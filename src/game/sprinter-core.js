@@ -294,7 +294,14 @@
     if (!this.curved || s >= this.arc) return 0;
     const a = Math.atan((v * v) / (9.81 * this.radius(lane)));
     const fade = Math.max(0, Math.min(1, (this.arc - s) / 9));
-    return Math.min(a, 0.38) * fade;
+    // En debut de courbe (depart en quinconce), l'orientation (headAng)
+    // peut depasser 90 degres : combinee a l'inclinaison laterale, la
+    // projection isometrique ecrasait visuellement le coureur. On attenue
+    // donc l'inclinaison quand le cap est tres marque, pour ne la laisser
+    // pleinement visible qu'une fois le coureur revenu vers l'axe de course.
+    const heading = this.heading(s, lane);
+    const tempered = Math.max(0.4, 1 - heading / (Math.PI * 0.85));
+    return Math.min(a, 0.38) * fade * tempered;
   };
 
   // ---------------------------------------------------------------------
