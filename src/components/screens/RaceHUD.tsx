@@ -37,21 +37,21 @@ export function RaceHUD() {
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
       
       {/* Top HUD Bar */}
-      <div className="absolute top-0 left-0 w-full bg-card/80 backdrop-blur-md border-b-2 border-primary/50 text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
+      <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
         <div className="flex justify-between w-1/2 landscape:w-auto landscape:flex-1 items-center gap-2 sm:gap-4 order-1 min-w-0">
-          <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate">
+          <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {N.levelName(levelIdx)}
           </div>
-          <div className={`shrink-0 font-black font-display text-xl sm:text-2xl md:text-3xl ${pos === 1 ? 'text-primary' : 'text-foreground'}`}>
+          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 ? 'text-primary' : 'text-foreground'}`}>
             {posTxt}
           </div>
         </div>
-        
+
         <div className="w-1/2 landscape:w-auto landscape:flex-1 flex justify-end items-center gap-2 sm:gap-4 order-2 landscape:order-3">
-          <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest ${ph === 0 ? 'text-primary' : ph === 1 ? 'text-cyan-400' : 'text-muted-foreground'}`}>
+          <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${ph === 0 ? 'text-primary' : ph === 1 ? 'text-cyan-400' : 'text-muted-foreground'}`}>
             {N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])}
           </div>
-          <div className="font-black font-mono text-2xl sm:text-3xl md:text-4xl text-primary tabular-nums">
+          <div className="font-black font-mono text-2xl sm:text-3xl md:text-4xl text-primary tabular-nums landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {elapsed.toFixed(2)}
           </div>
         </div>
