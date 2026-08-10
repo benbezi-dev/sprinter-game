@@ -1,15 +1,43 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
+import { Globe2 } from 'lucide-react';
+import { getSavedName, saveName, submitScore } from '@/game/leaderboard';
+import { LeaderboardScreen } from './LeaderboardScreen';
 
 export function WinAllScreen() {
-  const { runTime, runSplits, runRank } = useGameStore();
+  const { runTime, runSplits, runRank, raceKey } = useGameStore();
   const { N } = SprinterApp;
+
+  const [name, setName] = useState(getSavedName());
+  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [worldRank, setWorldRank] = useState<number | null>(null);
+  const [showTop500, setShowTop500] = useState(false);
+
+  // Un seul envoi par parcours termine, meme si le composant se re-rend.
+  useEffect(() => {
+    if (getSavedName()) handleSave(getSavedName());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSave = async (nameToUse?: string) => {
+    const finalName = (nameToUse ?? name).trim();
+    if (!finalName) return;
+    saveName(finalName);
+    setStatus('sending');
+    try {
+      const res = await submitScore(raceKey, finalName, runTime * 1000);
+      setWorldRank(res.rank);
+      setStatus('done');
+    } catch {
+      setStatus('error');
+    }
+  };
 
   const handleReplay = () => {
     SprinterApp.startRun();
   };
-  
+
   const handleHome = () => {
     SprinterApp.G.state = 'title';
     SprinterApp.buildLevel(0);
@@ -62,6 +90,52 @@ export function WinAllScreen() {
               {runRank === 1 ? N.t('best_run') : runRank <= 3 ? N.t('top3_runs') : N.t('top10_runs')}
             </motion.div>
           )}
+
+          {/* Classement mondial TOP 500 */}
+          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-2 md:gap-3">
+            <div className="flex items-center gap-2 justify-center">
+              <Globe2 className="w-4 h-4 text-primary" />
+              <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('top500')}</h2>
+            </div>
+
+            {status === 'done' && worldRank !== null && (
+              <div className="text-center text-primary font-bold text-sm md:text-base tracking-wide">
+                {N.t('score_saved', { r: N.ord(worldRank) })}
+              </div>
+            )}
+            {status === 'error' && (
+              <div className="text-center text-destructive text-xs md:text-sm">{N.t('score_save_fail')}</div>
+            )}
+
+            {status !== 'sending' && (
+              <div className="flex gap-2">
+                <input
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder={N.t('your_name')}
+                  maxLength={20}
+                  className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                />
+                <button
+                  onClick={() => handleSave()}
+                  disabled={!name.trim()}
+                  className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs md:text-sm text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  {status === 'done' ? N.t('edit_name') : N.t('save_score')}
+                </button>
+              </div>
+            )}
+            {status === 'sending' && (
+              <div className="text-center text-xs md:text-sm text-muted-foreground animate-pulse">{N.t('saving_score')}</div>
+            )}
+
+            <button
+              onClick={() => setShowTop500(true)}
+              className="text-xs md:text-sm text-muted-foreground hover:text-primary transition-colors underline underline-offset-2"
+            >
+              {N.t('view_top500')}
+            </button>
+          </div>
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">

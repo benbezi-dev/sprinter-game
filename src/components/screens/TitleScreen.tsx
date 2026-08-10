@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
-import { Trophy, Volume2, VolumeX, Globe } from 'lucide-react';
+import { Trophy, Volume2, VolumeX, Globe, Globe2 } from 'lucide-react';
+import { LeaderboardScreen } from './LeaderboardScreen';
 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
   const { Audio_, N, RACES } = SprinterApp;
+  const [showTop500, setShowTop500] = useState(false);
 
   const handleStart = () => {
     SprinterApp.startRun();
@@ -62,7 +64,14 @@ export function TitleScreen() {
                 <Trophy className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                 <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('best_runs')}</h2>
               </div>
-              
+              <button
+                onClick={() => setShowTop500(true)}
+                className="w-full mb-3 md:mb-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold tracking-widest text-[10px] md:text-xs flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors"
+              >
+                <Globe2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                {N.t('view_top500')}
+              </button>
+
               {!currentRuns.length ? (
                 <div className="py-4 md:py-8 text-center flex flex-col gap-1 md:gap-2">
                   <p className="text-xs md:text-sm text-muted-foreground font-medium">{N.t('no_run')}</p>
@@ -126,6 +135,10 @@ export function TitleScreen() {
           </div>
         </div>
       </div>
+
+      {showTop500 && (
+        <LeaderboardScreen initialRace={raceKey} onClose={() => setShowTop500(false)} />
+      )}
     </div>
   );
 }

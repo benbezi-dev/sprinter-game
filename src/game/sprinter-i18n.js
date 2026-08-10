@@ -87,6 +87,21 @@
     top3_runs:    ['TOP 3 DES PARCOURS', 'TOP 3 RUNS'],
     top10_runs:   ['TOP 10 DES PARCOURS', 'TOP 10 RUNS'],
 
+    // classement mondial
+    top500:          ['TOP 500 - ALL TIME', 'TOP 500 - ALL TIME'],
+    your_name:       ['ton nom', 'your name'],
+    save_score:      ['ENREGISTRER MON CHRONO', 'SAVE MY TIME'],
+    saving_score:    ['envoi en cours...', 'sending...'],
+    score_saved:     ['classe {r}e sur le TOP 500 mondial', 'ranked {r} on the world TOP 500'],
+    score_save_fail: ["echec de l'envoi, reessaie plus tard", 'failed to send, try again later'],
+    view_top500:     ['VOIR LE TOP 500', 'VIEW TOP 500'],
+    close:           ['FERMER', 'CLOSE'],
+    loading_ranks:   ['chargement du classement...', 'loading rankings...'],
+    empty_top500:    ['aucun chrono enregistre pour le moment', 'no times recorded yet'],
+    your_rank:       ['TON RANG : {r}', 'YOUR RANK: {r}'],
+    outside_top500:  ['hors du top 500', 'outside the top 500'],
+    edit_name:       ['MODIFIER LE NOM', 'EDIT NAME'],
+
     // ---- version bureau, au clavier ----
     composing:    ['composition de la bande-son...', 'composing the soundtrack...'],
     sound_off:    ['SON COUPE  (S)', 'SOUND OFF  (S)'],
