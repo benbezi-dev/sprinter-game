@@ -494,17 +494,21 @@
                               x * Math.sin(a) + z * Math.cos(a)];
 
     // Foulee plus marquee (genou plus haut, bras plus amples, buste plus
-    // vivant) pour se rapprocher de l'energie du jeu de reference plutot
-    // qu'une demarche plate.
+    // vivant). Le meme facteur s'applique a toute la chaine (cuisse ET
+    // mollet, bras ET avant-bras) : amplifier seulement le premier
+    // segment sans le second cassait l'effet d'entrainement naturel d'un
+    // membre (le bout semblait trainer derriere le haut), ce qui donnait
+    // une impression de mouvement disloque plutot que coordonne.
+    const LIMB_BOOST = 1.18;
     function leg(q) {
-      const th = gait(GAIT.thigh, q) * A * 1.18;
-      const kn = gait(GAIT.knee, q) * (0.42 + 0.58 * A) * 1.15;
-      const an = gait(GAIT.ankle, q) * (0.50 + 0.50 * A);
+      const th = gait(GAIT.thigh, q) * A * LIMB_BOOST;
+      const kn = gait(GAIT.knee, q) * (0.42 + 0.58 * A) * LIMB_BOOST;
+      const an = gait(GAIT.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(GAIT.arm, q) * (0.55 + 0.45 * A) * 1.20;
-      const ef = gait(GAIT.elbow, q) * (0.62 + 0.38 * A);
+      const ua = gait(GAIT.arm, q) * (0.55 + 0.45 * A) * LIMB_BOOST;
+      const ef = gait(GAIT.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
 
