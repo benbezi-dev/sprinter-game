@@ -27,10 +27,10 @@
     // --- depart : mise en action, transition, vitesse maximale ----------
     // Un sprinteur sort des blocs corps tres incline, pousse en foulees
     // courtes et frequentes, puis se redresse progressivement. Le
-    // redressement s'acheve vers trente metres, quand la vitesse maximale
+    // redressement s'acheve vers quarante metres, quand la vitesse maximale
     // est atteinte.
     DRIVE_END: 15.0,          // fin de la phase de poussee, en metres
-    TRANS_END: 30.0,          // corps entierement redresse
+    TRANS_END: 40.0,          // corps entierement redresse
     DRIVE_PITCH: 0.62,        // inclinaison du corps a la sortie des blocs
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
