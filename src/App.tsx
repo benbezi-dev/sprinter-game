@@ -24,11 +24,31 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 
 const queryClient = new QueryClient();
 
+// Certains navigateurs mobiles (Chrome Android en paysage notamment) ne
+// recalculent pas 100dvh correctement quand leur barre d'adresse reste
+// affichee : le contenu se retrouve dessine sous la barre plutot qu'en
+// dessous. On mesure la hauteur reellement visible via window.innerHeight
+// (fiable sur ce point, contrairement a dvh sur ces navigateurs) et on
+// l'applique via une variable CSS, avec un court delai apres rotation le
+// temps que la barre du navigateur se stabilise.
+function useVisualViewportHeight() {
+  useEffect(() => {
+    const setHeight = () => {
+      document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+    window.addEventListener('orientationchange', () => setTimeout(setHeight, 120));
+    return () => window.removeEventListener('resize', setHeight);
+  }, []);
+}
+
 function MainGame() {
   const state = useGameStore(s => s.state);
-  
+  useVisualViewportHeight();
+
   return (
-    <div className="relative w-full h-[100dvh] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
+    <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
       <GameCanvas />
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
