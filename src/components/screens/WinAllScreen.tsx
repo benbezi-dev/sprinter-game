@@ -5,6 +5,8 @@ import { Globe2 } from 'lucide-react';
 import { getSavedName, saveName, submitScore } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 export function WinAllScreen() {
   const { runTime, runSplits, runRank, raceKey } = useGameStore();
   const { N } = SprinterApp;
@@ -87,7 +89,12 @@ export function WinAllScreen() {
 
           {/* Rank Badge */}
           {runRank && (
-            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { delay: 0.5 } }} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center">
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { delay: 0.5 } }} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center flex items-center gap-2 md:gap-3">
+              <img
+                src={`${BASE}/icons/${runRank === 1 ? 'medal1' : runRank <= 3 ? 'medal2' : 'star'}.png`}
+                alt=""
+                className="w-6 h-6 md:w-8 md:h-8"
+              />
               {runRank === 1 ? N.t('best_run') : runRank <= 3 ? N.t('top3_runs') : N.t('top10_runs')}
             </motion.div>
           )}

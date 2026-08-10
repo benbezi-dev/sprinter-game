@@ -138,14 +138,28 @@ export function GameCanvas() {
                        SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
                        
             if (champ) {
-              for (let i = 0; i < 70; i++) {
+              // Confettis qui tournent sur eux-memes en tombant, plutot que
+              // de simples rectangles droits : plus vivant pour l'ecran de
+              // sacre.
+              for (let i = 0; i < 90; i++) {
                 const sd = (i * 7919) % 997;
                 const x = (sd * 13) % G.VW;
                 const y = ((ct * (60 + sd % 90) + sd * 3) % (G.VH + 120)) - 60;
                 if (y >= -10) {
                   const cols = ['rgb(248,205,74)', 'rgb(104,216,236)', 'rgb(232,121,216)', 'rgb(108,226,138)', 'rgb(238,240,248)'];
+                  const cx2 = x + Math.sin(ct * 3 + sd) * 6;
+                  const spin = ct * (2 + (sd % 5)) + sd;
+                  const w = SprinterApp.ui() * (4 + sd % 4), h = SprinterApp.ui() * 7;
+                  ctx.save();
+                  ctx.translate(cx2, y);
+                  ctx.rotate(spin);
                   ctx.fillStyle = cols[sd % 5];
-                  ctx.fillRect(x + Math.sin(ct * 3 + sd) * 5, y, SprinterApp.ui() * 4 + sd % 4, SprinterApp.ui() * 7);
+                  if (sd % 7 === 0) {
+                    ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill();
+                  } else {
+                    ctx.fillRect(-w / 2, -h / 2, w, h);
+                  }
+                  ctx.restore();
                 }
               }
             }

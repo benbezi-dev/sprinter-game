@@ -564,6 +564,22 @@
     }
     band(ctx, sm, rOut, rOut + 46, rgb(th.grass));
 
+    // Grain sur la pelouse exterieure : quelques touches plus claires/sombres
+    // ancrees au monde (elles defilent avec la piste, pas avec l'ecran), pour
+    // casser l'aplat plutot qu'une texture image plaquee sans rapport avec
+    // notre perspective isometrique maison.
+    for (let i = 0; i < sm.length; i += 3) {
+      const seed = i * 13;
+      for (let k = 0; k < 3; k++) {
+        const rr = rOut + 3 + ((seed + k * 17) % 40);
+        const p = ground(...ptOf(sm[i], rr));
+        if (p[0] < -20 || p[0] > G.VW + 20 || p[1] < -20 || p[1] > G.VH + 20) continue;
+        const light = (seed + k) % 2 === 0;
+        ctx.fillStyle = rgb(th.grassEdge, light ? 1.35 : 0.85);
+        ctx.fillRect(p[0], p[1], 1.6 * ui(), 1.6 * ui());
+      }
+    }
+
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
     // projection retombe sur la surface de course : peintes apres, elles
@@ -579,6 +595,24 @@
       const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz, f = 1 - t * 0.05;
       band(ctx, sm, r0, r0 + 0.05, rgb(th.riser, f), z1);
       band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
+    }
+    // Public dans les gradins : simples pastilles alternant deux teintes
+    // (crowdLo/crowdHi, deja prevues par theme mais jusque-la inutilisees),
+    // avec un leger balancement pour donner une impression de foule vivante
+    // plutot que des tribunes vides.
+    const tnow = performance.now() / 1000;
+    for (let t = 0; t < tiers; t++) {
+      const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
+      for (let i = 0; i < sm.length; i += 2) {
+        const seed = i * 7 + t * 31;
+        const rr = r0 + 0.35 + (seed % 5) * 0.22;
+        const p = solid(...ptOf(sm[i], rr), z1 + Math.sin(tnow * 2 + seed) * 0.04);
+        if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
+        ctx.fillStyle = rgb(seed % 3 === 0 ? th.crowdHi : th.crowdLo);
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], 2.1 * ui(), 0, TAU);
+        ctx.fill();
+      }
     }
     band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
          1.05 + tiers * sz + 2.4);

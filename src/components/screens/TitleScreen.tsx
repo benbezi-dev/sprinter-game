@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
-import { Trophy, Volume2, VolumeX, Globe, Globe2 } from 'lucide-react';
+import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
@@ -33,11 +35,15 @@ export function TitleScreen() {
             <span className="font-bold text-xs md:text-sm text-foreground/90">{N.getLang().toUpperCase()}</span>
           </button>
 
-          <button 
+          <button
             onClick={() => toggleAudio()}
             className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
           >
-            {Audio_.on ? <Volume2 className="w-4 h-4 md:w-5 md:h-5 text-primary" /> : <VolumeX className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />}
+            <img
+              src={`${BASE}/icons/${Audio_.on ? 'audio-on' : 'audio-off'}.png`}
+              alt=""
+              className={`w-4 h-4 md:w-5 md:h-5 ${Audio_.on ? 'opacity-100' : 'opacity-40'}`}
+            />
           </button>
         </div>
 
@@ -61,7 +67,7 @@ export function TitleScreen() {
             {/* Leaderboard Card */}
             <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl">
               <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-6 justify-center">
-                <Trophy className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                <img src={`${BASE}/icons/trophy.png`} alt="" className="w-4 h-4 md:w-5 md:h-5" />
                 <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('best_runs')}</h2>
               </div>
               <button
