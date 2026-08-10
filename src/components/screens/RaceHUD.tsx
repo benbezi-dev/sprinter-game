@@ -56,10 +56,11 @@ export function RaceHUD() {
           </div>
         </div>
 
-        <div className="w-full landscape:w-auto flex justify-center order-3 landscape:order-2 px-4 landscape:px-0 landscape:mx-2">
-          {/* Progress Bar : plus discrete en paysage, elle ne doit pas rivaliser
-              avec la position et le chrono qui l'entourent. */}
-          <div className="w-full max-w-[280px] landscape:max-w-[120px] bg-black/50 h-2 md:h-2.5 rounded-full overflow-hidden flex relative border border-white/10">
+        <div className="w-full landscape:hidden flex justify-center order-3 px-4">
+          {/* Progress Bar : retiree en paysage (place au classement/chrono,
+              plus de largeur pour voir la course), gardee en portrait ou
+              elle ne gene pas. */}
+          <div className="w-full max-w-[280px] bg-black/50 h-2 md:h-2.5 rounded-full overflow-hidden flex relative border border-white/10">
             {/* Drive section */}
             <div className="h-full bg-primary/20" style={{ width: `${(C.DRIVE_END / total) * 100}%` }} />
             {/* Transition section */}
