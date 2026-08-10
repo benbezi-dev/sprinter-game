@@ -101,6 +101,7 @@
     your_rank:       ['TON RANG : {r}', 'YOUR RANK: {r}'],
     outside_top500:  ['hors du top 500', 'outside the top 500'],
     edit_name:       ['MODIFIER LE NOM', 'EDIT NAME'],
+    best_split_short:['meilleur :', 'best:'],
 
     // ---- version bureau, au clavier ----
     composing:    ['composition de la bande-son...', 'composing the soundtrack...'],

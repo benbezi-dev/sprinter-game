@@ -91,9 +91,16 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                         {e.name}
                       </span>
                     </div>
-                    <span className="font-mono font-bold shrink-0 text-xs md:text-sm text-foreground">
-                      {(e.time_ms / 1000).toFixed(2)} s
-                    </span>
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className="font-mono font-bold text-xs md:text-sm text-foreground">
+                        {(e.time_ms / 1000).toFixed(2)} s
+                      </span>
+                      {!!e.best_split_ms && (
+                        <span className="font-mono text-[9px] md:text-[10px] text-cyan-400">
+                          {N.t('best_split_short')} {(e.best_split_ms / 1000).toFixed(2)} s
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}

@@ -118,7 +118,7 @@ export function RaceHUD() {
           )}
         </AnimatePresence>
 
-        {reactFlash > 0 && player?.reaction !== null && !player.jumped && (
+        {reactFlash > 0 && player && player.reaction !== null && !player.jumped && (
           <div className="flex flex-col items-center" style={{ opacity: Math.min(reactFlash, 1) }}>
             <div className={`text-base sm:text-lg md:text-xl font-black tracking-widest uppercase ${player.reactBonus > C.REACT_BONUS * 0.82 ? 'text-primary' : 'text-foreground'}`}>
               {player.reactBonus > C.REACT_BONUS * 0.82 ? N.t('react_top') : N.t('reaction')}
@@ -129,7 +129,7 @@ export function RaceHUD() {
           </div>
         )}
         
-        {transFlash > 0 && player?.transGrade !== null && (
+        {transFlash > 0 && player && player.transGrade !== null && (
           <div className="flex flex-col items-center mt-2 md:mt-4" style={{ opacity: Math.min(transFlash, 1) }}>
             <div className={`text-lg sm:text-xl md:text-2xl font-black tracking-widest uppercase ${player.transGrade === 2 ? 'text-primary' : player.transGrade === 1 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
               {N.t(`trans_${player.transGrade}`)}

@@ -12,6 +12,7 @@ export type RaceKey = '100' | '200';
 export type LeaderboardEntry = {
   name: string;
   time_ms: number;
+  best_split_ms: number;
   updated_at: number;
 };
 
@@ -58,7 +59,7 @@ export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[
   return data.entries || [];
 }
 
-export async function submitScore(race: RaceKey, name: string, timeMs: number): Promise<{
+export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number): Promise<{
   rank: number;
   best_time_ms: number;
   entries: LeaderboardEntry[];
@@ -71,6 +72,7 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number): 
       race_key: race,
       name,
       time_ms: Math.round(timeMs),
+      best_split_ms: Math.round(bestSplitMs),
     }),
   });
   if (!res.ok) throw new Error('score submit failed');
@@ -82,6 +84,7 @@ export async function fetchMyRank(race: RaceKey): Promise<{
   rank?: number;
   name?: string;
   time_ms?: number;
+  best_split_ms?: number;
 }> {
   const res = await fetch(`${API_BASE}/rank?race=${race}&device_id=${getDeviceId()}`);
   if (!res.ok) throw new Error('rank fetch failed');

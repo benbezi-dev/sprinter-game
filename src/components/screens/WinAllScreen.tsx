@@ -26,7 +26,8 @@ export function WinAllScreen() {
     saveName(finalName);
     setStatus('sending');
     try {
-      const res = await submitScore(raceKey, finalName, runTime * 1000);
+      const bestSplit = runSplits.length ? Math.min(...runSplits) * 1000 : runTime * 1000;
+      const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit);
       setWorldRank(res.rank);
       setStatus('done');
     } catch {
