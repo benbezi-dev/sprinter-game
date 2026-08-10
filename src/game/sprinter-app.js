@@ -639,13 +639,22 @@
       return [T.curved ? m - T.arc : m, r];
     };
 
-    // Reperes blancs tous les dix metres. Sur une vraie piste, le depart
-    // en quinconce n'est PAS un trait continu qui traverse tous les
-    // couloirs : chaque couloir a son propre repere, court et perpendiculaire
-    // a SA propre trajectoire, dessine a l'angle donne par SON propre rayon
-    // (l'ecart peut depasser 20 m entre le couloir 1 et le couloir 8 sur un
-    // 200 m). Les reperes de couloirs voisins ne se rejoignent donc pas.
-    for (let m = 0; m <= T.total; m += 10) {
+    // Reperes au sol : uniquement le depart, la ligne des 100 m et celle
+    // des 50 derniers metres (comme les marquages permanents d'une vraie
+    // piste), plus la ligne d'arrivee dessinee plus bas. Pas de grille
+    // tous les 10 m, ca n'existe pas sur une piste reelle.
+    const markerSet = new Set([0]);
+    if (T.total - 100 > 0) markerSet.add(T.total - 100);
+    if (T.total - 50 > 0) markerSet.add(T.total - 50);
+    const markers = Array.from(markerSet).sort((a, b) => a - b);
+
+    // Le depart en quinconce n'est PAS un trait continu qui traverse tous
+    // les couloirs sur une vraie piste : chaque couloir a son propre
+    // repere, court et perpendiculaire a SA propre trajectoire, dessine a
+    // l'angle donne par SON propre rayon (l'ecart peut depasser 20 m entre
+    // le couloir 1 et le couloir 8 sur un 200 m). Les reperes de couloirs
+    // voisins ne se rejoignent donc pas.
+    for (const m of markers) {
       const inBend = T.curved && m < T.arc;
       ctx.strokeStyle = 'rgba(255,255,255,0.90)';
       ctx.lineWidth = m === 0 ? 3 : 1.6;
@@ -668,10 +677,10 @@
       }
     }
 
-    // chiffres sur l'herbe exterieure, tous les dix metres
+    // chiffres sur l'herbe exterieure, aux memes reperes
     ctx.font = '600 ' + (13 * ui()) + 'px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.80)';
-    for (let m = 0; m <= T.total; m += 10) {
+    for (const m of markers) {
       const q = at(m, rOut + 2.4);
       if (!q) continue;
       const p = ground(q[0], q[1]);
