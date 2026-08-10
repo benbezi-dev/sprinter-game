@@ -630,12 +630,7 @@
     }
     rail(ctx, sm, rOut, rgb(th.lane), 2.2);
 
-    // Position d'un point de la piste a la distance m et au rayon r. Le
-    // depart en quinconce (chaque couloir parcourt le meme arc mais avec
-    // un rayon different) doit se lire visuellement : on calcule l'angle
-    // avec LE rayon de ce point precis, pas un rayon fixe, sinon la ligne
-    // de depart retombe a plat (un simple rayon) au lieu d'onduler d'un
-    // couloir a l'autre comme sur une vraie piste.
+    // Position d'un point de la piste a la distance m et au rayon r.
     const at = (m, r) => {
       if (T.curved && m < T.arc) {
         const phi = (T.arc - m) / r;
@@ -644,31 +639,33 @@
       return [T.curved ? m - T.arc : m, r];
     };
 
-    // Reperes blancs tous les dix metres, en travers de la piste. Dans le
-    // virage, chaque couloir a son propre rayon donc son propre angle pour
-    // une meme distance m : on relie les couloirs un a un (comme le trace
-    // au sol d'un vrai depart en quinconce) plutot qu'une seule corde entre
-    // les deux bords, qui aurait coupe les couloirs intermediaires.
+    // Reperes blancs tous les dix metres. Sur une vraie piste, le depart
+    // en quinconce n'est PAS un trait continu qui traverse tous les
+    // couloirs : chaque couloir a son propre repere, court et perpendiculaire
+    // a SA propre trajectoire, dessine a l'angle donne par SON propre rayon
+    // (l'ecart peut depasser 20 m entre le couloir 1 et le couloir 8 sur un
+    // 200 m). Les reperes de couloirs voisins ne se rejoignent donc pas.
     for (let m = 0; m <= T.total; m += 10) {
       const inBend = T.curved && m < T.arc;
-      const pts = [];
+      ctx.strokeStyle = 'rgba(255,255,255,0.90)';
+      ctx.lineWidth = m === 0 ? 3 : 1.6;
       if (inBend) {
-        for (let e = 0; e <= C.LANE_COUNT; e++) {
-          const q = at(m, T.edge(e));
-          if (q) pts.push(ground(q[0], q[1]));
+        for (let e = 0; e < C.LANE_COUNT; e++) {
+          const laneR = T.radius(e);
+          const qa = at(m, laneR - C.LANE_W * 0.5), qb = at(m, laneR + C.LANE_W * 0.5);
+          if (!qa || !qb) continue;
+          const a = ground(qa[0], qa[1]), b = ground(qb[0], qb[1]);
+          if ((a[0] < -200 && b[0] < -200) || (a[0] > G.VW + 200 && b[0] > G.VW + 200)) continue;
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
         }
       } else {
         const qa = at(m, rIn), qb = at(m, rOut);
-        if (qa) pts.push(ground(qa[0], qa[1]));
-        if (qb) pts.push(ground(qb[0], qb[1]));
+        if (!qa || !qb) continue;
+        const a = ground(qa[0], qa[1]), b = ground(qb[0], qb[1]);
+        if (a[0] < -200 && b[0] < -200) continue;
+        if (a[0] > G.VW + 200 && b[0] > G.VW + 200) continue;
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
       }
-      if (pts.length < 2) continue;
-      if (pts.every(p => p[0] < -200) || pts.every(p => p[0] > G.VW + 200)) continue;
-      ctx.strokeStyle = 'rgba(255,255,255,0.90)';
-      ctx.lineWidth = m === 0 ? 3 : 1.6;
-      ctx.beginPath();
-      pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
-      ctx.stroke();
     }
 
     // chiffres sur l'herbe exterieure, tous les dix metres
