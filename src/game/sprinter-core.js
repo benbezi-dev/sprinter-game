@@ -162,6 +162,29 @@
                     [4.10, 1.04], [5.10, 1.44], [5.70, 1.56]])
   };
 
+  // Couplage bras / jambes (biomecanique du sprint) : le bras doit etre au
+  // plus loin en arriere quand la cuisse du MEME cote est au plus haut
+  // devant, et inversement. Les deux courbes n'ayant pas leurs extremes au
+  // meme endroit du cycle (cuisse avant vers 4,81 rad, bras arriere vers
+  // 3,18 rad), un simple dephasage de PI ne les met PAS en opposition : on
+  // obtenait un bras et un genou qui montaient du meme cote, ce qui ne
+  // ressemble a rien d'athletique. On cale donc le bras sur la cuisse a
+  // partir des extremes reels des tables, plutot qu'en supposant qu'elles
+  // sont alignees.
+  const ARM_PHASE = (function () {
+    function peakAt(table, sign) {
+      let best = -Infinity, at = 0;
+      for (let i = 0; i < 720; i++) {
+        const q = TAU * i / 720, v = sign * gait(table, q);
+        if (v > best) { best = v; at = q; }
+      }
+      return at;
+    }
+    const thighForward = peakAt(GAIT.thigh, 1);
+    const armBackward = peakAt(GAIT.arm, -1);
+    return ((armBackward - thighForward) % TAU + TAU) % TAU;
+  })();
+
   // ---------------------------------------------------------------------
   // ATHLETES
   // ---------------------------------------------------------------------
@@ -575,8 +598,10 @@
       return [ua, ua + ef];
     }
 
+    // cote +1 : jambe en phase p, donc bras cale en opposition sur cette
+    // meme phase ; cote -1 : tout est decale d'un demi-cycle.
     const l = leg(p), rr = leg(p + Math.PI);
-    let al = arm(p + Math.PI), ar = arm(p);
+    let al = arm(p + ARM_PHASE), ar = arm(p + Math.PI + ARM_PHASE);
     const cel = r.celebrate || 0;
     if (cel > 0) {
       const ul = 2.55 + 0.22 * Math.sin(p * 0.8);
