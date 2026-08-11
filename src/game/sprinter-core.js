@@ -38,29 +38,16 @@
     REACT_WINDOW: 0.32,
     REACT_BONUS: 1.35,        // m/s offerts sur une reaction parfaite
     FALSE_START_FREEZE: 0.28, // blocage si on part avant le signal
-    // --- rythme : le moteur d'acceleration ------------------------------
-    // Remplace l'ancienne "transition", notee une seule fois en sortie de
-    // blocs sur un critere invisible. Ici tout est continu et lisible :
-    // chaque appui est evalue au moment ou il tombe, et deux leviers
-    // independants pilotent la vitesse.
-    //   - la CADENCE (combien d'appuis par seconde) : le levier evident,
-    //     accessible des la premiere partie ;
-    //   - le RYTHME (la regularite de ces appuis) : le levier de maitrise,
-    //     qui rend chaque appui plus efficace et releve la vitesse de pointe.
-    // Un joueur qui tape vite mais anarchiquement plafonne ; un joueur qui
-    // tape vite ET regulier va nettement plus vite. Aucun jugement cache :
-    // la jauge de rythme du HUD montre l'etat en direct.
-    RHY_TOL: 0.34,        // ecart relatif tolere d'un appui a l'autre
-    RHY_RISE: 0.30,       // vitesse de montee du rythme, par appui
-    RHY_DECAY: 0.30,      // perte de rythme par seconde sans appui
-    RHY_START: 0.60,      // rythme initial : la mise en action n'est pas punie
-    RHY_STUMBLE: 0.45,    // fraction de rythme conservee apres une trebuche
-    // Plancher volontairement haut : un joueur irregulier reste jouable
-    // (il progresse quand meme), il est simplement nettement moins rapide
-    // qu'un joueur regulier. A cadence egale, le rythme vaut ~2,5 a 3,8 s
-    // sur 400 m — assez pour compter, pas assez pour bloquer un debutant.
-    RHY_GAIN: [0.94, 1.24],  // multiplicateur d'impulsion (pire -> meilleur)
-    RHY_VMAX: [0.95, 1.05],  // multiplicateur de vitesse de pointe
+    // transition : la cadence doit monter franchement pendant la poussee
+    TRANS_GOOD: 1.18,
+    TRANS_PERFECT: 1.45,
+    TRANS_BOOST: [0, 0.18, 0.40],   // impulsion immediate, selon la note
+    TRANS_DRAG: [1.0, 0.91, 0.82],  // freinage allege pendant TRANS_TIME
+    TRANS_TIME: [0, 1.8, 2.6],
+    // Une transition reussie ne donne pas seulement un coup d'accelerateur :
+    // elle fixe la vitesse maximale tenue jusqu'a l'arrivee. C'est la que se
+    // joue l'essentiel du gain, de l'ordre du dixieme de seconde.
+    TRANS_VMAX: [1.0, 1.012, 1.030],
 
     // --- morphologie ---------------------------------------------------
     MODEL_H: 1.72,
@@ -409,12 +396,9 @@
     this.stumbleTimer = 0; this.fallAnim = 0; this.lastKey = null;
     // depart : reaction, cadence de poussee, note de transition
     this.reaction = null; this.reactBonus = 0; this.jumped = false;
-    this.freeze = 0;
-    // rythme : 0 = appuis anarchiques, 1 = cadence parfaitement reguliere
-    this.rhythm = C.RHY_START;
-    this.gapAvg = 0; this.lastPressT = null;
-    this.rhythmSum = 0; this.rhythmN = 0;  // moyenne, pour le bilan de course
-    this.drivePitch = C.DRIVE_PITCH;
+    this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
+    this.transGrade = null; this.transRatio = 0;
+    this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
     this.maxSpeed = opts.maxSpeed || 12;
     this.best = opts.best || 9.1;
@@ -459,39 +443,25 @@
     return this.d < C.TRANS_END ? 1 : 2;
   };
 
-  // Vitesse de pointe accessible a l'instant present : elle depend du
-  // rythme, donc elle monte quand le joueur est regulier et redescend quand
-  // il part en vrille. C'est ce qui remplace le bonus fige de l'ancienne
-  // transition.
-  Runner.prototype.speedCap = function () {
-    return this.maxSpeed * (C.RHY_VMAX[0] +
-      (C.RHY_VMAX[1] - C.RHY_VMAX[0]) * this.rhythm);
-  };
-
-  // Rythme moyen tenu sur la course, pour l'affichage de fin.
-  Runner.prototype.rhythmAvg = function () {
-    return this.rhythmN ? this.rhythmSum / this.rhythmN : 0;
-  };
-
-  // Evalue la regularite de l'appui qui vient de tomber. On compare son
-  // ecart au precedent a la moyenne lissee des ecarts : une cadence qui
-  // monte progressivement (ce que fait naturellement un sprinteur) reste
-  // donc consideree comme reguliere, seuls les a-coups font chuter le
-  // rythme.
-  Runner.prototype.feelRhythm = function (elapsed) {
-    if (elapsed === undefined) return;
-    if (this.lastPressT !== null) {
-      const gap = elapsed - this.lastPressT;
-      if (gap > 0.001) {
-        const avg = this.gapAvg > 0 ? this.gapAvg : gap;
-        const rel = Math.abs(gap - avg) / Math.max(gap, avg);
-        const q = Math.max(0, Math.min(1, 1 - rel / C.RHY_TOL));
-        this.rhythm += (q - this.rhythm) * C.RHY_RISE;
-        this.gapAvg = avg + (gap - avg) * 0.34;
-        this.rhythmSum += this.rhythm; this.rhythmN++;
-      }
-    }
-    this.lastPressT = elapsed;
+  // Note de transition : on compare la cadence des trois premiers appuis a
+  // celle des trois derniers de la phase de poussee. Un bon depart monte en
+  // frequence sans a-coup ; trebucher annule la note.
+  Runner.prototype.gradeTransition = function () {
+    const p = this.pressTimes;
+    if (this.stumbledInDrive || p.length < 7) { this.transGrade = 0; return; }
+    const gap = [];
+    for (let i = 1; i < p.length; i++) gap.push(p[i] - p[i - 1]);
+    const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+    const early = mean(gap.slice(0, 3)), late = mean(gap.slice(-3));
+    const ratio = late > 0.0001 ? early / late : 0;
+    this.transRatio = ratio;
+    this.transGrade = ratio >= C.TRANS_PERFECT ? 2
+      : (ratio >= C.TRANS_GOOD ? 1 : 0);
+    const g = this.transGrade;
+    this.maxSpeed *= C.TRANS_VMAX[g];
+    this.v = Math.min(this.maxSpeed, this.v + C.TRANS_BOOST[g]);
+    this.boostT = C.TRANS_TIME[g];
+    this.boostDrag = C.TRANS_DRAG[g];
   };
 
   Runner.prototype.press = function (key, elapsed) {
@@ -506,10 +476,8 @@
         this.v += this.reactBonus;
       }
     }
-    this.feelRhythm(elapsed);
-    // un appui bien place pousse plus fort qu'un appui a contretemps
-    const eff = C.RHY_GAIN[0] + (C.RHY_GAIN[1] - C.RHY_GAIN[0]) * this.rhythm;
-    const cap = this.speedCap();
+    if (elapsed !== undefined && this.d < C.DRIVE_END)
+      this.pressTimes.push(elapsed);
     let stumbled = false;
     if (this.lastKey === key) {
       const risk = C.STUMBLE_BASE +
@@ -518,13 +486,13 @@
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
         this.fallAnim = 1;
-        this.rhythm *= C.RHY_STUMBLE;
+        if (this.d < C.DRIVE_END) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(cap, this.v + C.BOOST * 0.3 * eff);
+        this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
       }
     } else {
-      this.v = Math.min(cap, this.v + C.BOOST * eff);
+      this.v = Math.min(this.maxSpeed, this.v + C.BOOST);
     }
     this.lastKey = key;
     return stumbled;
@@ -535,9 +503,7 @@
       this.fallAnim = Math.max(0, this.fallAnim - dt / C.STUMBLE_TIME);
     }
     if (this.freeze > 0) this.freeze = Math.max(0, this.freeze - dt);
-    // Le rythme se perd si on cesse d'appuyer : il se tient, il ne
-    // s'acquiert pas une fois pour toutes.
-    if (!this.finished) this.rhythm = Math.max(0, this.rhythm - C.RHY_DECAY * dt);
+    if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt);
     if (this.finished) {
       this.v *= Math.exp(-1.15 * dt);
       this.d += this.v * dt;
@@ -549,11 +515,18 @@
       this.stumbleTimer -= dt;
       this.v *= Math.exp(-6 * dt);
     } else {
-      this.v *= Math.exp(-C.DRAG * dt);
+      // le freinage est allege quelques secondes apres une bonne transition
+      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1);
+      this.v *= Math.exp(-drag * dt);
     }
+    const before = this.d;
     this.d += this.v * dt;
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
+    if (this.transGrade === null && before < C.DRIVE_END &&
+        this.d >= C.DRIVE_END) {
+      this.gradeTransition();
+    }
     if (this.d >= this.total) {
       this.finished = true;
       // Le chrono affiche doit toujours etre le temps reellement couru : le

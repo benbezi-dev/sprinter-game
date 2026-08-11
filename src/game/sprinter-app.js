@@ -317,8 +317,8 @@
     runTime: 0, runSplits: [], runRank: null,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
-    reactFlash: 0, falseFlash: 0,
-    reactShown: false,
+    reactFlash: 0, transFlash: 0, falseFlash: 0,
+    reactShown: false, transShown: false,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60
   };
@@ -379,8 +379,8 @@
     G.parts = [];
     G.elapsed = 0; G.countT = 0; G.shake = 0; G.flash = 0;
     G.stumbleFlash = 0; G.acc = 0;
-    G.reactFlash = G.falseFlash = 0;
-    G.reactShown = false;
+    G.reactFlash = G.transFlash = G.falseFlash = 0;
+    G.reactShown = G.transShown = false;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
   }
