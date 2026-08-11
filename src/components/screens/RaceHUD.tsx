@@ -32,6 +32,10 @@ export function RaceHUD() {
   const posTxt = N.ord(pos);
   const ph = player?.phase ? player.phase() : 0;
   const total = T?.total || 100;
+  // Fenetre de transition de l'epreuve en cours (15-45 m sur 100 m,
+  // 20-60 m sur 200 m, 20-80 m sur 400 m).
+  const transFrom = player?.transFrom ?? C.DRIVE_END;
+  const transTo = player?.transTo ?? C.TRANS_END;
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
@@ -61,10 +65,10 @@ export function RaceHUD() {
               plus de largeur pour voir la course), gardee en portrait ou
               elle ne gene pas. */}
           <div className="w-full max-w-[280px] bg-black/50 h-2 md:h-2.5 rounded-full overflow-hidden flex relative border border-white/10">
-            {/* Drive section */}
-            <div className="h-full bg-primary/20" style={{ width: `${(C.DRIVE_END / total) * 100}%` }} />
-            {/* Transition section */}
-            <div className="h-full bg-cyan-400/20" style={{ width: `${((C.TRANS_END - C.DRIVE_END) / total) * 100}%` }} />
+            {/* Drive section — jusqu'au debut de la fenetre de transition */}
+            <div className="h-full bg-primary/20" style={{ width: `${(transFrom / total) * 100}%` }} />
+            {/* Transition section — la fenetre propre a l'epreuve */}
+            <div className="h-full bg-cyan-400/20" style={{ width: `${((transTo - transFrom) / total) * 100}%` }} />
             
             {/* Player marker */}
             <div 
