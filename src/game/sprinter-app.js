@@ -81,7 +81,7 @@
   const N = globalThis.SprinterI18N;
   const t = (k, v) => N.t(k, v);
   const CUT_INTRO = N.CUT_INTRO, CUT_DEFEAT = N.CUT_DEFEAT;
-  const CUT_CHAMPION = N.CUT_CHAMPION;
+  const CUT_CHAMPION = N.CUT_CHAMPION, CUT_TAUNT = N.CUT_TAUNT;
   // chaque variante est un couple [francais, anglais]
   const pickLang = a => a[Math.floor(Math.random() * a.length)][N.index()];
 
@@ -397,14 +397,14 @@
       man = { look: PLAYER_LOOK, stride: 0, v: G.race.maxSpeed * 0.18,
               maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
     } else {
-      const tbl = kind === 'intro' ? CUT_INTRO : CUT_DEFEAT;
+      const tbl = kind === 'intro' ? CUT_INTRO : (kind === 'taunt' ? CUT_TAUNT : CUT_DEFEAT);
       const first = (G.champion || 'Le favori').split(' ')[0];
       lines = pickLang(tbl[G.levelIdx]).map(s => s.split('{n}').join(first));
       man = { look: ZEZE[G.champion] ||
                     K.lookFor(G.champion || 'X', LEVELS[G.levelIdx].pool),
               stride: 0, maxSpeed: G.race.maxSpeed,
               v: kind === 'intro' ? G.race.maxSpeed : G.race.maxSpeed * 0.22,
-              fallAnim: 0, celebrate: 0 };
+              fallAnim: 0, celebrate: kind === 'taunt' ? 1 : 0 };
     }
     G.cut = { kind, t: 0, lines, man, name: G.champion || '' };
     G.skipArm = 0; G.state = 'cut';
@@ -443,7 +443,8 @@
       save(); G.flash = 1; Audio_.sfx('win');
       queueCuts(['defeat'], 'result'); return;
     }
-    save(); Audio_.sfx('lose'); G.overChoice = 0; G.state = 'over';
+    save(); Audio_.sfx('lose'); G.overChoice = 0;
+    queueCuts(['taunt'], 'over'); return;
   }
 
   // --- projection -----------------------------------------------------
@@ -923,7 +924,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
-    CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, GOLD, CREAM, MUTED, CYAN, GREEN,
+    CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,
     RED, MAGENTA };
 })();
