@@ -644,7 +644,11 @@
     // les a combles.
     const tnow = performance.now() / 1000;
     const density = CROWD_DENSITY[G.levelIdx] ?? 1;
-    const cw = 3.4 * ui(), ch = cw * (31 / 21);
+    // Taille en pixels ecran : basee sur scaleM() (l'echelle monde -> pixels,
+    // la meme que pour les coureurs), pas sur ui() (un facteur d'interface
+    // minuscule, ~0,6 a 1,7) — sinon les sprites ne mesurent que 2-3 px et
+    // deviennent invisibles une fois lisses par le canvas.
+    const ch = scaleM() * 0.55, cw = ch * (21 / 31);
     for (let t = 0; t < tiers; t++) {
       const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
       for (let i = 0; i < sm.length; i += 2) {
@@ -670,7 +674,7 @@
     // "definition" au decor (accent visuel base sur un asset plutot que sur
     // un aplat de couleur uni).
     {
-      const fw = 2.6 * ui(), fh = fw * (27 / 32);
+      const fh = scaleM() * 0.42, fw = fh * (32 / 27);
       const fz = 1.05 + tiers * sz + 2.55, fr = near + tiers * sr + 0.5;
       const fstp = decorStride() * 2;
       if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
