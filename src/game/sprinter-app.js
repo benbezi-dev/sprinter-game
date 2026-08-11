@@ -561,18 +561,27 @@
   // doit paraitre completement dense sans dessiner un sprite par personne
   // (des dizaines de milliers d'appels drawImage par image feraient chuter
   // le framerate, surtout sur telephone).
-  function bandPattern(ctx, sm, rIn, rOut, pattern, z) {
+  // (ox, oy) decale l'origine du motif sans bouger la forme remplie : on
+  // translate le contexte puis on retranche le meme decalage aux points du
+  // trace. C'est ce qui permet d'ancrer la foule au monde (elle defile avec
+  // la piste). On evite volontairement pattern.setTransform(), qui refait
+  // le rendu de la tuile a chaque image et coutait ~35% du framerate.
+  function bandPattern(ctx, sm, rIn, rOut, pattern, z, ox, oy) {
     if (sm.length < 2 || !pattern) return;
+    ox = ox || 0; oy = oy || 0;
+    ctx.save();
+    ctx.translate(ox, oy);
     ctx.beginPath();
     for (let i = 0; i < sm.length; i++) {
       const p = solid(...ptOf(sm[i], rIn), z || 0);
-      i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+      i ? ctx.lineTo(p[0] - ox, p[1] - oy) : ctx.moveTo(p[0] - ox, p[1] - oy);
     }
     for (let i = sm.length - 1; i >= 0; i--) {
       const p = solid(...ptOf(sm[i], rOut), z || 0);
-      ctx.lineTo(p[0], p[1]);
+      ctx.lineTo(p[0] - ox, p[1] - oy);
     }
     ctx.closePath(); ctx.fillStyle = pattern; ctx.fill();
+    ctx.restore();
   }
   // Motif de foule : une tuile dessinee une seule fois (des dizaines de
   // supporters juxtapoles et decales, toujours opaques), repetee ensuite
@@ -582,6 +591,7 @@
   // pour la finale) plutot que d'une opacite reduite sur tout le motif —
   // sinon le public entier parait transparent au lieu d'etre juste moins
   // nombreux.
+  const CROWD_TILE = 180;
   const crowdPatternCache = {};
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
@@ -589,7 +599,7 @@
     const density = CROWD_DENSITY[levelIdx] ?? 1;
     const count = Math.max(15, Math.round(90 * density));
     const tile = document.createElement('canvas');
-    tile.width = 180; tile.height = 180;
+    tile.width = CROWD_TILE; tile.height = CROWD_TILE;
     const tctx = tile.getContext('2d');
     for (let n = 0; n < count; n++) {
       const img = CROWD_IMGS[n % CROWD_IMGS.length];
@@ -693,14 +703,19 @@
     // nus restent visibles (pas de tribune principale en courbe).
     const crowdPat = getCrowdPattern(ctx, G.levelIdx);
     if (crowdPat) {
-      // Petit mouvement de foule : le motif oscille doucement dans le temps
-      // au lieu de rester fige, pour donner une impression de vie sans
-      // recalculer la tuile ni redessiner personne individuellement.
-      if (crowdPat.setTransform) {
-        const tnow = performance.now() / 1000;
-        const m = new DOMMatrix().translate(Math.sin(tnow * 1.3) * 2.4, Math.cos(tnow * 0.85) * 1.2);
-        crowdPat.setTransform(m);
-      }
+      // Le motif est ancre au MONDE, pas a l'ecran : on le decale de la
+      // position ecran d'un point fixe du terrain (l'origine). Comme la
+      // projection est lineaire en (X - camX, Y - camY), un deplacement de
+      // camera se traduit par une simple translation : les spectateurs
+      // defilent donc avec la piste et sortent de l'ecran quand le coureur
+      // les depasse, au lieu de rester colles a l'affichage. Le decalage est
+      // ramene modulo la taille de la tuile (le motif se repete de toute
+      // facon) pour garder de petites valeurs. Une legere oscillation dans
+      // le temps s'y ajoute pour le mouvement de foule.
+      const tnow = performance.now() / 1000;
+      const anchor = ground(0, 0);
+      const ox = (anchor[0] + Math.sin(tnow * 1.3) * 2.4) % CROWD_TILE;
+      const oy = (anchor[1] + Math.cos(tnow * 0.85) * 1.2) % CROWD_TILE;
       const straightRuns = [];
       let run = null;
       for (const s of sm) {
@@ -709,7 +724,7 @@
       }
       for (let t = 0; t < tiers; t++) {
         const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
-        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1);
+        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, ox, oy);
       }
     }
     band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
