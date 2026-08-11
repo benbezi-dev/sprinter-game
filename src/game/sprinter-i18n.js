@@ -8,7 +8,7 @@
   // ------------------------------------------------------------ interface
   const UI = {
     // ouverture et accueil
-    races:        ['100 METRES   -   200 METRES', '100 METRES   -   200 METRES'],
+    races:        ['100 - 200 - 400 METRES', '100 - 200 - 400 METRES'],
     tagline:      ['six étapes, un seul chrono à battre',
                    'six stages, one clock to beat'],
     tap_start:    ["touche l'écran pour commencer", 'tap the screen to start'],
@@ -157,7 +157,8 @@
 
   const RACE_SUB = {
     '100': ['la ligne droite', 'the straight'],
-    '200': ['virage et ligne droite', 'bend and straight']
+    '200': ['virage et ligne droite', 'bend and straight'],
+    '400': ['un tour de piste', 'one lap of the track']
   };
 
   // ----------------------------------------------------- présentations

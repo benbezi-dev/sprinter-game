@@ -42,7 +42,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         </div>
 
         <div className="flex gap-2 w-full">
-          {(['100', '200'] as const).map(k => (
+          {(['100', '200', '400'] as const).map(k => (
             <button
               key={k}
               onClick={() => setRace(k)}

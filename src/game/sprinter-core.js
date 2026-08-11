@@ -61,7 +61,8 @@
     RUNOUT: 26.0
   };
 
-  // Deux epreuves. Le 100 m est le cas particulier sans virage.
+  // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
+  // est un tour complet de piste (deux virages, deux lignes droites).
   const RACES = {
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
@@ -74,6 +75,12 @@
       arc: 115.61, straight: 84.39, maxSpeed: 11.671, best: 18.20,
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
                [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
+    },
+    '400': {
+      key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
+      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 40.50,
+      ranges: [[55.50, 66.50], [50.00, 55.50], [44.50, 46.50],
+               [42.50, 44.50], [42.50, 43.75], [40.50, 42.50]]
     }
   };
 
@@ -263,10 +270,22 @@
   // trace avec un virage de longueur nulle. Comme l'arc parcouru est le meme
   // pour tous les couloirs alors que les rayons different, l'angle balaye
   // diminue vers l'exterieur : c'est le depart en quinconce.
+  //
+  // Le 400 m est un tour complet : ce meme virage + ligne droite, suivi
+  // d'un second demi-tour identique tourne de 180 degres. Contrairement au
+  // premier virage (ou demarre la course, d'ou le depart en quinconce),
+  // le second virage n'est jamais un point de depart : tous les couloirs y
+  // balaient exactement le meme angle (un demi-tour, pi radians), a l'image
+  // d'un vrai virage "interieur" de piste ou personne ne prend d'avance.
+  // Les deux portions se raccordent exactement bout a bout (verifie
+  // numeriquement : pour le couloir 1, le point de depart et la ligne
+  // d'arrivee du 400 m tombent alors au meme endroit, comme sur une vraie
+  // piste ou ce couloir boucle un tour parfait).
   function Track(race) {
     this.arc = race.arc;
     this.straight = race.straight;
-    this.total = race.arc + race.straight;
+    this.fullLap = !!race.fullLap;
+    this.total = this.fullLap ? 2 * (race.arc + race.straight) : race.arc + race.straight;
     this.curved = race.arc > 0;
   }
   Track.prototype.radius = function (lane) {
@@ -277,29 +296,63 @@
     if (this.curved && onBend) return [-r * Math.sin(v), r * Math.cos(v)];
     return [v, this.curved ? r : r];
   };
-  Track.prototype.pos = function (s, lane) {
-    if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
-    const r = this.radius(lane);
+  // Second demi-tour : meme forme que le premier (bascule vers la formule
+  // "pure", puisqu'on n'y demarre jamais), tourne de 180 degres et
+  // translate pour raccorder exactement au bout de la premiere ligne droite.
+  Track.prototype.posLap2 = function (s2, r) {
+    const A = this.arc, S = this.straight;
+    if (s2 < A) {
+      const phi = Math.PI * (A - s2) / A;
+      return [S + r * Math.sin(phi), -r * Math.cos(phi)];
+    }
+    return [S - (s2 - A), -r];
+  };
+  // Position a la distance s, pour un rayon donne directement (pas
+  // necessairement le centre d'un couloir : sert aussi au rendu, qui
+  // dessine des reperes a des rayons arbitraires comme les bords de piste).
+  Track.prototype.posAtR = function (s, r) {
+    if (this.fullLap && s >= this.arc + this.straight) {
+      return this.posLap2(s - (this.arc + this.straight), r);
+    }
     if (s < this.arc) {
       const phi = (this.arc - s) / r;
       return [-r * Math.sin(phi), r * Math.cos(phi)];
     }
     return [s - this.arc, r];
   };
+  Track.prototype.pos = function (s, lane) {
+    if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
+    return this.posAtR(s, this.radius(lane));
+  };
   Track.prototype.heading = function (s, lane) {
-    if (!this.curved || s >= this.arc) return 0;
+    if (!this.curved) return 0;
+    if (this.fullLap && s >= this.arc + this.straight) {
+      const s2 = s - (this.arc + this.straight);
+      if (s2 < this.arc) return Math.PI * (this.arc - s2) / this.arc - Math.PI;
+      return -Math.PI;
+    }
+    if (s >= this.arc) return 0;
     return (this.arc - s) / this.radius(lane);
   };
   Track.prototype.lean = function (s, lane, v) {
-    if (!this.curved || s >= this.arc) return 0;
+    if (!this.curved) return 0;
+    let sBend = null;
+    if (this.fullLap && s >= this.arc + this.straight) {
+      const s2 = s - (this.arc + this.straight);
+      if (s2 < this.arc) sBend = s2;
+    } else if (s < this.arc) {
+      sBend = s;
+    }
+    if (sBend === null) return 0;
     const a = Math.atan((v * v) / (9.81 * this.radius(lane)));
-    const fade = Math.max(0, Math.min(1, (this.arc - s) / 9));
-    // En debut de courbe (depart en quinconce), l'orientation (headAng)
-    // peut depasser 90 degres : combinee a l'inclinaison laterale, la
-    // projection isometrique ecrasait visuellement le coureur. On attenue
-    // donc l'inclinaison quand le cap est tres marque, pour ne la laisser
-    // pleinement visible qu'une fois le coureur revenu vers l'axe de course.
-    const heading = this.heading(s, lane);
+    const fade = Math.max(0, Math.min(1, (this.arc - sBend) / 9));
+    // En debut de courbe (depart en quinconce, ou en sortie du second
+    // virage), l'orientation (headAng) peut depasser 90 degres : combinee
+    // a l'inclinaison laterale, la projection isometrique ecrasait
+    // visuellement le coureur. On attenue donc l'inclinaison quand le cap
+    // s'ecarte trop de l'axe de course, pour ne la laisser pleinement
+    // visible qu'une fois le coureur revenu vers cet axe.
+    const heading = Math.abs(this.heading(s, lane));
     const tempered = Math.max(0.4, 1 - heading / (Math.PI * 0.85));
     return Math.min(a, 0.38) * fade * tempered;
   };

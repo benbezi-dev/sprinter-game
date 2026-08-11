@@ -303,7 +303,7 @@
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
-    scores: {}, runs: { '100': [], '200': [] }, furthest: { '100': 0, '200': 0 },
+    scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60
   };
 
@@ -495,19 +495,36 @@
   function samples() {
     const T = G.track, out = [];
     if (T.curved) {
-      for (let i = 0; i <= ARC_STEPS; i++)
-        out.push([true, Math.PI * (1 - i / ARC_STEPS)]);
       const st = segLen();
-      for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x]);
+      for (let i = 0; i <= ARC_STEPS; i++)
+        out.push([true, Math.PI * (1 - i / ARC_STEPS), 0]);
+      const s1End = T.fullLap ? T.straight : T.straight + C.RUNOUT;
+      for (let x = st; x <= s1End; x += st) out.push([false, x, 0]);
+      // Tour complet (400 m) : second virage + seconde ligne droite,
+      // symetriques du premier couple (voir Track.posLap2), pour que le
+      // decor (pelouse, gradins, couloirs) existe sur tout le tour et pas
+      // seulement sur la moitie ou demarre la course.
+      if (T.fullLap) {
+        for (let i = 0; i <= ARC_STEPS; i++)
+          out.push([true, Math.PI * (1 - i / ARC_STEPS), 1]);
+        for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
+      }
     } else {
-      for (let x = -20; x <= T.straight + C.RUNOUT; x += 12) out.push([false, x]);
+      for (let x = -20; x <= T.straight + C.RUNOUT; x += 12) out.push([false, x, 0]);
     }
     return out;
   }
   function ptOf(sm, r) {
     const T = G.track;
-    if (T.curved) return T.posR(sm[1], r, sm[0]);
-    return [sm[1], r];
+    if (!T.curved) return [sm[1], r];
+    if (sm[2] === 1) {
+      // Second demi-tour (voir Track.posLap2) : meme rotation de 180
+      // degres + translation, mais a partir d'un angle phi deja calcule
+      // (comme pour le premier virage) plutot que d'une distance s.
+      if (sm[0]) return [T.straight + r * Math.sin(sm[1]), -r * Math.cos(sm[1])];
+      return [T.straight - sm[1], -r];
+    }
+    return T.posR(sm[1], r, sm[0]);
   }
   function band(ctx, sm, rIn, rOut, col, z) {
     if (sm.length < 2) return;
@@ -556,9 +573,17 @@
         const p = ground(...ptOf(s, rIn));
         i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
       });
-      let p = ground(T.straight + C.RUNOUT, 0); ctx.lineTo(p[0], p[1]);
-      p = ground(0, 0); ctx.lineTo(p[0], p[1]);
-      ctx.closePath(); ctx.fillStyle = rgb(th.grass); ctx.fill();
+      if (T.fullLap) {
+        // Tour complet : les echantillons font deja tout le tour du bord
+        // interieur (les deux virages et les deux lignes droites) ; on
+        // referme simplement la boucle plutot que de couper par le centre.
+        ctx.closePath();
+      } else {
+        let p = ground(T.straight + C.RUNOUT, 0); ctx.lineTo(p[0], p[1]);
+        p = ground(0, 0); ctx.lineTo(p[0], p[1]);
+        ctx.closePath();
+      }
+      ctx.fillStyle = rgb(th.grass); ctx.fill();
     } else {
       band(ctx, sm, rIn - 60, rIn, rgb(th.grass));
     }
@@ -631,13 +656,7 @@
     rail(ctx, sm, rOut, rgb(th.lane), 2.2);
 
     // Position d'un point de la piste a la distance m et au rayon r.
-    const at = (m, r) => {
-      if (T.curved && m < T.arc) {
-        const phi = (T.arc - m) / r;
-        return phi > Math.PI ? null : T.posR(phi, r, true);
-      }
-      return [T.curved ? m - T.arc : m, r];
-    };
+    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
 
     // Reperes au sol : uniquement le depart, la ligne des 100 m et celle
     // des 50 derniers metres (comme les marquages permanents d'une vraie
@@ -688,15 +707,18 @@
       ctx.fillText(m === 0 ? t('depart') : String(m), p[0], p[1]);
     }
 
-    // damier d'arrivee
-    const fx = T.curved ? T.straight : T.total;
+    // damier d'arrivee : positionne par distance de course (via at(), qui
+    // gere le second demi-tour du 400 m) plutot que par coordonnee locale
+    // fixe, sinon la ligne d'arrivee tomberait au mauvais endroit sur un
+    // tour complet.
     for (let i = 0; i < C.LANE_COUNT * 2; i++) {
       const rr = rIn + i * C.LANE_W * 0.5;
       ctx.fillStyle = i % 2 ? 'rgb(56,58,72)' : '#fff';
       ctx.beginPath();
-      const q = [ground(fx - 0.35, rr), ground(fx + 0.35, rr),
-                 ground(fx + 0.35, rr + C.LANE_W * 0.5),
-                 ground(fx - 0.35, rr + C.LANE_W * 0.5)];
+      const c0 = at(T.total - 0.35, rr), c1 = at(T.total + 0.35, rr),
+            c2 = at(T.total + 0.35, rr + C.LANE_W * 0.5), c3 = at(T.total - 0.35, rr + C.LANE_W * 0.5);
+      const q = [ground(c0[0], c0[1]), ground(c1[0], c1[1]),
+                 ground(c2[0], c2[1]), ground(c3[0], c3[1])];
       ctx.moveTo(q[0][0], q[0][1]);
       for (let j = 1; j < 4; j++) ctx.lineTo(q[j][0], q[j][1]);
       ctx.closePath(); ctx.fill();

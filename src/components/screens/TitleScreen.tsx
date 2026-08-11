@@ -14,7 +14,7 @@ export function TitleScreen() {
     SprinterApp.startRun();
   };
 
-  const handleRaceToggle = (key: '100' | '200') => {
+  const handleRaceToggle = (key: '100' | '200' | '400') => {
     SprinterApp.G.raceKey = key;
     SprinterApp.G.race = RACES[key];
     SprinterApp.buildLevel(0);
@@ -116,7 +116,7 @@ export function TitleScreen() {
 
             {/* Race Selectors */}
             <div className="flex gap-2">
-              {(['100', '200'] as const).map(k => (
+              {(['100', '200', '400'] as const).map(k => (
                 <button
                   key={k}
                   onClick={() => handleRaceToggle(k)}

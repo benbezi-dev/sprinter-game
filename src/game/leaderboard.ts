@@ -7,7 +7,7 @@ const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const DEVICE_ID_KEY = 'sprinter_device_id';
 const PLAYER_NAME_KEY = 'sprinter_player_name';
 
-export type RaceKey = '100' | '200';
+export type RaceKey = '100' | '200' | '400';
 
 export type LeaderboardEntry = {
   name: string;

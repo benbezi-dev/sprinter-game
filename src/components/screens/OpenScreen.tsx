@@ -42,7 +42,7 @@ export function OpenScreen() {
             animate={{ opacity: 1, y: 0 }}
             className="text-lg sm:text-2xl font-bold tracking-widest text-foreground/90 font-display whitespace-nowrap"
           >
-            100 METRES &nbsp;&mdash;&nbsp; 200 METRES
+            100 &nbsp;&mdash;&nbsp; 200 &nbsp;&mdash;&nbsp; 400 METRES
           </motion.div>
         )}
         
