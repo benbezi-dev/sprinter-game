@@ -555,6 +555,45 @@
     }
     ctx.closePath(); ctx.fillStyle = col; ctx.fill();
   }
+  // Meme trace que band(), mais rempli avec un motif au lieu d'une teinte
+  // unie : utilise pour le public des gradins (voir getCrowdPattern), qui
+  // doit paraitre completement dense sans dessiner un sprite par personne
+  // (des dizaines de milliers d'appels drawImage par image feraient chuter
+  // le framerate, surtout sur telephone).
+  function bandPattern(ctx, sm, rIn, rOut, pattern, z) {
+    if (sm.length < 2 || !pattern) return;
+    ctx.beginPath();
+    for (let i = 0; i < sm.length; i++) {
+      const p = solid(...ptOf(sm[i], rIn), z || 0);
+      i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+    }
+    for (let i = sm.length - 1; i >= 0; i--) {
+      const p = solid(...ptOf(sm[i], rOut), z || 0);
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath(); ctx.fillStyle = pattern; ctx.fill();
+  }
+  // Motif de foule : une tuile dessinee une seule fois (des dizaines de
+  // supporters juxtapoles et decales), repetee ensuite par le moteur canvas
+  // lui-meme sur toute la surface du gradin. Un plein complet, sans le
+  // cout d'un dessin individuel par personne.
+  let crowdPattern = null;
+  function getCrowdPattern(ctx) {
+    if (crowdPattern) return crowdPattern;
+    if (!CROWD_IMGS.every(im => im.complete && im.naturalWidth)) return null;
+    const tile = document.createElement('canvas');
+    tile.width = 180; tile.height = 180;
+    const tctx = tile.getContext('2d');
+    for (let n = 0; n < 90; n++) {
+      const img = CROWD_IMGS[n % CROWD_IMGS.length];
+      const seed = n * 2654435761;
+      const w = 13 + (seed % 7), h = w * (31 / 21);
+      const x = (seed % 211) % tile.width, y = ((seed / 211) % 193) % tile.height;
+      tctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+    }
+    crowdPattern = ctx.createPattern(tile, 'repeat');
+    return crowdPattern;
+  }
   function rail(ctx, sm, r, col, w, z) {
     if (sm.length < 2) return;
     ctx.beginPath();
@@ -637,48 +676,23 @@
       band(ctx, sm, r0, r0 + 0.05, rgb(th.riser, f), z1);
       band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
     }
-    // Public dans les gradins : sprites de supporters (Kenney Sports Pack),
-    // avec un leger balancement pour donner une impression de foule vivante.
-    // Le taux de remplissage grimpe avec l'importance de l'etape : une
-    // competition scolaire a des gradins clairsemes, la finale intergalactique
-    // les a combles.
-    const tnow = performance.now() / 1000;
+    // Public dans les gradins : motif de foule dense (getCrowdPattern) plutot
+    // que des sprites individuels. Multiplier encore le nombre de personnes
+    // dessinees une a une (deja 35 000+ a l'etape 6) ferait chuter le
+    // framerate, surtout sur telephone, sans que ca se voie vraiment a
+    // l'ecran — un motif repete donne un gradin visuellement complet, sans
+    // aucun cout supplementaire quelle que soit la "densite" recherchee.
+    // Le taux de remplissage grimpe toujours avec l'importance de l'etape,
+    // via l'opacite du motif (gradins clairsemes -> combles).
     const density = CROWD_DENSITY[G.levelIdx] ?? 1;
-    // Taille en pixels ecran : basee sur scaleM() (l'echelle monde -> pixels,
-    // la meme que pour les coureurs), pas sur ui() (un facteur d'interface
-    // minuscule, ~0,6 a 1,7) — sinon les sprites ne mesurent que 2-3 px et
-    // deviennent invisibles une fois lisses par le canvas.
-    const ch = scaleM() * 0.55, cw = ch * (21 / 31);
-    // Cinquante personnes par emplacement echantillonne, reparties sur toute
-    // la profondeur du gradin (rayon, bord a bord) ET sur une plus large
-    // portion de la piste (interpolees sur plusieurs reperes, pas seulement
-    // le suivant) pour occuper le maximum de place plutot que de former des
-    // tas espaces.
-    const PER_SLOT = 148;
-    const SPREAD = 6;
-    for (let t = 0; t < tiers; t++) {
-      const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
-      for (let i = 0; i < sm.length; i += SPREAD) {
-        const iNext = Math.min(i + SPREAD, sm.length - 1);
-        for (let k = 0; k < PER_SLOT; k++) {
-          const seed = (i * 7 + t * 31) * PER_SLOT + k;
-          const occupied = ((seed * 2654435761) >>> 0) % 1000 / 1000 < density;
-          if (!occupied) continue;
-          const rr = r0 + ((seed % 100) / 100) * sr;
-          const frac = ((seed >> 3) % 100) / 100;
-          const pA = ptOf(sm[i], rr), pB = ptOf(sm[iNext], rr);
-          const wx = pA[0] + (pB[0] - pA[0]) * frac, wy = pA[1] + (pB[1] - pA[1]) * frac;
-          const p = solid(wx, wy, z1 + Math.sin(tnow * 2 + seed) * 0.04);
-          if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
-          const img = CROWD_IMGS[seed % CROWD_IMGS.length];
-          if (img.complete && img.naturalWidth) {
-            ctx.drawImage(img, p[0] - cw / 2, p[1] - ch / 2, cw, ch);
-          } else {
-            ctx.fillStyle = rgb(seed % 3 === 0 ? th.crowdHi : th.crowdLo);
-            ctx.beginPath(); ctx.arc(p[0], p[1], 2.1 * ui(), 0, TAU); ctx.fill();
-          }
-        }
+    const crowdPat = getCrowdPattern(ctx);
+    if (crowdPat) {
+      ctx.globalAlpha = Math.max(0.35, density);
+      for (let t = 0; t < tiers; t++) {
+        const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
+        bandPattern(ctx, sm, r0, r0 + sr, crowdPat, z1);
       }
+      ctx.globalAlpha = 1;
     }
     band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
          1.05 + tiers * sz + 2.4);
