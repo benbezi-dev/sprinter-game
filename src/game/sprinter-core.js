@@ -72,24 +72,32 @@
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
+  //
+  // maxSpeed est volontairement en dessous des vitesses reelles d'un
+  // sprinteur : c'est la vitesse SANS transition reussie. Avec les gains de
+  // transition (x10, voir TRANS_*), une transition parfaite ramene le chrono
+  // juste sous la borne basse de l'etape 6 (9,02 s / 18,19 s / 36,95 s),
+  // tandis qu'une course sans transition (10,37 s / 21,82 s / 45,63 s) suffit
+  // encore largement a passer l'etape 1. Modifier maxSpeed sans reverifier
+  // ces deux bornes casse toute la courbe de difficulte.
   const RACES = {
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
-      arc: 0, straight: 100, maxSpeed: 12.073, best: 9.10,
+      arc: 0, straight: 100, maxSpeed: 10.814, best: 9.10,
       transFrom: 15, transTo: 45,
       ranges: [[12.50, 15.00], [11.20, 12.50], [10.00, 10.50],
                [9.58, 10.00], [9.58, 9.85], [9.11, 9.58]]
     },
     '200': {
       key: '200', label: '200 METRES', sub: 'virage et ligne droite',
-      arc: 115.61, straight: 84.39, maxSpeed: 11.671, best: 18.20,
+      arc: 115.61, straight: 84.39, maxSpeed: 9.839, best: 18.20,
       transFrom: 20, transTo: 60,
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
                [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
     },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
-      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 36.90,
+      arc: 115.61, straight: 84.39, maxSpeed: 9.256, best: 36.90,
       transFrom: 20, transTo: 80,
       ranges: [[55.00, 60.00], [49.00, 55.00], [44.50, 49.00],
                [43.50, 44.50], [43.18, 43.50], [36.98, 37.98]]
