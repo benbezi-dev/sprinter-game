@@ -84,7 +84,9 @@
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
       arc: 0, straight: 100, maxSpeed: 10.814, best: 9.10,
-      transFrom: 15, transTo: 45,
+      // Fenetre la plus courte du jeu (30 m, ~3 s) : on abaisse les seuils
+      // pour compenser le peu de temps disponible pour monter la cadence.
+      transFrom: 15, transTo: 45, transGood: 1.10, transPerfect: 1.30,
       ranges: [[12.50, 15.00], [11.20, 12.50], [10.00, 10.50],
                [9.58, 10.00], [9.58, 9.85], [9.11, 9.58]]
     },
@@ -428,6 +430,10 @@
     // blocs) que la montee en frequence est mesuree.
     this.transFrom = opts.transFrom != null ? opts.transFrom : C.DRIVE_END;
     this.transTo = opts.transTo != null ? opts.transTo : C.TRANS_END;
+    // Seuils de notation, ajustables par epreuve : une fenetre courte
+    // laisse moins de temps pour monter la cadence, donc moins d'exigence.
+    this.transGood = opts.transGood != null ? opts.transGood : C.TRANS_GOOD;
+    this.transPerfect = opts.transPerfect != null ? opts.transPerfect : C.TRANS_PERFECT;
     if (this.target) this.setPace(this.target);
   }
 
@@ -483,8 +489,8 @@
     const early = mean(gap.slice(0, 3)), late = mean(gap.slice(-3));
     const ratio = late > 0.0001 ? early / late : 0;
     this.transRatio = ratio;
-    this.transGrade = ratio >= C.TRANS_PERFECT ? 2
-      : (ratio >= C.TRANS_GOOD ? 1 : 0);
+    this.transGrade = ratio >= this.transPerfect ? 2
+      : (ratio >= this.transGood ? 1 : 0);
     const g = this.transGrade;
     this.maxSpeed *= C.TRANS_VMAX[g];
     this.v = Math.min(this.maxSpeed, this.v + C.TRANS_BOOST[g]);

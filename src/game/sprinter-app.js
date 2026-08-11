@@ -366,7 +366,8 @@
     G.runners = [];
     const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total,
-      transFrom: R.transFrom, transTo: R.transTo });
+      transFrom: R.transFrom, transTo: R.transTo,
+      transGood: R.transGood, transPerfect: R.transPerfect });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     lvl.names.forEach((n, i) => {
