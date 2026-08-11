@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 export function RaceHUD() {
   const { 
     state, elapsed, countT, champion, championTime, levelIdx, runners, player,
-    shake, falseFlash, reactFlash, transFlash, stumbleFlash
+    shake, falseFlash, reactFlash, stumbleFlash
   } = useGameStore();
   
   const { N, C } = SprinterApp;
@@ -32,6 +32,13 @@ export function RaceHUD() {
   const posTxt = N.ord(pos);
   const ph = player?.phase ? player.phase() : 0;
   const total = T?.total || 100;
+  // Rythme : lu a chaque frame sur le coureur, pour une jauge qui suit
+  // reellement les appuis plutot qu'un etat fige.
+  const rhythm = Math.max(0, Math.min(1, player?.rhythm ?? 0));
+  const rhyCol = rhythm >= 0.75 ? 'text-primary'
+    : rhythm >= 0.45 ? 'text-emerald-400' : 'text-orange-400';
+  const rhyBar = rhythm >= 0.75 ? 'bg-primary'
+    : rhythm >= 0.45 ? 'bg-emerald-400' : 'bg-orange-400';
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
@@ -48,9 +55,22 @@ export function RaceHUD() {
         </div>
 
         <div className="w-1/2 landscape:w-auto landscape:flex-1 flex justify-end items-center gap-2 sm:gap-4 order-2 landscape:order-3">
-          <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${ph === 0 ? 'text-primary' : ph === 1 ? 'text-cyan-400' : 'text-muted-foreground'}`}>
-            {N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])}
-          </div>
+          {/* Jauge de rythme : etat en direct de la regularite des appuis.
+              Remplace l'ancienne note de transition, qui n'apparaissait
+              qu'une fois, apres coup, sans qu'on sache pourquoi. */}
+          {isRace && (
+            <div className="flex flex-col items-end gap-0.5 min-w-[68px] sm:min-w-[86px]">
+              <div className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${rhyCol}`}>
+                {N.t('rhythm')} {Math.round(rhythm * 100)}%
+              </div>
+              <div className="w-full h-1.5 sm:h-2 bg-black/50 rounded-full overflow-hidden border border-white/10">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-100 ${rhyBar}`}
+                  style={{ width: `${Math.round(rhythm * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="font-black font-mono text-2xl sm:text-3xl md:text-4xl text-primary tabular-nums landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {elapsed.toFixed(2)}
           </div>
@@ -129,20 +149,7 @@ export function RaceHUD() {
           </div>
         )}
         
-        {transFlash > 0 && player && player.transGrade !== null && (
-          <div className="flex flex-col items-center mt-2 md:mt-4" style={{ opacity: Math.min(transFlash, 1) }}>
-            <div className={`text-lg sm:text-xl md:text-2xl font-black tracking-widest uppercase ${player.transGrade === 2 ? 'text-primary' : player.transGrade === 1 ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-              {N.t(`trans_${player.transGrade}`)}
-            </div>
-            {player.transGrade > 0 && (
-              <div className="text-xs sm:text-sm md:text-base font-bold text-cyan-400 font-mono tracking-wide bg-black/50 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full mt-1">
-                +{C.TRANS_BOOST[player.transGrade].toFixed(2)} m/s &nbsp;&mdash;&nbsp; {Math.round((1 - C.TRANS_DRAG[player.transGrade]) * 100)}% drag
-              </div>
-            )}
-          </div>
-        )}
-        
-        {ph === 0 && elapsed > 0.1 && transFlash <= 0 && reactFlash <= 0 && !player?.finished && (
+        {ph === 0 && elapsed > 0.1 && reactFlash <= 0 && !player?.finished && (
           <div className="text-xs md:text-sm font-medium text-muted-foreground tracking-widest uppercase mt-4 md:mt-8 animate-pulse">
             {N.t('drive_hint')}
           </div>

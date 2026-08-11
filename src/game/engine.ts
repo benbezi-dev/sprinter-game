@@ -22,7 +22,6 @@ export type GameState = {
   flash: number;
   stumbleFlash: number;
   reactFlash: number;
-  transFlash: number;
   falseFlash: number;
   cut: any;
   levelIdx: number;
@@ -128,7 +127,6 @@ export function toggleAudio() {
 export function updateLogic(dt: number) {
   G.skipArm = Math.max(0, G.skipArm - dt);
   G.reactFlash = Math.max(0, G.reactFlash - dt);
-  G.transFlash = Math.max(0, G.transFlash - dt);
   G.falseFlash = Math.max(0, G.falseFlash - dt);
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.flash = Math.max(0, G.flash - dt * 1.4);
@@ -166,10 +164,8 @@ export function updateLogic(dt: number) {
       G.reactShown = true; G.reactFlash = 2.2;
       if (!G.player.jumped) Audio_.sfx('beep');
     }
-    if (G.player.transGrade !== null && !G.transShown) {
-      G.transShown = true; G.transFlash = 2.4;
-      if (G.player.transGrade) { Audio_.sfx('win'); G.flash = 0.6; }
-    }
+    // Le rythme n'a plus de "moment" a annoncer : il se lit en direct sur
+    // la jauge du HUD, donc plus de flash ponctuel ici.
     SprinterApp.followCam(dt);
     
     const out = G.player.finished && G.player.d >= G.track.total + C.RUNOUT;
@@ -191,7 +187,6 @@ export function updateLogic(dt: number) {
     flash: G.flash,
     stumbleFlash: G.stumbleFlash,
     reactFlash: G.reactFlash,
-    transFlash: G.transFlash,
     falseFlash: G.falseFlash,
     cut: G.cut,
     levelIdx: G.levelIdx,

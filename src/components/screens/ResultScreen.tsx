@@ -10,8 +10,8 @@ export function ResultScreen() {
 
   const startRecap = () => {
     if (!player || player.reaction === null) return N.t('no_start');
-    const g = player.transGrade === null ? 0 : player.transGrade;
-    return N.t('start_line', { r: player.jumped ? '--' : player.reaction.toFixed(3), g: N.t('trans_' + g) });
+    const rhy = Math.round((player.rhythmAvg ? player.rhythmAvg() : 0) * 100);
+    return N.t('start_line', { r: player.jumped ? '--' : player.reaction.toFixed(3), g: N.t('rhythm_kept', { r: rhy }) });
   };
 
   const handleNext = () => {
