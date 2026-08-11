@@ -47,6 +47,22 @@
     }
   };
 
+  // Public dans les gradins : sprites (Kenney Sports Pack, CC0) plutot que
+  // de simples pastilles, et remplissage croissant selon l'importance de
+  // l'etape (une petite competition scolaire n'attire pas la meme foule
+  // qu'une finale intergalactique).
+  const CROWD_BASE = (typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
+  const CROWD_COLORS = ['blue', 'red', 'green', 'gold', 'white'];
+  const CROWD_IMGS = CROWD_COLORS.map(c => {
+    const img = new Image();
+    img.src = CROWD_BASE + '/icons/crowd/' + c + '.png';
+    return img;
+  });
+  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
+  const FLAG_IMG = new Image();
+  FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
+
   const GOLD = 'rgb(248,205,74)', CREAM = 'rgb(238,240,248)';
   const MUTED = 'rgb(140,146,182)', CYAN = 'rgb(104,216,236)';
   const GREEN = 'rgb(108,226,138)', RED = 'rgb(250,106,106)';
@@ -621,26 +637,50 @@
       band(ctx, sm, r0, r0 + 0.05, rgb(th.riser, f), z1);
       band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
     }
-    // Public dans les gradins : simples pastilles alternant deux teintes
-    // (crowdLo/crowdHi, deja prevues par theme mais jusque-la inutilisees),
-    // avec un leger balancement pour donner une impression de foule vivante
-    // plutot que des tribunes vides.
+    // Public dans les gradins : sprites de supporters (Kenney Sports Pack),
+    // avec un leger balancement pour donner une impression de foule vivante.
+    // Le taux de remplissage grimpe avec l'importance de l'etape : une
+    // competition scolaire a des gradins clairsemes, la finale intergalactique
+    // les a combles.
     const tnow = performance.now() / 1000;
+    const density = CROWD_DENSITY[G.levelIdx] ?? 1;
+    const cw = 3.4 * ui(), ch = cw * (31 / 21);
     for (let t = 0; t < tiers; t++) {
       const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
       for (let i = 0; i < sm.length; i += 2) {
         const seed = i * 7 + t * 31;
+        const occupied = ((seed * 2654435761) >>> 0) % 1000 / 1000 < density;
+        if (!occupied) continue;
         const rr = r0 + 0.35 + (seed % 5) * 0.22;
         const p = solid(...ptOf(sm[i], rr), z1 + Math.sin(tnow * 2 + seed) * 0.04);
         if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
-        ctx.fillStyle = rgb(seed % 3 === 0 ? th.crowdHi : th.crowdLo);
-        ctx.beginPath();
-        ctx.arc(p[0], p[1], 2.1 * ui(), 0, TAU);
-        ctx.fill();
+        const img = CROWD_IMGS[seed % CROWD_IMGS.length];
+        if (img.complete && img.naturalWidth) {
+          ctx.drawImage(img, p[0] - cw / 2, p[1] - ch / 2, cw, ch);
+        } else {
+          ctx.fillStyle = rgb(seed % 3 === 0 ? th.crowdHi : th.crowdLo);
+          ctx.beginPath(); ctx.arc(p[0], p[1], 2.1 * ui(), 0, TAU); ctx.fill();
+        }
       }
     }
     band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
          1.05 + tiers * sz + 2.4);
+
+    // Fanions a damier le long du toit des tribunes, pour donner plus de
+    // "definition" au decor (accent visuel base sur un asset plutot que sur
+    // un aplat de couleur uni).
+    {
+      const fw = 2.6 * ui(), fh = fw * (27 / 32);
+      const fz = 1.05 + tiers * sz + 2.55, fr = near + tiers * sr + 0.5;
+      const fstp = decorStride() * 2;
+      if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
+        for (let i = 0; i < sm.length; i += fstp) {
+          const p = solid(...ptOf(sm[i], fr), fz);
+          if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
+          ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);
+        }
+      }
+    }
 
     // la piste par-dessus : elle reste toujours entierement lisible
     band(ctx, sm, rIn, rOut, rgb(th.trackA));
