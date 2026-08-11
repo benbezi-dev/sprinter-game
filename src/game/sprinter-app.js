@@ -649,19 +649,24 @@
     // minuscule, ~0,6 a 1,7) — sinon les sprites ne mesurent que 2-3 px et
     // deviennent invisibles une fois lisses par le canvas.
     const ch = scaleM() * 0.55, cw = ch * (21 / 31);
-    // Vingt personnes par emplacement echantillonne (reparties sur toute la
-    // profondeur du gradin) plutot qu'une seule, pour une foule vingt fois
-    // plus dense sur chaque etape et chaque epreuve.
+    // Vingt personnes par emplacement echantillonne, reparties a la fois sur
+    // la profondeur du gradin (rayon) ET le long de la piste (interpolees
+    // jusqu'au repere suivant) plutot que toutes empilees au meme point :
+    // sinon la foule forme des tas espaces au lieu de remplir le gradin.
     const PER_SLOT = 20;
     for (let t = 0; t < tiers; t++) {
       const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
       for (let i = 0; i < sm.length; i += 2) {
+        const iNext = Math.min(i + 2, sm.length - 1);
         for (let k = 0; k < PER_SLOT; k++) {
           const seed = (i * 7 + t * 31) * PER_SLOT + k;
           const occupied = ((seed * 2654435761) >>> 0) % 1000 / 1000 < density;
           if (!occupied) continue;
           const rr = r0 + 0.35 + ((seed % 100) / 100) * (sr - 0.4);
-          const p = solid(...ptOf(sm[i], rr), z1 + Math.sin(tnow * 2 + seed) * 0.04);
+          const frac = ((seed >> 3) % 100) / 100;
+          const pA = ptOf(sm[i], rr), pB = ptOf(sm[iNext], rr);
+          const wx = pA[0] + (pB[0] - pA[0]) * frac, wy = pA[1] + (pB[1] - pA[1]) * frac;
+          const p = solid(wx, wy, z1 + Math.sin(tnow * 2 + seed) * 0.04);
           if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
           const img = CROWD_IMGS[seed % CROWD_IMGS.length];
           if (img.complete && img.naturalWidth) {
