@@ -76,8 +76,8 @@
   // maxSpeed est volontairement en dessous des vitesses reelles d'un
   // sprinteur : c'est la vitesse SANS transition reussie. Avec les gains de
   // transition (x10, voir TRANS_*), une transition parfaite ramene le chrono
-  // juste sous la borne basse de l'etape 6 (9,02 s / 18,19 s / 36,95 s),
-  // tandis qu'une course sans transition (10,37 s / 21,82 s / 45,63 s) suffit
+  // juste sous la borne basse de l'etape 6 (9,01 s / 18,19 s / 36,78 s),
+  // tandis qu'une course sans transition (10,37 s / 21,82 s / 45,43 s) suffit
   // encore largement a passer l'etape 1. Modifier maxSpeed sans reverifier
   // ces deux bornes casse toute la courbe de difficulte.
   const RACES = {
@@ -97,7 +97,7 @@
     },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
-      arc: 115.61, straight: 84.39, maxSpeed: 9.256, best: 36.90,
+      arc: 115.61, straight: 84.39, maxSpeed: 9.300, best: 36.90,
       transFrom: 20, transTo: 80,
       ranges: [[55.00, 60.00], [49.00, 55.00], [44.50, 49.00],
                [43.50, 44.50], [43.18, 43.50], [36.98, 37.98]]
