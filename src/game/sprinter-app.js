@@ -574,25 +574,31 @@
     ctx.closePath(); ctx.fillStyle = pattern; ctx.fill();
   }
   // Motif de foule : une tuile dessinee une seule fois (des dizaines de
-  // supporters juxtapoles et decales), repetee ensuite par le moteur canvas
-  // lui-meme sur toute la surface du gradin. Un plein complet, sans le
-  // cout d'un dessin individuel par personne.
-  let crowdPattern = null;
-  function getCrowdPattern(ctx) {
-    if (crowdPattern) return crowdPattern;
+  // supporters juxtapoles et decales, toujours opaques), repetee ensuite
+  // par le moteur canvas lui-meme sur toute la surface du gradin. Le
+  // remplissage progressif par etape vient du NOMBRE de personnes bakees
+  // dans la tuile (une tuile clairsemee pour la 1ere competition, dense
+  // pour la finale) plutot que d'une opacite reduite sur tout le motif —
+  // sinon le public entier parait transparent au lieu d'etre juste moins
+  // nombreux.
+  const crowdPatternCache = {};
+  function getCrowdPattern(ctx, levelIdx) {
+    if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
     if (!CROWD_IMGS.every(im => im.complete && im.naturalWidth)) return null;
+    const density = CROWD_DENSITY[levelIdx] ?? 1;
+    const count = Math.max(15, Math.round(90 * density));
     const tile = document.createElement('canvas');
     tile.width = 180; tile.height = 180;
     const tctx = tile.getContext('2d');
-    for (let n = 0; n < 90; n++) {
+    for (let n = 0; n < count; n++) {
       const img = CROWD_IMGS[n % CROWD_IMGS.length];
       const seed = n * 2654435761;
       const w = 13 + (seed % 7), h = w * (31 / 21);
       const x = (seed % 211) % tile.width, y = ((seed / 211) % 193) % tile.height;
       tctx.drawImage(img, x - w / 2, y - h / 2, w, h);
     }
-    crowdPattern = ctx.createPattern(tile, 'repeat');
-    return crowdPattern;
+    crowdPatternCache[levelIdx] = ctx.createPattern(tile, 'repeat');
+    return crowdPatternCache[levelIdx];
   }
   function rail(ctx, sm, r, col, w, z) {
     if (sm.length < 2) return;
@@ -682,17 +688,28 @@
     // framerate, surtout sur telephone, sans que ca se voie vraiment a
     // l'ecran — un motif repete donne un gradin visuellement complet, sans
     // aucun cout supplementaire quelle que soit la "densite" recherchee.
-    // Le taux de remplissage grimpe toujours avec l'importance de l'etape,
-    // via l'opacite du motif (gradins clairsemes -> combles).
-    const density = CROWD_DENSITY[G.levelIdx] ?? 1;
-    const crowdPat = getCrowdPattern(ctx);
+    // Uniquement sur les lignes droites : dans le virage, seuls les gradins
+    // nus restent visibles (pas de tribune principale en courbe).
+    const crowdPat = getCrowdPattern(ctx, G.levelIdx);
     if (crowdPat) {
-      ctx.globalAlpha = Math.max(0.35, density);
+      // Petit mouvement de foule : le motif oscille doucement dans le temps
+      // au lieu de rester fige, pour donner une impression de vie sans
+      // recalculer la tuile ni redessiner personne individuellement.
+      if (crowdPat.setTransform) {
+        const tnow = performance.now() / 1000;
+        const m = new DOMMatrix().translate(Math.sin(tnow * 1.3) * 2.4, Math.cos(tnow * 0.85) * 1.2);
+        crowdPat.setTransform(m);
+      }
+      const straightRuns = [];
+      let run = null;
+      for (const s of sm) {
+        if (!s[0]) { if (!run) { run = []; straightRuns.push(run); } run.push(s); }
+        else run = null;
+      }
       for (let t = 0; t < tiers; t++) {
         const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
-        bandPattern(ctx, sm, r0, r0 + sr, crowdPat, z1);
+        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1);
       }
-      ctx.globalAlpha = 1;
     }
     band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
          1.05 + tiers * sz + 2.4);
