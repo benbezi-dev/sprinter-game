@@ -38,25 +38,16 @@
     REACT_WINDOW: 0.32,
     REACT_BONUS: 1.35,        // m/s offerts sur une reaction parfaite
     FALSE_START_FREEZE: 0.28, // blocage si on part avant le signal
-    // transition : la cadence doit monter franchement pendant la fenetre de
-    // transition propre a l'epreuve (voir transFrom / transTo dans RACES)
+    // transition : la cadence doit monter franchement pendant la poussee
     TRANS_GOOD: 1.18,
     TRANS_PERFECT: 1.45,
-    // Gains multiplies par dix par rapport au reglage d'origine
-    // ([0, 0.18, 0.40] / [0, 0.012, 0.030] de gain de vitesse max) : la
-    // transition devient le facteur decisif du chrono, et non plus un
-    // reglage fin de l'ordre du dixieme.
-    TRANS_BOOST: [0, 1.80, 4.00],   // impulsion immediate, selon la note
-    // Freinage allege pendant TRANS_TIME. La reduction est elle aussi
-    // multipliee par dix (0,09 -> 0,90 et 0,18 -> 1,80), mais plafonnee
-    // pour rester physique : au-dela de 1,0 le "freinage" deviendrait
-    // negatif, et le coureur accelererait tout seul sans appuyer.
-    TRANS_DRAG: [1.0, 0.10, 0.05],
+    TRANS_BOOST: [0, 0.18, 0.40],   // impulsion immediate, selon la note
+    TRANS_DRAG: [1.0, 0.91, 0.82],  // freinage allege pendant TRANS_TIME
     TRANS_TIME: [0, 1.8, 2.6],
     // Une transition reussie ne donne pas seulement un coup d'accelerateur :
     // elle fixe la vitesse maximale tenue jusqu'a l'arrivee. C'est la que se
-    // joue l'essentiel du gain.
-    TRANS_VMAX: [1.0, 1.12, 1.30],
+    // joue l'essentiel du gain, de l'ordre du dixieme de seconde.
+    TRANS_VMAX: [1.0, 1.012, 1.030],
 
     // --- morphologie ---------------------------------------------------
     MODEL_H: 1.72,
@@ -72,35 +63,22 @@
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
-  //
-  // maxSpeed est volontairement en dessous des vitesses reelles d'un
-  // sprinteur : c'est la vitesse SANS transition reussie. Avec les gains de
-  // transition (x10, voir TRANS_*), une transition parfaite ramene le chrono
-  // juste sous la borne basse de l'etape 6 (9,01 s / 18,19 s / 36,78 s),
-  // tandis qu'une course sans transition (10,37 s / 21,82 s / 45,43 s) suffit
-  // encore largement a passer l'etape 1. Modifier maxSpeed sans reverifier
-  // ces deux bornes casse toute la courbe de difficulte.
   const RACES = {
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
-      arc: 0, straight: 100, maxSpeed: 10.814, best: 9.10,
-      // Fenetre la plus courte du jeu (30 m, ~3 s) : on abaisse les seuils
-      // pour compenser le peu de temps disponible pour monter la cadence.
-      transFrom: 15, transTo: 45, transGood: 1.10, transPerfect: 1.30,
+      arc: 0, straight: 100, maxSpeed: 12.073, best: 9.10,
       ranges: [[12.50, 15.00], [11.20, 12.50], [10.00, 10.50],
                [9.58, 10.00], [9.58, 9.85], [9.11, 9.58]]
     },
     '200': {
       key: '200', label: '200 METRES', sub: 'virage et ligne droite',
-      arc: 115.61, straight: 84.39, maxSpeed: 9.839, best: 18.20,
-      transFrom: 20, transTo: 60,
+      arc: 115.61, straight: 84.39, maxSpeed: 11.671, best: 18.20,
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
                [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
     },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
-      arc: 115.61, straight: 84.39, maxSpeed: 9.300, best: 36.90,
-      transFrom: 20, transTo: 80,
+      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 36.90,
       ranges: [[55.00, 60.00], [49.00, 55.00], [44.50, 49.00],
                [43.50, 44.50], [43.18, 43.50], [36.98, 37.98]]
     }
@@ -418,22 +396,13 @@
     this.stumbleTimer = 0; this.fallAnim = 0; this.lastKey = null;
     // depart : reaction, cadence de poussee, note de transition
     this.reaction = null; this.reactBonus = 0; this.jumped = false;
-    this.freeze = 0; this.pressTimes = []; this.stumbledInTrans = false;
+    this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
     this.maxSpeed = opts.maxSpeed || 12;
     this.best = opts.best || 9.1;
     this.total = opts.total || 100;
-    // Fenetre de transition, en metres, propre a l'epreuve : c'est sur
-    // cette portion (et non plus sur un nombre d'appuis en sortie de
-    // blocs) que la montee en frequence est mesuree.
-    this.transFrom = opts.transFrom != null ? opts.transFrom : C.DRIVE_END;
-    this.transTo = opts.transTo != null ? opts.transTo : C.TRANS_END;
-    // Seuils de notation, ajustables par epreuve : une fenetre courte
-    // laisse moins de temps pour monter la cadence, donc moins d'exigence.
-    this.transGood = opts.transGood != null ? opts.transGood : C.TRANS_GOOD;
-    this.transPerfect = opts.transPerfect != null ? opts.transPerfect : C.TRANS_PERFECT;
     if (this.target) this.setPace(this.target);
   }
 
@@ -468,29 +437,26 @@
     return C.DRIVE_PITCH * Math.pow(1 - q, 1.6);
   };
 
-  // Phase courante : 0 poussee, 1 transition, 2 vitesse maximale. Les
-  // bornes sont celles de la fenetre de transition de l'epreuve, pour que
-  // l'affichage colle exactement a la portion ou la cadence est mesuree.
+  // Phase courante : 0 poussee, 1 transition, 2 vitesse maximale.
   Runner.prototype.phase = function () {
-    if (this.d < this.transFrom) return 0;
-    return this.d < this.transTo ? 1 : 2;
+    if (this.d < C.DRIVE_END) return 0;
+    return this.d < C.TRANS_END ? 1 : 2;
   };
 
   // Note de transition : on compare la cadence des trois premiers appuis a
-  // celle des trois derniers effectues DANS la fenetre de transition de
-  // l'epreuve. Monter franchement la frequence gauche/droite sur cette
-  // portion declenche la transition ; trebucher pendant la fenetre l'annule.
+  // celle des trois derniers de la phase de poussee. Un bon depart monte en
+  // frequence sans a-coup ; trebucher annule la note.
   Runner.prototype.gradeTransition = function () {
     const p = this.pressTimes;
-    if (this.stumbledInTrans || p.length < 7) { this.transGrade = 0; return; }
+    if (this.stumbledInDrive || p.length < 7) { this.transGrade = 0; return; }
     const gap = [];
     for (let i = 1; i < p.length; i++) gap.push(p[i] - p[i - 1]);
     const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
     const early = mean(gap.slice(0, 3)), late = mean(gap.slice(-3));
     const ratio = late > 0.0001 ? early / late : 0;
     this.transRatio = ratio;
-    this.transGrade = ratio >= this.transPerfect ? 2
-      : (ratio >= this.transGood ? 1 : 0);
+    this.transGrade = ratio >= C.TRANS_PERFECT ? 2
+      : (ratio >= C.TRANS_GOOD ? 1 : 0);
     const g = this.transGrade;
     this.maxSpeed *= C.TRANS_VMAX[g];
     this.v = Math.min(this.maxSpeed, this.v + C.TRANS_BOOST[g]);
@@ -510,8 +476,7 @@
         this.v += this.reactBonus;
       }
     }
-    // on n'enregistre que les appuis effectues dans la fenetre de transition
-    if (elapsed !== undefined && this.d >= this.transFrom && this.d < this.transTo)
+    if (elapsed !== undefined && this.d < C.DRIVE_END)
       this.pressTimes.push(elapsed);
     let stumbled = false;
     if (this.lastKey === key) {
@@ -521,8 +486,7 @@
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
         this.fallAnim = 1;
-        if (this.d >= this.transFrom && this.d < this.transTo)
-          this.stumbledInTrans = true;
+        if (this.d < C.DRIVE_END) this.stumbledInDrive = true;
         stumbled = true;
       } else {
         this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
@@ -559,8 +523,8 @@
     this.d += this.v * dt;
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
-    if (this.transGrade === null && before < this.transTo &&
-        this.d >= this.transTo) {
+    if (this.transGrade === null && before < C.DRIVE_END &&
+        this.d >= C.DRIVE_END) {
       this.gradeTransition();
     }
     if (this.d >= this.total) {
