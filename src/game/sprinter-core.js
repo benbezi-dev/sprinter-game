@@ -78,9 +78,9 @@
     },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
-      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 40.50,
-      ranges: [[55.50, 66.50], [50.00, 55.50], [44.50, 46.50],
-               [42.50, 44.50], [42.50, 43.75], [40.50, 42.50]]
+      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 35.80,
+      ranges: [[49.50, 59.50], [44.50, 49.50], [39.50, 41.50],
+               [38.00, 39.50], [38.00, 39.00], [36.00, 38.00]]
     }
   };
 
@@ -506,7 +506,10 @@
     }
     if (this.d >= this.total) {
       this.finished = true;
-      this.finishTime = Math.max(this.best, elapsed);
+      // Le chrono affiche doit toujours etre le temps reellement couru : le
+      // plancher a `this.best` cachait les performances qui le battaient
+      // (rendait par exemple un 37 s affiche comme 40,50 s sur le 400 m).
+      this.finishTime = elapsed;
     }
   };
 
