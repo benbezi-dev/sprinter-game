@@ -851,8 +851,12 @@
     const parts = pose(person);
     const sgn = mirror ? -1 : 1;
     const hc = Math.cos(headAng || 0), hs = Math.sin(headAng || 0);
-    const rc = Math.cos(lean || 0), rs = Math.sin(lean || 0);
-    const fall = (person.fallAnim || 0) * 1.25 - (person.drivePitch || 0);
+    // La chute ajoute son propre deport lateral par-dessus l'inclinaison
+    // du virage : le coureur part de travers au lieu de piquer droit devant.
+    const fsh = K.fallShape(person.fallAnim);
+    const roll = (lean || 0) + (fsh ? fsh.roll : 0);
+    const rc = Math.cos(roll), rs = Math.sin(roll);
+    const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
     for (const [col, pv, ang, off, hf, yaw] of parts) {

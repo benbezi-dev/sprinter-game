@@ -23,6 +23,11 @@
     STUMBLE_SPEED: 0.42,
     STUMBLE_KEEP: 0.20,
     STUMBLE_TIME: 0.62,
+    // Duree de l'ANIMATION de chute, volontairement plus longue que la
+    // penalite de vitesse (STUMBLE_TIME) : le coureur a le temps de
+    // partir de travers, mouliner des bras et se retablir en titubant,
+    // sans pour autant etre penalise plus longtemps qu'avant.
+    FALL_TIME: 1.15,
 
     // --- depart : mise en action, transition, vitesse maximale ----------
     // Un sprinteur sort des blocs corps tres incline, pousse en foulees
@@ -500,7 +505,7 @@
 
   Runner.prototype.stepPlayer = function (dt, elapsed) {
     if (this.fallAnim > 0) {
-      this.fallAnim = Math.max(0, this.fallAnim - dt / C.STUMBLE_TIME);
+      this.fallAnim = Math.max(0, this.fallAnim - dt / C.FALL_TIME);
     }
     if (this.freeze > 0) this.freeze = Math.max(0, this.freeze - dt);
     if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt);
@@ -565,6 +570,29 @@
     return false;
   };
 
+  // Forme de la chute, a partir de fallAnim (1 au faux pas -> 0 a la fin).
+  // L'ancienne version basculait le corps d'un coup a 1,25 rad puis le
+  // redressait lineairement : ca partait raide et ca se terminait mou.
+  // Ici tout passe par une enveloppe qui part de zero, culmine, puis
+  // retombe, avec des oscillations amorties par dessus : le coureur pique
+  // du nez, part de travers, mouline des bras et se retablit en titubant.
+  function fallShape(fallAnim) {
+    if (!fallAnim || fallAnim <= 0) return null;
+    const p = 1 - Math.max(0, Math.min(1, fallAnim));   // 0 -> 1
+    // montee rapide (p^0.45), retour plus lent : le desequilibre est
+    // brutal, le retablissement laborieux — c'est ce qui fait le comique.
+    const env = Math.sin(Math.PI * Math.pow(p, 0.45));
+    const damp = 1 - p;                                  // oscillations qui s'eteignent
+    return {
+      // piqué du nez + rebonds de redressement
+      pitch: env * (0.92 + 0.34 * Math.sin(p * Math.PI * 4.6) * damp),
+      // deport lateral : on titube d'un cote puis de l'autre
+      roll: env * 0.46 * Math.sin(p * Math.PI * 2.4),
+      // moulinets de bras, a fond au plus fort du desequilibre
+      flail: env
+    };
+  }
+
   // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
@@ -608,6 +636,17 @@
       const ur = 2.55 + 0.22 * Math.sin(p * 0.8 + 1.1);
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
+    }
+    // Moulinets de bras pendant la chute : les deux bras tournent en
+    // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
+    // de rattraper son equilibre.
+    const fsh = fallShape(r.fallAnim);
+    if (fsh && fsh.flail > 0.01) {
+      const f = fsh.flail, w = (1 - r.fallAnim) * Math.PI * 5.4;
+      const wl = 1.9 + 1.5 * Math.sin(w);
+      const wr = 1.9 + 1.5 * Math.sin(w + 2.4);
+      al = [al[0] * (1 - f) + wl * f, al[1] * (1 - f) + (wl + 0.55) * f];
+      ar = [ar[0] * (1 - f) + wr * f, ar[1] * (1 - f) + (wr + 0.55) * f];
     }
 
     const bob = -0.036 * A * Math.cos(2 * (p - 0.75));
@@ -746,7 +785,7 @@
   })();
 
   root.SprinterCore = {
-    TAU, C, RACES, LEVELS, GAIT, gait, catmull, Track, Runner, pose,
+    TAU, C, RACES, LEVELS, GAIT, gait, catmull, Track, Runner, pose, fallShape,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
