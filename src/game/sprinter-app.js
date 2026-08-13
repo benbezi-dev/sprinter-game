@@ -47,18 +47,12 @@
     }
   };
 
-  // Public dans les gradins : sprites (Kenney Sports Pack, CC0) plutot que
-  // de simples pastilles, et remplissage croissant selon l'importance de
-  // l'etape (une petite competition scolaire n'attire pas la meme foule
-  // qu'une finale intergalactique).
+  // Public dans les gradins : des personnages a facettes cuits dans une
+  // tuile (voir getCrowdPattern), et non plus des sprites plats. Le
+  // remplissage croit avec l'importance de l'etape — une competition
+  // scolaire n'attire pas la meme foule qu'une finale intergalactique.
   const CROWD_BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
-  const CROWD_COLORS = ['blue', 'red', 'green', 'gold', 'white'];
-  const CROWD_IMGS = CROWD_COLORS.map(c => {
-    const img = new Image();
-    img.src = CROWD_BASE + '/icons/crowd/' + c + '.png';
-    return img;
-  });
   const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
@@ -595,21 +589,85 @@
   const crowdPatternCache = {};
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
-    if (!CROWD_IMGS.every(im => im.complete && im.naturalWidth)) return null;
     const density = CROWD_DENSITY[levelIdx] ?? 1;
     const count = Math.max(15, Math.round(90 * density));
     const tile = document.createElement('canvas');
     tile.width = CROWD_TILE; tile.height = CROWD_TILE;
     const tctx = tile.getContext('2d');
+    // Chaque supporter est un vrai personnage a facettes, eclaire comme les
+    // coureurs, et non plus un sprite plat. Comme tout est cuit une seule
+    // fois dans la tuile puis repete par le moteur canvas, le public gagne
+    // du volume sans rien couter par frame — ce qui serait impossible en
+    // dessinant les dizaines de milliers de spectateurs un par un.
     for (let n = 0; n < count; n++) {
-      const img = CROWD_IMGS[n % CROWD_IMGS.length];
-      const seed = n * 2654435761;
-      const w = 13 + (seed % 7), h = w * (31 / 21);
-      const x = (seed % 211) % tile.width, y = ((seed / 211) % 193) % tile.height;
-      tctx.drawImage(img, x - w / 2, y - h / 2, w, h);
+      const seed = ((n + 1) * 2654435761) >>> 0;
+      const fan = {
+        look: K.lookFor('fan' + levelIdx + '_' + n, 'divers'),
+        stride: (seed % 628) / 100,
+        v: 0, maxSpeed: 12, fallAnim: 0,
+        // bras leves : un public qui encourage, pas qui court
+        celebrate: 0.72 + (seed % 28) / 100
+      };
+      const caps = personCapsules(fan, 0, 0, (seed & 1) === 1, false);
+      const k = 11 + (seed % 5);
+      const x = seed % CROWD_TILE;
+      const y = ((seed / 211) | 0) % CROWD_TILE;
+      // dessine aussi les copies debordantes, sinon la tuile se raccorde
+      // sur des corps coupes et le raccord se voit
+      for (const dx of [0, -CROWD_TILE]) {
+        for (const dy of [0, -CROWD_TILE]) {
+          if ((dx || dy) && x + dx < -40 && y + dy < -40) continue;
+          drawFacetFigure(tctx, caps, x + dx, y + dy, k);
+        }
+      }
     }
     crowdPatternCache[levelIdx] = ctx.createPattern(tile, 'repeat');
     return crowdPatternCache[levelIdx];
+  }
+  // Face VERTICALE le long de la piste, entre deux hauteurs. C'est ce qui
+  // manquait au decor : les gradins n'etaient qu'un empilement de bandes
+  // horizontales, donc plats. Avec la contremarche reellement dessinee et
+  // eclairee selon son orientation, l'escalier se lit en volume.
+  //
+  // La normale d'une contremarche est horizontale et tourne avec la piste :
+  // en virage les gradins ne prennent donc pas la lumiere de la meme
+  // maniere partout. On decoupe en troncons pour capter cette variation
+  // sans payer une facette par echantillon.
+  function wall(ctx, sm, r, zLo, zHi, baseCol, chunk) {
+    if (sm.length < 2) return;
+    const step = Math.max(1, chunk | 0);
+    for (let i = 0; i < sm.length - 1; i += step) {
+      const j = Math.min(i + step, sm.length - 1);
+      const a = ptOf(sm[i], r), aOut = ptOf(sm[i], r + 1);
+      let nx = aOut[0] - a[0], ny = aOut[1] - a[1];
+      const nl = Math.hypot(nx, ny) || 1;
+      nx /= nl; ny /= nl;
+      const d = nx * LIGHT[0] + ny * LIGHT[1];
+      const shade = 0.45 + 0.55 * (d > 0 ? d : 0);
+      // On ne reprend pas tous les echantillons du troncon : quelques
+      // points suffisent a epouser la courbe a cette echelle, et cela
+      // divise par trois le nombre de projections a calculer.
+      const sub = Math.max(1, step >> 2);
+      ctx.beginPath();
+      let first = true;
+      for (let q = i; q <= j; q += sub) {
+        const p = solid(...ptOf(sm[q], r), zLo);
+        first ? (ctx.moveTo(p[0], p[1]), first = false) : ctx.lineTo(p[0], p[1]);
+      }
+      const pEndLo = solid(...ptOf(sm[j], r), zLo);
+      ctx.lineTo(pEndLo[0], pEndLo[1]);
+      const pEndHi = solid(...ptOf(sm[j], r), zHi);
+      ctx.lineTo(pEndHi[0], pEndHi[1]);
+      for (let q = j - sub; q >= i; q -= sub) {
+        const p = solid(...ptOf(sm[q], r), zHi);
+        ctx.lineTo(p[0], p[1]);
+      }
+      const pStartHi = solid(...ptOf(sm[i], r), zHi);
+      ctx.lineTo(pStartHi[0], pStartHi[1]);
+      ctx.closePath();
+      ctx.fillStyle = rgb(baseCol, shade);
+      ctx.fill();
+    }
   }
   function rail(ctx, sm, r, col, w, z) {
     if (sm.length < 2) return;
@@ -684,13 +742,18 @@
     const near = rOut + 1.6, tiers = 4, sr = 1.7, sz = 0.58;
     const stp = decorStride();
     band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
+    // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
+    // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
     for (let i = 0; i + stp < sm.length; i += stp) {
-      band(ctx, sm.slice(i, i + stp + 1), near, near + 0.3,
-           rgb(th.panels[(i / stp) % th.panels.length]), 0.65);
+      wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
+           th.panels[(i / stp) % th.panels.length], stp);
     }
     for (let t = 0; t < tiers; t++) {
       const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz, f = 1 - t * 0.05;
-      band(ctx, sm, r0, r0 + 0.05, rgb(th.riser, f), z1);
+      // contremarche : vraie face verticale, du gradin precedent a celui-ci,
+      // eclairee selon son orientation -> l'escalier a du relief
+      wall(ctx, sm, r0, z1 - sz, z1, th.riser, stp);
+      // marche : surface horizontale, pleinement exposee a la lumiere
       band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
     }
     // Public dans les gradins : motif de foule dense (getCrowdPattern) plutot
