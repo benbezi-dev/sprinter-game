@@ -829,22 +829,163 @@
     }
   }
 
-  // --- rendu "moderne" d'un personnage : capsules vectorielles plates ---
-  // Un seul style pour toute l'appli (course, cinematiques, accueil) :
-  // meme squelette pose() qu'avant, mais chaque segment est projete en
-  // deux points (base/pointe) et trace comme une capsule 2D a teinte
-  // plate, au lieu d'un cube facette. Plus net, plus leger (pas de
-  // degrade recree a chaque frame), et la rotation en virage (headAng)
-  // s'applique correctement puisqu'elle fait partie du meme calcul que
-  // pour le reste de la scene.
-  function capsulePath(ctx, x0, y0, r0, x1, y1, r1) {
-    const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 0.0001;
-    const angle = Math.atan2(dy, dx);
-    const alpha = Math.asin(Math.max(-1, Math.min(1, (r0 - r1) / d)));
-    ctx.beginPath();
-    ctx.arc(x0, y0, Math.max(0.4, r0), angle + Math.PI / 2 - alpha, angle - Math.PI / 2 + alpha, false);
-    ctx.arc(x1, y1, Math.max(0.4, r1), angle - Math.PI / 2 + alpha, angle + Math.PI / 2 - alpha, false);
-    ctx.closePath();
+  // -------------------------------------------------------------------
+  // RENDU A FACETTES
+  // -------------------------------------------------------------------
+  // Un seul style pour toute l'appli (course, cinematiques, accueil), a
+  // partir du meme squelette pose() : chaque segment est un volume
+  // eclaire, et non plus une capsule 2D a teinte plate. La rotation en
+  // virage (headAng) reste correcte puisqu'elle fait partie du meme
+  // calcul que pour le reste de la scene.
+  //
+  // Chaque segment du corps est un tronc de cone a N faces, eclairees une
+  // par une par LIGHT. Le corps a donc un vrai relief, la ou la capsule
+  // ne donnait qu'un aplat cerne.
+  //
+  // Trois choses tiennent le cout de rendu, indispensable avec huit
+  // coureurs a l'ecran :
+  //   - le nombre de faces suit la taille a l'ecran du segment (un doigt
+  //     ne merite pas autant de facettes qu'un torse) ;
+  //   - les faces qui tournent le dos a la camera sont eliminees, ce qui
+  //     retire la moitie du travail ;
+  //   - le tri reste par segment (un tube est convexe, donc trier ses
+  //     propres faces suffit) plutot qu'un tri global de milliers de faces.
+
+  // Direction de vue de la projection isometrique, deduite de la
+  // projection elle-meme : ecran = ((Y-X)*ISO_COS, -(X+Y)*ISO_SIN - Z).
+  const VIEW = (function () {
+    const v = [C.ISO_COS, C.ISO_COS, -2 * C.ISO_COS * C.ISO_SIN];
+    const n = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / n, v[1] / n, v[2] / n];
+  })();
+
+  const RING_MAX = 10;
+  // tampons reutilises d'une frame a l'autre : ce code tourne des
+  // centaines de fois par image, il ne doit rien allouer.
+  const _p0x = new Float64Array(RING_MAX), _p0y = new Float64Array(RING_MAX), _p0z = new Float64Array(RING_MAX);
+  const _p1x = new Float64Array(RING_MAX), _p1y = new Float64Array(RING_MAX), _p1z = new Float64Array(RING_MAX);
+  const _nx = new Float64Array(RING_MAX), _ny = new Float64Array(RING_MAX), _nz = new Float64Array(RING_MAX);
+  const _s0x = new Float64Array(RING_MAX), _s0y = new Float64Array(RING_MAX);
+  const _s1x = new Float64Array(RING_MAX), _s1y = new Float64Array(RING_MAX);
+  const _fDepth = new Float64Array(RING_MAX + 2);
+  const _fShade = new Float64Array(RING_MAX + 2);
+  const _fKind = new Int32Array(RING_MAX + 2);
+  const _fOrder = new Int32Array(RING_MAX + 2);
+
+  function facetCount(rpx) {
+    if (rpx < 2.5) return 4;
+    if (rpx < 5) return 6;
+    if (rpx < 10) return 8;
+    return RING_MAX;
+  }
+
+  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k) {
+    const r0 = e0[3], r1 = e1[3];
+    let dx = e1[0] - e0[0], dy = e1[1] - e0[1], dz = e1[2] - e0[2];
+    let len = Math.hypot(dx, dy, dz);
+    if (len < 1e-6) { dx = 0; dy = 0; dz = 1; len = 1e-6; }
+    const axx = dx / len, axy = dy / len, axz = dz / len;
+
+    // base orthonormee perpendiculaire a l'axe du segment
+    let hx = 0, hy = 0, hz = 1;
+    if (Math.abs(axz) > 0.9) { hx = 1; hz = 0; }
+    let ux = axy * hz - axz * hy, uy = axz * hx - axx * hz, uz = axx * hy - axy * hx;
+    const ul = Math.hypot(ux, uy, uz) || 1;
+    ux /= ul; uy /= ul; uz /= ul;
+    const vx = axy * uz - axz * uy, vy = axz * ux - axx * uz, vz = axx * uy - axy * ux;
+
+    const N = facetCount(Math.max(r0, r1) * k);
+    const dr = (r1 - r0) / len;
+
+    for (let i = 0; i < N; i++) {
+      const a = TAU * i / N, ca = Math.cos(a), sa = Math.sin(a);
+      const rx = ux * ca + vx * sa, ry = uy * ca + vy * sa, rz = uz * ca + vz * sa;
+      // normale d'un tronc de cone : radiale, inclinee par la variation de rayon
+      let mx = rx - axx * dr, my = ry - axy * dr, mz = rz - axz * dr;
+      const ml = Math.hypot(mx, my, mz) || 1;
+      _nx[i] = mx / ml; _ny[i] = my / ml; _nz[i] = mz / ml;
+
+      const X0 = e0[0] + rx * r0, Y0 = e0[1] + ry * r0, Z0 = e0[2] + rz * r0;
+      const X1 = e1[0] + rx * r1, Y1 = e1[1] + ry * r1, Z1 = e1[2] + rz * r1;
+      _p0x[i] = X0; _p0y[i] = Y0; _p0z[i] = Z0;
+      _p1x[i] = X1; _p1y[i] = Y1; _p1z[i] = Z1;
+      _s0x[i] = ax + (Y0 - X0) * C.ISO_COS * k;
+      _s0y[i] = ay - (X0 + Y0) * C.ISO_SIN * k - Z0 * k;
+      _s1x[i] = ax + (Y1 - X1) * C.ISO_COS * k;
+      _s1y[i] = ay - (X1 + Y1) * C.ISO_SIN * k - Z1 * k;
+    }
+
+    // faces laterales visibles, plus les deux disques de bout
+    let nf = 0;
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      const mx = (_nx[i] + _nx[j]) * 0.5, my = (_ny[i] + _ny[j]) * 0.5, mz = (_nz[i] + _nz[j]) * 0.5;
+      if (mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2] >= 0) continue;   // dos a la camera
+      _fKind[nf] = i;
+      _fDepth[nf] = (_p0x[i] + _p0y[i] + _p0x[j] + _p0y[j] +
+                     _p1x[i] + _p1y[i] + _p1x[j] + _p1y[j]) * 0.25;
+      const nl = mx * LIGHT[0] + my * LIGHT[1] + mz * LIGHT[2];
+      _fShade[nf] = 0.56 + 0.60 * (nl < 0 ? -nl : 0);
+      nf++;
+    }
+    // bouchons : sans eux les extremites (mains, pieds, tete) sont creuses
+    if (-(axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2]) < 0) {
+      _fKind[nf] = -1;
+      _fDepth[nf] = e0[0] + e0[1];
+      const nl = -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]);
+      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
+      nf++;
+    }
+    if (axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2] < 0) {
+      _fKind[nf] = -2;
+      _fDepth[nf] = e1[0] + e1[1];
+      const nl = axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2];
+      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
+      nf++;
+    }
+
+    for (let i = 0; i < nf; i++) _fOrder[i] = i;
+    // tri par insertion : nf vaut au plus 12, c'est plus rapide qu'un sort()
+    for (let i = 1; i < nf; i++) {
+      const cur = _fOrder[i], d = _fDepth[cur];
+      let j = i - 1;
+      while (j >= 0 && _fDepth[_fOrder[j]] < d) { _fOrder[j + 1] = _fOrder[j]; j--; }
+      _fOrder[j + 1] = cur;
+    }
+
+    for (let f = 0; f < nf; f++) {
+      const id = _fOrder[f], kind = _fKind[id];
+      ctx.beginPath();
+      if (kind >= 0) {
+        const i = kind, j = (i + 1) % N;
+        ctx.moveTo(_s0x[i], _s0y[i]);
+        ctx.lineTo(_s0x[j], _s0y[j]);
+        ctx.lineTo(_s1x[j], _s1y[j]);
+        ctx.lineTo(_s1x[i], _s1y[i]);
+      } else if (kind === -1) {
+        ctx.moveTo(_s0x[0], _s0y[0]);
+        for (let i = 1; i < N; i++) ctx.lineTo(_s0x[i], _s0y[i]);
+      } else {
+        ctx.moveTo(_s1x[0], _s1y[0]);
+        for (let i = 1; i < N; i++) ctx.lineTo(_s1x[i], _s1y[i]);
+      }
+      ctx.closePath();
+      ctx.fillStyle = rgb(col, _fShade[id]);
+      ctx.fill();
+    }
+  }
+
+  function drawFacetFigure(ctx, caps, ax, ay, k) {
+    const order = [];
+    for (let i = 0; i < caps.length; i++) {
+      const e0 = caps[i][1], e1 = caps[i][2];
+      order.push([(e0[0] + e0[1] + e1[0] + e1[1]) * 0.5, i]);
+    }
+    order.sort((a, b) => b[0] - a[0]);
+    for (let n = 0; n < order.length; n++) {
+      const c = caps[order[n][1]];
+      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k);
+    }
   }
 
   function personCapsules(person, headAng, lean, mirror, applyCurve) {
@@ -884,30 +1025,11 @@
     return caps;
   }
 
-  function drawCapsuleFigure(ctx, caps, ax, ay, k) {
-    const drawn = [];
-    for (const [col, e0, e1] of caps) {
-      const x0 = ax + (e0[1] - e0[0]) * C.ISO_COS * k, y0 = ay - (e0[0] + e0[1]) * C.ISO_SIN * k - e0[2] * k;
-      const x1 = ax + (e1[1] - e1[0]) * C.ISO_COS * k, y1 = ay - (e1[0] + e1[1]) * C.ISO_SIN * k - e1[2] * k;
-      const depth = (e0[0] + e0[1] + e1[0] + e1[1]) * 0.5;
-      drawn.push([depth, col, x0, y0, e0[3] * k, x1, y1, e1[3] * k]);
-    }
-    drawn.sort((a, b) => b[0] - a[0]);
-    for (const [, col, x0, y0, r0, x1, y1, r1] of drawn) {
-      capsulePath(ctx, x0, y0, r0, x1, y1, r1);
-      ctx.fillStyle = rgb(col, 1);
-      ctx.fill();
-      ctx.lineWidth = Math.max(0.6, Math.max(r0, r1) * 0.12);
-      ctx.strokeStyle = rgb(col, 0.55);
-      ctx.stroke();
-    }
-  }
-
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
     const curved = !!(G.track && G.track.curved);
     const caps = personCapsules(r, headAng, lean, false, curved);
-    drawCapsuleFigure(ctx, caps, ax, ay, k);
+    drawFacetFigure(ctx, caps, ax, ay, k);
   }
 
   function drawAthletes(ctx) {
@@ -936,7 +1058,7 @@
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
     const caps = personCapsules(man, 0, 0, mirror, false);
-    drawCapsuleFigure(ctx, caps, cx2, cy2, k);
+    drawFacetFigure(ctx, caps, cx2, cy2, k);
   }
 
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
