@@ -2,13 +2,24 @@ import React, { useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { OneShotPanel, ChallengePanel } from './ModePanels';
+import { codeFromUrl } from '@/game/challenge';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+type Tab = 'career' | 'oneshot' | 'versus';
+const TABS: { id: Tab; key: string }[] = [
+  { id: 'career', key: 'mode_career' },
+  { id: 'oneshot', key: 'mode_oneshot' },
+  { id: 'versus', key: 'mode_versus' },
+];
 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
   const { Audio_, N, RACES } = SprinterApp;
   const [showTop500, setShowTop500] = useState(false);
+  // Un lien ?defi=CODE doit tomber directement sur l'onglet du defi.
+  const [tab, setTab] = useState<Tab>(() => (codeFromUrl() ? 'versus' : 'career'));
 
   const handleStart = () => {
     SprinterApp.startRun();
@@ -56,14 +67,36 @@ export function TitleScreen() {
                 SPRINTER
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
-                {RACES[raceKey].label} &mdash; {N.t('six_stages')}
+                {tab === 'career'
+                  ? <>{RACES[raceKey].label} &mdash; {N.t('six_stages')}</>
+                  : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
               </p>
             </div>
           </div>
 
           {/* Right Side: Records and Controls */}
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
-            
+
+            {/* Selecteur de mode */}
+            <div className="flex gap-1 p-1 rounded-2xl bg-black/30 border border-white/10">
+              {TABS.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
+                    ${tab === t.id
+                      ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+                >
+                  {N.t(t.key)}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'oneshot' && <OneShotPanel />}
+            {tab === 'versus' && <ChallengePanel />}
+
+            {tab === 'career' && <>
             {/* Leaderboard Card */}
             <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl">
               <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-6 justify-center">
@@ -137,6 +170,7 @@ export function TitleScreen() {
             >
               {N.t('start')}
             </button>
+            </>}
 
           </div>
         </div>

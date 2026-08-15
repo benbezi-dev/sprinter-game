@@ -5,10 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 export function RaceHUD() {
   const { 
     state, elapsed, countT, champion, championTime, levelIdx, runners, player,
-    shake, falseFlash, reactFlash, transFlash, stumbleFlash
+    shake, falseFlash, reactFlash, transFlash, stumbleFlash,
+    mode, shotRaces, shotIdx, ghostName
   } = useGameStore();
-  
+
   const { N, C } = SprinterApp;
+
+  // Dans un defi, l'adversaire a battre est le fantome, pas le favori de l'IA.
+  const ghostSplit: number | undefined = (SprinterApp.G.ghostSplits || [])[shotIdx];
+  const rival = ghostName && ghostSplit != null
+    ? { name: ghostName, time: ghostSplit }
+    : champion ? { name: champion, time: championTime } : null;
   
   // Countdown overlay
   const isCount = state === 'count';
@@ -93,10 +100,17 @@ export function RaceHUD() {
               {n > 0 ? n : N.t('go')}
             </span>
           </div>
-          {champion && (
-            <div className="mt-6 md:mt-12 bg-black/60 px-4 py-1.5 md:px-6 md:py-2 rounded-full border border-fuchsia-500/30 max-w-[90vw] text-center">
-              <span className="font-bold text-fuchsia-400 tracking-widest text-[10px] sm:text-xs md:text-base block truncate">
-                {N.t('to_beat')} {champion} &mdash; {championTime.toFixed(2)} s
+          {mode === 'oneshot' && shotRaces.length > 1 && (
+            <div className="mt-4 md:mt-8 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
+              {N.t('event_n', { n: shotIdx + 1, t: shotRaces.length })}
+            </div>
+          )}
+          {rival && (
+            <div className={`mt-6 md:mt-12 bg-black/60 px-4 py-1.5 md:px-6 md:py-2 rounded-full border max-w-[90vw] text-center
+              ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
+              <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base block truncate
+                ${ghostName ? 'text-cyan-300' : 'text-fuchsia-400'}`}>
+                {N.t('to_beat')} {rival.name} &mdash; {rival.time.toFixed(2)} s
               </span>
             </div>
           )}

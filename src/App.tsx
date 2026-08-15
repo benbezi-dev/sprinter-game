@@ -21,6 +21,7 @@ import { RaceHUD } from '@/components/screens/RaceHUD';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
+import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ function useVisualViewportHeight() {
 
 function MainGame() {
   const state = useGameStore(s => s.state);
+  const mode = useGameStore(s => s.mode);
   useVisualViewportHeight();
 
   return (
@@ -58,7 +60,10 @@ function MainGame() {
         {(state === 'count' || state === 'race') && <RaceHUD />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
-        {state === 'winall' && <WinAllScreen />}
+        {/* Le one-shot a son propre recapitulatif : epreuves choisies,
+            comparaison au fantome, creation du defi. Le TOP 500 ne concerne
+            que la carriere complete, un cumul one-shot n'y a pas sa place. */}
+        {state === 'winall' && (mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       
       {/* Invisible overlay for receiving touches during the race */}

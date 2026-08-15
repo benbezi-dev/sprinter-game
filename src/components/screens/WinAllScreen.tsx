@@ -41,10 +41,7 @@ export function WinAllScreen() {
     SprinterApp.startRun();
   };
 
-  const handleHome = () => {
-    SprinterApp.G.state = 'title';
-    SprinterApp.buildLevel(0);
-  };
+  const handleHome = () => SprinterApp.goHome();
 
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">

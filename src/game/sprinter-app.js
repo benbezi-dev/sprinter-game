@@ -314,8 +314,28 @@
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
-    keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60
+    keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
+
+    // --- mode one-shot ---------------------------------------------------
+    // 'campaign' : les six etapes d'affilee, comme avant.
+    // 'oneshot'  : une ou plusieurs epreuves choisies, courues une fois. Le
+    //              classement face aux adversaires n'interrompt plus rien :
+    //              seul le chrono cumule compte, c'est un contre-la-montre.
+    mode: 'campaign',
+    shotRaces: [], shotIdx: 0, shotLevel: 4,
+
+    // --- fantome -----------------------------------------------------------
+    // recTrace : la course en cours est echantillonnee (distance tous les
+    // REC_STEP) pour pouvoir etre rejouee plus tard par un adversaire.
+    // ghost : la trace d'un autre joueur, rejouee en direct a cote de nous.
+    recTrace: null, recNext: 0, shotTraces: [],
+    ghost: null, ghostName: '', ghostTime: 0,
+    challenge: null      // defi en cours (voir challenge.ts)
   };
+  // pas de trace ultra-fine : 12,5 relevés par seconde suffisent a rejouer
+  // une course de maniere fluide, et gardent la trace assez courte pour
+  // tenir dans la base sans compression.
+  const REC_STEP = 0.08;
 
   function load() {
     try {
@@ -375,6 +395,8 @@
     G.stumbleFlash = 0; G.acc = 0;
     G.reactFlash = G.transFlash = G.falseFlash = 0;
     G.reactShown = G.transShown = false;
+    // nouvelle course : on repart sur une trace vierge
+    G.recTrace = []; G.recNext = 0; G.ghost = null;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
   }
@@ -405,13 +427,113 @@
   }
 
   function startRun() {
+    G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null;
     startLevel(0);
   }
   function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
 
+  // Retour a l'accueil. On repasse en carriere et on oublie l'adversaire :
+  // sans ca un defi termine resterait actif sur la course suivante.
+  function goHome() {
+    G.mode = 'campaign';
+    G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
+    G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
+    G.shotRaces = []; G.shotIdx = 0;
+    G.state = 'title';
+    buildLevel(0);
+  }
+
+  // --- one-shot : une ou plusieurs epreuves, courues une seule fois -------
+  // opts.ghost / opts.challenge permettent de rejouer contre un adversaire.
+  function startOneShot(races, opts) {
+    opts = opts || {};
+    G.mode = 'oneshot';
+    G.shotRaces = races.slice();
+    G.shotIdx = 0;
+    G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;
+    G.runTime = 0; G.runSplits = []; G.runRank = null;
+    G.shotTraces = [];
+    G.challenge = opts.challenge || null;
+    G.ghostSet = opts.ghosts || null;   // une trace par epreuve, si defi
+    G.ghostSplits = opts.ghostSplits || [];
+    G.ghostName = opts.ghostName || '';
+    G.ghostTime = opts.ghostTime || 0;
+    startShotRace();
+  }
+  function startShotRace() {
+    G.raceKey = G.shotRaces[G.shotIdx];
+    G.race = RACES[G.raceKey];
+    buildLevel(G.shotLevel);
+    armGhost();
+    // pas de cinematique de presentation : le one-shot va droit au but
+    queueCuts([], 'count');
+  }
+  function nextShotRace() {
+    G.shotIdx++;
+    if (G.shotIdx >= G.shotRaces.length) { G.state = 'winall'; return; }
+    startShotRace();
+  }
+
+  // Prepare le fantome de l'epreuve courante : un coureur pilote par une
+  // trace enregistree, place dans le couloir d'un adversaire (qu'on retire)
+  // pour rester lisible a cote du joueur.
+  function armGhost() {
+    G.ghost = null;
+    const set = G.ghostSet;
+    if (!set) return;
+    const trace = set[G.shotIdx];
+    if (!trace || !trace.length) return;
+    const lane = 4;
+    const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
+    if (idx >= 0) G.runners.splice(idx, 1);
+    const r = new Runner(G.ghostName || 'FANTOME', lane, {
+      maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
+    });
+    r.isGhost = true; r.d = 0; r.v = 0;
+    const splits = G.ghostSplits || [];
+    G.ghost = { trace, step: REC_STEP, runner: r, time: splits[G.shotIdx] || 0 };
+  }
+  // Avance le fantome a la position qu'avait l'adversaire au meme instant.
+  function stepGhost(dt) {
+    const g = G.ghost;
+    if (!g) return;
+    const r = g.runner, tr = g.trace;
+    const last = tr.length - 1;
+    const x = G.elapsed / g.step;
+    if (x >= last) {
+      // Trace epuisee : l'adversaire a franchi la ligne. On le laisse
+      // decelerer comme un vrai coureur plutot que de le figer net sur la
+      // piste, ce qui se verrait immediatement.
+      if (!r.finished) { r.finished = true; r.finishTime = g.time || last * g.step; }
+      r.v *= Math.exp(-1.15 * dt);
+      r.d += r.v * dt;
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
+    const i0 = Math.max(0, Math.floor(x));
+    const i1 = Math.min(last, i0 + 1);
+    const f = Math.max(0, Math.min(1, x - i0));
+    const d = (tr[i0] + (tr[i1] - tr[i0]) * f) / 10;
+    r.v = dt > 0 ? Math.max(0, (d - r.d) / dt) : r.v;
+    r.d = d;
+    r.stride += r.v * dt * (Math.PI / r.strideLength());
+    r.drivePitch = r.pitchAt();
+  }
+
   function finishRace() {
-    const order = G.runners.slice().sort((a, b) =>
+    // Le fantome court hors de G.runners (il n'a pas d'IA), mais il doit
+    // apparaitre au classement comme n'importe quel adversaire. S'il n'a pas
+    // eu le temps de finir avant l'arret de la course, on lui rend son chrono
+    // reel plutot que de l'afficher abandonnant.
+    let field = G.runners;
+    if (G.ghost) {
+      const gr = G.ghost.runner;
+      if (gr.finishTime == null) gr.finishTime = G.ghost.time || null;
+      field = G.runners.concat([gr]);
+    }
+    const order = field.slice().sort((a, b) =>
       (a.finishTime === null ? 1e9 : a.finishTime) -
       (b.finishTime === null ? 1e9 : b.finishTime));
     G.ranking = order;
@@ -426,6 +548,19 @@
       else if (p) G.badge = ['top10', GREEN];
     }
     Audio_.stop();
+    // One-shot : contre-la-montre. La place face aux adversaires ne decide
+    // plus de la suite — on enchaine toujours, et c'est le cumul des chronos
+    // qui departage, y compris face au fantome d'un adversaire.
+    if (G.mode === 'oneshot') {
+      const tt = G.player.finishTime;
+      G.runSplits.push(tt);
+      G.runTime += tt || 0;
+      G.shotTraces.push(G.recTrace || []);
+      save(); G.flash = 1;
+      Audio_.sfx(tt !== null ? 'win' : 'lose');
+      if (G.shotIdx + 1 < G.shotRaces.length) { G.state = 'result'; return; }
+      G.state = 'winall'; return;
+    }
     if (G.won) {
       G.runSplits.push(G.player.finishTime);
       G.runTime += G.player.finishTime;
@@ -1098,21 +1233,27 @@
   function drawAthletes(ctx) {
     const T = G.track, m = scaleM();
     const vis = [];
-    for (const r of G.runners) {
+    const all = G.ghost ? G.runners.concat([G.ghost.runner]) : G.runners;
+    for (const r of all) {
       const p = T.pos(r.d, r.lane), g2 = ground(p[0], p[1]);
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
     for (const [r, g2] of vis) {
+      if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
       ctx.fillStyle = 'rgba(0,0,0,0.42)';
       ctx.beginPath();
       ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
       ctx.fill();
     }
     for (const [r, g2, p] of vis) {
+      // le fantome est translucide : on voit qu'il n'est pas vraiment la,
+      // tout en suivant precisement l'ecart avec lui
+      if (r.isGhost) ctx.globalAlpha = 0.42;
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
+      if (r.isGhost) ctx.globalAlpha = 1;
     }
   }
 
@@ -1127,6 +1268,7 @@
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
+    startOneShot, startShotRace, nextShotRace, stepGhost, REC_STEP, goHome,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,

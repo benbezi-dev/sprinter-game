@@ -3,10 +3,11 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 
 export function ResultScreen() {
-  const { 
-    levelIdx, player, runTime, ranking, badge
+  const {
+    levelIdx, player, runTime, ranking, badge, mode, shotRaces, shotIdx
   } = useGameStore();
   const { N } = SprinterApp;
+  const oneShot = mode === 'oneshot';
 
   const startRecap = () => {
     if (!player || player.reaction === null) return N.t('no_start');
@@ -14,14 +15,14 @@ export function ResultScreen() {
     return N.t('start_line', { r: player.jumped ? '--' : player.reaction.toFixed(3), g: N.t('trans_' + g) });
   };
 
+  // En one-shot il n'y a pas d'etape suivante au sens de la carriere :
+  // on enchaine sur l'epreuve suivante du programme choisi.
   const handleNext = () => {
-    SprinterApp.startLevel(levelIdx + 1);
+    if (oneShot) SprinterApp.nextShotRace();
+    else SprinterApp.startLevel(levelIdx + 1);
   };
-  
-  const handleHome = () => {
-    SprinterApp.G.state = 'title';
-    SprinterApp.buildLevel(0);
-  };
+
+  const handleHome = () => SprinterApp.goHome();
 
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/80 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
@@ -30,13 +31,21 @@ export function ResultScreen() {
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black font-display text-emerald-400 tracking-tight uppercase drop-shadow-md">
-              {N.t('stage_done', { n: levelIdx + 1 })}
+              {oneShot
+                ? N.t('event_n', { n: shotIdx + 1, t: shotRaces.length })
+                : N.t('stage_done', { n: levelIdx + 1 })}
             </h1>
-            
+
+            {/* total_of commence par " s   -   cumul " : le "s" du chrono de
+                l'epreuve vient de la, il ne faut pas le doubler. */}
             <div className="text-sm sm:text-base font-medium text-foreground/80 tracking-wide">
-              {N.t('first_in')}<span className="text-white font-bold ml-1">{player?.finishTime?.toFixed(2)}s</span>
-              <span className="mx-2 opacity-50">|</span>
-              {N.t('total_of')}<span className="text-white font-bold ml-1">{runTime.toFixed(2)}s</span>
+              {oneShot
+                ? <>{SprinterApp.RACES[SprinterApp.G.raceKey].label}{' '}</>
+                : N.t('first_in')}
+              {player?.finishTime != null
+                ? <><span className="text-white font-bold">{player.finishTime.toFixed(2)}</span>{N.t('total_of')}</>
+                : <><span className="text-destructive font-bold">{N.t('dnf')}</span>{N.t('total_of').replace(' s ', ' ')}</>}
+              <span className="text-white font-bold">{runTime.toFixed(2)}</span> s
             </div>
             
             <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-400 uppercase">
@@ -50,14 +59,20 @@ export function ResultScreen() {
               {ranking.map((r, i) => {
                 const isMe = r.isPlayer;
                 const mc = i === 0 ? 'text-primary' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground';
-                const nc = isMe ? 'text-primary' : r.name === SprinterApp.G.champion ? 'text-fuchsia-400' : 'text-foreground';
+                const nc = isMe ? 'text-primary' : r.isGhost ? 'text-cyan-300'
+                  : r.name === SprinterApp.G.champion ? 'text-fuchsia-400' : 'text-foreground';
                 const tc = r.finishTime ? 'text-foreground' : 'text-destructive';
                 
                 return (
-                  <div key={i} className={`flex items-center justify-between px-3 py-2 md:px-4 md:py-3 rounded-xl border ${isMe ? 'bg-primary/10 border-primary/30' : 'border-white/5 bg-black/20'}`}>
+                  <div key={i} className={`flex items-center justify-between px-3 py-2 md:px-4 md:py-3 rounded-xl border ${isMe ? 'bg-primary/10 border-primary/30' : r.isGhost ? 'bg-cyan-400/5 border-cyan-400/25' : 'border-white/5 bg-black/20'}`}>
                     <div className="flex items-center gap-2 md:gap-4 overflow-hidden pr-2">
                       <span className={`font-bold w-6 md:w-8 shrink-0 text-sm md:text-base ${mc}`}>{N.ord(i + 1)}</span>
                       <span className={`font-bold tracking-wide truncate text-sm md:text-base ${nc}`}>{isMe ? N.t('you') : r.name}</span>
+                      {r.isGhost && (
+                        <span className="shrink-0 text-[9px] md:text-[10px] font-bold tracking-widest text-cyan-300/80 border border-cyan-400/30 rounded px-1.5 py-0.5">
+                          {N.t('ghost_label')}
+                        </span>
+                      )}
                     </div>
                     <span className={`font-mono font-bold shrink-0 text-sm md:text-base ${tc}`}>
                       {r.finishTime ? `${r.finishTime.toFixed(2)} s` : N.t('dnf')}
@@ -78,7 +93,7 @@ export function ResultScreen() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
             <button onClick={handleNext} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
-              {N.t('next_stage', { n: levelIdx + 2 })}
+              {oneShot ? N.t('next_event') : N.t('next_stage', { n: levelIdx + 2 })}
             </button>
             <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
               {N.t('home')}

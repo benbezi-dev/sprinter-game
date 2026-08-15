@@ -41,6 +41,12 @@ export type GameState = {
   overChoice: number;
   ranking: any[];
   runSplits: number[];
+  mode: 'campaign' | 'oneshot';
+  shotRaces: string[];
+  shotIdx: number;
+  ghostName: string;
+  ghostTime: number;
+  challenge: any;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -171,6 +177,16 @@ export function updateLogic(dt: number) {
       for (const r of G.runners) if (!r.isPlayer) r.stepAI(step, G.elapsed);
     }
     
+    // Enregistre la course pour qu'un adversaire puisse la reaffronter en
+    // fantome, et fait avancer le fantome que l'on affronte.
+    if (G.recTrace) {
+      while (G.elapsed >= G.recNext) {
+        G.recTrace.push(Math.round(G.player.d * 10));
+        G.recNext += SprinterApp.REC_STEP;
+      }
+    }
+    SprinterApp.stepGhost(dt);
+
     if (G.player.reaction !== null && !G.reactShown) {
       G.reactShown = true; G.reactFlash = 2.2;
       if (!G.player.jumped) Audio_.sfx('beep');
@@ -219,5 +235,11 @@ export function updateLogic(dt: number) {
     overChoice: G.overChoice,
     ranking: G.ranking,
     runSplits: G.runSplits,
+    mode: G.mode,
+    shotRaces: G.shotRaces,
+    shotIdx: G.shotIdx,
+    ghostName: G.ghostName,
+    ghostTime: G.ghostTime,
+    challenge: G.challenge,
   });
 }
