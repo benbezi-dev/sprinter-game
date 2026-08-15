@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { SprinterApp, updateLogic, useGameStore } from '@/game/engine';
+import { SprinterApp, updateLogic, useGameStore, syncHtmlLang } from '@/game/engine';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,6 +24,9 @@ export function GameCanvas() {
 
     SprinterApp.G.cv = canvas;
     SprinterApp.load();
+    // load() fixe la langue (sauvegardee ou detectee) : on aligne le
+    // document dessus pour ne pas declencher la traduction navigateur.
+    syncHtmlLang();
     
     const resize = () => {
       const box = canvas.parentElement || canvas;

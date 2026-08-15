@@ -113,9 +113,18 @@ export function padPress(side: 'left' | 'right') {
   }
 }
 
+// Garde l'attribut lang du document aligne sur la langue du jeu. Sans ca
+// la page annonce une langue qui n'est pas celle affichee, et les
+// navigateurs proposent de la traduire — une traduction navigateur
+// reecrit les noeuds de texte sous les pieds de React et le fait planter.
+export function syncHtmlLang() {
+  try { document.documentElement.lang = SprinterApp.N.getLang(); } catch (e) { }
+}
+
 export function toggleLang() {
   SprinterApp.N.toggle();
   SprinterApp.save();
+  syncHtmlLang();
   // Force a re-render so text updates
   gameStore.setState({});
 }

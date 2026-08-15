@@ -1,8 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- lang="fr" et translate="no" : la page etait declaree en anglais alors
+     que toute l'interface est en francais, donc les navigateurs mobiles
+     proposaient (ou appliquaient) une traduction. Or un moteur de
+     traduction remplace directement les noeuds de texte du DOM, ce que
+     React ne supporte pas : au premier changement d'ecran il tente de
+     retirer un noeud qui n'existe plus et plante. Le jeu gere deja sa
+     propre traduction FR/EN, la traduction navigateur n'a donc rien a
+     faire ici. L'attribut lang est resynchronise au changement de langue. -->
+<html lang="fr" translate="no">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <meta name="google" content="notranslate" />
     <title>Sprinter</title>
     <meta name="description" content="Sprinter — built on Replit. Update this description to reflect the app." />
     <meta name="robots" content="index, follow" />
