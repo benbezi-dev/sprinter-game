@@ -12,6 +12,7 @@ import {
 } from 'wouter';
 
 import { useGameStore } from '@/game/engine';
+import { useBackGuard } from '@/hooks/use-back-guard';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
 import { OpenScreen } from '@/components/screens/OpenScreen';
@@ -48,6 +49,7 @@ function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
   useVisualViewportHeight();
+  useBackGuard();
 
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">

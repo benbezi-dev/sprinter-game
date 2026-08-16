@@ -81,9 +81,18 @@
   * {
     @apply border-border;
   }
+  /* overscroll-behavior doit etre pose sur la racine : c'est de html que la
+     zone d'affichage herite sa valeur. Sur body seul, le navigateur continue
+     d'interpreter un balayage horizontal comme un retour arriere — or pendant
+     une course les pouces sont justement sur les bords bas de l'ecran, donc
+     le geste partait tout seul et faisait quitter la page. */
+  html {
+    overscroll-behavior: none;
+    touch-action: none;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground overflow-hidden overscroll-none select-none;
     /* Prevent pull-to-refresh on mobile */
-    touch-action: none; 
+    touch-action: none;
   }
 }
