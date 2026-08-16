@@ -12,7 +12,11 @@
     tagline:      ['six étapes, un seul chrono à battre',
                    'six stages, one clock to beat'],
     tap_start:    ["touche l'écran pour commencer", 'tap the screen to start'],
+    // six_stages porte son propre separateur : reservee au rendu canvas, qui
+    // concatene sans mise en forme. En HTML on prend six_stages_bare et on
+    // pose le tiret soi-meme, sinon les deux separateurs se cumulent.
     six_stages:   ['   -   six étapes', '   -   six stages'],
+    six_stages_bare: ['six étapes', 'six stages'],
     best_runs:    ['MEILLEURS PARCOURS', 'BEST RUNS'],
     no_run:       ["aucun parcours terminé pour l'instant", 'no run finished yet'],
     furthest:     ['étape la plus loin : ', 'furthest stage: '],
@@ -154,8 +158,8 @@
     share_whatsapp:  ['WhatsApp', 'WhatsApp'],
     share_sms:       ['SMS', 'SMS'],
     share_other:     ['Snapchat, Instagram…', 'Snapchat, Instagram…'],
-    share_other_hint:['Snapchat et Instagram ne permettent pas d’envoi direct depuis le web : ils apparaissent dans le menu de partage du téléphone.',
-                      'Snapchat and Instagram allow no direct web send: they appear in your phone’s share menu.'],
+    share_other_hint:['Snapchat et Instagram s’ouvrent depuis le menu de partage.',
+                      'Snapchat and Instagram open from the share menu.'],
     code_copied:     ['code copié', 'code copied'],
     challenge_rematch:['DÉFIER À NOUVEAU', 'CHALLENGE BACK'],
     challenge_rematch_sub:['tu as gagné — renvoie-lui un défi sur la course que tu viens de faire',

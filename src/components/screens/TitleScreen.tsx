@@ -68,7 +68,7 @@ export function TitleScreen() {
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
-                  ? <>{RACES[raceKey].label} &mdash; {N.t('six_stages')}</>
+                  ? <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
               </p>
             </div>
@@ -78,7 +78,9 @@ export function TitleScreen() {
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
 
             {/* Selecteur de mode */}
-            <div className="flex gap-1 p-1 rounded-2xl bg-black/30 border border-white/10">
+            {/* Le selecteur flotte au-dessus de la piste, tres claire : sans
+                fond assez opaque les onglets inactifs deviennent illisibles. */}
+            <div className="flex gap-1 p-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10">
               {TABS.map(t => (
                 <button
                   key={t.id}
@@ -86,7 +88,7 @@ export function TitleScreen() {
                   className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
                     ${tab === t.id
                       ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+                      : 'text-foreground/70 hover:text-foreground hover:bg-white/10'}`}
                 >
                   {N.t(t.key)}
                 </button>

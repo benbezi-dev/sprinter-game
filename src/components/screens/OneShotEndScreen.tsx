@@ -96,7 +96,9 @@ export function OneShotEndScreen() {
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
-            <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
+            {/* Titre en trois mots : tracking-tighter les collait en un seul
+                bloc. On respire un peu et on garde le mot entier soude. */}
+            <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
               ${challenge ? (beaten ? 'text-primary' : 'text-destructive') : 'text-primary'}`}>
               {challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost') : N.t('oneshot_done')}
             </h1>
@@ -240,19 +242,21 @@ export function OneShotEndScreen() {
                     </p>
                   )}
 
-                  <div className="flex flex-wrap gap-2 justify-center">
+                  {/* Copier reste un repli : traite en lien discret pour que
+                      la rangee d'envoi garde le premier plan. */}
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 justify-center pt-1">
                     <button
                       onClick={() => handleCopy('code')}
-                      className="px-4 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
+                      className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
                     >
-                      {copied === 'code' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'code' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                       {copied === 'code' ? N.t('code_copied') : N.t('challenge_copy_code')}
                     </button>
                     <button
                       onClick={() => handleCopy('link')}
-                      className="px-4 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
+                      className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground hover:text-primary transition-colors flex items-center gap-1.5"
                     >
-                      {copied === 'link' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                       {copied === 'link' ? N.t('challenge_copied') : N.t('challenge_copy')}
                     </button>
                   </div>
