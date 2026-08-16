@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
-import { createChallenge, submitAttempt, challengeLink } from '@/game/challenge';
+import {
+  createChallenge, submitAttempt, challengeLink,
+  shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
+} from '@/game/challenge';
 
 /** Chrono ou abandon, sans jamais appeler toFixed sur un null. */
 function fmt(v: number | null | undefined, dnf: string) {
@@ -21,6 +24,9 @@ export function OneShotEndScreen() {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
   const submitted = useRef(false);
+
+  // Message envoye a l'ami : chrono realise, code, lien direct.
+  const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
 
   const ghostSplits: number[] = (SprinterApp.G.ghostSplits || []) as number[];
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
@@ -192,6 +198,48 @@ export function OneShotEndScreen() {
                   <div className="font-mono font-black text-3xl md:text-4xl tracking-[0.35em] text-primary pl-[0.35em]">
                     {code}
                   </div>
+
+                  {/* Envoi direct. WhatsApp et SMS acceptent un message
+                      prerempli par simple lien. Snapchat et Instagram non :
+                      ils passent par la feuille de partage du telephone. */}
+                  <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground mt-1">
+                    {N.t('share_send')}
+                  </span>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <a
+                      href={whatsappUrl(msg)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] md:text-xs text-background hover:opacity-90 transition-opacity flex items-center gap-2"
+                      style={{ backgroundColor: '#25D366' }}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      {N.t('share_whatsapp')}
+                    </a>
+                    <a
+                      href={smsUrl(msg)}
+                      className="px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] md:text-xs text-background hover:opacity-90 transition-opacity flex items-center gap-2"
+                      style={{ backgroundColor: '#4FC3F7' }}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      {N.t('share_sms')}
+                    </a>
+                    {canNativeShare() && (
+                      <button
+                        onClick={() => nativeShare(msg, code)}
+                        className="px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        {N.t('share_other')}
+                      </button>
+                    )}
+                  </div>
+                  {canNativeShare() && (
+                    <p className="text-[9px] md:text-[10px] text-muted-foreground text-center max-w-xs leading-snug">
+                      {N.t('share_other_hint')}
+                    </p>
+                  )}
+
                   <div className="flex flex-wrap gap-2 justify-center">
                     <button
                       onClick={() => handleCopy('code')}

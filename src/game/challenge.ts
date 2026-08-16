@@ -99,6 +99,55 @@ export function challengeLink(id: string): string {
   return `${base}?defi=${id}`;
 }
 
+/* ---------------------------------------------------------------- partage
+   WhatsApp et SMS acceptent un lien d'envoi direct avec un texte prerempli.
+   Snapchat et Instagram, eux, n'exposent aucune adresse publique permettant
+   de prefixer un message : leurs kits de partage passent par l'application.
+   Le seul chemin honnete vers ces deux-la est la feuille de partage du
+   telephone (navigator.share), qui liste justement les applications
+   installees — Snapchat et Instagram compris. */
+
+/** Le message qu'on envoie a l'ami : chrono, code, lien. */
+export function shareText(id: string, races: string[], totalMs: number, fr: boolean): string {
+  const t = (totalMs / 1000).toFixed(2);
+  const ep = races.map(r => r + ' m').join(' + ');
+  return fr
+    ? `Je te défie sur Sprinter : ${t} s sur ${ep}. Code ${id} — ${challengeLink(id)}`
+    : `I challenge you on Sprinter: ${t} s on ${ep}. Code ${id} — ${challengeLink(id)}`;
+}
+
+/** WhatsApp accepte un texte prerempli, sans destinataire impose. */
+export function whatsappUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Le separateur du SMS differe : iOS veut `sms:&body=`, Android `sms:?body=`.
+ * Se tromper ouvre l'application sans le message.
+ */
+export function smsUrl(text: string): string {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1);
+  return `sms:${ios ? '&' : '?'}body=${encodeURIComponent(text)}`;
+}
+
+/** La feuille de partage native est-elle disponible ? */
+export function canNativeShare(): boolean {
+  return typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function';
+}
+
+/** Ouvre la feuille de partage du telephone. Renvoie false si refusee. */
+export async function nativeShare(text: string, id: string): Promise<boolean> {
+  if (!canNativeShare()) return false;
+  try {
+    await (navigator as any).share({ title: 'Sprinter', text, url: challengeLink(id) });
+    return true;
+  } catch {
+    // l'utilisateur a ferme la feuille, ou le partage a ete refuse
+    return false;
+  }
+}
+
 /** Code present dans l'URL au chargement, s'il y en a un. */
 export function codeFromUrl(): string {
   try {
