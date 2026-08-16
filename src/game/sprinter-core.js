@@ -23,6 +23,12 @@
     STUMBLE_SPEED: 0.42,
     STUMBLE_KEEP: 0.20,
     STUMBLE_TIME: 0.62,
+    // Au doigt on n'a ni le relief des touches ni leur precision : le pouce
+    // part legerement a cote, se pose deux fois, ou arrive en retard. La
+    // meme rigueur qu'au clavier se paie donc bien plus cher sur telephone.
+    // On attenue le risque de chute quand on joue au toucher. 1 = clavier.
+    STUMBLE_INPUT_SCALE: 1,
+    STUMBLE_TOUCH_SCALE: 0.55,
     // Duree de l'ANIMATION de chute, volontairement plus longue que la
     // penalite de vitesse (STUMBLE_TIME) : le coureur a le temps de
     // partir de travers, mouliner des bras et se retablir en titubant,
@@ -485,8 +491,9 @@
       this.pressTimes.push(elapsed);
     let stumbled = false;
     if (this.lastKey === key) {
-      const risk = C.STUMBLE_BASE +
-        C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed);
+      const risk = (C.STUMBLE_BASE +
+        C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
+        C.STUMBLE_INPUT_SCALE;
       if (Math.random() < risk) {
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;

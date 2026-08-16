@@ -102,7 +102,24 @@ export function buzz(ms: number) {
   } catch (e) { }
 }
 
+// Deux appuis du meme cote separes de moins de DUP_MS ne sont pas une faute
+// de jeu : personne ne tape deux fois le meme pad en 50 ms. C'est un rebond
+// du pouce, un double contact, ou la repetition automatique d'une touche
+// maintenue. Les compter comme une repetition, c'est offrir une chute pour
+// rien. On les ignore purement et simplement.
+const DUP_MS = 55;
+let lastSide: 'left' | 'right' | null = null;
+let lastAt = 0;
+
+/** Le jeu se joue-t-il au doigt ? Regle la tolerance aux fautes d'appui. */
+export function setTouchInput(on: boolean) {
+  C.STUMBLE_INPUT_SCALE = on ? C.STUMBLE_TOUCH_SCALE : 1;
+}
+
 export function padPress(side: 'left' | 'right') {
+  const now = performance.now();
+  if (side === lastSide && now - lastAt < DUP_MS) return;
+  lastSide = side; lastAt = now;
   if (G.state === 'count') {
     if (!G.player.jumped) {
       G.player.jumped = true;

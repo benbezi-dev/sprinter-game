@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SprinterApp, padPress, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
+import { SprinterApp, padPress, useGameStore, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
 
 export function useInputHandlers() {
   const state = useGameStore(s => s.state);
@@ -7,7 +7,9 @@ export function useInputHandlers() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       SprinterApp.Audio_.init();
-      
+      // Le clavier reprend la main : on revient a la rigueur d'origine.
+      if (e.key.startsWith('Arrow')) setTouchInput(false);
+
       if (e.key === 'ArrowLeft') {
         padPress('left');
         SprinterApp.G.touches.left = 1;
@@ -40,11 +42,13 @@ export function useInputHandlers() {
   return {
     handleLeftTouch: () => {
       SprinterApp.Audio_.init();
+      setTouchInput(true);
       padPress('left');
       SprinterApp.G.touches.left = 1;
     },
     handleRightTouch: () => {
       SprinterApp.Audio_.init();
+      setTouchInput(true);
       padPress('right');
       SprinterApp.G.touches.right = 1;
     },

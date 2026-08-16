@@ -71,32 +71,67 @@ export function TouchControls() {
 
   if (state !== 'race' && state !== 'count') return null;
 
-  const padClass =
-    'flex-1 rounded-2xl border-2 border-white/10 bg-card/40 backdrop-blur-sm ' +
-    'flex items-center justify-center select-none touch-none pointer-events-auto';
+  // Zone sensible et zone visible sont deux choses distinctes.
+  //
+  // Avant, c'etait la carte arrondie elle-meme qui recevait l'appui : les
+  // marges, l'ecart central et la marge de securite du bas ne declenchaient
+  // rien. Mesure sur un ecran de 375 pt : 8 px a gauche, 8 px entre les deux
+  // pads, 7 px a droite, 8 px en bas — 6 % de la largeur, pile la ou les
+  // pouces se posent, et l'ecart central tombe entre les deux mains.
+  //
+  // Or un appui perdu ne se contente pas de manquer : le coup suivant, du
+  // cote oppose, devient une repetition aux yeux du jeu. Et une repetition,
+  // c'est une chute dans un cas sur deux, jusqu'a neuf sur dix a pleine
+  // vitesse. Une marge de 8 px se payait donc en chutes.
+  //
+  // Les deux moities sensibles couvrent maintenant toute la bande, bord a
+  // bord, sans interstice. Les cartes arrondies ne sont plus que du decor.
+  const hitClass =
+    'flex-1 h-full flex items-center justify-center select-none touch-none pointer-events-auto';
+  const cardClass =
+    'w-full h-full rounded-2xl border-2 border-white/10 bg-card/40 backdrop-blur-sm ' +
+    'flex items-center justify-center pointer-events-none';
 
   return (
-    <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex px-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pb-[max(env(safe-area-inset-bottom),0.5rem)] gap-2 z-50 pointer-events-none">
+    <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex z-50 pointer-events-none">
       <div
-        ref={leftRef}
-        className={padClass}
-        style={{ color: IDLE_FG }}
+        className={hitClass}
         onPointerDown={(e) => { e.preventDefault(); light('left'); handleLeftTouch(); }}
         onPointerUp={() => handleTouchEnd('left')}
         onPointerCancel={() => handleTouchEnd('left')}
       >
-        <Chevrons dir={-1} />
+        <div
+          ref={leftRef}
+          className={cardClass}
+          style={{
+            color: IDLE_FG,
+            marginLeft: 'max(env(safe-area-inset-left),0.5rem)',
+            marginRight: '0.25rem',
+            marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',
+          }}
+        >
+          <Chevrons dir={-1} />
+        </div>
       </div>
 
       <div
-        ref={rightRef}
-        className={padClass}
-        style={{ color: IDLE_FG }}
+        className={hitClass}
         onPointerDown={(e) => { e.preventDefault(); light('right'); handleRightTouch(); }}
         onPointerUp={() => handleTouchEnd('right')}
         onPointerCancel={() => handleTouchEnd('right')}
       >
-        <Chevrons dir={1} />
+        <div
+          ref={rightRef}
+          className={cardClass}
+          style={{
+            color: IDLE_FG,
+            marginLeft: '0.25rem',
+            marginRight: 'max(env(safe-area-inset-right),0.5rem)',
+            marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',
+          }}
+        >
+          <Chevrons dir={1} />
+        </div>
       </div>
 
       <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
