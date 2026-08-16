@@ -52,16 +52,39 @@ export function saveName(name: string) {
   }
 }
 
+/**
+ * Le TOP 500 classe le meilleur chrono realise sur UNE course, pas le cumul
+ * du parcours. On refait le tri ici plutot que de dependre de l'ordre rendu
+ * par le serveur : l'affichage reste juste meme si le Worker n'a pas encore
+ * ete redeploye. Les lignes sans chrono par course (0) datent d'avant cette
+ * mesure et n'ont pas de place dans ce classement.
+ */
+export function rankByRaceTime(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  return entries
+    .filter(e => e.best_split_ms > 0)
+    .sort((a, b) => a.best_split_ms - b.best_split_ms);
+}
+
+/** Rang d'un chrono de course dans une liste deja filtree et triee. */
+export function rankOf(entries: LeaderboardEntry[], splitMs: number): number {
+  return entries.filter(e => e.best_split_ms < splitMs).length + 1;
+}
+
 export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[]> {
   const res = await fetch(`${API_BASE}/leaderboard?race=${race}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
-  return data.entries || [];
+  return rankByRaceTime(data.entries || []);
 }
 
+/**
+ * `rank` porte sur le meilleur chrono realise sur UNE course (best_split_ms),
+ * pas sur le cumul du parcours : c'est ce que classe le TOP 500.
+ */
 export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number): Promise<{
   rank: number;
   best_time_ms: number;
+  best_split_ms: number;
   entries: LeaderboardEntry[];
 }> {
   const res = await fetch(`${API_BASE}/submit`, {

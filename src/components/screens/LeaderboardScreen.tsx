@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { fetchLeaderboard, fetchMyRank, type LeaderboardEntry, type RaceKey } from '@/game/leaderboard';
+import { fetchLeaderboard, fetchMyRank, rankOf, type LeaderboardEntry, type RaceKey } from '@/game/leaderboard';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -20,7 +20,9 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
       .then(([list, mine]) => {
         if (cancelled) return;
         setEntries(list);
-        setMyRank(mine.found && mine.rank ? mine.rank : null);
+        // Rang recalcule sur le chrono de course, a partir de la liste deja
+        // triee : independant de ce que renvoie le serveur.
+        setMyRank(mine.found && mine.best_split_ms ? rankOf(list, mine.best_split_ms) : null);
       })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
@@ -32,9 +34,14 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         <div className="w-full flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src={`${BASE}/icons/trophy.png`} alt="" className="w-5 h-5" />
-            <h2 className="font-black font-display tracking-tight text-primary text-xl md:text-2xl">
-              {N.t('top500')}
-            </h2>
+            <div className="flex flex-col">
+              <h2 className="font-black font-display tracking-tight text-primary text-xl md:text-2xl leading-tight">
+                {N.t('top500')}
+              </h2>
+              <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
+                {N.t('top500_sub')}
+              </span>
+            </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
             <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
@@ -92,13 +99,16 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                         {e.name}
                       </span>
                     </div>
+                    {/* Le classement se joue sur le chrono d'une course : il
+                        passe en gros. Le cumul du parcours reste en dessous,
+                        a titre indicatif. */}
                     <div className="flex flex-col items-end shrink-0">
-                      <span className="font-mono font-bold text-xs md:text-sm text-foreground">
-                        {(e.time_ms / 1000).toFixed(2)} s
+                      <span className={`font-mono font-bold text-sm md:text-base ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
+                        {(e.best_split_ms / 1000).toFixed(2)} s
                       </span>
-                      {!!e.best_split_ms && (
-                        <span className="font-mono text-[9px] md:text-[10px] text-cyan-400">
-                          {N.t('best_split_short')} {(e.best_split_ms / 1000).toFixed(2)} s
+                      {!!e.time_ms && (
+                        <span className="font-mono text-[9px] md:text-[10px] text-muted-foreground">
+                          {N.t('run_total_short')} {(e.time_ms / 1000).toFixed(2)} s
                         </span>
                       )}
                     </div>

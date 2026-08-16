@@ -102,6 +102,10 @@
     outside_top500:  ['hors du top 500', 'outside the top 500'],
     edit_name:       ['MODIFIER LE NOM', 'EDIT NAME'],
     best_split_short:['meilleure étape :', 'best stage:'],
+    top500_sub:      ['meilleur chrono sur une course', 'best time on a single race'],
+    run_total_short: ['parcours complet :', 'full run:'],
+    score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
+                      'ranked {r} on the world TOP 500 with {s} s'],
 
     // modes de jeu : carrière, one shot, défi différé
     mode_career:     ['CARRIÈRE', 'CAREER'],

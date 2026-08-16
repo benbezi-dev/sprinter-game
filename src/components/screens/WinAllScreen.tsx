@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 import { Globe2 } from 'lucide-react';
-import { getSavedName, saveName, submitScore } from '@/game/leaderboard';
+import { getSavedName, saveName, submitScore, rankByRaceTime, rankOf } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -14,6 +14,8 @@ export function WinAllScreen() {
   const [name, setName] = useState(getSavedName());
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   const [worldRank, setWorldRank] = useState<number | null>(null);
+  // chrono qui a valu ce rang : le meilleur temps sur une course, pas le cumul
+  const [worldSplit, setWorldSplit] = useState<number | null>(null);
   const [showTop500, setShowTop500] = useState(false);
 
   // Un seul envoi par parcours termine, meme si le composant se re-rend.
@@ -30,7 +32,11 @@ export function WinAllScreen() {
     try {
       const bestSplit = runSplits.length ? Math.min(...runSplits) * 1000 : runTime * 1000;
       const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit);
-      setWorldRank(res.rank);
+      // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
+      // depuis la liste renvoyee plutot que de dependre du champ du serveur.
+      const mine = res.best_split_ms ?? bestSplit;
+      setWorldSplit(mine);
+      setWorldRank(rankOf(rankByRaceTime(res.entries || []), mine));
       setStatus('done');
     } catch {
       setStatus('error');
@@ -105,7 +111,9 @@ export function WinAllScreen() {
 
             {status === 'done' && worldRank !== null && (
               <div className="text-center text-primary font-bold text-sm md:text-base tracking-wide">
-                {N.t('score_saved', { r: N.ord(worldRank) })}
+                {worldSplit
+                  ? N.t('score_saved_race', { r: N.ord(worldRank), s: (worldSplit / 1000).toFixed(2) })
+                  : N.t('score_saved', { r: N.ord(worldRank) })}
               </div>
             )}
             {status === 'error' && (
