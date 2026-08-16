@@ -1,32 +1,46 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { fetchLeaderboard, fetchMyRank, rankOf, type LeaderboardEntry, type RaceKey } from '@/game/leaderboard';
+import {
+  fetchLeaderboardRaw, fetchMyRank, rankByRaceTime, rankByRunTime, rankOf,
+  type LeaderboardEntry, type RaceKey,
+} from '@/game/leaderboard';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+// Deux facons de classer une meme discipline : le meilleur chrono realise sur
+// une seule course, et le cumul du parcours complet en six etapes.
+type Cat = 'race' | 'run';
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   const { N } = SprinterApp;
   const [race, setRace] = useState<RaceKey>(initialRace);
-  const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null);
-  const [myRank, setMyRank] = useState<number | null>(null);
+  const [cat, setCat] = useState<Cat>('race');
+  const [raw, setRaw] = useState<LeaderboardEntry[] | null>(null);
+  const [mySplit, setMySplit] = useState<number | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    setEntries(null);
+    setRaw(null);
     setError(false);
-    setMyRank(null);
-    Promise.all([fetchLeaderboard(race), fetchMyRank(race)])
+    setMySplit(null);
+    Promise.all([fetchLeaderboardRaw(race), fetchMyRank(race)])
       .then(([list, mine]) => {
         if (cancelled) return;
-        setEntries(list);
-        // Rang recalcule sur le chrono de course, a partir de la liste deja
-        // triee : independant de ce que renvoie le serveur.
-        setMyRank(mine.found && mine.best_split_ms ? rankOf(list, mine.best_split_ms) : null);
+        setRaw(list);
+        setMySplit(mine.found && mine.best_split_ms ? mine.best_split_ms : null);
       })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
   }, [race]);
+
+  // Les deux categories se derivent de la meme reponse : un seul aller-retour
+  // reseau, et le tri reste juste quelle que soit la version du serveur.
+  const entries = raw === null ? null : (cat === 'race' ? rankByRaceTime(raw) : rankByRunTime(raw));
+  const myRank = entries && mySplit && cat === 'race' ? rankOf(entries, mySplit) : null;
+  const value = (e: LeaderboardEntry) => (cat === 'race' ? e.best_split_ms : e.time_ms);
+  const other = (e: LeaderboardEntry) => (cat === 'race' ? e.time_ms : e.best_split_ms);
+  const otherLabel = cat === 'race' ? N.t('run_total_short') : N.t('best_split_short');
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center pointer-events-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-y-auto">
@@ -39,7 +53,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                 {N.t('top500')}
               </h2>
               <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
-                {N.t('top500_sub')}
+                {N.t(cat === 'race' ? 'cat_race_sub' : 'cat_run_sub')}
               </span>
             </div>
           </div>
@@ -63,6 +77,22 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
           ))}
         </div>
 
+        {/* Categorie de classement */}
+        <div className="flex gap-1 p-1 rounded-2xl bg-black/30 border border-white/10 w-full">
+          {([['race', 'cat_race'], ['run', 'cat_run']] as const).map(([id, key]) => (
+            <button
+              key={id}
+              onClick={() => setCat(id)}
+              className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
+                ${cat === id
+                  ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+            >
+              {N.t(key)}
+            </button>
+          ))}
+        </div>
+
         {myRank && (
           <div className="w-full bg-primary/10 border border-primary/30 rounded-xl px-4 py-2 text-center">
             <span className="font-bold text-primary tracking-widest text-sm">
@@ -79,7 +109,9 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
             <p className="text-center text-sm text-muted-foreground py-6">{N.t('loading_ranks')}</p>
           )}
           {!error && entries !== null && entries.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground py-6">{N.t('empty_top500')}</p>
+            <p className="text-center text-sm text-muted-foreground py-6">
+              {N.t(cat === 'run' ? 'empty_cat_run' : 'empty_top500')}
+            </p>
           )}
           {!error && entries !== null && entries.length > 0 && (
             <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto pr-1">
@@ -99,16 +131,15 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                         {e.name}
                       </span>
                     </div>
-                    {/* Le classement se joue sur le chrono d'une course : il
-                        passe en gros. Le cumul du parcours reste en dessous,
-                        a titre indicatif. */}
+                    {/* Le chrono qui decide du classement passe en gros ;
+                        l'autre reste en dessous, a titre indicatif. */}
                     <div className="flex flex-col items-end shrink-0">
                       <span className={`font-mono font-bold text-sm md:text-base ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
-                        {(e.best_split_ms / 1000).toFixed(2)} s
+                        {(value(e) / 1000).toFixed(2)} s
                       </span>
-                      {!!e.time_ms && (
+                      {!!other(e) && (
                         <span className="font-mono text-[9px] md:text-[10px] text-muted-foreground">
-                          {N.t('run_total_short')} {(e.time_ms / 1000).toFixed(2)} s
+                          {otherLabel} {(other(e) / 1000).toFixed(2)} s
                         </span>
                       )}
                     </div>

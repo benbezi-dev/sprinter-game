@@ -65,16 +65,42 @@ export function rankByRaceTime(entries: LeaderboardEntry[]): LeaderboardEntry[] 
     .sort((a, b) => a.best_split_ms - b.best_split_ms);
 }
 
+/**
+ * Seconde categorie : le cumul du parcours complet, celui de la carriere en
+ * six etapes. Un cumul a 0 signifie qu'aucun parcours entier n'a ete boucle.
+ */
+export function rankByRunTime(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  return entries
+    .filter(e => e.time_ms > 0)
+    .sort((a, b) => a.time_ms - b.time_ms);
+}
+
 /** Rang d'un chrono de course dans une liste deja filtree et triee. */
 export function rankOf(entries: LeaderboardEntry[], splitMs: number): number {
   return entries.filter(e => e.best_split_ms < splitMs).length + 1;
 }
 
-export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[]> {
+/** Nombre de places au classement : au-dela, on n'entre pas au tableau. */
+export const TOP_N = 500;
+
+/**
+ * Le chrono entre-t-il au TOP 500 ? Tant que le tableau n'est pas plein,
+ * n'importe quel chrono y a sa place.
+ */
+export function makesTop(entries: LeaderboardEntry[], splitMs: number): boolean {
+  return rankOf(entries, splitMs) <= TOP_N;
+}
+
+/** Liste brute, non triee : les deux categories s'en deduisent. */
+export async function fetchLeaderboardRaw(race: RaceKey): Promise<LeaderboardEntry[]> {
   const res = await fetch(`${API_BASE}/leaderboard?race=${race}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
-  return rankByRaceTime(data.entries || []);
+  return data.entries || [];
+}
+
+export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[]> {
+  return rankByRaceTime(await fetchLeaderboardRaw(race));
 }
 
 /**

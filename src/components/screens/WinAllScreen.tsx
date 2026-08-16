@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 import { Globe2 } from 'lucide-react';
-import { getSavedName, saveName, submitScore, rankByRaceTime, rankOf } from '@/game/leaderboard';
+import {
+  getSavedName, saveName, submitScore, fetchLeaderboardRaw,
+  rankByRaceTime, rankOf, TOP_N,
+} from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -12,15 +15,36 @@ export function WinAllScreen() {
   const { N } = SprinterApp;
 
   const [name, setName] = useState(getSavedName());
-  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  // 'checking' : on regarde d'abord si le chrono entre au tableau. On ne
+  // propose la saisie du nom que dans ce cas — inutile de faire saisir un nom
+  // pour un chrono qui ne sera jamais affiche.
+  const [status, setStatus] = useState<'checking' | 'outside' | 'idle' | 'sending' | 'done' | 'error'>('checking');
   const [worldRank, setWorldRank] = useState<number | null>(null);
   // chrono qui a valu ce rang : le meilleur temps sur une course, pas le cumul
   const [worldSplit, setWorldSplit] = useState<number | null>(null);
+  const [wouldBe, setWouldBe] = useState<number | null>(null);
   const [showTop500, setShowTop500] = useState(false);
+
+  // Meilleur chrono realise sur une seule course du parcours : c'est lui qui
+  // est classe, pas le cumul.
+  const bestSplitMs = runSplits.length ? Math.min(...runSplits) * 1000 : runTime * 1000;
 
   // Un seul envoi par parcours termine, meme si le composant se re-rend.
   useEffect(() => {
-    if (getSavedName()) handleSave(getSavedName());
+    let cancelled = false;
+    fetchLeaderboardRaw(raceKey)
+      .then(list => {
+        if (cancelled) return;
+        const rank = rankOf(rankByRaceTime(list), bestSplitMs);
+        setWouldBe(rank);
+        if (rank > TOP_N) { setStatus('outside'); return; }
+        if (getSavedName()) handleSave(getSavedName());
+        else setStatus('idle');
+      })
+      // Classement injoignable : on laisse la possibilite d'envoyer plutot
+      // que de retenir un chrono qui meritait peut-etre sa place.
+      .catch(() => { if (!cancelled) setStatus('idle'); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -30,7 +54,7 @@ export function WinAllScreen() {
     saveName(finalName);
     setStatus('sending');
     try {
-      const bestSplit = runSplits.length ? Math.min(...runSplits) * 1000 : runTime * 1000;
+      const bestSplit = bestSplitMs;
       const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit);
       // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
       // depuis la liste renvoyee plutot que de dependre du champ du serveur.
@@ -119,8 +143,31 @@ export function WinAllScreen() {
             {status === 'error' && (
               <div className="text-center text-destructive text-xs md:text-sm">{N.t('score_save_fail')}</div>
             )}
+            {status === 'checking' && (
+              <div className="text-center text-xs md:text-sm text-muted-foreground animate-pulse">
+                {N.t('loading_ranks')}
+              </div>
+            )}
+            {/* Hors des 500 : on ne demande pas de nom, on annonce simplement
+                le chrono qu'il aurait fallu battre pour entrer. */}
+            {status === 'outside' && (
+              <div className="flex flex-col items-center gap-1 py-1">
+                <span className="text-sm md:text-base font-bold text-muted-foreground tracking-wide">
+                  {N.t('outside_top500')}
+                </span>
+                <span className="font-mono text-xs md:text-sm text-foreground/70">
+                  {(bestSplitMs / 1000).toFixed(2)} s
+                </span>
+              </div>
+            )}
 
-            {status !== 'sending' && (
+            {status === 'idle' && wouldBe !== null && (
+              <div className="text-center text-primary font-bold text-sm md:text-base tracking-wide">
+                {N.t('will_enter', { s: (bestSplitMs / 1000).toFixed(2), r: N.ord(wouldBe) })}
+              </div>
+            )}
+
+            {status !== 'sending' && status !== 'checking' && status !== 'outside' && (
               <div className="flex gap-2">
                 <input
                   value={name}

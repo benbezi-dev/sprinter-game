@@ -18,7 +18,7 @@ export function OneShotEndScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
   const submitted = useRef(false);
 
@@ -60,11 +60,12 @@ export function OneShotEndScreen() {
     }
   };
 
-  const handleCopy = async () => {
+  // Le code se dicte, le lien s'envoie : les deux servent, on propose les deux.
+  const handleCopy = async (what: 'code' | 'link') => {
     try {
-      await navigator.clipboard.writeText(challengeLink(code));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(what === 'code' ? code : challengeLink(code));
+      setCopied(what);
+      setTimeout(() => setCopied(null), 1800);
     } catch {
       // presse-papiers refuse : le code reste lisible et recopiable a la main
     }
@@ -147,17 +148,24 @@ export function OneShotEndScreen() {
             )}
           </div>
 
-          {/* Creer un defi a partir de cette course */}
-          {!challenge && (
-            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3">
+          {/* Creer un defi a partir de cette course. Hors defi c'est le
+              partage normal ; apres un defi gagne c'est la revanche, qu'on
+              renvoie a l'adversaire. */}
+          {(!challenge || beaten) && (
+            <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3
+              ${beaten ? 'border-primary/40' : 'border-white/10'}`}>
               <div className="flex items-center gap-2 justify-center">
                 <Ghost className="w-4 h-4 text-primary" />
-                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('challenge_make')}</h2>
+                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">
+                  {N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
+                </h2>
               </div>
 
               {!code && (
                 <>
-                  <p className="text-center text-[10px] md:text-xs text-muted-foreground">{N.t('challenge_share')}</p>
+                  <p className="text-center text-[10px] md:text-xs text-muted-foreground">
+                    {N.t(beaten ? 'challenge_rematch_sub' : 'challenge_share')}
+                  </p>
                   <div className="flex gap-2">
                     <input
                       value={name}
@@ -172,7 +180,7 @@ export function OneShotEndScreen() {
                       className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs md:text-sm text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
                     >
                       {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      {busy ? N.t('challenge_making') : N.t('challenge_make')}
+                      {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                     </button>
                   </div>
                   {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
@@ -184,13 +192,22 @@ export function OneShotEndScreen() {
                   <div className="font-mono font-black text-3xl md:text-4xl tracking-[0.35em] text-primary pl-[0.35em]">
                     {code}
                   </div>
-                  <button
-                    onClick={handleCopy}
-                    className="px-4 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
-                  >
-                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copied ? N.t('challenge_copied') : N.t('challenge_copy')}
-                  </button>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <button
+                      onClick={() => handleCopy('code')}
+                      className="px-4 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
+                    >
+                      {copied === 'code' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'code' ? N.t('code_copied') : N.t('challenge_copy_code')}
+                    </button>
+                    <button
+                      onClick={() => handleCopy('link')}
+                      className="px-4 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20 transition-colors flex items-center gap-2"
+                    >
+                      {copied === 'link' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      {copied === 'link' ? N.t('challenge_copied') : N.t('challenge_copy')}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
