@@ -1,0 +1,8 @@
+name = "sprinter-leaderboard"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sprinter-leaderboard"
+database_id = "67256277-9486-4e46-96e7-337bf789a327"
