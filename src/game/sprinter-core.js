@@ -29,6 +29,12 @@
     // On attenue le risque de chute quand on joue au toucher. 1 = clavier.
     STUMBLE_INPUT_SCALE: 1,
     STUMBLE_TOUCH_SCALE: 0.55,
+    // iOS perd nettement plus d'appuis qu'Android a cadence de course. La
+    // cause n'a pas pu etre isolee — un appui physique y produit pourtant
+    // bien un evenement et un seul — mais l'ecart de chutes entre les deux
+    // plateformes est net. Compensation assumee, a retirer le jour ou la
+    // cause reelle sera trouvee.
+    STUMBLE_IOS_SCALE: 0.35,
     // Duree de l'ANIMATION de chute, volontairement plus longue que la
     // penalite de vitesse (STUMBLE_TIME) : le coureur a le temps de
     // partir de travers, mouliner des bras et se retablir en titubant,

@@ -103,23 +103,58 @@ export function buzz(ms: number) {
 }
 
 // Deux appuis du meme cote separes de moins de DUP_MS ne sont pas une faute
-// de jeu : personne ne tape deux fois le meme pad en 50 ms. C'est un rebond
+// de jeu : personne ne tape deux fois le meme pad en 80 ms. C'est un rebond
 // du pouce, un double contact, ou la repetition automatique d'une touche
 // maintenue. Les compter comme une repetition, c'est offrir une chute pour
 // rien. On les ignore purement et simplement.
-const DUP_MS = 55;
+const DUP_MS = 80;
+// Un appui du meme cote qui arrive apres un temps mort n'est pas une faute
+// non plus : c'est le signe qu'un appui s'est perdu en route. Le joueur a
+// bien alterne, mais le systeme n'a pas transmis un des deux coups — bord de
+// l'ecran capte par un geste du systeme, doigt mal pose, image sautee. Une
+// vraie faute, elle, tombe dans la cadence. On compare donc l'ecart au rythme
+// que le joueur tient : au-dela de MISSED_BEAT fois sa cadence, il manque un
+// temps, et on traite l'appui comme une alternance normale.
+const MISSED_BEAT = 1.55;
 let lastSide: 'left' | 'right' | null = null;
 let lastAt = 0;
+let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
 
-/** Le jeu se joue-t-il au doigt ? Regle la tolerance aux fautes d'appui. */
+/** Nouvelle course : le rythme de la precedente n'a rien a y faire. */
+export function resetInputRhythm() {
+  lastSide = null; lastAt = 0; cadence = 0;
+}
+
+const IS_IOS = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && (navigator as any).maxTouchPoints > 1));
+
+/**
+ * Le jeu se joue-t-il au doigt ? Regle la tolerance aux fautes d'appui.
+ * iOS perd nettement plus d'appuis qu'Android a cadence de course, sans que
+ * la cause ait pu etre isolee : a geste identique les joueurs iPhone chutent
+ * beaucoup plus. En attendant d'en trouver l'origine, on compense.
+ */
 export function setTouchInput(on: boolean) {
-  C.STUMBLE_INPUT_SCALE = on ? C.STUMBLE_TOUCH_SCALE : 1;
+  C.STUMBLE_INPUT_SCALE = on
+    ? (IS_IOS ? C.STUMBLE_IOS_SCALE : C.STUMBLE_TOUCH_SCALE)
+    : 1;
 }
 
 export function padPress(side: 'left' | 'right') {
   const now = performance.now();
-  if (side === lastSide && now - lastAt < DUP_MS) return;
+  const gap = lastAt ? now - lastAt : 0;
+  const repeat = side === lastSide;
+
+  if (repeat && lastAt && gap < DUP_MS) return;          // rebond, on ignore
+  const missedBeat = repeat && cadence > 0 && gap > cadence * MISSED_BEAT;
+
   lastSide = side; lastAt = now;
+  // Un temps mort fausserait la cadence : on ne l'y verse pas.
+  if (gap > 0 && gap < 1000 && !missedBeat) {
+    cadence = cadence ? cadence * 0.7 + gap * 0.3 : gap;
+  }
+
   if (G.state === 'count') {
     if (!G.player.jumped) {
       G.player.jumped = true;
@@ -129,6 +164,10 @@ export function padPress(side: 'left' | 'right') {
     return;
   }
   if (G.state !== 'race') return;
+  // Appui manifestement perdu : le joueur a bien alterne, le moteur ne doit
+  // pas y voir une repetition. On efface le dernier cote pour qu'il compte
+  // comme une foulee normale, avec sa poussee pleine.
+  if (missedBeat) G.player.lastKey = null;
   if (G.player.press(side, G.elapsed)) {
     G.stumbleFlash = 0.9; G.shake = 1; Audio_.sfx('trip'); buzz(30);
   } else if (G.player.tookStep()) {
@@ -184,7 +223,10 @@ export function updateLogic(dt: number) {
     G.countT += dt;
     if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
     SprinterApp.followCam(dt);
-    if (G.countT >= 3) { Audio_.sfx('go'); G.state = 'race'; G.elapsed = 0; }
+    if (G.countT >= 3) {
+      Audio_.sfx('go'); G.state = 'race'; G.elapsed = 0;
+      resetInputRhythm();
+    }
   } else if (G.state === 'race') {
     G.acc += dt;
     const step = 1 / 240;
