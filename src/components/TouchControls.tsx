@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useInputHandlers } from '@/hooks/use-inputs';
-import { useGameStore, SprinterApp } from '@/game/engine';
+import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION } from '@/game/engine';
 
 // Double chevron : plus lisible et plus soigne qu'un caractere "<" ou ">",
 // et surtout parfaitement centrable puisqu'on maitrise le viewBox. La
@@ -38,11 +38,39 @@ export function TouchControls() {
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
+  const edgeL = useRef<HTMLDivElement | null>(null);
+  const edgeR = useRef<HTMLDivElement | null>(null);
   const timers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
+  const edgeTimers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
 
   useEffect(() => () => {
     clearTimeout(timers.current.left);
     clearTimeout(timers.current.right);
+    clearTimeout(edgeTimers.current.left);
+    clearTimeout(edgeTimers.current.right);
+  }, []);
+
+  // Remplacant du vibreur, pour les appareils qui n'en ont pas — c'est-a-dire
+  // tous les iPhone. Une lueur breve sur le bord de l'ecran du cote joue :
+  // la vision peripherique capte tres bien un eclat sans quitter le coureur
+  // des yeux, la ou l'allumage du pad oblige a baisser le regard.
+  useEffect(() => {
+    if (HAS_VIBRATION) return;
+    setStepCue((side, kind) => {
+      const el = side === 'left' ? edgeL.current : edgeR.current;
+      if (!el) return;
+      el.style.transition = 'none';
+      el.style.opacity = kind === 'trip' ? '1' : '0.42';
+      el.style.background = kind === 'trip'
+        ? `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgba(239,68,68,0.85), transparent)`
+        : `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgba(248,205,74,0.75), transparent)`;
+      clearTimeout(edgeTimers.current[side]);
+      edgeTimers.current[side] = window.setTimeout(() => {
+        el.style.transition = `opacity ${kind === 'trip' ? 260 : 130}ms ease-out`;
+        el.style.opacity = '0';
+      }, kind === 'trip' ? 90 : 45);
+    });
+    return () => setStepCue(null);
   }, []);
 
   // L'allumage est pilote directement sur le noeud, pas par une classe CSS
@@ -93,6 +121,13 @@ export function TouchControls() {
     'flex items-center justify-center pointer-events-none';
 
   return (
+    <>
+    {!HAS_VIBRATION && (
+      <>
+        <div ref={edgeL} className="fixed left-0 top-0 h-full w-[14px] md:w-[20px] z-40 pointer-events-none" style={{ opacity: 0 }} />
+        <div ref={edgeR} className="fixed right-0 top-0 h-full w-[14px] md:w-[20px] z-40 pointer-events-none" style={{ opacity: 0 }} />
+      </>
+    )}
     <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex z-50 pointer-events-none">
       <div
         className={hitClass}
@@ -140,5 +175,6 @@ export function TouchControls() {
         </span>
       </div>
     </div>
+    </>
   );
 }

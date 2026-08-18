@@ -102,6 +102,30 @@ export function buzz(ms: number) {
   } catch (e) { }
 }
 
+/**
+ * Safari sur iOS n'implemente pas l'API Vibration, et ne l'a jamais fait :
+ * aucun iPhone, aucune version. Android rend donc une petite secousse a
+ * chaque foulee reconnue et une plus franche a chaque faux pas, quand
+ * l'iPhone ne rend rien du tout.
+ *
+ * Cette secousse n'est pas un ornement : c'est la boucle de retour qui
+ * permet de tenir l'alternance sans regarder ses pouces. Prive de ce canal,
+ * on court a l'aveugle en fixant le coureur, le rythme se delite, et les
+ * repetitions — seule cause de chute du jeu — se multiplient.
+ *
+ * Faute de vibreur, on rend le meme signal en vision peripherique.
+ */
+export const HAS_VIBRATION = typeof navigator !== 'undefined' &&
+  (typeof navigator.vibrate === 'function' ||
+   !!(window as any).Capacitor?.Plugins?.Haptics);
+
+type Cue = (side: 'left' | 'right', kind: 'step' | 'trip') => void;
+let stepCue: Cue | null = null;
+export function setStepCue(fn: Cue | null) { stepCue = fn; }
+function cue(side: 'left' | 'right', kind: 'step' | 'trip') {
+  if (!HAS_VIBRATION && stepCue) stepCue(side, kind);
+}
+
 // Deux appuis du meme cote separes de moins de DUP_MS ne sont pas une faute
 // de jeu : personne ne tape deux fois le meme pad en 80 ms. C'est un rebond
 // du pouce, un double contact, ou la repetition automatique d'une touche
@@ -170,8 +194,10 @@ export function padPress(side: 'left' | 'right') {
   if (missedBeat) G.player.lastKey = null;
   if (G.player.press(side, G.elapsed)) {
     G.stumbleFlash = 0.9; G.shake = 1; Audio_.sfx('trip'); buzz(30);
+    cue(side, 'trip');
   } else if (G.player.tookStep()) {
     buzz(6);
+    cue(side, 'step');
   }
 }
 
