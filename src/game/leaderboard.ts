@@ -150,17 +150,37 @@ export async function submitRaceRecord(race: RaceKey, name: string, splitMs: num
  * TOP 500 de leur propre discipline. Chaque course est jugee chez elle : un
  * 100 m se compare a des 100 m, quel que soit le mode qui l'a produit.
  */
+export type RaceOutcome = {
+  race: RaceKey;
+  ms: number;
+  rank: number;
+  /** Chrono deja detenu par ce joueur sur cette epreuve, s'il en a un. */
+  ownMs: number | null;
+  /** Le nouveau chrono ameliore-t-il son propre record ? */
+  beatsOwn: boolean;
+};
+
 export async function qualifyingRaces(
   races: RaceKey[], splitsSec: (number | null)[]
-): Promise<{ race: RaceKey; ms: number; rank: number }[]> {
-  const out: { race: RaceKey; ms: number; rank: number }[] = [];
+): Promise<RaceOutcome[]> {
+  const out: RaceOutcome[] = [];
   for (let i = 0; i < races.length; i++) {
     const s = splitsSec[i];
     if (s == null || s <= 0) continue;
+    const ms = s * 1000;
     try {
-      const list = rankByRaceTime(await fetchLeaderboardRaw(races[i]));
-      const rank = rankOf(list, s * 1000);
-      if (rank <= TOP_N) out.push({ race: races[i], ms: s * 1000, rank });
+      const [list, mine] = await Promise.all([
+        fetchLeaderboardRaw(races[i]).then(rankByRaceTime),
+        fetchMyRank(races[i]).catch(() => ({ found: false } as any)),
+      ]);
+      const rank = rankOf(list, ms);
+      if (rank > TOP_N) continue;
+      // Le serveur ne conserve qu'un chrono par appareil et par epreuve, et
+      // garde le meilleur. Un temps plus lent que le sien ne changera donc
+      // rien au tableau : autant le dire plutot que d'annoncer une place
+      // qu'on n'occupera pas.
+      const ownMs = mine.found && mine.best_split_ms ? mine.best_split_ms : null;
+      out.push({ race: races[i], ms, rank, ownMs, beatsOwn: ownMs === null || ms < ownMs });
     } catch {
       // classement injoignable : on n'annonce pas une place qu'on ignore
     }

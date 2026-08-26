@@ -135,6 +135,8 @@
     os_top_intro_n:  ['{n} chronos entrent au TOP 500', '{n} times make the TOP 500'],
     os_top_line:     ['{d} m — {s} s — {r}', '{d} m — {s} s — {r}'],
     os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
+    top500_count:    ['{n} chronos classés sur 500', '{n} times ranked of 500'],
+    os_top_better:   ['ton record sur {d} m reste {s} s', 'your {d} m record stays {s} s'],
     run_total_short: ['parcours complet :', 'full run:'],
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],

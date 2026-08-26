@@ -3,7 +3,8 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2 } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord, type RaceKey,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord,
+  type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
 import { primeTopNames } from '@/game/engine';
 import {
@@ -31,7 +32,7 @@ export function OneShotEndScreen() {
   // Les chronos d'un one shot ou d'un defi valent ceux de la carriere : un
   // 100 m reste un 100 m. On les propose donc au TOP 500, epreuve par epreuve
   // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
-  const [tops, setTops] = useState<{ race: RaceKey; ms: number; rank: number }[] | null>(null);
+  const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
   const [topName, setTopName] = useState(getSavedName());
   const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
 
@@ -40,17 +41,22 @@ export function OneShotEndScreen() {
     qualifyingRaces(shotRaces as RaceKey[], runSplits)
       .then(list => {
         if (cancelled) return;
-        setTops(list);
-        setTopStatus(list.length ? 'idle' : 'done');
+        setOutcomes(list);
+        setTopStatus(list.some(o => o.beatsOwn) ? 'idle' : 'done');
       })
-      .catch(() => { if (!cancelled) { setTops([]); setTopStatus('error'); } });
+      .catch(() => { if (!cancelled) { setOutcomes([]); setTopStatus('error'); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
+  // serveur ecarterait les autres de toute facon.
+  const tops = (outcomes || []).filter(o => o.beatsOwn);
+  const kept = (outcomes || []).filter(o => !o.beatsOwn);
+
   const handleSaveTop = async () => {
     const finalName = topName.trim();
-    if (!finalName || !tops?.length) return;
+    if (!finalName || !tops.length) return;
     saveName(finalName);
     setTopStatus('sending');
     try {
@@ -194,7 +200,7 @@ export function OneShotEndScreen() {
           </div>
 
           {/* Inscription au TOP 500, epreuve par epreuve */}
-          {(topStatus === 'checking' || (tops && tops.length > 0)) && (
+          {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
             <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3">
               <div className="flex items-center gap-2 justify-center">
                 <Globe2 className="w-4 h-4 text-primary" />
@@ -207,25 +213,40 @@ export function OneShotEndScreen() {
                 </p>
               )}
 
-              {tops && tops.length > 0 && (
+              {outcomes && outcomes.length > 0 && (
                 <>
-                  <p className="text-center text-[10px] md:text-xs text-primary font-bold tracking-wide">
-                    {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
-                  </p>
+                  {tops.length > 0 && (
+                    <p className="text-center text-[10px] md:text-xs text-primary font-bold tracking-wide">
+                      {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
+                    </p>
+                  )}
                   <div className="flex flex-col gap-1">
                     {tops.map((t, i) => (
-                      <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/25 border border-white/5">
+                      <div key={'n' + i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/25 border border-white/5">
                         <span className="text-xs md:text-sm font-bold text-foreground">{t.race} m</span>
                         <span className="font-mono text-xs md:text-sm text-primary">{(t.ms / 1000).toFixed(2)} s</span>
                         <span className="text-[10px] md:text-xs text-muted-foreground">{N.ord(t.rank)}</span>
                       </div>
                     ))}
+                    {/* Chronos plus lents que son propre record : le tableau
+                        ne bougera pas, on le dit au lieu de laisser croire
+                        a un enregistrement sans effet. */}
+                    {kept.map((t, i) => (
+                      <div key={'k' + i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/15 border border-white/5 opacity-70">
+                        <span className="text-xs md:text-sm text-muted-foreground">{t.race} m</span>
+                        <span className="font-mono text-[10px] md:text-xs text-muted-foreground">
+                          {N.t('os_top_better', { d: t.race, s: ((t.ownMs || 0) / 1000).toFixed(2) })}
+                        </span>
+                      </div>
+                    ))}
                   </div>
 
                   {topStatus === 'done' ? (
-                    <p className="text-center text-sm text-primary font-bold">
-                      {N.t('os_top_saved', { n: topName.trim() })}
-                    </p>
+                    tops.length > 0 ? (
+                      <p className="text-center text-sm text-primary font-bold">
+                        {N.t('os_top_saved', { n: topName.trim() })}
+                      </p>
+                    ) : null
                   ) : (
                     <>
                       <div className="flex gap-2">

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import {
   fetchLeaderboardRaw, fetchMyRank, rankByRaceTime, rankByRunTime, rankOf,
-  type LeaderboardEntry, type RaceKey,
+  NO_RUN_MS, type LeaderboardEntry, type RaceKey,
 } from '@/game/leaderboard';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -12,7 +12,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 type Cat = 'race' | 'run';
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
-  const { N } = SprinterApp;
+  const { N, RACES } = SprinterApp;
   const [race, setRace] = useState<RaceKey>(initialRace);
   const [cat, setCat] = useState<Cat>('race');
   const [raw, setRaw] = useState<LeaderboardEntry[] | null>(null);
@@ -39,7 +39,13 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
   const entries = raw === null ? null : (cat === 'race' ? rankByRaceTime(raw) : rankByRunTime(raw));
   const myRank = entries && mySplit && cat === 'race' ? rankOf(entries, mySplit) : null;
   const value = (e: LeaderboardEntry) => (cat === 'race' ? e.best_split_ms : e.time_ms);
-  const other = (e: LeaderboardEntry) => (cat === 'race' ? e.time_ms : e.best_split_ms);
+  // NO_RUN_MS n'est pas un chrono : c'est la marque d'une ligne nee d'un one
+  // shot ou d'un defi, sans parcours complet derriere. L'afficher donnerait un
+  // « parcours complet : 1200.00 s » absurde.
+  const other = (e: LeaderboardEntry) => {
+    const v = cat === 'race' ? e.time_ms : e.best_split_ms;
+    return cat === 'race' && v >= NO_RUN_MS ? 0 : v;
+  };
   const otherLabel = cat === 'race' ? N.t('run_total_short') : N.t('best_split_short');
 
   return (
@@ -114,7 +120,21 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
             </p>
           )}
           {!error && entries !== null && entries.length > 0 && (
-            <div className="flex flex-col gap-1.5 max-h-[50vh] overflow-y-auto pr-1">
+            <>
+            {/* Combien de noms le tableau porte reellement, sur les 500
+                places : sans ce reperage on ne sait pas si la liste est
+                complete ou tronquee. */}
+            <div className="flex items-baseline justify-between px-1 pb-2 mb-1 border-b border-white/10">
+              <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground">
+                {N.t('top500_count', { n: entries.length })}
+              </span>
+              <span className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                {RACES[race].label}
+              </span>
+            </div>
+            {/* La liste occupe toute la hauteur disponible : avec 500 noms,
+                une fenetre de 50 vh obligeait a defiler dans un hublot. */}
+            <div className="flex flex-col gap-1.5 max-h-[calc(100dvh-22rem)] min-h-[40vh] overflow-y-auto overscroll-contain pr-1">
               {entries.map((e, i) => {
                 const rank = i + 1;
                 const isMe = myRank === rank;
@@ -147,6 +167,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                 );
               })}
             </div>
+            </>
           )}
         </div>
       </div>
