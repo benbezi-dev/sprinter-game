@@ -138,6 +138,33 @@ async function ensureChallengeTarget(db) {
   targetReady = true;
 }
 
+// Historique des courses. Indexe sur le nom autant que sur l'appareil : c'est
+// ce qui permet a un joueur de retrouver ses courses en changeant de
+// telephone. Le nom n'est pas authentifie — deux personnes qui choisissent le
+// meme verraient donc un historique commun. Compromis assume : c'est deja
+// l'identite publique du classement, et l'alternative serait un compte.
+const HIST_PER_DEVICE = 300;
+let racesReady = false;
+async function ensureRaceTable(db) {
+  if (racesReady) return;
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS races (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      race_key TEXT NOT NULL,
+      time_ms INTEGER NOT NULL,
+      mode TEXT NOT NULL,
+      level_idx INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS races_by_name ON races(name_key, race_key, created_at)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS races_by_device ON races(device_id, race_key, created_at)`),
+  ]);
+  racesReady = true;
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -287,6 +314,59 @@ export default {
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
       });
+    }
+
+    // ------------------------------------------------ historique personnel
+    if (url.pathname === '/race' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, race_key, time_ms, mode, level_idx } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
+      const t = Math.round(Number(time_ms));
+      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
+        return json({ error: 'temps invalide' }, 400);
+      }
+      const cleaned = cleanName(name);
+      const key = cleaned.trim().toLowerCase();
+      const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
+      const md = mode === 'oneshot' ? 'oneshot' : 'campaign';
+      await ensureRaceTable(env.DB);
+      await env.DB.prepare(
+        `INSERT INTO races (device_id, name_key, name, race_key, time_ms, mode, level_idx, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(device_id, key, cleaned, race_key, t, md, lvl, Date.now()).run();
+      // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
+      // limite pour un historique que personne ne fera defiler jusqu'au bout.
+      await env.DB.prepare(
+        `DELETE FROM races WHERE device_id = ? AND id NOT IN (
+           SELECT id FROM races WHERE device_id = ? ORDER BY created_at DESC LIMIT ?)`
+      ).bind(device_id, device_id, HIST_PER_DEVICE).run();
+      return json({ ok: true });
+    }
+
+    // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
+    // appareil a l'autre — sinon celui de cet appareil seul.
+    if (url.pathname === '/races' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      const race = url.searchParams.get('race');
+      const nameKey = (url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
+      await ensureRaceTable(env.DB);
+      const q = nameKey
+        ? env.DB.prepare(
+            `SELECT race_key, time_ms, mode, level_idx, created_at FROM races
+              WHERE race_key = ? AND (name_key = ? OR device_id = ?)
+              ORDER BY created_at DESC LIMIT 300`
+          ).bind(race, nameKey, deviceId)
+        : env.DB.prepare(
+            `SELECT race_key, time_ms, mode, level_idx, created_at FROM races
+              WHERE race_key = ? AND device_id = ?
+              ORDER BY created_at DESC LIMIT 300`
+          ).bind(race, deviceId);
+      const { results } = await q.all();
+      return json({ courses: results || [] });
     }
 
     // -------------------------------------------------- visites et tableau

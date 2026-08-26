@@ -13,6 +13,13 @@ SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
 
+// Le moteur est du JavaScript ancien, sans acces aux modules : il previent
+// par ce crochet quand une course est terminee, et la couche moderne se
+// charge de l'envoyer.
+SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
+  pushFinishedRace(race, t, mode, level);
+};
+
 export type GameState = {
   state: 'open' | 'title' | 'cut' | 'count' | 'race' | 'result' | 'over' | 'winall';
   elapsed: number;
@@ -159,6 +166,16 @@ export function primeTopNames() {
         .catch(() => { /* repli sur le plateau maison */ });
     });
   });
+}
+
+/**
+ * Une course vient de se terminer : on la pousse a l'historique distant, pour
+ * qu'elle suive le joueur d'un appareil a l'autre. Le moteur l'a deja rangee
+ * en local, cet envoi ne bloque donc rien.
+ */
+export function pushFinishedRace(race: string, seconds: number, mode: string, level: number) {
+  import('./history').then(({ pushRace }) => pushRace(race as any, seconds, mode, level))
+    .catch(() => { /* module ou reseau indisponible : le local suffit */ });
 }
 
 /** Nouvelle course : le rythme de la precedente n'a rien a y faire. */

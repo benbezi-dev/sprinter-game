@@ -382,6 +382,9 @@
       if (h.length > HIST_MAX) h.length = HIST_MAX;
       localStorage.setItem(HIST, JSON.stringify(h));
     } catch (e) { /* stockage plein ou refuse : l'historique n'est pas vital */ }
+    // ...puis au serveur, pour que l'historique suive d'un appareil a l'autre.
+    try { G.onRaceRecorded && G.onRaceRecorded(G.raceKey, t, G.mode, G.levelIdx); }
+    catch (e) { /* le local est deja ecrit, on n'en fait pas un echec */ }
   }
   function raceHistory() {
     try { return JSON.parse(localStorage.getItem(HIST) || '[]'); }

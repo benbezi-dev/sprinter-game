@@ -5,14 +5,13 @@ import {
   fetchLeaderboardRaw, fetchMyRank, rankByRaceTime, rankByRunTime, rankOf,
   NO_RUN_MS, type LeaderboardEntry, type RaceKey,
 } from '@/game/leaderboard';
+import { fetchHistory, localHistory, type Course } from '@/game/history';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // Deux facons de classer une meme discipline : le meilleur chrono realise sur
 // une seule course, et le cumul du parcours complet en six etapes.
 type Cat = 'race' | 'run' | 'mine';
-
-type Course = { r: string; t: number; m: string; l: number; d: number };
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   const { N, RACES } = SprinterApp;
@@ -21,6 +20,16 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
   const [raw, setRaw] = useState<LeaderboardEntry[] | null>(null);
   const [mySplit, setMySplit] = useState<number | null>(null);
   const [error, setError] = useState(false);
+  // Historique : le serveur fait foi quand il repond, sinon l'appareil.
+  const [mesCourses, setMesCourses] = useState<Course[]>([]);
+
+  useEffect(() => {
+    let annule = false;
+    setMesCourses(localHistory(race));          // affichage immediat
+    fetchHistory(race).then(({ courses }) => { if (!annule) setMesCourses(courses); })
+      .catch(() => { /* le local reste affiche */ });
+    return () => { annule = true; };
+  }, [race]);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,9 +48,6 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
 
   // Les deux categories se derivent de la meme reponse : un seul aller-retour
   // reseau, et le tri reste juste quelle que soit la version du serveur.
-  // L'historique est local : il n'attend aucune reponse reseau.
-  const mesCourses: Course[] = (SprinterApp.raceHistory() as Course[])
-    .filter(c => c.r === race);
 
   const entries = raw === null ? null : (cat === 'run' ? rankByRunTime(raw) : rankByRaceTime(raw));
   const myRank = entries && mySplit && cat === 'race' ? rankOf(entries, mySplit) : null;
@@ -126,7 +132,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                   <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground">
                     {N.t('mine_count', {
                       n: mesCourses.length,
-                      s: Math.min(...mesCourses.map(c => c.t)).toFixed(2),
+                      s: Math.min(...mesCourses.map(c => c.seconds)).toFixed(2),
                     })}
                   </span>
                   <span className="text-[9px] md:text-[10px] text-muted-foreground/70">
@@ -135,23 +141,23 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                 </div>
                 <div className="flex flex-col gap-1.5 max-h-[calc(100dvh-24rem)] min-h-[36vh] overflow-y-auto overscroll-contain pr-1">
                   {mesCourses.map((c, i) => {
-                    const best = c.t === Math.min(...mesCourses.map(x => x.t));
+                    const best = c.seconds === Math.min(...mesCourses.map(x => x.seconds));
                     return (
                       <div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border
                         ${best ? 'bg-primary/10 border-primary/30' : 'border-white/5 bg-black/20'}`}>
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="text-[10px] md:text-xs text-muted-foreground truncate">
-                            {new Date(c.d).toLocaleDateString(N.getLang() === 'fr' ? 'fr-FR' : 'en-GB',
+                            {new Date(c.at).toLocaleDateString(N.getLang() === 'fr' ? 'fr-FR' : 'en-GB',
                               { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="text-[9px] md:text-[10px] text-muted-foreground/70 truncate">
-                            {N.t(c.m === 'oneshot' ? 'mode_oneshot_s' : 'mode_career_s')}
-                            {c.m !== 'oneshot' && ` · ${N.levelName(c.l)}`}
+                            {N.t(c.mode === 'oneshot' ? 'mode_oneshot_s' : 'mode_career_s')}
+                            {c.mode !== 'oneshot' && ` · ${N.levelName(c.level)}`}
                           </span>
                         </div>
                         <span className={`font-mono font-bold text-sm md:text-base shrink-0 tabular-nums
                           ${best ? 'text-primary' : 'text-foreground'}`}>
-                          {c.t.toFixed(2)} s
+                          {c.seconds.toFixed(2)} s
                         </span>
                       </div>
                     );
