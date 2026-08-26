@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
   fetchLeaderboardRaw, fetchMyRank, rankByRaceTime, rankByRunTime, rankOf,
@@ -143,17 +144,20 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                     key={i}
                     className={`flex items-center justify-between px-3 py-2 rounded-xl border ${isMe ? 'bg-primary/15 border-primary/40' : 'border-white/5 bg-black/20'}`}
                   >
-                    <div className="flex items-center gap-2 md:gap-3 overflow-hidden pr-2">
-                      <span className={`font-bold w-8 shrink-0 text-xs md:text-sm ${rank === 1 ? 'text-primary' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                    {/* Le nom prend toute la place restante : flex-1 avec
+                        min-w-0, sans quoi il se fait ecraser par le bouton et
+                        les chronos, et ne reste qu'une initiale. */}
+                    <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 pr-2">
+                      <span className={`font-bold w-6 md:w-8 shrink-0 text-xs md:text-sm ${rank === 1 ? 'text-primary' : rank === 2 ? 'text-slate-300' : rank === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                         {rank}.
                       </span>
                       <span className={`font-bold tracking-wide truncate text-xs md:text-sm ${isMe ? 'text-primary' : 'text-foreground'}`}>
                         {e.name}
                       </span>
                     </div>
-                    {/* Defier cette personne : on court la meme discipline,
-                        et le defi lui sera adresse a l'arrivee. On la designe
-                        par sa ligne, jamais par son appareil. */}
+                    {/* Defier cette personne. Reduit a une icone : le libelle
+                        mangeait la largeur du nom. Le titre et l'aria-label
+                        gardent l'intention lisible. */}
                     {!isMe && e.id != null && (
                       <button
                         onClick={() => {
@@ -161,10 +165,12 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                           onClose();
                           SprinterApp.startOneShot([race], { levelIdx: 4 });
                         }}
-                        className="shrink-0 mr-2 px-2.5 py-1 rounded-lg text-[9px] md:text-[10px] font-bold tracking-widest
-                                   text-primary/80 border border-primary/30 hover:bg-primary/15 hover:text-primary transition-colors"
+                        title={`${N.t('challenge_them')} — ${e.name}`}
+                        aria-label={`${N.t('challenge_them')} ${e.name}`}
+                        className="shrink-0 mr-2 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
+                                   text-primary/70 border border-primary/30 hover:bg-primary/15 hover:text-primary transition-colors"
                       >
-                        {N.t('challenge_them')}
+                        <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       </button>
                     )}
                     <div className="flex flex-col items-end shrink-0">

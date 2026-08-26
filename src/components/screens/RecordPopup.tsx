@@ -63,29 +63,39 @@ export function RecordPopup() {
         // Tableau vide : le premier chrono en est forcement le meilleur.
         if (best !== null && t * 1000 >= best) return;
         setSplit(t); setPrev(best); setRace(key);
-        setName(getSavedName());
+        const nom = getSavedName();
+        setName(nom);
         setStatus('idle'); setRank(null);
         setOpen(true);
+        // Nom deja connu : le record part tout seul. C'est souvent la seule
+        // occasion de l'enregistrer — en carriere, le chrono d'une etape ne
+        // remonte qu'a la fin des six, et un joueur qui s'arrete la perdrait
+        // son record mondial.
+        if (nom.trim()) envoyer(nom.trim(), key, t);
       })
       .catch(() => { /* classement injoignable : pas de record annonce */ });
 
     return () => { cancelled = true; };
   }, [state, player, raceKey]);
 
-  const handleSave = async () => {
-    const finalName = name.trim();
-    if (!finalName) return;
+  const envoyer = async (finalName: string, key: RaceKey, chrono: number) => {
     saveName(finalName);
     setStatus('sending');
     try {
-      await submitRaceRecord(race, finalName, split * 1000);
+      await submitRaceRecord(key, finalName, chrono * 1000);
       // On relit le tableau pour annoncer une place reellement constatee.
-      const list = rankByRaceTime(await fetchLeaderboardRaw(race));
-      setRank(rankOf(list, split * 1000));
+      const list = rankByRaceTime(await fetchLeaderboardRaw(key));
+      setRank(rankOf(list, chrono * 1000));
       setStatus('done');
     } catch {
       setStatus('error');
     }
+  };
+
+  const handleSave = () => {
+    const finalName = name.trim();
+    if (!finalName) return;
+    envoyer(finalName, race, split);
   };
 
   return (

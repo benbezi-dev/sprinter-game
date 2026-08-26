@@ -42,30 +42,41 @@ export function OneShotEndScreen() {
       .then(list => {
         if (cancelled) return;
         setOutcomes(list);
-        setTopStatus(list.some(o => o.beatsOwn) ? 'idle' : 'done');
+        const aEnvoyer = list.filter(o => o.beatsOwn);
+        if (!aEnvoyer.length) { setTopStatus('done'); return; }
+        // Nom deja connu : on enregistre sans rien demander. Un chrono qui
+        // ameliore son propre record n'a aucune raison d'attendre un clic,
+        // et c'est deja ce que fait la carriere.
+        const nom = getSavedName().trim();
+        if (nom) envoyer(nom, aEnvoyer);
+        else setTopStatus('idle');
       })
       .catch(() => { if (!cancelled) { setOutcomes([]); setTopStatus('error'); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
-  // serveur ecarterait les autres de toute facon.
-  const tops = (outcomes || []).filter(o => o.beatsOwn);
-  const kept = (outcomes || []).filter(o => !o.beatsOwn);
-
-  const handleSaveTop = async () => {
-    const finalName = topName.trim();
-    if (!finalName || !tops.length) return;
-    saveName(finalName);
+  const envoyer = async (nom: string, liste: RaceOutcome[]) => {
+    saveName(nom);
     setTopStatus('sending');
     try {
-      for (const t of tops) await submitRaceRecord(t.race, finalName, t.ms);
+      for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
       primeTopNames();          // le plateau olympique se met a jour
       setTopStatus('done');
     } catch {
       setTopStatus('error');
     }
+  };
+
+  // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
+  // serveur ecarterait les autres de toute facon.
+  const tops = (outcomes || []).filter(o => o.beatsOwn);
+  const kept = (outcomes || []).filter(o => !o.beatsOwn);
+
+  const handleSaveTop = () => {
+    const finalName = topName.trim();
+    if (!finalName || !tops.length) return;
+    envoyer(finalName, tops);
   };
 
   const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
