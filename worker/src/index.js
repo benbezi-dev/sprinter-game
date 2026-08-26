@@ -193,6 +193,43 @@ async function ensureRaceTable(db) {
   racesReady = true;
 }
 
+// Un nom appartient a quelqu'un, et cet appartenance se prouve par un code
+// court. C'est ce qui remplace un compte : pas de tiers, pas d'e-mail, pas
+// d'ecran de consentement — juste de quoi relier ses appareils et empecher
+// qu'on prenne son nom.
+let joueursReady = false;
+async function ensurePlayerTables(db) {
+  if (joueursReady) return;
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS players (
+      name_key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      code TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS player_devices (
+      name_key TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (name_key, device_id)
+    )`),
+  ]);
+  joueursReady = true;
+}
+
+/** Cet appareil a-t-il le droit d'ecrire sous ce nom ? */
+async function peutUtiliser(db, nameKey, deviceId) {
+  if (!nameKey) return true;                       // anonyme : rien a proteger
+  await ensurePlayerTables(db);
+  const p = await db.prepare(`SELECT name_key FROM players WHERE name_key = ?`)
+    .bind(nameKey).first();
+  if (!p) return true;                             // nom encore libre
+  const d = await db.prepare(
+    `SELECT 1 AS ok FROM player_devices WHERE name_key = ? AND device_id = ?`
+  ).bind(nameKey, deviceId).first();
+  return !!d;
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -263,6 +300,11 @@ export default {
       let split = Math.round(Number(best_split_ms));
       if (!Number.isFinite(split) || split <= 0 || split > t) split = t;
       const cleanedName = cleanName(name);
+      // Un nom reserve n'accepte que les appareils de son proprietaire :
+      // sans cela la reservation ne protegerait rien.
+      if (!await peutUtiliser(env.DB, cleanedName.trim().toLowerCase(), device_id)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
       const now = Date.now();
       await ensureScoreGhost(env.DB);
 
@@ -345,6 +387,66 @@ export default {
       });
     }
 
+    // ------------------------------------------------------------- identite
+    // Reserver un nom. Si personne ne l'a pris, il est a nous et on recoit un
+    // code ; s'il est deja a nous, on le recupere ; sinon il faut le code.
+    if (url.pathname === '/claim' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const propre = cleanName(name);
+      const key = propre.trim().toLowerCase();
+      if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+
+      const existe = await env.DB.prepare(
+        `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
+
+      if (existe) {
+        const lie = await env.DB.prepare(
+          `SELECT 1 AS ok FROM player_devices WHERE name_key = ? AND device_id = ?`
+        ).bind(key, device_id).first();
+        if (lie) return json({ ok: true, name: existe.name, code: existe.code, deja: true });
+        return json({ ok: false, pris: true });     // il faudra fournir le code
+      }
+
+      const code = makeCode();
+      await env.DB.prepare(
+        `INSERT INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
+      ).bind(key, propre, code, Date.now()).run();
+      // Les appareils qui jouaient deja sous ce nom sont rattaches : sans
+      // cela, reserver son propre nom couperait le joueur de son historique.
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at)
+         SELECT DISTINCT ?, device_id, ? FROM scores WHERE lower(trim(name)) = ?`
+      ).bind(key, Date.now(), key).run();
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
+      ).bind(key, device_id, Date.now()).run();
+      return json({ ok: true, name: propre, code });
+    }
+
+    // Relier cet appareil a un nom deja reserve, en prouvant qu'il est a nous.
+    if (url.pathname === '/link' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, code } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      const donne = String(code || '').trim().toUpperCase();
+      if (!key || !donne) return json({ error: 'parametres invalides' }, 400);
+      await ensurePlayerTables(env.DB);
+      const p = await env.DB.prepare(
+        `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
+      if (!p) return json({ ok: false, inconnu: true });
+      if (p.code !== donne) return json({ ok: false, mauvais_code: true });
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
+      ).bind(key, device_id, Date.now()).run();
+      return json({ ok: true, name: p.name });
+    }
+
     // ------------------------------------------------ historique personnel
     if (url.pathname === '/race' && request.method === 'POST') {
       let body;
@@ -358,6 +460,9 @@ export default {
       }
       const cleaned = cleanName(name);
       const key = cleaned.trim().toLowerCase();
+      if (!await peutUtiliser(env.DB, key, device_id)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
       const md = mode === 'oneshot' ? 'oneshot' : 'campaign';
       await ensureRaceTable(env.DB);

@@ -6,6 +6,7 @@ import {
   NO_RUN_MS, type LeaderboardEntry, type RaceKey,
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
+import { IdentityPanel } from './IdentityPanel';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -125,6 +126,8 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         {/* Historique personnel : tout ce qu'on a couru, y compris ce que le
             classement ne peut pas garder. Lu sur l'appareil, sans reseau. */}
         {cat === 'mine' ? (
+          <>
+          <IdentityPanel />
           <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
             {mesCourses.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-6">{N.t('mine_empty')}</p>
@@ -171,6 +174,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               </>
             )}
           </div>
+          </>
         ) : (
         <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
           {error && (
