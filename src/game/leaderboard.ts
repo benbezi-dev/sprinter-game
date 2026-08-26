@@ -69,9 +69,18 @@ export function rankByRaceTime(entries: LeaderboardEntry[]): LeaderboardEntry[] 
  * Seconde categorie : le cumul du parcours complet, celui de la carriere en
  * six etapes. Un cumul a 0 signifie qu'aucun parcours entier n'a ete boucle.
  */
+/**
+ * Un record sur une seule course peut tomber en pleine carriere, avant qu'un
+ * parcours complet ait ete boucle. Il n'y a alors aucun cumul a declarer : on
+ * envoie cette valeur, que le classement des parcours ignore. Le Worker ne
+ * remplace le cumul que s'il est meilleur, donc un vrai parcours deja
+ * enregistre survit intact a l'envoi d'un record de course.
+ */
+export const NO_RUN_MS = 1200000;
+
 export function rankByRunTime(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   return entries
-    .filter(e => e.time_ms > 0)
+    .filter(e => e.time_ms > 0 && e.time_ms < NO_RUN_MS)
     .sort((a, b) => a.time_ms - b.time_ms);
 }
 
@@ -126,6 +135,20 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
   });
   if (!res.ok) throw new Error('score submit failed');
   return res.json();
+}
+
+/**
+ * Enregistre un record realise sur une seule course, sans toucher au
+ * classement des parcours complets.
+ */
+export async function submitRaceRecord(race: RaceKey, name: string, splitMs: number) {
+  return submitScore(race, name, NO_RUN_MS, splitMs);
+}
+
+/** Meilleur chrono mondial sur une course, ou null si le tableau est vide. */
+export async function fetchRaceBest(race: RaceKey): Promise<number | null> {
+  const list = rankByRaceTime(await fetchLeaderboardRaw(race));
+  return list.length ? list[0].best_split_ms : null;
 }
 
 export async function fetchMyRank(race: RaceKey): Promise<{
