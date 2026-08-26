@@ -55,9 +55,21 @@
     REACT_WINDOW: 0.32,
     REACT_BONUS: 1.35,        // m/s offerts sur une reaction parfaite
     FALSE_START_FREEZE: 0.28, // blocage si on part avant le signal
-    // transition : la cadence doit monter franchement pendant la poussee
-    TRANS_GOOD: 1.18,
-    TRANS_PERFECT: 1.45,
+    // Transition : la cadence doit monter pendant la poussee. On compare les
+    // MEDIANES des deux moities de la phase, pas trois appuis contre trois.
+    //
+    // Mesure a l'appui : avec trois contre trois, vingt millisecondes d'ecart
+    // sur le depart faisaient passer la reussite de 227/300 a 39/300 — le
+    // bruit du doigt decidait a la place du joueur. Sur les medianes de
+    // moities, taper a fond plafonne a 1,082 et la moindre montee demarre a
+    // 1,094 : la separation est franche, la note cesse d'etre un pile ou face.
+    TRANS_GOOD: 1.09,
+    TRANS_PERFECT: 1.20,
+    // Plancher de cadence sur la seconde moitie. Sans lui, le chemin le plus
+    // facile vers la note parfaite etait de trainer expres sur les premiers
+    // appuis — ratio 3,76, le double d'une vraie montee en puissance.
+    TRANS_FLOOR: 0.125,
+    TRANS_MIN_PRESS: 8,
     TRANS_BOOST: [0, 0.18, 0.40],   // impulsion immediate, selon la note
     TRANS_DRAG: [1.0, 0.91, 0.82],  // freinage allege pendant TRANS_TIME
     TRANS_TIME: [0, 1.8, 2.6],
@@ -188,19 +200,173 @@
   // ressemble a rien d'athletique. On cale donc le bras sur la cuisse a
   // partir des extremes reels des tables, plutot qu'en supposant qu'elles
   // sont alignees.
-  const ARM_PHASE = (function () {
-    function peakAt(table, sign) {
-      let best = -Infinity, at = 0;
-      for (let i = 0; i < 720; i++) {
-        const q = TAU * i / 720, v = sign * gait(table, q);
-        if (v > best) { best = v; at = q; }
-      }
-      return at;
+  // ---- profils de foulee -------------------------------------------------
+  // Chaque athlete court avec SA biomecanique. Les tables donnent la forme du
+  // cycle (angles au fil de la foulee) ; les scalaires donnent le caractere :
+  // amplitude des membres, inclinaison du buste, rebond vertical, et longueur
+  // d'appui (stride) qui arbitre entre foulee longue et haute frequence.
+  // 'base' reprend a l'identique la foulee historique : tout athlete sans
+  // profil declare court exactement comme avant.
+  const GAITS = {
+    base: Object.assign({}, GAIT, {
+      boost: 1.18, armAmp: 1.00, lean: 1.00, bob: 1.00, stride: 1.00
+    }),
+
+    // Cadence tres elevee plutot que foulee longue, recuperation talon-fessier
+    // tres compacte et maintenue tard, buste haut, bras relaches.
+    cadence: {
+      thigh: catmull([[0, 0.34], [0.75, -0.02], [1.50, -0.44], [2.20, -0.26],
+                      [3.10, 0.18], [4.10, 0.62], [4.85, 0.74], [5.55, 0.60]]),
+      knee: catmull([[0, -0.26], [0.50, -0.58], [1.10, -0.30], [1.50, -0.18],
+                     [2.10, -1.44], [2.70, -2.28], [3.40, -2.34], [4.20, -1.86],
+                     [5.00, -1.02], [5.60, -0.40]]),
+      ankle: catmull([[0, 0.14], [0.60, 0.04], [1.45, -0.48], [2.10, -0.28],
+                      [3.20, 0.18], [4.60, 0.22], [5.60, 0.15]]),
+      arm: catmull([[0, 0.36], [1.10, 0.08], [2.20, -0.40], [3.14, -0.82],
+                    [4.10, -0.52], [5.10, 0.04], [5.70, 0.26]]),
+      elbow: catmull([[0, 1.72], [1.10, 1.48], [2.20, 1.12], [3.14, 0.92],
+                      [4.10, 1.18], [5.10, 1.58], [5.70, 1.68]]),
+      boost: 1.14, armAmp: 0.90, lean: 0.82, bob: 0.88, stride: 0.97
+    },
+
+    // Sprinteur vif : appuis brefs, genou avant qui remonte tot et vite,
+    // bras nerveux. Amplitude contenue, tout est dans la frequence.
+    sharp: {
+      thigh: catmull([[0, 0.42], [0.75, 0.00], [1.50, -0.46], [2.20, -0.24],
+                      [3.10, 0.28], [4.10, 0.76], [4.85, 0.84], [5.55, 0.66]]),
+      knee: catmull([[0, -0.30], [0.50, -0.64], [1.10, -0.32], [1.50, -0.14],
+                     [2.10, -1.34], [2.70, -2.12], [3.40, -2.08], [4.20, -1.44],
+                     [5.00, -0.78], [5.60, -0.38]]),
+      ankle: catmull([[0, 0.16], [0.60, 0.02], [1.45, -0.56], [2.10, -0.32],
+                      [3.20, 0.20], [4.60, 0.24], [5.60, 0.16]]),
+      arm: catmull([[0, 0.48], [1.10, 0.12], [2.20, -0.50], [3.14, -1.02],
+                    [4.10, -0.64], [5.10, 0.06], [5.70, 0.34]]),
+      elbow: catmull([[0, 1.62], [1.10, 1.32], [2.20, 0.94], [3.14, 0.72],
+                      [4.10, 1.00], [5.10, 1.46], [5.70, 1.58]]),
+      boost: 1.20, armAmp: 1.08, lean: 1.06, bob: 0.94, stride: 0.94
+    },
+
+    // Puissance : poussee longue, forte extension derriere, jambe plus
+    // tendue a l'appui, bras amples. Frequence plus basse, foulee qui avale.
+    power: {
+      thigh: catmull([[0, 0.40], [0.75, -0.06], [1.50, -0.64], [2.20, -0.40],
+                      [3.10, 0.18], [4.10, 0.72], [4.85, 0.86], [5.55, 0.72]]),
+      knee: catmull([[0, -0.22], [0.50, -0.50], [1.10, -0.26], [1.50, -0.12],
+                     [2.10, -1.02], [2.70, -1.74], [3.40, -1.80], [4.20, -1.40],
+                     [5.00, -0.84], [5.60, -0.38]]),
+      ankle: catmull([[0, 0.10], [0.60, 0.00], [1.45, -0.62], [2.10, -0.34],
+                      [3.20, 0.14], [4.60, 0.18], [5.60, 0.12]]),
+      arm: catmull([[0, 0.50], [1.10, 0.12], [2.20, -0.54], [3.14, -1.08],
+                    [4.10, -0.68], [5.10, 0.06], [5.70, 0.36]]),
+      elbow: catmull([[0, 1.52], [1.10, 1.26], [2.20, 0.90], [3.14, 0.70],
+                      [4.10, 0.96], [5.10, 1.36], [5.70, 1.48]]),
+      boost: 1.26, armAmp: 1.12, lean: 1.14, bob: 1.10, stride: 1.03
+    },
+
+    // Foulee huilee : aucune cassure, extremes adoucis, tres peu de rebond.
+    // Amplitude large mais posee - l'impression de glisser sans forcer.
+    fluid: {
+      thigh: catmull([[0, 0.36], [0.75, -0.04], [1.50, -0.54], [2.20, -0.34],
+                      [3.10, 0.16], [4.10, 0.64], [4.85, 0.76], [5.55, 0.64]]),
+      knee: catmull([[0, -0.26], [0.50, -0.54], [1.10, -0.32], [1.50, -0.20],
+                     [2.10, -1.10], [2.70, -1.80], [3.40, -1.88], [4.20, -1.50],
+                     [5.00, -0.92], [5.60, -0.44]]),
+      ankle: catmull([[0, 0.11], [0.60, 0.02], [1.45, -0.46], [2.10, -0.28],
+                      [3.20, 0.14], [4.60, 0.17], [5.60, 0.12]]),
+      arm: catmull([[0, 0.38], [1.10, 0.10], [2.20, -0.42], [3.14, -0.86],
+                    [4.10, -0.56], [5.10, 0.04], [5.70, 0.28]]),
+      elbow: catmull([[0, 1.56], [1.10, 1.34], [2.20, 1.02], [3.14, 0.84],
+                      [4.10, 1.08], [5.10, 1.42], [5.70, 1.52]]),
+      boost: 1.16, armAmp: 0.96, lean: 0.88, bob: 0.72, stride: 0.98
+    },
+
+    // Frequence elevee ET grande amplitude, talon qui claque tres haut sous
+    // la fesse, buste redresse jusqu'a paraitre en arriere, epaules relachees.
+    lyles: {
+      thigh: catmull([[0, 0.38], [0.75, -0.04], [1.50, -0.58], [2.20, -0.32],
+                      [3.10, 0.24], [4.10, 0.78], [4.85, 0.92], [5.55, 0.74]]),
+      knee: catmull([[0, -0.28], [0.50, -0.62], [1.10, -0.34], [1.50, -0.18],
+                     [2.10, -1.50], [2.70, -2.34], [3.40, -2.42], [4.20, -1.92],
+                     [5.00, -1.06], [5.60, -0.44]]),
+      ankle: catmull([[0, 0.14], [0.60, 0.02], [1.45, -0.58], [2.10, -0.32],
+                      [3.20, 0.18], [4.60, 0.22], [5.60, 0.14]]),
+      arm: catmull([[0, 0.44], [1.10, 0.10], [2.20, -0.48], [3.14, -0.92],
+                    [4.10, -0.58], [5.10, 0.05], [5.70, 0.32]]),
+      elbow: catmull([[0, 1.66], [1.10, 1.40], [2.20, 1.06], [3.14, 0.86],
+                      [4.10, 1.12], [5.10, 1.50], [5.70, 1.62]]),
+      boost: 1.22, armAmp: 0.98, lean: 0.70, bob: 0.92, stride: 1.00
+    },
+
+    // Puissance appuyee : buste plus engage, poussee qui dure, rebond franc.
+    // Une foulee qui laboure plutot qu'elle ne caresse.
+    drive: {
+      thigh: catmull([[0, 0.44], [0.75, -0.02], [1.50, -0.60], [2.20, -0.38],
+                      [3.10, 0.22], [4.10, 0.70], [4.85, 0.82], [5.55, 0.70]]),
+      knee: catmull([[0, -0.24], [0.50, -0.56], [1.10, -0.28], [1.50, -0.14],
+                     [2.10, -1.16], [2.70, -1.90], [3.40, -1.96], [4.20, -1.52],
+                     [5.00, -0.88], [5.60, -0.40]]),
+      ankle: catmull([[0, 0.13], [0.60, 0.00], [1.45, -0.60], [2.10, -0.34],
+                      [3.20, 0.17], [4.60, 0.21], [5.60, 0.13]]),
+      arm: catmull([[0, 0.52], [1.10, 0.14], [2.20, -0.52], [3.14, -1.04],
+                    [4.10, -0.66], [5.10, 0.07], [5.70, 0.36]]),
+      elbow: catmull([[0, 1.50], [1.10, 1.24], [2.20, 0.88], [3.14, 0.68],
+                      [4.10, 0.94], [5.10, 1.34], [5.70, 1.46]]),
+      boost: 1.24, armAmp: 1.10, lean: 1.20, bob: 1.14, stride: 1.04
+    },
+
+    // Foulee aerienne : suspension longue, genou qui monte haut et retombe
+    // lentement, peu d'appuis. Silhouette longiligne qui semble planer.
+    glide: {
+      thigh: catmull([[0, 0.34], [0.75, -0.06], [1.50, -0.56], [2.20, -0.36],
+                      [3.10, 0.14], [4.10, 0.66], [4.85, 0.84], [5.55, 0.68]]),
+      knee: catmull([[0, -0.28], [0.50, -0.52], [1.10, -0.34], [1.50, -0.22],
+                     [2.10, -1.06], [2.70, -1.72], [3.40, -1.84], [4.20, -1.56],
+                     [5.00, -0.98], [5.60, -0.46]]),
+      ankle: catmull([[0, 0.10], [0.60, 0.03], [1.45, -0.44], [2.10, -0.26],
+                      [3.20, 0.13], [4.60, 0.16], [5.60, 0.11]]),
+      arm: catmull([[0, 0.34], [1.10, 0.09], [2.20, -0.38], [3.14, -0.80],
+                    [4.10, -0.52], [5.10, 0.03], [5.70, 0.24]]),
+      elbow: catmull([[0, 1.58], [1.10, 1.38], [2.20, 1.08], [3.14, 0.90],
+                      [4.10, 1.14], [5.10, 1.46], [5.70, 1.54]]),
+      boost: 1.20, armAmp: 0.92, lean: 0.78, bob: 1.06, stride: 1.06
     }
-    const thighForward = peakAt(GAIT.thigh, 1);
-    const armBackward = peakAt(GAIT.arm, -1);
-    return ((armBackward - thighForward) % TAU + TAU) % TAU;
-  })();
+  };
+
+  // Couplage bras / jambes (biomecanique du sprint) : le bras doit etre au
+  // plus loin en arriere quand la cuisse du MEME cote est au plus haut
+  // devant, et inversement. Les deux courbes n'ayant pas leurs extremes au
+  // meme endroit du cycle, un simple dephasage de PI ne les met PAS en
+  // opposition : on obtenait un bras et un genou qui montaient du meme cote,
+  // ce qui ne ressemble a rien d'athletique. On cale donc le bras sur la
+  // cuisse a partir des extremes reels des tables, plutot qu'en supposant
+  // qu'elles sont alignees. Chaque profil ayant ses propres tables, le
+  // dephasage se calcule par profil (et se retient, c'est un balayage).
+  function peakAt(table, sign) {
+    let best = -Infinity, at = 0;
+    for (let i = 0; i < 720; i++) {
+      const q = TAU * i / 720, v = sign * gait(table, q);
+      if (v > best) { best = v; at = q; }
+    }
+    return at;
+  }
+
+  const armPhaseCache = new Map();
+  function armPhaseOf(P) {
+    let v = armPhaseCache.get(P);
+    if (v === undefined) {
+      v = ((peakAt(P.arm, -1) - peakAt(P.thigh, 1)) % TAU + TAU) % TAU;
+      armPhaseCache.set(P, v);
+    }
+    return v;
+  }
+
+  const EMPTY_MORPH = {};
+
+  function gaitOf(look) {
+    return (look && GAITS[look.gait]) || GAITS.base;
+  }
+
+  const ARM_PHASE = armPhaseOf(GAITS.base);
 
   // ---------------------------------------------------------------------
   // ATHLETES
@@ -236,27 +402,42 @@
       shoe: o.shoe || [250, 250, 255],
       hair: o.hair || 'crop',
       hairCol: o.hairCol || HAIR,
-      h: Math.max(C.MIN_H, Math.min(C.MAX_H, o.h || 1.80))
+      h: Math.max(C.MIN_H, Math.min(C.MAX_H, o.h || 1.80)),
+      // Profil de foulee (voir GAITS) et retouches de gabarit : deux athletes
+      // de meme taille doivent pouvoir avoir une silhouette et une gestuelle
+      // reconnaissables. Absents => foulee historique et gabarit standard.
+      gait: o.gait || 'base',
+      morph: o.morph || null
     };
   }
 
   // Meme regle que le reste du plateau "sprint" a partir du mondial :
   // que des carnations noires (ebene) pour la finale ZEZE.
   const ZEZE = {
+    // Sept athletes, sept foulees et sept gabarits : chacun doit etre
+    // reconnaissable de loin a sa silhouette, et de pres a sa gestuelle.
+    // Le profil (voir GAITS) porte la biomecanique, morph le gabarit.
     'Benbezi ZEZE': look({ build: 'm', skin: 'ebene', jersey: [214, 48, 62],
-      shorts: [26, 26, 40], hair: 'fade', h: 1.96 }),
+      shorts: [26, 26, 40], hair: 'fade', h: 1.86,
+      gait: 'lyles', morph: { sh: 1.06, hip: 0.98, arm: 1.04, leg: 1.04 } }),
     'Ryan ZEZE': look({ build: 'm', skin: 'ebene', jersey: [48, 132, 232],
-      shorts: [24, 30, 52], shoe: [250, 224, 70], hair: 'crop', h: 1.78 }),
+      shorts: [24, 30, 52], shoe: [250, 224, 70], hair: 'crop', h: 1.78,
+      gait: 'sharp', morph: { sh: 1.02, hip: 0.98, arm: 1.02, leg: 1.06 } }),
     'Mickeal ZEZE': look({ build: 'm', skin: 'ebene', jersey: [44, 190, 128],
-      shorts: [22, 34, 32], shoe: [246, 126, 46], hair: 'flattop', h: 1.85 }),
+      shorts: [22, 34, 32], shoe: [246, 126, 46], hair: 'flattop', h: 1.85,
+      gait: 'power', morph: { sh: 1.14, hip: 1.02, arm: 1.16, leg: 1.12 } }),
     'Herman ZEZE': look({ build: 'm', skin: 'ebene', jersey: [246, 150, 40],
-      shorts: [34, 26, 22], shoe: [126, 226, 250], hair: 'shaved', h: 2.00 }),
+      shorts: [34, 26, 22], shoe: [126, 226, 250], hair: 'shaved', h: 2.00,
+      gait: 'fluid', morph: { sh: 0.96, hip: 0.94, arm: 0.92, leg: 0.94 } }),
     'Greta ZEZE': look({ build: 'f', skin: 'ebene', jersey: [162, 92, 232],
-      shorts: [28, 22, 44], hair: 'bun', h: 1.70 }),
+      shorts: [28, 22, 44], hair: 'bun', h: 1.70,
+      gait: 'drive', morph: { sh: 1.12, hip: 1.06, arm: 1.10, leg: 1.14 } }),
     'Ervie ZEZE': look({ build: 'f', skin: 'ebene', jersey: [36, 198, 196],
-      shorts: [20, 34, 36], shoe: [250, 224, 70], hair: 'braids', h: 1.75 }),
+      shorts: [20, 34, 36], shoe: [250, 224, 70], hair: 'braids', h: 1.75,
+      gait: 'glide', morph: { sh: 0.92, hip: 0.94, arm: 0.88, leg: 0.92 } }),
     'Victoire ZEZE': look({ build: 'f', skin: 'ebene', jersey: [236, 96, 178],
-      shorts: [36, 22, 36], shoe: [246, 126, 46], hair: 'ponytail', h: 1.63 })
+      shorts: [36, 22, 36], shoe: [246, 126, 46], hair: 'ponytail', h: 1.63,
+      gait: 'cadence', morph: { sh: 0.98, hip: 1.02, arm: 0.96, leg: 1.12 } })
   };
 
   const PLAYER_LOOK = look({ build: 'm', skin: 'ebene', jersey: [248, 205, 74],
@@ -442,7 +623,12 @@
   Runner.prototype.strideLength = function () {
     const amp = 0.34 + 0.66 * Math.min(1, this.v / this.maxSpeed);
     const leg = 0.87 * (this.look.h / C.MODEL_H);
-    return Math.max(0.85, 4 * leg * Math.sin(Math.min(1.15, 0.70 * amp)));
+    // stride > 1 : foulee qui avale, moins d'appuis. stride < 1 : haute
+    // frequence. La vitesse ne change pas, seul le nombre d'appuis pour la
+    // couvrir - c'est la difference entre un finisseur et un frequenciel.
+    const P = gaitOf(this.look);
+    return Math.max(0.85, 4 * leg * P.stride *
+                    Math.sin(Math.min(1.15, 0.70 * amp)));
   };
 
   // Inclinaison du corps entier, en radians, d'apres la distance parcourue.
@@ -460,20 +646,37 @@
     return this.d < C.TRANS_END ? 1 : 2;
   };
 
-  // Note de transition : on compare la cadence des trois premiers appuis a
-  // celle des trois derniers de la phase de poussee. Un bon depart monte en
-  // frequence sans a-coup ; trebucher annule la note.
+  // Note de transition : on compare la cadence de la premiere moitie de la
+  // poussee a celle de la seconde. Un bon depart monte en frequence sans
+  // a-coup ; trebucher annule la note.
+  //
+  // Deux precautions, chacune corrigeant un defaut mesure. On prend les
+  // MEDIANES de chaque moitie, et non la moyenne de trois appuis : sur si peu
+  // d'echantillons, l'imprecision du doigt pesait plus lourd que l'intention,
+  // et la note basculait sur vingt millisecondes. Et la seconde moitie doit
+  // atteindre une cadence reelle : autrement le moyen le plus sur d'obtenir la
+  // note parfaite etait de trainer expres au depart, ce qui recompensait
+  // exactement le contraire d'un bon demarrage.
+  function mediane(a) {
+    const s = a.slice().sort((x, y) => x - y), n = s.length;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  }
   Runner.prototype.gradeTransition = function () {
     const p = this.pressTimes;
-    if (this.stumbledInDrive || p.length < 7) { this.transGrade = 0; return; }
+    if (this.stumbledInDrive || p.length < C.TRANS_MIN_PRESS) {
+      this.transGrade = 0; return;
+    }
     const gap = [];
     for (let i = 1; i < p.length; i++) gap.push(p[i] - p[i - 1]);
-    const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
-    const early = mean(gap.slice(0, 3)), late = mean(gap.slice(-3));
-    const ratio = late > 0.0001 ? early / late : 0;
+    const moitie = Math.floor(gap.length / 2);
+    const late = mediane(gap.slice(moitie));
+    const ratio = late > 0.0001 ? mediane(gap.slice(0, moitie)) / late : 0;
     this.transRatio = ratio;
-    this.transGrade = ratio >= C.TRANS_PERFECT ? 2
-      : (ratio >= C.TRANS_GOOD ? 1 : 0);
+    // Une montee qui n'aboutit pas a une vraie cadence ne vaut rien : c'est
+    // ce qui distingue un demarrage maitrise d'un depart simplement lent.
+    const abouti = late <= C.TRANS_FLOOR;
+    this.transGrade = !abouti ? 0
+      : (ratio >= C.TRANS_PERFECT ? 2 : (ratio >= C.TRANS_GOOD ? 1 : 0));
     const g = this.transGrade;
     this.maxSpeed *= C.TRANS_VMAX[g];
     this.v = Math.min(this.maxSpeed, this.v + C.TRANS_BOOST[g]);
@@ -615,8 +818,9 @@
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
+    const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
-    const lean = -(0.05 + 0.16 * sp);
+    const lean = -(0.05 + 0.16 * sp) * P.lean;
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -626,23 +830,24 @@
     // segment sans le second cassait l'effet d'entrainement naturel d'un
     // membre (le bout semblait trainer derriere le haut), ce qui donnait
     // une impression de mouvement disloque plutot que coordonne.
-    const LIMB_BOOST = 1.18;
+    const LIMB_BOOST = P.boost;
     function leg(q) {
-      const th = gait(GAIT.thigh, q) * A * LIMB_BOOST;
-      const kn = gait(GAIT.knee, q) * (0.42 + 0.58 * A) * LIMB_BOOST;
-      const an = gait(GAIT.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
+      const th = gait(P.thigh, q) * A * LIMB_BOOST;
+      const kn = gait(P.knee, q) * (0.42 + 0.58 * A) * LIMB_BOOST;
+      const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(GAIT.arm, q) * (0.55 + 0.45 * A) * LIMB_BOOST;
-      const ef = gait(GAIT.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
+      const ua = gait(P.arm, q) * (0.55 + 0.45 * A) * LIMB_BOOST * P.armAmp;
+      const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
 
     // cote +1 : jambe en phase p, donc bras cale en opposition sur cette
     // meme phase ; cote -1 : tout est decale d'un demi-cycle.
+    const AP = armPhaseOf(P);
     const l = leg(p), rr = leg(p + Math.PI);
-    let al = arm(p + ARM_PHASE), ar = arm(p + Math.PI + ARM_PHASE);
+    let al = arm(p + AP), ar = arm(p + Math.PI + AP);
     const cel = r.celebrate || 0;
     if (cel > 0) {
       const ul = 2.55 + 0.22 * Math.sin(p * 0.8);
@@ -662,7 +867,7 @@
       ar = [ar[0] * (1 - f) + wr * f, ar[1] * (1 - f) + (wr + 0.55) * f];
     }
 
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75));
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob;
     const yawHip = -0.16 * A * Math.sin(p);
     const yawTop = 0.21 * A * Math.sin(p);
     const sway = 0.016 * A * Math.sin(p);
@@ -671,10 +876,14 @@
     // elargis, cuisses epaisses qui s'affinent vers le mollet, bras avec
     // un vrai galbe biceps/avant-bras. Seules les largeurs changent, pas
     // les longueurs de segment (deja calees sur la taille du personnage).
-    const shY = fem ? 0.130 : 0.154;
-    const hipY = fem ? 0.094 : 0.082;
-    const armR = fem ? 0.052 : 0.060;
-    const legR = fem ? 0.082 : 0.090;
+    // Gabarit de base selon le sexe, puis retouches par athlete : epaules,
+    // bassin, bras et cuisses se reglent independamment pour que chaque
+    // silhouette soit reconnaissable de loin, avant meme la gestuelle.
+    const MO = L.morph || EMPTY_MORPH;
+    const shY = (fem ? 0.130 : 0.154) * (MO.sh || 1);
+    const hipY = (fem ? 0.094 : 0.082) * (MO.hip || 1);
+    const armR = (fem ? 0.052 : 0.060) * (MO.arm || 1);
+    const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
     const add = (c, pv, a, o, hb, ht, hz, yaw) =>
@@ -798,7 +1007,8 @@
   })();
 
   root.SprinterCore = {
-    TAU, C, RACES, LEVELS, GAIT, gait, catmull, Track, Runner, pose, fallShape,
+    TAU, C, RACES, LEVELS, GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    pose, fallShape,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
