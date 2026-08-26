@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -25,6 +25,8 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
+import { Dashboard } from '@/components/screens/Dashboard';
+import { dashboardRequested, pingVisit } from '@/game/stats';
 
 const queryClient = new QueryClient();
 
@@ -98,6 +100,17 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 
 function App() {
+  // Le tableau de bord passe par un parametre d'URL plutot que par une route :
+  // GitHub Pages n'a pas de repli SPA ici, un chemin dedie renverrait une 404
+  // au chargement direct. Meme convention que le lien de defi, ?defi=.
+  const [stats] = useState(dashboardRequested);
+
+  // Un passage compte une fois par session, et seulement pour le jeu : ouvrir
+  // le tableau de bord ne doit pas gonfler ses propres chiffres.
+  useEffect(() => { if (!stats) pingVisit(); }, [stats]);
+
+  if (stats) return <Dashboard />;
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

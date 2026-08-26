@@ -1,0 +1,108 @@
+// Tableau de bord : frequentation et participation.
+//
+// Deux sources, volontairement independantes. Les participants se deduisent du
+// classement, qui existe deja : ce volet fonctionne sans rien deployer. Les
+// visites, elles, demandent un compteur cote serveur — tant que le Worker
+// n'est pas redeploye, /stats repond 404 et le tableau le dit au lieu
+// d'inventer des chiffres.
+
+import { getDeviceId, fetchLeaderboardRaw, rankByRaceTime, type RaceKey } from './leaderboard';
+
+const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+const RACES: RaceKey[] = ['100', '200', '400'];
+const VISIT_KEY = 'sprinter_visit_ping';
+
+export type ServerStats = {
+  visites: { total: number; visiteurs: number; par_jour: { day: string; visiteurs: number; hits: number }[] };
+  scores: { lignes?: number; appareils?: number; joueurs?: number };
+  defis: { defis?: number; tentatives?: number };
+};
+
+/**
+ * Signale un passage, une fois par session. On ne veut pas compter chaque
+ * changement d'ecran : ce serait du bruit, pas de la frequentation.
+ */
+export function pingVisit() {
+  try {
+    if (sessionStorage.getItem(VISIT_KEY)) return;
+    sessionStorage.setItem(VISIT_KEY, '1');
+  } catch {
+    // sessionStorage indisponible : on signale quand meme, une fois de trop
+    // vaut mieux qu'un trou dans le comptage
+  }
+  fetch(`${API_BASE}/visit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: getDeviceId() }),
+    keepalive: true,
+  }).catch(() => { /* compteur pas encore deploye : sans consequence */ });
+}
+
+export async function fetchServerStats(): Promise<ServerStats | null> {
+  try {
+    const res = await fetch(`${API_BASE}/stats`);
+    if (!res.ok) return null;          // endpoint absent : Worker pas a jour
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export type RaceStats = {
+  race: RaceKey;
+  classes: number;
+  meilleur: number | null;
+  meilleurNom: string;
+  actifs7j: number;
+};
+
+export type BoardStats = {
+  parEpreuve: RaceStats[];
+  joueurs: string[];        // noms distincts, toutes epreuves confondues
+  lignes: number;
+  actifs24h: number;
+  actifs7j: number;
+  actifs30j: number;
+};
+
+/** Participation, deduite du classement. Aucun deploiement necessaire. */
+export async function fetchBoardStats(): Promise<BoardStats> {
+  const jour = 86400000;
+  const now = Date.now();
+  const noms = new Set<string>();
+  const parEpreuve: RaceStats[] = [];
+  let lignes = 0, a24 = 0, a7 = 0, a30 = 0;
+
+  for (const race of RACES) {
+    let liste: ReturnType<typeof rankByRaceTime> = [];
+    try { liste = rankByRaceTime(await fetchLeaderboardRaw(race)); } catch { /* epreuve muette */ }
+    let actifs7 = 0;
+    for (const e of liste) {
+      lignes++;
+      const k = String(e.name || '').trim().toLowerCase();
+      if (k) noms.add(k);
+      const age = now - (e.updated_at || 0);
+      if (age < jour) a24++;
+      if (age < 7 * jour) { a7++; actifs7++; }
+      if (age < 30 * jour) a30++;
+    }
+    parEpreuve.push({
+      race,
+      classes: liste.length,
+      meilleur: liste.length ? liste[0].best_split_ms : null,
+      meilleurNom: liste.length ? liste[0].name : '',
+      actifs7j: actifs7,
+    });
+  }
+  return { parEpreuve, joueurs: [...noms], lignes, actifs24h: a24, actifs7j: a7, actifs30j: a30 };
+}
+
+/** Le tableau de bord est-il demande dans l'URL ? */
+export function dashboardRequested(): boolean {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    return p.has('stats') || p.has('tableau');
+  } catch {
+    return false;
+  }
+}

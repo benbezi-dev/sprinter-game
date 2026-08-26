@@ -111,6 +111,23 @@ async function getRank(db, race, splitMs) {
   return (row?.n || 0) + 1;
 }
 
+// Une ligne par appareil et par jour : un meme visiteur qui revient dix fois
+// dans la journee compte pour dix passages mais un seul visiteur. Rien de
+// nominatif n'est stocke, seulement l'identifiant anonyme deja utilise par le
+// classement.
+let visitsReady = false;
+async function ensureVisitTable(db) {
+  if (visitsReady) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS visits (
+    day TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    hits INTEGER NOT NULL DEFAULT 1,
+    last_at INTEGER NOT NULL,
+    PRIMARY KEY (day, device_id)
+  )`).run();
+  visitsReady = true;
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -259,6 +276,54 @@ export default {
         split_ms: row.best_split_ms,
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
+      });
+    }
+
+    // -------------------------------------------------- visites et tableau
+    if (url.pathname === '/visit' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensureVisitTable(env.DB);
+      const now = Date.now();
+      const day = new Date(now).toISOString().slice(0, 10);
+      await env.DB.prepare(
+        `INSERT INTO visits (day, device_id, hits, last_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT(day, device_id) DO UPDATE SET hits = hits + 1, last_at = excluded.last_at`
+      ).bind(day, device_id, now).run();
+      return json({ ok: true });
+    }
+
+    // Tout ce que le tableau de bord affiche, en un seul aller-retour.
+    if (url.pathname === '/stats' && request.method === 'GET') {
+      await ensureVisitTable(env.DB);
+      await ensureChallengeTables(env.DB);
+      await ensureScoreGhost(env.DB);
+
+      const v = await env.DB.prepare(
+        `SELECT COALESCE(SUM(hits),0) AS hits,
+                COUNT(DISTINCT device_id) AS visiteurs
+           FROM visits`
+      ).first();
+      const { results: parJour } = await env.DB.prepare(
+        `SELECT day, COUNT(*) AS visiteurs, SUM(hits) AS hits
+           FROM visits GROUP BY day ORDER BY day DESC LIMIT 30`
+      ).all();
+      const s = await env.DB.prepare(
+        `SELECT COUNT(*) AS lignes,
+                COUNT(DISTINCT device_id) AS appareils,
+                COUNT(DISTINCT lower(trim(name))) AS joueurs
+           FROM scores`
+      ).first();
+      const c = await env.DB.prepare(
+        `SELECT (SELECT COUNT(*) FROM challenges) AS defis,
+                (SELECT COUNT(*) FROM challenge_attempts) AS tentatives`
+      ).first();
+
+      return json({
+        visites: { total: v?.hits || 0, visiteurs: v?.visiteurs || 0, par_jour: parJour || [] },
+        scores: s || {}, defis: c || {},
       });
     }
 
