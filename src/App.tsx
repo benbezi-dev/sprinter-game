@@ -24,6 +24,7 @@ import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
+import { QuitRace } from '@/components/screens/QuitRace';
 
 const queryClient = new QueryClient();
 
@@ -75,6 +76,7 @@ function MainGame() {
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}
       <RecordPopup />
+      <QuitRace />
     </div>
   );
 }

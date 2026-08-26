@@ -47,6 +47,7 @@ export type GameState = {
   ghostName: string;
   ghostTime: number;
   challenge: any;
+  paused: boolean;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -182,6 +183,7 @@ export function setTouchInput(on: boolean) {
 }
 
 export function padPress(side: 'left' | 'right') {
+  if (G.paused) return;               // course suspendue : les pads sont muets
   const now = performance.now();
   const gap = lastAt ? now - lastAt : 0;
   const repeat = side === lastSide;
@@ -238,7 +240,24 @@ export function toggleAudio() {
   gameStore.setState({});
 }
 
+/** Etats ou une course est reellement en cours et peut etre suspendue. */
+const PAUSABLE = new Set(['count', 'race']);
+
+export function pauseRace() {
+  if (PAUSABLE.has(G.state)) { G.paused = true; gameStore.setState({ paused: true }); }
+}
+export function resumeRace() {
+  G.paused = false; gameStore.setState({ paused: false });
+}
+
 export function updateLogic(dt: number) {
+  // Course suspendue : le monde se fige, mais on continue a rendre l'image
+  // et a alimenter React, sinon le panneau de sortie ne s'afficherait pas.
+  if (G.paused && PAUSABLE.has(G.state)) {
+    gameStore.setState({ paused: true, state: G.state });
+    return;
+  }
+
   G.skipArm = Math.max(0, G.skipArm - dt);
   G.reactFlash = Math.max(0, G.reactFlash - dt);
   G.transFlash = Math.max(0, G.transFlash - dt);
@@ -342,5 +361,6 @@ export function updateLogic(dt: number) {
     ghostName: G.ghostName,
     ghostTime: G.ghostTime,
     challenge: G.challenge,
+    paused: G.paused,
   });
 }

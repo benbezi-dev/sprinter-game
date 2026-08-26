@@ -137,6 +137,12 @@
     os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
     top500_count:    ['{n} chronos classés sur 500', '{n} times ranked of 500'],
     os_top_better:   ['ton record sur {d} m reste {s} s', 'your {d} m record stays {s} s'],
+
+    // sortie de course
+    pause_title:     ['COURSE EN PAUSE', 'RACE PAUSED'],
+    pause_note:      ['quitter maintenant abandonne le chrono en cours',
+                      'leaving now gives up the current time'],
+    resume:          ['REPRENDRE', 'RESUME'],
     run_total_short: ['parcours complet :', 'full run:'],
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],

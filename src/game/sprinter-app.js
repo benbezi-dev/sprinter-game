@@ -316,6 +316,10 @@
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
+    // Course suspendue. Sans cela, ouvrir la sortie laisserait le chrono
+    // tourner : renoncer couterait la course qu'on voulait justement garder.
+    paused: false,
+
     // Noms du haut du TOP 500 par discipline, charges en tache de fond et
     // servis aux Jeux olympiques. Vides tant que le reseau n'a pas repondu :
     // le plateau maison prend alors le relais.
@@ -434,6 +438,7 @@
     G.stumbleFlash = 0; G.acc = 0;
     G.reactFlash = G.transFlash = G.falseFlash = 0;
     G.reactShown = G.transShown = false;
+    G.paused = false;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
     const p0 = G.track.pos(0, 3);
@@ -475,6 +480,7 @@
   // Retour a l'accueil. On repasse en carriere et on oublie l'adversaire :
   // sans ca un defi termine resterait actif sur la course suivante.
   function goHome() {
+    G.paused = false;
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
