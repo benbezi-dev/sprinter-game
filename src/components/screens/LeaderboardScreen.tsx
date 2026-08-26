@@ -36,7 +36,9 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
     setRaw(null);
     setError(false);
     setMySplit(null);
-    Promise.all([fetchLeaderboardRaw(race), fetchMyRank(race)])
+    // Le serveur regroupe par joueur, et le regroupement depend de la
+    // categorie : on redemande donc en changeant d'onglet.
+    Promise.all([fetchLeaderboardRaw(race, cat === 'run' ? 'run' : 'race'), fetchMyRank(race)])
       .then(([list, mine]) => {
         if (cancelled) return;
         setRaw(list);
@@ -44,7 +46,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
       })
       .catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; };
-  }, [race]);
+  }, [race, cat]);
 
   // Les deux categories se derivent de la meme reponse : un seul aller-retour
   // reseau, et le tri reste juste quelle que soit la version du serveur.

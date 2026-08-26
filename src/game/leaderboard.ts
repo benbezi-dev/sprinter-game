@@ -64,8 +64,7 @@ export function saveName(name: string) {
  * mesure et n'ont pas de place dans ce classement.
  */
 export function rankByRaceTime(entries: LeaderboardEntry[]): LeaderboardEntry[] {
-  return entries
-    .filter(e => e.best_split_ms > 0)
+  return oneEntryPerPlayer(entries.filter(e => e.best_split_ms > 0), 'race')
     .sort((a, b) => a.best_split_ms - b.best_split_ms);
 }
 
@@ -83,8 +82,7 @@ export function rankByRaceTime(entries: LeaderboardEntry[]): LeaderboardEntry[] 
 export const NO_RUN_MS = 1200000;
 
 export function rankByRunTime(entries: LeaderboardEntry[]): LeaderboardEntry[] {
-  return entries
-    .filter(e => e.time_ms > 0 && e.time_ms < NO_RUN_MS)
+  return oneEntryPerPlayer(entries.filter(e => e.time_ms > 0 && e.time_ms < NO_RUN_MS), 'run')
     .sort((a, b) => a.time_ms - b.time_ms);
 }
 
@@ -104,12 +102,35 @@ export function makesTop(entries: LeaderboardEntry[], splitMs: number): boolean 
   return rankOf(entries, splitMs) <= TOP_N;
 }
 
-/** Liste brute, non triee : les deux categories s'en deduisent. */
-export async function fetchLeaderboardRaw(race: RaceKey): Promise<LeaderboardEntry[]> {
-  const res = await fetch(`${API_BASE}/leaderboard?race=${race}`);
+/**
+ * Le serveur ne rend qu'une entree par joueur, sur son meilleur chrono. Le
+ * regroupement depend donc de la categorie demandee : le meilleur temps d'une
+ * course et le meilleur cumul ne viennent pas forcement de la meme course.
+ */
+export async function fetchLeaderboardRaw(
+  race: RaceKey, by: 'race' | 'run' = 'race'
+): Promise<LeaderboardEntry[]> {
+  const res = await fetch(`${API_BASE}/leaderboard?race=${race}&by=${by}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
   return data.entries || [];
+}
+
+/**
+ * Filet de securite : si le serveur n'a pas encore la version qui regroupe,
+ * on ne laisse pas un joueur occuper plusieurs lignes. On garde sa meilleure.
+ */
+export function oneEntryPerPlayer(
+  entries: LeaderboardEntry[], by: 'race' | 'run' = 'race'
+): LeaderboardEntry[] {
+  const valeur = (e: LeaderboardEntry) => (by === 'run' ? e.time_ms : e.best_split_ms);
+  const garde = new Map<string, LeaderboardEntry>();
+  for (const e of entries) {
+    const k = String(e.name || '').trim().toLowerCase();
+    const deja = garde.get(k);
+    if (!deja || valeur(e) < valeur(deja)) garde.set(k, e);
+  }
+  return [...garde.values()];
 }
 
 export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[]> {

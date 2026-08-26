@@ -9,6 +9,9 @@ const MAX_TIME_MS = 20 * 60000; // 20 minutes, plafond large
 const MAX_RACES = 6;
 const MAX_TRACE_PTS = 1200;
 const TOP_N = 500;
+// Cumul sentinelle : marque une ligne nee d'un one shot ou d'un defi, sans
+// parcours complet derriere. Doit rester identique cote jeu (NO_RUN_MS).
+const NO_RUN_MS = 1200000;
 
 function cors(resp) {
   resp.headers.set('Access-Control-Allow-Origin', '*');
@@ -92,21 +95,46 @@ async function ensureScoreGhost(db) {
 // `id` est le rowid : un identifiant opaque qui permet de defier une ligne du
 // tableau sans jamais exposer le device_id de son proprietaire. `has_ghost`
 // dit si la course est rejouable en fantome.
-async function getLeaderboard(db, race) {
+// Une entree par joueur, pas par appareil. Un meme joueur qui joue sur son
+// telephone et son ordinateur creait autant de lignes : le tableau se
+// remplissait de ses propres tentatives. On regroupe donc sur le nom et on ne
+// garde que son meilleur chrono.
+//
+// GROUP BY avec MIN() : SQLite garantit que les colonnes nues proviennent de
+// la ligne qui porte le minimum. L'identifiant renvoye est donc bien celui de
+// la meilleure course — c'est elle qu'on defie, et son fantome qu'on affronte.
+//
+// `by` decide sur quoi porte le regroupement : le classement par course se
+// resume au meilleur chrono d'une course, celui des parcours au meilleur
+// cumul. Regrouper une fois pour les deux donnerait un cumul qui n'est pas le
+// meilleur du joueur.
+async function getLeaderboard(db, race, by = 'race') {
+  const col = by === 'run' ? 'time_ms' : 'best_split_ms';
+  const garde = by === 'run'
+    ? `time_ms > 0 AND time_ms < ${NO_RUN_MS}`
+    : `best_split_ms > 0`;
   const { results } = await db.prepare(
     `SELECT rowid AS id, name, time_ms, best_split_ms, updated_at,
+            MIN(${col}) AS _min,
             (trace IS NOT NULL AND length(trace) > 2) AS has_ghost
        FROM scores
-      WHERE race_key = ? AND best_split_ms > 0
-      ORDER BY best_split_ms ASC LIMIT ${TOP_N}`
+      WHERE race_key = ? AND ${garde}
+      GROUP BY lower(trim(name))
+      ORDER BY _min ASC LIMIT ${TOP_N}`
   ).bind(race).all();
-  return (results || []).map(r => ({ ...r, has_ghost: !!r.has_ghost }));
+  return (results || []).map(({ _min, ...r }) => ({ ...r, has_ghost: !!r.has_ghost }));
 }
 
+// Le rang se compte en joueurs devant soi, pas en lignes : sans cela, un
+// joueur present sur trois appareils occuperait trois places et repousserait
+// tout le monde vers le bas.
 async function getRank(db, race, splitMs) {
   const row = await db.prepare(
-    `SELECT COUNT(*) AS n FROM scores
-      WHERE race_key = ? AND best_split_ms > 0 AND best_split_ms < ?`
+    `SELECT COUNT(*) AS n FROM (
+       SELECT MIN(best_split_ms) AS m FROM scores
+        WHERE race_key = ? AND best_split_ms > 0
+        GROUP BY lower(trim(name))
+     ) WHERE m < ?`
   ).bind(race, splitMs).first();
   return (row?.n || 0) + 1;
 }
@@ -215,8 +243,9 @@ export default {
       if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
       // getLeaderboard lit la colonne trace : elle doit exister avant.
       await ensureScoreGhost(env.DB);
-      const entries = await getLeaderboard(env.DB, race);
-      return json({ race, entries });
+      const by = url.searchParams.get('by') === 'run' ? 'run' : 'race';
+      const entries = await getLeaderboard(env.DB, race, by);
+      return json({ race, by, entries });
     }
 
     if (url.pathname === '/submit' && request.method === 'POST') {
