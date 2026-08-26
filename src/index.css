@@ -4,6 +4,9 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
+/* Ecran peu haut : telephone en paysage, la position de jeu. Les fenetres
+   qui s'ouvrent par-dessus la course doivent y tenir sans defilement. */
+@custom-variant short (@media (max-height: 560px));
 
 @theme inline {
   --color-background: var(--background);

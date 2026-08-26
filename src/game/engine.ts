@@ -47,6 +47,11 @@ export type GameState = {
   ghostName: string;
   ghostTime: number;
   challenge: any;
+  // Derniere course achevee : le compteur change a chaque arrivee, ce qui
+  // suffit a declencher la comparaison au record du monde de la distance.
+  raceSeq: number;
+  lastRaceKey: '100' | '200' | '400';
+  lastRaceTime: number | null;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -326,5 +331,8 @@ export function updateLogic(dt: number) {
     ghostName: G.ghostName,
     ghostTime: G.ghostTime,
     challenge: G.challenge,
+    raceSeq: G.raceSeq,
+    lastRaceKey: G.lastRaceKey,
+    lastRaceTime: G.lastRaceTime,
   });
 }

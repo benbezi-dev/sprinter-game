@@ -118,6 +118,25 @@
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],
 
+    // record du monde battu en fin de course
+    wr_title:        ['RECORD DU MONDE BATTU', 'WORLD RECORD BROKEN'],
+    wr_first:        ['PREMIER RECORD DU MONDE', 'FIRST WORLD RECORD'],
+    wr_race:         ['{r} — TOP 500 MONDIAL', '{r} — WORLD TOP 500'],
+    wr_old:          ['ancien record : {s} s   -   {n}',
+                      'previous record: {s} s   -   {n}'],
+    wr_none:         ['aucun chrono à battre sur cette distance',
+                      'no time to beat on this distance'],
+    wr_gain:         ['{s} s de mieux', '{s} s faster'],
+    wr_ask_name:     ['inscris ton nom en tête du TOP 500',
+                      'put your name at the top of the TOP 500'],
+    wr_claim:        ['INSCRIRE MON RECORD', 'CLAIM MY RECORD'],
+    wr_holder:       ['TON NOM EST EN TÊTE DU TOP 500',
+                      'YOUR NAME NOW TOPS THE TOP 500'],
+    wr_ranked:       ['classé {r} sur le TOP 500 mondial',
+                      'ranked {r} on the world TOP 500'],
+    wr_beaten:       ['un autre chrono est passé devant entre-temps',
+                      'another time went ahead in the meantime'],
+
     // modes de jeu : carrière, one shot, défi différé
     mode_career:     ['CARRIÈRE', 'CAREER'],
     mode_oneshot:    ['ONE SHOT', 'ONE SHOT'],

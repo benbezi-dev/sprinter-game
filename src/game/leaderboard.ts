@@ -80,6 +80,15 @@ export function rankOf(entries: LeaderboardEntry[], splitMs: number): number {
   return entries.filter(e => e.best_split_ms < splitMs).length + 1;
 }
 
+/**
+ * Le record du monde de la distance : la premiere ligne du TOP 500, celle
+ * que l'on bat en fin de course. Aucune ligne classable = pas encore de
+ * record, la distance est vierge.
+ */
+export function worldRecord(entries: LeaderboardEntry[]): LeaderboardEntry | null {
+  return rankByRaceTime(entries)[0] || null;
+}
+
 /** Nombre de places au classement : au-dela, on n'entre pas au tableau. */
 export const TOP_N = 500;
 
@@ -125,6 +134,41 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
     }),
   });
   if (!res.ok) throw new Error('score submit failed');
+  return res.json();
+}
+
+/**
+ * Chrono d'une seule course, envoye des la ligne d'arrivee franchie quand il
+ * bat le record du monde de la distance. Il n'y a pas de parcours complet
+ * derriere : `split_only` dit au serveur de ne toucher qu'au meilleur chrono
+ * par course et de laisser le cumul du parcours intact — sans quoi un 100 m
+ * de dix secondes viendrait truster le classement des parcours complets.
+ *
+ * La trace de la course accompagne l'envoi : le record devient ainsi
+ * affrontable en fantome depuis le tableau.
+ */
+export async function submitRaceTime(
+  race: RaceKey, name: string, splitMs: number, trace?: number[] | null
+): Promise<{
+  rank: number;
+  best_split_ms: number;
+  entries: LeaderboardEntry[];
+}> {
+  const split = Math.round(splitMs);
+  const res = await fetch(`${API_BASE}/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_id: getDeviceId(),
+      race_key: race,
+      name,
+      time_ms: split,
+      best_split_ms: split,
+      split_only: true,
+      trace: trace && trace.length ? trace : undefined,
+    }),
+  });
+  if (!res.ok) throw new Error('race time submit failed');
   return res.json();
 }
 

@@ -309,6 +309,15 @@
     champion: null, championTime: 0,
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
+
+    // --- derniere course achevee -----------------------------------------
+    // Chaque arrivee est un candidat au record du monde de la distance : le
+    // TOP 500 classe le meilleur chrono realise sur UNE course. raceSeq
+    // s'incremente a chaque arrivee — c'est le signal que l'interface guette
+    // pour aller comparer le chrono au record, sans avoir a deviner la
+    // transition depuis l'etat du jeu.
+    raceSeq: 0, lastRaceKey: '100', lastRaceTime: null, lastRaceTrace: null,
+
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
@@ -548,6 +557,15 @@
       else if (p) G.badge = ['top10', GREEN];
     }
     Audio_.stop();
+
+    // La course qui vient de s'achever, gardee a part : le mode, la place au
+    // classement de l'epreuve et la suite du parcours n'y changent rien, un
+    // chrono reste un chrono face au TOP 500 de la distance.
+    G.raceSeq++;
+    G.lastRaceKey = G.raceKey;
+    G.lastRaceTime = G.player.finishTime;
+    G.lastRaceTrace = G.recTrace ? G.recTrace.slice() : null;
+
     // One-shot : contre-la-montre. La place face aux adversaires ne decide
     // plus de la suite — on enchaine toujours, et c'est le cumul des chronos
     // qui departage, y compris face au fantome d'un adversaire.
