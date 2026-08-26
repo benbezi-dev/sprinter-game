@@ -128,6 +128,16 @@ async function ensureVisitTable(db) {
   visitsReady = true;
 }
 
+// Un defi peut viser quelqu'un en particulier. La colonne est ajoutee apres
+// coup sur une table qui existe deja, d'ou la migration paresseuse.
+let targetReady = false;
+async function ensureChallengeTarget(db) {
+  if (targetReady) return;
+  try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
+  catch (e) { /* colonne deja presente */ }
+  targetReady = true;
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -334,7 +344,8 @@ export default {
     if (url.pathname === '/challenge' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, races, level_idx, total_ms, splits, traces } = body || {};
+      const { device_id, name, races, level_idx, total_ms, splits, traces,
+              target_score_id } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
       const t = Math.round(Number(total_ms));
@@ -348,13 +359,27 @@ export default {
         .map(v => Math.max(0, Math.round(Number(v)) || 0));
 
       await ensureChallengeTables(env.DB);
+      await ensureChallengeTarget(env.DB);
+
+      // Defi adresse a quelqu'un : on le designe par la ligne de classement
+      // qu'il occupe, jamais par son device_id — celui-ci ne sort pas d'ici.
+      // On ne s'adresse pas non plus un defi a soi-meme.
+      let target = null, targetName = '';
+      const sid = Math.round(Number(target_score_id));
+      if (Number.isFinite(sid) && sid > 0) {
+        const row = await env.DB.prepare(
+          `SELECT device_id, name FROM scores WHERE rowid = ?`
+        ).bind(sid).first();
+        if (row && row.device_id !== device_id) { target = row.device_id; targetName = row.name; }
+      }
+
       const id = makeCode();
       await env.DB.prepare(
-        `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(id, Date.now(), device_id, cleanName(name), JSON.stringify(races),
-             lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces)).run();
-      return json({ id });
+             lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces), target).run();
+      return json({ id, target_name: targetName });
     }
 
     if (url.pathname === '/challenge' && request.method === 'GET') {
@@ -377,6 +402,31 @@ export default {
         traces: JSON.parse(row.traces || '[]'),
         created_at: row.created_at,
         attempts: await attemptsFor(env.DB, id),
+      });
+    }
+
+    // Boite de reception : les defis qui me sont adresses et que je n'ai pas
+    // encore releves. Sans les traces, qui pesent lourd et ne servent qu'au
+    // moment ou l'on accepte.
+    if (url.pathname === '/inbox' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      await ensureChallengeTables(env.DB);
+      await ensureChallengeTarget(env.DB);
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.owner_name, c.races, c.level_idx, c.total_ms, c.splits, c.created_at
+           FROM challenges c
+          WHERE c.target_device = ?
+            AND NOT EXISTS (SELECT 1 FROM challenge_attempts a
+                             WHERE a.id = c.id AND a.device_id = ?)
+          ORDER BY c.created_at DESC LIMIT 20`
+      ).bind(deviceId, deviceId).all();
+      return json({
+        defis: (results || []).map(r => ({
+          id: r.id, owner_name: r.owner_name, races: JSON.parse(r.races),
+          level_idx: r.level_idx, total_ms: r.total_ms,
+          splits: JSON.parse(r.splits || '[]'), created_at: r.created_at,
+        })),
       });
     }
 

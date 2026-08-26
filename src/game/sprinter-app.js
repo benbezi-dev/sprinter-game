@@ -316,6 +316,10 @@
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
+    // Joueur du TOP 500 que l'on est en train de defier : retenu le temps de
+    // la course, pour adresser le defi a la bonne personne a l'arrivee.
+    challengeTarget: null,
+
     // Course suspendue. Sans cela, ouvrir la sortie laisserait le chrono
     // tourner : renoncer couterait la course qu'on voulait justement garder.
     paused: false,
@@ -481,6 +485,7 @@
   // sans ca un defi termine resterait actif sur la course suivante.
   function goHome() {
     G.paused = false;
+    G.challengeTarget = null;
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;

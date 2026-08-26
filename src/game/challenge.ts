@@ -31,6 +31,33 @@ export function normalizeCode(raw: string): string {
   return raw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
+/** Un defi qui m'est adresse, tel que le renvoie la boite de reception. */
+export type InboxChallenge = {
+  id: string;
+  owner_name: string;
+  races: RaceKey[];
+  level_idx: number;
+  total_ms: number;
+  splits: number[];
+  created_at: number;
+};
+
+/**
+ * Les defis qui me visent et que je n'ai pas encore releves. On designe un
+ * adversaire par la ligne de classement qu'il occupe : son identifiant
+ * d'appareil ne quitte jamais le serveur.
+ */
+export async function fetchInbox(): Promise<InboxChallenge[]> {
+  try {
+    const res = await fetch(`${API_BASE}/inbox?device_id=${getDeviceId()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.defis || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function createChallenge(input: {
   races: RaceKey[];
   levelIdx: number;
@@ -38,6 +65,8 @@ export async function createChallenge(input: {
   splits: number[];
   traces: number[][];
   name?: string;
+  /** rowid de la ligne de classement visee, pour un defi adresse */
+  targetScoreId?: number | null;
 }): Promise<string> {
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
@@ -50,6 +79,7 @@ export async function createChallenge(input: {
       total_ms: Math.round(input.totalMs),
       splits: input.splits.map(s => Math.round(s)),
       traces: input.traces,
+      target_score_id: input.targetScoreId ?? null,
     }),
   });
   if (!res.ok) throw new Error('challenge create failed');

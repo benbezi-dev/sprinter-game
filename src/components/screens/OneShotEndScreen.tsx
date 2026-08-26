@@ -68,6 +68,8 @@ export function OneShotEndScreen() {
     }
   };
 
+  const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+
   // Message envoye a l'ami : chrono realise, code, lien direct.
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
 
@@ -100,6 +102,7 @@ export function OneShotEndScreen() {
         splits: runSplits.map(s => (s || 0) * 1000),
         traces: SprinterApp.G.shotTraces || [],
         name: finalName || undefined,
+        targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
       });
       setCode(id);
     } catch {
@@ -288,6 +291,13 @@ export function OneShotEndScreen() {
                   {N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                 </h2>
               </div>
+              {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
+                  le joueur ne sait plus a qui son code va partir. */}
+              {cible && (
+                <p className="text-center text-[10px] md:text-xs text-cyan-300">
+                  {N.t(code ? 'target_sent' : 'target_run', { n: cible.name, d: shotRaces[0] })}
+                </p>
+              )}
 
               {!code && (
                 <>

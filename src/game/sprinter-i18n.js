@@ -143,6 +143,18 @@
     pause_note:      ['quitter maintenant abandonne le chrono en cours',
                       'leaving now gives up the current time'],
     resume:          ['REPRENDRE', 'RESUME'],
+
+    // defis adresses et boite de reception
+    challenge_them:  ['DÉFIER', 'CHALLENGE'],
+    target_run:      ['cours ton {d} m : le défi partira à {n}',
+                      'run your {d} m: the challenge goes to {n}'],
+    target_sent:     ['défi envoyé à {n}', 'challenge sent to {n}'],
+    inbox_one:       ['DÉFI REÇU', 'CHALLENGE RECEIVED'],
+    inbox_many:      ['{n} DÉFIS REÇUS', '{n} CHALLENGES RECEIVED'],
+    inbox_from:      ['{n} te défie sur {d} m en {s} s',
+                      '{n} challenges you on {d} m in {s} s'],
+    inbox_accept:    ['RELEVER', 'ACCEPT'],
+    inbox_later:     ['plus tard', 'later'],
     run_total_short: ['parcours complet :', 'full run:'],
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],

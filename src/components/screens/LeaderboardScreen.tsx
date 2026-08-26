@@ -151,8 +151,22 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                         {e.name}
                       </span>
                     </div>
-                    {/* Le chrono qui decide du classement passe en gros ;
-                        l'autre reste en dessous, a titre indicatif. */}
+                    {/* Defier cette personne : on court la meme discipline,
+                        et le defi lui sera adresse a l'arrivee. On la designe
+                        par sa ligne, jamais par son appareil. */}
+                    {!isMe && e.id != null && (
+                      <button
+                        onClick={() => {
+                          SprinterApp.G.challengeTarget = { scoreId: e.id, name: e.name };
+                          onClose();
+                          SprinterApp.startOneShot([race], { levelIdx: 4 });
+                        }}
+                        className="shrink-0 mr-2 px-2.5 py-1 rounded-lg text-[9px] md:text-[10px] font-bold tracking-widest
+                                   text-primary/80 border border-primary/30 hover:bg-primary/15 hover:text-primary transition-colors"
+                      >
+                        {N.t('challenge_them')}
+                      </button>
+                    )}
                     <div className="flex flex-col items-end shrink-0">
                       <span className={`font-mono font-bold text-sm md:text-base ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
                         {(value(e) / 1000).toFixed(2)} s

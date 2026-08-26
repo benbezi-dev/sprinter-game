@@ -14,6 +14,10 @@ export type LeaderboardEntry = {
   time_ms: number;
   best_split_ms: number;
   updated_at: number;
+  /** rowid opaque : sert a designer ce joueur sans exposer son appareil */
+  id?: number;
+  /** sa course est-elle rejouable en fantome ? */
+  has_ghost?: boolean;
 };
 
 function randomId(): string {

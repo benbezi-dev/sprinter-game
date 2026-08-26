@@ -25,6 +25,7 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
+import { InboxPopup } from '@/components/screens/InboxPopup';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 
@@ -79,6 +80,7 @@ function MainGame() {
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}
       <RecordPopup />
       <QuitRace />
+      <InboxPopup />
     </div>
   );
 }
