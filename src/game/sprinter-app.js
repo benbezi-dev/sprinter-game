@@ -316,6 +316,11 @@
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
+    // Noms du haut du TOP 500 par discipline, charges en tache de fond et
+    // servis aux Jeux olympiques. Vides tant que le reseau n'a pas repondu :
+    // le plateau maison prend alors le relais.
+    topNames: { '100': [], '200': [], '400': [] },
+
     // --- mode one-shot ---------------------------------------------------
     // 'campaign' : les six etapes d'affilee, comme avant.
     // 'oneshot'  : une ou plusieurs epreuves choisies, courues une fois. Le
@@ -371,6 +376,39 @@
     return p < 0 ? null : p + 1;
   }
 
+  // Aux Jeux olympiques, le plateau n'est plus invente : ce sont les sept
+  // meilleurs chronos mondiaux de la discipline, tires du TOP 500 par course.
+  //
+  // Trois regles. Un joueur peut occuper plusieurs lignes du tableau, il ne
+  // prend qu'un seul couloir — on descend alors chercher le suivant. Le nom du
+  // joueur lui-meme est retire, sinon il courrait contre son propre fantome
+  // homonyme. Et s'il n'y a pas encore sept noms au tableau, on complete avec
+  // les adversaires maison, sans doublon.
+  const OLYMPIC = 4;
+  function myNameKey() {
+    try { return (localStorage.getItem('sprinter_player_name') || '').trim().toLowerCase(); }
+    catch (e) { return ''; }
+  }
+  function olympicNames() {
+    const base = LEVELS[OLYMPIC].names;
+    const top = (G.topNames && G.topNames[G.raceKey]) || [];
+    const mine = myNameKey();
+    const seen = new Set(), out = [];
+    for (const n of top) {
+      const k = String(n).trim().toLowerCase();
+      if (!k || k === mine || seen.has(k)) continue;
+      seen.add(k); out.push(n);
+      if (out.length === base.length) return out;
+    }
+    for (const n of base) {
+      const k = n.trim().toLowerCase();
+      if (k === mine || seen.has(k)) continue;
+      seen.add(k); out.push(n);
+      if (out.length === base.length) break;
+    }
+    return out;
+  }
+
   // --- mise en place d'une course ------------------------------------
   function buildLevel(idx) {
     G.levelIdx = idx;
@@ -382,7 +420,8 @@
       best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
-    lvl.names.forEach((n, i) => {
+    const names = idx === OLYMPIC ? olympicNames() : lvl.names;
+    names.forEach((n, i) => {
       const t = lo + Math.random() * (hi - lo);
       const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,

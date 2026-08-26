@@ -127,6 +127,14 @@
     wr_fail:         ["échec de l'envoi, réessaie", 'failed to send, try again'],
     wr_see:          ['VOIR LE TOP 500', 'VIEW TOP 500'],
     wr_later:        ['plus tard', 'later'],
+
+    // enregistrement des chronos one shot / defi au TOP 500
+    os_top_checking: ['vérification du classement...', 'checking the rankings...'],
+    os_top_none:     ['aucun chrono ne rentre au TOP 500', 'no time makes the TOP 500'],
+    os_top_intro:    ['{n} chrono entre au TOP 500', '{n} time makes the TOP 500'],
+    os_top_intro_n:  ['{n} chronos entrent au TOP 500', '{n} times make the TOP 500'],
+    os_top_line:     ['{d} m — {s} s — {r}', '{d} m — {s} s — {r}'],
+    os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
     run_total_short: ['parcours complet :', 'full run:'],
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],

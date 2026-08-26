@@ -1,8 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
-import { getSavedName, saveName } from '@/game/leaderboard';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2 } from 'lucide-react';
+import {
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, type RaceKey,
+} from '@/game/leaderboard';
+import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
@@ -24,6 +27,40 @@ export function OneShotEndScreen() {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
   const submitted = useRef(false);
+
+  // Les chronos d'un one shot ou d'un defi valent ceux de la carriere : un
+  // 100 m reste un 100 m. On les propose donc au TOP 500, epreuve par epreuve
+  // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
+  const [tops, setTops] = useState<{ race: RaceKey; ms: number; rank: number }[] | null>(null);
+  const [topName, setTopName] = useState(getSavedName());
+  const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    qualifyingRaces(shotRaces as RaceKey[], runSplits)
+      .then(list => {
+        if (cancelled) return;
+        setTops(list);
+        setTopStatus(list.length ? 'idle' : 'done');
+      })
+      .catch(() => { if (!cancelled) { setTops([]); setTopStatus('error'); } });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSaveTop = async () => {
+    const finalName = topName.trim();
+    if (!finalName || !tops?.length) return;
+    saveName(finalName);
+    setTopStatus('sending');
+    try {
+      for (const t of tops) await submitRaceRecord(t.race, finalName, t.ms);
+      primeTopNames();          // le plateau olympique se met a jour
+      setTopStatus('done');
+    } catch {
+      setTopStatus('error');
+    }
+  };
 
   // Message envoye a l'ami : chrono realise, code, lien direct.
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
@@ -155,6 +192,68 @@ export function OneShotEndScreen() {
               </div>
             )}
           </div>
+
+          {/* Inscription au TOP 500, epreuve par epreuve */}
+          {(topStatus === 'checking' || (tops && tops.length > 0)) && (
+            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3">
+              <div className="flex items-center gap-2 justify-center">
+                <Globe2 className="w-4 h-4 text-primary" />
+                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('top500')}</h2>
+              </div>
+
+              {topStatus === 'checking' && (
+                <p className="text-center text-xs text-muted-foreground animate-pulse">
+                  {N.t('os_top_checking')}
+                </p>
+              )}
+
+              {tops && tops.length > 0 && (
+                <>
+                  <p className="text-center text-[10px] md:text-xs text-primary font-bold tracking-wide">
+                    {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    {tops.map((t, i) => (
+                      <div key={i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/25 border border-white/5">
+                        <span className="text-xs md:text-sm font-bold text-foreground">{t.race} m</span>
+                        <span className="font-mono text-xs md:text-sm text-primary">{(t.ms / 1000).toFixed(2)} s</span>
+                        <span className="text-[10px] md:text-xs text-muted-foreground">{N.ord(t.rank)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {topStatus === 'done' ? (
+                    <p className="text-center text-sm text-primary font-bold">
+                      {N.t('os_top_saved', { n: topName.trim() })}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <input
+                          value={topName}
+                          onChange={e => setTopName(e.target.value)}
+                          placeholder={N.t('your_name')}
+                          maxLength={20}
+                          className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                        />
+                        <button
+                          onClick={handleSaveTop}
+                          disabled={!topName.trim() || topStatus === 'sending'}
+                          className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs md:text-sm text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
+                        >
+                          {topStatus === 'sending' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                          {N.t('save_score')}
+                        </button>
+                      </div>
+                      {topStatus === 'error' && (
+                        <p className="text-center text-xs text-destructive">{N.t('score_save_fail')}</p>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; apres un defi gagne c'est la revanche, qu'on

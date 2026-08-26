@@ -145,6 +145,48 @@ export async function submitRaceRecord(race: RaceKey, name: string, splitMs: num
   return submitScore(race, name, NO_RUN_MS, splitMs);
 }
 
+/**
+ * Parmi les chronos d'un programme (one shot ou defi), ceux qui entrent au
+ * TOP 500 de leur propre discipline. Chaque course est jugee chez elle : un
+ * 100 m se compare a des 100 m, quel que soit le mode qui l'a produit.
+ */
+export async function qualifyingRaces(
+  races: RaceKey[], splitsSec: (number | null)[]
+): Promise<{ race: RaceKey; ms: number; rank: number }[]> {
+  const out: { race: RaceKey; ms: number; rank: number }[] = [];
+  for (let i = 0; i < races.length; i++) {
+    const s = splitsSec[i];
+    if (s == null || s <= 0) continue;
+    try {
+      const list = rankByRaceTime(await fetchLeaderboardRaw(races[i]));
+      const rank = rankOf(list, s * 1000);
+      if (rank <= TOP_N) out.push({ race: races[i], ms: s * 1000, rank });
+    } catch {
+      // classement injoignable : on n'annonce pas une place qu'on ignore
+    }
+  }
+  return out;
+}
+
+/**
+ * Les noms du haut du tableau d'une discipline, dedoublonnes. Un meme joueur
+ * peut occuper plusieurs lignes du TOP 500 ; il ne doit sortir qu'une fois,
+ * sans quoi il courrait contre lui-meme.
+ */
+export async function fetchTopNames(race: RaceKey, limit = 24): Promise<string[]> {
+  const list = rankByRaceTime(await fetchLeaderboardRaw(race));
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of list) {
+    const k = String(e.name || '').trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(e.name);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 /** Meilleur chrono mondial sur une course, ou null si le tableau est vide. */
 export async function fetchRaceBest(race: RaceKey): Promise<number | null> {
   const list = rankByRaceTime(await fetchLeaderboardRaw(race));

@@ -144,6 +144,22 @@ let lastSide: 'left' | 'right' | null = null;
 let lastAt = 0;
 let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
 
+/**
+ * Charge en tache de fond les noms du haut du TOP 500, dont les Jeux
+ * olympiques garnissent leur plateau. buildLevel est synchrone : les noms
+ * doivent etre la avant la course, pas pendant. Si le reseau ne repond pas,
+ * G.topNames reste vide et le plateau maison sert de repli.
+ */
+export function primeTopNames() {
+  import('./leaderboard').then(({ fetchTopNames }) => {
+    (['100', '200', '400'] as const).forEach(race => {
+      fetchTopNames(race)
+        .then(names => { G.topNames[race] = names; })
+        .catch(() => { /* repli sur le plateau maison */ });
+    });
+  });
+}
+
 /** Nouvelle course : le rythme de la precedente n'a rien a y faire. */
 export function resetInputRhythm() {
   lastSide = null; lastAt = 0; cadence = 0;
