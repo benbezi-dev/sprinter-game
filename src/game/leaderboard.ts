@@ -44,12 +44,22 @@ export function getSavedName(): string {
   }
 }
 
+/**
+ * Le nom du joueur decide aussi de qui s'aligne face a lui : il ne court pas
+ * contre lui-meme. Un changement de nom doit donc se voir ailleurs que dans
+ * le classement, d'ou cet observateur — un seul, pose au demarrage.
+ */
+type NameWatcher = (name: string) => void;
+let nameWatcher: NameWatcher | null = null;
+export function onNameSaved(fn: NameWatcher | null) { nameWatcher = fn; }
+
 export function saveName(name: string) {
   try {
     localStorage.setItem(PLAYER_NAME_KEY, name);
   } catch {
     // localStorage indisponible : le nom sera juste redemande la prochaine fois
   }
+  if (nameWatcher) { try { nameWatcher(name); } catch (e) { } }
 }
 
 /**
