@@ -6,6 +6,7 @@ import {
   submitRaceTime, worldRecord,
   type LeaderboardEntry, type RaceKey,
 } from '@/game/leaderboard';
+import { setField } from '@/game/olympicField';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -160,6 +161,9 @@ export function RecordPopup() {
     try {
       const res = await submitRaceTime(pending.race, finalName, pending.ms, pending.trace);
       const list = rankByRaceTime(res.entries || []);
+      // Le joueur vient de prendre la tete du TOP 500 : il alignera donc les
+      // Jeux olympiques de cette distance des la prochaine course.
+      setField(pending.race, res.entries || []);
       const mine = res.best_split_ms || pending.ms;
       setRank(rankOf(list, mine));
       setTop(list.slice(0, 5));

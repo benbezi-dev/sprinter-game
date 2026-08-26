@@ -318,6 +318,13 @@
     // transition depuis l'etat du jeu.
     raceSeq: 0, lastRaceKey: '100', lastRaceTime: null, lastRaceTrace: null,
 
+    // --- grille des Jeux olympiques ---------------------------------------
+    // Aux Jeux olympiques, les adversaires ne sont plus des noms inventes :
+    // ce sont les premiers du TOP 500 de la distance. Une liste par
+    // discipline, remplie par l'interface des que le classement repond.
+    // null = pas encore de reponse, on garde la grille d'origine.
+    top500Field: { '100': null, '200': null, '400': null },
+
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
@@ -381,9 +388,17 @@
   }
 
   // --- mise en place d'une course ------------------------------------
+  // L'etape ou l'on affronte les meilleurs mondiaux plutot que des noms
+  // ecrits d'avance. On la reconnait a son decor, pas a son rang : l'ordre
+  // des etapes peut bouger, le sens de celle-ci non.
+  const OLYMPIC = LEVELS.findIndex(l => l.theme === 'olympic');
+
   function buildLevel(idx) {
     G.levelIdx = idx;
     const lvl = LEVELS[idx], R = G.race;
+    // Grille de depart : aux Jeux olympiques, le TOP 500 de la distance s'il
+    // a repondu ; partout ailleurs, et hors ligne, les noms de l'etape.
+    const names = (idx === OLYMPIC && G.top500Field[G.raceKey]) || lvl.names;
     const [lo, hi] = R.ranges[idx];
     G.track = new Track(R);
     G.runners = [];
@@ -391,7 +406,7 @@
       best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
-    lvl.names.forEach((n, i) => {
+    names.forEach((n, i) => {
       const t = lo + Math.random() * (hi - lo);
       const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,

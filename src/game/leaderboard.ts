@@ -100,12 +100,23 @@ export function makesTop(entries: LeaderboardEntry[], splitMs: number): boolean 
   return rankOf(entries, splitMs) <= TOP_N;
 }
 
+/**
+ * Toute lecture du classement passe par ici : un observateur y suffit donc a
+ * tenir a jour la grille de depart des Jeux olympiques, sans que ce module
+ * ait a connaitre le jeu. Un seul observateur, pose une fois au demarrage.
+ */
+type Watcher = (race: RaceKey, entries: LeaderboardEntry[]) => void;
+let watcher: Watcher | null = null;
+export function onLeaderboard(fn: Watcher | null) { watcher = fn; }
+
 /** Liste brute, non triee : les deux categories s'en deduisent. */
 export async function fetchLeaderboardRaw(race: RaceKey): Promise<LeaderboardEntry[]> {
   const res = await fetch(`${API_BASE}/leaderboard?race=${race}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
-  return data.entries || [];
+  const entries: LeaderboardEntry[] = data.entries || [];
+  if (watcher) { try { watcher(race, entries); } catch (e) { } }
+  return entries;
 }
 
 export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[]> {

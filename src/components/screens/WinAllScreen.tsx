@@ -6,6 +6,7 @@ import {
   getSavedName, saveName, submitScore, fetchLeaderboardRaw,
   rankByRaceTime, rankOf, TOP_N,
 } from '@/game/leaderboard';
+import { setField } from '@/game/olympicField';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -56,6 +57,9 @@ export function WinAllScreen() {
     try {
       const bestSplit = bestSplitMs;
       const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit);
+      // Le classement renvoye par l'envoi est le plus frais qui soit : la
+      // grille des Jeux olympiques s'y remet a jour au passage.
+      setField(raceKey, res.entries || []);
       // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
       // depuis la liste renvoyee plutot que de dependre du champ du serveur.
       const mine = res.best_split_ms ?? bestSplit;

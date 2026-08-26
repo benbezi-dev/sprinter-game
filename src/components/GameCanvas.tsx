@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang } from '@/game/engine';
+import { primeFields } from '@/game/olympicField';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,6 +25,9 @@ export function GameCanvas() {
 
     SprinterApp.G.cv = canvas;
     SprinterApp.load();
+    // La grille des Jeux olympiques se remplit avec les premiers du TOP 500 :
+    // on la demande des le lancement, elle sera prete bien avant l'etape.
+    primeFields();
     // load() fixe la langue (sauvegardee ou detectee) : on aligne le
     // document dessus pour ne pas declencher la traduction navigateur.
     syncHtmlLang();
