@@ -26,6 +26,7 @@ import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { InboxPopup } from '@/components/screens/InboxPopup';
+import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 
@@ -81,6 +82,7 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      <InstallPrompt />
     </div>
   );
 }

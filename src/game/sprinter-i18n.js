@@ -117,6 +117,17 @@
     mine_count:      ['{n} courses — meilleure : {s} s', '{n} races — best: {s} s'],
     mine_note:       ['Le TOP 500 ne retient que ton meilleur chrono par épreuve. Cet historique garde tout, et reste sur cet appareil.',
                       'The TOP 500 keeps only your best time per event. This history keeps everything, and stays on this device.'],
+    // installation sur le telephone
+    install_title:   ['INSTALLER LE JEU', 'INSTALL THE GAME'],
+    install_why:     ['plein écran, sans barre de navigateur, et jouable hors ligne',
+                      'full screen, no browser bar, and playable offline'],
+    install_do:      ['INSTALLER', 'INSTALL'],
+    install_later:   ['plus tard', 'later'],
+    install_ios_1:   ['Appuie sur', 'Tap'],
+    install_ios_2:   ['Partager', 'Share'],
+    install_ios_3:   ['en bas de Safari, puis sur', 'at the bottom of Safari, then'],
+    install_ios_4:   ['Sur l’écran d’accueil', 'Add to Home Screen'],
+
     mode_career_s:   ['carrière', 'career'],
     mode_oneshot_s:  ['one shot', 'one shot'],
     cat_race_sub:    ['meilleur chrono sur une course', 'best time on a single race'],
