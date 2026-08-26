@@ -70,13 +70,17 @@
     // appuis — ratio 3,76, le double d'une vraie montee en puissance.
     TRANS_FLOOR: 0.125,
     TRANS_MIN_PRESS: 8,
-    TRANS_BOOST: [0, 0.18, 0.40],   // impulsion immediate, selon la note
-    TRANS_DRAG: [1.0, 0.91, 0.82],  // freinage allege pendant TRANS_TIME
-    TRANS_TIME: [0, 1.8, 2.6],
+    TRANS_BOOST: [0, 0.26, 0.55],   // impulsion immediate, selon la note
+    TRANS_DRAG: [1.0, 0.88, 0.78],  // freinage allege pendant TRANS_TIME
+    TRANS_TIME: [0, 2.2, 3.0],
     // Une transition reussie ne donne pas seulement un coup d'accelerateur :
     // elle fixe la vitesse maximale tenue jusqu'a l'arrivee. C'est la que se
     // joue l'essentiel du gain, de l'ordre du dixieme de seconde.
-    TRANS_VMAX: [1.0, 1.012, 1.030],
+    //
+    // Releve juste assez pour que jouer la transition rapporte vraiment :
+    // avec l'imprecision reelle du doigt, l'ancienne valeur la rendait
+    // legerement perdante (-0,025 s), donc decorative.
+    TRANS_VMAX: [1.0, 1.018, 1.042],
 
     // --- morphologie ---------------------------------------------------
     MODEL_H: 1.72,
@@ -95,19 +99,19 @@
   const RACES = {
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
-      arc: 0, straight: 100, maxSpeed: 12.073, best: 9.10,
+      arc: 0, straight: 100, maxSpeed: 12.435, best: 9.10,
       ranges: [[12.50, 15.00], [11.20, 12.50], [10.00, 10.50],
                [9.58, 10.00], [9.58, 9.85], [9.11, 9.58]]
     },
     '200': {
       key: '200', label: '200 METRES', sub: 'virage et ligne droite',
-      arc: 115.61, straight: 84.39, maxSpeed: 11.671, best: 18.20,
+      arc: 115.61, straight: 84.39, maxSpeed: 12.021, best: 18.20,
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
                [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
     },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
-      arc: 115.61, straight: 84.39, maxSpeed: 11.20, best: 36.90,
+      arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: 36.90,
       ranges: [[55.00, 60.00], [49.00, 55.00], [44.50, 49.00],
                [43.50, 44.50], [43.18, 43.50], [36.98, 37.98]]
     }
