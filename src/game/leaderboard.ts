@@ -160,6 +160,8 @@ export type RaceOutcome = {
   rank: number;
   /** Chrono deja detenu par ce joueur sur cette epreuve, s'il en a un. */
   ownMs: number | null;
+  /** Sa place actuelle avec ce chrono. */
+  ownRank: number | null;
   /** Le nouveau chrono ameliore-t-il son propre record ? */
   beatsOwn: boolean;
 };
@@ -184,7 +186,8 @@ export async function qualifyingRaces(
       // rien au tableau : autant le dire plutot que d'annoncer une place
       // qu'on n'occupera pas.
       const ownMs = mine.found && mine.best_split_ms ? mine.best_split_ms : null;
-      out.push({ race: races[i], ms, rank, ownMs, beatsOwn: ownMs === null || ms < ownMs });
+      const ownRank = mine.found && mine.rank ? mine.rank : null;
+      out.push({ race: races[i], ms, rank, ownMs, ownRank, beatsOwn: ownMs === null || ms < ownMs });
     } catch {
       // classement injoignable : on n'annonce pas une place qu'on ignore
     }

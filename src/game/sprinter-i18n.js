@@ -137,6 +137,11 @@
     os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
     top500_count:    ['{n} chronos classés sur 500', '{n} times ranked of 500'],
     os_top_better:   ['ton record sur {d} m reste {s} s', 'your {d} m record stays {s} s'],
+    os_kept_title:   ['TON RECORD TIENT', 'YOUR RECORD HOLDS'],
+    os_kept_line:    ['{d} m : tu détiens déjà {s} s ({r} au TOP 500)',
+                      '{d} m: you already hold {s} s ({r} on the TOP 500)'],
+    os_kept_now:     ['ce chrono de {s} s ne le bat pas — le classement ne garde que ton meilleur',
+                      'this {s} s does not beat it — the ranking keeps only your best'],
 
     // sortie de course
     pause_title:     ['COURSE EN PAUSE', 'RACE PAUSED'],

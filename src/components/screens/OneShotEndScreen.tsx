@@ -242,17 +242,33 @@ export function OneShotEndScreen() {
                         <span className="text-[10px] md:text-xs text-muted-foreground">{N.ord(t.rank)}</span>
                       </div>
                     ))}
-                    {/* Chronos plus lents que son propre record : le tableau
-                        ne bougera pas, on le dit au lieu de laisser croire
-                        a un enregistrement sans effet. */}
-                    {kept.map((t, i) => (
-                      <div key={'k' + i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/15 border border-white/5 opacity-70">
-                        <span className="text-xs md:text-sm text-muted-foreground">{t.race} m</span>
-                        <span className="font-mono text-[10px] md:text-xs text-muted-foreground">
-                          {N.t('os_top_better', { d: t.race, s: ((t.ownMs || 0) / 1000).toFixed(2) })}
+                    {/* Chronos plus lents que son propre record. Le tableau ne
+                        garde qu'un chrono par epreuve et par appareil, le
+                        meilleur : envoyer celui-ci le remplacerait par un
+                        moins bon. On l'annonce franchement, parce qu'une
+                        petite ligne grise se lisait comme « rien ne s'est
+                        passe ». */}
+                    {kept.length > 0 && (
+                      <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/[0.07] p-3 flex flex-col gap-1.5">
+                        <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300 text-center">
+                          {N.t('os_kept_title')}
                         </span>
+                        {kept.map((t, i) => (
+                          <div key={'k' + i} className="flex flex-col items-center gap-0.5">
+                            <span className="text-xs md:text-sm text-foreground text-center">
+                              {N.t('os_kept_line', {
+                                d: t.race,
+                                s: ((t.ownMs || 0) / 1000).toFixed(2),
+                                r: t.ownRank ? N.ord(t.ownRank) : '—',
+                              })}
+                            </span>
+                            <span className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
+                              {N.t('os_kept_now', { s: (t.ms / 1000).toFixed(2) })}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
 
                   {topStatus === 'done' ? (
