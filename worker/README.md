@@ -53,18 +53,28 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 |---------|-----------------------|------|
 | GET     | `/leaderboard?race=`  | TOP 500, trié sur le meilleur chrono d'une course |
 | POST    | `/submit`             | Enregistre un parcours, renvoie le rang |
+| POST    | `/submit` + `split_only` | Enregistre le chrono d'une seule course |
 | GET     | `/rank?race=&device_id=` | Rang de cet appareil |
 | GET     | `/ghost?id=`          | Trace fantôme d'une ligne du classement |
 | POST    | `/challenge`          | Crée un défi, renvoie un code court |
 | GET     | `/challenge?id=`      | Lit un défi et ses tentatives |
 | POST    | `/challenge/attempt`  | Enregistre une tentative |
 
-## Deux règles à ne pas casser
+## Trois règles à ne pas casser
 
 **Le meilleur chrono sur une course ne redescend jamais.** Il survit à un
 parcours au total plus lent : `bestSplit` prend toujours le minimum entre
 l'ancien et le nouveau. Un `ON CONFLICT ... SET best_split_ms = excluded...`
 sans ce minimum écrase un meilleur temps — le bug a déjà eu lieu.
+
+**`split_only` ne touche jamais au cumul du parcours.** Le jeu envoie le
+chrono d'une seule course dès la ligne franchie quand le record du monde de
+la distance tombe : il n'y a pas de parcours complet derrière. Écrire ce
+chrono dans `time_ms` mettrait un 100 m de dix secondes en tête du classement
+des parcours entiers. Une première ligne créée par cette voie garde donc
+`time_ms = 0` — ce qui l'exclut du classement des parcours, pas de celui par
+course. **Ce chemin doit être déployé avant que le jeu ne l'utilise** : un
+Worker antérieur ignore le drapeau et écrase le cumul.
 
 **Les lignes à `best_split_ms = 0` sont exclues du classement.** Elles datent
 d'avant la mesure du chrono par course ; sans exclusion elles prendraient la

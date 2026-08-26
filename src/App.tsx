@@ -23,6 +23,7 @@ import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
+import { RecordPopup } from '@/components/screens/RecordPopup';
 
 const queryClient = new QueryClient();
 
@@ -70,6 +71,10 @@ function MainGame() {
       
       {/* Invisible overlay for receiving touches during the race */}
       <TouchControls />
+
+      {/* Record du monde de la distance battu : l'annonce passe par-dessus
+          le recapitulatif de fin de course, quel que soit le mode. */}
+      <RecordPopup />
     </div>
   );
 }

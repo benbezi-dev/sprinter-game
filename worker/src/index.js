@@ -169,7 +169,13 @@ export default {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
 
+      // split_only : le chrono d'une seule course, envoye des la ligne
+      // franchie quand il bat le record du monde de la distance. Il n'y a pas
+      // de parcours complet derriere — on ne touche donc jamais au cumul,
+      // sans quoi un 100 m de dix secondes prendrait la tete du classement
+      // des parcours entiers.
       const { device_id, race_key, name, time_ms, best_split_ms, trace } = body || {};
+      const splitOnly = !!(body && body.split_only);
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const t = Math.round(Number(time_ms));
@@ -192,7 +198,18 @@ export default {
       // qui l'a produit : on ne le remplace jamais par une valeur pire.
       const bestSplit = existing ? Math.min(split, existing.best_split_ms || split) : split;
 
-      if (!existing || t < existing.time_ms) {
+      if (splitOnly) {
+        // Cumul laisse tel quel : 0 pour une premiere ligne, ce qui l'exclut
+        // du classement des parcours complets jusqu'a ce qu'un vrai parcours
+        // soit boucle.
+        await env.DB.prepare(
+          `INSERT INTO scores (device_id, race_key, name, time_ms, best_split_ms, updated_at)
+           VALUES (?, ?, ?, 0, ?, ?)
+           ON CONFLICT(device_id, race_key) DO UPDATE SET
+             name = excluded.name, best_split_ms = excluded.best_split_ms,
+             updated_at = excluded.updated_at`
+        ).bind(device_id, race_key, cleanedName, bestSplit, now).run();
+      } else if (!existing || t < existing.time_ms) {
         await env.DB.prepare(
           `INSERT INTO scores (device_id, race_key, name, time_ms, best_split_ms, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)
@@ -217,7 +234,9 @@ export default {
         }
       }
 
-      const bestTime = existing && existing.time_ms < t ? existing.time_ms : t;
+      const bestTime = splitOnly
+        ? (existing ? existing.time_ms : 0)
+        : (existing && existing.time_ms < t ? existing.time_ms : t);
       // le rang se joue sur le meilleur chrono d'une course, pas sur le cumul
       const rank = await getRank(env.DB, race_key, bestSplit);
       const entries = await getLeaderboard(env.DB, race_key);
