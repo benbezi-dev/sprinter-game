@@ -10,7 +10,9 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // Deux facons de classer une meme discipline : le meilleur chrono realise sur
 // une seule course, et le cumul du parcours complet en six etapes.
-type Cat = 'race' | 'run';
+type Cat = 'race' | 'run' | 'mine';
+
+type Course = { r: string; t: number; m: string; l: number; d: number };
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   const { N, RACES } = SprinterApp;
@@ -37,7 +39,11 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
 
   // Les deux categories se derivent de la meme reponse : un seul aller-retour
   // reseau, et le tri reste juste quelle que soit la version du serveur.
-  const entries = raw === null ? null : (cat === 'race' ? rankByRaceTime(raw) : rankByRunTime(raw));
+  // L'historique est local : il n'attend aucune reponse reseau.
+  const mesCourses: Course[] = (SprinterApp.raceHistory() as Course[])
+    .filter(c => c.r === race);
+
+  const entries = raw === null ? null : (cat === 'run' ? rankByRunTime(raw) : rankByRaceTime(raw));
   const myRank = entries && mySplit && cat === 'race' ? rankOf(entries, mySplit) : null;
   const value = (e: LeaderboardEntry) => (cat === 'race' ? e.best_split_ms : e.time_ms);
   // NO_RUN_MS n'est pas un chrono : c'est la marque d'une ligne nee d'un one
@@ -47,7 +53,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
     const v = cat === 'race' ? e.time_ms : e.best_split_ms;
     return cat === 'race' && v >= NO_RUN_MS ? 0 : v;
   };
-  const otherLabel = cat === 'race' ? N.t('run_total_short') : N.t('best_split_short');
+  const otherLabel = cat === 'race' ? N.t('run_total_tiny') : N.t('best_split_tiny');
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center pointer-events-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-y-auto">
@@ -60,7 +66,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                 {N.t('top500')}
               </h2>
               <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
-                {N.t(cat === 'race' ? 'cat_race_sub' : 'cat_run_sub')}
+                {N.t(cat === 'race' ? 'cat_race_sub' : cat === 'run' ? 'cat_run_sub' : 'cat_mine_sub')}
               </span>
             </div>
           </div>
@@ -86,7 +92,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
 
         {/* Categorie de classement */}
         <div className="flex gap-1 p-1 rounded-2xl bg-black/30 border border-white/10 w-full">
-          {([['race', 'cat_race'], ['run', 'cat_run']] as const).map(([id, key]) => (
+          {([['race', 'cat_race'], ['run', 'cat_run'], ['mine', 'cat_mine']] as const).map(([id, key]) => (
             <button
               key={id}
               onClick={() => setCat(id)}
@@ -108,6 +114,56 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
           </div>
         )}
 
+        {/* Historique personnel : tout ce qu'on a couru, y compris ce que le
+            classement ne peut pas garder. Lu sur l'appareil, sans reseau. */}
+        {cat === 'mine' ? (
+          <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
+            {mesCourses.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-6">{N.t('mine_empty')}</p>
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between px-1 pb-2 mb-1 border-b border-white/10">
+                  <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground">
+                    {N.t('mine_count', {
+                      n: mesCourses.length,
+                      s: Math.min(...mesCourses.map(c => c.t)).toFixed(2),
+                    })}
+                  </span>
+                  <span className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                    {RACES[race].label}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5 max-h-[calc(100dvh-24rem)] min-h-[36vh] overflow-y-auto overscroll-contain pr-1">
+                  {mesCourses.map((c, i) => {
+                    const best = c.t === Math.min(...mesCourses.map(x => x.t));
+                    return (
+                      <div key={i} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border
+                        ${best ? 'bg-primary/10 border-primary/30' : 'border-white/5 bg-black/20'}`}>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-[10px] md:text-xs text-muted-foreground truncate">
+                            {new Date(c.d).toLocaleDateString(N.getLang() === 'fr' ? 'fr-FR' : 'en-GB',
+                              { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[9px] md:text-[10px] text-muted-foreground/70 truncate">
+                            {N.t(c.m === 'oneshot' ? 'mode_oneshot_s' : 'mode_career_s')}
+                            {c.m !== 'oneshot' && ` · ${N.levelName(c.l)}`}
+                          </span>
+                        </div>
+                        <span className={`font-mono font-bold text-sm md:text-base shrink-0 tabular-nums
+                          ${best ? 'text-primary' : 'text-foreground'}`}>
+                          {c.t.toFixed(2)} s
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[9px] md:text-[10px] text-muted-foreground/70 leading-snug mt-3 pt-2 border-t border-white/10">
+                  {N.t('mine_note')}
+                </p>
+              </>
+            )}
+          </div>
+        ) : (
         <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
           {error && (
             <p className="text-center text-sm text-destructive py-6">{N.t('score_save_fail')}</p>
@@ -173,13 +229,15 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                         <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       </button>
                     )}
-                    <div className="flex flex-col items-end shrink-0">
-                      <span className={`font-mono font-bold text-sm md:text-base ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
+                    {/* Colonne des chronos calee sur son contenu le plus
+                        large, pour que le reste revienne au nom. */}
+                    <div className="flex flex-col items-end shrink-0 tabular-nums">
+                      <span className={`font-mono font-bold text-sm md:text-base whitespace-nowrap ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
                         {(value(e) / 1000).toFixed(2)} s
                       </span>
                       {!!other(e) && (
-                        <span className="font-mono text-[9px] md:text-[10px] text-muted-foreground">
-                          {otherLabel} {(other(e) / 1000).toFixed(2)} s
+                        <span className="font-mono text-[9px] md:text-[10px] text-muted-foreground whitespace-nowrap">
+                          {otherLabel} {(other(e) / 1000).toFixed(2)}
                         </span>
                       )}
                     </div>
@@ -190,6 +248,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   );

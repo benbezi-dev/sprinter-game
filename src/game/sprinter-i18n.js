@@ -109,6 +109,16 @@
     top500_sub:      ['meilleur chrono sur une course', 'best time on a single race'],
     cat_race:        ['PAR COURSE', 'BY RACE'],
     cat_run:         ['PARCOURS', 'FULL RUN'],
+    cat_mine:        ['MES COURSES', 'MY RACES'],
+    cat_mine_sub:    ['toutes tes courses sur cet appareil',
+                      'every race you ran on this device'],
+    mine_empty:      ['aucune course sur cette épreuve pour l’instant',
+                      'no race on this event yet'],
+    mine_count:      ['{n} courses — meilleure : {s} s', '{n} races — best: {s} s'],
+    mine_note:       ['Le TOP 500 ne retient que ton meilleur chrono par épreuve. Cet historique garde tout, et reste sur cet appareil.',
+                      'The TOP 500 keeps only your best time per event. This history keeps everything, and stays on this device.'],
+    mode_career_s:   ['carrière', 'career'],
+    mode_oneshot_s:  ['one shot', 'one shot'],
     cat_race_sub:    ['meilleur chrono sur une course', 'best time on a single race'],
     cat_run_sub:     ['cumul des six étapes', 'total of all six stages'],
     empty_cat_run:   ['aucun parcours complet enregistré', 'no full run recorded yet'],
@@ -161,6 +171,10 @@
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
     run_total_short: ['parcours complet :', 'full run:'],
+    // Variantes courtes pour les lignes du classement : le libelle long
+    // mangeait la largeur reservee au nom du joueur.
+    run_total_tiny:  ['cumul', 'run'],
+    best_split_tiny: ['course', 'race'],
     score_saved_race:['classé {r}e sur le TOP 500 mondial avec {s} s',
                       'ranked {r} on the world TOP 500 with {s} s'],
 

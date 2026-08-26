@@ -367,6 +367,27 @@
       }));
     } catch (e) { }
   }
+  // Historique personnel : toutes les courses terminees, pas seulement celles
+  // qui entrent au classement. Le TOP 500 ne garde qu'un chrono par joueur et
+  // par epreuve, le meilleur ; tout le reste de ce qu'on a couru disparaissait
+  // sans laisser de trace. Garde ici, sur l'appareil, et plafonne.
+  const HIST = 'sprinter_history';
+  const HIST_MAX = 300;
+  function recordHistory(t) {
+    if (t == null) return;
+    try {
+      const h = JSON.parse(localStorage.getItem(HIST) || '[]');
+      h.unshift({ r: G.raceKey, t: Math.round(t * 100) / 100,
+                  m: G.mode, l: G.levelIdx, d: Date.now() });
+      if (h.length > HIST_MAX) h.length = HIST_MAX;
+      localStorage.setItem(HIST, JSON.stringify(h));
+    } catch (e) { /* stockage plein ou refuse : l'historique n'est pas vital */ }
+  }
+  function raceHistory() {
+    try { return JSON.parse(localStorage.getItem(HIST) || '[]'); }
+    catch (e) { return []; }
+  }
+
   const skey = i => G.raceKey + ':' + i;
   function levelScores(i) { return G.scores[skey(i)] || []; }
   function recordTime(i, t) {
@@ -598,6 +619,9 @@
       else if (p) G.badge = ['top10', GREEN];
     }
     Audio_.stop();
+    // Toute course terminee entre a l'historique personnel, qu'elle batte un
+    // record ou non — c'est justement ce que le classement ne peut pas garder.
+    recordHistory(G.player.finishTime);
     // One-shot : contre-la-montre. La place face aux adversaires ne decide
     // plus de la suite — on enchaine toujours, et c'est le cumul des chronos
     // qui departage, y compris face au fantome d'un adversaire.
@@ -1319,6 +1343,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, startShotRace, nextShotRace, stepGhost, REC_STEP, goHome,
+    raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,
