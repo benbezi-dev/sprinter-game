@@ -23,6 +23,15 @@ const OLYMPIC: number =
 // meme hors ligne, sans attendre la reponse du classement.
 const CACHE_KEY = 'sprinter_olympic_field';
 
+// Nom du joueur, garde ici plutot que relu a chaque fois : il peut etre
+// choisi dans une partie ou localStorage n'ecrit pas, et c'est quand meme
+// celui du joueur.
+let playerName = '';
+function setPlayerName(name: string) {
+  playerName = (name || '').trim().toLowerCase();
+}
+setPlayerName(getSavedName());
+
 /**
  * Les sept noms de la ligne de depart, pris dans l'ordre propose.
  *
@@ -33,15 +42,6 @@ const CACHE_KEY = 'sprinter_olympic_field';
  * son nom figure au TOP 500 il s'alignerait une seconde fois, contre
  * lui-meme. La place revient la aussi au coureur suivant.
  */
-// Nom du joueur, garde ici plutot que relu a chaque fois : il peut etre
-// choisi dans une partie ou localStorage n'ecrit pas, et c'est quand meme
-// celui du joueur.
-let playerName = '';
-function setPlayerName(name: string) {
-  playerName = (name || '').trim().toLowerCase();
-}
-setPlayerName(getSavedName());
-
 function assemble(names: string[], size = FIELD_SIZE): string[] {
   const field: string[] = [];
   const seen = new Set<string>();
