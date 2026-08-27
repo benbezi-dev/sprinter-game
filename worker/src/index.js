@@ -230,6 +230,94 @@ async function peutUtiliser(db, nameKey, deviceId) {
   return !!d;
 }
 
+// Classement des duels, distinct du TOP 500. Il ne recompense pas la vitesse
+// pure mais l'engagement : tous les duels y comptent, qu'on les ait lances ou
+// releves.
+//
+// Le bareme depend du role, parce que les deux roles ne courent pas le meme
+// risque. Celui qui lance abat sa carte le premier : son chrono est pose, et
+// l'autre le voit courir en fantome en sachant exactement ce qu'il doit
+// battre. On le paie donc peu quand il l'emporte quand meme (+1) et on le
+// sanctionne franchement quand il tombe (-2). Celui qui releve, lui, gagne
+// gros (+2) et perd peu (-1).
+//
+// Effet de bord voulu : la somme des points distribues vaut toujours zero
+// (+2/-2 ou +1/-1), donc le classement ne derive ni vers le haut ni vers le
+// bas quel que soit le nombre de duels joues.
+const DUEL_INIT_WIN = 1, DUEL_INIT_LOSS = -2;
+const DUEL_RECV_WIN = 2, DUEL_RECV_LOSS = -1;
+const DUEL_DRAW = 0;
+let duelReady = false;
+async function ensureDuelTables(db) {
+  if (duelReady) return;
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS duel_players (
+      name_key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      points INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      draws INTEGER NOT NULL DEFAULT 0,
+      launched INTEGER NOT NULL DEFAULT 0,
+      prev_rank INTEGER,
+      last_delta INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )`),
+    // Un duel ne se resout qu'une fois : la cle empeche qu'une seconde
+    // tentative sur le meme defi redistribue des points.
+    db.prepare(`CREATE TABLE IF NOT EXISTS duel_results (
+      challenge_id TEXT NOT NULL,
+      opponent_key TEXT NOT NULL,
+      challenger_key TEXT NOT NULL,
+      challenger_ms INTEGER NOT NULL,
+      opponent_ms INTEGER NOT NULL,
+      outcome TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (challenge_id, opponent_key)
+    )`),
+  ]);
+  // Colonnes arrivees apres coup : la table existe deja chez ceux qui
+  // jouaient avant, d'ou les ajouts tolerants.
+  for (const sql of [
+    `ALTER TABLE duel_players ADD COLUMN received INTEGER NOT NULL DEFAULT 0`,
+    // Le nom lisible de celui qui a releve. La cle est en minuscules et sert
+    // a dedoublonner ; c'est ce nom-ci qu'on montre au lanceur.
+    `ALTER TABLE duel_results ADD COLUMN opponent_name TEXT`,
+    // Celui qui lance apprend le resultat en revenant au jeu, une seule fois.
+    `ALTER TABLE duel_results ADD COLUMN seen_by_challenger INTEGER NOT NULL DEFAULT 0`,
+  ]) {
+    try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
+  }
+  duelReady = true;
+}
+
+async function touchDuelPlayer(db, key, name) {
+  await db.prepare(
+    `INSERT INTO duel_players (name_key, name, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(name_key) DO UPDATE SET name = excluded.name`
+  ).bind(key, name, Date.now()).run();
+}
+
+/**
+ * Le classement, ordonne. Y figure quiconque a joue au moins un duel — lance
+ * ou releve, peu importe. Un joueur qui a seulement envoye un defi que
+ * personne n'a encore releve n'a pas de duel derriere lui : il attend son
+ * tour plutot que d'occuper une ligne a zero point.
+ */
+async function duelBoard(db) {
+  const { results } = await db.prepare(
+    `SELECT name, points, wins, losses, draws, launched, received,
+            prev_rank, last_delta
+       FROM duel_players WHERE wins + losses + draws > 0
+      ORDER BY points DESC, wins DESC, losses ASC, name ASC LIMIT 500`
+  ).all();
+  // Le mouvement n'est pas calcule ici : un rang fige cote serveur ne survit
+  // pas au duel suivant, l'indicateur serait vide la plupart du temps. Le jeu
+  // compare au classement qu'il a affiche la derniere fois, ce qui donne un
+  // deplacement toujours parlant : « depuis ta derniere visite ».
+  return (results || []).map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -385,6 +473,90 @@ export default {
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
       });
+    }
+
+    // -------------------------------------------------- classement des duels
+    if (url.pathname === '/duels' && request.method === 'GET') {
+      await ensureDuelTables(env.DB);
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      const board = await duelBoard(env.DB);
+      const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      return json({
+        bareme: {
+          initie: { victoire: DUEL_INIT_WIN, defaite: DUEL_INIT_LOSS, nul: DUEL_DRAW },
+          recu:   { victoire: DUEL_RECV_WIN, defaite: DUEL_RECV_LOSS, nul: DUEL_DRAW },
+        },
+        classement: board, moi,
+      });
+    }
+
+    // Resultats des defis que J'AI lances. Celui qui releve voit son duel se
+    // trancher a l'arrivee ; celui qui a lance, lui, avait deja range son
+    // telephone. Sans ce guichet il ne saurait jamais qu'on lui a repondu :
+    // il verrait seulement sa ligne bouger au classement, sans savoir qui ni
+    // de combien.
+    //
+    // On filtre sur l'appareil ET sur le nom : l'appareil suffit dans le cas
+    // courant, le nom permet de retrouver ses resultats sur un second
+    // telephone quand on a reserve son identite.
+    if (url.pathname === '/duel/results' && request.method === 'GET') {
+      const device_id = url.searchParams.get('device_id') || '';
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!isValidDeviceId(device_id) && !nom) return json({ results: [] });
+      await ensureDuelTables(env.DB);
+      await ensureChallengeTables(env.DB);
+      const { results } = await env.DB.prepare(
+        `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at, c.races
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.seen_by_challenger = 0
+            AND (c.owner_device = ? OR (? <> '' AND r.challenger_key = ?))
+          ORDER BY r.created_at ASC LIMIT 20`
+      ).bind(device_id, nom, nom).all();
+
+      return json({
+        results: (results || []).map(r => ({
+          id: r.challenge_id,
+          adversaire: r.opponent_name || r.opponent_key,
+          // 'challenger' : c'est moi qui l'emporte, puisque j'ai lance.
+          issue: r.outcome,
+          points: r.outcome === 'challenger' ? DUEL_INIT_WIN
+                : r.outcome === 'opponent' ? DUEL_INIT_LOSS : DUEL_DRAW,
+          mon_ms: r.challenger_ms,
+          son_ms: r.opponent_ms,
+          races: JSON.parse(r.races || '[]'),
+          at: r.created_at,
+        })),
+      });
+    }
+
+    // Accuser reception : un resultat ne s'annonce qu'une fois.
+    if (url.pathname === '/duel/results/seen' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, ids } = body || {};
+      const nom = String(name || '').trim().toLowerCase();
+      if (!Array.isArray(ids) || !ids.length) return json({ ok: true, n: 0 });
+      await ensureDuelTables(env.DB);
+      await ensureChallengeTables(env.DB);
+      const propres = ids
+        .map(v => String(v || '').toUpperCase())
+        .filter(v => /^[A-Z0-9]{4,10}$/.test(v))
+        .slice(0, 20);
+      if (!propres.length) return json({ ok: true, n: 0 });
+      const trous = propres.map(() => '?').join(',');
+      // La condition de propriete est reprise telle quelle : sans elle,
+      // n'importe qui pourrait faire taire les resultats d'un autre.
+      await env.DB.prepare(
+        `UPDATE duel_results SET seen_by_challenger = 1
+          WHERE challenge_id IN (${trous})
+            AND seen_by_challenger = 0
+            AND challenge_id IN (
+              SELECT c.id FROM challenges c
+               WHERE c.owner_device = ? OR (? <> '' AND lower(trim(c.owner_name)) = ?))`
+      ).bind(...propres, String(device_id || ''), nom, nom).run();
+      return json({ ok: true, n: propres.length });
     }
 
     // ------------------------------------------------------------- identite
@@ -593,6 +765,16 @@ export default {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(id, Date.now(), device_id, cleanName(name), JSON.stringify(races),
              lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces), target).run();
+      // On enregistre le lanceur des maintenant, pour tenir son compteur de
+      // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
+      const lanceurKey = cleanName(name).trim().toLowerCase();
+      if (lanceurKey) {
+        await ensureDuelTables(env.DB);
+        await touchDuelPlayer(env.DB, lanceurKey, cleanName(name));
+        await env.DB.prepare(
+          `UPDATE duel_players SET launched = launched + 1, updated_at = ? WHERE name_key = ?`
+        ).bind(Date.now(), lanceurKey).run();
+      }
       return json({ id, target_name: targetName });
     }
 
@@ -658,8 +840,9 @@ export default {
         return json({ error: 'temps invalide' }, 400);
       }
       await ensureChallengeTables(env.DB);
+      await ensureDuelTables(env.DB);
       const ch = await env.DB.prepare(
-        `SELECT owner_name, total_ms FROM challenges WHERE id = ?`
+        `SELECT owner_name, owner_device, total_ms FROM challenges WHERE id = ?`
       ).bind(code).first();
       if (!ch) return json({ found: false }, 404);
 
@@ -677,12 +860,64 @@ export default {
              splits = excluded.splits, created_at = excluded.created_at`
         ).bind(code, device_id, cleanName(name), t, JSON.stringify(cleanSplits), Date.now()).run();
       }
+      // --- resolution du duel ------------------------------------------
+      // Le premier resultat fait foi : un defi ne se rejoue pas, et une
+      // seconde tentative ne redistribue donc aucun point.
+      const moiKey = cleanName(name).trim().toLowerCase();
+      const luiKey = String(ch.owner_name || '').trim().toLowerCase();
+      let duel = null;
+      const deja = await env.DB.prepare(
+        `SELECT outcome, challenger_ms, opponent_ms FROM duel_results
+          WHERE challenge_id = ? AND opponent_key = ?`
+      ).bind(code, moiKey).first();
+
+      if (deja) {
+        duel = { issue: deja.outcome, deja: true };
+      } else if (moiKey && luiKey && moiKey !== luiKey) {
+        const issue = t < ch.total_ms ? 'opponent'
+                    : (t > ch.total_ms ? 'challenger' : 'draw');
+        await env.DB.prepare(
+          `INSERT INTO duel_results (challenge_id, opponent_key, opponent_name,
+             challenger_key, challenger_ms, opponent_ms, outcome, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(code, moiKey, cleanName(name), luiKey, ch.total_ms, t, issue, Date.now()).run();
+
+        await touchDuelPlayer(env.DB, luiKey, ch.owner_name);
+        await touchDuelPlayer(env.DB, moiKey, cleanName(name));
+
+        // challenger = celui qui a lance le defi, opponent = celui qui le releve.
+        const pts = { challenger: DUEL_DRAW, opponent: DUEL_DRAW };
+        if (issue === 'challenger') {
+          pts.challenger = DUEL_INIT_WIN; pts.opponent = DUEL_RECV_LOSS;
+        } else if (issue === 'opponent') {
+          pts.opponent = DUEL_RECV_WIN; pts.challenger = DUEL_INIT_LOSS;
+        }
+
+        const maj = (key, delta, w, l, d, recu) => env.DB.prepare(
+          `UPDATE duel_players SET points = points + ?, wins = wins + ?,
+             losses = losses + ?, draws = draws + ?, received = received + ?,
+             last_delta = ?, updated_at = ?
+           WHERE name_key = ?`
+        ).bind(delta, w, l, d, recu, delta, Date.now(), key);
+        await env.DB.batch([
+          maj(luiKey, pts.challenger, issue==='challenger'?1:0, issue==='opponent'?1:0, issue==='draw'?1:0, 0),
+          maj(moiKey, pts.opponent,   issue==='opponent'?1:0,   issue==='challenger'?1:0, issue==='draw'?1:0, 1),
+        ]);
+        duel = {
+          issue,
+          role: 'opponent',              // le point de vue de celui qui repond
+          points: pts.opponent,
+          points_adverse: pts.challenger,
+        };
+      }
+
       return json({
         id: code,
         owner_name: ch.owner_name,
         owner_total_ms: ch.total_ms,
         your_total_ms: prev && prev.total_ms < t ? prev.total_ms : t,
         attempts: await attemptsFor(env.DB, code),
+        duel,
       });
     }
 

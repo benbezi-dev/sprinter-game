@@ -22,6 +22,7 @@ import { RaceHUD } from '@/components/screens/RaceHUD';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
+import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
@@ -66,6 +67,7 @@ function MainGame() {
         {state === 'title' && <TitleScreen />}
         {state === 'cut' && <CutScreen />}
         {(state === 'count' || state === 'race') && <RaceHUD />}
+        {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
         {/* Le one-shot a son propre recapitulatif : epreuves choisies,

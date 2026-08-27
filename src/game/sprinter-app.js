@@ -269,6 +269,28 @@
       this.buf.trip = blip(160, 0.22, 0.32, 0.55);
       this.buf.win = blip(760, 0.6, 0.3, 1.6);
       this.buf.lose = blip(300, 0.5, 0.3, 0.6);
+      // Deux phrases pour les fins de duel. Un blip de 0,5 s ne porte pas un
+      // resultat definitif : la fanfare monte a l'octave, la chute descend.
+      this.buf.fanfare = this.phrase([
+        [0, 0.00, 0.16], [4, 0.15, 0.16], [7, 0.30, 0.16],
+        [12, 0.45, 0.22], [7, 0.68, 0.14], [12, 0.83, 0.85],
+      ], 3);
+      this.buf.dirge = this.phrase([
+        [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
+        [-9, 1.10, 1.10],
+      ], 2, 'tri');
+    },
+    // Une phrase jouee une seule fois : [demi-tons, depart, duree].
+    phrase(notes, oct, wave) {
+      const sr = this.ctx.sampleRate;
+      const fin = notes.reduce((m, n) => Math.max(m, n[1] + n[2]), 0);
+      const d = this.ctx.createBuffer(1, ((fin + 0.3) * sr) | 0, sr);
+      notes.forEach(n => {
+        this.tone(d, n[1], n[2], this.semi(n[0], oct), 0.34, wave || 'tri', 2.0);
+        this.tone(d, n[1], n[2], this.semi(n[0], oct + 1), 0.15, 'sin', 2.4);
+        this.tone(d, n[1], n[2], this.semi(n[0], oct - 1), 0.18, 'sq', 3.0);
+      });
+      return this.norm(d);
     },
     // La musique de course se durcit a partir du championnat du monde.
     raceTrack(level) {
@@ -285,6 +307,16 @@
     stop() {
       if (this.src) { try { this.src.stop(); } catch (e) { } }
       this.src = null; this.cur = null;
+    },
+    // Annonce de fin : la boucle de fond s'arrete, la phrase reste seule.
+    // Une fanfare par-dessus la musique de course ne s'entendrait pas.
+    cue(name) {
+      if (!this.ok || !this.on) return;
+      this.stop();
+      const b = this.buf[name]; if (!b) return;
+      const s = this.ctx.createBufferSource();
+      const g = this.ctx.createGain(); g.gain.value = 0.75;
+      s.buffer = b; s.connect(g); g.connect(this.ctx.destination); s.start();
     },
     sfx(name) {
       if (!this.ok || !this.on) return;
@@ -313,6 +345,9 @@
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
+    // Faux depart eliminatoire : vrai le temps de la cinematique et de
+    // l'ecran de fin, remis a zero au depart de la course suivante.
+    falseOut: false, falseOutT: 0,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
@@ -466,6 +501,7 @@
     G.stumbleFlash = 0; G.acc = 0;
     G.reactFlash = G.transFlash = G.falseFlash = 0;
     G.reactShown = G.transShown = false;
+    G.falseOut = false; G.falseOutT = 0;
     G.paused = false;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
@@ -488,7 +524,8 @@
       const tbl = kind === 'intro' ? CUT_INTRO : (kind === 'taunt' ? CUT_TAUNT : CUT_DEFEAT);
       const first = (G.champion || 'Le favori').split(' ')[0];
       lines = pickLang(tbl[G.levelIdx]).map(s => s.split('{n}').join(first));
-      man = { look: ZEZE[G.champion] ||
+      man = { name: G.champion || '',
+              look: ZEZE[G.champion] ||
                     K.lookFor(G.champion || 'X', LEVELS[G.levelIdx].pool),
               stride: 0, maxSpeed: G.race.maxSpeed,
               v: kind === 'intro' ? G.race.maxSpeed : G.race.maxSpeed * 0.22,
@@ -509,6 +546,7 @@
   // sans ca un defi termine resterait actif sur la course suivante.
   function goHome() {
     G.paused = false;
+    G.falseOut = false;
     G.challengeTarget = null;
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
@@ -543,6 +581,24 @@
     // pas de cinematique de presentation : le one-shot va droit au but
     queueCuts([], 'count');
   }
+  // Faux depart eliminatoire. Reserve au one-shot et au defi : la course y
+  // est unique et sans reprise, partir avant le signal met donc fin a tout,
+  // comme sur une vraie piste. Les epreuves restantes comptent pour abandon
+  // et le duel est perdu — c'est ce que renvoie le vrai : true si l'on vient
+  // bien d'eliminer le joueur.
+  function falseStartOut() {
+    if (G.mode !== 'oneshot' || G.falseOut) return false;
+    G.falseOut = true; G.falseOutT = 0;
+    G.player.jumped = true;
+    while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
+    while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
+    G.shotIdx = G.shotRaces.length;
+    G.flash = 1; G.shake = 1.6; G.falseFlash = 2.4;
+    Audio_.cue('dirge');
+    G.state = 'falseout';
+    return true;
+  }
+
   function nextShotRace() {
     G.shotIdx++;
     if (G.shotIdx >= G.shotRaces.length) { G.state = 'winall'; return; }
@@ -569,6 +625,23 @@
     G.ghost = { trace, step: REC_STEP, runner: r, time: splits[G.shotIdx] || 0 };
   }
   // Avance le fantome a la position qu'avait l'adversaire au meme instant.
+  /**
+   * Ou en etait le fantome a l'instant t. Sert a dessiner sa trainee : sans
+   * elle il glisse le long du couloir comme un decor, avec elle on lit d'un
+   * coup d'oeil s'il accelere ou s'il rentre dans le mur.
+   */
+  function ghostDistAt(t) {
+    const g = G.ghost;
+    if (!g || t <= 0) return 0;
+    const tr = g.trace, last = tr.length - 1;
+    const x = t / g.step;
+    if (x >= last) return tr[last] / 10;
+    const i0 = Math.max(0, Math.floor(x));
+    const i1 = Math.min(last, i0 + 1);
+    const f = Math.max(0, Math.min(1, x - i0));
+    return (tr[i0] + (tr[i1] - tr[i0]) * f) / 10;
+  }
+
   function stepGhost(dt) {
     const g = G.ghost;
     if (!g) return;
@@ -1303,6 +1376,13 @@
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
     const curved = !!(G.track && G.track.curved);
+    // Les sept ZEZE sont dessines depuis leur planche de sprites ; pour tout
+    // le reste du plateau, et tant que les images ne sont pas chargees, on
+    // garde le rendu en capsules. Sur piste courbe le monde entier tourne de
+    // WROT : le sprite doit donc etre choisi sur le cap deja tourne.
+    const S = globalThis.SprinterSprites;
+    if (S && S.draw(ctx, r, ax, ay, k,
+                    (headAng || 0) + (curved ? WROT : 0), lean)) return;
     const caps = personCapsules(r, headAng, lean, false, curved);
     drawFacetFigure(ctx, caps, ax, ay, k);
   }
@@ -1326,7 +1406,7 @@
     for (const [r, g2, p] of vis) {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui
-      if (r.isGhost) ctx.globalAlpha = 0.42;
+      if (r.isGhost) { drawGhostTrail(ctx, r, m); ctx.globalAlpha = 0.42; }
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
@@ -1334,18 +1414,47 @@
     }
   }
 
+  /**
+   * Trois echos derriere le fantome, pris sur sa propre trace. Ils espacent
+   * l'image quand il va vite et la resserrent quand il ralentit : l'ecart
+   * devient lisible sans quitter la piste des yeux, ce que ne donne aucun
+   * chiffre affiche en haut de l'ecran.
+   */
+  function drawGhostTrail(ctx, r, m) {
+    const T = G.track;
+    const dNow = r.d;
+    const strideNow = r.stride;
+    for (let k = 3; k >= 1; k--) {
+      const d = ghostDistAt(G.elapsed - k * 0.13);
+      if (d <= 0 || dNow - d < 0.05) continue;
+      const p = T.pos(d, r.lane), g2 = ground(p[0], p[1]);
+      if (g2[0] < -200 || g2[0] > G.VW + 200) continue;
+      ctx.globalAlpha = 0.10 * (4 - k) / 3;
+      r.d = d; r.stride = strideNow - (dNow - d) * (Math.PI / r.strideLength());
+      drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
+                 m * (r.look.h / C.MODEL_H),
+                 T.heading(d, r.lane), T.lean(d, r.lane, r.v));
+    }
+    r.d = dNow; r.stride = strideNow;
+    ctx.globalAlpha = 1;
+  }
+
   // athlete isole, pour les cinematiques et l'accueil : meme style que
   // pendant la course, sans rotation de virage (personnage pose seul).
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
+    const S = globalThis.SprinterSprites;
+    if (S && S.draw(ctx, man, cx2, cy2, k, 0, 0, mirror)) return;
     const caps = personCapsules(man, 0, 0, mirror, false);
     drawFacetFigure(ctx, caps, cx2, cy2, k);
   }
 
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
+    falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
-    startOneShot, startShotRace, nextShotRace, stepGhost, REC_STEP, goHome,
+    startOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,

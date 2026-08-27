@@ -2,6 +2,7 @@
 // epreuves contre le fantome du premier, et le meilleur cumul gagne.
 // Meme backend que le classement mondial (Cloudflare Worker + D1).
 
+import type { DuelIssue } from './duels';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -107,6 +108,7 @@ export async function submitAttempt(input: {
   owner_total_ms: number;
   your_total_ms: number;
   attempts: ChallengeAttempt[];
+  duel: DuelIssue | null;
 }> {
   const res = await fetch(`${API_BASE}/challenge/attempt`, {
     method: 'POST',

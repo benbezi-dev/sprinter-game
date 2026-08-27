@@ -3,6 +3,9 @@ import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engin
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
+import { DuelRanking } from './DuelRanking';
+import { DUELS_OUVERTS } from '@/game/duels';
+import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -18,6 +21,7 @@ export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
   const { Audio_, N, RACES } = SprinterApp;
   const [showTop500, setShowTop500] = useState(false);
+  const [showDuels, setShowDuels] = useState(false);
   // Un lien ?defi=CODE doit tomber directement sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(() => (codeFromUrl() ? 'versus' : 'career'));
 
@@ -94,6 +98,34 @@ export function TitleScreen() {
                 </button>
               ))}
             </div>
+
+            {/* Classement des duels : accessible depuis les trois onglets,
+                c'est une facon de jouer a part entiere. La piste derriere est
+                claire et bariolee — sans fond opaque le bouton s'y noie.
+                Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
+            {DUELS_OUVERTS && <button
+              onClick={() => setShowDuels(true)}
+              className="w-full px-4 py-3 rounded-2xl bg-black/70 backdrop-blur-md
+                         border border-primary/50 hover:bg-black/85 transition-colors
+                         shadow-[0_0_25px_rgba(248,205,74,0.2)]
+                         flex items-center justify-between gap-3 text-left"
+            >
+              <span className="flex items-center gap-2.5 min-w-0">
+                <Swords className="w-4 h-4 md:w-5 md:h-5 text-primary shrink-0" />
+                <span className="flex flex-col min-w-0">
+                  <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm truncate">
+                    {N.t('duel_open')}
+                  </span>
+                  <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
+                    {N.t('duel_sub')}
+                  </span>
+                </span>
+              </span>
+              <span className="font-mono text-[9px] md:text-[10px] text-primary/80 shrink-0 tracking-wider">
+                +2 / -1
+                <span className="block text-cyan-300/70">+1 / -2</span>
+              </span>
+            </button>}
 
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
@@ -177,6 +209,8 @@ export function TitleScreen() {
           </div>
         </div>
       </div>
+
+      {showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 
       {showTop500 && (
         <LeaderboardScreen initialRace={raceKey} onClose={() => setShowTop500(false)} />

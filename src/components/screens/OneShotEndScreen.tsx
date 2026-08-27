@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2 } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
 import { primeTopNames } from '@/game/engine';
@@ -11,6 +11,19 @@ import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { DuelRanking } from './DuelRanking';
+import type { DuelIssue } from '@/game/duels';
+import { DUELS_OUVERTS } from '@/game/duels';
+
+/**
+ * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
+ * tranche en comparant deux totaux : un abandon doit perdre, et cette marque
+ * — la meme qui signale ailleurs une ligne sans course derriere elle — le dit
+ * sans ajouter de colonne. C'est aussi la borne haute que le serveur accepte :
+ * au-dela il rejette l'envoi, et le duel resterait ouvert alors qu'il est
+ * bel et bien perdu.
+ */
+const DSQ_MS = NO_RUN_MS;
 
 /** Chrono ou abandon, sans jamais appeler toFixed sur un null. */
 function fmt(v: number | null | undefined, dnf: string) {
@@ -18,7 +31,7 @@ function fmt(v: number | null | undefined, dnf: string) {
 }
 
 export function OneShotEndScreen() {
-  const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge } = useGameStore();
+  const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   const [name, setName] = useState(getSavedName());
@@ -27,7 +40,16 @@ export function OneShotEndScreen() {
   const [err, setErr] = useState(false);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
-  const submitted = useRef(false);
+  // Retient le defi deja envoye, pas un simple booleen : si l'ecran survit
+  // au passage d'un defi au suivant, un booleen bloquerait le second envoi.
+  const submitted = useRef<string | null>(null);
+  // Issue du duel telle que le serveur l'a tranchee. Elle ne depend pas du
+  // chrono affiche ici : c'est lui qui fait foi, et il ne se rejoue pas.
+  const [duel, setDuel] = useState<DuelIssue | null>(null);
+  const [duelEnCours, setDuelEnCours] = useState(!!challenge);
+  const [voirDuels, setVoirDuels] = useState(false);
+  // La phrase de resultat ne se joue qu'une fois par defi.
+  const sonne = useRef(false);
 
   // Les chronos d'un one shot ou d'un defi valent ceux de la carriere : un
   // 100 m reste un 100 m. On les propose donc au TOP 500, epreuve par epreuve
@@ -88,18 +110,35 @@ export function OneShotEndScreen() {
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
   const beaten = !!challenge && complete && runTime < ghostTime;
 
-  // Defi en cours : on envoie le chrono une seule fois, des l'arrivee.
+  // Defi en cours : on envoie le resultat une seule fois, des l'arrivee.
+  // Un faux depart eliminatoire s'envoie aussi — c'est une defaite, pas une
+  // course qui n'a pas eu lieu, et l'adversaire doit toucher ses points.
   useEffect(() => {
-    if (!challenge || submitted.current || !complete) return;
-    submitted.current = true;
+    if (!challenge || submitted.current === challenge.id || (!complete && !falseOut)) return;
+    submitted.current = challenge.id;
+    setDuel(null); setDuelEnCours(true); sonne.current = false;
     submitAttempt({
       id: challenge.id,
-      totalMs: runTime * 1000,
-      splits: runSplits.map(s => (s || 0) * 1000),
+      totalMs: falseOut ? DSQ_MS : runTime * 1000,
+      splits: falseOut ? [] : runSplits.map(s => (s || 0) * 1000),
       name: getSavedName() || undefined,
-    }).then(() => setSent(true)).catch(() => { /* le chrono local reste affiche */ });
+    })
+      .then(r => { setSent(true); setDuel(r.duel || null); })
+      .catch(() => { /* le chrono local reste affiche */ })
+      .finally(() => setDuelEnCours(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [challenge && challenge.id, complete, falseOut]);
+
+  // La musique du resultat. Elle ne part qu'une fois l'issue connue : jouer
+  // une fanfare avant de savoir qui a gagne serait pire que le silence.
+  // Apres un faux depart la phrase de defaite a deja retenti pendant la
+  // cinematique, on ne la rejoue pas.
+  useEffect(() => {
+    if (!duel || sonne.current || falseOut) return;
+    sonne.current = true;
+    SprinterApp.Audio_.cue(duel.issue === 'opponent' ? 'fanfare'
+                         : duel.issue === 'draw' ? 'win' : 'dirge');
+  }, [duel, falseOut]);
 
   const handleCreate = async () => {
     const finalName = name.trim();
@@ -134,17 +173,6 @@ export function OneShotEndScreen() {
     }
   };
 
-  const handleReplay = () => {
-    SprinterApp.startOneShot(shotRaces, {
-      levelIdx: SprinterApp.G.shotLevel,
-      ghosts: SprinterApp.G.ghostSet,
-      ghostSplits,
-      ghostName,
-      ghostTime,
-      challenge,
-    });
-  };
-
   const dnf = N.t('dnf_short');
 
   return (
@@ -156,18 +184,76 @@ export function OneShotEndScreen() {
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
             <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
-              ${challenge ? (beaten ? 'text-primary' : 'text-destructive') : 'text-primary'}`}>
-              {challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost') : N.t('oneshot_done')}
+              ${falseOut || (challenge && !beaten) ? 'text-destructive' : 'text-primary'}`}>
+              {falseOut ? N.t('false_out')
+                : challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost')
+                : N.t('oneshot_done')}
             </h1>
-            <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
-              {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
-            </div>
-            {challenge && (
+            {falseOut ? (
+              <div className="text-[10px] sm:text-xs md:text-base font-bold text-destructive tracking-widest uppercase">
+                {N.t('false_out_sub')}
+              </div>
+            ) : (
+              <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
+                {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
+              </div>
+            )}
+            {challenge && !falseOut && (
               <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-300 uppercase">
                 {N.t('challenge_gap', { s: (Math.abs(runTime - ghostTime)).toFixed(2) })}
               </div>
             )}
           </div>
+
+          {/* Resultat du duel : les points comptent pour le classement des
+              duels, et une seule fois. On l'annonce comme definitif parce
+              qu'il l'est — relancer le meme defi ne redistribue rien. */}
+          {challenge && (duelEnCours || duel) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-1.5 shadow-2xl
+                ${!duel ? 'border-white/10 bg-card/60'
+                  : duel.issue === 'opponent' ? 'border-primary/50 bg-primary/10'
+                  : duel.issue === 'draw' ? 'border-white/20 bg-white/5'
+                  : 'border-destructive/50 bg-destructive/10'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Swords className={`w-4 h-4 ${!duel ? 'text-muted-foreground'
+                  : duel.issue === 'opponent' ? 'text-primary'
+                  : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`} />
+                <span className={`font-black font-display tracking-tight uppercase text-lg md:text-2xl
+                  ${!duel ? 'text-muted-foreground'
+                    : duel.issue === 'opponent' ? 'text-primary'
+                    : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`}>
+                  {!duel ? N.t('duel_await')
+                    : N.t(duel.issue === 'opponent' ? 'duel_won'
+                        : duel.issue === 'draw' ? 'duel_tie' : 'duel_lost')}
+                </span>
+              </div>
+
+              {duel && (
+                <>
+                  {/* Un duel deja tranche ne redistribue rien : afficher un
+                      « 0 pts » laisserait croire a un match nul. */}
+                  {typeof duel.points === 'number' && (
+                    <span className="font-mono font-black text-2xl md:text-3xl
+                                     tabular-nums text-foreground">
+                      {duel.points > 0 ? '+' : ''}{duel.points}
+                      <span className="text-xs font-normal ml-1 text-muted-foreground">
+                        {N.t('duel_pts')}
+                      </span>
+                    </span>
+                  )}
+                  <span className="text-[10px] md:text-xs text-muted-foreground tracking-wide text-center">
+                    {N.t('duel_vs', { n: challenge.owner_name || N.t('ghost_label') })}
+                    {' · '}
+                    {N.t(duel.deja ? 'duel_seen' : 'duel_final')}
+                  </span>
+                </>
+              )}
+            </motion.div>
+          )}
 
           {/* Chronos epreuve par epreuve, face au fantome si defi */}
           <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 shadow-2xl">
@@ -201,7 +287,10 @@ export function OneShotEndScreen() {
               <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base">
                 {challenge ? N.t('you_label') : 'TOTAL'}
               </span>
-              <span className="font-mono font-black text-xl md:text-2xl text-primary">{runTime.toFixed(2)} s</span>
+              <span className={`font-mono font-black text-xl md:text-2xl
+                ${falseOut ? 'text-destructive' : 'text-primary'}`}>
+                {falseOut ? dnf : `${runTime.toFixed(2)} s`}
+              </span>
             </div>
             {challenge && (
               <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1">
@@ -309,7 +398,7 @@ export function OneShotEndScreen() {
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; apres un defi gagne c'est la revanche, qu'on
               renvoie a l'adversaire. */}
-          {(!challenge || beaten) && (
+          {!falseOut && (!challenge || beaten) && (
             <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3
               ${beaten ? 'border-primary/40' : 'border-white/10'}`}>
               <div className="flex items-center gap-2 justify-center">
@@ -428,17 +517,33 @@ export function OneShotEndScreen() {
             </p>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button onClick={handleReplay} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
-              {N.t('replay')}
-            </button>
-            <button onClick={() => SprinterApp.goHome()} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
+          {/* Une seule course, un seul resultat : il n'y a rien a rejouer.
+              Le bouton de reprise a disparu pour cette raison, et on le dit
+              plutot que de laisser le joueur chercher ou il est passe. */}
+          <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
+            <p className="text-center text-[10px] md:text-xs tracking-widest uppercase text-muted-foreground">
+              {N.t('os_once')}
+            </p>
+            {/* Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
+            {DUELS_OUVERTS && <button
+              onClick={() => setVoirDuels(true)}
+              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
+                         tracking-widest text-background bg-primary hover:bg-primary/90 transition-all
+                         border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
+                         flex items-center justify-center gap-2"
+            >
+              <Swords className="w-4 h-4" />
+              {N.t('duel_see')}
+            </button>}
+            <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
               {N.t('home')}
             </button>
           </div>
 
         </motion.div>
       </div>
+
+      {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)} />}
     </div>
   );
 }

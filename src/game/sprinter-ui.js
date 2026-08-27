@@ -667,6 +667,8 @@
       // partir avant le signal : pas de prime de reaction, et le
       // coureur reste bloque un court instant au coup de pistolet
       if (!G.player.jumped) {
+        // one-shot et defi : sans reprise possible, le faux depart elimine
+        if (A.falseStartOut()) { buzz(120); return; }
         G.player.jumped = true;
         G.player.freeze = C.FALSE_START_FREEZE;
         G.falseFlash = 1.6; G.shake = 0.7; Audio_.sfx('trip'); buzz(30);

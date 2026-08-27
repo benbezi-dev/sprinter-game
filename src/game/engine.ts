@@ -1,5 +1,6 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
+import './sprinter-sprites.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
@@ -13,6 +14,12 @@ SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
 
+// Planches de sprites des sept ZEZE : chargement en tache de fond. Tant
+// qu'elles ne sont pas la — ou si elles n'arrivent jamais — le moteur dessine
+// ses athletes en capsules comme avant, donc rien ne bloque le demarrage.
+export const SprinterSprites = (globalThis as any).SprinterSprites;
+if (SprinterSprites) SprinterSprites.load(import.meta.env.BASE_URL || '/');
+
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
@@ -21,7 +28,7 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
 };
 
 export type GameState = {
-  state: 'open' | 'title' | 'cut' | 'count' | 'race' | 'result' | 'over' | 'winall';
+  state: 'open' | 'title' | 'cut' | 'count' | 'race' | 'result' | 'over' | 'winall' | 'falseout';
   elapsed: number;
   countT: number;
   openT: number;
@@ -55,6 +62,11 @@ export type GameState = {
   ghostTime: number;
   challenge: any;
   paused: boolean;
+  falseOut: boolean;
+  /** Mode fantome : ou en est l'adversaire, en direct. */
+  ghostOn: boolean;
+  ghostD: number;
+  ghostDone: boolean;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -216,6 +228,9 @@ export function padPress(side: 'left' | 'right') {
 
   if (G.state === 'count') {
     if (!G.player.jumped) {
+      // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
+      // En carriere il coute seulement un blocage au coup de pistolet.
+      if (SprinterApp.falseStartOut()) { buzz(120); return; }
       G.player.jumped = true;
       G.player.freeze = C.FALSE_START_FREEZE;
       G.falseFlash = 1.6; G.shake = 0.7; Audio_.sfx('trip'); buzz(30);
@@ -379,5 +394,9 @@ export function updateLogic(dt: number) {
     ghostTime: G.ghostTime,
     challenge: G.challenge,
     paused: G.paused,
+    falseOut: G.falseOut,
+    ghostOn: !!G.ghost,
+    ghostD: G.ghost ? G.ghost.runner.d : 0,
+    ghostDone: G.ghost ? !!G.ghost.runner.finished : false,
   });
 }

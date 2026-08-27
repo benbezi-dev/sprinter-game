@@ -6,7 +6,8 @@ export function RaceHUD() {
   const { 
     state, elapsed, countT, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
-    mode, shotRaces, shotIdx, ghostName
+    mode, shotRaces, shotIdx, ghostName,
+    ghostOn, ghostD, ghostDone
   } = useGameStore();
 
   const { N, C } = SprinterApp;
@@ -35,6 +36,20 @@ export function RaceHUD() {
     return a.finished ? a.finishTime - b.finishTime : b.d - a.d;
   });
   
+  // Mode fantome : l'ecart avec l'adversaire, en direct. Les metres se lisent
+  // sans reflechir, mais c'est en secondes qu'on pense une course — on donne
+  // les deux, la seconde etant l'ecart converti a la vitesse du moment.
+  const ecartM = ghostOn ? (player?.d || 0) - ghostD : 0;
+  // La conversion se fait sur SA vitesse a soi, jamais sur celle du fantome :
+  // le fantome avance en rejouant une trace echantillonnee, sa vitesse
+  // instantanee saute d'une image a l'autre et donnerait un ecart qui
+  // clignote. Sous 2 m/s on ne convertit pas du tout — au depart le rapport
+  // partirait a l'infini.
+  const vRef = player?.v || 0;
+  const ecartS = vRef > 2 ? ecartM / vRef : null;
+  const devant = ecartM > 0.15;
+  const derriere = ecartM < -0.15;
+
   const pos = order.indexOf(player) + 1;
   const posTxt = N.ord(pos);
   const ph = player?.phase ? player.phase() : 0;
@@ -82,6 +97,60 @@ export function RaceHUD() {
         </div>
       </div>
 
+      {/* Mode fantome : le seul repere qui compte pendant un duel. Il occupe
+          la bande libre sous le HUD, la ou l'oeil revient naturellement entre
+          deux foulees, et il disparait des que la course est finie. */}
+      {isRace && ghostOn && !player?.finished && (
+        <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
+                        px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
+          <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
+                           flex flex-col gap-1 shadow-lg
+            ${devant ? 'border-emerald-400/50 bg-emerald-500/[0.12]'
+              : derriere ? 'border-destructive/50 bg-destructive/[0.12]'
+              : 'border-cyan-400/40 bg-black/50'}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.25em] text-cyan-300/90 truncate">
+                {ghostName || N.t('ghost_mode')}
+              </span>
+              <span className={`text-[8px] sm:text-[9px] font-bold tracking-widest
+                ${devant ? 'text-emerald-400' : derriere ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {devant ? N.t('ghost_ahead') : derriere ? N.t('ghost_behind') : N.t('ghost_level')}
+              </span>
+            </div>
+
+            <div className="flex items-baseline justify-center gap-2 leading-none">
+              <span className={`font-mono font-black tabular-nums text-xl sm:text-2xl
+                ${devant ? 'text-emerald-400' : derriere ? 'text-destructive' : 'text-cyan-300'}`}>
+                {ecartM > 0 ? '+' : ''}{ecartM.toFixed(1)}
+                <span className="text-[9px] font-normal ml-0.5">m</span>
+              </span>
+              {ecartS !== null && (
+                <span className="font-mono tabular-nums text-[10px] sm:text-xs text-foreground/70">
+                  {ecartS > 0 ? '+' : ''}{ecartS.toFixed(2)} s
+                </span>
+              )}
+            </div>
+
+            {/* Les deux coureurs sur la meme reglette : la position relative
+                se saisit d'un coup d'oeil, meme sans lire les chiffres. */}
+            <div className="relative h-1.5 rounded-full bg-black/60 border border-white/10 overflow-hidden">
+              <div className="absolute inset-y-0 left-0 bg-cyan-400/40"
+                   style={{ width: `${Math.min(100, (ghostD / total) * 100)}%` }} />
+              <div className="absolute inset-y-0 w-[3px] bg-cyan-300 rounded-full"
+                   style={{ left: `calc(${Math.min(100, (ghostD / total) * 100)}% - 1.5px)` }} />
+              <div className="absolute inset-y-0 w-[3px] bg-primary rounded-full shadow-[0_0_6px_rgba(248,205,74,0.9)]"
+                   style={{ left: `calc(${Math.min(100, ((player?.d || 0) / total) * 100)}% - 1.5px)` }} />
+            </div>
+
+            {ghostDone && (
+              <span className="text-[8px] sm:text-[9px] text-center tracking-wide text-cyan-300/70">
+                {N.t('ghost_home')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Countdown Center Display */}
       {isCount && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
@@ -111,6 +180,16 @@ export function RaceHUD() {
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base block truncate
                 ${ghostName ? 'text-cyan-300' : 'text-fuchsia-400'}`}>
                 {N.t('to_beat')} {rival.name} &mdash; {rival.time.toFixed(2)} s
+              </span>
+            </div>
+          )}
+          {ghostName && (
+            <div className="mt-2 md:mt-3 flex flex-col items-center gap-0.5">
+              <span className="text-[10px] md:text-xs font-black tracking-[0.3em] text-cyan-300">
+                {N.t('ghost_mode')}
+              </span>
+              <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
+                {N.t('ghost_live')}
               </span>
             </div>
           )}
