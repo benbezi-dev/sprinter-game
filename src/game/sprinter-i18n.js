@@ -129,6 +129,11 @@
     duel_rules_why:  ['lancer un défi, c’est montrer son chrono le premier',
                       'sending a challenge means showing your time first'],
     duel_counts:     ['{l} lancés · {r} relevés', '{l} sent · {r} answered'],
+    duel_answered:   ['TON DÉFI A ÉTÉ RELEVÉ', 'YOUR CHALLENGE WAS ANSWERED'],
+    duel_more:       ['{n} autre résultat en attente', '{n} more result waiting'],
+    duel_mores:      ['{n} autres résultats en attente', '{n} more results waiting'],
+    duel_next:       ['SUIVANT', 'NEXT'],
+    duel_ok:         ['COMPRIS', 'GOT IT'],
     // mode fantome
     ghost_mode:      ['MODE FANTÔME', 'GHOST MODE'],
     ghost_ahead:     ['DEVANT', 'AHEAD'],

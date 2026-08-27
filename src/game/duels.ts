@@ -5,15 +5,14 @@
 // lancer un defi expose son chrono le premier, donc +1 / -2 ; le relever se
 // paie +2 / -1. La somme reste nulle a chaque duel.
 
-import { getSavedName } from './leaderboard';
+import { getDeviceId, getSavedName } from './leaderboard';
 
 /**
- * Les duels partent en production avec le reste du jeu, mais leurs portes
- * restent fermees : le code est livre, l'acces ne l'est pas encore. Passer
- * cette constante a true rouvre les deux entrees (accueil et fin de course)
- * sans autre changement.
+ * Portes des duels. A false, les trois entrees disparaissent — accueil, fin de
+ * course, et l'annonce du resultat a celui qui a lance le defi — sans autre
+ * changement : le code reste livre, seul l'acces bascule.
  */
-export const DUELS_OUVERTS = false;
+export const DUELS_OUVERTS = true;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
@@ -96,5 +95,61 @@ export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
     return data;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Resultat d'un defi que J'AI lance, tel que je l'apprends en revenant.
+ * `issue` est vue du serveur : 'challenger' veut dire que c'est moi, le
+ * lanceur, qui l'emporte.
+ */
+export type MonDuel = {
+  id: string;
+  adversaire: string;
+  issue: 'challenger' | 'opponent' | 'draw';
+  points: number;
+  mon_ms: number;
+  son_ms: number;
+  races: string[];
+  at: number;
+};
+
+/**
+ * Les resultats en attente d'etre annonces.
+ *
+ * Celui qui releve un defi voit son duel se trancher a l'arrivee. Celui qui
+ * l'a lance, lui, avait deja range son telephone : sans ce guichet il verrait
+ * seulement sa ligne bouger au classement, sans savoir qui lui a repondu ni
+ * de combien.
+ */
+export async function fetchMesDuels(): Promise<MonDuel[]> {
+  try {
+    const q = `device_id=${encodeURIComponent(getDeviceId())}` +
+              `&name=${encodeURIComponent(getSavedName() || '')}`;
+    const res = await fetch(`${API_BASE}/duel/results?${q}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.results) ? data.results : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Un resultat ne s'annonce qu'une fois. */
+export async function marquerDuelsVus(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  try {
+    await fetch(`${API_BASE}/duel/results/seen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: getDeviceId(),
+        name: getSavedName() || '',
+        ids,
+      }),
+    });
+  } catch {
+    // reseau muet : le resultat sera reannonce au prochain passage, ce qui
+    // vaut mieux que de le perdre.
   }
 }

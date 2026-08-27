@@ -548,7 +548,7 @@ export default {
       const trous = propres.map(() => '?').join(',');
       // La condition de propriete est reprise telle quelle : sans elle,
       // n'importe qui pourrait faire taire les resultats d'un autre.
-      await env.DB.prepare(
+      const r = await env.DB.prepare(
         `UPDATE duel_results SET seen_by_challenger = 1
           WHERE challenge_id IN (${trous})
             AND seen_by_challenger = 0
@@ -556,7 +556,9 @@ export default {
               SELECT c.id FROM challenges c
                WHERE c.owner_device = ? OR (? <> '' AND lower(trim(c.owner_name)) = ?))`
       ).bind(...propres, String(device_id || ''), nom, nom).run();
-      return json({ ok: true, n: propres.length });
+      // On renvoie ce qui a vraiment bascule, pas ce qui a ete demande : une
+      // demande portant sur les defis d'autrui ne change rien, et doit le dire.
+      return json({ ok: true, n: (r && r.meta && r.meta.changes) || 0 });
     }
 
     // ------------------------------------------------------------- identite

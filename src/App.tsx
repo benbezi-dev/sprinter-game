@@ -26,6 +26,7 @@ import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
+import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { Dashboard } from '@/components/screens/Dashboard';
@@ -84,6 +85,9 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
+          annonce ici, des son retour au calme. */}
+      <DuelResultPopup />
       <InstallPrompt />
     </div>
   );
