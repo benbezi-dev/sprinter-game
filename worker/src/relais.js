@@ -27,6 +27,10 @@
 --------------------------------------------------------------------------- */
 
 const TAILLE = 4;                     // un relais, c'est quatre. Jamais moins.
+// Une confrontation oppose de deux a huit equipes. Deux, c'est un duel
+// d'equipes ; huit, c'est une finale a couloirs pleins. Au-dela, la piste n'a
+// plus de couloir a offrir et l'ecran plus rien a montrer.
+const MIN_EQUIPES = 2, MAX_EQUIPES = 8;
 const MAX_NOM_EQUIPE = 24;
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -302,6 +306,11 @@ export async function classementRelais(db, race = '4x100', limite = 500) {
   }));
 }
 
+/** Une confrontation est-elle jouable avec ce nombre d'equipes ? */
+export function confrontationValide(n) {
+  return Number.isInteger(n) && n >= MIN_EQUIPES && n <= MAX_EQUIPES;
+}
+
 /** Enregistre le resultat d'un relais couru. */
 export async function enregistrerRelais(db, { team_id, race_key, legs }) {
   await ensureRelayTables(db);
@@ -325,4 +334,4 @@ export async function enregistrerRelais(db, { team_id, race_key, legs }) {
   return { total_ms: total };
 }
 
-export { TAILLE };
+export { TAILLE, MIN_EQUIPES, MAX_EQUIPES };

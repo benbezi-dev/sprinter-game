@@ -68,6 +68,46 @@
     // Plancher de cadence sur la seconde moitie. Sans lui, le chemin le plus
     // facile vers la note parfaite etait de trainer expres sur les premiers
     // appuis — ratio 3,76, le double d'une vraie montee en puissance.
+    // --- relais : la zone de lancement et le passage de temoin ----------
+    // Le receveur ne part pas arrete : il dispose de 30 metres pour se lancer,
+    // et le temoin change de main quelque part dans cette zone. C'est ce qui
+    // rend un relais plus rapide que quatre 100 m mis bout a bout — un depart
+    // arrete coute 1,11 s, mesure sur cette physique.
+    RELAY_LAUNCH: 30.0,
+    // Le passage se joue a deux : le donneur et le receveur touchent au meme
+    // instant. L'ecart entre les deux touches, mesure sur l'horloge commune de
+    // la salle, donne la note. Les fenetres tiennent compte de ce que la
+    // synchronisation d'horloge laisse d'incertitude — moins de 15 ms mesures
+    // sur l'infrastructure reelle — et de la variabilite humaine, qui est
+    // l'ordre de grandeur dominant.
+    RELAY_SYNC_PERFECT: 0.070,
+    RELAY_SYNC_GOOD: 0.180,
+    // Effets, dans l'ordre rate / bon / parfait.
+    //
+    // Ils portent A LA FOIS sur le plafond de vitesse et sur le freinage, et
+    // pour toute la duree du relais. C'est la mesure qui l'impose : la vitesse
+    // tenue vaut BOOST / (1 - exp(-DRAG x cadence)), plafonnee par maxSpeed.
+    // Un joueur a cadence lente est limite par le freinage et ne sent pas le
+    // plafond ; un joueur rapide tape dans le plafond et ne sent pas le
+    // freinage. N'agir que sur l'un des deux ne toucherait que la moitie des
+    // joueurs. Agir seulement au moment de la passe ne toucherait personne :
+    // sur 100 m le coureur reaccelere, et toute correction ponctuelle se
+    // dissout — c'est la raison pour laquelle l'effet dure.
+    RELAY_PASS_VMAX: [0.940, 1.000, 1.045],
+    RELAY_PASS_DRAG: [1.080, 1.000, 0.930],
+    RELAY_PASS_BOOST: [0, 0.20, 0.45],
+    RELAY_PASS_KEEP: [0.60, 1.00, 1.00],   // part de la vitesse de lancement gardee
+    RELAY_PASS_FREEZE: [0.15, 0, 0],       // le temoin echappe des mains
+    // Temoin non transmis dans les 30 metres : l'equipe ne perd pas la course,
+    // elle la perd de vue. Environ une seconde de plus qu'un passage rate.
+    RELAY_MISS_VMAX: 0.90,
+    RELAY_MISS_DRAG: 1.12,
+    RELAY_MISS_KEEP: 0.25,
+    RELAY_MISS_FREEZE: 0.50,
+    // L'effet couvre tout le relais : au-dela de la duree d'une portion, la
+    // valeur exacte n'a plus d'importance.
+    RELAY_EFFECT_TIME: 30.0,
+
     TRANS_FLOOR: 0.125,
     TRANS_MIN_PRESS: 8,
     TRANS_BOOST: [0, 0.26, 0.55],   // impulsion immediate, selon la note
@@ -599,6 +639,8 @@
     // depart : reaction, cadence de poussee, note de transition
     this.reaction = null; this.reactBonus = 0; this.jumped = false;
     this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
+    // Relais : note du passage recu, et ecart entre les deux touches.
+    this.passGrade = null; this.passGap = 0;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
@@ -665,6 +707,41 @@
     const s = a.slice().sort((x, y) => x - y), n = s.length;
     return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
   }
+  /**
+   * Note un passage de temoin et en applique les effets.
+   *
+   * `ecart` est le decalage entre les deux touches, en secondes, mesure sur
+   * l'horloge commune de la salle — pas sur celle d'un telephone. `transmis`
+   * dit si le temoin a bien change de main dans les 30 metres.
+   *
+   * La vitesse de lancement acquise dans la zone n'est pas remplacee : elle
+   * est conservee, entierement sur un bon passage, amputee sur un mauvais.
+   * C'est le sens du geste — on ne redonne pas de la vitesse a celui qui rate,
+   * on lui retire celle qu'il avait construite.
+   */
+  Runner.prototype.gradeHandoff = function (ecart, transmis) {
+    if (!transmis) {
+      this.passGrade = -1;
+      this.v *= C.RELAY_MISS_KEEP;
+      this.maxSpeed *= C.RELAY_MISS_VMAX;
+      this.boostT = C.RELAY_EFFECT_TIME;
+      this.boostDrag = C.RELAY_MISS_DRAG;
+      this.stumbleTimer = C.RELAY_MISS_FREEZE;
+      return -1;
+    }
+    const e = Math.abs(Number(ecart) || 0);
+    const g = e <= C.RELAY_SYNC_PERFECT ? 2 : e <= C.RELAY_SYNC_GOOD ? 1 : 0;
+    this.passGrade = g;
+    this.passGap = e;
+    this.v = Math.min(this.maxSpeed,
+                      this.v * C.RELAY_PASS_KEEP[g] + C.RELAY_PASS_BOOST[g]);
+    this.maxSpeed *= C.RELAY_PASS_VMAX[g];
+    this.boostT = C.RELAY_EFFECT_TIME;
+    this.boostDrag = C.RELAY_PASS_DRAG[g];
+    if (C.RELAY_PASS_FREEZE[g] > 0) this.stumbleTimer = C.RELAY_PASS_FREEZE[g];
+    return g;
+  };
+
   Runner.prototype.gradeTransition = function () {
     const p = this.pressTimes;
     if (this.stumbledInDrive || p.length < C.TRANS_MIN_PRESS) {
