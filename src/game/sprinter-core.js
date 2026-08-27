@@ -149,6 +149,16 @@
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
                [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
     },
+    // Le relais emprunte la geometrie du 400 m — un tour de piste — mais se
+    // court en quatre portions de cent metres. La vitesse de pointe est celle
+    // du 100 m : un relayeur sprinte, il ne gere pas un tour.
+    '4x100': {
+      key: '4x100', label: '4 x 100 METRES', sub: 'le relais',
+      fullLap: true, relay: true, legs: 4, legLength: 100,
+      arc: 115.61, straight: 84.39, maxSpeed: 12.435, best: 36.84,
+      ranges: [[50.00, 60.00], [45.00, 50.00], [40.00, 44.00],
+               [38.00, 40.00], [37.20, 38.00], [36.84, 37.60]]
+    },
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
       arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: 36.90,
@@ -641,6 +651,14 @@
     this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
     // Relais : note du passage recu, et ecart entre les deux touches.
     this.passGrade = null; this.passGap = 0;
+    // Ou commence la portion de ce coureur, et sur quelle longueur il se met
+    // en action. Zero et DRIVE_END pour une course ordinaire — un relayeur,
+    // lui, demarre a 100, 200 ou 300 metres du depart, et dispose de trente
+    // metres de lancement au lieu de quinze de poussee. Sans ces deux
+    // reperes, la transition serait notee au mauvais endroit et le troisieme
+    // relayeur serait juge sur une phase qu'il a franchie depuis longtemps.
+    this.legStart = 0;
+    this.driveEnd = C.DRIVE_END;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
@@ -682,14 +700,15 @@
   // atteinte. La decroissance est en puissance 1,6 : le redressement est
   // rapide sur les premiers metres puis s'adoucit, comme chez un sprinteur.
   Runner.prototype.pitchAt = function () {
-    const q = Math.min(1, Math.max(0, this.d / C.TRANS_END));
+    const q = Math.min(1, Math.max(0, (this.d - this.legStart) / C.TRANS_END));
     return C.DRIVE_PITCH * Math.pow(1 - q, 1.6);
   };
 
   // Phase courante : 0 poussee, 1 transition, 2 vitesse maximale.
   Runner.prototype.phase = function () {
-    if (this.d < C.DRIVE_END) return 0;
-    return this.d < C.TRANS_END ? 1 : 2;
+    const p = this.d - this.legStart;
+    if (p < this.driveEnd) return 0;
+    return p < C.TRANS_END ? 1 : 2;
   };
 
   // Note de transition : on compare la cadence de la premiere moitie de la
@@ -777,7 +796,7 @@
         this.v += this.reactBonus;
       }
     }
-    if (elapsed !== undefined && this.d < C.DRIVE_END)
+    if (elapsed !== undefined && this.d - this.legStart < this.driveEnd)
       this.pressTimes.push(elapsed);
     let stumbled = false;
     if (this.lastKey === key) {
@@ -788,7 +807,7 @@
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
         this.fallAnim = 1;
-        if (this.d < C.DRIVE_END) this.stumbledInDrive = true;
+        if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
         this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
@@ -825,8 +844,8 @@
     this.d += this.v * dt;
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
-    if (this.transGrade === null && before < C.DRIVE_END &&
-        this.d >= C.DRIVE_END) {
+    const fin = this.legStart + this.driveEnd;
+    if (this.transGrade === null && before < fin && this.d >= fin) {
       this.gradeTransition();
     }
     if (this.d >= this.total) {
