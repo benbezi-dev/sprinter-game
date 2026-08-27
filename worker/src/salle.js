@@ -25,6 +25,17 @@ import { appliquerDuel } from './duels.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
+// Un Durable Object est facture au temps ou il reste eveille, et une WebSocket
+// ouverte l'y maintient. Une salle qui a rendu son verdict ne sert plus a rien
+// mais coute autant qu'une salle en pleine course : on la ferme.
+//
+// Pas immediatement — les deux joueurs regardent leur resultat et peuvent
+// vouloir remettre ca. On leur laisse le temps de se decider, et le moindre
+// « pret » annule la fermeture.
+const APRES_RESULTAT_MS = 45 * 1000;
+// Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
+// joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
+const INACTIVITE_MS = 4 * 60 * 1000;
 // Delai entre « tout le monde est pret » et le coup de pistolet. Assez long
 // pour absorber une latence mediocre, assez court pour ne pas ennuyer.
 const AVANT_DEPART_MS = 4000;
@@ -52,6 +63,7 @@ export class SalleDirecte {
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
     this.code = '';            // le code de la salle, pose au premier appel
+    this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
   }
 
@@ -67,6 +79,28 @@ export class SalleDirecte {
       joueurs, epreuves: this.epreuves, niveau: this.niveau,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
     };
+  }
+
+  /**
+   * Programme la fermeture de la salle. Toute activite la repousse : c'est le
+   * silence qui ferme, pas l'horloge.
+   */
+  programmerFermeture(delai, raison) {
+    clearTimeout(this.minuteur);
+    this.minuteur = setTimeout(() => {
+      this.diffuser({ t: 'ferme', raison });
+      for (const [ws] of this.joueurs) {
+        try { ws.close(1000, raison); } catch (e) { /* deja fermee */ }
+      }
+      this.joueurs.clear();
+    }, delai);
+  }
+
+  /** Il se passe quelque chose : la salle ne ferme pas maintenant. */
+  vivante() {
+    clearTimeout(this.minuteur);
+    this.minuteur = setTimeout(() => this.programmerFermeture(0, 'inactivite'),
+                               INACTIVITE_MS);
   }
 
   diffuser(msg, sauf) {
@@ -132,6 +166,7 @@ export class SalleDirecte {
     this.joueurs.set(serveur, {
       id, nom, pret: false, d: 0, fin: null, parti: false,
     });
+    this.vivante();
 
     serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
     serveur.addEventListener('close', () => this.parti(serveur));
@@ -154,6 +189,9 @@ export class SalleDirecte {
     // que de le laisser courir contre un couloir vide.
     this.diffuser({ t: 'sorti', id: j.id, nom: j.nom, ...this.vue() });
     if (this.joueurs.size === 0) this.termine = false;
+    // Plus personne : on eteint le minuteur. Un setTimeout en attente suffit a
+    // maintenir l'objet eveille, et donc facture, pour rien.
+    if (this.joueurs.size === 0) { clearTimeout(this.minuteur); this.minuteur = null; }
   }
 
   recu(ws, brut) {
@@ -172,6 +210,7 @@ export class SalleDirecte {
 
       case 'pret': {
         j.pret = !!m.pret;
+        this.vivante();
         // Le depart se declenche quand la salle est pleine et que tout le
         // monde a confirme. On l'annonce a une date absolue : chacun compte
         // avec sa propre horloge recalee, personne n'attend le signal d'un
@@ -197,6 +236,7 @@ export class SalleDirecte {
         // reculer l'adversaire a l'ecran.
         if (d > j.d) j.d = d;
         j.parti = true;
+        this.vivante();
         this.diffuser({ t: 'pos', id: j.id, d: Math.round(j.d * 10) / 10 }, ws);
         return;
       }
@@ -235,6 +275,10 @@ export class SalleDirecte {
     // L'hote a lance la partie : c'est lui l'initiateur, au sens du bareme.
     const issue = hote.fin < invite.fin ? 'challenger'
                 : hote.fin > invite.fin ? 'opponent' : 'draw';
+
+    // Le verdict est rendu : la salle n'a plus de raison d'etre eveillee. On
+    // laisse le temps de le lire et de relancer, puis on ferme.
+    this.programmerFermeture(APRES_RESULTAT_MS, 'course terminee');
 
     this.diffuser({
       t: 'resultat',

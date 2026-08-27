@@ -30,6 +30,13 @@ const LEG = 100;                       // longueur d'une portion
 const AVANT_DEPART_MS = 5000;          // le temps de se mettre en place
 const FENETRE_TOUCHE_MS = 600;         // au-dela, les deux touches ne vont plus ensemble
 const VIE_MS = 20 * 60 * 1000;
+// Un Durable Object se facture au temps ou il reste eveille, et une WebSocket
+// ouverte l'y maintient. Le probleme est particulierement net ici : un relais
+// dure quarante secondes mais son salon peut rester ouvert dix minutes pendant
+// que les quatre s'organisent. On ferme donc des que la course est jouee, et on
+// ferme aussi un salon ou il ne se passe rien.
+const APRES_COURSE_MS = 60 * 1000;
+const INACTIVITE_MS = 5 * 60 * 1000;
 
 function net(nom) {
   const s = String(nom || '').trim().slice(0, 20).replace(/[<>]/g, '');
@@ -51,6 +58,7 @@ export class SalleRelais {
     this.touches = new Map();          // relais -> date de la touche temoin
     this.elimine = null;
     this.total = null;
+    this.minuteur = null;
     this.ne = Date.now();
   }
 
@@ -67,6 +75,28 @@ export class SalleRelais {
       porteur: this.porteur, temoin_d: Math.round(this.temoinD * 10) / 10,
       passes: this.passes, elimine: this.elimine, total: this.total,
     };
+  }
+
+  /**
+   * Programme la fermeture. Toute activite la repousse : c'est le silence qui
+   * ferme, pas l'horloge. Une equipe qui veut recourir n'a qu'a se redeclarer
+   * prete.
+   */
+  programmerFermeture(delai, raison) {
+    clearTimeout(this.minuteur);
+    this.minuteur = setTimeout(() => {
+      this.diffuser({ t: 'ferme', raison });
+      for (const [ws] of this.joueurs) {
+        try { ws.close(1000, raison); } catch (e) { /* deja fermee */ }
+      }
+      this.joueurs.clear();
+    }, delai);
+  }
+
+  vivante() {
+    clearTimeout(this.minuteur);
+    this.minuteur = setTimeout(() => this.programmerFermeture(0, 'inactivite'),
+                               INACTIVITE_MS);
   }
 
   diffuser(msg, sauf) {
@@ -126,6 +156,7 @@ export class SalleRelais {
     const j = { id: crypto.randomUUID().slice(0, 8), nom, cle, relais,
                 pret: false, d: (relais - 1) * LEG, parti: false, fini: false };
     this.joueurs.set(serveur, j);
+    this.vivante();
 
     serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
     serveur.addEventListener('close', () => this.parti(serveur));
@@ -150,12 +181,16 @@ export class SalleRelais {
       this.eliminer('un relayeur a quitte la course', j.relais);
     }
     this.diffuser({ t: 'sorti', nom: j.nom, relais: j.relais, ...this.vue() });
+    // Plus personne : on eteint le minuteur. Un setTimeout en attente suffit a
+    // maintenir l'objet eveille, et donc facture, pour rien.
+    if (this.joueurs.size === 0) { clearTimeout(this.minuteur); this.minuteur = null; }
   }
 
   eliminer(raison, relais) {
     if (this.elimine) return;
     this.elimine = { raison, relais: relais || null };
     this.departA = null;
+    this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
     this.diffuser({ t: 'elimine', ...this.elimine, ...this.vue() });
   }
 
@@ -174,6 +209,7 @@ export class SalleRelais {
 
       case 'pret': {
         j.pret = !!m.pret;
+        this.vivante();
         const tous = this.joueurs.size === TAILLE &&
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
@@ -210,6 +246,7 @@ export class SalleRelais {
         if (!Number.isFinite(d) || d < 0 || d > 500) return;
         if (d > j.d) j.d = d;
         j.parti = true;
+        this.vivante();
         if (j.relais === this.porteur) this.temoinD = j.d;
 
         // Le receveur qui quitte sa zone sans le temoin elimine l'equipe.
@@ -248,6 +285,7 @@ export class SalleRelais {
         if (!Number.isFinite(ms) || ms < 10000 || ms > 600000) return;
         j.fini = true;
         this.total = ms;
+        this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
         this.diffuser({ t: 'fini', total: ms, passes: this.passes, ...this.vue() });
         const ecrire = this.ecrire();
         if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
