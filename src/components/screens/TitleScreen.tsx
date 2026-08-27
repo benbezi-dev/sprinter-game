@@ -11,6 +11,8 @@ import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
+import { GameTour, tourVu, marquerTourVu } from './GameTour';
+import { Compass } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -27,6 +29,7 @@ export function TitleScreen() {
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
+  const [tour, setTour] = useState(() => !tourVu());
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(
     () => (codeFromUrl() || codeDirectUrl() ? 'versus' : 'career'));
@@ -237,11 +240,28 @@ export function TitleScreen() {
               <GraduationCap className="w-3.5 h-3.5" />
               {N.t('tuto_open')}
             </button>
+
+            <button
+              onClick={() => setTour(true)}
+              className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                         text-muted-foreground hover:text-primary transition-colors
+                         flex items-center justify-center gap-1.5"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              {N.t('tour_open')}
+            </button>
             </>}
 
           </div>
         </div>
       </div>
+
+      {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
+          un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
+          mondial et des defis. Le tutoriel du geste, lui, reste au moment de
+          la premiere course — deux tutoriels d'affilee avant de courir, ce
+          serait un de trop. */}
+      {tour && <GameTour onClose={(jouer) => { marquerTourVu(); setTour(false); if (jouer) handleStart(); }} />}
 
       {tuto && <Tutorial onClose={fermerTuto} />}
 
