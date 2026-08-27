@@ -3,6 +3,7 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
 } from './duels.js';
 export { SalleDirecte } from './salle.js';
+export { SalleRelais } from './salle-relais.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -475,6 +476,24 @@ export default {
         if (!Number.isInteger(n) || n <= 0) return json({ error: 'identifiant invalide' }, 400);
         const f = await fantomeRelais(env.DB, n);
         return f ? json({ fantome: f }) : json({ error: 'fantome introuvable' }, 404);
+      }
+
+      // La salle d'une equipe : quatre joueurs, une piste, un temoin. Comme
+      // pour les duels, le Worker n'aiguille que — la course vit dans l'objet.
+      if (sous.startsWith('room/')) {
+        const reste = sous.slice('room/'.length);
+        const [brut, tail] = reste.split('/');
+        const code = (brut || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        if (!env.SALLES_RELAIS) return json({ error: 'relais indisponible' }, 503);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : '/ws';
+        cible.searchParams.set('team', code);
+        const id = env.SALLES_RELAIS.idFromName('R-' + code);
+        const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
       }
 
       if (sous === 'ranking' && request.method === 'GET') {

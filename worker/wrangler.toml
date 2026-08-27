@@ -18,3 +18,13 @@ class_name = "SalleDirecte"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SalleDirecte"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["SalleRelais"]
+
+# Une salle de relais par equipe : quatre joueurs et un temoin partagent le
+# meme objet, comme les deux joueurs d'un duel partagent le leur.
+[[durable_objects.bindings]]
+name = "SALLES_RELAIS"
+class_name = "SalleRelais"
