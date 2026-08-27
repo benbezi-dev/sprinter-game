@@ -98,12 +98,11 @@
     RELAY_PASS_BOOST: [0, 0.20, 0.45],
     RELAY_PASS_KEEP: [0.60, 1.00, 1.00],   // part de la vitesse de lancement gardee
     RELAY_PASS_FREEZE: [0.15, 0, 0],       // le temoin echappe des mains
-    // Temoin non transmis dans les 30 metres : l'equipe ne perd pas la course,
-    // elle la perd de vue. Environ une seconde de plus qu'un passage rate.
-    RELAY_MISS_VMAX: 0.90,
-    RELAY_MISS_DRAG: 1.12,
-    RELAY_MISS_KEEP: 0.25,
-    RELAY_MISS_FREEZE: 0.50,
+    // Le lieu du passage ne se negocie pas : hors de la zone, avant la zone,
+    // ou temoin lache — l'equipe est eliminee. Il n'y a donc pas de bareme
+    // pour un passage mal place, seulement pour un passage mal synchronise.
+    // C'est la regle de l'athletisme, et elle change la nature du mode : on
+    // n'y perd pas des secondes, on y perd la course.
     // L'effet couvre tout le relais : au-dela de la duree d'une portion, la
     // valeur exacte n'a plus d'importance.
     RELAY_EFFECT_TIME: 30.0,
@@ -730,24 +729,18 @@
    * Note un passage de temoin et en applique les effets.
    *
    * `ecart` est le decalage entre les deux touches, en secondes, mesure sur
-   * l'horloge commune de la salle — pas sur celle d'un telephone. `transmis`
-   * dit si le temoin a bien change de main dans les 30 metres.
+   * l'horloge commune de la salle — pas sur celle d'un telephone.
+   *
+   * Cette note ne juge que la SYNCHRONISATION. Le lieu du passage, lui, ne se
+   * note pas : hors zone, l'equipe est eliminee, et la question du bareme ne
+   * se pose plus.
    *
    * La vitesse de lancement acquise dans la zone n'est pas remplacee : elle
    * est conservee, entierement sur un bon passage, amputee sur un mauvais.
    * C'est le sens du geste — on ne redonne pas de la vitesse a celui qui rate,
    * on lui retire celle qu'il avait construite.
    */
-  Runner.prototype.gradeHandoff = function (ecart, transmis) {
-    if (!transmis) {
-      this.passGrade = -1;
-      this.v *= C.RELAY_MISS_KEEP;
-      this.maxSpeed *= C.RELAY_MISS_VMAX;
-      this.boostT = C.RELAY_EFFECT_TIME;
-      this.boostDrag = C.RELAY_MISS_DRAG;
-      this.stumbleTimer = C.RELAY_MISS_FREEZE;
-      return -1;
-    }
+  Runner.prototype.gradeHandoff = function (ecart) {
     const e = Math.abs(Number(ecart) || 0);
     const g = e <= C.RELAY_SYNC_PERFECT ? 2 : e <= C.RELAY_SYNC_GOOD ? 1 : 0;
     this.passGrade = g;
