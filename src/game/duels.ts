@@ -12,7 +12,7 @@ import { getDeviceId, getSavedName } from './leaderboard';
  * course, et l'annonce du resultat a celui qui a lance le defi — sans autre
  * changement : le code reste livre, seul l'acces bascule.
  */
-export const DUELS_OUVERTS = true;
+export const DUELS_OUVERTS = false;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
