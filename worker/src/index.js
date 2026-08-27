@@ -6,6 +6,7 @@ export { SalleDirecte } from './salle.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
+  fantomesRelais, fantomeRelais,
 } from './relais.js';
 
 /**
@@ -451,15 +452,29 @@ export default {
       if (sous === 'score' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { id, race_key, legs } = body || {};
+        const { id, race_key, legs, traces } = body || {};
         const code = String(id || '').toUpperCase();
         if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
-        const r = await enregistrerRelais(env.DB, { team_id: code, race_key, legs });
+        const r = await enregistrerRelais(env.DB, { team_id: code, race_key, legs, traces });
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
       if (sous === 'mine' && request.method === 'GET') {
         return json(await mesEquipes(env.DB, url.searchParams.get('name') || ''));
+      }
+
+      // Les courses affrontables en fantome : le haut du classement, et lui
+      // seul. Une equipe hors du top garde son chrono mais n'est plus rejouee.
+      if (sous === 'ghosts' && request.method === 'GET') {
+        const race = url.searchParams.get('race') || '4x100';
+        return json({ race, fantomes: await fantomesRelais(env.DB, race) });
+      }
+
+      if (sous.startsWith('ghost/') && request.method === 'GET') {
+        const n = parseInt(sous.slice('ghost/'.length), 10);
+        if (!Number.isInteger(n) || n <= 0) return json({ error: 'identifiant invalide' }, 400);
+        const f = await fantomeRelais(env.DB, n);
+        return f ? json({ fantome: f }) : json({ error: 'fantome introuvable' }, 404);
       }
 
       if (sous === 'ranking' && request.method === 'GET') {

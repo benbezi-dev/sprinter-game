@@ -102,12 +102,73 @@ export async function ensureRelayTables(db) {
       race_key TEXT NOT NULL,
       total_ms INTEGER NOT NULL,
       legs TEXT NOT NULL,
+      traces TEXT,
       created_at INTEGER NOT NULL
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS relay_scores_best
                   ON relay_scores(race_key, total_ms)`),
   ]);
+  // Colonne ajoutee apres coup, comme ailleurs : la table peut deja exister.
+  try { await db.prepare(`ALTER TABLE relay_scores ADD COLUMN traces TEXT`).run(); }
+  catch (e) { /* colonne deja presente */ }
   pret = true;
+}
+
+/**
+ * Seuls les dix meilleures EQUIPES restent affrontables en fantome, et
+ * chacune par sa meilleure course.
+ *
+ * Une equipe dominante remplirait sinon les dix places a elle seule, et il n'y
+ * aurait plus qu'un adversaire a defier au lieu de dix. C'est aussi la lecture
+ * qui colle au classement, ou une equipe n'occupe qu'une ligne.
+ *
+ * On efface les traces des autres, pas leurs lignes : une equipe ne perd pas
+ * son chrono, seulement la possibilite qu'on la rejoue.
+ */
+const FANTOMES_GARDES = 10;
+async function elaguerFantomes(db, race) {
+  await db.prepare(
+    `UPDATE relay_scores SET traces = NULL
+      WHERE race_key = ? AND traces IS NOT NULL AND id NOT IN (
+        SELECT id FROM (
+          SELECT id, team_id, MIN(total_ms) AS m
+            FROM relay_scores
+           WHERE race_key = ? AND traces IS NOT NULL
+           GROUP BY team_id
+           ORDER BY m ASC LIMIT ?))`
+  ).bind(race, race, FANTOMES_GARDES).run();
+}
+
+/** Les courses rejouables en fantome, du meilleur au moins bon. */
+export async function fantomesRelais(db, race = '4x100', limite = FANTOMES_GARDES) {
+  await ensureRelayTables(db);
+  // Une equipe, une ligne : la meme regle que le classement.
+  const { results } = await db.prepare(
+    `SELECT s.id, s.team_id, t.name, s.legs, s.created_at,
+            MIN(s.total_ms) AS total_ms
+       FROM relay_scores s JOIN relay_teams t ON t.id = s.team_id
+      WHERE s.race_key = ? AND s.traces IS NOT NULL
+      GROUP BY s.team_id
+      ORDER BY total_ms ASC LIMIT ?`).bind(race, Math.min(limite, FANTOMES_GARDES)).all();
+  return (results || []).map((r, i) => ({
+    rang: i + 1, id: r.id, equipe: r.name, equipe_id: r.team_id,
+    total_ms: r.total_ms, relais: JSON.parse(r.legs || '[]'), le: r.created_at,
+  }));
+}
+
+/** La trace complete d'une course, pour la courir en fantome. */
+export async function fantomeRelais(db, id) {
+  await ensureRelayTables(db);
+  const r = await db.prepare(
+    `SELECT s.id, s.team_id, t.name, s.race_key, s.total_ms, s.legs, s.traces
+       FROM relay_scores s JOIN relay_teams t ON t.id = s.team_id
+      WHERE s.id = ?`).bind(id).first();
+  if (!r || !r.traces) return null;
+  return {
+    id: r.id, equipe: r.name, equipe_id: r.team_id, epreuve: r.race_key,
+    total_ms: r.total_ms, relais: JSON.parse(r.legs || '[]'),
+    traces: JSON.parse(r.traces),
+  };
 }
 
 /** L'equipe et ses membres, telle qu'un client la voit. */
@@ -312,7 +373,7 @@ export function confrontationValide(n) {
 }
 
 /** Enregistre le resultat d'un relais couru. */
-export async function enregistrerRelais(db, { team_id, race_key, legs }) {
+export async function enregistrerRelais(db, { team_id, race_key, legs, traces }) {
   await ensureRelayTables(db);
   if (!Array.isArray(legs) || legs.length !== TAILLE) {
     return { erreur: 'il faut les quatre temps' };
@@ -327,10 +388,29 @@ export async function enregistrerRelais(db, { team_id, race_key, legs }) {
   if (t.status !== 'active') return { erreur: 'equipe incomplete' };
 
   const total = propres.reduce((a, b) => a + b, 0);
+  const race = String(race_key || '4x100');
+
+  // Les traces sont bornees comme celles des defis : un client ne doit pas
+  // pouvoir remplir la base sous couvert d'enregistrer une course.
+  let tr = null;
+  if (Array.isArray(traces) && traces.length === TAILLE) {
+    tr = JSON.stringify(traces.map(t => {
+      const a = [];
+      if (!Array.isArray(t)) return a;
+      for (let i = 0; i < t.length && i < 1200; i++) {
+        const n = Math.round(Number(t[i]));
+        a.push(Number.isFinite(n) ? Math.max(0, Math.min(60000, n)) : 0);
+      }
+      return a;
+    }));
+  }
+
   await db.prepare(
-    `INSERT INTO relay_scores (team_id, race_key, total_ms, legs, created_at)
-     VALUES (?, ?, ?, ?, ?)`
-  ).bind(team_id, String(race_key || '4x100'), total, JSON.stringify(propres), Date.now()).run();
+    `INSERT INTO relay_scores (team_id, race_key, total_ms, legs, traces, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).bind(team_id, race, total, JSON.stringify(propres), tr, Date.now()).run();
+
+  if (tr) await elaguerFantomes(db, race);
   return { total_ms: total };
 }
 
