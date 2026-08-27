@@ -167,6 +167,10 @@
     os_tuto_3_s:     ['TOP 500, et défiable par un ami', 'TOP 500, and a friend can take it on'],
     os_tuto_go:      ['LANCER UN ONE SHOT', 'START A ONE SHOT'],
     // tutoriel — on montre le geste, on ne le raconte pas
+    tuto_ask_t:      ['PREMIÈRE COURSE', 'FIRST RACE'],
+    tuto_ask_s:      ['le geste s’apprend en trente secondes', 'the gesture takes thirty seconds to learn'],
+    tuto_ask_yes:    ['APPRENDRE LE GESTE', 'LEARN THE GESTURE'],
+    tuto_ask_no:     ['JE COURS TOUT DE SUITE', 'LET ME RUN'],
     tuto_watch:      ['REGARDE', 'WATCH'],
     tuto_your_turn:  ['À TOI', 'YOUR TURN'],
     tuto_1_t:        ['ALTERNE', 'ALTERNATE'],

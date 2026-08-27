@@ -12,6 +12,7 @@ import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
+import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -30,16 +31,27 @@ export function TitleScreen() {
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
   const [tour, setTour] = useState(() => !tourVu());
+  const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(
     () => (codeFromUrl() || codeDirectUrl() ? 'versus' : 'career'));
 
-  // Premiere course : on passe par le tutoriel. Il ne dure qu'une poignee de
-  // secondes et il n'y a pas d'autre endroit ou expliquer la transition, qui
-  // reste invisible tant qu'on ne l'a pas sentie sous le pouce.
+  // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
+  // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel
+  // d'office, avec un lien « passer » en petit dans un coin, c'est lui donner
+  // autre chose que ce qu'il a demande.
   const handleStart = () => {
-    if (!tutoVu()) { setTuto(true); return; }
+    if (!tutoVu()) { setPropose(true); return; }
     SprinterApp.startRun();
+  };
+
+  // Les deux reponses valent acceptation : on ne repose pas la question a la
+  // course suivante, et le tutoriel reste a portee depuis l'accueil.
+  const repondrePropose = (apprendre: boolean) => {
+    setPropose(false);
+    marquerTutoVu();
+    if (apprendre) setTuto(true);
+    else SprinterApp.startRun();
   };
 
   const fermerTuto = (lancer: boolean) => {
@@ -262,6 +274,8 @@ export function TitleScreen() {
           la premiere course — deux tutoriels d'affilee avant de courir, ce
           serait un de trop. */}
       {tour && <GameTour onClose={(jouer) => { marquerTourVu(); setTour(false); if (jouer) handleStart(); }} />}
+
+      {propose && <TutoPropose onChoix={repondrePropose} />}
 
       {tuto && <Tutorial onClose={fermerTuto} />}
 
