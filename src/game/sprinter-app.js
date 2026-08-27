@@ -1376,13 +1376,6 @@
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
     const curved = !!(G.track && G.track.curved);
-    // Les sept ZEZE sont dessines depuis leur planche de sprites ; pour tout
-    // le reste du plateau, et tant que les images ne sont pas chargees, on
-    // garde le rendu en capsules. Sur piste courbe le monde entier tourne de
-    // WROT : le sprite doit donc etre choisi sur le cap deja tourne.
-    const S = globalThis.SprinterSprites;
-    if (S && S.draw(ctx, r, ax, ay, k,
-                    (headAng || 0) + (curved ? WROT : 0), lean)) return;
     const caps = personCapsules(r, headAng, lean, false, curved);
     drawFacetFigure(ctx, caps, ax, ay, k);
   }
@@ -1443,8 +1436,6 @@
   // pendant la course, sans rotation de virage (personnage pose seul).
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
-    const S = globalThis.SprinterSprites;
-    if (S && S.draw(ctx, man, cx2, cy2, k, 0, 0, mirror)) return;
     const caps = personCapsules(man, 0, 0, mirror, false);
     drawFacetFigure(ctx, caps, cx2, cy2, k);
   }

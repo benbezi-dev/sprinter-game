@@ -1,6 +1,5 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
-import './sprinter-sprites.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
@@ -13,12 +12,6 @@ export const SprinterApp = (globalThis as any).SprinterApp;
 SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
-
-// Planches de sprites des sept ZEZE : chargement en tache de fond. Tant
-// qu'elles ne sont pas la — ou si elles n'arrivent jamais — le moteur dessine
-// ses athletes en capsules comme avant, donc rien ne bloque le demarrage.
-export const SprinterSprites = (globalThis as any).SprinterSprites;
-if (SprinterSprites) SprinterSprites.load(import.meta.env.BASE_URL || '/');
 
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se

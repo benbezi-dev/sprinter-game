@@ -3,6 +3,7 @@ import { SprinterApp } from '@/game/engine';
 import { Ghost, Loader2 } from 'lucide-react';
 import { fetchChallenge, codeFromUrl, clearUrlCode, normalizeCode, type Challenge } from '@/game/challenge';
 import type { RaceKey } from '@/game/leaderboard';
+import { estInstallee, estIOS } from '@/game/pwa';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
@@ -114,13 +115,30 @@ export function ChallengePanel() {
   };
 
   // Un lien ?defi=CODE ouvre directement le defi correspondant.
+  const [venuDuLien, setVenuDuLien] = useState('');
   useEffect(() => {
     if (autoTried.current) return;
     autoTried.current = true;
     const fromUrl = codeFromUrl();
-    if (fromUrl) { setCode(fromUrl); clearUrlCode(); load(fromUrl); }
+    if (fromUrl) { setCode(fromUrl); setVenuDuLien(fromUrl); clearUrlCode(); load(fromUrl); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Lien ouvert dans Safari alors que le jeu est peut-etre installe. Android
+  // et les navigateurs de bureau ouvrent d'eux-memes l'application (scope +
+  // handle_links dans le manifeste) ; iOS n'a rien de tel et aucune page web
+  // ne peut reveiller l'icone de l'ecran d'accueil. On rend donc le code
+  // recopiable plutot que de laisser le joueur revenir en arriere le chercher.
+  const horsApp = !!venuDuLien && estIOS() && !estInstallee();
+  const [copie, setCopie] = useState(false);
+  const copier = async () => {
+    try {
+      await navigator.clipboard.writeText(venuDuLien);
+      setCopie(true); setTimeout(() => setCopie(false), 1800);
+    } catch {
+      // presse-papiers refuse : le code reste lisible et recopiable a la main
+    }
+  };
 
   const accept = () => {
     if (!ch) return;
@@ -140,6 +158,26 @@ export function ChallengePanel() {
         <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
           {N.t('versus_desc')}
         </p>
+
+        {horsApp && (
+          <div className="rounded-xl border border-cyan-400/35 bg-cyan-400/[0.07] px-3 py-2.5
+                          flex flex-col items-center gap-1.5">
+            <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300 text-center">
+              {N.t('link_in_app')}
+            </span>
+            <span className="text-[9px] md:text-[10px] text-muted-foreground text-center leading-snug">
+              {N.t('link_in_app_sub')}
+            </span>
+            <button
+              onClick={copier}
+              className="mt-0.5 px-4 py-1.5 rounded-lg bg-black/40 border border-white/10
+                         font-mono font-bold tracking-[0.3em] text-sm text-cyan-200
+                         hover:bg-black/60 transition-colors pl-[0.3em]"
+            >
+              {copie ? N.t('code_copied') : venuDuLien}
+            </button>
+          </div>
+        )}
 
         <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary text-center">
           {N.t('challenge_code')}
