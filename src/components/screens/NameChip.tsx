@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { User, Check, Loader2, KeyRound, X } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
-import { claimName, savedCode } from '@/game/identity';
+import { claimName, savedCode, lierInstagram, instagramDe } from '@/game/identity';
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -25,13 +25,31 @@ export function NameChip() {
   const [saisie, setSaisie] = useState(nom);
   const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'ok'>('repos');
   const [code, setCode] = useState(savedCode());
+  const [insta, setInsta] = useState('');
+  const [instaEtat, setInstaEtat] = useState<'repos' | 'envoi' | 'lie' | 'bad' | 'sansnom' | 'pasatoi'>('repos');
 
   // Le nom peut aussi etre pose ailleurs — au bandeau de record, a la fin
   // d'un one shot. On le relit en revenant a l'accueil, sinon la puce
   // afficherait encore « choisis ton nom » alors qu'il vient d'etre choisi.
   useEffect(() => { setNom(getSavedName()); setCode(savedCode()); }, [etatJeu]);
 
-  useEffect(() => { if (ouvert) { setSaisie(getSavedName()); setEtat('repos'); } }, [ouvert]);
+  useEffect(() => {
+    if (!ouvert) return;
+    setSaisie(getSavedName()); setEtat('repos'); setInstaEtat('repos');
+    // On rappelle le pseudo deja lie, pour ne pas le faire retaper.
+    const n = getSavedName();
+    if (n) instagramDe(n).then(v => { if (v) setInsta(v); });
+  }, [ouvert]);
+
+  const lierInsta = async () => {
+    const v = insta.trim();
+    setInstaEtat('envoi');
+    const r = await lierInstagram(v);
+    if (r.etat === 'ok') { setInsta(r.insta || ''); setInstaEtat('lie'); }
+    else if (r.etat === 'sans-nom') setInstaEtat('sansnom');
+    else if (r.etat === 'pas-a-toi') setInstaEtat('pasatoi');
+    else setInstaEtat('bad');
+  };
 
   const valider = async () => {
     const n = saisie.trim();
@@ -109,6 +127,50 @@ export function NameChip() {
                 <span className="text-[9px] text-muted-foreground leading-snug">{N.t('name_code_why')}</span>
               </div>
             )}
+
+            {/* Instagram : un lien declare, pas une connexion. L'API qui
+                permettait de se connecter avec un compte personnel a ete
+                retiree par Meta fin 2024 ; on demande donc le pseudo, et le
+                serveur verifie seulement que le nom de joueur est bien a
+                nous — sans quoi on pourrait accrocher le compte d'un autre. */}
+            <div className="flex flex-col gap-1.5 pt-1 border-t border-white/10">
+              <span className="text-[10px] font-bold tracking-widest text-muted-foreground flex items-center gap-1.5 pt-2">
+                <Instagram className="w-3 h-3" />{N.t('insta_title')}
+              </span>
+              <div className="flex gap-2">
+                <span className="flex items-center px-2 rounded-l-xl bg-black/35 border border-r-0 border-white/10 text-muted-foreground text-sm">@</span>
+                <input
+                  value={insta}
+                  onChange={e => { setInsta(e.target.value); setInstaEtat('repos'); }}
+                  onKeyDown={e => { if (e.key === 'Enter') lierInsta(); }}
+                  placeholder={N.t('insta_ph')}
+                  maxLength={40}
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                  className="flex-1 min-w-0 -ml-2 bg-black/35 border border-white/10 rounded-r-xl px-2 py-2 text-sm text-foreground
+                             placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                />
+                <button
+                  onClick={lierInsta}
+                  disabled={instaEtat === 'envoi'}
+                  className="shrink-0 px-3 py-2 rounded-xl font-bold tracking-wide text-[10px]
+                             text-foreground bg-white/5 border border-white/15 hover:bg-white/10
+                             disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                >
+                  {instaEtat === 'envoi' && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {instaEtat === 'lie' && <Check className="w-3 h-3 text-primary" />}
+                  {N.t(instaEtat === 'lie' ? 'insta_linked' : 'insta_link')}
+                </button>
+              </div>
+              <span className="text-[9px] text-muted-foreground leading-snug">
+                {N.t(instaEtat === 'bad' ? 'insta_bad'
+                   : instaEtat === 'sansnom' ? 'insta_first'
+                   : instaEtat === 'pasatoi' ? 'insta_notyours'
+                   : 'insta_why')}
+              </span>
+              <span className="text-[9px] text-muted-foreground/70 leading-snug">
+                {N.t('insta_note')}
+              </span>
+            </div>
 
             <button
               onClick={valider}

@@ -18,6 +18,8 @@ export type LeaderboardEntry = {
   id?: number;
   /** sa course est-elle rejouable en fantome ? */
   has_ghost?: boolean;
+  /** pseudo Instagram declare par le joueur, non verifie */
+  insta?: string | null;
 };
 
 function randomId(): string {

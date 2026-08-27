@@ -131,17 +131,24 @@ async function ensureScoreGhost(db) {
 // cumul. Regrouper une fois pour les deux donnerait un cumul qui n'est pas le
 // meilleur du joueur.
 async function getLeaderboard(db, race, by = 'race') {
+  // La colonne insta vient de la table des joueurs, et cette table peut ne pas
+  // avoir encore recu sa migration. Sans cette ligne, le classement entier
+  // repond 500 au premier deploiement — c'est deja arrive avec la colonne des
+  // traces, on ne le refait pas.
+  await ensurePlayerTables(db);
   const col = by === 'run' ? 'time_ms' : 'best_split_ms';
   const garde = by === 'run'
     ? `time_ms > 0 AND time_ms < ${NO_RUN_MS}`
     : `best_split_ms > 0`;
   const { results } = await db.prepare(
-    `SELECT rowid AS id, name, time_ms, best_split_ms, updated_at,
-            MIN(${col}) AS _min,
-            (trace IS NOT NULL AND length(trace) > 2) AS has_ghost
-       FROM scores
-      WHERE race_key = ? AND ${garde}
-      GROUP BY lower(trim(name))
+    `SELECT s.rowid AS id, s.name, s.time_ms, s.best_split_ms, s.updated_at,
+            MIN(s.${col}) AS _min,
+            (s.trace IS NOT NULL AND length(s.trace) > 2) AS has_ghost,
+            p.insta AS insta
+       FROM scores s
+       LEFT JOIN players p ON p.name_key = lower(trim(s.name))
+      WHERE s.race_key = ? AND ${garde.replace(/\b(time_ms|best_split_ms)\b/g, 's.$1')}
+      GROUP BY lower(trim(s.name))
       ORDER BY _min ASC LIMIT ${TOP_N}`
   ).bind(race).all();
   return (results || []).map(({ _min, ...r }) => ({ ...r, has_ghost: !!r.has_ghost }));
@@ -236,7 +243,27 @@ async function ensurePlayerTables(db) {
       PRIMARY KEY (name_key, device_id)
     )`),
   ]);
+  // Le pseudo Instagram arrive apres coup : la table existe deja chez ceux qui
+  // ont reserve leur nom.
+  try { await db.prepare(`ALTER TABLE players ADD COLUMN insta TEXT`).run(); }
+  catch (e) { /* colonne deja presente */ }
   joueursReady = true;
+}
+
+/**
+ * Un pseudo Instagram, nettoye.
+ *
+ * On accepte ce qu'Instagram accepte — lettres, chiffres, point, tiret bas,
+ * trente caracteres — et on retire l'arobase que les gens collent par habitude
+ * ainsi qu'une URL complete si elle a ete copiee depuis le navigateur.
+ */
+function cleanInsta(brut) {
+  let s = String(brut || '').trim();
+  if (!s) return '';
+  s = s.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '');
+  s = s.replace(/[/?#].*$/, '');
+  s = s.replace(/^@+/, '');
+  return /^[A-Za-z0-9._]{1,30}$/.test(s) ? s : null;   // null = saisie refusee
 }
 
 /** Cet appareil a-t-il le droit d'ecrire sous ce nom ? */
@@ -668,6 +695,45 @@ export default {
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();
       return json({ ok: true, name: propre, code });
+    }
+
+    // Lier son compte Instagram a son nom de joueur.
+    //
+    // Ce n'est PAS une connexion : Instagram ne nous dit rien, le joueur
+    // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
+    // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
+    // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
+    if (url.pathname === '/profil' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, insta } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+
+      const propre = cleanInsta(insta);
+      if (propre === null) return json({ error: 'pseudo invalide' }, 400);
+
+      await ensurePlayerTables(env.DB);
+      if (!(await peutUtiliser(env.DB, key, device_id))) {
+        return json({ error: 'ce nom ne t appartient pas' }, 403);
+      }
+      const p = await env.DB.prepare(
+        `SELECT name_key FROM players WHERE name_key = ?`).bind(key).first();
+      if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
+
+      await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
+        .bind(propre || null, key).run();
+      return json({ ok: true, insta: propre || null });
+    }
+
+    if (url.pathname === '/profil' && request.method === 'GET') {
+      const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!key) return json({ insta: null });
+      await ensurePlayerTables(env.DB);
+      const p = await env.DB.prepare(
+        `SELECT insta FROM players WHERE name_key = ?`).bind(key).first();
+      return json({ insta: (p && p.insta) || null });
     }
 
     // Relier cet appareil a un nom deja reserve, en prouvant qu'il est a nous.

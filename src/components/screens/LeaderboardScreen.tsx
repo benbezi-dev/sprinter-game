@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Swords } from 'lucide-react';
+import { Swords , Instagram } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
   fetchLeaderboardRaw, fetchMyRank, rankByRaceTime, rankByRunTime, rankOf,
@@ -7,6 +7,7 @@ import {
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
 import { IdentityPanel } from './IdentityPanel';
+import { lienInstagram } from '@/game/identity';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -222,6 +223,20 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                       <span className={`font-bold tracking-wide truncate text-xs md:text-sm ${isMe ? 'text-primary' : 'text-foreground'}`}>
                         {e.name}
                       </span>
+                      {/* Le profil declare par le joueur. Discret : c'est une
+                          adresse qu'il a donnee, pas une identite verifiee. */}
+                      {e.insta && (
+                        <a
+                          href={lienInstagram(e.insta)}
+                          target="_blank" rel="noopener noreferrer"
+                          onClick={ev => ev.stopPropagation()}
+                          title={N.t('insta_visit', { n: e.name })}
+                          aria-label={N.t('insta_visit', { n: e.name })}
+                          className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Instagram className="w-3.5 h-3.5" />
+                        </a>
+                      )}
                     </div>
                     {/* Defier cette personne. Reduit a une icone : le libelle
                         mangeait la largeur du nom. Le titre et l'aria-label
