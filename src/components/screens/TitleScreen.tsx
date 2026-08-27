@@ -8,6 +8,8 @@ import { DUELS_OUVERTS } from '@/game/duels';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
+import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
+import { GraduationCap } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -23,12 +25,23 @@ export function TitleScreen() {
   const { Audio_, N, RACES } = SprinterApp;
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
+  const [tuto, setTuto] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(
     () => (codeFromUrl() || codeDirectUrl() ? 'versus' : 'career'));
 
+  // Premiere course : on passe par le tutoriel. Il ne dure qu'une poignee de
+  // secondes et il n'y a pas d'autre endroit ou expliquer la transition, qui
+  // reste invisible tant qu'on ne l'a pas sentie sous le pouce.
   const handleStart = () => {
+    if (!tutoVu()) { setTuto(true); return; }
     SprinterApp.startRun();
+  };
+
+  const fermerTuto = (lancer: boolean) => {
+    marquerTutoVu();
+    setTuto(false);
+    if (lancer) SprinterApp.startRun();
   };
 
   const handleRaceToggle = (key: '100' | '200' | '400') => {
@@ -206,11 +219,26 @@ export function TitleScreen() {
             >
               {N.t('start')}
             </button>
+
+            {/* Toujours accessible : on oublie vite la regle de la transition,
+                et les joueurs arrives par un lien de defi n'ont jamais vu le
+                tutoriel. */}
+            <button
+              onClick={() => setTuto(true)}
+              className="w-full -mt-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                         text-muted-foreground hover:text-primary transition-colors
+                         flex items-center justify-center gap-1.5"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              {N.t('tuto_open')}
+            </button>
             </>}
 
           </div>
         </div>
       </div>
+
+      {tuto && <Tutorial onClose={fermerTuto} />}
 
       {showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 
