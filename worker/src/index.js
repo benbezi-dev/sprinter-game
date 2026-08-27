@@ -1,3 +1,9 @@
+import {
+  DUEL_INIT_WIN, DUEL_INIT_LOSS, DUEL_RECV_WIN, DUEL_RECV_LOSS, DUEL_DRAW,
+  ensureDuelTables, duelBoard, appliquerDuel, compterLance,
+} from './duels.js';
+export { SalleDirecte } from './salle.js';
+
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
 const MIN_TIME_MS = 1000;       // en dessous, forcement invalide
@@ -230,94 +236,6 @@ async function peutUtiliser(db, nameKey, deviceId) {
   return !!d;
 }
 
-// Classement des duels, distinct du TOP 500. Il ne recompense pas la vitesse
-// pure mais l'engagement : tous les duels y comptent, qu'on les ait lances ou
-// releves.
-//
-// Le bareme depend du role, parce que les deux roles ne courent pas le meme
-// risque. Celui qui lance abat sa carte le premier : son chrono est pose, et
-// l'autre le voit courir en fantome en sachant exactement ce qu'il doit
-// battre. On le paie donc peu quand il l'emporte quand meme (+1) et on le
-// sanctionne franchement quand il tombe (-2). Celui qui releve, lui, gagne
-// gros (+2) et perd peu (-1).
-//
-// Effet de bord voulu : la somme des points distribues vaut toujours zero
-// (+2/-2 ou +1/-1), donc le classement ne derive ni vers le haut ni vers le
-// bas quel que soit le nombre de duels joues.
-const DUEL_INIT_WIN = 1, DUEL_INIT_LOSS = -2;
-const DUEL_RECV_WIN = 2, DUEL_RECV_LOSS = -1;
-const DUEL_DRAW = 0;
-let duelReady = false;
-async function ensureDuelTables(db) {
-  if (duelReady) return;
-  await db.batch([
-    db.prepare(`CREATE TABLE IF NOT EXISTS duel_players (
-      name_key TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      points INTEGER NOT NULL DEFAULT 0,
-      wins INTEGER NOT NULL DEFAULT 0,
-      losses INTEGER NOT NULL DEFAULT 0,
-      draws INTEGER NOT NULL DEFAULT 0,
-      launched INTEGER NOT NULL DEFAULT 0,
-      prev_rank INTEGER,
-      last_delta INTEGER NOT NULL DEFAULT 0,
-      updated_at INTEGER NOT NULL
-    )`),
-    // Un duel ne se resout qu'une fois : la cle empeche qu'une seconde
-    // tentative sur le meme defi redistribue des points.
-    db.prepare(`CREATE TABLE IF NOT EXISTS duel_results (
-      challenge_id TEXT NOT NULL,
-      opponent_key TEXT NOT NULL,
-      challenger_key TEXT NOT NULL,
-      challenger_ms INTEGER NOT NULL,
-      opponent_ms INTEGER NOT NULL,
-      outcome TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      PRIMARY KEY (challenge_id, opponent_key)
-    )`),
-  ]);
-  // Colonnes arrivees apres coup : la table existe deja chez ceux qui
-  // jouaient avant, d'ou les ajouts tolerants.
-  for (const sql of [
-    `ALTER TABLE duel_players ADD COLUMN received INTEGER NOT NULL DEFAULT 0`,
-    // Le nom lisible de celui qui a releve. La cle est en minuscules et sert
-    // a dedoublonner ; c'est ce nom-ci qu'on montre au lanceur.
-    `ALTER TABLE duel_results ADD COLUMN opponent_name TEXT`,
-    // Celui qui lance apprend le resultat en revenant au jeu, une seule fois.
-    `ALTER TABLE duel_results ADD COLUMN seen_by_challenger INTEGER NOT NULL DEFAULT 0`,
-  ]) {
-    try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
-  }
-  duelReady = true;
-}
-
-async function touchDuelPlayer(db, key, name) {
-  await db.prepare(
-    `INSERT INTO duel_players (name_key, name, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(name_key) DO UPDATE SET name = excluded.name`
-  ).bind(key, name, Date.now()).run();
-}
-
-/**
- * Le classement, ordonne. Y figure quiconque a joue au moins un duel — lance
- * ou releve, peu importe. Un joueur qui a seulement envoye un defi que
- * personne n'a encore releve n'a pas de duel derriere lui : il attend son
- * tour plutot que d'occuper une ligne a zero point.
- */
-async function duelBoard(db) {
-  const { results } = await db.prepare(
-    `SELECT name, points, wins, losses, draws, launched, received,
-            prev_rank, last_delta
-       FROM duel_players WHERE wins + losses + draws > 0
-      ORDER BY points DESC, wins DESC, losses ASC, name ASC LIMIT 500`
-  ).all();
-  // Le mouvement n'est pas calcule ici : un rang fige cote serveur ne survit
-  // pas au duel suivant, l'indicateur serait vide la plupart du temps. Le jeu
-  // compare au classement qu'il a affiche la derniere fois, ce qui donne un
-  // deplacement toujours parlant : « depuis ta derniere visite ».
-  return (results || []).map((r, i) => ({ ...r, rank: i + 1 }));
-}
-
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -473,6 +391,38 @@ export default {
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
       });
+    }
+
+    // ------------------------------------------------ course en direct
+    // Le Worker ne fait qu'aiguiller : toute la vie de la salle se passe dans
+    // le Durable Object, seul endroit ou les deux joueurs se rejoignent
+    // vraiment. On adresse l'objet par le code, en majuscules, pour que
+    // « ab12cd » et « AB12CD » tombent au meme endroit.
+    // Ouvrir une salle : on tire un code libre a l'oral, comme pour un defi.
+    if (url.pathname === '/live/nouveau' && request.method === 'POST') {
+      return json({ id: makeCode() });
+    }
+
+    if (url.pathname.startsWith('/live/')) {
+      const reste = url.pathname.slice('/live/'.length);
+      const [brut, sous] = reste.split('/');
+      const code = (brut || '').toUpperCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+      if (!env.SALLES) return json({ error: 'direct indisponible' }, 503);
+
+      const cible = new URL(request.url);
+      cible.pathname = sous === 'etat' ? '/etat' : '/ws';
+      cible.searchParams.set('code', code);
+
+      const id = env.SALLES.idFromName(code);
+      const reponse = await env.SALLES.get(id).fetch(new Request(cible, request));
+      // Une reponse 101 porte une WebSocket : on la rend telle quelle, sans
+      // toucher aux en-tetes, sinon la poignee de main echoue.
+      if (reponse.status === 101) return reponse;
+      return cors(new Response(reponse.body, {
+        status: reponse.status,
+        headers: { 'Content-Type': 'application/json' },
+      }));
     }
 
     // -------------------------------------------------- classement des duels
@@ -770,13 +720,7 @@ export default {
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = cleanName(name).trim().toLowerCase();
-      if (lanceurKey) {
-        await ensureDuelTables(env.DB);
-        await touchDuelPlayer(env.DB, lanceurKey, cleanName(name));
-        await env.DB.prepare(
-          `UPDATE duel_players SET launched = launched + 1, updated_at = ? WHERE name_key = ?`
-        ).bind(Date.now(), lanceurKey).run();
-      }
+      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name));
       return json({ id, target_name: targetName });
     }
 
@@ -864,54 +808,16 @@ export default {
       }
       // --- resolution du duel ------------------------------------------
       // Le premier resultat fait foi : un defi ne se rejoue pas, et une
-      // seconde tentative ne redistribue donc aucun point.
-      const moiKey = cleanName(name).trim().toLowerCase();
-      const luiKey = String(ch.owner_name || '').trim().toLowerCase();
-      let duel = null;
-      const deja = await env.DB.prepare(
-        `SELECT outcome, challenger_ms, opponent_ms FROM duel_results
-          WHERE challenge_id = ? AND opponent_key = ?`
-      ).bind(code, moiKey).first();
-
-      if (deja) {
-        duel = { issue: deja.outcome, deja: true };
-      } else if (moiKey && luiKey && moiKey !== luiKey) {
-        const issue = t < ch.total_ms ? 'opponent'
-                    : (t > ch.total_ms ? 'challenger' : 'draw');
-        await env.DB.prepare(
-          `INSERT INTO duel_results (challenge_id, opponent_key, opponent_name,
-             challenger_key, challenger_ms, opponent_ms, outcome, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(code, moiKey, cleanName(name), luiKey, ch.total_ms, t, issue, Date.now()).run();
-
-        await touchDuelPlayer(env.DB, luiKey, ch.owner_name);
-        await touchDuelPlayer(env.DB, moiKey, cleanName(name));
-
-        // challenger = celui qui a lance le defi, opponent = celui qui le releve.
-        const pts = { challenger: DUEL_DRAW, opponent: DUEL_DRAW };
-        if (issue === 'challenger') {
-          pts.challenger = DUEL_INIT_WIN; pts.opponent = DUEL_RECV_LOSS;
-        } else if (issue === 'opponent') {
-          pts.opponent = DUEL_RECV_WIN; pts.challenger = DUEL_INIT_LOSS;
-        }
-
-        const maj = (key, delta, w, l, d, recu) => env.DB.prepare(
-          `UPDATE duel_players SET points = points + ?, wins = wins + ?,
-             losses = losses + ?, draws = draws + ?, received = received + ?,
-             last_delta = ?, updated_at = ?
-           WHERE name_key = ?`
-        ).bind(delta, w, l, d, recu, delta, Date.now(), key);
-        await env.DB.batch([
-          maj(luiKey, pts.challenger, issue==='challenger'?1:0, issue==='opponent'?1:0, issue==='draw'?1:0, 0),
-          maj(moiKey, pts.opponent,   issue==='opponent'?1:0,   issue==='challenger'?1:0, issue==='draw'?1:0, 1),
-        ]);
-        duel = {
-          issue,
-          role: 'opponent',              // le point de vue de celui qui repond
-          points: pts.opponent,
-          points_adverse: pts.challenger,
-        };
-      }
+      // seconde tentative ne redistribue donc aucun point. Le bareme vit dans
+      // duels.js, partage avec la course en direct.
+      const duel = await appliquerDuel(env.DB, {
+        id: code,
+        challengerName: ch.owner_name,
+        opponentName: cleanName(name),
+        challengerMs: ch.total_ms,
+        opponentMs: t,
+      });
+      if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
 
       return json({
         id: code,

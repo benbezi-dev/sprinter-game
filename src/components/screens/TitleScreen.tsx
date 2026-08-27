@@ -7,6 +7,7 @@ import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
+import { codeDirectUrl } from '@/game/live';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -22,8 +23,9 @@ export function TitleScreen() {
   const { Audio_, N, RACES } = SprinterApp;
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
-  // Un lien ?defi=CODE doit tomber directement sur l'onglet du defi.
-  const [tab, setTab] = useState<Tab>(() => (codeFromUrl() ? 'versus' : 'career'));
+  // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
+  const [tab, setTab] = useState<Tab>(
+    () => (codeFromUrl() || codeDirectUrl() ? 'versus' : 'career'));
 
   const handleStart = () => {
     SprinterApp.startRun();

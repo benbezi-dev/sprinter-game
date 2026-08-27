@@ -4,6 +4,8 @@ import { Ghost, Loader2 } from 'lucide-react';
 import { fetchChallenge, codeFromUrl, clearUrlCode, normalizeCode, type Challenge } from '@/game/challenge';
 import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
+import { LivePanel } from './LivePanel';
+import { DUELS_OUVERTS } from '@/game/duels';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
@@ -154,6 +156,12 @@ export function ChallengePanel() {
 
   return (
     <div className="flex flex-col gap-3 md:gap-4">
+      {/* Deux facons de se defier, dans l'ordre ou on les decouvre : celle qui
+          demande que l'autre soit la maintenant, puis celle qui s'accommode
+          d'une reponse le lendemain. La premiere alimente le meme classement
+          que la seconde, elle passe donc par le meme interrupteur. */}
+      {DUELS_OUVERTS && <LivePanel />}
+
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
         <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
           {N.t('versus_desc')}

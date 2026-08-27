@@ -348,6 +348,8 @@
     // Faux depart eliminatoire : vrai le temps de la cinematique et de
     // l'ecran de fin, remis a zero au depart de la course suivante.
     falseOut: false, falseOutT: 0,
+    // Course en direct : l'adversaire court en meme temps que nous.
+    liveOn: false, liveNom: '', liveFin: null, liveResultat: null,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
@@ -547,6 +549,7 @@
   function goHome() {
     G.paused = false;
     G.falseOut = false;
+    G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.challengeTarget = null;
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
@@ -599,6 +602,48 @@
     return true;
   }
 
+  /**
+   * Course en direct. On emprunte toute la plomberie du one-shot — chronos,
+   * splits, entree au TOP 500, absence de reprise — et on remplace seulement
+   * l'adversaire : au lieu d'une trace enregistree, quelqu'un qui court
+   * maintenant, a l'autre bout d'une WebSocket.
+   *
+   * Le depart n'est pas « dans trois secondes » mais « a telle date ». Le
+   * decompte est donc cale sur ce que la salle a annonce, converti en temps
+   * de jeu : les deux joueurs voient le meme 3-2-1 et partent ensemble, quelle
+   * que soit leur latence.
+   */
+  function startLive(races, opts) {
+    opts = opts || {};
+    G.mode = 'oneshot';
+    G.liveOn = true;
+    G.liveNom = opts.adversaire || '';
+    G.liveFin = null;
+    G.liveResultat = null;
+    G.shotRaces = races.slice();
+    G.shotIdx = 0;
+    G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;
+    G.runTime = 0; G.runSplits = []; G.runRank = null;
+    G.shotTraces = [];
+    G.challenge = null;
+    G.ghostSet = null; G.ghostSplits = []; G.ghostName = opts.adversaire || '';
+    G.ghostTime = 0;
+    G.raceKey = G.shotRaces[0];
+    G.race = RACES[G.raceKey];
+    buildLevel(G.shotLevel);
+    armLive(G.liveNom);
+    queueCuts([], 'count');
+    // Le decompte reste suspendu tant que la salle n'a pas donne l'heure.
+    G.countT = -99;
+  }
+
+  /** Cale le decompte sur le coup de pistolet annonce par la salle. */
+  function liveDepart(dansMs) {
+    if (!G.liveOn) return;
+    G.countT = 3 - Math.max(0, dansMs) / 1000;
+    G.state = 'count';
+  }
+
   function nextShotRace() {
     G.shotIdx++;
     if (G.shotIdx >= G.shotRaces.length) { G.state = 'winall'; return; }
@@ -630,10 +675,42 @@
    * elle il glisse le long du couloir comme un decor, avec elle on lit d'un
    * coup d'oeil s'il accelere ou s'il rentre dans le mur.
    */
+  /**
+   * Adversaire en direct : meme couloir que le fantome, meme rendu, mais
+   * pilote par le reseau au lieu d'une trace enregistree. Tout ce qui lit
+   * G.ghost — la camera, le classement, l'ecart affiche — continue de
+   * fonctionner sans rien savoir de la difference.
+   */
+  function armLive(nom) {
+    G.ghost = null;
+    const lane = 4;
+    const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
+    if (idx >= 0) G.runners.splice(idx, 1);
+    const r = new Runner(nom || 'ADVERSAIRE', lane, {
+      maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
+    });
+    r.isGhost = true; r.d = 0; r.v = 0;
+    G.ghost = { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
+                trace: [], step: REC_STEP, time: 0 };
+  }
+
+  /** Derniere position connue de l'adversaire, telle qu'annoncee par lui. */
+  function liveDist(d) {
+    const g = G.ghost;
+    if (!g || !g.live) return;
+    const dt = Math.max(0.02, G.elapsed - g.depuis);
+    if (d > g.cible) {
+      g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
+      g.cible = d;
+      g.depuis = G.elapsed;
+    }
+  }
+
   function ghostDistAt(t) {
     const g = G.ghost;
-    if (!g || t <= 0) return 0;
+    if (!g || g.live || t <= 0) return 0;
     const tr = g.trace, last = tr.length - 1;
+    if (last < 0) return 0;
     const x = t / g.step;
     if (x >= last) return tr[last] / 10;
     const i0 = Math.max(0, Math.floor(x));
@@ -645,7 +722,39 @@
   function stepGhost(dt) {
     const g = G.ghost;
     if (!g) return;
-    const r = g.runner, tr = g.trace;
+    const r = g.runner;
+    // En direct, les positions arrivent par paquets, dix fois par seconde au
+    // mieux. Sauter d'un paquet a l'autre ferait tressauter l'adversaire a
+    // chaque message : on extrapole doucement depuis la derniere position
+    // connue et sa vitesse, puis on glisse vers cette cible. Le resultat est
+    // une foulee continue, avec un retard de quelques centiemes — invisible a
+    // l'oeil, alors qu'un saut de 40 cm ne l'est pas.
+    if (g.live) {
+      const vmax = G.race.maxSpeed * 1.15;
+      // L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire :
+      // quand un paquet tarde, mieux vaut un adversaire legerement en retard
+      // qu'un adversaire qui file a vingt metres par seconde puis s'arrete
+      // net au paquet suivant.
+      const age = Math.min(0.4, Math.max(0, G.elapsed - g.depuis));
+      const vise = Math.min(g.cible + Math.min(g.vEst, vmax) * age,
+                            g.cible + vmax * age);
+      const avant = r.d;
+      r.d += (vise - r.d) * Math.min(1, dt * 11);
+      if (r.d < avant) r.d = avant;          // un adversaire ne recule jamais
+      // La vitesse sert a animer la foulee et a chiffrer l'ecart : elle doit
+      // etre lisse. Une difference brute d'une image a l'autre, avec des
+      // paquets irreguliers, donne des pics qui font battre les jambes n'importe
+      // comment et clignoter l'ecart affiche.
+      const brut = dt > 0 ? (r.d - avant) / dt : r.v;
+      r.v = r.v * 0.78 + Math.max(0, Math.min(vmax, brut)) * 0.22;
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = r.pitchAt();
+      if (!r.finished && r.d >= G.track.total) {
+        r.finished = true; r.finishTime = g.time || G.elapsed;
+      }
+      return;
+    }
+    const tr = g.trace;
     const last = tr.length - 1;
     const x = G.elapsed / g.step;
     if (x >= last) {
@@ -1399,7 +1508,13 @@
     for (const [r, g2, p] of vis) {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui
-      if (r.isGhost) { drawGhostTrail(ctx, r, m); ctx.globalAlpha = 0.42; }
+      // La trainee raconte une trace enregistree. En direct il n'y a rien a
+      // rejouer : l'adversaire est la, maintenant, et on le dessine plein.
+      if (r.isGhost) {
+        const live = G.ghost && G.ghost.live;
+        if (!live) drawGhostTrail(ctx, r, m);
+        ctx.globalAlpha = live ? 0.92 : 0.42;
+      }
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
@@ -1445,6 +1560,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    armLive, liveDist, startLive, liveDepart,
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,

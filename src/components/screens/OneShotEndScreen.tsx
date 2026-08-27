@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -31,7 +31,8 @@ function fmt(v: number | null | undefined, dnf: string) {
 }
 
 export function OneShotEndScreen() {
-  const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut } = useGameStore();
+  const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
+          liveOn, liveNom, liveResultat } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   const [name, setName] = useState(getSavedName());
@@ -173,6 +174,17 @@ export function OneShotEndScreen() {
     }
   };
 
+  // Course en direct : l'issue vient de la salle, pas du chrono local — c'est
+  // elle qui a vu les deux arrivees.
+  const live = !!liveOn && !!liveResultat;
+  const monRole = live && liveResultat.hote.id === liveResultat.moi ? 'hote' : 'invite';
+  const liveGagne = live && (
+    (monRole === 'hote' && liveResultat.issue === 'challenger') ||
+    (monRole === 'invite' && liveResultat.issue === 'opponent'));
+  const liveNul = live && liveResultat.issue === 'draw';
+  const monMs = live ? liveResultat[monRole].ms : 0;
+  const sonMs = live ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
+
   const dnf = N.t('dnf_short');
 
   return (
@@ -184,8 +196,10 @@ export function OneShotEndScreen() {
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
             <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
-              ${falseOut || (challenge && !beaten) ? 'text-destructive' : 'text-primary'}`}>
+              ${falseOut || (challenge && !beaten) || (live && !liveGagne && !liveNul)
+                ? 'text-destructive' : live && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
               {falseOut ? N.t('false_out')
+                : live ? N.t(liveGagne ? 'live_won' : liveNul ? 'live_tie' : 'live_lost')
                 : challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost')
                 : N.t('oneshot_done')}
             </h1>
@@ -204,6 +218,47 @@ export function OneShotEndScreen() {
               </div>
             )}
           </div>
+
+          {/* Course en direct : les deux chronos face a face. Le classement des
+              duels est alimente par la salle elle-meme, donc rien a envoyer
+              d'ici — seulement a montrer. */}
+          {live && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
+                ${liveGagne ? 'border-emerald-400/50 bg-emerald-400/[0.10]'
+                  : liveNul ? 'border-white/20 bg-white/5'
+                  : 'border-destructive/50 bg-destructive/10'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Radio className={`w-4 h-4 ${liveGagne ? 'text-emerald-400' : liveNul ? 'text-foreground' : 'text-destructive'}`} />
+                <span className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-muted-foreground">
+                  {N.t('live_vs', { n: liveNom || N.t('ghost_label') })}
+                </span>
+              </div>
+              <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs md:text-sm font-bold tracking-wide text-primary">{N.t('duel_you')}</span>
+                  <span className={`font-mono font-bold text-sm md:text-base ${liveGagne ? 'text-emerald-400' : 'text-foreground'}`}>
+                    {(monMs / 1000).toFixed(2)} s
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs md:text-sm font-bold tracking-wide text-cyan-300 truncate min-w-0">
+                    {liveNom || '—'}
+                  </span>
+                  <span className={`font-mono font-bold text-sm md:text-base ${liveGagne ? 'text-foreground' : 'text-destructive'}`}>
+                    {(sonMs / 1000).toFixed(2)} s
+                  </span>
+                </div>
+              </div>
+              {!liveNul && (
+                <span className="text-[10px] md:text-xs text-muted-foreground">
+                  {N.t('live_gap', { s: (Math.abs(monMs - sonMs) / 1000).toFixed(2) })}
+                </span>
+              )}
+            </motion.div>
+          )}
 
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce

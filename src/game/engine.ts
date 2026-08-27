@@ -60,6 +60,10 @@ export type GameState = {
   ghostOn: boolean;
   ghostD: number;
   ghostDone: boolean;
+  /** Course en direct : l'adversaire court en meme temps. */
+  liveOn: boolean;
+  liveNom: string;
+  liveResultat: any;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -275,6 +279,35 @@ export function resumeRace() {
   G.paused = false; gameStore.setState({ paused: false });
 }
 
+/**
+ * Salle de course en direct. Le moteur ignore tout du reseau : il expose sa
+ * position, et cette couche la transmet. Dix envois par seconde suffisent —
+ * l'adversaire est interpole a l'affichage, et un flux plus dense n'ajoute
+ * que du trafic.
+ */
+let salleLive: { position(d: number): void; fini(ms: number): void } | null = null;
+let prochainEnvoi = 0;
+let finEnvoyee = false;
+
+export function brancherSalle(s: typeof salleLive) {
+  salleLive = s;
+  prochainEnvoi = 0;
+  finEnvoyee = false;
+}
+
+function pousserPosition() {
+  if (!salleLive) return;
+  if (G.elapsed >= prochainEnvoi) {
+    prochainEnvoi = G.elapsed + 0.1;
+    salleLive.position(G.player.d);
+  }
+  if (!finEnvoyee && G.player.finished && G.player.finishTime != null) {
+    finEnvoyee = true;
+    salleLive.position(G.track.total);
+    salleLive.fini(G.player.finishTime * 1000);
+  }
+}
+
 export function updateLogic(dt: number) {
   // Course suspendue : le monde se fige, mais on continue a rendre l'image
   // et a alimenter React, sinon le panneau de sortie ne s'afficherait pas.
@@ -305,6 +338,10 @@ export function updateLogic(dt: number) {
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11 : 3.2);
     if (G.cut.t > 15.4) SprinterApp.nextCut();
   } else if (G.state === 'count') {
+    // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
+    // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
+    // ferait partir les deux joueurs a des instants differents.
+    if (G.liveOn && G.countT <= -90) { gameStore.setState({ state: G.state }); return; }
     const prev = Math.floor(G.countT);
     G.countT += dt;
     if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
@@ -331,6 +368,7 @@ export function updateLogic(dt: number) {
       }
     }
     SprinterApp.stepGhost(dt);
+    if (G.liveOn) pousserPosition();
 
     if (G.player.reaction !== null && !G.reactShown) {
       G.reactShown = true; G.reactFlash = 2.2;
@@ -391,5 +429,8 @@ export function updateLogic(dt: number) {
     ghostOn: !!G.ghost,
     ghostD: G.ghost ? G.ghost.runner.d : 0,
     ghostDone: G.ghost ? !!G.ghost.runner.finished : false,
+    liveOn: G.liveOn,
+    liveNom: G.liveNom,
+    liveResultat: G.liveResultat,
   });
 }
