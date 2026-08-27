@@ -3,6 +3,20 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
 } from './duels.js';
 export { SalleDirecte } from './salle.js';
+import {
+  ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
+  classementRelais, enregistrerRelais, equipe as equipeRelais,
+} from './relais.js';
+
+/**
+ * Porte du mode relais, cote serveur.
+ *
+ * Le mode est developpe mais pas ouvert. Passer cette constante a true, puis
+ * redeployer, rend les routes /relay/* disponibles — c'est ce qu'il faudra
+ * faire pour la semaine de tests. Le jeu a sa propre porte de son cote : les
+ * deux doivent etre ouvertes pour qu'un joueur voie quoi que ce soit.
+ */
+const RELAIS_OUVERT = false;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -391,6 +405,77 @@ export default {
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
       });
+    }
+
+    // ------------------------------------------------------------- relais
+    // Les equipes de relais. Le mode n'est pas encore ouvert : la porte se
+    // ferme ici AUSSI, pas seulement dans le jeu. Sans cela, une simple
+    // requete a la main permettrait de reserver des noms d'equipe avant
+    // l'ouverture — et un nom appartient a une composition pour toujours.
+    if (url.pathname.startsWith('/relay/')) {
+      if (!RELAIS_OUVERT) return json({ error: 'relais pas encore ouvert' }, 503);
+      const sous = url.pathname.slice('/relay/'.length);
+
+      if (sous === 'team' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { name, creator, members } = body || {};
+        const r = await creerEquipe(env.DB, {
+          createur: creator,
+          coequipiers: Array.isArray(members) ? members.slice(0, 8) : [],
+          nom: name,
+        });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'answer' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, name, accept } = body || {};
+        const code = String(id || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        const r = await repondre(env.DB, { id: code, joueur: name, accepte: !!accept });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'order' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, order } = body || {};
+        const code = String(id || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        const r = await ordonner(env.DB, { id: code, ordre: order });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'score' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, race_key, legs } = body || {};
+        const code = String(id || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        const r = await enregistrerRelais(env.DB, { team_id: code, race_key, legs });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'mine' && request.method === 'GET') {
+        return json(await mesEquipes(env.DB, url.searchParams.get('name') || ''));
+      }
+
+      if (sous === 'ranking' && request.method === 'GET') {
+        const race = url.searchParams.get('race') || '4x100';
+        return json({ race, classement: await classementRelais(env.DB, race) });
+      }
+
+      if (sous.startsWith('team/') && request.method === 'GET') {
+        const code = sous.slice('team/'.length).toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        await ensureRelayTables(env.DB);
+        const e = await equipeRelais(env.DB, code);
+        return e ? json({ equipe: e }) : json({ error: 'equipe introuvable' }, 404);
+      }
+
+      return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------ course en direct
