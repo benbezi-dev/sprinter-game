@@ -10,6 +10,7 @@ import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { GraduationCap } from 'lucide-react';
+import { NameChip } from './NameChip';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -64,6 +65,10 @@ export function TitleScreen() {
             <Globe className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
             <span className="font-bold text-xs md:text-sm text-foreground/90">{N.getLang().toUpperCase()}</span>
           </button>
+
+          {/* Le nom du joueur occupe le centre du bandeau, qui etait vide.
+              C'est le seul ecran que tout le monde traverse. */}
+          <NameChip />
 
           <button
             onClick={() => toggleAudio()}

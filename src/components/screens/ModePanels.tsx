@@ -6,6 +6,8 @@ import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { DUELS_OUVERTS } from '@/game/duels';
+import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
+import { GraduationCap } from 'lucide-react';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
@@ -21,7 +23,17 @@ export function OneShotPanel() {
     setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));
   };
 
-  const launch = () => {
+  // Le mode est peu utilise, et le premier obstacle est de comprendre a quoi
+  // il sert. On l'explique donc une fois, au moment ou l'on s'y interesse.
+  const [tuto, setTuto] = useState(false);
+  const vuDeja = useRef(false);
+  useEffect(() => {
+    if (vuDeja.current) return;
+    vuDeja.current = true;
+    if (!oneShotTutoVu()) setTuto(true);
+  }, []);
+
+  const partir = () => {
     if (!picked.length) return;
     // On garde l'ordre 100 / 200 / 400 quel que soit l'ordre des clics :
     // c'est l'ordre d'un vrai programme d'athletisme.
@@ -29,12 +41,27 @@ export function OneShotPanel() {
     SprinterApp.startOneShot(races, { levelIdx: level });
   };
 
+  const launch = partir;
+
+  const fermerTuto = (lancer: boolean) => {
+    marquerOneShotTutoVu();
+    setTuto(false);
+    if (lancer) partir();
+  };
+
   return (
     <div className="flex flex-col gap-3 md:gap-4">
+      {tuto && <OneShotTuto onClose={fermerTuto} />}
+
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-4">
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
-          {N.t('oneshot_desc')}
-        </p>
+        <button
+          onClick={() => setTuto(true)}
+          className="self-center flex items-center gap-1.5 text-[10px] md:text-xs font-bold
+                     tracking-widest text-muted-foreground hover:text-primary transition-colors"
+        >
+          <GraduationCap className="w-3.5 h-3.5" />
+          {N.t('os_tuto_open')}
+        </button>
 
         <div>
           <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary mb-2">
