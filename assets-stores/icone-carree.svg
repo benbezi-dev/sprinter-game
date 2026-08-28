@@ -1,0 +1,49 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    L'icone des stores.
+
+    Elle est carree et opaque, et ce n'est pas un detail de gout : Apple refuse
+    une icone qui porte un canal alpha ou ses propres coins arrondis, parce que
+    c'est iOS qui applique le masque. L'icone ronde du site, elle, laisse ses
+    coins transparents — la reprendre telle quelle aurait valu un rejet.
+
+    On reprend donc l'identite plutot que le fichier : le bleu de nuit du jeu,
+    les couloirs dores en diagonale comme sur la piste, et le coureur au
+    centre. La composition va jusqu'aux bords, de sorte que le masque d'iOS
+    comme celui d'Android puissent y mordre sans rien couper d'important.
+  -->
+  <defs>
+    <radialGradient id="fond" cx="35%" cy="28%" r="90%">
+      <stop offset="0%" stop-color="#22315c"/>
+      <stop offset="100%" stop-color="#060a14"/>
+    </radialGradient>
+    <linearGradient id="couloir" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F8CD4A" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#F8CD4A" stop-opacity="0.14"/>
+    </linearGradient>
+    <clipPath id="carre"><rect width="1024" height="1024"/></clipPath>
+  </defs>
+
+  <!-- Fond plein : aucune transparence nulle part. -->
+  <rect width="1024" height="1024" fill="#0a0f1c"/>
+  <rect width="1024" height="1024" fill="url(#fond)"/>
+
+  <g clip-path="url(#carre)">
+    <!-- Les couloirs, en diagonale, comme la piste vue de trois quarts. -->
+    <g fill="url(#couloir)" transform="rotate(-19 512 512)">
+      <rect x="-240" y="96"  width="1560" height="86"/>
+      <rect x="-240" y="392" width="1560" height="86"/>
+      <rect x="-240" y="688" width="1560" height="86"/>
+    </g>
+    <!-- Deux traits de vitesse, repris de l'icone ronde. -->
+    <g stroke="#5FD3E8" stroke-width="26" stroke-linecap="round" opacity="0.45">
+      <path d="M96 792 L232 735"/>
+      <path d="M68 678 L238 610"/>
+    </g>
+  </g>
+
+  <!-- Le coureur, au centre, assez grand pour rester lisible en 48 px. -->
+  <g transform="translate(512,512) scale(28) translate(-12,-12)">
+    <path fill="#F8CD4A" d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.7 12 16 13 17.49 13v-2c-1.5 0-2.8-.8-3.4-2l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+  </g>
+</svg>

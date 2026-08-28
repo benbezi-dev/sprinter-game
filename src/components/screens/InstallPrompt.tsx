@@ -2,11 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Share, Plus, X } from 'lucide-react';
+import { EST_NATIF } from '@/game/canal';
 
 const REFUS = 'sprinter_install_refuse';
 
 /** Deja lance depuis l'ecran d'accueil du telephone ? */
 function dejaInstalle() {
+  // Dans l'enveloppe native, le jeu EST l'application : il n'y a rien a
+  // installer, et proposer de passer par Safari renverrait vers un autre canal
+  // de distribution — absurde pour le joueur, et refuse par l'App Store.
+  if (EST_NATIF) return true;
   try {
     return window.matchMedia('(display-mode: standalone)').matches ||
       (navigator as any).standalone === true;

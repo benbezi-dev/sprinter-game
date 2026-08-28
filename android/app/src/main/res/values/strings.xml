@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sprinter</string>
+    <string name="title_activity_main">Sprinter</string>
+    <string name="package_name">dev.benbezi.sprinter</string>
+    <string name="custom_url_scheme">dev.benbezi.sprinter</string>
+</resources>

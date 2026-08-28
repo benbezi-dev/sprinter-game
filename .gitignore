@@ -15,3 +15,16 @@ suivi/
 
 # Secrets de developpement wrangler.
 worker/.dev.vars
+
+# Enveloppes natives : regenerees par `npx cap add` et `npx cap sync`, elles
+# pesent lourd et contiennent des chemins de machine. Les sources qui comptent
+# sont capacitor.config.ts et assets-stores/.
+ios/App/App/public/
+ios/App/Pods/
+ios/DerivedData/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+# Icônes PWA regenerees par @capacitor/assets a la racine.
+/icons/

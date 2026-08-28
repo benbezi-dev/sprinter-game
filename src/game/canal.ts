@@ -21,6 +21,27 @@
 export const EST_TEST = import.meta.env.VITE_CANAL === 'test';
 export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 
+/**
+ * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
+ *
+ * On interroge le global pose par Capacitor sans rien importer de lui : le
+ * build web ne doit pas embarquer une bibliotheque native dont il n'a que faire.
+ *
+ * Ce que cela change n'est pas cosmetique. Une application distribuee sur
+ * l'App Store ne doit pas renvoyer ses joueurs vers un autre canal
+ * d'installation — une banniere « ajoute le jeu a ton ecran d'accueil depuis
+ * Safari » y est a la fois absurde et un motif de rejet.
+ */
+export const EST_NATIF: boolean = (() => {
+  try {
+    const c = (window as any).Capacitor;
+    if (!c) return false;
+    return typeof c.isNativePlatform === 'function' ? !!c.isNativePlatform() : !!c.isNative;
+  } catch {
+    return false;
+  }
+})();
+
 const CLE = 'sprinter_acces_test';
 
 /** Le code d'acces range dans ce navigateur, s'il y en a un. */
