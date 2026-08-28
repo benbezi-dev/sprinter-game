@@ -6,6 +6,8 @@ import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
+import { RelaisPanel } from './RelaisPanel';
+import { EST_TEST } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap } from 'lucide-react';
@@ -191,6 +193,9 @@ export function ChallengePanel() {
       {DUELS_OUVERTS && <LivePanel />}
       {/* Le championnat n'apparait que si le joueur y est engage. */}
       {DUELS_OUVERTS && <ChampPanel />}
+      {/* Le relais n'est ouvert que sur le canal de test. En production,
+          EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
+      {EST_TEST && <RelaisPanel />}
 
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
         <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
