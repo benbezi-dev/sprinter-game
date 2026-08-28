@@ -30,11 +30,20 @@ export function TitleScreen() {
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
-  const [tour, setTour] = useState(() => !tourVu());
+  // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
+  //
+  // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
+  // de precis, souvent parce qu'un ami vient d'envoyer son chrono. Le duel se
+  // joue entre gens qui savent deja courir : on ne les retient pas sur un
+  // ecran d'explication. La visite reste a portee depuis l'accueil.
+  //
+  // Le relais fera exception le jour venu — le passage de temoin est un geste
+  // neuf, qui ne se devine pas et qu'il faudra montrer.
+  const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl());
+  const [tour, setTour] = useState(() => !tourVu() && !venuPourUnDuel);
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
-  const [tab, setTab] = useState<Tab>(
-    () => (codeFromUrl() || codeDirectUrl() ? 'versus' : 'career'));
+  const [tab, setTab] = useState<Tab>(() => (venuPourUnDuel ? 'versus' : 'career'));
 
   // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel
