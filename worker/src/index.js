@@ -5,6 +5,10 @@ import {
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 import {
+  ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
+  ouvrirNational, titresDe, continentDe,
+} from './championnats.js';
+import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
   fantomesRelais, fantomeRelais,
@@ -19,6 +23,13 @@ import {
  * deux doivent etre ouvertes pour qu'un joueur voie quoi que ce soit.
  */
 const RELAIS_OUVERT = false;
+
+/**
+ * Porte des championnats. Meme principe que le relais : le code est livre,
+ * l'acces ne l'est pas. Les routes /champ/* repondent 503 tant que c'est
+ * ferme, et le jeu a sa propre porte de son cote.
+ */
+const CHAMPIONNATS_OUVERTS = false;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -334,6 +345,12 @@ export default {
       return json({ race, by, entries });
     }
 
+    // Le pays d'un joueur, vu par Cloudflare sur la requete elle-meme. On le
+    // note au passage plutot que de le demander : personne n'a envie de
+    // remplir un formulaire pour courir un 100 metres. Le joueur peut le
+    // corriger, et son choix ne se fait jamais ecraser.
+    const paysVu = (request.cf && request.cf.country) || null;
+
     if (url.pathname === '/submit' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -341,6 +358,7 @@ export default {
       const { device_id, race_key, name, time_ms, best_split_ms, trace } = body || {};
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
       const t = Math.round(Number(time_ms));
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
@@ -434,6 +452,51 @@ export default {
         total_ms: row.time_ms,
         trace: JSON.parse(row.trace),
       });
+    }
+
+    // ------------------------------------------------------- championnats
+    if (url.pathname.startsWith('/champ/')) {
+      if (!CHAMPIONNATS_OUVERTS) return json({ error: 'championnats pas encore ouverts' }, 503);
+      const sous = url.pathname.slice('/champ/'.length);
+
+      // Ou en est le monde : quels pays peuvent tenir leur championnat.
+      if (sous === 'pays' && request.method === 'GET') {
+        return json({ pays: await paysEligibles(env.DB) });
+      }
+
+      // Le joueur corrige son pays.
+      if (sous === 'pays' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, name, pays } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const key = cleanName(name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await choisirPays(env.DB, key, pays);
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'titres' && request.method === 'GET') {
+        const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+        return json({ titres: key ? await titresDe(env.DB, key) : [] });
+      }
+
+      // Ouvrir une edition nationale. Reserve a l'exploitation : c'est un acte
+      // de calendrier, pas une action de joueur.
+      if (sous === 'ouvrir' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { pays, debut } = body || {};
+        const t = Number(debut);
+        if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
+        const r = await ouvrirNational(env.DB, { pays, debutSamedi: t });
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------------------- relais
