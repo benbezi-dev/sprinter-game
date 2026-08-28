@@ -86,10 +86,33 @@ export async function verifierAcces(db, code, ctx) {
   return { code: r.code, nom: r.nom };
 }
 
-/** Ouvre un acces au nom de quelqu'un. */
-export async function creerAcces(db, nom) {
+/**
+ * Ouvre un acces au nom de quelqu'un.
+ *
+ * `codeVoulu` permet de choisir le code plutot que de le subir. Un code qu'on
+ * a choisi se donne au telephone sans le faire repeter — et c'est bien ainsi
+ * qu'un acces de test circule, de vive voix. Sans code voulu, on en tire un.
+ */
+export async function creerAcces(db, nom, codeVoulu) {
   await ensureAccesTables(db);
   const n = String(nom || '').trim().slice(0, 40) || 'sans nom';
+
+  if (codeVoulu) {
+    const c = String(codeVoulu).trim().toUpperCase();
+    // Meme forme que celle acceptee a l'entree : ce qui ne peut pas etre saisi
+    // ne doit pas pouvoir etre cree.
+    if (!/^[A-Z0-9]{4,12}$/.test(c)) {
+      return { erreur: 'code invalide : 4 a 12 lettres ou chiffres' };
+    }
+    const deja = await db.prepare(
+      `SELECT code FROM acces_test WHERE code = ?`).bind(c).first();
+    if (deja) return { erreur: 'ce code est deja pris', code: c };
+    await db.prepare(
+      `INSERT INTO acces_test (code, nom, cree_le) VALUES (?, ?, ?)`
+    ).bind(c, n, Date.now()).run();
+    return { code: c, nom: n, choisi: true };
+  }
+
   for (let essai = 0; essai < 6; essai++) {
     const code = tirerCode();
     try {

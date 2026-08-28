@@ -406,8 +406,10 @@ export default {
         }
         if (quoi === 'creer' && request.method === 'POST') {
           let body; try { body = await request.json(); } catch { body = {}; }
-          const r = await creerAcces(production, (body || {}).nom);
-          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+          // `code` est facultatif : sans lui le serveur en tire un, avec lui
+          // on choisit le sien — plus facile a dicter a celui qui le recoit.
+          const r = await creerAcces(production, (body || {}).nom, (body || {}).code);
+          return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
         }
         if (quoi === 'revoquer' && request.method === 'POST') {
           let body; try { body = await request.json(); } catch { body = {}; }
