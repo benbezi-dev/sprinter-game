@@ -25,9 +25,14 @@
 export const DUEL_INIT_WIN = 1, DUEL_INIT_LOSS = -2;
 export const DUEL_RECV_WIN = 2, DUEL_RECV_LOSS = -1;
 export const DUEL_DRAW = 0;
-let duelReady = false;
+// Les tables sont creees a la demande, et on memorise qu'elles le sont pour
+// ne pas repayer un CREATE IF NOT EXISTS a chaque requete. Cette memoire est
+// tenue PAR BASE : le worker en sert deux — production et test — et un simple
+// booleen mentait a la seconde, qui restait sans tables parce que la premiere
+// avait deja eteint la migration.
+const duelReady = new WeakSet();
 export async function ensureDuelTables(db) {
-  if (duelReady) return;
+  if (duelReady.has(db)) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS duel_players (
       name_key TEXT PRIMARY KEY,
@@ -66,7 +71,7 @@ export async function ensureDuelTables(db) {
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }
-  duelReady = true;
+  duelReady.add(db);
 }
 
 export async function touchDuelPlayer(db, key, name) {

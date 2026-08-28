@@ -47,6 +47,7 @@ export class SalleRelais {
   constructor(state, env) {
     this.state = state;
     this.env = env;
+    this.test = false;         // salle du canal de test : ecrit ailleurs
     /** @type {Map<WebSocket, {id,nom,cle,relais,pret,d,parti,fini}>} */
     this.joueurs = new Map();
     this.equipe = null;                // code de l'equipe
@@ -114,11 +115,23 @@ export class SalleRelais {
     return { debut, fin: debut + ZONE };
   }
 
+  /**
+   * La base a laquelle cette salle parle.
+   *
+   * Une salle du canal de test ne doit jamais toucher au classement reel : ses
+   * equipes, ses chronos et ses fantomes vivent dans la base de test.
+   */
+  base() {
+    return this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+  }
+
   // --- connexion -----------------------------------------------------------
 
   async fetch(request) {
     const url = new URL(request.url);
     this.equipe = this.equipe || (url.searchParams.get('team') || '').toUpperCase();
+    // Le canal est pose par le worker, jamais par le client.
+    if (url.searchParams.get('canal') === 'test') this.test = true;
 
     if (url.pathname.endsWith('/etat')) {
       return new Response(JSON.stringify({ existe: this.joueurs.size > 0, ...this.vue() }),
@@ -137,8 +150,8 @@ export class SalleRelais {
     // Le relais de chacun vient de l'equipe, pas du client : on ne choisit
     // pas son rang en se connectant.
     let relais = 0;
-    if (this.env.DB && this.equipe) {
-      const e = await chargerEquipe(this.env.DB, this.equipe);
+    if (this.base() && this.equipe) {
+      const e = await chargerEquipe(this.base(), this.equipe);
       const m = e && e.membres.find(x => x.cle === cle && x.etat === 'in');
       if (!m || !m.relais) return new Response('pas dans cette equipe', { status: 403 });
       relais = m.relais;
@@ -340,12 +353,12 @@ export class SalleRelais {
 
   async ecrire() {
     try {
-      if (!this.env.DB || !this.equipe || this.total == null) return;
+      if (!this.base() || !this.equipe || this.total == null) return;
       // Les quatre temps de portion ne sont pas encore transmis par les
       // clients : on inscrit le cumul reparti, la course entiere etant la
       // seule chose que le serveur a reellement chronometree.
       const part = Math.round(this.total / TAILLE);
-      await enregistrerRelais(this.env.DB, {
+      await enregistrerRelais(this.base(), {
         team_id: this.equipe, race_key: this.epreuve,
         legs: [part, part, part, this.total - 3 * part],
       });

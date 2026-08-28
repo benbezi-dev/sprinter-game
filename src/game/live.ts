@@ -17,6 +17,7 @@
 //    la physique tourne chez lui. Le serveur borne ce qu'il accepte.
 
 import { getSavedName } from './leaderboard';
+import { avecAcces } from './canal';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
@@ -115,7 +116,9 @@ export class Salle {
       races: epreuves.join(','),
       level: String(niveau),
     });
-    const ws = new WebSocket(`${WS_BASE}/live/${this.code}?${q}`);
+    // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
+    // passe donc par la requete. Sans lui, la salle est celle de production.
+    const ws = new WebSocket(avecAcces(`${WS_BASE}/live/${this.code}?${q}`));
     this.ws = ws;
 
     ws.onopen = () => {

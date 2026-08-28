@@ -17,22 +17,22 @@ import {
   fantomesRelais, fantomeRelais,
 } from './relais.js';
 
-/**
- * Porte du mode relais, cote serveur.
- *
- * Le mode est developpe mais pas ouvert. Passer cette constante a true, puis
- * redeployer, rend les routes /relay/* disponibles — c'est ce qu'il faudra
- * faire pour la semaine de tests. Le jeu a sa propre porte de son cote : les
- * deux doivent etre ouvertes pour qu'un joueur voie quoi que ce soit.
- */
-const RELAIS_OUVERT = false;
+import {
+  verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
+} from './acces.js';
 
 /**
- * Porte des championnats. Meme principe que le relais : le code est livre,
- * l'acces ne l'est pas. Les routes /champ/* repondent 503 tant que c'est
- * ferme, et le jeu a sa propre porte de son cote.
+ * Portes du relais et des championnats.
+ *
+ * Elles ne sont plus des constantes : ces modes sont ouverts sur le canal de
+ * test et fermes en production. Un seul deploiement sert les deux, et c'est le
+ * code d'acces presente par l'appelant qui decide de quel cote il se trouve.
+ *
+ * Le jour ou l'on voudra les ouvrir a tout le monde, il suffira de renvoyer
+ * true ici sans condition.
  */
-const CHAMPIONNATS_OUVERTS = false;
+const relaisOuvert = canal => canal.test;
+const championnatsOuverts = canal => canal.test;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -109,16 +109,39 @@ function cleanTraces(v, nRaces) {
 // Migration paresseuse : la table scores existe depuis longtemps, on lui
 // ajoute les colonnes du fantome au premier passage. ALTER TABLE echoue si la
 // colonne est deja la — c'est le cas nominal, on ignore.
-let scoresReady = false;
+// Les tables sont creees a la demande, et on memorise qu'elles le sont pour
+// ne pas repayer un CREATE IF NOT EXISTS a chaque requete. Cette memoire est
+// tenue PAR BASE : le worker en sert deux — production et test — et un simple
+// booleen mentait a la seconde, qui restait sans tables parce que la premiere
+// avait deja eteint la migration.
+const scoresReady = new WeakSet();
 async function ensureScoreGhost(db) {
-  if (scoresReady) return;
+  if (scoresReady.has(db)) return;
+  // La table des scores a longtemps ete creee a la main, au demarrage du
+  // projet : le code ne savait que lui ajouter des colonnes. Cela tenait tant
+  // qu'il n'y avait qu'une base — sur une base neuve, chaque route qui la
+  // touche echouait sans rien dire, l'ALTER TABLE etant deja avale par le
+  // try/catch. On la cree donc ici, comme toutes les autres.
+  try {
+    await db.prepare(`CREATE TABLE IF NOT EXISTS scores (
+      device_id TEXT NOT NULL,
+      race_key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      time_ms INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      best_split_ms INTEGER NOT NULL DEFAULT 0,
+      trace TEXT,
+      trace_ms INTEGER,
+      PRIMARY KEY (device_id, race_key)
+    )`).run();
+  } catch (e) { /* deja la */ }
   for (const sql of [
     `ALTER TABLE scores ADD COLUMN trace TEXT`,
     `ALTER TABLE scores ADD COLUMN trace_ms INTEGER`,
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }
-  scoresReady = true;
+  scoresReady.add(db);
 }
 
 // Le TOP 500 classe le meilleur chrono realise sur UNE course, pas le cumul
@@ -186,9 +209,9 @@ async function getRank(db, race, splitMs) {
 // dans la journee compte pour dix passages mais un seul visiteur. Rien de
 // nominatif n'est stocke, seulement l'identifiant anonyme deja utilise par le
 // classement.
-let visitsReady = false;
+const visitsReady = new WeakSet();
 async function ensureVisitTable(db) {
-  if (visitsReady) return;
+  if (visitsReady.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS visits (
     day TEXT NOT NULL,
     device_id TEXT NOT NULL,
@@ -196,17 +219,17 @@ async function ensureVisitTable(db) {
     last_at INTEGER NOT NULL,
     PRIMARY KEY (day, device_id)
   )`).run();
-  visitsReady = true;
+  visitsReady.add(db);
 }
 
 // Un defi peut viser quelqu'un en particulier. La colonne est ajoutee apres
 // coup sur une table qui existe deja, d'ou la migration paresseuse.
-let targetReady = false;
+const targetReady = new WeakSet();
 async function ensureChallengeTarget(db) {
-  if (targetReady) return;
+  if (targetReady.has(db)) return;
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
-  targetReady = true;
+  targetReady.add(db);
 }
 
 // Historique des courses. Indexe sur le nom autant que sur l'appareil : c'est
@@ -215,9 +238,9 @@ async function ensureChallengeTarget(db) {
 // meme verraient donc un historique commun. Compromis assume : c'est deja
 // l'identite publique du classement, et l'alternative serait un compte.
 const HIST_PER_DEVICE = 300;
-let racesReady = false;
+const racesReady = new WeakSet();
 async function ensureRaceTable(db) {
-  if (racesReady) return;
+  if (racesReady.has(db)) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS races (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,16 +256,16 @@ async function ensureRaceTable(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_name ON races(name_key, race_key, created_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_device ON races(device_id, race_key, created_at)`),
   ]);
-  racesReady = true;
+  racesReady.add(db);
 }
 
 // Un nom appartient a quelqu'un, et cet appartenance se prouve par un code
 // court. C'est ce qui remplace un compte : pas de tiers, pas d'e-mail, pas
 // d'ecran de consentement — juste de quoi relier ses appareils et empecher
 // qu'on prenne son nom.
-let joueursReady = false;
+const joueursReady = new WeakSet();
 async function ensurePlayerTables(db) {
-  if (joueursReady) return;
+  if (joueursReady.has(db)) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS players (
       name_key TEXT PRIMARY KEY,
@@ -261,7 +284,7 @@ async function ensurePlayerTables(db) {
   // ont reserve leur nom.
   try { await db.prepare(`ALTER TABLE players ADD COLUMN insta TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
-  joueursReady = true;
+  joueursReady.add(db);
 }
 
 /**
@@ -330,11 +353,75 @@ async function attemptsFor(db, id) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
       return cors(new Response(null, { status: 204 }));
+    }
+
+    // ------------------------------------------------------------- le canal
+    //
+    // Un seul worker sert deux mondes. Le code d'acces presente par l'appelant
+    // decide duquel : sans code valide on est en production, avec on est sur le
+    // canal de test, ou tout est ouvert.
+    //
+    // La verification se fait toujours contre la base de production, qui tient
+    // la liste des acces — sans quoi on ne pourrait plus rien verifier apres
+    // avoir bascule.
+    const production = env.DB;
+    const codeDonne = request.headers.get('X-Sprinter-Test')
+      || url.searchParams.get('acces') || '';
+    const acces = codeDonne && production
+      ? await verifierAcces(production, codeDonne, ctx) : null;
+    const canal = { test: !!acces, nom: acces ? acces.nom : null };
+
+    // Les quatre-vingt-treize routes qui suivent parlent a `env.DB` sans avoir
+    // a savoir sur quel canal elles tournent. On leur passe donc un env dont DB
+    // pointe deja sur la bonne base : une seule ligne decide, plutot que
+    // quatre-vingt-treize occasions d'en oublier une.
+    if (canal.test && env.DB_TEST) env = { ...env, DB: env.DB_TEST };
+
+    // ------------------------------------------------------ acces au test
+    if (url.pathname.startsWith('/test/')) {
+      const sous = url.pathname.slice('/test/'.length);
+
+      // Le code est-il bon ? Le jeu s'en sert pour savoir s'il ouvre sa porte.
+      if (sous === 'entrer' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const r = await verifierAcces(production, (body || {}).code, ctx);
+        return r ? json({ ok: true, nom: r.nom })
+                 : json({ error: 'code refuse' }, 403);
+      }
+
+      // Administration. Sans le secret ADMIN_CLE pose sur le worker, tout ici
+      // repond 403 : ferme par defaut plutot qu'ouvert par oubli.
+      if (sous.startsWith('admin/')) {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        const quoi = sous.slice('admin/'.length);
+
+        if (quoi === 'liste' && request.method === 'GET') {
+          return json({ acces: await listerAcces(production) });
+        }
+        if (quoi === 'creer' && request.method === 'POST') {
+          let body; try { body = await request.json(); } catch { body = {}; }
+          const r = await creerAcces(production, (body || {}).nom);
+          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        }
+        if (quoi === 'revoquer' && request.method === 'POST') {
+          let body; try { body = await request.json(); } catch { body = {}; }
+          const r = await revoquerAcces(production, (body || {}).code);
+          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        }
+        if (quoi === 'rendre' && request.method === 'POST') {
+          let body; try { body = await request.json(); } catch { body = {}; }
+          const r = await rendreAcces(production, (body || {}).code);
+          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        }
+      }
+
+      return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------------- classement
@@ -459,7 +546,9 @@ export default {
 
     // ------------------------------------------------------- championnats
     if (url.pathname.startsWith('/champ/')) {
-      if (!CHAMPIONNATS_OUVERTS) return json({ error: 'championnats pas encore ouverts' }, 503);
+      if (!championnatsOuverts(canal)) {
+        return json({ error: 'championnats reserves au canal de test' }, 403);
+      }
       const sous = url.pathname.slice('/champ/'.length);
 
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
@@ -576,7 +665,9 @@ export default {
     // requete a la main permettrait de reserver des noms d'equipe avant
     // l'ouverture — et un nom appartient a une composition pour toujours.
     if (url.pathname.startsWith('/relay/')) {
-      if (!RELAIS_OUVERT) return json({ error: 'relais pas encore ouvert' }, 503);
+      if (!relaisOuvert(canal)) {
+        return json({ error: 'relais reserve au canal de test' }, 403);
+      }
       const sous = url.pathname.slice('/relay/'.length);
 
       if (sous === 'team' && request.method === 'POST') {
@@ -650,7 +741,8 @@ export default {
         const cible = new URL(request.url);
         cible.pathname = tail === 'etat' ? '/etat' : '/ws';
         cible.searchParams.set('team', code);
-        const id = env.SALLES_RELAIS.idFromName('R-' + code);
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RT-' : 'R-') + code);
         const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
         if (rep.status === 101) return rep;
         return cors(new Response(rep.body, { status: rep.status,
@@ -693,8 +785,14 @@ export default {
       const cible = new URL(request.url);
       cible.pathname = sous === 'etat' ? '/etat' : '/ws';
       cible.searchParams.set('code', code);
+      // Le canal voyage jusqu'a la salle : c'est elle qui ecrit le resultat du
+      // duel, et elle doit l'ecrire dans la bonne base.
+      if (canal.test) cible.searchParams.set('canal', 'test');
 
-      const id = env.SALLES.idFromName(code);
+      // Deux salles portant le meme code, une de test et une de production, ne
+      // doivent jamais etre le meme objet — sans quoi deux joueurs qui ne se
+      // sont rien demande se retrouveraient sur la meme piste.
+      const id = env.SALLES.idFromName(canal.test ? 'T-' + code : code);
       const reponse = await env.SALLES.get(id).fetch(new Request(cible, request));
       // Une reponse 101 porte une WebSocket : on la rend telle quelle, sans
       // toucher aux en-tetes, sinon la poignee de main echoue.

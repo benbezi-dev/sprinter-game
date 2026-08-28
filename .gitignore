@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Le build de la version de test, produit par le workflow.
+dist-test/
 *.tsbuildinfo
 .DS_Store
 worker/node_modules/
@@ -10,3 +12,6 @@ worker/.wrangler/
 suivi/
 # Configuration locale de l'outillage : chemins absolus propres a la machine.
 .claude/
+
+# Secrets de developpement wrangler.
+worker/.dev.vars

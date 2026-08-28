@@ -7,6 +7,17 @@ binding = "DB"
 database_name = "sprinter-leaderboard"
 database_id = "67256277-9486-4e46-96e7-337bf789a327"
 
+# La base du canal de test. Elle existe pour une raison simple : la version de
+# test ouvre tout, y compris les duels, et les parties qu'on y joue n'ont rien
+# a faire dans le classement reel. Deux bases plutot qu'une colonne « canal »
+# sur chaque table, parce qu'il suffirait d'oublier un seul filtre quelque part
+# pour qu'une partie de test remonte au classement — et on ne s'en apercevrait
+# qu'apres.
+[[d1_databases]]
+binding = "DB_TEST"
+database_name = "sprinter-leaderboard-test"
+database_id = "94531930-4cf2-41ea-9f91-7acbc82599e5"
+
 # Une salle de course en direct par partie. Un Durable Object est le seul
 # moyen d'avoir un point de rendez-vous unique et cohérent : deux joueurs qui
 # se défient doivent tomber sur le MÊME objet, quel que soit le datacentre qui

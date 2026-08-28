@@ -15,6 +15,8 @@ import { useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
+import { EST_TEST } from '@/game/canal';
+import { PorteTest } from '@/components/screens/PorteTest';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
@@ -73,6 +75,9 @@ function MainGame() {
 
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
+      {/* La porte de la version de test. En production, EST_TEST vaut false en
+          dur et le bundler retire la porte comme tout ce qu'elle amene. */}
+      {EST_TEST && <PorteTest />}
       <GameCanvas />
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">

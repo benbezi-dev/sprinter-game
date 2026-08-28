@@ -81,6 +81,7 @@ export class SalleDirecte {
     this.ordre = [];           // les participants dans l'ordre des couloirs
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
+    this.test = false;         // salle du canal de test : ecrit ailleurs
     this.code = '';            // le code de la salle, pose au premier appel
     this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
@@ -148,6 +149,9 @@ export class SalleDirecte {
     // sous lequel on l'a adresse, et il en a besoin pour identifier la
     // rencontre au classement.
     this.code = this.code || (url.searchParams.get('code') || '').toUpperCase();
+    // Le canal est pose par le worker, jamais par le client : une salle de test
+    // ecrit son resultat dans la base de test, et nulle part ailleurs.
+    if (url.searchParams.get('canal') === 'test') this.test = true;
 
     // Consultation sans WebSocket : sert au client a savoir si un code existe
     // avant d'ouvrir quoi que ce soit.
@@ -351,10 +355,11 @@ export class SalleDirecte {
 
   async ecrire(hote, invite) {
     try {
-      if (!this.env.DB || !this.code) return;
+      const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+      if (!base || !this.code) return;
       // Prefixe distinct : un code de salle et un code de defi vivent dans le
       // meme espace de cles, et rien ne garantit qu'ils ne se croisent jamais.
-      await appliquerDuel(this.env.DB, {
+      await appliquerDuel(base, {
         id: 'LIVE-' + this.code,
         challengerName: hote.nom,
         opponentName: invite.nom,

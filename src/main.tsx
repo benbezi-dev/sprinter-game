@@ -2,8 +2,14 @@ import { createRoot } from 'react-dom/client';
 
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { brancherAcces } from '@/game/canal';
 
 import './index.css';
+
+// Avant tout le reste : sur le canal de test, aucune requete ne doit partir
+// sans son code d'acces — sinon elle atterrirait dans la base de production.
+// Sans effet en production, ou la fonction se reduit a un retour immediat.
+brancherAcces();
 
 // Service worker : rend le jeu installable sur le telephone, et jouable hors
 // ligne. Enregistre apres le chargement pour ne pas disputer la bande passante

@@ -1,8 +1,17 @@
 // Un championnat de France complet, contre le vrai serveur.
 const B = 'http://127.0.0.1:8788';
-const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
   body: JSON.stringify(b) }).then(r => r.json());
-const get = u => fetch(B + u).then(r => r.json());
+const get = u => fetch(B + u, { headers: H }).then(r => r.json());
+
+// Les routes des championnats sont reservees au canal de test : le harnais se
+// procure un acces comme n'importe quel appelant, puis le presente a chaque
+// requete.
+const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
+const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
+  body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
+const H = { 'X-Sprinter-Test': _acces.code };
+
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';
 
 // Chaque joueur a un niveau intrinseque tire de son rang, plus du bruit :

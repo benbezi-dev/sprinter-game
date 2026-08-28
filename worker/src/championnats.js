@@ -18,6 +18,9 @@ import {
   ANNONCES,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
+// Les championnats lisent le classement des duels : sur une base neuve, cette
+// table doit exister avant qu'on la joigne, sans quoi la requete echoue.
+import { ensureDuelTables } from './duels.js';
 
 /** Le continent d'un pays. Table courte : on n'y met que ce qu'on utilise. */
 const CONTINENTS = {
@@ -85,9 +88,14 @@ export function continentDe(pays) {
   return PAYS_CONTINENT[String(pays || '').toUpperCase()] || null;
 }
 
-let pret = false;
+// Les tables sont creees a la demande, et on memorise qu'elles le sont pour
+// ne pas repayer un CREATE IF NOT EXISTS a chaque requete. Cette memoire est
+// tenue PAR BASE : le worker en sert deux — production et test — et un simple
+// booleen mentait a la seconde, qui restait sans tables parce que la premiere
+// avait deja eteint la migration.
+const pret = new WeakSet();
 export async function ensureChampTables(db) {
-  if (pret) return;
+  if (pret.has(db)) return;
   await db.batch([
     // Le pays d'un joueur. `source` dit d'ou il vient : 'geo' quand c'est
     // Cloudflare qui l'a vu, 'choix' quand le joueur l'a corrige — et un choix
@@ -178,7 +186,7 @@ export async function ensureChampTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_fil ON champ_annonces(id)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_zone ON champ_annonces(zone, id)`),
   ]);
-  pret = true;
+  pret.add(db);
 }
 
 /**
@@ -244,6 +252,7 @@ export async function choisirPays(db, nameKey, pays) {
 /** Combien de joueurs classes et actifs un pays compte-t-il ? */
 export async function effectifPays(db, pays, fenetreJours) {
   await ensureChampTables(db);
+  await ensureDuelTables(db);
   const depuis = Date.now() - fenetreJours * 24 * 3600 * 1000;
   const r = await db.prepare(
     `SELECT COUNT(*) AS n
@@ -256,6 +265,7 @@ export async function effectifPays(db, pays, fenetreJours) {
 /** Les pays capables de tenir leur championnat ce cycle-ci. */
 export async function paysEligibles(db) {
   await ensureChampTables(db);
+  await ensureDuelTables(db);
   const cfg = ECHELONS.national;
   const depuis = Date.now() - cfg.fenetreActiviteJours * 24 * 3600 * 1000;
   const { results } = await db.prepare(

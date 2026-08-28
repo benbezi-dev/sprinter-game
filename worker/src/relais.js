@@ -63,9 +63,14 @@ export function cleComposition(noms) {
   return [...new Set(noms.map(cle).filter(Boolean))].sort().join('');
 }
 
-let pret = false;
+// Les tables sont creees a la demande, et on memorise qu'elles le sont pour
+// ne pas repayer un CREATE IF NOT EXISTS a chaque requete. Cette memoire est
+// tenue PAR BASE : le worker en sert deux — production et test — et un simple
+// booleen mentait a la seconde, qui restait sans tables parce que la premiere
+// avait deja eteint la migration.
+const pret = new WeakSet();
 export async function ensureRelayTables(db) {
-  if (pret) return;
+  if (pret.has(db)) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS relay_teams (
       id TEXT PRIMARY KEY,
@@ -111,7 +116,7 @@ export async function ensureRelayTables(db) {
   // Colonne ajoutee apres coup, comme ailleurs : la table peut deja exister.
   try { await db.prepare(`ALTER TABLE relay_scores ADD COLUMN traces TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
-  pret = true;
+  pret.add(db);
 }
 
 /**

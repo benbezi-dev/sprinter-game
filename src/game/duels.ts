@@ -6,13 +6,17 @@
 // paie +2 / -1. La somme reste nulle a chaque duel.
 
 import { getDeviceId, getSavedName } from './leaderboard';
+import { EST_TEST } from './canal';
 
 /**
  * Portes des duels. A false, les trois entrees disparaissent — accueil, fin de
  * course, et l'annonce du resultat a celui qui a lance le defi — sans autre
  * changement : le code reste livre, seul l'acces bascule.
  */
-export const DUELS_OUVERTS = false;
+// Ferme en production jusqu'a l'ouverture annoncee ; toujours ouvert sur le
+// canal de test, qui existe pour essayer ce qui n'est pas encore sorti.
+const OUVERT_EN_PRODUCTION = false;
+export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
