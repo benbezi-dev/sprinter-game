@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { User, Check, Loader2, KeyRound, X, Instagram } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram, Unlink } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
-import { claimName, savedCode, lierInstagram, instagramDe } from '@/game/identity';
+import { claimName, savedCode, lierInstagram, instagramDe, lienInstagram } from '@/game/identity';
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -26,7 +26,10 @@ export function NameChip() {
   const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'ok'>('repos');
   const [code, setCode] = useState(savedCode());
   const [insta, setInsta] = useState('');
-  const [instaEtat, setInstaEtat] = useState<'repos' | 'envoi' | 'lie' | 'bad' | 'sansnom' | 'pasatoi'>('repos');
+  // Ce qui est reellement lie, distinct de ce qu'on tape : sans cette
+  // distinction, le bouton ne saurait pas s'il doit lier ou delier.
+  const [lie, setLie] = useState('');
+  const [instaEtat, setInstaEtat] = useState<'repos' | 'envoi' | 'lie' | 'delie' | 'bad' | 'sansnom' | 'pasatoi'>('repos');
 
   // Le nom peut aussi etre pose ailleurs — au bandeau de record, a la fin
   // d'un one shot. On le relit en revenant a l'accueil, sinon la puce
@@ -38,14 +41,28 @@ export function NameChip() {
     setSaisie(getSavedName()); setEtat('repos'); setInstaEtat('repos');
     // On rappelle le pseudo deja lie, pour ne pas le faire retaper.
     const n = getSavedName();
-    if (n) instagramDe(n).then(v => { if (v) setInsta(v); });
+    setLie(''); setInsta('');
+    if (n) instagramDe(n).then(v => { if (v) { setLie(v); setInsta(v); } });
   }, [ouvert]);
 
-  const lierInsta = async () => {
-    const v = insta.trim();
+  /**
+   * Le meme bouton lie et delie, selon l'etat.
+   *
+   * Delier, c'est envoyer un pseudo vide : le serveur en fait un NULL, et le
+   * profil disparait du TOP 500. Rien d'autre ne change — ni le nom, ni le
+   * code de recuperation, ni les chronos.
+   */
+  const basculerInsta = async () => {
+    const delier = !!lie;
+    const v = delier ? '' : insta.trim();
+    if (!delier && v.length < 1) return;
     setInstaEtat('envoi');
     const r = await lierInstagram(v);
-    if (r.etat === 'ok') { setInsta(r.insta || ''); setInstaEtat('lie'); }
+    if (r.etat === 'ok') {
+      setLie(r.insta || '');
+      setInsta(r.insta || '');
+      setInstaEtat(r.insta ? 'lie' : 'delie');
+    }
     else if (r.etat === 'sans-nom') setInstaEtat('sansnom');
     else if (r.etat === 'pas-a-toi') setInstaEtat('pasatoi');
     else setInstaEtat('bad');
@@ -138,33 +155,54 @@ export function NameChip() {
                 <Instagram className="w-3 h-3" />{N.t('insta_title')}
               </span>
               <div className="flex gap-2">
-                <span className="flex items-center px-2 rounded-l-xl bg-black/35 border border-r-0 border-white/10 text-muted-foreground text-sm">@</span>
-                <input
-                  value={insta}
-                  onChange={e => { setInsta(e.target.value); setInstaEtat('repos'); }}
-                  onKeyDown={e => { if (e.key === 'Enter') lierInsta(); }}
-                  placeholder={N.t('insta_ph')}
-                  maxLength={40}
-                  autoCapitalize="none" autoCorrect="off" spellCheck={false}
-                  className="flex-1 min-w-0 -ml-2 bg-black/35 border border-white/10 rounded-r-xl px-2 py-2 text-sm text-foreground
-                             placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
-                />
+                {lie ? (
+                  // Deja lie : on montre le compte plutot qu'un champ vide, et
+                  // le bouton propose la seule action qui reste utile.
+                  <a
+                    href={lienInstagram(lie)}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 min-w-0 flex items-center gap-1 px-3 py-2 rounded-xl
+                               bg-primary/[0.08] border border-primary/30 text-primary
+                               text-sm font-bold truncate hover:bg-primary/[0.14] transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">@{lie}</span>
+                  </a>
+                ) : (
+                  <>
+                    <span className="flex items-center px-2 rounded-l-xl bg-black/35 border border-r-0 border-white/10 text-muted-foreground text-sm">@</span>
+                    <input
+                      value={insta}
+                      onChange={e => { setInsta(e.target.value); setInstaEtat('repos'); }}
+                      onKeyDown={e => { if (e.key === 'Enter') basculerInsta(); }}
+                      placeholder={N.t('insta_ph')}
+                      maxLength={40}
+                      autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                      className="flex-1 min-w-0 -ml-2 bg-black/35 border border-white/10 rounded-r-xl px-2 py-2 text-sm text-foreground
+                                 placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                    />
+                  </>
+                )}
                 <button
-                  onClick={lierInsta}
-                  disabled={instaEtat === 'envoi'}
-                  className="shrink-0 px-3 py-2 rounded-xl font-bold tracking-wide text-[10px]
-                             text-foreground bg-white/5 border border-white/15 hover:bg-white/10
-                             disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                  onClick={basculerInsta}
+                  disabled={instaEtat === 'envoi' || (!lie && !insta.trim())}
+                  className={`shrink-0 px-3 py-2 rounded-xl font-bold tracking-wide text-[10px]
+                              border transition-colors flex items-center gap-1.5
+                              disabled:opacity-40 disabled:pointer-events-none
+                    ${lie ? 'text-destructive bg-destructive/10 border-destructive/30 hover:bg-destructive/20'
+                          : 'text-foreground bg-white/5 border-white/15 hover:bg-white/10'}`}
                 >
                   {instaEtat === 'envoi' && <Loader2 className="w-3 h-3 animate-spin" />}
-                  {instaEtat === 'lie' && <Check className="w-3 h-3 text-primary" />}
-                  {N.t(instaEtat === 'lie' ? 'insta_linked' : 'insta_link')}
+                  {lie ? <Unlink className="w-3 h-3" /> : null}
+                  {N.t(lie ? 'insta_unlink' : 'insta_link')}
                 </button>
               </div>
               <span className="text-[9px] text-muted-foreground leading-snug">
                 {N.t(instaEtat === 'bad' ? 'insta_bad'
                    : instaEtat === 'sansnom' ? 'insta_first'
                    : instaEtat === 'pasatoi' ? 'insta_notyours'
+                   : instaEtat === 'delie' ? 'insta_gone'
+                   : lie ? 'insta_on'
                    : 'insta_why')}
               </span>
               <span className="text-[9px] text-muted-foreground/70 leading-snug">
