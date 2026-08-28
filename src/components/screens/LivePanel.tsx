@@ -42,6 +42,17 @@ export function LivePanel() {
   const [occupe, setOccupe] = useState(false);
   const [copie, setCopie] = useState(false);
   const [nom, setNom] = useState(getSavedName());
+  /**
+   * Combien de couloirs sur cette piste.
+   *
+   * Deux, c'est un duel : un vainqueur, un perdant, des points qui changent de
+   * main. Trois ou plus, c'est une course : un classement, et rien au
+   * classement des duels — le bareme est fait pour une paire.
+   *
+   * Huit est le nombre de couloirs d'une piste, et donc le format d'une serie
+   * de championnat.
+   */
+  const [places, setPlaces] = useState(2);
 
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [voixEtat, setVoixEtat] = useState<EtatVoix>({
@@ -95,8 +106,14 @@ export function LivePanel() {
   const lancerCourse = () => {
     const dans = Math.max(0, (cibleDepart.current ?? Date.now()) - Date.now());
     const adverse = salle.current?.adversaire || '';
+    // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
+    // les deux clients doivent placer les memes gens aux memes endroits.
+    const moi = salle.current?.moi || '';
+    const autres = (salon?.joueurs || [])
+      .filter(j => j.id !== moi)
+      .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0 }));
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse });
+      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse, autres });
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
@@ -127,7 +144,9 @@ export function LivePanel() {
       cibleDepart.current = Date.now() + dansMs;
       if (!presEnCours.current) lancerCourse();
     },
-    onPos: (d: number) => SprinterApp.liveDist(d),
+    // A huit, savoir qui a bouge est la moitie de l'information : la position
+    // part vers le coureur qui porte cet identifiant, pas vers « l'adversaire ».
+    onPos: (id: string, d: number) => SprinterApp.liveDistDe(id, d),
     onFini: (_n: string, ms: number) => { SprinterApp.G.liveFin = ms; },
     onResultat: (r: any) => {
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
@@ -162,7 +181,7 @@ export function LivePanel() {
       position: (d: number) => s.position(d),
       fini: (ms: number) => s.fini(ms),
     });
-    s.connecter([epreuve], 4);
+    s.connecter([epreuve], 4, places);
   };
 
   const creer = async () => {
@@ -250,6 +269,32 @@ export function LivePanel() {
             </button>
           ))}
         </div>
+
+        {/* Le nombre de couloirs. Il ne se choisit qu'a l'ouverture : le
+            changer une fois la piste formee ferait entrer ou sortir des gens
+            d'une course deja commencee. */}
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] tracking-widest text-muted-foreground shrink-0">
+            {N.t('live_lanes')}
+          </span>
+          <div className="flex gap-1 flex-1">
+            {[2, 4, 6, 8].map(n => (
+              <button
+                key={n}
+                onClick={() => setPlaces(n)}
+                className={`flex-1 py-1.5 rounded-lg font-mono font-bold text-xs transition-all border
+                  ${places === n
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                    : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/5'}`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[9px] text-muted-foreground/70 text-center leading-snug -mt-1">
+          {N.t(places === 2 ? 'live_lanes_duel' : 'live_lanes_course')}
+        </p>
 
         <input
           value={nom}

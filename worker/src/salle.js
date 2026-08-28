@@ -50,18 +50,50 @@ const AVANT_DEPART_MS = 4000;
 // comme un signal : comme le depart, la presentation est une date absolue et
 // chacun compte avec sa propre horloge recalee.
 const AVANT_PRESENTATION_MS = 1500;
-// Le cahier des charges demande 5 a 8 secondes ; six laisse le temps de lire
-// un pseudo et d'entendre une phrase sans que l'attente ne pese.
+// Le cahier des charges demande 5 a 8 secondes par participant ; six laissent
+// le temps de lire un pseudo et d'entendre une phrase sans que l'attente ne
+// pese. A deux, cela fait douze secondes : parfait.
 const PRESENTATION_PAR_JOUEUR_MS = 6000;
+// A huit, cela ferait quarante-huit secondes avant le coup de pistolet, et
+// personne n'attend quarante-huit secondes pour courir dix. On plafonne donc la
+// sequence entiere : le creneau de chacun se resserre a mesure qu'il y a du
+// monde, sans jamais descendre sous le seuil ou l'on n'a plus le temps de lire
+// un nom.
+const PRESENTATION_TOTAL_MAX_MS = 24000;
+const PRESENTATION_MIN_MS = 3000;
 // La fenetre micro tient dans le creneau du participant, pas a cheval dessus :
-// sans quoi on parlerait encore pendant la presentation du suivant.
+// sans quoi on parlerait encore pendant la presentation du suivant. Elle se
+// resserre avec lui, en gardant de quoi enchainer.
 const PRESENTATION_MICRO_MS = 5000;
+const MICRO_MARGE_MS = 800;
+
+/** Le creneau de chacun, selon le nombre de partants. */
+function creneauPresentation(n) {
+  if (n <= 1) return PRESENTATION_PAR_JOUEUR_MS;
+  return Math.max(PRESENTATION_MIN_MS,
+                  Math.min(PRESENTATION_PAR_JOUEUR_MS,
+                           Math.round(PRESENTATION_TOTAL_MAX_MS / n)));
+}
 // Bornes de credibilite d'un chrono annonce par un client.
 const MIN_MS = 1000, MAX_MS = 20 * 60000;
 // Au-dela, on considere que le joueur a abandonne la course en cours.
 const ABANDON_MS = 3 * 60000;
 
-const MAX_JOUEURS = 2;
+/**
+ * Le plafond d'une piste.
+ *
+ * Huit, parce que c'est le nombre de couloirs d'une piste d'athletisme et donc
+ * le format d'une serie de championnat. Le duel a deux reste le cas courant :
+ * la taille est decidee par celui qui ouvre la piste, et vaut deux par defaut.
+ *
+ * Ce que la taille change vraiment n'est pas l'affichage mais le sens de la
+ * course. A deux, c'est un duel : il y a un vainqueur, un perdant, et des
+ * points qui changent de main. A trois ou plus, c'est une course : il y a un
+ * classement, et rien ne bouge au classement des duels — un bareme concu pour
+ * une paire n'a pas de generalisation honnete a huit.
+ */
+const PLAFOND_JOUEURS = 8;
+const DEFAUT_JOUEURS = 2;
 
 function net(nom) {
   const s = String(nom || '').trim().slice(0, 20).replace(/[<>]/g, '');
@@ -79,6 +111,7 @@ export class SalleDirecte {
     this.departA = null;       // date absolue du coup de pistolet, ms epoch
     this.presentationA = null; // date absolue du debut de la presentation
     this.ordre = [];           // les participants dans l'ordre des couloirs
+    this.max = DEFAUT_JOUEURS; // taille de la piste, fixee par le createur
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
     this.test = false;         // salle du canal de test : ecrit ailleurs
@@ -91,17 +124,21 @@ export class SalleDirecte {
 
   /** Etat public de la salle, tel que le voit un client. */
   vue() {
-    const joueurs = [...this.joueurs.values()].map(j => ({
+    const joueurs = [...this.joueurs.values()].map((j, i) => ({
       id: j.id, nom: j.nom, pret: j.pret, d: Math.round(j.d * 10) / 10,
       fin: j.fin, hote: j.id === this.hote,
+      // Le couloir suit l'ordre d'arrivee sur la piste. Il sert au jeu a
+      // placer chaque adversaire, et a la presentation a les faire passer.
+      couloir: i + 1,
     }));
     return {
-      joueurs, epreuves: this.epreuves, niveau: this.niveau,
+      joueurs, epreuves: this.epreuves, niveau: this.niveau, max: this.max,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
       presentation: this.presentationA ? {
         debut_a: this.presentationA,
-        par: PRESENTATION_PAR_JOUEUR_MS,
-        micro: PRESENTATION_MICRO_MS,
+        par: creneauPresentation(this.ordre.length),
+        micro: Math.min(PRESENTATION_MICRO_MS,
+                        creneauPresentation(this.ordre.length) - MICRO_MARGE_MS),
         ordre: this.ordre,
       } : null,
     };
@@ -158,7 +195,7 @@ export class SalleDirecte {
     if (url.pathname.endsWith('/etat')) {
       return new Response(JSON.stringify({
         existe: this.joueurs.size > 0 || !!this.epreuves,
-        complete: this.joueurs.size >= MAX_JOUEURS,
+        complete: this.joueurs.size >= this.max,
         ...this.vue(),
       }), { headers: { 'Content-Type': 'application/json' } });
     }
@@ -167,7 +204,7 @@ export class SalleDirecte {
       return new Response('websocket attendu', { status: 426 });
     }
 
-    if (this.joueurs.size >= MAX_JOUEURS) {
+    if (this.joueurs.size >= this.max) {
       return new Response('salle complete', { status: 409 });
     }
 
@@ -190,6 +227,10 @@ export class SalleDirecte {
       this.epreuves = eps.length ? eps : ['100'];
       const n = parseInt(url.searchParams.get('level') || '4', 10);
       this.niveau = Number.isFinite(n) && n >= 0 && n <= 5 ? n : 4;
+      // Seul le premier arrive decide de la taille : la changer en cours de
+      // route ferait entrer ou sortir des gens d'une course deja formee.
+      const m = parseInt(url.searchParams.get('max') || String(DEFAUT_JOUEURS), 10);
+      this.max = Number.isFinite(m) ? Math.max(2, Math.min(PLAFOND_JOUEURS, m)) : DEFAUT_JOUEURS;
     }
 
     this.joueurs.set(serveur, {
@@ -244,7 +285,7 @@ export class SalleDirecte {
         // monde a confirme. On l'annonce a une date absolue : chacun compte
         // avec sa propre horloge recalee, personne n'attend le signal d'un
         // autre.
-        const tous = this.joueurs.size === MAX_JOUEURS &&
+        const tous = this.joueurs.size === this.max &&
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
           // L'ordre des couloirs est l'ordre d'inscription : l'hote a ouvert
@@ -257,7 +298,7 @@ export class SalleDirecte {
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
           this.departA = this.presentationA
-            + this.ordre.length * PRESENTATION_PAR_JOUEUR_MS
+            + this.ordre.length * creneauPresentation(this.ordre.length)
             + AVANT_DEPART_MS;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
@@ -318,7 +359,7 @@ export class SalleDirecte {
   peutTrancher() {
     if (this.termine) return;
     const tous = [...this.joueurs.values()];
-    if (tous.length < MAX_JOUEURS || tous.some(x => x.fin === null)) return;
+    if (tous.length < this.max || tous.some(x => x.fin === null)) return;
     this.termine = true;
     this.departA = null;
     // La presentation appartient a la course qui vient d'avoir lieu : une
@@ -326,31 +367,50 @@ export class SalleDirecte {
     this.presentationA = null;
     this.ordre = [];
 
-    const hote = tous.find(x => x.id === this.hote) || tous[0];
-    const invite = tous.find(x => x !== hote);
-
-    // L'hote a lance la partie : c'est lui l'initiateur, au sens du bareme.
-    const issue = hote.fin < invite.fin ? 'challenger'
-                : hote.fin > invite.fin ? 'opponent' : 'draw';
-
     // Le verdict est rendu : la salle n'a plus de raison d'etre eveillee. On
     // laisse le temps de le lire et de relancer, puis on ferme.
     this.programmerFermeture(APRES_RESULTAT_MS, 'course terminee');
 
-    this.diffuser({
-      t: 'resultat',
-      issue,
-      hote: { id: hote.id, nom: hote.nom, ms: hote.fin },
-      invite: { id: invite.id, nom: invite.nom, ms: invite.fin },
-    });
+    // L'ordre d'arrivee, quel que soit le nombre de partants. Un abandon porte
+    // un chrono sentinelle, donc il se range naturellement en dernier.
+    const ordre = [...tous].sort((a, b) => a.fin - b.fin);
+    const classement = ordre.map((x, i) => ({
+      place: i + 1, id: x.id, nom: x.nom, ms: x.fin,
+      abandon: x.fin >= ABANDON_MS,
+    }));
 
-    // Les points passent par le meme chemin que ceux d'un defi differe : une
-    // course en direct et un defi rejoue en fantome doivent compter pareil.
-    // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
-    // indisponible, la course reste jouee et affichee, seuls les points
-    // manquent, ce qui vaut mieux que deux joueurs bloques sur une attente.
-    const ecrire = this.ecrire(hote, invite);
-    if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+    const message = { t: 'resultat', classement, partants: tous.length };
+
+    // A deux, c'est un duel : on garde les champs historiques pour que
+    // l'annonce du resultat et le classement des duels continuent de
+    // fonctionner tels quels.
+    if (this.max === 2) {
+      const hote = tous.find(x => x.id === this.hote) || tous[0];
+      const invite = tous.find(x => x !== hote);
+      // L'hote a lance la partie : c'est lui l'initiateur, au sens du bareme.
+      message.issue = hote.fin < invite.fin ? 'challenger'
+                    : hote.fin > invite.fin ? 'opponent' : 'draw';
+      message.hote = { id: hote.id, nom: hote.nom, ms: hote.fin };
+      message.invite = { id: invite.id, nom: invite.nom, ms: invite.fin };
+      this.diffuser(message);
+
+      // Les points passent par le meme chemin que ceux d'un defi differe : une
+      // course en direct et un defi rejoue en fantome doivent compter pareil.
+      // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
+      // indisponible, la course reste jouee et affichee, seuls les points
+      // manquent, ce qui vaut mieux que deux joueurs bloques sur une attente.
+      const ecrire = this.ecrire(hote, invite);
+      if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+      return;
+    }
+
+    // A trois ou plus, c'est une course : un classement, et rien au classement
+    // des duels. Le bareme est fait pour une paire — l'etendre a huit
+    // supposerait d'inventer une regle qu'on n'a pas, et le premier reflexe
+    // (vingt-huit duels croises pour huit partants) gonflerait le classement
+    // sans rien mesurer de juste. Les series de championnat, elles, ont leur
+    // propre chemin d'enregistrement.
+    this.diffuser(message);
   }
 
   async ecrire(hote, invite) {

@@ -98,7 +98,14 @@ export async function duelBoard(db) {
   // pas au duel suivant, l'indicateur serait vide la plupart du temps. Le jeu
   // compare au classement qu'il a affiche la derniere fois, ce qui donne un
   // deplacement toujours parlant : « depuis ta derniere visite ».
-  return (results || []).map((r, i) => ({ ...r, rank: i + 1 }));
+  //
+  // Les points, eux, ne sortent pas d'ici. Ils ordonnent le classement et ne
+  // s'affichent nulle part : ce qu'un joueur doit lire, c'est sa place et le
+  // fait qu'il monte ou qu'il descende. Les retirer de la reponse plutot que
+  // de les cacher a l'ecran est la seule facon que ce soit vrai — sinon ils
+  // restent lisibles dans les outils du navigateur, et le total d'un
+  // adversaire se compare a la virgule pres.
+  return (results || []).map(({ points, ...r }, i) => ({ ...r, rank: i + 1 }));
 }
 
 

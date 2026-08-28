@@ -25,6 +25,8 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 export type JoueurSalle = {
   id: string; nom: string; pret: boolean; d: number;
   fin: number | null; hote: boolean;
+  /** Couloir attribue par la salle, dans l'ordre d'arrivee. */
+  couloir?: number;
 };
 
 export type Couloir = { id: string; nom: string; couloir: number };
@@ -42,6 +44,8 @@ export type Presentation = {
 
 export type EtatSalle = {
   joueurs: JoueurSalle[];
+  /** Nombre de couloirs de cette piste : 2 pour un duel, jusqu'a 8. */
+  max?: number;
   epreuves: string[] | null;
   niveau: number;
   depart_a: number | null;
@@ -51,17 +55,27 @@ export type EtatSalle = {
   } | null;
 };
 
+export type Arrivee = {
+  place: number; id: string; nom: string; ms: number; abandon?: boolean;
+};
+
 export type ResultatDirect = {
-  issue: 'challenger' | 'opponent' | 'draw';
-  hote: { id: string; nom: string; ms: number };
-  invite: { id: string; nom: string; ms: number };
+  /** L'ordre d'arrivee, quel que soit le nombre de partants. */
+  classement: Arrivee[];
+  partants: number;
+  /** Present seulement a deux : c'est alors un duel, et il se score. */
+  issue?: 'challenger' | 'opponent' | 'draw';
+  hote?: { id: string; nom: string; ms: number };
+  invite?: { id: string; nom: string; ms: number };
 };
 
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
   onPresentation?: (p: Presentation) => void;
   onDepart?: (dansMs: number) => void;
-  onPos?: (d: number) => void;
+  /** Position d'un adversaire. `id` le designe : a huit, savoir QUI a bouge
+   *  est la moitie de l'information. */
+  onPos?: (id: string, d: number) => void;
   onFini?: (nom: string, ms: number, abandon: boolean) => void;
   onResultat?: (r: ResultatDirect) => void;
   onSorti?: (nom: string) => void;
@@ -110,11 +124,14 @@ export class Salle {
     this.ec = ec;
   }
 
-  connecter(epreuves: string[], niveau: number) {
+  connecter(epreuves: string[], niveau: number, places = 2) {
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
       races: epreuves.join(','),
       level: String(niveau),
+      // Seul le premier arrive fixe la taille ; pour les autres le serveur
+      // ignore ce parametre, la piste etant deja formee.
+      max: String(places),
     });
     // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
     // passe donc par la requete.
@@ -178,7 +195,7 @@ export class Salle {
         this.majEtat(m);
         return;
       case 'pos':
-        this.ec.onPos?.(m.d);
+        this.ec.onPos?.(m.id, m.d);
         return;
       case 'fini':
         this.ec.onFini?.(m.nom, m.ms, !!m.abandon);

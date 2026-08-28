@@ -23,7 +23,8 @@ const VU_KEY = 'sprinter_duels_vus';
 
 export type DuelRow = {
   name: string;
-  points: number;
+  // Pas de `points` : le serveur ne les publie plus. Ils ordonnent le
+  // classement sans jamais s'afficher — voir duelBoard cote worker.
   wins: number;
   losses: number;
   draws: number;
@@ -33,8 +34,6 @@ export type DuelRow = {
   rank: number;
   /** Places gagnees depuis la derniere consultation. Positif = montee. */
   move?: number;
-  /** Points gagnes depuis la derniere consultation. */
-  gain?: number;
 };
 
 /** Issue d'un duel telle que le serveur la tranche, du point de vue de
@@ -59,7 +58,8 @@ export type DuelBoard = {
   moi: DuelRow | null;
 };
 
-type Vu = Record<string, { rank: number; points: number }>;
+// On ne retient que le rang : les points ne viennent plus du serveur.
+type Vu = Record<string, { rank: number }>;
 
 function lireVu(): Vu {
   try { return JSON.parse(localStorage.getItem(VU_KEY) || '{}'); } catch { return {}; }
@@ -67,7 +67,7 @@ function lireVu(): Vu {
 function ecrireVu(rows: DuelRow[]) {
   try {
     const v: Vu = {};
-    for (const r of rows) v[r.name.trim().toLowerCase()] = { rank: r.rank, points: r.points };
+    for (const r of rows) v[r.name.trim().toLowerCase()] = { rank: r.rank };
     localStorage.setItem(VU_KEY, JSON.stringify(v));
   } catch { /* sans memoire : pas de fleches, le classement reste juste */ }
 }
@@ -88,12 +88,10 @@ export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
     for (const r of data.classement) {
       const avant = vu[r.name.trim().toLowerCase()];
       r.move = avant ? avant.rank - r.rank : 0;
-      r.gain = avant ? r.points - avant.points : 0;
     }
     if (data.moi) {
       const a = vu[data.moi.name.trim().toLowerCase()];
       data.moi.move = a ? a.rank - data.moi.rank : 0;
-      data.moi.gain = a ? data.moi.points - a.points : 0;
     }
     if (marquerVu) ecrireVu(data.classement);
     return data;

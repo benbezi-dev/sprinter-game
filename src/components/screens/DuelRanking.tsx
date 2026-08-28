@@ -106,15 +106,10 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
               <span className="font-black text-primary text-lg">{N.ord(board.moi.rank)}</span>
               <span className="font-bold text-primary truncate">{N.t('duel_you')}</span>
             </div>
-            <div className="flex items-center gap-3 shrink-0">
-              {!!board.moi.gain && (
-                <span className={`text-[10px] font-bold ${board.moi.gain > 0 ? 'text-emerald-400' : 'text-destructive'}`}>
-                  {board.moi.gain > 0 ? '+' : ''}{board.moi.gain}
-                </span>
-              )}
-              <span className="font-mono font-black text-xl text-primary">
-                {board.moi.points} <span className="text-xs font-normal">{N.t('duel_pts')}</span>
-              </span>
+            {/* Ni total ni gain : seule la place compte, et le mouvement la
+                raconte. */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Mouvement move={board.moi.move || 0} />
             </div>
           </div>
         )}
@@ -176,10 +171,6 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                             {N.t('duel_counts', { l: r.launched || 0, r: r.received || 0 })}
                           </span>
                         </div>
-                        <span className={`font-mono font-bold text-sm md:text-base shrink-0 tabular-nums
-                          ${r.points > 0 ? 'text-foreground' : r.points < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                          {r.points > 0 ? '+' : ''}{r.points}
-                        </span>
                       </motion.div>
                     );
                   })}

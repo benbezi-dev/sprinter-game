@@ -229,6 +229,11 @@
     live_closed:     ['la liaison a été coupée', 'the connection dropped'],
     live_invite:     ['Je t’attends sur la piste. Code {c} — {l}',
                       'I am waiting for you on the track. Code {c} — {l}'],
+    live_lanes:      ['COULOIRS', 'LANES'],
+    live_lanes_duel: ['un duel : le vainqueur prend des points, le perdant en rend',
+                      'a duel: the winner takes points, the loser gives some back'],
+    live_lanes_course: ['une course : un classement à l’arrivée, sans points au classement des duels',
+                        'a race: a finishing order, no points on the duel ranking'],
     live_won:        ['COURSE GAGNÉE', 'RACE WON'],
     live_lost:       ['COURSE PERDUE', 'RACE LOST'],
     // presentation des participants, avant le depart
