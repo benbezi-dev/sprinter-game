@@ -25,6 +25,7 @@
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE } from './relais-course.js';
+import { fantomeRelais } from './relais.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
@@ -51,12 +52,67 @@ export class SalleConfrontation {
     this.joueurs = new Map();
     /** @type {Map<string, CourseEquipe>} */
     this.equipes = new Map();
+    /** @type {Map<string, {trace:number[], total:number}>} */
+    this.fantomes = new Map();
+    this.tic = null;
     this.minuteur = null;
     this.ne = Date.now();
   }
 
   base() {
     return this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+  }
+
+  /**
+   * Charge les equipes fantomes contre lesquelles on court.
+   *
+   * Un fantome est une course enregistree du haut du classement. Il ne se
+   * connecte pas, ne tape pas, ne peut pas etre elimine : il rejoue, et c'est
+   * tout. Courir contre lui est la seule facon d'affronter les meilleures
+   * equipes sans avoir a reunir huit personnes au meme moment.
+   */
+  async chargerFantomes(ids) {
+    if (!this.base()) return;
+    for (const brut of ids) {
+      const id = parseInt(brut, 10);
+      if (!Number.isFinite(id) || this.fantomes.has('F' + id)) continue;
+      const f = await fantomeRelais(this.base(), id);
+      if (!f || !Array.isArray(f.traces) || f.traces.length < 10) continue;
+      const cle = 'F' + id;
+      this.fantomes.set(cle, { trace: f.traces, total: f.total_ms });
+      const c = this.courseDe(cle, f.equipe + ' (fantome)');
+      c.fantome = true;
+    }
+  }
+
+  /**
+   * Avance les fantomes, dix fois par seconde.
+   *
+   * Le battement ne tourne que pendant la course : un Durable Object se
+   * facture au temps ou il reste eveille, et un intervalle oublie le
+   * maintiendrait en vie pour rien.
+   */
+  battre() {
+    clearInterval(this.tic);
+    if (!this.fantomes.size) return;
+    this.tic = setInterval(() => {
+      if (!this.departA) return;
+      const t = Date.now() - this.departA;
+      if (t < 0) return;
+      let bouge = false;
+      for (const [cle, f] of this.fantomes) {
+        const c = this.equipes.get(cle);
+        if (!c || c.total != null) continue;
+        const r = c.rejouer(t, f.trace, f.total);
+        if (r.total != null) { bouge = true; this.diffuser({ t: 'fini', equipe: cle, total: r.total, ...this.vue() }); }
+        else if (r.d != null) {
+          this.diffuser({ t: 'pos', equipe: cle, relais: c.porteur,
+                          d: Math.round(r.d * 10) / 10 });
+        }
+      }
+      if (bouge) this.cloreSiFini();
+      if (this.toutEstJoue()) { clearInterval(this.tic); this.tic = null; }
+    }, 100);
   }
 
   /** La course d'une equipe, creee a sa premiere connexion. */
@@ -187,6 +243,11 @@ export class SalleConfrontation {
       return new Response('confrontation complete', { status: 409 });
     }
 
+    // Les fantombes se declarent a la connexion, et ne se chargent qu'une fois.
+    const fantomes = (url.searchParams.get('fantomes') || '')
+      .split(',').map(x => x.trim()).filter(Boolean).slice(0, 7);
+    if (fantomes.length) await this.chargerFantomes(fantomes);
+
     const nom = net(url.searchParams.get('name'));
     const cle = nom.trim().toLowerCase();
 
@@ -276,10 +337,20 @@ export class SalleConfrontation {
         }
         const pretes = [...parEquipe.values()]
           .filter(v => v.length === TAILLE && v.every(x => x.pret)).length;
-        const tous = pretes >= MIN_EQUIPES && pretes === parEquipe.size;
+        // Les fantomes n'ont personne a attendre : on ne compte que les
+        // equipes qui ont des joueurs. Un fantome de plus ne doit jamais
+        // empecher un depart.
+        const humaines = parEquipe.size;
+        const tous = humaines >= 1 && pretes === humaines &&
+                     (humaines + this.fantomes.size) >= MIN_EQUIPES;
         if (tous && !this.departA) {
           this.departA = Date.now() + AVANT_DEPART_MS;
           for (const course of this.equipes.values()) course.reinitialiser();
+          for (const cle of this.fantomes.keys()) {
+            const c = this.equipes.get(cle);
+            if (c) c.fantome = true;
+          }
+          this.battre();
         }
         this.etat();
         return;
@@ -303,7 +374,8 @@ export class SalleConfrontation {
 
       case 'pos': {
         this.vivante();
-        const r = c.avancer(j.relais, m.d);
+        const r = c.avancer(j.relais, m.d,
+                            this.departA ? Date.now() - this.departA : null);
         if (r.elimine) {
           this.diffuser({ t: 'elimine', equipe: j.equipe, ...r.elimine, ...this.vue() });
           this.cloreSiFini();
@@ -349,6 +421,7 @@ export class SalleConfrontation {
         await enregistrerRelais(this.base(), {
           team_id: c.equipe, race_key: this.epreuve,
           legs: [part, part, part, c.total - 3 * part],
+          traces: c.traceReguliere(),
         });
       }
     } catch (e) { /* le classement se passera de cette confrontation */ }

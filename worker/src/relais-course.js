@@ -60,6 +60,10 @@ export class CourseEquipe {
   }
 
   reinitialiser() {
+    // La trace du temoin : c'est ELLE la course de l'equipe, pas les quatre
+    // coureurs. Sans elle aucun fantome ne peut exister, et le mode fantome
+    // n'avait jusqu'ici rien a rejouer.
+    this.trace = [];
     this.porteur = 1;
     this.temoinD = 0;
     this.passes = [];
@@ -108,14 +112,21 @@ export class CourseEquipe {
    * pas quatre sprints : on ne quitte pas sa zone sans le temoin, et on ne
    * l'emporte pas au-dela.
    */
-  avancer(relais, d) {
+  avancer(relais, d, t = null) {
     if (this.finie()) return {};
     const v = Number(d);
     if (!Number.isFinite(v) || v < 0 || v > 500) return {};
     const c = this.coureur(relais);
     if (v > c.d) c.d = v;
     c.parti = true;
-    if (relais === this.porteur) this.temoinD = c.d;
+    if (relais === this.porteur) {
+      this.temoinD = c.d;
+      // On note ou etait le temoin, et quand. Les positions arrivent dix fois
+      // par seconde : c'est deja la finesse d'un fantome.
+      if (t != null && Number.isFinite(t) && t >= 0) {
+        this.trace.push([Math.round(t), Math.round(this.temoinD * 10)]);
+      }
+    }
 
     if (relais === this.porteur + 1) {
       const z = zoneDe(relais);
@@ -183,6 +194,33 @@ export class CourseEquipe {
     return { passe: p };
   }
 
+  /**
+   * Rejouer une course enregistree, a l'instant t.
+   *
+   * Un fantome n'obeit a aucune regle : il a deja couru, et sa course est un
+   * fait. On ne lui applique donc ni zone, ni elimination — les lui appliquer
+   * reviendrait a rejuger une course deja jugee, avec le risque d'eliminer
+   * retrospectivement une equipe qui figure au classement.
+   *
+   * Le porteur se deduit de la position du temoin : c'est faux de quelques
+   * metres dans la zone de transmission, et cela n'a aucune importance — il ne
+   * sert qu'a dire quel relayeur dessiner en train de courir.
+   */
+  rejouer(t, trace, totalMs, pas = 100) {
+    if (this.total != null) return {};
+    const i = Math.floor(t / pas);
+    if (i >= trace.length) {
+      this.temoinD = 400;
+      this.total = totalMs;
+      this.coureur(TAILLE).fini = true;
+      return { total: totalMs };
+    }
+    this.temoinD = (trace[Math.max(0, i)] || 0) / 10;
+    this.porteur = Math.max(1, Math.min(TAILLE, Math.floor(this.temoinD / LEG) + 1));
+    this.coureur(this.porteur).d = this.temoinD;
+    return { d: this.temoinD };
+  }
+
   /** Le dernier relayeur franchit la ligne. */
   terminer(relais, ms) {
     if (this.finie() || relais !== TAILLE) return {};
@@ -191,6 +229,29 @@ export class CourseEquipe {
     this.coureur(TAILLE).fini = true;
     this.total = v;
     return { total: v };
+  }
+
+  /**
+   * La trace ramenee sur une grille reguliere, en decimetres.
+   *
+   * Les positions arrivent quand elles arrivent — un fantome, lui, doit
+   * pouvoir etre lu a n'importe quel instant sans chercher dans une liste
+   * irreguliere. On interpole donc une fois, a l'ecriture, plutot qu'a chaque
+   * image de chaque rejeu.
+   */
+  traceReguliere(pas = 100) {
+    if (!this.trace.length || this.total == null) return [];
+    const out = [];
+    let i = 0;
+    for (let t = 0; t <= this.total; t += pas) {
+      while (i + 1 < this.trace.length && this.trace[i + 1][0] <= t) i++;
+      const [t0, d0] = this.trace[i];
+      const suiv = this.trace[i + 1];
+      if (!suiv || suiv[0] <= t0) { out.push(d0); continue; }
+      const f = Math.max(0, Math.min(1, (t - t0) / (suiv[0] - t0)));
+      out.push(Math.round(d0 + (suiv[1] - d0) * f));
+    }
+    return out;
   }
 
   vue() {

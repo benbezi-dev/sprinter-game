@@ -248,7 +248,8 @@ export class SalleRelais {
 
       case 'pos': {
         this.vivante();
-        const r = c.avancer(j.relais, m.d);
+        const r = c.avancer(j.relais, m.d,
+                            this.departA ? Date.now() - this.departA : null);
         if (r.elimine) {
           this.departA = null;
           this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
@@ -298,6 +299,7 @@ export class SalleRelais {
       await enregistrerRelais(this.base(), {
         team_id: this.equipe, race_key: this.epreuve,
         legs: [part, part, part, c.total - 3 * part],
+        traces: c.traceReguliere(),
       });
     } catch (e) { /* le classement se passera de cette course */ }
   }

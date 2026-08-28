@@ -395,19 +395,26 @@ export async function enregistrerRelais(db, { team_id, race_key, legs, traces })
   const total = propres.reduce((a, b) => a + b, 0);
   const race = String(race_key || '4x100');
 
-  // Les traces sont bornees comme celles des defis : un client ne doit pas
-  // pouvoir remplir la base sous couvert d'enregistrer une course.
+  // La trace est celle du TEMOIN, d'un bout a l'autre : une seule suite de
+  // positions, pas quatre.
+  //
+  // Quatre traces etaient attendues ici, et c'etait une erreur de
+  // representation — quatre traces racontent quatre courses independantes, or
+  // un relais est une seule course que quatre personnes se passent. Rien ne
+  // s'y ecrivait, aucun fantome n'a donc jamais pu exister ; le contrat
+  // pouvait etre corrige sans rien menager.
+  //
+  // Bornee comme celles des defis : un client ne doit pas pouvoir remplir la
+  // base sous couvert d'enregistrer une course. Un 4x100 dure une quarantaine
+  // de secondes, soit quatre cents releves au pas de cent millisecondes.
   let tr = null;
-  if (Array.isArray(traces) && traces.length === TAILLE) {
-    tr = JSON.stringify(traces.map(t => {
-      const a = [];
-      if (!Array.isArray(t)) return a;
-      for (let i = 0; i < t.length && i < 1200; i++) {
-        const n = Math.round(Number(t[i]));
-        a.push(Number.isFinite(n) ? Math.max(0, Math.min(60000, n)) : 0);
-      }
-      return a;
-    }));
+  if (Array.isArray(traces) && traces.length >= 10) {
+    const a = [];
+    for (let k = 0; k < traces.length && k < 1200; k++) {
+      const n = Math.round(Number(traces[k]));
+      a.push(Number.isFinite(n) ? Math.max(0, Math.min(60000, n)) : 0);
+    }
+    tr = JSON.stringify(a);
   }
 
   await db.prepare(
