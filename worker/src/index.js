@@ -8,7 +8,7 @@ import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
-  etatEdition, enregistrerCourse, cloturerPhase,
+  etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   fluxDirect, recapMondial,
 } from './championnats.js';
 import {
@@ -52,7 +52,15 @@ const NO_RUN_MS = 1200000;
 function cors(resp) {
   resp.headers.set('Access-Control-Allow-Origin', '*');
   resp.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  resp.headers.set('Access-Control-Allow-Headers', 'Content-Type');
+  // Nos deux en-tetes maison doivent figurer ici, sinon le navigateur bloque
+  // la requete AVANT de l'envoyer : un en-tete qui n'est pas « simple »
+  // declenche un pre-vol, et le pre-vol refuse ce qui n'est pas annonce.
+  //
+  // Sans cette ligne, tout le canal de test etait muet depuis un navigateur —
+  // et le defaut se cachait bien, la porte d'entree et les WebSockets etant
+  // les deux seuls chemins qui n'utilisent pas ces en-tetes.
+  resp.headers.set('Access-Control-Allow-Headers',
+                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin');
   return resp;
 }
 
@@ -629,6 +637,13 @@ export default {
         return json(await recapMondial(env.DB, {
           echelon: url.searchParams.get('echelon') || null,
         }));
+      }
+
+      // Mon championnat, s'il y en a un. Le jeu n'a que le nom du joueur.
+      if (sous === 'mien' && request.method === 'GET') {
+        const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+        const id = key ? await editionDe(env.DB, key) : null;
+        return json({ edition: id });
       }
 
       // L'etat d'une edition : ou elle en est, qui court quoi.

@@ -5,6 +5,7 @@ import { fetchChallenge, codeFromUrl, clearUrlCode, normalizeCode, type Challeng
 import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
+import { ChampPanel } from './ChampPanel';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap } from 'lucide-react';
@@ -188,6 +189,8 @@ export function ChallengePanel() {
           d'une reponse le lendemain. La premiere alimente le meme classement
           que la seconde, elle passe donc par le meme interrupteur. */}
       {DUELS_OUVERTS && <LivePanel />}
+      {/* Le championnat n'apparait que si le joueur y est engage. */}
+      {DUELS_OUVERTS && <ChampPanel />}
 
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
         <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">

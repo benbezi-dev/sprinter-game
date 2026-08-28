@@ -506,6 +506,31 @@ export function calendrierCycle(debutSamedi) {
   ];
 }
 
+/**
+ * L'edition en cours ou ce joueur est engage, s'il y en a une.
+ *
+ * Sans cette route, un joueur n'a aucun moyen de retrouver son championnat :
+ * il faudrait qu'il retienne un identifiant qu'on ne lui a jamais montre. On
+ * cherche donc par son nom, comme partout ailleurs dans le jeu.
+ *
+ * On rend aussi la derniere edition terminee : le sacre merite d'etre lu
+ * encore un moment apres la finale, pas d'etre efface a la seconde ou elle
+ * s'acheve.
+ */
+export async function editionDe(db, nameKey) {
+  await ensureChampTables(db);
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return null;
+  const r = await db.prepare(
+    `SELECT e.id FROM champ_editions e
+       JOIN champ_partants p ON p.edition = e.id
+      WHERE p.name_key = ?
+      ORDER BY e.etat = 'terminee', e.debut DESC
+      LIMIT 1`
+  ).bind(k).first();
+  return r ? r.id : null;
+}
+
 /** L'etat complet d'une edition : ou elle en est, qui court quoi. */
 export async function etatEdition(db, id) {
   await ensureChampTables(db);
@@ -518,9 +543,25 @@ export async function etatEdition(db, id) {
   const { results: res } = await db.prepare(
     `SELECT phase, course, name_key, ms, place FROM champ_resultats
       WHERE edition = ? ORDER BY phase, course, place`).bind(id).all();
+  // Le nom lisible et la forme de la phase viennent d'ici, pas du jeu : le
+  // format est une regle de competition, et la dupliquer cote client garantit
+  // qu'un jour les deux ne diront plus la meme chose.
+  const z = nomZone(e.zone, e.echelon);
+  const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
+  const cfg = FORMAT.phases[iPhase] || null;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
+    zoneNom: z.nom,
+    titre: e.echelon === 'mondial' ? ECHELONS.mondial.nom
+         : ECHELONS[e.echelon].nom + ' ' + z.avec,
     phase: e.phase, etat: e.etat,
+    phaseNom: cfg ? cfg.nom : e.phase,
+    phaseIndex: iPhase,
+    phases: FORMAT.phases.map(p => ({ cle: p.cle, nom: p.nom, courses: p.courses })),
+    courses: cfg ? cfg.courses : 0,
+    parCourse: cfg ? cfg.parCourse : 0,
+    directsParCourse: cfg ? cfg.directsParCourse : 0,
+    repechages: cfg ? cfg.repechages : 0,
     champion: e.champion_nom || null,
     partants: partants || [], resultats: res || [],
     calendrier: calendrier(e.debut, CALENDRIER),
