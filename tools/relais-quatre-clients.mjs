@@ -3,6 +3,9 @@
 // Chaque client simule un relayeur : il court a vitesse constante, s'elance
 // quand le porteur approche, et touche le temoin quand ils sont cote a cote.
 const BASE = process.env.BASE || 'ws://127.0.0.1:8788';
+// Les routes du relais sont reservees au canal de test : le harnais
+// presente un code, comme n'importe quel client.
+const ACCES = process.env.ACCES || 'ECRAN1';
 const EQUIPE = process.argv[2] || 'PU8G2Z';
 const MARQUE = Number(process.argv[3] ?? 0);
 const AVANCE = Number(process.argv[4] ?? 10);
@@ -11,7 +14,7 @@ const LEG = 100;
 
 function joueur(nom) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${BASE}/relay/room/${EQUIPE}?name=${encodeURIComponent(nom)}`);
+    const ws = new WebSocket(`${BASE}/relay/room/${EQUIPE}?acces=${ACCES}&name=${encodeURIComponent(nom)}`);
     const dire = m => console.log(`[${nom.padEnd(5)}] +${String(Date.now() - t00).padStart(6)}ms  ${m}`);
     const envoyer = o => { try { ws.send(JSON.stringify(o)); } catch { } };
 
@@ -108,6 +111,9 @@ function joueur(nom) {
 }
 
 setTimeout(() => { console.log('--- delai global'); process.exit(1); }, 60000);
-await Promise.all([joueur('Ana'), joueur('Bob'), joueur('Carl'), joueur('Dana')]);
+// La salle refuse qui n'est pas de l'equipe : les noms viennent donc de la
+// ligne de commande, pas d'une liste figee.
+const NOMS = (process.env.NOMS || 'Ana,Bob,Carl,Dana').split(',');
+await Promise.all(NOMS.map(n => joueur(n.trim())));
 console.log('--- termine');
 process.exit(0);

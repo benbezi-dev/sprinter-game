@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { CourseRelais } from './CourseRelais';
 import { Users, Loader2, Check, X, ArrowUpDown, Trophy } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -59,7 +60,9 @@ function Membre({ m, position, surMoi, onMonter }: {
   );
 }
 
-function Equipe({ e, onChange }: { e: EquipeRelais; onChange: () => void }) {
+function Equipe({ e, onChange, onCourir }: {
+  e: EquipeRelais; onChange: () => void; onCourir: (id: string) => void;
+}) {
   const { N } = SprinterApp;
   const moi = (getSavedName() || '').trim().toLowerCase();
   const [ordre, setOrdre] = useState<string[]>(() => titulaires(e).map(m => m.cle));
@@ -105,6 +108,12 @@ function Equipe({ e, onChange }: { e: EquipeRelais; onChange: () => void }) {
       {/* On dit ce qui manque plutot que de griser un bouton sans rien
           expliquer : « pas encore prete » n'aide personne a agir. */}
       {prete ? (
+        <>
+        <button onClick={() => onCourir(e.id)}
+          className="w-full py-3 rounded-xl font-black font-display tracking-widest text-sm
+                     text-background bg-emerald-400 hover:bg-emerald-400/90">
+          {N.t('relais_courir')}
+        </button>
         <button onClick={enregistrer} disabled={occupe}
           className="w-full py-2 rounded-xl font-bold tracking-widest text-xs text-background
                      bg-emerald-400 hover:bg-emerald-400/90 disabled:opacity-40
@@ -112,6 +121,7 @@ function Equipe({ e, onChange }: { e: EquipeRelais; onChange: () => void }) {
           {occupe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
           {N.t('relais_fixer_ordre')}
         </button>
+        </>
       ) : (
         <p className="text-[10px] text-center text-muted-foreground leading-snug">
           {N.t(manque === 'attente' ? 'relais_manque_reponses' : 'relais_manque_refus')}
@@ -131,6 +141,8 @@ export function RelaisPanel() {
   const [coequipiers, setCoequipiers] = useState(['', '', '']);
   const [erreur, setErreur] = useState('');
   const [occupe, setOccupe] = useState(false);
+  /** L'equipe qui court en ce moment : le vestiaire s'efface derriere elle. */
+  const [surLaPiste, setSurLaPiste] = useState<string | null>(null);
 
   const recharger = async () => {
     const [m, c] = await Promise.all([mesEquipes(), classementRelais()]);
@@ -156,6 +168,12 @@ export function RelaisPanel() {
     await repondre(id, oui);
     recharger();
   };
+
+  // Sur la piste, le vestiaire n'a plus rien a dire.
+  if (surLaPiste) {
+    return <CourseRelais equipe={surLaPiste}
+                         onQuitter={() => { setSurLaPiste(null); recharger(); }} />;
+  }
 
   return (
     <motion.div
@@ -212,7 +230,8 @@ export function RelaisPanel() {
           <span className="text-[9px] tracking-widest text-muted-foreground">
             {N.t('relais_mes_equipes')}
           </span>
-          {equipes.map(e => <Equipe key={e.id} e={e} onChange={recharger} />)}
+          {equipes.map(e => <Equipe key={e.id} e={e} onChange={recharger}
+                                    onCourir={setSurLaPiste} />)}
         </div>
       )}
 
