@@ -34,8 +34,20 @@ new_sqlite_classes = ["SalleDirecte"]
 tag = "v2"
 new_sqlite_classes = ["SalleRelais"]
 
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["SalleConfrontation"]
+
 # Une salle de relais par equipe : quatre joueurs et un temoin partagent le
 # meme objet, comme les deux joueurs d'un duel partagent le leur.
 [[durable_objects.bindings]]
 name = "SALLES_RELAIS"
 class_name = "SalleRelais"
+
+# Une confrontation de deux a huit equipes de relais. Distincte de la salle
+# d'une equipe seule : elle partage un seul coup de pistolet entre toutes, et
+# rend un classement a l'arrivee. Les regles du temoin, elles, sont les memes —
+# elles vivent dans relais-course.js et ne sont recopiees nulle part.
+[[durable_objects.bindings]]
+name = "CONFRONTATIONS"
+class_name = "SalleConfrontation"

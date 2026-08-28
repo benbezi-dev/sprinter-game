@@ -4,6 +4,7 @@ import {
 } from './duels.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
+export { SalleConfrontation } from './salle-confrontation.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
@@ -767,6 +768,30 @@ export default {
         if (canal.test) cible.searchParams.set('canal', 'test');
         const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RT-' : 'R-') + code);
         const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      // Ouvrir une confrontation : un code, comme une piste de duel.
+      if (sous === 'confrontation' && request.method === 'POST') {
+        return json({ id: makeCode() });
+      }
+
+      // La salle d'une confrontation. Le code de l'equipe voyage avec le
+      // joueur : c'est lui qui dit dans quel couloir il court.
+      if (sous.startsWith('conf/')) {
+        const reste = sous.slice('conf/'.length);
+        const [brut, tail] = reste.split('/');
+        const code = (brut || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        if (!env.CONFRONTATIONS) return json({ error: 'confrontations indisponibles' }, 503);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : '/ws';
+        cible.searchParams.set('conf', code);
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        const id = env.CONFRONTATIONS.idFromName((canal.test ? 'CT-' : 'C-') + code);
+        const rep = await env.CONFRONTATIONS.get(id).fetch(new Request(cible, request));
         if (rep.status === 101) return rep;
         return cors(new Response(rep.body, { status: rep.status,
           headers: { 'Content-Type': 'application/json' } }));

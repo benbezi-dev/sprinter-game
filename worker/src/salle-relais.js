@@ -17,18 +17,15 @@
      deux touches sur SON horloge et decide : passage valide et note, ou
      equipe eliminee. Un client ne peut pas s'auto-declarer valide.
 
-   L'elimination est immediate et sans appel : hors zone, avant la zone, ou
-   temoin lache. C'est la regle de l'athletisme, elle n'est pas negociable
-   ici non plus.
+   Les regles elles-memes vivent dans relais-course.js, parce que la salle de
+   confrontation en a besoin a l'identique. Cette salle-ci ne fait plus que
+   deux choses : tenir les sockets, et donner l'heure du depart.
 --------------------------------------------------------------------------- */
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
+import { CourseEquipe, zoneDe, TAILLE, LEG } from './relais-course.js';
 
-const TAILLE = 4;
-const ZONE = 30;                       // zone de lancement et de transmission
-const LEG = 100;                       // longueur d'une portion
 const AVANT_DEPART_MS = 5000;          // le temps de se mettre en place
-const FENETRE_TOUCHE_MS = 600;         // au-dela, les deux touches ne vont plus ensemble
 const VIE_MS = 20 * 60 * 1000;
 // Un Durable Object se facture au temps ou il reste eveille, et une WebSocket
 // ouverte l'y maintient. Le probleme est particulierement net ici : un relais
@@ -48,33 +45,39 @@ export class SalleRelais {
     this.state = state;
     this.env = env;
     this.test = false;         // salle du canal de test : ecrit ailleurs
-    /** @type {Map<WebSocket, {id,nom,cle,relais,pret,d,parti,fini}>} */
+    /** @type {Map<WebSocket, {id,nom,cle,relais,pret}>} */
     this.joueurs = new Map();
     this.equipe = null;                // code de l'equipe
     this.epreuve = '4x100';
     this.departA = null;               // date absolue du coup de pistolet
-    this.porteur = 1;                  // quel relais detient le temoin
-    this.temoinD = 0;                  // ou en est le temoin, en metres
-    this.passes = [];                  // {relais, a, ecart, note}
-    this.touches = new Map();          // relais -> date de la touche temoin
-    this.elimine = null;
-    this.total = null;
+    this.course = null;                // pose au premier appel, avec le code
     this.minuteur = null;
     this.ne = Date.now();
+  }
+
+  /** La course de l'equipe, creee a la volee. */
+  laCourse() {
+    if (!this.course) this.course = new CourseEquipe(this.equipe || '', '');
+    return this.course;
   }
 
   // --- vue publique --------------------------------------------------------
 
   vue() {
+    const c = this.laCourse();
+    const distances = new Map(c.vue().coureurs.map(x => [x.relais, x]));
     const joueurs = [...this.joueurs.values()]
       .sort((a, b) => a.relais - b.relais)
-      .map(j => ({ id: j.id, nom: j.nom, relais: j.relais, pret: j.pret,
-                   d: Math.round(j.d * 10) / 10, fini: j.fini }));
+      .map(j => ({
+        id: j.id, nom: j.nom, relais: j.relais, pret: j.pret,
+        d: distances.get(j.relais)?.d ?? 0,
+        fini: distances.get(j.relais)?.fini ?? false,
+      }));
     return {
       equipe: this.equipe, epreuve: this.epreuve, joueurs,
       depart_a: this.departA, horloge: Date.now(),
-      porteur: this.porteur, temoin_d: Math.round(this.temoinD * 10) / 10,
-      passes: this.passes, elimine: this.elimine, total: this.total,
+      porteur: c.porteur, temoin_d: Math.round(c.temoinD * 10) / 10,
+      passes: c.passes, elimine: c.elimine, total: c.total,
     };
   }
 
@@ -109,11 +112,7 @@ export class SalleRelais {
   }
   etat() { this.diffuser({ t: 'salle', ...this.vue() }); }
 
-  /** Geometrie : la zone du relayeur k (2..4), en metres absolus. */
-  zoneDe(relais) {
-    const debut = (relais - 1) * LEG;
-    return { debut, fin: debut + ZONE };
-  }
+  zoneDe(relais) { return zoneDe(relais); }
 
   /**
    * La base a laquelle cette salle parle.
@@ -166,9 +165,9 @@ export class SalleRelais {
     const [client, serveur] = Object.values(paire);
     serveur.accept();
 
-    const j = { id: crypto.randomUUID().slice(0, 8), nom, cle, relais,
-                pret: false, d: (relais - 1) * LEG, parti: false, fini: false };
+    const j = { id: crypto.randomUUID().slice(0, 8), nom, cle, relais, pret: false };
     this.joueurs.set(serveur, j);
+    this.laCourse();
     this.vivante();
 
     serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
@@ -177,7 +176,7 @@ export class SalleRelais {
 
     try {
       serveur.send(JSON.stringify({ t: 'bienvenue', moi: j.id, relais: j.relais,
-                                    zone: relais > 1 ? this.zoneDe(relais) : null,
+                                    zone: relais > 1 ? zoneDe(relais) : null,
                                     ...this.vue() }));
     } catch (e) { /* deja fermee */ }
     this.etat();
@@ -190,7 +189,8 @@ export class SalleRelais {
     this.joueurs.delete(ws);
     // Un relais ne se court pas a trois : si quelqu'un part en pleine course,
     // l'equipe ne peut pas finir.
-    if (this.departA && !this.total && !this.elimine) {
+    const c = this.laCourse();
+    if (this.departA && !c.finie()) {
       this.eliminer('un relayeur a quitte la course', j.relais);
     }
     this.diffuser({ t: 'sorti', nom: j.nom, relais: j.relais, ...this.vue() });
@@ -200,11 +200,11 @@ export class SalleRelais {
   }
 
   eliminer(raison, relais) {
-    if (this.elimine) return;
-    this.elimine = { raison, relais: relais || null };
+    const el = this.laCourse().eliminer(raison, relais);
+    if (!el) return;
     this.departA = null;
     this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
-    this.diffuser({ t: 'elimine', ...this.elimine, ...this.vue() });
+    this.diffuser({ t: 'elimine', ...el, ...this.vue() });
   }
 
   // --- protocole -----------------------------------------------------------
@@ -214,6 +214,7 @@ export class SalleRelais {
     if (!j) return;
     let m;
     try { m = JSON.parse(brut); } catch { return; }
+    const c = this.laCourse();
 
     switch (m && m.t) {
       case 'ping':
@@ -227,11 +228,7 @@ export class SalleRelais {
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
           this.departA = Date.now() + AVANT_DEPART_MS;
-          this.porteur = 1; this.temoinD = 0; this.passes = [];
-          this.touches.clear(); this.elimine = null; this.total = null;
-          for (const x of this.joueurs.values()) {
-            x.d = (x.relais - 1) * LEG; x.parti = false; x.fini = false;
-          }
+          c.reinitialiser();
         }
         this.etat();
         return;
@@ -244,62 +241,45 @@ export class SalleRelais {
 
       // Le receveur se place dans sa zone avant le depart.
       case 'marque': {
-        if (this.departA || j.relais === 1) return;
-        const z = this.zoneDe(j.relais);
-        const v = Number(m.d);
-        if (!Number.isFinite(v)) return;
-        j.d = Math.max(z.debut, Math.min(z.fin, v));
-        this.etat();
+        if (this.departA) return;
+        if (c.placer(j.relais, m.d)) this.etat();
         return;
       }
 
       case 'pos': {
-        if (this.elimine) return;
-        const d = Number(m.d);
-        if (!Number.isFinite(d) || d < 0 || d > 500) return;
-        if (d > j.d) j.d = d;
-        j.parti = true;
         this.vivante();
-        if (j.relais === this.porteur) this.temoinD = j.d;
-
-        // Le receveur qui quitte sa zone sans le temoin elimine l'equipe.
-        if (j.relais === this.porteur + 1) {
-          const z = this.zoneDe(j.relais);
-          if (j.d > z.fin) {
-            this.eliminer('sortie de zone sans le temoin', j.relais);
-            return;
-          }
+        const r = c.avancer(j.relais, m.d);
+        if (r.elimine) {
+          this.departA = null;
+          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
+          return;
         }
-        // Le porteur qui depasse la zone en gardant le temoin, aussi.
-        if (this.porteur < TAILLE) {
-          const z = this.zoneDe(this.porteur + 1);
-          if (j.relais === this.porteur && j.d > z.fin) {
-            this.eliminer('le temoin a depasse la zone', j.relais);
-            return;
-          }
+        if (r.d != null) {
+          this.diffuser({ t: 'pos', relais: j.relais, d: Math.round(r.d * 10) / 10 }, ws);
         }
-        this.diffuser({ t: 'pos', relais: j.relais, d: Math.round(j.d * 10) / 10 }, ws);
         return;
       }
 
       // Les deux touchent : le serveur date, verifie la geometrie, et tranche.
       case 'temoin': {
-        if (this.elimine || this.porteur >= TAILLE) return;
-        if (j.relais !== this.porteur && j.relais !== this.porteur + 1) return;
-        this.touches.set(j.relais, Date.now());
-        this.tenterPasse();
+        const r = c.taper(j.relais, Date.now());
+        if (r.elimine) {
+          this.departA = null;
+          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
+          return;
+        }
+        if (r.passe) this.diffuser({ t: 'passe', ...r.passe, ...this.vue() });
         return;
       }
 
       case 'fini': {
-        if (this.elimine || this.total !== null) return;
-        if (j.relais !== TAILLE) return;
-        const ms = Math.round(Number(m.ms));
-        if (!Number.isFinite(ms) || ms < 10000 || ms > 600000) return;
-        j.fini = true;
-        this.total = ms;
+        const r = c.terminer(j.relais, m.ms);
+        if (r.total == null) return;
+        this.departA = null;
         this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
-        this.diffuser({ t: 'fini', total: ms, passes: this.passes, ...this.vue() });
+        this.diffuser({ t: 'fini', total: r.total, passes: c.passes, ...this.vue() });
         const ecrire = this.ecrire();
         if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
         return;
@@ -307,60 +287,17 @@ export class SalleRelais {
     }
   }
 
-  /**
-   * Un passage a lieu quand les deux touches sont la, rapprochees, et que la
-   * geometrie le permet. Tout le reste elimine.
-   */
-  tenterPasse() {
-    const donneur = this.porteur, receveur = this.porteur + 1;
-    const tD = this.touches.get(donneur), tR = this.touches.get(receveur);
-    if (!tD || !tR) return;
-
-    const ecart = Math.abs(tD - tR);
-    if (ecart > FENETRE_TOUCHE_MS) {
-      // Trop loin l'une de l'autre : on ne considere pas que c'est un passage,
-      // on oublie la plus ancienne et on attend.
-      this.touches.delete(tD < tR ? donneur : receveur);
-      return;
-    }
-
-    const jD = [...this.joueurs.values()].find(x => x.relais === donneur);
-    const jR = [...this.joueurs.values()].find(x => x.relais === receveur);
-    if (!jD || !jR) return;
-
-    const z = this.zoneDe(receveur);
-    if (jR.d < z.debut || jR.d > z.fin) {
-      this.eliminer('temoin passe hors de la zone', receveur);
-      return;
-    }
-    if (jD.d < z.debut) {
-      this.eliminer('temoin donne avant la zone', donneur);
-      return;
-    }
-    if (jD.d > z.fin) {
-      this.eliminer('temoin passe hors de la zone', donneur);
-      return;
-    }
-
-    this.porteur = receveur;
-    this.temoinD = jR.d;
-    this.touches.clear();
-    const p = { relais: receveur, a: Math.round(jR.d * 10) / 10,
-                dans_zone: Math.round((jR.d - z.debut) * 10) / 10, ecart };
-    this.passes.push(p);
-    this.diffuser({ t: 'passe', ...p, ...this.vue() });
-  }
-
   async ecrire() {
     try {
-      if (!this.base() || !this.equipe || this.total == null) return;
+      const c = this.laCourse();
+      if (!this.base() || !this.equipe || c.total == null) return;
       // Les quatre temps de portion ne sont pas encore transmis par les
       // clients : on inscrit le cumul reparti, la course entiere etant la
       // seule chose que le serveur a reellement chronometree.
-      const part = Math.round(this.total / TAILLE);
+      const part = Math.round(c.total / TAILLE);
       await enregistrerRelais(this.base(), {
         team_id: this.equipe, race_key: this.epreuve,
-        legs: [part, part, part, this.total - 3 * part],
+        legs: [part, part, part, c.total - 3 * part],
       });
     } catch (e) { /* le classement se passera de cette course */ }
   }
