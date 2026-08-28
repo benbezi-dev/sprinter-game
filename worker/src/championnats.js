@@ -14,9 +14,10 @@
 --------------------------------------------------------------------------- */
 
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER,
+  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
+  ANNONCES,
 } from './championnats-config.js';
-import { serpentin, qualifier, podium, calendrier } from './championnats-moteur.js';
+import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 
 /** Le continent d'un pays. Table courte : on n'y met que ce qu'on utilise. */
 const CONTINENTS = {
@@ -156,8 +157,50 @@ export async function ensureChampTables(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_titres_porteur
                   ON champ_titres(name_key, expire_le)`),
+
+    // Le fil des annonces. C'est la seule memoire de ce qui s'est passe en
+    // direct, et elle sert trois choses d'un coup : la diffusion dans
+    // l'application, les notifications, et le recapitulatif mondial. Les ecrire
+    // une fois plutot que de les recalculer trois fois garantit que les trois
+    // racontent la meme competition.
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_annonces (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      edition TEXT,
+      echelon TEXT NOT NULL,
+      zone TEXT NOT NULL,
+      type TEXT NOT NULL,
+      titre TEXT NOT NULL,
+      texte TEXT,
+      donnees TEXT,
+      au INTEGER NOT NULL,
+      pousser INTEGER NOT NULL DEFAULT 0
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_fil ON champ_annonces(id)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_zone ON champ_annonces(zone, id)`),
   ]);
   pret = true;
+}
+
+/**
+ * Ecrit une annonce dans le fil.
+ *
+ * `pousser` distingue ce qui merite de faire vibrer un telephone de ce qui
+ * merite seulement d'apparaitre a l'ecran. La liste est en configuration
+ * (`ANNONCES`) parce que c'est un reglage d'audience, pas une regle du sport :
+ * trop de notifications et l'application se fait couper le son une fois pour
+ * toutes, ce dont on ne revient pas.
+ */
+export async function annoncer(db, { edition, echelon, zone, type, titre, texte, donnees }) {
+  await ensureChampTables(db);
+  const r = await db.prepare(
+    `INSERT INTO champ_annonces (edition, echelon, zone, type, titre, texte, donnees, au, pousser)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    edition || null, echelon, String(zone || '').toUpperCase(), type,
+    titre, texte || null, donnees ? JSON.stringify(donnees) : null,
+    Date.now(), ANNONCES.has(type) ? 1 : 0
+  ).run();
+  return r;
 }
 
 /**
@@ -238,39 +281,127 @@ function code(n = 8) {
   return s;
 }
 
+/** Le classement des duels d'une zone, pour completer une grille. */
+async function classement(db, { pays = null, continent = null, exclure, limite }) {
+  const depuis = Date.now() - ECHELONS.national.fenetreActiviteJours * 24 * 3600 * 1000;
+  const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
+  const args = pays ? [pays] : continent ? [continent] : [];
+  const { results } = await db.prepare(
+    `SELECT d.name_key AS cle, d.name AS nom, d.points
+       FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
+      WHERE ${ou} AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      ORDER BY d.points DESC, d.wins DESC, d.losses ASC, d.name ASC
+      LIMIT ?`
+  ).bind(...args, depuis, limite + (exclure ? exclure.size : 0)).all();
+  const pris = [];
+  for (const r of results || []) {
+    if (exclure && exclure.has(r.cle)) continue;
+    pris.push(r);
+    if (pris.length >= limite) break;
+  }
+  return pris;
+}
+
+/** Les champions en titre d'un echelon, encore porteurs a cette seconde. */
+async function championsEnTitre(db, echelon, filtreZone) {
+  const { results } = await db.prepare(
+    `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
+            COALESCE(d.points, 0) AS points
+       FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
+      WHERE t.echelon = ? AND t.expire_le > ?
+      ORDER BY t.sacre_le DESC`
+  ).bind(echelon, Date.now()).all();
+
+  const vus = new Set();
+  const sortie = [];
+  for (const r of results || []) {
+    if (vus.has(r.cle)) continue;                 // un seul titre par personne
+    if (filtreZone && !filtreZone(r.zone)) continue;
+    vus.add(r.cle);
+    sortie.push(r);
+  }
+  return sortie;
+}
+
 /**
- * Ouvre une edition nationale : fige les 32 meilleurs du pays et seme la grille.
+ * Qui prend le depart, selon l'echelon.
+ *
+ * Renvoie { joueurs, doffice } ou une erreur. `doffice` est l'ensemble des cles
+ * qualifiees par leur titre plutot que par leur classement — l'information
+ * interesse l'affichage, pas la competition.
+ */
+async function pool(db, echelon, zone) {
+  if (echelon === 'national') {
+    const cfg = ECHELONS.national;
+    const n = await effectifPays(db, zone, cfg.fenetreActiviteJours);
+    if (n < cfg.minJoueurs) {
+      return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
+    }
+    const l = await classement(db, { pays: zone, exclure: new Set(), limite: FORMAT.partants });
+    return { joueurs: l, doffice: new Set() };
+  }
+
+  // Continental et mondial partagent la meme mecanique : des champions
+  // qualifies d'office, puis un repechage au classement de la zone jusqu'a 32.
+  const estContinental = echelon === 'continental';
+  const champions = estContinental
+    ? await championsEnTitre(db, 'national', z => continentDe(z) === zone)
+    : await championsEnTitre(db, 'continental', null);
+
+  const minimum = MIN_DOFFICE[echelon] || 0;
+  if (champions.length < minimum) {
+    return {
+      erreur: 'pas assez de champions',
+      champions: champions.length, requis: minimum,
+      repli: 'attendre',
+    };
+  }
+
+  const exclure = new Set(champions.map(c => c.cle));
+  const complement = await classement(db, {
+    continent: estContinental ? zone : null,
+    exclure, limite: FORMAT.partants - champions.length,
+  });
+
+  const joueurs = [...champions, ...complement];
+  return { joueurs, doffice: exclure };
+}
+
+/**
+ * Ouvre une edition et seme sa grille.
  *
  * « Figes a la cloture » est le point important : une fois l'edition ouverte,
  * le classement des duels peut bouger comme il veut, la grille ne bouge plus.
  * Sans quoi un joueur pourrait entrer ou sortir de la competition entre deux
  * courses, ce qui n'aurait aucun sens.
  */
-export async function ouvrirNational(db, { pays, debutSamedi }) {
+export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
   await ensureChampTables(db);
-  const cfg = ECHELONS.national;
-  const p = String(pays).toUpperCase();
+  if (!ECHELONS[echelon]) return { erreur: 'echelon inconnu' };
+  const z = String(zone || 'MONDE').toUpperCase();
 
-  const n = await effectifPays(db, p, cfg.fenetreActiviteJours);
-  if (n < cfg.minJoueurs) {
-    return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
+  // Une zone ne tient qu'un championnat a la fois. Deux editions ouvertes pour
+  // le meme pays produiraient deux champions du meme endroit, et un titre qui
+  // ne veut plus rien dire.
+  const deja = await db.prepare(
+    `SELECT id, debut FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND etat <> 'terminee' LIMIT 1`
+  ).bind(echelon, z).first();
+  if (deja) return { erreur: 'edition deja ouverte', edition: deja.id, debut: deja.debut };
+
+  const p = await pool(db, echelon, z);
+  if (p.erreur) return p;
+  if (p.joueurs.length < FORMAT.partants) {
+    return { erreur: 'grille incomplete', joueurs: p.joueurs.length, requis: FORMAT.partants };
   }
 
-  const depuis = Date.now() - cfg.fenetreActiviteJours * 24 * 3600 * 1000;
-  const { results } = await db.prepare(
-    `SELECT d.name_key, d.name, d.points, d.wins, d.losses
-       FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE g.pays = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
-      ORDER BY d.points DESC, d.wins DESC, d.losses ASC, d.name ASC
-      LIMIT ?`
-  ).bind(p, depuis, FORMAT.partants).all();
-
-  const joueurs = (results || []).map((r, i) => ({
-    cle: r.name_key, nom: r.name, rang: i + 1,
-  }));
-  if (joueurs.length < FORMAT.partants) {
-    return { erreur: 'grille incomplete', joueurs: joueurs.length };
-  }
+  // Le semis se fait au classement des duels pour tout le monde, titre ou pas.
+  // Placer les champions en tete de serie parce qu'ils sont champions
+  // desequilibrerait les series, ce que le serpentin existe precisement pour
+  // eviter : on qualifie par le titre, on seme au niveau mesure.
+  const joueurs = [...p.joueurs]
+    .sort((a, b) => (b.points || 0) - (a.points || 0))
+    .map((j, i) => ({ cle: j.cle, nom: j.nom, rang: i + 1, doffice: p.doffice.has(j.cle) }));
 
   const id = code();
   const phase0 = FORMAT.phases[0];
@@ -278,8 +409,8 @@ export async function ouvrirNational(db, { pays, debutSamedi }) {
 
   await db.prepare(
     `INSERT INTO champ_editions (id, echelon, zone, debut, phase, etat, cree_le)
-     VALUES (?, 'national', ?, ?, ?, 'ouverte', ?)`
-  ).bind(id, p, debutSamedi, phase0.cle, Date.now()).run();
+     VALUES (?, ?, ?, ?, ?, 'ouverte', ?)`
+  ).bind(id, echelon, z, debutSamedi, phase0.cle, Date.now()).run();
 
   const lignes = [];
   grille.forEach((course, ic) => course.forEach(j => {
@@ -290,11 +421,79 @@ export async function ouvrirNational(db, { pays, debutSamedi }) {
   }));
   await db.batch(lignes);
 
+  const nom = nomZone(z, echelon);
+  await annoncer(db, {
+    edition: id, echelon, zone: z, type: 'ouverture',
+    titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
+    texte: FORMAT.partants + ' partants, ' + phase0.courses + ' séries. Premier départ samedi.',
+    donnees: { partants: joueurs.length, doffice: p.doffice.size },
+  });
+
   return {
-    edition: id, pays: p, partants: joueurs.length,
+    edition: id, echelon, zone: z, pays: echelon === 'national' ? z : undefined,
+    partants: joueurs.length, doffice: p.doffice.size,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
     calendrier: calendrier(debutSamedi, CALENDRIER),
   };
+}
+
+/** Ouvre une edition nationale. Conserve pour les appels existants. */
+export async function ouvrirNational(db, { pays, debutSamedi }) {
+  return ouvrirEchelon(db, { echelon: 'national', zone: pays, debutSamedi });
+}
+
+/**
+ * Ouvre le meme weekend pour tous les pays qui peuvent le tenir.
+ *
+ * « Tous les championnats nationaux ont lieu le meme weekend » n'est pas un
+ * detail d'affichage : c'est ce qui fait qu'un joueur sait que pendant qu'il
+ * court sa serie, trente autres pays courent la leur. Une seule date, passee
+ * a tout le monde, et les pays trop petits ressortent dans `ecartes` avec
+ * leur raison plutot que d'echouer en silence.
+ */
+export async function ouvrirCycle(db, { debutSamedi, echelon = 'national' }) {
+  await ensureChampTables(db);
+  const ouvertes = [], ecartes = [];
+
+  if (echelon === 'national') {
+    for (const p of await paysEligibles(db)) {
+      if (!p.eligible) { ecartes.push({ zone: p.pays, raison: 'pays trop petit', joueurs: p.joueurs, repli: p.repli }); continue; }
+      const r = await ouvrirEchelon(db, { echelon: 'national', zone: p.pays, debutSamedi });
+      if (r.erreur) ecartes.push({ zone: p.pays, raison: r.erreur, ...r });
+      else ouvertes.push({ zone: p.pays, edition: r.edition, partants: r.partants });
+    }
+  } else if (echelon === 'continental') {
+    for (const c of Object.keys(CONTINENTS)) {
+      const r = await ouvrirEchelon(db, { echelon: 'continental', zone: c, debutSamedi });
+      if (r.erreur) ecartes.push({ zone: c, raison: r.erreur, ...r });
+      else ouvertes.push({ zone: c, edition: r.edition, partants: r.partants });
+    }
+  } else {
+    const r = await ouvrirEchelon(db, { echelon: 'mondial', zone: 'MONDE', debutSamedi });
+    if (r.erreur) ecartes.push({ zone: 'MONDE', raison: r.erreur, ...r });
+    else ouvertes.push({ zone: 'MONDE', edition: r.edition, partants: r.partants });
+  }
+
+  return { echelon, debut: debutSamedi, ouvertes, ecartes };
+}
+
+/**
+ * Les trois weekends d'un cycle, deduits du premier.
+ *
+ * Les delais entre echelons sont en configuration : ils servent a agreger les
+ * champions et a fabriquer l'attente, et ce sont exactement les nombres qu'on
+ * voudra bouger apres le premier cycle.
+ */
+export function calendrierCycle(debutSamedi) {
+  const SEMAINE = 7 * 24 * 3600 * 1000;
+  const nat = debutSamedi;
+  const con = nat + ECHELONS.continental.semainesApresPrecedent * SEMAINE;
+  const mon = con + ECHELONS.mondial.semainesApresPrecedent * SEMAINE;
+  return [
+    { echelon: 'national',    debut: nat, rendezVous: calendrier(nat, CALENDRIER) },
+    { echelon: 'continental', debut: con, rendezVous: calendrier(con, CALENDRIER) },
+    { echelon: 'mondial',     debut: mon, rendezVous: calendrier(mon, CALENDRIER) },
+  ];
 }
 
 /** L'etat complet d'une edition : ou elle en est, qui court quoi. */
@@ -355,7 +554,41 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   }
   if (!lignes.length) return { erreur: 'aucun chrono exploitable' };
   await db.batch(lignes);
-  return { ok: true, enregistres: lignes.length, sur: attendus.size };
+
+  // Les qualifies directs d'une course sont decides par cette course seule :
+  // on peut donc les annoncer des l'arrivee, ce que la mise en scene demande.
+  // Les repeches, eux, se calculent sur les quatre series et attendent la
+  // cloture — c'est tout l'ecart entre ce qui se voit et ce qui se devine.
+  const cfgPhase = FORMAT.phases.find(x => x.cle === phase);
+  const { results: arrivee } = await db.prepare(
+    `SELECT r.name_key AS cle, r.ms, p.nom, p.rang_duel AS rang
+       FROM champ_resultats r JOIN champ_partants p
+         ON p.edition = r.edition AND p.name_key = r.name_key
+      WHERE r.edition = ? AND r.phase = ? AND r.course = ?`
+  ).bind(edition, phase, course).all();
+
+  const ordre = ordonner(arrivee || []);
+  const directs = ordre.slice(0, (cfgPhase && cfgPhase.directsParCourse) || 0);
+  const ed = await db.prepare(
+    `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
+
+  if (ed) {
+    await annoncer(db, {
+      edition, echelon: ed.echelon, zone: ed.zone,
+      type: directs.length ? 'qualification-directe' : 'course-terminee',
+      titre: (cfgPhase ? cfgPhase.nom : phase) + ' — course ' + course,
+      texte: directs.length
+        ? directs.map(r => r.nom).join(' et ') + ' passent directement.'
+        : 'Course terminée.',
+      donnees: {
+        phase, course,
+        arrivee: ordre.map((r, i) => ({ place: i + 1, nom: r.nom, ms: r.ms })),
+        directs: directs.map(r => r.nom),
+      },
+    });
+  }
+
+  return { ok: true, enregistres: lignes.length, sur: attendus.size, directs: directs.map(r => r.nom) };
 }
 
 /**
@@ -435,6 +668,24 @@ export async function cloturerPhase(db, edition) {
     `UPDATE champ_editions SET phase = ? WHERE id = ?`).bind(suivante.cle, edition));
   await db.batch(ecritures);
 
+  // Le seul moment de la competition ou le suspense est fabrique plutot que
+  // couru : les repeches n'existaient dans aucune course, ils sortent du
+  // classement de toutes.
+  await annoncer(db, {
+    edition, echelon: e.echelon, zone: e.zone,
+    type: suivante.cle === 'finale' ? 'reveal-finale' : 'reveal-demies',
+    titre: 'Les repêchés — ' + suivante.nom,
+    texte: q.repeches.length
+      ? q.repeches.map(r => r.nom).join(', ') + ' sont repêchés au chrono.'
+      : 'Aucun repêchage.',
+    donnees: {
+      directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
+      repeches: q.repeches.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
+      elimines: q.elimines.length,
+      grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
+    },
+  });
+
   return {
     phase: e.phase, suivante: suivante.cle,
     directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
@@ -485,7 +736,85 @@ export async function sacrer(db, edition, gagnant) {
         WHERE id = ?`
     ).bind(gagnant.cle, gagnant.nom, maintenant, edition),
   ]);
+
+  await annoncer(db, {
+    edition, echelon: e.echelon, zone: e.zone, type: 'sacre',
+    titre: gagnant.nom + ' — ' + libelle,
+    texte: 'Titre porté ' + TITRE_MOIS + ' mois.',
+    donnees: { champion: gagnant.nom, libelle, expire_le: expire.getTime() },
+  });
+
   return { libelle, champion: gagnant.nom, expire_le: expire.getTime() };
+}
+
+/**
+ * Le fil des annonces, pour la diffusion en direct.
+ *
+ * `depuis` est un identifiant, pas une date : un client qui a deja vu
+ * l'annonce 412 demande la suite et recoit exactement ce qu'il n'a pas vu,
+ * sans trou ni doublon meme si deux annonces tombent dans la meme milliseconde.
+ * C'est ce qui permet a un ecran de rester ouvert un weekend entier.
+ */
+export async function fluxDirect(db, { zone = null, depuis = 0, limite = 50 } = {}) {
+  await ensureChampTables(db);
+  const z = zone ? String(zone).toUpperCase() : null;
+  const { results } = await db.prepare(
+    z
+      ? `SELECT * FROM champ_annonces WHERE zone = ? AND id > ? ORDER BY id LIMIT ?`
+      : `SELECT * FROM champ_annonces WHERE id > ? ORDER BY id LIMIT ?`
+  ).bind(...(z ? [z, depuis, limite] : [depuis, limite])).all();
+
+  const annonces = (results || []).map(r => ({
+    id: r.id, edition: r.edition, echelon: r.echelon, zone: r.zone,
+    zoneNom: nomZone(r.zone, r.echelon).nom,
+    type: r.type, titre: r.titre, texte: r.texte,
+    donnees: r.donnees ? JSON.parse(r.donnees) : null,
+    au: r.au, pousser: !!r.pousser,
+  }));
+  return {
+    annonces,
+    curseur: annonces.length ? annonces[annonces.length - 1].id : depuis,
+  };
+}
+
+/**
+ * Le recapitulatif mondial : qui court, qui vient d'etre sacre.
+ *
+ * L'ecran existe pour une raison precise — un joueur seul devant sa course ne
+ * voit pas qu'il participe a quelque chose de mondial. Cette vue le lui montre :
+ * les editions en cours partout, et les champions qui tombent un par un.
+ */
+export async function recapMondial(db, { echelon = null } = {}) {
+  await ensureChampTables(db);
+  const args = [], ou = [];
+  if (echelon) { ou.push('echelon = ?'); args.push(echelon); }
+  const filtre = ou.length ? 'WHERE ' + ou.join(' AND ') : '';
+
+  const { results: editions } = await db.prepare(
+    `SELECT id, echelon, zone, debut, phase, etat, champion_nom, fini_le
+       FROM champ_editions ${filtre} ORDER BY debut DESC, zone`
+  ).bind(...args).all();
+
+  const encours = [], sacres = [];
+  for (const e of editions || []) {
+    const z = nomZone(e.zone, e.echelon);
+    const ligne = {
+      edition: e.id, echelon: e.echelon, zone: e.zone, zoneNom: z.nom,
+      debut: e.debut, phase: e.phase,
+    };
+    if (e.etat === 'terminee') {
+      sacres.push({ ...ligne, champion: e.champion_nom, fini_le: e.fini_le });
+    } else {
+      encours.push(ligne);
+    }
+  }
+  sacres.sort((a, b) => (b.fini_le || 0) - (a.fini_le || 0));
+
+  return {
+    encours, sacres,
+    total: (editions || []).length,
+    termines: sacres.length,
+  };
 }
 
 export { FORMAT, ECHELONS, TITRE_MOIS, CALENDRIER, qualifier, podium, calendrier };

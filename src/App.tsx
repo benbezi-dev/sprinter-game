@@ -47,9 +47,21 @@ function useVisualViewportHeight() {
       document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
     };
     setHeight();
+    // Une application lancee depuis l'ecran d'accueil sur iOS met parfois
+    // plusieurs images a etablir sa hauteur definitive — et n'emet alors aucun
+    // evenement de redimensionnement. Sans ces quelques repassages, la variable
+    // reste figee sur la valeur du demarrage pour toute la session, et
+    // l'application s'affiche plus courte que l'ecran.
+    const rappels = [80, 300, 800, 1600].map(d => setTimeout(setHeight, d));
     window.addEventListener('resize', setHeight);
     window.addEventListener('orientationchange', () => setTimeout(setHeight, 120));
-    return () => window.removeEventListener('resize', setHeight);
+    // Au retour d'arriere-plan, la hauteur peut avoir change sans evenement.
+    window.addEventListener('pageshow', setHeight);
+    return () => {
+      rappels.forEach(clearTimeout);
+      window.removeEventListener('resize', setHeight);
+      window.removeEventListener('pageshow', setHeight);
+    };
   }, []);
 }
 

@@ -51,16 +51,28 @@ export const ECHELONS = {
     // Chaque champion national du continent est qualifie d'office ; on complete
     // jusqu'a 32 par les mieux classes du continent au classement des duels.
     qualifiesDOffice: 'champions_nationaux',
+    complementPar: 'classement_continental',
     semainesApresPrecedent: 3,
     titre: 'Champion d’{zone}',
   },
   mondial: {
     cle: 'mondial', nom: 'Championnat du monde',
     qualifiesDOffice: 'champions_continentaux',
+    complementPar: 'classement_mondial',
     semainesApresPrecedent: 4,
     titre: 'Champion du monde',
   },
 };
+
+/**
+ * Ce qu'on exige d'un pool de qualification avant d'ouvrir une edition.
+ *
+ * Un continental a besoin de champions nationaux pour exister : ouvrir un
+ * continental sans aucun champion sacre produirait une competition qui porte
+ * le nom d'un continent et n'en represente rien. On demande donc un minimum de
+ * qualifies d'office, faute de quoi l'edition attend le cycle suivant.
+ */
+export const MIN_DOFFICE = { continental: 2, mondial: 2 };
 
 /**
  * Combien de temps un titre se porte.
@@ -115,7 +127,7 @@ export const CALENDRIER = {
 
 /** Les moments qui meritent de sortir une notification. */
 export const ANNONCES = new Set([
-  'serie-depart', 'qualification-directe', 'reveal-demies',
+  'ouverture', 'serie-depart', 'qualification-directe', 'reveal-demies',
   'demie-depart', 'reveal-finale', 'finale-depart', 'sacre',
 ]);
 

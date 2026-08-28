@@ -6,8 +6,10 @@ export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
-  ouvrirNational, titresDe, continentDe,
+  ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
+  titresDe, continentDe,
   etatEdition, enregistrerCourse, cloturerPhase,
+  fluxDirect, recapMondial,
 } from './championnats.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -485,16 +487,57 @@ export default {
         return json({ titres: key ? await titresDe(env.DB, key) : [] });
       }
 
-      // Ouvrir une edition nationale. Reserve a l'exploitation : c'est un acte
-      // de calendrier, pas une action de joueur.
+      // Ouvrir une edition. Reserve a l'exploitation : c'est un acte de
+      // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
+      // national, ce que faisaient les appels existants.
       if (sous === 'ouvrir' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { pays, debut } = body || {};
+        const { pays, zone, echelon, debut } = body || {};
         const t = Number(debut);
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
-        const r = await ouvrirNational(env.DB, { pays, debutSamedi: t });
+        const r = await ouvrirEchelon(env.DB, {
+          echelon: echelon || 'national',
+          zone: zone || pays || 'MONDE',
+          debutSamedi: t,
+        });
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Le meme weekend pour tout le monde : un seul appel ouvre tout un
+      // echelon d'un coup, et dit qui a ete ecarte et pourquoi.
+      if (sous === 'cycle' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const t = Number(body && body.debut);
+        if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
+        return json(await ouvrirCycle(env.DB, {
+          debutSamedi: t, echelon: (body && body.echelon) || 'national',
+        }));
+      }
+
+      // Les trois weekends d'un cycle, deduits du premier.
+      if (sous === 'calendrier' && request.method === 'GET') {
+        const t = Number(url.searchParams.get('debut'));
+        if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
+        return json({ cycle: calendrierCycle(t) });
+      }
+
+      // La diffusion en direct. `depuis` est le dernier identifiant deja vu :
+      // un ecran ouvert tout le weekend redemande la suite, jamais le passe.
+      if (sous === 'direct' && request.method === 'GET') {
+        const depuis = parseInt(url.searchParams.get('depuis') || '0', 10) || 0;
+        const limite = Math.min(200, parseInt(url.searchParams.get('limite') || '50', 10) || 50);
+        return json(await fluxDirect(env.DB, {
+          zone: url.searchParams.get('zone'), depuis, limite,
+        }));
+      }
+
+      // Le recapitulatif mondial : qui court, qui vient d'etre sacre.
+      if (sous === 'monde' && request.method === 'GET') {
+        return json(await recapMondial(env.DB, {
+          echelon: url.searchParams.get('echelon') || null,
+        }));
       }
 
       // L'etat d'une edition : ou elle en est, qui court quoi.

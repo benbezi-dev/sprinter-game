@@ -47,7 +47,26 @@ export function GameCanvas() {
     };
     
     resize();
-    window.addEventListener('resize', resize);
+
+    // On observe le parent plutot que d'ecouter `resize` sur window, et ce
+    // n'est pas un detail de style.
+    //
+    // La hauteur du conteneur vient d'une variable CSS que le composant parent
+    // met a jour sur `resize`. Or les effets React s'executent des enfants vers
+    // les parents : l'ecouteur du canvas etait donc pose en premier, et partait
+    // en premier — il mesurait le conteneur avant que celui-ci n'ait recu sa
+    // nouvelle hauteur, et gardait ainsi une mesure de retard en permanence.
+    //
+    // Invisible sur un ecran qui ne change jamais de taille. Mais une
+    // application installee sur iOS stabilise sa hauteur une seule fois, juste
+    // apres le lancement : le canvas restait alors bloque a la hauteur du
+    // demarrage, et le jeu ne dessinait que dans le haut de l'ecran.
+    //
+    // Un ResizeObserver, lui, se declenche apres la mise en page, avec la
+    // taille reelle, sans dependre de l'ordre des ecouteurs.
+    const observateur = new ResizeObserver(resize);
+    observateur.observe(canvas.parentElement || canvas);
+    // Filet : la densite de pixels peut changer sans que le parent ne bouge.
     window.addEventListener('orientationchange', () => setTimeout(resize, 120));
     
     // Initial game state setup if needed
@@ -182,7 +201,7 @@ export function GameCanvas() {
     
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      window.removeEventListener('resize', resize);
+      observateur.disconnect();
     };
   }, []);
   

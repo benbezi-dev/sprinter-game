@@ -4,14 +4,21 @@ import { motion } from 'framer-motion';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
-  type EtatSalle, type JoueurSalle,
+  type EtatSalle, type JoueurSalle, type Presentation,
 } from '@/game/live';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
+import { Voix, type EtatVoix } from '@/game/voix';
+import { Review, type EtatReview } from '@/game/review';
+import { PresentationDirect } from './PresentationDirect';
+import { ReviewVideo } from './ReviewVideo';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
-type Etape = 'repos' | 'ouverture' | 'salon' | 'partie';
+/** Le mot du vainqueur, apres la course. */
+const MICRO_VAINQUEUR_MS = 5000;
+
+type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
 
 /**
  * Course en direct.
@@ -36,8 +43,21 @@ export function LivePanel() {
   const [copie, setCopie] = useState(false);
   const [nom, setNom] = useState(getSavedName());
 
+  const [presentation, setPresentation] = useState<Presentation | null>(null);
+  const [voixEtat, setVoixEtat] = useState<EtatVoix>({
+    micro: false, refuse: false, ouvert: false, connecte: false,
+  });
+  const [review, setReview] = useState<EtatReview>({
+    phase: 'inactif', url: null, fichier: '', reste: 0, taille: 0,
+  });
+
   const salle = useRef<Salle | null>(null);
+  const voix = useRef<Voix | null>(null);
+  const film = useRef<Review | null>(null);
   const auto = useRef(false);
+  /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
+  const cibleDepart = useRef<number | null>(null);
+  const presEnCours = useRef(false);
 
   // Un lien ?direct=CODE tombe directement dans le salon.
   useEffect(() => {
@@ -45,30 +65,93 @@ export function LivePanel() {
     auto.current = true;
     const c = codeDirectUrl();
     if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
-    return () => { salle.current?.fermer(); };
+    return () => {
+      salle.current?.fermer();
+      voix.current?.arreter();
+      film.current?.jeter();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Ouvre la liaison audio. Un seul des deux emet l'offre — l'hote — sans quoi
+   * les deux negociations se croisent et aucune n'aboutit.
+   */
+  const ouvrirVoix = () => {
+    if (voix.current) return;
+    const v = new Voix({
+      envoyer: (type, charge) => salle.current?.signaler(type, charge),
+      onEtat: setVoixEtat,
+    });
+    voix.current = v;
+    v.demarrer(!!salle.current?.suisHote);
+  };
+
+  /**
+   * Le pistolet. Appele soit a la fin de la presentation, soit tout de suite
+   * si la salle n'en a pas annonce — le mode reste jouable contre un serveur
+   * qui ne connaitrait pas encore la sequence.
+   */
+  const lancerCourse = () => {
+    const dans = Math.max(0, (cibleDepart.current ?? Date.now()) - Date.now());
+    const adverse = salle.current?.adversaire || '';
+    if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
+      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse });
+    }
+    SprinterApp.G.liveNom = adverse;
+    SprinterApp.G.ghostName = adverse;
+    SprinterApp.liveDepart(dans);
+    setEtape('partie');
+
+    // On ne filme que la course. Un peu avant le coup de pistolet, pour ne pas
+    // perdre les premieres images le temps que l'encodeur demarre.
+    if (!film.current) film.current = new Review(setReview);
+    const f = film.current;
+    setTimeout(() => f.demarrer(SprinterApp.G.cv || null), Math.max(0, dans - 300));
+  };
+
   const ecouteurs = (monCode: string) => ({
-    onEtat: (e: EtatSalle) => { setSalon(e); setEtape('salon'); },
+    onEtat: (e: EtatSalle) => {
+      setSalon(e);
+      setEtape(p => (p === 'presentation' || p === 'partie' || p === 'review') ? p : 'salon');
+    },
+    onPresentation: (p: Presentation) => {
+      setPresentation(p);
+      presEnCours.current = true;
+      setEtape('presentation');
+      // La voix se monte pendant la presentation : la negociation prend un
+      // instant, et on veut que le micro soit deja pret au premier passage.
+      ouvrirVoix();
+    },
     onDepart: (dansMs: number) => {
-      // La salle a donne l'heure : on lance la course et on cale le decompte.
-      const adverse = salle.current?.adversaire || '';
-      if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-        SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse });
-      }
-      SprinterApp.G.liveNom = adverse;
-      SprinterApp.G.ghostName = adverse;
-      SprinterApp.liveDepart(dansMs);
-      setEtape('partie');
+      cibleDepart.current = Date.now() + dansMs;
+      if (!presEnCours.current) lancerCourse();
     },
     onPos: (d: number) => SprinterApp.liveDist(d),
     onFini: (_n: string, ms: number) => { SprinterApp.G.liveFin = ms; },
     onResultat: (r: any) => {
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
       SprinterApp.G.liveOn = true;
+      presEnCours.current = false;
+      setPresentation(null);
+      film.current?.arreter();
+
+      // Le mot du vainqueur : cinq secondes, et seulement pour lui. Le perdant
+      // garde son micro coupe, ce qui est aussi une facon de ne pas transformer
+      // une defaite en moment penible.
+      const jaiGagne = (r.issue === 'challenger' && salle.current?.suisHote) ||
+                       (r.issue === 'opponent' && !salle.current?.suisHote);
+      if (jaiGagne) voix.current?.ouvrirMicro(MICRO_VAINQUEUR_MS);
+      else voix.current?.fermerMicro();
+
+      setEtape('review');
     },
-    onSorti: () => setErreur(N.t('live_gone')),
+    onSignal: (type: 'sdp' | 'ice', charge: any) => {
+      // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
+      if (!voix.current) ouvrirVoix();
+      voix.current?.recu(type, charge);
+    },
+    onSorti: () => { setErreur(N.t('live_gone')); voix.current?.fermerMicro(); },
     onFerme: () => { if (etape === 'salon') setErreur(N.t('live_closed')); },
   });
 
@@ -112,7 +195,20 @@ export function LivePanel() {
   const quitter = () => {
     salle.current?.fermer(); salle.current = null;
     brancherSalle(null);
+    // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
+    // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
+    voix.current?.arreter(); voix.current = null;
+    presEnCours.current = false; cibleDepart.current = null;
+    setPresentation(null);
     setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
+  };
+
+  /** Tout le monde est passe : on enchaine sur le pistolet. */
+  const finPresentation = () => {
+    if (!presEnCours.current) return;
+    presEnCours.current = false;
+    voix.current?.fermerMicro();
+    lancerCourse();
   };
 
   const copier = async () => {
@@ -205,10 +301,45 @@ export function LivePanel() {
 
   // --- salon : on attend, on partage, on se declare pret --------------------
   return (
+    <>
+      {/* La presentation couvre l'ecran : c'est un moment a part, pas un
+          encart dans le salon. */}
+      {etape === 'presentation' && presentation && (
+        <PresentationDirect
+          presentation={presentation}
+          moi={salle.current?.moi || ''}
+          voix={voixEtat}
+          onTour={(_i, estMoi) => {
+            if (estMoi) voix.current?.ouvrirMicro(presentation.micro);
+            else voix.current?.fermerMicro();
+          }}
+          onFini={finPresentation}
+        />
+      )}
+
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"
     >
+      {/* Apres la course : la video, et son compte a rebours. */}
+      {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
+        <ReviewVideo etat={review} onTelecharger={() => film.current?.telecharger()} />
+      )}
+
+      {/* Le mot du vainqueur, pendant qu'il l'a. */}
+      {etape === 'review' && voixEtat.ouvert && (
+        <div className="flex items-center justify-center gap-2 px-3 py-1.5 rounded-full
+                        bg-red-500/15 border border-red-400/40 self-center">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-70" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          </span>
+          <span className="font-mono text-[10px] tracking-widest text-red-300">
+            {N.t('mic_winner')}
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 justify-center">
         <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
         <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
@@ -291,5 +422,6 @@ export function LivePanel() {
         {N.t('live_leave')}
       </button>
     </motion.div>
+    </>
   );
 }

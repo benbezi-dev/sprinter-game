@@ -4,3 +4,9 @@ dist/
 .DS_Store
 worker/node_modules/
 worker/.wrangler/
+
+# Suivi interne : feuille de route, dates de sortie, decisions. Le depot est
+# public — ce tableau ne l'est pas.
+suivi/
+# Configuration locale de l'outillage : chemins absolus propres a la machine.
+.claude/

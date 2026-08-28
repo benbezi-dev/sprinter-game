@@ -26,12 +26,28 @@ export type JoueurSalle = {
   fin: number | null; hote: boolean;
 };
 
+export type Couloir = { id: string; nom: string; couloir: number };
+
+/** La sequence de presentation, telle que la salle l'annonce. */
+export type Presentation = {
+  /** Millisecondes avant le premier participant, dans notre horloge a nous. */
+  dansMs: number;
+  /** Duree d'affichage par participant. */
+  par: number;
+  /** Duree de la fenetre micro dans le creneau de chacun. */
+  micro: number;
+  ordre: Couloir[];
+};
+
 export type EtatSalle = {
   joueurs: JoueurSalle[];
   epreuves: string[] | null;
   niveau: number;
   depart_a: number | null;
   termine: boolean;
+  presentation?: {
+    debut_a: number; par: number; micro: number; ordre: Couloir[];
+  } | null;
 };
 
 export type ResultatDirect = {
@@ -42,12 +58,15 @@ export type ResultatDirect = {
 
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
+  onPresentation?: (p: Presentation) => void;
   onDepart?: (dansMs: number) => void;
   onPos?: (d: number) => void;
   onFini?: (nom: string, ms: number, abandon: boolean) => void;
   onResultat?: (r: ResultatDirect) => void;
   onSorti?: (nom: string) => void;
   onFerme?: (raison: string) => void;
+  /** Signalisation WebRTC arrivee de l'autre pair. */
+  onSignal?: (type: 'sdp' | 'ice', charge: any) => void;
 };
 
 /** Demande un code de salle au serveur : meme alphabet que les defis. */
@@ -157,15 +176,37 @@ export class Salle {
         return;
       case 'resultat':
         this.departPose = false;
+        this.presentationPose = false;
         this.ec.onResultat?.(m as ResultatDirect);
+        return;
+      // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
+      // pour la connexion audio, qui s'en charge.
+      case 'sdp':
+      case 'ice':
+        this.ec.onSignal?.(m.t, m.charge);
         return;
     }
   }
+
+  private presentationPose = false;
 
   private majEtat(m: any) {
     const autre = (m.joueurs || []).find((j: JoueurSalle) => j.id !== this.moi);
     this.adversaire = autre ? autre.nom : '';
     this.ec.onEtat?.(m as EtatSalle);
+
+    // Comme le depart, la presentation est annoncee a une date absolue. On la
+    // ramene dans notre horloge une seule fois, et le reste se compte en local.
+    const p = m.presentation;
+    if (p && p.debut_a && !this.presentationPose) {
+      this.presentationPose = true;
+      this.ec.onPresentation?.({
+        dansMs: p.debut_a - (Date.now() + this.decalage),
+        par: p.par, micro: p.micro, ordre: p.ordre || [],
+      });
+    }
+    if (!p) this.presentationPose = false;
+
     if (m.depart_a && !this.departPose) {
       this.departPose = true;
       // Le depart est une date, pas un signal : on la ramene dans notre
@@ -186,6 +227,8 @@ export class Salle {
   }
 
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
+  /** Passe une offre, une reponse ou un candidat ICE a l'autre pair. */
+  signaler(type: 'sdp' | 'ice', charge: any) { this.envoyer({ t: type, charge }); }
   position(d: number) { this.envoyer({ t: 'pos', d }); }
   fini(ms: number) { this.envoyer({ t: 'fini', ms: Math.round(ms) }); }
   abandon() { this.envoyer({ t: 'abandon' }); }

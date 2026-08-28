@@ -24,6 +24,12 @@
     <meta property="og:image" content="/icon-512.png" />
     <meta name="twitter:image" content="/icon-512.png" />
     <meta name="theme-color" content="#0a0f1c" />
+    <!-- Avant iOS 16.4, Safari ignorait le champ `display` du manifeste : seule
+         cette balise faisait ouvrir l'application en plein ecran depuis
+         l'ecran d'accueil. Sans effet sur les versions recentes, qui lisent le
+         manifeste — mais les anciennes rouvraient l'application dans Safari. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Sprinter" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%icon-192.png" />
     <!-- Chemin relatif a la base : le site est publie sous un

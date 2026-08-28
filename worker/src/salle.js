@@ -39,6 +39,23 @@ const INACTIVITE_MS = 4 * 60 * 1000;
 // Delai entre « tout le monde est pret » et le coup de pistolet. Assez long
 // pour absorber une latence mediocre, assez court pour ne pas ennuyer.
 const AVANT_DEPART_MS = 4000;
+
+// --- presentation des participants, facon championnat ----------------------
+// Chaque participant passe face camera, un par un, avant la course. Les durees
+// sont ici et pas dans le client : c'est la salle qui les annonce, sinon deux
+// clients avec des reglages differents presenteraient des athletes differents
+// au meme instant.
+//
+// Le temps de reaction humain n'entre pas en jeu ici, donc rien n'est annonce
+// comme un signal : comme le depart, la presentation est une date absolue et
+// chacun compte avec sa propre horloge recalee.
+const AVANT_PRESENTATION_MS = 1500;
+// Le cahier des charges demande 5 a 8 secondes ; six laisse le temps de lire
+// un pseudo et d'entendre une phrase sans que l'attente ne pese.
+const PRESENTATION_PAR_JOUEUR_MS = 6000;
+// La fenetre micro tient dans le creneau du participant, pas a cheval dessus :
+// sans quoi on parlerait encore pendant la presentation du suivant.
+const PRESENTATION_MICRO_MS = 5000;
 // Bornes de credibilite d'un chrono annonce par un client.
 const MIN_MS = 1000, MAX_MS = 20 * 60000;
 // Au-dela, on considere que le joueur a abandonne la course en cours.
@@ -60,6 +77,8 @@ export class SalleDirecte {
     this.epreuves = null;      // fixees par le premier arrive
     this.niveau = 4;
     this.departA = null;       // date absolue du coup de pistolet, ms epoch
+    this.presentationA = null; // date absolue du debut de la presentation
+    this.ordre = [];           // les participants dans l'ordre des couloirs
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
     this.code = '';            // le code de la salle, pose au premier appel
@@ -78,6 +97,12 @@ export class SalleDirecte {
     return {
       joueurs, epreuves: this.epreuves, niveau: this.niveau,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
+      presentation: this.presentationA ? {
+        debut_a: this.presentationA,
+        par: PRESENTATION_PAR_JOUEUR_MS,
+        micro: PRESENTATION_MICRO_MS,
+        ordre: this.ordre,
+      } : null,
     };
   }
 
@@ -218,11 +243,35 @@ export class SalleDirecte {
         const tous = this.joueurs.size === MAX_JOUEURS &&
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
-          this.departA = Date.now() + AVANT_DEPART_MS;
+          // L'ordre des couloirs est l'ordre d'inscription : l'hote a ouvert
+          // la salle, il passe le premier. C'est arbitraire mais stable, et
+          // les deux clients doivent en avoir exactement le meme.
+          this.ordre = [...this.joueurs.values()].map((x, i) => ({
+            id: x.id, nom: x.nom, couloir: i + 1,
+          }));
+          this.presentationA = Date.now() + AVANT_PRESENTATION_MS;
+          // Le pistolet tombe apres que tout le monde soit passe. Une seule
+          // soustraction cote client suffit alors a savoir ou l'on en est.
+          this.departA = this.presentationA
+            + this.ordre.length * PRESENTATION_PAR_JOUEUR_MS
+            + AVANT_DEPART_MS;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
         }
         this.envoyerEtat();
+        return;
+      }
+
+      // --- signalisation WebRTC ---------------------------------------------
+      // La salle ne comprend rien a ce qu'elle transporte : une offre, une
+      // reponse et des candidats ICE sont des donnees opaques qu'elle passe a
+      // l'autre bout, en ajoutant seulement qui les envoie. C'est le minimum
+      // qu'un point de rendez-vous doit faire, et c'est deja tout ce dont deux
+      // navigateurs ont besoin pour s'entendre directement.
+      case 'sdp':
+      case 'ice': {
+        this.vivante();
+        this.diffuser({ t: m.t, de: j.id, charge: m.charge }, ws);
         return;
       }
 
@@ -268,6 +317,10 @@ export class SalleDirecte {
     if (tous.length < MAX_JOUEURS || tous.some(x => x.fin === null)) return;
     this.termine = true;
     this.departA = null;
+    // La presentation appartient a la course qui vient d'avoir lieu : une
+    // revanche en refera une neuve, avec l'ordre du moment.
+    this.presentationA = null;
+    this.ordre = [];
 
     const hote = tous.find(x => x.id === this.hote) || tous[0];
     const invite = tous.find(x => x !== hote);
