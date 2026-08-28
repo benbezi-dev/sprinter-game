@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { fetchDuels, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
+import { Drapeau, Medaille } from '@/components/Insignes';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -160,15 +161,25 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                           {r.rank}.
                         </span>
                         <Mouvement move={r.move || 0} />
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <span className={`font-bold tracking-wide truncate text-xs md:text-sm
-                            ${moi ? 'text-primary' : 'text-foreground'}`}>
-                            {r.name}
+                        {/* Le pseudo occupe sa ligne entiere. La medaille est
+                            passee en dessous, avec le bilan : mise a cote du
+                            nom elle le faisait tronquer, et c'est le nom qu'on
+                            vient lire. */}
+                        <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <Drapeau pays={r.pays} className="text-[13px]" />
+                            <span className={`font-bold tracking-wide truncate text-xs md:text-sm
+                              ${moi ? 'text-primary' : 'text-foreground'}`}>
+                              {r.name}
+                            </span>
                           </span>
-                          <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
-                            {N.t('duel_record', { v: r.wins, d: r.losses, n: r.draws })}
-                            {' · '}
-                            {N.t('duel_counts', { l: r.launched || 0, r: r.received || 0 })}
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <Medaille m={r.medaille} />
+                            <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
+                              {N.t('duel_record', { v: r.wins, d: r.losses, n: r.draws })}
+                              {' · '}
+                              {N.t('duel_counts', { l: r.launched || 0, r: r.received || 0 })}
+                            </span>
                           </span>
                         </div>
                       </motion.div>

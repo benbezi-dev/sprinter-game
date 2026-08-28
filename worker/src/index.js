@@ -9,6 +9,7 @@ import {
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
+  medaillesDe, paysDe,
   fluxDirect, recapMondial,
 } from './championnats.js';
 import {
@@ -650,7 +651,12 @@ export default {
       if (sous.startsWith('edition/') && request.method === 'GET') {
         const id = sous.slice('edition/'.length).toUpperCase();
         const e = await etatEdition(env.DB, id);
-        return e ? json(e) : json({ error: 'edition introuvable' }, 404);
+        if (!e) return json({ error: 'edition introuvable' }, 404);
+        // Le drapeau de chacun : un championnat continental ou mondial n'a
+        // aucun sens si l'on ne voit pas d'ou viennent les coureurs.
+        const pays = await paysDe(env.DB, e.partants.map(p => p.name_key));
+        for (const p of e.partants) p.pays = pays.get(p.name_key) || null;
+        return json(e);
       }
 
       // Les chronos d'une course. On range, on ne tranche pas encore.
@@ -825,6 +831,26 @@ export default {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
       const board = await duelBoard(env.DB);
+
+      // Le drapeau et la medaille se posent ici, pas dans duelBoard : le
+      // classement des duels ne doit rien savoir des championnats, sans quoi
+      // deux systemes qui n'ont aucune raison de se connaitre finiraient
+      // enchevetres.
+      //
+      // Une seule medaille par joueur, la plus prestigieuse — un bronze
+      // mondial passe devant un or national. Afficher les trois transformerait
+      // le classement en tableau de decorations.
+      const cles = board.map(r => r.name.trim().toLowerCase());
+      const [pays, medailles] = await Promise.all([
+        paysDe(env.DB, cles), medaillesDe(env.DB, cles),
+      ]);
+      for (const r of board) {
+        const k = r.name.trim().toLowerCase();
+        r.pays = pays.get(k) || null;
+        const m = medailles.get(k);
+        if (m) r.medaille = m;
+      }
+
       const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
       return json({
         bareme: {

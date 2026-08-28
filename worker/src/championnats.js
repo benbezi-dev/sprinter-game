@@ -166,6 +166,25 @@ export async function ensureChampTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_titres_porteur
                   ON champ_titres(name_key, expire_le)`),
 
+    // Les medailles. Distinctes des titres : un titre ne va qu'au vainqueur,
+    // une medaille va aux trois premiers. On garde les deux plutot que d'en
+    // deriver l'une de l'autre, parce qu'elles ne durent pas pareil et ne
+    // veulent pas dire la meme chose — « champion » est un statut, « medaille
+    // de bronze au mondial » est un resultat.
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_medailles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      echelon TEXT NOT NULL,
+      zone TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      nom TEXT NOT NULL,
+      place INTEGER NOT NULL,
+      edition TEXT NOT NULL,
+      obtenu_le INTEGER NOT NULL,
+      expire_le INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS champ_medailles_porteur
+                  ON champ_medailles(name_key, expire_le)`),
+
     // Le fil des annonces. C'est la seule memoire de ce qui s'est passe en
     // direct, et elle sert trois choses d'un coup : la diffusion dans
     // l'application, les notifications, et le recapitulatif mondial. Les ecrire
@@ -685,6 +704,7 @@ export async function cloturerPhase(db, edition) {
     ).bind(r.place, edition, e.phase, r.cle));
     await db.batch(majPlaces);
     if (!p.champion) return { erreur: 'aucun finaliste n a de chrono' };
+    await poserMedailles(db, edition, e, p.podium);
     const sacre = await sacrer(db, edition, { cle: p.champion.cle, nom: p.champion.nom });
     return { phase: e.phase, finale: true, podium: p.podium, classement: p.classement, ...sacre };
   }
@@ -744,6 +764,105 @@ export async function cloturerPhase(db, edition) {
     elimines: q.elimines.length,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
   };
+}
+
+/**
+ * Les trois premiers d'une finale recoivent leur medaille.
+ *
+ * Elles durent le meme temps qu'un titre — jusqu'au championnat suivant — pour
+ * la meme raison : une medaille qu'on porte a vie finirait par ne plus rien
+ * dire, et le classement se couvrirait de sigles sans age.
+ */
+export async function poserMedailles(db, edition, e, podiumTrois) {
+  await ensureChampTables(db);
+  const maintenant = Date.now();
+  const expire = new Date(maintenant);
+  expire.setMonth(expire.getMonth() + TITRE_MOIS);
+  const lignes = podiumTrois.map(r => db.prepare(
+    `INSERT INTO champ_medailles
+       (echelon, zone, name_key, nom, place, edition, obtenu_le, expire_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(e.echelon, e.zone, r.cle, r.nom, r.place, edition, maintenant, expire.getTime()));
+  if (lignes.length) await db.batch(lignes);
+}
+
+/**
+ * Decoupe une liste de cles en paquets interrogeables.
+ *
+ * SQLite plafonne le nombre de parametres lies d'une requete, et D1 bien plus
+ * bas qu'on ne l'imagine. Le classement pouvant compter cinq cents joueurs, un
+ * seul `IN (?, ?, ...)` fait echouer la requete entiere — et l'echec ne se
+ * serait pas vu tant que le classement restait petit. On interroge donc par
+ * paquets.
+ */
+const PAQUET = 80;
+function paquets(liste) {
+  const out = [];
+  for (let i = 0; i < liste.length; i += PAQUET) out.push(liste.slice(i, i + PAQUET));
+  return out;
+}
+
+/** Le rang de prestige d'un echelon. Plus c'est haut, plus ca prime. */
+const PRESTIGE = { mondial: 3, continental: 2, national: 1 };
+
+/**
+ * La meilleure medaille de chacun, pour un ensemble de joueurs.
+ *
+ * « Meilleure » veut dire la plus prestigieuse, et la competition prime sur la
+ * couleur : un bronze mondial passe devant un or national. C'est la regle
+ * demandee, et c'est aussi la seule qui se defende — sans quoi un champion
+ * national afficherait le meme sigle qu'un medaille du monde.
+ *
+ * A egalite d'echelon, c'est la couleur qui departage, puis la date.
+ */
+export async function medaillesDe(db, cles) {
+  await ensureChampTables(db);
+  const liste = [...new Set((cles || []).map(c => String(c || '').toLowerCase()).filter(Boolean))];
+  if (!liste.length) return new Map();
+  const maintenant = Date.now();
+  const lignes = [];
+  for (const bloc of paquets(liste)) {
+    const trous = bloc.map(() => '?').join(',');
+    const { results } = await db.prepare(
+      `SELECT name_key, echelon, zone, place, obtenu_le
+         FROM champ_medailles
+        WHERE expire_le > ? AND name_key IN (${trous})`
+    ).bind(maintenant, ...bloc).all();
+    lignes.push(...(results || []));
+  }
+
+  const meilleures = new Map();
+  for (const r of lignes) {
+    const actuel = meilleures.get(r.name_key);
+    const mieux = !actuel
+      || PRESTIGE[r.echelon] > PRESTIGE[actuel.echelon]
+      || (PRESTIGE[r.echelon] === PRESTIGE[actuel.echelon] && r.place < actuel.place)
+      || (PRESTIGE[r.echelon] === PRESTIGE[actuel.echelon] && r.place === actuel.place
+          && r.obtenu_le > actuel.obtenu_le);
+    if (mieux) {
+      meilleures.set(r.name_key, {
+        echelon: r.echelon, zone: r.zone, place: r.place,
+        zoneNom: nomZone(r.zone, r.echelon).nom,
+      });
+    }
+  }
+  return meilleures;
+}
+
+/** Le pays de chacun, pour un ensemble de joueurs. */
+export async function paysDe(db, cles) {
+  await ensureChampTables(db);
+  const liste = [...new Set((cles || []).map(c => String(c || '').toLowerCase()).filter(Boolean))];
+  if (!liste.length) return new Map();
+  const m = new Map();
+  for (const bloc of paquets(liste)) {
+    const trous = bloc.map(() => '?').join(',');
+    const { results } = await db.prepare(
+      `SELECT name_key, pays FROM player_pays WHERE name_key IN (${trous})`
+    ).bind(...bloc).all();
+    for (const r of results || []) m.set(r.name_key, r.pays);
+  }
+  return m;
 }
 
 /** Le titre porte par un joueur, s'il en porte un et qu'il court toujours. */

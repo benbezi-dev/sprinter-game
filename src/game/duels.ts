@@ -34,6 +34,13 @@ export type DuelRow = {
   rank: number;
   /** Places gagnees depuis la derniere consultation. Positif = montee. */
   move?: number;
+  /** Code du pays, tel que vu ou choisi. */
+  pays?: string | null;
+  /** La medaille la plus prestigieuse encore portee, s'il y en a une. */
+  medaille?: {
+    echelon: 'national' | 'continental' | 'mondial';
+    zone: string; zoneNom: string; place: number;
+  } | null;
 };
 
 /** Issue d'un duel telle que le serveur la tranche, du point de vue de

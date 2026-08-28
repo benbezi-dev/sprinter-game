@@ -20,6 +20,8 @@ export type Partant = {
   course: number | null;
   /** Phase ou il a ete elimine, ou null s'il court encore. */
   sorti_en: string | null;
+  /** Code du pays : un continental ou un mondial n'a aucun sens sans lui. */
+  pays?: string | null;
 };
 
 export type Resultat = {

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Loader2, Timer, Flag, Sparkles, Medal } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
+import { Drapeau } from '@/components/Insignes';
 import {
   etatEdition, fluxDirect, prochain, grille, arrivee,
   type Edition, type Annonce, type Partant,
@@ -72,6 +73,7 @@ function Couloir({ p, place, ms, direct }: {
         ${couru ? 'text-primary' : 'text-muted-foreground/60'}`}>
         {couru ? place : '·'}
       </span>
+      <Drapeau pays={p.pays} className="text-[12px]" />
       <span className="text-[11px] font-bold tracking-wide truncate flex-1 text-foreground">
         {p.nom}
       </span>
@@ -152,8 +154,9 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
   }, [montres, repeches.length]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-6
-                    bg-gradient-to-b from-black/94 via-black/90 to-black/95 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-[#05070d]"
+         style={{ backgroundImage:
+           'radial-gradient(120% 80% at 50% 35%, rgba(248,205,74,0.06), transparent 70%)' }}>
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                   className="w-full max-w-sm flex flex-col items-center gap-4">
         <Sparkles className="w-5 h-5" style={{ color: OR }} />
@@ -204,13 +207,20 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
   const { N } = SprinterApp;
   const fin = arrivee(e, 'finale', 1);
   const trois = fin.slice(0, 3);
+  // Le pays de chacun : sur un podium continental ou mondial, c'est la moitie
+  // de ce qu'on regarde.
+  const paysDe = (cle: string) =>
+    e.partants.find(p => p.name_key === cle)?.pays || null;
+  const paysDuChampion = trois[0] ? paysDe(trois[0].name_key) : null;
   // L'ordre visuel d'un podium : deuxieme, premier, troisieme.
   const ordre = [trois[1], trois[0], trois[2]].filter(Boolean);
   const hauteurs = [64, 96, 48];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6
-                    bg-gradient-to-b from-black/95 via-[#0a0a12]/95 to-black/96">
+                    bg-[#05070d]"
+         style={{ backgroundImage:
+           'radial-gradient(120% 80% at 50% 30%, rgba(248,205,74,0.07), transparent 70%)' }}>
       <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
                   className="w-full max-w-sm flex flex-col items-center gap-5">
         <Trophy className="w-7 h-7" style={{ color: OR }} />
@@ -218,7 +228,9 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
           <p className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-1">
             {e.titre}
           </p>
-          <h2 className="font-display font-black text-3xl tracking-tight" style={{ color: OR }}>
+          <h2 className="font-display font-black text-3xl tracking-tight flex items-center justify-center gap-2"
+              style={{ color: OR }}>
+            <Drapeau pays={paysDuChampion} className="text-2xl" />
             {e.champion}
           </h2>
         </div>
@@ -242,8 +254,11 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
                 <span className="absolute -top-11 flex flex-col items-center gap-0.5 w-full">
                   <Medal className="w-3.5 h-3.5"
                          style={{ color: rang === 1 ? OR : rang === 2 ? '#CBD5E1' : '#B45309' }} />
-                  <span className="text-[10px] font-bold tracking-wide truncate max-w-full px-1 text-foreground">
-                    {r.nom}
+                  <span className="flex items-center gap-1 max-w-full px-1">
+                    <Drapeau pays={paysDe(r.name_key)} className="text-[11px]" />
+                    <span className="text-[10px] font-bold tracking-wide truncate text-foreground">
+                      {r.nom}
+                    </span>
                   </span>
                   <span className="font-mono text-[9px] tabular-nums text-muted-foreground">
                     {chrono(r.ms)}
@@ -315,13 +330,23 @@ export function Championnat({ edition, onQuitter }: {
         }
       }
     };
-    // Premiere lecture : on prend l'etat, et on se cale sur la fin du fil pour
-    // ne pas rejouer a l'ouverture toutes les annonces deja passees.
+    // Premiere lecture : on prend l'etat, puis on se cale sur la FIN du fil.
+    //
+    // « La fin » demande une boucle, et c'est le piege : le serveur repond par
+    // pages, si bien qu'une seule requete laisse le curseur au milieu de
+    // l'historique. Les annonces suivantes arrivent alors comme si elles
+    // etaient nouvelles — a l'ouverture, l'ecran rejouait la revelation des
+    // repeches d'un championnat termine il y a des jours, dans un autre pays.
     (async () => {
       const etat = await etatEdition(edition);
       if (vivant && etat) setE(etat);
-      const f = await fluxDirect(0);
-      if (vivant && f) { curseur.current = f.curseur; f.annonces.forEach(a => vu.current.add(a.id)); }
+      for (let page = 0; page < 40; page++) {
+        const f = await fluxDirect(curseur.current);
+        if (!vivant || !f) return;
+        f.annonces.forEach(a => vu.current.add(a.id));
+        if (!f.annonces.length || f.curseur === curseur.current) break;
+        curseur.current = f.curseur;
+      }
     })();
     const t = setInterval(battre, CADENCE_MS);
     return () => { vivant = false; clearInterval(t); };
