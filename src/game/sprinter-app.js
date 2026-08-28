@@ -635,9 +635,14 @@
     G.raceKey = G.shotRaces[0];
     G.race = RACES[G.raceKey];
     buildLevel(G.shotLevel);
-    // A plusieurs, chaque adversaire prend son couloir ; a deux, on garde le
-    // chemin d'avant, qui place l'unique adversaire au couloir 4.
-    if (opts.autres && opts.autres.length > 1) armLives(opts.autres);
+    // Un seul chemin, a deux comme a huit.
+    //
+    // Il y en a eu deux un moment, et cela s'est paye tout de suite : les
+    // positions recues etaient routees par identifiant vers une table que le
+    // chemin « a deux » ne remplissait pas. L'adversaire restait donc immobile
+    // sur la ligne pendant toute la course — dans le mode dont c'est
+    // precisement le seul interet.
+    if (opts.autres && opts.autres.length) armLives(opts.autres);
     else armLive(G.liveNom);
     queueCuts([], 'count');
     // Le decompte reste suspendu tant que la salle n'a pas donne l'heure.
@@ -709,15 +714,22 @@
     if (!autres || !autres.length) return;
 
     const monCouloir = G.player ? G.player.lane : 3;
-    const libres = [];
-    for (let l = 1; l <= 8; l++) if (l !== monCouloir) libres.push(l);
+    // Le joueur occupe toujours le meme couloir chez lui ; les adversaires se
+    // repartissent sur les autres. On tient la liste de ce qui est pris, sinon
+    // deux adversaires finissent superposes et l'un des deux devient invisible.
+    const pris = new Set([monCouloir]);
+    const suivantLibre = () => {
+      for (let l = 1; l <= 8; l++) if (!pris.has(l)) return l;
+      return monCouloir === 1 ? 2 : 1;   // piste pleine : cas theorique
+    };
 
-    autres.forEach((autre, i) => {
-      // On respecte le couloir annonce par la salle quand il est libre, sinon
-      // on prend le suivant : les deux clients doivent placer les memes gens
-      // aux memes endroits, sans quoi on ne se double pas au meme couloir.
+    autres.forEach((autre) => {
+      // On respecte le couloir annonce par la salle quand il est libre : les
+      // deux clients doivent placer les memes gens aux memes endroits, sans
+      // quoi on ne se double pas au meme couloir.
       let lane = autre.couloir;
-      if (!lane || lane === monCouloir || lane < 1 || lane > 8) lane = libres[i % libres.length];
+      if (!lane || lane < 1 || lane > 8 || pris.has(lane)) lane = suivantLibre();
+      pris.add(lane);
       const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
       if (idx >= 0) G.runners.splice(idx, 1);
       const r = new Runner(autre.nom || 'ADVERSAIRE', lane, {
@@ -732,8 +744,11 @@
 
   /** Position annoncee par un adversaire donne. */
   function liveDistDe(id, d) {
-    const g = G.lives && G.lives.get(id);
-    if (!g) return;
+    // Le filet : si la table est vide, c'est qu'on est sur l'ancien chemin a
+    // un seul adversaire. Mieux vaut le faire avancer que de laisser la course
+    // se jouer contre une statue.
+    const g = (G.lives && G.lives.get(id)) || (!G.lives || !G.lives.size ? G.ghost : null);
+    if (!g || !g.live) return;
     const dt = Math.max(0.02, G.elapsed - g.depuis);
     if (d > g.cible) {
       g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
