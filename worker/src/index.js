@@ -7,6 +7,7 @@ export { SalleRelais } from './salle-relais.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, titresDe, continentDe,
+  etatEdition, enregistrerCourse, cloturerPhase,
 } from './championnats.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -493,6 +494,33 @@ export default {
         const t = Number(debut);
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
         const r = await ouvrirNational(env.DB, { pays, debutSamedi: t });
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // L'etat d'une edition : ou elle en est, qui court quoi.
+      if (sous.startsWith('edition/') && request.method === 'GET') {
+        const id = sous.slice('edition/'.length).toUpperCase();
+        const e = await etatEdition(env.DB, id);
+        return e ? json(e) : json({ error: 'edition introuvable' }, 404);
+      }
+
+      // Les chronos d'une course. On range, on ne tranche pas encore.
+      if (sous === 'course' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { edition, phase, course, chronos } = body || {};
+        const r = await enregistrerCourse(env.DB, {
+          edition: String(edition || '').toUpperCase(), phase,
+          course: parseInt(course, 10), chronos,
+        });
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
+      if (sous === 'cloturer' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const r = await cloturerPhase(env.DB, String(body.edition || '').toUpperCase());
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
 
