@@ -73,11 +73,23 @@ function MainGame() {
   useVisualViewportHeight();
   useBackGuard();
 
+  // Sur le canal de test, le jeu ne se monte qu'une fois l'acces accorde.
+  //
+  // Le poser en simple calque par-dessus un jeu deja demarre ne suffisait pas :
+  // les ecrans montes dessous partaient travailler avant que le code ne soit
+  // saisi. En particulier, le panneau du direct rejoint automatiquement la
+  // piste d'un lien d'invitation des son montage — sans code, cette connexion
+  // partait sur le canal de production, et les deux joueurs se retrouvaient
+  // dans deux salles differentes en croyant etre sur la meme piste.
+  //
+  // En production, EST_TEST vaut false en dur : la valeur initiale est vraie,
+  // la porte disparait du build, et rien de tout ceci n'existe.
+  const [acces, setAcces] = useState(!EST_TEST);
+
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
-      {/* La porte de la version de test. En production, EST_TEST vaut false en
-          dur et le bundler retire la porte comme tout ce qu'elle amene. */}
-      {EST_TEST && <PorteTest />}
+      {EST_TEST && <PorteTest onOuvert={setAcces} />}
+      {acces && (<>
       <GameCanvas />
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
@@ -106,6 +118,7 @@ function MainGame() {
           annonce ici, des son retour au calme. */}
       <DuelResultPopup />
       <InstallPrompt />
+      </>)}
     </div>
   );
 }

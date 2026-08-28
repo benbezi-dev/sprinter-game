@@ -19,7 +19,7 @@ import { codeAcces, poserCode, oublierCode, verifierCode } from '@/game/canal';
  * sans code valide, le serveur refuse les routes reservees et, surtout, aucune
  * ecriture ne peut atteindre la base de production.
  */
-export function PorteTest() {
+export function PorteTest({ onOuvert }: { onOuvert: (ouvert: boolean) => void }) {
   const [etat, setEtat] = useState<'verifie' | 'demande' | 'ouvert'>('verifie');
   const [saisie, setSaisie] = useState('');
   const [nom, setNom] = useState('');
@@ -29,12 +29,12 @@ export function PorteTest() {
   // Au lancement : le code range est-il encore valable ?
   useEffect(() => {
     const code = codeAcces();
-    if (!code) { setEtat('demande'); return; }
+    if (!code) { setEtat('demande'); onOuvert(false); return; }
     let vivant = true;
     verifierCode(code).then(r => {
       if (!vivant) return;
-      if (r.ok) { setNom(r.nom || ''); setEtat('ouvert'); }
-      else { oublierCode(); setErreur("cet accès a été retiré"); setEtat('demande'); }
+      if (r.ok) { setNom(r.nom || ''); setEtat('ouvert'); onOuvert(true); }
+      else { oublierCode(); setErreur("cet accès a été retiré"); setEtat('demande'); onOuvert(false); }
     });
     return () => { vivant = false; };
   }, []);
@@ -46,11 +46,11 @@ export function PorteTest() {
     const r = await verifierCode(c);
     setOccupe(false);
     if (!r.ok) { setErreur('code refusé'); return; }
-    poserCode(c); setNom(r.nom || ''); setEtat('ouvert');
+    poserCode(c); setNom(r.nom || ''); setEtat('ouvert'); onOuvert(true);
   };
 
   const sortir = () => {
-    oublierCode(); setSaisie(''); setNom(''); setEtat('demande');
+    oublierCode(); setSaisie(''); setNom(''); setEtat('demande'); onOuvert(false);
   };
 
   // Acces accorde : un simple bandeau, pour qu'on n'oublie jamais qu'on est
