@@ -139,14 +139,24 @@
     '100': {
       key: '100', label: '100 METRES', sub: 'la ligne droite',
       arc: 0, straight: 100, maxSpeed: 12.435, best: 9.10,
+      // Le dernier rang est la finale ZEZE. Il ne se lit pas comme les
+      // autres : c'est le seul ou l'adversaire court plus vite que le joueur
+      // ne peut le faire en tapant a dix appuis par seconde. Mesure sur cette
+      // physique, avec une alternance parfaite et sans faux pas : 10,25 s a
+      // huit appuis par seconde, 9,22 s a dix, 8,87 s a treize, 8,61 s a
+      // dix-sept. Battre le meilleur ZEZE demande donc d'y tenir treize a
+      // quatorze appuis, ce qui est le geste d'un joueur qui s'entraine.
       ranges: [[12.50, 15.00], [11.20, 12.50], [10.00, 10.50],
-               [9.58, 10.00], [9.58, 9.85], [9.11, 9.58]]
+               [9.58, 10.00], [9.58, 9.85], [8.75, 9.00]]
     },
     '200': {
       key: '200', label: '200 METRES', sub: 'virage et ligne droite',
       arc: 115.61, straight: 84.39, maxSpeed: 12.021, best: 18.20,
+      // Meme mesure sur le tour partiel : 19,47 s a huit appuis par seconde,
+      // 18,13 s a dix, 17,74 s a treize. Le meilleur ZEZE passe donc d'un
+      // cheveu sous ce que treize appuis donnent.
       ranges: [[25.00, 30.00], [22.40, 25.00], [20.00, 21.00],
-               [19.16, 20.00], [19.16, 19.70], [18.22, 19.16]]
+               [19.16, 20.00], [19.16, 19.70], [17.75, 18.00]]
     },
     // Le relais emprunte la geometrie du 400 m — un tour de piste — mais se
     // court en quatre portions de cent metres. La vitesse de pointe est celle
@@ -161,8 +171,11 @@
     '400': {
       key: '400', label: '400 METRES', sub: 'un tour de piste', fullLap: true,
       arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: 36.90,
+      // Le tour complet pardonne davantage : 37,92 s a huit appuis par
+      // seconde, 36,88 s a dix, 36,37 s a treize. Le meilleur ZEZE reste
+      // devant un joueur a dix appuis, et derriere un joueur a treize.
       ranges: [[55.00, 60.00], [49.00, 55.00], [44.50, 49.00],
-               [43.50, 44.50], [43.18, 43.50], [36.98, 37.98]]
+               [43.50, 44.50], [43.18, 43.50], [36.70, 37.00]]
     }
   };
 
