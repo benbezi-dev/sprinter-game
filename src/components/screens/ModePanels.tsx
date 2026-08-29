@@ -263,15 +263,20 @@ export function ChallengePanel() {
                 {N.t('challenge_from', { n: ch.owner_name })}
               </span>
             </div>
+            {/* Les epreuves, sans les chronos.
+                Connaitre le temps a battre avant de partir transforme le duel
+                en calcul : on regarde le nombre et on decide si ca vaut la
+                peine d'essayer. On l'apprend en courant, comme sur une piste —
+                le fantome est la, a cote, et il dit tout ce qu'il faut. */}
             <div className="flex flex-wrap gap-1.5 justify-center">
               {ch.races.map((r, i) => (
                 <span key={i} className="text-[10px] md:text-xs font-mono bg-black/30 border border-white/10 rounded-md px-2 py-1">
-                  {r} m &middot; {(ch.splits[i] / 1000 || 0).toFixed(2)} s
+                  {r} m
                 </span>
               ))}
             </div>
-            <div className="text-center text-sm font-bold text-foreground">
-              {N.t('challenge_beat', { s: (ch.total_ms / 1000).toFixed(2) })}
+            <div className="text-center text-[11px] md:text-xs text-muted-foreground">
+              {N.t('challenge_aveugle')}
             </div>
             <div className="text-center text-[10px] text-muted-foreground">
               {N.levelName(ch.level_idx)}

@@ -3,9 +3,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Loader2 } from 'lucide-react';
 import { fetchInbox, fetchChallenge, type InboxChallenge } from '@/game/challenge';
-
-/** On ne derange pas un joueur en pleine course. */
-const CALME = new Set(['title', 'result', 'winall', 'over']);
+import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 
 /**
  * Defi recu.
@@ -23,21 +21,20 @@ export function InboxPopup() {
   const [chargement, setChargement] = useState('');
   const vu = useRef<Set<string>>(new Set());
 
-  // On interroge au repos, puis de loin en loin : un defi differe n'a pas
-  // besoin d'arriver a la seconde.
-  useEffect(() => {
-    let annule = false;
-    const relever = () => {
-      if (!CALME.has(SprinterApp.G.state)) return;
-      fetchInbox().then(list => { if (!annule) setDefis(list); });
-    };
-    relever();
-    const id = setInterval(relever, 45000);
-    return () => { annule = true; clearInterval(id); };
-  }, []);
+  // Toutes les vingt secondes, et au retour dans le jeu.
+  //
+  // Un defi differe n'a pas besoin d'arriver a la seconde — c'est bien ce
+  // qu'il a de differe. Mais quarante-cinq secondes de minuterie, sans reveil
+  // au retour, faisaient qu'un joueur pouvait ouvrir le jeu, regarder l'accueil
+  // et le refermer sans jamais voir qu'on l'avait defie.
+  const annule = useRef(false);
+  useEffect(() => { annule.current = false; return () => { annule.current = true; }; }, []);
+  useSondageAuRepos(() => {
+    fetchInbox().then(list => { if (!annule.current) setDefis(list); });
+  }, 20000);
 
   const enAttente = defis.filter(d => !vu.current.has(d.id));
-  if (!CALME.has(state) || enAttente.length === 0) return null;
+  if (!estAuCalme() || enAttente.length === 0) return null;
 
   const relever = async (d: InboxChallenge) => {
     setChargement(d.id);
@@ -109,11 +106,7 @@ export function InboxPopup() {
               {enAttente.map(d => (
                 <div key={d.id} className="rounded-xl border border-white/10 bg-black/30 p-3 flex flex-col gap-2">
                   <p className="text-xs md:text-sm text-foreground text-center">
-                    {N.t('inbox_from', {
-                      n: d.owner_name,
-                      d: d.races.join(' + '),
-                      s: (d.total_ms / 1000).toFixed(2),
-                    })}
+                    {N.t('inbox_from', { n: d.owner_name, d: d.races.join(' + ') })}
                   </p>
                   <button
                     onClick={() => relever(d)}

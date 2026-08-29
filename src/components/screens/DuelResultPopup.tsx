@@ -4,9 +4,8 @@ import { motion } from 'framer-motion';
 import { Swords, ChevronRight } from 'lucide-react';
 import { fetchMesDuels, marquerDuelsVus, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
-
-/** On n'annonce rien a quelqu'un qui court. */
-const CALME = new Set(['title', 'result', 'winall', 'over']);
+import { pique } from '@/game/piques';
+import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
@@ -33,17 +32,17 @@ export function DuelResultPopup() {
   const annule = useRef(false);
   const dernier = useRef(0);
 
-  // On interroge des que le jeu est au calme, puis de loin en loin.
+  // Toutes les dix secondes, et au retour dans le jeu.
   //
-  // Le declenchement sur l'etat compte autant que l'intervalle : au demarrage
-  // on est sur l'ecran d'ouverture, qui n'est pas un moment calme, et sans ce
-  // reveil le joueur attendrait le prochain tour de boucle pour apprendre un
-  // resultat qui l'attend depuis la veille.
+  // C'est le resultat d'un defi qu'ON A LANCE : quand il arrive, le joueur est
+  // le plus souvent devant son ecran a l'attendre. Quarante-cinq secondes de
+  // minuterie faisaient mettre plus d'une minute a une nouvelle qu'il fallait
+  // annoncer tout de suite — mesure a soixante-cinq secondes.
   const relever = useRef(() => {});
   relever.current = () => {
-    if (!DUELS_OUVERTS || !CALME.has(SprinterApp.G.state)) return;
+    if (!DUELS_OUVERTS || !estAuCalme()) return;
     const t = Date.now();
-    if (t - dernier.current < 8000) return;      // pas de rafale
+    if (t - dernier.current < 4000) return;      // pas de rafale
     dernier.current = t;
     fetchMesDuels().then(list => {
       if (annule.current || !list.length) return;
@@ -57,16 +56,17 @@ export function DuelResultPopup() {
   };
 
   useEffect(() => {
-    if (!DUELS_OUVERTS) return;
     annule.current = false;
-    const id = setInterval(() => relever.current(), 45000);
-    return () => { annule.current = true; clearInterval(id); };
+    return () => { annule.current = true; };
   }, []);
 
+  useSondageAuRepos(() => relever.current(), 10000);
+  // Le changement d'etat reste un reveil a lui seul : on sort d'une course,
+  // et le resultat peut attendre depuis qu'on y est entre.
   useEffect(() => { relever.current(); }, [state]);
 
   const duel = file[0];
-  const montrable = DUELS_OUVERTS && CALME.has(state) && !!duel;
+  const montrable = DUELS_OUVERTS && estAuCalme() && !!duel;
 
   // La phrase de resultat accompagne l'annonce, une fois par duel.
   useEffect(() => {
@@ -81,10 +81,25 @@ export function DuelResultPopup() {
 
   const gagne = duel.issue === 'challenger';
   const nul = duel.issue === 'draw';
+  const perdu = !gagne && !nul;
 
   const suivant = () => {
     marquerDuelsVus([duel.id]);
     setFile(f => f.slice(1));
+  };
+
+  /**
+   * Repartir sur la meme epreuve, le defi arme pour le meme adversaire.
+   *
+   * On ne rejoue pas la course perdue — un defi se court une fois, et le
+   * rejouer laisserait tenter sa chance jusqu'a tomber sur un bon jour. C'est
+   * un nouveau duel qui se lance, dans l'autre sens : cette fois c'est nous qui
+   * posons le chrono, et l'ecran de fin sait deja a qui l'envoyer.
+   */
+  const revanche = () => {
+    marquerDuelsVus([duel.id]);
+    SprinterApp.G.revanche = duel.adversaire;
+    SprinterApp.startOneShot(duel.races, { levelIdx: 4 });
   };
 
   const ton = gagne ? 'text-primary' : nul ? 'text-foreground' : 'text-destructive';
@@ -129,26 +144,45 @@ export function DuelResultPopup() {
               <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
             </span>
 
-            {/* Les deux chronos face a face : c'est la seule chose que le
-                lanceur n'a pas vue de ses yeux. */}
-            <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-xs md:text-sm font-bold tracking-wide text-primary truncate">
-                  {N.t('duel_you')}
-                </span>
-                <span className={`font-mono font-bold text-sm md:text-base ${gagne ? 'text-emerald-400' : 'text-foreground'}`}>
-                  {fmt(duel.mon_ms)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-xs md:text-sm font-bold tracking-wide text-cyan-300 truncate min-w-0">
+            {/* Gagne ou nul : les deux chronos face a face, c'est la seule
+                chose que le lanceur n'a pas vue de ses yeux.
+
+                Perdu : le mot de l'adversaire a la place. Deux nombres et un
+                ecart, c'est exact et c'est froid — on lit, on hausse les
+                epaules, on passe. Ce qui donne envie de rejouer n'est pas le
+                nombre, c'est la phrase qui pique. Le chrono reste lisible
+                ailleurs pour qui le cherche. */}
+            {perdu ? (
+              <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
+                              px-4 py-3 flex flex-col items-center gap-1.5">
+                <p className="text-sm md:text-base text-foreground text-center leading-snug">
+                  « {pique(duel.id, duel.adversaire)} »
+                </p>
+                <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
+                                 truncate max-w-full">
                   {duel.adversaire}
                 </span>
-                <span className={`font-mono font-bold text-sm md:text-base ${gagne ? 'text-foreground' : 'text-destructive'}`}>
-                  {fmt(duel.son_ms)}
-                </span>
               </div>
-            </div>
+            ) : (
+              <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs md:text-sm font-bold tracking-wide text-primary truncate">
+                    {N.t('duel_you')}
+                  </span>
+                  <span className={`font-mono font-bold text-sm md:text-base ${gagne ? 'text-emerald-400' : 'text-foreground'}`}>
+                    {fmt(duel.mon_ms)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-xs md:text-sm font-bold tracking-wide text-cyan-300 truncate min-w-0">
+                    {duel.adversaire}
+                  </span>
+                  <span className="font-mono font-bold text-sm md:text-base text-foreground">
+                    {fmt(duel.son_ms)}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <span className="text-[10px] md:text-xs text-muted-foreground text-center">
               {duel.races.map(r => (RACES as any)[r]?.label || `${r} m`).join(' + ')}
@@ -157,6 +191,23 @@ export function DuelResultPopup() {
             </span>
 
             <div className="w-full flex flex-col gap-2 mt-1">
+              {/* La revanche est offerte a la defaite, et seulement la.
+                  La proposer au vainqueur serait lui demander de remettre en
+                  jeu ce qu'il vient de gagner ; c'est au perdant de rappeler
+                  l'autre sur la piste. */}
+              {perdu && (
+                <button
+                  onClick={revanche}
+                  className="w-full py-3 rounded-xl font-black font-display tracking-widest
+                             text-background bg-primary hover:bg-primary/90 transition-colors
+                             flex flex-col items-center leading-tight"
+                >
+                  {N.t('duel_revanche')}
+                  <span className="font-sans font-normal text-[9px] tracking-normal opacity-70">
+                    {N.t('duel_revanche_sub', { n: duel.adversaire })}
+                  </span>
+                </button>
+              )}
               <button
                 onClick={() => { setVoirDuels(true); }}
                 className="w-full py-2.5 rounded-xl font-bold tracking-widest text-[11px] md:text-xs

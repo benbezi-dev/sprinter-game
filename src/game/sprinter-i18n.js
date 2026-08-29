@@ -357,6 +357,26 @@
                       'send a challenge, or answer a friend’s'],
     duel_empty:      ['aucun duel joué pour l’instant', 'no duel played yet'],
     duel_pts:        ['pts', 'pts'],
+    // Les piques, quand on perd un duel. Ecrites par le jeu et signees du nom
+    // de l'adversaire — voir game/piques.ts, qui dit pourquoi. On chambre un
+    // ami, on ne l'insulte pas : ce sont des gens qui se connaissent.
+    pique_0: ['j’ai même pas eu à forcer.', 'I did not even have to try.'],
+    pique_1: ['tu veux que je recommence au ralenti ?',
+              'want me to do it again in slow motion?'],
+    pique_2: ['j’ai eu le temps de m’ennuyer.', 'I had time to get bored.'],
+    pique_3: ['la ligne d’arrivée, c’est de ce côté-ci.',
+              'the finish line is over on this side.'],
+    pique_4: ['merci pour l’échauffement.', 'thanks for the warm-up.'],
+    pique_5: ['j’ai regardé derrière, il n’y avait personne.',
+              'I looked back and there was nobody there.'],
+    pique_6: ['tu as couru ? je n’ai rien vu passer.',
+              'you ran? I did not see anything go by.'],
+    pique_7: ['garde ce chrono, il fera un beau souvenir.',
+              'keep that time, it will make a nice souvenir.'],
+    duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
+    duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
+                        'same event — your turn to set the time'],
+    duel_renvoyer:   ['renvoie le code à {n}', 'send the code back to {n}'],
     // L'echelle des divisions. Les noms viennent de l'athletisme francais
     // plutot que des metaux : on ne monte pas de bronze en argent, on passe du
     // departemental au regional.
@@ -480,8 +500,11 @@
     target_sent:     ['défi envoyé à {n}', 'challenge sent to {n}'],
     inbox_one:       ['DÉFI REÇU', 'CHALLENGE RECEIVED'],
     inbox_many:      ['{n} DÉFIS REÇUS', '{n} CHALLENGES RECEIVED'],
-    inbox_from:      ['{n} te défie sur {d} m en {s} s',
-                      '{n} challenges you on {d} m in {s} s'],
+    // Le chrono de celui qui defie ne s'annonce pas : le connaitre d'avance
+    // transforme un duel en calcul — on regarde le nombre et on decide si ca
+    // vaut la peine d'essayer. On l'apprend en courant, comme sur une piste.
+    inbox_from:      ['{n} te défie sur {d} m',
+                      '{n} challenges you on {d} m'],
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
     run_total_short: ['parcours complet :', 'full run:'],
@@ -520,6 +543,8 @@
     challenge_net:   ['connexion impossible, réessaie', 'connection failed, try again'],
     challenge_from:  ['défi de {n}', 'challenge from {n}'],
     challenge_beat:  ['à battre : {s} s', 'to beat: {s} s'],
+    challenge_aveugle: ['son chrono, tu le découvriras en courant',
+                        'you will find out their time by running'],
     challenge_accept:['RELEVER LE DÉFI', 'ACCEPT THE CHALLENGE'],
     challenge_make:  ['DÉFIER UN AMI', 'CHALLENGE A FRIEND'],
     challenge_making:['création du défi...', 'creating challenge...'],

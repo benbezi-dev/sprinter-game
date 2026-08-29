@@ -338,6 +338,9 @@
     raceKey: '100', race: RACES['100'], track: null,
     levelIdx: 0, runners: [], player: null, parts: [],
     elapsed: 0, countT: 0, camX: 0, camY: 0,
+    // Le nom de celui a qui renvoyer le code apres une defaite. Nul le reste
+    // du temps : c'est ce qui distingue une course ordinaire d'une revanche.
+    revanche: null,
     champion: null, championTime: 0,
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
@@ -550,6 +553,9 @@
   // Retour a l'accueil. On repasse en carriere et on oublie l'adversaire :
   // sans ca un defi termine resterait actif sur la course suivante.
   function goHome() {
+    // La revanche ne concerne qu'une course : de retour a l'accueil, le nom
+    // de celui a qui renvoyer le code n'a plus rien a designer.
+    G.revanche = null;
     G.paused = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;

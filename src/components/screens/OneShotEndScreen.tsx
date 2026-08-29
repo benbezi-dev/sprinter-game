@@ -13,6 +13,7 @@ import {
 } from '@/game/challenge';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
+import { pique } from '@/game/piques';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 
@@ -314,6 +315,32 @@ export function OneShotEndScreen() {
                       )}
                     </div>
                   )}
+                  {/* Perdu : le mot de l'adversaire, et la revanche.
+                      Un ecart de chronos est exact et froid ; c'est la phrase
+                      qui donne envie de repartir, et le bouton qui le permet
+                      dans la foulee. */}
+                  {duel.issue === 'challenger' && (
+                    <>
+                      <p className="text-sm md:text-base text-foreground text-center leading-snug
+                                    px-2 mt-0.5">
+                        « {pique(challenge.id, challenge.owner_name)} »
+                      </p>
+                      <button
+                        onClick={() => {
+                          SprinterApp.G.revanche = challenge.owner_name;
+                          SprinterApp.startOneShot(shotRaces as any, { levelIdx: SprinterApp.G.shotLevel });
+                        }}
+                        className="mt-1 px-5 py-2.5 rounded-xl font-black font-display tracking-widest
+                                   text-background bg-primary hover:bg-primary/90 transition-colors
+                                   flex flex-col items-center leading-tight text-sm"
+                      >
+                        {N.t('duel_revanche')}
+                        <span className="font-sans font-normal text-[9px] tracking-normal opacity-70">
+                          {N.t('duel_revanche_sub')}
+                        </span>
+                      </button>
+                    </>
+                  )}
                   <span className="text-[10px] md:text-xs text-muted-foreground tracking-wide text-center">
                     {N.t('duel_vs', { n: challenge.owner_name || N.t('ghost_label') })}
                     {' · '}
@@ -481,6 +508,16 @@ export function OneShotEndScreen() {
               {cible && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
                   {N.t(code ? 'target_sent' : 'target_run', { n: cible.name, d: shotRaces[0] })}
+                </p>
+              )}
+              {/* Revanche : on rappelle a qui le code doit repartir.
+                  Le defi ne s'adresse pas tout seul — les noms ne sont pas des
+                  adresses, et deux joueurs peuvent porter le meme. C'est donc
+                  un rappel, pas un envoi : le code se recopie comme les
+                  autres. */}
+              {!cible && SprinterApp.G.revanche && (
+                <p className="text-center text-[10px] md:text-xs text-primary">
+                  {N.t('duel_renvoyer', { n: SprinterApp.G.revanche })}
                 </p>
               )}
 

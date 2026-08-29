@@ -203,9 +203,18 @@ function relayeur(equipe, nom, conf) {
   console.log('\n── LE MEME JEU, CONTRE UNE COURSE ENREGISTREE ───────────────\n');
   const g = await fetch(B + '/relay/ghosts', { headers: H }).then(r => r.json());
   const dispo = (g.fantomes || []).filter(f => f.equipe_id !== eq.id);
-  ok('la course qu on vient de courir est rejouable',
-     (g.fantomes || []).some(f => f.equipe_id === eq.id),
-     `${(g.fantomes || []).length} fantome(s)`);
+  // Une course n'est rejouable que si elle entre dans les dix meilleures : au
+  // dela, le serveur efface sa trace pour ne pas stocker quatre cents positions
+  // par course pour des equipes que plus personne n'ira defier. L'assertion
+  // porte donc sur la REGLE, et non sur « ma course y est » — elle y etait tant
+  // que la base en comptait moins de dix, et elle a cesse d'y etre le jour ou
+  // le classement s'est rempli.
+  const gardes = g.fantomes || [];
+  const dixieme = gardes.length >= 10 ? gardes[gardes.length - 1].total_ms : Infinity;
+  const dedans = gardes.some(f => f.equipe_id === eq.id);
+  ok('le top dix garde les traces, et lui seul',
+     dedans === (total <= dixieme),
+     dedans ? `presente en ${total} ms` : `${total} ms, hors des dix (${dixieme} ms)`);
 
   const cible = dispo[0] || (g.fantomes || [])[0];
   if (!cible) {
