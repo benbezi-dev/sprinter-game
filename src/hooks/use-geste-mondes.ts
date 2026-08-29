@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Direction } from '@/game/mondes';
 
 /**
@@ -33,6 +33,13 @@ export function useGesteMondes(
   onGeste: (d: Direction) => void,
   actif = true,
 ) {
+  // La fonction change a chaque rendu ; les ecouteurs, non. Sans cela on les
+  // decroche et on les raccroche a chaque image, ce qui n'est pas faux mais
+  // qui est du travail pour rien — et une occasion de perdre un geste en
+  // cours pile au moment ou l'on rebranche.
+  const fn = useRef(onGeste);
+  fn.current = onGeste;
+
   useEffect(() => {
     const el = cible.current;
     if (!el || !actif) return;
@@ -57,12 +64,12 @@ export function useGesteMondes(
         // Le doigt va a gauche : le monde de droite entre. C'est le sens des
         // pages, pas celui du doigt — on pousse l'accueil pour decouvrir ce
         // qu'il y a a cote.
-        onGeste(dx < 0 ? 'droite' : 'gauche');
+        fn.current(dx < 0 ? 'droite' : 'gauche');
         return;
       }
       // Doigt vers le haut, depuis le bas de la page : on tire pour voir
       // dessous.
-      if (auBout && dy < -SEUIL && ay > ax * FRANCHISE) onGeste('bas');
+      if (auBout && dy < -SEUIL && ay > ax * FRANCHISE) fn.current('bas');
     };
 
     el.addEventListener('pointerdown', debut);
@@ -72,5 +79,5 @@ export function useGesteMondes(
       el.removeEventListener('pointerdown', debut);
       el.removeEventListener('pointerup', fin);
     };
-  }, [cible, onGeste, actif]);
+  }, [cible, actif]);
 }
