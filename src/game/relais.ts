@@ -106,6 +106,35 @@ export const classementRelais = (race = '4x100') =>
   lire<{ race: string; classement: LigneRelais[] }>(
     '/relay/ranking?race=' + encodeURIComponent(race));
 
+/** Une course enregistree, affrontable sans que personne se connecte. */
+export type FantomeRelais = {
+  rang: number;
+  /** L'identifiant de la COURSE, pas celui de l'equipe : une equipe en a
+      plusieurs, et c'est une course precise que l'on reaffronte. */
+  id: number;
+  equipe: string;
+  equipe_id: string;
+  total_ms: number;
+  relais: number[];
+  le: number;
+};
+
+/**
+ * Les courses rejouables, du meilleur au moins bon.
+ *
+ * Le serveur n'en garde que dix : au-dela, une equipe conserve son chrono au
+ * classement mais sa trace est effacee. Affronter le onzieme n'aurait pas
+ * grand interet, et stocker quatre cents positions par course pour toutes les
+ * equipes du jeu en aurait encore moins.
+ */
+export const fantomesRelais = (race = '4x100') =>
+  lire<{ race: string; fantomes: FantomeRelais[] }>(
+    '/relay/ghosts?race=' + encodeURIComponent(race));
+
+/** Ouvre une confrontation et renvoie son code, a partager comme un salon. */
+export const ouvrirConfrontation = () =>
+  poster<{ id: string }>('/relay/confrontation', {});
+
 /** Les membres qui ont accepte, dans l'ordre des relais quand il est fixe. */
 export const titulaires = (e: EquipeRelais) =>
   e.membres.filter(m => m.etat === 'in')

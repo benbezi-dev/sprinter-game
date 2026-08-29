@@ -356,7 +356,13 @@ export function updateLogic(dt: number) {
     while (G.acc >= step) {
       G.acc -= step; G.elapsed += step;
       G.player.stepPlayer(step, G.elapsed);
-      for (const r of G.runners) if (!r.isPlayer) r.stepAI(step, G.elapsed);
+      // Un adversaire en direct n'est pas pilote ici : sa position vient du
+      // reseau, et `stepGhost` l'interpole plus bas. Le lui appliquer en plus
+      // le detruisait — le modele de l'ordinateur se cale sur un chrono vise,
+      // qu'un joueur reel n'a pas : sans chrono, la vitesse et la constante de
+      // temps ne sont jamais calculees, la position devient NaN, et
+      // l'adversaire disparait de la piste sans une erreur.
+      for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
     }
     
     // Enregistre la course pour qu'un adversaire puisse la reaffronter en

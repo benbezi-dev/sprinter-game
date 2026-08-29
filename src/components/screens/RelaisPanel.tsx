@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CourseRelais } from './CourseRelais';
+import { Confrontation } from './Confrontation';
+import { Fantomes } from './Fantomes';
+import { entrerSurLaPiste } from '@/game/piste';
 import { Users, Loader2, Check, X, ArrowUpDown, Trophy } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -141,8 +143,6 @@ export function RelaisPanel() {
   const [coequipiers, setCoequipiers] = useState(['', '', '']);
   const [erreur, setErreur] = useState('');
   const [occupe, setOccupe] = useState(false);
-  /** L'equipe qui court en ce moment : le vestiaire s'efface derriere elle. */
-  const [surLaPiste, setSurLaPiste] = useState<string | null>(null);
 
   const recharger = async () => {
     const [m, c] = await Promise.all([mesEquipes(), classementRelais()]);
@@ -152,6 +152,9 @@ export function RelaisPanel() {
   };
 
   useEffect(() => { recharger(); }, []);
+
+  /** Seules les equipes au complet peuvent entrer sur une piste. */
+  const pretes = equipes.filter(e => ceQuiManque(e) === null);
 
   const creer = async () => {
     const autres = coequipiers.map(s => s.trim()).filter(Boolean);
@@ -168,12 +171,6 @@ export function RelaisPanel() {
     await repondre(id, oui);
     recharger();
   };
-
-  // Sur la piste, le vestiaire n'a plus rien a dire.
-  if (surLaPiste) {
-    return <CourseRelais equipe={surLaPiste}
-                         onQuitter={() => { setSurLaPiste(null); recharger(); }} />;
-  }
 
   return (
     <motion.div
@@ -231,9 +228,17 @@ export function RelaisPanel() {
             {N.t('relais_mes_equipes')}
           </span>
           {equipes.map(e => <Equipe key={e.id} e={e} onChange={recharger}
-                                    onCourir={setSurLaPiste} />)}
+                                    onCourir={id => entrerSurLaPiste(
+                                      { genre: 'relais', equipe: id })} />)}
         </div>
       )}
+
+      {/* Les deux facons de courir contre quelqu'un plutot que contre le
+          chrono : d'autres equipes maintenant, ou les meilleures courses deja
+          enregistrees. Elles ne s'excluent pas — une confrontation peut
+          melanger les deux. */}
+      {pretes.length > 0 && <Confrontation equipes={pretes} />}
+      {pretes.length > 0 && <Fantomes equipes={pretes} />}
 
       {/* Creer une equipe. Le nom se choisit une fois : la composition le
           possede, et changer un coequipier change d'equipe. */}

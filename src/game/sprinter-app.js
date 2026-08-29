@@ -649,6 +649,64 @@
     G.countT = -99;
   }
 
+  /**
+   * Une portion de relais.
+   *
+   * On ne joue PAS un cent metres. La piste est celle du 4x100 — un tour
+   * complet, quatre cents metres — et le relayeur y est pose a sa marque. Cela
+   * n'a l'air que d'un detail de mise en place, et ce sont trois choses :
+   *
+   * - les distances n'ont plus a etre traduites. Le moteur compte en metres
+   *   absolus depuis le depart, exactement comme la salle. Une portion posee
+   *   sur une piste de cent metres obligeait a ajouter la marque a chaque
+   *   position sortante, et le troisieme relayeur franchissait sa ligne
+   *   d'arrivee a trois cent quinze metres du depart.
+   * - le relayeur peut courir jusqu'a la zone suivante. Sur cent metres il
+   *   terminait sa course avant d'avoir pu donner le temoin, et le jeu
+   *   affichait un ecran de fin au milieu du relais.
+   * - la zone de lancement existe. Un receveur ne part pas des blocs : il a
+   *   trente metres pour se lancer, et c'est ce que le moteur note a la place
+   *   de la poussee. Sans cela, le troisieme relayeur serait juge sur une
+   *   phase qu'il a franchie depuis longtemps.
+   *
+   * @param opts.relais 1 a 4 — le rang de ce coureur.
+   * @param opts.marque ou il est pose, en metres absolus.
+   * @param opts.autres les temoins adverses : [{ id, nom, couloir }].
+   */
+  function startRelais(opts) {
+    opts = opts || {};
+    const relais = Math.max(1, Math.min(4, opts.relais || 1));
+    const marque = Math.max(0, Number(opts.marque) || (relais - 1) * 100);
+    startLive(['4x100'], {
+      levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
+      adversaire: '', autres: opts.autres || [],
+    });
+    const p = G.player;
+    p.legStart = marque;
+    p.d = marque;
+    // Le premier part des blocs, avec sa poussee et sa reaction ; les trois
+    // autres partent lances, et c'est la zone que l'on note.
+    if (relais > 1) {
+      p.driveEnd = C.RELAY_LAUNCH;
+      p.reaction = 0;
+    }
+    G.relaisRang = relais;
+    return marque;
+  }
+
+  /**
+   * Le temoin vient d'arriver dans mes mains.
+   *
+   * L'ecart entre les deux tapes est mesure par la salle, sur son horloge :
+   * c'est la seule qui soit commune aux deux telephones. Il ne reste au jeu
+   * qu'a en tirer les consequences physiques — la vitesse gardee, le plafond
+   * et le freinage pour le reste du relais.
+   */
+  function recevoirTemoin(ecartMs) {
+    if (!G.player) return null;
+    return G.player.gradeHandoff((Number(ecartMs) || 0) / 1000);
+  }
+
   /** Cale le decompte sur le coup de pistolet annonce par la salle. */
   function liveDepart(dansMs) {
     if (!G.liveOn) return;
@@ -1668,6 +1726,7 @@
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
+    startRelais, recevoirTemoin,
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,

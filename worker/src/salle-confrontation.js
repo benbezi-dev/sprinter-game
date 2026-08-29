@@ -416,7 +416,10 @@ export class SalleConfrontation {
     try {
       if (!this.base()) return;
       for (const c of this.equipes.values()) {
-        if (c.total == null) continue;
+        // Un fantome vient d'etre rejoue, pas couru : le reinscrire ajouterait
+        // une course a une equipe qui n'a rien fait ce soir-la, et ferait
+        // grossir le classement d'une ligne a chaque confrontation.
+        if (c.fantome || c.total == null) continue;
         const part = Math.round(c.total / TAILLE);
         await enregistrerRelais(this.base(), {
           team_id: c.equipe, race_key: this.epreuve,

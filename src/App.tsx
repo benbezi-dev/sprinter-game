@@ -17,6 +17,7 @@ import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
 import { EST_TEST } from '@/game/canal';
 import { PorteTest } from '@/components/screens/PorteTest';
+import { PisteRelais } from '@/components/screens/PisteRelais';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
@@ -117,6 +118,12 @@ function MainGame() {
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. */}
       <DuelResultPopup />
+      {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
+          l'ecran-titre disparait au coup de pistolet, et une salle tenue par
+          un panneau demonte se fermerait a l'instant precis ou la course
+          commence. En production, EST_TEST vaut false en dur et tout ceci
+          sort du build. */}
+      {EST_TEST && <PisteRelais />}
       <InstallPrompt />
       </>)}
     </div>
