@@ -6,6 +6,7 @@ import {
   MONDES, PLACE, allerAu, useMonde, type Monde, type Direction,
 } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
+import { HAIES } from '@/game/haies.js';
 
 /**
  * Les trois autres jeux, et le passage de l'un a l'autre.
@@ -26,6 +27,20 @@ const ENTREE: Record<Direction, { x?: string; y?: string }> = {
 const FLECHE: Record<Direction, typeof ChevronUp> = {
   bas: ChevronUp, droite: ChevronLeft, gauche: ChevronRight,
 };
+
+/**
+ * « 10 haies · 1,067 m · 9,14 m » — le reglement en une ligne.
+ *
+ * La mise en forme vit ici, dans l'ecran, et non dans la table des jeux : un
+ * calcul fait au chargement d'un module n'est pas elaguable, et tout le
+ * reglement des haies partait dans le build public ou rien ne l'affiche.
+ */
+function cotesDe(cle: string): string {
+  const r = (HAIES as any)[cle];
+  if (!r) return '';
+  const nb = (v: number) => String(v).replace('.', ',');
+  return `${r.haies.nombre} haies · ${nb(r.haies.hauteur)} m · ${nb(r.haies.ecart)} m`;
+}
 
 export function Mondes() {
   const monde = useMonde();
@@ -98,9 +113,19 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
                      className={`w-full px-4 py-3.5 rounded-2xl border flex items-center gap-3
                        ${e.jouable ? 'border-white/20 bg-white/[0.06]'
                                    : 'border-white/8 bg-white/[0.02]'}`}>
-                  <span className="flex-1 font-bold tracking-widest text-sm md:text-base"
-                        style={{ color: e.jouable ? '#fff' : 'rgba(255,255,255,0.4)' }}>
-                    {N.t(e.nom)}
+                  <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                    <span className="font-bold tracking-widest text-sm md:text-base"
+                          style={{ color: e.jouable ? '#fff' : 'rgba(255,255,255,0.4)' }}>
+                      {N.t(e.nom)}
+                    </span>
+                    {/* Les cotes du reglement, sous le nom. Elles disent le jeu
+                        avant qu'il existe : dix haies a 9,14 m les unes des
+                        autres, on voit deja la course. */}
+                    {e.cotes && (
+                      <span className="font-mono text-[9px] tracking-wide text-white/30">
+                        {cotesDe(e.cle)}
+                      </span>
+                    )}
                   </span>
                   {!e.jouable && (
                     <span className="flex items-center gap-1.5 text-[9px] tracking-widest

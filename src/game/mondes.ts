@@ -43,6 +43,16 @@ export type Discipline = {
   /** Clef de traduction du nom. */
   nom: string;
   /**
+   * La discipline a-t-elle des cotes reglementaires a montrer ?
+   *
+   * On garde un drapeau, pas la chaine elle-meme. La calculer ici obligerait
+   * ce fichier a lire le reglement des haies au chargement, et un appel au
+   * chargement n'est pas elaguable : tout le reglement partait alors dans le
+   * build public, ou aucun ecran ne peut l'afficher. C'est l'ecran — qui, lui,
+   * ne vit que sur le canal de test — qui va le chercher.
+   */
+  cotes?: boolean;
+  /**
    * L'epreuve est-elle jouable ?
    *
    * Une discipline annoncee et injouable vaut mieux qu'une discipline cachee :
@@ -76,9 +86,9 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
     cle: 'hurdlers', nom: 'HURDLERS', sous: 'monde_hurdlers_sous',
     fond: '#0b1220', accent: 'rgb(96,165,250)',
     disciplines: [
-      { cle: '100h', nom: 'disc_100h', jouable: false },
-      { cle: '110h', nom: 'disc_110h', jouable: false },
-      { cle: '400h', nom: 'disc_400h', jouable: false },
+      { cle: '100h', nom: 'disc_100h', jouable: false, cotes: true },
+      { cle: '110h', nom: 'disc_110h', jouable: false, cotes: true },
+      { cle: '400h', nom: 'disc_400h', jouable: false, cotes: true },
     ],
   },
   jumper: {
