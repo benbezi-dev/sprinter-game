@@ -107,21 +107,36 @@ export const PLATEAUX = {
 /**
  * Les trois courses, dans la forme que le moteur attend d'une epreuve.
  *
- * La vitesse de pointe est celle de Sprinter, volontairement : un hurdleur ne
- * court pas moins vite qu'un sprinteur, il perd du temps sur les haies. C'est
- * au jeu des haies de coûter ce qu'il coûte, pas a un plafond baisse en
- * douce — un plafond ne se sent pas, une haie mal passee si.
+ * SUR LA VITESSE DE POINTE, je reviens sur ce qui etait ecrit ici.
+ *
+ * Il y avait : « la vitesse de pointe est celle de Sprinter, volontairement —
+ * c'est au jeu des haies de couter ce qu'il coute, pas a un plafond baisse en
+ * douce ». L'argument valait contre un plafond qui REMPLACE le cout des haies.
+ * Il ne vaut pas ici : les haies coutent, et le cout vient du reglement
+ * lui-meme — 3,55 m de vol sur 9,14 m d'intervalle, mesures, pas choisis.
+ *
+ * Le plafond dit autre chose, et quelque chose de vrai : UN HURDLEUR NE COURT
+ * JAMAIS UN INTERVALLE LIBRE. Meme entre deux haies il regle sa foulee pour la
+ * suivante ; il n'atteint donc jamais la vitesse d'un sprinteur sur le plat.
+ * Ce n'est pas un malus cache, c'est la definition de l'epreuve.
+ *
+ * Mesure a l'appui : au plafond du plat, un jeu parfait bouclait le 110 m
+ * haies en 10,85 s — plus vite que le record du monde de 12,80, haies
+ * comprises. Ce n'etait pas un plafond honnete, c'etait un plafond faux.
+ *
+ * Le tour garde celui du plat : la ou l'intervalle fait trente-cinq metres, ce
+ * qui coute est la gene repetee, et elle suffit.
  */
 export const HAIES = {
   '100h': {
     key: '100h', label: '100 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 100, maxSpeed: 12.435, best: RECORDS['100h'].s,
+    arc: 0, straight: 100, maxSpeed: 11.000, best: RECORDS['100h'].s,
     haies: { nombre: NB_HAIES, hauteur: 0.838, premiere: 13.00, ecart: 8.50, fin: 10.50 },
     ranges: PLATEAUX['100h'],
   },
   '110h': {
     key: '110h', label: '110 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 110, maxSpeed: 12.435, best: RECORDS['110h'].s,
+    arc: 0, straight: 110, maxSpeed: 11.000, best: RECORDS['110h'].s,
     haies: { nombre: NB_HAIES, hauteur: 1.067, premiere: 13.72, ecart: 9.14, fin: 14.02 },
     ranges: PLATEAUX['110h'],
   },

@@ -67,6 +67,53 @@ export const APPEL = {
 export const REGLE = { '100h': 'parite', '110h': 'parite', '400h': 'constance' };
 
 /**
+ * CE QUE COUTE UNE HAIE, et pourquoi les deux epreuves ne le paient pas pareil.
+ *
+ * C'est la partie qui a demande le plus de mesures, et la seule qu'aucun
+ * raisonnement ne donnait d'avance.
+ *
+ * Le premier modele ne retirait qu'un peu de vitesse au passage. L'automate
+ * bouclait alors un 110 m haies en 10,37 s quand le record du monde est a
+ * 12,80 : il courait un 110 m plat avec des egratignures. Descendre la vitesse
+ * gardee jusqu'a 0,84 ne rendait que quatre dixiemes sur la course entiere,
+ * parce que le moteur reaccelere plus vite qu'une haie ne coute.
+ *
+ * Ce qui manquait n'etait pas une penalite mais LE VOL — le temps ou l'on ne
+ * pousse plus. Le moteur savait deja le faire : `freeze` laisse le coureur
+ * avancer et freiner mais lui interdit de reprendre de la vitesse.
+ *
+ * SUR LES COURTES, le vol est une DISTANCE, pas une duree. Le reglement la
+ * donne : on quitte le sol 2,15 m avant la haie et on retombe 1,40 m apres,
+ * soit 3,55 m des 9,14 de l'intervalle. Une duree fixe donnait 4,7 m a pleine
+ * vitesse — plus de la moitie de l'intervalle — et le rythme alternait alors
+ * 5,4,5,4 sans jamais se poser, ce qu'aucun joueur n'aurait pu tenir. Rapporte
+ * a la vitesse du moment, le vol laisse toujours 5,59 m au sol, soit les trois
+ * foulees d'un hurdleur.
+ *
+ * SUR LE TOUR, c'est une duree, et plus longue. L'intervalle y fait 35 m : le
+ * vol n'en represente qu'un dixieme, et un 400 m haies calcule ainsi ne se
+ * distinguait plus d'un 400 m plat — entre taper a neuf et taper a treize, le
+ * chrono ne bougeait que d'une demi-seconde. Ce qui coute sur le tour n'est pas
+ * le saut, c'est de courir POUR la haie sur trente-cinq metres : on regle sa
+ * foulee bien avant, on ne court jamais librement. La seconde represente cela.
+ * Elle ne coute d'ailleurs pas une seconde au chrono — le coureur reprend sa
+ * vitesse ensuite, et la perte nette tourne autour de quatre dixiemes, ce qui
+ * est l'ecart reel entre le tour plat et le tour de haies.
+ */
+export const COUT = {
+  '100h': { vol: 'distance' },
+  '110h': { vol: 'distance' },
+  '400h': { vol: 'duree', duree: 1.00 },
+};
+
+/** Combien de temps le coureur reste en l'air, a cette vitesse. */
+export function volDe(cle, v) {
+  const c = COUT[cle];
+  if (c.vol === 'duree') return c.duree;
+  return (APPEL[cle].avant + APPEL[cle].apres) / Math.max(1, v);
+}
+
+/**
  * La tolerance autour du point d'appel, en metres.
  *
  * PARFAIT : on passe sans rien perdre. La zone est etroite — c'est ce qui

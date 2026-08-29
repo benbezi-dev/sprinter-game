@@ -368,6 +368,10 @@ export function updateLogic(dt: number) {
     while (G.acc >= step) {
       G.acc -= step; G.elapsed += step;
       G.player.stepPlayer(step, G.elapsed);
+      // Les haies, quand il y en a. Le moteur ne les connait pas : c'est le
+      // jeu des haies qui se pose ici a l'armement, et qui se retire en
+      // partant. Sans course de haies, cette ligne est un test qui echoue.
+      if (G.pasHaies) G.pasHaies(G.player);
       // Un adversaire en direct n'est pas pilote ici : sa position vient du
       // reseau, et `stepGhost` l'interpole plus bas. Le lui appliquer en plus
       // le detruisait — le modele de l'ordinateur se cale sur un chrono vise,
