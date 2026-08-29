@@ -15,6 +15,7 @@ import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
+import { EST_TEST } from '@/game/canal';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -94,7 +95,14 @@ export function TitleScreen() {
   const currentRuns = runs[raceKey] || [];
   
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className={`w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20
+      px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
+      pb-[max(env(safe-area-inset-bottom),1rem)]
+      ${/* Le bandeau « version de test » est pose en haut de l'ecran, par-dessus
+            tout : sans cette marge il recouvrait la langue, le nom et le son. */''}
+      ${EST_TEST
+        ? 'pt-[calc(max(env(safe-area-inset-top),1rem)+1.9rem)]'
+        : 'pt-[max(env(safe-area-inset-top),1rem)]'}`}>
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
@@ -170,13 +178,16 @@ export function TitleScreen() {
                          shadow-[0_0_25px_rgba(248,205,74,0.2)]
                          flex items-center justify-between gap-3 text-left"
             >
-              <span className="flex items-center gap-2.5 min-w-0">
+              <span className="flex items-center gap-2.5 min-w-0 flex-1">
                 <Swords className="w-4 h-4 md:w-5 md:h-5 text-primary shrink-0" />
+                {/* Le titre ne se coupe plus : il passe a la ligne. « VOIR LE
+                    CLASSEMENT DE… » ne dit pas de quoi, et c'est justement le
+                    mot manquant qui portait le sens. */}
                 <span className="flex flex-col min-w-0">
-                  <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm truncate">
+                  <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm leading-tight">
                     {N.t('duel_open')}
                   </span>
-                  <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
+                  <span className="text-[9px] md:text-[10px] text-foreground/60 leading-snug">
                     {N.t('duel_sub')}
                   </span>
                 </span>
@@ -188,7 +199,7 @@ export function TitleScreen() {
                   d'oeil, c'est sa division. */}
               {monRang
                 ? <Ecusson etage={monRang.etage} division={monRang.division}
-                           lp={monRang.etage === 'legende' ? monRang.lp : undefined} />
+                           lp={monRang.etage === 'legende' ? monRang.lp : undefined} compact />
                 : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
                                    shrink-0 tracking-wider">—</span>}
             </button>}

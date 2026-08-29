@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { Ghost, Loader2 } from 'lucide-react';
+import { Ghost, Loader2, Radio, Users, ChevronDown } from 'lucide-react';
 import { fetchChallenge, codeFromUrl, clearUrlCode, normalizeCode, type Challenge } from '@/game/challenge';
 import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
+import { codeDirectUrl } from '@/game/live';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
 import { EST_TEST } from '@/game/canal';
@@ -123,7 +124,12 @@ export function OneShotPanel() {
 /* -------------------------------------------------------------------- defi
    On charge le defi d'un autre joueur a partir de son code, puis on court
    les memes epreuves contre son fantome. */
-export function ChallengePanel() {
+/**
+ * Le defi differe : un code, un fantome, et tout le temps qu'on veut pour y
+ * repondre. C'etait le seul contenu de cet onglet ; il en est devenu un parmi
+ * d'autres, et vit donc dans son propre composant.
+ */
+function DefiDiffere() {
   const { N } = SprinterApp;
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -186,17 +192,6 @@ export function ChallengePanel() {
 
   return (
     <div className="flex flex-col gap-3 md:gap-4">
-      {/* Deux facons de se defier, dans l'ordre ou on les decouvre : celle qui
-          demande que l'autre soit la maintenant, puis celle qui s'accommode
-          d'une reponse le lendemain. La premiere alimente le meme classement
-          que la seconde, elle passe donc par le meme interrupteur. */}
-      {DUELS_OUVERTS && <LivePanel />}
-      {/* Le championnat n'apparait que si le joueur y est engage. */}
-      {DUELS_OUVERTS && <ChampPanel />}
-      {/* Le relais n'est ouvert que sur le canal de test. En production,
-          EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
-      {EST_TEST && <RelaisPanel />}
-
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
         <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
           {N.t('versus_desc')}
@@ -287,6 +282,107 @@ export function ChallengePanel() {
       >
         {N.t('challenge_accept')}
       </button>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------- le menu des modes */
+
+/**
+ * L'onglet du defi : un mode, ou plusieurs.
+ *
+ * En production il n'y en a qu'un — le defi differe — et l'onglet le montre
+ * directement, comme il l'a toujours fait. Sur le canal de test, tout est
+ * ouvert : direct, relais, confrontations, fantomes. Les empiler les uns sous
+ * les autres donnait une colonne qu'il fallait derouler longuement pour
+ * decouvrir ce qu'elle contenait, et le premier panneau occupait a lui seul
+ * plus d'un ecran.
+ *
+ * Un menu regle les deux a la fois. Ferme, il tient en trois lignes et dit ce
+ * qui existe — ce qu'aucun empilement ne faisait, puisqu'il fallait faire
+ * defiler pour l'apprendre. Ouvert, il ne montre qu'un mode, celui qu'on a
+ * choisi.
+ *
+ * Un seul mode disponible n'a pas de menu : replier un unique choix derriere
+ * un titre a ouvrir, c'est ajouter un geste pour ne rien montrer de plus.
+ */
+type Mode = {
+  id: string;
+  titre: string;
+  sous: string;
+  Icone: typeof Radio;
+  teinte: string;
+  panneau: React.ReactNode;
+};
+
+export function ChallengePanel() {
+  const { N } = SprinterApp;
+
+  const modes: Mode[] = [];
+  if (DUELS_OUVERTS) {
+    modes.push({
+      id: 'direct', titre: N.t('live_title'), sous: N.t('live_sub'),
+      Icone: Radio, teinte: 'text-emerald-400 border-emerald-400/40',
+      panneau: <LivePanel />,
+    });
+  }
+  if (EST_TEST) {
+    modes.push({
+      id: 'relais', titre: N.t('relais_titre'), sous: N.t('relais_menu_sub'),
+      Icone: Users, teinte: 'text-emerald-300 border-emerald-300/40',
+      panneau: <RelaisPanel />,
+    });
+  }
+  modes.push({
+    id: 'defi', titre: N.t('mode_versus'), sous: N.t('versus_desc'),
+    Icone: Ghost, teinte: 'text-primary border-primary/40',
+    panneau: <DefiDiffere />,
+  });
+
+  // Un lien d'invitation ouvre le mode qu'il concerne : on ne fait pas chercher
+  // dans un menu quelqu'un qui vient de cliquer sur « viens courir ».
+  const [ouvert, setOuvert] = useState<string | null>(() => {
+    if (codeDirectUrl() && DUELS_OUVERTS) return 'direct';
+    if (codeFromUrl()) return 'defi';
+    return null;
+  });
+
+  return (
+    <div className="flex flex-col gap-3 md:gap-4">
+      {/* Le championnat passe avant le menu, et n'y figure pas : on ne choisit
+          pas d'y aller, on y est engage. Rien ne s'affiche a qui n'y court
+          pas. */}
+      {DUELS_OUVERTS && <ChampPanel />}
+
+      {modes.length === 1 ? modes[0].panneau : modes.map(m => {
+        const actif = ouvert === m.id;
+        return (
+          <div key={m.id} className="flex flex-col gap-3 md:gap-4">
+            <button
+              onClick={() => setOuvert(actif ? null : m.id)}
+              aria-expanded={actif}
+              className={`w-full px-4 py-3 rounded-2xl bg-black/70 backdrop-blur-md border
+                          hover:bg-black/85 transition-colors flex items-center gap-3 text-left
+                          ${actif ? m.teinte : 'border-white/10'}`}
+            >
+              <m.Icone className={`w-4 h-4 md:w-5 md:h-5 shrink-0
+                                   ${actif ? m.teinte.split(' ')[0] : 'text-foreground/70'}`} />
+              <span className="flex flex-col min-w-0 flex-1">
+                <span className={`font-bold tracking-widest text-[11px] md:text-sm
+                                  ${actif ? m.teinte.split(' ')[0] : 'text-foreground/90'}`}>
+                  {m.titre}
+                </span>
+                <span className="text-[9px] md:text-[10px] text-foreground/55 leading-snug">
+                  {m.sous}
+                </span>
+              </span>
+              <ChevronDown className={`w-4 h-4 shrink-0 text-foreground/50 transition-transform
+                                       ${actif ? 'rotate-180' : ''}`} />
+            </button>
+            {actif && m.panneau}
+          </div>
+        );
+      })}
     </div>
   );
 }

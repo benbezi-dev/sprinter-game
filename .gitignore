@@ -10,6 +10,16 @@ worker/.wrangler/
 # Suivi interne : feuille de route, dates de sortie, decisions. Le depot est
 # public — ce tableau ne l'est pas.
 suivi/
+# Contrats, accords de confidentialite, pieces d'anteriorite. Le depot est
+# public : y committer un NDA reviendrait a le publier, et une piece
+# d'anteriorite publiee ne prouve plus rien d'anterieur.
+juridique/
+# Strategie de communication : ton, vocabulaire, calendrier de lancement.
+# Le depot est public, et une charte editoriale lisible par tous perd la
+# moitie de son interet. Le dossier docs/ reste libre pour de la
+# documentation publique — c'est ce fichier-ci, et lui seul, qui sort.
+docs/instagram_charte.md
+
 # Configuration locale de l'outillage : chemins absolus propres a la machine.
 .claude/
 
