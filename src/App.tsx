@@ -19,6 +19,7 @@ import { EST_TEST } from '@/game/canal';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
+import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
@@ -136,6 +137,10 @@ function MainGame() {
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}
       <PresentationDirect />
+      {/* Les trois autres jeux, atteints par un geste depuis l'accueil. En
+          production, MONDES_OUVERTS vaut false en dur et rien de tout ceci
+          n'est embarque. */}
+      {EST_TEST && <Mondes />}
       <InstallPrompt />
       </>)}
     </div>

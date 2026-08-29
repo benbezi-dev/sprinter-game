@@ -1,0 +1,131 @@
+// Les quatre jeux, et comment on passe de l'un a l'autre.
+//
+// Sprinter est au centre. Les trois autres l'entourent, chacun dans une
+// direction, et l'on y va par un geste plutot que par un menu : vers le bas
+// les haies, a droite les sauts, a gauche les lancers.
+//
+// Ce n'est pas une coquetterie. Un menu aurait mis les quatre jeux au meme
+// rang, alors qu'ils ne le sont pas : Sprinter est celui qu'on ouvre, les
+// autres sont ce qu'on trouve autour. La direction elle-meme porte du sens —
+// on descend vers les haies parce que c'est le meme couloir avec des obstacles
+// dedans, on va sur les cotes pour les concours, qui ne se courent pas.
+//
+// Une seule regle a tenir : le geste doit rendre le chemin evident dans les
+// DEUX sens. On revient toujours par la direction opposee, sans quoi le joueur
+// se retrouve quelque part sans savoir comment en sortir.
+
+import { EST_TEST } from './canal';
+import { useSyncExternalStore } from 'react';
+
+export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
+export type Direction = 'bas' | 'droite' | 'gauche';
+
+/** Ou se trouve chaque jeu par rapport a Sprinter. */
+export const PLACE: Record<Exclude<Monde, 'sprinter'>, Direction> = {
+  hurdlers: 'bas',
+  jumper: 'droite',
+  thrower: 'gauche',
+};
+
+/** Le jeu qui se trouve dans cette direction depuis Sprinter. */
+export function mondeVers(d: Direction): Exclude<Monde, 'sprinter'> {
+  return (Object.keys(PLACE) as Exclude<Monde, 'sprinter'>[])
+    .find(m => PLACE[m] === d)!;
+}
+
+/** Par ou l'on revient a Sprinter depuis ce jeu. */
+export const RETOUR: Record<Direction, Direction> = {
+  bas: 'haut' as Direction, droite: 'gauche', gauche: 'droite',
+};
+
+export type Discipline = {
+  cle: string;
+  /** Clef de traduction du nom. */
+  nom: string;
+  /**
+   * L'epreuve est-elle jouable ?
+   *
+   * Une discipline annoncee et injouable vaut mieux qu'une discipline cachee :
+   * elle dit ce que le jeu deviendra. Mais elle doit le dire, et non se laisser
+   * appuyer pour ne rien faire.
+   */
+  jouable: boolean;
+};
+
+export type DescriptionMonde = {
+  cle: Monde;
+  nom: string;
+  sous: string;
+  /** Deux teintes : le fond du jeu, et son accent. */
+  fond: string;
+  accent: string;
+  disciplines: Discipline[];
+};
+
+export const MONDES: Record<Monde, DescriptionMonde> = {
+  sprinter: {
+    cle: 'sprinter', nom: 'SPRINTER', sous: 'monde_sprinter_sous',
+    fond: '#060913', accent: 'rgb(248,205,74)',
+    disciplines: [
+      { cle: '100', nom: 'disc_100', jouable: true },
+      { cle: '200', nom: 'disc_200', jouable: true },
+      { cle: '400', nom: 'disc_400', jouable: true },
+    ],
+  },
+  hurdlers: {
+    cle: 'hurdlers', nom: 'HURDLERS', sous: 'monde_hurdlers_sous',
+    fond: '#0b1220', accent: 'rgb(96,165,250)',
+    disciplines: [
+      { cle: '100h', nom: 'disc_100h', jouable: false },
+      { cle: '110h', nom: 'disc_110h', jouable: false },
+      { cle: '400h', nom: 'disc_400h', jouable: false },
+    ],
+  },
+  jumper: {
+    cle: 'jumper', nom: 'JUMPER', sous: 'monde_jumper_sous',
+    fond: '#0d1410', accent: 'rgb(52,211,153)',
+    disciplines: [
+      { cle: 'longueur', nom: 'disc_longueur', jouable: false },
+      { cle: 'hauteur', nom: 'disc_hauteur', jouable: false },
+      { cle: 'triple', nom: 'disc_triple', jouable: false },
+      { cle: 'perche', nom: 'disc_perche', jouable: false },
+    ],
+  },
+  thrower: {
+    cle: 'thrower', nom: 'THROWER', sous: 'monde_thrower_sous',
+    fond: '#160f0c', accent: 'rgb(251,146,60)',
+    disciplines: [
+      { cle: 'poids', nom: 'disc_poids', jouable: false },
+      { cle: 'marteau', nom: 'disc_marteau', jouable: false },
+      { cle: 'disque', nom: 'disc_disque', jouable: false },
+      { cle: 'javelot', nom: 'disc_javelot', jouable: false },
+    ],
+  },
+};
+
+/**
+ * Les quatre jeux ne sont ouverts que sur le canal de test.
+ *
+ * En production, `EST_TEST` vaut false en dur : le geste ne fait rien, les
+ * accueils ne sont pas embarques, et Sprinter reste seul comme aujourd'hui.
+ */
+export const MONDES_OUVERTS = EST_TEST;
+
+let courant: Monde = 'sprinter';
+const abonnes = new Set<() => void>();
+
+export function allerAu(m: Monde) {
+  if (!MONDES_OUVERTS && m !== 'sprinter') return;
+  courant = m;
+  for (const f of abonnes) f();
+}
+
+export function mondeCourant() { return courant; }
+
+export function useMonde(): Monde {
+  return useSyncExternalStore(
+    (l) => { abonnes.add(l); return () => { abonnes.delete(l); }; },
+    () => courant,
+    () => courant,
+  );
+}

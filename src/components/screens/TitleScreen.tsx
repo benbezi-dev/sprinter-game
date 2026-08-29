@@ -15,6 +15,10 @@ import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
+import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
+import { useGesteMondes } from '@/hooks/use-geste-mondes';
+import type { Direction } from '@/game/mondes';
+import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -92,7 +96,14 @@ export function TitleScreen() {
   };
 
   const currentRuns = runs[raceKey] || [];
-  
+
+  // Le geste qui mene aux trois autres jeux. Il se pose sur le rouleau de
+  // l'accueil, pas sur la fenetre : c'est la position de ce rouleau qui dit si
+  // l'on est au bout, et donc si tirer encore veut dire « montre-moi les
+  // haies » plutot que « fais defiler ».
+  const rouleau = React.useRef<HTMLDivElement>(null);
+  useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
+
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col w-full">
@@ -192,6 +203,32 @@ export function TitleScreen() {
                 : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
                                    shrink-0 tracking-wider">—</span>}
             </button>}
+
+            {/* Les trois autres jeux, annonces.
+                Un geste que rien n'annonce n'existe pas : personne ne tire
+                l'ecran vers le bas pour voir s'il se passe quelque chose. Ces
+                trois reperes sont la pour etre remarques une fois, et oublies
+                ensuite — c'est pourquoi ils sont discrets et ne prennent pas
+                de place. */}
+            {MONDES_OUVERTS && (
+              <div className="flex items-center justify-between gap-2 px-1 pt-1 pb-0.5">
+                <button onClick={() => allerAu('thrower')}
+                        className="flex items-center gap-1 text-[9px] tracking-widest
+                                   text-white/40 hover:text-white/80 transition-colors">
+                  <FlecheG className="w-3 h-3" /> THROWER
+                </button>
+                <button onClick={() => allerAu('hurdlers')}
+                        className="flex items-center gap-1 text-[9px] tracking-widest
+                                   text-white/40 hover:text-white/80 transition-colors">
+                  HURDLERS <ChevronDown className="w-3 h-3" />
+                </button>
+                <button onClick={() => allerAu('jumper')}
+                        className="flex items-center gap-1 text-[9px] tracking-widest
+                                   text-white/40 hover:text-white/80 transition-colors">
+                  JUMPER <FlecheD className="w-3 h-3" />
+                </button>
+              </div>
+            )}
 
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
