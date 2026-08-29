@@ -318,8 +318,16 @@ export function OneShotEndScreen() {
                   )}
                   {/* Gagne : le vainqueur est la, et l'autre est parti depuis
                       longtemps. C'est ici, et nulle part ailleurs, qu'il peut
-                      lui laisser un mot. */}
-                  {duel.issue === 'opponent' && (
+                      lui laisser un mot.
+
+                      Derriere le meme interrupteur que le classement des duels,
+                      et pas seulement par prudence : le serveur refuse le depot
+                      hors du canal de test. Sans cette condition, un joueur de
+                      la vraie version verrait le champ, ecrirait sa phrase, et
+                      recevrait un refus — on lui aurait promis quelque chose
+                      qui n'existe pas encore. Les deux verrous s'ouvriront le
+                      meme jour. */}
+                  {DUELS_OUVERTS && duel.issue === 'opponent' && (
                     <LaisserUnMot duel={challenge.id}
                                   adversaire={challenge.owner_name || N.t('opponent')} />
                   )}
