@@ -189,6 +189,15 @@ export class Voix {
    * Rien n'attend une action de l'utilisateur pour se refermer — c'est
    * exactement ce qu'on veut d'un micro qui s'ouvre tout seul.
    */
+  /**
+   * L'etat courant, pour qui l'affiche sans etre abonne.
+   *
+   * La presentation des athletes vit hors de l'arbre qui a monte cette
+   * liaison : elle ne peut pas recevoir les mises a jour, elle vient donc les
+   * chercher a chaque battement.
+   */
+  lireEtat(): EtatVoix { return this.etat; }
+
   ouvrirMicro(ms: number) {
     if (!this.piste) return;
     clearTimeout(this.minuteur);

@@ -11,7 +11,7 @@ import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challen
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { Review, type EtatReview } from '@/game/review';
-import { PresentationDirect } from './PresentationDirect';
+import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
@@ -126,6 +126,38 @@ export function LivePanel() {
   };
 
   /**
+   * Monte la piste sans donner le depart.
+   *
+   * Les adversaires viennent du salon avec le couloir que la salle leur a
+   * attribue : c'est ce qui fait que les huit telephones placent les memes
+   * gens aux memes endroits, pendant la presentation comme pendant la course.
+   */
+  const monterLaPiste = () => {
+    if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
+    SprinterApp.startLive([epreuve], {
+      levelIdx: 4, adversaire: salle.current?.adversaire || '', autres: lesAutres(),
+    });
+  };
+
+  /**
+   * Les adversaires, lus dans la SALLE et non dans l'etat React.
+   *
+   * Les ecouteurs de la salle sont crees une fois, a la connexion : ce qu'ils
+   * capturent de React date de cet instant-la, ou le salon etait encore vide.
+   * Lire `salon` depuis eux donnait donc une piste sans personne dessus —
+   * huit couloirs, sept coureurs de l'ordinateur, et pas d'adversaire.
+   *
+   * La salle, elle, garde son dernier etat a jour. C'est la source, on y va.
+   */
+  const lesAutres = () => {
+    const s = salle.current;
+    const moi = s?.moi || '';
+    return (s?.dernierEtat?.joueurs || [])
+      .filter(j => j.id !== moi)
+      .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0 }));
+  };
+
+  /**
    * Le pistolet. Appele soit a la fin de la presentation, soit tout de suite
    * si la salle n'en a pas annonce — le mode reste jouable contre un serveur
    * qui ne connaitrait pas encore la sequence.
@@ -135,10 +167,7 @@ export function LivePanel() {
     const adverse = salle.current?.adversaire || '';
     // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
     // les deux clients doivent placer les memes gens aux memes endroits.
-    const moi = salle.current?.moi || '';
-    const autres = (salon?.joueurs || [])
-      .filter(j => j.id !== moi)
-      .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0 }));
+    const autres = lesAutres();
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
       SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse, autres });
     }
@@ -166,6 +195,31 @@ export function LivePanel() {
       // La voix se monte pendant la presentation : la negociation prend un
       // instant, et on veut que le micro soit deja pret au premier passage.
       ouvrirVoix();
+
+      // La piste se monte MAINTENANT, et non au coup de pistolet.
+      //
+      // C'est ce qui permet de presenter les athletes la ou ils vont courir,
+      // dans leurs couloirs, dessines par le moteur. Le decompte reste
+      // suspendu — startLive le laisse a -99 — donc personne ne part : on a
+      // simplement allume le stade avant l'annonce.
+      monterLaPiste();
+
+      // Et la presentation passe a la racine de l'application. Elle ne peut
+      // pas rester ici : monter la piste fait sortir le jeu de l'ecran-titre,
+      // qui emporte ce panneau avec lui. Les fonctions qu'on lui confie
+      // continuent de marcher apres, elles tiennent la liaison audio par une
+      // reference qui, elle, survit.
+      lancerPresentation({
+        presentation: p,
+        moi: salle.current?.moi || '',
+        onTour: (_i, estMoi) => {
+          if (estMoi) voix.current?.ouvrirMicro(p.micro);
+          else voix.current?.fermerMicro();
+        },
+        onFini: () => { lancerPresentation(null); finPresentation(); },
+        etatVoix: () => voix.current?.lireEtat() ??
+          { micro: false, refuse: false, ouvert: false, connecte: false },
+      });
     },
     onDepart: (dansMs: number) => {
       cibleDepart.current = Date.now() + dansMs;
@@ -242,6 +296,13 @@ export function LivePanel() {
   const quitter = () => {
     quitterSalon(); salle.current = null;
     brancherSalle(null);
+    // Partir pendant la presentation laissait le jeu sur la piste, decompte
+    // suspendu, sans rien pour le relancer ni pour en sortir : la piste montee
+    // avant le pistolet doit se demonter par le meme chemin.
+    lancerPresentation(null);
+    if (SprinterApp.G.state === 'count' && SprinterApp.G.countT <= -90) {
+      SprinterApp.goHome();
+    }
     // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
     voix.current?.arreter(); voix.current = null;
@@ -375,21 +436,6 @@ export function LivePanel() {
   // --- salon : on attend, on partage, on se declare pret --------------------
   return (
     <>
-      {/* La presentation couvre l'ecran : c'est un moment a part, pas un
-          encart dans le salon. */}
-      {etape === 'presentation' && presentation && (
-        <PresentationDirect
-          presentation={presentation}
-          moi={salle.current?.moi || ''}
-          voix={voixEtat}
-          onTour={(_i, estMoi) => {
-            if (estMoi) voix.current?.ouvrirMicro(presentation.micro);
-            else voix.current?.fermerMicro();
-          }}
-          onFini={finPresentation}
-        />
-      )}
-
     <motion.div
       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"

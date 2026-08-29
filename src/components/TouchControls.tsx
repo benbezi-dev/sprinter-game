@@ -35,6 +35,7 @@ const LIT_MS = 110;
 export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
+  const countT = useGameStore(s => s.countT);
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +99,11 @@ export function TouchControls() {
   }, []);
 
   if (state !== 'race' && state !== 'count') return null;
+  // Le decompte suspendu, c'est la presentation des athletes : on regarde, on
+  // ne court pas encore. Les pavés et leur consigne n'y ont rien a faire — ils
+  // recouvraient la moitie basse de la piste au moment ou l'on presente
+  // quelqu'un.
+  if (state === 'count' && countT <= -90) return null;
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //

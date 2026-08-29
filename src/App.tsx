@@ -18,6 +18,7 @@ import { TouchControls } from '@/components/TouchControls';
 import { EST_TEST } from '@/game/canal';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
+import { PresentationDirect } from '@/components/screens/PresentationDirect';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
@@ -71,6 +72,7 @@ function useVisualViewportHeight() {
 function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
+  const countT = useGameStore(s => s.countT);
   useVisualViewportHeight();
   useBackGuard();
 
@@ -86,6 +88,8 @@ function MainGame() {
   // En production, EST_TEST vaut false en dur : la valeur initiale est vraie,
   // la porte disparait du build, et rien de tout ceci n'existe.
   const [acces, setAcces] = useState(!EST_TEST);
+  /** Le decompte suspendu, c'est la presentation des athletes. */
+  const enPresentation = state === 'count' && countT <= -90;
 
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
@@ -97,7 +101,11 @@ function MainGame() {
         {state === 'open' && <OpenScreen />}
         {state === 'title' && <TitleScreen />}
         {state === 'cut' && <CutScreen />}
-        {(state === 'count' || state === 'race') && <RaceHUD />}
+        {/* Pendant la presentation, le decompte est suspendu et l'etat vaut
+            deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
+            0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient
+            par-dessus la presentation alors que personne ne court encore. */}
+        {(state === 'count' || state === 'race') && !enPresentation && <RaceHUD />}
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
@@ -124,6 +132,10 @@ function MainGame() {
           commence. En production, EST_TEST vaut false en dur et tout ceci
           sort du build. */}
       {EST_TEST && <PisteRelais />}
+      {/* La presentation des athletes se joue SUR la piste, et doit donc
+          survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
+          et le panneau du direct avec lui. */}
+      <PresentationDirect />
       <InstallPrompt />
       </>)}
     </div>

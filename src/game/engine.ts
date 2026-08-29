@@ -341,7 +341,19 @@ export function updateLogic(dt: number) {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
     // ferait partir les deux joueurs a des instants differents.
-    if (G.liveOn && G.countT <= -90) { gameStore.setState({ state: G.state }); return; }
+    if (G.liveOn && G.countT <= -90) {
+      // Decompte suspendu : c'est le temps de la presentation. La piste est
+      // deja montee, tout le monde est dans son couloir — on fait vivre la
+      // scene plutot que de la figer, sans quoi le joueur regarderait une
+      // photographie pendant vingt secondes.
+      SprinterApp.stepPresentation(dt);
+      // `countT` part avec l'etat : c'est a lui qu'on reconnait une
+      // presentation d'un vrai decompte, et sans lui l'interface affichait le
+      // tableau de course par-dessus — « a battre », « alterne les deux
+      // touches » — alors que personne ne court encore.
+      gameStore.setState({ state: G.state, countT: G.countT });
+      return;
+    }
     const prev = Math.floor(G.countT);
     G.countT += dt;
     if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');

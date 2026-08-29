@@ -341,6 +341,8 @@
     // Le nom de celui a qui renvoyer le code apres une defaite. Nul le reste
     // du temps : c'est ce qui distingue une course ordinaire d'une revanche.
     revanche: null,
+    /** L'athlete mis en avant pendant la presentation, ou nul. */
+    presente: null,
     champion: null, championTime: 0,
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
@@ -556,6 +558,7 @@
     // La revanche ne concerne qu'une course : de retour a l'accueil, le nom
     // de celui a qui renvoyer le code n'a plus rien a designer.
     G.revanche = null;
+    G.presente = null;
     G.paused = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
@@ -1070,6 +1073,47 @@
       const t = ax * WC - ay * WS; ay = ax * WS + ay * WC; ax = t;
     }
     return (ax + ay) * scaleM();
+  }
+
+  /**
+   * La presentation des athletes, sur la piste.
+   *
+   * Le moteur est deja entre en course — decompte suspendu, tout le monde en
+   * place dans son couloir — et cette fonction ne fait que trois choses : elle
+   * amene la camera sur celui qu'on presente, elle lui fait lever les bras, et
+   * elle laisse les autres tranquilles.
+   *
+   * Le salut n'est pas une animation nouvelle : c'est `celebrate`, deja utilise
+   * par les cinematiques, qui melange la position des bras vers le haut. Un
+   * geste que le jeu sait deja faire vaut mieux qu'un geste de plus a entretenir.
+   */
+  function presenterCoureur(r) {
+    G.presente = r || null;
+  }
+
+  const CELEBRE_MONTEE = 2.6, CELEBRE_DESCENTE = 3.4;
+
+  function stepPresentation(dt) {
+    if (!G.track || !G.runners) return;
+    // La camera glisse plus lentement que pendant la course : c'est un
+    // travelling de presentation, pas une poursuite.
+    const vise = G.presente || G.player;
+    if (vise) {
+      const p = G.track.pos(vise.d, vise.lane);
+      const k = 1 - Math.exp(-3.4 * dt);
+      G.camX += (p[0] - G.camX) * k;
+      G.camY += (p[1] - G.camY) * k;
+    }
+    for (const r of G.runners) {
+      const cible = r === G.presente ? 1 : 0;
+      const vitesse = cible > (r.celebrate || 0) ? CELEBRE_MONTEE : CELEBRE_DESCENTE;
+      const c = r.celebrate || 0;
+      r.celebrate = c + Math.max(-vitesse * dt, Math.min(vitesse * dt, cible - c));
+      // Un souffle dans la foulee : sans lui les athletes sont des statues, et
+      // une piste de statues se voit immediatement.
+      r.stride += dt * (r === G.presente ? 1.1 : 0.5);
+      r.drivePitch = 0;
+    }
   }
 
   function followCam(dt) {
@@ -1847,7 +1891,7 @@
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
-    startRelais, recevoirTemoin,
+    startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
