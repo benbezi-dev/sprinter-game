@@ -36,6 +36,18 @@ import {
  */
 const relaisOuvert = canal => canal.test;
 const championnatsOuverts = canal => canal.test;
+/**
+ * Le mot du vainqueur : reserve au canal de test.
+ *
+ * C'est la seule ecriture du jeu ou un joueur produit un contenu qu'un autre
+ * lira, et personne ne la relit. Tant qu'elle n'a pas ete eprouvee entre gens
+ * qui se connaissent, la porte reste fermee du cote du serveur — pas seulement
+ * dans le jeu. Sans cela, une simple requete a la main suffirait a deposer un
+ * message chez n'importe quel joueur de la vraie version.
+ *
+ * A rouvrir en meme temps que les duels de production, et pas avant.
+ */
+const motOuvert = canal => canal.test;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -912,6 +924,7 @@ export default {
     // sont ce qui separe un chambrage entre amis d'une boite a insultes, et
     // elles doivent pouvoir etre relues d'un bloc.
     if (url.pathname === '/duel/mot' && request.method === 'POST') {
+      if (!motOuvert(canal)) return json({ error: 'reserve au canal de test' }, 403);
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { id, name, texte, voix, voix_type } = body || {};
@@ -980,9 +993,10 @@ export default {
           WHERE r.seen_by_opponent = 0
             AND r.outcome = 'challenger'
             AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
+            AND ? = 1
             AND (? <> '' AND r.opponent_key = ?)
           ORDER BY created_at ASC LIMIT 20`
-      ).bind(device_id, nom, nom, nom, nom).all();
+      ).bind(device_id, nom, nom, motOuvert(canal) ? 1 : 0, nom, nom).all();
 
       return json({
         results: (results || []).map(r => ({

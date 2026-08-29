@@ -131,6 +131,18 @@ const mesDuels = (n) =>
   ok('aucun des deux ne parle apres un nul', surNul.statut === 403,
      JSON.stringify(surNul.corps));
 
+  titre('LA PORTE EST FERMEE HORS DU CANAL DE TEST');
+
+  // Sans l'en-tete d'acces, la requete tombe sur la production. Le mot doit y
+  // etre refuse : c'est la seule ecriture ou un joueur produit un contenu qu'un
+  // autre lira, et rien ne la relit encore.
+  const horsTest = await fetch(B + '/duel/mot', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, name: releveur, texte: 'coucou la production' }),
+  }).then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
+  ok('en production, personne ne depose de mot', horsTest.statut === 403,
+     JSON.stringify(horsTest.corps));
+
   titre('LE CHEMIN INVERSE : LE LANCEUR GAGNE');
 
   const g = nom('G'), p = nom('P');
