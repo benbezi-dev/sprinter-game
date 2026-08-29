@@ -100,6 +100,8 @@
     score_saved:     ['classé {r}e sur le TOP 500 mondial', 'ranked {r} on the world TOP 500'],
     score_save_fail: ["échec de l'envoi, réessaie plus tard", 'failed to send, try again later'],
     view_top500:     ['VOIR LE TOP 500', 'VIEW TOP 500'],
+    // Sur un bouton, « VOIR LE » ne dit rien que le bouton ne dise deja.
+    top500_court:    ['TOP 500', 'TOP 500'],
     close:           ['FERMER', 'CLOSE'],
     loading_ranks:   ['chargement du classement...', 'loading rankings...'],
     empty_top500:    ['aucun chrono enregistré pour le moment', 'no times recorded yet'],
@@ -210,8 +212,6 @@
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
-    live_sub:        ['même coup de pistolet, chacun son téléphone',
-                      'same gun, each on their own phone'],
     live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
                       'you both start on the same gun, each on your own phone — no ghost, nobody knows who wins'],
     live_create:     ['OUVRIR UNE PISTE', 'OPEN A TRACK'],
@@ -234,8 +234,6 @@
                       'I am waiting for you on the track. Code {c} — {l}'],
     // relais 4x100
     relais_titre:    ['RELAIS 4 × 100', '4 × 100 RELAY'],
-    relais_menu_sub: ['équipes de quatre, confrontations et fantômes',
-                      'teams of four, head-to-heads and ghosts'],
     relais_desc:     ['quatre coureurs, un témoin. Une équipe, c’est sa composition : mêmes quatre noms, même équipe.',
                       'four runners, one baton. A team is its line-up: same four names, same team.'],
     relais_invitations: ['ON T’A INVITÉ', 'YOU ARE INVITED'],

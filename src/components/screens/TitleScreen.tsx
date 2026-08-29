@@ -15,7 +15,6 @@ import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
-import { EST_TEST } from '@/game/canal';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -95,14 +94,7 @@ export function TitleScreen() {
   const currentRuns = runs[raceKey] || [];
   
   return (
-    <div className={`w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20
-      px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
-      pb-[max(env(safe-area-inset-bottom),1rem)]
-      ${/* Le bandeau « version de test » est pose en haut de l'ecran, par-dessus
-            tout : sans cette marge il recouvrait la langue, le nom et le son. */''}
-      ${EST_TEST
-        ? 'pt-[calc(max(env(safe-area-inset-top),1rem)+1.9rem)]'
-        : 'pt-[max(env(safe-area-inset-top),1rem)]'}`}>
+    <div className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
@@ -178,16 +170,13 @@ export function TitleScreen() {
                          shadow-[0_0_25px_rgba(248,205,74,0.2)]
                          flex items-center justify-between gap-3 text-left"
             >
-              <span className="flex items-center gap-2.5 min-w-0 flex-1">
+              <span className="flex items-center gap-2.5 min-w-0">
                 <Swords className="w-4 h-4 md:w-5 md:h-5 text-primary shrink-0" />
-                {/* Le titre ne se coupe plus : il passe a la ligne. « VOIR LE
-                    CLASSEMENT DE… » ne dit pas de quoi, et c'est justement le
-                    mot manquant qui portait le sens. */}
                 <span className="flex flex-col min-w-0">
-                  <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm leading-tight">
+                  <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm truncate">
                     {N.t('duel_open')}
                   </span>
-                  <span className="text-[9px] md:text-[10px] text-foreground/60 leading-snug">
+                  <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
                     {N.t('duel_sub')}
                   </span>
                 </span>
@@ -199,7 +188,7 @@ export function TitleScreen() {
                   d'oeil, c'est sa division. */}
               {monRang
                 ? <Ecusson etage={monRang.etage} division={monRang.division}
-                           lp={monRang.etage === 'legende' ? monRang.lp : undefined} compact />
+                           lp={monRang.etage === 'legende' ? monRang.lp : undefined} />
                 : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
                                    shrink-0 tracking-wider">—</span>}
             </button>}
@@ -208,52 +197,66 @@ export function TitleScreen() {
             {tab === 'versus' && <ChallengePanel />}
 
             {tab === 'career' && <>
-            {/* Leaderboard Card */}
-            <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl">
-              <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-6 justify-center">
-                <img src={`${BASE}/icons/trophy.png`} alt="" className="w-4 h-4 md:w-5 md:h-5" />
-                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('best_runs')}</h2>
+            {/* Les meilleurs parcours, resserres.
+                Cette carte poussait COMMENCER sous la ligne de flottaison : il
+                fallait derouler pour lancer une course, sur l'ecran dont c'est
+                la seule raison d'etre. Trois blocs empiles sont devenus deux
+                lignes, sans qu'aucune information disparaisse.
+
+                Le titre et le bouton du TOP 500 partageaient le meme sens et
+                occupaient deux etages ; ils tiennent sur une ligne. Et les
+                lignes vides — celles des parcours qu'on n'a pas encore courus —
+                ne sont plus dessinees : montrer cinq rangs dont quatre affichent
+                « -- » prend la place de cinq resultats pour n'en donner qu'un. */}
+            <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-5 shadow-2xl flex flex-col gap-2 md:gap-3">
+              <div className="flex items-center gap-2">
+                <img src={`${BASE}/icons/trophy.png`} alt="" className="w-4 h-4 shrink-0" />
+                {/* Le titre passe a la ligne plutot que de se faire couper :
+                    sur un ecran etroit il ne tient pas a cote du bouton, et
+                    « MEILLEU… » ne dit rien. Deux lignes de titre restent bien
+                    plus courtes que les deux blocs empiles d'avant. */}
+                <h2 className="flex-1 min-w-0 font-bold tracking-widest text-primary
+                               text-[11px] md:text-sm leading-tight">
+                  {N.t('best_runs')}
+                </h2>
+                <button
+                  onClick={() => setShowTop500(true)}
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30
+                             text-primary font-bold tracking-widest text-[9px] md:text-[11px]
+                             flex items-center gap-1.5 hover:bg-primary/20 transition-colors"
+                >
+                  <Globe2 className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                  {N.t('top500_court')}
+                </button>
               </div>
-              <button
-                onClick={() => setShowTop500(true)}
-                className="w-full mb-3 md:mb-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold tracking-widest text-[10px] md:text-xs flex items-center justify-center gap-2 hover:bg-primary/20 transition-colors"
-              >
-                <Globe2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                {N.t('view_top500')}
-              </button>
 
               {!currentRuns.length ? (
-                <div className="py-4 md:py-8 text-center flex flex-col gap-1 md:gap-2">
-                  <p className="text-xs md:text-sm text-muted-foreground font-medium">{N.t('no_run')}</p>
-                  <p className="text-foreground/90 font-bold text-xs md:text-sm uppercase tracking-wide">
+                <p className="text-[11px] md:text-sm text-center leading-snug text-muted-foreground">
+                  {N.t('no_run')}
+                  {' — '}
+                  <span className="text-foreground/90 font-bold uppercase tracking-wide">
                     {N.t('furthest')} {furthest[raceKey]} {N.t('of_six')}
-                  </p>
-                </div>
+                  </span>
+                </p>
               ) : (
-                <div className="flex flex-col gap-1 md:gap-2">
-                  {Array.from({ length: 5 }).map((_, i) => {
-                    const run = currentRuns[i];
-                    return (
-                      <div key={i} className="flex items-center text-xs md:text-sm font-mono bg-black/20 rounded-md px-2 py-1.5 md:px-3 md:py-2 border border-white/5">
-                        <span className="w-4 md:w-6 text-muted-foreground/50">{i + 1}.</span>
-                        {run ? (
-                          <>
-                            <span className={`font-bold ml-1 md:ml-2 ${i === 0 ? 'text-primary' : i < 3 ? 'text-cyan-400' : 'text-foreground'}`}>
-                              {run.toFixed(2)} s
-                            </span>
-                            <div className="flex-1 ml-2 md:ml-4 h-1 md:h-1.5 bg-black/40 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${i === 0 ? 'bg-primary' : i < 3 ? 'bg-cyan-400' : 'bg-white/40'}`}
-                                style={{ width: `${(currentRuns[0] / run) * 100}%` }}
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground ml-1 md:ml-2 font-medium">--</span>
-                        )}
+                <div className="flex flex-col gap-1">
+                  {currentRuns.slice(0, 5).map((run, i) => (
+                    <div key={i} className="flex items-center text-[11px] md:text-sm font-mono
+                                            bg-black/20 rounded-md px-2 py-1 md:px-3 md:py-1.5
+                                            border border-white/5">
+                      <span className="w-4 md:w-6 text-muted-foreground/50">{i + 1}.</span>
+                      <span className={`font-bold ml-1 md:ml-2
+                        ${i === 0 ? 'text-primary' : i < 3 ? 'text-cyan-400' : 'text-foreground'}`}>
+                        {run.toFixed(2)} s
+                      </span>
+                      <div className="flex-1 ml-2 md:ml-4 h-1 md:h-1.5 bg-black/40 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${i === 0 ? 'bg-primary' : i < 3 ? 'bg-cyan-400' : 'bg-white/40'}`}
+                          style={{ width: `${(currentRuns[0] / run) * 100}%` }}
+                        />
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
