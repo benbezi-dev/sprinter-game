@@ -7,7 +7,7 @@
 // verifie.
 
 import {
-  HAIES, RECORDS, PLATEAUX, APPUIS_IDEAL, NB_HAIES,
+  HAIES, RECORDS, PLATEAUX, APPUIS_IDEAL, NB_HAIES, ECART_MONDIAL,
   distanceDe, positionsDes, verifierGeometrie, fouleeIdeale,
 } from '../src/game/haies.js';
 
@@ -73,9 +73,39 @@ titre('LE PLATEAU MONDIAL ENCADRE LE RECORD');
 for (const c of CLES) {
   const [a, b] = PLATEAUX[c][3];
   const R = RECORDS[c].s;
+  const attendu = R * ECART_MONDIAL;
   ok(`${c} : ${a} a ${b} autour de ${R}`,
-     Math.abs((R - a) - 0.30) < 0.005 && Math.abs((b - R) - 0.30) < 0.005,
+     Math.abs((R - a) - attendu) < 0.01 && Math.abs((b - R) - attendu) < 0.01,
      `${(R - a).toFixed(2)} avant, ${(b - R).toFixed(2)} apres`);
+}
+
+// L'ecart est une PROPORTION, et c'est ce qui doit etre verifie.
+//
+// Exprime en secondes, il valait 2,3 % d'un 110 m haies et 0,65 % d'un tour :
+// le plateau du 400 m tenait dans six dixiemes apres quarante-six secondes de
+// course, ou l'on ne pouvait ni prendre de l'avance ni en perdre. Le test
+// verifie donc que les trois epreuves respirent pareil, et que le 110 m — ou
+// le chiffre a ete pose — retombe exactement sur ses trois dixiemes.
+ok('les trois epreuves ont la meme respiration',
+   CLES.every(c => {
+     const [a, b] = PLATEAUX[c][3];
+     return Math.abs((b - a) / RECORDS[c].s - 2 * ECART_MONDIAL) < 0.002;
+   }),
+   CLES.map(c => {
+     const [a, b] = PLATEAUX[c][3];
+     return `${c} ${(100 * (b - a) / RECORDS[c].s).toFixed(1)}%`;
+   }).join(' · '));
+
+ok('le 110 m retombe sur les trois dixiemes demandes',
+   Math.abs((RECORDS['110h'].s - PLATEAUX['110h'][3][0]) - 0.30) < 0.005,
+   `${(RECORDS['110h'].s - PLATEAUX['110h'][3][0]).toFixed(3)} s`);
+
+// Un plateau trop serre n'est plus une course : personne ne prend d'avance,
+// tout se joue au centieme. On exige de quoi se detacher.
+for (const c of CLES) {
+  const [a, b] = PLATEAUX[c][3];
+  ok(`${c} : le plateau mondial laisse de quoi se detacher`,
+     b - a >= 0.5, `${(b - a).toFixed(2)} s entre le premier et le dernier`);
 }
 
 titre('CHAQUE NIVEAU EST PLUS DUR QUE LE PRECEDENT');

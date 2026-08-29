@@ -51,28 +51,57 @@ export const RECORDS = {
 };
 
 /**
+ * L'ecart du plateau mondial autour du record, en part du record.
+ *
+ * Trois dixiemes sur le 110 m — le chiffre choisi — mais exprime en
+ * proportion, et c'est tout l'objet de cette constante.
+ *
+ * En valeur absolue, trois dixiemes valent 2,3 % d'un 110 m haies et 0,65 %
+ * d'un tour complet. Le plateau du 400 m tenait alors dans six dixiemes apres
+ * quarante-six secondes de course : sept adversaires a portee de photo-finish
+ * a chaque tentative, ou l'on ne pouvait ni prendre de l'avance ni en perdre.
+ * Ce n'etait pas une decision, c'etait un effet de bord de l'unite choisie.
+ *
+ * En proportion, l'ecart vaut deux secondes sur le tour — l'ecart d'une vraie
+ * finale — et ne bouge pas d'un centieme sur le 110 m, ou le chiffre a ete
+ * pose.
+ */
+export const ECART_MONDIAL = 0.30 / 12.80;
+
+/**
  * Les six plateaux, du scolaire aux ZEZE.
  *
- * Les quatre premiers suivent les proportions de Sprinter rapportees a son
+ * Les trois premiers suivent les proportions de Sprinter rapportees a son
  * propre record — l'echelle de difficulte du jeu est deja calee, il n'y avait
  * aucune raison d'en inventer une seconde.
  *
- * Le niveau mondial est le record a trois dixiemes pres, dans les deux sens :
- * c'est le seul plateau du jeu ou l'on court CONTRE la marque reelle plutot
- * qu'apres elle.
+ * Le mondial encadre le record : c'est le seul plateau du jeu ou l'on court
+ * CONTRE la marque reelle plutot qu'apres elle.
  *
- * Les deux derniers ont du etre poses a la main. A trois dixiemes sous le
- * record, le mondial passait devant les Jeux olympiques, qui partaient du
+ * Les deux derniers descendent, et il le fallait. A l'ecart demande SOUS le
+ * record, le mondial serait passe devant les Jeux olympiques, qui partaient du
  * record lui-meme : la course serait devenue plus facile en montant d'un
- * niveau. Ils restent donc plus rapides, comme partout ailleurs dans le jeu.
+ * niveau.
  */
+const PROPORTIONS = [[1.305, 1.566], [1.169, 1.305], [1.044, 1.096]];
+const ZEZE = [0.913, 0.939];
+
+/** Les six plateaux d'une epreuve, calcules depuis son record. */
+function plateauxDe(record) {
+  const e = ECART_MONDIAL;
+  const arrondi = ([a, b]) => [Math.round(a * 100) / 100, Math.round(b * 100) / 100];
+  return [
+    ...PROPORTIONS.map(([a, b]) => arrondi([record * a, record * b])),
+    arrondi([record * (1 - e), record * (1 + e)]),
+    arrondi([record * (1 - e * 1.5), record * (1 - e * 0.5)]),
+    arrondi([record * ZEZE[0], record * ZEZE[1]]),
+  ];
+}
+
 export const PLATEAUX = {
-  '100h': [[15.81, 18.98], [14.17, 15.81], [12.65, 13.28],
-           [11.82, 12.42], [11.67, 11.97], [11.07, 11.39]],
-  '110h': [[16.70, 20.04], [14.96, 16.70], [13.36, 14.03],
-           [12.50, 13.10], [12.35, 12.65], [11.69, 12.03]],
-  '400h': [[59.94, 71.93], [53.71, 59.94], [47.95, 50.35],
-           [45.64, 46.24], [45.49, 45.79], [41.96, 43.16]],
+  '100h': plateauxDe(RECORDS['100h'].s),
+  '110h': plateauxDe(RECORDS['110h'].s),
+  '400h': plateauxDe(RECORDS['400h'].s),
 };
 
 /**
