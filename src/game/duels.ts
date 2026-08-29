@@ -142,11 +142,25 @@ export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
 export type MonDuel = {
   id: string;
   adversaire: string;
+  /**
+   * De quel cote j'etais dans cette rencontre.
+   *
+   * Le meme ecran sert les deux roles depuis que le vainqueur peut laisser un
+   * mot : celui qui a lance apprend son resultat, celui qui a releve apprend ce
+   * qu'on lui a dit. Sans ce champ, l'ecran ne saurait pas de quel cote lire
+   * l'issue — et annoncerait une victoire a celui qui vient de perdre.
+   */
+  role: 'challenger' | 'opponent';
   issue: 'challenger' | 'opponent' | 'draw';
   /** Ce que ce duel m'a rapporte, tel qu'inscrit au moment ou il s'est joue. */
   lp: number;
   mon_ms: number;
   son_ms: number;
+  /** Le mot du vainqueur, s'il en a laisse un. Nul pour le vainqueur lui-meme. */
+  mot?: string | null;
+  /** Sa voix, encodee. Effacee du serveur des que cette fenetre se ferme. */
+  voix?: string | null;
+  voix_type?: string | null;
   races: string[];
   at: number;
 };

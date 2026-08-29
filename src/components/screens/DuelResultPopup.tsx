@@ -5,6 +5,7 @@ import { Swords, ChevronRight } from 'lucide-react';
 import { fetchMesDuels, marquerDuelsVus, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
+import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
@@ -79,9 +80,14 @@ export function DuelResultPopup() {
 
   if (!montrable || !duel) return null;
 
-  const gagne = duel.issue === 'challenger';
+  // Qui a gagne, vu de MA place. La fenetre servait au seul lanceur ; elle
+  // sert desormais aussi a celui qui a releve, quand le vainqueur lui a laisse
+  // un mot. Lire l'issue sans savoir de quel cote on etait annoncerait une
+  // victoire a celui qui vient de perdre.
+  const gagne = duel.issue === (duel.role || 'challenger');
   const nul = duel.issue === 'draw';
   const perdu = !gagne && !nul;
+  const jeRecoisUnMot = perdu && !!(duel.mot || duel.voix);
 
   const suivant = () => {
     marquerDuelsVus([duel.id]);
@@ -153,16 +159,24 @@ export function DuelResultPopup() {
                 nombre, c'est la phrase qui pique. Le chrono reste lisible
                 ailleurs pour qui le cherche. */}
             {perdu ? (
-              <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
-                              px-4 py-3 flex flex-col items-center gap-1.5">
-                <p className="text-sm md:text-base text-foreground text-center leading-snug">
-                  « {pique(duel.id, duel.adversaire)} »
-                </p>
-                <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
-                                 truncate max-w-full">
-                  {duel.adversaire}
-                </span>
-              </div>
+              // Le mot de l'adversaire s'il en a laisse un, la pique sinon.
+              // Une phrase ecrite par le jeu vaut mieux que rien, mais elle
+              // n'a jamais valu la vraie voix de celui qui vient de gagner.
+              jeRecoisUnMot ? (
+                <LireLeMot texte={duel.mot} voix={duel.voix}
+                           voixType={duel.voix_type} auteur={duel.adversaire} />
+              ) : (
+                <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
+                                px-4 py-3 flex flex-col items-center gap-1.5">
+                  <p className="text-sm md:text-base text-foreground text-center leading-snug">
+                    « {pique(duel.id, duel.adversaire)} »
+                  </p>
+                  <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
+                                   truncate max-w-full">
+                    {duel.adversaire}
+                  </span>
+                </div>
+              )
             ) : (
               <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
                 <div className="flex items-center justify-between px-3 py-2">
@@ -189,6 +203,10 @@ export function DuelResultPopup() {
               {file.length > 1 &&
                 ` · ${N.t(file.length > 2 ? 'duel_mores' : 'duel_more', { n: file.length - 1 })}`}
             </span>
+
+            {/* Le vainqueur qui apprend sa victoire ici n'etait pas la quand
+                l'autre a couru : c'est son seul moment pour lui repondre. */}
+            {gagne && <LaisserUnMot duel={duel.id} adversaire={duel.adversaire} />}
 
             <div className="w-full flex flex-col gap-2 mt-1">
               {/* La revanche est offerte a la defaite, et seulement la.

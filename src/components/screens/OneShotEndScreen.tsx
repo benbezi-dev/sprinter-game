@@ -14,6 +14,7 @@ import {
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
 import { pique } from '@/game/piques';
+import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 
@@ -315,6 +316,14 @@ export function OneShotEndScreen() {
                       )}
                     </div>
                   )}
+                  {/* Gagne : le vainqueur est la, et l'autre est parti depuis
+                      longtemps. C'est ici, et nulle part ailleurs, qu'il peut
+                      lui laisser un mot. */}
+                  {duel.issue === 'opponent' && (
+                    <LaisserUnMot duel={challenge.id}
+                                  adversaire={challenge.owner_name || N.t('opponent')} />
+                  )}
+
                   {/* Perdu : le mot de l'adversaire, et la revanche.
                       Un ecart de chronos est exact et froid ; c'est la phrase
                       qui donne envie de repartir, et le bouton qui le permet

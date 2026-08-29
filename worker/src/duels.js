@@ -82,6 +82,15 @@ export async function ensureDuelTables(db) {
     // l'apprendre en revenant, parfois des jours plus tard.
     `ALTER TABLE duel_results ADD COLUMN lp_challenger INTEGER`,
     `ALTER TABLE duel_results ADD COLUMN lp_opponent INTEGER`,
+    // Le mot du vainqueur : un texte court, ou sa voix encodee. La voix est
+    // effacee des que le perdant a ferme la fenetre — voir mot.js.
+    `ALTER TABLE duel_results ADD COLUMN mot TEXT`,
+    `ALTER TABLE duel_results ADD COLUMN voix TEXT`,
+    `ALTER TABLE duel_results ADD COLUMN voix_type TEXT`,
+    // Le perdant a-t-il lu le mot ? Le pendant de seen_by_challenger, pour
+    // celui qui a releve le defi : lui aussi doit apprendre quelque chose
+    // apres coup, maintenant que le vainqueur peut lui parler.
+    `ALTER TABLE duel_results ADD COLUMN seen_by_opponent INTEGER NOT NULL DEFAULT 0`,
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }
