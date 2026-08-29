@@ -17,6 +17,7 @@ export function FalseStartCut() {
   // La cinematique annonce ce qui vient de se passer, et cela depend de qui
   // court. Un duel se perd ici ; une course pour soi s'arrete et se reprend.
   const defaite = fauxDepartEstUneDefaite({
+    courseEnDirect: !!SprinterApp.G.liveOn,
     defiRecu: !!SprinterApp.G.challenge,
     defiEnvoye: false,
     fauxDepart: true,

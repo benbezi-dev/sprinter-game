@@ -475,6 +475,8 @@
     os_rejouer:      ['REJOUER LA COURSE', 'RUN IT AGAIN'],
     os_rejouer_sub:  ['ton chrono ne part nulle part tant que tu n’as pas envoyé de défi',
                       'your time goes nowhere until you send a challenge'],
+    os_verrou_direct: ['course en direct : ton adversaire a couru en même temps, le résultat est joué',
+                       'live race: your opponent ran at the same moment, the result stands'],
     os_verrou_recu:  ['tu répondais à un défi : ton chrono est déjà parti chez ton adversaire',
                       'you were answering a challenge: your time has already gone to your opponent'],
     os_verrou_envoye: ['le défi est envoyé — ce chrono est celui qu’il devra battre',

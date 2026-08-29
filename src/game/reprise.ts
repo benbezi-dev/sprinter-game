@@ -14,7 +14,14 @@
    shot soit plus severe.
 
    Des qu'un adversaire entre en jeu, le chrono devient une parole donnee, et
-   une parole ne se reprend pas. Trois cas :
+   une parole ne se reprend pas. Quatre cas :
+
+   LA COURSE EN DIRECT. Quelqu'un a couru au meme instant, a l'autre bout
+   d'une WebSocket, et la salle a deja tranche. C'est le cas le plus engage
+   qui soit, et c'est aussi celui qu'on oublie : une course en direct emprunte
+   toute la plomberie du one shot et finit sur le meme ecran, sans qu'aucun
+   defi n'ait ete recu ni envoye. Elle passait donc entre les trois autres
+   verrous, et le bouton de reprise s'affichait apres un duel en direct perdu.
 
    REPONDRE A UN DEFI. Le resultat part au serveur des l'arrivee, avant meme
    que le joueur ait touche un bouton — l'adversaire attend un chrono, pas la
@@ -36,6 +43,8 @@
 
 /** Ce qu'il faut savoir de la course qui vient de finir. */
 export type EtatCourse = {
+  /** La course s'est jouee en direct contre un adversaire reel. */
+  courseEnDirect: boolean;
   /** On repondait a un defi recu. */
   defiRecu: boolean;
   /** Un defi a deja ete cree depuis cette course. */
@@ -47,7 +56,8 @@ export type EtatCourse = {
 };
 
 /** Pourquoi la course ne se rejoue pas. Nul quand elle se rejoue. */
-export type Verrou = 'defi_recu' | 'defi_envoye' | 'faux_depart_duel' | null;
+export type Verrou =
+  | 'course_directe' | 'defi_recu' | 'defi_envoye' | 'faux_depart_duel' | null;
 
 /**
  * Qu'est-ce qui empeche de rejouer ?
@@ -57,6 +67,7 @@ export type Verrou = 'defi_recu' | 'defi_envoye' | 'faux_depart_duel' | null;
  * explication se cherche, et on finit par croire a une panne.
  */
 export function verrouDeReprise(e: EtatCourse): Verrou {
+  if (e.courseEnDirect) return 'course_directe';
   if (e.defiRecu) return 'defi_recu';
   if (e.defiEnvoye) return 'defi_envoye';
   if (e.fauxDepart && e.chaineDeDuel) return 'faux_depart_duel';
@@ -77,5 +88,5 @@ export function peutRejouer(e: EtatCourse): boolean {
  * renvoie.
  */
 export function fauxDepartEstUneDefaite(e: EtatCourse): boolean {
-  return e.fauxDepart && (e.defiRecu || e.chaineDeDuel);
+  return e.fauxDepart && (e.courseEnDirect || e.defiRecu || e.chaineDeDuel);
 }

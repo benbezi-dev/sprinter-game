@@ -194,6 +194,11 @@ export function OneShotEndScreen() {
   // marque une course lancee depuis un duel — elle survit a une reprise, sans
   // quoi il suffirait de rejouer une fois pour sortir de la chaine.
   const etatCourse = {
+    // Une course en direct emprunte toute la plomberie du one shot et finit
+    // ici, sans defi recu ni envoye. Sans cette ligne elle passait entre les
+    // autres verrous et proposait de rejouer un duel deja tranche par la
+    // salle, contre quelqu'un qui a couru au meme instant.
+    courseEnDirect: !!liveOn,
     defiRecu: !!challenge,
     defiEnvoye: !!code,
     fauxDepart: falseOut,
@@ -672,7 +677,8 @@ export function OneShotEndScreen() {
               <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>
-                {N.t(verrou === 'defi_recu' ? 'os_verrou_recu'
+                {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
+                   : verrou === 'defi_recu' ? 'os_verrou_recu'
                    : verrou === 'defi_envoye' ? 'os_verrou_envoye'
                    : 'os_verrou_faux')}
               </p>

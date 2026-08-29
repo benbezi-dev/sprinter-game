@@ -1,6 +1,6 @@
-// La regle de reprise, verifiee sur les seize cas possibles.
+// La regle de reprise, verifiee sur les trente-deux cas possibles.
 //
-// Quatre booleens font seize combinaisons. C'est assez peu pour les parcourir
+// Cinq booleens font trente-deux combinaisons. C'est assez peu pour les parcourir
 // toutes plutot que d'en choisir quelques-unes : une regle qui decide si un
 // chrono peut repartir chez un adversaire merite qu'on la regarde en entier,
 // et non aux endroits ou l'on pensait deja avoir raison.
@@ -11,22 +11,25 @@
 
 import { readFileSync } from 'node:fs';
 
-const src = readFileSync(new URL('../src/game/reprise.ts', import.meta.url), 'utf8')
-  .replace(/export type [\s\S]*?};\n/g, '')
-  .replace(/export type Verrou[^\n]*\n/g, '')
-  .replace(/: EtatCourse/g, '')
-  .replace(/: Verrou/g, '')
-  .replace(/: boolean/g, '')
-  .replace(/export /g, '');
-const mod = new Function(`${src}; return { verrouDeReprise, peutRejouer, fauxDepartEstUneDefaite };`)();
+// On lit le fichier de regle sans le compiler a la main.
+//
+// La premiere version effacait les types elle-meme, et s'est cassee deux fois
+// de suite : d'abord sur une union tenant sur deux lignes, puis sur un type
+// objet dont chaque champ se termine par un point-virgule. Ecrire un troisieme
+// effaceur aurait ete s'entetter — esbuild est deja une dependance de Vite et
+// fait exactement cela, correctement.
+const { transform } = await import('esbuild');
+const ts = readFileSync(new URL('../src/game/reprise.ts', import.meta.url), 'utf8');
+const { code } = await transform(ts, { loader: 'ts', format: 'esm' });
+const mod = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 const { verrouDeReprise, peutRejouer, fauxDepartEstUneDefaite } = mod;
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
 const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.length))}`);
 
-const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel) =>
-  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel });
+const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect = false) =>
+  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect });
 
 titre('LA COURSE QU ON COURT POUR SOI SE REJOUE');
 
@@ -47,6 +50,23 @@ ok('un defi envoye verrouille la course',
 ok('un faux depart dans une revanche ne se rejoue pas',
    verrouDeReprise(cas(false, false, true, true)) === 'faux_depart_duel');
 
+titre('LA COURSE EN DIRECT NE SE REJOUE JAMAIS');
+
+// Le cas qu'on oublie : une course en direct emprunte la plomberie du one
+// shot et finit sur le meme ecran, sans defi recu ni envoye. Elle passait
+// entre les trois autres verrous, et le bouton s'affichait apres un duel en
+// direct perdu. Personne n'aurait ecrit ce cas de tete — il est venu d'une
+// question posee a voix haute.
+ok('un direct gagne ne se rejoue pas',
+   verrouDeReprise(cas(false, false, false, false, true)) === 'course_directe');
+ok('un direct perdu non plus',
+   verrouDeReprise(cas(false, false, false, true, true)) === 'course_directe');
+ok('et il passe avant tous les autres verrous',
+   verrouDeReprise(cas(true, true, true, true, true)) === 'course_directe',
+   'c est l engagement le plus fort');
+ok('un faux depart en direct est une defaite',
+   fauxDepartEstUneDefaite(cas(false, false, true, false, true)));
+
 titre('LE FAUX DEPART EN DUEL EST UNE DEFAITE');
 
 ok('celui qui recoit le defi perd',
@@ -59,33 +79,41 @@ ok('et pas de defaite sans faux depart',
    !fauxDepartEstUneDefaite(cas(true, true, false, true)),
    'perdre un duel au chrono n est pas la meme chose');
 
-titre('LES SEIZE CAS, SANS EN CHOISIR AUCUN');
+titre('LES TRENTE-DEUX CAS, SANS EN CHOISIR AUCUN');
 
 // La verite de reference, ecrite a la main. Le test ne vaut que s'il connait
 // la reponse par un autre chemin que la fonction qu'il teste.
-let compte = 0, rejouables = 0;
+let compte = 0, rejouables = 0, faux = 0;
 for (const a of [false, true]) for (const b of [false, true])
-for (const c of [false, true]) for (const d of [false, true]) {
-  const etat = cas(a, b, c, d);
-  const attendu = !a && !b && !(c && d);
+for (const c of [false, true]) for (const d of [false, true])
+for (const e2 of [false, true]) {
+  const etat = cas(a, b, c, d, e2);
+  const attendu = !e2 && !a && !b && !(c && d);
+  const defaiteAttendue = c && (e2 || a || d);
   compte++;
   if (attendu) rejouables++;
-  ok(`recu=${+a} envoye=${+b} faux=${+c} chaine=${+d} → ${attendu ? 'rejouable' : 'verrouille'}`,
-     peutRejouer(etat) === attendu,
+  if (defaiteAttendue) faux++;
+  ok(`direct=${+e2} recu=${+a} envoye=${+b} faux=${+c} chaine=${+d} → ${attendu ? 'rejouable' : 'verrouille'}`,
+     peutRejouer(etat) === attendu && fauxDepartEstUneDefaite(etat) === defaiteAttendue,
      `la regle dit ${peutRejouer(etat) ? 'rejouable' : verrouDeReprise(etat)}`);
 }
-ok(`les seize cas sont couverts`, compte === 16, String(compte));
-// Trois, et le compte se refait a la main : les deux premiers booleens sont
-// des interdits secs, donc il faut recu=0 et envoye=0. Restent quatre cas, et
-// le faux depart en chaine de duel en retire un.
+ok(`les trente-deux cas sont couverts`, compte === 32, String(compte));
+// Trois, et le compte se refait a la main : direct, recu et envoye sont des
+// interdits secs, donc il faut les trois a zero. Restent quatre cas, et le
+// faux depart en chaine de duel en retire un.
 ok('trois d entre eux se rejouent', rejouables === 3, String(rejouables));
+ok('les vingt-neuf autres sont verrouilles', compte - rejouables === 29,
+   String(compte - rejouables));
+ok(`le faux depart fait perdre dans ${faux} cas sur trente-deux`, faux === 14, String(faux));
 
 titre('L ORDRE DES VERROUS NE MENT PAS');
 
 // Quand plusieurs interdits s'appliquent, celui qu'on annonce doit etre le
 // plus fort. Dire « tu as deja envoye » a quelqu'un qui repondait a un defi
 // l'enverrait chercher un envoi qu'il n'a jamais fait.
-ok('repondre a un defi passe avant tout le reste',
+ok('le direct passe avant tout le reste',
+   verrouDeReprise(cas(true, true, true, true, true)) === 'course_directe');
+ok('puis repondre a un defi',
    verrouDeReprise(cas(true, true, true, true)) === 'defi_recu');
 ok('l envoi passe avant le faux depart',
    verrouDeReprise(cas(false, true, true, true)) === 'defi_envoye');
