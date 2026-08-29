@@ -449,14 +449,38 @@
     duel_delta:      ['{p} point', '{p} point'],
     duel_deltas:     ['{p} points', '{p} points'],
     false_out:       ['FAUX DÉPART', 'FALSE START'],
+    // Deux faux departs, deux phrases. Engage dans un duel, partir avant le
+    // signal fait perdre et rien ne se reprend. Seul sur la piste, on n'a rien
+    // promis a personne : la course s'arrete, elle ne coute rien, et on la
+    // reprend. Annoncer une defaite la ou il n'y a pas d'adversaire etait un
+    // mensonge que l'ecran racontait tout seul.
     false_out_sub:   ['éliminé — le duel est perdu', 'eliminated — the duel is lost'],
+    false_out_seul:  ['éliminé — cette course s’arrête ici', 'eliminated — this race ends here'],
     false_out_rule:  ['une seule course, aucune reprise', 'one race only, no second chance'],
+    false_out_libre: ['tu pourras la reprendre', 'you can run it again'],
     false_out_gun:   ['parti avant le coup de pistolet', 'gone before the gun'],
     duel_await:      ['résultat du duel…', 'duel result…'],
     duel_vs:         ['contre {n}', 'against {n}'],
     duel_seen:       ['duel déjà tranché', 'duel already settled'],
     duel_see:        ['VOIR LE CLASSEMENT', 'VIEW THE RANKING'],
-    os_once:         ['cette course ne se rejoue pas', 'this race cannot be replayed'],
+    // Le tutoriel annoncait « cette course ne se rejoue pas ». Ce n'est plus
+    // vrai : elle se rejoue tant qu'aucun adversaire n'attend le chrono. Ce
+    // qui reste vrai — et qui est le vrai enjeu du mode — c'est qu'une fois le
+    // defi parti, le chrono est donne.
+    os_once:         ['une fois le défi envoyé, le chrono ne se reprend plus',
+                      'once the challenge is sent, the time is final'],
+    // La reprise. Le bouton dit ce qu'il fait ; les trois phrases de verrou
+    // disent POURQUOI il n'est pas la, ce qui compte davantage — un bouton qui
+    // disparait sans raison se cherche, et finit par passer pour une panne.
+    os_rejouer:      ['REJOUER LA COURSE', 'RUN IT AGAIN'],
+    os_rejouer_sub:  ['ton chrono ne part nulle part tant que tu n’as pas envoyé de défi',
+                      'your time goes nowhere until you send a challenge'],
+    os_verrou_recu:  ['tu répondais à un défi : ton chrono est déjà parti chez ton adversaire',
+                      'you were answering a challenge: your time has already gone to your opponent'],
+    os_verrou_envoye: ['le défi est envoyé — ce chrono est celui qu’il devra battre',
+                       'the challenge is sent — this is the time they have to beat'],
+    os_verrou_faux:  ['faux départ dans un duel : la course est perdue. Envoie un nouveau défi pour repartir.',
+                      'false start in a duel: the race is lost. Send a new challenge to start over.'],
     cut_skip:        ['PASSER', 'SKIP'],
 
     // identite : nom reserve et code de recuperation

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -17,6 +17,7 @@ import { pique } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
+import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -188,6 +189,21 @@ export function OneShotEndScreen() {
   const monMs = live ? liveResultat[monRole].ms : 0;
   const sonMs = live ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
 
+  // Ce qui interdit de rejouer, ou rien. `code` est l'identifiant du defi cree
+  // depuis cette course : sa presence dit que le chrono est parti. `revanche`
+  // marque une course lancee depuis un duel — elle survit a une reprise, sans
+  // quoi il suffirait de rejouer une fois pour sortir de la chaine.
+  const etatCourse = {
+    defiRecu: !!challenge,
+    defiEnvoye: !!code,
+    fauxDepart: falseOut,
+    chaineDeDuel: !!SprinterApp.G.revanche,
+  };
+  const verrou = verrouDeReprise(etatCourse);
+  // Un faux depart ne fait perdre que s'il y a quelqu'un a qui perdre. Seul
+  // sur la piste, il arrete la course et rien d'autre.
+  const defaiteSeche = fauxDepartEstUneDefaite(etatCourse);
+
   const dnf = N.t('dnf_short');
 
   return (
@@ -208,7 +224,7 @@ export function OneShotEndScreen() {
             </h1>
             {falseOut ? (
               <div className="text-[10px] sm:text-xs md:text-base font-bold text-destructive tracking-widest uppercase">
-                {N.t('false_out_sub')}
+                {N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
@@ -640,13 +656,43 @@ export function OneShotEndScreen() {
             </p>
           )}
 
-          {/* Une seule course, un seul resultat : il n'y a rien a rejouer.
-              Le bouton de reprise a disparu pour cette raison, et on le dit
-              plutot que de laisser le joueur chercher ou il est passe. */}
+          {/* LA REPRISE.
+              On rejoue tant que personne d'autre n'est engage : apres un faux
+              depart, apres une chute, ou simplement parce que le chrono ne
+              plait pas. Des qu'un adversaire attend le chrono, il est donne et
+              ne se reprend plus. La regle et ses trois interdits vivent dans
+              game/reprise, ou ils se lisent d'un bloc et se verifient sans
+              lancer une course ; ici on ne fait que la lire.
+
+              Le verrou est affiche plutot que taire le bouton sans un mot : un
+              bouton qui disparait sans explication se cherche, et finit par
+              passer pour une panne. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
-            <p className="text-center text-[10px] md:text-xs tracking-widest uppercase text-muted-foreground">
-              {N.t('os_once')}
-            </p>
+            {verrou ? (
+              <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
+                ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
+                                                : 'text-muted-foreground'}`}>
+                {N.t(verrou === 'defi_recu' ? 'os_verrou_recu'
+                   : verrou === 'defi_envoye' ? 'os_verrou_envoye'
+                   : 'os_verrou_faux')}
+              </p>
+            ) : (
+              <>
+                <button
+                  onClick={() => SprinterApp.rejouerOneShot()}
+                  className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
+                             tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
+                             border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
+                             flex items-center justify-center gap-2"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  {N.t('os_rejouer')}
+                </button>
+                <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+                  {N.t('os_rejouer_sub')}
+                </p>
+              </>
+            )}
             {/* Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setVoirDuels(true)}

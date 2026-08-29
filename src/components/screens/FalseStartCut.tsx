@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
+import { fauxDepartEstUneDefaite } from '@/game/reprise';
 import { motion } from 'framer-motion';
 
 /**
@@ -13,6 +14,14 @@ import { motion } from 'framer-motion';
  */
 export function FalseStartCut() {
   const { N } = SprinterApp;
+  // La cinematique annonce ce qui vient de se passer, et cela depend de qui
+  // court. Un duel se perd ici ; une course pour soi s'arrete et se reprend.
+  const defaite = fauxDepartEstUneDefaite({
+    defiRecu: !!SprinterApp.G.challenge,
+    defiEnvoye: false,
+    fauxDepart: true,
+    chaineDeDuel: !!SprinterApp.G.revanche,
+  });
   const [passe, setPasse] = useState(false);
 
   const suite = () => {
@@ -101,7 +110,7 @@ export function FalseStartCut() {
           transition={{ delay: 1.05 }}
           className="text-base md:text-2xl font-black tracking-widest uppercase text-foreground"
         >
-          {N.t('false_out_sub')}
+          {N.t(defaite ? 'false_out_sub' : 'false_out_seul')}
         </motion.span>
 
         <motion.span
@@ -110,7 +119,7 @@ export function FalseStartCut() {
           transition={{ delay: 1.6 }}
           className="text-[10px] md:text-xs tracking-widest uppercase text-muted-foreground"
         >
-          {N.t('false_out_rule')}
+          {N.t(defaite ? 'false_out_rule' : 'false_out_libre')}
         </motion.span>
       </div>
 

@@ -101,7 +101,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
               </motion.div>
               <motion.span
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.5 }}
-                className="text-xs md:text-sm font-black tracking-widest uppercase text-destructive"
+                className="text-[11px] md:text-sm font-bold tracking-wide text-destructive text-center max-w-xs leading-snug"
               >
                 {N.t('os_once')}
               </motion.span>

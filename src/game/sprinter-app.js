@@ -576,6 +576,11 @@
   // opts.ghost / opts.challenge permettent de rejouer contre un adversaire.
   function startOneShot(races, opts) {
     opts = opts || {};
+    // On retient de quoi refaire EXACTEMENT cette course. Rejouer en
+    // reconstruisant les options a la main donnerait une course qui ressemble
+    // a la premiere : meme distance, mais plus de fantome, ou un plateau par
+    // defaut. Le joueur croirait rejouer et courrait autre chose.
+    G.shotOpts = opts;
     G.mode = 'oneshot';
     G.shotRaces = races.slice();
     G.shotIdx = 0;
@@ -597,11 +602,32 @@
     // pas de cinematique de presentation : le one-shot va droit au but
     queueCuts([], 'count');
   }
-  // Faux depart eliminatoire. Reserve au one-shot et au defi : la course y
-  // est unique et sans reprise, partir avant le signal met donc fin a tout,
-  // comme sur une vraie piste. Les epreuves restantes comptent pour abandon
-  // et le duel est perdu — c'est ce que renvoie le vrai : true si l'on vient
-  // bien d'eliminer le joueur.
+  /**
+   * Rejouer la course qu'on vient de courir.
+   *
+   * Les memes epreuves, le meme plateau, le meme fantome : on repasse les
+   * options d'origine plutot que d'en fabriquer de nouvelles.
+   *
+   * `revanche` n'est pas efface, et c'est voulu : une course lancee dans une
+   * chaine de duel y reste en la rejouant. C'est ce qui fait qu'un faux depart
+   * y compte toujours comme une defaite, et non seulement a la premiere
+   * tentative — sans quoi il suffirait de rejouer une fois pour sortir de la
+   * chaine et se retrouver a courir pour soi.
+   */
+  function rejouerOneShot() {
+    if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
+    startOneShot(G.shotRaces, G.shotOpts || {});
+    return true;
+  }
+
+  // Faux depart eliminatoire. Reserve au one-shot et au defi : partir avant le
+  // signal met fin a la course, comme sur une vraie piste.
+  //
+  // Ce qui suit depend de qui court. Seul, on peut la reprendre — voir
+  // game/reprise. Engage dans un duel, non : le faux depart y est une defaite,
+  // pour celui qui recoit le defi comme pour celui qui le renvoie. Les
+  // epreuves restantes comptent pour abandon et le duel est perdu — c'est ce
+  // que renvoie le vrai : true si l'on vient bien d'eliminer le joueur.
   function falseStartOut() {
     if (G.mode !== 'oneshot' || G.falseOut) return false;
     G.falseOut = true; G.falseOutT = 0;
@@ -1889,7 +1915,7 @@
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
-    startOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    startOneShot, rejouerOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     REC_STEP, goHome,
