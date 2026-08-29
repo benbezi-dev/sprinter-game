@@ -475,6 +475,15 @@
     os_rejouer:      ['REJOUER LA COURSE', 'RUN IT AGAIN'],
     os_rejouer_sub:  ['ton chrono ne part nulle part tant que tu n’as pas envoyé de défi',
                       'your time goes nowhere until you send a challenge'],
+    // Depuis le 5, on ne rature plus une course : on la rejoue contre
+    // quelqu'un. Le libelle dit l'action, pas l'ecran qui s'ouvre.
+    os_defier:       ['DÉFIER QUELQU’UN', 'CHALLENGE SOMEONE'],
+    os_defier_sub:   ['ouvre le classement et choisis ton adversaire — un autre, ou le même',
+                      'open the ranking and pick your opponent — someone else, or the same one'],
+    os_verrou_classement: ['cette course ne se rejoue pas : elle se rejoue contre quelqu’un',
+                           'this race is not replayed — it is run again against someone'],
+    os_defi_sans_cible: ['{n} n’est pas au TOP 500 de cette épreuve : envoie-lui le code toi-même',
+                         '{n} is not in this event’s TOP 500 — send them the code yourself'],
     os_verrou_direct: ['course en direct : ton adversaire a couru en même temps, le résultat est joué',
                        'live race: your opponent ran at the same moment, the result stands'],
     os_verrou_recu:  ['tu répondais à un défi : ton chrono est déjà parti chez ton adversaire',

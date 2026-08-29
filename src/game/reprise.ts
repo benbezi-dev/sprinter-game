@@ -40,19 +40,19 @@
    Hors de toute chaine de duel, le faux depart se rejoue comme le reste : le
    joueur n'a rien promis a personne.
 
-   ET CELA CHANGE LE 5 SEPTEMBRE.
+   ET TOUT CELA S'ARRETE LE 5 SEPTEMBRE.
 
-   Le jour ou le classement des duels ouvre, l'elimination redevient ce qu'elle
-   etait : partir avant le signal met fin a la course, et il n'y a pas de
-   reprise — meme seul sur la piste. C'est le meme drapeau qui ouvre le
-   classement et qui referme cette porte, parce que c'est la meme decision :
-   des lors que tout chrono peut devenir un defi, un faux depart qu'on
-   recommence n'en est plus un.
+   Le jour ou le classement des duels ouvre, la reprise disparait de ces trois
+   modes : le one shot, la course en direct et le relais. Plus rien ne se
+   rejoue — ni un faux depart, ni un chrono decevant.
 
-   La reprise, elle, ne disparait pas pour autant. Un chrono qui ne plait pas
-   se rejoue toujours, tant que le defi n'est pas parti. Ce sont deux regles
-   distinctes et il faut les garder distinctes : ce qui redevient severe, c'est
-   le faux depart, pas la course entiere.
+   Ce n'est pas une severite ajoutee, c'est un deplacement. Ce qu'on faisait en
+   recommencant, on le fait desormais en DEFIANT : le classement s'ouvre depuis
+   l'ecran d'arrivee, et l'on y choisit quelqu'un — un autre, ou le meme. Une
+   course qui ne plait pas ne se rature plus, elle se rejoue contre quelqu'un.
+
+   La reprise etait une reponse a un manque, et le manque disparait le 5. La
+   carriere, elle, garde la sienne : on n'y court contre personne.
 --------------------------------------------------------------------------- */
 
 /** Ce qu'il faut savoir de la course qui vient de finir. */
@@ -79,7 +79,7 @@ export type EtatCourse = {
 /** Pourquoi la course ne se rejoue pas. Nul quand elle se rejoue. */
 export type Verrou =
   | 'course_directe' | 'defi_recu' | 'defi_envoye'
-  | 'faux_depart_duel' | 'faux_depart_elimine' | null;
+  | 'faux_depart_duel' | 'faux_depart_elimine' | 'classement_ouvert' | null;
 
 /**
  * Qu'est-ce qui empeche de rejouer ?
@@ -93,8 +93,10 @@ export function verrouDeReprise(e: EtatCourse): Verrou {
   if (e.defiRecu) return 'defi_recu';
   if (e.defiEnvoye) return 'defi_envoye';
   if (e.fauxDepart && e.chaineDeDuel) return 'faux_depart_duel';
-  // Apres le 5, tout faux depart elimine, meme seul sur la piste.
-  if (e.fauxDepart && e.duelsOuverts) return 'faux_depart_elimine';
+  // Apres le 5, plus rien ne se rejoue. Le faux depart garde son mot a lui :
+  // « une seule course, aucune reprise » dit ce qui vient de se passer, la ou
+  // « ouvre le classement » ne dirait que la suite.
+  if (e.duelsOuverts) return e.fauxDepart ? 'faux_depart_elimine' : 'classement_ouvert';
   return null;
 }
 

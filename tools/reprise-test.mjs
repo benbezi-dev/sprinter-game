@@ -93,9 +93,9 @@ ok('apres le 5, il elimine',
 // Ce qui NE change pas le 5 : un chrono qui ne plait pas se rejoue toujours,
 // tant que le defi n'est pas parti. C'est la distinction qui porte tout — ce
 // qui redevient severe est le faux depart, pas la course entiere.
-ok('apres le 5, un chrono decevant se rejoue encore',
-   peutRejouer(cas(false, false, false, false, false, true)),
-   'seul le faux depart redevient eliminatoire');
+ok('apres le 5, un chrono decevant ne se rejoue plus non plus',
+   verrouDeReprise(cas(false, false, false, false, false, true)) === 'classement_ouvert',
+   'on ne rature plus une course, on la rejoue contre quelqu un');
 ok('apres le 5, un defi envoye verrouille toujours',
    verrouDeReprise(cas(false, true, false, false, false, true)) === 'defi_envoye');
 
@@ -114,7 +114,7 @@ for (const a of [false, true]) for (const b of [false, true])
 for (const c of [false, true]) for (const d of [false, true])
 for (const e2 of [false, true]) for (const f of [false, true]) {
   const etat = cas(a, b, c, d, e2, f);
-  const attendu = !e2 && !a && !b && !(c && (d || f));
+  const attendu = !f && !e2 && !a && !b && !(c && d);
   const defaiteAttendue = c && (e2 || a || d);
   compte++;
   if (attendu) rejouables++;
@@ -124,12 +124,11 @@ for (const e2 of [false, true]) for (const f of [false, true]) {
      `la regle dit ${peutRejouer(etat) ? 'rejouable' : verrouDeReprise(etat)}`);
 }
 ok(`les soixante-quatre cas sont couverts`, compte === 64, String(compte));
-// Le compte se refait a la main : direct, recu et envoye sont des interdits
-// secs, donc les trois a zero. Restent huit cas (faux x chaine x ouvert), dont
-// trois seulement se rejouent — ceux sans faux depart, plus le faux depart
-// solo d'avant le 5.
-ok('cinq cas se rejouent', rejouables === 5, String(rejouables));
-ok('les cinquante-neuf autres sont verrouilles', compte - rejouables === 59,
+// Le compte se refait a la main : ouvert, direct, recu et envoye sont quatre
+// interdits secs, donc les quatre a zero. Restent quatre cas (faux x chaine),
+// dont trois se rejouent — le faux depart en chaine de duel retire le dernier.
+ok('trois cas se rejouent, tous avant le 5', rejouables === 3, String(rejouables));
+ok('les soixante et un autres sont verrouilles', compte - rejouables === 61,
    String(compte - rejouables));
 ok(`le faux depart fait perdre dans ${faux} cas sur soixante-quatre`,
    faux === 28, String(faux));

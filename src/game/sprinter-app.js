@@ -364,6 +364,9 @@
     // Joueur du TOP 500 que l'on est en train de defier : retenu le temps de
     // la course, pour adresser le defi a la bonne personne a l'arrivee.
     challengeTarget: null,
+    // Nom vise par un defi lance depuis le classement des duels, quand le
+    // TOP 500 ne l'a pas retrouve : le code partira, mais a personne.
+    defiSansCible: null,
 
     // Course suspendue. Sans cela, ouvrir la sortie laisserait le chrono
     // tourner : renoncer couterait la course qu'on voulait justement garder.
@@ -564,6 +567,7 @@
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.lives = null;
     G.challengeTarget = null;
+    G.defiSansCible = null;
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;

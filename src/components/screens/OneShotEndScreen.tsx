@@ -107,6 +107,7 @@ export function OneShotEndScreen() {
   };
 
   const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+  const sansCible = SprinterApp.G.defiSansCible as string | null;
 
   // Message envoye a l'ami : chrono realise, code, lien direct.
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
@@ -553,6 +554,15 @@ export function OneShotEndScreen() {
                   {N.t(code ? 'target_sent' : 'target_run', { n: cible.name, d: shotRaces[0] })}
                 </p>
               )}
+              {/* Defi lance depuis le classement des duels, mais la personne
+                  n'a pas ete retrouvee au TOP 500 de cette epreuve : le code
+                  existe, personne ne l'a recu. On le dit ici plutot que de
+                  laisser croire qu'elle a ete prevenue. */}
+              {!cible && sansCible && (
+                <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                  {N.t('os_defi_sans_cible', { n: sansCible })}
+                </p>
+              )}
               {/* Revanche : on rappelle a qui le code doit repartir.
                   Le defi ne s'adresse pas tout seul — les noms ne sont pas des
                   adresses, et deux joueurs peuvent porter le meme. C'est donc
@@ -686,6 +696,7 @@ export function OneShotEndScreen() {
                    : verrou === 'defi_recu' ? 'os_verrou_recu'
                    : verrou === 'defi_envoye' ? 'os_verrou_envoye'
                    : verrou === 'faux_depart_elimine' ? 'false_out_rule'
+                   : verrou === 'classement_ouvert' ? 'os_verrou_classement'
                    : 'os_verrou_faux')}
               </p>
             ) : (
@@ -705,7 +716,9 @@ export function OneShotEndScreen() {
                 </p>
               </>
             )}
-            {/* Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
+            {/* Depuis le 5, c'est ce bouton qui prend la place de la reprise :
+                on ne recommence plus sa course, on la rejoue contre quelqu'un.
+                Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setVoirDuels(true)}
               className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
@@ -714,8 +727,13 @@ export function OneShotEndScreen() {
                          flex items-center justify-center gap-2"
             >
               <Swords className="w-4 h-4" />
-              {N.t('duel_see')}
+              {N.t('os_defier')}
             </button>}
+            {DUELS_OUVERTS && (
+              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+                {N.t('os_defier_sub')}
+              </p>
+            )}
             <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
               {N.t('home')}
             </button>
@@ -724,7 +742,8 @@ export function OneShotEndScreen() {
         </motion.div>
       </div>
 
-      {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)} />}
+      {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
+                                 epreuves={shotRaces as string[]} />}
     </div>
   );
 }

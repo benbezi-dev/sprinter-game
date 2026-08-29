@@ -204,3 +204,48 @@ export async function marquerDuelsVus(ids: string[]): Promise<void> {
     // vaut mieux que de le perdre.
   }
 }
+
+/**
+ * Defier quelqu'un depuis le classement des duels.
+ *
+ * On relance les MEMES epreuves que celles qu'on vient de courir : defier
+ * quelqu'un sur un 400 m parce qu'on vient d'en faire un a l'instant est le
+ * seul enchainement qui ait un sens depuis un ecran d'arrivee.
+ *
+ * LE CIBLAGE PASSE PAR LE TOP 500, et il faut savoir pourquoi. Le serveur
+ * n'accepte qu'un identifiant de score pour designer un adversaire : c'est
+ * ainsi qu'il retrouve son appareil et lui pose le defi dans sa boite. Or le
+ * classement des duels est tenu par NOM, sans cet identifiant. On va donc le
+ * chercher la ou il existe.
+ *
+ * Quand le nom ne s'y retrouve pas — un joueur classe en duels qui n'est pas
+ * au TOP 500 de cette epreuve — le defi part quand meme, mais sans destinataire
+ * : il produit un code a envoyer soi-meme. C'est une degradation, pas un echec,
+ * et l'ecran le dit plutot que de laisser croire que la personne a ete
+ * prevenue.
+ */
+export async function defierDepuisClassement(
+  nom: string,
+  epreuves: string[],
+  niveau = 4,
+): Promise<{ cible: boolean }> {
+  const { SprinterApp } = await import('./engine');
+  const { fetchLeaderboard } = await import('./leaderboard');
+
+  const cherche = nom.trim().toLowerCase();
+  let trouve: { scoreId: number; name: string } | null = null;
+
+  // On interroge l'epreuve qu'on vient de courir en premier : c'est celle ou
+  // la personne a le plus de chances de figurer si elle nous y a croises.
+  for (const e of [...new Set(epreuves)]) {
+    try {
+      const liste = await fetchLeaderboard(e as '100' | '200' | '400');
+      const l = liste.find(x => x.id != null && x.name.trim().toLowerCase() === cherche);
+      if (l && l.id != null) { trouve = { scoreId: l.id, name: l.name }; break; }
+    } catch { /* le reseau a manque : on part sans cible */ }
+  }
+
+  SprinterApp.G.challengeTarget = trouve;
+  SprinterApp.startOneShot(epreuves, { levelIdx: niveau });
+  return { cible: !!trouve };
+}

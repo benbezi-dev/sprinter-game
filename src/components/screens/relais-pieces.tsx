@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Flag, XCircle, Hand } from 'lucide-react';
+import { Flag, XCircle, Hand, Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { ARRIVEE, LEG, TAILLE, type Zone } from '@/game/salle-relais';
+import { DUELS_OUVERTS } from '@/game/duels';
+import { DuelRanking } from './DuelRanking';
 
 /**
  * Les pieces communes aux deux courses de relais.
@@ -187,6 +189,7 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
   onFermer: () => void;
   enfants?: React.ReactNode;
 }) {
+  const [voirDuels, setVoirDuels] = useState(false);
   const { N } = SprinterApp;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6 py-8
@@ -242,11 +245,27 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
           </div>
         )}
 
+        {/* Le relais ne se rejoue pas — il faudrait rassembler quatre
+            personnes une seconde fois. Ce qu'on peut faire seul en sortant,
+            c'est aller en defier une. Ferme tant que DUELS_OUVERTS vaut
+            false (voir game/duels). */}
+        {DUELS_OUVERTS && (
+          <button onClick={() => setVoirDuels(true)}
+            className="mt-2 px-6 py-2.5 rounded-xl font-black font-display tracking-widest
+                       text-background bg-primary text-sm flex items-center gap-2">
+            <Swords className="w-4 h-4" />
+            {N.t('os_defier')}
+          </button>
+        )}
+
         <button onClick={onFermer}
           className="mt-2 px-6 py-2.5 rounded-xl font-black font-display tracking-widest
                      text-background bg-emerald-400 text-sm">
           {N.t('champ_continue')}
         </button>
+
+        {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
+                                   epreuves={['100']} />}
       </motion.div>
     </div>
   );

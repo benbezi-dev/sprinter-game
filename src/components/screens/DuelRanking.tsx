@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
-import { fetchDuels, type DuelBoard, type DuelRow } from '@/game/duels';
+import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
 import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
 
@@ -58,7 +58,35 @@ function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
   );
 }
 
-export function DuelRanking({ onClose }: { onClose: () => void }) {
+/**
+ * Le classement des duels, et — depuis le 5 septembre — l'endroit d'ou l'on
+ * repart au combat.
+ *
+ * `epreuves` sont celles qu'on vient de courir. Les recevoir plutot que les
+ * choisir ici est ce qui donne son sens au bouton : defier quelqu'un sur un
+ * 400 m parce qu'on vient d'en faire un a l'instant. Sans elles, le classement
+ * reste ce qu'il etait, une page qu'on lit.
+ */
+export function DuelRanking({ onClose, epreuves }: {
+  onClose: () => void;
+  epreuves?: string[];
+}) {
+  const [defiEnCours, setDefiEnCours] = useState<string | null>(null);
+
+  const defier = async (nom: string) => {
+    if (!epreuves || !epreuves.length || defiEnCours) return;
+    setDefiEnCours(nom);
+    try {
+      const { cible } = await defierDepuisClassement(nom, epreuves);
+      // Sans cible retrouvee, la course part quand meme et finira sur un code
+      // a envoyer soi-meme. On le retient pour que l'ecran d'arrivee le dise.
+      SprinterApp.G.defiSansCible = !cible ? nom : null;
+      onClose();
+    } catch {
+      setDefiEnCours(null);
+    }
+  };
+
   const { N } = SprinterApp;
   const [board, setBoard] = useState<DuelBoard | null>(null);
   const [chargement, setChargement] = useState(true);
@@ -235,6 +263,25 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                             </span>
                           </span>
                         </div>
+                        {/* Defier cette personne, sur l'epreuve qu'on vient de
+                            courir. Absent sur sa propre ligne, et absent quand
+                            on ouvre le classement sans sortir d'une course :
+                            il n'y aurait alors aucune epreuve a proposer. */}
+                        {!moi && !!epreuves?.length && (
+                          <button
+                            onClick={() => defier(r.name)}
+                            disabled={!!defiEnCours}
+                            title={`${N.t('challenge_them')} — ${r.name}`}
+                            aria-label={`${N.t('challenge_them')} ${r.name}`}
+                            className="shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
+                                       text-primary/70 border border-primary/30 hover:bg-primary/15
+                                       hover:text-primary disabled:opacity-30 transition-colors"
+                          >
+                            {defiEnCours === r.name
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                          </button>
+                        )}
                       </motion.div>
                     );
                   })}
