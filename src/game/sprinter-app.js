@@ -642,7 +642,11 @@
     // chemin « a deux » ne remplissait pas. L'adversaire restait donc immobile
     // sur la ligne pendant toute la course — dans le mode dont c'est
     // precisement le seul interet.
-    if (opts.autres && opts.autres.length) armLives(opts.autres);
+    // Une liste vide n'est pas une liste absente. Un relais couru seul contre
+    // le chrono annonce `autres: []` : lui armer l'adversaire du vieux chemin
+    // posait sur la piste un coureur immobile etiquete ADVERSAIRE, contre qui
+    // personne ne courait.
+    if (opts.autres) armLives(opts.autres);
     else armLive(G.liveNom);
     queueCuts([], 'count');
     // Le decompte reste suspendu tant que la salle n'a pas donne l'heure.
@@ -736,8 +740,13 @@
       maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
     });
     r.isGhost = true; r.d = 0; r.v = 0;
+    // Un fantome est l'adversaire aussi, meme s'il a couru hier : sur une piste
+    // a huit, savoir lequel des coureurs porte le chrono a battre vaut autant
+    // qu'en direct.
+    r.repere = { couleur: CYAN, nom: G.ghostName || t('ghost_label') };
     const splits = G.ghostSplits || [];
     G.ghost = { trace, step: REC_STEP, runner: r, time: splits[G.shotIdx] || 0 };
+    marquerJoueur();
   }
   // Avance le fantome a la position qu'avait l'adversaire au meme instant.
   /**
@@ -769,6 +778,7 @@
   function armLives(autres) {
     G.ghost = null;
     G.lives = new Map();
+    marquerJoueur();
     if (!autres || !autres.length) return;
 
     const monCouloir = G.player ? G.player.lane : 3;
@@ -794,10 +804,23 @@
         maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
       });
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
+      r.repere = { couleur: couleurCouloir(lane), nom: autre.nom || '' };
       G.runners.push(r);
       G.lives.set(autre.id, { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
                               trace: [], step: REC_STEP, time: 0 });
     });
+  }
+
+  /**
+   * Le joueur porte son propre repere.
+   *
+   * Se retrouver soi-meme est la premiere chose qu'on cherche sur une piste a
+   * huit, et le maillot ne suffit pas : la camera suit le joueur, mais elle
+   * suit aussi ceux qui le doublent.
+   */
+  function marquerJoueur() {
+    if (!G.player) return;
+    G.player.repere = { couleur: couleurCouloir(G.player.lane), nom: t('you'), moi: true };
   }
 
   /** Position annoncee par un adversaire donne. */
@@ -824,8 +847,12 @@
       maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
     });
     r.isGhost = true; r.d = 0; r.v = 0;
+    // Un duel n'a qu'un adversaire, et c'est justement la ou le repere compte
+    // le plus : sept coureurs de l'ordinateur l'entourent, tous pareils.
+    r.repere = { couleur: couleurCouloir(lane), nom: nom || t('opponent') };
     G.ghost = { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
                 trace: [], step: REC_STEP, time: 0 };
+    marquerJoueur();
   }
 
   /** Derniere position connue de l'adversaire, telle qu'annoncee par lui. */
@@ -1649,6 +1676,87 @@
     drawFacetFigure(ctx, caps, ax, ay, k);
   }
 
+  /* ------------------------------------------------- reperes des coureurs */
+
+  /**
+   * Une couleur par couloir.
+   *
+   * Le couloir vient de la salle, jamais du client : les huit telephones
+   * placent donc les memes gens aux memes endroits, et cette couleur-ci se
+   * deduit du couloir plutot que de s'echanger. Deux joueurs voient forcement
+   * le meme adversaire de la meme couleur, sans qu'un seul message ait ete
+   * ajoute au protocole.
+   *
+   * Huit teintes ecartees les unes des autres, et aucune ne ressemble au
+   * maillot des coureurs de l'ordinateur — c'est precisement ce qu'il faut
+   * pouvoir distinguer.
+   */
+  const REPERES = ['rgb(52,211,153)', 'rgb(248,205,74)', 'rgb(96,165,250)',
+                   'rgb(244,114,182)', 'rgb(167,139,250)', 'rgb(251,146,60)',
+                   'rgb(45,212,191)', 'rgb(248,113,113)'];
+  function couleurCouloir(lane) {
+    return REPERES[(Math.max(1, lane || 1) - 1) % REPERES.length];
+  }
+
+  /**
+   * Le cerceau au sol, et le nom au-dessus.
+   *
+   * Sept coureurs pilotes par l'ordinateur et un adversaire reel se ressemblent
+   * trait pour trait : sur une piste a huit, rien ne disait lequel etait
+   * l'autre joueur. Le cerceau se lit du coin de l'oeil pendant qu'on court,
+   * le nom se lit quand on releve la tete.
+   *
+   * Jamais la couleur seule : le nom est ecrit a cote, et le joueur porte un
+   * cerceau double. Huit teintes sur un ecran de telephone, en pleine course,
+   * ne suffisent a personne — et a plus forte raison a qui les distingue mal.
+   */
+  function drawRepere(ctx, r, x, y, m) {
+    const rep = r.repere;
+    if (!rep) return;
+    const rx = 19 * m / 30, ry = 7.6 * m / 30;
+    ctx.save();
+    ctx.strokeStyle = rep.couleur;
+    ctx.lineWidth = Math.max(1.6, 2.4 * ui());
+    ctx.globalAlpha = 0.95;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, TAU);
+    ctx.stroke();
+    // Le joueur porte un second cerceau : sur une piste pleine, se retrouver
+    // soi-meme est la premiere chose qu'on cherche.
+    if (rep.moi) {
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx * 1.32, ry * 1.32, 0, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Le nom, en pastille, au-dessus de la tete. */
+  function drawNomRepere(ctx, r, x, y, m) {
+    const rep = r.repere;
+    if (!rep || !rep.nom) return;
+    const taille = Math.max(9, 11 * ui());
+    const haut = y - m * (r.look.h / C.MODEL_H) * 1.34 - 6 * ui();
+    ctx.save();
+    ctx.font = '800 ' + taille + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const l = ctx.measureText(rep.nom).width + 10 * ui();
+    const h = taille + 6 * ui();
+    ctx.fillStyle = 'rgba(6,9,19,0.72)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - l / 2, haut - h / 2, l, h, h / 2);
+    else ctx.rect(x - l / 2, haut - h / 2, l, h);
+    ctx.fill();
+    ctx.strokeStyle = rep.couleur;
+    ctx.lineWidth = Math.max(1, 1.4 * ui());
+    ctx.stroke();
+    ctx.fillStyle = rep.couleur;
+    ctx.fillText(rep.nom, x, haut + 0.5);
+    ctx.restore();
+  }
+
   function drawAthletes(ctx) {
     const T = G.track, m = scaleM();
     const vis = [];
@@ -1670,6 +1778,9 @@
       ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
       ctx.fill();
     }
+    // Les cerceaux passent apres toutes les ombres et avant tous les coureurs :
+    // sinon l'ombre du voisin recouvrirait le cerceau de celui de devant.
+    for (const [r, g2] of vis) drawRepere(ctx, r, g2[0], g2[1], m);
     for (const [r, g2, p] of vis) {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui
@@ -1685,6 +1796,10 @@
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
       if (r.isGhost) ctx.globalAlpha = 1;
     }
+    // Les noms tout en haut de la pile : une pastille a demi cachee par le
+    // coureur de devant ne se lit pas, et c'est la seule chose qui distingue
+    // deux adversaires de couleurs voisines.
+    for (const [r, g2] of vis) drawNomRepere(ctx, r, g2[0], g2[1], m);
   }
 
   /**

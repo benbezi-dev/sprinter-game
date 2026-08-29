@@ -65,6 +65,7 @@
     alternate:    ['alterne les deux touches', 'alternate the two buttons'],
     alternate_kb: ['alterne les deux flèches', 'alternate the two arrows'],
     you:          ['TOI', 'YOU'],
+    opponent:     ['ADVERSAIRE', 'RIVAL'],
     depart:       ['DÉPART', 'START'],
     arrivee:      ['ARRIVÉE', 'FINISH'],
 

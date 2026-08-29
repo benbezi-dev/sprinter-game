@@ -118,13 +118,33 @@ export class Salle {
   code: string;
   suisHote = false;
   adversaire = '';
+  /**
+   * Le dernier etat recu de la salle.
+   *
+   * Il est garde ici parce que l'ecran qui l'affiche peut disparaitre et
+   * revenir — au coup de pistolet, puis a la fin de la course. A son retour, il
+   * doit pouvoir se redessiner sans attendre le prochain message : sans cela on
+   * retomberait sur un salon vide alors que la salle, elle, n'a pas bouge.
+   */
+  dernierEtat: EtatSalle | null = null;
+  /** Les epreuves et le niveau de cette piste, pour un ecran qui revient. */
+  epreuves: string[] = [];
 
   constructor(code: string, ec: Ecouteurs) {
     this.code = code.toUpperCase();
     this.ec = ec;
   }
 
+  /**
+   * Rebrancher les ecouteurs sur un ecran qui vient d'etre remonte.
+   *
+   * Les precedents pointaient sur un composant demonte ; leurs appels a React
+   * ne faisaient plus rien, ce qui est sans danger mais sans effet.
+   */
+  ecouter(ec: Ecouteurs) { this.ec = ec; }
+
   connecter(epreuves: string[], niveau: number, places = 2) {
+    this.epreuves = epreuves.slice();
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
       races: epreuves.join(','),
@@ -223,6 +243,7 @@ export class Salle {
   private majEtat(m: any) {
     const autre = (m.joueurs || []).find((j: JoueurSalle) => j.id !== this.moi);
     this.adversaire = autre ? autre.nom : '';
+    this.dernierEtat = m as EtatSalle;
     this.ec.onEtat?.(m as EtatSalle);
 
     // Comme le depart, la presentation est annoncee a une date absolue. On la

@@ -6,6 +6,7 @@ import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   type EtatSalle, type JoueurSalle, type Presentation,
 } from '@/game/live';
+import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Voix, type EtatVoix } from '@/game/voix';
@@ -74,13 +75,39 @@ export function LivePanel() {
   useEffect(() => {
     if (auto.current) return;
     auto.current = true;
-    const c = codeDirectUrl();
-    if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
-    return () => {
-      salle.current?.fermer();
-      voix.current?.arreter();
-      film.current?.jeter();
-    };
+
+    // Une salle deja ouverte se reprend telle quelle.
+    //
+    // Ce panneau vit dans l'ecran-titre, qui disparait au coup de pistolet et
+    // revient a la fin de la course. Ouvrir une seconde salle au retour
+    // laisserait la premiere courir sans personne pour l'ecouter, et fermer la
+    // premiere au depart — ce qu'on faisait — figeait les deux adversaires
+    // l'un pour l'autre. La salle survit donc au demontage, et c'est l'ecran
+    // qui se rebranche dessus.
+    const dejaLa = salonCourant();
+    if (dejaLa) {
+      salle.current = dejaLa;
+      dejaLa.ecouter(ecouteurs(dejaLa.code));
+      setCode(dejaLa.code);
+      if (dejaLa.epreuves[0]) setEpreuve(dejaLa.epreuves[0] as RaceKey);
+      if (dejaLa.dernierEtat) {
+        setSalon(dejaLa.dernierEtat);
+        setPlaces(dejaLa.dernierEtat.max || 2);
+      }
+      setEtape('salon');
+    } else {
+      const c = codeDirectUrl();
+      if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
+    }
+
+    // Rien n'est ferme ici, et c'est le coeur de la correction. Un demontage
+    // n'est pas un depart : la salle, le micro et l'enregistrement appartiennent
+    // a la course, pas a l'ecran qui la regarde. Tout se ferme dans quitter().
+    //
+    // Le micro ne reste pas ouvert pour autant : il est mute hors des fenetres
+    // explicites — la presentation, puis les cinq secondes du vainqueur — et
+    // c'est justement cette derniere qui disparaissait quand le demontage
+    // coupait la liaison audio en pleine course.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,6 +204,7 @@ export function LivePanel() {
   const brancher = (c: string) => {
     const s = new Salle(c, ecouteurs(c));
     salle.current = s;
+    poserSalon(s);
     brancherSalle({
       position: (d: number) => s.position(d),
       fini: (ms: number) => s.fini(ms),
@@ -212,7 +240,7 @@ export function LivePanel() {
   };
 
   const quitter = () => {
-    salle.current?.fermer(); salle.current = null;
+    quitterSalon(); salle.current = null;
     brancherSalle(null);
     // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
