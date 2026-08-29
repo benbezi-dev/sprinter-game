@@ -125,8 +125,8 @@ export function DuelResultPopup() {
             </h2>
 
             <span className="font-mono font-black text-3xl md:text-4xl tabular-nums text-foreground leading-none">
-              {duel.points > 0 ? '+' : ''}{duel.points}
-              <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_pts')}</span>
+              {duel.lp > 0 ? '+' : ''}{duel.lp}
+              <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
             </span>
 
             {/* Les deux chronos face a face : c'est la seule chose que le

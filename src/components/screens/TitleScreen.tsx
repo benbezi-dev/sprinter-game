@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
-import { DUELS_OUVERTS } from '@/game/duels';
+import { DUELS_OUVERTS, fetchDuels, type DuelRow } from '@/game/duels';
+import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
@@ -41,6 +42,21 @@ export function TitleScreen() {
   // neuf, qui ne se devine pas et qu'il faudra montrer.
   const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl());
   const [tour, setTour] = useState(() => !tourVu() && !venuPourUnDuel);
+  /**
+   * Ma division, affichee a l'entree du classement.
+   *
+   * Sans marquer la visite : ouvrir le jeu ne doit pas effacer les fleches
+   * qu'on n'a pas encore vues. C'est le meme piege que sur l'ecran du
+   * classement, ou un rafraichissement automatique les aurait fait
+   * disparaitre toutes seules.
+   */
+  const [monRang, setMonRang] = useState<DuelRow | null>(null);
+  useEffect(() => {
+    if (!DUELS_OUVERTS) return;
+    let annule = false;
+    fetchDuels(false).then(b => { if (!annule) setMonRang(b?.moi || null); });
+    return () => { annule = true; };
+  }, []);
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(() => (venuPourUnDuel ? 'versus' : 'career'));
@@ -165,10 +181,16 @@ export function TitleScreen() {
                   </span>
                 </span>
               </span>
-              <span className="font-mono text-[9px] md:text-[10px] text-primary/80 shrink-0 tracking-wider">
-                +2 / -1
-                <span className="block text-cyan-300/70">+1 / -2</span>
-              </span>
+              {/* Le rang, et rien d'autre.
+                  Le bareme figurait ici sous forme de chiffres ; il n'a plus
+                  de sens hors contexte, puisque ce qu'un duel rapporte depend
+                  d'ou l'on se situe. Ce que le joueur vient chercher d'un coup
+                  d'oeil, c'est sa division. */}
+              {monRang
+                ? <Ecusson etage={monRang.etage} division={monRang.division}
+                           lp={monRang.etage === 'legende' ? monRang.lp : undefined} />
+                : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
+                                   shrink-0 tracking-wider">—</span>}
             </button>}
 
             {tab === 'oneshot' && <OneShotPanel />}

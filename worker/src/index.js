@@ -1,5 +1,5 @@
 import {
-  DUEL_INIT_WIN, DUEL_INIT_LOSS, DUEL_RECV_WIN, DUEL_RECV_LOSS, DUEL_DRAW,
+  recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
 } from './duels.js';
 export { SalleDirecte } from './salle.js';
@@ -852,6 +852,20 @@ export default {
     }
 
     // -------------------------------------------------- classement des duels
+    // Refaire tout le classement depuis l'historique des duels.
+    //
+    // Rejouable sans risque : chacun repart de son point de depart avant que
+    // les rencontres soient rejouees dans l'ordre. C'est ce qui permet de
+    // toucher au bareme, au facteur K ou aux seuils de division sans avoir a
+    // se demander ce que devient l'existant — on le refait.
+    //
+    // Sous cle d'administration, et jamais autrement : la route reecrit le
+    // classement de tout le monde.
+    if (url.pathname === '/duels/recalculer' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      return json(await recalculerClassement(env.DB));
+    }
+
     if (url.pathname === '/duels' && request.method === 'GET') {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
@@ -878,10 +892,14 @@ export default {
 
       const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
       return json({
-        bareme: {
-          initie: { victoire: DUEL_INIT_WIN, defaite: DUEL_INIT_LOSS, nul: DUEL_DRAW },
-          recu:   { victoire: DUEL_RECV_WIN, defaite: DUEL_RECV_LOSS, nul: DUEL_DRAW },
+        // L'echelle voyage avec le classement : le jeu doit pouvoir dessiner
+        // une progression — « il te reste tant avant la division suivante » —
+        // sans avoir a recopier des seuils qui changeront.
+        echelle: {
+          etages: ETAGES, divisions: DIVISIONS,
+          legende: LEGENDE, lp_par_palier: LP_PAR_PALIER,
         },
+        bareme: { lanceur: LP.lanceur, releveur: LP.releveur },
         classement: board, moi,
       });
     }
@@ -903,7 +921,8 @@ export default {
       await ensureChallengeTables(env.DB);
       const { results } = await env.DB.prepare(
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
-                r.challenger_ms, r.opponent_ms, r.created_at, c.races
+                r.challenger_ms, r.opponent_ms, r.created_at, r.lp_challenger,
+                c.races
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
           WHERE r.seen_by_challenger = 0
@@ -917,8 +936,10 @@ export default {
           adversaire: r.opponent_name || r.opponent_key,
           // 'challenger' : c'est moi qui l'emporte, puisque j'ai lance.
           issue: r.outcome,
-          points: r.outcome === 'challenger' ? DUEL_INIT_WIN
-                : r.outcome === 'opponent' ? DUEL_INIT_LOSS : DUEL_DRAW,
+          // Ce que CE duel lui a rapporte, tel qu'il a ete inscrit au moment
+          // ou il s'est joue. On ne le recalcule pas : il dependait du MMR
+          // d'alors, et des duels ont pu se jouer depuis.
+          lp: r.lp_challenger ?? 0,
           mon_ms: r.challenger_ms,
           son_ms: r.opponent_ms,
           races: JSON.parse(r.races || '[]'),

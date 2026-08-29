@@ -310,16 +310,29 @@ function code(n = 8) {
   return s;
 }
 
-/** Le classement des duels d'une zone, pour completer une grille. */
+/**
+ * Le classement des duels d'une zone, pour completer une grille.
+ *
+ * On seme au MMR, et non aux points de ligue. Les deux ne disent pas la meme
+ * chose : les points de ligue recompensent — celui qui releve des defis y monte
+ * plus vite que celui qui en lance — tandis que le MMR estime qui court le plus
+ * vite, et c'est cela qu'une grille de championnat doit refleter. Semer aux
+ * points reviendrait a placer en tete de serie celui qui a joue le plus, pas
+ * celui qui est le plus rapide.
+ *
+ * Le nombre ne sort pas pour autant : il ordonne des noms, et ce sont les noms
+ * qu'on affiche.
+ */
 async function classement(db, { pays = null, continent = null, exclure, limite }) {
+  await ensureDuelTables(db);
   const depuis = Date.now() - ECHELONS.national.fenetreActiviteJours * 24 * 3600 * 1000;
   const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
   const args = pays ? [pays] : continent ? [continent] : [];
   const { results } = await db.prepare(
-    `SELECT d.name_key AS cle, d.name AS nom, d.points
+    `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
       WHERE ${ou} AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
-      ORDER BY d.points DESC, d.wins DESC, d.losses ASC, d.name ASC
+      ORDER BY d.mmr DESC, d.wins DESC, d.losses ASC, d.name ASC
       LIMIT ?`
   ).bind(...args, depuis, limite + (exclure ? exclure.size : 0)).all();
   const pris = [];
@@ -331,11 +344,18 @@ async function classement(db, { pays = null, continent = null, exclure, limite }
   return pris;
 }
 
-/** Les champions en titre d'un echelon, encore porteurs a cette seconde. */
+/**
+ * Les champions en titre d'un echelon, encore porteurs a cette seconde.
+ *
+ * La table des duels est creee au besoin : un championnat peut s'ouvrir sur une
+ * base ou personne n'a encore joue de duel, et lire une table absente y faisait
+ * echouer toute l'ouverture avec une erreur cinq cents.
+ */
 async function championsEnTitre(db, echelon, filtreZone) {
+  await ensureDuelTables(db);
   const { results } = await db.prepare(
     `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
-            COALESCE(d.points, 0) AS points
+            COALESCE(d.mmr, 0) AS force
        FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
       WHERE t.echelon = ? AND t.expire_le > ?
       ORDER BY t.sacre_le DESC`
@@ -429,7 +449,7 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
   // desequilibrerait les series, ce que le serpentin existe precisement pour
   // eviter : on qualifie par le titre, on seme au niveau mesure.
   const joueurs = [...p.joueurs]
-    .sort((a, b) => (b.points || 0) - (a.points || 0))
+    .sort((a, b) => (b.force || 0) - (a.force || 0))
     .map((j, i) => ({ cle: j.cle, nom: j.nom, rang: i + 1, doffice: p.doffice.has(j.cle) }));
 
   const id = code();

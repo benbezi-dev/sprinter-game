@@ -4,23 +4,56 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { fetchDuels, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
-import { Drapeau, Medaille } from '@/components/Insignes';
+import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Fleche de deplacement depuis la derniere visite. */
-function Mouvement({ move }: { move: number }) {
+/**
+ * Le reglage systeme « reduire les animations ».
+ *
+ * Ce n'est pas un gout : pour une partie des gens, un mouvement a l'ecran
+ * provoque des nausees ou declenche une migraine. Un classement qui se
+ * reordonne en glissant est exactement le genre de mouvement vise.
+ */
+function useAnimationsReduites() {
+  const requete = '(prefers-reduced-motion: reduce)';
+  const [reduit, setReduit] = useState(() => {
+    try { return window.matchMedia(requete).matches; } catch { return false; }
+  });
+  useEffect(() => {
+    let m: MediaQueryList;
+    try { m = window.matchMedia(requete); } catch { return; }
+    const suivre = () => setReduit(m.matches);
+    m.addEventListener('change', suivre);
+    return () => m.removeEventListener('change', suivre);
+  }, []);
+  return reduit;
+}
+
+/**
+ * Fleche de deplacement depuis la derniere visite.
+ *
+ * La fleche et la couleur ne suffisent pas : un lecteur d'ecran ne voit ni
+ * l'une ni l'autre, et « 2 » tout seul ne veut rien dire. Le texte lu est donc
+ * ecrit a cote, invisible a l'oeil.
+ */
+function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
+  const { N } = SprinterApp;
   if (!move) return <span className="w-8 shrink-0" />;
   const monte = move > 0;
   return (
     <motion.span
-      initial={{ opacity: 0, y: monte ? 6 : -6 }}
+      initial={reduit ? false : { opacity: 0, y: monte ? 6 : -6 }}
       animate={{ opacity: 1, y: 0 }}
       className={`w-8 shrink-0 flex items-center justify-center gap-0.5 text-[10px] font-bold
         ${monte ? 'text-emerald-400' : 'text-destructive'}`}
     >
-      {monte ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-      {Math.abs(move)}
+      {monte ? <ChevronUp className="w-3 h-3" aria-hidden />
+             : <ChevronDown className="w-3 h-3" aria-hidden />}
+      <span aria-hidden>{Math.abs(move)}</span>
+      <span className="sr-only">
+        {N.t(monte ? 'duel_monte_a11y' : 'duel_descend_a11y', { n: String(Math.abs(move)) })}
+      </span>
     </motion.span>
   );
 }
@@ -44,6 +77,7 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
 
   const rows = board?.classement || [];
   const bareme = board?.bareme;
+  const reduit = useAnimationsReduites();
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center
@@ -70,48 +104,67 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Deux baremes, parce que les deux roles ne courent pas le meme
-            risque. Les afficher cote a cote est la seule facon de rendre la
-            regle lisible d'un coup d'oeil. */}
+        {/* La regle, en une phrase.
+            Les chiffres du bareme ne sont plus affiches, et pas par pudeur :
+            ils ne veulent plus rien dire pris seuls. Ce qu'un duel rapporte
+            depend d'ou l'on se situe par rapport a sa division — annoncer
+            « +25 » a quelqu'un qui en recevra quarante serait faux. Ce qui
+            reste vrai, et suffit a jouer, c'est le sens de l'asymetrie. */}
         {bareme && (
-          <div className="w-full flex flex-col gap-1.5">
-            <div className="grid grid-cols-2 gap-2">
-              {([['duel_rules_init', bareme.initie, 'text-cyan-300 border-cyan-400/30 bg-cyan-400/[0.06]'],
-                 ['duel_rules_recv', bareme.recu, 'text-primary border-primary/30 bg-primary/[0.07]']] as const)
-                .map(([cle, b, style]) => (
-                <div key={cle} className={`rounded-xl border px-3 py-2 flex flex-col items-center gap-0.5 ${style}`}>
-                  <span className="text-[9px] md:text-[10px] font-bold tracking-widest">
-                    {N.t(cle)}
-                  </span>
-                  <span className="font-mono text-[10px] md:text-xs text-foreground/85 text-center">
-                    {N.t('duel_rules_line', {
-                      v: b.victoire > 0 ? `+${b.victoire}` : b.victoire,
-                      d: b.defaite,
-                      n: b.nul,
-                    })}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <span className="text-[9px] md:text-[10px] text-muted-foreground/70 text-center leading-snug">
-              {N.t('duel_rules_all')} — {N.t('duel_rules_why')}
-            </span>
-          </div>
+          <p className="w-full text-[9px] md:text-[10px] text-muted-foreground/80
+                        text-center leading-snug px-2">
+            {N.t('duel_regle')}
+          </p>
         )}
 
-        {/* Ma position, mise en avant */}
+        {/* Ma position, mise en avant.
+            Le rang general reste, mais ce n'est plus lui qu'on vient chercher :
+            a mille joueurs, « 347e » ne raconte rien. La division, si — et la
+            barre dit combien il reste avant la suivante, ce qu'un total de
+            points ne disait pas. */}
         {board?.moi && (
           <div className="w-full rounded-xl border border-primary/40 bg-primary/10 px-4 py-3
-                          flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className="font-black text-primary text-lg">{N.ord(board.moi.rank)}</span>
-              <span className="font-bold text-primary truncate">{N.t('duel_you')}</span>
+                          flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-black text-primary text-lg shrink-0">
+                  {N.ord(board.moi.rank)}
+                </span>
+                <span className="font-bold text-primary truncate">{N.t('duel_you')}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Mouvement move={board.moi.move || 0} reduit={reduit} />
+              </div>
             </div>
-            {/* Ni total ni gain : seule la place compte, et le mouvement la
-                raconte. */}
-            <div className="flex items-center gap-2 shrink-0">
-              <Mouvement move={board.moi.move || 0} />
-            </div>
+            {/* Le rang en entier, sur sa propre ligne : c'est la seule ligne
+                de l'ecran ou il a la place de s'ecrire, et c'est celle qu'on
+                vient lire. */}
+            <Ecusson etage={board.moi.etage} division={board.moi.division}
+                     className="self-start" />
+            {board.echelle && board.moi.etage !== 'legende' && (
+              <div className="flex flex-col gap-1">
+                <div className="h-1.5 rounded-full bg-black/40 overflow-hidden"
+                     role="progressbar" aria-valuemin={0}
+                     aria-valuemax={board.echelle.lp_par_palier}
+                     aria-valuenow={board.moi.lp}
+                     aria-label={nomDuRang(board.moi.etage, board.moi.division)}>
+                  <motion.span className="block h-full bg-primary rounded-full"
+                    initial={false}
+                    animate={{ width: `${Math.min(100, (board.moi.lp / board.echelle.lp_par_palier) * 100)}%` }}
+                    transition={reduit ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 30 }} />
+                </div>
+                <span className="text-[9px] text-primary/80 tabular-nums text-right">
+                  {N.t('duel_reste', {
+                    n: `${Math.max(0, board.echelle.lp_par_palier - board.moi.lp)} ${N.t('duel_lp')}`,
+                  })}
+                </span>
+              </div>
+            )}
+            {board.moi.etage === 'legende' && (
+              <span className="text-[9px] text-primary/80 tabular-nums text-right">
+                {board.moi.lp} {N.t('duel_lp')}
+              </span>
+            )}
           </div>
         )}
         {!chargement && !board?.moi && (
@@ -150,8 +203,9 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                     return (
                       <motion.div
                         key={r.name.toLowerCase()}
-                        layout
-                        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                        layout={reduit ? false : true}
+                        transition={reduit ? { duration: 0 }
+                                           : { type: 'spring', stiffness: 420, damping: 34 }}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border
                           ${moi ? 'bg-primary/15 border-primary/40' : 'border-white/5 bg-black/20'}`}
                       >
@@ -160,7 +214,7 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                             : r.rank === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                           {r.rank}.
                         </span>
-                        <Mouvement move={r.move || 0} />
+                        <Mouvement move={r.move || 0} reduit={reduit} />
                         {/* Le pseudo occupe sa ligne entiere. La medaille est
                             passee en dessous, avec le bilan : mise a cote du
                             nom elle le faisait tronquer, et c'est le nom qu'on
@@ -175,10 +229,9 @@ export function DuelRanking({ onClose }: { onClose: () => void }) {
                           </span>
                           <span className="flex items-center gap-1.5 min-w-0">
                             <Medaille m={r.medaille} />
+                            <Ecusson etage={r.etage} division={r.division} lp={r.lp} compact />
                             <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
                               {N.t('duel_record', { v: r.wins, d: r.losses, n: r.draws })}
-                              {' · '}
-                              {N.t('duel_counts', { l: r.launched || 0, r: r.received || 0 })}
                             </span>
                           </span>
                         </div>

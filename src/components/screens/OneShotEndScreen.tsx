@@ -12,6 +12,7 @@ import {
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
 import { DuelRanking } from './DuelRanking';
+import { nomDuRang } from '@/components/Insignes';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 
@@ -290,15 +291,28 @@ export function OneShotEndScreen() {
               {duel && (
                 <>
                   {/* Un duel deja tranche ne redistribue rien : afficher un
-                      « 0 pts » laisserait croire a un match nul. */}
-                  {typeof duel.points === 'number' && (
-                    <span className="font-mono font-black text-2xl md:text-3xl
-                                     tabular-nums text-foreground">
-                      {duel.points > 0 ? '+' : ''}{duel.points}
-                      <span className="text-xs font-normal ml-1 text-muted-foreground">
-                        {N.t('duel_pts')}
+                      « 0 PL » laisserait croire a un match nul. */}
+                  {typeof duel.lp === 'number' && (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="font-mono font-black text-2xl md:text-3xl
+                                       tabular-nums text-foreground">
+                        {duel.lp > 0 ? '+' : ''}{duel.lp}
+                        <span className="text-xs font-normal ml-1 text-muted-foreground">
+                          {N.t('duel_lp')}
+                        </span>
                       </span>
-                    </span>
+                      {/* Un changement de division est le seul moment ou le
+                          classement se raconte tout seul. On ne le laisse pas
+                          passer dans une ligne de chiffres. */}
+                      {duel.rang && (duel.monte || duel.descend) && (
+                        <span className={`text-[10px] md:text-xs font-bold tracking-widest
+                          ${duel.monte ? 'text-emerald-400' : 'text-destructive'}`}>
+                          {N.t(duel.monte ? 'duel_promu' : 'duel_relegue', {
+                            r: nomDuRang(duel.rang.etage, duel.rang.division),
+                          })}
+                        </span>
+                      )}
+                    </div>
                   )}
                   <span className="text-[10px] md:text-xs text-muted-foreground tracking-wide text-center">
                     {N.t('duel_vs', { n: challenge.owner_name || N.t('ghost_label') })}

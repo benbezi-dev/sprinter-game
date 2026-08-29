@@ -1,9 +1,13 @@
 // Classement des duels — distinct du TOP 500.
 //
 // Le TOP 500 recompense la vitesse pure ; celui-ci recompense l'engagement.
-// Tous les duels comptent, lances comme releves, et le bareme depend du role :
-// lancer un defi expose son chrono le premier, donc +1 / -2 ; le relever se
-// paie +2 / -1. La somme reste nulle a chaque duel.
+// Tous les duels comptent, lances comme releves.
+//
+// Deux couches, et le jeu n'en voit qu'une. Le serveur tient un nombre cache
+// qui estime la force de chacun ; il ne sort jamais d'ici, et ce module n'a
+// aucun moyen de le lire. Ce qui arrive est ce qui se montre : un etage, une
+// division, et des points de ligue. Le bareme depend du role — relever un defi
+// dont le chrono est deja pose rapporte plus que le lancer.
 
 import { getDeviceId, getSavedName } from './leaderboard';
 import { EST_TEST } from './canal';
@@ -21,10 +25,27 @@ export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
 
+/** Les etages de l'echelle, du premier au dernier. */
+export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legende';
+
+export type Echelle = {
+  etages: Etage[];
+  divisions: number;
+  legende: number;
+  lp_par_palier: number;
+};
+
 export type DuelRow = {
   name: string;
-  // Pas de `points` : le serveur ne les publie plus. Ils ordonnent le
-  // classement sans jamais s'afficher — voir duelBoard cote worker.
+  // Pas de MMR : le serveur ne le publie pas. Il estime la force et ordonne
+  // les egalites parfaites, sans jamais s'afficher — voir duelBoard cote
+  // worker. Ce qui suit est toute la couche visible.
+  /** Le palier absolu, de 0 au sommet. Sert a comparer et a ordonner. */
+  palier: number;
+  etage: Etage;
+  /** IV a I, et zero en Legende, qui n'a pas de division. */
+  division: number;
+  lp: number;
   wins: number;
   losses: number;
   draws: number;
@@ -49,9 +70,14 @@ export type DuelIssue = {
   issue: 'opponent' | 'challenger' | 'draw';
   /** Role du joueur local dans ce duel. */
   role?: 'opponent' | 'challenger';
-  /** Points attribues au joueur qui releve le defi. */
-  points?: number;
-  points_adverse?: number;
+  /** Points de ligue gagnes par celui qui releve le defi. */
+  lp?: number;
+  lp_adverse?: number;
+  /** Le rang atteint apres ce duel, de chaque cote. */
+  rang?: { palier: number; etage: Etage; division: number };
+  rang_adverse?: { palier: number; etage: Etage; division: number };
+  monte?: boolean;
+  descend?: boolean;
   /** Duel deja tranche a une tentative precedente : rien n'a bouge. */
   deja?: boolean;
 };
@@ -60,7 +86,8 @@ export type DuelIssue = {
 export type DuelBareme = { victoire: number; defaite: number; nul: number };
 
 export type DuelBoard = {
-  bareme: { initie: DuelBareme; recu: DuelBareme };
+  echelle: Echelle;
+  bareme: { lanceur: DuelBareme; releveur: DuelBareme };
   classement: DuelRow[];
   moi: DuelRow | null;
 };
@@ -116,7 +143,8 @@ export type MonDuel = {
   id: string;
   adversaire: string;
   issue: 'challenger' | 'opponent' | 'draw';
-  points: number;
+  /** Ce que ce duel m'a rapporte, tel qu'inscrit au moment ou il s'est joue. */
+  lp: number;
   mon_ms: number;
   son_ms: number;
   races: string[];
