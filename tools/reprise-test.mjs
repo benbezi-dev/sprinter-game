@@ -1,6 +1,6 @@
-// La regle de reprise, verifiee sur les trente-deux cas possibles.
+// La regle de reprise, verifiee sur les soixante-quatre cas possibles.
 //
-// Cinq booleens font trente-deux combinaisons. C'est assez peu pour les parcourir
+// Six booleens font soixante-quatre combinaisons. C'est assez peu pour les parcourir
 // toutes plutot que d'en choisir quelques-unes : une regle qui decide si un
 // chrono peut repartir chez un adversaire merite qu'on la regarde en entier,
 // et non aux endroits ou l'on pensait deja avoir raison.
@@ -28,8 +28,9 @@ let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
 const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.length))}`);
 
-const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect = false) =>
-  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect });
+const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel,
+             courseEnDirect = false, duelsOuverts = false) =>
+  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect, duelsOuverts });
 
 titre('LA COURSE QU ON COURT POUR SOI SE REJOUE');
 
@@ -79,32 +80,59 @@ ok('et pas de defaite sans faux depart',
    !fauxDepartEstUneDefaite(cas(true, true, false, true)),
    'perdre un duel au chrono n est pas la meme chose');
 
-titre('LES TRENTE-DEUX CAS, SANS EN CHOISIR AUCUN');
+titre('LE 5 SEPTEMBRE REFERME LE FAUX DEPART');
+
+// Avant : partir avant le signal, seul sur la piste, se reprend. Apres :
+// l'elimination redevient ce qu'elle etait, et cela vaut meme sans adversaire.
+// Le meme drapeau ouvre le classement et referme cette porte.
+ok('avant le 5, un faux depart en solo se rejoue',
+   peutRejouer(cas(false, false, true, false, false, false)));
+ok('apres le 5, il elimine',
+   verrouDeReprise(cas(false, false, true, false, false, true)) === 'faux_depart_elimine');
+
+// Ce qui NE change pas le 5 : un chrono qui ne plait pas se rejoue toujours,
+// tant que le defi n'est pas parti. C'est la distinction qui porte tout — ce
+// qui redevient severe est le faux depart, pas la course entiere.
+ok('apres le 5, un chrono decevant se rejoue encore',
+   peutRejouer(cas(false, false, false, false, false, true)),
+   'seul le faux depart redevient eliminatoire');
+ok('apres le 5, un defi envoye verrouille toujours',
+   verrouDeReprise(cas(false, true, false, false, false, true)) === 'defi_envoye');
+
+// Et l'elimination n'est pas une defaite : il n'y a personne a qui perdre.
+// L'ancien ecran annoncait « le duel est perdu » a un joueur qui courait seul.
+ok('un faux depart en solo apres le 5 elimine sans faire perdre',
+   !fauxDepartEstUneDefaite(cas(false, false, true, false, false, true)),
+   'on remet l elimination, pas le mensonge');
+
+titre('LES SOIXANTE-QUATRE CAS, SANS EN CHOISIR AUCUN');
 
 // La verite de reference, ecrite a la main. Le test ne vaut que s'il connait
 // la reponse par un autre chemin que la fonction qu'il teste.
 let compte = 0, rejouables = 0, faux = 0;
 for (const a of [false, true]) for (const b of [false, true])
 for (const c of [false, true]) for (const d of [false, true])
-for (const e2 of [false, true]) {
-  const etat = cas(a, b, c, d, e2);
-  const attendu = !e2 && !a && !b && !(c && d);
+for (const e2 of [false, true]) for (const f of [false, true]) {
+  const etat = cas(a, b, c, d, e2, f);
+  const attendu = !e2 && !a && !b && !(c && (d || f));
   const defaiteAttendue = c && (e2 || a || d);
   compte++;
   if (attendu) rejouables++;
   if (defaiteAttendue) faux++;
-  ok(`direct=${+e2} recu=${+a} envoye=${+b} faux=${+c} chaine=${+d} → ${attendu ? 'rejouable' : 'verrouille'}`,
+  ok(`ouvert=${+f} direct=${+e2} recu=${+a} envoye=${+b} faux=${+c} chaine=${+d} → ${attendu ? 'rejouable' : 'verrouille'}`,
      peutRejouer(etat) === attendu && fauxDepartEstUneDefaite(etat) === defaiteAttendue,
      `la regle dit ${peutRejouer(etat) ? 'rejouable' : verrouDeReprise(etat)}`);
 }
-ok(`les trente-deux cas sont couverts`, compte === 32, String(compte));
-// Trois, et le compte se refait a la main : direct, recu et envoye sont des
-// interdits secs, donc il faut les trois a zero. Restent quatre cas, et le
-// faux depart en chaine de duel en retire un.
-ok('trois d entre eux se rejouent', rejouables === 3, String(rejouables));
-ok('les vingt-neuf autres sont verrouilles', compte - rejouables === 29,
+ok(`les soixante-quatre cas sont couverts`, compte === 64, String(compte));
+// Le compte se refait a la main : direct, recu et envoye sont des interdits
+// secs, donc les trois a zero. Restent huit cas (faux x chaine x ouvert), dont
+// trois seulement se rejouent — ceux sans faux depart, plus le faux depart
+// solo d'avant le 5.
+ok('cinq cas se rejouent', rejouables === 5, String(rejouables));
+ok('les cinquante-neuf autres sont verrouilles', compte - rejouables === 59,
    String(compte - rejouables));
-ok(`le faux depart fait perdre dans ${faux} cas sur trente-deux`, faux === 14, String(faux));
+ok(`le faux depart fait perdre dans ${faux} cas sur soixante-quatre`,
+   faux === 28, String(faux));
 
 titre('L ORDRE DES VERROUS NE MENT PAS');
 

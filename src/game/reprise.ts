@@ -39,6 +39,20 @@
 
    Hors de toute chaine de duel, le faux depart se rejoue comme le reste : le
    joueur n'a rien promis a personne.
+
+   ET CELA CHANGE LE 5 SEPTEMBRE.
+
+   Le jour ou le classement des duels ouvre, l'elimination redevient ce qu'elle
+   etait : partir avant le signal met fin a la course, et il n'y a pas de
+   reprise — meme seul sur la piste. C'est le meme drapeau qui ouvre le
+   classement et qui referme cette porte, parce que c'est la meme decision :
+   des lors que tout chrono peut devenir un defi, un faux depart qu'on
+   recommence n'en est plus un.
+
+   La reprise, elle, ne disparait pas pour autant. Un chrono qui ne plait pas
+   se rejoue toujours, tant que le defi n'est pas parti. Ce sont deux regles
+   distinctes et il faut les garder distinctes : ce qui redevient severe, c'est
+   le faux depart, pas la course entiere.
 --------------------------------------------------------------------------- */
 
 /** Ce qu'il faut savoir de la course qui vient de finir. */
@@ -53,11 +67,19 @@ export type EtatCourse = {
   fauxDepart: boolean;
   /** Cette course appartient a une chaine de duel — une revanche, typiquement. */
   chaineDeDuel: boolean;
+  /**
+   * Le classement des duels est ouvert — autrement dit, on est apres le
+   * 5 septembre. Passe en parametre plutot que lu ici : cette regle doit
+   * pouvoir se verifier dans les deux mondes sans qu'on bascule un drapeau
+   * global pour la tester.
+   */
+  duelsOuverts: boolean;
 };
 
 /** Pourquoi la course ne se rejoue pas. Nul quand elle se rejoue. */
 export type Verrou =
-  | 'course_directe' | 'defi_recu' | 'defi_envoye' | 'faux_depart_duel' | null;
+  | 'course_directe' | 'defi_recu' | 'defi_envoye'
+  | 'faux_depart_duel' | 'faux_depart_elimine' | null;
 
 /**
  * Qu'est-ce qui empeche de rejouer ?
@@ -71,6 +93,8 @@ export function verrouDeReprise(e: EtatCourse): Verrou {
   if (e.defiRecu) return 'defi_recu';
   if (e.defiEnvoye) return 'defi_envoye';
   if (e.fauxDepart && e.chaineDeDuel) return 'faux_depart_duel';
+  // Apres le 5, tout faux depart elimine, meme seul sur la piste.
+  if (e.fauxDepart && e.duelsOuverts) return 'faux_depart_elimine';
   return null;
 }
 
@@ -83,9 +107,14 @@ export function peutRejouer(e: EtatCourse): boolean {
  * Le faux depart compte-t-il comme une defaite seche ?
  *
  * Ce n'est pas la meme question que la precedente, et les confondre serait une
- * faute : un faux depart hors duel se rejoue ET ne fait perdre a personne. Un
- * faux depart en duel fait perdre, que l'on ait recu le defi ou qu'on le
- * renvoie.
+ * faute. Un faux depart en duel fait perdre, que l'on ait recu le defi ou
+ * qu'on le renvoie. Seul sur la piste, il elimine mais ne fait perdre a
+ * personne — et cela reste vrai apres le 5 septembre, ou la course s'arrete
+ * sans se rejouer mais ou il n'y a toujours pas d'adversaire a qui perdre.
+ *
+ * L'ancien ecran disait « eliminé — le duel est perdu » a un joueur qui
+ * courait seul. C'etait faux avant les modifications d'aujourd'hui, et le
+ * redevenir serait une regression : on remet l'elimination, pas le mensonge.
  */
 export function fauxDepartEstUneDefaite(e: EtatCourse): boolean {
   return e.fauxDepart && (e.courseEnDirect || e.defiRecu || e.chaineDeDuel);

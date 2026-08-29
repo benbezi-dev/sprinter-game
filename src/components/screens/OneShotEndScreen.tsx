@@ -203,6 +203,11 @@ export function OneShotEndScreen() {
     defiEnvoye: !!code,
     fauxDepart: falseOut,
     chaineDeDuel: !!SprinterApp.G.revanche,
+    // Le 5 septembre, le meme drapeau qui ouvre le classement referme le faux
+    // depart : l'elimination redevient ce qu'elle etait avant. Le reste de la
+    // reprise ne bouge pas — un chrono qui ne plait pas se rejoue toujours
+    // tant que le defi n'est pas parti.
+    duelsOuverts: DUELS_OUVERTS,
   };
   const verrou = verrouDeReprise(etatCourse);
   // Un faux depart ne fait perdre que s'il y a quelqu'un a qui perdre. Seul
@@ -680,6 +685,7 @@ export function OneShotEndScreen() {
                 {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
                    : verrou === 'defi_recu' ? 'os_verrou_recu'
                    : verrou === 'defi_envoye' ? 'os_verrou_envoye'
+                   : verrou === 'faux_depart_elimine' ? 'false_out_rule'
                    : 'os_verrou_faux')}
               </p>
             ) : (

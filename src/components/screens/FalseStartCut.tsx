@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { fauxDepartEstUneDefaite } from '@/game/reprise';
+import { fauxDepartEstUneDefaite, peutRejouer } from '@/game/reprise';
+import { DUELS_OUVERTS } from '@/game/duels';
 import { motion } from 'framer-motion';
 
 /**
@@ -16,13 +17,20 @@ export function FalseStartCut() {
   const { N } = SprinterApp;
   // La cinematique annonce ce qui vient de se passer, et cela depend de qui
   // court. Un duel se perd ici ; une course pour soi s'arrete et se reprend.
-  const defaite = fauxDepartEstUneDefaite({
+  // Deux questions, et il faut les poser separement. « Ai-je perdu ? » depend
+  // d'un adversaire ; « puis-je reprendre ? » depend du 5 septembre. Apres le
+  // 5, un faux depart en solo elimine sans faire perdre a personne : la course
+  // s'arrete, et il n'y a pourtant personne en face.
+  const etat = {
     courseEnDirect: !!SprinterApp.G.liveOn,
     defiRecu: !!SprinterApp.G.challenge,
     defiEnvoye: false,
     fauxDepart: true,
     chaineDeDuel: !!SprinterApp.G.revanche,
-  });
+    duelsOuverts: DUELS_OUVERTS,
+  };
+  const defaite = fauxDepartEstUneDefaite(etat);
+  const reprise = peutRejouer(etat);
   const [passe, setPasse] = useState(false);
 
   const suite = () => {
@@ -120,7 +128,7 @@ export function FalseStartCut() {
           transition={{ delay: 1.6 }}
           className="text-[10px] md:text-xs tracking-widest uppercase text-muted-foreground"
         >
-          {N.t(defaite ? 'false_out_rule' : 'false_out_libre')}
+          {N.t(reprise ? 'false_out_libre' : 'false_out_rule')}
         </motion.span>
       </div>
 
