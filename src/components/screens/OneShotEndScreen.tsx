@@ -13,7 +13,7 @@ import {
 } from '@/game/challenge';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
-import { pique } from '@/game/piques';
+import { pique, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -206,6 +206,10 @@ export function OneShotEndScreen() {
                          : duel.issue === 'draw' ? null : 'perdu')
                  : beaten ? 'gagne' : 'perdu')
     : null;
+
+  // La phrase du bouton, tiree d'une graine stable : le code du defi quand il
+  // y en a un, le chrono sinon. Elle ne doit pas changer pendant qu'on lit.
+  const mots = issue ? relance(issue, challenge?.id || String(runTime)) : null;
 
   // Ce qui interdit de rejouer, ou rien. `code` est l'identifiant du defi cree
   // depuis cette course : sa presence dit que le chrono est parti. `revanche`
@@ -739,13 +743,11 @@ export function OneShotEndScreen() {
                          flex items-center justify-center gap-2"
             >
               <Swords className="w-4 h-4" />
-              {N.t(issue === 'gagne' ? 'os_defier_gagne'
-                 : issue === 'perdu' ? 'os_defier_perdu' : 'os_defier')}
+              {N.t(mots ? mots.titre : 'os_defier')}
             </button>}
             {DUELS_OUVERTS && (
               <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                {N.t(issue === 'gagne' ? 'os_defier_gagne_sub'
-                   : issue === 'perdu' ? 'os_defier_perdu_sub' : 'os_defier_sub')}
+                {N.t(mots ? mots.sous : 'os_defier_sub')}
               </p>
             )}
             <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">

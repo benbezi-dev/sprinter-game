@@ -40,3 +40,32 @@ export function pique(idDuel: string, adversaire: string): string {
   const n = somme % NB_PIQUES;
   return N.t('pique_' + n, { n: adversaire || N.t('opponent') });
 }
+
+/* ---------------------------------------------------------------------------
+   LA RELANCE — ce que dit le bouton qui mene au classement
+   ---------------------------------------------------------------------------
+   Meme principe que les piques, autre cible : ici le jeu chambre CELUI QUI
+   LIT, pas l'adversaire. Se moquer du perdant qui a l'ecran sous les yeux fait
+   rire ; se moquer de quelqu'un qui n'est pas la fait autre chose, et c'est ce
+   qui rend ces lignes jouables entre amis.
+--------------------------------------------------------------------------- */
+
+/** Combien de relances par issue. Le nombre vit ici, comme pour les piques. */
+export const NB_RELANCES = 3;
+
+/**
+ * Quelle relance afficher, pour une course donnee.
+ *
+ * L'index se tire d'une graine et jamais au hasard, pour la meme raison que
+ * les piques : une phrase qui change a chaque rendu n'est plus une phrase,
+ * c'est un scintillement. La graine est le code du defi quand il y en a un,
+ * le chrono sinon — deux choses stables pendant qu'on lit l'ecran, et
+ * differentes d'une course a l'autre.
+ */
+export function relance(issue: 'gagne' | 'perdu', graine: string) {
+  let somme = 0;
+  const s = String(graine || '');
+  for (let i = 0; i < s.length; i++) somme = (somme * 31 + s.charCodeAt(i)) >>> 0;
+  const n = somme % NB_RELANCES;
+  return { titre: `relance_${issue}_${n}`, sous: `relance_${issue}_${n}_sub` };
+}
