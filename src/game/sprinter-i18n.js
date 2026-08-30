@@ -479,9 +479,21 @@
                       'one more race, right now — this one stays as it is'],
     // Le classement s'AJOUTE au raccourci, il ne le remplace pas : defier
     // quelqu'un n'est pas relancer une course.
+    //
+    // Le bouton ne parle pas pareil selon d'ou l'on sort. Apres une victoire
+    // il pousse a enchainer ; apres une defaite il propose de descendre d'un
+    // cran, ce que tout le monde a deja fait sans l'avouer. Le jeu se moque du
+    // joueur, jamais de l'adversaire : la vanne se retourne sur celui qui lit,
+    // et c'est ce qui la rend jouable entre amis.
     os_defier:       ['DÉFIER QUELQU’UN', 'CHALLENGE SOMEONE'],
     os_defier_sub:   ['ouvre le classement et choisis ton adversaire — un autre, ou le même',
                       'open the ranking and pick your opponent — someone else, or the same one'],
+    os_defier_gagne: ['EN FUMER UN AUTRE', 'GO SMOKE ANOTHER ONE'],
+    os_defier_gagne_sub: ['celui-là est plié. Au suivant.',
+                          'that one’s done. Next.'],
+    os_defier_perdu: ['ME REFAIRE SUR PLUS FAIBLE', 'PICK ON SOMEONE SMALLER'],
+    os_defier_perdu_sub: ['descends d’une division, personne n’en saura rien',
+                          'drop a division — nobody has to know'],
     os_defi_sans_cible: ['{n} n’est pas au TOP 500 de cette épreuve : envoie-lui le code toi-même',
                          '{n} is not in this event’s TOP 500 — send them the code yourself'],
     // Ce qui suit ne retire plus le bouton : ce sont des constats, poses a

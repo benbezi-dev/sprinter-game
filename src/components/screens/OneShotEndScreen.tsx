@@ -190,6 +190,23 @@ export function OneShotEndScreen() {
   const monMs = live ? liveResultat[monRole].ms : 0;
   const sonMs = live ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
 
+  // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
+  //
+  // Sert au ton du bouton qui mene au classement, et a rien d'autre. Le duel
+  // tranche par le serveur fait foi quand il est connu — « opponent », c'est
+  // celui qui releve le defi, donc nous ; avant sa reponse on se rabat sur le
+  // chrono local, qui dit deja la meme chose dans presque tous les cas.
+  //
+  // Un faux depart en duel est une defaite meme sans chrono : c'est justement
+  // la ou la vanne tombe le mieux.
+  const issue: 'gagne' | 'perdu' | null =
+      live ? (liveGagne ? 'gagne' : liveNul ? null : 'perdu')
+    : challenge ? (falseOut ? 'perdu'
+                 : duel ? (duel.issue === 'opponent' ? 'gagne'
+                         : duel.issue === 'draw' ? null : 'perdu')
+                 : beaten ? 'gagne' : 'perdu')
+    : null;
+
   // Ce qui interdit de rejouer, ou rien. `code` est l'identifiant du defi cree
   // depuis cette course : sa presence dit que le chrono est parti. `revanche`
   // marque une course lancee depuis un duel — elle survit a une reprise, sans
@@ -722,11 +739,13 @@ export function OneShotEndScreen() {
                          flex items-center justify-center gap-2"
             >
               <Swords className="w-4 h-4" />
-              {N.t('os_defier')}
+              {N.t(issue === 'gagne' ? 'os_defier_gagne'
+                 : issue === 'perdu' ? 'os_defier_perdu' : 'os_defier')}
             </button>}
             {DUELS_OUVERTS && (
               <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                {N.t('os_defier_sub')}
+                {N.t(issue === 'gagne' ? 'os_defier_gagne_sub'
+                   : issue === 'perdu' ? 'os_defier_perdu_sub' : 'os_defier_sub')}
               </p>
             )}
             <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
