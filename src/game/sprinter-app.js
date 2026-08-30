@@ -607,20 +607,30 @@
     queueCuts([], 'count');
   }
   /**
-   * Rejouer la course qu'on vient de courir.
+   * RECOMMENCER : lancer une course de plus, tout de suite.
    *
-   * Les memes epreuves, le meme plateau, le meme fantome : on repasse les
-   * options d'origine plutot que d'en fabriquer de nouvelles.
+   * Ce n'est pas rejouer la precedente, et la nuance porte tout le reste. La
+   * course qui vient de finir garde son chrono ; s'il etait parti dans un
+   * duel, il y reste. On en commence simplement une autre, sur les memes
+   * epreuves et au meme plateau — ce que le joueur faisait jusqu'ici en
+   * repassant par l'accueil, le menu et le mode, soit quatre ecrans pour
+   * refaire dix secondes de course.
    *
-   * `revanche` n'est pas efface, et c'est voulu : une course lancee dans une
-   * chaine de duel y reste en la rejouant. C'est ce qui fait qu'un faux depart
-   * y compte toujours comme une defaite, et non seulement a la premiere
-   * tentative — sans quoi il suffirait de rejouer une fois pour sortir de la
-   * chaine et se retrouver a courir pour soi.
+   * ON REPART SEUL, ET C'EST VOULU. Le defi auquel on repondait est joue,
+   * l'adversaire en direct est parti, la revanche est consommee : les
+   * rembarquer ferait croire qu'on recourt la meme rencontre. Seule la cible
+   * d'un defi survit, parce qu'elle est une intention et non un resultat —
+   * qui visait quelqu'un au TOP 500 avant un faux depart le vise encore.
+   *
+   * Le detour par les options d'origine n'aurait pas convenu ici : pour une
+   * course en direct elles ne passent meme pas par startOneShot, et l'on
+   * relancerait une salle qui n'existe plus.
    */
-  function rejouerOneShot() {
+  function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
-    startOneShot(G.shotRaces, G.shotOpts || {});
+    G.liveOn = false; G.liveResultat = null; G.liveNom = null;
+    G.revanche = null; G.defiSansCible = null;
+    startOneShot(G.shotRaces, { levelIdx: G.shotLevel });
     return true;
   }
 
@@ -1919,7 +1929,7 @@
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
-    startOneShot, rejouerOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     REC_STEP, goHome,

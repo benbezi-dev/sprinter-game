@@ -472,24 +472,27 @@
     // La reprise. Le bouton dit ce qu'il fait ; les trois phrases de verrou
     // disent POURQUOI il n'est pas la, ce qui compte davantage — un bouton qui
     // disparait sans raison se cherche, et finit par passer pour une panne.
-    os_rejouer:      ['REJOUER LA COURSE', 'RUN IT AGAIN'],
-    os_rejouer_sub:  ['ton chrono ne part nulle part tant que tu n’as pas envoyé de défi',
-                      'your time goes nowhere until you send a challenge'],
-    // Depuis le 5, on ne rature plus une course : on la rejoue contre
-    // quelqu'un. Le libelle dit l'action, pas l'ecran qui s'ouvre.
+    // RECOMMENCER, et non REJOUER. Le mot compte : on ne reprend pas la course
+    // precedente, on en lance une de plus. La premiere garde son chrono.
+    os_rejouer:      ['RECOMMENCER', 'RUN AGAIN'],
+    os_rejouer_sub:  ['une course de plus, tout de suite — celle-ci reste ce qu’elle est',
+                      'one more race, right now — this one stays as it is'],
+    // Le classement s'AJOUTE au raccourci, il ne le remplace pas : defier
+    // quelqu'un n'est pas relancer une course.
     os_defier:       ['DÉFIER QUELQU’UN', 'CHALLENGE SOMEONE'],
     os_defier_sub:   ['ouvre le classement et choisis ton adversaire — un autre, ou le même',
                       'open the ranking and pick your opponent — someone else, or the same one'],
-    os_verrou_classement: ['cette course ne se rejoue pas : elle se rejoue contre quelqu’un',
-                           'this race is not replayed — it is run again against someone'],
     os_defi_sans_cible: ['{n} n’est pas au TOP 500 de cette épreuve : envoie-lui le code toi-même',
                          '{n} is not in this event’s TOP 500 — send them the code yourself'],
-    os_verrou_direct: ['course en direct : ton adversaire a couru en même temps, le résultat est joué',
-                       'live race: your opponent ran at the same moment, the result stands'],
-    os_verrou_recu:  ['tu répondais à un défi : ton chrono est déjà parti chez ton adversaire',
-                      'you were answering a challenge: your time has already gone to your opponent'],
-    os_verrou_envoye: ['le défi est envoyé — ce chrono est celui qu’il devra battre',
-                       'the challenge is sent — this is the time they have to beat'],
+    // Ce qui suit ne retire plus le bouton : ce sont des constats, poses a
+    // cote de lui. D'ou le « celui-la » — il designe la course qui vient de
+    // finir, pas celle qu'on peut relancer.
+    os_verrou_direct: ['course en direct : ton adversaire a couru en même temps, ce résultat-là est joué',
+                       'live race: your opponent ran at the same moment — that result stands'],
+    os_verrou_recu:  ['ce chrono-là est parti chez ton adversaire : il ne se reprend pas',
+                      'that time has gone to your opponent — it cannot be taken back'],
+    os_verrou_envoye: ['le défi est envoyé — ce chrono-là est celui qu’il devra battre',
+                       'the challenge is sent — that is the time they have to beat'],
     os_verrou_faux:  ['faux départ dans un duel : la course est perdue. Envoie un nouveau défi pour repartir.',
                       'false start in a duel: the race is lost. Send a new challenge to start over.'],
     cut_skip:        ['PASSER', 'SKIP'],

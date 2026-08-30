@@ -204,11 +204,6 @@ export function OneShotEndScreen() {
     defiEnvoye: !!code,
     fauxDepart: falseOut,
     chaineDeDuel: !!SprinterApp.G.revanche,
-    // Le 5 septembre, le meme drapeau qui ouvre le classement referme le faux
-    // depart : l'elimination redevient ce qu'elle etait avant. Le reste de la
-    // reprise ne bouge pas — un chrono qui ne plait pas se rejoue toujours
-    // tant que le defi n'est pas parti.
-    duelsOuverts: DUELS_OUVERTS,
   };
   const verrou = verrouDeReprise(etatCourse);
   // Un faux depart ne fait perdre que s'il y a quelqu'un a qui perdre. Seul
@@ -676,48 +671,48 @@ export function OneShotEndScreen() {
             </p>
           )}
 
-          {/* LA REPRISE.
-              On rejoue tant que personne d'autre n'est engage : apres un faux
-              depart, apres une chute, ou simplement parce que le chrono ne
-              plait pas. Des qu'un adversaire attend le chrono, il est donne et
-              ne se reprend plus. La regle et ses trois interdits vivent dans
-              game/reprise, ou ils se lisent d'un bloc et se verifient sans
-              lancer une course ; ici on ne fait que la lire.
+          {/* RECOMMENCER — le raccourci, et la raison de tout ce qui suit.
+              Ce que les joueurs demandaient n'etait pas d'effacer un chrono
+              mais d'en relancer un : apres un faux depart ou une course ratee,
+              il fallait repasser par l'accueil, le menu, le mode, puis
+              demarrer. Quatre ecrans pour refaire dix secondes de course.
 
-              Le verrou est affiche plutot que taire le bouton sans un mot : un
-              bouton qui disparait sans explication se cherche, et finit par
-              passer pour une panne. */}
+              Le bouton est donc INCONDITIONNEL. Recommencer ne reprend rien a
+              personne : la course qui vient de finir garde son chrono, et s'il
+              etait parti dans un duel il y reste. Ce qui est acquis se dit
+              juste en dessous, a cote du bouton et non a sa place. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
-            {verrou ? (
+            <button
+              onClick={() => SprinterApp.recommencer()}
+              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
+                         tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
+                         border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
+                         flex items-center justify-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              {N.t('os_rejouer')}
+            </button>
+            <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+              {N.t('os_rejouer_sub')}
+            </p>
+
+            {/* Ce qui est joue de la course precedente. Un constat, plus un
+                verrou : il n'empeche plus rien, il informe. */}
+            {verrou && (
               <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>
                 {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
                    : verrou === 'defi_recu' ? 'os_verrou_recu'
                    : verrou === 'defi_envoye' ? 'os_verrou_envoye'
-                   : verrou === 'faux_depart_elimine' ? 'false_out_rule'
-                   : verrou === 'classement_ouvert' ? 'os_verrou_classement'
                    : 'os_verrou_faux')}
               </p>
-            ) : (
-              <>
-                <button
-                  onClick={() => SprinterApp.rejouerOneShot()}
-                  className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
-                             tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
-                             border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
-                             flex items-center justify-center gap-2"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  {N.t('os_rejouer')}
-                </button>
-                <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                  {N.t('os_rejouer_sub')}
-                </p>
-              </>
             )}
-            {/* Depuis le 5, c'est ce bouton qui prend la place de la reprise :
-                on ne recommence plus sa course, on la rejoue contre quelqu'un.
+
+            {/* Le classement s'AJOUTE au raccourci. Une version precedente le
+                mettait a sa place le 5 septembre — mais defier quelqu'un est
+                un autre ecran et un autre parcours, et la plainte des joueurs
+                serait revenue ce jour-la telle quelle.
                 Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setVoirDuels(true)}

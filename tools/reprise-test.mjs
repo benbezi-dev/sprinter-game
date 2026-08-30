@@ -1,13 +1,11 @@
-// La regle de reprise, verifiee sur les soixante-quatre cas possibles.
+// Recommencer n'est pas effacer.
 //
-// Six booleens font soixante-quatre combinaisons. C'est assez peu pour les parcourir
-// toutes plutot que d'en choisir quelques-unes : une regle qui decide si un
-// chrono peut repartir chez un adversaire merite qu'on la regarde en entier,
-// et non aux endroits ou l'on pensait deja avoir raison.
-//
-// Le fichier teste est en TypeScript. On le lit sans le compiler : les types
-// s'effacent, la regle reste. Un harnais qui exigerait une compilation serait
-// un harnais qu'on ne lance pas.
+// Le harnais verifiait autrefois soixante-quatre combinaisons pour savoir
+// quand le bouton devait disparaitre. Il n'en verifie plus aucune, parce que
+// le bouton ne disparait plus : recommencer lance une course de plus et ne
+// reprend rien a personne. Ce qui reste a verifier est l'autre question — ce
+// qui est ACQUIS de la course qu'on vient de finir, pour l'annoncer a cote du
+// bouton plutot qu'a sa place.
 
 import { readFileSync } from 'node:fs';
 
@@ -22,128 +20,65 @@ const { transform } = await import('esbuild');
 const ts = readFileSync(new URL('../src/game/reprise.ts', import.meta.url), 'utf8');
 const { code } = await transform(ts, { loader: 'ts', format: 'esm' });
 const mod = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
-const { verrouDeReprise, peutRejouer, fauxDepartEstUneDefaite } = mod;
+const { verrouDeReprise, peutRecommencer, fauxDepartEstUneDefaite } = mod;
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
 const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.length))}`);
 
-const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel,
-             courseEnDirect = false, duelsOuverts = false) =>
-  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect, duelsOuverts });
+const cas = (defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect = false) =>
+  ({ defiRecu, defiEnvoye, fauxDepart, chaineDeDuel, courseEnDirect });
 
-titre('LA COURSE QU ON COURT POUR SOI SE REJOUE');
+titre('ON PEUT TOUJOURS LANCER UNE COURSE DE PLUS');
 
-ok('une course ordinaire se rejoue', peutRejouer(cas(false, false, false, false)));
-ok('un faux depart hors duel se rejoue', peutRejouer(cas(false, false, true, false)),
-   'le joueur n a rien promis a personne');
-ok('et il ne fait perdre a personne',
-   !fauxDepartEstUneDefaite(cas(false, false, true, false)));
+// La propriete qui a coute le plus cher a comprendre. Elle ne depend de rien,
+// et c'est exactement ce qu'il faut verifier : aucun etat de la course
+// precedente ne doit pouvoir la rendre fausse.
+ok('recommencer est toujours possible', peutRecommencer() === true);
+ok('et cela ne depend d aucun etat', peutRecommencer.length === 0,
+   'la fonction ne prend rien : il n y a rien a examiner');
 
-titre('DES QU UN ADVERSAIRE EST ENGAGE, LE CHRONO EST DONNE');
+titre('CE QUI EST ACQUIS SE DIT, MAIS N INTERDIT RIEN');
 
-ok('repondre a un defi ne se rejoue pas',
-   verrouDeReprise(cas(true, false, false, false)) === 'defi_recu',
-   'le resultat part au serveur des l arrivee');
-ok('un defi envoye verrouille la course',
-   verrouDeReprise(cas(false, true, false, false)) === 'defi_envoye',
-   'le code est deja chez l ami, avec le chrono a battre');
-ok('un faux depart dans une revanche ne se rejoue pas',
-   verrouDeReprise(cas(false, false, true, true)) === 'faux_depart_duel');
+for (const [nom, etat, attendu] of [
+  ['une course ordinaire ne laisse rien de definitif', cas(false, false, false, false), null],
+  ['repondre a un defi est definitif',                 cas(true, false, false, false), 'defi_recu'],
+  ['un defi envoye est definitif',                     cas(false, true, false, false), 'defi_envoye'],
+  ['une course en direct est definitive',              cas(false, false, false, false, true), 'course_directe'],
+  ['un faux depart en chaine de duel est une defaite', cas(false, false, true, true), 'faux_depart_duel'],
+  ['un faux depart solo ne laisse rien',               cas(false, false, true, false), null],
+]) {
+  ok(nom, verrouDeReprise(etat) === attendu,
+     `la regle dit ${verrouDeReprise(etat)}`);
+  // Et dans TOUS ces cas, le raccourci reste offert.
+  ok(`   ...et le raccourci reste offert`, peutRecommencer() === true);
+}
 
-titre('LA COURSE EN DIRECT NE SE REJOUE JAMAIS');
+titre('L ORDRE DE CE QU ON ANNONCE NE MENT PAS');
 
-// Le cas qu'on oublie : une course en direct emprunte la plomberie du one
-// shot et finit sur le meme ecran, sans defi recu ni envoye. Elle passait
-// entre les trois autres verrous, et le bouton s'affichait apres un duel en
-// direct perdu. Personne n'aurait ecrit ce cas de tete — il est venu d'une
-// question posee a voix haute.
-ok('un direct gagne ne se rejoue pas',
-   verrouDeReprise(cas(false, false, false, false, true)) === 'course_directe');
-ok('un direct perdu non plus',
-   verrouDeReprise(cas(false, false, false, true, true)) === 'course_directe');
-ok('et il passe avant tous les autres verrous',
-   verrouDeReprise(cas(true, true, true, true, true)) === 'course_directe',
-   'c est l engagement le plus fort');
-ok('un faux depart en direct est une defaite',
-   fauxDepartEstUneDefaite(cas(false, false, true, false, true)));
+// Quand plusieurs choses sont acquises, on annonce la plus forte. Dire « tu as
+// deja envoye » a quelqu'un qui repondait a un defi l'enverrait chercher un
+// envoi qu'il n'a jamais fait.
+ok('le direct passe avant tout le reste',
+   verrouDeReprise(cas(true, true, true, true, true)) === 'course_directe');
+ok('puis repondre a un defi',
+   verrouDeReprise(cas(true, true, true, true)) === 'defi_recu');
+ok('puis l envoi',
+   verrouDeReprise(cas(false, true, true, true)) === 'defi_envoye');
 
-titre('LE FAUX DEPART EN DUEL EST UNE DEFAITE');
+titre('LE FAUX DEPART EN DUEL RESTE UNE DEFAITE');
 
 ok('celui qui recoit le defi perd',
    fauxDepartEstUneDefaite(cas(true, false, true, false)));
 ok('celui qui le renvoie apres l avoir recu perd aussi',
    fauxDepartEstUneDefaite(cas(false, false, true, true)));
+ok('celui qui court en direct perd',
+   fauxDepartEstUneDefaite(cas(false, false, true, false, true)));
 ok('mais pas celui qui court seul',
-   !fauxDepartEstUneDefaite(cas(false, false, true, false)));
-ok('et pas de defaite sans faux depart',
-   !fauxDepartEstUneDefaite(cas(true, true, false, true)),
-   'perdre un duel au chrono n est pas la meme chose');
-
-titre('LE 5 SEPTEMBRE REFERME LE FAUX DEPART');
-
-// Avant : partir avant le signal, seul sur la piste, se reprend. Apres :
-// l'elimination redevient ce qu'elle etait, et cela vaut meme sans adversaire.
-// Le meme drapeau ouvre le classement et referme cette porte.
-ok('avant le 5, un faux depart en solo se rejoue',
-   peutRejouer(cas(false, false, true, false, false, false)));
-ok('apres le 5, il elimine',
-   verrouDeReprise(cas(false, false, true, false, false, true)) === 'faux_depart_elimine');
-
-// Ce qui NE change pas le 5 : un chrono qui ne plait pas se rejoue toujours,
-// tant que le defi n'est pas parti. C'est la distinction qui porte tout — ce
-// qui redevient severe est le faux depart, pas la course entiere.
-ok('apres le 5, un chrono decevant ne se rejoue plus non plus',
-   verrouDeReprise(cas(false, false, false, false, false, true)) === 'classement_ouvert',
-   'on ne rature plus une course, on la rejoue contre quelqu un');
-ok('apres le 5, un defi envoye verrouille toujours',
-   verrouDeReprise(cas(false, true, false, false, false, true)) === 'defi_envoye');
-
-// Et l'elimination n'est pas une defaite : il n'y a personne a qui perdre.
-// L'ancien ecran annoncait « le duel est perdu » a un joueur qui courait seul.
-ok('un faux depart en solo apres le 5 elimine sans faire perdre',
-   !fauxDepartEstUneDefaite(cas(false, false, true, false, false, true)),
-   'on remet l elimination, pas le mensonge');
-
-titre('LES SOIXANTE-QUATRE CAS, SANS EN CHOISIR AUCUN');
-
-// La verite de reference, ecrite a la main. Le test ne vaut que s'il connait
-// la reponse par un autre chemin que la fonction qu'il teste.
-let compte = 0, rejouables = 0, faux = 0;
-for (const a of [false, true]) for (const b of [false, true])
-for (const c of [false, true]) for (const d of [false, true])
-for (const e2 of [false, true]) for (const f of [false, true]) {
-  const etat = cas(a, b, c, d, e2, f);
-  const attendu = !f && !e2 && !a && !b && !(c && d);
-  const defaiteAttendue = c && (e2 || a || d);
-  compte++;
-  if (attendu) rejouables++;
-  if (defaiteAttendue) faux++;
-  ok(`ouvert=${+f} direct=${+e2} recu=${+a} envoye=${+b} faux=${+c} chaine=${+d} → ${attendu ? 'rejouable' : 'verrouille'}`,
-     peutRejouer(etat) === attendu && fauxDepartEstUneDefaite(etat) === defaiteAttendue,
-     `la regle dit ${peutRejouer(etat) ? 'rejouable' : verrouDeReprise(etat)}`);
-}
-ok(`les soixante-quatre cas sont couverts`, compte === 64, String(compte));
-// Le compte se refait a la main : ouvert, direct, recu et envoye sont quatre
-// interdits secs, donc les quatre a zero. Restent quatre cas (faux x chaine),
-// dont trois se rejouent — le faux depart en chaine de duel retire le dernier.
-ok('trois cas se rejouent, tous avant le 5', rejouables === 3, String(rejouables));
-ok('les soixante et un autres sont verrouilles', compte - rejouables === 61,
-   String(compte - rejouables));
-ok(`le faux depart fait perdre dans ${faux} cas sur soixante-quatre`,
-   faux === 28, String(faux));
-
-titre('L ORDRE DES VERROUS NE MENT PAS');
-
-// Quand plusieurs interdits s'appliquent, celui qu'on annonce doit etre le
-// plus fort. Dire « tu as deja envoye » a quelqu'un qui repondait a un defi
-// l'enverrait chercher un envoi qu'il n'a jamais fait.
-ok('le direct passe avant tout le reste',
-   verrouDeReprise(cas(true, true, true, true, true)) === 'course_directe');
-ok('puis repondre a un defi',
-   verrouDeReprise(cas(true, true, true, true)) === 'defi_recu');
-ok('l envoi passe avant le faux depart',
-   verrouDeReprise(cas(false, true, true, true)) === 'defi_envoye');
+   !fauxDepartEstUneDefaite(cas(false, false, true, false)),
+   'il n y a personne a qui perdre');
+ok('et perdre au chrono n est pas un faux depart',
+   !fauxDepartEstUneDefaite(cas(true, true, false, true)));
 
 console.log('\n──────────────────────────────────────────────────────────────');
 console.log(e ? `   ${e} ECHEC(S).` : '   TOUT PASSE.');
