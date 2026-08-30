@@ -17,6 +17,7 @@ import { pique, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
+import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 
 /**
@@ -703,7 +704,7 @@ export function OneShotEndScreen() {
               etait parti dans un duel il y reste. Ce qui est acquis se dit
               juste en dessous, a cote du bouton et non a sa place. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button
+            {RECOMMENCER_OUVERT && <button
               onClick={() => SprinterApp.recommencer()}
               className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
@@ -712,10 +713,12 @@ export function OneShotEndScreen() {
             >
               <RotateCcw className="w-4 h-4" />
               {N.t('os_rejouer')}
-            </button>
-            <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-              {N.t('os_rejouer_sub')}
-            </p>
+            </button>}
+            {RECOMMENCER_OUVERT && (
+              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+                {N.t('os_rejouer_sub')}
+              </p>
+            )}
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
