@@ -24,16 +24,13 @@ export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 /**
  * Le raccourci RECOMMENCER, sur l'ecran d'arrivee du one shot.
  *
- * Ouvert au canal de test seulement, le temps de le regarder tourner. Le
- * drapeau vit ici plutot que dans game/reprise : ce fichier-la ne contient que
- * la regle, sans un seul import, pour que le harnais puisse le charger seul et
- * la verifier sans lancer une course. Y glisser une dependance au canal
- * casserait cela.
- *
- * Le jour ou on l'ouvre a tout le monde, une ligne suffit : `= true`. Le
- * bouton et sa phrase sont deja ecrits et verifies.
+ * Ouvert a tout le monde : regarde tourner sur le canal de test, puis ouvert
+ * a la version publique. Le drapeau vit ici plutot que dans game/reprise :
+ * ce fichier-la ne contient que la regle, sans un seul import, pour que le
+ * harnais puisse le charger seul et la verifier sans lancer une course. Y
+ * glisser une dependance au canal casserait cela.
  */
-export const RECOMMENCER_OUVERT = EST_TEST;
+export const RECOMMENCER_OUVERT = true;
 
 /**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
