@@ -86,6 +86,55 @@ function json(data, status = 200) {
   }));
 }
 
+// Regles par route : le nombre d'appels qu'une meme IP peut faire dans la
+// fenetre, avant d'etre mise en attente. `/test/entrer` est la plus stricte
+// des trois : c'est la seule qui ressemble a une authentification, et donc
+// la seule qu'une force brute chercherait a marteler.
+const RATE_LIMITS = {
+  '/test/entrer': { max: 8, fenetreMs: 60_000 },
+  '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  default: { max: 30, fenetreMs: 60_000 },
+};
+
+const limitesReady = new WeakSet();
+async function ensureRateLimitTable(db) {
+  if (limitesReady.has(db)) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS rate_limits (
+    cle TEXT PRIMARY KEY,
+    fenetre_debut INTEGER NOT NULL,
+    compte INTEGER NOT NULL
+  )`).run();
+  limitesReady.add(db);
+}
+
+/**
+ * Cette IP a-t-elle encore droit a un appel sur cette route, maintenant ?
+ *
+ * Fenetre fixe plutot que glissante : moins precis pres des bords, mais une
+ * seule ligne par cle et une seule ecriture par appel — ce que la fenetre
+ * glissante ne tient pas sans une table d'evenements qui grossit sans fin.
+ */
+async function sousLimite(db, ip, route) {
+  await ensureRateLimitTable(db);
+  const regle = RATE_LIMITS[route] || RATE_LIMITS.default;
+  const cle = `${route}:${ip}`;
+  const now = Date.now();
+  const row = await db.prepare(
+    `SELECT fenetre_debut, compte FROM rate_limits WHERE cle = ?`
+  ).bind(cle).first();
+
+  if (!row || now - row.fenetre_debut >= regle.fenetreMs) {
+    await db.prepare(
+      `INSERT INTO rate_limits (cle, fenetre_debut, compte) VALUES (?, ?, 1)
+       ON CONFLICT(cle) DO UPDATE SET fenetre_debut = excluded.fenetre_debut, compte = 1`
+    ).bind(cle, now).run();
+    return true;
+  }
+  if (row.compte >= regle.max) return false;
+  await db.prepare(`UPDATE rate_limits SET compte = compte + 1 WHERE cle = ?`).bind(cle).run();
+  return true;
+}
+
 function cleanName(raw) {
   const s = String(raw || '').trim().slice(0, MAX_NAME_LEN);
   return s.replace(/[<>]/g, '') || 'Anonyme';
@@ -404,6 +453,32 @@ export default {
     // pointe deja sur la bonne base : une seule ligne decide, plutot que
     // quatre-vingt-treize occasions d'en oublier une.
     if (canal.test && env.DB_TEST) env = { ...env, DB: env.DB_TEST };
+
+    // --------------------------------------------------------- anti-abus
+    //
+    // Toute ecriture passe par une IP, et une IP qui insiste plus que de
+    // raison sur la meme route n'a aucune raison legitime de le faire : ni
+    // un joueur qui pose son chrono, ni un navigateur qui tente un code
+    // d'acces. On la ralentit avant qu'elle n'atteigne la route elle-meme.
+    //
+    // Un compteur par (route, IP), remis a zero a l'expiration de sa
+    // fenetre : pas de nouvelle brique d'infrastructure, la meme base D1 qui
+    // tient deja les scores tient ce compteur. Une protection au niveau du
+    // reseau (regle de rate-limiting Cloudflare, DDoS) reste la premiere
+    // ligne de defense contre un deluge massif ; celle-ci vise l'abus a
+    // l'echelle d'un joueur ou d'un script isole, pas d'un botnet.
+    //
+    // Le canal de test en est exempte : qui s'y trouve a deja presente un
+    // code individuel et revocable, ce que l'IP n'ajoute rien a verifier —
+    // et c'est aussi le canal que les harnais de simulation martelent
+    // volontairement pour rejouer un cycle de championnat ou un relais en
+    // quelques secondes.
+    if (request.method === 'POST' && !canal.test) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'inconnue';
+      if (!(await sousLimite(env.DB, ip, url.pathname))) {
+        return json({ error: 'trop de tentatives, reessayez dans une minute' }, 429);
+      }
+    }
 
     // ------------------------------------------------------ acces au test
     if (url.pathname.startsWith('/test/')) {
