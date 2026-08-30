@@ -1282,6 +1282,111 @@ export default {
       });
     }
 
+    // Le tableau de bord complet, reserve a l'administration.
+    //
+    // /stats reste public et sobre : c'est celui que le jeu affiche a
+    // n'importe quel joueur qui tape ?stats dans l'URL. Celui-ci va bien plus
+    // loin — parties jouees par epreuve, par mode, par niveau, relances,
+    // fidelite des visiteurs, duels, relais, championnats — et n'a donc rien
+    // a faire sans la cle d'administration, comme le reste de /test/admin/*.
+    //
+    // Une requete qui echoue (table pas encore migree sur une base neuve) ne
+    // fait jamais tomber tout le tableau : elle rend juste sa case a zero.
+    if (url.pathname === '/stats/admin' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const db = env.DB;
+      await Promise.all([
+        ensureVisitTable(db), ensureChallengeTables(db), ensureScoreGhost(db),
+        ensureRaceTable(db), ensurePlayerTables(db), ensureDuelTables(db),
+        ensureRelayTables(db), ensureChampTables(db),
+      ]);
+
+      const q1 = async (sql, ...args) => {
+        try { return await db.prepare(sql).bind(...args).first(); }
+        catch { return null; }
+      };
+      const qN = async (sql, ...args) => {
+        try { const { results } = await db.prepare(sql).bind(...args).all(); return results || []; }
+        catch { return []; }
+      };
+
+      const [
+        visitesTotal, visitesParJour, fidelite,
+        partiesTotal, partiesParJour, partiesParEpreuve, partiesParMode, partiesParNiveau, rejoueurs,
+        defisTotal, defisParJour, tentatives,
+        duelsTotal, duelsIssues, duelsTop,
+        relaisEquipes, relaisCourses,
+        champEditions, champCourses,
+        joueursTotal, joueursInsta,
+        scoresTotal,
+      ] = await Promise.all([
+        q1(`SELECT COALESCE(SUM(hits),0) AS hits, COUNT(DISTINCT device_id) AS visiteurs FROM visits`),
+        qN(`SELECT day, COUNT(*) AS visiteurs, SUM(hits) AS hits FROM visits GROUP BY day ORDER BY day DESC LIMIT 30`),
+        qN(`SELECT tranche, COUNT(*) AS appareils FROM (
+              SELECT CASE WHEN total = 1 THEN '1'
+                          WHEN total BETWEEN 2 AND 3 THEN '2-3'
+                          WHEN total BETWEEN 4 AND 10 THEN '4-10'
+                          ELSE '10+' END AS tranche
+                FROM (SELECT device_id, SUM(hits) AS total FROM visits GROUP BY device_id)
+            ) GROUP BY tranche`),
+        q1(`SELECT COUNT(*) AS n, COUNT(DISTINCT device_id) AS appareils, COUNT(DISTINCT name_key) AS joueurs FROM races`),
+        qN(`SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS parties FROM races GROUP BY day ORDER BY day DESC LIMIT 30`),
+        qN(`SELECT race_key, COUNT(*) AS parties FROM races GROUP BY race_key`),
+        qN(`SELECT mode, COUNT(*) AS parties FROM races GROUP BY mode`),
+        qN(`SELECT level_idx, COUNT(*) AS parties FROM races GROUP BY level_idx ORDER BY level_idx`),
+        qN(`SELECT name, COUNT(*) AS parties FROM races GROUP BY name_key ORDER BY parties DESC LIMIT 10`),
+        q1(`SELECT COUNT(*) AS n FROM challenges`),
+        qN(`SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS crees FROM challenges GROUP BY day ORDER BY day DESC LIMIT 30`),
+        q1(`SELECT COUNT(*) AS n FROM challenge_attempts`),
+        q1(`SELECT COUNT(*) AS n FROM duel_results`),
+        qN(`SELECT outcome, COUNT(*) AS n FROM duel_results GROUP BY outcome`),
+        qN(`SELECT name, launched, wins, losses, draws FROM duel_players ORDER BY launched DESC LIMIT 10`),
+        q1(`SELECT COUNT(*) AS n FROM relay_teams`),
+        q1(`SELECT COUNT(*) AS n FROM relay_scores`),
+        q1(`SELECT COUNT(*) AS n FROM champ_editions`),
+        q1(`SELECT COUNT(*) AS n FROM champ_resultats`),
+        q1(`SELECT COUNT(*) AS n FROM players`),
+        q1(`SELECT COUNT(*) AS n FROM players WHERE insta IS NOT NULL`),
+        q1(`SELECT COUNT(*) AS lignes, COUNT(DISTINCT device_id) AS appareils, COUNT(DISTINCT lower(trim(name))) AS joueurs FROM scores`),
+      ]);
+
+      return json({
+        genere_le: Date.now(),
+        visites: {
+          total: visitesTotal?.hits || 0,
+          visiteurs: visitesTotal?.visiteurs || 0,
+          par_jour: visitesParJour,
+          fidelite,
+        },
+        parties: {
+          total: partiesTotal?.n || 0,
+          appareils: partiesTotal?.appareils || 0,
+          joueurs: partiesTotal?.joueurs || 0,
+          moyenne_par_appareil: partiesTotal?.appareils ? (partiesTotal.n / partiesTotal.appareils) : 0,
+          par_jour: partiesParJour,
+          par_epreuve: partiesParEpreuve,
+          par_mode: partiesParMode,
+          par_niveau: partiesParNiveau,
+          top_rejoueurs: rejoueurs,
+        },
+        defis: {
+          crees: defisTotal?.n || 0,
+          tentatives: tentatives?.n || 0,
+          taux_relance: defisTotal?.n ? (tentatives.n / defisTotal.n) : 0,
+          par_jour: defisParJour,
+        },
+        duels: {
+          total: duelsTotal?.n || 0,
+          issues: duelsIssues,
+          top_lanceurs: duelsTop,
+        },
+        relais: { equipes: relaisEquipes?.n || 0, courses: relaisCourses?.n || 0 },
+        championnats: { editions: champEditions?.n || 0, courses: champCourses?.n || 0 },
+        joueurs: { noms_reserves: joueursTotal?.n || 0, avec_insta: joueursInsta?.n || 0 },
+        scores: scoresTotal || {},
+      });
+    }
+
     // ------------------------------------------------------------- defis
     // Creation : l'auteur envoie sa course (chronos + traces) et recupere un
     // code court a transmettre. L'adversaire jouera exactement les memes

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="fr" translate="no">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+<meta name="google" content="notranslate" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Sprinter — Tableau de bord</title>
+<meta name="theme-color" content="#05070d" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Sprinter Admin" />
+<link rel="apple-touch-icon" href="../icons/icon-192.webp" />
+<link rel="icon" href="../icons/icon-48.webp" />
+<link rel="manifest" href="manifest.webmanifest" />
+<style>
+  :root{
+    --bg:#05070d; --panel:#ffffff0a; --panel-b:#ffffff1a; --sunk:#00000040;
+    --fg:#ffffff; --dim:#ffffff73; --dim2:#ffffff59; --accent:#f8cd4a;
+    --ok:#5ed08a; --warn:#ef6a6a; --mono: ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; overscroll-behavior:none;}
+  body{min-height:100dvh;}
+  a{color:inherit}
+  .wrap{max-width:76rem;margin:0 auto;padding:1.5rem 1.25rem 4rem;display:flex;flex-direction:column;gap:1.5rem;}
+  header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+  h1{font-size:1.7rem;font-weight:900;letter-spacing:-.02em;color:var(--accent);margin:0;}
+  .sub{font-size:.75rem;color:var(--dim);margin:.25rem 0 0;}
+  .pill{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+    padding:.3rem .6rem;border-radius:999px;border:1px solid var(--panel-b);color:var(--dim);}
+  .pill.live{color:var(--ok);border-color:#5ed08a44;}
+  .pill.stale{color:var(--warn);border-color:#ef6a6a44;}
+
+  .bar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;background:var(--panel);
+    border:1px solid var(--panel-b);border-radius:1rem;padding:.75rem;}
+  .bar input{background:var(--sunk);border:1px solid var(--panel-b);color:var(--fg);
+    border-radius:.6rem;padding:.5rem .7rem;font-size:.8rem;font-family:var(--mono);min-width:0;flex:1;}
+  .bar input#apikey{flex:1 1 12rem;}
+  .bar input#apibase{flex:2 1 16rem;}
+  button{cursor:pointer;font-family:var(--sans);font-weight:700;font-size:.72rem;
+    text-transform:uppercase;letter-spacing:.06em;border-radius:.6rem;padding:.55rem 1rem;
+    border:1px solid var(--panel-b);background:var(--sunk);color:var(--fg);transition:.15s;}
+  button:hover{background:#ffffff14;}
+  button.accent{background:var(--accent);color:#1a1200;border-color:var(--accent);}
+  button.accent:hover{filter:brightness(1.08);}
+  button.ghost{opacity:.7}
+  label.chk{display:flex;align-items:center;gap:.4rem;font-size:.68rem;color:var(--dim);
+    text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;}
+
+  #msg{font-size:.75rem;padding:.6rem .9rem;border-radius:.7rem;display:none;}
+  #msg.show{display:block}
+  #msg.err{background:#ef6a6a1a;color:#ff9a9a;border:1px solid #ef6a6a33;}
+  #msg.info{background:#f8cd4a14;color:var(--accent);border:1px solid #f8cd4a33;}
+
+  section{background:var(--panel);border:1px solid var(--panel-b);border-radius:1.1rem;
+    padding:1.1rem 1.1rem 1.3rem;}
+  section h2{display:flex;align-items:center;gap:.5rem;margin:0 0 1rem;font-size:.68rem;
+    font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);}
+  section h2 .n{color:var(--dim2);font-weight:600;letter-spacing:0;text-transform:none;font-size:.68rem;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));gap:.7rem;}
+  .kpi{background:var(--panel);border:1px solid var(--panel-b);border-radius:1rem;padding:.9rem 1rem;
+    display:flex;flex-direction:column;gap:.15rem;}
+  .kpi .lbl{font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);}
+  .kpi .val{font-family:var(--mono);font-weight:900;font-size:1.9rem;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .kpi .note{font-size:.62rem;color:var(--dim2);margin-top:.1rem;}
+
+  .grid2{display:grid;grid-template-columns:1fr;gap:1rem;}
+  @media(min-width:56rem){.grid2{grid-template-columns:1.3fr 1fr;}}
+  .grid3{display:grid;grid-template-columns:1fr;gap:1rem;}
+  @media(min-width:56rem){.grid3{grid-template-columns:repeat(3,1fr);}}
+
+  .daily{display:flex;gap:2px;height:7rem;}
+  .daily .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;
+    min-width:2px;position:relative;cursor:default;}
+  .daily .fill{width:100%;background:var(--accent);opacity:.55;border-radius:2px 2px 0 0;transition:opacity .1s;}
+  .daily .col:hover .fill{opacity:1}
+  .daily .col .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:.3rem;
+    background:#000;border:1px solid var(--panel-b);color:#fff;font-size:.6rem;padding:.25rem .45rem;
+    border-radius:.4rem;white-space:nowrap;display:none;z-index:5;font-family:var(--mono);}
+  .daily .col:hover .tip{display:block}
+  .dailylabels{display:flex;justify-content:space-between;font-size:.58rem;color:var(--dim2);
+    margin-top:.4rem;font-family:var(--mono);}
+
+  .rows{display:flex;flex-direction:column;gap:.5rem;}
+  .row{display:flex;align-items:center;gap:.6rem;}
+  .row .rl{width:5.5rem;flex-shrink:0;font-size:.7rem;font-weight:700;color:var(--dim);text-transform:capitalize;}
+  .row .rb{flex:1;height:.85rem;background:var(--sunk);border-radius:.4rem;overflow:hidden;}
+  .row .rb i{display:block;height:100%;background:var(--accent);border-radius:.4rem;}
+  .row .rv{width:3.4rem;flex-shrink:0;text-align:right;font-family:var(--mono);font-weight:800;font-size:.75rem;}
+
+  table{width:100%;border-collapse:collapse;font-size:.75rem;}
+  th{text-align:left;font-size:.6rem;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);
+    padding:.3rem .5rem;border-bottom:1px solid var(--panel-b);}
+  td{padding:.4rem .5rem;border-bottom:1px solid #ffffff0d;font-family:var(--mono);}
+  tr:last-child td{border-bottom:none}
+  td.name{font-family:var(--sans);font-weight:600;}
+  .rank{color:var(--dim2);width:1.6rem;display:inline-block;}
+
+  .empty{font-size:.72rem;color:var(--dim2);padding:.6rem 0;text-align:center;}
+  .foot{font-size:.65rem;color:var(--dim2);line-height:1.6;padding:.5rem .2rem 0;}
+  .skel{opacity:.35;filter:blur(1px);pointer-events:none;}
+  code{background:var(--sunk);padding:.1rem .35rem;border-radius:.3rem;font-size:.9em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>TABLEAU DE BORD</h1>
+      <p class="sub">Sprinter — activité de l'app, vue admin</p>
+    </div>
+    <span id="statusPill" class="pill">non connecté</span>
+  </header>
+
+  <div class="bar">
+    <input id="apibase" type="text" placeholder="URL du worker" autocomplete="off" spellcheck="false" />
+    <input id="apikey" type="password" placeholder="Clé d'administration (X-Sprinter-Admin)" autocomplete="off" spellcheck="false" />
+    <button class="accent" id="btnConnect">Se connecter</button>
+    <button class="ghost" id="btnRefresh" title="Rafraîchir maintenant">↻ Rafraîchir</button>
+    <label class="chk"><input type="checkbox" id="autoRefresh" /> auto 60 s</label>
+  </div>
+
+  <div id="msg"></div>
+
+  <div id="app"></div>
+
+  <p class="foot">
+    Cette page est publique mais aveugle sans la clé d'administration : le serveur refuse
+    toute donnée sans le bon en-tête <code>X-Sprinter-Admin</code>. La clé reste sur cet
+    appareil (stockage local du navigateur) et n'est jamais envoyée ailleurs qu'au worker.
+    Rien de nominatif n'est affiché : les appareils sont des identifiants anonymes, les
+    noms sont ceux, publics, choisis par les joueurs eux-mêmes au classement.
+  </p>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var LS_KEY = 'sprinter_admin_key';
+  var LS_BASE = 'sprinter_admin_base';
+  var LS_CACHE = 'sprinter_admin_cache';
+  var LS_AUTO = 'sprinter_admin_auto';
+  var DEFAULT_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+
+  var $ = function(id){ return document.getElementById(id); };
+  var apibase = $('apibase'), apikey = $('apikey'), app = $('app'), msg = $('msg'), pill = $('statusPill');
+  var timer = null;
+
+  apibase.value = localStorage.getItem(LS_BASE) || DEFAULT_BASE;
+  apikey.value = localStorage.getItem(LS_KEY) || '';
+  $('autoRefresh').checked = localStorage.getItem(LS_AUTO) === '1';
+
+  function showMsg(text, kind){
+    msg.textContent = text;
+    msg.className = 'show ' + (kind || 'info');
+  }
+  function hideMsg(){ msg.className = ''; }
+
+  function setStatus(kind, text){
+    pill.className = 'pill' + (kind ? ' ' + kind : '');
+    pill.textContent = text;
+  }
+
+  function fmt(n){
+    n = Number(n) || 0;
+    return n.toLocaleString('fr-FR');
+  }
+  function pct(n){
+    return (Number(n) || 0).toLocaleString('fr-FR', { style: 'percent', maximumFractionDigits: 1 });
+  }
+  function dayLabel(d){
+    if (!d) return '';
+    var p = d.split('-');
+    return p.length === 3 ? p[2] + '/' + p[1] : d;
+  }
+
+  var RACE_LABELS = { '100': '100 m', '200': '200 m', '400': '400 m' };
+  var MODE_LABELS = { campaign: 'Campagne', oneshot: 'One-shot' };
+  var ISSUE_LABELS = { challenger: 'Lanceur gagne', opponent: 'Relanceur gagne', draw: 'Nul' };
+  var FIDELITY_ORDER = ['1', '2-3', '4-10', '10+'];
+  var FIDELITY_LABELS = { '1': '1 visite', '2-3': '2 à 3 visites', '4-10': '4 à 10 visites', '10+': '10+ visites' };
+
+  function dailyChart(rows, key, labelKey){
+    labelKey = labelKey || 'day';
+    var data = (rows || []).slice().reverse();
+    if (!data.length) return '<p class="empty">Pas encore de données.</p>';
+    var max = Math.max.apply(null, data.map(function(d){ return Number(d[key]) || 0; })) || 1;
+    var cols = data.map(function(d){
+      var v = Number(d[key]) || 0;
+      var h = Math.max(3, Math.round((v / max) * 100));
+      return '<div class="col"><div class="tip">' + dayLabel(d[labelKey]) + ' — ' + fmt(v) + '</div>' +
+        '<div class="fill" style="height:' + h + '%"></div></div>';
+    }).join('');
+    return '<div class="daily">' + cols + '</div>' +
+      '<div class="dailylabels"><span>' + dayLabel(data[0][labelKey]) + '</span><span>' +
+      dayLabel(data[data.length - 1][labelKey]) + '</span></div>';
+  }
+
+  function barRows(items, opts){
+    opts = opts || {};
+    var labels = opts.labels || {};
+    var list = (items || []).slice();
+    if (opts.order) {
+      list.sort(function(a, b){ return opts.order.indexOf(a[opts.key]) - opts.order.indexOf(b[opts.key]); });
+    } else {
+      list.sort(function(a, b){ return (Number(b[opts.value]) || 0) - (Number(a[opts.value]) || 0); });
+    }
+    if (!list.length) return '<p class="empty">Pas encore de données.</p>';
+    var max = Math.max.apply(null, list.map(function(d){ return Number(d[opts.value]) || 0; })) || 1;
+    return '<div class="rows">' + list.map(function(d){
+      var v = Number(d[opts.value]) || 0;
+      var k = d[opts.key];
+      var lbl = labels[k] || k || '—';
+      var w = Math.max(2, Math.round((v / max) * 100));
+      return '<div class="row"><span class="rl">' + lbl + '</span>' +
+        '<span class="rb"><i style="width:' + w + '%"></i></span>' +
+        '<span class="rv">' + fmt(v) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function table(rows, cols){
+    if (!rows || !rows.length) return '<p class="empty">Pas encore de données.</p>';
+    var head = '<tr>' + cols.map(function(c){ return '<th>' + c.label + '</th>'; }).join('') + '</tr>';
+    var body = rows.map(function(r, i){
+      return '<tr>' + cols.map(function(c, ci){
+        var v = c.fmt ? c.fmt(r[c.key], r, i) : r[c.key];
+        return '<td class="' + (ci === 0 ? 'name' : '') + '">' + v + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    return '<table>' + head + body + '</table>';
+  }
+
+  function section(title, note, body){
+    return '<section><h2>' + title + (note ? ' <span class="n">' + note + '</span>' : '') + '</h2>' + body + '</section>';
+  }
+
+  function kpi(lbl, val, note){
+    return '<div class="kpi"><span class="lbl">' + lbl + '</span><span class="val">' + val + '</span>' +
+      (note ? '<span class="note">' + note + '</span>' : '') + '</div>';
+  }
+
+  function render(s){
+    var v = s.visites || {}, p = s.parties || {}, d = s.defis || {}, du = s.duels || {},
+        r = s.relais || {}, c = s.championnats || {}, j = s.joueurs || {}, sc = s.scores || {};
+
+    var revenants = (v.fidelite || []).filter(function(f){ return f.tranche !== '1'; })
+      .reduce(function(a, f){ return a + (Number(f.appareils) || 0); }, 0);
+    var totalAppareils = (v.fidelite || []).reduce(function(a, f){ return a + (Number(f.appareils) || 0); }, 0);
+    var tauxRetour = totalAppareils ? revenants / totalAppareils : 0;
+
+    var html = '';
+
+    html += '<div class="kpis">' +
+      kpi('Visiteurs', fmt(v.visiteurs), 'appareils distincts') +
+      kpi('Visites cumulées', fmt(v.total), 'passages, tous appareils') +
+      kpi('Parties jouées', fmt(p.total), 'toutes épreuves, tous modes') +
+      kpi('Taux de retour', pct(tauxRetour), 'appareils revenus plus d\'une fois') +
+      kpi('Défis créés', fmt(d.crees), fmt(d.tentatives) + ' relevés') +
+      kpi('Duels joués', fmt(du.total), 'défis et courses en direct') +
+      kpi('Joueurs enregistrés', fmt(j.noms_reserves), fmt(j.avec_insta) + ' avec Instagram') +
+      '</div>';
+
+    html += '<div class="grid2">';
+    html += section('Fréquentation — 30 derniers jours', null, dailyChart(v.par_jour, 'hits'));
+    html += section('Fidélité des visiteurs', totalAppareils + ' appareils', barRows(v.fidelite, {
+      key: 'tranche', value: 'appareils', labels: FIDELITY_LABELS, order: FIDELITY_ORDER,
+    }));
+    html += '</div>';
+
+    html += '<div class="grid2">';
+    html += section('Parties jouées — 30 derniers jours', null, dailyChart(p.par_jour, 'parties'));
+    html += section('Rejeu', null,
+      kpi('Parties / appareil', (Number(p.moyenne_par_appareil) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 }),
+          fmt(p.appareils) + ' appareils, ' + fmt(p.joueurs) + ' noms distincts')
+    );
+    html += '</div>';
+
+    html += '<div class="grid3">';
+    html += section('Par épreuve', null, barRows(p.par_epreuve, { key: 'race_key', value: 'parties', labels: RACE_LABELS }));
+    html += section('Par mode', null, barRows(p.par_mode, { key: 'mode', value: 'parties', labels: MODE_LABELS }));
+    html += section('Par niveau', null, barRows(p.par_niveau, {
+      key: 'level_idx', value: 'parties',
+      labels: { 0: 'Étape 1', 1: 'Étape 2', 2: 'Étape 3', 3: 'Étape 4', 4: 'Étape 5', 5: 'Étape 6' },
+    }));
+    html += '</div>';
+
+    html += '<div class="grid2">';
+    html += section('Joueurs les plus actifs', 'par nombre de parties', table(p.top_rejoueurs, [
+      { key: 'name', label: 'Joueur', fmt: function(v, r, i){ return '<span class="rank">' + (i + 1) + '.</span>' + (v || '—'); } },
+      { key: 'parties', label: 'Parties', fmt: fmt },
+    ]));
+    html += section('Défis — 30 derniers jours', 'taux de relance ' + pct(d.taux_relance), dailyChart(d.par_jour, 'crees'));
+    html += '</div>';
+
+    html += '<div class="grid2">';
+    html += section('Issues des duels', null, barRows(du.issues, { key: 'outcome', value: 'n', labels: ISSUE_LABELS }));
+    html += section('Lanceurs de défis les plus actifs', null, table(du.top_lanceurs, [
+      { key: 'name', label: 'Joueur', fmt: function(v, r, i){ return '<span class="rank">' + (i + 1) + '.</span>' + (v || '—'); } },
+      { key: 'launched', label: 'Lancés', fmt: fmt },
+      { key: 'wins', label: 'V', fmt: fmt },
+      { key: 'losses', label: 'D', fmt: fmt },
+    ]));
+    html += '</div>';
+
+    html += '<div class="kpis">' +
+      kpi('Équipes de relais', fmt(r.equipes)) +
+      kpi('Courses de relais', fmt(r.courses)) +
+      kpi('Éditions de championnat', fmt(c.editions)) +
+      kpi('Courses de championnat', fmt(c.courses)) +
+      kpi('Chronos au classement', fmt(sc.lignes), fmt(sc.appareils) + ' appareils') +
+      '</div>';
+
+    app.innerHTML = html;
+  }
+
+  function persistCache(data){
+    try { localStorage.setItem(LS_CACHE, JSON.stringify({ at: Date.now(), data: data })); } catch (e) {}
+  }
+  function loadCache(){
+    try {
+      var raw = localStorage.getItem(LS_CACHE);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function fetchStats(){
+    var base = apibase.value.trim().replace(/\/$/, '');
+    var key = apikey.value.trim();
+    if (!base) { showMsg('Indique l\'URL du worker.', 'err'); return; }
+    if (!key) { showMsg('Indique la clé d\'administration (ADMIN_CLE du worker).', 'err'); return; }
+
+    localStorage.setItem(LS_BASE, base);
+    localStorage.setItem(LS_KEY, key);
+
+    setStatus('', 'chargement…');
+    hideMsg();
+
+    fetch(base + '/stats/admin', { headers: { 'X-Sprinter-Admin': key } })
+      .then(function(res){
+        if (res.status === 403) throw { code: 403 };
+        if (!res.ok) throw { code: res.status };
+        return res.json();
+      })
+      .then(function(data){
+        persistCache(data);
+        render(data);
+        setStatus('live', 'à jour — ' + new Date(data.genere_le || Date.now()).toLocaleTimeString('fr-FR'));
+      })
+      .catch(function(err){
+        if (err && err.code === 403) {
+          setStatus('stale', 'clé refusée');
+          showMsg('Clé d\'administration refusée par le serveur. Vérifie ADMIN_CLE.', 'err');
+          return;
+        }
+        var cache = loadCache();
+        if (cache) {
+          render(cache.data);
+          setStatus('stale', 'hors ligne — ' + new Date(cache.at).toLocaleTimeString('fr-FR'));
+          showMsg('Connexion au worker impossible : dernières données connues affichées.', 'info');
+        } else {
+          setStatus('stale', 'indisponible');
+          showMsg('Connexion au worker impossible et aucune donnée en cache.', 'err');
+        }
+      });
+  }
+
+  $('btnConnect').addEventListener('click', fetchStats);
+  $('btnRefresh').addEventListener('click', fetchStats);
+  apikey.addEventListener('keydown', function(e){ if (e.key === 'Enter') fetchStats(); });
+
+  $('autoRefresh').addEventListener('change', function(){
+    localStorage.setItem(LS_AUTO, this.checked ? '1' : '0');
+    if (timer) { clearInterval(timer); timer = null; }
+    if (this.checked) timer = setInterval(fetchStats, 60000);
+  });
+
+  var cached = loadCache();
+  if (cached) {
+    render(cached.data);
+    setStatus('stale', 'en cache — ' + new Date(cached.at).toLocaleTimeString('fr-FR'));
+  }
+  if (apikey.value) fetchStats();
+  if ($('autoRefresh').checked) timer = setInterval(fetchStats, 60000);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
