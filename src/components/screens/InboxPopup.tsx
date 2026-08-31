@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Swords, Loader2 } from 'lucide-react';
 import { fetchInbox, fetchChallenge, type InboxChallenge } from '@/game/challenge';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
+import { surCourrier } from '@/game/boite';
 
 /**
  * Defi recu.
@@ -29,9 +30,18 @@ export function InboxPopup() {
   // et le refermer sans jamais voir qu'on l'avait defie.
   const annule = useRef(false);
   useEffect(() => { annule.current = false; return () => { annule.current = true; }; }, []);
-  useSondageAuRepos(() => {
+  const interroger = useRef(() => {});
+  interroger.current = () => {
     fetchInbox().then(list => { if (!annule.current) setDefis(list); });
-  }, 20000);
+  };
+  useSondageAuRepos(() => interroger.current(), 20000);
+
+  // Et sans attendre, quand la boite sonne : c'est elle qui fait la difference
+  // entre « on se defie » et « il ne se passe rien pendant vingt secondes ».
+  // Le sondage reste derriere, pour les moments ou la liaison est tombee.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'defi') interroger.current();
+  }), []);
 
   const enAttente = defis.filter(d => !vu.current.has(d.id));
   if (!estAuCalme() || enAttente.length === 0) return null;

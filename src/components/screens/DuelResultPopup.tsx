@@ -7,6 +7,7 @@ import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
+import { surCourrier } from '@/game/boite';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
@@ -39,11 +40,14 @@ export function DuelResultPopup() {
   // le plus souvent devant son ecran a l'attendre. Quarante-cinq secondes de
   // minuterie faisaient mettre plus d'une minute a une nouvelle qu'il fallait
   // annoncer tout de suite — mesure a soixante-cinq secondes.
-  const relever = useRef(() => {});
-  relever.current = () => {
+  const relever = useRef((tout_de_suite?: boolean) => {});
+  relever.current = (tout_de_suite?: boolean) => {
     if (!DUELS_OUVERTS || !estAuCalme()) return;
     const t = Date.now();
-    if (t - dernier.current < 4000) return;      // pas de rafale
+    // Le garde-fou anti-rafale ne s'applique pas a un signal de la boite : il
+    // protege d'un sondage qui s'emballe, pas d'une nouvelle qui vient
+    // d'arriver et qu'on attend justement.
+    if (!tout_de_suite && t - dernier.current < 4000) return;
     dernier.current = t;
     fetchMesDuels().then(list => {
       if (annule.current || !list.length) return;
@@ -62,6 +66,11 @@ export function DuelResultPopup() {
   }, []);
 
   useSondageAuRepos(() => relever.current(), 10000);
+  // La boite sonne : le resultat d'un duel, ou le mot du vainqueur qui arrive
+  // apres coup. On va le chercher tout de suite plutot qu'au prochain palier.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'duel' || quoi === 'mot') relever.current(true);
+  }), []);
   // Le changement d'etat reste un reveil a lui seul : on sort d'une course,
   // et le resultat peut attendre depuis qu'on y est entre.
   useEffect(() => { relever.current(); }, [state]);
