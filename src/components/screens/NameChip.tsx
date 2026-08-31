@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { User, Check, Loader2, KeyRound, X, Instagram, Unlink } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, savedCode, lierInstagram, instagramDe, lienInstagram } from '@/game/identity';
+import { nettoyerInsta } from '@/game/insta';
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -51,13 +52,21 @@ export function NameChip() {
    * Delier, c'est envoyer un pseudo vide : le serveur en fait un NULL, et le
    * profil disparait du TOP 500. Rien d'autre ne change — ni le nom, ni le
    * code de recuperation, ni les chronos.
+   *
+   * Avant d'envoyer, on nettoie : @pseudo, pseudo nu ou lien du profil colle
+   * designent le meme compte, et c'est presque toujours avec l'arobase que le
+   * pseudo est sous la main. On repose dans le champ ce qui sera enregistre,
+   * pour que le joueur voie ce qu'il lie.
    */
   const basculerInsta = async () => {
     const delier = !!lie;
     const v = delier ? '' : insta.trim();
     if (!delier && v.length < 1) return;
+    const propre = delier ? '' : nettoyerInsta(v);
+    if (propre === null || (!delier && propre === '')) { setInstaEtat('bad'); return; }
+    if (!delier && propre !== v) setInsta(propre);
     setInstaEtat('envoi');
-    const r = await lierInstagram(v);
+    const r = await lierInstagram(propre);
     if (r.etat === 'ok') {
       setLie(r.insta || '');
       setInsta(r.insta || '');
@@ -173,7 +182,10 @@ export function NameChip() {
                     <span className="flex items-center px-2 rounded-l-xl bg-black/35 border border-r-0 border-white/10 text-muted-foreground text-sm">@</span>
                     <input
                       value={insta}
-                      onChange={e => { setInsta(e.target.value); setInstaEtat('repos'); }}
+                      /* L'arobase est deja dessinee a gauche du champ : celle
+                         que le joueur tape ou colle ferait doublon, on la
+                         retire a la volee plutot que de la lui reprocher. */
+                      onChange={e => { setInsta(e.target.value.replace(/^\s*@+/, '')); setInstaEtat('repos'); }}
                       onKeyDown={e => { if (e.key === 'Enter') basculerInsta(); }}
                       placeholder={N.t('insta_ph')}
                       maxLength={40}
