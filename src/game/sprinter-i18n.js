@@ -132,6 +132,10 @@
     duel_rules_why:  ['lancer un défi, c’est montrer son chrono le premier',
                       'sending a challenge means showing your time first'],
     duel_counts:     ['{l} lancés · {r} relevés', '{l} sent · {r} answered'],
+    // Le selecteur d'epreuve du classement des duels. « SUR » et pas
+    // « CHOISIS » : l'epreuve est deja posee — celle qu'on vient de courir, ou
+    // le 100 m — et la ligne dit sur quoi part le duel, elle ne reclame rien.
+    duel_sur:        ['LE DUEL SE COURT SUR', 'THE DUEL IS RUN ON'],
     // identite du joueur, sur l'accueil
     name_set:        ['CHOISIS TON NOM', 'PICK YOUR NAME'],
     name_title:      ['TON NOM', 'YOUR NAME'],

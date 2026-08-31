@@ -8,6 +8,9 @@ import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+/** Les trois epreuves, dans l'ordre d'un programme d'athletisme. */
+const RACE_KEYS = ['100', '200', '400'];
+
 /**
  * Le reglage systeme « reduire les animations ».
  *
@@ -59,13 +62,19 @@ function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
 }
 
 /**
- * Le classement des duels, et — depuis le 5 septembre — l'endroit d'ou l'on
- * repart au combat.
+ * Le classement des duels, et l'endroit d'ou l'on repart au combat.
  *
- * `epreuves` sont celles qu'on vient de courir. Les recevoir plutot que les
- * choisir ici est ce qui donne son sens au bouton : defier quelqu'un sur un
- * 400 m parce qu'on vient d'en faire un a l'instant. Sans elles, le classement
- * reste ce qu'il etait, une page qu'on lit.
+ * On y prend quelqu'un en duel comme au TOP 500 : une epreuve en haut, une
+ * epee sur chaque ligne. C'est la meme mecanique parce que c'est le meme
+ * geste, et la difference entre les deux ecrans n'a jamais ete la — le TOP 500
+ * classe la vitesse, celui-ci l'engagement.
+ *
+ * `epreuves` sont celles qu'on vient de courir, quand on arrive d'une course.
+ * Elles ne commandent plus le bouton, elles le PREREGLENT : sortir d'un 400 m
+ * et defier quelqu'un dessus reste ce qu'on veut faire neuf fois sur dix, mais
+ * ne pas en sortir n'est plus une raison de ne rien pouvoir faire. C'etait le
+ * defaut de cet ecran : ouvert depuis l'accueil, il n'etait qu'une page qu'on
+ * lit, sans un seul moyen d'entrer dans un duel.
  */
 export function DuelRanking({ onClose, epreuves }: {
   onClose: () => void;
@@ -73,11 +82,25 @@ export function DuelRanking({ onClose, epreuves }: {
 }) {
   const [defiEnCours, setDefiEnCours] = useState<string | null>(null);
 
+  /**
+   * L'epreuve du duel a venir.
+   *
+   * On garde un tableau, et pas une seule cle : quand on arrive d'un one shot
+   * a plusieurs epreuves, le defi rejoue la meme combinaison — c'est ce qui
+   * existait, et le perdre ferait d'un 100 + 200 un simple 100. Toucher un
+   * bouton ramene a une epreuve unique, ce qui est la lecture normale d'un
+   * selecteur.
+   */
+  const [choix, setChoix] = useState<string[]>(() => {
+    const e = (epreuves || []).filter(k => RACE_KEYS.includes(k));
+    return e.length ? e : ['100'];
+  });
+
   const defier = async (nom: string) => {
-    if (!epreuves || !epreuves.length || defiEnCours) return;
+    if (!choix.length || defiEnCours) return;
     setDefiEnCours(nom);
     try {
-      const { cible } = await defierDepuisClassement(nom, epreuves);
+      const { cible } = await defierDepuisClassement(nom, choix);
       // Sans cible retrouvee, la course part quand meme et finira sur un code
       // a envoyer soi-meme. On le retient pour que l'ecran d'arrivee le dise.
       SprinterApp.G.defiSansCible = !cible ? nom : null;
@@ -87,7 +110,7 @@ export function DuelRanking({ onClose, epreuves }: {
     }
   };
 
-  const { N } = SprinterApp;
+  const { N, RACES } = SprinterApp;
   const [board, setBoard] = useState<DuelBoard | null>(null);
   const [chargement, setChargement] = useState(true);
   const moiKey = (getSavedName() || '').trim().toLowerCase();
@@ -144,6 +167,37 @@ export function DuelRanking({ onClose, epreuves }: {
             {N.t('duel_regle')}
           </p>
         )}
+
+        {/* Sur quoi se court le duel.
+            Meme selecteur qu'au TOP 500, au meme endroit de l'ecran : c'est le
+            meme choix, et deux presentations differentes du meme choix se
+            paient a chaque fois qu'on passe de l'un a l'autre.
+            Il est PREREGLE sur ce qu'on vient de courir quand on arrive d'une
+            course, et sur le 100 m sinon — jamais vide : un ecran ou il faut
+            choisir avant de pouvoir agir demande deux gestes la ou il en
+            fallait un. */}
+        <div className="w-full flex flex-col gap-1.5">
+          <span className="text-[9px] md:text-[10px] font-bold tracking-widest
+                           text-muted-foreground text-center">
+            {N.t('duel_sur')}
+          </span>
+          <div className="flex gap-2">
+            {RACE_KEYS.map(k => (
+              <button
+                key={k}
+                onClick={() => setChoix([k])}
+                aria-pressed={choix.includes(k)}
+                className={`flex-1 py-2 rounded-xl font-bold tracking-wider transition-all
+                            border-b-2 text-sm md:text-base
+                  ${choix.includes(k)
+                    ? 'bg-primary/20 text-primary border-primary'
+                    : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
+              >
+                {RACES[k].label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Ma position, mise en avant.
             Le rang general reste, mais ce n'est plus lui qu'on vient chercher :
@@ -263,11 +317,11 @@ export function DuelRanking({ onClose, epreuves }: {
                             </span>
                           </span>
                         </div>
-                        {/* Defier cette personne, sur l'epreuve qu'on vient de
-                            courir. Absent sur sa propre ligne, et absent quand
-                            on ouvre le classement sans sortir d'une course :
-                            il n'y aurait alors aucune epreuve a proposer. */}
-                        {!moi && !!epreuves?.length && (
+                        {/* Prendre cette personne en duel, sur l'epreuve
+                            choisie au-dessus. Sur toutes les lignes sauf la
+                            sienne, et depuis n'importe ou — l'accueil compris,
+                            ou le classement n'ouvrait sur rien. */}
+                        {!moi && (
                           <button
                             onClick={() => defier(r.name)}
                             disabled={!!defiEnCours}
