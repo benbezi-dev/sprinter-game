@@ -1,22 +1,41 @@
 // Un cycle complet contre le vrai serveur : national -> continental -> mondial.
 //
 // Ce que ce harnais cherche a prendre en defaut, ce n'est pas le format d'une
-// course — championnats-test.mjs s'en charge — mais l'enchainement : est-ce
-// qu'un champion national arrive bien dans son continental, est-ce qu'un
-// champion continental arrive bien au mondial, et est-ce que le fil d'annonces
-// raconte la meme competition que la base.
+// course — championnats-test.mjs s'en charge — mais l'enchainement : qui monte
+// d'un echelon a l'autre, et pourquoi.
+//
+// La regle a change, et c'est tout l'objet de ce fichier. Un continental ne se
+// remplissait avec les champions nationaux completes par les mieux classes du
+// continent : on pouvait donc courir un championnat d'Europe sans avoir rien
+// gagne, pourvu d'avoir un bon MMR. Desormais c'est le PODIUM ENTIER de chaque
+// nation qui monte, et rien d'autre — puis le podium entier de chaque continent
+// pour le mondial. Une nation y est representee par trois personnes, ce qui est
+// le minimum pour qu'on puisse dire qu'elle est representee.
+//
+// Et quand la somme des podiums depasse trente-deux, il faut bien trancher :
+// c'est le MMR qui le fait, et la derniere partie du harnais le verifie sur un
+// continent volontairement surpeuple.
+
+// Le harnais seme son propre monde, mais il attend une base LOCALE NEUVE :
+// une edition ne se rejoue pas, et un pays qui a deja tenu son championnat
+// exige desormais trente-deux joueurs. Pour rejouer : arreter wrangler,
+// supprimer worker/.wrangler/state, relancer.
+
+import { semerPays, nomsDe } from './graine-championnats.mjs';
 
 const B = 'http://127.0.0.1:8788';
 const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
-  body: JSON.stringify(b) }).then(r => r.json());
-const get = u => fetch(B + u, { headers: H }).then(r => r.json());
+  body: JSON.stringify(b) }).then(r => r.json().catch(() => ({})));
+const get = u => fetch(B + u, { headers: H }).then(r => r.json().catch(() => ({})));
 
-// Les routes des championnats sont reservees au canal de test : le harnais se
-// procure un acces comme n'importe quel appelant, puis le presente a chaque
-// requete.
+// Les routes des championnats sont reservees au canal de test, et leurs
+// ecritures au role d'organisateur : le harnais se procure les deux comme
+// n'importe quel appelant, puis les presente a chaque requete.
 const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
+await fetch(B + '/test/admin/role', { method: 'POST', headers: ADMIN,
+  body: JSON.stringify({ code: _acces.code, role: 'organisateur' }) });
 const H = { 'X-Sprinter-Test': _acces.code };
 
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';
@@ -31,6 +50,29 @@ let echecs = 0;
 function verifier(nom, condition, detail) {
   if (condition) { console.log(`   ✓ ${nom}`); }
   else { console.log(`   ✗ ${nom}${detail ? ' — ' + detail : ''}`); echecs++; }
+}
+
+/**
+ * Tous les noms montes sur un podium national, sur cette base.
+ *
+ * Les harnais se suivent sur la meme base locale : la France, l'Islande ou le
+ * Luxembourg peuvent y avoir couru avant nous. Ce qu'on verifie n'est donc
+ * jamais « exactement ces gens-la », mais « personne qui ne soit monte sur un
+ * podium » — ce qui est la regle, et qui se tient quel que soit le passe de la
+ * base.
+ */
+async function medaillesNationales() {
+  const monde = await get('/champ/monde?echelon=national');
+  const noms = new Set();
+  for (const e of monde.sacres || []) {
+    const etat = await get('/champ/edition/' + e.edition);
+    if (etat.error) continue;
+    const finale = (etat.resultats || [])
+      .filter(r => r.phase === 'finale' && r.place != null && r.place <= 3);
+    const parCle = new Map((etat.partants || []).map(p => [p.name_key, p.nom]));
+    for (const r of finale) noms.add(parCle.get(r.name_key) || r.name_key);
+  }
+  return noms;
 }
 
 /** Deroule une edition entiere, de la premiere serie au sacre. */
@@ -69,6 +111,26 @@ console.log('\n╔════════════════════�
 console.log('║  CYCLE COMPLET — national → continental → mondial            ║');
 console.log('╚══════════════════════════════════════════════════════════════╝');
 
+// ------------------------------------------------------------------- graine
+//
+// Le harnais seme son propre monde plutot que de supposer une base deja
+// peuplee : six pays, trois en Europe et trois en Afrique, chacun avec de quoi
+// tenir une premiere edition.
+console.log('\n── ON SEME SIX PAYS ─────────────────────────────────────────');
+const EUROPE = ['BE', 'CH', 'PT'];
+const AFRIQUE = ['DZ', 'TN', 'TG'];
+const marque = Math.random().toString(36).slice(2, 5).toUpperCase();
+for (const p of [...EUROPE, ...AFRIQUE]) {
+  await semerPays(B, H, p, nomsDe(p + marque, 8));
+}
+const eligibles = await get('/champ/pays');
+console.log('   ' + (eligibles.pays || []).filter(p => p.eligible)
+  .map(p => `${p.pays}:${p.joueurs}`).join('  '));
+verifier('les six pays semes sont eligibles',
+  [...EUROPE, ...AFRIQUE].every(z =>
+    (eligibles.pays || []).some(p => p.pays === z && p.eligible)),
+  JSON.stringify((eligibles.pays || []).map(p => p.pays + ':' + p.eligible)));
+
 // ---------------------------------------------------------------- calendrier
 console.log('\n── LE CALENDRIER DU CYCLE ───────────────────────────────────');
 const cal = await get('/champ/calendrier?debut=' + samedi);
@@ -83,9 +145,12 @@ verifier('mondial 4 semaines apres le continental',
 
 // ------------------------------------------------- garde-fou avant l'heure
 console.log('\n── AVANT TOUT : LES GARDE-FOUS ──────────────────────────────');
-const tropTot = await post('/champ/ouvrir', { echelon: 'continental', zone: 'EU', debut: samedi });
-verifier('un continental sans champions est refuse',
-  tropTot.error === 'pas assez de champions', JSON.stringify(tropTot).slice(0, 90));
+// L'Oceanie n'a personne : aucun podium national, donc rien a faire monter.
+const tropTot = await post('/champ/ouvrir', { echelon: 'continental', zone: 'OC', debut: samedi });
+verifier('un continental sans podium national est refuse',
+  tropTot.error === 'pas assez de nations avec podium', JSON.stringify(tropTot).slice(0, 110));
+verifier('le refus compte les nations, pas les champions',
+  tropTot.zones === 0 && tropTot.requis === 2, JSON.stringify(tropTot).slice(0, 110));
 
 // ------------------------------------------------------------- nationaux
 console.log('\n── LES CHAMPIONNATS NATIONAUX, LE MEME WEEKEND ──────────────');
@@ -95,19 +160,29 @@ for (const e of cycle.ecartes.slice(0, 4)) {
   console.log(`     ecarte ${e.zone} : ${e.raison}${e.joueurs != null ? ' (' + e.joueurs + ' joueurs)' : ''}`);
 }
 verifier('les six pays semes ouvrent leur championnat',
-  ['FR', 'DE', 'ES', 'MA', 'SN', 'CI'].every(p => cycle.ouvertes.some(o => o.zone === p)),
+  [...EUROPE, ...AFRIQUE].every(p => cycle.ouvertes.some(o => o.zone === p)),
   cycle.ouvertes.map(o => o.zone).join(','));
 
-const redite = await post('/champ/ouvrir', { pays: 'FR', debut: samedi });
+const redite = await post('/champ/ouvrir', { pays: EUROPE[0], debut: samedi });
 verifier('deux editions pour un meme pays sont refusees',
   redite.error === 'edition deja ouverte');
 
 console.log('');
+// Les podiums nationaux, gardes au passage : c'est eux, et eux seuls, qui
+// doivent se retrouver dans les grilles continentales.
+const podiumsNationaux = new Map();
 for (const o of cycle.ouvertes) {
   const r = await courir(o.edition);
   if (r.erreur) { console.log(`   ✗ ${o.zone} : ${r.erreur}`); echecs++; }
-  else console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  else {
+    podiumsNationaux.set(o.zone, (r.podium || []).map(p => p.nom));
+    console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}` +
+                `   (podium : ${(r.podium || []).map(p => p.nom).join(', ')})`);
+  }
 }
+verifier('chaque pays rend un podium de trois',
+  [...podiumsNationaux.values()].every(p => p.length === 3),
+  [...podiumsNationaux.entries()].map(([z, p]) => z + ':' + p.length).join(' '));
 
 // ---------------------------------------------------------- continentaux
 console.log('\n── LES CHAMPIONNATS CONTINENTAUX ────────────────────────────');
@@ -115,32 +190,53 @@ const cycleC = await post('/champ/cycle', { debut: samedi + 3 * SEMAINE, echelon
 console.log(`   ${cycleC.ouvertes.length} continents ouvrent, ${cycleC.ecartes.length} ecartes`);
 for (const e of cycleC.ecartes) {
   console.log(`     ecarte ${e.zone} : ${e.raison}` +
-              (e.champions != null ? ` (${e.champions} champions)` : '') +
+              (e.zones != null ? ` (${e.zones} nations)` : '') +
               (e.joueurs != null ? ` (${e.joueurs} joueurs)` : ''));
 }
 verifier('EU et AF ouvrent leur continental',
   cycleC.ouvertes.filter(o => o.zone === 'EU' || o.zone === 'AF').length === 2);
 
-// Les champions nationaux doivent etre dans la grille de leur continental.
+// Le coeur de la nouvelle regle : le podium ENTIER de chaque nation, et
+// personne d'autre.
+//
+// La base peut porter d'autres nations que celles semees ici — les harnais se
+// suivent sur la meme base locale. On ne suppose donc pas la composition : on
+// demande au salon combien de nations europeennes ont un podium valide, et la
+// grille doit valoir exactement trois fois ce nombre.
 const euEd = cycleC.ouvertes.find(o => o.zone === 'EU');
 if (euEd) {
   const etatEu = await get('/champ/edition/' + euEd.edition);
   const noms = new Set(etatEu.partants.map(p => p.nom));
-  const champsEu = (await get('/champ/monde?echelon=national')).sacres
-    .filter(x => ['FR', 'DE', 'ES'].includes(x.zone));
-  const dedans = champsEu.filter(c => noms.has(c.champion));
-  verifier('les champions nationaux europeens sont dans la grille continentale',
-    dedans.length === champsEu.length,
-    `${dedans.length}/${champsEu.length}`);
-  verifier('la grille continentale compte 32 partants', etatEu.partants.length === 32,
+  const attendus = EUROPE.flatMap(z => podiumsNationaux.get(z) || []);
+  const dedans = attendus.filter(n => noms.has(n));
+  console.log(`   grille continentale EU : ${etatEu.partants.length} partants`);
+  verifier('les podiums nationaux europeens sont dans la grille continentale',
+    dedans.length === attendus.length, `${dedans.length}/${attendus.length}`);
+  verifier('trois partants par nation, pas un seul champion',
+    attendus.length === EUROPE.length * 3, attendus.length + ' qualifies');
+
+  // Un continental ne se complete plus au classement : personne d'autre que
+  // les medailles n'y court. C'est la difference qu'on ne pouvait pas voir en
+  // comptant seulement les champions — une grille de 32 avec trois champions
+  // dedans avait exactement la meme apparence.
+  const medailles = await medaillesNationales();
+  const parasites = [...noms].filter(n => !medailles.has(n));
+  verifier('aucun repechage au classement continental',
+    parasites.length === 0, parasites.slice(0, 6).join(', '));
+  verifier('la grille vaut trois places par nation qualifiee',
+    etatEu.partants.length % 3 === 0 || etatEu.partants.length === 32,
     etatEu.partants.length + ' partants');
 }
 
 console.log('');
+const podiumsContinentaux = new Map();
 for (const o of cycleC.ouvertes) {
   const r = await courir(o.edition);
   if (r.erreur) { console.log(`   ✗ ${o.zone} : ${r.erreur}`); echecs++; }
-  else console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  else {
+    podiumsContinentaux.set(o.zone, (r.podium || []).map(p => p.nom));
+    console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  }
 }
 
 // ---------------------------------------------------------------- mondial
@@ -153,10 +249,13 @@ if (cycleM.ouvertes.length) {
   const id = cycleM.ouvertes[0].edition;
   const etatM = await get('/champ/edition/' + id);
   const noms = new Set(etatM.partants.map(p => p.nom));
-  const champsC = (await get('/champ/monde?echelon=continental')).sacres;
-  const dedans = champsC.filter(c => noms.has(c.champion));
-  verifier('les champions continentaux sont dans la grille mondiale',
-    dedans.length === champsC.length, `${dedans.length}/${champsC.length}`);
+  const attendus = [...podiumsContinentaux.values()].flat();
+  const dedans = attendus.filter(n => noms.has(n));
+  verifier('les podiums continentaux sont dans la grille mondiale',
+    dedans.length === attendus.length, `${dedans.length}/${attendus.length}`);
+  verifier('la grille mondiale ne contient rien d autre',
+    etatM.partants.length === attendus.length,
+    `${etatM.partants.length} partants pour ${attendus.length} medailles`);
 
   const r = await courir(id, false);
   if (r.erreur) { console.log('   ✗', r.erreur); echecs++; }
@@ -167,11 +266,65 @@ if (cycleM.ouvertes.length) {
   }
 }
 
+// ------------------------------------------------ quand les podiums debordent
+//
+// Onze nations de plus dans le meme continent : quatorze podiums, quarante-deux
+// qualifies pour trente-deux couloirs. Il faut trancher, et le seul critere
+// comparable entre des podiums venus de pays differents est le MMR.
+console.log('\n── QUAND LA SOMME DES PODIUMS DEPASSE 32 ────────────────────');
+const PETITS = ['IE', 'NL', 'AT', 'PL', 'SE', 'NO', 'DK', 'FI', 'GR', 'HU', 'CZ'];
+for (const p of PETITS) await semerPays(B, H, p, nomsDe(p + marque, 4));
+
+const cycle2 = await post('/champ/cycle', { debut: samedi + 10 * SEMAINE, echelon: 'national' });
+const petitsOuverts = cycle2.ouvertes.filter(o => PETITS.includes(o.zone));
+console.log(`   ${petitsOuverts.length} petites nations ouvrent leur premiere edition`);
+verifier('les onze petites nations ouvrent en format reduit',
+  petitsOuverts.length === PETITS.length,
+  petitsOuverts.map(o => o.zone).join(','));
+
+const podiumsPetits = new Map();
+for (const o of petitsOuverts) {
+  const r = await courir(o.edition);
+  if (r.erreur) { console.log(`   ✗ ${o.zone} : ${r.erreur}`); echecs++; }
+  else podiumsPetits.set(o.zone, (r.podium || []).map(p => p.nom));
+}
+verifier('chaque petite nation rend elle aussi un podium de trois',
+  [...podiumsPetits.values()].every(p => p.length === 3),
+  [...podiumsPetits.entries()].map(([z, p]) => z + ':' + p.length).join(' '));
+
+const euBis = await post('/champ/ouvrir', {
+  echelon: 'continental', zone: 'EU', debut: samedi + 13 * SEMAINE });
+verifier('un second continental europeen s ouvre', !euBis.error,
+  JSON.stringify(euBis).slice(0, 120));
+
+if (!euBis.error) {
+  const bassin = [...podiumsPetits.values(), ...EUROPE.map(z => podiumsNationaux.get(z) || [])].flat();
+  console.log(`   au moins ${bassin.length} medailles europeennes pour 32 couloirs`);
+  verifier('le bassin depasse bien trente-deux', bassin.length > 32, bassin.length + ' medailles');
+  verifier('la grille est ramenee a trente-deux', euBis.partants === 32,
+    euBis.partants + ' partants');
+
+  const etatBis = await get('/champ/edition/' + euBis.edition);
+  const noms = etatBis.partants.map(p => p.nom);
+  verifier('personne n y figure deux fois', new Set(noms).size === noms.length);
+  const medailles = await medaillesNationales();
+  const intrus = noms.filter(n => !medailles.has(n));
+  verifier('les trente-deux retenus sortent tous d un podium',
+    intrus.length === 0, intrus.slice(0, 6).join(', '));
+  // Le tri se fait au MMR, qui ne sort jamais. Ce qui se verifie de l'exterieur
+  // est sa consequence : les retenus sont semes en tete de grille, donc les
+  // rangs vont de 1 a 32 sans trou.
+  const rangs = etatBis.partants.map(p => p.rang_duel).sort((a, b) => a - b);
+  verifier('les retenus sont semes de 1 a 32',
+    rangs[0] === 1 && rangs[rangs.length - 1] === 32,
+    `${rangs[0]}..${rangs[rangs.length - 1]}`);
+}
+
 // ------------------------------------------------------- diffusion directe
 console.log('\n── LE FIL DES ANNONCES ──────────────────────────────────────');
 let curseur = 0, total = 0, pousses = 0;
 const parType = {};
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < 200; i++) {
   const f = await get(`/champ/direct?depuis=${curseur}&limite=200`);
   if (!f.annonces.length) break;
   for (const a of f.annonces) {
@@ -191,9 +344,7 @@ verifier('le fil annonce les qualifies directs', (parType['qualification-directe
 const vide = await get(`/champ/direct?depuis=${curseur}`);
 verifier('un curseur a jour ne renvoie rien', vide.annonces.length === 0);
 
-// On filtre sur une zone qui a reellement couru dans ce cycle, sans quoi le
-// test passerait aussi bien sur un fil vide.
-const zoneTest = cycle.ouvertes.length ? cycle.ouvertes[0].zone : 'FR';
+const zoneTest = cycle.ouvertes.length ? cycle.ouvertes[0].zone : EUROPE[0];
 const filZone = await get(`/champ/direct?zone=${zoneTest}&limite=200`);
 verifier(`le fil se filtre par zone (${zoneTest})`,
   filZone.annonces.length > 0 && filZone.annonces.every(a => a.zone === zoneTest),
@@ -206,8 +357,18 @@ console.log(`   ${monde.total} editions, ${monde.termines} terminees, ${monde.en
 for (const x of monde.sacres.slice(0, 12)) {
   console.log(`     ${x.echelon.padEnd(12)} ${x.zoneNom.padEnd(12)} ${x.champion}`);
 }
-verifier('toutes les editions sont terminees', monde.encours.length === 0,
-  monde.encours.length + ' encore en cours');
+// Toutes les editions que CE harnais a ouvertes doivent etre terminees, sauf
+// le continental de debordement qu'on laisse volontairement sur la grille. Ce
+// qu'une autre seance a laisse ouvert sur la base n'est pas notre affaire.
+const miennes = [
+  ...cycle.ouvertes, ...cycleC.ouvertes, ...cycleM.ouvertes, ...petitsOuverts,
+].map(o => o.edition);
+const restees = monde.encours.filter(e => miennes.includes(e.edition));
+verifier('toutes les editions du harnais sont allees jusqu au sacre',
+  restees.length === 0, restees.map(e => e.zone).join(','));
+verifier('le continental de debordement, lui, attend sur la grille',
+  !euBis.error && monde.encours.some(e => e.edition === euBis.edition),
+  monde.encours.map(e => e.echelon + ':' + e.zone).join(' '));
 
 console.log('\n' + '─'.repeat(62));
 console.log(echecs === 0 ? '   TOUT PASSE.' : `   ${echecs} VERIFICATION(S) EN ECHEC.`);

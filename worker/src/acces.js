@@ -56,6 +56,17 @@ export async function ensureAccesTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS acces_test_vivants
                   ON acces_test(revoque_le)`),
   ]);
+  // Colonne arrivee apres coup : les acces existants n'en ont pas, et un acces
+  // sans role est un acces ordinaire — c'est le defaut qu'on veut.
+  for (const sql of [
+    // Le role. NULL pour un invite ordinaire, 'organisateur' pour qui pilote
+    // les championnats du canal de test. Distinct de l'acces lui-meme : on
+    // retire un role sans fermer la porte, et on ferme la porte sans avoir a
+    // se souvenir du role.
+    `ALTER TABLE acces_test ADD COLUMN role TEXT`,
+  ]) {
+    try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
+  }
   pret.add(db);
 }
 
@@ -72,7 +83,7 @@ export async function verifierAcces(db, code, ctx) {
   await ensureAccesTables(db);
 
   const r = await db.prepare(
-    `SELECT code, nom, revoque_le FROM acces_test WHERE code = ?`
+    `SELECT code, nom, role, revoque_le FROM acces_test WHERE code = ?`
   ).bind(c).first();
   if (!r || r.revoque_le) return null;
 
@@ -83,7 +94,25 @@ export async function verifierAcces(db, code, ctx) {
   ).bind(Date.now(), c).run().catch(() => {});
   if (ctx && ctx.waitUntil) ctx.waitUntil(noter);
 
-  return { code: r.code, nom: r.nom };
+  return { code: r.code, nom: r.nom, role: r.role || null };
+}
+
+/**
+ * Donne — ou retire — le role d'organisateur.
+ *
+ * Retirer le role n'est pas revoquer l'acces : quelqu'un peut cesser de piloter
+ * les championnats tout en continuant a jouer sur le canal de test. Les deux
+ * gestes sont separes parce que les deux decisions le sont.
+ */
+export async function definirRole(db, code, role) {
+  await ensureAccesTables(db);
+  const c = String(code || '').trim().toUpperCase();
+  const r = role == null || role === '' ? null : String(role).trim().toLowerCase();
+  if (r !== null && r !== 'organisateur') return { erreur: 'role inconnu' };
+  const res = await db.prepare(
+    `UPDATE acces_test SET role = ? WHERE code = ?`).bind(r, c).run();
+  const touche = res && res.meta && res.meta.changes;
+  return touche ? { ok: true, code: c, role: r } : { erreur: 'code inconnu' };
 }
 
 /**
@@ -156,11 +185,11 @@ export async function rendreAcces(db, code) {
 export async function listerAcces(db) {
   await ensureAccesTables(db);
   const { results } = await db.prepare(
-    `SELECT code, nom, cree_le, revoque_le, dernier_vu, vus
+    `SELECT code, nom, role, cree_le, revoque_le, dernier_vu, vus
        FROM acces_test ORDER BY revoque_le IS NOT NULL, cree_le DESC`
   ).all();
   return (results || []).map(r => ({
-    code: r.code, nom: r.nom,
+    code: r.code, nom: r.nom, role: r.role || null,
     actif: !r.revoque_le,
     cree_le: r.cree_le, revoque_le: r.revoque_le,
     dernier_vu: r.dernier_vu, passages: r.vus,

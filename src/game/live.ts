@@ -69,6 +69,21 @@ export type ResultatDirect = {
   invite?: { id: string; nom: string; ms: number };
 };
 
+/** Un message du chat de la salle, tel qu'elle le rediffuse. */
+export type MessageChat = {
+  id: string; nom: string; texte: string; au: number;
+};
+
+/**
+ * Le contexte de championnat d'une salle.
+ *
+ * Il n'est lu qu'a l'ouverture de la salle et voyage dans l'URL : c'est ce qui
+ * fait que la salle sait ou ecrire son resultat sans qu'aucun client n'ait a
+ * le lui dire ensuite — et donc sans qu'un client puisse le changer en cours
+ * de course.
+ */
+export type ChampContexte = { edition: string; phase: string; course: number };
+
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
   onPresentation?: (p: Presentation) => void;
@@ -82,6 +97,8 @@ type Ecouteurs = {
   onFerme?: (raison: string) => void;
   /** Signalisation WebRTC arrivee de l'autre pair. */
   onSignal?: (type: 'sdp' | 'ice', charge: any) => void;
+  /** Un message du chat, le sien compris : la salle rediffuse a tout le monde. */
+  onChat?: (m: MessageChat) => void;
 };
 
 /** Demande un code de salle au serveur : meme alphabet que les defis. */
@@ -143,7 +160,7 @@ export class Salle {
    */
   ecouter(ec: Ecouteurs) { this.ec = ec; }
 
-  connecter(epreuves: string[], niveau: number, places = 2) {
+  connecter(epreuves: string[], niveau: number, places = 2, champ?: ChampContexte) {
     this.epreuves = epreuves.slice();
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
@@ -153,6 +170,14 @@ export class Salle {
       // ignore ce parametre, la piste etant deja formee.
       max: String(places),
     });
+    // Une course de championnat le dit a la salle, qui ecrira le resultat
+    // elle-meme. Comme la taille de piste, seul le premier arrive est ecoute :
+    // les suivants tombent sur une salle deja formee.
+    if (champ) {
+      q.set('champ_edition', champ.edition);
+      q.set('champ_phase', champ.phase);
+      q.set('champ_course', String(champ.course));
+    }
     // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
     // passe donc par la requete.
     //
@@ -235,6 +260,9 @@ export class Salle {
       case 'ice':
         this.ec.onSignal?.(m.t, m.charge);
         return;
+      case 'chat':
+        this.ec.onChat?.({ id: m.id, nom: m.nom, texte: m.texte, au: m.au });
+        return;
     }
   }
 
@@ -278,6 +306,17 @@ export class Salle {
   }
 
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
+  /**
+   * Dit quelque chose a la salle.
+   *
+   * Rien n'est affiche en local avant que la salle ne le rediffuse : ce qu'on
+   * lit est ce que les autres lisent, y compris quand la salle a laisse tomber
+   * le message parce qu'on parlait trop vite.
+   */
+  chat(texte: string) {
+    const t = String(texte || '').trim().slice(0, 200);
+    if (t) this.envoyer({ t: 'chat', texte: t });
+  }
   /** Passe une offre, une reponse ou un candidat ICE a l'autre pair. */
   signaler(type: 'sdp' | 'ice', charge: any) { this.envoyer({ t: type, charge }); }
   position(d: number) { this.envoyer({ t: 'pos', d }); }

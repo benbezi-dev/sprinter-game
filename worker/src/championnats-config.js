@@ -67,12 +67,27 @@ export const ECHELONS = {
 /**
  * Ce qu'on exige d'un pool de qualification avant d'ouvrir une edition.
  *
- * Un continental a besoin de champions nationaux pour exister : ouvrir un
- * continental sans aucun champion sacre produirait une competition qui porte
+ * Un continental a besoin de nations qui ont couru pour exister : ouvrir un
+ * continental sans aucun podium national produirait une competition qui porte
  * le nom d'un continent et n'en represente rien. On demande donc un minimum de
- * qualifies d'office, faute de quoi l'edition attend le cycle suivant.
+ * zones qualifiees, faute de quoi l'edition attend le cycle suivant.
+ *
+ * Le nom compte : il ne s'agit plus de champions qualifies d'office — un
+ * echelon superieur prend desormais le podium ENTIER de chaque zone en dessous,
+ * et ce qu'on compte ici sont des entites (des nations, des continents), pas
+ * des personnes.
  */
-export const MIN_DOFFICE = { continental: 2, mondial: 2 };
+export const MIN_ENTITES = { continental: 2, mondial: 2 };
+
+/**
+ * Le plancher absolu d'une premiere edition nationale.
+ *
+ * En dessous de quatre partants, la structure series -> repechage -> demies ->
+ * finale n'a plus rien a distribuer : une « serie » de deux serait la finale.
+ * Quatre est donc le nombre a partir duquel un format reduit raconte encore la
+ * meme histoire qu'un championnat a trente-deux.
+ */
+export const FORMAT_REDUIT_MIN = 4;
 
 /**
  * Combien de temps un titre se porte.

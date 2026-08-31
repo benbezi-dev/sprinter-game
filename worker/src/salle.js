@@ -22,6 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { enregistrerCourse } from './championnats.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
@@ -100,6 +101,32 @@ function net(nom) {
   return s || 'Anonyme';
 }
 
+// --- le chat de la salle ---------------------------------------------------
+// Deux cents caracteres : de quoi se dire quelque chose avant un depart, pas de
+// quoi ecrire dans la fenetre des autres. Cinq messages par dix secondes : de
+// quoi s'exclamer a l'arrivee sans pouvoir noyer l'ecran.
+//
+// Le depassement est silencieux plutot qu'une erreur : dire « tu parles trop »
+// a quelqu'un qui vient de doubler un message coute plus d'attention que de
+// laisser tomber le message.
+const CHAT_MAX = 200;
+const CHAT_PAR_FENETRE = 5;
+const CHAT_FENETRE_MS = 10000;
+
+/** Un texte de chat, debarrasse de ce qui n'est pas du texte. */
+function netChat(texte) {
+  return String(texte || '')
+    // Les caracteres de controle ne se voient pas et font n'importe quoi une
+    // fois rendus : un retour chariot casse une ligne, une sequence de
+    // controle fait n'importe quoi ailleurs, et rien de tout cela n'est du
+    // message. On les remplace par une espace plutot que de les supprimer :
+    // « bonjour\ntoi » doit rester deux mots.
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CHAT_MAX);
+}
+
 export class SalleDirecte {
   constructor(state, env) {
     this.state = state;
@@ -115,6 +142,7 @@ export class SalleDirecte {
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
     this.test = false;         // salle du canal de test : ecrit ailleurs
+    this.champ = null;         // { edition, phase, course } si c'est une course de championnat
     this.code = '';            // le code de la salle, pose au premier appel
     this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
@@ -231,10 +259,26 @@ export class SalleDirecte {
       // route ferait entrer ou sortir des gens d'une course deja formee.
       const m = parseInt(url.searchParams.get('max') || String(DEFAUT_JOUEURS), 10);
       this.max = Number.isFinite(m) ? Math.max(2, Math.min(PLAFOND_JOUEURS, m)) : DEFAUT_JOUEURS;
+
+      // Une course de championnat se declare a l'ouverture de la salle, comme
+      // les epreuves et la taille de piste : ce qui suit ne peut plus changer
+      // pendant qu'on court. La salle n'a rien a verifier de ce qu'on lui dit
+      // ici — c'est `enregistrerCourse` qui refusera une edition inconnue, une
+      // phase qui n'est pas celle en cours, et les coureurs qui ne figurent
+      // pas dans la grille.
+      const ed = (url.searchParams.get('champ_edition') || '').toUpperCase();
+      const ph = url.searchParams.get('champ_phase') || '';
+      const co = parseInt(url.searchParams.get('champ_course') || '', 10);
+      if (/^[A-Z0-9]{4,16}$/.test(ed) && ph && Number.isFinite(co) && co > 0) {
+        this.champ = { edition: ed, phase: ph, course: co };
+      }
     }
 
     this.joueurs.set(serveur, {
       id, nom, pret: false, d: 0, fin: null, parti: false,
+      // Le compteur du chat : quand la fenetre a commence, et combien de
+      // messages y sont deja passes.
+      chatDepuis: 0, chatDits: 0,
     });
     this.vivante();
 
@@ -345,6 +389,27 @@ export class SalleDirecte {
         return;
       }
 
+      // Le chat de la salle. Generique : il sert d'abord aux championnats,
+      // dont les courses se regardent a plusieurs et se commentent, mais rien
+      // ici ne parle de championnat — un duel en direct en profite pareil, et
+      // un ecran qui n'ecoute pas ce message ne voit tout simplement rien.
+      case 'chat': {
+        const texte = netChat(m.texte);
+        if (!texte) return;
+        const maintenant = Date.now();
+        if (maintenant - j.chatDepuis > CHAT_FENETRE_MS) {
+          j.chatDepuis = maintenant;
+          j.chatDits = 0;
+        }
+        // Au-dela du compte, on laisse tomber sans rien dire : refuser
+        // bruyamment coute plus d'attention a tout le monde que de perdre un
+        // message de trop.
+        if (++j.chatDits > CHAT_PAR_FENETRE) return;
+        this.vivante();
+        this.diffuser({ t: 'chat', id: j.id, nom: j.nom, texte, au: maintenant });
+        return;
+      }
+
       // Abandon volontaire, ou faux depart eliminatoire.
       case 'abandon': {
         if (j.fin !== null) return;
@@ -409,8 +474,50 @@ export class SalleDirecte {
     // supposerait d'inventer une regle qu'on n'a pas, et le premier reflexe
     // (vingt-huit duels croises pour huit partants) gonflerait le classement
     // sans rien mesurer de juste. Les series de championnat, elles, ont leur
-    // propre chemin d'enregistrement.
+    // propre chemin d'enregistrement : celui-ci.
     this.diffuser(message);
+
+    if (this.champ) {
+      const ecrire = this.ecrireChamp(tous);
+      if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+    }
+  }
+
+  /**
+   * Le resultat d'une serie de championnat, ecrit depuis la salle.
+   *
+   * C'est le seul endroit ou les chronos existent au complet et au meme
+   * instant. Les faire remonter par le client — huit clients qui envoient
+   * chacun le meme resultat — supposerait de decider lequel fait foi ; la salle,
+   * elle, les a arbitres et les tient tous.
+   *
+   * On n'attend pas cette ecriture pour annoncer le classement : si la base est
+   * indisponible, la course reste courue et affichee, et le filet de secours
+   * reste la saisie manuelle du salon.
+   *
+   * Aucune validation ici : `enregistrerCourse` refuse deja une edition
+   * terminee, une phase qui n'est pas celle en cours, et tout nom qui n'est pas
+   * dans la grille de cette course. Recopier ces regles dans la salle, c'est
+   * s'exposer a ce qu'un jour les deux ne disent plus la meme chose.
+   */
+  async ecrireChamp(tous) {
+    try {
+      const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+      if (!base) return;
+      await enregistrerCourse(base, {
+        edition: this.champ.edition,
+        phase: this.champ.phase,
+        course: this.champ.course,
+        // La cle d'un joueur est son nom en minuscules, comme partout ailleurs
+        // dans le jeu. Un abandon porte un chrono sentinelle dans la salle ;
+        // au championnat il n'a pas de chrono du tout, et c'est ce qui
+        // l'empeche d'etre repeche.
+        chronos: tous.map(x => ({
+          cle: String(x.nom || '').trim().toLowerCase(),
+          ms: x.fin >= ABANDON_MS ? null : x.fin,
+        })),
+      });
+    } catch (e) { /* le salon gardera la saisie manuelle pour rattraper */ }
   }
 
   async ecrire(hote, invite) {

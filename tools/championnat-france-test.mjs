@@ -1,15 +1,24 @@
 // Un championnat de France complet, contre le vrai serveur.
+//
+// C'est le cas nominal : trente-deux partants, quatre series de huit, deux
+// demies, une finale. Il vaut comme non-regression — un pays qui a de quoi
+// remplir la grille doit continuer de courir exactement ce format-la, sans
+// rien devoir au format reduit des petits pays.
+import { semerPays, nomsDe } from './graine-championnats.mjs';
+
 const B = 'http://127.0.0.1:8788';
 const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
   body: JSON.stringify(b) }).then(r => r.json());
 const get = u => fetch(B + u, { headers: H }).then(r => r.json());
 
-// Les routes des championnats sont reservees au canal de test : le harnais se
-// procure un acces comme n'importe quel appelant, puis le presente a chaque
-// requete.
+// Les routes des championnats sont reservees au canal de test, et leurs
+// ecritures au role d'organisateur : le harnais se procure les deux comme
+// n'importe quel appelant, puis les presente a chaque requete.
 const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
+await fetch(B + '/test/admin/role', { method: 'POST', headers: ADMIN,
+  body: JSON.stringify({ code: _acces.code, role: 'organisateur' }) });
 const H = { 'X-Sprinter-Test': _acces.code };
 
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';
@@ -21,6 +30,17 @@ let graine = 12345;
 const hasard = () => (graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 
 const samedi = Date.UTC(2026, 8, 5);
+
+// De quoi remplir la grille. Le harnais seme lui-meme plutot que de supposer
+// une base deja peuplee : sur une base neuve, la France n'a personne, et un
+// championnat sans partants ne prouve rien.
+const dejaLa = ((await get('/champ/pays')).pays || []).find(p => p.pays === 'FR');
+if (!dejaLa || dejaLa.joueurs < 32) {
+  const manque = 32 - (dejaLa ? dejaLa.joueurs : 0);
+  console.log(`\n   (on seme ${manque} coureurs francais)`);
+  await semerPays(B, H, 'FR', nomsDe('Fra' + Math.random().toString(36).slice(2, 5).toUpperCase(), manque));
+}
+
 console.log('\n══ OUVERTURE ═══════════════════════════════════════════════');
 const ouv = await post('/champ/ouvrir', { pays: 'FR', debut: samedi });
 if (ouv.error) { console.log('  ', ouv); process.exit(1); }

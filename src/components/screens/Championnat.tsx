@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Loader2, Timer, Flag, Sparkles, Medal } from 'lucide-react';
+import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Radio } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
 import {
-  etatEdition, fluxDirect, prochain, grille, arrivee,
+  etatEdition, fluxDirect, prochain, grille, arrivee, maCourse,
   type Edition, type Annonce, type Partant,
 } from '@/game/championnats';
+import { getSavedName } from '@/game/leaderboard';
+import { CourseChampionnat, courseChampEnCours } from './CourseChampionnat';
 
 /**
  * Le championnat, tel qu'on le suit.
@@ -23,6 +25,14 @@ import {
 
 const CADENCE_MS = 4000;
 const OR = '#F8CD4A';
+/**
+ * A partir de quand on peut rejoindre sa course.
+ *
+ * Deux minutes avant le rendez-vous : assez tot pour que les huit soient sur
+ * la piste au coup de pistolet, assez tard pour que le bouton ne reste pas
+ * allume tout le weekend au-dessus d'une salle vide.
+ */
+const AVANT_COURSE_MS = 2 * 60 * 1000;
 
 /** « 2 h 14 min » a partir d'un delai en millisecondes. */
 function delai(ms: number): string {
@@ -298,6 +308,7 @@ export function Championnat({ edition, onQuitter }: {
   const [revelation, setRevelation] = useState<Annonce | null>(null);
   const [podium, setPodium] = useState(false);
   const [maintenant, setMaintenant] = useState(Date.now());
+  const [surLaPiste, setSurLaPiste] = useState(false);
   const curseur = useRef(0);
   const vu = useRef(new Set<number>());
 
@@ -362,6 +373,25 @@ export function Championnat({ edition, onQuitter }: {
 
   const rv = prochain(e.calendrier, maintenant);
 
+  // Ma course, si j'en ai une : elle donne le code du salon, les partants, et
+  // l'heure du rendez-vous. La salle s'ouvre deux minutes avant — ou tout de
+  // suite si l'on y est deja, ce qui arrive au retour de la course elle-meme :
+  // cet ecran est demonte pendant qu'on court et remonte a l'arrivee.
+  const mienne = maCourse(e, getSavedName() || '');
+  const dedans = !!mienne && courseChampEnCours(mienne.code);
+  const alHeure = !!mienne && !mienne.couru &&
+    (mienne.at == null || mienne.at - maintenant <= AVANT_COURSE_MS);
+
+  if (mienne && (dedans || (surLaPiste && alHeure))) {
+    return (
+      <CourseChampionnat
+        edition={e.id} phase={mienne.phase} phaseNom={mienne.phaseNom}
+        course={mienne.course} partants={mienne.partants} code={mienne.code}
+        onQuitter={() => setSurLaPiste(false)}
+      />
+    );
+  }
+
   return (
     <>
       <AnimatePresence>
@@ -412,6 +442,29 @@ export function Championnat({ edition, onQuitter }: {
               {delai(rv.at - maintenant)}
             </span>
           </div>
+        )}
+
+        {/* Rejoindre sa course. Le bouton n'apparait qu'a l'approche du
+            rendez-vous : le reste du temps, il n'y a personne dans la salle et
+            l'y envoyer serait l'y laisser seul. */}
+        {mienne && !mienne.couru && (
+          alHeure ? (
+            <button onClick={() => setSurLaPiste(true)}
+              className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-sm
+                         text-background flex items-center justify-center gap-2"
+              style={{ backgroundColor: OR }}>
+              <Radio className="w-4 h-4" />
+              {N.t('champ_rejoindre')}
+            </button>
+          ) : (
+            <p className="text-center text-[10px] text-muted-foreground">
+              {N.t('champ_ma_course', {
+                p: mienne.phaseNom,
+                c: mienne.course,
+                d: mienne.at ? delai(mienne.at - maintenant) : '—',
+              })}
+            </p>
+          )
         )}
 
         <Grille e={e} />

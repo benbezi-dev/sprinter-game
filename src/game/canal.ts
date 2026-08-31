@@ -54,6 +54,7 @@ export const EST_NATIF: boolean = (() => {
 })();
 
 const CLE = 'sprinter_acces_test';
+const CLE_ROLE = 'sprinter_role_test';
 
 /** Le code d'acces range dans ce navigateur, s'il y en a un. */
 export function codeAcces(): string {
@@ -66,13 +67,39 @@ export function poserCode(code: string) {
 }
 
 export function oublierCode() {
-  try { localStorage.removeItem(CLE); } catch { /* refuse */ }
+  try { localStorage.removeItem(CLE); localStorage.removeItem(CLE_ROLE); } catch { /* refuse */ }
+}
+
+/**
+ * Le role attache a ce code, tel que le serveur l'a annonce a l'entree.
+ *
+ * Il est range ici pour l'affichage, et pour lui seul : c'est le serveur qui
+ * refuse d'ouvrir un championnat a qui n'est pas organisateur, a chaque
+ * requete. Retirer ce role dans le navigateur ne donnerait donc rien de plus
+ * que de voir un ecran dont tous les boutons repondent 403.
+ */
+export function poserRole(role: string | null) {
+  try {
+    if (role) localStorage.setItem(CLE_ROLE, role);
+    else localStorage.removeItem(CLE_ROLE);
+  } catch { /* refuse */ }
+}
+
+export function roleAcces(): string {
+  if (!EST_TEST) return '';
+  try { return localStorage.getItem(CLE_ROLE) || ''; } catch { return ''; }
+}
+
+/** L'ecran du salon des championnats s'affiche-t-il pour cette personne ? */
+export function estOrganisateur(): boolean {
+  return EST_TEST && roleAcces() === 'organisateur';
 }
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
-/** Demande au serveur si ce code ouvre encore. */
-export async function verifierCode(code: string): Promise<{ ok: boolean; nom?: string }> {
+/** Demande au serveur si ce code ouvre encore, et a quel titre. */
+export async function verifierCode(code: string):
+    Promise<{ ok: boolean; nom?: string; role?: string | null }> {
   try {
     const r = await fetch(`${API_BASE}/test/entrer`, {
       method: 'POST',
@@ -81,7 +108,10 @@ export async function verifierCode(code: string): Promise<{ ok: boolean; nom?: s
     });
     if (!r.ok) return { ok: false };
     const d = await r.json();
-    return { ok: !!d.ok, nom: d.nom };
+    // Le role suit le code : il est reverifie a chaque entree, comme l'acces
+    // lui-meme, donc un role retire disparait au lancement suivant.
+    poserRole(d.ok ? (d.role || null) : null);
+    return { ok: !!d.ok, nom: d.nom, role: d.role || null };
   } catch {
     return { ok: false };
   }

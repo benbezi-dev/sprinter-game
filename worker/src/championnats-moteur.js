@@ -10,7 +10,72 @@
    Tout est pur : memes entrees, memes sorties, testable sans rien monter.
 --------------------------------------------------------------------------- */
 
-import { DEPARTAGE } from './championnats-config.js';
+import { DEPARTAGE, FORMAT, FORMAT_REDUIT_MIN } from './championnats-config.js';
+
+/** Le nombre de couloirs d'une piste : le format nominal en fixe la mesure. */
+const COULOIRS = FORMAT.phases[0].parCourse;
+
+/**
+ * Une manche amont : combien de courses, et par ou l'on passe.
+ *
+ * Les deux portes gardent la proportion du format nominal — un direct pour
+ * quatre partants, le reste repeche au chrono. Le plafond n'est pas decoratif :
+ * au-dela, le nombre de repeches deviendrait negatif, c'est-a-dire que les
+ * qualifies directs sortiraient a eux seuls plus de monde que la phase suivante
+ * n'en accueille.
+ *
+ * Quand l'effectif entrant est deja celui de la sortie, la manche ne qualifie
+ * rien : tout le monde passe, et l'annoncer comme un repechage serait fabriquer
+ * un suspense qui n'existe pas. C'est la « manche de forme ».
+ */
+function manche(modele, entrants, sortie) {
+  const courses = Math.ceil(entrants / COULOIRS);
+  const parCourse = Math.ceil(entrants / courses);
+  const plafond = Math.floor(sortie / courses);
+  const directsParCourse = entrants === sortie
+    ? plafond
+    : Math.min(plafond, Math.max(1, Math.floor(Math.round(entrants / 4) / courses)));
+  return {
+    ...modele,
+    courses, parCourse, directsParCourse,
+    repechages: sortie - directsParCourse * courses,
+  };
+}
+
+/**
+ * Le format d'une edition dont l'effectif n'est pas celui du format nominal.
+ *
+ * Trois phases, toujours, et jamais moins : c'est la structure qui fait qu'un
+ * championnat a douze joueurs reste un championnat — des series, un repechage
+ * revele apres la derniere, des demies, une finale. Un format a deux phases
+ * serait un tournoi, pas un championnat, et le premier titre du jeu ne peut pas
+ * se gagner sur une autre forme que ceux qui suivront.
+ *
+ * La finale tient dans une piste : huit au plus, moins s'il n'y a pas huit
+ * personnes. Chaque phase amont vise a peu pres la moitie de son effectif
+ * entrant, ce qui donne l'allure du format nominal (32 -> 16 -> 8) quel que
+ * soit le nombre de partants.
+ */
+export function formatDynamique(n) {
+  const partants = Math.max(FORMAT_REDUIT_MIN,
+                            Math.min(FORMAT.partants, Math.round(Number(n) || 0)));
+  const finale = Math.min(COULOIRS, partants);
+  const milieu = Math.max(finale, Math.min(partants, Math.round(partants / 2)));
+  const [mSeries, mDemies, mFinale] = FORMAT.phases;
+  return {
+    partants,
+    phases: [
+      manche(mSeries, partants, milieu),
+      manche(mDemies, milieu, finale),
+      {
+        ...mFinale,
+        courses: 1, parCourse: finale,
+        directsParCourse: 0, repechages: 0,
+        podium: Math.min(mFinale.podium, finale),
+      },
+    ],
+  };
+}
 
 /**
  * Repartition en serpentin.
@@ -133,12 +198,20 @@ export function podium(resultatsFinale, taille = 3) {
  * `debutSamedi` est un instant UTC : le samedi a minuit. Tout le reste s'en
  * deduit, ce qui garantit que deux pays qui courent « le meme weekend »
  * courent bien a la meme seconde, quelle que soit l'heure qu'il est chez eux.
+ *
+ * `format` decide des creneaux qui existent vraiment. Le calendrier est ecrit
+ * pour trente-deux partants, donc pour quatre series ; une edition qui n'en
+ * court que deux ne doit pas afficher un rendez-vous a quinze heures trente
+ * pour une course qui n'aura pas lieu.
  */
-export function calendrier(debutSamedi, config) {
+export function calendrier(debutSamedi, config, format = FORMAT) {
   const JOUR = 24 * 60 * 60 * 1000;
   const rendez = [];
   for (const [i, jour] of [[0, config.jour1], [1, config.jour2]]) {
     for (const e of jour) {
+      const phase = format.phases.find(p => p.cle === e.phase);
+      if (!phase) continue;
+      if (e.course != null && e.course > phase.courses) continue;
       rendez.push({ ...e, at: debutSamedi + i * JOUR + e.minute * 60 * 1000 });
     }
   }

@@ -1,7 +1,8 @@
 /* Verification du moteur de championnat, sans base ni reseau. */
-import { serpentin, desequilibre, ordonner, qualifier, podium, calendrier, prochain }
+import { serpentin, desequilibre, ordonner, qualifier, podium, calendrier, prochain,
+         formatDynamique }
   from '../worker/src/championnats-moteur.js';
-import { FORMAT, CALENDRIER } from '../worker/src/championnats-config.js';
+import { FORMAT, CALENDRIER, FORMAT_REDUIT_MIN } from '../worker/src/championnats-config.js';
 
 let ok = 0, ko = 0;
 const dit = (b, m) => { if (b) { ok++; console.log('   ✓ ' + m); } else { ko++; console.log('   ✗ ' + m); } };
@@ -88,6 +89,67 @@ dit(rv.find(r => r.cle === 'reveal-demies').at > rv.find(r => r.cle === 'serie-4
 dit(rv.find(r => r.cle === 'sacre').at > rv.find(r => r.cle === 'finale').at,
     'le sacre suit la finale');
 dit(prochain(rv, samedi).cle === 'serie-1', 'le premier rendez-vous est la serie 1');
+
+console.log('\n=== 8. le format reduit : un championnat garde sa forme a tout effectif');
+// Ce qu'on verifie n'est pas une valeur mais des invariants : un format dont
+// les portes ne mènent pas exactement a l'effectif de la phase suivante produit
+// une competition qui a l'air normale et qui perd — ou invente — des coureurs.
+for (const n of [4, 6, 8, 9, 12, 16, 20, 24, 31, 32]) {
+  const f = formatDynamique(n);
+  const [p0, p1, p2] = f.phases;
+  const sorties = [
+    p0.directsParCourse * p0.courses + p0.repechages,
+    p1.directsParCourse * p1.courses + p1.repechages,
+  ];
+  const ligne = `n=${String(n).padStart(2)} : ` + f.phases.map(p =>
+    `${p.cle}(${p.courses}x${p.parCourse}, ${p.directsParCourse}d+${p.repechages}r)`).join(' → ');
+  console.log('     ' + ligne);
+
+  dit(f.phases.length === 3, `n=${n} : trois phases, jamais moins`);
+  dit(f.phases.every(p => p.parCourse <= 8), `n=${n} : jamais plus de 8 par course`);
+  dit(f.phases.every(p => p.courses * p.parCourse >= 1), `n=${n} : chaque phase a une course`);
+  dit(p0.courses * p0.parCourse >= n || n > FORMAT.partants,
+      `n=${n} : les series ont de la place pour tout le monde`);
+  dit(sorties[0] === p1.courses * p1.parCourse ||
+      sorties[0] <= p1.courses * p1.parCourse,
+      `n=${n} : les qualifies des series tiennent dans les demies`);
+  dit(sorties[1] === p2.parCourse, `n=${n} : les demies remplissent exactement la finale`);
+  dit(f.phases.every(p => p.repechages >= 0), `n=${n} : aucun repechage negatif`);
+  dit(p2.parCourse <= 8 && p2.parCourse === Math.min(8, n), `n=${n} : finale a ${Math.min(8, n)}`);
+  dit(p2.podium <= p2.parCourse && p2.podium <= 3, `n=${n} : podium tenable`);
+}
+
+console.log('\n=== 9. les bornes du format reduit');
+dit(formatDynamique(2).partants === FORMAT_REDUIT_MIN, 'sous le plancher, on remonte au plancher');
+dit(formatDynamique(99).partants === FORMAT.partants, 'au-dessus de 32, on redescend a 32');
+const f32 = formatDynamique(32);
+dit(f32.phases[0].courses === FORMAT.phases[0].courses &&
+    f32.phases[0].directsParCourse === FORMAT.phases[0].directsParCourse &&
+    f32.phases[0].repechages === FORMAT.phases[0].repechages,
+    'a 32, le format calcule retombe sur le format nominal');
+dit(FORMAT.partants === 32 && FORMAT.phases[0].courses === 4,
+    'le format nominal n est pas remplace par le calcul');
+
+console.log('\n=== 10. le calendrier ne montre que les courses qui existent');
+const samedi2 = Date.UTC(2026, 8, 5);
+const f12 = formatDynamique(12);
+const rv12 = calendrier(samedi2, CALENDRIER, f12);
+const cles12 = rv12.map(r => r.cle);
+console.log('     ' + cles12.join('  '));
+dit(!cles12.includes('serie-3') && !cles12.includes('serie-4'),
+    `les series surnumeraires disparaissent (${f12.phases[0].courses} series)`);
+dit(cles12.includes('serie-1') && cles12.includes('serie-2'), 'les series reelles restent');
+dit(cles12.includes('reveal-demies') && cles12.includes('reveal-finale') &&
+    cles12.includes('sacre'), 'les reveals et le sacre ne dependent pas du nombre de courses');
+dit(cles12.filter(c => c.startsWith('demie-')).length === f12.phases[1].courses,
+    'autant de creneaux de demies que de demies');
+dit(calendrier(samedi2, CALENDRIER).length === 10,
+    'sans format donne, le calendrier nominal est inchange');
+const f6 = formatDynamique(6);
+const cles6 = calendrier(samedi2, CALENDRIER, f6).map(r => r.cle);
+dit(cles6.filter(c => c.startsWith('serie-')).length === 1 &&
+    cles6.filter(c => c.startsWith('demie-')).length === 1,
+    'a six partants, une serie et une demie');
 
 console.log(`\n${ko === 0 ? 'TOUT PASSE' : 'ECHECS'} — ${ok} verifications, ${ko} echec(s)\n`);
 process.exit(ko === 0 ? 0 : 1);

@@ -36,6 +36,41 @@ export type RendezVous = {
   reveal?: boolean; ceremonie?: boolean;
 };
 
+/** Ce qu'une zone donnerait si on l'ouvrait maintenant. */
+export type Prevision = {
+  echelon: 'national' | 'continental' | 'mondial';
+  zone: string;
+  zoneNom: string;
+  /** Joueurs classes et actifs de la zone (national), ou medailles (au-dessus). */
+  joueurs: number;
+  partants?: number;
+  requis?: number;
+  ouvrable: boolean;
+  raison?: string | null;
+  /** Moins de 32 partants : format reduit, et c'est la premiere edition. */
+  reduit?: boolean;
+  premiere?: boolean;
+  courses?: number;
+  finale?: number;
+  zones?: number;
+  tete?: string[];
+  /** Edition deja ouverte pour cette zone, s'il y en a une. */
+  edition?: string | null;
+  phase?: string | null;
+};
+
+export type Salon = {
+  maintenant: number;
+  nations: Prevision[];
+  continents: Prevision[];
+  monde: Prevision;
+  ouvrables: number;
+  enCours: {
+    edition: string; echelon: string; zone: string; zoneNom: string;
+    phase: string; debut: number;
+  }[];
+};
+
 export type Edition = {
   id: string;
   echelon: 'national' | 'continental' | 'mondial';
@@ -57,6 +92,10 @@ export type Edition = {
   partants: Partant[];
   resultats: Resultat[];
   calendrier: RendezVous[];
+  /** L'effectif prevu par le format fige a l'ouverture. */
+  partantsAttendus?: number;
+  /** Vrai si cette edition ne court pas le format nominal a 32. */
+  reduit?: boolean;
 };
 
 export type Annonce = {
@@ -95,6 +134,27 @@ async function json<T>(chemin: string): Promise<T | null> {
   }
 }
 
+/**
+ * Un appel qui ecrit. Le corps d'erreur est rendu tel quel plutot qu'avale :
+ * le salon a besoin de dire POURQUOI une zone refuse de s'ouvrir, et le
+ * serveur le sait — « pays trop petit », « edition deja ouverte », « reserve
+ * aux organisateurs » sont trois refus qui ne se corrigent pas pareil.
+ */
+async function poster<T>(chemin: string, corps: any): Promise<T & { error?: string }> {
+  try {
+    const r = await fetch(API_BASE + chemin, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok && !d.error) return { ...d, error: 'HTTP ' + r.status } as any;
+    return d as any;
+  } catch {
+    return { error: 'reseau' } as any;
+  }
+}
+
 /** Le championnat ou ce joueur est engage, s'il y en a un. */
 export const monEdition = (nom: string) =>
   json<{ edition: string | null }>('/champ/mien?name=' + encodeURIComponent(nom));
@@ -109,6 +169,91 @@ export const recapMondial = (echelon?: string) =>
 export const fluxDirect = (depuis = 0, zone?: string) =>
   json<{ annonces: Annonce[]; curseur: number }>(
     `/champ/direct?depuis=${depuis}` + (zone ? `&zone=${encodeURIComponent(zone)}` : ''));
+
+/* ------------------------------------------------------- le salon organisateur
+
+   Toutes ces routes existent deja cote serveur et sont gardees par le role
+   d'organisateur : ce qui suit ne fait que les appeler. Le client ne decide de
+   rien — il demande, et le serveur refuse ou fait. */
+
+/** L'etat du monde : effectifs par nation, par continent, et pour le monde. */
+export const previsionSalon = () => json<Salon>('/champ/salon');
+
+export const ouvrirCycle = (debut: number, echelon = 'national') =>
+  poster<{ ouvertes: any[]; ecartes: any[] }>('/champ/cycle', { debut, echelon });
+
+export const ouvrirZone = (echelon: string, zone: string, debut: number) =>
+  poster<{ edition: string; partants: number; reduit: boolean }>(
+    '/champ/ouvrir', { echelon, zone, debut });
+
+export const cloturerPhase = (edition: string) =>
+  poster<{ phase: string; suivante?: string; finale?: boolean; champion?: string }>(
+    '/champ/cloturer', { edition });
+
+/**
+ * La saisie manuelle d'une course. Le filet de securite, et rien d'autre.
+ *
+ * Les chronos arrivent normalement de la salle en direct, qui les a arbitres.
+ * Mais un partant absent bloque la cloture de sa phase, et il faut alors
+ * pouvoir poser un chrono — ou un abandon — a la main plutot que d'abandonner
+ * l'edition entiere.
+ */
+export const saisirCourse = (
+  edition: string, phase: string, course: number,
+  chronos: { cle: string; ms: number | null }[],
+) => poster<{ ok: boolean; enregistres: number }>(
+  '/champ/course', { edition, phase, course, chronos });
+
+/**
+ * Le code de salon d'une course de championnat.
+ *
+ * Miroir exact de `codeCourseChamp` cote serveur (worker/src/championnats.js).
+ * Recopie plutot que demandee : huit joueurs doivent tomber sur la meme salle
+ * sans qu'aucun aller-retour ne le leur dise, et un calcul de deux lignes qui
+ * ne depend que de donnees deja connues ne merite pas une route.
+ *
+ * Les deux implementations doivent rester identiques ; c'est le seul endroit du
+ * client ou une regle du serveur est recopiee, et direct-champ-test.mjs verifie
+ * qu'elles disent la meme chose.
+ */
+export function codeCourseChamp(edition: string, phase: string, course: number): string {
+  const lettre = (phase || 'X').slice(0, 1).toUpperCase();
+  const n = Math.max(1, Math.min(9, Math.floor(course) || 1));
+  return (lettre + n + (edition || ''))
+    .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+}
+
+/**
+ * Ma course dans cette edition, et son rendez-vous.
+ *
+ * Un joueur ne connait de son championnat que son propre nom : c'est a partir
+ * de lui qu'on retrouve la course ou il est engage, puis le creneau de cette
+ * course dans le calendrier. Rien n'est renvoye s'il est deja sorti — un
+ * elimine n'a pas de prochaine course, et lui en proposer une serait cruel.
+ */
+export function maCourse(e: Edition, nameKey: string): {
+  phase: string; phaseNom: string; course: number; partants: Partant[];
+  code: string; at: number | null; couru: boolean;
+} | null {
+  const cle = (nameKey || '').trim().toLowerCase();
+  const moi = e.partants.find(p => p.name_key === cle);
+  if (!moi || moi.sorti_en || moi.course == null) return null;
+  if (moi.phase !== e.phase || e.etat === 'terminee') return null;
+
+  const rv = e.calendrier.find(r => r.phase === moi.phase && r.course === moi.course);
+  const partants = e.partants.filter(p => p.phase === moi.phase && p.course === moi.course);
+  return {
+    phase: moi.phase,
+    phaseNom: e.phases.find(p => p.cle === moi.phase)?.nom || moi.phase,
+    course: moi.course,
+    partants,
+    code: codeCourseChamp(e.id, moi.phase, moi.course),
+    at: rv ? rv.at : null,
+    // Deja courue : le chrono est en base, il n'y a plus rien a rejoindre.
+    couru: e.resultats.some(r =>
+      r.phase === moi.phase && r.course === moi.course && r.name_key === cle),
+  };
+}
 
 /** Le prochain rendez-vous du calendrier, a partir de maintenant. */
 export function prochain(cal: RendezVous[], maintenant = Date.now()) {

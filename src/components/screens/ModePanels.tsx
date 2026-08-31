@@ -6,6 +6,7 @@ import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
+import { SalonChampionnats } from './SalonChampionnats';
 import { RelaisPanel } from './RelaisPanel';
 import { EST_TEST } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -193,6 +194,9 @@ export function ChallengePanel() {
       {DUELS_OUVERTS && <LivePanel />}
       {/* Le championnat n'apparait que si le joueur y est engage. */}
       {DUELS_OUVERTS && <ChampPanel />}
+      {/* Le salon des championnats : reserve aux organisateurs, et absent du
+          build public — EST_TEST vaut false en dur en production. */}
+      {EST_TEST && <SalonChampionnats />}
       {/* Le relais n'est ouvert que sur le canal de test. En production,
           EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
       {EST_TEST && <RelaisPanel />}

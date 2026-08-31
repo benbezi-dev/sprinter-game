@@ -14,7 +14,7 @@ import {
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe,
-  fluxDirect, recapMondial,
+  fluxDirect, recapMondial, previsionSalon,
 } from './championnats.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -24,6 +24,7 @@ import {
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
+  definirRole,
 } from './acces.js';
 
 /**
@@ -38,6 +39,20 @@ import {
  */
 const relaisOuvert = canal => canal.test;
 const championnatsOuverts = canal => canal.test;
+/**
+ * Qui a le droit de piloter un championnat.
+ *
+ * Ouvrir une edition, ouvrir un cycle entier, clore une phase : ce sont des
+ * actes de calendrier, irreversibles et visibles par tout le monde. Ils
+ * n'etaient proteges que par le canal de test, c'est-a-dire par n'importe quel
+ * code d'invitation — quelqu'un venu essayer une course pouvait sacrer un
+ * champion de France depuis la console de son navigateur.
+ *
+ * L'administrateur passe toujours : il tient la cle, il n'a pas besoin d'un
+ * role en plus.
+ */
+const estOrganisateur = (request, env, canal) =>
+  estAdmin(request, env) || canal.role === 'organisateur';
 /**
  * Le mot du vainqueur : reserve au canal de test.
  *
@@ -399,7 +414,10 @@ export default {
       || url.searchParams.get('acces') || '';
     const acces = codeDonne && production
       ? await verifierAcces(production, codeDonne, ctx) : null;
-    const canal = { test: !!acces, nom: acces ? acces.nom : null };
+    const canal = {
+      test: !!acces, nom: acces ? acces.nom : null,
+      role: acces ? acces.role : null,
+    };
 
     // Les quatre-vingt-treize routes qui suivent parlent a `env.DB` sans avoir
     // a savoir sur quel canal elles tournent. On leur passe donc un env dont DB
@@ -416,7 +434,10 @@ export default {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const r = await verifierAcces(production, (body || {}).code, ctx);
-        return r ? json({ ok: true, nom: r.nom })
+        // Le role voyage avec la reponse : c'est ce qui decide si le jeu
+        // affiche l'entree du salon des championnats, et il n'y a pas d'autre
+        // moment ou le client pourrait l'apprendre.
+        return r ? json({ ok: true, nom: r.nom, role: r.role || null })
                  : json({ error: 'code refuse' }, 403);
       }
 
@@ -444,6 +465,13 @@ export default {
         if (quoi === 'rendre' && request.method === 'POST') {
           let body; try { body = await request.json(); } catch { body = {}; }
           const r = await rendreAcces(production, (body || {}).code);
+          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        }
+        // Le role d'organisateur, donne ou retire. `role: null` retire sans
+        // toucher a l'acces lui-meme.
+        if (quoi === 'role' && request.method === 'POST') {
+          let body; try { body = await request.json(); } catch { body = {}; }
+          const r = await definirRole(production, (body || {}).code, (body || {}).role);
           return r.erreur ? json({ error: r.erreur }, 400) : json(r);
         }
       }
@@ -603,10 +631,23 @@ export default {
         return json({ titres: key ? await titresDe(env.DB, key) : [] });
       }
 
+      // Le salon des championnats : ce que donnerait chaque zone si on
+      // l'ouvrait maintenant. Lecture seule, mais reservee aux organisateurs —
+      // c'est leur tableau de bord, et il dit qui court ou.
+      if (sous === 'salon' && request.method === 'GET') {
+        if (!estOrganisateur(request, env, canal)) {
+          return json({ error: 'reserve aux organisateurs' }, 403);
+        }
+        return json(await previsionSalon(env.DB));
+      }
+
       // Ouvrir une edition. Reserve a l'exploitation : c'est un acte de
       // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
       // national, ce que faisaient les appels existants.
       if (sous === 'ouvrir' && request.method === 'POST') {
+        if (!estOrganisateur(request, env, canal)) {
+          return json({ error: 'reserve aux organisateurs' }, 403);
+        }
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { pays, zone, echelon, debut } = body || {};
@@ -623,6 +664,9 @@ export default {
       // Le meme weekend pour tout le monde : un seul appel ouvre tout un
       // echelon d'un coup, et dit qui a ete ecarte et pourquoi.
       if (sous === 'cycle' && request.method === 'POST') {
+        if (!estOrganisateur(request, env, canal)) {
+          return json({ error: 'reserve aux organisateurs' }, 403);
+        }
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const t = Number(body && body.debut);
@@ -689,6 +733,9 @@ export default {
 
       // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
       if (sous === 'cloturer' && request.method === 'POST') {
+        if (!estOrganisateur(request, env, canal)) {
+          return json({ error: 'reserve aux organisateurs' }, 403);
+        }
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const r = await cloturerPhase(env.DB, String(body.edition || '').toUpperCase());

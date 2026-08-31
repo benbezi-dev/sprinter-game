@@ -14,10 +14,12 @@
 --------------------------------------------------------------------------- */
 
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
-  ANNONCES,
+  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_ENTITES,
+  FORMAT_REDUIT_MIN, ANNONCES,
 } from './championnats-config.js';
-import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
+import {
+  serpentin, qualifier, podium, calendrier, ordonner, formatDynamique,
+} from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
 // table doit exister avant qu'on la joigne, sans quoi la requete echoue.
 import { ensureDuelTables } from './duels.js';
@@ -65,6 +67,15 @@ const PAYS_NOMS = {
   FI: ['Finlande', 'de Finlande'],        GR: ['Grèce', 'de Grèce'],
   TR: ['Turquie', 'de Turquie'],          RU: ['Russie', 'de Russie'],
   UA: ['Ukraine', "d'Ukraine"],           RO: ['Roumanie', 'de Roumanie'],
+  // Les petits pays d'Europe. Ils manquaient tant qu'un pays avait besoin de
+  // trente-deux joueurs pour ouvrir : aucun d'eux n'y arrivait, et leur titre
+  // ne s'affichait jamais. Depuis qu'une premiere edition se court a effectif
+  // reduit, ce sont eux qui sacrent les premiers champions — « Champion de IS »
+  // ne peut pas etre le premier titre du jeu.
+  IS: ['Islande', "d'Islande"],           MT: ['Malte', 'de Malte'],
+  AT: ['Autriche', "d'Autriche"],         CZ: ['Tchéquie', 'de Tchéquie'],
+  HU: ['Hongrie', 'de Hongrie'],          SK: ['Slovaquie', 'de Slovaquie'],
+  HR: ['Croatie', 'de Croatie'],          SI: ['Slovénie', 'de Slovénie'],
 };
 
 const CONTINENT_NOMS = {
@@ -205,7 +216,45 @@ export async function ensureChampTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_fil ON champ_annonces(id)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_zone ON champ_annonces(zone, id)`),
   ]);
+  // Colonnes arrivees apres coup : la table existe deja la ou des editions ont
+  // ete jouees, d'ou l'ajout tolerant.
+  for (const sql of [
+    // Le format fige a l'ouverture. Une edition ouverte a douze partants ne
+    // court pas quatre series de huit, et son etat doit rester lisible des
+    // annees apres — y compris si le format nominal change entre-temps.
+    // NULL veut dire « format nominal », ce que sont toutes les editions
+    // anterieures a cette colonne.
+    `ALTER TABLE champ_editions ADD COLUMN format TEXT`,
+  ]) {
+    try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
+  }
   pret.add(db);
+}
+
+/**
+ * Le format d'une edition chargee.
+ *
+ * `e` porte deja la colonne : aucune requete supplementaire, et surtout aucune
+ * occasion de lire le format nominal la ou l'edition en a un autre.
+ */
+export function formatDe(e) {
+  if (!e || !e.format) return FORMAT;
+  try { return JSON.parse(e.format); } catch { return FORMAT; }
+}
+
+/**
+ * Le code de salon d'une course de championnat.
+ *
+ * Deterministe, et calculable des deux cotes sans se parler : le joueur qui
+ * rejoint sa serie et celui qui l'ouvre doivent tomber sur la meme salle sans
+ * qu'aucun aller-retour ne le leur dise. Lettre de phase, numero de course,
+ * identifiant d'edition — dix caracteres, la forme exacte qu'accepte /live/.
+ */
+export function codeCourseChamp(edition, phase, course) {
+  const lettre = String(phase || 'X').slice(0, 1).toUpperCase();
+  const n = Math.max(1, Math.min(9, parseInt(course, 10) || 1));
+  return (lettre + n + String(edition || ''))
+    .toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
 }
 
 /**
@@ -281,6 +330,23 @@ export async function effectifPays(db, pays, fenetreJours) {
   return (r && r.n) || 0;
 }
 
+/**
+ * Ce pays a-t-il deja tenu un championnat ?
+ *
+ * Une seule question, et elle decide de tout le reste : la premiere edition
+ * d'un pays peut se courir a effectif reduit, les suivantes non. Sans ce
+ * garde-fou, un pays de dix joueurs distribuerait un titre national tous les
+ * trois mois a un vivier qui ne grandit jamais — le titre ne vaudrait alors
+ * que ce que vaut le fait d'etre arrive tot.
+ */
+export async function paysADejaOuvert(db, zone) {
+  await ensureChampTables(db);
+  const r = await db.prepare(
+    `SELECT 1 AS x FROM champ_editions WHERE echelon = 'national' AND zone = ? LIMIT 1`
+  ).bind(String(zone || '').toUpperCase()).first();
+  return !!r;
+}
+
 /** Les pays capables de tenir leur championnat ce cycle-ci. */
 export async function paysEligibles(db) {
   await ensureChampTables(db);
@@ -294,11 +360,26 @@ export async function paysEligibles(db) {
       GROUP BY g.pays
       ORDER BY n DESC`
   ).bind(depuis).all();
-  return (results || []).map(r => ({
-    pays: r.pays, joueurs: r.n,
-    eligible: r.n >= cfg.minJoueurs,
-    repli: r.n >= cfg.minJoueurs ? null : REPLI_PAYS_TROP_PETIT,
-  }));
+
+  // Les pays qui ont deja couru : une seule requete plutot qu'une par pays.
+  const { results: vus } = await db.prepare(
+    `SELECT DISTINCT zone FROM champ_editions WHERE echelon = 'national'`).all();
+  const dejaOuvert = new Set((vus || []).map(r => r.zone));
+
+  return (results || []).map(r => {
+    const premiere = !dejaOuvert.has(r.pays);
+    const requis = premiere ? FORMAT_REDUIT_MIN : cfg.minJoueurs;
+    const eligible = r.n >= requis;
+    return {
+      pays: r.pays, joueurs: r.n, eligible, requis,
+      // Une premiere edition qui n'atteint pas trente-deux se court dans un
+      // format reduit : c'est ce que le salon annonce, et c'est ce qui merite
+      // d'etre dit plutot que subi.
+      reduit: eligible && r.n < cfg.minJoueurs,
+      premiere,
+      repli: eligible ? null : REPLI_PAYS_TROP_PETIT,
+    };
+  });
 }
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -345,75 +426,104 @@ async function classement(db, { pays = null, continent = null, exclure, limite }
 }
 
 /**
- * Les champions en titre d'un echelon, encore porteurs a cette seconde.
+ * Les podiums encore valides d'un echelon, une zone apres l'autre.
  *
- * La table des duels est creee au besoin : un championnat peut s'ouvrir sur une
- * base ou personne n'a encore joue de duel, et lire une table absente y faisait
- * echouer toute l'ouverture avec une erreur cinq cents.
+ * C'est la regle de qualification des echelons superieurs, et elle a change :
+ * ce n'est plus le champion seul qui monte, complete par les mieux classes de
+ * la zone, mais le podium entier de chaque nation — puis de chaque continent.
+ *
+ * Ce que ce changement fait, et que l'ancienne regle ne faisait pas : une
+ * medaille nationale sert enfin a quelque chose, et un continental se compose
+ * de gens qui ont couru pour y etre plutot que de gens bien classes qui n'ont
+ * rien gagne. Une nation y est representee par trois personnes, ce qui est le
+ * minimum pour qu'on puisse dire qu'elle est representee.
+ *
+ * On ne retient qu'une edition par zone — la derniere. Deux editions d'un meme
+ * pays peuvent coexister dans la fenetre de validite des medailles, et prendre
+ * les six ferait entrer un podium perime.
  */
-async function championsEnTitre(db, echelon, filtreZone) {
+async function podiumsActifs(db, echelonSource, filtreZone) {
+  await ensureChampTables(db);
   await ensureDuelTables(db);
   const { results } = await db.prepare(
-    `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
+    `SELECT m.name_key AS cle, m.nom, m.zone, m.place, m.edition, m.obtenu_le,
             COALESCE(d.mmr, 0) AS force
-       FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
-      WHERE t.echelon = ? AND t.expire_le > ?
-      ORDER BY t.sacre_le DESC`
-  ).bind(echelon, Date.now()).all();
+       FROM champ_medailles m LEFT JOIN duel_players d ON d.name_key = m.name_key
+      WHERE m.echelon = ? AND m.expire_le > ?
+      ORDER BY m.obtenu_le DESC, m.place ASC`
+  ).bind(echelonSource, Date.now()).all();
 
+  const editionDeZone = new Map();   // la derniere edition de chaque zone
   const vus = new Set();
-  const sortie = [];
+  const zones = new Set();
+  const joueurs = [];
   for (const r of results || []) {
-    if (vus.has(r.cle)) continue;                 // un seul titre par personne
     if (filtreZone && !filtreZone(r.zone)) continue;
+    if (!editionDeZone.has(r.zone)) editionDeZone.set(r.zone, r.edition);
+    if (editionDeZone.get(r.zone) !== r.edition) continue;   // podium perime
+    if (vus.has(r.cle)) continue;                            // un seul billet
     vus.add(r.cle);
-    sortie.push(r);
+    zones.add(r.zone);
+    joueurs.push(r);
   }
-  return sortie;
+  return { joueurs, zones };
 }
 
 /**
  * Qui prend le depart, selon l'echelon.
  *
  * Renvoie { joueurs, doffice } ou une erreur. `doffice` est l'ensemble des cles
- * qualifiees par leur titre plutot que par leur classement — l'information
+ * qualifiees par un resultat plutot que par leur classement — l'information
  * interesse l'affichage, pas la competition.
  */
 async function pool(db, echelon, zone) {
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
     const n = await effectifPays(db, zone, cfg.fenetreActiviteJours);
-    if (n < cfg.minJoueurs) {
-      return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
+    // La premiere edition d'un pays peut se courir a effectif reduit ; les
+    // suivantes exigent les trente-deux. Un pays n'a donc qu'une seule
+    // occasion d'ouvrir petit, et c'est celle ou personne n'y a encore rien
+    // gagne — apres quoi le titre se merite au format complet.
+    const deja = await paysADejaOuvert(db, zone);
+    const requis = deja ? cfg.minJoueurs : FORMAT_REDUIT_MIN;
+    if (n < requis) {
+      return { erreur: 'pays trop petit', joueurs: n, requis, premiere: !deja,
+               repli: REPLI_PAYS_TROP_PETIT };
     }
     const l = await classement(db, { pays: zone, exclure: new Set(), limite: FORMAT.partants });
-    return { joueurs: l, doffice: new Set() };
+    return { joueurs: l, doffice: new Set(), reduit: l.length < FORMAT.partants };
   }
 
-  // Continental et mondial partagent la meme mecanique : des champions
-  // qualifies d'office, puis un repechage au classement de la zone jusqu'a 32.
+  // Continental et mondial partagent la meme mecanique : le podium entier de
+  // chaque zone en dessous, et rien d'autre. Pas de complement au classement —
+  // on ne court pas un continental parce qu'on a un bon MMR, on le court
+  // parce qu'on est monte sur un podium.
   const estContinental = echelon === 'continental';
-  const champions = estContinental
-    ? await championsEnTitre(db, 'national', z => continentDe(z) === zone)
-    : await championsEnTitre(db, 'continental', null);
+  const { joueurs: podiums, zones } = await podiumsActifs(
+    db,
+    estContinental ? 'national' : 'continental',
+    estContinental ? z => continentDe(z) === zone : null,
+  );
 
-  const minimum = MIN_DOFFICE[echelon] || 0;
-  if (champions.length < minimum) {
+  const minimum = MIN_ENTITES[echelon] || 0;
+  if (zones.size < minimum) {
     return {
-      erreur: 'pas assez de champions',
-      champions: champions.length, requis: minimum,
+      erreur: 'pas assez de nations avec podium',
+      zones: zones.size, requis: minimum,
       repli: 'attendre',
     };
   }
 
-  const exclure = new Set(champions.map(c => c.cle));
-  const complement = await classement(db, {
-    continent: estContinental ? zone : null,
-    exclure, limite: FORMAT.partants - champions.length,
-  });
+  // Au-dela de trente-deux, la piste ne suit plus : on tranche au MMR, qui est
+  // la seule mesure comparable entre des podiums venus de pays differents.
+  const joueurs = podiums.length > FORMAT.partants
+    ? [...podiums].sort((a, b) => (b.force || 0) - (a.force || 0)).slice(0, FORMAT.partants)
+    : podiums;
 
-  const joueurs = [...champions, ...complement];
-  return { joueurs, doffice: exclure };
+  return {
+    joueurs, doffice: new Set(joueurs.map(j => j.cle)),
+    zones: zones.size, reduit: joueurs.length < FORMAT.partants,
+  };
 }
 
 /**
@@ -440,26 +550,30 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
 
   const p = await pool(db, echelon, z);
   if (p.erreur) return p;
-  if (p.joueurs.length < FORMAT.partants) {
-    return { erreur: 'grille incomplete', joueurs: p.joueurs.length, requis: FORMAT.partants };
+  if (p.joueurs.length < FORMAT_REDUIT_MIN) {
+    return { erreur: 'grille incomplete', joueurs: p.joueurs.length, requis: FORMAT_REDUIT_MIN };
   }
 
   // Le semis se fait au classement des duels pour tout le monde, titre ou pas.
-  // Placer les champions en tete de serie parce qu'ils sont champions
+  // Placer les medailles en tete de serie parce qu'elles sont des medailles
   // desequilibrerait les series, ce que le serpentin existe precisement pour
-  // eviter : on qualifie par le titre, on seme au niveau mesure.
+  // eviter : on qualifie par le resultat, on seme au niveau mesure.
   const joueurs = [...p.joueurs]
     .sort((a, b) => (b.force || 0) - (a.force || 0))
     .map((j, i) => ({ cle: j.cle, nom: j.nom, rang: i + 1, doffice: p.doffice.has(j.cle) }));
 
+  // Le format est fige ici, une fois pour toutes. Une edition doit rester
+  // lisible apres coup meme si le format nominal change : ce qu'elle a couru
+  // est ce qui est ecrit sur elle, pas ce que la configuration dira plus tard.
+  const format = joueurs.length === FORMAT.partants ? FORMAT : formatDynamique(joueurs.length);
   const id = code();
-  const phase0 = FORMAT.phases[0];
+  const phase0 = format.phases[0];
   const grille = serpentin(joueurs, phase0.courses);
 
   await db.prepare(
-    `INSERT INTO champ_editions (id, echelon, zone, debut, phase, etat, cree_le)
-     VALUES (?, ?, ?, ?, ?, 'ouverte', ?)`
-  ).bind(id, echelon, z, debutSamedi, phase0.cle, Date.now()).run();
+    `INSERT INTO champ_editions (id, echelon, zone, debut, phase, etat, cree_le, format)
+     VALUES (?, ?, ?, ?, ?, 'ouverte', ?, ?)`
+  ).bind(id, echelon, z, debutSamedi, phase0.cle, Date.now(), JSON.stringify(format)).run();
 
   const lignes = [];
   grille.forEach((course, ic) => course.forEach(j => {
@@ -474,15 +588,18 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
   await annoncer(db, {
     edition: id, echelon, zone: z, type: 'ouverture',
     titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
-    texte: FORMAT.partants + ' partants, ' + phase0.courses + ' séries. Premier départ samedi.',
-    donnees: { partants: joueurs.length, doffice: p.doffice.size },
+    texte: joueurs.length + ' partants, ' + phase0.courses +
+           (phase0.courses > 1 ? ' séries' : ' série') + '. Premier départ samedi.',
+    donnees: { partants: joueurs.length, doffice: p.doffice.size, reduit: !!p.reduit },
   });
 
   return {
     edition: id, echelon, zone: z, pays: echelon === 'national' ? z : undefined,
     partants: joueurs.length, doffice: p.doffice.size,
+    reduit: joueurs.length !== FORMAT.partants,
+    format,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
-    calendrier: calendrier(debutSamedi, CALENDRIER),
+    calendrier: calendrier(debutSamedi, CALENDRIER, format),
   };
 }
 
@@ -546,6 +663,98 @@ export function calendrierCycle(debutSamedi) {
 }
 
 /**
+ * Ce qu'une zone donnerait si on l'ouvrait maintenant. Lecture seule.
+ *
+ * Le salon existe pour repondre a une question avant de la trancher : combien
+ * de partants, en combien de series, et est-ce que ca passe. Repondre en
+ * ouvrant vraiment l'edition serait une facon couteuse de se renseigner — une
+ * edition ouverte ne se referme pas.
+ */
+export async function previsionZone(db, echelon, zone, enCours = null) {
+  await ensureChampTables(db);
+  const z = String(zone || 'MONDE').toUpperCase();
+  const nom = nomZone(z, echelon);
+  const base = { echelon, zone: z, zoneNom: nom.nom };
+
+  const deja = enCours ? enCours.get(echelon + ':' + z) : await db.prepare(
+    `SELECT id FROM champ_editions WHERE echelon = ? AND zone = ? AND etat <> 'terminee' LIMIT 1`
+  ).bind(echelon, z).first();
+
+  const p = await pool(db, echelon, z);
+  if (p.erreur) {
+    return {
+      ...base, ouvrable: false, raison: p.erreur,
+      joueurs: p.joueurs != null ? p.joueurs : 0,
+      zones: p.zones, requis: p.requis, premiere: p.premiere,
+      edition: deja ? deja.id : null,
+    };
+  }
+
+  const n = p.joueurs.length;
+  const format = n === FORMAT.partants ? FORMAT : formatDynamique(n);
+  return {
+    ...base,
+    ouvrable: n >= FORMAT_REDUIT_MIN && !deja,
+    raison: deja ? 'edition deja ouverte' : n < FORMAT_REDUIT_MIN ? 'grille incomplete' : null,
+    partants: n, joueurs: n, zones: p.zones,
+    reduit: n !== FORMAT.partants,
+    courses: format.phases[0].courses,
+    finale: format.phases[format.phases.length - 1].parCourse,
+    tete: p.joueurs.slice(0, 8).map(j => j.nom),
+    edition: deja ? deja.id : null,
+  };
+}
+
+/**
+ * L'etat du monde, tel que le salon des championnats le montre.
+ *
+ * Une seule requete pour les nations — elles peuvent etre nombreuses et leur
+ * effectif se lit d'un coup — puis une prevision complete pour chaque continent
+ * et pour le monde, qui sont six et dont la composition demande d'aller lire
+ * les podiums.
+ */
+export async function previsionSalon(db) {
+  await ensureChampTables(db);
+  await ensureDuelTables(db);
+
+  const { results: ouvertes } = await db.prepare(
+    `SELECT id, echelon, zone, phase, debut FROM champ_editions WHERE etat <> 'terminee'`
+  ).all();
+  const enCours = new Map((ouvertes || []).map(e => [e.echelon + ':' + e.zone, e]));
+
+  const nations = (await paysEligibles(db)).map(p => {
+    const deja = enCours.get('national:' + p.pays);
+    const n = Math.min(p.joueurs, FORMAT.partants);
+    return {
+      echelon: 'national', zone: p.pays, zoneNom: nomZone(p.pays, 'national').nom,
+      joueurs: p.joueurs, partants: n, requis: p.requis,
+      ouvrable: p.eligible && !deja,
+      raison: deja ? 'edition deja ouverte' : p.eligible ? null : 'pays trop petit',
+      reduit: p.reduit, premiere: p.premiere,
+      courses: p.eligible ? (n === FORMAT.partants ? FORMAT : formatDynamique(n)).phases[0].courses : 0,
+      edition: deja ? deja.id : null,
+      phase: deja ? deja.phase : null,
+    };
+  });
+
+  const continents = [];
+  for (const c of Object.keys(CONTINENTS)) {
+    continents.push(await previsionZone(db, 'continental', c, enCours));
+  }
+  const monde = await previsionZone(db, 'mondial', 'MONDE', enCours);
+
+  return {
+    maintenant: Date.now(),
+    nations, continents, monde,
+    ouvrables: nations.filter(n => n.ouvrable).length,
+    enCours: (ouvertes || []).map(e => ({
+      edition: e.id, echelon: e.echelon, zone: e.zone,
+      zoneNom: nomZone(e.zone, e.echelon).nom, phase: e.phase, debut: e.debut,
+    })),
+  };
+}
+
+/**
  * L'edition en cours ou ce joueur est engage, s'il y en a une.
  *
  * Sans cette route, un joueur n'a aucun moyen de retrouver son championnat :
@@ -586,8 +795,9 @@ export async function etatEdition(db, id) {
   // format est une regle de competition, et la dupliquer cote client garantit
   // qu'un jour les deux ne diront plus la meme chose.
   const z = nomZone(e.zone, e.echelon);
-  const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
-  const cfg = FORMAT.phases[iPhase] || null;
+  const format = formatDe(e);
+  const iPhase = format.phases.findIndex(p => p.cle === e.phase);
+  const cfg = format.phases[iPhase] || null;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
     zoneNom: z.nom,
@@ -596,14 +806,18 @@ export async function etatEdition(db, id) {
     phase: e.phase, etat: e.etat,
     phaseNom: cfg ? cfg.nom : e.phase,
     phaseIndex: iPhase,
-    phases: FORMAT.phases.map(p => ({ cle: p.cle, nom: p.nom, courses: p.courses })),
+    phases: format.phases.map(p => ({ cle: p.cle, nom: p.nom, courses: p.courses })),
+    // Une edition a effectif reduit ne court pas le format nominal : le jeu ne
+    // peut pas le deviner, il doit le lire ici.
+    partantsAttendus: format.partants,
+    reduit: format.partants !== FORMAT.partants,
     courses: cfg ? cfg.courses : 0,
     parCourse: cfg ? cfg.parCourse : 0,
     directsParCourse: cfg ? cfg.directsParCourse : 0,
     repechages: cfg ? cfg.repechages : 0,
     champion: e.champion_nom || null,
     partants: partants || [], resultats: res || [],
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrier(e.debut, CALENDRIER, format),
   };
 }
 
@@ -618,7 +832,7 @@ export async function etatEdition(db, id) {
 export async function enregistrerCourse(db, { edition, phase, course, chronos }) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT phase, etat FROM champ_editions WHERE id = ?`).bind(edition).first();
+    `SELECT phase, etat, format FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat === 'terminee') return { erreur: 'edition terminee' };
   if (e.phase !== phase) return { erreur: 'ce n est pas la phase en cours', phase: e.phase };
@@ -649,7 +863,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   // on peut donc les annoncer des l'arrivee, ce que la mise en scene demande.
   // Les repeches, eux, se calculent sur les quatre series et attendent la
   // cloture — c'est tout l'ecart entre ce qui se voit et ce qui se devine.
-  const cfgPhase = FORMAT.phases.find(x => x.cle === phase);
+  const cfgPhase = formatDe(e).phases.find(x => x.cle === phase);
   const { results: arrivee } = await db.prepare(
     `SELECT r.name_key AS cle, r.ms, p.nom, p.rang_duel AS rang
        FROM champ_resultats r JOIN champ_partants p
@@ -691,12 +905,14 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
 export async function cloturerPhase(db, edition) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT phase, etat, zone, echelon FROM champ_editions WHERE id = ?`).bind(edition).first();
+    `SELECT phase, etat, zone, echelon, format FROM champ_editions WHERE id = ?`
+  ).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat === 'terminee') return { erreur: 'edition terminee' };
 
-  const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
-  const cfg = FORMAT.phases[iPhase];
+  const format = formatDe(e);
+  const iPhase = format.phases.findIndex(p => p.cle === e.phase);
+  const cfg = format.phases[iPhase];
 
   // On rassemble les chronos, course par course, avec de quoi departager.
   const { results: brut } = await db.prepare(
@@ -717,7 +933,7 @@ export async function cloturerPhase(db, edition) {
   }
 
   // La finale ne qualifie personne : elle sacre.
-  if (iPhase === FORMAT.phases.length - 1) {
+  if (iPhase === format.phases.length - 1) {
     const p = podium(courses[0], cfg.podium);
     const majPlaces = p.classement.map(r => db.prepare(
       `UPDATE champ_resultats SET place = ? WHERE edition = ? AND phase = ? AND name_key = ?`
@@ -730,7 +946,7 @@ export async function cloturerPhase(db, edition) {
   }
 
   const q = qualifier(courses, cfg);
-  const suivante = FORMAT.phases[iPhase + 1];
+  const suivante = format.phases[iPhase + 1];
 
   // Les qualifies repartent en serpentin, semes sur leur chrono du jour : le
   // meilleur temps de la phase est tete de serie de la suivante.
