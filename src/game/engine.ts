@@ -354,6 +354,10 @@ export function updateLogic(dt: number) {
       gameStore.setState({ state: G.state, countT: G.countT });
       return;
     }
+    // Le pistolet est annonce : la presentation est finie, et les bras leves
+    // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
+    // courait toute la course en saluant.
+    SprinterApp.finirLesSaluts(dt);
     const prev = Math.floor(G.countT);
     G.countT += dt;
     if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
@@ -390,6 +394,9 @@ export function updateLogic(dt: number) {
       }
     }
     SprinterApp.stepGhost(dt);
+    // Un depart donne pendant qu'un salut descendait encore : on finit de le
+    // rendre en course plutot que de le figer a mi-hauteur.
+    SprinterApp.finirLesSaluts(dt);
     if (G.liveOn) pousserPosition();
 
     if (G.player.reaction !== null && !G.reactShown) {

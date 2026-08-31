@@ -263,15 +263,34 @@ export function OneShotEndScreen() {
   };
 
   // Course en direct : l'issue vient de la salle, pas du chrono local — c'est
-  // elle qui a vu les deux arrivees.
+  // elle qui a vu les arrivees.
   const live = !!liveOn && !!liveResultat;
-  const monRole = live && liveResultat.hote.id === liveResultat.moi ? 'hote' : 'invite';
-  const liveGagne = live && (
-    (monRole === 'hote' && liveResultat.issue === 'challenger') ||
-    (monRole === 'invite' && liveResultat.issue === 'opponent'));
-  const liveNul = live && liveResultat.issue === 'draw';
-  const monMs = live ? liveResultat[monRole].ms : 0;
-  const sonMs = live ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
+
+  /**
+   * A DEUX, ET SEULEMENT A DEUX, la salle annonce un duel.
+   *
+   * Au-dela, elle envoie un ordre d'arrivee et rien d'autre : le bareme des
+   * duels est fait pour une paire, et une course a huit n'en est pas une. Cet
+   * ecran lisait pourtant `liveResultat.hote.id` sans condition — sur une
+   * piste a quatre, six ou huit couloirs, la lecture echouait et emportait
+   * TOUT l'ecran de fin. On ne voyait donc aucun resultat apres la course :
+   * pas une omission d'affichage, une page qui tombait.
+   */
+  const duo = live && !!liveResultat.hote && !!liveResultat.invite;
+  const monRole = duo && liveResultat.hote.id === liveResultat.moi ? 'hote' : 'invite';
+  const liveNul = duo && liveResultat.issue === 'draw';
+  const monMs = duo ? liveResultat[monRole].ms : 0;
+  const sonMs = duo ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
+
+  /** L'ordre d'arrivee, quand il y a plus de deux couloirs sur la piste. */
+  const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
+    (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
+  const maLigne = classement.find(x => x.id === liveResultat?.moi) || null;
+
+  const liveGagne = duo
+    ? ((monRole === 'hote' && liveResultat.issue === 'challenger') ||
+       (monRole === 'invite' && liveResultat.issue === 'opponent'))
+    : !!maLigne && maLigne.place === 1;
 
   // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
   //
@@ -328,6 +347,8 @@ export function OneShotEndScreen() {
               ${falseOut || (challenge && !beaten) || (live && !liveGagne && !liveNul)
                 ? 'text-destructive' : live && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
               {falseOut ? N.t('false_out')
+                : live && !duo && maLigne
+                  ? `${N.ord(maLigne.place)} ${N.t('live_sur', { n: classement.length })}`
                 : live ? N.t(liveGagne ? 'live_won' : liveNul ? 'live_tie' : 'live_lost')
                 : challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost')
                 : N.t('oneshot_done')}
@@ -351,7 +372,7 @@ export function OneShotEndScreen() {
           {/* Course en direct : les deux chronos face a face. Le classement des
               duels est alimente par la salle elle-meme, donc rien a envoyer
               d'ici — seulement a montrer. */}
-          {live && (
+          {duo && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
@@ -387,6 +408,69 @@ export function OneShotEndScreen() {
                 </span>
               )}
             </motion.div>
+          )}
+
+          {/* Plus de deux couloirs : c'est une course, et le resultat d'une
+              course est son ordre d'arrivee. Rien au classement des duels —
+              le bareme est fait pour une paire — mais il fallait bien montrer
+              qui a gagne, ce qui ne se faisait nulle part. */}
+          {live && !duo && classement.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
+                ${liveGagne ? 'border-emerald-400/50 bg-emerald-400/[0.10]'
+                  : 'border-white/15 bg-card/60'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Radio className={`w-4 h-4 ${liveGagne ? 'text-emerald-400' : 'text-foreground'}`} />
+                <span className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-muted-foreground">
+                  {N.t('live_ordre')}
+                </span>
+              </div>
+              <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
+                {classement.map(l => {
+                  const moi = l.id === liveResultat.moi;
+                  return (
+                    <div key={l.id} className={`flex items-center justify-between px-3 py-2
+                      ${moi ? 'bg-primary/10' : ''}`}>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className={`font-bold w-6 shrink-0 text-xs md:text-sm
+                          ${l.place === 1 ? 'text-primary' : l.place === 2 ? 'text-slate-300'
+                            : l.place === 3 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                          {l.place}.
+                        </span>
+                        <span className={`font-bold tracking-wide truncate text-xs md:text-sm
+                          ${moi ? 'text-primary' : 'text-foreground'}`}>
+                          {moi ? N.t('duel_you') : l.nom}
+                        </span>
+                      </span>
+                      <span className={`font-mono font-bold shrink-0 text-sm md:text-base
+                        ${l.abandon ? 'text-destructive' : 'text-foreground'}`}>
+                        {l.abandon ? N.t('dnf') : `${(l.ms / 1000).toFixed(2)} s`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* La pique, apres une course en direct perdue.
+              Elle existait pour le defi differe et manquait ici, alors que
+              c'est le moment ou elle porte le plus : l'autre vient de nous
+              battre en meme temps que nous, et il est encore la. */}
+          {live && !liveGagne && !liveNul && (
+            <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
+                            px-4 py-3 flex flex-col items-center gap-1.5">
+              <p className="text-sm md:text-base text-foreground text-center leading-snug">
+                « {pique(`${liveNom}${monMs || (maLigne ? maLigne.ms : 0)}`,
+                         duo ? liveNom : (classement[0] ? classement[0].nom : liveNom))} »
+              </p>
+              <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
+                               truncate max-w-full">
+                {duo ? liveNom : (classement[0] ? classement[0].nom : liveNom)}
+              </span>
+            </div>
           )}
 
           {/* Resultat du duel : les points comptent pour le classement des

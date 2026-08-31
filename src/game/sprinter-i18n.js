@@ -324,6 +324,10 @@
     live_lanes_course: ['une course : un classement à l’arrivée, sans points au classement des duels',
                         'a race: a finishing order, no points on the duel ranking'],
     live_won:        ['COURSE GAGNÉE', 'RACE WON'],
+    // Au-dela de deux couloirs, une course en direct n'est plus un duel : on
+    // annonce une place et un ordre d'arrivee, pas un vainqueur et un perdant.
+    live_sur:        ['SUR {n} PARTANTS', 'OF {n} STARTERS'],
+    live_ordre:      ['ORDRE D’ARRIVÉE', 'FINISHING ORDER'],
     live_lost:       ['COURSE PERDUE', 'RACE LOST'],
     // presentation des participants, avant le depart
     pres_title:      ['PRÉSENTATION DES ATHLÈTES', 'ATHLETE INTRODUCTIONS'],

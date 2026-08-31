@@ -1165,6 +1165,28 @@
     }
   }
 
+  /**
+   * Les bras redescendent quand la presentation est finie.
+   *
+   * `celebrate` est monte a 1 sur l'athlete presente, et redescendu a 0 sur
+   * les autres — mais uniquement DANS stepPresentation, qui cesse d'etre
+   * appele au coup de pistolet. Le dernier presente gardait donc son salut
+   * pendant toute la course : on courait les bras en l'air, sans que rien ne
+   * puisse l'annuler avant le retour a l'accueil. C'etait d'autant plus
+   * visible que le dernier presente est souvent le joueur lui-meme.
+   *
+   * On redescend au lieu de remettre a zero d'un coup : un salut qui se coupe
+   * net a l'image du depart se voit autant que le salut bloque.
+   */
+  function finirLesSaluts(dt) {
+    G.presente = null;
+    if (!G.runners) return;
+    for (const r of G.runners) {
+      if (!r.celebrate) continue;
+      r.celebrate = Math.max(0, r.celebrate - CELEBRE_DESCENTE * dt);
+    }
+  }
+
   function followCam(dt) {
     const T = G.track, s = G.player ? G.player.d : 0, lane = 3;
     // La camera vise la position exacte du joueur (pas de decalage vers
@@ -1939,6 +1961,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    finirLesSaluts,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     REC_STEP, goHome,
