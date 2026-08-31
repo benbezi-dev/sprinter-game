@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -19,6 +19,7 @@ import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
+import { BoutonRecommencer, RevancheDirecte } from './Recommencer';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -37,7 +38,7 @@ function fmt(v: number | null | undefined, dnf: string) {
 
 export function OneShotEndScreen() {
   const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
-          liveOn, liveNom, liveResultat } = useGameStore();
+          liveOn, liveNom, liveResultat, livePoints } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   const [name, setName] = useState(getSavedName());
@@ -67,6 +68,17 @@ export function OneShotEndScreen() {
   const [duel, setDuel] = useState<DuelIssue | null>(null);
   const [duelEnCours, setDuelEnCours] = useState(!!challenge);
   const [voirDuels, setVoirDuels] = useState(false);
+  /**
+   * Le classement a-t-il fini de se faire attendre ?
+   *
+   * Les points d'une course en direct arrivent apres le resultat, le temps
+   * d'une ecriture en base. Presque toujours en moins d'une seconde — mais
+   * « presque toujours » n'est pas assez pour laisser tourner une roue sans fin
+   * : deux joueurs portant le meme nom ne forment pas un duel, et une base
+   * indisponible ne repond pas du tout. Dans les deux cas le serveur se tait,
+   * a juste titre, et c'est a l'ecran de cesser d'attendre.
+   */
+  const [attenteFinie, setAttenteFinie] = useState(false);
   // La phrase de resultat ne se joue qu'une fois par defi.
   const sonne = useRef(false);
 
@@ -292,6 +304,33 @@ export function OneShotEndScreen() {
        (monRole === 'invite' && liveResultat.issue === 'opponent'))
     : !!maLigne && maLigne.place === 1;
 
+  /**
+   * CE QUE CETTE COURSE M'A COUTE, OU RAPPORTE.
+   *
+   * Une course en direct a toujours compte au classement des duels — c'est le
+   * meme bareme, le meme classement, et c'etait deja le cas avant cet ecran.
+   * Elle ne le DISAIT pas : les points partaient du serveur en silence, et le
+   * joueur ne pouvait les constater qu'en ouvrant le classement plus tard,
+   * sans savoir quelle course les avait produits. Celui qui releve un defi
+   * differe, lui, lisait son gain a l'arrivee depuis toujours.
+   *
+   * On lit par identifiant plutot que par role : la salle nous connait sous
+   * celui-la, et c'est le seul qui ne se retourne pas selon qu'on ait ouvert
+   * la piste ou qu'on l'ait rejointe.
+   */
+  /** Huit secondes : au-dela, le classement ne repondra plus. */
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setAttenteFinie(true), 8000);
+    return () => clearTimeout(t);
+  }, [live]);
+
+  const mouvement: { lp: number; rang?: any; monte?: boolean; descend?: boolean } | null =
+    live && duo && livePoints && livePoints.moi
+      ? [livePoints.hote, livePoints.invite]
+          .find((x: any) => x && x.id === livePoints.moi) || null
+      : null;
+
   // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
   //
   // Sert au ton du bouton qui mene au classement, et a rien d'autre. Le duel
@@ -471,6 +510,84 @@ export function OneShotEndScreen() {
                 {duo ? liveNom : (classement[0] ? classement[0].nom : liveNom)}
               </span>
             </div>
+          )}
+
+          {/* CE QUE LA COURSE EN DIRECT A COUTE AU CLASSEMENT.
+
+              A deux, et seulement a deux : au-dela, la piste n'est plus un
+              duel et le serveur n'envoie aucun point — voir salle.js. Le bloc
+              apparait donc pour un duel et reste absent d'une serie a huit,
+              ou il n'aurait rien a annoncer.
+
+              Il s'affiche AVANT de connaitre le chiffre. Les points ne
+              tombent pas avec le resultat : l'ordre d'arrivee se connait a la
+              ligne, les points demandent une ecriture en base, et la salle
+              n'attend pas la seconde pour annoncer le premier. Une seconde
+              d'attente annoncee vaut mieux qu'un bloc qui surgit sous les
+              yeux d'un joueur en train de lire autre chose. */}
+          {live && duo && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-1.5 shadow-2xl
+                ${!mouvement ? 'border-white/10 bg-card/60'
+                  : mouvement.lp > 0 ? 'border-primary/50 bg-primary/10'
+                  : mouvement.lp < 0 ? 'border-destructive/50 bg-destructive/10'
+                  : 'border-white/20 bg-white/5'}`}
+            >
+              <div className="flex items-center gap-2">
+                <Swords className={`w-4 h-4 ${!mouvement ? 'text-muted-foreground'
+                  : mouvement.lp > 0 ? 'text-primary'
+                  : mouvement.lp < 0 ? 'text-destructive' : 'text-foreground'}`} />
+                <span className="text-[10px] md:text-xs font-bold tracking-[0.25em]
+                                 text-muted-foreground">
+                  {N.t('live_pl_titre')}
+                </span>
+              </div>
+
+              {mouvement ? (
+                <>
+                  <span className="font-mono font-black text-3xl md:text-4xl
+                                   tabular-nums text-foreground leading-none">
+                    {mouvement.lp > 0 ? '+' : ''}{mouvement.lp}
+                    <span className="text-xs font-normal ml-1 text-muted-foreground">
+                      {N.t('duel_lp')}
+                    </span>
+                  </span>
+                  {/* Un changement de division ne passe pas dans une ligne de
+                      chiffres : c'est le seul moment ou le classement se
+                      raconte tout seul. */}
+                  {mouvement.rang && (mouvement.monte || mouvement.descend) && (
+                    <span className={`text-[10px] md:text-xs font-bold tracking-widest
+                      ${mouvement.monte ? 'text-emerald-400' : 'text-destructive'}`}>
+                      {N.t(mouvement.monte ? 'duel_promu' : 'duel_relegue', {
+                        r: nomDuRang(mouvement.rang.etage, mouvement.rang.division),
+                      })}
+                    </span>
+                  )}
+                  {/* La phrase parle de prendre et de rendre : sur une
+                      egalite, ou rien ne bouge, elle n'aurait rien a
+                      expliquer. */}
+                  {mouvement.lp !== 0 && (
+                    <p className="text-[10px] md:text-xs text-muted-foreground text-center
+                                  leading-snug max-w-xs">
+                      {N.t('live_pl_sub')}
+                    </p>
+                  )}
+                </>
+              ) : attenteFinie ? (
+                <span className="text-[11px] md:text-xs text-muted-foreground tracking-wide
+                                 text-center leading-snug max-w-xs">
+                  {N.t('live_pl_muet')}
+                </span>
+              ) : (
+                <span className="text-[11px] md:text-xs text-muted-foreground tracking-wide
+                                 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {N.t('live_pl_attente')}
+                </span>
+              )}
+            </motion.div>
           )}
 
           {/* Resultat du duel : les points comptent pour le classement des
@@ -900,21 +1017,26 @@ export function OneShotEndScreen() {
               etait parti dans un duel il y reste. Ce qui est acquis se dit
               juste en dessous, a cote du bouton et non a sa place. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
-            {RECOMMENCER_OUVERT && <button
-              onClick={() => SprinterApp.recommencer()}
-              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
-                         tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
-                         border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
-                         flex items-center justify-center gap-2"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {N.t('os_rejouer')}
-            </button>}
-            {RECOMMENCER_OUVERT && (
-              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                {N.t('os_rejouer_sub')}
-              </p>
-            )}
+            {/* SEUL, OU ENSEMBLE.
+
+                Recommencer seul est le raccourci d'origine, et il ne change
+                pas : une course de plus, tout de suite. Mais apres une course
+                en direct, l'adversaire est encore la — et repartir seul sous
+                ses yeux, c'est quitter la piste sans le dire. Ce que deux
+                joueurs veulent alors n'est pas une course de plus, c'est la
+                meme, contre le meme. Le bouton demande donc un accord et
+                montre celui de l'autre ; le repli solo reste, un ton plus bas,
+                et dit son prix. Voir Recommencer.tsx. */}
+            {RECOMMENCER_OUVERT && (live ? <RevancheDirecte /> : (
+              <>
+                <BoutonRecommencer onClick={() => SprinterApp.recommencer()}>
+                  {N.t('os_rejouer')}
+                </BoutonRecommencer>
+                <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+                  {N.t('os_rejouer_sub')}
+                </p>
+              </>
+            ))}
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}

@@ -50,6 +50,14 @@ export type EtatSalle = {
   niveau: number;
   depart_a: number | null;
   termine: boolean;
+  /**
+   * Combien de courses cette piste a deja rendues.
+   *
+   * Zero avant la premiere : le bouton dit alors « JE SUIS PRÊT ». Au-dela, le
+   * meme accord se demande sous un autre nom — « RECOMMENCER » — et c'est le
+   * seul endroit ou l'ecran peut faire la difference.
+   */
+  manche?: number;
   presentation?: {
     debut_a: number; par: number; micro: number; ordre: Couloir[];
   } | null;
@@ -67,6 +75,32 @@ export type ResultatDirect = {
   issue?: 'challenger' | 'opponent' | 'draw';
   hote?: { id: string; nom: string; ms: number };
   invite?: { id: string; nom: string; ms: number };
+  /** Le rang de cette course sur la piste : 0 pour la premiere. */
+  manche?: number;
+};
+
+/** Ce que le classement des duels retient d'un joueur apres une course. */
+export type MouvementLigue = {
+  id: string;
+  /** Points de ligue gagnes ou perdus. Negatif quand on en rend. */
+  lp: number;
+  rang?: { palier: number; etage: string; division: number };
+  monte?: boolean;
+  descend?: boolean;
+};
+
+/**
+ * Ce que la course en direct a coute aux deux adversaires.
+ *
+ * Il arrive APRES le resultat, et separement : l'ordre d'arrivee se connait a
+ * la ligne, les points demandent une ecriture en base. La salle n'attend pas
+ * la seconde pour annoncer le premier — une base indisponible ne doit pas
+ * priver deux joueurs de leur chrono.
+ */
+export type PointsDirect = {
+  manche?: number;
+  hote?: MouvementLigue;
+  invite?: MouvementLigue;
 };
 
 type Ecouteurs = {
@@ -78,6 +112,8 @@ type Ecouteurs = {
   onPos?: (id: string, d: number) => void;
   onFini?: (nom: string, ms: number, abandon: boolean) => void;
   onResultat?: (r: ResultatDirect) => void;
+  /** Ce que la course a rapporte, quand le classement a rendu sa reponse. */
+  onPoints?: (p: PointsDirect) => void;
   onSorti?: (nom: string) => void;
   onFerme?: (raison: string) => void;
   /** Signalisation WebRTC arrivee de l'autre pair. */
@@ -143,6 +179,45 @@ export class Salle {
    */
   ecouter(ec: Ecouteurs) { this.ec = ec; }
 
+  /**
+   * La liaison est-elle encore la ?
+   *
+   * L'ecran d'arrivee en a besoin pour savoir quoi proposer : recommencer
+   * ENSEMBLE n'a de sens que si l'autre est encore au bout du fil. Une piste
+   * fermee — l'adversaire est parti, la salle a expire — doit rendre la main
+   * au raccourci solo plutot que d'afficher un bouton qui ne fera rien.
+   */
+  get ouverte(): boolean {
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  private observateurs = new Set<(e: EtatSalle | null) => void>();
+
+  /**
+   * Regarder la salle sans la prendre.
+   *
+   * `ecouter` REMPLACE les ecouteurs, et c'est ce qu'on veut quand l'ecran du
+   * salon se remonte : il n'y a qu'un pilote a la fois. Mais l'ecran d'arrivee
+   * n'est pas un second pilote — il ne monte pas la piste, ne donne pas le
+   * depart et ne route pas les positions. Il a seulement besoin de savoir qui
+   * a dit oui.
+   *
+   * S'il passait par `ecouter`, il emporterait avec lui `onDepart`,
+   * `onPresentation` et `onPos` : la revanche partirait chez l'autre et pas
+   * chez lui. D'ou ce canal en lecture seule, qui s'ajoute au pilote au lieu
+   * de le remplacer. Rend de quoi se desabonner.
+   */
+  observer(fn: (e: EtatSalle | null) => void): () => void {
+    this.observateurs.add(fn);
+    return () => { this.observateurs.delete(fn); };
+  }
+
+  private prevenirObservateurs() {
+    for (const fn of this.observateurs) {
+      try { fn(this.dernierEtat); } catch { /* un observateur muet n'arrete rien */ }
+    }
+  }
+
   connecter(epreuves: string[], niveau: number, places = 2) {
     this.epreuves = epreuves.slice();
     const q = new URLSearchParams({
@@ -183,6 +258,10 @@ export class Salle {
     ws.onclose = () => {
       clearInterval(this.timerPing);
       this.ec.onFerme?.('fermee');
+      // Une piste fermee est une information, pas un silence : l'ecran
+      // d'arrivee doit retirer sa proposition de revanche plutot que de
+      // laisser un bouton attendre quelqu'un qui n'est plus la.
+      this.prevenirObservateurs();
     };
   }
 
@@ -229,6 +308,9 @@ export class Salle {
         this.presentationPose = false;
         this.ec.onResultat?.(m as ResultatDirect);
         return;
+      case 'points':
+        this.ec.onPoints?.(m as PointsDirect);
+        return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.
       case 'sdp':
@@ -245,6 +327,7 @@ export class Salle {
     this.adversaire = autre ? autre.nom : '';
     this.dernierEtat = m as EtatSalle;
     this.ec.onEtat?.(m as EtatSalle);
+    this.prevenirObservateurs();
 
     // Comme le depart, la presentation est annoncee a une date absolue. On la
     // ramene dans notre horloge une seule fois, et le reste se compte en local.

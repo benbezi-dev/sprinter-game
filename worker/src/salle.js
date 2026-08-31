@@ -32,7 +32,15 @@ const VIE_SALLE_MS = 20 * 60 * 1000;
 // Pas immediatement — les deux joueurs regardent leur resultat et peuvent
 // vouloir remettre ca. On leur laisse le temps de se decider, et le moindre
 // « pret » annule la fermeture.
-const APRES_RESULTAT_MS = 45 * 1000;
+//
+// Quatre-vingt-dix secondes, et non quarante-cinq. Ce delai n'est pas un
+// reglage de confort : c'est le temps dont dispose RECOMMENCER pour exister.
+// L'ecran d'arrivee porte un chrono, un ecart, une pique, parfois une
+// promotion ; le temps de le lire et de decider a deux, la salle avait ferme,
+// et le bouton ne pouvait plus rien proposer d'autre que de repartir seul.
+// Une demande de revanche, elle, repousse la fermeture aussi longtemps qu'il
+// le faut — c'est l'attente qui coute, pas la decision.
+const APRES_RESULTAT_MS = 90 * 1000;
 // Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
@@ -114,6 +122,21 @@ export class SalleDirecte {
     this.max = DEFAUT_JOUEURS; // taille de la piste, fixee par le createur
     this.hote = null;          // identifiant du createur : c'est lui l'initiateur
     this.termine = false;
+    /**
+     * Combien de courses cette piste a deja rendues.
+     *
+     * Sert a deux choses, et la premiere ne se voit pas : elle donne son
+     * identite a chaque rencontre. Le classement des duels refuse de trancher
+     * deux fois le meme identifiant — c'est ce qui protege un defi differe
+     * d'une seconde tentative — et la salle donnait le sien, « LIVE-CODE »,
+     * a toutes ses manches. La deuxieme course sur une meme piste, et toutes
+     * les suivantes, ne rapportaient donc rien a personne : elles se jouaient,
+     * s'affichaient, et n'existaient pas au classement.
+     *
+     * La seconde est visible : le client s'en sert pour savoir si le bouton
+     * dit « JE SUIS PRET » ou « RECOMMENCER ».
+     */
+    this.manche = 0;
     this.test = false;         // salle du canal de test : ecrit ailleurs
     this.code = '';            // le code de la salle, pose au premier appel
     this.minuteur = null;      // fermeture programmee
@@ -134,6 +157,7 @@ export class SalleDirecte {
     return {
       joueurs, epreuves: this.epreuves, niveau: this.niveau, max: this.max,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
+      manche: this.manche,
       presentation: this.presentationA ? {
         debut_a: this.presentationA,
         par: creneauPresentation(this.ordre.length),
@@ -278,6 +302,21 @@ export class SalleDirecte {
         try { ws.send(JSON.stringify({ t: 'pong', a: m.a, serveur: Date.now() })); } catch (e) { }
         return;
 
+      // Un seul accord pour deux questions.
+      //
+      // Avant la premiere course, « pret » veut dire « je suis pret ». Apres
+      // un resultat, il veut dire « on recommence » — et c'est le meme
+      // message, volontairement. Deux mecanismes d'accord dans une salle qui
+      // n'en demande qu'un, ce sont deux facons de partir a trois contre un et
+      // deux endroits ou reveiller la piste ; la salle n'a besoin de savoir
+      // qu'une chose, qui est prete a courir maintenant.
+      //
+      // Ce qui change apres un resultat n'est donc pas le protocole mais le
+      // point de depart : les drapeaux sont remis a zero (voir peutTrancher),
+      // si bien qu'une revanche exige un accord neuf de TOUT LE MONDE. Sans
+      // cette remise a zero, les deux joueurs restaient prets de la course
+      // precedente, et le premier qui touchait son bouton deux fois relancait
+      // la piste pour l'autre, sans lui demander son avis.
       case 'pret': {
         j.pret = !!m.pret;
         this.vivante();
@@ -367,6 +406,20 @@ export class SalleDirecte {
     this.presentationA = null;
     this.ordre = [];
 
+    // Le numero de CETTE course, avant d'ouvrir la suivante. C'est lui qui
+    // entre au classement ; l'incrementer d'abord ferait porter a la premiere
+    // manche l'identite de la seconde.
+    const manche = this.manche;
+    this.manche = manche + 1;
+
+    // Personne n'est plus pret. Tant que ces drapeaux restaient leves, il
+    // suffisait d'en baisser un et de le relever pour relancer la piste tout
+    // seul : la revanche partait sans l'accord de l'autre, qui lisait encore
+    // son resultat. On les baisse donc tous, et l'etat part tout de suite —
+    // les deux ecrans doivent montrer un accord vide, sinon chacun croirait
+    // que l'autre a deja dit oui.
+    for (const x of tous) x.pret = false;
+
     // Le verdict est rendu : la salle n'a plus de raison d'etre eveillee. On
     // laisse le temps de le lire et de relancer, puis on ferme.
     this.programmerFermeture(APRES_RESULTAT_MS, 'course terminee');
@@ -392,14 +445,19 @@ export class SalleDirecte {
                     : hote.fin > invite.fin ? 'opponent' : 'draw';
       message.hote = { id: hote.id, nom: hote.nom, ms: hote.fin };
       message.invite = { id: invite.id, nom: invite.nom, ms: invite.fin };
+      message.manche = manche;
       this.diffuser(message);
+      // La piste est de nouveau disponible, et personne n'y est pret : les
+      // deux ecrans d'arrivee ont besoin de le savoir pour proposer la
+      // revanche et montrer ou en est l'autre.
+      this.envoyerEtat();
 
       // Les points passent par le meme chemin que ceux d'un defi differe : une
       // course en direct et un defi rejoue en fantome doivent compter pareil.
       // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
       // indisponible, la course reste jouee et affichee, seuls les points
       // manquent, ce qui vaut mieux que deux joueurs bloques sur une attente.
-      const ecrire = this.ecrire(hote, invite);
+      const ecrire = this.ecrire(hote, invite, manche);
       if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
       return;
     }
@@ -410,21 +468,62 @@ export class SalleDirecte {
     // (vingt-huit duels croises pour huit partants) gonflerait le classement
     // sans rien mesurer de juste. Les series de championnat, elles, ont leur
     // propre chemin d'enregistrement.
+    message.manche = manche;
     this.diffuser(message);
+    // Recommencer ensemble ne concerne pas que le duel : huit coureurs qui
+    // veulent refaire la serie passent par le meme accord.
+    this.envoyerEtat();
   }
 
-  async ecrire(hote, invite) {
+  /**
+   * Porte la course au classement des duels, et dit aux deux ce qu'elle leur
+   * a coute.
+   *
+   * L'ANNONCE EST LA MOITIE DE L'AFFAIRE. Les points partaient deja d'ici,
+   * mais ils partaient en silence : les deux joueurs voyaient leur chrono, un
+   * ecart, et rien. Le mouvement de ligue n'apparaissait qu'au classement, plus
+   * tard, sans qu'on sache quelle course l'avait produit — alors que celui qui
+   * releve un defi differe, lui, lit son gain sur l'ecran d'arrivee. Le meme
+   * classement se racontait donc deux fois moins bien dans le mode ou les deux
+   * adversaires sont presents.
+   */
+  async ecrire(hote, invite, manche) {
     try {
       const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
       if (!base || !this.code) return;
       // Prefixe distinct : un code de salle et un code de defi vivent dans le
       // meme espace de cles, et rien ne garantit qu'ils ne se croisent jamais.
-      await appliquerDuel(base, {
-        id: 'LIVE-' + this.code,
+      //
+      // Le numero de manche vient ensuite, et il est ce qui fait qu'une
+      // revanche compte. Le classement refuse de trancher deux fois le meme
+      // identifiant ; toutes les manches d'une piste portaient le meme, donc
+      // seule la premiere entrait au classement. La premiere garde son
+      // identifiant nu — les lignes deja ecrites le portent, et un recalcul
+      // doit retomber sur elles.
+      const points = await appliquerDuel(base, {
+        id: 'LIVE-' + this.code + (manche ? '-' + manche : ''),
         challengerName: hote.nom,
         opponentName: invite.nom,
         challengerMs: hote.fin,
         opponentMs: invite.fin,
+      });
+      // Rien a annoncer si le classement n'a rien bouge : deux joueurs portant
+      // le meme nom, ou une rencontre deja tranchee. Mieux vaut ne rien dire
+      // que d'afficher un « 0 PL » qui se lirait comme un match nul.
+      if (!points || points.deja || typeof points.lp !== 'number') return;
+      this.diffuser({
+        t: 'points',
+        manche,
+        // Chacun lit sa ligne. « lp » sans suffixe est celui du releveur, donc
+        // de l'invite : l'hote tient le role du lanceur — voir duels.js.
+        hote: {
+          id: hote.id, lp: points.lp_adverse, rang: points.rang_adverse,
+          monte: !!points.monte_adverse, descend: !!points.descend_adverse,
+        },
+        invite: {
+          id: invite.id, lp: points.lp, rang: points.rang,
+          monte: !!points.monte, descend: !!points.descend,
+        },
       });
     } catch (e) { /* le classement se passera de ce duel */ }
   }

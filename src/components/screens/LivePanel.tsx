@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
-  type EtatSalle, type JoueurSalle, type Presentation,
+  type EtatSalle, type JoueurSalle, type Presentation, type PointsDirect,
 } from '@/game/live';
 import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
@@ -93,6 +93,14 @@ export function LivePanel() {
       if (dejaLa.dernierEtat) {
         setSalon(dejaLa.dernierEtat);
         setPlaces(dejaLa.dernierEtat.max || 2);
+        // Le drapeau vient de la SALLE, jamais de ce qu'on croyait savoir.
+        // Une course rendue les baisse tous — c'est ce qui protege la revanche
+        // d'un depart sans accord — et un panneau qui se remonterait avec son
+        // ancien « pret » afficherait ANNULER sur un accord que la salle a
+        // deja oublie.
+        const mien = (dejaLa.dernierEtat.joueurs || [])
+          .find(j => j.id === dejaLa.moi);
+        setPret(!!mien?.pret);
       }
       setEtape('salon');
     } else {
@@ -134,10 +142,28 @@ export function LivePanel() {
    */
   const monterLaPiste = () => {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
-    SprinterApp.startLive([epreuve], {
+    SprinterApp.startLive([lEpreuve()], {
       levelIdx: 4, adversaire: salle.current?.adversaire || '', autres: lesAutres(),
     });
   };
+
+  /**
+   * L'epreuve de cette piste, lue dans la SALLE.
+   *
+   * Meme raison que pour `lesAutres`, et la meme correction : les ecouteurs
+   * sont crees une fois et gardent ce que React valait a cet instant. Or au
+   * remontage du panneau — apres une course, quand on revient a l'accueil —
+   * ils sont poses AVANT que `setEpreuve` n'ait pu s'appliquer, si bien qu'ils
+   * capturaient le 100 m par defaut. Une revanche sur une piste de 200 m
+   * partait donc sur un 100 m chez celui qui etait repasse par l'accueil, et
+   * sur un 200 m chez l'autre : deux courses differentes, un seul chrono
+   * commun, et un resultat qui n'avait plus de sens.
+   *
+   * La salle porte l'epreuve depuis sa creation et ne la change jamais. C'est
+   * la source.
+   */
+  const lEpreuve = (): RaceKey =>
+    (salle.current?.epreuves[0] as RaceKey) || epreuve;
 
   /**
    * Les adversaires, lus dans la SALLE et non dans l'etat React.
@@ -169,7 +195,7 @@ export function LivePanel() {
     // les deux clients doivent placer les memes gens aux memes endroits.
     const autres = lesAutres();
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse, autres });
+      SprinterApp.startLive([lEpreuve()], { levelIdx: 4, adversaire: adverse, autres });
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
@@ -186,6 +212,10 @@ export function LivePanel() {
   const ecouteurs = (monCode: string) => ({
     onEtat: (e: EtatSalle) => {
       setSalon(e);
+      // Meme raison qu'au remontage : la salle est seule a savoir qui est
+      // pret, et elle remet tout le monde a zero apres chaque course.
+      const mien = (e.joueurs || []).find(j => j.id === salle.current?.moi);
+      if (mien) setPret(!!mien.pret);
       setEtape(p => (p === 'presentation' || p === 'partie' || p === 'review') ? p : 'salon');
     },
     onPresentation: (p: Presentation) => {
@@ -252,6 +282,12 @@ export function LivePanel() {
       else voix.current?.fermerMicro();
 
       setEtape('review');
+    },
+    // Les points arrivent apres le resultat, et l'ecran d'arrivee les attend.
+    // Ils passent donc par l'etat du jeu et non par celui de ce panneau, qui
+    // est demonte a cet instant — c'est l'ecran de fin qui occupe la place.
+    onPoints: (p: PointsDirect) => {
+      SprinterApp.G.livePoints = { ...p, moi: salle.current?.moi || '' };
     },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
@@ -336,6 +372,16 @@ export function LivePanel() {
   const msg = code ? N.t('live_invite', { c: code, l: lienSalle(code) }) : '';
   const joueurs: JoueurSalle[] = salon?.joueurs || [];
   const complet = joueurs.length >= 2;
+  /**
+   * Cette piste a-t-elle deja couru ?
+   *
+   * Le meme accord ne se demande pas dans les memes mots. Avant la premiere
+   * course, on se declare pret ; apres, on recommence — et l'ecran doit le
+   * dire, sinon un joueur revenu au salon apres sa course cherche un bouton
+   * REVANCHE qui n'existe pas a cote d'un « JE SUIS PRÊT » qui, lui, fait
+   * exactement ce qu'il attend.
+   */
+  const manche = salon?.manche || 0;
 
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
@@ -538,7 +584,7 @@ export function LivePanel() {
           ${pret ? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/40'
                  : 'bg-emerald-400 text-background hover:bg-emerald-400/90'}`}
       >
-        {N.t(pret ? 'live_unready' : 'live_go')}
+        {N.t(pret ? 'live_unready' : manche ? 'live_encore' : 'live_go')}
       </button>
 
       {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}

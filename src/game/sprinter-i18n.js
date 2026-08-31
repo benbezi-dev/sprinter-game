@@ -239,6 +239,38 @@
     live_closed:     ['la liaison a été coupée', 'the connection dropped'],
     live_invite:     ['Je t’attends sur la piste. Code {c} — {l}',
                       'I am waiting for you on the track. Code {c} — {l}'],
+    // --- recommencer ensemble ------------------------------------------
+    // Le meme accord que « JE SUIS PRÊT », demande dans d'autres mots parce
+    // qu'il ne pose plus la meme question : avant la premiere course on se
+    // declare pret, apres on recommence. Et ENSEMBLE n'est pas decoratif —
+    // c'est ce qui distingue ce bouton du raccourci solo de l'ecran
+    // d'arrivee, qui lui, quitte la piste.
+    live_encore:     ['RECOMMENCER ENSEMBLE', 'RUN AGAIN TOGETHER'],
+    // Le meme mot qu'au salon : on annule un accord, on n'en donne pas un
+    // second. Ce que l'on attend se lit sous le bouton, pas dessus.
+    live_encore_attente: ['ANNULER', 'CANCEL'],
+    live_encore_oui: ['D’ACCORD', 'AGREED'],
+    live_encore_pas: ['PAS ENCORE', 'NOT YET'],
+    live_encore_sub: ['il faut être d’accord tous les deux — chacun voit l’autre',
+                      'you both have to agree — each of you sees the other'],
+    live_encore_wait: ['en attente de {n}', 'waiting for {n}'],
+    live_encore_veut: ['{n} veut recommencer — touche le bouton et ça repart',
+                       '{n} wants to run again — tap the button and off you go'],
+    live_encore_part: ['tout le monde est d’accord — ça repart',
+                       'everyone agreed — here it goes'],
+    live_encore_seul: ['recommencer seul — tu quittes la piste',
+                       'run again alone — you leave the track'],
+    live_encore_parti: ['ton adversaire a quitté la piste — tu peux repartir seul',
+                        'your opponent left the track — you can go again alone'],
+    // Ce que la course vient de coûter, ou de rapporter. Une course en direct
+    // est un duel : elle compte au classement comme un défi relevé, dans les
+    // deux sens.
+    live_pl_titre:   ['CLASSEMENT DES DUELS', 'DUEL RANKING'],
+    live_pl_attente: ['la course entre au classement…', 'the race is entering the ranking…'],
+    live_pl_muet:    ['le classement n’a pas répondu — ta course reste jouée',
+                      'the ranking did not answer — your race still stands'],
+    live_pl_sub:     ['une course en direct compte comme un duel : le vainqueur prend des points, le perdant en rend',
+                      'a live race counts as a duel: the winner takes points, the loser gives some back'],
     // relais 4x100
     relais_titre:    ['RELAIS 4 × 100', '4 × 100 RELAY'],
     relais_desc:     ['quatre coureurs, un témoin. Une équipe, c’est sa composition : mêmes quatre noms, même équipe.',

@@ -108,12 +108,19 @@ export function esperance(mmrA, mmrB) {
  * corrige la prediction, il ne recompense pas. La difference se voit sur un
  * duel entre egaux — le releveur y est legerement favori, sa victoire lui
  * rapporte donc un peu moins que celle du lanceur.
+ *
+ * `direct` annule cet avantage, et pour la meme raison qui le justifie
+ * ailleurs : il mesure le benefice de courir contre un chrono deja pose. Dans
+ * une course en direct il n'y en a pas — les deux partent au meme instant sans
+ * rien savoir. Le maintenir reviendrait a predire un favori la ou il n'y en a
+ * pas, et le MMR corrigerait indefiniment un ecart qu'il aurait invente.
  */
-export function majMmr({ mmrLanceur, mmrReleveur, duelsLanceur, duelsReleveur, issue }) {
+export function majMmr({ mmrLanceur, mmrReleveur, duelsLanceur, duelsReleveur, issue, direct }) {
   const a = Number(mmrLanceur) || MMR_DEPART;
   const b = Number(mmrReleveur) || MMR_DEPART;
-  // Le releveur est attendu un peu plus haut qu'il ne l'est reellement.
-  const eLanceur = esperance(a, b + AVANTAGE_RELEVEUR);
+  // Le releveur est attendu un peu plus haut qu'il ne l'est reellement — sauf
+  // en direct, ou il ne releve rien.
+  const eLanceur = esperance(a, b + (direct ? 0 : AVANTAGE_RELEVEUR));
   const eReleveur = 1 - eLanceur;
 
   const sLanceur = issue === 'challenger' ? 1 : issue === 'opponent' ? 0 : 0.5;
@@ -147,6 +154,23 @@ export function majMmr({ mmrLanceur, mmrReleveur, duelsLanceur, duelsReleveur, i
 export const LP = {
   lanceur:  { victoire: 20, defaite: -25, nul: 0 },
   releveur: { victoire: 25, defaite: -20, nul: 0 },
+  // La course en direct n'a pas de roles, et le bareme ci-dessus ne peut donc
+  // pas s'y appliquer. Toute son asymetrie repose sur une chose : le chrono du
+  // lanceur est POSE, et celui qui releve sait exactement ce qu'il doit battre.
+  // En direct, les deux partent au meme coup de pistolet et personne ne connait
+  // l'issue — l'avantage qu'on paie n'existe pas.
+  //
+  // Le lui appliquer quand meme avait une consequence qui ne se voit qu'a la
+  // longue : l'hote de la piste tient le role du lanceur a chaque manche, et
+  // deux joueurs de force egale qui enchainent les revanches sur la meme piste
+  // videraient lentement le compte de celui qui l'a ouverte, sans qu'aucune
+  // course y soit pour quelque chose. C'est une taxe sur le fait d'inviter.
+  //
+  // Un seul bareme pour les deux, donc, et de meme poids que l'autre : la
+  // moyenne des deux roles, (20 + 25) / 2 et (−25 − 20) / 2, arrondie vers le
+  // bas. Une course en direct pese autant qu'un defi differe ; elle ne
+  // choisit simplement pas de camp.
+  direct:   { victoire: 22, defaite: -22, nul: 0 },
 };
 
 /** Le MMR qu'on attend d'un joueur a ce palier. */
@@ -179,9 +203,16 @@ export function modulation(mmr, palier, gagne) {
   return Math.max(MODULATION_MIN, Math.min(MODULATION_MAX, brut));
 }
 
-/** Les points de ligue gagnes ou perdus sur un duel. */
-export function gainLp({ role, issue, mmr, palier }) {
-  const bareme = role === 'lanceur' ? LP.lanceur : LP.releveur;
+/**
+ * Les points de ligue gagnes ou perdus sur un duel.
+ *
+ * `direct` remplace le bareme des roles par celui du direct — voir LP. Le role
+ * continue de dire QUEL CAMP on tient, il cesse seulement de dire combien cela
+ * coute : en direct, les deux camps sont payes pareil.
+ */
+export function gainLp({ role, issue, mmr, palier, direct }) {
+  const bareme = direct ? LP.direct
+               : role === 'lanceur' ? LP.lanceur : LP.releveur;
   const gagnant = role === 'lanceur' ? 'challenger' : 'opponent';
   if (issue === 'draw') return 0;
   const gagne = issue === gagnant;
@@ -239,16 +270,23 @@ export function appliquerLp({ palier, lp, bouclier = 0, delta }) {
  * l'autre — la modulation des points depend du MMR, et il faut celui d'AVANT
  * le duel. Les calculer separement laisserait un jour passer la version mise
  * a jour, et la montee dependrait du resultat deux fois.
+ *
+ * `direct` dit que la rencontre s'est jouee au meme coup de pistolet plutot
+ * que contre un chrono pose. Les deux couches en tiennent compte, chacune a sa
+ * facon : le MMR abandonne l'avantage du releveur, les points de ligue
+ * abandonnent l'asymetrie des roles.
  */
-export function appliquerDuelAuClassement({ lanceur, releveur, issue }) {
+export function appliquerDuelAuClassement({ lanceur, releveur, issue, direct }) {
   const mmr = majMmr({
     mmrLanceur: lanceur.mmr, mmrReleveur: releveur.mmr,
     duelsLanceur: lanceur.duels, duelsReleveur: releveur.duels,
-    issue,
+    issue, direct,
   });
 
-  const dLanceur = gainLp({ role: 'lanceur', issue, mmr: lanceur.mmr, palier: lanceur.palier });
-  const dReleveur = gainLp({ role: 'releveur', issue, mmr: releveur.mmr, palier: releveur.palier });
+  const dLanceur = gainLp({ role: 'lanceur', issue, mmr: lanceur.mmr,
+                            palier: lanceur.palier, direct });
+  const dReleveur = gainLp({ role: 'releveur', issue, mmr: releveur.mmr,
+                             palier: releveur.palier, direct });
 
   return {
     lanceur: {

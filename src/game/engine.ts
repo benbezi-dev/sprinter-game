@@ -64,6 +64,17 @@ export type GameState = {
   liveOn: boolean;
   liveNom: string;
   liveResultat: any;
+  /**
+   * Ce que la course en direct a coute au classement des duels.
+   *
+   * Separe de `liveResultat` parce qu'il arrive separement, et plus tard : la
+   * salle annonce l'ordre d'arrivee des la ligne franchie, les points une fois
+   * la base ecrite. L'ecran d'arrivee est deja affiche quand ils tombent, et
+   * c'est pour cela qu'ils passent par le magasin plutot que par une propriete
+   * de composant — le panneau du direct qui les recoit est demonte a ce
+   * moment-la.
+   */
+  livePoints: any;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -461,5 +472,6 @@ export function updateLogic(dt: number) {
     liveOn: G.liveOn,
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
+    livePoints: G.livePoints,
   });
 }

@@ -157,6 +157,12 @@ export async function duelBoard(db) {
  * `challenger` est celui qui a lance : l'auteur du defi, ou l'hote de la
  * salle. `opponent` est celui qui a repondu.
  *
+ * `direct` dit que les deux ont couru au meme coup de pistolet. Le bareme s'en
+ * sert pour ne pas facturer a l'hote d'une piste un avantage que personne n'a
+ * eu — voir LP.direct dans classement.js. On ne le stocke pas : l'identifiant
+ * de la rencontre le porte deja, et c'est ce qui permet a un recalcul de le
+ * retrouver sur les lignes ecrites avant que ce parametre n'existe.
+ *
  * Renvoie l'issue et les points, ou `{ deja: true }` si la rencontre etait
  * deja tranchee.
  */
@@ -184,8 +190,22 @@ export async function appliquerDuel(db, r) {
   await touchDuelPlayer(db, luiKey, r.challengerName);
   await touchDuelPlayer(db, moiKey, r.opponentName);
 
-  const bouge = await noterDuel(db, luiKey, moiKey, issue, r.id);
+  const bouge = await noterDuel(db, luiKey, moiKey, issue, r.id, estDirect(r.id));
   return { issue, ...bouge };
+}
+
+/**
+ * Cette rencontre s'est-elle jouee en direct ?
+ *
+ * La reponse est dans l'identifiant, et c'est un choix : le prefixe est pose
+ * par la salle du direct depuis le premier jour, il vit donc deja sur toutes
+ * les lignes deja ecrites. Une colonne aurait dit la meme chose pour les
+ * nouvelles seulement, et un recalcul — qui refait tout l'historique avec les
+ * regles du moment — aurait applique aux anciennes courses en direct un bareme
+ * dont on vient justement de dire qu'il ne leur convient pas.
+ */
+function estDirect(id) {
+  return /^LIVE-/.test(String(id || ''));
 }
 
 /** L'etat de classement d'un joueur, tel que le module de calcul l'attend. */
@@ -212,9 +232,9 @@ async function etatDe(db, key) {
  * le premier avant de lire le second ferait dependre le resultat de l'ordre
  * dans lequel on les traite, ce qui rendrait un recalcul non reproductible.
  */
-async function noterDuel(db, luiKey, moiKey, issue, id = null) {
+async function noterDuel(db, luiKey, moiKey, issue, id = null, direct = false) {
   const [lanceur, releveur] = await Promise.all([etatDe(db, luiKey), etatDe(db, moiKey)]);
-  const apres = appliquerDuelAuClassement({ lanceur, releveur, issue });
+  const apres = appliquerDuelAuClassement({ lanceur, releveur, issue, direct });
 
   const maj = (key, x, w, l, d, recu) => db.prepare(
     `UPDATE duel_players SET mmr = ?, lp = ?, palier = ?, bouclier = ?,
@@ -242,11 +262,20 @@ async function noterDuel(db, luiKey, moiKey, issue, id = null) {
 
   // Ce qui remonte au jeu est ce que le joueur peut voir : des points de
   // ligue et un rang. Le MMR reste ou il est.
+  //
+  // Les champs sans suffixe sont ceux du releveur, parce que c'est lui qui
+  // lisait cette reponse : le defi differe se tranche sur SON telephone, le
+  // lanceur etant parti depuis longtemps. La course en direct a change cela —
+  // les deux sont la, et chacun veut son propre mouvement de points. D'ou les
+  // champs « _adverse », qui existaient deja pour les points et manquaient
+  // pour la promotion : sans eux, un hote promu ne l'apprenait pas.
   return {
     lp: apres.releveur.delta_lp, lp_adverse: apres.lanceur.delta_lp,
     rang: rangDe(apres.releveur.palier),
     rang_adverse: rangDe(apres.lanceur.palier),
     monte: apres.releveur.monte > 0, descend: apres.releveur.descend > 0,
+    monte_adverse: apres.lanceur.monte > 0,
+    descend_adverse: apres.lanceur.descend > 0,
   };
 }
 
@@ -279,7 +308,12 @@ export async function recalculerClassement(db) {
     // Les mouvements inscrits sur chaque rencontre sont refaits aussi : sans
     // cela, un joueur revenant apres un recalcul lirait un gain qui n'a plus
     // de rapport avec le classement qu'il a sous les yeux.
-    await noterDuel(db, d.challenger_key, d.opponent_key, d.outcome, d.challenge_id);
+    //
+    // Le bareme du direct se retrouve sur l'identifiant, et c'est tout
+    // l'interet de l'y avoir laisse : les courses en direct d'avant ce
+    // changement sont rejouees avec la regle d'aujourd'hui, comme le reste.
+    await noterDuel(db, d.challenger_key, d.opponent_key, d.outcome, d.challenge_id,
+                    estDirect(d.challenge_id));
     joues++;
   }
   return { duels: joues };

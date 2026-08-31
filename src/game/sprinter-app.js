@@ -360,6 +360,10 @@
     falseOut: false, falseOutT: 0,
     // Course en direct : l'adversaire court en meme temps que nous.
     liveOn: false, liveNom: '', liveFin: null, liveResultat: null,
+    // Ce que cette course a coute au classement des duels. Arrive apres le
+    // resultat, la salle n'attendant pas l'ecriture en base pour annoncer
+    // l'ordre d'arrivee.
+    livePoints: null,
     // Un adversaire par identifiant de joueur. Vide en duel a deux ancienne
     // maniere, remplie des qu'on court a plusieurs.
     lives: null,
@@ -570,6 +574,7 @@
     G.paused = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
+    G.livePoints = null;
     G.lives = null;
     G.challengeTarget = null;
     G.defiSansCible = null;
@@ -633,7 +638,7 @@
    */
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
-    G.liveOn = false; G.liveResultat = null; G.liveNom = null;
+    G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.livePoints = null;
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
     // de la meme revanche — pour ca, c'est le bouton dedie qui relance
@@ -682,6 +687,9 @@
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;
     G.liveResultat = null;
+    // Les points de la course precedente ne suivent pas sur la piste
+    // suivante : une revanche se lit sur son propre mouvement de ligue.
+    G.livePoints = null;
     G.shotRaces = races.slice();
     G.shotIdx = 0;
     G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;

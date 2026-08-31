@@ -223,6 +223,81 @@ for (let i = 0; i < 6; i++) {
 ok('un joueur trop fort pour sa division la quitte vite',
    grimpe.palier >= 2, `palier ${grimpe.palier} apres six duels`);
 
+titre('LA COURSE EN DIRECT N A PAS DE ROLES');
+// Tout le bareme des roles repose sur une chose : le chrono du lanceur est
+// pose, et celui qui releve sait ce qu'il doit battre. En direct, les deux
+// partent au meme coup de pistolet et personne ne connait l'issue. Ce qui se
+// verifie ici n'est donc pas un chiffre mais une propriete : le resultat ne
+// doit pas dependre de qui a ouvert la piste.
+
+ok('les deux roles sont payes pareil en direct',
+   LP.direct.victoire === -LP.direct.defaite,
+   `${LP.direct.victoire} / ${LP.direct.defaite}`);
+// L amplitude — ce qui separe une victoire d une defaite — ne doit pas
+// s ecarter de celle des roles : le direct ne choisit pas de camp, il ne
+// devient pas pour autant un mode ou l on gagne moins ou plus.
+const ampleDirect = LP.direct.victoire - LP.direct.defaite;
+const ampleRoles = (LP.lanceur.victoire - LP.lanceur.defaite
+                  + LP.releveur.victoire - LP.releveur.defaite) / 2;
+ok('et une course en direct pese autant qu un defi differe',
+   Math.abs(ampleDirect - ampleRoles) <= 1, `${ampleDirect} vs ${ampleRoles}`);
+
+// A rang egal, la victoire du lanceur et celle du releveur se valent.
+const vLanceur = gainLp({ role: 'lanceur', issue: 'challenger',
+                          mmr: MMR_DEPART, palier: 3, direct: true });
+const vReleveur = gainLp({ role: 'releveur', issue: 'opponent',
+                           mmr: MMR_DEPART, palier: 3, direct: true });
+ok('gagner en ayant ouvert la piste vaut gagner en l ayant rejointe',
+   vLanceur === vReleveur, `${vLanceur} vs ${vReleveur}`);
+const dLanceur = gainLp({ role: 'lanceur', issue: 'opponent',
+                          mmr: MMR_DEPART, palier: 3, direct: true });
+const dReleveur = gainLp({ role: 'releveur', issue: 'challenger',
+                           mmr: MMR_DEPART, palier: 3, direct: true });
+ok('et perdre coute la meme chose des deux cotes',
+   dLanceur === dReleveur, `${dLanceur} vs ${dReleveur}`);
+ok('le bareme des roles reste asymetrique, lui',
+   gainLp({ role: 'lanceur', issue: 'challenger', mmr: MMR_DEPART, palier: 3 })
+     !== gainLp({ role: 'releveur', issue: 'opponent', mmr: MMR_DEPART, palier: 3 }));
+
+// L avantage du releveur sort de la prediction, puisqu il n a plus lieu.
+const enDirect = majMmr({
+  mmrLanceur: MMR_DEPART, mmrReleveur: MMR_DEPART,
+  duelsLanceur: 50, duelsReleveur: 50, issue: 'draw', direct: true,
+});
+ok('a force egale et en direct, le modele ne designe pas de favori',
+   Math.abs(enDirect.esperance_lanceur - 0.5) < 1e-9,
+   String(enDirect.esperance_lanceur));
+const enDiffere = majMmr({
+  mmrLanceur: MMR_DEPART, mmrReleveur: MMR_DEPART,
+  duelsLanceur: 50, duelsReleveur: 50, issue: 'draw',
+});
+ok('alors qu il en designe un sur un defi differe',
+   enDiffere.esperance_lanceur < 0.5 && AVANTAGE_RELEVEUR > 0,
+   String(enDiffere.esperance_lanceur));
+
+// Et de bout en bout : deux joueurs identiques, la meme course lue des deux
+// cotes. Ce que l un gagne quand il ouvre, l autre le gagne quand il rejoint.
+const parLHote = appliquerDuelAuClassement({
+  lanceur: neuf({ palier: 4, lp: 30 }), releveur: neuf({ palier: 4, lp: 30 }),
+  issue: 'challenger', direct: true,
+});
+const parLInvite = appliquerDuelAuClassement({
+  lanceur: neuf({ palier: 4, lp: 30 }), releveur: neuf({ palier: 4, lp: 30 }),
+  issue: 'opponent', direct: true,
+});
+ok('une piste en direct ne taxe pas celui qui l a ouverte',
+   parLHote.lanceur.delta_lp === parLInvite.releveur.delta_lp &&
+   parLHote.releveur.delta_lp === parLInvite.lanceur.delta_lp,
+   `${parLHote.lanceur.delta_lp}/${parLInvite.releveur.delta_lp}`);
+// Le contre-exemple : sans « direct », l hote perd a chaque revanche.
+const sansDirect = appliquerDuelAuClassement({
+  lanceur: neuf({ palier: 4, lp: 30 }), releveur: neuf({ palier: 4, lp: 30 }),
+  issue: 'challenger',
+});
+ok('sans direct, la meme course n aurait pas paye pareil',
+   sansDirect.lanceur.delta_lp !== parLHote.lanceur.delta_lp,
+   `${sansDirect.lanceur.delta_lp} vs ${parLHote.lanceur.delta_lp}`);
+
 console.log('\n──────────────────────────────────────────────────────────────');
 console.log(e ? `   ${e} ECHEC(S).` : '   TOUT PASSE.');
 process.exit(e ? 1 : 0);
