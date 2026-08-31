@@ -239,8 +239,15 @@ export function LivePanel() {
       // Le mot du vainqueur : cinq secondes, et seulement pour lui. Le perdant
       // garde son micro coupe, ce qui est aussi une facon de ne pas transformer
       // une defaite en moment penible.
-      const jaiGagne = (r.issue === 'challenger' && salle.current?.suisHote) ||
-                       (r.issue === 'opponent' && !salle.current?.suisHote);
+      // A deux, l'issue dit qui gagne ; au-dela, c'est la premiere place de
+      // l'ordre d'arrivee. Sans cette seconde lecture, le vainqueur d'une
+      // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
+      // que pour un duel, et personne ne parlait.
+      const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      const jaiGagne = r.issue
+        ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
+           (r.issue === 'opponent' && !salle.current?.suisHote))
+        : !!premier && premier.id === salle.current?.moi;
       if (jaiGagne) voix.current?.ouvrirMicro(MICRO_VAINQUEUR_MS);
       else voix.current?.fermerMicro();
 
