@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
+import { MONTEE, TRANSITION } from '@/lib/mouvement';
 import { Flag, XCircle, Hand, Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { ARRIVEE, LEG, TAILLE, type Zone } from '@/game/salle-relais';
@@ -128,7 +129,7 @@ export function Couloir({ nom, code, d, porteur, couleur, moi, elimine, total, f
             className="absolute inset-y-0 left-0 rounded-full"
             style={{ background: couleur }}
             animate={{ width: `${part * 100}%` }}
-            transition={{ duration: 0.12, ease: 'linear' }}
+            transition={TRANSITION.suivi}
           />
         </div>
       </div>
@@ -194,7 +195,7 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6 py-8
                     overflow-y-auto bg-[#05070d]">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      <motion.div {...MONTEE}
                   className="w-full max-w-sm flex flex-col items-center gap-4">
         {rate ? <XCircle className="w-7 h-7 text-destructive" />
               : <Flag className="w-7 h-7 text-emerald-400" />}

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, type EtatRelais } from '@/game/salle-relais';
@@ -175,7 +176,7 @@ export function CourseRelais({ equipe, onQuitter }: {
     <div className="fixed inset-0 z-40 flex items-center justify-center px-4 py-8
                     overflow-y-auto bg-[#05070d]/90 backdrop-blur-sm">
       <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        {...MONTEE}
         className="w-full max-w-sm bg-card/80 backdrop-blur-xl border border-emerald-400/30
                    rounded-2xl p-4 md:p-5 shadow-2xl flex flex-col gap-4"
       >

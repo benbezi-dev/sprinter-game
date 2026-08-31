@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { fauxDepartEstUneDefaite } from '@/game/reprise';
 import { motion } from 'motion/react';
+import { DUREE, COURBE } from '@/lib/mouvement';
 
 /**
  * Cinematique du faux depart eliminatoire.
@@ -61,7 +62,7 @@ export function FalseStartCut() {
         className="absolute inset-0 bg-destructive"
         initial={{ opacity: 0.85 }}
         animate={{ opacity: [0.85, 0.1, 0.55, 0.12] }}
-        transition={{ duration: 0.9, times: [0, 0.25, 0.4, 1] }}
+        transition={{ duration: DUREE.scene, times: [0, 0.25, 0.4, 1] }}
       />
       <motion.div
         className="absolute inset-0 bg-black"
@@ -78,7 +79,7 @@ export function FalseStartCut() {
           style={{ top: i === 0 ? '32%' : '68%' }}
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
-          transition={{ duration: 0.7, delay: 0.5 + i * 0.12, ease: 'easeOut' }}
+          transition={{ duration: 0.7, delay: 0.5 + i * 0.12, ease: COURBE.sortie }}
         />
       ))}
 
@@ -95,7 +96,7 @@ export function FalseStartCut() {
         <motion.h1
           initial={{ scale: 1.6, opacity: 0, letterSpacing: '0.3em' }}
           animate={{ scale: 1, opacity: 1, letterSpacing: '0em' }}
-          transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          transition={{ duration: DUREE.ample, ease: COURBE.elan }}
           className="text-5xl sm:text-6xl md:text-8xl font-black font-display uppercase
                      text-destructive drop-shadow-[0_0_40px_rgba(239,68,68,0.55)]"
         >

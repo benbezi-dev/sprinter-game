@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
+import { FEUILLE } from '@/lib/mouvement';
 import { Download, Share, Plus, X } from 'lucide-react';
 import { EST_NATIF } from '@/game/canal';
 
@@ -87,7 +88,7 @@ export function InstallPrompt() {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        {...FEUILLE}
         className="fixed inset-x-0 bottom-0 z-[57] pointer-events-auto
                    px-[max(env(safe-area-inset-left),0.75rem)] pr-[max(env(safe-area-inset-right),0.75rem)]
                    pb-[max(env(safe-area-inset-bottom),0.75rem)]"

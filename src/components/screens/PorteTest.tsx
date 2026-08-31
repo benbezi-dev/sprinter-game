@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { KeyRound, Loader2, FlaskConical, LogOut } from 'lucide-react';
 import { codeAcces, poserCode, oublierCode, verifierCode } from '@/game/canal';
 
@@ -78,7 +79,7 @@ export function PorteTest({ onOuvert }: { onOuvert: (ouvert: boolean) => void })
     <div className="fixed inset-0 z-[70] flex items-center justify-center px-6
                     bg-gradient-to-b from-[#080a12] via-[#05070d] to-[#080a12]">
       <motion.div
-        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        {...MONTEE}
         className="w-full max-w-sm flex flex-col gap-4"
       >
         <div className="flex items-center gap-2 justify-center">

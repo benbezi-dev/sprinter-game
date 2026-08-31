@@ -1,9 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { motion } from 'motion/react';
+import { MONTEE, FONDU, SURGISSEMENT, COURBE, TRANSITION, retarde } from '@/lib/mouvement';
 import { X, Timer, Ghost, Globe2 } from 'lucide-react';
 
 const VU = 'sprinter_tuto_oneshot_vu';
+
+/**
+ * Duree d'un plan, en millisecondes.
+ *
+ * La barre d'avancement met exactement ce temps a se remplir, et le minuteur
+ * qui passe au plan suivant attend exactement ce temps : c'est le meme nombre,
+ * et il n'existe qu'ici. Ecrit deux fois, la barre finissait sa course avant
+ * ou apres le changement de plan des qu'on touchait a l'un des deux.
+ */
+const DUREE_PLAN = 2600;
 
 export function oneShotTutoVu(): boolean {
   try { return localStorage.getItem(VU) === '1'; } catch { return true; }
@@ -30,8 +41,8 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
   const timers = useRef<any[]>([]);
 
   useEffect(() => {
-    timers.current.push(setTimeout(() => setPlan(1), 2600));
-    timers.current.push(setTimeout(() => setPlan(2), 5200));
+    timers.current.push(setTimeout(() => setPlan(1), DUREE_PLAN));
+    timers.current.push(setTimeout(() => setPlan(2), DUREE_PLAN * 2));
     return () => timers.current.forEach(clearTimeout);
   }, []);
 
@@ -49,7 +60,8 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
             <div key={i} className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
               <motion.div className="h-full bg-primary" initial={false}
                 animate={{ width: i < plan ? '100%' : i === plan ? '100%' : '0%' }}
-                transition={{ duration: i === plan ? 2.6 : 0.2, ease: 'linear' }} />
+                transition={i === plan ? { duration: DUREE_PLAN / 1000, ease: COURBE.lineaire }
+                                       : TRANSITION.progression} />
             </div>
           ))}
         </div>
@@ -61,8 +73,8 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
 
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-5 min-h-0">
 
-        <motion.div key={`t${plan}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.22 }} className="flex flex-col items-center gap-1 text-center">
+        <motion.div key={`t${plan}`} {...MONTEE}
+                    className="flex flex-col items-center gap-1 text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase text-primary">
             {N.t(titres[plan])}
           </h2>
@@ -93,14 +105,14 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
           {plan === 1 && (
             <div className="flex flex-col items-center gap-3">
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                {...SURGISSEMENT}
                 className="flex items-center gap-2 px-5 py-3 rounded-2xl border border-white/15 bg-black/30"
               >
                 <Timer className="w-5 h-5 text-primary" />
                 <Chrono />
               </motion.div>
               <motion.span
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.5 }}
+                {...retarde(FONDU, 1.5)}
                 className="text-[11px] md:text-sm font-bold tracking-wide text-destructive text-center max-w-xs leading-snug"
               >
                 {N.t('os_once')}
@@ -112,7 +124,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
           {plan === 2 && (
             <div className="flex flex-col items-center gap-3 w-full max-w-xs">
               <motion.div
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                {...MONTEE}
                 className="w-full rounded-xl border border-primary/40 bg-primary/[0.08] px-4 py-3
                            flex items-center justify-between"
               >
@@ -122,7 +134,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
                 <span className="font-mono font-black text-primary">9.62 s</span>
               </motion.div>
               <motion.div
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}
+                {...retarde(MONTEE, 0.7)}
                 className="w-full rounded-xl border border-cyan-400/40 bg-cyan-400/[0.07] px-4 py-3
                            flex items-center gap-2"
               >

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { MONTEE, FONDU, SURGISSEMENT, RESSORT } from '@/lib/mouvement';
 import { Trophy, Loader2, Timer, Flag, Sparkles, Medal } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
@@ -157,7 +158,7 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-[#05070d]"
          style={{ backgroundImage:
            'radial-gradient(120% 80% at 50% 35%, rgba(248,205,74,0.06), transparent 70%)' }}>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+      <motion.div {...MONTEE}
                   className="w-full max-w-sm flex flex-col items-center gap-4">
         <Sparkles className="w-5 h-5" style={{ color: OR }} />
         <h2 className="font-display font-black tracking-widest text-center text-lg"
@@ -173,7 +174,7 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
             <motion.div key={r.nom + i}
               initial={{ opacity: 0, x: -20, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+              transition={RESSORT.panneau}
               className="flex items-center gap-3 px-3 py-2 rounded-xl
                          bg-primary/12 border border-primary/35">
               <span className="font-mono text-[10px] text-primary/70 w-4">{i + 1}</span>
@@ -188,7 +189,7 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
         </div>
 
         {montres >= repeches.length && (
-          <motion.button initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          <motion.button {...FONDU}
             onClick={onFini}
             className="mt-3 px-6 py-2.5 rounded-xl font-black font-display tracking-widest
                        text-background text-sm"
@@ -221,7 +222,7 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
                     bg-[#05070d]"
          style={{ backgroundImage:
            'radial-gradient(120% 80% at 50% 30%, rgba(248,205,74,0.07), transparent 70%)' }}>
-      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
+      <motion.div {...SURGISSEMENT}
                   className="w-full max-w-sm flex flex-col items-center gap-5">
         <Trophy className="w-7 h-7" style={{ color: OR }} />
         <div className="text-center">
@@ -242,7 +243,7 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
               <motion.div key={r.name_key}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: hauteurs[i], opacity: 1 }}
-                transition={{ delay: 0.25 + i * 0.18, type: 'spring', stiffness: 200, damping: 22 }}
+                transition={{ ...RESSORT.jauge, delay: 0.25 + i * 0.18 }}
                 className="flex-1 flex flex-col justify-end items-center rounded-t-lg border-t border-x
                            px-1 pb-2 relative"
                 style={{
@@ -374,7 +375,7 @@ export function Championnat({ edition, onQuitter }: {
       </AnimatePresence>
 
       <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        {...MONTEE}
         className="bg-card/70 backdrop-blur-xl border rounded-2xl p-4 md:p-5 shadow-2xl
                    flex flex-col gap-4"
         style={{ borderColor: 'rgba(248,205,74,0.28)' }}

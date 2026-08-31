@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
+import { MONTEE, SURGISSEMENT, retarde } from '@/lib/mouvement';
 import { Globe2 } from 'lucide-react';
 import {
   getSavedName, saveName, submitScore, fetchLeaderboardRaw,
@@ -76,7 +77,7 @@ export function WinAllScreen() {
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+        <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(248,205,74,0.4)]">
@@ -116,7 +117,7 @@ export function WinAllScreen() {
 
           {/* Rank Badge */}
           {runRank && (
-            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1, transition: { delay: 0.5 } }} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center flex items-center gap-2 md:gap-3">
+            <motion.div {...retarde(MONTEE, 0.5)} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center flex items-center gap-2 md:gap-3">
               <img
                 src={`${BASE}/icons/${runRank === 1 ? 'medal1' : runRank <= 3 ? 'medal2' : 'star'}.png`}
                 alt=""

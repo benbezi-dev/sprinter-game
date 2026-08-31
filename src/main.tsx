@@ -1,4 +1,5 @@
 import { createRoot } from 'react-dom/client';
+import { MotionConfig } from 'motion/react';
 
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -31,6 +32,13 @@ createRoot(document.getElementById('root')!, {
   },
 }).render(
   <ErrorBoundary>
-    <App />
+    {/* « reduire les animations » est un reglage systeme, et le respecter ne
+        peut pas dependre du soin apporte a chaque ecran. Pose ici, il vide de
+        leur mouvement les deplacements et les changements de taille de tout le
+        jeu, et laisse passer les fondus : l'interface reste lisible, elle
+        cesse simplement de bouger. */}
+    <MotionConfig reducedMotion="user">
+      <App />
+    </MotionConfig>
   </ErrorBoundary>,
 );

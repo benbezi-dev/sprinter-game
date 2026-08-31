@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { MONTEE, FONDU, SURGISSEMENT } from '@/lib/mouvement';
 import { Mic, MicOff } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { usePresentationDirecte } from '@/game/presentation-directe';
@@ -43,7 +44,7 @@ function Micro({ voix, estMoi, dans }: { voix: EtatVoix; estMoi: boolean; dans: 
   if (!voix.ouvert) return <span className="h-7" />;
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+      {...SURGISSEMENT}
       className="flex items-center gap-2 px-3 py-1.5 rounded-full
                  bg-red-500/20 border border-red-400/50 backdrop-blur-sm"
     >
@@ -139,7 +140,7 @@ export function PresentationDirect() {
 
       {/* Avant le premier athlete : un simple decompte, la piste derriere. */}
       {index < 0 && (
-        <motion.div key="avant" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        <motion.div key="avant" {...FONDU}
                     className="relative self-center font-display font-black text-7xl
                                text-white/85 tabular-nums drop-shadow-lg">
           {Math.ceil(avant / 1000)}
@@ -151,10 +152,7 @@ export function PresentationDirect() {
           {courant && (
             <motion.div
               key={courant.id}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ duration: 0.4, ease: [0.22, 0.8, 0.3, 1] }}
+              {...MONTEE}
               className="flex flex-col items-center gap-2 w-full"
             >
               <div className="flex items-baseline gap-3">

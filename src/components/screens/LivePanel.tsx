@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
@@ -437,7 +438,7 @@ export function LivePanel() {
   return (
     <>
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"
     >
       {/* Apres la course : la video, et son compte a rebours. */}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye, Swords } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { TAILLE } from '@/game/salle-relais';
@@ -254,7 +255,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
     <div className="fixed inset-0 z-40 flex items-center justify-center px-4 py-8
                     overflow-y-auto bg-[#05070d]/90 backdrop-blur-sm">
       <motion.div
-        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+        {...MONTEE}
         className="w-full max-w-sm bg-card/80 backdrop-blur-xl border border-primary/30
                    rounded-2xl p-4 md:p-5 shadow-2xl flex flex-col gap-4"
       >

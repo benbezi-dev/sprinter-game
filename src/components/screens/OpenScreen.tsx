@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { MONTEE, FONDU } from '@/lib/mouvement';
 import { useGameStore } from '@/game/engine';
 
 export function OpenScreen() {
@@ -38,8 +39,7 @@ export function OpenScreen() {
       <div className="flex-1 flex flex-col items-center pt-4 md:pt-8 gap-2 md:gap-4 z-10 text-center px-4">
         {openT > 3.1 && (
           <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
+            {...MONTEE}
             className="text-lg sm:text-2xl font-bold tracking-widest text-foreground/90 font-display whitespace-nowrap"
           >
             100 &nbsp;&mdash;&nbsp; 200 &nbsp;&mdash;&nbsp; 400 METRES
@@ -48,8 +48,7 @@ export function OpenScreen() {
         
         {openT > 4.0 && (
           <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            {...FONDU}
             className="text-[10px] sm:text-sm md:text-base font-medium text-muted-foreground uppercase tracking-widest max-w-[280px] sm:max-w-none"
           >
             Six stages, one clock to beat

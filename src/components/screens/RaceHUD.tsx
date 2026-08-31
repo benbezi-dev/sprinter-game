@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
+import { SURGISSEMENT } from '@/lib/mouvement';
 
 export function RaceHUD() {
   const { 
@@ -200,7 +201,7 @@ export function RaceHUD() {
       <div className="absolute top-[130px] landscape:top-[80px] w-full flex flex-col items-center gap-1 sm:gap-2 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pointer-events-none z-0">
         <AnimatePresence>
           {falseFlash > 0 && (
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
+            <motion.div {...SURGISSEMENT} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
               {N.t('false_start')}
             </motion.div>
           )}

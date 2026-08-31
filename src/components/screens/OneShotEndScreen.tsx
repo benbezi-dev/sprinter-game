@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
+import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
@@ -237,7 +238,7 @@ export function OneShotEndScreen() {
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+        <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
@@ -271,7 +272,7 @@ export function OneShotEndScreen() {
               d'ici — seulement a montrer. */}
           {live && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              {...MONTEE}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
                 ${liveGagne ? 'border-emerald-400/50 bg-emerald-400/[0.10]'
                   : liveNul ? 'border-white/20 bg-white/5'
@@ -312,8 +313,7 @@ export function OneShotEndScreen() {
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
           {challenge && (duelEnCours || duel) && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              {...MONTEE}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-1.5 shadow-2xl
                 ${!duel ? 'border-white/10 bg-card/60'
                   : duel.issue === 'opponent' ? 'border-primary/50 bg-primary/10'

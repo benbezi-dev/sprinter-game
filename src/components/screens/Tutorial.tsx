@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SprinterApp, SprinterCore } from '@/game/engine';
 import { motion } from 'motion/react';
+import { MONTEE, SURGISSEMENT, TRANSITION } from '@/lib/mouvement';
 import { ChevronLeft, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
 
 const { C } = SprinterCore;
@@ -249,7 +250,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
             <div key={i} className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
               <motion.div className="h-full bg-primary" initial={false}
                 animate={{ width: i < etape ? '100%' : i === etape ? `${avancement * 100}%` : '0%' }}
-                transition={{ duration: 0.25 }} />
+                transition={TRANSITION.progression} />
             </div>
           ))}
         </div>
@@ -262,8 +263,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-3 py-3 min-h-0">
 
         {etape < 3 && (
-          <motion.div key={`t${etape}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }} className="flex flex-col items-center gap-1">
+          <motion.div key={`t${etape}`} {...MONTEE} className="flex flex-col items-center gap-1">
             <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
               ${demo ? 'text-cyan-300' : 'text-primary/70'}`}>
               {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
@@ -299,7 +299,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
                   {N.t('tuto_v_early')}
                 </motion.span>
               ) : reaction !== null ? (
-                <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                <motion.div {...SURGISSEMENT}
                             className="flex flex-col items-center gap-0.5">
                   <span className={`font-mono font-black text-2xl md:text-3xl
                     ${reaction <= C.REACT_BEST ? 'text-primary'
@@ -340,7 +340,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
                                     transition: 'height 90ms linear' }} />
                       {mien != null && (
                         <motion.div initial={{ height: 0 }} animate={{ height: `${hauteur(mien)}%` }}
-                          transition={{ duration: 0.1 }}
+                          transition={TRANSITION.suivi}
                           className={`absolute bottom-0 w-[58%] rounded-t-sm
                             ${mien <= C.TRANS_FLOOR ? 'bg-primary' : 'bg-white/70'}`} />
                       )}
@@ -351,7 +351,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
 
               <div className="h-8 flex items-center">
                 {verdict ? (
-                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  <motion.div {...MONTEE}
                               className="flex items-center gap-3">
                     <span className={`text-base md:text-xl font-black tracking-widest uppercase ${verdict.ton}`}>
                       {N.t(verdict.mot)}
@@ -370,7 +370,7 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
           )}
 
           {etape === 3 && (
-            <motion.div initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }}
+            <motion.div {...SURGISSEMENT}
                         className="flex flex-col items-center gap-3">
               <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center">
                 <Check className="w-8 h-8 text-primary" />
