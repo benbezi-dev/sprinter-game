@@ -100,11 +100,20 @@ export function DuelResultPopup() {
    * On ne rejoue pas la course perdue — un defi se court une fois, et le
    * rejouer laisserait tenter sa chance jusqu'a tomber sur un bon jour. C'est
    * un nouveau duel qui se lance, dans l'autre sens : cette fois c'est nous qui
-   * posons le chrono, et l'ecran de fin sait deja a qui l'envoyer.
+   * posons le chrono.
+   *
+   * Le defi PART TOUT SEUL a l'arrivee, sans code a recopier — c'est l'ecran
+   * de fin qui s'en charge, voir OneShotEndScreen. Mais seulement si le
+   * nouveau chrono bat celui qui nous a battus : `revancheMs` le retient pour
+   * ca. On ne derange pas quelqu'un avec un temps moins bon que le sien ; sans
+   * l'avoir battu, rien ne part et le meme bouton reste offert pour retenter,
+   * sans reperdre les points du duel qu'on venge — ils sont deja acquis.
    */
   const revanche = () => {
     marquerDuelsVus([duel.id]);
     SprinterApp.G.revanche = duel.adversaire;
+    SprinterApp.G.revancheId = duel.id;
+    SprinterApp.G.revancheMs = duel.son_ms;
     SprinterApp.startOneShot(duel.races, { levelIdx: 4 });
   };
 

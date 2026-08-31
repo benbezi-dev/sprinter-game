@@ -68,6 +68,16 @@ export async function createChallenge(input: {
   name?: string;
   /** rowid de la ligne de classement visee, pour un defi adresse */
   targetScoreId?: number | null;
+  /**
+   * L'identifiant du duel qu'on venge, quand ce chrono est une revanche.
+   *
+   * Different d'un defi adresse par ligne de classement : ici la personne
+   * peut ne meme pas figurer au TOP 500 de cette epreuve, on la retrouve par
+   * le duel lui-meme, ou les deux appareils sont deja inscrits. Le serveur
+   * verifie seul qu'on etait bien le perdant et qu'on a bien battu son
+   * chrono — voir /challenge, cote worker.
+   */
+  revancheDe?: string | null;
 }): Promise<string> {
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
@@ -81,6 +91,7 @@ export async function createChallenge(input: {
       splits: input.splits.map(s => Math.round(s)),
       traces: input.traces,
       target_score_id: input.targetScoreId ?? null,
+      revanche_de: input.revancheDe ?? null,
     }),
   });
   if (!res.ok) throw new Error('challenge create failed');

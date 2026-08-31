@@ -1342,7 +1342,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { device_id, name, races, level_idx, total_ms, splits, traces,
-              target_score_id } = body || {};
+              target_score_id, revanche_de } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
       const t = Math.round(Number(total_ms));
@@ -1368,6 +1368,60 @@ export default {
           `SELECT device_id, name FROM scores WHERE rowid = ?`
         ).bind(sid).first();
         if (row && row.device_id !== device_id) { target = row.device_id; targetName = row.name; }
+      }
+
+      /* ------------------------------------------------------- la revanche
+         Un defi qui repart CHEZ CELUI QUI VIENT DE NOUS BATTRE, sans code a
+         recopier. On ne passe pas par le TOP 500 comme ailleurs : la personne
+         peut ne pas y figurer sur cette epreuve, et surtout on la connait
+         deja — elle est l'autre partie d'une rencontre qui vient d'avoir
+         lieu. On repart donc du duel lui-meme, ou les deux appareils sont
+         inscrits.
+
+         Deux conditions, et elles ne sont pas decoratives :
+
+         1. SEUL LE PERDANT prend sa revanche. Sans cela, l'identifiant d'un
+            duel — qui circule des deux cotes — suffirait a s'adresser a
+            n'importe qui.
+         2. IL FAUT AVOIR BATTU SON CHRONO. C'est la regle du jeu : on ne
+            derange pas quelqu'un avec un temps moins bon que le sien. Le jeu
+            la tient deja a l'ecran ; le serveur la tient aussi, parce qu'une
+            regle qui ne vit que dans l'ecran n'est pas une regle. */
+      const duelRef = String(revanche_de || '').toUpperCase();
+      if (!target && /^[A-Z0-9]{4,10}$/.test(duelRef)) {
+        await ensureDuelTables(env.DB);
+        const d = await env.DB.prepare(
+          `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
+                  c.owner_device, c.owner_name
+             FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
+            WHERE r.challenge_id = ?`
+        ).bind(duelRef).first();
+        if (d && d.outcome !== 'draw') {
+          // L'appareil de celui qui a releve : la rencontre ne garde que son
+          // nom, sa tentative garde son appareil.
+          const rep = await env.DB.prepare(
+            `SELECT device_id, name FROM challenge_attempts
+              WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
+          ).bind(duelRef).first();
+
+          const moiCle = cleanName(name).trim().toLowerCase();
+          const suisLanceur = d.owner_device === device_id ||
+            (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
+          const suisReleveur = (!!rep && rep.device_id === device_id) ||
+            (!!moiCle && String(d.opponent_key || '') === moiCle);
+          const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
+          const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
+          // Le chrono du vainqueur, celui qu'il fallait battre.
+          const aBattre = d.outcome === 'opponent' ? d.opponent_ms : d.challenger_ms;
+
+          if (monRole && monRole === perdant && t < aBattre) {
+            const cible = suisLanceur ? (rep ? rep.device_id : null) : d.owner_device;
+            const cibleNom = suisLanceur
+              ? (d.opponent_name || (rep && rep.name) || '')
+              : (d.owner_name || '');
+            if (cible && cible !== device_id) { target = cible; targetName = cibleNom; }
+          }
+        }
       }
 
       const id = makeCode();

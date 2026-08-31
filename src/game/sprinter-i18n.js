@@ -423,6 +423,12 @@
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
     duel_renvoyer:   ['renvoie le code à {n}', 'send the code back to {n}'],
+    // La revanche part toute seule, et seulement si elle a battu le chrono
+    // qu'elle venge : on ne derange pas quelqu'un avec un temps moins bon.
+    duel_revanche_envoyee: ['REVANCHE ENVOYÉE', 'REVENGE SENT'],
+    duel_revanche_ratee_titre: ['PAS ENCORE', 'NOT YET'],
+    duel_revanche_ratee: ['il fallait descendre sous {s} s pour renvoyer le défi à {n} — rien n’est parti',
+                          'you needed under {s} s to send the challenge back to {n} — nothing went out'],
     // L'echelle des divisions. Les noms viennent de l'athletisme francais
     // plutot que des metaux : on ne monte pas de bronze en argent, on passe du
     // departemental au regional.

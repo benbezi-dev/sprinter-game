@@ -341,6 +341,11 @@
     // Le nom de celui a qui renvoyer le code apres une defaite. Nul le reste
     // du temps : c'est ce qui distingue une course ordinaire d'une revanche.
     revanche: null,
+    // L'identifiant du duel qu'on venge, et le chrono qu'il faut battre pour
+    // que le defi reparte tout seul — voir /challenge, cote worker. Sans le
+    // second, `revanche` ne suffirait pas a savoir si le nouveau chrono a
+    // suffi : c'est la regle « on ne derange pas avec un temps moins bon ».
+    revancheId: null, revancheMs: 0,
     /** L'athlete mis en avant pendant la presentation, ou nul. */
     presente: null,
     champion: null, championTime: 0,
@@ -560,7 +565,7 @@
   function goHome() {
     // La revanche ne concerne qu'une course : de retour a l'accueil, le nom
     // de celui a qui renvoyer le code n'a plus rien a designer.
-    G.revanche = null;
+    G.revanche = null; G.revancheId = null; G.revancheMs = 0;
     G.presente = null;
     G.paused = false;
     G.falseOut = false;
@@ -629,7 +634,11 @@
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
     G.liveOn = false; G.liveResultat = null; G.liveNom = null;
-    G.revanche = null; G.defiSansCible = null;
+    // La revanche est consommee ici comme partout ailleurs sur ce chemin :
+    // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
+    // de la meme revanche — pour ca, c'est le bouton dedie qui relance
+    // startOneShot en laissant G.revancheId intact.
+    G.revanche = null; G.revancheId = null; G.revancheMs = 0; G.defiSansCible = null;
     startOneShot(G.shotRaces, { levelIdx: G.shotLevel });
     return true;
   }
