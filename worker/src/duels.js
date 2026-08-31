@@ -91,6 +91,14 @@ export async function ensureDuelTables(db) {
     // celui qui a releve le defi : lui aussi doit apprendre quelque chose
     // apres coup, maintenant que le vainqueur peut lui parler.
     `ALTER TABLE duel_results ADD COLUMN seen_by_opponent INTEGER NOT NULL DEFAULT 0`,
+    // Le mot a-t-il ete LU ? Distinct d'avoir vu le resultat, et il a fallu
+    // les separer : le resultat d'un duel existe des la ligne d'arrivee de
+    // celui qui releve, le mot du vainqueur arrive apres — le temps qu'il
+    // apprenne sa victoire et qu'il parle. Le perdant qui avait deja referme
+    // son annonce ne le recevait alors jamais : sa ligne etait « vue », et
+    // rien ne la ramenait. Un drapeau a lui permet au mot de revenir seul,
+    // sans dependre de l'ordre dans lequel les deux se sont produits.
+    `ALTER TABLE duel_results ADD COLUMN mot_vu INTEGER NOT NULL DEFAULT 0`,
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }

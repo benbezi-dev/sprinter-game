@@ -117,7 +117,16 @@ export function DuelResultPopup() {
           voile plein ecran de plus a chaque resultat tant que l'animation
           n'aboutit pas — et elle n'aboutit pas quand le telephone met la page
           en veille. Il n'y a de toute facon rien a regarder sortir : la carte
-          suivante prend la place immediatement. */}
+          suivante prend la place immediatement.
+
+          Il s'efface pendant qu'on regarde le classement, et c'est une
+          correction, pas un effet : cette annonce est posee a z-55, le
+          classement a z-50. « Voir le classement » l'ouvrait donc DERRIERE
+          l'annonce — le bouton marchait, on ne voyait rien, et le seul recours
+          etait de fermer l'annonce sans savoir qu'on avait ouvert autre chose.
+          Empiler deux calques pleins n'a de toute facon aucun sens : on lit le
+          classement, puis on revient a son resultat, qui n'a pas bouge. */}
+      {!voirDuels && (
         <motion.div
           key={duel.id}
           initial={{ opacity: 0 }}
@@ -247,6 +256,7 @@ export function DuelResultPopup() {
             </div>
           </motion.div>
         </motion.div>
+      )}
 
       {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)} />}
     </>

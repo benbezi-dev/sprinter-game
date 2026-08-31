@@ -28,15 +28,26 @@
 /** Un mot tient en deux phrases. Au-dela, ce n'est plus une pique. */
 export const MAX_TEXTE = 140;
 /**
- * Six secondes de voix, et cent mille caracteres encodes.
+ * Six secondes de voix, et le plafond qui suit le format.
  *
  * La duree est bornee cote client, la taille cote serveur : le client peut
- * mentir sur l'une, pas sur l'autre. Six secondes d'Opus pesent une vingtaine
- * de milliers d'octets ; le plafond laisse de la marge a un encodeur bavard
- * sans laisser passer un fichier depose a la main.
+ * mentir sur l'une, pas sur l'autre.
+ *
+ * Le jeu envoie desormais du WAV : des echantillons bruts, sans compression,
+ * parce que c'est le seul format qu'aucun telephone ne refuse de lire — un
+ * enregistrement Opus fait sur Android arrivait muet sur un iPhone. Six
+ * secondes en 8 kHz mono seize bits pesent quatre-vingt-seize kilooctets, soit
+ * cent trente mille caracteres encodes : l'ancien plafond de cent mille les
+ * aurait refusees toutes. On le porte a deux cent mille, ce qui laisse la
+ * marge d'un encodeur un peu bavard sans laisser passer un fichier depose a la
+ * main. La voix est effacee des qu'elle a ete ecoutee : rien de tout cela ne
+ * s'accumule.
  */
-export const MAX_VOIX_B64 = 100000;
-export const TYPES_VOIX = ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg'];
+export const MAX_VOIX_B64 = 200000;
+export const TYPES_VOIX = [
+  'audio/wav', 'audio/wave', 'audio/x-wav',
+  'audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg',
+];
 
 /**
  * Caracteres de controle, marques de direction et espaces de largeur nulle.

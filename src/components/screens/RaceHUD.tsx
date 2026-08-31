@@ -7,7 +7,7 @@ export function RaceHUD() {
     state, elapsed, countT, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
-    ghostOn, ghostD, ghostDone
+    ghostOn, ghostD, ghostDone, challenge
   } = useGameStore();
 
   const { N, C } = SprinterApp;
@@ -17,6 +17,22 @@ export function RaceHUD() {
   const rival = ghostName && ghostSplit != null
     ? { name: ghostName, time: ghostSplit }
     : champion ? { name: champion, time: championTime } : null;
+
+  /**
+   * Un defi RECU se court a l'aveugle.
+   *
+   * Le chrono de l'autre etait annonce avant le depart, et il decidait de la
+   * course a la place du joueur : on lit le nombre, on juge que c'est joue
+   * d'avance, et on court en touriste — ou on se sait large, et on gere. Dans
+   * les deux cas on ne se donne pas a fond, et la surprise de l'arrivee est
+   * perdue.
+   *
+   * Le nom reste : savoir CONTRE QUI l'on court est ce qui donne envie. Le
+   * fantome est la, dans le couloir d'a cote, et il dit tout ce qu'il faut au
+   * moment ou ca compte. C'est la meme regle que l'ecran d'acceptation, qui ne
+   * montre deja que les epreuves.
+   */
+  const aveugle = !!challenge;
   
   // Countdown overlay
   const isCount = state === 'count';
@@ -179,7 +195,9 @@ export function RaceHUD() {
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base block truncate
                 ${ghostName ? 'text-cyan-300' : 'text-fuchsia-400'}`}>
-                {N.t('to_beat')} {rival.name} &mdash; {rival.time.toFixed(2)} s
+                {aveugle
+                  ? `${N.t('to_race')}${rival.name}`
+                  : `${N.t('to_beat')}${rival.name} \u2014 ${rival.time.toFixed(2)} s`}
               </span>
             </div>
           )}

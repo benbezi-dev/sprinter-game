@@ -972,6 +972,16 @@ export default {
       // il l'a fait ensuite. On ne remonte donc ces lignes-la que s'il y a
       // vraiment quelque chose a lire ; un duel deja vu, sans un mot, n'a
       // aucune raison de revenir a l'ecran.
+      //
+      // Et le mot revient MEME SI le resultat a deja ete vu. C'est la
+      // troisieme branche, et elle repare une perte silencieuse : le duel se
+      // tranche a l'arrivee de celui qui releve, le mot du vainqueur n'est
+      // depose qu'ensuite — le temps qu'il apprenne sa victoire et qu'il
+      // parle. Le perdant qui avait referme son annonce entre les deux voyait
+      // sa ligne marquee « vue », et la voix restait en base jusqu'a ce que
+      // personne ne la reclame. On lit donc `mot_vu` la ou on lisait « vu »
+      // tout court : le resultat s'annonce une fois, le mot aussi, et les deux
+      // n'ont pas a arriver ensemble.
       const { results } = await env.DB.prepare(
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
@@ -987,16 +997,32 @@ export default {
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
                 c.races, c.owner_name,
+                'challenger' AS role
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.seen_by_challenger = 1
+            AND r.mot_vu = 0
+            AND r.outcome = 'opponent'
+            AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
+            AND ? = 1
+            AND (c.owner_device = ? OR (? <> '' AND r.challenger_key = ?))
+         UNION ALL
+        SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
+                r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                c.races, c.owner_name,
                 'opponent' AS role
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
-          WHERE r.seen_by_opponent = 0
+          WHERE r.mot_vu = 0
             AND r.outcome = 'challenger'
             AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
             AND ? = 1
             AND (? <> '' AND r.opponent_key = ?)
           ORDER BY created_at ASC LIMIT 20`
-      ).bind(device_id, nom, nom, motOuvert(canal) ? 1 : 0, nom, nom).all();
+      ).bind(device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, nom, nom).all();
 
       return json({
         results: (results || []).map(r => ({
@@ -1056,6 +1082,26 @@ export default {
             AND seen_by_opponent = 0 AND opponent_key = ?`
       ).bind(...propres, nom).run() : null;
 
+      // LE MOT EST LU, et c'est autre chose qu'avoir vu le resultat.
+      //
+      // On ne marque ici que celui a qui le mot etait destine : le perdant.
+      // Le vainqueur qui referme SA fenetre n'a rien lu — il vient d'ecrire.
+      await env.DB.prepare(
+        `UPDATE duel_results SET mot_vu = 1
+          WHERE challenge_id IN (${trous}) AND mot_vu = 0
+            AND outcome = 'opponent'
+            AND challenge_id IN (
+              SELECT c.id FROM challenges c
+               WHERE c.owner_device = ? OR (? <> '' AND lower(trim(c.owner_name)) = ?))`
+      ).bind(...propres, String(device_id || ''), nom, nom).run();
+      if (nom) {
+        await env.DB.prepare(
+          `UPDATE duel_results SET mot_vu = 1
+            WHERE challenge_id IN (${trous}) AND mot_vu = 0
+              AND outcome = 'challenger' AND opponent_key = ?`
+        ).bind(...propres, nom).run();
+      }
+
       // LA VOIX S'EFFACE ICI, et nulle part ailleurs.
       //
       // C'est la promesse faite au joueur : ce qu'il a dit disparait quand
@@ -1063,13 +1109,19 @@ export default {
       // se ferme, pas par une tache de menage qui passerait plus tard — une
       // promesse tenue « d'ici quelques heures » n'est pas la meme promesse.
       //
+      // Sur `mot_vu`, et non plus sur « quelqu'un a vu quelque chose ». La
+      // condition d'avant effacait la voix des que L'UN DES DEUX refermait sa
+      // fenetre — vainqueur compris. Elle detruisait donc l'enregistrement
+      // dans le cas le plus ordinaire qui soit : on gagne, on parle, on
+      // referme son annonce, et la voix disparait avant que l'autre l'ait
+      // entendue. Le perdant ne recevait plus que le texte.
+      //
       // Le texte reste : il tient en cent quarante caracteres, il ne coute
       // rien, et le perdant peut vouloir le relire. C'est la voix qui pese et
       // qu'on s'est engage a ne pas garder.
       await env.DB.prepare(
         `UPDATE duel_results SET voix = NULL, voix_type = NULL
-          WHERE challenge_id IN (${trous}) AND voix IS NOT NULL
-            AND (seen_by_opponent = 1 OR seen_by_challenger = 1)`
+          WHERE challenge_id IN (${trous}) AND voix IS NOT NULL AND mot_vu = 1`
       ).bind(...propres).run();
 
       // On renvoie ce qui a vraiment bascule, pas ce qui a ete demande : une

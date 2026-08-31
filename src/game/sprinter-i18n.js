@@ -59,6 +59,9 @@
     // course
     stumble:      ['TU TRÉBUCHES', 'YOU STUMBLE'],
     to_beat:      ['à battre : ', 'to beat: '],
+    // Un defi recu se court sans connaitre le chrono d'en face : on sait
+    // contre qui, pas contre quoi.
+    to_race:      ['tu cours contre ', 'you are racing '],
     ready:        ['À VOS MARQUES', 'READY'],
     get_set:      ['PRÊTS', 'GET SET'],
     go:           ['PARTEZ', 'GO'],
@@ -414,6 +417,8 @@
     mot_ecouter_sa_voix: ['ÉCOUTER CE QU’IL A DIT', 'HEAR WHAT THEY SAID'],
     mot_ephemere:    ['ce vocal disparaît quand tu fermes cette fenêtre',
                       'this recording vanishes when you close this window'],
+    mot_illisible:   ['ce message ne se lit pas sur cet appareil',
+                      'this message will not play on this device'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
