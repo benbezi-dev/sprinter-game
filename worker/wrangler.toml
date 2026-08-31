@@ -38,6 +38,10 @@ new_sqlite_classes = ["SalleRelais"]
 tag = "v3"
 new_sqlite_classes = ["SalleConfrontation"]
 
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["Boite"]
+
 # Une salle de relais par equipe : quatre joueurs et un temoin partagent le
 # meme objet, comme les deux joueurs d'un duel partagent le leur.
 [[durable_objects.bindings]]
@@ -51,3 +55,12 @@ class_name = "SalleRelais"
 [[durable_objects.bindings]]
 name = "CONFRONTATIONS"
 class_name = "SalleConfrontation"
+
+# La boite d'un joueur : une par appareil, et une WebSocket ouverte pendant
+# qu'il joue. Elle ne porte que des coups de sonnette — defi recu, duel
+# tranche, mot depose — et le jeu va chercher le contenu par les routes
+# ordinaires. C'est ce qui remplace un sondage de dix a vingt secondes par une
+# nouvelle qui arrive dans la seconde, a cote comme a l'autre bout du monde.
+[[durable_objects.bindings]]
+name = "BOITES"
+class_name = "Boite"

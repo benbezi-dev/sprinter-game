@@ -36,6 +36,8 @@ import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { dashboardRequested, pingVisit } from '@/game/stats';
+import { ouvrirBoite } from '@/game/boite';
+import { DUELS_OUVERTS } from '@/game/duels';
 
 const queryClient = new QueryClient();
 
@@ -89,6 +91,19 @@ function MainGame() {
   // En production, EST_TEST vaut false en dur : la valeur initiale est vraie,
   // la porte disparait du build, et rien de tout ceci n'existe.
   const [acces, setAcces] = useState(!EST_TEST);
+
+  /**
+   * La liaison permanente s'ouvre des que le jeu est jouable.
+   *
+   * Apres la porte du canal de test, et pas avant : sans code d'acces la boite
+   * n'existe pas, et frapper quand meme mettrait le jeu a sonder une adresse
+   * de production depuis la version de test. Elle ne se referme jamais — c'est
+   * le module qui gere veille, coupures et retours.
+   */
+  useEffect(() => {
+    if (!acces || !DUELS_OUVERTS) return;
+    ouvrirBoite();
+  }, [acces]);
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
 

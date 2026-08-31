@@ -59,6 +59,9 @@
     // course
     stumble:      ['TU TRÉBUCHES', 'YOU STUMBLE'],
     to_beat:      ['à battre : ', 'to beat: '],
+    // Un defi recu se court sans connaitre le chrono d'en face : on sait
+    // contre qui, pas contre quoi.
+    to_race:      ['tu cours contre ', 'you are racing '],
     ready:        ['À VOS MARQUES', 'READY'],
     get_set:      ['PRÊTS', 'GET SET'],
     go:           ['PARTEZ', 'GO'],
@@ -414,10 +417,24 @@
     mot_ecouter_sa_voix: ['ÉCOUTER CE QU’IL A DIT', 'HEAR WHAT THEY SAID'],
     mot_ephemere:    ['ce vocal disparaît quand tu fermes cette fenêtre',
                       'this recording vanishes when you close this window'],
+    mot_illisible:   ['ce message ne se lit pas sur cet appareil',
+                      'this message will not play on this device'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
     duel_renvoyer:   ['renvoie le code à {n}', 'send the code back to {n}'],
+    // La revanche part toute seule, et seulement si elle a battu le chrono
+    // qu'elle venge : on ne derange pas quelqu'un avec un temps moins bon.
+    duel_revanche_envoyee: ['REVANCHE ENVOYÉE', 'REVENGE SENT'],
+    // La revanche est partie, mais le serveur n'a retrouve personne : ce
+    // n'est pas la meme chose qu'un defi lance depuis le classement, ou l'on
+    // sait que la personne manque au TOP 500 de l'epreuve. Ici on ne sait pas
+    // pourquoi — on dit donc ce qui reste vrai, et ce qu'il reste a faire.
+    os_revanche_sans_cible: ['{n} n’a pas pu être prévenu — envoie-lui le code toi-même',
+                             '{n} could not be notified — send them the code yourself'],
+    duel_revanche_ratee_titre: ['PAS ENCORE', 'NOT YET'],
+    duel_revanche_ratee: ['il fallait descendre sous {s} s pour renvoyer le défi à {n} — rien n’est parti',
+                          'you needed under {s} s to send the challenge back to {n} — nothing went out'],
     // L'echelle des divisions. Les noms viennent de l'athletisme francais
     // plutot que des metaux : on ne monte pas de bronze en argent, on passe du
     // departemental au regional.

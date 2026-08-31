@@ -161,6 +161,7 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
 }) {
   const { N } = SprinterApp;
   const [url, setUrl] = useState<string | null>(null);
+  const [muet, setMuet] = useState(false);
 
   useEffect(() => {
     if (!voix) return;
@@ -169,6 +170,22 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
     catch { setUrl(null); }
     return () => { if (u) URL.revokeObjectURL(u); };
   }, [voix, voixType]);
+
+  /**
+   * Jouer, et dire quand ca ne joue pas.
+   *
+   * L'echec etait avale : on appuyait, il ne se passait rien, et il n'y avait
+   * aucun moyen de savoir si l'autre s'etait tu ou si le telephone refusait le
+   * format. Une ligne vaut mieux qu'un bouton mort — et depuis que le mot part
+   * en WAV, ce cas ne devrait plus concerner que de vieux enregistrements.
+   */
+  const jouer = () => {
+    if (!url) return;
+    setMuet(false);
+    const a = new Audio(url);
+    a.onerror = () => setMuet(true);
+    a.play().catch(() => setMuet(true));
+  };
 
   if (!texte && !url) return null;
 
@@ -182,13 +199,18 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
       )}
       {url && (
         <button
-          onClick={() => { const a = new Audio(url); a.play().catch(() => {}); }}
+          onClick={jouer}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10
                      text-foreground font-bold tracking-widest text-[10px] md:text-xs
                      hover:bg-white/15 transition-colors"
         >
           <Play className="w-3.5 h-3.5" /> {N.t('mot_ecouter_sa_voix')}
         </button>
+      )}
+      {muet && (
+        <span className="text-[10px] text-destructive text-center leading-snug">
+          {N.t('mot_illisible')}
+        </span>
       )}
       <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
                        truncate max-w-full">

@@ -7,6 +7,7 @@ import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
+import { surCourrier } from '@/game/boite';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
@@ -39,11 +40,14 @@ export function DuelResultPopup() {
   // le plus souvent devant son ecran a l'attendre. Quarante-cinq secondes de
   // minuterie faisaient mettre plus d'une minute a une nouvelle qu'il fallait
   // annoncer tout de suite — mesure a soixante-cinq secondes.
-  const relever = useRef(() => {});
-  relever.current = () => {
+  const relever = useRef((tout_de_suite?: boolean) => {});
+  relever.current = (tout_de_suite?: boolean) => {
     if (!DUELS_OUVERTS || !estAuCalme()) return;
     const t = Date.now();
-    if (t - dernier.current < 4000) return;      // pas de rafale
+    // Le garde-fou anti-rafale ne s'applique pas a un signal de la boite : il
+    // protege d'un sondage qui s'emballe, pas d'une nouvelle qui vient
+    // d'arriver et qu'on attend justement.
+    if (!tout_de_suite && t - dernier.current < 4000) return;
     dernier.current = t;
     fetchMesDuels().then(list => {
       if (annule.current || !list.length) return;
@@ -62,6 +66,11 @@ export function DuelResultPopup() {
   }, []);
 
   useSondageAuRepos(() => relever.current(), 10000);
+  // La boite sonne : le resultat d'un duel, ou le mot du vainqueur qui arrive
+  // apres coup. On va le chercher tout de suite plutot qu'au prochain palier.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'duel' || quoi === 'mot') relever.current(true);
+  }), []);
   // Le changement d'etat reste un reveil a lui seul : on sort d'une course,
   // et le resultat peut attendre depuis qu'on y est entre.
   useEffect(() => { relever.current(); }, [state]);
@@ -100,11 +109,20 @@ export function DuelResultPopup() {
    * On ne rejoue pas la course perdue — un defi se court une fois, et le
    * rejouer laisserait tenter sa chance jusqu'a tomber sur un bon jour. C'est
    * un nouveau duel qui se lance, dans l'autre sens : cette fois c'est nous qui
-   * posons le chrono, et l'ecran de fin sait deja a qui l'envoyer.
+   * posons le chrono.
+   *
+   * Le defi PART TOUT SEUL a l'arrivee, sans code a recopier — c'est l'ecran
+   * de fin qui s'en charge, voir OneShotEndScreen. Mais seulement si le
+   * nouveau chrono bat celui qui nous a battus : `revancheMs` le retient pour
+   * ca. On ne derange pas quelqu'un avec un temps moins bon que le sien ; sans
+   * l'avoir battu, rien ne part et le meme bouton reste offert pour retenter,
+   * sans reperdre les points du duel qu'on venge — ils sont deja acquis.
    */
   const revanche = () => {
     marquerDuelsVus([duel.id]);
     SprinterApp.G.revanche = duel.adversaire;
+    SprinterApp.G.revancheId = duel.id;
+    SprinterApp.G.revancheMs = duel.son_ms;
     SprinterApp.startOneShot(duel.races, { levelIdx: 4 });
   };
 
@@ -117,7 +135,16 @@ export function DuelResultPopup() {
           voile plein ecran de plus a chaque resultat tant que l'animation
           n'aboutit pas — et elle n'aboutit pas quand le telephone met la page
           en veille. Il n'y a de toute facon rien a regarder sortir : la carte
-          suivante prend la place immediatement. */}
+          suivante prend la place immediatement.
+
+          Il s'efface pendant qu'on regarde le classement, et c'est une
+          correction, pas un effet : cette annonce est posee a z-55, le
+          classement a z-50. « Voir le classement » l'ouvrait donc DERRIERE
+          l'annonce — le bouton marchait, on ne voyait rien, et le seul recours
+          etait de fermer l'annonce sans savoir qu'on avait ouvert autre chose.
+          Empiler deux calques pleins n'a de toute facon aucun sens : on lit le
+          classement, puis on revient a son resultat, qui n'a pas bouge. */}
+      {!voirDuels && (
         <motion.div
           key={duel.id}
           initial={{ opacity: 0 }}
@@ -247,6 +274,7 @@ export function DuelResultPopup() {
             </div>
           </motion.div>
         </motion.div>
+      )}
 
       {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)} />}
     </>

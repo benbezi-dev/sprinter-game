@@ -6,6 +6,8 @@ import { poserMot, MAX_TEXTE } from './mot.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
+export { Boite } from './boite.js';
+import { sonner } from './boite.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
@@ -826,6 +828,25 @@ export default {
       return json({ error: 'not found' }, 404);
     }
 
+    // ------------------------------------------------------- la boite
+    // La liaison permanente d'un joueur. Elle ne transporte que des coups de
+    // sonnette ; le jeu va chercher le courrier par les routes ordinaires —
+    // voir boite.js, qui explique pourquoi c'est fait ainsi.
+    if (url.pathname.startsWith('/boite/')) {
+      const appareil = url.pathname.slice('/boite/'.length);
+      if (!isValidDeviceId(appareil)) return json({ error: 'appareil invalide' }, 400);
+      if (!env.BOITES) return json({ error: 'boite indisponible' }, 503);
+      // Comme pour les salles, la boite d'un joueur de test et celle d'un
+      // joueur de production ne sont pas le meme objet.
+      const id = env.BOITES.idFromName(canal.test ? 'T-' + appareil : appareil);
+      const reponse = await env.BOITES.get(id).fetch(new Request(url, request));
+      if (reponse.status === 101) return reponse;
+      return cors(new Response(reponse.body, {
+        status: reponse.status,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    }
+
     // ------------------------------------------------ course en direct
     // Le Worker ne fait qu'aiguiller : toute la vie de la salle se passe dans
     // le Durable Object, seul endroit ou les deux joueurs se rejoignent
@@ -936,6 +957,30 @@ export default {
       const r = await poserMot(env.DB, {
         id: code, cle, texte, voix, voixType: voix_type,
       });
+
+      // La sonnette chez le perdant : c'est lui qui recoit le mot, et lui seul.
+      //
+      // Son appareil n'est pas dans la rencontre — elle ne garde que des noms.
+      // On le retrouve du cote ou il se trouve : celui qui a lance le defi est
+      // inscrit sur le defi, celui qui l'a releve sur sa tentative.
+      if (!r.erreur) ctx.waitUntil((async () => {
+        try {
+          const d = await env.DB.prepare(
+            `SELECT r.outcome, c.owner_device FROM duel_results r
+               JOIN challenges c ON c.id = r.challenge_id
+              WHERE r.challenge_id = ?`).bind(code).first();
+          if (!d || d.outcome === 'draw') return;
+          if (d.outcome === 'opponent') {
+            // Le releveur l'emporte : le perdant est celui qui a lance.
+            await sonner(env, d.owner_device, 'mot', canal.test);
+            return;
+          }
+          const rep = await env.DB.prepare(
+            `SELECT device_id FROM challenge_attempts
+              WHERE id = ? ORDER BY total_ms ASC LIMIT 1`).bind(code).first();
+          if (rep) await sonner(env, rep.device_id, 'mot', canal.test);
+        } catch (e) { /* le sondage reste derriere */ }
+      })());
       return r.erreur ? json({ error: r.erreur, ...r }, r.deja ? 409 : 403) : json(r);
     }
 
@@ -972,6 +1017,16 @@ export default {
       // il l'a fait ensuite. On ne remonte donc ces lignes-la que s'il y a
       // vraiment quelque chose a lire ; un duel deja vu, sans un mot, n'a
       // aucune raison de revenir a l'ecran.
+      //
+      // Et le mot revient MEME SI le resultat a deja ete vu. C'est la
+      // troisieme branche, et elle repare une perte silencieuse : le duel se
+      // tranche a l'arrivee de celui qui releve, le mot du vainqueur n'est
+      // depose qu'ensuite — le temps qu'il apprenne sa victoire et qu'il
+      // parle. Le perdant qui avait referme son annonce entre les deux voyait
+      // sa ligne marquee « vue », et la voix restait en base jusqu'a ce que
+      // personne ne la reclame. On lit donc `mot_vu` la ou on lisait « vu »
+      // tout court : le resultat s'annonce une fois, le mot aussi, et les deux
+      // n'ont pas a arriver ensemble.
       const { results } = await env.DB.prepare(
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
@@ -987,16 +1042,32 @@ export default {
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
                 c.races, c.owner_name,
+                'challenger' AS role
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.seen_by_challenger = 1
+            AND r.mot_vu = 0
+            AND r.outcome = 'opponent'
+            AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
+            AND ? = 1
+            AND (c.owner_device = ? OR (? <> '' AND r.challenger_key = ?))
+         UNION ALL
+        SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
+                r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                c.races, c.owner_name,
                 'opponent' AS role
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
-          WHERE r.seen_by_opponent = 0
+          WHERE r.mot_vu = 0
             AND r.outcome = 'challenger'
             AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
             AND ? = 1
             AND (? <> '' AND r.opponent_key = ?)
           ORDER BY created_at ASC LIMIT 20`
-      ).bind(device_id, nom, nom, motOuvert(canal) ? 1 : 0, nom, nom).all();
+      ).bind(device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, nom, nom).all();
 
       return json({
         results: (results || []).map(r => ({
@@ -1056,6 +1127,36 @@ export default {
             AND seen_by_opponent = 0 AND opponent_key = ?`
       ).bind(...propres, nom).run() : null;
 
+      // LE MOT EST LU, et c'est autre chose qu'avoir vu le resultat.
+      //
+      // Deux conditions, et la seconde a manque a un premier essai :
+      //
+      // - on ne marque que celui a qui le mot etait destine : le perdant. Le
+      //   vainqueur qui referme SA fenetre n'a rien lu, il vient d'ecrire.
+      // - et seulement s'il y avait quelque chose a lire. Sans ce garde-fou,
+      //   le perdant qui referme son annonce AVANT que le vainqueur ait parle
+      //   marquait le mot comme lu par avance : celui-ci arrivait ensuite dans
+      //   une ligne deja soldee, et ne repartait plus jamais. C'est exactement
+      //   la perte qu'on cherchait a corriger, reintroduite un cran plus loin.
+      await env.DB.prepare(
+        `UPDATE duel_results SET mot_vu = 1
+          WHERE challenge_id IN (${trous}) AND mot_vu = 0
+            AND outcome = 'opponent'
+            AND (mot IS NOT NULL OR voix IS NOT NULL)
+            AND challenge_id IN (
+              SELECT c.id FROM challenges c
+               WHERE c.owner_device = ? OR (? <> '' AND lower(trim(c.owner_name)) = ?))`
+      ).bind(...propres, String(device_id || ''), nom, nom).run();
+      if (nom) {
+        await env.DB.prepare(
+          `UPDATE duel_results SET mot_vu = 1
+            WHERE challenge_id IN (${trous}) AND mot_vu = 0
+              AND outcome = 'challenger'
+              AND (mot IS NOT NULL OR voix IS NOT NULL)
+              AND opponent_key = ?`
+        ).bind(...propres, nom).run();
+      }
+
       // LA VOIX S'EFFACE ICI, et nulle part ailleurs.
       //
       // C'est la promesse faite au joueur : ce qu'il a dit disparait quand
@@ -1063,13 +1164,19 @@ export default {
       // se ferme, pas par une tache de menage qui passerait plus tard — une
       // promesse tenue « d'ici quelques heures » n'est pas la meme promesse.
       //
+      // Sur `mot_vu`, et non plus sur « quelqu'un a vu quelque chose ». La
+      // condition d'avant effacait la voix des que L'UN DES DEUX refermait sa
+      // fenetre — vainqueur compris. Elle detruisait donc l'enregistrement
+      // dans le cas le plus ordinaire qui soit : on gagne, on parle, on
+      // referme son annonce, et la voix disparait avant que l'autre l'ait
+      // entendue. Le perdant ne recevait plus que le texte.
+      //
       // Le texte reste : il tient en cent quarante caracteres, il ne coute
       // rien, et le perdant peut vouloir le relire. C'est la voix qui pese et
       // qu'on s'est engage a ne pas garder.
       await env.DB.prepare(
         `UPDATE duel_results SET voix = NULL, voix_type = NULL
-          WHERE challenge_id IN (${trous}) AND voix IS NOT NULL
-            AND (seen_by_opponent = 1 OR seen_by_challenger = 1)`
+          WHERE challenge_id IN (${trous}) AND voix IS NOT NULL AND mot_vu = 1`
       ).bind(...propres).run();
 
       // On renvoie ce qui a vraiment bascule, pas ce qui a ete demande : une
@@ -1290,7 +1397,7 @@ export default {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { device_id, name, races, level_idx, total_ms, splits, traces,
-              target_score_id } = body || {};
+              target_score_id, revanche_de } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
       const t = Math.round(Number(total_ms));
@@ -1318,6 +1425,60 @@ export default {
         if (row && row.device_id !== device_id) { target = row.device_id; targetName = row.name; }
       }
 
+      /* ------------------------------------------------------- la revanche
+         Un defi qui repart CHEZ CELUI QUI VIENT DE NOUS BATTRE, sans code a
+         recopier. On ne passe pas par le TOP 500 comme ailleurs : la personne
+         peut ne pas y figurer sur cette epreuve, et surtout on la connait
+         deja — elle est l'autre partie d'une rencontre qui vient d'avoir
+         lieu. On repart donc du duel lui-meme, ou les deux appareils sont
+         inscrits.
+
+         Deux conditions, et elles ne sont pas decoratives :
+
+         1. SEUL LE PERDANT prend sa revanche. Sans cela, l'identifiant d'un
+            duel — qui circule des deux cotes — suffirait a s'adresser a
+            n'importe qui.
+         2. IL FAUT AVOIR BATTU SON CHRONO. C'est la regle du jeu : on ne
+            derange pas quelqu'un avec un temps moins bon que le sien. Le jeu
+            la tient deja a l'ecran ; le serveur la tient aussi, parce qu'une
+            regle qui ne vit que dans l'ecran n'est pas une regle. */
+      const duelRef = String(revanche_de || '').toUpperCase();
+      if (!target && /^[A-Z0-9]{4,10}$/.test(duelRef)) {
+        await ensureDuelTables(env.DB);
+        const d = await env.DB.prepare(
+          `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
+                  c.owner_device, c.owner_name
+             FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
+            WHERE r.challenge_id = ?`
+        ).bind(duelRef).first();
+        if (d && d.outcome !== 'draw') {
+          // L'appareil de celui qui a releve : la rencontre ne garde que son
+          // nom, sa tentative garde son appareil.
+          const rep = await env.DB.prepare(
+            `SELECT device_id, name FROM challenge_attempts
+              WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
+          ).bind(duelRef).first();
+
+          const moiCle = cleanName(name).trim().toLowerCase();
+          const suisLanceur = d.owner_device === device_id ||
+            (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
+          const suisReleveur = (!!rep && rep.device_id === device_id) ||
+            (!!moiCle && String(d.opponent_key || '') === moiCle);
+          const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
+          const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
+          // Le chrono du vainqueur, celui qu'il fallait battre.
+          const aBattre = d.outcome === 'opponent' ? d.opponent_ms : d.challenger_ms;
+
+          if (monRole && monRole === perdant && t < aBattre) {
+            const cible = suisLanceur ? (rep ? rep.device_id : null) : d.owner_device;
+            const cibleNom = suisLanceur
+              ? (d.opponent_name || (rep && rep.name) || '')
+              : (d.owner_name || '');
+            if (cible && cible !== device_id) { target = cible; targetName = cibleNom; }
+          }
+        }
+      }
+
       const id = makeCode();
       await env.DB.prepare(
         `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device)
@@ -1328,6 +1489,10 @@ export default {
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = cleanName(name).trim().toLowerCase();
       if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name));
+      // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
+      // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
+      // se trouve sur un ecran calme.
+      if (target) ctx.waitUntil(sonner(env, target, 'defi', canal.test));
       return json({ id, target_name: targetName });
     }
 
@@ -1425,6 +1590,12 @@ export default {
         opponentMs: t,
       });
       if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
+
+      // Celui qui a lance le defi n'est pas la : c'est tout l'objet de sa
+      // boite. Il l'apprend maintenant plutot qu'au sondage suivant.
+      if (duel && !duel.deja && ch.owner_device) {
+        ctx.waitUntil(sonner(env, ch.owner_device, 'duel', canal.test));
+      }
 
       return json({
         id: code,

@@ -68,7 +68,17 @@ export async function createChallenge(input: {
   name?: string;
   /** rowid de la ligne de classement visee, pour un defi adresse */
   targetScoreId?: number | null;
-}): Promise<string> {
+  /**
+   * L'identifiant du duel qu'on venge, quand ce chrono est une revanche.
+   *
+   * Different d'un defi adresse par ligne de classement : ici la personne
+   * peut ne meme pas figurer au TOP 500 de cette epreuve, on la retrouve par
+   * le duel lui-meme, ou les deux appareils sont deja inscrits. Le serveur
+   * verifie seul qu'on etait bien le perdant et qu'on a bien battu son
+   * chrono — voir /challenge, cote worker.
+   */
+  revancheDe?: string | null;
+}): Promise<{ id: string; cible: string }> {
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -81,12 +91,23 @@ export async function createChallenge(input: {
       splits: input.splits.map(s => Math.round(s)),
       traces: input.traces,
       target_score_id: input.targetScoreId ?? null,
+      revanche_de: input.revancheDe ?? null,
     }),
   });
   if (!res.ok) throw new Error('challenge create failed');
   const data = await res.json();
   if (!data.id) throw new Error('challenge create failed');
-  return data.id as string;
+  /**
+   * On rend aussi QUI a ete prevenu, et c'est le serveur qui le dit.
+   *
+   * Le jeu croyait le savoir : il visait quelqu'un, donc il annoncait « defi
+   * envoye a Ana ». Mais la cible peut ne pas etre retrouvee — une ligne de
+   * classement effacee, un serveur d'une version plus ancienne qui ignore le
+   * champ — et l'ecran affirmait alors une chose fausse a la place d'un code a
+   * transmettre soi-meme. Une chaine vide veut dire « personne n'a ete
+   * prevenu », et l'ecran a de quoi le dire honnetement.
+   */
+  return { id: data.id as string, cible: String(data.target_name || '') };
 }
 
 export async function fetchChallenge(code: string): Promise<Challenge | null> {

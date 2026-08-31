@@ -49,6 +49,19 @@ export function OneShotEndScreen() {
   // Retient le defi deja envoye, pas un simple booleen : si l'ecran survit
   // au passage d'un defi au suivant, un booleen bloquerait le second envoi.
   const submitted = useRef<string | null>(null);
+  /** La revanche deja envoyee — evite un doublon si l'ecran se rejoue. */
+  const revancheEnvoyee = useRef<string | null>(null);
+  /**
+   * Le nom de celui a qui la revanche vient de partir.
+   *
+   * Il double `G.revanche`, et il le faut : G est vide des l'envoi — sans quoi
+   * la course suivante repartirait vers le meme adversaire — et l'ecran
+   * perdrait a la seconde meme sa confirmation, pour se rabattre sur « DEFIER
+   * UN AMI » alors que le defi vient de partir tout seul.
+   */
+  const [revancheFaite, setRevancheFaite] = useState<string | null>(null);
+  /** Qui l'on visait, meme si le serveur n'a finalement touche personne. */
+  const [revancheVise, setRevancheVise] = useState<string>('');
   // Issue du duel telle que le serveur l'a tranchee. Elle ne depend pas du
   // chrono affiche ici : c'est lui qui fait foi, et il ne se rejoue pas.
   const [duel, setDuel] = useState<DuelIssue | null>(null);
@@ -117,6 +130,21 @@ export function OneShotEndScreen() {
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
   const beaten = !!challenge && complete && runTime < ghostTime;
 
+  /**
+   * Cette course venge un duel perdu, si `revancheId` est pose.
+   *
+   * `revancheMs` est le chrono qu'il fallait battre — celui qui nous a battus
+   * la premiere fois. Tant qu'on ne l'a pas battu, le defi ne part pas : on
+   * ne derange pas quelqu'un avec un temps moins bon que le sien. C'est la
+   * seule condition ; les points du duel qu'on venge restent perdus, la
+   * revanche n'efface rien, elle ouvre juste une seconde manche.
+   */
+  const revancheId = SprinterApp.G.revancheId as string | null;
+  const revancheNom = SprinterApp.G.revanche as string | null;
+  const revancheMs = (SprinterApp.G.revancheMs as number) || 0;
+  const revancheBattue = !!revancheId && !falseOut && complete && runTime * 1000 < revancheMs;
+
+
   // Defi en cours : on envoie le resultat une seule fois, des l'arrivee.
   // Un faux depart eliminatoire s'envoie aussi — c'est une defaite, pas une
   // course qui n'a pas eu lieu, et l'adversaire doit toucher ses points.
@@ -147,12 +175,66 @@ export function OneShotEndScreen() {
                          : duel.issue === 'draw' ? 'win' : 'dirge');
   }, [duel, falseOut]);
 
+  /**
+   * Envoie la revanche toute seule, des que le chrono la bat.
+   *
+   * On n'attend pas un clic : la promesse du bouton « PRENDRE MA REVANCHE »
+   * etait justement de ne plus avoir a recopier un code. Rien ne part si le
+   * chrono ne bat pas `revancheMs` — le champ reste vide, et le bouton de
+   * relance, plus bas, laisse retenter sans avoir perdu la trace de qui l'on
+   * venge.
+   *
+   * Consommee des l'envoi : sans quoi une nouvelle course lancee depuis cet
+   * ecran — un defi different, ou un fantome du TOP 500 — se retrouverait
+   * elle aussi adressee a l'adversaire d'une revanche deja partie.
+   */
+  useEffect(() => {
+    if (!revancheId || revancheEnvoyee.current === revancheId) return;
+    if (!complete && !falseOut) return;          // la course n'est pas finie
+    if (falseOut || !revancheBattue) return;      // pas battu : rien ne part
+    revancheEnvoyee.current = revancheId;
+    (async () => {
+      setBusy(true); setErr(false);
+      try {
+        const { id, cible: prevenu } = await createChallenge({
+          races: shotRaces as ('100' | '200' | '400')[],
+          levelIdx: SprinterApp.G.shotLevel,
+          totalMs: runTime * 1000,
+          splits: runSplits.map(s => (s || 0) * 1000),
+          traces: SprinterApp.G.shotTraces || [],
+          name: name.trim() || undefined,
+          revancheDe: revancheId,
+        });
+        setCode(id);
+        setRevancheVise(revancheNom || '');
+        // On annonce « envoye a X » seulement si le serveur a bien touche
+        // quelqu'un. Sinon le code existe et c'est tout : on le dira comme
+        // tel, plutot que d'affirmer une remise qui n'a pas eu lieu.
+        setRevancheFaite(prevenu || '');
+        SprinterApp.G.revanche = null;
+        SprinterApp.G.revancheId = null;
+        SprinterApp.G.revancheMs = 0;
+      } catch {
+        setErr(true);
+        revancheEnvoyee.current = null;           // le prochain rendu retentera
+      } finally {
+        setBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revancheId, complete, falseOut, revancheBattue]);
+
+  /** Relancer la meme revanche : `revancheId` n'a pas bouge, on repart. */
+  const relancerRevanche = () => {
+    SprinterApp.startOneShot(shotRaces as any, { levelIdx: SprinterApp.G.shotLevel });
+  };
+
   const handleCreate = async () => {
     const finalName = name.trim();
     if (finalName) saveName(finalName);
     setBusy(true); setErr(false);
     try {
-      const id = await createChallenge({
+      const { id } = await createChallenge({
         races: shotRaces as ('100' | '200' | '400')[],
         levelIdx: SprinterApp.G.shotLevel,
         totalMs: runTime * 1000,
@@ -389,6 +471,8 @@ export function OneShotEndScreen() {
                       <button
                         onClick={() => {
                           SprinterApp.G.revanche = challenge.owner_name;
+                          SprinterApp.G.revancheId = challenge.id;
+                          SprinterApp.G.revancheMs = challenge.total_ms;
                           SprinterApp.startOneShot(shotRaces as any, { levelIdx: SprinterApp.G.shotLevel });
                         }}
                         className="mt-1 px-5 py-2.5 rounded-xl font-black font-display tracking-widest
@@ -553,15 +637,18 @@ export function OneShotEndScreen() {
           )}
 
           {/* Creer un defi a partir de cette course. Hors defi c'est le
-              partage normal ; apres un defi gagne c'est la revanche, qu'on
-              renvoie a l'adversaire. */}
+              partage normal ; une revanche part toute seule des qu'elle bat
+              le chrono qu'elle venge. */}
           {!falseOut && (!challenge || beaten) && (
             <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3
-              ${beaten ? 'border-primary/40' : 'border-white/10'}`}>
+              ${beaten || revancheBattue || revancheFaite !== null
+                ? 'border-primary/40' : 'border-white/10'}`}>
               <div className="flex items-center gap-2 justify-center">
                 <Ghost className="w-4 h-4 text-primary" />
                 <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">
-                  {N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
+                  {N.t(revancheFaite !== null ? 'duel_revanche_envoyee'
+                     : revancheId ? (revancheBattue ? 'duel_revanche_envoyee' : 'duel_revanche_ratee_titre')
+                     : beaten ? 'challenge_rematch' : 'challenge_make')}
                 </h2>
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
@@ -575,23 +662,48 @@ export function OneShotEndScreen() {
                   n'a pas ete retrouvee au TOP 500 de cette epreuve : le code
                   existe, personne ne l'a recu. On le dit ici plutot que de
                   laisser croire qu'elle a ete prevenue. */}
-              {!cible && sansCible && (
+              {!cible && !revancheId && revancheFaite === null && sansCible && (
                 <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
                   {N.t('os_defi_sans_cible', { n: sansCible })}
                 </p>
               )}
-              {/* Revanche : on rappelle a qui le code doit repartir.
-                  Le defi ne s'adresse pas tout seul — les noms ne sont pas des
-                  adresses, et deux joueurs peuvent porter le meme. C'est donc
-                  un rappel, pas un envoi : le code se recopie comme les
-                  autres. */}
-              {!cible && SprinterApp.G.revanche && (
-                <p className="text-center text-[10px] md:text-xs text-primary">
-                  {N.t('duel_renvoyer', { n: SprinterApp.G.revanche })}
+              {/* Revanche gagnee : le defi vient de partir tout seul, comme
+                  pour une cible du TOP 500 — meme phrase, meme confiance. */}
+              {!cible && (revancheFaite || (revancheId && revancheBattue)) && (
+                <p className="text-center text-[10px] md:text-xs text-cyan-300">
+                  {N.t(code ? 'target_sent' : 'target_run',
+                       { n: revancheFaite || revancheVise || revancheNom, d: shotRaces[0] })}
                 </p>
               )}
+              {/* La revanche est partie, mais le serveur n'a retrouve
+                  personne : le code existe, il reste a l'envoyer soi-meme. On
+                  le dit plutot que d'affirmer une remise qui n'a pas eu lieu. */}
+              {!cible && revancheFaite === '' && (
+                <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                  {N.t('os_revanche_sans_cible', { n: revancheVise })}
+                </p>
+              )}
+              {/* Revanche pas encore gagnee : le chrono n'a pas suffi, rien
+                  n'est parti, et le meme adversaire reste vise — on ne perd
+                  pas la main en retentant. */}
+              {!cible && revancheId && !revancheBattue && revancheFaite === null && (
+                <div className="flex flex-col items-center gap-2.5">
+                  <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                    {N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
+                  </p>
+                  <button
+                    onClick={relancerRevanche}
+                    className="px-5 py-2 rounded-xl font-black font-display tracking-widest text-xs md:text-sm
+                               text-background bg-primary hover:bg-primary/90 transition-colors"
+                  >
+                    {N.t('duel_revanche')}
+                  </button>
+                </div>
+              )}
 
-              {!code && (
+              {/* La saisie manuelle — nom, puis « défier » — ne concerne pas
+                  une revanche : elle part d'elle-meme, ou pas du tout. */}
+              {!code && !revancheId && revancheFaite === null && (
                 <>
                   <p className="text-center text-[10px] md:text-xs text-muted-foreground">
                     {N.t(beaten ? 'challenge_rematch_sub' : 'challenge_share')}
