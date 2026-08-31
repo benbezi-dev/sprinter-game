@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { KeyRound, Loader2, FlaskConical, LogOut } from 'lucide-react';
 import { codeAcces, poserCode, oublierCode, verifierCode } from '@/game/canal';
 

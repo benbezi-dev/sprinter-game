@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Loader2, Timer, Flag, Sparkles, Medal } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';

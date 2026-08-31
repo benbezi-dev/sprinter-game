@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Download, Share, Plus, X } from 'lucide-react';
 import { EST_NATIF } from '@/game/canal';
 

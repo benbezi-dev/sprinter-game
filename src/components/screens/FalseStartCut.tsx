@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { fauxDepartEstUneDefaite } from '@/game/reprise';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 /**
  * Cinematique du faux depart eliminatoire.

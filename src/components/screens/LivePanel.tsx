@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,

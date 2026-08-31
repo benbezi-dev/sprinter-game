@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Globe2 } from 'lucide-react';
 import {
   getSavedName, saveName, submitScore, fetchLeaderboardRaw,

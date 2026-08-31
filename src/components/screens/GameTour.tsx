@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { X, ChevronLeft, ChevronRight, Trophy, Ghost, Radio, Users, Flag } from 'lucide-react';
 
 const VU = 'sprinter_tour_vu';

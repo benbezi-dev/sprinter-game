@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Eye, Swords } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { TAILLE } from '@/game/salle-relais';

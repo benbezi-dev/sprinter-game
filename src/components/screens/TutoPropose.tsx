@@ -1,6 +1,6 @@
 import React from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { GraduationCap, Play } from 'lucide-react';
 
 /**

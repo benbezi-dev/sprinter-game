@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';

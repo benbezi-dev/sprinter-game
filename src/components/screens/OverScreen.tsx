@@ -1,6 +1,6 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 export function OverScreen() {
   const { 

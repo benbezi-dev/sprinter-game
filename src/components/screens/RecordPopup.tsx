@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Loader2 } from 'lucide-react';
 import {
   fetchRaceBest, submitRaceRecord, fetchLeaderboardRaw,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Flag, XCircle, Hand, Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { ARRIVEE, LEG, TAILLE, type Zone } from '@/game/salle-relais';

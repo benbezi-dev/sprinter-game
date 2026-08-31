@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, type EtatRelais } from '@/game/salle-relais';

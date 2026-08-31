@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { User, Check, Loader2, KeyRound, X, Instagram, Unlink } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, savedCode, lierInstagram, instagramDe, lienInstagram } from '@/game/identity';

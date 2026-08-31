@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Swords, Loader2 } from 'lucide-react';
 import { fetchInbox, fetchChallenge, type InboxChallenge } from '@/game/challenge';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
 import { ChevronUp, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {

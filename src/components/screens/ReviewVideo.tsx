@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Download, Loader2, Film, Timer } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { compteARebours, TTL_MS, type EtatReview } from '@/game/review';

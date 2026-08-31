@@ -1,6 +1,6 @@
 import React from 'react';
 import { SprinterApp, useGameStore, pauseRace, resumeRace } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 /**
  * Sortie de course, discrete.

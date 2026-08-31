@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SprinterApp, SprinterCore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
 
 const { C } = SprinterCore;
