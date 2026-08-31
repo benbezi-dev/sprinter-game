@@ -11,6 +11,7 @@ import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
 import { pique, relance } from '@/game/piques';
@@ -705,7 +706,7 @@ export function OneShotEndScreen() {
               juste en dessous, a cote du bouton et non a sa place. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
             {RECOMMENCER_OUVERT && <button
-              onClick={() => SprinterApp.recommencer()}
+              onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
               className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
                          border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
@@ -761,7 +762,10 @@ export function OneShotEndScreen() {
         </motion.div>
       </div>
 
-      {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
+      {/* voirDuels ne peut devenir vrai que par le bouton lui-meme ferme tant
+          que DUELS_OUVERTS vaut false ; le repeter ici est ce qui permet au
+          bundler de le prouver sans suivre l'etat a l'execution. */}
+      {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
                                  epreuves={shotRaces as string[]} />}
     </div>
   );

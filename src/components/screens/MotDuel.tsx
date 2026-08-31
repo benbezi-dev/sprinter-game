@@ -161,13 +161,26 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
 }) {
   const { N } = SprinterApp;
   const [url, setUrl] = useState<string | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
 
+  // Le lecteur se prepare des que le mot arrive, pas au moment ou on appuie
+  // sur « ecouter » : jouer un blob webm fraichement construit avant que le
+  // navigateur ait fini de le lire est ce qui rendait le bouton fiable une
+  // fois sur dix. En preparant l'element a l'avance, il est pret bien avant
+  // que quiconque ait fini de lire le mot.
   useEffect(() => {
     if (!voix) return;
     let u = '';
-    try { u = urlDeLaVoix(voix, voixType || 'audio/webm'); setUrl(u); }
-    catch { setUrl(null); }
-    return () => { if (u) URL.revokeObjectURL(u); };
+    try {
+      u = urlDeLaVoix(voix, voixType || 'audio/webm');
+      setUrl(u);
+      const a = new Audio();
+      a.preload = 'auto';
+      a.src = u;
+      a.load();
+      audio.current = a;
+    } catch { setUrl(null); }
+    return () => { if (u) URL.revokeObjectURL(u); audio.current = null; };
   }, [voix, voixType]);
 
   if (!texte && !url) return null;
@@ -182,7 +195,18 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
       )}
       {url && (
         <button
-          onClick={() => { const a = new Audio(url); a.play().catch(() => {}); }}
+          onClick={() => {
+            const a = audio.current;
+            if (!a) return;
+            a.currentTime = 0;
+            a.play().catch(err => {
+              // La preparation a l'avance couvre l'ecrasante majorite des cas ;
+              // s'il echoue quand meme, on retente une fois avec un element
+              // tout neuf plutot que de laisser le bouton ne rien faire.
+              console.warn('Lecture du mot vocal impossible :', err);
+              new Audio(url).play().catch(() => {});
+            });
+          }}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10
                      text-foreground font-bold tracking-widest text-[10px] md:text-xs
                      hover:bg-white/15 transition-colors"

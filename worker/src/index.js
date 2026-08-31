@@ -245,6 +245,24 @@ async function ensureVisitTable(db) {
   visitsReady.add(db);
 }
 
+// Le bouton RECOMMENCER, compte comme les visites : une ligne par appareil et
+// par jour, rien de nominatif. Le jeu ne l'instrumentait pas — sans ce
+// compteur, personne ne pouvait dire combien de fois une course est relancee,
+// ni si le raccourci sert. Meme forme que `visits` pour que le tableau les
+// lise de la meme facon.
+const reprisesReady = new WeakSet();
+async function ensureRepriseTable(db) {
+  if (reprisesReady.has(db)) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS reprises (
+    day TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    hits INTEGER NOT NULL DEFAULT 1,
+    last_at INTEGER NOT NULL,
+    PRIMARY KEY (day, device_id)
+  )`).run();
+  reprisesReady.add(db);
+}
+
 // Un defi peut viser quelqu'un en particulier. La colonne est ajoutee apres
 // coup sur une table qui existe deja, d'ou la migration paresseuse.
 const targetReady = new WeakSet();
@@ -1250,35 +1268,259 @@ export default {
       return json({ ok: true });
     }
 
+    // Une reprise : le joueur a rappuye sur RECOMMENCER. Meme geste que /visit,
+    // meme table de forme identique.
+    if (url.pathname === '/reprise' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensureRepriseTable(env.DB);
+      const now = Date.now();
+      const day = new Date(now).toISOString().slice(0, 10);
+      await env.DB.prepare(
+        `INSERT INTO reprises (day, device_id, hits, last_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT(day, device_id) DO UPDATE SET hits = hits + 1, last_at = excluded.last_at`
+      ).bind(day, device_id, now).run();
+      return json({ ok: true });
+    }
+
     // Tout ce que le tableau de bord affiche, en un seul aller-retour.
+    //
+    // Le contrat est double. Les trois blocs d'origine — `visites`, `scores`,
+    // `defis` — gardent EXACTEMENT leur forme : un tableau plus ancien continue
+    // de fonctionner. Tout le reste est ajoute a cote, et chaque ajout passe
+    // par `bloc()` : sur une base ou une table manque encore (la production n'a
+    // pas toutes celles du canal de test), on rend un repli plutot que de
+    // faire tomber la reponse entiere.
     if (url.pathname === '/stats' && request.method === 'GET') {
       await ensureVisitTable(env.DB);
       await ensureChallengeTables(env.DB);
       await ensureScoreGhost(env.DB);
+      await ensureRepriseTable(env.DB);
 
-      const v = await env.DB.prepare(
+      const DB = env.DB;
+      const bloc = async (fn, repli) => { try { return await fn(); } catch { return repli; } };
+      const JOUR = 86400000;
+      const now = Date.now();
+      const depuis = n => now - n * JOUR;
+
+      // --- visites (forme d'origine, intacte) ---------------------------
+      const v = await DB.prepare(
         `SELECT COALESCE(SUM(hits),0) AS hits,
                 COUNT(DISTINCT device_id) AS visiteurs
            FROM visits`
       ).first();
-      const { results: parJour } = await env.DB.prepare(
+      const { results: parJour } = await DB.prepare(
         `SELECT day, COUNT(*) AS visiteurs, SUM(hits) AS hits
            FROM visits GROUP BY day ORDER BY day DESC LIMIT 30`
       ).all();
-      const s = await env.DB.prepare(
+      // Mensuel : pas de plafond de 30 jours ici, et `visiteurs` est un vrai
+      // distinct sur le mois (pas une somme de distincts quotidiens).
+      const parMoisVisites = await bloc(async () => (await DB.prepare(
+        `SELECT substr(day,1,7) AS mois,
+                COUNT(DISTINCT device_id) AS visiteurs,
+                COALESCE(SUM(hits),0) AS hits
+           FROM visits GROUP BY mois ORDER BY mois DESC LIMIT 24`
+      ).all()).results || [], []);
+      const revient = await bloc(async () => (await DB.prepare(
+        `SELECT COUNT(*) AS n FROM (
+           SELECT device_id, COUNT(DISTINCT day) AS j FROM visits GROUP BY device_id
+         ) WHERE j > 1`).first())?.n || 0, 0);
+
+      // --- scores (forme d'origine, intacte) --------------------------
+      const s = await DB.prepare(
         `SELECT COUNT(*) AS lignes,
                 COUNT(DISTINCT device_id) AS appareils,
                 COUNT(DISTINCT lower(trim(name))) AS joueurs
            FROM scores`
       ).first();
-      const c = await env.DB.prepare(
+
+      // --- defis (forme d'origine + colonnes en plus) ----------------
+      await bloc(() => ensureChallengeTarget(DB), null);
+      const c = await DB.prepare(
         `SELECT (SELECT COUNT(*) FROM challenges) AS defis,
                 (SELECT COUNT(*) FROM challenge_attempts) AS tentatives`
       ).first();
+      const defisPlus = await bloc(async () => {
+        const rep = await DB.prepare(
+          `SELECT
+             SUM(CASE WHEN target_device IS NOT NULL THEN 1 ELSE 0 END) AS adresses,
+             SUM(CASE WHEN target_device IS NULL THEN 1 ELSE 0 END) AS publics,
+             (SELECT COUNT(DISTINCT id) FROM challenge_attempts) AS repondus
+           FROM challenges`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM challenges GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: tpj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM challenge_attempts GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM challenges GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const { results: tpm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM challenge_attempts GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        // Delai median entre la creation d'un defi et sa premiere reponse.
+        const { results: delais } = await DB.prepare(
+          `SELECT (a.premier - c.created_at) AS d FROM challenges c
+             JOIN (SELECT id, MIN(created_at) AS premier FROM challenge_attempts GROUP BY id) a
+               ON a.id = c.id
+            ORDER BY d`).all();
+        const med = delais.length ? delais[Math.floor(delais.length / 2)].d : null;
+        return {
+          adresses: rep?.adresses || 0, publics: rep?.publics || 0,
+          repondus: rep?.repondus || 0,
+          par_jour: pj || [], tentatives_par_jour: tpj || [],
+          par_mois: pm || [], tentatives_par_mois: tpm || [],
+          delai_reponse_median_ms: med,
+        };
+      }, { adresses: 0, publics: 0, repondus: 0, par_jour: [], tentatives_par_jour: [], par_mois: [], tentatives_par_mois: [], delai_reponse_median_ms: null });
+
+      // --- parties jouees (table `races`) ----------------------------
+      const parties = await bloc(async () => {
+        const tot = await DB.prepare(
+          `SELECT COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const { results: pe } = await DB.prepare(
+          `SELECT race_key, COUNT(*) AS n FROM races GROUP BY race_key`).all();
+        const { results: prog } = await DB.prepare(
+          `SELECT level_idx, COUNT(*) AS n FROM races GROUP BY level_idx ORDER BY level_idx`).all();
+        const actif = async ms => (await DB.prepare(
+          `SELECT COUNT(DISTINCT name_key) AS n FROM races WHERE created_at >= ?`).bind(ms).first())?.n || 0;
+        const { results: hj } = await DB.prepare(
+          `SELECT CAST(strftime('%w', created_at/1000, 'unixepoch') AS INTEGER) AS jour,
+                  CAST(strftime('%H', created_at/1000, 'unixepoch') AS INTEGER) AS heure,
+                  COUNT(*) AS n
+             FROM races GROUP BY jour, heure`).all();
+        const { results: top } = await DB.prepare(
+          `SELECT name, COUNT(*) AS n, MAX(created_at) AS dernier
+             FROM races GROUP BY name_key ORDER BY n DESC LIMIT 20`).all();
+        return {
+          total: tot?.n || 0, joueurs: tot?.joueurs || 0,
+          par_mode: { campaign: tot?.campagne || 0, oneshot: tot?.oneshot || 0 },
+          par_jour: pj || [], par_mois: pm || [], par_epreuve: pe || [], progression: prog || [],
+          actifs: { j1: await actif(depuis(1)), j7: await actif(depuis(7)), j30: await actif(depuis(30)) },
+          heure_jour: hj || [], top_joueurs: top || [], borne: HIST_PER_DEVICE,
+        };
+      }, null);
+
+      // --- reprises (table `reprises`) ------------------------------
+      const reprises = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT COALESCE(SUM(hits),0) AS total,
+                  COUNT(DISTINCT device_id) AS appareils FROM reprises`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT day, SUM(hits) AS n FROM reprises GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT substr(day,1,7) AS mois, SUM(hits) AS n
+             FROM reprises GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        return { total: t?.total || 0, appareils: t?.appareils || 0, par_jour: pj || [], par_mois: pm || [] };
+      }, { total: 0, appareils: 0, par_jour: [], par_mois: [] });
+
+      // --- duels (tables `duel_results` / `duel_players`) ----------
+      const duels = await bloc(async () => {
+        const r = await DB.prepare(
+          `SELECT COUNT(*) AS joues,
+                  SUM(CASE WHEN outcome='challenger' THEN 1 ELSE 0 END) AS lanceur_gagne,
+                  SUM(CASE WHEN outcome='opponent'   THEN 1 ELSE 0 END) AS releveur_gagne,
+                  SUM(CASE WHEN outcome='draw'       THEN 1 ELSE 0 END) AS nul
+             FROM duel_results`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM duel_results GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM duel_results GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const p = await DB.prepare(
+          `SELECT COALESCE(SUM(launched),0) AS lances,
+                  COALESCE(SUM(received),0) AS releves,
+                  COUNT(*) AS inscrits,
+                  SUM(CASE WHEN wins+losses+draws > 0 THEN 1 ELSE 0 END) AS classes
+             FROM duel_players`).first();
+        const { results: paliers } = await DB.prepare(
+          `SELECT palier, COUNT(*) AS n FROM duel_players
+             WHERE wins+losses+draws > 0 GROUP BY palier ORDER BY palier`).all();
+        return {
+          joues: r?.joues || 0,
+          issues: { lanceur: r?.lanceur_gagne || 0, releveur: r?.releveur_gagne || 0, nul: r?.nul || 0 },
+          par_jour: pj || [], par_mois: pm || [],
+          lances: p?.lances || 0, releves: p?.releves || 0,
+          inscrits: p?.inscrits || 0, joueurs_classes: p?.classes || 0,
+          paliers: paliers || [],
+        };
+      }, null);
+
+      // --- joueurs nommes (tables `players` / `player_devices`) ----
+      const joueurs = await bloc(async () => {
+        const p = await DB.prepare(
+          `SELECT COUNT(*) AS nommes,
+                  SUM(CASE WHEN insta IS NOT NULL AND insta <> '' THEN 1 ELSE 0 END) AS avec_insta
+             FROM players`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM players GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM players GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const multi = await bloc(async () => (await DB.prepare(
+          `SELECT COUNT(*) AS n FROM (
+             SELECT name_key, COUNT(*) AS d FROM player_devices GROUP BY name_key
+           ) WHERE d > 1`).first())?.n || 0, 0);
+        return {
+          nommes: p?.nommes || 0, avec_insta: p?.avec_insta || 0,
+          par_jour: pj || [], par_mois: pm || [], multi_appareils: multi,
+        };
+      }, null);
+
+      // --- geographie (table `player_pays`) -----------------------
+      const geo = await bloc(async () => {
+        const { results } = await DB.prepare(
+          `SELECT pays, COUNT(*) AS n FROM player_pays
+             GROUP BY pays ORDER BY n DESC LIMIT 12`).all();
+        return results || [];
+      }, null);
+
+      // --- relais / championnats : compteurs, tolerants -----------
+      const relais = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT (SELECT COUNT(*) FROM relay_teams) AS equipes,
+                  (SELECT COUNT(*) FROM relay_scores) AS courses`).first();
+        return { equipes: t?.equipes || 0, courses: t?.courses || 0 };
+      }, null);
+      const championnats = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT (SELECT COUNT(*) FROM champ_editions) AS editions,
+                  (SELECT COUNT(*) FROM champ_titres)   AS titres`).first();
+        return { editions: t?.editions || 0, titres: t?.titres || 0 };
+      }, null);
 
       return json({
-        visites: { total: v?.hits || 0, visiteurs: v?.visiteurs || 0, par_jour: parJour || [] },
-        scores: s || {}, defis: c || {},
+        // --- contrat d'origine, inchange ---
+        visites: {
+          total: v?.hits || 0, visiteurs: v?.visiteurs || 0, par_jour: parJour || [],
+          par_mois: parMoisVisites || [], reviennent: revient,
+        },
+        scores: s || {},
+        defis: { ...(c || {}), ...defisPlus },
+        // --- ajouts ---
+        parties, reprises, duels, joueurs, geo, relais, championnats,
+        releve_a: now,
       });
     }
 

@@ -12,10 +12,50 @@ const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const RACES: RaceKey[] = ['100', '200', '400'];
 const VISIT_KEY = 'sprinter_visit_ping';
 
+type Jour = { day: string; n?: number; hits?: number; visiteurs?: number };
+
 export type ServerStats = {
-  visites: { total: number; visiteurs: number; par_jour: { day: string; visiteurs: number; hits: number }[] };
+  visites: {
+    total: number; visiteurs: number;
+    par_jour: { day: string; visiteurs: number; hits: number }[];
+    reviennent?: number;
+  };
   scores: { lignes?: number; appareils?: number; joueurs?: number };
-  defis: { defis?: number; tentatives?: number };
+  defis: {
+    defis?: number; tentatives?: number;
+    adresses?: number; publics?: number; repondus?: number;
+    par_jour?: Jour[]; tentatives_par_jour?: Jour[];
+    delai_reponse_median_ms?: number | null;
+  };
+  // Blocs ajoutes par le Worker enrichi. Absents tant qu'il n'est pas deploye —
+  // d'ou l'optionnalite : le tableau les masque plutot que de planter.
+  parties?: {
+    total: number; joueurs: number;
+    par_mode: { campaign: number; oneshot: number };
+    par_jour: (Jour & { joueurs?: number; campagne?: number; oneshot?: number })[];
+    par_epreuve: { race_key: string; n: number }[];
+    progression: { level_idx: number; n: number }[];
+    actifs: { j1: number; j7: number; j30: number };
+    heure_jour: { jour: number; heure: number; n: number }[];
+    top_joueurs: { name: string; n: number; dernier: number }[];
+    borne: number;
+  } | null;
+  reprises?: { total: number; appareils: number; par_jour: Jour[] };
+  duels?: {
+    joues: number;
+    issues: { lanceur: number; releveur: number; nul: number };
+    par_jour: Jour[];
+    lances: number; releves: number; inscrits: number; joueurs_classes: number;
+    paliers: { palier: number; n: number }[];
+  } | null;
+  joueurs?: {
+    nommes: number; avec_insta: number;
+    par_jour: Jour[]; multi_appareils: number;
+  } | null;
+  geo?: { pays: string; n: number }[] | null;
+  relais?: { equipes: number; courses: number } | null;
+  championnats?: { editions: number; titres: number } | null;
+  releve_a?: number;
 };
 
 /**

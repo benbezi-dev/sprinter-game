@@ -104,6 +104,7 @@ export function DuelResultPopup() {
    */
   const revanche = () => {
     marquerDuelsVus([duel.id]);
+    setFile(f => f.slice(1));
     SprinterApp.G.revanche = duel.adversaire;
     SprinterApp.startOneShot(duel.races, { levelIdx: 4 });
   };

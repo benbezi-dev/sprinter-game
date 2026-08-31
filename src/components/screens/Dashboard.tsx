@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Eye, Timer, Ghost, Activity, Loader2 } from 'lucide-react';
+import { Users, Eye, Timer, Ghost, Activity, Loader2, RotateCcw } from 'lucide-react';
 import {
   fetchBoardStats, fetchServerStats, type BoardStats, type ServerStats,
 } from '@/game/stats';
@@ -158,6 +158,13 @@ export function Dashboard() {
                 valeur={srv?.scores?.appareils ?? 'en attente'}
                 attente={!srv}
                 note={srv ? 'un joueur peut en avoir plusieurs' : undefined}
+              />
+              <Tuile
+                icone={<RotateCcw className="w-4 h-4" />}
+                libelle="Reprises"
+                valeur={srv?.reprises ? srv.reprises.total.toLocaleString('fr-FR') : 'en attente'}
+                attente={!srv?.reprises}
+                note={srv?.reprises ? 'appuis sur RECOMMENCER' : undefined}
               />
             </section>
 
