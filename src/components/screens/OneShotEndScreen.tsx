@@ -60,6 +60,8 @@ export function OneShotEndScreen() {
    * UN AMI » alors que le defi vient de partir tout seul.
    */
   const [revancheFaite, setRevancheFaite] = useState<string | null>(null);
+  /** Qui l'on visait, meme si le serveur n'a finalement touche personne. */
+  const [revancheVise, setRevancheVise] = useState<string>('');
   // Issue du duel telle que le serveur l'a tranchee. Elle ne depend pas du
   // chrono affiche ici : c'est lui qui fait foi, et il ne se rejoue pas.
   const [duel, setDuel] = useState<DuelIssue | null>(null);
@@ -194,7 +196,7 @@ export function OneShotEndScreen() {
     (async () => {
       setBusy(true); setErr(false);
       try {
-        const id = await createChallenge({
+        const { id, cible: prevenu } = await createChallenge({
           races: shotRaces as ('100' | '200' | '400')[],
           levelIdx: SprinterApp.G.shotLevel,
           totalMs: runTime * 1000,
@@ -204,7 +206,11 @@ export function OneShotEndScreen() {
           revancheDe: revancheId,
         });
         setCode(id);
-        setRevancheFaite(revancheNom || '');
+        setRevancheVise(revancheNom || '');
+        // On annonce « envoye a X » seulement si le serveur a bien touche
+        // quelqu'un. Sinon le code existe et c'est tout : on le dira comme
+        // tel, plutot que d'affirmer une remise qui n'a pas eu lieu.
+        setRevancheFaite(prevenu || '');
         SprinterApp.G.revanche = null;
         SprinterApp.G.revancheId = null;
         SprinterApp.G.revancheMs = 0;
@@ -228,7 +234,7 @@ export function OneShotEndScreen() {
     if (finalName) saveName(finalName);
     setBusy(true); setErr(false);
     try {
-      const id = await createChallenge({
+      const { id } = await createChallenge({
         races: shotRaces as ('100' | '200' | '400')[],
         levelIdx: SprinterApp.G.shotLevel,
         totalMs: runTime * 1000,
@@ -663,10 +669,18 @@ export function OneShotEndScreen() {
               )}
               {/* Revanche gagnee : le defi vient de partir tout seul, comme
                   pour une cible du TOP 500 — meme phrase, meme confiance. */}
-              {!cible && (revancheFaite !== null || (revancheId && revancheBattue)) && (
+              {!cible && (revancheFaite || (revancheId && revancheBattue)) && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
                   {N.t(code ? 'target_sent' : 'target_run',
-                       { n: revancheFaite || revancheNom, d: shotRaces[0] })}
+                       { n: revancheFaite || revancheVise || revancheNom, d: shotRaces[0] })}
+                </p>
+              )}
+              {/* La revanche est partie, mais le serveur n'a retrouve
+                  personne : le code existe, il reste a l'envoyer soi-meme. On
+                  le dit plutot que d'affirmer une remise qui n'a pas eu lieu. */}
+              {!cible && revancheFaite === '' && (
+                <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                  {N.t('os_revanche_sans_cible', { n: revancheVise })}
                 </p>
               )}
               {/* Revanche pas encore gagnee : le chrono n'a pas suffi, rien

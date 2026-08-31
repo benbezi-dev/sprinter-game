@@ -78,7 +78,7 @@ export async function createChallenge(input: {
    * chrono — voir /challenge, cote worker.
    */
   revancheDe?: string | null;
-}): Promise<string> {
+}): Promise<{ id: string; cible: string }> {
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -97,7 +97,17 @@ export async function createChallenge(input: {
   if (!res.ok) throw new Error('challenge create failed');
   const data = await res.json();
   if (!data.id) throw new Error('challenge create failed');
-  return data.id as string;
+  /**
+   * On rend aussi QUI a ete prevenu, et c'est le serveur qui le dit.
+   *
+   * Le jeu croyait le savoir : il visait quelqu'un, donc il annoncait « defi
+   * envoye a Ana ». Mais la cible peut ne pas etre retrouvee — une ligne de
+   * classement effacee, un serveur d'une version plus ancienne qui ignore le
+   * champ — et l'ecran affirmait alors une chose fausse a la place d'un code a
+   * transmettre soi-meme. Une chaine vide veut dire « personne n'a ete
+   * prevenu », et l'ecran a de quoi le dire honnetement.
+   */
+  return { id: data.id as string, cible: String(data.target_name || '') };
 }
 
 export async function fetchChallenge(code: string): Promise<Challenge | null> {

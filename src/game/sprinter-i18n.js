@@ -426,6 +426,12 @@
     // La revanche part toute seule, et seulement si elle a battu le chrono
     // qu'elle venge : on ne derange pas quelqu'un avec un temps moins bon.
     duel_revanche_envoyee: ['REVANCHE ENVOYÉE', 'REVENGE SENT'],
+    // La revanche est partie, mais le serveur n'a retrouve personne : ce
+    // n'est pas la meme chose qu'un defi lance depuis le classement, ou l'on
+    // sait que la personne manque au TOP 500 de l'epreuve. Ici on ne sait pas
+    // pourquoi — on dit donc ce qui reste vrai, et ce qu'il reste a faire.
+    os_revanche_sans_cible: ['{n} n’a pas pu être prévenu — envoie-lui le code toi-même',
+                             '{n} could not be notified — send them the code yourself'],
     duel_revanche_ratee_titre: ['PAS ENCORE', 'NOT YET'],
     duel_revanche_ratee: ['il fallait descendre sous {s} s pour renvoyer le défi à {n} — rien n’est parti',
                           'you needed under {s} s to send the challenge back to {n} — nothing went out'],
