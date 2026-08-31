@@ -110,7 +110,7 @@ export function DuelRanking({ onClose, epreuves }: {
     }
   };
 
-  const { N, RACES } = SprinterApp;
+  const { N } = SprinterApp;
   const [board, setBoard] = useState<DuelBoard | null>(null);
   const [chargement, setChargement] = useState(true);
   const moiKey = (getSavedName() || '').trim().toLowerCase();
@@ -193,7 +193,7 @@ export function DuelRanking({ onClose, epreuves }: {
                     ? 'bg-primary/20 text-primary border-primary'
                     : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
               >
-                {RACES[k].label}
+                {k} M
               </button>
             ))}
           </div>
