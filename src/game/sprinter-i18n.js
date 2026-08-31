@@ -321,6 +321,8 @@
     // rejoindre sa course, et la courir en direct
     champ_rejoindre: ['REJOINDRE MA COURSE', 'JOIN MY RACE'],
     champ_ma_course: ['ta course : {p} {c} — dans {d}', 'your race: {p} {c} — in {d}'],
+    champ_entrer_avant: ['entrer dans le salon avant l’heure',
+                         'enter the room ahead of time'],
     champ_course_directe: ['EN DIRECT', 'LIVE'],
     champ_course_finie: ['COURSE TERMINÉE', 'RACE OVER'],
     champ_course_ecrite: ['le résultat est enregistré au championnat',

@@ -382,7 +382,7 @@ export function Championnat({ edition, onQuitter }: {
   const alHeure = !!mienne && !mienne.couru &&
     (mienne.at == null || mienne.at - maintenant <= AVANT_COURSE_MS);
 
-  if (mienne && (dedans || (surLaPiste && alHeure))) {
+  if (mienne && (dedans || surLaPiste)) {
     return (
       <CourseChampionnat
         edition={e.id} phase={mienne.phase} phaseNom={mienne.phaseNom}
@@ -457,13 +457,26 @@ export function Championnat({ edition, onQuitter }: {
               {N.t('champ_rejoindre')}
             </button>
           ) : (
-            <p className="text-center text-[10px] text-muted-foreground">
-              {N.t('champ_ma_course', {
-                p: mienne.phaseNom,
-                c: mienne.course,
-                d: mienne.at ? delai(mienne.at - maintenant) : '—',
-              })}
-            </p>
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-center text-[10px] text-muted-foreground">
+                {N.t('champ_ma_course', {
+                  p: mienne.phaseNom,
+                  c: mienne.course,
+                  d: mienne.at ? delai(mienne.at - maintenant) : '—',
+                })}
+              </p>
+              {/* La porte de service. Le rendez-vous reste la regle — c'est lui
+                  qui rassemble huit personnes a la meme seconde — mais rien ne
+                  justifie d'interdire d'entrer dans sa propre salle avant
+                  l'heure : elle se referme d'elle-meme si personne ne vient. Et
+                  c'est la seule facon de derouler une edition d'essai en une
+                  seance, plutot que d'attendre le lendemain pour les demies. */}
+              <button onClick={() => setSurLaPiste(true)}
+                className="text-[10px] tracking-widest text-primary/80 hover:text-primary
+                           underline-offset-2 hover:underline">
+                {N.t('champ_entrer_avant')}
+              </button>
+            </div>
           )
         )}
 
