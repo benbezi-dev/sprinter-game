@@ -96,3 +96,20 @@
     touch-action: none;
   }
 }
+
+/* La barre d'actions des ecrans d'arrivee (voir components/screens/EcranFin),
+   quand l'ecran est bas : telephone couche, ou clavier ouvert par-dessus.
+   Elle garde ses boutons entiers et se contente de se serrer — trois lignes
+   de commandes prenaient sinon la moitie de la hauteur, et le resultat
+   qu'elles commentent passait sous la ligne de flottaison.
+
+   Hors de toute couche : une regle non stratifiee l'emporte sur les
+   utilitaires de Tailwind, qui vivent dans la leur. */
+@media (max-height: 520px) {
+  .barre-fin { padding-top: 0.375rem; }
+  .barre-fin button { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+  /* Un ecran bas est presque toujours un ecran large : la barre s'y etale
+     plutot que de plier ses libelles sur deux lignes, ce qui lui coutait
+     encore une ligne de hauteur. */
+  .barre-fin > div { max-width: 46rem; }
+}

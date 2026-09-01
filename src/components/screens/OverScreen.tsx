@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
+import { EcranFin } from './EcranFin';
 
 export function OverScreen() {
   const { 
@@ -25,10 +26,27 @@ export function OverScreen() {
   
   const rank = ranking.indexOf(player) + 1;
 
+  // « On recourt ? » et sa reponse descendent dans la barre du bas, hors du
+  // rouleau : la question n'a plus a se chercher sous la grille d'arrivee.
+  const actions = (
+    <>
+      <div className="text-center text-sm md:text-base font-bold tracking-widest text-foreground uppercase">
+        {N.t('race_again')}
+      </div>
+      <div className="flex gap-2 md:gap-3">
+        <button onClick={handleRetry} className="flex-1 py-3 rounded-xl font-black font-display text-base sm:text-lg tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1">
+          {N.t('yes').toUpperCase()}
+        </button>
+        <button onClick={handleHome} className="flex-1 py-3 rounded-xl font-black font-display text-base sm:text-lg tracking-widest text-background bg-destructive hover:bg-red-400 transition-all border-b-4 border-red-700 active:border-b-0 active:translate-y-1">
+          {N.t('no').toUpperCase()}
+        </button>
+      </div>
+    </>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <EcranFin fond="bg-black/90 backdrop-blur-sm" actions={actions}>
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-4 md:py-8 gap-3 md:gap-5">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">
@@ -68,22 +86,7 @@ export function OverScreen() {
             </div>
           </div>
 
-          <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
-            {N.t('race_again')}
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 md:gap-4 w-full max-w-md">
-            <button onClick={handleRetry} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1">
-              {N.t('yes').toUpperCase()}
-            </button>
-            <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-destructive hover:bg-red-400 transition-all border-b-4 border-red-700 active:border-b-0 active:translate-y-1">
-              {N.t('no').toUpperCase()}
-            </button>
-          </div>
-
         </motion.div>
-      </div>
-    </div>
+    </EcranFin>
   );
 }

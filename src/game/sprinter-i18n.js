@@ -494,14 +494,16 @@
     // defi parti, le chrono est donne.
     os_once:         ['une fois le défi envoyé, le chrono ne se reprend plus',
                       'once the challenge is sent, the time is final'],
-    // La reprise. Le bouton dit ce qu'il fait ; les trois phrases de verrou
-    // disent POURQUOI il n'est pas la, ce qui compte davantage — un bouton qui
-    // disparait sans raison se cherche, et finit par passer pour une panne.
+    // La reprise. Le bouton dit ce qu'il fait ; les phrases de verrou disent
+    // ce que la course precedente a deja donne, ce qui ne se devine pas.
     // RECOMMENCER, et non REJOUER. Le mot compte : on ne reprend pas la course
     // precedente, on en lance une de plus. La premiere garde son chrono.
+    //
+    // Les deux sous-titres qui accompagnaient les boutons ont disparu avec le
+    // passage a la barre d'actions fixe : ils expliquaient des libelles qui se
+    // lisent seuls, et coutaient deux lignes chacun a l'endroit exact ou l'on
+    // manquait de place. Les verrous et les relances, eux, sont restes.
     os_rejouer:      ['RECOMMENCER', 'RUN AGAIN'],
-    os_rejouer_sub:  ['une course de plus, tout de suite — celle-ci reste ce qu’elle est',
-                      'one more race, right now — this one stays as it is'],
     // Le classement s'AJOUTE au raccourci, il ne le remplace pas : defier
     // quelqu'un n'est pas relancer une course.
     //
@@ -511,8 +513,6 @@
     // joueur, jamais de l'adversaire : la vanne se retourne sur celui qui lit,
     // et c'est ce qui la rend jouable entre amis.
     os_defier:       ['DÉFIER QUELQU’UN', 'CHALLENGE SOMEONE'],
-    os_defier_sub:   ['ouvre le classement et choisis ton adversaire — un autre, ou le même',
-                      'open the ranking and pick your opponent — someone else, or the same one'],
     // Trois relances par issue, tirees d'une graine stable — voir game/piques.
     // Le compte doit rester egal a NB_RELANCES : une langue qui en aurait une
     // de moins ferait tomber le tirage sur une clef vide.

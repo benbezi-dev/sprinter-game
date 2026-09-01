@@ -20,6 +20,7 @@ import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
+import { EcranFin } from './EcranFin';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 
 /**
@@ -374,10 +375,87 @@ export function OneShotEndScreen() {
 
   const dnf = N.t('dnf_short');
 
+  // Une seule epreuve, ou un programme de plusieurs ? Le detail chrono par
+  // chrono n'a de sens que dans le second cas — ou face a un fantome, qui
+  // donne une colonne a comparer. Sur une course seule et sans adversaire, le
+  // tableau ne faisait que reecrire le total du titre : le meme nombre trois
+  // fois, sur trois lignes, avant meme d'arriver aux boutons.
+  const plusieurs = shotRaces.length > 1;
+  const epreuveSeule = !plusieurs && shotRaces[0] != null ? RACES[shotRaces[0]].label : '';
+  const detailChronos = plusieurs || !!challenge;
+
+  /**
+   * La barre du bas : ce qu'on peut faire maintenant, toujours sous le pouce.
+   *
+   * RECOMMENCER et DEFIER partagent une ligne, ACCUEIL tient la sienne, plus
+   * discrete — trois boutons pleine largeur auraient repris a la course la
+   * place qu'on vient de lui rendre.
+   *
+   * Les deux longues phrases qui accompagnaient les boutons sont tombees :
+   * elles expliquaient des libelles qui se lisent seuls, et coutaient deux
+   * lignes chacune a un endroit qui doit tenir dans l'ecran. Ce qui ne se
+   * devine pas, lui, reste : le verrou dit ce que la course precedente a deja
+   * donne, et la relance garde sa vanne quand on sort d'un duel.
+   */
+  const actions = (
+    <>
+      {verrou ? (
+        <p className={`text-center text-[10px] md:text-xs tracking-wide leading-snug
+          ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+          {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
+             : verrou === 'defi_recu' ? 'os_verrou_recu'
+             : verrou === 'defi_envoye' ? 'os_verrou_envoye'
+             : 'os_verrou_faux')}
+        </p>
+      ) : mots && DUELS_OUVERTS ? (
+        <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug">
+          {N.t(mots.sous)}
+        </p>
+      ) : null}
+
+      <div className="flex items-stretch gap-2">
+        {RECOMMENCER_OUVERT && <button
+          onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
+          className="flex-1 min-w-0 px-2 py-3 rounded-xl font-black font-display
+                     text-sm sm:text-base tracking-widest leading-tight text-background
+                     bg-emerald-400 hover:bg-emerald-300 transition-all
+                     border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
+                     flex items-center justify-center gap-2"
+        >
+          <RotateCcw className="w-4 h-4 shrink-0" />
+          {N.t('os_rejouer')}
+        </button>}
+
+        {/* Le classement s'AJOUTE au raccourci. Une version precedente le
+            mettait a sa place — mais defier quelqu'un est un autre ecran et un
+            autre parcours, et la plainte des joueurs serait revenue telle
+            quelle. Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
+        {DUELS_OUVERTS && <button
+          onClick={() => setVoirDuels(true)}
+          className="flex-1 min-w-0 px-2 py-3 rounded-xl font-black font-display
+                     text-sm sm:text-base tracking-widest leading-tight text-background
+                     bg-primary hover:bg-primary/90 transition-all
+                     border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
+                     flex items-center justify-center gap-2"
+        >
+          <Swords className="w-4 h-4 shrink-0" />
+          {N.t(mots ? mots.titre : 'os_defier')}
+        </button>}
+      </div>
+
+      <button onClick={() => SprinterApp.goHome()}
+              className="w-full py-2.5 rounded-xl font-bold tracking-widest text-sm
+                         text-foreground bg-secondary hover:bg-secondary/80 transition-all
+                         border-b-4 border-black active:border-b-0 active:translate-y-1">
+        {N.t('home')}
+      </button>
+    </>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <>
+      <EcranFin actions={actions}>
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-4 md:py-8 gap-3 md:gap-5">
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
@@ -398,7 +476,11 @@ export function OneShotEndScreen() {
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
-                {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
+                {/* Une course seule n'a pas de cumul : elle a un nom. Le
+                    tableau des chronos le disait plus bas, apres deux cartes
+                    et un defilement — il le dit ici, ou l'oeil est deja. */}
+                {plusieurs || !epreuveSeule ? N.t('total_in') : `${epreuveSeule} · `}
+                <span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
               </div>
             )}
             {challenge && !falseOut && (
@@ -619,9 +701,14 @@ export function OneShotEndScreen() {
             </motion.div>
           )}
 
-          {/* Chronos epreuve par epreuve, face au fantome si defi */}
-          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 shadow-2xl">
-            <div className="flex flex-col gap-1.5 md:gap-3">
+          {/* Chronos epreuve par epreuve, face au fantome si defi.
+
+              Absent quand il n'aurait rien a dire : une course unique courue
+              sans adversaire tient tout entiere dans le titre, et cette carte
+              n'y ajoutait que le meme chrono, deux fois. */}
+          {detailChronos && (
+          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl">
+            {plusieurs && <div className="flex flex-col gap-1.5 md:gap-3">
               {shotRaces.map((r, i) => {
                 const mine = runSplits[i];
                 const his = challenge ? ghostSplits[i] : undefined;
@@ -645,9 +732,12 @@ export function OneShotEndScreen() {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 flex justify-between items-center px-2 md:px-4 gap-2">
+            {/* Sur une epreuve unique, cette ligne EST le tableau : le trait de
+                separation et la marge du haut n'ont plus rien a separer. */}
+            <div className={`flex justify-between items-center px-2 md:px-4 gap-2
+              ${plusieurs ? 'mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10' : ''}`}>
               <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base">
                 {challenge ? N.t('you_label') : 'TOTAL'}
               </span>
@@ -665,6 +755,7 @@ export function OneShotEndScreen() {
               </div>
             )}
           </div>
+          )}
 
           {/* Inscription au TOP 500, epreuve par epreuve */}
           {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
@@ -964,79 +1055,27 @@ export function OneShotEndScreen() {
             </div>
           )}
 
-          {/* RECOMMENCER — le raccourci, et la raison de tout ce qui suit.
+          {/* RECOMMENCER, DEFIER, ACCUEIL : la suite est descendue dans la
+              barre du bas, hors du rouleau (voir EcranFin).
+
               Ce que les joueurs demandaient n'etait pas d'effacer un chrono
               mais d'en relancer un : apres un faux depart ou une course ratee,
               il fallait repasser par l'accueil, le menu, le mode, puis
-              demarrer. Quatre ecrans pour refaire dix secondes de course.
-
-              Le bouton est donc INCONDITIONNEL. Recommencer ne reprend rien a
-              personne : la course qui vient de finir garde son chrono, et s'il
-              etait parti dans un duel il y reste. Ce qui est acquis se dit
-              juste en dessous, a cote du bouton et non a sa place. */}
-          <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
-            {RECOMMENCER_OUVERT && <button
-              onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
-              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
-                         tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
-                         border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
-                         flex items-center justify-center gap-2"
-            >
-              <RotateCcw className="w-4 h-4" />
-              {N.t('os_rejouer')}
-            </button>}
-            {RECOMMENCER_OUVERT && (
-              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                {N.t('os_rejouer_sub')}
-              </p>
-            )}
-
-            {/* Ce qui est joue de la course precedente. Un constat, plus un
-                verrou : il n'empeche plus rien, il informe. */}
-            {verrou && (
-              <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
-                ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
-                                                : 'text-muted-foreground'}`}>
-                {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
-                   : verrou === 'defi_recu' ? 'os_verrou_recu'
-                   : verrou === 'defi_envoye' ? 'os_verrou_envoye'
-                   : 'os_verrou_faux')}
-              </p>
-            )}
-
-            {/* Le classement s'AJOUTE au raccourci. Une version precedente le
-                mettait a sa place le 5 septembre — mais defier quelqu'un est
-                un autre ecran et un autre parcours, et la plainte des joueurs
-                serait revenue ce jour-la telle quelle.
-                Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
-            {DUELS_OUVERTS && <button
-              onClick={() => setVoirDuels(true)}
-              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
-                         tracking-widest text-background bg-primary hover:bg-primary/90 transition-all
-                         border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
-                         flex items-center justify-center gap-2"
-            >
-              <Swords className="w-4 h-4" />
-              {N.t(mots ? mots.titre : 'os_defier')}
-            </button>}
-            {DUELS_OUVERTS && (
-              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
-                {N.t(mots ? mots.sous : 'os_defier_sub')}
-              </p>
-            )}
-            <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
-              {N.t('home')}
-            </button>
-          </div>
+              demarrer. Quatre ecrans pour refaire dix secondes de course. Le
+              raccourci existait donc deja — mais sous une pile de cartes qui
+              grandissait a chaque nouveaute, et qu'il fallait derouler en
+              entier pour l'atteindre. Un raccourci qu'on cherche n'en est plus
+              un, et le bouton d'accueil, dernier de la pile, se cherchait
+              encore davantage. */}
 
         </motion.div>
-      </div>
+      </EcranFin>
 
       {/* voirDuels ne peut devenir vrai que par le bouton lui-meme ferme tant
           que DUELS_OUVERTS vaut false ; le repeter ici est ce qui permet au
           bundler de le prouver sans suivre l'etat a l'execution. */}
       {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
                                  epreuves={shotRaces as string[]} />}
-    </div>
+    </>
   );
 }

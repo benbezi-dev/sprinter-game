@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
+import { EcranFin } from './EcranFin';
 
 export function ResultScreen() {
   const {
@@ -24,10 +25,23 @@ export function ResultScreen() {
 
   const handleHome = () => SprinterApp.goHome();
 
+  // Les deux boutons vivent dans la barre du bas, hors du rouleau : une
+  // grille d'arrivee de huit coureurs les poussait hors de l'ecran, et
+  // « ETAPE SUIVANTE » est precisement ce qu'on cherche en arrivant ici.
+  const actions = (
+    <div className="flex gap-2 md:gap-3">
+      <button onClick={handleNext} className="flex-1 min-w-0 px-2 py-3 rounded-xl font-black font-display text-base sm:text-lg tracking-widest leading-tight text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
+        {oneShot ? N.t('next_event') : N.t('next_stage', { n: levelIdx + 2 })}
+      </button>
+      <button onClick={handleHome} className="flex-1 min-w-0 px-2 py-3 rounded-xl font-bold tracking-widest text-sm leading-tight text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
+        {N.t('home')}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/80 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <EcranFin fond="bg-black/80 backdrop-blur-sm" actions={actions}>
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-4 md:py-8 gap-3 md:gap-5">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black font-display text-emerald-400 tracking-tight uppercase drop-shadow-md">
@@ -90,18 +104,7 @@ export function ResultScreen() {
             </motion.div>
           )}
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button onClick={handleNext} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
-              {oneShot ? N.t('next_event') : N.t('next_stage', { n: levelIdx + 2 })}
-            </button>
-            <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
-              {N.t('home')}
-            </button>
-          </div>
-
         </motion.div>
-      </div>
-    </div>
+    </EcranFin>
   );
 }

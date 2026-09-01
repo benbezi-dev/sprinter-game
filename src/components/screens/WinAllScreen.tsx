@@ -7,6 +7,7 @@ import {
   rankByRaceTime, rankOf, TOP_N,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { EcranFin } from './EcranFin';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -73,10 +74,24 @@ export function WinAllScreen() {
 
   const handleHome = () => SprinterApp.goHome();
 
+  // Six etapes, un tableau de chronos et le TOP 500 : le compte rendu d'un
+  // parcours complet ne tient dans aucun ecran de telephone. Les deux boutons
+  // descendent donc dans la barre du bas, ou ils ne se cherchent plus.
+  const actions = (
+    <div className="flex gap-2 md:gap-3">
+      <button onClick={handleReplay} className="flex-1 min-w-0 px-2 py-3 rounded-xl font-black font-display text-base sm:text-lg tracking-widest leading-tight text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
+        {N.t('replay')}
+      </button>
+      <button onClick={handleHome} className="flex-1 min-w-0 px-2 py-3 rounded-xl font-bold tracking-widest text-sm leading-tight text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
+        {N.t('home')}
+      </button>
+    </div>
+  );
+
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <>
+      <EcranFin actions={actions}>
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-4 md:py-8 gap-3 md:gap-5">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(248,205,74,0.4)]">
@@ -89,7 +104,7 @@ export function WinAllScreen() {
           </div>
           
           {/* Splits Card */}
-          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 shadow-2xl">
+          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl">
             <div className="flex flex-col gap-1.5 md:gap-3">
               {runSplits.map((split, i) => (
                 <div key={i} className="flex items-center justify-between px-3 py-2 md:px-4 md:py-3 rounded-xl border border-white/5 bg-black/20">
@@ -197,18 +212,14 @@ export function WinAllScreen() {
             </button>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button onClick={handleReplay} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
-              {N.t('replay')}
-            </button>
-            <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
-              {N.t('home')}
-            </button>
-          </div>
-
         </motion.div>
-      </div>
-    </div>
+      </EcranFin>
+
+      {/* « VOIR LE TOP 500 » armait ce panneau sans que personne ne le monte :
+          le bouton s'enfoncait, et il ne se passait rien. */}
+      {showTop500 && (
+        <LeaderboardScreen initialRace={raceKey} onClose={() => setShowTop500(false)} />
+      )}
+    </>
   );
 }
