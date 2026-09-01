@@ -1,0 +1,17 @@
+{
+  "name": "Sprinter — Tableau de bord",
+  "short_name": "Sprinter Admin",
+  "description": "Activité de l'app Sprinter : visites, parties jouées, défis, duels.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
+  "icons": [
+    { "src": "../icons/icon-192.webp", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "../icons/icon-512.webp", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ],
+  "id": "/sprinter-game/dashboard/",
+  "scope": "/sprinter-game/dashboard/",
+  "orientation": "any",
+  "categories": ["utilities"]
+}
