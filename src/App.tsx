@@ -140,8 +140,12 @@ function MainGame() {
       <QuitRace />
       <InboxPopup />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
-          annonce ici, des son retour au calme. */}
-      <DuelResultPopup />
+          annonce ici, des son retour au calme. Comme pour PisteRelais
+          ci-dessous, la porte se pose ici et non a l'interieur du composant :
+          DUELS_OUVERTS vaut false en dur en production, et c'est cette forme
+          precise — la constante en tete du && — qui permet au bundler de
+          sortir le composant du build plutot que de l'y livrer inerte. */}
+      {DUELS_OUVERTS && <DuelResultPopup />}
       {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
           l'ecran-titre disparait au coup de pistolet, et une salle tenue par
           un panneau demonte se fermerait a l'instant precis ou la course

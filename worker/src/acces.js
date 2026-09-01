@@ -174,13 +174,49 @@ export async function listerAcces(db) {
  * l'administration est fermee — plutot fermee que grande ouverte par defaut.
  */
 export function estAdmin(request, env) {
-  const attendu = env.ADMIN_CLE;
+  return memeCle(request.headers.get('X-Sprinter-Admin'), env.ADMIN_CLE);
+}
+
+/**
+ * L'appelant a-t-il le droit de lire le tableau de bord ?
+ *
+ * Une cle a part, et pas celle de l'administration : lire des compteurs n'est
+ * pas refaire un classement. `ADMIN_CLE` ouvre `/duels/recalculer`, qui reecrit
+ * le rang de tout le monde, et cree ou revoque les acces au canal de test. La
+ * poser dans le navigateur pour consulter des chiffres reviendrait a promener
+ * les cles de la maison pour aller chercher le courrier — d'autant que le
+ * tableau s'ouvre depuis la page publique du jeu, ou n'importe quelle faille
+ * d'affichage donnerait au passage tout ce que la cle permet.
+ *
+ * `TABLEAU_CLE` ne donne que la lecture de `/stats`. L'administrateur passe
+ * aussi, parce qu'il peut deja tout : lui refuser la lecture serait une gene
+ * sans etre une protection.
+ *
+ * Se pose une fois sur le Worker deploye :
+ *
+ *     npx wrangler secret put TABLEAU_CLE
+ *
+ * Sans ce secret, `/stats` reste ferme a tout le monde. C'est voulu : ferme par
+ * defaut plutot qu'ouvert par oubli — et le jour ou l'on redeploie sans y
+ * penser, on perd un tableau, pas la discretion de ses chiffres.
+ */
+export function estTableau(request, env) {
+  return memeCle(request.headers.get('X-Sprinter-Tableau'), env.TABLEAU_CLE)
+      || estAdmin(request, env);
+}
+
+/**
+ * Deux chaines sont-elles la meme cle ?
+ *
+ * Sans cle attendue, personne ne passe. La comparaison se fait a temps
+ * constant : une comparaison naive fuit la cle, caractere par caractere, a qui
+ * prend la peine de chronometrer.
+ */
+function memeCle(donne, attendu) {
   if (!attendu) return false;
-  const donne = request.headers.get('X-Sprinter-Admin') || '';
-  if (donne.length !== attendu.length) return false;
-  // Comparaison a temps constant : une comparaison naive fuit la cle,
-  // caractere par caractere, a qui prend la peine de chronometrer.
+  const d = donne || '';
+  if (d.length !== attendu.length) return false;
   let diff = 0;
-  for (let i = 0; i < attendu.length; i++) diff |= donne.charCodeAt(i) ^ attendu.charCodeAt(i);
+  for (let i = 0; i < attendu.length; i++) diff |= d.charCodeAt(i) ^ attendu.charCodeAt(i);
   return diff === 0;
 }

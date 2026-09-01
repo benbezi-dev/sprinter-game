@@ -685,6 +685,15 @@
     share_other:     ['Snapchat, Instagram…', 'Snapchat, Instagram…'],
     share_other_hint:['Snapchat et Instagram s’ouvrent depuis le menu de partage.',
                       'Snapchat and Instagram open from the share menu.'],
+    // L'image de la course, a partager. Distincte du defi : elle ne demande ni
+    // code ni adversaire, et le libelle doit le dire — « partager ma course »
+    // et non « partager le defi », sinon le bouton promet ce qu'il ne fait pas.
+    affiche_share:   ['PARTAGER MA COURSE', 'SHARE MY RUN'],
+    affiche_making:  ['Image en cours…', 'Making image…'],
+    affiche_saved:   ['image enregistrée', 'image saved'],
+    affiche_failed:  ['image impossible', 'image failed'],
+    affiche_hint:    ['une image de ta course, pour Instagram ou TikTok',
+                      'an image of your run, for Instagram or TikTok'],
     code_copied:     ['code copié', 'code copied'],
     challenge_rematch:['DÉFIER À NOUVEAU', 'CHALLENGE BACK'],
     challenge_rematch_sub:['tu as gagné — renvoie-lui un défi sur la course que tu viens de faire',

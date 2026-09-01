@@ -361,7 +361,7 @@ export function TitleScreen() {
 
       {tuto && <Tutorial onClose={fermerTuto} />}
 
-      {showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
+      {DUELS_OUVERTS && showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 
       {showTop500 && (
         <LeaderboardScreen initialRace={raceKey} onClose={() => setShowTop500(false)} />

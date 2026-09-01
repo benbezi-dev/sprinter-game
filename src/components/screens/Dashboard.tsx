@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Eye, Timer, Ghost, Activity, Loader2 } from 'lucide-react';
+import { Users, Eye, Timer, Ghost, Activity, Loader2, RotateCcw } from 'lucide-react';
 import {
-  fetchBoardStats, fetchServerStats, type BoardStats, type ServerStats,
+  fetchBoardStats, type BoardStats, type ServerStats,
 } from '@/game/stats';
+import { PorteTableau } from './PorteTableau';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -24,15 +25,27 @@ function Tuile({ icone, valeur, libelle, note, attente }: {
   );
 }
 
+/**
+ * Le tableau de bord, derriere sa porte.
+ *
+ * Les chiffres du serveur arrivent par la porte plutot que d'etre relus ici :
+ * c'est la tentative de lecture qui valide la cle, et la refaire une seconde
+ * fois pour les memes donnees serait un aller-retour pour rien.
+ */
 export function Dashboard() {
+  return <PorteTableau enfant={srv => <TableauDeBord srv={srv} />} />;
+}
+
+function TableauDeBord({ srv }: { srv: ServerStats }) {
   const [board, setBoard] = useState<BoardStats | null>(null);
-  const [srv, setSrv] = useState<ServerStats | null>(null);
   const [chargement, setChargement] = useState(true);
 
+  // Le classement public, lui, n'a jamais eu besoin de cle : il est deja
+  // affiche par le TOP 500 du jeu.
   useEffect(() => {
     let annule = false;
-    Promise.all([fetchBoardStats(), fetchServerStats()])
-      .then(([b, s]) => { if (!annule) { setBoard(b); setSrv(s); setChargement(false); } })
+    fetchBoardStats()
+      .then(b => { if (!annule) { setBoard(b); setChargement(false); } })
       .catch(() => { if (!annule) setChargement(false); });
     return () => { annule = true; };
   }, []);
@@ -158,6 +171,13 @@ export function Dashboard() {
                 valeur={srv?.scores?.appareils ?? 'en attente'}
                 attente={!srv}
                 note={srv ? 'un joueur peut en avoir plusieurs' : undefined}
+              />
+              <Tuile
+                icone={<RotateCcw className="w-4 h-4" />}
+                libelle="Reprises"
+                valeur={srv?.reprises ? srv.reprises.total.toLocaleString('fr-FR') : 'en attente'}
+                attente={!srv?.reprises}
+                note={srv?.reprises ? 'appuis sur RECOMMENCER' : undefined}
               />
             </section>
 

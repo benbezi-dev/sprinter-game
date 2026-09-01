@@ -114,6 +114,24 @@ setTimeout(() => { console.log('--- delai global'); process.exit(1); }, 60000);
 // La salle refuse qui n'est pas de l'equipe : les noms viennent donc de la
 // ligne de commande, pas d'une liste figee.
 const NOMS = (process.env.NOMS || 'Ana,Bob,Carl,Dana').split(',');
-await Promise.all(NOMS.map(n => joueur(n.trim())));
+try {
+  await Promise.all(NOMS.map(n => joueur(n.trim())));
+} catch (err) {
+  // Ce fichier n'est pas un test : il ne monte pas d'equipe, il en REJOINT une.
+  // Lance sans code d'equipe, il tombait sur une trace de socket qui laissait
+  // croire a une panne du relais — alors qu'il n'y a simplement aucune salle a
+  // l'autre bout. relais-client-test.mjs, lui, se suffit a lui-meme.
+  console.error(`\n✗ ${err.message}\n`);
+  console.error('Ce harnais REJOINT une salle de relais existante ; il n en cree pas.');
+  console.error('Il lui faut une equipe deja montee, et son code en premier argument :');
+  console.error('');
+  console.error('    BASE=ws://127.0.0.1:8788 ACCES=<code> node tools/relais-quatre-clients.mjs <EQUIPE>');
+  console.error('');
+  console.error(`  BASE doit etre une adresse WebSocket (ws:// ou wss://) — ici « ${BASE} ».`);
+  console.error(`  equipe visee : ${EQUIPE}${process.argv[2] ? '' : '  (defaut : aucune salle ne porte ce code)'}`);
+  console.error('');
+  console.error('Pour un relais complet sans rien preparer : node tools/relais-client-test.mjs');
+  process.exit(1);
+}
 console.log('--- termine');
 process.exit(0);

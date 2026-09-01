@@ -10,6 +10,16 @@
 //   - la voix disparait quand la fenetre se ferme. C'est une promesse faite au
 //     joueur, et une promesse ne se verifie pas a l'oeil.
 //   - un nul ne se chambre pas.
+//
+// La borne de taille se lit dans le module plutot que d'etre recopiee ici. Elle
+// a deja bouge une fois — cent mille caracteres, puis deux cent mille pour
+// laisser passer six secondes de WAV — et le harnais envoyait exactement
+// l'ancien plafond. Devenu la valeur ACCEPTEE, il ne prouvait plus rien : le
+// serveur le prenait, le mot etait pose, et les deux verifications suivantes
+// tombaient en cascade sur « le mot est deja pose ». Un test qui recopie une
+// constante ment le jour ou elle change.
+import { MAX_VOIX_B64 } from '../worker/src/mot.js';
+
 const B = process.env.BASE || 'http://127.0.0.1:8788';
 const ACCES = process.env.ACCES || 'ECRAN1';
 const H = { 'Content-Type': 'application/json', 'X-Sprinter-Test': ACCES };
@@ -101,9 +111,22 @@ const mesDuels = (n) =>
   const mauvaisType = await post('/duel/mot', { id: id3, name: b, voix: VOIX, voix_type: 'application/x-msdownload' });
   ok('un type qui n est pas de l audio est refuse', mauvaisType.statut === 403,
      JSON.stringify(mauvaisType.corps));
-  const enorme = await post('/duel/mot', { id: id3, name: b, voix: 'A'.repeat(200000), voix_type: 'audio/webm' });
+  // Quatre caracteres au-dela du plafond, et non le plafond lui-meme : c'est la
+  // premiere taille qui doit etre refusee.
+  const enorme = await post('/duel/mot',
+    { id: id3, name: b, voix: 'A'.repeat(MAX_VOIX_B64 + 4), voix_type: 'audio/webm' });
   ok('un enregistrement trop lourd est refuse', enorme.statut === 403,
      JSON.stringify(enorme.corps));
+
+  // Et le plafond exact passe : une borne qui refuse ce qu'elle annonce
+  // accepter est aussi fausse qu'une borne qui laisse tout entrer. On ne pose
+  // rien ici — le duel doit rester vierge pour la verification suivante — donc
+  // on eprouve la taille sur un duel a part.
+  const idBorne = await duel(nom('P'), nom('Q'), 11000, 10100);
+  const pile = await post('/duel/mot',
+    { id: idBorne, name: nom('Q'), voix: 'A'.repeat(MAX_VOIX_B64), voix_type: 'audio/webm' });
+  ok('le plafond exact est accepte', pile.statut === 200 && pile.corps.voix,
+     `${MAX_VOIX_B64} caracteres — ${JSON.stringify(pile.corps)}`);
 
   const posee = await post('/duel/mot', { id: id3, name: b, voix: VOIX, voix_type: 'audio/webm;codecs=opus' });
   ok('la voix se depose', posee.statut === 200 && posee.corps.voix,

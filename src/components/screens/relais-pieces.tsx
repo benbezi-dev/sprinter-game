@@ -264,7 +264,7 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
           {N.t('champ_continue')}
         </button>
 
-        {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
+        {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
                                    epreuves={['100']} />}
       </motion.div>
     </div>

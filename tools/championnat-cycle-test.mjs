@@ -6,7 +6,12 @@
 // champion continental arrive bien au mondial, et est-ce que le fil d'annonces
 // raconte la meme competition que la base.
 
-const B = 'http://127.0.0.1:8788';
+// L'adresse se laisse choisir, comme dans les autres harnais. Codee en dur,
+// elle a fait tourner ce test contre un `wrangler dev` lance depuis une AUTRE
+// copie du depot, restee trois commits en arriere : les championnats y etaient
+// encore derriere la cle d'administration, le harnais lisait « refuse », et
+// l'echec ressemblait a un bug du jeu.
+const B = process.env.BASE || 'http://127.0.0.1:8788';
 const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
   body: JSON.stringify(b) }).then(r => r.json());
 const get = u => fetch(B + u, { headers: H }).then(r => r.json());
@@ -90,6 +95,31 @@ verifier('un continental sans champions est refuse',
 // ------------------------------------------------------------- nationaux
 console.log('\n── LES CHAMPIONNATS NATIONAUX, LE MEME WEEKEND ──────────────');
 const cycle = await post('/champ/cycle', { debut: samedi, echelon: 'national' });
+// Dire ce qui manque, plutot que de tomber sur `undefined.length`. Ce harnais
+// suppose une base deja peuplee — trente-deux joueurs classes par pays, sur six
+// pays — et ne la seme pas lui-meme. Sur une base vide, l'ancienne version
+// mourait d'un TypeError trois lignes plus bas, ce qui ne disait pas quoi faire.
+// Aucun pays ouvert compte autant qu'une reponse malformee : sans une seule
+// edition, les huit verifications qui suivent echouent en cascade et racontent
+// huit pannes la ou il n'y en a aucune — seulement une base sans joueurs.
+if (!cycle || !Array.isArray(cycle.ouvertes) || cycle.ouvertes.length === 0) {
+  const vide = cycle && Array.isArray(cycle.ouvertes);
+  console.log(vide
+    ? '\n   ✗ aucun pays n a pu ouvrir son championnat.'
+    : `\n   ✗ /champ/cycle n a pas rendu de cycle : ${JSON.stringify(cycle).slice(0, 200)}`);
+  if (vide && cycle.ecartes?.length) {
+    for (const e of cycle.ecartes.slice(0, 6)) {
+      console.log(`     ecarte ${e.zone} : ${e.raison}${e.joueurs != null ? ' (' + e.joueurs + ' joueurs)' : ''}`);
+    }
+  }
+  console.log('\n   Ce harnais convoque des joueurs deja classes ; il n en cree aucun.');
+  console.log('   Il lui faut une base peuplee — au moins 32 joueurs classes dans');
+  console.log('   chacun des pays FR, DE, ES, MA, SN, CI. Sur une base neuve il n y a');
+  console.log('   personne a aligner, et donc rien a verifier : ce n est pas un echec');
+  console.log('   du jeu, c est un harnais sans terrain.');
+  console.log(`\n   Serveur interroge : ${B}  (BASE=... pour en changer)`);
+  process.exit(1);
+}
 console.log(`   ${cycle.ouvertes.length} pays ouvrent, ${cycle.ecartes.length} ecartes`);
 for (const e of cycle.ecartes.slice(0, 4)) {
   console.log(`     ecarte ${e.zone} : ${e.raison}${e.joueurs != null ? ' (' + e.joueurs + ' joueurs)' : ''}`);

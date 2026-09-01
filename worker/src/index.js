@@ -24,7 +24,12 @@ import {
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
+  estTableau,
 } from './acces.js';
+import {
+  ensureReseauxTables, regarderClassement, regarderDuel, regarderSacre,
+  regarderCap, fileDAttente, ecarter, marquerPublie, MOMENTS,
+} from './reseaux.js';
 
 /**
  * Portes du relais et des championnats.
@@ -69,15 +74,21 @@ const NO_RUN_MS = 1200000;
 function cors(resp) {
   resp.headers.set('Access-Control-Allow-Origin', '*');
   resp.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  // Nos deux en-tetes maison doivent figurer ici, sinon le navigateur bloque
+  // TOUS nos en-tetes maison doivent figurer ici, sinon le navigateur bloque
   // la requete AVANT de l'envoyer : un en-tete qui n'est pas « simple »
   // declenche un pre-vol, et le pre-vol refuse ce qui n'est pas annonce.
   //
   // Sans cette ligne, tout le canal de test etait muet depuis un navigateur —
   // et le defaut se cachait bien, la porte d'entree et les WebSockets etant
   // les deux seuls chemins qui n'utilisent pas ces en-tetes.
+  //
+  // La meme chose s'est reproduite avec `X-Sprinter-Tableau` : ajouter un
+  // en-tete sans l'annoncer ici donne une panne qui ne ressemble pas a une
+  // panne de CORS — le tableau affichait « serveur injoignable », parce que
+  // cote client un pre-vol refuse se presente comme un `fetch` qui echoue,
+  // sans statut ni message. Qui ajoute un en-tete ajoute une ligne ici.
   resp.headers.set('Access-Control-Allow-Headers',
-                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin');
+                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau');
   return resp;
 }
 
@@ -247,6 +258,24 @@ async function ensureVisitTable(db) {
   visitsReady.add(db);
 }
 
+// Le bouton RECOMMENCER, compte comme les visites : une ligne par appareil et
+// par jour, rien de nominatif. Le jeu ne l'instrumentait pas — sans ce
+// compteur, personne ne pouvait dire combien de fois une course est relancee,
+// ni si le raccourci sert. Meme forme que `visits` pour que le tableau les
+// lise de la meme facon.
+const reprisesReady = new WeakSet();
+async function ensureRepriseTable(db) {
+  if (reprisesReady.has(db)) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS reprises (
+    day TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    hits INTEGER NOT NULL DEFAULT 1,
+    last_at INTEGER NOT NULL,
+    PRIMARY KEY (day, device_id)
+  )`).run();
+  reprisesReady.add(db);
+}
+
 // Un defi peut viser quelqu'un en particulier. La colonne est ajoutee apres
 // coup sur une table qui existe deja, d'ou la migration paresseuse.
 const targetReady = new WeakSet();
@@ -407,6 +436,12 @@ export default {
     // quatre-vingt-treize occasions d'en oublier une.
     if (canal.test && env.DB_TEST) env = { ...env, DB: env.DB_TEST };
 
+    // Ce qui part vers les reseaux a besoin de la base ET du canal, ensemble.
+    // Les passer lies plutot que separement n'est pas une commodite : c'est ce
+    // qui permet a `noter()` de refuser le canal de test elle-meme, au lieu de
+    // faire confiance a cinq appelants pour y penser chacun de leur cote.
+    canal.db = env.DB;
+
     // ------------------------------------------------------ acces au test
     if (url.pathname.startsWith('/test/')) {
       const sous = url.pathname.slice('/test/'.length);
@@ -530,6 +565,32 @@ export default {
       // le rang se joue sur le meilleur chrono d'une course, pas sur le cumul
       const rank = await getRank(env.DB, race_key, bestSplit);
       const entries = await getLeaderboard(env.DB, race_key);
+
+      // Ce chrono vient-il de produire un moment qui se raconte ? La question
+      // se pose ici parce que c'est ici qu'on a tout : le classement relu, le
+      // rang, et le nom. La poser ailleurs obligerait a redemander les trois.
+      //
+      // `waitUntil` et pas `await` : le joueur attend son classement, et il
+      // n'a pas a payer l'ecriture d'une ligne qui ne le concerne pas. Si le
+      // signalement echoue, il echoue seul et en silence — voir `noter()`.
+      ctx.waitUntil(regarderClassement(canal, race_key, cleanedName, bestSplit, entries));
+
+      // Les caps de frequentation. Ils se regardent ici plutot que dans /stats :
+      // /stats est une lecture, et une lecture ne doit pas ecrire — un tableau
+      // de bord ouvert deux fois signalerait deux fois le meme cap. Une course
+      // enregistree, elle, est un evenement, et c'est le bon moment pour
+      // demander si le compteur vient de passer un rond.
+      //
+      // La table `reseaux_caps` est ce qui rend l'appel repetable : elle retient
+      // les seuils deja franchis, donc l'appeler a chaque course ne produit un
+      // moment qu'une fois.
+      ctx.waitUntil((async () => {
+        try {
+          const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM scores`).first();
+          await regarderCap(canal, 'joueurs', n && n.n);
+        } catch { /* un cap manque ne casse rien */ }
+      })());
+
       return json({ race: race_key, rank, best_time_ms: bestTime,
                     best_split_ms: bestSplit, entries });
     }
@@ -691,7 +752,33 @@ export default {
       if (sous === 'cloturer' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const r = await cloturerPhase(env.DB, String(body.edition || '').toUpperCase());
+        const edition = String(body.edition || '').toUpperCase();
+        const r = await cloturerPhase(env.DB, edition);
+
+        // Une finale sacre. C'est le moment le plus fort du bareme apres la
+        // tete d'un classement : une date, un nom, un titre.
+        //
+        // A ce jour l'appel ne produit rien, et c'est normal : les
+        // championnats sont reserves au canal de test (`championnatsOuverts`
+        // juste au-dessus), et `noter()` refuse le canal de test. Le crochet
+        // est pose pour le jour ou ils s'ouvriront — le brancher ce jour-la,
+        // dans un fichier qu'on aura oublie, coute plus cher que de le poser
+        // maintenant a l'endroit qui sait.
+        if (r && !r.erreur && r.finale && r.podium) {
+          const [or, argent] = r.podium;
+          ctx.waitUntil(regarderSacre(canal, {
+            id: edition,
+            echelon: r.echelon || null,
+            pays: r.zone || null,
+            epreuve: r.epreuve || null,
+            champion: or ? or.nom : null,
+            chrono_ms: or ? or.ms : null,
+            deuxieme: argent ? argent.nom : null,
+            deuxieme_ms: argent ? argent.ms : null,
+            partants: Array.isArray(r.classement) ? r.classement.length : null,
+          }));
+        }
+
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
 
@@ -1357,35 +1444,328 @@ export default {
       return json({ ok: true });
     }
 
+    // Une reprise : le joueur a rappuye sur RECOMMENCER. Meme geste que /visit,
+    // meme table de forme identique.
+    if (url.pathname === '/reprise' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensureRepriseTable(env.DB);
+      const now = Date.now();
+      const day = new Date(now).toISOString().slice(0, 10);
+      await env.DB.prepare(
+        `INSERT INTO reprises (day, device_id, hits, last_at) VALUES (?, ?, 1, ?)
+         ON CONFLICT(day, device_id) DO UPDATE SET hits = hits + 1, last_at = excluded.last_at`
+      ).bind(day, device_id, now).run();
+      return json({ ok: true });
+    }
+
     // Tout ce que le tableau de bord affiche, en un seul aller-retour.
+    //
+    // Le contrat est double. Les trois blocs d'origine — `visites`, `scores`,
+    // `defis` — gardent EXACTEMENT leur forme : un tableau plus ancien continue
+    // de fonctionner. Tout le reste est ajoute a cote, et chaque ajout passe
+    // par `bloc()` : sur une base ou une table manque encore (la production n'a
+    // pas toutes celles du canal de test), on rend un repli plutot que de
+    // faire tomber la reponse entiere.
+    // --------------------------------------------------- ce qui va aux reseaux
+    //
+    // La file des moments que le jeu a signales, et les deux gestes qui la
+    // vident : ecarter, ou marquer publie. Ce worker ne publie rien lui-meme —
+    // c'est delibere et c'est explique en tete de reseaux.js. Il tient le
+    // registre de ce qui est sorti, ce qui evite qu'un record ressorte le mois
+    // suivant depuis une file qu'on relit.
+    //
+    // Sous `estAdmin` et pas `estTableau` : lire la frequentation n'engage
+    // rien, decider ce qui parle au nom du jeu engage la marque entiere. Les
+    // deux cles existent justement pour ne pas confondre les deux.
+    if (url.pathname.startsWith('/reseaux/')) {
+      if (!estAdmin(request, env)) return json({ error: 'introuvable' }, 404);
+      const quoi = url.pathname.slice('/reseaux/'.length);
+
+      // Les noms ne sortent en clair que si on les demande, et la demande est
+      // dans l'URL — visible, donc, dans le journal comme dans la barre
+      // d'adresse. Un masquage qu'on leve par accident n'en est pas un.
+      if (quoi === 'file' && request.method === 'GET') {
+        const etat = url.searchParams.get('etat') || 'propose';
+        if (!['propose', 'ecarte', 'publie'].includes(etat)) {
+          return json({ error: 'etat inconnu' }, 400);
+        }
+        return json({
+          moments: await fileDAttente(env.DB, {
+            etat,
+            limite: url.searchParams.get('limite'),
+            avecNoms: url.searchParams.get('noms') === '1',
+          }),
+          // Le bareme voyage avec la file : l'ecran de validation affiche le
+          // pilier et le titre de chaque moment sans avoir a recopier la table
+          // des poids, qui vivrait alors a deux endroits.
+          bareme: MOMENTS,
+        });
+      }
+
+      if (quoi === 'ecarter' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const ok = await ecarter(env.DB, (body || {}).id);
+        return ok ? json({ ok: true }) : json({ error: 'deja tranche' }, 409);
+      }
+
+      if (quoi === 'publie' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const ok = await marquerPublie(env.DB, (body || {}).id, (body || {}).reseaux);
+        return ok ? json({ ok: true }) : json({ error: 'deja tranche' }, 409);
+      }
+
+      return json({ error: 'not found' }, 404);
+    }
+
     if (url.pathname === '/stats' && request.method === 'GET') {
+      // Le tableau de bord se lit sous cle, et pas autrement.
+      //
+      // Il s'ouvrait par `?stats` sur la page publique, sans rien demander : le
+      // premier parametre que l'on essaie sur un jeu, et le trafic du jeu
+      // s'affichait. Masquer la page n'aurait rien valu — un `curl /stats`
+      // rendait les memes chiffres. C'est donc la ROUTE qui ferme, et la porte
+      // du navigateur n'est que la facon de presenter la cle.
+      //
+      // Une seule porte, et non deux etages : on a un temps garde les agregats
+      // ouverts en ne fermant que le nominatif, mais deux gardes qui repondent
+      // a la meme question sont un garde de trop — et le premier a se relacher
+      // est toujours celui dont on avait oublie qu'il gardait quelque chose.
+      //
+      // 404 plutot que 403 : sans cle, cette route n'existe pas. Repondre
+      // « interdit » confirmerait qu'il y a un tableau a trouver.
+      if (!estTableau(request, env)) return json({ error: 'introuvable' }, 404);
+
       await ensureVisitTable(env.DB);
       await ensureChallengeTables(env.DB);
       await ensureScoreGhost(env.DB);
+      await ensureRepriseTable(env.DB);
 
-      const v = await env.DB.prepare(
+      const DB = env.DB;
+      const bloc = async (fn, repli) => { try { return await fn(); } catch { return repli; } };
+
+      const JOUR = 86400000;
+      const now = Date.now();
+      const depuis = n => now - n * JOUR;
+
+      // --- visites (forme d'origine, intacte) ---------------------------
+      const v = await DB.prepare(
         `SELECT COALESCE(SUM(hits),0) AS hits,
                 COUNT(DISTINCT device_id) AS visiteurs
            FROM visits`
       ).first();
-      const { results: parJour } = await env.DB.prepare(
+      const { results: parJour } = await DB.prepare(
         `SELECT day, COUNT(*) AS visiteurs, SUM(hits) AS hits
            FROM visits GROUP BY day ORDER BY day DESC LIMIT 30`
       ).all();
-      const s = await env.DB.prepare(
+      // Mensuel : pas de plafond de 30 jours ici, et `visiteurs` est un vrai
+      // distinct sur le mois (pas une somme de distincts quotidiens).
+      const parMoisVisites = await bloc(async () => (await DB.prepare(
+        `SELECT substr(day,1,7) AS mois,
+                COUNT(DISTINCT device_id) AS visiteurs,
+                COALESCE(SUM(hits),0) AS hits
+           FROM visits GROUP BY mois ORDER BY mois DESC LIMIT 24`
+      ).all()).results || [], []);
+      const revient = await bloc(async () => (await DB.prepare(
+        `SELECT COUNT(*) AS n FROM (
+           SELECT device_id, COUNT(DISTINCT day) AS j FROM visits GROUP BY device_id
+         ) WHERE j > 1`).first())?.n || 0, 0);
+
+      // --- scores (forme d'origine, intacte) --------------------------
+      const s = await DB.prepare(
         `SELECT COUNT(*) AS lignes,
                 COUNT(DISTINCT device_id) AS appareils,
                 COUNT(DISTINCT lower(trim(name))) AS joueurs
            FROM scores`
       ).first();
-      const c = await env.DB.prepare(
+
+      // --- defis (forme d'origine + colonnes en plus) ----------------
+      await bloc(() => ensureChallengeTarget(DB), null);
+      const c = await DB.prepare(
         `SELECT (SELECT COUNT(*) FROM challenges) AS defis,
                 (SELECT COUNT(*) FROM challenge_attempts) AS tentatives`
       ).first();
+      const defisPlus = await bloc(async () => {
+        const rep = await DB.prepare(
+          `SELECT
+             SUM(CASE WHEN target_device IS NOT NULL THEN 1 ELSE 0 END) AS adresses,
+             SUM(CASE WHEN target_device IS NULL THEN 1 ELSE 0 END) AS publics,
+             (SELECT COUNT(DISTINCT id) FROM challenge_attempts) AS repondus
+           FROM challenges`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM challenges GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: tpj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM challenge_attempts GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM challenges GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const { results: tpm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM challenge_attempts GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        // Delai median entre la creation d'un defi et sa premiere reponse.
+        const { results: delais } = await DB.prepare(
+          `SELECT (a.premier - c.created_at) AS d FROM challenges c
+             JOIN (SELECT id, MIN(created_at) AS premier FROM challenge_attempts GROUP BY id) a
+               ON a.id = c.id
+            ORDER BY d`).all();
+        const med = delais.length ? delais[Math.floor(delais.length / 2)].d : null;
+        return {
+          adresses: rep?.adresses || 0, publics: rep?.publics || 0,
+          repondus: rep?.repondus || 0,
+          par_jour: pj || [], tentatives_par_jour: tpj || [],
+          par_mois: pm || [], tentatives_par_mois: tpm || [],
+          delai_reponse_median_ms: med,
+        };
+      }, { adresses: 0, publics: 0, repondus: 0, par_jour: [], tentatives_par_jour: [], par_mois: [], tentatives_par_mois: [], delai_reponse_median_ms: null });
+
+      // --- parties jouees (table `races`) ----------------------------
+      const parties = await bloc(async () => {
+        const tot = await DB.prepare(
+          `SELECT COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n,
+                  COUNT(DISTINCT name_key) AS joueurs,
+                  SUM(CASE WHEN mode='campaign' THEN 1 ELSE 0 END) AS campagne,
+                  SUM(CASE WHEN mode='oneshot'  THEN 1 ELSE 0 END) AS oneshot
+             FROM races GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const { results: pe } = await DB.prepare(
+          `SELECT race_key, COUNT(*) AS n FROM races GROUP BY race_key`).all();
+        const { results: prog } = await DB.prepare(
+          `SELECT level_idx, COUNT(*) AS n FROM races GROUP BY level_idx ORDER BY level_idx`).all();
+        const actif = async ms => (await DB.prepare(
+          `SELECT COUNT(DISTINCT name_key) AS n FROM races WHERE created_at >= ?`).bind(ms).first())?.n || 0;
+        const { results: hj } = await DB.prepare(
+          `SELECT CAST(strftime('%w', created_at/1000, 'unixepoch') AS INTEGER) AS jour,
+                  CAST(strftime('%H', created_at/1000, 'unixepoch') AS INTEGER) AS heure,
+                  COUNT(*) AS n
+             FROM races GROUP BY jour, heure`).all();
+        const { results: top } = await DB.prepare(
+          `SELECT name, COUNT(*) AS n, MAX(created_at) AS dernier
+             FROM races GROUP BY name_key ORDER BY n DESC LIMIT 20`).all();
+        return {
+          total: tot?.n || 0, joueurs: tot?.joueurs || 0,
+          par_mode: { campaign: tot?.campagne || 0, oneshot: tot?.oneshot || 0 },
+          par_jour: pj || [], par_mois: pm || [], par_epreuve: pe || [], progression: prog || [],
+          actifs: { j1: await actif(depuis(1)), j7: await actif(depuis(7)), j30: await actif(depuis(30)) },
+          heure_jour: hj || [], top_joueurs: top || [], borne: HIST_PER_DEVICE,
+        };
+      }, null);
+
+      // --- reprises (table `reprises`) ------------------------------
+      const reprises = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT COALESCE(SUM(hits),0) AS total,
+                  COUNT(DISTINCT device_id) AS appareils FROM reprises`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT day, SUM(hits) AS n FROM reprises GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT substr(day,1,7) AS mois, SUM(hits) AS n
+             FROM reprises GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        return { total: t?.total || 0, appareils: t?.appareils || 0, par_jour: pj || [], par_mois: pm || [] };
+      }, { total: 0, appareils: 0, par_jour: [], par_mois: [] });
+
+      // --- duels (tables `duel_results` / `duel_players`) ----------
+      const duels = await bloc(async () => {
+        const r = await DB.prepare(
+          `SELECT COUNT(*) AS joues,
+                  SUM(CASE WHEN outcome='challenger' THEN 1 ELSE 0 END) AS lanceur_gagne,
+                  SUM(CASE WHEN outcome='opponent'   THEN 1 ELSE 0 END) AS releveur_gagne,
+                  SUM(CASE WHEN outcome='draw'       THEN 1 ELSE 0 END) AS nul
+             FROM duel_results`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM duel_results GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM duel_results GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const p = await DB.prepare(
+          `SELECT COALESCE(SUM(launched),0) AS lances,
+                  COALESCE(SUM(received),0) AS releves,
+                  COUNT(*) AS inscrits,
+                  SUM(CASE WHEN wins+losses+draws > 0 THEN 1 ELSE 0 END) AS classes
+             FROM duel_players`).first();
+        const { results: paliers } = await DB.prepare(
+          `SELECT palier, COUNT(*) AS n FROM duel_players
+             WHERE wins+losses+draws > 0 GROUP BY palier ORDER BY palier`).all();
+        return {
+          joues: r?.joues || 0,
+          issues: { lanceur: r?.lanceur_gagne || 0, releveur: r?.releveur_gagne || 0, nul: r?.nul || 0 },
+          par_jour: pj || [], par_mois: pm || [],
+          lances: p?.lances || 0, releves: p?.releves || 0,
+          inscrits: p?.inscrits || 0, joueurs_classes: p?.classes || 0,
+          paliers: paliers || [],
+        };
+      }, null);
+
+      // --- joueurs nommes (tables `players` / `player_devices`) ----
+      const joueurs = await bloc(async () => {
+        const p = await DB.prepare(
+          `SELECT COUNT(*) AS nommes,
+                  SUM(CASE WHEN insta IS NOT NULL AND insta <> '' THEN 1 ELSE 0 END) AS avec_insta
+             FROM players`).first();
+        const { results: pj } = await DB.prepare(
+          `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
+             FROM players GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+        const { results: pm } = await DB.prepare(
+          `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
+             FROM players GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        const multi = await bloc(async () => (await DB.prepare(
+          `SELECT COUNT(*) AS n FROM (
+             SELECT name_key, COUNT(*) AS d FROM player_devices GROUP BY name_key
+           ) WHERE d > 1`).first())?.n || 0, 0);
+        return {
+          nommes: p?.nommes || 0, avec_insta: p?.avec_insta || 0,
+          par_jour: pj || [], par_mois: pm || [], multi_appareils: multi,
+        };
+      }, null);
+
+      // --- geographie (table `player_pays`) -----------------------
+      const geo = await bloc(async () => {
+        const { results } = await DB.prepare(
+          `SELECT pays, COUNT(*) AS n FROM player_pays
+             GROUP BY pays ORDER BY n DESC LIMIT 12`).all();
+        return results || [];
+      }, null);
+
+      // --- relais / championnats : compteurs, tolerants -----------
+      const relais = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT (SELECT COUNT(*) FROM relay_teams) AS equipes,
+                  (SELECT COUNT(*) FROM relay_scores) AS courses`).first();
+        return { equipes: t?.equipes || 0, courses: t?.courses || 0 };
+      }, null);
+      const championnats = await bloc(async () => {
+        const t = await DB.prepare(
+          `SELECT (SELECT COUNT(*) FROM champ_editions) AS editions,
+                  (SELECT COUNT(*) FROM champ_titres)   AS titres`).first();
+        return { editions: t?.editions || 0, titres: t?.titres || 0 };
+      }, null);
 
       return json({
-        visites: { total: v?.hits || 0, visiteurs: v?.visiteurs || 0, par_jour: parJour || [] },
-        scores: s || {}, defis: c || {},
+        // --- contrat d'origine, inchange ---
+        visites: {
+          total: v?.hits || 0, visiteurs: v?.visiteurs || 0, par_jour: parJour || [],
+          par_mois: parMoisVisites || [], reviennent: revient,
+        },
+        scores: s || {},
+        defis: { ...(c || {}), ...defisPlus },
+        // --- ajouts ---
+        parties, reprises, duels, joueurs, geo, relais, championnats,
+        releve_a: now,
       });
     }
 
@@ -1560,7 +1940,7 @@ export default {
       await ensureChallengeTables(env.DB);
       await ensureDuelTables(env.DB);
       const ch = await env.DB.prepare(
-        `SELECT owner_name, owner_device, total_ms FROM challenges WHERE id = ?`
+        `SELECT owner_name, owner_device, total_ms, races FROM challenges WHERE id = ?`
       ).bind(code).first();
       if (!ch) return json({ found: false }, 404);
 
@@ -1590,6 +1970,17 @@ export default {
         opponentMs: t,
       });
       if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
+
+      // Un duel tranche aux centiemes se raconte. On ne regarde que le premier
+      // resultat — `deja` marque une seconde tentative, qui ne redistribue rien
+      // et ne raconte donc rien non plus.
+      if (duel && !duel.deja) {
+        let epreuves = null;
+        try { epreuves = JSON.parse(ch.races || 'null'); } catch { /* colonne illisible */ }
+        ctx.waitUntil(regarderDuel(canal,
+          { nom: ch.owner_name, total_ms: ch.total_ms, epreuves },
+          { nom: cleanName(name), total_ms: t, epreuves }));
+      }
 
       // Celui qui a lance le defi n'est pas la : c'est tout l'objet de sa
       // boite. Il l'apprend maintenant plutot qu'au sondage suivant.

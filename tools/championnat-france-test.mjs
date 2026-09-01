@@ -1,5 +1,9 @@
 // Un championnat de France complet, contre le vrai serveur.
-const B = 'http://127.0.0.1:8788';
+//
+// L'adresse se laisse choisir, comme dans les autres harnais : codee en dur,
+// elle interroge le `wrangler dev` qui se trouve la, meme s'il sert une copie
+// du depot restee en arriere — et l'ecart de version ressemble alors a un bug.
+const B = process.env.BASE || 'http://127.0.0.1:8788';
 const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
   body: JSON.stringify(b) }).then(r => r.json());
 const get = u => fetch(B + u, { headers: H }).then(r => r.json());
@@ -23,7 +27,18 @@ const hasard = () => (graine = (graine * 1103515245 + 12345) & 0x7fffffff) / 0x7
 const samedi = Date.UTC(2026, 8, 5);
 console.log('\n══ OUVERTURE ═══════════════════════════════════════════════');
 const ouv = await post('/champ/ouvrir', { pays: 'FR', debut: samedi });
-if (ouv.error) { console.log('  ', ouv); process.exit(1); }
+if (ouv.error) {
+  console.log('  ', ouv);
+  // « pays trop petit » n'est pas une panne : c'est une base vide. Ce harnais
+  // convoque des joueurs deja classes et n'en cree aucun.
+  if (ouv.error === 'pays trop petit' || ouv.error === 'grille incomplete') {
+    console.log(`\n   Il faut au moins ${ouv.requis} joueurs classes en FR pour ouvrir une`);
+    console.log(`   edition ; la base en compte ${ouv.joueurs}. Rien a verifier tant que`);
+    console.log('   personne ne peut courir.');
+  }
+  console.log(`\n   Serveur interroge : ${B}  (BASE=... pour en changer)`);
+  process.exit(1);
+}
 console.log(`   Édition ${ouv.edition} — ${ouv.partants} partants, Championnat de France\n`);
 for (const c of ouv.grille) {
   for (const j of c.joueurs) niveau[j.cle] = 9400 + j.rang * 22;

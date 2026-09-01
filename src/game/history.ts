@@ -51,6 +51,21 @@ export function pushRace(race: RaceKey, seconds: number, mode: string, level: nu
 }
 
 /**
+ * Une reprise : le joueur vient de rappuyer sur RECOMMENCER. Fire-and-forget,
+ * comme `pushRace` — le raccourci ne doit jamais attendre le reseau. Sert au
+ * seul tableau de bord : savoir combien de fois une course est relancee, et si
+ * le bouton sert.
+ */
+export function pushReprise() {
+  fetch(`${API_BASE}/reprise`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: getDeviceId() }),
+    keepalive: true,
+  }).catch(() => { /* hors ligne ou compteur pas deploye : sans consequence */ });
+}
+
+/**
  * Historique d'une epreuve. Le serveur fait foi — il porte les courses de tous
  * les appareils du joueur. S'il ne repond pas, on rend celui de l'appareil.
  */

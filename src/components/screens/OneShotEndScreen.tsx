@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -11,6 +11,7 @@ import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
 import { pique, relance } from '@/game/piques';
@@ -19,6 +20,7 @@ import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
+import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -67,6 +69,16 @@ export function OneShotEndScreen() {
   const [duel, setDuel] = useState<DuelIssue | null>(null);
   const [duelEnCours, setDuelEnCours] = useState(!!challenge);
   const [voirDuels, setVoirDuels] = useState(false);
+  /**
+   * Ou en est l'image de la course.
+   *
+   * Quatre etats et pas un booleen « en cours » : ce qui arrive au bout n'est
+   * pas toujours le meme geste. Sur un telephone l'image part dans une
+   * application, sur un ordinateur elle se range dans les telechargements, et
+   * annoncer « envoye » a quelqu'un qui vient de recevoir un fichier est le
+   * genre de petit mensonge qui se voit tout de suite.
+   */
+  const [affiche, setAffiche] = useState<'repos' | 'fabrique' | Sortie>('repos');
   // La phrase de resultat ne se joue qu'une fois par defi.
   const sonne = useRef(false);
 
@@ -128,6 +140,33 @@ export function OneShotEndScreen() {
 
   const ghostSplits: number[] = (SprinterApp.G.ghostSplits || []) as number[];
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
+
+  /**
+   * Fabrique l'image de la course et la fait sortir de l'application.
+   *
+   * Elle ne demande ni code, ni adversaire, ni nom : le partage textuel qui
+   * vit plus bas a besoin d'un defi cree, celui-ci n'a besoin que d'un chrono.
+   * C'est la raison d'etre du bouton — un joueur qui vient de courir seul
+   * n'avait jusqu'ici rien a montrer.
+   */
+  async function partagerMaCourse() {
+    setAffiche('fabrique');
+    const sortie = await partagerAffiche({
+      chronoMs: runTime * 1000,
+      epreuves: shotRaces,
+      nom: name || undefined,
+      // Le fantome ne s'affiche que s'il a vraiment couru : `ghostTime` vaut
+      // zero hors d'un defi, et un ecart calcule dessus annoncerait une
+      // avance de neuf secondes sur personne.
+      fantomeNom: challenge ? ghostName : undefined,
+      fantomeMs: challenge && ghostTime > 0 ? ghostTime * 1000 : null,
+    });
+    setAffiche(sortie);
+    // L'aveu revient au repos tout seul : ce n'est pas un etat durable, et un
+    // « image enregistree » qui reste affiche jusqu'a la course suivante finit
+    // par parler d'un fichier que le joueur a oublie.
+    setTimeout(() => setAffiche('repos'), 3200);
+  }
   const beaten = !!challenge && complete && runTime < ghostTime;
 
   /**
@@ -889,6 +928,42 @@ export function OneShotEndScreen() {
             </p>
           )}
 
+          {/* PARTAGER MA COURSE — une image, pas un code.
+              Le partage qui vit plus haut envoie du texte : un code a six
+              lettres dans une conversation ne ressemble a rien et personne ne
+              le republie. Celui-ci sort une image de la course, et il ne
+              demande ni defi ni adversaire — seulement un chrono.
+
+              Il ne s'affiche donc pas aux memes conditions que le reste : une
+              course non terminee ou un faux depart n'ont pas de chrono a
+              montrer, et le bouton disparait plutot que de produire une image
+              qui annoncerait un temps qui n'existe pas. */}
+          {complete && !falseOut && runTime > 0 && (
+            <div className="flex flex-col items-center gap-1.5 w-full max-w-md mt-1">
+              <button
+                onClick={partagerMaCourse}
+                disabled={affiche === 'fabrique'}
+                className="w-full py-2.5 md:py-3 rounded-xl font-black font-display tracking-widest
+                           text-xs md:text-sm text-primary bg-primary/10 border border-primary/30
+                           hover:bg-primary/20 disabled:opacity-50 disabled:pointer-events-none
+                           transition-colors flex items-center justify-center gap-2"
+              >
+                {affiche === 'fabrique'
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <ImageDown className="w-4 h-4" />}
+                {affiche === 'fabrique' ? N.t('affiche_making') : N.t('affiche_share')}
+              </button>
+              {/* Ce qui s'est reellement passe. « Enregistre » et « envoye » ne
+                  se disent pas au meme moment, et le module rend lequel des
+                  deux a eu lieu precisement pour qu'on ne devine pas. */}
+              <p className="text-center text-[9px] md:text-[10px] text-muted-foreground leading-snug">
+                {affiche === 'telechargement' ? N.t('affiche_saved')
+                  : affiche === 'echec' ? N.t('affiche_failed')
+                  : N.t('affiche_hint')}
+              </p>
+            </div>
+          )}
+
           {/* RECOMMENCER — le raccourci, et la raison de tout ce qui suit.
               Ce que les joueurs demandaient n'etait pas d'effacer un chrono
               mais d'en relancer un : apres un faux depart ou une course ratee,
@@ -901,7 +976,7 @@ export function OneShotEndScreen() {
               juste en dessous, a cote du bouton et non a sa place. */}
           <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
             {RECOMMENCER_OUVERT && <button
-              onClick={() => SprinterApp.recommencer()}
+              onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
               className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
                          border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
@@ -957,7 +1032,10 @@ export function OneShotEndScreen() {
         </motion.div>
       </div>
 
-      {voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
+      {/* voirDuels ne peut devenir vrai que par le bouton lui-meme ferme tant
+          que DUELS_OUVERTS vaut false ; le repeter ici est ce qui permet au
+          bundler de le prouver sans suivre l'etat a l'execution. */}
+      {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
                                  epreuves={shotRaces as string[]} />}
     </div>
   );
