@@ -109,9 +109,13 @@ const p3 = trois[0].presentation;
 ok('la presentation annonce trois participants', p3 && p3.ordre.length === 3,
    p3 ? String(p3.ordre.length) : 'aucune');
 if (p3) {
+  // Le creneau vaut trois secondes quel que soit le nombre de partants : a
+  // trois, la sequence entiere tient donc en neuf secondes.
+  ok('trois secondes par athlete', p3.par === 3000, `${p3.par} ms`);
   ok('le pistolet suit les trois presentations',
      trois[0].depart === p3.debut_a + 3 * p3.par + 4000,
      `${trois[0].depart} vs ${p3.debut_a + 3 * p3.par + 4000}`);
+  console.log(`   presentation ${(3 * p3.par) / 1000} s, puis 4 s avant le pistolet`);
 }
 
 console.log('\n── LE VERDICT A TROIS ──────────────────────────────────────');

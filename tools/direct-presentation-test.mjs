@@ -82,6 +82,9 @@ if (a.presentation && b.presentation) {
   ok('meme ordre, au champ pres', JSON.stringify(pa.ordre) === JSON.stringify(pb.ordre));
   ok('la fenetre micro tient dans le creneau', pa.micro <= pa.par,
      `${pa.micro} > ${pa.par}`);
+  // Trois secondes par athlete, et la meme valeur a deux comme a huit : le
+  // creneau ne se resserre plus avec le nombre de partants.
+  ok('trois secondes par athlete', pa.par === 3000, `${pa.par} ms`);
   ok('deux participants annonces', pa.ordre.length === 2, pa.ordre.length + '');
   ok("l'hote passe en premier", pa.ordre[0] && pa.ordre[0].id === a.moi);
   ok('les couloirs sont numerotes a partir de 1',

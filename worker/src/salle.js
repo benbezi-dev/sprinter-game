@@ -50,29 +50,43 @@ const AVANT_DEPART_MS = 4000;
 // comme un signal : comme le depart, la presentation est une date absolue et
 // chacun compte avec sa propre horloge recalee.
 const AVANT_PRESENTATION_MS = 1500;
-// Le cahier des charges demande 5 a 8 secondes par participant ; six laissent
-// le temps de lire un pseudo et d'entendre une phrase sans que l'attente ne
-// pese. A deux, cela fait douze secondes : parfait.
-const PRESENTATION_PAR_JOUEUR_MS = 6000;
-// A huit, cela ferait quarante-huit secondes avant le coup de pistolet, et
-// personne n'attend quarante-huit secondes pour courir dix. On plafonne donc la
-// sequence entiere : le creneau de chacun se resserre a mesure qu'il y a du
-// monde, sans jamais descendre sous le seuil ou l'on n'a plus le temps de lire
-// un nom.
-const PRESENTATION_TOTAL_MAX_MS = 24000;
-const PRESENTATION_MIN_MS = 3000;
+/**
+ * TROIS SECONDES PAR ATHLETE, quel que soit le nombre de partants.
+ *
+ * Le cahier des charges d'origine demandait cinq a huit secondes. Le creneau
+ * valait donc six, resserre par un plafond sur la sequence entiere : douze
+ * secondes a deux, dix-huit a trois, vingt-quatre des quatre et au-dela. Deux
+ * defauts, et le second est le pire :
+ *
+ * - c'etait long. Personne n'attend une demi-minute pour courir dix secondes,
+ *   et le mode ou l'on relance quatre fois de suite le payait a chaque fois.
+ * - c'etait imprevisible. La duree d'un creneau dependait du nombre de
+ *   partants, si bien qu'on ne pouvait pas apprendre le rythme de la
+ *   sequence : elle etait lente a deux et pressee a huit.
+ *
+ * Trois secondes pour tout le monde repond aux deux. C'est ce qu'il faut pour
+ * lire un nom, voir l'athlete lever les bras et l'entendre — c'etait deja le
+ * plancher que le resserrement visait a huit — et la sequence entiere devient
+ * une simple multiplication : six secondes a deux, vingt-quatre a huit, la ou
+ * il y a effectivement huit personnes a montrer.
+ */
+const PRESENTATION_PAR_JOUEUR_MS = 3000;
 // La fenetre micro tient dans le creneau du participant, pas a cheval dessus :
-// sans quoi on parlerait encore pendant la presentation du suivant. Elle se
-// resserre avec lui, en gardant de quoi enchainer.
+// sans quoi on parlerait encore pendant la presentation du suivant. C'est donc
+// le creneau qui la borne — 2 200 ms sur les 3 000 — et le plafond de cinq
+// secondes ne sert plus que de garde-fou si le creneau s'allongeait un jour.
 const PRESENTATION_MICRO_MS = 5000;
 const MICRO_MARGE_MS = 800;
 
-/** Le creneau de chacun, selon le nombre de partants. */
-function creneauPresentation(n) {
-  if (n <= 1) return PRESENTATION_PAR_JOUEUR_MS;
-  return Math.max(PRESENTATION_MIN_MS,
-                  Math.min(PRESENTATION_PAR_JOUEUR_MS,
-                           Math.round(PRESENTATION_TOTAL_MAX_MS / n)));
+/**
+ * Le creneau de chacun.
+ *
+ * Il ne depend plus du nombre de partants ; la fonction reste parce que la
+ * salle annonce cette duree au client, qui compte avec, et parce qu'un creneau
+ * qui redeviendrait variable se recalculerait ici, a un seul endroit.
+ */
+function creneauPresentation() {
+  return PRESENTATION_PAR_JOUEUR_MS;
 }
 // Bornes de credibilite d'un chrono annonce par un client.
 const MIN_MS = 1000, MAX_MS = 20 * 60000;
@@ -151,9 +165,9 @@ export class SalleDirecte {
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
       presentation: this.presentationA ? {
         debut_a: this.presentationA,
-        par: creneauPresentation(this.ordre.length),
+        par: creneauPresentation(),
         micro: Math.min(PRESENTATION_MICRO_MS,
-                        creneauPresentation(this.ordre.length) - MICRO_MARGE_MS),
+                        creneauPresentation() - MICRO_MARGE_MS),
         ordre: this.ordre,
       } : null,
     };
@@ -322,7 +336,7 @@ export class SalleDirecte {
           this.departA = seul
             ? Date.now() + AVANT_DEPART_MS
             : this.presentationA
-              + this.ordre.length * creneauPresentation(this.ordre.length)
+              + this.ordre.length * creneauPresentation()
               + AVANT_DEPART_MS;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
