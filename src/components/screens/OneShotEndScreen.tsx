@@ -326,6 +326,27 @@ export function OneShotEndScreen() {
     (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
   const maLigne = classement.find(x => x.id === liveResultat?.moi) || null;
 
+  /**
+   * UN SEUL COULOIR : ce n'est plus une course, c'est un tour de piste seul.
+   *
+   * La salle rend le meme message qu'a huit — un ordre d'arrivee — et cet ecran
+   * l'aurait affiche tel quel : « 1re sur 1 partants », un classement d'une
+   * ligne, et un ton de victoire pour avoir battu personne. Rien de faux, et
+   * rien qui veuille dire quelque chose. On repasse donc par l'affichage
+   * ordinaire du one-shot : le chrono, les splits, le classement mondial —
+   * c'est-a-dire tout ce que cette course-la avait vraiment en jeu.
+   *
+   * Deux sources, et il en faut deux. Le resultat de la salle tranche des
+   * qu'il arrive ; mais cet ecran s'affiche AUSSI sans lui — un faux depart le
+   * montre avant que la salle n'ait rendu son verdict — et c'est precisement
+   * la qu'il ne faut pas annoncer un duel perdu a quelqu'un qui courait seul.
+   * La piste, elle, sait tout de suite : un direct a un couloir n'a arme aucun
+   * adversaire, `lives` y est vide.
+   */
+  const seul = !!liveOn && (liveResultat
+    ? (!duo && classement.length <= 1)
+    : ((SprinterApp.G.lives?.size || 0) === 0 && !SprinterApp.G.ghost));
+
   const liveGagne = duo
     ? ((monRole === 'hote' && liveResultat.issue === 'challenger') ||
        (monRole === 'invite' && liveResultat.issue === 'opponent'))
@@ -341,7 +362,7 @@ export function OneShotEndScreen() {
   // Un faux depart en duel est une defaite meme sans chrono : c'est justement
   // la ou la vanne tombe le mieux.
   const issue: 'gagne' | 'perdu' | null =
-      live ? (liveGagne ? 'gagne' : liveNul ? null : 'perdu')
+      live && !seul ? (liveGagne ? 'gagne' : liveNul ? null : 'perdu')
     : challenge ? (falseOut ? 'perdu'
                  : duel ? (duel.issue === 'opponent' ? 'gagne'
                          : duel.issue === 'draw' ? null : 'perdu')
@@ -361,7 +382,13 @@ export function OneShotEndScreen() {
     // ici, sans defi recu ni envoye. Sans cette ligne elle passait entre les
     // autres verrous et proposait de rejouer un duel deja tranche par la
     // salle, contre quelqu'un qui a couru au meme instant.
-    courseEnDirect: !!liveOn,
+    //
+    // Sauf a un couloir : il n'y a alors personne en face, donc rien de
+    // definitif et personne a qui perdre. C'est ce que dit le commentaire de
+    // fauxDepartEstUneDefaite, et le laisser a `true` y aurait fait revenir
+    // exactement le mensonge qu'il decrit — « eliminé, le duel est perdu »
+    // affiche a quelqu'un qui courait seul.
+    courseEnDirect: !!liveOn && !seul,
     defiRecu: !!challenge,
     defiEnvoye: !!code,
     fauxDepart: falseOut,
@@ -383,12 +410,12 @@ export function OneShotEndScreen() {
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
             <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
-              ${falseOut || (challenge && !beaten) || (live && !liveGagne && !liveNul)
-                ? 'text-destructive' : live && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
+              ${falseOut || (challenge && !beaten) || (live && !seul && !liveGagne && !liveNul)
+                ? 'text-destructive' : live && !seul && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
               {falseOut ? N.t('false_out')
-                : live && !duo && maLigne
+                : live && !duo && !seul && maLigne
                   ? `${N.ord(maLigne.place)} ${N.t('live_sur', { n: classement.length })}`
-                : live ? N.t(liveGagne ? 'live_won' : liveNul ? 'live_tie' : 'live_lost')
+                : live && !seul ? N.t(liveGagne ? 'live_won' : liveNul ? 'live_tie' : 'live_lost')
                 : challenge ? N.t(beaten ? 'challenge_won' : 'challenge_lost')
                 : N.t('oneshot_done')}
             </h1>
@@ -453,7 +480,7 @@ export function OneShotEndScreen() {
               course est son ordre d'arrivee. Rien au classement des duels —
               le bareme est fait pour une paire — mais il fallait bien montrer
               qui a gagne, ce qui ne se faisait nulle part. */}
-          {live && !duo && classement.length > 0 && (
+          {live && !duo && !seul && classement.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
@@ -498,7 +525,7 @@ export function OneShotEndScreen() {
               Elle existait pour le defi differe et manquait ici, alors que
               c'est le moment ou elle porte le plus : l'autre vient de nous
               battre en meme temps que nous, et il est encore la. */}
-          {live && !liveGagne && !liveNul && (
+          {live && !seul && !liveGagne && !liveNul && (
             <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
                             px-4 py-3 flex flex-col items-center gap-1.5">
               <p className="text-sm md:text-base text-foreground text-center leading-snug">

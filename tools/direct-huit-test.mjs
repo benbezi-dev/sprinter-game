@@ -84,6 +84,7 @@ ok('la presentation annonce huit participants', p && p.ordre.length === 8,
    p ? String(p.ordre.length) : 'aucune');
 if (p) {
   const attendu = p.debut_a + 8 * p.par + 4000;
+  ok('trois secondes par athlete', p.par === 3000, `${p.par} ms`);
   ok('la sequence entiere tient sous trente secondes', 8 * p.par <= 30000,
      `${(8 * p.par) / 1000} s`);
   ok('le pistolet suit les huit presentations', cl[0].depart === attendu,

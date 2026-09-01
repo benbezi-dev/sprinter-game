@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
+  COULOIRS,
   type EtatSalle, type JoueurSalle, type Presentation,
 } from '@/game/live';
 import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
@@ -46,12 +47,19 @@ export function LivePanel() {
   /**
    * Combien de couloirs sur cette piste.
    *
-   * Deux, c'est un duel : un vainqueur, un perdant, des points qui changent de
-   * main. Trois ou plus, c'est une course : un classement, et rien au
-   * classement des duels — le bareme est fait pour une paire.
+   * Un, c'est un tour de piste seul : le stade, la video, et personne a
+   * attendre. Deux, c'est un duel : un vainqueur, un perdant, des points qui
+   * changent de main. Trois ou plus, c'est une course : un classement, et rien
+   * au classement des duels — le bareme est fait pour une paire.
    *
    * Huit est le nombre de couloirs d'une piste, et donc le format d'une serie
    * de championnat.
+   *
+   * Toutes les tailles intermediaires existent, impaires comprises. On n'en
+   * proposait que quatre — deux, quatre, six, huit — et cela paraissait suffire
+   * jusqu'a ce qu'on soit trois : il fallait alors ouvrir une piste a quatre et
+   * attendre un quatrieme qui n'existait pas. Le depart n'arrive que quand tous
+   * les couloirs sont pris, donc cette course-la ne partait jamais.
    */
   const [places, setPlaces] = useState(2);
 
@@ -335,7 +343,25 @@ export function LivePanel() {
 
   const msg = code ? N.t('live_invite', { c: code, l: lienSalle(code) }) : '';
   const joueurs: JoueurSalle[] = salon?.joueurs || [];
-  const complet = joueurs.length >= 2;
+  /**
+   * La taille de la piste vient de la SALLE, pas du selecteur.
+   *
+   * Celui qui rejoint n'a rien choisi : la piste etait deja formee quand il est
+   * arrive, et son propre selecteur est reste sur deux. C'est `max` qui fait
+   * foi de part et d'autre, et le selecteur ne sert que le temps d'ouvrir.
+   */
+  const taille = salon?.max || places;
+  /**
+   * Pleine, donc prete a partir.
+   *
+   * On lisait « au moins deux », ce qui etait vrai tant que le duel etait le
+   * seul format. Sur une piste plus large, le bouton PRET s'allumait des le
+   * deuxieme arrive alors que la salle, elle, attend que tous les couloirs
+   * soient pris : on pouvait se declarer pret et ne rien voir se passer.
+   */
+  const complet = joueurs.length >= taille;
+  /** Les couloirs encore libres, pour les montrer tels quels. */
+  const libres = Math.max(0, taille - joueurs.length);
 
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
@@ -368,17 +394,23 @@ export function LivePanel() {
 
         {/* Le nombre de couloirs. Il ne se choisit qu'a l'ouverture : le
             changer une fois la piste formee ferait entrer ou sortir des gens
-            d'une course deja commencee. */}
-        <div className="flex items-center gap-2">
-          <span className="text-[9px] tracking-widest text-muted-foreground shrink-0">
+            d'une course deja commencee.
+
+            Un a huit, un par un. Les huit tiennent sur une ligne, ce qui evite
+            d'avoir a choisir lesquels montrer — et le seul choix qu'on avait
+            fait, les tailles paires, tombait exactement sur le cas le plus
+            courant apres le duel : etre trois. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9px] tracking-widest text-muted-foreground text-center">
             {N.t('live_lanes')}
           </span>
-          <div className="flex gap-1 flex-1">
-            {[2, 4, 6, 8].map(n => (
+          <div className="grid grid-cols-8 gap-1">
+            {COULOIRS.map(n => (
               <button
                 key={n}
                 onClick={() => setPlaces(n)}
-                className={`flex-1 py-1.5 rounded-lg font-mono font-bold text-xs transition-all border
+                aria-pressed={places === n}
+                className={`py-1.5 rounded-lg font-mono font-bold text-xs transition-all border
                   ${places === n
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
                     : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/5'}`}
@@ -389,7 +421,9 @@ export function LivePanel() {
           </div>
         </div>
         <p className="text-[9px] text-muted-foreground/70 text-center leading-snug -mt-1">
-          {N.t(places === 2 ? 'live_lanes_duel' : 'live_lanes_course')}
+          {N.t(places === 1 ? 'live_lanes_seul'
+             : places === 2 ? 'live_lanes_duel'
+             : 'live_lanes_course', { n: places })}
         </p>
 
         <input
@@ -481,7 +515,7 @@ export function LivePanel() {
       {!complet && (
         <>
           <p className="text-[10px] md:text-xs text-muted-foreground text-center">
-            {N.t('live_waiting')}
+            {N.t('live_waiting', { n: taille })}
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
             <a href={whatsappUrl(msg)} target="_blank" rel="noopener noreferrer"
@@ -510,24 +544,42 @@ export function LivePanel() {
       )}
 
       <div className="flex flex-col gap-1.5">
-        {joueurs.map(j => (
+        {joueurs.map((j, i) => (
           <div key={j.id}
-               className={`flex items-center justify-between px-3 py-2 rounded-xl border
+               className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl border
                  ${j.pret ? 'border-emerald-400/40 bg-emerald-400/[0.08]' : 'border-white/10 bg-black/25'}`}>
-            <span className="text-xs md:text-sm font-bold tracking-wide text-foreground truncate">
-              {j.nom}{j.hote ? ' ·' : ''}
+            <span className="flex items-center gap-2 min-w-0">
+              {/* Le couloir, puisqu'il y en a maintenant jusqu'a huit : c'est
+                  la que l'on se cherchera des l'entree sur la piste. */}
+              <span className="font-mono text-[10px] w-4 shrink-0 text-center text-muted-foreground">
+                {j.couloir || i + 1}
+              </span>
+              <span className="text-xs md:text-sm font-bold tracking-wide text-foreground truncate">
+                {j.nom}{j.hote ? ' ·' : ''}
+              </span>
             </span>
-            <span className={`text-[9px] md:text-[10px] font-bold tracking-widest
+            <span className={`text-[9px] md:text-[10px] font-bold tracking-widest shrink-0
               ${j.pret ? 'text-emerald-400' : 'text-muted-foreground'}`}>
               {N.t(j.pret ? 'live_ready' : 'live_notready')}
             </span>
           </div>
         ))}
-        {joueurs.length < 2 && (
-          <div className="flex items-center justify-center px-3 py-2 rounded-xl border border-dashed border-white/15 text-[10px] text-muted-foreground">
-            {N.t('live_empty_seat')}
+        {/* Un couloir vide par couloir vide. Il n'y en avait qu'un, dessine
+            des qu'on etait seul : sur une piste a six, on ne voyait pas les
+            quatre places qui manquaient encore.
+
+            La phrase ne se lit qu'une fois, sur le premier couloir libre. Sur
+            les suivants elle ne dirait rien de plus que le trait pointille, et
+            cinq fois la meme ligne se lit comme une erreur d'affichage. */}
+        {Array.from({ length: libres }, (_, i) => (
+          <div key={`libre-${i}`}
+               className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-white/15 text-[10px] text-muted-foreground">
+            <span className="font-mono w-4 shrink-0 text-center">
+              {joueurs.length + i + 1}
+            </span>
+            <span className="truncate">{i === 0 ? N.t('live_empty_seat') : ''}</span>
           </div>
-        )}
+        ))}
       </div>
 
       <button

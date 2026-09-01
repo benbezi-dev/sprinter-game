@@ -225,11 +225,13 @@
     live_join:       ['REJOINDRE', 'JOIN'],
     live_or:         ['ou', 'or'],
     live_room:       ['PISTE OUVERTE', 'TRACK OPEN'],
-    live_waiting:    ['envoie ce code à ton adversaire — la course part quand vous êtes deux',
-                      'send this code to your opponent — the race starts once you are two'],
+    live_waiting:    ['envoie ce code — la course part quand les {n} couloirs sont pris',
+                      'send this code — the race starts once all {n} lanes are taken'],
     live_ready:      ['PRÊT', 'READY'],
     live_notready:   ['PAS ENCORE', 'NOT YET'],
-    live_empty_seat: ['couloir libre — en attente d’un adversaire', 'lane free — waiting for an opponent'],
+    // Le numero du couloir est dessine a cote : la phrase n'a plus a le
+    // repeter, elle dit seulement ce qui manque.
+    live_empty_seat: ['libre — en attente d’un coureur', 'free — waiting for a runner'],
     live_go:         ['JE SUIS PRÊT', 'I AM READY'],
     live_unready:    ['ANNULER', 'CANCEL'],
     live_leave:      ['quitter la piste', 'leave the track'],
@@ -319,10 +321,12 @@
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
     champ_quitter:   ['quitter le championnat', 'leave the championship'],
     live_lanes:      ['COULOIRS', 'LANES'],
+    live_lanes_seul: ['un tour de piste seul : le stade, le chrono, et personne à attendre',
+                      'a lap on your own: the stadium, the clock, and nobody to wait for'],
     live_lanes_duel: ['un duel : le vainqueur prend des points, le perdant en rend',
                       'a duel: the winner takes points, the loser gives some back'],
-    live_lanes_course: ['une course : un classement à l’arrivée, sans points au classement des duels',
-                        'a race: a finishing order, no points on the duel ranking'],
+    live_lanes_course: ['une course à {n} : un classement à l’arrivée, sans points au classement des duels',
+                        'a {n}-runner race: a finishing order, no points on the duel ranking'],
     live_won:        ['COURSE GAGNÉE', 'RACE WON'],
     // Au-dela de deux couloirs, une course en direct n'est plus un duel : on
     // annonce une place et un ordre d'arrivee, pas un vainqueur et un perdant.
