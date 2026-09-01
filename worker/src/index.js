@@ -3,6 +3,7 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
 } from './duels.js';
 import { poserMot, MAX_TEXTE } from './mot.js';
+import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
@@ -339,22 +340,6 @@ async function ensurePlayerTables(db) {
   try { await db.prepare(`ALTER TABLE players ADD COLUMN insta TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
   joueursReady.add(db);
-}
-
-/**
- * Un pseudo Instagram, nettoye.
- *
- * On accepte ce qu'Instagram accepte — lettres, chiffres, point, tiret bas,
- * trente caracteres — et on retire l'arobase que les gens collent par habitude
- * ainsi qu'une URL complete si elle a ete copiee depuis le navigateur.
- */
-function cleanInsta(brut) {
-  let s = String(brut || '').trim();
-  if (!s) return '';
-  s = s.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '');
-  s = s.replace(/[/?#].*$/, '');
-  s = s.replace(/^@+/, '');
-  return /^[A-Za-z0-9._]{1,30}$/.test(s) ? s : null;   // null = saisie refusee
 }
 
 /** Cet appareil a-t-il le droit d'ecrire sous ce nom ? */
@@ -1327,7 +1312,7 @@ export default {
       const key = cleanName(name).trim().toLowerCase();
       if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
 
-      const propre = cleanInsta(insta);
+      const propre = nettoyerInsta(insta);
       if (propre === null) return json({ error: 'pseudo invalide' }, 400);
 
       await ensurePlayerTables(env.DB);

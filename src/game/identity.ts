@@ -6,6 +6,7 @@
 // ecran de consentement.
 
 import { getDeviceId, getSavedName } from './leaderboard';
+import { nettoyerInsta } from './insta';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const CODE_KEY = 'sprinter_recovery_code';
@@ -75,16 +76,23 @@ export async function linkDevice(name: string, code: string): Promise<LinkResult
  * L'API qui permettait une vraie connexion Instagram pour un compte personnel
  * a ete retiree par Meta fin 2024 ; ce qui subsiste ne vaut que pour les
  * comptes professionnels et demande une revue d'application. D'ou ce choix.
+ *
+ * On accepte le pseudo sous la forme ou le joueur l'a sous la main : avec son
+ * arobase, sans, ou en collant le lien du profil. Le nettoyage se fait ici
+ * avant l'envoi — le serveur refait le meme, mais autant refuser tout de
+ * suite ce qui n'ira pas plutot que d'attendre un aller-retour pour le dire.
  */
 export async function lierInstagram(insta: string): Promise<
   { etat: 'ok'; insta: string | null } | { etat: 'invalide' | 'pas-a-toi' | 'sans-nom' | 'erreur' }
 > {
+  const propre = nettoyerInsta(insta);
+  if (propre === null) return { etat: 'invalide' };
   try {
     const res = await fetch(`${API_BASE}/profil`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        device_id: getDeviceId(), name: getSavedName(), insta,
+        device_id: getDeviceId(), name: getSavedName(), insta: propre,
       }),
     });
     const d = await res.json().catch(() => ({}));
@@ -108,7 +116,14 @@ export async function instagramDe(nom: string): Promise<string | null> {
   }
 }
 
-/** Le lien vers un profil Instagram. */
+/**
+ * Le lien vers un profil Instagram.
+ *
+ * On renettoie au passage : un pseudo enregistre avant que l'arobase soit
+ * acceptee partout pourrait en avoir garde une, et « instagram.com/@moi »
+ * n'ouvre aucun profil.
+ */
 export function lienInstagram(insta: string): string {
-  return `https://instagram.com/${encodeURIComponent(insta)}`;
+  const propre = nettoyerInsta(insta) || String(insta || '');
+  return `https://instagram.com/${encodeURIComponent(propre)}`;
 }
