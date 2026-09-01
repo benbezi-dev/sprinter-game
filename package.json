@@ -7,7 +7,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "tableau": "node suivi/servir.mjs"
+    "tableau": "node suivi/servir.mjs",
+    "android:sync": "npm run build && npx cap sync android",
+    "android:ouvrir": "npm run android:sync && npx cap open android",
+    "android:aab": "npm run android:sync && cd android && ./gradlew bundleRelease",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

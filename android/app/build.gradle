@@ -1,5 +1,38 @@
 apply plugin: 'com.android.application'
 
+/**
+ * La signature de publication.
+ *
+ * Play n'accepte qu'un paquet signe, et la cle qui le signe est ce qui prouve
+ * qu'une mise a jour vient bien de nous. Elle ne peut donc pas vivre dans le
+ * depot : les secrets sont lus depuis `android/keystore.properties`, ignore par
+ * git, et le trousseau lui-meme est range hors du projet.
+ *
+ * Sans ce fichier, rien ne casse — le build de debogage continue de tourner et
+ * `bundleRelease` produit simplement un paquet non signe. C'est voulu : un
+ * clone frais doit compiler sans avoir a fabriquer une cle d'abord.
+ */
+def fichierCles = rootProject.file('keystore.properties')
+def cles = new Properties()
+if (fichierCles.exists()) {
+    fichierCles.withInputStream { cles.load(it) }
+}
+
+// On ne se contente pas de l'existence du fichier : un `keystore.properties`
+// a moitie rempli — le cas normal juste apres l'avoir copie du modele — ferait
+// echouer `bundleRelease` sur une erreur de mot de passe illisible. On verifie
+// donc que le trousseau est vraiment la et que les deux mots de passe sont
+// renseignes, et sinon on produit un paquet non signe en le disant.
+def signaturePrete = fichierCles.exists() &&
+        cles['storeFile'] && cles['keyAlias'] &&
+        cles['storePassword'] && cles['keyPassword'] &&
+        file(cles['storeFile']).exists()
+
+if (fichierCles.exists() && !signaturePrete) {
+    logger.warn("Sprinter : android/keystore.properties est incomplet ou le trousseau est introuvable. " +
+                "Le paquet de publication sortira NON SIGNE et Play le refusera.")
+}
+
 android {
     namespace = "dev.benbezi.sprinter"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +49,24 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Renseignes seulement si le fichier existe : y toucher sans lui
+            // ferait echouer la configuration du projet, y compris pour un
+            // simple build de debogage.
+            if (signaturePrete) {
+                storeFile file(cles['storeFile'])
+                storePassword cles['storePassword']
+                keyAlias cles['keyAlias']
+                keyPassword cles['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signaturePrete) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
