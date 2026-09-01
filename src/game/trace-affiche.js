@@ -462,15 +462,19 @@ export function dessinerCourse(cv, course) {
 
   empiler(blocs, haut, bas);
 
-  // L'adresse, en bas : une story se regarde hors de tout contexte, et sans
-  // elle l'image ne dit pas ou l'on joue. C'est la seule ligne de cette image
-  // qui serve a autre chose qu'a raconter la course.
+  // Le compte, en bas : une story se regarde hors de tout contexte, et sans
+  // cette ligne l'image ne dit pas ou retrouver le jeu. C'est la seule de
+  // l'image qui serve a autre chose qu'a raconter la course.
+  //
+  // Le nom du compte plutot que l'adresse du site : une story se regarde DANS
+  // Instagram, ou une adresse ne se clique pas et ne se recopie pas — tandis
+  // qu'un @ se cherche d'un geste, sans quitter l'application.
   c.save();
   c.fillStyle = 'rgba(255,255,255,0.30)';
   c.font = `600 ${T(0.026)}px Outfit, sans-serif`;
   c.textAlign = 'center'; c.textBaseline = 'middle';
   c.letterSpacing = `${T(0.004)}px`;
-  c.fillText('sprinter-game.com', cx, H - Math.round(H * 0.088));
+  c.fillText('@sprintergame', cx, H - Math.round(H * 0.088));
   c.restore();
 
   poserPied(c, L, H, marge);
