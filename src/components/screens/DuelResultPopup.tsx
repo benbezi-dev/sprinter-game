@@ -235,7 +235,7 @@ export function DuelResultPopup() {
               // Une phrase ecrite par le jeu vaut mieux que rien, mais elle
               // n'a jamais valu la vraie voix de celui qui vient de gagner.
               jeRecoisUnMot ? (
-                <LireLeMot texte={duel.mot} voix={duel.voix}
+                <LireLeMot duel={duel.id} texte={duel.mot} voix={duel.voix}
                            voixType={duel.voix_type} auteur={duel.adversaire} />
               ) : (
                 <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]

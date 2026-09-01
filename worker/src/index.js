@@ -35,6 +35,10 @@ import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
+import {
+  signaler, bloquer, debloquer, listeBloques, estBanni,
+  nombreEnAttente, listeSignalements, trancher, cleDe, MOTIFS,
+} from './moderation.js';
 
 /**
  * Portes du relais et des championnats.
@@ -1124,6 +1128,13 @@ export default {
       if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
       const cle = String(name || '').trim().toLowerCase();
       if (!cle) return json({ error: 'nom requis' }, 400);
+
+      // Un banni ne depose plus. La sanction porte sur la personne et pas sur
+      // un message : on l'arrete donc a l'entree, avant meme de regarder si la
+      // rencontre lui appartient. Le refus reste vague a dessein — detailler
+      // le motif ici n'aiderait qu'a chercher le contournement.
+      if (await estBanni(env.DB, cle)) return json({ error: 'depot refuse' }, 403);
+
       await ensureDuelTables(env.DB);
       const r = await poserMot(env.DB, {
         id: code, cle, texte, voix, voixType: voix_type,
@@ -1161,6 +1172,16 @@ export default {
     // le lire par une requete bien tournee.
     const perdant = r => r.outcome === 'opponent' ? 'challenger'
                        : r.outcome === 'challenger' ? 'opponent' : null;
+
+    // Qui a ecrit le mot d'une rencontre : toujours l'autre cote que celui
+    // qui le lit.
+    const auteurDuMot = r => cleDe(
+      r.role === 'challenger' ? r.opponent_key : r.challenger_key);
+
+    // Ce mot doit-il partir ? Deux conditions, et elles ne se remplacent pas :
+    // il faut etre le destinataire, ET ne pas avoir bloque celui qui parle.
+    const motLisible = (r, bloques) =>
+      perdant(r) === r.role && !bloques.has(auteurDuMot(r));
 
     // Resultats des defis que J'AI lances. Celui qui releve voit son duel se
     // trancher a l'arrivee ; celui qui a lance, lui, avait deja range son
@@ -1240,6 +1261,15 @@ export default {
              motOuvert(canal) ? 1 : 0, device_id, nom, nom,
              motOuvert(canal) ? 1 : 0, nom, nom).all();
 
+      // CE QU'ON A BLOQUE N'ARRIVE PAS.
+      //
+      // Le filtrage se fait ici plutot que dans la requete au-dessus : celle-ci
+      // porte trois branches et une regle de reapparition qu'on ne veut pas
+      // reecrire pour si peu. Le mot est retire du service, pas de la base —
+      // debloquer quelqu'un doit pouvoir rendre ce qu'il avait dit, et un
+      // blocage n'est pas un verdict.
+      const bloques = new Set(await listeBloques(env.DB, nom));
+
       return json({
         results: (results || []).map(r => ({
           id: r.challenge_id,
@@ -1254,10 +1284,12 @@ export default {
           lp: r.role === 'challenger' ? (r.lp_challenger ?? 0) : (r.lp_opponent ?? 0),
           mon_ms: r.role === 'challenger' ? r.challenger_ms : r.opponent_ms,
           son_ms: r.role === 'challenger' ? r.opponent_ms : r.challenger_ms,
-          // Le mot ne part qu'a celui a qui il est destine : le perdant.
-          mot: perdant(r) === r.role ? (r.mot || null) : null,
-          voix: perdant(r) === r.role ? (r.voix || null) : null,
-          voix_type: perdant(r) === r.role ? (r.voix_type || null) : null,
+          // Le mot ne part qu'a celui a qui il est destine : le perdant, et
+          // seulement s'il n'a pas bloque celui qui l'a ecrit. L'auteur d'un
+          // mot est toujours l'autre cote de la rencontre.
+          mot: motLisible(r, bloques) ? (r.mot || null) : null,
+          voix: motLisible(r, bloques) ? (r.voix || null) : null,
+          voix_type: motLisible(r, bloques) ? (r.voix_type || null) : null,
           races: JSON.parse(r.races || '[]'),
           at: r.created_at,
         })),
@@ -1355,6 +1387,62 @@ export default {
       const n = ((r && r.meta && r.meta.changes) || 0) +
                 ((r2 && r2.meta && r2.meta.changes) || 0);
       return json({ ok: true, n });
+    }
+
+    // ----------------------------------------------------------- moderation
+    //
+    // Voir `moderation.js` pour ce que chacun de ces gestes veut dire. Ici on
+    // ne fait que les exposer, et les deux dernieres routes sont fermees a
+    // tout le monde sauf a l'administrateur.
+    if (url.pathname.startsWith('/moderation/')) {
+      const sous = url.pathname.slice('/moderation/'.length);
+
+      // Signaler un mot. Reserve a celui a qui il etait adresse — la
+      // verification vit dans `signaler()`, avec la raison qui l'impose.
+      if (sous === 'signaler' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { duel, device_id, name, motif } = body || {};
+        const r = await signaler(env.DB, {
+          duel, deviceId: device_id, cle: name, motif,
+        });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      // Bloquer, debloquer, et savoir qui on a bloque. Effet immediat, sans
+      // avis de personne : c'est le geste qui protege sans attendre.
+      if ((sous === 'bloquer' || sous === 'debloquer') && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { name, cible } = body || {};
+        const r = sous === 'bloquer'
+          ? await bloquer(env.DB, name, cible)
+          : await debloquer(env.DB, name, cible);
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      if (sous === 'bloques' && request.method === 'GET') {
+        const cles = await listeBloques(env.DB, url.searchParams.get('name'));
+        return json({ bloques: cles, motifs: MOTIFS });
+      }
+
+      // --- a partir d'ici, l'administrateur et personne d'autre
+      if (!estAdmin(request, env)) return json({ error: 'reserve' }, 403);
+
+      if (sous === 'file' && request.method === 'GET') {
+        const tout = url.searchParams.get('tout') === '1';
+        return json({ signalements: await listeSignalements(env.DB, { tout }) });
+      }
+
+      if (sous === 'trancher' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, verdict, bannir, raison } = body || {};
+        const r = await trancher(env.DB, { id, verdict, bannir, raison });
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      return json({ error: 'route inconnue' }, 404);
     }
 
     // ------------------------------------------------------------- identite
@@ -1941,6 +2029,15 @@ export default {
         return { editions: t?.editions || 0, titres: t?.titres || 0 };
       }, null);
 
+      // Combien de signalements attendent d'etre tranches.
+      //
+      // Un nombre, et rien d'autre. Cette route s'ouvre avec `TABLEAU_CLE`,
+      // une cle qui vit dans un navigateur ouvert depuis la page publique du
+      // jeu ; le contenu des signalements — ce qu'une personne a ecrit a une
+      // autre — demande `ADMIN_CLE` et s'obtient sur /moderation/file.
+      const signalements = await bloc(async () => (
+        { en_attente: await nombreEnAttente(DB) }), { en_attente: 0 });
+
       return json({
         // --- contrat d'origine, inchange ---
         visites: {
@@ -1951,6 +2048,7 @@ export default {
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
         parties, reprises, duels, joueurs, geo, relais, championnats,
+        signalements,
         releve_a: now,
       });
     }

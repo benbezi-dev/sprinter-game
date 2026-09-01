@@ -428,6 +428,23 @@
                       'this recording vanishes when you close this window'],
     mot_illisible:   ['ce message ne se lit pas sur cet appareil',
                       'this message will not play on this device'],
+
+    /* Signaler et bloquer. Deux gestes qui ne se confondent pas : signaler
+       s'adresse a un humain qui lira plus tard, bloquer agit tout de suite. */
+    mod_signaler:    ['signaler', 'report'],
+    mod_titre:       ['Pourquoi signales-tu ce mot ?', 'Why are you reporting this?'],
+    mod_explique:    ['Un signalement est lu par quelqu’un. Bloquer, c’est immédiat.',
+                      'A report is read by a person. Blocking takes effect at once.'],
+    mod_insulte:     ['insulte', 'insult'],
+    mod_haine:       ['haine, racisme', 'hate, racism'],
+    mod_sexuel:      ['sexuel', 'sexual'],
+    mod_menace:      ['menace', 'threat'],
+    mod_autre:       ['autre', 'other'],
+    mod_envoye:      ['Signalé. Quelqu’un le lira.', 'Reported. Someone will read it.'],
+    mod_deja:        ['déjà signalé', 'already reported'],
+    mod_bloquer:     ['bloquer {n}', 'block {n}'],
+    mod_bloque:      ['{n} ne pourra plus t’écrire.', '{n} can no longer write to you.'],
+    mod_annuler:     ['annuler', 'cancel'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
