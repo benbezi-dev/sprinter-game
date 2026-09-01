@@ -7,11 +7,23 @@
   "background_color": "#05070d",
   "theme_color": "#05070d",
   "icons": [
-    { "src": "../icons/icon-192.webp", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
-    { "src": "../icons/icon-512.webp", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+    {
+      "src": "../icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "../icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
   ],
-  "id": "/sprinter-game/dashboard/",
-  "scope": "/sprinter-game/dashboard/",
+  "id": "/dashboard/",
+  "scope": "/dashboard/",
   "orientation": "any",
-  "categories": ["utilities"]
+  "categories": [
+    "utilities"
+  ]
 }

@@ -13,16 +13,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <meta name="google" content="notranslate" />
     <title>Sprinter</title>
-    <meta name="description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <meta name="description" content="Jeu d'athlétisme arcade : 100 m, 200 m, 400 m. Six étapes, un seul chrono à battre, et un classement mondial. Gratuit, sans inscription, dans le navigateur." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Sprinter" />
-    <meta property="og:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <!-- Un lien partage dans une conversation vaut par sa vignette : sans elle
+         il ne ressemble a rien et personne ne l'ouvre. Ces balises etaient
+         restees sur le gabarit de l'outil qui a genere le projet — chaque lien
+         du jeu annoncait donc « built on Replit. Update this description ».
+         Les adresses sont absolues : un chemin relatif ne se resout pas dans
+         un aspirateur de vignettes, qui ne charge pas la page. -->
+    <meta property="og:site_name" content="Sprinter" />
+    <meta property="og:locale" content="fr_FR" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://sprinter-game.com/" />
+    <meta property="og:title" content="Sprinter — six étapes, un seul chrono à battre" />
+    <meta property="og:description" content="Jeu d'athlétisme arcade : 100 m, 200 m, 400 m et un classement mondial. Gratuit, sans inscription." />
+    <meta property="og:image" content="https://sprinter-game.com/partage.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SPRINTER — six étapes, un seul chrono à battre. 100 m, 200 m, 400 m." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Sprinter" />
-    <meta name="twitter:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
-    <meta property="og:image" content="/icon-512.png" />
-    <meta name="twitter:image" content="/icon-512.png" />
+    <meta name="twitter:title" content="Sprinter — six étapes, un seul chrono à battre" />
+    <meta name="twitter:description" content="Jeu d'athlétisme arcade : 100 m, 200 m, 400 m et un classement mondial. Gratuit, sans inscription." />
+    <meta name="twitter:image" content="https://sprinter-game.com/partage.png" />
     <meta name="theme-color" content="#0a0f1c" />
     <!-- Avant iOS 16.4, Safari ignorait le champ `display` du manifeste : seule
          cette balise faisait ouvrir l'application en plein ecran depuis
@@ -39,7 +51,13 @@
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Les trois familles que le jeu utilise vraiment (voir --font-display,
+         --font-sans et --font-mono dans src/index.css). Elles arrivaient par un
+         @import en tete de la feuille : le navigateur ne les decouvrait donc
+         qu'apres avoir telecharge et lu tout le CSS, deux allers-retours en
+         file au lieu d'un. Ici elles partent en meme temps que lui.
+         Le lien precedent chargeait Inter, qu'aucune regle n'emploie. -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>
