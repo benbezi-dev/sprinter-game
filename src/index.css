@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+/* Les polices sont demandees depuis index.html, pas ici : un @import n'est
+   decouvert qu'apres le telechargement de la feuille qui le porte, et cette
+   feuille-ci pese 150 ko. Voir le commentaire de index.html. */
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";

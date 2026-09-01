@@ -12,17 +12,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <meta name="google" content="notranslate" />
-    <title>Sprinter</title>
-    <meta name="description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <title>Sprinter — jeu de sprint</title>
+    <!-- Ce bloc est ce que voit quelqu'un a qui on envoie le lien, et il se
+         lit AVANT le jeu : sur WhatsApp, Discord, iMessage ou X, l'apercu est
+         la seule chose qui decide si le lien s'ouvre. Il portait encore le
+         texte d'echafaudage « Sprinter — built on Replit. Update this
+         description to reflect the app. » : chaque partage annoncait donc un
+         projet inacheve, et le jeu perdait au seuil les joueurs que son
+         propre systeme de defis lui amenait.
+
+         Les adresses sont absolues et non relatives : les robots d'apercu de
+         Facebook, X et Discord ne resolvent pas toujours un chemin en /... et
+         retombent alors sur aucune image du tout. -->
+    <meta name="description" content="Jeu de sprint arcade : alterne deux touches, enchaine 100 m, 200 m et 400 m, et remonte six etapes jusqu'a la finale. Ton chrono contre le TOP 500 mondial." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Sprinter" />
-    <meta property="og:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <link rel="canonical" href="https://sprinter-game.com/" />
+    <meta property="og:site_name" content="Sprinter" />
+    <meta property="og:url" content="https://sprinter-game.com/" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:title" content="Sprinter — jeu de sprint" />
+    <meta property="og:description" content="Alterne les deux touches. Six etapes, un seul chrono a battre. 100 m, 200 m, 400 m — gratuit, sans installation." />
     <meta property="og:type" content="website" />
+    <!-- 1200x630 : le format qu'attendent les grandes cartes de partage. Une
+         icone carree de 512 px, annoncee en « summary_large_image », sortait
+         rognee ou reduite a une vignette selon le reseau. -->
+    <meta property="og:image" content="https://sprinter-game.com/partage-1200x630.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Sprinter — jeu de sprint : 100 m, 200 m, 400 m" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Sprinter" />
-    <meta name="twitter:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
-    <meta property="og:image" content="/icon-512.png" />
-    <meta name="twitter:image" content="/icon-512.png" />
+    <meta name="twitter:title" content="Sprinter — jeu de sprint" />
+    <meta name="twitter:description" content="Alterne les deux touches. Six etapes, un seul chrono a battre. 100 m, 200 m, 400 m — gratuit, sans installation." />
+    <meta name="twitter:image" content="https://sprinter-game.com/partage-1200x630.png" />
     <meta name="theme-color" content="#0a0f1c" />
     <!-- Avant iOS 16.4, Safari ignorait le champ `display` du manifeste : seule
          cette balise faisait ouvrir l'application en plein ecran depuis
@@ -39,7 +61,19 @@
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Les trois polices de la charte, demandees ici plutot que par un
+         @import en tete de src/index.css.
+         Un @import n'est decouvert qu'une fois la feuille qui le contient
+         telechargee : le navigateur devait donc recevoir les 150 ko de CSS du
+         jeu (22 ko compresses) AVANT de seulement apprendre l'existence des
+         polices, puis attendre un aller-retour de plus pour leur feuille, un
+         autre pour les fichiers. Demandees depuis le document, elles partent
+         en meme temps que le CSS.
+         Inter, qui etait demandee ici, a ete retiree : aucun jeton ne la nomme
+         (--font-sans vaut Plus Jakarta Sans, --font-display Outfit,
+         --font-mono Space Mono). C'etait une feuille bloquante et des
+         fichiers de police telecharges pour rien. -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

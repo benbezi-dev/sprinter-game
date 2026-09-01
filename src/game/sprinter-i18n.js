@@ -9,6 +9,10 @@
   const UI = {
     // ouverture et accueil
     races:        ['100 - 200 - 400 METRES', '100 - 200 - 400 METRES'],
+    // « races » porte les nombres et son separateur d'un bloc, pour un rendu
+    // qui concatene sans mise en forme. L'ecran d'ouverture pose ses propres
+    // cadratins et n'a besoin que du mot — accentue, en francais.
+    metres:       ['MÈTRES', 'METRES'],
     tagline:      ['six étapes, un seul chrono à battre',
                    'six stages, one clock to beat'],
     tap_start:    ["touche l'écran pour commencer", 'tap the screen to start'],
@@ -106,6 +110,12 @@
     // Sur un bouton, « VOIR LE » ne dit rien que le bouton ne dise deja.
     top500_court:    ['TOP 500', 'TOP 500'],
     close:           ['FERMER', 'CLOSE'],
+    // Les deux boutons du jeu qui ne portent qu'une image. Un lecteur d'ecran
+    // n'a rien a annoncer devant une icone en alt="" : il dit « bouton », et
+    // c'est tout. Ces deux libelles ne s'affichent nulle part — ils ne sortent
+    // que par aria-label.
+    a11y_son:        ['couper ou activer le son', 'mute or unmute the sound'],
+    a11y_fermer:     ['fermer', 'close'],
     loading_ranks:   ['chargement du classement...', 'loading rankings...'],
     empty_top500:    ['aucun chrono enregistré pour le moment', 'no times recorded yet'],
     your_rank:       ['TON RANG : {r}', 'YOUR RANK: {r}'],

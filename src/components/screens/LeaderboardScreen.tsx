@@ -80,7 +80,8 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               </span>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
+          <button onClick={onClose} aria-label={N.t('a11y_fermer')}
+                  className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
             <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
           </button>
         </div>

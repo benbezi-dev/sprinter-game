@@ -123,6 +123,8 @@ export function TitleScreen() {
 
           <button
             onClick={() => toggleAudio()}
+            aria-label={N.t('a11y_son')}
+            aria-pressed={Audio_.on}
             className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
           >
             <img
