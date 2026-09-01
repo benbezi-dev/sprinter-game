@@ -124,6 +124,14 @@ export async function submitAttempt(input: {
   totalMs: number;
   splits: number[];
   name?: string;
+  /**
+   * Ma trace, une par epreuve — de quoi faire de cette course un fantome.
+   *
+   * Le defi gardait celle du lanceur et pas la mienne, si bien que le perdant
+   * du duel n'avait personne a courir dans sa revanche. Facultative : un faux
+   * depart n'a rien enregistre, et le duel se tranche sans elle.
+   */
+  traces?: number[][];
 }): Promise<{
   owner_name: string;
   owner_total_ms: number;
@@ -140,6 +148,7 @@ export async function submitAttempt(input: {
       name: input.name || getSavedName() || 'Anonyme',
       total_ms: Math.round(input.totalMs),
       splits: input.splits.map(s => Math.round(s)),
+      traces: input.traces || [],
     }),
   });
   if (!res.ok) throw new Error('attempt submit failed');

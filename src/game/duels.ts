@@ -186,6 +186,54 @@ export async function fetchMesDuels(): Promise<MonDuel[]> {
   }
 }
 
+/**
+ * Le fantome a battre dans une revanche : celui du vainqueur.
+ *
+ * La revanche partait sur une piste vide. Le chrono a battre etait connu — le
+ * jeu le tenait, le serveur aussi — mais rien ne courait a cote du joueur, et
+ * une cible qu'on ne voit pas ne se court pas : on ne savait qu'a l'arrivee si
+ * on avait tenu le rythme.
+ *
+ * Le serveur ne la rend qu'au PERDANT de la rencontre, et c'est lui qui le
+ * verifie. Nul quand il n'y a rien a rendre : une rencontre d'avant que les
+ * tentatives ne gardent leur trace, un duel nul, ou quelqu'un qui reclame la
+ * trace d'un duel dont il n'etait pas.
+ */
+export type FantomeDuel = {
+  /** Le nom a afficher dans le couloir du fantome. */
+  name: string;
+  /** Son total, en millisecondes : le chrono qu'il faut battre. */
+  total_ms: number;
+  races: string[];
+  level_idx: number;
+  /** Ses chronos epreuve par epreuve, en millisecondes. */
+  splits: number[];
+  /** Une trace par epreuve, en decimetres. Vide si le duel est trop ancien. */
+  traces: number[][];
+};
+
+export async function fantomeDuDuel(id: string): Promise<FantomeDuel | null> {
+  try {
+    const q = `id=${encodeURIComponent(id)}` +
+              `&device_id=${encodeURIComponent(getDeviceId())}` +
+              `&name=${encodeURIComponent(getSavedName() || '')}`;
+    const res = await fetch(`${API_BASE}/duel/fantome?${q}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !data.found) return null;
+    return {
+      name: String(data.name || ''),
+      total_ms: Number(data.total_ms) || 0,
+      races: Array.isArray(data.races) ? data.races.map(String) : [],
+      level_idx: Number(data.level_idx) || 0,
+      splits: Array.isArray(data.splits) ? data.splits.map((v: any) => Number(v) || 0) : [],
+      traces: Array.isArray(data.traces) ? data.traces : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Un resultat ne s'annonce qu'une fois. */
 export async function marquerDuelsVus(ids: string[]): Promise<void> {
   if (!ids.length) return;

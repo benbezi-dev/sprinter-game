@@ -11,6 +11,8 @@ const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '
 const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 54 - t.length))}`);
 const post = (u, b) => fetch(B + u, { method: 'POST', headers: H, body: JSON.stringify(b) })
   .then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
+const get = u => fetch(B + u)
+  .then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
 
 const s = Math.random().toString(36).slice(2, 6).toUpperCase();
 const devA = `revaaaa1-${s}-2222-3333-444444444444`;
@@ -58,6 +60,54 @@ const parB = await defi(devB, nomB, 9500, { revanche_de: id2 });
 ok('B vise A en battant son chrono', parB.target_name === nomA, String(parB.target_name));
 const parBmou = await defi(devB, nomB, 10400, { revanche_de: id2 });
 ok('mais pas avec un chrono plus lent', !parBmou.target_name, String(parBmou.target_name));
+
+titre('LE FANTOME A BATTRE — RENDU AU SEUL PERDANT');
+/* La revanche se court contre le vainqueur, pas contre une piste vide. Le
+   serveur rend donc sa trace — et seulement a celui qui a perdu, parce que
+   l'identifiant d'un duel circule des deux cotes. */
+const id3 = (await defi(devA, nomA, 11000)).id;
+await post('/challenge/attempt', {
+  id: id3, device_id: devB, name: nomB, total_ms: 10000, splits: [10000],
+  traces: [[0, 40, 90, 150, 220]],
+});
+
+const vuParA = (await get(`/duel/fantome?id=${id3}&device_id=${devA}&name=${nomA}`)).corps;
+ok('le perdant recoit la course du vainqueur', vuParA.found === true, JSON.stringify(vuParA));
+ok('  avec son nom', vuParA.name === nomB, String(vuParA.name));
+ok('  avec son chrono', vuParA.total_ms === 10000, String(vuParA.total_ms));
+ok('  avec sa trace', Array.isArray(vuParA.traces) && vuParA.traces[0]
+   && vuParA.traces[0].length === 5, JSON.stringify(vuParA.traces));
+
+const vuParB = (await get(`/duel/fantome?id=${id3}&device_id=${devB}&name=${nomB}`)).corps;
+ok('le vainqueur n a pas de fantome a courir', vuParB.found === false, JSON.stringify(vuParB));
+
+const vuParC = (await get(`/duel/fantome?id=${id3}&device_id=${devC}&name=${nomC}`)).corps;
+ok('un tiers qui connait le code n obtient rien', vuParC.found === false, JSON.stringify(vuParC));
+
+// L'autre sens : le releveur qui perd court contre la course du lanceur, celle
+// que le defi gardait depuis toujours.
+const id4 = (await defi(devA, nomA, 10000)).id;
+await post('/challenge/attempt', { id: id4, device_id: devB, name: nomB, total_ms: 11000, splits: [11000] });
+const vuParBperdant = (await get(`/duel/fantome?id=${id4}&device_id=${devB}&name=${nomB}`)).corps;
+ok('le releveur qui perd recoit la course du lanceur',
+   vuParBperdant.found === true && vuParBperdant.name === nomA, JSON.stringify(vuParBperdant));
+ok('  avec sa trace', Array.isArray(vuParBperdant.traces) && vuParBperdant.traces[0]
+   && vuParBperdant.traces[0].length === 4, JSON.stringify(vuParBperdant.traces));
+
+// Une rencontre d'avant que les tentatives ne gardent leur trace : le fantome
+// est vide, et c'est un fantome en moins, pas une erreur. Le jeu repart alors
+// avec le seul chrono pour cible.
+const id5 = (await defi(devA, nomA, 11000)).id;
+await post('/challenge/attempt', { id: id5, device_id: devB, name: nomB, total_ms: 10000, splits: [10000] });
+const sansTrace = (await get(`/duel/fantome?id=${id5}&device_id=${devA}&name=${nomA}`)).corps;
+ok('sans trace enregistree, la reponse tient quand meme',
+   sansTrace.found === true && sansTrace.total_ms === 10000, JSON.stringify(sansTrace));
+ok('  et la trace revient vide',
+   Array.isArray(sansTrace.traces) && (sansTrace.traces[0] || []).length === 0,
+   JSON.stringify(sansTrace.traces));
+
+const nul = (await get(`/duel/fantome?id=ZZZZZZ&device_id=${devA}&name=${nomA}`)).corps;
+ok('un duel inexistant ne rend rien', nul.found === false, JSON.stringify(nul));
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout tient.\n');
 process.exit(e ? 1 : 0);

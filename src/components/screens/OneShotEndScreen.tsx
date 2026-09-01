@@ -20,6 +20,7 @@ import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
+import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 
 /**
@@ -41,6 +42,9 @@ export function OneShotEndScreen() {
   const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
           liveOn, liveNom, liveResultat } = useGameStore();
   const { N, RACES } = SprinterApp;
+
+  // Ce qui depasse est reduit, pas cache — voir le crochet.
+  const { cadre, contenu, echelle, hauteur } = useTenirDansLEcran();
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -158,8 +162,8 @@ export function OneShotEndScreen() {
       // Le fantome ne s'affiche que s'il a vraiment couru : `ghostTime` vaut
       // zero hors d'un defi, et un ecart calcule dessus annoncerait une
       // avance de neuf secondes sur personne.
-      fantomeNom: challenge ? ghostName : undefined,
-      fantomeMs: challenge && ghostTime > 0 ? ghostTime * 1000 : null,
+      fantomeNom: aFantome ? ghostName : undefined,
+      fantomeMs: aFantome ? ghostTime * 1000 : null,
     });
     setAffiche(sortie);
     // L'aveu revient au repos tout seul : ce n'est pas un etat durable, et un
@@ -168,6 +172,18 @@ export function OneShotEndScreen() {
     setTimeout(() => setAffiche('repos'), 3200);
   }
   const beaten = !!challenge && complete && runTime < ghostTime;
+  /**
+   * Un fantome a-t-il couru dans ce couloir ?
+   *
+   * Ce n'etait pas la meme question que « suis-je dans un defi », et les
+   * confondre coutait tout l'ecran de la revanche : elle se court desormais
+   * contre le fantome du vainqueur, hors de tout defi — l'ecran comparait donc
+   * deux chronos qu'il refusait d'afficher l'un a cote de l'autre.
+   *
+   * `ghostTime` ne vaut plus zero que quand personne n'a couru : le one shot
+   * ordinaire, le TOP 500, la course en direct le remettent a zero au depart.
+   */
+  const aFantome = ghostTime > 0;
 
   /**
    * Cette course venge un duel perdu, si `revancheId` est pose.
@@ -196,6 +212,10 @@ export function OneShotEndScreen() {
       totalMs: falseOut ? DSQ_MS : runTime * 1000,
       splits: falseOut ? [] : runSplits.map(s => (s || 0) * 1000),
       name: getSavedName() || undefined,
+      // Ma course devient a son tour un fantome : celui que l'adversaire
+      // aura a courir s'il perd et prend sa revanche. Un faux depart n'a
+      // rien enregistre, et il n'y a rien a faire courir.
+      traces: falseOut ? [] : (SprinterApp.G.shotTraces || []),
     })
       .then(r => { setSent(true); setDuel(r.duel || null); })
       .catch(() => { /* le chrono local reste affiche */ })
@@ -263,9 +283,25 @@ export function OneShotEndScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revancheId, complete, falseOut, revancheBattue]);
 
-  /** Relancer la meme revanche : `revancheId` n'a pas bouge, on repart. */
-  const relancerRevanche = () => {
-    SprinterApp.startOneShot(shotRaces as any, { levelIdx: SprinterApp.G.shotLevel });
+  /**
+   * Repartir sur la meme course, contre le meme fantome, hors du defi.
+   *
+   * Sert deux fois : au perdant d'un defi qui prend sa revanche, et a celui qui
+   * la retente apres l'avoir ratee. Les options du depart sont reprises telles
+   * quelles — c'est ce qui embarque la trace de l'adversaire, ses chronos et son
+   * nom — moins le defi lui-meme, qui est joue et ne se rejoue pas.
+   *
+   * Les reconstruire a la main aurait donne une course qui ressemble a la
+   * premiere : meme distance, mais plus de fantome. C'est ce que faisait le
+   * bouton avant aujourd'hui, et la revanche se courait sur une piste vide.
+   */
+  const memeCourseSansLeDefi = () => {
+    const opts = (SprinterApp.G.shotOpts || {}) as any;
+    SprinterApp.startOneShot(shotRaces as any, {
+      ...opts,
+      levelIdx: opts.levelIdx == null ? SprinterApp.G.shotLevel : opts.levelIdx,
+      challenge: null,
+    });
   };
 
   const handleCreate = async () => {
@@ -375,14 +411,38 @@ export function OneShotEndScreen() {
   const dnf = N.t('dnf_short');
 
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <div ref={cadre} className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+      {/* CENTRE QUAND IL Y A DE LA PLACE, ENTIER QUAND IL N'Y EN A PAS.
+
+          `justify-center` faisait les deux mal : des que le contenu depassait,
+          il debordait des DEUX cotes et le haut devenait inatteignable — le
+          titre de l'ecran se retrouvait cent pixels au-dessus du premier pixel
+          qu'on puisse faire defiler. On pouvait descendre, jamais remonter
+          jusqu'a lui, et « DEFI REMPORTE » n'existait simplement plus.
+
+          Les marges automatiques centrent aussi bien et s'effacent d'elles
+          memes quand la place manque : rien ne sort de l'ecran par le haut. */}
+      <div className="min-h-full flex flex-col items-center w-full">
+        {/* La reduction vit sur ce calque-ci, et pas sur celui d'en dessous :
+            l'animation d'entree anime deja son echelle, et deux transformations
+            sur le meme element s'ecrasent l'une l'autre. La hauteur reservee
+            est celle d'apres reduction, sans quoi le conteneur croirait
+            deborder encore. */}
+        <div className="w-full my-auto flex flex-col items-center"
+             style={{ height: hauteur ?? undefined }}>
+        <div ref={contenu} className="w-full flex flex-col items-center"
+             style={echelle < 1
+               ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
+               : undefined}>
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          className="flex flex-col items-center max-w-2xl court:max-w-none w-full
+                     py-4 md:py-8 court:py-1 gap-3 md:gap-6 court:gap-0
+                     colonnes-si-bas">
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
-            <h1 className={`text-3xl sm:text-4xl md:text-6xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
+            <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
               ${falseOut || (challenge && !beaten) || (live && !liveGagne && !liveNul)
                 ? 'text-destructive' : live && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
               {falseOut ? N.t('false_out')
@@ -393,16 +453,16 @@ export function OneShotEndScreen() {
                 : N.t('oneshot_done')}
             </h1>
             {falseOut ? (
-              <div className="text-[10px] sm:text-xs md:text-base font-bold text-destructive tracking-widest uppercase">
+              <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-bold text-destructive tracking-widest uppercase">
                 {N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
-              <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
+              <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
                 {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
               </div>
             )}
-            {challenge && !falseOut && (
-              <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-300 uppercase">
+            {aFantome && !falseOut && (
+              <div className="text-[10px] sm:text-xs md:text-sm court:text-[10px] font-bold tracking-widest text-cyan-300 uppercase">
                 {N.t('challenge_gap', { s: (Math.abs(runTime - ghostTime)).toFixed(2) })}
               </div>
             )}
@@ -519,7 +579,7 @@ export function OneShotEndScreen() {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-1.5 shadow-2xl
+              className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 flex flex-col items-center gap-1.5 shadow-2xl
                 ${!duel ? 'border-white/10 bg-card/60'
                   : duel.issue === 'opponent' ? 'border-primary/50 bg-primary/10'
                   : duel.issue === 'draw' ? 'border-white/20 bg-white/5'
@@ -529,7 +589,7 @@ export function OneShotEndScreen() {
                 <Swords className={`w-4 h-4 ${!duel ? 'text-muted-foreground'
                   : duel.issue === 'opponent' ? 'text-primary'
                   : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`} />
-                <span className={`font-black font-display tracking-tight uppercase text-lg md:text-2xl
+                <span className={`font-black font-display tracking-tight uppercase text-lg md:text-2xl court:text-base
                   ${!duel ? 'text-muted-foreground'
                     : duel.issue === 'opponent' ? 'text-primary'
                     : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`}>
@@ -545,7 +605,7 @@ export function OneShotEndScreen() {
                       « 0 PL » laisserait croire a un match nul. */}
                   {typeof duel.lp === 'number' && (
                     <div className="flex flex-col items-center gap-1">
-                      <span className="font-mono font-black text-2xl md:text-3xl
+                      <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
                                        tabular-nums text-foreground">
                         {duel.lp > 0 ? '+' : ''}{duel.lp}
                         <span className="text-xs font-normal ml-1 text-muted-foreground">
@@ -596,7 +656,10 @@ export function OneShotEndScreen() {
                           SprinterApp.G.revanche = challenge.owner_name;
                           SprinterApp.G.revancheId = challenge.id;
                           SprinterApp.G.revancheMs = challenge.total_ms;
-                          SprinterApp.startOneShot(shotRaces as any, { levelIdx: SprinterApp.G.shotLevel });
+                          // Le fantome qui vient de nous battre repart avec la
+                          // revanche : sa trace est deja la, celle du defi
+                          // qu'on vient de courir.
+                          memeCourseSansLeDefi();
                         }}
                         className="mt-1 px-5 py-2.5 rounded-xl font-black font-display tracking-widest
                                    text-background bg-primary hover:bg-primary/90 transition-colors
@@ -620,24 +683,24 @@ export function OneShotEndScreen() {
           )}
 
           {/* Chronos epreuve par epreuve, face au fantome si defi */}
-          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 shadow-2xl">
-            <div className="flex flex-col gap-1.5 md:gap-3">
+          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 court:p-2 shadow-2xl">
+            <div className="flex flex-col gap-1.5 md:gap-3 court:gap-1">
               {shotRaces.map((r, i) => {
                 const mine = runSplits[i];
-                const his = challenge ? ghostSplits[i] : undefined;
+                const his = aFantome ? ghostSplits[i] : undefined;
                 const ahead = mine != null && his != null && mine < his;
                 return (
-                  <div key={i} className="flex items-center justify-between px-3 py-2 md:px-4 md:py-3 rounded-xl border border-white/5 bg-black/20 gap-2">
-                    <span className="font-bold tracking-wide text-foreground text-sm md:text-base truncate">
+                  <div key={i} className="flex items-center justify-between px-3 py-1.5 md:px-4 md:py-3 court:px-2 court:py-1 rounded-xl border border-white/5 bg-black/20 gap-2">
+                    <span className="font-bold tracking-wide text-foreground text-sm md:text-base court:text-xs truncate">
                       {RACES[r].label}
                     </span>
-                    <div className="flex items-center gap-3 md:gap-5 shrink-0">
+                    <div className="flex items-center gap-3 md:gap-5 court:gap-2 shrink-0">
                       {his != null && (
-                        <span className="font-mono text-xs md:text-sm text-cyan-300/70">
+                        <span className="font-mono text-xs md:text-sm court:text-[10px] text-cyan-300/70">
                           {his.toFixed(2)} s
                         </span>
                       )}
-                      <span className={`font-mono font-bold text-base md:text-lg
+                      <span className={`font-mono font-bold text-base md:text-lg court:text-xs
                         ${mine == null ? 'text-destructive' : his == null ? 'text-primary' : ahead ? 'text-emerald-400' : 'text-destructive'}`}>
                         {fmt(mine, dnf)}
                       </span>
@@ -647,54 +710,77 @@ export function OneShotEndScreen() {
               })}
             </div>
 
-            <div className="mt-3 md:mt-4 pt-3 md:pt-4 border-t border-white/10 flex justify-between items-center px-2 md:px-4 gap-2">
-              <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base">
+            <div className="mt-2 md:mt-4 pt-2 md:pt-4 court:mt-2 court:pt-2 border-t border-white/10 flex justify-between items-center px-2 md:px-4 gap-2">
+              <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base court:text-xs min-w-0 truncate">
                 {challenge ? N.t('you_label') : 'TOTAL'}
               </span>
-              <span className={`font-mono font-black text-xl md:text-2xl
+              <span className={`font-mono font-black text-xl md:text-2xl court:text-sm shrink-0 whitespace-nowrap
                 ${falseOut ? 'text-destructive' : 'text-primary'}`}>
                 {falseOut ? dnf : `${runTime.toFixed(2)} s`}
               </span>
             </div>
-            {challenge && (
+            {aFantome && (
               <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1">
-                <span className="font-bold tracking-widest text-cyan-300 uppercase text-sm md:text-base truncate flex items-center gap-2">
-                  <Ghost className="w-4 h-4 shrink-0" />{ghostName || N.t('ghost_label')}
+                <span className="font-bold tracking-widest text-cyan-300 uppercase text-sm md:text-base court:text-xs min-w-0 truncate flex items-center gap-2">
+                  <Ghost className="w-4 h-4 court:w-3 court:h-3 shrink-0" />
+                  <span className="truncate">{ghostName || N.t('ghost_label')}</span>
                 </span>
-                <span className="font-mono font-black text-xl md:text-2xl text-cyan-300">{ghostTime.toFixed(2)} s</span>
+                <span className="font-mono font-black text-xl md:text-2xl court:text-sm shrink-0 whitespace-nowrap text-cyan-300">{ghostTime.toFixed(2)} s</span>
               </div>
             )}
           </div>
 
-          {/* Inscription au TOP 500, epreuve par epreuve */}
-          {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
-            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-              <div className="flex items-center gap-2 justify-center">
-                <Globe2 className="w-4 h-4 text-primary" />
-                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">{N.t('top500')}</h2>
-              </div>
+          {/* LE TOP 500 EN DEUX LIGNES.
 
-              {topStatus === 'checking' && (
-                <p className="text-center text-xs text-muted-foreground animate-pulse">
-                  {N.t('os_top_checking')}
-                </p>
-              )}
+              Il tenait un panneau entier — un titre, une phrase, une ligne
+              encadree par epreuve, puis une confirmation — pour dire six
+              nombres et un nom. Cent soixante pixels, qui en portrait
+              repoussaient les boutons hors de l'ecran : on arrivait sur son
+              resultat et il fallait defiler pour trouver RECOMMENCER.
+
+              Rien n'est retire. Le titre porte desormais l'etat — on verifie,
+              tant de chronos entrent, enregistres sous tel nom — et les
+              chronos passent en une file qui se replie toute seule. Le
+              formulaire, lui, ne s'affiche que quand il sert vraiment : sans
+              nom connu, personne ne peut enregistrer a votre place. */}
+          {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
+            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2.5 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1.5">
+              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
+                <span className="flex items-center gap-2 shrink-0">
+                  <Globe2 className="w-4 h-4 court:w-3 court:h-3 text-primary" />
+                  <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm court:text-[10px]">{N.t('top500')}</h2>
+                </span>
+                {topStatus === 'checking' && (
+                  <span className="text-[10px] md:text-xs text-muted-foreground animate-pulse">
+                    {N.t('os_top_checking')}
+                  </span>
+                )}
+                {tops.length > 0 && (
+                  <span className="text-[10px] md:text-xs text-primary font-bold tracking-wide">
+                    · {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
+                  </span>
+                )}
+                {topStatus === 'done' && tops.length > 0 && (
+                  <span className="text-[10px] md:text-xs text-muted-foreground">
+                    · {N.t('os_top_saved', { n: topName.trim() })}
+                  </span>
+                )}
+              </div>
 
               {outcomes && outcomes.length > 0 && (
                 <>
-                  {tops.length > 0 && (
-                    <p className="text-center text-[10px] md:text-xs text-primary font-bold tracking-wide">
-                      {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
-                    </p>
-                  )}
                   <div className="flex flex-col gap-1">
-                    {tops.map((t, i) => (
-                      <div key={'n' + i} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-black/25 border border-white/5">
-                        <span className="text-xs md:text-sm font-bold text-foreground">{t.race} m</span>
-                        <span className="font-mono text-xs md:text-sm text-primary">{(t.ms / 1000).toFixed(2)} s</span>
-                        <span className="text-[10px] md:text-xs text-muted-foreground">{N.ord(t.rank)}</span>
+                    {tops.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
+                        {tops.map((t, i) => (
+                          <span key={'n' + i} className="whitespace-nowrap text-xs md:text-sm court:text-[10px]">
+                            <span className="font-bold text-foreground">{t.race} m</span>{' '}
+                            <span className="font-mono text-primary">{(t.ms / 1000).toFixed(2)} s</span>{' '}
+                            <span className="text-muted-foreground">{N.ord(t.rank)}</span>
+                          </span>
+                        ))}
                       </div>
-                    ))}
+                    )}
                     {/* Chronos plus lents que son propre record. Le tableau ne
                         garde qu'un chrono par epreuve et par appareil, le
                         meilleur : envoyer celui-ci le remplacerait par un
@@ -702,35 +788,31 @@ export function OneShotEndScreen() {
                         petite ligne grise se lisait comme « rien ne s'est
                         passe ». */}
                     {kept.length > 0 && (
-                      <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/[0.07] p-3 flex flex-col gap-1.5">
-                        <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300 text-center">
-                          {N.t('os_kept_title')}
-                        </span>
+                      <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/[0.07] px-3 py-1.5 flex flex-col gap-0.5">
                         {kept.map((t, i) => (
-                          <div key={'k' + i} className="flex flex-col items-center gap-0.5">
-                            <span className="text-xs md:text-sm text-foreground text-center">
+                          <p key={'k' + i} className="text-[10px] md:text-xs text-center leading-snug">
+                            <span className="font-bold tracking-widest text-cyan-300">
+                              {N.t('os_kept_title')}
+                            </span>
+                            {' · '}
+                            <span className="text-foreground">
                               {N.t('os_kept_line', {
                                 d: t.race,
                                 s: ((t.ownMs || 0) / 1000).toFixed(2),
                                 r: t.ownRank ? N.ord(t.ownRank) : '—',
                               })}
                             </span>
-                            <span className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
+                            {' — '}
+                            <span className="text-muted-foreground">
                               {N.t('os_kept_now', { s: (t.ms / 1000).toFixed(2) })}
                             </span>
-                          </div>
+                          </p>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {topStatus === 'done' ? (
-                    tops.length > 0 ? (
-                      <p className="text-center text-sm text-primary font-bold">
-                        {N.t('os_top_saved', { n: topName.trim() })}
-                      </p>
-                    ) : null
-                  ) : (
+                  {topStatus === 'done' ? null : (
                     <>
                       <div className="flex gap-2">
                         <input
@@ -738,12 +820,12 @@ export function OneShotEndScreen() {
                           onChange={e => setTopName(e.target.value)}
                           placeholder={N.t('your_name')}
                           maxLength={20}
-                          className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                          className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                         />
                         <button
                           onClick={handleSaveTop}
                           disabled={!topName.trim() || topStatus === 'sending'}
-                          className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs md:text-sm text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
+                          className="shrink-0 px-4 py-2 court:px-2 court:py-1.5 rounded-xl font-bold tracking-wide text-xs md:text-sm court:text-[10px] text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
                         >
                           {topStatus === 'sending' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                           {N.t('save_score')}
@@ -762,17 +844,34 @@ export function OneShotEndScreen() {
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; une revanche part toute seule des qu'elle bat
               le chrono qu'elle venge. */}
-          {!falseOut && (!challenge || beaten) && (
-            <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-3
+          {/* Un faux depart dans une revanche ne la termine pas : rien n'est
+              parti chez l'adversaire, rien n'est perdu du duel qu'on venge —
+              seule la tentative est brulee. Le panneau restait pourtant cache,
+              et avec lui le seul bouton qui gardait la trace de qui l'on
+              venge : il fallait repasser par RECOMMENCER, qui sort de la
+              chaine. On le garde donc ouvert, sans le formulaire de creation
+              — celui-la reste ferme, il n'y a pas de chrono a envoyer. */}
+          {(!falseOut || !!revancheId) && (!challenge || beaten) && (
+            <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-3 court:gap-1.5
               ${beaten || revancheBattue || revancheFaite !== null
                 ? 'border-primary/40' : 'border-white/10'}`}>
-              <div className="flex items-center gap-2 justify-center">
-                <Ghost className="w-4 h-4 text-primary" />
-                <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm">
-                  {N.t(revancheFaite !== null ? 'duel_revanche_envoyee'
-                     : revancheId ? (revancheBattue ? 'duel_revanche_envoyee' : 'duel_revanche_ratee_titre')
-                     : beaten ? 'challenge_rematch' : 'challenge_make')}
-                </h2>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-center">
+                <span className="flex items-center gap-2 shrink-0">
+                  <Ghost className="w-4 h-4 court:w-3 court:h-3 text-primary" />
+                  <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm court:text-[10px]">
+                    {N.t(revancheFaite !== null ? 'duel_revanche_envoyee'
+                       : revancheId ? (revancheBattue ? 'duel_revanche_envoyee' : 'duel_revanche_ratee_titre')
+                       : beaten ? 'challenge_rematch' : 'challenge_make')}
+                  </h2>
+                </span>
+                {/* La phrase qui expliquait le panneau vivait sous lui, en
+                    ligne pleine ; a cote du titre elle dit la meme chose et
+                    rend une ligne a l'ecran. */}
+                {!code && !revancheId && revancheFaite === null && (
+                  <span className="text-[10px] md:text-xs text-muted-foreground">
+                    · {N.t(beaten ? 'challenge_rematch_sub' : 'challenge_share')}
+                  </span>
+                )}
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
                   le joueur ne sait plus a qui son code va partir. */}
@@ -815,7 +914,7 @@ export function OneShotEndScreen() {
                     {N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
                   </p>
                   <button
-                    onClick={relancerRevanche}
+                    onClick={memeCourseSansLeDefi}
                     className="px-5 py-2 rounded-xl font-black font-display tracking-widest text-xs md:text-sm
                                text-background bg-primary hover:bg-primary/90 transition-colors"
                   >
@@ -828,21 +927,18 @@ export function OneShotEndScreen() {
                   une revanche : elle part d'elle-meme, ou pas du tout. */}
               {!code && !revancheId && revancheFaite === null && (
                 <>
-                  <p className="text-center text-[10px] md:text-xs text-muted-foreground">
-                    {N.t(beaten ? 'challenge_rematch_sub' : 'challenge_share')}
-                  </p>
                   <div className="flex gap-2">
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder={N.t('your_name')}
                       maxLength={20}
-                      className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                      className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                     />
                     <button
                       onClick={handleCreate}
                       disabled={busy || !complete}
-                      className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs md:text-sm text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
+                      className="shrink-0 px-4 py-2 court:px-2 court:py-1.5 rounded-xl font-bold tracking-wide text-xs md:text-sm court:text-[10px] text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
                     >
                       {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                       {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
@@ -938,32 +1034,6 @@ export function OneShotEndScreen() {
               course non terminee ou un faux depart n'ont pas de chrono a
               montrer, et le bouton disparait plutot que de produire une image
               qui annoncerait un temps qui n'existe pas. */}
-          {complete && !falseOut && runTime > 0 && (
-            <div className="flex flex-col items-center gap-1.5 w-full max-w-md mt-1">
-              <button
-                onClick={partagerMaCourse}
-                disabled={affiche === 'fabrique'}
-                className="w-full py-2.5 md:py-3 rounded-xl font-black font-display tracking-widest
-                           text-xs md:text-sm text-primary bg-primary/10 border border-primary/30
-                           hover:bg-primary/20 disabled:opacity-50 disabled:pointer-events-none
-                           transition-colors flex items-center justify-center gap-2"
-              >
-                {affiche === 'fabrique'
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <ImageDown className="w-4 h-4" />}
-                {affiche === 'fabrique' ? N.t('affiche_making') : N.t('affiche_share')}
-              </button>
-              {/* Ce qui s'est reellement passe. « Enregistre » et « envoye » ne
-                  se disent pas au meme moment, et le module rend lequel des
-                  deux a eu lieu precisement pour qu'on ne devine pas. */}
-              <p className="text-center text-[9px] md:text-[10px] text-muted-foreground leading-snug">
-                {affiche === 'telechargement' ? N.t('affiche_saved')
-                  : affiche === 'echec' ? N.t('affiche_failed')
-                  : N.t('affiche_hint')}
-              </p>
-            </div>
-          )}
-
           {/* RECOMMENCER — le raccourci, et la raison de tout ce qui suit.
               Ce que les joueurs demandaient n'etait pas d'effacer un chrono
               mais d'en relancer un : apres un faux depart ou une course ratee,
@@ -974,22 +1044,69 @@ export function OneShotEndScreen() {
               personne : la course qui vient de finir garde son chrono, et s'il
               etait parti dans un duel il y reste. Ce qui est acquis se dit
               juste en dessous, a cote du bouton et non a sa place. */}
-          <div className="flex flex-col gap-3 md:gap-4 w-full max-w-md mt-2">
+          {/* Sur un ecran bas, cette barre traverse les colonnes et se met a
+              l'horizontale : trois boutons empiles avec leurs phrases faisaient
+              deux cents pixels d'un seul bloc, qu'aucune colonne ne pouvait
+              prendre sans deborder. Chaque bouton garde la sienne, dessous. */}
+          {/* CHAQUE BOUTON PORTE SA PHRASE.
+
+              Elles vivaient dessous, en paragraphes : trois lignes de texte
+              gris separees des boutons qu'elles expliquent, et trente pixels
+              de perdus a chaque fois. Dedans, elles disent la meme chose au
+              meme endroit — c'est deja ce que fait « PRENDRE MA REVANCHE »
+              depuis le debut, et personne n'a jamais eu de mal a le lire. */}
+          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none mt-1 md:mt-2 court:mt-0
+                          court:flex-row court:items-start court:[column-span:all]">
+            {/* PARTAGER MA COURSE — une image, pas un code.
+                Le partage qui vit plus haut envoie du texte : un code a six
+                lettres dans une conversation ne ressemble a rien et personne
+                ne le republie. Celui-ci sort une image de la course, et il ne
+                demande ni defi ni adversaire — seulement un chrono. D'ou sa
+                condition propre : une course non terminee ou un faux depart
+                n'ont pas de chrono a montrer, et le bouton disparait plutot
+                que de produire une image qui annoncerait un temps qui
+                n'existe pas. */}
+            {complete && !falseOut && runTime > 0 && (
+              <button
+                onClick={partagerMaCourse}
+                disabled={affiche === 'fabrique'}
+                className="w-full court:flex-1 court:min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
+                           text-xs md:text-sm text-primary bg-primary/10 border border-primary/30
+                           hover:bg-primary/20 disabled:opacity-50 disabled:pointer-events-none
+                           transition-colors flex flex-col items-center leading-tight gap-0.5"
+              >
+                <span className="flex items-center gap-2">
+                  {affiche === 'fabrique'
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <ImageDown className="w-4 h-4" />}
+                  {affiche === 'fabrique' ? N.t('affiche_making') : N.t('affiche_share')}
+                </span>
+                {/* Ce qui s'est reellement passe. « Enregistre » et « envoye »
+                    ne se disent pas au meme moment, et le module rend lequel
+                    des deux a eu lieu precisement pour qu'on ne devine pas. */}
+                <span className="font-sans font-normal text-[9px] md:text-[10px] tracking-normal opacity-80 leading-snug">
+                  {affiche === 'telechargement' ? N.t('affiche_saved')
+                    : affiche === 'echec' ? N.t('affiche_failed')
+                    : N.t('affiche_hint')}
+                </span>
+              </button>
+            )}
+            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
             {RECOMMENCER_OUVERT && <button
               onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
-              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
+              className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
                          border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
-                         flex items-center justify-center gap-2"
+                         flex flex-col items-center leading-tight gap-0.5"
             >
-              <RotateCcw className="w-4 h-4" />
-              {N.t('os_rejouer')}
-            </button>}
-            {RECOMMENCER_OUVERT && (
-              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+              <span className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                {N.t('os_rejouer')}
+              </span>
+              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] tracking-normal opacity-80 leading-snug">
                 {N.t('os_rejouer_sub')}
-              </p>
-            )}
+              </span>
+            </button>}
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
@@ -1003,6 +1120,8 @@ export function OneShotEndScreen() {
                    : 'os_verrou_faux')}
               </p>
             )}
+            </div>
+            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
 
             {/* Le classement s'AJOUTE au raccourci. Une version precedente le
                 mettait a sa place le 5 septembre — mais defier quelqu'un est
@@ -1011,25 +1130,28 @@ export function OneShotEndScreen() {
                 Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setVoirDuels(true)}
-              className="w-full py-3 md:py-4 rounded-xl font-black font-display text-base sm:text-lg md:text-xl
+              className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
                          tracking-widest text-background bg-primary hover:bg-primary/90 transition-all
                          border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
-                         flex items-center justify-center gap-2"
+                         flex flex-col items-center leading-tight gap-0.5"
             >
-              <Swords className="w-4 h-4" />
-              {N.t(mots ? mots.titre : 'os_defier')}
-            </button>}
-            {DUELS_OUVERTS && (
-              <p className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug -mt-1">
+              <span className="flex items-center gap-2">
+                <Swords className="w-4 h-4" />
+                {N.t(mots ? mots.titre : 'os_defier')}
+              </span>
+              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] tracking-normal opacity-80 leading-snug">
                 {N.t(mots ? mots.sous : 'os_defier_sub')}
-              </p>
-            )}
-            <button onClick={() => SprinterApp.goHome()} className="w-full py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
+              </span>
+            </button>}
+            </div>
+            <button onClick={() => SprinterApp.goHome()} className="w-full court:flex-1 court:self-stretch py-3 md:py-4 court:py-2 court:text-sm rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
               {N.t('home')}
             </button>
           </div>
 
         </motion.div>
+        </div>
+        </div>
       </div>
 
       {/* voirDuels ne peut devenir vrai que par le bouton lui-meme ferme tant

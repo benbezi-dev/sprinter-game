@@ -393,6 +393,26 @@ async function ensureChallengeTables(db) {
       PRIMARY KEY (id, device_id)
     )`),
   ]);
+  await ensureAttemptTraces(db);
+}
+
+/* --------------------------------------------------- la trace du repondant
+   Le defi gardait la course de celui qui LANCE, et lui seul : c'est elle qui
+   sert de fantome a celui qui releve. L'inverse manquait, et il manquait
+   quelque chose avec lui — le perdant d'un duel n'avait personne a courir dans
+   sa revanche. Il repartait sur une piste vide avec un chrono a battre pour
+   seule indication, alors que la course qui l'avait battu avait bien eu lieu.
+
+   Colonne ajoutee apres coup, comme ailleurs ici : ALTER TABLE echoue si elle
+   est deja la, ce qui est le cas nominal. La memoire est tenue PAR BASE — le
+   worker en sert deux, production et test, et un simple booleen laisserait la
+   seconde sans colonne. */
+const attemptTracesReady = new WeakSet();
+async function ensureAttemptTraces(db) {
+  if (attemptTracesReady.has(db)) return;
+  try { await db.prepare(`ALTER TABLE challenge_attempts ADD COLUMN traces TEXT`).run(); }
+  catch { /* deja la */ }
+  attemptTracesReady.add(db);
 }
 
 async function attemptsFor(db, id) {
@@ -1924,12 +1944,85 @@ export default {
       });
     }
 
+    /* --------------------------------------------------- le fantome a battre
+       Le perdant d'un duel prend sa revanche, et il la court CONTRE CELUI QUI
+       L'A BATTU — sa trace, son nom, son chrono. Sans cette route il repartait
+       sur une piste vide : la regle « il faut battre son chrono pour que le
+       defi reparte » etait tenue par le serveur, mais rien a l'ecran ne
+       montrait ce qu'il fallait battre.
+
+       Deux verrous, les memes qu'a la creation d'une revanche : il faut etre
+       partie de cette rencontre, et en etre le PERDANT. Sans le second,
+       l'identifiant d'un duel — qui circule des deux cotes — suffirait a se
+       faire rendre la trace de quelqu'un d'autre.
+
+       Une rencontre d'avant cette version n'a pas de trace du repondant :
+       `traces` revient vide, et le jeu court alors comme avant, avec le seul
+       chrono pour cible. C'est un fantome en moins, pas une erreur. */
+    if (url.pathname === '/duel/fantome' && request.method === 'GET') {
+      const id = (url.searchParams.get('id') || '').toUpperCase();
+      const deviceId = url.searchParams.get('device_id') || '';
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(id)) return json({ error: 'code invalide' }, 400);
+      if (!isValidDeviceId(deviceId) && !nom) return json({ found: false });
+      await ensureChallengeTables(env.DB);
+      await ensureDuelTables(env.DB);
+
+      const d = await env.DB.prepare(
+        `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
+                c.owner_device, c.owner_name, c.races, c.level_idx, c.splits, c.traces
+           FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.challenge_id = ?`
+      ).bind(id).first();
+      if (!d || d.outcome === 'draw') return json({ found: false });
+
+      // L'appareil de celui qui a releve : la rencontre ne garde que son nom,
+      // sa tentative garde son appareil et sa trace.
+      const rep = await env.DB.prepare(
+        `SELECT device_id, name, splits, traces FROM challenge_attempts
+          WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
+      ).bind(id).first();
+
+      const suisLanceur = (!!deviceId && d.owner_device === deviceId) ||
+        (!!nom && String(d.owner_name || '').trim().toLowerCase() === nom);
+      const suisReleveur = (!!rep && !!deviceId && rep.device_id === deviceId) ||
+        (!!nom && String(d.opponent_key || '') === nom);
+      const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
+      const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
+      if (!monRole || monRole !== perdant) return json({ found: false });
+
+      // Le fantome est celui du vainqueur : la course du lanceur si c'est lui
+      // qui l'emporte, la tentative du repondant sinon.
+      const lanceurGagne = d.outcome === 'challenger';
+      const brut = lanceurGagne ? d.traces : (rep ? rep.traces : null);
+      const bruts = lanceurGagne ? d.splits : (rep ? rep.splits : null);
+      let epreuves = [];
+      try { epreuves = JSON.parse(d.races || '[]') || []; } catch { /* illisible */ }
+      let traces = [], splits = [];
+      try { traces = cleanTraces(JSON.parse(brut || '[]'), epreuves.length) || []; }
+      catch { traces = []; }
+      try { splits = (JSON.parse(bruts || '[]') || []).map(v => Math.max(0, Math.round(Number(v)) || 0)); }
+      catch { splits = []; }
+
+      return json({
+        found: true,
+        id,
+        name: lanceurGagne ? (d.owner_name || '')
+                           : (d.opponent_name || (rep && rep.name) || ''),
+        total_ms: lanceurGagne ? d.challenger_ms : d.opponent_ms,
+        races: epreuves,
+        level_idx: d.level_idx,
+        splits,
+        traces,
+      });
+    }
+
     // Tentative : on enregistre le chrono de l'adversaire et on renvoie le
     // classement du defi. On ne garde que la meilleure tentative par appareil.
     if (url.pathname === '/challenge/attempt' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { id, device_id, name, total_ms, splits } = body || {};
+      const { id, device_id, name, total_ms, splits, traces } = body || {};
       const code = String(id || '').toUpperCase();
       if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
@@ -1946,17 +2039,25 @@ export default {
 
       const cleanSplits = (Array.isArray(splits) ? splits : [])
         .map(v => Math.max(0, Math.round(Number(v)) || 0));
+      // La trace de cette tentative, pour que le perdant du duel ait un
+      // fantome a courir dans sa revanche. Facultative : une version plus
+      // ancienne du jeu ne l'envoie pas, et le duel se tranche pareil.
+      let epreuvesDuDefi = [];
+      try { epreuvesDuDefi = JSON.parse(ch.races || '[]') || []; } catch { /* illisible */ }
+      const cleanedTraces = cleanTraces(traces, epreuvesDuDefi.length) || [];
       const prev = await env.DB.prepare(
         `SELECT total_ms FROM challenge_attempts WHERE id = ? AND device_id = ?`
       ).bind(code, device_id).first();
       if (!prev || t < prev.total_ms) {
         await env.DB.prepare(
-          `INSERT INTO challenge_attempts (id, device_id, name, total_ms, splits, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO challenge_attempts (id, device_id, name, total_ms, splits, traces, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id, device_id) DO UPDATE SET
              name = excluded.name, total_ms = excluded.total_ms,
-             splits = excluded.splits, created_at = excluded.created_at`
-        ).bind(code, device_id, cleanName(name), t, JSON.stringify(cleanSplits), Date.now()).run();
+             splits = excluded.splits, traces = excluded.traces,
+             created_at = excluded.created_at`
+        ).bind(code, device_id, cleanName(name), t, JSON.stringify(cleanSplits),
+               JSON.stringify(cleanedTraces), Date.now()).run();
       }
       // --- resolution du duel ------------------------------------------
       // Le premier resultat fait foi : un defi ne se rejoue pas, et une

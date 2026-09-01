@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
-import { Swords, ChevronRight } from 'lucide-react';
-import { fetchMesDuels, marquerDuelsVus, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
+import { Swords, ChevronRight, Loader2 } from 'lucide-react';
+import { fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
@@ -29,6 +29,8 @@ export function DuelResultPopup() {
 
   const [file, setFile] = useState<MonDuel[]>([]);
   const [voirDuels, setVoirDuels] = useState(false);
+  /** Le temps d'aller chercher le fantome de l'adversaire, avant de partir. */
+  const [enRoute, setEnRoute] = useState(false);
   const sonne = useRef<string>('');
 
   const annule = useRef(false);
@@ -104,12 +106,20 @@ export function DuelResultPopup() {
   };
 
   /**
-   * Repartir sur la meme epreuve, le defi arme pour le meme adversaire.
+   * Repartir sur la meme epreuve, CONTRE LE FANTOME DE CELUI QUI NOUS A BATTUS.
    *
    * On ne rejoue pas la course perdue — un defi se court une fois, et le
    * rejouer laisserait tenter sa chance jusqu'a tomber sur un bon jour. C'est
    * un nouveau duel qui se lance, dans l'autre sens : cette fois c'est nous qui
    * posons le chrono.
+   *
+   * Sa course repart avec nous. La revanche se courait sur une piste vide : le
+   * chrono a battre etait connu du jeu et du serveur, mais rien ne courait a
+   * cote du joueur, et une cible qu'on ne voit pas ne se court pas. On va donc
+   * chercher sa trace avant de partir — c'est tout ce que ce petit temps
+   * d'attente paie. Une rencontre trop ancienne n'en a pas gardee : on part
+   * alors comme avant, avec le seul chrono pour cible, plutot que de ne pas
+   * partir.
    *
    * Le defi PART TOUT SEUL a l'arrivee, sans code a recopier — c'est l'ecran
    * de fin qui s'en charge, voir OneShotEndScreen. Mais seulement si le
@@ -118,12 +128,22 @@ export function DuelResultPopup() {
    * l'avoir battu, rien ne part et le meme bouton reste offert pour retenter,
    * sans reperdre les points du duel qu'on venge — ils sont deja acquis.
    */
-  const revanche = () => {
+  const revanche = async () => {
+    if (enRoute) return;
+    setEnRoute(true);
+    const f = await fantomeDuDuel(duel.id);
+    const trace = !!f && f.traces.some(t => Array.isArray(t) && t.length > 0);
     marquerDuelsVus([duel.id]);
     SprinterApp.G.revanche = duel.adversaire;
     SprinterApp.G.revancheId = duel.id;
     SprinterApp.G.revancheMs = duel.son_ms;
-    SprinterApp.startOneShot(duel.races, { levelIdx: 4 });
+    SprinterApp.startOneShot(duel.races, trace ? {
+      levelIdx: f!.level_idx,
+      ghosts: f!.traces,
+      ghostSplits: (f!.splits || []).map(ms => ms / 1000),
+      ghostName: f!.name || duel.adversaire,
+      ghostTime: (f!.total_ms || duel.son_ms) / 1000,
+    } : { levelIdx: 4 });
   };
 
   const ton = gagne ? 'text-primary' : nul ? 'text-foreground' : 'text-destructive';
@@ -158,25 +178,50 @@ export function DuelResultPopup() {
             initial={{ scale: 0.92, y: 12 }}
             animate={{ scale: 1, y: 0 }}
             transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-            className={`w-full max-w-sm bg-card/95 border ${cadre} rounded-2xl shadow-2xl
-                        p-4 md:p-6 flex flex-col items-center gap-3`}
+            /* DEUX COLONNES QUAND L'ECRAN EST BAS.
+
+               Le jeu se tient surtout en paysage, ou il reste moins de quatre
+               cents pixels de haut. Cette annonce en demandait plus de cinq
+               cents : titre, points, chronos, le champ du mot et trois boutons
+               empiles — et il fallait faire defiler pour atteindre le bouton
+               qui ferme, dans une fenetre qui tient en six lignes.
+
+               Rien n'est cache pour autant, et c'est la seule regle que
+               s'impose ce qui suit : le verdict passe a gauche, ce qu'on lit et
+               ce qu'on ecrit a droite, les boutons dessous. En portrait la
+               grille n'a qu'une colonne et l'ordre est celui d'avant. */
+            className={`w-full max-w-sm court:max-w-2xl bg-card/95 border ${cadre} rounded-2xl shadow-2xl
+                        p-4 md:p-6 court:p-3
+                        grid grid-cols-1 court:grid-cols-2 gap-3 court:gap-x-4 court:gap-y-2`}
           >
-            <div className="flex items-center gap-2">
-              <Swords className={`w-4 h-4 ${ton}`} />
-              <span className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-muted-foreground">
-                {N.t('duel_answered')}
+            <div className="flex flex-col items-center gap-3 court:gap-1.5 court:justify-center min-w-0">
+              <div className="flex items-center gap-2">
+                <Swords className={`w-4 h-4 court:w-3.5 court:h-3.5 ${ton}`} />
+                <span className="text-[10px] md:text-xs court:text-[9px] font-bold tracking-[0.25em] text-muted-foreground">
+                  {N.t('duel_answered')}
+                </span>
+              </div>
+
+              <h2 className={`font-black font-display tracking-tight uppercase text-2xl md:text-3xl court:text-xl text-center ${ton}`}>
+                {N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
+              </h2>
+
+              <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
+                {duel.lp > 0 ? '+' : ''}{duel.lp}
+                <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
+              </span>
+
+              {/* L'epreuve, et le nombre de resultats qui attendent derriere
+                  celui-ci. Il vivait sous les chronos ; il tient avec le
+                  verdict, qui est ce qu'il precise. */}
+              <span className="text-[10px] md:text-xs court:text-[9px] text-muted-foreground text-center">
+                {duel.races.map(r => (RACES as any)[r]?.label || `${r} m`).join(' + ')}
+                {file.length > 1 &&
+                  ` · ${N.t(file.length > 2 ? 'duel_mores' : 'duel_more', { n: file.length - 1 })}`}
               </span>
             </div>
 
-            <h2 className={`font-black font-display tracking-tight uppercase text-2xl md:text-3xl text-center ${ton}`}>
-              {N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
-            </h2>
-
-            <span className="font-mono font-black text-3xl md:text-4xl tabular-nums text-foreground leading-none">
-              {duel.lp > 0 ? '+' : ''}{duel.lp}
-              <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
-            </span>
-
+            <div className="flex flex-col items-center gap-3 court:gap-2 min-w-0 w-full">
             {/* Gagne ou nul : les deux chronos face a face, c'est la seule
                 chose que le lanceur n'a pas vue de ses yeux.
 
@@ -194,8 +239,8 @@ export function DuelResultPopup() {
                            voixType={duel.voix_type} auteur={duel.adversaire} />
               ) : (
                 <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
-                                px-4 py-3 flex flex-col items-center gap-1.5">
-                  <p className="text-sm md:text-base text-foreground text-center leading-snug">
+                                px-4 py-3 court:py-2 flex flex-col items-center gap-1.5">
+                  <p className="text-sm md:text-base court:text-xs text-foreground text-center leading-snug">
                     « {pique(duel.id, duel.adversaire)} »
                   </p>
                   <span className="text-[10px] md:text-xs font-bold tracking-widest text-cyan-300
@@ -206,7 +251,7 @@ export function DuelResultPopup() {
               )
             ) : (
               <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
-                <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center justify-between px-3 py-2 court:py-1.5">
                   <span className="text-xs md:text-sm font-bold tracking-wide text-primary truncate">
                     {N.t('duel_you')}
                   </span>
@@ -214,7 +259,7 @@ export function DuelResultPopup() {
                     {fmt(duel.mon_ms)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center justify-between px-3 py-2 court:py-1.5">
                   <span className="text-xs md:text-sm font-bold tracking-wide text-cyan-300 truncate min-w-0">
                     {duel.adversaire}
                   </span>
@@ -225,17 +270,12 @@ export function DuelResultPopup() {
               </div>
             )}
 
-            <span className="text-[10px] md:text-xs text-muted-foreground text-center">
-              {duel.races.map(r => (RACES as any)[r]?.label || `${r} m`).join(' + ')}
-              {file.length > 1 &&
-                ` · ${N.t(file.length > 2 ? 'duel_mores' : 'duel_more', { n: file.length - 1 })}`}
-            </span>
-
             {/* Le vainqueur qui apprend sa victoire ici n'etait pas la quand
                 l'autre a couru : c'est son seul moment pour lui repondre. */}
             {gagne && <LaisserUnMot duel={duel.id} adversaire={duel.adversaire} />}
+            </div>
 
-            <div className="w-full flex flex-col gap-2 mt-1">
+            <div className="w-full court:col-span-2 flex flex-col gap-2 mt-1 court:mt-0">
               {/* La revanche est offerte a la defaite, et seulement la.
                   La proposer au vainqueur serait lui demander de remettre en
                   jeu ce qu'il vient de gagner ; c'est au perdant de rappeler
@@ -243,34 +283,43 @@ export function DuelResultPopup() {
               {perdu && (
                 <button
                   onClick={revanche}
-                  className="w-full py-3 rounded-xl font-black font-display tracking-widest
+                  disabled={enRoute}
+                  className="w-full py-3 court:py-2 rounded-xl font-black font-display tracking-widest
                              text-background bg-primary hover:bg-primary/90 transition-colors
+                             disabled:opacity-60 disabled:pointer-events-none
                              flex flex-col items-center leading-tight"
                 >
-                  {N.t('duel_revanche')}
+                  <span className="flex items-center gap-2">
+                    {enRoute && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {N.t('duel_revanche')}
+                  </span>
                   <span className="font-sans font-normal text-[9px] tracking-normal opacity-70">
                     {N.t('duel_revanche_sub', { n: duel.adversaire })}
                   </span>
                 </button>
               )}
-              <button
-                onClick={() => { setVoirDuels(true); }}
-                className="w-full py-2.5 rounded-xl font-bold tracking-widest text-[11px] md:text-xs
-                           text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20
-                           transition-colors flex items-center justify-center gap-2"
-              >
-                <Swords className="w-3.5 h-3.5" />
-                {N.t('duel_see')}
-              </button>
-              <button
-                onClick={suivant}
-                className="w-full py-3 rounded-xl font-black font-display tracking-widest
-                           text-background bg-primary hover:bg-primary/90 transition-colors
-                           flex items-center justify-center gap-2"
-              >
-                {N.t(file.length > 1 ? 'duel_next' : 'duel_ok')}
-                {file.length > 1 && <ChevronRight className="w-4 h-4" />}
-              </button>
+              {/* Cote a cote sur un ecran bas : deux boutons pleine largeur
+                  l'un sous l'autre coutaient quarante pixels pour rien. */}
+              <div className="flex flex-col court:flex-row gap-2">
+                <button
+                  onClick={() => { setVoirDuels(true); }}
+                  className="w-full court:flex-1 py-2.5 court:py-2 rounded-xl font-bold tracking-widest text-[11px] md:text-xs
+                             text-primary bg-primary/10 border border-primary/30 hover:bg-primary/20
+                             transition-colors flex items-center justify-center gap-2"
+                >
+                  <Swords className="w-3.5 h-3.5" />
+                  {N.t('duel_see')}
+                </button>
+                <button
+                  onClick={suivant}
+                  className="w-full court:flex-1 py-3 court:py-2 rounded-xl font-black font-display tracking-widest
+                             text-background bg-primary hover:bg-primary/90 transition-colors
+                             flex items-center justify-center gap-2"
+                >
+                  {N.t(file.length > 1 ? 'duel_next' : 'duel_ok')}
+                  {file.length > 1 && <ChevronRight className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
           </motion.div>
         </motion.div>

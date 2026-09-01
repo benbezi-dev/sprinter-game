@@ -5,6 +5,47 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ------------------------------------------------------------------ court
+   L'ecran est BAS, pas etroit.
+
+   Le jeu se tient surtout en paysage : un telephone couche offre 380 pixels
+   de haut pour 850 de large. Les fenetres de resultat, elles, etaient empilees
+   pour un ecran debout — titre, points, chronos, mot, trois boutons les uns
+   sous les autres — et il fallait faire defiler pour lire la fin d'une
+   nouvelle qui tient en six lignes.
+
+   `md:` ne pouvait pas repondre a ca : il regarde la largeur, et un telephone
+   couche est LARGE. C'est la hauteur qui manque. D'ou cette variante, qui sert
+   a replier en deux colonnes et a rabattre les tailles — jamais a cacher quoi
+   que ce soit, l'information doit tenir a l'ecran, pas disparaitre.
+
+   Elle est declaree APRES `dark` et avant tout le reste, donc emise apres les
+   variantes de largeur : sur un telephone couche, ou `md:` et `court:` valent
+   tous les deux, c'est `court:` qui tranche. */
+@custom-variant court (@media (max-height: 620px));
+
+/* L'ecran de fin de course, quand la hauteur manque.
+   Il empile huit panneaux — resultat du duel, chronos, TOP 500, defi, image,
+   boutons — et cela ne rentre pas dans les 380 pixels d'un telephone couche.
+   Plutot que d'en cacher, on les met en colonnes : chaque panneau reste
+   entier, et l'ecran se lit de haut en bas puis de gauche a droite.
+   Trois colonnes des que la largeur le permet, deux sinon. */
+@media (max-height: 620px) {
+  .colonnes-si-bas {
+    display: block;
+    column-count: 2;
+    column-gap: 0.75rem;
+  }
+  .colonnes-si-bas > * {
+    break-inside: avoid;
+    margin-bottom: 0.5rem;
+    width: 100%;
+  }
+}
+@media (max-height: 620px) and (min-width: 720px) {
+  .colonnes-si-bas { column-count: 3; }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
