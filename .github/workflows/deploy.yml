@@ -24,11 +24,13 @@ jobs:
           node-version: 22
       - run: npm install
 
-      # Le jeu, tel que tout le monde le voit.
+      # Le jeu, tel que tout le monde le voit. Il est servi a la racine de
+      # sprinter-game.com et non plus dans un sous-dossier au nom du depot :
+      # le chemin de base se reduit donc a « / ».
       - name: Construire la production
         run: npm run build
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/
+          BASE_PATH: /
 
       # La version de test, dans un sous-dossier du meme site. Un seul
       # deploiement sert les deux : pas de second depot a tenir a jour, et la
@@ -39,7 +41,7 @@ jobs:
       - name: Construire la version de test
         run: npx vite build --outDir dist-test
         env:
-          BASE_PATH: /${{ github.event.repository.name }}/test/
+          BASE_PATH: /test/
           VITE_CANAL: test
 
       # Le manifeste dit a iOS et Android quelle application on installe. Sans
@@ -50,7 +52,7 @@ jobs:
           node -e '
             const f = "dist-test/manifest.webmanifest";
             const m = JSON.parse(require("fs").readFileSync(f, "utf8"));
-            const base = "/${{ github.event.repository.name }}/test/";
+            const base = "/test/";
             m.name = "Sprinter — test";
             m.short_name = "Sprinter test";
             m.id = base;

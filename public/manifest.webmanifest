@@ -50,8 +50,8 @@
       "purpose": "any maskable"
     }
   ],
-  "id": "/sprinter-game/",
-  "scope": "/sprinter-game/",
+  "id": "/",
+  "scope": "/",
   "handle_links": "preferred",
   "launch_handler": {
     "client_mode": [
