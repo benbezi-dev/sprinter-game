@@ -346,6 +346,29 @@ export function TitleScreen() {
             </button>
             </>}
 
+            {/* LES PAGES LEGALES, ET POURQUOI ELLES SONT ICI.
+                Sur le site, l'adresse suffit a les atteindre. Dans
+                l'application il n'y a pas de barre d'adresse : sans ce
+                pied de page, ni le joueur ni le relecteur du Play Store ne
+                peuvent les trouver — et une regle de Play demande qu'un jeu
+                ou l'on s'ecrit rende ses conditions accessibles. On ouvre
+                dans le navigateur plutot que dans la vue du jeu : une page
+                de texte ouverte par-dessus une partie n'a pas de retour. */}
+            <div className="w-full pt-3 mt-1 flex items-center justify-center gap-3
+                            text-[9px] tracking-widest text-white/30">
+              <a href="https://sprinter-game.com/conditions.html"
+                 target="_blank" rel="noopener noreferrer"
+                 className="hover:text-white/70 transition-colors">
+                {N.t('legal_conditions')}
+              </a>
+              <span aria-hidden="true">·</span>
+              <a href="https://sprinter-game.com/confidentialite.html"
+                 target="_blank" rel="noopener noreferrer"
+                 className="hover:text-white/70 transition-colors">
+                {N.t('legal_vie_privee')}
+              </a>
+            </div>
+
           </div>
         </div>
       </div>

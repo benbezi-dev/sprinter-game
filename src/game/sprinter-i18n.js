@@ -445,6 +445,8 @@
     mod_bloquer:     ['bloquer {n}', 'block {n}'],
     mod_bloque:      ['{n} ne pourra plus t’écrire.', '{n} can no longer write to you.'],
     mod_annuler:     ['annuler', 'cancel'],
+    legal_conditions: ['conditions', 'terms'],
+    legal_vie_privee: ['confidentialité', 'privacy'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
