@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { Confrontation } from './Confrontation';
 import { Fantomes } from './Fantomes';
 import { entrerSurLaPiste } from '@/game/piste';
@@ -174,7 +175,7 @@ export function RelaisPanel() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-5
                  shadow-2xl flex flex-col gap-4"
     >

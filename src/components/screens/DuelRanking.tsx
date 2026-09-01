@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
 import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
@@ -10,28 +11,6 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 /** Les trois epreuves, dans l'ordre d'un programme d'athletisme. */
 const RACE_KEYS = ['100', '200', '400'];
-
-/**
- * Le reglage systeme « reduire les animations ».
- *
- * Ce n'est pas un gout : pour une partie des gens, un mouvement a l'ecran
- * provoque des nausees ou declenche une migraine. Un classement qui se
- * reordonne en glissant est exactement le genre de mouvement vise.
- */
-function useAnimationsReduites() {
-  const requete = '(prefers-reduced-motion: reduce)';
-  const [reduit, setReduit] = useState(() => {
-    try { return window.matchMedia(requete).matches; } catch { return false; }
-  });
-  useEffect(() => {
-    let m: MediaQueryList;
-    try { m = window.matchMedia(requete); } catch { return; }
-    const suivre = () => setReduit(m.matches);
-    m.addEventListener('change', suivre);
-    return () => m.removeEventListener('change', suivre);
-  }, []);
-  return reduit;
-}
 
 /**
  * Fleche de deplacement depuis la derniere visite.
@@ -233,7 +212,7 @@ export function DuelRanking({ onClose, epreuves }: {
                   <motion.span className="block h-full bg-primary rounded-full"
                     initial={false}
                     animate={{ width: `${Math.min(100, (board.moi.lp / board.echelle.lp_par_palier) * 100)}%` }}
-                    transition={reduit ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 30 }} />
+                    transition={reduit ? { duration: 0 } : RESSORT.jauge} />
                 </div>
                 <span className="text-[9px] text-primary/80 tabular-nums text-right">
                   {N.t('duel_reste', {
@@ -286,8 +265,7 @@ export function DuelRanking({ onClose, epreuves }: {
                       <motion.div
                         key={r.name.toLowerCase()}
                         layout={reduit ? false : true}
-                        transition={reduit ? { duration: 0 }
-                                           : { type: 'spring', stiffness: 420, damping: 34 }}
+                        transition={reduit ? { duration: 0 } : RESSORT.rang}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border
                           ${moi ? 'bg-primary/15 border-primary/40' : 'border-white/5 bg-black/20'}`}
                       >

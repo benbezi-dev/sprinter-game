@@ -1,5 +1,6 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 import { Download, Loader2, Film, Timer } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { compteARebours, TTL_MS, type EtatReview } from '@/game/review';
@@ -26,7 +27,7 @@ export function ReviewVideo({ etat, onTelecharger }: {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+      {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-3"
     >
       <div className="flex items-center gap-2 justify-center">

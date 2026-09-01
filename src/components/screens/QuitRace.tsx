@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp, useGameStore, pauseRace, resumeRace } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { VOILE, PANNEAU } from '@/lib/mouvement';
 
 /**
  * Sortie de course, discrete.
@@ -47,13 +48,13 @@ export function QuitRace() {
       <AnimatePresence>
         {paused && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            {...VOILE}
             className="fixed inset-0 z-[55] flex items-center justify-center
                        bg-black/70 backdrop-blur-md pointer-events-auto
                        px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]"
           >
             <motion.div
-              initial={{ scale: 0.94, y: 8 }} animate={{ scale: 1, y: 0 }}
+              {...PANNEAU}
               className="w-full max-w-xs bg-card/90 border border-white/10 rounded-2xl
                          p-5 md:p-6 shadow-2xl flex flex-col items-center gap-4"
             >

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { MONTEE, COURBE, TRANSITION } from '@/lib/mouvement';
 import { X, ChevronLeft, ChevronRight, Trophy, Ghost, Radio, Users, Flag } from 'lucide-react';
 
 const VU = 'sprinter_tour_vu';
@@ -91,7 +92,8 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
             <button key={k} onClick={() => aller(k)} className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
               <motion.div className="h-full bg-primary" initial={false}
                 animate={{ width: k < i ? '100%' : k === i ? '100%' : '0%' }}
-                transition={{ duration: k === i && auto ? DUREE / 1000 : 0.2, ease: 'linear' }} />
+                transition={k === i && auto ? { duration: DUREE / 1000, ease: COURBE.lineaire }
+                                            : TRANSITION.progression} />
             </button>
           ))}
         </div>
@@ -102,8 +104,8 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-5 min-h-0">
-        <motion.div key={`t${i}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.22 }} className="flex flex-col items-center gap-1.5 text-center">
+        <motion.div key={`t${i}`} {...MONTEE}
+                    className="flex flex-col items-center gap-1.5 text-center">
           <p.Icone className={`w-6 h-6 ${p.couleur}`} />
           <h2 className={`text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase ${p.couleur}`}>
             {N.t(p.titre)}

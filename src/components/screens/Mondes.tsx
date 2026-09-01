@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'motion/react';
+import { RESSORT } from '@/lib/mouvement';
 import { ChevronUp, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
@@ -79,7 +80,7 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
         initial={{ opacity: 0, ...ENTREE[direction] }}
         animate={{ opacity: 1, x: 0, y: 0 }}
         exit={{ opacity: 0, ...ENTREE[direction] }}
-        transition={{ type: 'spring', stiffness: 260, damping: 32 }}
+        transition={RESSORT.glissement}
         className="fixed inset-0 z-[45] pointer-events-auto overflow-hidden"
         style={{ background: d.fond }}
       >

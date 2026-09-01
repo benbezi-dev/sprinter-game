@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { Swords, ChevronRight } from 'lucide-react';
 import { fetchMesDuels, marquerDuelsVus, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
@@ -147,17 +148,16 @@ export function DuelResultPopup() {
       {!voirDuels && (
         <motion.div
           key={duel.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+          initial={VOILE.initial}
+          animate={VOILE.animate}
+          transition={VOILE.transition}
           className="fixed inset-0 z-[55] bg-black/80 backdrop-blur-sm flex items-center justify-center
                      pointer-events-auto overflow-y-auto
                      px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
                      pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]"
         >
           <motion.div
-            initial={{ scale: 0.92, y: 12 }}
-            animate={{ scale: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+            {...PANNEAU}
             className={`w-full max-w-sm bg-card/95 border ${cadre} rounded-2xl shadow-2xl
                         p-4 md:p-6 flex flex-col items-center gap-3`}
           >

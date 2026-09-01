@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { MONTEE } from '@/lib/mouvement';
 
 export function OverScreen() {
   const { 
@@ -28,7 +29,7 @@ export function OverScreen() {
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+        <motion.div {...MONTEE} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">

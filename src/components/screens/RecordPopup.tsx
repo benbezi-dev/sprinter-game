@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { VOILE, PANNEAU, RESSORT, TRANSITION } from '@/lib/mouvement';
 import { Trophy, Loader2 } from 'lucide-react';
 import {
   fetchRaceBest, submitRaceRecord, fetchLeaderboardRaw,
@@ -104,13 +105,10 @@ export function RecordPopup() {
         {open && (
           <motion.div
             className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md pointer-events-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            {...VOILE}
           >
             <motion.div
-              initial={{ scale: 0.7, y: 30, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+              {...PANNEAU}
               className="relative w-full max-w-sm rounded-3xl border-2 border-primary/60 bg-card/95 p-6 md:p-8 flex flex-col items-center gap-3 shadow-[0_0_60px_rgba(248,205,74,0.35)]"
             >
               {/* halo qui respire : le record doit se voir de loin */}
@@ -118,13 +116,13 @@ export function RecordPopup() {
                 aria-hidden
                 className="absolute inset-0 rounded-3xl border-2 border-primary/50 pointer-events-none"
                 animate={{ opacity: [0.15, 0.7, 0.15], scale: [1, 1.035, 1] }}
-                transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+                transition={TRANSITION.battement}
               />
 
               <motion.div
                 initial={{ rotate: -18, scale: 0.5 }}
                 animate={{ rotate: 0, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 12, delay: 0.1 }}
+                transition={{ ...RESSORT.trophee, delay: 0.1 }}
               >
                 <Trophy className="w-10 h-10 md:w-12 md:h-12 text-primary drop-shadow-[0_0_16px_rgba(248,205,74,0.7)]" />
               </motion.div>

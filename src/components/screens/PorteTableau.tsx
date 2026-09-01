@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { KeyRound, Loader2, BarChart3, WifiOff } from 'lucide-react';
 import {
   cleTableau, poserCleTableau, lireServerStats, type ServerStats,

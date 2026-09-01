@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { SURGISSEMENT } from '@/lib/mouvement';
 import { User, Check, Loader2, KeyRound, X, Instagram, Unlink } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, savedCode, lierInstagram, instagramDe, lienInstagram } from '@/game/identity';
@@ -114,7 +115,7 @@ export function NameChip() {
         <div className="fixed inset-0 z-[58] bg-black/85 backdrop-blur-sm flex items-center justify-center
                         pointer-events-auto p-4">
           <motion.div
-            initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            {...SURGISSEMENT}
             className="w-full max-w-sm bg-card/95 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-3"
           >
             <div className="flex items-center justify-between">

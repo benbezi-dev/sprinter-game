@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
+import { VOILE, PANNEAU, TRANSITION } from '@/lib/mouvement';
 import { Swords, Loader2 } from 'lucide-react';
 import { fetchInbox, fetchChallenge, type InboxChallenge } from '@/game/challenge';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
@@ -74,7 +75,7 @@ export function InboxPopup() {
         <motion.button
           onClick={() => setOuvert(true)}
           animate={{ opacity: [1, 0.45, 1], scale: [1, 1.06, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          transition={TRANSITION.battement}
           className="fixed z-[58] pointer-events-auto flex items-center gap-2
                      rounded-full bg-primary text-background font-bold
                      text-[10px] md:text-xs tracking-widest uppercase
@@ -94,13 +95,13 @@ export function InboxPopup() {
       <AnimatePresence>
         {ouvert && (
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            {...VOILE}
             className="fixed inset-0 z-[59] flex items-center justify-center bg-black/80
                        backdrop-blur-md pointer-events-auto
                        px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]"
           >
             <motion.div
-              initial={{ scale: 0.94, y: 10 }} animate={{ scale: 1, y: 0 }}
+              {...PANNEAU}
               className="w-full max-w-sm bg-card/95 border border-primary/30 rounded-2xl
                          p-5 shadow-2xl flex flex-col gap-3 max-h-[80dvh] overflow-y-auto"
             >

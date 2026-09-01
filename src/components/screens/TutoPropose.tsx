@@ -1,6 +1,7 @@
 import React from 'react';
 import { SprinterApp } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import { PANNEAU } from '@/lib/mouvement';
 import { GraduationCap, Play } from 'lucide-react';
 
 /**
@@ -21,9 +22,7 @@ export function TutoPropose({ onChoix }: { onChoix: (apprendre: boolean) => void
     <div className="fixed inset-0 z-[58] bg-black/85 backdrop-blur-sm flex items-center justify-center
                     pointer-events-auto p-4">
       <motion.div
-        initial={{ scale: 0.94, opacity: 0, y: 10 }}
-        animate={{ scale: 1, opacity: 1, y: 0 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        {...PANNEAU}
         className="w-full max-w-sm bg-card/95 border border-white/10 rounded-2xl shadow-2xl
                    p-5 md:p-6 flex flex-col items-center gap-4 text-center"
       >
