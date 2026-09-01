@@ -22,6 +22,9 @@
     furthest:     ['étape la plus loin : ', 'furthest stage: '],
     of_six:       [' sur 6', ' of 6'],
     start:        ['COMMENCER', 'START'],
+    // Le repere qui dit qu'il reste de la page. Lu par les lecteurs d'ecran,
+    // et pose en infobulle : la fleche seule suffit a l'oeil.
+    plus_bas:     ['il y a plus en dessous', 'there is more below'],
     sound:        ['son : ', 'sound: '],
     yes:          ['oui', 'yes'],
     no:           ['non', 'no'],
@@ -651,6 +654,18 @@
                       'pick your events, one single attempt'],
     versus_desc:     ["affronte le fantôme d'un autre joueur",
                       "race another player's ghost"],
+    // La ligne sous le titre quand l'onglet DÉFI est ouvert. Elle annonce la
+    // famille, pas l'un de ses membres : le mode choisi se présente lui-même
+    // juste en dessous, dans son propre panneau.
+    versus_family:   ['plusieurs façons de se mesurer à quelqu’un',
+                      'several ways to take someone on'],
+    // Les façons de se mesurer, en un mot chacune. Assez court pour tenir à
+    // quatre de front sur un téléphone.
+    sub_direct:      ['DIRECT', 'LIVE'],
+    sub_ghost:       ['FANTÔME', 'GHOST'],
+    sub_relais:      ['RELAIS', 'RELAY'],
+    sub_champ:       ['CHAMPIONNAT', 'CHAMPIONSHIP'],
+    sub_direct_on:   ['piste ouverte', 'track open'],
     pick_events:     ['ÉPREUVES', 'EVENTS'],
     pick_level:      ['NIVEAU', 'LEVEL'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
@@ -661,6 +676,7 @@
     total_in:        ['cumul : ', 'total: '],
 
     // défi différé
+    challenge_titre: ['DÉFI PAR FANTÔME', 'GHOST CHALLENGE'],
     challenge_code:  ['CODE DU DÉFI', 'CHALLENGE CODE'],
     challenge_enter: ['entre le code reçu', 'enter the code you got'],
     challenge_load:  ['CHARGER', 'LOAD'],

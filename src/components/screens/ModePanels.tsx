@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { Ghost, Loader2 } from 'lucide-react';
+import { Ghost, Loader2, Radio, Users, Trophy } from 'lucide-react';
 import { fetchChallenge, codeFromUrl, clearUrlCode, normalizeCode, type Challenge } from '@/game/challenge';
 import type { RaceKey } from '@/game/leaderboard';
 import { estInstallee, estIOS } from '@/game/pwa';
-import { LivePanel } from './LivePanel';
+import { LivePanel, type Etape } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
+import { codeDirectUrl } from '@/game/live';
 import { EST_TEST } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
@@ -121,8 +122,45 @@ export function OneShotPanel() {
 }
 
 /* -------------------------------------------------------------------- defi
-   On charge le defi d'un autre joueur a partir de son code, puis on court
-   les memes epreuves contre son fantome. */
+   Se mesurer a quelqu'un. Quatre facons, selon que l'autre est la maintenant
+   ou qu'il repondra demain, qu'on court seul ou a quatre : le direct, le
+   fantome charge par son code, le relais, et le championnat. */
+
+type Sous = 'direct' | 'code' | 'relais' | 'champ';
+
+type Onglet = {
+  id: Sous;
+  cle: string;
+  Icone: typeof Radio;
+  /** Couleur de l'icone au repos. */
+  teinte: string;
+  /** Fond de la pastille quand elle est choisie. */
+  fond: string;
+};
+
+/**
+ * Y a-t-il plus d'une facon de se mesurer a quelqu'un sur ce canal ?
+ *
+ * Le direct et le championnat suivent les duels, le relais le canal de test.
+ * Tout ferme, il ne reste que le defi differe — il est alors seul, et l'ecran
+ * s'en explique une fois plutot que deux.
+ */
+export const PLUSIEURS_DEFIS = DUELS_OUVERTS || EST_TEST;
+
+/**
+ * Un panneau range derriere son onglet.
+ *
+ * Cache, pas demonte : ce qu'il tient — une salle ouverte, un fil d'annonces —
+ * appartient a la course et doit survivre au fait qu'on regarde ailleurs.
+ */
+function Volet({ actif, children }: { actif: boolean; children: React.ReactNode }) {
+  return (
+    <div className={`flex-col gap-3 md:gap-4 ${actif ? 'flex' : 'hidden'}`}>
+      {children}
+    </div>
+  );
+}
+
 export function ChallengePanel() {
   const { N } = SprinterApp;
   const [code, setCode] = useState('');
@@ -172,6 +210,54 @@ export function ChallengePanel() {
     }
   };
 
+  // La facon de se mesurer qu'on regarde en ce moment. Un lien tranche pour
+  // nous : ?defi= ouvre le fantome, ?direct= ouvre la piste. Sinon on montre
+  // le direct, qui est la porte la plus large — a defaut, le fantome, seule
+  // facon ouverte tant que les duels sont fermes.
+  const [sous, setSous] = useState<Sous>(() => {
+    if (codeFromUrl()) return 'code';
+    if (codeDirectUrl()) return 'direct';
+    return DUELS_OUVERTS ? 'direct' : 'code';
+  });
+
+  // Une salle du direct ouverte revient toujours devant. Des gens y attendent
+  // le coup de pistolet : la laisser vivre derriere un onglet ferme, c'est
+  // faire rater le depart a celui qui l'a ouverte.
+  const [etapeDirect, setEtapeDirect] = useState<Etape>('repos');
+  const pisteOuverte = etapeDirect !== 'repos';
+  useEffect(() => { if (pisteOuverte) setSous('direct'); }, [pisteOuverte]);
+
+  // Suis-je engage dans un championnat ? La reponse vient du panneau lui-meme
+  // (voir ChampPanel), et elle decide si l'onglet existe.
+  const [champ, setChamp] = useState(false);
+
+  const onglets: Onglet[] = [];
+  if (DUELS_OUVERTS) onglets.push({
+    id: 'direct', cle: 'sub_direct', Icone: Radio,
+    teinte: 'text-emerald-400', fond: 'bg-emerald-400',
+  });
+  onglets.push({
+    id: 'code', cle: 'sub_ghost', Icone: Ghost,
+    teinte: 'text-primary', fond: 'bg-primary',
+  });
+  // Le relais n'est ouvert que sur le canal de test. En production, EST_TEST
+  // vaut false en dur et le bundler retire tout le panneau.
+  if (EST_TEST) onglets.push({
+    id: 'relais', cle: 'sub_relais', Icone: Users,
+    teinte: 'text-emerald-400', fond: 'bg-emerald-400',
+  });
+  // Le championnat n'apparait qu'a qui y est engage.
+  if (DUELS_OUVERTS && champ) onglets.push({
+    id: 'champ', cle: 'sub_champ', Icone: Trophy,
+    teinte: 'text-primary', fond: 'bg-primary',
+  });
+
+  // Un onglet peut disparaitre sous les pieds — le championnat se termine, un
+  // drapeau se ferme. On retombe alors sur le premier plutot que sur du vide.
+  const actif: Sous = onglets.some(o => o.id === sous) ? sous : (onglets[0]?.id ?? 'code');
+  // A quatre de front, les libelles n'ont plus la place de respirer.
+  const serre = onglets.length >= 4;
+
   const accept = () => {
     if (!ch) return;
     SprinterApp.startOneShot(ch.races, {
@@ -186,21 +272,98 @@ export function ChallengePanel() {
 
   return (
     <div className="flex flex-col gap-3 md:gap-4">
-      {/* Deux facons de se defier, dans l'ordre ou on les decouvre : celle qui
-          demande que l'autre soit la maintenant, puis celle qui s'accommode
-          d'une reponse le lendemain. La premiere alimente le meme classement
-          que la seconde, elle passe donc par le meme interrupteur. */}
-      {DUELS_OUVERTS && <LivePanel />}
-      {/* Le championnat n'apparait que si le joueur y est engage. */}
-      {DUELS_OUVERTS && <ChampPanel />}
-      {/* Le relais n'est ouvert que sur le canal de test. En production,
-          EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
-      {EST_TEST && <RelaisPanel />}
+      {/* La rangee des facons de se mesurer a quelqu'un.
 
+          Elles etaient empilees les unes sous les autres, ce qui revenait a
+          n'en montrer qu'une : celle du haut. Les autres n'existaient que pour
+          qui savait deja qu'elles etaient la et faisait glisser la page pour
+          les retrouver — c'est-a-dire pour personne, le premier jour.
+
+          On reprend donc, un cran plus bas, le geste qui sert deja aux modes
+          de jeu : une rangee, une facon a la fois, et tout ce qui existe
+          visible d'un coup d'oeil sans rien faire defiler. Chaque pastille
+          garde la couleur de son panneau — vert pour ce qui se court a
+          plusieurs et maintenant, or pour ce qui se joue contre un chrono deja
+          pose — pour qu'on retienne les differences avant meme de les lire.
+
+          Une seule facon ouverte, pas de rangee : un choix unique ne se
+          presente pas comme un choix. */}
+      {onglets.length > 1 && (
+        <div className="flex gap-1 p-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10">
+          {onglets.map(o => {
+            const on = actif === o.id;
+            return (
+              <button
+                key={o.id}
+                onClick={() => setSous(o.id)}
+                aria-pressed={on}
+                className={`relative flex-1 min-w-0 flex flex-col items-center gap-0.5 py-1.5 rounded-xl transition-all
+                  ${on
+                    ? `${o.fond} text-background`
+                    : 'text-foreground/70 hover:text-foreground hover:bg-white/10'}`}
+              >
+                <o.Icone className={`w-3.5 h-3.5 shrink-0 ${on ? '' : o.teinte}`} />
+                <span className={`w-full truncate text-center font-bold leading-tight
+                  ${serre ? 'text-[8px] tracking-wide' : 'text-[9px] md:text-[11px] tracking-widest'}`}>
+                  {N.t(o.cle)}
+                </span>
+                {/* Une piste ouverte pendant qu'on regarde ailleurs. Le point
+                    ne sert que dans ce cas : d'ordinaire l'onglet est deja
+                    revenu devant tout seul. */}
+                {o.id === 'direct' && pisteOuverte && !on && (
+                  <span className="absolute top-1 right-1.5 flex h-1.5 w-1.5"
+                        title={N.t('sub_direct_on')}>
+                    <span className="animate-ping absolute inline-flex h-full w-full
+                                     rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Les panneaux restent montes, celui qu'on ne regarde pas y compris.
+          Une salle du direct tient une liaison ouverte, le championnat un fil
+          d'annonces, le relais son vestiaire : les demonter au changement
+          d'onglet couperait des choses qui appartiennent a la course, pas a
+          l'ecran qui la regarde. C'est deja ainsi qu'ils vivaient quand ils
+          etaient tous les quatre a l'ecran en meme temps. */}
+      {DUELS_OUVERTS && (
+        <Volet actif={actif === 'direct'}>
+          <LivePanel onEtape={setEtapeDirect} />
+        </Volet>
+      )}
+
+      {EST_TEST && (
+        <Volet actif={actif === 'relais'}>
+          <RelaisPanel />
+        </Volet>
+      )}
+
+      {DUELS_OUVERTS && (
+        <Volet actif={actif === 'champ'}>
+          <ChampPanel onEdition={e => setChamp(!!e)} />
+        </Volet>
+      )}
+
+      <Volet actif={actif === 'code'}>
       <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
-          {N.t('versus_desc')}
-        </p>
+        {/* Le panneau se presente comme ses voisins : un titre, une ligne pour
+            dire ce que c'est. Quand il est seul, la ligne est deja sous le
+            titre du jeu et on ne la repete pas. */}
+        <div className="flex items-center gap-2 justify-center">
+          <Ghost className="w-4 h-4 text-primary" />
+          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+            {N.t('challenge_titre')}
+          </h3>
+        </div>
+        {PLUSIEURS_DEFIS && (
+          <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
+            {N.t('versus_desc')}
+          </p>
+        )}
 
         {horsApp && (
           <div className="rounded-xl border border-cyan-400/35 bg-cyan-400/[0.07] px-3 py-2.5
@@ -292,6 +455,7 @@ export function ChallengePanel() {
       >
         {N.t('challenge_accept')}
       </button>
+      </Volet>
     </div>
   );
 }

@@ -19,7 +19,7 @@ const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 /** Le mot du vainqueur, apres la course. */
 const MICRO_VAINQUEUR_MS = 5000;
 
-type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
+export type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
 
 /**
  * Course en direct.
@@ -30,10 +30,21 @@ type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'revi
  * coeur qui bat. En echange il faut que les deux soient la, maintenant, ce que
  * le salon organise.
  */
-export function LivePanel() {
+export function LivePanel({ onEtape }: { onEtape?: (e: Etape) => void } = {}) {
   const { N, RACES } = SprinterApp;
 
   const [etape, setEtape] = useState<Etape>('repos');
+
+  // Ou en est la piste, dit a qui nous affiche. Une salle ouverte n'est pas un
+  // panneau parmi d'autres : des gens attendent le coup de pistolet dedans, et
+  // l'ecran qui nous contient doit pouvoir nous ramener devant les yeux du
+  // joueur plutot que de nous laisser vivre derriere un onglet ferme.
+  const prevenu = useRef<Etape | null>(null);
+  useEffect(() => {
+    if (prevenu.current === etape) return;
+    prevenu.current = etape;
+    onEtape?.(etape);
+  }, [etape, onEtape]);
   const [code, setCode] = useState('');
   const [saisie, setSaisie] = useState('');
   const [epreuve, setEpreuve] = useState<RaceKey>('100');
