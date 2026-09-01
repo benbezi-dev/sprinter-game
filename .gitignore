@@ -36,5 +36,18 @@ android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
+android/app/src/main/assets/public/
+
+# La cle de signature Play et ses mots de passe. Perdre ce trousseau, c'est
+# perdre le droit de mettre l'application a jour : il se range hors du projet
+# et se sauvegarde ailleurs. Il n'entre jamais ici.
+# Tout ce qui s'appelle « keystore » sous android/ — le fichier .properties,
+# mais aussi les copies et les notes ou l'on garde le mot de passe le temps de
+# le ranger ailleurs. Une regle large plutot qu'une liste : c'est la seule qui
+# tienne quand le fichier suivant s'appellera « keystore - copie 2.txt ».
+android/keystore*
+!android/keystore.properties.exemple
+*.jks
+*.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
 /icons/

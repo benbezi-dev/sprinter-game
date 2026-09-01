@@ -32,4 +32,22 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Le micro. Deux endroits du jeu s'en servent, et sans cette ligne les deux
+      echouent en silence dans l'enveloppe native : `game/mot.ts` enregistre le
+      mot du vainqueur, `game/voix.ts` ouvre la voix du duel en direct. Le
+      navigateur demande l'autorisation tout seul ; une application doit l'avoir
+      declaree ici d'abord, sinon la demande n'est meme pas posee.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!--
+      Le micro n'est pas une condition d'installation : un telephone sans micro
+      doit pouvoir installer le jeu et courir. Sans cette ligne, Play deduit du
+      `uses-permission` ci-dessus une exigence materielle et retire l'application
+      du catalogue de ces appareils.
+    -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 </manifest>
