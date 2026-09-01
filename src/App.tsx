@@ -34,6 +34,7 @@ import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
+import { LiaisonParLien } from '@/components/screens/LiaisonParLien';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
@@ -161,6 +162,10 @@ function MainGame() {
           n'est embarque. */}
       {EST_TEST && <Mondes />}
       <InstallPrompt />
+      {/* Le telephone qu'on vient de viser arrive avec un jeton dans l'adresse.
+          Il se consomme ici, au-dessus de tout : la liaison est la premiere
+          chose a regler, avant meme l'ecran-titre. */}
+      <LiaisonParLien />
       </>)}
     </div>
   );

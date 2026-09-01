@@ -4,6 +4,7 @@ import {
   fetchBoardStats, type BoardStats, type ServerStats,
 } from '@/game/stats';
 import { PorteTableau } from './PorteTableau';
+import { FileRecuperations } from './FileRecuperations';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -68,6 +69,10 @@ function TableauDeBord({ srv }: { srv: ServerStats }) {
             Retour au jeu
           </a>
         </header>
+
+        {/* En tete, parce que c'est la seule section du tableau qui attend une
+            decision : le reste se consulte, celle-ci se traite. */}
+        <FileRecuperations />
 
         {chargement && (
           <div className="flex items-center gap-2 text-white/50 text-sm py-10 justify-center">

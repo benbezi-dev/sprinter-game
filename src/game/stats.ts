@@ -191,6 +191,71 @@ export async function fetchBoardStats(): Promise<BoardStats> {
   return { parEpreuve, joueurs: [...noms], lignes, actifs24h: a24, actifs7j: a7, actifs30j: a30 };
 }
 
+/* ---------------------------------------------- la file des recuperations
+
+   Un joueur qui a tout perdu depose une demande ; quelqu'un la tranche. Ce
+   quelqu'un lit ici, depuis le tableau de bord, mais avec l'autre cle.
+
+   Ce n'est pas un exces de prudence : accepter une demande donne a quelqu'un
+   les clefs d'un nom, la ou le reste du tableau ne fait que montrer des
+   compteurs. Le worker le dit deja pour `/stats` (voir `estTableau` dans
+   acces.js) — on suit la meme ligne, et la cle d'administration ne se range
+   pas dans le navigateur : elle se tape au moment de s'en servir, et repart
+   avec l'onglet. */
+
+export type DemandeRecup = {
+  id: number;
+  nom: string;
+  appareil: string;
+  indice: string | null;
+  cree_le: number;
+  etat: 'attente' | 'accepte' | 'refuse';
+  tranche_le: number | null;
+  nom_cree_le: number | null;
+  insta: string | null;
+  phrase: string | null;
+  compte: string;
+  appareils: number;
+  courses: number;
+  derniere_course: number | null;
+};
+
+export type LectureFile =
+  | { etat: 'ok'; demandes: DemandeRecup[] }
+  | { etat: 'refuse' }
+  | { etat: 'panne' };
+
+export async function lireRecuperations(cle: string, toutes = false): Promise<LectureFile> {
+  const c = cle.trim();
+  if (!c) return { etat: 'refuse' };
+  try {
+    const res = await fetch(`${API_BASE}/recuperations${toutes ? '?toutes=1' : ''}`, {
+      headers: { 'X-Sprinter-Admin': c },
+    });
+    if (res.status === 404 || res.status === 403) return { etat: 'refuse' };
+    if (!res.ok) return { etat: 'panne' };
+    const d = await res.json();
+    return { etat: 'ok', demandes: d.demandes || [] };
+  } catch {
+    return { etat: 'panne' };
+  }
+}
+
+export async function trancherRecuperation(
+  cle: string, id: number, accepte: boolean,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/recuperation/trancher`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Sprinter-Admin': cle.trim() },
+      body: JSON.stringify({ id, accepte }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Le tableau de bord est-il demande dans l'URL ? */
 export function dashboardRequested(): boolean {
   try {

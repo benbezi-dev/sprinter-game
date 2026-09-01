@@ -560,9 +560,12 @@
                       'write it down: it links your other devices to this name, and stops anyone taking it'],
     id_show:         ['VOIR MON CODE', 'SHOW MY CODE'],
     id_reserve:      ['RÉSERVER', 'RESERVE'],
-    id_taken:        ['ce nom est déjà pris par quelqu’un', 'this name is already taken'],
-    id_taken_help:   ['si c’est le tien, entre son code de récupération',
-                      'if it is yours, enter its recovery code'],
+    // « Ce nom est pris » etait exact et inutile : le nom pris, c'est presque
+    // toujours le sien. On dit donc d'abord ce qu'il faut faire.
+    id_taken:        ['« {n} », c’est déjà toi ?', 'is “{n}” already you?'],
+    id_taken_help:   ['ce nom appartient à quelqu’un. Si c’est toi, entre ton code de récupération pour le retrouver sur cet appareil.',
+                      'this name belongs to someone. If that is you, enter your recovery code to get it back on this device.'],
+    id_taken_other:  ['sinon, choisis-en un autre', 'otherwise, pick another one'],
     id_link:         ['RELIER', 'LINK'],
     id_linked:       ['appareil relié à {n}', 'device linked to {n}'],
     id_bad_code:     ['code incorrect', 'wrong code'],
@@ -570,6 +573,48 @@
     id_link_title:   ['UN AUTRE APPAREIL ?', 'ANOTHER DEVICE?'],
     id_link_help:    ['entre ton nom et ton code pour retrouver ici tes chronos et ton historique',
                       'enter your name and code to find your times and history here'],
+
+    // le code colle dans le champ du nom
+    id_is_code:      ['ça, c’est ton code — pas ton nom', 'that is your code — not your name'],
+    id_is_code_help: ['il ouvre le nom « {n} ». Écris ce nom au-dessus, puis colle le code ici.',
+                      'it unlocks the name “{n}”. Type that name above, then paste the code here.'],
+
+    // relier un telephone en le visant
+    id_qr_open:      ['RELIER UN TÉLÉPHONE', 'LINK A PHONE'],
+    id_qr_title:     ['VISE CE CARRÉ', 'SCAN THIS SQUARE'],
+    id_qr_help:      ['avec l’appareil photo de l’autre téléphone. Il portera ce nom sans rien avoir à taper.',
+                      'with the other phone’s camera. It will carry this name without typing anything.'],
+    id_qr_expire:    ['ce lien vaut 10 minutes et ne sert qu’une fois',
+                      'this link lasts 10 minutes and works once'],
+    id_qr_again:     ['UN NOUVEAU LIEN', 'A NEW LINK'],
+    id_qr_copy:      ['copier le lien', 'copy the link'],
+    id_qr_fail:      ['impossible d’ouvrir un lien depuis cet appareil',
+                      'could not open a link from this device'],
+    id_qr_close:     ['fermer', 'close'],
+
+    // ce que voit le telephone qui vient d'etre vise
+    id_join_wait:    ['liaison en cours…', 'linking…'],
+    id_join_ok:      ['c’est fait : cet appareil est {n}', 'done: this device is {n}'],
+    id_join_dead:    ['ce lien a expiré ou a déjà servi — demande-s’en un autre',
+                      'this link has expired or was already used — ask for another'],
+
+    // recuperer un code perdu
+    id_lost:         ['j’ai perdu mon code', 'I lost my code'],
+    id_lost_title:   ['RETROUVER SON NOM', 'GET YOUR NAME BACK'],
+    id_lost_who:     ['quel nom veux-tu retrouver ?', 'which name do you want back?'],
+    id_lost_send:    ['ENVOYER LA DEMANDE', 'SEND THE REQUEST'],
+    id_lost_hint:    ['dis-nous qui tu es (facultatif)', 'tell us who you are (optional)'],
+    id_lost_insta_t: ['PROUVE QUE C’EST TON COMPTE', 'PROVE THE ACCOUNT IS YOURS'],
+    id_lost_insta:   ['envoie ce mot en message privé à @{c}, depuis @{i}. Personne d’autre que toi ne peut écrire depuis ce compte — c’est ce qui prouve que le nom est le tien.',
+                      'send this word as a private message to @{c}, from @{i}. Nobody else can write from that account — that is what proves the name is yours.'],
+    id_lost_no_insta:['aucun compte Instagram n’est lié à ce nom, alors la demande sera tranchée à la main. Raconte ce que tu peux : quand tu jouais, sur quel appareil, avec qui.',
+                      'no Instagram account is linked to this name, so the request will be settled by hand. Tell us what you can: when you played, on which device, with whom.'],
+    id_lost_waiting: ['demande envoyée. Reviens ici pour voir la réponse.',
+                      'request sent. Come back here to see the answer.'],
+    id_lost_refused: ['cette demande a été refusée', 'this request was refused'],
+    id_lost_back:    ['ton nom t’est rendu : {n}', 'your name is yours again: {n}'],
+    id_lost_none:    ['ce nom n’a jamais été réservé — il est libre, prends-le',
+                      'this name was never reserved — it is free, take it'],
 
     // installation sur le telephone
     install_title:   ['INSTALLER LE JEU', 'INSTALL THE GAME'],
