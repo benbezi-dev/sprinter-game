@@ -31,6 +31,10 @@ import {
   ensureReseauxTables, regarderClassement, regarderDuel, regarderSacre,
   regarderCap, fileDAttente, ecarter, marquerPublie, MOMENTS,
 } from './reseaux.js';
+import {
+  ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
+  listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
+} from './identite.js';
 
 /**
  * Portes du relais et des championnats.
@@ -1345,9 +1349,29 @@ export default {
       const key = propre.trim().toLowerCase();
       if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
       await ensurePlayerTables(env.DB);
+      // Plus bas, le rattachement des appareils lit la table des scores. Sur
+      // une base neuve — celle du canal de test, ou n'importe quel deploiement
+      // avant le premier chrono — cette table n'existe pas encore, et toute
+      // reservation de nom echouait sur un D1_ERROR muet.
+      await ensureScoreGhost(env.DB);
 
       const existe = await env.DB.prepare(
         `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
+
+      // Ce n'est pas un nom, c'est un code de recuperation.
+      //
+      // Le geste est naturel : on a perdu son nom, on a son code sous la main,
+      // et le seul champ visible est celui du nom. Le jeu le reservait alors
+      // comme un pseudo, rendait un second code, et le joueur repartait avec
+      // une identite qu'il n'avait pas demandee — pendant que la sienne
+      // restait fermee. On l'arrete ici, et on renvoie le nom qui va avec pour
+      // que l'ecran puisse proposer la liaison au lieu d'un refus sec.
+      if (!existe) {
+        const proprietaire = await estUnCode(env.DB, propre);
+        if (proprietaire) {
+          return json({ ok: false, est_un_code: true, nom: proprietaire });
+        }
+      }
 
       if (existe) {
         const lie = await env.DB.prepare(
@@ -1371,6 +1395,88 @@ export default {
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();
       return json({ ok: true, name: propre, code });
+    }
+
+    // ------------------------------------------- relier sans retaper le code
+    //
+    // Un appareil deja relie tire un jeton ; le telephone le presente. Entre
+    // les deux, un QR code — parce que viser vaut mieux qu'epeler.
+    if (url.pathname === '/transfert/nouveau' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const r = await ouvrirTransfert(env.DB, key, device_id);
+      if (r.erreur) return json({ error: 'cet appareil n est pas relie a ce nom' }, 403);
+      return json({ ok: true, ...r });
+    }
+
+    if (url.pathname === '/transfert/utiliser' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, jeton } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const r = await utiliserTransfert(env.DB, jeton, device_id);
+      // Un lien mort n'est pas une erreur de serveur : le jeu a une phrase
+      // pour chacun de ces trois cas, et il lui faut donc les trois.
+      if (r.erreur) return json({ ok: false, [r.erreur.replace(/-/g, '_')]: true });
+      return json(r);
+    }
+
+    // ------------------------------------------------ recuperer un code perdu
+    //
+    // Voir worker/src/identite.js pour ce qui prouve quoi : ici on ne fait que
+    // deposer la demande, la relire, et — pour l'administrateur — la trancher.
+    if (url.pathname === '/recuperation' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, indice } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const propre = cleanName(name);
+      const key = propre.trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const r = await demanderRecuperation(env.DB, {
+        nameKey: key, nom: propre, deviceId: device_id, indice,
+      });
+      if (r.erreur === 'inconnu') return json({ ok: false, inconnu: true });
+      return json(r);
+    }
+
+    if (url.pathname === '/recuperation' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!key) return json({ etat: 'aucune' });
+      await ensurePlayerTables(env.DB);
+      return json(await etatRecuperation(env.DB, key, deviceId));
+    }
+
+    // La file et la decision passent par la cle d'administration, pas par celle
+    // du tableau de bord : accepter une demande, c'est donner a quelqu'un les
+    // clefs d'un nom. Lire des compteurs et ouvrir une identite ne sont pas la
+    // meme responsabilite — meme raisonnement que pour estTableau.
+    if (url.pathname === '/recuperations' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'introuvable' }, 404);
+      await ensurePlayerTables(env.DB);
+      await ensureRaceTable(env.DB);
+      const toutes = url.searchParams.get('toutes') === '1';
+      return json({
+        compte: COMPTE_JEU,
+        demandes: await listerRecuperations(env.DB, { toutes }),
+      });
+    }
+
+    if (url.pathname === '/recuperation/trancher' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const r = await trancherRecuperation(env.DB, (body || {}).id, !!(body || {}).accepte);
+      return r.erreur ? json({ error: r.erreur }, 404) : json(r);
     }
 
     // Lier son compte Instagram a son nom de joueur.

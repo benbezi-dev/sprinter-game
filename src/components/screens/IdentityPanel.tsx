@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { KeyRound, Copy, Check, Loader2, ShieldCheck } from 'lucide-react';
+import { KeyRound, Copy, Check, Loader2, ShieldCheck, LifeBuoy } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, linkDevice, savedCode } from '@/game/identity';
+import { LiaisonQR } from './LiaisonQR';
+import { Recuperation } from './Recuperation';
 
 /**
  * Identite du joueur : son nom, le code qui le lui reserve, et de quoi relier
@@ -14,8 +16,12 @@ export function IdentityPanel() {
   const [nom, setNom] = useState(getSavedName());
   const [code, setCode] = useState(savedCode());
   const [voirCode, setVoirCode] = useState(false);
-  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'erreur'>('repos');
+  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'est_un_code' | 'erreur'>('repos');
   const [copie, setCopie] = useState(false);
+  // Le nom auquel appartient le code que le joueur vient de coller dans le
+  // champ du nom. On le garde pour pouvoir lui proposer la liaison d'un geste.
+  const [nomDuCode, setNomDuCode] = useState('');
+  const [perdu, setPerdu] = useState(false);
 
   const [autreCode, setAutreCode] = useState('');
   const [lien, setLien] = useState<'' | 'envoi' | 'lie' | 'mauvais' | 'inconnu' | 'erreur'>('');
@@ -28,6 +34,15 @@ export function IdentityPanel() {
     if (r.etat === 'reserve') {
       saveName(r.name); setNom(r.name); setCode(r.code); setVoirCode(true); setEtat('repos');
     } else if (r.etat === 'pris') setEtat('pris');
+    else if (r.etat === 'est_un_code') {
+      // Le code devient ce qu'il aurait toujours du etre : la preuve, pas le
+      // pseudo. On le deplace dans le champ prevu pour lui, et on remet le
+      // vrai nom dans celui du nom.
+      setAutreCode(nom.trim().toUpperCase());
+      setNomDuCode(r.nom);
+      setNom(r.nom);
+      setEtat('est_un_code');
+    }
     else setEtat('erreur');
   };
 
@@ -112,12 +127,20 @@ export function IdentityPanel() {
       )}
 
       {/* Nom deja pris : on ne bloque pas, on explique et on propose le code. */}
-      {(etat === 'pris' || lien) && (
+      {(etat === 'pris' || etat === 'est_un_code' || lien) && (
         <div className="rounded-xl border border-white/10 bg-black/25 p-3 flex flex-col gap-2">
           {etat === 'pris' && (
             <>
               <span className="text-xs font-bold text-destructive text-center">{N.t('id_taken')}</span>
               <span className="text-[10px] text-muted-foreground text-center">{N.t('id_taken_help')}</span>
+            </>
+          )}
+          {etat === 'est_un_code' && (
+            <>
+              <span className="text-xs font-bold text-primary text-center">{N.t('id_is_code')}</span>
+              <span className="text-[10px] text-muted-foreground text-center">
+                {N.t('id_is_code_help', { n: nomDuCode })}
+              </span>
             </>
           )}
           {lien !== 'lie' && (
@@ -158,8 +181,32 @@ export function IdentityPanel() {
         </div>
       )}
 
+      {/* Un nom a nous : on peut relier un autre telephone sans rien dicter. */}
+      {code && nom.trim() && etat !== 'pris' && etat !== 'est_un_code' && (
+        <LiaisonQR nom={nom.trim()} />
+      )}
+
+      {/* La porte de secours : plus de code, plus d'appareil relie. */}
+      {perdu ? (
+        <Recuperation
+          nom={nom.trim()}
+          surRetour={(c, n) => {
+            setCode(c); setNom(n); setVoirCode(true);
+            setPerdu(false); setEtat('repos'); setLien('');
+          }}
+        />
+      ) : (
+        (etat === 'pris' || lien === 'mauvais' || lien === 'inconnu') && (
+          <button onClick={() => setPerdu(true)}
+                  className="text-[10px] font-bold tracking-widest text-muted-foreground
+                             hover:text-primary transition-colors flex items-center gap-1.5 self-start">
+            <LifeBuoy className="w-3 h-3" /> {N.t('rec_lost')}
+          </button>
+        )
+      )}
+
       {/* Comment retrouver ses chronos depuis un autre telephone. */}
-      {!code && etat !== 'pris' && (
+      {!code && etat !== 'pris' && etat !== 'est_un_code' && (
         <div className="flex flex-col gap-1">
           <span className="text-[9px] md:text-[10px] font-bold tracking-widest text-muted-foreground">
             {N.t('id_link_title')}

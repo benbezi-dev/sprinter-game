@@ -34,7 +34,9 @@ import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
+import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
+import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -161,6 +163,10 @@ function MainGame() {
           n'est embarque. */}
       {EST_TEST && <Mondes />}
       <InstallPrompt />
+      {/* Le telephone qui vient de viser un QR code : la liaison se fait seule,
+          et se pose au-dessus de tout le reste — c'est la seule chose que ce
+          joueur-la ait demandee en ouvrant le jeu. */}
+      <LiaisonEntrante />
       </>)}
     </div>
   );
@@ -187,11 +193,18 @@ function App() {
   // GitHub Pages n'a pas de repli SPA ici, un chemin dedie renverrait une 404
   // au chargement direct. Meme convention que le lien de defi, ?defi=.
   const [stats] = useState(dashboardRequested);
+  // La file des recuperations suit la meme convention, et reste separee du
+  // tableau de bord : elle ne s'ouvre pas avec la meme cle.
+  const [file] = useState(() => {
+    try { return new URLSearchParams(window.location.search).has('recuperations'); }
+    catch { return false; }
+  });
 
   // Un passage compte une fois par session, et seulement pour le jeu : ouvrir
   // le tableau de bord ne doit pas gonfler ses propres chiffres.
-  useEffect(() => { if (!stats) pingVisit(); }, [stats]);
+  useEffect(() => { if (!stats && !file) pingVisit(); }, [stats, file]);
 
+  if (file) return <FileRecuperations />;
   if (stats) return <Dashboard />;
 
   return (

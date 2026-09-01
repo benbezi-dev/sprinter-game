@@ -21,6 +21,11 @@ function keepCode(code: string) {
 export type ClaimResult =
   | { etat: 'reserve'; name: string; code: string; deja: boolean }
   | { etat: 'pris' }
+  // Le joueur a colle son code de recuperation dans le champ du nom. Ce n'est
+  // pas une erreur de sa part : il a perdu son nom, il a son code sous la
+  // main, et le seul champ visible est celui du nom. Le serveur nous rend le
+  // nom auquel ce code appartient, pour qu'on propose la liaison.
+  | { etat: 'est_un_code'; nom: string }
   | { etat: 'reseau' };
 
 /**
@@ -37,6 +42,7 @@ export async function claimName(name: string): Promise<ClaimResult> {
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
     if (d.ok) { keepCode(d.code); return { etat: 'reserve', name: d.name, code: d.code, deja: !!d.deja }; }
+    if (d.est_un_code) return { etat: 'est_un_code', nom: d.nom };
     if (d.pris) return { etat: 'pris' };
     return { etat: 'reseau' };
   } catch {
@@ -126,4 +132,247 @@ export async function instagramDe(nom: string): Promise<string | null> {
 export function lienInstagram(insta: string): string {
   const propre = nettoyerInsta(insta) || String(insta || '');
   return `https://instagram.com/${encodeURIComponent(propre)}`;
+}
+
+/* ===========================================================================
+   RETROUVER SON NOM
+
+   Deux chemins, cote jeu. Voir worker/src/identite.js pour ce que chacun
+   prouve — c'est la que la question est tranchee.
+   =========================================================================== */
+
+/* ---------------------------------------------------------- le transfert
+   « J'ai un telephone qui me connait deja. »
+
+   L'appareil relie tire un jeton a usage unique, l'affiche en QR code, et le
+   nouveau telephone le vise. Personne n'epelle rien.
+
+   Le jeton voyage dans le FRAGMENT de l'adresse (#lier=), pas dans sa partie
+   interrogeable (?lier=). Un fragment ne quitte jamais le navigateur : il
+   n'apparait ni dans les journaux du serveur, ni dans ceux du CDN, ni dans le
+   referer envoye au site suivant. Pour ce qui ouvre un nom, c'est la seule
+   place acceptable dans une URL. */
+
+export type TransfertOuvert = { jeton: string; expire_le: number; vie_ms: number };
+
+/** Depuis un appareil deja relie : ouvrir un lien de liaison. */
+export async function ouvrirTransfert(nom: string): Promise<TransfertOuvert | null> {
+  try {
+    const res = await fetch(`${API_BASE}/transfert/nouveau`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name: nom }),
+    });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d.ok ? { jeton: d.jeton, expire_le: d.expire_le, vie_ms: d.vie_ms } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** L'adresse a viser, celle que porte le QR code. */
+export function lienDeLiaison(jeton: string): string {
+  return `${window.location.origin}${window.location.pathname}#lier=${jeton}`;
+}
+
+/** Un jeton present dans l'adresse au chargement, s'il y en a un. */
+export function jetonDepuisUrl(): string {
+  try {
+    const m = /[#&]lier=([A-Za-z0-9]{6,12})/.exec(window.location.hash);
+    return m ? m[1].toUpperCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Retirer le jeton de l'adresse une fois pris en compte.
+ *
+ * Sans cela, recharger la page rejouerait une liaison deja faite — et
+ * afficherait « ce lien a deja servi » a quelqu'un qui n'a rien demande.
+ */
+export function oublierJetonUrl() {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = url.hash.replace(/[#&]?lier=[A-Za-z0-9]{6,12}/, '').replace(/^#$/, '');
+    window.history.replaceState({}, '', url.toString());
+  } catch {
+    /* pas d'History API : sans consequence, le jeton est deja consomme */
+  }
+}
+
+export type LiaisonResult =
+  | { etat: 'lie'; name: string; code: string }
+  | { etat: 'inconnu' | 'deja_utilise' | 'perime' | 'reseau' };
+
+/** Depuis le nouveau telephone : presenter le jeton. */
+export async function utiliserTransfert(jeton: string): Promise<LiaisonResult> {
+  try {
+    const res = await fetch(`${API_BASE}/transfert/utiliser`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), jeton }),
+    });
+    if (!res.ok) return { etat: 'reseau' };
+    const d = await res.json();
+    if (d.ok) { keepCode(d.code); return { etat: 'lie', name: d.name, code: d.code }; }
+    if (d.deja_utilise) return { etat: 'deja_utilise' };
+    if (d.perime) return { etat: 'perime' };
+    return { etat: 'inconnu' };
+  } catch {
+    return { etat: 'reseau' };
+  }
+}
+
+/* -------------------------------------------------------- la recuperation
+   « Je n'ai plus rien. »
+
+   Personne ne peut trancher cela automatiquement : le chrono, le rang et le
+   pseudo Instagram sont affiches au TOP 500, donc connus de qui veut les
+   lire. La demande est deposee, un humain decide.
+
+   Sauf si un compte Instagram est lie au nom. Alors le serveur tire un mot de
+   passage, et le joueur l'envoie en message prive au compte du jeu DEPUIS ce
+   compte-la. Declarer un pseudo ne prouve rien ; ecrire depuis le compte, si.
+   C'est la seule verification reelle que ce jeu puisse offrir, et c'est
+   pourquoi l'ecran pousse a lier son Instagram avant d'en avoir besoin. */
+
+export type Recuperation =
+  /** L'appareil etait encore relie : il n'y avait rien a arbitrer. */
+  | { etat: 'rendu'; name: string; code: string }
+  | { etat: 'attente'; depuis?: number; insta: string | null; phrase: string | null; compte: string }
+  | { etat: 'refuse' }
+  | { etat: 'aucune' }
+  | { etat: 'inconnu' }
+  | { etat: 'reseau' };
+
+/** Deposer une demande — ou recuperer son code tout de suite si on y a droit. */
+export async function demanderRecuperation(nom: string, indice?: string): Promise<Recuperation> {
+  try {
+    const res = await fetch(`${API_BASE}/recuperation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name: nom, indice }),
+    });
+    if (!res.ok) return { etat: 'reseau' };
+    const d = await res.json();
+    if (d.inconnu) return { etat: 'inconnu' };
+    if (d.direct) { keepCode(d.code); return { etat: 'rendu', name: d.name, code: d.code }; }
+    return {
+      etat: 'attente', depuis: d.cree_le,
+      insta: d.insta ?? null, phrase: d.phrase ?? null, compte: d.compte,
+    };
+  } catch {
+    return { etat: 'reseau' };
+  }
+}
+
+/** Ou en est ma demande ? C'est cette lecture qui delivre le code accepte. */
+export async function etatRecuperation(nom: string): Promise<Recuperation> {
+  try {
+    const q = `device_id=${encodeURIComponent(getDeviceId())}&name=${encodeURIComponent(nom)}`;
+    const res = await fetch(`${API_BASE}/recuperation?${q}`);
+    if (!res.ok) return { etat: 'reseau' };
+    const d = await res.json();
+    if (d.etat === 'accepte') { keepCode(d.code); return { etat: 'rendu', name: d.name, code: d.code }; }
+    if (d.etat === 'attente') {
+      return {
+        etat: 'attente', depuis: d.depuis,
+        insta: d.insta ?? null, phrase: d.phrase ?? null, compte: d.compte,
+      };
+    }
+    if (d.etat === 'refuse') return { etat: 'refuse' };
+    if (d.etat === 'inconnu') return { etat: 'inconnu' };
+    return { etat: 'aucune' };
+  } catch {
+    return { etat: 'reseau' };
+  }
+}
+
+/**
+ * Ouvrir la conversation avec le compte du jeu.
+ *
+ * Instagram n'expose aucune adresse qui preremplisse un message prive — la
+ * seule chose qu'on puisse faire est d'amener le joueur sur le profil, le mot
+ * de passage copie dans son presse-papiers. C'est aussi pour cela que l'ecran
+ * affiche le mot en grand : il doit survivre a un aller-retour entre deux
+ * applications.
+ */
+export function lienMessageJeu(compte: string): string {
+  return `https://instagram.com/${encodeURIComponent(compte)}`;
+}
+
+/* ---------------------------------------------- la file, cote administrateur
+
+   Celui qui tranche ne passe pas par la cle du tableau de bord. Lire des
+   compteurs et rendre un nom a quelqu'un ne sont pas la meme responsabilite :
+   la premiere se consulte depuis n'importe quel navigateur, la seconde ouvre
+   une identite. Voir estTableau / estAdmin dans worker/src/acces.js.
+
+   Comme pour le tableau de bord, la cle n'est pas verifiee par une route a
+   part : on la presente a la file, et la reponse tranche. */
+
+const CLE_ADMIN = 'sprinter_cle_admin';
+
+export function cleAdmin(): string {
+  try { return localStorage.getItem(CLE_ADMIN) || ''; } catch { return ''; }
+}
+export function poserCleAdmin(cle: string) {
+  try { localStorage.setItem(CLE_ADMIN, cle); } catch { /* sans memoire */ }
+}
+
+export type DemandeRecuperation = {
+  id: number;
+  nom: string;
+  name_key: string;
+  appareil: string;
+  indice: string | null;
+  cree_le: number;
+  etat: 'attente' | 'accepte' | 'refuse';
+  tranche_le: number | null;
+  nom_cree_le: number | null;
+  /** De quel compte le message doit venir. */
+  insta: string | null;
+  /** Et quel mot il doit porter. Les deux ensemble, ou rien. */
+  phrase: string | null;
+  compte: string;
+  appareils: number;
+  courses: number;
+  derniere_course: number | null;
+};
+
+export type FileRecuperations =
+  | { etat: 'ok'; demandes: DemandeRecuperation[] }
+  | { etat: 'refuse' | 'panne' };
+
+export async function lireFileRecuperations(cle?: string, toutes = false): Promise<FileRecuperations> {
+  const c = cle ?? cleAdmin();
+  if (!c) return { etat: 'refuse' };
+  try {
+    const res = await fetch(`${API_BASE}/recuperations${toutes ? '?toutes=1' : ''}`, {
+      headers: { 'X-Sprinter-Admin': c },
+    });
+    if (res.status === 404 || res.status === 403) return { etat: 'refuse' };
+    if (!res.ok) return { etat: 'panne' };
+    const d = await res.json();
+    return { etat: 'ok', demandes: d.demandes || [] };
+  } catch {
+    return { etat: 'panne' };
+  }
+}
+
+/** Accepter ou refuser. L'acceptation ne relie rien : c'est l'appareil
+ *  demandeur qui viendra chercher sa reponse, et lui seul en profitera. */
+export async function trancherRecuperation(id: number, accepte: boolean): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/recuperation/trancher`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Sprinter-Admin': cleAdmin() },
+      body: JSON.stringify({ id, accepte }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
