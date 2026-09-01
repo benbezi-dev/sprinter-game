@@ -1,4 +1,4 @@
-// Course en direct — deux joueurs, une piste, en meme temps.
+// Course en direct — de un a huit coureurs, une piste, en meme temps.
 //
 // Le defi differe fait courir contre une trace : on rattrape quelqu'un qui a
 // deja fini. Ici l'adversaire court pendant qu'on court, personne ne connait
@@ -22,6 +22,21 @@ import { avecAcces, codeAcces, EST_TEST } from './canal';
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
+/**
+ * Les tailles de piste possibles.
+ *
+ * Huit couloirs, c'est une piste d'athletisme. Un, c'est un tour de piste
+ * seul — le stade et la video, sans personne a attendre. Et entre les deux,
+ * TOUTES les tailles, y compris les impaires : on se retrouve a trois bien
+ * plus souvent qu'a quatre, et une piste qu'on ne peut pas remplir ne part
+ * jamais, puisque le depart attend qu'elle le soit.
+ */
+export const MIN_COULOIRS = 1;
+export const MAX_COULOIRS = 8;
+/** Les tailles proposees, dans l'ordre. */
+export const COULOIRS: number[] =
+  Array.from({ length: MAX_COULOIRS - MIN_COULOIRS + 1 }, (_, i) => MIN_COULOIRS + i);
+
 export type JoueurSalle = {
   id: string; nom: string; pret: boolean; d: number;
   fin: number | null; hote: boolean;
@@ -44,7 +59,7 @@ export type Presentation = {
 
 export type EtatSalle = {
   joueurs: JoueurSalle[];
-  /** Nombre de couloirs de cette piste : 2 pour un duel, jusqu'a 8. */
+  /** Nombre de couloirs de cette piste : de 1 a 8, 2 pour un duel. */
   max?: number;
   epreuves: string[] | null;
   niveau: number;
@@ -150,8 +165,11 @@ export class Salle {
       races: epreuves.join(','),
       level: String(niveau),
       // Seul le premier arrive fixe la taille ; pour les autres le serveur
-      // ignore ce parametre, la piste etant deja formee.
-      max: String(places),
+      // ignore ce parametre, la piste etant deja formee. Elle est bornee des
+      // deux cotes ici comme la-bas : le serveur ne fait jamais confiance a ce
+      // qu'on lui envoie, et l'ecran n'a pas a proposer ce que la salle
+      // refuserait.
+      max: String(Math.max(MIN_COULOIRS, Math.min(MAX_COULOIRS, Math.round(places) || 2))),
     });
     // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
     // passe donc par la requete.

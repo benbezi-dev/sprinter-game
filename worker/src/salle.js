@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------
    SALLE DE COURSE EN DIRECT
    ---------------------------------------------------------------------------
-   Deux joueurs, une seule piste, en meme temps.
+   De un a huit joueurs, une seule piste, en meme temps.
 
    Le mode fantome faisait courir contre un enregistrement : on savait deja que
    l'autre avait fini, on ne faisait que rattraper une trace. Ici personne ne
@@ -85,14 +85,29 @@ const ABANDON_MS = 3 * 60000;
  * Huit, parce que c'est le nombre de couloirs d'une piste d'athletisme et donc
  * le format d'une serie de championnat. Le duel a deux reste le cas courant :
  * la taille est decidee par celui qui ouvre la piste, et vaut deux par defaut.
+ * Toutes les tailles entre les deux existent, y compris les impaires : on est
+ * trois bien plus souvent qu'on est quatre.
  *
  * Ce que la taille change vraiment n'est pas l'affichage mais le sens de la
- * course. A deux, c'est un duel : il y a un vainqueur, un perdant, et des
- * points qui changent de main. A trois ou plus, c'est une course : il y a un
- * classement, et rien ne bouge au classement des duels — un bareme concu pour
- * une paire n'a pas de generalisation honnete a huit.
+ * course. A un, c'est un tour de piste seul. A deux, c'est un duel : il y a un
+ * vainqueur, un perdant, et des points qui changent de main. A trois ou plus,
+ * c'est une course : il y a un classement, et rien ne bouge au classement des
+ * duels — un bareme concu pour une paire n'a pas de generalisation honnete a
+ * huit.
  */
 const PLAFOND_JOUEURS = 8;
+/**
+ * Le plancher, lui, est UN.
+ *
+ * Pas par symetrie : parce qu'une piste se remplit avec les gens qu'on a. Un
+ * couloir, c'est un tour de piste seul — le meme stade, la meme video, sans
+ * personne a attendre. Et surtout, un plancher a deux forcait a arrondir : on
+ * ne proposait que des tailles paires, si bien qu'un groupe de trois ouvrait
+ * une piste a quatre et restait plante devant un couloir que personne ne
+ * venait prendre. Le depart attend que la piste soit pleine ; une piste qu'on
+ * ne peut pas remplir ne part jamais.
+ */
+const PLANCHER_JOUEURS = 1;
 const DEFAUT_JOUEURS = 2;
 
 function net(nom) {
@@ -230,7 +245,9 @@ export class SalleDirecte {
       // Seul le premier arrive decide de la taille : la changer en cours de
       // route ferait entrer ou sortir des gens d'une course deja formee.
       const m = parseInt(url.searchParams.get('max') || String(DEFAUT_JOUEURS), 10);
-      this.max = Number.isFinite(m) ? Math.max(2, Math.min(PLAFOND_JOUEURS, m)) : DEFAUT_JOUEURS;
+      this.max = Number.isFinite(m)
+        ? Math.max(PLANCHER_JOUEURS, Math.min(PLAFOND_JOUEURS, m))
+        : DEFAUT_JOUEURS;
     }
 
     this.joueurs.set(serveur, {
@@ -294,12 +311,19 @@ export class SalleDirecte {
           this.ordre = [...this.joueurs.values()].map((x, i) => ({
             id: x.id, nom: x.nom, couloir: i + 1,
           }));
-          this.presentationA = Date.now() + AVANT_PRESENTATION_MS;
+          // Seul sur la piste, on ne se presente a personne : la sequence est
+          // faite pour qu'on se regarde avant de courir, et six secondes de
+          // presentation face a des couloirs vides ne sont plus qu'une attente.
+          // On passe directement au pistolet.
+          const seul = this.ordre.length < 2;
+          this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
-          this.departA = this.presentationA
-            + this.ordre.length * creneauPresentation(this.ordre.length)
-            + AVANT_DEPART_MS;
+          this.departA = seul
+            ? Date.now() + AVANT_DEPART_MS
+            : this.presentationA
+              + this.ordre.length * creneauPresentation(this.ordre.length)
+              + AVANT_DEPART_MS;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
         }
