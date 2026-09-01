@@ -89,6 +89,7 @@ Ce qu'il faut pouvoir montrer, et qui existe :
 | Signalement dans l'app | Fenêtre de lecture du mot — `LireLeMot`, `src/components/screens/MotDuel.tsx` |
 | Blocage d'un joueur | Même endroit, effet immédiat |
 | Conditions publiques | https://sprinter-game.com/conditions.html |
+| Lien depuis l'app | Pied de l'écran-titre — `TitleScreen.tsx` |
 | Traitement des signalements | Console de modération, `suivi/moderation.html` |
 | Retrait d'un contenu / sanction | `/moderation/trancher`, `worker/src/moderation.js` |
 
@@ -114,17 +115,12 @@ fois, à une seule personne, sans réponse possible. Il n'y a pas de chat libre.
 - Suppression sur demande à `contact@sprinter-game.com`.
 - **Pas** d'identifiant publicitaire, **pas** d'analyse d'audience.
 
-⚠️ **À amender dans la politique de confidentialité avant de soumettre.** Elle
-affirme aujourd'hui que l'enregistrement vocal « est supprimé du serveur dès
-qu'il a été écouté ; il n'est jamais conservé au-delà ». Depuis la modération,
-c'est vrai sauf dans un cas — et une déclaration inexacte sur ce point est
-exactement ce que Google sanctionne. Paragraphe à ajouter :
-
-> Si le destinataire signale un message, son contenu — texte et enregistrement
-> — est copié dans le signalement afin de pouvoir être examiné. C'est la seule
-> exception à l'effacement, et elle ne porte que sur ce qu'un joueur a
-> explicitement désigné comme abusif. Ces copies sont conservées le temps du
-> traitement, puis supprimées.
+✅ **Fait le 1er septembre 2026.** La politique de confidentialité porte
+désormais une section « Signalement et modération », en français et en
+anglais, qui nomme l'exception et la borne : le contenu signalé — texte et
+enregistrement — est copié dans le signalement au moment de l'envoi, lu par
+le seul éditeur, supprimé une fois traité. Le blocage ne transporte aucun
+contenu. Les deux déclarations, la page et le code, disent la même chose.
 
 ---
 
