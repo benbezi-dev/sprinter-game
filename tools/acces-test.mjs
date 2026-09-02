@@ -126,6 +126,39 @@ for (const a of (liste.corps.acces || []).slice(0, 6)) {
 }
 ok('les passages sont comptes', (liste.corps.acces || []).some(a => a.passages > 0));
 
+// -------------------------------------------------------- role organisateur
+console.log('\n── ROLE ORGANISATEUR ────────────────────────────────────────');
+const h2 = { 'X-Sprinter-Test': CODE2 };
+const ouvrirSansRole = await post('/champ/ouvrir', { pays: 'ZZ', debut: Date.now() }, h2);
+ok('sans role, ouvrir un championnat est refuse', ouvrirSansRole.statut === 403,
+   `HTTP ${ouvrirSansRole.statut}`);
+
+const poseRole = await post('/test/admin/role', { code: CODE2, role: 'organisateur' }, admin);
+ok('le role se pose', poseRole.statut === 200 && poseRole.corps.role === 'organisateur');
+
+const entree2 = await post('/test/entrer', { code: CODE2 });
+ok('le role voyage avec l entree', entree2.corps.role === 'organisateur');
+
+const ouvrirAvecRole = await post('/champ/ouvrir', { pays: 'ZZ', debut: Date.now() }, h2);
+ok('avec le role, la route repond (refusee pour une autre raison que le role)',
+   ouvrirAvecRole.statut !== 403 || ouvrirAvecRole.corps.error !== 'refuse',
+   JSON.stringify(ouvrirAvecRole.corps));
+
+const retireRole = await post('/test/admin/role', { code: CODE2, role: null }, admin);
+ok('le role se retire', retireRole.statut === 200 && retireRole.corps.role === null);
+
+const ouvrirApresRetrait = await post('/champ/ouvrir', { pays: 'ZZ', debut: Date.now() }, h2);
+ok('le role retire, l acces redevient un simple testeur', ouvrirApresRetrait.statut === 403,
+   `HTTP ${ouvrirApresRetrait.statut}`);
+
+// La cle admin doit passer meme sur le canal de test, sans porter le role :
+// c'est elle qui garde la main quoi qu'il arrive au role d'un acces.
+const adminSurCanalTest = await post('/champ/ouvrir', { pays: 'YY', debut: Date.now() },
+  { ...admin, ...h2 });
+ok('l admin passe toujours, sans avoir besoin du role',
+   adminSurCanalTest.statut !== 403 || adminSurCanalTest.corps.error !== 'refuse',
+   JSON.stringify(adminSurCanalTest.corps));
+
 // menage : on ne laisse pas trainer les acces du test
 for (const c of [CODE, CODE2]) await post('/test/admin/revoquer', { code: c }, admin);
 

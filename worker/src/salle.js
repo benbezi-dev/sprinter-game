@@ -22,6 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { enregistrerCourse } from './championnats.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
@@ -95,6 +96,32 @@ const ABANDON_MS = 3 * 60000;
 const PLAFOND_JOUEURS = 8;
 const DEFAUT_JOUEURS = 2;
 
+// --- chat texte --------------------------------------------------------
+// Pas de moderation, comme le mot du vainqueur (mot.js) : on limite donc le
+// debit et la longueur plutot que le contenu, ce qui borne les degats d'un
+// flood sans pretendre filtrer ce qui se dit.
+const CHAT_MAX_CARACTERES = 200;
+const CHAT_FENETRE_MS = 10000;
+const CHAT_MAX_PAR_FENETRE = 5;
+// Espaces exotiques et caracteres de controle : de quoi faire mine d'un
+// message vide, ou perturber l'affichage d'un client qui ne s'en protege pas.
+const CHAT_INDESIRABLES_CODES = [
+  [0x00, 0x1f], [0x7f, 0x9f],
+  [0x200b, 0x200f],
+  [0x2028, 0x2029],
+  [0x202a, 0x202e], [0x2066, 0x2069],
+  [0xfeff, 0xfeff],
+];
+function nettoyerChat(texte) {
+  let s = '';
+  for (const c of texte) {
+    const code = c.codePointAt(0);
+    if (CHAT_INDESIRABLES_CODES.some(([a, b]) => code >= a && code <= b)) { s += ' '; continue; }
+    s += c;
+  }
+  return s;
+}
+
 function net(nom) {
   const s = String(nom || '').trim().slice(0, 20).replace(/[<>]/g, '');
   return s || 'Anonyme';
@@ -116,6 +143,7 @@ export class SalleDirecte {
     this.termine = false;
     this.test = false;         // salle du canal de test : ecrit ailleurs
     this.code = '';            // le code de la salle, pose au premier appel
+    this.champ = null;         // {edition, phase, course} si c'est une course de championnat
     this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
   }
@@ -231,6 +259,17 @@ export class SalleDirecte {
       // route ferait entrer ou sortir des gens d'une course deja formee.
       const m = parseInt(url.searchParams.get('max') || String(DEFAUT_JOUEURS), 10);
       this.max = Number.isFinite(m) ? Math.max(2, Math.min(PLAFOND_JOUEURS, m)) : DEFAUT_JOUEURS;
+
+      // Une course de championnat porte son contexte dans l'URL : c'est ce
+      // qui dit a la salle, une fois le verdict rendu, ou ecrire le chrono.
+      const ce = (url.searchParams.get('champ_edition') || '').toUpperCase();
+      if (ce) {
+        this.champ = {
+          edition: ce,
+          phase: url.searchParams.get('champ_phase') || '',
+          course: parseInt(url.searchParams.get('champ_course') || '1', 10) || 1,
+        };
+      }
     }
 
     this.joueurs.set(serveur, {
@@ -353,6 +392,22 @@ export class SalleDirecte {
         this.peutTrancher();
         return;
       }
+
+      // Chat texte libre entre les partants d'une meme salle. Au-dela du
+      // debit tolere, on se tait plutot que de repondre une erreur : un
+      // flood n'a pas besoin d'accuse de reception.
+      case 'chat': {
+        const texte = nettoyerChat(String(m.texte || ''))
+          .replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX_CARACTERES);
+        if (!texte) return;
+        const maintenant = Date.now();
+        j.chatHorodatages = (j.chatHorodatages || []).filter(t => maintenant - t < CHAT_FENETRE_MS);
+        if (j.chatHorodatages.length >= CHAT_MAX_PAR_FENETRE) return;
+        j.chatHorodatages.push(maintenant);
+        this.vivante();
+        this.diffuser({ t: 'chat', id: j.id, nom: j.nom, texte, au: maintenant });
+        return;
+      }
     }
   }
 
@@ -408,8 +463,21 @@ export class SalleDirecte {
     // des duels. Le bareme est fait pour une paire — l'etendre a huit
     // supposerait d'inventer une regle qu'on n'a pas, et le premier reflexe
     // (vingt-huit duels croises pour huit partants) gonflerait le classement
-    // sans rien mesurer de juste. Les series de championnat, elles, ont leur
-    // propre chemin d'enregistrement.
+    // sans rien mesurer de juste.
+    //
+    // Une course de championnat, elle, a un chemin d'enregistrement a elle :
+    // le meme filet que le mode manuel (`enregistrerCourse` filtre deja les
+    // intrus via la grille de l'edition), pour que le direct et la saisie a
+    // la main produisent exactement le meme resultat.
+    if (this.champ) {
+      const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+      const chronos = tous.map(x => ({ cle: x.nom.trim().toLowerCase(), ms: x.fin }));
+      const ecrire = enregistrerCourse(base, {
+        edition: this.champ.edition, phase: this.champ.phase,
+        course: this.champ.course, chronos,
+      }).catch(() => {});
+      if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+    }
     this.diffuser(message);
   }
 

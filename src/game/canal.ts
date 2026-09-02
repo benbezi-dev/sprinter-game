@@ -72,7 +72,7 @@ export function oublierCode() {
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 /** Demande au serveur si ce code ouvre encore. */
-export async function verifierCode(code: string): Promise<{ ok: boolean; nom?: string }> {
+export async function verifierCode(code: string): Promise<{ ok: boolean; nom?: string; role?: string | null }> {
   try {
     const r = await fetch(`${API_BASE}/test/entrer`, {
       method: 'POST',
@@ -81,10 +81,32 @@ export async function verifierCode(code: string): Promise<{ ok: boolean; nom?: s
     });
     if (!r.ok) return { ok: false };
     const d = await r.json();
-    return { ok: !!d.ok, nom: d.nom };
+    if (d.ok) poserRole(d.role || null);
+    return { ok: !!d.ok, nom: d.nom, role: d.role || null };
   } catch {
     return { ok: false };
   }
+}
+
+const CLE_ROLE = 'sprinter_role_test';
+
+/**
+ * Le role du code courant, tel que renvoye a la derniere verification.
+ *
+ * On le garde a cote du code plutot que de le redemander a chaque lecture :
+ * l'ecran du salon doit savoir des son montage s'il a le droit de s'afficher,
+ * sans attendre un aller-retour reseau qui ferait clignoter la porte.
+ */
+export function poserRole(role: string | null) {
+  try {
+    if (role) localStorage.setItem(CLE_ROLE, role);
+    else localStorage.removeItem(CLE_ROLE);
+  } catch { /* refuse */ }
+}
+
+export function estOrganisateur(): boolean {
+  if (!EST_TEST) return false;
+  try { return localStorage.getItem(CLE_ROLE) === 'organisateur'; } catch { return false; }
 }
 
 /**

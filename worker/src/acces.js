@@ -56,6 +56,17 @@ export async function ensureAccesTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS acces_test_vivants
                   ON acces_test(revoque_le)`),
   ]);
+  // Colonne arrivee apres coup : ceux qui avaient deja des acces ne portent
+  // pas de role, ce qui les laisse simples testeurs jusqu'a ce qu'on leur en
+  // pose un.
+  for (const sql of [
+    // NULL, ou 'organisateur'. Distinct de l'admin (cle Cloudflare, tout ou
+    // rien) : un organisateur peut piloter le salon championnats sans porter
+    // la cle qui ouvre l'administration des acces eux-memes.
+    `ALTER TABLE acces_test ADD COLUMN role TEXT`,
+  ]) {
+    try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
+  }
   pret.add(db);
 }
 
@@ -72,7 +83,7 @@ export async function verifierAcces(db, code, ctx) {
   await ensureAccesTables(db);
 
   const r = await db.prepare(
-    `SELECT code, nom, revoque_le FROM acces_test WHERE code = ?`
+    `SELECT code, nom, role, revoque_le FROM acces_test WHERE code = ?`
   ).bind(c).first();
   if (!r || r.revoque_le) return null;
 
@@ -83,7 +94,7 @@ export async function verifierAcces(db, code, ctx) {
   ).bind(Date.now(), c).run().catch(() => {});
   if (ctx && ctx.waitUntil) ctx.waitUntil(noter);
 
-  return { code: r.code, nom: r.nom };
+  return { code: r.code, nom: r.nom, role: r.role || null };
 }
 
 /**
@@ -152,15 +163,35 @@ export async function rendreAcces(db, code) {
   return touche ? { ok: true, code: c } : { erreur: 'code inconnu' };
 }
 
+/**
+ * Pose ou retire le role d'organisateur sur un acces.
+ *
+ * Distinct de `revoquerAcces` : retirer le role laisse la personne entrer
+ * dans la version de test comme un testeur ordinaire, sans acces au salon
+ * championnats — on ne lui ferme pas la porte, on lui retire seulement les
+ * cles du pupitre.
+ */
+export async function definirRole(db, code, role) {
+  await ensureAccesTables(db);
+  const c = String(code || '').trim().toUpperCase();
+  const r = String(role || '').trim() || null;
+  if (r && r !== 'organisateur') return { erreur: 'role inconnu' };
+  const res = await db.prepare(
+    `UPDATE acces_test SET role = ? WHERE code = ?`
+  ).bind(r, c).run();
+  const touche = res && res.meta && res.meta.changes;
+  return touche ? { ok: true, code: c, role: r } : { erreur: 'code inconnu' };
+}
+
 /** Qui a acces, qui ne l'a plus, et qui s'en est servi. */
 export async function listerAcces(db) {
   await ensureAccesTables(db);
   const { results } = await db.prepare(
-    `SELECT code, nom, cree_le, revoque_le, dernier_vu, vus
+    `SELECT code, nom, role, cree_le, revoque_le, dernier_vu, vus
        FROM acces_test ORDER BY revoque_le IS NOT NULL, cree_le DESC`
   ).all();
   return (results || []).map(r => ({
-    code: r.code, nom: r.nom,
+    code: r.code, nom: r.nom, role: r.role || null,
     actif: !r.revoque_le,
     cree_le: r.cree_le, revoque_le: r.revoque_le,
     dernier_vu: r.dernier_vu, passages: r.vus,

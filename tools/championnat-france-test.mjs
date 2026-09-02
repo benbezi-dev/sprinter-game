@@ -10,6 +10,10 @@ const get = u => fetch(B + u, { headers: H }).then(r => r.json());
 const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
+// Ouvrir et cloturer un championnat est reserve aux organisateurs : ce
+// harnais en pilote un, comme le ferait le salon.
+await fetch(B + '/test/admin/role', { method: 'POST', headers: ADMIN,
+  body: JSON.stringify({ code: _acces.code, role: 'organisateur' }) });
 const H = { 'X-Sprinter-Test': _acces.code };
 
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';

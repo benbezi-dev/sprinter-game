@@ -10,7 +10,7 @@
    Tout est pur : memes entrees, memes sorties, testable sans rien monter.
 --------------------------------------------------------------------------- */
 
-import { DEPARTAGE } from './championnats-config.js';
+import { DEPARTAGE, FORMAT, FORMAT_REDUIT_MIN } from './championnats-config.js';
 
 /**
  * Repartition en serpentin.
@@ -128,17 +128,81 @@ export function podium(resultatsFinale, taille = 3) {
 }
 
 /**
+ * Une phase intermediaire : combien de courses, quelle proportion de directs
+ * et de repeches pour aller de `entree` joueurs a `sortie` qualifies.
+ *
+ * Quand `entree` est deja a la taille de sortie, la phase n'a plus de tri a
+ * faire : elle devient une manche de forme, tout le monde direct. On la garde
+ * quand meme dans le calendrier plutot que de la supprimer, pour qu'une
+ * grille reduite raconte toujours la meme histoire en trois actes.
+ */
+function construirePhase(entree, sortie, cle, nom) {
+  const courses = Math.max(1, Math.ceil(entree / 8));
+  const parCourse = Math.ceil(entree / courses);
+  if (entree === sortie) {
+    return { cle, nom, courses, parCourse, directsParCourse: parCourse, repechages: 0 };
+  }
+  // Meme proportion qu'au format nominal : deux directs sur huit, soit un
+  // quart de la course, avant de completer au repechage.
+  const directsParCourse = Math.max(1, Math.min(parCourse - 1, Math.round(parCourse / 4)));
+  const directsTotal = Math.min(sortie - 1, directsParCourse * courses);
+  const parCourseReel = Math.floor(directsTotal / courses) || directsParCourse;
+  const repechages = Math.max(0, sortie - parCourseReel * courses);
+  return { cle, nom, courses, parCourse, directsParCourse: parCourseReel, repechages };
+}
+
+/**
+ * Le format d'une grille dont l'effectif n'est pas 32 : une premiere edition
+ * trop petite, ou un continental/mondial dont le nombre de podiums qualifies
+ * ne tombe pas rond.
+ *
+ * La structure reste toujours a trois actes (series, demies, finale) — c'est
+ * ce qui fait qu'une grille reduite ressemble a une vraie competition plutot
+ * qu'a un format au rabais. Seuls les effectifs par phase varient, en visant
+ * a chaque etage la moitie de ce qui entre, comme le fait deja le format
+ * nominal (32 -> 16 -> 8). En dessous de `FORMAT_REDUIT_MIN`, il n'y a plus
+ * de grille a construire.
+ */
+export function formatDynamique(n) {
+  const partants = Math.max(FORMAT_REDUIT_MIN, Math.min(FORMAT.partants, Math.round(n)));
+  const finale = Math.min(8, partants);
+  const apresSeries = partants <= finale ? finale : Math.max(finale, Math.ceil(partants / 2));
+
+  return {
+    partants,
+    phases: [
+      construirePhase(partants, apresSeries, 'series', 'Séries'),
+      construirePhase(apresSeries, finale, 'demies', 'Demi-finales'),
+      {
+        cle: 'finale', nom: 'Finale',
+        courses: 1, parCourse: finale,
+        directsParCourse: 0, repechages: 0,
+        podium: Math.min(3, finale),
+      },
+    ],
+  };
+}
+
+/**
  * Le calendrier d'une edition, en dates absolues.
  *
  * `debutSamedi` est un instant UTC : le samedi a minuit. Tout le reste s'en
  * deduit, ce qui garantit que deux pays qui courent « le meme weekend »
  * courent bien a la meme seconde, quelle que soit l'heure qu'il est chez eux.
+ *
+ * `format` (par defaut le format nominal a 32) determine quels creneaux sont
+ * reels : une grille reduite n'a pas forcement quatre series ni deux demies,
+ * et les creneaux surnumeraires du calendrier fixe sont alors ecartes.
  */
-export function calendrier(debutSamedi, config) {
+export function calendrier(debutSamedi, config, format = FORMAT) {
+  const coursesParPhase = new Map(format.phases.map(p => [p.cle, p.courses]));
   const JOUR = 24 * 60 * 60 * 1000;
   const rendez = [];
   for (const [i, jour] of [[0, config.jour1], [1, config.jour2]]) {
     for (const e of jour) {
+      const nCourses = coursesParPhase.get(e.phase);
+      if (nCourses == null) continue;
+      if (e.course != null && e.course > nCourses) continue;
       rendez.push({ ...e, at: debutSamedi + i * JOUR + e.minute * 60 * 1000 });
     }
   }

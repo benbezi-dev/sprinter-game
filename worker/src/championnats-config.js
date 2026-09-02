@@ -67,12 +67,23 @@ export const ECHELONS = {
 /**
  * Ce qu'on exige d'un pool de qualification avant d'ouvrir une edition.
  *
- * Un continental a besoin de champions nationaux pour exister : ouvrir un
- * continental sans aucun champion sacre produirait une competition qui porte
- * le nom d'un continent et n'en represente rien. On demande donc un minimum de
- * qualifies d'office, faute de quoi l'edition attend le cycle suivant.
+ * Un continental a besoin de nations avec un podium pour exister : ouvrir un
+ * continental sans aucune nation qualifiee produirait une competition qui
+ * porte le nom d'un continent et n'en represente rien. On demande donc un
+ * minimum d'entites (nations pour un continental, continents pour un
+ * mondial) porteuses d'un podium, faute de quoi l'edition attend le cycle
+ * suivant.
  */
-export const MIN_DOFFICE = { continental: 2, mondial: 2 };
+export const MIN_ENTITES = { continental: 2, mondial: 2 };
+
+/**
+ * Le plancher absolu d'une grille, quel que soit l'echelon.
+ *
+ * En dessous, le format reduit lui-meme n'a plus de sens : une serie ne
+ * qualifie plus personne, un repechage ne repeche rien. C'est le seuil sous
+ * lequel on refuse d'ouvrir, meme pour une premiere edition.
+ */
+export const FORMAT_REDUIT_MIN = 4;
 
 /**
  * Combien de temps un titre se porte.

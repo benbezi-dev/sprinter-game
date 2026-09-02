@@ -17,6 +17,9 @@ const get = u => fetch(B + u, { headers: H }).then(r => r.json());
 const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
+// Piloter un cycle (ouvrir, clore) est reserve aux organisateurs.
+await fetch(B + '/test/admin/role', { method: 'POST', headers: ADMIN,
+  body: JSON.stringify({ code: _acces.code, role: 'organisateur' }) });
 const H = { 'X-Sprinter-Test': _acces.code };
 
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';
@@ -84,8 +87,8 @@ verifier('mondial 4 semaines apres le continental',
 // ------------------------------------------------- garde-fou avant l'heure
 console.log('\n── AVANT TOUT : LES GARDE-FOUS ──────────────────────────────');
 const tropTot = await post('/champ/ouvrir', { echelon: 'continental', zone: 'EU', debut: samedi });
-verifier('un continental sans champions est refuse',
-  tropTot.error === 'pas assez de champions', JSON.stringify(tropTot).slice(0, 90));
+verifier('un continental sans nation qualifiee (podium) est refuse',
+  tropTot.error === 'pas assez de nations avec podium', JSON.stringify(tropTot).slice(0, 90));
 
 // ------------------------------------------------------------- nationaux
 console.log('\n── LES CHAMPIONNATS NATIONAUX, LE MEME WEEKEND ──────────────');
@@ -103,10 +106,16 @@ verifier('deux editions pour un meme pays sont refusees',
   redite.error === 'edition deja ouverte');
 
 console.log('');
+// Le podium de chaque pays, pas seulement son champion : c'est desormais lui
+// qui qualifie pour le continental.
+const podiumsNat = {};
 for (const o of cycle.ouvertes) {
   const r = await courir(o.edition);
   if (r.erreur) { console.log(`   ✗ ${o.zone} : ${r.erreur}`); echecs++; }
-  else console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  else {
+    podiumsNat[o.zone] = r.podium || [];
+    console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  }
 }
 
 // ---------------------------------------------------------- continentaux
@@ -121,26 +130,30 @@ for (const e of cycleC.ecartes) {
 verifier('EU et AF ouvrent leur continental',
   cycleC.ouvertes.filter(o => o.zone === 'EU' || o.zone === 'AF').length === 2);
 
-// Les champions nationaux doivent etre dans la grille de leur continental.
+// Le podium ENTIER de chaque nation europeenne doit etre dans la grille
+// continentale — plus seulement son champion.
 const euEd = cycleC.ouvertes.find(o => o.zone === 'EU');
 if (euEd) {
   const etatEu = await get('/champ/edition/' + euEd.edition);
   const noms = new Set(etatEu.partants.map(p => p.nom));
-  const champsEu = (await get('/champ/monde?echelon=national')).sacres
-    .filter(x => ['FR', 'DE', 'ES'].includes(x.zone));
-  const dedans = champsEu.filter(c => noms.has(c.champion));
-  verifier('les champions nationaux europeens sont dans la grille continentale',
-    dedans.length === champsEu.length,
-    `${dedans.length}/${champsEu.length}`);
-  verifier('la grille continentale compte 32 partants', etatEu.partants.length === 32,
-    etatEu.partants.length + ' partants');
+  const podiumsEu = ['FR', 'DE', 'ES'].flatMap(z => podiumsNat[z] || []).map(p => p.nom);
+  const dedans = podiumsEu.filter(nom => noms.has(nom));
+  verifier('les podiums nationaux europeens (9 coureurs) sont dans la grille continentale',
+    dedans.length === podiumsEu.length && podiumsEu.length === 9,
+    `${dedans.length}/${podiumsEu.length}`);
+  verifier('la grille continentale reunit exactement les podiums qualifies',
+    etatEu.partants.length === podiumsEu.length, etatEu.partants.length + ' partants');
 }
 
 console.log('');
+const podiumsCon = {};
 for (const o of cycleC.ouvertes) {
   const r = await courir(o.edition);
   if (r.erreur) { console.log(`   ✗ ${o.zone} : ${r.erreur}`); echecs++; }
-  else console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  else {
+    podiumsCon[o.zone] = r.podium || [];
+    console.log(`   ${o.zone} → ${r.libelle || 'champion'} : ${r.champion}`);
+  }
 }
 
 // ---------------------------------------------------------------- mondial
@@ -153,10 +166,12 @@ if (cycleM.ouvertes.length) {
   const id = cycleM.ouvertes[0].edition;
   const etatM = await get('/champ/edition/' + id);
   const noms = new Set(etatM.partants.map(p => p.nom));
-  const champsC = (await get('/champ/monde?echelon=continental')).sacres;
-  const dedans = champsC.filter(c => noms.has(c.champion));
-  verifier('les champions continentaux sont dans la grille mondiale',
-    dedans.length === champsC.length, `${dedans.length}/${champsC.length}`);
+  const podiumsMonde = Object.values(podiumsCon).flat().map(p => p.nom);
+  const dedans = podiumsMonde.filter(nom => noms.has(nom));
+  verifier('les podiums continentaux sont dans la grille mondiale',
+    dedans.length === podiumsMonde.length, `${dedans.length}/${podiumsMonde.length}`);
+  verifier('la grille mondiale reunit exactement les podiums qualifies',
+    etatM.partants.length === podiumsMonde.length, etatM.partants.length + ' partants');
 
   const r = await courir(id, false);
   if (r.erreur) { console.log('   ✗', r.erreur); echecs++; }
