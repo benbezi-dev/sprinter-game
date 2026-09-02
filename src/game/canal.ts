@@ -22,6 +22,42 @@ export const EST_TEST = import.meta.env.VITE_CANAL === 'test';
 export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 
 /**
+ * Ce build part-il dans l'enveloppe native, ou sur le site ?
+ *
+ * L'application installee se publie avec le jeu entier : les duels, le direct
+ * et le championnat y sont ouverts, alors que le site les garde fermes jusqu'a
+ * l'ouverture annoncee. C'est ce drapeau qui fait la difference, et lui seul —
+ * voir DUELS_OUVERTS dans game/duels.
+ *
+ * A ne pas confondre avec `EST_NATIF` plus bas, et la difference est tout
+ * l'interet : `EST_NATIF` interroge Capacitor au chargement, si bien que le
+ * code des modes concernes voyagerait quand meme dans le bundle du site,
+ * simplement inerte. Celui-ci est fixe a la compilation et se replie en `false`
+ * en dur cote web, ou le bundler l'emporte avec tout ce qui en depend.
+ *
+ * Meme forme litterale que `VITE_CANAL` ci-dessus, et pour la meme raison : un
+ * `as any` ou un `?.` casserait le remplacement, et les modes fermes
+ * repartiraient dans le build public.
+ */
+export const EST_ENVELOPPE = import.meta.env.VITE_ENVELOPPE === 'native';
+
+/**
+ * Le relais et la confrontation d'equipes.
+ *
+ * Meme regle que les duels : ouvert dans l'application, ferme sur le site.
+ * Le drapeau vit ici plutot que dans game/salle-relais parce que ce fichier
+ * n'importe rien — App.tsx peut le lire sans faire entrer la salle de relais
+ * dans le bundle du site, ce qui annulerait tout l'elagage.
+ *
+ * Le serveur, lui, ne distingue pas l'application du site : les deux se
+ * presentent sur le canal de production. `/relay/*` est donc ouvert a qui
+ * fabrique la requete, et c'est ce drapeau — cote client, a la compilation —
+ * qui decide de qui VOIT le mode. Voir la note de `relaisOuvert` dans
+ * worker/src/index.js.
+ */
+export const RELAIS_OUVERT = EST_TEST || EST_ENVELOPPE;
+
+/**
  * Le raccourci RECOMMENCER, sur l'ecran d'arrivee du one shot.
  *
  * Ouvert a tout le monde : regarde tourner sur le canal de test, puis ouvert

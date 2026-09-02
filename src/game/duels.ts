@@ -10,17 +10,24 @@
 // dont le chrono est deja pose rapporte plus que le lancer.
 
 import { getDeviceId, getSavedName } from './leaderboard';
-import { EST_TEST } from './canal';
+import { EST_TEST, EST_ENVELOPPE } from './canal';
 
 /**
  * Portes des duels. A false, les trois entrees disparaissent — accueil, fin de
  * course, et l'annonce du resultat a celui qui a lance le defi — sans autre
  * changement : le code reste livre, seul l'acces bascule.
  */
-// Ferme en production jusqu'a l'ouverture annoncee ; toujours ouvert sur le
-// canal de test, qui existe pour essayer ce qui n'est pas encore sorti.
+// Ferme sur le site jusqu'a l'ouverture annoncee. Ouvert partout ailleurs :
+// sur le canal de test, qui existe pour essayer ce qui n'est pas encore sorti,
+// et dans l'enveloppe native, qui se publie avec le jeu entier — la fiche Play
+// annonce DEFIE, et y declare le mot du vainqueur comme contenu entre joueurs.
+//
+// Cette constante ne commande pas que les duels : le direct (LivePanel) et le
+// championnat (ChampPanel) sont ouverts par elle, parce qu'ils alimentent le
+// meme classement. Les modes qui n'ont pas de serveur — le relais, les trois
+// autres mondes — restent derriere EST_TEST et ne sont pas de la fete.
 const OUVERT_EN_PRODUCTION = false;
-export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
+export const DUELS_OUVERTS = EST_TEST || EST_ENVELOPPE || OUVERT_EN_PRODUCTION;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';

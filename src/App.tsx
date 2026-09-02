@@ -15,7 +15,7 @@ import { useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
-import { EST_TEST } from '@/game/canal';
+import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
@@ -153,7 +153,7 @@ function MainGame() {
           un panneau demonte se fermerait a l'instant precis ou la course
           commence. En production, EST_TEST vaut false en dur et tout ceci
           sort du build. */}
-      {EST_TEST && <PisteRelais />}
+      {RELAIS_OUVERT && <PisteRelais />}
       {/* La presentation des athletes se joue SUR la piste, et doit donc
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}

@@ -2,6 +2,7 @@ node_modules/
 dist/
 # Le build de la version de test, produit par le workflow.
 dist-test/
+dist-app/
 *.tsbuildinfo
 .DS_Store
 worker/node_modules/

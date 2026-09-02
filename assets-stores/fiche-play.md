@@ -130,9 +130,12 @@ Le jeu s'ouvre sans compte : rien à fournir. Note à joindre :
 
 ```
 Aucun identifiant n'est nécessaire : le jeu se lance et se joue directement.
-Le mode duel et le message entre joueurs ne sont ouverts qu'à un canal de
-test ; ils n'apparaissent pas dans la version publique. Le signalement et le
-blocage se trouvent sous chaque message reçu, dans la fenêtre de lecture.
+Cette application contient le jeu entier : le duel, la course en direct et le
+mot du vainqueur y sont ouverts. Le signalement et le blocage se trouvent sous
+chaque message reçu, dans la fenêtre de lecture — pour y arriver : accueil ▸
+DÉFIER, lancer un défi, et ouvrir le message annoncé au retour. Deux appareils
+sont nécessaires pour recevoir un mot, l'expéditeur et le destinataire étant
+forcément deux joueurs distincts.
 ```
 
 ---

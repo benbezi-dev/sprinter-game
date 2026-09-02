@@ -8,7 +8,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "tableau": "node suivi/servir.mjs",
-    "android:sync": "npm run build && npx cap sync android",
+    "build:app": "VITE_ENVELOPPE=native vite build --outDir dist-app",
+    "android:sync": "npm run build:app && SPRINTER_WEBDIR=dist-app npx cap sync android",
     "android:ouvrir": "npm run android:sync && npx cap open android",
     "android:aab": "npm run android:sync && cd android && ./gradlew bundleRelease",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
