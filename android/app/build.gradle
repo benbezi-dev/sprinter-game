@@ -1,5 +1,26 @@
 apply plugin: 'com.android.application'
 
+/*
+ * LA SIGNATURE DE PUBLICATION, SANS LE MOT DE PASSE DANS LE DEPOT.
+ *
+ * Le Play Store refuse un paquet signe avec la cle de debogage. Il faut donc
+ * une vraie cle — et elle ne se remplace pas : perdre le keystore, c'est ne
+ * plus jamais pouvoir mettre a jour l'application sous le meme identifiant.
+ *
+ * Les identifiants vivent dans keystore.properties, qui n'est PAS versionne
+ * (voir .gitignore). Le depot ne porte que keystore.properties.exemple, qui
+ * dit quoi remplir sans rien reveler.
+ *
+ * Si le fichier est absent — une autre machine, la CI — on ne casse rien :
+ * la signature de release est simplement omise, et les builds de debogage
+ * continuent de fonctionner. C'est ce que fait le `if` plus bas.
+ */
+def fichierCles = rootProject.file('keystore.properties')
+def cles = new Properties()
+if (fichierCles.exists()) {
+    fichierCles.withInputStream { cles.load(it) }
+}
+
 android {
     namespace = "dev.benbezi.sprinter"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +37,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (cles.getProperty('storeFile')) {
+            release {
+                storeFile file(cles.getProperty('storeFile'))
+                storePassword cles.getProperty('storePassword')
+                keyAlias cles.getProperty('keyAlias')
+                keyPassword cles.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
+            // Sans keystore.properties, on laisse le paquet non signe plutot
+            // que d'echouer : c'est ce qui permet a la CI et aux autres postes
+            // de construire quand meme.
+            if (cles.getProperty('storeFile')) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn('keystore.properties absent : la release ne sera pas signee.')
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
