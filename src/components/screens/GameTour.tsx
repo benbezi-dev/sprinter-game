@@ -103,7 +103,18 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-5 min-h-0">
+      {/* Le vide des ecrans tres hauts.
+
+          Sur un pliable ferme — 904 x 2316, un rapport de 1:2,56 — cette zone
+          fait pres de 1700 px pour un contenu qui en occupe 350. Le groupe
+          flottait au milieu d'un desert, et l'ecran paraissait inacheve.
+
+          On ne remonte pas le bouton : sa place est en bas, c'est la que le
+          pouce le trouve. On donne de l'ampleur au groupe quand la hauteur le
+          permet, et le vide se repartit au lieu de s'accumuler. En dessous de
+          800 px de haut, rien ne change. */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto
+                      gap-5 [@media(min-height:800px)]:gap-10 [@media(min-height:1100px)]:gap-16 min-h-0">
         <motion.div key={`t${i}`} {...MONTEE}
                     className="flex flex-col items-center gap-1.5 text-center">
           <p.Icone className={`w-6 h-6 ${p.couleur}`} />
@@ -113,7 +124,8 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
           <p className="text-xs md:text-sm text-foreground/70 max-w-xs">{N.t(p.sous)}</p>
         </motion.div>
 
-        <div key={`s${i}`} className="w-full flex items-center justify-center min-h-[130px]">
+        <div key={`s${i}`} className="w-full flex items-center justify-center
+                                      min-h-[130px] [@media(min-height:800px)]:min-h-[200px]">
           {p.scene}
         </div>
       </div>
