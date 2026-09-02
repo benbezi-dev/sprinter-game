@@ -41,29 +41,44 @@ import {
 } from './moderation.js';
 
 /**
- * Portes du relais et des championnats.
+ * Portes du relais, des championnats et du mot du vainqueur.
  *
- * Elles ne sont plus des constantes : ces modes sont ouverts sur le canal de
- * test et fermes en production. Un seul deploiement sert les deux, et c'est le
- * code d'acces presente par l'appelant qui decide de quel cote il se trouve.
+ * Ouvertes sans condition de canal depuis le 02/09/2026. C'est ce que la note
+ * precedente annoncait — « il suffira de renvoyer true ici sans condition » —
+ * et ce que l'application Android exige : elle embarque le jeu entier et se
+ * presente au serveur sur le canal de production, exactement comme le site.
  *
- * Le jour ou l'on voudra les ouvrir a tout le monde, il suffira de renvoyer
- * true ici sans condition.
+ * Ce que cela concede, et qu'il vaut mieux ecrire que laisser deviner : le
+ * serveur ne distingue pas l'application du site, les deux arrivant sans code
+ * d'acces. Ces routes sont donc joignables par qui fabrique la requete a la
+ * main. Le partage entre ce qui EXISTE et ce qui se VOIT est desormais cote
+ * client seul, fixe a la compilation — `EST_ENVELOPPE` et `RELAIS_OUVERT` dans
+ * src/game/canal.ts : le bundle du site n'embarque pas ces ecrans, celui de
+ * l'application les embarque.
+ *
+ * On ne pourrait pas faire mieux avec un marqueur porte par le client : un APK
+ * se decompresse, un en-tete « secret » y serait public des le premier jour.
+ * Mieux vaut une concession explicite qu'une serrure qui s'ouvre elle-meme.
+ *
+ * Ce que la porte de canal ne protegeait PAS, et qui tient sans elle :
+ * `poserMot` refuse tout ce qui n'est pas le nom du vainqueur d'une rencontre
+ * tranchee, et une seule fois par rencontre ; un banni est arrete a l'entree ;
+ * la lecture d'un mot est reservee a son destinataire (`motLisible`) ; le
+ * contenu est assaini ; et tout POST hors canal de test passe par le limiteur
+ * d'IP ci-dessus, six par minute pour `/duel/mot`. La porte etait une barriere
+ * de lancement posee par-dessus cette autorisation, pas l'autorisation.
+ *
+ * Restent deux consequences a assumer, deja pesees le jour de la fermeture :
+ * les noms d'equipe de relais deviennent reservables par tout le monde, et un
+ * nom appartient a sa composition pour toujours ; et le mot du vainqueur reste
+ * la seule ecriture ou un joueur produit un contenu qu'un autre lira. C'est
+ * precisement ce que couvre la moderation — signalement, blocage,
+ * bannissement, dans moderation.js, en ligne depuis le 02/09/2026 — et elle
+ * n'existait pas quand ces portes ont ete fermees.
  */
-const relaisOuvert = canal => canal.test;
-const championnatsOuverts = canal => canal.test;
-/**
- * Le mot du vainqueur : reserve au canal de test.
- *
- * C'est la seule ecriture du jeu ou un joueur produit un contenu qu'un autre
- * lira, et personne ne la relit. Tant qu'elle n'a pas ete eprouvee entre gens
- * qui se connaissent, la porte reste fermee du cote du serveur — pas seulement
- * dans le jeu. Sans cela, une simple requete a la main suffirait a deposer un
- * message chez n'importe quel joueur de la vraie version.
- *
- * A rouvrir en meme temps que les duels de production, et pas avant.
- */
-const motOuvert = canal => canal.test;
+const relaisOuvert = () => true;
+const championnatsOuverts = () => true;
+const motOuvert = () => true;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
