@@ -45,7 +45,7 @@ export function OneShotEndScreen() {
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, largeur } = useTenirDansLEcran();
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -458,9 +458,17 @@ export function OneShotEndScreen() {
             deborder encore. */}
         <div className="w-full my-auto flex flex-col items-center"
              style={{ height: hauteur ?? undefined }}>
+        {/* La largeur suit l'echelle en sens inverse : une reduction prend de
+            la largeur autant que de la hauteur, et les panneaux se
+            retrouvaient a 86% du cadre, quarante pixels de vide de chaque
+            cote. On elargit donc la mise en page d'autant que la reduction va
+            la reprendre — apres transformation, les panneaux tombent pile sur
+            les marges du cadre, et il ne reste de rapetisse que ce qu'on
+            voulait rapetisser : le texte et les espacements. */}
         <div ref={contenu} className="w-full flex flex-col items-center"
              style={echelle < 1
-               ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
+               ? { width: largeur,
+                   transform: `scale(${echelle})`, transformOrigin: 'top center' }
                : undefined}>
         <motion.div {...SURGISSEMENT}
           className="flex flex-col items-center max-w-2xl court:max-w-none w-full
