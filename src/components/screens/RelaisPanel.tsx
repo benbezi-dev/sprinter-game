@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Confrontation } from './Confrontation';
 import { Fantomes } from './Fantomes';
+import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
 import { Users, Loader2, Check, X, ArrowUpDown, Trophy } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
@@ -264,6 +265,10 @@ export function RelaisPanel() {
                        focus:outline-none focus:border-emerald-400/50"
           />
         ))}
+        {/* On peut taper les trois noms, ou les prendre au tableau mondial :
+            un pseudo mal orthographie invite un inconnu qui ne repondra
+            jamais, et l'equipe attend une reponse impossible. */}
+        <ChoixCoureurs coequipiers={coequipiers} onChanger={setCoequipiers} />
         <button onClick={creer} disabled={occupe}
           className="w-full py-2.5 rounded-xl font-black font-display tracking-widest
                      text-background bg-emerald-400 hover:bg-emerald-400/90

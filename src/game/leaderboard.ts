@@ -218,6 +218,28 @@ export async function qualifyingRaces(
   return out;
 }
 
+/** Une ligne du TOP 500 reduite a ce qu'il faut pour designer un joueur. */
+export type TopPlayer = {
+  name: string;
+  /** Sa place dans la discipline demandee, 1 pour le meilleur. */
+  rank: number;
+  /** Son meilleur chrono sur une course de cette discipline. */
+  ms: number;
+};
+
+/**
+ * Le TOP 500 d'une discipline, un joueur par ligne et deja classe : de quoi
+ * proposer un annuaire des coureurs du jeu la ou l'on demande un nom. Taper
+ * reste possible partout — tout le monde n'est pas au tableau — mais celui
+ * qui y est n'a plus a etre epele sans faute.
+ */
+export async function fetchTopPlayers(race: RaceKey = '100'): Promise<TopPlayer[]> {
+  const list = rankByRaceTime(await fetchLeaderboardRaw(race));
+  return list.slice(0, TOP_N).map((e, i) => ({
+    name: e.name, rank: i + 1, ms: e.best_split_ms,
+  }));
+}
+
 /**
  * Les noms du haut du tableau d'une discipline, dedoublonnes. Un meme joueur
  * peut occuper plusieurs lignes du TOP 500 ; il ne doit sortir qu'une fois,
