@@ -127,9 +127,22 @@
     MAX_H: 2.00,
 
     // --- piste ----------------------------------------------------------
+    // Cotes officielles World Athletics, piste standard de 400 m. Le detail
+    // et les sources sont dans docs/piste-athletisme.md.
     LANE_W: 1.22,
     LANE_COUNT: 8,
-    R1: 36.80,
+    // La corde : le bord interieur de la piste, la ou se pose la bordure.
+    // Ce n'est PAS la ligne sur laquelle on mesure les 400 m — celle-la
+    // passe trente centimetres plus loin, et c'est elle qui vaut 400,00 m
+    // (2 x 84,39 + 2 pi x 36,80 = 400,00).
+    R1: 36.50,
+    // Ligne de mesure. Trente centimetres de la corde au couloir 1, parce
+    // qu'une bordure physique ecarte le coureur ; vingt centimetres de la
+    // ligne peinte pour les autres couloirs, ou il n'y a rien a eviter.
+    // C'est la trajectoire qu'un coureur suit reellement, donc celle que
+    // l'on fait suivre a nos coureurs.
+    MES_1: 0.30,
+    MES_N: 0.20,
     RUNOUT: 26.0
   };
 
@@ -553,86 +566,136 @@
   // ---------------------------------------------------------------------
   // PISTE
   // ---------------------------------------------------------------------
-  // Le 200 m enchaine un virage puis une ligne droite ; le 100 m est le meme
-  // trace avec un virage de longueur nulle. Comme l'arc parcouru est le meme
-  // pour tous les couloirs alors que les rayons different, l'angle balaye
-  // diminue vers l'exterieur : c'est le depart en quinconce.
+  // La piste est celle de World Athletics : deux demi-cercles de 36,50 m de
+  // rayon a la corde, relies par deux lignes droites de 84,39 m. Le detail
+  // des cotes est dans docs/piste-athletisme.md.
   //
-  // Le 400 m est un tour complet : ce meme virage + ligne droite, suivi
-  // d'un second demi-tour identique tourne de 180 degres. Contrairement au
-  // premier virage (ou demarre la course, d'ou le depart en quinconce),
-  // le second virage n'est jamais un point de depart : tous les couloirs y
-  // balaient exactement le meme angle (un demi-tour, pi radians), a l'image
-  // d'un vrai virage "interieur" de piste ou personne ne prend d'avance.
-  // Les deux portions se raccordent exactement bout a bout (verifie
-  // numeriquement : pour le couloir 1, le point de depart et la ligne
-  // d'arrivee du 400 m tombent alors au meme endroit, comme sur une vraie
-  // piste ou ce couloir boucle un tour parfait).
+  // Le 200 m enchaine un virage puis une ligne droite ; le 100 m est le meme
+  // trace avec un virage de longueur nulle. Le 400 m et le relais sont un
+  // tour complet : ce meme virage + ligne droite, suivis d'un second
+  // demi-tour tourne de 180 degres.
+  //
+  // Tout le monde court la meme distance — c'est la regle de l'athletisme,
+  // et c'est aussi ce qui rend le jeu juste : le couloir ne change pas le
+  // chrono possible. Ce qui change d'un couloir a l'autre, c'est OU l'on
+  // demarre : voir bend1(), qui fabrique le depart en quinconce a partir du
+  // seul rayon.
   function Track(race) {
     this.arc = race.arc;
     this.straight = race.straight;
     this.fullLap = !!race.fullLap;
     this.total = this.fullLap ? 2 * (race.arc + race.straight) : race.arc + race.straight;
     this.curved = race.arc > 0;
+    this.relay = !!race.relay;
+    this.legs = race.legs || 0;
+    this.legLength = race.legLength || 0;
   }
+  // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
+  // la trajectoire du coureur, pas le milieu du couloir.
   Track.prototype.radius = function (lane) {
-    return C.R1 + lane * C.LANE_W + C.LANE_W * 0.5;
+    return lane === 0 ? C.R1 + C.MES_1 : C.R1 + lane * C.LANE_W + C.MES_N;
   };
+  // Rayon d'une ligne peinte : edge(0) est la corde, edge(8) le bord
+  // exterieur du huitieme couloir.
   Track.prototype.edge = function (e) { return C.R1 + e * C.LANE_W; };
+  // Longueur du PREMIER virage, pour un rayon donne — et c'est la que se
+  // fabrique le depart en quinconce.
+  //
+  // Sur un tour complet, le second virage est un demi-tour entier : le
+  // coureur du couloir 8 y parcourt pi x 45,24 = 142,13 m la ou celui du
+  // couloir 1 en parcourt 115,61. Comme tout le monde court 400 m et finit
+  // sur la meme ligne, ce que le couloir exterieur prend au second virage,
+  // il ne l'a pas au premier : il n'en fait que 400 - 2 x 84,39 - 142,13 =
+  // 89,09 m, donc il demarre plus loin dans la courbe. C'est exactement le
+  // decalage de 53,03 m qu'on lit sur une vraie piste.
+  //
+  // Sur un demi-tour (200 m), le virage vaut 115,61 m pour tous les
+  // couloirs — 200 moins la ligne droite — et c'est l'angle balaye qui
+  // diminue vers l'exterieur.
+  Track.prototype.bend1 = function (r) {
+    return this.fullLap ? this.total - 2 * this.straight - Math.PI * r : this.arc;
+  };
   Track.prototype.posR = function (v, r, onBend) {
     if (this.curved && onBend) return [-r * Math.sin(v), r * Math.cos(v)];
     return [v, this.curved ? r : r];
   };
-  // Second demi-tour : meme forme que le premier (bascule vers la formule
-  // "pure", puisqu'on n'y demarre jamais), tourne de 180 degres et
-  // translate pour raccorder exactement au bout de la premiere ligne droite.
+  // Second demi-tour : meme forme que le premier, tournee de 180 degres et
+  // translatee pour raccorder au bout de la premiere ligne droite. Ici le
+  // virage est toujours un demi-tour complet, quel que soit le rayon.
   Track.prototype.posLap2 = function (s2, r) {
-    const A = this.arc, S = this.straight;
-    if (s2 < A) {
-      const phi = Math.PI * (A - s2) / A;
+    const B = Math.PI * r, S = this.straight;
+    if (s2 < B) {
+      const phi = (B - s2) / r;
       return [S + r * Math.sin(phi), -r * Math.cos(phi)];
     }
-    return [S - (s2 - A), -r];
+    return [S - (s2 - B), -r];
   };
   // Position a la distance s, pour un rayon donne directement (pas
-  // necessairement le centre d'un couloir : sert aussi au rendu, qui
-  // dessine des reperes a des rayons arbitraires comme les bords de piste).
+  // necessairement une ligne de mesure : sert aussi au rendu, qui dessine
+  // des reperes a des rayons arbitraires comme les bords de piste).
+  //
+  // Le trace boucle exactement : a s = total, tous les rayons tombent sur
+  // [0, -r], c'est-a-dire sur une meme ligne d'arrivee radiale. Et pour le
+  // couloir 1 d'un tour complet, bend1 vaut pi x 36,80, donc le depart
+  // tombe lui aussi sur cette ligne — le tour est parfait, comme sur une
+  // vraie piste.
   Track.prototype.posAtR = function (s, r) {
-    if (this.fullLap && s >= this.arc + this.straight) {
-      return this.posLap2(s - (this.arc + this.straight), r);
+    const A = this.bend1(r);
+    if (this.fullLap && s >= A + this.straight) {
+      return this.posLap2(s - A - this.straight, r);
     }
-    if (s < this.arc) {
-      const phi = (this.arc - s) / r;
+    if (s < A) {
+      const phi = (A - s) / r;
       return [-r * Math.sin(phi), r * Math.cos(phi)];
     }
-    return [s - this.arc, r];
+    return [s - A, r];
   };
   Track.prototype.pos = function (s, lane) {
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
     return this.posAtR(s, this.radius(lane));
   };
+  // Le meme point, mais exprime comme un echantillon du rendu :
+  // [surVirage, v, moitie]. Sur un virage v est l'angle, sur une ligne
+  // droite c'est l'abscisse depuis le debut de cette droite. Cela permet de
+  // tracer un repere RADIAL — un trait qui traverse le couloir a angle
+  // constant — au lieu de relier deux points pris a la meme distance
+  // parcourue, qui sur un virage ne sont pas alignes sur le meme rayon.
+  Track.prototype.markAt = function (s, lane) {
+    if (!this.curved) return [false, s, 0];
+    const r = this.radius(lane), A = this.bend1(r), S = this.straight;
+    if (this.fullLap && s >= A + S) {
+      const s2 = s - A - S, B = Math.PI * r;
+      if (s2 < B) return [true, (B - s2) / r, 1];
+      return [false, s2 - B, 1];
+    }
+    if (s < A) return [true, (A - s) / r, 0];
+    return [false, s - A, 0];
+  };
   Track.prototype.heading = function (s, lane) {
     if (!this.curved) return 0;
-    if (this.fullLap && s >= this.arc + this.straight) {
-      const s2 = s - (this.arc + this.straight);
-      if (s2 < this.arc) return Math.PI * (this.arc - s2) / this.arc - Math.PI;
+    const r = this.radius(lane), A = this.bend1(r);
+    if (this.fullLap && s >= A + this.straight) {
+      const s2 = s - A - this.straight, B = Math.PI * r;
+      if (s2 < B) return (B - s2) / r - Math.PI;
       return -Math.PI;
     }
-    if (s >= this.arc) return 0;
-    return (this.arc - s) / this.radius(lane);
+    if (s >= A) return 0;
+    return (A - s) / r;
   };
   Track.prototype.lean = function (s, lane, v) {
     if (!this.curved) return 0;
-    let sBend = null;
-    if (this.fullLap && s >= this.arc + this.straight) {
-      const s2 = s - (this.arc + this.straight);
-      if (s2 < this.arc) sBend = s2;
-    } else if (s < this.arc) {
-      sBend = s;
+    const r = this.radius(lane), A = this.bend1(r);
+    // Distance restant a courir dans le virage, ou null hors virage.
+    let rem = null;
+    if (this.fullLap && s >= A + this.straight) {
+      const s2 = s - A - this.straight, B = Math.PI * r;
+      if (s2 < B) rem = B - s2;
+    } else if (s < A) {
+      rem = A - s;
     }
-    if (sBend === null) return 0;
-    const a = Math.atan((v * v) / (9.81 * this.radius(lane)));
-    const fade = Math.max(0, Math.min(1, (this.arc - sBend) / 9));
+    if (rem === null) return 0;
+    const a = Math.atan((v * v) / (9.81 * r));
+    const fade = Math.max(0, Math.min(1, rem / 9));
     // En debut de courbe (depart en quinconce, ou en sortie du second
     // virage), l'orientation (headAng) peut depasser 90 degres : combinee
     // a l'inclinaison laterale, la projection isometrique ecrasait

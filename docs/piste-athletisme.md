@@ -153,6 +153,23 @@ Lv  = PI * r               // developpe d'un virage pour ce couloir
 // total = 2 * Ld + 2 * Lv
 ```
 
+## 8. Ce que le jeu en fait
+
+| Fiche | Code |
+| --- | --- |
+| Corde 36,50 m | `C.R1` (`src/game/sprinter-core.js`) |
+| Couloir 1,22 m, 8 couloirs | `C.LANE_W`, `C.LANE_COUNT` |
+| Mesure 30 cm / 20 cm | `C.MES_1`, `C.MES_N`, `Track.radius(lane)` |
+| Lignes peintes | `Track.edge(e)` — `edge(0)` est la corde |
+| Décalage au départ (stagger) | `Track.bend1(r)` |
+| Repère radial d'un couloir | `Track.markAt(s, lane)` |
+| Zone de transmission 30 m | `C.RELAY_LAUNCH`, rendu dans `drawWorld` |
+
+Le couloir ne change pas le chrono possible : tout le monde court la distance
+de l'épreuve, et c'est le point de **départ** qui varie. C'est la règle de
+l'athlétisme, et `Track` n'intervient nulle part dans la physique — elle ne
+sert qu'à placer, orienter et incliner les coureurs.
+
 ## Sources
 
 - World Athletics — *Track and Field Facilities Manual*, marking plan 400 m standard track

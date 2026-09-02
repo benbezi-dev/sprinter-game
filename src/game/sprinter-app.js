@@ -1524,8 +1524,24 @@
     }
     rail(ctx, sm, rOut, rgb(th.lane), 2.2);
 
-    // Position d'un point de la piste a la distance m et au rayon r.
-    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
+    // Rayon d'une ligne peinte, ligne droite comprise.
+    const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
+
+    // Un repere de couloir se trace RADIALEMENT, a l'angle de ce couloir :
+    // court, perpendiculaire a SA propre trajectoire, d'une ligne peinte a
+    // l'autre. C'est ce qui donne le depart en quinconce — sur un 400 m,
+    // cinquante-trois metres separent le repere du couloir 1 de celui du
+    // couloir 8, et les reperes voisins ne se rejoignent pas. Relier deux
+    // points pris a la meme distance parcourue donnerait un trait de
+    // travers : dans un virage ils ne sont pas sur le meme rayon.
+    const tick = (m, e, col, w) => {
+      const sa = T.markAt(m, e);
+      const qa = ptOf(sa, lineR(e)), qb = ptOf(sa, lineR(e + 1));
+      const a = ground(qa[0], qa[1]), b = ground(qb[0], qb[1]);
+      if ((a[0] < -200 && b[0] < -200) || (a[0] > G.VW + 200 && b[0] > G.VW + 200)) return;
+      ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    };
 
     // Reperes au sol : uniquement le depart, la ligne des 100 m et celle
     // des 50 derniers metres (comme les marquages permanents d'une vraie
@@ -1536,50 +1552,61 @@
     if (T.total - 50 > 0) markerSet.add(T.total - 50);
     const markers = Array.from(markerSet).sort((a, b) => a - b);
 
-    // Le depart en quinconce n'est PAS un trait continu qui traverse tous
-    // les couloirs sur une vraie piste : chaque couloir a son propre
-    // repere, court et perpendiculaire a SA propre trajectoire, dessine a
-    // l'angle donne par SON propre rayon (l'ecart peut depasser 20 m entre
-    // le couloir 1 et le couloir 8 sur un 200 m). Les reperes de couloirs
-    // voisins ne se rejoignent donc pas.
-    for (const m of markers) {
-      const inBend = T.curved && m < T.arc;
-      ctx.strokeStyle = 'rgba(255,255,255,0.90)';
-      ctx.lineWidth = m === 0 ? 3 : 1.6;
-      if (inBend) {
+    for (const m of markers)
+      for (let e = 0; e < C.LANE_COUNT; e++)
+        tick(m, e, 'rgba(255,255,255,0.90)', m === 0 ? 3 : 1.6);
+
+    // Zones de transmission du relais, en jaune comme sur une piste.
+    // La zone fait trente metres depuis 2018 — l'ancienne zone de vingt
+    // metres a absorbe la zone d'elan de dix — et porte une ligne de
+    // repere a vingt metres de son debut. Le jeu pose le receveur au debut
+    // de sa zone et lui donne trente metres pour se lancer : l'ensemble est
+    // donc decale de vingt metres par rapport au marquage officiel, mais la
+    // geometrie est la bonne, et les debuts de zone restent a cent metres
+    // l'un de l'autre comme sur une vraie piste.
+    if (T.relay && T.legLength > 0) {
+      for (let k = 1; k < T.legs; k++) {
+        const z0 = k * T.legLength;
         for (let e = 0; e < C.LANE_COUNT; e++) {
-          const laneR = T.radius(e);
-          const qa = at(m, laneR - C.LANE_W * 0.5), qb = at(m, laneR + C.LANE_W * 0.5);
-          if (!qa || !qb) continue;
-          const a = ground(qa[0], qa[1]), b = ground(qb[0], qb[1]);
-          if ((a[0] < -200 && b[0] < -200) || (a[0] > G.VW + 200 && b[0] > G.VW + 200)) continue;
-          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+          tick(z0, e, 'rgba(255,206,0,0.92)', 2.4);
+          tick(z0 + C.RELAY_LAUNCH, e, 'rgba(255,206,0,0.92)', 2.4);
+          tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
         }
-      } else {
-        const qa = at(m, rIn), qb = at(m, rOut);
-        if (!qa || !qb) continue;
-        const a = ground(qa[0], qa[1]), b = ground(qb[0], qb[1]);
-        if (a[0] < -200 && b[0] < -200) continue;
-        if (a[0] > G.VW + 200 && b[0] > G.VW + 200) continue;
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
       }
     }
 
-    // chiffres sur l'herbe exterieure, aux memes reperes
+    // Numeros de couloir, peints juste avant chaque ligne de depart.
+    ctx.save();
+    ctx.font = '700 ' + (12 * ui()) + 'px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let e = 0; e < C.LANE_COUNT; e++) {
+      const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
+      const p = ground(q[0], q[1]);
+      if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
+      ctx.fillText(String(e + 1), p[0], p[1]);
+    }
+    ctx.restore();
+
+    // chiffres sur l'herbe exterieure, aux memes reperes — poses a cote du
+    // repere du couloir exterieur, qui est celui qu'ils annoncent.
     ctx.font = '600 ' + (13 * ui()) + 'px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.80)';
     for (const m of markers) {
-      const q = at(m, rOut + 2.4);
+      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + 2.4);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
       ctx.fillText(m === 0 ? t('depart') : String(m), p[0], p[1]);
     }
 
-    // damier d'arrivee : positionne par distance de course (via at(), qui
-    // gere le second demi-tour du 400 m) plutot que par coordonnee locale
-    // fixe, sinon la ligne d'arrivee tomberait au mauvais endroit sur un
-    // tour complet.
+    // damier d'arrivee : positionne par distance de course (qui gere le
+    // second demi-tour du 400 m) plutot que par coordonnee locale fixe,
+    // sinon la ligne d'arrivee tomberait au mauvais endroit sur un tour
+    // complet. Elle, au moins, est bien radiale : tous les couloirs y
+    // arrivent au meme endroit, c'est la definition d'une ligne d'arrivee.
+    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
     for (let i = 0; i < C.LANE_COUNT * 2; i++) {
       const rr = rIn + i * C.LANE_W * 0.5;
       ctx.fillStyle = i % 2 ? 'rgb(56,58,72)' : '#fff';
