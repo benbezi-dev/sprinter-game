@@ -200,6 +200,20 @@ if (moment) {
   ok('on le retrouve parmi les ecartes', ecartes.some(m => m.id === moment.id));
 }
 
+// La porte du rattrapage des noms. Le geste lui-meme se verifie hors serveur —
+// tools/reseaux-noms-test.mjs, avec une base de mensonge — parce qu'il demande
+// un mouchoir dans la file, et qu'on ne fabrique pas huit coureurs en vingt
+// centiemes sur une vraie base pour le plaisir de regarder. Ce qui se verifie
+// ici est ce que seul le vrai serveur peut dire : la route est branchee, et
+// elle est fermee comme les deux autres.
+const nomsNu = await post('/reseaux/noms', { id: 1 });
+ok('sans cle, la reparation des noms n existe pas', nomsNu.statut === 404,
+   `HTTP ${nomsNu.statut}`);
+const nomsInconnu = await post('/reseaux/noms', { id: 999999999 }, admin);
+ok('avec la cle, un identifiant inconnu se dit introuvable',
+   nomsInconnu.statut === 404 && nomsInconnu.corps.raison === 'introuvable',
+   `HTTP ${nomsInconnu.statut} ${JSON.stringify(nomsInconnu.corps).slice(0, 60)}`);
+
 // On refait tomber la tete du classement pour avoir de quoi publier : le seul
 // moment de la file vient d'etre ecarte, et une section qui ne trouve rien a
 // tester passerait au vert sans avoir rien verifie. C'est arrive au premier

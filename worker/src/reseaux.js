@@ -260,10 +260,16 @@ export async function regarderClassement(canal, race, nom, chronoMs, entrees) {
       await noter(canal, 'mouchoir', `mouchoir:${race}:${haut.length}:${ecart}`, {
         race, combien: haut.length, ecart_ms: ecart,
         premier_ms: premier, dernier_ms: dernier,
-        // Les noms partent masques des l'ecriture pour ce moment-ci : une liste
-        // de huit pseudonymes demanderait huit accords, et l'image se tient
-        // tres bien sans eux — c'est l'ecart qu'elle raconte, pas les porteurs.
-        noms: haut.map(e => masquer(e.name)),
+        // Les noms entiers, comme partout ailleurs dans cette file. Ils
+        // partaient masques des l'ecriture, et c'etait une erreur d'un cran :
+        // l'image se tient tres bien sans eux, mais un classement resserre est
+        // exactement le moment ou l'on peut avoir envie de les montrer — huit
+        // joueurs a qui l'on demande leur accord, et la liste devient une
+        // liste de gens plutot qu'une colonne de chronos. Masquer ici rendait
+        // ce choix impossible A JAMAIS pour la ligne ecrite : le pseudonyme
+        // n'existait plus nulle part. C'est la lecture qui masque — regle 2,
+        // `sansNoms()` juste en dessous — et le defaut reste donc le meme.
+        noms: haut.map(e => e.name),
         chronos_ms: haut.map(e => Number(e.best_split_ms ?? e.time_ms)),
       });
     }
@@ -388,6 +394,77 @@ function sansNoms(d) {
   }
   if (Array.isArray(c.noms)) c.noms = c.noms.map(masquer);
   return c;
+}
+
+/** Un nom qui est deja sorti de `masquer()` : il porte les points. */
+const estMasque = nom => String(nom || '').includes('\u2022');
+
+/**
+ * Rend a un moment les noms que l'ecriture lui avait retires.
+ *
+ * Le mouchoir a longtemps range des noms deja masques — voir le commentaire
+ * dans `regarderClassement`. Les lignes ecrites avant ce changement ne peuvent
+ * donc plus etre publiees avec les noms, quel que soit le geste de celui qui
+ * valide : le pseudonyme n'est nulle part. Cette fonction les repeche dans le
+ * classement, qui est la source d'ou ils venaient.
+ *
+ * Elle ne devine RIEN. Un nom n'est rendu que si le classement porte encore,
+ * au meme chrono, un seul pseudonyme dont la forme masquee est exactement
+ * celle qui est rangee — meme initiale, meme longueur. Un classement qui a
+ * bouge depuis, un chrono disparu, deux candidats possibles : on refuse la
+ * ligne entiere et on le dit. Une image de compte de marque qui attribue le
+ * chrono d'un joueur a un autre est pire que la meme image sans les noms.
+ *
+ * `chercherClassement` est passe par l'appelant plutot que lu ici : ce module
+ * ne connait pas la table des scores, et c'est ce qui lui permet d'etre teste
+ * et relu sans le reste du worker.
+ */
+export async function reparerNoms(db, id, chercherClassement) {
+  await ensureReseauxTables(db);
+  const l = await db.prepare(
+    `SELECT id, type, donnees FROM reseaux_file WHERE id = ?`
+  ).bind(Number(id)).first();
+  if (!l) return { ok: false, raison: 'introuvable' };
+
+  let d;
+  try { d = JSON.parse(l.donnees); } catch { return { ok: false, raison: 'ligne illisible' }; }
+
+  const noms = Array.isArray(d.noms) ? d.noms : null;
+  const chronos = Array.isArray(d.chronos_ms) ? d.chronos_ms : null;
+  if (!noms || !chronos || noms.length !== chronos.length) {
+    return { ok: false, raison: 'ce moment ne porte pas de liste de noms' };
+  }
+  // Rien a faire, et ce n'est pas une erreur : c'est l'etat d'une ligne ecrite
+  // apres le changement, et l'atelier doit pouvoir appeler sans regarder.
+  if (!noms.some(estMasque)) return { ok: true, retrouves: 0 };
+  if (!d.race) return { ok: false, raison: 'moment sans epreuve' };
+
+  const entrees = (await chercherClassement(d.race)) || [];
+  const clairs = noms.slice();
+  const perdus = [];
+  noms.forEach((nom, i) => {
+    if (!estMasque(nom)) return;
+    const chrono = Number(chronos[i]);
+    const candidats = [...new Set(entrees
+      .filter(e => Number(e.best_split_ms ?? e.time_ms) === chrono && masquer(e.name) === nom)
+      .map(e => String(e.name)))];
+    if (candidats.length === 1) clairs[i] = candidats[0];
+    else perdus.push(i + 1);
+  });
+  if (perdus.length) {
+    return {
+      ok: false,
+      raison: 'le classement ne confirme plus ces places',
+      places: perdus,
+    };
+  }
+
+  const retrouves = clairs.filter((n, i) => n !== noms[i]).length;
+  await db.prepare(`UPDATE reseaux_file SET donnees = ? WHERE id = ?`)
+    .bind(JSON.stringify({ ...d, noms: clairs }), Number(l.id)).run();
+  // On rend le compte, pas les noms : ce qui sort en clair sort par la file et
+  // son `noms=1`, un seul chemin, visible dans l'URL comme dans le journal.
+  return { ok: true, retrouves };
 }
 
 /** Ecarte un moment : il ne sera plus propose, et il ne revient pas. */

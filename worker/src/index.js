@@ -29,7 +29,7 @@ import {
 } from './acces.js';
 import {
   ensureReseauxTables, regarderClassement, regarderDuel, regarderSacre,
-  regarderCap, fileDAttente, ecarter, marquerPublie, MOMENTS,
+  regarderCap, fileDAttente, ecarter, marquerPublie, reparerNoms, MOMENTS,
 } from './reseaux.js';
 import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
@@ -1695,6 +1695,22 @@ export default {
         let body; try { body = await request.json(); } catch { body = {}; }
         const ok = await ecarter(env.DB, (body || {}).id);
         return ok ? json({ ok: true }) : json({ error: 'deja tranche' }, 409);
+      }
+
+      // Rendre a un moment les noms que l'ecriture lui avait retires.
+      //
+      // Ne concerne que les mouchoirs ranges avant que ce moment-la garde ses
+      // noms entiers : eux seuls portent une liste deja masquee dans la base,
+      // et sans ce geste ils ne peuvent plus etre publies avec les noms, meme
+      // avec l'accord des huit joueurs. Le rattrapage relit le classement et
+      // n'accepte un nom que si celui-ci s'y retrouve, seul, au meme chrono et
+      // sous la meme forme masquee. La reponse ne rend pas les noms — ils
+      // sortent par la file et son `noms=1`, comme tous les autres.
+      if (quoi === 'noms' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const r = await reparerNoms(env.DB, (body || {}).id,
+                                    race => getLeaderboard(env.DB, race));
+        return r.ok ? json(r) : json(r, r.raison === 'introuvable' ? 404 : 409);
       }
 
       if (quoi === 'publie' && request.method === 'POST') {

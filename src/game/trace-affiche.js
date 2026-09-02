@@ -165,6 +165,29 @@ function surtitre(c, texte, x, y, taille) {
 }
 
 /**
+ * Le texte, coupe pour tenir dans la largeur donnee.
+ *
+ * La colonne du mouchoir portait des noms masques — huit signes au plus — et
+ * rien ne pouvait donc y deborder. Depuis que ces noms peuvent sortir en
+ * clair, un pseudonyme de vingt signes vient buter dans le chrono, et deux
+ * textes qui se chevauchent sur une image publiee ne se rattrapent pas apres
+ * coup. On coupe donc, avec les points de suspension qui disent que c'etait
+ * plus long — un nom tronque sans eux se lit comme un nom court, et faux.
+ *
+ * La police doit etre posee sur le contexte avant l'appel : c'est elle qui
+ * decide de la largeur.
+ */
+function couper(c, texte, largeurMax) {
+  const t = String(texte || '');
+  if (largeurMax <= 0 || c.measureText(t).width <= largeurMax) return t;
+  let court = t;
+  while (court.length > 1 && c.measureText(court + '…').width > largeurMax) {
+    court = court.slice(0, -1);
+  }
+  return court + '…';
+}
+
+/**
  * Dessine un moment dans un canvas, au format demande.
  *
  * Un seul point d'entree pour les trois formats : les proportions sont
@@ -292,12 +315,18 @@ export function dessinerMoment(cv, moment, format) {
         c.save();
         c.textBaseline = 'middle';
         c.fillStyle = i === 0 ? '#F8CD4A' : 'rgba(255,255,255,0.72)';
-        c.font = `${i === 0 ? 700 : 500} ${Math.round(pas * 0.44)}px Outfit, sans-serif`;
-        c.textAlign = 'left';
-        c.fillText(`${i + 1}. ${(d.noms || [])[i] || ''}`, gaucheCol, ly);
+        // Le chrono d'abord, parce que c'est lui qui fixe la place qui reste :
+        // il est le sujet de l'image et ne se coupe jamais. Le nom prend ce
+        // qui est libre, moins un blanc franc — deux textes qui se frolent se
+        // lisent comme un seul.
         c.font = `700 ${Math.round(pas * 0.46)}px 'Space Mono', monospace`;
+        const largeurChrono = c.measureText(s2(ms)).width;
         c.textAlign = 'right';
         c.fillText(s2(ms), gaucheCol + colonne, ly);
+        c.font = `${i === 0 ? 700 : 500} ${Math.round(pas * 0.44)}px Outfit, sans-serif`;
+        c.textAlign = 'left';
+        const place = colonne - largeurChrono - pas * 0.55;
+        c.fillText(couper(c, `${i + 1}. ${(d.noms || [])[i] || ''}`, place), gaucheCol, ly);
         c.restore();
       });
     } });
