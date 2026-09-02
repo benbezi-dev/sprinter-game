@@ -260,10 +260,18 @@ export async function regarderClassement(canal, race, nom, chronoMs, entrees) {
       await noter(canal, 'mouchoir', `mouchoir:${race}:${haut.length}:${ecart}`, {
         race, combien: haut.length, ecart_ms: ecart,
         premier_ms: premier, dernier_ms: dernier,
-        // Les noms partent masques des l'ecriture pour ce moment-ci : une liste
-        // de huit pseudonymes demanderait huit accords, et l'image se tient
-        // tres bien sans eux — c'est l'ecart qu'elle raconte, pas les porteurs.
-        noms: haut.map(e => masquer(e.name)),
+        // Les noms entiers, comme partout ailleurs dans la file. Ils partaient
+        // masques des l'ecriture pour ce moment-ci, et le masquage etait donc
+        // fait DEUX fois — une a l'ecriture, une a la lecture. La seconde
+        // suffit ; la premiere rendait ce moment-la le seul dont l'atelier ne
+        // pouvait pas afficher les noms, meme en les demandant, parce qu'ils
+        // n'existaient plus nulle part. Or c'est l'atelier qui doit pouvoir
+        // regarder qui est dans la liste : c'est lui qui va demander l'accord,
+        // et on ne le demande pas a « M••••• ».
+        //
+        // La regle 2 ne bouge pas d'un pouce : ce que la file REND est masque
+        // par defaut, et `sansNoms()` masque `noms` comme les autres champs.
+        noms: haut.map(e => e.name),
         chronos_ms: haut.map(e => Number(e.best_split_ms ?? e.time_ms)),
       });
     }

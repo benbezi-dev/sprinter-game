@@ -27,6 +27,66 @@ export const FORMATS = {
   large: { l: 1600, h: 900,  nom: 'X', ou: 'x' },
 };
 
+/* ------------------------------------------------------- ou retrouver le jeu */
+
+/**
+ * Le jeu et ses comptes, ecrits une seule fois.
+ *
+ * Ils etaient jusqu'ici en dur dans le trace de la story du joueur, et nulle
+ * part ailleurs : les images de l'atelier — celles qui partent du compte du
+ * jeu, donc celles qu'un inconnu voit en premier — ne disaient ni ou jouer ni
+ * ou suivre la suite. Un seul endroit, maintenant, pour les trois adresses.
+ */
+export const JEU = {
+  site: 'sprinter-game.com',
+  lien: 'https://sprinter-game.com',
+  instagram: 'sprintergame',
+  tiktok: 'sprinter_game',
+};
+
+/**
+ * Les comptes a nommer sur une image qui part vers `ou`.
+ *
+ * Dynamique, et pas une ligne fixe : ce qui se cherche d'un geste, c'est le
+ * compte du reseau ou l'on se trouve deja — un @ Instagram ne se cherche pas
+ * depuis TikTok. Chaque format declare sa destination (`FORMATS[].ou`), et
+ * l'image ne nomme donc que les comptes qu'on peut y atteindre. La story, qui
+ * part aux deux, les nomme tous les deux.
+ *
+ * Un format sans compte a lui — le X, ou le jeu n'a rien — les montre tous les
+ * deux aussi : l'image y sert alors a ramener vers la ou le jeu publie
+ * vraiment, et une signature vide serait la seule reponse pire que celle-la.
+ */
+export function comptesPour(ou) {
+  const d = String(ou || '');
+  const l = [];
+  if (d.includes('instagram')) l.push(JEU.instagram);
+  if (d.includes('tiktok')) l.push(JEU.tiktok);
+  return l.length ? l : [JEU.instagram, JEU.tiktok];
+}
+
+/**
+ * Les adresses cliquables d'une publication.
+ *
+ * Pour l'atelier, pas pour l'image : un texte peint dans un canvas n'est pas
+ * un lien, et la page qui prepare une publication a besoin des adresses vraies
+ * — celle du jeu, celles des deux comptes — pour les ouvrir d'un clic et les
+ * coller dans la legende. Elles sortent d'ici et pas de la page, sinon
+ * l'image et la legende se contrediront le jour ou un compte change de nom.
+ */
+export function liensPublication(format) {
+  const F = FORMATS[format] || FORMATS.feed;
+  return {
+    ou: F.ou,
+    jeu: JEU.lien,
+    instagram: `https://instagram.com/${JEU.instagram}`,
+    tiktok: `https://www.tiktok.com/@${JEU.tiktok}`,
+    // Tels qu'ils sont ecrits dans l'image : la legende et le visuel nomment
+    // les memes comptes, dans le meme ordre.
+    comptes: comptesPour(F.ou).map(n => '@' + n),
+  };
+}
+
 // La virgule, pas le point. La charte ecrit « 9,58 s » et la publication du
 // 30 aout « 8,25 s en tete » : le point venait de toFixed, pas d'un choix. Un
 // chrono francais s'ecrit a la virgule, y compris — et surtout — en 216 px.
@@ -59,19 +119,59 @@ function poserFond(c, L, H) {
   c.restore();
 }
 
-/** La signature, en bas. Discrete : le compte se nomme deja au-dessus. */
-function poserPied(c, L, H, marge) {
+/**
+ * La signature, en bas : l'adresse du jeu, puis les comptes de la destination.
+ *
+ * Les deux ensemble, et pas l'un OU l'autre. Un @ se cherche d'un geste sans
+ * quitter l'application — c'est ce qui avait fait preferer le compte a
+ * l'adresse sur la story du joueur — mais il ne mene qu'a un autre fil ; et
+ * l'adresse, qui se clique mal et se recopie moins bien, est pourtant la seule
+ * des deux qui ouvre le jeu. Une image partagee se regarde hors de tout
+ * contexte : c'est la seule ligne qu'elle porte en plus de ce qu'elle raconte,
+ * et elle doit donc repondre aux deux questions.
+ *
+ * Les deux zones sont mesurees avant d'etre tracees. Une taille unique qui
+ * tiendrait partout serait celle du format le plus etroit, donc trop petite
+ * sur les deux autres ; et une taille reglee a l'oeil sur la story se
+ * chevaucherait le jour ou un compte s'allonge.
+ */
+function poserPied(c, L, H, marge, ou) {
+  const y = H - marge * 0.92;
   c.save();
   c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
   c.beginPath(); c.moveTo(marge, H - marge * 1.5); c.lineTo(L - marge, H - marge * 1.5); c.stroke();
+
+  const comptes = comptesPour(ou).map(n => '@' + n).join('  ·  ');
+  const dispo = L - marge * 2;
+  // L'air entre les deux zones. En dessous, elles se lisent comme une seule
+  // phrase et l'oeil cherche ou l'adresse s'arrete.
+  const air = L * 0.05;
+
+  // Mesurer demande de poser la fonte : on garde donc la derniere posee, qui
+  // est celle du trace.
+  const mesurer = t => {
+    c.font = `600 ${t}px Outfit, sans-serif`;
+    c.letterSpacing = `${L * 0.003}px`;
+    return c.measureText(JEU.site).width + c.measureText(comptes).width;
+  };
+  let taille = Math.round(L * 0.0205);
+  const pris = mesurer(taille);
+  if (pris + air > dispo) {
+    // Un plancher, sinon un jour ou trois comptes tiendraient la ligne, la
+    // signature deviendrait illisible plutot que serree.
+    taille = Math.max(Math.round(taille * (dispo - air) / pris), Math.round(L * 0.013));
+    mesurer(taille);
+  }
+
+  c.textBaseline = 'middle';
   c.fillStyle = 'rgba(255,255,255,0.46)';
-  c.font = `700 ${Math.round(L * 0.0205)}px Outfit, sans-serif`;
-  c.textAlign = 'left'; c.textBaseline = 'middle';
-  c.letterSpacing = `${L * 0.006}px`;
-  c.fillText('SPRINTER', marge, H - marge * 0.92);
+  c.textAlign = 'left';
+  c.fillText(JEU.site, marge, y);
+  // Un ton en dessous : l'adresse est ce qu'on veut faire retenir, les comptes
+  // sont ce qu'on veut rendre trouvable.
+  c.fillStyle = 'rgba(255,255,255,0.32)';
   c.textAlign = 'right';
-  c.fillStyle = 'rgba(255,255,255,0.30)';
-  c.fillText('JEU DE SPRINT', L - marge, H - marge * 0.92);
+  c.fillText(comptes, L - marge, y);
   c.restore();
 }
 
@@ -355,7 +455,7 @@ export function dessinerMoment(cv, moment, format) {
   }
 
   empiler(blocs, haut, bas);
-  poserPied(c, L, H, marge);
+  poserPied(c, L, H, marge, F.ou);
   return cv;
 }
 
@@ -462,22 +562,17 @@ export function dessinerCourse(cv, course) {
 
   empiler(blocs, haut, bas);
 
-  // Le compte, en bas : une story se regarde hors de tout contexte, et sans
-  // cette ligne l'image ne dit pas ou retrouver le jeu. C'est la seule de
-  // l'image qui serve a autre chose qu'a raconter la course.
+  // Ou retrouver le jeu : c'est le pied qui le dit, ici comme sur les images
+  // de l'atelier. Cette ligne-la etait tracee a part, juste au-dessus, et elle
+  // ne nommait que le compte Instagram — en dur, dans cette fonction. Deux
+  // consequences, et la seconde ne se voyait pas d'ici : la story ne donnait
+  // pas l'adresse du jeu, et les images qui partent du compte du jeu ne
+  // donnaient ni l'une ni l'autre, puisqu'elles ne passaient pas par ici.
   //
-  // Le nom du compte plutot que l'adresse du site : une story se regarde DANS
-  // Instagram, ou une adresse ne se clique pas et ne se recopie pas — tandis
-  // qu'un @ se cherche d'un geste, sans quitter l'application.
-  c.save();
-  c.fillStyle = 'rgba(255,255,255,0.30)';
-  c.font = `600 ${T(0.026)}px Outfit, sans-serif`;
-  c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.letterSpacing = `${T(0.004)}px`;
-  c.fillText('@sprintergame', cx, H - Math.round(H * 0.088));
-  c.restore();
-
-  poserPied(c, L, H, marge);
+  // Le pied porte donc les deux, pour les deux chemins. La story part sur
+  // Instagram ET TikTok — `FORMATS.story.ou` le dit — et nomme donc les deux
+  // comptes.
+  poserPied(c, L, H, marge, FORMATS.story.ou);
   return cv;
 }
 
