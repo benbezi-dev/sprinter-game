@@ -19,7 +19,7 @@ import { useEffect, useRef, useState } from 'react';
  * reduit le tout du rapport des deux. Le texte rapetisse un peu, l'ecran est
  * complet, et personne n'a besoin de savoir qu'il s'est passe quelque chose.
  *
- * TROIS PRECAUTIONS, ET ELLES COMPTENT :
+ * QUATRE PRECAUTIONS, ET ELLES COMPTENT :
  *
  * 1. TOUT OU RIEN, ET UN PLANCHER POUR EN DECIDER. On ne reduit que si la
  *    reduction suffit a TOUT montrer, et seulement dans la limite du
@@ -37,6 +37,17 @@ import { useEffect, useRef, useState } from 'react';
  *    de moitie. Sans ce garde-fou, poser le doigt dans le champ « ton nom »
  *    ferait rapetisser tout l'ecran sous les doigts, puis grandir en le
  *    refermant. On garde l'echelle qu'on avait le temps de la saisie.
+ *
+ * 4. LA LARGEUR RENDUE. Une reduction manquait de hauteur et prenait la
+ *    largeur avec : a 0.86, les panneaux se retrouvaient a 86% de l'ecran et
+ *    laissaient quarante pixels de vide de chaque cote — des marges que
+ *    personne n'avait demandees, sur le seul ecran ou l'on a huit choses a
+ *    montrer. On rend donc au contenu, EN MISE EN PAGE, la largeur que la
+ *    reduction va lui prendre : `largeur` vaut 1/echelle, et apres reduction
+ *    les panneaux retombent exactement sur la largeur du cadre. Seuls le
+ *    texte et les espacements rapetissent, ce qui etait le but. La mesure,
+ *    elle, se fait toujours a la largeur du cadre — voir plus bas, c'est ce
+ *    qui empeche l'echelle et la largeur de se poursuivre l'une l'autre.
  */
 export function useTenirDansLEcran(plancher = 0.75) {
   /** Le conteneur qui defile : c'est lui qui connait la place disponible. */
@@ -59,7 +70,23 @@ export function useTenirDansLEcran(plancher = 0.75) {
       const st = getComputedStyle(c);
       const dispo = c.clientHeight
         - (parseFloat(st.paddingTop) || 0) - (parseFloat(st.paddingBottom) || 0);
+      // TOUJOURS MESURER A LA LARGEUR DU CADRE, jamais a la largeur rendue.
+      //
+      // Sans cela, la precaution 4 se mord la queue : la largeur posee vient
+      // de l'echelle, l'echelle vient de la hauteur, et la hauteur vient de
+      // la largeur. Sur un ecran bas, ou les panneaux se rangent en colonnes,
+      // un panneau plus large change de colonne d'un coup — les deux valeurs
+      // se poursuivaient alors sans jamais se rejoindre, et l'ecran finissait
+      // par defiler, ce que tout ce fichier existe pour eviter.
+      //
+      // On repose donc la largeur du cadre le temps d'une lecture. Cela coute
+      // un calcul de mise en page, et rend la mesure independante de ce qu'on
+      // en fera : l'echelle est exactement celle qu'on aurait sans compenser,
+      // et la compensation ne peut que raccourcir un contenu plus large.
+      const rendue = d.style.width;
+      if (rendue) d.style.width = '';
       const besoin = d.scrollHeight;
+      if (rendue) d.style.width = rendue;
       if (!(dispo > 0) || !(besoin > 0)) return;
 
       const rapport = dispo / besoin;
@@ -101,5 +128,9 @@ export function useTenirDansLEcran(plancher = 0.75) {
     };
   }, [plancher]);
 
-  return { cadre, contenu, echelle, hauteur };
+  /* La largeur a poser sur l'element reduit, en pourcentage du cadre : celle
+     qui, une fois multipliee par l'echelle, redonne la largeur du cadre. */
+  const largeur = echelle < 1 ? `${(100 / echelle).toFixed(3)}%` : undefined;
+
+  return { cadre, contenu, echelle, hauteur, largeur };
 }
