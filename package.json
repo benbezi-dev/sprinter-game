@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "tableau": "node suivi/servir.mjs"
+    "tableau": "node suivi/servir.mjs",
+    "atelier": "node tools/servir-atelier.mjs"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

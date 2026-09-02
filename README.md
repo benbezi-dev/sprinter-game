@@ -39,3 +39,19 @@ Le jeu sera disponible sur `https://<votre-utilisateur>.github.io/<nom-du-repo>/
 - `src/game/` — moteur du jeu (physique, rendu low-poly, audio procédural, i18n)
 - `src/components/` — interface React (écrans, HUD, contrôles tactiles)
 - `public/` — icônes de l'application
+- `worker/` — l'API (classements, duels, championnats) sur Cloudflare Workers
+- `tools/` — harnais de test et outillage interne, hors du site publié
+
+### L'atelier de publication
+
+`tools/reseaux.html` prépare ce qui part sur les comptes du jeu : le worker
+signale ses moments (un record en tête, un titre, un classement qui se
+resserre), l'atelier les dessine aux trois formats et tient le registre de ce
+qui est sorti. Il ne publie rien lui-même — c'est un second geste, humain.
+
+```bash
+npm run atelier    # puis http://localhost:4178/reseaux.html
+```
+
+Il lit une route fermée par `ADMIN_CLE` : la clé est demandée à l'ouverture et
+reste dans le navigateur. Le build de production ne l'embarque pas.

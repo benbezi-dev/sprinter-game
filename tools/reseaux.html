@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sprinter · atelier de publication</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- ---------------------------------------------------------------------------
+     L'ATELIER DE PUBLICATION
+     ---------------------------------------------------------------------------
+     Ce que le jeu a signale, et ce qu'on en fait. La file se remplit toute
+     seule — `worker/src/reseaux.js` la remplit depuis /submit, depuis la
+     resolution d'un duel, depuis la cloture d'un championnat — et cette page
+     est le second geste : celui ou quelqu'un regarde, choisit, et publie.
+
+     ELLE NE PUBLIE RIEN. Le worker ne publie rien non plus, et c'est ecrit en
+     tete de reseaux.js : le jeu accepte du texte libre, et un compte de marque
+     qui republie du texte libre sans le lire publie une insulte tot ou tard.
+     Ici on prepare, on telecharge, on colle a la main. Ce que cette page ecrit
+     dans la base, c'est uniquement ce qui a DEJA ete publie, et ou.
+
+     ELLE NE CONTIENT AUCUNE CLE. La cle d'administration est demandee une fois
+     et rangee dans le localStorage du navigateur qui s'en sert. Elle n'est pas
+     dans ce fichier, elle n'est pas dans le depot, et elle ne part que dans
+     l'en-tete `X-Sprinter-Admin` vers le worker.
+
+     ELLE VIT DANS LE DEPOT, a cote du module qu'elle importe. Elle a longtemps
+     vecu dans `suivi/`, qui est hors de git : le tracage des images a change
+     deux fois sans que la page puisse suivre, et personne ne l'aurait vu avant
+     de la rouvrir. Une page qui importe du code suivi doit etre suivie avec
+     lui.
+
+     Se sert avec `npm run atelier`, puis http://localhost:4178/reseaux.html
+--------------------------------------------------------------------------- */ -->
+
+<style>
+  :root {
+    --nuit: #060913;
+    --fond: #0b0f1a;
+    --carte: #101725;
+    --trait: #1e2839;
+    --or: #F8CD4A;
+    --texte: #e8ebf2;
+    --doux: #8d97ac;
+    --faible: #5c6579;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--nuit); color: var(--texte);
+    font: 400 15px/1.55 Outfit, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--or); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: 'Space Mono', ui-monospace, monospace; }
+
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: rgba(6,9,19,.94); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--trait); padding: 14px 22px;
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  }
+  header h1 {
+    margin: 0; font: 800 15px Outfit; letter-spacing: .2em; text-transform: uppercase;
+  }
+  header h1 small {
+    display: block; font: 600 10px Outfit; letter-spacing: .16em;
+    color: var(--faible); margin-top: 2px;
+  }
+  .pousse { margin-left: auto; }
+
+  button, .bouton {
+    font: 700 11px Outfit; letter-spacing: .13em; text-transform: uppercase;
+    background: #18202f; color: var(--texte); border: 1px solid var(--trait);
+    border-radius: 7px; padding: 8px 13px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: #33415a; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.actif { background: var(--or); color: #0b0f1a; border-color: var(--or); }
+  button.or { color: var(--or); border-color: #4a4324; }
+  button.danger { color: #ff9b9b; border-color: #4a2b2b; }
+  .onglets { display: flex; gap: 6px; }
+
+  label.bascule {
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 600 11px Outfit; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--doux); cursor: pointer;
+  }
+  input[type=checkbox] { accent-color: var(--or); width: 15px; height: 15px; }
+
+  main { padding: 22px; max-width: 1500px; margin: 0 auto; }
+  .mot {
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 18px;
+    font: 500 13px Outfit; border: 1px solid var(--trait); background: var(--carte);
+  }
+  .mot.alerte { border-color: #4a2b2b; color: #ff9b9b; }
+  .mot.noms { border-color: #4a4324; color: var(--or); }
+
+  .moment {
+    display: grid; grid-template-columns: minmax(280px, 360px) 1fr; gap: 22px;
+    background: var(--fond); border: 1px solid var(--trait); border-radius: 12px;
+    padding: 18px; margin-bottom: 18px;
+  }
+  @media (max-width: 900px) { .moment { grid-template-columns: 1fr; } }
+
+  .haut { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .pilier {
+    font: 800 10px Outfit; letter-spacing: .1em; color: #0b0f1a;
+    background: var(--or); border-radius: 4px; padding: 2px 6px;
+  }
+  .titre { font: 700 17px Outfit; }
+  .poids { font: 700 11px 'Space Mono'; color: var(--faible); }
+  .quand { font: 500 11px Outfit; color: var(--faible); margin-top: 3px; }
+
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 14px 0 0; }
+  dt { font: 600 11px Outfit; letter-spacing: .07em; text-transform: uppercase; color: var(--faible); }
+  dd { margin: 0; font: 500 13px Outfit; }
+  dd.chiffre { font-family: 'Space Mono'; color: var(--or); }
+
+  .liens { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--trait); }
+  .liens h4 {
+    margin: 0 0 7px; font: 700 10px Outfit; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--faible);
+  }
+  .liens a { display: block; font: 500 13px 'Space Mono'; margin-bottom: 3px; }
+
+  .gestes { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--trait); }
+  .gestes .ou { display: flex; gap: 14px; margin-bottom: 11px; }
+  .gestes .rang { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .formats { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .format { flex: 1 1 200px; max-width: 260px; }
+  .format b {
+    display: block; font: 700 10px Outfit; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--doux); margin-bottom: 6px;
+  }
+  .format canvas {
+    width: 100%; height: auto; display: block;
+    border: 1px solid var(--trait); border-radius: 6px; background: var(--nuit);
+  }
+  .format button { width: 100%; margin-top: 7px; }
+
+  .vide { color: var(--faible); padding: 40px 0; text-align: center; font: 500 14px Outfit; }
+</style>
+
+<header>
+  <h1>Atelier de publication<small id="ou">sprinter · file des moments</small></h1>
+  <div class="onglets" id="onglets"></div>
+  <label class="bascule" title="Les pseudonymes ne sortent de la file que si on les demande. La demande est visible : c'est cette case.">
+    <input type="checkbox" id="noms" checked> Noms en clair
+  </label>
+  <div class="pousse"></div>
+  <button id="relire">Relire la file</button>
+  <button id="cle">Changer de clé</button>
+</header>
+
+<main>
+  <div id="mot"></div>
+  <div id="file"></div>
+</main>
+
+<script type="module">
+// Le chemin est ABSOLU et non relatif : cette page se sert aussi bien depuis
+// /reseaux.html (ce que fait `npm run atelier`) que depuis /tools/reseaux.html,
+// et un « ../src/... » ne survivrait pas au premier des deux.
+import {
+  FORMATS, dessinerMoment, liensPublication, LIBELLE_CAP, s2, EPREUVE,
+} from '/src/game/trace-affiche.js';
+
+// Le worker de production. La meme adresse que partout dans src/game/ : elle
+// est publique, c'est la cle qui ne l'est pas.
+const API = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+
+const RESEAUX = ['instagram', 'tiktok', 'x'];
+const ETATS = [
+  ['propose', 'À trancher'],
+  ['publie',  'Publiés'],
+  ['ecarte',  'Écartés'],
+];
+
+const $ = s => document.querySelector(s);
+let etat = 'propose';
+let bareme = {};
+
+/* ----------------------------------------------------------------- la cle */
+
+// Dans le localStorage du navigateur qui s'en sert, et nulle part ailleurs.
+// Demandee a la premiere ouverture, gardee ensuite : un atelier qui redemande
+// une cle a chaque relecture est un atelier qu'on n'ouvre pas.
+function laCle(redemander = false) {
+  let c = localStorage.getItem('sprinter.admin');
+  if (!c || redemander) {
+    c = prompt('Clé d’administration (ADMIN_CLE du worker)', c || '') || '';
+    if (c) localStorage.setItem('sprinter.admin', c.trim());
+    else localStorage.removeItem('sprinter.admin');
+  }
+  return (c || '').trim();
+}
+
+async function appel(chemin, corps) {
+  const cle = laCle();
+  if (!cle) throw new Error('Aucune clé : la file reste fermée.');
+  const r = await fetch(API + chemin, {
+    method: corps ? 'POST' : 'GET',
+    headers: { 'X-Sprinter-Admin': cle, ...(corps ? { 'Content-Type': 'application/json' } : {}) },
+    body: corps ? JSON.stringify(corps) : undefined,
+  });
+  const rep = await r.json().catch(() => ({}));
+  // Sans la cle, la route repond 404 — elle n'existe pas, plutot que d'avouer
+  // qu'elle existe et se refuse. C'est voulu cote worker, et cela demande donc
+  // d'etre traduit ici : « introuvable » ferait chercher une panne de reseau.
+  if (r.status === 404 && rep.error === 'introuvable') {
+    throw new Error('Clé refusée. La file ne répond qu’à ADMIN_CLE.');
+  }
+  if (!r.ok) throw new Error(rep.error || `HTTP ${r.status}`);
+  return rep;
+}
+
+/* ------------------------------------------------------------- l'affichage */
+
+const dateFr = ms => new Date(Number(ms)).toLocaleString('fr-FR',
+  { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+/** Ce qu'un moment raconte, en clair, champ par champ. */
+function detail(m) {
+  const d = m.donnees || {};
+  const l = [];
+  const ajoute = (quoi, valeur, chiffre = false) => {
+    if (valeur !== null && valeur !== undefined && valeur !== '') l.push([quoi, valeur, chiffre]);
+  };
+
+  if (d.race) ajoute('Épreuve', EPREUVE(d.race));
+  if (m.type === 'tete' || m.type === 'podium') {
+    ajoute('Coureur', d.nom);
+    ajoute('Chrono', s2(d.chrono_ms) + ' s', true);
+    if (m.type === 'podium') ajoute('Rang', d.rang + 'e');
+    if (d.ecart_ms != null) ajoute('Devant le suivant', s2(d.ecart_ms) + ' s', true);
+    if (d.second) ajoute('Le suivant', d.second);
+    if (d.tete_nom) ajoute('En tête', `${d.tete_nom} · ${s2(d.tete_ms)} s`);
+    ajoute('Classés', d.classes);
+  } else if (m.type === 'mouchoir') {
+    ajoute('Coureurs', d.combien);
+    ajoute('Écart', s2(d.ecart_ms) + ' s', true);
+    (d.noms || []).forEach((n, i) => ajoute(`${i + 1}.`, `${n} · ${s2((d.chronos_ms || [])[i])} s`));
+  } else if (m.type === 'duel') {
+    ajoute('Écart', s2(d.ecart_ms) + ' s', true);
+    ajoute('Vainqueur', `${d.gagnant} · ${s2(d.gagnant_ms)} s`);
+    ajoute('Battu', `${d.perdant} · ${s2(d.perdant_ms)} s`);
+    if (d.epreuves) ajoute('Épreuves', [].concat(d.epreuves).join(' + '));
+  } else if (m.type === 'sacre') {
+    ajoute('Échelon', [d.echelon, d.pays].filter(Boolean).join(' · '));
+    if (d.epreuve) ajoute('Épreuve', EPREUVE(d.epreuve));
+    ajoute('Champion', d.champion);
+    if (d.chrono_ms != null) ajoute('Chrono', s2(d.chrono_ms) + ' s', true);
+    if (d.deuxieme) ajoute('Deuxième', `${d.deuxieme}${d.deuxieme_ms != null ? ' · ' + s2(d.deuxieme_ms) + ' s' : ''}`);
+    ajoute('Partants', d.partants);
+  } else if (m.type === 'cap') {
+    ajoute('Série', LIBELLE_CAP[d.quoi] || d.quoi);
+    ajoute('Seuil', Number(d.seuil).toLocaleString('fr-FR'), true);
+    ajoute('Valeur atteinte', Number(d.valeur).toLocaleString('fr-FR'));
+  }
+
+  const dl = document.createElement('dl');
+  for (const [quoi, valeur, chiffre] of l) {
+    const dt = document.createElement('dt'); dt.textContent = quoi;
+    const dd = document.createElement('dd'); dd.textContent = valeur;
+    if (chiffre) dd.className = 'chiffre';
+    dl.append(dt, dd);
+  }
+  return dl;
+}
+
+/**
+ * Les adresses de la publication, cliquables.
+ *
+ * Elles viennent de `liensPublication()` et pas d'ici : l'image ecrit les
+ * memes comptes, dans le meme ordre, et deux listes se contrediraient au
+ * premier changement de compte.
+ */
+function liens(format) {
+  const L = liensPublication(format);
+  const bloc = document.createElement('div');
+  bloc.className = 'liens';
+  const h = document.createElement('h4');
+  h.textContent = 'Ce que l’image donne à lire';
+  bloc.append(h);
+
+  const jeu = document.createElement('a');
+  jeu.href = L.jeu; jeu.target = '_blank'; jeu.rel = 'noopener';
+  jeu.textContent = L.jeu.replace(/^https?:\/\//, '');
+  bloc.append(jeu);
+
+  for (const c of L.comptes) {
+    const a = document.createElement('a');
+    a.href = c.lien; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = `${c.nom} · ${c.reseau}`;
+    bloc.append(a);
+  }
+
+  const copier = document.createElement('button');
+  copier.className = 'or';
+  copier.style.marginTop = '8px';
+  copier.textContent = 'Copier les liens';
+  copier.onclick = async () => {
+    const texte = [L.jeu, ...L.comptes.map(c => `${c.nom} — ${c.lien}`)].join('\n');
+    try {
+      await navigator.clipboard.writeText(texte);
+      copier.textContent = 'Copiés';
+      setTimeout(() => (copier.textContent = 'Copier les liens'), 1400);
+    } catch { copier.textContent = 'Copie refusée'; }
+  };
+  bloc.append(copier);
+  return bloc;
+}
+
+/** Les trois formats, dessines, avec de quoi les emporter. */
+function apercus(m) {
+  const bloc = document.createElement('div');
+  bloc.className = 'formats';
+  for (const [format, F] of Object.entries(FORMATS)) {
+    const d = document.createElement('div');
+    d.className = 'format';
+    const b = document.createElement('b');
+    b.textContent = `${F.nom} · ${F.l}×${F.h}`;
+    const cv = document.createElement('canvas');
+    d.append(b, cv);
+
+    dessinerMoment(cv, m, format);
+
+    const tel = document.createElement('button');
+    tel.textContent = 'Télécharger';
+    tel.onclick = () => cv.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `sprinter-${m.type}-${m.id}-${format}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, 'image/png');
+
+    d.append(tel, liens(format));
+    bloc.append(d);
+  }
+  return bloc;
+}
+
+/** Ecarter, ou marquer publie — et ou. */
+function gestes(m, recharger) {
+  const bloc = document.createElement('div');
+  bloc.className = 'gestes';
+
+  if (m.etat !== 'propose') {
+    const p = document.createElement('div');
+    p.className = 'quand';
+    p.textContent = m.etat === 'publie'
+      ? `Publié le ${dateFr(m.publie_le)}${m.reseaux.length ? ' · ' + m.reseaux.join(', ') : ''}`
+      : 'Écarté — il ne reviendra pas dans la file.';
+    bloc.append(p);
+    return bloc;
+  }
+
+  const ou = document.createElement('div');
+  ou.className = 'ou';
+  const cases = {};
+  for (const r of RESEAUX) {
+    const l = document.createElement('label');
+    l.className = 'bascule';
+    const c = document.createElement('input');
+    c.type = 'checkbox'; c.checked = true;
+    cases[r] = c;
+    l.append(c, document.createTextNode(r));
+    ou.append(l);
+  }
+  bloc.append(ou);
+
+  const rang = document.createElement('div');
+  rang.className = 'rang';
+
+  const publie = document.createElement('button');
+  publie.className = 'actif';
+  publie.textContent = 'Marquer publié';
+  publie.onclick = async () => {
+    const choisis = RESEAUX.filter(r => cases[r].checked);
+    if (!choisis.length) return dire('Aucun réseau coché : rien à enregistrer.', 'alerte');
+    // Le registre est tenu APRES coup, par celui qui a publie. Rien n'est
+    // parti d'ici — voir l'en-tete de ce fichier.
+    if (!confirm(`Confirmer que ce moment est déjà publié sur ${choisis.join(', ')} ?`)) return;
+    await tenter(publie, () => appel('/reseaux/publie', { id: m.id, reseaux: choisis }), recharger);
+  };
+
+  const ecarter = document.createElement('button');
+  ecarter.className = 'danger';
+  ecarter.textContent = 'Écarter';
+  ecarter.onclick = async () => {
+    if (!confirm('Écarter ce moment ? Il ne reviendra pas dans la file.')) return;
+    await tenter(ecarter, () => appel('/reseaux/ecarter', { id: m.id }), recharger);
+  };
+
+  rang.append(publie, ecarter);
+  bloc.append(rang);
+  return bloc;
+}
+
+async function tenter(bouton, geste, apres) {
+  bouton.disabled = true;
+  try { await geste(); await apres(); }
+  catch (e) { dire(e.message || String(e), 'alerte'); bouton.disabled = false; }
+}
+
+function dire(texte, classe = '') {
+  const m = $('#mot');
+  m.className = 'mot ' + classe;
+  m.textContent = texte;
+}
+
+/* ------------------------------------------------------------- la lecture */
+
+async function relire() {
+  const clair = $('#noms').checked;
+  dire('Lecture de la file…');
+  let rep;
+  try {
+    // `noms=1` est ce qui leve le masque, et la demande est dans l'URL — donc
+    // visible dans le journal comme dans la barre d'adresse. La case en tete
+    // de page est cette demande : cochee, on sait de qui l'on parle et l'on
+    // peut aller demander l'accord ; decochee, l'ecran se relit a plusieurs
+    // sans montrer un pseudonyme a personne.
+    rep = await appel(`/reseaux/file?etat=${etat}&limite=100${clair ? '&noms=1' : ''}`);
+  } catch (e) {
+    dire(e.message || String(e), 'alerte');
+    $('#file').innerHTML = '';
+    return;
+  }
+
+  bareme = rep.bareme || {};
+  const moments = rep.moments || [];
+  dire(clair
+    ? `${moments.length} moment(s) · les pseudonymes sont EN CLAIR — rien ne les publie pour autant : la charte demande l’accord de leur porteur (§5.4).`
+    : `${moments.length} moment(s) · pseudonymes masqués.`, clair ? 'noms' : '');
+
+  const file = $('#file');
+  file.innerHTML = '';
+  if (!moments.length) {
+    const v = document.createElement('div');
+    v.className = 'vide';
+    v.textContent = 'Rien ici. Le jeu n’a pas signalé de moment dans cet état.';
+    file.append(v);
+    return;
+  }
+
+  for (const m of moments) {
+    const carte = document.createElement('article');
+    carte.className = 'moment';
+
+    const gauche = document.createElement('div');
+    const haut = document.createElement('div');
+    haut.className = 'haut';
+    if (m.pilier) {
+      const p = document.createElement('span');
+      p.className = 'pilier'; p.textContent = 'P' + m.pilier;
+      haut.append(p);
+    }
+    const t = document.createElement('span');
+    t.className = 'titre';
+    t.textContent = m.titre || (bareme[m.type] || {}).titre || m.type;
+    const w = document.createElement('span');
+    w.className = 'poids'; w.textContent = m.poids;
+    haut.append(t, w);
+
+    const quand = document.createElement('div');
+    quand.className = 'quand';
+    quand.textContent = `${m.type} · vu le ${dateFr(m.vu_le)} · #${m.id}`;
+
+    gauche.append(haut, quand, detail(m), gestes(m, relire));
+    carte.append(gauche, apercus(m));
+    file.append(carte);
+  }
+}
+
+/* ------------------------------------------------------------- la mise en route */
+
+const onglets = $('#onglets');
+for (const [valeur, libelle] of ETATS) {
+  const b = document.createElement('button');
+  b.textContent = libelle;
+  b.onclick = () => {
+    etat = valeur;
+    [...onglets.children].forEach(x => x.classList.toggle('actif', x === b));
+    relire();
+  };
+  if (valeur === etat) b.className = 'actif';
+  onglets.append(b);
+}
+$('#relire').onclick = relire;
+$('#noms').onchange = relire;
+$('#cle').onclick = () => { laCle(true); relire(); };
+$('#ou').textContent = API.replace(/^https?:\/\//, '');
+
+// Les polices AVANT le premier trace : un canvas dessine pendant qu'une police
+// arrive encore ecrit en police de repli, et il ne se redessine pas quand elle
+// finit par arriver. Meme lecon que dans src/game/affiche.ts.
+try {
+  await Promise.all([
+    document.fonts.load('900 200px Outfit'),
+    document.fonts.load('700 200px "Space Mono"'),
+    document.fonts.load('600 22px Outfit'),
+  ]);
+} catch { /* on dessinera avec ce qu'on a */ }
+
+relire();
+</script>
+</html>
