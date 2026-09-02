@@ -21,16 +21,44 @@ if (fichierCles.exists()) {
 // On ne se contente pas de l'existence du fichier : un `keystore.properties`
 // a moitie rempli — le cas normal juste apres l'avoir copie du modele — ferait
 // echouer `bundleRelease` sur une erreur de mot de passe illisible. On verifie
-// donc que le trousseau est vraiment la et que les deux mots de passe sont
-// renseignes, et sinon on produit un paquet non signe en le disant.
-def signaturePrete = fichierCles.exists() &&
-        cles['storeFile'] && cles['keyAlias'] &&
-        cles['storePassword'] && cles['keyPassword'] &&
-        file(cles['storeFile']).exists()
+// donc que le trousseau est vraiment la et que les quatre champs sont
+// renseignes, et on dit lequel manque.
+def manques = []
+if (fichierCles.exists()) {
+    ['storeFile', 'keyAlias', 'storePassword', 'keyPassword'].each {
+        if (!cles[it]) manques << it
+    }
+    if (cles['storeFile'] && !file(cles['storeFile']).exists()) {
+        manques << "trousseau introuvable au chemin indique (${cles['storeFile']})"
+    }
+}
+def signaturePrete = fichierCles.exists() && manques.isEmpty()
 
-if (fichierCles.exists() && !signaturePrete) {
-    logger.warn("Sprinter : android/keystore.properties est incomplet ou le trousseau est introuvable. " +
-                "Le paquet de publication sortira NON SIGNE et Play le refusera.")
+/*
+ * Un `keystore.properties` present mais casse ARRETE la release.
+ *
+ * Ce n'etait pas le cas, et cela a coute une livraison : le chemin declare
+ * pointait sur une autre machine, le build ne s'est pas arrete, il a produit
+ * un paquet NON SIGNE et s'est contente d'un `logger.warn` que les centaines
+ * de lignes de Gradle noient completement. On ne l'apprend alors qu'au refus
+ * de Play, ou jamais.
+ *
+ * Le refus est pose sur le graphe des taches, pas a la configuration : un
+ * `assembleDebug` ou un `cap sync` continuent de tourner sans trousseau, et
+ * l'absence complete du fichier reste permise — un clone frais et la CI
+ * doivent compiler sans avoir a fabriquer une cle. C'est le fichier a moitie
+ * rempli, et lui seul, qui est traite comme une erreur.
+ */
+gradle.taskGraph.whenReady { graphe ->
+    if (fichierCles.exists() && !signaturePrete &&
+            graphe.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        throw new GradleException(
+            "Sprinter : android/keystore.properties est present mais inutilisable — " +
+            manques.join(', ') + ".\n" +
+            "Un paquet de publication non signe est refuse par Play : on s'arrete ici " +
+            "plutot que d'en fabriquer un. Completer le fichier, ou le retirer pour " +
+            "produire volontairement un paquet non signe.")
+    }
 }
 
 android {
