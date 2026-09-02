@@ -35,34 +35,62 @@ export const FORMATS = {
  * Ils etaient jusqu'ici en dur dans le trace de la story du joueur, et nulle
  * part ailleurs : les images de l'atelier — celles qui partent du compte du
  * jeu, donc celles qu'un inconnu voit en premier — ne disaient ni ou jouer ni
- * ou suivre la suite. Un seul endroit, maintenant, pour les trois adresses.
+ * ou suivre la suite. Un seul endroit, maintenant, pour toutes les adresses.
+ *
+ * Les comptes sont ranges PAR DESTINATION, et la cle est exactement celle que
+ * les formats declarent dans `FORMATS[].ou`. C'est ce qui fait le lien entre
+ * « cette image part sur X » et « elle nomme donc @SprinterGa8iis », sans que
+ * personne n'ait a le redire ailleurs. Ajouter un reseau, c'est ajouter une
+ * ligne ici et une dans PROFIL, et rien d'autre nulle part.
  */
 export const JEU = {
   site: 'sprinter-game.com',
   lien: 'https://sprinter-game.com',
-  instagram: 'sprintergame',
-  tiktok: 'sprinter_game',
+  comptes: {
+    instagram: 'sprintergame',
+    tiktok: 'sprinter_game',
+    x: 'SprinterGa8iis',
+  },
 };
+
+/**
+ * L'adresse d'un profil. Les trois reseaux ne l'ecrivent pas pareil — TikTok
+ * garde l'arobase dans le chemin, les deux autres non — et c'est le genre de
+ * detail qui produit un lien mort quand on le devine au lieu de le ranger.
+ */
+const PROFIL = {
+  instagram: n => `https://instagram.com/${n}`,
+  tiktok:    n => `https://www.tiktok.com/@${n}`,
+  x:         n => `https://x.com/${n}`,
+};
+
+/**
+ * Les reseaux ou part une image dont la destination est `ou`.
+ *
+ * La destination s'ecrit comme une somme — « instagram+tiktok » — et se lit
+ * donc en la decoupant, pas en y cherchant des morceaux : `includes('x')`
+ * aurait fini par trouver un « x » dans le nom d'un reseau qui n'a rien
+ * demande, et personne n'aurait su pourquoi cette image nommait ce compte.
+ *
+ * Une destination qu'on ne connait pas les nomme tous : l'image sert alors a
+ * ramener vers la ou le jeu publie, et une signature vide serait la seule
+ * reponse pire que trop de comptes.
+ */
+export function reseauxDe(ou) {
+  const l = String(ou || '').split('+').map(r => r.trim()).filter(r => JEU.comptes[r]);
+  return l.length ? l : Object.keys(JEU.comptes);
+}
 
 /**
  * Les comptes a nommer sur une image qui part vers `ou`.
  *
  * Dynamique, et pas une ligne fixe : ce qui se cherche d'un geste, c'est le
  * compte du reseau ou l'on se trouve deja — un @ Instagram ne se cherche pas
- * depuis TikTok. Chaque format declare sa destination (`FORMATS[].ou`), et
- * l'image ne nomme donc que les comptes qu'on peut y atteindre. La story, qui
- * part aux deux, les nomme tous les deux.
- *
- * Un format sans compte a lui — le X, ou le jeu n'a rien — les montre tous les
- * deux aussi : l'image y sert alors a ramener vers la ou le jeu publie
- * vraiment, et une signature vide serait la seule reponse pire que celle-la.
+ * depuis TikTok. Le fil nomme donc un compte, la story qui part aux deux en
+ * nomme deux, et l'image de X nomme celui de X.
  */
 export function comptesPour(ou) {
-  const d = String(ou || '');
-  const l = [];
-  if (d.includes('instagram')) l.push(JEU.instagram);
-  if (d.includes('tiktok')) l.push(JEU.tiktok);
-  return l.length ? l : [JEU.instagram, JEU.tiktok];
+  return reseauxDe(ou).map(r => JEU.comptes[r]);
 }
 
 /**
@@ -70,20 +98,24 @@ export function comptesPour(ou) {
  *
  * Pour l'atelier, pas pour l'image : un texte peint dans un canvas n'est pas
  * un lien, et la page qui prepare une publication a besoin des adresses vraies
- * — celle du jeu, celles des deux comptes — pour les ouvrir d'un clic et les
- * coller dans la legende. Elles sortent d'ici et pas de la page, sinon
- * l'image et la legende se contrediront le jour ou un compte change de nom.
+ * — celle du jeu, celles des comptes — pour les ouvrir d'un clic et les coller
+ * dans la legende. Elles sortent d'ici et pas de la page, sinon l'image et la
+ * legende se contrediront le jour ou un compte change de nom.
+ *
+ * `comptes` suit la destination du format, dans l'ordre ou l'image les ecrit :
+ * la legende nomme les memes comptes que le visuel. `profils` les donne tous,
+ * pour un pied de page qui ne depend pas de la publication affichee.
  */
 export function liensPublication(format) {
   const F = FORMATS[format] || FORMATS.feed;
   return {
     ou: F.ou,
     jeu: JEU.lien,
-    instagram: `https://instagram.com/${JEU.instagram}`,
-    tiktok: `https://www.tiktok.com/@${JEU.tiktok}`,
-    // Tels qu'ils sont ecrits dans l'image : la legende et le visuel nomment
-    // les memes comptes, dans le meme ordre.
-    comptes: comptesPour(F.ou).map(n => '@' + n),
+    comptes: reseauxDe(F.ou).map(r => ({
+      reseau: r, nom: '@' + JEU.comptes[r], lien: PROFIL[r](JEU.comptes[r]),
+    })),
+    profils: Object.fromEntries(
+      Object.entries(JEU.comptes).map(([r, n]) => [r, PROFIL[r](n)])),
   };
 }
 
