@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Globe2 } from 'lucide-react';
 import {
   getSavedName, saveName, submitScore, fetchLeaderboardRaw,
-  rankByRaceTime, rankOf, TOP_N,
+  rankByRaceTime, rankOf, TOP_N, NOM_PRIS,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
@@ -18,7 +18,7 @@ export function WinAllScreen() {
   // 'checking' : on regarde d'abord si le chrono entre au tableau. On ne
   // propose la saisie du nom que dans ce cas — inutile de faire saisir un nom
   // pour un chrono qui ne sera jamais affiche.
-  const [status, setStatus] = useState<'checking' | 'outside' | 'idle' | 'sending' | 'done' | 'error'>('checking');
+  const [status, setStatus] = useState<'checking' | 'outside' | 'idle' | 'sending' | 'done' | 'error' | 'pris'>('checking');
   const [worldRank, setWorldRank] = useState<number | null>(null);
   // chrono qui a valu ce rang : le meilleur temps sur une course, pas le cumul
   const [worldSplit, setWorldSplit] = useState<number | null>(null);
@@ -62,8 +62,10 @@ export function WinAllScreen() {
       setWorldSplit(mine);
       setWorldRank(rankOf(rankByRaceTime(res.entries || []), mine));
       setStatus('done');
-    } catch {
-      setStatus('error');
+    } catch (e) {
+      // Nom deja reserve ailleurs : ce n'est pas une panne, et reessayer ne
+      // changera rien. Voir NOM_PRIS.
+      setStatus(e instanceof Error && e.message === NOM_PRIS ? 'pris' : 'error');
     }
   };
 
@@ -142,6 +144,14 @@ export function WinAllScreen() {
             )}
             {status === 'error' && (
               <div className="text-center text-destructive text-xs md:text-sm">{N.t('score_save_fail')}</div>
+            )}
+            {status === 'pris' && (
+              <div className="flex flex-col gap-0.5">
+                <div className="text-center text-destructive text-xs md:text-sm">{N.t('score_name_taken')}</div>
+                <div className="text-center text-[10px] md:text-xs text-muted-foreground leading-snug">
+                  {N.t('score_taken_help')}
+                </div>
+              </div>
             )}
             {status === 'checking' && (
               <div className="text-center text-xs md:text-sm text-muted-foreground animate-pulse">

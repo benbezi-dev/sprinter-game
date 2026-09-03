@@ -169,7 +169,19 @@ export function DuelResultPopup() {
           key={duel.id}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="fixed inset-0 z-[55] bg-black/80 backdrop-blur-sm flex items-center justify-center
+          /* CENTRE QUAND IL Y A DE LA PLACE, ENTIER QUAND IL N'Y EN A PAS.
+
+             `items-center` centrait la carte sur l'axe vertical, y compris
+             quand elle etait plus haute que l'ecran : elle debordait alors des
+             DEUX cotes, et le haut — « DUEL GAGNE », les points — devenait
+             inatteignable, au-dessus du premier pixel qu'on puisse faire
+             defiler. On pouvait descendre, jamais remonter jusqu'a lui.
+
+             Le cas n'est pas theorique : ouvrir le clavier pour laisser un mot
+             enleve la moitie de la hauteur. Les marges automatiques centrent
+             aussi bien et s'effacent d'elles memes quand la place manque —
+             meme correction qu'a l'ecran de fin de course. */
+          className="fixed inset-0 z-[55] bg-black/80 backdrop-blur-sm flex flex-col items-center
                      pointer-events-auto overflow-y-auto
                      px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
                      pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]"
@@ -190,7 +202,7 @@ export function DuelResultPopup() {
                s'impose ce qui suit : le verdict passe a gauche, ce qu'on lit et
                ce qu'on ecrit a droite, les boutons dessous. En portrait la
                grille n'a qu'une colonne et l'ordre est celui d'avant. */
-            className={`w-full max-w-sm court:max-w-2xl bg-card/95 border ${cadre} rounded-2xl shadow-2xl
+            className={`w-full my-auto max-w-sm court:max-w-2xl bg-card/95 border ${cadre} rounded-2xl shadow-2xl
                         p-4 md:p-6 court:p-3
                         grid grid-cols-1 court:grid-cols-2 gap-3 court:gap-x-4 court:gap-y-2`}
           >

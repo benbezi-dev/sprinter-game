@@ -21,16 +21,71 @@
 
    Elle est declaree APRES `dark` et avant tout le reste, donc emise apres les
    variantes de largeur : sur un telephone couche, ou `md:` et `court:` valent
-   tous les deux, c'est `court:` qui tranche. */
-@custom-variant court (@media (max-height: 620px));
+   tous les deux, c'est `court:` qui tranche.
+
+   ELLE EXIGE AUSSI DE LA LARGEUR, ET CE N'EST PAS UNE PRECAUTION.
+   Un telephone DEBOUT devient bas des qu'on ouvre le clavier : 412 pixels de
+   large sur 360 de haut. Sans la borne de largeur, `court:` s'y declenchait et
+   posait la mise en page du paysage — deux colonnes, boutons a l'horizontale —
+   sur un ecran deux fois trop etroit pour elle. Le champ du mot et le bouton
+   ENVOYER sortaient de la carte par la droite, hors d'atteinte, au moment
+   precis ou l'on ecrivait dedans.
+
+   620 pixels separent proprement les deux cas : un telephone couche en fait
+   au moins 640, un telephone debout avec son clavier au plus 430. */
+@custom-variant court (@media (max-height: 620px) and (min-width: 620px));
+
+/* ------------------------------------------------------------------ serre
+   L'ecran est TROP CHARGE POUR LA PLACE, quelle que soit sa forme.
+
+   `court:` regarde la hauteur du telephone et suppose le paysage : sous 620
+   pixels on est couche, et les panneaux passent en colonnes. Mais un
+   telephone DEBOUT de 640 pixels tombe entre deux chaises — trop haut pour
+   `court:`, trop court pour l'ecran de fin dans ses configurations chargees.
+   Mesure faite sur un 360x640 : un one shot de trois epreuves gagne en defi
+   demande 881 pixels pour 608 disponibles. On defile de 273 pixels.
+
+   Celle-ci ne regarde pas l'ecran mais le contenu : `useTenirDansLEcran` pose
+   la classe `serre` des qu'il constate que ca ne tient pas, et les tailles se
+   rabattent d'un cran. Elle ne dit RIEN de la mise en page — pas de colonnes,
+   pas de boutons mis a l'horizontale — parce qu'une largeur de 360 pixels ne
+   le permettrait pas ; uniquement des marges, des interlignes et des corps.
+
+   Declaree APRES `court`, donc emise apres elle : quand les deux valent, sur
+   un telephone couche et charge, c'est le reglage le plus serre qui tranche.
+
+   Rien n'est cache. C'est la regle de `court:` et elle vaut ici aussi. */
+@custom-variant serre (&:is(.serre *));
+
+/* ----------------------------------------------------------- serre-debout
+   SERRE, ET SUR UN ECRAN ETROIT.
+
+   `serre:` dit que ca ne rentre pas ; `court:` dit qu'on est couche. Les deux
+   peuvent etre vraies ensemble — un telephone couche et charge — et c'est la
+   que le piege se referme : une regle `serre:` qui changerait le `display` ou
+   la direction d'un bloc ecraserait la mise en page que `court:` vient de
+   poser, et casserait le paysage pour reparer le portrait.
+
+   Cette variante-ci ne vaut que la ou `court:` ne vaut PAS : sous 620 pixels
+   de large, la borne exacte que `court:` exige. Les deux ne se croisent
+   jamais, et on peut donc y changer la mise en page sans regarder ailleurs. */
+@custom-variant serre-debout {
+  @media (max-width: 619px) {
+    &:is(.serre *) { @slot }
+  }
+}
 
 /* L'ecran de fin de course, quand la hauteur manque.
    Il empile huit panneaux — resultat du duel, chronos, TOP 500, defi, image,
    boutons — et cela ne rentre pas dans les 380 pixels d'un telephone couche.
    Plutot que d'en cacher, on les met en colonnes : chaque panneau reste
    entier, et l'ecran se lit de haut en bas puis de gauche a droite.
-   Trois colonnes des que la largeur le permet, deux sinon. */
-@media (max-height: 620px) {
+   Trois colonnes des que la largeur le permet, deux sinon.
+
+   Meme borne de largeur que la variante `court:`, et pour la meme raison :
+   deux colonnes de 170 pixels sur un telephone debout au clavier ouvert ne
+   sont pas une mise en page, c'est un debordement. */
+@media (max-height: 620px) and (min-width: 620px) {
   .colonnes-si-bas {
     display: block;
     column-count: 2;

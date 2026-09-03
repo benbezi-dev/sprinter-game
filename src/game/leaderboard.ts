@@ -140,6 +140,23 @@ export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[
 }
 
 /**
+ * Le serveur a refuse le nom : il est reserve a d'autres appareils que celui-ci.
+ *
+ * Ce refus n'est pas une panne, et c'est tout l'interet de le distinguer : il
+ * ne passera jamais avec le temps. « echec de l'envoi, reessaie plus tard »
+ * envoyait donc le joueur reappuyer indefiniment sur un bouton qui ne pouvait
+ * pas marcher, sans jamais lui dire ce qui bloquait ni ce qu'il pouvait y
+ * faire — alors que la reponse du serveur, elle, le disait (403, `pris`).
+ *
+ * Le cas se rencontre pour de bon sur le canal de test : le navigateur y
+ * partage son identifiant d'appareil et son nom avec le vrai jeu — meme
+ * origine, meme localStorage — mais la reservation du nom vit dans la base du
+ * canal. Un nom reserve ici et pas la-bas refuse tous les chronos, course
+ * apres course.
+ */
+export const NOM_PRIS = 'nom-pris';
+
+/**
  * `rank` porte sur le meilleur chrono realise sur UNE course (best_split_ms),
  * pas sur le cumul du parcours : c'est ce que classe le TOP 500.
  */
@@ -160,6 +177,12 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
       best_split_ms: Math.round(bestSplitMs),
     }),
   });
+  // Le nom reserve a quelqu'un d'autre se reconnait a son corps, pas a son
+  // statut : 403 sert aussi ailleurs.
+  if (res.status === 403) {
+    const d = await res.json().catch(() => null);
+    if (d && d.pris) throw new Error(NOM_PRIS);
+  }
   if (!res.ok) throw new Error('score submit failed');
   return res.json();
 }

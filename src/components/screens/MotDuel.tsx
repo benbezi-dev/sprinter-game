@@ -73,8 +73,8 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
   const reste = Math.max(0, Math.ceil((MAX_VOIX_MS - ecoule) / 1000));
 
   return (
-    <div className="w-full flex flex-col gap-1.5 md:gap-2 court:gap-1.5 rounded-xl border border-white/10
-                    bg-black/25 p-2.5 md:p-3 court:p-2">
+    <div className="w-full flex flex-col gap-1.5 md:gap-2 court:gap-1.5 serre:gap-1 rounded-xl border border-white/10
+                    bg-black/25 p-2.5 md:p-3 court:p-2 serre:p-2">
       <span className="text-[9px] md:text-[10px] tracking-widest text-muted-foreground text-center">
         {N.t('mot_titre', { n: adversaire })}
       </span>
@@ -86,7 +86,7 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
           placeholder={N.t('mot_placeholder')}
           maxLength={MAX_TEXTE}
           disabled={enregistre}
-          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 court:py-1.5 text-sm court:text-xs
+          className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 court:py-1.5 serre:py-1.5 text-sm court:text-xs serre:text-xs
                      text-foreground placeholder:text-muted-foreground
                      focus:outline-none focus:border-primary/50 disabled:opacity-40"
         />
@@ -99,7 +99,7 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
         {!prete ? (
           <button
             onClick={() => enregistre ? enr.current?.arreter() : enr.current?.demarrer()}
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-2 court:py-1.5 rounded-xl
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-2 court:py-1.5 serre:py-1.5 rounded-xl
                         font-bold tracking-widest text-[10px] md:text-xs transition-colors
                         ${enregistre ? 'bg-destructive text-background'
                           : 'bg-white/10 text-foreground hover:bg-white/15'}`}
@@ -132,7 +132,7 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
         <button
           onClick={envoyer}
           disabled={envoi || enregistre || (!texte.trim() && !prete)}
-          className="flex-1 py-2 court:py-1.5 rounded-xl font-black font-display tracking-widest text-[11px] md:text-xs
+          className="flex-1 py-2 court:py-1.5 serre:py-1.5 rounded-xl font-black font-display tracking-widest text-[11px] md:text-xs
                      text-background bg-primary hover:bg-primary/90 disabled:opacity-40
                      disabled:pointer-events-none flex items-center justify-center gap-1.5"
         >

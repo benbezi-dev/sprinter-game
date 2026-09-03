@@ -15,18 +15,44 @@ import { useEffect, useRef, useState } from 'react';
  * defiler, c'est ce qu'on voulait corriger. Replier des panneaux derriere un
  * geste, c'est cacher une information qu'on avait justement decide de montrer.
  *
- * Celle-ci n'enleve rien : elle mesure ce qu'il faut, mesure ce qu'il y a, et
- * reduit le tout du rapport des deux. Le texte rapetisse un peu, l'ecran est
- * complet, et personne n'a besoin de savoir qu'il s'est passe quelque chose.
+ * Celle-ci n'enleve rien. Elle mesure ce qu'il faut, mesure ce qu'il y a, et
+ * s'y prend en DEUX TEMPS, du moins visible au plus visible :
+ *
+ * 1. ELLE RESSERRE. La classe `serre` passe sur le contenu et les tailles se
+ *    rabattent d'un cran — marges, interlignes, corps de texte. C'est le meme
+ *    geste que la variante `court:` fait en paysage, ici declenche par la
+ *    mesure et non par la forme de l'ecran. Sur un 360x640 charge, cela suffit
+ *    a ramener 881 pixels sous les 608 disponibles.
+ *
+ * 2. ELLE REDUIT. Si le resserrement n'a pas suffi, tout est mis a l'echelle
+ *    du rapport des deux hauteurs. Le texte rapetisse pour de bon, l'ecran est
+ *    complet, et personne n'a besoin de savoir qu'il s'est passe quelque chose.
+ *
+ * L'ordre compte : resserrer se lit encore, reduire finit par ne plus se lire.
+ * On ne descend donc a l'echelle que ce que le resserrement n'a pas absorbe.
+ *
+ * LE RESSERREMENT NE SE DEFAIT PAS. Une fois pose il reste pour la vie de
+ * l'ecran, et c'est ce qui empeche le battement : resserrer fait tenir, ce qui
+ * autoriserait a desserrer, ce qui ferait deborder — l'ecran clignoterait
+ * entre deux tailles a chaque mesure. L'ecran de fin de course ne dure que le
+ * temps d'une course ; la question se repose entiere a la suivante.
  *
  * TROIS PRECAUTIONS, ET ELLES COMPTENT :
  *
  * 1. TOUT OU RIEN, ET UN PLANCHER POUR EN DECIDER. On ne reduit que si la
- *    reduction suffit a TOUT montrer, et seulement dans la limite du
- *    plancher. Le demi-progres serait le pire des reglages : en portrait il
- *    faudrait descendre aux deux tiers pour un ecran qui defilerait encore —
- *    on aurait rapetisse le texte pour rien. Sous le plancher on ne touche
- *    donc a rien et l'ecran defile comme avant, entier, rien de coupe.
+ *    reduction suffit a TOUT montrer : rapetisser le texte pour un ecran qui
+ *    defilerait quand meme serait le pire des reglages. Sous le plancher on
+ *    ne touche donc a rien et l'ecran defile, entier, rien de coupe.
+ *
+ *    LE PLANCHER EST DESCENDU DE 0,75 A 0,6 le 02/09/2026, en meme temps que
+ *    le resserrement est arrive. Les deux vont ensemble. A 0,75 la reduction
+ *    etait le seul recours et devait rester lisible toute seule ; elle ne
+ *    ramasse plus aujourd'hui que ce que le resserrement a laisse, quelques
+ *    dizaines de pixels la ou il y en avait deux cents. Un ecran de duel
+ *    gagne avec montee de division, mesure sur un 360x640, demandait 760
+ *    pixels pour 608 : il passe a 0,80, et il aurait defile a l'ancien
+ *    plancher pour vingt pixels de trop. C'est exactement le cas que les
+ *    joueurs signalent, et il ne doit plus jamais defiler.
  *
  * 2. LA HAUTEUR RESERVEE. Une transformation ne change pas la mise en page :
  *    reduire sans rien dire laisserait le conteneur croire qu'il deborde
@@ -38,7 +64,7 @@ import { useEffect, useRef, useState } from 'react';
  *    ferait rapetisser tout l'ecran sous les doigts, puis grandir en le
  *    refermant. On garde l'echelle qu'on avait le temps de la saisie.
  */
-export function useTenirDansLEcran(plancher = 0.75) {
+export function useTenirDansLEcran(plancher = 0.6) {
   /** Le conteneur qui defile : c'est lui qui connait la place disponible. */
   const cadre = useRef<HTMLDivElement | null>(null);
   /** Ce qu'on reduit. Sa hauteur de mise en page reste celle d'avant. */
@@ -47,6 +73,11 @@ export function useTenirDansLEcran(plancher = 0.75) {
   const [echelle, setEchelle] = useState(1);
   /** La hauteur a reserver, ou nul quand rien n'est reduit. */
   const [hauteur, setHauteur] = useState<number | null>(null);
+  /** Premier recours : les tailles rabattues d'un cran. Ne se defait pas. */
+  const [serre, setSerre] = useState(false);
+  // Double de `serre`, lisible depuis la mesure : celle-ci vit dans un effet
+  // monte une seule fois, et ne verrait jamais l'etat changer autrement.
+  const dejaSerre = useRef(false);
 
   useEffect(() => {
     let vivant = true;
@@ -62,6 +93,18 @@ export function useTenirDansLEcran(plancher = 0.75) {
       const besoin = d.scrollHeight;
       if (!(dispo > 0) || !(besoin > 0)) return;
 
+      // PREMIER TEMPS : resserrer. On rend la main sans rien mettre a
+      // l'echelle — la classe change la hauteur, l'observateur rappellera, et
+      // la mesure suivante portera sur l'ecran resserre. Se decider tout de
+      // suite sur une echelle qu'on va invalider ferait sauter l'ecran deux
+      // fois pour un seul reglage.
+      if (besoin > dispo && !dejaSerre.current) {
+        dejaSerre.current = true;
+        setSerre(true);
+        return;
+      }
+
+      // SECOND TEMPS : reduire ce qui depasse encore.
       const rapport = dispo / besoin;
       // Ca tient deja, ou la reduction ne suffirait pas : on n'y touche pas.
       const e = rapport >= 1 || rapport < plancher ? 1 : rapport;
@@ -101,5 +144,5 @@ export function useTenirDansLEcran(plancher = 0.75) {
     };
   }, [plancher]);
 
-  return { cadre, contenu, echelle, hauteur };
+  return { cadre, contenu, echelle, hauteur, serre };
 }

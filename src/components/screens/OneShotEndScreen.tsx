@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS, NOM_PRIS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
 import { primeTopNames } from '@/game/engine';
@@ -38,13 +38,67 @@ function fmt(v: number | null | undefined, dnf: string) {
   return v == null ? dnf : `${v.toFixed(2)} s`;
 }
 
+/**
+ * L'ENTREE EN CASCADE : UN PANNEAU APRES L'AUTRE, ET NON TOUS A LA FOIS.
+ *
+ * Cet ecran dit jusqu'a huit choses — le resultat, le duel, la pique, les
+ * chronos face au fantome, le TOP 500, le defi a renvoyer, l'image a partager,
+ * les boutons — et elles tombaient toutes dans la meme image. Celui qui vient
+ * de gagner ou de perdre recevait un mur : rien ne disait par ou commencer, et
+ * le seul mot qu'il attendait — REMPORTE, PERDU — se noyait dans le reste.
+ *
+ * Rien n'est retire ni replie. Les panneaux entrent l'un apres l'autre, dans
+ * l'ordre ou ils sont ecrits — le titre d'abord, les boutons en dernier — et
+ * la seconde que dure la descente est celle ou l'on lisait deja le titre.
+ *
+ * LE DECALAGE EST PORTE PAR LE PARENT, ET C'EST VOULU. La moitie des panneaux
+ * est conditionnelle : un delai calcule panneau par panneau se serait decale
+ * d'un cran des qu'il en manquait un, et les derniers auraient attendu pour
+ * rien. `staggerChildren` ne compte que les enfants reellement rendus. Et si
+ * l'un d'eux devait apparaitre apres coup, il entrerait seul, a la seconde ou
+ * il arrive, sans rejouer toute la descente derriere lui.
+ *
+ * LA DESCENTE DURE MOINS D'UNE SECONDE, ET C'EST UN PLAFOND. On revient sur
+ * cet ecran a chaque course, plusieurs fois par minute : la cascade doit se
+ * remarquer une fois et ne jamais se faire attendre. Dans le cas courant —
+ * titre, chronos, TOP 500, defi, boutons — le dernier panneau est pose au bout
+ * de six dixiemes ; dans le plus charge, juste avant la seconde.
+ */
+const CASCADE: Variants = {
+  repliee: {},
+  ouverte: { transition: { delayChildren: 0.05, staggerChildren: 0.08 } },
+};
+
+/**
+ * Un panneau qui entre. Opacite et glissement, rien d'autre : ce sont les deux
+ * seules proprietes qu'un telephone anime sans refaire la mise en page, et la
+ * hauteur que mesure `useTenirDansLEcran` reste donc juste des la premiere
+ * image — sans quoi l'ecran se serait mis a l'echelle d'apres un contenu a
+ * moitie arrive, puis aurait saute une fois la cascade finie.
+ */
+const VOLET: Variants = {
+  repliee: { opacity: 0, y: 14 },
+  ouverte: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] } },
+};
+
+/** Mouvement reduit : l'ordre reste — c'est la lecture qu'on etale, pas
+ *  l'animation — et seul le glissement part. */
+const VOLET_IMMOBILE: Variants = {
+  repliee: { opacity: 0 },
+  ouverte: { opacity: 1, transition: { duration: 0.2 } },
+};
+
 export function OneShotEndScreen() {
   const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
           liveOn, liveNom, liveResultat } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, serre } = useTenirDansLEcran();
+
+  // Les panneaux entrent l'un apres l'autre — voir CASCADE.
+  const doux = useReducedMotion();
+  const volet = doux ? VOLET_IMMOBILE : VOLET;
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -91,7 +145,7 @@ export function OneShotEndScreen() {
   // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
   const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
   const [topName, setTopName] = useState(getSavedName());
-  const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
+  const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error' | 'pris'>('checking');
 
   useEffect(() => {
     let cancelled = false;
@@ -120,8 +174,10 @@ export function OneShotEndScreen() {
       for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
       primeTopNames();          // le plateau olympique se met a jour
       setTopStatus('done');
-    } catch {
-      setTopStatus('error');
+    } catch (e) {
+      // Un nom qui appartient a un autre appareil ne se debloque pas en
+      // reessayant : on le dit, et on laisse le champ ouvert pour en changer.
+      setTopStatus(e instanceof Error && e.message === NOM_PRIS ? 'pris' : 'error');
     }
   };
 
@@ -408,6 +464,10 @@ export function OneShotEndScreen() {
   // sur la piste, il arrete la course et rien d'autre.
   const defaiteSeche = fauxDepartEstUneDefaite(etatCourse);
 
+  // PARTAGER partage sa rangee avec ACCUEIL quand l'ecran est serre et debout.
+  // Seul, ACCUEIL prendrait une demi-largeur pour rien : il s'etale alors.
+  const afficheAffiche = complete && !falseOut && runTime > 0;
+
   const dnf = N.t('dnf_short');
 
   return (
@@ -423,23 +483,23 @@ export function OneShotEndScreen() {
           Les marges automatiques centrent aussi bien et s'effacent d'elles
           memes quand la place manque : rien ne sort de l'ecran par le haut. */}
       <div className="min-h-full flex flex-col items-center w-full">
-        {/* La reduction vit sur ce calque-ci, et pas sur celui d'en dessous :
-            l'animation d'entree anime deja son echelle, et deux transformations
-            sur le meme element s'ecrasent l'une l'autre. La hauteur reservee
-            est celle d'apres reduction, sans quoi le conteneur croirait
-            deborder encore. */}
+        {/* La reduction vit sur ce calque-ci, et elle y vit seule : plus bas,
+            chaque panneau porte sa propre transformation le temps d'entrer, et
+            deux transformations sur le meme element s'ecrasent l'une l'autre.
+            La hauteur reservee est celle d'apres reduction, sans quoi le
+            conteneur croirait deborder encore. */}
         <div className="w-full my-auto flex flex-col items-center"
              style={{ height: hauteur ?? undefined }}>
-        <div ref={contenu} className="w-full flex flex-col items-center"
+        <div ref={contenu} className={`w-full flex flex-col items-center ${serre ? 'serre' : ''}`}
              style={echelle < 1
                ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
                : undefined}>
-        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        <motion.div variants={CASCADE} initial="repliee" animate="ouverte"
           className="flex flex-col items-center max-w-2xl court:max-w-none w-full
-                     py-4 md:py-8 court:py-1 gap-3 md:gap-6 court:gap-0
+                     py-4 md:py-8 court:py-1 serre:py-1 gap-3 md:gap-6 court:gap-0 serre:gap-1
                      colonnes-si-bas">
 
-          <div className="flex flex-col items-center text-center gap-1 md:gap-2">
+          <motion.div variants={volet} className="flex flex-col items-center text-center gap-1 md:gap-2 serre:gap-0">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
             <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
@@ -466,14 +526,14 @@ export function OneShotEndScreen() {
                 {N.t('challenge_gap', { s: (Math.abs(runTime - ghostTime)).toFixed(2) })}
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* Course en direct : les deux chronos face a face. Le classement des
               duels est alimente par la salle elle-meme, donc rien a envoyer
               d'ici — seulement a montrer. */}
           {duo && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              variants={volet}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
                 ${liveGagne ? 'border-emerald-400/50 bg-emerald-400/[0.10]'
                   : liveNul ? 'border-white/20 bg-white/5'
@@ -515,7 +575,7 @@ export function OneShotEndScreen() {
               qui a gagne, ce qui ne se faisait nulle part. */}
           {live && !duo && classement.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+              variants={volet}
               className={`w-full rounded-2xl border px-4 py-4 flex flex-col items-center gap-2 shadow-2xl
                 ${liveGagne ? 'border-emerald-400/50 bg-emerald-400/[0.10]'
                   : 'border-white/15 bg-card/60'}`}
@@ -559,7 +619,7 @@ export function OneShotEndScreen() {
               c'est le moment ou elle porte le plus : l'autre vient de nous
               battre en meme temps que nous, et il est encore la. */}
           {live && !liveGagne && !liveNul && (
-            <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
+            <motion.div variants={volet} className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
                             px-4 py-3 flex flex-col items-center gap-1.5">
               <p className="text-sm md:text-base text-foreground text-center leading-snug">
                 « {pique(`${liveNom}${monMs || (maLigne ? maLigne.ms : 0)}`,
@@ -569,7 +629,7 @@ export function OneShotEndScreen() {
                                truncate max-w-full">
                 {duo ? liveNom : (classement[0] ? classement[0].nom : liveNom)}
               </span>
-            </div>
+            </motion.div>
           )}
 
           {/* Resultat du duel : les points comptent pour le classement des
@@ -577,9 +637,8 @@ export function OneShotEndScreen() {
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
           {challenge && (duelEnCours || duel) && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 flex flex-col items-center gap-1.5 shadow-2xl
+              variants={volet}
+              className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 serre:px-3 serre:py-1 flex flex-col items-center gap-1.5 serre:gap-0.5 shadow-2xl
                 ${!duel ? 'border-white/10 bg-card/60'
                   : duel.issue === 'opponent' ? 'border-primary/50 bg-primary/10'
                   : duel.issue === 'draw' ? 'border-white/20 bg-white/5'
@@ -589,7 +648,7 @@ export function OneShotEndScreen() {
                 <Swords className={`w-4 h-4 ${!duel ? 'text-muted-foreground'
                   : duel.issue === 'opponent' ? 'text-primary'
                   : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`} />
-                <span className={`font-black font-display tracking-tight uppercase text-lg md:text-2xl court:text-base
+                <span className={`font-black font-display tracking-tight uppercase text-lg md:text-2xl court:text-base serre:text-base
                   ${!duel ? 'text-muted-foreground'
                     : duel.issue === 'opponent' ? 'text-primary'
                     : duel.issue === 'draw' ? 'text-foreground' : 'text-destructive'}`}>
@@ -605,7 +664,7 @@ export function OneShotEndScreen() {
                       « 0 PL » laisserait croire a un match nul. */}
                   {typeof duel.lp === 'number' && (
                     <div className="flex flex-col items-center gap-1">
-                      <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
+                      <span className="font-mono font-black text-2xl md:text-3xl court:text-xl serre:text-lg
                                        tabular-nums text-foreground">
                         {duel.lp > 0 ? '+' : ''}{duel.lp}
                         <span className="text-xs font-normal ml-1 text-muted-foreground">
@@ -683,24 +742,24 @@ export function OneShotEndScreen() {
           )}
 
           {/* Chronos epreuve par epreuve, face au fantome si defi */}
-          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 court:p-2 shadow-2xl">
-            <div className="flex flex-col gap-1.5 md:gap-3 court:gap-1">
+          <motion.div variants={volet} className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 court:p-2 serre:p-1.5 shadow-2xl">
+            <div className="flex flex-col gap-1.5 md:gap-3 court:gap-1 serre:gap-1">
               {shotRaces.map((r, i) => {
                 const mine = runSplits[i];
                 const his = aFantome ? ghostSplits[i] : undefined;
                 const ahead = mine != null && his != null && mine < his;
                 return (
-                  <div key={i} className="flex items-center justify-between px-3 py-1.5 md:px-4 md:py-3 court:px-2 court:py-1 rounded-xl border border-white/5 bg-black/20 gap-2">
-                    <span className="font-bold tracking-wide text-foreground text-sm md:text-base court:text-xs truncate">
+                  <div key={i} className="flex items-center justify-between px-3 py-1.5 md:px-4 md:py-3 court:px-2 court:py-1 serre:px-2 serre:py-0.5 rounded-xl border border-white/5 bg-black/20 gap-2">
+                    <span className="font-bold tracking-wide text-foreground text-sm md:text-base court:text-xs serre:text-xs truncate">
                       {RACES[r].label}
                     </span>
                     <div className="flex items-center gap-3 md:gap-5 court:gap-2 shrink-0">
                       {his != null && (
-                        <span className="font-mono text-xs md:text-sm court:text-[10px] text-cyan-300/70">
+                        <span className="font-mono text-xs md:text-sm court:text-[10px] serre:text-[10px] text-cyan-300/70">
                           {his.toFixed(2)} s
                         </span>
                       )}
-                      <span className={`font-mono font-bold text-base md:text-lg court:text-xs
+                      <span className={`font-mono font-bold text-base md:text-lg court:text-xs serre:text-sm
                         ${mine == null ? 'text-destructive' : his == null ? 'text-primary' : ahead ? 'text-emerald-400' : 'text-destructive'}`}>
                         {fmt(mine, dnf)}
                       </span>
@@ -710,25 +769,25 @@ export function OneShotEndScreen() {
               })}
             </div>
 
-            <div className="mt-2 md:mt-4 pt-2 md:pt-4 court:mt-2 court:pt-2 border-t border-white/10 flex justify-between items-center px-2 md:px-4 gap-2">
-              <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base court:text-xs min-w-0 truncate">
+            <div className="mt-2 md:mt-4 pt-2 md:pt-4 court:mt-2 court:pt-2 serre:mt-1 serre:pt-1 border-t border-white/10 flex justify-between items-center px-2 md:px-4 gap-2">
+              <span className="font-bold tracking-widest text-foreground uppercase text-sm md:text-base court:text-xs serre:text-xs min-w-0 truncate">
                 {challenge ? N.t('you_label') : 'TOTAL'}
               </span>
-              <span className={`font-mono font-black text-xl md:text-2xl court:text-sm shrink-0 whitespace-nowrap
+              <span className={`font-mono font-black text-xl md:text-2xl court:text-sm serre:text-sm shrink-0 whitespace-nowrap
                 ${falseOut ? 'text-destructive' : 'text-primary'}`}>
                 {falseOut ? dnf : `${runTime.toFixed(2)} s`}
               </span>
             </div>
             {aFantome && (
               <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1">
-                <span className="font-bold tracking-widest text-cyan-300 uppercase text-sm md:text-base court:text-xs min-w-0 truncate flex items-center gap-2">
+                <span className="font-bold tracking-widest text-cyan-300 uppercase text-sm md:text-base court:text-xs serre:text-xs min-w-0 truncate flex items-center gap-2">
                   <Ghost className="w-4 h-4 court:w-3 court:h-3 shrink-0" />
                   <span className="truncate">{ghostName || N.t('ghost_label')}</span>
                 </span>
-                <span className="font-mono font-black text-xl md:text-2xl court:text-sm shrink-0 whitespace-nowrap text-cyan-300">{ghostTime.toFixed(2)} s</span>
+                <span className="font-mono font-black text-xl md:text-2xl court:text-sm serre:text-sm shrink-0 whitespace-nowrap text-cyan-300">{ghostTime.toFixed(2)} s</span>
               </div>
             )}
-          </div>
+          </motion.div>
 
           {/* LE TOP 500 EN DEUX LIGNES.
 
@@ -744,7 +803,7 @@ export function OneShotEndScreen() {
               formulaire, lui, ne s'affiche que quand il sert vraiment : sans
               nom connu, personne ne peut enregistrer a votre place. */}
           {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
-            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2.5 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1.5">
+            <motion.div variants={volet} className="w-full bg-card/60 border border-white/10 rounded-2xl p-2.5 sm:p-4 md:p-6 court:p-2 serre:p-1.5 shadow-2xl flex flex-col gap-1.5 court:gap-1.5 serre:gap-1">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
                   <Globe2 className="w-4 h-4 court:w-3 court:h-3 text-primary" />
@@ -834,11 +893,19 @@ export function OneShotEndScreen() {
                       {topStatus === 'error' && (
                         <p className="text-center text-xs text-destructive">{N.t('score_save_fail')}</p>
                       )}
+                      {topStatus === 'pris' && (
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-center text-xs text-destructive">{N.t('score_name_taken')}</p>
+                          <p className="text-center text-[10px] text-muted-foreground leading-snug">
+                            {N.t('score_taken_help')}
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                 </>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* Creer un defi a partir de cette course. Hors defi c'est le
@@ -852,7 +919,7 @@ export function OneShotEndScreen() {
               chaine. On le garde donc ouvert, sans le formulaire de creation
               — celui-la reste ferme, il n'y a pas de chrono a envoyer. */}
           {(!falseOut || !!revancheId) && (!challenge || beaten) && (
-            <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-3 court:gap-1.5
+            <motion.div variants={volet} className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 court:p-2 serre:p-1.5 shadow-2xl flex flex-col gap-3 court:gap-1.5 serre:gap-1.5
               ${beaten || revancheBattue || revancheFaite !== null
                 ? 'border-primary/40' : 'border-white/10'}`}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-center">
@@ -1015,13 +1082,13 @@ export function OneShotEndScreen() {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {challenge && sent && (
-            <p className="text-[10px] md:text-xs text-muted-foreground tracking-wide">
+            <motion.p variants={volet} className="text-[10px] md:text-xs text-muted-foreground tracking-wide">
               {N.t('challenge_from', { n: challenge.owner_name })} &middot; {challenge.id}
-            </p>
+            </motion.p>
           )}
 
           {/* PARTAGER MA COURSE — une image, pas un code.
@@ -1055,7 +1122,8 @@ export function OneShotEndScreen() {
               de perdus a chaque fois. Dedans, elles disent la meme chose au
               meme endroit — c'est deja ce que fait « PRENDRE MA REVANCHE »
               depuis le debut, et personne n'a jamais eu de mal a le lire. */}
-          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none mt-1 md:mt-2 court:mt-0
+          <motion.div variants={volet} className="flex flex-col gap-2 md:gap-4 court:gap-1.5 serre:gap-1 w-full max-w-md court:max-w-none mt-1 md:mt-2 court:mt-0 serre:mt-0
+                          serre-debout:grid serre-debout:grid-cols-2 serre-debout:items-start
                           court:flex-row court:items-start court:[column-span:all]">
             {/* PARTAGER MA COURSE — une image, pas un code.
                 Le partage qui vit plus haut envoie du texte : un code a six
@@ -1066,12 +1134,12 @@ export function OneShotEndScreen() {
                 n'ont pas de chrono a montrer, et le bouton disparait plutot
                 que de produire une image qui annoncerait un temps qui
                 n'existe pas. */}
-            {complete && !falseOut && runTime > 0 && (
+            {afficheAffiche && (
               <button
                 onClick={partagerMaCourse}
                 disabled={affiche === 'fabrique'}
-                className="w-full court:flex-1 court:min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
-                           text-xs md:text-sm text-primary bg-primary/10 border border-primary/30
+                className="w-full court:flex-1 court:min-w-0 py-2.5 md:py-3 court:py-2 serre:py-1.5 serre-debout:order-4 rounded-xl font-black font-display tracking-widest serre-debout:tracking-normal
+                           text-xs md:text-sm serre-debout:text-[10px] serre-debout:leading-tight text-primary bg-primary/10 border border-primary/30
                            hover:bg-primary/20 disabled:opacity-50 disabled:pointer-events-none
                            transition-colors flex flex-col items-center leading-tight gap-0.5"
               >
@@ -1084,17 +1152,17 @@ export function OneShotEndScreen() {
                 {/* Ce qui s'est reellement passe. « Enregistre » et « envoye »
                     ne se disent pas au meme moment, et le module rend lequel
                     des deux a eu lieu precisement pour qu'on ne devine pas. */}
-                <span className="font-sans font-normal text-[9px] md:text-[10px] tracking-normal opacity-80 leading-snug">
+                <span className="font-sans font-normal text-[9px] md:text-[10px] serre:text-[8px] serre-debout:leading-none tracking-normal opacity-80 leading-snug">
                   {affiche === 'telechargement' ? N.t('affiche_saved')
                     : affiche === 'echec' ? N.t('affiche_failed')
                     : N.t('affiche_hint')}
                 </span>
               </button>
             )}
-            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
+            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 serre:gap-1 court:flex-1 court:min-w-0 serre-debout:contents">
             {RECOMMENCER_OUVERT && <button
               onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
-              className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
+              className="w-full py-3 md:py-4 court:py-2 serre:py-1.5 serre-debout:order-1 serre-debout:col-span-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm serre:text-sm
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
                          border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1
                          flex flex-col items-center leading-tight gap-0.5"
@@ -1103,7 +1171,7 @@ export function OneShotEndScreen() {
                 <RotateCcw className="w-4 h-4" />
                 {N.t('os_rejouer')}
               </span>
-              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] tracking-normal opacity-80 leading-snug">
+              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] serre:text-[9px] tracking-normal opacity-80 leading-snug">
                 {N.t('os_rejouer_sub')}
               </span>
             </button>}
@@ -1111,7 +1179,7 @@ export function OneShotEndScreen() {
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
             {verrou && (
-              <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
+              <p className={`text-center text-[11px] md:text-xs serre:text-[9px] serre-debout:order-2 serre-debout:col-span-2 tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>
                 {N.t(verrou === 'course_directe' ? 'os_verrou_direct'
@@ -1121,7 +1189,7 @@ export function OneShotEndScreen() {
               </p>
             )}
             </div>
-            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
+            <div className="flex flex-col gap-2 md:gap-4 court:gap-1 serre:gap-1 court:flex-1 court:min-w-0 serre-debout:contents">
 
             {/* Le classement s'AJOUTE au raccourci. Une version precedente le
                 mettait a sa place le 5 septembre — mais defier quelqu'un est
@@ -1130,7 +1198,7 @@ export function OneShotEndScreen() {
                 Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setVoirDuels(true)}
-              className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
+              className="w-full py-3 md:py-4 court:py-2 serre:py-1.5 serre-debout:order-3 serre-debout:col-span-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm serre:text-sm
                          tracking-widest text-background bg-primary hover:bg-primary/90 transition-all
                          border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
                          flex flex-col items-center leading-tight gap-0.5"
@@ -1139,15 +1207,15 @@ export function OneShotEndScreen() {
                 <Swords className="w-4 h-4" />
                 {N.t(mots ? mots.titre : 'os_defier')}
               </span>
-              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] tracking-normal opacity-80 leading-snug">
+              <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] serre:text-[9px] tracking-normal opacity-80 leading-snug">
                 {N.t(mots ? mots.sous : 'os_defier_sub')}
               </span>
             </button>}
             </div>
-            <button onClick={() => SprinterApp.goHome()} className="w-full court:flex-1 court:self-stretch py-3 md:py-4 court:py-2 court:text-sm rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">
+            <button onClick={() => SprinterApp.goHome()} className={`w-full court:flex-1 court:self-stretch py-3 md:py-4 court:py-2 serre:py-1.5 court:text-sm serre:text-sm serre-debout:order-5 ${afficheAffiche ? '' : 'serre-debout:col-span-2'} rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1`}>
               {N.t('home')}
             </button>
-          </div>
+          </motion.div>
 
         </motion.div>
         </div>
