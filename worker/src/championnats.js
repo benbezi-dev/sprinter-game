@@ -84,6 +84,37 @@ export function nomZone(zone, echelon) {
 const PAYS_CONTINENT = {};
 for (const [c, pays] of Object.entries(CONTINENTS)) for (const p of pays) PAYS_CONTINENT[p] = c;
 
+/**
+ * La liste des nations que le jeu sait nommer, pour les ecrans qui la posent.
+ *
+ * Elle sort d'ici et non d'une copie cote client, pour une raison qui s'est
+ * deja vue ailleurs dans ce projet : deux tables du meme fait divergent a la
+ * premiere retouche, et c'est le titre du champion qui aurait fini par ne plus
+ * ressembler au drapeau affiche a cote. `PAYS_NOMS` est la seule source.
+ *
+ * On ne rend que les pays NOMMES. Un joueur peut porter un code que la table
+ * ignore — Cloudflare voit le monde entier, pas seulement ces cinquante-deux
+ * pays — et son titre lira alors « Champion de MT ». C'est laid mais honnete,
+ * et c'est reparable en ajoutant une ligne a `PAYS_NOMS` ; proposer un choix
+ * parmi des codes bruts, en revanche, ne serait ni l'un ni l'autre.
+ */
+export function listeNations() {
+  return Object.entries(PAYS_NOMS)
+    .map(([code, [nom]]) => ({ code, nom, continent: PAYS_CONTINENT[code] || null }))
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+
+/** Le pays d'un seul joueur, avec d'ou il vient. */
+export async function paysDUn(db, nameKey) {
+  await ensureChampTables(db);
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return null;
+  const r = await db.prepare(
+    `SELECT pays, continent, source, vu_le FROM player_pays WHERE name_key = ?`
+  ).bind(k).first();
+  return r || null;
+}
+
 export function continentDe(pays) {
   return PAYS_CONTINENT[String(pays || '').toUpperCase()] || null;
 }
@@ -252,12 +283,60 @@ export async function noterPays(db, nameKey, pays) {
   ).bind(k, p, continentDe(p), Date.now()).run();
 }
 
-/** Le joueur corrige son pays lui-meme. Ce choix prime sur la detection. */
+/**
+ * Le joueur retire un pays qui n'a jamais ete choisi.
+ *
+ * Une nationalite CHOISIE ne se retire pas — voir `choisirPays`. Ce qui
+ * s'efface ici n'est donc qu'une detection : la ligne 'geo' que Cloudflare a
+ * posee sans que personne l'ait declaree. On la supprime au lieu d'y ecrire un
+ * vide, pour que la detection puisse reprendre a la course suivante.
+ */
+export async function oublierPays(db, nameKey) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return { ok: false, erreur: 'nom invalide' };
+  await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (deja && deja.source === 'choix') {
+    return { ok: false, erreur: 'nationalite definitive', pays: deja.pays };
+  }
+  await db.prepare(`DELETE FROM player_pays WHERE name_key = ?`).bind(k).run();
+  return { ok: true, pays: null };
+}
+
+/**
+ * Le joueur choisit sa nationalite. UNE FOIS, et pour de bon.
+ *
+ * Elle ne se change plus ensuite, et ce n'est pas une severite gratuite : elle
+ * decide du championnat national ou l'on se presente. Sans verrou, il suffirait
+ * de suivre le pays ou la grille est la plus faible — se declarer d'un pays a
+ * trente-deux joueurs le samedi, d'un autre le mois suivant — et le titre de
+ * champion national ne voudrait plus rien dire. Un titre se porte trois mois ;
+ * la nationalite qui y donne droit doit tenir au moins aussi longtemps.
+ *
+ * La detection, elle, ne verrouille rien : une ligne 'geo' se laisse remplacer
+ * par un choix, puisque personne ne l'a declaree. C'est l'inverse qui est
+ * interdit — un choix ne se fait jamais ecraser, ni par la detection, ni par
+ * un second choix.
+ *
+ * Il n'existe volontairement AUCUNE route pour defaire cela cote joueur. Si une
+ * correction devient necessaire — un doigt qui glisse, un pays homonyme — elle
+ * passera par l'administration, qui devra l'ecrire exprES.
+ */
 export async function choisirPays(db, nameKey, pays) {
   const k = String(nameKey || '').trim().toLowerCase();
   const p = String(pays || '').trim().toUpperCase();
   if (!k || !/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
   await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (deja && deja.source === 'choix') {
+    return deja.pays === p
+      // Reposer le meme pays n'est pas une erreur : c'est ce que fait un ecran
+      // qui reenvoie son etat. On rend ce qui est, sans rien changer.
+      ? { ok: true, pays: deja.pays, continent: continentDe(deja.pays), inchange: true }
+      : { erreur: 'nationalite deja choisie', pays: deja.pays };
+  }
   await db.prepare(
     `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
      VALUES (?, ?, ?, 'choix', ?)
@@ -268,6 +347,47 @@ export async function choisirPays(db, nameKey, pays) {
   return { ok: true, pays: p, continent: continentDe(p) };
 }
 
+/**
+ * L'administration corrige une nationalite. Le seul geste qui passe le verrou.
+ *
+ * Il existe parce que le verrou est total cote joueur : un doigt qui glisse sur
+ * une liste de cinquante pays coute la saison entiere, et sans cette porte la
+ * seule reparation serait d'ouvrir la base a la main. Mieux vaut un geste
+ * nomme, sous cle, qui dit ce qu'il remplace.
+ *
+ * Il rend l'ANCIEN pays autant que le nouveau. Une correction sans trace de ce
+ * qu'elle a efface ne se verifie pas : c'est ce que l'ecran affiche en retour,
+ * et c'est ce qui permet de s'apercevoir qu'on a corrige le mauvais joueur.
+ *
+ * Il ne cree rien. Corriger la nationalite de quelqu'un qui n'en a jamais
+ * declare serait la CHOISIR a sa place — precisement ce que tout le reste de ce
+ * fichier s'emploie a rendre impossible.
+ */
+export async function imposerPays(db, nameKey, pays) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  const p = String(pays || '').trim().toUpperCase();
+  if (!k) return { erreur: 'nom invalide' };
+  if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
+  await ensureChampTables(db);
+  const avant = await db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  // Il faut une nationalite DECLAREE, pas une simple detection. Ecrire par-dessus
+  // une ligne 'geo' reviendrait a choisir a la place du joueur — exactement ce
+  // que le verrou empeche partout ailleurs. L'ecran d'administration refusait
+  // deja ce cas ; c'est ici qu'il doit etre refuse, l'ecran ne fait foi de rien.
+  if (!avant || avant.source !== 'choix') {
+    return { erreur: 'ce joueur n a pas declare de nationalite' };
+  }
+  if (avant.pays === p) {
+    return { ok: true, avant: avant.pays, pays: p, inchange: true };
+  }
+  await db.prepare(
+    `UPDATE player_pays SET pays = ?, continent = ?, source = 'choix', vu_le = ?
+      WHERE name_key = ?`
+  ).bind(p, continentDe(p), Date.now(), k).run();
+  return { ok: true, avant: avant.pays, pays: p, continent: continentDe(p) };
+}
+
 /** Combien de joueurs classes et actifs un pays compte-t-il ? */
 export async function effectifPays(db, pays, fenetreJours) {
   await ensureChampTables(db);
@@ -276,7 +396,8 @@ export async function effectifPays(db, pays, fenetreJours) {
   const r = await db.prepare(
     `SELECT COUNT(*) AS n
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE g.pays = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?`
+      WHERE g.pays = ? AND g.source = 'choix'
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?`
   ).bind(String(pays).toUpperCase(), depuis).first();
   return (r && r.n) || 0;
 }
@@ -287,10 +408,17 @@ export async function paysEligibles(db) {
   await ensureDuelTables(db);
   const cfg = ECHELONS.national;
   const depuis = Date.now() - cfg.fenetreActiviteJours * 24 * 3600 * 1000;
+  // `source = 'choix'` : on ne compte QUE les nationalites declarees.
+  //
+  // Une detection Cloudflare dit d'ou part une connexion, pas pour qui l'on
+  // court. Compter les detections gonflerait l'effectif d'un pays de gens qui
+  // n'ont jamais demande a s'y presenter, et ouvrirait un championnat national
+  // a une grille que personne n'a choisi de rejoindre.
   const { results } = await db.prepare(
     `SELECT g.pays AS pays, COUNT(*) AS n
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      WHERE g.source = 'choix'
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
       GROUP BY g.pays
       ORDER BY n DESC`
   ).bind(depuis).all();
@@ -328,10 +456,14 @@ async function classement(db, { pays = null, continent = null, exclure, limite }
   const depuis = Date.now() - ECHELONS.national.fenetreActiviteJours * 24 * 3600 * 1000;
   const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
   const args = pays ? [pays] : continent ? [continent] : [];
+  // Meme regle que pour l'eligibilite : une grille ne se remplit que de
+  // nationalites declarees. Un joueur detecte en France sans l'avoir dit n'a
+  // pas demande a courir le championnat de France.
   const { results } = await db.prepare(
     `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE ${ou} AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      WHERE ${ou} AND g.source = 'choix'
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
       ORDER BY d.mmr DESC, d.wins DESC, d.losses ASC, d.name ASC
       LIMIT ?`
   ).bind(...args, depuis, limite + (exclure ? exclure.size : 0)).all();
