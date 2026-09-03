@@ -10,7 +10,8 @@ import { RelaisPanel } from './RelaisPanel';
 import { EST_TEST } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Swords } from 'lucide-react';
+import { Repliable } from './Repliable';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
@@ -197,10 +198,15 @@ export function ChallengePanel() {
           EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
       {EST_TEST && <RelaisPanel />}
 
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center tracking-wide">
-          {N.t('versus_desc')}
-        </p>
+      <Repliable
+        titre={N.t('challenge_code')}
+        sous={N.t('versus_desc')}
+        icone={<Swords className="w-4 h-4" />}
+        couleur="text-primary"
+        /* Un lien ?defi=CODE ouvre le panneau : le joueur arrive ici POUR ca,
+           et le trouver replie serait le renvoyer chercher ce qu'il tient. */
+        ouvertParDefaut={!!venuDuLien || !!ch}
+      >
 
         {horsApp && (
           <div className="rounded-xl border border-cyan-400/35 bg-cyan-400/[0.07] px-3 py-2.5
@@ -222,9 +228,6 @@ export function ChallengePanel() {
           </div>
         )}
 
-        <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary text-center">
-          {N.t('challenge_code')}
-        </h3>
         <div className="flex gap-2">
           <input
             value={code}
@@ -283,15 +286,19 @@ export function ChallengePanel() {
             </div>
           </div>
         )}
-      </div>
 
-      <button
-        onClick={accept}
-        disabled={!ch}
-        className="w-full py-3 md:py-5 rounded-xl font-black font-display text-lg md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgba(248,205,74,0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
-      >
-        {N.t('challenge_accept')}
-      </button>
+        {/* RELEVER LE DEFI vit DANS le panneau depuis qu'il se replie. Dehors,
+            il restait seul et gris sous un titre ferme : un grand bouton
+            inerte que rien n'expliquait, puisque le champ qui l'active etait
+            replie juste au-dessus. */}
+        <button
+          onClick={accept}
+          disabled={!ch}
+          className="w-full py-3 md:py-5 rounded-xl font-black font-display text-lg md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgba(248,205,74,0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
+        >
+          {N.t('challenge_accept')}
+        </button>
+      </Repliable>
     </div>
   );
 }

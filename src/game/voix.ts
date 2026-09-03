@@ -9,20 +9,35 @@
 //
 // Trois choses meritent d'etre dites parce qu'elles ne se devinent pas :
 //
-// 1. Le micro n'est jamais « ferme » au sens ou l'on couperait la capture. On
-//    garde la piste ouverte et on bascule `enabled`. Redemander getUserMedia a
-//    chaque fenetre de cinq secondes rallumerait la diode de l'appareil a
-//    chaque fois, reveillerait la demande de permission sur certains
-//    navigateurs, et ferait perdre les premieres syllabes le temps que la
-//    capture demarre.
+// 1. Le micro n'est PRIS que pendant les fenetres de parole, et rendu des
+//    qu'elles se referment.
+//
+//    On gardait avant la capture ouverte pour toute la duree du duel, en se
+//    contentant de basculer `enabled`. Sur un ordinateur cela ne se voit pas.
+//    Sur un telephone, si : tant qu'une capture existe, le systeme considere
+//    que l'application tient le micro, et il ne le donne a personne d'autre.
+//    Un joueur en communication WhatsApp qui ouvrait un duel n'etait plus
+//    entendu de son correspondant — pour le systeme, le micro etait ici, et il
+//    y restait jusqu'a ce qu'on quitte la salle. Une piste `enabled = false`
+//    n'y change rien : elle cesse d'emettre, elle ne rend pas l'appareil.
+//
+//    On rend donc reellement le micro entre les fenetres. Le cout est de
+//    quelques centaines de millisecondes au debut de chaque prise de parole,
+//    le temps que la capture demarre ; le gain est qu'un duel n'accapare plus
+//    le micro du telephone pendant plusieurs minutes.
+//
+//    Pour que ce va-et-vient ne coute pas une renegociation a chaque fois, la
+//    place de la voix est reservee des le depart : un emetteur vide, negocie
+//    une seule fois, sur lequel on pose puis retire la piste. Le SDP ne bouge
+//    plus.
+//
 // 2. Une seule des deux parties emet l'offre, sinon les deux se croisent et la
 //    negociation echoue (« glare »). C'est l'hote, arbitrairement mais
 //    stablement — les deux cotes connaissent deja qui il est.
-// 3. Un refus de micro n'interrompt rien. On monte quand meme la connexion,
-//    en reception seule : celui qui a refuse continue d'entendre l'autre, et
-//    le duel se joue. C'est le comportement demande, et c'est aussi le seul
-//    raisonnable — perdre une course parce qu'on a dit non a une permission
-//    serait absurde.
+// 3. Un refus de micro n'interrompt rien. On monte quand meme la connexion :
+//    celui qui a refuse continue d'entendre l'autre, et le duel se joue. C'est
+//    le comportement demande, et c'est aussi le seul raisonnable — perdre une
+//    course parce qu'on a dit non a une permission serait absurde.
 
 /**
  * Serveurs de mise en relation.
@@ -41,12 +56,34 @@ const STUN = [
 /** A remplir le jour ou l'on prend un service TURN. Voir la note ci-dessus. */
 const TURN: RTCIceServer[] = [];
 
+/** Ce qu'on demande a la capture, une fois pour toutes. */
+const AUDIO: MediaTrackConstraints = {
+  echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+};
+
+/**
+ * Souvenir d'une permission deja accordee.
+ *
+ * Il sert a une seule chose : savoir s'il faut demander le micro AVANT la
+ * premiere fenetre de parole. La boite de dialogue du systeme mangerait les
+ * cinq secondes du joueur, donc on la provoque en amont — mais une seule fois
+ * dans la vie de l'installation, parce que la provoquer prend le micro un
+ * instant, et que prendre le micro est exactement ce qu'on cherche a eviter.
+ *
+ * L'API des permissions repond mieux quand elle existe ; ce drapeau est le
+ * filet pour les navigateurs qui ne connaissent pas « microphone », dont
+ * Safari, c'est-a-dire l'application iOS.
+ */
+const ACCORD = 'sprinter.micro.accorde';
+const dejaAccorde = () => { try { return localStorage.getItem(ACCORD) === '1'; } catch { return false; } };
+const noterAccord = () => { try { localStorage.setItem(ACCORD, '1'); } catch { /* stockage refuse */ } };
+
 export type EtatVoix = {
-  /** La capture locale fonctionne. */
+  /** La capture est possible : permission accordee, appareil present. */
   micro: boolean;
   /** L'utilisateur a refuse la permission : on continue sans sa voix. */
   refuse: boolean;
-  /** Ma fenetre de parole est ouverte en ce moment. */
+  /** Ma fenetre de parole est ouverte, et le micro est reellement pris. */
   ouvert: boolean;
   /** Le pair est joignable et l'audio circule. */
   connecte: boolean;
@@ -62,11 +99,24 @@ export class Voix {
   private pc: RTCPeerConnection | null = null;
   private flux: MediaStream | null = null;
   private piste: MediaStreamTrack | null = null;
+  /** La place reservee a ma voix dans la negociation. Elle survit aux fenetres. */
+  private emetteur: RTCRtpSender | null = null;
   private audio: HTMLAudioElement | null = null;
   private minuteur: any = null;
   private enAttente: RTCIceCandidateInit[] = [];
   private distantPose = false;
   private o: Options;
+
+  /**
+   * Numero de la fenetre de parole en cours.
+   *
+   * Demander le micro prend du temps, et la fenetre peut s'etre refermee
+   * pendant que le systeme repondait — un tour de presentation qui s'acheve,
+   * un joueur qui quitte. Le numero permet de reconnaitre une capture qui
+   * arrive trop tard et de la rendre aussitot, plutot que de laisser une piste
+   * orpheline ouverte pour le reste du duel.
+   */
+  private fenetre = 0;
 
   private etat: EtatVoix = { micro: false, refuse: false, ouvert: false, connecte: false };
 
@@ -82,6 +132,16 @@ export class Voix {
     return typeof RTCPeerConnection !== 'undefined' &&
            !!navigator.mediaDevices?.getUserMedia;
   }
+
+  /**
+   * L'application passe a l'arriere-plan : on rend le micro sans attendre la
+   * fin de la fenetre.
+   *
+   * Repondre a un appel, c'est precisement passer a l'arriere-plan. Si l'on
+   * gardait la capture le temps du minuteur, on reprendrait au correspondant
+   * la voix qu'on vient de lui rendre.
+   */
+  private auFond = () => { if (document.hidden) this.fermerMicro(); };
 
   /**
    * Monte la connexion. `initiateur` doit etre vrai chez un seul des deux.
@@ -107,26 +167,19 @@ export class Voix {
     };
     this.pc.ontrack = ev => this.jouerDistant(ev.streams[0]);
 
-    // On demande le micro avant de negocier : la piste doit exister au moment
-    // de fabriquer l'offre, sinon il faudrait renegocier juste apres.
+    // La place de ma voix, negociee vide.
+    //
+    // C'est ce qui rend le va-et-vient du micro invisible pour la connexion :
+    // poser une piste sur un emetteur deja negocie ne demande pas de nouvelle
+    // offre, alors qu'ajouter une piste en cours de route en demanderait une a
+    // chaque fenetre de parole.
     try {
-      this.flux = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
-      this.piste = this.flux.getAudioTracks()[0] || null;
-      if (this.piste) {
-        // Coupe des le depart : on ne parle que dans les fenetres prevues.
-        this.piste.enabled = false;
-        this.pc.addTrack(this.piste, this.flux);
-      }
-      this.prevenir({ micro: !!this.piste, refuse: false });
+      this.emetteur = this.pc.addTransceiver('audio', { direction: 'sendrecv' }).sender;
     } catch {
-      // Permission refusee, pas de micro sur l'appareil, ou contexte non
-      // securise : on ecoute sans parler.
-      this.prevenir({ micro: false, refuse: true });
-      try { this.pc.addTransceiver('audio', { direction: 'recvonly' }); } catch { /* ignore */ }
+      this.emetteur = null;
     }
+
+    document.addEventListener('visibilitychange', this.auFond);
 
     if (initiateur) {
       try {
@@ -134,6 +187,44 @@ export class Voix {
         await this.pc.setLocalDescription(offre);
         this.o.envoyer('sdp', this.pc.localDescription);
       } catch { /* la voix se passera de cette course */ }
+    }
+
+    // Volontairement apres la negociation, et sans l'attendre : la boite de
+    // dialogue de permission ne doit retarder ni l'offre ni la reponse.
+    void this.sonderPermission();
+  }
+
+  /**
+   * Savoir si l'on pourra parler, sans prendre le micro pour le savoir.
+   *
+   * L'API des permissions repond sans rien allumer. Quand elle ne connait pas
+   * « microphone » — Safari, donc l'application iOS — on se rabat sur le
+   * souvenir d'un accord passe. Il ne reste qu'un cas ou l'on demande vraiment
+   * la capture : la toute premiere fois, pour que le joueur reponde a la
+   * question avant son tour de parole et non pendant. On rend l'appareil dans
+   * la foulee.
+   */
+  private async sonderPermission() {
+    let etat: PermissionState | null = null;
+    try {
+      const p = await (navigator as any).permissions?.query({ name: 'microphone' });
+      etat = p?.state ?? null;
+      if (p) p.onchange = () => this.prevenir({
+        micro: p.state !== 'denied', refuse: p.state === 'denied',
+      });
+    } catch { /* permission inconnue de ce navigateur */ }
+
+    if (etat === 'granted') { noterAccord(); this.prevenir({ micro: true, refuse: false }); return; }
+    if (etat === 'denied') { this.prevenir({ micro: false, refuse: true }); return; }
+    if (dejaAccorde()) { this.prevenir({ micro: true, refuse: false }); return; }
+
+    try {
+      const f = await navigator.mediaDevices.getUserMedia({ audio: AUDIO, video: false });
+      f.getTracks().forEach(t => t.stop());
+      noterAccord();
+      this.prevenir({ micro: true, refuse: false });
+    } catch {
+      this.prevenir({ micro: false, refuse: true });
     }
   }
 
@@ -182,14 +273,6 @@ export class Voix {
   }
 
   /**
-   * Ouvre le micro pour une duree donnee, puis le referme tout seul.
-   *
-   * Le minuteur est remplace a chaque appel : deux fenetres qui se
-   * chevaucheraient ne doivent pas laisser la premiere couper la seconde.
-   * Rien n'attend une action de l'utilisateur pour se refermer — c'est
-   * exactement ce qu'on veut d'un micro qui s'ouvre tout seul.
-   */
-  /**
    * L'etat courant, pour qui l'affiche sans etre abonne.
    *
    * La presentation des athletes vit hors de l'arbre qui a monte cette
@@ -198,32 +281,105 @@ export class Voix {
    */
   lireEtat(): EtatVoix { return this.etat; }
 
-  ouvrirMicro(ms: number) {
-    if (!this.piste) return;
-    clearTimeout(this.minuteur);
-    this.piste.enabled = true;
-    this.prevenir({ ouvert: true });
-    this.minuteur = setTimeout(() => this.fermerMicro(), ms);
+  /**
+   * Rebranche l'affichage sur cette liaison.
+   *
+   * L'ecran qui l'a montee est demonte a chaque course et remonte apres. Le
+   * nouveau vient donc reprendre le fil, et recoit l'etat courant dans la
+   * foulee : sans cela il afficherait un micro eteint pendant qu'il est
+   * ouvert, parce que la derniere nouvelle est partie vers un composant mort.
+   */
+  brancherEtat(surEtat: (e: EtatVoix) => void) {
+    this.o.onEtat = surEtat;
+    surEtat(this.etat);
   }
 
+  /**
+   * Ouvre le micro pour une duree donnee, puis le referme tout seul.
+   *
+   * Le minuteur est arme tout de suite, la capture est demandee en parallele :
+   * une fenetre de cinq secondes dure cinq secondes, que le systeme ait mis
+   * cinquante millisecondes ou trois cents a repondre. Rien n'attend une
+   * action de l'utilisateur pour se refermer — c'est exactement ce qu'on veut
+   * d'un micro qui s'ouvre tout seul.
+   */
+  ouvrirMicro(ms: number) {
+    clearTimeout(this.minuteur);
+    const f = ++this.fenetre;
+    this.minuteur = setTimeout(() => this.fermerMicro(), ms);
+    void this.prendreLeMicro(f);
+  }
+
+  private async prendreLeMicro(f: number) {
+    // Deux fenetres qui s'enchainent sans respirer : la capture est encore la,
+    // on ne la redemande pas.
+    if (this.piste) {
+      this.piste.enabled = true;
+      this.prevenir({ ouvert: true });
+      return;
+    }
+
+    let flux: MediaStream;
+    try {
+      flux = await navigator.mediaDevices.getUserMedia({ audio: AUDIO, video: false });
+    } catch {
+      // Permission refusee, pas de micro sur l'appareil, ou micro tenu par une
+      // autre application : on ecoute sans parler.
+      this.prevenir({ micro: false, refuse: true, ouvert: false });
+      return;
+    }
+
+    // La fenetre s'est refermee pendant que le systeme repondait.
+    if (f !== this.fenetre) { flux.getTracks().forEach(t => t.stop()); return; }
+
+    noterAccord();
+    this.flux = flux;
+    this.piste = flux.getAudioTracks()[0] || null;
+    if (!this.piste) { this.rendreLeMicro(); this.prevenir({ micro: false, ouvert: false }); return; }
+
+    try { await this.emetteur?.replaceTrack(this.piste); } catch { /* on parlera dans le vide */ }
+    if (f !== this.fenetre) { this.rendreLeMicro(); return; }
+
+    this.prevenir({ micro: true, refuse: false, ouvert: true });
+  }
+
+  /** Referme la fenetre et rend l'appareil. Le voyant doit s'eteindre ici. */
   fermerMicro() {
     clearTimeout(this.minuteur);
     this.minuteur = null;
-    if (this.piste) this.piste.enabled = false;
+    this.fenetre++;
+    this.rendreLeMicro();
     this.prevenir({ ouvert: false });
+  }
+
+  /**
+   * Rend physiquement le micro au systeme.
+   *
+   * `enabled = false` ne suffisait pas : la piste cesse d'emettre mais
+   * l'appareil reste pris, et aucune autre application ne peut s'en servir.
+   * Seul `stop()` le libere.
+   */
+  private rendreLeMicro() {
+    try { this.emetteur?.replaceTrack(null); } catch { /* connexion deja fermee */ }
+    if (this.piste) this.piste.enabled = false;
+    try { this.flux?.getTracks().forEach(t => t.stop()); } catch { /* deja rendu */ }
+    this.flux = null;
+    this.piste = null;
   }
 
   /** Rend le micro et coupe tout. Le voyant de l'appareil doit s'eteindre. */
   arreter() {
     clearTimeout(this.minuteur);
     this.minuteur = null;
-    try { this.flux?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
+    this.fenetre++;
+    document.removeEventListener('visibilitychange', this.auFond);
+    this.rendreLeMicro();
     try { this.pc?.close(); } catch { /* ignore */ }
     if (this.audio) {
       try { this.audio.srcObject = null; this.audio.remove(); } catch { /* ignore */ }
       this.audio = null;
     }
-    this.pc = null; this.flux = null; this.piste = null;
+    this.pc = null; this.emetteur = null;
     this.enAttente = []; this.distantPose = false;
     this.prevenir({ micro: false, ouvert: false, connecte: false });
   }

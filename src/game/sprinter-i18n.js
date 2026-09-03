@@ -102,6 +102,12 @@
     saving_score:    ['envoi en cours...', 'sending...'],
     score_saved:     ['classé {r}e sur le TOP 500 mondial', 'ranked {r} on the world TOP 500'],
     score_save_fail: ["échec de l'envoi, réessaie plus tard", 'failed to send, try again later'],
+    // Le nom appartient à un autre appareil. Ce refus-là ne passera pas avec
+    // le temps : il ne doit donc jamais emprunter les mots d'une panne réseau.
+    score_name_taken:['ce nom est réservé à un autre appareil',
+                      'this name belongs to another device'],
+    score_taken_help:['prends-en un autre, ou relie cet appareil à ton nom dans MES COURSES avec ton code de récupération',
+                      'pick another, or link this device to your name in MY RACES with your recovery code'],
     view_top500:     ['VOIR LE TOP 500', 'VIEW TOP 500'],
     // Sur un bouton, « VOIR LE » ne dit rien que le bouton ne dise deja.
     top500_court:    ['TOP 500', 'TOP 500'],
@@ -148,6 +154,30 @@
     name_saved:      ['ENREGISTRÉ', 'SAVED'],
     name_taken:      ['ce nom est déjà pris par quelqu’un d’autre', 'that name is already taken'],
     name_code:       ['TON CODE DE RÉCUPÉRATION', 'YOUR RECOVERY CODE'],
+    // La nationalite. OPTIONNELLE, et elle le reste : un joueur sans drapeau
+    // court, se classe et gagne exactement comme les autres. Elle ne sert qu'a
+    // une chose — savoir dans quel championnat national il se presente — et
+    // cette chose-la n'existe pas encore pour les joueurs de la vraie version.
+    // Rien dans le jeu ne doit donner l'impression qu'il manque quelque chose
+    // a celui qui n'en pose pas.
+    pays_title:      ['TA NATIONALITÉ', 'YOUR NATIONALITY'],
+    pays_opt:        ['une seule fois', 'once only'],
+    pays_aucun:      ['choisis ton pays', 'pick your country'],
+    // Ce que la nationalite engage, dit AVANT le geste et non apres.
+    pays_why:        ['il faut l’avoir choisie pour courir un championnat national — et elle ne se change plus ensuite',
+                      'you need one to run a national championship — and it cannot be changed afterwards'],
+    pays_vu:         ['tu sembles te connecter depuis {pays} — à toi de dire',
+                      'you seem to connect from {pays} — up to you'],
+    pays_save:       ['CHOISIR', 'CHOOSE'],
+    pays_confirm:    ['Courir pour {pays} ?\n\nCe choix est définitif : il décide du championnat national où tu te présentes, et il ne se change plus.',
+                      'Run for {pays}?\n\nThis is final: it decides which national championship you enter, and it cannot be changed.'],
+    pays_fige:       ['définitif', 'final'],
+    pays_on:         ['tu cours pour ce pays — ton drapeau accompagne ton nom au championnat',
+                      'you run for this country — your flag follows your name at the championship'],
+    pays_deja:       ['ta nationalité est déjà choisie, elle ne se change plus',
+                      'your nationality is already chosen, it cannot be changed'],
+    pays_first:      ['enregistre d’abord ton nom', 'save your name first'],
+    pays_bad:        ['pays invalide', 'invalid country'],
     insta_title:     ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
     insta_ph:        ['ton pseudo, avec ou sans le @', 'your handle, with or without the @'],
     insta_why:       ['ton profil devient visitable depuis le TOP 500 et tes défis',
@@ -275,6 +305,19 @@
                           'a teammate declined — this team cannot race'],
     relais_prete:    ['équipe prête', 'team ready'],
     relais_classement: ['CLASSEMENT DES ÉQUIPES', 'TEAM RANKING'],
+    // deux equipes au plus : au-dela, on choisit celle qu'on quitte
+    relais_plein_titre: ['DEUX ÉQUIPES, PAS TROIS', 'TWO TEAMS, NOT THREE'],
+    relais_plein:    ['tu cours déjà dans deux équipes. Quitte celle que tu ne cours plus pour en monter une autre.',
+                      'you already run for two teams. Leave the one you no longer run for to build another.'],
+    relais_plein_invit: ['tu cours déjà dans deux équipes — quitte-en une pour accepter celle-ci.',
+                         'you already run for two teams — leave one to accept this.'],
+    relais_quitter:  ['QUITTER', 'LEAVE'],
+    relais_quitter_sur: ['quitter pour de bon ?', 'leave for good?'],
+    relais_quitter_sub: ['on ne revient que sur une nouvelle invitation',
+                         'you only come back on a fresh invitation'],
+    relais_reste:    ['il te reste une place', 'one slot left'],
+    relais_place:    ['1 équipe sur 2', '1 of 2 teams'],
+    relais_places:   ['{n} équipes sur 2', '{n} of 2 teams'],
     // la course elle-meme
     relais_courir:   ['ENTRER SUR LA PISTE', 'GO TO THE TRACK'],
     relais_mon_rang: ['tu es le {n}e relayeur', 'you run leg {n}'],
