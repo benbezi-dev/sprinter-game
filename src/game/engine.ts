@@ -333,6 +333,18 @@ export function updateLogic(dt: number) {
   if (G.state === 'open') {
     G.openT += dt;
     if (G.openT > 6.4) G.state = 'title';
+  } else if (G.state === 'title') {
+    // La ceremonie d'un championnat se joue par-dessus le menu, et le moteur y
+    // montre deja la piste et ses huit couloirs : il n'y a donc rien a monter,
+    // seulement quelqu'un a designer. `presente` est l'unique interrupteur —
+    // pose par le podium a son ouverture, retire a sa fermeture.
+    //
+    // Le `else` n'est pas decoratif. `stepPresentation` est aussi ce qui fait
+    // REDESCENDRE les bras des autres ; s'arreter net a la fermeture laisserait
+    // le dernier presente saluer sur l'ecran-titre jusqu'au prochain
+    // demarrage. C'est le meme accident que le coup de pistolet a deja connu.
+    if (G.presente) SprinterApp.stepPresentation(dt);
+    else SprinterApp.finirLesSaluts(dt);
   } else if (G.state === 'cut') {
     G.cut.t += dt;
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11 : 3.2);

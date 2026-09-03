@@ -21,6 +21,8 @@ import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
+import { CeremonieChampionnat } from '@/components/screens/Championnat';
+import { useCeremonieChampionnat } from '@/game/ceremonie-championnat';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { RaceHUD } from '@/components/screens/RaceHUD';
@@ -106,6 +108,14 @@ function MainGame() {
   }, [acces]);
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
+  /**
+   * Le sacre d'un championnat, qui se joue sur la piste.
+   *
+   * Meme raison que la presentation juste au-dessus : l'ecran-titre s'efface,
+   * sans quoi le menu couvrirait la piste que la ceremonie a justement pour
+   * objet de montrer. Il revient tel quel a la fermeture.
+   */
+  const ceremonie = useCeremonieChampionnat();
 
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
@@ -115,7 +125,7 @@ function MainGame() {
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
-        {state === 'title' && <TitleScreen />}
+        {state === 'title' && !ceremonie && <TitleScreen />}
         {state === 'cut' && <CutScreen />}
         {/* Pendant la presentation, le decompte est suspendu et l'etat vaut
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
@@ -137,6 +147,7 @@ function MainGame() {
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}
       <RecordPopup />
+      {DUELS_OUVERTS && <CeremonieChampionnat />}
       <QuitRace />
       <InboxPopup />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
