@@ -13,7 +13,7 @@ import {
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
-  medaillesDe, paysDe,
+  medaillesDe, paysDe, paysDUn, listeNations, oublierPays, imposerPays,
   fluxDirect, recapMondial,
 } from './championnats.js';
 import {
@@ -101,6 +101,162 @@ function json(data, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   }));
+}
+
+// Regles par route : le nombre d'appels qu'une meme IP peut faire dans la
+// fenetre, avant d'etre mise en attente. `/test/entrer` est la plus stricte
+// des trois : c'est la seule qui ressemble a une authentification, et donc
+// la seule qu'une force brute chercherait a marteler.
+const RATE_LIMITS = {
+  '/test/entrer': { max: 8, fenetreMs: 60_000 },
+  '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  default: { max: 30, fenetreMs: 60_000 },
+};
+
+// La plus longue des fenetres declarees : au-dela, plus aucune regle n'a besoin
+// de la ligne, quelle que soit la route qui l'a creee. Calcule plutot qu'ecrit
+// en dur, pour qu'ajouter une regle plus large ne fasse pas purger trop tot.
+const MAX_FENETRE_MS = Math.max(
+  ...Object.values(RATE_LIMITS).map(r => r.fenetreMs)
+);
+
+const limitesReady = new WeakSet();
+async function ensureRateLimitTable(db) {
+  if (limitesReady.has(db)) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS rate_limits (
+    cle TEXT PRIMARY KEY,
+    fenetre_debut INTEGER NOT NULL,
+    compte INTEGER NOT NULL
+  )`).run();
+  // La purge ci-dessous cherche par fenetre, pas par cle : sans cet index elle
+  // balayerait la table entiere a chaque passage.
+  await db.prepare(
+    `CREATE INDEX IF NOT EXISTS rate_limits_fenetre ON rate_limits (fenetre_debut)`
+  ).run();
+  limitesReady.add(db);
+}
+
+/**
+ * Cette IP a-t-elle encore droit a un appel sur cette route, maintenant ?
+ *
+ * Fenetre fixe plutot que glissante : moins precis pres des bords, mais une
+ * seule ligne par cle et une seule ecriture par appel — ce que la fenetre
+ * glissante ne tient pas sans une table d'evenements qui grossit sans fin.
+ */
+async function sousLimite(db, ip, route) {
+  await ensureRateLimitTable(db);
+  const regle = RATE_LIMITS[route] || RATE_LIMITS.default;
+  const cle = `${route}:${ip}`;
+  const now = Date.now();
+  const row = await db.prepare(
+    `SELECT fenetre_debut, compte FROM rate_limits WHERE cle = ?`
+  ).bind(cle).first();
+
+  if (!row || now - row.fenetre_debut >= regle.fenetreMs) {
+    await db.prepare(
+      `INSERT INTO rate_limits (cle, fenetre_debut, compte) VALUES (?, ?, 1)
+       ON CONFLICT(cle) DO UPDATE SET fenetre_debut = excluded.fenetre_debut, compte = 1`
+    ).bind(cle, now).run();
+
+    // Une cle porte une adresse IP, et une adresse IP est une donnee
+    // personnelle : elle n'a rien a faire dans la base une seconde de plus que
+    // ce que le comptage exige. On efface donc les fenetres mortes en passant.
+    //
+    // Ici et pas ailleurs : ce branchement est le seul qui s'execute au plus
+    // une fois par minute et par IP, alors que le corps de la fonction tourne a
+    // chaque appel. Une tache planifiee ferait le meme travail, en ajoutant une
+    // piece a entretenir pour un balayage que le trafic declenche tout seul.
+    //
+    // MAX_FENETRE_MS et pas `regle.fenetreMs` : la purge est globale, et une
+    // ligne de `/duel/mot` ne doit pas etre jugee a l'aune de la fenetre de la
+    // route qui se trouve passer par la.
+    await db.prepare(
+      `DELETE FROM rate_limits WHERE fenetre_debut < ?`
+    ).bind(now - MAX_FENETRE_MS).run();
+    return true;
+  }
+  if (row.compte >= regle.max) return false;
+  await db.prepare(`UPDATE rate_limits SET compte = compte + 1 WHERE cle = ?`).bind(cle).run();
+  return true;
+}
+
+/* ------------------------------------------------------------ plausibilite
+   Un chrono arrive du client, et le client est l'appareil du joueur : rien
+   n'y est verifiable. `MIN_TIME_MS` valait 1 seconde pour les trois epreuves
+   — un plafond de securite contre une valeur aberrante, pas une regle de
+   jeu. Il laissait donc poser un 100 m en une seconde, et `best_split_ms`,
+   qui est ce qui CLASSE, n'etait meme pas tenu par lui : il lui suffisait
+   d'etre positif et sous le cumul.
+
+   Le plancher ci-dessous se deduit du moteur au lieu d'etre choisi. Chaque
+   epreuve a une vitesse de pointe (`RACES[...].maxSpeed` dans
+   sprinter-core.js), et une seule chose peut la relever au cours d'une course
+   individuelle : la note de transition, au mieux `TRANS_VMAX[2]` = 1.042, et
+   une seule fois par course (`gradeTransition` est gardee par
+   `transGrade === null`). Le temps qu'il faudrait pour couvrir la distance en
+   tenant DEJA cette vitesse au premier metre est donc une borne que rien ne
+   franchit — d'autant que la montee en vitesse est exponentielle,
+   `v(t) = vmax (1 - e^-t/tau)`, et n'atteint jamais vmax.
+
+   Ce que cela donne, face aux records du jour : 7,718 s contre 8,246 s au
+   100 m, 15,967 contre 16,629 au 200, 33,276 contre 34,888 au 400. Entre
+   quatre et sept pour cent de marge sous ce que les meilleurs joueurs font
+   reellement, sans qu'aucune course jouable ne puisse tomber dessous.
+
+   Recopie plutot qu'importee : le worker ne partage pas de module avec le
+   client, et une dependance vers `src/` casserait le deploiement. Le prix est
+   qu'un reglage du moteur doit etre reporte ici — d'ou le controle
+   `tools/verifier-plancher.mjs`, qui relit sprinter-core.js et compare. */
+const VMAX_EPREUVE = { '100': 12.435, '200': 12.021, '400': 11.536 };
+const DISTANCE_M = { '100': 100, '200': 200, '400': 400 };
+const TRANS_VMAX_MAX = 1.042;
+
+function plancherMs(race) {
+  const v = VMAX_EPREUVE[race];
+  if (!v) return MIN_TIME_MS;
+  return Math.floor(1000 * DISTANCE_M[race] / (v * TRANS_VMAX_MAX));
+}
+
+/** Le plancher d'une suite d'epreuves courues d'affilee : leurs planchers. */
+function plancherTotalMs(races) {
+  return races.reduce((s, r) => s + plancherMs(r), 0);
+}
+
+/**
+ * Ce chrono est-il courable sur cette epreuve ?
+ *
+ * Rend `null` si oui, un message si non — pour que l'appelant reponde 400
+ * sans avoir a redire la regle.
+ */
+function chronoAberrant(race, ms) {
+  if (!Number.isFinite(ms) || ms > MAX_TIME_MS) return 'temps invalide';
+  if (ms < plancherMs(race)) return 'temps impossible sur cette epreuve';
+  return null;
+}
+
+/* La trace est une position en decimetres relevee tous les REC_STEP (0,08 s,
+   voir sprinter-app.js). Sa longueur dit donc la duree de la course aussi
+   surement que le chrono annonce, et les deux doivent se ressembler.
+
+   La tolerance est large a dessein — 0,6x a 1,6x — parce qu'un faux positif
+   couterait un fantome a un joueur honnete, alors que le plancher ci-dessus
+   tient deja la triche grossiere. Ce controle vise la trace fabriquee, pas la
+   trace imprecise.
+
+   En cas de desaccord on ecarte LA TRACE, pas le chrono : une trace absente
+   prive d'un fantome, un chrono refuse prive d'un record. */
+const REC_STEP_MS = 80;
+
+function traceIncoherente(race, ms, trace) {
+  if (!trace || !trace.length) return false;
+  const dureeTrace = trace.length * REC_STEP_MS;
+  if (dureeTrace < 0.6 * ms || dureeTrace > 1.6 * ms + 1000) return true;
+  // Aucun intervalle ne peut couvrir plus que la vitesse de pointe permet.
+  const bondMax = VMAX_EPREUVE[race] * TRANS_VMAX_MAX * (REC_STEP_MS / 1000) * 10 * 1.5;
+  for (let i = 1; i < trace.length; i++) {
+    if (trace[i] - trace[i - 1] > bondMax) return true;
+  }
+  return false;
 }
 
 function cleanName(raw) {
@@ -466,6 +622,32 @@ export default {
     // faire confiance a cinq appelants pour y penser chacun de leur cote.
     canal.db = env.DB;
 
+    // --------------------------------------------------------- anti-abus
+    //
+    // Toute ecriture passe par une IP, et une IP qui insiste plus que de
+    // raison sur la meme route n'a aucune raison legitime de le faire : ni
+    // un joueur qui pose son chrono, ni un navigateur qui tente un code
+    // d'acces. On la ralentit avant qu'elle n'atteigne la route elle-meme.
+    //
+    // Un compteur par (route, IP), remis a zero a l'expiration de sa
+    // fenetre : pas de nouvelle brique d'infrastructure, la meme base D1 qui
+    // tient deja les scores tient ce compteur. Une protection au niveau du
+    // reseau (regle de rate-limiting Cloudflare, DDoS) reste la premiere
+    // ligne de defense contre un deluge massif ; celle-ci vise l'abus a
+    // l'echelle d'un joueur ou d'un script isole, pas d'un botnet.
+    //
+    // Le canal de test en est exempte : qui s'y trouve a deja presente un
+    // code individuel et revocable, ce que l'IP n'ajoute rien a verifier —
+    // et c'est aussi le canal que les harnais de simulation martelent
+    // volontairement pour rejouer un cycle de championnat ou un relais en
+    // quelques secondes.
+    if (request.method === 'POST' && !canal.test) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'inconnue';
+      if (!(await sousLimite(env.DB, ip, url.pathname))) {
+        return json({ error: 'trop de tentatives, reessayez dans une minute' }, 429);
+      }
+    }
+
     // ------------------------------------------------------ acces au test
     if (url.pathname.startsWith('/test/')) {
       const sous = url.pathname.slice('/test/'.length);
@@ -536,12 +718,16 @@ export default {
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
       const t = Math.round(Number(time_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
-        return json({ error: 'temps invalide' }, 400);
-      }
+      const aberrantTotal = chronoAberrant(race_key, t);
+      if (aberrantTotal) return json({ error: aberrantTotal }, 400);
       // le meilleur chrono individuel ne peut pas depasser le temps total
       let split = Math.round(Number(best_split_ms));
       if (!Number.isFinite(split) || split <= 0 || split > t) split = t;
+      // Et surtout : il doit tenir le plancher de l'epreuve. C'est LUI qui
+      // classe — `getRank` plus bas se joue sur `bestSplit` — et le controle
+      // sur le cumul ne le couvrait pas : `best_split_ms: 1` passait.
+      const aberrantSplit = chronoAberrant(race_key, split);
+      if (aberrantSplit) return json({ error: aberrantSplit }, 400);
       const cleanedName = cleanName(name);
       // Un nom reserve n'accepte que les appareils de son proprietaire :
       // sans cela la reservation ne protegerait rien.
@@ -578,7 +764,10 @@ export default {
       // qu'un adversaire affrontera en fantome depuis le tableau.
       if (split === bestSplit) {
         const tr = cleanTrace(trace);
-        if (tr.length) {
+        // Une trace qui ne raconte pas le chrono annonce n'a pas ete courue
+        // avec lui. On l'ecarte sans refuser le score : voir
+        // `traceIncoherente` pour le pourquoi de ce partage.
+        if (tr.length && !traceIncoherente(race_key, split, tr)) {
           await env.DB.prepare(
             `UPDATE scores SET trace = ?, trace_ms = ? WHERE device_id = ? AND race_key = ?`
           ).bind(JSON.stringify(tr), bestSplit, device_id, race_key).run();
@@ -658,7 +847,17 @@ export default {
 
     // ------------------------------------------------------- championnats
     if (url.pathname.startsWith('/champ/')) {
-      if (!championnatsOuverts(canal)) {
+      // L'administration passe la porte du canal, les joueurs non.
+      //
+      // Les championnats restent fermes en production — c'est ce que dit
+      // `championnatsOuverts`, et cela ne change pas ici. Mais OUVRIR une
+      // edition est un acte d'exploitation, pas de jeu : il doit pouvoir se
+      // faire depuis l'ecran d'administration, qui parle a la vraie base et
+      // n'a aucune raison de passer par le canal de test. Sans cette ligne,
+      // administrer les championnats obligerait a ouvrir le canal a tout le
+      // monde pour s'en servir soi-meme.
+      const admin = estAdmin(request, env);
+      if (!championnatsOuverts(canal) && !admin) {
         return json({ error: 'championnats reserves au canal de test' }, 403);
       }
       const sous = url.pathname.slice('/champ/'.length);
@@ -683,6 +882,18 @@ export default {
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
+      // Corriger la nationalite d'un joueur. Le seul geste qui passe le
+      // verrou, et il est sous cle : cote joueur, un choix ne se defait pas.
+      if (sous === 'nationalite' && request.method === 'POST') {
+        if (!admin) return json({ error: 'reserve a l administration' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const key = cleanName((body || {}).name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        const r = await imposerPays(env.DB, key, (body || {}).pays);
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
       if (sous === 'titres' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
         return json({ titres: key ? await titresDe(env.DB, key) : [] });
@@ -692,6 +903,7 @@ export default {
       // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
       // national, ce que faisaient les appels existants.
       if (sous === 'ouvrir' && request.method === 'POST') {
+        if (!admin) return json({ error: 'reserve a l administration' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { pays, zone, echelon, debut } = body || {};
@@ -708,6 +920,7 @@ export default {
       // Le meme weekend pour tout le monde : un seul appel ouvre tout un
       // echelon d'un coup, et dit qui a ete ecarte et pourquoi.
       if (sous === 'cycle' && request.method === 'POST') {
+        if (!admin) return json({ error: 'reserve a l administration' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const t = Number(body && body.debut);
@@ -1427,16 +1640,51 @@ export default {
     // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
     // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
     // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
+    /**
+     * Les nations que le jeu sait nommer.
+     *
+     * Hors de `/champ/`, et c'est le point : cette porte-la est fermee en
+     * production (`championnatsOuverts` vaut `canal.test`), alors que l'ecran
+     * du nom, lui, tourne chez tous les joueurs. Une liste de pays n'est pas
+     * une donnee de championnat — c'est ce qui permet a un joueur de dire d'ou
+     * il vient, des maintenant, pour des championnats qui viendront apres.
+     *
+     * Elle sort du serveur plutot que d'une copie dans le jeu : deux tables du
+     * meme fait divergent a la premiere retouche, et c'est le titre du champion
+     * qui aurait fini par ne plus ressembler au drapeau affiche a cote.
+     */
+    if (url.pathname === '/nations' && request.method === 'GET') {
+      return json({ nations: listeNations() });
+    }
+
     if (url.pathname === '/profil' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, insta } = body || {};
+      const { device_id, name } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const key = cleanName(name).trim().toLowerCase();
       if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
 
-      const propre = cleanInsta(insta);
-      if (propre === null) return json({ error: 'pseudo invalide' }, 400);
+      // On ne touche QUE les champs presents dans le corps.
+      //
+      // La premiere version ecrivait `insta` a chaque appel : envoyer son pays
+      // aurait donc efface son compte Instagram, en silence, parce que le champ
+      // manquant valait « vide ». Un profil qui se met a jour par morceaux doit
+      // distinguer « absent » de « vide » — c'est la difference entre ne rien
+      // dire et dire non.
+      const veutInsta = Object.prototype.hasOwnProperty.call(body || {}, 'insta');
+      const veutPays = Object.prototype.hasOwnProperty.call(body || {}, 'pays');
+      if (!veutInsta && !veutPays) return json({ error: 'rien a poser' }, 400);
+
+      const propre = veutInsta ? cleanInsta(body.insta) : undefined;
+      if (veutInsta && propre === null) return json({ error: 'pseudo invalide' }, 400);
+
+      // Le pays vide delie, comme un pseudo vide : on ne force personne a
+      // declarer d'ou il vient, et on ne l'y enferme pas non plus.
+      const paysDemande = veutPays ? String(body.pays || '').trim().toUpperCase() : undefined;
+      if (veutPays && paysDemande && !/^[A-Z]{2}$/.test(paysDemande)) {
+        return json({ error: 'pays invalide' }, 400);
+      }
 
       await ensurePlayerTables(env.DB);
       if (!(await peutUtiliser(env.DB, key, device_id))) {
@@ -1446,18 +1694,68 @@ export default {
         `SELECT name_key FROM players WHERE name_key = ?`).bind(key).first();
       if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
 
-      await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
-        .bind(propre || null, key).run();
-      return json({ ok: true, insta: propre || null });
+      if (veutInsta) {
+        await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
+          .bind(propre || null, key).run();
+      }
+      // La nationalite est DEFINITIVE : le serveur refuse d'en changer.
+      //
+      // Le refus rend 409 et non 400, et il porte le pays deja choisi : un
+      // ecran qui aurait perdu le fil peut ainsi se remettre a jour sans
+      // relire, et l'erreur dit ce qui est plutot que ce qui manque. Ce n'est
+      // pas une severite gratuite — la nationalite decide du championnat
+      // national ou l'on se presente, et sans verrou il suffirait de suivre la
+      // grille la plus faible pour collectionner les titres.
+      if (veutPays) {
+        const r = paysDemande
+          ? await choisirPays(env.DB, key, paysDemande)
+          : await oublierPays(env.DB, key);
+        if (r && r.erreur) {
+          const definitif = r.erreur === 'nationalite deja choisie'
+                         || r.erreur === 'nationalite definitive';
+          return json({ error: r.erreur, pays: r.pays || null },
+                      definitif ? 409 : 400);
+        }
+      }
+      const apres = veutPays ? await paysDUn(env.DB, key) : null;
+      return json({
+        ok: true,
+        ...(veutInsta ? { insta: propre || null } : {}),
+        ...(veutPays ? { pays: apres ? apres.pays : null,
+                         continent: apres ? apres.continent : null,
+                         definitif: !!(apres && apres.source === 'choix') } : {}),
+      });
     }
 
     if (url.pathname === '/profil' && request.method === 'GET') {
       const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-      if (!key) return json({ insta: null });
+      // Sans nom, on rend quand meme le pays VU : c'est ce qui permet a l'ecran
+      // de proposer un drapeau des la premiere ouverture, avant meme que le
+      // joueur ait choisi comment il s'appelle.
+      if (!key) {
+        return json({ insta: null, pays: paysVu || null,
+                      continent: continentDe(paysVu || ''),
+                      source: paysVu ? 'vu' : null });
+      }
       await ensurePlayerTables(env.DB);
       const p = await env.DB.prepare(
         `SELECT insta FROM players WHERE name_key = ?`).bind(key).first();
-      return json({ insta: (p && p.insta) || null });
+      const g = await paysDUn(env.DB, key);
+      // Le repli sur ce que Cloudflare voit, SANS rien ecrire.
+      //
+      // La detection ne se declenche qu'a `/submit`, c'est-a-dire apres une
+      // course : un joueur qui vient de poser son nom n'a encore aucun pays en
+      // base, et l'ecran lui proposerait une liste de cinquante pays a fouiller
+      // sans rien de selectionne. On lui montre celui d'ou il se connecte,
+      // marque 'vu', qu'il n'a qu'a confirmer. L'ecrire serait une autre
+      // affaire : cela graverait une detection en choix sans que personne ait
+      // choisi.
+      return json({
+        insta: (p && p.insta) || null,
+        pays: g ? g.pays : (paysVu || null),
+        continent: g ? g.continent : continentDe(paysVu || ''),
+        source: g ? g.source : (paysVu ? 'vu' : null),
+      });
     }
 
     // Relier cet appareil a un nom deja reserve, en prouvant qu'il est a nous.
@@ -1488,9 +1786,8 @@ export default {
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       const t = Math.round(Number(time_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
-        return json({ error: 'temps invalide' }, 400);
-      }
+      const aberrant = chronoAberrant(race_key, t);
+      if (aberrant) return json({ error: aberrant }, 400);
       const cleaned = cleanName(name);
       const key = cleaned.trim().toLowerCase();
       if (!await peutUtiliser(env.DB, key, device_id)) {
@@ -1786,6 +2083,50 @@ export default {
         return { total: t?.total || 0, appareils: t?.appareils || 0, par_jour: pj || [], par_mois: pm || [] };
       }, { total: 0, appareils: 0, par_jour: [], par_mois: [] });
 
+      // --- retention par cohorte (table `visits`) -------------------
+      //
+      // D1/D7/D30 au sens ou un editeur les entend — et ce n'est PAS le sens
+      // des « joueurs actifs sur 7 jours » calcules plus haut. La, on comptait
+      // qui a joue recemment. Ici on suit un GROUPE : les appareils vus pour la
+      // premiere fois le meme jour, et la part d'entre eux qui rouvre le jeu
+      // exactement N jours plus tard. C'est le seul des deux qui se compare aux
+      // reperes du marche, et le seul qu'on demande dans un dossier.
+      //
+      // Deux precautions, sans lesquelles le chiffre ment :
+      //
+      // 1. Une cohorte trop jeune ne compte pas. Un appareil arrive hier ne
+      //    peut pas avoir de J+7 ; le laisser au denominateur ferait chuter le
+      //    taux a mesure que le jeu gagne des joueurs — l'inverse de ce qu'on
+      //    veut lire. D'ou `date(jour, +N day) < date('now')` : seuls les
+      //    jalons entierement ecoules entrent dans le calcul.
+      // 2. C'est un retour au JEU, pas une partie jouee. `visits` enregistre
+      //    l'ouverture ; quelqu'un qui rouvre sans courir compte comme revenu.
+      //    Le taux est donc un plafond, et le tableau le dit.
+      const retention = await bloc(async () => {
+        const jalon = async n => {
+          // Le meme ecart sert deux fois dans la requete, d'ou les deux liens.
+          const ecart = `+${n} day`;
+          const r = await DB.prepare(
+            `WITH premiere AS (
+               SELECT device_id, MIN(day) AS jour FROM visits GROUP BY device_id
+             )
+             SELECT COUNT(*) AS base,
+                    COALESCE(SUM(CASE WHEN EXISTS (
+                      SELECT 1 FROM visits v
+                       WHERE v.device_id = p.device_id
+                         AND v.day = date(p.jour, ?)
+                    ) THEN 1 ELSE 0 END), 0) AS revenus
+               FROM premiere p
+              WHERE date(p.jour, ?) < date('now')`
+          ).bind(ecart, ecart).first();
+          const base = r?.base || 0;
+          // `taux` a null plutot qu'a zero quand la base est vide : zero se lit
+          // « personne n'est revenu », null se lit « on ne sait pas encore ».
+          return { base, revenus: r?.revenus || 0, taux: base ? (r.revenus / base) : null };
+        };
+        return { j1: await jalon(1), j7: await jalon(7), j30: await jalon(30) };
+      }, null);
+
       // --- duels (tables `duel_results` / `duel_players`) ----------
       const duels = await bloc(async () => {
         const r = await DB.prepare(
@@ -1881,7 +2222,7 @@ export default {
         scores: s || {},
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
-        parties, reprises, duels, joueurs, geo, relais, championnats,
+        parties, reprises, retention, duels, joueurs, geo, relais, championnats,
         signalements,
         releve_a: now,
       });
@@ -1898,8 +2239,10 @@ export default {
               target_score_id, revanche_de } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
+      // Un defi porte plusieurs epreuves d'affilee : son plancher est la
+      // somme des leurs, pas la seconde forfaitaire de `MIN_TIME_MS`.
       const t = Math.round(Number(total_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
+      if (!Number.isFinite(t) || t > MAX_TIME_MS || t < plancherTotalMs(races)) {
         return json({ error: 'temps invalide' }, 400);
       }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
@@ -2125,6 +2468,9 @@ export default {
       if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const t = Math.round(Number(total_ms));
+      // Grossier ici, precis plus bas : le plancher d'une tentative depend des
+      // epreuves du defi, et celles-ci vivent dans la ligne `challenges` qu'on
+      // n'a pas encore lue.
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
@@ -2142,6 +2488,17 @@ export default {
       // ancienne du jeu ne l'envoie pas, et le duel se tranche pareil.
       let epreuvesDuDefi = [];
       try { epreuvesDuDefi = JSON.parse(ch.races || '[]') || []; } catch { /* illisible */ }
+
+      // Maintenant qu'on sait ce qui a ete couru, le chrono se juge. Une
+      // tentative decide d'un duel et fait bouger le classement : elle merite
+      // le meme plancher que le defi qu'elle releve. Si les epreuves sont
+      // illisibles on ne peut rien deduire, et on s'en tient au controle
+      // grossier deja passe — refuser sur une ligne abimee punirait le joueur
+      // pour une donnee qui n'est pas la sienne.
+      if (epreuvesDuDefi.length && t < plancherTotalMs(epreuvesDuDefi)) {
+        return json({ error: 'temps invalide' }, 400);
+      }
+
       const cleanedTraces = cleanTraces(traces, epreuvesDuDefi.length) || [];
       const prev = await env.DB.prepare(
         `SELECT total_ms FROM challenge_attempts WHERE id = ? AND device_id = ?`
