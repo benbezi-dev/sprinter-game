@@ -183,10 +183,78 @@ function surtitre(c, texte, x, y, taille) {
  * additionne, on centre, on trace. C'est ce qui permet aux trois formats de
  * partager le meme code sans qu'aucun n'ait l'air d'un autre mal recadre.
  */
-function empiler(elements, hautDispo, basDispo) {
+function empiler(elements, hautDispo, basDispo, ecartMax = 0) {
   const total = elements.reduce((n, e) => n + e.h, 0);
-  let y = hautDispo + (basDispo - hautDispo - total) / 2;
-  for (const e of elements) { e.dessine(y); y += e.h; }
+  // Le jeu qui reste apres la pile va aux JOINTURES, pas aux deux bords.
+  //
+  // Centrer une pile courte dans une hauteur longue donnait une etiquette
+  // posee au milieu du noir : sur un 1080 x 1920, un one shot de trois
+  // epreuves occupait 654 pixels sur 1277 et laissait un tiers de l'image
+  // vide en haut. Ce vide-la ne se lit pas comme une respiration, il se lit
+  // comme une image ratee.
+  //
+  // Distribuer plutot que centrer remplit la zone sans toucher aux tailles.
+  // L'ecart est PLAFONNE, et c'est ce plafond qui garde une composition : sans
+  // lui, une pile de trois lignes s'etalerait en liste aeree, chaque ligne
+  // seule au milieu de son tiers. Passe le plafond, ce qui reste se centre
+  // comme avant — un poster qui respire, pas une liste.
+  const jointures = Math.max(0, elements.length - 1);
+  const jeu = basDispo - hautDispo - total;
+  const ecart = jointures > 0 && ecartMax > 0
+    ? Math.min(ecartMax, Math.max(0, jeu / jointures)) : 0;
+  let y = hautDispo + (jeu - ecart * jointures) / 2;
+  for (const e of elements) { e.dessine(y); y += e.h + ecart; }
+}
+
+/**
+ * La taille a laquelle un chrono tient dans une largeur donnee.
+ *
+ * La largeur d'un texte est proportionnelle a sa taille : une mesure a une
+ * taille de reference suffit donc a calculer l'autre, sans boucle ni
+ * dichotomie. On mesure comme `chiffre` compose — chasse fixe, virgule
+ * resserree — sinon on calculerait la largeur d'un autre dessin que celui
+ * qu'on trace.
+ */
+function tailleDuChiffre(c, texte, largeurMax, tailleMin, tailleMax) {
+  const ref = tailleMin;
+  c.save();
+  c.font = `700 ${ref}px 'Space Mono', monospace`;
+  const str = String(texte);
+  const i = str.indexOf(',');
+  const w = i < 0
+    ? c.measureText(str).width
+    : c.measureText(str.slice(0, i)).width
+      + c.measureText('0').width * 0.40
+      + c.measureText(str.slice(i + 1)).width;
+  c.restore();
+  if (!(w > 0)) return tailleMin;
+  return Math.round(Math.max(tailleMin, Math.min(tailleMax, ref * largeurMax / w)));
+}
+
+/**
+ * La taille a laquelle un texte tient dans une largeur donnee.
+ *
+ * `ligne()` ne mesure rien : elle pose la police et trace. Cela allait tant que
+ * les seuls noms qui passaient par elle etaient masques — « T••••••• » fait
+ * huit caracteres et rien de plus. Les vrais pseudonymes vont jusqu'a vingt
+ * (MAX_NAME_LEN, cote worker), et un nom de vingt capitales a 73 px sort des
+ * marges de l'affiche.
+ *
+ * On reduit plutot que de couper. Un nom tronque en « KINGLEYON... » est un
+ * nom faux, et l'affiche existe justement pour nommer quelqu'un ; deux points
+ * de moins se voient a peine, un nom ampute se voit tout de suite.
+ *
+ * Meme forme que tailleDuChiffre juste au-dessus : on mesure a une taille de
+ * reference et on met a l'echelle, plutot que de boucler en descendant d'un
+ * pixel a la fois.
+ */
+function tailleQuiTient(c, texte, largeurMax, taille, gras = 500) {
+  c.save();
+  c.font = `${gras} ${taille}px Outfit, sans-serif`;
+  const w = c.measureText(String(texte)).width;
+  c.restore();
+  if (!(w > largeurMax) || !(w > 0)) return taille;
+  return Math.max(1, Math.floor(taille * largeurMax / w));
 }
 
 /** La hauteur qu'occupera un titre, sans le tracer. */
@@ -266,8 +334,13 @@ export function dessinerMoment(cv, moment, format) {
       blocs.push({ h: T(0.05), dessine: y =>
         ligne(c, `${s2(d.ecart_ms)} s devant le suivant`, cx, y, T(0.030), 'rgba(248,205,74,0.85)', 600) });
     } else if (d.tete_ms != null) {
+      // Sous le centieme, l'ecart s'affiche « 0,00 s » et l'image dit alors
+      // qu'il ne manque rien pour etre premier. Le fait est pourtant plus fort
+      // que cela — il se joue au millieme — et c'est ce qu'on ecrit.
+      const dt = d.chrono_ms - d.tete_ms;
       blocs.push({ h: T(0.05), dessine: y =>
-        ligne(c, `${s2(d.chrono_ms - d.tete_ms)} s de la tete`, cx, y, T(0.030), 'rgba(248,205,74,0.85)', 600) });
+        ligne(c, dt < 10 ? 'à égalité au centième' : `${s2(dt)} s de la tête`,
+              cx, y, T(0.030), 'rgba(248,205,74,0.85)', 600) });
     }
 
   } else if (moment.type === 'mouchoir') {
@@ -329,8 +402,11 @@ export function dessinerMoment(cv, moment, format) {
     blocs.push({ h: mesurerTitre(c, texte, largeurTitre, tt, ti) + T(0.05),
                  dessine: y => { c.fillStyle = '#FFFFFF';
                                  titre(c, texte, cx, y, largeurTitre, tt, ti); } });
-    blocs.push({ h: T(0.10), dessine: y =>
-      ligne(c, String(d.champion || '').toUpperCase(), cx, y, T(0.068), '#F8CD4A', 800) });
+    blocs.push({ h: T(0.10), dessine: y => {
+      const nom = String(d.champion || '').toUpperCase();
+      ligne(c, nom, cx, y, tailleQuiTient(c, nom, largeurTitre, T(0.068), 800),
+            '#F8CD4A', 800);
+    } });
     if (d.chrono_ms != null) {
       blocs.push({ h: T(0.175), dessine: y => chiffre(c, s2(d.chrono_ms), cx, y + T(0.085), T(0.13)) });
     }
@@ -432,13 +508,31 @@ export function dessinerCourse(cv, course) {
   // Le chrono, et rien d'autre au-dessus. C'est le sujet : la charte demande
   // un chiffre dans l'image, et celui-la est le seul qui compte pour celui qui
   // vient de courir.
-  blocs.push({ h: T(0.30), dessine: y => chiffre(c, s2(course.chronoMs), cx, y + T(0.15), T(0.26)) });
+  //
+  // IL SE COMPOSE A LA LARGEUR DE L'IMAGE, pas a une fraction fixe. Une
+  // fraction fixe est calee sur le pire cas — « 78,68 », cinq signes d'un one
+  // shot de trois epreuves — et le cas courant en pati : un « 8,98 » sortait a
+  // 585 pixels sur les 902 disponibles, un tiers de la largeur perdu de chaque
+  // cote du sujet de l'image. On mesure, et on remplit.
+  const chronoTexte = s2(course.chronoMs);
+  const tailleChrono = tailleDuChiffre(c, chronoTexte, L - marge * 2, T(0.26), T(0.42));
+  // La boite suit la taille : c'est elle qui donne au chiffre sa place dans la
+  // pile, et un chiffre grossi dans une boite inchangee mordrait ses voisins.
+  const hChrono = Math.round(T(0.30) * tailleChrono / T(0.26));
+  blocs.push({ h: hChrono, dessine: y => chiffre(c, chronoTexte, cx, y + hChrono / 2, tailleChrono) });
   blocs.push({ h: T(0.06), dessine: y =>
     ligne(c, 'SECONDES', cx, y, T(0.032), 'rgba(255,255,255,0.40)', 700) });
 
   if (course.nom) {
-    blocs.push({ h: T(0.10), dessine: y =>
-      ligne(c, String(course.nom).toUpperCase(), cx, y + T(0.02), T(0.052), '#FFFFFF', 800) });
+    // Meme precaution que sur le sacre : la story est le seul endroit ou le
+    // joueur voit son propre pseudonyme en grand, et c'est celui qu'il
+    // partage. Un nom qui deborde des marges sur SON image est le defaut le
+    // plus visible du lot.
+    blocs.push({ h: T(0.10), dessine: y => {
+      const nom = String(course.nom).toUpperCase();
+      ligne(c, nom, cx, y + T(0.02),
+            tailleQuiTient(c, nom, L - marge * 2, T(0.052), 800), '#FFFFFF', 800);
+    } });
   }
 
   // Le fantome : l'ecart, pas le verdict. « 0,12 s » se lit et se compare,
@@ -460,7 +554,9 @@ export function dessinerCourse(cv, course) {
             'rgba(248,205,74,0.85)', 600) });
   }
 
-  empiler(blocs, haut, bas);
+  // L'ecart maximum entre deux blocs : de quoi remplir la story sans defaire
+  // les groupes. Voir `empiler`.
+  empiler(blocs, haut, bas, T(0.075));
 
   // Le compte, en bas : une story se regarde hors de tout contexte, et sans
   // cette ligne l'image ne dit pas ou retrouver le jeu. C'est la seule de
