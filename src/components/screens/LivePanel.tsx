@@ -7,10 +7,14 @@ import {
   type EtatSalle, type JoueurSalle, type Presentation,
 } from '@/game/live';
 import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
+import {
+  poserVoix, voixCourante, couperVoix, programmerFinVoix, annulerFinVoix,
+} from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
+import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
-import { Review, type EtatReview } from '@/game/review';
+import { Review, TTL_MS, type EtatReview } from '@/game/review';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
@@ -64,7 +68,6 @@ export function LivePanel() {
   });
 
   const salle = useRef<Salle | null>(null);
-  const voix = useRef<Voix | null>(null);
   const film = useRef<Review | null>(null);
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
@@ -95,19 +98,23 @@ export function LivePanel() {
         setPlaces(dejaLa.dernierEtat.max || 2);
       }
       setEtape('salon');
+      // La liaison audio a survecu au demontage — c'est tout l'objet de
+      // `voix-directe`. Elle continue d'emettre vers un composant mort tant
+      // qu'on ne la rebranche pas sur celui-ci.
+      voixCourante()?.brancherEtat(setVoixEtat);
     } else {
       const c = codeDirectUrl();
       if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
     }
 
     // Rien n'est ferme ici, et c'est le coeur de la correction. Un demontage
-    // n'est pas un depart : la salle, le micro et l'enregistrement appartiennent
-    // a la course, pas a l'ecran qui la regarde. Tout se ferme dans quitter().
+    // n'est pas un depart : la salle, la liaison audio et l'enregistrement
+    // appartiennent a la course, pas a l'ecran qui la regarde. Ils se ferment
+    // dans quitter(), ou d'eux-memes a la fin de la review.
     //
-    // Le micro ne reste pas ouvert pour autant : il est mute hors des fenetres
-    // explicites — la presentation, puis les cinq secondes du vainqueur — et
-    // c'est justement cette derniere qui disparaissait quand le demontage
-    // coupait la liaison audio en pleine course.
+    // Le micro, lui, n'est meme pas tenu entre-temps : il est pris a l'ouverture
+    // d'une fenetre de parole — la presentation, puis les cinq secondes du
+    // vainqueur — et rendu au systeme des qu'elle se referme.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,12 +123,12 @@ export function LivePanel() {
    * les deux negociations se croisent et aucune n'aboutit.
    */
   const ouvrirVoix = () => {
-    if (voix.current) return;
+    if (voixCourante()) return;
     const v = new Voix({
       envoyer: (type, charge) => salle.current?.signaler(type, charge),
       onEtat: setVoixEtat,
     });
-    voix.current = v;
+    poserVoix(v);
     v.demarrer(!!salle.current?.suisHote);
   };
 
@@ -163,6 +170,9 @@ export function LivePanel() {
    * qui ne connaitrait pas encore la sequence.
    */
   const lancerCourse = () => {
+    // Une salle qui n'annonce pas de presentation passe directement ici : la
+    // coupure programmee doit tomber la aussi.
+    annulerFinVoix();
     const dans = Math.max(0, (cibleDepart.current ?? Date.now()) - Date.now());
     const adverse = salle.current?.adversaire || '';
     // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
@@ -191,6 +201,9 @@ export function LivePanel() {
     onPresentation: (p: Presentation) => {
       setPresentation(p);
       presEnCours.current = true;
+      // Une revanche dans la meme salle : la coupure programmee a la fin du
+      // duel precedent n'a plus lieu d'etre.
+      annulerFinVoix();
       setEtape('presentation');
       // La voix se monte pendant la presentation : la negociation prend un
       // instant, et on veut que le micro soit deja pret au premier passage.
@@ -213,11 +226,11 @@ export function LivePanel() {
         presentation: p,
         moi: salle.current?.moi || '',
         onTour: (_i, estMoi) => {
-          if (estMoi) voix.current?.ouvrirMicro(p.micro);
-          else voix.current?.fermerMicro();
+          if (estMoi) voixCourante()?.ouvrirMicro(p.micro);
+          else voixCourante()?.fermerMicro();
         },
         onFini: () => { lancerPresentation(null); finPresentation(); },
-        etatVoix: () => voix.current?.lireEtat() ??
+        etatVoix: () => voixCourante()?.lireEtat() ??
           { micro: false, refuse: false, ouvert: false, connecte: false },
       });
     },
@@ -248,17 +261,31 @@ export function LivePanel() {
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
         : !!premier && premier.id === salle.current?.moi;
-      if (jaiGagne) voix.current?.ouvrirMicro(MICRO_VAINQUEUR_MS);
-      else voix.current?.fermerMicro();
+      if (jaiGagne) voixCourante()?.ouvrirMicro(MICRO_VAINQUEUR_MS);
+      else voixCourante()?.fermerMicro();
+
+      // Puis la liaison se coupe d'elle-meme a la fin de la review.
+      //
+      // La review n'a pas d'autre fin que celle de sa video : dix minutes,
+      // comptees a partir d'ici, apres quoi l'ecran ne montre plus rien qu'on
+      // puisse encore appeler une course. La meme duree sert quand il n'y a
+      // pas eu de video du tout — un appareil qui ne sait pas encoder n'a
+      // aucune raison de garder une connexion ouverte plus longtemps que les
+      // autres.
+      //
+      // Le micro, lui, est deja rendu : il ne l'est que pendant les fenetres
+      // de parole. Ce qui s'eteint ici, c'est le canal d'ecoute — de quoi se
+      // parler apres la course, sans que cela dure indefiniment.
+      programmerFinVoix(TTL_MS);
 
       setEtape('review');
     },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
-      if (!voix.current) ouvrirVoix();
-      voix.current?.recu(type, charge);
+      if (!voixCourante()) ouvrirVoix();
+      voixCourante()?.recu(type, charge);
     },
-    onSorti: () => { setErreur(N.t('live_gone')); voix.current?.fermerMicro(); },
+    onSorti: () => { setErreur(N.t('live_gone')); voixCourante()?.fermerMicro(); },
     onFerme: () => { if (etape === 'salon') setErreur(N.t('live_closed')); },
   });
 
@@ -312,7 +339,7 @@ export function LivePanel() {
     }
     // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
-    voix.current?.arreter(); voix.current = null;
+    couperVoix();
     presEnCours.current = false; cibleDepart.current = null;
     setPresentation(null);
     setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
@@ -322,7 +349,7 @@ export function LivePanel() {
   const finPresentation = () => {
     if (!presEnCours.current) return;
     presEnCours.current = false;
-    voix.current?.fermerMicro();
+    voixCourante()?.fermerMicro();
     lancerCourse();
   };
 
@@ -340,16 +367,11 @@ export function LivePanel() {
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
     return (
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-        <div className="flex items-center gap-2 justify-center">
-          <Radio className="w-4 h-4 text-emerald-400" />
-          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-            {N.t('live_title')}
-          </h3>
-        </div>
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
-          {N.t('live_desc')}
-        </p>
+      <Repliable
+        titre={N.t('live_title')}
+        sous={N.t('live_desc')}
+        icone={<Radio className="w-4 h-4" />}
+      >
 
         <div className="flex gap-2">
           {RACE_KEYS.map(k => (
@@ -436,7 +458,7 @@ export function LivePanel() {
           </button>
         </div>
         {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
-      </div>
+      </Repliable>
     );
   }
 
