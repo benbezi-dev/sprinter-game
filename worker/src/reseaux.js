@@ -260,10 +260,15 @@ export async function regarderClassement(canal, race, nom, chronoMs, entrees) {
       await noter(canal, 'mouchoir', `mouchoir:${race}:${haut.length}:${ecart}`, {
         race, combien: haut.length, ecart_ms: ecart,
         premier_ms: premier, dernier_ms: dernier,
-        // Les noms partent masques des l'ecriture pour ce moment-ci : une liste
-        // de huit pseudonymes demanderait huit accords, et l'image se tient
-        // tres bien sans eux — c'est l'ecart qu'elle raconte, pas les porteurs.
-        noms: haut.map(e => masquer(e.name)),
+        // Les noms entiers, comme partout ailleurs dans cette file.
+        //
+        // Ils partaient masques des l'ecriture, et c'etait une erreur de forme :
+        // masquer en base rend le masquage IRREVERSIBLE, alors que le besoin
+        // — savoir qui feliciter, qui taguer — arrive apres coup. Le masquage
+        // est une decision d'affichage, pas de stockage ; il vit donc a la
+        // lecture seule, dans `fileDAttente`, ou l'on peut encore changer
+        // d'avis.
+        noms: haut.map(e => e.name),
         chronos_ms: haut.map(e => Number(e.best_split_ms ?? e.time_ms)),
       });
     }
@@ -358,10 +363,24 @@ export async function fileDAttente(db, { etat = 'propose', limite = 50, avecNoms
        ORDER BY poids DESC, vu_le DESC LIMIT ?`
   ).bind(etat, Math.min(Number(limite) || 50, 200)).all();
 
+  // Les comptes Instagram, joints A LA LECTURE et pas a l'ecriture.
+  //
+  // La difference n'est pas theorique : un joueur lie son compte quand il veut,
+  // souvent bien apres la course qui l'a fait entrer dans cette file. Fige a
+  // l'ecriture, le moment porterait pour toujours l'absence de compte constatee
+  // ce jour-la ; joint a la lecture, il gagne le compte des que le joueur le
+  // declare, sans qu'on ait a repasser sur la file.
+  //
+  // Rien de tout cela ne sort quand les noms sont masques : un compte Instagram
+  // designe une personne plus surement qu'un pseudonyme de jeu, et le masquage
+  // ne vaudrait rien s'il laissait passer l'arobase a cote.
+  const comptes = avecNoms ? await comptesInstagram(db, results || []) : new Map();
+
   return (results || []).map(l => {
     let d = {};
     try { d = JSON.parse(l.donnees); } catch { /* ligne illisible : on rend le reste */ }
     if (!avecNoms) d = sansNoms(d);
+    else d = avecComptes(d, comptes);
     const m = MOMENTS[l.type] || {};
     return {
       id: l.id, type: l.type, titre: m.titre || l.type, pilier: m.pilier || null,
@@ -382,11 +401,87 @@ export async function fileDAttente(db, { etat = 'propose', limite = 50, avecNoms
  */
 function sansNoms(d) {
   const c = { ...d };
-  for (const champ of ['nom', 'second', 'tete_nom', 'gagnant', 'perdant',
-                       'champion', 'deuxieme']) {
+  for (const champ of CHAMPS_NOM) {
     if (c[champ]) c[champ] = masquer(c[champ]);
   }
   if (Array.isArray(c.noms)) c.noms = c.noms.map(masquer);
+  return c;
+}
+
+/**
+ * Les comptes Instagram des joueurs cites, en peu de requetes.
+ *
+ * Une par moment aurait fait vingt requetes pour une page de file. On ramasse
+ * donc tous les noms d'abord, on demande par paquets, et l'on rend un index.
+ *
+ * PAR PAQUETS, et pas en une fois : D1 plafonne le nombre de parametres lies
+ * par requete, et un seul `IN (?, ?, ...)` non decoupe finit par depasser. La
+ * file se lit jusqu'a 200 moments (`fileDAttente`), un mouchoir en cite huit a
+ * lui seul : une douzaine de mouchoirs suffit. Le jour ou cela deborderait, le
+ * `catch` rendrait une Map vide et TOUS les comptes disparaitraient d'un coup,
+ * sans erreur visible — le pire des echecs, celui qui ressemble a « personne
+ * n'a declare son compte ». `championnats.js` s'est deja donne cette regle
+ * avec la meme taille de paquet ; on la reprend telle quelle.
+ *
+ * `players.insta` est renseigne par la route `/profil` : le joueur declare son
+ * compte, et le serveur verifie seulement qu'il a le droit d'ecrire sous ce nom
+ * — sans quoi n'importe qui accrocherait le compte d'un autre a son chrono.
+ */
+const PAQUET_NOMS = 80;
+
+async function comptesInstagram(db, lignes) {
+  const noms = new Set();
+  for (const l of lignes) {
+    let d;
+    try { d = JSON.parse(l.donnees); } catch { continue; }
+    for (const champ of CHAMPS_NOM) if (d[champ]) noms.add(String(d[champ]).trim().toLowerCase());
+    if (Array.isArray(d.noms)) for (const n of d.noms) if (n) noms.add(String(n).trim().toLowerCase());
+  }
+  if (!noms.size) return new Map();
+
+  const cles = [...noms];
+  const index = new Map();
+  try {
+    // La table des joueurs peut ne pas exister sur une base neuve, et la
+    // colonne `insta` est arrivee apres coup : on ne fait pas echouer la
+    // lecture de la file pour un agrement.
+    for (let i = 0; i < cles.length; i += PAQUET_NOMS) {
+      const lot = cles.slice(i, i + PAQUET_NOMS);
+      const trous = lot.map(() => '?').join(',');
+      const { results } = await db.prepare(
+        `SELECT name_key, insta FROM players WHERE insta IS NOT NULL AND name_key IN (${trous})`
+      ).bind(...lot).all();
+      for (const r of results || []) index.set(r.name_key, r.insta);
+    }
+    return index;
+  } catch {
+    return new Map();
+  }
+}
+
+/** Les champs qui portent un pseudonyme. Une seule liste, deux usages. */
+const CHAMPS_NOM = ['nom', 'second', 'tete_nom', 'gagnant', 'perdant',
+                    'champion', 'deuxieme'];
+
+/**
+ * Pose le compte Instagram a cote de chaque nom cite.
+ *
+ * A cote, et non a la place : le visuel montre le pseudonyme du jeu — c'est
+ * lui qui figure au classement — tandis que le compte sert a taguer une fois
+ * l'image deposee. Confondre les deux mettrait un arobase dans l'image, ou
+ * il ne veut rien dire pour qui regarde une course.
+ */
+function avecComptes(d, comptes) {
+  if (!comptes.size) return d;
+  const c = { ...d };
+  const cherche = n => comptes.get(String(n || '').trim().toLowerCase()) || null;
+  for (const champ of CHAMPS_NOM) {
+    if (c[champ]) {
+      const insta = cherche(c[champ]);
+      if (insta) c[champ + '_insta'] = insta;
+    }
+  }
+  if (Array.isArray(c.noms)) c.noms_insta = c.noms.map(cherche);
   return c;
 }
 
