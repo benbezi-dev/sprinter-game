@@ -10,15 +10,13 @@ import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
-import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
-import { Compass } from 'lucide-react';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
-import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD, Mail } from 'lucide-react';
+import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -28,6 +26,59 @@ const TABS: { id: Tab; key: string }[] = [
   { id: 'oneshot', key: 'mode_oneshot' },
   { id: 'versus', key: 'mode_versus' },
 ];
+
+/**
+ * Le pied de l'accueil : les trois liens de bas de page.
+ *
+ * Il se tient SOUS le rouleau, hors de lui, et ne bouge donc plus. Avant,
+ * chaque onglet portait ses liens au bas de son propre contenu : ils
+ * remontaient avec le defi, dont le panneau est court, descendaient avec la
+ * carriere, dont le panneau est long, et le contact se retrouvait seul quand
+ * les deux autres ne vivaient qu'en carriere. Trois emplacements pour la meme
+ * chose, decides par la hauteur du contenu et celle de la fenetre.
+ *
+ * Trois libelles sur une seule ligne, en entier — « NOUS CONT… » coupe au
+ * bord de l'ecran ne dit rien a personne, et un lien qu'on ne lit pas n'est
+ * pas un lien. Ce qui les fait tenir : plus d'icones, un espacement de
+ * lettres sobre, et une largeur laissee a chacun selon la longueur de son mot
+ * plutot que trois colonnes egales — « DÉCOUVRIR LE JEU » a besoin de plus
+ * d'un tiers de la barre, « NOUS CONTACTER » de moins.
+ *
+ * La taille suit la largeur de l'ecran (clamp) au lieu de sauter a des
+ * paliers : les trois libelles francais, les plus longs, demandent environ
+ * 33 fois la taille du texte pour tenir cote a cote, soit un peu moins de
+ * 3 % de la largeur par point de police. Entre les deux bornes, personne ne
+ * voit jamais un mot coupe ni un mot passe a la ligne — ni sur l'ecran de
+ * couverture d'un pliable, ni sur un moniteur.
+ */
+function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void }) {
+  const { N } = SprinterApp;
+  const liens = [
+    { cle: 'tour_open', action: onTour },
+    { cle: 'tuto_open', action: onTuto },
+    // mailto: par window.location — un <a href> ne mene nulle part dans la
+    // fenetre sans barre d'adresse d'une application installee.
+    { cle: 'contact',
+      action: () => { window.location.href = 'mailto:support@sprinter-game.com'; } },
+  ];
+
+  return (
+    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4
+                    flex items-center justify-between gap-1">
+      {liens.map(({ cle, action }) => (
+        <button
+          key={cle}
+          onClick={action}
+          className="px-0.5 py-1.5 whitespace-nowrap
+                     text-[clamp(7px,2.6vw,11px)] font-bold tracking-wide leading-none
+                     text-muted-foreground hover:text-primary transition-colors"
+        >
+          {N.t(cle)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
@@ -105,7 +156,10 @@ export function TitleScreen() {
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
   return (
-    <div ref={rouleau} className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
+      {/* Ce qui defile defile ici, et seulement ici : le pied de page reste
+          en dehors, pose au bas de l'ecran. */}
+      <div ref={rouleau} className="flex-1 min-h-0 overflow-y-auto">
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
@@ -233,18 +287,6 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
-            {(tab === 'oneshot' || tab === 'versus') && (
-              <button
-                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-                className="w-full py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-center gap-1.5"
-              >
-                <Mail className="w-3.5 h-3.5" />
-                {N.t('contact')}
-              </button>
-            )}
-
             {tab === 'career' && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
@@ -334,42 +376,14 @@ export function TitleScreen() {
               {N.t('start')}
             </button>
 
-            <div className="flex items-center justify-center gap-3 mt-1 flex-wrap">
-              <button
-                onClick={() => setTour(true)}
-                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center gap-1 shrink-0"
-              >
-                <Compass className="w-3 h-3 shrink-0" />
-                {N.t('tour_open')}
-              </button>
-
-              <button
-                onClick={() => setTuto(true)}
-                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center gap-1 shrink-0"
-              >
-                <GraduationCap className="w-3 h-3 shrink-0" />
-                {N.t('tuto_open')}
-              </button>
-
-              <button
-                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center gap-1 shrink-0"
-              >
-                <Mail className="w-3 h-3 shrink-0" />
-                {N.t('contact')}
-              </button>
-            </div>
             </>}
 
           </div>
         </div>
       </div>
+      </div>
+
+      <PiedLiens onTour={() => setTour(true)} onTuto={() => setTuto(true)} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
