@@ -1,4 +1,5 @@
 import './sprinter-i18n.js';
+import './langues/index.js';
 import './sprinter-core.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
@@ -253,7 +254,28 @@ export function padPress(side: 'left' | 'right') {
 // navigateurs proposent de la traduire — une traduction navigateur
 // reecrit les noeuds de texte sous les pieds de React et le fait planter.
 export function syncHtmlLang() {
-  try { document.documentElement.lang = SprinterApp.N.getLang(); } catch (e) { }
+  try {
+    document.documentElement.lang = SprinterApp.N.getLang();
+    // L'arabe se lit de droite a gauche : le document bascule avec la langue.
+    document.documentElement.dir = SprinterApp.N.isRTL() ? 'rtl' : 'ltr';
+  } catch (e) { }
+}
+
+/** Les langues offertes au joueur : celles dont le paquet est dans le bundle. */
+export function languesDisponibles() {
+  const L = (globalThis as any).SprinterLangues;
+  return L ? L.disponibles() : SprinterApp.N.LANGUES;
+}
+
+// Une langue autre que le francais ou l'anglais arrive en paquet separe,
+// telecharge au moment ou on la choisit. Le temps qu'il arrive, l'affichage
+// reste sur l'anglais plutot que sur des trous.
+export async function setLang(code: string) {
+  const L = (globalThis as any).SprinterLangues;
+  if (L) await L.choisir(code); else SprinterApp.N.setLang(code);
+  SprinterApp.save();
+  syncHtmlLang();
+  gameStore.setState({});
 }
 
 export function toggleLang() {

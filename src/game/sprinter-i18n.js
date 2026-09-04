@@ -1338,47 +1338,155 @@
     ]
   ];
 
-  // ---------------------------------------------------------------- outils
-  const LANGS = ['fr', 'en'];
+  // --------------------------------------------------------------- langues
+  // Le francais et l'anglais vivent dans les tables ci-dessus, en position 0
+  // et 1. Toute autre langue arrive en paquet separe, depose par register().
+  // Ce qu'un paquet ne traduit pas retombe sur l'anglais : jamais sur un
+  // trou, jamais sur la cle nue.
+  const LANGUES = [
+    { code: 'fr', nom: 'Français' },
+    { code: 'en', nom: 'English' },
+    { code: 'es', nom: 'Español' },
+    { code: 'pt', nom: 'Português' },
+    { code: 'de', nom: 'Deutsch' },
+    { code: 'it', nom: 'Italiano' },
+    { code: 'nl', nom: 'Nederlands' },
+    { code: 'pl', nom: 'Polski' },
+    { code: 'tr', nom: 'Türkçe' },
+    { code: 'ru', nom: 'Русский' },
+    { code: 'ar', nom: 'العربية', rtl: true },
+    { code: 'hi', nom: 'हिन्दी' },
+    { code: 'id', nom: 'Bahasa Indonesia' },
+    { code: 'ja', nom: '日本語' },
+    { code: 'ko', nom: '한국어' },
+    { code: 'zh', nom: '中文' }
+  ];
+  const LANGS = LANGUES.map(function (l) { return l.code; });
+  const PACKS = Object.create(null);
   const I = { lang: 'fr' };
 
-  function index() { return I.lang === 'en' ? 1 : 0; }
+  const CUTS = { intro: CUT_INTRO, defeat: CUT_DEFEAT,
+                 champion: CUT_CHAMPION, taunt: CUT_TAUNT };
+
+  function fiche(code) {
+    const c = code || I.lang;
+    for (let i = 0; i < LANGUES.length; i++) {
+      if (LANGUES[i].code === c) return LANGUES[i];
+    }
+    return null;
+  }
+
+  // 0 = francais, 1 = anglais. L'anglais tient aussi lieu de repli.
+  function index() { return I.lang === 'fr' ? 0 : 1; }
+  function paquet() { return PACKS[I.lang] || null; }
 
   function t(key, vars) {
-    const row = UI[key];
-    let s = row ? row[index()] : key;
+    const p = paquet();
+    let s = p && p.UI ? p.UI[key] : undefined;
+    if (s === undefined || s === null || s === '') {
+      const row = UI[key];
+      s = row ? row[index()] : key;
+    }
     if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
     return s;
   }
 
-  function levelName(i) { return LEVEL_NAMES[i][index()]; }
-  function raceSub(key) { return (RACE_SUB[key] || ['', ''])[index()]; }
+  function levelName(i) {
+    const p = paquet();
+    const n = p && p.LEVEL_NAMES ? p.LEVEL_NAMES[i] : null;
+    return n || LEVEL_NAMES[i][index()];
+  }
 
-  // 1er / 1re en français, 1st / 2nd / 3rd en anglais
+  function raceSub(key) {
+    const p = paquet();
+    const s = p && p.RACE_SUB ? p.RACE_SUB[key] : null;
+    return s || (RACE_SUB[key] || ['', ''])[index()];
+  }
+
+  // La scene se tire au sort ici, et non chez l'appelant : le repli porte
+  // ainsi sur la variante choisie. Un paquet traduit a moitie rend l'autre
+  // moitie en anglais, au lieu de rendre du vide.
+  function cut(kind, stage) {
+    const base = CUTS[kind];
+    if (!base) return [];
+    const banc = kind === 'champion' ? base : (base[stage] || []);
+    if (!banc.length) return [];
+    const v = Math.floor(Math.random() * banc.length);
+    const p = paquet();
+    if (p && p.CUTS && p.CUTS[kind]) {
+      const pb = kind === 'champion' ? p.CUTS[kind] : p.CUTS[kind][stage];
+      const lignes = pb && pb[v];
+      if (lignes && lignes.length) return lignes.slice();
+    }
+    return (banc[v][index()] || banc[v][1] || []).slice();
+  }
+
+  // 1er / 1re en francais, 1st / 2nd / 3rd en anglais. Ailleurs, le paquet
+  // pose sa propre regle ; a defaut le nombre reste nu, ce qui se lit partout
+  // et ne se trompe nulle part.
   function ord(n, feminine) {
+    if (I.lang === 'fr') return n + (n === 1 ? (feminine ? 're' : 'er') : 'e');
     if (I.lang === 'en') {
       const d = n % 10, c = n % 100;
       if (c >= 11 && c <= 13) return n + 'th';
       return n + (d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th');
     }
-    return n + (n === 1 ? (feminine ? 're' : 'er') : 'e');
+    const p = paquet();
+    if (p && typeof p.ord === 'function') return p.ord(n, feminine);
+    return String(n);
   }
 
-  function setLang(l) { I.lang = LANGS.indexOf(l) >= 0 ? l : 'fr'; return I.lang; }
+  // ------------------------------------------------------------- paquets
+  function register(code, p) {
+    if (!code || !p || LANGS.indexOf(code) < 0) return false;
+    PACKS[code] = p;
+    return true;
+  }
+  function loaded(code) {
+    const c = code || I.lang;
+    return c === 'fr' || c === 'en' || !!PACKS[c];
+  }
+  function isRTL(code) { const f = fiche(code); return !!(f && f.rtl); }
+  function nomLangue(code) { const f = fiche(code); return f ? f.nom : String(code || ''); }
+
+  // L'arabe se lit de droite a gauche. Le document entier bascule, sinon le
+  // HTML et le canvas se contrediraient a l'ecran.
+  function appliquerSens() {
+    try {
+      const d = root.document;
+      if (!d || !d.documentElement) return;
+      d.documentElement.lang = I.lang;
+      d.documentElement.dir = isRTL() ? 'rtl' : 'ltr';
+    } catch (e) { /* pas de document : rien a basculer */ }
+  }
+
+  function setLang(l) {
+    I.lang = LANGS.indexOf(l) >= 0 ? l : 'fr';
+    appliquerSens();
+    return I.lang;
+  }
   function getLang() { return I.lang; }
   function toggle() { return setLang(I.lang === 'fr' ? 'en' : 'fr'); }
 
-  // langue du téléphone au premier lancement
+  // langue du telephone au premier lancement
   function detect() {
     try {
-      const l = (navigator.languages && navigator.languages[0]) ||
-                navigator.language || 'fr';
-      return String(l).toLowerCase().indexOf('fr') === 0 ? 'fr' : 'en';
-    } catch (e) { return 'fr'; }
+      const nav = root.navigator;
+      const dispo = (nav && (nav.languages || (nav.language ? [nav.language] : []))) || [];
+      for (let i = 0; i < dispo.length; i++) {
+        const brut = String(dispo[i] || '').toLowerCase();
+        if (LANGS.indexOf(brut) >= 0) return brut;
+        const court = brut.split('-')[0];
+        if (LANGS.indexOf(court) >= 0) return court;
+      }
+    } catch (e) { /* navigateur muet : on repart de l'anglais */ }
+    return 'en';
   }
 
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
-    LANGS, t, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
+    LANGUES, LANGS, PACKS, t, levelName, raceSub, cut, ord,
+    register, loaded, isRTL, nomLangue,
+    setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

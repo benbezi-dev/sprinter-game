@@ -76,8 +76,8 @@
   const t = (k, v) => N.t(k, v);
   const CUT_INTRO = N.CUT_INTRO, CUT_DEFEAT = N.CUT_DEFEAT;
   const CUT_CHAMPION = N.CUT_CHAMPION, CUT_TAUNT = N.CUT_TAUNT;
-  // chaque variante est un couple [francais, anglais]
-  const pickLang = a => a[Math.floor(Math.random() * a.length)][N.index()];
+  // Le tirage de la variante se fait dans i18n : c'est la que se trouve le
+  // repli sur l'anglais quand la langue courante ne traduit pas la scene.
 
   // -------------------------------------------------------------------
   // SON
@@ -535,13 +535,12 @@
     const kind = G.cutQueue.shift();
     let lines, man;
     if (kind === 'champion') {
-      lines = pickLang(CUT_CHAMPION).slice();
+      lines = N.cut('champion');
       man = { look: PLAYER_LOOK, stride: 0, v: G.race.maxSpeed * 0.18,
               maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
     } else {
-      const tbl = kind === 'intro' ? CUT_INTRO : (kind === 'taunt' ? CUT_TAUNT : CUT_DEFEAT);
-      const first = (G.champion || 'Le favori').split(' ')[0];
-      lines = pickLang(tbl[G.levelIdx]).map(s => s.split('{n}').join(first));
+      const first = (G.champion || t('favourite')).split(' ')[0];
+      lines = N.cut(kind, G.levelIdx).map(s => s.split('{n}').join(first));
       man = { name: G.champion || '',
               look: ZEZE[G.champion] ||
                     K.lookFor(G.champion || 'X', LEVELS[G.levelIdx].pool),

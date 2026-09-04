@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
-import { Globe, Globe2 } from 'lucide-react';
+import { SprinterApp, useGameStore, toggleAudio } from '@/game/engine';
+import { Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
@@ -12,6 +12,7 @@ import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
+import { LanguePicker } from './LanguePicker';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
@@ -109,13 +110,7 @@ export function TitleScreen() {
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
-          <button 
-            onClick={() => toggleLang()}
-            className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2 hover:bg-white/10 transition-colors"
-          >
-            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-            <span className="font-bold text-xs md:text-sm text-foreground/90">{N.getLang().toUpperCase()}</span>
-          </button>
+          <LanguePicker />
 
           {/* Le nom du joueur occupe le centre du bandeau, qui etait vide.
               C'est le seul ecran que tout le monde traverse. */}
