@@ -9,7 +9,7 @@
 // division, et des points de ligue. Le bareme depend du role — relever un defi
 // dont le chrono est deja pose rapporte plus que le lancer.
 
-import { getDeviceId, getSavedName } from './leaderboard';
+import { getDeviceId, getSavedName, type LigneClassee } from './leaderboard';
 import { EST_TEST } from './canal';
 
 /**
@@ -24,6 +24,8 @@ export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
+/** Ma propre place, gardee a part : voir monRangDuel(). */
+const MON_RANG_KEY = 'sprinter_duel_mon_rang';
 
 /** Les etages de l'echelle, du premier au dernier. */
 export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legende';
@@ -107,12 +109,54 @@ function ecrireVu(rows: DuelRow[]) {
 }
 
 /**
+ * MA PLACE, TELLE QU'ON L'A LUE LA DERNIERE FOIS.
+ *
+ * Gardee a part de VU_KEY, qui retient le rang de TOUT LE MONDE pour les
+ * fleches du tableau. Les deux reperes ne se posent pas aux memes moments :
+ * celui des fleches ne bouge qu'a l'ouverture du classement — sinon elles
+ * s'effaceraient seules pendant qu'on les regarde — alors que le mien doit
+ * suivre chaque lecture, y compris les rafraichissements. C'est de lui que
+ * l'annonce d'un duel tire « d'ou je viens ».
+ */
+export function monRangDuel(): number | null {
+  try {
+    const v = localStorage.getItem(MON_RANG_KEY);
+    const n = v == null ? 0 : Number(v);
+    return n > 0 ? n : null;
+  } catch { return null; }
+}
+
+/**
+ * LA LECTURE LA PLUS RECENTE GAGNE, MEME SI ELLE REPOND LA PREMIERE.
+ *
+ * Deux lectures se croisent pour de bon : celle prise avant un duel est
+ * plafonnee — un reseau lent ne retient pas le resultat — et elle peut donc
+ * repondre APRES celle qui annonce le deplacement. Sans ce jeton elle
+ * reposerait alors la place d'avant le duel, et le duel suivant annoncerait
+ * une seconde fois la montee de celui-ci.
+ */
+let derniereLecture = 0;
+let lectures = 0;
+
+function noterMonRang(rank: number | null, jeton: number) {
+  if (jeton < derniereLecture) return;
+  derniereLecture = jeton;
+  try {
+    if (rank == null) localStorage.removeItem(MON_RANG_KEY);
+    else localStorage.setItem(MON_RANG_KEY, String(rank));
+  } catch { /* sans memoire : pas d'annonce de montee, le classement reste juste */ }
+}
+
+/**
  * Le mouvement se mesure depuis la derniere fois que CE joueur a regarde le
  * classement. Un rang fige cote serveur ne survivrait pas au duel suivant et
  * l'indicateur serait vide la plupart du temps ; ainsi il raconte toujours
  * quelque chose : « voila ce qui a change depuis ton dernier passage ».
  */
 export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
+  // Pris avant la requete : c'est l'ordre des DEPARTS qui dit laquelle des
+  // deux lectures est la plus recente, pas celui des reponses.
+  const jeton = ++lectures;
   try {
     const nom = encodeURIComponent(getSavedName() || '');
     const res = await fetch(`${API_BASE}/duels?name=${nom}`);
@@ -128,10 +172,95 @@ export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
       data.moi.move = a ? a.rank - data.moi.rank : 0;
     }
     if (marquerVu) ecrireVu(data.classement);
+    // Mon repere se pose a CHAQUE lecture, marquee ou non : il ne sert pas a
+    // afficher une fleche mais a savoir d'ou partira la prochaine annonce.
+    noterMonRang(data.moi ? data.moi.rank : null, jeton);
     return data;
   } catch {
     return null;
   }
+}
+
+/**
+ * MON DEPLACEMENT AU CLASSEMENT DES DUELS : D'OU JE VIENS, OU JE SUIS, QUI EST
+ * AUTOUR.
+ *
+ * Le serveur n'annonce ni l'un ni l'autre. Il rend des points de ligue et une
+ * division — ce qui suffit a dire ce qu'un duel a rapporte, et pas a dire
+ * qu'on vient de doubler trois personnes. La place, elle, ne se deduit pas
+ * d'un total : elle depend de ce que mille autres joueurs ont fait pendant ce
+ * temps. On la relit donc au tableau.
+ *
+ * `avant` est le repere pose a la derniere lecture. Il est repose au passage :
+ * un meme deplacement ne s'annonce ainsi qu'une fois, et trois resultats
+ * annonces d'affilee ne racontent pas trois fois la meme montee.
+ */
+export type MonMouvement = {
+  /** Ma place d'avant. Nulle quand je n'etais pas classe : c'est une entree. */
+  avant: number | null;
+  apres: number;
+  /** Le nom sous lequel je figure au tableau. */
+  nom: string;
+  /** Le voisinage de ma nouvelle place, ma ligne exclue. */
+  lignes: LigneClassee[];
+};
+
+export async function mouvementDuel(rayon = 4): Promise<MonMouvement | null> {
+  const avant = monRangDuel();
+  // Sans marquer la visite : les fleches du tableau disent « depuis ton
+  // dernier passage », et passer ici n'est pas y etre passe.
+  const b = await fetchDuels(false);
+  if (!b || !b.moi) return null;
+  const apres = b.moi.rank;
+  const cle = b.moi.name.trim().toLowerCase();
+  const lignes = (b.classement || [])
+    .filter(r => r.name.trim().toLowerCase() !== cle)
+    .filter(r => r.rank >= apres - rayon && r.rank <= apres + rayon + 1)
+    .map(r => ({ rank: r.rank, name: r.name }));
+  return { avant, apres, nom: b.moi.name, lignes };
+}
+
+/**
+ * LE MEME DEPLACEMENT, MAIS APRES UNE COURSE EN DIRECT.
+ *
+ * Le direct annonce son resultat AVANT d'inscrire les points : la salle
+ * diffuse l'arrivee aux deux joueurs, puis ecrit au classement de son cote —
+ * volontairement, pour qu'une base indisponible ne laisse pas deux personnes
+ * bloquees devant une attente. Lire le tableau des l'arrivee tombe donc le
+ * plus souvent avant que la ligne ait bouge.
+ *
+ * On redemande donc, quelques fois, jusqu'a ce que la place change. Un duel
+ * qui ne deplace personne — et il y en a — fait relire pour rien : c'est le
+ * prix a payer pour ne pas rater les autres, et il se paie en trois requetes
+ * qu'aucun joueur ne voit passer.
+ *
+ * Repasser par mouvementDuel() est sans danger : le repere ne se deplace que
+ * quand la place se deplace, donc une lecture qui ne trouve rien de neuf
+ * repose la meme valeur et la suivante part du meme point.
+ */
+export async function mouvementApresDirect(essais = 3, pause = 900): Promise<MonMouvement | null> {
+  for (let i = 0; i < essais; i++) {
+    const m = await mouvementDuel();
+    if (m && m.avant !== m.apres) return m;
+    if (i < essais - 1) await new Promise(r => setTimeout(r, pause));
+  }
+  return null;
+}
+
+/**
+ * Pose le repere JUSTE AVANT un duel.
+ *
+ * Sans lui, le deplacement annonce a l'arrivee serait compte depuis la
+ * derniere fois que le joueur a ouvert le tableau — hier, ou jamais. Ce duel-ci
+ * doit annoncer ce que CE duel a fait, et pour cela il faut avoir lu le
+ * classement pendant qu'il tenait encore.
+ *
+ * A prendre AVANT d'envoyer le chrono : apres, le serveur a deja bouge la
+ * ligne, et le repere ne mesurerait plus rien. Plafonne par l'appelant — le
+ * resultat d'un duel n'attend pas apres un reseau lent.
+ */
+export async function repereAvantDuel(): Promise<void> {
+  await fetchDuels(false);
 }
 
 /**

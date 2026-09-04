@@ -180,7 +180,7 @@
   };
 
   // pool : carnation du plateau. 'divers' pour les etapes locales,
-  // 'sprint' pour le mondial, les Jeux et la finale ZEZE.
+  // 'sprint' pour le mondial, les Jeux mondiaux et la finale ZEZE.
   const LEVELS = [
     { name: 'Competition scolaire', theme: 'day', pool: 'divers',
       names: ['Paul Martin', 'Leo Dubois', 'Noah Petit', 'Enzo Roy',
@@ -194,7 +194,7 @@
     { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
-    { name: 'Jeux olympiques', theme: 'olympic', pool: 'sprint',
+    { name: 'Jeux mondiaux', theme: 'mondiaux', pool: 'sprint',
       names: ['Blaze Kade', 'Jett Cruz', 'Rex Solar', 'Kai Volt',
               'Ash Comet', 'Neo Flash', 'Ray Quick'] },
     { name: 'Inter galactique', theme: 'cosmos', pool: 'sprint',

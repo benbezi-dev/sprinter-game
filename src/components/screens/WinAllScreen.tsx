@@ -3,10 +3,11 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 import { Globe2 } from 'lucide-react';
 import {
-  getSavedName, saveName, submitScore, fetchLeaderboardRaw,
-  rankByRaceTime, rankOf, TOP_N, NOM_PRIS,
+  getSavedName, saveName, submitScore, fetchLeaderboardRaw, fetchMyRank,
+  rankByRaceTime, rankOf, voisinage, TOP_N, NOM_PRIS, type LigneClassee,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { MonteeAuClassement } from './MonteeClassement';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -24,6 +25,19 @@ export function WinAllScreen() {
   const [worldSplit, setWorldSplit] = useState<number | null>(null);
   const [wouldBe, setWouldBe] = useState<number | null>(null);
   const [showTop500, setShowTop500] = useState(false);
+  /**
+   * Ce qu'il faut pour montrer la montee, et non seulement l'annoncer.
+   *
+   * `avantRank` est la place que ce joueur occupait AVANT ce parcours — nulle
+   * s'il n'etait pas au tableau, ce qui fait de son chrono une entree et non
+   * une remontee. `voisins` sont les noms autour de sa nouvelle place, lus
+   * dans la liste que l'envoi vient de renvoyer : ce sont ceux qu'il a
+   * doubles, et ils comptent plus que le nombre.
+   */
+  const [avantRank, setAvantRank] = useState<number | null>(null);
+  const [voisins, setVoisins] = useState<LigneClassee[]>([]);
+  /** Le nom sous lequel le chrono est parti, fige : le champ reste editable. */
+  const [nomEnvoye, setNomEnvoye] = useState('');
 
   // Meilleur chrono realise sur une seule course du parcours : c'est lui qui
   // est classe, pas le cumul.
@@ -32,11 +46,24 @@ export function WinAllScreen() {
   // Un seul envoi par parcours termine, meme si le composant se re-rend.
   useEffect(() => {
     let cancelled = false;
-    fetchLeaderboardRaw(raceKey)
-      .then(list => {
+    // La place d'AVANT se demande en meme temps que le tableau : apres l'envoi
+    // elle n'existe plus, et c'est d'elle que part l'animation de montee. Un
+    // classement qui repond et un rang qui manque n'empechent rien — on
+    // annonce alors une entree au tableau plutot que pas d'annonce du tout.
+    Promise.all([
+      fetchLeaderboardRaw(raceKey),
+      fetchMyRank(raceKey).catch(() => ({ found: false } as any)),
+    ])
+      .then(([list, mine]) => {
         if (cancelled) return;
-        const rank = rankOf(rankByRaceTime(list), bestSplitMs);
+        const classe = rankByRaceTime(list);
+        const rank = rankOf(classe, bestSplitMs);
         setWouldBe(rank);
+        // Mesuree dans la liste qu'on vient de trier, avec le chrono que le
+        // serveur reconnait a cet appareil : les deux places doivent sortir du
+        // meme comptage, sinon le deplacement annonce serait faux.
+        setAvantRank(mine.found && mine.best_split_ms
+          ? rankOf(classe, mine.best_split_ms) : null);
         if (rank > TOP_N) { setStatus('outside'); return; }
         if (getSavedName()) handleSave(getSavedName());
         else setStatus('idle');
@@ -59,8 +86,12 @@ export function WinAllScreen() {
       // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
       // depuis la liste renvoyee plutot que de dependre du champ du serveur.
       const mine = res.best_split_ms ?? bestSplit;
+      const classe = rankByRaceTime(res.entries || []);
+      const rang = rankOf(classe, mine);
       setWorldSplit(mine);
-      setWorldRank(rankOf(rankByRaceTime(res.entries || []), mine));
+      setWorldRank(rang);
+      setNomEnvoye(finalName);
+      setVoisins(voisinage(classe, finalName, rang));
       setStatus('done');
     } catch (e) {
       // Nom deja reserve ailleurs : ce n'est pas une panne, et reessayer ne
@@ -141,6 +172,21 @@ export function WinAllScreen() {
                   ? N.t('score_saved_race', { r: N.ord(worldRank), s: (worldSplit / 1000).toFixed(2) })
                   : N.t('score_saved', { r: N.ord(worldRank) })}
               </div>
+            )}
+            {/* Les places gagnees, jouees plutot que dites — voir
+                MonteeClassement. Rien quand le chrono n'a fait bouger
+                personne : le serveur garde le meilleur des deux, et une
+                animation immobile serait une promesse pour rien. */}
+            {status === 'done' && worldRank !== null && voisins.length > 0 &&
+             (avantRank === null || worldRank < avantRank) && (
+              <MonteeAuClassement
+                titre={N.t('top500')}
+                nom={nomEnvoye}
+                rangAvant={avantRank}
+                rangApres={worldRank}
+                lignes={voisins}
+                delai={0.55}
+              />
             )}
             {status === 'error' && (
               <div className="text-center text-destructive text-xs md:text-sm">{N.t('score_save_fail')}</div>

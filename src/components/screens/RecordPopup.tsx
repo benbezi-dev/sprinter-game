@@ -7,28 +7,11 @@ import {
   rankByRaceTime, rankOf, getSavedName, saveName, type RaceKey,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
+// Le meme chrono qui defile que sur l'ecran du record personnel.
+import { Compteur } from './Compteur';
 
 /** Ecrans qui suivent une course. La cinematique n'en fait pas partie. */
 const AFTER_RACE = new Set(['result', 'winall', 'over']);
-
-/** Chrono qui defile jusqu'a sa valeur : le record se lit en arrivant. */
-function Counter({ to }: { to: number }) {
-  const [v, setV] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    const t0 = performance.now();
-    const dur = 900;
-    const tick = (now: number) => {
-      const p = Math.min(1, (now - t0) / dur);
-      // depart rapide, arrivee posee : on lit la valeur finale sans a-coup
-      setV(to * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [to]);
-  return <>{v.toFixed(2)}</>;
-}
 
 export function RecordPopup() {
   const { state, player, raceKey } = useGameStore();
@@ -137,7 +120,7 @@ export function RecordPopup() {
               </p>
 
               <div className="font-mono font-black text-5xl md:text-6xl text-foreground tabular-nums my-1">
-                <Counter to={split} /> <span className="text-2xl md:text-3xl text-primary">s</span>
+                <Compteur vers={split} /> <span className="text-2xl md:text-3xl text-primary">s</span>
               </div>
 
               <p className="text-[11px] md:text-xs text-muted-foreground text-center -mt-1">

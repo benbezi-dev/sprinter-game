@@ -33,6 +33,36 @@ export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 export const RECOMMENCER_OUVERT = true;
 
 /**
+ * LA FETE DU RECORD PERSONNEL, ET LA DATE OU ELLE S'OUVRE.
+ *
+ * Battre son record sur une distance prend l'ecran entier apres la course —
+ * trophee, chrono qui defile, place au TOP 500, confettis — avant de rendre
+ * la main au menu de fin. On la regarde tourner sur le canal de test, puis
+ * elle s'ouvre a tout le monde le 5 septembre 2026 a 18 h.
+ *
+ * UNE DATE, ET NON UN INTERRUPTEUR A BASCULER A LA MAIN. Le jeu publie est un
+ * paquet statique deja chez les joueurs : un drapeau `false` en dur aurait
+ * demande une nouvelle mise en ligne a l'heure dite, avec quelqu'un devant un
+ * clavier. Ecrite ici, l'ouverture se fait toute seule, a la course suivante,
+ * y compris pour une page ouverte depuis la veille.
+ *
+ * CE CODE VOYAGE DONC DES MAINTENANT DANS LA VERSION PUBLIQUE, contrairement
+ * aux modes fermes que le bundler efface. C'est le prix de l'ouverture
+ * automatique et il est assume : trois composants d'affichage, rien qui parle
+ * au serveur, rien qu'on cherche a garder secret.
+ *
+ * L'INSTANT EST LE MEME PARTOUT. 18 h a Paris, pas 18 h au poignet de chacun :
+ * une ouverture est un moment, pas une heure locale — sinon Tokyo l'aurait eue
+ * sept heures avant nous. En septembre la France est a UTC+2.
+ */
+const OUVERTURE_FETE_RECORD = Date.UTC(2026, 8, 5, 16, 0, 0);
+
+/** L'heure est-elle venue, ou sommes-nous sur le canal de test ? */
+export function feteDuRecordOuverte(): boolean {
+  return EST_TEST || Date.now() >= OUVERTURE_FETE_RECORD;
+}
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

@@ -17,6 +17,7 @@ import { Voix, type EtatVoix } from '@/game/voix';
 import { Review, TTL_MS, type EtatReview } from '@/game/review';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
+import { DUELS_OUVERTS, repereAvantDuel } from '@/game/duels';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
@@ -236,6 +237,13 @@ export function LivePanel() {
     },
     onDepart: (dansMs: number) => {
       cibleDepart.current = Date.now() + dansMs;
+      /* LE REPERE D'AVANT LA COURSE, POSE AU COUP DE PISTOLET.
+         A deux, cette course est un duel et elle bougera la ligne des deux
+         joueurs au classement. Ce qu'ils y occupaient n'existera plus a
+         l'arrivee : le seul moment pour le lire est celui-ci, et il est
+         gratuit — il reste une course entiere avant qu'on en ait besoin.
+         Sans reponse, l'arrivee se passera de l'animation. */
+      if (DUELS_OUVERTS) repereAvantDuel();
       if (!presEnCours.current) lancerCourse();
     },
     // A huit, savoir qui a bouge est la moitie de l'information : la position

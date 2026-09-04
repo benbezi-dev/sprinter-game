@@ -164,7 +164,7 @@ let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
 
 /**
  * Charge en tache de fond les noms du haut du TOP 500, dont les Jeux
- * olympiques garnissent leur plateau. buildLevel est synchrone : les noms
+ * mondiaux garnissent leur plateau. buildLevel est synchrone : les noms
  * doivent etre la avant la course, pas pendant. Si le reseau ne repond pas,
  * G.topNames reste vide et le plateau maison sert de repli.
  */

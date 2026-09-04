@@ -197,6 +197,35 @@
     insta_visit:     ['voir le profil Instagram de {n}', 'view {n}’s Instagram profile'],
     name_code_why:   ['note-le : il te rend ton nom et tes courses sur un autre téléphone',
                       'write it down: it restores your name and races on another phone'],
+
+    /* L'ACCUEIL DEMANDE LE NOM UNE FOIS, ET UNE CHOSE A LA FOIS.
+
+       Le nom se demandait la ou il manquait : au bandeau de record, a la fin
+       d'un one shot, dans un coin du TOP 500. La question se pose desormais
+       une bonne fois au premier lancement, et plus jamais ensuite.
+
+       TROIS ECRANS D'UNE LIGNE, PAS UN FORMULAIRE. Tout poser d'un coup —
+       nom, drapeau, Instagram, avec la phrase qui explique chacun — faisait
+       une page de texte a lire avant d'avoir couru une seule fois, et le
+       bouton passait sous le bord de l'ecran. On avance donc d'un pas a la
+       fois : un titre de deux mots, un champ, un bouton. Ce que chaque champ
+       fait se lit sur le champ lui-meme.
+
+       « PASSER » A CHAQUE PAS. Personne n'est retenu a l'entree d'un jeu de
+       course, et la nationalite est definitive : la reclamer serait la faire
+       choisir au hasard. */
+    bienvenue_titre: ['BIENVENUE', 'WELCOME'],
+    bv_nom_t:        ['TON NOM', 'YOUR NAME'],
+    bv_nom_s:        ['il suit tous tes chronos', 'it follows every time you run'],
+    bv_pays_t:       ['TON DRAPEAU', 'YOUR FLAG'],
+    bv_pays_s:       ['pour les championnats — définitif', 'for championships — final'],
+    bv_insta_t:      ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
+    bv_insta_s:      ['ouvert depuis le classement — déclaré, non vérifié',
+                      'open from the ranking — declared, unverified'],
+    bv_passer:       ['passer', 'skip'],
+    bv_suite:        ['SUIVANT', 'NEXT'],
+    bienvenue_plus:  ['PLUS TARD', 'LATER'],
+    bienvenue_go:    ['C’EST PARTI', 'LET’S GO'],
     // visite du jeu
     tour_open:       ['DÉCOUVRIR LE JEU', 'TAKE THE TOUR'],
     tour_1_t:        ['ALTERNE', 'ALTERNATE'],
@@ -247,6 +276,7 @@
     tuto_replay:     ['revoir le tutoriel', 'watch again'],
     tuto_skip:       ['passer', 'skip'],
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
+    contact:         ['NOUS CONTACTER', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
     live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
@@ -516,6 +546,21 @@
     duel_lp:         ['PL', 'LP'],
     duel_monte_a11y: ['monte de {n} places', 'up {n} places'],
     duel_descend_a11y: ['descend de {n} places', 'down {n} places'],
+    // L'ANNONCE DE LA MONTEE — voir MonteeClassement.tsx. Le nom du joueur
+    // traverse le classement et se pose a sa nouvelle place, entre les noms
+    // qu'il vient de doubler. Ces textes servent aux deux tableaux : le
+    // TOP 500 et les duels. `c` est le nom du classement.
+    places_1:        ['PLACE', 'PLACE'],
+    places_n:        ['PLACES', 'PLACES'],
+    classement_entree: ['ENTRÉE AU CLASSEMENT', 'ON THE BOARD'],
+    // Lu a voix haute : une flèche et une couleur ne se lisent pas, et « 3 »
+    // tout seul ne veut rien dire.
+    classement_bouge_a11y: ['{n} places gagnées — {r} au {c}',
+                            '{n} places gained — {r} in the {c}'],
+    classement_perd_a11y:  ['{n} places perdues — {r} au {c}',
+                            '{n} places lost — {r} in the {c}'],
+    classement_entre_a11y: ['entrée au classement — {r} au {c}',
+                            'on the board — {r} in the {c}'],
     duel_lp_long:    ['points de ligue', 'league points'],
     duel_promu:      ['TU MONTES EN {r}', 'PROMOTED TO {r}'],
     duel_relegue:    ['TU DESCENDS EN {r}', 'RELEGATED TO {r}'],
@@ -608,6 +653,64 @@
                       'false start in a duel: the race is lost. Send a new challenge to start over.'],
     cut_skip:        ['PASSER', 'SKIP'],
 
+    // notifications : ce qui fait vibrer le telephone quand le jeu est ferme
+    avis_title:      ['NOTIFICATIONS', 'NOTIFICATIONS'],
+    avis_desc:       ['être prévenu quand le jeu est fermé',
+                      'be told when the game is closed'],
+    avis_pourquoi:   ['un défi reçu la nuit ne sert à rien s’il se découvre le lendemain',
+                      'a challenge received at night is worth nothing if you find it the next day'],
+    avis_activer:    ['ACTIVER LES NOTIFICATIONS', 'TURN NOTIFICATIONS ON'],
+    avis_couper:     ['NE PLUS RIEN RECEVOIR', 'STOP RECEIVING'],
+    avis_actives:    ['notifications actives', 'notifications on'],
+    avis_essai:      ['M’ENVOYER UN ESSAI', 'SEND ME A TEST'],
+    avis_essai_ok:   ['envoyé — il devrait arriver dans la seconde',
+                      'sent — it should land within a second'],
+    avis_essai_ko:   ['rien n’est parti : vérifie que les notifications sont autorisées',
+                      'nothing went out: check that notifications are allowed'],
+    avis_refuse:     ['tu les as refusées : cela se rouvre dans les réglages du téléphone, pas ici',
+                      'you turned them down: this reopens in the phone settings, not here'],
+    avis_installer:  ['sur iPhone, ajoute d’abord le jeu à ton écran d’accueil : Safari ne les donne qu’aux applications installées',
+                      'on iPhone, add the game to your home screen first: Safari only gives them to installed apps'],
+    avis_indispo:    ['ce navigateur ne sait pas les recevoir',
+                      'this browser cannot receive them'],
+    avis_erreur:     ['le serveur n’a pas pu enregistrer l’abonnement',
+                      'the server could not register the subscription'],
+    avis_choisir:    ['CE QUE JE VEUX RECEVOIR', 'WHAT I WANT TO RECEIVE'],
+    avis_g_defi:     ['Un défi reçu', 'A challenge received'],
+    avis_g_defi_s:   ['quelqu’un t’a envoyé un chrono à battre', 'someone sent you a time to beat'],
+    avis_g_selection: ['Une sélection en championnat', 'A championship selection'],
+    avis_g_selection_s: ['tu fais partie des 32 partants', 'you are one of the 32 runners'],
+    avis_g_direct:   ['Un défi en direct', 'A live challenge'],
+    avis_g_direct_s: ['quelqu’un t’attend sur la piste, maintenant', 'someone is waiting on the track, now'],
+    avis_g_relais:   ['Une invitation au relais', 'A relay invitation'],
+    avis_g_relais_s: ['on te veut dans une équipe', 'a team wants you'],
+    avis_g_rendezvous: ['Les rendez-vous des championnats', 'Championship start times'],
+    avis_g_rendezvous_s: ['un quart d’heure avant chaque course', 'a quarter of an hour before each race'],
+    avis_g_assister:   ['Les finales, et qui les gagne', 'The finals, and who wins them'],
+    avis_g_assister_s: ['un quart d’heure avant, puis le sacre — même sans y courir',
+                        'a quarter of an hour before, then the crowning — even when you are not in it'],
+    avis_g_record:     ['Un record du monde qui tombe', 'A world record falling'],
+    avis_g_record_s:   ['la première place d’une distance change de main',
+                        'the top spot of a distance changes hands'],
+    avis_suivre:       ['QUELS CHAMPIONNATS', 'WHICH CHAMPIONSHIPS'],
+    avis_suivre_national:    ['mon pays', 'my country'],
+    avis_suivre_continental: ['mon continent', 'my continent'],
+    avis_suivre_mondial:     ['le championnat du monde', 'the World Championship'],
+    avis_suivre_vide:  ['coche au moins une portée, sinon rien ne partira',
+                        'tick at least one, otherwise nothing will be sent'],
+    avis_suivre_nom:   ['réserve ton nom plus haut pour que ton pays soit connu',
+                        'reserve your name above so your country is known'],
+
+    // inviter quelqu'un a courir en direct
+    live_inviter:    ['INVITER UN JOUEUR', 'INVITE A PLAYER'],
+    live_inviter_ph: ['son nom', 'their name'],
+    live_inviter_ok: ['{n} est prévenu — son téléphone sonne',
+                      '{n} has been told — their phone is ringing'],
+    live_inviter_ko: ['personne de ce nom n’a réservé le sien : envoie-lui le code',
+                      'nobody with that name has reserved it: send them the code'],
+    live_invite_recue: ['{n} t’attend sur la piste', '{n} is waiting for you on the track'],
+    live_invite_rejoindre: ['REJOINDRE', 'JOIN'],
+
     // identite : nom reserve et code de recuperation
     id_title:        ['TON NOM', 'YOUR NAME'],
     id_code_title:   ['CODE DE RÉCUPÉRATION', 'RECOVERY CODE'],
@@ -625,6 +728,23 @@
     id_link_title:   ['UN AUTRE APPAREIL ?', 'ANOTHER DEVICE?'],
     id_link_help:    ['entre ton nom et ton code pour retrouver ici tes chronos et ton historique',
                       'enter your name and code to find your times and history here'],
+
+    // supprimer son profil
+    id_del:          ['SUPPRIMER MON PROFIL', 'DELETE MY PROFILE'],
+    id_del_what:     ['ton nom, ton code, tes chronos du classement, ton historique en ligne, tes défis et tes duels disparaissent du serveur, sur tous tes appareils.',
+                      'your name, your code, your leaderboard times, your online history, your challenges and your duels are removed from the server, on all your devices.'],
+    id_del_keep:     ['ta progression et tes courses gardées sur cet appareil ne bougent pas.',
+                      'your career progress and the races kept on this device are untouched.'],
+    id_del_final:    ['c’est définitif : rien de tout cela ne se récupère.',
+                      'this is final: none of it can be recovered.'],
+    id_del_confirm:  ['écris {n} pour confirmer', 'type {n} to confirm'],
+    id_del_go:       ['SUPPRIMER', 'DELETE'],
+    id_del_cancel:   ['annuler', 'cancel'],
+    id_del_done:     ['profil supprimé', 'profile deleted'],
+    id_del_device:   ['ce nom n’était pas réservé : ce qui venait de cet appareil a été effacé',
+                      'this name was not reserved: what came from this device has been erased'],
+    id_del_code:     ['cet appareil n’est pas relié à ce nom : entre son code de récupération',
+                      'this device is not linked to this name: enter its recovery code'],
 
     // installation sur le telephone
     install_title:   ['INSTALLER LE JEU', 'INSTALL THE GAME'],
@@ -659,19 +779,78 @@
     wr_later:        ['plus tard', 'later'],
 
     // enregistrement des chronos one shot / defi au TOP 500
-    os_top_checking: ['vérification du classement...', 'checking the rankings...'],
-    os_top_none:     ['aucun chrono ne rentre au TOP 500', 'no time makes the TOP 500'],
-    os_top_intro:    ['{n} chrono entre au TOP 500', '{n} time makes the TOP 500'],
-    os_top_intro_n:  ['{n} chronos entrent au TOP 500', '{n} times make the TOP 500'],
-    os_top_line:     ['{d} m — {s} s — {r}', '{d} m — {s} s — {r}'],
-    os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
     top500_count:    ['{n} chronos classés sur 500', '{n} times ranked of 500'],
-    os_top_better:   ['ton record sur {d} m reste {s} s', 'your {d} m record stays {s} s'],
-    os_kept_title:   ['TON RECORD TIENT', 'YOUR RECORD HOLDS'],
-    os_kept_line:    ['{d} m : tu détiens déjà {s} s ({r} au TOP 500)',
-                      '{d} m: you already hold {s} s ({r} on the TOP 500)'],
-    os_kept_now:     ['ce chrono de {s} s ne le bat pas — le classement ne garde que ton meilleur',
-                      'this {s} s does not beat it — the ranking keeps only your best'],
+
+    // Record personnel battu. Il avait un panneau au milieu du menu de fin ;
+    // il a maintenant son écran, tout de suite après la course, avec les
+    // confettis et sa place au TOP 500 — puis le menu reprend, sans rien de
+    // tout cela. C'est le seul instant où la place de tous les temps veut
+    // dire quelque chose : le chrono vient de tomber.
+    os_record_titre:   ['RECORD BATTU', 'RECORD BEATEN'],
+    os_record_titre_n: ['RECORDS BATTUS', 'RECORDS BEATEN'],
+    os_record_sur:     ['sur {d} m', 'over {d} m'],
+    os_record_premier: ['premier chrono sur la distance', 'first time at this distance'],
+    os_record_gain:    ['{s} s de mieux', '{s} s faster'],
+    os_record_rang:    ['{r} au TOP 500 - ALL TIME', '{r} on the TOP 500 - ALL TIME'],
+    os_record_saved:   ['enregistré au nom de {n}', 'saved under {n}'],
+    os_record_suite:   ['CONTINUER', 'CONTINUE'],
+    // Le champ « ton nom » a quitte cet ecran : il se demande une fois, a
+    // l'accueil. Reste a le dire quand il manque encore — le chrono est bien
+    // le meilleur du joueur, mais sans nom le classement n'a personne a qui
+    // l'attribuer, et un record qui disparait sans un mot se lit comme un bug.
+    os_record_sansnom: ['choisis ton nom sur l’accueil pour l’inscrire au TOP 500',
+                        'pick your name on the home screen to enter it on the TOP 500'],
+
+    // LE RECORD DU MONDE D'UNE DISTANCE VIENT DE TOMBER, et ce n'est pas le
+    // joueur qui l'a battu. C'est la seule nouvelle du classement qui change
+    // quelque chose pour tout le monde a la fois : le chrono a battre n'est
+    // plus le meme. Elle arrive par notification chez les abonnes, et par cette
+    // carte chez tous les autres — voir game/record-monde.ts.
+    wrm_titre:       ['RECORD DU MONDE', 'WORLD RECORD'],
+    wrm_sur:         ['sur {d} m', 'over {d} m'],
+    // A qui il a ete pris. La phrase evite de supposer qui detient le record :
+    // le jeu ne sait rien du detenteur qu'un nom, et une tournure genree se
+    // tromperait une fois sur deux.
+    wrm_pris:        ['pris à {n} — {s} s de mieux', 'taken from {n} — {s} s faster'],
+    wrm_pris_soi:    ['son propre record, amélioré de {s} s',
+                      'their own record, improved by {s} s'],
+    wrm_defier:      ['ALLER LE BATTRE', 'GO BEAT IT'],
+    // Les seize piques, dans l'ordre de `NOTES_RECORD` (worker/src/avis.js).
+    // L'ORDRE EST LE CONTRAT : c'est l'index, tire du record lui-meme, qui fait
+    // que la notification et cette carte disent la meme phrase. Ajouter une
+    // ligne ici sans l'ajouter la-bas les fait diverger en silence.
+    wrm_note_0:      ['avis aux challengers : la barre vient de monter.',
+                      'note to challengers: the bar just went up.'],
+    wrm_note_1:      ['quelqu’un pour répondre ? On attend.',
+                      'anyone care to answer? We’re waiting.'],
+    wrm_note_2:      ['les autres sont priés de courir plus vite.',
+                      'everyone else is kindly asked to run faster.'],
+    wrm_note_3:      ['ce chrono va rester affiché un moment. Sauf si.',
+                      'this time is staying up for a while. Unless.'],
+    wrm_note_4:      ['le haut du tableau a changé de main. Pour l’instant.',
+                      'the top of the board just changed hands. For now.'],
+    wrm_note_5:      ['les félicitations sont facultatives. Le battre, non.',
+                      'congratulations are optional. Beating it is not.'],
+    wrm_note_6:      ['il y a un chrono à battre. Il n’est pas de toi.',
+                      'there’s a time to beat. It isn’t yours.'],
+    wrm_note_7:      ['quelque part, quelqu’un vient de mieux courir que toi.',
+                      'somewhere, someone just ran better than you.'],
+    wrm_note_8:      ['la piste est ouverte. Le record, beaucoup moins.',
+                      'the track is open. The record, much less so.'],
+    wrm_note_9:      ['tu peux relire le chrono. Il ne changera pas tout seul.',
+                      'read the time again if you like. It won’t move on its own.'],
+    wrm_note_10:     ['deux solutions : t’entraîner, ou t’y habituer.',
+                      'two options: train, or get used to it.'],
+    wrm_note_11:     ['un nouveau nom en haut du tableau. Le tien est plus bas.',
+                      'a new name at the top of the board. Yours is further down.'],
+    wrm_note_12:     ['personne n’a jamais battu un record en lisant une notification.',
+                      'nobody ever beat a record by reading a notification.'],
+    wrm_note_13:     ['son fantôme t’attend au TOP 500. Il ne mord pas.',
+                      'their ghost is waiting on the TOP 500. It doesn’t bite.'],
+    wrm_note_14:     ['ce n’est qu’un record. Ça se reprend.',
+                      'it’s only a record. Records get taken back.'],
+    wrm_note_15:     ['les blocs sont libres. On dit ça, on dit rien.',
+                      'the blocks are free. Just saying.'],
 
     // sortie de course
     pause_title:     ['COURSE EN PAUSE', 'RACE PAUSED'],
@@ -813,7 +992,7 @@
     ['Niveau régional', 'Regional level'],
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
-    ['Jeux olympiques', 'Olympic Games'],
+    ['Jeux mondiaux', 'World Games'],
     ['Intergalactique', 'Intergalactic']
   ];
 
