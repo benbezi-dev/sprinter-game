@@ -22,26 +22,6 @@ import { EST_TEST } from './canal';
 const OUVERT_EN_PRODUCTION = false;
 export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 
-/**
- * Le second verrou : les points de ligue ne se montrent pas encore.
- *
- * Il vit ici, a cote du premier, parce que c'est la meme decision — a quel
- * moment le classement des duels commence a se dire — et parce qu'une date
- * recopiee dans deux ecrans finit par n'etre plus la meme. L'annonce d'un
- * defi releve la portait seule ; l'ecran de fin, lui, affichait ses points
- * sans la connaitre, si bien qu'on masquait un nombre d'un cote et qu'on le
- * donnait de l'autre, sur le meme duel.
- *
- * Ce qu'il masque, c'est tout ce qui parle du classement a l'arrivee : le
- * nombre de points ET le changement de division. Cacher l'un en gardant
- * l'autre ne cache rien — « tu montes en departemental III » dit deja qu'il
- * existe un bareme et ou l'on se trouve dedans.
- *
- * Le verdict, les chronos et l'ecart ne sont pas concernes : ils ne
- * dependent pas du classement, et ce sont eux qui font la course.
- */
-export const MASQUER_LP = Date.now() < new Date('2026-09-05T16:00:00Z').getTime();
-
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const VU_KEY = 'sprinter_duels_vus';
 

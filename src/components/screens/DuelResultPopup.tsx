@@ -4,8 +4,7 @@ import { motion } from 'motion/react';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { Swords, ChevronRight, Loader2 } from 'lucide-react';
 import {
-  fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, MASQUER_LP,
-  type MonDuel,
+  fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel,
 } from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
@@ -209,12 +208,10 @@ export function DuelResultPopup() {
                 {N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
               </h2>
 
-              {!MASQUER_LP && (
-                <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
-                  {duel.lp > 0 ? '+' : ''}{duel.lp}
-                  <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
-                </span>
-              )}
+              <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
+                {duel.lp > 0 ? '+' : ''}{duel.lp}
+                <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
+              </span>
 
               {/* L'epreuve, et le nombre de resultats qui attendent derriere
                   celui-ci. Il vivait sous les chronos ; il tient avec le
