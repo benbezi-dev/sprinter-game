@@ -2,12 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
-import { claimName, savedCode, lierInstagram, instagramDe, lienInstagram,
+import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInstagram,
          nations, paysDe, poserPays, type Nation } from '@/game/identity';
 import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
+import { Recuperation } from './Recuperation';
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -27,8 +28,23 @@ export function NameChip() {
 
   const [ouvert, setOuvert] = useState(false);
   const [saisie, setSaisie] = useState(nom);
-  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'ok'>('repos');
+  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'est_un_code' | 'reseau' | 'ok'>('repos');
   const [code, setCode] = useState(savedCode());
+
+  /* Ce qu'il faut pour sortir d'un essai qui n'aboutit pas.
+
+     `autreCode` le code presente pour prouver que ce nom est bien a nous ;
+     `nomDuCode` le nom auquel appartient un code colle dans le champ du nom ;
+     `perdu`     la porte de secours est ouverte — on n'a plus de code du tout.
+
+     Ces trois-la vivaient uniquement dans MES COURSES (`IdentityPanel`), trois
+     ecrans plus loin. Le joueur qui se voit refuser son nom, lui, est ICI : le
+     laisser devant « ce nom est deja pris » sans rien a faire, c'est lui dire
+     de renoncer a ses courses. */
+  const [autreCode, setAutreCode] = useState('');
+  const [nomDuCode, setNomDuCode] = useState('');
+  const [lien, setLien] = useState<'' | 'envoi' | 'lie' | 'mauvais' | 'inconnu' | 'erreur'>('');
+  const [perdu, setPerdu] = useState(false);
   const [insta, setInsta] = useState('');
   // Ce qui est reellement lie, distinct de ce qu'on tape : sans cette
   // distinction, le bouton ne saurait pas s'il doit lier ou delier.
@@ -59,6 +75,8 @@ export function NameChip() {
   useEffect(() => {
     if (!ouvert) return;
     setSaisie(getSavedName()); setEtat('repos'); setInstaEtat('repos');
+    // Un refus d'hier ne doit pas accueillir celui qui rouvre l'ecran.
+    setAutreCode(''); setNomDuCode(''); setLien(''); setPerdu(false);
     // On rappelle le pseudo deja lie, pour ne pas le faire retaper.
     const n = getSavedName();
     setLie(''); setInsta('');
@@ -142,16 +160,60 @@ export function NameChip() {
   const valider = async () => {
     const n = saisie.trim();
     if (n.length < 2) return;
+    // Le nom d'avant, pour pouvoir revenir dessus : ce qu'on vient de taper
+    // n'est pas toujours un nom (voir `est_un_code` plus bas).
+    const avant = getSavedName();
     // On enregistre d'abord : le nom doit servir meme si le reseau est muet.
     saveName(n); setNom(n);
-    setEtat('envoi');
+    setEtat('envoi'); setLien(''); setPerdu(false);
     // Puis on tente de le reserver, ce qui donne le code de recuperation et
     // permet de retrouver ses courses sur un autre telephone.
     const r = await claimName(n);
-    if (r.etat === 'reserve') { setCode(r.code); setEtat('ok'); }
+    if (r.etat === 'reserve') {
+      setCode(r.code); setEtat('ok');
+      setTimeout(() => setOuvert(false), 1200);
+    }
     else if (r.etat === 'pris') setEtat('pris');
-    else setEtat('ok');
-    if (r.etat !== 'pris') setTimeout(() => setOuvert(false), 1200);
+    else if (r.etat === 'est_un_code') {
+      /* Le joueur a colle son code dans le champ du nom. Il n'a pas tort : il
+         a perdu son nom, son code est ce qu'il lui reste, et c'est le seul
+         champ visible. On remet chaque chose a sa place — le vrai nom dans le
+         champ du nom, le code dans le sien — plutot que de garder ce code
+         enregistre comme nom sur l'appareil. */
+      saveName(avant); setNom(avant);
+      setSaisie(r.nom); setNomDuCode(r.nom);
+      setAutreCode(n.toUpperCase());
+      setEtat('est_un_code');
+    }
+    /* Le reseau muet ne se raconte plus comme une reussite. L'ecran disait
+       « ENREGISTRÉ » et se fermait : le nom etait bien pose sur l'appareil,
+       mais pas reserve — et rien ne disait qu'un autre pouvait encore le
+       prendre. */
+    else setEtat('reseau');
+  };
+
+  /**
+   * Relier cet appareil au nom, code a l'appui.
+   *
+   * C'est la seule preuve d'appartenance que le jeu connaisse : pas de mot de
+   * passe, pas d'e-mail. Sans elle il reste la demande de recuperation, plus
+   * bas, qu'un humain tranche.
+   */
+  const relier = async () => {
+    const n = saisie.trim();
+    if (!n || !autreCode.trim()) return;
+    setLien('envoi');
+    const r = await linkDevice(n, autreCode);
+    if (r === 'lie') {
+      saveName(n); setNom(n);
+      setCode(autreCode.trim().toUpperCase());
+      setLien('lie'); setEtat('ok');
+      /* On ne referme pas tout seul, contrairement a un simple enregistrement :
+         ce qui s'affiche ici est le code retrouve, et il est a noter. */
+    }
+    else if (r === 'mauvais_code') setLien('mauvais');
+    else if (r === 'inconnu') setLien('inconnu');
+    else setLien('erreur');
   };
 
   const vide = !nom;
@@ -177,7 +239,12 @@ export function NameChip() {
                         pointer-events-auto p-4">
           <motion.div
             {...SURGISSEMENT}
-            className="w-full max-w-sm bg-card/95 border border-white/10 rounded-2xl p-5 shadow-2xl flex flex-col gap-3"
+            /* La carte defile : elle porte deja le nom, le pays et Instagram, et
+               le bloc de recuperation peut s'ouvrir dessous. Sans cela, sur un
+               telephone tenu a l'horizontale, le bouton ENREGISTRER passait
+               sous le bord de l'ecran — hors d'atteinte. */
+            className="w-full max-w-sm max-h-[88vh] overflow-y-auto bg-card/95 border border-white/10
+                       rounded-2xl p-5 shadow-2xl flex flex-col gap-3"
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-primary">
@@ -194,7 +261,7 @@ export function NameChip() {
 
             <input
               value={saisie}
-              onChange={e => { setSaisie(e.target.value); setEtat('repos'); }}
+              onChange={e => { setSaisie(e.target.value); setEtat('repos'); setLien(''); }}
               onKeyDown={e => { if (e.key === 'Enter') valider(); }}
               placeholder={N.t('your_name')}
               maxLength={20}
@@ -203,8 +270,104 @@ export function NameChip() {
                          placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
             />
 
-            {etat === 'pris' && (
-              <p className="text-xs text-destructive">{N.t('name_taken')}</p>
+            {/* L'essai qui n'aboutit pas — et ce qu'on peut encore faire.
+
+                Deux refus mènent ici : le nom est à quelqu'un, ou bien c'est
+                un code qui a été collé dans le champ du nom. Les deux ouvrent
+                la même porte : le code, puis — s'il ne l'a plus — la demande
+                de récupération. */}
+            {(etat === 'pris' || etat === 'est_un_code' || lien) && (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-3 flex flex-col gap-2">
+                {etat === 'pris' && (
+                  <>
+                    <span className="text-xs font-bold text-destructive text-center">{N.t('name_taken')}</span>
+                    <span className="text-[10px] text-muted-foreground text-center leading-snug">
+                      {N.t('id_taken_help')}
+                    </span>
+                  </>
+                )}
+                {etat === 'est_un_code' && (
+                  <>
+                    <span className="text-xs font-bold text-primary text-center">{N.t('id_is_code')}</span>
+                    <span className="text-[10px] text-muted-foreground text-center leading-snug">
+                      {N.t('id_is_code_help', { n: nomDuCode })}
+                    </span>
+                  </>
+                )}
+
+                {lien !== 'lie' && (
+                  <div className="flex gap-2">
+                    <input
+                      value={autreCode}
+                      onChange={e => { setAutreCode(e.target.value.toUpperCase()); setLien(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter') relier(); }}
+                      placeholder={N.t('id_code_title')}
+                      maxLength={10}
+                      autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+                      className="flex-1 min-w-0 bg-black/35 border border-white/10 rounded-xl px-3 py-2
+                                 text-sm font-mono tracking-[0.25em] text-center text-foreground
+                                 placeholder:tracking-normal placeholder:font-sans placeholder:text-muted-foreground
+                                 focus:outline-none focus:border-primary/50"
+                    />
+                    <button
+                      onClick={relier}
+                      disabled={!autreCode.trim() || lien === 'envoi'}
+                      className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] text-background
+                                 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none
+                                 transition-colors flex items-center gap-1.5"
+                    >
+                      {lien === 'envoi' && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {N.t('id_link')}
+                    </button>
+                  </div>
+                )}
+
+                {lien === 'lie' && (
+                  <span className="text-xs font-bold text-primary text-center">
+                    {N.t('id_linked', { n: saisie.trim() })}
+                  </span>
+                )}
+                {lien === 'mauvais' && (
+                  <span className="text-[10px] text-destructive text-center">{N.t('id_bad_code')}</span>
+                )}
+                {lien === 'inconnu' && (
+                  <span className="text-[10px] text-destructive text-center">{N.t('id_unknown')}</span>
+                )}
+                {lien === 'erreur' && (
+                  <span className="text-[10px] text-destructive text-center">{N.t('score_save_fail')}</span>
+                )}
+
+                {/* La porte de secours : plus de code, plus d'appareil relié.
+
+                    Elle n'apparaît qu'ici, après un essai qui n'a pas abouti.
+                    Offerte d'emblée, elle enverrait demander à un humain ce
+                    qu'un code déjà en poche règle en deux secondes — et la
+                    file des demandes se remplirait de gens qui n'ont rien
+                    perdu. */}
+                {perdu ? (
+                  <Recuperation
+                    nom={saisie.trim()}
+                    surRetour={(c, n) => {
+                      setCode(c); setSaisie(n); setNom(n);
+                      setPerdu(false); setEtat('ok'); setLien('');
+                    }}
+                  />
+                ) : (
+                  (etat === 'pris' || lien === 'mauvais' || lien === 'inconnu') && (
+                    <button
+                      onClick={() => setPerdu(true)}
+                      className="self-center text-[10px] font-bold tracking-widest text-muted-foreground
+                                 hover:text-primary transition-colors flex items-center gap-1.5"
+                    >
+                      <LifeBuoy className="w-3 h-3" /> {N.t('rec_lost')}
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+
+            {etat === 'reseau' && (
+              <p className="text-xs text-destructive text-center">{N.t('score_save_fail')}</p>
             )}
             {etat === 'ok' && code && (
               <div className="rounded-xl border border-primary/30 bg-primary/[0.07] px-3 py-2 flex flex-col gap-1">
