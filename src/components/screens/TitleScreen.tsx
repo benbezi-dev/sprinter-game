@@ -29,6 +29,54 @@ const TABS: { id: Tab; key: string }[] = [
   { id: 'versus', key: 'mode_versus' },
 ];
 
+/**
+ * Le pied de l'accueil : les trois liens de bas de page.
+ *
+ * Il se tient SOUS le rouleau, hors de lui, et ne bouge donc plus. Avant,
+ * chaque onglet portait ses liens au bas de son propre contenu : ils
+ * remontaient avec le defi, dont le panneau est court, descendaient avec la
+ * carriere, dont le panneau est long, et le contact se retrouvait seul quand
+ * les deux autres ne vivaient qu'en carriere. Trois emplacements pour la meme
+ * chose, decides par la hauteur du contenu et celle de la fenetre.
+ *
+ * Les libelles s'ecrivent en entier, sur deux lignes s'il le faut. « NOUS
+ * CONT… » coupe au bord de l'ecran ne dit rien a personne, et un lien qu'on
+ * ne lit pas n'est pas un lien. Sur un telephone tenu debout l'icone passe
+ * donc au-dessus du mot, pour laisser toute la largeur de la colonne au
+ * texte ; des qu'il y a de la place, elle revient a cote et la barre reprend
+ * la moitie de sa hauteur — en paysage, chaque ligne gagnee compte.
+ */
+function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void }) {
+  const { N } = SprinterApp;
+  const liens = [
+    { cle: 'tour_open', Icone: Compass, action: onTour },
+    { cle: 'tuto_open', Icone: GraduationCap, action: onTuto },
+    // mailto: par window.location — un <a href> ne mene nulle part dans la
+    // fenetre sans barre d'adresse d'une application installee.
+    { cle: 'contact', Icone: Mail,
+      action: () => { window.location.href = 'mailto:support@sprinter-game.com'; } },
+  ];
+
+  return (
+    <div className="shrink-0 w-full max-w-md mx-auto mt-2 md:mt-3 grid grid-cols-3 gap-1
+                    p-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10">
+      {liens.map(({ cle, Icone, action }) => (
+        <button
+          key={cle}
+          onClick={action}
+          className="min-w-0 px-1 py-1.5 rounded-xl
+                     flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5
+                     text-[10px] md:text-[11px] font-bold tracking-wide leading-tight text-center
+                     text-foreground/75 hover:text-primary hover:bg-white/10 transition-colors"
+        >
+          <Icone className="w-3.5 h-3.5 shrink-0" />
+          <span className="w-full sm:w-auto break-words">{N.t(cle)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
   const { Audio_, N, RACES } = SprinterApp;
@@ -105,7 +153,10 @@ export function TitleScreen() {
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
   return (
-    <div ref={rouleau} className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+      {/* Ce qui defile defile ici, et seulement ici : le pied de page reste
+          en dehors, pose au bas de l'ecran. */}
+      <div ref={rouleau} className="flex-1 min-h-0 overflow-y-auto">
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
@@ -233,18 +284,6 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
-            {(tab === 'oneshot' || tab === 'versus') && (
-              <button
-                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-                className="w-full py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-center gap-1.5"
-              >
-                <Mail className="w-3.5 h-3.5" />
-                {N.t('contact')}
-              </button>
-            )}
-
             {tab === 'career' && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
@@ -334,42 +373,14 @@ export function TitleScreen() {
               {N.t('start')}
             </button>
 
-            <div className="flex items-center justify-between gap-1 mt-1">
-              <button
-                onClick={() => setTour(true)}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-start gap-1"
-              >
-                <Compass className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('tour_open')}</span>
-              </button>
-
-              <button
-                onClick={() => setTuto(true)}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-center gap-1"
-              >
-                <GraduationCap className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('tuto_open')}</span>
-              </button>
-
-              <button
-                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                           text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-end gap-1"
-              >
-                <Mail className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('contact')}</span>
-              </button>
-            </div>
             </>}
 
           </div>
         </div>
       </div>
+      </div>
+
+      <PiedLiens onTour={() => setTour(true)} onTuto={() => setTuto(true)} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
