@@ -45,7 +45,7 @@ export function OneShotEndScreen() {
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, remplir } = useTenirDansLEcran();
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -473,16 +473,35 @@ export function OneShotEndScreen() {
             sur le meme element s'ecrasent l'une l'autre. La hauteur reservee
             est celle d'apres reduction, sans quoi le conteneur croirait
             deborder encore. */}
-        <div className="w-full my-auto flex flex-col items-center"
+        {/* REMPLIR L'ECRAN QUAND IL RESTE DE LA PLACE.
+
+            Deux regimes, et un seul drapeau pour en decider. Quand la
+            reduction est a l'oeuvre — l'ecran est trop charge, on rapetisse —
+            rien ne change : le bloc garde sa hauteur reservee et se centre,
+            comme avant. Mais quand tout tient deja, le centrage laissait un
+            vide en bas de l'ecran, d'autant plus grand depuis que le TOP 500
+            ne s'affiche plus ici : le resultat flottait au milieu, avec un
+            tiers de noir sous les boutons.
+
+            Dans ce regime-la, la colonne s'etire sur toute la hauteur et
+            repartit ce qu'il reste entre ses blocs. Rien ne grossit — un
+            agrandissement deborderait par les cotes, la colonne occupe deja
+            toute la largeur — c'est l'espace entre les blocs qui prend la
+            place, ce qui est exactement ce qu'une affiche demande.
+
+            Et seulement quand il ne manque pas grand-chose : c'est le crochet
+            qui tranche, en comparant ce qu'il faut a ce qu'il y a. Un ecran a
+            moitie vide qu'on etire ne se remplit pas, il se troue. */}
+        <div className={`w-full flex flex-col items-center ${remplir ? 'flex-1' : 'my-auto'}`}
              style={{ height: hauteur ?? undefined }}>
-        <div ref={contenu} className="w-full flex flex-col items-center"
+        <div ref={contenu} className={`w-full flex flex-col items-center ${remplir ? 'flex-1' : ''}`}
              style={echelle < 1
                ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
                : undefined}>
         <motion.div {...SURGISSEMENT}
-          className="flex flex-col items-center max-w-2xl court:max-w-none w-full
+          className={`flex flex-col items-center max-w-2xl court:max-w-none w-full
                      py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
-                     colonnes-si-bas">
+                     colonnes-si-bas ${remplir ? 'flex-1 justify-between' : ''}`}>
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
@@ -801,113 +820,48 @@ export function OneShotEndScreen() {
             )}
           </div>
 
-          {/* LE TOP 500 EN DEUX LIGNES.
+          {/* LE TOP 500 NE S'AFFICHE PLUS ICI — SAUF QUAND IL FAUT UN NOM.
+              Ce panneau disait six nombres et un rang pour une information
+              que le joueur n'attendait pas a cet endroit : il vient lire s'il
+              a gagne, pas ou son chrono se range. Il prenait le tiers de
+              l'affiche et repoussait les boutons vers le bas.
 
-              Il tenait un panneau entier — un titre, une phrase, une ligne
-              encadree par epreuve, puis une confirmation — pour dire six
-              nombres et un nom. Cent soixante pixels, qui en portrait
-              repoussaient les boutons hors de l'ecran : on arrivait sur son
-              resultat et il fallait defiler pour trouver RECOMMENCER.
-
-              Rien n'est retire. Le titre porte desormais l'etat — on verifie,
-              tant de chronos entrent, enregistres sous tel nom — et les
-              chronos passent en une file qui se replie toute seule. Le
-              formulaire, lui, ne s'affiche que quand il sert vraiment : sans
-              nom connu, personne ne peut enregistrer a votre place. */}
-          {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
-            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-6 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1.5">
+              Ce qui reste est ce qui AGIT. Un chrono qui ameliore son propre
+              record part tout seul des que le nom est connu — c'est le cas de
+              presque tout le monde, et cela ne demande rien. Sans nom, en
+              revanche, personne ne peut enregistrer a la place du joueur : le
+              retirer aussi ferait perdre le record en silence. Le formulaire
+              reste donc, seul, et seulement dans ce cas-la. */}
+          {tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done' && (
+            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-4 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
                   <Globe2 className="w-4 h-4 court:w-3 court:h-3 text-primary" />
                   <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm court:text-[10px]">{N.t('top500')}</h2>
                 </span>
-                {topStatus === 'checking' && (
-                  <span className="text-[10px] md:text-xs text-muted-foreground animate-pulse">
-                    {N.t('os_top_checking')}
-                  </span>
-                )}
-                {tops.length > 0 && (
-                  <span className="text-[10px] md:text-xs text-primary font-bold tracking-wide">
-                    · {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
-                  </span>
-                )}
-                {topStatus === 'done' && tops.length > 0 && (
-                  <span className="text-[10px] md:text-xs text-muted-foreground">
-                    · {N.t('os_top_saved', { n: topName.trim() })}
-                  </span>
-                )}
+                <span className="text-[10px] md:text-xs text-primary font-bold tracking-wide">
+                  · {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
+                </span>
               </div>
-
-              {outcomes && outcomes.length > 0 && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    {tops.length > 0 && (
-                      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
-                        {tops.map((t, i) => (
-                          <span key={'n' + i} className="whitespace-nowrap text-xs md:text-sm court:text-[10px]">
-                            <span className="font-bold text-foreground">{t.race} m</span>{' '}
-                            <span className="font-mono text-primary">{(t.ms / 1000).toFixed(2)} s</span>{' '}
-                            <span className="text-muted-foreground">{N.ord(t.rank)}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {/* Chronos plus lents que son propre record. Le tableau ne
-                        garde qu'un chrono par epreuve et par appareil, le
-                        meilleur : envoyer celui-ci le remplacerait par un
-                        moins bon. On l'annonce franchement, parce qu'une
-                        petite ligne grise se lisait comme « rien ne s'est
-                        passe ». */}
-                    {kept.length > 0 && (
-                      <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/[0.07] px-3 py-1.5 flex flex-col gap-0.5">
-                        {kept.map((t, i) => (
-                          <p key={'k' + i} className="text-[10px] md:text-xs text-center leading-snug">
-                            <span className="font-bold tracking-widest text-cyan-300">
-                              {N.t('os_kept_title')}
-                            </span>
-                            {' · '}
-                            <span className="text-foreground">
-                              {N.t('os_kept_line', {
-                                d: t.race,
-                                s: ((t.ownMs || 0) / 1000).toFixed(2),
-                                r: t.ownRank ? N.ord(t.ownRank) : '—',
-                              })}
-                            </span>
-                            {' — '}
-                            <span className="text-muted-foreground">
-                              {N.t('os_kept_now', { s: (t.ms / 1000).toFixed(2) })}
-                            </span>
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {topStatus === 'done' ? null : (
-                    <>
-                      <div className="flex gap-2">
-                        <input
-                          value={topName}
-                          onChange={e => setTopName(e.target.value)}
-                          placeholder={N.t('your_name')}
-                          maxLength={20}
-                          className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
-                        />
-                        <button
-                          onClick={handleSaveTop}
-                          disabled={!topName.trim() || topStatus === 'sending'}
-                          className="shrink-0 px-4 py-2 court:px-2 court:py-1.5 rounded-xl font-bold tracking-wide text-xs md:text-sm court:text-[10px] text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
-                        >
-                          {topStatus === 'sending' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          {N.t('save_score')}
-                        </button>
-                      </div>
-                      {topStatus === 'error' && (
-                        <p className="text-center text-xs text-destructive">{N.t('score_save_fail')}</p>
-                      )}
-                    </>
-                  )}
-                </>
+              <div className="flex gap-2">
+                <input
+                  value={topName}
+                  onChange={e => setTopName(e.target.value)}
+                  placeholder={N.t('your_name')}
+                  maxLength={20}
+                  className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                />
+                <button
+                  onClick={handleSaveTop}
+                  disabled={!topName.trim() || topStatus === 'sending'}
+                  className="shrink-0 px-4 py-2 court:px-2 court:py-1.5 rounded-xl font-bold tracking-wide text-xs md:text-sm court:text-[10px] text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
+                >
+                  {topStatus === 'sending' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {N.t('save_score')}
+                </button>
+              </div>
+              {topStatus === 'error' && (
+                <p className="text-center text-xs text-destructive">{N.t('score_save_fail')}</p>
               )}
             </div>
           )}
