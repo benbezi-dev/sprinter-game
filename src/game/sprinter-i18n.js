@@ -276,6 +276,7 @@
     tuto_replay:     ['revoir le tutoriel', 'watch again'],
     tuto_skip:       ['passer', 'skip'],
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
+    contact:         ['NOUS CONTACTER', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
     live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
@@ -727,6 +728,23 @@
     id_link_title:   ['UN AUTRE APPAREIL ?', 'ANOTHER DEVICE?'],
     id_link_help:    ['entre ton nom et ton code pour retrouver ici tes chronos et ton historique',
                       'enter your name and code to find your times and history here'],
+
+    // supprimer son profil
+    id_del:          ['SUPPRIMER MON PROFIL', 'DELETE MY PROFILE'],
+    id_del_what:     ['ton nom, ton code, tes chronos du classement, ton historique en ligne, tes défis et tes duels disparaissent du serveur, sur tous tes appareils.',
+                      'your name, your code, your leaderboard times, your online history, your challenges and your duels are removed from the server, on all your devices.'],
+    id_del_keep:     ['ta progression et tes courses gardées sur cet appareil ne bougent pas.',
+                      'your career progress and the races kept on this device are untouched.'],
+    id_del_final:    ['c’est définitif : rien de tout cela ne se récupère.',
+                      'this is final: none of it can be recovered.'],
+    id_del_confirm:  ['écris {n} pour confirmer', 'type {n} to confirm'],
+    id_del_go:       ['SUPPRIMER', 'DELETE'],
+    id_del_cancel:   ['annuler', 'cancel'],
+    id_del_done:     ['profil supprimé', 'profile deleted'],
+    id_del_device:   ['ce nom n’était pas réservé : ce qui venait de cet appareil a été effacé',
+                      'this name was not reserved: what came from this device has been erased'],
+    id_del_code:     ['cet appareil n’est pas relié à ce nom : entre son code de récupération',
+                      'this device is not linked to this name: enter its recovery code'],
 
     // installation sur le telephone
     install_title:   ['INSTALLER LE JEU', 'INSTALL THE GAME'],
