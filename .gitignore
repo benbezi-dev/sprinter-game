@@ -42,6 +42,9 @@ android/local.properties
 # signature qui fuit ne se retire pas — elle se remplace, et l'application ne
 # se met alors plus a jour pour ceux qui l'ont deja installee.
 android/keystore*
+# Le modele, lui, se suit : c'est la documentation du fichier ci-dessus, et il
+# ne porte que des valeurs a remplir. Il a deja vecu dans le depot (5aedd64).
+!android/keystore.properties.exemple
 *.jks
 *.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
