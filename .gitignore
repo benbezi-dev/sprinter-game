@@ -39,14 +39,17 @@ android/.gradle/
 android/local.properties
 android/app/src/main/assets/public/
 
-# La cle de signature Play et ses mots de passe. Perdre ce trousseau, c'est
-# perdre le droit de mettre l'application a jour : il se range hors du projet
-# et se sauvegarde ailleurs. Il n'entre jamais ici.
-# Tout ce qui s'appelle « keystore » sous android/ — le fichier .properties,
-# mais aussi les copies et les notes ou l'on garde le mot de passe le temps de
-# le ranger ailleurs. Une regle large plutot qu'une liste : c'est la seule qui
-# tienne quand le fichier suivant s'appellera « keystore - copie 2.txt ».
+# Le trousseau de signature Android et ses mots de passe. Perdre ce trousseau,
+# c'est perdre le droit de mettre l'application a jour ; le laisser fuir est
+# pire encore : une cle de signature qui a fuite ne se retire pas, elle se
+# remplace, et l'application ne se met alors plus a jour pour ceux qui l'ont
+# deja installee. Ces fichiers n'ont jamais ete suivis, mais rien ne les en
+# empechait — un seul `git add -A` suffisait.
+# Une regle large plutot qu'une liste : c'est la seule qui tienne quand le
+# fichier suivant s'appellera « keystore - copie 2.txt ».
 android/keystore*
+# Le modele, lui, se suit : il documente le fichier ci-dessus et ne porte que
+# des valeurs a remplir. Il a deja vecu dans le depot (5aedd64).
 !android/keystore.properties.exemple
 *.jks
 *.keystore

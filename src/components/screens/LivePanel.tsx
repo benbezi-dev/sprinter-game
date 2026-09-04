@@ -14,6 +14,7 @@ import {
 } from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
+import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { Review, TTL_MS, type EtatReview } from '@/game/review';
 import { lancerPresentation } from '@/game/presentation-directe';
@@ -393,16 +394,11 @@ export function LivePanel() {
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
     return (
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-        <div className="flex items-center gap-2 justify-center">
-          <Radio className="w-4 h-4 text-emerald-400" />
-          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-            {N.t('live_title')}
-          </h3>
-        </div>
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
-          {N.t('live_desc')}
-        </p>
+      <Repliable
+        titre={N.t('live_title')}
+        sous={N.t('live_desc')}
+        icone={<Radio className="w-4 h-4" />}
+      >
 
         <div className="flex gap-2">
           {RACE_KEYS.map(k => (
@@ -497,7 +493,7 @@ export function LivePanel() {
           </button>
         </div>
         {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
-      </div>
+      </Repliable>
     );
   }
 

@@ -464,7 +464,7 @@ export function OneShotEndScreen() {
                : undefined}>
         <motion.div {...SURGISSEMENT}
           className="flex flex-col items-center max-w-2xl court:max-w-none w-full
-                     py-4 md:py-8 court:py-1 gap-3 md:gap-6 court:gap-0
+                     py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
                      colonnes-si-bas">
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
@@ -710,7 +710,7 @@ export function OneShotEndScreen() {
           )}
 
           {/* Chronos epreuve par epreuve, face au fantome si defi */}
-          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-8 court:p-2 shadow-2xl">
+          <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-8 court:p-2 shadow-2xl">
             <div className="flex flex-col gap-1.5 md:gap-3 court:gap-1">
               {shotRaces.map((r, i) => {
                 const mine = runSplits[i];
@@ -771,7 +771,7 @@ export function OneShotEndScreen() {
               formulaire, lui, ne s'affiche que quand il sert vraiment : sans
               nom connu, personne ne peut enregistrer a votre place. */}
           {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
-            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2.5 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1.5">
+            <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-6 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1.5">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
                   <Globe2 className="w-4 h-4 court:w-3 court:h-3 text-primary" />
@@ -879,7 +879,7 @@ export function OneShotEndScreen() {
               chaine. On le garde donc ouvert, sans le formulaire de creation
               — celui-la reste ferme, il n'y a pas de chrono a envoyer. */}
           {(!falseOut || !!revancheId) && (!challenge || beaten) && (
-            <div className={`w-full bg-card/60 border rounded-2xl p-3 sm:p-4 md:p-6 court:p-2 shadow-2xl flex flex-col gap-3 court:gap-1.5
+            <div className={`w-full bg-card/60 border rounded-2xl p-2 sm:p-3 md:p-6 court:p-2 shadow-2xl flex flex-col gap-2 court:gap-1.5
               ${beaten || revancheBattue || revancheFaite !== null
                 ? 'border-primary/40' : 'border-white/10'}`}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-center">
@@ -1082,7 +1082,7 @@ export function OneShotEndScreen() {
               de perdus a chaque fois. Dedans, elles disent la meme chose au
               meme endroit — c'est deja ce que fait « PRENDRE MA REVANCHE »
               depuis le debut, et personne n'a jamais eu de mal a le lire. */}
-          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none mt-1 md:mt-2 court:mt-0
+          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none court:mt-0
                           court:flex-row court:items-start court:[column-span:all]">
             {/* PARTAGER MA COURSE — une image, pas un code.
                 Le partage qui vit plus haut envoie du texte : un code a six
