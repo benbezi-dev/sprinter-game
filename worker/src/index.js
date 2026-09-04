@@ -50,23 +50,22 @@ import { alerterRecuperation } from './courriel.js';
  */
 const relaisOuvert = () => true;
 /**
- * Les championnats restent fermes, et ce n'est pas un oubli.
+ * Les championnats : ouverts a la lecture, tenus par la cle a l'ecriture.
  *
- * Quatre routes de cette famille ecrivent sans demander a qui elles parlent :
- * `ouvrir` et `cycle` creent des editions, `course` enregistre des chronos
- * dans une phase, `cloturer` qualifie et sacre. Aucune ne verifie que
- * l'appelant est qui il pretend etre — pas de device_id, pas de peutUtiliser,
- * rien. Entre gens qui se connaissent, sur le canal de test, cela n'a jamais
- * eu d'importance ; ouvert a tout le monde, cela veut dire qu'une requete a la
- * main suffit pour fabriquer un champion du Maroc dans la vraie base, ou
- * cloturer une finale que personne n'a courue.
+ * Cette porte protegeait autre chose que ce qu'elle avait l'air de proteger.
+ * Quatre routes de la famille ecrivent — `ouvrir` et `cycle` creent des
+ * editions, `course` enregistre des chronos, `cloturer` qualifie et sacre — et
+ * aucune ne verifiait a qui elle parlait. Entre gens qui se connaissent, sur
+ * le canal de test, cela n'avait pas d'importance ; l'ouvrir telle quelle
+ * aurait suffi a fabriquer un champion du Maroc dans la vraie base, ou a
+ * cloturer une finale que personne n'a courue, avec une requete a la main.
  *
- * Cette porte s'ouvrira quand ces quatre routes sauront a qui elles obeissent.
- * Elle ne coute rien a laisser fermee : le panneau du championnat, dans le
- * jeu, ne s'affiche que si le joueur est engage dans une edition — sans
- * edition, il ne rend rien du tout.
+ * Elles demandent maintenant ADMIN_CLE, comme /duels/recalculer. Ce ne sont
+ * pas des routes de joueur : seul le tableau de bord des championnats les
+ * appelle, et il porte deja la cle. Ce que voit le jeu — le calendrier, le
+ * fil, les titres, sa propre edition — reste ouvert a tous.
  */
-const championnatsOuverts = canal => canal.test;
+const championnatsOuverts = () => true;
 /**
  * Le mot du vainqueur : ouvert avec les duels, comme annonce.
  *
@@ -796,6 +795,7 @@ export default {
       // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
       // national, ce que faisaient les appels existants.
       if (sous === 'ouvrir' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { pays, zone, echelon, debut } = body || {};
@@ -812,6 +812,7 @@ export default {
       // Le meme weekend pour tout le monde : un seul appel ouvre tout un
       // echelon d'un coup, et dit qui a ete ecarte et pourquoi.
       if (sous === 'cycle' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const t = Number(body && body.debut);
@@ -866,6 +867,7 @@ export default {
 
       // Les chronos d'une course. On range, on ne tranche pas encore.
       if (sous === 'course' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { edition, phase, course, chronos } = body || {};
@@ -878,6 +880,7 @@ export default {
 
       // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
       if (sous === 'cloturer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const edition = String(body.edition || '').toUpperCase();
