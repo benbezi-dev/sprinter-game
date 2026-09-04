@@ -1081,7 +1081,7 @@ export function OneShotEndScreen() {
               meme endroit — c'est deja ce que fait « PRENDRE MA REVANCHE »
               depuis le debut, et personne n'a jamais eu de mal a le lire. */}
           <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none court:mt-0
-                          court:flex-row court:items-start court:[column-span:all]">
+                          court:flex-row court:items-start court:[column-span:all] boutons-si-bas">
             {/* PARTAGER MA COURSE — une image, pas un code.
                 Le partage qui vit plus haut envoie du texte : un code a six
                 lettres dans une conversation ne ressemble a rien et personne

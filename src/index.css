@@ -41,6 +41,21 @@
     margin-bottom: 0.5rem;
     width: 100%;
   }
+
+  /* LA RANGEE DE BOUTONS PASSE A LA LIGNE PLUTOT QUE DE SE SERRER.
+
+     Elle traverse les colonnes — c'est `column-span: all` — et se met en
+     rangee pour tenir sur un ecran bas. Sur un telephone couche etroit, ces
+     quatre boutons se partageaient 333 pixels : 78 chacun, ou « RECOMMENCER »
+     ne tient pas. Un mot sans espace ne se coupe pas : il sortait de sa boite
+     et venait se poser sur le bouton voisin, illisible des deux cotes.
+
+     Une largeur minimale, et le reste suit tout seul : la ou deux tiennent, il
+     y en a deux par ligne ; la ou quatre tiennent — un telephone couche large,
+     une tablette — ils restent sur une seule. C'est la place qui decide, et
+     non un point de rupture ecrit a la main. */
+  .boutons-si-bas { flex-wrap: wrap; }
+  .boutons-si-bas > * { flex: 1 1 9rem; min-width: 0; }
 }
 @media (max-height: 620px) and (min-width: 720px) {
   .colonnes-si-bas { column-count: 3; }
