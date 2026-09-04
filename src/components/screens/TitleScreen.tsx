@@ -234,15 +234,15 @@ export function TitleScreen() {
             {tab === 'versus' && <ChallengePanel />}
 
             {(tab === 'oneshot' || tab === 'versus') && (
-              <a
-                href="mailto:support@sprinter-game.com"
+              <button
+                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
                 className="w-full py-1.5 text-[10px] md:text-xs font-bold tracking-widest
                            text-muted-foreground hover:text-primary transition-colors
                            flex items-center justify-center gap-1.5"
               >
                 <Mail className="w-3.5 h-3.5" />
                 {N.t('contact')}
-              </a>
+              </button>
             )}
 
             {tab === 'career' && <>
@@ -357,15 +357,15 @@ export function TitleScreen() {
               {N.t('tour_open')}
             </button>
 
-            <a
-              href="mailto:support@sprinter-game.com"
+            <button
+              onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
               className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
                          text-muted-foreground hover:text-primary transition-colors
                          flex items-center justify-center gap-1.5"
             >
               <Mail className="w-3.5 h-3.5" />
               {N.t('contact')}
-            </a>
+            </button>
             </>}
 
           </div>
