@@ -49,3 +49,14 @@ android/keystore*
 *.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
 /icons/
+
+# Une copie complete du projet posee a la racine du projet. Elle est arrivee
+# par un rapatriement, elle pese pres d'un giga et elle porte son propre .git :
+# un seul `git add -A` la publiait sur un depot public. Le chemin est ancre par
+# le slash de tete — un dossier `src/sprinter/` resterait suivi.
+/sprinter/
+# Les copies de securite prises avant une modification (`fichier.tsx.bak-avant-
+# truc-20260904-1402`). Elles vivent a cote du fichier qu'elles doublent, donc
+# dans src/ : rien ne les distinguait d'une source, et publier une source
+# n'etait qu'une question de temps.
+*.bak-*
