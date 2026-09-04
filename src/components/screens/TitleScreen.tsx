@@ -18,7 +18,7 @@ import { Compass } from 'lucide-react';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
-import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
+import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD, Mail } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -233,6 +233,18 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
+            {(tab === 'oneshot' || tab === 'versus') && (
+              <a
+                href="mailto:support@sprinter-game.com"
+                className="w-full py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                           text-muted-foreground hover:text-primary transition-colors
+                           flex items-center justify-center gap-1.5"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                {N.t('contact')}
+              </a>
+            )}
+
             {tab === 'career' && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
@@ -344,6 +356,16 @@ export function TitleScreen() {
               <Compass className="w-3.5 h-3.5" />
               {N.t('tour_open')}
             </button>
+
+            <a
+              href="mailto:support@sprinter-game.com"
+              className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                         text-muted-foreground hover:text-primary transition-colors
+                         flex items-center justify-center gap-1.5"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              {N.t('contact')}
+            </a>
             </>}
 
           </div>
