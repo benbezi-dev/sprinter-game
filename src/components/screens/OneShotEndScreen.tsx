@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Swords, Radio, RotateCcw, ImageDown } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS, NOM_PRIS,
   type RaceKey, type RaceOutcome,
@@ -13,12 +13,14 @@ import {
 } from '@/game/challenge';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
+import { Confettis } from './Confettis';
+import { RecordBattu } from './RecordBattu';
 import { nomDuRang } from '@/components/Insignes';
 import { pique, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
-import { RECOMMENCER_OUVERT } from '@/game/canal';
+import { RECOMMENCER_OUVERT, feteDuRecordOuverte } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
@@ -94,7 +96,7 @@ export function OneShotEndScreen() {
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur, serre } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, serre, aise } = useTenirDansLEcran();
 
   // Les panneaux entrent l'un apres l'autre — voir CASCADE.
   const doux = useReducedMotion();
@@ -144,8 +146,25 @@ export function OneShotEndScreen() {
   // 100 m reste un 100 m. On les propose donc au TOP 500, epreuve par epreuve
   // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
   const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
-  const [topName, setTopName] = useState(getSavedName());
-  const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error' | 'pris'>('checking');
+  /**
+   * Le nom sous lequel ce chrono part, lu une fois pour la vie de l'ecran.
+   *
+   * Il ne se saisit plus ici : la question se pose au premier lancement, sur
+   * l'accueil (voir Bienvenue.tsx). Le lire a chaque rendu plutot que de le
+   * figer donnerait un panneau qui change de nom au milieu d'une phrase si le
+   * joueur en pose un ailleurs pendant que l'envoi est en cours.
+   */
+  const [nomJoueur] = useState(() => getSavedName().trim());
+  const [topStatus, setTopStatus] = useState<'checking' | 'sansnom' | 'sending' | 'done' | 'error' | 'pris'>('checking');
+  /**
+   * La fete du record a-t-elle deja ete refermee ?
+   *
+   * Elle s'ouvre seule des que le classement a repondu, et se ferme par son
+   * bouton. L'etat vit ici et non dans la fenetre elle-meme : demontee, elle
+   * emporterait sa memoire avec elle et se rouvrirait au premier rendu
+   * suivant — l'envoi du chrono, a lui seul, en declenche trois.
+   */
+  const [recordVu, setRecordVu] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -155,12 +174,16 @@ export function OneShotEndScreen() {
         setOutcomes(list);
         const aEnvoyer = list.filter(o => o.beatsOwn);
         if (!aEnvoyer.length) { setTopStatus('done'); return; }
-        // Nom deja connu : on enregistre sans rien demander. Un chrono qui
-        // ameliore son propre record n'a aucune raison d'attendre un clic,
-        // et c'est deja ce que fait la carriere.
-        const nom = getSavedName().trim();
-        if (nom) envoyer(nom, aEnvoyer);
-        else setTopStatus('idle');
+        // ON ENREGISTRE SANS RIEN DEMANDER. Un chrono qui ameliore son
+        // propre record n'a aucune raison d'attendre un clic — c'est deja ce
+        // que fait la carriere, et le champ qui le reclamait ici tombait au
+        // pire moment : entre le record et le bouton pour le relire.
+        //
+        // Sans nom, il n'y a personne a qui attribuer la ligne. On ne rouvre
+        // pas un formulaire pour autant : on le dit, et l'accueil s'en
+        // charge — c'est la que la question se pose, une fois pour toutes.
+        if (nomJoueur) envoyer(nomJoueur, aEnvoyer);
+        else setTopStatus('sansnom');
       })
       .catch(() => { if (!cancelled) { setOutcomes([]); setTopStatus('error'); } });
     return () => { cancelled = true; };
@@ -182,15 +205,10 @@ export function OneShotEndScreen() {
   };
 
   // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
-  // serveur ecarterait les autres de toute facon.
+  // serveur ecarterait les autres de toute facon. Ce sont aussi les seuls
+  // que l'ecran annonce — un chrono plus lent que le sien ne change rien au
+  // tableau, et il n'y a rien a en dire ici.
   const tops = (outcomes || []).filter(o => o.beatsOwn);
-  const kept = (outcomes || []).filter(o => !o.beatsOwn);
-
-  const handleSaveTop = () => {
-    const finalName = topName.trim();
-    if (!finalName || !tops.length) return;
-    envoyer(finalName, tops);
-  };
 
   const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
   const sansCible = SprinterApp.G.defiSansCible as string | null;
@@ -470,7 +488,30 @@ export function OneShotEndScreen() {
 
   const dnf = N.t('dnf_short');
 
+  // Lu au rendu et non a la construction du module : une page laissee ouverte
+  // depuis la veille doit voir la fete s'ouvrir a l'heure dite, sans rien
+  // recharger.
+  const fete = feteDuRecordOuverte();
+
   return (
+    <>
+    {/* Un record tombe : l'ecran le fete une fois. Le panneau plus bas dit
+        lequel et de combien — ceci n'ajoute aucune information, seulement le
+        fait que ce resultat-la n'est pas un resultat de plus. */}
+    {/* LA FETE D'ABORD, LE MENU ENSUITE. Elle arrive des que le classement a
+        repondu — quelques dixiemes apres l'arrivee — et prend l'ecran entier
+        le temps qu'on lise le chrono et sa place. Derriere elle, le menu de
+        fin est deja monte et intact : CONTINUER ne charge rien, il decouvre.
+
+        Le canal de test la voit tout de suite, tout le monde le 5 septembre a
+        18 h — voir canal.ts. La question se pose une fois, ici, et vaut pour
+        les confettis comme pour la fenetre : les uns sans l'autre feraient
+        pleuvoir sur un menu qui n'annonce rien. */}
+    {fete && tops.length > 0 && <Confettis />}
+    {fete && tops.length > 0 && !recordVu && (
+      <RecordBattu tops={tops} statut={topStatus} nom={nomJoueur}
+                   onFermer={() => setRecordVu(true)} />
+    )}
     <div ref={cadre} className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       {/* CENTRE QUAND IL Y A DE LA PLACE, ENTIER QUAND IL N'Y EN A PAS.
 
@@ -481,7 +522,15 @@ export function OneShotEndScreen() {
           jusqu'a lui, et « DEFI REMPORTE » n'existait simplement plus.
 
           Les marges automatiques centrent aussi bien et s'effacent d'elles
-          memes quand la place manque : rien ne sort de l'ecran par le haut. */}
+          memes quand la place manque : rien ne sort de l'ecran par le haut.
+
+          ET QUAND IL EN RESTE TROP. Le TOP 500 parti, un resultat simple ne
+          remplit plus l'ecran d'un telephone debout : le bloc se ramassait au
+          milieu, un tiers de noir au-dessus, autant en dessous. `aise` est la
+          place que la mesure a trouvee en trop ; la colonne la prend et
+          `space-evenly` la redistribue entre les panneaux, qui respirent au
+          lieu de flotter. A zero — ecran charge, ou paysage — rien de tout
+          cela ne s'applique et le centrage d'avant reprend la main. */}
       <div className="min-h-full flex flex-col items-center w-full">
         {/* La reduction vit sur ce calque-ci, et elle y vit seule : plus bas,
             chaque panneau porte sa propre transformation le temps d'entrer, et
@@ -490,14 +539,14 @@ export function OneShotEndScreen() {
             conteneur croirait deborder encore. */}
         <div className="w-full my-auto flex flex-col items-center"
              style={{ height: hauteur ?? undefined }}>
-        <div ref={contenu} className={`w-full flex flex-col items-center ${serre ? 'serre' : ''}`}
+        <div ref={contenu} className={`w-full flex flex-col items-center ${serre ? 'serre' : ''} ${aise > 0 ? 'etale' : ''}`}
              style={echelle < 1
                ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
                : undefined}>
         <motion.div variants={CASCADE} initial="repliee" animate="ouverte"
-          className="flex flex-col items-center max-w-2xl court:max-w-none w-full
+          className={`flex flex-col items-center max-w-2xl court:max-w-none w-full
                      py-4 md:py-8 court:py-1 serre:py-1 gap-3 md:gap-6 court:gap-0 serre:gap-1
-                     colonnes-si-bas">
+                     colonnes-si-bas ${aise > 0 ? 'etale-colonne' : ''}`}>
 
           <motion.div variants={volet} className="flex flex-col items-center text-center gap-1 md:gap-2 serre:gap-0">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
@@ -789,124 +838,18 @@ export function OneShotEndScreen() {
             )}
           </motion.div>
 
-          {/* LE TOP 500 EN DEUX LIGNES.
+          {/* LE RECORD N'EST PLUS UN PANNEAU D'ICI.
 
-              Il tenait un panneau entier — un titre, une phrase, une ligne
-              encadree par epreuve, puis une confirmation — pour dire six
-              nombres et un nom. Cent soixante pixels, qui en portrait
-              repoussaient les boutons hors de l'ecran : on arrivait sur son
-              resultat et il fallait defiler pour trouver RECOMMENCER.
+              Il en tenait un, entre les chronos et « DEFIER UN AMI » : meme
+              bordure, meme largeur, meme rang dans la descente que le reste.
+              On battait son record et on lisait une ligne de plus, coincee au
+              milieu d'un menu.
 
-              Rien n'est retire. Le titre porte desormais l'etat — on verifie,
-              tant de chronos entrent, enregistres sous tel nom — et les
-              chronos passent en une file qui se replie toute seule. Le
-              formulaire, lui, ne s'affiche que quand il sert vraiment : sans
-              nom connu, personne ne peut enregistrer a votre place. */}
-          {(topStatus === 'checking' || (outcomes && outcomes.length > 0)) && (
-            <motion.div variants={volet} className="w-full bg-card/60 border border-white/10 rounded-2xl p-2.5 sm:p-4 md:p-6 court:p-2 serre:p-1.5 shadow-2xl flex flex-col gap-1.5 court:gap-1.5 serre:gap-1">
-              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
-                <span className="flex items-center gap-2 shrink-0">
-                  <Globe2 className="w-4 h-4 court:w-3 court:h-3 text-primary" />
-                  <h2 className="font-bold tracking-widest text-primary text-xs md:text-sm court:text-[10px]">{N.t('top500')}</h2>
-                </span>
-                {topStatus === 'checking' && (
-                  <span className="text-[10px] md:text-xs text-muted-foreground animate-pulse">
-                    {N.t('os_top_checking')}
-                  </span>
-                )}
-                {tops.length > 0 && (
-                  <span className="text-[10px] md:text-xs text-primary font-bold tracking-wide">
-                    · {N.t(tops.length > 1 ? 'os_top_intro_n' : 'os_top_intro', { n: tops.length })}
-                  </span>
-                )}
-                {topStatus === 'done' && tops.length > 0 && (
-                  <span className="text-[10px] md:text-xs text-muted-foreground">
-                    · {N.t('os_top_saved', { n: topName.trim() })}
-                  </span>
-                )}
-              </div>
-
-              {outcomes && outcomes.length > 0 && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    {tops.length > 0 && (
-                      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5">
-                        {tops.map((t, i) => (
-                          <span key={'n' + i} className="whitespace-nowrap text-xs md:text-sm court:text-[10px]">
-                            <span className="font-bold text-foreground">{t.race} m</span>{' '}
-                            <span className="font-mono text-primary">{(t.ms / 1000).toFixed(2)} s</span>{' '}
-                            <span className="text-muted-foreground">{N.ord(t.rank)}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {/* Chronos plus lents que son propre record. Le tableau ne
-                        garde qu'un chrono par epreuve et par appareil, le
-                        meilleur : envoyer celui-ci le remplacerait par un
-                        moins bon. On l'annonce franchement, parce qu'une
-                        petite ligne grise se lisait comme « rien ne s'est
-                        passe ». */}
-                    {kept.length > 0 && (
-                      <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/[0.07] px-3 py-1.5 flex flex-col gap-0.5">
-                        {kept.map((t, i) => (
-                          <p key={'k' + i} className="text-[10px] md:text-xs text-center leading-snug">
-                            <span className="font-bold tracking-widest text-cyan-300">
-                              {N.t('os_kept_title')}
-                            </span>
-                            {' · '}
-                            <span className="text-foreground">
-                              {N.t('os_kept_line', {
-                                d: t.race,
-                                s: ((t.ownMs || 0) / 1000).toFixed(2),
-                                r: t.ownRank ? N.ord(t.ownRank) : '—',
-                              })}
-                            </span>
-                            {' — '}
-                            <span className="text-muted-foreground">
-                              {N.t('os_kept_now', { s: (t.ms / 1000).toFixed(2) })}
-                            </span>
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {topStatus === 'done' ? null : (
-                    <>
-                      <div className="flex gap-2">
-                        <input
-                          value={topName}
-                          onChange={e => setTopName(e.target.value)}
-                          placeholder={N.t('your_name')}
-                          maxLength={20}
-                          className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
-                        />
-                        <button
-                          onClick={handleSaveTop}
-                          disabled={!topName.trim() || topStatus === 'sending'}
-                          className="shrink-0 px-4 py-2 court:px-2 court:py-1.5 rounded-xl font-bold tracking-wide text-xs md:text-sm court:text-[10px] text-background bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none transition-colors flex items-center gap-2"
-                        >
-                          {topStatus === 'sending' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                          {N.t('save_score')}
-                        </button>
-                      </div>
-                      {topStatus === 'error' && (
-                        <p className="text-center text-xs text-destructive">{N.t('score_save_fail')}</p>
-                      )}
-                      {topStatus === 'pris' && (
-                        <div className="flex flex-col gap-0.5">
-                          <p className="text-center text-xs text-destructive">{N.t('score_name_taken')}</p>
-                          <p className="text-center text-[10px] text-muted-foreground leading-snug">
-                            {N.t('score_taken_help')}
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </motion.div>
-          )}
+              Il est parti devant, sur son propre ecran, avec les confettis,
+              le chrono qui defile et sa place au TOP 500 — voir RecordBattu.
+              Ce menu-ci reprend la main quand cette fenetre se ferme, et il
+              ressemble alors a toutes les autres courses : c'est justement ce
+              qui fait qu'une course a record ne ressemble a aucune. */}
 
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; une revanche part toute seule des qu'elle bat
@@ -1228,5 +1171,6 @@ export function OneShotEndScreen() {
       {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)}
                                  epreuves={shotRaces as string[]} />}
     </div>
+    </>
   );
 }

@@ -659,19 +659,27 @@
     wr_later:        ['plus tard', 'later'],
 
     // enregistrement des chronos one shot / defi au TOP 500
-    os_top_checking: ['vérification du classement...', 'checking the rankings...'],
-    os_top_none:     ['aucun chrono ne rentre au TOP 500', 'no time makes the TOP 500'],
-    os_top_intro:    ['{n} chrono entre au TOP 500', '{n} time makes the TOP 500'],
-    os_top_intro_n:  ['{n} chronos entrent au TOP 500', '{n} times make the TOP 500'],
-    os_top_line:     ['{d} m — {s} s — {r}', '{d} m — {s} s — {r}'],
-    os_top_saved:    ['chronos enregistrés au nom de {n}', 'times saved under {n}'],
     top500_count:    ['{n} chronos classés sur 500', '{n} times ranked of 500'],
-    os_top_better:   ['ton record sur {d} m reste {s} s', 'your {d} m record stays {s} s'],
-    os_kept_title:   ['TON RECORD TIENT', 'YOUR RECORD HOLDS'],
-    os_kept_line:    ['{d} m : tu détiens déjà {s} s ({r} au TOP 500)',
-                      '{d} m: you already hold {s} s ({r} on the TOP 500)'],
-    os_kept_now:     ['ce chrono de {s} s ne le bat pas — le classement ne garde que ton meilleur',
-                      'this {s} s does not beat it — the ranking keeps only your best'],
+
+    // Record personnel battu. Il avait un panneau au milieu du menu de fin ;
+    // il a maintenant son écran, tout de suite après la course, avec les
+    // confettis et sa place au TOP 500 — puis le menu reprend, sans rien de
+    // tout cela. C'est le seul instant où la place de tous les temps veut
+    // dire quelque chose : le chrono vient de tomber.
+    os_record_titre:   ['RECORD BATTU', 'RECORD BEATEN'],
+    os_record_titre_n: ['RECORDS BATTUS', 'RECORDS BEATEN'],
+    os_record_sur:     ['sur {d} m', 'over {d} m'],
+    os_record_premier: ['premier chrono sur la distance', 'first time at this distance'],
+    os_record_gain:    ['{s} s de mieux', '{s} s faster'],
+    os_record_rang:    ['{r} au TOP 500 - ALL TIME', '{r} on the TOP 500 - ALL TIME'],
+    os_record_saved:   ['enregistré au nom de {n}', 'saved under {n}'],
+    os_record_suite:   ['CONTINUER', 'CONTINUE'],
+    // Le champ « ton nom » a quitte cet ecran : il se demande une fois, a
+    // l'accueil. Reste a le dire quand il manque encore — le chrono est bien
+    // le meilleur du joueur, mais sans nom le classement n'a personne a qui
+    // l'attribuer, et un record qui disparait sans un mot se lit comme un bug.
+    os_record_sansnom: ['choisis ton nom sur l’accueil pour l’inscrire au TOP 500',
+                        'pick your name on the home screen to enter it on the TOP 500'],
 
     // sortie de course
     pause_title:     ['COURSE EN PAUSE', 'RACE PAUSED'],

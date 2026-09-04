@@ -16,7 +16,8 @@ import { useEffect, useRef, useState } from 'react';
  * geste, c'est cacher une information qu'on avait justement decide de montrer.
  *
  * Celle-ci n'enleve rien. Elle mesure ce qu'il faut, mesure ce qu'il y a, et
- * s'y prend en DEUX TEMPS, du moins visible au plus visible :
+ * s'y prend en TROIS TEMPS — deux quand l'ecran est trop court, un troisieme
+ * quand il est trop long :
  *
  * 1. ELLE RESSERRE. La classe `serre` passe sur le contenu et les tailles se
  *    rabattent d'un cran — marges, interlignes, corps de texte. C'est le meme
@@ -28,8 +29,27 @@ import { useEffect, useRef, useState } from 'react';
  *    du rapport des deux hauteurs. Le texte rapetisse pour de bon, l'ecran est
  *    complet, et personne n'a besoin de savoir qu'il s'est passe quelque chose.
  *
- * L'ordre compte : resserrer se lit encore, reduire finit par ne plus se lire.
- * On ne descend donc a l'echelle que ce que le resserrement n'a pas absorbe.
+ * L'ordre de ces deux-la compte : resserrer se lit encore, reduire finit par
+ * ne plus se lire. On ne descend donc a l'echelle que ce que le resserrement
+ * n'a pas absorbe.
+ *
+ * 3. ELLE ETALE. Le probleme se pose aussi dans l'autre sens, et il est arrive
+ *    le jour ou le TOP 500 a quitte cet ecran : moins de panneaux, et sur un
+ *    telephone debout le resultat se ramassait en un bloc au milieu, un tiers
+ *    d'ecran vide au-dessus et autant en dessous. Rien ne depassait, tout se
+ *    lisait, et cela donnait quand meme l'impression d'un ecran inacheve.
+ *
+ *    La place qui reste est donc rendue aux panneaux plutot que laissee autour
+ *    d'eux : le conteneur prend la hauteur disponible et `space-evenly`
+ *    repartit le surplus entre les blocs. PLAFONNE PAR INTERVALLE, une
+ *    centaine de pixels : sans plafond, trois panneaux sur un ecran tres haut
+ *    finissent separes par deux cents pixels de noir, ce qui n'est plus un
+ *    ecran mais une liste. Tant que la borne le permet, l'ecran se remplit.
+ *
+ *    LA MESURE RESTE CELLE DU CONTENU NU. `aise` est retranchee de la hauteur
+ *    lue avant tout calcul : sans cela, etaler ferait grandir la mesure, qui
+ *    ferait retrecir l'aise, qui ferait retrecir la mesure — l'ecran
+ *    respirerait indefiniment.
  *
  * LE RESSERREMENT NE SE DEFAIT PAS. Une fois pose il reste pour la vie de
  * l'ecran, et c'est ce qui empeche le battement : resserrer fait tenir, ce qui
@@ -75,6 +95,12 @@ export function useTenirDansLEcran(plancher = 0.6) {
   const [hauteur, setHauteur] = useState<number | null>(null);
   /** Premier recours : les tailles rabattues d'un cran. Ne se defait pas. */
   const [serre, setSerre] = useState(false);
+  /** La place rendue aux panneaux quand il en reste, en pixels. */
+  const [aise, setAise] = useState(0);
+  // Lisible depuis la mesure, qui vit dans un effet monte une seule fois — et
+  // surtout : c'est elle qu'on retranche de la hauteur lue, pour mesurer
+  // toujours le contenu nu.
+  const aiseRef = useRef(0);
   // Double de `serre`, lisible depuis la mesure : celle-ci vit dans un effet
   // monte une seule fois, et ne verrait jamais l'etat changer autrement.
   const dejaSerre = useRef(false);
@@ -90,7 +116,7 @@ export function useTenirDansLEcran(plancher = 0.6) {
       const st = getComputedStyle(c);
       const dispo = c.clientHeight
         - (parseFloat(st.paddingTop) || 0) - (parseFloat(st.paddingBottom) || 0);
-      const besoin = d.scrollHeight;
+      const besoin = d.scrollHeight - aiseRef.current;
       if (!(dispo > 0) || !(besoin > 0)) return;
 
       // PREMIER TEMPS : resserrer. On rend la main sans rien mettre a
@@ -104,10 +130,45 @@ export function useTenirDansLEcran(plancher = 0.6) {
         return;
       }
 
+      // TROISIEME TEMPS, QUAND IL RESTE DE LA PLACE : l'etaler. Rien a
+      // reduire ici, et rien a resserrer non plus — on rend au contenu ce que
+      // l'ecran lui laisse, sans jamais depasser le tiers de sa hauteur.
+      if (besoin <= dispo) {
+        const reste = dispo - besoin;
+        // LE PLAFOND SE COMPTE PAR INTERVALLE, PAS EN PROPORTION. Une part de
+        // la hauteur du contenu donnait le mauvais reglage aux deux bouts :
+        // un ecran deja charge gagnait cent pixels dont il n'avait pas besoin,
+        // un resultat de trois panneaux restait tasse au milieu d'un
+        // telephone debout. Ce qui se voit, c'est l'espace ENTRE deux
+        // panneaux : au-dela d'une centaine de pixels ils cessent d'etre lus
+        // ensemble. On le borne donc la, et l'ecran se remplit tant que la
+        // borne le permet. `space-evenly` compte un intervalle de plus que de
+        // panneaux — un au-dessus du premier, un sous le dernier.
+        const colonne = d.firstElementChild;
+        const trous = Math.max(2, (colonne ? colonne.childElementCount : 1) + 1);
+        // ON N'ETALE QUE CE QUI EST UNE COLONNE. Sous une certaine hauteur et
+        // au-dela d'une certaine largeur — un telephone couche — l'ecran de
+        // fin passe en multi-colonnes : le conteneur devient un bloc, ou
+        // `space-evenly` ne veut plus rien dire. Lui reserver de la hauteur
+        // n'y ajouterait pas de l'air, cela collerait le contenu en haut d'une
+        // boite trop grande. On lit donc la mise en page reelle plutot que de
+        // rejouer sa condition en JavaScript, ou elle divergerait du CSS.
+        const enColonnes = !!colonne && getComputedStyle(colonne).display !== 'flex';
+        // Quelques pixels ne valent pas un changement de mise en page.
+        const a = (enColonnes || reste < 24) ? 0 : Math.round(Math.min(reste, trous * 96));
+        aiseRef.current = a;
+        setAise(a);
+        setEchelle(1);
+        setHauteur(a > 0 ? besoin + a : null);
+        return;
+      }
+
       // SECOND TEMPS : reduire ce qui depasse encore.
+      aiseRef.current = 0;
+      setAise(0);
       const rapport = dispo / besoin;
-      // Ca tient deja, ou la reduction ne suffirait pas : on n'y touche pas.
-      const e = rapport >= 1 || rapport < plancher ? 1 : rapport;
+      // La reduction ne suffirait pas : on n'y touche pas, l'ecran defile.
+      const e = rapport < plancher ? 1 : rapport;
       setEchelle(e);
       setHauteur(e < 1 ? Math.ceil(besoin * e) : null);
     };
@@ -144,5 +205,5 @@ export function useTenirDansLEcran(plancher = 0.6) {
     };
   }, [plancher]);
 
-  return { cadre, contenu, echelle, hauteur, serre };
+  return { cadre, contenu, echelle, hauteur, serre, aise };
 }

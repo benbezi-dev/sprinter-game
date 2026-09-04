@@ -101,6 +101,19 @@
   .colonnes-si-bas { column-count: 3; }
 }
 
+/* ETALER L'ECRAN DE FIN QUAND IL RESTE DE LA PLACE.
+   Pose par `useTenirDansLEcran` le jour ou le TOP 500 a quitte cet ecran :
+   sans lui, un resultat simple se ramasse en un bloc au milieu d'un telephone
+   debout, un tiers de noir au-dessus et autant en dessous. La colonne prend
+   la hauteur disponible et `space-evenly` rend le surplus aux panneaux.
+
+   EN COLONNES, ON NE L'ETALE PAS — et c'est le crochet qui s'en charge, pas
+   une regle de plus ici : il lit le `display` reel du conteneur et ne pose
+   aucune aise quand ce n'est plus une colonne flex. Une seconde condition
+   ecrite en CSS aurait fini par diverger de la premiere. */
+.etale { height: 100%; }
+.etale-colonne { flex: 1 1 0%; justify-content: space-evenly; }
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
