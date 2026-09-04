@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-400.0 -160.0 1185.7 238.0">
+<!--
+  SPRINTER-GAME — version principale, pour fond sombre
+
+  Le coureur prend la place du I : c'est le mot lui-meme qui court. Son fut
+  reste dessine derriere lui, pour qu'a petite taille — ou la silhouette n'est
+  plus qu'une tache — le mot se lise encore SPRINTER. Le vide autour du
+  coureur est un vrai trou dans les lettres, pas un contour de la couleur du
+  fond : le logo se pose donc sur n'importe quel fond.
+
+  La vitesse tient a trois choses : le mot penche de 9 degres, des entailles
+  horizontales creusent les lettres a l'arriere puis s'effacent vers l'avant
+  (un degrade dans le masque), et des trainees filent derriere le S.
+
+  Les lettres sont Outfit 900 — la police d'affichage du jeu — converties en
+  courbes : aucun fichier de police n'est necessaire pour afficher ce logo.
+  Outfit est sous licence SIL OFL 1.1.
+
+  Ne pas modifier a la main sans raison : les entailles, le masque du coureur
+  et la boite sont solidaires.
+-->
+<defs>
+    <linearGradient id="s-or" x1="0" y1="-100.0" x2="0" y2="16"
+        gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFDA6A"/><stop offset="1" stop-color="#EDAE33"/>
+    </linearGradient>
+    <linearGradient id="s-fondu" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000"/><stop offset="0.34" stop-color="#000"/>
+      <stop offset="1" stop-color="#fff"/></linearGradient>
+    <linearGradient id="s-t0" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F8CD4A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#F8CD4A" stop-opacity="0.85"/></linearGradient>
+      <linearGradient id="s-t1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5FD3E8" stop-opacity="0"/>
+      <stop offset="1" stop-color="#5FD3E8" stop-opacity="0.85"/></linearGradient>
+      <linearGradient id="s-t2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#F8CD4A" stop-opacity="0"/>
+      <stop offset="1" stop-color="#F8CD4A" stop-opacity="0.85"/></linearGradient>
+    <mask id="s-mot" maskUnits="userSpaceOnUse"
+        x="-318.0" y="-260" width="1459.7175280898878" height="480">
+      <rect x="-318.0" y="-260" width="1459.7175280898878" height="480" fill="#fff"/>
+      <rect x="-78.0" y="-80" width="701.0" height="6" fill="url(#s-fondu)"/>
+      <rect x="-78.0" y="-57" width="701.0" height="8" fill="url(#s-fondu)"/>
+      <rect x="-78.0" y="-33" width="701.0" height="6" fill="url(#s-fondu)"/>
+      <g fill="#000" stroke="none"><g transform="translate(252.02,8.00) scale(1.03401) translate(15.0,-159.0)"><circle cx="70.0" cy="100.0" r="16.0" fill="#000"/><circle cx="32.0" cy="126.0" r="13.5" fill="#000"/><path d="M60.3,87.3 L23.8,115.3 L39.0,137.5 L78.3,113.7 Z" fill="#000"/>
+      <circle cx="32.0" cy="126.0" r="13.5" fill="#000"/><circle cx="6.0" cy="148.0" r="11.6" fill="#000"/><path d="M22.7,116.2 L-2.0,139.6 L13.0,157.3 L40.1,136.8 Z" fill="#000"/>
+      <circle cx="6.0" cy="148.0" r="11.6" fill="#000"/><circle cx="-10.0" cy="154.0" r="10.0" fill="#000"/><path d="M0.9,137.6 L-14.4,145.0 L-7.4,163.7 L9.0,159.2 Z" fill="#000"/>
+      <circle cx="92.0" cy="52.0" r="12.6" fill="#000"/><circle cx="112.0" cy="72.0" r="11.5" fill="#000"/><path d="M83.4,61.2 L104.2,80.4 L120.4,64.2 L101.2,43.4 Z" fill="#000"/>
+      <circle cx="112.0" cy="72.0" r="11.5" fill="#000"/><circle cx="118.0" cy="42.0" r="10.2" fill="#000"/><path d="M123.4,73.8 L128.1,43.6 L108.1,39.6 L100.8,69.3 Z" fill="#000"/>
+      <circle cx="105" cy="26" r="20.0" fill="#000"/>
+      <circle cx="92.0" cy="52.0" r="17.5" fill="#000"/><circle cx="70.0" cy="100.0" r="14.0" fill="#000"/><path d="M75.6,45.8 L56.9,95.0 L82.3,106.7 L107.4,60.3 Z" fill="#000"/>
+      <circle cx="70.0" cy="100.0" r="16.5" fill="#000"/><circle cx="116.0" cy="86.0" r="13.8" fill="#000"/><path d="M75.7,115.5 L120.8,99.0 L112.7,72.6 L66.1,84.0 Z" fill="#000"/>
+      <circle cx="116.0" cy="86.0" r="13.8" fill="#000"/><circle cx="104.0" cy="128.0" r="11.8" fill="#000"/><path d="M102.6,82.8 L92.5,125.3 L115.2,131.8 L129.1,90.4 Z" fill="#000"/>
+      <circle cx="104.0" cy="128.0" r="11.8" fill="#000"/><circle cx="120.0" cy="133.0" r="10.2" fill="#000"/><path d="M101.6,139.5 L117.9,143.0 L124.0,123.6 L108.6,117.1 Z" fill="#000"/>
+      <circle cx="92.0" cy="52.0" r="12.8" fill="#000"/><circle cx="66.0" cy="58.0" r="11.6" fill="#000"/><path d="M88.6,39.7 L62.9,46.8 L68.1,69.4 L94.3,64.6 Z" fill="#000"/>
+      <circle cx="66.0" cy="58.0" r="11.6" fill="#000"/><circle cx="58.0" cy="90.0" r="10.3" fill="#000"/><path d="M54.6,55.6 L47.9,87.9 L67.9,92.9 L77.1,61.3 Z" fill="#000"/></g></g>
+    </mask>
+  </defs>
+  <g transform="skewX(-9.0)">
+    <g><rect x="-288.0" y="-80" width="300.0" height="6" rx="3.0" fill="url(#s-t0)"/>
+      <rect x="-388.0" y="-57" width="400.0" height="8" rx="4.0" fill="url(#s-t1)"/>
+      <rect x="-318.0" y="-33" width="330.0" height="6" rx="3.0" fill="url(#s-t2)"/></g>
+    <g mask="url(#s-mot)" fill="url(#s-or)">
+      <path transform="translate(0.00,0.00)" d="M40.59 1.69Q27.81 1.69 18.33 -2.04Q8.85 -5.76 0.84 -13.90L18.40 -31.46Q23.88 -26.26 29.92 -23.53Q35.96 -20.79 42.84 -20.79Q48.60 -20.79 51.54 -22.54Q54.49 -24.30 54.49 -27.39Q54.49 -30.48 51.97 -32.51Q49.44 -34.55 45.29 -36.17Q41.15 -37.78 36.17 -39.47Q31.18 -41.15 26.26 -43.54Q21.35 -45.93 17.21 -49.37Q13.06 -52.81 10.53 -57.94Q8.01 -63.06 8.01 -70.51Q8.01 -80.20 12.64 -87.22Q17.28 -94.24 25.70 -97.96Q34.13 -101.69 45.51 -101.69Q56.74 -101.69 66.36 -98.10Q75.98 -94.52 82.30 -87.92L64.61 -70.37Q59.97 -74.86 55.34 -77.04Q50.70 -79.21 45.22 -79.21Q40.87 -79.21 38.27 -77.81Q35.67 -76.40 35.67 -73.60Q35.67 -70.65 38.20 -68.75Q40.73 -66.85 44.87 -65.31Q49.02 -63.76 54.00 -62.08Q58.99 -60.39 63.90 -58.08Q68.82 -55.76 72.96 -52.18Q77.11 -48.60 79.63 -43.26Q82.16 -37.92 82.16 -30.34Q82.16 -15.03 71.28 -6.67Q60.39 1.69 40.59 1.69Z"/>
+      <path transform="translate(87.53,0.00)" d="M31.04 -35.11V-55.34H49.16Q52.39 -55.34 55.13 -56.67Q57.87 -58.01 59.55 -60.74Q61.24 -63.48 61.24 -67.56Q61.24 -71.63 59.55 -74.37Q57.87 -77.11 55.13 -78.44Q52.39 -79.78 49.16 -79.78H31.04V-100.00H54.63Q64.33 -100.00 72.12 -96.14Q79.92 -92.28 84.48 -85.04Q89.04 -77.81 89.04 -67.56Q89.04 -57.44 84.48 -50.14Q79.92 -42.84 72.12 -38.97Q64.33 -35.11 54.63 -35.11ZM8.29 0.00V-100.00H36.38V0.00Z"/>
+      <path transform="translate(181.11,0.00)" d="M31.04 -39.89V-59.27H48.03Q53.79 -59.27 56.81 -62.08Q59.83 -64.89 59.83 -69.52Q59.83 -74.16 56.81 -76.97Q53.79 -79.78 48.03 -79.78H31.04V-100.00H52.53Q62.92 -100.00 70.79 -96.21Q78.65 -92.42 83.15 -85.67Q87.64 -78.93 87.64 -69.94Q87.64 -60.96 83.08 -54.21Q78.51 -47.47 70.37 -43.68Q62.22 -39.89 51.12 -39.89ZM8.29 0.00V-100.00H36.38V0.00ZM62.22 0.00 34.97 -42.70 60.25 -48.17 94.10 0.00Z"/>
+      <path transform="translate(370.15,0.00)" d="M8.29 0.00V-100.00H27.95L36.38 -78.93V0.00ZM77.11 0.00 19.10 -72.89 27.95 -100.00 85.96 -27.11ZM77.11 0.00 70.08 -22.19V-100.00H98.17V0.00Z"/>
+      <path transform="translate(478.61,0.00)" d="M32.16 0.00V-100.00H60.25V0.00ZM2.25 -76.12V-100.00H90.31V-76.12Z"/>
+      <path transform="translate(573.17,0.00)" d="M8.29 0.00V-100.00H36.38V0.00ZM31.04 0.00V-23.31H84.69V0.00ZM31.04 -39.61V-62.36H79.49V-39.61ZM31.04 -76.69V-100.00H83.85V-76.69Z"/>
+      <path transform="translate(664.91,0.00)" d="M31.04 -39.89V-59.27H48.03Q53.79 -59.27 56.81 -62.08Q59.83 -64.89 59.83 -69.52Q59.83 -74.16 56.81 -76.97Q53.79 -79.78 48.03 -79.78H31.04V-100.00H52.53Q62.92 -100.00 70.79 -96.21Q78.65 -92.42 83.15 -85.67Q87.64 -78.93 87.64 -69.94Q87.64 -60.96 83.08 -54.21Q78.51 -47.47 70.37 -43.68Q62.22 -39.89 51.12 -39.89ZM8.29 0.00V-100.00H36.38V0.00ZM62.22 0.00 34.97 -42.70 60.25 -48.17 94.10 0.00Z"/>
+      <path transform="translate(0.00,0.00)" d="M314.0,-100.0 h21.8 v100.0 h-21.8 Z"/>
+    </g>
+    <g transform="translate(570.4,60.0)" fill="#EEF0F8" opacity="0.92">
+      <path transform="translate(0.00,0.00)" d="M19.58 0.57Q15.62 0.57 12.25 -0.74Q8.88 -2.05 6.38 -4.44Q3.87 -6.83 2.48 -10.03Q1.10 -13.23 1.10 -17.00Q1.10 -20.82 2.55 -24.02Q4.01 -27.22 6.61 -29.58Q9.22 -31.95 12.65 -33.26Q16.09 -34.57 20.01 -34.57Q24.74 -34.57 28.48 -32.95Q32.23 -31.33 34.57 -28.56L28.13 -22.11Q26.36 -24.16 24.45 -25.17Q22.54 -26.17 19.87 -26.17Q17.33 -26.17 15.28 -25.05Q13.23 -23.92 12.01 -21.87Q10.79 -19.82 10.79 -17.05Q10.79 -14.28 11.91 -12.20Q13.04 -10.12 15.04 -8.98Q17.05 -7.83 19.72 -7.83Q22.30 -7.83 24.07 -8.83Q25.83 -9.84 26.77 -11.70Q27.70 -13.56 27.70 -16.09L34.24 -11.94L18.43 -12.42V-20.06H37.29V-18.62Q37.29 -12.51 35.07 -8.21Q32.85 -3.92 28.87 -1.67Q24.88 0.57 19.58 0.57Z"/>
+      <path transform="translate(52.38,0.00)" d="M0.29 0.00 13.23 -34.00H22.97L35.77 0.00H25.83L16.33 -28.89H19.77L10.03 0.00ZM8.69 -5.73V-13.18H27.70V-5.73Z"/>
+      <path transform="translate(102.76,0.00)" d="M2.82 0.00V-34.00H9.74L22.40 -15.47H19.39L31.99 -34.00H38.92V0.00H29.46V-18.34L30.85 -17.96L23.92 -8.02H17.81L10.94 -17.96L12.27 -18.34V0.00Z"/>
+      <path transform="translate(158.83,0.00)" d="M2.82 0.00V-34.00H12.37V0.00ZM10.55 0.00V-7.93H28.79V0.00ZM10.55 -13.47V-21.20H27.03V-13.47ZM10.55 -26.07V-34.00H28.51V-26.07Z"/>
+    </g>
+    <rect x="-14" y="40.0" width="524.4" height="5" rx="2.5"
+          fill="#F8CD4A" opacity="0.55"/>
+    <g><g transform="translate(252.02,8.00) scale(1.03401) translate(15.0,-159.0)"><defs><mask id="s-c-plan" maskUnits="userSpaceOnUse"
+        x="-55" y="-28" width="221" height="227">
+      <rect x="-55" y="-28" width="221" height="227" fill="#fff"/>
+      <circle cx="105" cy="26" r="15.5" fill="#000"/>
+      <circle cx="92.0" cy="52.0" r="13.0" fill="#000"/><circle cx="70.0" cy="100.0" r="9.5" fill="#000"/><path d="M79.8,47.4 L61.1,96.6 L78.4,104.5 L103.4,58.2 Z" fill="#000"/>
+      <circle cx="70.0" cy="100.0" r="12.0" fill="#000"/><circle cx="116.0" cy="86.0" r="9.3" fill="#000"/><path d="M74.1,111.3 L119.2,94.7 L113.8,77.0 L67.2,88.3 Z" fill="#000"/>
+      <circle cx="116.0" cy="86.0" r="9.3" fill="#000"/><circle cx="104.0" cy="128.0" r="7.3" fill="#000"/><path d="M107.0,83.9 L96.9,126.3 L110.9,130.3 L124.8,89.0 Z" fill="#000"/>
+      <circle cx="104.0" cy="128.0" r="7.3" fill="#000"/><circle cx="120.0" cy="133.0" r="5.7" fill="#000"/><path d="M102.5,135.1 L118.8,138.6 L122.2,127.7 L106.8,121.3 Z" fill="#000"/>
+      <circle cx="92.0" cy="52.0" r="8.3" fill="#000"/><circle cx="66.0" cy="58.0" r="7.1" fill="#000"/><path d="M89.8,44.0 L64.1,51.2 L67.3,65.0 L93.5,60.2 Z" fill="#000"/>
+      <circle cx="66.0" cy="58.0" r="7.1" fill="#000"/><circle cx="58.0" cy="90.0" r="5.8" fill="#000"/><path d="M59.0,56.6 L52.3,88.8 L63.6,91.6 L72.8,60.0 Z" fill="#000"/>
+    </mask></defs>
+    <g mask="url(#s-c-plan)"><circle cx="70.0" cy="100.0" r="9.0" fill="#F8CD4A"/><circle cx="32.0" cy="126.0" r="6.5" fill="#F8CD4A"/><path d="M64.5,92.9 L28.0,120.8 L35.4,131.6 L74.7,107.7 Z" fill="#F8CD4A"/>
+      <circle cx="32.0" cy="126.0" r="6.5" fill="#F8CD4A"/><circle cx="6.0" cy="148.0" r="4.6" fill="#F8CD4A"/><path d="M27.5,121.3 L2.8,144.7 L8.8,151.7 L35.9,131.2 Z" fill="#F8CD4A"/>
+      <circle cx="6.0" cy="148.0" r="4.6" fill="#F8CD4A"/><circle cx="-10.0" cy="154.0" r="3.0" fill="#F8CD4A"/><path d="M4.0,143.9 L-11.3,151.3 L-9.2,156.9 L7.2,152.4 Z" fill="#F8CD4A"/>
+      <circle cx="92.0" cy="52.0" r="5.6" fill="#F8CD4A"/><circle cx="112.0" cy="72.0" r="4.5" fill="#F8CD4A"/><path d="M88.2,56.1 L108.9,75.3 L115.3,68.9 L96.1,48.2 Z" fill="#F8CD4A"/>
+      <circle cx="112.0" cy="72.0" r="4.5" fill="#F8CD4A"/><circle cx="118.0" cy="42.0" r="3.2" fill="#F8CD4A"/><path d="M116.4,72.7 L121.2,42.5 L114.9,41.2 L107.6,70.9 Z" fill="#F8CD4A"/></g>
+    <circle cx="105" cy="26" r="13.0" fill="#F8CD4A"/>
+      <circle cx="92.0" cy="52.0" r="10.5" fill="#F8CD4A"/><circle cx="70.0" cy="100.0" r="7.0" fill="#F8CD4A"/><path d="M82.2,48.3 L63.5,97.5 L76.2,103.3 L101.2,57.0 Z" fill="#F8CD4A"/>
+      <circle cx="70.0" cy="100.0" r="9.5" fill="#F8CD4A"/><circle cx="116.0" cy="86.0" r="6.8" fill="#F8CD4A"/><path d="M73.3,108.9 L118.3,92.4 L114.4,79.4 L67.7,90.8 Z" fill="#F8CD4A"/>
+      <circle cx="116.0" cy="86.0" r="6.8" fill="#F8CD4A"/><circle cx="104.0" cy="128.0" r="4.8" fill="#F8CD4A"/><path d="M109.4,84.4 L99.3,126.9 L108.6,129.5 L122.4,88.2 Z" fill="#F8CD4A"/>
+      <circle cx="104.0" cy="128.0" r="4.8" fill="#F8CD4A"/><circle cx="120.0" cy="133.0" r="3.2" fill="#F8CD4A"/><path d="M103.0,132.7 L119.3,136.1 L121.2,130.1 L105.9,123.6 Z" fill="#F8CD4A"/>
+      <circle cx="92.0" cy="52.0" r="5.8" fill="#F8CD4A"/><circle cx="66.0" cy="58.0" r="4.6" fill="#F8CD4A"/><path d="M90.4,46.4 L64.8,53.6 L66.8,62.5 L93.0,57.7 Z" fill="#F8CD4A"/>
+      <circle cx="66.0" cy="58.0" r="4.6" fill="#F8CD4A"/><circle cx="58.0" cy="90.0" r="3.3" fill="#F8CD4A"/><path d="M61.5,57.1 L54.8,89.3 L61.2,90.9 L70.4,59.3 Z" fill="#F8CD4A"/></g></g>
+  </g>
+</svg>
