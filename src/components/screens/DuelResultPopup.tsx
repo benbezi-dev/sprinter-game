@@ -10,6 +10,8 @@ import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 
+const MASQUER_LP = Date.now() < new Date('2026-09-05T16:00:00Z').getTime();
+
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
 /**
@@ -206,10 +208,12 @@ export function DuelResultPopup() {
                 {N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
               </h2>
 
-              <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
-                {duel.lp > 0 ? '+' : ''}{duel.lp}
-                <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
-              </span>
+              {!MASQUER_LP && (
+                <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
+                  {duel.lp > 0 ? '+' : ''}{duel.lp}
+                  <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
+                </span>
+              )}
 
               {/* L'epreuve, et le nombre de resultats qui attendent derriere
                   celui-ci. Il vivait sous les chronos ; il tient avec le
