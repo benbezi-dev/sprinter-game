@@ -18,7 +18,7 @@ import { nomDuRang } from '@/components/Insignes';
 import { pique, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
-import { DUELS_OUVERTS } from '@/game/duels';
+import { DUELS_OUVERTS, MASQUER_LP } from '@/game/duels';
 import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
@@ -557,7 +557,7 @@ export function OneShotEndScreen() {
                   il fallait ouvrir le tableau et deviner ce qui avait bouge.
                   C'est la meme presentation que le bloc du defi, plus bas,
                   parce que c'est le meme classement et le meme bareme. */}
-              {mesPoints && typeof mesPoints.lp === 'number' && (
+              {!MASQUER_LP && mesPoints && typeof mesPoints.lp === 'number' && (
                 <div className="flex flex-col items-center gap-1">
                   <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
                                    tabular-nums text-foreground">
@@ -673,8 +673,10 @@ export function OneShotEndScreen() {
               {duel && (
                 <>
                   {/* Un duel deja tranche ne redistribue rien : afficher un
-                      « 0 PL » laisserait croire a un match nul. */}
-                  {typeof duel.lp === 'number' && (
+                      « 0 PL » laisserait croire a un match nul. Et rien du
+                      tout tant que le classement ne se dit pas — voir
+                      MASQUER_LP, qui tient les deux ecrans. */}
+                  {!MASQUER_LP && typeof duel.lp === 'number' && (
                     <div className="flex flex-col items-center gap-1">
                       <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
                                        tabular-nums text-foreground">

@@ -3,14 +3,15 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { Swords, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
+import {
+  fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, MASQUER_LP,
+  type MonDuel,
+} from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
 import { pique } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
-
-const MASQUER_LP = Date.now() < new Date('2026-09-05T16:00:00Z').getTime();
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
