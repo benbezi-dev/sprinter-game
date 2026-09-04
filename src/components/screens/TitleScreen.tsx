@@ -10,15 +10,13 @@ import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
-import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
-import { Compass } from 'lucide-react';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
-import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD, Mail } from 'lucide-react';
+import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -39,37 +37,43 @@ const TABS: { id: Tab; key: string }[] = [
  * les deux autres ne vivaient qu'en carriere. Trois emplacements pour la meme
  * chose, decides par la hauteur du contenu et celle de la fenetre.
  *
- * Les libelles s'ecrivent en entier, sur deux lignes s'il le faut. « NOUS
- * CONT… » coupe au bord de l'ecran ne dit rien a personne, et un lien qu'on
- * ne lit pas n'est pas un lien. Sur un telephone tenu debout l'icone passe
- * donc au-dessus du mot, pour laisser toute la largeur de la colonne au
- * texte ; des qu'il y a de la place, elle revient a cote et la barre reprend
- * la moitie de sa hauteur — en paysage, chaque ligne gagnee compte.
+ * Trois libelles sur une seule ligne, en entier — « NOUS CONT… » coupe au
+ * bord de l'ecran ne dit rien a personne, et un lien qu'on ne lit pas n'est
+ * pas un lien. Ce qui les fait tenir : plus d'icones, un espacement de
+ * lettres sobre, et une largeur laissee a chacun selon la longueur de son mot
+ * plutot que trois colonnes egales — « DÉCOUVRIR LE JEU » a besoin de plus
+ * d'un tiers de la barre, « NOUS CONTACTER » de moins.
+ *
+ * La taille suit la largeur de l'ecran (clamp) au lieu de sauter a des
+ * paliers : les trois libelles francais, les plus longs, demandent environ
+ * 33 fois la taille du texte pour tenir cote a cote, soit un peu moins de
+ * 3 % de la largeur par point de police. Entre les deux bornes, personne ne
+ * voit jamais un mot coupe ni un mot passe a la ligne — ni sur l'ecran de
+ * couverture d'un pliable, ni sur un moniteur.
  */
 function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void }) {
   const { N } = SprinterApp;
   const liens = [
-    { cle: 'tour_open', Icone: Compass, action: onTour },
-    { cle: 'tuto_open', Icone: GraduationCap, action: onTuto },
+    { cle: 'tour_open', action: onTour },
+    { cle: 'tuto_open', action: onTuto },
     // mailto: par window.location — un <a href> ne mene nulle part dans la
     // fenetre sans barre d'adresse d'une application installee.
-    { cle: 'contact', Icone: Mail,
+    { cle: 'contact',
       action: () => { window.location.href = 'mailto:support@sprinter-game.com'; } },
   ];
 
   return (
-    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4 grid grid-cols-3 gap-1">
-      {liens.map(({ cle, Icone, action }) => (
+    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4
+                    flex items-center justify-between gap-1">
+      {liens.map(({ cle, action }) => (
         <button
           key={cle}
           onClick={action}
-          className="min-w-0 px-1 py-1.5
-                     flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5
-                     text-[10px] md:text-[11px] font-bold tracking-wide leading-tight text-center
+          className="px-0.5 py-1.5 whitespace-nowrap
+                     text-[clamp(7px,2.6vw,11px)] font-bold tracking-wide leading-none
                      text-muted-foreground hover:text-primary transition-colors"
         >
-          <Icone className="w-3.5 h-3.5 shrink-0" />
-          <span className="w-full sm:w-auto break-words">{N.t(cle)}</span>
+          {N.t(cle)}
         </button>
       ))}
     </div>
