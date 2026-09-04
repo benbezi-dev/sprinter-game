@@ -6,7 +6,7 @@ import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } fro
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   COULOIRS,
-  type EtatSalle, type JoueurSalle, type Presentation,
+  type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
 } from '@/game/live';
 import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
 import {
@@ -24,6 +24,20 @@ const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
 const MICRO_VAINQUEUR_MS = 5000;
+
+/**
+ * Le terrain du direct : le stade intergalactique, dernier de la campagne.
+ *
+ * Le direct se courait sur la piste olympique, un rang plus bas. Ce n'est pas
+ * le meme rendez-vous : on y vient avec des gens qu'on a invites soi-meme, et
+ * c'est la course qu'ils raconteront. Elle se court donc sur le plus beau
+ * stade du jeu — cosmos, tribunes pleines — plutot que sur celui qu'on
+ * traverse en montant.
+ *
+ * Le terrain ne change rien a la physique : les chronos vises du dernier rang
+ * ne concernent que le plateau de l'ordinateur, qui ne court pas ici.
+ */
+const NIVEAU_DIRECT = 5;
 
 type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
 
@@ -151,7 +165,8 @@ export function LivePanel() {
   const monterLaPiste = () => {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
     SprinterApp.startLive([epreuve], {
-      levelIdx: 4, adversaire: salle.current?.adversaire || '', autres: lesAutres(),
+      levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
+      autres: lesAutres(), sansOrdinateur: true,
     });
   };
 
@@ -160,8 +175,8 @@ export function LivePanel() {
    *
    * Les ecouteurs de la salle sont crees une fois, a la connexion : ce qu'ils
    * capturent de React date de cet instant-la, ou le salon etait encore vide.
-   * Lire `salon` depuis eux donnait donc une piste sans personne dessus —
-   * huit couloirs, sept coureurs de l'ordinateur, et pas d'adversaire.
+   * Lire `salon` depuis eux donnait donc une piste sans personne dessus : le
+   * joueur seul dans son couloir, et pas un adversaire.
    *
    * La salle, elle, garde son dernier etat a jour. C'est la source, on y va.
    */
@@ -188,7 +203,9 @@ export function LivePanel() {
     // les deux clients doivent placer les memes gens aux memes endroits.
     const autres = lesAutres();
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse, autres });
+      SprinterApp.startLive([epreuve], {
+        levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
+      });
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
@@ -289,6 +306,9 @@ export function LivePanel() {
 
       setEtape('review');
     },
+    // Les points du duel, quand la salle a fini d'ecrire. L'ecran de fin est
+    // deja monte a cet instant : il les lit dans le moteur, comme le resultat.
+    onDuel: (d: DuelDirect) => { SprinterApp.G.liveDuel = d; },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
       if (!voixCourante()) ouvrirVoix();
@@ -306,7 +326,8 @@ export function LivePanel() {
       position: (d: number) => s.position(d),
       fini: (ms: number) => s.fini(ms),
     });
-    s.connecter([epreuve], 4, places);
+    // La salle annonce le terrain de la course : le meme qu'on monte ici.
+    s.connecter([epreuve], NIVEAU_DIRECT, places);
   };
 
   const creer = async () => {

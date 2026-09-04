@@ -18,6 +18,7 @@
 
 import { getSavedName } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
+import type { Etage } from './duels';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
@@ -84,6 +85,25 @@ export type ResultatDirect = {
   invite?: { id: string; nom: string; ms: number };
 };
 
+/**
+ * Ce qu'un duel du direct a rapporte, d'un cote.
+ *
+ * La salle nomme les deux joueurs par leur identifiant : le jeu prend le sien
+ * et ignore l'autre. Rien n'arrive quand il n'y a pas de points — une course a
+ * trois ou plus n'est pas un duel, et un duel deja tranche ne redistribue
+ * rien.
+ */
+export type PointsDuel = {
+  id: string;
+  /** Points de ligue gagnes ou perdus sur cette course. */
+  lp: number;
+  rang?: { palier: number; etage: Etage; division: number };
+  monte?: boolean;
+  descend?: boolean;
+};
+
+export type DuelDirect = { hote: PointsDuel; invite: PointsDuel };
+
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
   onPresentation?: (p: Presentation) => void;
@@ -93,6 +113,8 @@ type Ecouteurs = {
   onPos?: (id: string, d: number) => void;
   onFini?: (nom: string, ms: number, abandon: boolean) => void;
   onResultat?: (r: ResultatDirect) => void;
+  /** Les points du duel, juste apres le resultat. Absent s'il n'y en a pas. */
+  onDuel?: (d: DuelDirect) => void;
   onSorti?: (nom: string) => void;
   onFerme?: (raison: string) => void;
   /** Signalisation WebRTC arrivee de l'autre pair. */
@@ -246,6 +268,12 @@ export class Salle {
         this.departPose = false;
         this.presentationPose = false;
         this.ec.onResultat?.(m as ResultatDirect);
+        return;
+      // Les points arrivent APRES le verdict, et parfois pas du tout : la
+      // salle ecrit au classement hors du chemin de l'annonce, pour qu'une
+      // base indisponible ne retienne pas un resultat.
+      case 'duel':
+        this.ec.onDuel?.(m as DuelDirect);
         return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.

@@ -41,7 +41,7 @@ function fmt(v: number | null | undefined, dnf: string) {
 
 export function OneShotEndScreen() {
   const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
-          liveOn, liveNom, liveResultat } = useGameStore();
+          liveOn, liveNom, liveResultat, liveDuel } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
@@ -358,6 +358,23 @@ export function OneShotEndScreen() {
   const monMs = duo ? liveResultat[monRole].ms : 0;
   const sonMs = duo ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
 
+  /**
+   * Les points que CETTE course a rapportes, de mon cote.
+   *
+   * La salle annonce les deux joueurs par leur identifiant : on prend le sien,
+   * sans avoir a traduire « hote » en « lanceur ». Nul tant que la salle n'a
+   * rien annonce — l'ecriture au classement suit le verdict de peu, mais elle
+   * le suit, et cet ecran est deja la quand elle arrive. Nul aussi quand il
+   * n'y a rien a annoncer : plus de deux couloirs, ou une revanche que le
+   * classement a deja tranchee.
+   */
+  const mesPoints: { lp: number; rang?: { etage: any; division: number };
+                     monte?: boolean; descend?: boolean } | null =
+    duo && liveDuel
+      ? ([liveDuel.hote, liveDuel.invite]
+          .find((x: any) => x && x.id === liveResultat.moi) || null)
+      : null;
+
   /** L'ordre d'arrivee, quand il y a plus de deux couloirs sur la piste. */
   const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
     (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
@@ -533,6 +550,33 @@ export function OneShotEndScreen() {
                 <span className="text-[10px] md:text-xs text-muted-foreground">
                   {N.t('live_gap', { s: (Math.abs(monMs - sonMs) / 1000).toFixed(2) })}
                 </span>
+              )}
+
+              {/* Les points, comme apres un defi releve.
+                  Une course en direct comptait au classement sans le dire :
+                  il fallait ouvrir le tableau et deviner ce qui avait bouge.
+                  C'est la meme presentation que le bloc du defi, plus bas,
+                  parce que c'est le meme classement et le meme bareme. */}
+              {mesPoints && typeof mesPoints.lp === 'number' && (
+                <div className="flex flex-col items-center gap-1">
+                  <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
+                                   tabular-nums text-foreground">
+                    {mesPoints.lp > 0 ? '+' : ''}{mesPoints.lp}
+                    <span className="text-xs font-normal ml-1 text-muted-foreground">
+                      {N.t('duel_lp')}
+                    </span>
+                  </span>
+                  {/* Un changement de division est le seul moment ou le
+                      classement se raconte tout seul. */}
+                  {mesPoints.rang && (mesPoints.monte || mesPoints.descend) && (
+                    <span className={`text-[10px] md:text-xs font-bold tracking-widest
+                      ${mesPoints.monte ? 'text-emerald-400' : 'text-destructive'}`}>
+                      {N.t(mesPoints.monte ? 'duel_promu' : 'duel_relegue', {
+                        r: nomDuRang(mesPoints.rang.etage, mesPoints.rang.division),
+                      })}
+                    </span>
+                  )}
+                </div>
               )}
             </motion.div>
           )}

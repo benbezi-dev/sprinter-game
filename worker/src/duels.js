@@ -242,11 +242,19 @@ async function noterDuel(db, luiKey, moiKey, issue, id = null) {
 
   // Ce qui remonte au jeu est ce que le joueur peut voir : des points de
   // ligue et un rang. Le MMR reste ou il est.
+  //
+  // Le mouvement de division est rendu DES DEUX COTES. Un defi n'en montrait
+  // qu'un — celui qui releve est le seul present a l'arrivee, l'autre
+  // l'apprend plus tard par son annonce, ou son propre `rang` figure deja.
+  // Une course en direct a les deux joueurs devant leur ecran en meme temps :
+  // sans le second, l'hote promu par sa victoire ne l'apprenait pas.
   return {
     lp: apres.releveur.delta_lp, lp_adverse: apres.lanceur.delta_lp,
     rang: rangDe(apres.releveur.palier),
     rang_adverse: rangDe(apres.lanceur.palier),
     monte: apres.releveur.monte > 0, descend: apres.releveur.descend > 0,
+    monte_adverse: apres.lanceur.monte > 0,
+    descend_adverse: apres.lanceur.descend > 0,
   };
 }
 

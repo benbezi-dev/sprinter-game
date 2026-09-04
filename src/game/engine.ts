@@ -64,6 +64,8 @@ export type GameState = {
   liveOn: boolean;
   liveNom: string;
   liveResultat: any;
+  /** Les points du duel du direct, tels que la salle les a annonces. */
+  liveDuel: any;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -461,5 +463,6 @@ export function updateLogic(dt: number) {
     liveOn: G.liveOn,
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
+    liveDuel: G.liveDuel,
   });
 }
