@@ -32,9 +32,9 @@
       crowdLo: [56, 44, 78], crowdHi: [214, 188, 244],
       accent: [232, 121, 216], dust: [216, 196, 236]
     },
-    // Jeux olympiques : piste bleue, lignes blanches et liseret vert au
+    // Jeux mondiaux : piste bleue, lignes blanches et liseret vert au
     // couloir interieur, comme la piste d'athletisme de Vallehermoso.
-    olympic: {
+    mondiaux: {
       skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
       grass: [30, 111, 0], grassEdge: [20, 88, 0],
       trackA: [21, 70, 158], trackB: [16, 56, 132],
@@ -222,7 +222,7 @@
         bassDiv: 8, bassPat: [0, 0, 7, 0, 12, 0, 7, -1], bassAmp: 0.44,
         padAmp: 0.085, arp: 8, arpAmp: 0.11, drone: 0.10, droneSemi: 0, stab: 0
       });
-      this.buf.race2 = this.buildRace({          // jeux olympiques
+      this.buf.race2 = this.buildRace({          // jeux mondiaux
         bpm: 140, prog: [[0, MIN], [1, MAJ], [-4, MAJ], [7, AUG]],
         kick: [0, 1, 1.5, 2, 3, 3.5], snare: [1, 3, 3.75], hats: 16,
         bassDiv: 16, bassPat: [0, 0, 0, 12, 0, 0, 7, 0, 0, 0, 12, 0, 1, 0, 7, 0],
@@ -378,7 +378,7 @@
     paused: false,
 
     // Noms du haut du TOP 500 par discipline, charges en tache de fond et
-    // servis aux Jeux olympiques. Vides tant que le reseau n'a pas repondu :
+    // servis aux Jeux mondiaux. Vides tant que le reseau n'a pas repondu :
     // le plateau maison prend alors le relais.
     topNames: { '100': [], '200': [], '400': [] },
 
@@ -461,7 +461,7 @@
     return p < 0 ? null : p + 1;
   }
 
-  // Aux Jeux olympiques, le plateau n'est plus invente : ce sont les sept
+  // Aux Jeux mondiaux, le plateau n'est plus invente : ce sont les sept
   // meilleurs chronos mondiaux de la discipline, tires du TOP 500 par course.
   //
   // Trois regles. Un joueur peut occuper plusieurs lignes du tableau, il ne
@@ -469,13 +469,13 @@
   // joueur lui-meme est retire, sinon il courrait contre son propre fantome
   // homonyme. Et s'il n'y a pas encore sept noms au tableau, on complete avec
   // les adversaires maison, sans doublon.
-  const OLYMPIC = 4;
+  const MONDIAUX = 4;
   function myNameKey() {
     try { return (localStorage.getItem('sprinter_player_name') || '').trim().toLowerCase(); }
     catch (e) { return ''; }
   }
-  function olympicNames() {
-    const base = LEVELS[OLYMPIC].names;
+  function mondiauxNames() {
+    const base = LEVELS[MONDIAUX].names;
     const top = (G.topNames && G.topNames[G.raceKey]) || [];
     const mine = myNameKey();
     const seen = new Set(), out = [];
@@ -505,7 +505,7 @@
       best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
-    const names = idx === OLYMPIC ? olympicNames() : lvl.names;
+    const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
     names.forEach((n, i) => {
       const t = lo + Math.random() * (hi - lo);
       const lane = i < 3 ? i : i + 1;

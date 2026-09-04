@@ -27,7 +27,7 @@ export function GameCanvas() {
     // load() fixe la langue (sauvegardee ou detectee) : on aligne le
     // document dessus pour ne pas declencher la traduction navigateur.
     syncHtmlLang();
-    // Les Jeux olympiques courent contre le vrai TOP 500 : on va chercher les
+    // Les Jeux mondiaux courent contre le vrai TOP 500 : on va chercher les
     // noms des maintenant, bien avant que le joueur n'y arrive.
     primeTopNames();
 

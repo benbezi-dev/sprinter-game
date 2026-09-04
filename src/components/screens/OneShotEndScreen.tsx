@@ -206,7 +206,7 @@ export function OneShotEndScreen() {
     setTopStatus('sending');
     try {
       for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
-      primeTopNames();          // le plateau olympique se met a jour
+      primeTopNames();          // le plateau des Jeux mondiaux se met a jour
       setTopStatus('done');
     } catch (e) {
       // Un nom qui appartient a un autre appareil ne se debloque pas en

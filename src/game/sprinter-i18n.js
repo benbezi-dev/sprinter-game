@@ -974,7 +974,7 @@
     ['Niveau régional', 'Regional level'],
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
-    ['Jeux olympiques', 'Olympic Games'],
+    ['Jeux mondiaux', 'World Games'],
     ['Intergalactique', 'Intergalactic']
   ];
 
