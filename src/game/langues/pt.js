@@ -8,7 +8,7 @@ export default {
 
   LEVEL_NAMES: [
     'Torneio escolar', 'Nível regional', 'Nível nacional',
-    'Campeonato Mundial', 'Jogos Olímpicos', 'Intergaláctico'
+    'Campeonato Mundial', 'Jogos Mundiais', 'Intergaláctico'
   ],
 
   RACE_SUB: {

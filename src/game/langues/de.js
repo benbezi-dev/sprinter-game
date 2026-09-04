@@ -9,7 +9,7 @@ export default {
 
   LEVEL_NAMES: [
     'Schulsportfest', 'Regionale Ebene', 'Nationale Ebene',
-    'Weltmeisterschaft', 'Olympische Spiele', 'Intergalaktisch'
+    'Weltmeisterschaft', 'Weltspiele', 'Intergalaktisch'
   ],
 
   RACE_SUB: {

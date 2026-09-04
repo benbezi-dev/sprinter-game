@@ -9,7 +9,7 @@ export default {
 
   LEVEL_NAMES: [
     'Okul yarışması', 'Bölgesel seviye', 'Ulusal seviye',
-    'Dünya Şampiyonası', 'Olimpiyat Oyunları', 'Galaksiler arası'
+    'Dünya Şampiyonası', 'Dünya Oyunları', 'Galaksiler arası'
   ],
 
   RACE_SUB: {

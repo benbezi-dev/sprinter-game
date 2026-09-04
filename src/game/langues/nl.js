@@ -9,7 +9,7 @@ export default {
 
   LEVEL_NAMES: [
     'Schoolwedstrijd', 'Regionaal niveau', 'Nationaal niveau',
-    'Wereldkampioenschap', 'Olympische Spelen', 'Intergalactisch'
+    'Wereldkampioenschap', 'Wereldspelen', 'Intergalactisch'
   ],
 
   RACE_SUB: {

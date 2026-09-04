@@ -9,7 +9,7 @@ export default {
 
   LEVEL_NAMES: [
     'Zawody szkolne', 'Poziom regionalny', 'Poziom krajowy',
-    'Mistrzostwa świata', 'Igrzyska olimpijskie', 'Międzygalaktyczny'
+    'Mistrzostwa świata', 'Igrzyska światowe', 'Międzygalaktyczny'
   ],
 
   RACE_SUB: {

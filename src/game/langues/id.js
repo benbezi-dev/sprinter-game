@@ -9,7 +9,7 @@ export default {
 
   LEVEL_NAMES: [
     'Lomba sekolah', 'Tingkat daerah', 'Tingkat nasional',
-    'Kejuaraan Dunia', 'Olimpiade', 'Antargalaksi'
+    'Kejuaraan Dunia', 'Pesta Olahraga Dunia', 'Antargalaksi'
   ],
 
   RACE_SUB: {
