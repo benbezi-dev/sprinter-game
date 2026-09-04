@@ -36,5 +36,13 @@ android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
+# Le trousseau de signature Android. Ces fichiers portent le chemin du keystore
+# et ses mots de passe. Ils n'ont jamais ete suivis, mais rien ne les en
+# empechait : un seul `git add -A` les envoyait sur un depot public. Une cle de
+# signature qui fuit ne se retire pas — elle se remplace, et l'application ne
+# se met alors plus a jour pour ceux qui l'ont deja installee.
+android/keystore*
+*.jks
+*.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
 /icons/
