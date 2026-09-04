@@ -18,8 +18,11 @@ import { RecordBattu } from './RecordBattu';
 import { nomDuRang } from '@/components/Insignes';
 import { pique, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
-import type { DuelIssue } from '@/game/duels';
-import { DUELS_OUVERTS } from '@/game/duels';
+import type { DuelIssue, MonMouvement } from '@/game/duels';
+import {
+  DUELS_OUVERTS, mouvementDuel, mouvementApresDirect, repereAvantDuel,
+} from '@/game/duels';
+import { MonteeAuClassement } from './MonteeClassement';
 import { RECOMMENCER_OUVERT, feteDuRecordOuverte } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
@@ -128,6 +131,14 @@ export function OneShotEndScreen() {
   // chrono affiche ici : c'est lui qui fait foi, et il ne se rejoue pas.
   const [duel, setDuel] = useState<DuelIssue | null>(null);
   const [duelEnCours, setDuelEnCours] = useState(!!challenge);
+  /**
+   * Ce que ce duel a fait de ma place au classement.
+   *
+   * Le serveur n'en dit rien : il rend des points et une division, ce qui
+   * suffit a dire ce que le duel a rapporte et pas a dire qui l'on vient de
+   * doubler. La place se relit au tableau, apres coup — voir mouvementDuel.
+   */
+  const [mvtDuel, setMvtDuel] = useState<MonMouvement | null>(null);
   const [voirDuels, setVoirDuels] = useState(false);
   /**
    * Ou en est l'image de la course.
@@ -280,22 +291,59 @@ export function OneShotEndScreen() {
   useEffect(() => {
     if (!challenge || submitted.current === challenge.id || (!complete && !falseOut)) return;
     submitted.current = challenge.id;
-    setDuel(null); setDuelEnCours(true); sonne.current = false;
-    submitAttempt({
-      id: challenge.id,
-      totalMs: falseOut ? DSQ_MS : runTime * 1000,
-      splits: falseOut ? [] : runSplits.map(s => (s || 0) * 1000),
-      name: getSavedName() || undefined,
-      // Ma course devient a son tour un fantome : celui que l'adversaire
-      // aura a courir s'il perd et prend sa revanche. Un faux depart n'a
-      // rien enregistre, et il n'y a rien a faire courir.
-      traces: falseOut ? [] : (SprinterApp.G.shotTraces || []),
-    })
-      .then(r => { setSent(true); setDuel(r.duel || null); })
-      .catch(() => { /* le chrono local reste affiche */ })
-      .finally(() => setDuelEnCours(false));
+    setDuel(null); setDuelEnCours(true); setMvtDuel(null); sonne.current = false;
+    (async () => {
+      /* LE REPERE D'AVANT LE DUEL, PRIS AVANT D'ENVOYER LE CHRONO.
+
+         Le classement ne garde aucune trace de la place qu'on occupait : des
+         que le chrono est parti, le serveur a bouge la ligne et il n'y a plus
+         rien a comparer. Le seul instant ou cette place existe encore est
+         celui-ci — une lecture, juste avant l'envoi.
+
+         PLAFONNE A UNE SECONDE ET DEMIE, et c'est la seule chose qui compte
+         ici : un reseau lent ne doit pas retenir le resultat du duel pour une
+         animation. Passe ce delai on envoie, et l'annonce se fera sans le
+         deplacement plutot que de se faire attendre. */
+      if (DUELS_OUVERTS) {
+        await Promise.race([
+          repereAvantDuel().catch(() => { /* sans repere : pas d'animation */ }),
+          new Promise(r => setTimeout(r, 1500)),
+        ]);
+      }
+      try {
+        const r = await submitAttempt({
+          id: challenge.id,
+          totalMs: falseOut ? DSQ_MS : runTime * 1000,
+          splits: falseOut ? [] : runSplits.map(s => (s || 0) * 1000),
+          name: getSavedName() || undefined,
+          // Ma course devient a son tour un fantome : celui que l'adversaire
+          // aura a courir s'il perd et prend sa revanche. Un faux depart n'a
+          // rien enregistre, et il n'y a rien a faire courir.
+          traces: falseOut ? [] : (SprinterApp.G.shotTraces || []),
+        });
+        setSent(true); setDuel(r.duel || null);
+      } catch {
+        /* le chrono local reste affiche */
+      } finally {
+        setDuelEnCours(false);
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [challenge && challenge.id, complete, falseOut]);
+
+  /**
+   * Ou ce duel m'a place, une fois l'issue connue.
+   *
+   * Rien a relire quand la rencontre etait DEJA tranchee : personne n'a bouge,
+   * et une montee de zero place n'est pas une nouvelle. Rien non plus sans
+   * points distribues — un duel sans bareme ne deplace pas un classement.
+   */
+  useEffect(() => {
+    if (!DUELS_OUVERTS || !duel || duel.deja || typeof duel.lp !== 'number') return;
+    let annule = false;
+    mouvementDuel().then(m => { if (!annule) setMvtDuel(m); });
+    return () => { annule = true; };
+  }, [duel]);
 
   // La musique du resultat. Elle ne part qu'une fois l'issue connue : jouer
   // une fanfare avant de savoir qui a gagne serait pire que le silence.
@@ -440,6 +488,24 @@ export function OneShotEndScreen() {
     ? ((monRole === 'hote' && liveResultat.issue === 'challenger') ||
        (monRole === 'invite' && liveResultat.issue === 'opponent'))
     : !!maLigne && maLigne.place === 1;
+
+  /**
+   * Ou une course en direct A DEUX m'a place au classement des duels.
+   *
+   * A deux, et a deux seulement : au-dela c'est une course, elle ne compte
+   * pas au classement des duels, et le bareme n'a rien distribue a montrer.
+   *
+   * Le repere d'avant a ete pose au coup de pistolet, cote salle. Ici on ne
+   * fait que relire — en insistant, parce que la salle annonce l'arrivee
+   * avant d'inscrire les points. Voir mouvementApresDirect.
+   */
+  useEffect(() => {
+    if (!DUELS_OUVERTS || !live || !duo || !liveResultat.issue) return;
+    let annule = false;
+    mouvementApresDirect().then(m => { if (!annule) setMvtDuel(m); });
+    return () => { annule = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, duo]);
 
   // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
   //
@@ -615,6 +681,22 @@ export function OneShotEndScreen() {
                   {N.t('live_gap', { s: (Math.abs(monMs - sonMs) / 1000).toFixed(2) })}
                 </span>
               )}
+
+              {/* Ce que cette course a fait de ma place. Une course en direct
+                  a deux compte au classement des duels exactement comme un
+                  defi rejoue en fantome ; elle ne le disait nulle part, et on
+                  n'apprenait sa montee qu'en allant lire le tableau. */}
+              {mvtDuel && mvtDuel.lignes.length > 0 &&
+               mvtDuel.avant !== mvtDuel.apres && (
+                <MonteeAuClassement
+                  titre={N.t('duel_title')}
+                  nom={mvtDuel.nom}
+                  rangAvant={mvtDuel.avant}
+                  rangApres={mvtDuel.apres}
+                  lignes={mvtDuel.lignes}
+                  delai={0.35}
+                />
+              )}
             </motion.div>
           )}
 
@@ -733,6 +815,29 @@ export function OneShotEndScreen() {
                       )}
                     </div>
                   )}
+
+                  {/* LE DEPLACEMENT AU CLASSEMENT, TOUT DE SUITE APRES LES
+                      POINTS.
+
+                      « +25 PL » dit ce que le duel rapporte ; il ne dit pas ce
+                      qu'il change. Ce qu'on est venu chercher est la place —
+                      doubler quelqu'un, ou se faire doubler. Le nom traverse
+                      donc le classement et se pose entre ceux d'a cote, dans
+                      les deux sens : une descente se regarde aussi, et la
+                      cacher ferait d'un classement une machine a ne donner que
+                      des bonnes nouvelles. */}
+                  {mvtDuel && mvtDuel.lignes.length > 0 &&
+                   mvtDuel.avant !== mvtDuel.apres && (
+                    <MonteeAuClassement
+                      titre={N.t('duel_title')}
+                      nom={mvtDuel.nom}
+                      rangAvant={mvtDuel.avant}
+                      rangApres={mvtDuel.apres}
+                      lignes={mvtDuel.lignes}
+                      delai={0.35}
+                    />
+                  )}
+
                   {/* Gagne : le vainqueur est la, et l'autre est parti depuis
                       longtemps. C'est ici, et nulle part ailleurs, qu'il peut
                       lui laisser un mot.

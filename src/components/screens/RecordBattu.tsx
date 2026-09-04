@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Trophy, Loader2 } from 'lucide-react';
 import type { RaceOutcome } from '@/game/leaderboard';
 import { Compteur } from './Compteur';
+import { MonteeAuClassement } from './MonteeClassement';
 
 /**
  * LE RECORD A SON MOMENT, AVANT LE MENU DE FIN.
@@ -41,6 +42,26 @@ export function RecordBattu({
 }) {
   const { N } = SprinterApp;
   const seul = tops.length === 1 ? tops[0] : null;
+
+  /**
+   * L'EPREUVE DONT LA MONTEE SE MONTRE, ET IL N'Y EN A QU'UNE.
+   *
+   * « 9e au TOP 500 » est un nombre ; ce qu'on est venu chercher est le
+   * deplacement qui l'a produit. On le joue donc pour de bon — le nom qui
+   * traverse le classement et se pose entre ceux qu'il vient de doubler.
+   *
+   * Un programme a plusieurs epreuves peut faire monter deux fois. On garde la
+   * plus grande montee et rien d'autre : deux animations l'une sous l'autre se
+   * regardent l'une apres l'autre, et la carte finirait plus haute que
+   * l'ecran. Un premier chrono — aucune place d'avant — compte pour la plus
+   * grande de toutes : entrer au tableau est le plus grand des deplacements.
+   */
+  const gain = (t: RaceOutcome) =>
+    t.ownRank == null ? Number.MAX_SAFE_INTEGER : t.ownRank - t.rank;
+  const montee = nom
+    ? [...tops].filter(t => t.voisins.length && gain(t) > 0)
+               .sort((a, b) => gain(b) - gain(a))[0] || null
+    : null;
 
   /** Ce que ce chrono vaut face au precedent, ou face a rien du tout. */
   const ecart = (t: RaceOutcome) =>
@@ -137,6 +158,25 @@ export function RecordBattu({
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* LE DEPLACEMENT, TOUT DE SUITE APRES LE NOMBRE.
+
+              Monte des le premier rendu plutot qu'apparu apres coup : la
+              carte garde sa hauteur, et le bouton CONTINUER ne se derobe pas
+              sous le doigt une seconde apres qu'on l'a vise. Le trajet, lui,
+              attend que le chrono ait fini de defiler. */}
+          {montee && (
+            <div className="w-full mt-1">
+              <MonteeAuClassement
+                titre={tops.length > 1 ? `${montee.race} M · ${N.t('top500')}` : N.t('top500')}
+                nom={nom}
+                rangAvant={montee.ownRank}
+                rangApres={montee.rank}
+                lignes={montee.voisins}
+                delai={0.85}
+              />
             </div>
           )}
 

@@ -2,8 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'framer-motion';
 import { Swords, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
+import {
+  fetchMesDuels, marquerDuelsVus, fantomeDuDuel, mouvementDuel, DUELS_OUVERTS,
+  type MonDuel, type MonMouvement,
+} from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
+import { MonteeAuClassement } from './MonteeClassement';
 import { pique } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
@@ -29,6 +33,17 @@ export function DuelResultPopup() {
 
   const [file, setFile] = useState<MonDuel[]>([]);
   const [voirDuels, setVoirDuels] = useState(false);
+  /**
+   * Ou ce resultat m'a place au classement.
+   *
+   * Celui qui a lance le defi n'a rien vu de la rencontre : elle s'est jouee
+   * sans lui, parfois des jours plus tard. Le nombre de points ne lui apprend
+   * pas ce qui a change autour de lui — sa place, si, et c'est la seule chose
+   * qu'il n'aurait autrement decouverte qu'en allant lire le tableau.
+   */
+  const [mvt, setMvt] = useState<MonMouvement | null>(null);
+  /** Le resultat pour lequel la place a ete relue : une fois par duel. */
+  const lu = useRef('');
   /** Le temps d'aller chercher le fantome de l'adversaire, avant de partir. */
   const [enRoute, setEnRoute] = useState(false);
   const sonne = useRef<string>('');
@@ -88,6 +103,22 @@ export function DuelResultPopup() {
       duel.issue === 'challenger' ? 'fanfare' : duel.issue === 'draw' ? 'win' : 'dirge'
     );
   }, [montrable, duel]);
+
+  /**
+   * La place se relit quand le resultat s'affiche, pas quand il arrive.
+   *
+   * Les resultats sont annonces un par un : relire pour toute la file
+   * poserait le repere sur le premier et les suivants n'auraient plus rien a
+   * raconter. Chacun attend donc son tour a l'ecran.
+   */
+  useEffect(() => {
+    if (!montrable || !duel || lu.current === duel.id) return;
+    lu.current = duel.id;
+    setMvt(null);
+    let arrete = false;
+    mouvementDuel().then(m => { if (!arrete) setMvt(m); });
+    return () => { arrete = true; };
+  }, [montrable, duel && duel.id]);
 
   if (!montrable || !duel) return null;
 
@@ -231,6 +262,24 @@ export function DuelResultPopup() {
                 {file.length > 1 &&
                   ` · ${N.t(file.length > 2 ? 'duel_mores' : 'duel_more', { n: file.length - 1 })}`}
               </span>
+
+              {/* LE DEPLACEMENT, TOUT DE SUITE APRES LE VERDICT.
+
+                  Dans les deux sens : celui qui apprend une defaite voit sa
+                  ligne descendre. C'est desagreable et c'est juste — un
+                  classement qui ne montrerait que les montees ne serait plus
+                  un classement, et la descente est ce qui donne du prix a la
+                  place qu'on tient. */}
+              {mvt && mvt.lignes.length > 0 && mvt.avant !== mvt.apres && (
+                <MonteeAuClassement
+                  titre={N.t('duel_title')}
+                  nom={mvt.nom}
+                  rangAvant={mvt.avant}
+                  rangApres={mvt.apres}
+                  lignes={mvt.lignes}
+                  delai={0.4}
+                />
+              )}
             </div>
 
             <div className="flex flex-col items-center gap-3 court:gap-2 min-w-0 w-full">

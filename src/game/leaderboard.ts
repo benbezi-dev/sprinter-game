@@ -50,12 +50,24 @@ export function getSavedName(): string {
   }
 }
 
+/**
+ * Le nom vient de changer, et il s'affiche ailleurs.
+ *
+ * La puce de l'accueil le relisait au changement d'etat du jeu — ce qui
+ * suffisait tant qu'elle etait seule a le poser. La fenetre de bienvenue le
+ * pose desormais depuis un autre coin de l'arbre, sans que rien ne bouge dans
+ * le moteur : la puce restait donc a clignoter « CHOISIS TON NOM » sous le nom
+ * qu'on venait d'entrer, jusqu'a la course suivante.
+ */
+export const NOM_CHANGE = 'sprinter-nom';
+
 export function saveName(name: string) {
   try {
     localStorage.setItem(PLAYER_NAME_KEY, name);
   } catch {
     // localStorage indisponible : le nom sera juste redemande la prochaine fois
   }
+  try { window.dispatchEvent(new Event(NOM_CHANGE)); } catch { /* hors navigateur */ }
 }
 
 /**
@@ -196,6 +208,44 @@ export async function submitRaceRecord(race: RaceKey, name: string, splitMs: num
 }
 
 /**
+ * Une ligne de classement, reduite a ce qu'une annonce a besoin de montrer.
+ *
+ * Sert aux deux tableaux — le TOP 500 et les duels, qui n'ont pourtant pas une
+ * colonne en commun. Ce que l'animation de montee affiche est le meme de part
+ * et d'autre : une place, un nom. Le reste n'entrerait pas dans une ligne de
+ * vingt-huit pixels, et ne dirait rien de plus sur le deplacement.
+ */
+export type LigneClassee = { rank: number; name: string };
+
+/**
+ * LES VOISINS D'UNE PLACE, LE CHRONO DEJA POSE.
+ *
+ * `rang` est la place que le joueur va occuper, telle que `rankOf` la rend.
+ * On lui rend le classement TEL QU'IL SERA — sa propre ligne retiree, et
+ * celles d'en dessous decalees d'un cran pour lui faire place : le serveur ne
+ * garde qu'un chrono par appareil et par epreuve, donc son ancienne ligne
+ * disparait au profit de la nouvelle. Sans ce decalage, l'annonce montrerait
+ * deux joueurs sur la meme place.
+ *
+ * Sa ligne est EXCLUE du retour : c'est celle que l'animation dessine
+ * elle-meme, et qui voyage.
+ */
+export function voisinage(
+  entries: LeaderboardEntry[], nom: string, rang: number, rayon = 4
+): LigneClassee[] {
+  const cle = String(nom || '').trim().toLowerCase();
+  const autres = entries
+    .filter(e => String(e.name || '').trim().toLowerCase() !== cle)
+    .sort((a, b) => a.best_split_ms - b.best_split_ms);
+  const out: LigneClassee[] = [];
+  autres.forEach((e, i) => {
+    const r = i + 1 < rang ? i + 1 : i + 2;
+    if (r >= rang - rayon && r <= rang + rayon + 1) out.push({ rank: r, name: e.name });
+  });
+  return out;
+}
+
+/**
  * Parmi les chronos d'un programme (one shot ou defi), ceux qui entrent au
  * TOP 500 de leur propre discipline. Chaque course est jugee chez elle : un
  * 100 m se compare a des 100 m, quel que soit le mode qui l'a produit.
@@ -206,10 +256,19 @@ export type RaceOutcome = {
   rank: number;
   /** Chrono deja detenu par ce joueur sur cette epreuve, s'il en a un. */
   ownMs: number | null;
-  /** Sa place actuelle avec ce chrono. */
+  /**
+   * Sa place AVANT ce chrono. Nulle quand il n'en avait pas : il entre au
+   * tableau, il n'y remonte pas.
+   *
+   * Mesuree dans la meme liste que la nouvelle place, et non lue chez le
+   * serveur : les deux nombres servent a annoncer un deplacement — « 14e,
+   * puis 9e » — et deux comptages differents en donneraient un faux.
+   */
   ownRank: number | null;
   /** Le nouveau chrono ameliore-t-il son propre record ? */
   beatsOwn: boolean;
+  /** Le voisinage de la nouvelle place, sa ligne exclue. Voir voisinage(). */
+  voisins: LigneClassee[];
 };
 
 export async function qualifyingRaces(
@@ -232,8 +291,17 @@ export async function qualifyingRaces(
       // rien au tableau : autant le dire plutot que d'annoncer une place
       // qu'on n'occupera pas.
       const ownMs = mine.found && mine.best_split_ms ? mine.best_split_ms : null;
-      const ownRank = mine.found && mine.rank ? mine.rank : null;
-      out.push({ race: races[i], ms, rank, ownMs, ownRank, beatsOwn: ownMs === null || ms < ownMs });
+      // Sa place d'avant se relit dans la liste qu'on vient de trier, avec le
+      // chrono que le serveur lui reconnait. Le rang que le serveur annonce
+      // reste le filet : il sert quand la liste ne retrouve pas sa ligne.
+      const ownRank = ownMs != null ? rankOf(list, ownMs)
+                    : (mine.found && mine.rank ? mine.rank : null);
+      const nom = getSavedName();
+      out.push({
+        race: races[i], ms, rank, ownMs, ownRank,
+        beatsOwn: ownMs === null || ms < ownMs,
+        voisins: nom ? voisinage(list, nom, rank) : [],
+      });
     } catch {
       // classement injoignable : on n'annonce pas une place qu'on ignore
     }
