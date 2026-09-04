@@ -58,16 +58,15 @@ function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void 
   ];
 
   return (
-    <div className="shrink-0 w-full max-w-md mx-auto mt-2 md:mt-3 grid grid-cols-3 gap-1
-                    p-1 rounded-2xl bg-black/60 backdrop-blur-md border border-white/10">
+    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4 grid grid-cols-3 gap-1">
       {liens.map(({ cle, Icone, action }) => (
         <button
           key={cle}
           onClick={action}
-          className="min-w-0 px-1 py-1.5 rounded-xl
+          className="min-w-0 px-1 py-1.5
                      flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5
                      text-[10px] md:text-[11px] font-bold tracking-wide leading-tight text-center
-                     text-foreground/75 hover:text-primary hover:bg-white/10 transition-colors"
+                     text-muted-foreground hover:text-primary transition-colors"
         >
           <Icone className="w-3.5 h-3.5 shrink-0" />
           <span className="w-full sm:w-auto break-words">{N.t(cle)}</span>
@@ -153,7 +152,7 @@ export function TitleScreen() {
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
       {/* Ce qui defile defile ici, et seulement ici : le pied de page reste
           en dehors, pose au bas de l'ecran. */}
       <div ref={rouleau} className="flex-1 min-h-0 overflow-y-auto">
