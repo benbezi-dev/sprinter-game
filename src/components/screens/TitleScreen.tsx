@@ -334,38 +334,37 @@ export function TitleScreen() {
               {N.t('start')}
             </button>
 
-            {/* Toujours accessible : on oublie vite la regle de la transition,
-                et les joueurs arrives par un lien de defi n'ont jamais vu le
-                tutoriel. */}
-            <button
-              onClick={() => setTuto(true)}
-              className="w-full -mt-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                         text-muted-foreground hover:text-primary transition-colors
-                         flex items-center justify-center gap-1.5"
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              {N.t('tuto_open')}
-            </button>
+            <div className="flex items-center justify-between gap-1 mt-1">
+              <button
+                onClick={() => setTour(true)}
+                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                           text-muted-foreground hover:text-primary transition-colors
+                           flex items-center justify-start gap-1"
+              >
+                <Compass className="w-3 h-3 shrink-0" />
+                <span className="truncate">{N.t('tour_open')}</span>
+              </button>
 
-            <button
-              onClick={() => setTour(true)}
-              className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                         text-muted-foreground hover:text-primary transition-colors
-                         flex items-center justify-center gap-1.5"
-            >
-              <Compass className="w-3.5 h-3.5" />
-              {N.t('tour_open')}
-            </button>
+              <button
+                onClick={() => setTuto(true)}
+                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                           text-muted-foreground hover:text-primary transition-colors
+                           flex items-center justify-center gap-1"
+              >
+                <GraduationCap className="w-3 h-3 shrink-0" />
+                <span className="truncate">{N.t('tuto_open')}</span>
+              </button>
 
-            <button
-              onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-              className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                         text-muted-foreground hover:text-primary transition-colors
-                         flex items-center justify-center gap-1.5"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              {N.t('contact')}
-            </button>
+              <button
+                onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
+                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                           text-muted-foreground hover:text-primary transition-colors
+                           flex items-center justify-end gap-1"
+              >
+                <Mail className="w-3 h-3 shrink-0" />
+                <span className="truncate">{N.t('contact')}</span>
+              </button>
+            </div>
             </>}
 
           </div>
