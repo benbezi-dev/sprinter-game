@@ -73,6 +73,23 @@ const CONTINENT_NOMS = {
   OC: ['Océanie', "d'Océanie"],
 };
 
+/**
+ * Les pays qu'on peut se choisir, nommes.
+ *
+ * Le jeu ne tient pas sa propre table : c'est le serveur qui sait nommer un
+ * titre — « Champion du Maroc », pas « Champion de MA » — et deux tables du
+ * meme fait auraient diverge a la premiere retouche. Elle sort donc d'ici, ou
+ * elle vit deja, plutot que d'etre recopiee dans le jeu.
+ *
+ * Triee par nom, et non par code : c'est ainsi qu'on cherche le sien dans une
+ * liste de cinquante.
+ */
+export function listeNations() {
+  return Object.entries(PAYS_NOMS)
+    .map(([code, [nom]]) => ({ code, nom }))
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+
 /** Le nom lisible d'une zone, et sa forme avec preposition. */
 export function nomZone(zone, echelon) {
   const z = String(zone || '').toUpperCase();

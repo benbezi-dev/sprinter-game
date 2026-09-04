@@ -7,7 +7,7 @@ import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
-import { EST_TEST } from '@/game/canal';
+import { RELAIS_OUVERT } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
@@ -194,9 +194,9 @@ export function ChallengePanel() {
       {DUELS_OUVERTS && <LivePanel />}
       {/* Le championnat n'apparait que si le joueur y est engage. */}
       {DUELS_OUVERTS && <ChampPanel />}
-      {/* Le relais n'est ouvert que sur le canal de test. En production,
-          EST_TEST vaut false en dur et le bundler retire tout le panneau. */}
-      {EST_TEST && <RelaisPanel />}
+      {/* Le relais, ouvert comme le reste. Le drapeau vit dans game/canal :
+          a false, le bundler retire tout le panneau du build. */}
+      {RELAIS_OUVERT && <RelaisPanel />}
 
       <Repliable
         titre={N.t('challenge_code')}

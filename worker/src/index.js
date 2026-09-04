@@ -15,7 +15,7 @@ import {
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
-  medaillesDe, paysDe,
+  medaillesDe, paysDe, listeNations,
   fluxDirect, recapMondial,
 } from './championnats.js';
 import {
@@ -39,29 +39,44 @@ import {
 import { alerterRecuperation } from './courriel.js';
 
 /**
- * Portes du relais et des championnats.
+ * La porte du relais : ouverte.
  *
- * Elles ne sont plus des constantes : ces modes sont ouverts sur le canal de
- * test et fermes en production. Un seul deploiement sert les deux, et c'est le
- * code d'acces presente par l'appelant qui decide de quel cote il se trouve.
- *
- * Le jour ou l'on voudra les ouvrir a tout le monde, il suffira de renvoyer
- * true ici sans condition.
+ * Elle a vecu longtemps sous la forme `canal => canal.test` — ouverte sur le
+ * canal de test, fermee en production, un seul deploiement servant les deux.
+ * Le jour de l'ouverture etant venu, elle renvoie true sans condition, comme
+ * il etait prevu. On garde la forme d'une fonction plutot que d'effacer les
+ * appels : refermer doit rester l'affaire d'une ligne, et le canal de test
+ * reste distinct par sa base, pas par ce qu'il autorise.
  */
-const relaisOuvert = canal => canal.test;
+const relaisOuvert = () => true;
+/**
+ * Les championnats restent fermes, et ce n'est pas un oubli.
+ *
+ * Quatre routes de cette famille ecrivent sans demander a qui elles parlent :
+ * `ouvrir` et `cycle` creent des editions, `course` enregistre des chronos
+ * dans une phase, `cloturer` qualifie et sacre. Aucune ne verifie que
+ * l'appelant est qui il pretend etre — pas de device_id, pas de peutUtiliser,
+ * rien. Entre gens qui se connaissent, sur le canal de test, cela n'a jamais
+ * eu d'importance ; ouvert a tout le monde, cela veut dire qu'une requete a la
+ * main suffit pour fabriquer un champion du Maroc dans la vraie base, ou
+ * cloturer une finale que personne n'a courue.
+ *
+ * Cette porte s'ouvrira quand ces quatre routes sauront a qui elles obeissent.
+ * Elle ne coute rien a laisser fermee : le panneau du championnat, dans le
+ * jeu, ne s'affiche que si le joueur est engage dans une edition — sans
+ * edition, il ne rend rien du tout.
+ */
 const championnatsOuverts = canal => canal.test;
 /**
- * Le mot du vainqueur : reserve au canal de test.
+ * Le mot du vainqueur : ouvert avec les duels, comme annonce.
  *
  * C'est la seule ecriture du jeu ou un joueur produit un contenu qu'un autre
- * lira, et personne ne la relit. Tant qu'elle n'a pas ete eprouvee entre gens
- * qui se connaissent, la porte reste fermee du cote du serveur — pas seulement
- * dans le jeu. Sans cela, une simple requete a la main suffirait a deposer un
- * message chez n'importe quel joueur de la vraie version.
- *
- * A rouvrir en meme temps que les duels de production, et pas avant.
+ * lira, et personne ne la relit avant qu'il n'arrive. La porte etait tenue
+ * fermee tant que les duels de production l'etaient ; ils s'ouvrent, elle
+ * s'ouvre. Le tableau de moderation reste le seul filet — c'est un choix, et
+ * il se referme ici en remettant `canal => canal.test`.
  */
-const motOuvert = canal => canal.test;
+const motOuvert = () => true;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -899,10 +914,10 @@ export default {
     }
 
     // ------------------------------------------------------------- relais
-    // Les equipes de relais. Le mode n'est pas encore ouvert : la porte se
-    // ferme ici AUSSI, pas seulement dans le jeu. Sans cela, une simple
-    // requete a la main permettrait de reserver des noms d'equipe avant
-    // l'ouverture — et un nom appartient a une composition pour toujours.
+    // Les equipes de relais. La porte vit ici AUSSI, pas seulement dans le
+    // jeu : tant qu'elle etait fermee, une simple requete a la main aurait
+    // permis de reserver des noms d'equipe avant l'ouverture — et un nom
+    // appartient a une composition pour toujours. Elle est ouverte.
     if (url.pathname.startsWith('/relay/')) {
       if (!relaisOuvert(canal)) {
         return json({ error: 'relais reserve au canal de test' }, 403);
@@ -1553,16 +1568,45 @@ export default {
     // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
     // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
     // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
+    /**
+     * Les pays qu'on peut se choisir.
+     *
+     * Le selecteur du jeu lisait cette liste depuis toujours ; elle n'a jamais
+     * existe. Il recevait donc 404, se repliait sur une liste vide, et
+     * proposait un choix entre rien — on ne pouvait pas se donner de
+     * nationalite, sur aucun des deux canaux.
+     *
+     * Pas de porte dessus : nommer les pays n'engage rien, et la liste est la
+     * meme pour tout le monde.
+     */
+    if (url.pathname === '/nations' && request.method === 'GET') {
+      return json({ nations: listeNations() });
+    }
+
     if (url.pathname === '/profil' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, insta } = body || {};
+      const { device_id, name, insta, pays } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const key = cleanName(name).trim().toLowerCase();
       if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
 
-      const propre = nettoyerInsta(insta);
-      if (propre === null) return json({ error: 'pseudo invalide' }, 400);
+      // Ce que la requete vient poser. Le jeu n'envoie jamais les deux a la
+      // fois : le pseudo Instagram et la nationalite se demandent sur deux
+      // pas differents du meme panneau.
+      //
+      // Le test porte sur la PRESENCE du champ, pas sur sa valeur. Une
+      // requete qui ne parle pas d'Instagram ne doit pas y toucher : celle qui
+      // posait la nationalite n'en parlait pas, et effacait le pseudo du
+      // joueur au passage — `nettoyerInsta(undefined)` vaut la chaine vide,
+      // qui s'ecrivait par-dessus. On repondait « ok » a un joueur a qui l'on
+      // venait de prendre son compte Instagram sans rien enregistrer d'autre.
+      const veutInsta = body && Object.prototype.hasOwnProperty.call(body, 'insta');
+      const veutPays = body && Object.prototype.hasOwnProperty.call(body, 'pays');
+      if (!veutInsta && !veutPays) return json({ error: 'rien a poser' }, 400);
+
+      const propre = veutInsta ? nettoyerInsta(insta) : null;
+      if (veutInsta && propre === null) return json({ error: 'pseudo invalide' }, 400);
 
       await ensurePlayerTables(env.DB);
       if (!(await peutUtiliser(env.DB, key, device_id))) {
@@ -1572,18 +1616,54 @@ export default {
         `SELECT name_key FROM players WHERE name_key = ?`).bind(key).first();
       if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
 
-      await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
-        .bind(propre || null, key).run();
-      return json({ ok: true, insta: propre || null });
+      if (veutInsta) {
+        await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
+          .bind(propre || null, key).run();
+      }
+
+      // La nationalite se choisit UNE FOIS. Le refus porte un message qui
+      // commence par « nationalite » : le jeu tranche dessus, parce que 409
+      // sert deja a dire « reserve d abord ton nom » — deux refus tres
+      // differents sous le meme code.
+      let paysPose = null;
+      if (veutPays) {
+        await ensureChampTables(env.DB);
+        const deja = await env.DB.prepare(
+          `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(key).first();
+        if (deja && deja.source === 'choix') {
+          return json({ error: 'nationalite deja choisie', pays: deja.pays }, 409);
+        }
+        const r = await choisirPays(env.DB, key, pays);
+        if (r.erreur) return json({ error: r.erreur }, 400);
+        paysPose = r.pays;
+      }
+
+      return json({
+        ok: true,
+        insta: veutInsta ? (propre || null) : undefined,
+        pays: paysPose,
+      });
     }
 
     if (url.pathname === '/profil' && request.method === 'GET') {
       const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-      if (!key) return json({ insta: null });
+      if (!key) return json({ insta: null, pays: null, source: null });
       await ensurePlayerTables(env.DB);
-      const p = await env.DB.prepare(
-        `SELECT insta FROM players WHERE name_key = ?`).bind(key).first();
-      return json({ insta: (p && p.insta) || null });
+      await ensureChampTables(env.DB);
+      const [p, g] = await Promise.all([
+        env.DB.prepare(`SELECT insta FROM players WHERE name_key = ?`).bind(key).first(),
+        env.DB.prepare(`SELECT pays, source FROM player_pays WHERE name_key = ?`)
+          .bind(key).first(),
+      ]);
+      // `source` compte autant que le pays : 'choix' veut dire que le joueur
+      // l'a dit, 'vu' que Cloudflare a devine d'ou venait la requete. Les
+      // confondre reviendrait a cocher une nationalite que personne n'a
+      // declaree — et a ne plus jamais reposer la question.
+      return json({
+        insta: (p && p.insta) || null,
+        pays: (g && g.pays) || null,
+        source: (g && g.source) || null,
+      });
     }
 
     // Relier cet appareil a un nom deja reserve, en prouvant qu'il est a nous.

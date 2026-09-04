@@ -33,6 +33,19 @@ export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 export const RECOMMENCER_OUVERT = true;
 
 /**
+ * Le relais, et les trois autres jeux.
+ *
+ * Meme histoire que RECOMMENCER : eprouves sur le canal de test, puis ouverts
+ * a tout le monde. Le drapeau remplace `EST_TEST` aux trois endroits qui
+ * portaient ces modes — le vestiaire, la piste, et le geste vers les mondes.
+ *
+ * La forme compte autant qu'avant : une constante en tete d'un `&&` permet au
+ * bundler de suivre. A true, le code part dans le build ; a false, il en
+ * sort entierement, comme le faisait `EST_TEST`.
+ */
+export const RELAIS_OUVERT = true;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

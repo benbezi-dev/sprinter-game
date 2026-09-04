@@ -14,7 +14,6 @@
 // DEUX sens. On revient toujours par la direction opposee, sans quoi le joueur
 // se retrouve quelque part sans savoir comment en sortir.
 
-import { EST_TEST } from './canal';
 import { useSyncExternalStore } from 'react';
 
 export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
@@ -114,12 +113,14 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
 };
 
 /**
- * Les quatre jeux ne sont ouverts que sur le canal de test.
+ * Les quatre jeux sont ouverts.
  *
- * En production, `EST_TEST` vaut false en dur : le geste ne fait rien, les
- * accueils ne sont pas embarques, et Sprinter reste seul comme aujourd'hui.
+ * Ils ont vecu sur le canal de test, derriere `EST_TEST`, qui les sortait du
+ * build public. Ils partent maintenant avec le reste. A false, tout ceci
+ * ressort du build aussi surement qu'avant : c'est une constante, le bundler
+ * la suit.
  */
-export const MONDES_OUVERTS = EST_TEST;
+export const MONDES_OUVERTS = true;
 
 let courant: Monde = 'sprinter';
 const abonnes = new Set<() => void>();

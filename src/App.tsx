@@ -15,7 +15,8 @@ import { useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
-import { EST_TEST } from '@/game/canal';
+import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
+import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
@@ -166,17 +167,14 @@ function MainGame() {
       {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
           l'ecran-titre disparait au coup de pistolet, et une salle tenue par
           un panneau demonte se fermerait a l'instant precis ou la course
-          commence. En production, EST_TEST vaut false en dur et tout ceci
-          sort du build. */}
-      {EST_TEST && <PisteRelais />}
+          commence. */}
+      {RELAIS_OUVERT && <PisteRelais />}
       {/* La presentation des athletes se joue SUR la piste, et doit donc
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}
       <PresentationDirect />
-      {/* Les trois autres jeux, atteints par un geste depuis l'accueil. En
-          production, MONDES_OUVERTS vaut false en dur et rien de tout ceci
-          n'est embarque. */}
-      {EST_TEST && <Mondes />}
+      {/* Les trois autres jeux, atteints par un geste depuis l'accueil. */}
+      {MONDES_OUVERTS && <Mondes />}
       <InstallPrompt />
       {/* Le nom, la nationalite, Instagram : demandes une fois, sur l'accueil,
           avant la premiere course. Le composant decide seul s'il a quelque
