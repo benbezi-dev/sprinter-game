@@ -50,12 +50,24 @@ export function getSavedName(): string {
   }
 }
 
+/**
+ * Le nom vient d'etre pose sur cet appareil.
+ *
+ * La fenetre de bienvenue et la puce du nom vivent cote a cote sur l'accueil,
+ * et poser un nom ne fait pas bouger le moteur d'un pouce : sans ce signal, la
+ * puce garderait « choisis ton nom » alors que le nom vient d'etre choisi deux
+ * centimetres plus haut. Relire au changement d'etat du jeu ne suffit pas — il
+ * n'y a pas de changement d'etat.
+ */
+export const NOM_CHANGE = 'sprinter:nom-change';
+
 export function saveName(name: string) {
   try {
     localStorage.setItem(PLAYER_NAME_KEY, name);
   } catch {
     // localStorage indisponible : le nom sera juste redemande la prochaine fois
   }
+  try { window.dispatchEvent(new Event(NOM_CHANGE)); } catch { /* hors navigateur */ }
 }
 
 /**

@@ -506,7 +506,7 @@ export function LivePanel() {
     >
       {/* Apres la course : la video, et son compte a rebours. */}
       {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
-        <ReviewVideo etat={review} onTelecharger={() => film.current?.telecharger()} />
+        <ReviewVideo etat={review} onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}

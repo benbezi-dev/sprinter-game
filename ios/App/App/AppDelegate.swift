@@ -7,7 +7,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Avant toute image : la session audio. Sans elle, le jeu est muet sur
+        // un telephone en silencieux — voir SessionAudio.swift, qui explique
+        // pourquoi c'est une regle du jeu et pas un reglage d'ambiance.
+        SessionAudio.poser()
         return true
     }
 
@@ -26,7 +29,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // Une autre application a pu prendre le son pendant qu'on etait au
+        // fond — un appel, une video, un autre jeu — et la rendre dans un
+        // autre etat que celui qu'on avait pose. On le repose, a chaque
+        // retour : l'operation est sans effet quand rien n'a bouge.
+        SessionAudio.appliquer()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

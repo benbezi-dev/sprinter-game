@@ -18,6 +18,16 @@ export const TTL_MS = 10 * 60 * 1000;
 
 export type PhaseReview = 'inactif' | 'enregistre' | 'prete' | 'expiree' | 'impossible';
 
+/**
+ * Ce qui s'est reellement produit quand le joueur a appuye.
+ *
+ * Le meme vocabulaire que `affiche.ts`, et pour la meme raison : « enregistre
+ * dans tes videos » et « envoye a quelqu'un » ne se disent pas au meme moment.
+ * Le type est redefini ici plutot qu'importe — ce module n'a aucun import, et
+ * c'est voulu : il se charge seul, sans reveiller la moitie du jeu.
+ */
+export type Sortie = 'partage' | 'telechargement' | 'annule' | 'echec';
+
 export type EtatReview = {
   phase: PhaseReview;
   url: string | null;
@@ -51,10 +61,46 @@ function choisirFormat(): string | null {
   return null;
 }
 
+/**
+ * Le telephone sait-il faire sortir un fichier de cette taille et de ce type ?
+ *
+ * La question se pose avec le fichier lui-meme, comme dans `affiche.ts` :
+ * `canShare` repond selon le type MIME, pas selon la presence de la cle. Un
+ * temoin d'un octet suffit — c'est l'etiquette qu'on teste, pas le contenu.
+ *
+ * Sur iOS, cette question decide de tout. Une WKWebView n'a pas de
+ * telechargement : `<a download>` y est un clic dans le vide, sans erreur et
+ * sans fichier. Le bouton s'allumait, le compte a rebours s'ecoulait, et il ne
+ * se passait rien — la pire des trois issues possibles, parce qu'elle ne se
+ * distingue pas d'un jeu casse. La feuille de partage, elle, y fonctionne et
+ * propose « Enregistrer dans Fichiers ».
+ */
+function peutPartager(type: string): boolean {
+  try {
+    const n: any = navigator;
+    if (typeof n?.share !== 'function' || typeof n?.canShare !== 'function') return false;
+    const temoin = new File([new Uint8Array(1)], 't', { type: type || 'video/mp4' });
+    return n.canShare({ files: [temoin] });
+  } catch {
+    return false;
+  }
+}
+
 export class Review {
   private rec: MediaRecorder | null = null;
   private morceaux: Blob[] = [];
   private url: string | null = null;
+  /**
+   * Les donnees du film, gardees a cote de leur URL.
+   *
+   * Ce n'est pas une seconde copie : `createObjectURL` maintient deja ce blob
+   * vivant en memoire, et le nommer ne coute donc rien de plus. Sans ce nom,
+   * le partage n'aurait rien a partager — `morceaux` est vide des la fin de
+   * l'enregistrement, et une URL d'objet ne se remonte pas en fichier sans
+   * detour. Il tombe exactement en meme temps que l'URL : au bout des dix
+   * minutes, ou quand on jette tout.
+   */
+  private donnees: Blob | null = null;
   private expireA = 0;
   private battement: any = null;
   private format = '';
@@ -118,6 +164,7 @@ export class Review {
         if (!this.morceaux.length) { this.prevenir({ phase: 'impossible' }); resolve(); return; }
         const blob = new Blob(this.morceaux, { type: this.format });
         this.morceaux = [];
+        this.donnees = blob;
         this.url = URL.createObjectURL(blob);
         this.expireA = Date.now() + TTL_MS;
         const ext = this.format.startsWith('video/mp4') ? 'mp4' : 'webm';
@@ -154,24 +201,57 @@ export class Review {
     this.battement = null;
     if (this.url) { try { URL.revokeObjectURL(this.url); } catch { /* ignore */ } }
     this.url = null;
+    this.donnees = null;
     this.prevenir({ phase: 'expiree', url: null, reste: 0 });
   }
 
   /**
-   * Declenche le telechargement.
+   * Fait sortir la video de l'application.
    *
    * A partir de la, le fichier appartient a l'utilisateur : il est sorti de
    * l'onglet, et l'expiration ci-dessus ne le concerne plus.
+   *
+   * Deux chemins, et le second n'est pas un pis-aller : sur un ordinateur, la
+   * feuille de partage n'existe pas et enregistrer le fichier est exactement
+   * ce qu'on veut. La methode s'appelait `telecharger` ; elle ne telecharge
+   * plus toujours, et un nom qui ment sur un telephone valait moins que trois
+   * appels a renommer.
    */
-  telecharger() {
-    if (!this.url || this.etat.phase !== 'prete') return;
-    const a = document.createElement('a');
-    a.href = this.url;
-    a.download = this.etat.fichier;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+  async partager(): Promise<Sortie> {
+    if (!this.url || this.etat.phase !== 'prete') return 'echec';
+
+    const type = this.format || 'video/mp4';
+    if (this.donnees && peutPartager(type)) {
+      try {
+        const fichier = new File([this.donnees], this.etat.fichier, { type });
+        // Pas de `url` a cote du fichier : plusieurs applications de
+        // destination ne gardent que l'un des deux, et c'est souvent le lien
+        // qu'elles gardent — on perdrait la video, qui est tout l'objet du
+        // geste.
+        await (navigator as any).share({ files: [fichier] });
+        return 'partage';
+      } catch (e: any) {
+        // Refermer la feuille n'est pas un echec : c'est un choix, et l'ecran
+        // ne doit pas repondre par un message d'erreur a quelqu'un qui a
+        // simplement change d'avis.
+        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return 'annule';
+        // Echec pour une autre raison : plutot que de laisser le joueur sans
+        // rien, on tente quand meme de lui donner le fichier.
+      }
+    }
+
+    try {
+      const a = document.createElement('a');
+      a.href = this.url;
+      a.download = this.etat.fichier;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return 'telechargement';
+    } catch {
+      return 'echec';
+    }
   }
 
   /** Libere tout, sans attendre l'expiration. */
@@ -183,6 +263,7 @@ export class Review {
     this.morceaux = [];
     if (this.url) { try { URL.revokeObjectURL(this.url); } catch { /* ignore */ } }
     this.url = null;
+    this.donnees = null;
     this.expireA = 0;
     this.prevenir({ phase: 'inactif', url: null, reste: 0, taille: 0 });
   }

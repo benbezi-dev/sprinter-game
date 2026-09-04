@@ -59,6 +59,42 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | GET     | `/challenge?id=`      | Lit un défi et ses tentatives |
 | POST    | `/challenge/attempt`  | Enregistre une tentative |
 
+## L'alerte des récupérations de compte
+
+Quand un joueur qui a perdu son code dépose une demande (`POST /recuperation`),
+la boîte du jeu reçoit un mot : le nom, le mot de passage attendu, le compte
+Instagram d'où le message doit venir, et ce que le joueur a dit de lui.
+
+Sans ça, la demande n'existait que dans le tableau d'activité — et le tableau ne
+s'ouvre que quand on pense à l'ouvrir.
+
+```bash
+npx wrangler secret put RESEND_CLE
+```
+
+C'est une clé [Resend](https://resend.com). Le domaine de l'expéditeur doit y
+être vérifié (SPF/DKIM) ; `onboarding@resend.dev` fait l'affaire le temps d'un
+essai. Deux variables facultatives, dans `wrangler.toml`, si l'on veut autre
+chose que les valeurs par défaut :
+
+| Variable          | Défaut                                        |
+|-------------------|-----------------------------------------------|
+| `MAIL_DEST`       | `contact@sprinter-game.com`                   |
+| `MAIL_EXPEDITEUR` | `Sprinter <recuperations@sprinter-game.com>`  |
+
+Trois choses que ce courriel ne fait pas, volontairement :
+
+- **il ne part pas au joueur.** Le jeu ne connaît aucune adresse et n'en
+  demandera pas : l'identité tient dans un nom et un code court, sans tiers ni
+  e-mail (`src/identite.js`). Ce mot prévient l'arbitre, il ne remplace pas la
+  preuve — qui reste le message envoyé *depuis* le compte Instagram lié ;
+- **il ne part qu'une fois par demande.** Un appareil encore relié n'a rien à
+  arbitrer, et un second appui sur le bouton rend le même mot de passage : ni
+  l'un ni l'autre ne fait sonner la boîte. Le canal de test n'écrit jamais ;
+- **il ne peut pas faire échouer une demande.** L'envoi part dans un
+  `waitUntil` : sans clé, sur un refus de Resend ou sur une coupure, le joueur
+  a quand même déposé sa demande. `wrangler tail` dit lequel des trois.
+
 ## Deux règles à ne pas casser
 
 **Le meilleur chrono sur une course ne redescend jamais.** Il survit à un
