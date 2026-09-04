@@ -24,6 +24,35 @@ self.addEventListener('activate', event => {
   })());
 });
 
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* payload vide ou malformé */ }
+  const title = data.title ?? 'Sprinter';
+  const body  = data.body  ?? '';
+  const tag   = data.tag   ?? 'sprinter-notif';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon:  '/icon-192.png',
+      badge: '/icon-192.png',
+      tag,
+      renotify: true,
+      data: { url: self.registration.scope },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(wins => {
+      const w = wins.find(c => c.url.startsWith(self.registration.scope) && 'focus' in c);
+      if (w) return w.focus();
+      return self.clients.openWindow(event.notification.data?.url ?? self.registration.scope);
+    })
+  );
+});
+
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;

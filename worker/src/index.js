@@ -9,6 +9,7 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
+import { notifierAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
@@ -35,6 +36,7 @@ import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
+import { alerterRecuperation } from './courriel.js';
 
 /**
  * Portes du relais et des championnats.
@@ -451,6 +453,33 @@ async function ensureAttemptTraces(db) {
   try { await db.prepare(`ALTER TABLE challenge_attempts ADD COLUMN traces TEXT`).run(); }
   catch { /* deja la */ }
   attemptTracesReady.add(db);
+}
+
+const pushTableReady = new WeakSet();
+async function ensurePushTable(db) {
+  if (pushTableReady.has(db)) return;
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      device_id   TEXT PRIMARY KEY,
+      subscription TEXT NOT NULL,
+      created_at  INTEGER DEFAULT (unixepoch())
+    )
+  `).run();
+  pushTableReady.add(db);
+}
+
+/**
+ * Sonne la boite WebSocket ET envoie un push natif si le joueur est abonné.
+ * Remplace sonner() pour les événements qui méritent un push.
+ */
+async function sonnerEtPush(env, deviceId, type, canalTest, labelFr, labelEn) {
+  await sonner(env, deviceId, type, canalTest);
+  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
+  const db = canalTest ? env.DB_TEST : env.DB;
+  try {
+    await ensurePushTable(db);
+    await notifierAppareil(db, deviceId, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY);
+  } catch { /* le push est best-effort : une erreur ne casse pas l'écriture */ }
 }
 
 async function attemptsFor(db, id) {
@@ -1464,6 +1493,25 @@ export default {
         nameKey: key, nom: propre, deviceId: device_id, indice,
       });
       if (r.erreur === 'inconnu') return json({ ok: false, inconnu: true });
+
+      /* Une demande NEUVE previent la boite du jeu.
+       *
+       * Ni un appareil encore relie (`direct` : il n'y avait rien a arbitrer),
+       * ni un second appui sur le bouton (`deja` : meme demande, meme mot de
+       * passage) — ces deux-la n'ont rien a annoncer, et un joueur qui rouvre
+       * le jeu ferait sonner la boite jusqu'a ce qu'un filtre s'en charge.
+       *
+       * Le canal de test n'ecrit pas non plus : ce qu'on y depose est un essai,
+       * pas quelqu'un qui attend son nom.
+       *
+       * `waitUntil` et pas `await` : le joueur n'attend pas apres un courriel,
+       * et un refus de Resend n'a pas a devenir un echec de sa demande. */
+      if (!canal.test && r.etat === 'attente' && !r.deja) {
+        ctx.waitUntil(alerterRecuperation(env, {
+          id: r.id, nom: propre, insta: r.insta, phrase: r.phrase,
+          compte: r.compte, indice, cree_le: Date.now(),
+        }));
+      }
       return json(r);
     }
 
@@ -2163,7 +2211,7 @@ export default {
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
-      if (target) ctx.waitUntil(sonner(env, target, 'defi', canal.test));
+      if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
       return json({ id, target_name: targetName });
     }
 
@@ -2357,7 +2405,7 @@ export default {
       // Celui qui a lance le defi n'est pas la : c'est tout l'objet de sa
       // boite. Il l'apprend maintenant plutot qu'au sondage suivant.
       if (duel && !duel.deja && ch.owner_device) {
-        ctx.waitUntil(sonner(env, ch.owner_device, 'duel', canal.test));
+        ctx.waitUntil(sonnerEtPush(env, ch.owner_device, 'duel', canal.test));
       }
 
       return json({
@@ -2368,6 +2416,34 @@ export default {
         attempts: await attemptsFor(env.DB, code),
         duel,
       });
+    }
+
+    // --- Push notifications : enregistrement et suppression d'abonnement ---
+
+    if (url.pathname === '/push/subscribe' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, subscription } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
+      await ensurePushTable(env.DB);
+      await env.DB.prepare(
+        `INSERT INTO push_subscriptions (device_id, subscription) VALUES (?, ?)
+         ON CONFLICT(device_id) DO UPDATE SET subscription = excluded.subscription`
+      ).bind(device_id, JSON.stringify(subscription)).run();
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/push/unsubscribe' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      await env.DB.prepare(
+        'DELETE FROM push_subscriptions WHERE device_id = ?'
+      ).bind(device_id).run();
+      return json({ ok: true });
     }
 
     return json({ error: 'not found' }, 404);

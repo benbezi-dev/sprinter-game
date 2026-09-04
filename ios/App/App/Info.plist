@@ -2,12 +2,26 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+
+	<!-- La langue de repli, pas la langue du jeu.
+	     Le jeu est bilingue et choisit lui-meme sa langue ; cette cle ne
+	     decide que d'une chose : ce que lit un joueur dont la langue n'est
+	     ni le francais ni l'anglais. L'anglais sert donc de repli, et le
+	     francais vit dans fr.lproj/InfoPlist.strings. Mettre `fr` ici
+	     afficherait des demandes de permission en francais a un joueur
+	     allemand ou bresilien. -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+	</array>
+
 	<key>CFBundleDisplayName</key>
-        <string>Sprinter</string>
+	<string>Sprinter</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,35 +36,72 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- La categorie de l'App Store. Sprinter est un jeu d'athletisme :
+	     « sports-games » le range avec ses semblables plutot que dans le
+	     fourre-tout « games ». -->
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.sports-games</string>
+
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- Le micro, et rien d'autre.
+	     Ce texte n'est pas une formalite : c'est la phrase que le joueur lit
+	     au moment ou il decide. Elle dit les deux seuls usages — la voix en
+	     direct pendant un duel, et le mot de six secondes laisse au perdant —
+	     et elle dit qu'entre les deux le micro est rendu, ce que le code de
+	     `voix.ts` prend soin de faire vraiment.
+
+	     Aucune cle camera : le jeu filme son propre canvas pour la video de
+	     course, jamais l'objectif. Demander un acces dont on ne se sert pas
+	     est au mieux inutile, au pire suspect a l'examen d'Apple. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sprinter uses the microphone for live voice during a duel, and to record the six-second message the winner leaves behind. The microphone is released as soon as you stop speaking.</string>
+
+	<!-- Chiffrement : le jeu n'en embarque aucun qui lui soit propre. Il parle
+	     en HTTPS a son serveur et en DTLS-SRTP a son adversaire, deux
+	     protocoles fournis par le systeme — l'exemption habituelle. Sans cette
+	     cle, chaque envoi vers TestFlight repose la meme question. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-    <false/>
-    <key>UISceneConfigurations</key>
-    <dict>
-      <key>UIWindowSceneSessionRoleApplication</key>
-      <array>
-        <dict>
-            <key>UISceneConfigurationName</key>
-            <string>Default Configuration</string>
-            <key>UISceneDelegateClassName</key>
-            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-            <key>UISceneStoryboardFile</key>
-            <string>Main</string>
-        </dict>
-      </array>
-    </dict>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
+	<!-- `armv7` etait la valeur du gabarit Capacitor, et elle est fausse
+	     depuis longtemps : armv7 est le 32 bits, qu'aucun appareil sous iOS 15
+	     ne fait plus tourner et qu'aucun binaire soumis ne contient. La bonne
+	     declaration est arm64 — elle empeche l'installation sur un appareil
+	     incapable de faire tourner l'application, ce qui est precisement son
+	     role. -->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
+
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -64,6 +115,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

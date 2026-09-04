@@ -53,6 +53,27 @@ const config: CapacitorConfig = {
       backgroundColor: '#05070d',
       overlaysWebView: true,
     },
+    /**
+     * Le clavier, et la place qu'il prend.
+     *
+     * Sur Android, la WebView se retrecit quand le clavier monte : ce qui etait
+     * en bas d'un panneau remonte, et reste atteignable. Une WKWebView ne fait
+     * rien de tel — elle garde sa taille, le clavier se pose par-dessus, et le
+     * bas de l'ecran disparait dessous. Sur la fenetre de bienvenue, cela
+     * cachait « CONTINUER » derriere la barre du clavier et « PLUS TARD »
+     * entierement : on tapait son nom, et le bouton pour valider n'etait plus
+     * la.
+     *
+     * `native` rend a iOS le comportement d'Android : la vue se redimensionne,
+     * `window.innerHeight` diminue, et la variable --app-height que pose
+     * App.tsx suit toute seule. Le correctif vaut donc pour TOUS les champs du
+     * jeu — le nom, le code d'acces, le code d'un defi, le mot de cent
+     * quarante caracteres — et pas seulement pour celui ou on l'a remarque.
+     */
+    Keyboard: {
+      resize: 'native' as any,
+      resizeOnFullScreen: true,
+    },
   },
 };
 

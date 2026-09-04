@@ -198,6 +198,28 @@
     insta_visit:     ['voir le profil Instagram de {n}', 'view {n}’s Instagram profile'],
     name_code_why:   ['note-le : il te rend ton nom et tes courses sur un autre téléphone',
                       'write it down: it restores your name and races on another phone'],
+
+    // LA BIENVENUE : la meme fenetre d'identite, mais un pas a la fois, au
+    // premier lancement. Les titres tiennent en deux mots et les sous-titres
+    // en une ligne — c'est un joueur qui n'a pas encore couru, et qui n'est
+    // pas venu lire.
+    bienvenue_titre: ['BIENVENUE', 'WELCOME'],
+    // La sortie du premier pas, avant d'avoir rien pose : « plus plus tard »,
+    // pas « passer », parce qu'a ce moment-la on repousse la fenetre entiere.
+    bienvenue_plus:  ['PLUS TARD', 'LATER'],
+    // Le dernier pas, et le mot qui rend la piste.
+    bienvenue_go:    ['À LA PISTE', 'TO THE TRACK'],
+    bv_suite:        ['CONTINUER', 'CONTINUE'],
+    bv_passer:       ['PASSER', 'SKIP'],
+    bv_nom_t:        ['TON NOM', 'YOUR NAME'],
+    bv_nom_s:        ['il apparaît au TOP 500, sur tes défis et dans les duels',
+                      'it shows on the TOP 500, on your challenges and in duels'],
+    bv_pays_t:       ['TON PAYS', 'YOUR COUNTRY'],
+    bv_pays_s:       ['facultatif, et définitif — il décide du championnat national où tu te présentes',
+                      'optional, and final — it decides which national championship you enter'],
+    bv_insta_t:      ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
+    bv_insta_s:      ['facultatif — ton profil devient visitable depuis le TOP 500',
+                      'optional — your profile becomes reachable from the TOP 500'],
     // visite du jeu
     tour_open:       ['DÉCOUVRIR LE JEU', 'TAKE THE TOUR'],
     tour_1_t:        ['ALTERNE', 'ALTERNATE'],
@@ -400,11 +422,16 @@
     // video de la course, telechargeable pendant dix minutes
     review_title:    ['LA VIDÉO DE TA COURSE', 'YOUR RACE VIDEO'],
     review_making:   ['enregistrement en cours…', 'recording…'],
-    review_dl:       ['TÉLÉCHARGER', 'DOWNLOAD'],
+    // Un seul libellé pour les deux chemins, comme pour l'affiche : sur
+    // téléphone le bouton ouvre la feuille de partage, sur ordinateur il
+    // enregistre le fichier. Ce qui a réellement eu lieu se dit dessous.
+    review_share:    ['PARTAGER LA VIDÉO', 'SHARE THE VIDEO'],
+    review_saved:    ['vidéo enregistrée', 'video saved'],
+    review_failed:   ['partage impossible', 'sharing failed'],
     review_left:     ['effacée dans {t}', 'deleted in {t}'],
     review_gone:     ['la vidéo a été effacée', 'the video has been deleted'],
-    review_kept:     ['ce que tu as téléchargé reste sur ton téléphone',
-                      'what you downloaded stays on your phone'],
+    review_kept:     ['ce que tu as enregistré reste sur ton téléphone',
+                      'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
                       'this device cannot record the race'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],

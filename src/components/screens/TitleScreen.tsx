@@ -334,35 +334,35 @@ export function TitleScreen() {
               {N.t('start')}
             </button>
 
-            <div className="flex items-center justify-between gap-1 mt-1">
+            <div className="flex items-center justify-center gap-3 mt-1 flex-wrap">
               <button
                 onClick={() => setTour(true)}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
                            text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-start gap-1"
+                           flex items-center gap-1 shrink-0"
               >
                 <Compass className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('tour_open')}</span>
+                {N.t('tour_open')}
               </button>
 
               <button
                 onClick={() => setTuto(true)}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
                            text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-center gap-1"
+                           flex items-center gap-1 shrink-0"
               >
                 <GraduationCap className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('tuto_open')}</span>
+                {N.t('tuto_open')}
               </button>
 
               <button
                 onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
-                className="flex-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
+                className="py-1 text-[10px] md:text-xs font-bold tracking-normal
                            text-muted-foreground hover:text-primary transition-colors
-                           flex items-center justify-end gap-1"
+                           flex items-center gap-1 shrink-0"
               >
                 <Mail className="w-3 h-3 shrink-0" />
-                <span className="truncate">{N.t('contact')}</span>
+                {N.t('contact')}
               </button>
             </div>
             </>}
