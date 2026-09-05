@@ -73,3 +73,10 @@ android/keystore*
 # dans src/ : rien ne les distinguait d'une source, et publier une source
 # n'etait qu'une question de temps.
 *.bak-*
+
+# Intermediaires de rendu des films promo — refabricables, et lourds.
+assets-stores/promo/frames/
+assets-stores/promo/preview/
+assets-stores/promo/out/
+assets-stores/promo/explications/images/
+assets-stores/promo/explications/controle/
