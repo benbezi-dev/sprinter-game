@@ -19,6 +19,7 @@
 		5B1000042F00000000000004 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5B1000012F00000000000001 /* InfoPlist.strings */; };
 		5B1000062F00000000000006 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5B1000052F00000000000005 /* PrivacyInfo.xcprivacy */; };
 		5B1000082F00000000000008 /* SessionAudio.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1000072F00000000000007 /* SessionAudio.swift */; };
+		5B10000A2F0000000000000A /* SessionAudioPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1000092F00000000000009 /* SessionAudioPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		5B1000032F00000000000003 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		5B1000052F00000000000005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		5B1000072F00000000000007 /* SessionAudio.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAudio.swift; sourceTree = "<group>"; };
+		5B1000092F00000000000009 /* SessionAudioPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAudioPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +77,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				5B1000072F00000000000007 /* SessionAudio.swift */,
+				5B1000092F00000000000009 /* SessionAudioPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -173,6 +176,7 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				5B1000082F00000000000008 /* SessionAudio.swift in Sources */,
+				5B10000A2F0000000000000A /* SessionAudioPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -34,6 +34,20 @@ import Foundation
  Si l'on voulait un jour l'inverse — respecter l'interrupteur de silence —
  il suffirait de remplacer `.playback` par `.ambient` ci-dessous. Rien
  d'autre dans le fichier ne changerait.
+
+ Il y a un troisieme voleur de session, apres l'appel telephonique et l'alarme,
+ et c'est la page elle-meme : le micro du direct. Des qu'une capture demarre,
+ WebKit remplace la categorie posee ici par `playAndRecord` — il le faut, on
+ n'enregistre pas en `playback` — et il ne la rend pas quand la capture
+ s'arrete. Le jeu reste alors branche sur le circuit d'une conversation : sortie
+ traitee par l'annulation d'echo, volume d'un appel telephonique. Pour le
+ joueur : « le son a baisse tout seul pendant la course », et il ne revient
+ qu'au relancement.
+
+ C'est le meme scenario que l'appel entrant, avec la meme reponse : aller
+ reprendre la session. Le web sait quand le micro est rendu — lui seul le sait —
+ donc c'est lui qui appelle, par `SessionAudioPlugin`. Voir aussi
+ `src/game/session-audio.ts`, qui explique le detail cote jeu.
  */
 enum SessionAudio {
 

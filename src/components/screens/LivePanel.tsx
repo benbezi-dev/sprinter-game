@@ -26,6 +26,15 @@ const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
 const MICRO_VAINQUEUR_MS = 5000;
+/**
+ * Ce qu'on ajoute a la duree annoncee d'une presentation pour garder le micro.
+ *
+ * La sequence est calee sur une date absolue, ramenee dans l'horloge locale :
+ * quelques dizaines de millisecondes d'ecart entre les deux appareils sont
+ * normales. La marge evite que l'appareil soit rendu juste avant le dernier
+ * mot du dernier athlete.
+ */
+const MARGE_MICRO_MS = 1500;
 
 /**
  * Le terrain du direct : le stade intergalactique, dernier de la campagne.
@@ -230,6 +239,12 @@ export function LivePanel() {
     // Une salle qui n'annonce pas de presentation passe directement ici : la
     // coupure programmee doit tomber la aussi.
     annulerFinVoix();
+    // La liaison passe en veille pour la duree de la course : ni micro, ni
+    // ecoute. Personne ne parle entre le pistolet et l'arrivee, et une
+    // conversation ouverte tient le systeme en mode appel — le jeu sort alors
+    // au volume d'un telephone qu'on a a l'oreille. La connexion, elle, reste
+    // montee : le mot du vainqueur ne peut pas attendre une renegociation.
+    voixCourante()?.veille();
     const dans = Math.max(0, (cibleDepart.current ?? Date.now()) - Date.now());
     const adverse = salle.current?.adversaire || '';
     // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
@@ -267,6 +282,18 @@ export function LivePanel() {
       // La voix se monte pendant la presentation : la negociation prend un
       // instant, et on veut que le micro soit deja pret au premier passage.
       ouvrirVoix();
+      voixCourante()?.reveil();
+
+      // Et le micro est demande TOUT DE SUITE, pour toute la sequence.
+      //
+      // Une fenetre de parole dure 2 200 ms ; obtenir la capture en coute
+      // plusieurs centaines sur un telephone. La demander au moment du tour,
+      // c'est en perdre la moitie — et parfois la totalite, quand le systeme
+      // repond apres la fermeture. On la prend donc avant l'annonce, gardee
+      // muette jusqu'au tour de chacun, et rendue a la fin de la sequence.
+      voixCourante()?.prechauffer(
+        Math.max(0, p.dansMs) + p.par * Math.max(1, p.ordre.length) + MARGE_MICRO_MS,
+      );
 
       // La piste se monte MAINTENANT, et non au coup de pistolet.
       //
@@ -316,6 +343,8 @@ export function LivePanel() {
       // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
       // que pour un duel, et personne ne parlait.
       const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      // L'ecoute se rebranche : la course est finie, on peut se reparler.
+      voixCourante()?.reveil();
       const jaiGagne = r.issue
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
