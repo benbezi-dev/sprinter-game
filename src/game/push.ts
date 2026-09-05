@@ -229,6 +229,42 @@ async function desactiverWeb(): Promise<void> {
   await sub.unsubscribe();
 }
 
+/**
+ * Redit au serveur ou joindre ce navigateur, sans jamais rien demander.
+ *
+ * Un abonnement Web Push n'est pas acquis une fois pour toutes, contrairement
+ * a ce que le code d'avant supposait : il n'etait porte au serveur qu'une
+ * fois, apres la premiere course d'une session, et plus jamais ensuite.
+ *
+ * Or deux choses arrivent, et arrivent surtout aux installations anciennes :
+ *
+ * - le navigateur remplace l'abonnement (mise a jour de Chrome, menage du
+ *   service de push). Le service worker le repare de son cote, quand il est
+ *   reveille ; ici on repare meme s'il ne l'a pas ete ;
+ * - la permission reste accordee mais L'ABONNEMENT A DISPARU. C'est l'etat le
+ *   plus traitre : `Notification.permission` vaut toujours `granted`, le jeu
+ *   se croit joignable, l'ecran des reglages dit que tout va bien, et rien
+ *   n'arrive jamais. On le refait alors — sans rien demander, la permission
+ *   est deja la.
+ *
+ * Silencieuse de bout en bout : sans permission deja accordee, elle sort tout
+ * de suite, et ne montre donc jamais de fenetre au lancement.
+ */
+async function rafraichirWeb(): Promise<void> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  const reg = await navigator.serviceWorker.ready;
+  const existant = await reg.pushManager.getSubscription();
+  if (existant) { await enregistrerAbonnement(existant); return; }
+
+  const neuf = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: cleEnOctets(VAPID_PUBLIC_KEY),
+  });
+  await enregistrerAbonnement(neuf);
+}
+
 let ecouteWebPosee = false;
 
 /**
@@ -304,13 +340,21 @@ export async function activerPush(): Promise<void> {
  * aucune permission : sans permission deja accordee, il ne fait rien du tout.
  * C'est `activerPush` qui demande, au moment choisi par App.tsx.
  *
- * Sur le web, il n'y a pas de jeton a rafraichir — un abonnement Web Push ne
- * se perime pas de la meme facon, et le navigateur previendrait par
- * `pushsubscriptionchange`. L'appel y sert a autre chose : brancher l'ecoute
- * du service worker, pour qu'une notification touchee ouvre le bon ecran.
+ * Sur le web, la meme chose pour les memes raisons. On a longtemps cru le
+ * contraire — « un abonnement Web Push ne se perime pas » — et c'etait faux :
+ * il est remplace, il disparait pendant que la permission reste accordee, et
+ * rien a l'ecran ne le dit. `rafraichirWeb` s'en charge. L'appel branche aussi
+ * l'ecoute du service worker, pour qu'une notification touchee ouvre le bon
+ * ecran.
  */
 export async function reprendrePush(): Promise<void> {
-  if (!EST_NATIF) { ecouterWeb(); return; }
+  if (!EST_NATIF) {
+    ecouterWeb();
+    // Et on redit au serveur ou joindre ce navigateur — voir `rafraichirWeb`
+    // pour les deux facons dont un abonnement web se perd en silence.
+    await rafraichirWeb().catch(() => { /* on retentera au prochain lancement */ });
+    return;
+  }
   try {
     const FM = await greffon();
     const etat = await FM.checkPermissions();

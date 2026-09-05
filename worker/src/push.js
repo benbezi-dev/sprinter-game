@@ -222,9 +222,20 @@ async function chiffrer(charge, p256dhB64, authB64) {
  *
  * Avec son texte quand l'abonnement porte ses cles, vide sinon — un
  * abonnement enregistre avant que le chiffrement existe n'en a pas, et il
- * vaut mieux une notification muette qu'une notification perdue. Retourne
- * false si l'abonnement est expire ou revoque, et lui seul : une panne du
- * service de push n'est pas une raison d'oublier quelqu'un.
+ * vaut mieux une notification muette qu'une notification perdue.
+ *
+ * Rend un compte rendu plutot qu'un booleen, et `vivant` n'y vaut false QUE
+ * sur un 404 ou un 410. Le code d'avant rendait false des que la reponse
+ * n'etait pas un 2xx, et l'appelant supprimait la ligne : un 403 — une cle
+ * VAPID qui ne correspond plus —, un 429, une panne de Google effacaient donc
+ * l'abonnement de tous ceux qui etaient joignables, definitivement et sans
+ * un mot. Le chemin Firebase, lui, faisait deja la distinction ; les deux
+ * moities du meme fichier ne la faisaient pas pareil.
+ *
+ * Le reste du compte rendu — le code HTTP, ce que le service de push a
+ * repondu — ne sert pas a l'envoi : il sert au diagnostic, qui est la seule
+ * facon de voir quoi que ce soit dans un sous-systeme dont chaque etape
+ * avale ses erreurs par construction.
  */
 export async function envoyerPush(subscription, vapidPrivate, vapidPublic, charge) {
   const endpoint = subscription.endpoint;
@@ -250,9 +261,23 @@ export async function envoyerPush(subscription, vapidPrivate, vapidPublic, charg
   if (!corps) entetes['Content-Length'] = '0';
 
   const resp = await fetch(endpoint, { method: 'POST', headers: entetes, body: corps });
+  const accepte = resp.ok || resp.status === 201;
 
-  if (resp.status === 410 || resp.status === 404) return false; // abonnement revoque
-  return resp.ok || resp.status === 201;
+  // Ce que le service de push a repondu, quand il a refuse. C'est la seule
+  // phrase qui distingue « cle VAPID qui ne correspond pas » de « charge trop
+  // grosse », et elle n'existait nulle part.
+  let detail = '';
+  if (!accepte) {
+    try { detail = (await resp.text() || '').slice(0, 300); } catch { /* corps vide */ }
+  }
+
+  return {
+    vivant: !(resp.status === 404 || resp.status === 410),
+    accepte,
+    statut: resp.status,
+    chiffre: !!corps,
+    detail,
+  };
 }
 
 /**
@@ -273,9 +298,9 @@ async function notifierWeb(db, deviceId, type, vapidPrivate, vapidPublic) {
     const [titre, corps] = messageDe(type, row.langue);
     // `t` est le genre de la nouvelle : c'est lui qui, au clic, ouvre le bon
     // ecran plutot que l'accueil. Meme vocabulaire que la boite et que FCM.
-    const ok = await envoyerPush(sub, vapidPrivate, vapidPublic,
+    const verdict = await envoyerPush(sub, vapidPrivate, vapidPublic,
                                  { title: titre, body: corps, t: type, tag: 'sprinter-' + type });
-    if (!ok) morts.push(row.rowid);
+    if (!verdict.vivant) morts.push(row.rowid);
   }));
 
   // Nettoyage : on ne garde pas les endpoints revoques.
@@ -457,4 +482,98 @@ export async function notifierAppareil(db, deviceId, type, env) {
   if (compte) travaux.push(notifierNatif(db, deviceId, type, compte));
 
   await Promise.allSettled(travaux);
+}
+
+/* ------------------------------------------------------------- diagnostic */
+
+/**
+ * Ce que le serveur sait d'un appareil, et ce qui se passe quand on lui parle.
+ *
+ * Tout ce fichier avale ses erreurs : c'est voulu — une sonnerie ne doit pas
+ * faire echouer l'ecriture qui vient d'avoir lieu — mais cela veut dire qu'un
+ * joueur qui ne recoit rien ne laisse aucune trace nulle part. On ne sait
+ * meme pas si le message est parti. Cette fonction est la seule facon de le
+ * savoir : elle envoie une vraie notification et rend ce que le service de
+ * push a repondu, code et phrase.
+ *
+ * Elle ne modifie rien — pas meme un abonnement que le service declare mort.
+ * Un diagnostic qui efface ce qu'il observe n'est pas un diagnostic.
+ */
+export async function diagnostiquerAppareil(db, deviceId, env, envoyer) {
+  const rapport = {
+    appareil: deviceId,
+    web: { abonnements: [], transport: 'inactif' },
+    natif: { jetons: [], transport: 'inactif' },
+  };
+  if (!db || !deviceId) return rapport;
+
+  const vapidPret = !!(env && env.VAPID_PRIVATE_KEY && env.VAPID_PUBLIC_KEY);
+  rapport.web.transport = vapidPret ? 'pret' : 'sans cle VAPID';
+
+  const compte = compteDeService(env);
+  rapport.natif.transport = compte
+    ? 'pret (' + compte.project_id + ')'
+    : 'sans FCM_COMPTE_SERVICE';
+
+  /* --- le web ---------------------------------------------------------- */
+  try {
+    const r = await db.prepare(
+      'SELECT subscription, langue, created_at FROM push_subscriptions WHERE device_id = ?'
+    ).bind(deviceId).all();
+
+    for (const row of (r.results || [])) {
+      let sub = null;
+      try { sub = JSON.parse(row.subscription); } catch { /* illisible */ }
+      const cles = (sub && sub.keys) || {};
+      const ligne = {
+        service: sub && sub.endpoint ? new URL(sub.endpoint).host : 'illisible',
+        // Jamais l'endpoint entier : il suffit a notifier ce telephone, et ce
+        // rapport passe par des yeux et des journaux.
+        fin: sub && sub.endpoint ? sub.endpoint.slice(-12) : '',
+        chiffrable: !!(cles.p256dh && cles.auth),
+        langue: row.langue,
+        depuis: row.created_at,
+      };
+      if (envoyer && vapidPret && sub && sub.endpoint) {
+        const [titre, corps] = messageDe('defi', row.langue);
+        try {
+          const v = await envoyerPush(sub, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY,
+            { title: titre, body: corps, t: 'defi', tag: 'sprinter-diagnostic' });
+          ligne.envoi = v;
+        } catch (e) {
+          ligne.envoi = { erreur: String((e && e.message) || e) };
+        }
+      }
+      rapport.web.abonnements.push(ligne);
+    }
+  } catch (e) {
+    rapport.web.erreur = String((e && e.message) || e);
+  }
+
+  /* --- le natif -------------------------------------------------------- */
+  try {
+    const r = await db.prepare(
+      'SELECT jeton, plateforme, langue, cree_le FROM push_jetons WHERE device_id = ?'
+    ).bind(deviceId).all();
+
+    for (const l of (r.results || [])) {
+      const ligne = { plateforme: l.plateforme, langue: l.langue, depuis: l.cree_le,
+                      fin: String(l.jeton || '').slice(-8) };
+      if (envoyer && compte) {
+        const [titre, corps] = messageDe('defi', l.langue);
+        try {
+          const acces = await jetonAcces(compte);
+          ligne.envoi = { accepte: await envoyerFcm(
+            acces, compte.project_id, l.jeton, titre, corps, 'defi') };
+        } catch (e) {
+          ligne.envoi = { erreur: String((e && e.message) || e) };
+        }
+      }
+      rapport.natif.jetons.push(ligne);
+    }
+  } catch (e) {
+    rapport.natif.erreur = 'table absente';   // rien d'enregistre : pas une panne
+  }
+
+  return rapport;
 }

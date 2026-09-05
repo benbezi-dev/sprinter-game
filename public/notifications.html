@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<!-- Le controle des notifications, a ouvrir depuis le telephone qui ne recoit
+     rien : sprinter-game.com/notifications.html
+
+     Cette page existe parce que tout le chemin des notifications avale ses
+     erreurs par construction — une sonnerie ne doit jamais faire echouer
+     l'ecriture qui vient d'avoir lieu. Le prix de ce choix, c'est qu'un joueur
+     qui ne recoit rien ne laisse aucune trace : ni a l'ecran, ni dans les
+     journaux. On ne savait meme pas si le message etait parti.
+
+     Elle est en HTML nu, sans rien du jeu : elle doit marcher quand le jeu ne
+     marche pas. Elle partage l'origine du jeu, donc le meme service worker,
+     le meme abonnement et le meme localStorage — ce qu'elle montre est bien
+     ce que le jeu utilise, pas une copie. -->
+<html lang="fr" translate="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Sprinter — controle des notifications</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 20px 16px 64px; background: #05070d; color: #e6ecf7;
+         font: 15px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  h1 { font-size: 19px; margin: 0 0 4px; letter-spacing: .2px; }
+  p.sous { margin: 0 0 22px; color: #7e8ba3; font-size: 13px; }
+  section { border: 1px solid #1b2436; border-radius: 12px; padding: 14px 15px;
+            margin-bottom: 14px; background: #0a0f1c; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
+       color: #7e8ba3; margin: 0 0 10px; font-weight: 600; }
+  .l { display: flex; gap: 10px; align-items: baseline; padding: 5px 0;
+       border-top: 1px solid #131b2b; }
+  .l:first-of-type { border-top: 0; }
+  .k { flex: 0 0 42%; color: #8f9bb3; font-size: 13px; }
+  .v { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+       font-size: 13px; word-break: break-word; }
+  .ok   { color: #4ade80; }
+  .mal  { color: #f87171; }
+  .tiede{ color: #fbbf24; }
+  button { width: 100%; padding: 14px; font-size: 15px; font-weight: 600;
+           border: 0; border-radius: 11px; background: #2563eb; color: #fff;
+           margin-top: 6px; }
+  button:disabled { opacity: .5; }
+  button.second { background: #1b2436; color: #cbd5e1; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px;
+        color: #9fb0cc; margin: 12px 0 0; }
+  .note { color: #7e8ba3; font-size: 12.5px; margin: 10px 0 0; }
+</style>
+</head>
+<body>
+<h1>Controle des notifications</h1>
+<p class="sous">Ce que ce telephone dit, et ce que le serveur en sait.</p>
+
+<section><h2>Ce telephone</h2><div id="appareil"></div></section>
+<section><h2>Le serveur</h2><div id="serveur">Appuyez sur le bouton ci-dessous.</div></section>
+
+<section>
+  <h2>L'essai</h2>
+  <button id="essai">M'envoyer une notification maintenant</button>
+  <button id="reparer" class="second">Reparer mon abonnement</button>
+  <p class="note">L'essai fait partir une vraie notification vers ce telephone et
+     affiche ce que le service de push a repondu. Si la ligne dit
+     <span class="ok">acceptee</span> et que rien n'apparait sur l'ecran, la
+     panne est dans Android — reglages du telephone, pas le jeu.</p>
+  <pre id="journal"></pre>
+</section>
+
+<script>
+const API = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;');
+
+function ligne(cible, k, v, classe) {
+  cible.insertAdjacentHTML('beforeend',
+    `<div class="l"><div class="k">${esc(k)}</div><div class="v ${classe || ''}">${esc(v)}</div></div>`);
+}
+function dire(t) { $('journal').textContent += t + '\n'; }
+
+function deviceId() {
+  try { return localStorage.getItem('sprinter_device_id') || ''; } catch { return ''; }
+}
+
+async function etatAppareil() {
+  const c = $('appareil');
+  c.innerHTML = '';
+
+  const id = deviceId();
+  ligne(c, 'Identifiant', id ? id.slice(0, 8) + '…' : 'aucun — ouvrez le jeu une fois',
+        id ? '' : 'mal');
+
+  const installe = matchMedia('(display-mode: standalone)').matches
+    || navigator.standalone === true;
+  ligne(c, 'Ouvert depuis', installe ? "l'ecran d'accueil" : 'le navigateur');
+
+  const supporte = 'serviceWorker' in navigator && 'PushManager' in window;
+  ligne(c, 'Web Push', supporte ? 'disponible' : 'absent de ce navigateur',
+        supporte ? 'ok' : 'mal');
+  if (!supporte) return;
+
+  const perm = Notification.permission;
+  ligne(c, 'Permission', perm,
+        perm === 'granted' ? 'ok' : perm === 'denied' ? 'mal' : 'tiede');
+
+  let reg = null;
+  try { reg = await navigator.serviceWorker.getRegistration('/'); } catch (e) { /* rien */ }
+  if (!reg) { ligne(c, 'Service worker', 'aucun', 'mal'); return; }
+
+  const actif = reg.active;
+  ligne(c, 'Service worker', actif ? 'actif' : 'pas encore actif', actif ? 'ok' : 'tiede');
+  ligne(c, 'Fichier', actif ? new URL(actif.scriptURL).pathname : '—');
+
+  // Le service worker EN PLACE sait-il afficher une notification ? Un jeu
+  // ajoute a l'ecran d'accueil il y a des mois peut porter une version d'avant
+  // les notifications. Comparer le fichier servi ne le dirait pas : on demande
+  // donc a l'installe lui-meme, et son silence est une reponse.
+  const sienne = await new Promise(res => {
+    if (!actif) return res(null);
+    const canal = new MessageChannel();
+    const fin = setTimeout(() => res(null), 1500);
+    canal.port1.onmessage = e => { clearTimeout(fin); res((e.data || {}).version || null); };
+    try { actif.postMessage({ sprinter: 'version' }, [canal.port2]); }
+    catch (e) { clearTimeout(fin); res(null); }
+  });
+  ligne(c, 'Version installee', sienne || "ancienne — elle ne repond pas",
+        sienne ? 'ok' : 'mal');
+  if (!sienne) dire("Le service worker installe date d'avant les notifications. "
+                  + "Fermez le jeu completement, rouvrez-le, puis revenez ici.");
+
+  try {
+    const servi = await (await fetch('/sw.js', { cache: 'no-store' })).text();
+    const m = servi.match(/const VERSION = '([^']+)'/);
+    const enligne = m ? m[1] : 'inconnue';
+    ligne(c, 'Version en ligne', enligne,
+          sienne && sienne !== enligne ? 'tiede' : 'ok');
+    if (sienne && sienne !== enligne) {
+      dire('Le telephone porte une version plus ancienne que le site. '
+         + 'Fermez le jeu completement et rouvrez-le.');
+    }
+  } catch (e) { /* hors ligne */ }
+
+  let sub = null;
+  try { sub = await reg.pushManager.getSubscription(); } catch (e) { /* rien */ }
+  ligne(c, 'Abonnement', sub ? 'present' : 'ABSENT', sub ? 'ok' : 'mal');
+  if (sub) {
+    ligne(c, 'Service de push', new URL(sub.endpoint).host);
+    const k = sub.toJSON().keys || {};
+    ligne(c, 'Cles de chiffrement', (k.p256dh && k.auth) ? 'presentes' : 'absentes',
+          (k.p256dh && k.auth) ? 'ok' : 'tiede');
+  }
+}
+
+async function interrogerServeur(envoyer) {
+  const id = deviceId();
+  if (!id) { dire('Aucun identifiant sur ce telephone : ouvrez le jeu une fois.'); return; }
+
+  const c = $('serveur');
+  c.innerHTML = '';
+  const rep = await fetch(API + '/push/essai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: id, envoyer: !!envoyer }),
+  });
+  const d = await rep.json();
+  if (d.error) { ligne(c, 'Erreur', d.error, 'mal'); return; }
+
+  ligne(c, 'Transport web', d.web.transport, d.web.transport === 'pret' ? 'ok' : 'mal');
+  ligne(c, 'Abonnements connus', String(d.web.abonnements.length),
+        d.web.abonnements.length ? 'ok' : 'mal');
+
+  d.web.abonnements.forEach((a, i) => {
+    const n = d.web.abonnements.length > 1 ? ` #${i + 1}` : '';
+    ligne(c, 'Service' + n, a.service + ' …' + a.fin);
+    ligne(c, 'Texte chiffrable' + n, a.chiffrable ? 'oui' : 'non (sonnerie muette)',
+          a.chiffrable ? 'ok' : 'tiede');
+    if (a.envoi) {
+      const e = a.envoi;
+      if (e.erreur) { ligne(c, 'Envoi' + n, e.erreur, 'mal'); return; }
+      ligne(c, 'Envoi' + n,
+            (e.accepte ? 'acceptee' : 'REFUSEE') + ' (HTTP ' + e.statut + ')',
+            e.accepte ? 'ok' : 'mal');
+      if (e.detail) dire('Reponse du service de push : ' + e.detail);
+      if (e.accepte) {
+        dire('La notification est partie et le service de push l\'a acceptee.');
+        dire("Si rien n'apparait : Android > Parametres > Applications > Sprinter (ou Chrome) > Notifications.");
+      }
+    }
+  });
+
+  ligne(c, 'Transport natif', d.natif.transport,
+        d.natif.transport.startsWith('pret') ? 'ok' : 'tiede');
+  if (d.natif.jetons.length) ligne(c, 'Jetons natifs', String(d.natif.jetons.length));
+}
+
+$('essai').addEventListener('click', async () => {
+  $('essai').disabled = true;
+  $('journal').textContent = '';
+  try {
+    if (Notification.permission === 'default') {
+      dire('Permission : ' + await Notification.requestPermission());
+    }
+    await interrogerServeur(true);
+  } catch (e) { dire('Echec : ' + ((e && e.message) || e)); }
+  $('essai').disabled = false;
+  etatAppareil();
+});
+
+// Refaire l'abonnement de zero. C'est le geste qui repare le cas le plus
+// courant : la permission est accordee, mais le navigateur a laisse tomber
+// l'abonnement — et rien, nulle part, ne le disait.
+$('reparer').addEventListener('click', async () => {
+  $('reparer').disabled = true;
+  $('journal').textContent = '';
+  try {
+    const id = deviceId();
+    if (!id) throw new Error('ouvrez le jeu une fois d\'abord');
+    if (Notification.permission !== 'granted') {
+      const p = await Notification.requestPermission();
+      if (p !== 'granted') throw new Error('permission ' + p);
+    }
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+    const ancien = await reg.pushManager.getSubscription();
+    if (ancien) { await ancien.unsubscribe(); dire('Ancien abonnement retire.'); }
+    const cle = 'BAMcLBM4VSChNqcxJz6HMuByOxuFPUaHda7yHdEiHv4-6YIaksMxDYEVNHyjyQhsRUS20dCwi0d9p4flbKp9QM0';
+    const pad = '='.repeat((4 - cle.length % 4) % 4);
+    const brut = atob((cle + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    const octets = new Uint8Array(brut.length);
+    for (let i = 0; i < brut.length; i++) octets[i] = brut.charCodeAt(i);
+
+    const neuf = await reg.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: octets,
+    });
+    const r = await fetch(API + '/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: id, subscription: neuf.toJSON(), langue: 'fr' }),
+    });
+    dire(r.ok ? 'Nouvel abonnement enregistre. Faites l\'essai.'
+              : 'Le serveur a refuse : HTTP ' + r.status);
+  } catch (e) { dire('Echec : ' + ((e && e.message) || e)); }
+  $('reparer').disabled = false;
+  etatAppareil();
+});
+
+etatAppareil();
+interrogerServeur(false).catch(() => { /* le bouton reste */ });
+</script>
+</body>
+</html>

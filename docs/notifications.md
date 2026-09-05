@@ -133,6 +133,8 @@ autre appareil. La ligne `/push/natif/abonner` doit passer, puis l'envoi.
 | POST | `/push/unsubscribe` | Oublie les abonnements web d'un appareil |
 | POST | `/push/natif/abonner` | Enregistre un jeton Firebase |
 | POST | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
+| POST | `/push/rotation` | Remplace un abonnement que le navigateur a renouvele |
+| POST | `/push/essai` | Dit ce que le serveur sait d'un appareil, et lui envoie une vraie notification |
 
 Deux tables, et pas une seule a deux colonnes : un abonnement web est un objet
 qu'on rejoue tel quel, un jeton FCM est une chaine opaque, et un meme appareil
@@ -148,11 +150,70 @@ plus.
 | `direct` | Quelqu'un est invite a courir maintenant | `POST /direct/inviter` |
 | `relais` | Une equipe se forme et attend une reponse | `POST /relay/team` |
 | `duel` | Un defi lance vient d'etre releve | `POST /challenge/attempt` |
+| `mot` | Le vainqueur laisse un mot au perdant | `POST /duel/mot` |
 
-`mot` — le mot laisse par le vainqueur — passe encore par la seule boite
-WebSocket. Son texte existe deja dans `MESSAGES` : le jour ou on veut qu'il
-sonne aussi, il suffit de remplacer `sonner` par `sonnerEtPush` a ses deux
-points d'appel.
+Les cinq forment une boucle, et c'est le but : un defi part, il est releve, le
+lanceur l'apprend, le vainqueur laisse un mot, le perdant prend sa revanche —
+qui est un defi, et la boucle repart. Chaque maillon qui ne sonne pas casse
+l'echange : le joueur ne revient qu'au prochain lancement du jeu, c'est-a-dire
+souvent jamais. `mot` etait ce maillon-la, et il ne l'est plus.
+
+## Quand un telephone ne recoit rien
+
+Ouvrir **`sprinter-game.com/notifications.html`** sur le telephone en question.
+La page est en HTML nu, sans rien du jeu — elle doit marcher quand le jeu ne
+marche pas — et partage son origine, donc le meme service worker, le meme
+abonnement et le meme `localStorage`. Ce qu'elle montre est ce que le jeu
+utilise, pas une copie.
+
+Elle repond a la seule question qui compte : **le message est-il parti, et le
+service de push l'a-t-il accepte ?**
+
+| Ce qu'elle affiche | Ce que cela veut dire |
+|---|---|
+| Abonnement **ABSENT**, permission `granted` | L'etat le plus traitre : le jeu se croit joignable et ne l'est pas. « Reparer mon abonnement » |
+| Abonnements connus : **0** | Le telephone ne s'est jamais annonce au serveur. « Reparer » |
+| Envoi **REFUSEE (HTTP 403)** | Les cles VAPID des deux cotes ne correspondent plus |
+| Envoi **acceptee** et rien a l'ecran | La panne est dans Android, pas dans le jeu : *Parametres → Applications → Sprinter (ou Chrome) → Notifications* |
+| Version installee : **elle ne repond pas** | Le service worker sur ce telephone date d'avant les notifications. Fermer le jeu completement, rouvrir |
+| Version installee ≠ version en ligne | Le telephone porte une version plus ancienne que le site. Meme geste |
+
+La version installee est demandee **au service worker lui-meme**, par un
+`MessageChannel`, et non deduite du fichier servi par le site. C'est la
+difference qui compte : un jeu ajoute a l'ecran d'accueil il y a des mois porte
+sa propre copie, et comparer ce que le site sert n'en dit rien.
+
+Cette page existe parce que tout ce chemin avale ses erreurs par
+construction — une sonnerie ne doit jamais faire echouer l'ecriture qui vient
+d'avoir lieu. Le prix de ce choix, c'est qu'un joueur qui ne recoit rien ne
+laisse aucune trace : ni a l'ecran, ni dans les journaux. On ne savait meme pas
+si le message etait parti.
+
+### Deux pannes qui frappaient d'abord les installations anciennes
+
+**Un abonnement etait efface des que le service de push repondait autre chose
+qu'un 2xx.** Seuls un 404 et un 410 disent qu'un abonnement est mort ; un 403,
+un 429, une panne de Google ne disent rien de tel. Le code d'avant les traitait
+pareil : une indisponibilite de quelques minutes suffisait a rendre injoignable
+tout le monde a la fois, definitivement et sans un mot. Le chemin Firebase
+faisait deja la distinction — les deux moities du meme fichier ne la faisaient
+pas pareil.
+
+**Un abonnement renouvele n'etait porte a personne.** Le navigateur remplace un
+abonnement de son propre chef, et ne previent que le service worker, par
+`pushsubscriptionchange`. Sans gestionnaire, l'ancien endpoint restait en base :
+chaque defi partait vers un abonnement mort, Google repondait 410, et le joueur
+cessait d'etre joignable pour toujours. `public/sw.js` refait maintenant
+l'abonnement et le porte a `/push/rotation`, qui reconnait la ligne a son ancien
+endpoint — un service worker n'a pas acces au `device_id`, qui vit dans le
+`localStorage` du jeu.
+
+Et par-dessus les deux, une ceinture : **`reprendrePush` redit au serveur ou
+joindre ce navigateur a chaque lancement**, comme le chemin natif le faisait
+deja pour son jeton. Il ne demande rien et ne montre rien — sans permission
+deja accordee, il sort tout de suite. Avant, un abonnement web n'etait porte au
+serveur qu'une fois, apres la premiere course d'une session : tout ce qui se
+perdait entre-temps se perdait pour de bon.
 
 ## Ce que la politique de confidentialite doit dire
 

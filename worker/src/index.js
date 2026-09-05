@@ -9,7 +9,7 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
-import { notifierAppareil } from './push.js';
+import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
@@ -1329,13 +1329,13 @@ export default {
           if (!d || d.outcome === 'draw') return;
           if (d.outcome === 'opponent') {
             // Le releveur l'emporte : le perdant est celui qui a lance.
-            await sonner(env, d.owner_device, 'mot', canal.test);
+            await sonnerEtPush(env, d.owner_device, 'mot', canal.test);
             return;
           }
           const rep = await env.DB.prepare(
             `SELECT device_id FROM challenge_attempts
               WHERE id = ? ORDER BY total_ms ASC LIMIT 1`).bind(code).first();
-          if (rep) await sonner(env, rep.device_id, 'mot', canal.test);
+          if (rep) await sonnerEtPush(env, rep.device_id, 'mot', canal.test);
         } catch (e) { /* le sondage reste derriere */ }
       })());
       return r.erreur ? json({ error: r.erreur, ...r }, r.deja ? 409 : 403) : json(r);
@@ -2772,6 +2772,72 @@ export default {
                                           langue     = excluded.langue`
       ).bind(j, device_id, plat, langue === 'en' ? 'en' : 'fr', Date.now()).run();
       return json({ ok: true });
+    }
+
+    /* -------------------------------------------------------------------
+       UN ABONNEMENT QUI A CHANGE DE NUMERO
+
+       Le navigateur renouvelle un abonnement de lui-meme — mise a jour de
+       Chrome, cle VAPID changee, menage du service de push. Il previent le
+       service worker par `pushsubscriptionchange`, et personne d'autre. Sans
+       cette route, l'ancien endpoint restait en base : chaque envoi partait
+       vers un abonnement mort, le service repondait 410, et le joueur
+       disparaissait pour de bon sans que rien ne le dise.
+
+       On reconnait la ligne a son ANCIEN endpoint, pas au device_id : un
+       service worker n'a pas acces au localStorage, et le device_id y vit.
+       C'est aussi ce qui rend la route sure — il faut deja detenir l'ancien
+       abonnement pour ecrire quoi que ce soit.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/rotation' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { ancien_endpoint, subscription } = body || {};
+      const ancien = String(ancien_endpoint || '');
+      if (!ancien.startsWith('https://')) return json({ error: 'ancien endpoint invalide' }, 400);
+      if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
+      // Le remplacant doit venir du meme service de push que le remplace. Un
+      // navigateur qui renouvelle un abonnement ne change pas de service ; ce
+      // qui en change n'est pas un renouvellement, et n'a rien a ecrire ici.
+      try {
+        if (new URL(ancien).origin !== new URL(subscription.endpoint).origin) {
+          return json({ error: 'service de push different' }, 400);
+        }
+      } catch { return json({ error: 'endpoint illisible' }, 400); }
+      await ensurePushTable(env.DB);
+      const r = await env.DB.prepare(
+        `UPDATE push_subscriptions SET subscription = ?
+          WHERE json_extract(subscription, '$.endpoint') = ?`
+      ).bind(JSON.stringify(subscription), ancien).run();
+      return json({ ok: true, remplaces: (r.meta && r.meta.changes) || 0 });
+    }
+
+    /* -------------------------------------------------------------------
+       « EST-CE QUE MON TELEPHONE EST JOIGNABLE ? »
+
+       Tout le chemin des notifications avale ses erreurs par construction :
+       une sonnerie ne doit jamais faire echouer l'ecriture qui vient d'avoir
+       lieu. Le prix de ce choix, c'est qu'un joueur qui ne recoit rien ne
+       laisse aucune trace — ni dans les journaux, ni a l'ecran, nulle part. On
+       ne sait meme pas si le message est parti.
+
+       Cette route rend ce qu'on ne pouvait pas voir : ce que le serveur garde
+       de cet appareil, et — si on le demande — ce que le service de push
+       repond a une vraie notification envoyee maintenant.
+
+       Elle ne demande pas la cle d'administration, et n'en a pas besoin : elle
+       ne parle que de l'appareil dont on presente le device_id, et ne renvoie
+       jamais de quoi joindre qui que ce soit — ni endpoint entier, ni jeton.
+       C'est exactement l'autorite qu'a deja `/push/unsubscribe`, qui coupe les
+       notifications de l'appareil qu'on lui nomme.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/essai' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, envoyer } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      return json(await diagnostiquerAppareil(env.DB, device_id, env, envoyer !== false));
     }
 
     if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {
