@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { RecordChip } from './RecordPerso';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS, fetchDuels, type DuelRow } from '@/game/duels';
@@ -320,6 +321,14 @@ export function TitleScreen() {
                   {N.t('top500_court')}
                 </button>
               </div>
+
+              {/* Le record, NOMME. La liste au-dessous le contenait deja — son
+                  premier rang — mais rien ne disait que c'en etait un, et le
+                  mot « record » n'apparaissait nulle part dans le jeu. Il vient
+                  du serveur quand le joueur a un nom : c'est alors son record a
+                  LUI, telephone et ordinateur confondus, et pas celui de
+                  l'appareil qu'il tient. */}
+              <RecordChip race={raceKey as any} />
 
               {!currentRuns.length ? (
                 <p className="text-[11px] md:text-sm text-center leading-snug text-muted-foreground">

@@ -84,6 +84,18 @@
     home:         ['ACCUEIL', 'HOME'],
     replay:       ['REJOUER', 'PLAY AGAIN'],
     run_done:     ['PARCOURS TERMINÉ', 'RUN COMPLETE'],
+
+    // Le record personnel. Il existait depuis toujours dans `G.runs` et n'etait
+    // nomme nulle part : l'accueil affichait une liste de chronos dont le
+    // premier se trouvait etre le meilleur, sans le dire. Ce qu'on ne nomme
+    // pas ne se bat pas.
+    pb_label:     ['RECORD', 'BEST'],
+    pb_mine:      ['ton record', 'your best'],
+    pb_new:       ['NOUVEAU RECORD', 'NEW PERSONAL BEST'],
+    pb_gain:      ['{n} s repris à ton record', '{n} s off your best'],
+    pb_short:     ['il te manque {n} s', '{n} s short'],
+    pb_first:     ['premier chrono sur cette épreuve', 'first time on this event'],
+    pb_rank:      ['{o} au classement', '{o} overall'],
     six_in:       ['six étapes franchies en ', 'six stages cleared in '],
     stage_low:    ['étape ', 'stage '],
 

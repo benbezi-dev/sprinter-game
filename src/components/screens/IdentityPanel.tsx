@@ -5,6 +5,7 @@ import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, linkDevice, savedCode } from '@/game/identity';
 import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
+import { RecordChip } from './RecordPerso';
 
 /**
  * Identite du joueur : son nom, le code qui le lui reserve, et de quoi relier
@@ -73,6 +74,15 @@ export function IdentityPanel() {
         <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
           {N.t('id_title')}
         </h3>
+      </div>
+
+      {/* Les trois records, la ou le joueur vient deja voir qui il est.
+          Chaque pastille se tait tant qu'il n'a pas couru l'epreuve : trois
+          lignes de tirets ne disent rien de plus qu'une absence. */}
+      <div className="flex flex-wrap gap-1.5">
+        {(['100', '200', '400'] as const).map(r => (
+          <RecordChip key={r} race={r} compact avecEpreuve />
+        ))}
       </div>
 
       <div className="flex gap-2">

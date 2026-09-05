@@ -2,16 +2,36 @@ import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
+import { useRecord, s2 } from '@/game/record';
 
 export function RaceHUD() {
   const { 
     state, elapsed, countT, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
-    ghostOn, ghostD, ghostDone, challenge
+    ghostOn, ghostD, ghostDone, challenge, raceKey
   } = useGameStore();
 
   const { N, C } = SprinterApp;
+
+  /**
+   * LE REPERE DU RECORD, pendant la course.
+   *
+   * Un 100 m dure huit secondes et demie. Personne n'a le temps de faire une
+   * soustraction en courant, et c'est pourtant la seule question qui se pose :
+   * « est-ce que je suis dedans ? ». Le chrono repond donc lui-meme — il reste
+   * vert tant que le record est encore atteignable, et passe au rouge a la
+   * seconde exacte ou il ne l'est plus.
+   *
+   * C'est le repere que le jeu n'avait pas. Le fantome d'un duel occupe deja
+   * la bande sous le HUD, et il n'est la que dans un duel ; le record, lui,
+   * existe a chaque course.
+   */
+  const record = useRecord(raceKey);
+  const recordMs = record.ms;
+  const chronoMs = elapsed * 1000;
+  const dansLeRecord = recordMs !== null && chronoMs <= recordMs;
+  const recordPerdu = recordMs !== null && chronoMs > recordMs;
 
   // Dans un defi, l'adversaire a battre est le fantome, pas le favori de l'IA.
   const ghostSplit: number | undefined = (SprinterApp.G.ghostSplits || [])[shotIdx];
@@ -90,8 +110,22 @@ export function RaceHUD() {
           <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${ph === 0 ? 'text-primary' : ph === 1 ? 'text-cyan-400' : 'text-muted-foreground'}`}>
             {N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])}
           </div>
-          <div className="font-black font-mono text-2xl sm:text-3xl md:text-4xl text-primary tabular-nums landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-            {elapsed.toFixed(2)}
+          <div className="flex flex-col items-end leading-none gap-0.5">
+            <div className={`font-black font-mono text-2xl sm:text-3xl md:text-4xl tabular-nums
+                             transition-colors duration-200
+                             landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]
+              ${!isRace || recordMs === null ? 'text-primary'
+                : dansLeRecord ? 'text-emerald-400' : 'text-destructive'}`}>
+              {elapsed.toFixed(2)}
+            </div>
+            {recordMs !== null && (
+              <div className={`font-mono font-bold tabular-nums tracking-widest
+                               text-[8px] sm:text-[9px]
+                               landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]
+                ${recordPerdu && isRace ? 'text-destructive/70' : 'text-muted-foreground'}`}>
+                {N.t('pb_label')} {s2(recordMs)}
+              </div>
+            )}
           </div>
         </div>
 

@@ -23,6 +23,7 @@ import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
+import { EcartRecord } from './RecordPerso';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -880,6 +881,15 @@ export function OneShotEndScreen() {
                 {falseOut ? dnf : `${runTime.toFixed(2)} s`}
               </span>
             </div>
+            {/* L'ecart au record, sous le chrono du parcours. Il ne s'affiche
+                que sur une epreuve seule : sur un programme de plusieurs
+                courses, `runTime` est un cumul, et le comparer a un record de
+                100 m annoncerait un retard de vingt secondes sur soi-meme. */}
+            {!falseOut && shotRaces.length === 1 && (
+              <div className="flex justify-center mt-2">
+                <EcartRecord race={shotRaces[0] as any} ms={runTime * 1000} />
+              </div>
+            )}
             {aFantome && (
               <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1">
                 <span className="font-bold tracking-widest text-cyan-300 uppercase text-sm md:text-base court:text-xs min-w-0 truncate flex items-center gap-2">
