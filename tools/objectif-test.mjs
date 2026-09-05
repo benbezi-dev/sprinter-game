@@ -56,6 +56,7 @@ import {
   PLUS_BAS, PLUS_HAUT, directionDe, estMeilleur, meilleurDe, agregatSql,
 } from '../worker/src/epreuves.js';
 import { estAnonyme } from '../worker/src/records.js';
+import { verifierTrace, vraisemblance, PAS_S, BOND_SUSPECT } from '../worker/src/preuve.js';
 import { readFileSync } from 'node:fs';
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
@@ -639,6 +640,78 @@ const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 36
   ok('un objectif d avant la fenetre reste jouable', r !== null && r.reussi);
 }
 
+titre('UNE COURSE SE PROUVE, ELLE NE SE DECLARE PAS');
+
+// UNE VRAIE TRACE, prise dans le jeu le 6 septembre 2026 : 100 m en 13,858 s,
+// 211 points, ligne franchie au point 174. Elle est ici en entier plutot
+// qu'imitee — c'est elle qui a fixe les tolerances du module, et une imitation
+// aurait valide mes hypotheses au lieu de les mettre a l'epreuve.
+const VRAIE = ('0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,'
+ + '0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,5,8,12,14,19,23,27,33,37,43,'
+ + '49,56,61,68,75,82,90,96,104,112,119,128,137,144,152,160,170,179,186,195,204,213,'
+ + '223,230,240,249,259,269,276,286,295,306,313,323,333,343,353,362,370,381,391,401,'
+ + '409,418,428,438,448,456,466,476,485,495,504,514,524,533,543,551,561,571,581,591,'
+ + '599,609,619,629,639,646,656,666,676,686,694,703,714,723,733,744,751,761,771,781,'
+ + '791,799,809,819,829,839,846,856,866,876,884,894,904,913,924,932,941,951,961,971,'
+ + '979,989,999,1008,1017,1025,1030,1037,1043,1048,1052,1057,1061,1064,1068,1071,1073,'
+ + '1076,1078,1080,1082,1083,1085,1087,1088,1089,1090,1091,1092,1093,1094,1094,1095,'
+ + '1095,1096,1096,1097,1097,1098,1098').split(',').map(Number);
+const VRAI_MS = 13858;
+
+ok('une vraie course passe', verifierTrace(VRAIE, VRAI_MS, '100').length === 0,
+   verifierTrace(VRAIE, VRAI_MS, '100').join(' ; '));
+ok('...et elle depasse la ligne sans s arreter dessus',
+   VRAIE[VRAIE.length - 1] > 1000,
+   'le coureur decelere apres l arrivee : la trace ne s arrete pas au chrono');
+ok('...et le chrono tombe a moins d un pas du passage de ligne',
+   Math.abs(VRAIE.findIndex(d => d >= 1000) * PAS_S - VRAI_MS / 1000) < PAS_S);
+
+ok('rien du tout ne prouve rien', verifierTrace([], VRAI_MS, '100').length > 0);
+ok('un seul point non plus', verifierTrace([500], VRAI_MS, '100').length > 0);
+ok('une epreuve inconnue est refusee', verifierTrace(VRAIE, VRAI_MS, '800').length > 0);
+
+// Le meme chrono, une trace qui n'arrive jamais.
+ok('une course qui n atteint pas la ligne est refusee',
+   verifierTrace(VRAIE.map(d => Math.min(d, 900)), VRAI_MS, '100')
+     .some(g => /atteint/.test(g)));
+
+// La vraie trace, mais avec un chrono menteur : c'est la fraude la plus
+// evidente — joindre une course honnete a un resultat qui ne l'est pas.
+ok('une vraie trace avec un faux chrono est refusee',
+   verifierTrace(VRAIE, 8200, '100').some(g => /ligne/.test(g)),
+   verifierTrace(VRAIE, 8200, '100').join(' ; '));
+ok('...meme quand le faux chrono est a peine plus rapide',
+   verifierTrace(VRAIE, VRAI_MS - 400, '100').length > 0);
+ok('...mais un ecart d un pas passe',
+   verifierTrace(VRAIE, VRAI_MS - 70, '100').length === 0,
+   'l arrondi joue des deux cotes : on ne refuse pas pour huit centiemes');
+
+// Un coureur ne recule pas.
+const recule = VRAIE.slice(); recule[100] = recule[100] - 200;
+ok('une trace qui recule est refusee',
+   verifierTrace(recule, VRAI_MS, '100').some(g => /recule/.test(g)));
+
+// La trace la plus simple a inventer : une ligne droite instantanee.
+const teleporte = [0, 1000, 1000, 1000];
+ok('un saut jusqu a la ligne est refuse',
+   verifierTrace(teleporte, 240, '100').length > 0,
+   verifierTrace(teleporte, 240, '100').join(' ; '));
+
+titre('UN BOND SOUDAIN SE NOTE, IL NE SE PUNIT PAS');
+
+ok('sans passe, rien n est suspect', !vraisemblance(8000, null, 0).suspect);
+ok('...ni sous cinq courses', !vraisemblance(6000, 10000, 4).suspect,
+   'un joueur qui debute progresse par bonds, et c est normal');
+ok('une progression ordinaire passe',
+   !vraisemblance(9700, 10000, 50).suspect,
+   `3 % d amelioration, seuil a ${(BOND_SUSPECT * 100).toFixed(0)} %`);
+ok(`au-dela de ${(BOND_SUSPECT * 100).toFixed(0)} % d un coup, on note`,
+   vraisemblance(8000, 10000, 50).suspect);
+ok('...et on dit de combien',
+   Math.abs(vraisemblance(8000, 10000, 50).bond - 0.2) < 1e-9);
+ok('une course PLUS LENTE n est jamais suspecte',
+   !vraisemblance(11000, 10000, 50).suspect);
+
 titre('AUCUNE PHRASE N EN ECRASE UNE AUTRE');
 
 // Une clef ecrite deux fois dans le meme dictionnaire ne previent pas : elle
@@ -773,13 +846,50 @@ if (!joignable) {
   ok('/objectif sans nom repond 400, pas 404', sansNom.statut === 400,
      `statut ${sansNom.statut}`);
 
-  const tentative = await poster('/objectif/tentative',
-    { nom: 'ZZ-personne-' + Date.now(), ms: 9000 });
+  const inconnuNom = 'ZZ-personne-' + Date.now();
+  const appareil = 'dev-preuve-' + Math.random().toString(36).slice(2, 8);
+  const tentative = await poster('/objectif/tentative', { nom: inconnuNom, ms: 9000 });
   ok('/objectif/tentative existe', tentative.statut !== 404,
      `statut ${tentative.statut}`);
+
+  titre('LA TENTATIVE NE S ACCEPTE PLUS SUR PAROLE');
+
+  // Le trou que ces tests ferment : la route acceptait `{nom, ms}` et rien de
+  // plus. Une ligne de curl validait l'objectif de n'importe quel joueur du
+  // classement, ou s'attribuait un 5,00 s.
+  ok('sans appareil, on refuse', tentative.statut === 400,
+     `statut ${tentative.statut} — c est ce qui empeche de valider a la place d un autre`);
+
+  const horsBornes = await poster('/objectif/tentative',
+    { nom: inconnuNom, device_id: appareil, ms: 12 });
+  ok('un chrono impossible est refuse', horsBornes.statut === 400,
+     `statut ${horsBornes.statut}`);
+
+  const sansPreuve = await poster('/objectif/tentative',
+    { nom: inconnuNom, device_id: appareil, ms: 9000 });
+  ok('sans trace, la course est refusee', sansPreuve.statut === 422,
+     `statut ${sansPreuve.statut} ${JSON.stringify(sansPreuve.corps).slice(0, 60)}`);
+  ok('...en disant ce qui cloche', Array.isArray(sansPreuve.corps.griefs)
+     && sansPreuve.corps.griefs.length > 0,
+     JSON.stringify(sansPreuve.corps.griefs));
+
+  const bidon = await poster('/objectif/tentative',
+    { nom: inconnuNom, device_id: appareil, ms: 5000, trace: [0, 1000, 1000] });
+  ok('une trace inventee est refusee', bidon.statut === 422,
+     JSON.stringify(bidon.corps.griefs || bidon.corps).slice(0, 90));
+
+  // Une vraie trace, avec le bon chrono : elle passe la preuve, et le serveur
+  // repond alors « pas d'objectif ouvert » — ce qui est la verite pour ce nom.
+  const vraie = await poster('/objectif/tentative',
+    { nom: inconnuNom, device_id: appareil, ms: 13858, trace: VRAIE });
+  ok('une vraie course passe la preuve', vraie.statut === 200,
+     `statut ${vraie.statut} ${JSON.stringify(vraie.corps).slice(0, 60)}`);
   ok('...et rend null quand aucun objectif n est ouvert',
-     tentative.corps.objectif === null || tentative.statut === 429,
-     JSON.stringify(tentative.corps).slice(0, 80));
+     vraie.corps.objectif === null, JSON.stringify(vraie.corps).slice(0, 80));
+
+  const sig = await lire('/signalements');
+  ok('les signalements sont fermes sans cle d administration', sig.statut === 403,
+     `statut ${sig.statut}`);
 
   titre('LE RECORD PERSONNEL SUIT LES COURSES');
 

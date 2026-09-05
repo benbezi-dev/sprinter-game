@@ -19,7 +19,7 @@
 // Un agrement qui empeche de jouer n'est plus un agrement.
 
 import { useSyncExternalStore } from 'react';
-import { getSavedName, type RaceKey } from './leaderboard';
+import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 import { SprinterApp } from './engine';
 import { rendreLeHasard } from './graine';
 
@@ -80,6 +80,19 @@ export type Resultat = {
   expireLe: number | null;
   graine: number | null;
 };
+
+/**
+ * La trace de la course qui vient de finir.
+ *
+ * Le moteur la range dans `shotTraces` a l'arrivee de chaque course d'un
+ * programme. Le defi n'en compte qu'une : c'est la premiere, et la seule.
+ */
+function traceDeLaCourse(): number[] {
+  try {
+    const t = (SprinterApp.G.shotTraces || [])[0];
+    return Array.isArray(t) ? t : [];
+  } catch { return []; }
+}
 
 /** La langue a laquelle ce joueur repond — meme regle que push.ts. */
 function langue(): string {
@@ -255,7 +268,17 @@ export async function soumettreCourse(tempsMs: number): Promise<Resultat | null>
     const r = await fetch(`${API_BASE}/objectif/tentative`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nom, ms, langue: langue() }),
+      // LA TRACE ACCOMPAGNE LE CHRONO, et le serveur la reclame.
+      //
+      // C'est la distance du coureur toutes les 80 ms — celle qui sert deja a
+      // rejouer une course en fantome. Elle dit la forme de la course, et pas
+      // seulement son resultat : un chrono sans elle n'est plus qu'une
+      // affirmation, et le serveur en refuse.
+      body: JSON.stringify({
+        nom, ms, langue: langue(),
+        device_id: getDeviceId(),
+        trace: traceDeLaCourse(),
+      }),
     });
     if (!r.ok) throw new Error('indisponible');
     const d = await r.json();

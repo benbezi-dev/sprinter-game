@@ -27,6 +27,9 @@ import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
 } from './records.js';
 import {
+  verifierTrace, vraisemblance, signaler, listerSignalements,
+} from './preuve.js';
+import {
   EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
   ensureObjectifTables, heureLocale,
@@ -597,6 +600,17 @@ async function appareilsJoignables(db, appareils) {
   return [...joignables];
 }
 
+/** Combien de courses ce joueur a-t-il a son historique ? Sert a savoir si
+ *  l'on a de quoi juger un bond de performance — sous cinq courses, non. */
+async function nombreDeCourses(db, nameKey) {
+  try {
+    await ensureRaceTable(db);
+    const r = await db.prepare(
+      `SELECT COUNT(*) AS n FROM races WHERE name_key = ?`).bind(nameKey).first();
+    return r?.n || 0;
+  } catch { return 0; }
+}
+
 async function attemptsFor(db, id) {
   const { results } = await db.prepare(
     `SELECT name, total_ms, splits, created_at FROM challenge_attempts
@@ -906,18 +920,92 @@ export default {
       });
     }
 
+    /* -----------------------------------------------------------------
+       UNE TENTATIVE, ET CE QU'IL FAUT POUR L'ACCEPTER
+       -----------------------------------------------------------------
+       Cette route acceptait `{nom, ms}`. Rien d'autre : pas d'appareil, pas de
+       preuve, pas de bornes. N'importe qui pouvait valider l'objectif de
+       n'importe quel joueur du classement, ou s'attribuer un 5,00 s, avec une
+       ligne de curl et sans rien savoir de lui.
+
+       Quatre verrous, du moins cher au plus cher :
+
+         L'APPAREIL. Le meme controle que `/race` et `/submit` — un nom
+         reserve n'accepte que les appareils de son proprietaire. C'est ce qui
+         retire « valider a la place d'un autre » de la table.
+
+         LES BORNES. Les memes que partout ailleurs ici.
+
+         LE DELAI. Deux tentatives a moins de huit secondes n'ont pas ete
+         courues. Sans lui, le bonus de perseverance se ramasse en trois
+         requetes.
+
+         LA PREUVE. La trace de la course — la distance toutes les 80 ms, celle
+         qui sert deja au fantome. Elle dit la FORME de la course : elle avance
+         sans reculer, elle atteint la ligne, et elle l'atteint a l'instant
+         qu'annonce le chrono.
+
+       Cela ne rend pas la triche impossible : le moteur tourne chez le joueur.
+       Cela la fait passer d'une ligne a poster a une course a fabriquer.
+    ----------------------------------------------------------------- */
+
     if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const nom = String(body?.nom || '').trim();
-      const ms = Number(body?.ms);
+      const deviceId = body?.device_id;
+      const ms = Math.round(Number(body?.ms));
       const langue = body?.langue === 'en' ? 'en' : 'fr';
-      if (!nom) return json({ error: 'nom requis' }, 400);
-      if (!Number.isFinite(ms) || ms <= 0) return json({ error: 'ms invalide' }, 400);
 
-      const res = await enregistrerTentative(env.DB, nom.toLowerCase(), nom, ms, new Date());
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!Number.isFinite(ms) || ms < MIN_TIME_MS || ms > MAX_TIME_MS) {
+        return json({ error: 'temps invalide' }, 400);
+      }
+
+      const cle = nom.toLowerCase();
+      if (!await peutUtiliser(env.DB, cle, deviceId)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
+
+      // La preuve, avant tout enregistrement. Une course qui ne tient pas
+      // debout ne doit pas compter comme tentative — sinon la refuser
+      // reviendrait quand meme a faire avancer le compteur du bonus.
+      const griefs = verifierTrace(cleanTrace(body?.trace), ms, OBJ_EPREUVE);
+      if (griefs.length) {
+        await signaler(env.DB, {
+          nameKey: cle, deviceId, quoi: 'trace',
+          detail: griefs.join(' ; '), tempsMs: ms,
+        });
+        return json({ error: 'course invalide', griefs }, 422);
+      }
+
+      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date());
       if (!res) return json({ objectif: null });
+      if (res.refuse) return json({ refuse: res.refuse, attendreMs: res.attendreMs }, 429);
+
+      // La vraisemblance ne refuse rien : elle note. Un joueur progresse, un
+      // joueur s'entraine, un joueur prete son telephone a plus rapide que
+      // lui. Reprendre son record a quelqu'un qui vient de le battre serait la
+      // pire facon d'attraper le mauvais.
+      const v = vraisemblance(ms, res.pbMs, await nombreDeCourses(env.DB, cle));
+      if (v.suspect) {
+        await signaler(env.DB, {
+          nameKey: cle, deviceId, quoi: 'bond',
+          detail: `${(v.bond * 100).toFixed(1)} % d'un coup`,
+          tempsMs: ms, pbMs: res.pbMs,
+        });
+      }
+
       return json({ resultat: res, texte: texteResultat(res, langue) });
+    }
+
+    // Ce qu'il y a a regarder. Sous cle d'administration : un signalement
+    // nomme des joueurs, et rien ne dit encore qu'ils ont triche.
+    if (url.pathname === '/signalements' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      return json({ signalements: await listerSignalements(env.DB, n) });
     }
 
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {

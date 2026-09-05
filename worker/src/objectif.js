@@ -61,6 +61,19 @@ const MARGE_REPLI = 0.035;
 /** Sous ce nombre de courses, on ne calibre pas : on replie. */
 const COURSES_MIN = 8;
 
+/**
+ * Le temps minimum entre deux tentatives, en millisecondes.
+ *
+ * Une course de 100 m demande trois secondes de depart et huit secondes de
+ * piste au tout meilleur du classement. Deux tentatives a moins de huit
+ * secondes d'intervalle n'ont donc pas ete courues — elles ont ete postees.
+ *
+ * Ce n'est pas un anti-triche a lui seul : c'est ce qui empeche un script de
+ * ramasser le bonus de perseverance en trois requetes. La preuve de la course
+ * fait le reste.
+ */
+const DELAI_MIN_MS = 8000;
+
 /** Au-dela de tant de jours sans courir, on cesse de servir un objectif.
  *  Il reprendra tout seul a la premiere course : rien a reactiver. */
 const ACTIF_JOURS = 30;
@@ -605,6 +618,7 @@ export async function ensureObjectifTables(db) {
       expire_le INTEGER,
       graine INTEGER,
       palier TEXT,
+      derniere_le INTEGER,
       PRIMARY KEY (name_key, jour, creneau)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS objectif_classement (
@@ -636,6 +650,7 @@ export async function ensureObjectifTables(db) {
     `ALTER TABLE objectifs ADD COLUMN expire_le INTEGER`,
     `ALTER TABLE objectifs ADD COLUMN graine INTEGER`,
     `ALTER TABLE objectifs ADD COLUMN palier TEXT`,
+    `ALTER TABLE objectifs ADD COLUMN derniere_le INTEGER`,
     `ALTER TABLE objectif_classement ADD COLUMN vie_utilisee_le TEXT`,
   ]) {
     try { await db.prepare(sql).run(); } catch { /* colonne deja presente */ }
@@ -854,6 +869,14 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
   ).bind(nameKey, t, jourFr, t).first();
   if (!objectif) return null;
 
+  // Trop tot pour avoir couru. On rend un refus explicite plutot que null :
+  // null veut dire « pas d'objectif ouvert », et le jeu doit pouvoir
+  // distinguer les deux.
+  if (objectif.derniere_le && t - objectif.derniere_le < DELAI_MIN_MS) {
+    return { refuse: 'trop_rapide',
+             attendreMs: DELAI_MIN_MS - (t - objectif.derniere_le) };
+  }
+
   const direction = directionDe(objectif.race_key || EPREUVE);
   const dejaValide = !!objectif.valide_le;
   const essai = objectif.tentatives + 1;
@@ -891,9 +914,9 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
     `UPDATE objectifs
         SET tentatives = ?, meilleur_ms = ?, palier = ?,
             valide_le = COALESCE(valide_le, ?),
-            points = ?
+            points = ?, derniere_le = ?
       WHERE name_key = ? AND jour = ? AND creneau = ?`
-  ).bind(essai, meilleur, palier, reussi ? Date.now() : null, compte.total,
+  ).bind(essai, meilleur, palier, reussi ? Date.now() : null, compte.total, t,
          nameKey, objectif.jour, objectif.creneau).run();
 
   if (gain > 0) {
@@ -1116,4 +1139,4 @@ export function texteResultat(res, langue) {
 }
 
 export { POINTS, TOP_N, FENETRE, COURSES_MIN, MARGE_MIN, MARGE_MAX, MARGE_REPLI,
-         ACTIF_JOURS, SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS };
+         ACTIF_JOURS, SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS, DELAI_MIN_MS };
