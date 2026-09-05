@@ -510,7 +510,10 @@
     let best = 1e9;
     const names = idx === OLYMPIC ? olympicNames() : lvl.names;
     names.forEach((n, i) => {
-      const t = lo + Math.random() * (hi - lo);
+      // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
+      // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
+      // defis « identiques » incomparables.
+      const t = lo + K.alea() * (hi - lo);
       const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
         total: G.track.total, pool: lvl.pool });

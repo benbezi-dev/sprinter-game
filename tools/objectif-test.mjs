@@ -54,6 +54,7 @@ import {
   PLUS_BAS, PLUS_HAUT, directionDe, estMeilleur, meilleurDe, agregatSql,
 } from '../worker/src/epreuves.js';
 import { estAnonyme } from '../worker/src/records.js';
+import { readFileSync } from 'node:fs';
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
 // La cle d'administration du worker local, telle que .dev.vars la pose.
@@ -480,6 +481,78 @@ const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 36
   const db = baseObjectif({ ouvre_le: null, expire_le: null, jour: '2026-09-05' });
   const r = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
   ok('un objectif d avant la fenetre reste jouable', r !== null && r.reussi);
+}
+
+titre('LE MOTEUR SEME REND DEUX FOIS LA MEME COURSE');
+
+// Le noyau du jeu est du JavaScript ancien, sans modules : on le charge comme
+// le font les autres harnais, en l'evaluant sur globalThis.
+new Function(readFileSync('src/game/sprinter-core.js', 'utf8'))();
+const K = globalThis.SprinterCore;
+
+const suite = (n) => Array.from({ length: n }, () => K.alea());
+
+ok('sans graine, le tirage est celui du systeme', K.estSeme() === false);
+const libre1 = suite(8), libre2 = suite(8);
+ok('...et deux suites libres different',
+   libre1.join() !== libre2.join(),
+   'un jeu ordinaire ne doit rien changer du tout');
+
+K.semer(1234);
+const semee1 = suite(20);
+K.semer(1234);
+const semee2 = suite(20);
+ok('la meme graine rend la meme suite', semee1.join() === semee2.join());
+ok('...et le moteur le dit', (K.semer(1234), K.estSeme() === true));
+
+K.semer(1235);
+const autre = suite(20);
+ok('une graine voisine rend une autre suite', semee1.join() !== autre.join());
+
+ok('tous les tirages restent dans [0,1[',
+   semee1.every(v => v >= 0 && v < 1), JSON.stringify(semee1.slice(0, 3)));
+
+// La propriete qui compte pour le jeu : mille tirages semes se repartissent
+// comme un hasard. Un generateur biaise donnerait des plateaux tous lents ou
+// tous rapides, et le defi serait injuste d'un jour a l'autre plutot que d'un
+// joueur a l'autre.
+K.semer(99);
+const mille = Array.from({ length: 1000 }, () => K.alea());
+const moyenne = mille.reduce((a, b) => a + b, 0) / mille.length;
+ok(`la moyenne de mille tirages tombe pres de 0,5 (${moyenne.toFixed(3)})`,
+   Math.abs(moyenne - 0.5) < 0.03);
+const quarts = [0, 0, 0, 0];
+for (const v of mille) quarts[Math.min(3, Math.floor(v * 4))]++;
+ok(`les quatre quarts sont peuples (${quarts.join(', ')})`,
+   quarts.every(q => q > 200 && q < 300));
+
+K.desemer();
+ok('on rend la main au hasard du systeme', K.estSeme() === false);
+const apres1 = suite(8), apres2 = suite(8);
+ok('...et le tirage redevient imprevisible', apres1.join() !== apres2.join(),
+   'une graine oubliee ferait rejouer la meme course a l infini');
+
+titre('LES DEUX COTES CALCULENT LA MEME GRAINE');
+
+// Le jeu recalcule la graine plutot que de croire celle qu'on lui envoie. Les
+// deux implementations doivent donc rendre le meme nombre, au bit pres — et
+// elles vivent dans deux fichiers, dans deux langages.
+const { transform } = await import('esbuild');
+const tsBrut = readFileSync('src/game/graine.ts', 'utf8')
+  // `graine.ts` importe le moteur pour semer ; le hachage, lui, ne depend de
+  // rien. On retire l'import plutot que de monter tout le jeu pour six lignes.
+  .replace("import { SprinterCore } from './engine';", 'const SprinterCore = globalThis.SprinterCore;');
+const { code } = await transform(tsBrut, { loader: 'ts', format: 'esm' });
+const jeu = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+
+for (const texte of ['sprinter', '2026-09-05:midi:100', '', 'é', 'a'.repeat(300)]) {
+  ok(`hachage identique pour « ${texte.slice(0, 22)}${texte.length > 22 ? '…' : ''} »`,
+     jeu.hash32(texte) === hash32(texte),
+     `${jeu.hash32(texte)} vs ${hash32(texte)}`);
+}
+for (const [j, c, e] of [['2026-09-05', 'midi', '100'], ['2026-12-31', 'soir', '400']]) {
+  ok(`meme graine des deux cotes pour ${j} ${c} ${e} m`,
+     jeu.graineDe(j, c, e) === graineDe(j, c, e));
 }
 
 /* ================================================================ routes */

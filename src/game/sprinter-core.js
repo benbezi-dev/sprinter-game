@@ -10,6 +10,60 @@
 
   const TAU = Math.PI * 2;
 
+  /* -----------------------------------------------------------------------
+     LE TIRAGE, ET QUAND IL CESSE D'ETRE UN HASARD
+
+     Trois choses etaient tirees au sort a chaque course : le temps vise par
+     chaque adversaire, la phase de sa foulee, et le risque de chute quand le
+     joueur repete la meme touche. Trois `Math.random()`, et c'est tres bien
+     pour une course ordinaire — le plateau change, la course respire.
+
+     Pour un DEFI, c'est exactement ce qu'il ne faut pas. Deux joueurs qui
+     courent « le defi du midi » n'ont alors couru ni la meme piste ni contre
+     les memes adversaires : comparer leurs chronos ne compare rien, et le
+     classement du defi devient une loterie ou l'on peut tomber sur un plateau
+     lent. On seme donc le tirage avec la graine du defi, la meme pour tout le
+     monde ce jour-la, et le terrain devient identique.
+
+     `semer()` prend la main, `desemer()` la rend. Hors defi, `alea()` EST
+     `Math.random` — pas une reimplementation qui lui ressemble : le jeu
+     ordinaire ne doit rien changer du tout.
+
+     L'algorithme est mulberry32 : trente-deux bits d'etat, une multiplication
+     et trois decalages. Il ne vaut rien en cryptographie et ce n'est pas ce
+     qu'on lui demande — il faut qu'il rende la meme suite partout, ce que
+     `Math.random` ne garantit precisement pas d'un navigateur a l'autre.
+     ----------------------------------------------------------------------- */
+
+  let etatAlea = null;
+
+  /** Le tirage courant : seme si un defi est en cours, sinon celui du systeme. */
+  function alea() {
+    if (etatAlea === null) return Math.random();
+    // mulberry32
+    etatAlea = (etatAlea + 0x6D2B79F5) >>> 0;
+    let t = etatAlea;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  /** Fixe le tirage. Deux courses semees pareil se ressemblent trait pour trait. */
+  function semer(graine) {
+    etatAlea = (Number(graine) >>> 0);
+  }
+
+  /** Rend la main au hasard du systeme. A appeler EN SORTANT du defi : une
+   *  graine oubliee ferait rejouer la meme course a l'infini. */
+  function desemer() {
+    etatAlea = null;
+  }
+
+  /** Le tirage est-il seme en ce moment ? Sert au jeu pour le dire a l'ecran. */
+  function estSeme() {
+    return etatAlea !== null;
+  }
+
   const C = {
     // --- projection isometrique 2:1 -----------------------------------
     ISO_COS: 2 / Math.sqrt(5),
@@ -655,7 +709,7 @@
     this.look = this.isPlayer ? PLAYER_LOOK : lookFor(name, opts.pool);
     this.d = 0; this.v = 0;
     this.finished = false; this.finishTime = null;
-    this.stride = Math.random() * TAU;
+    this.stride = alea() * TAU;
     this.lastStep = 0;
     this.stumbleTimer = 0; this.fallAnim = 0; this.lastKey = null;
     // depart : reaction, cadence de poussee, note de transition
@@ -809,7 +863,7 @@
       const risk = (C.STUMBLE_BASE +
         C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
         C.STUMBLE_INPUT_SCALE;
-      if (Math.random() < risk) {
+      if (alea() < risk) {
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
         this.fallAnim = 1;
@@ -1114,7 +1168,7 @@
 
   root.SprinterCore = {
     TAU, C, RACES, LEVELS, GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
-    pose, fallShape,
+    pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
