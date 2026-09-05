@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -36,6 +36,7 @@ import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
+import { InviteNotifs } from '@/components/screens/InviteNotifs';
 import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
@@ -43,7 +44,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
-import { activerPush, reprendrePush } from '@/game/push';
+import { reprendrePush } from '@/game/push';
 
 const queryClient = new QueryClient();
 
@@ -123,17 +124,17 @@ function MainGame() {
     reprendrePush().catch(() => { /* best-effort */ });
   }, [acces]);
 
-  // Demande la permission push après le premier résultat de course.
-  // C'est le moment naturel : le joueur vient de finir une étape et comprend
-  // pourquoi être prévenu d'un défi a du sens. On ne demande jamais au
-  // chargement — c'est refusé par réflexe.
-  const pushDemande = useRef(false);
-  useEffect(() => {
-    if (!acces || pushDemande.current) return;
-    if (state !== 'result' && state !== 'winall') return;
-    pushDemande.current = true;
-    activerPush().catch(() => { /* best-effort */ });
-  }, [acces, state]);
+  // La permission push se demande depuis un bouton, et depuis rien d'autre.
+  //
+  // Elle se demandait ici, après le premier résultat de course : le moment
+  // était le bon, l'appel ne l'était pas. Une demande de permission qui ne
+  // part pas d'un geste du joueur n'est pas traitée comme les autres — Safari
+  // la rejette (`NotAllowedError`), Chrome la réduit à une pastille dans la
+  // barre d'adresse que personne ne voit sur un téléphone. Résultat : sur
+  // 90 appareils connus du serveur, 3 abonnements.
+  //
+  // La carte `InviteNotifs`, plus bas, propose au même moment — mais avec un
+  // bouton, et c'est le clic qui ouvre la fenêtre du système.
 
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
@@ -190,6 +191,7 @@ function MainGame() {
       {/* Les trois autres jeux, atteints par un geste depuis l'accueil. */}
       {MONDES_OUVERTS && <Mondes />}
       <InstallPrompt />
+      <InviteNotifs />
       {/* Le nom, la nationalite, Instagram : demandes une fois, sur l'accueil,
           avant la premiere course. Le composant decide seul s'il a quelque
           chose a demander — pose ici plutot que dans l'ecran-titre pour

@@ -713,6 +713,14 @@
     install_ios_3:   ['en bas de Safari, puis sur', 'at the bottom of Safari, then'],
     install_ios_4:   ['Sur l’écran d’accueil', 'Add to Home Screen'],
 
+    // etre prevenu d'un defi, telephone range
+    notifs_title:    ['ÊTRE PRÉVENU', 'GET NOTIFIED'],
+    notifs_why:      ['un défi, un duel relevé, un mot du vainqueur : tu le sais tout de suite, même le jeu fermé',
+                      'a challenge, a duel taken, a word from the winner: you know right away, even with the game closed'],
+    notifs_do:       ['ACTIVER', 'TURN ON'],
+    notifs_later:    ['plus tard', 'later'],
+    notifs_done:     ['c’est bon — tu seras prévenu', 'all set — we will let you know'],
+
     mode_career_s:   ['carrière', 'career'],
     mode_oneshot_s:  ['one shot', 'one shot'],
     cat_race_sub:    ['meilleur chrono sur une course', 'best time on a single race'],

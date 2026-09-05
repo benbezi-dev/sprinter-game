@@ -118,14 +118,14 @@ async function enregistrerJeton(jeton: string): Promise<void> {
   });
 }
 
-async function activerNatif(): Promise<void> {
+async function activerNatif(): Promise<boolean> {
   const FM = await greffon();
 
   let etat = await FM.checkPermissions();
   if (etat.receive !== 'granted' && etat.receive !== 'denied') {
     etat = await FM.requestPermissions();
   }
-  if (etat.receive !== 'granted') return;
+  if (etat.receive !== 'granted') return false;
 
   await poserEcouteurs(FM);
 
@@ -135,6 +135,7 @@ async function activerNatif(): Promise<void> {
   // regarder — pas ici.
   const { token } = await FM.getToken();
   await enregistrerJeton(token);
+  return true;
 }
 
 async function desactiverNatif(): Promise<void> {
@@ -189,21 +190,30 @@ async function enregistrerAbonnement(sub: PushSubscription): Promise<void> {
   });
 }
 
-async function activerWeb(): Promise<void> {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-  if (Notification.permission === 'denied') return;
+async function activerWeb(): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
+  if (Notification.permission === 'denied') return false;
 
+  // `requestPermission()` EXIGE UN GESTE DU JOUEUR, et pas partout de la meme
+  // facon. Chrome laisse passer un appel spontane mais le degrade en une
+  // pastille dans la barre d'adresse que personne ne remarque. Safari, lui,
+  // rejette : sur iPhone — le seul endroit ou le jeu tourne en Web Push apres
+  // avoir ete ajoute a l'ecran d'accueil — un appel hors clic leve
+  // `NotAllowedError`, la promesse est rattrapee plus haut, et il ne se passe
+  // rien du tout. C'est ainsi que la permission n'a jamais ete accordee a
+  // personne. L'appel part donc d'un bouton, et de nulle part ailleurs : voir
+  // `InviteNotifs.tsx`.
   let permission: NotificationPermission = Notification.permission;
   if (permission !== 'granted') {
     permission = await Notification.requestPermission();
   }
-  if (permission !== 'granted') return;
+  if (permission !== 'granted') return false;
 
   const reg = await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   if (existing) {
     await enregistrerAbonnement(existing);
-    return;
+    return true;
   }
 
   const sub = await reg.pushManager.subscribe({
@@ -211,6 +221,7 @@ async function activerWeb(): Promise<void> {
     applicationServerKey: cleEnOctets(VAPID_PUBLIC_KEY),
   });
   await enregistrerAbonnement(sub);
+  return true;
 }
 
 async function desactiverWeb(): Promise<void> {
@@ -318,13 +329,56 @@ async function webActif(): Promise<boolean> {
 /**
  * Demande la permission, puis fait savoir au serveur ou joindre ce telephone.
  *
- * Sans effet si le joueur a deja refuse, ou si rien de tout cela n'existe la
- * ou le jeu tourne. Ne leve jamais : une notification est un confort, et un
- * confort ne casse pas une partie.
+ * A APPELER DEPUIS UN CLIC, jamais autrement. La fenetre du systeme ne s'ouvre
+ * que pour un geste du joueur : hors clic, Safari rejette et Chrome degrade la
+ * demande en une pastille que personne ne voit. L'appel spontane qui vivait
+ * dans `App.tsx` — apres le premier resultat de course, sans que rien ne soit
+ * touche — ne demandait donc rien a personne sur iPhone, et presque a personne
+ * ailleurs. Il est remplace par `InviteNotifs.tsx`, une carte avec un bouton.
+ *
+ * Rend `true` si ce telephone est desormais joignable. Sans effet si le joueur
+ * a deja refuse, ou si rien de tout cela n'existe la ou le jeu tourne. Ne leve
+ * jamais : une notification est un confort, et un confort ne casse pas une
+ * partie.
  */
-export async function activerPush(): Promise<void> {
-  try { await (EST_NATIF ? activerNatif() : activerWeb()); }
-  catch { /* un telephone injoignable reste un telephone qui joue */ }
+export async function activerPush(): Promise<boolean> {
+  try { return await (EST_NATIF ? activerNatif() : activerWeb()); }
+  catch { return false; /* un telephone injoignable reste un telephone qui joue */ }
+}
+
+/**
+ * Ou en est ce telephone, avant qu'on lui demande quoi que ce soit.
+ *
+ * Quatre reponses, et chacune commande une conduite differente :
+ *
+ * - `impossible` : rien de tout cela n'existe ici. C'est le cas d'un onglet
+ *   Safari ordinaire sur iPhone, ou `PushManager` est absent tant que le jeu
+ *   n'a pas ete ajoute a l'ecran d'accueil. Proposer serait mentir ;
+ * - `refusee` : le systeme a dit non, et une page ne peut plus rien. Reposer
+ *   la question n'ouvre aucune fenetre — il faut passer par les reglages du
+ *   telephone. On se tait ;
+ * - `accordee` : c'est fait, il n'y a rien a proposer ;
+ * - `a-demander` : le seul cas ou la carte a lieu d'etre.
+ */
+export type EtatPush = 'accordee' | 'refusee' | 'a-demander' | 'impossible';
+
+export async function etatPush(): Promise<EtatPush> {
+  if (EST_NATIF) {
+    try {
+      const FM = await greffon();
+      const etat = await FM.checkPermissions();
+      if (etat.receive === 'granted') return 'accordee';
+      if (etat.receive === 'denied') return 'refusee';
+      return 'a-demander';
+    } catch { return 'impossible'; }
+  }
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'impossible';
+    if (typeof Notification === 'undefined') return 'impossible';
+    if (Notification.permission === 'granted') return 'accordee';
+    if (Notification.permission === 'denied') return 'refusee';
+    return 'a-demander';
+  } catch { return 'impossible'; }
 }
 
 /**
