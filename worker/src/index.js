@@ -598,10 +598,14 @@ async function envoyerObjectifs(env, maintenant) {
 
   for (const j of joueurs) {
     try {
-      const { objectif, nouveau, raison } = await creerObjectif(db, j, maintenant);
-      if (raison === 'silence') { bilan.tus++; continue; }
+      const { objectif, nouveau, silencieux } = await creerObjectif(db, j, maintenant);
       if (!objectif || !nouveau) continue;
       bilan.crees++;
+
+      // Le silence ne retient que la sonnerie : l'objectif existe, et celui
+      // qui rouvre le jeu de lui-meme le trouve. C'est ce qui lui permet de
+      // revenir — une tentative, et il est de nouveau prevenu.
+      if (silencieux) { bilan.tus++; continue; }
 
       // Le texte est fabrique par appareil, dans la langue de son abonnement :
       // on ne le calcule pas ici, on donne de quoi le calculer.
@@ -743,13 +747,25 @@ export default {
         }
       }
 
-      /* -----------------------------------------------------------------
-       L'OBJECTIF DU JOUR
-       -----------------------------------------------------------------
-       Trois routes, et le joueur s'y designe par son nom — la meme clef que
-       le classement (`lower(trim(name))`), et pas le device_id : un joueur qui
-       a deux telephones a un seul objectif.
-    ----------------------------------------------------------------- */
+      return json({ error: 'not found' }, 404);
+    }
+
+    /* -----------------------------------------------------------------
+     L'OBJECTIF DU JOUR
+     -----------------------------------------------------------------
+     Trois routes, et le joueur s'y designe par son nom — la meme clef que
+     le classement (`lower(trim(name))`), et pas le device_id : un joueur qui
+     a deux telephones a un seul objectif.
+
+     ELLES VIVENT ICI, ET PAS PLUS HAUT. Elles ont ete ecrites a l'interieur
+     du bloc `/test/`, dont l'accolade fermante se trouvait cent lignes plus
+     bas : aucune adresse commencant par `/objectif` n'y entrait, les trois
+     rendaient 404 en production, et rien ne le disait — le cron, lui, ne
+     passe pas par les routes, si bien que les objectifs partaient en
+     notification vers un jeu incapable de les lire. Un harnais qui appelle
+     les routes existe desormais dans tools/objectif-test.mjs : c'est lui,
+     et pas la relecture, qui protege contre la meme erreur.
+  ----------------------------------------------------------------- */
 
     if (url.pathname === '/objectif' && request.method === 'GET') {
       const nom = (url.searchParams.get('nom') || '').trim();
@@ -798,9 +814,6 @@ export default {
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {
       const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
       return json({ classement: await classementObjectifs(env.DB, n) });
-    }
-
-    return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------------- classement

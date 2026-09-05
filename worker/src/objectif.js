@@ -378,19 +378,27 @@ export async function creerObjectif(db, joueur, maintenant) {
   const existant = await db.prepare(
     `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
   ).bind(joueur.nameKey, joueur.jour, joueur.creneau).first();
-  if (existant) return { objectif: existant, nouveau: false };
+  if (existant) return { objectif: existant, nouveau: false, silencieux: false };
 
   // Le silence : quatre objectifs de suite sans une seule tentative, et on
-  // arrete. Quelqu'un qui ne repond plus n'a pas besoin d'etre relance deux
-  // fois par jour — il a besoin qu'on le laisse revenir de lui-meme.
+  // cesse de sonner. Quelqu'un qui ne repond plus n'a pas besoin d'etre
+  // relance deux fois par jour — il a besoin qu'on le laisse revenir de
+  // lui-meme.
+  //
+  // LE SILENCE RETIENT LA SONNERIE, PAS L'OBJECTIF. Il refusait d'abord la
+  // creation, et c'etait un piege sans fond : sans objectif, aucune tentative
+  // n'est possible ; sans tentative, le compteur ne redescend jamais ; le
+  // joueur reste tu pour toujours, meme s'il rouvre le jeu tous les jours.
+  // « Revenir de lui-meme » n'avait alors aucun chemin. On cree donc
+  // l'objectif quand meme — celui qui ouvre le jeu le trouve, le joue, et sa
+  // tentative rompt le silence — et c'est l'appelant qui s'abstient de
+  // notifier.
   const { results: recents } = await db.prepare(
     `SELECT tentatives FROM objectifs WHERE name_key = ?
       ORDER BY cree_le DESC LIMIT ?`
   ).bind(joueur.nameKey, SILENCE_APRES).all();
-  if (recents && recents.length >= SILENCE_APRES
-      && recents.every(o => o.tentatives === 0)) {
-    return { objectif: null, nouveau: false, raison: 'silence' };
-  }
+  const silencieux = !!(recents && recents.length >= SILENCE_APRES
+      && recents.every(o => o.tentatives === 0));
 
   const c = calibrer(joueur.pb, joueur.courses);
   const t = Date.now();
@@ -406,7 +414,7 @@ export async function creerObjectif(db, joueur, maintenant) {
     `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
   ).bind(joueur.nameKey, joueur.jour, joueur.creneau).first();
 
-  return { objectif, nouveau: true, calibrage: c };
+  return { objectif, nouveau: true, silencieux, calibrage: c };
 }
 
 /* -------------------------------------------------------------- tentative */
