@@ -36,10 +36,19 @@
 //   cp worker/src/*.js /tmp/w/src/
 //   (cd /tmp/w && npx wrangler dev --local --port 8789)
 //   BASE=http://127.0.0.1:8789 node tools/objectif-test.mjs
+//
+// ET SUR UNE BASE DEJA PEUPLEE, qui casse AUTREMENT. Un index pose sur une
+// colonne qu'un ALTER n'a pas encore ajoutee passe sur une base neuve — le
+// CREATE TABLE a mis la colonne — et fait echouer le lot entier sur une base
+// existante, donc chez les joueurs qui ont deja un objectif. C'est le chemin
+// qu'emprunte tout deploiement, et c'est celui qu'on voit le moins. Le worker
+// local ordinaire (worker/, avec son .wrangler accumule) est justement cette
+// base-la : le lancer sans effacer son etat est le second essai a faire.
 
 import {
   calibrer, quantile, fuseauDe, creneauMaintenant, heureLocale, creerObjectif,
-  MARGE_MIN, MARGE_MAX, MARGE_REPLI, COURSES_MIN,
+  fenetreDe, graineDe, hash32, CRENEAUX, enregistrerTentative,
+  MARGE_MIN, MARGE_MAX, MARGE_REPLI, COURSES_MIN, ACTIF_JOURS,
 } from '../worker/src/objectif.js';
 import {
   PLUS_BAS, PLUS_HAUT, directionDe, estMeilleur, meilleurDe, agregatSql,
@@ -153,25 +162,89 @@ ok('un pays inconnu replie sur son continent',
    fuseauDe('XX', 'AS') === 'Asia/Shanghai');
 ok('sans rien, Paris plutot qu UTC', fuseauDe(null, null) === 'Europe/Paris');
 
-// 12:00 a Paris en heure d ete, c est 10:00 UTC.
-const midiParis = new Date('2026-09-05T10:00:00Z');
-ok('midi a Paris ouvre le creneau du midi',
+// 12:45 a Paris en heure d ete, c est 10:45 UTC.
+const midiParis = new Date('2026-09-05T10:45:00Z');
+ok('12:45 a Paris ouvre le creneau du midi',
    creneauMaintenant(midiParis, 'Europe/Paris')?.creneau === 'midi');
 ok('...et personne a New York au meme instant',
    creneauMaintenant(midiParis, 'America/New_York') === null);
-ok('19:00 a Paris ouvre le creneau du soir',
-   creneauMaintenant(new Date('2026-09-05T17:00:00Z'), 'Europe/Paris')?.creneau === 'soir');
-ok('12:30 n ouvre rien',
+ok('20:15 a Paris ouvre le creneau du soir',
+   creneauMaintenant(new Date('2026-09-05T18:15:00Z'), 'Europe/Paris')?.creneau === 'soir');
+ok('12:00 n ouvre plus rien',
+   creneauMaintenant(new Date('2026-09-05T10:00:00Z'), 'Europe/Paris') === null);
+ok('12:30 non plus',
    creneauMaintenant(new Date('2026-09-05T10:30:00Z'), 'Europe/Paris') === null);
 
-// Les fuseaux a la demie et au quart d heure : le cron passe tous les quarts
-// d heure, et c est ce qui garantit que personne n est manque.
-ok('l Inde (+05:30) tombe juste',
-   creneauMaintenant(new Date('2026-09-05T06:30:00Z'), 'Asia/Kolkata')?.creneau === 'midi');
-ok('le Nepal (+05:45) tombe juste',
-   creneauMaintenant(new Date('2026-09-05T06:15:00Z'), 'Asia/Kathmandu')?.creneau === 'midi');
+// Le cron passe tous les quarts d heure, et tous les fuseaux reels sont des
+// multiples de quinze minutes. Une minute d envoi prise dans {0,15,30,45}
+// finit donc par tomber juste partout — y compris a :45 et :15.
+ok('l Inde (+05:30) tombe juste au midi',
+   creneauMaintenant(new Date('2026-09-05T07:15:00Z'), 'Asia/Kolkata')?.creneau === 'midi');
+ok('le Nepal (+05:45) tombe juste au midi',
+   creneauMaintenant(new Date('2026-09-05T07:00:00Z'), 'Asia/Kathmandu')?.creneau === 'midi');
+ok('les Chatham (+12:45) tombent juste au soir',
+   creneauMaintenant(new Date('2026-09-05T07:30:00Z'), 'Pacific/Chatham')?.creneau === 'soir');
+ok('toutes les minutes d envoi sont des quarts d heure',
+   Object.values(CRENEAUX).every(c => [0, 15, 30, 45].includes(c.envoi.minute)),
+   'sinon un fuseau a la demie ou au quart ne serait jamais servi');
 ok('un fuseau illisible replie sur UTC sans lever',
    heureLocale(new Date('2026-09-05T10:00:00Z'), 'Pas/Un/Fuseau').heure === 10);
+
+titre('L OBJECTIF EXPIRE, ET LA FENETRE EST UN INSTANT');
+
+const fMidi = fenetreDe('2026-09-05', 'midi', 'Europe/Paris', midiParis);
+const fSoir = fenetreDe('2026-09-05', 'soir', 'Europe/Paris', midiParis);
+const heureParis = t => heureLocale(new Date(t), 'Europe/Paris');
+
+ok('le midi ouvre a 12:45 locales',
+   heureParis(fMidi.ouvre).heure === 12 && heureParis(fMidi.ouvre).minute === 45,
+   JSON.stringify(heureParis(fMidi.ouvre)));
+ok('...et expire a 18:59 le meme jour',
+   heureParis(fMidi.expire).heure === 18 && heureParis(fMidi.expire).minute === 59
+   && heureParis(fMidi.expire).jour === '2026-09-05');
+ok('le soir ouvre a 20:15 locales',
+   heureParis(fSoir.ouvre).heure === 20 && heureParis(fSoir.ouvre).minute === 15);
+ok('...et expire a 2 h LE LENDEMAIN',
+   heureParis(fSoir.expire).heure === 2 && heureParis(fSoir.expire).jour === '2026-09-06',
+   JSON.stringify(heureParis(fSoir.expire)));
+ok('une fenetre dure toujours plus d une heure',
+   fMidi.expire - fMidi.ouvre > 3600000 && fSoir.expire - fSoir.ouvre > 3600000);
+ok('les deux fenetres ne se chevauchent pas',
+   fMidi.expire <= fSoir.ouvre,
+   'sinon une tentative ne saurait pas a quel objectif elle appartient');
+
+// Le meme creneau, deux fuseaux : deux instants differents, la meme heure
+// locale. C est toute la raison d etre du calcul.
+const fTokyo = fenetreDe('2026-09-05', 'midi', 'Asia/Tokyo', midiParis);
+ok('Tokyo ouvre a 12:45 chez lui, pas chez nous',
+   heureLocale(new Date(fTokyo.ouvre), 'Asia/Tokyo').heure === 12
+   && fTokyo.ouvre !== fMidi.ouvre);
+
+ok('le dernier jour du mois deborde correctement',
+   heureLocale(new Date(fenetreDe('2026-09-30', 'soir', 'Europe/Paris', midiParis).expire),
+               'Europe/Paris').jour === '2026-10-01');
+
+titre('LA PISTE EST LA MEME POUR TOUT LE MONDE');
+
+// La graine ne depend PAS du joueur : c est ce qui fait du defi une comparaison
+// plutot qu une collection de courses sans rapport.
+ok('la graine ne depend que du jour, du creneau et de l epreuve',
+   graineDe('2026-09-05', 'midi', '100') === graineDe('2026-09-05', 'midi', '100'));
+ok('deux creneaux du meme jour ne partagent pas la piste',
+   graineDe('2026-09-05', 'midi', '100') !== graineDe('2026-09-05', 'soir', '100'));
+ok('deux jours non plus',
+   graineDe('2026-09-05', 'midi', '100') !== graineDe('2026-09-06', 'midi', '100'));
+ok('deux epreuves non plus',
+   graineDe('2026-09-05', 'midi', '100') !== graineDe('2026-09-05', 'midi', '200'));
+ok('la graine est un entier non signe sur 32 bits',
+   Number.isInteger(graineDe('2026-09-05', 'midi', '100'))
+   && graineDe('2026-09-05', 'midi', '100') >= 0
+   && graineDe('2026-09-05', 'midi', '100') < 2 ** 32);
+ok('le hachage est stable dans le temps', hash32('sprinter') === hash32('sprinter'));
+ok('...et deux textes voisins ne se ressemblent pas',
+   Math.abs(hash32('2026-09-05') - hash32('2026-09-06')) > 1000);
+
+ok(`on cesse de servir apres ${ACTIF_JOURS} jours sans courir`, ACTIF_JOURS === 30);
 
 titre('UNE EPREUVE AU PLUS HAUT SE CALIBRE DANS L AUTRE SENS');
 
@@ -314,6 +387,100 @@ const rejoue = await creerObjectif(
   joueur, new Date());
 ok('un cron rejoue ne cree pas de doublon', rejoue.nouveau === false,
    'c est la PK (joueur, jour, creneau) qui le garantit, pas l appelant');
+
+titre('LES TENTATIVES SONT ILLIMITEES, ET SEULE LA MEILLEURE COMPTE');
+
+/** Une base qui ne tient qu'un objectif, et applique l'ecriture qu'on lui fait. */
+function baseObjectif(ligne) {
+  const etat = Object.assign({
+    name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', race_key: '100',
+    cible_ms: 8800, pb_ms: 8500, tentatives: 0, meilleur_ms: null,
+    valide_le: null, points: 0, ouvre_le: null, expire_le: null,
+  }, ligne);
+  const credits = [];
+  const rep = (sql, args) => ({
+    first: async () => {
+      if (/FROM objectifs/.test(sql)) {
+        const [, t1, jour, t2] = args;
+        const ouvert = etat.ouvre_le == null || etat.ouvre_le <= t1;
+        const vivant = etat.expire_le == null ? etat.jour >= jour : etat.expire_le > t2;
+        return ouvert && vivant ? { ...etat } : null;
+      }
+      if (/FROM objectif_classement/.test(sql)) {
+        return { points: 0, valides: 0, serie: 0, dernier_jour: null };
+      }
+      return null;
+    },
+    all: async () => ({ results: [] }),
+    run: async () => {
+      if (/UPDATE objectifs/.test(sql)) {
+        const [tent, meilleur, valide, pts] = args;
+        etat.tentatives = tent;
+        etat.meilleur_ms = meilleur;
+        etat.valide_le = etat.valide_le ?? valide;      // COALESCE
+        etat.points = (etat.points || 0) + pts;
+      }
+      if (/INSERT INTO objectif_classement/.test(sql)) credits.push(args[2]);
+      return {};
+    },
+  });
+  return {
+    etat, credits,
+    prepare: sql => ({ bind: (...a) => rep(sql, a), ...rep(sql, []) }),
+    batch: async () => [],
+  };
+}
+
+const t0 = new Date('2026-09-05T13:00:00Z');
+const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 3600000 };
+
+{
+  const db = baseObjectif(ouverte);
+  const rate = await enregistrerTentative(db, 'zoe', 'Zoe', 9100, t0);
+  ok('une course ratee compte comme tentative', rate.essai === 1 && !rate.reussi);
+  ok('...et pose le meilleur temps de la session', db.etat.meilleur_ms === 9100);
+  ok('...sans rapporter de points', rate.points === 0 && db.credits.length === 0);
+
+  const gagne = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
+  ok('la course suivante valide', gagne.reussi && gagne.essai === 2);
+  ok('...et rapporte', gagne.points > 0 && db.credits.length === 1);
+  ok('...et le meilleur temps suit', db.etat.meilleur_ms === 8700);
+
+  const encore = await enregistrerTentative(db, 'zoe', 'Zoe', 8600, t0);
+  ok('on peut continuer APRES avoir valide', encore !== null && encore.essai === 3,
+     'sinon on ferme la porte a celui qui vient justement de reussir');
+  ok('...le jeu le sait', encore.dejaValide === true);
+  ok('...la meilleure course est retenue', db.etat.meilleur_ms === 8600);
+  ok('...et les points ne tombent qu une fois',
+     encore.points === 0 && db.credits.length === 1,
+     `${db.credits.length} credit(s)`);
+
+  const moinsBien = await enregistrerTentative(db, 'zoe', 'Zoe', 9500, t0);
+  ok('une course plus lente ne degrade pas le meilleur temps',
+     db.etat.meilleur_ms === 8600 && moinsBien.essai === 4);
+  ok('...et n efface pas l heure de validation', db.etat.valide_le !== null);
+}
+
+{
+  const db = baseObjectif({ ouvre_le: t0.getTime() - 7200000, expire_le: t0.getTime() - 60000 });
+  ok('une course apres l expiration ne trouve plus rien',
+     (await enregistrerTentative(db, 'zoe', 'Zoe', 8000, t0)) === null);
+}
+
+{
+  const db = baseObjectif({ ouvre_le: t0.getTime() + 60000, expire_le: t0.getTime() + 7200000 });
+  ok('une course avant l ouverture non plus',
+     (await enregistrerTentative(db, 'zoe', 'Zoe', 8000, t0)) === null);
+}
+
+{
+  // Les objectifs d'avant la fenetre n'ont pas d'instants ranges. Les exclure
+  // aurait fait disparaitre l'objectif en cours de tous ceux qui en avaient un
+  // au moment du deploiement.
+  const db = baseObjectif({ ouvre_le: null, expire_le: null, jour: '2026-09-05' });
+  const r = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
+  ok('un objectif d avant la fenetre reste jouable', r !== null && r.reussi);
+}
 
 /* ================================================================ routes */
 

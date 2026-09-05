@@ -572,6 +572,31 @@ async function appareilsDe(db, cles) {
   } catch { return []; }
 }
 
+/**
+ * Parmi ces appareils, ceux qui peuvent recevoir une notification.
+ *
+ * Les deux transports comptent — un abonnement web, un jeton Firebase — et il
+ * suffit de l'un. Sans cette question, `notifierAppareil` part quand meme,
+ * ne trouve rien et se tait : le bilan du cron annoncerait alors trois cents
+ * notifications envoyees a des appareils qui n'en recoivent aucune.
+ */
+async function appareilsJoignables(db, appareils) {
+  const liste = [...new Set((appareils || []).filter(Boolean))];
+  if (!liste.length) return [];
+  const trous = liste.map(() => '?').join(',');
+  const joignables = new Set();
+  for (const sql of [
+    `SELECT device_id FROM push_subscriptions WHERE device_id IN (${trous})`,
+    `SELECT device_id FROM push_jetons WHERE device_id IN (${trous})`,
+  ]) {
+    try {
+      const { results } = await db.prepare(sql).bind(...liste).all();
+      for (const r of results || []) joignables.add(r.device_id);
+    } catch { /* table absente : ce transport ne repond a personne */ }
+  }
+  return [...joignables];
+}
+
 async function attemptsFor(db, id) {
   const { results } = await db.prepare(
     `SELECT name, total_ms, splits, created_at FROM challenge_attempts
@@ -596,15 +621,42 @@ async function attemptsFor(db, id) {
    part pas, le joueur joue quand meme. On journalise et on passe au suivant —
    un joueur qui plante ne doit pas priver les quatre cents autres.
 ------------------------------------------------------------------------- */
+/**
+ * Dans quel mode tourne l'Objectif du jour.
+ *
+ *   actif   — il calcule, il range, il sonne. Le mode normal.
+ *   essai   — il calcule, il range, il JOURNALISE ce qu'il aurait envoye, et
+ *             n'envoie rien. C'est le mode qui permet de changer une heure de
+ *             creneau, un calibrage ou un texte et de regarder ce que ca donne
+ *             sur les vrais joueurs, sans faire vibrer trois cents telephones
+ *             pour s'en apercevoir.
+ *   arrete  — il ne fait rien du tout.
+ *
+ * Le mode se pose dans wrangler.toml et se change par un deploiement. Ce n'est
+ * pas un reglage a chaud, et c'est voulu : un interrupteur qu'on peut basculer
+ * depuis une route est un interrupteur qu'on peut basculer par accident.
+ *
+ * Le defaut est « actif » — la valeur qu'avait le code avant d'avoir un mode.
+ * Un drapeau absent ne doit pas eteindre ce qui marchait.
+ */
+function modeObjectif(env) {
+  const m = String((env && env.OBJECTIF) || 'actif').trim().toLowerCase();
+  return (m === 'essai' || m === 'arrete') ? m : 'actif';
+}
+
 async function envoyerObjectifs(env, maintenant) {
   const db = env.DB;
   if (!db) return { servis: 0 };
 
+  const mode = modeObjectif(env);
+  if (mode === 'arrete') return { mode, servis: 0 };
+
   await ensureObjectifTables(db);
   const joueurs = await joueursAServir(db, maintenant);
-  if (!joueurs.length) return { servis: 0 };
+  if (!joueurs.length) return { mode, servis: 0 };
 
-  const bilan = { dus: joueurs.length, crees: 0, notifies: 0, tus: 0, erreurs: 0 };
+  const bilan = { mode, dus: joueurs.length, crees: 0, notifies: 0,
+                  tus: 0, sans_push: 0, simules: 0, erreurs: 0 };
 
   for (const j of joueurs) {
     try {
@@ -627,9 +679,35 @@ async function envoyerObjectifs(env, maintenant) {
       // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
       // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
       const appareils = await appareilsDe(db, [j.nameKey]);
-      for (const d of appareils) {
+      await ensurePushTable(db);
+
+      // Joignable ? La question se pose ICI et pas a la selection.
+      //
+      // Un joueur sans notification garde son objectif : il le trouvera en
+      // ouvrant le jeu, et c'est exactement la population qu'on espere voir
+      // revenir. Le filtrer en amont — comme le ferait un instantane du
+      // « top 500 joignable » — lui retirerait le defi pour la seule raison
+      // qu'on ne peut pas le lui annoncer.
+      const joignables = await appareilsJoignables(db, appareils);
+      if (!joignables.length) { bilan.sans_push++; continue; }
+
+      if (mode === 'essai') {
+        // Le mode d'essai s'arrete exactement ici : tout est calcule et range,
+        // rien ne part. Le journal porte ce qui serait parti, en francais —
+        // pas la langue de l'abonnement, qu'on n'a pas cherchee.
+        const t = texteObjectif(objectif, j.rang, 'fr');
+        console.log('objectif[essai]', JSON.stringify({
+          joueur: j.nameKey, rang: j.rang, appareils: joignables.length,
+          cible_ms: objectif.cible_ms, pb_ms: objectif.pb_ms,
+          creneau: objectif.creneau, expire_le: objectif.expire_le,
+          titre: t.titre, corps: t.corps,
+        }));
+        bilan.simules++;
+        continue;
+      }
+
+      for (const d of joignables) {
         try {
-          await ensurePushTable(db);
           await notifierAppareil(db, d, 'objectif', env, texte);
           bilan.notifies++;
         } catch { /* un appareil injoignable n'annule pas les autres */ }
@@ -650,7 +728,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
       envoyerObjectifs(env, new Date(event.scheduledTime || Date.now()))
-        .then(b => { if (b.crees) console.log('objectifs', JSON.stringify(b)); })
+        .then(b => { if (b.crees || b.mode !== 'actif') console.log('objectifs', JSON.stringify(b)); })
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
   },
@@ -784,25 +862,41 @@ export default {
       const cle = nom.toLowerCase();
 
       await ensureObjectifTables(env.DB);
-      // Le jour se lit a l'heure de Paris faute de mieux ici : la route est
-      // appelee par le jeu, qui sait deja quel objectif il attend. Le cron,
-      // lui, a range l'objectif sous le jour local du joueur.
+      // L'objectif OUVERT MAINTENANT, a l'instant pres.
+      //
+      // Les instants d'ouverture et d'expiration sont ranges dans la ligne :
+      // la route n'a donc pas a savoir dans quel fuseau vit le joueur, ce
+      // qu'elle ne pouvait de toute facon pas deviner — elle se rabattait sur
+      // l'heure de Paris et rendait un objectif du midi encore « en cours » a
+      // minuit. Les lignes d'avant la fenetre gardent la regle du jour.
+      const t = Date.now();
       const jour = heureLocale(new Date(), 'Europe/Paris').jour;
       const o = await env.DB.prepare(
-        `SELECT * FROM objectifs WHERE name_key = ? AND jour >= ?
+        `SELECT * FROM objectifs
+          WHERE name_key = ?
+            AND (ouvre_le IS NULL OR ouvre_le <= ?)
+            AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
           ORDER BY cree_le DESC LIMIT 1`
-      ).bind(cle, jour).first();
+      ).bind(cle, t, jour, t).first();
       if (!o) return json({ objectif: null });
 
       const rang = await getRank(env.DB, OBJ_EPREUVE, o.pb_ms);
-      const t = texteObjectif(o, rang, langue, true);
+      const texte = texteObjectif(o, rang, langue, true);
       return json({
         objectif: {
           creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
           cible_ms: o.cible_ms, pb_ms: o.pb_ms,
           tentatives: o.tentatives, meilleur_ms: o.meilleur_ms,
           valide: !!o.valide_le, points: o.points,
-          titre: t.titre, texte: t.corps,
+          // La graine et l'expiration servent au jeu : la premiere pour courir
+          // la MEME piste que tout le monde, la seconde pour dire combien de
+          // temps il reste. La graine n'est pas un secret — elle se recalcule
+          // a partir du jour, du creneau et de l'epreuve — mais la renvoyer
+          // evite au jeu de refaire le hachage et de se tromper d'un bit.
+          graine: o.graine ?? null,
+          ouvre_le: o.ouvre_le ?? null,
+          expire_le: o.expire_le ?? null,
+          titre: texte.titre, texte: texte.corps,
         },
       });
     }

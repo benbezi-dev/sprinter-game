@@ -61,6 +61,10 @@ const MARGE_REPLI = 0.035;
 /** Sous ce nombre de courses, on ne calibre pas : on replie. */
 const COURSES_MIN = 8;
 
+/** Au-dela de tant de jours sans courir, on cesse de servir un objectif.
+ *  Il reprendra tout seul a la premiere course : rien a reactiver. */
+const ACTIF_JOURS = 30;
+
 /** La fenetre d'observation. Trente courses couvrent la forme du moment sans
  *  trainer un niveau d'il y a trois semaines. */
 const FENETRE = 30;
@@ -175,19 +179,131 @@ export function heureLocale(date, fuseau) {
 }
 
 /**
- * Le creneau du au joueur maintenant, ou null.
+ * LES DEUX CRENEAUX, ET LEUR FENETRE.
  *
- * Le cron passe tous les quarts d'heure. Tous les fuseaux reels sont des
+ * L'objectif partait a 12:00 et 19:00 pile. Il part maintenant a 12:45 et
+ * 20:15, et il EXPIRE — ce qu'il ne faisait pas.
+ *
+ * Pourquoi ces heures-la. Midi pile attrape le debut de la pause, quand on
+ * cherche encore ou manger ; 12:45 tombe sur le creux d'apres, celui ou l'on a
+ * dix minutes et rien a en faire. 19:00 tombe pendant le trajet ou le repas,
+ * 20:15 apres. Ce sont deux paris, pas deux certitudes : les chiffres qui les
+ * trancheront n'existent pas encore, faute d'avoir jamais mesure une ouverture.
+ * Les heures sont donc ici, en clair, et se changent en une ligne.
+ *
+ * Pourquoi une fenetre. Sans expiration, un objectif du midi reste ouvert la
+ * nuit et le lendemain : le second push ne peut pas dire « il expire dans une
+ * heure », et « seule la meilleure course compte » ne veut rien dire s'il n'y
+ * a pas de fin. Celle du soir deborde sur le lendemain, jusqu'a 2 h — c'est la
+ * meme soiree pour celui qui la vit.
+ *
+ * Le cron passe tous les quarts d'heure, et tous les fuseaux reels sont des
  * multiples de quinze minutes — l'Inde a +05:30, le Nepal +05:45, Chatham
- * +12:45 — donc « minute locale a zero » finit toujours par tomber juste, et
- * personne n'est manque.
+ * +12:45. N'importe quelle minute prise dans {0, 15, 30, 45} finit donc par
+ * tomber juste partout, et personne n'est manque. :45 et :15 en font partie.
  */
+export const CRENEAUX = {
+  midi: {
+    nom: 'midi',
+    envoi:  { heure: 12, minute: 45 },
+    expire: { heure: 18, minute: 59, lendemain: false },
+  },
+  soir: {
+    nom: 'soir',
+    envoi:  { heure: 20, minute: 15 },
+    expire: { heure: 2, minute: 0, lendemain: true },
+  },
+};
+
+/** Le creneau du au joueur maintenant, ou null. */
 export function creneauMaintenant(date, fuseau) {
   const l = heureLocale(date, fuseau);
-  if (l.minute !== 0) return null;
-  if (l.heure === 12) return { creneau: 'midi', jour: l.jour };
-  if (l.heure === 19) return { creneau: 'soir', jour: l.jour };
+  for (const c of Object.values(CRENEAUX)) {
+    if (l.heure === c.envoi.heure && l.minute === c.envoi.minute) {
+      return { creneau: c.nom, jour: l.jour };
+    }
+  }
   return null;
+}
+
+/**
+ * De combien l'heure d'un fuseau est en avance sur UTC, a cet instant.
+ *
+ * On la mesure plutot que de la lire dans une table : `Intl` connait les
+ * changements d'heure, et une table de decalages serait fausse deux fois par
+ * an dans chaque hemisphere.
+ *
+ * Les secondes sont retirees des deux cotes — `heureLocale` n'en rend pas — ce
+ * qui laisse un decalage juste a la minute.
+ */
+function decalageMs(date, fuseau) {
+  const l = heureLocale(date, fuseau);
+  const [a, m, j] = l.jour.split('-').map(Number);
+  const mur = Date.UTC(a, m - 1, j, l.heure, l.minute);
+  const instant = Math.floor(date.getTime() / 60000) * 60000;
+  return mur - instant;
+}
+
+/**
+ * Quand un objectif ouvre et quand il expire, en instants absolus.
+ *
+ * Calcules A LA CREATION et ranges tels quels : ce sont des instants, pas des
+ * heures locales, et les comparer ne demande plus de savoir ou vit le joueur.
+ * Un joueur qui change de fuseau pendant sa fenetre la garde telle qu'elle a
+ * ete ouverte — c'est le comportement voulu, et l'inverse ferait expirer un
+ * objectif dans l'avion.
+ *
+ * `Date.UTC` accepte un quantieme qui deborde du mois : le 32 septembre est le
+ * 2 octobre, ce qui est exactement ce qu'il faut pour la fenetre du soir.
+ *
+ * Reste un angle mort assume : un changement d'heure qui tombe DANS la fenetre
+ * la decale d'une heure. Cela arrive deux fois l'an, a 2 ou 3 h du matin, sur
+ * le seul creneau du soir.
+ */
+export function fenetreDe(jour, creneau, fuseau, maintenant) {
+  const c = CRENEAUX[creneau];
+  if (!c) return null;
+  const dec = decalageMs(maintenant || new Date(), fuseau);
+  const [a, m, j] = String(jour).split('-').map(Number);
+  return {
+    ouvre: Date.UTC(a, m - 1, j, c.envoi.heure, c.envoi.minute) - dec,
+    expire: Date.UTC(a, m - 1, j + (c.expire.lendemain ? 1 : 0),
+                     c.expire.heure, c.expire.minute) - dec,
+  };
+}
+
+/* ---------------------------------------------------------------- graine */
+
+/**
+ * FNV-1a sur 32 bits. Le meme texte rend toujours le meme nombre, ici comme
+ * dans le jeu — c'est ce qui permet de recalculer la graine des deux cotes
+ * plutot que de se la transmettre et d'esperer qu'elle arrive.
+ *
+ * A TENIR D'ACCORD avec `hash32` dans src/game/graine.ts.
+ */
+export function hash32(texte) {
+  let h = 0x811c9dc5;
+  const s = String(texte);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * La graine d'un defi : le meme terrain pour tout le monde, ce jour-la.
+ *
+ * ELLE NE DEPEND PAS DU JOUEUR, et c'est tout l'interet. Le chrono a battre,
+ * lui, est taille sur chacun ; la piste, les adversaires et leurs temps sont
+ * les memes pour tous. Sans cela « le meilleur d'aujourd'hui » ne compare rien
+ * — deux joueurs courraient deux courses differentes sous le meme nom.
+ *
+ * Elle se recalcule partout a partir de trois choses publiques, plutot que de
+ * voyager : un nombre transmis est un nombre qu'un client peut changer.
+ */
+export function graineDe(jour, creneau, epreuve) {
+  return hash32(`${jour}:${creneau}:${epreuve}`);
 }
 
 /* --------------------------------------------------------------- calibre */
@@ -324,6 +440,9 @@ export async function ensureObjectifTables(db) {
       meilleur_ms INTEGER,
       valide_le INTEGER,
       points INTEGER NOT NULL DEFAULT 0,
+      ouvre_le INTEGER,
+      expire_le INTEGER,
+      graine INTEGER,
       PRIMARY KEY (name_key, jour, creneau)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS objectif_classement (
@@ -344,6 +463,36 @@ export async function ensureObjectifTables(db) {
     // exister, pas la table. Les trois routes de l'objectif rendaient alors
     // 500, sur un premier deploiement comme sur le canal de test.
   ]);
+
+  // Les trois colonnes de la fenetre et de la graine arrivent apres coup : la
+  // table existe deja chez ceux qui ont recu un objectif. Un ALTER par colonne,
+  // chacun dans son try — SQLite n'a pas d'ADD COLUMN IF NOT EXISTS, et c'est
+  // le cas nominal qui echoue ici, pas l'exception.
+  for (const sql of [
+    `ALTER TABLE objectifs ADD COLUMN ouvre_le INTEGER`,
+    `ALTER TABLE objectifs ADD COLUMN expire_le INTEGER`,
+    `ALTER TABLE objectifs ADD COLUMN graine INTEGER`,
+  ]) {
+    try { await db.prepare(sql).run(); } catch { /* colonne deja presente */ }
+  }
+
+  // L'INDEX DE LA FENETRE VIENT APRES LES COLONNES, ET SEUL.
+  //
+  // Il etait dans le lot du dessus, avec les tables, et c'etait faux d'une
+  // maniere qui ne se voit que sur une base DEJA PEUPLEE : sur une base neuve
+  // le CREATE TABLE pose `expire_le` et l'index passe ; sur une base existante
+  // la colonne n'arrive qu'a l'ALTER, deux lignes plus bas, et l'index echoue
+  // en emportant le lot entier — donc les trois routes de l'objectif, chez
+  // tous ceux qui en avaient deja un. C'est exactement le chemin qu'aurait
+  // pris le deploiement.
+  //
+  // Deuxieme fois que ce module pose un index sur ce qui n'existe pas encore.
+  // Les deux ne se voient qu'a l'essai, et sur deux bases differentes.
+  try {
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_objectifs_fenetre
+                      ON objectifs (name_key, expire_le)`).run();
+  } catch { /* colonne pas encore la : l'index attendra le prochain passage */ }
+
   pretes.add(db);
 }
 
@@ -360,14 +509,37 @@ export async function ensureObjectifTables(db) {
 export async function joueursAServir(db, maintenant) {
   await ensureObjectifTables(db);
 
+  // Le haut du classement, actif, et qui n'est pas un trou.
+  //
+  // TROIS FILTRES, ET AUCUN N'EST LA PAR PRUDENCE.
+  //
+  // Le rang, parce que l'objectif s'adresse a ceux qui figurent au tableau.
+  //
+  // L'activite, parce qu'un objectif quotidien envoye a quelqu'un qui n'a pas
+  // couru depuis six semaines n'est pas une relance, c'est un rappel qu'on
+  // peut couper. La date vient des COURSES et non de `scores.updated_at` :
+  // cette colonne ne bouge qu'a l'amelioration d'un record, si bien qu'un
+  // joueur assidu mais stagnant y passerait pour disparu.
+  //
+  // Le nom, parce que « Anonyme » n'en est pas un : d'anciennes lignes le
+  // portent, et lui envoyer un objectif viserait trois cents personnes a la
+  // fois — ou personne, ce qui revient au meme.
+  const depuis = (maintenant ? maintenant.getTime() : Date.now())
+    - ACTIF_JOURS * 86400000;
+
   const { results: classes } = await db.prepare(
-    `SELECT lower(trim(s.name)) AS k, s.name AS nom, MIN(s.best_split_ms) AS pb
+    `SELECT lower(trim(s.name)) AS k, s.name AS nom, MIN(s.best_split_ms) AS pb,
+            COALESCE(r.vu, MAX(s.updated_at)) AS vu
        FROM scores s
+       LEFT JOIN (SELECT name_key, MAX(created_at) AS vu FROM races GROUP BY name_key) r
+              ON r.name_key = lower(trim(s.name))
       WHERE s.race_key = ? AND s.best_split_ms > 0
+        AND lower(trim(s.name)) <> 'anonyme'
       GROUP BY lower(trim(s.name))
+     HAVING COALESCE(r.vu, MAX(s.updated_at)) >= ?
       ORDER BY pb ASC
       LIMIT ${TOP_N}`
-  ).bind(EPREUVE).all();
+  ).bind(EPREUVE, depuis).all();
 
   if (!classes || !classes.length) return [];
 
@@ -396,6 +568,10 @@ export async function joueursAServir(db, maintenant) {
   const dus = [];
   for (let i = 0; i < classes.length; i++) {
     const j = classes[i];
+    // `i + 1` est le rang PARMI LES ACTIFS, et c'est ce qu'on annonce. Le rang
+    // au tableau complet se lit par `getRank`, qui compte tout le monde ; le
+    // dire ici obligerait a une requete par joueur pour un nombre que la
+    // notification n'utilise qu'en decor.
     const fuseau = fuseaux.get(j.k) || 'Europe/Paris';
     const du = creneauMaintenant(maintenant, fuseau);
     if (!du) continue;
@@ -451,12 +627,20 @@ export async function creerObjectif(db, joueur, maintenant) {
   });
   const t = Date.now();
 
+  // La fenetre est calculee dans le fuseau du joueur et rangee en instants
+  // absolus : une fois ecrite, plus personne n'a besoin de savoir ou il vit.
+  const f = fenetreDe(joueur.jour, joueur.creneau, joueur.fuseau, maintenant)
+    || { ouvre: t, expire: t + 6 * 3600 * 1000 };
+  const graine = graineDe(joueur.jour, joueur.creneau, EPREUVE);
+
   await db.prepare(
     `INSERT OR IGNORE INTO objectifs
-       (name_key, jour, creneau, race_key, cible_ms, pb_ms, marge, methode, cree_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       (name_key, jour, creneau, race_key, cible_ms, pb_ms, marge, methode,
+        cree_le, ouvre_le, expire_le, graine)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(joueur.nameKey, joueur.jour, joueur.creneau, EPREUVE,
-         c.cibleMs, joueur.pb, c.marge, c.methode, t).run();
+         c.cibleMs, joueur.pb, c.marge, c.methode, t,
+         f.ouvre, f.expire, graine).run();
 
   const objectif = await db.prepare(
     `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
@@ -481,14 +665,31 @@ export async function creerObjectif(db, joueur, maintenant) {
 export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant) {
   await ensureObjectifTables(db);
 
+  const t = (maintenant || new Date()).getTime();
   const jourFr = heureLocale(maintenant || new Date(), 'Europe/Paris').jour;
+
+  // L'objectif ouvert MAINTENANT.
+  //
+  // Deux regles dans la meme requete, et il en faut deux : les objectifs
+  // d'avant la fenetre n'ont pas d'instants ranges, et les exclure ferait
+  // disparaitre l'objectif en cours de tous ceux qui en avaient un au moment
+  // du deploiement. Les anciens gardent donc la regle du jour, les nouveaux
+  // ont la vraie.
+  //
+  // `valide_le` NE FILTRE PLUS. Un objectif deja valide reste jouable jusqu'a
+  // l'expiration : les tentatives sont illimitees, et seule la meilleure est
+  // retenue. Le filtrer revenait a fermer la porte a celui qui vient de
+  // reussir — exactement le joueur qu'on voulait garder.
   const objectif = await db.prepare(
     `SELECT * FROM objectifs
-      WHERE name_key = ? AND valide_le IS NULL AND jour >= ?
+      WHERE name_key = ?
+        AND (ouvre_le IS NULL OR ouvre_le <= ?)
+        AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
       ORDER BY cree_le DESC LIMIT 1`
-  ).bind(nameKey, jourFr).first();
+  ).bind(nameKey, t, jourFr, t).first();
   if (!objectif) return null;
 
+  const dejaValide = !!objectif.valide_le;
   const essai = objectif.tentatives + 1;
   const reussi = tempsMs <= objectif.cible_ms;
   const record = tempsMs < objectif.pb_ms;
@@ -497,7 +698,9 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
 
   let points = 0;
   const detail = {};
-  if (reussi) {
+  // Les points ne tombent qu'une fois. Le reste continue : la tentative se
+  // compte, le meilleur temps se met a jour, et un record reste un record.
+  if (reussi && !dejaValide) {
     detail.base = POINTS.base;
     points += POINTS.base;
     if (essai === 1) { detail.premier_essai = POINTS.premier_essai; points += POINTS.premier_essai; }
@@ -510,22 +713,31 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
     if (serie > 0) { detail.serie = serie * POINTS.serie_par_jour; points += detail.serie; }
   }
 
+  // `valide_le` et `points` ne se reecrivent jamais a la baisse : une seconde
+  // course, meilleure mais posterieure, ne doit pas effacer l'heure de la
+  // validation ni les points deja credites.
   await db.prepare(
     `UPDATE objectifs
-        SET tentatives = ?, meilleur_ms = ?, valide_le = ?, points = ?
+        SET tentatives = ?, meilleur_ms = ?,
+            valide_le = COALESCE(valide_le, ?),
+            points = points + ?
       WHERE name_key = ? AND jour = ? AND creneau = ?`
   ).bind(essai, meilleur, reussi ? Date.now() : null, points,
          nameKey, objectif.jour, objectif.creneau).run();
 
-  if (reussi) await crediter(db, nameKey, nom, points, objectif.jour);
+  if (points > 0) await crediter(db, nameKey, nom, points, objectif.jour);
 
   return {
     reussi, record, essai, points, detail,
+    dejaValide,
     tempsMs,
     cibleMs: objectif.cible_ms,
     pbMs: objectif.pb_ms,
+    meilleurMs: meilleur,
     nouveauPbMs: record ? tempsMs : objectif.pb_ms,
     creneau: objectif.creneau,
+    expireLe: objectif.expire_le || null,
+    graine: objectif.graine || null,
   };
 }
 
@@ -638,12 +850,7 @@ const DISCRET = {
 
 /** Tirage stable : la meme clef rend toujours le meme indice. */
 function indice(clef, n) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < clef.length; i++) {
-    h ^= clef.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return (h >>> 0) % n;
+  return hash32(clef) % n;
 }
 
 /**
@@ -686,4 +893,4 @@ export function texteResultat(res, langue) {
     : { titre: 'Pas encore', corps: `${t} s — il manque ${manque} s. ${c} s reste ouvert.` };
 }
 
-export { POINTS, TOP_N, FENETRE, COURSES_MIN, MARGE_MIN, MARGE_MAX, MARGE_REPLI };
+export { POINTS, TOP_N, FENETRE, COURSES_MIN, MARGE_MIN, MARGE_MAX, MARGE_REPLI, ACTIF_JOURS };

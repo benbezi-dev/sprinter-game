@@ -74,5 +74,20 @@ class_name = "Boite"
 # locale vient de passer a 12:00 ou 19:00. Tous les fuseaux reels sont des
 # multiples de quinze minutes — l'Inde a +05:30, le Nepal +05:45, Chatham
 # +12:45 — donc personne n'est manque.
+# Le mode de l'Objectif du jour.
+#
+#   actif   il calcule, il range, il sonne.
+#   essai   il calcule, il range, il JOURNALISE ce qu'il aurait envoye, et
+#           n'envoie rien. C'est le mode qui permet de changer une heure de
+#           creneau, un calibrage ou un texte et de voir ce que ca donne sur
+#           les vrais joueurs, sans faire vibrer trois cents telephones pour
+#           s'en apercevoir. Les journaux se lisent avec `wrangler tail`.
+#   arrete  il ne fait rien.
+#
+# Se change par un deploiement, pas a chaud : un interrupteur qu'on bascule
+# depuis une route est un interrupteur qu'on bascule par accident.
+[vars]
+OBJECTIF = "actif"
+
 [triggers]
 crons = ["0,15,30,45 * * * *"]
