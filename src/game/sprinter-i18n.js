@@ -96,6 +96,45 @@
     pb_short:     ['il te manque {n} s', '{n} s short'],
     pb_first:     ['premier chrono sur cette épreuve', 'first time on this event'],
     pb_rank:      ['{o} au classement', '{o} overall'],
+
+    // L'Objectif du jour : la revanche, et le micro-conseil.
+    // Le conseil ne sert qu'apres trois echecs, et il porte sur CE qui vient
+    // de se passer — repeter le meme ecran une quatrieme fois ne fait revenir
+    // personne.
+    // Les etiquettes qui manquaient. Celles qui existaient deja — obj_titre,
+    // obj_cible, obj_reste, obj_valide, obj_points — sont plus bas, avec le
+    // reste du decor de l'objectif, et NE SONT PAS REDEFINIES ici : une clef
+    // ecrite deux fois dans le meme dictionnaire ne previent pas, elle prend
+    // silencieusement la derniere valeur. La carte du defi a affiche « il te
+    // manque 239 centiemes » a la place de « 239 min avant la fin » avant que
+    // le harnais ne compte les doublons.
+    obj_revanche:   ['REVANCHE', 'RUN IT BACK'],
+    // Le meme bouton, quand l'objectif est deja pris. « Revanche » n'a plus de
+    // sens pour qui vient de gagner, et les tentatives restent illimitees :
+    // l'or est encore devant.
+    obj_encore:     ['ENCORE MIEUX', 'GO BETTER'],
+    obj_manque:     ['il te manque {n} s', '{n} s short'],
+    obj_meilleur:   ['meilleur de la session', 'best this session'],
+    obj_a_passer:   ['à passer', 'to beat'],
+    obj_minutes:    ['{n} min avant la fin', '{n} min left'],
+    obj_bonus:      ['encore {n} course avant le bonus', '{n} more run for the bonus'],
+    obj_bonus_n:    ['encore {n} courses avant le bonus', '{n} more runs for the bonus'],
+    obj_bonus_pris: ['bonus de persévérance acquis', 'perseverance bonus earned'],
+    obj_quitter:    ['plus tard', 'later'],
+    obj_lancer:     ['COURIR LE DÉFI', 'RUN THE CHALLENGE'],
+    obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
+    // Les quatre conseils. Chacun designe une chose mesurée sur la course
+    // qu'on vient de courir, jamais un encouragement general.
+    obj_c_depart:   ['tu perds {n} s au coup de pistolet. Le départ se joue avant, pas après.',
+                     'you lose {n} s at the gun. The start is won before it, not after.'],
+    obj_c_trans:    ['ta transition casse le rythme. Accélère la cadence AVANT la sortie de poussée.',
+                     'your transition breaks the rhythm. Raise the cadence BEFORE the drive ends.'],
+    obj_c_chute:    ['tu répètes la même touche. Alterne franchement : deux fois à gauche coûte plus qu\u2019un temps de retard.',
+                     'you repeat the same key. Alternate cleanly: two lefts cost more than a slow beat.'],
+    obj_c_faux:     ['faux départ. Attends le coup de pistolet — la réaction se joue en trois centièmes.',
+                     'false start. Wait for the gun — reaction is decided in three hundredths.'],
+    obj_c_proche:   ['il ne manque que {n} s. C\u2019est une foulée mieux tenue, pas une autre course.',
+                     'only {n} s to find. That is one better stride, not another race.'],
     six_in:       ['six étapes franchies en ', 'six stages cleared in '],
     stage_low:    ['étape ', 'stage '],
 

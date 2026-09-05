@@ -398,6 +398,8 @@
     // REC_STEP) pour pouvoir etre rejouee plus tard par un adversaire.
     // ghost : la trace d'un autre joueur, rejouee en direct a cote de nous.
     recTrace: null, recNext: 0, shotTraces: [],
+    // La graine du defi en cours, ou null. Voir startShotRace.
+    graineCourse: null,
     ghost: null, ghostName: '', ghostTime: 0,
     challenge: null      // defi en cours (voir challenge.ts)
   };
@@ -613,6 +615,19 @@
   function startShotRace() {
     G.raceKey = G.shotRaces[G.shotIdx];
     G.race = RACES[G.raceKey];
+    // LA GRAINE SE REPOSE A CHAQUE COURSE, ET C'EST INDISPENSABLE.
+    //
+    // Un defi se joue autant de fois qu'on veut, et les tentatives doivent se
+    // courir sur LE MEME plateau — sinon « seule la meilleure compte » revient
+    // a garder le tirage le plus chanceux. Semer une seule fois au depart ne
+    // suffit pas : la course consomme le tirage, et la deuxieme tentative
+    // repartirait de la ou la premiere s'est arretee, avec d'autres
+    // adversaires.
+    //
+    // `graineCourse` est posee par le jeu quand il entre dans un defi, et
+    // retiree quand il en sort. Hors defi elle vaut null, et le tirage reste
+    // celui du systeme.
+    if (G.graineCourse != null) K.semer(G.graineCourse); else K.desemer();
     buildLevel(G.shotLevel);
     armGhost();
     // pas de cinematique de presentation : le one-shot va droit au but

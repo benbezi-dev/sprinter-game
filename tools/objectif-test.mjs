@@ -639,6 +639,28 @@ const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 36
   ok('un objectif d avant la fenetre reste jouable', r !== null && r.reussi);
 }
 
+titre('AUCUNE PHRASE N EN ECRASE UNE AUTRE');
+
+// Une clef ecrite deux fois dans le meme dictionnaire ne previent pas : elle
+// prend silencieusement la derniere valeur. Cinq des miennes sont tombees sur
+// des clefs qui existaient deja cent lignes plus bas, et la carte du defi a
+// affiche « il te manque 239 centiemes » a la place de « 239 min avant la
+// fin ». Rien ne l'aurait dit sans regarder l'ecran.
+{
+  const texte = readFileSync('src/game/sprinter-i18n.js', 'utf8');
+  const vues = new Map();
+  const doubles = [];
+  texte.split('\n').forEach((l, i) => {
+    const m = l.match(/^\s{4}([A-Za-z_][A-Za-z0-9_]*):\s*\[/);
+    if (!m) return;
+    const clef = m[1];
+    if (vues.has(clef)) doubles.push(`${clef} (lignes ${vues.get(clef)} et ${i + 1})`);
+    else vues.set(clef, i + 1);
+  });
+  ok(`${vues.size} phrases, aucune en double`, doubles.length === 0,
+     doubles.join(' ; '));
+}
+
 titre('LE MOTEUR SEME REND DEUX FOIS LA MEME COURSE');
 
 // Le noyau du jeu est du JavaScript ancien, sans modules : on le charge comme

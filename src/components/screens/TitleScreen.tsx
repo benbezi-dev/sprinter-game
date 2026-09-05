@@ -3,6 +3,8 @@ import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engin
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
+import { CarteObjectif } from './Revanche';
+import { lireObjectif, lancerObjectif, sessionCourante } from '@/game/objectif';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS, fetchDuels, type DuelRow } from '@/game/duels';
@@ -153,6 +155,10 @@ export function TitleScreen() {
   // l'accueil, pas sur la fenetre : c'est la position de ce rouleau qui dit si
   // l'on est au bout, et donc si tirer encore veut dire « montre-moi les
   // haies » plutot que « fais defiler ».
+  // On demande l'objectif du jour a l'ouverture de l'accueil. Sans nom, sans
+  // reseau ou hors fenetre, il n'y en a pas et la carte ne s'affiche pas.
+  React.useEffect(() => { void lireObjectif(); }, []);
+
   const rouleau = React.useRef<HTMLDivElement>(null);
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
@@ -206,6 +212,15 @@ export function TitleScreen() {
 
           {/* Right Side: Records and Controls */}
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
+
+            {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
+                Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
+                classement, ou serveur muet, la carte disparait plutot que
+                d'annoncer un defi qui n'existe pas. */}
+            <CarteObjectif onLancer={() => {
+              const o = sessionCourante().objectif;
+              if (o) lancerObjectif(o);
+            }} />
 
             {/* Selecteur de mode */}
             {/* Le selecteur flotte au-dessus de la piste, tres claire : sans

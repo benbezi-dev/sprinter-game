@@ -30,6 +30,8 @@ import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
+import { Revanche } from '@/components/screens/Revanche';
+import { useObjectif } from '@/game/objectif';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
@@ -83,6 +85,8 @@ function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
+  // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
+  const defiEnCours = useObjectif().enCours;
   useVisualViewportHeight();
   useBackGuard();
 
@@ -160,7 +164,13 @@ function MainGame() {
         {/* Le one-shot a son propre recapitulatif : epreuves choisies,
             comparaison au fantome, creation du defi. Le TOP 500 ne concerne
             que la carriere complete, un cumul one-shot n'y a pas sa place. */}
-        {state === 'winall' && (mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
+        {/* Le defi du jour a son propre ecran de fin. Il ne remplace pas
+            celui du one shot : il repond a une autre question. Le recapitulatif
+            ordinaire demande de choisir entre huit choses ; apres avoir rate de
+            neuf centiemes, choisir c'est fermer le jeu. */}
+        {state === 'winall' && (
+          defiEnCours ? <Revanche />
+            : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       
       {/* Invisible overlay for receiving touches during the race */}
