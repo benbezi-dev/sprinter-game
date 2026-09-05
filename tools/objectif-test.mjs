@@ -460,6 +460,16 @@ if (joignable && !B.includes('workers.dev')) {
      recalculAnon.corps.anonymes > 0 && recalculAnon.corps.crees === 0,
      JSON.stringify(recalculAnon.corps).slice(0, 100));
 
+  // Et meme quand on lui demande explicitement de creer, l'anonyme reste
+  // dehors : le drapeau ouvre la porte aux joueurs NOMMES, pas au trou.
+  const avecCreation = await poster('/records/recalculer', { creer: true },
+    { 'X-Sprinter-Admin': ADMIN });
+  ok('« creer » n inscrit toujours pas les anonymes',
+     avecCreation.corps.anonymes > 0,
+     JSON.stringify(avecCreation.corps).slice(0, 110));
+  ok('...et le classement reste sans « Anonyme »',
+     !((await lire('/leaderboard?race=100')).entries || []).some(e => estAnonyme(e.name)));
+
   const tableauApres = await lire('/leaderboard?race=100');
   ok('...et le classement ne contient toujours pas « Anonyme »',
      !(tableauApres.entries || []).some(e => estAnonyme(e.name)));

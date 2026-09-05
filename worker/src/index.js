@@ -855,7 +855,13 @@ export default {
       if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
       await ensureScoreGhost(env.DB);
       await ensureRaceTable(env.DB);
-      return json(await recalculerRecords(env.DB));
+      // `creer=1` fait ENTRER au classement les joueurs nommes qui ont des
+      // courses sans ligne de score. Ce n'est plus une reparation, c'est un
+      // changement de tableau public : il se demande, il ne se decide pas ici.
+      let corps; try { corps = await request.json(); } catch { corps = {}; }
+      const creer = (corps && corps.creer === true)
+        || url.searchParams.get('creer') === '1';
+      return json(await recalculerRecords(env.DB, { creer }));
     }
 
     // ------------------------------------------------------- classement

@@ -183,15 +183,25 @@ export async function recordDuJoueur(db, nameKey, epreuve) {
  * `races` est plafonne a 300 courses par appareil : les plus anciennes ont pu
  * disparaitre. C'est sans consequence ici — un record efface reste dans
  * `scores`, et on ne le degrade pas.
+ *
+ * `creer` DECIDE D'AUTRE CHOSE QU'UNE CORRECTION, et vaut false par defaut.
+ * Un appareil qui a des courses sans ligne de score n'est pas au classement :
+ * lui en creer une l'y fait ENTRER. C'est defendable — il a couru ces temps
+ * sous son nom — mais ce n'est plus reparer, c'est changer un tableau public.
+ * Mesure sur la production du 6 septembre 2026 : 27 joueurs nommes entreraient
+ * au 100 m, le meilleur a 8,35 s, soit la deuxieme place. Cela se decide, et
+ * pas dans le code : sans le drapeau, le recalcul se contente de corriger les
+ * records de ceux qui sont deja la.
  */
 export async function recalculerRecords(db, options = {}) {
   const epreuves = options.epreuves || CLES;
-  const bilan = { epreuves: {}, corriges: 0, crees: 0, anonymes: 0, vus: 0 };
+  const creer = options.creer === true;
+  const bilan = { epreuves: {}, corriges: 0, crees: 0, anonymes: 0, absents: 0, vus: 0, creer };
 
   for (const cle of epreuves) {
     const direction = directionDe(cle);
     const agg = agregatSql(direction);
-    const part = { vus: 0, corriges: 0, crees: 0, anonymes: 0, ecart_max_ms: 0 };
+    const part = { vus: 0, corriges: 0, crees: 0, anonymes: 0, absents: 0, ecart_max_ms: 0 };
 
     // Un appareil, une epreuve, son meilleur resultat : c'est exactement la
     // maille de `scores`. Agreger dans la base plutot que de ramener 2 800
@@ -221,6 +231,14 @@ export async function recalculerRecords(db, options = {}) {
       const ancien = recordDeLaLigne(ligne);
       if (!estMeilleur(direction, r.meilleur, ancien)) continue;
 
+      // Pas de ligne, et on n'a pas demande a en creer : on compte et on
+      // passe. Le chiffre a son interet — il dit combien de joueurs le
+      // classement ignore — sans que le lire les y fasse entrer.
+      if (!ligne && !creer) {
+        if (estAnonyme(r.nom)) part.anonymes++; else part.absents++;
+        continue;
+      }
+
       const ecart = ancien === null ? 0 : Math.abs(ancien - r.meilleur);
       if (ecart > part.ecart_max_ms) part.ecart_max_ms = ecart;
 
@@ -237,6 +255,7 @@ export async function recalculerRecords(db, options = {}) {
     bilan.corriges += part.corriges;
     bilan.crees += part.crees;
     bilan.anonymes += part.anonymes;
+    bilan.absents += part.absents;
   }
 
   return bilan;
