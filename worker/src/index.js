@@ -11,11 +11,6 @@ export { Boite } from './boite.js';
 import { sonner } from './boite.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
-  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif,
-  enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
-  ensureObjectifTables, heureLocale,
-} from './objectif.js';
-import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
@@ -31,6 +26,11 @@ import {
 import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
 } from './records.js';
+import {
+  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
+  enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
+  ensureObjectifTables, heureLocale,
+} from './objectif.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -896,6 +896,11 @@ export default {
           graine: o.graine ?? null,
           ouvre_le: o.ouvre_le ?? null,
           expire_le: o.expire_le ?? null,
+          // Les trois seuils, calcules ici plutot que dans le jeu : ils
+          // dependent du bareme, et un bareme recopie cote client est un
+          // bareme qui derive au premier reglage.
+          seuils: seuilsDe(o.pb_ms, o.cible_ms, 'plus_bas'),
+          palier: o.palier ?? null,
           titre: texte.titre, texte: texte.corps,
         },
       });

@@ -27,7 +27,7 @@
 // L'envoi est le travail de push.js, le declenchement celui du cron dans
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
-import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe } from './epreuves.js';
+import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur } from './epreuves.js';
 
 /* ------------------------------------------------------------- reglages */
 
@@ -73,13 +73,174 @@ const FENETRE = 30;
 const PAS_MS = 10;
 
 /** Les points du Classement des Objectifs. */
+/* ------------------------------------------------------------- le bareme
+
+   TROIS PALIERS, ET CHACUN A UN ROLE.
+
+   Un seuil unique laisse deux joueurs sur trois les mains vides. Celui qui
+   rate de trois centiemes repart avec rien, exactement comme celui qui n'a pas
+   couru ; celui qui est en forme n'a plus rien a chercher une fois la cible
+   passee. Trois paliers repondent aux deux :
+
+     BRONZE, a peu pres acquis des la premiere course. C'est l'accroche : on
+     a gagne quelque chose, donc on rejoue.
+     ARGENT, la cible calibree. C'est l'objectif reel, celui des trois courses.
+     OR, le record. Pour celui que l'argent n'occupe plus.
+
+   Les points ne s'additionnent pas d'un palier a l'autre : on marque ceux du
+   MEILLEUR palier atteint. Passer l'or vaut soixante, pas cent. Un joueur qui
+   ameliore d'argent en or plus tard dans la fenetre touche la difference — les
+   tentatives etant illimitees, le total se recalcule et seul l'ecart se
+   credite. */
+
+/** Les points du meilleur palier atteint. */
 const POINTS = {
-  base: 100,
-  premier_essai: 25,
-  record: 50,
-  serie_par_jour: 10,
+  bronze: 10,
+  argent: 30,
+  or: 60,
+  /** Trois courses sur le meme defi, et c'est gagne. Le KPI qu'on vise est
+   *  « au moins trois courses par defi » : il a droit a sa propre recompense
+   *  plutot que d'esperer qu'il tombe des autres. */
+  perseverance: 10,
+  /** Combien de courses ouvrent le bonus de perseverance. */
+  courses_perseverance: 3,
+  /** La serie ajoute un dixieme par jour, jusqu'a sept — donc x1,7 au plus. */
+  serie_pas: 0.1,
   serie_plafond: 7,
 };
+
+/**
+ * Les seuils du bronze et de l'or, autour du record.
+ *
+ * L'argent n'est pas ici : c'est la cible calibree, qui depend des courses du
+ * joueur et pas seulement de son record.
+ *
+ * SUR L'OR, UN AVERTISSEMENT. Le seuil est le record moins 1 %, tel que
+ * specifie. Cela veut dire qu'un record ameliore de MOINS de 1 % s'arrete a
+ * l'argent, pendant que l'ecran d'arrivee, lui, affiche « NOUVEAU RECORD » —
+ * il se declenche a la moindre amelioration. Les deux se contredisent sur une
+ * bande etroite : a 8,50 s de record, tout ce qui tombe entre 8,42 et 8,50.
+ * La constante est donc seule sur sa ligne : la mettre a 1 fait de tout record
+ * un or, et remet les deux d'accord.
+ */
+const SEUIL_BRONZE = 1.15;
+const SEUIL_OR = 0.99;
+
+export function seuilsDe(pbMs, cibleMs, direction) {
+  const haut = direction === PLUS_HAUT;
+  return {
+    bronze: Math.round(pbMs * (haut ? 2 - SEUIL_BRONZE : SEUIL_BRONZE)),
+    argent: cibleMs,
+    or: Math.round(pbMs * (haut ? 2 - SEUIL_OR : SEUIL_OR)),
+  };
+}
+
+/**
+ * Le palier atteint par un resultat, ou null s'il n'atteint rien.
+ *
+ * L'ordre compte : on regarde le plus haut d'abord. Un record passe aussi le
+ * bronze et l'argent, et l'annoncer « bronze » serait une insulte.
+ */
+export function palierDe(valeur, seuils, direction) {
+  const atteint = s => direction === PLUS_HAUT ? valeur >= s : valeur <= s;
+  if (atteint(seuils.or)) return 'or';
+  if (atteint(seuils.argent)) return 'argent';
+  if (atteint(seuils.bronze)) return 'bronze';
+  return null;
+}
+
+/**
+ * Ce que vaut un defi, en l'etat.
+ *
+ * Rend le TOTAL, pas un increment : les tentatives sont illimitees, et un
+ * joueur qui passe d'argent a or plus tard dans la fenetre doit finir avec ce
+ * que vaut l'or, pas avec la somme des deux. L'appelant credite la difference.
+ */
+export function pointsDe(palier, options = {}) {
+  const tentatives = options.tentatives || 0;
+  const serie = Math.max(0, Math.min(options.serie || 0, POINTS.serie_plafond));
+
+  const detail = {};
+  let base = 0;
+  if (palier) { detail[palier] = POINTS[palier]; base += POINTS[palier]; }
+
+  // La perseverance ne demande pas de reussir. C'est tout son interet : elle
+  // recompense d'avoir insiste, y compris quand on n'y arrive pas — et c'est
+  // exactement le joueur qu'on risque de perdre.
+  if (tentatives >= POINTS.courses_perseverance) {
+    detail.perseverance = POINTS.perseverance;
+    base += POINTS.perseverance;
+  }
+  if (!base) return { total: 0, detail: {}, multiplicateur: 1 };
+
+  const multiplicateur = 1 + serie * POINTS.serie_pas;
+  const total = Math.round(base * multiplicateur);
+  if (serie > 0) detail.serie = total - base;
+  return { total, detail, multiplicateur };
+}
+
+/* ------------------------------------------------------------- la serie */
+
+/** Le lendemain d'un jour, au format du jour. */
+function jourPlus(jour, n) {
+  const d = new Date(jour + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Combien de jours separent deux jours. */
+function ecartJours(a, b) {
+  return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+}
+
+/** Une vie par semaine glissante. */
+const VIE_TOUS_LES_JOURS = 7;
+
+/**
+ * Le nombre de jours consecutifs DEJA acquis, vu de `jour`.
+ *
+ * C'est lui qui fixe le multiplicateur, et pas la serie qui suivra : sinon le
+ * premier jour d'une serie se paierait deja majore, et valider midi puis soir
+ * compterait le meme jour deux fois.
+ */
+export function serieEnCours(ligne, jour) {
+  if (!ligne || !ligne.dernier_jour) return 0;
+  const s = Math.max(0, ligne.serie || 0);
+  if (ligne.dernier_jour === jour) return Math.max(0, s - 1);
+  if (ligne.dernier_jour === jourPlus(jour, -1)) return s;
+  if (ecartJours(ligne.dernier_jour, jour) === 2
+      && (!ligne.vie_utilisee_le
+          || ecartJours(ligne.vie_utilisee_le, jour) >= VIE_TOUS_LES_JOURS)) {
+    return s;
+  }
+  return 0;
+}
+
+/**
+ * La serie apres une validation, et si elle a coute une vie.
+ *
+ * POURQUOI UNE VIE. Une serie qui casse au premier jour manque punit
+ * exactement ce qu'elle recompense : plus elle est longue, plus la perdre fait
+ * mal, et plus le jour ou l'on ne peut pas jouer devient une raison de ne plus
+ * revenir du tout. Un jour saute par semaine, et la serie continue.
+ *
+ * Elle ne couvre qu'un seul jour d'affilee : deux jours manques, c'est une
+ * pause, pas un accident.
+ */
+export function serieSuivante(precedente, dernierJour, jour, vieUtiliseeLe) {
+  const serie = Math.max(0, precedente || 0);
+  if (!dernierJour) return { serie: 1, vieConsommee: false };
+  if (dernierJour === jour) return { serie: serie || 1, vieConsommee: false };
+  if (dernierJour === jourPlus(jour, -1)) {
+    return { serie: serie + 1, vieConsommee: false };
+  }
+  // Un seul jour saute, et une vie disponible : la serie tient.
+  if (ecartJours(dernierJour, jour) === 2) {
+    const libre = !vieUtiliseeLe || ecartJours(vieUtiliseeLe, jour) >= VIE_TOUS_LES_JOURS;
+    if (libre) return { serie: serie + 1, vieConsommee: true };
+  }
+  return { serie: 1, vieConsommee: false };
+}
 
 /**
  * La notification porte-t-elle le chrono, ou seulement l'invitation ?
@@ -443,6 +604,7 @@ export async function ensureObjectifTables(db) {
       ouvre_le INTEGER,
       expire_le INTEGER,
       graine INTEGER,
+      palier TEXT,
       PRIMARY KEY (name_key, jour, creneau)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS objectif_classement (
@@ -452,6 +614,7 @@ export async function ensureObjectifTables(db) {
       valides INTEGER NOT NULL DEFAULT 0,
       serie INTEGER NOT NULL DEFAULT 0,
       dernier_jour TEXT,
+      vie_utilisee_le TEXT,
       maj_le INTEGER NOT NULL
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_objectifs_jour
@@ -472,6 +635,8 @@ export async function ensureObjectifTables(db) {
     `ALTER TABLE objectifs ADD COLUMN ouvre_le INTEGER`,
     `ALTER TABLE objectifs ADD COLUMN expire_le INTEGER`,
     `ALTER TABLE objectifs ADD COLUMN graine INTEGER`,
+    `ALTER TABLE objectifs ADD COLUMN palier TEXT`,
+    `ALTER TABLE objectif_classement ADD COLUMN vie_utilisee_le TEXT`,
   ]) {
     try { await db.prepare(sql).run(); } catch { /* colonne deja presente */ }
   }
@@ -689,46 +854,65 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
   ).bind(nameKey, t, jourFr, t).first();
   if (!objectif) return null;
 
+  const direction = directionDe(objectif.race_key || EPREUVE);
   const dejaValide = !!objectif.valide_le;
   const essai = objectif.tentatives + 1;
-  const reussi = tempsMs <= objectif.cible_ms;
-  const record = tempsMs < objectif.pb_ms;
+  const record = estMeilleur(direction, tempsMs, objectif.pb_ms);
   const meilleur = objectif.meilleur_ms == null
-    ? tempsMs : Math.min(objectif.meilleur_ms, tempsMs);
+    ? tempsMs : (estMeilleur(direction, tempsMs, objectif.meilleur_ms)
+                 ? tempsMs : objectif.meilleur_ms);
 
-  let points = 0;
-  const detail = {};
-  // Les points ne tombent qu'une fois. Le reste continue : la tentative se
-  // compte, le meilleur temps se met a jour, et un record reste un record.
-  if (reussi && !dejaValide) {
-    detail.base = POINTS.base;
-    points += POINTS.base;
-    if (essai === 1) { detail.premier_essai = POINTS.premier_essai; points += POINTS.premier_essai; }
-    if (record) { detail.record = POINTS.record; points += POINTS.record; }
+  // LE PALIER SE JUGE SUR LA MEILLEURE COURSE, PAS SUR LA DERNIERE.
+  //
+  // Les tentatives sont illimitees et seule la meilleure compte : un joueur
+  // qui passe l'argent puis rate deux fois garde son argent. Juger la course
+  // qui vient d'avoir lieu le lui reprendrait a chaque essai suivant, ce qui
+  // reviendrait a le punir d'avoir continue.
+  const seuils = seuilsDe(objectif.pb_ms, objectif.cible_ms, direction);
+  const palier = palierDe(meilleur, seuils, direction);
+  const reussi = palier === 'argent' || palier === 'or';
 
-    const rang = await db.prepare(
-      `SELECT serie, dernier_jour FROM objectif_classement WHERE name_key = ?`
-    ).bind(nameKey).first();
-    const serie = Math.min(rang?.serie || 0, POINTS.serie_plafond);
-    if (serie > 0) { detail.serie = serie * POINTS.serie_par_jour; points += detail.serie; }
-  }
+  const ligne = await db.prepare(
+    `SELECT serie, dernier_jour, vie_utilisee_le FROM objectif_classement
+      WHERE name_key = ?`
+  ).bind(nameKey).first();
 
-  // `valide_le` et `points` ne se reecrivent jamais a la baisse : une seconde
-  // course, meilleure mais posterieure, ne doit pas effacer l'heure de la
-  // validation ni les points deja credites.
+  const compte = pointsDe(palier, {
+    tentatives: essai,
+    serie: serieEnCours(ligne, objectif.jour),
+  });
+
+  // Le TOTAL de ce defi, moins ce qui a deja ete credite. Passer d'argent a or
+  // en cours de fenetre rapporte la difference, pas la somme des deux.
+  const acquis = objectif.points || 0;
+  const gain = Math.max(0, compte.total - acquis);
+
   await db.prepare(
     `UPDATE objectifs
-        SET tentatives = ?, meilleur_ms = ?,
+        SET tentatives = ?, meilleur_ms = ?, palier = ?,
             valide_le = COALESCE(valide_le, ?),
-            points = points + ?
+            points = ?
       WHERE name_key = ? AND jour = ? AND creneau = ?`
-  ).bind(essai, meilleur, reussi ? Date.now() : null, points,
+  ).bind(essai, meilleur, palier, reussi ? Date.now() : null, compte.total,
          nameKey, objectif.jour, objectif.creneau).run();
 
-  if (points > 0) await crediter(db, nameKey, nom, points, objectif.jour);
+  if (gain > 0) {
+    await crediter(db, nameKey, nom, gain, objectif.jour,
+                   reussi && !dejaValide, ligne);
+  }
 
   return {
-    reussi, record, essai, points, detail,
+    reussi, record, essai,
+    palier,
+    seuils,
+    points: gain,
+    pointsTotal: compte.total,
+    detail: compte.detail,
+    multiplicateur: compte.multiplicateur,
+    // Combien de courses avant le bonus de perseverance. Zero quand il est
+    // acquis. Le jeu l'annonce des la premiere course : « 2 courses avant le
+    // bonus » se comprend, « bonus de perseverance » ne se comprend pas.
+    avantBonus: Math.max(0, POINTS.courses_perseverance - essai),
     dejaValide,
     tempsMs,
     cibleMs: objectif.cible_ms,
@@ -741,37 +925,39 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
   };
 }
 
-/** Le Classement des Objectifs : cumul des points, et la serie de jours. */
-async function crediter(db, nameKey, nom, points, jour) {
-  const ligne = await db.prepare(
-    `SELECT points, valides, serie, dernier_jour FROM objectif_classement WHERE name_key = ?`
-  ).bind(nameKey).first();
-
-  // La serie compte les JOURS consecutifs, pas les objectifs : valider midi et
-  // soir le meme jour ne compte qu'une fois. Sinon la serie doublerait sans
-  // que le joueur revienne un jour de plus.
-  let serie = 1;
-  if (ligne?.dernier_jour) {
-    if (ligne.dernier_jour === jour) serie = ligne.serie;
-    else {
-      const veille = new Date(jour + 'T00:00:00Z');
-      veille.setUTCDate(veille.getUTCDate() - 1);
-      serie = ligne.dernier_jour === veille.toISOString().slice(0, 10)
-        ? ligne.serie + 1 : 1;
-    }
-  }
+/**
+ * Le Classement des Objectifs : cumul des points, et la serie de jours.
+ *
+ * `valide` dit si CE credit valide l'objectif pour la premiere fois. Il fallait
+ * le distinguer : les tentatives etant illimitees, un meme defi credite
+ * plusieurs fois — bronze, puis perseverance, puis argent — et compter chaque
+ * versement comme une validation gonflerait `valides` et ferait avancer la
+ * serie trois fois dans la meme journee.
+ */
+async function crediter(db, nameKey, nom, points, jour, valide, ligne) {
+  const suite = valide
+    ? serieSuivante(ligne?.serie, ligne?.dernier_jour, jour, ligne?.vie_utilisee_le)
+    : null;
 
   await db.prepare(
-    `INSERT INTO objectif_classement (name_key, nom, points, valides, serie, dernier_jour, maj_le)
-     VALUES (?, ?, ?, 1, ?, ?, ?)
+    `INSERT INTO objectif_classement
+       (name_key, nom, points, valides, serie, dernier_jour, vie_utilisee_le, maj_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(name_key) DO UPDATE SET
        nom = excluded.nom,
        points = points + excluded.points,
-       valides = valides + 1,
-       serie = excluded.serie,
-       dernier_jour = excluded.dernier_jour,
+       valides = valides + excluded.valides,
+       serie = CASE WHEN excluded.valides > 0 THEN excluded.serie ELSE serie END,
+       dernier_jour = CASE WHEN excluded.valides > 0
+                           THEN excluded.dernier_jour ELSE dernier_jour END,
+       vie_utilisee_le = COALESCE(excluded.vie_utilisee_le, vie_utilisee_le),
        maj_le = excluded.maj_le`
-  ).bind(nameKey, nom || nameKey, points, serie, jour, Date.now()).run();
+  ).bind(nameKey, nom || nameKey, points,
+         valide ? 1 : 0,
+         suite ? suite.serie : (ligne?.serie || 0),
+         valide ? jour : (ligne?.dernier_jour || null),
+         suite && suite.vieConsommee ? jour : null,
+         Date.now()).run();
 }
 
 /** Le tableau du Classement des Objectifs. */
@@ -872,25 +1058,62 @@ export function texteObjectif(objectif, rang, langue, avecChrono = CHRONO_DANS_L
   return { titre: TITRES[creneau][l], corps: jeu[indice(clef, jeu.length)](vue) };
 }
 
-/** Ce que le jeu affiche apres une tentative. Rendu au client, pas pousse. */
+/** Le nom d'un palier, dans les deux langues. */
+const NOMS_PALIER = {
+  bronze: { fr: 'Bronze', en: 'Bronze' },
+  argent: { fr: 'Argent', en: 'Silver' },
+  or:     { fr: 'Or', en: 'Gold' },
+};
+
+/**
+ * Ce que le jeu affiche apres une tentative. Rendu au client, pas pousse.
+ *
+ * TROIS CHOSES, ET DANS CET ORDRE : ce qui est acquis, ce qu'il reste a
+ * gratter, et ce qui s'obtient en rejouant. La derniere est la plus utile et
+ * c'etait celle qui manquait — « il te manque 9 centiemes » fait relancer,
+ * « pas encore » fait fermer.
+ */
 export function texteResultat(res, langue) {
   const l = langue === 'en' ? 'en' : 'fr';
   const t = s2(res.tempsMs), c = s2(res.cibleMs);
+  const palier = res.palier ? NOMS_PALIER[res.palier][l] : null;
+
+  // Ce que rapporterait une course de plus, dit en clair. Le joueur ne doit
+  // pas avoir a deviner qu'il est a deux courses d'un bonus.
+  const bonus = res.avantBonus > 0
+    ? (l === 'en'
+        ? ` ${res.avantBonus} more run${res.avantBonus > 1 ? 's' : ''} for the streak bonus.`
+        : ` Encore ${res.avantBonus} course${res.avantBonus > 1 ? 's' : ''} avant le bonus.`)
+    : '';
+
   if (res.record && res.reussi) {
     const gain = ((res.pbMs - res.tempsMs) / 1000).toFixed(2);
     return l === 'en'
-      ? { titre: 'New personal best', corps: `${t} s — ${gain} s off your old best. Objective cleared, +${res.points} pts. Your best is updated: the next objectives start from there.` }
-      : { titre: 'Nouveau record', corps: `${t} s — ${gain} s repris à ton ancien record. Objectif validé, +${res.points} pts. Ton record est à jour : les prochains objectifs partiront de là.` };
+      ? { titre: 'New personal best', corps: `${t} s — ${gain} s off your old best. ${palier}, +${res.points} pts. Your best is updated: the next objectives start from there.` }
+      : { titre: 'Nouveau record', corps: `${t} s — ${gain} s repris à ton ancien record. ${palier}, +${res.points} pts. Ton record est à jour : les prochains objectifs partiront de là.` };
   }
+
   if (res.reussi) {
     return l === 'en'
-      ? { titre: 'Objective cleared', corps: `${t} s, target was ${c} s. +${res.points} pts` + (res.essai === 1 ? ' — first try.' : ` — in ${res.essai} tries.`) }
-      : { titre: 'Objectif validé', corps: `${t} s, la cible était ${c} s. +${res.points} pts` + (res.essai === 1 ? ' — du premier coup.' : ` — en ${res.essai} essais.`) };
+      ? { titre: `${palier} cleared`, corps: `${t} s, target was ${c} s. +${res.points} pts` + (res.essai === 1 ? ' — first try.' : ` — in ${res.essai} tries.`) + bonus }
+      : { titre: `${palier} décroché`, corps: `${t} s, la cible était ${c} s. +${res.points} pts` + (res.essai === 1 ? ' — du premier coup.' : ` — en ${res.essai} essais.`) + bonus };
   }
+
   const manque = ((res.tempsMs - res.cibleMs) / 1000).toFixed(2);
+
+  // Le bronze est le palier de l'accroche : il tombe des la premiere course, et
+  // le dire change tout. « Pas encore » sur une course qui a rapporte quelque
+  // chose est une mauvaise nouvelle inventee.
+  if (res.palier === 'bronze') {
+    return l === 'en'
+      ? { titre: 'Bronze', corps: `${t} s — +${res.points} pts. ${manque} s short of silver at ${c} s.` + bonus }
+      : { titre: 'Bronze', corps: `${t} s — +${res.points} pts. Il te manque ${manque} s pour l'argent à ${c} s.` + bonus };
+  }
+
   return l === 'en'
-    ? { titre: 'Not yet', corps: `${t} s — ${manque} s short. ${c} s is still open.` }
-    : { titre: 'Pas encore', corps: `${t} s — il manque ${manque} s. ${c} s reste ouvert.` };
+    ? { titre: 'Not yet', corps: `${t} s — ${manque} s short. ${c} s is still open.` + bonus }
+    : { titre: 'Pas encore', corps: `${t} s — il manque ${manque} s. ${c} s reste ouvert.` + bonus };
 }
 
-export { POINTS, TOP_N, FENETRE, COURSES_MIN, MARGE_MIN, MARGE_MAX, MARGE_REPLI, ACTIF_JOURS };
+export { POINTS, TOP_N, FENETRE, COURSES_MIN, MARGE_MIN, MARGE_MAX, MARGE_REPLI,
+         ACTIF_JOURS, SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS };

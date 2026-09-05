@@ -48,6 +48,8 @@
 import {
   calibrer, quantile, fuseauDe, creneauMaintenant, heureLocale, creerObjectif,
   fenetreDe, graineDe, hash32, CRENEAUX, enregistrerTentative,
+  seuilsDe, palierDe, pointsDe, serieSuivante, serieEnCours, POINTS,
+  SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS,
   MARGE_MIN, MARGE_MAX, MARGE_REPLI, COURSES_MIN, ACTIF_JOURS,
 } from '../worker/src/objectif.js';
 import {
@@ -389,6 +391,127 @@ const rejoue = await creerObjectif(
 ok('un cron rejoue ne cree pas de doublon', rejoue.nouveau === false,
    'c est la PK (joueur, jour, creneau) qui le garantit, pas l appelant');
 
+titre('TROIS PALIERS, ET PERSONNE NE REPART LES MAINS VIDES');
+
+const PB = 8500, CIBLE = 8800;
+const seuils = seuilsDe(PB, CIBLE, PLUS_BAS);
+
+ok(`bronze a ${seuils.bronze} ms (record + ${((SEUIL_BRONZE - 1) * 100).toFixed(0)} %)`,
+   seuils.bronze === Math.round(PB * SEUIL_BRONZE));
+ok('argent EST la cible calibree', seuils.argent === CIBLE);
+ok(`or a ${seuils.or} ms (record - ${((1 - SEUIL_OR) * 100).toFixed(0)} %)`,
+   seuils.or === Math.round(PB * SEUIL_OR));
+ok('les trois seuils sont ordonnes', seuils.or < seuils.argent && seuils.argent < seuils.bronze,
+   'sinon un palier en cache un autre');
+ok('le bronze est plus lent que le record', seuils.bronze > PB,
+   'c est l accroche : il doit tomber des la premiere course');
+ok('l or est plus rapide que le record', seuils.or < PB);
+
+for (const [nom, ms, attendu] of [
+  ['une course tres lente n atteint rien', 12000, null],
+  ['juste au-dessus du bronze',            seuils.bronze + 1, null],
+  ['pile sur le bronze',                   seuils.bronze, 'bronze'],
+  ['entre bronze et argent',               8900, 'bronze'],
+  ['pile sur la cible',                    CIBLE, 'argent'],
+  ['entre argent et or',                   8500, 'argent'],
+  ['pile sur l or',                        seuils.or, 'or'],
+  ['bien au-dela de l or',                 8000, 'or'],
+]) {
+  ok(`${nom} → ${attendu ?? 'rien'}`, palierDe(ms, seuils, PLUS_BAS) === attendu,
+     String(palierDe(ms, seuils, PLUS_BAS)));
+}
+
+// La bande ou le bareme et l ecran ne disent pas la meme chose. Elle est
+// documentee dans le module, et ce test existe pour qu elle reste connue.
+const recordCourt = PB - 10;
+ok('un record ameliore de moins de 1 % s arrete a l argent',
+   palierDe(recordCourt, seuils, PLUS_BAS) === 'argent' && recordCourt < PB,
+   'l ecran affiche pourtant « NOUVEAU RECORD » : SEUIL_OR a 1 les remettrait d accord');
+
+// Au plus haut, tout doit s inverser sans que rien d autre change.
+const sHaut = seuilsDe(PB, 8200, PLUS_HAUT);
+ok('au plus haut, le bronze est plus BAS que le record', sHaut.bronze < PB);
+ok('...et l or plus haut', sHaut.or > PB);
+ok('...et l ordre des seuils est inverse',
+   sHaut.or > sHaut.argent && sHaut.argent > sHaut.bronze);
+ok('...et un gros score decroche l or', palierDe(9000, sHaut, PLUS_HAUT) === 'or');
+ok('...un petit ne decroche rien', palierDe(1000, sHaut, PLUS_HAUT) === null);
+
+titre('LES POINTS DU MEILLEUR PALIER, PAS LA SOMME DES TROIS');
+
+ok('bronze seul', pointsDe('bronze', { tentatives: 1 }).total === POINTS.bronze);
+ok('argent seul', pointsDe('argent', { tentatives: 1 }).total === POINTS.argent);
+ok('or seul', pointsDe('or', { tentatives: 1 }).total === POINTS.or);
+ok('l or ne vaut pas bronze + argent + or',
+   pointsDe('or', { tentatives: 1 }).total !== POINTS.bronze + POINTS.argent + POINTS.or);
+ok('rien du tout ne vaut rien', pointsDe(null, { tentatives: 1 }).total === 0);
+
+const troisCourses = pointsDe(null, { tentatives: POINTS.courses_perseverance });
+ok(`la perseverance tombe a ${POINTS.courses_perseverance} courses MEME SANS REUSSIR`,
+   troisCourses.total === POINTS.perseverance,
+   'c est exactement le joueur qu on risque de perdre');
+ok('...et pas avant',
+   pointsDe(null, { tentatives: POINTS.courses_perseverance - 1 }).total === 0);
+ok('...et elle s ajoute au palier',
+   pointsDe('argent', { tentatives: 3 }).total === POINTS.argent + POINTS.perseverance);
+
+const sansSerie = pointsDe('argent', { tentatives: 1, serie: 0 });
+const avecSerie = pointsDe('argent', { tentatives: 1, serie: 3 });
+ok('la serie majore', avecSerie.total > sansSerie.total,
+   `${sansSerie.total} → ${avecSerie.total}`);
+ok('...de dix pour cent par jour',
+   avecSerie.multiplicateur === 1 + 3 * POINTS.serie_pas);
+ok('...et elle est plafonnee',
+   pointsDe('or', { tentatives: 1, serie: 99 }).total
+   === pointsDe('or', { tentatives: 1, serie: POINTS.serie_plafond }).total,
+   `plafond a ${POINTS.serie_plafond} jours`);
+ok('sans rien a majorer, la serie ne cree pas de points',
+   pointsDe(null, { tentatives: 1, serie: 7 }).total === 0);
+
+titre('UNE JOURNEE MANQUEE NE REMET PAS TOUT A ZERO');
+
+const S = (serie, dernier, vie) => ({ serie, dernier_jour: dernier, vie_utilisee_le: vie });
+
+ok('la premiere validation ouvre la serie',
+   serieSuivante(0, null, '2026-09-10', null).serie === 1);
+ok('deux jours de suite : elle monte',
+   serieSuivante(3, '2026-09-09', '2026-09-10', null).serie === 4);
+ok('deux fois le meme jour ne compte qu une fois',
+   serieSuivante(3, '2026-09-10', '2026-09-10', null).serie === 3,
+   'valider midi ET soir ne doit pas doubler la serie');
+
+const rattrape = serieSuivante(5, '2026-09-08', '2026-09-10', null);
+ok('un jour saute, et la vie rattrape', rattrape.serie === 6);
+ok('...en se consommant', rattrape.vieConsommee === true);
+
+const deuxieme = serieSuivante(6, '2026-09-10', '2026-09-12', '2026-09-10');
+ok('une seconde vie dans la meme semaine est refusee',
+   deuxieme.serie === 1 && deuxieme.vieConsommee === false,
+   'une vie par semaine, sinon ce n est plus une serie');
+
+const semaineApres = serieSuivante(6, '2026-09-17', '2026-09-19', '2026-09-10');
+ok(`une vie se recharge apres ${VIE_TOUS_LES_JOURS} jours`,
+   semaineApres.serie === 7 && semaineApres.vieConsommee === true);
+
+ok('deux jours manques, c est une pause, pas un accident',
+   serieSuivante(9, '2026-09-07', '2026-09-10', null).serie === 1);
+ok('un mois d absence non plus',
+   serieSuivante(9, '2026-08-01', '2026-09-10', null).serie === 1);
+
+titre('LE MULTIPLICATEUR REGARDE LES JOURS DEJA ACQUIS');
+
+ok('sans historique, aucun bonus', serieEnCours(null, '2026-09-10') === 0);
+ok('la veille compte', serieEnCours(S(4, '2026-09-09', null), '2026-09-10') === 4);
+ok('aujourd hui deja valide ne se compte pas deux fois',
+   serieEnCours(S(4, '2026-09-10', null), '2026-09-10') === 3,
+   'sinon le second creneau du jour serait majore une fois de trop');
+ok('une serie morte ne majore plus rien',
+   serieEnCours(S(9, '2026-08-01', null), '2026-09-10') === 0);
+ok('un jour saute avec une vie disponible tient encore',
+   serieEnCours(S(4, '2026-09-08', null), '2026-09-10') === 4);
+ok('...mais pas si la vie vient d etre depensee',
+   serieEnCours(S(4, '2026-09-08', '2026-09-06'), '2026-09-10') === 0);
+
 titre('LES TENTATIVES SONT ILLIMITEES, ET SEULE LA MEILLEURE COMPTE');
 
 /** Une base qui ne tient qu'un objectif, et applique l'ecriture qu'on lui fait. */
@@ -396,7 +519,7 @@ function baseObjectif(ligne) {
   const etat = Object.assign({
     name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', race_key: '100',
     cible_ms: 8800, pb_ms: 8500, tentatives: 0, meilleur_ms: null,
-    valide_le: null, points: 0, ouvre_le: null, expire_le: null,
+    valide_le: null, points: 0, palier: null, ouvre_le: null, expire_le: null,
   }, ligne);
   const credits = [];
   const rep = (sql, args) => ({
@@ -415,11 +538,16 @@ function baseObjectif(ligne) {
     all: async () => ({ results: [] }),
     run: async () => {
       if (/UPDATE objectifs/.test(sql)) {
-        const [tent, meilleur, valide, pts] = args;
+        // Le meme ordre que le vrai UPDATE, et il compte : `palier` s'est
+        // glisse en troisieme position, et une fausse base restee sur
+        // l'ancien ordre rangeait le palier dans `valide_le` et l'horodatage
+        // dans les points. Les tests echouaient — sur eux-memes.
+        const [tent, meilleur, palier, valide, pts] = args;
         etat.tentatives = tent;
         etat.meilleur_ms = meilleur;
+        etat.palier = palier;
         etat.valide_le = etat.valide_le ?? valide;      // COALESCE
-        etat.points = (etat.points || 0) + pts;
+        etat.points = pts;                              // pose, pas ajoute
       }
       if (/INSERT INTO objectif_classement/.test(sql)) credits.push(args[2]);
       return {};
@@ -436,30 +564,58 @@ const t0 = new Date('2026-09-05T13:00:00Z');
 const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 3600000 };
 
 {
+  // Quatre courses sur le meme defi, et le compte a la fin doit valoir
+  // exactement ce que vaut le meilleur palier, plus la perseverance. Ni la
+  // somme des versements successifs, ni la somme des paliers traverses.
   const db = baseObjectif(ouverte);
-  const rate = await enregistrerTentative(db, 'zoe', 'Zoe', 9100, t0);
-  ok('une course ratee compte comme tentative', rate.essai === 1 && !rate.reussi);
-  ok('...et pose le meilleur temps de la session', db.etat.meilleur_ms === 9100);
-  ok('...sans rapporter de points', rate.points === 0 && db.credits.length === 0);
+  const total = () => db.credits.reduce((a, b) => a + b, 0);
 
-  const gagne = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
-  ok('la course suivante valide', gagne.reussi && gagne.essai === 2);
-  ok('...et rapporte', gagne.points > 0 && db.credits.length === 1);
+  const un = await enregistrerTentative(db, 'zoe', 'Zoe', 9100, t0);
+  ok('une course loin de la cible decroche quand meme le bronze',
+     un.palier === 'bronze' && !un.reussi,
+     'personne ne repart les mains vides : c est l accroche');
+  ok('...elle compte comme tentative', un.essai === 1);
+  ok('...elle pose le meilleur temps de la session', db.etat.meilleur_ms === 9100);
+  ok(`...et rapporte ${POINTS.bronze} points`, total() === POINTS.bronze, String(total()));
+  ok('...sans valider l objectif', db.etat.valide_le === null);
+  ok(`...en annoncant les ${un.avantBonus} courses qui restent avant le bonus`,
+     un.avantBonus === POINTS.courses_perseverance - 1);
+
+  const deux = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
+  ok('la course suivante passe la cible', deux.reussi && deux.palier === 'argent');
   ok('...et le meilleur temps suit', db.etat.meilleur_ms === 8700);
+  ok('...elle ne rapporte que la DIFFERENCE avec le bronze deja acquis',
+     deux.points === POINTS.argent - POINTS.bronze, String(deux.points));
+  ok(`...le total du defi vaut l argent, pas bronze + argent`,
+     total() === POINTS.argent, String(total()));
+  ok('...et l objectif est valide', db.etat.valide_le !== null);
 
-  const encore = await enregistrerTentative(db, 'zoe', 'Zoe', 8600, t0);
-  ok('on peut continuer APRES avoir valide', encore !== null && encore.essai === 3,
+  const trois = await enregistrerTentative(db, 'zoe', 'Zoe', 8600, t0);
+  ok('on peut continuer APRES avoir valide', trois !== null && trois.essai === 3,
      'sinon on ferme la porte a celui qui vient justement de reussir');
-  ok('...le jeu le sait', encore.dejaValide === true);
+  ok('...le jeu le sait', trois.dejaValide === true);
   ok('...la meilleure course est retenue', db.etat.meilleur_ms === 8600);
-  ok('...et les points ne tombent qu une fois',
-     encore.points === 0 && db.credits.length === 1,
-     `${db.credits.length} credit(s)`);
+  ok('...et la troisieme course declenche la perseverance',
+     trois.points === POINTS.perseverance && trois.avantBonus === 0,
+     `${trois.points} pts, ${trois.avantBonus} restantes`);
+  ok('le total vaut argent + perseverance, et rien de plus',
+     total() === POINTS.argent + POINTS.perseverance, String(total()));
 
-  const moinsBien = await enregistrerTentative(db, 'zoe', 'Zoe', 9500, t0);
+  const quatre = await enregistrerTentative(db, 'zoe', 'Zoe', 9500, t0);
   ok('une course plus lente ne degrade pas le meilleur temps',
-     db.etat.meilleur_ms === 8600 && moinsBien.essai === 4);
+     db.etat.meilleur_ms === 8600 && quatre.essai === 4);
+  ok('...ne reprend aucun point', quatre.points === 0
+     && total() === POINTS.argent + POINTS.perseverance);
   ok('...et n efface pas l heure de validation', db.etat.valide_le !== null);
+
+  const cinq = await enregistrerTentative(db, 'zoe', 'Zoe', 8300, t0);
+  ok('un record en fin de fenetre fait monter a l or', cinq.palier === 'or');
+  ok('...et ne rapporte que ce qui manquait',
+     cinq.points === POINTS.or - POINTS.argent, String(cinq.points));
+  ok('...pour un total qui vaut l or plus la perseverance',
+     total() === POINTS.or + POINTS.perseverance, String(total()));
+  ok('...et le classement n a jamais ete credite deux fois du meme point',
+     db.etat.points === total(), `${db.etat.points} vs ${total()}`);
 }
 
 {
