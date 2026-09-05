@@ -26,10 +26,23 @@ docs/instagram_charte.md
 # Secrets de developpement wrangler.
 worker/.dev.vars
 
+# Le compte de service Firebase, celui qui autorise a envoyer une notification
+# a n'importe quel telephone du parc. Google le livre sous ce nom-la. Il vit
+# dans un secret wrangler (`npx wrangler secret put FCM_COMPTE_SERVICE`), et
+# jamais dans le depot : celui-ci est public, et une cle publiee ne se retire
+# pas — elle se revoque, et il faut alors la remplacer partout.
+*-firebase-adminsdk-*.json
+fcm-compte-service*.json
+
 # Enveloppes natives : regenerees par `npx cap add` et `npx cap sync`, elles
 # pesent lourd et contiennent des chemins de machine. Les sources qui comptent
 # sont capacitor.config.ts et assets-stores/.
 ios/App/App/public/
+# Les liens symboliques vers node_modules que `npx cap sync ios` pose pour
+# resoudre la collision de paquets Swift de Firebase (voir capacitor.config.ts).
+# Ils pointent dans node_modules, qui n'est pas suivi : les committer ne
+# donnerait que des liens casses sur une autre machine.
+ios/App/CapApp-SPM/symlinks/
 ios/App/Pods/
 ios/DerivedData/
 android/app/build/

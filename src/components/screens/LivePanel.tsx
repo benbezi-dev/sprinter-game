@@ -2,17 +2,19 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
+import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   COULOIRS,
   type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
 } from '@/game/live';
-import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
+import { poserSalon, salonCourant, quitterSalon, surDemandeRejoindre } from '@/game/salon-direct';
 import {
   poserVoix, voixCourante, couperVoix, programmerFinVoix, annulerFinVoix,
 } from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
+import { inviterEnDirect } from '@/game/invitations-directes';
+import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
@@ -55,6 +57,18 @@ export function LivePanel() {
 
   const [etape, setEtape] = useState<Etape>('repos');
   const [code, setCode] = useState('');
+  /**
+   * Le classement des duels, ouvert par-dessus le salon pour y choisir des
+   * adversaires.
+   *
+   * Le code de salle ne suffisait qu'avec des gens qu'on a deja au telephone.
+   * Quelqu'un croise au classement n'est joignable par aucun de ces moyens :
+   * c'est le serveur qui porte l'invitation jusqu'a lui.
+   */
+  const [choisirAdversaires, setChoisirAdversaires] = useState(false);
+  /** Ce que le dernier envoi a donne, pour le dire sans faire un ecran de plus. */
+  const [conviesInfo, setConviesInfo] = useState<{ ok: number; injoignable: string | null }>(
+    { ok: 0, injoignable: null });
   const [saisie, setSaisie] = useState('');
   const [epreuve, setEpreuve] = useState<RaceKey>('100');
   const [salon, setSalon] = useState<EtatSalle | null>(null);
@@ -130,14 +144,33 @@ export function LivePanel() {
       if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
     }
 
-    // Rien n'est ferme ici, et c'est le coeur de la correction. Un demontage
-    // n'est pas un depart : la salle, la liaison audio et l'enregistrement
-    // appartiennent a la course, pas a l'ecran qui la regarde. Ils se ferment
-    // dans quitter(), ou d'eux-memes a la fin de la review.
+    // Une invitation acceptee ailleurs dans le jeu.
+    //
+    // L'ecran qui affiche l'invitation ne sait pas rejoindre une salle — c'est
+    // ce panneau qui sait, et il n'est pas toujours monte quand l'invitation
+    // arrive. La demande attend donc dans `salon-direct` et ce branchement la
+    // ramasse, qu'elle soit deja la ou qu'elle vienne plus tard.
+    //
+    // On ne rejoint pas si l'on est deja dans une salle : accepter une
+    // invitation en pleine composition d'un relais ferait sortir de la
+    // premiere sans le dire.
+    const desabonner = surDemandeRejoindre(c => {
+      if (salonCourant()) return;
+      setSaisie(c);
+      rejoindre(c);
+    });
+
+    // Le nettoyage ne ferme QUE ce branchement, et c'est le coeur de la
+    // correction que ce fichier porte depuis le debut : un demontage n'est pas
+    // un depart. La salle, la liaison audio et l'enregistrement appartiennent a
+    // la course, pas a l'ecran qui la regarde — ils se ferment dans quitter(),
+    // ou d'eux-memes a la fin de la review. Ne se desabonner que du guetteur
+    // est sans risque : il ne tient rien, il ecoute.
     //
     // Le micro, lui, n'est meme pas tenu entre-temps : il est pris a l'ouverture
     // d'une fenetre de parole — la presentation, puis les cinq secondes du
     // vainqueur — et rendu au systeme des qu'elle se referme.
+    return () => { desabonner(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -584,7 +617,52 @@ export function LivePanel() {
               {copie ? N.t('code_copied') : N.t('challenge_copy')}
             </button>
           </div>
+
+          {/* Choisir ses adversaires dans le classement des duels.
+              Les boutons au-dessus supposent tous qu'on a deja la personne
+              quelque part — un numero, une conversation. Celui-ci s'adresse a
+              ceux qu'on ne connait que par leur pseudonyme : l'invitation
+              part dans le jeu, et arrive chez eux dans la seconde. */}
+          <div className="flex flex-col items-center gap-1 pt-1">
+            <button
+              onClick={() => setChoisirAdversaires(true)}
+              className="px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] md:text-xs
+                         text-emerald-300 bg-emerald-400/10 border border-emerald-400/30
+                         hover:bg-emerald-400/20 transition-colors flex items-center gap-2"
+            >
+              <ListOrdered className="w-3.5 h-3.5" />
+              {N.t('live_choisir')}
+            </button>
+            <p className="text-[9px] md:text-[10px] text-muted-foreground text-center leading-snug">
+              {conviesInfo.injoignable
+                ? N.t('live_injoignable', { n: conviesInfo.injoignable })
+                : conviesInfo.ok > 0
+                  ? N.t('live_convies', { n: String(conviesInfo.ok) })
+                  : N.t('live_choisir_sub')}
+            </p>
+          </div>
         </>
+      )}
+
+      {/* Le classement, par-dessus le salon. On garde la salle ouverte
+          derriere : choisir un adversaire ne doit pas faire perdre le code
+          ni les joueurs deja arrives. */}
+      {choisirAdversaires && (
+        <DuelRanking
+          onClose={() => setChoisirAdversaires(false)}
+          surInviter={async (nom: string) => {
+            const r = await inviterEnDirect([nom], code);
+            if (r.invites.length) {
+              setConviesInfo(c => ({ ok: c.ok + 1, injoignable: null }));
+              return true;
+            }
+            // Injoignable n'est pas une panne : beaucoup de joueurs figurent au
+            // classement sans avoir reserve leur nom. On le dit, plutot que de
+            // laisser croire a un envoi qui n'a pas eu lieu.
+            setConviesInfo(c => ({ ...c, injoignable: nom }));
+            return false;
+          }}
+        />
       )}
 
       <div className="flex flex-col gap-1.5">

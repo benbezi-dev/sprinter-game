@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- L'or du logo. Android en teinte l'icone de la barre d'etat et le
+         filet de la notification deroulee : sans lui, tout est gris. -->
+    <color name="couleur_notification">#F8CD4A</color>
+</resources>

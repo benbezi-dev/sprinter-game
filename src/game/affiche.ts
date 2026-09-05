@@ -29,6 +29,14 @@ export type Course = {
   fantomeMs?: number | null;
   /** Le rang au classement, s'il est connu. */
   rang?: number | null;
+  /**
+   * Ceux qu'on a devances, dans l'ordre d'arrivee.
+   *
+   * Une course en direct se court contre quelqu'un, et l'image ne le disait
+   * pas. `ms` peut manquer sur un abandon — l'affiche le dit alors au lieu de
+   * calculer un ecart sur un chrono qui n'existe pas.
+   */
+  battus?: Array<{ nom: string; ms?: number | null; abandon?: boolean }>;
 };
 
 /** Le nom du fichier. Date en tete : il se range tout seul dans une pellicule. */

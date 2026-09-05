@@ -14,6 +14,39 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
+    // ------------------------------------------------------------------
+    // Le jeton de notification, et les trois messages qu'iOS envoie ici
+    // ------------------------------------------------------------------
+    //
+    // APNs ne parle qu'a l'AppDelegate. Ces trois methodes ne font rien
+    // d'autre que reposter ce qu'il dit sur le NotificationCenter, ou le
+    // greffon Firebase l'attend : c'est le seul chemin entre le systeme et
+    // le code JavaScript qui enregistre le jeton.
+    //
+    // Sans elles, `getToken()` reste en attente pour toujours — sans erreur,
+    // sans message dans la console, sans rien. L'application se lance, tout
+    // a l'air normal, et aucune notification n'arrive jamais.
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        NotificationCenter.default.post(
+            name: Notification.Name.init("didReceiveRemoteNotification"),
+            object: completionHandler, userInfo: userInfo)
+    }
+
     func applicationWillResignActive(_ application: UIApplication) {
         // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
         // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.

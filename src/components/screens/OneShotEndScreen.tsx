@@ -165,6 +165,7 @@ export function OneShotEndScreen() {
       // avance de neuf secondes sur personne.
       fantomeNom: aFantome ? ghostName : undefined,
       fantomeMs: aFantome ? ghostTime * 1000 : null,
+      battus: battusDeLaCourse(),
     });
     setAffiche(sortie);
     // L'aveu revient au repos tout seul : ce n'est pas un etat durable, et un
@@ -379,6 +380,40 @@ export function OneShotEndScreen() {
   const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
     (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
   const maLigne = classement.find(x => x.id === liveResultat?.moi) || null;
+
+  /**
+   * Ceux que cette course a devances, pour l'image qu'on partage.
+   *
+   * Une course en direct se court CONTRE quelqu'un, et l'affiche n'en disait
+   * rien : elle montrait un chrono seul, comme un tour de piste joue dans son
+   * coin. Nommer l'adversaire est ce qui transforme un resultat en recit.
+   *
+   * `function` et non `const` : elle est appelee au clic sur le bouton de
+   * partage, qui est declare plus haut dans le fichier. Une constante fleche
+   * n'existerait pas encore a cet endroit-la.
+   *
+   * Deux formes de course en direct, et une seule sortie :
+   *   - le duo, ou l'adversaire est `liveNom` et son chrono `sonMs` ;
+   *   - les couloirs multiples, ou le classement porte tout le monde.
+   *
+   * On ne rend QUE ceux qui sont derriere. Se vanter de gens qui vous ont
+   * battu n'a pas de sens, et l'affiche n'a pas la place de tout montrer.
+   */
+  function battusDeLaCourse() {
+    if (!live) return undefined;
+
+    if (duo) {
+      // Un nul ne devance personne, et perdre non plus.
+      if (liveNul || !(monMs > 0) || !(sonMs > monMs)) return undefined;
+      return [{ nom: liveNom || N.t('ghost_label'), ms: sonMs }];
+    }
+
+    if (!maLigne) return undefined;
+    const derriere = classement
+      .filter(l => l.id !== liveResultat.moi && l.place > maLigne.place)
+      .map(l => ({ nom: l.nom, ms: l.abandon ? null : l.ms, abandon: !!l.abandon }));
+    return derriere.length ? derriere : undefined;
+  }
 
   /**
    * UN SEUL COULOIR : ce n'est plus une course, c'est un tour de piste seul.

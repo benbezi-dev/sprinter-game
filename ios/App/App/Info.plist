@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Firebase ne se presente a Google que lorsqu'on le lui demande : sans
+	     cette cle, le SDK depose un jeton d'inscription des le premier
+	     lancement, avant toute acceptation. Le greffon rallume
+	     l'initialisation au premier getToken(), qui n'arrive qu'une fois la
+	     permission accordee. Voir docs/notifications.md. -->
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 

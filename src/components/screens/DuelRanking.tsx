@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { RESSORT, useAnimationsReduites } from '@/lib/mouvement';
-import { Swords, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Swords, ChevronUp, ChevronDown, Loader2, Radio, Check } from 'lucide-react';
 import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
 import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
@@ -55,10 +55,35 @@ function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
  * defaut de cet ecran : ouvert depuis l'accueil, il n'etait qu'une page qu'on
  * lit, sans un seul moyen d'entrer dans un duel.
  */
-export function DuelRanking({ onClose, epreuves }: {
+export function DuelRanking({ onClose, epreuves, surInviter }: {
   onClose: () => void;
   epreuves?: string[];
+  /**
+   * Quand elle est fournie, l'ecran ne sert plus a defier mais a CHOISIR des
+   * adversaires pour une course en direct.
+   *
+   * Une prop plutot qu'un drapeau `mode` : ce qui change n'est pas un
+   * affichage, c'est ce que fait le bouton de chaque ligne — et le passer
+   * directement evite d'avoir a deviner, depuis ici, ce que le parent veut
+   * faire du nom. Le classement ne connait pas les salles, et c'est bien.
+   *
+   * Rend `true` si le choix a ete pris en compte, `false` sinon : la ligne
+   * s'allume ou pas selon la reponse, sans que cet ecran ait a savoir
+   * pourquoi.
+   */
+  surInviter?: (nom: string) => Promise<boolean>;
 }) {
+  /** Ceux qu'on vient de convier, pour que la ligne le montre. */
+  const [convies, setConvies] = useState<string[]>([]);
+  const [invitEnCours, setInvitEnCours] = useState<string | null>(null);
+
+  const inviter = async (nom: string) => {
+    if (!surInviter || invitEnCours || convies.includes(nom)) return;
+    setInvitEnCours(nom);
+    const ok = await surInviter(nom);
+    setInvitEnCours(null);
+    if (ok) setConvies(c => [...c, nom]);
+  };
   const [defiEnCours, setDefiEnCours] = useState<string | null>(null);
 
   /**
@@ -299,7 +324,7 @@ export function DuelRanking({ onClose, epreuves }: {
                             choisie au-dessus. Sur toutes les lignes sauf la
                             sienne, et depuis n'importe ou — l'accueil compris,
                             ou le classement n'ouvrait sur rien. */}
-                        {!moi && (
+                        {!moi && !surInviter && (
                           <button
                             onClick={() => defier(r.name)}
                             disabled={!!defiEnCours}
@@ -312,6 +337,31 @@ export function DuelRanking({ onClose, epreuves }: {
                             {defiEnCours === r.name
                               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                               : <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+                          </button>
+                        )}
+                        {/* Le meme geste, mais pour une course en direct : on
+                            convie au lieu de defier. Une ligne deja conviee
+                            reste allumee et ne se reclique pas — sans quoi on
+                            enverrait trois invitations a la meme personne sans
+                            s'en apercevoir. */}
+                        {!moi && surInviter && (
+                          <button
+                            onClick={() => inviter(r.name)}
+                            disabled={!!invitEnCours || convies.includes(r.name)}
+                            title={`${N.t('live_inviter')} — ${r.name}`}
+                            aria-label={`${N.t('live_inviter')} ${r.name}`}
+                            className={`shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
+                                       border transition-colors ${
+                              convies.includes(r.name)
+                                ? 'text-background bg-emerald-400 border-emerald-400'
+                                : 'text-primary/70 border-primary/30 hover:bg-primary/15 hover:text-primary'
+                            } disabled:opacity-100`}
+                          >
+                            {invitEnCours === r.name
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : convies.includes(r.name)
+                                ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                                : <Radio className="w-3.5 h-3.5 md:w-4 md:h-4" />}
                           </button>
                         )}
                       </motion.div>

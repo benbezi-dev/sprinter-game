@@ -7,6 +7,28 @@
    dans le code est ce qui rendra ces reglages possibles sans relire le moteur.
 --------------------------------------------------------------------------- */
 
+/**
+ * L'epreuve sur laquelle un championnat se court.
+ *
+ * Elle manquait, et son absence ne se voyait pas : une edition portait un
+ * echelon, une zone et un weekend, mais aucune distance — si bien qu'on ne
+ * pouvait pas dire de quoi son champion etait champion. Les chronos etaient
+ * ranges dans `champ_resultats` sans qu'on sache sur quelle distance les lire.
+ *
+ * Le 100 m par defaut, et une seule epreuve par edition.
+ *
+ * Attention a ce que cette colonne ne dit PAS : elle n'ouvre pas trois
+ * championnats en parallele. La regle « une zone ne tient qu'un championnat a
+ * la fois » (voir `ouvrirEchelon`) est inchangee, et elle est volontaire. La
+ * lever demanderait de decider si « champion de France » sans autre precision
+ * veut encore dire quelque chose quand il y en a trois — et, plus
+ * prosaiquement, trois grilles de trente-deux partants tirees du meme pays.
+ * Cette colonne dit seulement sur quelle distance se court l'edition en cours,
+ * ce que personne ne savait jusqu'ici.
+ */
+export const EPREUVES = ['100', '200', '400'];
+export const EPREUVE_DEFAUT = '100';
+
 /** Le format d'une competition : combien on part, comment on se qualifie. */
 export const FORMAT = {
   // 32 partants, quatre series de huit, deux demies de huit, une finale.

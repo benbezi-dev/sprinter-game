@@ -824,6 +824,17 @@
     // L'image de la course, a partager. Distincte du defi : elle ne demande ni
     // code ni adversaire, et le libelle doit le dire — « partager ma course »
     // et non « partager le defi », sinon le bouton promet ce qu'il ne fait pas.
+    // Inviter a une course en direct depuis le classement des duels.
+    live_inviter:    ['INVITER', 'INVITE'],
+    live_choisir:    ['CHOISIR DANS LE CLASSEMENT', 'PICK FROM THE RANKING'],
+    live_choisir_sub:['ils recevront l\u2019invitation dans le jeu',
+                      'they get the invite inside the game'],
+    live_convies:    ['{n} invit\u00e9(s)', '{n} invited'],
+    live_injoignable:['{n} n\u2019a pas r\u00e9serv\u00e9 son nom : impossible de le joindre',
+                      '{n} hasn\u2019t reserved their name: can\u2019t reach them'],
+    live_invit_recue:['{n} t\u2019invite \u00e0 courir', '{n} invites you to race'],
+    live_invit_ok:   ['REJOINDRE', 'JOIN'],
+    live_invit_non:  ['plus tard', 'later'],
     affiche_share:   ['PARTAGER MA COURSE', 'SHARE MY RUN'],
     affiche_making:  ['Image en cours…', 'Making image…'],
     affiche_saved:   ['image enregistrée', 'image saved'],

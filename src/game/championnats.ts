@@ -41,6 +41,14 @@ export type Edition = {
   echelon: 'national' | 'continental' | 'mondial';
   zone: string;
   zoneNom: string;
+  /**
+   * La distance de l'edition : '100', '200' ou '400'.
+   *
+   * Le serveur la rend toujours, y compris pour les editions ouvertes avant
+   * qu'elle existe — il retombe alors sur le 100 m. Pas de `| null` ici, donc :
+   * un ecran n'a jamais a se demander de quoi on est champion.
+   */
+  epreuve: string;
   /** « Championnat national de France », deja accorde. */
   titre: string;
   debut: number;

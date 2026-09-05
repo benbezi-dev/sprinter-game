@@ -24,11 +24,15 @@ self.addEventListener('activate', event => {
   })());
 });
 
+// Le contenu arrive chiffre, et le navigateur le dechiffre avant de nous le
+// donner (RFC 8291 — voir worker/src/push.js). Le repli sur un texte vide
+// reste : les abonnements enregistres avant que le chiffrement existe ne
+// portent pas de cles, et le serveur leur envoie encore une sonnerie muette.
 self.addEventListener('push', event => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { /* payload vide ou malformé */ }
   const title = data.title ?? 'Sprinter';
-  const body  = data.body  ?? '';
+  const body  = data.body  ?? 'Il y a du nouveau.';
   const tag   = data.tag   ?? 'sprinter-notif';
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -37,20 +41,39 @@ self.addEventListener('push', event => {
       badge: '/icon-192.png',
       tag,
       renotify: true,
-      data: { url: self.registration.scope },
+      // `t` est le genre de la nouvelle. Il ne sert pas a l'affichage : il
+      // sert au clic, pour ouvrir le bon ecran plutot que l'accueil.
+      data: { url: self.registration.scope, t: data.t || '' },
     })
   );
 });
 
+// Le clic doit mener quelque part.
+//
+// Sans cela, toucher la notification ouvrait le jeu sur l'ecran d'accueil et
+// le defi n'apparaissait qu'au sondage suivant : on est prevenu, on ouvre, et
+// il n'y a rien. Deux chemins, parce qu'il y a deux situations : une fenetre
+// deja ouverte s'apprend la nouvelle par message, une fenetre a ouvrir la
+// recoit dans son adresse — elle n'a pas encore de service worker a qui
+// parler au moment ou elle demarre.
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(wins => {
-      const w = wins.find(c => c.url.startsWith(self.registration.scope) && 'focus' in c);
-      if (w) return w.focus();
-      return self.clients.openWindow(event.notification.data?.url ?? self.registration.scope);
-    })
-  );
+  const genre = (event.notification.data && event.notification.data.t) || '';
+  const base = (event.notification.data && event.notification.data.url)
+    || self.registration.scope;
+
+  event.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const w = wins.find(c => c.url.startsWith(self.registration.scope) && 'focus' in c);
+    if (w) {
+      try { w.postMessage({ sprinter: 'courrier', t: genre }); } catch (e) { /* fenetre partie */ }
+      return w.focus();
+    }
+    const url = genre
+      ? base + (base.includes('?') ? '&' : '?') + 'sonnerie=' + encodeURIComponent(genre)
+      : base;
+    return self.clients.openWindow(url);
+  })());
 });
 
 self.addEventListener('fetch', event => {

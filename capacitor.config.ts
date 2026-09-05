@@ -1,3 +1,5 @@
+/// <reference types="@capacitor-firebase/messaging" />
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
@@ -73,6 +75,38 @@ const config: CapacitorConfig = {
     Keyboard: {
       resize: 'native' as any,
       resizeOnFullScreen: true,
+    },
+
+    /**
+     * Ce que devient une notification qui arrive alors que le jeu est ouvert.
+     *
+     * Rien. La liste est vide, et c'est delibere : quand l'application est au
+     * premier plan, la boite WebSocket a deja porte la nouvelle et l'ecran
+     * concerne s'est deja mis a jour. Une banniere par-dessus repeterait ce
+     * qu'on est en train de regarder — et pendant une course, elle passerait
+     * devant la piste au pire moment.
+     *
+     * Le reglage ne vaut que pour iOS ; sur Android le comportement au premier
+     * plan est le meme par defaut.
+     */
+    FirebaseMessaging: {
+      presentationOptions: [],
+    },
+  },
+
+  /**
+   * Deux paquets Swift declarent le meme produit Firebase, et SwiftPM refuse
+   * de resoudre le graphe : le lien symbolique fait tomber la collision.
+   * Sans cette ligne, `npx cap sync ios` produit un projet qui ne compile pas.
+   * Voir capawesome-team/capacitor-firebase#959.
+   */
+  experimental: {
+    ios: {
+      spm: {
+        packageOptions: {
+          '@capacitor-firebase/messaging': { symlink: true },
+        },
+      },
     },
   },
 };

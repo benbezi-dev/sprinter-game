@@ -33,6 +33,12 @@ import {
   regarderCap, fileDAttente, ecarter, marquerPublie, MOMENTS,
 } from './reseaux.js';
 import {
+  deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
+} from './instagram-envoi.js';
+import {
+  inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
+} from './direct-invitations.js';
+import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
@@ -479,21 +485,76 @@ async function ensurePushTable(db) {
       created_at  INTEGER DEFAULT (unixepoch())
     )
   `).run();
+  // La langue du joueur, ajoutee apres coup : les abonnements d'avant restent
+  // et repondent en francais, ce que la valeur par defaut dit deja.
+  try { await db.prepare(
+    `ALTER TABLE push_subscriptions ADD COLUMN langue TEXT NOT NULL DEFAULT 'fr'`).run(); }
+  catch { /* deja la */ }
+
+  // Les jetons de l'application native. Une table separee des abonnements web,
+  // et pas une colonne de plus sur la meme : les deux ne se ressemblent que de
+  // loin — un abonnement web est un objet qu'on rejoue tel quel, un jeton FCM
+  // est une chaine opaque — et surtout un meme appareil peut porter les deux a
+  // la fois, le site dans son navigateur et l'application a cote.
+  //
+  // Le jeton est la cle, pas l'appareil : c'est lui que Firebase renouvelle,
+  // c'est lui qui meurt a une desinstallation, et une reinstallation en donne
+  // un nouveau sans que l'ancien previenne. Un appareil peut donc en avoir
+  // plusieurs le temps que les morts se fassent ramasser a l'envoi.
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS push_jetons (
+      jeton      TEXT PRIMARY KEY,
+      device_id  TEXT NOT NULL,
+      plateforme TEXT,
+      langue     TEXT NOT NULL DEFAULT 'fr',
+      cree_le    INTEGER NOT NULL
+    )
+  `).run();
+  await db.prepare(
+    `CREATE INDEX IF NOT EXISTS push_jetons_appareil ON push_jetons(device_id)`).run();
   pushTableReady.add(db);
 }
 
 /**
- * Sonne la boite WebSocket ET envoie un push natif si le joueur est abonné.
- * Remplace sonner() pour les événements qui méritent un push.
+ * Sonne la boite WebSocket ET fait vibrer le telephone.
+ *
+ * Les deux, et pas l'un ou l'autre : la socket ne porte que pendant que le jeu
+ * est ouvert, la notification ne sert qu'a le rouvrir. Le genre de la nouvelle
+ * — `defi`, `direct`, `relais`, `duel`, `mot` — est le meme mot des deux
+ * cotes, et c'est `push.js` qui sait quel texte lui correspond.
+ *
+ * Aucune des deux ne peut faire echouer l'ecriture qui vient de se produire :
+ * on a enregistre un defi, une invitation, une equipe — la sonnerie est ce qui
+ * vient apres, et elle n'a pas le droit de defaire ce qui est fait.
  */
-async function sonnerEtPush(env, deviceId, type, canalTest, labelFr, labelEn) {
+async function sonnerEtPush(env, deviceId, type, canalTest) {
   await sonner(env, deviceId, type, canalTest);
-  if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) return;
   const db = canalTest ? env.DB_TEST : env.DB;
   try {
     await ensurePushTable(db);
-    await notifierAppareil(db, deviceId, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY);
+    await notifierAppareil(db, deviceId, type, env);
   } catch { /* le push est best-effort : une erreur ne casse pas l'écriture */ }
+}
+
+/**
+ * Les appareils derriere une liste de noms.
+ *
+ * Un joueur peut en avoir plusieurs — on previent tous, parce qu'on ignore
+ * lequel il a en main. Un nom qu'aucun appareil ne reclame n'est pas une
+ * erreur : beaucoup jouent sans avoir reserve leur pseudonyme, et ceux-la ne
+ * sont joignables par personne.
+ */
+async function appareilsDe(db, cles) {
+  const liste = [...new Set((cles || [])
+    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean))];
+  if (!liste.length) return [];
+  try {
+    const { results } = await db.prepare(
+      `SELECT device_id FROM player_devices
+        WHERE name_key IN (${liste.map(() => '?').join(',')})`
+    ).bind(...liste).all();
+    return [...new Set((results || []).map(r => r.device_id).filter(Boolean))];
+  } catch { return []; }
 }
 
 async function attemptsFor(db, id) {
@@ -798,13 +859,16 @@ export default {
         if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { pays, zone, echelon, debut } = body || {};
+        const { pays, zone, echelon, debut, epreuve } = body || {};
         const t = Number(debut);
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
         const r = await ouvrirEchelon(env.DB, {
           echelon: echelon || 'national',
           zone: zone || pays || 'MONDE',
           debutSamedi: t,
+          // Absente, l'epreuve retombe sur le 100 m : les appels ecrits avant
+          // qu'elle existe ouvrent donc exactement ce qu'ils ouvraient.
+          epreuve,
         });
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
@@ -819,6 +883,7 @@ export default {
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
         return json(await ouvrirCycle(env.DB, {
           debutSamedi: t, echelon: (body && body.echelon) || 'national',
+          epreuve: body && body.epreuve,
         }));
       }
 
@@ -936,6 +1001,20 @@ export default {
           coequipiers: Array.isArray(members) ? members.slice(0, 8) : [],
           nom: name,
         });
+        // La sonnette chez les trois invites. Sans elle, une invitation de
+        // relais n'existe qu'au prochain `/relay/mine` — c'est-a-dire quand
+        // l'invite pense a ouvrir l'ecran des equipes, ce qu'il ne fait pas
+        // s'il ignore qu'on l'attend. Le tout part apres la reponse : le
+        // createur n'a pas a attendre trois boites pour voir son equipe.
+        if (!r.erreur && r.equipe && !r.existait) {
+          const invites = (r.equipe.membres || [])
+            .filter(m => m.etat === 'invited').map(m => m.cle);
+          ctx.waitUntil((async () => {
+            for (const appareil of await appareilsDe(env.DB, invites)) {
+              await sonnerEtPush(env, appareil, 'relais', canal.test);
+            }
+          })());
+        }
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
@@ -1063,6 +1142,66 @@ export default {
         status: reponse.status,
         headers: { 'Content-Type': 'application/json' },
       }));
+    }
+
+    // -------------------------------- inviter a une course en direct
+    //
+    // Le mode direct se rejoignait par un code qu'il fallait faire parvenir
+    // par un autre canal — ce qui suppose d'avoir deja la personne au
+    // telephone. Quelqu'un croise au classement des duels n'est joignable par
+    // aucun de ces moyens : on ne connait de lui qu'un pseudonyme.
+    //
+    // Ces deux routes font la jonction, et elle se fait ICI, sur le serveur :
+    // le pseudonyme entre, l'appareil ne sort pas. Etre au classement ne doit
+    // pas rendre joignable ailleurs.
+    if (url.pathname.startsWith('/direct/')) {
+      const sous = url.pathname.slice('/direct/'.length);
+
+      if (sous === 'inviter' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, nom, cibles, code, epreuve } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const salle = String(code || '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{4,8}$/.test(salle)) return json({ error: 'code de salle invalide' }, 400);
+
+        // On n'invite qu'en son propre nom. Sans cette verification, n'importe
+        // qui enverrait des invitations signees du nom d'un autre — et c'est
+        // le nom affiche qui decide si l'invite accepte.
+        const key = cleanName(nom).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+
+        const r = await inviterEnDirect(env.DB, {
+          deNom: cleanName(nom), versNoms: cibles, code: salle, epreuve,
+        });
+        // La sonnerie part apres la reponse : l'hote n'a pas a attendre que
+        // sept boites aient repondu pour voir sa salle s'ouvrir.
+        for (const appareil of r.appareils) {
+          ctx.waitUntil(sonnerEtPush(env, appareil, 'direct', canal.test));
+        }
+        return json({ invites: r.invites, injoignables: r.injoignables });
+      }
+
+      if (sous === 'invitations' && request.method === 'GET') {
+        const deviceId = url.searchParams.get('device_id');
+        if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+        return json({ invitations: await mesInvitationsDirectes(env.DB, deviceId) });
+      }
+
+      if (sous === 'trancher' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const ok = await trancherInvitation(env.DB, id, device_id);
+        return json({ ok });
+      }
+
+      return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------ course en direct
@@ -1797,6 +1936,34 @@ export default {
     // Sous `estAdmin` et pas `estTableau` : lire la frequentation n'engage
     // rien, decider ce qui parle au nom du jeu engage la marque entiere. Les
     // deux cles existent justement pour ne pas confondre les deux.
+    // ---------------------------------------------- le depot des images
+    //
+    // PUBLIQUE, et il faut l'ecrire en clair parce que c'est la seule route de
+    // ce Worker qui rende quelque chose sans cle. Ce n'est pas un oubli :
+    // l'API d'Instagram ne recoit pas de fichier, elle recoit une adresse, et
+    // ce sont les serveurs de Meta qui viennent lire. Une image derriere une
+    // cle serait une image que Meta ne peut pas prendre.
+    //
+    // Ce qui tient lieu de serrure : un identifiant de 32 caracteres tire au
+    // hasard, une duree de vie d'une heure, et rien dans l'image qui ne soit
+    // deja destine a etre publie. On ne depose ici que ce qui part sur un
+    // compte public dans la minute.
+    if (url.pathname.startsWith('/img/')) {
+      const id = url.pathname.slice('/img/'.length).replace(/\.jpg$/i, '');
+      if (!/^[0-9a-f]{32}$/.test(id)) return new Response('introuvable', { status: 404 });
+      const b64 = await lireImage(env.DB, id);
+      if (!b64) return new Response('introuvable', { status: 404 });
+      const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      return new Response(bin, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          // Meta relit parfois l'adresse : on laisse un cache court, mais rien
+          // qui survive a la disparition du depot.
+          'Cache-Control': 'public, max-age=600',
+        },
+      });
+    }
+
     if (url.pathname.startsWith('/reseaux/')) {
       if (!estAdmin(request, env)) return json({ error: 'introuvable' }, 404);
       const quoi = url.pathname.slice('/reseaux/'.length);
@@ -1820,6 +1987,55 @@ export default {
           // des poids, qui vivrait alors a deux endroits.
           bareme: MOMENTS,
         });
+      }
+
+      // Est-ce que l'envoi direct est possible sur ce Worker ? L'atelier le
+      // demande au chargement pour savoir s'il propose un bouton ou le simple
+      // telechargement. Repondre « non » n'est pas une panne, c'est l'etat par
+      // defaut tant que les deux secrets ne sont pas poses.
+      if (quoi === 'envoi' && request.method === 'GET') {
+        return json({ pret: envoiPret(env) });
+      }
+
+      // Envoyer une publication sur Instagram.
+      //
+      // L'atelier envoie l'image et le texte ; le jeton reste ici. C'est le
+      // point de tout ce dispositif : un jeton Instagram pose dans une page
+      // ouverte sur un poste de travail est un jeton qui finira par fuir, et
+      // celui-la publie au nom du jeu.
+      if (quoi === 'envoyer' && request.method === 'POST') {
+        if (!envoiPret(env)) {
+          return json({ error: 'envoi non configure',
+                        detail: 'poser IG_JETON et IG_COMPTE avec wrangler secret put' }, 409);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, image, legende } = body || {};
+        if (!image) return json({ error: 'image manquante' }, 400);
+
+        let depot;
+        try {
+          depot = await deposerImage(env.DB, String(image));
+        } catch (e) {
+          return json({ error: String(e && e.message || e) }, 400);
+        }
+
+        // L'adresse que Meta ira lire. On la construit sur l'origine de la
+        // requete plutot qu'en dur : le Worker repond sur son domaine
+        // workers.dev comme derriere un domaine a nous, et une adresse ecrite
+        // en dur serait fausse un jour sur deux.
+        const adresseImage = `${url.origin}/img/${depot}.jpg`;
+        const r = await publierInstagram(env, { adresseImage, legende });
+
+        // Le depot a fait son office, dans un sens comme dans l'autre : ce qui
+        // doit durer est la publication chez Instagram, pas la copie.
+        ctx.waitUntil(oublierImage(env.DB, depot));
+
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, 502);
+
+        // Le registre, comme pour une publication deposee a la main.
+        if (id != null) await marquerPublie(env.DB, id, ['instagram']);
+        return json({ ok: true, publication: r.publication });
       }
 
       if (quoi === 'ecarter' && request.method === 'POST') {
@@ -2506,14 +2722,15 @@ export default {
     if (url.pathname === '/push/subscribe' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, subscription } = body || {};
+      const { device_id, subscription, langue } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
       await ensurePushTable(env.DB);
       await env.DB.prepare(
-        `INSERT INTO push_subscriptions (device_id, subscription) VALUES (?, ?)
-         ON CONFLICT(device_id) DO UPDATE SET subscription = excluded.subscription`
-      ).bind(device_id, JSON.stringify(subscription)).run();
+        `INSERT INTO push_subscriptions (device_id, subscription, langue) VALUES (?, ?, ?)
+         ON CONFLICT(device_id) DO UPDATE SET subscription = excluded.subscription,
+                                              langue = excluded.langue`
+      ).bind(device_id, JSON.stringify(subscription), langue === 'en' ? 'en' : 'fr').run();
       return json({ ok: true });
     }
 
@@ -2525,6 +2742,46 @@ export default {
       await ensurePushTable(env.DB);
       await env.DB.prepare(
         'DELETE FROM push_subscriptions WHERE device_id = ?'
+      ).bind(device_id).run();
+      return json({ ok: true });
+    }
+
+    // Les memes deux routes, pour l'application des magasins. Ce qu'elle
+    // depose n'est pas un abonnement mais un jeton Firebase — voir la table
+    // `push_jetons` et le commentaire qui dit pourquoi elle est separee.
+    if (url.pathname === '/push/natif/abonner' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, jeton, plateforme, langue } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const j = String(jeton || '').trim();
+      // Un jeton FCM fait dans les cent cinquante caracteres et n'en contient
+      // aucun d'exotique. La borne haute existe pour qu'une requete tordue ne
+      // remplisse pas la table avec un megaoctet par ligne.
+      if (!/^[A-Za-z0-9:._~%+/-]{20,4096}$/.test(j)) return json({ error: 'jeton invalide' }, 400);
+      const plat = ['ios', 'android'].includes(String(plateforme)) ? String(plateforme) : null;
+      await ensurePushTable(env.DB);
+      // Le meme jeton peut changer de main : un appareil rendu, reinitialise,
+      // repris par quelqu'un d'autre. On ecrase l'appareil precedent plutot
+      // que d'envoyer les defis d'un joueur au telephone d'un autre.
+      await env.DB.prepare(
+        `INSERT INTO push_jetons (jeton, device_id, plateforme, langue, cree_le)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(jeton) DO UPDATE SET device_id  = excluded.device_id,
+                                          plateforme = excluded.plateforme,
+                                          langue     = excluded.langue`
+      ).bind(j, device_id, plat, langue === 'en' ? 'en' : 'fr', Date.now()).run();
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      await env.DB.prepare(
+        'DELETE FROM push_jetons WHERE device_id = ?'
       ).bind(device_id).run();
       return json({ ok: true });
     }

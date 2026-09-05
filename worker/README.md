@@ -58,6 +58,26 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/challenge`          | Crée un défi, renvoie un code court |
 | GET     | `/challenge?id=`      | Lit un défi et ses tentatives |
 | POST    | `/challenge/attempt`  | Enregistre une tentative |
+| POST    | `/push/subscribe`     | Enregistre un abonnement Web Push |
+| POST    | `/push/unsubscribe`   | Oublie les abonnements web d'un appareil |
+| POST    | `/push/natif/abonner`   | Enregistre un jeton Firebase (iOS, Android) |
+| POST    | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
+
+## Les notifications
+
+Deux transports, parce qu'une WebView n'a pas d'API Push et que le Web Push ne
+franchit donc pas la porte des magasins : VAPID pour le navigateur, Firebase
+Cloud Messaging pour l'application. Trois secrets les commandent —
+`VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `FCM_COMPTE_SERVICE` — et chacun peut
+manquer sans rien casser : le transport correspondant est saute, le reste
+continue.
+
+```bash
+npx wrangler secret put FCM_COMPTE_SERVICE < le-compte-de-service.json
+```
+
+La mise en place complete — projet Firebase, cle APNs, capacite Xcode — est
+dans [`docs/notifications.md`](../docs/notifications.md).
 
 ## L'alerte des récupérations de compte
 

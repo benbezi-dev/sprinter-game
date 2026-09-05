@@ -34,6 +34,7 @@ import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { InboxPopup } from '@/components/screens/InboxPopup';
+import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
@@ -42,7 +43,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
-import { activerPush } from '@/game/push';
+import { activerPush, reprendrePush } from '@/game/push';
 
 const queryClient = new QueryClient();
 
@@ -110,6 +111,18 @@ function MainGame() {
     ouvrirBoite();
   }, [acces]);
 
+  // Au lancement : redire au serveur où joindre ce téléphone.
+  //
+  // Rien ne s'affiche, et rien n'est demandé — sans permission déjà accordée,
+  // l'appel ne fait rien. Il existe parce qu'un jeton Firebase tourne : il
+  // change à une réinstallation, à une restauration, après des mois sans
+  // ouvrir le jeu. Sans ce rappel, le serveur continuerait d'envoyer vers un
+  // jeton mort, et personne ne verrait rien — ni le joueur, ni les journaux.
+  useEffect(() => {
+    if (!acces) return;
+    reprendrePush().catch(() => { /* best-effort */ });
+  }, [acces]);
+
   // Demande la permission push après le premier résultat de course.
   // C'est le moment naturel : le joueur vient de finir une étape et comprend
   // pourquoi être prévenu d'un défi a du sens. On ne demande jamais au
@@ -157,6 +170,7 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      <InvitationDirecte />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. Comme pour PisteRelais
           ci-dessous, la porte se pose ici et non a l'interieur du composant :

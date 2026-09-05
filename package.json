@@ -73,6 +73,7 @@
     "zod": "^3.25.76"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^8.5.1",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",
     "@capacitor/cli": "^8.5.0",

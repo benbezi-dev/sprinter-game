@@ -19,7 +19,11 @@ const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 /** Ce que la boite annonce. Le genre suffit : le jeu sait ou aller ensuite. */
-export type Courrier = 'defi' | 'duel' | 'mot' | 'ouverte';
+// 'direct' : quelqu'un invite a courir en direct, maintenant. Perissable —
+// voir InvitationDirecte.tsx, qui la lit autrement qu'un defi differe.
+// 'relais' : on veut de toi dans une equipe. Le contraire du direct — elle
+// attend, et se releve sur l'ecran des equipes.
+export type Courrier = 'defi' | 'duel' | 'mot' | 'ouverte' | 'direct' | 'relais';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;
@@ -128,6 +132,18 @@ export function fermerBoite() {
   voulue = false;
   if (reprise) { clearTimeout(reprise); reprise = null; }
   fermer();
+}
+
+/**
+ * Faire sonner la boite depuis ailleurs que la WebSocket.
+ *
+ * Une notification touchee sur l'ecran verrouille est la meme nouvelle que
+ * celle qui serait passee par la socket si le jeu avait ete ouvert — et elle
+ * doit rentrer par la meme porte, sinon chaque ecran aurait deux chemins a
+ * gerer au lieu d'un. C'est `push.ts` qui appelle, et lui seul.
+ */
+export function signalerCourrier(quoi: Courrier) {
+  prevenir(quoi);
 }
 
 /** S'abonner au courrier. Rend de quoi se desabonner. */

@@ -226,8 +226,10 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
                   className="w-full max-w-sm flex flex-col items-center gap-5">
         <Trophy className="w-7 h-7" style={{ color: OR }} />
         <div className="text-center">
+          {/* Sur l'ecran du sacre, la distance compte autant que la zone :
+              c'est d'elle qu'on est champion. */}
           <p className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-1">
-            {e.titre}
+            {e.titre} · {e.epreuve} m
           </p>
           <h2 className="font-display font-black text-3xl tracking-tight flex items-center justify-center gap-2"
               style={{ color: OR }}>
@@ -386,6 +388,13 @@ export function Championnat({ edition, onQuitter }: {
             <h3 className="text-[10px] md:text-xs font-bold tracking-widest" style={{ color: OR }}>
               {e.titre.toUpperCase()}
             </h3>
+            {/* La distance se lit a cote du titre, et pas dedans : le titre est
+                deja accorde par le serveur (« Championnat national de France »)
+                et on ne recolle pas du texte au milieu d'une phrase faite. */}
+            <span className="text-[10px] md:text-xs font-mono font-bold tracking-widest
+                             text-foreground/55">
+              {e.epreuve} M
+            </span>
           </div>
           {e.etat === 'terminee' && e.champion && (
             <button onClick={() => setPodium(true)}

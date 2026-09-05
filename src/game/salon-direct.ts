@@ -47,3 +47,47 @@ export function quitterSalon() {
   try { courant.fermer(); } catch { /* deja fermee */ }
   courant = null;
 }
+
+/* ---------------------------------------------------------------------------
+   REJOINDRE UNE SALLE DEPUIS L'EXTERIEUR DU PANNEAU
+   ---------------------------------------------------------------------------
+   Une invitation arrive n'importe quand, et l'ecran qui l'affiche n'est pas
+   celui qui sait rejoindre une salle. Le panneau du direct, lui, sait — mais
+   il n'est monte que dans l'ecran-titre, et pas toujours.
+
+   Meme nature de probleme que le reste de ce fichier : deux choses qui doivent
+   se parler n'ont pas la meme duree de vie. On depose donc la demande ici, et
+   le panneau la ramasse — qu'il soit deja la, ou qu'il arrive apres.
+--------------------------------------------------------------------------- */
+
+let demande: string | null = null;
+const guetteurs = new Set<(code: string) => void>();
+
+/** Demande a rejoindre cette salle. Prise tout de suite, ou au montage. */
+export function demanderRejoindre(code: string) {
+  const c = String(code || '').trim().toUpperCase();
+  if (!c) return;
+  demande = c;
+  // On previent qui ecoute. Si personne n'ecoute, la demande attend : c'est
+  // tout l'objet de ce mecanisme.
+  for (const g of guetteurs) {
+    try { g(c); } catch { /* un guetteur casse n'empeche pas les autres */ }
+  }
+}
+
+/**
+ * Le panneau s'annonce. Il recoit la demande en attente s'il y en a une, puis
+ * celles qui viendront tant qu'il reste monte.
+ */
+export function surDemandeRejoindre(f: (code: string) => void): () => void {
+  guetteurs.add(f);
+  if (demande) {
+    const c = demande;
+    demande = null;
+    try { f(c); } catch { /* le panneau decidera */ }
+  }
+  return () => { guetteurs.delete(f); };
+}
+
+/** La demande a ete honoree : elle ne doit pas se rejouer. */
+export function oublierDemande() { demande = null; }

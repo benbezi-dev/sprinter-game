@@ -15,7 +15,7 @@
 
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
-  ANNONCES,
+  ANNONCES, EPREUVES, EPREUVE_DEFAUT,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
@@ -126,11 +126,13 @@ export async function ensureChampTables(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS player_pays_par_pays ON player_pays(pays)`),
 
-    // Une edition : un championnat, un echelon, une zone, un weekend.
+    // Une edition : un championnat, un echelon, une zone, une epreuve, un
+    // weekend.
     db.prepare(`CREATE TABLE IF NOT EXISTS champ_editions (
       id TEXT PRIMARY KEY,
       echelon TEXT NOT NULL,
       zone TEXT NOT NULL,
+      epreuve TEXT NOT NULL DEFAULT '${EPREUVE_DEFAUT}',
       debut INTEGER NOT NULL,
       phase TEXT NOT NULL,
       etat TEXT NOT NULL,
@@ -222,6 +224,17 @@ export async function ensureChampTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_fil ON champ_annonces(id)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_annonces_zone ON champ_annonces(zone, id)`),
   ]);
+
+  // L'epreuve est arrivee apres la table. Hors du `batch` volontairement : un
+  // ALTER sur une colonne deja presente echoue, et il emporterait avec lui
+  // toute la creation des autres tables — le batch est atomique. Seul, il ne
+  // coute qu'un try/catch, et c'est le meme motif que `ensureScoreGhost`.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_editions ADD COLUMN epreuve TEXT NOT NULL DEFAULT '${EPREUVE_DEFAUT}'`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+
   pret.add(db);
 }
 
@@ -441,10 +454,15 @@ async function pool(db, echelon, zone) {
  * Sans quoi un joueur pourrait entrer ou sortir de la competition entre deux
  * courses, ce qui n'aurait aucun sens.
  */
-export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
+export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve }) {
   await ensureChampTables(db);
   if (!ECHELONS[echelon]) return { erreur: 'echelon inconnu' };
   const z = String(zone || 'MONDE').toUpperCase();
+  // L'epreuve se valide ici et pas a la porte HTTP : `ouvrirCycle` ouvre trente
+  // pays sans repasser par une requete, et une distance fantaisiste doit etre
+  // refusee la aussi.
+  const ep = String(epreuve == null ? EPREUVE_DEFAUT : epreuve);
+  if (!EPREUVES.includes(ep)) return { erreur: 'epreuve inconnue', epreuve: ep };
 
   // Une zone ne tient qu'un championnat a la fois. Deux editions ouvertes pour
   // le meme pays produiraient deux champions du meme endroit, et un titre qui
@@ -474,9 +492,9 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
   const grille = serpentin(joueurs, phase0.courses);
 
   await db.prepare(
-    `INSERT INTO champ_editions (id, echelon, zone, debut, phase, etat, cree_le)
-     VALUES (?, ?, ?, ?, ?, 'ouverte', ?)`
-  ).bind(id, echelon, z, debutSamedi, phase0.cle, Date.now()).run();
+    `INSERT INTO champ_editions (id, echelon, zone, epreuve, debut, phase, etat, cree_le)
+     VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?)`
+  ).bind(id, echelon, z, ep, debutSamedi, phase0.cle, Date.now()).run();
 
   const lignes = [];
   grille.forEach((course, ic) => course.forEach(j => {
@@ -491,12 +509,17 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
   await annoncer(db, {
     edition: id, echelon, zone: z, type: 'ouverture',
     titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
-    texte: FORMAT.partants + ' partants, ' + phase0.courses + ' séries. Premier départ samedi.',
-    donnees: { partants: joueurs.length, doffice: p.doffice.size },
+    // La distance ouvre la phrase : c'est d'elle qu'on est champion, et le fil
+    // d'annonces est le seul endroit ou un joueur lit l'edition en toutes
+    // lettres.
+    texte: ep + ' m. ' + FORMAT.partants + ' partants, ' + phase0.courses
+         + ' séries. Premier départ samedi.',
+    donnees: { partants: joueurs.length, doffice: p.doffice.size, epreuve: ep },
   });
 
   return {
-    edition: id, echelon, zone: z, pays: echelon === 'national' ? z : undefined,
+    edition: id, echelon, zone: z, epreuve: ep,
+    pays: echelon === 'national' ? z : undefined,
     partants: joueurs.length, doffice: p.doffice.size,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
     calendrier: calendrier(debutSamedi, CALENDRIER),
@@ -504,8 +527,8 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi }) {
 }
 
 /** Ouvre une edition nationale. Conserve pour les appels existants. */
-export async function ouvrirNational(db, { pays, debutSamedi }) {
-  return ouvrirEchelon(db, { echelon: 'national', zone: pays, debutSamedi });
+export async function ouvrirNational(db, { pays, debutSamedi, epreuve }) {
+  return ouvrirEchelon(db, { echelon: 'national', zone: pays, debutSamedi, epreuve });
 }
 
 /**
@@ -517,25 +540,25 @@ export async function ouvrirNational(db, { pays, debutSamedi }) {
  * a tout le monde, et les pays trop petits ressortent dans `ecartes` avec
  * leur raison plutot que d'echouer en silence.
  */
-export async function ouvrirCycle(db, { debutSamedi, echelon = 'national' }) {
+export async function ouvrirCycle(db, { debutSamedi, echelon = 'national', epreuve }) {
   await ensureChampTables(db);
   const ouvertes = [], ecartes = [];
 
   if (echelon === 'national') {
     for (const p of await paysEligibles(db)) {
       if (!p.eligible) { ecartes.push({ zone: p.pays, raison: 'pays trop petit', joueurs: p.joueurs, repli: p.repli }); continue; }
-      const r = await ouvrirEchelon(db, { echelon: 'national', zone: p.pays, debutSamedi });
+      const r = await ouvrirEchelon(db, { echelon: 'national', zone: p.pays, debutSamedi, epreuve });
       if (r.erreur) ecartes.push({ zone: p.pays, raison: r.erreur, ...r });
       else ouvertes.push({ zone: p.pays, edition: r.edition, partants: r.partants });
     }
   } else if (echelon === 'continental') {
     for (const c of Object.keys(CONTINENTS)) {
-      const r = await ouvrirEchelon(db, { echelon: 'continental', zone: c, debutSamedi });
+      const r = await ouvrirEchelon(db, { echelon: 'continental', zone: c, debutSamedi, epreuve });
       if (r.erreur) ecartes.push({ zone: c, raison: r.erreur, ...r });
       else ouvertes.push({ zone: c, edition: r.edition, partants: r.partants });
     }
   } else {
-    const r = await ouvrirEchelon(db, { echelon: 'mondial', zone: 'MONDE', debutSamedi });
+    const r = await ouvrirEchelon(db, { echelon: 'mondial', zone: 'MONDE', debutSamedi, epreuve });
     if (r.erreur) ecartes.push({ zone: 'MONDE', raison: r.erreur, ...r });
     else ouvertes.push({ zone: 'MONDE', edition: r.edition, partants: r.partants });
   }
@@ -607,6 +630,9 @@ export async function etatEdition(db, id) {
   const cfg = FORMAT.phases[iPhase] || null;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
+    // Les editions d'avant la colonne n'en portent pas : on retombe sur la
+    // valeur par defaut plutot que de rendre `null`, qu'aucun ecran n'attend.
+    epreuve: e.epreuve || EPREUVE_DEFAUT,
     zoneNom: z.nom,
     titre: e.echelon === 'mondial' ? ECHELONS.mondial.nom
          : ECHELONS[e.echelon].nom + ' ' + z.avec,
@@ -998,7 +1024,7 @@ export async function recapMondial(db, { echelon = null } = {}) {
   const filtre = ou.length ? 'WHERE ' + ou.join(' AND ') : '';
 
   const { results: editions } = await db.prepare(
-    `SELECT id, echelon, zone, debut, phase, etat, champion_nom, fini_le
+    `SELECT id, echelon, zone, epreuve, debut, phase, etat, champion_nom, fini_le
        FROM champ_editions ${filtre} ORDER BY debut DESC, zone`
   ).bind(...args).all();
 
@@ -1007,6 +1033,7 @@ export async function recapMondial(db, { echelon = null } = {}) {
     const z = nomZone(e.zone, e.echelon);
     const ligne = {
       edition: e.id, echelon: e.echelon, zone: e.zone, zoneNom: z.nom,
+      epreuve: e.epreuve || EPREUVE_DEFAUT,
       debut: e.debut, phase: e.phase,
     };
     if (e.etat === 'terminee') {

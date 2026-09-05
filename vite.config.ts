@@ -46,6 +46,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+      // Voir src/game/firebase-web-absent.ts : le greffon Firebase importe le
+      // SDK web dans une branche que le jeu ne prend jamais. On resout cet
+      // import vers un faux module plutot que d'embarquer `firebase` en entier
+      // pour du code qui ne sera pas charge.
+      'firebase/messaging': path.resolve(
+        import.meta.dirname, 'src/game/firebase-web-absent.ts'),
     },
   },
   server: {
