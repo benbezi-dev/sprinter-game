@@ -27,6 +27,8 @@
 // L'envoi est le travail de push.js, le declenchement celui du cron dans
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
+import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe } from './epreuves.js';
+
 /* ------------------------------------------------------------- reglages */
 
 /** L'epreuve qui porte les objectifs. Le 100 m est la seule qui ait assez de
@@ -206,55 +208,95 @@ export function quantile(triee, p) {
 /**
  * Le chrono a battre, pour un joueur et ses courses.
  *
- * @param {number} pbMs      Son record sur l'epreuve (scores.best_split_ms).
- * @param {number[]} coursesMs  Ses temps recents (races.time_ms), ordre libre.
- * @returns {{cibleMs, marge, methode, reussiteEstimee, essaisEstimes, courses}}
+ * LE SENS DE L'EPREUVE EST UN PARAMETRE, PAS UNE HYPOTHESE. Les trois epreuves
+ * du jeu se gagnent au chrono le plus bas, et cette fonction a longtemps ecrit
+ * cette hypothese partout : un `q / pb - 1` qui n'a de signe juste que dans ce
+ * sens-la, un `<=` pour compter les reussites, un arrondi vers le haut. Sur une
+ * epreuve au plus haut — une distance, un score — chacune de ces trois lignes
+ * aurait donne un resultat plausible et faux : une cible MEILLEURE que le
+ * record, presentee comme un objectif atteignable.
+ *
+ * Le calcul est donc ecrit une fois, avec un sens. Sur `plus_bas` il rend
+ * exactement ce qu'il rendait avant — c'est verifie par le harnais.
+ *
+ * @param {number} pbMs      Son record sur l'epreuve.
+ * @param {number[]} coursesMs  Ses resultats recents, ordre libre.
+ * @param {{direction?: string, pas?: number}} [options]
+ * @returns {{cibleMs, marge, methode, direction, reussiteEstimee, essaisEstimes, courses}}
  */
-export function calibrer(pbMs, coursesMs) {
+export function calibrer(pbMs, coursesMs, options = {}) {
+  const direction = options.direction || PLUS_BAS;
+  const pas = options.pas || PAS_MS;
+  const haut = direction === PLUS_HAUT;
+
+  // Dans quel sens la cible s'ecarte du record. Toute la generalisation tient
+  // dans ce signe : le reste du calcul est celui d'avant.
+  const sens = haut ? -1 : 1;
+
   const courses = (coursesMs || [])
     .filter(t => Number.isFinite(t) && t > 0)
     .slice(0, FENETRE)
     .sort((a, b) => a - b);
 
+  /** Ce resultat atteint-il la cible ? */
+  const atteint = (t, cible) => haut ? t >= cible : t <= cible;
+
+  /** La cible, ramenee du cote MOINS BON du record, strictement. */
+  const ecarter = (cible, borne) => haut
+    ? Math.min(cible, Math.floor((borne - 1) / pas) * pas)
+    : Math.max(cible, Math.ceil((borne + 1) / pas) * pas);
+
   let marge, methode;
   if (courses.length >= COURSES_MIN) {
-    const q = quantile(courses, REUSSITE_VISEE);
-    marge = borner(q / pbMs - 1, MARGE_MIN, MARGE_MAX);
+    // La valeur realisee une fois sur trois. Le tableau est trie croissant
+    // dans les deux cas : c'est le quantile qu'on prend a l'autre bout.
+    const q = quantile(courses, haut ? 1 - REUSSITE_VISEE : REUSSITE_VISEE);
+    // La marge se lit toujours « de combien la cible est MOINS BONNE que le
+    // record », donc toujours positive, quel que soit le sens.
+    marge = borner(sens * (q / pbMs - 1), MARGE_MIN, MARGE_MAX);
     methode = 'quantile';
   } else {
     marge = MARGE_REPLI;
     methode = 'repli';
   }
 
-  // On arrondit au pas d'affichage, et on garde la cible STRICTEMENT plus
-  // lente que le record : un objectif egal au record exigerait de le battre,
+  // On arrondit au pas d'affichage, et on garde la cible STRICTEMENT moins
+  // bonne que le record : une cible egale au record exigerait de le battre,
   // ce qui n'est pas ce qu'on annonce au joueur.
-  let cibleMs = Math.round(pbMs * (1 + marge) / PAS_MS) * PAS_MS;
-  if (cibleMs <= pbMs) cibleMs = Math.ceil((pbMs + 1) / PAS_MS) * PAS_MS;
+  let cibleMs = Math.round(pbMs * (1 + sens * marge) / pas) * pas;
+  cibleMs = ecarter(cibleMs, pbMs);
 
-  // Le garde-fou du haut : jamais plus lent que la mediane du joueur. Un temps
-  // qu'il realise plus d'une fois sur deux n'est pas un objectif, c'est une
-  // formalite. Ce plafond-la a un sens que « + 5 % » n'a pas : il est exprime
-  // dans les termes du joueur, pas dans un pourcentage choisi d'avance.
+  // Le garde-fou de l'autre cote : jamais moins exigeant que la mediane du
+  // joueur. Un resultat qu'il realise plus d'une fois sur deux n'est pas un
+  // objectif, c'est une formalite. Ce plafond-la a un sens que « + 5 % » n'a
+  // pas : il est exprime dans les termes du joueur.
+  //
+  // Quand les deux garde-fous se contredisent — un joueur dont la mediane VAUT
+  // le record, parce qu'il refait le meme temps a chaque course — c'est celui
+  // du record qui gagne. Ne jamais demander de battre son record est la
+  // promesse ; rester au-dessus de la mediane n'est qu'un reglage.
   if (courses.length >= COURSES_MIN) {
     const mediane = quantile(courses, 0.5);
-    if (cibleMs >= mediane) {
-      cibleMs = Math.floor((mediane - 1) / PAS_MS) * PAS_MS;
-      if (cibleMs <= pbMs) cibleMs = Math.ceil((pbMs + 1) / PAS_MS) * PAS_MS;
+    if (atteint(mediane, cibleMs)) {
+      cibleMs = haut
+        ? Math.ceil((mediane + 1) / pas) * pas
+        : Math.floor((mediane - 1) / pas) * pas;
+      cibleMs = ecarter(cibleMs, pbMs);
     }
   }
 
   let reussiteEstimee = null, essaisEstimes = null;
   if (courses.length >= COURSES_MIN) {
-    const touches = courses.filter(t => t <= cibleMs).length;
+    const touches = courses.filter(t => atteint(t, cibleMs)).length;
     reussiteEstimee = touches / courses.length;
     essaisEstimes = touches ? 1 / reussiteEstimee : null;
   }
 
   return {
     cibleMs,
-    marge: cibleMs / pbMs - 1,
+    marge: sens * (cibleMs / pbMs - 1),
     methode,
+    direction,
     reussiteEstimee,
     essaisEstimes,
     courses: courses.length,
@@ -295,8 +337,12 @@ export async function ensureObjectifTables(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_objectifs_jour
                 ON objectifs (jour, creneau)`),
-    db.prepare(`CREATE INDEX IF NOT EXISTS idx_races_epreuve_joueur
-                ON races (race_key, created_at)`),
+    // L'index dont `joueursAServir` a besoin porte sur `races`, et il est
+    // pose par ensureRaceTable, avec la table. Il etait ici, et le lot entier
+    // echouait sur une base neuve : CREATE INDEX sur une table absente n'est
+    // pas idempotent, meme avec IF NOT EXISTS — c'est l'index qui peut ne pas
+    // exister, pas la table. Les trois routes de l'objectif rendaient alors
+    // 500, sur un premier deploiement comme sur le canal de test.
   ]);
   pretes.add(db);
 }
@@ -400,7 +446,9 @@ export async function creerObjectif(db, joueur, maintenant) {
   const silencieux = !!(recents && recents.length >= SILENCE_APRES
       && recents.every(o => o.tentatives === 0));
 
-  const c = calibrer(joueur.pb, joueur.courses);
+  const c = calibrer(joueur.pb, joueur.courses, {
+    direction: directionDe(EPREUVE), pas: pasDe(EPREUVE),
+  });
   const t = Date.now();
 
   await db.prepare(

@@ -19,13 +19,36 @@
 //
 //   BASE=https://sprinter-leaderboard.benbezi-sprinter.workers.dev \
 //     node tools/objectif-test.mjs                  # contre la production
+//
+// SUR UNE BASE NEUVE, ET C'EST LA QUE CA CASSE. Le worker local accumule les
+// tables au fil des essais : au bout de deux lancements, tout existe, et une
+// route qui ne sait pas creer ce qu'elle lit passe pour correcte. Deux bugs
+// s'y sont deja caches — dont `ensureObjectifTables`, qui posait un index sur
+// `races`, une table dont elle n'est pas proprietaire, et faisait rendre 500 a
+// l'objectif entier sur un premier deploiement comme sur le canal de test.
+//
+// Pour retrouver cet etat, monter le worker AILLEURS, ou wrangler n'a pas
+// d'etat local, et appeler /objectif AVANT toute autre route :
+//
+//   rm -rf /tmp/w && mkdir -p /tmp/w/src
+//   cp worker/wrangler.toml worker/package.json worker/.dev.vars /tmp/w/
+//   ln -s "$PWD/worker/node_modules" /tmp/w/node_modules
+//   cp worker/src/*.js /tmp/w/src/
+//   (cd /tmp/w && npx wrangler dev --local --port 8789)
+//   BASE=http://127.0.0.1:8789 node tools/objectif-test.mjs
 
 import {
   calibrer, quantile, fuseauDe, creneauMaintenant, heureLocale, creerObjectif,
   MARGE_MIN, MARGE_MAX, MARGE_REPLI, COURSES_MIN,
 } from '../worker/src/objectif.js';
+import {
+  PLUS_BAS, PLUS_HAUT, directionDe, estMeilleur, meilleurDe, agregatSql,
+} from '../worker/src/epreuves.js';
+import { estAnonyme } from '../worker/src/records.js';
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
+// La cle d'administration du worker local, telle que .dev.vars la pose.
+const ADMIN = process.env.ADMIN_CLE || 'cle-de-test-locale-uniquement';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -150,6 +173,83 @@ ok('le Nepal (+05:45) tombe juste',
 ok('un fuseau illisible replie sur UTC sans lever',
    heureLocale(new Date('2026-09-05T10:00:00Z'), 'Pas/Un/Fuseau').heure === 10);
 
+titre('UNE EPREUVE AU PLUS HAUT SE CALIBRE DANS L AUTRE SENS');
+
+// Aucune epreuve du jeu ne se gagne encore au plus haut. On la teste quand
+// meme, et c'est le seul moment ou on peut le faire honnetement : le jour ou
+// elle existera, le harnais dira si le calcul tenait — plutot que le joueur.
+//
+// Le piege du sens inverse n'est pas qu'il plante, c'est qu'il ne plante pas.
+// Un MIN() sur une distance couronne le plus mauvais, et une cible calculee a
+// l'endroit sur une epreuve a l'envers est MEILLEURE que le record : elle
+// exige de le battre, en se presentant comme atteignable.
+const haut = { direction: PLUS_HAUT, pas: 10 };
+
+const profilsHaut = [
+  ['aucune course',        8500, []],
+  ['une seule course',     8500, [8400]],
+  ['metronome',            8500, Array.from({ length: 30 }, (_, i) => 8500 - (i % 5) * 10)],
+  ['dents de scie',        8500, Array.from({ length: 30 }, (_, i) => 8500 - (i % 30) * 33)],
+  ['record par chance',    8500, Array.from({ length: 30 }, () => 7300 - Math.round(Math.random() * 400))],
+];
+
+for (const [nom, pb, courses] of profilsHaut) {
+  const c = calibrer(pb, courses, haut);
+  ok(`${nom} : cible ${c.cibleMs} < record ${pb}`, c.cibleMs < pb,
+     `cible ${c.cibleMs}, record ${pb}`);
+  ok(`   ...et la marge reste positive et bornee`,
+     c.marge > 0 && c.marge <= MARGE_MAX + 1e-9,
+     `marge ${(c.marge * 100).toFixed(2)} %`);
+}
+
+for (const [nom, pb, courses] of profilsHaut) {
+  if (courses.length < COURSES_MIN) continue;
+  const mediane = quantile([...courses].sort((a, b) => a - b), 0.5);
+  const c = calibrer(pb, courses, haut);
+  ok(`${nom} : cible ${c.cibleMs} > mediane ${mediane} (plus exigeante)`,
+     c.cibleMs > mediane);
+}
+
+let violationsHaut = 0;
+for (let i = 0; i < 1000; i++) {
+  const pb = 7000 + Math.round(Math.random() * 6000);
+  const n = Math.round(Math.random() * 40);
+  const dispersion = Math.random() * 0.25;
+  const courses = Array.from({ length: n },
+    () => Math.round(pb * (1 - Math.random() * dispersion)));
+  const c = calibrer(pb, courses, haut);
+  if (!(c.cibleMs < pb)) violationsHaut++;
+}
+ok('mille profils au plus haut, aucune cible n atteint le record',
+   violationsHaut === 0, `${violationsHaut} exception(s)`);
+
+// Le meme joueur, la meme regularite, les deux sens : la marge doit etre la
+// meme des deux cotes. Si elle ne l'est pas, un des deux sens est un accident.
+const regulier = Array.from({ length: 30 }, (_, i) => (i % 17) * 10);
+const mBas  = calibrer(8500, regulier.map(d => 8500 + d)).marge;
+const mHaut = calibrer(8500, regulier.map(d => 8500 - d), haut).marge;
+ok(`marge identique dans les deux sens (${(mBas * 100).toFixed(2)} % / ${(mHaut * 100).toFixed(2)} %)`,
+   Math.abs(mBas - mHaut) < 0.002);
+
+titre('LE SENS EST DECLARE, PAS DEDUIT');
+
+ok('le 100 m se gagne au plus bas', directionDe('100') === PLUS_BAS);
+ok('les trois epreuves du jeu aussi',
+   ['100', '200', '400'].every(c => directionDe(c) === PLUS_BAS));
+ok('au plus bas, 8,40 s bat 8,50 s', estMeilleur(PLUS_BAS, 8400, 8500));
+ok('au plus haut, c est l inverse', estMeilleur(PLUS_HAUT, 8500, 8400));
+ok('egaler n est pas battre, au plus bas', !estMeilleur(PLUS_BAS, 8500, 8500));
+ok('egaler n est pas battre, au plus haut', !estMeilleur(PLUS_HAUT, 8500, 8500));
+ok('sans reference, tout resultat est le meilleur',
+   estMeilleur(PLUS_BAS, 8500, null));
+ok('le meilleur d une liste, au plus bas',
+   meilleurDe(PLUS_BAS, [8600, 8400, 8500]) === 8400);
+ok('le meilleur d une liste, au plus haut',
+   meilleurDe(PLUS_HAUT, [8600, 8400, 8500]) === 8600);
+ok('une liste vide n a pas de meilleur', meilleurDe(PLUS_BAS, []) === null);
+ok('SQL agrege dans le bon sens', agregatSql(PLUS_BAS) === 'MIN'
+   && agregatSql(PLUS_HAUT) === 'MAX');
+
 titre('LE SILENCE NE SE REFERME PAS SUR LE JOUEUR');
 
 // La regle du silence a d'abord refuse la CREATION de l'objectif, et c'etait
@@ -262,6 +362,138 @@ if (!joignable) {
   ok('...et rend null quand aucun objectif n est ouvert',
      tentative.corps.objectif === null || tentative.statut === 429,
      JSON.stringify(tentative.corps).slice(0, 80));
+
+  titre('LE RECORD PERSONNEL SUIT LES COURSES');
+
+  const inconnu2 = await lire('/record?nom=' + encodeURIComponent('ZZ-' + Date.now()));
+  ok('/record existe', inconnu2.statut !== 404, `statut ${inconnu2.statut}`);
+  ok('...et rend null pour qui n a jamais couru',
+     inconnu2.corps.record_ms === null, JSON.stringify(inconnu2.corps).slice(0, 90));
+  ok('...en annoncant le sens de l epreuve',
+     inconnu2.corps.direction === 'plus_bas', String(inconnu2.corps.direction));
+  ok('/record refuse une epreuve inconnue',
+     (await lire('/record?nom=zoe&race=800')).statut === 400);
+  ok('/record refuse un nom vide', (await lire('/record')).statut === 400);
+}
+
+/* ======================================================= record et courses */
+
+// Ce qui suit ECRIT, donc uniquement en local : on ne fabrique pas de courses
+// dans la base de production pour verifier une regle.
+if (joignable && !B.includes('workers.dev')) {
+  const lire = async u => (await fetch(B + u)).json();
+  const poster = async (u, b, h = {}) => {
+    const r = await fetch(B + u, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...h },
+      body: JSON.stringify(b),
+    });
+    return { statut: r.status, corps: await r.json().catch(() => ({})) };
+  };
+
+  const marque = Math.random().toString(36).slice(2, 7);
+  const nom = 'REC' + marque;
+  const appareil = 'dev-rec-' + marque;
+  const course = ms => poster('/race', {
+    device_id: appareil, name: nom, race_key: '100',
+    time_ms: ms, mode: 'oneshot', level_idx: 4,
+  });
+
+  const premiere = await course(9200);
+  ok('la premiere course pose le record', premiere.corps.record?.ms === 9200,
+     JSON.stringify(premiere.corps));
+  ok('...et n avait rien a battre', premiere.corps.record?.ancien_ms === null);
+
+  const pire = await course(9800);
+  ok('une course plus lente ne touche pas au record', pire.corps.record === null);
+
+  const mieux = await course(8700);
+  ok('une course plus rapide le remplace', mieux.corps.record?.ms === 8700);
+  ok('...en disant ce qu elle a battu', mieux.corps.record?.ancien_ms === 9200);
+
+  const egale = await course(8700);
+  ok('egaler son record n est pas le battre', egale.corps.record === null,
+     'sinon chaque egalite ferait clignoter « NOUVEAU RECORD »');
+
+  const vu = await lire('/record?nom=' + encodeURIComponent(nom));
+  ok('/record rend le record du joueur', vu.record_ms === 8700, JSON.stringify(vu));
+  ok('...et compte ses courses', vu.courses === 4, `${vu.courses} courses`);
+  ok('...et sa place', typeof vu.rang === 'number' && vu.rang >= 1, `rang ${vu.rang}`);
+
+  // Le meme joueur sur un second appareil : un seul record, pas deux.
+  await poster('/race', {
+    device_id: 'dev-rec2-' + marque, name: nom, race_key: '100',
+    time_ms: 8400, mode: 'oneshot', level_idx: 4,
+  });
+  const deuxAppareils = await lire('/record?nom=' + encodeURIComponent(nom));
+  ok('deux appareils, un seul record', deuxAppareils.record_ms === 8400,
+     `record ${deuxAppareils.record_ms}`);
+
+  titre('UNE COURSE ANONYME N A PAS DE RECORD');
+
+  // Le piege que ce harnais existe pour tenir ferme. `/race` enregistre sous
+  // « Anonyme » quand le joueur n'a pas de nom, et le classement regroupe PAR
+  // NOM. Creer une ligne pour ces courses ferait entrer « Anonyme » au tableau
+  // comme un seul joueur, avec le meilleur temps de tous les anonymes — mesure
+  // sur la production du 6 septembre 2026 : 301 appareils, 1 399 courses,
+  // meilleur 8,13 s, soit la premiere place devant le record reel de 8,25 s.
+  ok('« Anonyme » est reconnu comme une absence de nom', estAnonyme('Anonyme'));
+  ok('...quelle que soit la casse', estAnonyme('  anonyme '));
+  ok('...comme une chaine vide', estAnonyme('') && estAnonyme(null));
+  ok('...mais un vrai nom n en est pas une', !estAnonyme('Zoe'));
+
+  const fantomeAnonyme = 'dev-anon-' + Math.random().toString(36).slice(2, 7);
+  const anon = await poster('/race', {
+    device_id: fantomeAnonyme, name: 'Anonyme', race_key: '100',
+    time_ms: 7900, mode: 'oneshot', level_idx: 4,
+  });
+  ok('une course anonyme tres rapide ne pose aucun record',
+     anon.corps.record === null, JSON.stringify(anon.corps));
+
+  const tableau = await lire('/leaderboard?race=100');
+  ok('...et « Anonyme » n apparait pas au classement',
+     !(tableau.entries || []).some(e => estAnonyme(e.name)),
+     (tableau.entries || []).filter(e => estAnonyme(e.name)).map(e => e.name).join(', '));
+
+  const recalculAnon = await poster('/records/recalculer', {},
+    { 'X-Sprinter-Admin': ADMIN });
+  ok('le recalcul les compte sans les inscrire',
+     recalculAnon.corps.anonymes > 0 && recalculAnon.corps.crees === 0,
+     JSON.stringify(recalculAnon.corps).slice(0, 100));
+
+  const tableauApres = await lire('/leaderboard?race=100');
+  ok('...et le classement ne contient toujours pas « Anonyme »',
+     !(tableauApres.entries || []).some(e => estAnonyme(e.name)));
+
+  titre('LE RECALCUL SE REJOUE SANS RIEN CASSER');
+
+  const sansCle = await poster('/records/recalculer', {});
+  ok('le recalcul refuse sans cle d administration', sansCle.statut === 403,
+     `statut ${sansCle.statut}`);
+
+  const entete = { 'X-Sprinter-Admin': ADMIN };
+  const un = await poster('/records/recalculer', {}, entete);
+  ok('le recalcul repond', un.statut === 200, JSON.stringify(un.corps).slice(0, 90));
+
+  const deux = await poster('/records/recalculer', {}, entete);
+  ok('...et un second passage ne corrige plus rien',
+     deux.corps.corriges === 0 && deux.corps.crees === 0,
+     JSON.stringify(deux.corps).slice(0, 90));
+
+  const apres = await lire('/record?nom=' + encodeURIComponent(nom));
+  ok('...sans avoir degrade le record',
+     apres.record_ms === deuxAppareils.record_ms,
+     `${deuxAppareils.record_ms} puis ${apres.record_ms}`);
+
+  // Le cas qui a motive tout ceci : un record perime en base, un historique
+  // qui porte mieux. Le recalcul doit le rattraper.
+  await poster('/race', {
+    device_id: appareil, name: nom, race_key: '100',
+    time_ms: 8100, mode: 'oneshot', level_idx: 4,
+  });
+  const trois = await poster('/records/recalculer', {}, entete);
+  ok('un historique meilleur que le record est rattrape',
+     (await lire('/record?nom=' + encodeURIComponent(nom))).record_ms === 8100,
+     JSON.stringify(trois.corps).slice(0, 90));
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');

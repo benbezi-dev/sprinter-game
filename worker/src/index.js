@@ -28,6 +28,9 @@ import {
   classementRelais, enregistrerRelais, equipe as equipeRelais,
   fantomesRelais, fantomeRelais,
 } from './relais.js';
+import {
+  noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
+} from './records.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -101,7 +104,10 @@ const MAX_TRACE_PTS = 1200;
 const TOP_N = 500;
 // Cumul sentinelle : marque une ligne nee d'un one shot ou d'un defi, sans
 // parcours complet derriere. Doit rester identique cote jeu (NO_RUN_MS).
-const NO_RUN_MS = 1200000;
+// La valeur vit dans records.js, qui en a besoin pour creer une ligne ne
+// portant qu'un record : deux exemplaires du meme nombre finissent toujours
+// par diverger d'un chiffre.
+const NO_RUN_MS = SANS_PARCOURS_MS;
 
 function cors(resp) {
   resp.headers.set('Access-Control-Allow-Origin', '*');
@@ -390,6 +396,10 @@ async function ensureRaceTable(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_name ON races(name_key, race_key, created_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_device ON races(device_id, race_key, created_at)`),
+    // Celui de l'Objectif du jour : `joueursAServir` decoupe une fenetre de
+    // trente courses par joueur avec ROW_NUMBER, et lit donc la table par
+    // (epreuve, date). L'index vit ici, avec la table qu'il indexe.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_races_epreuve_joueur ON races(race_key, created_at)`),
   ]);
   racesReady.add(db);
 }
@@ -814,6 +824,38 @@ export default {
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {
       const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
       return json({ classement: await classementObjectifs(env.DB, n) });
+    }
+
+    /* -----------------------------------------------------------------
+       LE RECORD PERSONNEL
+       -----------------------------------------------------------------
+       Par le NOM, tous appareils confondus — c'est la difference avec
+       `/rank`, qui repond pour un appareil. Un joueur qui a un telephone et
+       un ordinateur a un record, pas deux, et c'est celui-la que le jeu
+       affiche et que l'objectif calibre.
+    ----------------------------------------------------------------- */
+
+    if (url.pathname === '/record' && request.method === 'GET') {
+      const nom = (url.searchParams.get('nom') || '').trim();
+      const race = url.searchParams.get('race') || '100';
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
+      await ensureScoreGhost(env.DB);
+      await ensureRaceTable(env.DB);
+      return json(await recordDuJoueur(env.DB, nom.toLowerCase(), race));
+    }
+
+    // Repare les records qui ont deja derive, en relisant l'historique.
+    //
+    // Sous cle d'administration comme /duels/recalculer, et pour la meme
+    // raison : la route reecrit une colonne que lit le classement de tout le
+    // monde. Elle se rejoue sans dommage — elle ne remplace jamais un record
+    // par une valeur moins bonne — mais cela n'en fait pas une route publique.
+    if (url.pathname === '/records/recalculer' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      await ensureScoreGhost(env.DB);
+      await ensureRaceTable(env.DB);
+      return json(await recalculerRecords(env.DB));
     }
 
     // ------------------------------------------------------- classement
@@ -1999,7 +2041,24 @@ export default {
         `DELETE FROM races WHERE device_id = ? AND id NOT IN (
            SELECT id FROM races WHERE device_id = ? ORDER BY created_at DESC LIMIT ?)`
       ).bind(device_id, device_id, HIST_PER_DEVICE).run();
-      return json({ ok: true });
+
+      // ...et le record suit, ICI plutot qu'au bon vouloir du jeu.
+      //
+      // C'est la fuite qui a fait deriver les deux tables : `/submit` n'ecrit
+      // le record que quand le jeu decide de l'envoyer, et la carriere ne
+      // l'envoie qu'au bout de six etapes. Une course enregistree qui bat le
+      // record et ne le met pas a jour, c'est un classement faux et un
+      // Objectif du jour calibre sur un chrono que le joueur a deja battu.
+      //
+      // La sonnerie ne peut pas defaire la course : elle est deja ecrite.
+      let record = null;
+      try {
+        const r = await noterRecord(env.DB, {
+          deviceId: device_id, epreuve: race_key, nom: cleaned, valeur: t,
+        });
+        if (r.record) record = { ancien_ms: r.ancien, ms: r.valeur };
+      } catch (e) { /* le record se rattrapera au recalcul */ }
+      return json({ ok: true, record });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
