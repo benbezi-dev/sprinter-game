@@ -60,6 +60,29 @@ export const COMPTE_JEU = 'sprintergame';
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
 /**
+ * Le code, tel qu'il arrive vraiment.
+ *
+ * Un code n'est fait que de [A-Z0-9] : ni `makeCode` ni `tirerJeton` ne tirent
+ * autre chose. Tout le reste de ce qui atterrit dans ce champ est du
+ * transport, pas du code — l'espace que le clavier ajoute apres une correction
+ * automatique, le tiret ou l'espace qu'on met en recopiant six caracteres a la
+ * main, le caractere de largeur nulle qui suit un copier-coller depuis une
+ * conversation. Aucun de ces trois-la ne fait partie du code, et aucun ne
+ * devrait valoir « code incorrect » a quelqu'un qui tient le bon.
+ *
+ * `trim()` ne suffisait pas : il ne connait ni le tiret, ni l'espace du
+ * milieu, ni U+200B. On enleve donc tout ce qu'un code ne peut pas contenir.
+ *
+ * Et on ne nettoie ainsi QUE le champ du code. Le champ du nom garde ce qu'on
+ * y met : un pseudo a le droit de porter des espaces, et le reduire de la meme
+ * facon ferait ressembler « Le K7X2QP » a un code — voir estUnCode, qui pour
+ * cette raison ne regarde que des chaines deja propres.
+ */
+export function normaliserCode(texte) {
+  return String(texte || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+/**
  * La duree de vie d'un jeton de transfert.
  *
  * Dix minutes : le temps de sortir son telephone et de viser un QR code, pas
@@ -175,7 +198,7 @@ export async function ouvrirTransfert(db, nameKey, deviceId) {
  */
 export async function utiliserTransfert(db, jeton, deviceId) {
   await ensureIdentiteTables(db);
-  const j = String(jeton || '').trim().toUpperCase();
+  const j = normaliserCode(jeton);
   if (!/^[A-Z0-9]{6,12}$/.test(j)) return { erreur: 'inconnu' };
 
   const now = Date.now();

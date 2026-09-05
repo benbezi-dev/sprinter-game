@@ -2,10 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy,
+         Copy } from 'lucide-react';
 import { getSavedName, saveName, NOM_CHANGE } from '@/game/leaderboard';
-import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInstagram,
-         nations, paysDe, poserPays, type Nation } from '@/game/identity';
+import { claimName, linkDevice, savedCode, normaliserCode, lierInstagram, instagramDe,
+         lienInstagram, nations, paysDe, poserPays, type Nation } from '@/game/identity';
 import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
 import { Recuperation } from './Recuperation';
@@ -130,6 +131,31 @@ export function PanneauIdentite({
   const [nomDuCode, setNomDuCode] = useState('');
   const [lien, setLien] = useState<'' | 'envoi' | 'lie' | 'mauvais' | 'inconnu' | 'erreur'>('');
   const [perdu, setPerdu] = useState(false);
+  /* Le nom qu'ouvre le code presente, quand ce n'est pas celui qu'on demande.
+
+     Un code appartient a UN nom, et se rebaptiser en tire un nouveau. Le
+     joueur qui a change de nom garde donc en main le code de son nom d'avant,
+     le presente au nouveau, et s'entend repondre « code incorrect » sans que
+     rien ne lui dise pourquoi — alors que ce code ouvre encore quelque chose.
+     Le serveur nous dit quoi ; on le lui propose d'un geste. */
+  const [codeOuvre, setCodeOuvre] = useState('');
+
+  /* LE CODE DE RECUPERATION, VISIBLE.
+
+     Il ne l'etait pas. Il s'affichait a la reservation puis la fenetre se
+     refermait au bout d'une seconde — et rien, nulle part, ne le remontrait :
+     rouvrir ce panneau ne l'affiche pas, et MES COURSES ne sait que relire
+     celui garde par le navigateur. Un joueur avait donc une seconde pour noter
+     ce qui lui rendra son nom, apres quoi il ne dependait plus que d'un
+     localStorage — celui-la meme qui s'efface, expire sous Safari, et a deja
+     disparu pour tout le monde le jour du changement d'adresse.
+
+     `voirCode` le met a l'ecran, et l'y laisse tant qu'on ne l'a pas ferme. */
+  const [voirCode, setVoirCode] = useState(false);
+  const [copieCode, setCopieCode] = useState(false);
+  /* Le nom REELLEMENT pose sur cet appareil. Distinct de la saisie : c'est lui
+     qui dit si l'on a le droit de redemander son code. */
+  const [nomPose, setNomPose] = useState(getSavedName());
   const [insta, setInsta] = useState('');
   // Ce qui est reellement lie, distinct de ce qu'on tape : sans cette
   // distinction, le bouton ne saurait pas s'il doit lier ou delier.
@@ -237,36 +263,80 @@ export function PanneauIdentite({
     else setInstaEtat('bad');
   };
 
+  /**
+   * Le nom vient d'etre refuse : il est a quelqu'un d'autre.
+   *
+   * On REND a l'appareil le nom qu'il portait avant l'essai. Sans cela, la
+   * saisie restait enregistree : l'appareil se mettait a jouer sous un nom
+   * qu'il ne possede pas — chaque chrono refuse par le serveur — et ce panneau
+   * presentait au joueur le drapeau et l'Instagram du VRAI proprietaire comme
+   * s'ils etaient les siens, bouton DELIER compris, qui ne pouvait que
+   * repondre « ce nom ne t appartient pas ».
+   */
+  const nomRefuse = (avant?: string) => {
+    // `avant` absent : il n'y a pas de nom d'avant a rendre — c'est le nom
+    // deja pose sur l'appareil qui vient d'etre refuse. On ne l'efface pas
+    // pour autant, sans quoi le joueur perdrait sa saisie en voulant
+    // simplement revoir son code ; on ouvre le champ du code, qui est ce
+    // dont il a besoin.
+    if (avant !== undefined) { saveName(avant); setNomPose(avant); }
+    setEtat('pris');
+    setVoirCode(false);
+    // Ce que l'on montrait de ce nom n'est pas a nous. On l'efface plutot que
+    // de le laisser passer pour notre profil, et on remet celui du nom rendu
+    // a l'appareil s'il en avait un.
+    setLie(''); setInsta(''); setInstaEtat('repos');
+    setPaysFige(''); setPays(''); setPaysEtat('repos');
+    const rendu = (avant || '').trim();
+    if (rendu) {
+      instagramDe(rendu).then(v => { if (v) { setLie(v); setInsta(v); } });
+      paysDe(rendu).then(({ pays: q, definitif }) => {
+        if (definitif) { setPays(q || ''); setPaysFige(q || ''); }
+      });
+    }
+  };
+
   const valider = async () => {
     const n = saisie.trim();
     if (n.length < 2) return;
     // Le nom d'avant, pour pouvoir revenir dessus : ce qu'on vient de taper
-    // n'est pas toujours un nom (voir `est_un_code` plus bas).
+    // n'est pas toujours un nom (voir `est_un_code` plus bas), et n'est pas
+    // toujours libre (voir `pris`).
     const avant = getSavedName();
     // On enregistre d'abord : le nom doit servir meme si le reseau est muet.
-    saveName(n);
-    setEtat('envoi'); setLien(''); setPerdu(false);
+    saveName(n); setNomPose(n);
+    setEtat('envoi'); setLien(''); setCodeOuvre(''); setPerdu(false);
     // Puis on tente de le reserver, ce qui donne le code de recuperation et
     // permet de retrouver ses courses sur un autre telephone.
     const r = await claimName(n);
     if (r.etat === 'reserve') {
-      setCode(r.code); setEtat('ok');
-      // A l'accueil le nom etait la seule raison d'ouvrir : la fenetre se
-      // referme. A la bienvenue, on passe au drapeau — mais pas avant d'avoir
-      // laisse voir le code de recuperation, qui ne se represente jamais.
-      if (bienvenue) setTimeout(avancer, 2600);
-      else setTimeout(() => onFermer(), 1200);
+      setCode(r.code); setEtat('ok'); setVoirCode(true);
+      /* UN CODE NEUF NE SE REFERME PAS TOUT SEUL.
+
+         Il n'existe qu'ici, une seule fois : le reste du jeu ne sait que
+         relire celui garde par le navigateur, et c'est justement ce navigateur
+         qui oublie. Fermer la fenetre une seconde apres l'avoir affiche, c'est
+         le montrer a personne — et c'est la raison pour laquelle des joueurs
+         se presentent ensuite avec un code qui n'est pas le leur.
+
+         Quand le code etait deja connu (`deja` : ce nom est a nous depuis un
+         moment), il n'y a rien de neuf a noter et l'enchainement d'avant
+         reprend son cours. */
+      if (r.deja) {
+        if (bienvenue) setTimeout(avancer, 1400);
+        else setTimeout(() => onFermer(), 1200);
+      }
     }
-    else if (r.etat === 'pris') setEtat('pris');
+    else if (r.etat === 'pris') nomRefuse(avant);
     else if (r.etat === 'est_un_code') {
       /* Le joueur a colle son code dans le champ du nom. Il n'a pas tort : il
          a perdu son nom, son code est ce qu'il lui reste, et c'est le seul
          champ visible. On remet chaque chose a sa place — le vrai nom dans le
          champ du nom, le code dans le sien — plutot que de garder ce code
          enregistre comme nom sur l'appareil. */
-      saveName(avant);
+      saveName(avant); setNomPose(avant);
       setSaisie(r.nom); setNomDuCode(r.nom);
-      setAutreCode(n.toUpperCase());
+      setAutreCode(normaliserCode(n));
       setEtat('est_un_code');
     }
     /* Le reseau muet ne se raconte plus comme une reussite. L'ecran disait
@@ -277,26 +347,66 @@ export function PanneauIdentite({
   };
 
   /**
+   * Revoir son code de recuperation.
+   *
+   * On le redemande au serveur plutot que de se contenter de celui garde par
+   * le navigateur : quand ce dernier l'a oublie — donnees effacees, peremption
+   * de Safari, changement d'adresse du jeu — mais que l'appareil est encore
+   * relie au nom, le serveur le rend quand meme. C'est exactement le cas qui
+   * amenait des joueurs a taper un code au hasard dans le champ de liaison.
+   *
+   * Reserve au nom REELLEMENT pose sur cet appareil : demander le code d'un
+   * nom qu'on vient de taper reviendrait a le reserver au passage.
+   */
+  const revoirCode = async () => {
+    const n = nomPose.trim();
+    if (!n) return;
+    if (code) { setVoirCode(true); return; }
+    setEtat('envoi');
+    const r = await claimName(n);
+    if (r.etat === 'reserve') { setCode(r.code); setVoirCode(true); setEtat('repos'); }
+    else if (r.etat === 'pris') nomRefuse();
+    else setEtat('reseau');
+  };
+
+  const copierCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopieCode(true); setTimeout(() => setCopieCode(false), 1800);
+    } catch { /* presse-papiers refuse : le code reste lisible en grand */ }
+  };
+
+  /**
    * Relier cet appareil au nom, code a l'appui.
    *
    * C'est la seule preuve d'appartenance que le jeu connaisse : pas de mot de
    * passe, pas d'e-mail. Sans elle il reste la demande de recuperation, plus
    * bas, qu'un humain tranche.
    */
-  const relier = async () => {
-    const n = saisie.trim();
+  const relier = async (nomVise?: string) => {
+    const n = (nomVise ?? saisie).trim();
     if (!n || !autreCode.trim()) return;
-    setLien('envoi');
+    setLien('envoi'); setCodeOuvre('');
     const r = await linkDevice(n, autreCode);
-    if (r === 'lie') {
-      saveName(n);
-      setCode(autreCode.trim().toUpperCase());
-      setLien('lie'); setEtat('ok');
+    if (r.etat === 'lie') {
+      saveName(n); setNomPose(n); setSaisie(n);
+      setCode(normaliserCode(autreCode));
+      setLien('lie'); setEtat('ok'); setVoirCode(true);
       /* On ne referme pas tout seul, contrairement a un simple enregistrement :
          ce qui s'affiche ici est le code retrouve, et il est a noter. */
+      // Le nom est a nous pour de bon : son drapeau et son Instagram sont donc
+      // bien les notres, et le panneau peut les reprendre.
+      instagramDe(n).then(v => { setLie(v || ''); setInsta(v || ''); });
+      paysDe(n).then(({ pays: q, definitif }) => {
+        if (definitif) { setPays(q || ''); setPaysFige(q || ''); }
+      });
     }
-    else if (r === 'mauvais_code') setLien('mauvais');
-    else if (r === 'inconnu') setLien('inconnu');
+    else if (r.etat === 'mauvais_code') {
+      setLien('mauvais');
+      // Ce code n'ouvre pas ce nom-la — mais il en ouvre peut-etre un autre.
+      setCodeOuvre(r.autreNom && r.autreNom !== n ? r.autreNom : '');
+    }
+    else if (r.etat === 'inconnu') setLien('inconnu');
     else setLien('erreur');
   };
 
@@ -400,7 +510,13 @@ export function PanneauIdentite({
                   <div className="flex gap-2">
                     <input
                       value={autreCode}
-                      onChange={e => { setAutreCode(e.target.value.toUpperCase()); setLien(''); }}
+                      /* On nettoie a la frappe : ce que le champ montre est
+                         exactement ce qui sera compare, espace du milieu et
+                         tiret compris. Voir normaliserCode. */
+                      onChange={e => {
+                        setAutreCode(normaliserCode(e.target.value));
+                        setLien(''); setCodeOuvre('');
+                      }}
                       onKeyDown={e => { if (e.key === 'Enter') relier(); }}
                       placeholder={N.t('id_code_title')}
                       maxLength={10}
@@ -411,7 +527,7 @@ export function PanneauIdentite({
                                  focus:outline-none focus:border-primary/50"
                     />
                     <button
-                      onClick={relier}
+                      onClick={() => relier()}
                       disabled={!autreCode.trim() || lien === 'envoi'}
                       className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] text-background
                                  bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none
@@ -431,6 +547,28 @@ export function PanneauIdentite({
                 {lien === 'mauvais' && (
                   <span className="text-[10px] text-destructive text-center">{N.t('id_bad_code')}</span>
                 )}
+                {/* Ce code n'ouvre pas ce nom-la, mais il en ouvre un autre.
+
+                    C'est le « code incorrect » de bonne foi le plus frequent :
+                    un code appartient a UN nom, se rebaptiser en tire un
+                    nouveau, et le joueur presente au nom d'aujourd'hui le code
+                    de celui d'hier. Plutot que de le laisser croire son code
+                    mort, on lui dit lequel il ouvre — et on l'y relie d'un
+                    geste. */}
+                {lien === 'mauvais' && codeOuvre && (
+                  <>
+                    <span className="text-[10px] text-muted-foreground text-center leading-snug">
+                      {N.t('id_code_autre', { n: codeOuvre })}
+                    </span>
+                    <button
+                      onClick={() => relier(codeOuvre)}
+                      className="self-center px-4 py-2 rounded-xl font-bold tracking-wide text-[10px]
+                                 text-background bg-primary hover:bg-primary/90 transition-colors"
+                    >
+                      {N.t('id_is_code_do', { n: codeOuvre })}
+                    </button>
+                  </>
+                )}
                 {lien === 'inconnu' && (
                   <span className="text-[10px] text-destructive text-center">{N.t('id_unknown')}</span>
                 )}
@@ -449,8 +587,8 @@ export function PanneauIdentite({
                   <Recuperation
                     nom={saisie.trim()}
                     surRetour={(c, n) => {
-                      setCode(c); setSaisie(n);
-                      setPerdu(false); setEtat('ok'); setLien('');
+                      setCode(c); setSaisie(n); setNomPose(n);
+                      setPerdu(false); setEtat('ok'); setLien(''); setVoirCode(true);
                     }}
                   />
                 ) : (
@@ -470,14 +608,62 @@ export function PanneauIdentite({
             {etat === 'reseau' && (
               <p className="text-xs text-destructive text-center">{N.t('score_save_fail')}</p>
             )}
-            {etat === 'ok' && code && (
-              <div className="rounded-xl border border-primary/30 bg-primary/[0.07] px-3 py-2 flex flex-col gap-1">
+
+            {/* LE CODE DE RECUPERATION.
+
+                Il reste a l'ecran jusqu'a ce qu'on le ferme. Il s'affichait
+                une seconde avant que la fenetre ne se referme d'elle-meme, et
+                rien ne le remontrait jamais : le joueur qui ne l'avait pas note
+                dans cette seconde-la ne dependait plus que du navigateur, et
+                revenait des mois plus tard taper au hasard dans le champ de
+                liaison. C'est ce que « les codes de recuperation ne marchent
+                pas » veut dire, la plupart du temps. */}
+            {voirCode && code && (
+              <div className="rounded-xl border border-primary/30 bg-primary/[0.07] px-3 py-2.5 flex flex-col gap-1.5">
                 <span className="text-[10px] font-bold tracking-widest text-primary flex items-center gap-1.5">
                   <KeyRound className="w-3 h-3" />{N.t('name_code')}
                 </span>
                 <span className="font-mono font-black tracking-[0.25em] text-primary text-lg">{code}</span>
                 <span className="text-[9px] text-muted-foreground leading-snug">{N.t('name_code_why')}</span>
+                <div className="flex items-center gap-3 pt-0.5">
+                  <button
+                    onClick={copierCode}
+                    className="text-[10px] font-bold tracking-widest text-muted-foreground
+                               hover:text-primary transition-colors flex items-center gap-1.5"
+                  >
+                    {copieCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copieCode ? N.t('code_copied') : N.t('challenge_copy_code')}
+                  </button>
+                  {/* Fermer le code est un geste, jamais un delai. A la
+                      bienvenue il fait passer au drapeau ; a l'accueil il
+                      referme la fenetre, ce que le minuteur faisait avant. */}
+                  <button
+                    onClick={() => { setVoirCode(false); if (etat === 'ok') { if (bienvenue) avancer(); else onFermer(); } }}
+                    className="ml-auto text-[10px] font-bold tracking-widest text-primary
+                               hover:text-primary/80 transition-colors"
+                  >
+                    {N.t('name_code_noted')}
+                  </button>
+                </div>
               </div>
+            )}
+
+            {/* REVOIR SON CODE, a tout moment.
+
+                Il n'existait aucun chemin vers lui : rouvrir ce panneau ne
+                l'affichait pas, et MES COURSES ne sait relire que celui garde
+                par le navigateur — celui-la meme qui l'oublie. On le redemande
+                donc au serveur, qui le rend a un appareil encore relie. */}
+            {!voirCode && !bienvenue && nomPose.trim() && etat !== 'pris' && etat !== 'est_un_code' && (
+              <button
+                onClick={revoirCode}
+                disabled={etat === 'envoi'}
+                className="self-start text-[10px] font-bold tracking-widest text-muted-foreground
+                           hover:text-primary transition-colors flex items-center gap-1.5
+                           disabled:opacity-40 disabled:pointer-events-none"
+              >
+                <KeyRound className="w-3 h-3" /> {N.t('id_show')}
+              </button>
             )}
           </div>
         )}
@@ -694,7 +880,7 @@ export function PanneauIdentite({
              donc la fenetre entiere — c'est aussi ce que le mot promet — au
              lieu d'avancer dans le vide. Quelqu'un qui a deja un nom, lui,
              passe simplement au pas suivant. */
-          const nomPose = !!getSavedName().trim();
+          const aUnNom = !!nomPose.trim();
           return (
           <div className="flex flex-col gap-1 pt-1">
             <button
@@ -716,13 +902,13 @@ export function PanneauIdentite({
             {!fait && (
               <button
                 onClick={pas === DERNIER ? () => onFermer(true)
-                       : (pas === 0 && !nomPose) ? () => onFermer(false)
+                       : (pas === 0 && !aUnNom) ? () => onFermer(false)
                        : avancer}
                 className="w-full py-2 rounded-xl font-bold tracking-widest text-xs
                            text-muted-foreground hover:text-foreground transition-colors"
               >
                 {N.t(pas === DERNIER ? 'bienvenue_go'
-                   : pas === 0 ? (nomPose ? 'bv_passer' : 'bienvenue_plus')
+                   : pas === 0 ? (aUnNom ? 'bv_passer' : 'bienvenue_plus')
                    : 'bv_passer')}
               </button>
             )}

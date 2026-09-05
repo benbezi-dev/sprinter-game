@@ -40,7 +40,7 @@ import {
 } from './direct-invitations.js';
 import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
-  listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
+  listerRecuperations, trancherRecuperation, estUnCode, normaliserCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
 
@@ -1815,13 +1815,32 @@ export default {
       const { device_id, name, code } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const key = cleanName(name).trim().toLowerCase();
-      const donne = String(code || '').trim().toUpperCase();
+      // On enleve du code ce qu'un code ne peut pas contenir — espace du
+      // milieu, tiret, caractere invisible colle avec. `trim().toUpperCase()`
+      // laissait passer les trois, et le porteur du bon code s'entendait
+      // repondre « code incorrect ». Voir normaliserCode.
+      const donne = normaliserCode(code);
       if (!key || !donne) return json({ error: 'parametres invalides' }, 400);
       await ensurePlayerTables(env.DB);
       const p = await env.DB.prepare(
         `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
       if (!p) return json({ ok: false, inconnu: true });
-      if (p.code !== donne) return json({ ok: false, mauvais_code: true });
+      if (p.code !== donne) {
+        // Le code ne va pas avec CE nom — mais il va peut-etre avec un autre.
+        //
+        // C'est le cas le plus frequent des « code incorrect » de bonne foi :
+        // un code appartient a UN nom, et changer de nom en tire un nouveau.
+        // Le joueur qui s'est rebaptise garde donc en main le code de son nom
+        // d'avant, le presente au nouveau, et se fait renvoyer sans savoir
+        // pourquoi. On lui dit lequel il ouvre, pour qu'il puisse s'y relier
+        // d'un geste au lieu de croire son code mort.
+        //
+        // Cela ne revele rien de neuf : le meme code tape dans le champ du NOM
+        // rend deja le nom de son proprietaire (voir estUnCode, plus haut dans
+        // /claim). Qui tient le code tient deja le nom.
+        const autre = await estUnCode(env.DB, donne);
+        return json({ ok: false, mauvais_code: true, autre_nom: autre || null });
+      }
       await env.DB.prepare(
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();

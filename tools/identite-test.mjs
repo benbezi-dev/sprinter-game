@@ -62,6 +62,58 @@ ok('un pseudo en forme de code passe quand meme',
    sosie.corps.ok === true || sosie.corps.pris === true,
    JSON.stringify(sosie.corps));
 
+// --------------------------------------------- le code, tape par un humain
+//
+// Six caracteres recopies d'un ecran a l'autre arrivent rarement nus. Le
+// clavier du telephone ajoute un espace apres une correction, on coupe le code
+// en deux d'un tiret pour le relire, un copier-coller depuis une conversation
+// emmene un caractere de largeur nulle. Rien de tout cela ne fait partie du
+// code, et rien de tout cela ne doit valoir « code incorrect » a quelqu'un qui
+// tient le bon — c'est la premiere raison, et la plus bete, pour laquelle les
+// codes de recuperation « ne marchaient pas ».
+console.log('\n── LE CODE TAPE PAR UN HUMAIN ───────────────────────────────');
+const commeTape = [
+  ['tel quel',                  CODE],
+  ['en minuscules',             CODE.toLowerCase()],
+  ['coupe par un espace',       CODE.slice(0, 3) + ' ' + CODE.slice(3)],
+  ['coupe par un tiret',        CODE.slice(0, 3) + '-' + CODE.slice(3)],
+  ['entoure d espaces',         '  ' + CODE + '  '],
+  ['avec une espace insecable', CODE + '\u00a0'],
+  ['avec une largeur nulle',    '\u200b' + CODE + '\u200b'],
+];
+for (let i = 0; i < commeTape.length; i++) {
+  const [libelle, saisi] = commeTape[i];
+  const r = await post('/link', { device_id: appareil('tape' + i), name: NOM, code: saisi });
+  ok(libelle, r.corps.ok === true, JSON.stringify(r.corps));
+}
+
+// ------------------------------------------- le code d un autre nom a soi
+//
+// Un code appartient a UN nom, et se rebaptiser en tire un nouveau. Le joueur
+// qui a change de nom garde donc en main le code de son nom d'avant, le
+// presente au nom d'aujourd'hui, et s'entend repondre « code incorrect » sans
+// que rien ne lui dise pourquoi. On lui dit lequel il ouvre.
+console.log('\n── LE CODE D UN AUTRE NOM ───────────────────────────────────');
+const AUTRE = `${NOM.slice(0, 14)}bis`;
+const bis = await post('/claim', { device_id: appareil('bis'), name: AUTRE });
+ok('un second nom se reserve', bis.corps.ok === true, JSON.stringify(bis.corps));
+
+const croise = await post('/link', { device_id: appareil('croise'), name: AUTRE, code: CODE });
+ok('le code du premier n ouvre pas le second', croise.corps.mauvais_code === true,
+   JSON.stringify(croise.corps));
+ok('mais on dit quel nom il ouvre', croise.corps.autre_nom === NOM,
+   String(croise.corps.autre_nom));
+// Ce que l'on revele la, le champ du nom le revelait deja (voir plus haut) :
+// qui tient le code tient deja le nom.
+const suivre = await post('/link', {
+  device_id: appareil('croise'), name: croise.corps.autre_nom, code: CODE,
+});
+ok('et s y relier fonctionne', suivre.corps.ok === true, JSON.stringify(suivre.corps));
+
+const rien = await post('/link', { device_id: appareil('rien'), name: AUTRE, code: 'ZZZZZZ' });
+ok('un code qui n ouvre rien ne nomme personne',
+   rien.corps.mauvais_code === true && !rien.corps.autre_nom, JSON.stringify(rien.corps));
+
 // ------------------------------------------------------------- le transfert
 console.log('\n── LE TRANSFERT ─────────────────────────────────────────────');
 const inconnu = await post('/transfert/nouveau', { device_id: appareil('intrus'), name: NOM });
@@ -74,8 +126,12 @@ ok('le jeton est court et lisible', /^[A-Z0-9]{8}$/.test(JETON || ''), String(JE
 ok('le jeton perime en dix minutes',
    Math.abs(jetonRep.corps.vie_ms - 600000) < 1000, String(jetonRep.corps.vie_ms));
 
+// Le jeton se recopie a la main quand l'appareil ne peut pas viser le QR
+// code : il subit donc les memes espaces et tirets que le code.
 const tel2 = appareil('tel2');
-const liaison = await post('/transfert/utiliser', { device_id: tel2, jeton: JETON });
+const liaison = await post('/transfert/utiliser', {
+  device_id: tel2, jeton: JETON.slice(0, 4) + ' ' + JETON.slice(4),
+});
 ok('le second appareil est relie', liaison.corps.ok === true, JSON.stringify(liaison.corps));
 ok('il recoit le nom', liaison.corps.name === NOM, String(liaison.corps.name));
 ok('il recoit le code', liaison.corps.code === CODE, String(liaison.corps.code));

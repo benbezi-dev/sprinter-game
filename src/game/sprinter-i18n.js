@@ -198,6 +198,9 @@
     insta_visit:     ['voir le profil Instagram de {n}', 'view {n}’s Instagram profile'],
     name_code_why:   ['note-le : il te rend ton nom et tes courses sur un autre téléphone',
                       'write it down: it restores your name and races on another phone'],
+    // Le code ne s'efface plus tout seul au bout d'une seconde : c'est ce
+    // bouton qui le referme, quand le joueur l'a vraiment note.
+    name_code_noted: ['J’AI NOTÉ', 'GOT IT'],
 
     // LA BIENVENUE : la meme fenetre d'identite, mais un pas a la fois, au
     // premier lancement. Les titres tiennent en deux mots et les sous-titres
@@ -660,6 +663,11 @@
     id_is_code_help: ['il appartient à {n}. On relie cet appareil à ce nom ?',
                       'it belongs to {n}. Link this device to that name?'],
     id_is_code_do:   ['RELIER À {n}', 'LINK TO {n}'],
+    // Le code presente ouvre un autre nom que celui demande. Un code
+    // appartient a UN nom, et changer de nom en tire un nouveau : c'est la
+    // raison la plus frequente d'un « code incorrect » de bonne foi.
+    id_code_autre:   ['ce code ouvre le nom {n}',
+                      'this code opens the name {n}'],
 
     // relier un autre telephone sans rien retaper
     id_qr_title:     ['RELIER UN AUTRE TÉLÉPHONE', 'LINK ANOTHER PHONE'],

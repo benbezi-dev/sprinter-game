@@ -18,6 +18,24 @@ function keepCode(code: string) {
   try { localStorage.setItem(CODE_KEY, code); } catch { /* sans memoire */ }
 }
 
+/**
+ * Le code, tel qu'il arrive vraiment.
+ *
+ * Un code n'est fait que de [A-Z0-9]. Tout le reste de ce qu'on tape ou colle
+ * dans ce champ est du transport : l'espace que le clavier du telephone ajoute
+ * apres une correction, le tiret ou l'espace qu'on met en recopiant six
+ * caracteres a la main, le caractere de largeur nulle qui suit un
+ * copier-coller depuis une conversation. `trim()` n'en enlevait aucun des
+ * trois, et le porteur du bon code s'entendait repondre « code incorrect ».
+ *
+ * Le serveur refait le meme nettoyage (voir normaliserCode dans
+ * worker/src/identite.js) — celui-ci sert a ce que le champ montre au joueur
+ * exactement ce qui sera compare.
+ */
+export function normaliserCode(texte: string): string {
+  return String(texte || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
 export type ClaimResult =
   | { etat: 'reserve'; name: string; code: string; deja: boolean }
   | { etat: 'pris' }
@@ -50,24 +68,36 @@ export async function claimName(name: string): Promise<ClaimResult> {
   }
 }
 
-export type LinkResult = 'lie' | 'mauvais_code' | 'inconnu' | 'reseau';
+export type LinkResult =
+  | { etat: 'lie' }
+  /**
+   * Le code ne va pas avec ce nom. `autreNom` dit avec lequel il va, quand il
+   * va avec un autre : un code appartient a UN nom, et changer de nom en tire
+   * un nouveau — celui qui s'est rebaptise garde donc en main le code de son
+   * nom d'avant. Le lui dire vaut mieux que de le laisser croire son code mort.
+   */
+  | { etat: 'mauvais_code'; autreNom: string | null }
+  | { etat: 'inconnu' }
+  | { etat: 'reseau' };
 
 /** Relie cet appareil a un nom deja reserve, code a l'appui. */
 export async function linkDevice(name: string, code: string): Promise<LinkResult> {
+  const propre = normaliserCode(code);
+  if (!propre) return { etat: 'mauvais_code', autreNom: null };
   try {
     const res = await fetch(`${API_BASE}/link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: getDeviceId(), name, code: code.trim().toUpperCase() }),
+      body: JSON.stringify({ device_id: getDeviceId(), name, code: propre }),
     });
-    if (!res.ok) return 'reseau';
+    if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
-    if (d.ok) { keepCode(code.trim().toUpperCase()); return 'lie'; }
-    if (d.mauvais_code) return 'mauvais_code';
-    if (d.inconnu) return 'inconnu';
-    return 'reseau';
+    if (d.ok) { keepCode(propre); return { etat: 'lie' }; }
+    if (d.mauvais_code) return { etat: 'mauvais_code', autreNom: d.autre_nom || null };
+    if (d.inconnu) return { etat: 'inconnu' };
+    return { etat: 'reseau' };
   } catch {
-    return 'reseau';
+    return { etat: 'reseau' };
   }
 }
 

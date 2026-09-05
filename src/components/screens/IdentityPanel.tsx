@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SprinterApp } from '@/game/engine';
 import { KeyRound, Copy, Check, Loader2, ShieldCheck, LifeBuoy } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
-import { claimName, linkDevice, savedCode } from '@/game/identity';
+import { claimName, linkDevice, savedCode, normaliserCode } from '@/game/identity';
 import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
 
@@ -25,6 +25,9 @@ export function IdentityPanel() {
 
   const [autreCode, setAutreCode] = useState('');
   const [lien, setLien] = useState<'' | 'envoi' | 'lie' | 'mauvais' | 'inconnu' | 'erreur'>('');
+  // Le nom qu'ouvre le code presente, quand ce n'est pas celui qu'on demande :
+  // un code appartient a UN nom, et se rebaptiser en tire un nouveau.
+  const [codeOuvre, setCodeOuvre] = useState('');
 
   const reserver = async () => {
     const n = nom.trim();
@@ -38,7 +41,7 @@ export function IdentityPanel() {
       // Le code devient ce qu'il aurait toujours du etre : la preuve, pas le
       // pseudo. On le deplace dans le champ prevu pour lui, et on remet le
       // vrai nom dans celui du nom.
-      setAutreCode(nom.trim().toUpperCase());
+      setAutreCode(normaliserCode(nom));
       setNomDuCode(r.nom);
       setNom(r.nom);
       setEtat('est_un_code');
@@ -46,16 +49,20 @@ export function IdentityPanel() {
     else setEtat('erreur');
   };
 
-  const relier = async () => {
-    const n = nom.trim();
+  const relier = async (nomVise?: string) => {
+    const n = (nomVise ?? nom).trim();
     if (!n || !autreCode.trim()) return;
-    setLien('envoi');
+    setLien('envoi'); setCodeOuvre('');
     const r = await linkDevice(n, autreCode);
-    if (r === 'lie') {
-      saveName(n); setCode(autreCode.trim().toUpperCase());
-      setLien('lie'); setEtat('repos');
-    } else if (r === 'mauvais_code') setLien('mauvais');
-    else if (r === 'inconnu') setLien('inconnu');
+    if (r.etat === 'lie') {
+      saveName(n); setNom(n); setCode(normaliserCode(autreCode));
+      setVoirCode(true); setLien('lie'); setEtat('repos');
+    } else if (r.etat === 'mauvais_code') {
+      setLien('mauvais');
+      // Ce code n'ouvre pas ce nom-la, mais il en ouvre peut-etre un autre.
+      setCodeOuvre(r.autreNom && r.autreNom !== n ? r.autreNom : '');
+    }
+    else if (r.etat === 'inconnu') setLien('inconnu');
     else setLien('erreur');
   };
 
@@ -147,7 +154,10 @@ export function IdentityPanel() {
             <div className="flex gap-2">
               <input
                 value={autreCode}
-                onChange={e => { setAutreCode(e.target.value.toUpperCase()); setLien(''); }}
+                onChange={e => {
+                  setAutreCode(normaliserCode(e.target.value));
+                  setLien(''); setCodeOuvre('');
+                }}
                 placeholder={N.t('id_code_title')}
                 maxLength={10}
                 autoCapitalize="characters" autoCorrect="off" spellCheck={false}
@@ -157,7 +167,7 @@ export function IdentityPanel() {
                            focus:outline-none focus:border-primary/50"
               />
               <button
-                onClick={relier}
+                onClick={() => relier()}
                 disabled={!autreCode.trim() || lien === 'envoi'}
                 className="shrink-0 px-4 py-2 rounded-xl font-bold tracking-wide text-xs text-background
                            bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none
@@ -174,6 +184,22 @@ export function IdentityPanel() {
             </span>
           )}
           {lien === 'mauvais' && <span className="text-[10px] text-destructive text-center">{N.t('id_bad_code')}</span>}
+          {/* Ce code ouvre un AUTRE nom : on le dit, et on l'y relie d'un
+              geste, plutot que de laisser croire le code mort. */}
+          {lien === 'mauvais' && codeOuvre && (
+            <>
+              <span className="text-[10px] text-muted-foreground text-center">
+                {N.t('id_code_autre', { n: codeOuvre })}
+              </span>
+              <button
+                onClick={() => relier(codeOuvre)}
+                className="self-center px-4 py-2 rounded-xl font-bold tracking-wide text-[10px]
+                           text-background bg-primary hover:bg-primary/90 transition-colors"
+              >
+                {N.t('id_is_code_do', { n: codeOuvre })}
+              </button>
+            </>
+          )}
           {lien === 'inconnu' && <span className="text-[10px] text-destructive text-center">{N.t('id_unknown')}</span>}
           {(lien === 'erreur' || etat === 'erreur') && (
             <span className="text-[10px] text-destructive text-center">{N.t('score_save_fail')}</span>
