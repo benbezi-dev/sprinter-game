@@ -64,3 +64,15 @@ class_name = "SalleConfrontation"
 [[durable_objects.bindings]]
 name = "BOITES"
 class_name = "Boite"
+
+# L'Objectif du jour part a midi et a dix-neuf heures — a l'heure du joueur,
+# pas a celle du serveur. Un envoi unique a 12:00 UTC tomberait a 4 h du matin
+# en Californie et a 21 h a Tokyo : l'inverse des heures de forte affluence
+# qu'on vise.
+#
+# Le cron passe donc tous les quarts d'heure et ne sert que ceux dont l'heure
+# locale vient de passer a 12:00 ou 19:00. Tous les fuseaux reels sont des
+# multiples de quinze minutes — l'Inde a +05:30, le Nepal +05:45, Chatham
+# +12:45 — donc personne n'est manque.
+[triggers]
+crons = ["0,15,30,45 * * * *"]

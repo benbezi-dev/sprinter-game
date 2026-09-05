@@ -58,6 +58,14 @@ const MESSAGES = {
     fr: ['Un mot pour toi', 'Le vainqueur t\u2019a laissé quelque chose.'],
     en: ['A word for you', 'The winner left you something.'],
   },
+  // L'objectif du jour fabrique son texte a l'envoi — il porte le chrono du
+  // joueur, qui n'existe pas dans une table statique. Cette entree est ce
+  // qu'on dit quand ce calcul n'a pas abouti : une sonnerie generique vaut
+  // mieux qu'une sonnerie muette.
+  objectif: {
+    fr: ['Objectif du jour', 'Ton objectif du jour est en ligne.'],
+    en: ['Objective of the day', 'Your objective of the day is up.'],
+  },
 };
 
 const DEFAUT = { fr: ['Sprinter', 'Il y a du nouveau.'], en: ['Sprinter', 'Something new.'] };
@@ -66,6 +74,31 @@ const DEFAUT = { fr: ['Sprinter', 'Il y a du nouveau.'], en: ['Sprinter', 'Somet
 function messageDe(type, langue) {
   const jeu = MESSAGES[type] || DEFAUT;
   return jeu[langue === 'en' ? 'en' : 'fr'] || jeu.fr;
+}
+
+/**
+ * Le texte a envoyer : celui du type, ou celui qu'on nous donne.
+ *
+ * La table ci-dessus suffit tant qu'une nouvelle dit la meme chose a tout le
+ * monde. L'objectif du jour, lui, porte le chrono du joueur : « passe sous
+ * 8,51 s » n'existe pas dans une table statique, et le recopier a l'appel
+ * ramenerait le probleme que MESSAGES resout — un texte de plus a oublier de
+ * traduire.
+ *
+ * D'ou ce detour : l'appelant ne fournit pas un texte, il fournit de quoi le
+ * fabriquer DANS LA LANGUE DE L'ABONNEMENT. Chaque appareil garde la sienne,
+ * et un joueur qui a deux telephones dans deux langues recoit les deux bonnes.
+ *
+ * @param {(langue:string)=>[string,string]} [texte] Optionnel.
+ */
+function textePour(type, langue, texte) {
+  if (typeof texte === 'function') {
+    try {
+      const r = texte(langue === 'en' ? 'en' : 'fr');
+      if (Array.isArray(r) && r.length === 2 && r[0] && r[1]) return r;
+    } catch { /* un texte qui casse ne doit pas empecher la sonnerie */ }
+  }
+  return messageDe(type, langue);
 }
 
 /* ------------------------------------------------------------------ outils */
@@ -284,7 +317,7 @@ export async function envoyerPush(subscription, vapidPrivate, vapidPublic, charg
  * Envoie un push a tous les abonnements web d'un appareil et supprime les
  * abonnements revoques au passage.
  */
-async function notifierWeb(db, deviceId, type, vapidPrivate, vapidPublic) {
+async function notifierWeb(db, deviceId, type, vapidPrivate, vapidPublic, texte) {
   const rows = await db.prepare(
     'SELECT rowid, subscription, langue FROM push_subscriptions WHERE device_id = ?'
   ).bind(deviceId).all();
@@ -295,7 +328,7 @@ async function notifierWeb(db, deviceId, type, vapidPrivate, vapidPublic) {
   await Promise.allSettled(rows.results.map(async row => {
     let sub;
     try { sub = JSON.parse(row.subscription); } catch { morts.push(row.rowid); return; }
-    const [titre, corps] = messageDe(type, row.langue);
+    const [titre, corps] = textePour(type, row.langue, texte);
     // `t` est le genre de la nouvelle : c'est lui qui, au clic, ouvre le bon
     // ecran plutot que l'accueil. Meme vocabulaire que la boite et que FCM.
     const verdict = await envoyerPush(sub, vapidPrivate, vapidPublic,
@@ -434,7 +467,7 @@ async function envoyerFcm(acces, projet, jeton, titre, corps, type) {
 }
 
 /** Previent tous les appareils natifs d'un joueur, et oublie les jetons morts. */
-async function notifierNatif(db, deviceId, type, compte) {
+async function notifierNatif(db, deviceId, type, compte, texte) {
   let lignes;
   try {
     const r = await db.prepare(
@@ -447,7 +480,7 @@ async function notifierNatif(db, deviceId, type, compte) {
   const acces = await jetonAcces(compte);
   const morts = [];
   await Promise.allSettled(lignes.map(async l => {
-    const [titre, corps] = messageDe(type, l.langue);
+    const [titre, corps] = textePour(type, l.langue, texte);
     let vivant = true;
     try { vivant = await envoyerFcm(acces, compte.project_id, l.jeton, titre, corps, type); }
     catch { vivant = true; }       // une panne reseau n'est pas un jeton mort
@@ -470,16 +503,20 @@ async function notifierNatif(db, deviceId, type, compte) {
  * pas de cle VAPID, pas de compte de service — est simplement saute. C'est ce
  * qui permet de deployer le serveur avant d'avoir les cles, et de brancher
  * l'un puis l'autre sans toucher au code qui appelle.
+ *
+ * `texte` est optionnel : sans lui, la nouvelle dit ce que dit son type. Avec,
+ * elle dit ce que la fonction rend pour la langue de chaque appareil — c'est
+ * ce qui permet d'annoncer un chrono personnel sans le recopier ici.
  */
-export async function notifierAppareil(db, deviceId, type, env) {
+export async function notifierAppareil(db, deviceId, type, env, texte) {
   if (!db || !deviceId) return;
 
   const travaux = [];
   if (env && env.VAPID_PRIVATE_KEY && env.VAPID_PUBLIC_KEY) {
-    travaux.push(notifierWeb(db, deviceId, type, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY));
+    travaux.push(notifierWeb(db, deviceId, type, env.VAPID_PRIVATE_KEY, env.VAPID_PUBLIC_KEY, texte));
   }
   const compte = compteDeService(env);
-  if (compte) travaux.push(notifierNatif(db, deviceId, type, compte));
+  if (compte) travaux.push(notifierNatif(db, deviceId, type, compte, texte));
 
   await Promise.allSettled(travaux);
 }

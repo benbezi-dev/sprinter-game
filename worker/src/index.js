@@ -11,6 +11,11 @@ export { Boite } from './boite.js';
 import { sonner } from './boite.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
+  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif,
+  enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
+  ensureObjectifTables, heureLocale,
+} from './objectif.js';
+import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   titresDe, continentDe,
@@ -568,7 +573,74 @@ async function attemptsFor(db, id) {
   }));
 }
 
+/* -------------------------------------------------------------------------
+   L'OBJECTIF DU JOUR
+   -------------------------------------------------------------------------
+   Le cron passe tous les quarts d'heure. La quasi-totalite de ces passages ne
+   fait rien : `joueursAServir` ne rend quelqu'un que si SON heure locale vient
+   de passer a midi ou a dix-neuf heures. C'est le prix a payer pour que
+   l'heure annoncee soit celle du joueur et pas celle du serveur, et il est
+   d'une requete a vide toutes les quinze minutes.
+
+   Rien ici ne peut echouer bruyamment. Un objectif est un agrement : s'il ne
+   part pas, le joueur joue quand meme. On journalise et on passe au suivant —
+   un joueur qui plante ne doit pas priver les quatre cents autres.
+------------------------------------------------------------------------- */
+async function envoyerObjectifs(env, maintenant) {
+  const db = env.DB;
+  if (!db) return { servis: 0 };
+
+  await ensureObjectifTables(db);
+  const joueurs = await joueursAServir(db, maintenant);
+  if (!joueurs.length) return { servis: 0 };
+
+  const bilan = { dus: joueurs.length, crees: 0, notifies: 0, tus: 0, erreurs: 0 };
+
+  for (const j of joueurs) {
+    try {
+      const { objectif, nouveau, raison } = await creerObjectif(db, j, maintenant);
+      if (raison === 'silence') { bilan.tus++; continue; }
+      if (!objectif || !nouveau) continue;
+      bilan.crees++;
+
+      // Le texte est fabrique par appareil, dans la langue de son abonnement :
+      // on ne le calcule pas ici, on donne de quoi le calculer.
+      const texte = (langue) => {
+        const t = texteObjectif(objectif, j.rang, langue);
+        return [t.titre, t.corps];
+      };
+
+      // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
+      // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
+      const appareils = await appareilsDe(db, [j.nameKey]);
+      for (const d of appareils) {
+        try {
+          await ensurePushTable(db);
+          await notifierAppareil(db, d, 'objectif', env, texte);
+          bilan.notifies++;
+        } catch { /* un appareil injoignable n'annule pas les autres */ }
+      }
+    } catch (e) {
+      bilan.erreurs++;
+      console.log('objectif', j.nameKey, String(e && e.message || e));
+    }
+  }
+  return bilan;
+}
+
 export default {
+  /**
+   * Le declencheur horaire. Il ne sert que l'Objectif du jour, et seulement
+   * sur la base de production : le canal de test n'a pas de public a prevenir.
+   */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      envoyerObjectifs(env, new Date(event.scheduledTime || Date.now()))
+        .then(b => { if (b.crees) console.log('objectifs', JSON.stringify(b)); })
+        .catch(e => console.log('objectifs KO', String(e && e.message || e)))
+    );
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
@@ -671,7 +743,64 @@ export default {
         }
       }
 
-      return json({ error: 'not found' }, 404);
+      /* -----------------------------------------------------------------
+       L'OBJECTIF DU JOUR
+       -----------------------------------------------------------------
+       Trois routes, et le joueur s'y designe par son nom — la meme clef que
+       le classement (`lower(trim(name))`), et pas le device_id : un joueur qui
+       a deux telephones a un seul objectif.
+    ----------------------------------------------------------------- */
+
+    if (url.pathname === '/objectif' && request.method === 'GET') {
+      const nom = (url.searchParams.get('nom') || '').trim();
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      const langue = url.searchParams.get('langue') === 'en' ? 'en' : 'fr';
+      const cle = nom.toLowerCase();
+
+      await ensureObjectifTables(env.DB);
+      // Le jour se lit a l'heure de Paris faute de mieux ici : la route est
+      // appelee par le jeu, qui sait deja quel objectif il attend. Le cron,
+      // lui, a range l'objectif sous le jour local du joueur.
+      const jour = heureLocale(new Date(), 'Europe/Paris').jour;
+      const o = await env.DB.prepare(
+        `SELECT * FROM objectifs WHERE name_key = ? AND jour >= ?
+          ORDER BY cree_le DESC LIMIT 1`
+      ).bind(cle, jour).first();
+      if (!o) return json({ objectif: null });
+
+      const rang = await getRank(env.DB, OBJ_EPREUVE, o.pb_ms);
+      const t = texteObjectif(o, rang, langue, true);
+      return json({
+        objectif: {
+          creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
+          cible_ms: o.cible_ms, pb_ms: o.pb_ms,
+          tentatives: o.tentatives, meilleur_ms: o.meilleur_ms,
+          valide: !!o.valide_le, points: o.points,
+          titre: t.titre, texte: t.corps,
+        },
+      });
+    }
+
+    if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const nom = String(body?.nom || '').trim();
+      const ms = Number(body?.ms);
+      const langue = body?.langue === 'en' ? 'en' : 'fr';
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      if (!Number.isFinite(ms) || ms <= 0) return json({ error: 'ms invalide' }, 400);
+
+      const res = await enregistrerTentative(env.DB, nom.toLowerCase(), nom, ms, new Date());
+      if (!res) return json({ objectif: null });
+      return json({ resultat: res, texte: texteResultat(res, langue) });
+    }
+
+    if (url.pathname === '/objectif/classement' && request.method === 'GET') {
+      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      return json({ classement: await classementObjectifs(env.DB, n) });
+    }
+
+    return json({ error: 'not found' }, 404);
     }
 
     // ------------------------------------------------------- classement
