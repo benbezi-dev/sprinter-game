@@ -45,7 +45,7 @@ export function OneShotEndScreen() {
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur, remplir } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, remplir, largeur } = useTenirDansLEcran();
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -491,7 +491,7 @@ export function OneShotEndScreen() {
   const dnf = N.t('dnf_short');
 
   return (
-    <div ref={cadre} className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div ref={cadre} className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto overflow-x-hidden px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       {/* CENTRE QUAND IL Y A DE LA PLACE, ENTIER QUAND IL N'Y EN A PAS.
 
           `justify-center` faisait les deux mal : des que le contenu depassait,
@@ -529,12 +529,27 @@ export function OneShotEndScreen() {
             moitie vide qu'on etire ne se remplit pas, il se troue. */}
         <div className={`w-full flex flex-col items-center ${remplir ? 'flex-1' : 'my-auto'}`}
              style={{ height: hauteur ?? undefined }}>
+        {/* LA LARGEUR EST RENDUE EN MEME TEMPS QU'ELLE EST PRISE.
+
+            Une reduction agit sur les deux dimensions : celle qui faisait
+            tenir l'ecran en hauteur le retirait aussi des bords, et les
+            panneaux finissaient au milieu avec deux bandes noires autour.
+
+            La colonne est donc posee PLUS LARGE que l'ecran — `1 / echelle`
+            de la place — et la reduction la ramene pile dedans. Le point de
+            reduction est ce qui fait tenir les deux : centre, le debordement
+            est symetrique et se resorbe des deux cotes a la fois.
+
+            `--tenir` sert la meme correction a la largeur maximale de la
+            colonne, plus bas : sans elle, un ecran large garderait une
+            colonne reduite pour rien. */}
         <div ref={contenu} className={`w-full flex flex-col items-center ${remplir ? 'flex-1' : ''}`}
              style={echelle < 1
-               ? { transform: `scale(${echelle})`, transformOrigin: 'top center' }
+               ? { width: largeur, transform: `scale(${echelle})`, transformOrigin: 'top center',
+                   ...({ '--tenir': echelle } as Record<string, unknown>) }
                : undefined}>
         <motion.div {...SURGISSEMENT}
-          className={`flex flex-col items-center max-w-2xl court:max-w-none w-full
+          className={`flex flex-col items-center largeur-tenue w-full
                      py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
                      colonnes-si-bas ${remplir ? 'flex-1 justify-between' : ''}`}>
 

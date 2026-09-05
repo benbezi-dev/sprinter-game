@@ -74,14 +74,37 @@ export function useTenirDansLEcran(plancher = 0.75, plafondRemplissage = 1.25) {
       const st = getComputedStyle(c);
       const dispo = c.clientHeight
         - (parseFloat(st.paddingTop) || 0) - (parseFloat(st.paddingBottom) || 0);
+
+      // LA MESURE SE FAIT TOUJOURS A LA MEME LARGEUR.
+      //
+      // Le contenu est ELARGI tant qu'il est reduit — c'est ce qui lui rend
+      // les bords de l'ecran, voir plus bas. Sa hauteur naturelle depend donc
+      // de l'echelle qu'on vient de poser, et la mesurer telle quelle rendrait
+      // le calcul circulaire : une phrase qui se deplie fait remonter
+      // l'echelle, qui resserre la colonne, qui replie la phrase — et l'ecran
+      // se met a battre entre deux tailles.
+      //
+      // On retire donc l'elargissement le temps de la mesure. La reference ne
+      // bouge plus, l'echelle se pose une fois, et comme elargir ne peut que
+      // RACCOURCIR une colonne, ce qu'on a calcule sur la colonne etroite
+      // tient forcement une fois la colonne large.
+      const elargie = d.style.width;
+      if (elargie) d.style.width = '';
       const besoin = naturel(d);
+      if (elargie) d.style.width = elargie;
+
       if (!(dispo > 0) || !(besoin > 0)) return;
 
       const rapport = dispo / besoin;
       // Ca tient deja, ou la reduction ne suffirait pas : on n'y touche pas.
       const e = rapport >= 1 || rapport < plancher ? 1 : rapport;
       setEchelle(e);
-      setHauteur(e < 1 ? Math.ceil(besoin * e) : null);
+      // La hauteur reservee, elle, est celle qu'on VOIT : mesuree elargie, et
+      // non sur la reference, sans quoi on garderait sous l'ecran la place que
+      // l'elargissement vient justement de faire gagner. Elle se pose une
+      // image apres l'echelle, le temps que la largeur suive — l'observateur
+      // nous ramene ici pour ca.
+      setHauteur(e < 1 ? Math.ceil(naturel(d) * e) : null);
       setRemplir(e === 1 && rapport > 1 && rapport <= plafondRemplissage);
     };
 
@@ -117,7 +140,26 @@ export function useTenirDansLEcran(plancher = 0.75, plafondRemplissage = 1.25) {
     };
   }, [plancher, plafondRemplissage]);
 
-  return { cadre, contenu, echelle, hauteur, remplir };
+  /**
+   * L'ELARGISSEMENT QUI VA AVEC LA REDUCTION.
+   *
+   * Reduire d'un septieme retirait aussi un septieme de LARGEUR : sur un
+   * telephone de 412 pixels, les panneaux tombaient a 326 et flottaient au
+   * milieu, deux bandes noires de 43 pixels de chaque cote. Un ecran deja a
+   * l'etroit en hauteur s'ecartait donc des bords, ce qui est exactement le
+   * contraire de ce qu'il faudrait faire quand la place manque.
+   *
+   * On rend cette largeur en la donnant d'avance : la colonne est mise en
+   * page a `1 / echelle` de la place disponible, et la reduction la ramene
+   * pile a la largeur de l'ecran. Le texte garde la taille qu'il avait, les
+   * panneaux retrouvent les bords — et comme une colonne plus large est plus
+   * courte, il reste souvent un peu de hauteur, donc un peu moins a reduire.
+   *
+   * Nul quand rien n'est reduit : il n'y a alors rien a rendre.
+   */
+  const largeur = echelle < 1 ? `${(100 / echelle).toFixed(4)}%` : undefined;
+
+  return { cadre, contenu, echelle, hauteur, remplir, largeur };
 }
 
 /**
