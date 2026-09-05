@@ -15,7 +15,7 @@ import {
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
-import { pique, relance } from '@/game/piques';
+import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -713,6 +713,17 @@ export function OneShotEndScreen() {
             </div>
           )}
 
+          {/* Et le boost apres une victoire, ou il n'y avait rien.
+              Ni cadre ni nom : ce n'est plus l'adversaire qui parle — il vient
+              de perdre, on ne va pas lui faire dire sa defaite — c'est le jeu
+              qui porte le gagnant. Voir game/piques.ts. */}
+          {live && !seul && liveGagne && (
+            <p className="text-sm md:text-base court:text-xs font-semibold text-emerald-300
+                          text-center leading-snug px-2">
+              {boost(`${liveNom}${monMs || (maLigne ? maLigne.ms : 0)}`)}
+            </p>
+          )}
+
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
@@ -776,6 +787,16 @@ export function OneShotEndScreen() {
                       recevrait un refus — on lui aurait promis quelque chose
                       qui n'existe pas encore. Les deux verrous s'ouvriront le
                       meme jour. */}
+                  {/* Le defi releve et gagne n'avait qu'un champ de saisie :
+                      on demandait au vainqueur d'ecrire avant de lui avoir
+                      rien dit. Le boost passe devant — c'est la reponse du
+                      jeu, le mot est celle du joueur. */}
+                  {duel.issue === 'opponent' && (
+                    <p className="text-sm md:text-base court:text-xs font-semibold text-primary
+                                  text-center leading-snug px-2">
+                      {boost(challenge.id)}
+                    </p>
+                  )}
                   {DUELS_OUVERTS && duel.issue === 'opponent' && (
                     <LaisserUnMot duel={challenge.id}
                                   adversaire={challenge.owner_name || N.t('opponent')} />

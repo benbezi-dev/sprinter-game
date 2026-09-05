@@ -480,9 +480,12 @@
     disc_marteau:    ['LANCER DE MARTEAU', 'HAMMER THROW'],
     disc_disque:     ['LANCER DE DISQUE', 'DISCUS THROW'],
     disc_javelot:    ['LANCER DE JAVELOT', 'JAVELIN THROW'],
-    // Les piques, quand on perd un duel. Ecrites par le jeu et signees du nom
-    // de l'adversaire — voir game/piques.ts, qui dit pourquoi. On chambre un
+    // Les piques d'un duel perdu. Ecrites par le jeu et signees du nom de
+    // l'adversaire — voir game/piques.ts, qui dit pourquoi. On chambre un
     // ami, on ne l'insulte pas : ce sont des gens qui se connaissent.
+    // Le compte doit rester egal a NB_PIQUES : une langue qui en aurait une
+    // de moins ferait tomber le tirage sur une clef vide, et `t()` afficherait
+    // « pique_12 » en toutes lettres.
     pique_0: ['j’ai même pas eu à forcer.', 'I did not even have to try.'],
     pique_1: ['tu veux que je recommence au ralenti ?',
               'want me to do it again in slow motion?'],
@@ -496,6 +499,60 @@
               'you ran? I did not see anything go by.'],
     pique_7: ['garde ce chrono, il fera un beau souvenir.',
               'keep that time, it will make a nice souvenir.'],
+    pique_8: ['préviens-moi quand tu arrives, j’attends.',
+              'let me know when you get here, I’m waiting.'],
+    pique_9: ['c’était ton meilleur, ou tu en gardais ?',
+              'was that your best, or were you saving some?'],
+    pique_10: ['on remet ça quand tu veux, j’ai la journée.',
+               'again whenever you like, I’ve got all day.'],
+    pique_11: ['joli départ. C’est la suite qui a péché.',
+               'nice start. It’s the rest that let you down.'],
+    pique_12: ['la prochaine fois, pars au coup de feu.',
+               'next time, try leaving on the gun.'],
+    pique_13: ['rassure-toi, le chronomètre a bien marché.',
+               'don’t worry, the clock was working fine.'],
+    pique_14: ['la prochaine, je m’échauffe. Promis.',
+               'next one I’ll warm up. Promise.'],
+    pique_15: ['tu progresses. J’imagine.', 'you’re getting better. I assume.'],
+
+    // ------------------------------------------------------- objectif du jour
+    //
+    // Le titre et la phrase de l'objectif viennent du SERVEUR, pas d'ici : ils
+    // portent le chrono du joueur, que seul le serveur connait au moment ou il
+    // le calcule. Ce qui suit est le decor autour — les etiquettes fixes, qui
+    // se traduisent comme le reste.
+    obj_titre:      ['OBJECTIF DU JOUR', 'OBJECTIVE OF THE DAY'],
+    obj_cible:      ['à battre : {t} s', 'to beat: {t} s'],
+    obj_record:     ['ton record : {t} s', 'your best: {t} s'],
+    obj_reste:      ['il te manque {n} centièmes', '{n} hundredths short'],
+    obj_reste_1:    ['il te manque 1 centième', '1 hundredth short'],
+    obj_essais:     ['{n} essais', '{n} tries'],
+    obj_essai_1:    ['1 essai', '1 try'],
+    obj_valide:     ['OBJECTIF VALIDÉ', 'OBJECTIVE CLEARED'],
+    obj_points:     ['+{n} pts', '+{n} pts'],
+    obj_aucun:      ['pas d\u2019objectif en cours', 'no objective running'],
+    obj_classement: ['CLASSEMENT DES OBJECTIFS', 'OBJECTIVES RANKING'],
+    obj_serie:      ['série : {n} jours', 'streak: {n} days'],
+    obj_serie_1:    ['série : 1 jour', 'streak: 1 day'],
+    obj_valides:    ['{n} validés', '{n} cleared'],
+    // Et quand on GAGNE : un boost, pas une pique. Ni la meme voix, ni le meme
+    // but. Les lignes du dessus sont la parole de l'adversaire et elles
+    // piquent ; celles-ci sont le jeu qui parle au vainqueur, et elles
+    // portent. On ne degonfle pas quelqu'un qui vient de gagner — il est venu
+    // chercher exactement ce moment-la. Le compte doit rester egal a
+    // NB_BOOSTS.
+    boost_0: ['personne ne t’a vu passer.', 'nobody even saw you go past.'],
+    boost_1: ['c’est propre. Vraiment propre.', 'that was clean. Really clean.'],
+    boost_2: ['ce chrono-là, tu peux le raconter.',
+              'that’s a time worth telling people about.'],
+    boost_3: ['tu étais devant, et ça se voyait.',
+              'you were in front, and it showed.'],
+    boost_4: ['voilà ce que ça donne quand tu pars bien.',
+              'that’s what it looks like when you start right.'],
+    boost_5: ['rien à dire : c’est mérité.', 'nothing to argue with — you earned it.'],
+    boost_6: ['garde cette course en tête. C’est ton niveau.',
+              'remember this race. That’s your level.'],
+    boost_7: ['la ligne était à toi.', 'that finish line was yours.'],
     // Le mot du vainqueur
     mot_titre:       ['LAISSE UN MOT À {n}', 'LEAVE {n} A WORD'],
     mot_placeholder: ['chambre-le en deux phrases', 'needle them in two lines'],
