@@ -31,7 +31,8 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { Revanche } from '@/components/screens/Revanche';
-import { useObjectif } from '@/game/objectif';
+import { useObjectif, ouvrirDepuisNotification } from '@/game/objectif';
+import { surCourrier } from '@/game/boite';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
@@ -87,6 +88,17 @@ function MainGame() {
   const countT = useGameStore(s => s.countT);
   // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
   const defiEnCours = useObjectif().enCours;
+
+  // La notification de l'objectif ouvre le defi, sans ecran intermediaire.
+  //
+  // Elle arrive par la meme porte que les autres — un coup de sonnette qui dit
+  // le genre de la nouvelle — et c'est le seul genre qui LANCE quelque chose
+  // plutot que d'afficher un ecran. `ouvrirDepuisNotification` refuse d'elle-
+  // meme si l'on est au milieu d'une course : interrompre celle qu'on court
+  // pour en ouvrir une autre serait pire que de ne rien faire.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'objectif') void ouvrirDepuisNotification();
+  }), []);
   useVisualViewportHeight();
   useBackGuard();
 

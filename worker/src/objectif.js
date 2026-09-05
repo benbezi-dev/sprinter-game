@@ -28,6 +28,7 @@
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
 import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur } from './epreuves.js';
+import { decalageDe } from './journal.js';
 
 /* ------------------------------------------------------------- reglages */
 
@@ -371,10 +372,11 @@ export function heureLocale(date, fuseau) {
  * a pas de fin. Celle du soir deborde sur le lendemain, jusqu'a 2 h — c'est la
  * meme soiree pour celui qui la vit.
  *
- * Le cron passe tous les quarts d'heure, et tous les fuseaux reels sont des
+ * Le cron passe toutes les cinq minutes, et tous les fuseaux reels sont des
  * multiples de quinze minutes — l'Inde a +05:30, le Nepal +05:45, Chatham
- * +12:45. N'importe quelle minute prise dans {0, 15, 30, 45} finit donc par
- * tomber juste partout, et personne n'est manque. :45 et :15 en font partie.
+ * +12:45. N'importe quelle minute multiple de cinq finit donc par tomber juste
+ * partout, et personne n'est manque — ce qui laisse la place au decalage
+ * personnel de chaque joueur, par pas de cinq minutes.
  */
 export const CRENEAUX = {
   midi: {
@@ -389,13 +391,24 @@ export const CRENEAUX = {
   },
 };
 
-/** Le creneau du au joueur maintenant, ou null. */
-export function creneauMaintenant(date, fuseau) {
+/**
+ * Le creneau du au joueur maintenant, ou null.
+ *
+ * `decalageMin` est le sien, et il est stable : quelques minutes avant ou
+ * apres l'heure ronde, toujours les memes. Trois cents telephones qui vibrent
+ * a la meme seconde, ca se voit ; et un rendez-vous a 12:45:00 tous les jours
+ * a quelque chose de mecanique.
+ *
+ * Le decalage peut faire passer d'une heure a l'autre — 12:45 moins dix
+ * minutes fait 12:35, mais 00:05 moins dix fait 23:55 la veille. On compare
+ * donc des minutes depuis minuit, modulo la journee.
+ */
+export function creneauMaintenant(date, fuseau, decalageMin = 0) {
   const l = heureLocale(date, fuseau);
+  const maintenant = l.heure * 60 + l.minute;
   for (const c of Object.values(CRENEAUX)) {
-    if (l.heure === c.envoi.heure && l.minute === c.envoi.minute) {
-      return { creneau: c.nom, jour: l.jour };
-    }
+    const du = (((c.envoi.heure * 60 + c.envoi.minute + decalageMin) % 1440) + 1440) % 1440;
+    if (maintenant === du) return { creneau: c.nom, jour: l.jour };
   }
   return null;
 }
@@ -753,7 +766,7 @@ export async function joueursAServir(db, maintenant) {
     // dire ici obligerait a une requete par joueur pour un nombre que la
     // notification n'utilise qu'en decor.
     const fuseau = fuseaux.get(j.k) || 'Europe/Paris';
-    const du = creneauMaintenant(maintenant, fuseau);
+    const du = creneauMaintenant(maintenant, fuseau, decalageDe(j.k));
     if (!du) continue;
     dus.push({
       nameKey: j.k, nom: j.nom, rang: i + 1, pb: j.pb, fuseau,
@@ -1045,6 +1058,59 @@ const TITRES = {
   soir: { fr: 'Objectif du soir', en: 'Evening objective' },
 };
 
+/**
+ * LE SOIR NE DIT PAS LA MEME CHOSE SELON LA JOURNEE QU'ON A EUE.
+ *
+ * Une relance identique a celle de midi, envoyee huit heures plus tard, ignore
+ * tout ce qui s'est passe entre les deux. Elle sonne pareil pour celui qui a
+ * valide du premier coup et pour celui qui n'a pas ouvert le jeu.
+ *
+ * Trois etats, trois tons. Deux tournures par etat : c'est de quoi comparer
+ * deux textes sur le meme public, ce que le journal permet desormais de
+ * mesurer.
+ *
+ * LA SPEC DEMANDAIT « ton defi de midi expire dans 1 h » pour le non-joue.
+ * Ce message ne peut pas exister ici : la fenetre de midi ferme a 18:59 et le
+ * second envoi part a 20:15 — le defi de midi est deja clos quand on ecrit. Le
+ * dire serait mentir. On garde l'intention, qui est de ne pas ecrire la meme
+ * phrase a tout le monde, en la formulant sur ce qui est vrai.
+ */
+const SUITE = {
+  // Midi n'a pas ete ouvert.
+  absent: {
+    fr: [
+      o => `Celui de midi est passé sans toi. Le second est ouvert : ${o.cible} s.`,
+      o => `Rien ce midi. Il te reste celui-là : ${o.cible} s, et la nuit devant toi.`,
+    ],
+    en: [
+      o => `The midday one went by without you. The second is open: ${o.cible} s.`,
+      o => `Nothing at lunch. This one is left: ${o.cible} s, and the night ahead.`,
+    ],
+  },
+  // Joue, mais pas valide.
+  tente: {
+    fr: [
+      o => `Ce midi il te manquait ${o.manque} s. Deuxième chance : ${o.cible} s.`,
+      o => `Tu y étais presque. ${o.cible} s, et cette fois tu sais où ça coince.`,
+    ],
+    en: [
+      o => `At lunch you were ${o.manque} s short. Second chance: ${o.cible} s.`,
+      o => `You were close. ${o.cible} s, and this time you know where it slips.`,
+    ],
+  },
+  // Deja valide.
+  valide: {
+    fr: [
+      o => `Midi est plié. Défends ta place : ${o.cible} s pour le second.`,
+      o => `Un de fait. Le soir compte double dans une série — ${o.cible} s.`,
+    ],
+    en: [
+      o => `Midday is done. Defend your spot: ${o.cible} s for the second.`,
+      o => `One down. Evenings are what keep a streak alive — ${o.cible} s.`,
+    ],
+  },
+};
+
 /** La version qui ne dit pas le chrono — voir CHRONO_DANS_LA_NOTIF. */
 const DISCRET = {
   midi: {
@@ -1066,19 +1132,55 @@ function indice(clef, n) {
  * Le titre et le texte d'un objectif, prets pour la notification.
  * @returns {{titre:string, corps:string}}
  */
-export function texteObjectif(objectif, rang, langue, avecChrono = CHRONO_DANS_LA_NOTIF) {
+export function texteObjectif(objectif, rang, langue,
+                              avecChrono = CHRONO_DANS_LA_NOTIF, midi = null) {
   const l = langue === 'en' ? 'en' : 'fr';
   const creneau = objectif.creneau === 'soir' ? 'soir' : 'midi';
-  if (!avecChrono) return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l] };
+  if (!avecChrono) {
+    return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l],
+             variante: null, contexte: 'discret' };
+  }
+
   const vue = {
     pb: s2(objectif.pb_ms),
     cible: s2(objectif.cible_ms),
     ecart: ((objectif.cible_ms - objectif.pb_ms) / 1000).toFixed(2),
+    manque: midi && midi.meilleurMs
+      ? ((midi.meilleurMs - midi.cibleMs) / 1000).toFixed(2) : '',
     rang: rang || '',
   };
-  const jeu = TOURNURES[creneau][l];
+
+  // Le soir, quand on sait ce qu'a donne midi, on parle de CA.
+  const contexte = (creneau === 'soir' && midi && SUITE[midi.etat]) ? midi.etat : creneau;
+  const jeu = contexte === creneau ? TOURNURES[creneau][l] : SUITE[contexte][l];
+
+  // Tirage stable : le meme objectif rend toujours la meme phrase. C'est la
+  // regle des piques du duel, et pour la meme raison — une phrase qui change
+  // sous les yeux du joueur n'est la parole de personne.
   const clef = `${objectif.name_key}:${objectif.jour}:${creneau}`;
-  return { titre: TITRES[creneau][l], corps: jeu[indice(clef, jeu.length)](vue) };
+  const variante = indice(clef, jeu.length);
+  return { titre: TITRES[creneau][l], corps: jeu[variante](vue), variante, contexte };
+}
+
+/**
+ * Ce qu'a donne le creneau de midi, pour ecrire celui du soir.
+ *
+ * Trois etats : jamais ouvert, tente sans y arriver, valide. Rend null quand
+ * il n'y avait pas d'objectif a midi — un joueur servi pour la premiere fois
+ * le soir n'a pas de midi a commenter.
+ */
+export async function midiDuJour(db, nameKey, jour) {
+  try {
+    const o = await db.prepare(
+      `SELECT tentatives, meilleur_ms, cible_ms, valide_le FROM objectifs
+        WHERE name_key = ? AND jour = ? AND creneau = 'midi'`
+    ).bind(nameKey, jour).first();
+    if (!o) return null;
+    return {
+      etat: o.valide_le ? 'valide' : (o.tentatives > 0 ? 'tente' : 'absent'),
+      meilleurMs: o.meilleur_ms, cibleMs: o.cible_ms, tentatives: o.tentatives,
+    };
+  } catch { return null; }
 }
 
 /** Le nom d'un palier, dans les deux langues. */

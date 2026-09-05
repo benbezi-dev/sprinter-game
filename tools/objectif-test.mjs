@@ -57,6 +57,10 @@ import {
 } from '../worker/src/epreuves.js';
 import { estAnonyme } from '../worker/src/records.js';
 import { verifierTrace, vraisemblance, PAS_S, BOND_SUSPECT } from '../worker/src/preuve.js';
+import {
+  decalageDe, peutSonner, DECALAGE_MAX_MIN, DECALAGE_PAS_MIN,
+  ECART_MIN_MS, SANS_OUVERTURE,
+} from '../worker/src/journal.js';
 import { readFileSync } from 'node:fs';
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
@@ -639,6 +643,109 @@ const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 36
   const r = await enregistrerTentative(db, 'zoe', 'Zoe', 8700, t0);
   ok('un objectif d avant la fenetre reste jouable', r !== null && r.reussi);
 }
+
+titre('CHACUN RECOIT A SON HEURE, ET TOUJOURS LA MEME');
+
+const noms = Array.from({ length: 400 }, (_, i) => 'joueur' + i);
+const decalages = noms.map(decalageDe);
+
+ok('le decalage est stable pour un meme nom',
+   decalageDe('zoe') === decalageDe('zoe'),
+   'un rendez-vous qui bouge tous les jours n en est plus un');
+ok(`il reste dans ±${DECALAGE_MAX_MIN} minutes`,
+   decalages.every(d => Math.abs(d) <= DECALAGE_MAX_MIN));
+ok(`et tombe sur un multiple de ${DECALAGE_PAS_MIN}`,
+   decalages.every(d => d % DECALAGE_PAS_MIN === 0),
+   'le cron ne passe que toutes les cinq minutes : le reste serait injoignable');
+
+const repartition = new Map();
+for (const d of decalages) repartition.set(d, (repartition.get(d) || 0) + 1);
+const valeurs = [...repartition.keys()].sort((a, b) => a - b);
+ok(`les ${valeurs.length} decalages possibles sont tous utilises`,
+   valeurs.length === (2 * DECALAGE_MAX_MIN) / DECALAGE_PAS_MIN + 1,
+   valeurs.join(', '));
+const parts = [...repartition.values()];
+ok('...et aucun ne ramasse tout le monde',
+   Math.max(...parts) < noms.length * 0.4,
+   `le plus charge en prend ${Math.max(...parts)} sur ${noms.length}`);
+
+// Le decalage doit deplacer le creneau, et le deplacer VRAIMENT.
+const midi1245 = new Date('2026-09-05T10:45:00Z');
+ok('sans decalage, 12:45 ouvre le midi',
+   creneauMaintenant(midi1245, 'Europe/Paris', 0)?.creneau === 'midi');
+ok('avec +5, 12:45 n ouvre plus rien',
+   creneauMaintenant(midi1245, 'Europe/Paris', 5) === null);
+ok('...et 12:50 ouvre a sa place',
+   creneauMaintenant(new Date('2026-09-05T10:50:00Z'), 'Europe/Paris', 5)?.creneau === 'midi');
+ok('avec -10, c est 12:35',
+   creneauMaintenant(new Date('2026-09-05T10:35:00Z'), 'Europe/Paris', -10)?.creneau === 'midi');
+// Le soir a 20:15 moins dix, c est 20:05 : rien ne change d'heure ici, mais la
+// regle doit tenir meme quand le decalage franchit une heure ronde.
+ok('un decalage qui franchit l heure ronde tombe juste',
+   creneauMaintenant(new Date('2026-09-05T18:05:00Z'), 'Europe/Paris', -10)?.creneau === 'soir');
+
+titre('ON NE SONNE PAS N IMPORTE QUAND');
+
+/** Une base qui ne tient que le journal d'un joueur. */
+function baseJournal({ envois = [], pref = null } = {}) {
+  const rep = (sql, args) => ({
+    first: async () => {
+      if (/FROM notif_prefs/.test(sql)) return pref ? { rythme: pref } : null;
+      if (/MAX\(envoye_le\)/.test(sql)) {
+        const vivants = envois.filter(e => e.statut !== 'retenu');
+        return { t: vivants.length ? Math.max(...vivants.map(e => e.envoye_le)) : null };
+      }
+      return null;
+    },
+    all: async () => ({
+      results: /SELECT ouvert_le/.test(sql)
+        ? envois.slice(0, SANS_OUVERTURE) : [],
+    }),
+    run: async () => ({}),
+  });
+  return { prepare: sql => ({ bind: (...a) => rep(sql, a), ...rep(sql, []) }),
+           batch: async () => [] };
+}
+
+const TREF = Date.parse('2026-09-05T18:15:00Z');
+const ilYA = h => ({ envoye_le: TREF - h * 3600000, ouvert_le: null, statut: 'envoye' });
+
+ok('un joueur neuf recoit',
+   (await peutSonner(baseJournal(), 'zoe', 'soir', TREF)).ok);
+
+ok(`deux sonneries a moins de ${ECART_MIN_MS / 3600000} h : la seconde attend`,
+   !(await peutSonner(baseJournal({ envois: [ilYA(1)] }), 'zoe', 'soir', TREF)).ok,
+   'chacune se justifie seule ; les quatre ensemble font desinstaller');
+ok('...et la raison est dite',
+   (await peutSonner(baseJournal({ envois: [ilYA(1)] }), 'zoe', 'soir', TREF)).raison
+     === 'trop_rapproche');
+ok('au-dela, elle part',
+   (await peutSonner(baseJournal({ envois: [ilYA(5)] }), 'zoe', 'soir', TREF)).ok);
+
+const sansReponse = { envois: Array.from({ length: SANS_OUVERTURE }, (_, i) => ilYA(24 + i * 12)) };
+ok(`${SANS_OUVERTURE} sonneries sans une ouverture : plus qu une par jour`,
+   !(await peutSonner(baseJournal(sansReponse), 'zoe', 'midi', TREF)).ok);
+ok('...et c est le SOIR qu on garde',
+   (await peutSonner(baseJournal(sansReponse), 'zoe', 'soir', TREF)).ok,
+   'pas zero : celui qui n ouvre pas cette semaine ouvrira peut-etre la suivante');
+ok('...la raison le dit',
+   (await peutSonner(baseJournal(sansReponse), 'zoe', 'midi', TREF)).raison === 'sans_ouverture');
+
+const avecOuverture = { envois: [
+  { ...ilYA(24), ouvert_le: TREF - 20 * 3600000 },
+  ilYA(36), ilYA(48), ilYA(60),
+] };
+ok('une seule ouverture suffit a revenir a deux par jour',
+   (await peutSonner(baseJournal(avecOuverture), 'zoe', 'midi', TREF)).ok);
+
+ok('le choix du joueur l emporte',
+   !(await peutSonner(baseJournal({ pref: 'un' }), 'zoe', 'midi', TREF)).ok);
+ok('...et la raison le distingue de l anti-fatigue',
+   (await peutSonner(baseJournal({ pref: 'un' }), 'zoe', 'midi', TREF)).raison
+     === 'rythme_choisi',
+   'un joueur qui a choisi n est pas un joueur qui ne repond plus');
+ok('...et il recoit quand meme le soir',
+   (await peutSonner(baseJournal({ pref: 'un' }), 'zoe', 'soir', TREF)).ok);
 
 titre('UNE COURSE SE PROUVE, ELLE NE SE DECLARE PAS');
 

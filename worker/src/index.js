@@ -30,9 +30,13 @@ import {
   verifierTrace, vraisemblance, signaler, listerSignalements,
 } from './preuve.js';
 import {
+  peutSonner, noterEnvoi, noterOuverture, poserRythme, rythmeDe,
+  tauxOuverture, raisonsDeNonEnvoi, RYTHMES,
+} from './journal.js';
+import {
   EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
-  ensureObjectifTables, heureLocale,
+  ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
 
 import {
@@ -625,11 +629,11 @@ async function attemptsFor(db, id) {
 /* -------------------------------------------------------------------------
    L'OBJECTIF DU JOUR
    -------------------------------------------------------------------------
-   Le cron passe tous les quarts d'heure. La quasi-totalite de ces passages ne
+   Le cron passe toutes les cinq minutes. La quasi-totalite de ces passages ne
    fait rien : `joueursAServir` ne rend quelqu'un que si SON heure locale vient
    de passer a midi ou a dix-neuf heures. C'est le prix a payer pour que
    l'heure annoncee soit celle du joueur et pas celle du serveur, et il est
-   d'une requete a vide toutes les quinze minutes.
+   d'une requete a vide toutes les cinq minutes.
 
    Rien ici ne peut echouer bruyamment. Un objectif est un agrement : s'il ne
    part pas, le joueur joue quand meme. On journalise et on passe au suivant —
@@ -683,12 +687,22 @@ async function envoyerObjectifs(env, maintenant) {
       // revenir — une tentative, et il est de nouveau prevenu.
       if (silencieux) { bilan.tus++; continue; }
 
+      // Le soir parle de la journee qu'on a eue : valide, tente sans y
+      // arriver, ou pas ouvert du tout. Lu une fois par joueur, pas par
+      // appareil — c'est la meme journee sur les deux telephones.
+      const midi = objectif.creneau === 'soir'
+        ? await midiDuJour(db, j.nameKey, objectif.jour) : null;
+
       // Le texte est fabrique par appareil, dans la langue de son abonnement :
       // on ne le calcule pas ici, on donne de quoi le calculer.
       const texte = (langue) => {
-        const t = texteObjectif(objectif, j.rang, langue);
+        const t = texteObjectif(objectif, j.rang, langue, undefined, midi);
         return [t.titre, t.corps];
       };
+      // ...et on retient CE QUI a ete choisi, pour pouvoir un jour dire quel
+      // texte fait ouvrir. La langue importe peu ici : la variante est la meme
+      // des deux cotes, c'est le tirage qui la fixe.
+      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi);
 
       // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
       // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
@@ -703,18 +717,35 @@ async function envoyerObjectifs(env, maintenant) {
       // « top 500 joignable » — lui retirerait le defi pour la seule raison
       // qu'on ne peut pas le lui annoncer.
       const joignables = await appareilsJoignables(db, appareils);
-      if (!joignables.length) { bilan.sans_push++; continue; }
+      if (!joignables.length) {
+        bilan.sans_push++;
+        await noterEnvoi(db, { nameKey: j.nameKey, type: 'objectif',
+          jour: objectif.jour, creneau: objectif.creneau,
+          statut: 'retenu', raison: 'sans_abonnement' });
+        continue;
+      }
+
+      // Les regles de sonnerie : le rythme du joueur, et les quatre heures
+      // entre deux. Le silence des tentatives, lui, a deja parle plus haut.
+      const verdict = await peutSonner(db, j.nameKey, objectif.creneau, maintenant?.getTime());
+      if (!verdict.ok) {
+        bilan.retenus = (bilan.retenus || 0) + 1;
+        await noterEnvoi(db, { nameKey: j.nameKey, type: 'objectif',
+          jour: objectif.jour, creneau: objectif.creneau,
+          statut: 'retenu', raison: verdict.raison });
+        continue;
+      }
 
       if (mode === 'essai') {
         // Le mode d'essai s'arrete exactement ici : tout est calcule et range,
         // rien ne part. Le journal porte ce qui serait parti, en francais —
         // pas la langue de l'abonnement, qu'on n'a pas cherchee.
-        const t = texteObjectif(objectif, j.rang, 'fr');
         console.log('objectif[essai]', JSON.stringify({
           joueur: j.nameKey, rang: j.rang, appareils: joignables.length,
           cible_ms: objectif.cible_ms, pb_ms: objectif.pb_ms,
           creneau: objectif.creneau, expire_le: objectif.expire_le,
-          titre: t.titre, corps: t.corps,
+          contexte: choix.contexte, variante: choix.variante,
+          titre: choix.titre, corps: choix.corps,
         }));
         bilan.simules++;
         continue;
@@ -724,6 +755,9 @@ async function envoyerObjectifs(env, maintenant) {
         try {
           await notifierAppareil(db, d, 'objectif', env, texte);
           bilan.notifies++;
+          await noterEnvoi(db, { nameKey: j.nameKey, deviceId: d, type: 'objectif',
+            jour: objectif.jour, creneau: objectif.creneau,
+            contexte: choix.contexte, variante: choix.variante, statut: 'envoye' });
         } catch { /* un appareil injoignable n'annule pas les autres */ }
       }
     } catch (e) {
@@ -998,6 +1032,60 @@ export default {
       }
 
       return json({ resultat: res, texte: texteResultat(res, langue) });
+    }
+
+    /* -----------------------------------------------------------------
+       LES NOTIFICATIONS : ce qu'on en sait, et ce que le joueur en decide.
+    ----------------------------------------------------------------- */
+
+    // Une notification a ete touchee. Le jeu le dit en s'ouvrant, et c'est la
+    // seule facon de connaitre un taux d'ouverture : rien d'autre ne remonte.
+    if (url.pathname === '/notifications/ouverte' && request.method === 'POST') {
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const nom = String(body?.nom || '').trim();
+      const type = String(body?.type || 'objectif').slice(0, 20);
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      await noterOuverture(env.DB, nom.toLowerCase(), type);
+      return json({ ok: true });
+    }
+
+    // Une ou deux par jour. Le choix du joueur l'emporte sur celui qu'on fait
+    // pour lui — et il doit pouvoir revenir en arriere, donc on rend l'etat.
+    if (url.pathname === '/notifications/rythme') {
+      const nom = String((url.searchParams.get('nom') || '')).trim();
+      if (request.method === 'GET') {
+        if (!nom) return json({ error: 'nom requis' }, 400);
+        return json(await rythmeDe(env.DB, nom.toLowerCase()));
+      }
+      if (request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const n = String(body?.nom || '').trim();
+        const deviceId = body?.device_id;
+        const rythme = String(body?.rythme || '');
+        if (!n) return json({ error: 'nom requis' }, 400);
+        if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+        if (!RYTHMES.includes(rythme)) return json({ error: 'rythme invalide' }, 400);
+        // Le meme controle que partout : un reglage se change depuis un
+        // appareil du proprietaire, pas depuis n'importe lequel.
+        if (!await peutUtiliser(env.DB, n.toLowerCase(), deviceId)) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
+        await poserRythme(env.DB, n.toLowerCase(), rythme);
+        return json({ ok: true, rythme });
+      }
+    }
+
+    // Les chiffres : taux d'ouverture par creneau et par tournure, et les
+    // raisons de non-envoi. Sous cle d'administration.
+    if (url.pathname === '/notifications/chiffres' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const jours = Math.min(Number(url.searchParams.get('jours')) || 30, 365);
+      const depuis = Date.now() - jours * 86400000;
+      return json({
+        jours,
+        ouverture: await tauxOuverture(env.DB, depuis),
+        non_envoyees: await raisonsDeNonEnvoi(env.DB, depuis),
+      });
     }
 
     // Ce qu'il y a a regarder. Sous cle d'administration : un signalement

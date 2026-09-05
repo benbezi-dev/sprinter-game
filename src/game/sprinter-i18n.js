@@ -123,6 +123,11 @@
     obj_quitter:    ['plus tard', 'later'],
     obj_lancer:     ['COURIR LE DÉFI', 'RUN THE CHALLENGE'],
     obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
+    obj_rythme:     ['RAPPELS DU DÉFI', 'CHALLENGE REMINDERS'],
+    obj_rythme_2:   ['deux par jour', 'twice a day'],
+    obj_rythme_1:   ['une par jour', 'once a day'],
+    obj_rythme_auto:['réduit à une : les dernières n’ont pas été ouvertes',
+                     'reduced to one: the last few went unopened'],
     // Les quatre conseils. Chacun designe une chose mesurée sur la course
     // qu'on vient de courir, jamais un encouragement general.
     obj_c_depart:   ['tu perds {n} s au coup de pistolet. Le départ se joue avant, pas après.',

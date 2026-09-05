@@ -329,3 +329,70 @@ export function minutesRestantes(o: Objectif | null): number | null {
   if (!o || !o.expire_le) return null;
   return Math.max(0, Math.round((o.expire_le - Date.now()) / 60000));
 }
+
+/* ------------------------------------------------------- la notification */
+
+/**
+ * Une notification d'objectif a ete touchee.
+ *
+ * DEUX CHOSES, ET LA PREMIERE EST INVISIBLE. On previent le serveur qu'elle a
+ * ete ouverte : rien d'autre ne le lui dirait, et sans cela le taux
+ * d'ouverture n'existe pas — donc ni l'anti-fatigue, ni la comparaison de deux
+ * textes. Puis on ouvre le defi, directement, sans ecran intermediaire : c'est
+ * ce qu'annonce la notification, et l'ecran d'accueil entre les deux est
+ * exactement ou l'on perd les gens.
+ *
+ * Rend true si la course a ete lancee. False quand on n'etait pas en position
+ * de le faire — au milieu d'une autre course, par exemple : interrompre celle
+ * qu'on est en train de courir pour en ouvrir une autre serait pire que de ne
+ * rien faire.
+ */
+export async function ouvrirDepuisNotification(): Promise<boolean> {
+  const nom = getSavedName();
+  if (nom) {
+    fetch(`${API_BASE}/notifications/ouverte`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom, type: 'objectif' }),
+      keepalive: true,
+    }).catch(() => { /* le compteur n'est pas vital */ });
+  }
+
+  const o = await lireObjectif();
+  if (!o) return false;
+
+  const etat = SprinterApp.G.state;
+  if (etat !== 'title' && etat !== 'open') return false;
+
+  lancerObjectif(o);
+  return true;
+}
+
+/* ------------------------------------------------------------- le rythme */
+
+export type Rythme = { rythme: 'deux' | 'un'; choisi: boolean };
+
+/** Une notification par jour, ou deux ? Et est-ce le joueur qui l'a choisi ? */
+export async function lireRythme(): Promise<Rythme | null> {
+  const nom = getSavedName();
+  if (!nom) return null;
+  try {
+    const r = await fetch(`${API_BASE}/notifications/rythme?nom=${encodeURIComponent(nom)}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+/** Le joueur choisit son rythme. Rend false si le serveur a refuse. */
+export async function poserRythme(rythme: 'deux' | 'un'): Promise<boolean> {
+  const nom = getSavedName();
+  if (!nom) return false;
+  try {
+    const r = await fetch(`${API_BASE}/notifications/rythme`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom, device_id: getDeviceId(), rythme }),
+    });
+    return r.ok;
+  } catch { return false; }
+}

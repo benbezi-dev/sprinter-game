@@ -23,7 +23,8 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // voir InvitationDirecte.tsx, qui la lit autrement qu'un defi differe.
 // 'relais' : on veut de toi dans une equipe. Le contraire du direct — elle
 // attend, et se releve sur l'ecran des equipes.
-export type Courrier = 'defi' | 'duel' | 'mot' | 'ouverte' | 'direct' | 'relais';
+export type Courrier = 'defi' | 'duel' | 'mot' | 'ouverte' | 'direct' | 'relais'
+                     | 'objectif';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;

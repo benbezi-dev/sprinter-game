@@ -70,8 +70,9 @@ class_name = "Boite"
 # en Californie et a 21 h a Tokyo : l'inverse des heures de forte affluence
 # qu'on vise.
 #
-# Le cron passe donc tous les quarts d'heure et ne sert que ceux dont l'heure
-# locale vient de passer a 12:00 ou 19:00. Tous les fuseaux reels sont des
+# Le cron passe donc toutes les cinq minutes et ne sert que ceux dont l'heure
+# locale vient de tomber sur leur creneau, decalage personnel compris. Tous
+# les fuseaux reels sont des
 # multiples de quinze minutes — l'Inde a +05:30, le Nepal +05:45, Chatham
 # +12:45 — donc personne n'est manque.
 # Le mode de l'Objectif du jour.
@@ -89,5 +90,16 @@ class_name = "Boite"
 [vars]
 OBJECTIF = "actif"
 
+# POURQUOI CINQ MINUTES ET NON QUINZE. Chaque joueur recoit a quelques minutes
+# pres de son heure, toujours les memes : trois cents telephones qui vibrent a
+# la meme seconde, ca se voit, et un rendez-vous a 12:45:00 tous les jours a
+# quelque chose de mecanique. Or le cron ne peut servir quelqu'un qu'aux
+# instants ou il passe : au quart d'heure, avec des fuseaux eux-memes au quart
+# d'heure, la minute locale ne prend que quatre valeurs et le seul decalage
+# possible est de quinze minutes. A cinq, un decalage de cinq minutes devient
+# atteignable partout.
+#
+# Le prix est de 288 passages par jour au lieu de 96. La quasi-totalite ne fait
+# rien : une requete qui ne rend personne.
 [triggers]
-crons = ["0,15,30,45 * * * *"]
+crons = ["*/5 * * * *"]
