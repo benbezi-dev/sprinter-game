@@ -90,15 +90,25 @@ const dire = l => { console.log(l); fs.appendFileSync(SORTIE, l + '\n'); };
 fs.writeFileSync(SORTIE, '');
 dire('cadence tenue   meilleur chrono   note        montee');
 
-// La forme de la montee n'est pas balayee finement : deux longueurs et quatre
-// premiers ecarts suffisent a encadrer l'optimum a quelques centiemes, et le
-// tableau sert a situer un chrono, pas a le calibrer — pour ca, il y a
-// `calibrer.mjs`, qui cherche au sous-pas pres.
-for (const f of [10, 12, 13, 14, 15, 17, 20, 25, 30, 40, 50]) {
+// LA GRILLE DE MONTEE SUIT LA CADENCE, et la premiere version ne le faisait
+// pas : quatre premiers ecarts fixes, de 0,09 a 0,18 s, encadrent bien
+// l'optimum a douze appuis par seconde et le manquent completement a
+// cinquante, ou la bonne montee part de 0,03 s. Le tableau annoncait donc un
+// plancher de 8,42 s la ou la physique en donne un plus bas. On accroche
+// desormais la grille a la cadence visee — puis on garde quelques ecarts
+// larges, qui restent les bons en bas du tableau.
+//
+// Cela reste un encadrement a quelques centiemes : ce tableau sert a SITUER un
+// chrono, pas a le calibrer. Pour calibrer, il y a `calibrer.mjs`, qui cherche
+// au sous-pas pres et n'a qu'une cible a viser.
+const CADENCES = process.argv.length > 2
+  ? process.argv.slice(2).map(Number)
+  : [10, 12, 13, 14, 15, 17, 20, 25, 30, 40, 50];
+for (const f of CADENCES) {
   const g1 = 1 / f;
   let meilleur = null;
-  for (const n of [10, 16])
-    for (const g0 of [0.09, 0.12, 0.15, 0.18]) {
+  for (const n of [10, 16, 22])
+    for (const g0 of [g1 * 1.2, g1 * 1.6, g1 * 2.2, g1 * 3, 0.09, 0.12, 0.15, 0.18]) {
       if (g0 < g1) continue;
       const r = await page.evaluate(a => window.__courir(a), sequence(g0, g1, n));
       if (r.chrono == null) continue;

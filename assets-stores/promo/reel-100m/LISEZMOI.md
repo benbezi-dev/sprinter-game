@@ -274,13 +274,29 @@ appuis par seconde : le reel aurait affiché une marque que le jeu ne rend pas.
 dans `RACES['100']` — 8,87 s à treize appuis par seconde, 8,61 s à dix-sept —
 datent d'un départ plat : cadence constante, donc aucune montée, donc **note
 de transition ratée** et 4,2 % de vitesse maximale en moins. Ils disent ce que
-coûte une course mal partie, pas ce qu'un bon départ rapporte. Avec la
-réaction et la transition parfaite, la course de ce reel tient 8,75 s à
-**16,8 appuis par seconde** — la cadence la plus lente que la calibration ait
-trouvée dans le navigateur, en exigeant une marge sur la note de transition.
-Une simulation hors ligne du même moteur descend à 13,7 appuis par seconde,
-mais en frôlant le seuil de la note : elle ne survit pas à la quantification
-du jeu, et la note retombe à « bonne ».
+coûte une course mal partie, pas ce qu'un bon départ rapporte.
 
-C'est bien « le geste d'un joueur qui s'entraîne » que décrit le commentaire
-du code — mais un joueur qui s'entraîne *et* qui soigne son départ.
+`cadences.mjs` refait la mesure avec, pour chaque cadence, la meilleure montée
+trouvée. Réaction et transition parfaite comprises :
+
+| Cadence tenue | Meilleur chrono |
+|---|---|
+| 10 appuis/s | 9,258 s |
+| 12 appuis/s | 8,921 s |
+| 13 appuis/s | 8,854 s |
+| 14 appuis/s | 8,804 s |
+| **15 appuis/s** | **8,679 s** |
+| 17 appuis/s | 8,633 s |
+
+**Il faut donc environ quinze appuis par seconde pour passer sous 8,75 s**, et
+non treize à quatorze. Le commentaire du code parle de « treize à quatorze
+appuis » pour battre le meilleur ZEZE — c'est juste en moyenne, puisque son
+chrono est tiré entre 8,75 et 9,00 s, mais il en faut quinze pour battre le
+plus rapide d'entre eux. La course de ce reel en tient 16,8, ce qui lui laisse
+la marge dont une capture a besoin.
+
+Le plancher de cette physique, aux cadences que seul un script peut tenir, se
+mesure avec la même commande : `node cadences.mjs 20 25 30 40 50`. La grille
+de montée doit y être resserrée — à cinquante appuis par seconde, la bonne
+montée part de 0,03 s d'écart, pas de 0,09 — faute de quoi le tableau annonce
+un plancher plus haut que la physique n'en donne.
