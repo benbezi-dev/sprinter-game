@@ -1,0 +1,281 @@
+<meta charset="utf-8">
+<title>Sprinter — les championnats</title>
+<link rel="stylesheet" href="commun.css">
+<style>
+.ech{display:flex;align-items:center;gap:26px;width:912px;padding:30px 34px;border-radius:22px;
+  border:2px solid var(--line);background:#0b1020}
+.ech .em{font-size:52px;width:74px;text-align:center;flex:none}
+.ech .co{flex:1}
+.ech .ti{font-family:Outfit,sans-serif;font-weight:800;font-size:40px}
+.ech .su{font-size:27px;color:var(--mut);font-weight:600;margin-top:4px;line-height:1.28}
+.fleche{font-family:'Space Mono',monospace;font-size:30px;color:#ffffff2e;letter-spacing:.2em}
+
+/* la grille de depart */
+.serie{display:flex;flex-direction:column;gap:6px;width:210px;padding:16px 14px;border-radius:16px;
+  border:2px solid var(--line);background:#0b1020}
+.serie .ttl{font-family:'Space Mono',monospace;font-size:21px;letter-spacing:.14em;color:var(--mut);
+  text-align:center;margin-bottom:4px}
+.serie i{display:block;height:16px;border-radius:5px;background:#ffffff14;font-style:normal}
+.serie i.q{background:var(--ac);box-shadow:0 0 14px #F5A52466}
+
+/* l'entonnoir des phases */
+.ph{display:flex;align-items:center;gap:24px;width:912px;padding:26px 32px;border-radius:20px;
+  border:2px solid var(--line);background:#0b1020}
+.ph .n{font-family:Outfit,sans-serif;font-weight:800;font-size:38px;flex:1}
+.ph .d{font-family:'Space Mono',monospace;font-size:25px;color:var(--mut);letter-spacing:.08em;text-align:right}
+.ph .d b{color:var(--ac);font-weight:700}
+
+.jour{display:flex;gap:22px;width:912px}
+.jour .c{flex:1;padding:28px 26px;border-radius:20px;border:2px solid var(--line);background:#0b1020}
+.jour .j{font-family:'Space Mono',monospace;font-size:25px;letter-spacing:.18em;color:var(--ac)}
+.jour .l{font-size:30px;font-weight:700;color:#e6ecfa;margin-top:12px;line-height:1.3}
+</style>
+
+<div id="stage">
+  <div id="bgtrack"></div><div id="glow"></div><div id="glow2"></div>
+  <div id="streaks"></div><div id="vign"></div>
+  <div id="prog"></div><div id="etiq"></div>
+
+  <svg width="0" height="0" style="position:absolute"><symbol id="run" viewBox="0 0 24 24">
+    <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.7 12 16 13 17.49 13v-2c-1.5 0-2.8-.8-3.4-2l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+  </symbol></svg>
+
+  <!-- ================================================== OUVERTURE -->
+  <section class="scene" id="sc-ouv"><div class="mid" style="gap:34px">
+    <div class="chapno" id="ou-no" style="-webkit-text-stroke-color:#F5A5243d">32</div>
+    <div class="h1" id="ou-t">Les<br>championnats</div>
+    <div class="rule" id="ou-r"></div>
+    <div class="p" id="ou-s">Un week-end. Trente-deux partants.<br>
+      <span class="ac">Un seul champion</span>.</div>
+  </div></section>
+
+  <!-- ================================================== LES TROIS ECHELONS -->
+  <section class="scene" id="sc-ec"><div class="mid" style="gap:20px">
+    <div class="kick" id="ec-k" style="margin-bottom:14px">Trois échelons, dans cet ordre</div>
+    <div class="ech"><span class="em">🇫🇷</span><span class="co">
+      <div class="ti">Championnat national</div>
+      <div class="su">Ton pays. Il faut ton drapeau pour y entrer.</div></span></div>
+    <div class="fleche ec-f">▼&nbsp;&nbsp;3 SEMAINES</div>
+    <div class="ech"><span class="em">🌍</span><span class="co">
+      <div class="ti">Championnat continental</div>
+      <div class="su">Les champions nationaux du continent, qualifiés d'office.</div></span></div>
+    <div class="fleche ec-f">▼&nbsp;&nbsp;4 SEMAINES</div>
+    <div class="ech"><span class="em">🏆</span><span class="co">
+      <div class="ti">Championnat du monde</div>
+      <div class="su">Les champions continentaux, qualifiés d'office.</div></span></div>
+    <div class="p" id="ec-s" style="margin-top:20px">On complète chaque grille à 32<br>
+      par les mieux classés <span class="ac">au classement des duels</span>.</div>
+  </div></section>
+
+  <!-- ================================================== OUVRIR UN NATIONAL -->
+  <section class="scene" id="sc-ou"><div class="mid" style="gap:32px">
+    <div class="kick" id="ov-k">Pour qu'un pays ait son championnat</div>
+    <div class="card" id="ov-card" style="width:912px;padding:48px 46px;text-align:center">
+      <div class="mono ac" id="ov-n" style="font-size:120px;font-weight:700;line-height:1">32</div>
+      <div style="font-size:34px;font-weight:800;margin-top:14px">joueurs classés <span class="ac">et actifs</span></div>
+      <div style="font-size:29px;color:var(--mut);font-weight:600;margin-top:14px">
+        actif = au moins un duel classé sur les <span class="mono">60 derniers jours</span></div>
+    </div>
+    <div class="card" id="ov-note" style="width:912px;padding:30px 36px;text-align:center">
+      <div style="font-size:31px;font-weight:700;color:#cbd5e1">En dessous, le pays <b class="ac">attend</b> le cycle suivant —
+        <span style="color:var(--mut);font-weight:600">et ses joueurs restent repêchables au continental.</span></div>
+    </div>
+  </div></section>
+
+  <!-- ================================================== LA GRILLE -->
+  <section class="scene" id="sc-gr"><div class="mid" style="gap:32px">
+    <div class="kick" id="gr-k">La grille</div>
+    <div class="h2" id="gr-t" style="margin-bottom:10px">32 partants,<br>4 séries de 8</div>
+    <div style="display:flex;gap:22px;flex-wrap:wrap;justify-content:center;width:912px" id="gr-list"></div>
+    <div class="p" id="gr-s">Le mieux classé au duel prend <span class="ac">le couloir du milieu</span>.<br>
+      Comme sur une vraie piste : 4 et 5 sont les meilleurs.</div>
+  </div></section>
+
+  <!-- ================================================== LE FORMAT -->
+  <section class="scene" id="sc-fo"><div class="mid" style="gap:22px">
+    <div class="kick" id="fo-k" style="margin-bottom:14px">Comment on passe</div>
+    <div class="ph"><span class="n">Séries</span><span class="d">4 courses · <b>2 directs</b> par course<br>+ <b>8 repêchés</b> au chrono</span></div>
+    <div class="fleche fo-f">▼</div>
+    <div class="ph"><span class="n">Demi-finales</span><span class="d">2 courses · <b>2 directs</b> par course<br>+ <b>4 repêchés</b> au chrono</span></div>
+    <div class="fleche fo-f">▼</div>
+    <div class="ph" id="fo-fin"><span class="n">Finale</span><span class="d">8 couloirs<br><b>elle ne qualifie personne</b></span></div>
+    <div class="p" id="fo-s" style="margin-top:20px">Les huit repêchés ne sont révélés<br>
+      <span class="ac">qu'après la dernière série</span>.</div>
+  </div></section>
+
+  <!-- ================================================== LE WEEK-END -->
+  <section class="scene" id="sc-we"><div class="mid" style="gap:32px">
+    <div class="kick" id="we-k">Le calendrier</div>
+    <div class="h3" id="we-t">Tout tient en un week-end</div>
+    <div class="jour">
+      <div class="c we-c"><div class="j">SAMEDI</div><div class="l">Les quatre séries,<br>espacées d'1 h 30.</div></div>
+      <div class="c we-c"><div class="j">DIMANCHE</div><div class="l">Les demies,<br>puis la finale.</div></div>
+    </div>
+    <div class="p" id="we-s">Les heures sont en UTC : « le même week-end, partout »<br>
+      n'a de sens que sur <span class="ac">une horloge commune</span>.</div>
+  </div></section>
+
+  <!-- ================================================== LE TITRE -->
+  <section class="scene" id="sc-ti"><div class="mid" style="gap:30px">
+    <div class="kick" id="ti-k">La finale ne qualifie pas</div>
+    <div class="h2" id="ti-t" style="margin-bottom:12px">Elle sacre</div>
+    <div style="display:flex;gap:20px;justify-content:center" id="ti-med"></div>
+    <div class="card" id="ti-card" style="width:912px;padding:38px 44px;text-align:center;margin-top:8px">
+      <div style="font-size:34px;font-weight:800">Le titre se porte <span class="ac">trois mois</span>.
+        <span style="color:var(--mut);font-weight:600;font-size:30px"><br>
+        Quatre championnats nationaux par an — et une échéance qui revient.</span></div>
+    </div>
+    <div class="p" id="ti-s">La médaille, elle, reste accrochée à ton nom.</div>
+  </div></section>
+
+  <!-- ================================================== SORTIE -->
+  <section class="scene" id="sc-fin"><div class="mid" style="gap:38px">
+    <div class="logo" id="fi-logo"><svg><use href="#run"/></svg></div>
+    <div class="h2" id="fi-t">Un chrono se bat.<br>Un titre se gagne</div>
+    <div class="rule" id="fi-r"></div>
+    <div class="p" id="fi-s" style="font-size:42px;color:var(--fg)">Le week-end, <span class="ac">devant tout le monde</span>.</div>
+  </div></section>
+
+  <div id="wipe"></div><div id="flash"></div><div id="grain"></div>
+</div>
+
+<script src="commun.js"></script>
+<script>
+const OR='#F5A524';
+/* ------------------------------------------------------------ construction */
+/* quatre series de huit ; les deux premiers de chaque course passent */
+q('#gr-list').innerHTML=[1,2,3,4].map(n=>`
+  <div class="serie gr-c"><div class="ttl">SÉRIE ${n}</div>
+    ${Array.from({length:8},(_,i)=>`<i class="gr-l" data-q="${(i===3||i===4)?1:0}"></i>`).join('')}
+  </div>`).join('');
+
+q('#ti-med').innerHTML=[['🥇','#F8CD4A'],['🥈','#CBD5E1'],['🥉','#B45309']].map(([e,c])=>`
+  <div class="ti-m" style="width:150px;height:150px;border-radius:26px;border:2px solid ${c}55;
+    background:${c}10;display:flex;align-items:center;justify-content:center;font-size:76px">${e}</div>`).join('');
+
+/* ------------------------------------------------------------------- plans */
+function anOuv(l,d){
+  T(q('#ou-no'),{s:.9+.1*E.oc(sg(l,0,1.4)), o:sg(l,0,.7)*.9, y:20*(1-E.oc(sg(l,0,1.2)))});
+  const t=q('#ou-t'), p=E.oq(sg(l,.25,1.3));
+  T(t,{y:40*(1-p), o:sg(l,.25,.7), s:1.06-.06*p, b:12*(1-p)});
+  const r=q('#ou-r'); r.style.transform=`scaleX(${E.oc(sg(l,.9,1.5)).toFixed(3)})`; r.style.opacity=1;
+  io(q('#ou-s'),l,1.05,1.7,99,99,30);
+  midOut('sc-ouv',E.io(sg(l,d-.4,d)));
+}
+function anEc(l,d){
+  io(q('#ec-k'),l,.05,.5,99,99,22);
+  qa('.ech').forEach((c,i)=>{const a=.35+i*.6, e=E.ob(sg(l,a,a+.6));
+    T(c,{x:-70*(1-e), o:sg(l,a,a+.3), s:.95+.05*e});
+    const vif=l>a+.55&&l<a+1.5;
+    c.style.borderColor=vif?OR+'88':'var(--line)';
+    c.style.background=vif?OR+'0d':'#0b1020';
+    c.style.boxShadow=vif?`0 0 44px ${OR}26`:'none';
+  });
+  qa('.ec-f').forEach((f,i)=>{const a=.85+i*.6;
+    f.style.opacity=sg(l,a,a+.35).toFixed(2);
+    f.style.transform=`translateY(${(12*(1-E.oc(sg(l,a,a+.4)))).toFixed(1)}px)`;});
+  io(q('#ec-s'),l,3.5,4.1,99,99,26);
+  midOut('sc-ec',E.io(sg(l,d-.4,d)));
+}
+function anOv(l,d){
+  io(q('#ov-k'),l,.05,.5,99,99,22);
+  io(q('#ov-card'),l,.2,.9,99,99,54,.94);
+  /* le compteur monte jusqu'a 32 */
+  const n=Math.round(E.oc(sg(l,.6,1.9))*32);
+  q('#ov-n').textContent=String(n);
+  const plein=n>=32, pu=plein?sg(l,1.9,2.3):0;
+  q('#ov-card').style.boxShadow=`0 24px 60px #0008, 0 0 ${(58*pu*(.8+.2*Math.sin(l*6.5))).toFixed(0)}px ${OR}3d`;
+  q('#ov-card').style.borderColor=plein?OR+'66':'var(--line)';
+  io(q('#ov-note'),l,2.3,2.9,99,99,34);
+  midOut('sc-ou',E.io(sg(l,d-.4,d)));
+}
+function anGr(l,d){
+  io(q('#gr-k'),l,.05,.5,99,99,22);
+  io(q('#gr-t'),l,.15,.85,99,99,44);
+  qa('.gr-c').forEach((c,i)=>{const a=.6+i*.16, e=E.ob(sg(l,a,a+.55));
+    T(c,{y:56*(1-e), o:sg(l,a,a+.28), s:.94+.06*e});});
+  /* les deux premiers de chaque serie s'allument */
+  const t0=1.9;
+  qa('.gr-l').forEach((li,i)=>{
+    const serie=Math.floor(i/8), rang=i%8;
+    const on = li.dataset.q==='1' && l > t0+serie*.22;
+    li.className='gr-l'+(on?' q':'');
+    li.style.opacity = on ? 1 : .32;
+  });
+  io(q('#gr-s'),l,3.0,3.6,99,99,26);
+  midOut('sc-gr',E.io(sg(l,d-.4,d)));
+}
+function anFo(l,d){
+  io(q('#fo-k'),l,.05,.5,99,99,22);
+  qa('.ph').forEach((c,i)=>{const a=.3+i*.62, e=E.ob(sg(l,a,a+.6));
+    T(c,{y:56*(1-e), o:sg(l,a,a+.3), s:.95+.05*e});
+    const vif=l>a+.55&&l<a+1.5;
+    c.style.borderColor=vif?OR+'88':'var(--line)';
+    c.style.background=vif?OR+'0d':'#0b1020';
+  });
+  qa('.fo-f').forEach((f,i)=>{const a=.8+i*.62;
+    f.style.opacity=sg(l,a,a+.35).toFixed(2);});
+  /* la finale bat une fois posee */
+  const fin=q('#fo-fin'), pu=sg(l,2.4,2.9);
+  fin.style.boxShadow=`0 0 ${(52*pu*(.78+.22*Math.sin(l*6.5))).toFixed(0)}px ${OR}3d`;
+  io(q('#fo-s'),l,3.3,3.9,99,99,26);
+  midOut('sc-fo',E.io(sg(l,d-.4,d)));
+}
+function anWe(l,d){
+  io(q('#we-k'),l,.05,.5,99,99,22);
+  io(q('#we-t'),l,.15,.8,99,99,40);
+  qa('.we-c').forEach((c,i)=>{const a=.5+i*.3, e=E.ob(sg(l,a,a+.6));
+    T(c,{x:(i?70:-70)*(1-e), o:sg(l,a,a+.3), s:.95+.05*e});});
+  io(q('#we-s'),l,1.7,2.3,99,99,26);
+  midOut('sc-we',E.io(sg(l,d-.4,d)));
+}
+function anTi(l,d){
+  io(q('#ti-k'),l,.05,.5,99,99,22);
+  io(q('#ti-t'),l,.2,.85,99,99,48);
+  qa('.ti-m').forEach((m,i)=>{const a=.7+i*.2, p=E.el(sg(l,a,a+1.0));
+    T(m,{s:.4+.6*p, o:sg(l,a,a+.25), r:(1-p)*-18});});
+  io(q('#ti-card'),l,1.7,2.35,99,99,44);
+  io(q('#ti-s'),l,2.5,3.1,99,99,26);
+  midOut('sc-ti',E.io(sg(l,d-.4,d)));
+}
+function anFin(l,d){
+  const p=E.el(sg(l,.05,1.1));
+  T(q('#fi-logo'),{s:.55+.45*p,o:sg(l,.05,.3)});
+  io(q('#fi-t'),l,.35,1.0,99,99,40);
+  const r=q('#fi-r'); r.style.transform=`scaleX(${E.oc(sg(l,.95,1.45)).toFixed(3)})`; r.style.opacity=1;
+  const s=q('#fi-s'); io(s,l,1.15,1.75,99,99,26);
+  if(l>1.8) s.style.opacity=(.72+.28*Math.abs(Math.sin(l*2.6))).toFixed(2);
+  midOut('sc-fin',E.io(sg(l,d-.5,d)));
+}
+
+/* --------------------------------------------------------------- timeline */
+monterFilm({
+  duree: 34.2,
+  accent: OR,
+  etiquette: 'Les championnats',
+  chapitres: [[0,13.0],[13.0,24.0],[24.0,34.2]],
+  cuts: [13.0, 24.0],
+  flashes: [{ t: 27.8+.9, force: .5, duree: .3, secousse: .3 }],
+  scenes: {
+    ouv:['sc-ouv', 0,    2.8],
+    ec: ['sc-ec',  2.8,  8.6],
+    ov: ['sc-ou',  8.6,  13.0],
+    gr: ['sc-gr',  13.0, 17.8],
+    fo: ['sc-fo',  17.8, 24.0],
+    we: ['sc-we',  24.0, 27.8],
+    ti: ['sc-ti',  27.8, 31.6],
+    fin:['sc-fin', 31.6, 34.2],
+  },
+  anim: { ouv:anOuv, ec:anEc, ov:anOv, gr:anGr, fo:anFo, we:anWe, ti:anTi, fin:anFin },
+  photos: [
+    [1.8,  'ouverture'],
+    [7.8,  'trois-echelons'],
+    [12.2, 'ouvrir-un-national'],
+    [17.0, 'la-grille'],
+    [23.0, 'le-format'],
+    [27.0, 'le-week-end'],
+    [31.0, 'le-titre'],
+    [33.4, 'sortie'],
+  ],
+});
+</script>

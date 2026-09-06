@@ -1,0 +1,276 @@
+<meta charset="utf-8">
+<title>Sprinter — le classement des duels</title>
+<link rel="stylesheet" href="commun.css">
+
+<div id="stage">
+  <div id="bgtrack"></div><div id="glow"></div><div id="glow2"></div>
+  <div id="streaks"></div><div id="vign"></div>
+  <div id="prog"></div><div id="etiq"></div>
+
+  <svg width="0" height="0" style="position:absolute"><symbol id="run" viewBox="0 0 24 24">
+    <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.7 12 16 13 17.49 13v-2c-1.5 0-2.8-.8-3.4-2l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+  </symbol></svg>
+
+  <!-- ================================================== OUVERTURE -->
+  <section class="scene" id="sc-ouv"><div class="mid" style="gap:34px">
+    <div class="chapno" id="ou-no" style="-webkit-text-stroke-color:#F8CD4A3d">LP</div>
+    <div class="h1" id="ou-t">Le classement<br>des duels</div>
+    <div class="rule" id="ou-r"></div>
+    <div class="p" id="ou-s">Il ne récompense pas la vitesse pure.<br>
+      Il récompense <span class="ac">l'engagement</span>.</div>
+  </div></section>
+
+  <!-- ================================================== DEUX CLASSEMENTS -->
+  <section class="scene" id="sc-deux"><div class="mid" style="gap:40px">
+    <div class="kick" id="dx-k">Deux classements, pas un</div>
+    <div class="card dx-c" style="width:912px;padding:44px 46px">
+      <div class="mono" style="font-size:26px;letter-spacing:.2em;color:var(--mut)">TOP 500</div>
+      <div class="h3" style="text-align:left;margin:12px 0 16px">La vitesse pure</div>
+      <div style="font-size:33px;font-weight:600;color:#cbd5e1">Un seul chrono compte :
+        <span class="mono ac">ton meilleur</span>. Cours mille fois, il n'en reste qu'un.</div>
+    </div>
+    <div class="mono" id="dx-vs" style="font-size:44px;color:var(--mut);letter-spacing:.3em">CONTRE</div>
+    <div class="card dx-c" style="width:912px;padding:44px 46px;border-color:#F8CD4A55;background:#F8CD4A0d">
+      <div class="mono ac" style="font-size:26px;letter-spacing:.2em">CLASSEMENT DES DUELS</div>
+      <div class="h3" style="text-align:left;margin:12px 0 16px">L'engagement</div>
+      <div style="font-size:33px;font-weight:600;color:#e6ecfa"><span class="ac">Tous</span> tes duels
+        comptent — ceux que tu lances comme ceux que tu relèves.</div>
+    </div>
+    <div class="p" id="dx-s">Tu peux être 300<sup>e</sup> au chrono<br>et premier ici.</div>
+  </div></section>
+
+  <!-- ================================================== LE BAREME -->
+  <section class="scene" id="sc-bar"><div class="mid" style="gap:34px">
+    <div class="kick" id="ba-k">Le barème</div>
+    <div class="h2" id="ba-t" style="margin-bottom:6px">Relever rapporte<br>plus que lancer</div>
+    <div style="display:flex;gap:24px;width:912px;margin-top:14px">
+      <div class="card ba-c" style="flex:1;padding:36px 30px;text-align:center">
+        <div class="mono" style="font-size:24px;letter-spacing:.18em;color:var(--mut)">TU LANCES</div>
+        <div style="font-family:Outfit;font-weight:900;font-size:40px;margin:16px 0 22px">LE DÉFI</div>
+        <div class="mono ok" style="font-size:56px;font-weight:700">+20</div>
+        <div class="mono" style="font-size:22px;color:var(--mut);letter-spacing:.16em;margin-top:4px">VICTOIRE</div>
+        <div class="mono ko" style="font-size:44px;font-weight:700;margin-top:22px">−25</div>
+        <div class="mono" style="font-size:22px;color:var(--mut);letter-spacing:.16em;margin-top:4px">DÉFAITE</div>
+      </div>
+      <div class="card ba-c" style="flex:1;padding:36px 30px;text-align:center;
+           border-color:#F8CD4A66;background:#F8CD4A10">
+        <div class="mono ac" style="font-size:24px;letter-spacing:.18em">TU RELÈVES</div>
+        <div style="font-family:Outfit;font-weight:900;font-size:40px;margin:16px 0 22px">LE DÉFI</div>
+        <div class="mono ok" style="font-size:56px;font-weight:700">+25</div>
+        <div class="mono" style="font-size:22px;color:var(--mut);letter-spacing:.16em;margin-top:4px">VICTOIRE</div>
+        <div class="mono ko" style="font-size:44px;font-weight:700;margin-top:22px">−20</div>
+        <div class="mono" style="font-size:22px;color:var(--mut);letter-spacing:.16em;margin-top:4px">DÉFAITE</div>
+      </div>
+    </div>
+    <div class="p" id="ba-s" style="margin-top:22px">Tu gagnes plus, tu perds moins.<br>
+      <span style="color:#5FD3E8">Le nul ne bouge rien : 0 des deux côtés.</span></div>
+  </div></section>
+
+  <!-- ================================================== L'ECHELLE -->
+  <section class="scene" id="sc-ech"><div class="mid" style="gap:36px">
+    <div class="kick" id="ec-k">L'échelle</div>
+    <div class="ladder" id="ec-list"></div>
+    <div class="card" id="ec-note" style="width:912px;padding:30px 36px;text-align:center">
+      <div style="font-size:34px;font-weight:800"><span class="mono ac">100 LP</span> pour passer au palier suivant.
+        <span style="color:var(--mut);font-weight:600"><br>Quatre étages de quatre divisions, IV → I.
+        Puis Légende, qui n'en a pas.</span></div>
+    </div>
+  </div></section>
+
+  <!-- ================================================== LA MONTEE -->
+  <section class="scene" id="sc-mon"><div class="mid" style="gap:44px">
+    <div class="kick" id="mo-k">Points de ligue</div>
+    <div class="card" id="mo-card" style="width:912px;padding:56px 54px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="badge" id="mo-badge" style="color:var(--gold);border-color:#F8CD4A66;background:#F8CD4A14">
+          <span id="mo-rank">NATIONAL III</span>
+        </div>
+        <div class="mono" id="mo-val" style="font-size:52px;font-weight:700">0<span
+          style="font-size:32px;color:var(--mut)"> LP</span></div>
+      </div>
+      <div style="margin-top:38px;height:26px;border-radius:26px;background:#ffffff12;overflow:hidden">
+        <div id="mo-bar" style="height:100%;width:0;border-radius:26px;
+          background:linear-gradient(90deg,#F8CD4A,#ffe89a)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:18px" class="mono">
+        <span id="mo-div" style="font-size:24px;color:var(--mut);letter-spacing:.12em">DIVISION III</span>
+        <span id="mo-next" style="font-size:24px;color:var(--mut);letter-spacing:.12em">100 LP → DIVISION II</span>
+      </div>
+    </div>
+    <div id="mo-gain" class="mono ac" style="font-size:92px;font-weight:700;text-shadow:0 0 60px #F8CD4A66">+25 LP</div>
+    <div id="mo-up" class="h2 ac" style="position:absolute;left:0;right:0;top:430px">Promotion</div>
+    <div class="p" id="mo-s">Un duel relevé et gagné,<br>et la barre change d'étage.</div>
+  </div></section>
+
+  <!-- ================================================== LE MOUVEMENT -->
+  <section class="scene" id="sc-mvt"><div class="mid" style="gap:34px">
+    <div class="kick" id="mv-k">Depuis ton dernier passage</div>
+    <div style="display:flex;flex-direction:column;gap:16px" id="mv-list"></div>
+    <div class="p" id="mv-s" style="margin-top:16px">Les flèches ne comparent pas à hier.<br>
+      Elles comparent à <span class="ac">la dernière fois que tu as regardé</span>.</div>
+  </div></section>
+
+  <!-- ================================================== SORTIE -->
+  <section class="scene" id="sc-fin"><div class="mid" style="gap:38px">
+    <div class="logo" id="fi-logo"><svg><use href="#run"/></svg></div>
+    <div class="h2" id="fi-t">Ce n'est pas le plus<br>rapide qui monte</div>
+    <div class="rule" id="fi-r"></div>
+    <div class="p" id="fi-s" style="font-size:42px;color:var(--fg)">C'est celui qui <span class="ac">répond</span>.</div>
+  </div></section>
+
+  <div id="wipe"></div><div id="flash"></div><div id="grain"></div>
+</div>
+
+<script src="commun.js"></script>
+<script>
+/* ------------------------------------------------------------ construction */
+const ETAGES = [['DÉPARTEMENTAL','#B45309'],['RÉGIONAL','#CBD5E1'],['NATIONAL','#F8CD4A'],
+                ['ÉLITE','#5FD3E8'],['LÉGENDE','#F0ABFC']];
+q('#ec-list').innerHTML = ETAGES.map(([n,c],i)=>`
+  <div class="lrow ec-r">
+    <span class="nm" style="color:${c}">${n}</span>
+    <span class="divs">${i<4 ? ['IV','III','II','I'].map(d=>`<b>${d}</b>`).join('')
+      : `<b style="border-color:${c}55;color:${c}">SANS DIVISION</b>`}</span>
+  </div>`).join('');
+
+const CLAS = [
+  ['1','ZEPH','ÉLITE I','2 141', 0,  false, '🥇'],
+  ['2','NORA','ÉLITE II','2 090', 3, false, ''],
+  ['3','TOI','ÉLITE II','2 088', 6, true,  ''],
+  ['4','KAYS','ÉLITE III','1 977', -2, false, ''],
+  ['5','ILAN','NATIONAL I','1 902', 1, false, ''],
+];
+q('#mv-list').innerHTML = CLAS.map(([r,n,e,lp,mv,moi,med])=>`
+  <div class="rowb mv-r" style="${moi?'border-color:#F8CD4A88;background:#F8CD4A12':''}">
+    <span class="rk"${moi?' style="color:#F8CD4A"':''}>${r}</span>
+    <span class="nm"${moi?' style="color:#F8CD4A"':''}>${n}${med?` <span style="font-size:32px">${med}</span>`:''}</span>
+    <span class="mono" style="font-size:24px;letter-spacing:.1em;color:var(--mut);width:190px">${e}</span>
+    <span class="mono mv-a" style="font-size:28px;font-weight:700;width:96px;text-align:right;opacity:0;color:${
+      mv>0?'#4ADE80':mv<0?'#FB7185':'#94A3B8'}">${mv>0?'▲ '+mv:mv<0?'▼ '+Math.abs(mv):'—'}</span>
+  </div>`).join('');
+
+/* ------------------------------------------------------------------- plans */
+function anOuv(l,d){
+  T(q('#ou-no'),{s:.9+.1*E.oc(sg(l,0,1.4)), o:sg(l,0,.7)*.9, y:20*(1-E.oc(sg(l,0,1.2)))});
+  const t=q('#ou-t'), p=E.oq(sg(l,.25,1.3));
+  T(t,{y:40*(1-p), o:sg(l,.25,.7), s:1.06-.06*p, b:12*(1-p)});
+  const r=q('#ou-r'); r.style.transform=`scaleX(${E.oc(sg(l,.9,1.5)).toFixed(3)})`; r.style.opacity=1;
+  io(q('#ou-s'),l,1.05,1.7,99,99,30);
+  midOut('sc-ouv',E.io(sg(l,d-.4,d)));
+}
+function anDeux(l,d){
+  io(q('#dx-k'),l,.05,.5,99,99,22);
+  cascade('.dx-c',l,.3,.55,.6,0,60);
+  io(q('#dx-vs'),l,.75,1.15,99,99,0);
+  io(q('#dx-s'),l,1.85,2.4,99,99,26);
+  const deux=qa('.dx-c')[1], pu=sg(l,1.5,2.0);
+  deux.style.boxShadow=`0 0 ${(50*pu*(.8+.2*Math.sin(l*7))).toFixed(0)}px #F8CD4A33`;
+  midOut('sc-deux',E.io(sg(l,d-.4,d)));
+}
+function anBar(l,d){
+  io(q('#ba-k'),l,.05,.5,99,99,22);
+  io(q('#ba-t'),l,.2,.85,99,99,44);
+  qa('.ba-c').forEach((c,i)=>{const a=.6+i*.22, e=E.ob(sg(l,a,a+.6));
+    T(c,{x:(i?70:-70)*(1-e), o:sg(l,a,a+.3), s:.94+.06*e});});
+  /* la carte « relever » se detache une fois les deux posees */
+  const r=qa('.ba-c')[1], pu=sg(l,1.7,2.2);
+  T(r,{x:0, o:1, s:1+.035*pu});
+  r.style.boxShadow=`0 24px 60px #0008, 0 0 ${(56*pu*(.78+.22*Math.sin(l*6.5))).toFixed(0)}px #F8CD4A3d`;
+  io(q('#ba-s'),l,2.5,3.1,99,99,26);
+  midOut('sc-bar',E.io(sg(l,d-.4,d)));
+}
+function anEch(l,d){
+  io(q('#ec-k'),l,.05,.5,99,99,22);
+  cascade('.ec-r',l,.3,.16,.6,-70,0);
+  /* on remonte l'echelle : chaque etage s'allume a son tour */
+  const rows=qa('.ec-r'); const cur=Math.floor(cl((l-1.5)/.42,0,4.999));
+  rows.forEach((r,i)=>{
+    const on = l>1.5 && i===cur;
+    const c = ETAGES[i][1];
+    r.style.borderColor = on ? c+'99' : 'var(--line)';
+    r.style.background  = on ? c+'12' : '#0b1020';
+    r.style.boxShadow   = on ? `0 0 46px ${c}2e` : 'none';
+    r.querySelectorAll('.divs b').forEach(b=>{ b.style.color = on ? c+'cc' : '#ffffff33';
+      b.style.borderColor = on ? c+'55' : '#ffffff1a'; });
+  });
+  io(q('#ec-note'),l,3.5,4.1,99,99,34);
+  midOut('sc-ech',E.io(sg(l,d-.4,d)));
+}
+function anMon(l,d){
+  io(q('#mo-k'),l,.05,.5,99,99,22);
+  io(q('#mo-card'),l,.15,.8,99,99,54,.96);
+  const PROMO=2.30;
+  /* 78 LP au depart, +25 : on passe 100, donc on change de division */
+  const av=78, gain=25;
+  const p=E.io(sg(l,1.5,2.30));
+  const lp=av+gain*p;
+  const aff=lp<100?lp:lp-100;
+  q('#mo-val').innerHTML=Math.round(aff)+'<span style="font-size:32px;color:var(--mut)"> LP</span>';
+  q('#mo-bar').style.width=(cl(aff/100)*100).toFixed(1)+'%';
+  const monte=l>=PROMO;
+  q('#mo-rank').textContent=monte?'NATIONAL II':'NATIONAL III';
+  q('#mo-div').textContent=monte?'DIVISION II':'DIVISION III';
+  q('#mo-next').textContent=monte?'100 LP → DIVISION I':'100 LP → DIVISION II';
+  const b=q('#mo-badge'), pop=monte?Math.max(0,1-(l-PROMO)/.5):0;
+  T(b,{s:1+.16*pop, o:1});
+  b.style.boxShadow=`0 0 ${(60*pop).toFixed(0)}px #F8CD4A88`;
+  /* le gain flotte puis s'efface */
+  const g=q('#mo-gain'), gi=E.ob(sg(l,1.35,1.85));
+  T(g,{y:36*(1-gi)-70*E.io(sg(l,2.1,2.7)), o:sg(l,1.35,1.6)*(1-sg(l,2.25,2.75)), s:.7+.3*gi});
+  /* PROMOTION traverse l'ecran */
+  const u=q('#mo-up'), up=sg(l,PROMO,PROMO+.75);
+  u.style.opacity=(sg(l,PROMO,PROMO+.15)*(1-sg(l,PROMO+.6,PROMO+.95))).toFixed(2);
+  u.style.transform=`translateY(${(60-120*E.oq(up)).toFixed(0)}px) scale(${(1+.22*E.oc(up)).toFixed(3)})`;
+  io(q('#mo-s'),l,2.9,3.5,99,99,28);
+  midOut('sc-mon',E.io(sg(l,d-.4,d)));
+}
+function anMvt(l,d){
+  io(q('#mv-k'),l,.05,.5,99,99,22);
+  cascade('.mv-r',l,.3,.15,.58,70,0);
+  qa('.mv-a').forEach((a,i)=>{const s=1.4+i*.12;
+    a.style.opacity=sg(l,s,s+.3).toFixed(2);
+    a.style.transform=`translateY(${(14*(1-E.ob(sg(l,s,s+.45)))).toFixed(1)}px)`;});
+  const moi=qa('.mv-r')[2], pu=sg(l,2.1,2.6);
+  moi.style.boxShadow=`0 0 ${(46*pu*(.75+.25*Math.sin(l*7))).toFixed(0)}px #F8CD4A44`;
+  io(q('#mv-s'),l,2.7,3.3,99,99,28);
+  midOut('sc-mvt',E.io(sg(l,d-.4,d)));
+}
+function anFin(l,d){
+  const p=E.el(sg(l,.05,1.1));
+  T(q('#fi-logo'),{s:.55+.45*p,o:sg(l,.05,.3)});
+  io(q('#fi-t'),l,.35,1.0,99,99,40);
+  const r=q('#fi-r'); r.style.transform=`scaleX(${E.oc(sg(l,.95,1.45)).toFixed(3)})`; r.style.opacity=1;
+  const s=q('#fi-s'); io(s,l,1.15,1.75,99,99,26);
+  if(l>1.8) s.style.opacity=(.72+.28*Math.abs(Math.sin(l*2.6))).toFixed(2);
+  midOut('sc-fin',E.io(sg(l,d-.5,d)));
+}
+
+/* --------------------------------------------------------------- timeline */
+monterFilm({
+  duree: 28.4,
+  accent: '#F8CD4A',
+  etiquette: 'Classement des duels',
+  chapitres: [[0,12.4],[12.4,21.4],[21.4,28.4]],
+  cuts: [12.4, 21.4],
+  flashes: [{ t: 17.0+2.30, force: .72, duree: .28, secousse: .42 }],
+  scenes: {
+    ouv:['sc-ouv', 0,    3.0],
+    deux:['sc-deux',3.0,  7.4],
+    bar:['sc-bar', 7.4,  12.4],
+    ech:['sc-ech', 12.4, 17.0],
+    mon:['sc-mon', 17.0, 21.4],
+    mvt:['sc-mvt', 21.4, 25.4],
+    fin:['sc-fin', 25.4, 28.4],
+  },
+  anim: { ouv:anOuv, deux:anDeux, bar:anBar, ech:anEch, mon:anMon, mvt:anMvt, fin:anFin },
+  photos: [
+    [1.9,  'ouverture'],
+    [6.2,  'deux-classements'],
+    [10.6, 'bareme'],
+    [16.2, 'echelle'],
+    [19.75, 'promotion'],
+    [24.4, 'mouvement'],
+    [27.4, 'sortie'],
+  ],
+});
+</script>
