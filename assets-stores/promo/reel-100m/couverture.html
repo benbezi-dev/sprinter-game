@@ -1,0 +1,76 @@
+<meta charset="utf-8">
+<title>Sprinter — couverture reel 100 m</title>
+<style>
+/* ===========================================================================
+   La couverture du reel « 100 m ». 1080 x 1920, charte de assets-stores/promo
+   (meme fond, meme or, memes fontes que source-video/video.html et que
+   explications/commun.css) : une vignette qui s'en ecarterait se verrait au
+   fil, a cote des autres publications.
+
+   Elle ne porte que deux choses : la mesure, et le chrono. Tout le reste est
+   du fond.
+   =========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Space+Mono:wght@700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#000;overflow:hidden}
+:root{ --bg:#060913; --gold:#F8CD4A; --mut:#94A3B8; }
+
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;
+  background:radial-gradient(125% 75% at 28% 16%, #17245080 0%, #0a0f2200 55%), #060913;}
+#bgtrack{position:absolute;inset:-25%;opacity:.55;transform:rotate(-9deg);
+  background:repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 2px, transparent 2px 118px);}
+#glow{position:absolute;left:-15%;top:-10%;width:900px;height:900px;border-radius:50%;
+  background:radial-gradient(circle,#F8CD4A22 0%,transparent 68%);filter:blur(30px)}
+#glow2{position:absolute;right:-20%;bottom:-5%;width:1000px;height:1000px;border-radius:50%;
+  background:radial-gradient(circle,#2563EB2e 0%,transparent 68%);filter:blur(40px)}
+#vign{position:absolute;inset:0;background:radial-gradient(115% 75% at 50% 45%,transparent 40%,#000000cc 100%)}
+#grain{position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* LA MESURE — petite, au-dessus, et volontairement grise.
+   L'or n'est porte que par le chrono : deux ors se disputeraient l'oeil a la
+   taille d'un ongle, et c'est le chiffre qui doit gagner. */
+#mesure{position:absolute;left:0;right:0;top:604px;text-align:center;
+  font-family:'Outfit',sans-serif;font-weight:800;font-size:72px;line-height:1;
+  letter-spacing:.34em;text-indent:.34em;   /* rattrape la chasse ajoutee a droite */
+  text-transform:uppercase;color:var(--mut)}
+
+/* LE CHRONO — au centre exact, dans le tiers median de l'image (y 640 -> 1280),
+   ou rien d'autre n'entre.
+
+   LA TAILLE EST DICTEE PAR LA LARGEUR, PAS PAR LA HAUTEUR. Space Mono a une
+   chasse de 0,612 em et une hauteur de chiffre de 0,72 em : « 8,25 » vaut donc
+   4 x 0,612 = 2,448 em de large pour 0,72 em de haut, un rapport de 3,4 pour 1.
+   Porter le chiffre au tiers de 1920 px (640 px de haut) demanderait 889 px de
+   corps, soit 2 176 px de large — le double du cadre. Le chiffre est donc pose
+   a la taille maximale que la largeur autorise, et c'est la BANDE qui lui
+   donne son tiers de hauteur. C'est cette largeur-la, de toute facon, qui le
+   rend lisible en vignette : au fil, on lit large avant de lire haut.
+
+   400 px de corps, virgule resserree : « 8,25 » mesure 859 px de large sur
+   288 px de haut ; avec l'ecart et l'unite, le bloc fait 968 px, soit 49 px
+   de marge a gauche et 64 a droite — l'unite porte son approche a elle, on
+   centre sur la chasse et l'oeil, lui, se cale sur les chiffres. */
+#chrono{position:absolute;left:0;right:0;top:960px;transform:translateY(-50%);
+  display:flex;align-items:baseline;justify-content:center;gap:30px;
+  font-family:'Space Mono',monospace;font-weight:700;color:var(--gold);
+  line-height:.72;                          /* la boite epouse la hauteur du chiffre */
+  text-shadow:0 0 90px #F8CD4A3d}
+#chrono .n{font-size:400px}
+/* La virgule est le seul endroit ou l'on desserre le monospace. Space Mono lui
+   donne la meme chasse qu'a un 8, et le chiffre se lisait « 8 , 25 » en trois
+   morceaux ; on lui reprend 0,15 em de chaque cote pour qu'elle se colle au 8.
+   Les chiffres, eux, gardent leur chasse : c'est ce qui fait un chrono. */
+#chrono .v{margin:0 -.15em}
+#chrono .u{font-size:128px;opacity:.8}
+</style>
+
+<div id="stage">
+  <div id="bgtrack"></div>
+  <div id="glow"></div>
+  <div id="glow2"></div>
+  <div id="vign"></div>
+  <div id="mesure">100 m</div>
+  <div id="chrono"><span class="n">8<span class="v">,</span>25</span><span class="u">s</span></div>
+  <div id="grain"></div>
+</div>

@@ -18,6 +18,13 @@ node source-video/render.mjs full                # les 1845 images
 
 Le chapitrage vit dans la constante `S` en bas de `video.html` (scène → début, fin).
 
+## Reel « 100 m »
+
+`reel-100m/` — un autre film, court celui-là : dix secondes, une prise, une
+coupe. Le dossier ne contient pas la vidéo — elle se capture dans le jeu —
+mais de quoi la tourner et l'habiller : plan de tournage seconde par seconde,
+cartons et leurs timecodes, sous-titres SRT, et la couverture avec sa source.
+
 ## Storyboard
 
 `storyboard/` contient les 17 planches (`.dc.html`) et leur disposition
