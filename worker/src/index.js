@@ -33,6 +33,7 @@ import {
   peutSonner, noterEnvoi, noterOuverture, poserRythme, rythmeDe,
   tauxOuverture, raisonsDeNonEnvoi, RYTHMES,
 } from './journal.js';
+import { mesures } from './mesures.js';
 import {
   EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
@@ -1086,6 +1087,20 @@ export default {
         ouverture: await tauxOuverture(env.DB, depuis),
         non_envoyees: await raisonsDeNonEnvoi(env.DB, depuis),
       });
+    }
+
+    // Les sept chiffres de l'Objectif du jour. Sous cle d'administration :
+    // ils comptent des joueurs, meme s'ils n'en nomment aucun.
+    if (url.pathname === '/objectif/mesures' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const jours = Math.min(Number(url.searchParams.get('jours')) || 30, 365);
+      // Les trois tables que `mesures` lit, et dont elle n'est proprietaire
+      // d'aucune. Sans ces lignes, la route rend 500 sur une base neuve —
+      // troisieme fois que ce module s'y prend les pieds, et la troisieme fois
+      // ne s'est vue qu'en montant un worker sur une base vierge.
+      await ensureObjectifTables(env.DB);
+      await ensureRaceTable(env.DB);
+      return json(await mesures(env.DB, jours));
     }
 
     // Ce qu'il y a a regarder. Sous cle d'administration : un signalement
@@ -3222,6 +3237,11 @@ export default {
       const { device_id } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       await ensurePushTable(env.DB);
+      // On note AVANT d'effacer : apres, on ne sait plus qui c'etait, et
+      // « combien de joueurs ont coupe les notifications » redevient une
+      // question sans reponse. C'est la seule trace qu'on garde d'un depart.
+      await noterEnvoi(env.DB, { nameKey: '-', deviceId: device_id,
+        type: 'desabonnement', statut: 'coupe', raison: 'web' });
       await env.DB.prepare(
         'DELETE FROM push_subscriptions WHERE device_id = ?'
       ).bind(device_id).run();
@@ -3328,6 +3348,10 @@ export default {
       const { device_id } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       await ensurePushTable(env.DB);
+      // Meme trace que du cote web, et pour la meme raison : une fois la ligne
+      // effacee, plus rien ne dit que quelqu'un est parti.
+      await noterEnvoi(env.DB, { nameKey: '-', deviceId: device_id,
+        type: 'desabonnement', statut: 'coupe', raison: 'natif' });
       await env.DB.prepare(
         'DELETE FROM push_jetons WHERE device_id = ?'
       ).bind(device_id).run();

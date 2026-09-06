@@ -924,8 +924,8 @@ if (!joignable) {
   console.log(`   ⚠ ${B} ne repond pas — moitie des routes NON VERIFIEE.`);
   console.log('     (cd worker && npx wrangler dev), puis relancer.');
 } else {
-  const lire = async u => {
-    const r = await fetch(B + u, { signal: AbortSignal.timeout(8000) });
+  const lire = async (u, h = {}) => {
+    const r = await fetch(B + u, { headers: h, signal: AbortSignal.timeout(8000) });
     return { statut: r.status, corps: await r.json().catch(() => ({})) };
   };
   const poster = async (u, b) => {
@@ -1016,7 +1016,7 @@ if (!joignable) {
 // Ce qui suit ECRIT, donc uniquement en local : on ne fabrique pas de courses
 // dans la base de production pour verifier une regle.
 if (joignable && !B.includes('workers.dev')) {
-  const lire = async u => (await fetch(B + u)).json();
+  const lire = async (u, h = {}) => (await fetch(B + u, { headers: h })).json();
   const poster = async (u, b, h = {}) => {
     const r = await fetch(B + u, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...h },
@@ -1108,6 +1108,106 @@ if (joignable && !B.includes('workers.dev')) {
   const tableauApres = await lire('/leaderboard?race=100');
   ok('...et le classement ne contient toujours pas « Anonyme »',
      !(tableauApres.entries || []).some(e => estAnonyme(e.name)));
+
+  titre('LES MESURES DISENT LE VRAI, MEME QUAND SQL PREFERE NULL');
+
+  // Cinq defis dont on connait les chiffres a la main. Deux bugs se sont caches
+  // ici, et aucun des deux ne plantait :
+  //
+  //   `NULL IN ('argent','or')` ne vaut pas faux, il vaut NULL — que AND
+  //   propage, que NOT propage encore, et qu'un CASE compte comme zero. Le
+  //   joueur qui court une fois sans rien decrocher, exactement celui qui rate
+  //   et ne relance pas, sortait du denominateur : 100 % annonce pour 67 %.
+  //
+  //   Et `date(julianday(jour) + n - 2440588)` rendait une date qui ne
+  //   correspondait a rien : la retention repondait zero, tout le temps, ce qui
+  //   ressemble a « personne ne revient » et se lit comme un resultat.
+  //
+  // ON PEUPLE LA BASE DIRECTEMENT, par wrangler, et jamais par une route. Une
+  // route d'essai est une porte de plus a tenir fermee en production ; le
+  // harnais, lui, n'existe que sur cette machine.
+  // Uniquement contre le worker local ORDINAIRE : le harnais peuple la base de
+  // `worker/`, et un worker monte ailleurs — celui de l'essai sur base neuve,
+  // par exemple — a la sienne. Interroger l'un en peuplant l'autre ne dit rien.
+  if (B !== 'http://127.0.0.1:8788') {
+    console.log(`   (mesures verifiees contre le worker local de worker/, pas ${B})`);
+  } else {
+    const { execFileSync } = await import('node:child_process');
+    const sql = (commande) => execFileSync('npx',
+      ['wrangler', 'd1', 'execute', 'sprinter-leaderboard', '--local',
+       '--json', '--command', commande],
+      { cwd: 'worker', maxBuffer: 32 * 1024 * 1024 }).toString();
+
+    const marque = 'tm' + Math.random().toString(36).slice(2, 7);
+    const maintenant = Date.now();
+    const hier = maintenant - 86400000;
+    const jourHier = new Date(hier).toISOString().slice(0, 10);
+    const o = (qui, n, palier, valide) =>
+      `('${marque}-${qui}','${jourHier}','midi','100',8800,8500,0.035,'repli',` +
+      `${hier},${n},${palier ? 8700 : 9900},${valide ? hier : 'NULL'},0,` +
+      `${palier ? `'${palier}'` : 'NULL'})`;
+
+    // ON MESURE L'ECART, PAS LE TOTAL. La base locale peut deja contenir des
+    // objectifs — les miens d'hier, ceux d'un autre essai — et vider la base
+    // de quelqu'un pour faire passer un test est le genre de service qu'on ne
+    // rend pas. Ce qu'on ajoute est connu ; c'est donc ce qu'on verifie.
+    const avant = await lire('/objectif/mesures?jours=2', { 'X-Sprinter-Admin': ADMIN });
+
+    sql(`DELETE FROM objectifs WHERE name_key LIKE '${marque}%';
+         DELETE FROM races WHERE name_key LIKE '${marque}%';
+         INSERT INTO objectifs (name_key,jour,creneau,race_key,cible_ms,pb_ms,
+           marge,methode,cree_le,tentatives,meilleur_ms,valide_le,points,palier)
+         VALUES ${[
+           o('a', 4, 'argent', true),   // relance puis valide
+           o('b', 1, 'argent', true),   // valide du premier coup
+           o('c', 2, 'bronze', false),  // relance, pas valide
+           o('d', 1, null, false),      // rate une fois, ne relance pas
+           o('e', 0, null, false),      // servi, jamais joue
+         ].join(',')};
+         INSERT INTO races (device_id,name_key,name,race_key,time_ms,mode,level_idx,created_at)
+         VALUES ('dtm','${marque}-a','A','100',8700,'oneshot',4,${maintenant}),
+                ('dtm','${marque}-c','C','100',9000,'oneshot',4,${maintenant});`);
+
+    const m = await lire('/objectif/mesures?jours=2', { 'X-Sprinter-Admin': ADMIN });
+    const d = (apres, av) => (apres || 0) - (av || 0);
+    const k = m.kpi_courses_par_defi, ka = avant.kpi_courses_par_defi;
+    const palierDe_ = x => Object.fromEntries((x.paliers || []).map(p => [p.palier, p.n]));
+    const pa = palierDe_(avant), pm = palierDe_(m);
+
+    ok('quatre defis joues de plus, sur cinq servis de plus',
+       d(k.defis_joues, ka.defis_joues) === 4
+       && d(m.participation.servis, avant.participation.servis) === 5,
+       JSON.stringify({ joues: d(k.defis_joues, ka.defis_joues),
+                        servis: d(m.participation.servis, avant.participation.servis) }));
+    ok('huit courses de plus', d(k.courses, ka.courses) === 8,
+       String(d(k.courses, ka.courses)));
+    ok('un seul defi de plus atteint les trois courses',
+       d(k.au_moins_trois, ka.au_moins_trois) === 1,
+       String(d(k.au_moins_trois, ka.au_moins_trois)));
+
+    ok('deux argents, un bronze, un rien',
+       d(pm.argent, pa.argent) === 2 && d(pm.bronze, pa.bronze) === 1
+       && d(pm.rien, pa.rien) === 1,
+       JSON.stringify({ argent: d(pm.argent, pa.argent),
+                        bronze: d(pm.bronze, pa.bronze), rien: d(pm.rien, pa.rien) }));
+
+    ok('la revanche compte TROIS echecs de plus, pas deux',
+       d(m.revanche.apres_echec, avant.revanche.apres_echec) === 3
+       && d(m.revanche.relances, avant.revanche.relances) === 2,
+       `${d(m.revanche.relances, avant.revanche.relances)}/` +
+       `${d(m.revanche.apres_echec, avant.revanche.apres_echec)} — celui qui rate sans ` +
+       `rien decrocher a un palier NULL, et SQL le faisait disparaitre du denominateur`);
+
+    const j1 = m.retention.find(r => r.jour === 'J1');
+    const j1a = avant.retention.find(r => r.jour === 'J1');
+    ok('la retention J1 voit les DEUX qui sont revenus',
+       d(j1.cohorte, j1a.cohorte) === 5 && d(j1.revenus, j1a.revenus) === 2,
+       `${d(j1.revenus, j1a.revenus)}/${d(j1.cohorte, j1a.cohorte)} — une date julienne ` +
+       `mal convertie rendait zero, ce qui se lit comme « personne ne revient »`);
+
+    sql(`DELETE FROM objectifs WHERE name_key LIKE '${marque}%';
+         DELETE FROM races WHERE name_key LIKE '${marque}%';`);
+  }
 
   titre('LE RECALCUL SE REJOUE SANS RIEN CASSER');
 
