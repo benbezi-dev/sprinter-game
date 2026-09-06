@@ -114,6 +114,8 @@ assets-stores/promo/reel-100m/controle/
 assets-stores/promo/reel-100m/son.wav
 # La telemetrie du tournage : 271 releves, refaits en quarante secondes.
 assets-stores/promo/reel-100m/chronologie.json
+# Le journal de `cadences.mjs` : une mesure, pas une source.
+assets-stores/promo/reel-100m/cadences.txt
 # Les paquets de publication par semaine : des copies de travail, faites de
 # fichiers qui vivent deja ailleurs.
 assets-stores/promo/reel-100m/semaines/*/

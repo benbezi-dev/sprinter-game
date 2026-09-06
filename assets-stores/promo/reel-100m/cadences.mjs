@@ -23,7 +23,10 @@
      node cadences.mjs
    =========================================================================== */
 import puppeteer from 'puppeteer-core';
+import fs from 'node:fs';
+import path from 'node:path';
 
+const ICI = path.dirname(new URL(import.meta.url).pathname);
 const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const URL_JEU = process.env.URL_JEU || 'http://127.0.0.1:4173/';
 const REACTION = 40 / 240;        // premier appui : un multiple du pas de physique
@@ -78,17 +81,31 @@ const sequence = (g0, g1, n) => {
   return t;
 };
 
-console.log('cadence tenue   meilleur chrono   note        montee');
+// LA SORTIE S'ECRIT AU FUR ET A MESURE, dans `cadences.txt`. Une course coute
+// une quinzaine de secondes et il y en a des dizaines : une mesure qu'on
+// interrompt ne doit pas etre une mesure perdue. La premiere version ecrivait
+// tout a la fin, et vingt minutes de calcul sont parties avec le processus.
+const SORTIE = path.join(ICI, 'cadences.txt');
+const dire = l => { console.log(l); fs.appendFileSync(SORTIE, l + '\n'); };
+fs.writeFileSync(SORTIE, '');
+dire('cadence tenue   meilleur chrono   note        montee');
+
+// La forme de la montee n'est pas balayee finement : deux longueurs et quatre
+// premiers ecarts suffisent a encadrer l'optimum a quelques centiemes, et le
+// tableau sert a situer un chrono, pas a le calibrer — pour ca, il y a
+// `calibrer.mjs`, qui cherche au sous-pas pres.
 for (const f of [10, 12, 13, 14, 15, 17, 20, 25, 30, 40, 50]) {
   const g1 = 1 / f;
   let meilleur = null;
-  for (let n = 8; n <= 24; n += 4)
-    for (let g0 = g1; g0 <= 0.20; g0 += 0.015) {
+  for (const n of [10, 16])
+    for (const g0 of [0.09, 0.12, 0.15, 0.18]) {
+      if (g0 < g1) continue;
       const r = await page.evaluate(a => window.__courir(a), sequence(g0, g1, n));
       if (r.chrono == null) continue;
       if (!meilleur || r.chrono < meilleur.chrono) meilleur = { ...r, g0, n };
     }
-  console.log(`  ${String(f).padStart(2)} appuis/s      ${meilleur.chrono.toFixed(3)} s`
+  if (!meilleur) { dire(`  ${String(f).padStart(2)} appuis/s      aucune course achevee`); continue; }
+  dire(`  ${String(f).padStart(2)} appuis/s      ${meilleur.chrono.toFixed(3)} s`
     + `        ${['ratee', 'bonne', 'PARFAITE'][meilleur.note].padEnd(9)}`
     + ` ${meilleur.n} appuis depuis ${meilleur.g0.toFixed(3)} s`);
 }
