@@ -279,24 +279,40 @@ coûte une course mal partie, pas ce qu'un bon départ rapporte.
 `cadences.mjs` refait la mesure avec, pour chaque cadence, la meilleure montée
 trouvée. Réaction et transition parfaite comprises :
 
-| Cadence tenue | Meilleur chrono |
-|---|---|
-| 10 appuis/s | 9,258 s |
-| 12 appuis/s | 8,921 s |
-| 13 appuis/s | 8,854 s |
-| 14 appuis/s | 8,804 s |
-| **15 appuis/s** | **8,679 s** |
-| 17 appuis/s | 8,633 s |
+| Cadence tenue | Meilleur chrono | | Cadence tenue | Meilleur chrono |
+|---|---|---|---|---|
+| 10 appuis/s | 9,258 s | | 25 appuis/s | 8,387 s |
+| 12 appuis/s | 8,921 s | | 30 appuis/s | 8,304 s |
+| 13 appuis/s | 8,854 s | | 33 appuis/s | 8,271 s |
+| 14 appuis/s | 8,779 s | | **35 appuis/s** | **8,254 s** |
+| **15 appuis/s** | **8,679 s** | | 38 appuis/s | 8,229 s |
+| 17 appuis/s | 8,600 s | | 40 appuis/s | 8,212 s |
+| 20 appuis/s | 8,521 s | | 50 appuis/s | **8,154 s** |
 
-**Il faut donc environ quinze appuis par seconde pour passer sous 8,75 s**, et
-non treize à quatorze. Le commentaire du code parle de « treize à quatorze
-appuis » pour battre le meilleur ZEZE — c'est juste en moyenne, puisque son
-chrono est tiré entre 8,75 et 9,00 s, mais il en faut quinze pour battre le
-plus rapide d'entre eux. La course de ce reel en tient 16,8, ce qui lui laisse
-la marge dont une capture a besoin.
+Trois lectures, et chacune contredit quelque chose que ce fichier a affirmé
+avant d'être mesuré.
 
-Le plancher de cette physique, aux cadences que seul un script peut tenir, se
-mesure avec la même commande : `node cadences.mjs 20 25 30 40 50`. La grille
-de montée doit y être resserrée — à cinquante appuis par seconde, la bonne
-montée part de 0,03 s d'écart, pas de 0,09 — faute de quoi le tableau annonce
-un plancher plus haut que la physique n'en donne.
+**Quinze appuis par seconde pour passer sous 8,75 s**, et non treize à
+quatorze : quatorze rendent 8,779 s, ils manquent la marque de trois
+centièmes. Le commentaire de `RACES['100']` parle de « treize à quatorze
+appuis » pour battre le meilleur ZEZE, ce qui est juste en moyenne — son
+chrono est tiré entre 8,75 et 9,00 s — mais battre le plus rapide d'entre eux
+en demande quinze. La course de ce reel en tient 16,8, ce qui lui laisse la
+marge dont une capture a besoin.
+
+**Le plancher de cette physique est à 8,154 s**, à cinquante appuis par
+seconde. Une recherche menée séparément, hors ligne sur le même module,
+donnait 8,146 s : deux méthodes indépendantes à huit millièmes l'une de
+l'autre.
+
+**8,25 s demande trente-cinq appuis par seconde** — 8,254 s exactement. Ce
+n'est donc pas un chrono impossible : c'est un chrono qu'aucun doigt humain ne
+tient, dix-sept alternances par main pendant huit secondes. C'est la vraie
+raison de ne pas l'afficher, et elle n'est pas celle que ce fichier donnait :
+8,25 s ne tombe pas sous le plancher, il tombe hors de portée d'un joueur.
+
+Une précaution en passant, qui n'appartient pas à ce dossier mais qui se
+déduit du tableau : un chrono de 8,25 s au classement correspond à une cadence
+qu'une main ne produit pas. `trace-affiche.js` en cite un, publié le 30 août.
+Le worker a déjà de quoi regarder — `courses_suspectes`, et l'anti-triche que
+« Une course se prouve, elle ne se déclare plus » a mis en place.
