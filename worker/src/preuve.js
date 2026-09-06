@@ -132,13 +132,27 @@ export function vraisemblance(tempsMs, pbMs, courses) {
   return { suspect: bond > BOND_SUSPECT, bond };
 }
 
-/* ------------------------------------------------------------ signalements */
+/* ------------------------------------------------------ courses suspectes
+
+   LE NOM DE CETTE TABLE A DEJA COUTE UNE PANNE. Elle s'appelait `signalements`,
+   et une table de ce nom existe deja en production : celle de la moderation des
+   duels — motif, verdict, mot, voix. `CREATE TABLE IF NOT EXISTS` n'a donc rien
+   cree, l'index a echoue sur une colonne absente, et la route rendait 500.
+
+   Pire : `signaler` avale ses erreurs par construction — une suspicion ne doit
+   pas faire echouer l'enregistrement d'une course — si bien que PAS UN SEUL
+   signalement n'a jamais ete ecrit, sans que rien le dise. Le catch reste, mais
+   il laisse desormais une trace dans le journal.
+
+   La table de moderation est vide aujourd'hui et aucune route ne la sert. Ce
+   n'est pas une raison pour lui prendre son nom : un nom qui veut deja dire
+   quelque chose est un piege qui se referme sur le suivant. */
 
 const pretes = new WeakSet();
 
-export async function ensureSignalements(db) {
+export async function ensureSuspectes(db) {
   if (pretes.has(db)) return;
-  await db.prepare(`CREATE TABLE IF NOT EXISTS signalements (
+  await db.prepare(`CREATE TABLE IF NOT EXISTS courses_suspectes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name_key TEXT NOT NULL,
     device_id TEXT,
@@ -150,8 +164,8 @@ export async function ensureSignalements(db) {
     revu_le INTEGER
   )`).run();
   await db.prepare(
-    `CREATE INDEX IF NOT EXISTS signalements_par_joueur
-       ON signalements (name_key, cree_le)`).run();
+    `CREATE INDEX IF NOT EXISTS courses_suspectes_par_joueur
+       ON courses_suspectes (name_key, cree_le)`).run();
   pretes.add(db);
 }
 
@@ -164,22 +178,27 @@ export async function ensureSignalements(db) {
  */
 export async function signaler(db, { nameKey, deviceId, quoi, detail, tempsMs, pbMs }) {
   try {
-    await ensureSignalements(db);
+    await ensureSuspectes(db);
     await db.prepare(
-      `INSERT INTO signalements
+      `INSERT INTO courses_suspectes
          (name_key, device_id, quoi, detail, temps_ms, pb_ms, cree_le)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(nameKey, deviceId || null, quoi,
            detail ? String(detail).slice(0, 500) : null,
            tempsMs || null, pbMs || null, Date.now()).run();
-  } catch { /* une suspicion ne fait pas echouer une course */ }
+  } catch (e) {
+    // On continue — une suspicion ne fait pas echouer une course — mais on le
+    // DIT. Ce catch a cache une collision de nom pendant toute une journee :
+    // rien ne s'ecrivait, et rien ne s'en plaignait.
+    console.log('suspecte KO', String((e && e.message) || e));
+  }
 }
 
 /** Ce qu'il y a a regarder. Sous cle d'administration. */
-export async function listerSignalements(db, limite = 100) {
-  await ensureSignalements(db);
+export async function listerSuspectes(db, limite = 100) {
+  await ensureSuspectes(db);
   const { results } = await db.prepare(
-    `SELECT * FROM signalements WHERE revu_le IS NULL
+    `SELECT * FROM courses_suspectes WHERE revu_le IS NULL
       ORDER BY cree_le DESC LIMIT ?`
   ).bind(Math.min(limite, 500)).all();
   return results || [];

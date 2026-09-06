@@ -994,9 +994,12 @@ if (!joignable) {
   ok('...et rend null quand aucun objectif n est ouvert',
      vraie.corps.objectif === null, JSON.stringify(vraie.corps).slice(0, 80));
 
-  const sig = await lire('/signalements');
-  ok('les signalements sont fermes sans cle d administration', sig.statut === 403,
-     `statut ${sig.statut}`);
+  // `/objectif/suspectes` et non `/signalements` : ce dernier nom appartient a
+  // la moderation des duels, table comprise. Avoir pris le nom a coute un 500
+  // en production et un anti-triche qui n'ecrivait rien.
+  const sig = await lire('/objectif/suspectes');
+  ok('les courses suspectes sont fermees sans cle d administration',
+     sig.statut === 403, `statut ${sig.statut}`);
 
   titre('LE RECORD PERSONNEL SUIT LES COURSES');
 

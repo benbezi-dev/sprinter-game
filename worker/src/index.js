@@ -27,7 +27,7 @@ import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
 } from './records.js';
 import {
-  verifierTrace, vraisemblance, signaler, listerSignalements,
+  verifierTrace, vraisemblance, signaler, listerSuspectes,
 } from './preuve.js';
 import {
   peutSonner, noterEnvoi, noterOuverture, poserRythme, rythmeDe,
@@ -1103,12 +1103,15 @@ export default {
       return json(await mesures(env.DB, jours));
     }
 
-    // Ce qu'il y a a regarder. Sous cle d'administration : un signalement
-    // nomme des joueurs, et rien ne dit encore qu'ils ont triche.
-    if (url.pathname === '/signalements' && request.method === 'GET') {
+    // Les courses a regarder. Sous cle d'administration : elles nomment des
+    // joueurs, et rien ne dit encore qu'ils ont triche.
+    //
+    // `/objectif/suspectes` et non `/signalements` : ce dernier appartient a la
+    // moderation des duels, comme la table du meme nom.
+    if (url.pathname === '/objectif/suspectes' && request.method === 'GET') {
       if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
       const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
-      return json({ signalements: await listerSignalements(env.DB, n) });
+      return json({ suspectes: await listerSuspectes(env.DB, n) });
     }
 
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {
