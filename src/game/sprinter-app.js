@@ -561,9 +561,40 @@
     G.skipArm = 0; G.state = 'cut';
   }
 
+  /**
+   * SORTIR DU DIRECT, ET TOUT REPOSER EN MEME TEMPS.
+   *
+   * Une course en direct laisse six choses derriere elle, dont une qui pilote
+   * la piste : `lives`, la table des adversaires reseau. Tant qu'elle est la,
+   * `stepGhost` prend le chemin « a plusieurs » et DESIGNE lui-meme le
+   * fantome, a chaque image, parmi ces adversaires.
+   *
+   * C'est ce qui faisait disparaitre le fantome d'un defi. On revient du
+   * direct, on releve un defi depuis l'ecran d'arrivee — sans repasser par
+   * l'accueil, et c'est justement la que les deux annonces s'affichent —
+   * `armGhost` pose bien le fantome dans son couloir, puis la premiere image
+   * le remplace par un coureur qui n'existe plus, immobile sur la ligne. Le
+   * fantome etait arme ; il disparaissait avant d'avoir fait un pas. Le duel
+   * de la revanche partait pareil, par le meme chemin.
+   *
+   * Le reste part avec, pour la meme raison : `liveResultat` survivait aussi,
+   * et l'ecran d'arrivee du defi rendait alors le classement du direct
+   * precedent.
+   *
+   * A APPELER PARTOUT OU UNE COURSE QUI N'EST PAS EN DIRECT SE MET EN PLACE.
+   * Trois endroits le faisaient a moitie, chacun a sa facon ; ils appellent
+   * ceci maintenant.
+   */
+  function quitterLeDirect() {
+    G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
+    G.liveDuel = null;
+    G.lives = null;
+  }
+
   function startRun() {
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null;
+    quitterLeDirect();
     startLevel(0);
   }
   function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
@@ -577,9 +608,7 @@
     G.presente = null;
     G.paused = false;
     G.falseOut = false;
-    G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
-    G.liveDuel = null;
-    G.lives = null;
+    quitterLeDirect();
     G.challengeTarget = null;
     G.defiSansCible = null;
     G.mode = 'campaign';
@@ -594,6 +623,11 @@
   // opts.ghost / opts.challenge permettent de rejouer contre un adversaire.
   function startOneShot(races, opts) {
     opts = opts || {};
+    // Un one-shot n'est jamais une course en direct — celle-la passe par
+    // startLive, qui monte sa piste lui-meme. Ce qu'un direct precedent a
+    // laisse derriere lui n'a donc rien a faire ici, et une chose en
+    // particulier : voir quitterLeDirect.
+    quitterLeDirect();
     // On retient de quoi refaire EXACTEMENT cette course. Rejouer en
     // reconstruisant les options a la main donnerait une course qui ressemble
     // a la premiere : meme distance, mais plus de fantome, ou un plateau par
@@ -655,7 +689,9 @@
    */
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
-    G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null;
+    // Le direct qu'on quitte est efface par startOneShot, plus bas, et il
+    // l'est entierement : cette ligne-ci en oubliait deux, dont la table des
+    // adversaires reseau.
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
     // de la meme revanche — pour ca, c'est le bouton dedie qui relance
@@ -955,6 +991,10 @@
 
   function armLive(nom) {
     G.ghost = null;
+    // Le chemin a UN adversaire : c'est G.ghost qui le porte, pas la table.
+    // La laisser pleine d'une course precedente ferait suivre a stepGhost le
+    // chemin « a plusieurs », vers des coureurs que plus personne n'alimente.
+    G.lives = null;
     const lane = 4;
     const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
     if (idx >= 0) G.runners.splice(idx, 1);
