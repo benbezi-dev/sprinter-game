@@ -103,3 +103,15 @@ assets-stores/promo/source-video/preview/
 assets-stores/promo/out/
 assets-stores/promo/explications/images/
 assets-stores/promo/explications/controle/
+
+# Le reel « 100 m » : la video, son son et ses images intermediaires. Tout s'y
+# refabrique a l'identique — la course est rejouee sur une horloge posee, donc
+# deux tournages donnent le meme chrono a la milliseconde — et le depot garde
+# la recette plutot que le plat.
+assets-stores/promo/reel-100m/images-jeu/
+assets-stores/promo/reel-100m/images-reel/
+assets-stores/promo/reel-100m/controle/
+assets-stores/promo/reel-100m/son.wav
+# La telemetrie du tournage : 271 releves, refaits en quarante secondes.
+assets-stores/promo/reel-100m/chronologie.json
+assets-stores/promo/reel-100m/sprinter-reel-100m-1080x1920.mp4

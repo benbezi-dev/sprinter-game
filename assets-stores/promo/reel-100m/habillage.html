@@ -1,0 +1,138 @@
+<meta charset="utf-8">
+<title>Sprinter — reel 100 m, habillage</title>
+<style>
+/* ===========================================================================
+   L'HABILLAGE — les images du jeu, recadrees et surchargees.
+
+   Tout depend du numero d'image : `window.renderFrame(f)` pose le recadrage,
+   les cartons et le sous-titre de l'image f, et rien d'autre ne bouge. Aucune
+   animation CSS, donc deux rendus de la meme image sont identiques.
+
+   La charte est celle de assets-stores/promo (Outfit 800 pour ce qui se lit,
+   Space Mono 700 pour ce qui se mesure, l'or #F8CD4A).
+   =========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@800&family=Space+Mono:wght@700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#000;overflow:hidden}
+#scene{position:relative;width:1080px;height:1920px;overflow:hidden;background:#000}
+
+/* L'image du jeu. Le recadrage des trois premieres secondes est un `scale`
+   ancre en haut a droite : c'est le seul coin qui garde a la fois le chrono du
+   HUD et la carte RÉACTION. Le retour a l'echelle 1 est un mouvement sur la
+   MEME prise — il ne coupe rien. */
+#jeu{position:absolute;inset:0;width:1080px;height:1920px;
+  transform-origin:1080px 0px;image-rendering:auto}
+
+/* Bande des cartons : au-dessus de la course, sous les cartes du jeu. */
+#cartons{position:absolute;left:0;right:0;top:560px;height:420px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:18px;text-align:center;opacity:0;
+  /* LE VOILE, ET IL N'EST PAS DECORATIF. La piste est bleue et verte en plein
+     jour : un texte blanc pose dessus se lit une image sur deux, selon ce qui
+     passe derriere. Un degrade sombre, sans bord visible, rend le fond
+     previsible sans poser de cadre. */
+  background:radial-gradient(78% 100% at 50% 50%, #000000ad 0%, #00000000 72%)}
+.h{font-family:'Outfit',sans-serif;font-weight:800;text-transform:uppercase;
+  font-size:72px;line-height:1.1;letter-spacing:-.01em;
+  text-shadow:0 6px 30px #000c, 0 2px 8px #000e}
+.or{color:#F8CD4A} .bl{color:#EEF0F8}
+.kick{font-family:'Space Mono',monospace;font-weight:700;font-size:30px;
+  letter-spacing:.42em;text-indent:.42em;color:#F8CD4A;text-transform:uppercase;
+  text-shadow:0 4px 18px #000d}
+.chiffre{font-family:'Space Mono',monospace;font-weight:700;font-size:132px;
+  color:#F8CD4A;line-height:1;text-shadow:0 8px 34px #000d, 0 0 70px #F8CD4A30}
+.url{font-family:'Space Mono',monospace;font-weight:700;font-size:36px;
+  letter-spacing:.28em;text-indent:.28em;color:#FFD75E;text-shadow:0 4px 18px #000e}
+
+/* Bande des sous-titres : au-dessus des zones tactiles du jeu. */
+#st{position:absolute;left:0;right:0;top:1290px;height:210px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;text-align:center;opacity:0;padding:0 60px;
+  background:radial-gradient(70% 100% at 50% 50%, #000000b8 0%, #00000000 76%)}
+#st div{font-family:'Outfit',sans-serif;font-weight:800;font-size:52px;
+  line-height:1.16;color:#fff;text-shadow:0 4px 22px #000e, 0 1px 4px #000}
+</style>
+
+<div id="scene">
+  <img id="jeu">
+  <div id="cartons"></div>
+  <div id="st"></div>
+</div>
+
+<script>
+const FPS = 30;
+const IMAGE_LIGNE = 270;          // l'image de l'arrivee : chrono 8.75, buste sur la ligne
+const IMAGES = 300;               // 10,00 s pile
+const DOSSIER = 'images-jeu/';
+
+/* --------------------------------------------------------------- recadrage */
+const ZOOM = 1.5;                 // les trois premieres secondes
+const OUVRE_DEBUT = 2.60, OUVRE_FIN = 3.00;
+const sortie = q => 1 - Math.pow(1 - q, 3);   // ease-out cubique
+
+/* ----------------------------------------------------------------- cartons */
+// [debut, fin, html]. Ils ne se chevauchent jamais.
+const CARTONS = [
+  [0.15, 2.90, `<div class="h bl">Tu penses avoir<br>des réflexes ?</div>
+                <div class="h or">Prouve-le<br>en 10 secondes.</div>`],
+  [3.00, 4.60, `<div class="kick">à battre</div>
+                <div class="chiffre">8,75 s</div>`],
+  [9.00, 10.00, `<div class="h bl">Ton tour</div>
+                 <div class="url">sprinter-game.com</div>`],
+];
+
+/* -------------------------------------------------------------- sous-titres */
+// Le commentaire ecrit : personne ne parle, et la majorite regarde sans le son.
+const SOUS_TITRES = [
+  [0.20, 2.50, ['Le pistolet part.', '0,167 s de réaction.']],
+  // Rien entre 2,5 et 4,8 s : le jeu y affiche sa propre carte TRANSITION
+  // PARFAITE et le carton du chrono a battre y passe. Une troisieme ligne de
+  // texte au meme instant ne se lirait pas — elle salirait les deux autres.
+  [4.80, 6.80, ['50 mètres, la cadence tient.']],
+  [6.90, 8.90, ['80 mètres. La ligne arrive.']],
+  [9.00, 10.00, ['8,75 s au chrono.']],
+];
+
+const img = document.getElementById('jeu');
+const elCartons = document.getElementById('cartons');
+const elSt = document.getElementById('st');
+
+// Un fondu court : a cette vitesse un glissement ne se lit pas, il salit.
+const FONDU = 0.12;
+function opacite(t, debut, fin) {
+  if (t < debut || t >= fin) return 0;
+  return Math.min(1, (t - debut) / FONDU, (fin - t) / FONDU);
+}
+
+window.renderFrame = async (f) => {
+  const t = f / FPS;
+
+  // 1. l'image du jeu — figee sur l'arrivee au-dela de la ligne
+  const source = DOSSIER + 'f' + String(Math.min(f, IMAGE_LIGNE)).padStart(5, '0') + '.jpg';
+  if (img.getAttribute('src') !== source) {
+    img.setAttribute('src', source);
+    await img.decode();
+  }
+
+  // 2. le recadrage
+  let k = ZOOM;
+  if (t >= OUVRE_FIN) k = 1;
+  else if (t > OUVRE_DEBUT)
+    k = ZOOM + (1 - ZOOM) * sortie((t - OUVRE_DEBUT) / (OUVRE_FIN - OUVRE_DEBUT));
+  img.style.transform = `scale(${k})`;
+
+  // 3. les cartons
+  const c = CARTONS.find(([a, b]) => t >= a && t < b);
+  elCartons.style.opacity = c ? opacite(t, c[0], c[1]) : 0;
+  if (c && elCartons.dataset.k !== c[2]) { elCartons.innerHTML = c[2]; elCartons.dataset.k = c[2]; }
+
+  // 4. le sous-titre
+  const s = SOUS_TITRES.find(([a, b]) => t >= a && t < b);
+  elSt.style.opacity = s ? opacite(t, s[0], s[1]) : 0;
+  if (s) {
+    const html = s[2].map(l => `<div>${l}</div>`).join('');
+    if (elSt.dataset.k !== html) { elSt.innerHTML = html; elSt.dataset.k = html; }
+  }
+};
+window.IMAGES = IMAGES;
+</script>

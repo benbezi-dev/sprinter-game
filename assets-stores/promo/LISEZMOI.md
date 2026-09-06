@@ -20,10 +20,15 @@ Le chapitrage vit dans la constante `S` en bas de `video.html` (scène → débu
 
 ## Reel « 100 m »
 
-`reel-100m/` — un autre film, court celui-là : dix secondes, une prise, une
-coupe. Le dossier ne contient pas la vidéo — elle se capture dans le jeu —
-mais de quoi la tourner et l'habiller : plan de tournage seconde par seconde,
-cartons et leurs timecodes, sous-titres SRT, et la couverture avec sa source.
+`sprinter-reel-100m-1080x1920.mp4` — 9:16, 30 i/s, 10,00 s pile, H.264 High /
+yuv420p, faststart, son AAC. Une prise, une coupe.
+
+À la différence du film « nouveautés », la course n'est pas dessinée : elle est
+**jouée dans le jeu**, sur une horloge posée qui rend le chrono reproductible à
+la milliseconde, et le son est celui du jeu, rendu depuis ses propres
+synthétiseurs. `reel-100m/` porte toute la chaîne — calibration de la course,
+tournage, habillage, son, encodage — plus le plan, les cartons, les
+sous-titres et la couverture.
 
 ## Storyboard
 
