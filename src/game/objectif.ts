@@ -21,7 +21,6 @@
 import { useSyncExternalStore } from 'react';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 import { SprinterApp } from './engine';
-import { rendreLeHasard } from './graine';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -110,13 +109,17 @@ function langue(): string {
    passe DEPUIS QUE LE JOUEUR EST ASSIS. « Ton meilleur essai de la session »
    n'est pas « ton meilleur essai du defi » quand on revient le soir. */
 
+/*
+   « LE JOUEUR COURT-IL LE DEFI EN CE MOMENT ? » NE VIT PAS ICI.
+   C'etait un second exemplaire de ce que le moteur sait deja, et les deux ont
+   diverge : le moteur partait sur un defi d'ami, la session se croyait
+   toujours dans l'objectif du jour, et l'ecran de revanche revenait par-dessus
+   le recapitulatif du defi — avec le chrono de la course de l'ami envoye au
+   serveur comme une tentative de l'objectif. La reponse se lit sur la course
+   en cours : `objectifEnCours`, publie par le moteur. */
+
 export type Session = {
   objectif: Objectif | null;
-  /** Le joueur court-il le defi EN CE MOMENT ?
-   *
-   *  Distinct de « un objectif existe » : l'accueil en connait un sans le
-   *  courir, et c'est ce drapeau-la qui decide quel ecran de fin s'affiche. */
-  enCours: boolean;
   /** Courses jouees depuis l'entree dans le defi. */
   courses: number;
   /** Le meilleur chrono de cette session, en ms. */
@@ -128,7 +131,7 @@ export type Session = {
 };
 
 let session: Session = {
-  objectif: null, enCours: false, courses: 0,
+  objectif: null, courses: 0,
   meilleurMs: null, dernier: null, envoi: false,
 };
 const ecouteurs = new Set<() => void>();
@@ -181,16 +184,21 @@ export async function lireObjectif(): Promise<Objectif | null> {
 /**
  * Entre dans le defi et lance la premiere course.
  *
- * La graine est posee AVANT `startOneShot` : c'est `startShotRace` qui la lit,
- * et elle doit etre en place quand il construit le plateau. Elle y reste pour
- * les tentatives suivantes — chacune se court sur le meme terrain.
+ * L'OBJECTIF VOYAGE DANS LES OPTIONS DE LA COURSE, il ne se pose plus a cote.
+ * La difference n'est pas de style. Pose sur le moteur avant l'appel, il y
+ * restait tant que quelqu'un ne pensait pas a le retirer — et personne ne le
+ * faisait, sauf le lien « sortir » de l'ecran de revanche. Or les annonces du
+ * jeu s'affichent justement sur cet ecran-la : on relevait un defi d'ami, et
+ * l'objectif du jour suivait. Passe dans les options, il ne survit a rien :
+ * la course suivante ne l'annonce pas, donc elle n'est pas l'objectif. Voir
+ * `poserObjectif`, cote moteur.
+ *
+ * La graine part avec lui, pour la meme raison — c'est `startShotRace` qui la
+ * lit, et elle doit etre en place quand il construit le plateau.
  */
 export function lancerObjectif(o: Objectif): void {
-  const G = SprinterApp.G;
-  G.graineCourse = o.graine ?? null;
-  G.objectifEnCours = o;
-  poser({ objectif: o, enCours: true, courses: 0, meilleurMs: null, dernier: null });
-  SprinterApp.startOneShot([o.epreuve], { levelIdx: NIVEAU_DEFI });
+  poser({ objectif: o, courses: 0, meilleurMs: null, dernier: null });
+  SprinterApp.startOneShot([o.epreuve], { levelIdx: NIVEAU_DEFI, objectif: o });
 }
 
 /**
@@ -199,41 +207,27 @@ export function lancerObjectif(o: Objectif): void {
  * Le meme chemin que l'entree, et volontairement : `startOneShot` remet la
  * course a zero et `startShotRace` repose la graine, donc le plateau est
  * identique a la tentative precedente. Passer par `recommencer()` du moteur
- * marcherait aussi, mais il efface des choses qui ne nous concernent pas et
- * n'a jamais promis de garder la graine.
+ * ne conviendrait pas : il part sur une course neuve, sans objectif, ce qui
+ * est exactement ce qu'une revanche n'est pas.
  */
 export function relancerObjectif(): boolean {
   const o = session.objectif;
   if (!o) return false;
-  const G = SprinterApp.G;
-  G.graineCourse = o.graine ?? null;
-  G.objectifEnCours = o;
-  poser({ enCours: true });
-  SprinterApp.startOneShot([o.epreuve], { levelIdx: NIVEAU_DEFI });
+  SprinterApp.startOneShot([o.epreuve], { levelIdx: NIVEAU_DEFI, objectif: o });
   return true;
 }
 
 /**
  * Sort du defi et rend le hasard au jeu ordinaire.
  *
- * A APPELER SANS FAUTE. Une graine laissee en place ne fait pas planter le
- * jeu : elle le rend lentement identique a lui-meme, toutes les courses
- * suivantes sur le meme plateau, y compris en carriere.
+ * Ce n'est plus la seule sortie, et c'est tout le correctif : n'importe quelle
+ * course lancee sans objectif dans ses options en sort aussi, d'elle-meme.
+ * Celle-ci reste pour le chemin explicite — le lien « sortir » — ou l'on veut
+ * aussi remettre le compte de la session a zero.
  */
 export function quitterObjectif(): void {
-  const G = SprinterApp.G;
-  G.graineCourse = null;
-  G.objectifEnCours = null;
-  // ET ON REND LE HASARD, EXPLICITEMENT.
-  //
-  // Effacer `graineCourse` ne suffit pas : seul `startShotRace` la relit, et
-  // une course de CARRIERE passe par `startLevel`, qui ne la regarde jamais.
-  // Le moteur restait donc seme apres etre sorti du defi — verifie, il l'etait
-  // — et tout le jeu se mettait a derouler une seule suite. Rien n'a l'air
-  // casse quand cela arrive : les plateaux changent toujours d'une course a
-  // l'autre. Ils ne changent simplement plus d'un joueur a l'autre.
-  rendreLeHasard();
-  poser({ enCours: false, courses: 0, meilleurMs: null, dernier: null });
+  SprinterApp.poserObjectif(null);
+  poser({ courses: 0, meilleurMs: null, dernier: null });
 }
 
 /** Court-on un defi en ce moment ? */

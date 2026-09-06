@@ -19,6 +19,14 @@
 // Relire `armGhost` n'attrape pas ca : il est juste. Il faut faire les deux
 // courses a la suite, et regarder l'image d'apres.
 //
+// L'OBJECTIF DU JOUR AVAIT LE MEME TROU, par la meme porte. Il pose une graine
+// — le plateau commun a tous les joueurs — et se declare en cours pour choisir
+// l'ecran de fin. Rien ne l'effacait non plus : on relevait un defi d'ami
+// depuis l'ecran de revanche, et le defi de l'ami se courait sur le plateau du
+// jour, l'ecran de revanche revenait a l'arrivee a la place du recapitulatif
+// du defi, et le chrono de la course de l'ami partait au serveur comme une
+// tentative de l'objectif. La seconde moitie de ce harnais garde cette porte.
+//
 //   node tools/fantome-test.mjs
 //
 // Aucun reseau, aucun serveur : le moteur entier tourne ici, dans Node.
@@ -65,6 +73,8 @@ await import('../src/game/sprinter-app.js');
 
 const A = globalThis.SprinterApp;
 const G = A.G;
+// Le noyau tient le tirage : c'est lui qui dit si une graine est encore posee.
+const K = globalThis.SprinterCore;
 
 let echecs = 0;
 const ok = (nom, cond, detail) => {
@@ -125,6 +135,23 @@ const courirEnDirect = () => {
   ] };
   G.liveDuel = { hote: null, invite: null };
 };
+
+/**
+ * L'objectif du jour, tel que le serveur le rend.
+ *
+ * Seuls trois champs comptent ici : l'epreuve, et la graine qui fixe le
+ * plateau. Le reste est du decor pour l'ecran de revanche.
+ */
+const OBJECTIF = { epreuve: '100', cible_ms: 11000, graine: 123456 };
+
+/** Entrer dans le defi du jour, comme le fait `lancerObjectif`. */
+const courirLObjectif = () =>
+  A.startOneShot([OBJECTIF.epreuve], { levelIdx: 4, objectif: OBJECTIF });
+
+/** Le plateau : qui court a cote, et en combien. C'est lui que la graine fixe. */
+const plateau = () => G.runners
+  .filter(r => !r.isPlayer && r.lane !== 4)   // 4 est le couloir du fantome
+  .map(r => `${r.lane}:${r.target.toFixed(4)}`).join(' ');
 
 /**
  * Quelques images de course, comme le fait la boucle du jeu.
@@ -230,6 +257,71 @@ ok('on repart seul', G.ghost === null && G.ghostSet === null,
    'le defi auquel on repondait est joue : le rembarquer ferait croire qu on le recourt');
 ok('...et sans rien du direct', G.liveOn === false && G.lives === null);
 
+/* ============================================== l'objectif du jour ======= */
+
+console.log('\n╔══════════════════════════════════════════════════════════════╗');
+console.log('║  L OBJECTIF DU JOUR NE SUIT PAS LA COURSE SUIVANTE           ║');
+console.log('╚══════════════════════════════════════════════════════════════╝');
+
+titre('LE DEFI DU JOUR SE COURT SEME, ET PLUSIEURS FOIS');
+
+A.goHome();
+courirLObjectif();
+ok('l objectif est en cours', !!G.objectifEnCours);
+ok('...le tirage est seme', K.estSeme() === true,
+   'sans quoi deux joueurs ne courent pas le meme defi');
+const plateauDuJour = plateau();
+courirLObjectif();
+ok('...et la tentative suivante retrouve le meme plateau',
+   plateau() === plateauDuJour,
+   'sinon « seule la meilleure compte » revient a garder le tirage le plus chanceux');
+
+titre('UN DEFI D AMI RELEVE DEPUIS LA REVANCHE EN SORT');
+
+// LE COEUR DE LA SECONDE MOITIE. L'ecran de revanche est un ecran calme : les
+// annonces s'y affichent, et le joueur peut relever de la.
+A.goHome();
+courirLObjectif();
+// Le garde-fou : « il est quitte » ne veut rien dire si rien n'a ete pose.
+ok('on court bien le defi du jour', !!G.objectifEnCours);
+releverUnDefi();
+ok('L OBJECTIF EST QUITTE', !!G.objectifEnCours === false,
+   'sinon l ecran de revanche revient a l arrivee, et le chrono du defi part '
+   + 'au serveur comme une tentative de l objectif du jour');
+ok('...la graine est rendue', G.graineCourse === null && K.estSeme() === false);
+ok('...et le defi de l ami ne court pas sur le plateau du jour',
+   plateau() !== plateauDuJour);
+courir(2);
+ok('...son fantome, lui, est bien la', !!G.ghost && !G.ghost.live,
+   G.ghost ? `live=${!!G.ghost.live}` : 'pas de fantome');
+
+titre('LES AUTRES PORTES AUSSI');
+
+for (const [nom, sortir] of [
+  ['une invitation en direct', () => courirEnDirect()],
+  ['une course de carriere', () => A.startRun()],
+  ['le retour a l accueil', () => A.goHome()],
+  ['la revanche d un duel', () => partirEnRevanche()],
+]) {
+  A.goHome();
+  courirLObjectif();
+  const pose = !!G.objectifEnCours;
+  sortir();
+  ok(nom, pose && !G.objectifEnCours && G.graineCourse === null &&
+          K.estSeme() === false,
+     pose ? `objectif=${!!G.objectifEnCours} graine=${G.graineCourse} seme=${K.estSeme()}`
+          : 'l objectif n a meme pas ete pose');
+}
+
+titre('ET LE CHEMIN EXPLICITE MARCHE TOUJOURS');
+
+A.goHome();
+courirLObjectif();
+const poseAvantSortie = !!G.objectifEnCours;
+A.poserObjectif(null);
+ok('le lien « sortir » rend tout', poseAvantSortie && !G.objectifEnCours &&
+   G.graineCourse === null && K.estSeme() === false);
+
 titre('L ACCUEIL REND TOUT, COMME AVANT');
 
 courirEnDirect();
@@ -238,6 +330,8 @@ ok('la table des adversaires', G.lives === null);
 ok('le direct', G.liveOn === false && G.liveResultat === null && G.liveDuel === null);
 ok('le fantome et sa trace', G.ghost === null && G.ghostSet === null &&
    G.ghostName === '' && G.ghostTime === 0);
+ok('l objectif du jour et sa graine',
+   !!G.objectifEnCours === false && G.graineCourse === null && K.estSeme() === false);
 ok('et on est de retour a l accueil', G.state === 'title');
 
 console.log(`\n${echecs === 0 ? '✓ tout passe' : `✗ ${echecs} echec(s)`}\n`);

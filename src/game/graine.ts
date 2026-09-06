@@ -52,10 +52,16 @@ export function semerDefi(graine: number): void {
 /**
  * Rend la main au hasard du systeme.
  *
- * A APPELER EN SORTANT DU DEFI, et c'est la moitie qui s'oublie : une graine
- * laissee en place ferait rejouer le meme plateau a toutes les courses
- * suivantes, y compris en carriere. Le jeu ne planterait pas — il deviendrait
- * lentement identique a lui-meme.
+ * « A appeler en sortant du defi » etait la consigne, et c'etait la moitie qui
+ * s'oubliait : une graine laissee en place fait rejouer le meme plateau a
+ * toutes les courses suivantes, y compris en carriere. Le jeu ne plante pas —
+ * il devient lentement identique a lui-meme.
+ *
+ * LE JEU NE COMPTE PLUS DESSUS, et c'est ce qui a change : la graine se pose
+ * et se rend avec l'objectif du jour, dans les options de la course, et c'est
+ * `poserObjectif` cote moteur qui s'en charge. Une consigne qu'il faut penser
+ * a suivre finit par ne plus l'etre. Reste ici de quoi semer hors de ce
+ * chemin — un outil, un harnais — sans avoir a passer par le moteur.
  */
 export function rendreLeHasard(): void {
   try { SprinterCore.desemer(); } catch { /* rien a rendre */ }

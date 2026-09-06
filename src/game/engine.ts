@@ -66,6 +66,15 @@ export type GameState = {
   liveResultat: any;
   /** Les points du duel du direct, tels que la salle les a annonces. */
   liveDuel: any;
+  /**
+   * La course en cours est-elle l'Objectif du jour ?
+   *
+   * Elle decide de l'ecran de fin — la revanche du defi du jour, ou le
+   * recapitulatif ordinaire. Elle se lit sur le moteur et nulle part ailleurs :
+   * un second exemplaire dans la couche React s'est deja mis a mentir quand on
+   * quittait l'objectif par une porte qu'il ne surveillait pas.
+   */
+  objectifEnCours: boolean;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -473,5 +482,6 @@ export function updateLogic(dt: number) {
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
     liveDuel: G.liveDuel,
+    objectifEnCours: !!G.objectifEnCours,
   });
 }

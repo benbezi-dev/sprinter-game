@@ -31,7 +31,7 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { Revanche } from '@/components/screens/Revanche';
-import { useObjectif, ouvrirDepuisNotification } from '@/game/objectif';
+import { ouvrirDepuisNotification } from '@/game/objectif';
 import { surCourrier } from '@/game/boite';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
@@ -87,7 +87,9 @@ function MainGame() {
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
   // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
-  const defiEnCours = useObjectif().enCours;
+  // Sur le moteur, et pas dans la session de l'objectif : c'est la course en
+  // cours qui sait si elle est le defi du jour, et elle seule.
+  const defiEnCours = useGameStore(s => s.objectifEnCours);
 
   // La notification de l'objectif ouvre le defi, sans ecran intermediaire.
   //

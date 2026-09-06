@@ -398,7 +398,11 @@
     // REC_STEP) pour pouvoir etre rejouee plus tard par un adversaire.
     // ghost : la trace d'un autre joueur, rejouee en direct a cote de nous.
     recTrace: null, recNext: 0, shotTraces: [],
-    // La graine du defi en cours, ou null. Voir startShotRace.
+    // L'objectif du jour que l'on court en ce moment, ou null, et la graine
+    // qui va avec — elle fixe le plateau pour que tout le monde coure le meme.
+    // Les deux sont poses par startOneShot, et par lui seul : voir
+    // poserObjectif, qui dit pourquoi.
+    objectifEnCours: null,
     graineCourse: null,
     ghost: null, ghostName: '', ghostTime: 0,
     challenge: null      // defi en cours (voir challenge.ts)
@@ -591,10 +595,46 @@
     G.lives = null;
   }
 
+  /**
+   * SORTIR DE L'OBJECTIF DU JOUR, ET RENDRE LE HASARD AVEC.
+   *
+   * Le meme oubli que le direct, et il coute plus cher. L'objectif du jour
+   * pose deux choses sur le moteur : la GRAINE, qui fixe le plateau pour que
+   * tout le monde coure le meme, et l'objectif lui-meme, qui decide de l'ecran
+   * de fin. Le seul chemin de sortie prevu est le lien « sortir » de l'ecran
+   * de revanche.
+   *
+   * Or ce n'est pas le seul chemin. Les deux annonces — « on t'a defie », « ton
+   * duel est tranche » — s'affichent au calme, et l'ecran de revanche est un
+   * ecran calme. On y releve un defi, et tout suit : le defi de l'ami se court
+   * sur le plateau seme du jour, l'ecran de revanche revient a l'arrivee a la
+   * place du recapitulatif du defi, et le chrono de la course de l'ami part au
+   * serveur comme une tentative de l'objectif du jour — avec sa trace, qui
+   * n'est pas celle de l'epreuve demandee.
+   *
+   * `objectifEnCours` est donc pose par `startOneShot` et par lui seul : une
+   * course qui ne l'annonce pas dans ses options n'est pas l'objectif, et le
+   * quitte. Le contraire — le poser sur G avant d'appeler — laissait chaque
+   * appelant responsable de le retirer, ce qu'aucun ne faisait.
+   *
+   * ET LE HASARD SE REND ICI. `startShotRace` deseme deja pour la course
+   * qu'il monte, mais une course de CARRIERE passe par `startLevel`, qui ne
+   * regarde jamais la graine : sans cette ligne, le moteur reste seme et tout
+   * le jeu deroule une seule suite. Rien n'a l'air casse quand cela arrive —
+   * les plateaux changent toujours d'une course a l'autre, ils ne changent
+   * simplement plus d'un joueur a l'autre.
+   */
+  function poserObjectif(o) {
+    G.objectifEnCours = o || null;
+    G.graineCourse = o && o.graine != null ? o.graine : null;
+    if (G.graineCourse == null) K.desemer();
+  }
+
   function startRun() {
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null;
     quitterLeDirect();
+    poserObjectif(null);
     startLevel(0);
   }
   function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
@@ -609,6 +649,7 @@
     G.paused = false;
     G.falseOut = false;
     quitterLeDirect();
+    poserObjectif(null);
     G.challengeTarget = null;
     G.defiSansCible = null;
     G.mode = 'campaign';
@@ -628,6 +669,9 @@
     // laisse derriere lui n'a donc rien a faire ici, et une chose en
     // particulier : voir quitterLeDirect.
     quitterLeDirect();
+    // Et cette course EST l'objectif du jour, ou elle en sort. Il n'y a pas de
+    // troisieme cas : voir poserObjectif.
+    poserObjectif(opts.objectif || null);
     // On retient de quoi refaire EXACTEMENT cette course. Rejouer en
     // reconstruisant les options a la main donnerait une course qui ressemble
     // a la premiere : meme distance, mais plus de fantome, ou un plateau par
@@ -741,6 +785,9 @@
   function startLive(races, opts) {
     opts = opts || {};
     G.mode = 'oneshot';
+    // Une invitation en direct s'accepte au calme, et l'ecran de revanche de
+    // l'objectif du jour en est un : on en sort ici comme ailleurs.
+    poserObjectif(null);
     G.liveOn = true;
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;
@@ -2058,6 +2105,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    poserObjectif,
     finirLesSaluts,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
