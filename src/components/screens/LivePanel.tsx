@@ -18,6 +18,7 @@ import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
+import { prechargerGlace } from '@/game/turn';
 import { Review, TTL_MS, type EtatReview } from '@/game/review';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
@@ -384,6 +385,11 @@ export function LivePanel() {
     const s = new Salle(c, ecouteurs(c));
     salle.current = s;
     poserSalon(s);
+    // Par ou passera la voix, demande maintenant plutot qu'au debut de la
+    // presentation : l'aller-retour au serveur se fait pendant qu'on attend
+    // l'adversaire dans le salon, et non dans les mille cinq cents
+    // millisecondes qui precedent l'annonce du premier athlete.
+    prechargerGlace();
     brancherSalle({
       position: (d: number) => s.position(d),
       fini: (ms: number) => s.fini(ms),

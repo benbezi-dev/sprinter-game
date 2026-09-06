@@ -9,6 +9,7 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
+import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
@@ -152,6 +153,10 @@ function json(data, status = 200) {
 const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
+  // joueur en demande un par partie ; dix par minute et par adresse laissent
+  // passer une famille derriere la meme box et arretent net un script.
+  '/direct/turn': { max: 10, fenetreMs: 60_000 },
   default: { max: 30, fenetreMs: 60_000 },
 };
 
@@ -1664,6 +1669,20 @@ export default {
           ctx.waitUntil(sonnerEtPush(env, appareil, 'direct', canal.test));
         }
         return json({ invites: r.invites, injoignables: r.injoignables });
+      }
+
+      // Les identifiants du relais de la voix.
+      //
+      // En POST, et pas en GET : c'est ce qui le fait passer par la limite de
+      // debit posee plus haut, qui ne regarde que les POST. La route ne change
+      // rien sur le serveur, mais elle depense — elle a plus besoin d'un
+      // compteur que la plupart des ecritures.
+      if (sous === 'turn' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        return json(await identifiantsTurn(env, device_id));
       }
 
       if (sous === 'invitations' && request.method === 'GET') {
