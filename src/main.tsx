@@ -3,9 +3,14 @@ import { MotionConfig } from 'motion/react';
 
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { brancherAcces } from '@/game/canal';
+import { brancherAcces, brancherSignet } from '@/game/canal';
 
 import './index.css';
+
+// Le signet de lecture D1, en premier — donc en enveloppe INTERIEURE, avec le
+// code d'acces par-dessus. L'ordre n'est pas indifferent : ainsi la reponse
+// repasse par l'enveloppe du signet en remontant, et c'est la qu'on le lit.
+brancherSignet();
 
 // Avant tout le reste : sur le canal de test, aucune requete ne doit partir
 // sans son code d'acces — sinon elle atterrirait dans la base de production.

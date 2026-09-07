@@ -136,7 +136,16 @@ function cors(resp) {
   // cote client un pre-vol refuse se presente comme un `fetch` qui echoue,
   // sans statut ni message. Qui ajoute un en-tete ajoute une ligne ici.
   resp.headers.set('Access-Control-Allow-Headers',
-                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau');
+                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau, X-D1-Bookmark');
+
+  // Annoncer un en-tete en REPONSE est une deuxieme porte, distincte de celle
+  // du dessus, et c'est celle qu'on oublie : sans cette ligne le navigateur
+  // recoit bien `X-D1-Bookmark` mais le cache au code du jeu, qui lit `null`
+  // et repart sans signet a la requete suivante. La replication tournerait, la
+  // coherence non — et l'onglet reseau ne montrerait rien d'anormal, puisque
+  // l'en-tete est bel et bien sur le fil. Qui ajoute un en-tete de reponse
+  // ajoute une ligne ici.
+  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark');
   return resp;
 }
 
@@ -813,7 +822,65 @@ export default {
     }
   },
 
-  async fetch(request, env, ctx) {
+  fetch: envelopper,
+};
+
+/**
+ * L'enveloppe de la session.
+ *
+ * Elle ne fait qu'une chose : reposer sur la reponse le signet que la session
+ * a atteint, pour que la requete suivante puisse le presenter. Tout le reste
+ * du travail est dans `servir`.
+ *
+ * Pourquoi une fonction de module et non une methode appelee par `this` : le
+ * runtime invoque `fetch` sans garantir a quoi `this` sera lie. Une methode
+ * qui s'appelle elle-meme par `this.servir` marche en developpement et lache
+ * ailleurs, ce qui est la pire des deux options.
+ */
+async function envelopper(request, env, ctx) {
+  const porteur = {};
+  let reponse;
+  try {
+    reponse = await servir(request, env, ctx, porteur);
+  } catch (e) {
+    // Un signet que D1 refuse ne se signale PAS a la creation de la session :
+    // `withSession()` est paresseux, il rend un objet sans rien verifier, et
+    // l'erreur ne sort qu'a la premiere requete — donc depuis la route, hors
+    // de portee du try/catch qui entoure la creation. Sans ce rattrapage, un
+    // signet perime dans un onglet laisse ouvert rend 500 a chaque appel et
+    // condamne l'onglet jusqu'a ce que le joueur vide son stockage.
+    //
+    // On ne rejoue qu'une lecture, et seulement si elle portait un signet :
+    // un GET est rejouable par nature, et la requete rejouee n'a plus
+    // d'en-tete a refuser, ce qui borne la recursion a un tour.
+    if (request.method === 'GET' && request.headers.get('X-D1-Bookmark')) {
+      const entetes = new Headers(request.headers);
+      entetes.delete('X-D1-Bookmark');
+      return await envelopper(new Request(request, { headers: entetes }), env, ctx);
+    }
+    throw e;
+  }
+
+  // Une reponse 101 porte une WebSocket : ses en-tetes ne se modifient plus,
+  // et la salle en direct ne lit aucun signet de toute facon.
+  if (!porteur.session || !reponse || reponse.status === 101) return reponse;
+
+  let signet = null;
+  try { signet = porteur.session.getBookmark(); } catch (e) { signet = null; }
+  if (!signet) return reponse;
+
+  try {
+    const copie = new Response(reponse.body, reponse);
+    copie.headers.set('X-D1-Bookmark', signet);
+    return copie;
+  } catch (e) {
+    // Une reponse dont les en-tetes sont scellees vaut mieux qu'une requete
+    // perdue : le signet se perd, la suivante repart sans contrainte.
+    return reponse;
+  }
+}
+
+async function servir(request, env, ctx, porteur) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -846,6 +913,65 @@ export default {
     // Les passer lies plutot que separement n'est pas une commodite : c'est ce
     // qui permet a `noter()` de refuser le canal de test elle-meme, au lieu de
     // faire confiance a cinq appelants pour y penser chacun de leur cote.
+    // ------------------------------------------------- la session de lecture
+    //
+    // La base de production est repliquee : des copies en lecture seule vivent
+    // aupres des joueurs, la primaire reste a Paris. Un classement demande de
+    // Tokyo n'a plus a traverser l'Europe pour repondre.
+    //
+    // Ce que la replication coute, c'est du retard : une replique peut avoir
+    // quelques centaines de millisecondes de decalage, et un joueur qui vient
+    // de poser son chrono doit le voir dans le classement qu'il ouvre juste
+    // apres — sinon la replication ne ressemble pas a une optimisation, elle
+    // ressemble a une perte de donnees.
+    //
+    // Le signet resout exactement cela. La reponse repart avec la position de
+    // lecture atteinte, le jeu la renvoie a la requete suivante, et le serveur
+    // choisit alors une replique au moins aussi a jour. Une ECRITURE, elle,
+    // part toujours de la primaire : elle commence presque toujours par une
+    // verification — ce nom est-il a cet appareil, ce code est-il le bon — et
+    // une verification lue sur une replique en retard autoriserait ce qu'elle
+    // devrait refuser.
+    //
+    // SANS signet presente, on lit aussi la primaire, GET compris. C'est ce
+    // choix qui rend le deploiement inoffensif : le jeu est une PWA, ses
+    // bundles vivent en cache, et un client charge hier ne connait pas encore
+    // le signet. Si l'absence de signet valait « lis au plus proche », toute
+    // la base installee gagnerait d'un coup le droit de lire une copie en
+    // retard, et verrait un classement sans le chrono qu'elle vient d'y
+    // poser. Un client a jour, lui, presente son signet des sa deuxieme
+    // requete : le gain arrive au rythme des mises a jour, jamais avant que le
+    // client sache s'en servir.
+    //
+    // Le tout s'efface de lui-meme si la plateforme ne connait pas les
+    // sessions : `env.DB` reste alors la base, et rien ne change.
+    // Un premier filtre sur la forme, volontairement large : il arrete le
+    // stockage corrompu et les curieux, sans se river au format exact d'un
+    // signet, qui n'est pas documente et peut changer. Ce qui passerait ce
+    // filtre sans etre valide est rattrape par le rejeu dans `envelopper`.
+    const signetBrut = request.headers.get('X-D1-Bookmark') || '';
+    const signetRecu = /^[0-9a-f]+(-[0-9a-f]+){2,5}$/i.test(signetBrut)
+      ? signetBrut : '';
+    if (env.DB && typeof env.DB.withSession === 'function') {
+      const contrainte = (request.method === 'GET' && signetRecu)
+        ? signetRecu
+        : 'first-primary';
+      let session = null;
+      try {
+        session = env.DB.withSession(contrainte);
+      } catch (e) {
+        // Signet illisible ou hors de portee — il a pu vieillir dans un onglet
+        // laisse ouvert. On repart sans contrainte plutot que de refuser la
+        // requete : le joueur perd la garantie de fraicheur, pas le service.
+        try { session = env.DB.withSession('first-unconstrained'); }
+        catch (e2) { session = null; }
+      }
+      if (session) {
+        env = { ...env, DB: session };
+        if (porteur) porteur.session = session;
+      }
+    }
+
     canal.db = env.DB;
 
     // --------------------------------------------------------- anti-abus
@@ -3467,5 +3593,4 @@ export default {
     }
 
     return json({ error: 'not found' }, 404);
-  },
-};
+}
