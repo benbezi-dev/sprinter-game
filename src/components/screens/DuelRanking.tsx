@@ -6,6 +6,7 @@ import { Swords, ChevronUp, ChevronDown, Loader2, Radio, Check } from 'lucide-re
 import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
 import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
+import { useBarreSelection, LigneSelection } from './Selection';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -133,6 +134,9 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
   const rows = board?.classement || [];
   const bareme = board?.bareme;
   const reduit = useAnimationsReduites();
+  // Où tombe la barre des sélectionnés, si elle tombe quelque part. Le hook
+  // rend `null` dès qu'elle ne serait pas exacte — voir useBarreSelection.
+  const barre = useBarreSelection(rows);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center
@@ -287,8 +291,8 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                   {rows.map((r: DuelRow) => {
                     const moi = r.name.trim().toLowerCase() === moiKey;
                     return (
+                      <React.Fragment key={r.name.toLowerCase()}>
                       <motion.div
-                        key={r.name.toLowerCase()}
                         layout={reduit ? false : true}
                         transition={reduit ? { duration: 0 } : RESSORT.rang}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border
@@ -365,6 +369,16 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                           </button>
                         )}
                       </motion.div>
+                      {/* LA LIGNE DE SÉLECTION, tracée juste sous le dernier
+                          qualifié du pays de ce joueur.
+                          Elle ne dit rien à qui n'a pas de championnat annoncé,
+                          et elle disparaît dès la clôture : après le gel, ce
+                          classement ne sélectionne plus personne, et un trait
+                          posé dessus désignerait des gens qui ne courent pas. */}
+                      {barre?.apres === r.name.trim().toLowerCase() && (
+                        <LigneSelection barre={barre} />
+                      )}
+                      </React.Fragment>
                     );
                   })}
                 </AnimatePresence>

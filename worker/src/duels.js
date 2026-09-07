@@ -113,6 +113,25 @@ export async function touchDuelPlayer(db, key, name) {
 }
 
 /**
+ * L'ordre du classement, en SQL, ecrit une seule fois.
+ *
+ * Deux endroits le lisent : le classement qu'on affiche, juste en dessous, et
+ * la selection d'un championnat. Qu'ils soient rigoureusement identiques n'est
+ * pas une commodite de relecture, c'est ce qui rend la selection verifiable :
+ * un joueur doit pouvoir compter les lignes au-dessus de lui et en deduire
+ * s'il est pris. Deux tris qui se ressemblent finiraient par se contredire un
+ * jour — il suffit d'ajouter un critere d'un cote — et ce jour-la la barre
+ * affichee dans le classement mentirait sans que personne ne s'en apercoive.
+ *
+ * `prefixe` sert la lecture des championnats, qui joint deux tables et doit
+ * donc qualifier ses colonnes. C'est le seul degre de liberte : les criteres
+ * et leur ordre, eux, ne se parametrent pas.
+ */
+export const ordreClassement = (prefixe = '') =>
+  ['palier DESC', 'lp DESC', 'mmr DESC', 'wins DESC', 'name ASC']
+    .map(c => prefixe + c).join(', ');
+
+/**
  * Le classement, ordonne. Y figure quiconque a joue au moins un duel — lance
  * ou releve, peu importe. Un joueur qui a seulement envoye un defi que
  * personne n'a encore releve n'a pas de duel derriere lui : il attend son
@@ -129,7 +148,7 @@ export async function duelBoard(db) {
     `SELECT name, mmr, lp, palier, wins, losses, draws, launched, received,
             prev_rank, last_delta
        FROM duel_players WHERE wins + losses + draws > 0
-      ORDER BY palier DESC, lp DESC, mmr DESC, wins DESC, name ASC LIMIT 500`
+      ORDER BY ${ordreClassement()} LIMIT 500`
   ).all();
   // Le mouvement n'est pas calcule ici : un rang fige cote serveur ne survit
   // pas au duel suivant, l'indicateur serait vide la plupart du temps. Le jeu

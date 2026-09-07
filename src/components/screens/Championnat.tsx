@@ -389,7 +389,7 @@ export function Championnat({ edition, onQuitter }: {
               {e.titre.toUpperCase()}
             </h3>
             {/* La distance se lit a cote du titre, et pas dedans : le titre est
-                deja accorde par le serveur (« Championnat national de France »)
+                deja accorde par le serveur (« Championnat de France »)
                 et on ne recolle pas du texte au milieu d'une phrase faite. */}
             <span className="text-[10px] md:text-xs font-mono font-bold tracking-widest
                              text-foreground/55">

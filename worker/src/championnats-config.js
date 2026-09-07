@@ -60,7 +60,14 @@ export const FORMAT = {
 /** Les trois echelons, et ce qui remplit leur grille de depart. */
 export const ECHELONS = {
   national: {
-    cle: 'national', nom: 'Championnat national',
+    // « Championnat de France », et non « Championnat national de France ».
+    //
+    // Le nom se compose avec la zone accordee (`nomZone().avec`), si bien que
+    // le mot « national » venait s'intercaler dans une phrase qui le disait
+    // deja : nommer le pays suffit a dire de quel echelon il s'agit. On le
+    // retire ici plutot qu'aux quatre endroits qui composent le titre, pour
+    // que les quatre continuent de dire la meme chose.
+    cle: 'national', nom: 'Championnat',
     // Un pays doit avoir au moins ce nombre de joueurs classes et actifs pour
     // tenir son propre championnat. En dessous, voir `replis`.
     minJoueurs: 32,
@@ -117,6 +124,51 @@ export const TITRE_MOIS = 3;
 export const REPLI_PAYS_TROP_PETIT = 'attendre';
 
 /**
+ * Combien de jours separent la cloture de la selection du premier depart.
+ *
+ * Trois jours : la selection ferme le mercredi soir, les series partent le
+ * samedi matin. Ce delai n'est pas du confort d'exploitation, c'est ce qui
+ * rend la selection juste.
+ *
+ * Une selection arretee le jour meme semble plus juste — « les trente-deux
+ * meilleurs le jour de la course » — et l'est moins : un joueur ne peut alors
+ * savoir s'il est pris qu'au moment ou il est trop tard pour y changer quoi
+ * que ce soit. Un decompte vers une echeance sur laquelle on peut encore agir
+ * est une pression ; un decompte vers un resultat deja ecrit est une attente.
+ *
+ * Ces trois jours achetent aussi la seule chose qu'une grille gelee permet :
+ * l'annoncer. « Tu y es, serie 3, couloir 5 » ne peut se dire que si la grille
+ * existe avant le coup de pistolet.
+ */
+export const CLOTURE_JOURS_AVANT = 3;
+
+/**
+ * Combien de suivants on garde en memoire au moment de la cloture.
+ *
+ * Les trente-deux retenus sont dans `champ_partants`. Ceux-la sont ceux
+ * d'apres, et ils ne courront pas : on les garde pour pouvoir repondre. « Je
+ * n'etais pas 33e » est une phrase qui sera prononcee, et une selection qu'on
+ * ne peut pas relire sera contestee — avoir eu raison ne suffit pas si l'on ne
+ * peut pas le montrer.
+ */
+export const SUIVANTS_GARDES = 8;
+
+/**
+ * Departage des joueurs a egalite pour la derniere place qualificative.
+ *
+ * `DEPARTAGE`, plus bas, tranche deux chronos identiques a l'arrivee. Celui-ci
+ * tranche deux joueurs identiques au depart, ce qui n'est pas la meme question
+ * et arrivera bien plus souvent : deux joueurs de la meme division au meme
+ * nombre de points de ligue, c'est un cas ordinaire, pas une coincidence.
+ *
+ * Le MMR y figure comme departage et non comme critere : il tranche une
+ * egalite sans jamais decider d'un rang. C'est ce qui permet de continuer a ne
+ * pas le montrer — on n'a pas a publier un nombre qui ne fait que separer deux
+ * joueurs que le classement visible declare a egalite.
+ */
+export const DEPARTAGE_SELECTION = ['palier', 'lp', 'mmr', 'victoires', 'nom'];
+
+/**
  * Le calendrier d'un weekend, en minutes depuis minuit UTC.
  *
  * Tout est en UTC parce que « le meme weekend, partout » n'a de sens que sur
@@ -147,10 +199,22 @@ export const CALENDRIER = {
   ],
 };
 
-/** Les moments qui meritent de sortir une notification. */
+/**
+ * Les moments qui meritent de sortir une notification.
+ *
+ * `annonce` ouvre la liste parce qu'elle ouvre la competition : c'est le seul
+ * moment ou l'on parle a tout un pays, dont les joueurs qui ne seront pas
+ * selectionnes — et ce sont eux qu'on cherche a faire jouer. Les autres
+ * s'adressent a trente-deux personnes.
+ *
+ * `annulation` n'y est pas, volontairement. Faire vibrer tout un pays pour lui
+ * dire qu'il n'aura pas de championnat coute une desinstallation et ne rapporte
+ * rien ; l'information reste lisible dans le fil, ou ceux qui suivaient
+ * l'edition la trouveront.
+ */
 export const ANNONCES = new Set([
-  'ouverture', 'serie-depart', 'qualification-directe', 'reveal-demies',
-  'demie-depart', 'reveal-finale', 'finale-depart', 'sacre',
+  'annonce', 'ouverture', 'serie-depart', 'qualification-directe',
+  'reveal-demies', 'demie-depart', 'reveal-finale', 'finale-depart', 'sacre',
 ]);
 
 /**

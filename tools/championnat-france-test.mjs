@@ -11,10 +11,18 @@ const get = u => fetch(B + u, { headers: H }).then(r => r.json());
 // Les routes des championnats sont reservees au canal de test : le harnais se
 // procure un acces comme n'importe quel appelant, puis le presente a chaque
 // requete.
-const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
+//
+// La cle d'administration voyage AVEC, et pas seulement sur `/test/admin/creer`.
+// Ouvrir une edition, poser des chronos, cloturer une phase sont des actes
+// d'exploitation : `estAdmin` les garde tous, et un acces au canal de test ne
+// les ouvre pas. Sans elle le harnais s'arretait sur `{ error: 'refuse' }` des
+// l'ouverture, ce qui ressemble a un championnat casse et n'etait qu'un en-tete
+// manquant. ADMIN_CLE=... pour la passer autrement qu'en local.
+const CLE_ADMIN = process.env.ADMIN_CLE || 'cle-de-test-locale-uniquement';
+const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': CLE_ADMIN };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());
-const H = { 'X-Sprinter-Test': _acces.code };
+const H = { 'X-Sprinter-Test': _acces.code, 'X-Sprinter-Admin': CLE_ADMIN };
 
 const s = ms => ms == null ? 'abandon' : (ms / 1000).toFixed(3) + ' s';
 

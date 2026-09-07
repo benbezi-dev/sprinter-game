@@ -83,8 +83,12 @@ const echapper = s => String(s).replace(/'/g, "''");
 
 const lignes = [];
 if (vider) {
-  for (const t of ['champ_resultats', 'champ_partants', 'champ_annonces',
-                   'champ_medailles', 'champ_titres', 'champ_editions']) {
+  // `champ_selection` est l'instantane de la cloture. Le laisser derriere
+  // ferait qu'un weekend rejoue garderait la barre du precedent : la grille
+  // serait neuve et l'archive qui doit la justifier parlerait d'une autre.
+  for (const t of ['champ_resultats', 'champ_partants', 'champ_selection',
+                   'champ_annonces', 'champ_medailles', 'champ_titres',
+                   'champ_editions']) {
     lignes.push(`DELETE FROM ${t};`);
   }
   console.log('   Editions, resultats, titres et annonces remis a zero.');

@@ -15,12 +15,19 @@
 
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
-  ANNONCES, EPREUVES, EPREUVE_DEFAUT,
+  ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
 // table doit exister avant qu'on la joigne, sans quoi la requete echoue.
-import { ensureDuelTables } from './duels.js';
+//
+// `ordreClassement` vient de la meme place pour une raison de fond : la
+// selection doit trier exactement comme le classement affiche, sinon la barre
+// des trente-deux qu'on dessine a l'ecran ne designe pas les trente-deux
+// qu'on selectionne. Une seule definition, deux lecteurs.
+import { ensureDuelTables, ordreClassement } from './duels.js';
+
+const JOUR = 24 * 3600 * 1000;
 
 /** Le continent d'un pays. Table courte : on n'y met que ce qu'on utilise. */
 const CONTINENTS = {
@@ -134,6 +141,7 @@ export async function ensureChampTables(db) {
       zone TEXT NOT NULL,
       epreuve TEXT NOT NULL DEFAULT '${EPREUVE_DEFAUT}',
       debut INTEGER NOT NULL,
+      cloture INTEGER,
       phase TEXT NOT NULL,
       etat TEXT NOT NULL,
       champion_key TEXT,
@@ -155,6 +163,29 @@ export async function ensureChampTables(db) {
       sorti_en TEXT,
       PRIMARY KEY (edition, name_key)
     )`),
+
+    // L'instantane de la cloture : le classement tel qu'il etait a la seconde
+    // ou la selection a ferme, un peu au-dela de la barre.
+    //
+    // Cette table ne sert jamais a courir. Elle sert a repondre. Une selection
+    // qu'on ne peut pas relire sera contestee, et « tu etais 34e » n'a de poids
+    // que si l'on peut dire derriere qui, avec quels points, a quelle heure.
+    //
+    // On y range le palier et les points de ligue — les valeurs du critere —
+    // et jamais le MMR. Le publier ici reviendrait a le publier tout court,
+    // puisque cette table est faite pour etre montree a qui reclame.
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_selection (
+      edition TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      nom TEXT NOT NULL,
+      rang INTEGER NOT NULL,
+      palier INTEGER,
+      lp INTEGER,
+      retenu INTEGER NOT NULL,
+      PRIMARY KEY (edition, name_key)
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS champ_selection_ordre
+                  ON champ_selection(edition, rang)`),
 
     // Un chrono couru dans une course d'une edition.
     db.prepare(`CREATE TABLE IF NOT EXISTS champ_resultats (
@@ -234,6 +265,33 @@ export async function ensureChampTables(db) {
       `ALTER TABLE champ_editions ADD COLUMN epreuve TEXT NOT NULL DEFAULT '${EPREUVE_DEFAUT}'`
     ).run();
   } catch (e) { /* la colonne est deja la */ }
+
+  // La cloture est arrivee apres la table elle aussi, et pour la meme raison
+  // elle s'ajoute seule. Elle est nullable a dessein : les editions ouvertes
+  // avant qu'elle existe n'ont jamais eu d'heure de cloture annoncee, et leur
+  // en inventer une apres coup serait affirmer une chose qui n'a pas eu lieu.
+  // `null` dit « celle-la n'a pas ete annoncee », ce qui est exact.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_editions ADD COLUMN cloture INTEGER`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+
+  // L'index sur la cloture vient APRES l'ALTER, et non dans le batch.
+  //
+  // L'y avoir mis a casse toute la creation au premier essai, et de la facon la
+  // plus instructive : sur une base neuve le batch cree la table avec sa
+  // colonne et l'index passe, mais sur une base existante la colonne n'arrive
+  // qu'a l'ALTER, dix lignes plus bas — l'index echouait donc, et comme le
+  // batch est atomique il emportait la creation de TOUTES les autres tables
+  // avec lui. Un `CREATE INDEX` qui nomme une colonne ajoutee apres coup
+  // appartient a l'apres-coup, pas au batch.
+  //
+  // Sans cet index, le cron relit toute la table toutes les cinq minutes.
+  try {
+    await db.prepare(`CREATE INDEX IF NOT EXISTS champ_editions_echeance
+                        ON champ_editions(etat, cloture)`).run();
+  } catch (e) { /* la colonne manque encore : l'index attendra le prochain tour */ }
 
   pret.add(db);
 }
@@ -341,28 +399,49 @@ function code(n = 8) {
 }
 
 /**
- * Le classement des duels d'une zone, pour completer une grille.
+ * Le classement d'une zone, pour remplir une grille.
  *
- * On seme au MMR, et non aux points de ligue. Les deux ne disent pas la meme
- * chose : les points de ligue recompensent — celui qui releve des defis y monte
- * plus vite que celui qui en lance — tandis que le MMR estime qui court le plus
- * vite, et c'est cela qu'une grille de championnat doit refleter. Semer aux
- * points reviendrait a placer en tete de serie celui qui a joue le plus, pas
- * celui qui est le plus rapide.
+ * QUALIFIER ET SEMER SONT DEUX QUESTIONS, et cette fonction sert les deux sans
+ * les confondre. Elle ordonne au classement visible — palier, puis points de
+ * ligue — et rend le MMR a cote, sous le nom de `force`. L'appelant qualifie
+ * avec l'ordre, et seme avec la force.
  *
- * Le nombre ne sort pas pour autant : il ordonne des noms, et ce sont les noms
- * qu'on affiche.
+ * Pourquoi qualifier au visible. Une selection decidee par le MMR est juste et
+ * invisible a la fois : le joueur ne peut ni verifier qu'il etait 33e, ni
+ * savoir quoi faire pour ne plus l'etre. Or une competition n'est pas seulement
+ * juste parce qu'elle prend les meilleurs ; elle l'est parce que tout le monde
+ * connaissait la regle et pouvait se voir dedans. Le classement visible est le
+ * seul ordre que le joueur suit deja.
+ *
+ * Le prix est connu : les points de ligue avantagent qui joue plus. Il est
+ * moins lourd qu'il n'y parait, parce que `modulation()` pondere deja chaque
+ * gain de points par l'ecart entre le MMR du joueur et ce qu'on attend de sa
+ * division — l'echelle visible n'est pas du temps de jeu, c'est du temps de jeu
+ * pese au niveau reel.
+ *
+ * Pourquoi semer au MMR quand meme. Placer les tetes de serie aux points
+ * reviendrait a mettre en couloir 4 celui qui a joue le plus, pas celui qui
+ * court le plus vite, et le serpentin existe precisement pour equilibrer les
+ * series. On qualifie a ce que le joueur voit, on seme a ce qu'on mesure.
+ *
+ * `maintenant` decide de la fenetre d'activite. Il se passe explicitement
+ * plutot que de se lire sur l'horloge : la cloture doit pouvoir dire « un duel
+ * classe dans les soixante jours avant mercredi 23h59 » et non « avant
+ * l'instant ou le cron est passe ».
  */
-async function classement(db, { pays = null, continent = null, exclure, limite }) {
+async function classement(db, {
+  pays = null, continent = null, exclure, limite, maintenant = Date.now(),
+}) {
   await ensureDuelTables(db);
-  const depuis = Date.now() - ECHELONS.national.fenetreActiviteJours * 24 * 3600 * 1000;
+  const depuis = maintenant - ECHELONS.national.fenetreActiviteJours * JOUR;
   const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
   const args = pays ? [pays] : continent ? [continent] : [];
   const { results } = await db.prepare(
-    `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force
+    `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force,
+            d.palier AS palier, d.lp AS lp
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
       WHERE ${ou} AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
-      ORDER BY d.mmr DESC, d.wins DESC, d.losses ASC, d.name ASC
+      ORDER BY ${ordreClassement('d.')}
       LIMIT ?`
   ).bind(...args, depuis, limite + (exclure ? exclure.size : 0)).all();
   const pris = [];
@@ -385,7 +464,7 @@ async function championsEnTitre(db, echelon, filtreZone) {
   await ensureDuelTables(db);
   const { results } = await db.prepare(
     `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
-            COALESCE(d.mmr, 0) AS force
+            COALESCE(d.mmr, 0) AS force, d.palier AS palier, d.lp AS lp
        FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
       WHERE t.echelon = ? AND t.expire_le > ?
       ORDER BY t.sacre_le DESC`
@@ -405,19 +484,33 @@ async function championsEnTitre(db, echelon, filtreZone) {
 /**
  * Qui prend le depart, selon l'echelon.
  *
- * Renvoie { joueurs, doffice } ou une erreur. `doffice` est l'ensemble des cles
- * qualifiees par leur titre plutot que par leur classement — l'information
- * interesse l'affichage, pas la competition.
+ * Renvoie { joueurs, suivants, doffice } ou une erreur. `doffice` est
+ * l'ensemble des cles qualifiees par leur titre plutot que par leur classement
+ * — l'information interesse l'affichage, pas la competition.
+ *
+ * `suivants` sont ceux d'apres la barre. Ils ne courront pas, et on les lit
+ * quand meme : c'est le seul moyen de repondre a qui reclame sa place. Sans
+ * eux, la selection est une affirmation qu'on ne peut pas relire.
  */
-async function pool(db, echelon, zone) {
+async function pool(db, echelon, zone, maintenant = Date.now()) {
+  // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
+  // suivants qu'on garde pour l'archive de la cloture.
+  const large = FORMAT.partants + SUIVANTS_GARDES;
+
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
     const n = await effectifPays(db, zone, cfg.fenetreActiviteJours);
     if (n < cfg.minJoueurs) {
       return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
     }
-    const l = await classement(db, { pays: zone, exclure: new Set(), limite: FORMAT.partants });
-    return { joueurs: l, doffice: new Set() };
+    const l = await classement(db, {
+      pays: zone, exclure: new Set(), limite: large, maintenant,
+    });
+    return {
+      joueurs: l.slice(0, FORMAT.partants),
+      suivants: l.slice(FORMAT.partants),
+      doffice: new Set(),
+    };
   }
 
   // Continental et mondial partagent la meme mecanique : des champions
@@ -439,76 +532,237 @@ async function pool(db, echelon, zone) {
   const exclure = new Set(champions.map(c => c.cle));
   const complement = await classement(db, {
     continent: estContinental ? zone : null,
-    exclure, limite: FORMAT.partants - champions.length,
+    exclure, limite: large - champions.length, maintenant,
   });
 
-  const joueurs = [...champions, ...complement];
-  return { joueurs, doffice: exclure };
+  // La barre tombe apres les trente-deux, champions d'office compris : c'est
+  // eux qui reduisent le nombre de places ouvertes au repechage, et un
+  // reclamant a le droit de le savoir.
+  const place = Math.max(0, FORMAT.partants - champions.length);
+  return {
+    joueurs: [...champions, ...complement.slice(0, place)],
+    suivants: complement.slice(place),
+    doffice: exclure,
+  };
 }
 
+/** L'heure de cloture d'une edition qui part ce samedi-la. */
+export const clotureDe = (debutSamedi) => debutSamedi - CLOTURE_JOURS_AVANT * JOUR;
+
 /**
- * Ouvre une edition et seme sa grille.
+ * ANNONCER UNE EDITION — premier des deux actes.
  *
- * « Figes a la cloture » est le point important : une fois l'edition ouverte,
- * le classement des duels peut bouger comme il veut, la grille ne bouge plus.
- * Sans quoi un joueur pourrait entrer ou sortir de la competition entre deux
- * courses, ce qui n'aurait aucun sens.
+ * Ces deux actes n'en faisaient qu'un, et c'est la tout ce qui empechait la
+ * selection d'etre juste. Ouvrir une edition, c'etait du meme geste declarer
+ * qu'elle aurait lieu ET geler ses trente-deux partants : le classement se
+ * lisait donc a l'instant ou quelqu'un lancait la commande. Mercredi matin ou
+ * vendredi soir, personne ne pouvait le savoir a l'avance ni le verifier
+ * apres. Il n'y avait pas de regle a propos de laquelle etre juste.
+ *
+ * Ici on ne fait que declarer : la zone, l'epreuve, le samedi du depart, et
+ * l'heure a laquelle la selection fermera. Aucun partant. C'est cette edition
+ * annoncee, et elle seule, qui donne un decompte a afficher — un decompte vers
+ * une echeance sur laquelle le joueur peut encore agir.
+ *
+ * `debutSamedi` DOIT ETRE MINUIT UTC du samedi, et pas une heure de course.
+ * `CALENDRIER` porte des minutes depuis minuit — la premiere serie a 9 h, la
+ * finale a 19 h — et `calendrier()` les ajoute telles quelles a cette date.
+ * Annoncer un depart a « samedi 7 h » decale donc tout le weekend de sept
+ * heures, et la finale tombe a 2 h du matin le lundi. Rien ne le refuse : la
+ * valeur reste un instant valide, elle ne veut simplement plus dire ce qu'on
+ * croit. `Date.UTC(2026, 8, 19)` — sans heure — est la forme juste.
  */
-export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve }) {
+export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, cloture }) {
   await ensureChampTables(db);
   if (!ECHELONS[echelon]) return { erreur: 'echelon inconnu' };
   const z = String(zone || 'MONDE').toUpperCase();
-  // L'epreuve se valide ici et pas a la porte HTTP : `ouvrirCycle` ouvre trente
-  // pays sans repasser par une requete, et une distance fantaisiste doit etre
-  // refusee la aussi.
+  // L'epreuve se valide ici et pas a la porte HTTP : `annoncerCycle` annonce
+  // trente pays sans repasser par une requete, et une distance fantaisiste
+  // doit etre refusee la aussi.
   const ep = String(epreuve == null ? EPREUVE_DEFAUT : epreuve);
   if (!EPREUVES.includes(ep)) return { erreur: 'epreuve inconnue', epreuve: ep };
 
+  const t = Number(debutSamedi);
+  if (!Number.isFinite(t)) return { erreur: 'date de debut invalide' };
+  const ferme = Number.isFinite(Number(cloture)) ? Number(cloture) : clotureDe(t);
+  if (ferme >= t) return { erreur: 'cloture apres le depart', cloture: ferme, debut: t };
+
   // Une zone ne tient qu'un championnat a la fois. Deux editions ouvertes pour
   // le meme pays produiraient deux champions du meme endroit, et un titre qui
-  // ne veut plus rien dire.
+  // ne veut plus rien dire. Une edition annulee, en revanche, ne bloque plus
+  // rien : elle n'aura pas lieu, et le cycle suivant doit pouvoir reannoncer.
   const deja = await db.prepare(
-    `SELECT id, debut FROM champ_editions
-      WHERE echelon = ? AND zone = ? AND etat <> 'terminee' LIMIT 1`
+    `SELECT id, debut, etat FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND etat NOT IN ('terminee', 'annulee') LIMIT 1`
   ).bind(echelon, z).first();
-  if (deja) return { erreur: 'edition deja ouverte', edition: deja.id, debut: deja.debut };
+  if (deja) return { erreur: 'edition deja ouverte', edition: deja.id, debut: deja.debut, etat: deja.etat };
 
-  const p = await pool(db, echelon, z);
-  if (p.erreur) return p;
-  if (p.joueurs.length < FORMAT.partants) {
-    return { erreur: 'grille incomplete', joueurs: p.joueurs.length, requis: FORMAT.partants };
+  // Un pays qui ne peut pas tenir son championnat se refuse ICI, et pas dans
+  // trois jours. `annoncerCycle` ne lui donnerait jamais son tour, mais une
+  // annonce a la main le pourrait — et annoncer un championnat pour ensuite
+  // l'annuler est bien pire que de ne pas l'annoncer.
+  //
+  // C'est un COMPTE, pas un classement : on verifie qu'il y a du monde, on ne
+  // regarde pas qui. Rien n'est gele, et le classement reste libre de bouger
+  // jusqu'a la cloture.
+  //
+  // Les echelons superieurs n'ont pas droit a cette verification, et c'est
+  // volontaire : un continental s'annonce AVANT que les nationaux aient
+  // couronne les champions qui le rempliront. Compter ses qualifies d'office a
+  // l'annonce reviendrait a refuser tous les continentaux du cycle.
+  if (echelon === 'national') {
+    const cfg = ECHELONS.national;
+    const n = await effectifPays(db, z, cfg.fenetreActiviteJours);
+    if (n < cfg.minJoueurs) {
+      return {
+        erreur: 'pays trop petit', joueurs: n,
+        requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT,
+      };
+    }
   }
 
-  // Le semis se fait au classement des duels pour tout le monde, titre ou pas.
-  // Placer les champions en tete de serie parce qu'ils sont champions
-  // desequilibrerait les series, ce que le serpentin existe precisement pour
-  // eviter : on qualifie par le titre, on seme au niveau mesure.
+  // On ne lit PAS le classement ici. Une grille semee a l'annonce serait
+  // exactement ce qu'on vient de defaire : un gel a une heure que personne
+  // n'a annoncee. La phase de depart est posee des maintenant pour que rien en
+  // aval n'ait a traiter une edition sans phase.
+  const id = code();
+  const phase0 = FORMAT.phases[0];
+  await db.prepare(
+    `INSERT INTO champ_editions
+       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?)`
+  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now()).run();
+
+  const nom = nomZone(z, echelon);
+  await annoncer(db, {
+    edition: id, echelon, zone: z, type: 'annonce',
+    titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
+    texte: ep + ' m. Premier départ samedi. Sélection des '
+         + FORMAT.partants + ' meilleurs du classement, à la clôture.',
+    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants },
+  });
+
+  return {
+    edition: id, echelon, zone: z, epreuve: ep, etat: 'annoncee',
+    pays: echelon === 'national' ? z : undefined,
+    debut: t, cloture: ferme,
+    calendrier: calendrier(t, CALENDRIER),
+  };
+}
+
+/**
+ * CLOTURER LA SELECTION — second acte, et le seul qui lise le classement.
+ *
+ * « Figes a la cloture » etait deja le principe ; il devient verifiable, parce
+ * que la cloture est maintenant une heure annoncee d'avance et non l'instant ou
+ * une commande a ete lancee. Apres cet appel, le classement peut bouger comme
+ * il veut : la grille ne bouge plus, et personne n'entre ni ne sort entre deux
+ * courses.
+ *
+ * `maintenant` est l'instant de reference — celui de la fenetre d'activite et
+ * celui qu'on inscrit. Le cron passe toutes les cinq minutes et peut donc
+ * arriver un peu apres l'heure ; on lui passe l'heure annoncee plutot que la
+ * sienne, pour que la regle affichee soit celle qui a ete appliquee.
+ */
+export async function cloturerSelection(db, edition, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const e = await db.prepare(
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+       FROM champ_editions WHERE id = ?`).bind(edition).first();
+  if (!e) return { erreur: 'edition introuvable' };
+  if (e.etat !== 'annoncee') return { erreur: 'edition deja cloturee', etat: e.etat };
+
+  const ep = e.epreuve || EPREUVE_DEFAUT;
+  const phase0 = FORMAT.phases[0];
+  const nom = nomZone(e.zone, e.echelon);
+  const intitule = e.echelon === 'mondial'
+    ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
+
+  const p = await pool(db, e.echelon, e.zone, maintenant);
+  const manque = !p.erreur && p.joueurs.length < FORMAT.partants;
+
+  // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
+  // joueurs actifs depuis l'annonce, ou ses champions ont expire.
+  //
+  // On annule, et on ne repousse pas. Repousser la cloture de vingt-quatre
+  // heures parce qu'il manque un partant reviendrait a deplacer l'echeance
+  // apres l'avoir publiee — c'est-a-dire a defaire ce que tout ce decoupage
+  // vient de construire. Le cycle suivant reannoncera.
+  if (p.erreur || manque) {
+    const raison = p.erreur ? p.erreur : 'grille incomplete';
+    await db.prepare(
+      `UPDATE champ_editions SET etat = 'annulee', fini_le = ? WHERE id = ?`
+    ).bind(maintenant, e.id).run();
+    await annoncer(db, {
+      edition: e.id, echelon: e.echelon, zone: e.zone, type: 'annulation',
+      titre: intitule,
+      texte: 'Édition annulée : pas assez de partants à la clôture.',
+      // Les champs se recopient un par un plutot que d'etaler `p`. Etaler
+      // marchait, et par accident : selon la branche, `p.joueurs` est un
+      // compte ou la liste complete des partants — et la seconde n'a rien a
+      // faire dans une annonce, qui est publique et se lit dans le fil.
+      donnees: {
+        raison,
+        joueurs: manque ? p.joueurs.length : p.joueurs,
+        requis: manque ? FORMAT.partants : p.requis,
+        champions: p.champions,
+        repli: p.repli,
+      },
+    });
+    // Le detail chiffre remonte avec l'erreur. L'ancien `ouvrirEchelon` le
+    // rendait, et deux appelants s'en servent pour dire quelque chose d'utile :
+    // le harnais France affiche « il faut 32 joueurs, la base en compte 4 », et
+    // `ouvrirCycle` le range dans `ecartes`. Sans ces champs, les deux
+    // annoncent un echec sans dire de combien.
+    return {
+      erreur: raison, edition: e.id, annulee: true,
+      joueurs: manque ? p.joueurs.length : p.joueurs,
+      requis: manque ? FORMAT.partants : p.requis,
+      champions: p.champions, repli: p.repli,
+    };
+  }
+
+  // Le semis se fait au MMR pour tout le monde, titre ou pas — c'est la
+  // deuxieme moitie de la regle « on qualifie a ce que le joueur voit, on seme
+  // a ce qu'on mesure ». Placer les champions en tete de serie parce qu'ils
+  // sont champions desequilibrerait les series, ce que le serpentin existe
+  // precisement pour eviter ; les y placer aux points de ligue mettrait en
+  // couloir 4 celui qui a le plus joue.
   const joueurs = [...p.joueurs]
     .sort((a, b) => (b.force || 0) - (a.force || 0))
     .map((j, i) => ({ cle: j.cle, nom: j.nom, rang: i + 1, doffice: p.doffice.has(j.cle) }));
 
-  const id = code();
-  const phase0 = FORMAT.phases[0];
   const grille = serpentin(joueurs, phase0.courses);
-
-  await db.prepare(
-    `INSERT INTO champ_editions (id, echelon, zone, epreuve, debut, phase, etat, cree_le)
-     VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?)`
-  ).bind(id, echelon, z, ep, debutSamedi, phase0.cle, Date.now()).run();
 
   const lignes = [];
   grille.forEach((course, ic) => course.forEach(j => {
     lignes.push(db.prepare(
       `INSERT INTO champ_partants (edition, name_key, nom, rang_duel, phase, course)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(id, j.cle, j.nom, j.rang, phase0.cle, ic + 1));
+    ).bind(e.id, j.cle, j.nom, j.rang, phase0.cle, ic + 1));
   }));
+
+  // L'instantane de la barre. `rang` est la position dans le vivier tel qu'il a
+  // servi : au national c'est le rang au classement, tout simplement ; aux
+  // echelons superieurs les champions d'office viennent d'abord, puisque ce
+  // sont eux qui reduisent le nombre de places ouvertes au repechage.
+  [...p.joueurs.map(j => ({ ...j, retenu: 1 })),
+   ...p.suivants.map(j => ({ ...j, retenu: 0 }))].forEach((j, i) => {
+    lignes.push(db.prepare(
+      `INSERT INTO champ_selection (edition, name_key, nom, rang, palier, lp, retenu)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(e.id, j.cle, j.nom, i + 1, j.palier ?? null, j.lp ?? null, j.retenu));
+  });
+
   await db.batch(lignes);
 
-  const nom = nomZone(z, echelon);
+  await db.prepare(
+    `UPDATE champ_editions SET etat = 'ouverte', phase = ? WHERE id = ?`
+  ).bind(phase0.cle, e.id).run();
+
   await annoncer(db, {
-    edition: id, echelon, zone: z, type: 'ouverture',
-    titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
+    edition: e.id, echelon: e.echelon, zone: e.zone, type: 'ouverture',
+    titre: intitule,
     // La distance ouvre la phrase : c'est d'elle qu'on est champion, et le fil
     // d'annonces est le seul endroit ou un joueur lit l'edition en toutes
     // lettres.
@@ -518,12 +772,51 @@ export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve })
   });
 
   return {
-    edition: id, echelon, zone: z, epreuve: ep,
-    pays: echelon === 'national' ? z : undefined,
+    edition: e.id, echelon: e.echelon, zone: e.zone, epreuve: ep, etat: 'ouverte',
+    pays: e.echelon === 'national' ? e.zone : undefined,
     partants: joueurs.length, doffice: p.doffice.size,
+    suivants: p.suivants.length,
+    cloture: e.cloture, debut: e.debut,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
-    calendrier: calendrier(debutSamedi, CALENDRIER),
+    calendrier: calendrier(e.debut, CALENDRIER),
   };
+}
+
+/**
+ * Annonce et cloture d'un seul geste.
+ *
+ * C'est l'ancien `ouvrirEchelon`, et il garde sa place : sur le canal de test
+ * on veut un championnat maintenant, pas dans trois jours, et les essais du
+ * moteur n'ont pas a attendre une echeance. En production c'est l'annonce
+ * qu'on appelle — un championnat ouvert sans avoir ete annonce est exactement
+ * ce que ce decoupage sert a rendre impossible.
+ */
+export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve }) {
+  const a = await annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve });
+  if (a.erreur) return a;
+
+  const r = await cloturerSelection(db, a.edition);
+
+  // Le geste a echoue : il ne doit rien laisser derriere lui.
+  //
+  // `cloturerSelection` annule l'edition quand la grille ne se remplit pas, et
+  // c'est la bonne reponse pour une edition annoncee : un pays a qui l'on a
+  // promis un championnat merite qu'on lui dise qu'il n'aura pas lieu. Mais ici
+  // l'annonce et la cloture tombent dans la meme milliseconde — personne ne l'a
+  // jamais vue passer, et laisser une edition annulee derriere soi reviendrait
+  // a garder la trace d'une promesse qui n'a jamais ete faite.
+  //
+  // Ce n'est pas cosmetique : `ouvrirCycle` appelle ceci pour trente zones, et
+  // celles qui n'ont pas assez de champions en laissaient une chacune. Elles
+  // ressortaient ensuite dans le recapitulatif mondial comme des editions
+  // existantes, ce qu'elles ne sont pas.
+  if (r.erreur) {
+    await db.batch([
+      db.prepare(`DELETE FROM champ_annonces WHERE edition = ?`).bind(a.edition),
+      db.prepare(`DELETE FROM champ_editions WHERE id = ?`).bind(a.edition),
+    ]);
+  }
+  return r;
 }
 
 /** Ouvre une edition nationale. Conserve pour les appels existants. */
@@ -539,31 +832,246 @@ export async function ouvrirNational(db, { pays, debutSamedi, epreuve }) {
  * court sa serie, trente autres pays courent la leur. Une seule date, passee
  * a tout le monde, et les pays trop petits ressortent dans `ecartes` avec
  * leur raison plutot que d'echouer en silence.
+ *
+ * `acte` decide de ce qu'on fait de chaque zone : l'annoncer, ou l'ouvrir sur
+ * le champ. Les deux parcourent exactement la meme liste de zones dans le meme
+ * ordre — c'est ce qui garantit qu'un cycle annonce et un cycle ouvert
+ * concernent le meme monde.
  */
-export async function ouvrirCycle(db, { debutSamedi, echelon = 'national', epreuve }) {
+export async function ouvrirCycle(db, {
+  debutSamedi, echelon = 'national', epreuve, acte = ouvrirEchelon,
+}) {
   await ensureChampTables(db);
   const ouvertes = [], ecartes = [];
 
   if (echelon === 'national') {
     for (const p of await paysEligibles(db)) {
       if (!p.eligible) { ecartes.push({ zone: p.pays, raison: 'pays trop petit', joueurs: p.joueurs, repli: p.repli }); continue; }
-      const r = await ouvrirEchelon(db, { echelon: 'national', zone: p.pays, debutSamedi, epreuve });
+      const r = await acte(db, { echelon: 'national', zone: p.pays, debutSamedi, epreuve });
       if (r.erreur) ecartes.push({ zone: p.pays, raison: r.erreur, ...r });
-      else ouvertes.push({ zone: p.pays, edition: r.edition, partants: r.partants });
+      else ouvertes.push({ zone: p.pays, edition: r.edition, partants: r.partants, cloture: r.cloture });
     }
   } else if (echelon === 'continental') {
     for (const c of Object.keys(CONTINENTS)) {
-      const r = await ouvrirEchelon(db, { echelon: 'continental', zone: c, debutSamedi, epreuve });
+      const r = await acte(db, { echelon: 'continental', zone: c, debutSamedi, epreuve });
       if (r.erreur) ecartes.push({ zone: c, raison: r.erreur, ...r });
-      else ouvertes.push({ zone: c, edition: r.edition, partants: r.partants });
+      else ouvertes.push({ zone: c, edition: r.edition, partants: r.partants, cloture: r.cloture });
     }
   } else {
-    const r = await ouvrirEchelon(db, { echelon: 'mondial', zone: 'MONDE', debutSamedi, epreuve });
+    const r = await acte(db, { echelon: 'mondial', zone: 'MONDE', debutSamedi, epreuve });
     if (r.erreur) ecartes.push({ zone: 'MONDE', raison: r.erreur, ...r });
-    else ouvertes.push({ zone: 'MONDE', edition: r.edition, partants: r.partants });
+    else ouvertes.push({ zone: 'MONDE', edition: r.edition, partants: r.partants, cloture: r.cloture });
   }
 
   return { echelon, debut: debutSamedi, ouvertes, ecartes };
+}
+
+/**
+ * Annonce le meme weekend a tout le monde, sans lire un seul classement.
+ *
+ * C'est l'appel d'exploitation en production : on annonce le cycle une ou deux
+ * semaines avant, et plus personne n'y touche. Le cron cloture chaque edition
+ * a son heure.
+ *
+ * La liste des pays est arretee ICI, a l'annonce. Un pays qui n'a pas ses
+ * trente-deux joueurs actifs ce jour-la n'aura pas de championnat, meme s'il
+ * les gagne avant la cloture — et c'est voulu : la liste des pays qui tiennent
+ * leur championnat est publiee avec l'annonce, et une liste publiee ne se
+ * complete pas en silence.
+ */
+export async function annoncerCycle(db, { debutSamedi, echelon = 'national', epreuve }) {
+  return ouvrirCycle(db, { debutSamedi, echelon, epreuve, acte: annoncerEchelon });
+}
+
+/**
+ * Cloture toutes les selections dont l'heure est passee.
+ *
+ * C'est le point d'entree du cron, et c'est ce qui fait de la cloture une
+ * echeance plutot qu'une intention. Une deadline qui attend qu'un humain lance
+ * une commande n'est pas une deadline : elle glisse d'une journee le jour ou la
+ * cle d'administration ne correspond pas, et la regle affichee devient fausse
+ * sans que personne ne l'ait decide.
+ *
+ * On cloture a l'heure ANNONCEE, pas a celle du passage. Le cron balaie toutes
+ * les cinq minutes et arrive donc jusqu'a cinq minutes en retard ; lire le
+ * classement avec son horloge a lui reviendrait a appliquer une fenetre
+ * d'activite de soixante jours et cinq minutes. L'ecart est infime et le
+ * principe ne l'est pas : la regle appliquee doit etre celle qui a ete
+ * publiee.
+ */
+export async function cloturerEcheances(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT id, cloture FROM champ_editions
+      WHERE etat = 'annoncee' AND cloture IS NOT NULL AND cloture <= ?
+      ORDER BY cloture`
+  ).bind(maintenant).all();
+
+  const cloturees = [], annulees = [];
+  for (const e of results || []) {
+    const r = await cloturerSelection(db, e.id, e.cloture);
+    if (r.annulee) annulees.push({ edition: e.id, raison: r.erreur });
+    else if (r.erreur) annulees.push({ edition: e.id, raison: r.erreur, echec: true });
+    else cloturees.push({ edition: e.id, zone: r.zone, partants: r.partants });
+  }
+  return { vues: (results || []).length, cloturees, annulees };
+}
+
+/**
+ * L'edition annoncee d'une zone, celle vers laquelle on decompte.
+ *
+ * Distincte de `editionDe`, qui cherche le championnat ou un joueur est
+ * ENGAGE : avant la cloture, personne ne l'est encore. C'est cette route qui
+ * permet de parler du championnat a qui n'y est pas — c'est-a-dire a ceux
+ * qu'il faut convaincre de jouer.
+ */
+export async function prochaineEdition(db, zone, echelon = 'national') {
+  await ensureChampTables(db);
+  const z = String(zone || '').toUpperCase();
+  if (!z) return null;
+  const e = await db.prepare(
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+       FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND etat IN ('annoncee', 'ouverte')
+      ORDER BY debut LIMIT 1`
+  ).bind(echelon, z).first();
+  if (!e) return null;
+  const nom = nomZone(e.zone, e.echelon);
+  return {
+    id: e.id, echelon: e.echelon, zone: e.zone, zoneNom: nom.nom,
+    titre: e.echelon === 'mondial' ? ECHELONS.mondial.nom
+         : ECHELONS[e.echelon].nom + ' ' + nom.avec,
+    epreuve: e.epreuve || EPREUVE_DEFAUT,
+    debut: e.debut, cloture: e.cloture, etat: e.etat,
+    partants: FORMAT.partants,
+    calendrier: calendrier(e.debut, CALENDRIER),
+  };
+}
+
+/**
+ * La course d'un partant, et l'heure a laquelle elle part.
+ *
+ * L'heure se calcule ici et non a l'ecran. Le calendrier est une regle de
+ * competition — le meme raisonnement que pour le format des phases : la
+ * recopier cote client garantit qu'un jour les deux ne diront plus la meme
+ * heure, et une heure de convocation fausse est pire que pas d'heure du tout.
+ */
+async function courseDe(db, edition, nameKey) {
+  const r = await db.prepare(
+    `SELECT phase, course FROM champ_partants WHERE edition = ? AND name_key = ?`
+  ).bind(edition, nameKey).first();
+  if (!r || r.course == null) return null;
+  const e = await db.prepare(
+    `SELECT debut FROM champ_editions WHERE id = ?`).bind(edition).first();
+  const rv = calendrier(e ? e.debut : 0, CALENDRIER)
+    .find(x => x.phase === r.phase && x.course === r.course);
+  return { phase: r.phase, numero: r.course, at: rv ? rv.at : null };
+}
+
+/**
+ * Ou en est ce joueur par rapport a la barre de selection de son pays.
+ *
+ * C'est la reponse a « il me manque combien de places », et c'est tout
+ * l'interet d'avoir qualifie au classement visible : cette question a
+ * desormais une reponse que le joueur peut verifier lui-meme en comptant les
+ * lignes du classement.
+ *
+ * Un RANG sort d'ici, jamais le MMR. Le nombre cache reste cache : il ordonne
+ * des noms, ce sont les noms qu'on rend. Une fois la selection cloturee, on
+ * lit l'instantane plutot que le classement du jour — sinon la reponse
+ * changerait apres la cloture, alors que la grille, elle, ne change plus.
+ */
+export async function rangSelection(db, nameKey) {
+  await ensureChampTables(db);
+  await ensureDuelTables(db);
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return null;
+
+  const g = await db.prepare(
+    `SELECT pays FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (!g || !g.pays) return { pays: null, raison: 'pays inconnu' };
+
+  const ed = await prochaineEdition(db, g.pays, 'national');
+  const places = FORMAT.partants;
+
+  // Le titre et l'epreuve voyagent avec le rang, et l'appel se suffit alors a
+  // lui-meme. C'est ce qui permet a la banderole de l'accueil de tenir en UNE
+  // requete : sans eux il lui faudrait aussi demander `/champ/prochain` pour
+  // savoir comment nommer le championnat dont elle affiche l'ecart.
+  const ou = ed
+    ? { titre: ed.titre, epreuve: ed.epreuve, zoneNom: ed.zoneNom }
+    : { titre: null, epreuve: null, zoneNom: null };
+
+  // Apres la cloture, la verite est dans l'instantane.
+  if (ed && ed.etat === 'ouverte') {
+    const r = await db.prepare(
+      `SELECT rang, retenu FROM champ_selection WHERE edition = ? AND name_key = ?`
+    ).bind(ed.id, k).first();
+    return {
+      pays: g.pays, ...ou, edition: ed.id, etat: ed.etat, places,
+      cloture: ed.cloture, debut: ed.debut,
+      // Pas de barre apres le gel : le classement du jour ne selectionne plus
+      // rien, et une barre tracee dessus designerait des gens qui ne courent
+      // pas. C'est la grille qui fait foi, et elle est ailleurs.
+      barre: null,
+      rang: r ? r.rang : null,
+      retenu: r ? !!r.retenu : false,
+      manque: r && !r.retenu ? r.rang - places : null,
+      gele: true,
+      // La course ou il part, quand il part. C'est LA nouvelle du gel, et elle
+      // ne vaut que pour les retenus : « serie 3 » ne dit rien a qui n'y est
+      // pas. Le couloir ne sort pas d'ici — il se derive du rang de semis a
+      // l'affichage, et le deriver deux fois serait deux occasions de ne plus
+      // dire la meme chose.
+      course: r && r.retenu ? await courseDe(db, ed.id, k) : null,
+    };
+  }
+
+  // Avant la cloture : le classement du moment, dans l'ordre qui selectionne.
+  const { results } = await db.prepare(
+    `SELECT d.name_key AS cle
+       FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
+      WHERE g.pays = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      ORDER BY ${ordreClassement('d.')}`
+  ).bind(g.pays, Date.now() - ECHELONS.national.fenetreActiviteJours * JOUR).all();
+
+  const i = (results || []).findIndex(r => r.cle === k);
+  const rang = i < 0 ? null : i + 1;
+
+  // Qui occupe la derniere place qualificative, nomme.
+  //
+  // Le jeu dessine une barre dans le classement, et il ne peut pas la placer
+  // seul : le classement affiche montre TOUT LE MONDE, tandis que la selection
+  // exige un duel classe dans les soixante derniers jours. Un joueur endormi
+  // depuis trois mois tient donc une ligne a l'ecran sans occuper de place
+  // dans le vivier — et compter trente-deux lignes cote client tracerait la
+  // barre trop bas, en silence.
+  //
+  // On rend donc la cle du dernier qualifie plutot qu'un compte. Le jeu trace
+  // apres cette ligne-la, ou ne trace rien s'il ne la voit pas.
+  const barre = (results || []).length >= places
+    ? (results[places - 1] || {}).cle || null
+    : null;
+  return {
+    pays: g.pays, ...ou,
+    edition: ed ? ed.id : null,
+    etat: ed ? ed.etat : null,
+    cloture: ed ? ed.cloture : null,
+    debut: ed ? ed.debut : null,
+    places, classes: (results || []).length,
+    barre,
+    rang,
+    // `null` quand le joueur n'est pas classe du tout : il n'a pas un ecart a
+    // la barre, il n'est pas encore sur la liste. Les deux cas demandent deux
+    // phrases differentes a l'ecran, pas la meme avec un zero dedans.
+    retenu: rang != null && rang <= places,
+    manque: rang != null && rang > places ? rang - places : null,
+    gele: false,
+    // Avant le gel, personne n'a de course : la grille n'existe pas. Le champ
+    // est la quand meme, a `null`, pour que l'ecran n'ait pas deux formes de
+    // reponse a distinguer selon le moment ou il a demande.
+    course: null,
+  };
 }
 
 /**
@@ -574,15 +1082,18 @@ export async function ouvrirCycle(db, { debutSamedi, echelon = 'national', epreu
  * voudra bouger apres le premier cycle.
  */
 export function calendrierCycle(debutSamedi) {
-  const SEMAINE = 7 * 24 * 3600 * 1000;
+  const SEMAINE = 7 * JOUR;
   const nat = debutSamedi;
   const con = nat + ECHELONS.continental.semainesApresPrecedent * SEMAINE;
   const mon = con + ECHELONS.mondial.semainesApresPrecedent * SEMAINE;
-  return [
-    { echelon: 'national',    debut: nat, rendezVous: calendrier(nat, CALENDRIER) },
-    { echelon: 'continental', debut: con, rendezVous: calendrier(con, CALENDRIER) },
-    { echelon: 'mondial',     debut: mon, rendezVous: calendrier(mon, CALENDRIER) },
-  ];
+  // La cloture voyage avec le weekend. Un calendrier qui annonce trois dates
+  // de depart sans dire quand chaque selection ferme est un calendrier
+  // inutilisable pour celui qui veut y entrer.
+  const w = (echelon, debut) => ({
+    echelon, debut, cloture: clotureDe(debut),
+    rendezVous: calendrier(debut, CALENDRIER),
+  });
+  return [w('national', nat), w('continental', con), w('mondial', mon)];
 }
 
 /**
@@ -630,6 +1141,11 @@ export async function etatEdition(db, id) {
   const cfg = FORMAT.phases[iPhase] || null;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
+    // `null` pour les editions ouvertes avant que la cloture existe, et pour
+    // celles qu'on ouvre d'un geste sur le canal de test. C'est exact : elles
+    // n'ont pas eu d'heure de cloture annoncee, et l'ecran ne doit pas
+    // decompter vers une echeance qui n'a jamais ete publiee.
+    cloture: e.cloture ?? null,
     // Les editions d'avant la colonne n'en portent pas : on retombe sur la
     // valeur par defaut plutot que de rendre `null`, qu'aucun ecran n'attend.
     epreuve: e.epreuve || EPREUVE_DEFAUT,
@@ -1024,29 +1540,45 @@ export async function recapMondial(db, { echelon = null } = {}) {
   const filtre = ou.length ? 'WHERE ' + ou.join(' AND ') : '';
 
   const { results: editions } = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, phase, etat, champion_nom, fini_le
+    `SELECT id, echelon, zone, epreuve, debut, cloture, phase, etat,
+            champion_nom, fini_le
        FROM champ_editions ${filtre} ORDER BY debut DESC, zone`
   ).bind(...args).all();
 
-  const encours = [], sacres = [];
+  // Quatre etats, quatre sorts. Ranger tout ce qui n'est pas termine dans
+  // « en cours » etait juste tant qu'il n'y avait que deux etats ; ca ne l'est
+  // plus. Une edition annoncee ne court pas encore, une edition annulee ne
+  // courra pas — les compter parmi celles qui courent afficherait des
+  // competitions qui n'ont pas lieu.
+  const annoncees = [], encours = [], sacres = [], annulees = [];
   for (const e of editions || []) {
     const z = nomZone(e.zone, e.echelon);
     const ligne = {
       edition: e.id, echelon: e.echelon, zone: e.zone, zoneNom: z.nom,
       epreuve: e.epreuve || EPREUVE_DEFAUT,
       debut: e.debut, phase: e.phase,
+      cloture: e.cloture ?? null,
+      // L'etat manquait, et le tableau de bord le lisait quand meme : son
+      // `e.etat === 'terminee'` etait donc toujours faux, et toute edition
+      // s'affichait « en cours ». Le defaut ne se voyait pas tant que la seule
+      // autre possibilite etait d'etre effectivement en cours.
+      etat: e.etat,
     };
-    if (e.etat === 'terminee') {
-      sacres.push({ ...ligne, champion: e.champion_nom, fini_le: e.fini_le });
-    } else {
-      encours.push(ligne);
-    }
+    if (e.etat === 'terminee') sacres.push({ ...ligne, champion: e.champion_nom, fini_le: e.fini_le });
+    else if (e.etat === 'annoncee') annoncees.push(ligne);
+    else if (e.etat === 'annulee') annulees.push(ligne);
+    else encours.push(ligne);
   }
   sacres.sort((a, b) => (b.fini_le || 0) - (a.fini_le || 0));
+  // Les prochaines d'abord : ce bloc sert a donner envie d'y etre.
+  annoncees.sort((a, b) => a.debut - b.debut);
 
   return {
-    encours, sacres,
-    total: (editions || []).length,
+    // `annoncees` est le seul endroit du recapitulatif qui parle a qui n'est
+    // pas encore selectionne — c'est-a-dire au plus grand nombre.
+    annoncees, encours, sacres, annulees,
+    // Une edition annulee ne compte pas dans le total : elle n'a pas eu lieu.
+    total: annoncees.length + encours.length + sacres.length,
     termines: sacres.length,
   };
 }
