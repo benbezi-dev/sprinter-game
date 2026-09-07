@@ -37,6 +37,19 @@
 
 const API = 'https://rtc.live.cloudflare.com/v1/turn/keys';
 
+/**
+ * Le chemin de fabrication.
+ *
+ * Cloudflare en a servi deux. L'ancien, `/credentials/generate`, rendait un
+ * objet unique a la forme de l'ebauche d'RFC. Le courant,
+ * `/credentials/generate-ice-servers`, rend le tableau que
+ * `RTCPeerConnection` attend, STUN et TURN ensemble. Viser l'ancien ne
+ * produisait pas une erreur visible : la route repondait une liste vide, le
+ * jeu retombait sur STUN, et les joueurs derriere un NAT symetrique restaient
+ * muets exactement comme avant TURN — sans que rien, nulle part, ne le dise.
+ */
+const CHEMIN = 'credentials/generate-ice-servers';
+
 /** Duree de vie d'un identifiant, en secondes. Voir la note ci-dessus. */
 const TTL_S = 3600;
 
@@ -57,7 +70,7 @@ export async function identifiantsTurn(env, deviceId) {
   if (!cle || !jeton) return RIEN;
 
   try {
-    const r = await fetch(`${API}/${encodeURIComponent(cle)}/credentials/generate`, {
+    const r = await fetch(`${API}/${encodeURIComponent(cle)}/${CHEMIN}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${jeton}`,
@@ -68,7 +81,17 @@ export async function identifiantsTurn(env, deviceId) {
         customIdentifier: String(deviceId || '').slice(0, 64),
       }),
     });
-    if (!r.ok) return RIEN;
+    if (!r.ok) {
+      // On trace, et c'est nouveau. Le repli silencieux est la bonne conduite
+      // pour le joueur — un duel sans voix vaut mieux qu'un duel refuse — mais
+      // il rendait la panne indetectable : personne ne peut signaler une voix
+      // qui n'a jamais existe. Le statut et le debut du corps suffisent a
+      // distinguer une cle refusee d'un chemin disparu. Ni l'un ni l'autre
+      // n'expose de secret.
+      const debut = await r.text().catch(() => '');
+      console.log('turn KO', r.status, debut.slice(0, 200));
+      return RIEN;
+    }
 
     const d = await r.json();
     // Cloudflare rend un objet unique, pas un tableau — la forme de l'ebauche
@@ -78,9 +101,10 @@ export async function identifiantsTurn(env, deviceId) {
     const liste = Array.isArray(s) ? s : (s ? [s] : []);
     if (!liste.length) return RIEN;
     return { iceServers: liste, ttl: TTL_S };
-  } catch {
+  } catch (e) {
     // Le service de relais est injoignable : le duel se jouera en direct ou
     // sans voix, mais il se jouera.
+    console.log('turn injoignable', String((e && e.message) || e));
     return RIEN;
   }
 }
