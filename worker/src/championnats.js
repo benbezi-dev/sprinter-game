@@ -564,13 +564,9 @@ export const clotureDe = (debutSamedi) => debutSamedi - CLOTURE_JOURS_AVANT * JO
  * annoncee, et elle seule, qui donne un decompte a afficher — un decompte vers
  * une echeance sur laquelle le joueur peut encore agir.
  *
- * `debutSamedi` DOIT ETRE MINUIT UTC du samedi, et pas une heure de course.
- * `CALENDRIER` porte des minutes depuis minuit — la premiere serie a 9 h, la
- * finale a 19 h — et `calendrier()` les ajoute telles quelles a cette date.
- * Annoncer un depart a « samedi 7 h » decale donc tout le weekend de sept
- * heures, et la finale tombe a 2 h du matin le lundi. Rien ne le refuse : la
- * valeur reste un instant valide, elle ne veut simplement plus dire ce qu'on
- * croit. `Date.UTC(2026, 8, 19)` — sans heure — est la forme juste.
+ * `debutSamedi` est minuit UTC d'un samedi — `Date.UTC(2026, 8, 19)`, sans
+ * heure. Ce n'est plus une consigne mais une condition : voir le refus dans le
+ * corps, et pourquoi il vaut mieux qu'un commentaire.
  */
 export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, cloture }) {
   await ensureChampTables(db);
@@ -584,6 +580,35 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
 
   const t = Number(debutSamedi);
   if (!Number.isFinite(t)) return { erreur: 'date de debut invalide' };
+
+  // MINUIT UTC, ET UN SAMEDI. Un commentaire ne suffisait pas.
+  //
+  // `CALENDRIER` porte des minutes depuis minuit — la premiere serie a 9 h, la
+  // finale a 19 h — et `calendrier()` les ajoute telles quelles a cette date.
+  // Une heure glissee dans `debut` decale donc tout le weekend d'autant, sans
+  // que rien ne proteste : la valeur reste un instant parfaitement valide, elle
+  // ne veut simplement plus dire ce qu'on croit. C'est arrive en verification,
+  // avec sept heures d'ecart — la finale tombait a 2 h du matin le lundi.
+  //
+  // Et le samedi n'est pas decoratif : `CALENDRIER` a un `jour1` et un `jour2`,
+  // donc un depart pose un mercredi produirait des demi-finales le jeudi.
+  //
+  // On refuse plutot que de corriger en silence. Ramener la valeur a minuit
+  // sans le dire changerait ce que l'appelant a demande, et ce genre de
+  // correction muette est exactement ce qui rend un defaut introuvable six mois
+  // plus tard. `attendu` donne la valeur juste, pour que le refus se repare
+  // sans avoir a relire ce fichier.
+  const d = new Date(t);
+  const minuit = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  if (t !== minuit) {
+    return { erreur: 'debut pas a minuit UTC', debut: t, attendu: minuit };
+  }
+  // En UTC, et pas dans le fuseau du serveur : le worker tourne la ou
+  // Cloudflare le pose, et `getDay()` y repondrait autre chose qu'ici.
+  if (d.getUTCDay() !== 6) {
+    return { erreur: 'debut pas un samedi', debut: t, jour: d.getUTCDay() };
+  }
+
   const ferme = Number.isFinite(Number(cloture)) ? Number(cloture) : clotureDe(t);
   if (ferme >= t) return { erreur: 'cloture apres le depart', cloture: ferme, debut: t };
 

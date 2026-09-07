@@ -58,6 +58,23 @@ const dit = (b, m) => { if (b) { ok++; console.log('   ✓ ' + m); } else { ko++
 const JOUR = 24 * 3600 * 1000;
 const iso = t => t == null ? 'jamais' : new Date(t).toISOString().replace('T', ' ').slice(0, 16);
 
+/**
+ * Le premier samedi a minuit UTC situe au moins `jours` plus tard.
+ *
+ * Ce harnais posait `Date.now() + 12 jours`, ce qui tombe a l'heure qu'il est
+ * un jour quelconque de la semaine. Le serveur le refuse desormais, et il a
+ * raison : `CALENDRIER` compte en minutes depuis minuit et suppose un weekend.
+ * Le harnais qui verifie les refus ne peut pas etre celui qui les provoque
+ * sans le vouloir.
+ */
+function samediApres(jours) {
+  const d = new Date(Date.now() + jours * JOUR);
+  const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  // 6 = samedi. On avance jusqu'au prochain, sans jamais reculer en deca du
+  // delai demande.
+  return t + ((6 - new Date(t).getUTCDay() + 7) % 7) * JOUR;
+}
+
 // --- de quoi remplir une grille --------------------------------------------
 const nations = await get('/champ/pays');
 const zones = (nations.pays || []).filter(p => p.eligible);
@@ -84,7 +101,7 @@ console.log(`\n   Serveur ${B} — zones d'essai ${ZA} et ${ZB}`);
 
 // =========================================================== 1. l'annonce
 console.log('\n=== 1. annoncer ne gele rien');
-const samedi = Date.now() + 12 * JOUR;
+const samedi = samediApres(12);
 const a = await post('/champ/annoncer', { pays: ZA, debut: samedi });
 dit(!a.error, 'l\'annonce passe' + (a.error ? ' — ' + a.error : ''));
 dit(a.etat === 'annoncee', `etat « annoncee » et non « ouverte »`);
@@ -107,7 +124,10 @@ dit((await get(`/champ/prochain?pays=${ZA}`)).edition.etat === 'annoncee',
 // ============================================ 3. l'echeance tombe toute seule
 console.log('\n=== 3. le cron cloture a l\'heure, sans personne');
 const b = await post('/champ/annoncer', {
-  pays: ZB, debut: Date.now() + 2 * 3600 * 1000, cloture: Date.now() - 60_000,
+  // Le depart reste un vrai samedi ; c'est la CLOTURE qu'on force dans le
+  // passe, et elle n'est pas contrainte — c'est precisement ce qui permet de
+  // repeter un weekend sans attendre trois jours.
+  pays: ZB, debut: samediApres(5), cloture: Date.now() - 60_000,
 });
 dit(!b.error && b.etat === 'annoncee', 'seconde edition annoncee, cloture deja passee');
 const bal = await post('/champ/echeances');
@@ -182,6 +202,19 @@ const r3 = await post('/champ/annoncer', {
 dit(r3.error === 'cloture apres le depart', 'une cloture posterieure au depart est refusee');
 const r4 = await post('/champ/cloturer-selection', { edition: bal.cloturees[0].edition });
 dit(r4.error === 'edition deja cloturee', 'on ne cloture pas deux fois');
+
+// Les deux refus qui protegent le calendrier. Sans eux, une heure glissee dans
+// la date de depart decale tout le weekend en silence : `CALENDRIER` compte en
+// minutes depuis minuit et `calendrier()` les ajoute telles quelles.
+const libre = zones[2] ? zones[2].pays : ZA;
+const r5 = await post('/champ/annoncer', { pays: libre, debut: samedi + 7 * 3600 * 1000 });
+dit(r5.error === 'debut pas a minuit UTC',
+  'un depart a une heure de la journee est refuse');
+dit(r5.attendu === samedi,
+  'et le refus donne la valeur juste, pour qu\'il se repare sans relire le code');
+const r6 = await post('/champ/annoncer', { pays: libre, debut: samedi + 3 * JOUR });
+dit(r6.error === 'debut pas un samedi',
+  'un depart un autre jour que le samedi est refuse');
 
 console.log(`\n   ${ok} verifications passees, ${ko} en echec\n`);
 process.exit(ko ? 1 : 0);
