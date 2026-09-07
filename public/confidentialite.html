@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sprinter — Confidentialité / Privacy</title>
+    <meta name="robots" content="index, follow" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #05070d;
+        color: #e7e9f0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Inter', Segoe UI, Roboto, sans-serif;
+        line-height: 1.6;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 2.5rem 1.25rem 4rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.25rem;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin-top: 2.25rem;
+        color: #9fb4ff;
+      }
+      .maj {
+        color: #8890a6;
+        font-size: 0.85rem;
+        margin-bottom: 2rem;
+      }
+      .note {
+        color: #8890a6;
+        font-size: 0.85rem;
+        border-left: 2px solid #2a3050;
+        padding-left: 0.75rem;
+        margin: 1.25rem 0;
+      }
+      a { color: #9fb4ff; }
+      code {
+        background: #10142a;
+        padding: 0.1em 0.4em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      hr {
+        border: none;
+        border-top: 1px solid #1c2140;
+        margin: 3rem 0;
+      }
+      ul { padding-left: 1.25rem; }
+      li { margin-bottom: 0.4rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Confidentialité — Sprinter</h1>
+      <p class="maj">Dernière mise à jour : 30 août 2026</p>
+
+      <p>Sprinter est un jeu d'athlétisme arcade. Ce document explique ce que
+      le jeu enregistre sur un serveur distant pour faire fonctionner le
+      classement mondial, les défis et les championnats — et ce qu'il
+      n'enregistre pas.</p>
+
+      <h2>Aucun compte</h2>
+      <p>Il n'y a ni inscription, ni e-mail, ni mot de passe. Le jeu se joue
+      sans rien créer, et n'importe qui peut choisir un pseudo librement.</p>
+
+      <h2>Ce qui est envoyé au serveur</h2>
+      <ul>
+        <li><strong>Un identifiant d'appareil</strong> : une chaîne générée
+        au hasard sur votre appareil au premier lancement, qui ne contient
+        aucune information sur vous. Il sert uniquement à retrouver votre
+        score d'une partie à l'autre.</li>
+        <li><strong>Le pseudo</strong> que vous choisissez pour apparaître au
+        classement. Il peut être réservé par un code, pour qu'un autre
+        appareil que le vôtre ne puisse pas s'en servir — ce code remplace un
+        compte, sans qu'aucune information personnelle ne soit demandée.</li>
+        <li><strong>Un pays approximatif</strong>, déduit automatiquement de
+        votre connexion réseau (via l'infrastructure Cloudflare) pour afficher
+        un drapeau à côté de votre nom. Aucune adresse IP n'est conservée dans
+        la base de données — seul le pays qui en a été déduit l'est. Vous
+        pouvez le corriger vous-même dans le jeu.</li>
+        <li><strong>Un pseudo Instagram</strong>, uniquement si vous choisissez
+        de l'ajouter, affiché à côté de votre nom au classement.</li>
+        <li><strong>Vos temps de course et le tracé de votre déplacement</strong>
+        (position dans le temps, pas de vidéo ni d'image), pour construire le
+        classement et permettre à un adversaire de vous affronter en
+        « fantôme ».</li>
+        <li><strong>Dans le mode duel</strong> (actuellement réservé à un
+        cercle restreint de testeurs) : un court message texte ou un
+        enregistrement vocal de quelques secondes, que seul le joueur battu
+        peut lire ou écouter. L'enregistrement vocal est supprimé du serveur
+        dès qu'il a été écouté ; il n'est jamais conservé au-delà.</li>
+      </ul>
+
+      <h2>Ce qui n'est jamais collecté</h2>
+      <ul>
+        <li>Pas d'e-mail, pas de numéro de téléphone, pas de mot de passe.</li>
+        <li>Pas d'identifiant publicitaire, pas de traceur publicitaire, pas
+        de revente de données à un tiers.</li>
+        <li>Aucun outil d'analyse d'audience (Google Analytics ou
+        équivalent) n'est intégré au jeu.</li>
+      </ul>
+
+      <h2>Prestataires techniques</h2>
+      <p>Le jeu et sa base de données sont hébergés sur l'infrastructure de
+      <strong>Cloudflare</strong> (Workers, D1). La page charge aussi la
+      police d'écriture <strong>Google Fonts</strong> depuis les serveurs de
+      Google. Ni l'un ni l'autre ne reçoit de données personnelles au-delà de
+      ce qui est nécessaire à leur fonctionnement technique (adressage
+      réseau).</p>
+
+      <h2>Combien de temps ces données sont gardées</h2>
+      <p>Les scores et le classement sont conservés tant que le jeu est en
+      activité. Un enregistrement vocal de duel disparaît dès sa lecture par
+      son destinataire, ou au plus tard quelques heures après, en cas de
+      panne inhabituelle.</p>
+
+      <h2>Vos droits</h2>
+      <p>Comme il n'y a pas de compte, il n'existe pas d'identité vérifiée à
+      laquelle rattacher une demande. Pour faire corriger ou supprimer les
+      données liées à un pseudo ou à un identifiant d'appareil, écrivez à
+      l'adresse ci-dessous en indiquant le pseudo utilisé dans le jeu.</p>
+
+      <h2>Contact</h2>
+      <p><a href="mailto:contact@sprinter-game.com">contact@sprinter-game.com</a></p>
+
+      <p class="note">Ce document décrit fidèlement ce que le code du jeu
+      envoie et enregistre à la date ci-dessus ; il n'a pas été relu par un
+      juriste et ne remplace pas un conseil juridique.</p>
+
+      <hr />
+
+      <h1 lang="en">Privacy — Sprinter</h1>
+      <p class="maj">Last updated: August 30, 2026</p>
+
+      <p>Sprinter is an arcade athletics game. This page explains what the
+      game sends to a remote server to run the world leaderboard, challenges
+      and championships — and what it does not.</p>
+
+      <h2 lang="en">No account</h2>
+      <p>There is no sign-up, no e-mail, no password. You can play without
+      creating anything, and pick any nickname freely.</p>
+
+      <h2 lang="en">What is sent to the server</h2>
+      <ul>
+        <li><strong>A device identifier</strong>: a random string generated
+        on your device the first time you play. It carries no information
+        about you and is only used to find your score again between
+        sessions.</li>
+        <li><strong>The nickname</strong> you pick to appear on the
+        leaderboard. It can be reserved with a short code so another device
+        can't use it — this code replaces an account without ever asking for
+        any personal information.</li>
+        <li><strong>An approximate country</strong>, inferred automatically
+        from your network connection (via Cloudflare's infrastructure) to
+        show a flag next to your name. No IP address is stored in the
+        database — only the country inferred from it. You can correct it
+        yourself in the game.</li>
+        <li><strong>An Instagram handle</strong>, only if you choose to add
+        one, shown next to your name on the leaderboard.</li>
+        <li><strong>Your race times and movement trace</strong> (position
+        over time, no video or image) to build the leaderboard and let
+        another player challenge you as a "ghost".</li>
+        <li><strong>In duel mode</strong> (currently limited to a small
+        circle of testers): a short text message or a few-second voice
+        recording, readable only by the player who lost. The voice recording
+        is deleted from the server as soon as it has been listened to, and
+        is never kept beyond that.</li>
+      </ul>
+
+      <h2 lang="en">What is never collected</h2>
+      <ul>
+        <li>No e-mail, no phone number, no password.</li>
+        <li>No advertising identifier, no advertising tracker, no data sold
+        to a third party.</li>
+        <li>No audience-analytics tool (Google Analytics or equivalent) is
+        built into the game.</li>
+      </ul>
+
+      <h2 lang="en">Technical providers</h2>
+      <p>The game and its database are hosted on <strong>Cloudflare</strong>'s
+      infrastructure (Workers, D1). The page also loads the
+      <strong>Google Fonts</strong> typeface from Google's servers. Neither
+      receives personal data beyond what their technical operation requires
+      (network addressing).</p>
+
+      <h2 lang="en">How long data is kept</h2>
+      <p>Scores and the leaderboard are kept as long as the game is live. A
+      duel's voice recording disappears as soon as its recipient listens to
+      it, or within a few hours at most in case of an unusual failure.</p>
+
+      <h2 lang="en">Your rights</h2>
+      <p>Since there is no account, there is no verified identity to attach
+      a request to. To have data tied to a nickname or device identifier
+      corrected or deleted, write to the address below with the nickname
+      used in the game.</p>
+
+      <h2 lang="en">Contact</h2>
+      <p><a href="mailto:contact@sprinter-game.com">contact@sprinter-game.com</a></p>
+
+      <p class="note" lang="en">This page accurately describes what the
+      game's code sends and stores as of the date above; it has not been
+      reviewed by a lawyer and is not legal advice.</p>
+    </main>
+  </body>
+</html>
