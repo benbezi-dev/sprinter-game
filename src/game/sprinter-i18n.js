@@ -455,6 +455,47 @@
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
     champ_quitter:   ['quitter le championnat', 'leave the championship'],
+
+    // la sélection : la banderole de l'accueil, puis la scène au gel.
+    //
+    // Deux règles pour tout ce bloc. D'abord aucune phrase ne contient de
+    // nombre en dur : le format vient du serveur, et « les 32 premiers »
+    // écrit ici serait faux le jour où FORMAT.partants bougera. Ensuite on ne
+    // dit jamais « joue plus » — le classement récompense les victoires, pas
+    // les parties, et promettre le contraire serait mentir sur ce que le jeu
+    // mesure.
+    sel_titre:       ['SÉLECTION', 'SELECTION'],
+    sel_ferme_dans:  ['clôture dans {n}', 'closes in {n}'],
+    sel_ferme:       ['sélection close', 'selection closed'],
+    sel_places:      ['les {n} premiers sont sélectionnés',
+                      'the top {n} are selected'],
+    sel_tu_es:       ['tu es {r}', 'you are {r}'],
+    sel_manque_1:    ['il te manque une place', 'you are one place short'],
+    sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
+    sel_dedans:      ['tu es qualifié', 'you are in'],
+    sel_dedans_fige: ['TU Y ES', 'YOU ARE IN'],
+    sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
+    sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
+    sel_pour_entrer: ['un duel gagné et tu entres au classement',
+                      'win one duel and you enter the ranking'],
+    sel_pas_de_pays: ['choisis ton pays pour pouvoir être sélectionné',
+                      'pick your country to become selectable'],
+    sel_ma_serie:    ['SÉRIE {n}', 'HEAT {n}'],
+    sel_convoque:    ['départ {n}', 'start {n}'],
+    sel_bonne_chance: ['la grille est gelée. À samedi.',
+                       'the grid is frozen. See you Saturday.'],
+    sel_prochaine:   ['le classement continue — la prochaine sélection viendra',
+                      'the ranking goes on — the next selection will come'],
+    sel_barre:       ['LIGNE DE SÉLECTION', 'SELECTION LINE'],
+    sel_barre_desc:  ['{t} — les {n} premiers de ce pays',
+                      '{t} — top {n} of this country'],
+    sel_voir:        ['voir', 'view'],
+
+    // Le décompte, en toutes lettres. « J-9 » ne se traduit pas, et « 9 j »
+    // sur un compteur qui tombe à zéro dans l'heure ne dit pas ce qu'il faut.
+    sel_j:           ['{n} j', '{n}d'],
+    sel_h:           ['{n} h', '{n}h'],
+    sel_min:         ['{n} min', '{n}min'],
     live_lanes:      ['COULOIRS', 'LANES'],
     live_lanes_seul: ['un tour de piste seul : le stade, le chrono, et personne à attendre',
                       'a lap on your own: the stadium, the clock, and nobody to wait for'],

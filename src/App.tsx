@@ -36,6 +36,7 @@ import { surCourrier } from '@/game/boite';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
+import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
@@ -201,6 +202,12 @@ function MainGame() {
           precise — la constante en tete du && — qui permet au bundler de
           sortir le composant du build plutot que de l'y livrer inerte. */}
       {DUELS_OUVERTS && <DuelResultPopup />}
+      {/* Le verdict de la sélection, une fois par championnat.
+          Posé ici et non dans l'ecran-titre pour la meme raison que Bienvenue :
+          il doit passer AU-DESSUS de l'accueil, pas dedans. Le composant decide
+          seul s'il a une nouvelle a annoncer — et il n'en a une qu'au gel de la
+          grille, pour qui etait dans la zone ou ca se jouait. */}
+      {DUELS_OUVERTS && <SceneSelection />}
       {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
           l'ecran-titre disparait au coup de pistolet, et une salle tenue par
           un panneau demonte se fermerait a l'instant precis ou la course

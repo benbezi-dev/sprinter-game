@@ -14,6 +14,7 @@ import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { NameChip } from './NameChip';
+import { BanderoleSelection } from './Selection';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -221,6 +222,20 @@ export function TitleScreen() {
               const o = sessionCourante().objectif;
               if (o) lancerObjectif(o);
             }} />
+
+            {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
+                Sous le défi du jour et au-dessus du sélecteur de mode : c'est
+                une échéance, pas un mode de jeu, et elle concerne autant qui
+                joue en carrière que qui ne fait que des duels.
+
+                Elle n'apparaît que si un championnat est annoncé dans le pays
+                du joueur — sinon rien, comme la carte de l'objectif. Et si le
+                joueur est qualifié, elle mène au panneau du championnat, qui
+                vit dans l'onglet du versus.
+
+                Fermée avec les duels : la sélection lit leur classement, elle
+                ne peut pas ouvrir avant lui. */}
+            {DUELS_OUVERTS && <BanderoleSelection onVoir={() => setTab('versus')} />}
 
             {/* Selecteur de mode */}
             {/* Le selecteur flotte au-dessus de la piste, tres claire : sans

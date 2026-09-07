@@ -13,6 +13,8 @@ import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
+  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
+  prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations,
@@ -771,15 +773,44 @@ async function envoyerObjectifs(env, maintenant) {
 
 export default {
   /**
-   * Le declencheur horaire. Il ne sert que l'Objectif du jour, et seulement
-   * sur la base de production : le canal de test n'a pas de public a prevenir.
+   * Le declencheur horaire. Deux travaux, et ils n'ont pas la meme portee.
+   *
+   * L'Objectif du jour ne part que sur la base de production : le canal de test
+   * n'a pas de public a prevenir.
+   *
+   * Les clotures de selection, elles, passent sur LES DEUX bases. C'est sur le
+   * canal de test qu'on repete un cycle avant de l'annoncer pour de vrai, et
+   * une echeance qui ne tomberait pas la ne prouverait rien de celle qui doit
+   * tomber en production.
+   *
+   * Chacun est arme separement : une cloture qui echoue ne doit pas emporter
+   * l'Objectif du jour avec elle, et reciproquement.
    */
   async scheduled(event, env, ctx) {
+    const quand = event.scheduledTime || Date.now();
+
     ctx.waitUntil(
-      envoyerObjectifs(env, new Date(event.scheduledTime || Date.now()))
+      envoyerObjectifs(env, new Date(quand))
         .then(b => { if (b.crees || b.mode !== 'actif') console.log('objectifs', JSON.stringify(b)); })
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
+
+    for (const [nom, db] of [['prod', env.DB], ['test', env.DB_TEST]]) {
+      if (!db) continue;
+      ctx.waitUntil(
+        cloturerEcheances(db, quand)
+          .then(b => {
+            // On ne journalise que ce qui s'est passe. Le cron repasse 288 fois
+            // par jour et ne trouve rien la quasi-totalite du temps : tracer
+            // chaque passage a vide rendrait `wrangler tail` illisible le jour
+            // ou l'on cherche precisement ce qui s'est cloture.
+            if (b.cloturees.length || b.annulees.length) {
+              console.log('champ cloture', nom, JSON.stringify(b));
+            }
+          })
+          .catch(e => console.log('champ cloture KO', nom, String(e && e.message || e)))
+      );
+    }
   },
 
   async fetch(request, env, ctx) {
@@ -1335,9 +1366,83 @@ export default {
         return json({ titres: key ? await titresDe(env.DB, key) : [] });
       }
 
-      // Ouvrir une edition. Reserve a l'exploitation : c'est un acte de
-      // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
-      // national, ce que faisaient les appels existants.
+      // Annoncer une edition, sans la geler. C'est l'appel de production :
+      // il declare la date et l'heure de cloture, et le cron fera le reste.
+      //
+      // `cloture` peut se forcer pour repeter un cycle sur le canal de test ;
+      // absente, elle se deduit de la date de depart, ce qui est le cas normal.
+      if (sous === 'annoncer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { pays, zone, echelon, debut, epreuve, cloture, cycle } = body || {};
+        const t = Number(debut);
+        if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
+
+        // Un seul appel annonce tout un echelon : c'est ce qu'on veut faire en
+        // vrai, et le faire pays par pays serait trente occasions d'oublier
+        // le trente-et-unieme.
+        if (cycle) {
+          return json(await annoncerCycle(env.DB, {
+            debutSamedi: t, echelon: echelon || 'national', epreuve,
+          }));
+        }
+
+        const r = await annoncerEchelon(env.DB, {
+          echelon: echelon || 'national',
+          zone: zone || pays || 'MONDE',
+          debutSamedi: t, epreuve, cloture,
+        });
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Forcer une cloture avant l'heure. Deux usages, tous deux legitimes :
+      // repeter un weekend complet sur le canal de test sans attendre trois
+      // jours, et rattraper a la main une echeance que le cron aurait manquee.
+      if (sous === 'cloturer-selection' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const id = String((body && body.edition) || '').toUpperCase();
+        if (!id) return json({ error: 'edition manquante' }, 400);
+        const r = await cloturerSelection(env.DB, id);
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Le balayage du cron, appelable a la main pour le verifier.
+      if (sous === 'echeances' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        return json(await cloturerEcheances(env.DB));
+      }
+
+      // Le prochain championnat d'un pays, annonce ou en cours.
+      //
+      // Cette route parle a qui n'est PAS selectionne, et c'est la seule. Tout
+      // le reste des championnats ne s'adresse qu'aux trente-deux partants —
+      // or ceux qu'il faut convaincre de jouer sont precisement les autres.
+      if (sous === 'prochain' && request.method === 'GET') {
+        const zone = String(url.searchParams.get('zone') || url.searchParams.get('pays') || '');
+        const ech = url.searchParams.get('echelon') || 'national';
+        return json({ edition: await prochaineEdition(env.DB, zone, ech) });
+      }
+
+      // Ou en est ce joueur par rapport a la barre des trente-deux.
+      //
+      // Un rang et un ecart, jamais le MMR : c'est le nombre de places qui
+      // manquent qui fait rejouer, et c'est une information que le joueur peut
+      // recompter lui-meme dans le classement — ce qui est tout l'interet
+      // d'avoir qualifie a l'echelle visible.
+      if (sous === 'selection' && request.method === 'GET') {
+        const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+        if (!key) return json({ error: 'nom manquant' }, 400);
+        return json(await rangSelection(env.DB, key) || { pays: null });
+      }
+
+      // Ouvrir une edition SUR LE CHAMP : annonce et cloture d'un seul geste.
+      // Reserve a l'exploitation, comme avant, et desormais reserve de fait aux
+      // essais : en production on annonce, et l'echeance cloture. Ouvrir ici
+      // gele le classement a l'instant de l'appel, ce qui est exactement ce que
+      // la cloture annoncee sert a ne plus faire.
       if (sous === 'ouvrir' && request.method === 'POST') {
         if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
