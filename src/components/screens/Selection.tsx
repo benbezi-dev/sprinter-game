@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { VOILE, PANNEAU, MONTEE, FONDU, SURGISSEMENT, TRANSITION, RESSORT, retarde } from '@/lib/mouvement';
+import { VOILE, PANNEAU, MONTEE, FONDU, SURGISSEMENT, TRANSITION, RESSORT, retarde, useAnimationsReduites } from '@/lib/mouvement';
 import { Flag, Trophy, ChevronRight } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
@@ -74,28 +74,100 @@ function useMaSelection() {
   return s;
 }
 
-/** « 9 j », « 14 h », « 23 min ». La plus grosse unité qui reste, et elle seule. */
+/**
+ * Le temps qu'il reste, d'autant plus précis qu'il en reste peu.
+ *
+ * « 8 j » suffit quand l'échéance est loin — le joueur veut savoir s'il a le
+ * temps, pas à quelle minute. Elle se resserre en approchant : « 1 j 6 h »,
+ * puis « 6 h 20 min », parce qu'à ce moment-là la question devient « est-ce
+ * que je peux encore faire un duel ce soir » et qu'une réponse à la journée
+ * près n'y répond plus.
+ *
+ * Jamais de secondes. Un compte à rebours qui défile attire l'oeil sur
+ * lui-même, et dans la dernière minute il n'y a de toute façon plus rien à
+ * faire — sauf regarder tourner un chiffre, ce qui n'est pas le but.
+ */
 function decompte(echeance: number | null): string | null {
   const r = restant(echeance);
   if (!r) return null;
   const { N } = SprinterApp;
-  if (r.jours > 0) return N.t('sel_j', { n: r.jours });
-  if (r.heures > 0) return N.t('sel_h', { n: r.heures });
-  // En dessous de la minute on affiche encore « 1 min » plutôt que des
-  // secondes : un compte à rebours à la seconde sur un écran d'accueil attire
-  // l'oeil sur lui-même, et il ne reste plus rien à faire à ce moment-là.
+  if (r.jours >= 2) return N.t('sel_j', { n: r.jours });
+  if (r.jours === 1) return N.t('sel_jh', { n: 1, h: r.heures });
+  if (r.heures >= 6) return N.t('sel_h', { n: r.heures });
+  if (r.heures > 0) return N.t('sel_hmin', { n: r.heures, m: r.minutes });
   return N.t('sel_min', { n: Math.max(1, r.minutes) });
 }
 
-/** L'heure d'une convocation, dans le fuseau du joueur. */
-function heureLocale(at: number | null): string | null {
+/** Vrai quand l'échéance mérite qu'on la regarde : moins de deux jours. */
+const presse = (echeance: number | null) => {
+  const r = restant(echeance);
+  return !!r && r.jours < 2;
+};
+
+/**
+ * Un instant dans le fuseau du joueur : « mercredi 16 sept., 02:00 ».
+ *
+ * Le jour ET l'heure, toujours les deux. La clôture tombe à minuit UTC, soit
+ * 02:00 à Paris : dire « mercredi » sans l'heure laisserait croire à une
+ * journée entière de mercredi, alors qu'il s'agit de la nuit de mardi à
+ * mercredi. C'est l'écart qui rendrait l'échéance injuste, et le seul remède
+ * est de l'écrire.
+ */
+function dateLocale(at: number | null, avecDate = true): string | null {
   if (at == null) return null;
   try {
-    return new Date(at).toLocaleString(SprinterApp.N.getLang() === 'en' ? 'en-GB' : 'fr-FR',
-      { weekday: 'long', hour: '2-digit', minute: '2-digit' });
+    return new Date(at).toLocaleString(SprinterApp.N.getLang() === 'en' ? 'en-GB' : 'fr-FR', {
+      weekday: 'long',
+      ...(avecDate ? { day: 'numeric', month: 'short' } : {}),
+      hour: '2-digit', minute: '2-digit',
+    });
   } catch {
     return null;
   }
+}
+
+/** L'heure d'une convocation : le jour et l'heure suffisent, la date non. */
+const heureLocale = (at: number | null) => dateLocale(at, false);
+
+/* -------------------------------------------------------------- le décompte */
+
+/**
+ * La pastille du temps restant.
+ *
+ * Elle s'allume — bordure et chiffre en or, souffle lent — sous les deux
+ * jours. Pas avant : une pastille qui clignote pendant douze jours n'est plus
+ * un signal, c'est un décor, et le jour où elle voudra dire quelque chose
+ * personne ne la verra. L'urgence ne se dépense qu'une fois.
+ *
+ * Le souffle s'arrête si le joueur a demandé moins d'animations : un compte à
+ * rebours qui bat dans le coin de l'écran est exactement ce que ce réglage
+ * existe pour supprimer.
+ */
+function Decompte({ reste, urgent }: { reste: string; urgent: boolean }) {
+  const { N } = SprinterApp;
+  const reduit = useAnimationsReduites();
+  return (
+    <motion.span
+      {...SURGISSEMENT}
+      className={`shrink-0 flex flex-col items-center justify-center rounded-xl border px-2.5 py-1.5
+        ${urgent
+          ? 'border-primary/60 bg-primary/[0.12]'
+          : 'border-white/12 bg-black/30'}`}
+      {...(urgent && !reduit
+        ? { animate: { opacity: [1, 0.62, 1] }, transition: TRANSITION.battement }
+        : {})}
+    >
+      <span className={`text-[8px] font-bold tracking-[0.18em] uppercase leading-none
+        ${urgent ? 'text-primary/80' : 'text-muted-foreground/70'}`}>
+        {N.t('sel_reste')}
+      </span>
+      <span className={`font-mono font-black tabular-nums leading-tight whitespace-nowrap
+                        text-[13px] md:text-sm
+        ${urgent ? 'text-primary' : 'text-foreground/90'}`}>
+        {reste}
+      </span>
+    </motion.span>
+  );
 }
 
 /* ------------------------------------------------------------- la banderole */
@@ -175,8 +247,11 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
           </span>
 
           {/* La deuxième ligne : ce qu'il reste à faire, ou ce qui est décidé.
-              Avant le gel c'est l'échéance et le nombre de places — les deux
-              faits sur lesquels le joueur peut agir. Après, c'est sa série. */}
+              Avant le gel c'est le rang et l'ÉCHÉANCE EN TOUTES LETTRES — le
+              décompte relatif vit dans la pastille à droite, celle-ci dit
+              quand. Les deux sont nécessaires : « 8 j » ne permet pas de
+              décider quand jouer, « mercredi 02:00 » ne dit pas si c'est loin.
+              Après le gel, c'est sa série. */}
           <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
             {s.gele
               ? (dedans && s.course
@@ -185,16 +260,24 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
               : s.rang == null
                 ? (pays ? N.t('sel_pour_entrer') : N.t('sel_places', { n: s.places }))
                 : `${N.t('sel_tu_es', { r: N.ord(s.rang) })} · ${
-                    reste ? N.t('sel_ferme_dans', { n: reste }) : N.t('sel_ferme')}`}
+                    dateLocale(s.cloture)
+                      ? N.t('sel_le', { d: dateLocale(s.cloture) })
+                      : N.t('sel_ferme')}`}
           </span>
         </div>
 
-        {cliquable && (
-          <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-bold
-                           uppercase tracking-widest text-primary">
-            {N.t('sel_voir')} <ChevronRight className="w-3.5 h-3.5" />
-          </span>
-        )}
+        {/* À droite : le décompte tant que la sélection est ouverte, l'accès au
+            championnat une fois qu'elle est close. Jamais les deux — ce sont
+            les deux moitiés du même moment, et il n'y en a qu'une de vraie à
+            la fois. */}
+        {!s.gele && reste
+          ? <Decompte reste={reste} urgent={presse(s.cloture)} />
+          : cliquable && (
+            <span className="shrink-0 flex items-center gap-0.5 text-[10px] font-bold
+                             uppercase tracking-widest text-primary">
+              {N.t('sel_voir')} <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          )}
       </Balise>
     </motion.div>
   );
@@ -239,18 +322,24 @@ export function LigneSelection({ barre }: {
 }) {
   const { N } = SprinterApp;
   const reste = decompte(barre.cloture);
+  const quand = dateLocale(barre.cloture);
+  const urgent = presse(barre.cloture);
   return (
     <motion.div {...FONDU} className="flex items-center gap-2 py-1.5 px-1 select-none">
       <span className="h-px flex-1 bg-primary/50" />
       <span className="flex flex-col items-center shrink-0">
         <span className="text-[8px] md:text-[9px] font-bold tracking-[0.2em] text-primary uppercase">
           {N.t('sel_barre')}
-          {reste && <span className="ml-1.5 text-muted-foreground">
+          {reste && <span className={`ml-1.5 ${urgent ? 'text-primary' : 'text-muted-foreground'}`}>
             {N.t('sel_ferme_dans', { n: reste })}
           </span>}
         </span>
         <span className="text-[8px] text-muted-foreground/80 text-center leading-tight">
           {N.t('sel_barre_desc', { t: barre.titre || '', n: barre.places })}
+          {/* L'échéance datée sous la barre. C'est ici qu'un joueur compare sa
+              ligne aux autres, donc c'est ici qu'il décide s'il a le temps
+              d'aller chercher un duel — et « dans 8 j » ne suffit pas pour ça. */}
+          {quand && <span className="block">{N.t('sel_le', { d: quand })}</span>}
         </span>
       </span>
       <span className="h-px flex-1 bg-primary/50" />

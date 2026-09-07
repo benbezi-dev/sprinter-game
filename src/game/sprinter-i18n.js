@@ -494,8 +494,20 @@
     // Le décompte, en toutes lettres. « J-9 » ne se traduit pas, et « 9 j »
     // sur un compteur qui tombe à zéro dans l'heure ne dit pas ce qu'il faut.
     sel_j:           ['{n} j', '{n}d'],
+    sel_jh:          ['{n} j {h} h', '{n}d {h}h'],
     sel_h:           ['{n} h', '{n}h'],
+    sel_hmin:        ['{n} h {m} min', '{n}h {m}min'],
     sel_min:         ['{n} min', '{n}min'],
+
+    // L'échéance en toutes lettres, sous le décompte.
+    //
+    // « clôture dans 8 j » ne dit pas QUAND, et c'est justement ce qu'un joueur
+    // a besoin de savoir pour décider quand jouer. La clôture tombe à minuit
+    // UTC, ce qui fait 02:00 à Paris : appeler ça « mercredi soir » serait
+    // faux d'une journée. On donne donc le jour ET l'heure, dans le fuseau du
+    // joueur, et on le laisse conclure.
+    sel_le:          ['clôture {d}', 'closes {d}'],
+    sel_reste:       ['il reste', 'time left'],
     live_lanes:      ['COULOIRS', 'LANES'],
     live_lanes_seul: ['un tour de piste seul : le stade, le chrono, et personne à attendre',
                       'a lap on your own: the stadium, the clock, and nobody to wait for'],
