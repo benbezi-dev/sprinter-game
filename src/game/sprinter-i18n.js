@@ -248,6 +248,10 @@
     tuto_replay:     ['revoir le tutoriel', 'watch again'],
     tuto_skip:       ['passer', 'skip'],
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
+    // Nous ecrire. L'adresse est montree en clair a cote du libelle : sur un
+    // ordinateur sans logiciel de courrier, un lien mailto n'ouvre rien, et
+    // une adresse qu'on peut recopier vaut mieux qu'un bouton mort.
+    contact_open:    ['NOUS ÉCRIRE', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
     live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',

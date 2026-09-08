@@ -14,7 +14,8 @@ import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
-import { Compass } from 'lucide-react';
+import { Compass, Mail } from 'lucide-react';
+import { CONTACT, lienContact } from '@/game/contact';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
@@ -345,6 +346,26 @@ export function TitleScreen() {
               {N.t('tour_open')}
             </button>
             </>}
+
+            {/* Nous ecrire.
+                Hors des onglets, donc toujours la : quand quelque chose ne va
+                pas, on cherche un contact la ou l'on se trouve, et pas dans un
+                ecran qu'il faudrait d'abord trouver. L'adresse est ecrite en
+                clair a cote du libelle — sur un ordinateur sans logiciel de
+                courrier, un lien mailto n'ouvre rien, et une adresse qu'on
+                peut recopier vaut mieux qu'un bouton mort. */}
+            <a
+              href={lienContact()}
+              className="w-full pt-2 pb-0.5 text-[9px] md:text-[10px] font-bold tracking-widest
+                         text-muted-foreground/70 hover:text-primary transition-colors
+                         flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5"
+            >
+              <Mail className="w-3 h-3 shrink-0" />
+              <span>{N.t('contact_open')}</span>
+              <span className="font-mono font-normal tracking-normal normal-case">
+                {CONTACT}
+              </span>
+            </a>
 
           </div>
         </div>
