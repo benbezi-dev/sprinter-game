@@ -35,8 +35,17 @@ export const EPREUVE = r => String(r || '').replace(/^(\d+)$/, '$1 m');
 
 /* --------------------------------------------------------------- le dessin */
 
-/** Le fond commun : la nuit du jeu, sa lueur doree, et trois couloirs. */
-function poserFond(c, L, H) {
+/**
+ * Le fond commun : la nuit du jeu, sa lueur doree, et trois couloirs.
+ *
+ * Exporte parce que l'atelier de republication en a besoin tel quel : il
+ * repose une affiche deja tracee et doit parfois REPEINDRE un morceau de son
+ * fond — un pseudonyme masque. Un aplat #060913 pose a la main y ferait une
+ * tache sombre partout ou la lueur porte encore, et une copie de ces quinze
+ * lignes dans suivi/ divergerait a la premiere retouche de la lueur. On
+ * partage la fonction, pas sa description.
+ */
+export function poserFond(c, L, H) {
   c.fillStyle = '#060913'; c.fillRect(0, 0, L, H);
 
   const lueur = c.createRadialGradient(L / 2, H * 0.08, 0, L / 2, H * 0.08, L * 0.85);
