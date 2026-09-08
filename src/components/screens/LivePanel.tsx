@@ -2,17 +2,23 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2 } from 'lucide-react';
+import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   COULOIRS,
-  type EtatSalle, type JoueurSalle, type Presentation,
+  type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
 } from '@/game/live';
-import { poserSalon, salonCourant, quitterSalon } from '@/game/salon-direct';
+import { poserSalon, salonCourant, quitterSalon, surDemandeRejoindre } from '@/game/salon-direct';
+import {
+  poserVoix, voixCourante, couperVoix, programmerFinVoix, annulerFinVoix,
+} from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
+import { inviterEnDirect } from '@/game/invitations-directes';
+import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
+import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
-import { Review, type EtatReview } from '@/game/review';
+import { Review, TTL_MS, type EtatReview } from '@/game/review';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
@@ -20,6 +26,29 @@ const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
 const MICRO_VAINQUEUR_MS = 5000;
+/**
+ * Ce qu'on ajoute a la duree annoncee d'une presentation pour garder le micro.
+ *
+ * La sequence est calee sur une date absolue, ramenee dans l'horloge locale :
+ * quelques dizaines de millisecondes d'ecart entre les deux appareils sont
+ * normales. La marge evite que l'appareil soit rendu juste avant le dernier
+ * mot du dernier athlete.
+ */
+const MARGE_MICRO_MS = 1500;
+
+/**
+ * Le terrain du direct : le stade intergalactique, dernier de la campagne.
+ *
+ * Le direct se courait sur la piste olympique, un rang plus bas. Ce n'est pas
+ * le meme rendez-vous : on y vient avec des gens qu'on a invites soi-meme, et
+ * c'est la course qu'ils raconteront. Elle se court donc sur le plus beau
+ * stade du jeu — cosmos, tribunes pleines — plutot que sur celui qu'on
+ * traverse en montant.
+ *
+ * Le terrain ne change rien a la physique : les chronos vises du dernier rang
+ * ne concernent que le plateau de l'ordinateur, qui ne court pas ici.
+ */
+const NIVEAU_DIRECT = 5;
 
 type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
 
@@ -37,6 +66,18 @@ export function LivePanel() {
 
   const [etape, setEtape] = useState<Etape>('repos');
   const [code, setCode] = useState('');
+  /**
+   * Le classement des duels, ouvert par-dessus le salon pour y choisir des
+   * adversaires.
+   *
+   * Le code de salle ne suffisait qu'avec des gens qu'on a deja au telephone.
+   * Quelqu'un croise au classement n'est joignable par aucun de ces moyens :
+   * c'est le serveur qui porte l'invitation jusqu'a lui.
+   */
+  const [choisirAdversaires, setChoisirAdversaires] = useState(false);
+  /** Ce que le dernier envoi a donne, pour le dire sans faire un ecran de plus. */
+  const [conviesInfo, setConviesInfo] = useState<{ ok: number; injoignable: string | null }>(
+    { ok: 0, injoignable: null });
   const [saisie, setSaisie] = useState('');
   const [epreuve, setEpreuve] = useState<RaceKey>('100');
   const [salon, setSalon] = useState<EtatSalle | null>(null);
@@ -73,7 +114,6 @@ export function LivePanel() {
   });
 
   const salle = useRef<Salle | null>(null);
-  const voix = useRef<Voix | null>(null);
   const film = useRef<Review | null>(null);
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
@@ -104,19 +144,42 @@ export function LivePanel() {
         setPlaces(dejaLa.dernierEtat.max || 2);
       }
       setEtape('salon');
+      // La liaison audio a survecu au demontage — c'est tout l'objet de
+      // `voix-directe`. Elle continue d'emettre vers un composant mort tant
+      // qu'on ne la rebranche pas sur celui-ci.
+      voixCourante()?.brancherEtat(setVoixEtat);
     } else {
       const c = codeDirectUrl();
       if (c) { nettoyerUrlDirect(); setSaisie(c); rejoindre(c); }
     }
 
-    // Rien n'est ferme ici, et c'est le coeur de la correction. Un demontage
-    // n'est pas un depart : la salle, le micro et l'enregistrement appartiennent
-    // a la course, pas a l'ecran qui la regarde. Tout se ferme dans quitter().
+    // Une invitation acceptee ailleurs dans le jeu.
     //
-    // Le micro ne reste pas ouvert pour autant : il est mute hors des fenetres
-    // explicites — la presentation, puis les cinq secondes du vainqueur — et
-    // c'est justement cette derniere qui disparaissait quand le demontage
-    // coupait la liaison audio en pleine course.
+    // L'ecran qui affiche l'invitation ne sait pas rejoindre une salle — c'est
+    // ce panneau qui sait, et il n'est pas toujours monte quand l'invitation
+    // arrive. La demande attend donc dans `salon-direct` et ce branchement la
+    // ramasse, qu'elle soit deja la ou qu'elle vienne plus tard.
+    //
+    // On ne rejoint pas si l'on est deja dans une salle : accepter une
+    // invitation en pleine composition d'un relais ferait sortir de la
+    // premiere sans le dire.
+    const desabonner = surDemandeRejoindre(c => {
+      if (salonCourant()) return;
+      setSaisie(c);
+      rejoindre(c);
+    });
+
+    // Le nettoyage ne ferme QUE ce branchement, et c'est le coeur de la
+    // correction que ce fichier porte depuis le debut : un demontage n'est pas
+    // un depart. La salle, la liaison audio et l'enregistrement appartiennent a
+    // la course, pas a l'ecran qui la regarde — ils se ferment dans quitter(),
+    // ou d'eux-memes a la fin de la review. Ne se desabonner que du guetteur
+    // est sans risque : il ne tient rien, il ecoute.
+    //
+    // Le micro, lui, n'est meme pas tenu entre-temps : il est pris a l'ouverture
+    // d'une fenetre de parole — la presentation, puis les cinq secondes du
+    // vainqueur — et rendu au systeme des qu'elle se referme.
+    return () => { desabonner(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,12 +188,12 @@ export function LivePanel() {
    * les deux negociations se croisent et aucune n'aboutit.
    */
   const ouvrirVoix = () => {
-    if (voix.current) return;
+    if (voixCourante()) return;
     const v = new Voix({
       envoyer: (type, charge) => salle.current?.signaler(type, charge),
       onEtat: setVoixEtat,
     });
-    voix.current = v;
+    poserVoix(v);
     v.demarrer(!!salle.current?.suisHote);
   };
 
@@ -144,7 +207,8 @@ export function LivePanel() {
   const monterLaPiste = () => {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
     SprinterApp.startLive([epreuve], {
-      levelIdx: 4, adversaire: salle.current?.adversaire || '', autres: lesAutres(),
+      levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
+      autres: lesAutres(), sansOrdinateur: true,
     });
   };
 
@@ -153,8 +217,8 @@ export function LivePanel() {
    *
    * Les ecouteurs de la salle sont crees une fois, a la connexion : ce qu'ils
    * capturent de React date de cet instant-la, ou le salon etait encore vide.
-   * Lire `salon` depuis eux donnait donc une piste sans personne dessus —
-   * huit couloirs, sept coureurs de l'ordinateur, et pas d'adversaire.
+   * Lire `salon` depuis eux donnait donc une piste sans personne dessus : le
+   * joueur seul dans son couloir, et pas un adversaire.
    *
    * La salle, elle, garde son dernier etat a jour. C'est la source, on y va.
    */
@@ -172,13 +236,24 @@ export function LivePanel() {
    * qui ne connaitrait pas encore la sequence.
    */
   const lancerCourse = () => {
+    // Une salle qui n'annonce pas de presentation passe directement ici : la
+    // coupure programmee doit tomber la aussi.
+    annulerFinVoix();
+    // La liaison passe en veille pour la duree de la course : ni micro, ni
+    // ecoute. Personne ne parle entre le pistolet et l'arrivee, et une
+    // conversation ouverte tient le systeme en mode appel — le jeu sort alors
+    // au volume d'un telephone qu'on a a l'oreille. La connexion, elle, reste
+    // montee : le mot du vainqueur ne peut pas attendre une renegociation.
+    voixCourante()?.veille();
     const dans = Math.max(0, (cibleDepart.current ?? Date.now()) - Date.now());
     const adverse = salle.current?.adversaire || '';
     // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
     // les deux clients doivent placer les memes gens aux memes endroits.
     const autres = lesAutres();
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-      SprinterApp.startLive([epreuve], { levelIdx: 4, adversaire: adverse, autres });
+      SprinterApp.startLive([epreuve], {
+        levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
+      });
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
@@ -200,10 +275,25 @@ export function LivePanel() {
     onPresentation: (p: Presentation) => {
       setPresentation(p);
       presEnCours.current = true;
+      // Une revanche dans la meme salle : la coupure programmee a la fin du
+      // duel precedent n'a plus lieu d'etre.
+      annulerFinVoix();
       setEtape('presentation');
       // La voix se monte pendant la presentation : la negociation prend un
       // instant, et on veut que le micro soit deja pret au premier passage.
       ouvrirVoix();
+      voixCourante()?.reveil();
+
+      // Et le micro est demande TOUT DE SUITE, pour toute la sequence.
+      //
+      // Une fenetre de parole dure 2 200 ms ; obtenir la capture en coute
+      // plusieurs centaines sur un telephone. La demander au moment du tour,
+      // c'est en perdre la moitie — et parfois la totalite, quand le systeme
+      // repond apres la fermeture. On la prend donc avant l'annonce, gardee
+      // muette jusqu'au tour de chacun, et rendue a la fin de la sequence.
+      voixCourante()?.prechauffer(
+        Math.max(0, p.dansMs) + p.par * Math.max(1, p.ordre.length) + MARGE_MICRO_MS,
+      );
 
       // La piste se monte MAINTENANT, et non au coup de pistolet.
       //
@@ -222,11 +312,11 @@ export function LivePanel() {
         presentation: p,
         moi: salle.current?.moi || '',
         onTour: (_i, estMoi) => {
-          if (estMoi) voix.current?.ouvrirMicro(p.micro);
-          else voix.current?.fermerMicro();
+          if (estMoi) voixCourante()?.ouvrirMicro(p.micro);
+          else voixCourante()?.fermerMicro();
         },
         onFini: () => { lancerPresentation(null); finPresentation(); },
-        etatVoix: () => voix.current?.lireEtat() ??
+        etatVoix: () => voixCourante()?.lireEtat() ??
           { micro: false, refuse: false, ouvert: false, connecte: false },
       });
     },
@@ -253,21 +343,40 @@ export function LivePanel() {
       // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
       // que pour un duel, et personne ne parlait.
       const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      // L'ecoute se rebranche : la course est finie, on peut se reparler.
+      voixCourante()?.reveil();
       const jaiGagne = r.issue
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
         : !!premier && premier.id === salle.current?.moi;
-      if (jaiGagne) voix.current?.ouvrirMicro(MICRO_VAINQUEUR_MS);
-      else voix.current?.fermerMicro();
+      if (jaiGagne) voixCourante()?.ouvrirMicro(MICRO_VAINQUEUR_MS);
+      else voixCourante()?.fermerMicro();
+
+      // Puis la liaison se coupe d'elle-meme a la fin de la review.
+      //
+      // La review n'a pas d'autre fin que celle de sa video : dix minutes,
+      // comptees a partir d'ici, apres quoi l'ecran ne montre plus rien qu'on
+      // puisse encore appeler une course. La meme duree sert quand il n'y a
+      // pas eu de video du tout — un appareil qui ne sait pas encoder n'a
+      // aucune raison de garder une connexion ouverte plus longtemps que les
+      // autres.
+      //
+      // Le micro, lui, est deja rendu : il ne l'est que pendant les fenetres
+      // de parole. Ce qui s'eteint ici, c'est le canal d'ecoute — de quoi se
+      // parler apres la course, sans que cela dure indefiniment.
+      programmerFinVoix(TTL_MS);
 
       setEtape('review');
     },
+    // Les points du duel, quand la salle a fini d'ecrire. L'ecran de fin est
+    // deja monte a cet instant : il les lit dans le moteur, comme le resultat.
+    onDuel: (d: DuelDirect) => { SprinterApp.G.liveDuel = d; },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
-      if (!voix.current) ouvrirVoix();
-      voix.current?.recu(type, charge);
+      if (!voixCourante()) ouvrirVoix();
+      voixCourante()?.recu(type, charge);
     },
-    onSorti: () => { setErreur(N.t('live_gone')); voix.current?.fermerMicro(); },
+    onSorti: () => { setErreur(N.t('live_gone')); voixCourante()?.fermerMicro(); },
     onFerme: () => { if (etape === 'salon') setErreur(N.t('live_closed')); },
   });
 
@@ -279,7 +388,8 @@ export function LivePanel() {
       position: (d: number) => s.position(d),
       fini: (ms: number) => s.fini(ms),
     });
-    s.connecter([epreuve], 4, places);
+    // La salle annonce le terrain de la course : le meme qu'on monte ici.
+    s.connecter([epreuve], NIVEAU_DIRECT, places);
   };
 
   const creer = async () => {
@@ -321,7 +431,7 @@ export function LivePanel() {
     }
     // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
-    voix.current?.arreter(); voix.current = null;
+    couperVoix();
     presEnCours.current = false; cibleDepart.current = null;
     setPresentation(null);
     setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
@@ -331,7 +441,7 @@ export function LivePanel() {
   const finPresentation = () => {
     if (!presEnCours.current) return;
     presEnCours.current = false;
-    voix.current?.fermerMicro();
+    voixCourante()?.fermerMicro();
     lancerCourse();
   };
 
@@ -367,16 +477,11 @@ export function LivePanel() {
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
     return (
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3">
-        <div className="flex items-center gap-2 justify-center">
-          <Radio className="w-4 h-4 text-emerald-400" />
-          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-            {N.t('live_title')}
-          </h3>
-        </div>
-        <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
-          {N.t('live_desc')}
-        </p>
+      <Repliable
+        titre={N.t('live_title')}
+        sous={N.t('live_desc')}
+        icone={<Radio className="w-4 h-4" />}
+      >
 
         <div className="flex gap-2">
           {RACE_KEYS.map(k => (
@@ -471,7 +576,7 @@ export function LivePanel() {
           </button>
         </div>
         {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
-      </div>
+      </Repliable>
     );
   }
 
@@ -484,7 +589,7 @@ export function LivePanel() {
     >
       {/* Apres la course : la video, et son compte a rebours. */}
       {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
-        <ReviewVideo etat={review} onTelecharger={() => film.current?.telecharger()} />
+        <ReviewVideo etat={review} onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}
@@ -541,7 +646,52 @@ export function LivePanel() {
               {copie ? N.t('code_copied') : N.t('challenge_copy')}
             </button>
           </div>
+
+          {/* Choisir ses adversaires dans le classement des duels.
+              Les boutons au-dessus supposent tous qu'on a deja la personne
+              quelque part — un numero, une conversation. Celui-ci s'adresse a
+              ceux qu'on ne connait que par leur pseudonyme : l'invitation
+              part dans le jeu, et arrive chez eux dans la seconde. */}
+          <div className="flex flex-col items-center gap-1 pt-1">
+            <button
+              onClick={() => setChoisirAdversaires(true)}
+              className="px-4 py-2 rounded-xl font-bold tracking-wide text-[10px] md:text-xs
+                         text-emerald-300 bg-emerald-400/10 border border-emerald-400/30
+                         hover:bg-emerald-400/20 transition-colors flex items-center gap-2"
+            >
+              <ListOrdered className="w-3.5 h-3.5" />
+              {N.t('live_choisir')}
+            </button>
+            <p className="text-[9px] md:text-[10px] text-muted-foreground text-center leading-snug">
+              {conviesInfo.injoignable
+                ? N.t('live_injoignable', { n: conviesInfo.injoignable })
+                : conviesInfo.ok > 0
+                  ? N.t('live_convies', { n: String(conviesInfo.ok) })
+                  : N.t('live_choisir_sub')}
+            </p>
+          </div>
         </>
+      )}
+
+      {/* Le classement, par-dessus le salon. On garde la salle ouverte
+          derriere : choisir un adversaire ne doit pas faire perdre le code
+          ni les joueurs deja arrives. */}
+      {choisirAdversaires && (
+        <DuelRanking
+          onClose={() => setChoisirAdversaires(false)}
+          surInviter={async (nom: string) => {
+            const r = await inviterEnDirect([nom], code);
+            if (r.invites.length) {
+              setConviesInfo(c => ({ ok: c.ok + 1, injoignable: null }));
+              return true;
+            }
+            // Injoignable n'est pas une panne : beaucoup de joueurs figurent au
+            // classement sans avoir reserve leur nom. On le dit, plutot que de
+            // laisser croire a un envoi qui n'a pas eu lieu.
+            setConviesInfo(c => ({ ...c, injoignable: nom }));
+            return false;
+          }}
+        />
       )}
 
       <div className="flex flex-col gap-1.5">

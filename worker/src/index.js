@@ -9,12 +9,15 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
+import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
+  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
+  prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
-  medaillesDe, paysDe,
+  medaillesDe, paysDe, listeNations,
   fluxDirect, recapMondial,
 } from './championnats.js';
 import {
@@ -22,6 +25,22 @@ import {
   classementRelais, enregistrerRelais, equipe as equipeRelais,
   fantomesRelais, fantomeRelais,
 } from './relais.js';
+import {
+  noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
+} from './records.js';
+import {
+  verifierTrace, vraisemblance, signaler, listerSuspectes,
+} from './preuve.js';
+import {
+  peutSonner, noterEnvoi, noterOuverture, poserRythme, rythmeDe,
+  tauxOuverture, raisonsDeNonEnvoi, RYTHMES,
+} from './journal.js';
+import { mesures } from './mesures.js';
+import {
+  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
+  enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
+  ensureObjectifTables, heureLocale, midiDuJour,
+} from './objectif.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -32,34 +51,55 @@ import {
   regarderCap, fileDAttente, ecarter, marquerPublie, MOMENTS,
 } from './reseaux.js';
 import {
+  deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
+} from './instagram-envoi.js';
+import {
+  inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
+} from './direct-invitations.js';
+import {
   ouvrirTransfert, utiliserTransfert, demanderRecuperation, etatRecuperation,
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
+import { alerterRecuperation } from './courriel.js';
 
 /**
- * Portes du relais et des championnats.
+ * La porte du relais : ouverte.
  *
- * Elles ne sont plus des constantes : ces modes sont ouverts sur le canal de
- * test et fermes en production. Un seul deploiement sert les deux, et c'est le
- * code d'acces presente par l'appelant qui decide de quel cote il se trouve.
- *
- * Le jour ou l'on voudra les ouvrir a tout le monde, il suffira de renvoyer
- * true ici sans condition.
+ * Elle a vecu longtemps sous la forme `canal => canal.test` — ouverte sur le
+ * canal de test, fermee en production, un seul deploiement servant les deux.
+ * Le jour de l'ouverture etant venu, elle renvoie true sans condition, comme
+ * il etait prevu. On garde la forme d'une fonction plutot que d'effacer les
+ * appels : refermer doit rester l'affaire d'une ligne, et le canal de test
+ * reste distinct par sa base, pas par ce qu'il autorise.
  */
-const relaisOuvert = canal => canal.test;
-const championnatsOuverts = canal => canal.test;
+const relaisOuvert = () => true;
 /**
- * Le mot du vainqueur : reserve au canal de test.
+ * Les championnats : ouverts a la lecture, tenus par la cle a l'ecriture.
+ *
+ * Cette porte protegeait autre chose que ce qu'elle avait l'air de proteger.
+ * Quatre routes de la famille ecrivent — `ouvrir` et `cycle` creent des
+ * editions, `course` enregistre des chronos, `cloturer` qualifie et sacre — et
+ * aucune ne verifiait a qui elle parlait. Entre gens qui se connaissent, sur
+ * le canal de test, cela n'avait pas d'importance ; l'ouvrir telle quelle
+ * aurait suffi a fabriquer un champion du Maroc dans la vraie base, ou a
+ * cloturer une finale que personne n'a courue, avec une requete a la main.
+ *
+ * Elles demandent maintenant ADMIN_CLE, comme /duels/recalculer. Ce ne sont
+ * pas des routes de joueur : seul le tableau de bord des championnats les
+ * appelle, et il porte deja la cle. Ce que voit le jeu — le calendrier, le
+ * fil, les titres, sa propre edition — reste ouvert a tous.
+ */
+const championnatsOuverts = () => true;
+/**
+ * Le mot du vainqueur : ouvert avec les duels, comme annonce.
  *
  * C'est la seule ecriture du jeu ou un joueur produit un contenu qu'un autre
- * lira, et personne ne la relit. Tant qu'elle n'a pas ete eprouvee entre gens
- * qui se connaissent, la porte reste fermee du cote du serveur — pas seulement
- * dans le jeu. Sans cela, une simple requete a la main suffirait a deposer un
- * message chez n'importe quel joueur de la vraie version.
- *
- * A rouvrir en meme temps que les duels de production, et pas avant.
+ * lira, et personne ne la relit avant qu'il n'arrive. La porte etait tenue
+ * fermee tant que les duels de production l'etaient ; ils s'ouvrent, elle
+ * s'ouvre. Le tableau de moderation reste le seul filet — c'est un choix, et
+ * il se referme ici en remettant `canal => canal.test`.
  */
-const motOuvert = canal => canal.test;
+const motOuvert = () => true;
 
 const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
@@ -74,7 +114,10 @@ const MAX_TRACE_PTS = 1200;
 const TOP_N = 500;
 // Cumul sentinelle : marque une ligne nee d'un one shot ou d'un defi, sans
 // parcours complet derriere. Doit rester identique cote jeu (NO_RUN_MS).
-const NO_RUN_MS = 1200000;
+// La valeur vit dans records.js, qui en a besoin pour creer une ligne ne
+// portant qu'un record : deux exemplaires du meme nombre finissent toujours
+// par diverger d'un chiffre.
+const NO_RUN_MS = SANS_PARCOURS_MS;
 
 function cors(resp) {
   resp.headers.set('Access-Control-Allow-Origin', '*');
@@ -93,7 +136,16 @@ function cors(resp) {
   // cote client un pre-vol refuse se presente comme un `fetch` qui echoue,
   // sans statut ni message. Qui ajoute un en-tete ajoute une ligne ici.
   resp.headers.set('Access-Control-Allow-Headers',
-                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau');
+                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau, X-D1-Bookmark');
+
+  // Annoncer un en-tete en REPONSE est une deuxieme porte, distincte de celle
+  // du dessus, et c'est celle qu'on oublie : sans cette ligne le navigateur
+  // recoit bien `X-D1-Bookmark` mais le cache au code du jeu, qui lit `null`
+  // et repart sans signet a la requete suivante. La replication tournerait, la
+  // coherence non — et l'onglet reseau ne montrerait rien d'anormal, puisque
+  // l'en-tete est bel et bien sur le fil. Qui ajoute un en-tete de reponse
+  // ajoute une ligne ici.
+  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark');
   return resp;
 }
 
@@ -363,6 +415,10 @@ async function ensureRaceTable(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_name ON races(name_key, race_key, created_at)`),
     db.prepare(`CREATE INDEX IF NOT EXISTS races_by_device ON races(device_id, race_key, created_at)`),
+    // Celui de l'Objectif du jour : `joueursAServir` decoupe une fenetre de
+    // trente courses par joueur avec ROW_NUMBER, et lit donc la table par
+    // (epreuve, date). L'index vit ici, avec la table qu'il indexe.
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_races_epreuve_joueur ON races(race_key, created_at)`),
   ]);
   racesReady.add(db);
 }
@@ -453,6 +509,124 @@ async function ensureAttemptTraces(db) {
   attemptTracesReady.add(db);
 }
 
+const pushTableReady = new WeakSet();
+async function ensurePushTable(db) {
+  if (pushTableReady.has(db)) return;
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      device_id   TEXT PRIMARY KEY,
+      subscription TEXT NOT NULL,
+      created_at  INTEGER DEFAULT (unixepoch())
+    )
+  `).run();
+  // La langue du joueur, ajoutee apres coup : les abonnements d'avant restent
+  // et repondent en francais, ce que la valeur par defaut dit deja.
+  try { await db.prepare(
+    `ALTER TABLE push_subscriptions ADD COLUMN langue TEXT NOT NULL DEFAULT 'fr'`).run(); }
+  catch { /* deja la */ }
+
+  // Les jetons de l'application native. Une table separee des abonnements web,
+  // et pas une colonne de plus sur la meme : les deux ne se ressemblent que de
+  // loin — un abonnement web est un objet qu'on rejoue tel quel, un jeton FCM
+  // est une chaine opaque — et surtout un meme appareil peut porter les deux a
+  // la fois, le site dans son navigateur et l'application a cote.
+  //
+  // Le jeton est la cle, pas l'appareil : c'est lui que Firebase renouvelle,
+  // c'est lui qui meurt a une desinstallation, et une reinstallation en donne
+  // un nouveau sans que l'ancien previenne. Un appareil peut donc en avoir
+  // plusieurs le temps que les morts se fassent ramasser a l'envoi.
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS push_jetons (
+      jeton      TEXT PRIMARY KEY,
+      device_id  TEXT NOT NULL,
+      plateforme TEXT,
+      langue     TEXT NOT NULL DEFAULT 'fr',
+      cree_le    INTEGER NOT NULL
+    )
+  `).run();
+  await db.prepare(
+    `CREATE INDEX IF NOT EXISTS push_jetons_appareil ON push_jetons(device_id)`).run();
+  pushTableReady.add(db);
+}
+
+/**
+ * Sonne la boite WebSocket ET fait vibrer le telephone.
+ *
+ * Les deux, et pas l'un ou l'autre : la socket ne porte que pendant que le jeu
+ * est ouvert, la notification ne sert qu'a le rouvrir. Le genre de la nouvelle
+ * — `defi`, `direct`, `relais`, `duel`, `mot` — est le meme mot des deux
+ * cotes, et c'est `push.js` qui sait quel texte lui correspond.
+ *
+ * Aucune des deux ne peut faire echouer l'ecriture qui vient de se produire :
+ * on a enregistre un defi, une invitation, une equipe — la sonnerie est ce qui
+ * vient apres, et elle n'a pas le droit de defaire ce qui est fait.
+ */
+async function sonnerEtPush(env, deviceId, type, canalTest) {
+  await sonner(env, deviceId, type, canalTest);
+  const db = canalTest ? env.DB_TEST : env.DB;
+  try {
+    await ensurePushTable(db);
+    await notifierAppareil(db, deviceId, type, env);
+  } catch { /* le push est best-effort : une erreur ne casse pas l'écriture */ }
+}
+
+/**
+ * Les appareils derriere une liste de noms.
+ *
+ * Un joueur peut en avoir plusieurs — on previent tous, parce qu'on ignore
+ * lequel il a en main. Un nom qu'aucun appareil ne reclame n'est pas une
+ * erreur : beaucoup jouent sans avoir reserve leur pseudonyme, et ceux-la ne
+ * sont joignables par personne.
+ */
+async function appareilsDe(db, cles) {
+  const liste = [...new Set((cles || [])
+    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean))];
+  if (!liste.length) return [];
+  try {
+    const { results } = await db.prepare(
+      `SELECT device_id FROM player_devices
+        WHERE name_key IN (${liste.map(() => '?').join(',')})`
+    ).bind(...liste).all();
+    return [...new Set((results || []).map(r => r.device_id).filter(Boolean))];
+  } catch { return []; }
+}
+
+/**
+ * Parmi ces appareils, ceux qui peuvent recevoir une notification.
+ *
+ * Les deux transports comptent — un abonnement web, un jeton Firebase — et il
+ * suffit de l'un. Sans cette question, `notifierAppareil` part quand meme,
+ * ne trouve rien et se tait : le bilan du cron annoncerait alors trois cents
+ * notifications envoyees a des appareils qui n'en recoivent aucune.
+ */
+async function appareilsJoignables(db, appareils) {
+  const liste = [...new Set((appareils || []).filter(Boolean))];
+  if (!liste.length) return [];
+  const trous = liste.map(() => '?').join(',');
+  const joignables = new Set();
+  for (const sql of [
+    `SELECT device_id FROM push_subscriptions WHERE device_id IN (${trous})`,
+    `SELECT device_id FROM push_jetons WHERE device_id IN (${trous})`,
+  ]) {
+    try {
+      const { results } = await db.prepare(sql).bind(...liste).all();
+      for (const r of results || []) joignables.add(r.device_id);
+    } catch { /* table absente : ce transport ne repond a personne */ }
+  }
+  return [...joignables];
+}
+
+/** Combien de courses ce joueur a-t-il a son historique ? Sert a savoir si
+ *  l'on a de quoi juger un bond de performance — sous cinq courses, non. */
+async function nombreDeCourses(db, nameKey) {
+  try {
+    await ensureRaceTable(db);
+    const r = await db.prepare(
+      `SELECT COUNT(*) AS n FROM races WHERE name_key = ?`).bind(nameKey).first();
+    return r?.n || 0;
+  } catch { return 0; }
+}
+
 async function attemptsFor(db, id) {
   const { results } = await db.prepare(
     `SELECT name, total_ms, splits, created_at FROM challenge_attempts
@@ -464,8 +638,249 @@ async function attemptsFor(db, id) {
   }));
 }
 
+/* -------------------------------------------------------------------------
+   L'OBJECTIF DU JOUR
+   -------------------------------------------------------------------------
+   Le cron passe toutes les cinq minutes. La quasi-totalite de ces passages ne
+   fait rien : `joueursAServir` ne rend quelqu'un que si SON heure locale vient
+   de passer a midi ou a dix-neuf heures. C'est le prix a payer pour que
+   l'heure annoncee soit celle du joueur et pas celle du serveur, et il est
+   d'une requete a vide toutes les cinq minutes.
+
+   Rien ici ne peut echouer bruyamment. Un objectif est un agrement : s'il ne
+   part pas, le joueur joue quand meme. On journalise et on passe au suivant —
+   un joueur qui plante ne doit pas priver les quatre cents autres.
+------------------------------------------------------------------------- */
+/**
+ * Dans quel mode tourne l'Objectif du jour.
+ *
+ *   actif   — il calcule, il range, il sonne. Le mode normal.
+ *   essai   — il calcule, il range, il JOURNALISE ce qu'il aurait envoye, et
+ *             n'envoie rien. C'est le mode qui permet de changer une heure de
+ *             creneau, un calibrage ou un texte et de regarder ce que ca donne
+ *             sur les vrais joueurs, sans faire vibrer trois cents telephones
+ *             pour s'en apercevoir.
+ *   arrete  — il ne fait rien du tout.
+ *
+ * Le mode se pose dans wrangler.toml et se change par un deploiement. Ce n'est
+ * pas un reglage a chaud, et c'est voulu : un interrupteur qu'on peut basculer
+ * depuis une route est un interrupteur qu'on peut basculer par accident.
+ *
+ * Le defaut est « actif » — la valeur qu'avait le code avant d'avoir un mode.
+ * Un drapeau absent ne doit pas eteindre ce qui marchait.
+ */
+function modeObjectif(env) {
+  const m = String((env && env.OBJECTIF) || 'actif').trim().toLowerCase();
+  return (m === 'essai' || m === 'arrete') ? m : 'actif';
+}
+
+async function envoyerObjectifs(env, maintenant) {
+  const db = env.DB;
+  if (!db) return { servis: 0 };
+
+  const mode = modeObjectif(env);
+  if (mode === 'arrete') return { mode, servis: 0 };
+
+  await ensureObjectifTables(db);
+  const joueurs = await joueursAServir(db, maintenant);
+  if (!joueurs.length) return { mode, servis: 0 };
+
+  const bilan = { mode, dus: joueurs.length, crees: 0, notifies: 0,
+                  tus: 0, sans_push: 0, simules: 0, erreurs: 0 };
+
+  for (const j of joueurs) {
+    try {
+      const { objectif, nouveau, silencieux } = await creerObjectif(db, j, maintenant);
+      if (!objectif || !nouveau) continue;
+      bilan.crees++;
+
+      // Le silence ne retient que la sonnerie : l'objectif existe, et celui
+      // qui rouvre le jeu de lui-meme le trouve. C'est ce qui lui permet de
+      // revenir — une tentative, et il est de nouveau prevenu.
+      if (silencieux) { bilan.tus++; continue; }
+
+      // Le soir parle de la journee qu'on a eue : valide, tente sans y
+      // arriver, ou pas ouvert du tout. Lu une fois par joueur, pas par
+      // appareil — c'est la meme journee sur les deux telephones.
+      const midi = objectif.creneau === 'soir'
+        ? await midiDuJour(db, j.nameKey, objectif.jour) : null;
+
+      // Le texte est fabrique par appareil, dans la langue de son abonnement :
+      // on ne le calcule pas ici, on donne de quoi le calculer.
+      const texte = (langue) => {
+        const t = texteObjectif(objectif, j.rang, langue, undefined, midi);
+        return [t.titre, t.corps];
+      };
+      // ...et on retient CE QUI a ete choisi, pour pouvoir un jour dire quel
+      // texte fait ouvrir. La langue importe peu ici : la variante est la meme
+      // des deux cotes, c'est le tirage qui la fixe.
+      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi);
+
+      // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
+      // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
+      const appareils = await appareilsDe(db, [j.nameKey]);
+      await ensurePushTable(db);
+
+      // Joignable ? La question se pose ICI et pas a la selection.
+      //
+      // Un joueur sans notification garde son objectif : il le trouvera en
+      // ouvrant le jeu, et c'est exactement la population qu'on espere voir
+      // revenir. Le filtrer en amont — comme le ferait un instantane du
+      // « top 500 joignable » — lui retirerait le defi pour la seule raison
+      // qu'on ne peut pas le lui annoncer.
+      const joignables = await appareilsJoignables(db, appareils);
+      if (!joignables.length) {
+        bilan.sans_push++;
+        await noterEnvoi(db, { nameKey: j.nameKey, type: 'objectif',
+          jour: objectif.jour, creneau: objectif.creneau,
+          statut: 'retenu', raison: 'sans_abonnement' });
+        continue;
+      }
+
+      // Les regles de sonnerie : le rythme du joueur, et les quatre heures
+      // entre deux. Le silence des tentatives, lui, a deja parle plus haut.
+      const verdict = await peutSonner(db, j.nameKey, objectif.creneau, maintenant?.getTime());
+      if (!verdict.ok) {
+        bilan.retenus = (bilan.retenus || 0) + 1;
+        await noterEnvoi(db, { nameKey: j.nameKey, type: 'objectif',
+          jour: objectif.jour, creneau: objectif.creneau,
+          statut: 'retenu', raison: verdict.raison });
+        continue;
+      }
+
+      if (mode === 'essai') {
+        // Le mode d'essai s'arrete exactement ici : tout est calcule et range,
+        // rien ne part. Le journal porte ce qui serait parti, en francais —
+        // pas la langue de l'abonnement, qu'on n'a pas cherchee.
+        console.log('objectif[essai]', JSON.stringify({
+          joueur: j.nameKey, rang: j.rang, appareils: joignables.length,
+          cible_ms: objectif.cible_ms, pb_ms: objectif.pb_ms,
+          creneau: objectif.creneau, expire_le: objectif.expire_le,
+          contexte: choix.contexte, variante: choix.variante,
+          titre: choix.titre, corps: choix.corps,
+        }));
+        bilan.simules++;
+        continue;
+      }
+
+      for (const d of joignables) {
+        try {
+          await notifierAppareil(db, d, 'objectif', env, texte);
+          bilan.notifies++;
+          await noterEnvoi(db, { nameKey: j.nameKey, deviceId: d, type: 'objectif',
+            jour: objectif.jour, creneau: objectif.creneau,
+            contexte: choix.contexte, variante: choix.variante, statut: 'envoye' });
+        } catch { /* un appareil injoignable n'annule pas les autres */ }
+      }
+    } catch (e) {
+      bilan.erreurs++;
+      console.log('objectif', j.nameKey, String(e && e.message || e));
+    }
+  }
+  return bilan;
+}
+
 export default {
-  async fetch(request, env, ctx) {
+  /**
+   * Le declencheur horaire. Deux travaux, et ils n'ont pas la meme portee.
+   *
+   * L'Objectif du jour ne part que sur la base de production : le canal de test
+   * n'a pas de public a prevenir.
+   *
+   * Les clotures de selection, elles, passent sur LES DEUX bases. C'est sur le
+   * canal de test qu'on repete un cycle avant de l'annoncer pour de vrai, et
+   * une echeance qui ne tomberait pas la ne prouverait rien de celle qui doit
+   * tomber en production.
+   *
+   * Chacun est arme separement : une cloture qui echoue ne doit pas emporter
+   * l'Objectif du jour avec elle, et reciproquement.
+   */
+  async scheduled(event, env, ctx) {
+    const quand = event.scheduledTime || Date.now();
+
+    ctx.waitUntil(
+      envoyerObjectifs(env, new Date(quand))
+        .then(b => { if (b.crees || b.mode !== 'actif') console.log('objectifs', JSON.stringify(b)); })
+        .catch(e => console.log('objectifs KO', String(e && e.message || e)))
+    );
+
+    for (const [nom, db] of [['prod', env.DB], ['test', env.DB_TEST]]) {
+      if (!db) continue;
+      ctx.waitUntil(
+        cloturerEcheances(db, quand)
+          .then(b => {
+            // On ne journalise que ce qui s'est passe. Le cron repasse 288 fois
+            // par jour et ne trouve rien la quasi-totalite du temps : tracer
+            // chaque passage a vide rendrait `wrangler tail` illisible le jour
+            // ou l'on cherche precisement ce qui s'est cloture.
+            if (b.cloturees.length || b.annulees.length) {
+              console.log('champ cloture', nom, JSON.stringify(b));
+            }
+          })
+          .catch(e => console.log('champ cloture KO', nom, String(e && e.message || e)))
+      );
+    }
+  },
+
+  fetch: envelopper,
+};
+
+/**
+ * L'enveloppe de la session.
+ *
+ * Elle ne fait qu'une chose : reposer sur la reponse le signet que la session
+ * a atteint, pour que la requete suivante puisse le presenter. Tout le reste
+ * du travail est dans `servir`.
+ *
+ * Pourquoi une fonction de module et non une methode appelee par `this` : le
+ * runtime invoque `fetch` sans garantir a quoi `this` sera lie. Une methode
+ * qui s'appelle elle-meme par `this.servir` marche en developpement et lache
+ * ailleurs, ce qui est la pire des deux options.
+ */
+async function envelopper(request, env, ctx) {
+  const porteur = {};
+  let reponse;
+  try {
+    reponse = await servir(request, env, ctx, porteur);
+  } catch (e) {
+    // Un signet que D1 refuse ne se signale PAS a la creation de la session :
+    // `withSession()` est paresseux, il rend un objet sans rien verifier, et
+    // l'erreur ne sort qu'a la premiere requete — donc depuis la route, hors
+    // de portee du try/catch qui entoure la creation. Sans ce rattrapage, un
+    // signet perime dans un onglet laisse ouvert rend 500 a chaque appel et
+    // condamne l'onglet jusqu'a ce que le joueur vide son stockage.
+    //
+    // On ne rejoue qu'une lecture, et seulement si elle portait un signet :
+    // un GET est rejouable par nature, et la requete rejouee n'a plus
+    // d'en-tete a refuser, ce qui borne la recursion a un tour.
+    if (request.method === 'GET' && request.headers.get('X-D1-Bookmark')) {
+      const entetes = new Headers(request.headers);
+      entetes.delete('X-D1-Bookmark');
+      return await envelopper(new Request(request, { headers: entetes }), env, ctx);
+    }
+    throw e;
+  }
+
+  // Une reponse 101 porte une WebSocket : ses en-tetes ne se modifient plus,
+  // et la salle en direct ne lit aucun signet de toute facon.
+  if (!porteur.session || !reponse || reponse.status === 101) return reponse;
+
+  let signet = null;
+  try { signet = porteur.session.getBookmark(); } catch (e) { signet = null; }
+  if (!signet) return reponse;
+
+  try {
+    const copie = new Response(reponse.body, reponse);
+    copie.headers.set('X-D1-Bookmark', signet);
+    return copie;
+  } catch (e) {
+    // Une reponse dont les en-tetes sont scellees vaut mieux qu'une requete
+    // perdue : le signet se perd, la suivante repart sans contrainte.
+    return reponse;
+  }
+}
+
+async function servir(request, env, ctx, porteur) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -498,6 +913,65 @@ export default {
     // Les passer lies plutot que separement n'est pas une commodite : c'est ce
     // qui permet a `noter()` de refuser le canal de test elle-meme, au lieu de
     // faire confiance a cinq appelants pour y penser chacun de leur cote.
+    // ------------------------------------------------- la session de lecture
+    //
+    // La base de production est repliquee : des copies en lecture seule vivent
+    // aupres des joueurs, la primaire reste a Paris. Un classement demande de
+    // Tokyo n'a plus a traverser l'Europe pour repondre.
+    //
+    // Ce que la replication coute, c'est du retard : une replique peut avoir
+    // quelques centaines de millisecondes de decalage, et un joueur qui vient
+    // de poser son chrono doit le voir dans le classement qu'il ouvre juste
+    // apres — sinon la replication ne ressemble pas a une optimisation, elle
+    // ressemble a une perte de donnees.
+    //
+    // Le signet resout exactement cela. La reponse repart avec la position de
+    // lecture atteinte, le jeu la renvoie a la requete suivante, et le serveur
+    // choisit alors une replique au moins aussi a jour. Une ECRITURE, elle,
+    // part toujours de la primaire : elle commence presque toujours par une
+    // verification — ce nom est-il a cet appareil, ce code est-il le bon — et
+    // une verification lue sur une replique en retard autoriserait ce qu'elle
+    // devrait refuser.
+    //
+    // SANS signet presente, on lit aussi la primaire, GET compris. C'est ce
+    // choix qui rend le deploiement inoffensif : le jeu est une PWA, ses
+    // bundles vivent en cache, et un client charge hier ne connait pas encore
+    // le signet. Si l'absence de signet valait « lis au plus proche », toute
+    // la base installee gagnerait d'un coup le droit de lire une copie en
+    // retard, et verrait un classement sans le chrono qu'elle vient d'y
+    // poser. Un client a jour, lui, presente son signet des sa deuxieme
+    // requete : le gain arrive au rythme des mises a jour, jamais avant que le
+    // client sache s'en servir.
+    //
+    // Le tout s'efface de lui-meme si la plateforme ne connait pas les
+    // sessions : `env.DB` reste alors la base, et rien ne change.
+    // Un premier filtre sur la forme, volontairement large : il arrete le
+    // stockage corrompu et les curieux, sans se river au format exact d'un
+    // signet, qui n'est pas documente et peut changer. Ce qui passerait ce
+    // filtre sans etre valide est rattrape par le rejeu dans `envelopper`.
+    const signetBrut = request.headers.get('X-D1-Bookmark') || '';
+    const signetRecu = /^[0-9a-f]+(-[0-9a-f]+){2,5}$/i.test(signetBrut)
+      ? signetBrut : '';
+    if (env.DB && typeof env.DB.withSession === 'function') {
+      const contrainte = (request.method === 'GET' && signetRecu)
+        ? signetRecu
+        : 'first-primary';
+      let session = null;
+      try {
+        session = env.DB.withSession(contrainte);
+      } catch (e) {
+        // Signet illisible ou hors de portee — il a pu vieillir dans un onglet
+        // laisse ouvert. On repart sans contrainte plutot que de refuser la
+        // requete : le joueur perd la garantie de fraicheur, pas le service.
+        try { session = env.DB.withSession('first-unconstrained'); }
+        catch (e2) { session = null; }
+      }
+      if (session) {
+        env = { ...env, DB: session };
+        if (porteur) porteur.session = session;
+      }
+    }
+
     canal.db = env.DB;
 
     // --------------------------------------------------------- anti-abus
@@ -568,6 +1042,276 @@ export default {
       }
 
       return json({ error: 'not found' }, 404);
+    }
+
+    /* -----------------------------------------------------------------
+     L'OBJECTIF DU JOUR
+     -----------------------------------------------------------------
+     Trois routes, et le joueur s'y designe par son nom — la meme clef que
+     le classement (`lower(trim(name))`), et pas le device_id : un joueur qui
+     a deux telephones a un seul objectif.
+
+     ELLES VIVENT ICI, ET PAS PLUS HAUT. Elles ont ete ecrites a l'interieur
+     du bloc `/test/`, dont l'accolade fermante se trouvait cent lignes plus
+     bas : aucune adresse commencant par `/objectif` n'y entrait, les trois
+     rendaient 404 en production, et rien ne le disait — le cron, lui, ne
+     passe pas par les routes, si bien que les objectifs partaient en
+     notification vers un jeu incapable de les lire. Un harnais qui appelle
+     les routes existe desormais dans tools/objectif-test.mjs : c'est lui,
+     et pas la relecture, qui protege contre la meme erreur.
+  ----------------------------------------------------------------- */
+
+    if (url.pathname === '/objectif' && request.method === 'GET') {
+      const nom = (url.searchParams.get('nom') || '').trim();
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      const langue = url.searchParams.get('langue') === 'en' ? 'en' : 'fr';
+      const cle = nom.toLowerCase();
+
+      await ensureObjectifTables(env.DB);
+      // L'objectif OUVERT MAINTENANT, a l'instant pres.
+      //
+      // Les instants d'ouverture et d'expiration sont ranges dans la ligne :
+      // la route n'a donc pas a savoir dans quel fuseau vit le joueur, ce
+      // qu'elle ne pouvait de toute facon pas deviner — elle se rabattait sur
+      // l'heure de Paris et rendait un objectif du midi encore « en cours » a
+      // minuit. Les lignes d'avant la fenetre gardent la regle du jour.
+      const t = Date.now();
+      const jour = heureLocale(new Date(), 'Europe/Paris').jour;
+      const o = await env.DB.prepare(
+        `SELECT * FROM objectifs
+          WHERE name_key = ?
+            AND (ouvre_le IS NULL OR ouvre_le <= ?)
+            AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
+          ORDER BY cree_le DESC LIMIT 1`
+      ).bind(cle, t, jour, t).first();
+      if (!o) return json({ objectif: null });
+
+      const rang = await getRank(env.DB, OBJ_EPREUVE, o.pb_ms);
+      const texte = texteObjectif(o, rang, langue, true);
+      return json({
+        objectif: {
+          creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
+          cible_ms: o.cible_ms, pb_ms: o.pb_ms,
+          tentatives: o.tentatives, meilleur_ms: o.meilleur_ms,
+          valide: !!o.valide_le, points: o.points,
+          // La graine et l'expiration servent au jeu : la premiere pour courir
+          // la MEME piste que tout le monde, la seconde pour dire combien de
+          // temps il reste. La graine n'est pas un secret — elle se recalcule
+          // a partir du jour, du creneau et de l'epreuve — mais la renvoyer
+          // evite au jeu de refaire le hachage et de se tromper d'un bit.
+          graine: o.graine ?? null,
+          ouvre_le: o.ouvre_le ?? null,
+          expire_le: o.expire_le ?? null,
+          // Les trois seuils, calcules ici plutot que dans le jeu : ils
+          // dependent du bareme, et un bareme recopie cote client est un
+          // bareme qui derive au premier reglage.
+          seuils: seuilsDe(o.pb_ms, o.cible_ms, 'plus_bas'),
+          palier: o.palier ?? null,
+          titre: texte.titre, texte: texte.corps,
+        },
+      });
+    }
+
+    /* -----------------------------------------------------------------
+       UNE TENTATIVE, ET CE QU'IL FAUT POUR L'ACCEPTER
+       -----------------------------------------------------------------
+       Cette route acceptait `{nom, ms}`. Rien d'autre : pas d'appareil, pas de
+       preuve, pas de bornes. N'importe qui pouvait valider l'objectif de
+       n'importe quel joueur du classement, ou s'attribuer un 5,00 s, avec une
+       ligne de curl et sans rien savoir de lui.
+
+       Quatre verrous, du moins cher au plus cher :
+
+         L'APPAREIL. Le meme controle que `/race` et `/submit` — un nom
+         reserve n'accepte que les appareils de son proprietaire. C'est ce qui
+         retire « valider a la place d'un autre » de la table.
+
+         LES BORNES. Les memes que partout ailleurs ici.
+
+         LE DELAI. Deux tentatives a moins de huit secondes n'ont pas ete
+         courues. Sans lui, le bonus de perseverance se ramasse en trois
+         requetes.
+
+         LA PREUVE. La trace de la course — la distance toutes les 80 ms, celle
+         qui sert deja au fantome. Elle dit la FORME de la course : elle avance
+         sans reculer, elle atteint la ligne, et elle l'atteint a l'instant
+         qu'annonce le chrono.
+
+       Cela ne rend pas la triche impossible : le moteur tourne chez le joueur.
+       Cela la fait passer d'une ligne a poster a une course a fabriquer.
+    ----------------------------------------------------------------- */
+
+    if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const nom = String(body?.nom || '').trim();
+      const deviceId = body?.device_id;
+      const ms = Math.round(Number(body?.ms));
+      const langue = body?.langue === 'en' ? 'en' : 'fr';
+
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!Number.isFinite(ms) || ms < MIN_TIME_MS || ms > MAX_TIME_MS) {
+        return json({ error: 'temps invalide' }, 400);
+      }
+
+      const cle = nom.toLowerCase();
+      if (!await peutUtiliser(env.DB, cle, deviceId)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
+
+      // La preuve, avant tout enregistrement. Une course qui ne tient pas
+      // debout ne doit pas compter comme tentative — sinon la refuser
+      // reviendrait quand meme a faire avancer le compteur du bonus.
+      const griefs = verifierTrace(cleanTrace(body?.trace), ms, OBJ_EPREUVE);
+      if (griefs.length) {
+        await signaler(env.DB, {
+          nameKey: cle, deviceId, quoi: 'trace',
+          detail: griefs.join(' ; '), tempsMs: ms,
+        });
+        return json({ error: 'course invalide', griefs }, 422);
+      }
+
+      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date());
+      if (!res) return json({ objectif: null });
+      if (res.refuse) return json({ refuse: res.refuse, attendreMs: res.attendreMs }, 429);
+
+      // La vraisemblance ne refuse rien : elle note. Un joueur progresse, un
+      // joueur s'entraine, un joueur prete son telephone a plus rapide que
+      // lui. Reprendre son record a quelqu'un qui vient de le battre serait la
+      // pire facon d'attraper le mauvais.
+      const v = vraisemblance(ms, res.pbMs, await nombreDeCourses(env.DB, cle));
+      if (v.suspect) {
+        await signaler(env.DB, {
+          nameKey: cle, deviceId, quoi: 'bond',
+          detail: `${(v.bond * 100).toFixed(1)} % d'un coup`,
+          tempsMs: ms, pbMs: res.pbMs,
+        });
+      }
+
+      return json({ resultat: res, texte: texteResultat(res, langue) });
+    }
+
+    /* -----------------------------------------------------------------
+       LES NOTIFICATIONS : ce qu'on en sait, et ce que le joueur en decide.
+    ----------------------------------------------------------------- */
+
+    // Une notification a ete touchee. Le jeu le dit en s'ouvrant, et c'est la
+    // seule facon de connaitre un taux d'ouverture : rien d'autre ne remonte.
+    if (url.pathname === '/notifications/ouverte' && request.method === 'POST') {
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const nom = String(body?.nom || '').trim();
+      const type = String(body?.type || 'objectif').slice(0, 20);
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      await noterOuverture(env.DB, nom.toLowerCase(), type);
+      return json({ ok: true });
+    }
+
+    // Une ou deux par jour. Le choix du joueur l'emporte sur celui qu'on fait
+    // pour lui — et il doit pouvoir revenir en arriere, donc on rend l'etat.
+    if (url.pathname === '/notifications/rythme') {
+      const nom = String((url.searchParams.get('nom') || '')).trim();
+      if (request.method === 'GET') {
+        if (!nom) return json({ error: 'nom requis' }, 400);
+        return json(await rythmeDe(env.DB, nom.toLowerCase()));
+      }
+      if (request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const n = String(body?.nom || '').trim();
+        const deviceId = body?.device_id;
+        const rythme = String(body?.rythme || '');
+        if (!n) return json({ error: 'nom requis' }, 400);
+        if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+        if (!RYTHMES.includes(rythme)) return json({ error: 'rythme invalide' }, 400);
+        // Le meme controle que partout : un reglage se change depuis un
+        // appareil du proprietaire, pas depuis n'importe lequel.
+        if (!await peutUtiliser(env.DB, n.toLowerCase(), deviceId)) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
+        await poserRythme(env.DB, n.toLowerCase(), rythme);
+        return json({ ok: true, rythme });
+      }
+    }
+
+    // Les chiffres : taux d'ouverture par creneau et par tournure, et les
+    // raisons de non-envoi. Sous cle d'administration.
+    if (url.pathname === '/notifications/chiffres' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const jours = Math.min(Number(url.searchParams.get('jours')) || 30, 365);
+      const depuis = Date.now() - jours * 86400000;
+      return json({
+        jours,
+        ouverture: await tauxOuverture(env.DB, depuis),
+        non_envoyees: await raisonsDeNonEnvoi(env.DB, depuis),
+      });
+    }
+
+    // Les sept chiffres de l'Objectif du jour. Sous cle d'administration :
+    // ils comptent des joueurs, meme s'ils n'en nomment aucun.
+    if (url.pathname === '/objectif/mesures' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const jours = Math.min(Number(url.searchParams.get('jours')) || 30, 365);
+      // Les trois tables que `mesures` lit, et dont elle n'est proprietaire
+      // d'aucune. Sans ces lignes, la route rend 500 sur une base neuve —
+      // troisieme fois que ce module s'y prend les pieds, et la troisieme fois
+      // ne s'est vue qu'en montant un worker sur une base vierge.
+      await ensureObjectifTables(env.DB);
+      await ensureRaceTable(env.DB);
+      return json(await mesures(env.DB, jours));
+    }
+
+    // Les courses a regarder. Sous cle d'administration : elles nomment des
+    // joueurs, et rien ne dit encore qu'ils ont triche.
+    //
+    // `/objectif/suspectes` et non `/signalements` : ce dernier appartient a la
+    // moderation des duels, comme la table du meme nom.
+    if (url.pathname === '/objectif/suspectes' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      return json({ suspectes: await listerSuspectes(env.DB, n) });
+    }
+
+    if (url.pathname === '/objectif/classement' && request.method === 'GET') {
+      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      return json({ classement: await classementObjectifs(env.DB, n) });
+    }
+
+    /* -----------------------------------------------------------------
+       LE RECORD PERSONNEL
+       -----------------------------------------------------------------
+       Par le NOM, tous appareils confondus — c'est la difference avec
+       `/rank`, qui repond pour un appareil. Un joueur qui a un telephone et
+       un ordinateur a un record, pas deux, et c'est celui-la que le jeu
+       affiche et que l'objectif calibre.
+    ----------------------------------------------------------------- */
+
+    if (url.pathname === '/record' && request.method === 'GET') {
+      const nom = (url.searchParams.get('nom') || '').trim();
+      const race = url.searchParams.get('race') || '100';
+      if (!nom) return json({ error: 'nom requis' }, 400);
+      if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
+      await ensureScoreGhost(env.DB);
+      await ensureRaceTable(env.DB);
+      return json(await recordDuJoueur(env.DB, nom.toLowerCase(), race));
+    }
+
+    // Repare les records qui ont deja derive, en relisant l'historique.
+    //
+    // Sous cle d'administration comme /duels/recalculer, et pour la meme
+    // raison : la route reecrit une colonne que lit le classement de tout le
+    // monde. Elle se rejoue sans dommage — elle ne remplace jamais un record
+    // par une valeur moins bonne — mais cela n'en fait pas une route publique.
+    if (url.pathname === '/records/recalculer' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      await ensureScoreGhost(env.DB);
+      await ensureRaceTable(env.DB);
+      // `creer=1` fait ENTRER au classement les joueurs nommes qui ont des
+      // courses sans ligne de score. Ce n'est plus une reparation, c'est un
+      // changement de tableau public : il se demande, il ne se decide pas ici.
+      let corps; try { corps = await request.json(); } catch { corps = {}; }
+      const creer = (corps && corps.creer === true)
+        || url.searchParams.get('creer') === '1';
+      return json(await recalculerRecords(env.DB, { creer }));
     }
 
     // ------------------------------------------------------- classement
@@ -748,19 +1492,97 @@ export default {
         return json({ titres: key ? await titresDe(env.DB, key) : [] });
       }
 
-      // Ouvrir une edition. Reserve a l'exploitation : c'est un acte de
-      // calendrier, pas une action de joueur. Sans `echelon`, on reste sur le
-      // national, ce que faisaient les appels existants.
-      if (sous === 'ouvrir' && request.method === 'POST') {
+      // Annoncer une edition, sans la geler. C'est l'appel de production :
+      // il declare la date et l'heure de cloture, et le cron fera le reste.
+      //
+      // `cloture` peut se forcer pour repeter un cycle sur le canal de test ;
+      // absente, elle se deduit de la date de depart, ce qui est le cas normal.
+      if (sous === 'annoncer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { pays, zone, echelon, debut } = body || {};
+        const { pays, zone, echelon, debut, epreuve, cloture, cycle } = body || {};
+        const t = Number(debut);
+        if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
+
+        // Un seul appel annonce tout un echelon : c'est ce qu'on veut faire en
+        // vrai, et le faire pays par pays serait trente occasions d'oublier
+        // le trente-et-unieme.
+        if (cycle) {
+          return json(await annoncerCycle(env.DB, {
+            debutSamedi: t, echelon: echelon || 'national', epreuve,
+          }));
+        }
+
+        const r = await annoncerEchelon(env.DB, {
+          echelon: echelon || 'national',
+          zone: zone || pays || 'MONDE',
+          debutSamedi: t, epreuve, cloture,
+        });
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Forcer une cloture avant l'heure. Deux usages, tous deux legitimes :
+      // repeter un weekend complet sur le canal de test sans attendre trois
+      // jours, et rattraper a la main une echeance que le cron aurait manquee.
+      if (sous === 'cloturer-selection' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const id = String((body && body.edition) || '').toUpperCase();
+        if (!id) return json({ error: 'edition manquante' }, 400);
+        const r = await cloturerSelection(env.DB, id);
+        return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Le balayage du cron, appelable a la main pour le verifier.
+      if (sous === 'echeances' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        return json(await cloturerEcheances(env.DB));
+      }
+
+      // Le prochain championnat d'un pays, annonce ou en cours.
+      //
+      // Cette route parle a qui n'est PAS selectionne, et c'est la seule. Tout
+      // le reste des championnats ne s'adresse qu'aux trente-deux partants —
+      // or ceux qu'il faut convaincre de jouer sont precisement les autres.
+      if (sous === 'prochain' && request.method === 'GET') {
+        const zone = String(url.searchParams.get('zone') || url.searchParams.get('pays') || '');
+        const ech = url.searchParams.get('echelon') || 'national';
+        return json({ edition: await prochaineEdition(env.DB, zone, ech) });
+      }
+
+      // Ou en est ce joueur par rapport a la barre des trente-deux.
+      //
+      // Un rang et un ecart, jamais le MMR : c'est le nombre de places qui
+      // manquent qui fait rejouer, et c'est une information que le joueur peut
+      // recompter lui-meme dans le classement — ce qui est tout l'interet
+      // d'avoir qualifie a l'echelle visible.
+      if (sous === 'selection' && request.method === 'GET') {
+        const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
+        if (!key) return json({ error: 'nom manquant' }, 400);
+        return json(await rangSelection(env.DB, key) || { pays: null });
+      }
+
+      // Ouvrir une edition SUR LE CHAMP : annonce et cloture d'un seul geste.
+      // Reserve a l'exploitation, comme avant, et desormais reserve de fait aux
+      // essais : en production on annonce, et l'echeance cloture. Ouvrir ici
+      // gele le classement a l'instant de l'appel, ce qui est exactement ce que
+      // la cloture annoncee sert a ne plus faire.
+      if (sous === 'ouvrir' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { pays, zone, echelon, debut, epreuve } = body || {};
         const t = Number(debut);
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
         const r = await ouvrirEchelon(env.DB, {
           echelon: echelon || 'national',
           zone: zone || pays || 'MONDE',
           debutSamedi: t,
+          // Absente, l'epreuve retombe sur le 100 m : les appels ecrits avant
+          // qu'elle existe ouvrent donc exactement ce qu'ils ouvraient.
+          epreuve,
         });
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
@@ -768,12 +1590,14 @@ export default {
       // Le meme weekend pour tout le monde : un seul appel ouvre tout un
       // echelon d'un coup, et dit qui a ete ecarte et pourquoi.
       if (sous === 'cycle' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const t = Number(body && body.debut);
         if (!Number.isFinite(t)) return json({ error: 'date de debut invalide' }, 400);
         return json(await ouvrirCycle(env.DB, {
           debutSamedi: t, echelon: (body && body.echelon) || 'national',
+          epreuve: body && body.epreuve,
         }));
       }
 
@@ -822,6 +1646,7 @@ export default {
 
       // Les chronos d'une course. On range, on ne tranche pas encore.
       if (sous === 'course' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { edition, phase, course, chronos } = body || {};
@@ -834,6 +1659,7 @@ export default {
 
       // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
       if (sous === 'cloturer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const edition = String(body.edition || '').toUpperCase();
@@ -870,10 +1696,10 @@ export default {
     }
 
     // ------------------------------------------------------------- relais
-    // Les equipes de relais. Le mode n'est pas encore ouvert : la porte se
-    // ferme ici AUSSI, pas seulement dans le jeu. Sans cela, une simple
-    // requete a la main permettrait de reserver des noms d'equipe avant
-    // l'ouverture — et un nom appartient a une composition pour toujours.
+    // Les equipes de relais. La porte vit ici AUSSI, pas seulement dans le
+    // jeu : tant qu'elle etait fermee, une simple requete a la main aurait
+    // permis de reserver des noms d'equipe avant l'ouverture — et un nom
+    // appartient a une composition pour toujours. Elle est ouverte.
     if (url.pathname.startsWith('/relay/')) {
       if (!relaisOuvert(canal)) {
         return json({ error: 'relais reserve au canal de test' }, 403);
@@ -889,6 +1715,20 @@ export default {
           coequipiers: Array.isArray(members) ? members.slice(0, 8) : [],
           nom: name,
         });
+        // La sonnette chez les trois invites. Sans elle, une invitation de
+        // relais n'existe qu'au prochain `/relay/mine` — c'est-a-dire quand
+        // l'invite pense a ouvrir l'ecran des equipes, ce qu'il ne fait pas
+        // s'il ignore qu'on l'attend. Le tout part apres la reponse : le
+        // createur n'a pas a attendre trois boites pour voir son equipe.
+        if (!r.erreur && r.equipe && !r.existait) {
+          const invites = (r.equipe.membres || [])
+            .filter(m => m.etat === 'invited').map(m => m.cle);
+          ctx.waitUntil((async () => {
+            for (const appareil of await appareilsDe(env.DB, invites)) {
+              await sonnerEtPush(env, appareil, 'relais', canal.test);
+            }
+          })());
+        }
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
@@ -1018,6 +1858,66 @@ export default {
       }));
     }
 
+    // -------------------------------- inviter a une course en direct
+    //
+    // Le mode direct se rejoignait par un code qu'il fallait faire parvenir
+    // par un autre canal — ce qui suppose d'avoir deja la personne au
+    // telephone. Quelqu'un croise au classement des duels n'est joignable par
+    // aucun de ces moyens : on ne connait de lui qu'un pseudonyme.
+    //
+    // Ces deux routes font la jonction, et elle se fait ICI, sur le serveur :
+    // le pseudonyme entre, l'appareil ne sort pas. Etre au classement ne doit
+    // pas rendre joignable ailleurs.
+    if (url.pathname.startsWith('/direct/')) {
+      const sous = url.pathname.slice('/direct/'.length);
+
+      if (sous === 'inviter' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, nom, cibles, code, epreuve } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const salle = String(code || '').trim().toUpperCase();
+        if (!/^[A-Z0-9]{4,8}$/.test(salle)) return json({ error: 'code de salle invalide' }, 400);
+
+        // On n'invite qu'en son propre nom. Sans cette verification, n'importe
+        // qui enverrait des invitations signees du nom d'un autre — et c'est
+        // le nom affiche qui decide si l'invite accepte.
+        const key = cleanName(nom).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+
+        const r = await inviterEnDirect(env.DB, {
+          deNom: cleanName(nom), versNoms: cibles, code: salle, epreuve,
+        });
+        // La sonnerie part apres la reponse : l'hote n'a pas a attendre que
+        // sept boites aient repondu pour voir sa salle s'ouvrir.
+        for (const appareil of r.appareils) {
+          ctx.waitUntil(sonnerEtPush(env, appareil, 'direct', canal.test));
+        }
+        return json({ invites: r.invites, injoignables: r.injoignables });
+      }
+
+      if (sous === 'invitations' && request.method === 'GET') {
+        const deviceId = url.searchParams.get('device_id');
+        if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+        return json({ invitations: await mesInvitationsDirectes(env.DB, deviceId) });
+      }
+
+      if (sous === 'trancher' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const ok = await trancherInvitation(env.DB, id, device_id);
+        return json({ ok });
+      }
+
+      return json({ error: 'not found' }, 404);
+    }
+
     // ------------------------------------------------ course en direct
     // Le Worker ne fait qu'aiguiller : toute la vie de la salle se passe dans
     // le Durable Object, seul endroit ou les deux joueurs se rejoignent
@@ -1143,13 +2043,13 @@ export default {
           if (!d || d.outcome === 'draw') return;
           if (d.outcome === 'opponent') {
             // Le releveur l'emporte : le perdant est celui qui a lance.
-            await sonner(env, d.owner_device, 'mot', canal.test);
+            await sonnerEtPush(env, d.owner_device, 'mot', canal.test);
             return;
           }
           const rep = await env.DB.prepare(
             `SELECT device_id FROM challenge_attempts
               WHERE id = ? ORDER BY total_ms ASC LIMIT 1`).bind(code).first();
-          if (rep) await sonner(env, rep.device_id, 'mot', canal.test);
+          if (rep) await sonnerEtPush(env, rep.device_id, 'mot', canal.test);
         } catch (e) { /* le sondage reste derriere */ }
       })());
       return r.erreur ? json({ error: r.erreur, ...r }, r.deja ? 409 : 403) : json(r);
@@ -1464,6 +2364,25 @@ export default {
         nameKey: key, nom: propre, deviceId: device_id, indice,
       });
       if (r.erreur === 'inconnu') return json({ ok: false, inconnu: true });
+
+      /* Une demande NEUVE previent la boite du jeu.
+       *
+       * Ni un appareil encore relie (`direct` : il n'y avait rien a arbitrer),
+       * ni un second appui sur le bouton (`deja` : meme demande, meme mot de
+       * passage) — ces deux-la n'ont rien a annoncer, et un joueur qui rouvre
+       * le jeu ferait sonner la boite jusqu'a ce qu'un filtre s'en charge.
+       *
+       * Le canal de test n'ecrit pas non plus : ce qu'on y depose est un essai,
+       * pas quelqu'un qui attend son nom.
+       *
+       * `waitUntil` et pas `await` : le joueur n'attend pas apres un courriel,
+       * et un refus de Resend n'a pas a devenir un echec de sa demande. */
+      if (!canal.test && r.etat === 'attente' && !r.deja) {
+        ctx.waitUntil(alerterRecuperation(env, {
+          id: r.id, nom: propre, insta: r.insta, phrase: r.phrase,
+          compte: r.compte, indice, cree_le: Date.now(),
+        }));
+      }
       return json(r);
     }
 
@@ -1505,16 +2424,45 @@ export default {
     // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
     // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
     // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
+    /**
+     * Les pays qu'on peut se choisir.
+     *
+     * Le selecteur du jeu lisait cette liste depuis toujours ; elle n'a jamais
+     * existe. Il recevait donc 404, se repliait sur une liste vide, et
+     * proposait un choix entre rien — on ne pouvait pas se donner de
+     * nationalite, sur aucun des deux canaux.
+     *
+     * Pas de porte dessus : nommer les pays n'engage rien, et la liste est la
+     * meme pour tout le monde.
+     */
+    if (url.pathname === '/nations' && request.method === 'GET') {
+      return json({ nations: listeNations() });
+    }
+
     if (url.pathname === '/profil' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, insta } = body || {};
+      const { device_id, name, insta, pays } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       const key = cleanName(name).trim().toLowerCase();
       if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
 
-      const propre = nettoyerInsta(insta);
-      if (propre === null) return json({ error: 'pseudo invalide' }, 400);
+      // Ce que la requete vient poser. Le jeu n'envoie jamais les deux a la
+      // fois : le pseudo Instagram et la nationalite se demandent sur deux
+      // pas differents du meme panneau.
+      //
+      // Le test porte sur la PRESENCE du champ, pas sur sa valeur. Une
+      // requete qui ne parle pas d'Instagram ne doit pas y toucher : celle qui
+      // posait la nationalite n'en parlait pas, et effacait le pseudo du
+      // joueur au passage — `nettoyerInsta(undefined)` vaut la chaine vide,
+      // qui s'ecrivait par-dessus. On repondait « ok » a un joueur a qui l'on
+      // venait de prendre son compte Instagram sans rien enregistrer d'autre.
+      const veutInsta = body && Object.prototype.hasOwnProperty.call(body, 'insta');
+      const veutPays = body && Object.prototype.hasOwnProperty.call(body, 'pays');
+      if (!veutInsta && !veutPays) return json({ error: 'rien a poser' }, 400);
+
+      const propre = veutInsta ? nettoyerInsta(insta) : null;
+      if (veutInsta && propre === null) return json({ error: 'pseudo invalide' }, 400);
 
       await ensurePlayerTables(env.DB);
       if (!(await peutUtiliser(env.DB, key, device_id))) {
@@ -1524,18 +2472,54 @@ export default {
         `SELECT name_key FROM players WHERE name_key = ?`).bind(key).first();
       if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
 
-      await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
-        .bind(propre || null, key).run();
-      return json({ ok: true, insta: propre || null });
+      if (veutInsta) {
+        await env.DB.prepare(`UPDATE players SET insta = ? WHERE name_key = ?`)
+          .bind(propre || null, key).run();
+      }
+
+      // La nationalite se choisit UNE FOIS. Le refus porte un message qui
+      // commence par « nationalite » : le jeu tranche dessus, parce que 409
+      // sert deja a dire « reserve d abord ton nom » — deux refus tres
+      // differents sous le meme code.
+      let paysPose = null;
+      if (veutPays) {
+        await ensureChampTables(env.DB);
+        const deja = await env.DB.prepare(
+          `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(key).first();
+        if (deja && deja.source === 'choix') {
+          return json({ error: 'nationalite deja choisie', pays: deja.pays }, 409);
+        }
+        const r = await choisirPays(env.DB, key, pays);
+        if (r.erreur) return json({ error: r.erreur }, 400);
+        paysPose = r.pays;
+      }
+
+      return json({
+        ok: true,
+        insta: veutInsta ? (propre || null) : undefined,
+        pays: paysPose,
+      });
     }
 
     if (url.pathname === '/profil' && request.method === 'GET') {
       const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-      if (!key) return json({ insta: null });
+      if (!key) return json({ insta: null, pays: null, source: null });
       await ensurePlayerTables(env.DB);
-      const p = await env.DB.prepare(
-        `SELECT insta FROM players WHERE name_key = ?`).bind(key).first();
-      return json({ insta: (p && p.insta) || null });
+      await ensureChampTables(env.DB);
+      const [p, g] = await Promise.all([
+        env.DB.prepare(`SELECT insta FROM players WHERE name_key = ?`).bind(key).first(),
+        env.DB.prepare(`SELECT pays, source FROM player_pays WHERE name_key = ?`)
+          .bind(key).first(),
+      ]);
+      // `source` compte autant que le pays : 'choix' veut dire que le joueur
+      // l'a dit, 'vu' que Cloudflare a devine d'ou venait la requete. Les
+      // confondre reviendrait a cocher une nationalite que personne n'a
+      // declaree — et a ne plus jamais reposer la question.
+      return json({
+        insta: (p && p.insta) || null,
+        pays: (g && g.pays) || null,
+        source: (g && g.source) || null,
+      });
     }
 
     // Relier cet appareil a un nom deja reserve, en prouvant qu'il est a nous.
@@ -1587,7 +2571,24 @@ export default {
         `DELETE FROM races WHERE device_id = ? AND id NOT IN (
            SELECT id FROM races WHERE device_id = ? ORDER BY created_at DESC LIMIT ?)`
       ).bind(device_id, device_id, HIST_PER_DEVICE).run();
-      return json({ ok: true });
+
+      // ...et le record suit, ICI plutot qu'au bon vouloir du jeu.
+      //
+      // C'est la fuite qui a fait deriver les deux tables : `/submit` n'ecrit
+      // le record que quand le jeu decide de l'envoyer, et la carriere ne
+      // l'envoie qu'au bout de six etapes. Une course enregistree qui bat le
+      // record et ne le met pas a jour, c'est un classement faux et un
+      // Objectif du jour calibre sur un chrono que le joueur a deja battu.
+      //
+      // La sonnerie ne peut pas defaire la course : elle est deja ecrite.
+      let record = null;
+      try {
+        const r = await noterRecord(env.DB, {
+          deviceId: device_id, epreuve: race_key, nom: cleaned, valeur: t,
+        });
+        if (r.record) record = { ancien_ms: r.ancien, ms: r.valeur };
+      } catch (e) { /* le record se rattrapera au recalcul */ }
+      return json({ ok: true, record });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
@@ -1666,6 +2667,34 @@ export default {
     // Sous `estAdmin` et pas `estTableau` : lire la frequentation n'engage
     // rien, decider ce qui parle au nom du jeu engage la marque entiere. Les
     // deux cles existent justement pour ne pas confondre les deux.
+    // ---------------------------------------------- le depot des images
+    //
+    // PUBLIQUE, et il faut l'ecrire en clair parce que c'est la seule route de
+    // ce Worker qui rende quelque chose sans cle. Ce n'est pas un oubli :
+    // l'API d'Instagram ne recoit pas de fichier, elle recoit une adresse, et
+    // ce sont les serveurs de Meta qui viennent lire. Une image derriere une
+    // cle serait une image que Meta ne peut pas prendre.
+    //
+    // Ce qui tient lieu de serrure : un identifiant de 32 caracteres tire au
+    // hasard, une duree de vie d'une heure, et rien dans l'image qui ne soit
+    // deja destine a etre publie. On ne depose ici que ce qui part sur un
+    // compte public dans la minute.
+    if (url.pathname.startsWith('/img/')) {
+      const id = url.pathname.slice('/img/'.length).replace(/\.jpg$/i, '');
+      if (!/^[0-9a-f]{32}$/.test(id)) return new Response('introuvable', { status: 404 });
+      const b64 = await lireImage(env.DB, id);
+      if (!b64) return new Response('introuvable', { status: 404 });
+      const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      return new Response(bin, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          // Meta relit parfois l'adresse : on laisse un cache court, mais rien
+          // qui survive a la disparition du depot.
+          'Cache-Control': 'public, max-age=600',
+        },
+      });
+    }
+
     if (url.pathname.startsWith('/reseaux/')) {
       if (!estAdmin(request, env)) return json({ error: 'introuvable' }, 404);
       const quoi = url.pathname.slice('/reseaux/'.length);
@@ -1689,6 +2718,55 @@ export default {
           // des poids, qui vivrait alors a deux endroits.
           bareme: MOMENTS,
         });
+      }
+
+      // Est-ce que l'envoi direct est possible sur ce Worker ? L'atelier le
+      // demande au chargement pour savoir s'il propose un bouton ou le simple
+      // telechargement. Repondre « non » n'est pas une panne, c'est l'etat par
+      // defaut tant que les deux secrets ne sont pas poses.
+      if (quoi === 'envoi' && request.method === 'GET') {
+        return json({ pret: envoiPret(env) });
+      }
+
+      // Envoyer une publication sur Instagram.
+      //
+      // L'atelier envoie l'image et le texte ; le jeton reste ici. C'est le
+      // point de tout ce dispositif : un jeton Instagram pose dans une page
+      // ouverte sur un poste de travail est un jeton qui finira par fuir, et
+      // celui-la publie au nom du jeu.
+      if (quoi === 'envoyer' && request.method === 'POST') {
+        if (!envoiPret(env)) {
+          return json({ error: 'envoi non configure',
+                        detail: 'poser IG_JETON et IG_COMPTE avec wrangler secret put' }, 409);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { id, image, legende } = body || {};
+        if (!image) return json({ error: 'image manquante' }, 400);
+
+        let depot;
+        try {
+          depot = await deposerImage(env.DB, String(image));
+        } catch (e) {
+          return json({ error: String(e && e.message || e) }, 400);
+        }
+
+        // L'adresse que Meta ira lire. On la construit sur l'origine de la
+        // requete plutot qu'en dur : le Worker repond sur son domaine
+        // workers.dev comme derriere un domaine a nous, et une adresse ecrite
+        // en dur serait fausse un jour sur deux.
+        const adresseImage = `${url.origin}/img/${depot}.jpg`;
+        const r = await publierInstagram(env, { adresseImage, legende });
+
+        // Le depot a fait son office, dans un sens comme dans l'autre : ce qui
+        // doit durer est la publication chez Instagram, pas la copie.
+        ctx.waitUntil(oublierImage(env.DB, depot));
+
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, 502);
+
+        // Le registre, comme pour une publication deposee a la main.
+        if (id != null) await marquerPublie(env.DB, id, ['instagram']);
+        return json({ ok: true, publication: r.publication });
       }
 
       if (quoi === 'ecarter' && request.method === 'POST') {
@@ -2163,7 +3241,7 @@ export default {
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
-      if (target) ctx.waitUntil(sonner(env, target, 'defi', canal.test));
+      if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
       return json({ id, target_name: targetName });
     }
 
@@ -2357,7 +3435,7 @@ export default {
       // Celui qui a lance le defi n'est pas la : c'est tout l'objet de sa
       // boite. Il l'apprend maintenant plutot qu'au sondage suivant.
       if (duel && !duel.deja && ch.owner_device) {
-        ctx.waitUntil(sonner(env, ch.owner_device, 'duel', canal.test));
+        ctx.waitUntil(sonnerEtPush(env, ch.owner_device, 'duel', canal.test));
       }
 
       return json({
@@ -2370,6 +3448,149 @@ export default {
       });
     }
 
+    // --- Push notifications : enregistrement et suppression d'abonnement ---
+
+    if (url.pathname === '/push/subscribe' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, subscription, langue } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
+      await ensurePushTable(env.DB);
+      await env.DB.prepare(
+        `INSERT INTO push_subscriptions (device_id, subscription, langue) VALUES (?, ?, ?)
+         ON CONFLICT(device_id) DO UPDATE SET subscription = excluded.subscription,
+                                              langue = excluded.langue`
+      ).bind(device_id, JSON.stringify(subscription), langue === 'en' ? 'en' : 'fr').run();
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/push/unsubscribe' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      // On note AVANT d'effacer : apres, on ne sait plus qui c'etait, et
+      // « combien de joueurs ont coupe les notifications » redevient une
+      // question sans reponse. C'est la seule trace qu'on garde d'un depart.
+      await noterEnvoi(env.DB, { nameKey: '-', deviceId: device_id,
+        type: 'desabonnement', statut: 'coupe', raison: 'web' });
+      await env.DB.prepare(
+        'DELETE FROM push_subscriptions WHERE device_id = ?'
+      ).bind(device_id).run();
+      return json({ ok: true });
+    }
+
+    // Les memes deux routes, pour l'application des magasins. Ce qu'elle
+    // depose n'est pas un abonnement mais un jeton Firebase — voir la table
+    // `push_jetons` et le commentaire qui dit pourquoi elle est separee.
+    if (url.pathname === '/push/natif/abonner' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, jeton, plateforme, langue } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const j = String(jeton || '').trim();
+      // Un jeton FCM fait dans les cent cinquante caracteres et n'en contient
+      // aucun d'exotique. La borne haute existe pour qu'une requete tordue ne
+      // remplisse pas la table avec un megaoctet par ligne.
+      if (!/^[A-Za-z0-9:._~%+/-]{20,4096}$/.test(j)) return json({ error: 'jeton invalide' }, 400);
+      const plat = ['ios', 'android'].includes(String(plateforme)) ? String(plateforme) : null;
+      await ensurePushTable(env.DB);
+      // Le meme jeton peut changer de main : un appareil rendu, reinitialise,
+      // repris par quelqu'un d'autre. On ecrase l'appareil precedent plutot
+      // que d'envoyer les defis d'un joueur au telephone d'un autre.
+      await env.DB.prepare(
+        `INSERT INTO push_jetons (jeton, device_id, plateforme, langue, cree_le)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(jeton) DO UPDATE SET device_id  = excluded.device_id,
+                                          plateforme = excluded.plateforme,
+                                          langue     = excluded.langue`
+      ).bind(j, device_id, plat, langue === 'en' ? 'en' : 'fr', Date.now()).run();
+      return json({ ok: true });
+    }
+
+    /* -------------------------------------------------------------------
+       UN ABONNEMENT QUI A CHANGE DE NUMERO
+
+       Le navigateur renouvelle un abonnement de lui-meme — mise a jour de
+       Chrome, cle VAPID changee, menage du service de push. Il previent le
+       service worker par `pushsubscriptionchange`, et personne d'autre. Sans
+       cette route, l'ancien endpoint restait en base : chaque envoi partait
+       vers un abonnement mort, le service repondait 410, et le joueur
+       disparaissait pour de bon sans que rien ne le dise.
+
+       On reconnait la ligne a son ANCIEN endpoint, pas au device_id : un
+       service worker n'a pas acces au localStorage, et le device_id y vit.
+       C'est aussi ce qui rend la route sure — il faut deja detenir l'ancien
+       abonnement pour ecrire quoi que ce soit.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/rotation' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { ancien_endpoint, subscription } = body || {};
+      const ancien = String(ancien_endpoint || '');
+      if (!ancien.startsWith('https://')) return json({ error: 'ancien endpoint invalide' }, 400);
+      if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
+      // Le remplacant doit venir du meme service de push que le remplace. Un
+      // navigateur qui renouvelle un abonnement ne change pas de service ; ce
+      // qui en change n'est pas un renouvellement, et n'a rien a ecrire ici.
+      try {
+        if (new URL(ancien).origin !== new URL(subscription.endpoint).origin) {
+          return json({ error: 'service de push different' }, 400);
+        }
+      } catch { return json({ error: 'endpoint illisible' }, 400); }
+      await ensurePushTable(env.DB);
+      const r = await env.DB.prepare(
+        `UPDATE push_subscriptions SET subscription = ?
+          WHERE json_extract(subscription, '$.endpoint') = ?`
+      ).bind(JSON.stringify(subscription), ancien).run();
+      return json({ ok: true, remplaces: (r.meta && r.meta.changes) || 0 });
+    }
+
+    /* -------------------------------------------------------------------
+       « EST-CE QUE MON TELEPHONE EST JOIGNABLE ? »
+
+       Tout le chemin des notifications avale ses erreurs par construction :
+       une sonnerie ne doit jamais faire echouer l'ecriture qui vient d'avoir
+       lieu. Le prix de ce choix, c'est qu'un joueur qui ne recoit rien ne
+       laisse aucune trace — ni dans les journaux, ni a l'ecran, nulle part. On
+       ne sait meme pas si le message est parti.
+
+       Cette route rend ce qu'on ne pouvait pas voir : ce que le serveur garde
+       de cet appareil, et — si on le demande — ce que le service de push
+       repond a une vraie notification envoyee maintenant.
+
+       Elle ne demande pas la cle d'administration, et n'en a pas besoin : elle
+       ne parle que de l'appareil dont on presente le device_id, et ne renvoie
+       jamais de quoi joindre qui que ce soit — ni endpoint entier, ni jeton.
+       C'est exactement l'autorite qu'a deja `/push/unsubscribe`, qui coupe les
+       notifications de l'appareil qu'on lui nomme.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/essai' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, envoyer } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      return json(await diagnostiquerAppareil(env.DB, device_id, env, envoyer !== false));
+    }
+
+    if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      await ensurePushTable(env.DB);
+      // Meme trace que du cote web, et pour la meme raison : une fois la ligne
+      // effacee, plus rien ne dit que quelqu'un est parti.
+      await noterEnvoi(env.DB, { nameKey: '-', deviceId: device_id,
+        type: 'desabonnement', statut: 'coupe', raison: 'natif' });
+      await env.DB.prepare(
+        'DELETE FROM push_jetons WHERE device_id = ?'
+      ).bind(device_id).run();
+      return json({ ok: true });
+    }
+
     return json({ error: 'not found' }, 404);
-  },
-};
+}

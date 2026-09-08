@@ -1,0 +1,4 @@
+/* La demande de micro, en anglais — le repli pour tout joueur qui n'est
+   pas francophone. Elle nomme les deux seuls usages, et dit que le micro
+   est rendu entre les deux : c'est ce que fait vraiment voix.ts. */
+"NSMicrophoneUsageDescription" = "Sprinter uses the microphone for live voice during a duel, and to record the six-second message the winner leaves behind. The microphone is released as soon as you stop speaking.";

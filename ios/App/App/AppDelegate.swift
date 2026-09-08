@@ -7,8 +7,44 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // Avant toute image : la session audio. Sans elle, le jeu est muet sur
+        // un telephone en silencieux — voir SessionAudio.swift, qui explique
+        // pourquoi c'est une regle du jeu et pas un reglage d'ambiance.
+        SessionAudio.poser()
         return true
+    }
+
+    // ------------------------------------------------------------------
+    // Le jeton de notification, et les trois messages qu'iOS envoie ici
+    // ------------------------------------------------------------------
+    //
+    // APNs ne parle qu'a l'AppDelegate. Ces trois methodes ne font rien
+    // d'autre que reposter ce qu'il dit sur le NotificationCenter, ou le
+    // greffon Firebase l'attend : c'est le seul chemin entre le systeme et
+    // le code JavaScript qui enregistre le jeton.
+    //
+    // Sans elles, `getToken()` reste en attente pour toujours — sans erreur,
+    // sans message dans la console, sans rien. L'application se lance, tout
+    // a l'air normal, et aucune notification n'arrive jamais.
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(
+            name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(
+            name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        NotificationCenter.default.post(
+            name: Notification.Name.init("didReceiveRemoteNotification"),
+            object: completionHandler, userInfo: userInfo)
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
@@ -26,7 +62,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // Une autre application a pu prendre le son pendant qu'on etait au
+        // fond — un appel, une video, un autre jeu — et la rendre dans un
+        // autre etat que celui qu'on avait pose. On le repose, a chaque
+        // retour : l'operation est sans effet quand rien n'a bouge.
+        SessionAudio.appliquer()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

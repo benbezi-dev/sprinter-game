@@ -33,6 +33,19 @@ export const CANAL: 'production' | 'test' = EST_TEST ? 'test' : 'production';
 export const RECOMMENCER_OUVERT = true;
 
 /**
+ * Le relais, et les trois autres jeux.
+ *
+ * Meme histoire que RECOMMENCER : eprouves sur le canal de test, puis ouverts
+ * a tout le monde. Le drapeau remplace `EST_TEST` aux trois endroits qui
+ * portaient ces modes — le vestiaire, la piste, et le geste vers les mondes.
+ *
+ * La forme compte autant qu'avant : une constante en tete d'un `&&` permet au
+ * bundler de suivre. A true, le code part dans le build ; a false, il en
+ * sort entierement, comme le faisait `EST_TEST`.
+ */
+export const RELAIS_OUVERT = true;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le
@@ -139,4 +152,63 @@ export function avecAcces(url: string): string {
   const code = codeAcces();
   if (!code) return url;
   return url + (url.includes('?') ? '&' : '?') + 'acces=' + encodeURIComponent(code);
+}
+
+/* ------------------------------------------------------------------ le signet
+ *
+ * La base de production est repliquee : une lecture part vers la copie la plus
+ * proche du joueur au lieu de traverser jusqu'a Paris. Ce que cela coute, c'est
+ * du retard — une copie peut avoir quelques centaines de millisecondes de
+ * decalage sur la primaire.
+ *
+ * Ce retard ne se voit qu'a un endroit, et il s'y voit tres mal : le joueur
+ * pose son chrono, ouvre le classement dans la seconde, et son temps n'y est
+ * pas. Rien, a cet instant, ne distingue une copie en retard d'une course
+ * perdue — et c'est la course perdue qu'il croira.
+ *
+ * Le serveur renvoie donc sur chaque reponse la position de lecture atteinte,
+ * et il suffit de la lui representer pour qu'il choisisse une copie au moins
+ * aussi a jour. C'est tout ce que fait ce qui suit : garder le dernier signet
+ * recu, et le reposer sur chaque requete.
+ *
+ * On enveloppe `fetch` une fois, pour la raison que `brancherAcces` explique
+ * plus haut : sept modules parlent au serveur, et sept endroits a modifier
+ * seraient sept occasions d'en oublier un. La difference est que celle-ci
+ * s'installe sur LES DEUX canaux — la production est justement celle qui est
+ * repliquee.
+ */
+const CLE_SIGNET = 'sprinter.d1.signet';
+
+let signet: string | null = (() => {
+  try { return sessionStorage.getItem(CLE_SIGNET); } catch { return null; }
+})();
+
+export function brancherSignet() {
+  const brut = window.fetch.bind(window);
+  window.fetch = (async (entree: any, init?: RequestInit) => {
+    const cible = typeof entree === 'string' ? entree
+      : entree instanceof Request ? entree.url : String(entree?.url || entree);
+    if (!cible.startsWith(API_BASE)) return brut(entree, init);
+
+    let appel = () => brut(entree, init);
+    if (signet) {
+      const entetes = new Headers((init && init.headers) ||
+        (entree instanceof Request ? entree.headers : undefined));
+      entetes.set('X-D1-Bookmark', signet);
+      appel = () => brut(entree, { ...(init || {}), headers: entetes });
+    }
+
+    const rep = await appel();
+
+    // Un signet absent n'efface pas celui qu'on tient. Une reponse servie par
+    // le cache du service worker, ou une route qui ne touche pas la base, n'en
+    // porte pas — et lacher le signet a cette occasion ferait repartir la
+    // requete suivante sans garantie, parfois juste apres une ecriture.
+    const recu = rep.headers.get('X-D1-Bookmark');
+    if (recu) {
+      signet = recu;
+      try { sessionStorage.setItem(CLE_SIGNET, recu); } catch { /* onglet prive */ }
+    }
+    return rep;
+  }) as typeof window.fetch;
 }

@@ -20,6 +20,37 @@
             </intent-filter>
         </activity>
 
+        <!-- Firebase ne se presente a Google que lorsqu'on le lui demande.
+
+             Par defaut, le SDK fabrique un jeton d'inscription et le depose
+             chez Google des le premier lancement — avant que le joueur ait
+             accepte quoi que ce soit, et meme s'il refuse ensuite. La page de
+             confidentialite promet le contraire : « il n'est sollicite
+             qu'apres acceptation des notifications ».
+
+             Ces deux lignes tiennent cette promesse. Rien n'est genere au
+             lancement ; le greffon rallume l'initialisation lui-meme au
+             premier `getToken()`, qui n'arrive qu'une fois la permission
+             accordee (voir src/game/push.ts). -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+
+        <!-- Ce qu'une notification montre quand elle arrive.
+
+             Sans ces deux lignes, Firebase prend l'icone de l'application, et
+             Android n'en garde que la silhouette : un rond blanc plein. Voir
+             res/drawable/ic_notification.xml. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/couleur_notification" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -32,4 +63,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Depuis Android 13, une application ne peut plus notifier sans l'avoir
+         demande. Le greffon Firebase declare deja cette permission de son
+         cote et la fusion des manifestes suffirait ; elle est repetee ici
+         parce qu'une permission qui n'apparait pas dans le manifeste de
+         l'application est une permission dont on oublie l'existence — et
+         celle-ci decide si les defis arrivent ou non. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

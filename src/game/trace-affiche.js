@@ -394,7 +394,8 @@ function entete(m) {
 /**
  * Dessine la course qui vient d'etre courue.
  *
- * `course` porte : { chronoMs, epreuves, nom, fantomeNom, fantomeMs, rang }.
+ * `course` porte : { chronoMs, epreuves, nom, fantomeNom, fantomeMs, rang,
+ * battus }.
  * Tout est facultatif sauf le chrono — un joueur sans nom, sans fantome et
  * sans rang doit obtenir une image aussi complete que les autres, sinon le
  * bouton ne sert qu'a ceux qui ont deja tout fait.
@@ -452,6 +453,61 @@ export function dessinerCourse(cv, course) {
     blocs.push({ h: T(0.05), dessine: y =>
       ligne(c, course.fantomeNom ? `face à ${course.fantomeNom}` : 'face au fantôme',
             cx, y, T(0.028), 'rgba(255,255,255,0.38)') });
+  }
+
+  // Ceux qu'on a devances, nommes.
+  //
+  // Une course en direct se court CONTRE quelqu'un, et l'image ne le disait
+  // pas : elle montrait un chrono seul, exactement comme un tour de piste joue
+  // dans son coin. Le nom de l'adversaire est ce qui transforme un resultat en
+  // recit — et, accessoirement, ce qui fait que l'autre republie.
+  //
+  // L'ecart plutot que le classement : « +0,12 » se lit et se compare, « 2e »
+  // ne dit pas de combien. C'est la regle du chiffre avant l'adjectif,
+  // appliquee a l'endroit ou elle compte le plus.
+  const battus = Array.isArray(course.battus) ? course.battus.filter(b => b && b.nom) : [];
+  if (battus.length) {
+    // Cinq au maximum : au-dela, la liste mange le chrono, qui reste le sujet.
+    // Le reste se compte, il ne se nomme pas.
+    const montres = battus.slice(0, 5);
+    const reste = battus.length - montres.length;
+
+    // Un peu de hauteur avant l'etiquette, et une taille lisible : a T(0.019)
+    // avec l'espacement des petites capitales, « DEVANT » se refermait sur
+    // lui-meme et passait pour une trainee grise sous le nom.
+    blocs.push({ h: T(0.075), dessine: y =>
+      surtitre(c, 'DEVANT', cx, y + T(0.028), T(0.023)) });
+
+    const pas = T(0.052);
+    blocs.push({ h: pas * montres.length + (reste ? T(0.04) : 0), dessine: y => {
+      montres.forEach((b, i) => {
+        const ly = y + pas * (i + 0.5);
+        c.save();
+        c.textBaseline = 'middle';
+        // La colonne est bornee et centree : sur une story de 1080 de large,
+        // un nom colle a gauche et un ecart colle a droite ne se lisent plus
+        // comme une meme ligne.
+        const colonne = Math.min(L - marge * 2, u * 0.66);
+        const g = (L - colonne) / 2;
+        c.fillStyle = 'rgba(255,255,255,0.62)';
+        c.font = `500 ${Math.round(pas * 0.60)}px Outfit, sans-serif`;
+        c.textAlign = 'left';
+        c.fillText(String(b.nom), g, ly);
+        // Un abandon n'a pas d'ecart : afficher « +0,00 » mentirait, et
+        // afficher un ecart calcule sur un chrono absent mentirait davantage.
+        const ecart = (!b.abandon && Number.isFinite(Number(b.ms)))
+          ? '+' + s2(Number(b.ms) - Number(course.chronoMs)) : 'abandon';
+        c.fillStyle = b.abandon ? 'rgba(255,255,255,0.30)' : 'rgba(248,205,74,0.80)';
+        c.font = `700 ${Math.round(pas * 0.58)}px 'Space Mono', monospace`;
+        c.textAlign = 'right';
+        c.fillText(ecart, g + colonne, ly);
+        c.restore();
+      });
+      if (reste) {
+        ligne(c, `et ${reste} autre${reste > 1 ? 's' : ''}`, cx,
+              y + pas * montres.length + T(0.005), T(0.024), 'rgba(255,255,255,0.34)');
+      }
+    } });
   }
 
   if (course.rang) {

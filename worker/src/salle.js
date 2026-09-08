@@ -399,6 +399,10 @@ export class SalleDirecte {
     const tous = [...this.joueurs.values()];
     if (tous.length < this.max || tous.some(x => x.fin === null)) return;
     this.termine = true;
+    // De quelle course on parle : l'instant du pistolet, retenu avant d'etre
+    // efface. Il ne sert qu'a nommer ce duel-la au classement, et il est le
+    // seul nombre de la salle qui change a chaque depart.
+    const course = this.departA || Date.now();
     this.departA = null;
     // La presentation appartient a la course qui vient d'avoir lieu : une
     // revanche en refera une neuve, avec l'ordre du moment.
@@ -437,7 +441,7 @@ export class SalleDirecte {
       // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
       // indisponible, la course reste jouee et affichee, seuls les points
       // manquent, ce qui vaut mieux que deux joueurs bloques sur une attente.
-      const ecrire = this.ecrire(hote, invite);
+      const ecrire = this.ecrire(hote, invite, course);
       if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
       return;
     }
@@ -451,20 +455,64 @@ export class SalleDirecte {
     this.diffuser(message);
   }
 
-  async ecrire(hote, invite) {
+  async ecrire(hote, invite, course) {
     try {
       const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
       if (!base || !this.code) return;
       // Prefixe distinct : un code de salle et un code de defi vivent dans le
       // meme espace de cles, et rien ne garantit qu'ils ne se croisent jamais.
-      await appliquerDuel(base, {
-        id: 'LIVE-' + this.code,
+      //
+      // Et la course fait partie du nom, pas seulement la salle. Un duel ne se
+      // resout qu'une fois — c'est la cle de duel_results qui le garantit — si
+      // bien qu'avec le seul code de salle, la revanche etait vue comme le
+      // meme duel : elle se courait, s'affichait, annoncait un vainqueur, et
+      // ne rapportait rien. Une salle vit quarante-cinq secondes apres le
+      // verdict justement pour qu'on la relance ; chaque depart est donc un
+      // duel a lui.
+      const points = await appliquerDuel(base, {
+        id: 'LIVE-' + this.code + '-' + course,
         challengerName: hote.nom,
         opponentName: invite.nom,
         challengerMs: hote.fin,
         opponentMs: invite.fin,
       });
+      this.annoncerPoints(hote, invite, points);
     } catch (e) { /* le classement se passera de ce duel */ }
+  }
+
+  /**
+   * Ce que le duel a rapporte, dit aux deux joueurs.
+   *
+   * Sans cela, une course en direct comptait en silence : les points partaient
+   * au classement, l'ecran de fin montrait deux chronos, et il fallait aller
+   * ouvrir le tableau pour deviner ce qui avait bouge. Un defi releve, lui,
+   * annonce ses points a l'arrivee depuis toujours — c'est la reponse de la
+   * route qui les porte. Le direct n'a pas de reponse a porter : la course est
+   * finie quand l'ecriture commence.
+   *
+   * D'ou un message de suite, et non un champ de plus dans `resultat` :
+   * l'ecriture est volontairement hors du chemin de l'annonce, pour qu'une
+   * base indisponible ne laisse pas deux joueurs devant un ecran vide. Le
+   * verdict part donc toujours le premier, les points quand ils existent.
+   *
+   * Chacun est nomme par son identifiant plutot que par son role : le jeu
+   * prend le sien sans avoir a savoir ce que « lanceur » veut dire ici.
+   */
+  annoncerPoints(hote, invite, points) {
+    // Un duel deja tranche ne redistribue rien : il n'y a pas de points a
+    // annoncer, et un « 0 PL » se lirait comme un match nul.
+    if (!points || points.deja || typeof points.lp !== 'number') return;
+    this.diffuser({
+      t: 'duel',
+      hote: {
+        id: hote.id, lp: points.lp_adverse, rang: points.rang_adverse,
+        monte: !!points.monte_adverse, descend: !!points.descend_adverse,
+      },
+      invite: {
+        id: invite.id, lp: points.lp, rang: points.rang,
+        monte: !!points.monte, descend: !!points.descend,
+      },
+    });
   }
 
   // Purge : une salle qui n'a plus servi depuis longtemps ne garde rien.

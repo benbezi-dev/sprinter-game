@@ -26,15 +26,80 @@ docs/instagram_charte.md
 # Secrets de developpement wrangler.
 worker/.dev.vars
 
+# Le compte de service Firebase, celui qui autorise a envoyer une notification
+# a n'importe quel telephone du parc. Google le livre sous ce nom-la. Il vit
+# dans un secret wrangler (`npx wrangler secret put FCM_COMPTE_SERVICE`), et
+# jamais dans le depot : celui-ci est public, et une cle publiee ne se retire
+# pas — elle se revoque, et il faut alors la remplacer partout.
+*-firebase-adminsdk-*.json
+fcm-compte-service*.json
+
 # Enveloppes natives : regenerees par `npx cap add` et `npx cap sync`, elles
 # pesent lourd et contiennent des chemins de machine. Les sources qui comptent
 # sont capacitor.config.ts et assets-stores/.
 ios/App/App/public/
+# Les liens symboliques vers node_modules que `npx cap sync ios` pose pour
+# resoudre la collision de paquets Swift de Firebase (voir capacitor.config.ts).
+# Ils pointent dans node_modules, qui n'est pas suivi : les committer ne
+# donnerait que des liens casses sur une autre machine.
+ios/App/CapApp-SPM/symlinks/
 ios/App/Pods/
 ios/DerivedData/
 android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
+# Le trousseau de signature Android. Ces fichiers portent le chemin du keystore
+# et ses mots de passe. Ils n'ont jamais ete suivis, mais rien ne les en
+# empechait : un seul `git add -A` les envoyait sur un depot public. Une cle de
+# signature qui fuit ne se retire pas — elle se remplace, et l'application ne
+# se met alors plus a jour pour ceux qui l'ont deja installee.
+android/keystore*
+# Le modele, lui, se suit : c'est la documentation du fichier ci-dessus, et il
+# ne porte que des valeurs a remplir. Il a deja vecu dans le depot (5aedd64).
+!android/keystore.properties.exemple
+*.jks
+*.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
 /icons/
+
+# Une copie complete du projet posee a la racine du projet. Elle est arrivee
+# par un rapatriement, elle pese pres d'un giga et elle porte son propre .git :
+# un seul `git add -A` la publiait sur un depot public. Le chemin est ancre par
+# le slash de tete — un dossier `src/sprinter/` resterait suivi.
+/sprinter/
+# Les copies de securite prises avant une modification (`fichier.tsx.bak-avant-
+# truc-20260904-1402`). Elles vivent a cote du fichier qu'elles doublent, donc
+# dans src/ : rien ne les distinguait d'une source, et publier une source
+# n'etait qu'une question de temps.
+*.bak-*
+
+# L'outillage des films promo vit chez lui, avec ses quatre-vingts megaoctets
+# de binaire ffmpeg. Il ne doit surtout pas remonter dans le depot.
+assets-stores/promo/node_modules/
+
+# Les SORTIES des films d'explication : 34 Mo de MP4 et 43 Mo de PNG, refaites
+# a l'identique par `node explications/rendu.mjs photos` puis `film`, et
+# `./explications/encoder.sh`. Verifie : l'outillage repart de sa nouvelle
+# place et refabrique les deux. Ce que git ne sait pas faire, c'est oublier —
+# 77 Mo qui entrent y restent, dans chaque clone, pour toujours.
+assets-stores/promo/explications/videos/
+assets-stores/promo/explications/photos/
+
+# Et la video « nouveautes » elle-meme, 15 Mo, pour la meme raison : elle se
+# refait par `node source-video/render.mjs full` puis `./source-video/encode.sh`.
+# Ce n'etait plus vrai avant aujourd'hui — les chemins de l'encodeur dataient
+# d'un deplacement de dossier et pointaient vers un promo/frames qui n'existe
+# pas. Repares et verifies de bout en bout, rendu puis encodage.
+#
+# La couverture reste, elle : 1,7 Mo, et rien ne dit qu'elle soit fabriquee
+# plutot que choisie a la main. Ce qu'on ne sait pas refaire, on le garde.
+assets-stores/promo/sprinter-nouveautes-1080x1920.mp4
+assets-stores/promo/out/
+
+# Intermediaires de rendu des films promo — refabricables, et lourds.
+assets-stores/promo/source-video/frames/
+assets-stores/promo/source-video/preview/
+assets-stores/promo/out/
+assets-stores/promo/explications/images/
+assets-stores/promo/explications/controle/

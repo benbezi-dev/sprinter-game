@@ -38,7 +38,7 @@ import { useEffect, useRef, useState } from 'react';
  *    ferait rapetisser tout l'ecran sous les doigts, puis grandir en le
  *    refermant. On garde l'echelle qu'on avait le temps de la saisie.
  */
-export function useTenirDansLEcran(plancher = 0.75) {
+export function useTenirDansLEcran(plancher = 0.75, plafondRemplissage = 1.25) {
   /** Le conteneur qui defile : c'est lui qui connait la place disponible. */
   const cadre = useRef<HTMLDivElement | null>(null);
   /** Ce qu'on reduit. Sa hauteur de mise en page reste celle d'avant. */
@@ -47,6 +47,21 @@ export function useTenirDansLEcran(plancher = 0.75) {
   const [echelle, setEchelle] = useState(1);
   /** La hauteur a reserver, ou nul quand rien n'est reduit. */
   const [hauteur, setHauteur] = useState<number | null>(null);
+  /**
+   * Doit-on ETALER le contenu sur toute la hauteur ?
+   *
+   * L'inverse du probleme d'origine, et il est arrive par la meme porte : a
+   * force de retirer ce qui encombrait, certains ecrans ne remplissent plus le
+   * telephone et le resultat flotte au milieu, un tiers de noir sous les
+   * boutons. Etale, il se lit comme une affiche : le titre en haut, les
+   * boutons en bas, le reste reparti.
+   *
+   * Mais seulement quand il ne manque PAS GRAND-CHOSE. Un ecran a moitie vide
+   * qu'on etire ne se remplit pas, il se troue : des blocs isoles separes par
+   * de grands vides, ce qui se voit bien plus qu'une marge en bas. D'ou le
+   * plafond — au-dela, on recentre et on ne touche a rien.
+   */
+  const [remplir, setRemplir] = useState(false);
 
   useEffect(() => {
     let vivant = true;
@@ -59,14 +74,38 @@ export function useTenirDansLEcran(plancher = 0.75) {
       const st = getComputedStyle(c);
       const dispo = c.clientHeight
         - (parseFloat(st.paddingTop) || 0) - (parseFloat(st.paddingBottom) || 0);
-      const besoin = d.scrollHeight;
+
+      // LA MESURE SE FAIT TOUJOURS A LA MEME LARGEUR.
+      //
+      // Le contenu est ELARGI tant qu'il est reduit — c'est ce qui lui rend
+      // les bords de l'ecran, voir plus bas. Sa hauteur naturelle depend donc
+      // de l'echelle qu'on vient de poser, et la mesurer telle quelle rendrait
+      // le calcul circulaire : une phrase qui se deplie fait remonter
+      // l'echelle, qui resserre la colonne, qui replie la phrase — et l'ecran
+      // se met a battre entre deux tailles.
+      //
+      // On retire donc l'elargissement le temps de la mesure. La reference ne
+      // bouge plus, l'echelle se pose une fois, et comme elargir ne peut que
+      // RACCOURCIR une colonne, ce qu'on a calcule sur la colonne etroite
+      // tient forcement une fois la colonne large.
+      const elargie = d.style.width;
+      if (elargie) d.style.width = '';
+      const besoin = naturel(d);
+      if (elargie) d.style.width = elargie;
+
       if (!(dispo > 0) || !(besoin > 0)) return;
 
       const rapport = dispo / besoin;
       // Ca tient deja, ou la reduction ne suffirait pas : on n'y touche pas.
       const e = rapport >= 1 || rapport < plancher ? 1 : rapport;
       setEchelle(e);
-      setHauteur(e < 1 ? Math.ceil(besoin * e) : null);
+      // La hauteur reservee, elle, est celle qu'on VOIT : mesuree elargie, et
+      // non sur la reference, sans quoi on garderait sous l'ecran la place que
+      // l'elargissement vient justement de faire gagner. Elle se pose une
+      // image apres l'echelle, le temps que la largeur suive — l'observateur
+      // nous ramene ici pour ca.
+      setHauteur(e < 1 ? Math.ceil(naturel(d) * e) : null);
+      setRemplir(e === 1 && rapport > 1 && rapport <= plafondRemplissage);
     };
 
     // Mesurer une image plus tard, et une seule fois par image. Lire la
@@ -99,7 +138,59 @@ export function useTenirDansLEcran(plancher = 0.75) {
       ro.disconnect();
       window.removeEventListener('resize', planifier);
     };
-  }, [plancher]);
+  }, [plancher, plafondRemplissage]);
 
-  return { cadre, contenu, echelle, hauteur };
+  /**
+   * L'ELARGISSEMENT QUI VA AVEC LA REDUCTION.
+   *
+   * Reduire d'un septieme retirait aussi un septieme de LARGEUR : sur un
+   * telephone de 412 pixels, les panneaux tombaient a 326 et flottaient au
+   * milieu, deux bandes noires de 43 pixels de chaque cote. Un ecran deja a
+   * l'etroit en hauteur s'ecartait donc des bords, ce qui est exactement le
+   * contraire de ce qu'il faudrait faire quand la place manque.
+   *
+   * On rend cette largeur en la donnant d'avance : la colonne est mise en
+   * page a `1 / echelle` de la place disponible, et la reduction la ramene
+   * pile a la largeur de l'ecran. Le texte garde la taille qu'il avait, les
+   * panneaux retrouvent les bords — et comme une colonne plus large est plus
+   * courte, il reste souvent un peu de hauteur, donc un peu moins a reduire.
+   *
+   * Nul quand rien n'est reduit : il n'y a alors rien a rendre.
+   */
+  const largeur = echelle < 1 ? `${(100 / echelle).toFixed(4)}%` : undefined;
+
+  return { cadre, contenu, echelle, hauteur, remplir, largeur };
+}
+
+/**
+ * LA HAUTEUR PROPRE DU CONTENU, ET POURQUOI CE N'EST PAS scrollHeight.
+ *
+ * Tant qu'on ne faisait que reduire, `scrollHeight` suffisait : une
+ * transformation ne change pas la mise en page, la mesure restait la meme d'un
+ * passage a l'autre. Etaler, si : la colonne prend alors toute la place
+ * offerte, et `scrollHeight` vaut exactement la place disponible. On mesurerait
+ * donc « ca tient pile », pour toujours — et le jour ou un panneau disparait,
+ * on ne saurait plus qu'il y a maintenant trop de place, on garderait un ecran
+ * etale et troue sans jamais pouvoir en sortir.
+ *
+ * La somme des blocs, elle, ne bouge pas quand on les ecarte. C'est donc elle
+ * qu'on mesure : les hauteurs de mise en page (`offsetHeight`, insensible aux
+ * transformations, la ou un rectangle mesure rendrait la taille reduite), plus
+ * les gouttieres et les marges internes de la colonne.
+ *
+ * Le repli reste `scrollHeight` : sur un ecran bas la colonne passe en deux ou
+ * trois colonnes typographiques, ou additionner des blocs ne veut plus rien
+ * dire — et l'on n'etale pas non plus dans ce cas-la.
+ */
+function naturel(d: HTMLElement): number {
+  const colonne = d.firstElementChild as HTMLElement | null;
+  if (!colonne) return d.scrollHeight;
+  const cs = getComputedStyle(colonne);
+  if (cs.columnCount !== 'auto' && cs.columnCount !== '') return d.scrollHeight;
+  const blocs = Array.from(colonne.children) as HTMLElement[];
+  if (!blocs.length) return d.scrollHeight;
+  const gouttiere = parseFloat(cs.rowGap) || 0;
+  const marges = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  return blocs.reduce((t, b) => t + b.offsetHeight, 0)
+       + gouttiere * (blocs.length - 1) + marges;
 }

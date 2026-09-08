@@ -84,6 +84,62 @@
     home:         ['ACCUEIL', 'HOME'],
     replay:       ['REJOUER', 'PLAY AGAIN'],
     run_done:     ['PARCOURS TERMINÉ', 'RUN COMPLETE'],
+
+    // Le record personnel. Il existait depuis toujours dans `G.runs` et n'etait
+    // nomme nulle part : l'accueil affichait une liste de chronos dont le
+    // premier se trouvait etre le meilleur, sans le dire. Ce qu'on ne nomme
+    // pas ne se bat pas.
+    pb_label:     ['RECORD', 'BEST'],
+    pb_mine:      ['ton record', 'your best'],
+    pb_new:       ['NOUVEAU RECORD', 'NEW PERSONAL BEST'],
+    pb_gain:      ['{n} s repris à ton record', '{n} s off your best'],
+    pb_short:     ['il te manque {n} s', '{n} s short'],
+    pb_first:     ['premier chrono sur cette épreuve', 'first time on this event'],
+    pb_rank:      ['{o} au classement', '{o} overall'],
+
+    // L'Objectif du jour : la revanche, et le micro-conseil.
+    // Le conseil ne sert qu'apres trois echecs, et il porte sur CE qui vient
+    // de se passer — repeter le meme ecran une quatrieme fois ne fait revenir
+    // personne.
+    // Les etiquettes qui manquaient. Celles qui existaient deja — obj_titre,
+    // obj_cible, obj_reste, obj_valide, obj_points — sont plus bas, avec le
+    // reste du decor de l'objectif, et NE SONT PAS REDEFINIES ici : une clef
+    // ecrite deux fois dans le meme dictionnaire ne previent pas, elle prend
+    // silencieusement la derniere valeur. La carte du defi a affiche « il te
+    // manque 239 centiemes » a la place de « 239 min avant la fin » avant que
+    // le harnais ne compte les doublons.
+    obj_revanche:   ['REVANCHE', 'RUN IT BACK'],
+    // Le meme bouton, quand l'objectif est deja pris. « Revanche » n'a plus de
+    // sens pour qui vient de gagner, et les tentatives restent illimitees :
+    // l'or est encore devant.
+    obj_encore:     ['ENCORE MIEUX', 'GO BETTER'],
+    obj_manque:     ['il te manque {n} s', '{n} s short'],
+    obj_meilleur:   ['meilleur de la session', 'best this session'],
+    obj_a_passer:   ['à passer', 'to beat'],
+    obj_minutes:    ['{n} min avant la fin', '{n} min left'],
+    obj_bonus:      ['encore {n} course avant le bonus', '{n} more run for the bonus'],
+    obj_bonus_n:    ['encore {n} courses avant le bonus', '{n} more runs for the bonus'],
+    obj_bonus_pris: ['bonus de persévérance acquis', 'perseverance bonus earned'],
+    obj_quitter:    ['plus tard', 'later'],
+    obj_lancer:     ['COURIR LE DÉFI', 'RUN THE CHALLENGE'],
+    obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
+    obj_rythme:     ['RAPPELS DU DÉFI', 'CHALLENGE REMINDERS'],
+    obj_rythme_2:   ['deux par jour', 'twice a day'],
+    obj_rythme_1:   ['une par jour', 'once a day'],
+    obj_rythme_auto:['réduit à une : les dernières n’ont pas été ouvertes',
+                     'reduced to one: the last few went unopened'],
+    // Les quatre conseils. Chacun designe une chose mesurée sur la course
+    // qu'on vient de courir, jamais un encouragement general.
+    obj_c_depart:   ['tu perds {n} s au coup de pistolet. Le départ se joue avant, pas après.',
+                     'you lose {n} s at the gun. The start is won before it, not after.'],
+    obj_c_trans:    ['ta transition casse le rythme. Accélère la cadence AVANT la sortie de poussée.',
+                     'your transition breaks the rhythm. Raise the cadence BEFORE the drive ends.'],
+    obj_c_chute:    ['tu répètes la même touche. Alterne franchement : deux fois à gauche coûte plus qu\u2019un temps de retard.',
+                     'you repeat the same key. Alternate cleanly: two lefts cost more than a slow beat.'],
+    obj_c_faux:     ['faux départ. Attends le coup de pistolet — la réaction se joue en trois centièmes.',
+                     'false start. Wait for the gun — reaction is decided in three hundredths.'],
+    obj_c_proche:   ['il ne manque que {n} s. C\u2019est une foulée mieux tenue, pas une autre course.',
+                     'only {n} s to find. That is one better stride, not another race.'],
     six_in:       ['six étapes franchies en ', 'six stages cleared in '],
     stage_low:    ['étape ', 'stage '],
 
@@ -102,6 +158,12 @@
     saving_score:    ['envoi en cours...', 'sending...'],
     score_saved:     ['classé {r}e sur le TOP 500 mondial', 'ranked {r} on the world TOP 500'],
     score_save_fail: ["échec de l'envoi, réessaie plus tard", 'failed to send, try again later'],
+    // Le nom appartient à un autre appareil. Ce refus-là ne passera pas avec
+    // le temps : il ne doit donc jamais emprunter les mots d'une panne réseau.
+    score_name_taken:['ce nom est réservé à un autre appareil',
+                      'this name belongs to another device'],
+    score_taken_help:['prends-en un autre, ou relie cet appareil à ton nom dans MES COURSES avec ton code de récupération',
+                      'pick another, or link this device to your name in MY RACES with your recovery code'],
     view_top500:     ['VOIR LE TOP 500', 'VIEW TOP 500'],
     // Sur un bouton, « VOIR LE » ne dit rien que le bouton ne dise deja.
     top500_court:    ['TOP 500', 'TOP 500'],
@@ -148,6 +210,30 @@
     name_saved:      ['ENREGISTRÉ', 'SAVED'],
     name_taken:      ['ce nom est déjà pris par quelqu’un d’autre', 'that name is already taken'],
     name_code:       ['TON CODE DE RÉCUPÉRATION', 'YOUR RECOVERY CODE'],
+    // La nationalite. OPTIONNELLE, et elle le reste : un joueur sans drapeau
+    // court, se classe et gagne exactement comme les autres. Elle ne sert qu'a
+    // une chose — savoir dans quel championnat national il se presente — et
+    // cette chose-la n'existe pas encore pour les joueurs de la vraie version.
+    // Rien dans le jeu ne doit donner l'impression qu'il manque quelque chose
+    // a celui qui n'en pose pas.
+    pays_title:      ['TA NATIONALITÉ', 'YOUR NATIONALITY'],
+    pays_opt:        ['une seule fois', 'once only'],
+    pays_aucun:      ['choisis ton pays', 'pick your country'],
+    // Ce que la nationalite engage, dit AVANT le geste et non apres.
+    pays_why:        ['il faut l’avoir choisie pour courir un championnat national — et elle ne se change plus ensuite',
+                      'you need one to run a national championship — and it cannot be changed afterwards'],
+    pays_vu:         ['tu sembles te connecter depuis {pays} — à toi de dire',
+                      'you seem to connect from {pays} — up to you'],
+    pays_save:       ['CHOISIR', 'CHOOSE'],
+    pays_confirm:    ['Courir pour {pays} ?\n\nCe choix est définitif : il décide du championnat national où tu te présentes, et il ne se change plus.',
+                      'Run for {pays}?\n\nThis is final: it decides which national championship you enter, and it cannot be changed.'],
+    pays_fige:       ['définitif', 'final'],
+    pays_on:         ['tu cours pour ce pays — ton drapeau accompagne ton nom au championnat',
+                      'you run for this country — your flag follows your name at the championship'],
+    pays_deja:       ['ta nationalité est déjà choisie, elle ne se change plus',
+                      'your nationality is already chosen, it cannot be changed'],
+    pays_first:      ['enregistre d’abord ton nom', 'save your name first'],
+    pays_bad:        ['pays invalide', 'invalid country'],
     insta_title:     ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
     insta_ph:        ['ton pseudo, avec ou sans le @', 'your handle, with or without the @'],
     insta_why:       ['ton profil devient visitable depuis le TOP 500 et tes défis',
@@ -168,6 +254,28 @@
     insta_visit:     ['voir le profil Instagram de {n}', 'view {n}’s Instagram profile'],
     name_code_why:   ['note-le : il te rend ton nom et tes courses sur un autre téléphone',
                       'write it down: it restores your name and races on another phone'],
+
+    // LA BIENVENUE : la meme fenetre d'identite, mais un pas a la fois, au
+    // premier lancement. Les titres tiennent en deux mots et les sous-titres
+    // en une ligne — c'est un joueur qui n'a pas encore couru, et qui n'est
+    // pas venu lire.
+    bienvenue_titre: ['BIENVENUE', 'WELCOME'],
+    // La sortie du premier pas, avant d'avoir rien pose : « plus plus tard »,
+    // pas « passer », parce qu'a ce moment-la on repousse la fenetre entiere.
+    bienvenue_plus:  ['PLUS TARD', 'LATER'],
+    // Le dernier pas, et le mot qui rend la piste.
+    bienvenue_go:    ['À LA PISTE', 'TO THE TRACK'],
+    bv_suite:        ['CONTINUER', 'CONTINUE'],
+    bv_passer:       ['PASSER', 'SKIP'],
+    bv_nom_t:        ['TON NOM', 'YOUR NAME'],
+    bv_nom_s:        ['il apparaît au TOP 500, sur tes défis et dans les duels',
+                      'it shows on the TOP 500, on your challenges and in duels'],
+    bv_pays_t:       ['TON PAYS', 'YOUR COUNTRY'],
+    bv_pays_s:       ['facultatif, et définitif — il décide du championnat national où tu te présentes',
+                      'optional, and final — it decides which national championship you enter'],
+    bv_insta_t:      ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
+    bv_insta_s:      ['facultatif — ton profil devient visitable depuis le TOP 500',
+                      'optional — your profile becomes reachable from the TOP 500'],
     // visite du jeu
     tour_open:       ['DÉCOUVRIR LE JEU', 'TAKE THE TOUR'],
     tour_1_t:        ['ALTERNE', 'ALTERNATE'],
@@ -218,6 +326,7 @@
     tuto_replay:     ['revoir le tutoriel', 'watch again'],
     tuto_skip:       ['passer', 'skip'],
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
+    contact:         ['NOUS CONTACTER', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
     live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
@@ -252,6 +361,18 @@
     relais_nom_equipe: ['nom de l’équipe', 'team name'],
     relais_coequipier: ['coéquipier {n}', 'teammate {n}'],
     relais_inviter:  ['INVITER LES TROIS', 'INVITE THE THREE'],
+    relais_top_ouvrir: ['CHOISIR DANS LE TOP 500', 'PICK FROM THE TOP 500'],
+    relais_top_fermer: ['FERMER LE TOP 500', 'CLOSE THE TOP 500'],
+    relais_top_chercher: ['chercher un coureur', 'search for a runner'],
+    relais_top_aucun: ['personne de ce nom dans ce TOP 500 — tape-le à la main',
+                       'nobody by that name in this TOP 500 — type it yourself'],
+    relais_top_muet: ['classement injoignable — tape les noms à la main',
+                      'ranking unreachable — type the names yourself'],
+    relais_top_reste: ['{n} autres coureurs — affine ta recherche',
+                       '{n} more runners — refine your search'],
+    relais_top_pleines: ['les trois places sont prises — touche un nom choisi pour le retirer',
+                         'all three spots are taken — tap a chosen name to remove it'],
+    relais_top_toi:  ['toi', 'you'],
     relais_incomplet: ['il faut un nom et trois coéquipiers', 'a name and three teammates are needed'],
     relais_attend:   ['en attente', 'pending'],
     relais_ok:       ['dans l’équipe', 'in'],
@@ -263,6 +384,19 @@
                           'a teammate declined — this team cannot race'],
     relais_prete:    ['équipe prête', 'team ready'],
     relais_classement: ['CLASSEMENT DES ÉQUIPES', 'TEAM RANKING'],
+    // deux equipes au plus : au-dela, on choisit celle qu'on quitte
+    relais_plein_titre: ['DEUX ÉQUIPES, PAS TROIS', 'TWO TEAMS, NOT THREE'],
+    relais_plein:    ['tu cours déjà dans deux équipes. Quitte celle que tu ne cours plus pour en monter une autre.',
+                      'you already run for two teams. Leave the one you no longer run for to build another.'],
+    relais_plein_invit: ['tu cours déjà dans deux équipes — quitte-en une pour accepter celle-ci.',
+                         'you already run for two teams — leave one to accept this.'],
+    relais_quitter:  ['QUITTER', 'LEAVE'],
+    relais_quitter_sur: ['quitter pour de bon ?', 'leave for good?'],
+    relais_quitter_sub: ['on ne revient que sur une nouvelle invitation',
+                         'you only come back on a fresh invitation'],
+    relais_reste:    ['il te reste une place', 'one slot left'],
+    relais_place:    ['1 équipe sur 2', '1 of 2 teams'],
+    relais_places:   ['{n} équipes sur 2', '{n} of 2 teams'],
     // la course elle-meme
     relais_courir:   ['ENTRER SUR LA PISTE', 'GO TO THE TRACK'],
     relais_mon_rang: ['tu es le {n}e relayeur', 'you run leg {n}'],
@@ -321,6 +455,59 @@
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
     champ_quitter:   ['quitter le championnat', 'leave the championship'],
+
+    // la sélection : la banderole de l'accueil, puis la scène au gel.
+    //
+    // Deux règles pour tout ce bloc. D'abord aucune phrase ne contient de
+    // nombre en dur : le format vient du serveur, et « les 32 premiers »
+    // écrit ici serait faux le jour où FORMAT.partants bougera. Ensuite on ne
+    // dit jamais « joue plus » — le classement récompense les victoires, pas
+    // les parties, et promettre le contraire serait mentir sur ce que le jeu
+    // mesure.
+    sel_titre:       ['SÉLECTION', 'SELECTION'],
+    sel_ferme_dans:  ['clôture dans {n}', 'closes in {n}'],
+    sel_ferme:       ['sélection close', 'selection closed'],
+    sel_places:      ['les {n} premiers sont sélectionnés',
+                      'the top {n} are selected'],
+    sel_tu_es:       ['tu es {r}', 'you are {r}'],
+    sel_manque_1:    ['il te manque une place', 'you are one place short'],
+    sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
+    sel_dedans:      ['tu es qualifié', 'you are in'],
+    sel_dedans_fige: ['TU Y ES', 'YOU ARE IN'],
+    sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
+    sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
+    sel_pour_entrer: ['un duel gagné et tu entres au classement',
+                      'win one duel and you enter the ranking'],
+    sel_pas_de_pays: ['choisis ton pays pour pouvoir être sélectionné',
+                      'pick your country to become selectable'],
+    sel_ma_serie:    ['SÉRIE {n}', 'HEAT {n}'],
+    sel_convoque:    ['départ {n}', 'start {n}'],
+    sel_bonne_chance: ['la grille est gelée. À samedi.',
+                       'the grid is frozen. See you Saturday.'],
+    sel_prochaine:   ['le classement continue — la prochaine sélection viendra',
+                      'the ranking goes on — the next selection will come'],
+    sel_barre:       ['LIGNE DE SÉLECTION', 'SELECTION LINE'],
+    sel_barre_desc:  ['{t} — les {n} premiers de ce pays',
+                      '{t} — top {n} of this country'],
+    sel_voir:        ['voir', 'view'],
+
+    // Le décompte, en toutes lettres. « J-9 » ne se traduit pas, et « 9 j »
+    // sur un compteur qui tombe à zéro dans l'heure ne dit pas ce qu'il faut.
+    sel_j:           ['{n} j', '{n}d'],
+    sel_jh:          ['{n} j {h} h', '{n}d {h}h'],
+    sel_h:           ['{n} h', '{n}h'],
+    sel_hmin:        ['{n} h {m} min', '{n}h {m}min'],
+    sel_min:         ['{n} min', '{n}min'],
+
+    // L'échéance en toutes lettres, sous le décompte.
+    //
+    // « clôture dans 8 j » ne dit pas QUAND, et c'est justement ce qu'un joueur
+    // a besoin de savoir pour décider quand jouer. La clôture tombe à minuit
+    // UTC, ce qui fait 02:00 à Paris : appeler ça « mercredi soir » serait
+    // faux d'une journée. On donne donc le jour ET l'heure, dans le fuseau du
+    // joueur, et on le laisse conclure.
+    sel_le:          ['clôture {d}', 'closes {d}'],
+    sel_reste:       ['il reste', 'time left'],
     live_lanes:      ['COULOIRS', 'LANES'],
     live_lanes_seul: ['un tour de piste seul : le stade, le chrono, et personne à attendre',
                       'a lap on your own: the stadium, the clock, and nobody to wait for'],
@@ -344,11 +531,16 @@
     // video de la course, telechargeable pendant dix minutes
     review_title:    ['LA VIDÉO DE TA COURSE', 'YOUR RACE VIDEO'],
     review_making:   ['enregistrement en cours…', 'recording…'],
-    review_dl:       ['TÉLÉCHARGER', 'DOWNLOAD'],
+    // Un seul libellé pour les deux chemins, comme pour l'affiche : sur
+    // téléphone le bouton ouvre la feuille de partage, sur ordinateur il
+    // enregistre le fichier. Ce qui a réellement eu lieu se dit dessous.
+    review_share:    ['PARTAGER LA VIDÉO', 'SHARE THE VIDEO'],
+    review_saved:    ['vidéo enregistrée', 'video saved'],
+    review_failed:   ['partage impossible', 'sharing failed'],
     review_left:     ['effacée dans {t}', 'deleted in {t}'],
     review_gone:     ['la vidéo a été effacée', 'the video has been deleted'],
-    review_kept:     ['ce que tu as téléchargé reste sur ton téléphone',
-                      'what you downloaded stays on your phone'],
+    review_kept:     ['ce que tu as enregistré reste sur ton téléphone',
+                      'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
                       'this device cannot record the race'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
@@ -397,9 +589,12 @@
     disc_marteau:    ['LANCER DE MARTEAU', 'HAMMER THROW'],
     disc_disque:     ['LANCER DE DISQUE', 'DISCUS THROW'],
     disc_javelot:    ['LANCER DE JAVELOT', 'JAVELIN THROW'],
-    // Les piques, quand on perd un duel. Ecrites par le jeu et signees du nom
-    // de l'adversaire — voir game/piques.ts, qui dit pourquoi. On chambre un
+    // Les piques d'un duel perdu. Ecrites par le jeu et signees du nom de
+    // l'adversaire — voir game/piques.ts, qui dit pourquoi. On chambre un
     // ami, on ne l'insulte pas : ce sont des gens qui se connaissent.
+    // Le compte doit rester egal a NB_PIQUES : une langue qui en aurait une
+    // de moins ferait tomber le tirage sur une clef vide, et `t()` afficherait
+    // « pique_12 » en toutes lettres.
     pique_0: ['j’ai même pas eu à forcer.', 'I did not even have to try.'],
     pique_1: ['tu veux que je recommence au ralenti ?',
               'want me to do it again in slow motion?'],
@@ -413,6 +608,60 @@
               'you ran? I did not see anything go by.'],
     pique_7: ['garde ce chrono, il fera un beau souvenir.',
               'keep that time, it will make a nice souvenir.'],
+    pique_8: ['préviens-moi quand tu arrives, j’attends.',
+              'let me know when you get here, I’m waiting.'],
+    pique_9: ['c’était ton meilleur, ou tu en gardais ?',
+              'was that your best, or were you saving some?'],
+    pique_10: ['on remet ça quand tu veux, j’ai la journée.',
+               'again whenever you like, I’ve got all day.'],
+    pique_11: ['joli départ. C’est la suite qui a péché.',
+               'nice start. It’s the rest that let you down.'],
+    pique_12: ['la prochaine fois, pars au coup de feu.',
+               'next time, try leaving on the gun.'],
+    pique_13: ['rassure-toi, le chronomètre a bien marché.',
+               'don’t worry, the clock was working fine.'],
+    pique_14: ['la prochaine, je m’échauffe. Promis.',
+               'next one I’ll warm up. Promise.'],
+    pique_15: ['tu progresses. J’imagine.', 'you’re getting better. I assume.'],
+
+    // ------------------------------------------------------- objectif du jour
+    //
+    // Le titre et la phrase de l'objectif viennent du SERVEUR, pas d'ici : ils
+    // portent le chrono du joueur, que seul le serveur connait au moment ou il
+    // le calcule. Ce qui suit est le decor autour — les etiquettes fixes, qui
+    // se traduisent comme le reste.
+    obj_titre:      ['OBJECTIF DU JOUR', 'OBJECTIVE OF THE DAY'],
+    obj_cible:      ['à battre : {t} s', 'to beat: {t} s'],
+    obj_record:     ['ton record : {t} s', 'your best: {t} s'],
+    obj_reste:      ['il te manque {n} centièmes', '{n} hundredths short'],
+    obj_reste_1:    ['il te manque 1 centième', '1 hundredth short'],
+    obj_essais:     ['{n} essais', '{n} tries'],
+    obj_essai_1:    ['1 essai', '1 try'],
+    obj_valide:     ['OBJECTIF VALIDÉ', 'OBJECTIVE CLEARED'],
+    obj_points:     ['+{n} pts', '+{n} pts'],
+    obj_aucun:      ['pas d\u2019objectif en cours', 'no objective running'],
+    obj_classement: ['CLASSEMENT DES OBJECTIFS', 'OBJECTIVES RANKING'],
+    obj_serie:      ['série : {n} jours', 'streak: {n} days'],
+    obj_serie_1:    ['série : 1 jour', 'streak: 1 day'],
+    obj_valides:    ['{n} validés', '{n} cleared'],
+    // Et quand on GAGNE : un boost, pas une pique. Ni la meme voix, ni le meme
+    // but. Les lignes du dessus sont la parole de l'adversaire et elles
+    // piquent ; celles-ci sont le jeu qui parle au vainqueur, et elles
+    // portent. On ne degonfle pas quelqu'un qui vient de gagner — il est venu
+    // chercher exactement ce moment-la. Le compte doit rester egal a
+    // NB_BOOSTS.
+    boost_0: ['personne ne t’a vu passer.', 'nobody even saw you go past.'],
+    boost_1: ['c’est propre. Vraiment propre.', 'that was clean. Really clean.'],
+    boost_2: ['ce chrono-là, tu peux le raconter.',
+              'that’s a time worth telling people about.'],
+    boost_3: ['tu étais devant, et ça se voyait.',
+              'you were in front, and it showed.'],
+    boost_4: ['voilà ce que ça donne quand tu pars bien.',
+              'that’s what it looks like when you start right.'],
+    boost_5: ['rien à dire : c’est mérité.', 'nothing to argue with — you earned it.'],
+    boost_6: ['garde cette course en tête. C’est ton niveau.',
+              'remember this race. That’s your level.'],
+    boost_7: ['la ligne était à toi.', 'that finish line was yours.'],
     // Le mot du vainqueur
     mot_titre:       ['LAISSE UN MOT À {n}', 'LEAVE {n} A WORD'],
     mot_placeholder: ['chambre-le en deux phrases', 'needle them in two lines'],
@@ -630,6 +879,14 @@
     install_ios_3:   ['en bas de Safari, puis sur', 'at the bottom of Safari, then'],
     install_ios_4:   ['Sur l’écran d’accueil', 'Add to Home Screen'],
 
+    // etre prevenu d'un defi, telephone range
+    notifs_title:    ['ÊTRE PRÉVENU', 'GET NOTIFIED'],
+    notifs_why:      ['un défi, un duel relevé, un mot du vainqueur : tu le sais tout de suite, même le jeu fermé',
+                      'a challenge, a duel taken, a word from the winner: you know right away, even with the game closed'],
+    notifs_do:       ['ACTIVER', 'TURN ON'],
+    notifs_later:    ['plus tard', 'later'],
+    notifs_done:     ['c’est bon — tu seras prévenu', 'all set — we will let you know'],
+
     mode_career_s:   ['carrière', 'career'],
     mode_oneshot_s:  ['one shot', 'one shot'],
     cat_race_sub:    ['meilleur chrono sur une course', 'best time on a single race'],
@@ -741,6 +998,17 @@
     // L'image de la course, a partager. Distincte du defi : elle ne demande ni
     // code ni adversaire, et le libelle doit le dire — « partager ma course »
     // et non « partager le defi », sinon le bouton promet ce qu'il ne fait pas.
+    // Inviter a une course en direct depuis le classement des duels.
+    live_inviter:    ['INVITER', 'INVITE'],
+    live_choisir:    ['CHOISIR DANS LE CLASSEMENT', 'PICK FROM THE RANKING'],
+    live_choisir_sub:['ils recevront l\u2019invitation dans le jeu',
+                      'they get the invite inside the game'],
+    live_convies:    ['{n} invit\u00e9(s)', '{n} invited'],
+    live_injoignable:['{n} n\u2019a pas r\u00e9serv\u00e9 son nom : impossible de le joindre',
+                      '{n} hasn\u2019t reserved their name: can\u2019t reach them'],
+    live_invit_recue:['{n} t\u2019invite \u00e0 courir', '{n} invites you to race'],
+    live_invit_ok:   ['REJOINDRE', 'JOIN'],
+    live_invit_non:  ['plus tard', 'later'],
     affiche_share:   ['PARTAGER MA COURSE', 'SHARE MY RUN'],
     affiche_making:  ['Image en cours…', 'Making image…'],
     affiche_saved:   ['image enregistrée', 'image saved'],

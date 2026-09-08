@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { RecordChip } from './RecordPerso';
+import { CarteObjectif } from './Revanche';
+import { lireObjectif, lancerObjectif, sessionCourante } from '@/game/objectif';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS, fetchDuels, type DuelRow } from '@/game/duels';
@@ -10,11 +13,10 @@ import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
-import { GraduationCap } from 'lucide-react';
 import { NameChip } from './NameChip';
+import { BanderoleSelection } from './Selection';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
-import { Compass } from 'lucide-react';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
@@ -28,6 +30,59 @@ const TABS: { id: Tab; key: string }[] = [
   { id: 'oneshot', key: 'mode_oneshot' },
   { id: 'versus', key: 'mode_versus' },
 ];
+
+/**
+ * Le pied de l'accueil : les trois liens de bas de page.
+ *
+ * Il se tient SOUS le rouleau, hors de lui, et ne bouge donc plus. Avant,
+ * chaque onglet portait ses liens au bas de son propre contenu : ils
+ * remontaient avec le defi, dont le panneau est court, descendaient avec la
+ * carriere, dont le panneau est long, et le contact se retrouvait seul quand
+ * les deux autres ne vivaient qu'en carriere. Trois emplacements pour la meme
+ * chose, decides par la hauteur du contenu et celle de la fenetre.
+ *
+ * Trois libelles sur une seule ligne, en entier — « NOUS CONT… » coupe au
+ * bord de l'ecran ne dit rien a personne, et un lien qu'on ne lit pas n'est
+ * pas un lien. Ce qui les fait tenir : plus d'icones, un espacement de
+ * lettres sobre, et une largeur laissee a chacun selon la longueur de son mot
+ * plutot que trois colonnes egales — « DÉCOUVRIR LE JEU » a besoin de plus
+ * d'un tiers de la barre, « NOUS CONTACTER » de moins.
+ *
+ * La taille suit la largeur de l'ecran (clamp) au lieu de sauter a des
+ * paliers : les trois libelles francais, les plus longs, demandent environ
+ * 33 fois la taille du texte pour tenir cote a cote, soit un peu moins de
+ * 3 % de la largeur par point de police. Entre les deux bornes, personne ne
+ * voit jamais un mot coupe ni un mot passe a la ligne — ni sur l'ecran de
+ * couverture d'un pliable, ni sur un moniteur.
+ */
+function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void }) {
+  const { N } = SprinterApp;
+  const liens = [
+    { cle: 'tour_open', action: onTour },
+    { cle: 'tuto_open', action: onTuto },
+    // mailto: par window.location — un <a href> ne mene nulle part dans la
+    // fenetre sans barre d'adresse d'une application installee.
+    { cle: 'contact',
+      action: () => { window.location.href = 'mailto:support@sprinter-game.com'; } },
+  ];
+
+  return (
+    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4
+                    flex items-center justify-between gap-1">
+      {liens.map(({ cle, action }) => (
+        <button
+          key={cle}
+          onClick={action}
+          className="px-0.5 py-1.5 whitespace-nowrap
+                     text-[clamp(7px,2.6vw,11px)] font-bold tracking-wide leading-none
+                     text-muted-foreground hover:text-primary transition-colors"
+        >
+          {N.t(cle)}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
@@ -101,11 +156,18 @@ export function TitleScreen() {
   // l'accueil, pas sur la fenetre : c'est la position de ce rouleau qui dit si
   // l'on est au bout, et donc si tirer encore veut dire « montre-moi les
   // haies » plutot que « fais defiler ».
+  // On demande l'objectif du jour a l'ouverture de l'accueil. Sans nom, sans
+  // reseau ou hors fenetre, il n'y en a pas et la carte ne s'affiche pas.
+  React.useEffect(() => { void lireObjectif(); }, []);
+
   const rouleau = React.useRef<HTMLDivElement>(null);
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
   return (
-    <div ref={rouleau} className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
+      {/* Ce qui defile defile ici, et seulement ici : le pied de page reste
+          en dehors, pose au bas de l'ecran. */}
+      <div ref={rouleau} className="flex-1 min-h-0 overflow-y-auto">
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
@@ -151,6 +213,29 @@ export function TitleScreen() {
 
           {/* Right Side: Records and Controls */}
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
+
+            {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
+                Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
+                classement, ou serveur muet, la carte disparait plutot que
+                d'annoncer un defi qui n'existe pas. */}
+            <CarteObjectif onLancer={() => {
+              const o = sessionCourante().objectif;
+              if (o) lancerObjectif(o);
+            }} />
+
+            {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
+                Sous le défi du jour et au-dessus du sélecteur de mode : c'est
+                une échéance, pas un mode de jeu, et elle concerne autant qui
+                joue en carrière que qui ne fait que des duels.
+
+                Elle n'apparaît que si un championnat est annoncé dans le pays
+                du joueur — sinon rien, comme la carte de l'objectif. Et si le
+                joueur est qualifié, elle mène au panneau du championnat, qui
+                vit dans l'onglet du versus.
+
+                Fermée avec les duels : la sélection lit leur classement, elle
+                ne peut pas ouvrir avant lui. */}
+            {DUELS_OUVERTS && <BanderoleSelection onVoir={() => setTab('versus')} />}
 
             {/* Selecteur de mode */}
             {/* Le selecteur flotte au-dessus de la piste, tres claire : sans
@@ -267,6 +352,14 @@ export function TitleScreen() {
                 </button>
               </div>
 
+              {/* Le record, NOMME. La liste au-dessous le contenait deja — son
+                  premier rang — mais rien ne disait que c'en etait un, et le
+                  mot « record » n'apparaissait nulle part dans le jeu. Il vient
+                  du serveur quand le joueur a un nom : c'est alors son record a
+                  LUI, telephone et ordinateur confondus, et pas celui de
+                  l'appareil qu'il tient. */}
+              <RecordChip race={raceKey as any} />
+
               {!currentRuns.length ? (
                 <p className="text-[11px] md:text-sm text-center leading-snug text-muted-foreground">
                   {N.t('no_run')}
@@ -322,33 +415,14 @@ export function TitleScreen() {
               {N.t('start')}
             </button>
 
-            {/* Toujours accessible : on oublie vite la regle de la transition,
-                et les joueurs arrives par un lien de defi n'ont jamais vu le
-                tutoriel. */}
-            <button
-              onClick={() => setTuto(true)}
-              className="w-full -mt-1 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                         text-muted-foreground hover:text-primary transition-colors
-                         flex items-center justify-center gap-1.5"
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              {N.t('tuto_open')}
-            </button>
-
-            <button
-              onClick={() => setTour(true)}
-              className="w-full -mt-2 py-1.5 text-[10px] md:text-xs font-bold tracking-widest
-                         text-muted-foreground hover:text-primary transition-colors
-                         flex items-center justify-center gap-1.5"
-            >
-              <Compass className="w-3.5 h-3.5" />
-              {N.t('tour_open')}
-            </button>
             </>}
 
           </div>
         </div>
       </div>
+      </div>
+
+      <PiedLiens onTour={() => setTour(true)} onTuto={() => setTuto(true)} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement

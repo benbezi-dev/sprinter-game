@@ -1,6 +1,7 @@
 {
   "name": "sprinter-leaderboard-worker",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev --local",
     "deploy": "wrangler deploy"

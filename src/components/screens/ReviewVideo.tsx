@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Download, Loader2, Film, Timer } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
-import { compteARebours, TTL_MS, type EtatReview } from '@/game/review';
+import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/review';
 
 /**
  * La video de la course, et son compte a rebours.
@@ -13,11 +13,15 @@ import { compteARebours, TTL_MS, type EtatReview } from '@/game/review';
  * seule facon honnete de presenter un bouton qui va s'eteindre — et accessoire-
  * ment ce qui donne envie d'appuyer maintenant.
  */
-export function ReviewVideo({ etat, onTelecharger }: {
+export function ReviewVideo({ etat, onPartager }: {
   etat: EtatReview;
-  onTelecharger: () => void;
+  onPartager: () => Promise<Sortie>;
 }) {
   const { N } = SprinterApp;
+  // Ce qui s'est reellement passe au dernier appui. L'etat vit ici plutot que
+  // chez l'appelant : il ne concerne que ce bouton, et personne d'autre n'a a
+  // le porter.
+  const [sortie, setSortie] = useState<Sortie | null>(null);
   if (etat.phase === 'inactif') return null;
 
   const mo = etat.taille ? (etat.taille / 1_048_576).toFixed(1) + ' Mo' : '';
@@ -51,14 +55,24 @@ export function ReviewVideo({ etat, onTelecharger }: {
       {etat.phase === 'prete' && (
         <>
           <button
-            onClick={onTelecharger}
+            onClick={async () => setSortie(await onPartager())}
             className="w-full py-3 rounded-xl font-black font-display tracking-widest text-background
                        bg-emerald-400 hover:bg-emerald-400/90 transition-colors
                        flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
-            {N.t('review_dl')}{mo ? ` · ${mo}` : ''}
+            {N.t('review_share')}{mo ? ` · ${mo}` : ''}
           </button>
+
+          {/* Le partage, lui, se voit : la feuille du telephone s'ouvre et
+              repond d'elle-meme. Ne restent a dire que les deux issues
+              muettes — le fichier tombe dans les telechargements d'un
+              ordinateur, ou rien n'a pu sortir du tout. */}
+          {(sortie === 'telechargement' || sortie === 'echec') && (
+            <p className={`text-center text-[11px] ${sortie === 'echec' ? 'text-red-300' : 'text-muted-foreground'}`}>
+              {sortie === 'telechargement' ? N.t('review_saved') : N.t('review_failed')}
+            </p>
+          )}
 
           {/* La barre se vide en meme temps que le temps restant. */}
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">
@@ -85,7 +99,7 @@ export function ReviewVideo({ etat, onTelecharger }: {
                        flex items-center justify-center gap-2 cursor-not-allowed"
           >
             <Download className="w-4 h-4" />
-            {N.t('review_dl')}
+            {N.t('review_share')}
           </button>
           <p className="text-center text-[11px] text-muted-foreground">{N.t('review_gone')}</p>
           <p className="text-center text-[10px] text-muted-foreground/70">{N.t('review_kept')}</p>

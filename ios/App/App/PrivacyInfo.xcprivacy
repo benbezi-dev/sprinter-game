@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Le manifeste de confidentialite, exige par Apple depuis mai 2024.
+
+  Ce fichier ne decide de rien : il traduit dans la langue d'Apple ce que
+  public/confidentialite.html dit deja aux joueurs, et les deux doivent rester
+  d'accord. Si l'un change, l'autre change — une etiquette de l'App Store qui
+  contredit la politique publiee est une faute, pas une approximation.
+
+  Trois choses valent d'etre dites, parce qu'elles se declarent mal :
+
+  1. `device_id` n'est PAS un identifiant d'appareil au sens d'Apple. C'est un
+     UUID tire au hasard par le jeu au premier lancement et range dans le
+     stockage local (leaderboard.ts). Il ne vient ni de l'IDFA ni de l'IDFV, et
+     ne survit pas a une desinstallation. Le declarer en `DeviceID` afficherait
+     sur la fiche de l'App Store une collecte materielle qui n'a pas lieu ;
+     c'est un `UserID`, au meme titre que le pseudo.
+
+  2. Le pays EST declare en localisation approximative. Le jeu ne demande
+     jamais la position, et aucune adresse IP n'est conservee — mais
+     Cloudflare deduit un pays de la connexion, et ce pays est range a cote du
+     nom. C'est une donnee derivee de la localisation, liee au joueur, et
+     stockee : la taire serait sous-declarer.
+
+  3. Rien ici ne sert au suivi publicitaire. Pas de regie, pas de mesure
+     d'audience, pas de revente — d'ou `NSPrivacyTracking` a faux et une liste
+     de domaines vide.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!-- Le pseudo, le code qui le reserve, l'identifiant tire au hasard, et
+		     le compte Instagram quand le joueur choisit de l'ajouter. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeUserID</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- Les temps de course, les intermediaires, et le trace du deplacement
+		     qui permet de courir contre le fantome d'un adversaire. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeGameplayContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- Le mot du vainqueur, quand il est dit plutot qu'ecrit : six
+		     secondes de voix, effacees du serveur des qu'elles ont ete
+		     ecoutees. Collecte quand meme : elles transitent. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeAudioData</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- Le meme mot, quand il est ecrit : cent quarante caracteres. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+
+		<!-- Le pays, deduit de la connexion pour proposer un drapeau, et
+		     corrigeable par le joueur. Voir la note 2 en tete de fichier. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Les « API a raison obligatoire ».
+	     Le binaire de l'application ne contient que AppDelegate et
+	     SceneDelegate ; il n'appelle aucune de ces API. Celles qu'utilise
+	     Capacitor — les preferences utilisateur, notamment — sont declarees
+	     dans le manifeste que ses propres frameworks embarquent, la ou elles
+	     sont appelees. Une liste vide n'est donc pas un oubli : c'est la
+	     reponse juste, et la seule verifiable. -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array/>
+</dict>
+</plist>

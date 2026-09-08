@@ -1,0 +1,349 @@
+<meta charset="utf-8">
+<title>Sprinter — la course en direct</title>
+<link rel="stylesheet" href="commun.css">
+<style>
+/* le schema du depart : trois telephones, une meme ligne de temps */
+.tl{display:flex;align-items:center;gap:20px;height:74px}
+.tl .who{font-family:'Space Mono',monospace;font-weight:700;font-size:26px;color:#dbe3f5;width:210px}
+.tl .who i{font-style:normal;color:var(--mut);font-size:22px}
+.tl .rail{position:relative;flex:1;height:8px;border-radius:8px;background:#ffffff14}
+.tl .tick{position:absolute;top:-17px;width:6px;height:42px;border-radius:6px;background:#FB7185;
+  box-shadow:0 0 20px #FB718599}
+.axe{position:absolute;top:2px;bottom:2px;width:3px;border-radius:3px;opacity:0;
+  background:repeating-linear-gradient(180deg,#4ADE80 0 10px,transparent 10px 20px)}
+</style>
+
+<div id="stage">
+  <div id="bgtrack"></div><div id="glow"></div><div id="glow2"></div>
+  <div id="streaks"></div><div id="vign"></div>
+  <div id="prog"></div><div id="etiq"></div>
+
+  <svg width="0" height="0" style="position:absolute"><symbol id="run" viewBox="0 0 24 24">
+    <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.7 12 16 13 17.49 13v-2c-1.5 0-2.8-.8-3.4-2l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+  </symbol></svg>
+
+  <!-- ================================================== OUVERTURE -->
+  <section class="scene" id="sc-ouv"><div class="mid" style="gap:34px">
+    <div class="chapno" id="ou-no" style="-webkit-text-stroke-color:#5FD3E83d">8</div>
+    <div class="h1" id="ou-t">La course<br>en direct</div>
+    <div class="rule" id="ou-r"></div>
+    <div class="p" id="ou-s">Jusqu'à huit coureurs. Une piste.<br>
+      Tout le monde part <span class="ac">en même temps</span>.</div>
+  </div></section>
+
+  <!-- ================================================== LA SALLE -->
+  <section class="scene" id="sc-sal"><div class="mid" style="gap:32px">
+    <div class="kick" id="sa-k">La salle</div>
+    <div class="h3" id="sa-t">De 1 à 8 couloirs —<br>même les nombres impairs</div>
+    <div class="card" id="sa-card" style="width:912px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div id="sa-list"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;
+           padding:18px 22px 6px;border-top:2px solid var(--line);margin-top:6px">
+        <span class="mono" style="font-size:26px;letter-spacing:.16em;color:var(--mut)">PISTE</span>
+        <span class="mono ac" id="sa-cpt" style="font-size:38px;font-weight:700">3 / 5</span>
+      </div>
+    </div>
+    <div class="p" id="sa-s">On se retrouve à trois bien plus souvent qu'à quatre.<br>
+      <span class="ac">Le départ attend que la piste soit pleine.</span></div>
+  </div></section>
+
+  <!-- ================================================== LE DEPART SYNCHRONE -->
+  <section class="scene" id="sc-syn"><div class="mid" style="gap:28px">
+    <div class="kick" id="sy-k">Le vrai problème</div>
+    <div class="h2" id="sy-t" style="margin-bottom:10px">Partir<br>exactement<br>ensemble</div>
+
+    <div class="card sy-c" style="width:912px;padding:30px 34px;position:relative">
+      <div class="mono ko" style="font-size:25px;letter-spacing:.18em">UN « PARTEZ » DIFFUSÉ</div>
+      <div style="font-size:29px;color:var(--mut);font-weight:600;margin:8px 0 18px">
+        il arrive avec la latence de chacun</div>
+      <div id="sy-a"></div>
+    </div>
+
+    <div class="card sy-c" style="width:912px;padding:30px 34px;position:relative;
+         border-color:#4ADE8055;background:#4ADE800d">
+      <div class="mono ok" style="font-size:25px;letter-spacing:.18em">UNE DATE</div>
+      <div style="font-size:29px;color:#cbd5e1;font-weight:600;margin:8px 0 18px">
+        <span class="mono ok">14:32:07.500</span> — chacun déclenche son propre départ</div>
+      <div id="sy-b" style="position:relative"></div>
+    </div>
+
+    <div class="p" id="sy-s">Le serveur n'envoie pas un signal.<br>Il annonce <span class="ac">une heure</span>.</div>
+  </div></section>
+
+  <!-- ================================================== PRESENTATION -->
+  <section class="scene" id="sc-pre"><div class="mid" style="gap:34px">
+    <div class="kick" id="pr-k">Avant le départ</div>
+    <div class="h3" id="pr-t">La présentation des couloirs</div>
+    <div class="card" id="pr-card" style="width:912px;padding:52px 46px;text-align:center">
+      <div class="mono" style="font-size:26px;letter-spacing:.2em;color:var(--mut)">COULOIR <span id="pr-no">4</span></div>
+      <div id="pr-nom" style="font-family:Outfit;font-weight:900;font-size:86px;margin:18px 0 26px">NORA</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px">
+        <div id="pr-mic" style="width:22px;height:22px;border-radius:50%;background:#FB7185"></div>
+        <span class="mono" style="font-size:28px;letter-spacing:.16em;color:var(--mut)">MICRO OUVERT</span>
+      </div>
+      <div style="margin-top:26px;height:12px;border-radius:12px;background:#ffffff12;overflow:hidden">
+        <div id="pr-bar" style="height:100%;width:0;background:var(--cyan);border-radius:12px"></div>
+      </div>
+    </div>
+    <div class="p" id="pr-s">Chacun son créneau, chacun sa voix.<br>Puis on va aux blocs.</div>
+  </div></section>
+
+  <!-- ================================================== LE DEPART -->
+  <section class="scene" id="sc-dep">
+    <div class="mid" style="gap:40px">
+      <div class="track" id="dp-track"></div>
+    </div>
+    <div id="dp-cpt" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      font-family:Outfit;font-weight:900;font-size:420px;color:var(--cyan);text-shadow:0 0 130px #5FD3E888">3</div>
+  </section>
+
+  <!-- ================================================== LA COURSE -->
+  <section class="scene" id="sc-crs"><div class="mid" style="gap:34px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;width:912px">
+      <div class="kick">En direct</div>
+      <div class="mono" id="cr-chr" style="font-size:64px;font-weight:700;color:var(--ac)">0.00</div>
+    </div>
+    <div class="track" id="cr-track"></div>
+    <div class="p" id="cr-s">Les positions arrivent <span class="ac">dix fois par seconde</span>.<br>
+      Le moteur en dessine soixante : personne ne saccade.</div>
+  </div></section>
+
+  <!-- ================================================== L'ARRIVEE -->
+  <section class="scene" id="sc-arr"><div class="mid" style="gap:32px">
+    <div class="kick" id="ar-k">Arrivée</div>
+    <div class="h3" id="ar-t" style="margin-bottom:10px">Personne ne connaît<br>l'issue avant la ligne</div>
+    <div style="display:flex;flex-direction:column;gap:14px" id="ar-list"></div>
+  </div></section>
+
+  <!-- ================================================== A DEUX, C'EST UN DUEL -->
+  <section class="scene" id="sc-duo"><div class="mid" style="gap:34px">
+    <div class="kick" id="du-k">La conséquence</div>
+    <div class="card du-c" style="width:912px;padding:42px 46px;border-color:#5FD3E866;background:#5FD3E80d">
+      <div class="mono ac" style="font-size:26px;letter-spacing:.18em">À DEUX SUR LA PISTE</div>
+      <div class="h3" style="text-align:left;margin:12px 0 16px">C'est un duel</div>
+      <div style="font-size:33px;font-weight:600;color:#e6ecfa">Il se score comme un défi relevé :
+        <span class="mono ok">+25 LP</span> pour le vainqueur, au classement des duels.</div>
+    </div>
+    <div class="card du-c" style="width:912px;padding:42px 46px">
+      <div class="mono" style="font-size:26px;letter-spacing:.18em;color:var(--mut)">À TROIS OU PLUS</div>
+      <div class="h3" style="text-align:left;margin:12px 0 16px;color:var(--mut)">C'est une course</div>
+      <div style="font-size:33px;font-weight:600;color:#cbd5e1">Un ordre d'arrivée, des records,
+        et <span style="color:var(--mut)">aucun point de ligue</span> : un duel se joue à deux.</div>
+    </div>
+    <div class="p" id="du-s">La même piste. Deux enjeux différents.</div>
+  </div></section>
+
+  <!-- ================================================== SORTIE -->
+  <section class="scene" id="sc-fin"><div class="mid" style="gap:38px">
+    <div class="logo" id="fi-logo"><svg><use href="#run"/></svg></div>
+    <div class="h2" id="fi-t">Le chrono ne suffit<br>plus à gagner</div>
+    <div class="rule" id="fi-r"></div>
+    <div class="p" id="fi-s" style="font-size:42px;color:var(--fg)">Il faut le faire <span class="ac">devant quelqu'un</span>.</div>
+  </div></section>
+
+  <div id="wipe"></div><div id="flash"></div><div id="grain"></div>
+</div>
+
+<script src="commun.js"></script>
+<script>
+const CY='#5FD3E8';
+/* ------------------------------------------------------------ construction */
+const SALLE=[['KAYS',true],['NORA',true],['ILAN',true],['ZEPH',false],['MAYA',false]];
+q('#sa-list').innerHTML=SALLE.map(([n],i)=>`
+  <div class="slot sa-r" style="width:auto">
+    <span class="num">${i+1}</span><span class="nm">${n}</span>
+    <span class="st">EN ATTENTE</span></div>`).join('');
+
+/* les trois telephones, et leur latence */
+const LAT=[['KAYS','28 ms',28],['NORA','140 ms',140],['ILAN','310 ms',310]];
+const rails=(host,aligne)=>host.innerHTML=LAT.map(([n,l])=>`
+  <div class="tl"><span class="who">${n} <i>${l}</i></span>
+    <span class="rail"><i class="tick" style="left:0"></i></span></div>`).join('');
+rails(q('#sy-a')); rails(q('#sy-b'));
+/* L'axe commun se cale sur le RAIL, pas sur la carte : les reperes sont poses
+   en pourcentage du rail, qui commence apres l'etiquette (210px + 20px de
+   gouttiere). Un « 60% » de la carte tomberait ailleurs.
+   Le calcul est en CSS et non en JS : une scene inactive est en display:none,
+   ou offsetLeft et offsetWidth valent zero. */
+{
+  const axe=document.createElement('div'); axe.className='axe'; axe.id='sy-axe';
+  axe.style.left='calc(230px + (100% - 230px) * 0.60 - 1px)';
+  q('#sy-b').appendChild(axe);
+}
+
+const HUIT=['KAYS','NORA','ILAN','ZEPH','MAYA','SAM','LOU','TIM'];
+function lanesLocal(host,n,names,color){ lanes(host,n,names,color); }
+lanesLocal(q('#dp-track'),8,HUIT,CY);
+lanesLocal(q('#cr-track'),8,HUIT,CY);
+
+const ARR=[['1','NORA','10"31'],['2','KAYS','10"38'],['3','ILAN','10"44'],
+           ['4','ZEPH','10"51'],['5','MAYA','10"62']];
+q('#ar-list').innerHTML=ARR.map(([r,n,t],i)=>`
+  <div class="rowb ar-r" style="${i===0?'border-color:#5FD3E888;background:#5FD3E812':''}">
+    <span class="rk"${i===0?' style="color:'+CY+'"':''}>${r}</span>
+    <span class="nm"${i===0?' style="color:'+CY+'"':''}>${n}</span>
+    <span class="tm">${t}</span></div>`).join('');
+
+/* ------------------------------------------------------------------- plans */
+function anOuv(l,d){
+  T(q('#ou-no'),{s:.9+.1*E.oc(sg(l,0,1.4)), o:sg(l,0,.7)*.9, y:20*(1-E.oc(sg(l,0,1.2)))});
+  const t=q('#ou-t'), p=E.oq(sg(l,.25,1.3));
+  T(t,{y:40*(1-p), o:sg(l,.25,.7), s:1.06-.06*p, b:12*(1-p)});
+  const r=q('#ou-r'); r.style.transform=`scaleX(${E.oc(sg(l,.9,1.5)).toFixed(3)})`; r.style.opacity=1;
+  io(q('#ou-s'),l,1.05,1.7,99,99,30);
+  midOut('sc-ouv',E.io(sg(l,d-.4,d)));
+}
+function anSal(l,d){
+  io(q('#sa-k'),l,.05,.5,99,99,22);
+  io(q('#sa-t'),l,.18,.8,99,99,40);
+  io(q('#sa-card'),l,.3,.95,99,99,54,.96);
+  cascade('.sa-r',l,.5,.13,.5,-50,0);
+  /* les deux derniers arrivent, la piste se remplit */
+  const n=3+Math.floor(cl((l-1.6)/.62,0,2));
+  qa('.sa-r').forEach((r,i)=>{
+    const dedans=i<n, st=r.querySelector('.st');
+    st.textContent=dedans?'✓ PRÊT':'…';
+    st.style.color=dedans?'#4ADE80':'var(--mut)';
+    r.style.borderColor=dedans?'#4ADE8055':'var(--line)';
+    r.style.background=dedans?'#4ADE800d':'#0b1020';
+  });
+  q('#sa-cpt').textContent=n+' / 5';
+  const plein=n>=5, pu=plein?sg(l,2.85,3.2):0;
+  q('#sa-cpt').style.color=plein?'#4ADE80':CY;
+  q('#sa-card').style.boxShadow=`0 24px 60px #0008, 0 0 ${(54*pu*(.8+.2*Math.sin(l*7))).toFixed(0)}px #4ADE8040`;
+  io(q('#sa-s'),l,2.5,3.1,99,99,26);
+  midOut('sc-sal',E.io(sg(l,d-.4,d)));
+}
+function anSyn(l,d){
+  io(q('#sy-k'),l,.05,.5,99,99,22);
+  io(q('#sy-t'),l,.15,.85,99,99,44);
+  qa('.sy-c').forEach((c,i)=>{const a=.55+i*.35, e=E.ob(sg(l,a,a+.6));
+    T(c,{y:70*(1-e), o:sg(l,a,a+.3), s:.96+.04*e});});
+  /* carte A : les trois departs se decalent */
+  const pa=E.oc(sg(l,1.6,2.3));
+  qa('#sy-a .tick').forEach((k,i)=>{
+    k.style.left=(pa*(10+LAT[i][2]*.13))+'%';
+    k.style.opacity=sg(l,1.6+i*.08,1.9+i*.08).toFixed(2);
+  });
+  /* carte B : ils se rangent tous sur la meme verticale */
+  const pb=E.io(sg(l,2.7,3.5));
+  q('#sy-axe').style.opacity=sg(l,2.6,3.0).toFixed(2);
+  qa('#sy-b .tick').forEach((k,i)=>{
+    const dep=10+LAT[i][2]*.13;
+    k.style.left=(dep+(60-dep)*pb)+'%';
+    k.style.background=pb>.85?'#4ADE80':'#FB7185';
+    k.style.boxShadow=`0 0 20px ${pb>.85?'#4ADE8099':'#FB718599'}`;
+    k.style.opacity=sg(l,2.5+i*.06,2.8+i*.06).toFixed(2);
+  });
+  io(q('#sy-s'),l,3.9,4.5,99,99,26);
+  midOut('sc-syn',E.io(sg(l,d-.4,d)));
+}
+function anPre(l,d){
+  io(q('#pr-k'),l,.05,.5,99,99,22);
+  io(q('#pr-t'),l,.15,.75,99,99,36);
+  io(q('#pr-card'),l,.3,.95,99,99,54,.96);
+  /* trois coureurs defilent dans leur creneau */
+  const CRE=[['4','NORA'],['5','KAYS'],['3','ILAN']];
+  const t0=1.0, par=.85, k=cl(Math.floor((l-t0)/par),0,2);
+  const u=cl((l-t0-k*par)/par);
+  q('#pr-no').textContent=CRE[k][0];
+  const nm=q('#pr-nom'); nm.textContent=CRE[k][1];
+  T(nm,{y:22*(1-E.ob(cl(u/.3))), o:cl(u/.18)*(1-cl((u-.86)/.14)), s:.94+.06*E.ob(cl(u/.35))});
+  q('#pr-bar').style.width=(u*100).toFixed(1)+'%';
+  const mic=q('#pr-mic'), on=u>.15&&u<.8;
+  mic.style.background=on?'#FB7185':'#334155';
+  mic.style.boxShadow=on?`0 0 ${(18+10*Math.sin(l*12)).toFixed(0)}px #FB7185`:'none';
+  io(q('#pr-s'),l,2.8,3.35,99,99,26);
+  midOut('sc-pre',E.io(sg(l,d-.4,d)));
+}
+function anDep(l,d){
+  const tr=q('#dp-track');
+  io(tr,l,.0,.5,99,99,60,.96);
+  qa('#dp-track .mover').forEach(m=>mover(m,26));
+  const c=q('#dp-cpt'), GUN=2.2;
+  if(l<GUN){
+    const n=3-Math.floor(l/.72);
+    c.textContent=String(Math.max(1,n));
+    const u=(l%.72)/.72;
+    c.style.opacity=(1-u*.55).toFixed(2);
+    c.style.transform=`scale(${(1.35-.35*E.oc(cl(u/.4))).toFixed(3)})`;
+  } else {
+    c.textContent='';
+    c.style.opacity=0;
+  }
+  /* la piste blanchit une fraction de seconde au coup de pistolet */
+  tr.style.borderColor = l>GUN && l<GUN+.25 ? '#ffffff' : 'var(--line)';
+}
+function anCrs(l,d){
+  io(q('#cr-track'),l,.0,.45,99,99,50,.97);
+  const DUREE=3.9;
+  const u=cl(l/DUREE);
+  /* huit vitesses legerement differentes : la course se resserre a l'arrivee */
+  const V=[1.000,.986,.972,.958,.944,.930,.916,.902];
+  qa('#cr-track .mover').forEach((m,i)=>{
+    const e=E.oc(u)*V[i];
+    mover(m, 26 + cl(e)*(830-26));
+  });
+  q('#cr-chr').textContent=(u*DUREE*2.65).toFixed(2);
+  io(q('#cr-s'),l,.9,1.5,99,99,26);
+  midOut('sc-crs',E.io(sg(l,d-.35,d)));
+}
+function anArr(l,d){
+  io(q('#ar-k'),l,.05,.5,99,99,22);
+  io(q('#ar-t'),l,.15,.8,99,99,40);
+  cascade('.ar-r',l,.5,.16,.55,60,0);
+  const prem=qa('.ar-r')[0], pu=sg(l,1.4,1.85);
+  prem.style.boxShadow=`0 0 ${(48*pu*(.75+.25*Math.sin(l*7))).toFixed(0)}px #5FD3E844`;
+  midOut('sc-arr',E.io(sg(l,d-.4,d)));
+}
+function anDuo(l,d){
+  io(q('#du-k'),l,.05,.5,99,99,22);
+  cascade('.du-c',l,.3,.5,.6,0,60);
+  const a=qa('.du-c')[0], pu=sg(l,1.3,1.8);
+  a.style.boxShadow=`0 24px 60px #0008, 0 0 ${(52*pu*(.8+.2*Math.sin(l*6.5))).toFixed(0)}px #5FD3E83d`;
+  io(q('#du-s'),l,2.2,2.8,99,99,26);
+  midOut('sc-duo',E.io(sg(l,d-.4,d)));
+}
+function anFin(l,d){
+  const p=E.el(sg(l,.05,1.1));
+  T(q('#fi-logo'),{s:.55+.45*p,o:sg(l,.05,.3)});
+  io(q('#fi-t'),l,.35,1.0,99,99,40);
+  const r=q('#fi-r'); r.style.transform=`scaleX(${E.oc(sg(l,.95,1.45)).toFixed(3)})`; r.style.opacity=1;
+  const s=q('#fi-s'); io(s,l,1.15,1.75,99,99,26);
+  if(l>1.8) s.style.opacity=(.72+.28*Math.abs(Math.sin(l*2.6))).toFixed(2);
+  midOut('sc-fin',E.io(sg(l,d-.5,d)));
+}
+
+/* --------------------------------------------------------------- timeline */
+monterFilm({
+  duree: 32.6,
+  accent: CY,
+  etiquette: 'Course en direct',
+  chapitres: [[0,12.8],[12.8,23.6],[23.6,32.6]],
+  cuts: [12.8, 23.6],
+  flashes: [{ t: 18.4+2.2, force: .88, duree: .3, secousse: .5 }],
+  scenes: {
+    ouv:['sc-ouv',  0,    3.0],
+    sal:['sc-sal',  3.0,  7.0],
+    syn:['sc-syn',  7.0,  12.8],
+    pre:['sc-pre',  12.8, 16.8],
+    dep:['sc-dep',  16.8, 19.5],
+    crs:['sc-crs',  19.5, 23.6],
+    arr:['sc-arr',  23.6, 26.8],
+    duo:['sc-duo',  26.8, 30.0],
+    fin:['sc-fin',  30.0, 32.6],
+  },
+  anim: { ouv:anOuv, sal:anSal, syn:anSyn, pre:anPre, dep:anDep, crs:anCrs, arr:anArr, duo:anDuo, fin:anFin },
+  photos: [
+    [1.9,  'ouverture'],
+    [6.3,  'salle-pleine'],
+    [11.8, 'date-contre-signal'],
+    [14.6, 'presentation'],
+    [18.6, 'depart'],
+    [22.4, 'course'],
+    [26.2, 'arrivee'],
+    [29.2, 'a-deux-c-est-un-duel'],
+    [31.6, 'sortie'],
+  ],
+});
+</script>

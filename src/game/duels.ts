@@ -17,9 +17,9 @@ import { EST_TEST } from './canal';
  * course, et l'annonce du resultat a celui qui a lance le defi — sans autre
  * changement : le code reste livre, seul l'acces bascule.
  */
-// Ferme en production jusqu'a l'ouverture annoncee ; toujours ouvert sur le
-// canal de test, qui existe pour essayer ce qui n'est pas encore sorti.
-const OUVERT_EN_PRODUCTION = false;
+// Ouvert partout. Le drapeau reste : refermer doit tenir en un mot, et le
+// canal de test garde son interet — il ecrit dans une autre base.
+const OUVERT_EN_PRODUCTION = true;
 export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';

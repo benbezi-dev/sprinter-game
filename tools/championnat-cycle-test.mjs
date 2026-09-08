@@ -12,13 +12,18 @@
 // encore derriere la cle d'administration, le harnais lisait « refuse », et
 // l'echec ressemblait a un bug du jeu.
 const B = process.env.BASE || 'http://127.0.0.1:8788';
-const post = (u, b) => fetch(B + u, { method: 'POST', headers: { 'Content-Type': 'application/json', ...H },
+// Ouvrir un cycle, poser une course, cloturer une phase : ce sont des gestes
+// d'organisateur, pas de joueur, et ils demandent la cle d'administration
+// depuis qu'ils sont ouverts a tout le monde en lecture. Le harnais joue ici
+// le role du tableau de bord des championnats, qui la porte deja.
+const post = (u, b) => fetch(B + u, { method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...H, ...ADMIN },
   body: JSON.stringify(b) }).then(r => r.json());
 const get = u => fetch(B + u, { headers: H }).then(r => r.json());
 
-// Les routes des championnats sont reservees au canal de test : le harnais se
-// procure un acces comme n'importe quel appelant, puis le presente a chaque
-// requete.
+// Le canal de test, lui, se procure un acces comme n'importe quel appelant :
+// c'est ce qui envoie les ecritures dans la base de test plutot que dans la
+// vraie.
 const ADMIN = { 'Content-Type': 'application/json', 'X-Sprinter-Admin': 'cle-de-test-locale-uniquement' };
 const _acces = await fetch(B + '/test/admin/creer', { method: 'POST', headers: ADMIN,
   body: JSON.stringify({ nom: 'harnais' }) }).then(r => r.json());

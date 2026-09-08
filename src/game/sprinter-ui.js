@@ -13,6 +13,15 @@
   let ctx = null;
 
   // ---------------------------------------------------------------- outils
+
+  // Un champ de saisie a-t-il la main ? (input, textarea, select, ou tout
+  // element contenteditable)
+  const editable = n => {
+    if (!n || n.nodeType !== 1) return false;
+    if (n.isContentEditable) return true;
+    const t = n.tagName;
+    return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+  };
   function font(sz, w) {
     return (w || 700) + ' ' + Math.max(9, Math.round(sz * A.ui())) + 'px ' +
       '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
@@ -817,6 +826,10 @@
     G.cv.addEventListener('pointercancel', release);
 
     window.addEventListener('keydown', e => {
+      // Le clavier est ecoute sur window : il faut le rendre aux champs de
+      // texte, sinon taper un nom pilote le jeu (le "l" de Lea bascule la
+      // langue, le "s" de Sofia coupe le son, l'espace valide un ecran).
+      if (editable(e.target) || editable(document.activeElement)) return;
       Audio_.init();
       if (e.key === 'ArrowLeft') { padPress('left'); G.touches.left = 1; }
       else if (e.key === 'ArrowRight') { padPress('right'); G.touches.right = 1; }

@@ -6,11 +6,23 @@ import { X, ChevronLeft, ChevronRight, Trophy, Ghost, Radio, Users, Flag } from 
 
 const VU = 'sprinter_tour_vu';
 
+/**
+ * La visite vient de se terminer.
+ *
+ * La fenetre de bienvenue attend ce moment-la : elle demande le nom, le pays
+ * et Instagram, et deux panneaux empiles au tout premier lancement ne se
+ * lisent ni l'un ni l'autre. Le marqueur seul ne suffit pas a la prevenir —
+ * il vit dans localStorage, que rien ne surveille, et fermer la visite ne
+ * fait pas bouger l'etat du jeu d'un pouce.
+ */
+export const TOUR_VU = 'sprinter:tour-vu';
+
 export function tourVu(): boolean {
   try { return localStorage.getItem(VU) === '1'; } catch { return true; }
 }
 export function marquerTourVu() {
   try { localStorage.setItem(VU, '1'); } catch { /* sans memoire, il reviendra */ }
+  try { window.dispatchEvent(new Event(TOUR_VU)); } catch { /* hors navigateur */ }
 }
 
 /**

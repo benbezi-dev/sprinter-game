@@ -1,3 +1,5 @@
+/// <reference types="@capacitor-firebase/messaging" />
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
@@ -52,6 +54,59 @@ const config: CapacitorConfig = {
       style: 'DARK',
       backgroundColor: '#05070d',
       overlaysWebView: true,
+    },
+    /**
+     * Le clavier, et la place qu'il prend.
+     *
+     * Sur Android, la WebView se retrecit quand le clavier monte : ce qui etait
+     * en bas d'un panneau remonte, et reste atteignable. Une WKWebView ne fait
+     * rien de tel — elle garde sa taille, le clavier se pose par-dessus, et le
+     * bas de l'ecran disparait dessous. Sur la fenetre de bienvenue, cela
+     * cachait « CONTINUER » derriere la barre du clavier et « PLUS TARD »
+     * entierement : on tapait son nom, et le bouton pour valider n'etait plus
+     * la.
+     *
+     * `native` rend a iOS le comportement d'Android : la vue se redimensionne,
+     * `window.innerHeight` diminue, et la variable --app-height que pose
+     * App.tsx suit toute seule. Le correctif vaut donc pour TOUS les champs du
+     * jeu — le nom, le code d'acces, le code d'un defi, le mot de cent
+     * quarante caracteres — et pas seulement pour celui ou on l'a remarque.
+     */
+    Keyboard: {
+      resize: 'native' as any,
+      resizeOnFullScreen: true,
+    },
+
+    /**
+     * Ce que devient une notification qui arrive alors que le jeu est ouvert.
+     *
+     * Rien. La liste est vide, et c'est delibere : quand l'application est au
+     * premier plan, la boite WebSocket a deja porte la nouvelle et l'ecran
+     * concerne s'est deja mis a jour. Une banniere par-dessus repeterait ce
+     * qu'on est en train de regarder — et pendant une course, elle passerait
+     * devant la piste au pire moment.
+     *
+     * Le reglage ne vaut que pour iOS ; sur Android le comportement au premier
+     * plan est le meme par defaut.
+     */
+    FirebaseMessaging: {
+      presentationOptions: [],
+    },
+  },
+
+  /**
+   * Deux paquets Swift declarent le meme produit Firebase, et SwiftPM refuse
+   * de resoudre le graphe : le lien symbolique fait tomber la collision.
+   * Sans cette ligne, `npx cap sync ios` produit un projet qui ne compile pas.
+   * Voir capawesome-team/capacitor-firebase#959.
+   */
+  experimental: {
+    ios: {
+      spm: {
+        packageOptions: {
+          '@capacitor-firebase/messaging': { symlink: true },
+        },
+      },
     },
   },
 };

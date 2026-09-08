@@ -1,0 +1,3 @@
+/* La meme demande, en francais. Les accents comptent : ce texte est lu par
+   le joueur au moment ou il decide, pas par une machine. */
+"NSMicrophoneUsageDescription" = "Sprinter utilise le micro pour la voix en direct pendant un duel, et pour enregistrer le mot de six secondes que le vainqueur laisse à son adversaire. Le micro est rendu dès que vous cessez de parler.";

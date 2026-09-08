@@ -3,9 +3,11 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { Swords, ChevronRight, Loader2 } from 'lucide-react';
-import { fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel } from '@/game/duels';
+import {
+  fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel,
+} from '@/game/duels';
 import { DuelRanking } from './DuelRanking';
-import { pique } from '@/game/piques';
+import { pique, boost } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
@@ -268,6 +270,20 @@ export function DuelResultPopup() {
                   </span>
                 </div>
               </div>
+            )}
+
+            {/* GAGNE : le boost, et c'est le jeu qui le dit.
+
+                Ni guillemets ni nom — la pique du dessus est citee parce que
+                quelqu'un la prononce, celle-ci n'a pas d'auteur. Et surtout
+                pas le meme ton : on ne chambre pas quelqu'un qui vient de
+                gagner, on lui donne ce qu'il est venu chercher. Voir
+                game/piques.ts. */}
+            {gagne && (
+              <p className="text-sm md:text-base court:text-xs font-semibold text-primary
+                            text-center leading-snug px-2">
+                {boost(duel.id)}
+              </p>
             )}
 
             {/* Le vainqueur qui apprend sa victoire ici n'etait pas la quand

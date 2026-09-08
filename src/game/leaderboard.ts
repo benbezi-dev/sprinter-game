@@ -50,12 +50,24 @@ export function getSavedName(): string {
   }
 }
 
+/**
+ * Le nom vient d'etre pose sur cet appareil.
+ *
+ * La fenetre de bienvenue et la puce du nom vivent cote a cote sur l'accueil,
+ * et poser un nom ne fait pas bouger le moteur d'un pouce : sans ce signal, la
+ * puce garderait « choisis ton nom » alors que le nom vient d'etre choisi deux
+ * centimetres plus haut. Relire au changement d'etat du jeu ne suffit pas — il
+ * n'y a pas de changement d'etat.
+ */
+export const NOM_CHANGE = 'sprinter:nom-change';
+
 export function saveName(name: string) {
   try {
     localStorage.setItem(PLAYER_NAME_KEY, name);
   } catch {
     // localStorage indisponible : le nom sera juste redemande la prochaine fois
   }
+  try { window.dispatchEvent(new Event(NOM_CHANGE)); } catch { /* hors navigateur */ }
 }
 
 /**
@@ -216,6 +228,28 @@ export async function qualifyingRaces(
     }
   }
   return out;
+}
+
+/** Une ligne du TOP 500 reduite a ce qu'il faut pour designer un joueur. */
+export type TopPlayer = {
+  name: string;
+  /** Sa place dans la discipline demandee, 1 pour le meilleur. */
+  rank: number;
+  /** Son meilleur chrono sur une course de cette discipline. */
+  ms: number;
+};
+
+/**
+ * Le TOP 500 d'une discipline, un joueur par ligne et deja classe : de quoi
+ * proposer un annuaire des coureurs du jeu la ou l'on demande un nom. Taper
+ * reste possible partout — tout le monde n'est pas au tableau — mais celui
+ * qui y est n'a plus a etre epele sans faute.
+ */
+export async function fetchTopPlayers(race: RaceKey = '100'): Promise<TopPlayer[]> {
+  const list = rankByRaceTime(await fetchLeaderboardRaw(race));
+  return list.slice(0, TOP_N).map((e, i) => ({
+    name: e.name, rank: i + 1, ms: e.best_split_ms,
+  }));
 }
 
 /**

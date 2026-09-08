@@ -64,6 +64,8 @@ export type GameState = {
   liveOn: boolean;
   liveNom: string;
   liveResultat: any;
+  /** Les points du duel du direct, tels que la salle les a annonces. */
+  liveDuel: any;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -185,6 +187,15 @@ export function primeTopNames() {
 export function pushFinishedRace(race: string, seconds: number, mode: string, level: number) {
   import('./history').then(({ pushRace }) => pushRace(race as any, seconds, mode, level))
     .catch(() => { /* module ou reseau indisponible : le local suffit */ });
+  // Le record de l'appareil vient peut-etre de bouger, et l'ecran d'arrivee
+  // s'affiche avant que le serveur en sache quoi que ce soit. Sans cette
+  // ligne, il annoncerait « record 8,50 s » sous le 8,43 s qu'il vient
+  // lui-meme d'afficher.
+  //
+  // Import differe, comme au-dessus : `record.ts` importe ce module, et une
+  // dependance circulaire au chargement laisserait `SprinterApp` indefini.
+  import('./record').then(({ noterCourse }) => noterCourse(race as any))
+    .catch(() => { /* l'affichage du record n'est pas vital a la course */ });
 }
 
 /** Nouvelle course : le rythme de la precedente n'a rien a y faire. */
@@ -461,5 +472,6 @@ export function updateLogic(dt: number) {
     liveOn: G.liveOn,
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
+    liveDuel: G.liveDuel,
   });
 }

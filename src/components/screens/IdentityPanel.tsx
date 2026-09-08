@@ -5,6 +5,8 @@ import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, linkDevice, savedCode } from '@/game/identity';
 import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
+import { RecordChip } from './RecordPerso';
+import { lireRythme, poserRythme, type Rythme } from '@/game/objectif';
 
 /**
  * Identite du joueur : son nom, le code qui le lui reserve, et de quoi relier
@@ -22,6 +24,17 @@ export function IdentityPanel() {
   // champ du nom. On le garde pour pouvoir lui proposer la liaison d'un geste.
   const [nomDuCode, setNomDuCode] = useState('');
   const [perdu, setPerdu] = useState(false);
+
+  // Le rythme des rappels du defi. Il vit ici parce que c'est deja l'espace
+  // personnel, et parce qu'un reglage de notification cache dans un menu est
+  // un reglage que personne ne trouve — donc que personne n'utilise, et qui
+  // finit par faire couper les notifications entierement.
+  const [rythme, setRythme] = useState<Rythme | null>(null);
+  React.useEffect(() => { void lireRythme().then(setRythme); }, []);
+  const changerRythme = async (r: 'deux' | 'un') => {
+    setRythme({ rythme: r, choisi: true });
+    if (!await poserRythme(r)) void lireRythme().then(setRythme);
+  };
 
   const [autreCode, setAutreCode] = useState('');
   const [lien, setLien] = useState<'' | 'envoi' | 'lie' | 'mauvais' | 'inconnu' | 'erreur'>('');
@@ -74,6 +87,40 @@ export function IdentityPanel() {
           {N.t('id_title')}
         </h3>
       </div>
+
+      {/* Les trois records, la ou le joueur vient deja voir qui il est.
+          Chaque pastille se tait tant qu'il n'a pas couru l'epreuve : trois
+          lignes de tirets ne disent rien de plus qu'une absence. */}
+      <div className="flex flex-wrap gap-1.5">
+        {(['100', '200', '400'] as const).map(r => (
+          <RecordChip key={r} race={r} compact avecEpreuve />
+        ))}
+      </div>
+
+      {rythme && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase">
+            {N.t('obj_rythme')}
+          </span>
+          <div className="flex gap-1 p-1 rounded-xl bg-black/30 border border-white/10">
+            {(['deux', 'un'] as const).map(r => (
+              <button key={r} onClick={() => changerRythme(r)}
+                className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-bold tracking-wide
+                  transition-colors ${rythme.rythme === r
+                    ? 'bg-primary text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                {N.t(r === 'deux' ? 'obj_rythme_2' : 'obj_rythme_1')}
+              </button>
+            ))}
+          </div>
+          {/* Quand c'est nous qui avons ralenti, on le dit. Un joueur qui
+              recoit moins sans savoir pourquoi croit a une panne. */}
+          {!rythme.choisi && rythme.rythme === 'un' && (
+            <span className="text-[10px] text-muted-foreground leading-snug">
+              {N.t('obj_rythme_auto')}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex gap-2">
         <input

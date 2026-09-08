@@ -360,6 +360,9 @@
     falseOut: false, falseOutT: 0,
     // Course en direct : l'adversaire court en meme temps que nous.
     liveOn: false, liveNom: '', liveFin: null, liveResultat: null,
+    // Les points du duel, quand la salle les annonce : ils arrivent apres le
+    // resultat et se lisent sur l'ecran de fin.
+    liveDuel: null,
     // Un adversaire par identifiant de joueur. Vide en duel a deux ancienne
     // maniere, remplie des qu'on court a plusieurs.
     lives: null,
@@ -395,6 +398,8 @@
     // REC_STEP) pour pouvoir etre rejouee plus tard par un adversaire.
     // ghost : la trace d'un autre joueur, rejouee en direct a cote de nous.
     recTrace: null, recNext: 0, shotTraces: [],
+    // La graine du defi en cours, ou null. Voir startShotRace.
+    graineCourse: null,
     ghost: null, ghostName: '', ghostTime: 0,
     challenge: null      // defi en cours (voir challenge.ts)
   };
@@ -507,7 +512,10 @@
     let best = 1e9;
     const names = idx === OLYMPIC ? olympicNames() : lvl.names;
     names.forEach((n, i) => {
-      const t = lo + Math.random() * (hi - lo);
+      // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
+      // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
+      // defis « identiques » incomparables.
+      const t = lo + K.alea() * (hi - lo);
       const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
         total: G.track.total, pool: lvl.pool });
@@ -570,6 +578,7 @@
     G.paused = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
+    G.liveDuel = null;
     G.lives = null;
     G.challengeTarget = null;
     G.defiSansCible = null;
@@ -606,6 +615,19 @@
   function startShotRace() {
     G.raceKey = G.shotRaces[G.shotIdx];
     G.race = RACES[G.raceKey];
+    // LA GRAINE SE REPOSE A CHAQUE COURSE, ET C'EST INDISPENSABLE.
+    //
+    // Un defi se joue autant de fois qu'on veut, et les tentatives doivent se
+    // courir sur LE MEME plateau — sinon « seule la meilleure compte » revient
+    // a garder le tirage le plus chanceux. Semer une seule fois au depart ne
+    // suffit pas : la course consomme le tirage, et la deuxieme tentative
+    // repartirait de la ou la premiere s'est arretee, avec d'autres
+    // adversaires.
+    //
+    // `graineCourse` est posee par le jeu quand il entre dans un defi, et
+    // retiree quand il en sort. Hors defi elle vaut null, et le tirage reste
+    // celui du systeme.
+    if (G.graineCourse != null) K.semer(G.graineCourse); else K.desemer();
     buildLevel(G.shotLevel);
     armGhost();
     // pas de cinematique de presentation : le one-shot va droit au but
@@ -633,7 +655,7 @@
    */
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
-    G.liveOn = false; G.liveResultat = null; G.liveNom = null;
+    G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null;
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
     // de la meme revanche — pour ca, c'est le bouton dedie qui relance
@@ -674,6 +696,11 @@
    * decompte est donc cale sur ce que la salle a annonce, converti en temps
    * de jeu : les deux joueurs voient le meme 3-2-1 et partent ensemble, quelle
    * que soit leur latence.
+   *
+   * @param opts.sansOrdinateur ne garder sur la piste que les vrais partants —
+   *   c'est ce que veut la course en direct. Le relais, qui passe par ici
+   *   aussi, garde son plateau : une portion courue seule contre le chrono n'a
+   *   sinon plus personne autour.
    */
   function startLive(races, opts) {
     opts = opts || {};
@@ -682,6 +709,8 @@
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;
     G.liveResultat = null;
+    // Une revanche ne rejoue pas les points de la course d'avant.
+    G.liveDuel = null;
     G.shotRaces = races.slice();
     G.shotIdx = 0;
     G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;
@@ -706,6 +735,8 @@
     // personne ne courait.
     if (opts.autres) armLives(opts.autres);
     else armLive(G.liveNom);
+    // Une piste en direct ne se remplit pas : voir retirerOrdinateur.
+    if (opts.sansOrdinateur) retirerOrdinateur();
     queueCuts([], 'count');
     // Le decompte reste suspendu tant que la salle n'a pas donne l'heure.
     G.countT = -99;
@@ -867,6 +898,32 @@
       G.lives.set(autre.id, { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
                               trace: [], step: REC_STEP, time: 0 });
     });
+  }
+
+  /**
+   * Ne laisse sur la piste que ceux qui courent vraiment.
+   *
+   * `buildLevel` remplit toujours les sept couloirs voisins avec le plateau de
+   * l'ordinateur, parce que c'est ce qu'il faut a une etape de campagne : une
+   * finale olympique sans personne dans les couloirs d'a cote n'est pas une
+   * finale. En direct, c'est l'inverse. Les gens presents dans la salle sont
+   * la raison d'etre du mode ; poser six coureurs maison a cote d'un duel
+   * revient a noyer l'adversaire au milieu de figurants qui, eux, ne risquent
+   * rien. On ne sait plus qui regarder, et le classement d'arrivee melange
+   * deux natures de coureurs.
+   *
+   * Un couloir vide se lit donc comme ce qu'il est : une place que personne
+   * n'a prise. C'est aussi ce que dit le salon avant le depart.
+   *
+   * Le favori annonce disparait avec le plateau : il venait de ses chronos
+   * vises, et le HUD n'a pas a afficher un nom a battre qui ne court pas.
+   */
+  function retirerOrdinateur() {
+    // Le fantome vit hors de G.runners sur le chemin a un seul adversaire ; le
+    // test le garde quand il y est, sur le chemin a plusieurs.
+    const fantome = G.ghost ? G.ghost.runner : null;
+    G.runners = G.runners.filter(r => r.isPlayer || r.isLive || r === fantome);
+    G.champion = ''; G.championTime = 0;
   }
 
   /**

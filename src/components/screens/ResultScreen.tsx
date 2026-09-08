@@ -2,10 +2,11 @@ import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
+import { EcartRecord } from './RecordPerso';
 
 export function ResultScreen() {
   const {
-    levelIdx, player, runTime, ranking, badge, mode, shotRaces, shotIdx
+    levelIdx, player, runTime, ranking, badge, mode, shotRaces, shotIdx, raceKey
   } = useGameStore();
   const { N } = SprinterApp;
   const oneShot = mode === 'oneshot';
@@ -48,6 +49,13 @@ export function ResultScreen() {
                 : <><span className="text-destructive font-bold">{N.t('dnf')}</span>{N.t('total_of').replace(' s ', ' ')}</>}
               <span className="text-white font-bold">{runTime.toFixed(2)}</span> s
             </div>
+
+            {/* Ce que la course vient de faire au record. C'est ici, sous le
+                chrono, et pas dans une fenetre par-dessus : un record personnel
+                tombe dix fois la premiere semaine, et dix fenetres a fermer
+                feraient de la bonne nouvelle une corvee. */}
+            <EcartRecord race={raceKey as any} ms={player?.finishTime != null
+              ? player.finishTime * 1000 : null} />
             
             <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-400 uppercase">
               {startRecap()}

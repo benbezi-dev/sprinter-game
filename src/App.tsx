@@ -15,7 +15,8 @@ import { useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
-import { EST_TEST } from '@/game/canal';
+import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
+import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
@@ -29,17 +30,25 @@ import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
+import { Revanche } from '@/components/screens/Revanche';
+import { useObjectif, ouvrirDepuisNotification } from '@/game/objectif';
+import { surCourrier } from '@/game/boite';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
+import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
+import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
+import { InviteNotifs } from '@/components/screens/InviteNotifs';
+import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
+import { reprendrePush } from '@/game/push';
 
 const queryClient = new QueryClient();
 
@@ -78,6 +87,19 @@ function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
+  // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
+  const defiEnCours = useObjectif().enCours;
+
+  // La notification de l'objectif ouvre le defi, sans ecran intermediaire.
+  //
+  // Elle arrive par la meme porte que les autres — un coup de sonnette qui dit
+  // le genre de la nouvelle — et c'est le seul genre qui LANCE quelque chose
+  // plutot que d'afficher un ecran. `ouvrirDepuisNotification` refuse d'elle-
+  // meme si l'on est au milieu d'une course : interrompre celle qu'on court
+  // pour en ouvrir une autre serait pire que de ne rien faire.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'objectif') void ouvrirDepuisNotification();
+  }), []);
   useVisualViewportHeight();
   useBackGuard();
 
@@ -106,6 +128,31 @@ function MainGame() {
     if (!acces || !DUELS_OUVERTS) return;
     ouvrirBoite();
   }, [acces]);
+
+  // Au lancement : redire au serveur où joindre ce téléphone.
+  //
+  // Rien ne s'affiche, et rien n'est demandé — sans permission déjà accordée,
+  // l'appel ne fait rien. Il existe parce qu'un jeton Firebase tourne : il
+  // change à une réinstallation, à une restauration, après des mois sans
+  // ouvrir le jeu. Sans ce rappel, le serveur continuerait d'envoyer vers un
+  // jeton mort, et personne ne verrait rien — ni le joueur, ni les journaux.
+  useEffect(() => {
+    if (!acces) return;
+    reprendrePush().catch(() => { /* best-effort */ });
+  }, [acces]);
+
+  // La permission push se demande depuis un bouton, et depuis rien d'autre.
+  //
+  // Elle se demandait ici, après le premier résultat de course : le moment
+  // était le bon, l'appel ne l'était pas. Une demande de permission qui ne
+  // part pas d'un geste du joueur n'est pas traitée comme les autres — Safari
+  // la rejette (`NotAllowedError`), Chrome la réduit à une pastille dans la
+  // barre d'adresse que personne ne voit sur un téléphone. Résultat : sur
+  // 90 appareils connus du serveur, 3 abonnements.
+  //
+  // La carte `InviteNotifs`, plus bas, propose au même moment — mais avec un
+  // bouton, et c'est le clic qui ouvre la fenêtre du système.
+
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
 
@@ -130,7 +177,13 @@ function MainGame() {
         {/* Le one-shot a son propre recapitulatif : epreuves choisies,
             comparaison au fantome, creation du defi. Le TOP 500 ne concerne
             que la carriere complete, un cumul one-shot n'y a pas sa place. */}
-        {state === 'winall' && (mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
+        {/* Le defi du jour a son propre ecran de fin. Il ne remplace pas
+            celui du one shot : il repond a une autre question. Le recapitulatif
+            ordinaire demande de choisir entre huit choses ; apres avoir rate de
+            neuf centiemes, choisir c'est fermer le jeu. */}
+        {state === 'winall' && (
+          defiEnCours ? <Revanche />
+            : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       
       {/* Invisible overlay for receiving touches during the race */}
@@ -141,6 +194,7 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      <InvitationDirecte />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. Comme pour PisteRelais
           ci-dessous, la porte se pose ici et non a l'interieur du composant :
@@ -148,21 +202,30 @@ function MainGame() {
           precise — la constante en tete du && — qui permet au bundler de
           sortir le composant du build plutot que de l'y livrer inerte. */}
       {DUELS_OUVERTS && <DuelResultPopup />}
+      {/* Le verdict de la sélection, une fois par championnat.
+          Posé ici et non dans l'ecran-titre pour la meme raison que Bienvenue :
+          il doit passer AU-DESSUS de l'accueil, pas dedans. Le composant decide
+          seul s'il a une nouvelle a annoncer — et il n'en a une qu'au gel de la
+          grille, pour qui etait dans la zone ou ca se jouait. */}
+      {DUELS_OUVERTS && <SceneSelection />}
       {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
           l'ecran-titre disparait au coup de pistolet, et une salle tenue par
           un panneau demonte se fermerait a l'instant precis ou la course
-          commence. En production, EST_TEST vaut false en dur et tout ceci
-          sort du build. */}
-      {EST_TEST && <PisteRelais />}
+          commence. */}
+      {RELAIS_OUVERT && <PisteRelais />}
       {/* La presentation des athletes se joue SUR la piste, et doit donc
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}
       <PresentationDirect />
-      {/* Les trois autres jeux, atteints par un geste depuis l'accueil. En
-          production, MONDES_OUVERTS vaut false en dur et rien de tout ceci
-          n'est embarque. */}
-      {EST_TEST && <Mondes />}
+      {/* Les trois autres jeux, atteints par un geste depuis l'accueil. */}
+      {MONDES_OUVERTS && <Mondes />}
       <InstallPrompt />
+      <InviteNotifs />
+      {/* Le nom, la nationalite, Instagram : demandes une fois, sur l'accueil,
+          avant la premiere course. Le composant decide seul s'il a quelque
+          chose a demander — pose ici plutot que dans l'ecran-titre pour
+          passer AU-DESSUS de lui, et non dedans. */}
+      <Bienvenue />
       {/* Le telephone qui vient de viser un QR code : la liaison se fait seule,
           et se pose au-dessus de tout le reste — c'est la seule chose que ce
           joueur-la ait demandee en ouvrant le jeu. */}
