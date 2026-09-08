@@ -1632,19 +1632,19 @@
       }
     }
 
-    // Numeros de couloir, peints juste avant chaque ligne de depart.
-    ctx.save();
-    ctx.font = '700 ' + (12 * ui()) + 'px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let e = 0; e < C.LANE_COUNT; e++) {
-      const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
-      const p = ground(q[0], q[1]);
-      if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
-      ctx.fillText(String(e + 1), p[0], p[1]);
+    // Numeros de couloir, peints juste avant chaque ligne de depart. Ce
+    // sont des chiffres traces, pas du texte : une piste porte l'identite
+    // graphique de sa competition, et une fonte systeme n'a jamais ete
+    // peinte au sol nulle part. Voir chiffres-piste.js.
+    const CH = globalThis.ChiffresPiste;
+    if (CH) {
+      for (let e = 0; e < C.LANE_COUNT; e++) {
+        const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
+        const p = ground(q[0], q[1]);
+        if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
+        CH.dessiner(ctx, e + 1, p[0], p[1], 17 * ui(), 'rgba(255,255,255,0.60)');
+      }
     }
-    ctx.restore();
 
     // chiffres sur l'herbe exterieure, aux memes reperes — poses a cote du
     // repere du couloir exterieur, qui est celui qu'ils annoncent.

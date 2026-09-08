@@ -1,5 +1,6 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
+import './chiffres-piste.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
