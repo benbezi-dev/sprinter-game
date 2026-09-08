@@ -417,6 +417,66 @@ export function TitleScreen() {
 
             </>}
 
+            {/* LE PIED DE PAGE, ET POURQUOI TOUT Y TIENT SUR UNE LIGNE.
+                Les pages legales y etaient deja : sur le site l'adresse
+                suffit a les atteindre, mais dans l'application il n'y a pas
+                de barre d'adresse — sans ce pied de page, ni le joueur ni le
+                relecteur du Play Store ne peuvent les trouver, et une regle
+                de Play demande qu'un jeu ou l'on s'ecrit rende ses conditions
+                accessibles. On ouvre dans le navigateur plutot que dans la
+                vue du jeu : une page de texte posee sur une partie n'a pas
+                de retour.
+
+                La visite, le tutoriel et le contact les rejoignent. Ils
+                occupaient une rangee de boutons sous COMMENCER, avec icones
+                et libelles en capitales : trois reperes de la meme taille que
+                l'action qu'on vient chercher, juste sous elle. Ce sont des
+                portes qu'on pousse une fois, pas des gestes de chaque visite
+                — ils se disent du meme ton discret que les mentions legales.
+
+                Deux groupes plutot qu'une liste a plat : quand la ligne ne
+                tient pas — le cas ordinaire sur un telephone — le retour
+                tombe entre les deux, et jamais au milieu des mentions
+                legales. Pas de point entre les groupes : sur une ligne
+                unique, l'ecart suffit a les distinguer, et un point orphelin
+                en fin de ligne se lirait comme une coquille. */}
+            <div className="w-full pt-3 mt-1 flex flex-wrap items-center justify-center
+                            gap-x-6 gap-y-0.5 text-[9px] tracking-widest text-white/30">
+              <div className="flex items-center gap-2">
+                {tab === 'career' && <>
+                  <button onClick={() => setTour(true)}
+                          className="py-1 lowercase hover:text-white/70 transition-colors">
+                    {N.t('tour_open')}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <button onClick={() => setTuto(true)}
+                          className="py-1 lowercase hover:text-white/70 transition-colors">
+                    {N.t('tuto_open')}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                </>}
+                <button
+                  onClick={() => { window.location.href = 'mailto:support@sprinter-game.com'; }}
+                  className="py-1 lowercase hover:text-white/70 transition-colors">
+                  {N.t('contact')}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a href="https://sprinter-game.com/conditions.html"
+                   target="_blank" rel="noopener noreferrer"
+                   className="py-1 hover:text-white/70 transition-colors">
+                  {N.t('legal_conditions')}
+                </a>
+                <span aria-hidden="true">·</span>
+                <a href="https://sprinter-game.com/confidentialite.html"
+                   target="_blank" rel="noopener noreferrer"
+                   className="py-1 hover:text-white/70 transition-colors">
+                  {N.t('legal_vie_privee')}
+                </a>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>

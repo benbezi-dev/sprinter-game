@@ -194,8 +194,9 @@ export function ChallengePanel() {
       {DUELS_OUVERTS && <LivePanel />}
       {/* Le championnat n'apparait que si le joueur y est engage. */}
       {DUELS_OUVERTS && <ChampPanel />}
-      {/* Le relais, ouvert comme le reste. Le drapeau vit dans game/canal :
-          a false, le bundler retire tout le panneau du build. */}
+      {/* Le relais suit les duels : ouvert dans l'application, ferme sur le
+          site, ou RELAIS_OUVERT vaut false en dur et le bundler retire tout
+          le panneau. */}
       {RELAIS_OUVERT && <RelaisPanel />}
 
       <Repliable

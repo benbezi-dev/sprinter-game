@@ -211,7 +211,8 @@ function MainGame() {
       {/* La course de relais se pose ici, et non dans l'onglet du vestiaire :
           l'ecran-titre disparait au coup de pistolet, et une salle tenue par
           un panneau demonte se fermerait a l'instant precis ou la course
-          commence. */}
+          commence. En production, EST_TEST vaut false en dur et tout ceci
+          sort du build. */}
       {RELAIS_OUVERT && <PisteRelais />}
       {/* La presentation des athletes se joue SUR la piste, et doit donc
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre

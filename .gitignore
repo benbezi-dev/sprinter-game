@@ -2,6 +2,7 @@ node_modules/
 dist/
 # Le build de la version de test, produit par le workflow.
 dist-test/
+dist-app/
 *.tsbuildinfo
 .DS_Store
 worker/node_modules/
@@ -49,14 +50,19 @@ android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
-# Le trousseau de signature Android. Ces fichiers portent le chemin du keystore
-# et ses mots de passe. Ils n'ont jamais ete suivis, mais rien ne les en
-# empechait : un seul `git add -A` les envoyait sur un depot public. Une cle de
-# signature qui fuit ne se retire pas — elle se remplace, et l'application ne
-# se met alors plus a jour pour ceux qui l'ont deja installee.
+android/app/src/main/assets/public/
+
+# Le trousseau de signature Android et ses mots de passe. Perdre ce trousseau,
+# c'est perdre le droit de mettre l'application a jour ; le laisser fuir est
+# pire encore : une cle de signature qui a fuite ne se retire pas, elle se
+# remplace, et l'application ne se met alors plus a jour pour ceux qui l'ont
+# deja installee. Ces fichiers n'ont jamais ete suivis, mais rien ne les en
+# empechait — un seul `git add -A` suffisait.
+# Une regle large plutot qu'une liste : c'est la seule qui tienne quand le
+# fichier suivant s'appellera « keystore - copie 2.txt ».
 android/keystore*
-# Le modele, lui, se suit : c'est la documentation du fichier ci-dessus, et il
-# ne porte que des valeurs a remplir. Il a deja vecu dans le depot (5aedd64).
+# Le modele, lui, se suit : il documente le fichier ci-dessus et ne porte que
+# des valeurs a remplir. Il a deja vecu dans le depot (5aedd64).
 !android/keystore.properties.exemple
 *.jks
 *.keystore

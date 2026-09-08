@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Mic, Square, Play, Send, Loader2, Check, Trash2 } from 'lucide-react';
+import { Mic, Square, Play, Send, Loader2, Check, Trash2, Flag, Ban } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
   Enregistreur, poserMot, urlDeLaVoix, MAX_TEXTE, MAX_VOIX_MS,
   type EtatVoix,
 } from '@/game/mot';
+import {
+  signaler, bloquer, dejaSignale, estBloque, MOTIFS, type Motif,
+} from '@/game/moderation';
 
 /**
  * Le mot du vainqueur : celui qui l'ecrit, et celui qui le recoit.
@@ -156,12 +159,18 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
  * de vous battre. Une fois cette fenetre fermee, l'enregistrement est efface du
  * serveur et ne se rejoue plus.
  */
-export function LireLeMot({ texte, voix, voixType, auteur }: {
+export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
+  duel?: string;
   texte?: string | null; voix?: string | null; voixType?: string | null; auteur: string;
 }) {
   const { N } = SprinterApp;
   const [url, setUrl] = useState<string | null>(null);
   const [muet, setMuet] = useState(false);
+  // Le recours du destinataire. `repos` est l'etat ordinaire : deux liens
+  // discrets, parce que c'est un ecran de defaite et pas un formulaire.
+  const [recours, setRecours] = useState<'repos' | 'choix' | 'envoye' | 'bloque'>(
+    () => (duel && dejaSignale(duel)) ? 'envoye'
+        : estBloque(auteur) ? 'bloque' : 'repos');
 
   useEffect(() => {
     if (!voix) return;
@@ -221,6 +230,79 @@ export function LireLeMot({ texte, voix, voixType, auteur }: {
           {N.t('mot_ephemere')}
         </span>
       )}
+
+      {/* SIGNALER ET BLOQUER.
+          Ici, et pas ailleurs : la voix est effacee du serveur des que cette
+          fenetre se ferme, et le signalement en copie le contenu au moment ou
+          il part. Une seconde plus tard, il n'y aurait plus rien a montrer a
+          qui doit le relire. Voir game/moderation.ts. */}
+      <div className="w-full pt-2 mt-1 border-t border-white/10 flex flex-col items-center gap-1.5">
+        {recours === 'repos' && (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setRecours('choix')}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground
+                         hover:text-foreground transition-colors"
+            >
+              <Flag className="w-3 h-3" /> {N.t('mod_signaler')}
+            </button>
+            <button
+              onClick={() => { void bloquer(auteur); setRecours('bloque'); }}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground
+                         hover:text-foreground transition-colors"
+            >
+              <Ban className="w-3 h-3" /> {N.t('mod_bloquer', { n: auteur })}
+            </button>
+          </div>
+        )}
+
+        {recours === 'choix' && (
+          <>
+            <span className="text-[10px] text-foreground text-center leading-snug">
+              {N.t('mod_titre')}
+            </span>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {MOTIFS.map((m: Motif) => (
+                <button
+                  key={m}
+                  onClick={() => {
+                    if (duel) void signaler(duel, m);
+                    setRecours('envoye');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/15
+                             text-[10px] text-foreground transition-colors"
+                >
+                  {N.t('mod_' + m)}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setRecours('repos')}
+              className="text-[9px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {N.t('mod_annuler')}
+            </button>
+          </>
+        )}
+
+        {recours === 'envoye' && (
+          <span className="text-[10px] text-cyan-300 text-center leading-snug">
+            {N.t('mod_envoye')}
+          </span>
+        )}
+
+        {recours === 'bloque' && (
+          <span className="text-[10px] text-cyan-300 text-center leading-snug">
+            {N.t('mod_bloque', { n: auteur })}
+          </span>
+        )}
+
+        {recours !== 'choix' && (
+          <span className="text-[9px] text-muted-foreground text-center leading-snug">
+            {N.t('mod_explique')}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
