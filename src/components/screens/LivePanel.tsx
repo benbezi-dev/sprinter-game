@@ -20,7 +20,7 @@ import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
 import { Review, type EtatReview } from '@/game/review';
-import { sonDuJeu } from '@/game/film-course';
+import { sonDuJeu, releverLesNoms, oublierLesNoms, nommesParLeFilm } from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
@@ -286,9 +286,16 @@ export function LivePanel() {
     // seconde ou l'on programme, la connexion peut n'avoir rien recu encore.
     if (!film.current) film.current = new Review(setReview);
     const f = film.current;
+    oublierLesNoms();
     setTimeout(
-      () => f.demarrer(SprinterApp.G.cv || null,
-                      [...sonDuJeu(), voixCourante()?.pisteDistante()]),
+      () => {
+        f.demarrer(SprinterApp.G.cv || null,
+                   [...sonDuJeu(), voixCourante()?.pisteDistante()]);
+        // Une fois la piste armee, donc au demarrage et pas avant : c'est la
+        // que les adversaires portent enfin leur pastille. Un direct met le
+        // pseudonyme de chacun au-dessus de sa tete, et le film l'emporte.
+        releverLesNoms();
+      },
       Math.max(0, dans - 300),
     );
   };
@@ -619,7 +626,8 @@ export function LivePanel() {
     >
       {/* Apres la course : la video, et son compte a rebours. */}
       {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
-        <ReviewVideo etat={review} onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
+        <ReviewVideo etat={review} nommes={nommesParLeFilm()}
+                     onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}
