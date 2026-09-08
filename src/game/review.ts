@@ -111,6 +111,30 @@ function choisirFormat(avecSon = false): string | null {
 }
 
 /**
+ * LE TYPE DU FICHIER, ET NON CELUI DE L'ENREGISTREUR.
+ *
+ * `MediaRecorder` veut savoir COMMENT encoder, et on le lui dit en detail :
+ * « video/mp4;codecs="avc1.42E01E,mp4a.40.2" ». Un fichier, lui, n'a pas de
+ * codecs — il est « video/mp4 », point. Et la difference n'est pas cosmetique :
+ * la feuille de partage filtre les fichiers qu'elle accepte SUR LEUR TYPE, et
+ * une chaine a rallonge entre guillemets ne ressemble a rien de ce qu'elle
+ * connait. `canShare` repond alors non, la feuille ne s'ouvre jamais, et on
+ * retombe sur le telechargement — qui, dans une WKWebView iOS, ne fait rien du
+ * tout. Le bouton s'allume, le joueur appuie, il ne se passe rien.
+ *
+ * `affiche.ts` n'a jamais eu ce probleme : elle annonce « image/jpeg » et rien
+ * d'autre. On fait pareil.
+ */
+function typeDuFichier(format: string): string {
+  return (format || '').split(';')[0].trim() || 'video/mp4';
+}
+
+/** L'extension qui va avec. Une feuille de partage regarde aussi le nom. */
+function extensionDe(type: string): string {
+  return type.includes('webm') ? 'webm' : 'mp4';
+}
+
+/**
  * Le telephone sait-il faire sortir un fichier de cette taille et de ce type ?
  *
  * La question se pose avec le fichier lui-meme, comme dans `affiche.ts` :
@@ -128,7 +152,8 @@ function peutPartager(type: string): boolean {
   try {
     const n: any = navigator;
     if (typeof n?.share !== 'function' || typeof n?.canShare !== 'function') return false;
-    const temoin = new File([new Uint8Array(1)], 't', { type: type || 'video/mp4' });
+    const t = typeDuFichier(type);
+    const temoin = new File([new Uint8Array(1)], `t.${extensionDe(t)}`, { type: t });
     return n.canShare({ files: [temoin] });
   } catch {
     return false;
@@ -385,7 +410,8 @@ export class Review {
   private async sortir(): Promise<Sortie> {
     const url = this.url;
     if (!url) return 'echec';
-    const type = this.format || 'video/mp4';
+    // Le type du fichier, pas celui de l'encodeur. Voir `typeDuFichier`.
+    const type = typeDuFichier(this.format);
     if (this.donnees && peutPartager(type)) {
       try {
         const fichier = new File([this.donnees], this.etat.fichier, { type });
