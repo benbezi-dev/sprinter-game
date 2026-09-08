@@ -37,6 +37,45 @@ export function filmDeLaCourse(): Review {
 
 export function etatDuFilm(): EtatReview { return etat; }
 
+/* ---------------------------------------------------------------------------
+   QUI LE FILM A FILME
+   ---------------------------------------------------------------------------
+   La course peint le pseudonyme de chaque adversaire sur une pastille au-dessus
+   de sa tete — c'est ce qui permet de le reconnaitre en pleine course, et c'est
+   la raison d'etre du repere. Le film capture le canvas : ces noms partent donc
+   avec la video, pendant toute sa duree, et un joueur qui l'envoie ne le sait
+   pas forcement.
+
+   On releve donc les noms AU MOMENT OU L'ON FILME, et pas au moment de
+   partager : a l'arrivee la piste est deja demontee, et le tri des noms n'a
+   plus rien a lire. Le releve vit ici plutot que dans `review.ts`, qui sait
+   filmer un canvas sans rien savoir de ce qu'il y a dessus, et qui doit le
+   rester.
+
+   Les deux chemins d'enregistrement s'y adressent : le one shot juste en
+   dessous, le direct depuis LivePanel.
+--------------------------------------------------------------------------- */
+
+let nommes: string[] = [];
+
+/** Les pseudonymes que la prise en cours a filmes. */
+export function nommesParLeFilm(): string[] { return nommes; }
+
+/**
+ * Ajoute a la liste ceux que la piste affiche maintenant.
+ *
+ * On ajoute au lieu de remplacer : un one shot enchaine trois epreuves dans la
+ * meme prise, et la seconde ne doit pas effacer ce que la premiere a montre.
+ */
+export function releverLesNoms() {
+  for (const nom of (SprinterApp as any).pseudonymesSurLaPiste?.() || []) {
+    if (!nommes.includes(nom)) nommes.push(nom);
+  }
+}
+
+/** La prise est jetee ou remplacee : ce qu'elle montrait ne vaut plus. */
+export function oublierLesNoms() { nommes = []; }
+
 function abonner(prevenir: () => void): () => void {
   abonnes.add(prevenir);
   return () => { abonnes.delete(prevenir); };
@@ -119,7 +158,10 @@ export function useFilmerLeOneShot() {
       // epreuves precedentes, et la jeter ici ne laisserait au joueur que son
       // 400 m alors que son chrono, lui, additionne les trois.
       if (shotIdx > 0 && f.filme()) f.reprendre();
-      else f.demarrer(SprinterApp.G.cv || null, sonDuJeu());
+      else { oublierLesNoms(); f.demarrer(SprinterApp.G.cv || null, sonDuJeu()); }
+      // Apres le demarrage comme apres la reprise : le fantome d'un 200 m
+      // n'est pas forcement celui du 100 m qui le precede dans la meme prise.
+      releverLesNoms();
       return;
     }
 
@@ -130,11 +172,13 @@ export function useFilmerLeOneShot() {
     // Un faux depart n'a pas de chrono, donc pas d'affiche et pas de video :
     // l'ecran de fin cache les deux boutons, et garder le film en memoire
     // reviendrait a stocker quelques mega-octets que personne ne verra.
-    if (state === 'falseout' || state === 'over') { f.jeter(); return; }
+    if (state === 'falseout' || state === 'over') { f.jeter(); oublierLesNoms(); return; }
 
     // Retour a l'ecran-titre, mais seulement en QUITTANT une course. La video
     // prete survit a tout le reste : le joueur peut ouvrir le classement, lire
     // sa boite, revenir — elle l'attend, jusqu'a ses deux heures.
-    if (state === 'title' && (veille === 'count' || veille === 'race' || veille === 'result')) f.jeter();
+    if (state === 'title' && (veille === 'count' || veille === 'race' || veille === 'result')) {
+      f.jeter(); oublierLesNoms();
+    }
   }, [state, mode, liveOn, shotIdx]);
 }

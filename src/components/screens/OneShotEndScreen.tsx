@@ -24,7 +24,8 @@ import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 import { compteARebours, type Sortie as SortieVideo } from '@/game/review';
-import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { useFilmDeLaCourse, partagerLeFilm, nommesParLeFilm } from '@/game/film-course';
+import { AvertissementDesNoms } from './ReviewVideo';
 import { EcartRecord } from './RecordPerso';
 
 /**
@@ -1211,6 +1212,7 @@ export function OneShotEndScreen() {
                  reste. L'image et le replay partagent donc la ligne qui existait
                  deja — ils repondent a la meme envie, ils se lisent bien cote a
                  cote, et le rang des boutons ne bouge pas. */
+              <>
               <div className="paire-partage flex flex-row items-stretch gap-2 court:gap-1.5 w-full court:flex-1 court:min-w-0">
               <button
                 onClick={partagerMaCourse}
@@ -1279,6 +1281,14 @@ export function OneShotEndScreen() {
                 </button>
               )}
               </div>
+              {/* Sous la paire, et non dans le bouton : le libelle du replay
+                  tient deja sur deux lignes dans une demi-largeur, et une
+                  phrase de plus a l'interieur le ferait deborder sur un
+                  telephone. Elle se lit avant l'appui, ce qui est tout ce
+                  qu'on lui demande. Le mot « vidéo » dit lequel des deux
+                  boutons elle concerne. */}
+              {film.phase === 'prete' && <AvertissementDesNoms nommes={nommesParLeFilm()} />}
+              </>
             )}
             <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
             {RECOMMENCER_OUVERT && <button

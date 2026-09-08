@@ -2060,6 +2060,35 @@
   }
 
   /**
+   * Les pseudonymes que la piste affiche en ce moment, le joueur excepte.
+   *
+   * La meme liste que celle des pastilles, et tiree de la meme expression :
+   * `drawAthletes` compose son `all` ainsi, et `drawNomRepere` ecrit chacun de
+   * ces noms au-dessus d'une tete. Cette fonction vit donc a cote d'elles, et
+   * non dans le module qui filme — un tri des noms ecrit ailleurs cesserait
+   * d'etre vrai a la premiere fois qu'on change qui porte une pastille.
+   *
+   * On ecarte les libelles : « TOI », « le fantome », « l'adversaire » ne
+   * designent personne. Ce qui reste est le pseudonyme de quelqu'un d'autre.
+   */
+  function pseudonymesSurLaPiste() {
+    const all = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0)
+      ? G.runners.concat([G.ghost.runner]) : G.runners;
+    // 'ADVERSAIRE' est le nom de repli que `armLive` donne au Runner lui-meme
+    // quand la salle n'a pas transmis de pseudonyme : il n'en designe aucun.
+    const libelles = [t('you'), t('ghost_label'), t('opponent'), 'ADVERSAIRE'];
+    const vus = [];
+    for (const r of all) {
+      const rep = r && r.repere;
+      if (!rep || rep.moi || !rep.nom) continue;
+      const nom = String(rep.nom).trim();
+      if (!nom || libelles.indexOf(nom) >= 0 || vus.indexOf(nom) >= 0) continue;
+      vus.push(nom);
+    }
+    return vus;
+  }
+
+  /**
    * Trois echos derriere le fantome, pris sur sa propre trace. Ils espacent
    * l'image quand il va vite et la resserrent quand il ralentit : l'ecart
    * devient lisible sans quitter la piste des yeux, ce que ne donne aucun
@@ -2103,6 +2132,7 @@
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
+    pseudonymesSurLaPiste,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,
     RED, MAGENTA };

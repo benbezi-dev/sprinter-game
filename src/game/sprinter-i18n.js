@@ -548,6 +548,16 @@
                       'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
                       'this device cannot record the race'],
+    // La course peint le pseudonyme de chaque adversaire au-dessus de sa tete,
+    // et le film capture la piste : ces noms partent avec la video. On le dit
+    // avant l'envoi, pas apres — une fois partagee, l'image ne se reprend pas.
+    // Deux cles plutot qu'un pluriel bricole : « le nom de Théo » et « les noms
+    // de Théo et Loïc » ne se construisent pas de la meme facon en francais.
+    review_names_1:  ['cette vidéo montre le nom de {n}', 'this video shows {n}’s name'],
+    review_names_n:  ['cette vidéo montre les noms de {n}', 'this video shows the names of {n}'],
+    // La conjonction de l'énumération, ici et non dans le composant : une
+    // langue de plus se traduit dans ce fichier, pas dans du JSX.
+    review_names_et: ['et', 'and'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
     live_vs:         ['en direct contre {n}', 'live against {n}'],
     live_gap:        ['{s} s d’écart', '{s} s apart'],
