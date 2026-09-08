@@ -49,6 +49,7 @@ import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
+import { useFilmerLeOneShot } from '@/game/film-course';
 
 const queryClient = new QueryClient();
 
@@ -102,6 +103,10 @@ function MainGame() {
   }), []);
   useVisualViewportHeight();
   useBackGuard();
+  // La camera du one shot. Elle se pose ici parce que c'est le seul endroit
+  // qui voie passer TOUTE la course : l'ecran de fin, lui, n'existe qu'une
+  // fois la derniere ligne franchie. Voir game/film-course.ts.
+  useFilmerLeOneShot();
 
   // Sur le canal de test, le jeu ne se monte qu'une fois l'acces accorde.
   //

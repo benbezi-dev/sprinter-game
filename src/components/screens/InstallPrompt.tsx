@@ -7,6 +7,22 @@ import { EST_NATIF } from '@/game/canal';
 
 const REFUS = 'sprinter_install_refuse';
 
+/**
+ * Cette invitation occupe-t-elle le bas de l'ecran en ce moment ?
+ *
+ * Une autre carte veut la meme place — celle des notifications — et doit
+ * pouvoir attendre son tour. Un drapeau de module plutot qu'un contexte : la
+ * question est « est-ce que la place est prise », pas « qu'est-ce qui la
+ * prend », et une seule de ces cartes existe a la fois dans l'arbre.
+ *
+ * Le savoir compte sur Android en particulier : `beforeinstallprompt` n'arrive
+ * pas au chargement mais quand le navigateur juge le jeu installable — parfois
+ * plusieurs secondes apres. Regarder une seule fois ne suffit donc pas, et
+ * c'est a celui qui attend de repasser.
+ */
+let visible = false;
+export function installVisible(): boolean { return visible; }
+
 /** Deja lance depuis l'ecran d'accueil du telephone ? */
 function dejaInstalle() {
   // Dans l'enveloppe native, le jeu EST l'application : il n'y a rien a
@@ -83,7 +99,16 @@ export function InstallPrompt() {
   };
 
   // Jamais pendant une course : on n'interrompt pas un chrono.
-  if (state !== 'title' || !ouvert) return null;
+  const montre = state === 'title' && ouvert;
+
+  // Le drapeau se pose dans un effet, pas dans le rendu : un rendu qui laisse
+  // une trace derriere lui est un rendu qu'on ne peut plus rejouer.
+  useEffect(() => {
+    visible = montre;
+    return () => { visible = false; };
+  }, [montre]);
+
+  if (!montre) return null;
 
   return (
     <AnimatePresence>

@@ -6,17 +6,48 @@
 // seule machine capable de produire ce fichier est celle qui a dessine la
 // course — le navigateur du joueur, image par image, sur son propre canvas.
 //
-// La duree de vie de dix minutes se tient donc toute seule, sans tache de
-// nettoyage a planifier nulle part : le fichier vit dans la memoire de l'onglet,
-// un minuteur le libere, et il disparait aussi si le joueur ferme la page. Ce
-// que l'utilisateur a telecharge, en revanche, est sorti de l'application et ne
-// nous appartient plus — c'est un fichier a lui, sur son appareil, que rien
+// Elle s'en va de deux facons, et la premiere est de loin la plus frequente.
+//
+// UNE FOIS SORTIE, ELLE NE REVIENT PAS. Des que la feuille de partage s'est
+// refermee — que le joueur ait envoye la video ou qu'il ait simplement change
+// d'avis — le film est libere ici meme. C'est la regle demandee, et elle se
+// defend : le fichier est parti chez lui, ou il a decide qu'il n'en voulait
+// pas ; dans les deux cas le jeu n'a plus de raison de garder plusieurs
+// dizaines de mega-octets dans la memoire d'un onglet. Seul un echec franc —
+// rien n'est sorti du tout — laisse le film en place, parce que retirer le
+// bouton a quelqu'un a qui il n'a rien donne serait le punir d'un incident
+// dont il n'est pas l'auteur.
+//
+// DEUX HEURES, SINON. C'est la borne du film auquel personne n'a touche. Elle
+// se tient toute seule, sans tache de nettoyage a planifier nulle part : le
+// fichier vit dans la memoire de l'onglet, un minuteur le libere, et il
+// disparait aussi si le joueur ferme la page.
+//
+// Ce que l'utilisateur a telecharge, en revanche, est sorti de l'application et
+// ne nous appartient plus — c'est un fichier a lui, sur son appareil, que rien
 // ici ne peut ni ne doit effacer.
 
-/** Dix minutes, comme demande. Au-dela, le bouton s'eteint. */
-export const TTL_MS = 10 * 60 * 1000;
+/**
+ * Deux heures, comme demande.
+ *
+ * Ce n'est PAS la duree de quoi que ce soit d'autre : le direct s'en servait
+ * pour decider quand couper la liaison audio d'apres-course, et une liaison
+ * ouverte deux heures n'est pas ce qu'on veut. Voir LivePanel, qui a repris sa
+ * propre duree.
+ */
+export const TTL_MS = 2 * 60 * 60 * 1000;
 
-export type PhaseReview = 'inactif' | 'enregistre' | 'prete' | 'expiree' | 'impossible';
+/**
+ * Ou en est le film.
+ *
+ * `rendue` et `expiree` disent toutes deux qu'il n'y a plus de fichier, et
+ * elles ne se confondent pas : la premiere est un depart — la video est sortie
+ * par la feuille de partage — la seconde une fin de vie. L'ecran ne dit donc
+ * pas la meme chose dans les deux cas, et surtout il ne va pas annoncer « la
+ * video a ete effacee » a quelqu'un qui vient de l'envoyer a ses amis.
+ */
+export type PhaseReview =
+  'inactif' | 'enregistre' | 'prete' | 'rendue' | 'expiree' | 'impossible';
 
 /**
  * Ce qui s'est reellement produit quand le joueur a appuye.
@@ -44,8 +75,15 @@ export type EtatReview = {
  * MP4 d'abord parce que c'est le seul que les appareils Apple savent relire
  * partout une fois telecharge : un WebM sauve depuis un iPhone finit dans la
  * pellicule sans pouvoir s'ouvrir, ce qui est pire que pas de video du tout.
+ *
+ * DEUX LISTES, PARCE QU'UN CONTENEUR NE SUFFIT PAS A PROMETTRE UNE PISTE SON.
+ * Demander « video/mp4;codecs=avc1 » avec du son dans le flux, c'est demander
+ * un film muet et lui tendre un micro : selon le navigateur, la piste audio
+ * est ignoree en silence — le replay sort sans le coup de pistolet, sans la
+ * foule, sans rien, et personne ne sait pourquoi. On nomme donc explicitement
+ * le codec audio des qu'il y a du son a mettre.
  */
-const FORMATS = [
+const FORMATS_MUETS = [
   'video/mp4;codecs=avc1',
   'video/mp4',
   'video/webm;codecs=vp9',
@@ -53,12 +91,23 @@ const FORMATS = [
   'video/webm',
 ];
 
-function choisirFormat(): string | null {
+const FORMATS_SONORES = [
+  'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4',
+  'video/webm;codecs="vp9,opus"',
+  'video/webm;codecs="vp8,opus"',
+  'video/webm',
+];
+
+function choisirFormat(avecSon = false): string | null {
   if (typeof MediaRecorder === 'undefined') return null;
-  for (const f of FORMATS) {
+  for (const f of avecSon ? FORMATS_SONORES : FORMATS_MUETS) {
     try { if (MediaRecorder.isTypeSupported(f)) return f; } catch { /* suivant */ }
   }
-  return null;
+  // Un appareil qui sait filmer mais pas sonoriser filme quand meme. Un replay
+  // muet vaut mieux que pas de replay.
+  return avecSon ? choisirFormat(false) : null;
 }
 
 /**
@@ -88,6 +137,8 @@ function peutPartager(type: string): boolean {
 
 export class Review {
   private rec: MediaRecorder | null = null;
+  /** Le flux tire du canvas, garde pour pouvoir le relacher. Voir `rendreLeCanvas`. */
+  private fluxVideo: MediaStream | null = null;
   private morceaux: Blob[] = [];
   private url: string | null = null;
   /**
@@ -134,17 +185,34 @@ export class Review {
    * images a la course elle-meme, ce qu'on ne peut pas se permettre dans un
    * jeu ou l'on compte en centiemes.
    */
-  demarrer(canvas: HTMLCanvasElement | null) {
+  demarrer(canvas: HTMLCanvasElement | null, sons: Array<MediaStreamTrack | null | undefined> = []) {
     if (!canvas) return;
-    const format = choisirFormat();
+    // Les pistes qu'on nous tend n'appartiennent PAS a cet enregistreur : le
+    // son du jeu sort d'un noeud qui vit aussi longtemps que l'onglet, la voix
+    // de l'adversaire d'une connexion qui a sa propre vie. On les emprunte le
+    // temps du film, et on ne les arretera jamais — arreter la piste du jeu
+    // couperait le son pour de bon, ce qui serait une facon spectaculaire de
+    // rater un replay.
+    const pistes = sons.filter((p): p is MediaStreamTrack => !!p && p.readyState === 'live');
+    const format = choisirFormat(pistes.length > 0);
     if (!format) { this.prevenir({ phase: 'impossible' }); return; }
     this.jeter();
 
     try {
       const flux = (canvas as any).captureStream(30) as MediaStream;
+      this.fluxVideo = flux;
+      for (const p of pistes) {
+        try { flux.addTrack(p); } catch { /* on filmera sans celle-la */ }
+      }
       this.format = format;
       this.morceaux = [];
-      this.rec = new MediaRecorder(flux, { mimeType: format, videoBitsPerSecond: 2_500_000 });
+      this.rec = new MediaRecorder(flux, {
+        mimeType: format,
+        videoBitsPerSecond: 2_500_000,
+        // De quoi rendre une foule et un coup de pistolet sans peser : le son
+        // du jeu est synthetise, il n'a pas la matiere d'un enregistrement.
+        audioBitsPerSecond: 128_000,
+      });
       this.rec.ondataavailable = ev => { if (ev.data && ev.data.size) this.morceaux.push(ev.data); };
       this.rec.onerror = () => this.prevenir({ phase: 'impossible' });
       this.rec.start(1000);
@@ -154,6 +222,61 @@ export class Review {
     }
   }
 
+  /**
+   * Rend le canvas a lui-meme.
+   *
+   * `captureStream` laisse une piste vivante branchee sur le canvas tant qu'on
+   * ne l'arrete pas : elle continue d'en tirer des images, pour personne. Une
+   * seule ne se voyait pas ; une par course, sur une soiree de one shots,
+   * finit par se sentir.
+   *
+   * Les pistes SON, elles, sont retirees du flux sans etre arretees — elles ne
+   * sont pas a nous. Voir `demarrer`.
+   */
+  private rendreLeCanvas() {
+    const f = this.fluxVideo;
+    this.fluxVideo = null;
+    if (!f) return;
+    try {
+      for (const p of f.getAudioTracks()) f.removeTrack(p);
+      for (const p of f.getVideoTracks()) p.stop();
+    } catch { /* deja rendu */ }
+  }
+
+  /**
+   * Suspend la capture, et la reprend.
+   *
+   * Un one shot peut compter trois epreuves, separees par un ecran de
+   * resultat que le joueur regarde le temps qu'il veut. Filmer d'une traite
+   * mettrait cette attente dans le film — parfois une minute d'ecran fixe,
+   * pour rien, et autant de mega-octets a faire passer ensuite par la feuille
+   * de partage. On ne filme donc que ce qui court, en une seule prise.
+   *
+   * `pause()` peut manquer sur un navigateur ancien. On ne s'en formalise
+   * pas : le film contiendra l'ecran de resultat, ce qui est moins bien mais
+   * reste une video de la course. C'est exactement le genre de detail pour
+   * lequel il ne faut pas renoncer a la fonction entiere.
+   */
+  pause() {
+    const r = this.rec;
+    if (!r || r.state !== 'recording' || typeof r.pause !== 'function') return;
+    try { r.pause(); } catch { /* on continue de filmer, tant pis */ }
+  }
+
+  reprendre() {
+    const r = this.rec;
+    if (!r || r.state !== 'paused' || typeof r.resume !== 'function') return;
+    try { r.resume(); } catch { /* la suite manquera au film */ }
+  }
+
+  /** Une prise est-elle en cours ? Sert a distinguer reprendre de recommencer. */
+  filme(): boolean {
+    return !!this.rec && this.rec.state !== 'inactive';
+  }
+
+  /** L'etat courant, pour qui arrive apres coup. */
+  lireEtat(): EtatReview { return this.etat; }
+
   /** Arrete la capture et publie le fichier. Demarre le compte a rebours. */
   arreter(): Promise<void> {
     return new Promise(resolve => {
@@ -161,6 +284,7 @@ export class Review {
       if (!r || r.state === 'inactive') { resolve(); return; }
       r.onstop = () => {
         this.rec = null;
+        this.rendreLeCanvas();
         if (!this.morceaux.length) { this.prevenir({ phase: 'impossible' }); resolve(); return; }
         const blob = new Blob(this.morceaux, { type: this.format });
         this.morceaux = [];
@@ -176,7 +300,7 @@ export class Review {
         this.battre();
         resolve();
       };
-      try { r.stop(); } catch { this.rec = null; resolve(); }
+      try { r.stop(); } catch { this.rec = null; this.rendreLeCanvas(); resolve(); }
     });
   }
 
@@ -186,14 +310,40 @@ export class Review {
    * Elle est inconditionnelle : que le joueur ait telecharge ou non ne change
    * rien, comme demande. On revoque l'URL, ce qui rend le lien inutilisable et
    * laisse le navigateur liberer la memoire du blob.
+   *
+   * On ne previent que quand l'ECRAN changerait. Le minuteur bat toujours a la
+   * seconde, mais sur deux heures le compte a rebours s'affiche a la minute :
+   * prevenir a chaque battement, ce serait repeindre sept mille fois l'ecran
+   * de fin — le plus charge du jeu — pour y reecrire le meme texte.
    */
   private battre() {
     clearInterval(this.battement);
+    let dernier = compteARebours(TTL_MS);
     this.battement = setInterval(() => {
       const reste = this.expireA - Date.now();
       if (reste <= 0) { this.expirer(); return; }
+      const vu = compteARebours(reste);
+      if (vu === dernier) return;
+      dernier = vu;
       this.prevenir({ reste });
     }, 1000);
+  }
+
+  /**
+   * La video est sortie du jeu : on la libere ici.
+   *
+   * La difference avec `expirer` n'est pas dans le geste — c'est le meme — mais
+   * dans ce qu'on en dit. Voir l'en-tete du fichier : une video partagee est
+   * partie chez son proprietaire, une video expiree n'est allee nulle part.
+   */
+  private rendre() {
+    clearInterval(this.battement);
+    this.battement = null;
+    if (this.url) { try { URL.revokeObjectURL(this.url); } catch { /* ignore */ } }
+    this.url = null;
+    this.donnees = null;
+    this.expireA = 0;
+    this.prevenir({ phase: 'rendue', url: null, reste: 0 });
   }
 
   private expirer() {
@@ -219,7 +369,22 @@ export class Review {
    */
   async partager(): Promise<Sortie> {
     if (!this.url || this.etat.phase !== 'prete') return 'echec';
+    const sortie = await this.sortir();
+    // ET LA VIDEO S'EN VA. Envoyee, enregistree, ou refusee d'un revers de
+    // pouce : dans les trois cas la feuille s'est refermee et le geste a eu
+    // lieu. Ce qui devait sortir est sorti, le reste ne nous appartient plus,
+    // et le bouton n'a plus rien a proposer — voir l'en-tete du fichier.
+    //
+    // `echec` seul fait exception : la, rien n'est sorti, et le joueur doit
+    // pouvoir reessayer.
+    if (sortie !== 'echec') this.rendre();
+    return sortie;
+  }
 
+  /** Le geste lui-meme, sans la consequence. */
+  private async sortir(): Promise<Sortie> {
+    const url = this.url;
+    if (!url) return 'echec';
     const type = this.format || 'video/mp4';
     if (this.donnees && peutPartager(type)) {
       try {
@@ -242,7 +407,7 @@ export class Review {
 
     try {
       const a = document.createElement('a');
-      a.href = this.url;
+      a.href = url;
       a.download = this.etat.fichier;
       a.rel = 'noopener';
       document.body.appendChild(a);
@@ -260,6 +425,7 @@ export class Review {
     this.battement = null;
     try { if (this.rec && this.rec.state !== 'inactive') this.rec.stop(); } catch { /* ignore */ }
     this.rec = null;
+    this.rendreLeCanvas();
     this.morceaux = [];
     if (this.url) { try { URL.revokeObjectURL(this.url); } catch { /* ignore */ } }
     this.url = null;
@@ -269,8 +435,21 @@ export class Review {
   }
 }
 
-/** « 4:07 » a partir d'un reste en millisecondes. */
+/**
+ * Le reste, ecrit comme on le lirait.
+ *
+ * Trois formes, parce qu'une seule ne tient pas sur deux heures : « 120:00 »
+ * n'est pas une duree qu'un oeil humain lit, et compter les secondes d'une
+ * heure et demie n'apprend rien a personne. On dit donc l'heure et la minute
+ * loin de la fin, la minute ensuite, et la seconde seulement dans les deux
+ * dernieres — la ou elle commence a compter.
+ *
+ * C'est aussi ce qui cadence le battement : voir `battre`, qui ne previent
+ * l'ecran que lorsque CETTE chaine change.
+ */
 export function compteARebours(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
+  if (s >= 120) return `${Math.ceil(s / 60)} min`;
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
