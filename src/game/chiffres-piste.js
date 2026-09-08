@@ -36,8 +36,10 @@
   const MIL = LARGE / 2;       // axe vertical
   const R = (G - H) / 2;       // rayon d'une panse pleine largeur
 
-  // Centre de la panse basse : elle touche la ligne de pied.
+  // Centre de la panse basse : elle touche la ligne de pied. Et son
+  // symetrique en haut, pour le 9.
   const YBAS = BAS - R;
+  const YHAUT = HAUT + R;
 
   const TAU = Math.PI * 2;
 
@@ -89,6 +91,17 @@
       const rh = 0.185, yh = HAUT + rh;
       c.moveTo(MIL + rh, yh); c.arc(MIL, yh, rh, 0, TAU);
       c.moveTo(MIL + R, YBAS); c.arc(MIL, YBAS, R, 0, TAU);
+    },
+    // Le 9 est le 6 retourne : cercle en haut, courbe qui descend.
+    9: (c) => {
+      c.moveTo(0.12, 0.85);
+      c.bezierCurveTo(0.32, 1.00, G, 0.80, G, YHAUT);
+      c.moveTo(MIL + R, YHAUT); c.arc(MIL, YHAUT, R, 0, TAU);
+    },
+    // Une ellipse pleine hauteur : un cercle serait trop court pour la
+    // boite, et le 0 Deco est de toute facon un ovale dresse.
+    0: (c) => {
+      c.ellipse(MIL, 0.5, R, (BAS - HAUT) / 2, 0, 0, TAU);
     }
   };
 
@@ -116,8 +129,24 @@
     ctx.restore();
   }
 
-  /** Largeur au sol d'un chiffre de cette hauteur, pour le centrer. */
-  function largeur(haut) { return LARGE * haut; }
+  /** Chasse d'un chiffre : sa boite plus l'approche qui la suit. */
+  const CHASSE = LARGE + 0.11;
 
-  root.ChiffresPiste = { dessiner, largeur, LARGE, TRAIT };
+  /** Largeur au sol d'un nombre de `n` chiffres, a cette hauteur. */
+  function largeur(n, haut) {
+    const k = String(n).length;
+    return (k * CHASSE - (CHASSE - LARGE)) * haut;
+  }
+
+  /** Peindre un nombre entier, centre sur (x, y). */
+  function dessinerNombre(ctx, n, x, y, haut, couleur, graisse) {
+    const chiffres = String(Math.round(n)).split('');
+    let cx = x - largeur(n, haut) / 2 + (LARGE / 2) * haut;
+    for (const d of chiffres) {
+      dessiner(ctx, Number(d), cx, y, haut, couleur, graisse);
+      cx += CHASSE * haut;
+    }
+  }
+
+  root.ChiffresPiste = { dessiner, dessinerNombre, largeur, LARGE, TRAIT };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

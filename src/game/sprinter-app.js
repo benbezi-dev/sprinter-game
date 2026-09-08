@@ -1646,17 +1646,26 @@
       }
     }
 
-    // chiffres sur l'herbe exterieure, aux memes reperes — poses a cote du
-    // repere du couloir exterieur, qui est celui qu'ils annoncent.
+    // Distances sur l'herbe exterieure, aux memes reperes — posees a cote
+    // du repere du couloir exterieur, qui est celui qu'elles annoncent.
+    // Memes chiffres que les numeros de couloir : tout ce qui est chiffre
+    // autour d'une piste vient du meme dessin. Seul le mot du depart reste
+    // du texte — on n'a pas de lettres, seulement des chiffres.
+    ctx.save();
     ctx.font = '600 ' + (13 * ui()) + 'px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     for (const m of markers) {
       const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + 2.4);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
-      ctx.fillText(m === 0 ? t('depart') : String(m), p[0], p[1]);
+      if (m === 0) ctx.fillText(t('depart'), p[0], p[1]);
+      else if (CH) CH.dessinerNombre(ctx, m, p[0], p[1], 15 * ui(), 'rgba(255,255,255,0.80)');
+      else ctx.fillText(String(m), p[0], p[1]);
     }
+    ctx.restore();
 
     // damier d'arrivee : positionne par distance de course (qui gere le
     // second demi-tour du 400 m) plutot que par coordonnee locale fixe,
