@@ -62,6 +62,7 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/push/unsubscribe`   | Oublie les abonnements web d'un appareil |
 | POST    | `/push/natif/abonner`   | Enregistre un jeton Firebase (iOS, Android) |
 | POST    | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
+| POST    | `/direct/turn`        | Identifiants du relais de la voix, valables une heure |
 
 ## Les notifications
 
@@ -78,6 +79,40 @@ npx wrangler secret put FCM_COMPTE_SERVICE < le-compte-de-service.json
 
 La mise en place complete — projet Firebase, cle APNs, capacite Xcode — est
 dans [`docs/notifications.md`](../docs/notifications.md).
+
+## Le relais de la voix des duels
+
+La voix d'un duel passe en direct d'un navigateur à l'autre. Derrière un NAT
+symétrique — beaucoup de réseaux mobiles, presque tous les réseaux
+d'entreprise, la plupart des wifis d'hôtel — le lien direct ne s'établit pas et
+ces joueurs jouaient muets, sans que rien à l'écran ne le dise. `POST
+/direct/turn` fabrique alors, pour une heure, les identifiants d'un relais
+[Cloudflare Realtime TURN](https://developers.cloudflare.com/realtime/turn/).
+
+Ils ne peuvent pas être posés dans le jeu : le paquet web se lit et
+l'application se désassemble, donc une clé qui y figure est une clé publiée —
+et le relais est facturé au gigaoctet. Elle reste ici, et le serveur ne délivre
+que du court.
+
+```bash
+npx wrangler secret put TURN_KEY_ID
+npx wrangler secret put TURN_API_TOKEN
+```
+
+Les deux se créent dans le tableau de bord Cloudflare, sous **Realtime → TURN**.
+Tant qu'ils manquent, la route répond une liste vide et le jeu retombe sur STUN
+seul : c'est le comportement d'avant, pas une panne. On peut donc déployer sans
+eux et ouvrir le service plus tard sans redéployer.
+
+Ce qui protège la facture, dans l'ordre : un `device_id` valide exigé, dix
+demandes par minute et par adresse (`RATE_LIMITS`), une heure de validité, et
+chaque identifiant étiqueté avec l'appareil qui l'a demandé — de quoi voir dans
+les [analyses](https://developers.cloudflare.com/realtime/turn/analytics/) si un
+seul appareil relaie tout le trafic.
+
+Un duel relayé coûte quelques centaines de kilo-octets : la voix seule tourne
+autour de 40 kbit/s, et seuls les joueurs qui ne peuvent pas faire autrement
+passent par là.
 
 ## L'alerte des récupérations de compte
 

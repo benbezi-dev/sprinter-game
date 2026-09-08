@@ -67,6 +67,15 @@
   .boutons-si-bas { flex-wrap: wrap; }
   .boutons-si-bas > * { flex: 1 1 9rem; min-width: 0; }
 
+  /* SAUF LA PAIRE DE PARTAGE, QUI COMPTE POUR DEUX.
+
+     « PARTAGER MA COURSE » et « LE REPLAY » vivent dans la meme case pour ne
+     pas ajouter un rang a cet ecran, mais ils restent deux boutons : sur la
+     part de neuf rem, ils se retrouvaient a quatre et demi chacun, ou plus un
+     seul de ces libelles ne tient. On lui donne donc la place de deux, et la
+     rangee se replie d'elle-meme quand elle ne l'a pas. */
+  .boutons-si-bas > .paire-partage { flex: 1 1 18rem; }
+
   /* En colonnes, la largeur de lecture est celle d'une colonne : la borne
      n'a plus rien a borner. */
   .largeur-tenue { max-width: none; }

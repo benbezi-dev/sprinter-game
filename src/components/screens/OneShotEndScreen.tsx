@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -23,6 +23,8 @@ import { RECOMMENCER_OUVERT } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
+import { compteARebours, type Sortie as SortieVideo } from '@/game/review';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
 
 /**
@@ -85,6 +87,22 @@ export function OneShotEndScreen() {
    * genre de petit mensonge qui se voit tout de suite.
    */
   const [affiche, setAffiche] = useState<'repos' | 'fabrique' | Sortie>('repos');
+
+  /**
+   * LA VIDEO DE LA COURSE, A COTE DE L'IMAGE.
+   *
+   * Les deux repondent a la meme envie et ne se remplacent pas : l'image se
+   * republie et se lit d'un coup d'oeil, la video montre la course. On les
+   * propose donc ensemble, sous le meme titre.
+   *
+   * Elle n'a rien a fabriquer au moment du clic — elle a ete tournee PENDANT
+   * la course, image par image, par le crochet pose a la racine (voir
+   * game/film-course.ts). Le bouton ne fait que la faire sortir, et c'est ce
+   * qui explique tout le reste de son comportement : une image ratee se
+   * refabrique, une video partie ne revient pas.
+   */
+  const film = useFilmDeLaCourse();
+  const [video, setVideo] = useState<SortieVideo | null>(null);
   // La phrase de resultat ne se joue qu'une fois par defi.
   const sonne = useRef(false);
 
@@ -174,6 +192,19 @@ export function OneShotEndScreen() {
     // par parler d'un fichier que le joueur a oublie.
     setTimeout(() => setAffiche('repos'), 3200);
   }
+  /**
+   * Fait sortir la video de l'application.
+   *
+   * Pas d'etat « en cours » : il n'y a rien a fabriquer, la feuille de partage
+   * s'ouvre dans la foulee du clic. Et pas de retour au repos apres trois
+   * secondes comme pour l'image : ce que le bouton dit ensuite n'est pas un
+   * accuse de reception qui s'efface, c'est l'etat du film — il est parti, et
+   * il ne reviendra pas.
+   */
+  async function partagerLaVideo() {
+    setVideo(await partagerLeFilm());
+  }
+
   const beaten = !!challenge && complete && runTime < ghostTime;
   /**
    * Un fantome a-t-il couru dans ce couloir ?
@@ -1173,15 +1204,23 @@ export function OneShotEndScreen() {
                 que de produire une image qui annoncerait un temps qui
                 n'existe pas. */}
             {complete && !falseOut && runTime > 0 && (
+              /* DEUX BOUTONS, UN SEUL RANG.
+                 L'ecran d'apres victoire dit deja huit choses et se reduit tout
+                 seul pour tenir sur un telephone (voir useTenirDansLEcran) : une
+                 ligne de plus, c'est un cran de reduction de plus pour TOUT le
+                 reste. L'image et le replay partagent donc la ligne qui existait
+                 deja — ils repondent a la meme envie, ils se lisent bien cote a
+                 cote, et le rang des boutons ne bouge pas. */
+              <div className="paire-partage flex flex-row items-stretch gap-2 court:gap-1.5 w-full court:flex-1 court:min-w-0">
               <button
                 onClick={partagerMaCourse}
                 disabled={affiche === 'fabrique'}
-                className="w-full court:flex-1 court:min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
-                           text-xs md:text-sm text-primary bg-primary/10 border border-primary/30
+                className="flex-1 min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
+                           text-[10px] md:text-xs text-primary bg-primary/10 border border-primary/30
                            hover:bg-primary/20 disabled:opacity-50 disabled:pointer-events-none
-                           transition-colors flex flex-col items-center leading-tight gap-0.5"
+                           transition-colors flex flex-col items-center justify-center leading-tight gap-0.5"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-1.5 text-center">
                   {affiche === 'fabrique'
                     ? <Loader2 className="w-4 h-4 animate-spin" />
                     : <ImageDown className="w-4 h-4" />}
@@ -1190,12 +1229,56 @@ export function OneShotEndScreen() {
                 {/* Ce qui s'est reellement passe. « Enregistre » et « envoye »
                     ne se disent pas au meme moment, et le module rend lequel
                     des deux a eu lieu precisement pour qu'on ne devine pas. */}
-                <span className="font-sans font-normal text-[9px] md:text-[10px] tracking-normal opacity-80 leading-snug">
+                <span className="font-sans font-normal text-[9px] md:text-[10px] tracking-normal opacity-80 leading-snug text-center">
                   {affiche === 'telechargement' ? N.t('affiche_saved')
                     : affiche === 'echec' ? N.t('affiche_failed')
                     : N.t('affiche_hint')}
                 </span>
               </button>
+
+              {/* LE REPLAY, A COTE DE L'IMAGE.
+                  Il ne s'annonce que s'il existe : un appareil qui ne sait pas
+                  encoder — ou une course dont le film a ete jete — laisse
+                  l'image prendre toute la ligne, plutot qu'un bouton eteint qui
+                  ferait croire a une panne.
+
+                  Les quatre etats disent quatre choses differentes, et aucune
+                  n'est interchangeable. « Enregistrement » : le fichier se
+                  ferme encore, c'est l'affaire d'un instant. « Prete » : le
+                  compte a rebours tourne. « Rendue » : le replay est sorti, par
+                  la feuille de partage, et le jeu ne l'a plus. « Expiree » : il
+                  a vecu ses deux heures sans que personne y touche. */}
+              {(film.phase === 'enregistre' || film.phase === 'prete' ||
+                film.phase === 'rendue' || film.phase === 'expiree') && (
+                <button
+                  onClick={partagerLaVideo}
+                  disabled={film.phase !== 'prete'}
+                  className="flex-1 min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
+                             text-[10px] md:text-xs text-emerald-300 bg-emerald-400/10 border border-emerald-400/30
+                             hover:bg-emerald-400/20 disabled:opacity-50 disabled:pointer-events-none
+                             transition-colors flex flex-col items-center justify-center leading-tight gap-0.5"
+                >
+                  <span className="flex items-center gap-1.5 text-center">
+                    {film.phase === 'enregistre'
+                      ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                      : <Film className="w-4 h-4 shrink-0" />}
+                    {N.t('video_replay')}
+                  </span>
+                  <span className="font-sans font-normal text-[9px] md:text-[10px] tracking-normal opacity-80 leading-snug text-center">
+                    {film.phase === 'enregistre' ? N.t('review_making')
+                      : film.phase === 'expiree' ? N.t('review_gone')
+                      : film.phase === 'rendue'
+                        ? (video === 'telechargement' ? N.t('review_saved') : N.t('review_rendue'))
+                      : video === 'echec' ? N.t('review_failed')
+                      /* Le poids a cote du compte a rebours : ce fichier part
+                         souvent en donnees mobiles, et savoir avant d'appuyer
+                         si l'on envoie 4 ou 40 Mo change le geste. */
+                      : `${N.t('review_left', { t: compteARebours(film.reste) })}${
+                          film.taille ? ` · ${(film.taille / 1_048_576).toFixed(1)} Mo` : ''}`}
+                  </span>
+                </button>
+              )}
+              </div>
             )}
             <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
             {RECOMMENCER_OUVERT && <button

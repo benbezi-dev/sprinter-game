@@ -84,18 +84,61 @@
   // -------------------------------------------------------------------
   const Audio_ = {
     ok: false, on: true, ctx: null, buf: {}, src: null, cur: null, gain: null,
+    // La SORTIE unique, et la prise branchee dessus.
+    //
+    // Tout passait auparavant directement sur `ctx.destination` : la musique
+    // par son gain, les bruitages et les annonces par le leur. Trois fils vers
+    // la meme prise murale, ce qui marche tant qu'on ne veut qu'entendre — et
+    // qui ne donne aucun endroit ou POSER UN MICRO quand on veut aussi
+    // enregistrer. Les trois passent maintenant par un seul noeud, et c'est de
+    // celui-la que part le replay. Voir `prise`.
+    sortie: null, capture: null,
     init() {
       if (this.ctx) return;
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       try {
         this.ctx = new AC();
+        this.sortie = this.ctx.createGain();
+        this.sortie.connect(this.ctx.destination);
         this.gain = this.ctx.createGain();
         this.gain.gain.value = 0.34;
-        this.gain.connect(this.ctx.destination);
+        this.gain.connect(this.sortie);
         this.build();
         this.ok = true;
       } catch (e) { this.ok = false; }
+    },
+
+    /**
+     * LE SON DU JEU, SOUS FORME DE FLUX — pour le replay, et rien d'autre.
+     *
+     * On derive, on ne detourne pas : `sortie` reste branchee sur les
+     * haut-parleurs, et la prise est un SECOND fil pose a cote. Le joueur
+     * continue donc d'entendre exactement ce qu'il entendait, enregistrement
+     * ou pas.
+     *
+     * Elle se cree une fois et ne se defait jamais : un noeud de capture qui
+     * ne recoit personne ne coute rien, et le rebrancher a chaque course
+     * ferait claquer le graphe au pire moment.
+     *
+     * Ce qui est coupe n'est pas enregistre — la prise est APRES le bouton
+     * son. C'est voulu : le replay rend ce que la course a sonne, et non ce
+     * qu'elle aurait sonne si on avait ecoute.
+     */
+    prise() {
+      this.init();
+      if (!this.ok || !this.ctx || typeof this.ctx.createMediaStreamDestination !== 'function') return null;
+      try {
+        if (!this.capture) {
+          this.capture = this.ctx.createMediaStreamDestination();
+          this.sortie.connect(this.capture);
+        }
+        // Un contexte suspendu ne produit rien : le premier geste du joueur l'a
+        // normalement reveille, mais un depart lance au clavier peut arriver
+        // avant. On insiste ici, ou cela ne coute qu'une promesse ignoree.
+        if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => { /* muet */ });
+        return this.capture.stream;
+      } catch (e) { return null; }
     },
     tone(d, t0, dur, f, amp, wave, decay) {
       const sr = d.sampleRate, ch = d.getChannelData(0);
@@ -316,14 +359,14 @@
       const b = this.buf[name]; if (!b) return;
       const s = this.ctx.createBufferSource();
       const g = this.ctx.createGain(); g.gain.value = 0.75;
-      s.buffer = b; s.connect(g); g.connect(this.ctx.destination); s.start();
+      s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
     },
     sfx(name) {
       if (!this.ok || !this.on) return;
       const b = this.buf[name]; if (!b) return;
       const s = this.ctx.createBufferSource();
       const g = this.ctx.createGain(); g.gain.value = 0.55;
-      s.buffer = b; s.connect(g); g.connect(this.ctx.destination); s.start();
+      s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
     },
     toggle() { this.on = !this.on; if (!this.on) this.stop(); return this.on; }
   };

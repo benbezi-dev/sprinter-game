@@ -5,13 +5,9 @@ import { Bell, Check, X } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { FEUILLE } from '@/lib/mouvement';
 import { activerPush, etatPush } from '@/game/push';
-import { EST_NATIF } from '@/game/canal';
-import { estInstallee } from '@/game/pwa';
+import { installVisible } from './InstallPrompt';
 
 const REPORTS = 'sprinter_notifs_reports';
-
-/** La cle que pose `InstallPrompt` quand on lui repond « plus tard ». */
-const INSTALL_REFUSE = 'sprinter_install_refuse';
 
 /**
  * A-t-on deja couru ?
@@ -22,21 +18,6 @@ const INSTALL_REFUSE = 'sprinter_install_refuse';
  * defie personne. Une course finie, et la question a un sens.
  */
 let aCouru = false;
-
-/**
- * Le bas de l'ecran est-il libre ?
- *
- * L'invitation a installer le jeu occupe exactement la meme place, et passe
- * avant. Ce n'est pas qu'une question de place : sur iPhone, l'installation
- * est un PREALABLE — `PushManager` n'existe pas dans un onglet Safari, il
- * n'apparait que dans le jeu ajoute a l'ecran d'accueil. Proposer les
- * notifications avant serait proposer un bouton qui ne peut rien faire.
- */
-function placeLibre(): boolean {
-  if (EST_NATIF) return true;              // rien a installer : le jeu EST l'application
-  if (estInstallee()) return true;
-  try { return !!localStorage.getItem(INSTALL_REFUSE); } catch { return false; }
-}
 
 /**
  * Combien de fois on repose la question a quelqu'un qui a repondu « plus
@@ -67,7 +48,7 @@ function reports(): number {
  * `NotAllowedError`, la promesse etait rattrapee, et il ne se passait rien.
  *
  * Ce que cela donnait : 90 appareils connus du serveur, 3 abonnements — et les
- * trois posés à la main pendant une mise au point. Le serveur envoyait
+ * trois poses a la main pendant une mise au point. Le serveur envoyait
  * parfaitement des notifications que personne ne s'etait jamais mis en
  * situation de recevoir.
  *
@@ -94,23 +75,47 @@ export function InviteNotifs() {
   // bouton disparait et rien ne distingue « accorde » de « rate ».
   const [reussi, setReussi] = useState(false);
 
-  if (state === 'result' || state === 'winall') aCouru = true;
+  // Le passage par un ecran d'arrivee se note dans un effet, pas dans le
+  // rendu : React rejoue un rendu quand il veut, et un rendu qui laisse une
+  // trace derriere lui est un rendu qu'on ne peut plus rejouer.
+  useEffect(() => {
+    if (state === 'result' || state === 'winall') aCouru = true;
+  }, [state]);
 
-  // L'accueil, une course derriere soi, et la place libre au bas de l'ecran.
-  const bonMoment = state === 'title' && aCouru && placeLibre();
+  // L'accueil, et une course derriere soi.
+  const bonMoment = state === 'title' && aCouru;
 
   useEffect(() => {
     if (!bonMoment || pose) return;
     if (reports() >= REPORTS_MAX) return;
 
     let vivant = true;
-    // `etatPush` ne demande rien et n'ouvre rien : elle lit ce que le systeme
-    // dit deja. Une permission refusee ne se repose pas depuis une page — la
-    // carte se tait alors plutot que de promettre un bouton sans effet.
-    etatPush().then(etat => {
-      if (vivant && etat === 'a-demander') setOuvert(true);
-    }).catch(() => { /* dans le doute, on ne propose pas */ });
-    return () => { vivant = false; };
+    let minuteur: ReturnType<typeof setTimeout> | undefined;
+
+    const regarder = () => {
+      if (!vivant) return;
+      // L'invitation a installer occupe exactement ce bas d'ecran, et passe
+      // avant. Ce n'est pas qu'une question de place : sur iPhone,
+      // l'installation est un PREALABLE — `PushManager` n'existe pas dans un
+      // onglet Safari, il n'apparait que dans le jeu ajoute a l'ecran
+      // d'accueil, et proposer avant serait proposer un bouton sans effet.
+      //
+      // On repasse plutot qu'on ne regarde une fois : sur Android, la fenetre
+      // d'installation n'arrive pas au chargement mais quand le navigateur
+      // juge le jeu installable, parfois plusieurs secondes plus tard.
+      if (installVisible()) { minuteur = setTimeout(regarder, 3000); return; }
+
+      // `etatPush` ne demande rien et n'ouvre rien : elle lit ce que le
+      // systeme dit deja. Une permission refusee ne se repose pas depuis une
+      // page — la carte se tait alors plutot que de promettre un bouton sans
+      // effet.
+      etatPush().then(etat => {
+        if (vivant && etat === 'a-demander') setOuvert(true);
+      }).catch(() => { /* dans le doute, on ne propose pas */ });
+    };
+    regarder();
+
+    return () => { vivant = false; if (minuteur) clearTimeout(minuteur); };
   }, [bonMoment, pose]);
 
   // Une course repart : la carte s'efface sans rien retenir. Ce n'est pas un
