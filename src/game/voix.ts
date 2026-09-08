@@ -449,6 +449,27 @@ export class Voix {
   lireEtat(): EtatVoix { return this.etat; }
 
   /**
+   * LA VOIX DE L'AUTRE, POUR LE REPLAY.
+   *
+   * Un duel en direct se court en se parlant : le replay qui n'en garde que
+   * le bruit du stade a perdu la moitie de ce qui s'est passe. On prete donc
+   * la piste distante a l'enregistreur — la MEME que celle qui joue dans les
+   * haut-parleurs, pas une seconde capture : on la lui prete, il ne l'arrete
+   * jamais, et la couper ici couperait la conversation.
+   *
+   * Nulle tant que rien n'est arrive : avant la premiere piste distante, ou
+   * apres la fin de la connexion. L'appelant filme alors sans.
+   *
+   * Ma propre voix n'y est pas, et c'est normal : elle n'a jamais fait un
+   * aller-retour par le reseau, elle sort de mon micro. Le replay rend ce que
+   * le joueur a ENTENDU.
+   */
+  pisteDistante(): MediaStreamTrack | null {
+    try { return this.fluxDistant?.getAudioTracks()[0] || null; }
+    catch { return null; }
+  }
+
+  /**
    * Rebranche l'affichage sur cette liaison.
    *
    * L'ecran qui l'a montee est demonte a chaque course et remonte apres. Le

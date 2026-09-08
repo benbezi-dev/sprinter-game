@@ -516,7 +516,7 @@
     pres_mic_on:     ['MICRO OUVERT', 'MIC LIVE'],
     pres_mic_off:    ['micro refusé', 'mic declined'],
     mic_winner:      ['LE MOT DU VAINQUEUR', 'THE WINNER SPEAKS'],
-    // video de la course, telechargeable pendant dix minutes
+    // video de la course : partageable jusqu'a ce qu'elle sorte, deux heures au plus
     review_title:    ['LA VIDÉO DE TA COURSE', 'YOUR RACE VIDEO'],
     review_making:   ['enregistrement en cours…', 'recording…'],
     // Un seul libellé pour les deux chemins, comme pour l'affiche : sur
@@ -527,6 +527,11 @@
     review_failed:   ['partage impossible', 'sharing failed'],
     review_left:     ['effacée dans {t}', 'deleted in {t}'],
     review_gone:     ['la vidéo a été effacée', 'the video has been deleted'],
+    // Partie, et pas effacée : la feuille de partage s'est refermée, donc la
+    // vidéo est sortie du jeu — envoyée, enregistrée, ou refusée. Annoncer
+    // « effacée » à quelqu'un qui vient de l'envoyer à ses amis lui ferait
+    // croire qu'il a perdu ce qu'il vient justement de donner.
+    review_rendue:   ['la vidéo est sortie du jeu', 'the video has left the game'],
     review_kept:     ['ce que tu as enregistré reste sur ton téléphone',
                       'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
@@ -1003,6 +1008,14 @@
     affiche_failed:  ['image impossible', 'image failed'],
     affiche_hint:    ['une image de ta course, pour Instagram ou TikTok',
                       'an image of your run, for Instagram or TikTok'],
+    // Le voisin de « PARTAGER MA COURSE », sur la meme ligne — l'ecran d'apres
+    // victoire est deja plein, il ne gagne pas un rang de plus pour ca.
+    //
+    // « LE REPLAY » et pas « PARTAGER LA VIDÉO » : c'est le mot du stade, celui
+    // qu'on entend quand l'arrivee repasse au ralenti sur l'ecran geant. Il
+    // tient sur une ligne a mi-largeur, ce que l'autre ne faisait pas, et il
+    // dit ce qu'on va voir plutot que le geste qu'on va faire.
+    video_replay:    ['LE REPLAY', 'THE REPLAY'],
     code_copied:     ['code copié', 'code copied'],
     challenge_rematch:['DÉFIER À NOUVEAU', 'CHALLENGE BACK'],
     challenge_rematch_sub:['tu as gagné — renvoie-lui un défi sur la course que tu viens de faire',

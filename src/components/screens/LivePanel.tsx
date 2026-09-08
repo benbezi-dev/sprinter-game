@@ -19,13 +19,25 @@ import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
-import { Review, TTL_MS, type EtatReview } from '@/game/review';
+import { Review, type EtatReview } from '@/game/review';
+import { sonDuJeu } from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
+/**
+ * Combien de temps la liaison audio reste ouverte apres la course.
+ *
+ * Elle valait la duree de vie de la video, et l'accord tenait tant que les
+ * deux faisaient dix minutes. La video vit maintenant deux heures — ce qui est
+ * bien pour un fichier dans une memoire, et absurde pour un micro ouvert entre
+ * deux inconnus. Les deux durees ont donc repris leur independance, et celle-ci
+ * garde la valeur qu'elle a toujours eue.
+ */
+const FIN_VOIX_MS = 10 * 60 * 1000;
+
 const MICRO_VAINQUEUR_MS = 5000;
 /**
  * Ce qu'on ajoute a la duree annoncee d'une presentation pour garder le micro.
@@ -263,9 +275,22 @@ export function LivePanel() {
 
     // On ne filme que la course. Un peu avant le coup de pistolet, pour ne pas
     // perdre les premieres images le temps que l'encodeur demarre.
+    //
+    // AVEC LE SON, ET AVEC LA VOIX. Le stade sort du moteur, la voix de
+    // l'adversaire de la connexion — deux pistes empruntees, jamais arretees
+    // par l'enregistreur (voir Review.demarrer). Un duel en direct se court en
+    // se parlant : le replay qui n'en garderait que l'image aurait retire ce
+    // qui distingue cette course de toutes les autres.
+    //
+    // La piste distante est relue au moment du depart et non ici : a la
+    // seconde ou l'on programme, la connexion peut n'avoir rien recu encore.
     if (!film.current) film.current = new Review(setReview);
     const f = film.current;
-    setTimeout(() => f.demarrer(SprinterApp.G.cv || null), Math.max(0, dans - 300));
+    setTimeout(
+      () => f.demarrer(SprinterApp.G.cv || null,
+                      [...sonDuJeu(), voixCourante()?.pisteDistante()]),
+      Math.max(0, dans - 300),
+    );
   };
 
   const ecouteurs = (monCode: string) => ({
@@ -355,17 +380,16 @@ export function LivePanel() {
 
       // Puis la liaison se coupe d'elle-meme a la fin de la review.
       //
-      // La review n'a pas d'autre fin que celle de sa video : dix minutes,
-      // comptees a partir d'ici, apres quoi l'ecran ne montre plus rien qu'on
-      // puisse encore appeler une course. La meme duree sert quand il n'y a
-      // pas eu de video du tout — un appareil qui ne sait pas encoder n'a
-      // aucune raison de garder une connexion ouverte plus longtemps que les
-      // autres.
+      // Dix minutes, comptees a partir d'ici, apres quoi l'ecran ne montre
+      // plus rien qu'on puisse encore appeler une course. La meme duree sert
+      // quand il n'y a pas eu de video du tout — un appareil qui ne sait pas
+      // encoder n'a aucune raison de garder une connexion ouverte plus
+      // longtemps que les autres.
       //
       // Le micro, lui, est deja rendu : il ne l'est que pendant les fenetres
       // de parole. Ce qui s'eteint ici, c'est le canal d'ecoute — de quoi se
       // parler apres la course, sans que cela dure indefiniment.
-      programmerFinVoix(TTL_MS);
+      programmerFinVoix(FIN_VOIX_MS);
 
       setEtape('review');
     },
