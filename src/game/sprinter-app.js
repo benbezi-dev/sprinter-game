@@ -75,7 +75,15 @@
       panels: [[240, 131, 156], [46, 190, 200], [247, 201, 96], [40, 122, 193]],
       crowdLo: [92, 78, 128], crowdHi: [255, 248, 236],
       accent: [247, 138, 100], dust: [240, 222, 196],
-      clouds: true, arbres: 'palmier', piscine: true,
+      clouds: true, avion: true, arbres: 'palmier', piscine: true,
+      // L'horizon pose pres, et la mer derriere : voir drawWorld. C'est ce qui
+      // fait entrer le ciel — et donc l'avion et les nuages — dans le cadre de
+      // la course, au lieu de les peindre pour personne.
+      // Mesure : avec quatre gradins et un toit, le ciel occupe 4 % du haut de
+      // l'image ; a deux gradins et sans toit, 35 %. C'est tout l'ecart entre
+      // un ciel qu'on peint pour personne et un ciel qu'on regarde en courant.
+      horizon: 6, lointain: [34, 150, 196], vagues: true,
+      toiture: false, gradins: 2,
       eau: [40, 184, 206],
       palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100]
     },
@@ -93,7 +101,7 @@
     // entre des gradins outremer. Les trois couleurs du tableau, aux trois
     // surfaces qu'on regarde.
     nuit: {
-      skyTop: [10, 24, 72], skyBot: [42, 88, 156], stars: 130,
+      skyTop: [10, 24, 72], skyBot: [42, 88, 156], stars: 300,
       grass: [26, 68, 72], grassEdge: [46, 108, 98],
       trackA: [206, 152, 46], trackB: [188, 134, 38],
       lane: [248, 236, 190], kerb: [246, 210, 96],
@@ -103,6 +111,8 @@
       crowdLo: [22, 34, 68], crowdHi: [220, 228, 246],
       accent: [246, 214, 110], dust: [188, 200, 224],
       tourbillons: true, arbres: 'cypres', pinceau: true,
+      horizon: 6, lointain: [28, 52, 96], toiture: false, gradins: 2,
+      village: true, villageSombre: [12, 24, 56],
       cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
     }
   };
@@ -141,16 +151,21 @@
   // Et LES ZEZE ONT DEUX STADES.
   //
   // La finale intergalactique se court tantot dans le stade cosmos, tantot
-  // sous la nuit etoilee de Van Gogh, et lequel on trouve tombe au hasard en
-  // arrivant (voir buildLevel). Ce n'est pas la meme chose que le decor de
-  // l'etape 3 : celui-la est fixe, celui-ci se joue a pile ou face. Un stade
-  // unique dit un lieu ; deux stades tires au sort disent une famille qui en
-  // possede plusieurs et recoit dans l'un ou dans l'autre.
+  // sous la nuit etoilee de Van Gogh — et LEQUEL DES DEUX N'EST PAS UN HASARD :
+  // il depend du chrono qu'on vient de poser a l'etape precedente (voir
+  // buildLevel et enDessousDuNiveau). Qui arrive a leur vitesse est recu dans
+  // le stade cosmos, celui de la vraie finale ; qui arrive plus lent que le
+  // plus lent d'entre eux est recu ailleurs, sous les etoiles.
+  //
+  // Un tirage au sort aurait dit « les ZEZE ont deux stades ». Celui-ci dit
+  // quelque chose de plus : il donne au decor le role d'un verdict, rendu
+  // avant meme le coup de pistolet, et que le joueur peut lire sans qu'on le
+  // lui ecrive.
   const ETAPE_BORD_DE_MER = 2, ETAPE_ZEZE = 5;
   if (import.meta.env.VITE_CANAL === 'test') {
     for (const stade of K.STADES_HORS_SERIE) LEVELS.push(stade);
     LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';
-    LEVELS[ETAPE_ZEZE].themes = ['cosmos', 'nuit'];
+    LEVELS[ETAPE_ZEZE].stades = { aNiveau: 'cosmos', enDessous: 'nuit' };
   }
 
   // Public dans les gradins : des personnages a facettes cuits dans une
@@ -651,6 +666,32 @@
     return out;
   }
 
+  /**
+   * Est-on arrive SOUS le niveau qu'il faut pour gagner ici ?
+   *
+   * On compare le chrono de la course precedente aux cotes de l'etape ou l'on
+   * entre. Le seuil est la borne HAUTE de la fourchette, c'est-a-dire le plus
+   * lent des adversaires : y etre superieur, c'est n'avoir battu aucun d'eux
+   * au tour precedent — un « en dessous du niveau » qui ne se discute pas. La
+   * borne basse aurait demande de battre le meilleur, ce qu'aucun plateau
+   * anterieur ne permet vraiment de prouver.
+   *
+   * On ne compare que des courses COMPARABLES. En championnat la question ne
+   * se pose pas : les six etapes se courent sur la meme distance. En one shot,
+   * l'epreuve precedente peut etre un 400 m avant un 100 m, et un chrono de
+   * 43 s dirait n'importe quoi — on renonce alors, et le stade reste celui de
+   * la finale.
+   */
+  function enDessousDuNiveau(R, idx) {
+    const s = G.runSplits;
+    if (!s || !s.length) return false;
+    if (G.mode === 'oneshot' && G.shotRaces[G.shotIdx - 1] !== G.raceKey) return false;
+    const precedent = s[s.length - 1];
+    const bornes = R.ranges && R.ranges[idx];
+    if (precedent == null || !bornes) return false;
+    return precedent > bornes[1];
+  }
+
   // --- mise en place d'une course ------------------------------------
   function buildLevel(idx) {
     // Un index hors du tableau ne doit pas faire tomber le jeu, et le cas
@@ -661,15 +702,11 @@
     if (!LEVELS[idx]) idx = OLYMPIC;
     G.levelIdx = idx;
     const lvl = LEVELS[idx], R = G.race;
-    // Deux decors pour une meme etape : on tire en arrivant.
-    //
-    // LE TIRAGE NE PASSE PAS PAR `alea()`, ET C'EST VOULU. Ce generateur-la
-    // est seme pendant un defi pour que deux tentatives se courent contre le
-    // meme plateau ; y prendre un nombre pour choisir un decor decalerait
-    // toutes les cotes tirees ensuite. Un stade n'est pas une promesse de
-    // defi — deux joueurs peuvent tres bien courir la meme course dans deux
-    // stades differents, ils courent contre les memes adversaires.
-    if (lvl.themes) lvl.theme = lvl.themes[(Math.random() * lvl.themes.length) | 0];
+    // Deux decors pour une meme etape : lequel se decide en arrivant, sur le
+    // chrono de la course precedente (voir enDessousDuNiveau).
+    if (lvl.stades) {
+      lvl.theme = enDessousDuNiveau(R, idx) ? lvl.stades.enDessous : lvl.stades.aNiveau;
+    }
     // Un stade hors serie porte son propre plateau : les `ranges` d'une
     // epreuve sont alignees sur les six etapes du championnat, et il n'en est
     // pas une.
@@ -1664,6 +1701,76 @@
     }
   }
 
+  // La mer, au-dela de la pelouse : quelques rides blanches, plates et
+  // courtes, posees dans le monde pour qu'elles defilent avec la piste. Chez
+  // Nagai l'eau n'a pas de matiere — c'est un aplat, et deux traits blancs
+  // suffisent a dire que c'est la mer et non un mur bleu.
+  function vaguesDuLointain(ctx, sm, rMer) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 2 * ui();
+    ctx.lineCap = 'round';
+    const stp = G.track.curved ? 8 : 1;
+    for (let i = 0; i + 1 < sm.length; i += stp) {
+      const graine = ((i + 5) * 2654435761) >>> 0;
+      for (let k = 0; k < 2; k++) {
+        const rr = rMer + 0.8 + ((graine >>> (k * 5)) % 3);
+        const a = ground(...ptOf(sm[i], rr));
+        if (a[0] < -30 || a[0] > G.VW + 30 || a[1] < -30 || a[1] > G.VH + 30) continue;
+        const b = ground(...ptOf(sm[i + 1], rr + 0.2));
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(a[0] + (b[0] - a[0]) * 0.5, a[1] + (b[1] - a[1]) * 0.5);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // L'AVION DE NAGAI.
+  //
+  // Il y en a un dans presque chaque affiche, minuscule, tres haut, et c'est
+  // lui qui donne l'echelle du ciel : sans lui le bleu n'a pas de fond. Il
+  // traverse l'ecran en trois quarts de minute, assez lentement pour qu'on le
+  // remarque sans le suivre.
+  //
+  // Il vit en coordonnees d'ecran, comme les nuages, et passe DERRIERE eux :
+  // un avion peint par-dessus un nuage se colle a la vitre.
+  function drawAvion(ctx, th) {
+    const u = ui(), t = performance.now() / 1000;
+    const L = G.VW + 300 * u;
+    const x = ((t % 44) / 44) * L - 150 * u;
+    const y = G.VH * (G.portrait ? 0.085 : 0.075) + Math.sin(t * 0.18) * 5 * u;
+    const e = 13 * u;                    // demi-longueur du fuselage
+
+    // la trainee, qui s'efface vers l'arriere
+    const g = ctx.createLinearGradient(x - 12 * e, y, x - e, y);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(1, 'rgba(255,255,255,0.55)');
+    ctx.strokeStyle = g; ctx.lineWidth = 2.2 * u; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 12 * e, y + 0.6 * u); ctx.lineTo(x - e, y); ctx.stroke();
+
+    // ailes en fleche, empennage, fuselage : des aplats, pas un modele
+    ctx.fillStyle = 'rgba(246,248,252,0.96)';
+    ctx.beginPath();
+    ctx.moveTo(x + 0.15 * e, y);
+    ctx.lineTo(x - 0.75 * e, y - 0.95 * e);
+    ctx.lineTo(x - 0.30 * e, y - 0.05 * e);
+    ctx.lineTo(x - 0.75 * e, y + 0.95 * e);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - 0.80 * e, y);
+    ctx.lineTo(x - 1.15 * e, y - 0.45 * e);
+    ctx.lineTo(x - 0.95 * e, y);
+    ctx.lineTo(x - 1.15 * e, y + 0.45 * e);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(x - 0.35 * e, y, e, 0.24 * e, 0, 0, TAU);
+    ctx.fill();
+    // le liseret : la seule couleur de l'appareil, prise a l'accent du stade
+    ctx.strokeStyle = rgb(th.accent); ctx.lineWidth = 1.6 * u;
+    ctx.beginPath();
+    ctx.moveTo(x - 1.1 * e, y - 0.05 * e); ctx.lineTo(x + 0.6 * e, y - 0.05 * e);
+    ctx.stroke();
+  }
+
   // Une palme : un fuseau courbe qui se souleve puis retombe. Le rayon `w`
   // ecarte les deux bords perpendiculairement a la palme, sinon les palmes
   // horizontales seraient larges et les verticales plates.
@@ -1830,13 +1937,99 @@
     return cv;
   }
 
+  // LE VILLAGE SOUS LES ETOILES.
+  //
+  // Le dernier morceau de la toile, et le plus facile a oublier : sous le ciel
+  // qui tourne, Van Gogh a peint un village endormi, ses fenetres allumees, et
+  // un clocher qui monte plus haut que les toits. Sans lui la nuit n'a pas de
+  // sol — les tourbillons flottent au-dessus de rien.
+  //
+  // Il est pose sur la bande de lointain, juste derriere les tribunes : assez
+  // loin pour etre un decor, assez pres pour que ses fenetres se voient.
+  const VILLAGE_W = 300, VILLAGE_H = 200;
+  const villageTiles = new Map();
+  function villageTile(th, variante) {
+    let tab = villageTiles.get(th);
+    if (!tab) { tab = []; villageTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = VILLAGE_W; cv.height = VILLAGE_H;
+    const c = cv.getContext('2d');
+    const sol = VILLAGE_H;
+    const sombre = rgb(th.villageSombre || [14, 26, 58]);
+    const feu = 'rgba(250,214,110,0.92)';
+
+    // une maison : un bloc, un toit en bache, deux fenetres allumees
+    const maison = (x, l, h, fenetres) => {
+      c.fillStyle = sombre;
+      c.fillRect(x, sol - h, l, h);
+      c.beginPath();
+      c.moveTo(x - 5, sol - h);
+      c.lineTo(x + l / 2, sol - h - l * 0.42);
+      c.lineTo(x + l + 5, sol - h);
+      c.closePath(); c.fill();
+      c.fillStyle = feu;
+      for (let i = 0; i < fenetres; i++) {
+        c.fillRect(x + 7 + i * 15, sol - h + 11, 8, 9);
+      }
+    };
+    // l'eglise : la meme chose, plus un clocher qui depasse tout
+    const eglise = (x) => {
+      const l = 42, h = 54;
+      maison(x, l, h, 2);
+      c.fillStyle = sombre;
+      c.fillRect(x + l * 0.34, sol - h - 46, 16, 50);
+      c.beginPath();
+      c.moveTo(x + l * 0.34 - 5, sol - h - 46);
+      c.lineTo(x + l * 0.34 + 8, sol - h - 84);
+      c.lineTo(x + l * 0.34 + 21, sol - h - 46);
+      c.closePath(); c.fill();
+      c.fillStyle = feu;
+      c.fillRect(x + l * 0.34 + 5, sol - h - 34, 6, 8);
+    };
+
+    if (variante === 0) { eglise(120); maison(30, 52, 40, 3); maison(200, 60, 34, 3); }
+    else if (variante === 1) { maison(24, 58, 38, 3); maison(110, 46, 46, 2); maison(190, 70, 32, 4); }
+    else { maison(40, 64, 34, 4); maison(130, 50, 44, 2); maison(206, 54, 38, 3); }
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  // Le village, pose sur la bande de lointain. Il est trace AVANT les
+  // tribunes : elles doivent lui passer devant, sinon les maisons flottent
+  // au-dessus du public.
+  function drawVillage(ctx, th, sm, rOut, horizon) {
+    // Un hameau tous les douze metres : la fenetre de vue est etroite (une
+    // vingtaine de metres de piste), et un village espace de quarante metres
+    // n'etait dans le cadre qu'une fois sur trois.
+    const stp = G.track.curved ? 12 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 13) * 2654435761) >>> 0;
+      // Bas et pres : la hauteur compte plus de deux fois la distance au sol
+      // a l'ecran, et un village de six metres pose neuf metres plus loin sort
+      // par le haut du cadre — on n'en voyait que les fenetres allumees.
+      const r = rOut + horizon + 0.5 + (graine % 2);
+      const h = (3.2 + ((graine >>> 5) % 3) * 0.45) * scaleM();
+      const tuile = villageTile(th, (graine >>> 11) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
   // Quel arbre pousse dans quel stade, et de quelle taille. Les hauteurs sont
   // en metres : un cypres depasse un palmier, et les deux rangees ne font pas
   // la meme taille — celle du dedans reste plus basse pour ne pas manger
   // l'ecran, puisqu'elle est beaucoup plus pres de la camera.
+  // `pas` espace la rangee : a 1 un arbre par echantillon utile, a 2 un sur
+  // deux. La palmeraie de la Riviera etait trop dense — une haie plutot qu'un
+  // decor — et se compte donc par deux.
   const ARBRE = {
-    palmier: { tuile: palmTile,   dehors: [6.2, 0.55], dedans: [5.6, 0.50] },
-    cypres:  { tuile: cypresTile, dehors: [8.6, 0.70], dedans: [7.2, 0.60] }
+    palmier: { tuile: palmTile,   dehors: [6.2, 0.55], dedans: [5.6, 0.50], pas: 2 },
+    cypres:  { tuile: cypresTile, dehors: [8.6, 0.70], dedans: [7.2, 0.60], pas: 1 }
   };
 
   function drawArbres(ctx, th, sm, rOut) {
@@ -1847,10 +2040,13 @@
     // samples()). Un pas unique donnerait des arbres tous les vingt metres
     // d'un cote et un seul de l'autre — un cent metres n'a qu'une douzaine
     // d'echantillons en tout.
-    const stp = G.track.curved ? 10 : 1;
+    const stp = (G.track.curved ? 10 : 1) * A.pas;
+    // Ils tiennent DANS la pelouse, quelle que soit sa largeur : plantes plus
+    // loin que l'horizon du stade, ils pousseraient dans la mer.
+    const large = (th.horizon || 46) - 2;
     for (let i = 0; i < sm.length; i += stp) {
       const graine = ((i + 7) * 2654435761) >>> 0;
-      const r = rOut + 9 + (graine % 5);
+      const r = rOut + Math.min(9, large - 2) + (graine % Math.max(1, Math.min(5, large - 7)));
       const h = (A.dehors[0] + ((graine >>> 5) % 5) * A.dehors[1]) * scaleM();
       const tuile = A.tuile(th, (graine >>> 11) % 3);
       const w = h * (tuile.width / tuile.height);
@@ -1887,7 +2083,9 @@
   // Traces avant, ils se faisaient repeindre par les couloirs des que leur
   // tete montait assez haut.
   function drawArbresDedans(ctx, th, sm, rIn) {
-    const stp = G.track.curved ? 12 : 1;
+    const A0 = ARBRE[th.arbres];
+    if (!A0) return;
+    const stp = (G.track.curved ? 12 : 1) * A0.pas;
     for (let i = 0; i < sm.length; i += stp) {
       const graine = ((i + 3) * 2246822519) >>> 0;
       // Entre la piste et le bassin, jamais dedans : le bassin commence a
@@ -2053,8 +2251,15 @@
   // La lune et les grosses etoiles. Ce ne sont pas des points : chez Van Gogh
   // l'astre est un disque entoure d'un halo qui deborde largement sur le ciel,
   // et c'est le halo qui fait la lumiere, pas le disque.
-  const ASTRES = [[0.08, 0.13, 1.00], [0.28, 0.27, 0.68], [0.50, 0.09, 0.86],
-                  [0.63, 0.31, 0.58], [0.86, 0.19, 0.95]];
+  // Onze, comme sur la toile — Van Gogh en a peint onze autour de sa lune, et
+  // c'est leur NOMBRE qui fait la nuit : trois etoiles font un ciel degage,
+  // onze font une nuit qui bouge.
+  const ASTRES = [
+    [0.05, 0.16, 1.00], [0.13, 0.05, 0.55], [0.21, 0.28, 0.72],
+    [0.31, 0.11, 0.88], [0.39, 0.33, 0.50], [0.48, 0.07, 0.95],
+    [0.57, 0.24, 0.62], [0.66, 0.13, 0.78], [0.79, 0.30, 0.58],
+    [0.88, 0.09, 1.00], [0.95, 0.22, 0.66]
+  ];
   function drawAstres(ctx) {
     const anchor = ground(0, 0);
     const w = G.VW, h = G.VH * (G.portrait ? 0.40 : 0.34);
@@ -2094,7 +2299,7 @@
   // donc le geste : de courts arcs orientes le long de la piste, poses dans le
   // monde (ils defilent avec elle), des DEUX cotes — celui du dedans est le
   // seul que le cadre montre vraiment pendant la course.
-  function coupsDePinceau(ctx, th, rIn, rOut) {
+  function coupsDePinceau(ctx, th, rIn, rOut, horizon) {
     // On avance EN METRES, pas en echantillons. Les echantillons du decor sont
     // espaces de 1,2 m dans le virage et de 12 m en ligne droite : un trait
     // tire de l'un au suivant mesurerait douze metres de long sur une ligne
@@ -2108,7 +2313,8 @@
       const graine = ((n + 11) * 2654435761) >>> 0;
       for (let k = 0; k < 3; k++) {
         const g2 = (graine >>> (k * 8)) & 0xffff;
-        const rr = k < 2 ? rIn - 1.5 - (g2 % 14) : rOut + 3 + (g2 % 34);
+        const rr = k < 2 ? rIn - 1.5 - (g2 % 14)
+                         : rOut + 3 + (g2 % Math.max(6, (horizon || 46) - 4));
         const q0 = at(m + (g2 % 7) * 0.3, rr);
         if (!q0) continue;
         const a = ground(q0[0], q0[1]);
@@ -2143,6 +2349,7 @@
       }
     }
     if (th.tourbillons) drawAstres(ctx);
+    if (th.avion) drawAvion(ctx, th);
     if (th.clouds) drawClouds(ctx);
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
@@ -2169,17 +2376,44 @@
     } else {
       band(ctx, sm, rIn - 60, rIn, rgb(th.grass));
     }
-    band(ctx, sm, rOut, rOut + 46, rgb(th.grass));
+    // LA PELOUSE EXTERIEURE, ET SURTOUT OU ELLE S'ARRETE.
+    //
+    // Par defaut elle court sur quarante-six metres. Si loin que le ciel du
+    // stade ne se voit jamais en course : la camera colle au coureur, et
+    // au-dessus des tribunes on trouve encore de l'herbe. Sans consequence
+    // pour un stade ordinaire ; mais cela vide de leur sujet ceux dont le
+    // ciel EST le sujet — les nuages et l'avion de la Riviera, les etoiles et
+    // la lune de la Nuit etoilee. On les peignait pour personne.
+    //
+    // Un theme peut donc poser son horizon plus pres. La pelouse s'arrete
+    // alors juste derriere les tribunes, une bande de lointain prend le
+    // relais — la mer d'un cote, les collines de l'autre — et le ciel occupe
+    // enfin le haut de l'image pendant toute la course.
+    const horizon = th.horizon || 46;
+    band(ctx, sm, rOut, rOut + horizon, rgb(th.grass));
+    if (th.lointain) {
+      // La bande de lointain est etroite A DESSEIN, et c'est mesure : la
+      // hauteur a l'ecran compte plus de deux fois la distance au sol (voir
+      // solid()), si bien que le toit des tribunes monte plus haut que le bord
+      // de la pelouse. Le ciel visible commence donc au-dessus du toit, et il
+      // n'en reste qu'un cinquieme d'image. Une mer de quatorze metres le
+      // remplissait a elle seule ; a quatre, elle n'est plus que la couture
+      // entre la pelouse et le ciel, et laisse la place aux nuages, a l'avion
+      // et aux etoiles.
+      band(ctx, sm, rOut + horizon, rOut + horizon + 3.5, rgb(th.lointain));
+      if (th.vagues) vaguesDuLointain(ctx, sm, rOut + horizon);
+      if (th.village) drawVillage(ctx, th, sm, rOut, horizon);
+    }
 
     // Grain sur la pelouse exterieure : quelques touches plus claires/sombres
     // ancrees au monde (elles defilent avec la piste, pas avec l'ecran), pour
     // casser l'aplat plutot qu'une texture image plaquee sans rapport avec
     // notre perspective isometrique maison.
-    if (th.pinceau) coupsDePinceau(ctx, th, rIn, rOut);
+    if (th.pinceau) coupsDePinceau(ctx, th, rIn, rOut, horizon);
     else for (let i = 0; i < sm.length; i += 3) {
       const seed = i * 13;
       for (let k = 0; k < 3; k++) {
-        const rr = rOut + 3 + ((seed + k * 17) % 40);
+        const rr = rOut + 3 + ((seed + k * 17) % Math.max(6, horizon - 4));
         const p = ground(...ptOf(sm[i], rr));
         if (p[0] < -20 || p[0] > G.VW + 20 || p[1] < -20 || p[1] > G.VH + 20) continue;
         const light = (seed + k) % 2 === 0;
@@ -2201,7 +2435,10 @@
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
     // projection retombe sur la surface de course : peintes apres, elles
     // recouvraient la piste et les coureurs.
-    const near = rOut + 1.6, tiers = 4, sr = 1.7, sz = 0.58;
+    // Le nombre de gradins est un reglage de THEME, pas une constante : une
+    // tribune haute remplit le haut de l'image (voir la toiture, plus bas), et
+    // un stade dont le sujet est le ciel ne peut pas se le permettre.
+    const near = rOut + 1.6, tiers = th.gradins || 4, sr = 1.7, sz = 0.58;
     const stp = decorStride();
     band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
@@ -2252,13 +2489,29 @@
         for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, ox, oy);
       }
     }
-    band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
-         1.05 + tiers * sz + 2.4);
+    // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
+    //
+    // Elle est posee tres haut, et la hauteur compte plus de deux fois la
+    // distance au sol a l'ecran (voir solid()) : le toit monte donc plus haut
+    // que le bord lointain de la pelouse, et REMPLIT tout le haut de l'image
+    // pendant la course. Mesure faite sur un cadre de telephone : au ras du
+    // bord superieur, il n'y avait que du toit, d'un cote a l'autre.
+    //
+    // Aucune importance pour un stade couvert. Mais un stade dont le sujet est
+    // le ciel — les nuages et l'avion de la Riviera, les etoiles de la Nuit
+    // etoilee — n'a alors plus de ciel du tout. Ces deux-la ont donc des
+    // gradins A CIEL OUVERT : le public s'arrete, et au-dessus commence
+    // l'horizon. C'est aussi ce que sont vraiment un stade de bord de mer et
+    // une reunion nocturne.
+    if (th.toiture !== false) {
+      band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
+           1.05 + tiers * sz + 2.4);
+    }
 
     // Fanions a damier le long du toit des tribunes, pour donner plus de
     // "definition" au decor (accent visuel base sur un asset plutot que sur
-    // un aplat de couleur uni).
-    {
+    // un aplat de couleur uni). Sans toit, ils n'ont rien ou pendre.
+    if (th.toiture !== false) {
       const fh = scaleM() * 0.42, fw = fh * (32 / 27);
       const fz = 1.05 + tiers * sz + 2.55, fr = near + tiers * sr + 0.5;
       const fstp = decorStride() * 2;
