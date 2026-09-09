@@ -3860,12 +3860,17 @@
    * (voir `pose` dans sprinter-core.js), donc lever le bras suffit a lever
    * l'arme. Le reste est du temps — `countT` avant le coup, `elapsed` apres.
    *
-   * Il se tient a l'interieur de la piste, quelques metres derriere la ligne,
-   * la ou il se tient sur un vrai stade : dans le champ au moment ou l'on
-   * attend, hors du champ des que la course part.
+   * OU IL SE TIENT, ET POURQUOI DEVANT.
+   *
+   * Sur la pelouse, en dedans du premier couloir, et quelques metres DEVANT
+   * les blocs — c'est la place du starter sur un vrai stade. Il ne se met pas
+   * derriere : il faut que les huit coureurs le voient sans tourner la tete,
+   * et qu'ils partent vers lui plutot que de le laisser dans leur dos. A
+   * l'ecran, cela le pose dans la bande d'herbe en bas a gauche, juste devant
+   * la ligne, et les coureurs le depassent dans la premiere seconde.
    */
-  const STARTER_D = -2.6;          // metres avant la ligne de depart
-  const STARTER_COULOIR = -1.15;   // en dedans du premier couloir, sur l'herbe
+  const STARTER_D = 1.8;           // metres APRES la ligne, donc devant eux
+  const STARTER_COULOIR = -1.0;    // en dedans du premier couloir, sur l'herbe
 
   /** Sa tenue : le blanc des officiels, et des chaussures de ville. */
   const LOOK_STARTER = K.look({
@@ -3971,16 +3976,21 @@
       // Un seul bras travaille ; l'autre reste le long du corps. Le coude se
       // deplie a mesure que le bras monte : on ne vise pas le ciel avec un
       // bras casse.
-      bras: [bras, 0.08, 0.20 * (1 - leve) + 0.04, 0.16],
-      pistolet: 1,
+      //
+      // C'est le bras du COTE DE LA CAMERA qui tient l'arme. Sur l'autre, le
+      // corps la masque a moitie — et une arme a moitie cachee ne raconte pas
+      // grand-chose.
+      bras: [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
+      pistolet: -1,
       // Les bulbes prennent l'accent du stade : le magenta des tribunes
       // cosmos. Il est d'ici, lui, et cela se voit jusque sur sa tete.
       antennes: alien ? [236, 132, 220] : null,
     };
-    // Un quart de tour vers nous : il regarde la piste et les blocs, pas
-    // l'horizon. Les coureurs, eux, sont dessines dans l'axe de leur course —
-    // de dos. Un starter de dos ne montrerait ni son bras ni son arme.
-    const caps = personCapsules(person, T.heading(STARTER_D, 0) - Math.PI / 2,
+    // Il fait face aux blocs, donc a la camera : demi-tour par rapport au sens
+    // de la course. Les coureurs, eux, sont dessines dans l'axe de leur
+    // course — de dos ; un starter de dos ne montrerait ni son bras ni son
+    // arme, et surtout ne regarderait personne.
+    const caps = personCapsules(person, T.heading(STARTER_D, 0) + Math.PI,
                                 0, false, !!T.curved);
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.beginPath();
