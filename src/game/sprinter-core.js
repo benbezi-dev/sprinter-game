@@ -269,6 +269,31 @@
               'Herman ZEZE', 'Ervie ZEZE', 'Victoire ZEZE'] }
   ];
 
+  // ------------------------------------------------------- stades hors serie
+  //
+  // Un stade qui n'est pas une etape du championnat. La difference n'est pas
+  // cosmetique : les six etapes ci-dessus forment une echelle — on monte de la
+  // cour d'ecole a l'intergalactique — et y accrocher un septieme barreau
+  // reviendrait a dire que la finale ZEZE n'est plus la fin. Celui-ci est un
+  // LIEU, qu'on choisit pour y courir une epreuve, et le championnat l'ignore.
+  //
+  // Il porte donc son plateau avec lui, au lieu d'ajouter une septieme entree
+  // aux `ranges` de chaque epreuve : ces tableaux-la sont alignes sur les six
+  // etapes, et une entree de plus y ferait croire a une etape de plus.
+  //
+  // La Riviera est un meeting d'ete au bord de l'eau : le plateau est fort,
+  // d'un cheveu sous la finale olympique, mais on n'y elimine personne.
+  const STADES_HORS_SERIE = [
+    { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
+      pool: 'divers',
+      // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
+      horsSerie: true,
+      plateau: { '100': [9.62, 9.92], '200': [19.30, 19.90],
+                 '400': [43.30, 44.00], '4x100': [37.60, 38.60] },
+      names: ['Rick Palma', 'Sunny Marino', 'Kenji Aoyama', 'Milo Cabana',
+              'Vince Corsair', 'Lisa Miramar', 'Nina Solaris'] }
+  ];
+
   // ---------------------------------------------------------------------
   // CYCLE DE FOULEE
   // ---------------------------------------------------------------------
@@ -1230,7 +1255,8 @@
   })();
 
   root.SprinterCore = {
-    TAU, C, RACES, LEVELS, GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
+    GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
     pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };

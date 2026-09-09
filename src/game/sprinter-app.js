@@ -44,8 +44,114 @@
       panels: [[56, 196, 92], [255, 255, 255], [240, 196, 70], [214, 74, 62]],
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
       accent: [56, 196, 92], dust: [210, 222, 236]
+    },
+    // Stade de la Riviera : le ciel, la piscine et les palmiers des affiches
+    // de Hiroshi Nagai. La palette ne cherche pas le realisme d'un stade, elle
+    // cherche l'aplat — turquoise, corail, creme, poses cote a cote et jamais
+    // desatures : chez Nagai le soleil ne fatigue aucune couleur. Les gradins
+    // sont blancs, et leur ombre tire sur le violet plutot que sur le gris.
+    //
+    // LA TOITURE EST TURQUOISE, ET C'EST UN REPORT. Le ciel de ce stade ne se
+    // voit presque jamais : la camera colle au coureur, et le cadre s'arrete
+    // une quinzaine de metres au-dela du bord de piste — les gradins bouchent
+    // l'horizon pendant toute la course. Le grand aplat bleu-vert de l'image,
+    // celui qui fait tenir la triade, doit donc etre porte par la seule
+    // surface haute qu'on voit vraiment : le toit des tribunes. Le ciel, lui,
+    // et les nuages qui vont avec, reviennent des qu'on joue en paysage ou sur
+    // grand ecran, ou le champ s'ouvre.
+    //
+    // Les quatre derniers champs n'existent que pour ce stade. `clouds` et
+    // `palms` allument un decor que les autres n'ont pas — des nuages a bord
+    // net, des palmiers derriere les tribunes — et les deux teintes qui
+    // suivent habillent ces palmiers. Un stade qui ne les porte pas ne paie
+    // rien : le test se fait sur le theme, pas sur le niveau.
+    riviera: {
+      skyTop: [22, 136, 214], skyBot: [158, 222, 242], stars: 0,
+      grass: [58, 168, 104], grassEdge: [40, 140, 88],
+      trackA: [236, 124, 106], trackB: [222, 108, 92],
+      lane: [255, 252, 244], kerb: [86, 206, 208],
+      tread: [246, 242, 232], riser: [178, 168, 202], roof: [72, 184, 194],
+      barrier: [255, 253, 247],
+      panels: [[240, 131, 156], [46, 190, 200], [247, 201, 96], [40, 122, 193]],
+      crowdLo: [92, 78, 128], crowdHi: [255, 248, 236],
+      accent: [247, 138, 100], dust: [240, 222, 196],
+      clouds: true, arbres: 'palmier', piscine: true,
+      eau: [40, 184, 206],
+      palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100]
+    },
+    // Stade de la Nuit etoilee : Van Gogh, et non une nuit de jeu video. La
+    // difference tient en un mot, le MOUVEMENT. Chez lui le ciel n'est pas un
+    // fond sombre pique de points blancs, c'est une matiere qui tourne — des
+    // tourbillons, des astres cernes d'un halo, et le coup de pinceau visible
+    // jusque dans l'herbe. Un aplat bleu nuit avec des etoiles ne rappellerait
+    // personne ; c'est deja ce que fait le stade Inter galactique, deux lignes
+    // plus haut.
+    //
+    // Meme report que pour la Riviera, et pour la meme raison : le ciel ne se
+    // voit presque pas en course. Ce qui porte le tableau a l'ecran, c'est la
+    // piste — un jaune de chrome, SA couleur — posee sur une pelouse bleu-vert
+    // entre des gradins outremer. Les trois couleurs du tableau, aux trois
+    // surfaces qu'on regarde.
+    nuit: {
+      skyTop: [10, 24, 72], skyBot: [42, 88, 156], stars: 130,
+      grass: [26, 68, 72], grassEdge: [46, 108, 98],
+      trackA: [206, 152, 46], trackB: [188, 134, 38],
+      lane: [248, 236, 190], kerb: [246, 210, 96],
+      tread: [58, 92, 140], riser: [28, 50, 102], roof: [22, 44, 96],
+      barrier: [176, 200, 232],
+      panels: [[240, 200, 70], [46, 86, 168], [126, 148, 74], [214, 122, 44]],
+      crowdLo: [22, 34, 68], crowdHi: [220, 228, 246],
+      accent: [246, 214, 110], dust: [188, 200, 224],
+      tourbillons: true, arbres: 'cypres', pinceau: true,
+      cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
     }
   };
+
+  // Le stade en plus n'entre dans la liste que sur le canal de test.
+  //
+  // Pourquoi ici, et pas dans le moteur ou vivent les donnees de jeu : le
+  // moteur est charge tel quel par les harnais de `tools/` — parfois en module
+  // Node, parfois evalue dans un `new Function` — et `import.meta` n'existe
+  // dans ni l'un ni l'autre. La ligne ci-dessous, ecrite la-bas, casserait
+  // trois outils d'un coup. Elle vit donc dans la couche navigateur, la seule
+  // qui passe toujours par Vite.
+  //
+  // CE QUE CE DRAPEAU FAIT, ET CE QU'IL NE FAIT PAS. Ecrite exactement ainsi,
+  // la condition se replie en `false` a la compilation publique, et le stade
+  // n'entre jamais dans LEVELS : aucun ecran ne le propose, aucune course ne
+  // s'y court. Mais sa description, elle, VOYAGE : `STADES_HORS_SERIE` est
+  // pose sur un objet global par le moteur, et un bundler ne peut pas suivre
+  // ce qui est publie sur un global. Ce n'est pas le cas de canal.ts, ou le
+  // drapeau retire vraiment le code du bundle. Ici il rend le stade
+  // inatteignable, pas absent — sept noms et huit chronos font le voyage. Le
+  // jour ou il faudra qu'il ne parte plus du tout, c'est la definition
+  // elle-meme qu'il faudra sortir du moteur, pas cette condition.
+  //
+  // La troisieme etape, elle, CHANGE DE DECOR SANS CHANGER DE RANG.
+  //
+  // « Niveau national » dit ou l'on en est sur l'echelle du championnat, pas ou
+  // la reunion se tient : le nom reste donc celui-la. Poser un nom de lieu au
+  // milieu de scolaire / regional / mondial / olympique casserait la seule
+  // chose que cette liste raconte, la montee — et l'ecran d'etape annonce
+  // « ETAPE 3 » a partir de cette place, pas a partir du nom.
+  //
+  // Rien d'autre ne bouge : meme plateau, memes adversaires, meme foule. Seul
+  // le theme change, donc seules les couleurs et le bord de mer.
+  //
+  // Et LES ZEZE ONT DEUX STADES.
+  //
+  // La finale intergalactique se court tantot dans le stade cosmos, tantot
+  // sous la nuit etoilee de Van Gogh, et lequel on trouve tombe au hasard en
+  // arrivant (voir buildLevel). Ce n'est pas la meme chose que le decor de
+  // l'etape 3 : celui-la est fixe, celui-ci se joue a pile ou face. Un stade
+  // unique dit un lieu ; deux stades tires au sort disent une famille qui en
+  // possede plusieurs et recoit dans l'un ou dans l'autre.
+  const ETAPE_BORD_DE_MER = 2, ETAPE_ZEZE = 5;
+  if (import.meta.env.VITE_CANAL === 'test') {
+    for (const stade of K.STADES_HORS_SERIE) LEVELS.push(stade);
+    LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';
+    LEVELS[ETAPE_ZEZE].themes = ['cosmos', 'nuit'];
+  }
 
   // Public dans les gradins : des personnages a facettes cuits dans une
   // tuile (voir getCrowdPattern), et non plus des sprites plats. Le
@@ -53,7 +159,10 @@
   // scolaire n'attire pas la meme foule qu'une finale intergalactique.
   const CROWD_BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
-  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
+  // Les six etapes du championnat, puis les stades hors serie. La Riviera est
+  // un meeting d'ete au bord de l'eau : gradins bien garnis, sans l'affluence
+  // d'une finale mondiale.
+  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00, 0.72];
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
 
@@ -544,9 +653,27 @@
 
   // --- mise en place d'une course ------------------------------------
   function buildLevel(idx) {
+    // Un index hors du tableau ne doit pas faire tomber le jeu, et le cas
+    // n'est pas theorique : les stades hors serie n'existent que sur le canal
+    // de test, et un defi enregistre la-bas porte son index avec lui. Ouvert
+    // dans la version publique, cet index designerait un stade absent — on
+    // court alors au stade olympique plutot que sur un ecran noir.
+    if (!LEVELS[idx]) idx = OLYMPIC;
     G.levelIdx = idx;
     const lvl = LEVELS[idx], R = G.race;
-    const [lo, hi] = R.ranges[idx];
+    // Deux decors pour une meme etape : on tire en arrivant.
+    //
+    // LE TIRAGE NE PASSE PAS PAR `alea()`, ET C'EST VOULU. Ce generateur-la
+    // est seme pendant un defi pour que deux tentatives se courent contre le
+    // meme plateau ; y prendre un nombre pour choisir un decor decalerait
+    // toutes les cotes tirees ensuite. Un stade n'est pas une promesse de
+    // defi — deux joueurs peuvent tres bien courir la meme course dans deux
+    // stades differents, ils courent contre les memes adversaires.
+    if (lvl.themes) lvl.theme = lvl.themes[(Math.random() * lvl.themes.length) | 0];
+    // Un stade hors serie porte son propre plateau : les `ranges` d'une
+    // epreuve sont alignees sur les six etapes du championnat, et il n'en est
+    // pas une.
+    const [lo, hi] = lvl.plateau ? lvl.plateau[R.key] : R.ranges[idx];
     G.track = new Track(R);
     G.runners = [];
     const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
@@ -1481,12 +1608,533 @@
     ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.stroke();
   }
 
+  /* ------------------------------------------------------ le bord de mer
+   *
+   * Deux decors qui n'appartiennent qu'au stade de la Riviera : des nuages
+   * plats dans le ciel, des palmiers derriere les tribunes. Ce sont les deux
+   * signatures des affiches de Hiroshi Nagai, et la palette seule ne les
+   * remplace pas — un ciel bleu sans nuage decoupe reste un ciel de jeu.
+   *
+   * Ils ne coutent rien aux trois autres stades : leur theme ne porte pas les
+   * drapeaux, et personne ne les appelle.
+   */
+
+  // Le nuage de Nagai : un blanc franc, un contour decoupe, un dessous plat.
+  // Ni degrade ni flou — c'est ce qui le distingue d'un nuage de jeu video,
+  // et c'est aussi ce qui le rend gratuit a dessiner.
+  function nuage(ctx, x, y, s) {
+    ctx.beginPath();
+    ctx.moveTo(x - 1.85 * s, y);
+    ctx.arc(x - 1.12 * s, y, 0.73 * s, Math.PI, 0);
+    ctx.arc(x - 0.20 * s, y, 1.02 * s, Math.PI, 0);
+    ctx.arc(x + 0.86 * s, y, 0.68 * s, Math.PI, 0);
+    ctx.lineTo(x + 1.54 * s, y);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.97)';
+    ctx.fill();
+    // Le dessous, a peine bleute : chez Nagai le nuage a une epaisseur, pas
+    // une ombre. Il occupe exactement le bord plat du trace ci-dessus.
+    ctx.fillStyle = 'rgba(190,222,243,0.92)';
+    ctx.fillRect(x - 1.85 * s, y - 0.075 * s, 3.39 * s, 0.075 * s);
+  }
+
+  // Position et taille de chaque nuage, en fractions de l'ecran : le ciel est
+  // compose une fois pour toutes, il ne se retire pas au hasard a chaque
+  // course. Une image dont les nuages sautent d'une partie a l'autre n'est
+  // plus une affiche, c'est un fond d'ecran.
+  const CLOUDS = [
+    [0.05, 0.14, 1.25], [0.23, 0.52, 0.78], [0.37, 0.05, 1.00],
+    [0.54, 0.34, 1.50], [0.71, 0.12, 0.72], [0.85, 0.46, 1.05],
+    [0.96, 0.22, 0.88]
+  ];
+  function drawClouds(ctx) {
+    // Ils suivent la camera au douzieme, et derivent lentement d'eux-memes.
+    // Fixes a l'ecran, ils auraient l'air peints sur la vitre ; poses dans le
+    // monde a l'echelle du reste, ils passeraient devant les gradins.
+    const anchor = ground(0, 0);
+    const derive = performance.now() / 1000 * 4.2;
+    const s0 = ui() * 25;
+    const large = G.VW + s0 * 8;
+    const bande = G.VH * (G.portrait ? 0.30 : 0.26);
+    for (let i = 0; i < CLOUDS.length; i++) {
+      const c = CLOUDS[i], s = s0 * c[2];
+      let x = (c[0] * large - anchor[0] * 0.085 - derive) % large;
+      if (x < 0) x += large;
+      nuage(ctx, x - s0 * 4, 14 + c[1] * bande, s);
+    }
+  }
+
+  // Une palme : un fuseau courbe qui se souleve puis retombe. Le rayon `w`
+  // ecarte les deux bords perpendiculairement a la palme, sinon les palmes
+  // horizontales seraient larges et les verticales plates.
+  function palme(c, x, y, ang, len, w, col) {
+    const dx = Math.cos(ang), dy = Math.sin(ang);
+    const px = -dy * w, py = dx * w;
+    const mx = x + dx * len * 0.5, my = y + dy * len * 0.5 - len * 0.14;
+    const ex = x + dx * len, ey = y + dy * len + len * 0.40;
+    c.beginPath();
+    c.moveTo(x, y);
+    c.quadraticCurveTo(mx + px, my + py, ex, ey);
+    c.quadraticCurveTo(mx - px, my - py, x, y);
+    c.closePath();
+    c.fillStyle = col; c.fill();
+  }
+
+  // Le palmier est CUIT UNE FOIS dans une tuile, comme le public des gradins,
+  // puis repose par drawImage. Le dessiner trait par trait a chaque image —
+  // un tronc courbe, ses anneaux, neuf palmes, trois noix — reviendrait a
+  // repayer une trentaine de chemins remplis par arbre et par image, pour un
+  // objet qui ne bouge pas. Trois inclinaisons suffisent a ce que l'alignement
+  // ne se voie pas.
+  const PALM_W = 460, PALM_H = 512;
+  const palmTiles = new Map();
+  function palmTile(th, variante) {
+    let tab = palmTiles.get(th);
+    if (!tab) { tab = []; palmTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = PALM_W; cv.height = PALM_H;
+    const c = cv.getContext('2d');
+    const bx = PALM_W / 2, by = PALM_H;
+    const pente = (variante - 1) * 28;
+    const tx = bx + pente, ty = PALM_H * 0.34;
+    const kx = bx + pente * 0.12, ky = PALM_H * 0.64;
+
+    // le stipe : deux bords quadratiques, du pied evase a la tete fine
+    const b0 = 18, b1 = 9;
+    c.beginPath();
+    c.moveTo(bx - b0, by);
+    c.quadraticCurveTo(kx - b1 * 1.7, ky, tx - b1, ty);
+    c.lineTo(tx + b1, ty);
+    c.quadraticCurveTo(kx + b1 * 1.7, ky, bx + b0, by);
+    c.closePath();
+    c.fillStyle = rgb(th.palmTrunk); c.fill();
+
+    // les anneaux, dans le trace du stipe : c'est ce qui empeche le tronc de
+    // n'etre qu'un ruban beige.
+    c.save(); c.clip();
+    c.strokeStyle = rgb(th.palmTrunk, 0.74); c.lineWidth = 3.5;
+    for (let i = 1; i < 18; i++) {
+      const t = i / 18, u = 1 - t;
+      const px = u * u * bx + 2 * u * t * kx + t * t * tx;
+      const py = u * u * by + 2 * u * t * ky + t * t * ty;
+      c.beginPath(); c.moveTo(px - 22, py - 3); c.lineTo(px + 22, py + 3); c.stroke();
+    }
+    c.restore();
+
+    // la couronne : neuf palmes en eventail, les hautes eclairees, les basses
+    // dans l'ombre de la tete. On dessine celles qui partent vers le haut en
+    // premier, pour que les retombantes passent devant.
+    const feuilles = 9;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < feuilles; i++) {
+        const a = -Math.PI + (i + 0.5) / feuilles * Math.PI;
+        const haute = Math.sin(a) < -0.55;
+        if ((pass === 0) !== haute) continue;
+        const len = 152 + ((i * 37) % 30);
+        palme(c, tx, ty, a, len, 25 + (i % 3) * 5,
+              rgb(th.palmLeaf, haute ? 1.22 : 0.86));
+      }
+    }
+    // la nervure, un ton plus sombre : la palme se lit alors en deux moities
+    for (let i = 0; i < feuilles; i++) {
+      const a = -Math.PI + (i + 0.5) / feuilles * Math.PI;
+      const len = 152 + ((i * 37) % 30);
+      c.strokeStyle = rgb(th.palmLeaf, 0.62); c.lineWidth = 3;
+      c.beginPath(); c.moveTo(tx, ty);
+      c.quadraticCurveTo(tx + Math.cos(a) * len * 0.5,
+                         ty + Math.sin(a) * len * 0.5 - len * 0.14,
+                         tx + Math.cos(a) * len, ty + Math.sin(a) * len + len * 0.40);
+      c.stroke();
+    }
+    // les noix, sous la tete
+    c.fillStyle = rgb(th.palmTrunk, 0.72);
+    for (const d of [[-13, 9], [5, 15], [16, 4]]) {
+      c.beginPath(); c.arc(tx + d[0], ty + d[1], 9, 0, TAU); c.fill();
+    }
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  // Les palmiers, plantes juste derriere les tribunes.
+  //
+  // La distance n'est pas decorative, elle decide si on les voit. La camera
+  // colle au coureur et le cadre est etroit : passe une douzaine de metres au
+  // dela du bord de piste, un objet sort du champ par le coin haut-droit et
+  // n'y revient jamais. Plantes la, en revanche, leur tete depasse du toit des
+  // gradins et traverse le haut de l'ecran pendant la course.
+  // Le cypres de Van Gogh, cuit dans sa tuile comme le palmier.
+  //
+  // Ce n'est pas un cone : c'est une FLAMME. Le profil s'ouvre vite au-dessus
+  // du pied, se referme en pointe, et les deux bords ondulent en se decalant
+  // l'un par rapport a l'autre — c'est ce decalage qui fait la torsion, et la
+  // torsion qui fait le cypres. Un triangle vert sombre n'aurait rien dit.
+  const CYPRES_W = 150, CYPRES_H = 620;
+  const cypresTiles = new Map();
+  function cypresTile(th, variante) {
+    let tab = cypresTiles.get(th);
+    if (!tab) { tab = []; cypresTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = CYPRES_W; cv.height = CYPRES_H;
+    const c = cv.getContext('2d');
+    const axe = CYPRES_W / 2, N = 32;
+    const torsion = (t) => Math.sin(t * 3.1 + variante * 1.7) * CYPRES_W * 0.14;
+    // Le profil fait tout. Pointe en haut, ventre au premier tiers, pied
+    // etroit : c'est cette silhouette-la qu'on reconnait de loin. Un fuseau
+    // regulier, large au milieu et arrondi aux deux bouts, donne un cocon.
+    // L'ondulation est multipliee par le profil lui-meme, pour qu'elle
+    // s'eteigne a la pointe au lieu d'y decouper des dents.
+    const bord = (sens) => {
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N;                       // 0 au sommet, 1 au pied
+        const prof = Math.sin(Math.pow(t, 0.62) * Math.PI * 0.98);
+        const large = Math.pow(prof, 0.78) * CYPRES_W * 0.40;
+        const ond = Math.sin(t * 13 + variante * 2.2 + (sens > 0 ? 0 : 1.6))
+                  * CYPRES_W * 0.07 * prof;
+        pts.push([axe + torsion(t) + sens * (large + ond), 6 + t * (CYPRES_H - 6)]);
+      }
+      return pts;
+    };
+    const g = bord(-1), d = bord(1);
+    c.beginPath();
+    c.moveTo(g[0][0], g[0][1]);
+    for (const q of g) c.lineTo(q[0], q[1]);
+    for (let i = d.length - 1; i >= 0; i--) c.lineTo(d[i][0], d[i][1]);
+    c.closePath();
+    c.fillStyle = rgb(th.cypresSombre); c.fill();
+
+    // Les coups de pinceau du dedans : ils montent en tournant, plus clairs
+    // que la masse. Sans eux le cypres redevient une silhouette decoupee.
+    c.save(); c.clip();
+    c.lineCap = 'round';
+    c.globalAlpha = 0.55;
+    for (let k = 0; k < 30; k++) {
+      const t0 = 0.04 + ((k * 7) % 15) / 15 * 0.93, cote = k % 2 ? -1 : 1;
+      const y0 = 6 + t0 * (CYPRES_H - 6);
+      const x0 = axe + torsion(t0) + cote * CYPRES_W * (0.06 + (k % 3) * 0.06);
+      c.beginPath();
+      c.moveTo(x0, y0);
+      c.quadraticCurveTo(x0 + cote * 16, y0 - 26, x0 - cote * 7, y0 - 48);
+      c.strokeStyle = rgb(th.cypresClair, k % 3 ? 1.15 : 0.78);
+      c.lineWidth = 2.4;
+      c.stroke();
+    }
+    c.restore();
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  // Quel arbre pousse dans quel stade, et de quelle taille. Les hauteurs sont
+  // en metres : un cypres depasse un palmier, et les deux rangees ne font pas
+  // la meme taille — celle du dedans reste plus basse pour ne pas manger
+  // l'ecran, puisqu'elle est beaucoup plus pres de la camera.
+  const ARBRE = {
+    palmier: { tuile: palmTile,   dehors: [6.2, 0.55], dedans: [5.6, 0.50] },
+    cypres:  { tuile: cypresTile, dehors: [8.6, 0.70], dedans: [7.2, 0.60] }
+  };
+
+  function drawArbres(ctx, th, sm, rOut) {
+    const A = ARBRE[th.arbres];
+    if (!A) return;
+    // Le pas se compte en ECHANTILLONS, et ceux-ci ne mesurent pas la meme
+    // longueur partout : 1,2 m dans le virage, 12 m en ligne droite (voir
+    // samples()). Un pas unique donnerait des arbres tous les vingt metres
+    // d'un cote et un seul de l'autre — un cent metres n'a qu'une douzaine
+    // d'echantillons en tout.
+    const stp = G.track.curved ? 10 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 7) * 2654435761) >>> 0;
+      const r = rOut + 9 + (graine % 5);
+      const h = (A.dehors[0] + ((graine >>> 5) % 5) * A.dehors[1]) * scaleM();
+      const tuile = A.tuile(th, (graine >>> 11) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
+  // L'ombre portee d'un arbre : longue, dure, toujours dans la meme
+  // direction. Chez Nagai l'ombre est un aplat, jamais un degrade, et c'est
+  // elle qui pose l'objet au sol — un palmier sans ombre flotte au-dessus de
+  // la pelouse. Elle donne aussi l'heure : longue, elle dit un soleil bas.
+  function ombreArbre(ctx, x, y, h) {
+    ctx.fillStyle = 'rgba(10,52,64,0.24)';
+    ctx.beginPath();
+    ctx.ellipse(x - h * 0.30, y + h * 0.03, h * 0.33, h * 0.07, -0.30, 0, TAU);
+    ctx.fill();
+  }
+
+  // LA RANGEE DE PALMIERS DU DEDANS, ET POURQUOI ELLE EXISTE.
+  //
+  // Ceux de derriere les tribunes ne se voient qu'en paysage ou sur grand
+  // ecran : le cadre du jeu s'ouvre vers l'INTERIEUR de la piste, jamais vers
+  // l'exterieur — mesure faite, un objet pose au-dela d'une douzaine de metres
+  // du bord sort par le coin haut-droit et n'y revient plus. Or un stade de
+  // Nagai sans palmier visible n'est plus qu'une piste corail. On en plante
+  // donc une seconde rangee dans la pelouse interieure, la ou le joueur les a
+  // reellement sous les yeux pendant qu'il court.
+  //
+  // Ils sont traces APRES la piste, et ce n'est pas un detail : ce qui se
+  // trouve en deca du couloir 1 est PLUS PRES de la camera que la piste (la
+  // profondeur croit avec la distance au centre), donc doit la recouvrir.
+  // Traces avant, ils se faisaient repeindre par les couloirs des que leur
+  // tete montait assez haut.
+  function drawArbresDedans(ctx, th, sm, rIn) {
+    const stp = G.track.curved ? 12 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 3) * 2246822519) >>> 0;
+      // Entre la piste et le bassin, jamais dedans : le bassin commence a
+      // sept metres du bord (voir PISCINE), et un palmier plante au milieu de
+      // l'eau se remarque tout de suite.
+      //
+      // LA LIMITE ASSUMEE : les coureurs, eux, sont traces apres tout le
+      // decor, donc un coureur des premiers couloirs passe DEVANT la palme
+      // quand elle deborde sur la piste. Trier les arbres avec les huit
+      // athletes couterait un tri global a chaque image pour rattraper une
+      // demi-seconde de recouvrement — on prefere l'arbre visible.
+      const r = rIn - 4 - (graine % 3);
+      const A = ARBRE[th.arbres];
+      if (!A) return;
+      const h = (A.dedans[0] + ((graine >>> 5) % 4) * A.dedans[1]) * scaleM();
+      const tuile = A.tuile(th, (graine >>> 11) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ombreArbre(ctx, p[0], p[1], h);
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
+  /* -------------------------------------------------------- la piscine
+   *
+   * L'objet de Nagai, et le clin d'oeil du stade. Un rectangle d'eau, sa
+   * margelle blanche, trois rides plates, un plongeoir : aucun degrade nulle
+   * part. Chez lui l'eau est un aplat turquoise raye de blanc, et c'est
+   * precisement cette absence de matiere qui la rend reconnaissable d'un coup
+   * d'oeil — une eau texturee ferait un moteur de jeu, pas une affiche.
+   *
+   * Elle vit dans la pelouse interieure pour la meme raison que les palmiers
+   * du dedans : c'est le seul cote que le cadre montre. Etant plate, elle ne
+   * recouvre jamais la piste, et peut donc rester tracee avec la pelouse.
+   */
+  const PISCINE = { m0: 38, m1: 62, dedans0: 7, dedans1: 16 };
+  function drawPiscine(ctx, th, rIn) {
+    const T = G.track;
+    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
+    const r0 = rIn - PISCINE.dedans1, r1 = rIn - PISCINE.dedans0;
+
+    // Le bassin suit la piste : sur un tour, un rectangle a quatre coins
+    // couperait la courbe en biais. On decoupe donc les deux longs cotes.
+    const contour = (marge) => {
+      const pts = [], N = 8;
+      const a0 = PISCINE.m0 - marge, a1 = PISCINE.m1 + marge;
+      for (let i = 0; i <= N; i++) {
+        const q = at(a0 + (a1 - a0) * i / N, r0 - marge);
+        if (q) pts.push(ground(q[0], q[1]));
+      }
+      for (let i = N; i >= 0; i--) {
+        const q = at(a0 + (a1 - a0) * i / N, r1 + marge);
+        if (q) pts.push(ground(q[0], q[1]));
+      }
+      return pts;
+    };
+    const remplir = (pts, col) => {
+      if (pts.length < 3) return;
+      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    };
+
+    const eau = contour(0);
+    if (!eau.length) return;
+    // Hors champ : on ne paie ni la margelle ni les rides.
+    let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+    for (const q of eau) {
+      if (q[0] < minx) minx = q[0]; if (q[0] > maxx) maxx = q[0];
+      if (q[1] < miny) miny = q[1]; if (q[1] > maxy) maxy = q[1];
+    }
+    if (maxx < -40 || minx > G.VW + 40 || maxy < -40 || miny > G.VH + 40) return;
+
+    remplir(contour(1.7), rgb(th.barrier));
+    remplir(eau, rgb(th.eau));
+
+    // Les rides : trois traits blancs poses a plat, pas une texture.
+    ctx.strokeStyle = 'rgba(255,255,255,0.78)';
+    ctx.lineWidth = 2.2 * ui(); ctx.lineCap = 'round';
+    for (let k = 0; k < 3; k++) {
+      const rr = r0 + (r1 - r0) * (0.26 + k * 0.24);
+      const a = at(PISCINE.m0 + 4 + k * 2.4, rr), b = at(PISCINE.m0 + 12.5 + k * 2.4, rr);
+      if (!a || !b) continue;
+      const pa = ground(a[0], a[1]), pb = ground(b[0], b[1]);
+      ctx.beginPath(); ctx.moveTo(pa[0], pa[1]); ctx.lineTo(pb[0], pb[1]); ctx.stroke();
+    }
+
+    // Le plongeoir : une planche blanche en porte-a-faux, a un metre au-dessus
+    // de l'eau. Elle est basse — assez pour se lire en volume, pas assez pour
+    // aller mordre sur les couloirs quand elle monte a l'ecran.
+    const rm = (r0 + r1) / 2, z = 1.15;
+    const coins = [[PISCINE.m1 + 1.2, rm - 0.6], [PISCINE.m1 + 1.2, rm + 0.6],
+                   [PISCINE.m1 - 4.2, rm + 0.6], [PISCINE.m1 - 4.2, rm - 0.6]];
+    const proj = coins.map(c => { const q = at(c[0], c[1]); return q ? solid(q[0], q[1], z) : null; });
+    if (proj.every(Boolean)) {
+      // le pied, puis la planche
+      const pied = at(PISCINE.m1 + 0.9, rm);
+      if (pied) {
+        const bas = ground(pied[0], pied[1]), haut = solid(pied[0], pied[1], z);
+        ctx.strokeStyle = rgb(th.barrier, 0.82);
+        ctx.lineWidth = 4 * ui();
+        ctx.beginPath(); ctx.moveTo(bas[0], bas[1]); ctx.lineTo(haut[0], haut[1]); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(proj[0][0], proj[0][1]);
+      for (let i = 1; i < 4; i++) ctx.lineTo(proj[i][0], proj[i][1]);
+      ctx.closePath(); ctx.fillStyle = rgb(th.barrier); ctx.fill();
+    }
+  }
+
+  /* ---------------------------------------------------- la nuit etoilee
+   *
+   * Trois gestes, et c'est tout ce qui separe une nuit de Van Gogh d'une nuit
+   * de jeu video : le ciel TOURNE, les astres portent un halo qui mord sur le
+   * bleu, et la matiere se voit — le coup de pinceau reste lisible partout,
+   * jusque dans l'herbe. Rien de tout cela n'est une texture : ce sont des
+   * traits, traces un par un, comme ils l'ont ete sur la toile.
+   */
+
+  // Les tourbillons. Quatre spirales qui se repondent, et de longues coulees
+  // entre elles. Elles tournent tres lentement sur elles-memes : le ciel de ce
+  // tableau n'est pas un decor pose derriere, c'est ce qui bouge le plus.
+  const SPIRALES = [
+    [0.14, 0.34, 0.21, 1], [0.42, 0.15, 0.14, -1],
+    [0.70, 0.36, 0.25, 1], [0.92, 0.13, 0.12, -1]
+  ];
+  function drawTourbillons(ctx) {
+    const anchor = ground(0, 0);
+    const t = performance.now() / 1000;
+    const w = G.VW, h = G.VH * (G.portrait ? 0.40 : 0.34);
+    const dx = -anchor[0] * 0.07, L = w * 1.4;
+    const enroule = (x) => ((x % L) + L) % L - w * 0.2;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      const y = (0.07 + i * 0.15) * h;
+      ctx.beginPath();
+      for (let x = -30; x <= w + 30; x += 22) {
+        const yy = y + Math.sin((x - dx) / 84 + i * 1.7) * 8 * ui();
+        x === -30 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy);
+      }
+      ctx.strokeStyle = i % 2 ? 'rgba(126,170,228,0.22)' : 'rgba(74,116,190,0.30)';
+      ctx.lineWidth = 2.4 * ui();
+      ctx.stroke();
+    }
+    for (let n = 0; n < SPIRALES.length; n++) {
+      const sp = SPIRALES[n];
+      const cx = enroule(sp[0] * w + dx), cy = sp[1] * h;
+      const R = sp[2] * Math.min(w, h * 2.4), sens = sp[3];
+      for (let k = 0; k < 5; k++) {
+        const r = R * (0.30 + k * 0.18);
+        const a0 = sens * (t * 0.05 + k * 0.62 + n * 1.3);
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, a0, a0 + sens * 2.2, sens < 0);
+        ctx.strokeStyle = k % 2 ? 'rgba(158,196,244,0.30)' : 'rgba(238,226,150,0.20)';
+        ctx.lineWidth = (2.8 - k * 0.32) * ui();
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // La lune et les grosses etoiles. Ce ne sont pas des points : chez Van Gogh
+  // l'astre est un disque entoure d'un halo qui deborde largement sur le ciel,
+  // et c'est le halo qui fait la lumiere, pas le disque.
+  const ASTRES = [[0.08, 0.13, 1.00], [0.28, 0.27, 0.68], [0.50, 0.09, 0.86],
+                  [0.63, 0.31, 0.58], [0.86, 0.19, 0.95]];
+  function drawAstres(ctx) {
+    const anchor = ground(0, 0);
+    const w = G.VW, h = G.VH * (G.portrait ? 0.40 : 0.34);
+    const dx = -anchor[0] * 0.07, L = w * 1.4;
+    const enroule = (x) => ((x % L) + L) % L - w * 0.2;
+    const halo = (x, y, r) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,246,192,0.90)');
+      g.addColorStop(0.30, 'rgba(246,214,110,0.34)');
+      g.addColorStop(1, 'rgba(246,214,110,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    };
+    for (const e of ASTRES) {
+      const x = enroule(e[0] * w + dx), y = e[1] * h, r = e[2] * 8 * ui();
+      halo(x, y, r * 4.4);
+      ctx.fillStyle = 'rgba(255,252,224,0.98)';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    }
+    // Le croissant : deux arcs, celui du dedans trace a l'envers. Un disque
+    // troue par-dessus le ciel serait plus simple, mais il faudrait effacer —
+    // et on ne peut pas effacer un ciel deja peint.
+    const mx = enroule(0.74 * w + dx), my = 0.10 * h, mr = 20 * ui();
+    halo(mx, my, mr * 3.2);
+    ctx.fillStyle = 'rgba(255,248,206,0.98)';
+    ctx.beginPath();
+    ctx.arc(mx, my, mr, 0.62, Math.PI * 2 - 0.62);
+    ctx.arc(mx + mr * 0.62, my, mr * 0.92, Math.PI * 2 - 0.95, 0.95, true);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // LE COUP DE PINCEAU DANS L'HERBE.
+  //
+  // Les autres stades cassent l'aplat de la pelouse avec un grain pointilliste
+  // — de petits carres plus clairs ou plus sombres. Van Gogh ne pointille pas,
+  // il tire des traits, et ces traits suivent une direction. La pelouse reprend
+  // donc le geste : de courts arcs orientes le long de la piste, poses dans le
+  // monde (ils defilent avec elle), des DEUX cotes — celui du dedans est le
+  // seul que le cadre montre vraiment pendant la course.
+  function coupsDePinceau(ctx, th, rIn, rOut) {
+    // On avance EN METRES, pas en echantillons. Les echantillons du decor sont
+    // espaces de 1,2 m dans le virage et de 12 m en ligne droite : un trait
+    // tire de l'un au suivant mesurerait douze metres de long sur une ligne
+    // droite, ce qui n'est plus un coup de pinceau mais une rayure.
+    const T = G.track;
+    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
+    const fin = T.total + 20;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 2.1 * ui();
+    for (let m = -10, n = 0; m < fin; m += 2.0, n++) {
+      const graine = ((n + 11) * 2654435761) >>> 0;
+      for (let k = 0; k < 3; k++) {
+        const g2 = (graine >>> (k * 8)) & 0xffff;
+        const rr = k < 2 ? rIn - 1.5 - (g2 % 14) : rOut + 3 + (g2 % 34);
+        const q0 = at(m + (g2 % 7) * 0.3, rr);
+        if (!q0) continue;
+        const a = ground(q0[0], q0[1]);
+        if (a[0] < -30 || a[0] > G.VW + 30 || a[1] < -30 || a[1] > G.VH + 30) continue;
+        const q1 = at(m + (g2 % 7) * 0.3 + 1.9, rr + 0.8);
+        if (!q1) continue;
+        const b = ground(q1[0], q1[1]);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.quadraticCurveTo((a[0] + b[0]) / 2 + 6 * ui(), (a[1] + b[1]) / 2 - 5 * ui(),
+                             b[0], b[1]);
+        ctx.strokeStyle = rgb(th.grassEdge, g2 & 1 ? 1.28 : 0.76);
+        ctx.stroke();
+      }
+    }
+  }
+
   function drawWorld(ctx, th) {
     const T = G.track;
     // ciel
     const g = ctx.createLinearGradient(0, 0, 0, G.VH);
     g.addColorStop(0, rgb(th.skyTop)); g.addColorStop(1, rgb(th.skyBot));
     ctx.fillStyle = g; ctx.fillRect(0, 0, G.VW, G.VH);
+    // Les tourbillons passent SOUS les etoiles : ce sont eux le ciel, les
+    // etoiles sont posees dessus.
+    if (th.tourbillons) drawTourbillons(ctx);
     if (th.stars) {
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       for (let i = 0; i < th.stars; i++) {
@@ -1494,6 +2142,8 @@
         ctx.fillRect((s * 13) % G.VW, (s * 7) % (G.VH * 0.7), 1.4, 1.4);
       }
     }
+    if (th.tourbillons) drawAstres(ctx);
+    if (th.clouds) drawClouds(ctx);
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
     const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
@@ -1525,7 +2175,8 @@
     // ancrees au monde (elles defilent avec la piste, pas avec l'ecran), pour
     // casser l'aplat plutot qu'une texture image plaquee sans rapport avec
     // notre perspective isometrique maison.
-    for (let i = 0; i < sm.length; i += 3) {
+    if (th.pinceau) coupsDePinceau(ctx, th, rIn, rOut);
+    else for (let i = 0; i < sm.length; i += 3) {
       const seed = i * 13;
       for (let k = 0; k < 3; k++) {
         const rr = rOut + 3 + ((seed + k * 17) % 40);
@@ -1536,6 +2187,15 @@
         ctx.fillRect(p[0], p[1], 1.6 * ui(), 1.6 * ui());
       }
     }
+
+    // La piscine, posee dans la pelouse interieure (voir drawPiscine).
+    if (th.piscine) drawPiscine(ctx, th, rIn);
+
+    // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
+    // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
+    // est le seul rangement dont on dispose. Leur pied disparait donc derriere
+    // les gradins, comme il le ferait vraiment, et seule la tete depasse.
+    if (th.arbres) drawArbres(ctx, th, sm, rOut);
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
@@ -1728,6 +2388,10 @@
       for (let j = 1; j < 4; j++) ctx.lineTo(q[j][0], q[j][1]);
       ctx.closePath(); ctx.fill();
     }
+
+    // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
+    // doivent la recouvrir (voir drawArbresDedans).
+    if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
   }
 
   // -------------------------------------------------------------------

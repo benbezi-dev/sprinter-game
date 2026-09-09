@@ -968,6 +968,9 @@
                       "race another player's ghost"],
     pick_events:     ['ÉPREUVES', 'EVENTS'],
     pick_level:      ['NIVEAU', 'LEVEL'],
+    // Le groupe des stades hors serie, dans le choix du niveau. Il n'a de
+    // contenu que sur le canal de test ; ailleurs, aucun ecran ne le rend.
+    pick_venue:      ['STADES', 'VENUES'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
     launch_oneshot:  ['LANCER', 'GO'],
     event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
@@ -1088,7 +1091,13 @@
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
     ['Jeux olympiques', 'Olympic Games'],
-    ['Intergalactique', 'Intergalactic']
+    ['Intergalactique', 'Intergalactic'],
+    // Au-dela des six etapes du championnat : les stades hors serie, dans
+    // l'ordre ou le moteur les ajoute (voir STADES_HORS_SERIE). Le nom reste
+    // ici meme quand le stade, lui, n'existe pas dans la version publique —
+    // l'historique des courses garde l'index de l'etape ou elles ont ete
+    // courues, et une partie jouee sur le canal de test se relit ailleurs.
+    ['Stade de la Riviera', 'Riviera Stadium']
   ];
 
   const RACE_SUB = {

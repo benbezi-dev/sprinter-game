@@ -96,11 +96,27 @@ export function OneShotPanel() {
             onChange={e => setLevel(Number(e.target.value))}
             className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50"
           >
-            {LEVELS.map((_: unknown, i: number) => (
+            {/* Les six etapes du championnat, numerotees comme dans la
+                carriere : le chiffre est ce qui dit la difficulte. */}
+            {LEVELS.map((l: any, i: number) => (l.horsSerie ? null : (
               <option key={i} value={i} className="bg-neutral-900">
                 {i + 1}. {N.levelName(i)}
               </option>
-            ))}
+            )))}
+            {/* Les stades hors serie, a part et SANS numero. Les numeroter
+                les ferait passer pour une septieme etape, alors qu'ils ne
+                sont pas sur l'echelle : ce sont des lieux ou courir, que le
+                championnat ignore. Le groupe n'a de contenu que sur le canal
+                de test, et un <optgroup> vide ne s'affiche pas. */}
+            {LEVELS.some((l: any) => l.horsSerie) && (
+              <optgroup label={N.t('pick_venue')} className="bg-neutral-900">
+                {LEVELS.map((l: any, i: number) => (l.horsSerie ? (
+                  <option key={i} value={i} className="bg-neutral-900">
+                    {N.levelName(i)}
+                  </option>
+                ) : null))}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>
