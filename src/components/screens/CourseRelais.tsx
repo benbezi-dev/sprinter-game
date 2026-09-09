@@ -4,6 +4,7 @@ import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, type EtatRelais } from '@/game/salle-relais';
+import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
 
 /**
@@ -72,6 +73,19 @@ export function CourseRelais({ equipe, onQuitter }: {
           },
           fini: () => s.terminer(),
         });
+
+        // ET LA CAMERA TOURNE, POUR LES QUATRE CENTS METRES ENTIERS.
+        //
+        // Pas seulement pour sa portion : un relais ne se raconte pas par un
+        // quart de relais. Le film part du coup de pistolet et s'arrete au
+        // chrono de l'equipe — on y voit donc son propre passage, mais aussi
+        // les trois autres, la transmission qu'on a recue et celle qu'on a
+        // donnee. C'est la seule course du jeu ou ce qu'on partage appartient
+        // a quatre personnes.
+        //
+        // La date du pistolet vient de la salle, comme en direct : on prend
+        // l'avance qu'il faut pour ne pas perdre la sortie des blocs.
+        programmerLeFilm('relais', dansMs);
       },
       onPasse: (p, etat) => {
         // Le temoin est parti de mes mains : ma course est finie, et il n'y a
@@ -85,13 +99,25 @@ export function CourseRelais({ equipe, onQuitter }: {
           SprinterApp.recevoirTemoin(derniere?.ecart ?? 0);
         }
       },
-      onElimine: (raison) => { brancherSalle(null); setErreur(raison); },
-      onFini: () => brancherSalle(null),
+      // La course s'arrete ici, et le film avec elle — dans les deux cas.
+      //
+      // Un relais elimine garde sa video : le passage rate est justement ce
+      // qu'on veut revoir, et l'ecran d'arrivee est la pour le proposer. C'est
+      // ce qui le distingue d'un faux depart en one shot, qui ne laisse aucune
+      // course derriere lui.
+      onElimine: (raison) => {
+        brancherSalle(null); setErreur(raison);
+        void arreterLeFilm('relais');
+      },
+      onFini: () => { brancherSalle(null); void arreterLeFilm('relais'); },
       onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
     });
     salle.current = s;
     s.connecter();
-    return () => { brancherSalle(null); s.fermer(); };
+    // En sortant de la piste, le film s'en va aussi : l'ecran d'arrivee est le
+    // seul a le proposer, et un fichier que plus personne ne peut voir n'a
+    // aucune raison d'occuper la memoire de l'onglet pendant deux heures.
+    return () => { brancherSalle(null); s.fermer(); jeterLeFilm('relais'); };
   }, [equipe]);
 
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et

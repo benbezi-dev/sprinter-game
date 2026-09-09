@@ -19,8 +19,9 @@ import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
-import { Review, type EtatReview } from '@/game/review';
-import { sonDuJeu } from '@/game/film-course';
+import {
+  programmerLeFilm, arreterLeFilm, jeterLeFilm, useFilmDeLaCourse, partagerLeFilm,
+} from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
@@ -122,12 +123,23 @@ export function LivePanel() {
   const [voixEtat, setVoixEtat] = useState<EtatVoix>({
     micro: false, refuse: false, ouvert: false, connecte: false,
   });
-  const [review, setReview] = useState<EtatReview>({
-    phase: 'inactif', url: null, fichier: '', reste: 0, taille: 0,
-  });
+  /**
+   * LE FILM DE LA COURSE, QUI NE VIT PLUS ICI.
+   *
+   * Il tenait dans un `useRef` de ce composant, et c'etait le seul endroit ou
+   * il ne pouvait pas tenir : ce panneau vit dans l'ecran-titre, qui disparait
+   * au coup de pistolet. La camera tournait bien — la salle garde les
+   * fonctions qu'on lui a confiees — mais au retour de la course, le panneau
+   * se remontait a neuf, avec un `ref` vide : la video etait en memoire, et
+   * plus un seul ecran ne pouvait la proposer.
+   *
+   * Elle vit donc dans `game/film-course`, au-dessus des composants, comme
+   * celle du one shot. Deux ecrans la montrent maintenant : celui de fin de
+   * course, tout de suite, et ce panneau au retour dans le salon.
+   */
+  const film = useFilmDeLaCourse();
 
   const salle = useRef<Salle | null>(null);
-  const film = useRef<Review | null>(null);
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
   const cibleDepart = useRef<number | null>(null);
@@ -284,13 +296,7 @@ export function LivePanel() {
     //
     // La piste distante est relue au moment du depart et non ici : a la
     // seconde ou l'on programme, la connexion peut n'avoir rien recu encore.
-    if (!film.current) film.current = new Review(setReview);
-    const f = film.current;
-    setTimeout(
-      () => f.demarrer(SprinterApp.G.cv || null,
-                      [...sonDuJeu(), voixCourante()?.pisteDistante()]),
-      Math.max(0, dans - 300),
-    );
+    programmerLeFilm('direct', dans, () => [voixCourante()?.pisteDistante()]);
   };
 
   const ecouteurs = (monCode: string) => ({
@@ -359,7 +365,7 @@ export function LivePanel() {
       SprinterApp.G.liveOn = true;
       presEnCours.current = false;
       setPresentation(null);
-      film.current?.arreter();
+      void arreterLeFilm('direct');
 
       // Le mot du vainqueur : cinq secondes, et seulement pour lui. Le perdant
       // garde son micro coupe, ce qui est aussi une facon de ne pas transformer
@@ -452,6 +458,14 @@ export function LivePanel() {
   const quitter = () => {
     quitterSalon(); salle.current = null;
     brancherSalle(null);
+    // La camera part avec la salle.
+    //
+    // Quitter, c'est renoncer a la course : celle qui tournait encore n'aura
+    // pas de fin a filmer, et celle qui etait prete n'a plus d'ecran ou se
+    // montrer — le panneau revient a son etat de repos, sans la carte video.
+    // Garder le fichier serait garder quelques dizaines de mega-octets pour
+    // personne.
+    jeterLeFilm('direct');
     // Partir pendant la presentation laissait le jeu sur la piste, decompte
     // suspendu, sans rien pour le relancer ni pour en sortir : la piste montee
     // avant le pistolet doit se demonter par le meme chemin.
@@ -617,9 +631,14 @@ export function LivePanel() {
       {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"
     >
-      {/* Apres la course : la video, et son compte a rebours. */}
-      {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
-        <ReviewVideo etat={review} onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
+      {/* Apres la course : la video, et son compte a rebours.
+
+          Celle du DIRECT, et pas une autre. L'enregistreur est partage avec le
+          one shot et le relais — un film qui n'est pas de cette course-ci n'a
+          rien a faire dans ce salon. */}
+      {film.genre === 'direct' &&
+        (etape === 'review' || film.phase === 'prete' || film.phase === 'expiree') && (
+        <ReviewVideo etat={film} onPartager={partagerLeFilm} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}

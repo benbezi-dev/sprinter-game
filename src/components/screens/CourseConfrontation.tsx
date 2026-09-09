@@ -11,6 +11,7 @@ import {
 import {
   Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe, chrono,
 } from './relais-pieces';
+import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 
 /**
  * La confrontation : deux a huit equipes, un seul coup de pistolet.
@@ -96,6 +97,14 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
           },
           fini: () => s.terminer(),
         });
+
+        // ET LA CAMERA TOURNE, DU PISTOLET AU CHRONO DE MON EQUIPE.
+        //
+        // C'est ici que le film a le plus a montrer : les temoins adverses
+        // courent dans les couloirs voisins, et ce qui se partage apres n'est
+        // pas un chrono mais un ecart — celui qu'on a pris, ou rendu, au
+        // moment de la transmission.
+        programmerLeFilm('relais', dansMs);
       },
       onPos: (eq, relais, d) => {
         if (relais === porteurs.current.get(eq)) {
@@ -111,18 +120,29 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         if (p.de === s.monRelais) brancherSalle(null);
         if (p.vers === s.monRelais) SprinterApp.recevoirTemoin(p.ecart);
       },
+      // Ma course s'arrete, par la ligne ou par l'elimination : le film
+      // s'arrete au meme instant. Pas a la fin de TOUTE la confrontation — a
+      // partir de la, mon ecran montre l'arrivee et le classement, qui n'ont
+      // rien a faire dans une video de course.
       onElimine: (eq, raison) => {
         if (eq !== equipe) return;
         brancherSalle(null);
         setErreur(raison);
+        void arreterLeFilm('relais');
       },
-      onFini: (eq) => { if (eq === equipe) brancherSalle(null); },
+      onFini: (eq) => {
+        if (eq !== equipe) return;
+        brancherSalle(null);
+        void arreterLeFilm('relais');
+      },
       onTermine: () => setTermine(true),
       onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
     });
     salle.current = s;
     s.connecter(max, fantomes);
-    return () => { brancherSalle(null); s.fermer(); };
+    // Le film ne survit pas a la sortie de piste : l'ecran d'arrivee est le
+    // seul a le proposer. Voir CourseRelais, meme regle.
+    return () => { brancherSalle(null); s.fermer(); jeterLeFilm('relais'); };
   }, [code, equipe]);
 
   useEffect(() => {
