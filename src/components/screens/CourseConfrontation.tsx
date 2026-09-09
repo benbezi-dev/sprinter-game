@@ -75,7 +75,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         setTemoins(Object.fromEntries(etat.equipes.map(x => [x.equipe, x.temoin_d])));
         setE(etat);
       },
-      onDepart: (dansMs) => {
+      onDepart: (dansMs, departA) => {
         // Les adversaires entrent dans la course comme des coureurs a part
         // entiere, un par couloir : tout le rendu, la camera et le classement
         // en course continuent de fonctionner sans savoir qu'ils viennent du
@@ -85,7 +85,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
           .filter(([id]) => id !== equipe)
           .map(([id, i]) => ({ id, nom: noms.current.get(id) || id, couloir: i + 1 }));
         SprinterApp.startRelais({ relais: s.monRelais, marque: s.marque, autres });
-        SprinterApp.liveDepart(dansMs);
+        SprinterApp.liveDepart(dansMs, departA);
         brancherSalle({
           position: (d) => {
             s.avancer(d);

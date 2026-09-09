@@ -56,7 +56,7 @@ export function CourseRelais({ equipe, onQuitter }: {
       // Le porteur ne recoit pas ses propres positions en echo : les siennes
       // lui viennent du moteur, celles des autres de la salle.
       onPos: (relais, d) => { if (relais === porteur.current) setTemoinD(d); },
-      onDepart: (dansMs) => {
+      onDepart: (dansMs, departA) => {
         // Le coup de pistolet est celui de TOUT LE MONDE, pas seulement du
         // premier relayeur. Les quatre entrent en course a la meme seconde :
         // les trois autres sont debout dans leur zone, libres de s'elancer
@@ -65,7 +65,7 @@ export function CourseRelais({ equipe, onQuitter }: {
         // porteur depasser — et cela ne demande aucun bouton : s'elancer,
         // c'est se mettre a courir.
         SprinterApp.startRelais({ relais: s.monRelais, marque: s.marque, autres: [] });
-        SprinterApp.liveDepart(dansMs);
+        SprinterApp.liveDepart(dansMs, departA);
         brancherSalle({
           position: (d) => {
             s.avancer(d);

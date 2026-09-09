@@ -62,8 +62,10 @@
     // Un defi recu se court sans connaitre le chrono d'en face : on sait
     // contre qui, pas contre quoi.
     to_race:      ['tu cours contre ', 'you are racing '],
-    ready:        ['À VOS MARQUES', 'READY'],
-    get_set:      ['PRÊTS', 'GET SET'],
+    // Les deux commandes du starter, dans les termes de la piste — ce sont
+    // celles qu'il dit à haute voix, et l'écran ne peut pas en dire d'autres.
+    ready:        ['À VOS MARQUES', 'ON YOUR MARKS'],
+    get_set:      ['PRÊT', 'SET'],
     go:           ['PARTEZ', 'GO'],
     alternate:    ['alterne les deux touches', 'alternate the two buttons'],
     alternate_kb: ['alterne les deux flèches', 'alternate the two arrows'],

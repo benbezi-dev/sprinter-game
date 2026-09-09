@@ -26,6 +26,12 @@ export type GameState = {
   elapsed: number;
   countT: number;
   openT: number;
+  /**
+   * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
+   * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
+   * du decompte, qui n'existe plus.
+   */
+  starter: number;
   shake: number;
   flash: number;
   stumbleFlash: number;
@@ -370,12 +376,18 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    const prev = Math.floor(G.countT);
     G.countT += dt;
-    if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
+    // LE STARTER, A LA PLACE DU DECOMPTE.
+    //
+    // Il n'y a plus de « 3, 2, 1 » : il y a « a vos marques », « pret », et
+    // un coup de pistolet qui tombe quand il tombe. Le bip a la seconde
+    // disait justement ce que le starter ne doit pas dire — dans combien de
+    // temps il va tirer. Voir poserLeDepart dans sprinter-app.js.
+    SprinterApp.starterParle();
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
-      Audio_.sfx('go'); G.state = 'race'; G.elapsed = 0;
+      SprinterApp.coupDePistolet();
+      G.state = 'race'; G.elapsed = 0;
       resetInputRhythm();
     }
   } else if (G.state === 'race') {
@@ -435,6 +447,7 @@ export function updateLogic(dt: number) {
     state: G.state,
     elapsed: G.elapsed,
     countT: G.countT,
+    starter: G.depart ? G.depart.dit : 0,
     openT: G.openT,
     shake: G.shake,
     flash: G.flash,

@@ -22,6 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { avantDepart } from './depart.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
@@ -36,9 +37,10 @@ const APRES_RESULTAT_MS = 45 * 1000;
 // Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
-// Delai entre « tout le monde est pret » et le coup de pistolet. Assez long
-// pour absorber une latence mediocre, assez court pour ne pas ennuyer.
-const AVANT_DEPART_MS = 4000;
+// Delai entre « tout le monde est pret » et le coup de pistolet : tire au
+// sort a chaque course, entre trois et dix secondes. Voir depart.js — c'est le
+// starter qui a rendu ce nombre variable, et le client applique la meme regle
+// pour les courses qu'on joue seul.
 
 // --- presentation des participants, facon championnat ----------------------
 // Chaque participant passe face camera, un par un, avant la course. Les durees
@@ -333,11 +335,12 @@ export class SalleDirecte {
           this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
+          const attente = avantDepart();
           this.departA = seul
-            ? Date.now() + AVANT_DEPART_MS
+            ? Date.now() + attente
             : this.presentationA
               + this.ordre.length * creneauPresentation()
-              + AVANT_DEPART_MS;
+              + attente;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
         }

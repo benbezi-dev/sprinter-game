@@ -143,6 +143,15 @@ export function LivePanel() {
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
   const cibleDepart = useRef<number | null>(null);
+  /**
+   * Cette meme date, mais dans l'horloge de la SALLE.
+   *
+   * Elle ne sert pas a compter — chacun compte chez lui, sur l'ecart qu'il a
+   * mesure — mais a tirer la tenue du starter : c'est le seul nombre que les
+   * huit telephones ont en commun, et donc le seul qui puisse leur faire
+   * entendre « pret » au meme instant. Voir poserLeDepart.
+   */
+  const dateDepart = useRef<number | null>(null);
   const presEnCours = useRef(false);
 
   // Un lien ?direct=CODE tombe directement dans le salon.
@@ -282,7 +291,7 @@ export function LivePanel() {
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
-    SprinterApp.liveDepart(dans);
+    SprinterApp.liveDepart(dans, dateDepart.current);
     setEtape('partie');
 
     // On ne filme que la course. Un peu avant le coup de pistolet, pour ne pas
@@ -352,8 +361,9 @@ export function LivePanel() {
           { micro: false, refuse: false, ouvert: false, connecte: false },
       });
     },
-    onDepart: (dansMs: number) => {
+    onDepart: (dansMs: number, departA: number) => {
       cibleDepart.current = Date.now() + dansMs;
+      dateDepart.current = departA;
       if (!presEnCours.current) lancerCourse();
     },
     // A huit, savoir qui a bouge est la moitie de l'information : la position
@@ -477,6 +487,7 @@ export function LivePanel() {
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
     couperVoix();
     presEnCours.current = false; cibleDepart.current = null;
+    dateDepart.current = null;
     setPresentation(null);
     setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
   };
