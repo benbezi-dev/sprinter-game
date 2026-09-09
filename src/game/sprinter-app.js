@@ -3869,7 +3869,7 @@
    * l'ecran, cela le pose dans la bande d'herbe en bas a gauche, juste devant
    * la ligne, et les coureurs le depassent dans la premiere seconde.
    */
-  const STARTER_D = 1.8;           // metres APRES la ligne, donc devant eux
+  const STARTER_D = 2.0;           // deux metres APRES la ligne, donc devant eux
   const STARTER_COULOIR = -1.0;    // en dedans du premier couloir, sur l'herbe
 
   /** Sa tenue : le blanc des officiels, et des chaussures de ville. */
