@@ -89,7 +89,7 @@
       // un ciel qu'on peint pour personne et un ciel qu'on regarde en courant.
       horizon: 6, lointain: [96, 198, 224], lointainFond: [18, 104, 168],
       vagues: true, toiture: false, gradins: 2, immeubles: true, transats: true,
-      haie: true, haieSombre: [24, 104, 76],
+      haie: true, haieSombre: [24, 104, 76], musique: 'riviera',
       eau: [96, 214, 226], eauFond: [22, 146, 190],
       palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100]
     },
@@ -118,7 +118,7 @@
       accent: [246, 214, 110], dust: [188, 200, 224],
       tourbillons: true, arbres: 'cypres', pinceau: true,
       horizon: 6, lointain: [28, 52, 96], toiture: false, gradins: 2,
-      village: true, villageSombre: [12, 24, 56],
+      village: true, villageSombre: [12, 24, 56], musique: 'nuit',
       cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
     }
   };
@@ -412,6 +412,47 @@
       });
       this.buf.race = this.buf.race0;
 
+      // --- les deux stades qui ont leur propre musique -----------------
+      //
+      // Les quatre paliers ci-dessus racontent une MONTEE : le tempo, la
+      // densite et l'harmonie se tendent d'une etape a l'autre, et une piste
+      // de plus dans cette suite n'aurait rien voulu dire. Ces deux stades ne
+      // sont pas des paliers, ce sont des lieux — ils ont donc leur morceau,
+      // accroche au theme et non au rang (voir raceTrack).
+      //
+      // Ils ne sont fabriques que sur le canal de test : ecrite ainsi, la
+      // condition se replie a la compilation publique, et ce sont deux tampons
+      // de pres d'un mega-octet et demi chacun qu'on evite d'allouer pour une
+      // musique qu'aucun ecran ne peut jouer.
+      if (import.meta.env.VITE_CANAL === 'test') {
+        const M7 = [0, 4, 7, 11], D7 = [0, 4, 7, 10], m7 = [0, 3, 7, 10];
+
+        // LA RIVIERA — city pop. Le tour d'accords des annees quatre-vingt
+        // japonaises : quatrieme degre majeur sept, dominante, tierce mineure,
+        // retour a la tonique mineure. Tempo pose, batterie qui ne pousse
+        // jamais, basse bavarde — c'est elle qui fait avancer le morceau, pas
+        // la grosse caisse. Rien ici ne doit donner envie de courir plus vite
+        // que le soleil ne le permet.
+        this.buf.riviera = this.buildRace({
+          bpm: 112, prog: [[-4, M7], [-2, D7], [-5, m7], [0, m7]],
+          kick: [0, 2, 2.5], snare: [1, 3], hats: 8,
+          bassDiv: 8, bassPat: [0, 0, 7, 12, 0, 7, 10, 7], bassAmp: 0.38,
+          padAmp: 0.105, arp: 8, arpAmp: 0.085, drone: 0, droneSemi: 0, stab: 0
+        });
+
+        // LA NUIT ETOILEE — le contraire. Lent, large, et un arpege deux fois
+        // plus rapide que tout le reste : c'est le ciel qui tourne au-dessus
+        // d'une piste ou rien ne presse. Le bourdon grave tient la nuit, la
+        // caisse claire ne tombe qu'une fois par mesure, et l'harmonie
+        // s'eloigne puis revient — la, fa, re, mi, comme on rentre chez soi.
+        this.buf.nuit = this.buildRace({
+          bpm: 84, prog: [[0, m7], [-4, M7], [5, m7], [7, D7]],
+          kick: [0, 2], snare: [3], hats: 8,
+          bassDiv: 4, bassPat: [0, 0, 7, 0], bassAmp: 0.36,
+          padAmp: 0.115, arp: 16, arpAmp: 0.10, drone: 0.12, droneSemi: 0, stab: 0
+        });
+      }
+
       // accueil
       let beat, bar, tot, d;
       beat = 60 / 92; bar = beat * 4; tot = bar * 4;
@@ -466,8 +507,24 @@
       return this.norm(d);
     },
     // La musique de course se durcit a partir du championnat du monde.
+    /**
+     * Quelle musique pour quelle etape.
+     *
+     * LE STADE PASSE AVANT L'ECHELLE. Les quatre pistes `race0..3` disent un
+     * RANG — la tension monte avec l'etape — et c'est juste tant qu'on gravit
+     * le championnat. Un stade qui n'est pas un palier n'a rien a faire dans
+     * cette suite : il porte sa musique dans son theme, et elle gagne.
+     *
+     * Le repli en fin de ligne repare un trou au passage : au-dela de la
+     * sixieme etape, l'ancienne formule reclamait un `race4` qui n'existe pas,
+     * et `music()` sortait sans rien jouer. Un stade hors serie se courait donc
+     * en silence, sans que rien ne le signale.
+     */
     raceTrack(level) {
-      return 'race' + (level <= 2 ? 0 : level - 2);
+      const lvl = LEVELS[level];
+      const th = lvl && THEMES[lvl.theme];
+      if (th && th.musique && this.buf[th.musique]) return th.musique;
+      return 'race' + (level <= 2 ? 0 : Math.min(3, level - 2));
     },
     music(name) {
       if (!this.ok || !this.on || this.cur === name) return;
