@@ -66,7 +66,12 @@
     // suivent habillent ces palmiers. Un stade qui ne les porte pas ne paie
     // rien : le test se fait sur le theme, pas sur le niveau.
     riviera: {
-      skyTop: [22, 136, 214], skyBot: [158, 222, 242], stars: 0,
+      // LE CIEL EST PROFOND, PAS PALE. Sur la toile de reference — le court de
+      // tennis — le bleu reste franc jusqu'au ras de la haie : il ne blanchit
+      // pas a l'horizon comme un ciel de photo. Le degrade existe, mais il va
+      // du cobalt au bleu moyen, jamais au blanc. Notre ciel delavait tout le
+      // haut de l'image et emportait avec lui la saturation du reste.
+      skyTop: [12, 92, 186], skyBot: [116, 194, 234], stars: 0,
       grass: [58, 168, 104], grassEdge: [40, 140, 88],
       trackA: [236, 124, 106], trackB: [222, 108, 92],
       lane: [255, 252, 244], kerb: [86, 206, 208],
@@ -82,9 +87,10 @@
       // Mesure : avec quatre gradins et un toit, le ciel occupe 4 % du haut de
       // l'image ; a deux gradins et sans toit, 35 %. C'est tout l'ecart entre
       // un ciel qu'on peint pour personne et un ciel qu'on regarde en courant.
-      horizon: 6, lointain: [34, 150, 196], vagues: true,
-      toiture: false, gradins: 2,
-      eau: [40, 184, 206],
+      horizon: 6, lointain: [96, 198, 224], lointainFond: [18, 104, 168],
+      vagues: true, toiture: false, gradins: 2, immeubles: true, transats: true,
+      haie: true, haieSombre: [24, 104, 76],
+      eau: [96, 214, 226], eauFond: [22, 146, 190],
       palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100]
     },
     // Stade de la Nuit etoilee : Van Gogh, et non une nuit de jeu video. La
@@ -1635,6 +1641,37 @@
       ctx.fill();
     }
   }
+  // Meme trace que band(), mais rempli d'un DEGRADE plutot que d'un aplat.
+  //
+  // Les affiches de Nagai ne sont pas faites que d'aplats, et c'est l'erreur
+  // qu'on avait faite ici : le ciel, la mer et l'eau d'un bassin y fondent
+  // d'un ton a l'autre, du profond vers le clair. C'est ce fondu, et lui seul,
+  // qui donne la profondeur — sans ajouter un detail, sans texture, sans
+  // ombre. Un aplat de mer ressemble a du papier bleu ; la meme bande avec
+  // deux tons ressemble a de l'eau.
+  //
+  // Le degrade est calcule sur l'emprise REELLE de la bande a l'ecran, pas sur
+  // la hauteur de l'ecran : la bande est oblique et sa position bouge avec la
+  // camera, un degrade fixe se decalerait a chaque pas du coureur.
+  function bandeDegradee(ctx, sm, rA, rB, colLoin, colPres, z) {
+    if (sm.length < 2) return;
+    const pts = [];
+    let y0 = Infinity, y1 = -Infinity;
+    const pousse = (p) => { pts.push(p); if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; };
+    for (let i = 0; i < sm.length; i++) pousse(solid(...ptOf(sm[i], rA), z || 0));
+    for (let i = sm.length - 1; i >= 0; i--) pousse(solid(...ptOf(sm[i], rB), z || 0));
+    y0 = Math.max(y0, -400); y1 = Math.min(y1, G.VH + 400);
+    if (!(y1 > y0)) { band(ctx, sm, rA, rB, rgb(colPres), z); return; }
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, rgb(colLoin));
+    g.addColorStop(1, rgb(colPres));
+    ctx.fillStyle = g; ctx.fill();
+  }
+
   function rail(ctx, sm, r, col, w, z) {
     if (sm.length < 2) return;
     ctx.beginPath();
@@ -1667,12 +1704,18 @@
     ctx.arc(x + 0.86 * s, y, 0.68 * s, Math.PI, 0);
     ctx.lineTo(x + 1.54 * s, y);
     ctx.closePath();
-    ctx.fillStyle = 'rgba(255,255,255,0.97)';
+    // Blanc franc en haut, a peine bleute en bas : le nuage a une EPAISSEUR.
+    // Le contour reste decoupe — c'est le remplissage qui fond, pas le bord,
+    // et c'est toute la difference avec un nuage flou de jeu video.
+    const gn = ctx.createLinearGradient(0, y - 1.05 * s, 0, y);
+    gn.addColorStop(0, 'rgba(255,255,255,0.98)');
+    gn.addColorStop(0.62, 'rgba(248,252,255,0.97)');
+    gn.addColorStop(1, 'rgba(214,234,248,0.96)');
+    ctx.fillStyle = gn;
     ctx.fill();
-    // Le dessous, a peine bleute : chez Nagai le nuage a une epaisseur, pas
-    // une ombre. Il occupe exactement le bord plat du trace ci-dessus.
-    ctx.fillStyle = 'rgba(190,222,243,0.92)';
-    ctx.fillRect(x - 1.85 * s, y - 0.075 * s, 3.39 * s, 0.075 * s);
+    // Le liseret du dessous, plus marque : il pose le nuage a plat dans le ciel.
+    ctx.fillStyle = 'rgba(178,214,240,0.92)';
+    ctx.fillRect(x - 1.85 * s, y - 0.07 * s, 3.39 * s, 0.07 * s);
   }
 
   // Position et taille de chaque nuage, en fractions de l'ecran : le ciel est
@@ -1793,12 +1836,86 @@
   // repayer une trentaine de chemins remplis par arbre et par image, pour un
   // objet qui ne bouge pas. Trois inclinaisons suffisent a ce que l'alignement
   // ne se voie pas.
+  // Le palmier eventail (washingtonia), tel qu'il est peint : une boule de
+  // palmes raides en etoile, chacune pointue, et un stipe epais couvert de
+  // vieilles palmes. Rien ne retombe — c'est exactement l'inverse du cocotier,
+  // et c'est ce contraste qui fait une vraie palmeraie.
+  function eventailTile(th) {
+    const W = 460, H = 512;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    const axe = W / 2, by = H, ty = H * 0.40;
+
+    // le stipe : epais, droit, et hirsute — des encoches courtes plutot que
+    // les anneaux nets du cocotier
+    const b0 = 26, b1 = 20;
+    c.beginPath();
+    c.moveTo(axe - b0, by);
+    c.quadraticCurveTo(axe - b1 * 1.2, (by + ty) / 2, axe - b1, ty);
+    c.lineTo(axe + b1, ty);
+    c.quadraticCurveTo(axe + b1 * 1.2, (by + ty) / 2, axe + b0, by);
+    c.closePath();
+    c.fillStyle = rgb(th.palmTrunk, 0.92); c.fill();
+    c.save(); c.clip();
+    c.strokeStyle = rgb(th.palmTrunk, 0.66); c.lineWidth = 4;
+    for (let i = 1; i < 26; i++) {
+      const y = ty + (by - ty) * i / 26;
+      const d = 10 + (i % 3) * 7;
+      c.beginPath(); c.moveTo(axe - d, y); c.lineTo(axe + d, y - 2); c.stroke();
+    }
+    c.restore();
+
+    // la couronne : des palmes en etoile, plus longues sur les cotes, a peine
+    // tombantes en bas. Chacune est une lame pointue, pas un fuseau.
+    const n = 17;
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI * 1.06 + (i + 0.5) / n * Math.PI * 1.12;
+      const haute = Math.sin(a) < -0.35;
+      const len = 150 + ((i * 53) % 34);
+      const dx = Math.cos(a), dy = Math.sin(a);
+      const px = -dy, py = dx;
+      const tombe = haute ? 0 : len * 0.16;
+      const w = 17 + (i % 3) * 4;
+      c.beginPath();
+      c.moveTo(axe, ty + 6);
+      c.quadraticCurveTo(axe + dx * len * 0.55 + px * w, ty + dy * len * 0.55 + py * w,
+                         axe + dx * len, ty + dy * len + tombe);
+      c.quadraticCurveTo(axe + dx * len * 0.55 - px * w, ty + dy * len * 0.55 - py * w,
+                         axe, ty + 6);
+      c.closePath();
+      c.fillStyle = rgb(th.palmLeaf, haute ? 1.26 : 0.84);
+      c.fill();
+      // la nervure, qui fait la raideur de la palme
+      c.strokeStyle = rgb(th.palmLeaf, 0.58); c.lineWidth = 2.4;
+      c.beginPath();
+      c.moveTo(axe, ty + 6);
+      c.lineTo(axe + dx * len * 0.96, ty + dy * len * 0.96 + tombe * 0.9);
+      c.stroke();
+    }
+    // le manchon de vieilles palmes, sous la couronne
+    c.fillStyle = rgb(th.palmTrunk, 0.78);
+    c.beginPath();
+    c.moveTo(axe - 30, ty + 2);
+    c.lineTo(axe + 30, ty + 2);
+    c.lineTo(axe + 22, ty + 52);
+    c.lineTo(axe - 22, ty + 52);
+    c.closePath(); c.fill();
+
+    return cv;
+  }
+
   const PALM_W = 460, PALM_H = 512;
   const palmTiles = new Map();
   function palmTile(th, variante) {
     let tab = palmTiles.get(th);
     if (!tab) { tab = []; palmTiles.set(th, tab); }
     if (tab[variante]) return tab[variante];
+    // La troisieme variante n'est pas un cocotier mais un PALMIER EVENTAIL, et
+    // c'est celui de la toile de reference : couronne ronde de palmes raides
+    // qui rayonnent, tronc epais et hirsute. Les deux especes cohabitent chez
+    // Nagai, et n'avoir que des cocotiers donnait une palmeraie trop molle.
+    if (variante === 2) { tab[2] = eventailTile(th); return tab[2]; }
 
     const cv = document.createElement('canvas');
     cv.width = PALM_W; cv.height = PALM_H;
@@ -1935,6 +2052,215 @@
 
     tab[variante] = cv;
     return cv;
+  }
+
+  // LA HAIE FLEURIE.
+  //
+  // Sur la toile de reference, entre le mur du court et le ciel, court une
+  // ligne de buissons ronds pointilles de petites fleurs blanches. C'est un
+  // detail qu'on ne remarque qu'une fois enleve : sans elle, le decor se
+  // reduit a trois aplats qui se touchent, et le stade a l'air decoupe aux
+  // ciseaux. Avec elle, il y a quelque chose entre le sol et le ciel.
+  const HAIE_W = 260, HAIE_H = 110;
+  const haieTiles = new Map();
+  function haieTile(th, variante) {
+    let tab = haieTiles.get(th);
+    if (!tab) { tab = []; haieTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = HAIE_W; cv.height = HAIE_H;
+    const c = cv.getContext('2d');
+    const sol = HAIE_H;
+    // des boules qui se chevauchent, deux tons de vert : la haie n'est jamais
+    // une bande, c'est une suite de touffes
+    for (let k = 0; k < 9; k++) {
+      const g2 = ((k + variante * 7 + 3) * 2654435761) >>> 0;
+      const x = 14 + k * 29 + (g2 % 9);
+      const r = 26 + (g2 >>> 5) % 14;
+      c.beginPath(); c.arc(x, sol - r * 0.55, r, 0, TAU);
+      c.fillStyle = rgb(th.haieSombre || th.palmLeaf, k % 2 ? 1.0 : 0.78);
+      c.fill();
+    }
+    c.fillStyle = 'rgba(255,255,255,0.90)';
+    for (let k = 0; k < 26; k++) {
+      const g2 = ((k + variante * 13 + 5) * 2246822519) >>> 0;
+      const x = (g2 % (HAIE_W - 20)) + 10;
+      const y = sol - 10 - ((g2 >>> 7) % 46);
+      c.fillRect(x, y, 3.4, 3.4);
+    }
+    tab[variante] = cv;
+    return cv;
+  }
+
+  function drawHaie(ctx, th, sm, rOut, horizon) {
+    const stp = G.track.curved ? 6 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 23) * 2654435761) >>> 0;
+      // Juste au-dela de la pelouse, et assez haute pour depasser du dernier
+      // gradin : posee en deca, elle disparaissait entierement derriere le
+      // public — les gradins sont traces apres elle.
+      const r = rOut + horizon + 0.8;
+      const h = 2.8 * scaleM();
+      const tuile = haieTile(th, (graine >>> 9) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
+  // L'IMMEUBLE BLANC, DE L'AUTRE COTE DE L'EAU.
+  //
+  // Apres la piscine et le palmier, c'est l'objet le plus reconnaissable de
+  // Nagai : un bloc blanc a toit plat, des rangees de balcons, une face a
+  // l'ombre franche, et pas un degrade dessus. Il n'a rien d'un batiment
+  // realiste — c'est une architecture de decor, posee la pour que l'eau ait
+  // une rive et le ciel une hauteur.
+  //
+  // Il se tient au-DELA de la mer, jamais devant : l'ordre de trace le met
+  // derriere elle, et c'est ce qui fait la rive opposee.
+  const IMM_W = 340, IMM_H = 260;
+  const immTiles = new Map();
+  function immeubleTile(th, variante) {
+    let tab = immTiles.get(th);
+    if (!tab) { tab = []; immTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = IMM_W; cv.height = IMM_H;
+    const c = cv.getContext('2d');
+    const blanc = rgb(th.barrier), ombre = rgb(th.riser, 1.06);
+    const sol = IMM_H;
+
+    // Trois silhouettes : un long bloc bas, une tour, un bloc a redans. Ce
+    // sont les trois qu'il peint, et trois suffisent a faire une station.
+    const plans = [
+      [[24, 118, 3], [150, 92, 2], [252, 66, 2]],
+      [[30, 70, 2], [116, 168, 4], [230, 88, 3]],
+      [[20, 96, 3], [128, 74, 2], [214, 132, 4]]
+    ][variante % 3];
+
+    for (const [x, h, etages] of plans) {
+      const l = 78;
+      // le corps, puis la face a l'ombre : deux aplats, pas un fondu
+      c.fillStyle = blanc; c.fillRect(x, sol - h, l, h);
+      c.fillStyle = ombre; c.fillRect(x + l - 18, sol - h, 18, h);
+      // l'acrotere : le toit plat de Nagai a toujours ce petit rebord
+      c.fillStyle = blanc; c.fillRect(x - 4, sol - h - 7, l + 8, 7);
+      c.fillStyle = ombre; c.fillRect(x - 4, sol - h - 1, l + 8, 2);
+      // les balcons : des fentes sombres barrees d'un garde-corps clair
+      for (let e = 0; e < etages; e++) {
+        const y = sol - h + 16 + e * (h - 22) / Math.max(1, etages);
+        c.fillStyle = rgb(th.riser, 0.72);
+        c.fillRect(x + 7, y, l - 32, 9);
+        c.fillStyle = blanc;
+        c.fillRect(x + 7, y + 7, l - 32, 3);
+      }
+    }
+    // Le liseret de la station, a l'accent du stade : un seul trait de couleur
+    // sur tout ce blanc, comme l'auvent d'un motel.
+    c.fillStyle = rgb(th.accent);
+    c.fillRect(plans[0][0] - 4, sol - 9, 96, 4);
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  function drawImmeubles(ctx, th, sm, rOut, horizon) {
+    // Un echantillon sur un : la fenetre ou un objet de cette hauteur tient
+    // dans le cadre ne fait que quelques metres de piste, et un immeuble tous
+    // les vingt-quatre metres n'y tombait presque jamais. Le tiers saute
+    // au-dessous, ce qui laisse des trous : une station balneaire, pas un mur.
+    const stp = G.track.curved ? 11 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 17) * 2654435761) >>> 0;
+      if ((graine >>> 3) % 3 === 0) continue;      // des trous : pas un mur
+      // SUR LA RIVE, PAS DERRIERE L'EAU. Pose au-dela de la mer, l'immeuble
+      // n'entrait dans le cadre que sur deux metres de piste — la hauteur
+      // compte plus de deux fois la distance au sol a l'ecran, et tout ce qui
+      // s'eloigne sort par le haut. Pose au bord, la mer passe DERRIERE lui
+      // (elle est tracee avant), ce qui est de toute facon la vraie image :
+      // l'hotel sur la plage, l'eau dans son dos.
+      const r = rOut + horizon + 0.3 + (graine % 2);
+      const h = (3.4 + ((graine >>> 5) % 3) * 0.55) * scaleM();
+      const tuile = immeubleTile(th, (graine >>> 11) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
+  // LE BORD DU BASSIN : PARASOL ET TRANSATS.
+  //
+  // Trois objets minuscules, et pourtant c'est eux qui disent qu'on est chez
+  // lui plutot qu'au bord d'une piscine municipale. Le parasol a des quartiers
+  // alternes, le transat une seule couleur : chez Nagai le mobilier n'a jamais
+  // plus de deux tons.
+  const MOB_W = 190, MOB_H = 200;
+  const mobTiles = new Map();
+  function mobilierTile(th, variante) {
+    let tab = mobTiles.get(th);
+    if (!tab) { tab = []; mobTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = MOB_W; cv.height = MOB_H;
+    const c = cv.getContext('2d');
+    const sol = MOB_H, blanc = rgb(th.barrier);
+
+    // le transat : une assise inclinee, deux pieds
+    const transat = (x, col) => {
+      c.strokeStyle = col; c.lineWidth = 7; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x, sol - 6); c.lineTo(x + 30, sol - 20);
+      c.lineTo(x + 46, sol - 46); c.stroke();
+      c.lineWidth = 5;
+      c.beginPath(); c.moveTo(x + 6, sol - 4); c.lineTo(x + 18, sol - 22); c.stroke();
+      c.beginPath(); c.moveTo(x + 34, sol - 4); c.lineTo(x + 40, sol - 24); c.stroke();
+    };
+    if (variante === 2) {
+      // le parasol : un mat, une toile a quartiers alternes
+      const px = 96, py = sol - 118;
+      c.strokeStyle = blanc; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(px, sol - 6); c.lineTo(px, py); c.stroke();
+      for (let k = 0; k < 8; k++) {
+        c.beginPath();
+        c.moveTo(px, py - 6);
+        c.arc(px, py - 6, 56, Math.PI + k * Math.PI / 8, Math.PI + (k + 1) * Math.PI / 8);
+        c.closePath();
+        c.fillStyle = k % 2 ? blanc : rgb(th.accent);
+        c.fill();
+      }
+      transat(20, rgb(th.accent));
+    } else if (variante === 1) {
+      transat(30, blanc); transat(96, rgb(th.accent));
+    } else {
+      transat(46, rgb(th.eau, 0.9)); transat(112, blanc);
+    }
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  // Le mobilier vit sur la margelle, entre le bassin et la piste, et seulement
+  // le long du bassin : des transats en pleine pelouse, cent metres plus loin,
+  // ne voudraient rien dire.
+  function drawMobilier(ctx, th, rIn) {
+    const T = G.track;
+    const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
+    const r = rIn - PISCINE.dedans0 + 1.1;
+    for (let k = 0; k < 4; k++) {
+      const m = PISCINE.m0 + 2 + k * ((PISCINE.m1 - PISCINE.m0 - 4) / 3);
+      const q = at(m, r);
+      if (!q) continue;
+      const h = 2.9 * scaleM();
+      const tuile = mobilierTile(th, k % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(q[0], q[1], 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
   }
 
   // LE VILLAGE SOUS LES ETOILES.
@@ -2161,7 +2487,20 @@
     if (maxx < -40 || minx > G.VW + 40 || maxy < -40 || miny > G.VH + 40) return;
 
     remplir(contour(1.7), rgb(th.barrier));
-    remplir(eau, rgb(th.eau));
+    // L'eau fond du fond vers le bord, comme chez lui : le turquoise n'est
+    // jamais le meme d'un bout a l'autre du bassin.
+    if (th.eauFond && eau.length > 2) {
+      let y0 = Infinity, y1 = -Infinity;
+      for (const q of eau) { if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+      ctx.beginPath(); ctx.moveTo(eau[0][0], eau[0][1]);
+      for (let i = 1; i < eau.length; i++) ctx.lineTo(eau[i][0], eau[i][1]);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, rgb(th.eauFond)); g.addColorStop(1, rgb(th.eau));
+      ctx.fillStyle = g; ctx.fill();
+    } else {
+      remplir(eau, rgb(th.eau));
+    }
 
     // Les rides : trois traits blancs poses a plat, pas une texture.
     ctx.strokeStyle = 'rgba(255,255,255,0.78)';
@@ -2215,7 +2554,7 @@
   function drawTourbillons(ctx) {
     const anchor = ground(0, 0);
     const t = performance.now() / 1000;
-    const w = G.VW, h = G.VH * (G.portrait ? 0.40 : 0.34);
+    const w = G.VW, h = G.VH * (G.portrait ? 0.30 : 0.26);
     const dx = -anchor[0] * 0.07, L = w * 1.4;
     const enroule = (x) => ((x % L) + L) % L - w * 0.2;
     ctx.save();
@@ -2262,29 +2601,67 @@
   ];
   function drawAstres(ctx) {
     const anchor = ground(0, 0);
-    const w = G.VW, h = G.VH * (G.portrait ? 0.40 : 0.34);
+    // Une bande BASSE, et c'est mesure : au-dela du quart superieur, les
+    // gradins et la pelouse reprennent la main et l'astre disparait derriere
+    // eux. La lune et les onze etoiles se tiennent donc toutes dans le ciel
+    // reellement visible pendant la course.
+    const w = G.VW, h = G.VH * (G.portrait ? 0.22 : 0.19);
     const dx = -anchor[0] * 0.07, L = w * 1.4;
     const enroule = (x) => ((x % L) + L) % L - w * 0.2;
-    const halo = (x, y, r) => {
-      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, 'rgba(255,246,192,0.90)');
-      g.addColorStop(0.30, 'rgba(246,214,110,0.34)');
-      g.addColorStop(1, 'rgba(246,214,110,0)');
+    // L'ASTRE DE VAN GOGH N'EST PAS UN POINT FLOU.
+    //
+    // C'est un noyau clair cerne d'ANNEAUX concentriques, poses au pinceau
+    // l'un apres l'autre — du jaune au bleu pale, de plus en plus larges et de
+    // plus en plus effaces. Un degrade radial donne une lampe de jeu video, et
+    // c'est exactement ce qu'on avait ; les anneaux donnent la toile. Le
+    // dernier anneau est volontairement le plus large et le plus pale : c'est
+    // lui qui fait mordre l'astre sur le bleu au lieu de s'y poser.
+    //
+    // Une legere ovalisation et un decalage par astre evitent la cible de
+    // flechettes : chez lui aucun cercle n'est parfait.
+    const astre = (x, y, r, chaud) => {
+      const u = ui();
+      // le voile, tres pale, qui empeche les anneaux de flotter dans le vide
+      const g = ctx.createRadialGradient(x, y, r * 0.4, x, y, r * 3.4);
+      g.addColorStop(0, chaud ? 'rgba(250,224,140,0.30)' : 'rgba(226,236,255,0.22)');
+      g.addColorStop(1, 'rgba(226,236,255,0)');
       ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r * 3.4, 0, TAU); ctx.fill();
+      // les anneaux, du plus large au plus serre
+      for (let k = 4; k >= 1; k--) {
+        const rr = r * (0.72 + k * 0.62);
+        const chaudK = k <= 2;
+        ctx.beginPath();
+        ctx.ellipse(x + (k % 2 ? 0.5 : -0.5) * u, y, rr, rr * 0.94, 0.3, 0, TAU);
+        ctx.strokeStyle = chaudK
+          ? 'rgba(250,220,124,' + (0.40 - k * 0.055).toFixed(2) + ')'
+          : 'rgba(186,214,250,' + (0.34 - k * 0.05).toFixed(2) + ')';
+        ctx.lineWidth = (1.4 + k * 0.9) * u;
+        ctx.stroke();
+      }
+      // le noyau : petit, franc, sans transparence
+      ctx.fillStyle = chaud ? 'rgba(255,246,206,0.99)' : 'rgba(255,252,232,0.99)';
       ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
     };
+
     for (const e of ASTRES) {
-      const x = enroule(e[0] * w + dx), y = e[1] * h, r = e[2] * 8 * ui();
-      halo(x, y, r * 4.4);
-      ctx.fillStyle = 'rgba(255,252,224,0.98)';
-      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      astre(enroule(e[0] * w + dx), e[1] * h, e[2] * 8.5 * ui(), false);
     }
-    // Le croissant : deux arcs, celui du dedans trace a l'envers. Un disque
-    // troue par-dessus le ciel serait plus simple, mais il faudrait effacer —
+
+    // La lune : les memes anneaux, en plus large et en plus chaud, et un
+    // croissant a la place du noyau. Deux arcs, celui du dedans trace a
+    // l'envers — un disque troue serait plus simple, mais il faudrait effacer,
     // et on ne peut pas effacer un ciel deja peint.
-    const mx = enroule(0.74 * w + dx), my = 0.10 * h, mr = 20 * ui();
-    halo(mx, my, mr * 3.2);
-    ctx.fillStyle = 'rgba(255,248,206,0.98)';
+    const mx = enroule(0.74 * w + dx), my = 0.16 * h, mr = 21 * ui();
+    astre(mx, my, mr * 0.34, true);
+    for (let k = 5; k >= 1; k--) {
+      ctx.beginPath();
+      ctx.ellipse(mx, my, mr * (1 + k * 0.42), mr * (1 + k * 0.42) * 0.95, 0.2, 0, TAU);
+      ctx.strokeStyle = 'rgba(250,214,116,' + (0.30 - k * 0.045).toFixed(2) + ')';
+      ctx.lineWidth = (1.6 + k * 1.1) * ui();
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,244,190,0.99)';
     ctx.beginPath();
     ctx.arc(mx, my, mr, 0.62, Math.PI * 2 - 0.62);
     ctx.arc(mx + mr * 0.62, my, mr * 0.92, Math.PI * 2 - 0.95, 0.95, true);
@@ -2342,10 +2719,34 @@
     // etoiles sont posees dessus.
     if (th.tourbillons) drawTourbillons(ctx);
     if (th.stars) {
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      // La bande ou elles tombent depend du stade. Etalees sur les deux tiers
+      // de la hauteur, comme au stade cosmos, les neuf dixiemes finissent
+      // derriere la pelouse et les gradins : il n'en restait qu'une poignee au
+      // ras du bord. Le ciel peint en montre une nappe entiere — on les
+      // resserre donc dans la bande qui se voit vraiment.
+      const bande = G.VH * (th.tourbillons ? 0.24 : 0.7);
       for (let i = 0; i < th.stars; i++) {
         const s = (i * 7919) % 9973;
-        ctx.fillRect((s * 13) % G.VW, (s * 7) % (G.VH * 0.7), 1.4, 1.4);
+        if (!th.tourbillons) {
+          ctx.fillStyle = 'rgba(255,255,255,0.85)';
+          ctx.fillRect((s * 13) % G.VW, (s * 7) % bande, 1.4, 1.4);
+          continue;
+        }
+        // LE SEMIS, ET POURQUOI IL A FALLU LE REFAIRE. Les deux modulos
+        // ci-dessus tirent x et y de la MEME suite : leurs restes marchent au
+        // pas, et sur une bande large ca ne se voit pas. Resserree au quart
+        // superieur, la correlation saute aux yeux — le ciel se rayait de
+        // diagonales pointillees, ce qui est tout sauf une nuit peinte. On
+        // brasse donc les bits avant de prendre les restes.
+        let a = Math.imul(i + 1, 2654435761) >>> 0;
+        a ^= a >>> 13; a = Math.imul(a, 1274126177) >>> 0; a ^= a >>> 16;
+        let b2 = Math.imul((i + 7) ^ (a >>> 9), 2246822519) >>> 0;
+        b2 ^= b2 >>> 15; b2 = Math.imul(b2, 3266489917) >>> 0; b2 ^= b2 >>> 11;
+        // trois calibres : un ciel de Van Gogh n'a pas deux etoiles pareilles
+        const t = (a % 7) / 7, c = 1.1 + t * 1.6;
+        ctx.fillStyle = 'rgba(255,252,' + (208 + ((a % 3) * 16)) + ',' +
+                        (0.52 + t * 0.45).toFixed(2) + ')';
+        ctx.fillRect(a % G.VW, b2 % bande, c, c);
       }
     }
     if (th.tourbillons) drawAstres(ctx);
@@ -2400,8 +2801,15 @@
       // remplissait a elle seule ; a quatre, elle n'est plus que la couture
       // entre la pelouse et le ciel, et laisse la place aux nuages, a l'avion
       // et aux etoiles.
-      band(ctx, sm, rOut + horizon, rOut + horizon + 3.5, rgb(th.lointain));
+      if (th.lointainFond) {
+        bandeDegradee(ctx, sm, rOut + horizon, rOut + horizon + 3.5,
+                      th.lointainFond, th.lointain);
+      } else {
+        band(ctx, sm, rOut + horizon, rOut + horizon + 3.5, rgb(th.lointain));
+      }
       if (th.vagues) vaguesDuLointain(ctx, sm, rOut + horizon);
+      if (th.immeubles) drawImmeubles(ctx, th, sm, rOut, horizon);
+      if (th.haie) drawHaie(ctx, th, sm, rOut, horizon);
       if (th.village) drawVillage(ctx, th, sm, rOut, horizon);
     }
 
@@ -2424,6 +2832,7 @@
 
     // La piscine, posee dans la pelouse interieure (voir drawPiscine).
     if (th.piscine) drawPiscine(ctx, th, rIn);
+    if (th.transats) drawMobilier(ctx, th, rIn);
 
     // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
     // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
