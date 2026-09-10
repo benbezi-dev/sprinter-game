@@ -134,7 +134,69 @@ export async function oublierImage(db, id) {
 
 /** L'envoi est-il configure sur ce Worker ? */
 export function envoiPret(env) {
-  return !!(env && env.IG_JETON && env.IG_COMPTE);
+  return !!(jeton(env) && compte(env));
+}
+
+/* ------------------------------------------------------- le jeton, lu juste
+   Un secret se pose en le collant, et un collage emporte ce qui l'entoure :
+   un retour a la ligne (`echo … | wrangler secret put`), des guillemets
+   recopies d'un fichier, une espace. Meta repond alors « Cannot parse access
+   token » pour un jeton pourtant juste — c'est ce qui est arrive le 10
+   septembre 2026, et rien, cote Meta, ne dit que le probleme est autour.
+
+   DEUX FAMILLES de jetons publient, avec les memes appels mais pas chez le
+   meme serveur :
+     - « Facebook Login » (EAA…) : graph.facebook.com, via la Page liee ;
+     - « Instagram Login » (IG…) : graph.instagram.com, sans Page.
+   La console de Meta fabrique l'une ou l'autre selon l'ecran d'ou l'on part,
+   et envoyer la seconde au premier serveur donne exactement la meme erreur
+   qu'un jeton tronque. On choisit donc le serveur d'apres le jeton. */
+const API_IG = 'https://graph.instagram.com/v21.0';
+const nettoyer = v => String(v || '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
+const jeton = env => nettoyer(env && env.IG_JETON);
+const compte = env => nettoyer(env && env.IG_COMPTE);
+const estInstagramLogin = j => /^IG/.test(j);
+const hote = env => (estInstagramLogin(jeton(env)) ? API_IG : API);
+
+/**
+ * Ce qu'on peut dire des deux secrets SANS les montrer : leur forme, puis
+ * l'avis de Meta. Ni le jeton ni un fragment ne sortent — sauf ses trois
+ * premiers caracteres, qui disent sa famille (EAA, IGA) et rien de plus.
+ */
+export async function diagnostiquer(env) {
+  const brut = String((env && env.IG_JETON) || '');
+  const j = jeton(env), c = compte(env);
+  const d = {
+    jeton: {
+      pose: !!brut,
+      longueur: j.length,
+      debut: j.slice(0, 3),
+      famille: estInstagramLogin(j) ? 'Instagram Login (graph.instagram.com)'
+             : /^EAA/.test(j) ? 'Facebook Login (graph.facebook.com)' : 'inconnue',
+      entoure: brut !== j,              // blancs ou guillemets retires autour
+      blancsDedans: /\s/.test(j),       // un jeton n'en contient jamais
+    },
+    compte: { pose: !!c, numerique: /^\d+$/.test(c), longueur: c.length },
+    hote: hote(env),
+  };
+  if (!j) return d;
+  try {
+    const moi = estInstagramLogin(j) ? '/me?fields=user_id,username' : '/me?fields=id,name';
+    const r = await fetch(`${hote(env)}${moi}&access_token=${encodeURIComponent(j)}`);
+    const m = await r.json().catch(() => ({}));
+    d.meta = r.ok ? { ok: true, nom: m.username || m.name || null, id: m.user_id || m.id || null }
+                  : { ok: false, http: r.status, erreur: messageMeta(m) };
+    if (r.ok && c) {
+      const rc = await fetch(`${hote(env)}/${encodeURIComponent(c)}?fields=id,username`
+                           + `&access_token=${encodeURIComponent(j)}`);
+      const mc = await rc.json().catch(() => ({}));
+      d.meta.compte = rc.ok ? { ok: true, username: mc.username || null }
+                            : { ok: false, http: rc.status, erreur: messageMeta(mc) };
+    }
+  } catch (e) {
+    d.meta = { ok: false, erreur: String(e && e.message || e) };
+  }
+  return d;
 }
 
 /* ------------------------------------------------------------ les formats
@@ -168,10 +230,10 @@ const messageMeta = d => (d && d.error && d.error.message) || 'reponse inattendu
 /** Cree un conteneur. Rend son identifiant, et l'adresse de depot pour une video. */
 async function creerConteneur(env, champs) {
   try {
-    const r = await fetch(`${API}/${env.IG_COMPTE}/media`, {
+    const r = await fetch(`${hote(env)}/${compte(env)}/media`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...champs, access_token: env.IG_JETON }),
+      body: JSON.stringify({ ...champs, access_token: jeton(env) }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.id) return echec('conteneur', messageMeta(d), r.status);
@@ -190,8 +252,8 @@ export async function etatConteneur(env, creation) {
   if (!envoiPret(env)) return nonPret();
   if (!/^\d+$/.test(String(creation || ''))) return echec('verification', 'conteneur inconnu');
   try {
-    const r = await fetch(`${API}/${creation}?fields=status_code,status`
-                        + `&access_token=${encodeURIComponent(env.IG_JETON)}`);
+    const r = await fetch(`${hote(env)}/${creation}?fields=status_code,status`
+                        + `&access_token=${encodeURIComponent(jeton(env))}`);
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return echec('etat', messageMeta(d), r.status);
     return { ok: true, etat: d.status_code || 'INCONNU', detail: d.status || null };
@@ -204,8 +266,8 @@ export async function etatConteneur(env, creation) {
     agrement : si Meta ne la donne pas, la publication n'en est pas moins faite. */
 async function lienDe(env, media) {
   try {
-    const r = await fetch(`${API}/${media}?fields=permalink`
-                        + `&access_token=${encodeURIComponent(env.IG_JETON)}`);
+    const r = await fetch(`${hote(env)}/${media}?fields=permalink`
+                        + `&access_token=${encodeURIComponent(jeton(env))}`);
     const d = await r.json().catch(() => ({}));
     return d.permalink || null;
   } catch { return null; }
@@ -216,10 +278,10 @@ export async function publierConteneur(env, creation) {
   if (!envoiPret(env)) return nonPret();
   if (!/^\d+$/.test(String(creation || ''))) return echec('verification', 'conteneur inconnu');
   try {
-    const r = await fetch(`${API}/${env.IG_COMPTE}/media_publish`, {
+    const r = await fetch(`${hote(env)}/${compte(env)}/media_publish`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creation_id: String(creation), access_token: env.IG_JETON }),
+      body: JSON.stringify({ creation_id: String(creation), access_token: jeton(env) }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.id) return echec('publication', messageMeta(d), r.status);
@@ -330,7 +392,7 @@ export async function chargerVideo(env, { creation, uri, corps, taille }) {
     const r = await fetch(adresse.href, {
       method: 'POST',
       headers: {
-        Authorization: `OAuth ${env.IG_JETON}`,
+        Authorization: `OAuth ${jeton(env)}`,
         offset: '0',
         file_size: String(taille),
       },

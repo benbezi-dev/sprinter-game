@@ -53,7 +53,7 @@ import {
 } from './reseaux.js';
 import {
   deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
-  ouvrirVideo, chargerVideo, etatConteneur, publierConteneur, FORMATS,
+  ouvrirVideo, chargerVideo, etatConteneur, publierConteneur, FORMATS, diagnostiquer,
 } from './instagram-envoi.js';
 import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
@@ -2865,6 +2865,13 @@ async function servir(request, env, ctx, porteur) {
       // la confirmation — le pire moment.
       if (quoi === 'envoi' && request.method === 'GET') {
         return json({ pret: envoiPret(env), formats: FORMATS });
+      }
+
+      // Les deux secrets, decrits sans etre montres : leur forme (longueur,
+      // famille, blancs parasites) et l'avis de Meta. C'est la seule facon de
+      // savoir ce qui est REELLEMENT pose, un secret ne se relisant pas.
+      if (quoi === 'diagnostic' && request.method === 'GET') {
+        return json(await diagnostiquer(env));
       }
 
       // Envoyer une publication sur Instagram.
