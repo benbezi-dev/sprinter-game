@@ -46,6 +46,25 @@ export const RECOMMENCER_OUVERT = true;
 export const RELAIS_OUVERT = true;
 
 /**
+ * LE STARTER : « a vos marques », « pret », et un coup de pistolet qui tombe
+ * quand il tombe.
+ *
+ * Il ne va pas dans l'autre sens que les deux drapeaux ci-dessus. Ceux-la
+ * sont des modes eprouves sur le canal de test puis ouverts a tout le monde ;
+ * celui-ci est un DEPART, et le depart du jeu publie reste ce qu'il etait :
+ * un decompte de trois secondes, un bip a chaque seconde franchie, un signal
+ * au bout. Le starter — l'attente tiree au sort entre trois et dix secondes,
+ * la voix, le juge en blanc sur la pelouse — ne se voit et ne s'entend que sur
+ * le canal de test, le temps qu'on decide s'il a sa place dans le jeu.
+ *
+ * La forme compte, comme partout dans ce fichier : `EST_TEST` se replie a la
+ * compilation, donc ce drapeau vaut `false` en dur dans le build public et
+ * tout ce qui en depend en sort — la voix de synthese comme le dessin du
+ * starter.
+ */
+export const DEPART_STARTER = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

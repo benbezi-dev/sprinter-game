@@ -29,7 +29,9 @@ export type GameState = {
   /**
    * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
    * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
-   * du decompte, qui n'existe plus.
+   * du decompte, sur le canal de test — celui qui essaie le starter. Dans le
+   * jeu publie, le depart reste un decompte et ce nombre ne bouge pas de 0 :
+   * c'est `countT` qu'on y lit.
    */
   starter: number;
   shake: number;
@@ -376,14 +378,18 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    G.countT += dt;
-    // LE STARTER, A LA PLACE DU DECOMPTE.
+    // LE DECOMPTE DANS LE JEU, LE STARTER SUR LE CANAL DE TEST.
     //
-    // Il n'y a plus de « 3, 2, 1 » : il y a « a vos marques », « pret », et
-    // un coup de pistolet qui tombe quand il tombe. Le bip a la seconde
-    // disait justement ce que le starter ne doit pas dire — dans combien de
-    // temps il va tirer. Voir poserLeDepart dans sprinter-app.js.
-    SprinterApp.starterParle();
+    // Le jeu publie compte trois secondes et marque chacune d'un bip. Le canal
+    // de test essaie autre chose : « a vos marques », « pret », et un coup de
+    // pistolet qui tombe quand il tombe — le bip a la seconde y dirait
+    // justement ce qu'un starter ne dit jamais, dans combien de temps il va
+    // tirer. `annoncerLeDepart` sait lequel des deux donne le depart ; il lui
+    // faut la seconde d'AVANT l'increment pour reconnaitre celle qui vient de
+    // passer. Voir « deux departs, un par canal » dans sprinter-app.js.
+    const avant = Math.floor(G.countT);
+    G.countT += dt;
+    SprinterApp.annoncerLeDepart(avant);
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
       SprinterApp.coupDePistolet();

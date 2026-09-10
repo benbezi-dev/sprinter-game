@@ -3,10 +3,11 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
+import { DEPART_STARTER } from '@/game/canal';
 
 export function RaceHUD() {
   const { 
-    state, elapsed, starter, champion, championTime, levelIdx, runners, player,
+    state, elapsed, countT, starter, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
     ghostOn, ghostD, ghostDone, challenge, raceKey
@@ -56,14 +57,22 @@ export function RaceHUD() {
   const aveugle = !!challenge;
   
   /**
-   * L'ECRAN DU DEPART.
+   * L'ECRAN DU DEPART — deux departs, deux ecrans.
    *
-   * Il n'y a plus de nombre a afficher : le decompte a cede la place a un
-   * starter, qui appelle les marques, demande le « pret », et tire quand il
-   * veut — entre trois et dix secondes plus tard. Montrer une seconde
-   * quelconque ici reviendrait a vendre la meche.
+   * Le jeu publie compte : le cercle tient la seconde qui reste, et rien
+   * d'autre. Pas de commande en toutes lettres au-dessus — le chiffre dit
+   * deja tout ce qu'il y a a savoir, et l'annoncer par-dessus ne ferait que
+   * meubler.
+   *
+   * Le canal de test essaie un starter, et la il n'y a plus de nombre a
+   * afficher : montrer une seconde quelconque reviendrait a vendre la meche.
+   * Reste la commande, en toutes lettres — le son ne peut pas porter seul une
+   * consigne, sur un telephone qui se joue dans le bruit ou son coupe.
    */
   const isCount = state === 'count';
+  const left = 3 - countT;
+  const n = Math.ceil(left);
+  const frac = left - Math.floor(left);
   const pret = starter >= 2;
   
   // Race state
@@ -207,37 +216,55 @@ export function RaceHUD() {
         </div>
       )}
 
-      {/* Le starter, au milieu de l'ecran */}
+      {/* Le depart, au milieu de l'ecran : le decompte, ou le starter */}
       {isCount && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          {/* LA COMMANDE, EN TOUTES LETTRES.
-              Le son dit la meme chose au meme instant — mais un telephone se
-              joue aussi dans le bruit, ou son coupe, et la consigne ne peut
-              pas dependre de ce qu'on entend. Le « pret » passe a l'or et
-              respire : c'est le signe qu'il ne reste plus que l'attente. */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={pret ? 'pret' : 'marques'}
-              initial={{ opacity: 0, scale: 0.92 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.04 }}
-              transition={{ duration: 0.18 }}
-              className={`px-5 py-3 md:px-10 md:py-5 rounded-2xl border-2 backdrop-blur-md max-w-[92vw]
-                ${pret ? 'border-primary bg-primary/15 shadow-[0_0_60px_rgba(248,205,74,0.28)] animate-pulse'
-                       : 'border-white/25 bg-card/60 shadow-2xl'}`}
-            >
-              <span className={`block font-display font-black tracking-widest text-center leading-none
-                text-2xl sm:text-4xl md:text-6xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
-                {pret ? N.t('get_set') : N.t('ready')}
-              </span>
-            </motion.div>
-          </AnimatePresence>
+          {DEPART_STARTER ? (
+            <>
+              {/* LA COMMANDE, EN TOUTES LETTRES.
+                  Le son dit la meme chose au meme instant — mais un telephone se
+                  joue aussi dans le bruit, ou son coupe, et la consigne ne peut
+                  pas dependre de ce qu'on entend. Le « pret » passe a l'or et
+                  respire : c'est le signe qu'il ne reste plus que l'attente. */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={pret ? 'pret' : 'marques'}
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.04 }}
+                  transition={{ duration: 0.18 }}
+                  className={`px-5 py-3 md:px-10 md:py-5 rounded-2xl border-2 backdrop-blur-md max-w-[92vw]
+                    ${pret ? 'border-primary bg-primary/15 shadow-[0_0_60px_rgba(248,205,74,0.28)] animate-pulse'
+                           : 'border-white/25 bg-card/60 shadow-2xl'}`}
+                >
+                  <span className={`block font-display font-black tracking-widest text-center leading-none
+                    text-2xl sm:text-4xl md:text-6xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
+                    {pret ? N.t('get_set') : N.t('ready')}
+                  </span>
+                </motion.div>
+              </AnimatePresence>
 
-          {/* Et la seule regle qui compte tant qu'il n'a pas tire. */}
-          <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest
-                          text-muted-foreground uppercase">
-            {N.t('wait_gun')}
-          </div>
+              {/* Et la seule regle qui compte tant qu'il n'a pas tire. */}
+              <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest
+                              text-muted-foreground uppercase">
+                {N.t('wait_gun')}
+              </div>
+            </>
+          ) : (
+            /* LE DECOMPTE, ET RIEN QUE LUI. Le cercle enfle a mesure que la
+               seconde s'use : le depart se voit venir du coin de l'oeil, sur
+               un ecran ou le regard est deja pris par la piste. Le chiffre
+               tombe a la derniere seconde plutot que d'ecrire « partez » —
+               le signal, lui, s'entend, et la course a deja commence. */
+            <div
+              className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
+              style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
+            >
+              <span className="text-4xl sm:text-6xl md:text-8xl font-black font-display tracking-tighter text-white drop-shadow-md">
+                {n > 0 ? n : ''}
+              </span>
+            </div>
+          )}
           {mode === 'oneshot' && shotRaces.length > 1 && (
             <div className="mt-4 md:mt-8 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
               {N.t('event_n', { n: shotIdx + 1, t: shotRaces.length })}
