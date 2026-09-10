@@ -151,9 +151,66 @@ export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[
   return rankByRaceTime(await fetchLeaderboardRaw(race));
 }
 
+/* ---------------------------------------------------------------------------
+   POURQUOI UN CHRONO N'ARRIVE PAS
+   ---------------------------------------------------------------------------
+   `submitScore` ne rendait qu'une erreur nue — « score submit failed ». Toutes
+   les causes s'y confondaient, et les ecrans n'avaient donc qu'une phrase a
+   dire : « echec de l'envoi, reessaie ».
+
+   Elle est fausse pour la moitie d'entre elles, et elle l'est de la pire
+   maniere. Un nom reserve par un AUTRE appareil vaut 403, et ce 403 ne
+   s'arrangera jamais : le serveur refusera le meme envoi ce soir, demain et le
+   mois prochain. Le joueur relance, relance, puis ferme la fenetre — et le
+   record du monde qu'il vient de courir n'existe nulle part.
+
+   Ce n'est pas une hypothese. Le 10 septembre 2026 a 01:31 UTC, un 8,22 s au
+   100 m — record du monde du jeu — est parti sous le nom « Léo », reserve la
+   veille par un autre appareil. Le serveur a note le pays du joueur (cette
+   ecriture-la precede le controle du nom) puis a refuse : rien dans `scores`,
+   rien dans `races`, et un joueur devant « reessaie » qui ne pouvait pas
+   marcher.
+
+   On distingue donc les refus, parce qu'ils n'appellent pas la meme suite :
+   celui qui ne s'arrangera pas demande un geste du joueur, les autres
+   demandent de la patience — et c'est le jeu qui la prend a sa charge, voir
+   `record-attente.ts`.
+--------------------------------------------------------------------------- */
+
+export type RaisonRefus =
+  /** Ce nom appartient a un autre appareil. Reessayer n'y changera rien. */
+  | 'nom-reserve'
+  /** Trop d'envois depuis cette adresse. Ca repassera tout seul. */
+  | 'trop-vite'
+  /** Reseau, serveur, inconnu. Le prochain essai peut aboutir. */
+  | 'reseau';
+
+export class EnvoiRefuse extends Error {
+  readonly raison: RaisonRefus;
+  constructor(raison: RaisonRefus) {
+    super(`envoi refuse : ${raison}`);
+    this.name = 'EnvoiRefuse';
+    this.raison = raison;
+  }
+}
+
+/**
+ * La raison d'un echec, quelle que soit la forme de l'erreur attrapee.
+ *
+ * Un `catch` recoit ce qui passe : notre refus type, une panne de `fetch`, ou
+ * une erreur d'un tout autre etage. Tout ce qu'on ne sait pas nommer est du
+ * reseau — c'est le seul classement qui ne promette rien de faux au joueur.
+ */
+export function raisonDe(e: unknown): RaisonRefus {
+  return e instanceof EnvoiRefuse ? e.raison : 'reseau';
+}
+
 /**
  * `rank` porte sur le meilleur chrono realise sur UNE course (best_split_ms),
  * pas sur le cumul du parcours : c'est ce que classe le TOP 500.
+ *
+ * Leve `EnvoiRefuse` et rien d'autre : l'appelant lit `raison` plutot que de
+ * deviner.
  */
 export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number): Promise<{
   rank: number;
@@ -161,18 +218,25 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
   best_split_ms: number;
   entries: LeaderboardEntry[];
 }> {
-  const res = await fetch(`${API_BASE}/submit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      device_id: getDeviceId(),
-      race_key: race,
-      name,
-      time_ms: Math.round(timeMs),
-      best_split_ms: Math.round(bestSplitMs),
-    }),
-  });
-  if (!res.ok) throw new Error('score submit failed');
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: getDeviceId(),
+        race_key: race,
+        name,
+        time_ms: Math.round(timeMs),
+        best_split_ms: Math.round(bestSplitMs),
+      }),
+    });
+  } catch {
+    throw new EnvoiRefuse('reseau');       // hors ligne, DNS, coupure
+  }
+  if (res.status === 403) throw new EnvoiRefuse('nom-reserve');
+  if (res.status === 429) throw new EnvoiRefuse('trop-vite');
+  if (!res.ok) throw new EnvoiRefuse('reseau');
   return res.json();
 }
 
