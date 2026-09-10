@@ -53,6 +53,7 @@ import {
 } from './reseaux.js';
 import {
   deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
+  ouvrirVideo, chargerVideo, etatConteneur, publierConteneur, FORMATS,
 } from './instagram-envoi.js';
 import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
@@ -2857,8 +2858,13 @@ async function servir(request, env, ctx, porteur) {
       // demande au chargement pour savoir s'il propose un bouton ou le simple
       // telechargement. Repondre « non » n'est pas une panne, c'est l'etat par
       // defaut tant que les deux secrets ne sont pas poses.
+      //
+      // `formats` dit en plus CE QU'IL sait envoyer. Le calendrier se deploie
+      // a part du Worker : sans cette liste, il proposerait un reel a un Worker
+      // qui ne sait encore publier que des images, et l'echec viendrait apres
+      // la confirmation — le pire moment.
       if (quoi === 'envoi' && request.method === 'GET') {
-        return json({ pret: envoiPret(env) });
+        return json({ pret: envoiPret(env), formats: FORMATS });
       }
 
       // Envoyer une publication sur Instagram.
@@ -2874,7 +2880,9 @@ async function servir(request, env, ctx, porteur) {
         }
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { id, image, legende } = body || {};
+        // `format` : 'fil' (par defaut, ce que l'atelier a toujours envoye) ou
+        // 'story'. Une story n'emporte pas la legende : l'API ne la prend pas.
+        const { id, image, legende, format } = body || {};
         if (!image) return json({ error: 'image manquante' }, 400);
 
         let depot;
@@ -2889,7 +2897,7 @@ async function servir(request, env, ctx, porteur) {
         // workers.dev comme derriere un domaine a nous, et une adresse ecrite
         // en dur serait fausse un jour sur deux.
         const adresseImage = `${url.origin}/img/${depot}.jpg`;
-        const r = await publierInstagram(env, { adresseImage, legende });
+        const r = await publierInstagram(env, { adresseImage, legende, format: format || 'fil' });
 
         // Le depot a fait son office, dans un sens comme dans l'autre : ce qui
         // doit durer est la publication chez Instagram, pas la copie.
@@ -2899,7 +2907,68 @@ async function servir(request, env, ctx, porteur) {
 
         // Le registre, comme pour une publication deposee a la main.
         if (id != null) await marquerPublie(env.DB, id, ['instagram']);
-        return json({ ok: true, publication: r.publication });
+        return json({ ok: true, publication: r.publication, lien: r.lien });
+      }
+
+      // Envoyer une VIDEO — reel, ou story filmee. Trois routes pour trois
+      // temps, enchaines par la page ; le pourquoi est en tete de la partie
+      // video de instagram-envoi.js. Une erreur de notre cote rend 400, une
+      // erreur de Meta 502 : les deux ne se reparent pas au meme endroit.
+      const statutDe = r => (r.etape === 'verification' ? 400 : 502);
+
+      if (quoi === 'video/ouvrir' && request.method === 'POST') {
+        if (!envoiPret(env)) {
+          return json({ error: 'envoi non configure',
+                        detail: 'poser IG_JETON et IG_COMPTE avec wrangler secret put' }, 409);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { format, legende, partagerAuFil, couverture } = body || {};
+
+        // La couverture d'un reel passe par le meme depot que les images :
+        // Meta la lit a une adresse. Elle n'est PAS effacee ici — Meta vient
+        // la chercher pendant le transcodage, bien apres cette reponse. Le
+        // menage d'une heure s'en charge.
+        let adresseCouverture = null;
+        if (couverture && format === 'reel') {
+          try {
+            adresseCouverture = `${url.origin}/img/${await deposerImage(env.DB, String(couverture))}.jpg`;
+          } catch (e) {
+            return json({ error: 'couverture : ' + String(e && e.message || e) }, 400);
+          }
+        }
+        const r = await ouvrirVideo(env, {
+          format, legende, partagerAuFil: partagerAuFil !== false, couverture: adresseCouverture,
+        });
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
+        return json({ ok: true, creation: r.creation, uri: r.uri });
+      }
+
+      // Le corps de cette requete EST la video, en octets bruts : elle
+      // traverse le Worker en flux jusqu'a Meta, sans s'arreter.
+      if (quoi === 'video/charger' && request.method === 'POST') {
+        const r = await chargerVideo(env, {
+          creation: url.searchParams.get('creation') || '',
+          uri: url.searchParams.get('uri') || '',
+          corps: request.body,
+          taille: Number(request.headers.get('Content-Length') || 0),
+        });
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
+        return json({ ok: true });
+      }
+
+      if (quoi === 'conteneur' && request.method === 'GET') {
+        const r = await etatConteneur(env, url.searchParams.get('creation'));
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
+        return json({ etat: r.etat, detail: r.detail });
+      }
+
+      if (quoi === 'publier' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const r = await publierConteneur(env, (body || {}).creation);
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
+        return json({ ok: true, publication: r.publication, lien: r.lien });
       }
 
       if (quoi === 'ecarter' && request.method === 'POST') {

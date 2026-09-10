@@ -137,8 +137,100 @@ export function envoiPret(env) {
   return !!(env && env.IG_JETON && env.IG_COMPTE);
 }
 
+/* ------------------------------------------------------------ les formats
+   Ce que chaque format demande a Meta, ecrit une fois. Une image passe par le
+   depot ci-dessus : Meta la lit a une adresse. Une video, non — elle est trop
+   lourde pour D1, et c'est Meta qui la RECOIT directement (voir chargerVideo).
+
+   Une story ne porte pas de legende : l'API ne la prend pas. Le texte d'une
+   story est dans l'image elle-meme, ou dans les stickers poses a la main. */
+const IMAGE = { fil: {}, story: { media_type: 'STORIES' } };
+const VIDEO = { reel: 'REELS', story: 'STORIES' };
+
+/** Ce que ce Worker sait envoyer. L'atelier le lit avant de proposer un bouton :
+    un calendrier deploye avant le Worker ne doit pas offrir un reel qui ne
+    partira pas. */
+export const FORMATS = ['fil', 'story', 'reel', 'story-video'];
+
+/** La limite d'un corps de requete sur un Worker est de 100 Mo ; on garde de
+    la marge. Une story video en accepte 100 chez Meta, un reel 300 : ce sont
+    donc les notres qui tombent en premier, et il vaut mieux le dire ici que
+    laisser Cloudflare couper la requete sans explication. */
+export const MAX_VIDEO_OCTETS = 95 * 1024 * 1024;
+
+const echec = (etape, erreur, http) => ({ ok: false, etape, erreur, http });
+const nonPret = () => echec('configuration',
+  'IG_JETON et IG_COMPTE ne sont pas poses sur le Worker');
+
+/** Le message de Meta, s'il en a donne un. */
+const messageMeta = d => (d && d.error && d.error.message) || 'reponse inattendue';
+
+/** Cree un conteneur. Rend son identifiant, et l'adresse de depot pour une video. */
+async function creerConteneur(env, champs) {
+  try {
+    const r = await fetch(`${API}/${env.IG_COMPTE}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...champs, access_token: env.IG_JETON }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.id) return echec('conteneur', messageMeta(d), r.status);
+    return { ok: true, creation: String(d.id), uri: d.uri || null };
+  } catch (e) {
+    return echec('conteneur', String(e && e.message || e));
+  }
+}
+
 /**
- * Publie une image sur Instagram, en deux temps.
+ * Ou en est un conteneur ? IN_PROGRESS tant que Meta lit ou transcode,
+ * FINISHED quand il peut partir, ERROR sinon — et dans ce cas `detail` porte
+ * le code de Meta (« 2207026 » : format video refuse), qui est la seule piste.
+ */
+export async function etatConteneur(env, creation) {
+  if (!envoiPret(env)) return nonPret();
+  if (!/^\d+$/.test(String(creation || ''))) return echec('verification', 'conteneur inconnu');
+  try {
+    const r = await fetch(`${API}/${creation}?fields=status_code,status`
+                        + `&access_token=${encodeURIComponent(env.IG_JETON)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return echec('etat', messageMeta(d), r.status);
+    return { ok: true, etat: d.status_code || 'INCONNU', detail: d.status || null };
+  } catch (e) {
+    return echec('etat', String(e && e.message || e));
+  }
+}
+
+/** L'adresse publique d'une publication, pour pouvoir aller la voir. Un
+    agrement : si Meta ne la donne pas, la publication n'en est pas moins faite. */
+async function lienDe(env, media) {
+  try {
+    const r = await fetch(`${API}/${media}?fields=permalink`
+                        + `&access_token=${encodeURIComponent(env.IG_JETON)}`);
+    const d = await r.json().catch(() => ({}));
+    return d.permalink || null;
+  } catch { return null; }
+}
+
+/** Publie un conteneur pret. C'est le seul appel de ce module qui se voit. */
+export async function publierConteneur(env, creation) {
+  if (!envoiPret(env)) return nonPret();
+  if (!/^\d+$/.test(String(creation || ''))) return echec('verification', 'conteneur inconnu');
+  try {
+    const r = await fetch(`${API}/${env.IG_COMPTE}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ creation_id: String(creation), access_token: env.IG_JETON }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.id) return echec('publication', messageMeta(d), r.status);
+    return { ok: true, publication: d.id, lien: await lienDe(env, d.id) };
+  } catch (e) {
+    return echec('publication', String(e && e.message || e));
+  }
+}
+
+/**
+ * Publie une image sur Instagram — au fil, ou en story.
  *
  * Meta demande d'abord de creer un « conteneur » a partir de l'adresse de
  * l'image, puis de le publier. Les deux appels peuvent echouer pour des
@@ -150,63 +242,107 @@ export function envoiPret(env) {
  * un conteneur qui n'est pas pret echoue : on attend donc qu'il annonce
  * FINISHED, sans depasser un temps raisonnable.
  */
-export async function publierInstagram(env, { adresseImage, legende }) {
-  if (!envoiPret(env)) {
-    return { ok: false, etape: 'configuration',
-             erreur: 'IG_JETON et IG_COMPTE ne sont pas poses sur le Worker' };
-  }
-  const jeton = env.IG_JETON;
-  const compte = env.IG_COMPTE;
+export async function publierInstagram(env, { adresseImage, legende, format = 'fil' }) {
+  if (!envoiPret(env)) return nonPret();
+  if (!(format in IMAGE)) return echec('verification', `format inconnu : ${format}`);
 
   // --- 1. le conteneur -----------------------------------------------------
-  let creation;
-  try {
-    const r = await fetch(`${API}/${compte}/media`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_url: adresseImage, caption: legende || '',
-                             access_token: jeton }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.id) {
-      return { ok: false, etape: 'conteneur', http: r.status,
-               erreur: (d.error && d.error.message) || 'reponse inattendue' };
-    }
-    creation = d.id;
-  } catch (e) {
-    return { ok: false, etape: 'conteneur', erreur: String(e && e.message || e) };
-  }
+  const champs = { image_url: adresseImage, ...IMAGE[format] };
+  if (format === 'fil') champs.caption = legende || '';
+  const c = await creerConteneur(env, champs);
+  if (!c.ok) return c;
 
   // --- 2. attendre que Meta ait pris l'image -------------------------------
   // Sans cette attente, la publication echoue par intermittence — et une panne
   // intermittente est celle qu'on met le plus longtemps a comprendre.
   for (let i = 0; i < 10; i++) {
-    try {
-      const r = await fetch(`${API}/${creation}?fields=status_code&access_token=${encodeURIComponent(jeton)}`);
-      const d = await r.json().catch(() => ({}));
-      if (d.status_code === 'FINISHED') break;
-      if (d.status_code === 'ERROR') {
-        return { ok: false, etape: 'preparation',
-                 erreur: 'Meta n a pas pu lire l image deposee' };
-      }
-    } catch { /* on retente */ }
+    const e = await etatConteneur(env, c.creation);
+    if (e.ok && e.etat === 'FINISHED') break;
+    if (e.ok && e.etat === 'ERROR') {
+      return echec('preparation', `Meta n a pas pu lire l image deposee${e.detail ? ' — ' + e.detail : ''}`);
+    }
     await new Promise(r => setTimeout(r, 1500));
   }
 
   // --- 3. la publication ---------------------------------------------------
+  return publierConteneur(env, c.creation);
+}
+
+/* ------------------------------------------------------------- les videos
+   Trois temps, et c'est l'atelier qui les enchaine, pas le Worker :
+
+     1. ouvrirVideo    — Meta cree le conteneur et rend une adresse de depot ;
+     2. chargerVideo   — les octets du MP4 passent A TRAVERS le Worker, en flux,
+                         jusqu'a cette adresse. Le jeton reste ici, la video ne
+                         s'arrete nulle part : ni D1, ni R2, ni memoire ;
+     3. publierConteneur, une fois que etatConteneur annonce FINISHED.
+
+   Pourquoi pas une seule requete : Meta met de quelques secondes a plusieurs
+   minutes a transcoder un reel. Tenir une requete ouverte tout ce temps, c'est
+   parier sur la patience du navigateur et du reseau ; l'atelier, lui, peut
+   interroger toutes les trois secondes et dire ou il en est. */
+
+/** Etape 1. `couverture` est l'adresse d'une image deja deposee, ou rien. */
+export async function ouvrirVideo(env, { format, legende, partagerAuFil = true, couverture = null }) {
+  if (!envoiPret(env)) return nonPret();
+  const type = VIDEO[format];
+  if (!type) return echec('verification', `format video inconnu : ${format}`);
+  const champs = { media_type: type, upload_type: 'resumable' };
+  if (type === 'REELS') {
+    champs.caption = legende || '';
+    champs.share_to_feed = !!partagerAuFil;
+    if (couverture) champs.cover_url = couverture;
+  }
+  const c = await creerConteneur(env, champs);
+  if (!c.ok) return c;
+  if (!c.uri) return echec('conteneur', 'Meta n a pas rendu d adresse de depot');
+  return c;
+}
+
+/**
+ * Etape 2. `corps` est le flux de la requete de l'atelier, `taille` sa longueur.
+ *
+ * L'adresse de depot revient de l'atelier, qui l'a recue de Meta a l'etape 1.
+ * C'est la seule adresse de ce module qu'on ne construit pas soi-meme, et on y
+ * envoie le jeton : elle est donc verifiee avant — un jeton parti ailleurs que
+ * chez Meta est un jeton perdu.
+ */
+export async function chargerVideo(env, { creation, uri, corps, taille }) {
+  if (!envoiPret(env)) return nonPret();
+  let adresse;
+  try { adresse = new URL(String(uri || '')); } catch { adresse = null; }
+  if (!/^\d+$/.test(String(creation || ''))
+      || !adresse || adresse.protocol !== 'https:'
+      || adresse.hostname !== 'rupload.facebook.com'
+      || !adresse.pathname.endsWith('/' + creation)) {
+    return echec('verification', 'adresse de depot refusee');
+  }
+  if (!corps || !(taille > 0)) return echec('verification', 'video vide');
+  if (taille > MAX_VIDEO_OCTETS) {
+    return echec('verification', `video trop lourde : ${Math.round(taille / 1048576)} Mo, `
+                               + `${Math.round(MAX_VIDEO_OCTETS / 1048576)} au plus`);
+  }
   try {
-    const r = await fetch(`${API}/${compte}/media_publish`, {
+    // Un flux de longueur annoncee : sans elle, le Worker enverrait en
+    // morceaux, et le depot de Meta attend un fichier dont il connait la taille.
+    const { readable, writable } = new FixedLengthStream(taille);
+    corps.pipeTo(writable).catch(() => { /* l'echec se lira dans la reponse */ });
+    const r = await fetch(adresse.href, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ creation_id: creation, access_token: jeton }),
+      headers: {
+        Authorization: `OAuth ${env.IG_JETON}`,
+        offset: '0',
+        file_size: String(taille),
+      },
+      body: readable,
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.id) {
-      return { ok: false, etape: 'publication', http: r.status,
-               erreur: (d.error && d.error.message) || 'reponse inattendue' };
+    if (!r.ok || d.success === false) {
+      return echec('chargement',
+        (d.debug_info && d.debug_info.message) || messageMeta(d), r.status);
     }
-    return { ok: true, publication: d.id };
+    return { ok: true };
   } catch (e) {
-    return { ok: false, etape: 'publication', erreur: String(e && e.message || e) };
+    return echec('chargement', String(e && e.message || e));
   }
 }
