@@ -6,7 +6,7 @@ import { useRecord, s2 } from '@/game/record';
 
 export function RaceHUD() {
   const { 
-    state, elapsed, countT, champion, championTime, levelIdx, runners, player,
+    state, elapsed, starter, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
     ghostOn, ghostD, ghostDone, challenge, raceKey
@@ -55,11 +55,16 @@ export function RaceHUD() {
    */
   const aveugle = !!challenge;
   
-  // Countdown overlay
+  /**
+   * L'ECRAN DU DEPART.
+   *
+   * Il n'y a plus de nombre a afficher : le decompte a cede la place a un
+   * starter, qui appelle les marques, demande le « pret », et tire quand il
+   * veut — entre trois et dix secondes plus tard. Montrer une seconde
+   * quelconque ici reviendrait a vendre la meche.
+   */
   const isCount = state === 'count';
-  const left = 3 - countT;
-  const n = Math.ceil(left);
-  const frac = left - Math.floor(left);
+  const pret = starter >= 2;
   
   // Race state
   const isRace = state === 'race';
@@ -202,23 +207,36 @@ export function RaceHUD() {
         </div>
       )}
 
-      {/* Countdown Center Display */}
+      {/* Le starter, au milieu de l'ecran */}
       {isCount && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          {n > 0 && (
-            <div className="mb-3 md:mb-5 bg-card/70 backdrop-blur-md px-4 py-1.5 md:px-6 md:py-2 rounded-full border border-white/10 shadow-lg">
-              <span className="font-bold text-foreground tracking-widest text-xs sm:text-sm md:text-lg uppercase">
-                {n >= 3 ? N.t('ready') : N.t('get_set')}
+          {/* LA COMMANDE, EN TOUTES LETTRES.
+              Le son dit la meme chose au meme instant — mais un telephone se
+              joue aussi dans le bruit, ou son coupe, et la consigne ne peut
+              pas dependre de ce qu'on entend. Le « pret » passe a l'or et
+              respire : c'est le signe qu'il ne reste plus que l'attente. */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pret ? 'pret' : 'marques'}
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.04 }}
+              transition={{ duration: 0.18 }}
+              className={`px-5 py-3 md:px-10 md:py-5 rounded-2xl border-2 backdrop-blur-md max-w-[92vw]
+                ${pret ? 'border-primary bg-primary/15 shadow-[0_0_60px_rgba(248,205,74,0.28)] animate-pulse'
+                       : 'border-white/25 bg-card/60 shadow-2xl'}`}
+            >
+              <span className={`block font-display font-black tracking-widest text-center leading-none
+                text-2xl sm:text-4xl md:text-6xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
+                {pret ? N.t('get_set') : N.t('ready')}
               </span>
-            </div>
-          )}
-          <div
-            className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
-            style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
-          >
-            <span className={`text-4xl sm:text-6xl md:text-8xl font-black font-display tracking-tighter ${n > 0 ? 'text-white drop-shadow-md' : 'text-primary'}`}>
-              {n > 0 ? n : N.t('go')}
-            </span>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Et la seule regle qui compte tant qu'il n'a pas tire. */}
+          <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest
+                          text-muted-foreground uppercase">
+            {N.t('wait_gun')}
           </div>
           {mode === 'oneshot' && shotRaces.length > 1 && (
             <div className="mt-4 md:mt-8 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">

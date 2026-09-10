@@ -1160,6 +1160,16 @@
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
     }
+    // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
+    //
+    // Le starter n'est pas un athlete : il se tient debout, le pistolet le
+    // long du corps, puis le bras bien haut. `bras` impose donc l'angle des
+    // deux bras — [gauche, droit, coude gauche, coude droit] — la ou
+    // `celebrate` se contente de les lever ensemble.
+    if (r.bras) {
+      al = [r.bras[0], r.bras[0] + (r.bras[2] || 0.18)];
+      ar = [r.bras[1], r.bras[1] + (r.bras[3] || 0.18)];
+    }
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -1257,6 +1267,8 @@
     }
 
     const sh = rot(0, 0.470, lean);
+    /** Le poing du bras armé, garde pour y accrocher le pistolet. */
+    let poing = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
@@ -1271,6 +1283,22 @@
           [armR - 0.004, armR - 0.001], 0.112, yawTop);
       add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
           [armR - 0.010, armR - 0.008], 0.036, yawTop);
+      if (r.pistolet === side) poing = [E, aFore];
+    }
+
+    // LES ANTENNES.
+    //
+    // Deux tiges et deux bulbes au-dessus du crane, et c'est tout ce qu'il
+    // faut : le reste de la silhouette est celle de n'importe qui, et c'est
+    // justement ce qui rend la difference lisible d'un coup d'oeil. Sert au
+    // starter du stade des ZEZE, qui n'est pas d'ici.
+    if (r.antennes) {
+      for (const dy of [-0.042, 0.042]) {
+        add(L.skin, hip, lean, [-0.012, dy, 0.806], [0.011, 0.011],
+            [0.008, 0.008], 0.058, hy);
+        add(r.antennes, hip, lean, [-0.018, dy, 0.884], [0.026, 0.026],
+            [0.024, 0.024], 0.016, hy);
+      }
     }
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
@@ -1296,6 +1324,27 @@
           [0.080, 0.052], 0.028, yawHip);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
           0.028, yawHip);
+    }
+
+    // LE PISTOLET DU STARTER, DANS LE PROLONGEMENT DE L'AVANT-BRAS.
+    //
+    // C'est ce qui lui donne son geste sans qu'on ait rien a animer de plus :
+    // bras le long du corps, l'arme pend vers le sol ; bras leve, elle vise le
+    // ciel. Un vrai starter ne fait pas autre chose.
+    //
+    // ELLE EST AJOUTEE EN DERNIER, ET C'EST UN CONTRAT : le rendu prend la
+    // derniere capsule pour savoir ou allumer l'eclair du coup de feu — voir
+    // `drawStarter` dans sprinter-app.js.
+    if (poing) {
+      const [M, a] = poing;
+      // Une crosse sombre et un canon d'acier : sur un short bleu nuit, une
+      // arme entierement noire ne se voit pas, et c'est pourtant la seule
+      // chose que le joueur doit repérer dans la main du starter.
+      const CROSSE = [38, 40, 50], CANON = [176, 182, 196];
+      add(CROSSE, M, a, [0.030, 0, -0.300], [0.022, 0.018], [0.026, 0.020],
+          0.034, yawTop);
+      add(CANON, M, a, [-0.004, 0, -0.378], [0.015, 0.014], [0.018, 0.016],
+          0.066, yawTop);
     }
     return out;
   }

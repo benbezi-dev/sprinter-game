@@ -255,6 +255,74 @@
   const pickLang = a => a[Math.floor(Math.random() * a.length)][N.index()];
 
   // -------------------------------------------------------------------
+  // LA VOIX DU STARTER
+  // -------------------------------------------------------------------
+  /**
+   * « A VOS MARQUES »… « PRET »… ET LE COUP DE PISTOLET.
+   *
+   * Ces trois sons sont synthetises, comme tout le reste du jeu — la musique,
+   * les tambours, les bruitages. Ce n'est pas une coquetterie, c'est ce qui
+   * leur permet d'exister partout :
+   *
+   * - un enregistrement, il aurait fallu le faire dans deux langues, le
+   *   livrer avec le jeu et l'attendre au chargement, pour trois secondes de
+   *   son. Le jeu tient aujourd'hui sans un seul fichier audio.
+   * - `speechSynthesis` parle vraiment, mais il ne passe pas par le graphe
+   *   audio du jeu : il ne serait ni dans le replay ni coupe par le bouton
+   *   son, il prendrait la voix systeme de l'appareil — et il arrive quand il
+   *   veut. Un depart se joue au centieme ; on ne le confie pas a un moteur
+   *   qui peut repondre trois cents millisecondes plus tard.
+   *
+   * LE PRINCIPE, LUI, EST CELUI DE LA PAROLE. Une voyelle n'est rien d'autre
+   * que trois bosses dans le spectre — ses formants. On excite trois
+   * resonateurs avec une source (des impulsions glottales pour ce qui est
+   * voise, du bruit pour les consonnes), on fait GLISSER leurs frequences
+   * d'un phoneme au suivant, et l'oreille entend des mots. C'est la glissade
+   * qui fait la voix : trois bourdons poses cote a cote ne s'entendent que
+   * comme trois bourdons.
+   *
+   * Les valeurs sont celles d'une voix d'homme grave, passee au haut-parleur
+   * du stade — c'est ce qu'on attend d'un starter, et cela tombe bien : ce
+   * timbre-la pardonne beaucoup a une synthese.
+   */
+  const FORMANTS = {
+    //          F1    F2    F3   source
+    a:        [ 730, 1150, 2450, 'v'],   // « a », « marques »
+    ah:       [ 700, 1220, 2500, 'v'],   // « marks », anglais
+    o:        [ 400,  760, 2400, 'v'],   // « vos »
+    aw:       [ 570,  900, 2450, 'v'],   // « on », anglais
+    eh:       [ 550, 1770, 2490, 'v'],   // « pret », « set »
+    j:        [ 300, 2200, 3000, 'v'],   // le yod de « your »
+    m:        [ 250, 1100, 2200, 'n'],
+    n:        [ 250, 1700, 2600, 'n'],
+    v:        [ 350, 1300, 2200, 'z'],   // fricative voisee
+    r:        [ 420, 1250, 1900, 'z'],   // le R francais, gratte dans la gorge
+    rr:       [ 320, 1000, 1500, 'v'],   // le r anglais : F3 tres bas
+    s:        [1300, 4800, 7000, 'f'],   // sifflante : tout est dans l'aigu
+    k:        [ 450, 1800, 2400, 'x'],   // occlusive : silence, puis explosion
+    p:        [ 400,  900, 2100, 'x'],
+    t:        [ 400, 1900, 2700, 'x'],
+    _:        [ 400, 1400, 2400, '.'],   // le silence, et le repos des formants
+  };
+
+  /**
+   * Les deux commandes, dans les deux langues.
+   *
+   * Les durees ne sont pas decoratives : ce sont elles qui donnent le debit
+   * d'un starter — pose sur les voyelles, net sur les consonnes. « A vos
+   * marques » s'etire, « pret » se tient.
+   */
+  const COMMANDES = {
+    marques_fr: [['a', 0.26], ['v', 0.07], ['o', 0.23], ['m', 0.09],
+                 ['a', 0.18], ['r', 0.09], ['k', 0.08]],
+    pret_fr:    [['p', 0.07], ['r', 0.07], ['eh', 0.40]],
+    marques_en: [['aw', 0.21], ['n', 0.07], ['j', 0.05], ['o', 0.12],
+                 ['rr', 0.09], ['m', 0.08], ['ah', 0.23], ['rr', 0.08],
+                 ['k', 0.06], ['s', 0.14]],
+    pret_en:    [['s', 0.14], ['eh', 0.28], ['t', 0.07]],
+  };
+
+  // -------------------------------------------------------------------
   // SON
   // -------------------------------------------------------------------
   const Audio_ = {
@@ -555,6 +623,18 @@
         [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
         [-9, 1.10, 1.10],
       ], 2, 'tri');
+
+      // Le depart : les deux commandes dans les deux langues, et le pistolet.
+      //
+      // Les quatre sont fabriquees ici, une fois pour toutes, et non a la
+      // demande : le starter parle a l'instant ou il parle, et une seconde de
+      // synthese au milieu d'un decompte se verrait. La langue peut changer
+      // en cours de partie, on tient donc les deux pretes.
+      this.buf.marques_fr = this.parole(COMMANDES.marques_fr);
+      this.buf.pret_fr = this.parole(COMMANDES.pret_fr, { f0: 112 });
+      this.buf.marques_en = this.parole(COMMANDES.marques_en);
+      this.buf.pret_en = this.parole(COMMANDES.pret_en, { f0: 112 });
+      this.buf.coup = this.pistolet();
     },
     // Une phrase jouee une seule fois : [demi-tons, depart, duree].
     phrase(notes, oct, wave) {
@@ -568,6 +648,242 @@
       });
       return this.norm(d);
     },
+    /* ---------------------------------------------------- la voix du stade */
+
+    /**
+     * UNE PHRASE, RENDUE ECHANTILLON PAR ECHANTILLON.
+     *
+     * Le detail de la fabrique — voir l'en-tete de FORMANTS pour le principe.
+     *
+     * La source change avec le phoneme : des impulsions glottales pour une
+     * voyelle, du bruit pour une sifflante, les deux pour un « v », un silence
+     * suivi d'une explosion pour un « k ». Les trois resonateurs, eux, ne
+     * s'arretent jamais : leur etat traverse les phonemes, et leurs
+     * frequences GLISSENT vers celles du suivant sur quarante
+     * millisecondes. Sans cette glissade, on entend une suite de sons ; avec,
+     * on entend quelqu'un parler.
+     *
+     * La sortie passe ensuite par un haut-parleur de stade : coupe dans les
+     * graves, un peu saturee, et renvoyee deux fois par les tribunes.
+     */
+    parole(seq, opts) {
+      const sr = this.ctx.sampleRate;
+      const o = opts || {};
+      const f0 = o.f0 || 104;
+      const duree = seq.reduce((s, p) => s + p[1], 0);
+      // La queue laisse la place aux renvois du stade.
+      const d = this.ctx.createBuffer(1, ((duree + 0.5) * sr) | 0, sr);
+      const ch = d.getChannelData(0);
+      const n = ch.length;
+
+      // Etat des trois resonateurs : deux echantillons chacun, plus les deux
+      // derniers echantillons de la source, communs aux trois.
+      const y1 = [0, 0, 0], y2 = [0, 0, 0];
+      let x1 = 0, x2 = 0;
+      // Le poids de chaque formant, une fois la source aplanie (voir la
+      // pre-accentuation plus bas). Le deuxieme formant est celui qui porte la
+      // voyelle : c'est lui qui separe un « a » d'un « o », et il ne doit pas
+      // rester dix decibels sous le premier.
+      const AMP = [1, 0.80, 0.50];
+      const BW = [70, 110, 170];
+      let phase = 0;                       // phase glottale, en periodes
+      let pic = 0;                         // echantillons restants d'une impulsion
+      const PIC = [1, 0.8, 0.35];          // sa forme, sur trois echantillons
+      let seed = 22222;
+      const bruit = () => {
+        seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+        return seed / 0x3fffffff - 1;
+      };
+
+      let i0 = 0;
+      let avant = FORMANTS._;
+      for (let k = 0; k < seq.length; k++) {
+        const nom = seq[k][0], dur = seq[k][1];
+        const ici = FORMANTS[nom] || FORMANTS._;
+        const src = ici[3];
+        const len = Math.max(1, (dur * sr) | 0);
+        const gliss = Math.min(len, (0.04 * sr) | 0);
+        // Une occlusive, c'est d'abord une bouche fermee : le silence fait
+        // autant pour l'entendre que l'explosion qui le suit.
+        const fermeture = src === 'x' ? (len * 0.55) | 0 : 0;
+        const att = Math.min((0.012 * sr) | 0, (len / 3) | 0);
+        const rel = Math.min((0.025 * sr) | 0, (len / 3) | 0);
+        // Les nasales sont sourdes : on elargit les bandes, le son s'etouffe.
+        const large = src === 'n' ? 2.4 : 1;
+        for (let i = 0; i < len; i++) {
+          const idx = i0 + i; if (idx >= n) break;
+          const g = gliss > 0 ? Math.min(1, i / gliss) : 1;
+          // L'intonation : la voix du starter descend en fin de commande.
+          const q = (i0 + i) / (duree * sr);
+          const f = f0 * (1.06 - 0.16 * q);
+          // La source.
+          let x = 0;
+          if (i >= fermeture) {
+            const voise = src === 'v' || src === 'n' || src === 'z';
+            if (voise) {
+              // L'EXCITATION EST UNE IMPULSION PAR PERIODE, ET RIEN ENTRE DEUX.
+              //
+              // C'est la source de la synthese a formants depuis Klatt, et
+              // elle a une propriete qu'aucune forme plus douce n'a : son
+              // spectre est PLAT. Toutes les harmoniques sortent au meme
+              // niveau, les trois resonateurs recoivent donc de quoi
+              // travailler jusqu'a trois mille hertz, et ce sont eux — et eux
+              // seuls — qui dessinent la voyelle.
+              //
+              // Une forme arrondie sonnerait plus humaine et ne dirait plus
+              // rien : son energie retombe d'elle-meme avant le deuxieme
+              // formant, celui qui separe justement un « a » d'un « o ». On
+              // garde donc le grain un peu dur d'une voix de haut-parleur,
+              // qui est de toute facon celle qu'on veut ici.
+              phase += f / sr;
+              if (phase >= 1) { phase -= 1; pic = 3; }
+              if (pic > 0) { x += PIC[3 - pic]; pic--; }
+              x *= src === 'n' ? 0.55 : 1;
+            }
+            if (src === 'z') x = x * 0.55 + bruit() * 0.45;
+            if (src === 'f') x = bruit() * 0.9;
+            if (src === 'x') {
+              // L'explosion : tout est dans les dix premieres millisecondes.
+              const e = (i - fermeture) / Math.max(1, len - fermeture);
+              x = bruit() * Math.exp(-9 * e);
+            }
+          }
+          // Les trois resonateurs, en parallele.
+          //
+          // Chacun recoit `x - x2`, c'est-a-dire la source privee de son
+          // continu et de son extreme aigu. C'est ce qui rend le montage en
+          // parallele utilisable : un resonateur ordinaire laisse passer les
+          // graves presque autant qu'il amplifie sa propre frequence, et les
+          // trois cumulaient donc leurs fuites — un ronflement grave qui
+          // couvrait les deux formants du haut, c'est-a-dire tout ce qui
+          // distingue un « a » d'un « o ».
+          const xd = x - x2;
+          let out = 0;
+          for (let b = 0; b < 3; b++) {
+            const F = avant[b] + (ici[b] - avant[b]) * g;
+            const th = TAU * F / sr;
+            const r = Math.exp(-Math.PI * BW[b] * large / sr);
+            const a1 = 2 * r * Math.cos(th), a2 = -r * r;
+            // Chaque branche est ramenee a un gain de UN a sa propre
+            // frequence : sans cela, la formule favorise mecaniquement les
+            // formants graves, et « pret » sort avec la couleur d'un « o ».
+            const c2 = Math.cos(2 * th), s2 = Math.sin(2 * th);
+            const den = Math.sqrt((1 - r * c2) * (1 - r * c2) + r * s2 * r * s2);
+            const gain = (1 - r) * den / Math.max(1e-4, 2 * Math.sin(th));
+            const v = gain * xd + a1 * y1[b] + a2 * y2[b];
+            y2[b] = y1[b]; y1[b] = v;
+            out += v * AMP[b];
+          }
+          x2 = x1; x1 = x;
+          // L'enveloppe du phoneme : pas de clic au raccord.
+          let env = 1;
+          if (i < att) env *= i / att;
+          if (i > len - rel) env *= (len - i) / rel;
+          ch[idx] += out * env * (o.amp || 1);
+        }
+        i0 += len;
+        avant = ici;
+      }
+
+      // Le haut-parleur du stade : rien sous deux cents hertz, rien au-dessus
+      // de quatre mille cinq cents, et une legere saturation. Les trois font
+      // la meme chose — ils enlevent a cette voix ce qu'elle a de trop propre,
+      // et c'est ce qui la rend croyable.
+      let bas = 0, haut = 0;
+      const kb = TAU * 190 / sr, kh = TAU * 4500 / sr;
+      for (let i = 0; i < n; i++) {
+        bas += (ch[i] - bas) * kb;
+        haut += (ch[i] - bas - haut) * kh;
+        ch[i] = Math.tanh(1.5 * haut);
+      }
+      // Et les tribunes renvoient la voix, deux fois. L'ecriture en place fait
+      // d'elle-meme une queue qui s'eteint : chaque renvoi renvoie a son tour.
+      const r1 = (0.085 * sr) | 0, r2 = (0.17 * sr) | 0;
+      for (let i = r1; i < n; i++) {
+        ch[i] += 0.30 * ch[i - r1];
+        if (i >= r2) ch[i] += 0.16 * ch[i - r2];
+      }
+      return this.norm(d);
+    },
+
+    /**
+     * LE COUP DE PISTOLET.
+     *
+     * Trois choses en une : le claquement — du bruit qui s'eteint en un
+     * dixieme de seconde —, le coup dans la poitrine — une sinusoide qui
+     * plonge de cent cinquante a quarante hertz —, et le stade qui le renvoie
+     * trois fois. C'est le troisieme qui fait le stade : un claquement sec et
+     * seul, c'est une porte qui claque.
+     */
+    pistolet() {
+      const sr = this.ctx.sampleRate;
+      const d = this.ctx.createBuffer(1, (1.2 * sr) | 0, sr);
+      const ch = d.getChannelData(0);
+      let seed = 7777;
+      const bruit = () => {
+        seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+        return seed / 0x3fffffff - 1;
+      };
+      const nb = (0.14 * sr) | 0;
+      for (let i = 0; i < nb; i++) {
+        const q = i / nb;
+        ch[i] += bruit() * Math.exp(-15 * q) * Math.min(1, i / 8);
+      }
+      let ph = 0;
+      const nl = (0.24 * sr) | 0;
+      for (let i = 0; i < nl; i++) {
+        const q = i / nl;
+        ph += (155 * Math.exp(-9 * q) + 44) / sr;
+        ch[i] += 0.8 * Math.exp(-10 * q) * Math.sin(TAU * ph);
+      }
+      // Les renvois, de plus en plus flous : chacun est une moyenne du
+      // precedent, ce qui emousse les aigus comme le fait une tribune.
+      [[0.075, 0.38], [0.155, 0.22], [0.29, 0.13]].forEach(([t, a]) => {
+        const dec = (t * sr) | 0;
+        for (let i = dec + 2; i < ch.length; i++) {
+          ch[i] += a * (ch[i - dec] + ch[i - dec - 1] + ch[i - dec - 2]) / 3;
+        }
+      });
+      return this.norm(d);
+    },
+
+    /**
+     * LE STARTER PARLE — ou tire.
+     *
+     * `quoi` vaut « marques », « pret » ou « feu ». La langue est celle du
+     * jeu : un starter qui donnerait ses ordres dans une autre langue que
+     * l'ecran serait un starter qu'on n'ecoute pas.
+     *
+     * Rend la duree de ce qui vient d'etre lance, en secondes — zero si le
+     * son est coupe ou indisponible.
+     */
+    starter(quoi) {
+      if (!this.ok || !this.on) return 0;
+      const nom = quoi === 'feu' ? 'coup'
+        : (quoi === 'pret' ? 'pret_' : 'marques_') + (N.index() ? 'en' : 'fr');
+      const b = this.buf[nom]; if (!b) return 0;
+      const s = this.ctx.createBufferSource();
+      const g = this.ctx.createGain();
+      g.gain.value = quoi === 'feu' ? 0.95 : 0.85;
+      s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
+      // La musique passe derriere le temps de l'annonce. Une consigne de
+      // depart qu'on n'entend pas est une consigne qui n'existe pas — et sur
+      // un telephone, le stade couvre tout.
+      if (quoi !== 'feu') this.retrait(b.duration);
+      return b.duration;
+    },
+
+    /** Met la musique en retrait, et la remonte toute seule. */
+    retrait(duree) {
+      if (!this.gain || !this.ctx) return;
+      try {
+        const t0 = this.ctx.currentTime;
+        this.gain.gain.cancelScheduledValues(t0);
+        this.gain.gain.setTargetAtTime(0.10, t0, 0.04);
+        this.gain.gain.setTargetAtTime(0.34, t0 + Math.max(0.1, duree), 0.15);
+      } catch (e) { /* le navigateur refuse : on parlera par-dessus */ }
+    },
+
     // La musique de course se durcit a partir du championnat du monde.
     /**
      * Quelle musique pour quelle etape.
@@ -630,6 +946,9 @@
     raceKey: '100', race: RACES['100'], track: null,
     levelIdx: 0, runners: [], player: null, parts: [],
     elapsed: 0, countT: 0, camX: 0, camY: 0,
+    /** Le depart en cours : sa longueur, sa tenue, et ce que le starter a
+     *  deja dit. Voir poserLeDepart. */
+    depart: null,
     // Le nom de celui a qui renvoyer le code apres une defaite. Nul le reste
     // du temps : c'est ce qui distingue une course ordinaire d'une revanche.
     revanche: null,
@@ -818,6 +1137,123 @@
   }
 
   // --- mise en place d'une course ------------------------------------
+  /* ----------------------------------------------------------- le depart */
+
+  /**
+   * LA LONGUEUR DU DEPART N'EST PLUS FIXE.
+   *
+   * Trois secondes, toujours les memes, c'est un metronome : au bout de deux
+   * courses on ne part plus sur le signal mais sur le rythme, et le temps de
+   * reaction ne mesure plus rien du tout. Un starter, lui, ne dit jamais quand
+   * il va tirer — c'est meme toute sa fonction. Entre trois et dix secondes
+   * separent donc « a vos marques » du coup de pistolet, et la seule facon de
+   * bien partir redevient d'attendre vraiment.
+   *
+   * Le tirage penche vers les departs courts. Dix secondes existent, et c'est
+   * parce qu'elles sont rares qu'elles sont redoutables : une attente qui
+   * arriverait une fois sur deux ne serait plus une surprise, seulement une
+   * lenteur.
+   */
+  const DEPART_MIN = 3, DEPART_MAX = 10;
+  /** Ce que le starter TIENT, entre « pret » et le coup. */
+  const TENUE_MIN = 1.2, TENUE_MAX = 3.0;
+  /** Et ce qu'il laisse pour se placer, entre les marques et « pret ». */
+  const MARQUES_MIN = 1.5;
+
+  /** Une longueur de depart, tiree au sort. */
+  function tirerLeDepart() {
+    return DEPART_MIN + (DEPART_MAX - DEPART_MIN) * Math.pow(Math.random(), 1.5);
+  }
+
+  /**
+   * Un tirage reproductible a partir d'un nombre.
+   *
+   * Mulberry32, comme `K.alea`, mais sans etat : semer le hasard du jeu pour
+   * une histoire de depart rejouerait le meme plateau d'adversaires a la
+   * course suivante.
+   */
+  function tirageDe(graine) {
+    let t = ((graine >>> 0) + 0x6D2B79F5) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  /**
+   * POSE LE DEPART : ou tombent les deux commandes, et le coup.
+   *
+   * `secondes` est le temps qui reste jusqu'au pistolet. Seul, il est tire au
+   * sort ici meme. En direct et en relais, c'est la SALLE qui l'annonce et il
+   * n'est pas negociable : le coup doit tomber a la meme milliseconde sur tous
+   * les telephones, sinon ce n'est plus la meme course.
+   *
+   * `graine` rend la tenue reproductible. Sans elle, deux joueurs de la meme
+   * course entendraient « pret » a deux instants differents — le pistolet
+   * serait bien commun, mais l'un aurait ete prevenu plus tot que l'autre. Les
+   * salles passent donc la date du depart, qui est la meme partout.
+   *
+   * LE DECOMPTE NE CHANGE PAS DE FORME. `countT` monte toujours jusqu'a 3, et
+   * 3 reste le coup de pistolet ; c'est son POINT DE DEPART qui bouge. Tout ce
+   * qui lit ce nombre ailleurs — la presentation suspendue a -99, le tableau
+   * de course, la camera — continue de le lire comme avant.
+   */
+  function poserLeDepart(secondes, graine) {
+    G.depart = dessinerLeDepart(secondes, graine);
+    G.countT = 3 - Math.max(0, Number(secondes) || 0);
+    return G.depart;
+  }
+
+  /**
+   * Le dessin d'un depart, sans le poser : sa longueur et sa tenue.
+   *
+   * Le tutoriel s'en sert pour faire repeter le vrai depart sans toucher a
+   * l'etat du jeu — c'est un exercice, pas une course.
+   */
+  function dessinerLeDepart(secondes, graine) {
+    const d = Math.max(0, Number(secondes) || 0);
+    // La sequence tient dans ses bornes : un starter n'appelle pas les marques
+    // vingt secondes avant de tirer, et il ne tire pas non plus dans la foulee
+    // de son annonce.
+    const seq = clamp(d, DEPART_MIN, DEPART_MAX);
+    const r = graine == null ? Math.random() : tirageDe(graine);
+    const haut = Math.min(TENUE_MAX, Math.max(0.6, seq - MARQUES_MIN));
+    const bas = Math.min(TENUE_MIN, haut);
+    return { duree: seq, tenue: bas + r * (haut - bas), dit: 0 };
+  }
+
+  /**
+   * LE STARTER, D'UNE IMAGE A L'AUTRE.
+   *
+   * La boucle l'appelle a chaque tour pendant le decompte ; il dit ce qu'il a
+   * a dire quand l'heure est venue, et se tait le reste du temps. Rend 1 ou 2
+   * quand il vient de parler, pour qui voudrait s'en servir.
+   */
+  function starterParle() {
+    const d = G.depart;
+    if (!d) return 0;
+    if (d.dit < 1 && G.countT >= 3 - d.duree) {
+      d.dit = 1; Audio_.starter('marques'); return 1;
+    }
+    if (d.dit < 2 && G.countT >= 3 - d.tenue) {
+      d.dit = 2; Audio_.starter('pret'); return 2;
+    }
+    return 0;
+  }
+
+  /**
+   * LE COUP DE PISTOLET.
+   *
+   * Le son, l'eclair du canon, la secousse. L'eclair n'est pas un ornement :
+   * un telephone tenu a bout de bras dans le bruit, et c'est l'oeil qui part
+   * en premier — comme sur une piste, ou le juge de depart leve son pistolet
+   * bien en vue.
+   */
+  function coupDePistolet() {
+    Audio_.starter('feu');
+    G.flash = 0.45; G.shake = 0.4;
+    if (G.depart) G.depart.dit = 3;
+  }
+
   function buildLevel(idx) {
     // Un index hors du tableau ne doit pas faire tomber le jeu, et le cas
     // n'est pas theorique : les stades hors serie n'existent que sur le canal
@@ -855,7 +1291,11 @@
       G.runners.push(r);
     });
     G.parts = [];
-    G.elapsed = 0; G.countT = 0; G.shake = 0; G.flash = 0;
+    G.elapsed = 0; G.shake = 0; G.flash = 0;
+    // Le depart de CETTE course : sa longueur, et l'heure de ses deux
+    // commandes. Le direct et le relais le reposeront sur l'heure annoncee par
+    // leur salle — voir liveDepart.
+    poserLeDepart(tirerLeDepart());
     G.stumbleFlash = 0; G.acc = 0;
     G.reactFlash = G.transFlash = G.falseFlash = 0;
     G.reactShown = G.transShown = false;
@@ -1132,10 +1572,17 @@
     return G.player.gradeHandoff((Number(ecartMs) || 0) / 1000);
   }
 
-  /** Cale le decompte sur le coup de pistolet annonce par la salle. */
-  function liveDepart(dansMs) {
+  /**
+   * Cale le decompte sur le coup de pistolet annonce par la salle.
+   *
+   * `departA` est la date du coup en temps serveur — la meme pour tout le
+   * monde. Elle ne sert pas a compter (chacun compte chez lui, sur l'ecart
+   * qu'il a mesure) mais a tirer la tenue du starter : c'est ce qui fait que
+   * les huit couloirs entendent « pret » au meme instant.
+   */
+  function liveDepart(dansMs, departA) {
     if (!G.liveOn) return;
-    G.countT = 3 - Math.max(0, dansMs) / 1000;
+    poserLeDepart(Math.max(0, dansMs) / 1000, departA == null ? null : departA);
     G.state = 'count';
   }
 
@@ -3711,8 +4158,175 @@
     ctx.restore();
   }
 
+  /* ----------------------------------------------------------- le starter */
+
+  /**
+   * LE JUGE DE DEPART, EN CHAIR ET EN OS.
+   *
+   * On l'entend depuis que le decompte a laisse la place a un starter ; il
+   * fallait aussi le voir. Trois positions, et rien de plus :
+   *
+   *   « a vos marques »  le pistolet pend le long du corps
+   *   « pret »           il leve le bras, l'arme vise le ciel
+   *   le coup            recul, eclair au canon, fumee qui monte
+   *
+   * Rien de tout cela n'est anime a la main : le canon prolonge l'avant-bras
+   * (voir `pose` dans sprinter-core.js), donc lever le bras suffit a lever
+   * l'arme. Le reste est du temps — `countT` avant le coup, `elapsed` apres.
+   *
+   * OU IL SE TIENT, ET POURQUOI DEVANT.
+   *
+   * Sur la pelouse, en dedans du premier couloir, et quelques metres DEVANT
+   * les blocs — c'est la place du starter sur un vrai stade. Il ne se met pas
+   * derriere : il faut que les huit coureurs le voient sans tourner la tete,
+   * et qu'ils partent vers lui plutot que de le laisser dans leur dos. A
+   * l'ecran, cela le pose dans la bande d'herbe en bas a gauche, juste devant
+   * la ligne, et les coureurs le depassent dans la premiere seconde.
+   */
+  const STARTER_D = 2.0;           // deux metres APRES la ligne, donc devant eux
+  const STARTER_COULOIR = -1.0;    // en dedans du premier couloir, sur l'herbe
+
+  /** Sa tenue : le blanc des officiels, et des chaussures de ville. */
+  const LOOK_STARTER = K.look({
+    build: 'm', skin: 'ambre', jersey: [234, 238, 246], shorts: [34, 38, 58],
+    shoe: [38, 40, 50], hair: 'crop', h: 1.78,
+  });
+
+  /**
+   * ET AU STADE DES ZEZE, LE STARTER N'EST PAS D'ICI.
+   *
+   * La finale intergalactique se court chez eux, pas chez nous : le juge de
+   * depart y est un autochtone — vert, deux antennes, un peu plus grand que
+   * nous et un peu plus fin. Rien d'autre ne change, ni le geste ni le
+   * pistolet : les regles de l'athletisme sont les memes dans toute la
+   * galaxie.
+   */
+  const LOOK_ALIEN = (() => {
+    // Le meme blanc d'officiel que son collegue d'ici : c'est ce qui le fait
+    // lire comme un starter et non comme un spectateur, et c'est aussi ce qui
+    // detache sa peau verte sur une piste violette.
+    const l = K.look({
+      build: 'm', skin: 'ambre', jersey: [230, 236, 250], shorts: [58, 26, 96],
+      shoe: [186, 128, 246], hair: 'shaved', h: 1.96,
+      morph: { sh: 0.92, hip: 0.90, arm: 1.16, leg: 1.14 },
+    });
+    // Une peau qui n'est dans aucune table de carnations, et c'est voulu :
+    // celles-la sont humaines, celle-ci ne l'est pas.
+    l.skin = [126, 216, 140];
+    l.hairCol = [126, 216, 140];
+    return l;
+  })();
+
+  /** L'eclair au canon, et la fumee qui monte. */
+  function dessinerLeCoup(ctx, x, y, t, k) {
+    ctx.save();
+    // L'eclair ne dure rien — un dixieme de seconde, comme le vrai.
+    if (t < 0.15) {
+      // Plein feu pendant quatre centiemes, puis il s'eteint. Un eclair qui
+      // commence deja a moitie efface ne ressemble a rien.
+      const a = t < 0.04 ? 1 : 1 - (t - 0.04) / 0.11;
+      const r = k * 0.5;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, 'rgba(255,255,242,' + (0.96 * a).toFixed(3) + ')');
+      g.addColorStop(0.35, 'rgba(255,214,120,' + (0.66 * a).toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(255,170,50,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+      // Quatre branches : c'est ce qui fait lire un eclair plutot qu'une
+      // lampe. Elles s'ecartent avec le temps, comme la lumiere se dilue.
+      ctx.strokeStyle = 'rgba(255,244,210,' + (0.95 * a).toFixed(3) + ')';
+      ctx.lineWidth = Math.max(1.8, k * 0.06);
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const ang = i * Math.PI / 2 + 0.5;
+        const l = r * (1.1 + 0.5 * (1 - a));
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.cos(ang) * l, y + Math.sin(ang) * l * 0.7);
+      }
+      ctx.stroke();
+    }
+    // La fumee : trois bouffees qui montent, s'ouvrent et s'effacent. C'est
+    // elle qui dit, une seconde plus tard, que le coup a bien ete tire.
+    for (let i = 0; i < 3; i++) {
+      const tt = t - i * 0.17;
+      if (tt <= 0 || tt > 1.7) continue;
+      const q = tt / 1.7;
+      const rr = k * (0.06 + 0.30 * q);
+      const yy = y - k * (0.10 + 0.72 * q) - i * k * 0.04;
+      const xx = x + k * 0.16 * q * (i - 1);
+      ctx.fillStyle = 'rgba(226,228,236,' + (0.36 * (1 - q) * (1 - q)).toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(xx, yy, rr, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawStarter(ctx) {
+    const T = G.track, d = G.depart;
+    if (!T || !d) return;
+    // Le coup est parti quand la course a commence : `elapsed` compte alors
+    // exactement le temps ecoule depuis, ce qui donne le recul, l'eclair et
+    // la fumee sans qu'on ait a tenir un chronometre de plus.
+    const tir = G.state === 'race' ? G.elapsed : -1;
+    if (G.state !== 'count' && !(tir >= 0 && tir < 2.6)) return;
+    // Pendant la presentation des athletes, il attend comme les autres.
+    const p = T.pos(STARTER_D, STARTER_COULOIR);
+    const g2 = ground(p[0], p[1]);
+    if (g2[0] < -240 || g2[0] > G.VW + 240 || g2[1] < -280 || g2[1] > G.VH + 260) return;
+
+    const alien = G.levelIdx === ETAPE_ZEZE;
+    const look = alien ? LOOK_ALIEN : LOOK_STARTER;
+    const m = scaleM(), k = m * (look.h / C.MODEL_H);
+
+    // Le bras monte au « pret », en une demi-seconde — un starter ne leve pas
+    // son arme d'un coup sec — et redescend une fois la course partie.
+    let leve = d.dit >= 2 ? clamp((G.countT - (3 - d.tenue)) / 0.45, 0, 1) : 0;
+    if (tir >= 0) leve = 1 - clamp((tir - 0.7) / 0.9, 0, 1);
+    const recul = tir >= 0 && tir < 1 ? 0.30 * Math.exp(-tir * 8) : 0;
+    const BAS = 0.12, HAUT = 2.98;
+    const bras = BAS + (HAUT - BAS) * leve + recul;
+
+    const person = {
+      look: look, stride: 0.55, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+      // Un seul bras travaille ; l'autre reste le long du corps. Le coude se
+      // deplie a mesure que le bras monte : on ne vise pas le ciel avec un
+      // bras casse.
+      //
+      // C'est le bras du COTE DE LA CAMERA qui tient l'arme. Sur l'autre, le
+      // corps la masque a moitie — et une arme a moitie cachee ne raconte pas
+      // grand-chose.
+      bras: [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
+      pistolet: -1,
+      // Les bulbes prennent l'accent du stade : le magenta des tribunes
+      // cosmos. Il est d'ici, lui, et cela se voit jusque sur sa tete.
+      antennes: alien ? [236, 132, 220] : null,
+    };
+    // Il fait face aux blocs, donc a la camera : demi-tour par rapport au sens
+    // de la course. Les coureurs, eux, sont dessines dans l'axe de leur
+    // course — de dos ; un starter de dos ne montrerait ni son bras ni son
+    // arme, et surtout ne regarderait personne.
+    const caps = personCapsules(person, T.heading(STARTER_D, 0) + Math.PI,
+                                0, false, !!T.curved);
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.beginPath();
+    ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
+    ctx.fill();
+    drawFacetFigure(ctx, caps, g2[0], g2[1], k);
+
+    // Le bout du canon, pour y poser l'eclair : c'est la derniere capsule que
+    // `pose` ajoute, et son premier bout. Le contrat est ecrit des deux cotes.
+    if (tir >= 0) {
+      const bout = caps[caps.length - 1][1];
+      const x = g2[0] + (bout[1] - bout[0]) * C.ISO_COS * k;
+      const y = g2[1] - (bout[0] + bout[1]) * C.ISO_SIN * k - bout[2] * k;
+      dessinerLeCoup(ctx, x, y, tir, k);
+    }
+  }
+
   function drawAthletes(ctx) {
     const T = G.track, m = scaleM();
+    // Le starter passe avant tout le monde : il se tient derriere la ligne,
+    // donc derriere les coureurs.
+    drawStarter(ctx);
     const vis = [];
     // A plusieurs, les adversaires en direct sont deja dans G.runners : le
     // fantome designe ne doit pas etre dessine une seconde fois par-dessus
@@ -3797,6 +4411,7 @@
     finirLesSaluts,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
+    poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle, coupDePistolet,
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,

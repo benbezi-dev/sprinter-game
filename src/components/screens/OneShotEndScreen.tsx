@@ -4,9 +4,10 @@ import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
+import { garder, oublier } from '@/game/record-attente';
 import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
@@ -15,6 +16,7 @@ import {
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
+import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
@@ -136,13 +138,23 @@ export function OneShotEndScreen() {
   const envoyer = async (nom: string, liste: RaceOutcome[]) => {
     saveName(nom);
     setTopStatus('sending');
-    try {
-      for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
-      primeTopNames();          // le plateau olympique se met a jour
-      setTopStatus('done');
-    } catch {
-      setTopStatus('error');
+    // Un refus sur une epreuve ne doit ni faire tomber les suivantes, ni
+    // emporter le chrono avec lui : chacune est tentee pour elle-meme, et
+    // celles qui echouent sont gardees pour un prochain envoi. Un `for` qui
+    // laisse filer la premiere erreur abandonnait les deux dernieres courses
+    // d'un one shot a cause de la premiere.
+    let refuse = false;
+    for (const t of liste) {
+      try {
+        await submitRaceRecord(t.race, nom, t.ms);
+        oublier(t.race);
+      } catch (e) {
+        garder(t.race, t.ms, nom, raisonDe(e));
+        refuse = true;
+      }
     }
+    primeTopNames();            // le plateau olympique se met a jour
+    setTopStatus(refuse ? 'error' : 'done');
   };
 
   // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
@@ -204,6 +216,16 @@ export function OneShotEndScreen() {
   async function partagerLaVideo() {
     setVideo(await partagerLeFilm());
   }
+
+  /**
+   * La distance ou ce duel a compte.
+   *
+   * Elle sert aux annonces de montee et de descente, qui ne veulent plus rien
+   * dire sans elle : les niveaux ne sont pas partages, on monte sur 400 m et
+   * pas partout. Le serveur la dit quand il repond ; sinon c'est la course
+   * qu'on vient de faire, ce qui revient au meme et tient meme hors ligne.
+   */
+  const disciplineCourue = nomDiscipline(cleDiscipline(shotRaces as string[]));
 
   const beaten = !!challenge && complete && runTime < ghostTime;
   /**
@@ -674,6 +696,7 @@ export function OneShotEndScreen() {
                       ${mesPoints.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                       {N.t(mesPoints.monte ? 'duel_promu' : 'duel_relegue', {
                         r: nomDuRang(mesPoints.rang.etage, mesPoints.rang.division),
+                        e: disciplineCourue,
                       })}
                     </span>
                   )}
@@ -803,6 +826,7 @@ export function OneShotEndScreen() {
                           ${duel.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                           {N.t(duel.monte ? 'duel_promu' : 'duel_relegue', {
                             r: nomDuRang(duel.rang.etage, duel.rang.division),
+                            e: duel.epreuve ? nomDiscipline(duel.epreuve) : disciplineCourue,
                           })}
                         </span>
                       )}
