@@ -305,15 +305,23 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
  *
  * La position vient du serveur (`barre`) et jamais d'un comptage local : voir
  * le champ dans `MaSelection`.
+ *
+ * `epreuve` est la discipline du classement affiché, et c'est une quatrième
+ * raison de ne rien tracer : les niveaux ne sont pas partagés, une édition se
+ * court sur UNE distance, et sa barre n'a de sens que dans le classement de
+ * cette distance-là. Tracée dans celui du 400 m, la barre d'un championnat du
+ * 100 m désignerait des gens qui ne courent pas — et le rang lu au-dessus
+ * d'elle serait celui d'une autre course.
  */
-export function useBarreSelection(rows: { name: string }[]) {
+export function useBarreSelection(rows: { name: string }[], epreuve?: string) {
   const s = useMaSelection();
   return React.useMemo(() => {
     if (!s || !s.edition || !s.pays || s.gele || !s.barre) return null;
+    if (epreuve && s.epreuve && s.epreuve !== epreuve) return null;
     const visible = rows.some(r => r.name.trim().toLowerCase() === s.barre);
     if (!visible) return null;
     return { apres: s.barre, titre: s.titre, places: s.places, cloture: s.cloture };
-  }, [s, rows]);
+  }, [s, rows, epreuve]);
 }
 
 /** La ligne elle-même : un trait, un nom, un décompte. */

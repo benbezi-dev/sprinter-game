@@ -356,21 +356,32 @@ export async function choisirPays(db, nameKey, pays) {
   return { ok: true, pays: p, continent: continentDe(p) };
 }
 
-/** Combien de joueurs classes et actifs un pays compte-t-il ? */
-export async function effectifPays(db, pays, fenetreJours) {
+/**
+ * Combien de joueurs classes et actifs un pays compte-t-il SUR CETTE EPREUVE ?
+ *
+ * La distance n'est pas un detail de comptage : depuis que les niveaux ne sont
+ * plus partages, un pays peut avoir quarante joueurs classes au 100 m et six
+ * au 400 m. Compter tous ses joueurs, toutes distances confondues, lui
+ * ouvrirait un championnat du 400 m que six personnes disputeraient — et la
+ * grille de trente-deux ne se remplirait qu'a la cloture, trop tard.
+ */
+export async function effectifPays(db, pays, fenetreJours, epreuve = EPREUVE_DEFAUT) {
   await ensureChampTables(db);
   await ensureDuelTables(db);
   const depuis = Date.now() - fenetreJours * 24 * 3600 * 1000;
   const r = await db.prepare(
     `SELECT COUNT(*) AS n
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE g.pays = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?`
-  ).bind(String(pays).toUpperCase(), depuis).first();
+      WHERE g.pays = ? AND d.epreuve = ?
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?`
+  ).bind(String(pays).toUpperCase(), String(epreuve || EPREUVE_DEFAUT), depuis).first();
   return (r && r.n) || 0;
 }
 
-/** Les pays capables de tenir leur championnat ce cycle-ci. */
-export async function paysEligibles(db) {
+/** Les pays capables de tenir leur championnat ce cycle-ci, sur l'epreuve ou
+ *  il se courra. Un pays de sprinters tient son 100 m et pas son 400 m : c'est
+ *  la meme regle qu'avant, appliquee au seul classement qui la concerne. */
+export async function paysEligibles(db, epreuve = EPREUVE_DEFAUT) {
   await ensureChampTables(db);
   await ensureDuelTables(db);
   const cfg = ECHELONS.national;
@@ -378,10 +389,10 @@ export async function paysEligibles(db) {
   const { results } = await db.prepare(
     `SELECT g.pays AS pays, COUNT(*) AS n
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      WHERE d.epreuve = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
       GROUP BY g.pays
       ORDER BY n DESC`
-  ).bind(depuis).all();
+  ).bind(String(epreuve || EPREUVE_DEFAUT), depuis).all();
   return (results || []).map(r => ({
     pays: r.pays, joueurs: r.n,
     eligible: r.n >= cfg.minJoueurs,
@@ -428,9 +439,16 @@ function code(n = 8) {
  * plutot que de se lire sur l'horloge : la cloture doit pouvoir dire « un duel
  * classe dans les soixante jours avant mercredi 23h59 » et non « avant
  * l'instant ou le cron est passe ».
+ *
+ * `epreuve` est celle de l'edition, et le classement lu est le sien. Une
+ * edition du 400 m se remplissait autrefois avec les meilleurs d'un classement
+ * unique, c'est-a-dire, en pratique, avec les meilleurs du 100 m : on
+ * qualifiait pour un tour de piste des gens dont personne — eux compris — ne
+ * savait ce qu'ils y valaient.
  */
 async function classement(db, {
   pays = null, continent = null, exclure, limite, maintenant = Date.now(),
+  epreuve = EPREUVE_DEFAUT,
 }) {
   await ensureDuelTables(db);
   const depuis = maintenant - ECHELONS.national.fenetreActiviteJours * JOUR;
@@ -440,10 +458,12 @@ async function classement(db, {
     `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force,
             d.palier AS palier, d.lp AS lp
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE ${ou} AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      WHERE ${ou} AND d.epreuve = ?
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
       ORDER BY ${ordreClassement('d.')}
       LIMIT ?`
-  ).bind(...args, depuis, limite + (exclure ? exclure.size : 0)).all();
+  ).bind(...args, String(epreuve || EPREUVE_DEFAUT), depuis,
+         limite + (exclure ? exclure.size : 0)).all();
   const pris = [];
   for (const r of results || []) {
     if (exclure && exclure.has(r.cle)) continue;
@@ -460,15 +480,21 @@ async function classement(db, {
  * base ou personne n'a encore joue de duel, et lire une table absente y faisait
  * echouer toute l'ouverture avec une erreur cinq cents.
  */
-async function championsEnTitre(db, echelon, filtreZone) {
+async function championsEnTitre(db, echelon, filtreZone, epreuve = EPREUVE_DEFAUT) {
   await ensureDuelTables(db);
+  // Le titre qualifie d'office ; c'est la FORCE qui seme, et elle se lit sur
+  // la distance du jour. Un champion national du 100 m qualifie pour le
+  // continental du 100 m y arrive avec ce qu'il vaut sur 100 m — et non avec
+  // un chiffre moyenne sur trois distances, qui le placerait tete de serie
+  // grace a des courses qu'il n'a pas faites ici.
   const { results } = await db.prepare(
     `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
             COALESCE(d.mmr, 0) AS force, d.palier AS palier, d.lp AS lp
-       FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
+       FROM champ_titres t
+       LEFT JOIN duel_players d ON d.name_key = t.name_key AND d.epreuve = ?
       WHERE t.echelon = ? AND t.expire_le > ?
       ORDER BY t.sacre_le DESC`
-  ).bind(echelon, Date.now()).all();
+  ).bind(String(epreuve || EPREUVE_DEFAUT), echelon, Date.now()).all();
 
   const vus = new Set();
   const sortie = [];
@@ -492,19 +518,20 @@ async function championsEnTitre(db, echelon, filtreZone) {
  * quand meme : c'est le seul moyen de repondre a qui reclame sa place. Sans
  * eux, la selection est une affirmation qu'on ne peut pas relire.
  */
-async function pool(db, echelon, zone, maintenant = Date.now()) {
+async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT) {
   // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
   // suivants qu'on garde pour l'archive de la cloture.
   const large = FORMAT.partants + SUIVANTS_GARDES;
+  const ep = String(epreuve || EPREUVE_DEFAUT);
 
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
-    const n = await effectifPays(db, zone, cfg.fenetreActiviteJours);
+    const n = await effectifPays(db, zone, cfg.fenetreActiviteJours, ep);
     if (n < cfg.minJoueurs) {
       return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
     }
     const l = await classement(db, {
-      pays: zone, exclure: new Set(), limite: large, maintenant,
+      pays: zone, exclure: new Set(), limite: large, maintenant, epreuve: ep,
     });
     return {
       joueurs: l.slice(0, FORMAT.partants),
@@ -517,8 +544,8 @@ async function pool(db, echelon, zone, maintenant = Date.now()) {
   // qualifies d'office, puis un repechage au classement de la zone jusqu'a 32.
   const estContinental = echelon === 'continental';
   const champions = estContinental
-    ? await championsEnTitre(db, 'national', z => continentDe(z) === zone)
-    : await championsEnTitre(db, 'continental', null);
+    ? await championsEnTitre(db, 'national', z => continentDe(z) === zone, ep)
+    : await championsEnTitre(db, 'continental', null, ep);
 
   const minimum = MIN_DOFFICE[echelon] || 0;
   if (champions.length < minimum) {
@@ -532,7 +559,7 @@ async function pool(db, echelon, zone, maintenant = Date.now()) {
   const exclure = new Set(champions.map(c => c.cle));
   const complement = await classement(db, {
     continent: estContinental ? zone : null,
-    exclure, limite: large - champions.length, maintenant,
+    exclure, limite: large - champions.length, maintenant, epreuve: ep,
   });
 
   // La barre tombe apres les trente-deux, champions d'office compris : c'est
@@ -635,9 +662,15 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
   // volontaire : un continental s'annonce AVANT que les nationaux aient
   // couronne les champions qui le rempliront. Compter ses qualifies d'office a
   // l'annonce reviendrait a refuser tous les continentaux du cycle.
+  //
+  // Le compte est celui de LA DISTANCE annoncee. Un pays de sprinters a de
+  // quoi remplir son 100 m sans avoir de quoi remplir son 400 m, et compter
+  // ses joueurs toutes distances confondues lui promettrait une edition dont
+  // la grille resterait vide a la cloture — c'est-a-dire une annulation
+  // annoncee, exactement ce que cette verification existe pour eviter.
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
-    const n = await effectifPays(db, z, cfg.fenetreActiviteJours);
+    const n = await effectifPays(db, z, cfg.fenetreActiviteJours, ep);
     if (n < cfg.minJoueurs) {
       return {
         erreur: 'pays trop petit', joueurs: n,
@@ -703,7 +736,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   const intitule = e.echelon === 'mondial'
     ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
 
-  const p = await pool(db, e.echelon, e.zone, maintenant);
+  const p = await pool(db, e.echelon, e.zone, maintenant, ep);
   const manque = !p.erreur && p.joueurs.length < FORMAT.partants;
 
   // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
@@ -870,7 +903,7 @@ export async function ouvrirCycle(db, {
   const ouvertes = [], ecartes = [];
 
   if (echelon === 'national') {
-    for (const p of await paysEligibles(db)) {
+    for (const p of await paysEligibles(db, epreuve || EPREUVE_DEFAUT)) {
       if (!p.eligible) { ecartes.push({ zone: p.pays, raison: 'pays trop petit', joueurs: p.joueurs, repli: p.repli }); continue; }
       const r = await acte(db, { echelon: 'national', zone: p.pays, debutSamedi, epreuve });
       if (r.erreur) ecartes.push({ zone: p.pays, raison: r.erreur, ...r });
@@ -1053,12 +1086,20 @@ export async function rangSelection(db, nameKey) {
   }
 
   // Avant la cloture : le classement du moment, dans l'ordre qui selectionne.
+  //
+  // Celui de LA DISTANCE ANNONCEE, et il faut le dire au jeu : la barre se
+  // trace dans un classement, et celui du 100 m ne selectionne personne pour
+  // une edition du 400 m. `epreuve` voyage donc avec le rang — l'ecran ne
+  // dessine la barre que dans le classement ou elle veut dire quelque chose.
+  const epSelection = (ed && ed.epreuve) || EPREUVE_DEFAUT;
   const { results } = await db.prepare(
     `SELECT d.name_key AS cle
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
-      WHERE g.pays = ? AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
+      WHERE g.pays = ? AND d.epreuve = ?
+        AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
       ORDER BY ${ordreClassement('d.')}`
-  ).bind(g.pays, Date.now() - ECHELONS.national.fenetreActiviteJours * JOUR).all();
+  ).bind(g.pays, epSelection,
+         Date.now() - ECHELONS.national.fenetreActiviteJours * JOUR).all();
 
   const i = (results || []).findIndex(r => r.cle === k);
   const rang = i < 0 ? null : i + 1;

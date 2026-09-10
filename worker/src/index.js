@@ -1,6 +1,7 @@
 import {
   recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
+  mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
 import { poserMot, MAX_TEXTE } from './mot.js';
 import { nettoyerInsta } from './insta.js';
@@ -1486,8 +1487,14 @@ async function servir(request, env, ctx, porteur) {
       const sous = url.pathname.slice('/champ/'.length);
 
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
+      //
+      // Sur une epreuve, forcement : un pays de sprinters tient son 100 m sans
+      // tenir son 400 m, et une liste sans distance ne repondrait a aucune
+      // question. Le 100 m par defaut, comme partout ailleurs.
       if (sous === 'pays' && request.method === 'GET') {
-        return json({ pays: await paysEligibles(env.DB) });
+        const ep = url.searchParams.get('epreuve') || '100';
+        if (!ALLOWED_RACES.has(ep)) return json({ error: 'epreuve inconnue', epreuve: ep }, 400);
+        return json({ epreuve: ep, pays: await paysEligibles(env.DB, ep) });
       }
 
       // Le joueur corrige son pays.
@@ -2006,7 +2013,12 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/duels' && request.method === 'GET') {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
-      const board = await duelBoard(env.DB);
+      // UN CLASSEMENT PAR DISCIPLINE. Sans `epreuve`, c'est celui du 100 m —
+      // la distance par defaut du jeu — et non un melange des trois : un
+      // classement toutes distances confondues annoncerait a un sprinter une
+      // division qu'il n'a gagnee nulle part.
+      const epreuve = disciplineValide(url.searchParams.get('epreuve'));
+      const board = await duelBoard(env.DB, epreuve);
 
       // Le drapeau et la medaille se posent ici, pas dans duelBoard : le
       // classement des duels ne doit rien savoir des championnats, sans quoi
@@ -2028,6 +2040,12 @@ async function servir(request, env, ctx, porteur) {
       }
 
       const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      // Mes divisions sur les AUTRES distances. L'accueil n'a la place que
+      // d'un ecusson et doit bien dire duquel il parle ; l'ecran du classement
+      // s'en sert pour montrer, sous le selecteur, ou en est le joueur sur ce
+      // qu'il n'est pas en train de regarder. Une liste vide pour qui n'a
+      // encore joue aucun duel.
+      const mes = nom ? await mesDisciplines(env.DB, nom) : [];
       return json({
         // L'echelle voyage avec le classement : le jeu doit pouvoir dessiner
         // une progression — « il te reste tant avant la division suivante » —
@@ -2037,7 +2055,12 @@ async function servir(request, env, ctx, porteur) {
           legende: LEGENDE, lp_par_palier: LP_PAR_PALIER,
         },
         bareme: { lanceur: LP.lanceur, releveur: LP.releveur },
-        classement: board, moi,
+        // La discipline lue, et celles qu'un ecran peut proposer. Les combines
+        // — un 100 + 200 court d'un bloc — ont leur classement mais ne
+        // figurent pas dans cette liste : on y entre en en courant un, pas en
+        // le choisissant dans un menu de sept boutons.
+        epreuve, epreuves: DISCIPLINES_SIMPLES,
+        classement: board, moi, mes_epreuves: mes,
       });
     }
 
@@ -2988,15 +3011,24 @@ async function servir(request, env, ctx, porteur) {
         const { results: pm } = await DB.prepare(
           `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
              FROM duel_results GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        // Une ligne par joueur ET par discipline : ce qui se compte en
+        // JOUEURS se compte donc en cles distinctes. Un COUNT(*) comptait
+        // trois fois celui qui court les trois distances, et le nombre
+        // d'inscrits aurait triple sans que personne n'arrive.
         const p = await DB.prepare(
           `SELECT COALESCE(SUM(launched),0) AS lances,
                   COALESCE(SUM(received),0) AS releves,
-                  COUNT(*) AS inscrits,
-                  SUM(CASE WHEN wins+losses+draws > 0 THEN 1 ELSE 0 END) AS classes
+                  COUNT(DISTINCT name_key) AS inscrits,
+                  COUNT(DISTINCT CASE WHEN wins+losses+draws > 0
+                                      THEN name_key END) AS classes
              FROM duel_players`).first();
+        // La repartition des divisions, discipline par discipline : c'est le
+        // seul decoupage qui veuille dire quelque chose maintenant qu'un meme
+        // joueur peut etre elite sur 100 m et departemental sur 400 m.
         const { results: paliers } = await DB.prepare(
-          `SELECT palier, COUNT(*) AS n FROM duel_players
-             WHERE wins+losses+draws > 0 GROUP BY palier ORDER BY palier`).all();
+          `SELECT epreuve, palier, COUNT(*) AS n FROM duel_players
+             WHERE wins+losses+draws > 0
+             GROUP BY epreuve, palier ORDER BY epreuve, palier`).all();
         return {
           joues: r?.joues || 0,
           issues: { lanceur: r?.lanceur_gagne || 0, releveur: r?.releveur_gagne || 0, nul: r?.nul || 0 },
@@ -3123,7 +3155,12 @@ async function servir(request, env, ctx, porteur) {
         q1(`SELECT COUNT(*) AS n FROM challenge_attempts`),
         q1(`SELECT COUNT(*) AS n FROM duel_results`),
         qN(`SELECT outcome, COUNT(*) AS n FROM duel_results GROUP BY outcome`),
-        qN(`SELECT name, launched, wins, losses, draws FROM duel_players ORDER BY launched DESC LIMIT 10`),
+        // Les lanceurs se comptent sur toutes leurs disciplines : c'est la
+        // personne qu'on regarde ici, pas son classement au 200 m.
+        qN(`SELECT name, SUM(launched) AS launched, SUM(wins) AS wins,
+                   SUM(losses) AS losses, SUM(draws) AS draws
+              FROM duel_players GROUP BY name_key
+             ORDER BY launched DESC LIMIT 10`),
         q1(`SELECT COUNT(*) AS n FROM relay_teams`),
         q1(`SELECT COUNT(*) AS n FROM relay_scores`),
         q1(`SELECT COUNT(*) AS n FROM champ_editions`),
@@ -3269,7 +3306,10 @@ async function servir(request, env, ctx, porteur) {
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = cleanName(name).trim().toLowerCase();
-      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name));
+      // Le compteur est tenu par discipline, comme le reste : « douze defis
+      // lances » ne veut plus rien dire quand les trois distances ne sont plus
+      // le meme classement.
+      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name), races);
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
@@ -3450,6 +3490,11 @@ async function servir(request, env, ctx, porteur) {
         opponentName: cleanName(name),
         challengerMs: ch.total_ms,
         opponentMs: t,
+        // SUR QUOI le duel s'est couru, donc quel classement il deplace. Les
+        // epreuves viennent du defi et jamais de la tentative : c'est le
+        // lanceur qui a pose le programme, et un client qui annoncerait autre
+        // chose se classerait sur une distance qu'il n'a pas courue.
+        epreuves: epreuvesDuDefi,
       });
       if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
 

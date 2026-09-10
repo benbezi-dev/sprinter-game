@@ -3,7 +3,10 @@ import { SprinterApp } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { Swords, ChevronUp, ChevronDown, Loader2, Radio, Check } from 'lucide-react';
-import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
+import {
+  fetchDuels, defierDepuisClassement, cleDiscipline, nomDiscipline,
+  type DuelBoard, type DuelRow, type MonRang,
+} from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
 import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
@@ -120,23 +123,39 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
   const [chargement, setChargement] = useState(true);
   const moiKey = (getSavedName() || '').trim().toLowerCase();
 
+  /**
+   * La discipline affichée, déduite du sélecteur.
+   *
+   * Le sélecteur ne préréglait que le duel à venir ; il commande maintenant
+   * aussi le classement qu'on lit, parce qu'il n'y en a plus un seul. C'est le
+   * même geste et la même ligne à l'écran : choisir le 400 m, c'est demander
+   * qui est fort sur 400 m ET partir se battre dessus.
+   */
+  const discipline = cleDiscipline(choix);
+
   useEffect(() => {
     let annule = false;
-    fetchDuels().then(b => { if (!annule) { setBoard(b); setChargement(false); } });
+    setChargement(true);
+    fetchDuels(discipline).then(b => { if (!annule) { setBoard(b); setChargement(false); } });
     // Le classement bouge pendant qu'on le regarde : on rafraichit sans
     // remettre le repere de visite, sinon les fleches s'effaceraient seules.
     const id = setInterval(() => {
-      fetchDuels(false).then(b => { if (!annule && b) setBoard(b); });
+      fetchDuels(discipline, false).then(b => { if (!annule && b) setBoard(b); });
     }, 20000);
     return () => { annule = true; clearInterval(id); };
-  }, []);
+  }, [discipline]);
 
   const rows = board?.classement || [];
   const bareme = board?.bareme;
   const reduit = useAnimationsReduites();
   // Où tombe la barre des sélectionnés, si elle tombe quelque part. Le hook
   // rend `null` dès qu'elle ne serait pas exacte — voir useBarreSelection.
-  const barre = useBarreSelection(rows);
+  // La discipline en fait partie : le championnat de France du 100 m ne
+  // sélectionne personne dans le classement du 400 m, et y tracer sa barre
+  // désignerait des gens qui ne courent pas.
+  const barre = useBarreSelection(rows, discipline);
+  // Mes divisions ailleurs, pour la ligne qui les rappelle sous la mienne.
+  const ailleurs = (board?.mes_epreuves || []).filter(r => r.epreuve !== discipline);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center
@@ -176,14 +195,18 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
           </p>
         )}
 
-        {/* Sur quoi se court le duel.
+        {/* La discipline : celle du classement affiché, et celle du duel.
             Meme selecteur qu'au TOP 500, au meme endroit de l'ecran : c'est le
             meme choix, et deux presentations differentes du meme choix se
             paient a chaque fois qu'on passe de l'un a l'autre.
             Il est PREREGLE sur ce qu'on vient de courir quand on arrive d'une
             course, et sur le 100 m sinon — jamais vide : un ecran ou il faut
             choisir avant de pouvoir agir demande deux gestes la ou il en
-            fallait un. */}
+            fallait un.
+            Depuis que les niveaux ne sont plus partagés, il fait aussi CHANGER
+            DE CLASSEMENT : il y a une échelle par distance, et la montrer
+            revient à répondre à la seule question qu'on se pose ici — qui est
+            fort sur ce que je m'apprête à courir. */}
         <div className="w-full flex flex-col gap-1.5">
           <span className="text-[9px] md:text-[10px] font-bold tracking-widest
                            text-muted-foreground text-center">
@@ -228,7 +251,8 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
             </div>
             {/* Le rang en entier, sur sa propre ligne : c'est la seule ligne
                 de l'ecran ou il a la place de s'ecrire, et c'est celle qu'on
-                vient lire. */}
+                vient lire. Sans la distance : elle est écrite en toutes
+                lettres dans le sélecteur, juste au-dessus. */}
             <Ecusson etage={board.moi.etage} division={board.moi.division}
                      className="self-start" />
             {board.echelle && board.moi.etage !== 'legende' && (
@@ -259,7 +283,34 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
         )}
         {!chargement && !board?.moi && (
           <div className="w-full rounded-xl border border-white/10 bg-black/25 px-4 py-2 text-center">
-            <span className="text-[10px] md:text-xs text-muted-foreground">{N.t('duel_unranked')}</span>
+            <span className="text-[10px] md:text-xs text-muted-foreground">
+              {N.t(ailleurs.length ? 'duel_unranked_ici' : 'duel_unranked')}
+            </span>
+          </div>
+        )}
+
+        {/* MES AUTRES DISTANCES.
+            C'est la ligne qui rend le changement visible : être régional sur
+            100 m et débutant sur 400 m n'est plus une contradiction, c'est ce
+            que raconte cette rangée. Elle ne s'affiche que s'il y a autre
+            chose à dire — un joueur qui n'a couru qu'une distance n'a pas
+            besoin qu'on lui rappelle qu'il n'en a couru qu'une. */}
+        {!chargement && ailleurs.length > 0 && (
+          <div className="w-full flex flex-col gap-1">
+            <span className="text-[9px] font-bold tracking-widest text-muted-foreground/80">
+              {N.t('duel_ailleurs')}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {ailleurs.map((r: MonRang) => (
+                <button key={r.epreuve}
+                        onClick={() => setChoix(r.epreuve.split('+'))}
+                        title={nomDiscipline(r.epreuve)}
+                        className="rounded-md hover:opacity-80 transition-opacity">
+                  <Ecusson etage={r.etage} division={r.division}
+                           epreuve={r.epreuve} compact />
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

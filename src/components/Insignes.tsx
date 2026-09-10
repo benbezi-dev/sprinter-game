@@ -88,7 +88,7 @@ export function Medaille({ m, taille = 'petit' }: {
 /* ------------------------------------------------------------- l'ecusson */
 
 import { SprinterApp } from '@/game/engine';
-import type { Etage } from '@/game/duels';
+import { nomDiscipline, type Etage } from '@/game/duels';
 
 /**
  * La couleur d'un etage.
@@ -129,17 +129,30 @@ function abrege(etage: Etage, division: number): string {
   return division > 0 ? `${court}${ROMAINS[division] || ''}` : court;
 }
 
-export function Ecusson({ etage, division, lp, compact = false, className = '' }: {
-  etage: Etage; division: number; lp?: number;
+/**
+ * `epreuve` nomme la DISCIPLINE de ce rang, et l'ecusson ne devrait presque
+ * jamais s'en passer.
+ *
+ * Les niveaux ne sont pas partagés : « NATIONAL II » tout seul ne dit pas sur
+ * quoi. Dans une liste on l'omet — l'écran entier porte déjà la distance en
+ * titre, et la répéter sur trois cents lignes ne dirait rien de plus — mais
+ * partout où l'écusson voyage seul, sur l'accueil notamment, il la porte.
+ */
+export function Ecusson({ etage, division, lp, epreuve, compact = false, className = '' }: {
+  etage: Etage; division: number; lp?: number; epreuve?: string | null;
   compact?: boolean; className?: string;
 }) {
   if (!etage) return null;
   const teinte = TEINTES[etage] || TEINTES.departemental;
   const complet = nomDuRang(etage, division);
+  const distance = epreuve ? nomDiscipline(epreuve) : '';
+  const lu = distance ? `${distance}, ${complet}` : complet;
   return (
     <span className={`shrink-0 inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded-md
                       border font-mono text-[9px] tracking-widest ${teinte} ${className}`}
-          title={complet} aria-label={lp != null ? `${complet}, ${lp}` : complet}>
+          title={distance ? `${complet} — ${distance}` : complet}
+          aria-label={lp != null ? `${lu}, ${lp}` : lu}>
+      {distance && <span className="opacity-70" aria-hidden>{distance}</span>}
       <span className="font-bold" aria-hidden>
         {compact ? abrege(etage, division) : complet}
       </span>
