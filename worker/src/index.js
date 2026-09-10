@@ -106,6 +106,13 @@ const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
 const MIN_TIME_MS = 1000;       // en dessous, forcement invalide
 const MAX_TIME_MS = 20 * 60000; // 20 minutes, plafond large
+// ATTENTION EN Y TOUCHANT. NO_RUN_MS, plus bas, vaut exactement MAX_TIME_MS,
+// et ne franchit donc ce plafond que parce que le test est `>` et non `>=`.
+// C'est le cumul sentinelle qu'envoie TOUT record du monde couru hors
+// carriere : baisser le plafond d'un millieme referait de chacun d'eux un 400
+// silencieux. /submit ne depend plus de cette coincidence — il laisse passer
+// la sentinelle explicitement. Les autres routes n'attendent que de vrais
+// chronos et gardent le plafond tel quel.
 // Un defi porte les traces des courses de son auteur, pour que l'adversaire
 // puisse l'affronter en fantome. On plafonne pour qu'un client ne puisse pas
 // remplir la base : 6 epreuves, ~13 releves/s, largement de quoi tenir un
@@ -1344,8 +1351,14 @@ async function servir(request, env, ctx, porteur) {
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
+      // Le cumul sentinelle n'est pas un chrono : il dit « pas de parcours
+      // complet derriere », et c'est ce que porte tout record du monde couru
+      // hors carriere. Il passe donc quel que soit le plafond des vrais
+      // chronos. La garde est ICI et pas dans MAX_TIME_MS : elargir le plafond
+      // partage desserrerait du meme geste /race, /objectif/tentative et les
+      // deux routes de duel, qui n'attendent que des courses reelles.
       const t = Math.round(Number(time_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
+      if (t !== NO_RUN_MS && (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS)) {
         return json({ error: 'temps invalide' }, 400);
       }
       // le meilleur chrono individuel ne peut pas depasser le temps total
