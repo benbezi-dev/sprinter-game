@@ -79,14 +79,33 @@ const course = await poste('/race', {
   device_id: intrus, name: nom, race_key: '100', time_ms: 8220,
   mode: 'oneshot', level_idx: 0,
 });
-ok('/race refuse en 403', course.statut === 403, String(course.statut));
-ok('...et le dit comme avant', course.corps.pris === true && course.corps.error === 'nom reserve',
-   JSON.stringify(course.corps));
+// LE POINT CENTRAL. /race rendait 403 et jetait la course : des jours de jeu
+// et un record du monde ont disparu ainsi. Il garde desormais la course et
+// n'ecarte que le nom conteste.
+ok('/race ne rejette plus la course', course.statut === 200, String(course.statut));
+ok('...et signale le nom ecarte', course.corps.nom_refuse === true, JSON.stringify(course.corps));
+ok('...sans annoncer de record a un anonyme', course.corps.record === null,
+   JSON.stringify(course.corps.record));
+
+const gardee = await lis(`/races?device_id=${intrus}&race=100`);
+const laCourse = (gardee.corps.courses || []).find(c => c.time_ms === 8220);
+ok('la course est bel et bien enregistree', !!laCourse,
+   JSON.stringify(gardee.corps.courses || []).slice(0, 120));
+
+// Et le classement, lui, reste protege : c'est l'attribution qu'on refuse,
+// pas la course. Aucune ligne ne doit naitre pour l'intrus.
+const classement = await lis('/leaderboard?race=100');
+const usurpe = (classement.corps.entries || []).some(
+  x => String(x.name || '').toLowerCase() === cle && x.best_split_ms === 8220);
+ok('le classement n a pas ete usurpe', !usurpe,
+   JSON.stringify((classement.corps.entries || []).slice(0, 3)));
 
 const envoi = await poste('/submit', {
   device_id: intrus, race_key: '100', name: nom, time_ms: 1200000, best_split_ms: 8220,
 });
-ok('/submit refuse en 403', envoi.statut === 403, String(envoi.statut));
+// /submit, lui, refuse toujours : ecrire au classement sous le nom d'un autre
+// n'a pas d'equivalent inoffensif, contrairement a garder une course.
+ok('/submit refuse toujours en 403', envoi.statut === 403, String(envoi.statut));
 
 // Deux fois la meme route : le compteur doit s'incrementer, pas se dupliquer.
 await poste('/submit', {

@@ -2615,11 +2615,32 @@ async function servir(request, env, ctx, porteur) {
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
+      /* UNE COURSE NE SE JETTE PAS.
+
+         Cette route rendait 403 et n'ecrivait rien quand le nom n'appartenait
+         pas a l'appareil. La regle du nom etait bonne ; la sanction, non. Un
+         joueur qui change de telephone garde son nom dans son navigateur et
+         perd le droit de l'employer : chacune de ses courses partait alors a
+         la poubelle, sans qu'il le sache et sans que personne le sache. Des
+         jours de jeu ont disparu ainsi, record du monde compris.
+
+         Ce qu'il fallait refuser, c'est l'ATTRIBUTION, pas la course. On
+         l'enregistre donc sous cet appareil sans le nom conteste — le
+         classement reste protege, `noterRecord` ne cree aucune ligne pour un
+         anonyme — et le jour ou le joueur relie son appareil, `recalculerRecords`
+         retrouve ces courses et les lui rend.
+
+         Et on le DIT au jeu, qui n'avait aucun moyen de l'apprendre : c'est
+         `nom_refuse` qui allume l'avertissement sur la puce du nom. */
       const cleaned = cleanName(name);
       const key = cleaned.trim().toLowerCase();
+      let nomRefuse = false;
+      let nom = cleaned, cle = key;
       if (!await peutUtiliser(env.DB, key, device_id)) {
         ctx.waitUntil(noterRefus(env.DB, { route: '/race', nameKey: key, deviceId: device_id }));
-        return json({ error: 'nom reserve', pris: true }, 403);
+        nomRefuse = true;
+        nom = 'Anonyme';
+        cle = 'anonyme';
       }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
       const md = mode === 'oneshot' ? 'oneshot' : 'campaign';
@@ -2627,7 +2648,7 @@ async function servir(request, env, ctx, porteur) {
       await env.DB.prepare(
         `INSERT INTO races (device_id, name_key, name, race_key, time_ms, mode, level_idx, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(device_id, key, cleaned, race_key, t, md, lvl, Date.now()).run();
+      ).bind(device_id, cle, nom, race_key, t, md, lvl, Date.now()).run();
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -2647,11 +2668,11 @@ async function servir(request, env, ctx, porteur) {
       let record = null;
       try {
         const r = await noterRecord(env.DB, {
-          deviceId: device_id, epreuve: race_key, nom: cleaned, valeur: t,
+          deviceId: device_id, epreuve: race_key, nom, valeur: t,
         });
         if (r.record) record = { ancien_ms: r.ancien, ms: r.valeur };
       } catch (e) { /* le record se rattrapera au recalcul */ }
-      return json({ ok: true, record });
+      return json({ ok: true, record, nom_refuse: nomRefuse });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un

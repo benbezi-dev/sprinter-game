@@ -18,6 +18,54 @@ function keepCode(code: string) {
   try { localStorage.setItem(CODE_KEY, code); } catch { /* sans memoire */ }
 }
 
+/* ---------------------------------------------------------------------------
+   LE NOM QUI N'EST PLUS LE SIEN, ICI
+   ---------------------------------------------------------------------------
+   Un nom appartient a l'appareil qui l'a reserve. Changer de telephone, ou
+   simplement vider son navigateur, tire un nouvel identifiant d'appareil : le
+   nom reste dans le stockage local, le droit de l'employer non.
+
+   Le jeu ne s'en apercevait JAMAIS. Il continuait de courir, d'envoyer, et le
+   serveur refusait tout en silence — `pushRace` est un envoi sans retour, et
+   personne ne lisait la reponse. Un joueur a perdu des jours de courses et un
+   record du monde de cette facon, sans qu'aucun ecran ne lui dise que quelque
+   chose n'allait pas.
+
+   Le serveur le dit maintenant, a chaque course : `nom_refuse`. On le retient
+   ici, et la puce du nom s'allume. Il s'efface tout seul a la premiere course
+   acceptee — le seul signal fiable que le mur est tombé.
+--------------------------------------------------------------------------- */
+
+const REFUS_KEY = 'sprinter_nom_refuse';
+
+/** La puce du nom se rallume sans attendre un changement d'ecran. */
+export const NOM_REFUSE = 'sprinter:nom-refuse';
+
+/** Le nom que le serveur vient de refuser sur cet appareil, s'il y en a un. */
+export function nomRefuse(): string {
+  try { return localStorage.getItem(REFUS_KEY) || ''; } catch { return ''; }
+}
+
+function poserRefus(valeur: string) {
+  try {
+    if (valeur) localStorage.setItem(REFUS_KEY, valeur);
+    else localStorage.removeItem(REFUS_KEY);
+  } catch { /* sans memoire : l'avertissement ne survivra pas au rechargement */ }
+  try { window.dispatchEvent(new Event(NOM_REFUSE)); } catch { /* hors navigateur */ }
+}
+
+/** Le serveur a refuse ce nom. */
+export function noterNomRefuse(nom: string) {
+  if (!nom || nomRefuse() === nom) return;      // deja dit, on ne re-sonne pas
+  poserRefus(nom);
+}
+
+/** Une course est passee sous ce nom : le mur n'existe plus. */
+export function oublierNomRefuse() {
+  if (!nomRefuse()) return;
+  poserRefus('');
+}
+
 export type ClaimResult =
   | { etat: 'reserve'; name: string; code: string; deja: boolean }
   | { etat: 'pris' }

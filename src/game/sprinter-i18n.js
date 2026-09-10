@@ -216,6 +216,11 @@
     name_save:       ['ENREGISTRER', 'SAVE'],
     name_saved:      ['ENREGISTRÉ', 'SAVED'],
     name_taken:      ['ce nom est déjà pris par quelqu’un d’autre', 'that name is already taken'],
+    // Le nom est bien le sien, mais pas sur CET appareil : ses courses partent
+    // sans lui. Voir src/game/identity.ts — le serveur le signale par
+    // `nom_refuse` a chaque course.
+    name_wall:       ['ce nom n’est pas à cet appareil — tes courses ne comptent pas pour toi. touche pour le relier',
+                      'this name isn’t linked to this device — your races don’t count for you. tap to link it'],
     name_code:       ['TON CODE DE RÉCUPÉRATION', 'YOUR RECOVERY CODE'],
     // La nationalite. OPTIONNELLE, et elle le reste : un joueur sans drapeau
     // court, se classe et gagne exactement comme les autres. Elle ne sert qu'a

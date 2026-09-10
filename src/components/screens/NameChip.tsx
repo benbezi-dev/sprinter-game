@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy, AlertTriangle } from 'lucide-react';
 import { getSavedName, saveName, NOM_CHANGE } from '@/game/leaderboard';
+import { nomRefuse, NOM_REFUSE } from '@/game/identity';
 import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInstagram,
          nations, paysDe, poserPays, type Nation } from '@/game/identity';
 import { nettoyerInsta } from '@/game/insta';
@@ -43,28 +44,68 @@ export function NameChip() {
     return () => window.removeEventListener(NOM_CHANGE, relire);
   }, []);
 
+  /* LE NOM QUI N'EST PLUS LE SIEN, ICI.
+
+     Un joueur qui change de telephone garde son nom dans son navigateur et
+     perd le droit de l'employer : le serveur ecarte alors son nom de chaque
+     course. C'etait parfaitement silencieux, et c'est ainsi qu'un record du
+     monde a disparu. La puce est le seul endroit ou le joueur lit son
+     identite — donc le seul endroit ou lui dire qu'elle ne le suit plus. */
+  const [refuse, setRefuse] = useState(nomRefuse());
+  useEffect(() => {
+    const relire = () => setRefuse(nomRefuse());
+    relire();
+    window.addEventListener(NOM_REFUSE, relire);
+    window.addEventListener(NOM_CHANGE, relire);
+    return () => {
+      window.removeEventListener(NOM_REFUSE, relire);
+      window.removeEventListener(NOM_CHANGE, relire);
+    };
+  }, [etatJeu]);
+
   const vide = !nom;
+  // Le mur ne concerne que le nom porte maintenant : un avertissement laisse
+  // par un nom qu'on a depuis change ne veut plus rien dire.
+  const mure = !vide && !!refuse && refuse === nom;
 
   return (
-    <>
+    <div className="relative">
       <button
         onClick={() => setOuvert(true)}
         className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2
                     border transition-colors max-w-[45vw]
           ${vide
             ? 'bg-primary/20 border-primary/60 text-primary animate-pulse'
-            : 'bg-card/80 backdrop-blur-md border-white/10 hover:bg-white/10 text-foreground/90'}`}
+            : mure
+              ? 'bg-destructive/20 border-destructive/70 text-destructive animate-pulse'
+              : 'bg-card/80 backdrop-blur-md border-white/10 hover:bg-white/10 text-foreground/90'}`}
+        title={mure ? N.t('name_wall') : undefined}
       >
-        <User className={`w-3.5 h-3.5 md:w-4 md:h-4 ${vide ? 'text-primary' : 'text-muted-foreground'}`} />
+        {mure
+          ? <AlertTriangle className="w-3.5 h-3.5 md:w-4 md:h-4 text-destructive" />
+          : <User className={`w-3.5 h-3.5 md:w-4 md:h-4 ${vide ? 'text-primary' : 'text-muted-foreground'}`} />}
         <span className="font-bold text-xs md:text-sm truncate">
           {vide ? N.t('name_set') : nom}
         </span>
       </button>
 
+      {/* Un pictogramme ne dit pas pourquoi. La phrase, si — et elle nomme le
+          geste qui repare, sans quoi l'avertissement ne serait qu'une alarme. */}
+      {mure && (
+        <button
+          onClick={() => setOuvert(true)}
+          className="absolute top-full mt-1.5 left-0 z-20 max-w-[70vw] text-left
+                     rounded-lg border border-destructive/40 bg-card/95 backdrop-blur-md
+                     px-2.5 py-1.5 text-[10px] leading-snug text-destructive"
+        >
+          {N.t('name_wall')}
+        </button>
+      )}
+
       {ouvert && (
         <PanneauIdentite onFermer={() => { setOuvert(false); setNom(getSavedName()); }} />
       )}
-    </>
+    </div>
   );
 }
 
