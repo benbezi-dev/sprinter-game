@@ -21,6 +21,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Review, type EtatReview } from './review';
 import { SprinterApp, useGameStore } from './engine';
+import { peindreLeHud } from './hud-film';
 
 /**
  * A QUELLE COURSE APPARTIENT LE FILM.
@@ -132,6 +133,17 @@ function annulerLeDepart() {
   if (depart) { clearTimeout(depart); depart = null; }
 }
 
+/**
+ * LE HUD DU JEU, POUR LE FILM.
+ *
+ * Le pendant de `sonDuJeu`, pour l'image. Le canevas ne porte que le stade :
+ * le chrono qui defile, le rang, l'epreuve, le starter et les retours de
+ * course sont du DOM React pose au-dessus, et `captureStream` ne voit pas le
+ * DOM. Les replays sortaient donc sans chrono — on y regardait courir sans
+ * jamais savoir en combien. `peindreLeHud` les repeint sur le montage
+ * qu'enregistre `review.ts` ; voir `hud-film.ts`.
+ */
+
 /** Commence une prise neuve pour cette course, son du jeu compris. */
 export function demarrerLeFilm(
   g: GenreFilm,
@@ -139,7 +151,8 @@ export function demarrerLeFilm(
 ) {
   annulerLeDepart();
   poserGenre(g);
-  filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons]);
+  filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons],
+                            peindreLeHud);
 }
 
 /**

@@ -59,6 +59,23 @@ export type PhaseReview =
  */
 export type Sortie = 'partage' | 'telechargement' | 'annule' | 'echec';
 
+/**
+ * CE QU'ON POSE PAR-DESSUS LES IMAGES DU JEU.
+ *
+ * Le canvas ne porte que le stade. Le chrono qui defile, le rang, le decompte,
+ * « TRANSITION PARFAITE » : tout cela est du DOM React pose au-dessus, et
+ * `captureStream()` ne voit pas le DOM. Un replay sans surcouche est donc une
+ * course sans chrono — on y voit courir, on n'y voit pas ce qui se joue.
+ *
+ * Le pinceau est fourni de l'exterieur plutot qu'ecrit ici : ce module ne sait
+ * rien du jeu, et c'est ce qui lui permet de se charger seul (voir l'en-tete de
+ * `Sortie`). Il recoit un contexte deja mis a l'echelle de l'appareil et
+ * raisonne en POINTS CSS — les memes nombres que la feuille de style.
+ *
+ * Voir `hud-film.ts`, qui en est la seule implementation.
+ */
+export type Surcouche = (ctx: CanvasRenderingContext2D, l: number, h: number) => void;
+
 export type EtatReview = {
   phase: PhaseReview;
   url: string | null;
@@ -164,6 +181,25 @@ export class Review {
   private rec: MediaRecorder | null = null;
   /** Le flux tire du canvas, garde pour pouvoir le relacher. Voir `rendreLeCanvas`. */
   private fluxVideo: MediaStream | null = null;
+  /**
+   * LE MONTAGE : le canvas qu'on filme reellement.
+   *
+   * Ce n'est pas celui du jeu. On y recopie l'image du stade, puis on repeint
+   * le HUD par-dessus, et c'est CE canvas-la qu'on enregistre. Le canvas du
+   * jeu n'est pas touche — il continue d'afficher la course pour le joueur,
+   * sans savoir qu'on le recopie.
+   *
+   * Il reste nul quand personne ne fournit de surcouche : on filme alors le
+   * canvas du jeu directement, comme avant.
+   */
+  private montage: HTMLCanvasElement | null = null;
+  private pinceau: CanvasRenderingContext2D | null = null;
+  private source: HTMLCanvasElement | null = null;
+  private surcouche: Surcouche | null = null;
+  /** L'appel a `requestAnimationFrame` en cours, pour pouvoir l'arreter. */
+  private trait = 0;
+  /** Pixels du film par point CSS. Recalcule quand le canvas change de taille. */
+  private echelle = 1;
   private morceaux: Blob[] = [];
   private url: string | null = null;
   /**
@@ -210,7 +246,9 @@ export class Review {
    * images a la course elle-meme, ce qu'on ne peut pas se permettre dans un
    * jeu ou l'on compte en centiemes.
    */
-  demarrer(canvas: HTMLCanvasElement | null, sons: Array<MediaStreamTrack | null | undefined> = []) {
+  demarrer(canvas: HTMLCanvasElement | null,
+           sons: Array<MediaStreamTrack | null | undefined> = [],
+           surcouche: Surcouche | null = null) {
     if (!canvas) return;
     // Les pistes qu'on nous tend n'appartiennent PAS a cet enregistreur : le
     // son du jeu sort d'un noeud qui vit aussi longtemps que l'onglet, la voix
@@ -224,7 +262,12 @@ export class Review {
     this.jeter();
 
     try {
-      const flux = (canvas as any).captureStream(30) as MediaStream;
+      // ON NE FILME PAS LE CANVAS DU JEU, ON FILME UN MONTAGE. Voir `montage`
+      // et `tracer` : le stade y est recopie, le HUD repeint par-dessus. Sans
+      // surcouche il n'y a rien a composer et on prend le canvas tel quel,
+      // c'est-a-dire une image de moins a copier par seconde.
+      const cible = surcouche ? this.ouvrirLeMontage(canvas, surcouche) : canvas;
+      const flux = (cible as any).captureStream(30) as MediaStream;
       this.fluxVideo = flux;
       for (const p of pistes) {
         try { flux.addTrack(p); } catch { /* on filmera sans celle-la */ }
@@ -243,8 +286,78 @@ export class Review {
       this.rec.start(1000);
       this.prevenir({ phase: 'enregistre', url: null, taille: 0, reste: 0 });
     } catch {
+      // Le montage a pu etre ouvert avant l'echec, et sa boucle tourne deja :
+      // sans ce rendu, elle recopierait le stade pour un enregistreur qui
+      // n'existe pas, jusqu'a la fin de l'onglet.
+      this.rendreLeCanvas();
       this.prevenir({ phase: 'impossible' });
     }
+  }
+
+  /**
+   * Ouvre le montage et lance la boucle qui le remplit.
+   *
+   * Il fait exactement la taille du canvas du jeu — pas de mise a l'echelle,
+   * pas de perte : le film sort dans la definition ou la course a ete dessinee.
+   */
+  private ouvrirLeMontage(source: HTMLCanvasElement, surcouche: Surcouche): HTMLCanvasElement {
+    const m = document.createElement('canvas');
+    m.width = source.width; m.height = source.height;
+    // `alpha: false` : le montage est opaque par construction — la premiere
+    // chose qu'on y pose est l'image pleine du stade. Le dire au navigateur
+    // lui epargne la composition d'une couche transparente a chaque image.
+    this.pinceau = m.getContext('2d', { alpha: false });
+    this.montage = m;
+    this.source = source;
+    this.surcouche = surcouche;
+    this.caler();
+    this.tracer();
+    return m;
+  }
+
+  /**
+   * Combien de pixels du film pour un point CSS.
+   *
+   * La question ne se pose qu'au changement de taille — une rotation d'ecran,
+   * un clavier qui s'ouvre. La poser a chaque image ferait lire `clientWidth`
+   * soixante fois par seconde, et une lecture de geometrie peut forcer le
+   * navigateur a recalculer la mise en page au pire moment.
+   */
+  private caler() {
+    const s = this.source;
+    if (!s) return;
+    this.echelle = s.width / (s.clientWidth || s.width) || 1;
+  }
+
+  /**
+   * Une image du film : le stade, puis le HUD.
+   *
+   * La boucle est la NOTRE, distincte de celle du jeu, et elle se replanifie
+   * en tete de fonction pour qu'une surcouche qui echoue ne l'arrete pas. Une
+   * erreur de peinture coute son HUD a une image — pas l'enregistrement.
+   */
+  private tracer = () => {
+    this.trait = requestAnimationFrame(this.tracer);
+    const s = this.source, m = this.montage, ctx = this.pinceau;
+    if (!s || !m || !ctx) return;
+    if (m.width !== s.width || m.height !== s.height) {
+      m.width = s.width; m.height = s.height;
+      this.caler();
+    }
+    try {
+      ctx.drawImage(s, 0, 0);
+      const k = this.echelle;
+      ctx.save();
+      ctx.scale(k, k);
+      this.surcouche?.(ctx, m.width / k, m.height / k);
+      ctx.restore();
+    } catch { /* cette image sortira sans son HUD, la suivante l'aura */ }
+  };
+
+  /** Arrete la boucle, sans defaire le montage. */
+  private suspendreLeTrait() {
+    if (this.trait) cancelAnimationFrame(this.trait);
+    this.trait = 0;
   }
 
   /**
@@ -259,6 +372,12 @@ export class Review {
    * sont pas a nous. Voir `demarrer`.
    */
   private rendreLeCanvas() {
+    // Le montage d'abord : sa boucle tire une image du canvas du jeu a chaque
+    // battement, et la laisser tourner apres l'enregistrement, c'est recopier
+    // un stade pour personne.
+    this.suspendreLeTrait();
+    this.montage = null; this.pinceau = null;
+    this.source = null; this.surcouche = null;
     const f = this.fluxVideo;
     this.fluxVideo = null;
     if (!f) return;
@@ -285,13 +404,20 @@ export class Review {
   pause() {
     const r = this.rec;
     if (!r || r.state !== 'recording' || typeof r.pause !== 'function') return;
-    try { r.pause(); } catch { /* on continue de filmer, tant pis */ }
+    try { r.pause(); } catch { /* on continue de filmer, tant pis */ return; }
+    // Rien n'est enregistre pendant la pause : composer y serait du travail
+    // pur perdu, et l'ecran de resultat entre deux epreuves peut durer une
+    // minute. On ne suspend la boucle QU'APRES une mise en pause reussie —
+    // un navigateur qui ne sait pas mettre en pause continue de filmer, et il
+    // filmerait alors une image figee.
+    this.suspendreLeTrait();
   }
 
   reprendre() {
     const r = this.rec;
     if (!r || r.state !== 'paused' || typeof r.resume !== 'function') return;
-    try { r.resume(); } catch { /* la suite manquera au film */ }
+    try { r.resume(); } catch { /* la suite manquera au film */ return; }
+    if (this.montage && !this.trait) this.tracer();
   }
 
   /** Une prise est-elle en cours ? Sert a distinguer reprendre de recommencer. */
