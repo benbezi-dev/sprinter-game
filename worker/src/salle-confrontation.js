@@ -26,10 +26,12 @@
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE } from './relais-course.js';
 import { fantomeRelais } from './relais.js';
+import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
-const AVANT_DEPART_MS = 6000;   // un peu plus qu'a une equipe : il y a du monde
+// Le delai avant le pistolet est tire au sort, entre trois et dix secondes,
+// et le meme pour toutes les equipes engagees. Voir depart.js.
 const VIE_MS = 30 * 60 * 1000;
 const APRES_COURSE_MS = 90 * 1000;
 const INACTIVITE_MS = 8 * 60 * 1000;
@@ -344,7 +346,7 @@ export class SalleConfrontation {
         const tous = humaines >= 1 && pretes === humaines &&
                      (humaines + this.fantomes.size) >= MIN_EQUIPES;
         if (tous && !this.departA) {
-          this.departA = Date.now() + AVANT_DEPART_MS;
+          this.departA = Date.now() + avantDepart();
           for (const course of this.equipes.values()) course.reinitialiser();
           for (const cle of this.fantomes.keys()) {
             const c = this.equipes.get(cle);
