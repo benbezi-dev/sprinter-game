@@ -8,6 +8,26 @@ fois quand elle n'existait que dans un dossier temporaire.
 
 ## Déployer
 
+**Le plus souvent, il n'y a rien à faire :** `.github/workflows/worker.yml`
+déploie le worker dès qu'un changement touchant `worker/` arrive sur `main`,
+et le bouton « Run workflow » de l'onglet Actions le redéploie à la demande.
+Le jeu et le serveur partent ainsi du même geste — auparavant le jeu se
+publiait tout seul sur GitHub Pages et le serveur restait en arrière sans que
+rien ne le dise.
+
+Cela demande un secret posé une fois dans **Settings > Secrets and variables >
+Actions** du dépôt : `CLOUDFLARE_API_TOKEN`, un jeton créé depuis le tableau de
+bord Cloudflare avec « Edit Cloudflare Workers » et la permission D1. Ajouter
+`CLOUDFLARE_ACCOUNT_ID` seulement si le jeton ouvre plusieurs comptes — sinon
+wrangler refuse de choisir. Sans le secret, le workflow s'arrête net en disant
+lequel manque, plutôt que d'échouer sur un « not authenticated » énigmatique.
+
+Les secrets du worker lui-même (`VAPID_PRIVATE_KEY`, `FCM_COMPTE_SERVICE`,
+`ADMIN_CLE`, `TABLEAU_CLE`) vivent chez Cloudflare et survivent aux
+déploiements : ils ne sont ni lus ni écrits par le workflow.
+
+### À la main
+
 Depuis ce dossier :
 
 ```bash
