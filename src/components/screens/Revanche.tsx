@@ -5,7 +5,7 @@ import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
 import { Timer, Trophy, RotateCcw, Lightbulb } from 'lucide-react';
 import {
   useObjectif, soumettreCourse, relancerObjectif, quitterObjectif,
-  minutesRestantes, s2, type Resultat,
+  minutesRestantes, s2, type Resultat, type Objectif,
 } from '@/game/objectif';
 
 /**
@@ -231,49 +231,65 @@ export function Revanche() {
     </div>
   );
 }
-
 /**
- * L'entree dans le defi, posee sur l'accueil.
+ * L'entree dans les defis, posee sur l'accueil.
  *
- * Elle ne s'affiche que s'il y a un objectif ouvert : hors fenetre, hors
- * classement, ou serveur muet, il n'y a rien a proposer et la carte disparait
- * plutot que d'annoncer un defi qui n'existe pas.
+ * UNE CARTE, JUSQU'A TROIS LIGNES — une par distance ou le joueur est classe.
+ * Elles sont trois defis distincts : trois cibles taillees sur ses courses a
+ * lui SUR CETTE DISTANCE, trois plateaux, trois lots de points. Le classement
+ * du jeu est deja par distance, celui-ci l'est aussi.
+ *
+ * Rien ne s'affiche s'il n'y a rien : hors fenetre, hors classement, ou
+ * serveur muet, la carte disparait plutot que d'annoncer un defi qui n'existe
+ * pas. Le temps restant, lui, est le meme pour les trois — c'est un creneau,
+ * pas trois — et se dit donc une seule fois, en tete.
  */
-export function CarteObjectif({ onLancer }: { onLancer: () => void }) {
+export function CarteObjectif({ onLancer }: { onLancer: (o: Objectif) => void }) {
   const { N } = SprinterApp;
   const s = useObjectif();
-  const o = s.objectif;
-  if (!o) return null;
-  const minutes = minutesRestantes(o);
+  const liste = s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []);
+  if (!liste.length) return null;
+  const minutes = minutesRestantes(liste[0]);
 
   return (
-    <button onClick={onLancer}
-      className="w-full rounded-2xl border-2 border-primary/50 bg-primary/[0.08]
-                 px-4 py-3 flex items-center gap-3 text-left
-                 hover:bg-primary/[0.14] transition-colors">
-      <Timer className="w-5 h-5 text-primary shrink-0" />
-      <div className="flex-1 min-w-0 flex flex-col">
-        <span className="text-[9px] font-bold tracking-[0.25em] text-primary uppercase">
-          {N.t('obj_titre')}
-          {minutes !== null && minutes > 0 && (
-            <span className="ml-2 text-muted-foreground">
-              {N.t('obj_minutes', { n: minutes })}
-            </span>
-          )}
-        </span>
-        <span className="font-mono font-black tabular-nums text-lg text-foreground">
-          {s2(o.cible_ms)} s
-          <span className="text-[10px] font-sans font-bold uppercase tracking-widest
-                           text-muted-foreground ml-2">
-            {N.t('obj_a_passer')}
+    <div className="w-full rounded-2xl border-2 border-primary/50 bg-primary/[0.08]
+                    px-4 py-3 flex flex-col gap-2">
+      <span className="text-[9px] font-bold tracking-[0.25em] text-primary uppercase
+                       flex items-center gap-2">
+        <Timer className="w-4 h-4 shrink-0" />
+        {N.t('obj_titre')}
+        {minutes !== null && minutes > 0 && (
+          <span className="text-muted-foreground">
+            {N.t('obj_minutes', { n: minutes })}
           </span>
-        </span>
-      </div>
-      {o.valide
-        ? <Trophy className="w-5 h-5 text-primary shrink-0" />
-        : <span className="text-[10px] font-bold uppercase tracking-widest text-primary shrink-0">
-            {N.t('obj_lancer')}
-          </span>}
-    </button>
+        )}
+      </span>
+
+      {liste.map(o => (
+        <button key={o.epreuve} onClick={() => onLancer(o)}
+          className="w-full flex items-center gap-3 text-left rounded-xl px-2 py-1.5
+                     hover:bg-primary/[0.12] transition-colors">
+          {/* LA DISTANCE D'ABORD. Avec trois cibles a l'ecran, un chrono seul
+              ne dit plus rien : 44,10 s n'est un objectif que si l'on sait
+              qu'il s'agit du tour de piste. */}
+          <span className="font-display font-black text-primary text-sm w-12 shrink-0
+                           tabular-nums">
+            {o.epreuve} M
+          </span>
+          <span className="flex-1 min-w-0 font-mono font-black tabular-nums text-lg text-foreground">
+            {s2(o.cible_ms)} s
+            <span className="text-[10px] font-sans font-bold uppercase tracking-widest
+                             text-muted-foreground ml-2">
+              {N.t('obj_a_passer')}
+            </span>
+          </span>
+          {o.valide
+            ? <Trophy className="w-5 h-5 text-primary shrink-0" />
+            : <span className="text-[10px] font-bold uppercase tracking-widest text-primary shrink-0">
+                {N.t('obj_lancer')}
+              </span>}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -40,10 +40,11 @@ import {
 } from './journal.js';
 import { mesures } from './mesures.js';
 import {
-  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
+  EPREUVE as OBJ_EPREUVE, EPREUVES_DEFI, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
+import { directionDe } from './epreuves.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -699,14 +700,21 @@ async function envoyerObjectifs(env, maintenant) {
   const joueurs = await joueursAServir(db, maintenant);
   if (!joueurs.length) return { mode, servis: 0 };
 
-  const bilan = { mode, dus: joueurs.length, crees: 0, notifies: 0,
+  const bilan = { mode, dus: joueurs.length, crees: 0, defis: 0, notifies: 0,
                   tus: 0, sans_push: 0, simules: 0, erreurs: 0 };
 
   for (const j of joueurs) {
     try {
-      const { objectif, nouveau, silencieux } = await creerObjectif(db, j, maintenant);
+      // UN JOUEUR, JUSQU'A TROIS DEFIS — un par distance ou il est classe. Le
+      // premier de la liste est celui de son epreuve de tete : c'est lui qui
+      // parle dans la notification, les autres y tiennent en une phrase. Une
+      // notification par creneau, comme avant ; trois sonneries pour un meme
+      // midi seraient trois fois la meme interruption.
+      const { objectif, objectifs, nouveaux, nouveau, silencieux } =
+        await creerObjectif(db, j, maintenant);
       if (!objectif || !nouveau) continue;
       bilan.crees++;
+      bilan.defis += nouveaux.length;
 
       // Le silence ne retient que la sonnerie : l'objectif existe, et celui
       // qui rouvre le jeu de lui-meme le trouve. C'est ce qui lui permet de
@@ -717,18 +725,25 @@ async function envoyerObjectifs(env, maintenant) {
       // arriver, ou pas ouvert du tout. Lu une fois par joueur, pas par
       // appareil — c'est la meme journee sur les deux telephones.
       const midi = objectif.creneau === 'soir'
-        ? await midiDuJour(db, j.nameKey, objectif.jour) : null;
+        ? await midiDuJour(db, j.nameKey, objectif.jour, objectif.race_key) : null;
+
+      // Les autres distances ouvertes dans le meme creneau. Le corps en dit
+      // un mot a la fin — sans lui, deux defis sur trois n'existeraient que
+      // pour qui rouvre le jeu de lui-meme.
+      const autres = (objectifs || [])
+        .filter(o => o.race_key !== objectif.race_key)
+        .map(o => o.race_key);
 
       // Le texte est fabrique par appareil, dans la langue de son abonnement :
       // on ne le calcule pas ici, on donne de quoi le calculer.
       const texte = (langue) => {
-        const t = texteObjectif(objectif, j.rang, langue, undefined, midi);
+        const t = texteObjectif(objectif, j.rang, langue, undefined, midi, autres);
         return [t.titre, t.corps];
       };
       // ...et on retient CE QUI a ete choisi, pour pouvoir un jour dire quel
       // texte fait ouvrir. La langue importe peu ici : la variante est la meme
       // des deux cotes, c'est le tirage qui la fixe.
-      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi);
+      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi, autres);
 
       // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
       // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
@@ -768,6 +783,7 @@ async function envoyerObjectifs(env, maintenant) {
         // pas la langue de l'abonnement, qu'on n'a pas cherchee.
         console.log('objectif[essai]', JSON.stringify({
           joueur: j.nameKey, rang: j.rang, appareils: joignables.length,
+          epreuve: objectif.race_key, autres,
           cible_ms: objectif.cible_ms, pb_ms: objectif.pb_ms,
           creneau: objectif.creneau, expire_le: objectif.expire_le,
           contexte: choix.contexte, variante: choix.variante,
@@ -1082,7 +1098,11 @@ async function servir(request, env, ctx, porteur) {
       const cle = nom.toLowerCase();
 
       await ensureObjectifTables(env.DB);
-      // L'objectif OUVERT MAINTENANT, a l'instant pres.
+      // LES DEFIS DU CRENEAU OUVERT, ET ILS SONT JUSQU'A TROIS.
+      //
+      // Un par distance ou le joueur est classe. On prend le creneau le plus
+      // recent parmi ceux qui sont ouverts, puis TOUTES ses lignes : trois
+      // defis d'un meme midi sont un seul midi, et le jeu les pose cote a cote.
       //
       // Les instants d'ouverture et d'expiration sont ranges dans la ligne :
       // la route n'a donc pas a savoir dans quel fuseau vit le joueur, ce
@@ -1091,19 +1111,30 @@ async function servir(request, env, ctx, porteur) {
       // minuit. Les lignes d'avant la fenetre gardent la regle du jour.
       const t = Date.now();
       const jour = heureLocale(new Date(), 'Europe/Paris').jour;
-      const o = await env.DB.prepare(
+      const { results: ouverts } = await env.DB.prepare(
         `SELECT * FROM objectifs
           WHERE name_key = ?
             AND (ouvre_le IS NULL OR ouvre_le <= ?)
             AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
-          ORDER BY cree_le DESC LIMIT 1`
-      ).bind(cle, t, jour, t).first();
-      if (!o) return json({ objectif: null });
+          ORDER BY cree_le DESC`
+      ).bind(cle, t, jour, t).all();
+      if (!ouverts || !ouverts.length) return json({ objectif: null, objectifs: [] });
 
-      const rang = await getRank(env.DB, OBJ_EPREUVE, o.pb_ms);
-      const texte = texteObjectif(o, rang, langue, true);
-      return json({
-        objectif: {
+      const recent = ouverts[0];
+      const duCreneau = ouverts
+        .filter(o => o.jour === recent.jour && o.creneau === recent.creneau)
+        // L'ordre du programme : 100, 200, 400. C'est celui des cartes a
+        // l'ecran, et il ne doit pas dependre de l'ordre d'insertion.
+        .sort((a, b) => EPREUVES_DEFI.indexOf(a.race_key)
+                      - EPREUVES_DEFI.indexOf(b.race_key));
+
+      const vus = [];
+      for (const o of duCreneau) {
+        // Le rang est celui de SA distance : etre deuxieme au 100 m ne dit
+        // rien de ce qu'on vaut sur un tour de piste.
+        const rang = await getRank(env.DB, o.race_key || OBJ_EPREUVE, o.pb_ms);
+        const texte = texteObjectif(o, rang, langue, true);
+        vus.push({
           creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
           cible_ms: o.cible_ms, pb_ms: o.pb_ms,
           tentatives: o.tentatives, meilleur_ms: o.meilleur_ms,
@@ -1119,11 +1150,17 @@ async function servir(request, env, ctx, porteur) {
           // Les trois seuils, calcules ici plutot que dans le jeu : ils
           // dependent du bareme, et un bareme recopie cote client est un
           // bareme qui derive au premier reglage.
-          seuils: seuilsDe(o.pb_ms, o.cible_ms, 'plus_bas'),
+          seuils: seuilsDe(o.pb_ms, o.cible_ms, directionDe(o.race_key)),
           palier: o.palier ?? null,
           titre: texte.titre, texte: texte.corps,
-        },
-      });
+        });
+      }
+
+      // `objectif` au singulier reste rendu, et c'est le 100 m quand il existe :
+      // un jeu d'avant les trois distances ne lit que ce champ-la, et doit
+      // continuer a trouver le defi qu'il sait courir.
+      const seul = vus.find(v => v.epreuve === OBJ_EPREUVE) || vus[0] || null;
+      return json({ objectif: seul, objectifs: vus });
     }
 
     /* -----------------------------------------------------------------
@@ -1162,9 +1199,15 @@ async function servir(request, env, ctx, porteur) {
       const deviceId = body?.device_id;
       const ms = Math.round(Number(body?.ms));
       const langue = body?.langue === 'en' ? 'en' : 'fr';
+      // QUELLE DISTANCE A ETE COURUE. Trois defis sont ouverts en meme temps,
+      // et c'est la course qui designe celui qu'elle vise — un 400 m ne valide
+      // pas le 100 m. Un jeu d'avant les trois distances n'envoie rien : sa
+      // course est un 100 m, la seule qu'il sache courir en defi.
+      const epreuve = String(body?.epreuve || OBJ_EPREUVE);
 
       if (!nom) return json({ error: 'nom requis' }, 400);
       if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!EPREUVES_DEFI.includes(epreuve)) return json({ error: 'epreuve invalide' }, 400);
       if (!Number.isFinite(ms) || ms < MIN_TIME_MS || ms > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
@@ -1178,7 +1221,7 @@ async function servir(request, env, ctx, porteur) {
       // La preuve, avant tout enregistrement. Une course qui ne tient pas
       // debout ne doit pas compter comme tentative — sinon la refuser
       // reviendrait quand meme a faire avancer le compteur du bonus.
-      const griefs = verifierTrace(cleanTrace(body?.trace), ms, OBJ_EPREUVE);
+      const griefs = verifierTrace(cleanTrace(body?.trace), ms, epreuve);
       if (griefs.length) {
         await signaler(env.DB, {
           nameKey: cle, deviceId, quoi: 'trace',
@@ -1187,7 +1230,7 @@ async function servir(request, env, ctx, porteur) {
         return json({ error: 'course invalide', griefs }, 422);
       }
 
-      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date());
+      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date(), epreuve);
       if (!res) return json({ objectif: null });
       if (res.refuse) return json({ refuse: res.refuse, attendreMs: res.attendreMs }, 429);
 
