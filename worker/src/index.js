@@ -30,6 +30,7 @@ import {
 import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
 } from './records.js';
+import { noterRefus, refusResume } from './refus.js';
 import {
   verifierTrace, vraisemblance, signaler, listerSuspectes,
 } from './preuve.js';
@@ -1170,6 +1171,7 @@ async function servir(request, env, ctx, porteur) {
 
       const cle = nom.toLowerCase();
       if (!await peutUtiliser(env.DB, cle, deviceId)) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/objectif/tentative', nameKey: cle, deviceId: deviceId }));
         return json({ error: 'nom reserve', pris: true }, 403);
       }
 
@@ -1239,6 +1241,7 @@ async function servir(request, env, ctx, porteur) {
         // Le meme controle que partout : un reglage se change depuis un
         // appareil du proprietaire, pas depuis n'importe lequel.
         if (!await peutUtiliser(env.DB, n.toLowerCase(), deviceId)) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/notifications/rythme', nameKey: n.toLowerCase(), deviceId: deviceId }));
           return json({ error: 'nom reserve', pris: true }, 403);
         }
         await poserRythme(env.DB, n.toLowerCase(), rythme);
@@ -1369,6 +1372,7 @@ async function servir(request, env, ctx, porteur) {
       // Un nom reserve n'accepte que les appareils de son proprietaire :
       // sans cela la reservation ne protegerait rien.
       if (!await peutUtiliser(env.DB, cleanedName.trim().toLowerCase(), device_id)) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/submit', nameKey: cleanedName.trim().toLowerCase(), deviceId: device_id }));
         return json({ error: 'nom reserve', pris: true }, 403);
       }
       const now = Date.now();
@@ -1506,6 +1510,7 @@ async function servir(request, env, ctx, porteur) {
         const key = cleanName(name).trim().toLowerCase();
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
         if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/pays', nameKey: key, deviceId: device_id }));
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
@@ -1911,6 +1916,7 @@ async function servir(request, env, ctx, porteur) {
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
         await ensurePlayerTables(env.DB);
         if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/direct/inviter', nameKey: key, deviceId: device_id }));
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
 
@@ -2521,6 +2527,7 @@ async function servir(request, env, ctx, porteur) {
 
       await ensurePlayerTables(env.DB);
       if (!(await peutUtiliser(env.DB, key, device_id))) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/profil', nameKey: key, deviceId: device_id }));
         return json({ error: 'ce nom ne t appartient pas' }, 403);
       }
       const p = await env.DB.prepare(
@@ -2611,6 +2618,7 @@ async function servir(request, env, ctx, porteur) {
       const cleaned = cleanName(name);
       const key = cleaned.trim().toLowerCase();
       if (!await peutUtiliser(env.DB, key, device_id)) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/race', nameKey: key, deviceId: device_id }));
         return json({ error: 'nom reserve', pris: true }, 403);
       }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
@@ -2837,6 +2845,24 @@ async function servir(request, env, ctx, porteur) {
       }
 
       return json({ error: 'not found' }, 404);
+    }
+
+    /* --------------------------------------------------- les refus de nom
+       Combien de joueurs se cognent au mur, et depuis quand.
+
+       Meme cle que le tableau de bord, et pour la meme raison : c'est un
+       compteur de frequentation, pas un geste. Les pseudonymes restent
+       masques sauf `?noms=1` — la demande est alors dans l'adresse, donc
+       visible dans le journal comme dans la barre du navigateur, ce qui est
+       la seule facon qu'un masquage tienne.
+
+       `?jours=` borne la fenetre, sept par defaut. */
+    if (url.pathname === '/refus' && request.method === 'GET') {
+      if (!estTableau(request, env)) return json({ error: 'introuvable' }, 404);
+      return json(await refusResume(env.DB, {
+        jours: url.searchParams.get('jours'),
+        avecNoms: url.searchParams.get('noms') === '1',
+      }));
     }
 
     if (url.pathname === '/stats' && request.method === 'GET') {
