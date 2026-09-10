@@ -1125,7 +1125,12 @@
     // ici meme quand le stade, lui, n'existe pas dans la version publique —
     // l'historique des courses garde l'index de l'etape ou elles ont ete
     // courues, et une partie jouee sur le canal de test se relit ailleurs.
-    ['Stade de la Riviera', 'Riviera Stadium']
+    ['Stade de la Riviera', 'Riviera Stadium'],
+    // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
+    // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
+    // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
+    // donc sur ces deux lignes, sans toucher au jeu.
+    ['Stade des Trois Soleils', 'Three Suns Stadium']
   ];
 
   const RACE_SUB = {
