@@ -8,6 +8,7 @@
 // repond, l'appareil sert de repli.
 
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
+import { noterNomRefuse, oublierNomRefuse } from './identity';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -33,21 +34,39 @@ export function localHistory(race: RaceKey): Course[] {
     }));
 }
 
-/** Envoi au serveur, sans bloquer : la course est deja gardee en local. */
+/**
+ * Envoi au serveur, sans bloquer : la course est deja gardee en local.
+ *
+ * ON LIT LA REPONSE, MAINTENANT. Elle etait jetee, et c'est ce qui a rendu la
+ * panne invisible : quand le nom n'appartient plus a cet appareil, le serveur
+ * ecarte le nom — il garde la course, mais sous « Anonyme » — et le dit par
+ * `nom_refuse`. Sans cette lecture, le joueur courait des jours durant sans
+ * qu'aucun ecran ne lui signale que son nom ne le suivait plus.
+ */
 export function pushRace(race: RaceKey, seconds: number, mode: string, level: number) {
+  const nom = getSavedName();
   fetch(`${API_BASE}/race`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       device_id: getDeviceId(),
-      name: getSavedName() || 'Anonyme',
+      name: nom || 'Anonyme',
       race_key: race,
       time_ms: Math.round(seconds * 1000),
       mode: mode === 'oneshot' ? 'oneshot' : 'campaign',
       level_idx: level,
     }),
     keepalive: true,
-  }).catch(() => { /* hors ligne : l'exemplaire local suffit */ });
+  })
+    .then(async res => {
+      if (!res.ok) return;                  // panne serveur : on ne conclut rien
+      const d = await res.json().catch(() => ({} as any));
+      // Un joueur sans nom n'a rien a se voir refuser : il court en anonyme,
+      // c'est son choix, et allumer un avertissement serait un contresens.
+      if (nom && d?.nom_refuse) noterNomRefuse(nom);
+      else if (nom) oublierNomRefuse();
+    })
+    .catch(() => { /* hors ligne : l'exemplaire local suffit */ });
 }
 
 /**
