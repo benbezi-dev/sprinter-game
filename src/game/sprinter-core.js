@@ -291,7 +291,35 @@
       plateau: { '100': [9.62, 9.92], '200': [19.30, 19.90],
                  '400': [43.30, 44.00], '4x100': [37.60, 38.60] },
       names: ['Rick Palma', 'Sunny Marino', 'Kenji Aoyama', 'Milo Cabana',
-              'Vince Corsair', 'Lisa Miramar', 'Nina Solaris'] }
+              'Vince Corsair', 'Lisa Miramar', 'Nina Solaris'] },
+
+    // LE STADE DES TROIS SOLEILS — la planete verte des mangas de combat.
+    //
+    // Trois soleils, donc jamais de nuit : c'est le detail qui fait toute la
+    // planete, et c'est pour lui que le ciel de ce stade est jaune-vert au
+    // lieu d'etre bleu. Le reste suit — une mer d'emeraude, des aiguilles de
+    // roche et leurs arches au fond, des arbres a chapeau, et un plateau de
+    // sept coureurs a la peau verte et au crane nu (pool 'namek').
+    //
+    // Le nom affiche vit dans les traductions, pas ici (voir LEVEL_NAMES) :
+    // c'est la un seul endroit a changer si l'on veut le rapprocher — ou
+    // l'eloigner — de l'oeuvre qui l'inspire, ce qui, pour un jeu publie sur
+    // les magasins, n'est pas une question de gout mais de droit.
+    //
+    // LE PLATEAU EST FORT, ET IL S'ARRETE SOUS LES ZEZE. Ces sept-la sortent
+    // du 100 m entre 9,28 et 9,66 — au-dessus de la finale olympique, sous
+    // la finale intergalactique. Les faire courir plus vite que les ZEZE
+    // aurait donne la meme chose qu'une septieme etape : la fin du
+    // championnat n'aurait plus ete la fin.
+    { cle: 'namek', name: 'Stade des Trois Soleils', theme: 'namek',
+      pool: 'namek',
+      horsSerie: true,
+      plateau: { '100': [9.28, 9.66], '200': [18.60, 19.20],
+                 '400': [41.80, 43.00], '4x100': [37.05, 37.85] },
+      // Sept noms tires des instruments de musique, comme le veut la
+      // coutume de ce peuple. Ils sont inventes : aucun ne sort de l'oeuvre.
+      names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
+              'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] }
   ];
 
   // ---------------------------------------------------------------------
@@ -534,7 +562,12 @@
     noisette: [120, 76, 50], bronze: [142, 92, 58],
     ambre: [176, 122, 78], miel: [198, 150, 104],
     olive: [206, 166, 118], sable: [224, 186, 142],
-    clair: [238, 204, 166], porcelaine: [246, 220, 190]
+    clair: [238, 204, 166], porcelaine: [246, 220, 190],
+    // La onzieme n'est pas une carnation humaine, et n'entre dans aucun
+    // tirage : elle n'existe que pour le plateau du stade des trois soleils
+    // (voir SKIN_POOL.namek). Rangee ici quand meme, parce que c'est le seul
+    // endroit ou le moteur sait traduire un nom de peau en trois octets.
+    vert: [104, 176, 96]
   };
   // Les etapes locales reunissent un plateau tire au hasard parmi toutes
   // les carnations (rien n'empeche deux ou six coureurs de sortir avec la
@@ -543,7 +576,30 @@
   const SKIN_POOL = {
     divers: ['ebene', 'cacao', 'acajou', 'noisette', 'bronze', 'ambre',
              'miel', 'olive', 'sable', 'clair', 'porcelaine'],
-    sprint: ['ebene']
+    sprint: ['ebene'],
+    namek: ['vert']
+  };
+  // Un plateau peut imposer sa coiffure.
+  //
+  // Le peuple du stade des trois soleils est CHAUVE, tous autant qu'ils sont,
+  // et c'est la moitie de ce qui le rend reconnaissable : la peau verte sous
+  // une natte ou une queue de cheval ne dit plus rien du tout. Le tirage de
+  // `lookFor` reste fait quand meme, puis on ecrase le resultat — retirer le
+  // tirage decalerait la suite aleatoire, et les huit athletes des deux autres
+  // plateaux changeraient tous de visage pour une raison qui ne les concerne
+  // pas.
+  const POOL_CRANE = { namek: 'shaved' };
+  const crane = (pool, tire) => POOL_CRANE[pool] || tire;
+  // Et sa tenue.
+  //
+  // Les sept maillots ordinaires sont vifs et melanges, ce qui va bien a une
+  // carnation humaine. Sur une peau verte, un tirage sur deux sortait un
+  // maillot vert ou turquoise : l'athlete devenait une silhouette d'une seule
+  // couleur, et on ne distinguait plus le torse des bras a trois couloirs de
+  // distance. Blanc et violet, la tenue de ce peuple, redonnent le contraste
+  // que la peau ne donne plus.
+  const POOL_TENUE = {
+    namek: [[240, 240, 246], [152, 112, 210], [232, 232, 238], [126, 94, 190]]
   };
   const HAIR_COLS = {
     noir: [28, 22, 22], brun: [56, 36, 24], chatain: [92, 62, 36],
@@ -632,11 +688,12 @@
     return look({
       build: nx() < 0.34 ? 'f' : 'm',
       skin: skin,
-      jersey: JERSEYS[Math.floor(nx() * JERSEYS.length)],
+      jersey: (POOL_TENUE[pool] || JERSEYS)[
+        Math.floor(nx() * (POOL_TENUE[pool] || JERSEYS).length)],
       shorts: [26 + Math.floor(nx() * 14), 26 + Math.floor(nx() * 10),
                36 + Math.floor(nx() * 16)],
       shoe: SHOES[Math.floor(nx() * SHOES.length)],
-      hair: HAIRS[Math.floor(nx() * HAIRS.length)],
+      hair: crane(pool, HAIRS[Math.floor(nx() * HAIRS.length)]),
       hairCol: HAIR_COLS[hairs[Math.floor(nx() * hairs.length)]],
       h: C.MIN_H + nx() * (C.MAX_H - C.MIN_H)
     });

@@ -120,6 +120,49 @@
       horizon: 6, lointain: [28, 52, 96], toiture: false, gradins: 2,
       village: true, villageSombre: [12, 24, 56], musique: 'nuit',
       cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
+    },
+    // Stade des Trois Soleils : la planete verte des mangas de combat, peinte
+    // comme un dessin anime des annees quatre-vingt-dix — des aplats cernes,
+    // trois ou quatre couleurs par objet, et pas un degrade sur le decor.
+    //
+    // CE QUI FAIT LA PLANETE, C'EST LE CIEL VERT, ET RIEN D'AUTRE. Une piste
+    // orange sous un ciel bleu est un stade ordinaire ; la meme piste sous un
+    // ciel jaune-vert n'est plus sur Terre, et ca se lit en un dixieme de
+    // seconde, sans qu'aucun ecran ait a l'annoncer. Tout le theme est bati
+    // sur cette inversion : le ciel prend le vert que la pelouse aurait du
+    // avoir, et la pelouse prend le bleu-vert de la mer.
+    //
+    // Meme report que pour la Riviera et la Nuit etoilee : la camera colle au
+    // coureur, le ciel ne se voit qu'a peine. On pose donc l'horizon pres
+    // (six metres) et on n'empile que deux gradins sans toiture, sinon ce
+    // ciel — qui EST le sujet — resterait derriere les tribunes toute la
+    // course. Les trois soleils, eux, sont assez haut pour tenir dans la
+    // bande qui reste.
+    //
+    // Le triangle de couleurs : ciel vert / piste orange / bleu franc au
+    // liseret et aux panneaux. C'est la tenue du personnage, pas une palette
+    // choisie a l'oeil — orange, bleu, et un peu d'or pour l'accent.
+    namek: {
+      skyTop: [86, 174, 74], skyBot: [188, 224, 118], stars: 0,
+      grass: [46, 138, 156], grassEdge: [34, 116, 136],
+      trackA: [226, 108, 40], trackB: [206, 92, 32],
+      lane: [252, 246, 232], kerb: [46, 108, 196],
+      tread: [236, 230, 208], riser: [116, 150, 142], roof: [74, 108, 104],
+      barrier: [250, 248, 238],
+      panels: [[240, 140, 40], [46, 108, 196], [247, 201, 60], [40, 168, 140]],
+      crowdLo: [56, 92, 80], crowdHi: [246, 238, 214],
+      accent: [247, 181, 40], dust: [220, 208, 176],
+      horizon: 6, lointain: [104, 206, 168], lointainFond: [26, 140, 128],
+      vagues: true, toiture: false, gradins: 2, musique: 'namek',
+      // Les trois decors qui n'appartiennent qu'a ce stade : les soleils dans
+      // le ciel, les aiguilles de roche et leurs arches sur la bande de
+      // lointain, les arbres a chapeau derriere les tribunes et dans la
+      // pelouse. Un theme qui ne les porte pas ne paie rien — le test se fait
+      // sur le theme, pas sur le niveau.
+      soleils: true, rochers: true, arbres: 'namek',
+      eau: [96, 214, 176], eauFond: [22, 150, 132],
+      roche: [122, 176, 168], rocheSombre: [56, 110, 116],
+      namekTronc: [206, 186, 142], namekChapeau: [34, 148, 118]
     }
   };
 
@@ -183,7 +226,9 @@
   // Les six etapes du championnat, puis les stades hors serie. La Riviera est
   // un meeting d'ete au bord de l'eau : gradins bien garnis, sans l'affluence
   // d'une finale mondiale.
-  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00, 0.72];
+  // Puis le stade des trois soleils : un tournoi qui deplace une planete
+  // entiere, donc des gradins pleins — juste sous la finale ZEZE.
+  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00, 0.72, 0.94];
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
 
@@ -450,6 +495,23 @@
           kick: [0, 2], snare: [3], hats: 8,
           bassDiv: 4, bassPat: [0, 0, 7, 0], bassAmp: 0.36,
           padAmp: 0.115, arp: 16, arpAmp: 0.10, drone: 0.12, droneSemi: 0, stab: 0
+        });
+
+        // LES TROIS SOLEILS — les cuivres du dessin anime de combat. Rapide,
+        // mais surtout FRAPPE : ce qui fait ce genre-la, ce n'est pas le
+        // tempo, c'est l'accord plaque a la trompette sur le contretemps.
+        // `stab` monte donc plus haut qu'ailleurs dans le jeu, et la basse
+        // marche en doubles-croches sous les cuivres au lieu de tenir la
+        // fondamentale. L'harmonie glisse d'un demi-ton vers le haut a la
+        // troisieme mesure — c'est le tour de passe-passe des generiques de
+        // l'epoque : on ne redescend jamais tout a fait d'ou l'on est parti.
+        this.buf.namek = this.buildRace({
+          bpm: 156, prog: [[0, MIN], [3, MAJ], [1, D7], [-4, AUG]],
+          kick: [0, 0.75, 1.5, 2, 2.5, 3.25], snare: [1, 3, 3.5], hats: 16,
+          bassDiv: 16,
+          bassPat: [0, 0, 0, 7, 0, 0, 10, 0, 12, 0, 7, 0, 3, 0, 7, 0],
+          bassAmp: 0.50, padAmp: 0.075, arp: 12, arpAmp: 0.095,
+          drone: 0.10, droneSemi: 0, stab: 0.24
         });
       }
 
@@ -1801,6 +1863,44 @@
     }
   }
 
+  // LES TROIS SOLEILS, ET POURQUOI ILS NE SE RESSEMBLENT PAS.
+  //
+  // Un soleil, c'est la Terre. Trois, c'est ailleurs — et c'est la tout ce
+  // que le joueur a besoin de voir pour savoir sur quelle planete il court.
+  // Encore faut-il qu'on les COMPTE : trois disques de meme taille alignes a
+  // la meme hauteur passeraient pour un motif d'interface, pas pour un ciel.
+  // Ils ont donc trois calibres et trois hauteurs, et le plus gros est le
+  // plus bas — c'est lui qui tombe dans la bande de ciel qui reste visible
+  // au-dessus des deux gradins.
+  //
+  // AUCUN DEGRADE. Un halo, ici, c'est un second disque translucide pose
+  // sous le premier, et le bord du soleil est un cercle net, cerne d'or. Un
+  // fondu radial donnerait un lampadaire de jeu video ; le dessin anime,
+  // lui, ne connait que l'aplat et le trait.
+  const SOLEILS = [[0.17, 0.150, 1.00], [0.55, 0.072, 0.56],
+                   [0.84, 0.185, 0.76]];
+  function drawSoleils(ctx, th) {
+    // Ils derivent au centieme de la camera. Assez pour ne pas etre peints
+    // sur la vitre, pas assez pour traverser l'ecran pendant un cent metres :
+    // un astre a cette distance ne bouge pas, et s'il bouge, il devient un
+    // ballon.
+    const anchor = ground(0, 0);
+    const r0 = ui() * 26;
+    for (const a of SOLEILS) {
+      const x = a[0] * G.VW - anchor[0] * 0.012;
+      const y = a[1] * G.VH;
+      const r = r0 * a[2];
+      ctx.fillStyle = 'rgba(255,246,190,0.22)';
+      ctx.beginPath(); ctx.arc(x, y, r * 1.70, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,250,212,0.42)';
+      ctx.beginPath(); ctx.arc(x, y, r * 1.28, 0, TAU); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU);
+      ctx.fillStyle = 'rgb(255,251,226)'; ctx.fill();
+      ctx.lineWidth = Math.max(1.4, r * 0.11);
+      ctx.strokeStyle = rgb(th.accent); ctx.stroke();
+    }
+  }
+
   // La mer, au-dela de la pelouse : quelques rides blanches, plates et
   // courtes, posees dans le monde pour qu'elles defilent avec la piste. Chez
   // Nagai l'eau n'a pas de matiere — c'est un aplat, et deux traits blancs
@@ -2249,6 +2349,110 @@
     }
   }
 
+  // LES AIGUILLES DE ROCHE ET LEURS ARCHES.
+  //
+  // Le relief de cette planete tient en deux formes, et elles ne sont pas
+  // interchangeables : des aiguilles qui montent tout droit — plus hautes
+  // que larges, penchees, jamais des cones symetriques — et des arches, ces
+  // ponts de pierre poses sur deux pieds que tout le monde reconnait sans
+  // savoir les nommer. Les unes seules donneraient des stalagmites ; les
+  // autres seules, un decor de western.
+  //
+  // Elles se tiennent AU-DELA de la mer, comme les immeubles de la Riviera :
+  // l'ordre du trace les met derriere elle, et c'est ce qui fait la rive
+  // d'en face. Deux aplats par rocher, le clair et son ombre, coupes net —
+  // ce que fait une cellulo, et ce que ne fait pas un degrade.
+  const ROC_W = 380, ROC_H = 320;
+  const rocTiles = new Map();
+  function rocherTile(th, variante) {
+    let tab = rocTiles.get(th);
+    if (!tab) { tab = []; rocTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = ROC_W; cv.height = ROC_H;
+    const c = cv.getContext('2d');
+    const sol = ROC_H, clair = rgb(th.roche), sombre = rgb(th.rocheSombre);
+
+    // La moitie droite de chaque rocher est dans l'ombre, et c'est un
+    // RECTANGLE pris dans le trace : la coupure est verticale et franche,
+    // au lieu de suivre le galbe. C'est exactement ce que fait la peinture
+    // sur cellulo, et c'est ce qui empeche la pierre de ressembler a une
+    // sculpture 3D mal eclairee.
+    const ombrer = (x, w, h) => {
+      c.fillStyle = sombre;
+      c.fillRect(x, sol - h, w, h);
+    };
+
+    const aiguille = (x, base, h, pente) => {
+      c.beginPath();
+      c.moveTo(x - base / 2, sol);
+      c.quadraticCurveTo(x - base * 0.30, sol - h * 0.58, x + pente, sol - h);
+      c.quadraticCurveTo(x + base * 0.36, sol - h * 0.50, x + base / 2, sol);
+      c.closePath();
+      c.fillStyle = clair; c.fill();
+      c.save(); c.clip(); ombrer(x + base * 0.06, base, h); c.restore();
+    };
+
+    const arche = (x, l, h) => {
+      c.beginPath();
+      c.moveTo(x, sol);
+      c.lineTo(x, sol - h * 0.55);
+      c.quadraticCurveTo(x + l / 2, sol - h * 1.24, x + l, sol - h * 0.55);
+      c.lineTo(x + l, sol);
+      c.lineTo(x + l - 38, sol);
+      c.lineTo(x + l - 38, sol - h * 0.52);
+      c.quadraticCurveTo(x + l / 2, sol - h * 0.88, x + 38, sol - h * 0.52);
+      c.lineTo(x + 38, sol);
+      c.closePath();
+      c.fillStyle = clair; c.fill();
+      c.save(); c.clip(); ombrer(x + l * 0.52, l, h * 1.3); c.restore();
+    };
+
+    // Trois compositions : une crete d'aiguilles, une arche flanquee d'une
+    // aiguille, une arche entre deux petites. Trois suffisent — au-dela, le
+    // joueur ne les distingue plus, et chaque variante coute une tuile.
+    // LES BASES SONT LARGES, ET C'EST UNE CORRECTION. Taillees fines, les
+    // aiguilles arrivaient a l'ecran hautes de trente pixels et larges de
+    // quatre : des lames, pas des rochers. A cette distance, une pierre doit
+    // etre trapue pour se lire comme de la pierre.
+    if (variante === 0) {
+      aiguille(96, 96, 250, 16); aiguille(212, 64, 172, -12);
+      aiguille(306, 104, 120, 8);
+    } else if (variante === 1) {
+      arche(34, 206, 216); aiguille(320, 80, 194, -14);
+    } else {
+      aiguille(66, 72, 150, -8); arche(122, 190, 170);
+      aiguille(340, 62, 118, 10);
+    }
+
+    tab[variante] = cv;
+    return cv;
+  }
+
+  function drawRochers(ctx, th, sm, rOut, horizon) {
+    // Un echantillon sur dix, et un rocher sur quatre saute : une cote
+    // decoupee, avec des trouees ou l'on voit la mer. Sans les trous, la
+    // bande de lointain devient une muraille, et le stade se retrouve au
+    // fond d'un puits.
+    const stp = G.track.curved ? 10 : 1;
+    for (let i = 0; i < sm.length; i += stp) {
+      const graine = ((i + 29) * 2654435761) >>> 0;
+      if ((graine >>> 3) % 4 === 0) continue;
+      const r = rOut + horizon + 0.4 + (graine % 3);
+      // Plus haut qu'un immeuble de la Riviera, et c'est voulu : une aiguille
+      // qui ne depasse pas le toit des gradins n'est plus une aiguille. Mais
+      // pas de beaucoup — la hauteur compte plus de deux fois la distance au
+      // sol a l'ecran, et tout ce qui monte trop sort par le haut du cadre.
+      const h = (4.4 + ((graine >>> 5) % 4) * 0.7) * scaleM();
+      const tuile = rocherTile(th, (graine >>> 11) % 3);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(sm[i], r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
   // LE BORD DU BASSIN : PARASOL ET TRANSATS.
   //
   // Trois objets minuscules, et pourtant c'est eux qui disent qu'on est chez
@@ -2403,6 +2607,109 @@
     }
   }
 
+  // L'ARBRE A CHAPEAU DE LA PLANETE VERTE.
+  //
+  // Ni palmier ni cypres : un tronc mince et courbe, et par-dessus une
+  // calotte pleine, large comme trois fois le tronc, posee comme un chapeau
+  // trop grand. C'est une silhouette de champignon, et c'est justement ce
+  // qui la rend etrangere — un arbre a feuillage nous ramenerait sur Terre
+  // aussi surement qu'un ciel bleu.
+  //
+  // Trois tons, jamais plus : la calotte, son dessous, et un croissant clair
+  // en haut a gauche. Le dessous est trace EN PREMIER et deborde un peu, ce
+  // qui donne l'epaisseur du chapeau sans une seule ombre portee.
+  // La tuile est ETROITE : 340 sur 480. Elle est posee a l'ecran a sa
+  // proportion, donc chaque pixel de vide sur les cotes est de la place
+  // perdue par la couronne — dans une tuile large, l'arbre arrivait deux fois
+  // trop petit pour son metrage.
+  const NAMEK_W = 340, NAMEK_H = 480;
+  const namekTiles = new Map();
+  function namekTile(th, variante) {
+    let tab = namekTiles.get(th);
+    if (!tab) { tab = []; namekTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = NAMEK_W; cv.height = NAMEK_H;
+    const c = cv.getContext('2d');
+    const bx = NAMEK_W / 2, by = NAMEK_H;
+    // Trois inclinaisons, comme pour le palmier : tous droits, les arbres
+    // d'une rangee se lisent comme une palissade.
+    const pente = (variante - 1) * 26;
+    const tx = bx + pente, ty = NAMEK_H * 0.43;
+    const kx = bx + pente * 0.15, ky = NAMEK_H * 0.70;
+
+    // le tronc : deux bords quadratiques, du pied evase a la tete fine
+    // EPAIS, ET C'EST UNE CORRECTION. A dix-sept pixels au pied, le tronc
+    // devenait un mat de parasol des qu'on le voyait en entier depuis la
+    // pelouse interieure : ce qui porte une couronne pareille doit avoir
+    // l'air de la porter.
+    const b0 = 27, b1 = 17;
+    c.beginPath();
+    c.moveTo(bx - b0, by);
+    c.quadraticCurveTo(kx - b1 * 1.6, ky, tx - b1, ty);
+    c.lineTo(tx + b1, ty);
+    c.quadraticCurveTo(kx + b1 * 1.6, ky, bx + b0, by);
+    c.closePath();
+    c.fillStyle = rgb(th.namekTronc); c.fill();
+    // sa face a l'ombre, coupee droit dans le trace
+    c.save(); c.clip();
+    c.fillStyle = rgb(th.namekTronc, 0.74);
+    c.fillRect(bx + pente * 0.4, 0, NAMEK_W, by);
+    c.restore();
+
+    const chapeau = rgb(th.namekChapeau);
+    const dessous = rgb(th.namekChapeau, 0.72);
+    const eclat = rgb(th.namekChapeau, 1.30);
+    // le dessous, qui deborde : c'est lui qui donne l'epaisseur
+    // LA COURONNE EST BOSSELEE, ET C'EST UNE CORRECTION.
+    //
+    // Elle etait une calotte lisse, et de tout l'arbre les gradins ne
+    // laissent voir QUE LE HAUT : le pied disparait derriere la tribune, ici
+    // comme pour les palmiers de la Riviera. Une demi-ellipse qui depasse du
+    // toit ne ressemble alors plus a un arbre, mais a une colline posee
+    // derriere le stade — on ne peut pas compter sur le tronc pour dire ce
+    // que c'est, puisqu'on ne le voit pas.
+    //
+    // Trois bulbes qui se chevauchent, eux, se lisent comme du vegetal du
+    // premier coup d'oeil : c'est la bosse, et rien d'autre, qui distingue
+    // une plante d'un relief. Le plus haut prend la lumiere, celui de droite
+    // reste dans l'ombre, et une pousse pointue depasse au sommet — le detail
+    // qui acheve de dire que ca a pousse.
+    c.fillStyle = dessous;
+    c.beginPath(); c.ellipse(tx, ty, 92, 22, 0, 0, TAU); c.fill();
+    const bulbe = (dx, dy, rx, ry, col) => {
+      c.fillStyle = col;
+      c.beginPath(); c.ellipse(tx + dx, ty + dy, rx, ry, 0, Math.PI, TAU);
+      c.fill();
+      c.fillRect(tx + dx - rx, ty + dy - 2, rx * 2, 4);
+    };
+    // HAUTE PLUTOT QUE LARGE. Etalee, la couronne retombait en soucoupe :
+    // un parasol, et rien d'autre. Ce qui pousse monte.
+    bulbe(50, 6, 64, 76, dessous);
+    bulbe(-54, 4, 68, 84, chapeau);
+    bulbe(-2, -22, 84, 126, chapeau);
+    bulbe(-24, -34, 48, 84, eclat);
+    // la pousse : un cone mince plante au sommet
+    c.fillStyle = eclat;
+    c.beginPath();
+    c.moveTo(tx - 14, ty - 132);
+    c.quadraticCurveTo(tx - 2, ty - 188, tx + 12, ty - 196);
+    c.quadraticCurveTo(tx + 8, ty - 154, tx + 14, ty - 130);
+    c.closePath(); c.fill();
+    // quatre gouttes sous le chapeau : la seule chose qui pende de cet arbre
+    c.fillStyle = dessous;
+    for (const d of [[-70, 6], [-24, 14], [30, 12], [72, 4]]) {
+      c.beginPath();
+      c.moveTo(tx + d[0] - 17, ty + d[1]);
+      c.quadraticCurveTo(tx + d[0], ty + d[1] + 58, tx + d[0] + 17, ty + d[1]);
+      c.closePath(); c.fill();
+    }
+
+    tab[variante] = cv;
+    return cv;
+  }
+
   // Quel arbre pousse dans quel stade, et de quelle taille. Les hauteurs sont
   // en metres : un cypres depasse un palmier, et les deux rangees ne font pas
   // la meme taille — celle du dedans reste plus basse pour ne pas manger
@@ -2412,7 +2719,12 @@
   // decor — et se compte donc par deux.
   const ARBRE = {
     palmier: { tuile: palmTile,   dehors: [6.2, 0.55], dedans: [5.6, 0.50], pas: 2 },
-    cypres:  { tuile: cypresTile, dehors: [8.6, 0.70], dedans: [7.2, 0.60], pas: 1 }
+    cypres:  { tuile: cypresTile, dehors: [8.6, 0.70], dedans: [7.2, 0.60], pas: 1 },
+    // L'arbre a chapeau est LARGE avant d'etre haut : monte a la taille du
+    // cypres, sa calotte barrait le ciel d'un bout a l'autre de l'ecran et
+    // avalait les trois soleils. On le tient donc entre le palmier et lui,
+    // et on l'espace par deux.
+    namek:   { tuile: namekTile,  dehors: [7.6, 0.60], dedans: [5.6, 0.45], pas: 2 }
   };
 
   function drawArbres(ctx, th, sm, rOut) {
@@ -2807,6 +3119,7 @@
       }
     }
     if (th.tourbillons) drawAstres(ctx);
+    if (th.soleils) drawSoleils(ctx, th);
     if (th.avion) drawAvion(ctx, th);
     if (th.clouds) drawClouds(ctx);
     const sm = samples();
@@ -2866,6 +3179,7 @@
       }
       if (th.vagues) vaguesDuLointain(ctx, sm, rOut + horizon);
       if (th.immeubles) drawImmeubles(ctx, th, sm, rOut, horizon);
+      if (th.rochers) drawRochers(ctx, th, sm, rOut, horizon);
       if (th.haie) drawHaie(ctx, th, sm, rOut, horizon);
       if (th.village) drawVillage(ctx, th, sm, rOut, horizon);
     }
