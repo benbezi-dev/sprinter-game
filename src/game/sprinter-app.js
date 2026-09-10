@@ -260,6 +260,11 @@
   /**
    * « A VOS MARQUES »… « PRET »… ET LE COUP DE PISTOLET.
    *
+   * Tout ce qui suit ne sert que le canal de test : le jeu publie donne son
+   * depart au decompte, sans une parole (voir « deux departs, un par canal »).
+   * Les tampons ne s'y fabriquent donc pas — le code, lui, reste, parce qu'il
+   * n'attend qu'un drapeau pour resservir.
+   *
    * Ces trois sons sont synthetises, comme tout le reste du jeu — la musique,
    * les tambours, les bruitages. Ce n'est pas une coquetterie, c'est ce qui
    * leur permet d'exister partout :
@@ -628,13 +633,23 @@
       //
       // Les quatre sont fabriquees ici, une fois pour toutes, et non a la
       // demande : le starter parle a l'instant ou il parle, et une seconde de
-      // synthese au milieu d'un decompte se verrait. La langue peut changer
+      // synthese au milieu d'un depart se verrait. La langue peut changer
       // en cours de partie, on tient donc les deux pretes.
-      this.buf.marques_fr = this.parole(COMMANDES.marques_fr);
-      this.buf.pret_fr = this.parole(COMMANDES.pret_fr, { f0: 112 });
-      this.buf.marques_en = this.parole(COMMANDES.marques_en);
-      this.buf.pret_en = this.parole(COMMANDES.pret_en, { f0: 112 });
-      this.buf.coup = this.pistolet();
+      //
+      // ET SEULEMENT SUR LE CANAL DE TEST, parce que le starter n'est que la
+      // (voir le bloc « deux departs, un par canal » plus bas). Le jeu publie
+      // donne le depart au decompte : le bip de la seconde et le signal, deja
+      // fabriques plus haut. Ecrite ainsi, la condition se replie a la
+      // compilation, et ce sont cinq tampons de synthese — pres de deux
+      // secondes de parole rendue echantillon par echantillon — qu'on ne
+      // calcule pas au premier son d'une partie qui ne les jouera jamais.
+      if (import.meta.env.VITE_CANAL === 'test') {
+        this.buf.marques_fr = this.parole(COMMANDES.marques_fr);
+        this.buf.pret_fr = this.parole(COMMANDES.pret_fr, { f0: 112 });
+        this.buf.marques_en = this.parole(COMMANDES.marques_en);
+        this.buf.pret_en = this.parole(COMMANDES.pret_en, { f0: 112 });
+        this.buf.coup = this.pistolet();
+      }
     },
     // Une phrase jouee une seule fois : [demi-tons, depart, duree].
     phrase(notes, oct, wave) {
@@ -1140,14 +1155,37 @@
   /* ----------------------------------------------------------- le depart */
 
   /**
-   * LA LONGUEUR DU DEPART N'EST PLUS FIXE.
+   * DEUX DEPARTS, UN PAR CANAL.
    *
-   * Trois secondes, toujours les memes, c'est un metronome : au bout de deux
-   * courses on ne part plus sur le signal mais sur le rythme, et le temps de
-   * reaction ne mesure plus rien du tout. Un starter, lui, ne dit jamais quand
-   * il va tirer — c'est meme toute sa fonction. Entre trois et dix secondes
-   * separent donc « a vos marques » du coup de pistolet, et la seule facon de
-   * bien partir redevient d'attendre vraiment.
+   * Le jeu publie part au DECOMPTE : trois secondes, un bip par seconde, un
+   * signal au bout. Le canal de test part au STARTER : « a vos marques »,
+   * « pret », et un coup de pistolet qui tombe entre trois et dix secondes
+   * plus tard, sans que rien n'annonce lequel. Les deux existent en meme
+   * temps parce que le second n'a pas encore fait ses preuves — c'est un
+   * changement de ce qu'on demande au joueur, pas un reglage, et il s'essaie
+   * la ou on peut le reprendre.
+   *
+   * La forme compte : ecrite ainsi, la condition se replie a la compilation
+   * publique, et tout ce qui pend au starter — sa voix de synthese, le juge
+   * de depart sur la pelouse — sort du build au lieu d'y voyager en silence.
+   * Voir DEPART_STARTER dans game/canal.ts, qui dit la meme chose du cote
+   * moderne, et l'en-tete de ce fichier-la pour le pourquoi de cette forme.
+   */
+  const STARTER = import.meta.env.VITE_CANAL === 'test';
+
+  /** Le decompte du jeu publie : trois secondes, et le joueur les connait. */
+  const DECOMPTE = 3;
+
+  /**
+   * LA LONGUEUR DU DEPART, QUAND C'EST LE STARTER QUI LE DONNE.
+   *
+   * C'est le pari de ce depart-la, et ce qui le distingue du decompte. Trois
+   * secondes, toujours les memes, c'est un metronome : au bout de deux courses
+   * on ne part plus sur le signal mais sur le rythme, et le temps de reaction
+   * ne mesure plus rien du tout. Un starter, lui, ne dit jamais quand il va
+   * tirer — c'est meme toute sa fonction. Entre trois et dix secondes separent
+   * donc « a vos marques » du coup de pistolet, et la seule facon de bien
+   * partir redevient d'attendre vraiment.
    *
    * Le tirage penche vers les departs courts. Dix secondes existent, et c'est
    * parce qu'elles sont rares qu'elles sont redoutables : une attente qui
@@ -1160,8 +1198,11 @@
   /** Et ce qu'il laisse pour se placer, entre les marques et « pret ». */
   const MARQUES_MIN = 1.5;
 
-  /** Une longueur de depart, tiree au sort. */
+  /** Une longueur de depart, tiree au sort — ou les trois secondes du jeu. */
   function tirerLeDepart() {
+    // Au decompte, il n'y a rien a tirer : trois secondes, les memes a chaque
+    // course, et c'est bien ce qui les separe d'un starter.
+    if (!STARTER) return DECOMPTE;
     return DEPART_MIN + (DEPART_MAX - DEPART_MIN) * Math.pow(Math.random(), 1.5);
   }
 
@@ -1224,9 +1265,10 @@
   /**
    * LE STARTER, D'UNE IMAGE A L'AUTRE.
    *
-   * La boucle l'appelle a chaque tour pendant le decompte ; il dit ce qu'il a
-   * a dire quand l'heure est venue, et se tait le reste du temps. Rend 1 ou 2
-   * quand il vient de parler, pour qui voudrait s'en servir.
+   * `annoncerLeDepart` l'appelle a chaque tour de boucle, sur le canal qui
+   * l'essaie ; il dit ce qu'il a a dire quand l'heure est venue, et se tait le
+   * reste du temps. Rend 1 ou 2 quand il vient de parler, pour qui voudrait
+   * s'en servir.
    */
   function starterParle() {
     const d = G.depart;
@@ -1241,14 +1283,37 @@
   }
 
   /**
-   * LE COUP DE PISTOLET.
+   * LE DEPART, D'UNE IMAGE A L'AUTRE, DANS L'UNE OU L'AUTRE VERSION.
    *
-   * Le son, l'eclair du canon, la secousse. L'eclair n'est pas un ornement :
-   * un telephone tenu a bout de bras dans le bruit, et c'est l'oeil qui part
-   * en premier — comme sur une piste, ou le juge de depart leve son pistolet
-   * bien en vue.
+   * La boucle appelle ceci a chaque tour pendant le compte, avec la valeur
+   * qu'avait `Math.floor(G.countT)` AVANT l'increment : c'est ce qui permet
+   * de reconnaitre le passage d'une seconde a la suivante sans tenir un
+   * compteur de plus.
+   *
+   * Au decompte, chaque seconde franchie vaut un bip — il dit dans combien de
+   * temps le signal tombe, ce qui est toute la fonction d'un decompte, et
+   * exactement ce qu'un starter ne dirait jamais. Au starter, il n'y a pas de
+   * seconde a marquer : il y a deux commandes a donner quand leur heure vient.
+   */
+  function annoncerLeDepart(avant) {
+    if (STARTER) return starterParle();
+    if (Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
+    return 0;
+  }
+
+  /**
+   * LE COUP DE PISTOLET — ou le signal, selon qui donne le depart.
+   *
+   * Au starter : le son, l'eclair du canon, la secousse. L'eclair n'est pas un
+   * ornement — un telephone tenu a bout de bras dans le bruit, et c'est l'oeil
+   * qui part en premier, comme sur une piste ou le juge de depart leve son
+   * pistolet bien en vue.
+   *
+   * Au decompte, c'est le signal seul, sans eclair ni secousse : rien n'est
+   * parti d'un canon, et un ecran qui tremble sur un bip ne raconterait rien.
    */
   function coupDePistolet() {
+    if (!STARTER) { Audio_.sfx('go'); return; }
     Audio_.starter('feu');
     G.flash = 0.45; G.shake = 0.4;
     if (G.depart) G.depart.dit = 3;
@@ -4261,6 +4326,10 @@
   }
 
   function drawStarter(ctx) {
+    // Personne sur la pelouse quand c'est un decompte qui donne le depart :
+    // le jeu publie n'a pas de starter, et un officiel plante la sans rien
+    // faire serait plus etrange que son absence.
+    if (!STARTER) return;
     const T = G.track, d = G.depart;
     if (!T || !d) return;
     // Le coup est parti quand la course a commence : `elapsed` compte alors
@@ -4411,7 +4480,8 @@
     finirLesSaluts,
     armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
-    poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle, coupDePistolet,
+    poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
+    annoncerLeDepart, coupDePistolet,
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,

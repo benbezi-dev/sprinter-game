@@ -30,8 +30,12 @@ import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
-// Le delai avant le pistolet est tire au sort, entre trois et dix secondes,
-// et le meme pour toutes les equipes engagees. Voir depart.js.
+// Un peu plus qu'a une equipe : il y a du monde a mettre en place. C'est le
+// delai du jeu publie, qui part au decompte ; sur le canal de test, ou un
+// starter donne le depart, il est tire au sort — et le meme pour toutes les
+// equipes engagees, parce qu'il n'y a qu'un seul coup de pistolet. Voir
+// depart.js.
+const AVANT_DEPART_MS = 6000;
 const VIE_MS = 30 * 60 * 1000;
 const APRES_COURSE_MS = 90 * 1000;
 const INACTIVITE_MS = 8 * 60 * 1000;
@@ -346,7 +350,7 @@ export class SalleConfrontation {
         const tous = humaines >= 1 && pretes === humaines &&
                      (humaines + this.fantomes.size) >= MIN_EQUIPES;
         if (tous && !this.departA) {
-          this.departA = Date.now() + avantDepart();
+          this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           for (const course of this.equipes.values()) course.reinitialiser();
           for (const cle of this.fantomes.keys()) {
             const c = this.equipes.get(cle);
