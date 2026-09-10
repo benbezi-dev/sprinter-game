@@ -922,7 +922,15 @@
     wr_save:         ['INSCRIRE MON NOM', 'PUT MY NAME ON IT'],
     wr_saving:       ['enregistrement...', 'saving...'],
     wr_done:         ['{n} est {r} au TOP 500', '{n} is {r} on the TOP 500'],
-    wr_fail:         ["échec de l'envoi, réessaie", 'failed to send, try again'],
+    wr_fail:         ["échec de l'envoi", 'failed to send'],
+    wr_too_fast:     ['trop de tentatives coup sur coup', 'too many attempts at once'],
+    // Le record est GARDÉ sur l'appareil avant que ces phrases s'affichent :
+    // elles disent ce qui va se passer, elles ne demandent rien. Voir
+    // src/game/record-attente.ts.
+    wr_kept:         ['ton record est gardé — il repartira tout seul',
+                      'your record is saved — it will be sent on its own'],
+    wr_taken_help:   ['ton record est gardé. relie cet appareil à ton nom dans MES COURSES, ou inscris-le sous un autre nom',
+                      'your record is saved. link this device to your name in MY RACES, or put another name on it'],
     wr_see:          ['VOIR LE TOP 500', 'VIEW TOP 500'],
     wr_later:        ['plus tard', 'later'],
 

@@ -4,9 +4,10 @@ import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
+import { garder, oublier } from '@/game/record-attente';
 import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
@@ -137,13 +138,23 @@ export function OneShotEndScreen() {
   const envoyer = async (nom: string, liste: RaceOutcome[]) => {
     saveName(nom);
     setTopStatus('sending');
-    try {
-      for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
-      primeTopNames();          // le plateau olympique se met a jour
-      setTopStatus('done');
-    } catch {
-      setTopStatus('error');
+    // Un refus sur une epreuve ne doit ni faire tomber les suivantes, ni
+    // emporter le chrono avec lui : chacune est tentee pour elle-meme, et
+    // celles qui echouent sont gardees pour un prochain envoi. Un `for` qui
+    // laisse filer la premiere erreur abandonnait les deux dernieres courses
+    // d'un one shot a cause de la premiere.
+    let refuse = false;
+    for (const t of liste) {
+      try {
+        await submitRaceRecord(t.race, nom, t.ms);
+        oublier(t.race);
+      } catch (e) {
+        garder(t.race, t.ms, nom, raisonDe(e));
+        refuse = true;
+      }
     }
+    primeTopNames();            // le plateau olympique se met a jour
+    setTopStatus(refuse ? 'error' : 'done');
   };
 
   // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
