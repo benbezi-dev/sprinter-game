@@ -76,6 +76,8 @@ export type Resultat = {
   pbMs: number;
   meilleurMs: number;
   nouveauPbMs: number;
+  /** La distance de ce defi, telle que le serveur l'a reconnue. */
+  epreuve: RaceKey;
   creneau: 'midi' | 'soir';
   expireLe: number | null;
   graine: number | null;
@@ -111,6 +113,16 @@ function langue(): string {
    n'est pas « ton meilleur essai du defi » quand on revient le soir. */
 
 export type Session = {
+  /**
+   * Les defis du creneau : un par distance ou le joueur est classe, de un a
+   * trois, dans l'ordre du programme. C'est ce que l'accueil pose en cartes.
+   */
+  objectifs: Objectif[];
+  /**
+   * Celui qu'on court, ou celui qu'on courrait. Distinct de la liste : une
+   * fois entre dans un defi, tout ce qui suit — la revanche, l'envoi, l'ecran
+   * d'arrivee — parle de CELUI-LA et d'aucun autre.
+   */
   objectif: Objectif | null;
   /** Le joueur court-il le defi EN CE MOMENT ?
    *
@@ -128,7 +140,7 @@ export type Session = {
 };
 
 let session: Session = {
-  objectif: null, enCours: false, courses: 0,
+  objectifs: [], objectif: null, enCours: false, courses: 0,
   meilleurMs: null, dernier: null, envoi: false,
 };
 const ecouteurs = new Set<() => void>();
@@ -156,24 +168,34 @@ export function useObjectif(): Session {
 /* ---------------------------------------------------------------- lecture */
 
 /**
- * L'objectif en cours, ou null.
+ * Les defis ouverts, un par distance. La liste peut etre vide.
  *
- * Null couvre quatre cas qui se traitent pareil : il n'y en a pas encore
- * aujourd'hui, la fenetre est fermee, le joueur n'est pas classe, le serveur
- * ne repond pas. Aucun n'est une erreur du point de vue du jeu.
+ * Vide couvre quatre cas qui se traitent pareil : il n'y en a pas encore
+ * aujourd'hui, la fenetre est fermee, le joueur n'est classe nulle part, le
+ * serveur ne repond pas. Aucun n'est une erreur du point de vue du jeu.
+ *
+ * `objectif` NE BOUGE PAS PENDANT UNE COURSE. L'accueil rappelle cette route
+ * en revenant, et ecraser le defi qu'on court par le premier de la liste
+ * renverrait le joueur sur le 100 m au milieu de son 400 m.
  */
-export async function lireObjectif(): Promise<Objectif | null> {
+export async function lireObjectif(): Promise<Objectif[]> {
   const nom = getSavedName();
-  if (!nom) return null;
+  if (!nom) return [];
   try {
     const r = await fetch(
       `${API_BASE}/objectif?nom=${encodeURIComponent(nom)}&langue=${langue()}`);
-    if (!r.ok) return null;
+    if (!r.ok) return [];
     const d = await r.json();
-    const o = (d?.objectif ?? null) as Objectif | null;
-    poser({ objectif: o });
-    return o;
-  } catch { return null; }
+    // `objectifs` est la forme d'aujourd'hui ; `objectif` seul est celle d'un
+    // serveur qui n'a pas encore ete deploye. Les deux se lisent, et le jeu ne
+    // reste pas sans defi le temps d'un deploiement.
+    const liste = (Array.isArray(d?.objectifs) ? d.objectifs
+      : (d?.objectif ? [d.objectif] : [])) as Objectif[];
+    poser(session.enCours
+      ? { objectifs: liste }
+      : { objectifs: liste, objectif: liste[0] || null });
+    return liste;
+  } catch { return []; }
 }
 
 /* ----------------------------------------------------------------- courir */
@@ -277,6 +299,10 @@ export async function soumettreCourse(tempsMs: number): Promise<Resultat | null>
       body: JSON.stringify({
         nom, ms, langue: langue(),
         device_id: getDeviceId(),
+        // LA DISTANCE QU'ON VIENT DE COURIR. Trois defis sont ouverts en meme
+        // temps, et c'est elle qui dit lequel cette course vise : sans elle,
+        // un 400 m irait valider le 100 m, qui n'a rien demande.
+        epreuve: session.objectif?.epreuve,
         trace: traceDeLaCourse(),
       }),
     });
@@ -346,6 +372,13 @@ export function minutesRestantes(o: Objectif | null): number | null {
  * de le faire — au milieu d'une autre course, par exemple : interrompre celle
  * qu'on est en train de courir pour en ouvrir une autre serait pire que de ne
  * rien faire.
+ *
+ * ET FALSE AUSSI QUAND IL Y EN A PLUSIEURS. Depuis que le defi existe sur les
+ * trois distances, la notification en annonce un et cite les autres — mais
+ * rien dans ce qu'elle transmet ne dit au jeu LEQUEL a ete touche. Ouvrir le
+ * 100 m a quelqu'un qui venait pour le tour de piste serait pire que de le
+ * laisser choisir : on rend alors la main a l'accueil, ou les trois cartes
+ * sont posees cote a cote et le choix coute un geste.
  */
 export async function ouvrirDepuisNotification(): Promise<boolean> {
   const nom = getSavedName();
@@ -358,8 +391,9 @@ export async function ouvrirDepuisNotification(): Promise<boolean> {
     }).catch(() => { /* le compteur n'est pas vital */ });
   }
 
-  const o = await lireObjectif();
-  if (!o) return false;
+  const liste = await lireObjectif();
+  if (liste.length !== 1) return false;
+  const o = liste[0];
 
   const etat = SprinterApp.G.state;
   if (etat !== 'title' && etat !== 'open') return false;

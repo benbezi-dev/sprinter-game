@@ -4,7 +4,7 @@ import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
 import { CarteObjectif } from './Revanche';
-import { lireObjectif, lancerObjectif, sessionCourante } from '@/game/objectif';
+import { lireObjectif, lancerObjectif } from '@/game/objectif';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS, fetchDuels, type MonRang } from '@/game/duels';
@@ -226,10 +226,7 @@ export function TitleScreen() {
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
                 classement, ou serveur muet, la carte disparait plutot que
                 d'annoncer un defi qui n'existe pas. */}
-            <CarteObjectif onLancer={() => {
-              const o = sessionCourante().objectif;
-              if (o) lancerObjectif(o);
-            }} />
+            <CarteObjectif onLancer={(o) => lancerObjectif(o)} />
 
             {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
                 Sous le défi du jour et au-dessus du sélecteur de mode : c'est
