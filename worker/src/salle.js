@@ -475,6 +475,11 @@ export class SalleDirecte {
         opponentName: invite.nom,
         challengerMs: hote.fin,
         opponentMs: invite.fin,
+        // La distance decide du classement touche : depuis que les niveaux ne
+        // sont plus partages, une course en direct sur 400 m ne doit rien
+        // deplacer au classement du 100 m. La salle les tient depuis le
+        // premier arrive, et c'est le meme programme pour tout le monde.
+        epreuves: this.epreuves,
       });
       this.annoncerPoints(hote, invite, points);
     } catch (e) { /* le classement se passera de ce duel */ }

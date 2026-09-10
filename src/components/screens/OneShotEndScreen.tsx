@@ -15,6 +15,7 @@ import {
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
+import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
@@ -204,6 +205,16 @@ export function OneShotEndScreen() {
   async function partagerLaVideo() {
     setVideo(await partagerLeFilm());
   }
+
+  /**
+   * La distance ou ce duel a compte.
+   *
+   * Elle sert aux annonces de montee et de descente, qui ne veulent plus rien
+   * dire sans elle : les niveaux ne sont pas partages, on monte sur 400 m et
+   * pas partout. Le serveur la dit quand il repond ; sinon c'est la course
+   * qu'on vient de faire, ce qui revient au meme et tient meme hors ligne.
+   */
+  const disciplineCourue = nomDiscipline(cleDiscipline(shotRaces as string[]));
 
   const beaten = !!challenge && complete && runTime < ghostTime;
   /**
@@ -674,6 +685,7 @@ export function OneShotEndScreen() {
                       ${mesPoints.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                       {N.t(mesPoints.monte ? 'duel_promu' : 'duel_relegue', {
                         r: nomDuRang(mesPoints.rang.etage, mesPoints.rang.division),
+                        e: disciplineCourue,
                       })}
                     </span>
                   )}
@@ -803,6 +815,7 @@ export function OneShotEndScreen() {
                           ${duel.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                           {N.t(duel.monte ? 'duel_promu' : 'duel_relegue', {
                             r: nomDuRang(duel.rang.etage, duel.rang.division),
+                            e: duel.epreuve ? nomDiscipline(duel.epreuve) : disciplineCourue,
                           })}
                         </span>
                       )}

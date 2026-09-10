@@ -28,6 +28,45 @@ const VU_KEY = 'sprinter_duels_vus';
 /** Les etages de l'echelle, du premier au dernier. */
 export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legende';
 
+/**
+ * LA DISCIPLINE : ce sur quoi une division se gagne.
+ *
+ * Un joueur n'a pas un niveau, il en a un par distance. Regional sur 100 m ne
+ * dit rien de ce qu'on vaut sur 400 m, et le classement le dit maintenant :
+ * il y a une echelle par discipline, et l'ecran demande celle qu'il montre.
+ *
+ * Une discipline est une epreuve — `'100'` — ou le cumul de plusieurs, courues
+ * d'un bloc : `'100+200'`. L'ordre est celui du programme, 100 avant 200 avant
+ * 400, sans quoi deux ecrans demanderaient deux classements pour la meme
+ * course. `cleDiscipline` est le seul endroit ou cette cle se fabrique.
+ */
+export const EPREUVES_DUEL = ['100', '200', '400'];
+export const DISCIPLINE_DEFAUT = '100';
+
+export function cleDiscipline(epreuves?: string[] | null): string {
+  const vues = new Set((epreuves || []).map(e => String(e).trim()));
+  const cle = EPREUVES_DUEL.filter(k => vues.has(k)).join('+');
+  return cle || DISCIPLINE_DEFAUT;
+}
+
+/** Le libelle d'une discipline : « 100 M », « 100 + 200 M ». */
+export function nomDiscipline(cle: string): string {
+  const eps = String(cle || '').split('+').filter(k => EPREUVES_DUEL.includes(k));
+  return (eps.length ? eps : [DISCIPLINE_DEFAUT]).join(' + ') + ' M';
+}
+
+/** Ma division sur une discipline, telle que le serveur la rend. */
+export type MonRang = {
+  epreuve: string;
+  palier: number;
+  etage: Etage;
+  division: number;
+  lp: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
 export type Echelle = {
   etages: Etage[];
   divisions: number;
@@ -37,6 +76,8 @@ export type Echelle = {
 
 export type DuelRow = {
   name: string;
+  /** La discipline de ce classement. La meme sur toutes ses lignes. */
+  epreuve: string;
   // Pas de MMR : le serveur ne le publie pas. Il estime la force et ordonne
   // les egalites parfaites, sans jamais s'afficher — voir duelBoard cote
   // worker. Ce qui suit est toute la couche visible.
@@ -70,6 +111,14 @@ export type DuelIssue = {
   issue: 'opponent' | 'challenger' | 'draw';
   /** Role du joueur local dans ce duel. */
   role?: 'opponent' | 'challenger';
+  /**
+   * La discipline ou ce duel a compte.
+   *
+   * Elle accompagne le rang pour une raison simple : « TU MONTES EN NATIONAL
+   * II » ne veut plus rien dire sans distance depuis que les niveaux ne sont
+   * plus partages — on monte sur 400 m, pas partout a la fois.
+   */
+  epreuve?: string;
   /** Points de ligue gagnes par celui qui releve le defi. */
   lp?: number;
   lp_adverse?: number;
@@ -88,20 +137,44 @@ export type DuelBareme = { victoire: number; defaite: number; nul: number };
 export type DuelBoard = {
   echelle: Echelle;
   bareme: { lanceur: DuelBareme; releveur: DuelBareme };
+  /** La discipline de ce classement, telle que le serveur l'a comprise. */
+  epreuve: string;
+  /** Les disciplines qu'un ecran peut proposer : les trois distances seules. */
+  epreuves: string[];
   classement: DuelRow[];
   moi: DuelRow | null;
+  /** Mes divisions sur TOUTES mes disciplines, la plus haute en tete. */
+  mes_epreuves: MonRang[];
 };
 
-// On ne retient que le rang : les points ne viennent plus du serveur.
-type Vu = Record<string, { rank: number }>;
+// On ne retient que le rang, et par discipline : le 12e du 100 m n'est pas le
+// 12e du 400 m, et une seule memoire pour les deux ferait clignoter des
+// fleches qui ne racontent rien.
+type Vu = Record<string, Record<string, { rank: number }>>;
 
 function lireVu(): Vu {
-  try { return JSON.parse(localStorage.getItem(VU_KEY) || '{}'); } catch { return {}; }
-}
-function ecrireVu(rows: DuelRow[]) {
   try {
-    const v: Vu = {};
-    for (const r of rows) v[r.name.trim().toLowerCase()] = { rank: r.rank };
+    const brut = JSON.parse(localStorage.getItem(VU_KEY) || '{}');
+    if (!brut || typeof brut !== 'object') return {};
+    // Le souvenir d'avant les disciplines rangeait des joueurs a la racine, la
+    // ou l'on range maintenant des distances. On ne le lit pas — un rang de
+    // joueur pris pour un classement entier ferait n'importe quoi — et il ne
+    // survit pas a la premiere ecriture, qui ne recopie que ce qui passe ici.
+    const propre: Vu = {};
+    for (const cle of Object.keys(brut)) {
+      if (cleDiscipline(cle.split('+')) === cle) propre[cle] = brut[cle];
+    }
+    return propre;
+  } catch { return {}; }
+}
+function ecrireVu(epreuve: string, rows: DuelRow[]) {
+  try {
+    // On garde les autres disciplines : chacune a son dernier passage, et
+    // regarder le 200 m ne doit pas effacer les fleches du 100 m.
+    const v = lireVu();
+    const d: Record<string, { rank: number }> = {};
+    for (const r of rows) d[r.name.trim().toLowerCase()] = { rank: r.rank };
+    v[epreuve] = d;
     localStorage.setItem(VU_KEY, JSON.stringify(v));
   } catch { /* sans memoire : pas de fleches, le classement reste juste */ }
 }
@@ -112,13 +185,20 @@ function ecrireVu(rows: DuelRow[]) {
  * l'indicateur serait vide la plupart du temps ; ainsi il raconte toujours
  * quelque chose : « voila ce qui a change depuis ton dernier passage ».
  */
-export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
+export async function fetchDuels(
+  epreuve: string = DISCIPLINE_DEFAUT, marquerVu = true,
+): Promise<DuelBoard | null> {
   try {
     const nom = encodeURIComponent(getSavedName() || '');
-    const res = await fetch(`${API_BASE}/duels?name=${nom}`);
+    const ep = encodeURIComponent(epreuve || DISCIPLINE_DEFAUT);
+    const res = await fetch(`${API_BASE}/duels?name=${nom}&epreuve=${ep}`);
     if (!res.ok) return null;
     const data: DuelBoard = await res.json();
-    const vu = lireVu();
+    // La discipline rendue fait foi : c'est celle que le serveur a comprise,
+    // et c'est sous elle que se rangent les fleches. Comparer un classement du
+    // 200 m au souvenir d'un 100 m inventerait des montees.
+    const cle = data.epreuve || epreuve || DISCIPLINE_DEFAUT;
+    const vu = lireVu()[cle] || {};
     for (const r of data.classement) {
       const avant = vu[r.name.trim().toLowerCase()];
       r.move = avant ? avant.rank - r.rank : 0;
@@ -127,7 +207,8 @@ export async function fetchDuels(marquerVu = true): Promise<DuelBoard | null> {
       const a = vu[data.moi.name.trim().toLowerCase()];
       data.moi.move = a ? a.rank - data.moi.rank : 0;
     }
-    if (marquerVu) ecrireVu(data.classement);
+    if (!Array.isArray(data.mes_epreuves)) data.mes_epreuves = [];
+    if (marquerVu) ecrireVu(cle, data.classement);
     return data;
   } catch {
     return null;

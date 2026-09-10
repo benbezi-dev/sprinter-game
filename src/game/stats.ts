@@ -46,7 +46,9 @@ export type ServerStats = {
     issues: { lanceur: number; releveur: number; nul: number };
     par_jour: Jour[];
     lances: number; releves: number; inscrits: number; joueurs_classes: number;
-    paliers: { palier: number; n: number }[];
+    /** La repartition des divisions, discipline par discipline : un meme
+     *  joueur peut etre elite sur 100 m et departemental sur 400 m. */
+    paliers: { epreuve: string; palier: number; n: number }[];
   } | null;
   joueurs?: {
     nommes: number; avec_insta: number;

@@ -90,3 +90,65 @@ export function agregatSql(direction) {
 export function ordreSql(direction) {
   return direction === PLUS_HAUT ? 'DESC' : 'ASC';
 }
+
+/* ------------------------------------------------------------ la discipline */
+
+/**
+ * LA DISCIPLINE D'UN DUEL — ce sur quoi un niveau se gagne.
+ *
+ * Un joueur n'a pas un niveau, il en a un PAR DISCIPLINE. Etre regional sur
+ * 100 m ne dit rien de ce qu'on vaut sur 400 m : ce sont deux courses, deux
+ * apprentissages, et deux echelles. Un classement unique melangeait les trois
+ * et racontait la meme chose sur les trois — le sprinter pur y montait grace a
+ * ses 100 m et se retrouvait annonce « national » sur un tour de piste qu'il
+ * n'avait jamais couru.
+ *
+ * La discipline est donc la cle de rangement du classement, et elle se derive
+ * des epreuves de la rencontre : le 100 m seul, le 200 m seul, et ainsi de
+ * suite. Un duel courru sur plusieurs epreuves — le one shot en propose
+ * jusqu'a trois — se gagne au CUMUL des chronos : ce n'est ni un 100 m ni un
+ * 200 m, c'est un combine, et il a sa propre echelle. Le repartir sur les
+ * epreuves qui le composent donnerait trois fois les points d'une seule
+ * course ; l'attribuer a l'une d'elles ferait entrer au classement du 400 m
+ * quelqu'un qui n'a jamais couru un 400 m tout seul.
+ *
+ * L'ordre est canonique — 100 avant 200 avant 400 — pour qu'un 200 + 100 et un
+ * 100 + 200 soient la meme discipline. Sans cela, l'ordre des clics du joueur
+ * ouvrirait deux classements jumeaux.
+ */
+export const DISCIPLINE_DEFAUT = '100';
+
+/** Ce qui separe deux epreuves dans la cle d'un combine. */
+const LIEN = '+';
+
+export function cleDiscipline(epreuves) {
+  const vues = new Set();
+  for (const e of Array.isArray(epreuves) ? epreuves : [epreuves]) {
+    const c = String(e == null ? '' : e).trim();
+    if (EPREUVES[c]) vues.add(c);
+  }
+  // Rien de reconnaissable : le 100 m plutot que rien. Une rencontre sans
+  // discipline n'irait dans aucun classement, et disparaitrait en silence.
+  if (!vues.size) return DISCIPLINE_DEFAUT;
+  return CLES.filter(c => vues.has(c)).join(LIEN);
+}
+
+/** Les epreuves d'une discipline, dans l'ordre du programme. */
+export function epreuvesDeDiscipline(cle) {
+  return String(cle || '').split(LIEN).filter(c => EPREUVES[c]);
+}
+
+/** Cette cle designe-t-elle une discipline du jeu ? */
+export function estDiscipline(cle) {
+  const eps = epreuvesDeDiscipline(cle);
+  return eps.length > 0 && cleDiscipline(eps) === String(cle);
+}
+
+/**
+ * Les disciplines qu'un ecran peut proposer : les trois epreuves seules.
+ *
+ * Les combines existent au classement — on y entre en courant un — mais ils ne
+ * se proposent pas : sept boutons pour trois distances demanderaient au joueur
+ * de choisir entre des choses dont six sur sept ne lui parlent pas.
+ */
+export const DISCIPLINES_SIMPLES = CLES.slice();

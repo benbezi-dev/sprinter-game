@@ -58,11 +58,37 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/challenge`          | Crée un défi, renvoie un code court |
 | GET     | `/challenge?id=`      | Lit un défi et ses tentatives |
 | POST    | `/challenge/attempt`  | Enregistre une tentative |
+| GET     | `/duels?epreuve=&name=` | Classement des duels d'une discipline |
+| POST    | `/duels/recalculer`   | Rejoue tout l'historique (clé d'administration) |
 | POST    | `/push/subscribe`     | Enregistre un abonnement Web Push |
 | POST    | `/push/unsubscribe`   | Oublie les abonnements web d'un appareil |
 | POST    | `/push/natif/abonner`   | Enregistre un jeton Firebase (iOS, Android) |
 | POST    | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
 | POST    | `/direct/turn`        | Identifiants du relais de la voix, valables une heure |
+
+## Un classement de duels par discipline
+
+Le niveau d'un joueur n'est pas partagé entre les distances : être régional sur
+100 m ne dit rien de ce qu'il vaut sur 400 m, et le classement le dit
+maintenant. `GET /duels` demande donc une **discipline** — `100`, `200`, `400`,
+ou un combiné couru d'un bloc comme `100+200` — et rend l'échelle de celle-là,
+le 100 m par défaut. La réponse porte aussi `mes_epreuves` : les divisions du
+joueur sur toutes ses distances, la plus haute en tête, pour l'écusson de
+l'accueil qui n'a la place que d'une.
+
+Un duel se range sous la discipline de la rencontre : les épreuves du défi pour
+un défi différé, celles de la salle pour une course en direct. Les championnats
+lisent l'échelle de leur propre distance — une édition du 400 m se remplit avec
+les meilleurs du 400 m.
+
+**Au premier appel après le déploiement, la table `duel_players` est refaite** :
+sa clé passe de `name_key` à `(name_key, epreuve)`, ce que SQLite ne sait pas
+retoucher en place. L'ancienne table est conservée telle quelle sous le nom
+`duel_players_avant_disciplines`, et les échelles sont reconstruites en rejouant
+`duel_results` — l'historique sait sur quoi chaque duel s'est joué (les défis
+gardent leurs `races` ; les courses en direct d'avant, qui ne gardaient rien,
+retombent sur le 100 m). Rien à lancer à la main ; `POST /duels/recalculer`
+refait le même travail à volonté.
 
 ## Les notifications
 
