@@ -9,6 +9,7 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
+import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
@@ -193,6 +194,10 @@ function json(data, status = 200) {
 const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
+  // joueur en demande un par partie ; dix par minute et par adresse laissent
+  // passer une famille derriere la meme box et arretent net un script.
+  '/direct/turn': { max: 10, fenetreMs: 60_000 },
   default: { max: 30, fenetreMs: 60_000 },
 };
 
@@ -1930,6 +1935,20 @@ async function servir(request, env, ctx, porteur) {
         return json({ invites: r.invites, injoignables: r.injoignables });
       }
 
+      // Les identifiants du relais de la voix.
+      //
+      // En POST, et pas en GET : c'est ce qui le fait passer par la limite de
+      // debit posee plus haut, qui ne regarde que les POST. La route ne change
+      // rien sur le serveur, mais elle depense — elle a plus besoin d'un
+      // compteur que la plupart des ecritures.
+      if (sous === 'turn' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        return json(await identifiantsTurn(env, device_id));
+      }
+
       if (sous === 'invitations' && request.method === 'GET') {
         const deviceId = url.searchParams.get('device_id');
         if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
@@ -3056,6 +3075,56 @@ async function servir(request, env, ctx, porteur) {
         return { total: t?.total || 0, appareils: t?.appareils || 0, par_jour: pj || [], par_mois: pm || [] };
       }, { total: 0, appareils: 0, par_jour: [], par_mois: [] });
 
+      // --- retention par cohorte (table `visits`) -------------------
+      //
+      // D1/D7/D30 au sens ou un editeur les entend — et ce n'est PAS le sens
+      // des « joueurs actifs sur 7 jours » calcules plus haut. La, on comptait
+      // qui a joue recemment. Ici on suit un GROUPE : les appareils vus pour la
+      // premiere fois le meme jour, et la part d'entre eux qui rouvre le jeu
+      // exactement N jours plus tard. C'est le seul des deux qui se compare aux
+      // reperes du marche, et le seul qu'on demande dans un dossier.
+      //
+      // Deux precautions, sans lesquelles le chiffre ment :
+      //
+      // 1. Une cohorte trop jeune ne compte pas. Un appareil arrive hier ne
+      //    peut pas avoir de J+7 ; le laisser au denominateur ferait chuter le
+      //    taux a mesure que le jeu gagne des joueurs — l'inverse de ce qu'on
+      //    veut lire. D'ou `date(jour, +N day) < date('now')` : seuls les
+      //    jalons entierement ecoules entrent dans le calcul.
+      // 2. C'est un retour au JEU, pas une partie jouee. `visits` enregistre
+      //    l'ouverture ; quelqu'un qui rouvre sans courir compte comme revenu.
+      //    Le taux est donc un plafond, et le tableau le dit.
+      //
+      // Reporte seul depuis 317005b, qui n'avait jamais rejoint cette branche.
+      // Le reste de ce commit — purge du limiteur, plancher des chronos,
+      // nationalite — n'est PAS repris : la nationalite a ici sa propre
+      // version, et le plancher change ce que le serveur accepte, ce qui
+      // merite son propre passage plutot qu'un transport en contrebande.
+      const retention = await bloc(async () => {
+        const jalon = async n => {
+          // Le meme ecart sert deux fois dans la requete, d'ou les deux liens.
+          const ecart = `+${n} day`;
+          const r = await DB.prepare(
+            `WITH premiere AS (
+               SELECT device_id, MIN(day) AS jour FROM visits GROUP BY device_id
+             )
+             SELECT COUNT(*) AS base,
+                    COALESCE(SUM(CASE WHEN EXISTS (
+                      SELECT 1 FROM visits v
+                       WHERE v.device_id = p.device_id
+                         AND v.day = date(p.jour, ?)
+                    ) THEN 1 ELSE 0 END), 0) AS revenus
+               FROM premiere p
+              WHERE date(p.jour, ?) < date('now')`
+          ).bind(ecart, ecart).first();
+          const base = r?.base || 0;
+          // `taux` a null plutot qu'a zero quand la base est vide : zero se lit
+          // « personne n'est revenu », null se lit « on ne sait pas encore ».
+          return { base, revenus: r?.revenus || 0, taux: base ? (r.revenus / base) : null };
+        };
+        return { j1: await jalon(1), j7: await jalon(7), j30: await jalon(30) };
+      }, null);
+
       // --- duels (tables `duel_results` / `duel_players`) ----------
       const duels = await bloc(async () => {
         const r = await DB.prepare(
@@ -3151,7 +3220,7 @@ async function servir(request, env, ctx, porteur) {
         scores: s || {},
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
-        parties, reprises, duels, joueurs, geo, relais, championnats,
+        parties, reprises, retention, duels, joueurs, geo, relais, championnats,
         signalements,
         releve_a: now,
       });
