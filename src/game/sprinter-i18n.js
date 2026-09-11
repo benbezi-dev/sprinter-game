@@ -128,6 +128,7 @@
     obj_a_battre:   ['à battre', 'to beat'],
     obj_reussi:     ['réussi', 'cleared'],
     obj_distance:   ['distance', 'distance'],
+    obj_fini:       ['créneau terminé', 'window closed'],
     obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
     obj_rythme:     ['RAPPELS DU DÉFI', 'CHALLENGE REMINDERS'],
     obj_rythme_2:   ['deux par jour', 'twice a day'],
