@@ -260,10 +260,22 @@ export async function regarderClassement(canal, race, nom, chronoMs, entrees) {
       await noter(canal, 'mouchoir', `mouchoir:${race}:${haut.length}:${ecart}`, {
         race, combien: haut.length, ecart_ms: ecart,
         premier_ms: premier, dernier_ms: dernier,
-        // Les noms partent masques des l'ecriture pour ce moment-ci : une liste
-        // de huit pseudonymes demanderait huit accords, et l'image se tient
-        // tres bien sans eux — c'est l'ecart qu'elle raconte, pas les porteurs.
-        noms: haut.map(e => masquer(e.name)),
+        // Les noms entiers, comme pour tous les autres moments.
+        //
+        // Ils partaient masques des l'ecriture ici, et nulle part ailleurs. Le
+        // raisonnement — une liste de huit pseudonymes demanderait huit
+        // accords — portait sur ce qu'on PUBLIE, et il reste vrai la ; mais il
+        // etait applique a ce qu'on ECRIT, ce qui est definitif. Le nom masque
+        // a l'ecriture n'existe plus nulle part : l'atelier ne peut plus
+        // demander l'accord a quelqu'un qu'il ne sait plus nommer, et sur les
+        // mouchoirs deja ranges le nom ne se retrouve qu'en repassant par
+        // `scores`, quand il y est encore.
+        //
+        // Le masquage n'a pas disparu, il a repris sa place : `sansNoms()`
+        // masque a la LECTURE, et une lecture qui ne demande pas `avecNoms`
+        // rend donc toujours huit noms masques. Ce qui change, c'est que
+        // l'atelier — qui demande `noms=1` — les voit enfin.
+        noms: haut.map(e => e.name),
         chronos_ms: haut.map(e => Number(e.best_split_ms ?? e.time_ms)),
       });
     }
