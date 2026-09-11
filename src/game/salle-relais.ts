@@ -41,7 +41,8 @@ export type EtatRelais = {
 
 type Ecouteurs = {
   onEtat?: (e: EtatRelais) => void;
-  onDepart?: (dansMs: number) => void;
+  /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
+  onDepart?: (dansMs: number, departA: number) => void;
   /** Position d'un coequipier, par son rang de relais. */
   onPos?: (relais: number, d: number) => void;
   /** Le temoin est passe : note de 0 a 2, du rate au parfait. */
@@ -138,7 +139,7 @@ export class SalleRelais {
       this.departPose = true;
       this.finEnvoyee = false;
       // Comme partout : une date, pas un signal. Chacun compte chez lui.
-      this.ec.onDepart?.(m.depart_a - this.maintenant());
+      this.ec.onDepart?.(m.depart_a - this.maintenant(), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
   }

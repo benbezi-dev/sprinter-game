@@ -24,8 +24,10 @@
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE, LEG } from './relais-course.js';
+import { avantDepart } from './depart.js';
 
-const AVANT_DEPART_MS = 5000;          // le temps de se mettre en place
+// Le temps de se mettre en place, puis d'attendre le starter : tire au sort
+// entre trois et dix secondes, comme partout ailleurs. Voir depart.js.
 const VIE_MS = 20 * 60 * 1000;
 // Un Durable Object se facture au temps ou il reste eveille, et une WebSocket
 // ouverte l'y maintient. Le probleme est particulierement net ici : un relais
@@ -227,7 +229,7 @@ export class SalleRelais {
         const tous = this.joueurs.size === TAILLE &&
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
-          this.departA = Date.now() + AVANT_DEPART_MS;
+          this.departA = Date.now() + avantDepart();
           c.reinitialiser();
         }
         this.etat();

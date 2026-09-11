@@ -61,6 +61,15 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
 
   // Pad allume par la demo, pour que le rythme se voie sur les pads memes.
   const [flash, setFlash] = useState<Cote | null>(null);
+  /**
+   * OU EN EST LE STARTER : 1 « a vos marques », 2 « pret », 0 le coup est
+   * parti, `null` il n'a pas commence.
+   *
+   * C'etait un decompte — 3, 2, 1, partez — et il ne pouvait pas le rester :
+   * la course, elle, se donne desormais a la voix, apres une attente qui dure
+   * entre trois et dix secondes. Un tutoriel qui apprendrait a partir sur un
+   * rythme apprendrait exactement ce qu'il ne faut pas faire.
+   */
   const [compte, setCompte] = useState<number | null>(null);
   const [modeleVus, setModeleVus] = useState(0);  // barres jouees par la demo
 
@@ -75,6 +84,18 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
 
   const dernier = useRef<Cote | null>(null);
   const raf = useRef(0);
+
+  /**
+   * La voix du starter, celle de la course.
+   *
+   * Le tutoriel ne fabrique pas ses propres sons : ce qu'on repete ici doit
+   * s'entendre exactement comme ce qu'on entendra en piste, sans quoi
+   * l'exercice apprend un autre depart que le vrai.
+   */
+  const starter = (quoi: 'marques' | 'pret' | 'feu') => {
+    try { SprinterApp.Audio_.init(); SprinterApp.Audio_.starter(quoi); }
+    catch { /* pas de son sur cet appareil : l'ecran suffit */ }
+  };
 
   const stop = () => { cancelAnimationFrame(raf.current); raf.current = 0; };
 
@@ -120,12 +141,15 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
       }
       ev.push({ t: t + 0.25, f: () => {} });
     } else if (e === 1) {
-      // Le decompte, puis l'appui juste apres le signal.
-      [3, 2, 1].forEach((n, i) => ev.push({ t: 0.3 + i * 0.7, f: () => setCompte(n) }));
-      ev.push({ t: 2.4, f: () => setCompte(0) });
-      ev.push({ t: 2.55, f: () => setFlash('left') });
-      ev.push({ t: 2.75, f: () => setFlash(null) });
-      ev.push({ t: 3.3, f: () => {} });
+      // Le starter, puis l'appui juste apres le coup. La demonstration garde
+      // une attente courte et fixe : elle montre la SEQUENCE, et c'est l'essai
+      // qui vient ensuite qui apprend a ne pas anticiper.
+      ev.push({ t: 0.3, f: () => { setCompte(1); starter('marques'); } });
+      ev.push({ t: 1.5, f: () => { setCompte(2); starter('pret'); } });
+      ev.push({ t: 2.9, f: () => { setCompte(0); starter('feu'); } });
+      ev.push({ t: 3.05, f: () => setFlash('left') });
+      ev.push({ t: 3.25, f: () => setFlash(null) });
+      ev.push({ t: 3.8, f: () => {} });
     } else {
       // Le profil, joue a son vrai tempo : trois appuis larges puis la cadence.
       let t = 0.4, cote: Cote = 'left';
@@ -149,12 +173,24 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jouer]);
 
-  /** Le vrai decompte de l'etape 2, une fois la demo passee. */
+  /**
+   * LE VRAI DEPART DE L'ETAPE 2, TIRE AU SORT COMME EN COURSE.
+   *
+   * La longueur et la tenue viennent du moteur lui-meme — la meme fonction
+   * qui pose le depart d'une course reelle. C'est ce qui fait de cet exercice
+   * une repetition et non une imitation : on y attend aussi longtemps, et
+   * aussi mal, que sur la piste.
+   */
   const departReel = useCallback(() => {
     setReaction(null); setTropTot(false);
+    const d = SprinterApp.dessinerLeDepart(SprinterApp.tirerLeDepart());
+    const marques = 0.4;
+    const pret = marques + Math.max(0, d.duree - d.tenue);
+    const feu = marques + d.duree;
     const ev: { t: number; f: () => void }[] = [];
-    [3, 2, 1].forEach((n, i) => ev.push({ t: i * 1, f: () => setCompte(n) }));
-    ev.push({ t: 3, f: () => { setCompte(0); setPistolet(performance.now()); } });
+    ev.push({ t: marques, f: () => { setCompte(1); starter('marques'); } });
+    ev.push({ t: pret, f: () => { setCompte(2); starter('pret'); } });
+    ev.push({ t: feu, f: () => { setCompte(0); starter('feu'); setPistolet(performance.now()); } });
     jouer(ev, () => {});
   }, [jouer]);
 
@@ -314,11 +350,18 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
                   </span>
                 </motion.div>
               ) : (
-                <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full border-4 flex items-center justify-center transition-colors
-                  ${compte === 0 ? 'border-primary bg-primary/25' : 'border-white/20 bg-card/60'}`}>
-                  <span className={`text-3xl md:text-4xl font-black font-display
-                    ${compte === 0 ? 'text-primary' : 'text-white'}`}>
-                    {compte === 0 ? N.t('go') : compte ?? ''}
+                /* La commande du starter, telle qu'elle s'affiche en course.
+                   Le cercle tenait un chiffre ; il n'y a plus de chiffre. */
+                <div className={`min-w-[10rem] md:min-w-[13rem] px-4 py-3 md:px-6 md:py-4 rounded-2xl
+                                 border-2 flex items-center justify-center transition-colors
+                  ${compte === 0 ? 'border-primary bg-primary/25'
+                    : compte === 2 ? 'border-primary/60 bg-primary/10'
+                    : 'border-white/20 bg-card/60'}`}>
+                  <span className={`text-lg md:text-2xl font-black font-display tracking-widest text-center
+                    ${compte === 0 || compte === 2 ? 'text-primary' : 'text-white'}`}>
+                    {compte === 0 ? N.t('go')
+                      : compte === 2 ? N.t('get_set')
+                      : compte === 1 ? N.t('ready') : ''}
                   </span>
                 </div>
               )}

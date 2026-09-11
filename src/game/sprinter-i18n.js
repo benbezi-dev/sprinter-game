@@ -62,8 +62,10 @@
     // Un defi recu se court sans connaitre le chrono d'en face : on sait
     // contre qui, pas contre quoi.
     to_race:      ['tu cours contre ', 'you are racing '],
-    ready:        ['À VOS MARQUES', 'READY'],
-    get_set:      ['PRÊTS', 'GET SET'],
+    // Les deux commandes du starter, dans les termes de la piste — ce sont
+    // celles qu'il dit à haute voix, et l'écran ne peut pas en dire d'autres.
+    ready:        ['À VOS MARQUES', 'ON YOUR MARKS'],
+    get_set:      ['PRÊT', 'SET'],
     go:           ['PARTEZ', 'GO'],
     alternate:    ['alterne les deux touches', 'alternate the two buttons'],
     alternate_kb: ['alterne les deux flèches', 'alternate the two arrows'],
@@ -197,10 +199,15 @@
     duel_rules_why:  ['lancer un défi, c’est montrer son chrono le premier',
                       'sending a challenge means showing your time first'],
     duel_counts:     ['{l} lancés · {r} relevés', '{l} sent · {r} answered'],
-    // Le selecteur d'epreuve du classement des duels. « SUR » et pas
+    // Le selecteur de discipline du classement des duels. « SUR » et pas
     // « CHOISIS » : l'epreuve est deja posee — celle qu'on vient de courir, ou
     // le 100 m — et la ligne dit sur quoi part le duel, elle ne reclame rien.
-    duel_sur:        ['LE DUEL SE COURT SUR', 'THE DUEL IS RUN ON'],
+    //
+    // Elle dit deux choses depuis que les niveaux ne sont plus partages : le
+    // classement qu'on lit, et le duel qui partira. Ce sont les deux faces du
+    // meme choix, et les separer en deux selecteurs demanderait de choisir
+    // deux fois la meme distance.
+    duel_sur:        ['LE CLASSEMENT ET LE DUEL, SUR', 'RANKING AND DUEL ON'],
     // identite du joueur, sur l'accueil
     name_set:        ['CHOISIS TON NOM', 'PICK YOUR NAME'],
     name_title:      ['TON NOM', 'YOUR NAME'],
@@ -209,6 +216,11 @@
     name_save:       ['ENREGISTRER', 'SAVE'],
     name_saved:      ['ENREGISTRÉ', 'SAVED'],
     name_taken:      ['ce nom est déjà pris par quelqu’un d’autre', 'that name is already taken'],
+    // Le nom est bien le sien, mais pas sur CET appareil : ses courses partent
+    // sans lui. Voir src/game/identity.ts — le serveur le signale par
+    // `nom_refuse` a chaque course.
+    name_wall:       ['ce nom n’est pas à cet appareil — tes courses ne comptent pas pour toi. touche pour le relier',
+                      'this name isn’t linked to this device — your races don’t count for you. tap to link it'],
     name_code:       ['TON CODE DE RÉCUPÉRATION', 'YOUR RECOVERY CODE'],
     // La nationalite. OPTIONNELLE, et elle le reste : un joueur sans drapeau
     // court, se classe et gagne exactement comme les autres. Elle ne sert qu'a
@@ -540,8 +552,20 @@
     // Le décompte, en toutes lettres. « J-9 » ne se traduit pas, et « 9 j »
     // sur un compteur qui tombe à zéro dans l'heure ne dit pas ce qu'il faut.
     sel_j:           ['{n} j', '{n}d'],
+    sel_jh:          ['{n} j {h} h', '{n}d {h}h'],
     sel_h:           ['{n} h', '{n}h'],
+    sel_hmin:        ['{n} h {m} min', '{n}h {m}min'],
     sel_min:         ['{n} min', '{n}min'],
+
+    // L'échéance en toutes lettres, sous le décompte.
+    //
+    // « clôture dans 8 j » ne dit pas QUAND, et c'est justement ce qu'un joueur
+    // a besoin de savoir pour décider quand jouer. La clôture tombe à minuit
+    // UTC, ce qui fait 02:00 à Paris : appeler ça « mercredi soir » serait
+    // faux d'une journée. On donne donc le jour ET l'heure, dans le fuseau du
+    // joueur, et on le laisse conclure.
+    sel_le:          ['clôture {d}', 'closes {d}'],
+    sel_reste:       ['il reste', 'time left'],
     live_lanes:      ['COULOIRS', 'LANES'],
     live_lanes_seul: ['un tour de piste seul : le stade, le chrono, et personne à attendre',
                       'a lap on your own: the stadium, the clock, and nobody to wait for'],
@@ -750,8 +774,10 @@
     duel_monte_a11y: ['monte de {n} places', 'up {n} places'],
     duel_descend_a11y: ['descend de {n} places', 'down {n} places'],
     duel_lp_long:    ['points de ligue', 'league points'],
-    duel_promu:      ['TU MONTES EN {r}', 'PROMOTED TO {r}'],
-    duel_relegue:    ['TU DESCENDS EN {r}', 'RELEGATED TO {r}'],
+    // La distance fait partie de l'annonce : un joueur monte en national sur
+    // 400 m, pas sur les trois distances a la fois.
+    duel_promu:      ['TU MONTES EN {r} — {e}', 'PROMOTED TO {r} — {e}'],
+    duel_relegue:    ['TU DESCENDS EN {r} — {e}', 'RELEGATED TO {r} — {e}'],
     duel_reste:      ['{n} avant la division suivante', '{n} to the next division'],
     duel_regle:      ['relever un défi rapporte plus que le lancer : le chrono est déjà posé, et tu sais ce que tu dois battre.',
                       'answering a challenge pays more than sending one: the time is already on the board, and you know what to beat.'],
@@ -765,6 +791,12 @@
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],
+    // Deux phrases, parce que ce sont deux situations : n'avoir jamais joué de
+    // duel, et en avoir joué ailleurs. Dire « tu n'es pas classé » à quelqu'un
+    // qui est régional sur 100 m serait faux — il n'est pas classé ICI.
+    duel_unranked_ici: ['pas encore classé sur cette distance — chaque distance a son échelle',
+                        'not ranked on this distance yet — each distance has its own ladder'],
+    duel_ailleurs:   ['TES AUTRES DISTANCES', 'YOUR OTHER DISTANCES'],
     duel_won:        ['DUEL GAGNÉ', 'DUEL WON'],
     duel_lost:       ['DUEL PERDU', 'DUEL LOST'],
     duel_tie:        ['MATCH NUL', 'DRAW'],
@@ -949,7 +981,15 @@
     wr_save:         ['INSCRIRE MON NOM', 'PUT MY NAME ON IT'],
     wr_saving:       ['enregistrement...', 'saving...'],
     wr_done:         ['{n} est {r} au TOP 500', '{n} is {r} on the TOP 500'],
-    wr_fail:         ["échec de l'envoi, réessaie", 'failed to send, try again'],
+    wr_fail:         ["échec de l'envoi", 'failed to send'],
+    wr_too_fast:     ['trop de tentatives coup sur coup', 'too many attempts at once'],
+    // Le record est GARDÉ sur l'appareil avant que ces phrases s'affichent :
+    // elles disent ce qui va se passer, elles ne demandent rien. Voir
+    // src/game/record-attente.ts.
+    wr_kept:         ['ton record est gardé — il repartira tout seul',
+                      'your record is saved — it will be sent on its own'],
+    wr_taken_help:   ['ton record est gardé. relie cet appareil à ton nom dans MES COURSES, ou inscris-le sous un autre nom',
+                      'your record is saved. link this device to your name in MY RACES, or put another name on it'],
     wr_see:          ['VOIR LE TOP 500', 'VIEW TOP 500'],
     wr_later:        ['plus tard', 'later'],
 

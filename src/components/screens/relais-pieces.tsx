@@ -5,7 +5,9 @@ import { Flag, XCircle, Hand, Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { ARRIVEE, LEG, TAILLE, type Zone } from '@/game/salle-relais';
 import { DUELS_OUVERTS } from '@/game/duels';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { DuelRanking } from './DuelRanking';
+import { ReviewVideo } from './ReviewVideo';
 
 /**
  * Les pieces communes aux deux courses de relais.
@@ -192,6 +194,18 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
 }) {
   const [voirDuels, setVoirDuels] = useState(false);
   const { N } = SprinterApp;
+  /**
+   * LE FILM DU RELAIS.
+   *
+   * Il est tourne par la course — voir CourseRelais et CourseConfrontation —
+   * et cet ecran est le seul a pouvoir le proposer : le relais ne se rejoue
+   * pas, et sortir d'ici, c'est retourner au vestiaire.
+   *
+   * On verifie a qui appartient la prise. L'enregistreur est unique et le
+   * meme etat sert au one shot et au direct ; sans cette lecture, une video
+   * de duel encore chaude s'afficherait sur l'arrivee d'un relais.
+   */
+  const film = useFilmDeLaCourse();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6 py-8
                     overflow-y-auto bg-[#05070d]">
@@ -222,6 +236,20 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
         )}
 
         {enfants}
+
+        {/* La video, entre le chrono et le detail des passages : c'est le
+            moment ou l'on vient de voir la course, et ou l'envie de la montrer
+            est la plus forte.
+
+            La carte porte elle-meme les quatre issues — en cours d'ecriture,
+            prete avec son compte a rebours, sortie du jeu, ou impossible sur
+            un appareil qui ne sait pas encoder. Rien a decider ici : ce qui
+            n'existe pas ne s'affiche pas (voir ReviewVideo). */}
+        {film.genre === 'relais' && (
+          <div className="w-full">
+            <ReviewVideo etat={film} onPartager={partagerLeFilm} />
+          </div>
+        )}
 
         {/* Les trois passages, notes. C'est la que se gagne un relais : trois
             transmissions parfaites valent plus qu'un relayeur rapide. */}

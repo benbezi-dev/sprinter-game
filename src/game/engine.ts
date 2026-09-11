@@ -1,5 +1,6 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
+import './chiffres-piste.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
@@ -41,6 +42,12 @@ export type GameState = {
   elapsed: number;
   countT: number;
   openT: number;
+  /**
+   * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
+   * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
+   * du decompte, qui n'existe plus.
+   */
+  starter: number;
   shake: number;
   flash: number;
   stumbleFlash: number;
@@ -406,21 +413,18 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    const prev = Math.floor(G.countT);
     G.countT += dt;
-    // Le starter est en place, et il est MUET : le decompte se voit, il ne
-    // s'entend pas. Trois bips egalement espaces annoncent le quatrieme, et
-    // l'on part alors sur une pulsation qu'on compte plutot qu'au coup de
-    // feu — c'est la reaction elle-meme qu'on mesure faux. Le geste est
-    // garde tel quel plutot que supprime : basculer STARTER_MUET rend les
-    // trois bips, sans rien avoir a reecrire.
-    if (!STARTER_MUET && Math.floor(G.countT) !== prev && G.countT < 3)
-      Audio_.sfx('beep');
+    // LE STARTER, A LA PLACE DU DECOMPTE.
+    //
+    // Il n'y a plus de « 3, 2, 1 » : il y a « a vos marques », « pret », et
+    // un coup de pistolet qui tombe quand il tombe. Le bip a la seconde
+    // disait justement ce que le starter ne doit pas dire — dans combien de
+    // temps il va tirer. Voir poserLeDepart dans sprinter-app.js.
+    SprinterApp.starterParle();
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
-      // Plein niveau, et non les 0,55 des autres bruitages : le pistolet
-      // passe devant la musique de course. Voir Audio_.detonation.
-      Audio_.sfx('go', 0.9); G.state = 'race'; G.elapsed = 0;
+      SprinterApp.coupDePistolet();
+      G.state = 'race'; G.elapsed = 0;
       // Le chronometre de la course repart de zero : ce qui se compte sur lui
       // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans
       // le vide. Voir reinitialiserEnvoi.
@@ -484,6 +488,7 @@ export function updateLogic(dt: number) {
     state: G.state,
     elapsed: G.elapsed,
     countT: G.countT,
+    starter: G.depart ? G.depart.dit : 0,
     openT: G.openT,
     shake: G.shake,
     flash: G.flash,

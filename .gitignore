@@ -74,9 +74,32 @@ android/keystore*
 # n'etait qu'une question de temps.
 *.bak-*
 
+# L'outillage des films promo vit chez lui, avec ses quatre-vingts megaoctets
+# de binaire ffmpeg. Il ne doit surtout pas remonter dans le depot.
+assets-stores/promo/node_modules/
+
+# Les SORTIES des films d'explication : 34 Mo de MP4 et 43 Mo de PNG, refaites
+# a l'identique par `node explications/rendu.mjs photos` puis `film`, et
+# `./explications/encoder.sh`. Verifie : l'outillage repart de sa nouvelle
+# place et refabrique les deux. Ce que git ne sait pas faire, c'est oublier —
+# 77 Mo qui entrent y restent, dans chaque clone, pour toujours.
+assets-stores/promo/explications/videos/
+assets-stores/promo/explications/photos/
+
+# Et la video « nouveautes » elle-meme, 15 Mo, pour la meme raison : elle se
+# refait par `node source-video/render.mjs full` puis `./source-video/encode.sh`.
+# Ce n'etait plus vrai avant aujourd'hui — les chemins de l'encodeur dataient
+# d'un deplacement de dossier et pointaient vers un promo/frames qui n'existe
+# pas. Repares et verifies de bout en bout, rendu puis encodage.
+#
+# La couverture reste, elle : 1,7 Mo, et rien ne dit qu'elle soit fabriquee
+# plutot que choisie a la main. Ce qu'on ne sait pas refaire, on le garde.
+assets-stores/promo/sprinter-nouveautes-1080x1920.mp4
+assets-stores/promo/out/
+
 # Intermediaires de rendu des films promo — refabricables, et lourds.
-assets-stores/promo/frames/
-assets-stores/promo/preview/
+assets-stores/promo/source-video/frames/
+assets-stores/promo/source-video/preview/
 assets-stores/promo/out/
 assets-stores/promo/explications/images/
 assets-stores/promo/explications/controle/

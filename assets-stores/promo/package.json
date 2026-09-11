@@ -1,0 +1,15 @@
+{
+  "name": "sprinter-promo",
+  "private": true,
+  "type": "module",
+  "description": "Outillage des films promo. SEPARE DU JEU, ET C'EST TOUT L'INTERET : la CI qui construit sprinter-game.com installe les devDependencies de la racine, et ffmpeg-static y telecharge quatre-vingts megaoctets de binaire a chaque construction, pour un outil qui ne tourne que sur la machine de fabrication. Ici, il ne genera personne.",
+  "scripts": {
+    "photos": "node explications/rendu.mjs photos",
+    "films": "node explications/rendu.mjs film",
+    "encoder": "./explications/encoder.sh"
+  },
+  "devDependencies": {
+    "ffmpeg-static": "^5.3.0",
+    "puppeteer-core": "^24.43.1"
+  }
+}

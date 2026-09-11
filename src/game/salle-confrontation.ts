@@ -66,7 +66,8 @@ export type EtatConfrontation = {
 
 type Ecouteurs = {
   onEtat?: (e: EtatConfrontation) => void;
-  onDepart?: (dansMs: number) => void;
+  /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
+  onDepart?: (dansMs: number, departA: number) => void;
   /**
    * Un coureur d'une equipe a bouge.
    *
@@ -170,7 +171,7 @@ export class SalleConfrontation {
     if (m.depart_a && !this.departPose) {
       this.departPose = true;
       this.finEnvoyee = false;
-      this.ec.onDepart?.(m.depart_a - this.maintenant());
+      this.ec.onDepart?.(m.depart_a - this.maintenant(), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
   }

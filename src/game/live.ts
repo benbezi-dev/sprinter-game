@@ -107,7 +107,13 @@ export type DuelDirect = { hote: PointsDuel; invite: PointsDuel };
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
   onPresentation?: (p: Presentation) => void;
-  onDepart?: (dansMs: number) => void;
+  /**
+   * Le pistolet. `dansMs` est l'attente restante, comptee chez soi ; `departA`
+   * la date du coup en temps serveur — la meme pour tout le monde, et c'est ce
+   * qui permet aux huit couloirs d'entendre « pret » au meme instant. Voir
+   * poserLeDepart dans sprinter-app.js.
+   */
+  onDepart?: (dansMs: number, departA: number) => void;
   /** Position d'un adversaire. `id` le designe : a huit, savoir QUI a bouge
    *  est la moitie de l'information. */
   onPos?: (id: string, d: number) => void;
@@ -308,7 +314,7 @@ export class Salle {
       this.departPose = true;
       // Le depart est une date, pas un signal : on la ramene dans notre
       // propre horloge et on laisse le jeu compter tout seul.
-      this.ec.onDepart?.(m.depart_a - (Date.now() + this.decalage));
+      this.ec.onDepart?.(m.depart_a - (Date.now() + this.decalage), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
   }

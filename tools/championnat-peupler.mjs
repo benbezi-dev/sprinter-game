@@ -118,13 +118,25 @@ if (effacer) {
       // a 1750, avec du bruit, pour que les tetes de serie veuillent dire
       // quelque chose et que les repechages soient disputes.
       const mmr = Math.round(1750 - (i / (PAR_PAYS - 1)) * 800 + (hasard() - 0.5) * 90);
-      const duels = 3 + Math.floor(hasard() * 22);
-      const wins = Math.round(duels * (0.25 + 0.5 * (1 - i / (PAR_PAYS - 1))));
-      const losses = duels - wins;
 
-      lignes.push(
-        `INSERT OR REPLACE INTO duel_players (name_key, name, points, wins, losses, draws, launched, last_delta, updated_at, received, mmr, lp, palier, bouclier) ` +
-        `VALUES ('${cle}', '${echapper(nom)}', ${wins * 12}, ${wins}, ${losses}, 0, ${duels}, 0, ${maintenant - Math.floor(hasard() * 20 * 86400000)}, 0, ${mmr}, ${wins * 7 % 100}, ${Math.min(4, Math.floor(mmr / 400))}, 0);`);
+      // UNE LIGNE PAR DISTANCE, parce que le classement en a une par distance.
+      // Un peuplement qui n'aurait rempli que le 100 m aurait donne un monde
+      // ou le championnat du 200 m n'ouvre nulle part, et on aurait cherche la
+      // panne dans le moteur.
+      //
+      // Et chaque distance a SON ordre, decale d'un cran de MMR : c'est ce que
+      // le classement par discipline raconte — le meilleur sprinter du pays
+      // n'est pas forcement celui qui tient le tour de piste — et une grille
+      // identique aux trois distances ne le montrerait pas.
+      for (const [rang, epreuve] of ['100', '200', '400'].entries()) {
+        const force = Math.round(mmr + (hasard() - 0.5) * 260 + (rang - 1) * 40);
+        const duels = 3 + Math.floor(hasard() * 22);
+        const wins = Math.round(duels * (0.25 + 0.5 * (1 - i / (PAR_PAYS - 1))));
+        const losses = duels - wins;
+        lignes.push(
+          `INSERT OR REPLACE INTO duel_players (name_key, epreuve, name, wins, losses, draws, launched, last_delta, updated_at, received, mmr, lp, palier, bouclier) ` +
+          `VALUES ('${cle}', '${epreuve}', '${echapper(nom)}', ${wins}, ${losses}, 0, ${duels}, 0, ${maintenant - Math.floor(hasard() * 20 * 86400000)}, 0, ${force}, ${wins * 7 % 100}, ${Math.min(4, Math.floor(force / 400))}, 0);`);
+      }
       lignes.push(
         `INSERT OR REPLACE INTO player_pays (name_key, pays, continent, source, vu_le) ` +
         `VALUES ('${cle}', '${p.code}', '${p.continent}', '${MARQUE}', ${maintenant});`);

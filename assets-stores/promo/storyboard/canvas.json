@@ -1,0 +1,173 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 720,
+      "h": 1080,
+      "title": "Plan de la vidéo"
+    },
+    {
+      "file": "S01Ouverture.dc.html",
+      "x": 830,
+      "y": 0,
+      "w": 540,
+      "h": 960,
+      "title": "00:00 · Ouverture"
+    },
+    {
+      "file": "S16Sortie.dc.html",
+      "x": 1480,
+      "y": 0,
+      "w": 540,
+      "h": 960,
+      "title": "00:58,2 · Sortie"
+    },
+    {
+      "file": "S02Titre01.dc.html",
+      "x": 0,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:03,4 · Titre 01"
+    },
+    {
+      "file": "S03Duel.dc.html",
+      "x": 650,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:05,4 · Le duel"
+    },
+    {
+      "file": "S04PointsLigue.dc.html",
+      "x": 1300,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:09,4 · Points de ligue"
+    },
+    {
+      "file": "S05Echelle.dc.html",
+      "x": 1950,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:13,8 · L’échelle"
+    },
+    {
+      "file": "S06Nationalite.dc.html",
+      "x": 2600,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:18,0 · Nationalité"
+    },
+    {
+      "file": "S07Championnats.dc.html",
+      "x": 3250,
+      "y": 1240,
+      "w": 540,
+      "h": 960,
+      "title": "00:22,8 · Championnats"
+    },
+    {
+      "file": "S08Titre02.dc.html",
+      "x": 0,
+      "y": 2360,
+      "w": 540,
+      "h": 960,
+      "title": "00:28,0 · Titre 02"
+    },
+    {
+      "file": "S09Salle.dc.html",
+      "x": 650,
+      "y": 2360,
+      "w": 540,
+      "h": 960,
+      "title": "00:30,0 · La salle"
+    },
+    {
+      "file": "S10Direct.dc.html",
+      "x": 1300,
+      "y": 2360,
+      "w": 540,
+      "h": 960,
+      "title": "00:34,0 · La course"
+    },
+    {
+      "file": "S11Arrivee.dc.html",
+      "x": 1950,
+      "y": 2360,
+      "w": 540,
+      "h": 960,
+      "title": "00:40,4 · L’arrivée"
+    },
+    {
+      "file": "S12Titre03.dc.html",
+      "x": 0,
+      "y": 3480,
+      "w": 540,
+      "h": 960,
+      "title": "00:43,6 · Titre 03"
+    },
+    {
+      "file": "S13Equipe.dc.html",
+      "x": 650,
+      "y": 3480,
+      "w": 540,
+      "h": 960,
+      "title": "00:45,6 · L’équipe"
+    },
+    {
+      "file": "S14Relais.dc.html",
+      "x": 1300,
+      "y": 3480,
+      "w": 540,
+      "h": 960,
+      "title": "00:49,8 · Le témoin"
+    },
+    {
+      "file": "S15Classement.dc.html",
+      "x": 1950,
+      "y": 3480,
+      "w": 540,
+      "h": 960,
+      "title": "00:55,4 · Classement"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -170,
+      "w": 900,
+      "text": "Master vidéo : 1080×1920, 30 i/s, 61,5 s, muet — la musique se pose au montage.\nChaque cadre ci-dessous est une étape du film, à l’échelle 1/2 (540×960)."
+    },
+    {
+      "id": "ch1",
+      "x": 0,
+      "y": 1120,
+      "w": 900,
+      "text": "Chapitre 01 · duel en ligne — 00:03,4 → 00:28,0\nDu défi relevé aux championnats ouverts par le drapeau."
+    },
+    {
+      "id": "ch2",
+      "x": 0,
+      "y": 2240,
+      "w": 900,
+      "text": "Chapitre 02 · course en direct — 00:28,0 → 00:43,6\nSalle de 1 à 8 couloirs, départ synchronisé, arrivée serrée."
+    },
+    {
+      "id": "ch3",
+      "x": 0,
+      "y": 3360,
+      "w": 900,
+      "text": "Chapitre 03 · relais 4×100 — 00:43,6 → 00:58,2\nÉquipe de quatre, passages de témoin, classement des équipes."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

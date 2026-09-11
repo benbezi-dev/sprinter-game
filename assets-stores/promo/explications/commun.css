@@ -1,0 +1,118 @@
+/* ===========================================================================
+   Charte commune aux films d'explication.
+   Reprend celle de source-video/video.html : meme palette, meme typographie,
+   memes briques. Un film qui s'en ecarte se verra a cote des autres.
+   =========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:#000;overflow:hidden}
+:root{
+  --bg:#060913; --card:#0B0F19; --line:#1E293B; --fg:#EEF0F8; --mut:#94A3B8;
+  --gold:#F8CD4A; --blue:#2563EB; --cyan:#5FD3E8; --fux:#F0ABFC; --silv:#CBD5E1;
+  --brz:#B45309; --vert:#4ADE80; --rouge:#FB7185;
+  /* couleur d'accent du film — chaque film la repose */
+  --ac:#F8CD4A;
+}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;color:var(--fg);
+  font-family:'Plus Jakarta Sans',sans-serif;
+  background:radial-gradient(125% 75% at 28% 16%, #17245080 0%, #0a0f2200 55%), #060913;}
+#bgtrack{position:absolute;inset:-25%;opacity:.55;transform:rotate(-9deg);
+  background:repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 2px, transparent 2px 118px);}
+#glow{position:absolute;left:-15%;top:-10%;width:900px;height:900px;border-radius:50%;
+  background:radial-gradient(circle,#F8CD4A22 0%,transparent 68%);filter:blur(30px)}
+#glow2{position:absolute;right:-20%;bottom:-5%;width:1000px;height:1000px;border-radius:50%;
+  background:radial-gradient(circle,#2563EB2e 0%,transparent 68%);filter:blur(40px)}
+#vign{position:absolute;inset:0;background:radial-gradient(115% 75% at 50% 45%,transparent 40%,#000000cc 100%)}
+.streak{position:absolute;height:3px;border-radius:3px;
+  background:linear-gradient(90deg,transparent,var(--ac),transparent);opacity:0}
+
+.scene{position:absolute;inset:0;display:none}
+.scene.on{display:block}
+.mid{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  display:flex;flex-direction:column;align-items:center;padding:0 84px}
+
+/* --------------------------------------------------------------- typographie */
+.kick{font-family:'Space Mono',monospace;font-weight:700;font-size:27px;letter-spacing:.42em;
+  color:var(--ac);text-transform:uppercase;text-align:center}
+.h1{font-family:'Outfit',sans-serif;font-weight:900;font-size:120px;line-height:.92;
+  letter-spacing:-.02em;text-transform:uppercase;text-align:center}
+.h2{font-family:'Outfit',sans-serif;font-weight:900;font-size:82px;line-height:.95;
+  letter-spacing:-.015em;text-transform:uppercase;text-align:center}
+.h3{font-family:'Outfit',sans-serif;font-weight:800;font-size:52px;line-height:1.05;
+  letter-spacing:-.01em;text-transform:uppercase;text-align:center}
+.p{font-size:36px;line-height:1.32;color:var(--mut);text-align:center;font-weight:600;max-width:860px}
+.mono{font-family:'Space Mono',monospace}
+.ac{color:var(--ac)} .gold{color:var(--gold)} .cy{color:var(--cyan)} .fx{color:var(--fux)}
+.ok{color:var(--vert)} .ko{color:var(--rouge)}
+
+/* -------------------------------------------------------------------- briques */
+.card{background:linear-gradient(180deg,#0d1322,#0a0e1a);border:2px solid var(--line);
+  border-radius:26px;box-shadow:0 24px 60px #0008}
+.chip{display:inline-flex;align-items:center;gap:16px;padding:18px 30px;border-radius:20px;
+  background:#0d1322e6;border:2px solid var(--line);font-weight:800;font-size:34px}
+.badge{display:inline-flex;align-items:baseline;gap:14px;padding:12px 22px;border-radius:14px;
+  border:2px solid;font-family:'Space Mono',monospace;font-weight:700;font-size:30px;letter-spacing:.16em}
+.pill{display:inline-flex;align-items:center;gap:12px;padding:10px 22px;border-radius:999px;
+  border:2px solid var(--line);background:#0d1322;font-family:'Space Mono',monospace;
+  font-weight:700;font-size:26px;letter-spacing:.1em;color:var(--mut)}
+.rule{height:5px;width:170px;border-radius:5px;background:var(--ac)}
+
+/* le numero de chapitre, en filigrane */
+.chapno{font-family:Outfit,sans-serif;font-weight:900;font-size:420px;line-height:.8;
+  color:transparent;-webkit-text-stroke:5px #ffffff26}
+
+/* ------------------------------------------------------------------- la piste */
+.track{position:relative;width:912px;border-radius:22px;overflow:hidden;
+  background:linear-gradient(180deg,#0e1526,#0a0f1d);border:2px solid var(--line)}
+.lane{position:relative;height:96px;border-bottom:2px dashed #ffffff14}
+.lane:last-child{border-bottom:0}
+.lane .ln{position:absolute;left:22px;top:50%;transform:translateY(-50%);
+  font-family:'Space Mono',monospace;font-size:26px;color:#ffffff2e;font-weight:700}
+.mover{position:absolute;top:50%;left:0;transform:translate(0,-50%);display:flex;align-items:center;gap:12px}
+.runner{width:56px;height:56px;fill:var(--ac);filter:drop-shadow(0 0 14px #ffffff44)}
+.tag{font-family:'Space Mono',monospace;font-size:24px;font-weight:700;color:#dbe3f5;
+  background:#0b1020cc;border:2px solid var(--line);border-radius:10px;padding:4px 12px;white-space:nowrap}
+.finline{position:absolute;top:0;bottom:0;width:12px;
+  background:repeating-linear-gradient(180deg,#fff 0 12px,#0b1020 12px 24px);opacity:.9}
+
+/* ------------------------------------------------------------------- rangees */
+.rowb{display:flex;align-items:center;gap:22px;width:912px;padding:20px 28px;border-radius:18px;
+  border:2px solid var(--line);background:#0b1020}
+.rowb .rk{font-family:'Space Mono',monospace;font-weight:700;font-size:32px;color:var(--mut);width:64px}
+.rowb .nm{font-family:'Outfit',sans-serif;font-weight:800;font-size:38px;flex:1}
+.rowb .tm{font-family:'Space Mono',monospace;font-weight:700;font-size:34px;color:var(--ac)}
+
+.slot{display:flex;align-items:center;gap:24px;width:912px;padding:22px 30px;border-radius:20px;
+  border:2px solid var(--line);background:#0b1020}
+.slot .num{width:62px;height:62px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+  font-family:'Space Mono',monospace;font-weight:700;font-size:32px;background:#111a30;color:var(--mut);
+  border:2px solid var(--line);flex:none}
+.slot .nm{font-family:'Outfit',sans-serif;font-weight:800;font-size:40px;flex:1}
+.slot .st{font-family:'Space Mono',monospace;font-weight:700;font-size:26px;letter-spacing:.12em;color:var(--mut)}
+
+.ladder{display:flex;flex-direction:column;gap:18px;width:912px}
+.lrow{display:flex;align-items:center;justify-content:space-between;padding:24px 34px;
+  border-radius:20px;border:2px solid var(--line);background:#0b1020}
+.lrow .nm{font-family:'Space Mono',monospace;font-weight:700;font-size:38px;letter-spacing:.14em}
+.divs{display:flex;gap:10px}
+.divs b{font-family:'Space Mono',monospace;font-size:26px;font-weight:700;color:#ffffff33;
+  border:2px solid #ffffff1a;border-radius:8px;padding:2px 12px}
+
+/* --------------------------------------------------------- le logo, l'outro */
+.logo{width:200px;height:200px;border-radius:50%;position:relative;
+  background:radial-gradient(85% 85% at 35% 28%,#22315c,#060a14);border:8px solid var(--ac);
+  display:flex;align-items:center;justify-content:center;box-shadow:0 0 70px #ffffff2a}
+.logo svg{width:112px;height:112px;fill:var(--ac)}
+
+/* ------------------------------------------------------------ chronologie UI */
+#prog{position:absolute;top:128px;left:84px;right:84px;display:flex;gap:16px;opacity:0}
+#prog .pb{flex:1;height:7px;border-radius:7px;background:#ffffff1a;overflow:hidden}
+#prog .pb i{display:block;height:100%;width:0;background:var(--ac);border-radius:7px}
+#etiq{position:absolute;top:172px;left:84px;right:84px;text-align:center;opacity:0;
+  font-family:'Space Mono',monospace;font-weight:700;font-size:24px;letter-spacing:.32em;
+  color:#ffffff59;text-transform:uppercase}
+
+#wipe{position:absolute;inset:0;background:var(--ac);transform:translateY(100%)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+#grain{position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E")}

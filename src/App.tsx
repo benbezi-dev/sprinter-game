@@ -49,6 +49,7 @@ import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
+import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
 
 const queryClient = new QueryClient();
@@ -144,6 +145,19 @@ function MainGame() {
   useEffect(() => {
     if (!acces) return;
     reprendrePush().catch(() => { /* best-effort */ });
+  }, [acces]);
+
+  // Le record du monde qui n'est pas passe la premiere fois.
+  //
+  // Un chrono refuse — reseau coupe, nom reserve par un autre appareil —
+  // etait perdu pour de bon : la fenetre ne s'ouvre qu'une fois par course.
+  // Il est desormais garde sur l'appareil, et ce branchement le renvoie au
+  // lancement puis a chaque changement de nom. C'est ce dernier moment qui
+  // compte : un nom reserve ne se debloque qu'en reliant l'appareil, et le
+  // record part alors sans que le joueur ait a y repenser.
+  useEffect(() => {
+    if (!acces) return;
+    brancherRattrapage();
   }, [acces]);
 
   // La permission push se demande depuis un bouton, et depuis rien d'autre.

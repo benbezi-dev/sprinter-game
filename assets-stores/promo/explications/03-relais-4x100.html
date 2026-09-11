@@ -1,0 +1,398 @@
+<meta charset="utf-8">
+<title>Sprinter — le relais 4×100</title>
+<link rel="stylesheet" href="commun.css">
+<style>
+#te-baton{position:absolute;width:34px;height:12px;border-radius:8px;background:#F0ABFC;
+  box-shadow:0 0 26px #F0ABFCaa;left:0;top:0;opacity:0}
+/* la zone de transmission : les 30 premiers metres de la portion du receveur */
+.zone{position:absolute;height:96px;background:#F0ABFC10;
+  border-left:2px dashed #F0ABFC3d;border-right:2px dashed #F0ABFC3d}
+.zone b{position:absolute;left:50%;top:6px;transform:translateX(-50%);white-space:nowrap;
+  font-family:'Space Mono',monospace;font-size:19px;font-weight:700;
+  color:#F0ABFC80;letter-spacing:.1em}
+
+/* le schema de la passe */
+#pa-piste{position:relative;width:912px;height:230px;border-radius:22px;overflow:hidden;
+  background:linear-gradient(180deg,#0e1526,#0a0f1d);border:2px solid var(--line)}
+#pa-zone{position:absolute;left:110px;right:110px;top:0;bottom:0;background:#F0ABFC12;
+  border-left:3px solid #F0ABFC66;border-right:3px solid #F0ABFC66}
+#pa-doux{position:absolute;left:calc(110px + (100% - 220px) * .30);
+  width:calc((100% - 220px) * .50);top:0;bottom:0;background:#4ADE8014;
+  border-left:2px dashed #4ADE8055;border-right:2px dashed #4ADE8055}
+.pa-lab{position:absolute;bottom:12px;font-family:'Space Mono',monospace;font-size:21px;
+  font-weight:700;letter-spacing:.1em;color:#ffffff45}
+.pa-tap{position:absolute;top:74px;width:26px;height:26px;border-radius:50%;
+  transform:translateX(-50%);box-shadow:0 0 26px currentColor}
+.pa-tap i{position:absolute;left:50%;top:34px;transform:translateX(-50%);font-style:normal;
+  font-family:'Space Mono',monospace;font-size:22px;font-weight:700;white-space:nowrap}
+</style>
+
+<div id="stage">
+  <div id="bgtrack"></div><div id="glow"></div><div id="glow2"></div>
+  <div id="streaks"></div><div id="vign"></div>
+  <div id="prog"></div><div id="etiq"></div>
+
+  <svg width="0" height="0" style="position:absolute"><symbol id="run" viewBox="0 0 24 24">
+    <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.7 12 16 13 17.49 13v-2c-1.5 0-2.8-.8-3.4-2l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+  </symbol></svg>
+
+  <!-- ================================================== OUVERTURE -->
+  <section class="scene" id="sc-ouv"><div class="mid" style="gap:34px">
+    <div class="chapno" id="ou-no" style="-webkit-text-stroke-color:#F0ABFC3d">4×</div>
+    <div class="h1" id="ou-t">Le relais<br>4×100</div>
+    <div class="rule" id="ou-r"></div>
+    <div class="p" id="ou-s">Quatre noms. Une équipe.<br>
+      Un témoin <span class="ac">à ne pas lâcher</span>.</div>
+  </div></section>
+
+  <!-- ================================================== L'EQUIPE -->
+  <section class="scene" id="sc-eq"><div class="mid" style="gap:32px">
+    <div class="kick" id="eq-k">Une équipe</div>
+    <div class="h3" id="eq-t">C'est sa composition,<br>rien d'autre</div>
+    <div style="display:flex;flex-direction:column;gap:16px;width:912px" id="eq-list"></div>
+    <div class="card" id="eq-note" style="width:912px;padding:28px 36px;text-align:center">
+      <div style="font-size:34px;font-weight:800">Change l'ordre : c'est
+        <span class="ac">la même équipe</span>.
+        <span style="color:var(--mut);font-weight:600;font-size:30px"><br>
+        Quatre noms ne forment jamais deux équipes différentes.</span></div>
+    </div>
+  </div></section>
+
+  <!-- ================================================== LES INVITATIONS -->
+  <section class="scene" id="sc-inv"><div class="mid" style="gap:30px">
+    <div class="kick" id="in-k">Les invitations</div>
+    <div class="h3" id="in-t">Créer une équipe<br>n'engage que toi</div>
+    <div style="display:flex;flex-direction:column;gap:16px;width:912px" id="in-list"></div>
+    <div class="card" id="in-cpt" style="width:912px;padding:24px 34px;display:flex;
+         align-items:center;justify-content:space-between">
+      <span class="mono" style="font-size:26px;letter-spacing:.16em;color:var(--mut)">PLACES À POURVOIR</span>
+      <span class="mono ac" id="in-n" style="font-size:38px;font-weight:700">3</span>
+    </div>
+    <div class="p" id="in-s">On ne se retrouve pas inscrit à une compétition<br>
+      <span class="ac">parce qu'un ami a tapé son nom</span>.</div>
+  </div></section>
+
+  <!-- ================================================== L'ORDRE -->
+  <section class="scene" id="sc-or"><div class="mid" style="gap:32px">
+    <div class="kick" id="or-k">L'ordre des relayeurs</div>
+    <div style="display:flex;flex-direction:column;gap:16px;width:912px" id="or-list"></div>
+    <div class="card" id="or-note" style="width:912px;padding:28px 36px;text-align:center">
+      <div style="font-size:32px;font-weight:800">Les relais 1 à 4 sont attribués
+        <span class="ac">à l'ordre des acceptations</span>.
+        <span style="color:var(--mut);font-weight:600"><br>
+        Une équipe complète a toujours un ordre — le fixer, c'est le changer.</span></div>
+    </div>
+  </div></section>
+
+  <!-- ================================================== LA COURSE -->
+  <section class="scene" id="sc-crs"><div class="mid" style="gap:28px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;width:912px">
+      <div class="kick" id="cr-leg">1<sup style="font-size:26px">er</sup> relayeur</div>
+      <div class="mono" id="cr-chr" style="font-size:64px;font-weight:700;color:var(--ac)">0.00</div>
+    </div>
+    <div class="track" id="cr-track"></div>
+    <div class="p" id="cr-s">Quatre portions de 100 m.<br>
+      Le receveur attend dans <span class="ac">sa zone</span> — les 30 premiers mètres.</div>
+  </div></section>
+
+  <!-- ================================================== LA PASSE -->
+  <section class="scene" id="sc-pa"><div class="mid" style="gap:28px">
+    <div class="kick" id="pa-k">La transmission</div>
+    <div class="h3" id="pa-t" style="margin-bottom:6px">Deux mains,<br>au même instant</div>
+    <div id="pa-piste">
+      <div id="pa-zone"></div><div id="pa-doux"></div>
+      <span class="pa-lab" style="left:118px">0 m</span>
+      <span class="pa-lab" style="left:50%;transform:translateX(-50%);color:#4ADE8080">LE BON TIERS</span>
+      <span class="pa-lab" style="right:118px">30 m</span>
+      <div class="pa-tap" id="pa-p" style="left:200px;background:#F0ABFC;color:#F0ABFC"><i>PORTEUR</i></div>
+      <div class="pa-tap" id="pa-r" style="left:260px;background:#5FD3E8;color:#5FD3E8"
+           ><i style="top:-40px">RECEVEUR</i></div>
+    </div>
+    <div class="card" id="pa-card" style="width:912px;padding:28px 36px;display:flex;
+         align-items:center;justify-content:space-between">
+      <div><div class="mono" style="font-size:22px;letter-spacing:.16em;color:var(--mut)">ÉCART ENTRE LES DEUX TAPES</div>
+        <div class="mono" id="pa-ms" style="font-size:52px;font-weight:700;margin-top:6px">480 ms</div></div>
+      <div class="badge" id="pa-verdict" style="font-size:26px">ÉLIMINÉE</div>
+    </div>
+    <div class="p" id="pa-s">Le serveur date les deux tapes et tranche.<br>
+      <span class="ac">Un passage raté élimine toute l'équipe.</span></div>
+  </div></section>
+
+  <!-- ================================================== LE CLASSEMENT -->
+  <section class="scene" id="sc-cla"><div class="mid" style="gap:30px">
+    <div class="kick" id="cl-k">Classement 4×100</div>
+    <div style="display:flex;flex-direction:column;gap:16px" id="cl-list"></div>
+    <div class="p" id="cl-s">Une équipe garde <span class="ac">son meilleur total</span>.<br>
+      Quatre portions, un seul chrono.</div>
+  </div></section>
+
+  <!-- ================================================== LES FANTOMES -->
+  <section class="scene" id="sc-fa"><div class="mid" style="gap:32px">
+    <div class="kick" id="fa-k">Les fantômes</div>
+    <div class="h2" id="fa-t" style="margin-bottom:6px">Affronte une équipe<br>sans attendre personne</div>
+    <div class="card" id="fa-card" style="width:912px;padding:42px 46px">
+      <div style="font-size:34px;font-weight:700;color:#e6ecfa;line-height:1.35">
+        Les <span class="mono ac">dix meilleures</span> courses restent rejouables : la trace du
+        témoin est enregistrée, position par position.
+        <span style="color:var(--mut);font-weight:600;font-size:31px"><br><br>
+        Tu affrontes quatre coureurs qui ont déjà fini — et qui ne t'attendront pas.</span></div>
+    </div>
+  </div></section>
+
+  <!-- ================================================== SORTIE -->
+  <section class="scene" id="sc-fin"><div class="mid" style="gap:38px">
+    <div class="logo" id="fi-logo"><svg><use href="#run"/></svg></div>
+    <div class="h2" id="fi-t">Seul, tu as<br>un chrono</div>
+    <div class="rule" id="fi-r"></div>
+    <div class="p" id="fi-s" style="font-size:42px;color:var(--fg)">À quatre, tu as <span class="ac">une équipe</span>.</div>
+  </div></section>
+
+  <div id="wipe"></div><div id="flash"></div><div id="grain"></div>
+</div>
+
+<script src="commun.js"></script>
+<script>
+const FX='#F0ABFC';
+const X0=26, X1=672;            /* la piste laisse la place a l'etiquette du coureur */
+const ZONE=.30;                 /* 30 m sur une portion de 100 : les 30 % de gauche */
+const MARQUE=.15;               /* le receveur attend au milieu de sa zone */
+
+/* ------------------------------------------------------------ construction */
+const NOMS=['KAYS','NORA','SAM','ILAN'];
+
+q('#eq-list').innerHTML=NOMS.map((n,i)=>`
+  <div class="slot eq-r"><span class="num">${i+1}</span><span class="nm">${n}</span>
+    <span class="st">LES RAPACES</span></div>`).join('');
+q('#in-list').innerHTML=NOMS.map((n,i)=>`
+  <div class="slot in-r"><span class="num">${i+1}</span><span class="nm">${n}</span>
+    <span class="st">${i===0?'✓ CRÉATEUR':'INVITÉ…'}</span></div>`).join('');
+q('#or-list').innerHTML=NOMS.map((n,i)=>`
+  <div class="slot or-r"><span class="num or-num">${i+1}</span><span class="nm">${n}</span>
+    <span class="st or-st">RELAIS ${i+1}</span></div>`).join('');
+
+const EQ=[['1','LES RAPACES','41"08',true],['2','NORD RELAY','41"64',false],
+          ['3','ONZE SECONDES','42"15',false],['4','LES BLEUS','42"90',false]];
+q('#cl-list').innerHTML=EQ.map(([r,n,t,moi])=>`
+  <div class="rowb cl-r" style="${moi?'border-color:#F0ABFC88;background:#F0ABFC12':''}">
+    <span class="rk"${moi?' style="color:'+FX+'"':''}>${r}</span>
+    <span class="nm"${moi?' style="color:'+FX+'"':''}>${n}</span>
+    <span class="tm">${t}</span></div>`).join('');
+
+lanes(q('#cr-track'),4,NOMS,FX);
+/* la zone de chaque receveur : le debut de SA portion, pas la fin de l'autre */
+[1,2,3].forEach(k=>{
+  const z=document.createElement('div'); z.className='zone';
+  z.style.left=X0+'px';
+  z.style.width=((X1-X0)*ZONE)+'px';
+  z.style.top=(k*96)+'px';
+  z.innerHTML='<b>ZONE 30 m</b>';
+  q('#cr-track').appendChild(z);
+});
+const baton=document.createElement('div'); baton.id='te-baton';
+q('#cr-track').appendChild(baton);
+
+/* ------------------------------------------------------------------- plans */
+function anOuv(l,d){
+  T(q('#ou-no'),{s:.9+.1*E.oc(sg(l,0,1.4)), o:sg(l,0,.7)*.9, y:20*(1-E.oc(sg(l,0,1.2)))});
+  const t=q('#ou-t'), p=E.oq(sg(l,.25,1.3));
+  T(t,{y:40*(1-p), o:sg(l,.25,.7), s:1.06-.06*p, b:12*(1-p)});
+  const r=q('#ou-r'); r.style.transform=`scaleX(${E.oc(sg(l,.9,1.5)).toFixed(3)})`; r.style.opacity=1;
+  io(q('#ou-s'),l,1.05,1.7,99,99,30);
+  midOut('sc-ouv',E.io(sg(l,d-.4,d)));
+}
+function anEq(l,d){
+  io(q('#eq-k'),l,.05,.5,99,99,22);
+  io(q('#eq-t'),l,.15,.8,99,99,40);
+  /* les lignes se posent, puis l'ordre se rebat sans que l'equipe change */
+  const MEL=[[0,1,2,3],[2,0,3,1],[3,2,1,0]];
+  const t0=1.7, pas=.8;
+  const k=cl(Math.floor((l-t0)/pas),0,2);
+  const u=E.io(cl((l-t0-k*pas)/.5));
+  qa('.eq-r').forEach((r,i)=>{
+    const a=.45+i*.14, e=E.ob(sg(l,a,a+.55));
+    const entree=-60*(1-e);
+    const prev=k? MEL[k-1].indexOf(i) : i, pos=MEL[k].indexOf(i);
+    const dy=(l<t0?0:((prev-i)*(1-u)+(pos-i)*u)*90);
+    r.style.opacity=sg(l,a,a+.25);
+    r.style.transform=`translate(${entree.toFixed(1)}px,${dy.toFixed(1)}px) scale(${(.95+.05*e).toFixed(3)})`;
+    r.querySelector('.num').textContent=String((l<t0?i:pos)+1);
+  });
+  io(q('#eq-note'),l,3.2,3.8,99,99,34);
+  midOut('sc-eq',E.io(sg(l,d-.4,d)));
+}
+function anInv(l,d){
+  io(q('#in-k'),l,.05,.5,99,99,22);
+  io(q('#in-t'),l,.15,.8,99,99,40);
+  io(q('#in-cpt'),l,1.0,1.6,99,99,40);
+  const arrive=[1.9,2.55,3.2];
+  let manquants=3;
+  qa('.in-r').forEach((r,i)=>{
+    const a=.45+i*.13, e=E.ob(sg(l,a,a+.55));
+    const st=r.querySelector('.st');
+    let ok=false, pop=0;
+    if(i===0){ ok=true; st.textContent='✓ CRÉATEUR'; }
+    else {
+      ok=l>=arrive[i-1];
+      if(!ok) manquants--, manquants++;      /* lisible : rien ne bouge */
+      else manquants--;
+      st.textContent=ok?'✓ DANS L’ÉQUIPE':'INVITÉ…';
+      pop=ok?Math.max(0,1-(l-arrive[i-1])/.35):0;
+    }
+    st.style.color=ok?FX:'var(--mut)';
+    r.style.borderColor=ok?FX+'55':'var(--line)';
+    r.style.background=ok?FX+'0d':'#0b1020';
+    r.style.opacity=sg(l,a,a+.25);
+    r.style.transform=`translateX(${(-60*(1-e)).toFixed(1)}px) scale(${(.95+.05*e+.035*pop).toFixed(3)})`;
+  });
+  const n=q('#in-n'); n.textContent=String(manquants);
+  n.style.color=manquants?FX:'#4ADE80';
+  io(q('#in-s'),l,3.5,4.05,99,99,26);
+  midOut('sc-inv',E.io(sg(l,d-.4,d)));
+}
+function anOr(l,d){
+  io(q('#or-k'),l,.05,.5,99,99,22);
+  const t0=1.7, u=E.io(cl((l-t0)/.7));
+  qa('.or-r').forEach((r,i)=>{
+    const a=.3+i*.14, e=E.ob(sg(l,a,a+.55));
+    let dy=0;
+    if(i===1) dy=u*2*90;
+    if(i===3) dy=u*-2*90;
+    r.style.opacity=sg(l,a,a+.25);
+    r.style.transform=`translate(${(-60*(1-e)).toFixed(1)}px,${dy.toFixed(1)}px) scale(${(.95+.05*e).toFixed(3)})`;
+    const rang = l<t0+.35 ? i+1 : (i===1?4:i===3?2:i+1);
+    r.querySelector('.or-num').textContent=String(rang);
+    r.querySelector('.or-st').textContent='RELAIS '+rang;
+    const bouge=(i===1||i===3)&&l>t0&&l<t0+.9;
+    r.style.borderColor=bouge?FX+'88':'var(--line)';
+    r.style.boxShadow=bouge?`0 0 40px ${FX}33`:'none';
+  });
+  io(q('#or-note'),l,2.8,3.4,99,99,34);
+  midOut('sc-or',E.io(sg(l,d-.4,d)));
+}
+function anCrs(l,d){
+  io(q('#cr-track'),l,.05,.55,99,99,54,.97);
+  const LEG=1.05, t0=.85;
+  const movers=qa('#cr-track .mover');
+  const g=cl((l-t0)/(LEG*4));
+  const cur=Math.min(3,Math.floor(g*4));
+  const posDe=i=>{
+    const s=t0+i*LEG, u=cl((l-s)/LEG);
+    const depart=i===0?0:MARQUE;
+    if(l<s) return X0+depart*(X1-X0);
+    return X0+(depart+(1-depart)*E.io(u))*(X1-X0);
+  };
+  movers.forEach((m,i)=>{
+    mover(m,posDe(i));
+    const s=t0+i*LEG;
+    m.style.opacity=(l<s?(i===0?1:.34):(l>s+LEG?.42:1)).toFixed(2);
+  });
+  /* le temoin est porte par le coureur en cours */
+  baton.style.top=(cur*96+44)+'px';
+  baton.style.left=(posDe(cur)+34).toFixed(0)+'px';
+  baton.style.opacity=(l>t0&&l<t0+LEG*4+.15)?1:0;
+  const bu=cl((l-t0-cur*LEG)/LEG);
+  const passe=(bu>.90)||(cur>0&&bu<.10);
+  baton.style.transform=`scale(${passe?2.0:1})`;
+  /* la zone du receveur s'allume quand le porteur arrive */
+  qa('#cr-track .zone').forEach((z,i)=>{
+    const actif=(cur===i&&bu>.80)||(cur===i+1&&bu<.16);
+    z.style.background=actif?FX+'2e':FX+'10';
+    z.style.borderColor=actif?FX+'aa':FX+'3d';
+  });
+  const ORD=['1<sup style="font-size:26px">er</sup> relayeur','2<sup style="font-size:26px">e</sup> relayeur',
+             '3<sup style="font-size:26px">e</sup> relayeur','4<sup style="font-size:26px">e</sup> relayeur'];
+  const lg=q('#cr-leg'); lg.innerHTML=l<t0?ORD[0]:ORD[cur];
+  T(lg,{o:sg(l,.4,.75), s:1+.07*Math.max(0,1-((l-t0-cur*LEG)/.25))});
+  q('#cr-chr').textContent=(g*41.08).toFixed(2);
+  io(q('#cr-s'),l,.9,1.5,99,99,26);
+  midOut('sc-crs',E.io(sg(l,d-.35,d)));
+}
+function anPa(l,d){
+  io(q('#pa-k'),l,.05,.5,99,99,22);
+  io(q('#pa-t'),l,.15,.8,99,99,40);
+  io(q('#pa-piste'),l,.35,1.0,99,99,54,.96);
+  io(q('#pa-card'),l,.5,1.15,99,99,44);
+  /* trois cas, dans l'ordre ou on les comprend */
+  const CAS=[
+    { p:.06, r:.30, ms:480, txt:'ÉLIMINÉE',       c:'#FB7185', note:'hors de la fenêtre de 600 ms' },
+    { p:.14, r:.20, ms:260, txt:'PASSAGE VALIDE', c:'#F8CD4A', note:'trop tôt dans la zone' },
+    { p:.52, r:.55, ms:70,  txt:'PASSAGE PARFAIT',c:'#4ADE80', note:'écart court, bon tiers' },
+  ];
+  const t0=1.5, par=1.15;
+  const k=cl(Math.floor((l-t0)/par),0,2);
+  const cas=CAS[l<t0?0:k];
+  const u=cl((l-t0-k*par)/par);
+  const pp=q('#pa-p'), pr=q('#pa-r');
+  pp.style.left=`calc(110px + (100% - 220px) * ${cas.p})`;
+  pr.style.left=`calc(110px + (100% - 220px) * ${cas.r})`;
+  /* les deux points battent au moment de la tape */
+  const bat=l>=t0 && u<.30 ? 1-u/.30 : 0;
+  pp.style.transform=`translateX(-50%) scale(${(1+.9*bat).toFixed(2)})`;
+  pr.style.transform=`translateX(-50%) scale(${(1+.9*bat).toFixed(2)})`;
+  const ms=q('#pa-ms'); ms.textContent=cas.ms+' ms'; ms.style.color=cas.c;
+  const v=q('#pa-verdict');
+  v.textContent=cas.txt; v.style.color=cas.c;
+  v.style.borderColor=cas.c+'88'; v.style.background=cas.c+'14';
+  v.style.transform=`scale(${(1+.10*bat).toFixed(3)})`;
+  q('#pa-card').style.borderColor=cas.c+'44';
+  io(q('#pa-s'),l,4.0,4.55,99,99,26);
+  midOut('sc-pa',E.io(sg(l,d-.4,d)));
+}
+function anCla(l,d){
+  io(q('#cl-k'),l,.05,.5,99,99,22);
+  cascade('.cl-r',l,.3,.16,.58,60,0);
+  const p=qa('.cl-r')[0], pu=sg(l,1.3,1.75);
+  p.style.boxShadow=`0 0 ${(48*pu*(.75+.25*Math.sin(l*7))).toFixed(0)}px ${FX}44`;
+  io(q('#cl-s'),l,1.85,2.45,99,99,26);
+  midOut('sc-cla',E.io(sg(l,d-.4,d)));
+}
+function anFa(l,d){
+  io(q('#fa-k'),l,.05,.5,99,99,22);
+  io(q('#fa-t'),l,.2,.85,99,99,44);
+  io(q('#fa-card'),l,.6,1.25,99,99,54,.96);
+  midOut('sc-fa',E.io(sg(l,d-.4,d)));
+}
+function anFin(l,d){
+  const p=E.el(sg(l,.05,1.1));
+  T(q('#fi-logo'),{s:.55+.45*p,o:sg(l,.05,.3)});
+  io(q('#fi-t'),l,.35,1.0,99,99,40);
+  const r=q('#fi-r'); r.style.transform=`scaleX(${E.oc(sg(l,.95,1.45)).toFixed(3)})`; r.style.opacity=1;
+  const s=q('#fi-s'); io(s,l,1.15,1.75,99,99,26);
+  if(l>1.8) s.style.opacity=(.72+.28*Math.abs(Math.sin(l*2.6))).toFixed(2);
+  midOut('sc-fin',E.io(sg(l,d-.5,d)));
+}
+
+/* --------------------------------------------------------------- timeline */
+monterFilm({
+  duree: 33.8,
+  accent: FX,
+  etiquette: 'Relais 4×100',
+  chapitres: [[0,15.2],[15.2,25.6],[25.6,33.8]],
+  cuts: [15.2, 25.6],
+  flashes: [{ t: 15.2+.85+1.05*4, force: .55, duree: .26, secousse: .34 }],
+  scenes: {
+    ouv:['sc-ouv', 0,    2.8],
+    eq: ['sc-eq',  2.8,  7.0],
+    inv:['sc-inv', 7.0,  11.4],
+    or: ['sc-or',  11.4, 15.2],
+    crs:['sc-crs', 15.2, 20.6],
+    pa: ['sc-pa',  20.6, 25.6],
+    cla:['sc-cla', 25.6, 28.6],
+    fa: ['sc-fa',  28.6, 31.4],
+    fin:['sc-fin', 31.4, 33.8],
+  },
+  anim: { ouv:anOuv, eq:anEq, inv:anInv, or:anOr, crs:anCrs, pa:anPa, cla:anCla, fa:anFa, fin:anFin },
+  photos: [
+    [1.8,  'ouverture'],
+    [6.4,  'une-equipe'],
+    [10.8, 'invitations'],
+    [14.6, 'ordre'],
+    [18.2, 'la-course'],
+    [22.8, 'passe-ratee'],
+    [25.2, 'passe-parfaite'],
+    [27.8, 'classement'],
+    [30.6, 'fantomes'],
+    [33.0, 'sortie'],
+  ],
+});
+</script>
