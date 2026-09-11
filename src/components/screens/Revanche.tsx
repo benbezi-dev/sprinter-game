@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
-import { Timer, Trophy, RotateCcw, Lightbulb } from 'lucide-react';
+import { Timer, Trophy, RotateCcw, Lightbulb, Check, Play } from 'lucide-react';
 import {
   useObjectif, soumettreCourse, relancerObjectif, quitterObjectif,
   minutesRestantes, s2, type Resultat, type Objectif,
@@ -234,10 +234,20 @@ export function Revanche() {
 /**
  * L'entree dans les defis, posee sur l'accueil.
  *
- * UNE CARTE, JUSQU'A TROIS LIGNES — une par distance ou le joueur est classe.
- * Elles sont trois defis distincts : trois cibles taillees sur ses courses a
- * lui SUR CETTE DISTANCE, trois plateaux, trois lots de points. Le classement
- * du jeu est deja par distance, celui-ci l'est aussi.
+ * UNE CARTE, UNE SEULE LIGNE. Les trois defis — un par distance ou le joueur
+ * est classe — restent trois defis distincts, mais ils ne s'empilent plus :
+ * un selecteur 100 / 200 / 400 choisit la distance, la ligne montre SA cible
+ * et UN bouton la court. Trois lignes identiques se lisaient comme un tableau
+ * et poussaient le selecteur de mode sous la ligne de flottaison ; une ligne
+ * se lit comme une action.
+ *
+ * LE SELECTEUR PLUTOT QU'UN MENU. Trois choix tiennent a l'ecran : les montrer
+ * dit qu'il y a trois defis, et on change de distance en un geste au lieu de
+ * deux. Un point vert marque une distance deja reussie.
+ *
+ * LA DISTANCE PROPOSEE D'ABORD est la premiere qui n'est pas encore reussie :
+ * rouvrir l'accueil sur un defi valide, c'est proposer de refaire ce qui est
+ * fait.
  *
  * Rien ne s'affiche s'il n'y a rien : hors fenetre, hors classement, ou
  * serveur muet, la carte disparait plutot que d'annoncer un defi qui n'existe
@@ -247,49 +257,102 @@ export function Revanche() {
 export function CarteObjectif({ onLancer }: { onLancer: (o: Objectif) => void }) {
   const { N } = SprinterApp;
   const s = useObjectif();
+  const [choisie, setChoisie] = useState<string | null>(null);
   const liste = s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []);
   if (!liste.length) return null;
+
+  const o = liste.find(x => x.epreuve === choisie)
+    ?? liste.find(x => !x.valide)
+    ?? liste[0];
   const minutes = minutesRestantes(liste[0]);
+
+  // Les fleches deplacent le choix, comme dans tout groupe de boutons radio.
+  const auClavier = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const i = liste.indexOf(o);
+    const n = liste.length;
+    const suivant = liste[(i + (e.key === 'ArrowRight' ? 1 : -1) + n) % n];
+    setChoisie(suivant.epreuve);
+    const bouton = e.currentTarget.querySelector<HTMLButtonElement>(`[data-epreuve="${suivant.epreuve}"]`);
+    bouton?.focus();
+  };
 
   return (
     <div className="w-full rounded-2xl border-2 border-primary/50 bg-primary/[0.08]
-                    px-4 py-3 flex flex-col gap-2">
+                    px-4 py-3 flex flex-col gap-2.5">
       <span className="text-[9px] font-bold tracking-[0.25em] text-primary uppercase
                        flex items-center gap-2">
         <Timer className="w-4 h-4 shrink-0" />
-        {N.t('obj_titre')}
+        <span className="truncate">{N.t('obj_titre')}</span>
         {minutes !== null && minutes > 0 && (
-          <span className="text-muted-foreground">
+          <span className="ml-auto shrink-0 text-muted-foreground">
             {N.t('obj_minutes', { n: minutes })}
           </span>
         )}
       </span>
 
-      {liste.map(o => (
-        <button key={o.epreuve} onClick={() => onLancer(o)}
-          className="w-full flex items-center gap-3 text-left rounded-xl px-2 py-1.5
-                     hover:bg-primary/[0.12] transition-colors">
-          {/* LA DISTANCE D'ABORD. Avec trois cibles a l'ecran, un chrono seul
-              ne dit plus rien : 44,10 s n'est un objectif que si l'on sait
-              qu'il s'agit du tour de piste. */}
-          <span className="font-display font-black text-primary text-sm w-12 shrink-0
-                           tabular-nums">
+      <div className="flex items-center gap-2">
+        {/* LA DISTANCE. Seule, elle se dit ; a plusieurs, elle se choisit. */}
+        {liste.length > 1 ? (
+          <div role="radiogroup" aria-label={N.t('obj_distance')} onKeyDown={auClavier}
+            className="shrink-0 flex rounded-xl border border-primary/30 bg-white/[0.06] p-[3px]">
+            {liste.map(x => {
+              const actif = x.epreuve === o.epreuve;
+              return (
+                <button key={x.epreuve} type="button" role="radio"
+                  data-epreuve={x.epreuve}
+                  aria-checked={actif} tabIndex={actif ? 0 : -1}
+                  aria-label={`${x.epreuve} m`}
+                  onClick={() => setChoisie(x.epreuve)}
+                  className={`relative w-9 py-2 rounded-lg font-display font-black text-sm
+                              tabular-nums transition-colors
+                              ${actif ? 'text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {actif && (
+                    <motion.span layoutId="obj-pastille" transition={RESSORT.rang}
+                      className="absolute inset-0 rounded-lg bg-primary" />
+                  )}
+                  <span className="relative">{x.epreuve}</span>
+                  {x.valide && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <span className="shrink-0 font-display font-black text-primary text-sm tabular-nums">
             {o.epreuve} M
           </span>
-          <span className="flex-1 min-w-0 font-mono font-black tabular-nums text-lg text-foreground">
-            {s2(o.cible_ms)} s
-            <span className="text-[10px] font-sans font-bold uppercase tracking-widest
-                             text-muted-foreground ml-2">
-              {N.t('obj_a_passer')}
-            </span>
+        )}
+
+        {/* LA CIBLE de la distance choisie. */}
+        <span className="flex-1 min-w-0 flex flex-col leading-none" aria-live="polite">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span key={o.epreuve}
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.15 }}
+              className="font-mono font-black tabular-nums text-lg text-foreground whitespace-nowrap">
+              {s2(o.cible_ms)} s
+            </motion.span>
+          </AnimatePresence>
+          <span className={`mt-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap
+                            flex items-center gap-1
+                            ${o.valide ? 'text-emerald-300' : 'text-muted-foreground'}`}>
+            {o.valide && <Check className="w-3 h-3 shrink-0" />}
+            {o.valide ? N.t('obj_reussi') : N.t('obj_a_battre')}
           </span>
-          {o.valide
-            ? <Trophy className="w-5 h-5 text-primary shrink-0" />
-            : <span className="text-[10px] font-bold uppercase tracking-widest text-primary shrink-0">
-                {N.t('obj_lancer')}
-              </span>}
+        </span>
+
+        {/* UN SEUL BOUTON. Il court le defi affiche, reussi ou pas. */}
+        <button type="button" onClick={() => onLancer(o)} aria-label={N.t('obj_lancer')}
+          className="shrink-0 rounded-full bg-primary text-background font-display font-black
+                     uppercase tracking-wide text-sm px-3.5 py-2.5 flex items-center gap-1.5
+                     active:scale-[0.96] transition-transform">
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span className="max-[379px]:hidden">{N.t('obj_courir')}</span>
         </button>
-      ))}
+      </div>
     </div>
   );
 }
