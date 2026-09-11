@@ -541,7 +541,7 @@
         return this.norm(b);
       };
       this.buf.beep = blip(660, 0.16, 0.3, 1);
-      this.buf.go = blip(1050, 0.34, 0.34, 1.3);
+      this.buf.go = this.detonation();      // le coup de pistolet
       this.buf.trip = blip(160, 0.22, 0.32, 0.55);
       this.buf.win = blip(760, 0.6, 0.3, 1.6);
       this.buf.lose = blip(300, 0.5, 0.3, 0.6);
@@ -567,6 +567,128 @@
         this.tone(d, n[1], n[2], this.semi(n[0], oct - 1), 0.18, 'sq', 3.0);
       });
       return this.norm(d);
+    },
+    /**
+     * LE COUP DE PISTOLET.
+     *
+     * C'etait un blip : une sinusoide de 1 050 Hz qui montait en un tiers de
+     * seconde. Ca donne un signal de depart, pas une detonation — et un
+     * depart de sprint se joue sur la premiere milliseconde du son, parce que
+     * c'est elle que l'oreille date. Un son qui met trente millisecondes a
+     * s'installer se date mal, et une reaction mesuree au centieme merite
+     * mieux que ca.
+     *
+     * Le coup est donc fabrique en quatre couches, dans cet ordre parce que
+     * c'est celui ou on les entend :
+     *
+     * 1. LA CLAQUE — du bruit passe-haut, monte en une fraction de
+     *    milliseconde, eteint en trente. C'est le son du pistolet.
+     * 2. LE CORPS — une sinusoide grave qui tombe de 130 a 38 Hz. C'est ce
+     *    qu'on recoit dans la poitrine ; sans elle la claque n'est qu'un clic.
+     *    Elle reste BASSE dans le melange : le tampon est normalise a sa
+     *    crete, et une sinusoide grave genereuse rafle tout le niveau — le
+     *    coup devient un coup de grosse caisse, et il disparait sur le
+     *    haut-parleur d'un telephone, qui ne descend pas si bas.
+     * 3. LES RETOURS — la meme claque, renvoyee trois fois par les tribunes,
+     *    chaque retour plus sourd que le precedent. C'est toute la difference
+     *    entre un pistolet dans un stade et un pistolet dans une piece.
+     * 4. LA TRAINEE — ce qui reste quand le coup a fini de rebondir. Courte
+     *    expres : le joueur doit courir, pas ecouter.
+     *
+     * La normalisation est faite ici et non par `norm`, qui applique un fondu
+     * d'entree de six millisecondes. Six millisecondes, c'est precisement la
+     * claque : ce fondu-la rendrait le travail ci-dessus inaudible.
+     */
+    detonation() {
+      const sr = this.ctx.sampleRate;
+      const b = this.ctx.createBuffer(1, (1.2 * sr) | 0, sr);
+      const ch = b.getChannelData(0);
+      // Meme generateur que les percussions : reproductible, et sans appel a
+      // Math.random dans une boucle de cinquante mille tours.
+      let seed = 0x2f6e2b1;
+      const nz = () => {
+        seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+        return seed / 0x3fffffff - 1;
+      };
+
+      // 1. LA CLAQUE. Fabriquee a part : les tribunes la renvoient telle
+      //    quelle plus bas, il faut donc pouvoir la relire.
+      const nc = (0.075 * sr) | 0;
+      const claque = new Float32Array(nc);
+      let bas = 0, m1 = 0, m2 = 0;
+      for (let i = 0; i < nc; i++) {
+        const t = i / sr, n = nz();
+        // Trois filtres d'un pole, tous du meme genre : une moyenne
+        // glissante. Ce qu'on en fait tient a la soustraction.
+        //   n - bas  : au-dessus de 5 kHz — le fouet.
+        //   m1 - m2  : de 300 Hz a 2,5 kHz — le rapport, c'est-a-dire la
+        //              part du coup qu'un haut-parleur de telephone sait
+        //              encore rendre. C'est elle qui porte le son.
+        bas += (n - bas) * 0.5;
+        m1 += (n - m1) * 0.28;
+        m2 += (n - m2) * 0.04;
+        claque[i] = Math.min(1, t / 0.0006) *
+          (1.15 * Math.exp(-t * 160) * (n - bas)
+           + 0.90 * Math.exp(-t * 42) * (m1 - m2)
+           + 0.35 * Math.exp(-t * 30) * n);
+      }
+
+      // 2. LE CORPS.
+      let ph = 0;
+      for (let i = 0; i < ch.length; i++) {
+        const t = i / sr;
+        ph += (92 * Math.exp(-t * 15) + 38) / sr;
+        ch[i] += 0.32 * Math.exp(-t * 20) * Math.min(1, t / 0.0012) *
+                 Math.sin(TAU * ph);
+      }
+
+      // 3. LES RETOURS : [retard, niveau, mollesse].
+      const retours = [[0, 1, 0], [0.072, 0.52, 0.42],
+                       [0.151, 0.34, 0.66], [0.283, 0.19, 0.80]];
+      for (const [t0, amp, mou] of retours) {
+        const i0 = (t0 * sr) | 0;
+        let lp = 0;
+        for (let i = 0; i < nc; i++) {
+          const k = i0 + i; if (k >= ch.length) break;
+          lp += (claque[i] - lp) * (1 - mou);
+          ch[k] += amp * lp;
+        }
+      }
+
+      // 4. LA TRAINEE.
+      let tr = 0;
+      for (let i = 0; i < ch.length; i++) {
+        const t = i / sr;
+        tr += (nz() - tr) * 0.15;
+        ch[i] += 1.1 * Math.exp(-t * 7.5) * (1 - Math.exp(-t * 500)) * tr;
+      }
+
+      // SATURATION, PUIS MISE A L'ECHELLE.
+      //
+      // Normaliser seul ne suffit pas a rendre un coup FORT. Un tampon
+      // normalise a sa crete est plafonne par son pic — ici une pointe de
+      // trente millisecondes — et tout le reste passe dessous : le blip
+      // qu'on remplace, lui, tenait un tiers de seconde a niveau plein, et
+      // il s'entendait donc PLUS FORT qu'une detonation propre, malgre une
+      // crete deux fois plus basse.
+      //
+      // La reponse est celle du studio : on ecrase. `tanh` rabat la pointe
+      // et remonte tout ce qui est en dessous, ce qui monte le niveau moyen
+      // sans toucher a la crete ni au temps de montee. La distorsion qu'elle
+      // ajoute n'est pas un defaut ici — un vrai coup de feu sature deja le
+      // micro qui l'enregistre.
+      let pk = 0;
+      for (let i = 0; i < ch.length; i++) pk = Math.max(pk, Math.abs(ch[i]));
+      const g0 = pk > 0.001 ? 1 / pk : 1;
+      const D = 2.8, sat = Math.tanh(D);
+      const fin = (0.01 * sr) | 0;
+      for (let i = 0; i < ch.length; i++) {
+        let v = 0.99 * Math.tanh(D * ch[i] * g0) / sat;
+        if (v > 1) v = 1; else if (v < -1) v = -1;
+        if (i > ch.length - fin) v *= (ch.length - i) / fin;
+        ch[i] = v;
+      }
+      return b;
     },
     // La musique de course se durcit a partir du championnat du monde.
     /**
@@ -610,11 +732,18 @@
       const g = this.ctx.createGain(); g.gain.value = 0.75;
       s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
     },
-    sfx(name) {
+    /**
+     * Un bruitage, a son niveau.
+     *
+     * `vol` est optionnel et vaut 0,55 comme avant. Il n'existe que pour le
+     * coup de pistolet, qui doit passer DEVANT la musique de course : un
+     * depart qu'on entend au meme niveau que la basse n'est pas un depart.
+     */
+    sfx(name, vol) {
       if (!this.ok || !this.on) return;
       const b = this.buf[name]; if (!b) return;
       const s = this.ctx.createBufferSource();
-      const g = this.ctx.createGain(); g.gain.value = 0.55;
+      const g = this.ctx.createGain(); g.gain.value = vol || 0.55;
       s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
     },
     toggle() { this.on = !this.on; if (!this.on) this.stop(); return this.on; }
@@ -863,6 +992,16 @@
     G.paused = false;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
+    // Et sur une piste sans adversaire en direct.
+    //
+    // La table ne mourait qu'a l'accueil. Une course lancee juste apres une
+    // course en direct — RECOMMENCER, un defi, un fantome — heritait donc de
+    // la table de la precedente, et stepGhost prend cette branche des qu'elle
+    // n'est pas vide : le fantome qu'on venait d'armer n'etait jamais avance,
+    // et la camera suivait un coureur qui n'est plus sur la piste. Les deux
+    // chemins du direct la reinstallent juste apres buildLevel — voir
+    // armLives et armLive.
+    G.lives = null;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
   }
@@ -1233,6 +1372,72 @@
   }
 
   /**
+   * Met la piste d'accord avec la salle, sans rien remettre a zero.
+   *
+   * `armLives` monte la piste une fois pour toutes, et pour la course en
+   * direct cela arrive au debut de la PRESENTATION — plusieurs dizaines de
+   * secondes avant le coup de pistolet. Entre les deux, la salle continue de
+   * vivre : quelqu'un ferme l'application, quelqu'un d'autre arrive. La piste,
+   * elle, ne le savait pas.
+   *
+   * Un partant qui s'en va laissait donc son coureur plante sur la ligne de
+   * depart, immobile toute la course sans faux depart ni elimination — il
+   * n'emet plus rien, et rien ne le retirait. Un partant qui arrive apres le
+   * montage, a l'inverse, n'avait aucun coureur a son identifiant : ses
+   * positions tombaient dans le vide (voir liveDistDe), il ne se voyait nulle
+   * part sur la piste, et il figurait pourtant au classement rendu par la
+   * salle, qui l'avait bien compte.
+   *
+   * On reconcilie donc plutot que de remonter : ceux qui restent gardent leur
+   * couloir, leur couleur et leur interpolation en cours, ce qu'un
+   * `armLives` neuf leur ferait perdre au milieu d'une course.
+   */
+  function majLives(autres) {
+    // Hors course en direct, la piste n'appartient pas a une salle : un
+    // message qui arriverait pendant une etape de campagne ou un defi n'a rien
+    // a y retirer ni a y ajouter.
+    if (!G.liveOn || !G.lives) return;
+    const voulus = new Map((autres || []).map(a => [a.id, a]));
+
+    // Ceux qui ne sont plus la quittent la piste.
+    for (const [id, g] of [...G.lives]) {
+      if (voulus.has(id)) continue;
+      const i = G.runners.indexOf(g.runner);
+      if (i >= 0) G.runners.splice(i, 1);
+      // Le fantome designe pointait peut-etre sur lui : stepGhost en redesigne
+      // un a l'image suivante, mais la camera ne doit pas suivre un absent
+      // d'ici la.
+      if (G.ghost === g) G.ghost = null;
+      G.lives.delete(id);
+    }
+
+    // Ceux qui viennent d'arriver prennent un couloir libre. Le couloir
+    // annonce par la salle est respecte quand il l'est encore : c'est ce qui
+    // fait que les huit telephones placent les memes gens aux memes endroits.
+    const pris = new Set(G.runners.map(r => r.lane));
+    for (const [id, a] of voulus) {
+      if (G.lives.has(id)) continue;
+      let lane = a.couloir;
+      if (!lane || lane < 1 || lane > 8 || pris.has(lane)) {
+        lane = 0;
+        for (let l = 1; l <= 8 && !lane; l++) if (!pris.has(l)) lane = l;
+        if (!lane) continue;             // piste pleine : cas theorique
+      }
+      pris.add(lane);
+      const i = G.runners.findIndex(r => !r.isPlayer && !r.isLive && r.lane === lane);
+      if (i >= 0) G.runners.splice(i, 1);
+      const r = new Runner(a.nom || 'ADVERSAIRE', lane, {
+        maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
+      });
+      r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
+      r.repere = { couleur: couleurCouloir(lane), nom: a.nom || '' };
+      G.runners.push(r);
+      G.lives.set(id, { live: true, cible: 0, vEst: 0, depuis: G.elapsed,
+                        runner: r, trace: [], step: REC_STEP, time: 0 });
+    }
+  }
+
+  /**
    * Ne laisse sur la piste que ceux qui courent vraiment.
    *
    * `buildLevel` remplit toujours les sept couloirs voisins avec le plateau de
@@ -1287,6 +1492,9 @@
 
   function armLive(nom) {
     G.ghost = null;
+    // Ce chemin-ci n'a qu'un adversaire, tenu par G.ghost : la table doit
+    // rester vide, sinon liveDistDe et stepGhost iraient la chercher.
+    G.lives = null;
     const lane = 4;
     const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
     if (idx >= 0) G.runners.splice(idx, 1);
@@ -1421,7 +1629,10 @@
     if (G.ghost) {
       const gr = G.ghost.runner;
       if (gr.finishTime == null) gr.finishTime = G.ghost.time || null;
-      field = G.runners.concat([gr]);
+      // A plusieurs, l'adversaire designe vit DANS G.runners : l'y ajouter une
+      // seconde fois le faisait figurer deux fois au classement d'arrivee, une
+      // ligne par exemplaire du meme coureur.
+      if (field.indexOf(gr) < 0) field = G.runners.concat([gr]);
     }
     const order = field.slice().sort((a, b) =>
       (a.finishTime === null ? 1e9 : a.finishTime) -
@@ -3759,7 +3970,7 @@
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
-    armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
+    armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     REC_STEP, goHome,
     raceHistory,

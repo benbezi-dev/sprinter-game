@@ -80,3 +80,9 @@ assets-stores/promo/preview/
 assets-stores/promo/out/
 assets-stores/promo/explications/images/
 assets-stores/promo/explications/controle/
+
+# Les images intermediaires des captures Instagram : une suite de JPEG
+# 1080 x 1920 par fonctionnalite, 2,3 Go en tout. Le rush livre
+# (`*_raw_v1.mp4`) porte la meme matiere ; ce dossier ne sert qu'a remonter un
+# reel sans refilmer, et se supprime sans rien perdre d'irremplacable.
+content/instagram/gameplay/_travail/

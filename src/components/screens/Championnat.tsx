@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, RESSORT } from '@/lib/mouvement';
-import { Trophy, Loader2, Timer, Flag, Sparkles, Medal } from 'lucide-react';
+import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Crown } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
 import {
   etatEdition, fluxDirect, prochain, grille, arrivee,
-  type Edition, type Annonce, type Partant,
+  bossVu, marquerBossVu,
+  type Edition, type Annonce, type Partant, type TenantEnTitre,
 } from '@/game/championnats';
 
 /**
@@ -50,7 +51,7 @@ function FilDesPhases({ e }: { e: Edition }) {
               ${active ? 'bg-primary/20 text-primary border-primary/50'
                 : passee ? 'text-primary/70 border-primary/25'
                 : 'text-muted-foreground/50 border-white/8'}`}>
-              {p.nom}
+              {SprinterApp.N.phaseNom(p.cle, p.nom)}
             </span>
           </React.Fragment>
         );
@@ -78,6 +79,18 @@ function Couloir({ p, place, ms, direct }: {
       <span className="text-[11px] font-bold tracking-wide truncate flex-1 text-foreground">
         {p.nom}
       </span>
+      {/* Le tenant du titre, sur sa ligne. Il est seme au MMR comme tout le
+          monde et peut donc tomber dans n'importe quelle serie : sans ce sigle,
+          rien ne distingue le champion en titre du vingt-septieme. */}
+      {p.tenant && (
+        <span className="flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded
+                         border text-[8px] font-black tracking-widest"
+              style={{ color: OR, borderColor: 'rgba(248,205,74,0.45)',
+                       backgroundColor: 'rgba(248,205,74,0.12)' }}>
+          <Crown className="w-2.5 h-2.5" />
+          {SprinterApp.N.t('champ_tenant')}
+        </span>
+      )}
       {p.rang_duel != null && !couru && (
         <span className="font-mono text-[9px] text-muted-foreground/60 shrink-0">
           {SprinterApp.N.ord(p.rang_duel)}
@@ -108,7 +121,7 @@ function Grille({ e }: { e: Edition }) {
           <div key={course} className="flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between px-1">
               <span className="text-[10px] font-bold tracking-widest text-muted-foreground">
-                {e.phaseNom} {e.courses > 1 ? course : ''}
+                {SprinterApp.N.phaseNom(e.phase, e.phaseNom)} {e.courses > 1 ? course : ''}
               </span>
               {courue && e.directsParCourse > 0 && (
                 <span className="text-[9px] text-primary/70 tracking-wide">
@@ -144,8 +157,9 @@ function Grille({ e }: { e: Edition }) {
  */
 function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
   const { N } = SprinterApp;
-  const repeches: { nom: string; ms: number | null; course: number }[] =
-    (a.donnees && a.donnees.repeches) || [];
+  const repeches: {
+    nom: string; ms: number | null; course: number; doffice?: boolean;
+  }[] = (a.donnees && a.donnees.repeches) || [];
   const [montres, setMontres] = useState(0);
 
   useEffect(() => {
@@ -181,9 +195,19 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
               <span className="flex-1 font-bold text-sm tracking-wide truncate text-foreground">
                 {r.nom}
               </span>
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                {chrono(r.ms)}
-              </span>
+              {/* Une place prise par un titre n'est pas une place prise au
+                  chrono, et l'ecran doit le dire. Le taire ferait passer un
+                  passe-droit pour un repechage merite — c'est la seule chose
+                  qui rendrait cette regle injuste aux yeux des sept autres. */}
+              {r.doffice ? (
+                <span className="text-[9px] font-bold tracking-wide shrink-0" style={{ color: OR }}>
+                  {N.t('champ_repeche_doffice')}
+                </span>
+              ) : (
+                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                  {chrono(r.ms)}
+                </span>
+              )}
             </motion.div>
           ))}
         </div>
@@ -197,6 +221,117 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
             {N.t('champ_continue')}
           </motion.button>
         )}
+      </motion.div>
+    </div>
+  );
+}
+
+/* ------------------------------------------- l'entree en lice du tenant */
+
+/**
+ * LA CINEMATIQUE DU CHAMPION EN TITRE.
+ *
+ * Elle se joue une fois par edition, a la cloture : l'instant ou le tenant du
+ * titre entre en lice et ou l'on sait enfin qui, parmi les trente-deux, a
+ * quelque chose a perdre.
+ *
+ * Elle passe par la meme porte que ses deux soeurs — le fil d'annonces
+ * declenche, l'ecran met en scene — et non par un chemin qu'elle serait seule a
+ * prendre. C'est ce qui garantit qu'un joueur qui rouvre l'application ne la
+ * revoit pas : le rattrapage du curseur marque les annonces passees comme vues
+ * sans les rejouer, et cela vaut pour celle-ci sans une ligne de plus.
+ *
+ * Ce que le serveur envoie et ce que cet ecran en fait sont deux choses. Le
+ * serveur dit : voici le tenant, son titre, sa serie, et il est en finale
+ * d'office. Rien de tout cela n'est recalcule ici — pas meme la phrase « en
+ * finale d'office », qui arrive comme un drapeau et non comme une regle a
+ * reappliquer.
+ */
+function Boss({ t, e, onFini }: { t: TenantEnTitre; e: Edition; onFini: () => void }) {
+  const { N } = SprinterApp;
+  const partant = e.partants.find(p => p.name_key === t.name_key);
+  const pays = partant ? partant.pays : null;
+
+  // La scene se ferme d'elle-meme. Un bouton « continuer » conviendrait a la
+  // revelation des repeches — huit noms qu'on lit — mais pas ici : il n'y a
+  // qu'un nom, et le faire valider transformerait une entree en lice en
+  // formulaire.
+  //
+  // LE MINUTEUR NE DOIT PAS DEPENDRE DE `onFini`, et c'est tout l'objet de ce
+  // detour par une reference. L'ecran parent porte une horloge qui avance
+  // toutes les secondes pour son compte a rebours ; il se rerend donc chaque
+  // seconde, et la lambda qu'il passe ici est neuve a chaque fois. Un effet qui
+  // en dependait relancait son minuteur une fois par seconde : la scene ne se
+  // fermait jamais, et restait sur l'ecran pour toujours.
+  //
+  // Ses deux soeurs n'ont pas ce probleme parce qu'elles se ferment sur un
+  // bouton, jamais sur un delai. Celle-ci est la seule a s'auto-fermer, donc la
+  // seule exposee.
+  const fermer = useRef(onFini);
+  fermer.current = onFini;
+  useEffect(() => {
+    const t = setTimeout(() => fermer.current(), 5200);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6 bg-[#05070d]"
+         style={{ backgroundImage:
+           'radial-gradient(120% 80% at 50% 40%, rgba(248,205,74,0.10), transparent 70%)' }}>
+      <motion.div {...SURGISSEMENT}
+                  className="w-full max-w-sm flex flex-col items-center gap-3">
+        <motion.div
+          initial={{ scale: 0.4, opacity: 0, rotate: -12 }}
+          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+          transition={RESSORT.panneau}>
+          <Crown className="w-8 h-8" style={{ color: OR }} />
+        </motion.div>
+
+        <p className="text-[10px] font-black tracking-[0.3em] text-center"
+           style={{ color: OR }}>
+          {N.t('champ_boss')}
+        </p>
+
+        {/* Le nom, seul et grand. C'est la seule information de cet ecran qui
+            doive se lire d'un coup d'oeil depuis l'autre bout d'une piece. */}
+        <h2 className="font-display font-black text-3xl tracking-tight text-center
+                       flex items-center justify-center gap-2 text-foreground">
+          <Drapeau pays={pays} className="text-2xl" />
+          {t.nom}
+        </h2>
+
+        {t.libelle && (
+          <p className="text-[11px] font-bold tracking-widest uppercase text-white/55 text-center">
+            {t.libelle}
+          </p>
+        )}
+
+        <p className="text-[11px] text-white/50 text-center leading-snug max-w-[28ch] mt-1">
+          {N.t('champ_boss_desc')}
+        </p>
+
+        {/* Les deux faits qui changent sa competition : sa serie, et le fait
+            qu'aucun resultat ne l'en sortira. */}
+        <div className="flex flex-col items-center gap-1.5 mt-2 w-full">
+          {t.course != null && (
+            <span className="text-[10px] font-mono tracking-widest text-white/45">
+              {/* `sel_ma_serie` et non le nom de la phase : celui-ci est au
+                  pluriel (« Séries »), et « Séries 2 » n'est pas du francais.
+                  C'est la meme cle que la scene de selection affiche deux
+                  secondes plus tot — le joueur lit donc deux fois la meme
+                  phrase, ce qui est exactement ce qu'on veut. */}
+              {N.t('sel_ma_serie', { n: t.course })}
+            </span>
+          )}
+          {t.finaleDOffice && (
+            <motion.span {...FONDU}
+              className="px-3 py-1.5 rounded-lg border text-[9px] font-black tracking-widest"
+              style={{ color: OR, borderColor: 'rgba(248,205,74,0.45)',
+                       backgroundColor: 'rgba(248,205,74,0.12)' }}>
+              {N.t('champ_boss_finale')}
+            </motion.span>
+          )}
+        </div>
       </motion.div>
     </div>
   );
@@ -229,7 +364,7 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
           {/* Sur l'ecran du sacre, la distance compte autant que la zone :
               c'est d'elle qu'on est champion. */}
           <p className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-1">
-            {e.titre} · {e.epreuve} m
+            {SprinterApp.N.titreEdition(e)} · {e.epreuve} m
           </p>
           <h2 className="font-display font-black text-3xl tracking-tight flex items-center justify-center gap-2"
               style={{ color: OR }}>
@@ -299,6 +434,7 @@ export function Championnat({ edition, onQuitter }: {
   const [e, setE] = useState<Edition | null>(null);
   const [fil, setFil] = useState<Annonce[]>([]);
   const [revelation, setRevelation] = useState<Annonce | null>(null);
+  const [boss, setBoss] = useState(false);
   const [podium, setPodium] = useState(false);
   const [maintenant, setMaintenant] = useState(Date.now());
   const curseur = useRef(0);
@@ -328,6 +464,11 @@ export function Championnat({ edition, onQuitter }: {
             if (vu.current.has(a.id)) continue;
             vu.current.add(a.id);
             if (a.type === 'reveal-demies' || a.type === 'reveal-finale') setRevelation(a);
+            // L'annonce `boss` ne declenche RIEN ici, et ce n'est pas un oubli :
+            // elle est emise a la cloture, l'instant meme ou ce panneau
+            // apparait, si bien que personne n'a l'ecran ouvert pour la
+            // recevoir. Elle sert la notification et le fil ; la scene, elle,
+            // se declenche sur l'etat — voir l'effet plus bas.
             if (a.type === 'sacre') setPodium(true);
           }
         }
@@ -355,6 +496,19 @@ export function Championnat({ edition, onQuitter }: {
     return () => { vivant = false; clearInterval(t); };
   }, [edition]);
 
+  // L'ENTREE EN LICE DU TENANT. Une fois par edition et par appareil.
+  //
+  // Sur l'etat et non sur le fil, parce que l'annonce arrive avant que cet
+  // ecran existe (voir `bossVu`). La memoire est marquee au declenchement et
+  // non a la fermeture : un rechargement au milieu de la scene ne doit pas la
+  // rejouer, et une scene manquee vaut mieux qu'une scene en boucle.
+  useEffect(() => {
+    if (!e || !e.tenant || e.etat === 'terminee') return;
+    if (bossVu(e.id)) return;
+    marquerBossVu(e.id);
+    setBoss(true);
+  }, [e]);
+
   if (!e) {
     return (
       <div className="bg-card/70 border border-white/10 rounded-2xl p-6 flex justify-center">
@@ -367,11 +521,17 @@ export function Championnat({ edition, onQuitter }: {
 
   return (
     <>
+      {/* Trois scenes, et jamais deux a la fois. L'ordre n'est pas celui du
+          hasard : l'entree en lice passe avant tout le reste puisqu'elle ouvre
+          la competition, le podium apres tout le reste puisqu'il la ferme. */}
       <AnimatePresence>
-        {revelation && (
+        {boss && e.tenant && (
+          <Boss t={e.tenant} e={e} onFini={() => setBoss(false)} />
+        )}
+        {!boss && revelation && (
           <Revelation a={revelation} onFini={() => setRevelation(null)} />
         )}
-        {!revelation && podium && e.etat === 'terminee' && (
+        {!boss && !revelation && podium && e.etat === 'terminee' && (
           <Podium e={e} onFerme={() => setPodium(false)} />
         )}
       </AnimatePresence>
@@ -386,7 +546,7 @@ export function Championnat({ edition, onQuitter }: {
           <div className="flex items-center gap-2">
             <Trophy className="w-3.5 h-3.5" style={{ color: OR }} />
             <h3 className="text-[10px] md:text-xs font-bold tracking-widest" style={{ color: OR }}>
-              {e.titre.toUpperCase()}
+              {SprinterApp.N.titreEdition(e).toUpperCase()}
             </h3>
             {/* La distance se lit a cote du titre, et pas dedans : le titre est
                 deja accorde par le serveur (« Championnat de France »)
@@ -401,6 +561,17 @@ export function Championnat({ edition, onQuitter }: {
                     className="text-[11px] font-bold tracking-wide text-primary underline-offset-2 hover:underline">
               {N.t('champ_sacre', { n: e.champion })}
             </button>
+          )}
+          {/* Le tenant du titre, tant que l'edition court.
+              La cinematique ne passe qu'une fois, a la cloture : celui qui
+              ouvre l'ecran le dimanche matin ne l'a jamais vue, et c'est
+              pourtant la premiere chose a savoir sur ce championnat. */}
+          {e.etat !== 'terminee' && e.tenant && (
+            <span className="flex items-center gap-1.5 text-[11px] font-bold tracking-wide"
+                  style={{ color: OR }}>
+              <Crown className="w-3 h-3" />
+              {N.t('champ_tenant_defend', { n: e.tenant.nom })}
+            </span>
           )}
         </div>
 

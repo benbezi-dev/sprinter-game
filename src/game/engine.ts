@@ -13,6 +13,22 @@ SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
 
+/**
+ * LE STARTER EST MUET.
+ *
+ * Le decompte sonnait trois bips avant le coup de feu — l'appel aux marques,
+ * puis « prets ». On les a coupes : trois impulsions egalement espacees
+ * annoncent la quatrieme, et le joueur part alors sur une pulsation qu'il
+ * compte, et non au coup de feu. C'est la reaction elle-meme qu'on mesure
+ * faux. Le decompte se voit toujours a l'ecran ; seule la detonation
+ * s'entend.
+ *
+ * Le geste est garde dans la boucle plutot que supprime : ce reglage a
+ * change deux fois, il changera peut-etre encore, et le remettre ne doit
+ * pas demander de rouvrir la boucle de jeu.
+ */
+const STARTER_MUET = true;
+
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
@@ -306,6 +322,27 @@ export function brancherSalle(s: typeof salleLive) {
   finEnvoyee = false;
 }
 
+/**
+ * Remet l'emission a zero pour la course qui commence.
+ *
+ * Les deux compteurs sont cales sur `G.elapsed`, qui repart de zero a chaque
+ * coup de pistolet — mais ils vivaient, eux, aussi longtemps que la salle.
+ * Une seconde course dans la meme salle heritait donc d'un `prochainEnvoi`
+ * pose a la fin de la premiere : dix secondes dans le futur, c'est-a-dire
+ * apres l'arrivee. Le joueur ne transmettait plus une seule position, et
+ * l'adversaire le voyait immobile sur la ligne de depart du debut a la fin,
+ * sans faux depart et sans erreur. `finEnvoyee`, reste vrai, retenait en plus
+ * le chrono d'arrivee : la salle n'avait alors plus de quoi trancher.
+ *
+ * Le relais rebranchait sa salle a chaque depart et echappait donc au piege ;
+ * le direct, qui branche la sienne a la connexion, tombait dedans des la
+ * revanche. La remise a zero appartient au depart, pas au branchement.
+ */
+export function reinitialiserEnvoi() {
+  prochainEnvoi = 0;
+  finEnvoyee = false;
+}
+
 function pousserPosition() {
   if (!salleLive) return;
   if (G.elapsed >= prochainEnvoi) {
@@ -371,10 +408,23 @@ export function updateLogic(dt: number) {
     SprinterApp.finirLesSaluts(dt);
     const prev = Math.floor(G.countT);
     G.countT += dt;
-    if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
+    // Le starter est en place, et il est MUET : le decompte se voit, il ne
+    // s'entend pas. Trois bips egalement espaces annoncent le quatrieme, et
+    // l'on part alors sur une pulsation qu'on compte plutot qu'au coup de
+    // feu — c'est la reaction elle-meme qu'on mesure faux. Le geste est
+    // garde tel quel plutot que supprime : basculer STARTER_MUET rend les
+    // trois bips, sans rien avoir a reecrire.
+    if (!STARTER_MUET && Math.floor(G.countT) !== prev && G.countT < 3)
+      Audio_.sfx('beep');
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
-      Audio_.sfx('go'); G.state = 'race'; G.elapsed = 0;
+      // Plein niveau, et non les 0,55 des autres bruitages : le pistolet
+      // passe devant la musique de course. Voir Audio_.detonation.
+      Audio_.sfx('go', 0.9); G.state = 'race'; G.elapsed = 0;
+      // Le chronometre de la course repart de zero : ce qui se compte sur lui
+      // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans
+      // le vide. Voir reinitialiserEnvoi.
+      reinitialiserEnvoi();
       resetInputRhythm();
     }
   } else if (G.state === 'race') {

@@ -16,6 +16,7 @@
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
+  TENANT,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
@@ -47,37 +48,66 @@ const CONTINENTS = {
  * que d'essayer de la deviner a partir du nom.
  */
 const PAYS_NOMS = {
-  FR: ['France', 'de France'],            BE: ['Belgique', 'de Belgique'],
-  CH: ['Suisse', 'de Suisse'],            CA: ['Canada', 'du Canada'],
-  DE: ['Allemagne', "d'Allemagne"],       ES: ['Espagne', "d'Espagne"],
-  IT: ['Italie', "d'Italie"],             PT: ['Portugal', 'du Portugal'],
-  GB: ['Royaume-Uni', 'du Royaume-Uni'],  IE: ['Irlande', "d'Irlande"],
-  NL: ['Pays-Bas', 'des Pays-Bas'],       LU: ['Luxembourg', 'du Luxembourg'],
-  US: ['États-Unis', 'des États-Unis'],   MX: ['Mexique', 'du Mexique'],
-  BR: ['Brésil', 'du Brésil'],            AR: ['Argentine', "d'Argentine'"],
-  MA: ['Maroc', 'du Maroc'],              DZ: ['Algérie', "d'Algérie"],
-  TN: ['Tunisie', 'de Tunisie'],          SN: ['Sénégal', 'du Sénégal'],
-  CI: ["Côte d'Ivoire", "de Côte d'Ivoire"], CM: ['Cameroun', 'du Cameroun'],
-  ML: ['Mali', 'du Mali'],                CD: ['Congo', 'du Congo'],
-  GA: ['Gabon', 'du Gabon'],              GN: ['Guinée', 'de Guinée'],
-  BF: ['Burkina Faso', 'du Burkina Faso'],NE: ['Niger', 'du Niger'],
-  TG: ['Togo', 'du Togo'],                BJ: ['Bénin', 'du Bénin'],
-  ZA: ['Afrique du Sud', "d'Afrique du Sud"], NG: ['Nigeria', 'du Nigeria'],
-  EG: ['Égypte', "d'Égypte"],             KE: ['Kenya', 'du Kenya'],
-  JP: ['Japon', 'du Japon'],              CN: ['Chine', 'de Chine'],
-  KR: ['Corée du Sud', 'de Corée du Sud'],IN: ['Inde', "d'Inde"],
-  AU: ['Australie', "d'Australie"],       NZ: ['Nouvelle-Zélande', 'de Nouvelle-Zélande'],
-  PL: ['Pologne', 'de Pologne'],          SE: ['Suède', 'de Suède'],
-  NO: ['Norvège', 'de Norvège'],          DK: ['Danemark', 'du Danemark'],
-  FI: ['Finlande', 'de Finlande'],        GR: ['Grèce', 'de Grèce'],
-  TR: ['Turquie', 'de Turquie'],          RU: ['Russie', 'de Russie'],
-  UA: ['Ukraine', "d'Ukraine"],           RO: ['Roumanie', 'de Roumanie'],
+  FR: ['France', 'de France', 'France'],
+  BE: ['Belgique', 'de Belgique', 'Belgium'],
+  CH: ['Suisse', 'de Suisse', 'Switzerland'],
+  CA: ['Canada', 'du Canada', 'Canada'],
+  DE: ['Allemagne', "d'Allemagne", 'Germany'],
+  ES: ['Espagne', "d'Espagne", 'Spain'],
+  IT: ['Italie', "d'Italie", 'Italy'],
+  PT: ['Portugal', 'du Portugal', 'Portugal'],
+  GB: ['Royaume-Uni', 'du Royaume-Uni', 'United Kingdom'],
+  IE: ['Irlande', "d'Irlande", 'Ireland'],
+  NL: ['Pays-Bas', 'des Pays-Bas', 'Netherlands'],
+  LU: ['Luxembourg', 'du Luxembourg', 'Luxembourg'],
+  US: ['États-Unis', 'des États-Unis', 'United States'],
+  MX: ['Mexique', 'du Mexique', 'Mexico'],
+  BR: ['Brésil', 'du Brésil', 'Brazil'],
+  // La forme avec preposition portait une apostrophe de trop — "d'Argentine'"
+  // — et le titre sortait « Champion d'Argentine' », guillemet compris.
+  AR: ['Argentine', "d'Argentine", 'Argentina'],
+  MA: ['Maroc', 'du Maroc', 'Morocco'],
+  DZ: ['Algérie', "d'Algérie", 'Algeria'],
+  TN: ['Tunisie', 'de Tunisie', 'Tunisia'],
+  SN: ['Sénégal', 'du Sénégal', 'Senegal'],
+  CI: ["Côte d'Ivoire", "de Côte d'Ivoire", 'Ivory Coast'],
+  CM: ['Cameroun', 'du Cameroun', 'Cameroon'],
+  ML: ['Mali', 'du Mali', 'Mali'],
+  CD: ['Congo', 'du Congo', 'Congo'],
+  GA: ['Gabon', 'du Gabon', 'Gabon'],
+  GN: ['Guinée', 'de Guinée', 'Guinea'],
+  BF: ['Burkina Faso', 'du Burkina Faso', 'Burkina Faso'],
+  NE: ['Niger', 'du Niger', 'Niger'],
+  TG: ['Togo', 'du Togo', 'Togo'],
+  BJ: ['Bénin', 'du Bénin', 'Benin'],
+  ZA: ['Afrique du Sud', "d'Afrique du Sud", 'South Africa'],
+  NG: ['Nigeria', 'du Nigeria', 'Nigeria'],
+  EG: ['Égypte', "d'Égypte", 'Egypt'],
+  KE: ['Kenya', 'du Kenya', 'Kenya'],
+  JP: ['Japon', 'du Japon', 'Japan'],
+  CN: ['Chine', 'de Chine', 'China'],
+  KR: ['Corée du Sud', 'de Corée du Sud', 'South Korea'],
+  IN: ['Inde', "d'Inde", 'India'],
+  AU: ['Australie', "d'Australie", 'Australia'],
+  NZ: ['Nouvelle-Zélande', 'de Nouvelle-Zélande', 'New Zealand'],
+  PL: ['Pologne', 'de Pologne', 'Poland'],
+  SE: ['Suède', 'de Suède', 'Sweden'],
+  NO: ['Norvège', 'de Norvège', 'Norway'],
+  DK: ['Danemark', 'du Danemark', 'Denmark'],
+  FI: ['Finlande', 'de Finlande', 'Finland'],
+  GR: ['Grèce', 'de Grèce', 'Greece'],
+  TR: ['Turquie', 'de Turquie', 'Turkey'],
+  RU: ['Russie', 'de Russie', 'Russia'],
+  UA: ['Ukraine', "d'Ukraine", 'Ukraine'],
+  RO: ['Roumanie', 'de Roumanie', 'Romania'],
 };
 
 const CONTINENT_NOMS = {
-  EU: ["Europe", "d'Europe"],       AF: ['Afrique', "d'Afrique"],
-  AM: ['Amériques', 'des Amériques'], AS: ['Asie', "d'Asie"],
-  OC: ['Océanie', "d'Océanie"],
+  EU: ['Europe', "d'Europe", 'Europe'],
+  AF: ['Afrique', "d'Afrique", 'Africa'],
+  AM: ['Amériques', 'des Amériques', 'the Americas'],
+  AS: ['Asie', "d'Asie", 'Asia'],
+  OC: ['Océanie', "d'Océanie", 'Oceania'],
 };
 
 /**
@@ -97,12 +127,28 @@ export function listeNations() {
     .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 }
 
-/** Le nom lisible d'une zone, et sa forme avec preposition. */
+/**
+ * Le nom lisible d'une zone : sa forme simple, sa forme avec preposition, et
+ * son nom anglais.
+ *
+ * `nomEn` a ete ajoute le 9 septembre 2026. Il manquait, et son absence se
+ * voyait a l'endroit le plus visible du jeu : le titre d'une edition est
+ * compose ICI, article francais compris, et l'ecran l'affichait tel quel — si
+ * bien qu'un joueur anglophone lisait « Championnat de France » en haut de son
+ * panneau et sur son podium, au milieu d'une interface par ailleurs traduite.
+ *
+ * L'anglais n'a pas besoin de la forme avec preposition : il pose le nom du
+ * pays devant (« France National Championship »), la ou le francais demande
+ * de France, du Maroc, des Etats-Unis. C'est pourquoi il n'y a que trois
+ * colonnes et non quatre — et pourquoi la composition du titre anglais est du
+ * cote du client, avec le reste de sa langue.
+ */
 export function nomZone(zone, echelon) {
   const z = String(zone || '').toUpperCase();
   const table = echelon === 'continental' ? CONTINENT_NOMS : PAYS_NOMS;
   const e = table[z];
-  return e ? { nom: e[0], avec: e[1] } : { nom: z, avec: 'de ' + z };
+  return e ? { nom: e[0], avec: e[1], nomEn: e[2] || e[0] }
+           : { nom: z, avec: 'de ' + z, nomEn: z };
 }
 
 const PAYS_CONTINENT = {};
@@ -161,6 +207,15 @@ export async function ensureChampTables(db) {
       phase TEXT NOT NULL,
       course INTEGER,
       sorti_en TEXT,
+      -- Le tenant du titre de CETTE edition, et il n'y en a qu'un.
+      --
+      -- Le statut est ecrit ici, une seule fois, a la cloture — et non relu
+      -- dans champ_titres a chaque phase. C'est delibere : un titre porte
+      -- une date d'expiration, et le lire en cours de weekend ferait qu'un
+      -- titre expirant samedi soir changerait les regles entre la quatrieme
+      -- serie et les demi-finales. La grille est gelee a la cloture ; le
+      -- tenant l'est avec elle.
+      tenant INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (edition, name_key)
     )`),
 
@@ -211,7 +266,20 @@ export async function ensureChampTables(db) {
       libelle TEXT NOT NULL,
       edition TEXT NOT NULL,
       sacre_le INTEGER NOT NULL,
-      expire_le INTEGER NOT NULL
+      expire_le INTEGER NOT NULL,
+      -- L'instant ou ce titre a cesse d'etre porte, avant son echeance.
+      --
+      -- Deux facons d'y arriver, et une seule consequence. Le tenant perd sa
+      -- finale : il perd son statut a la seconde ou elle s'acheve. Ou bien un
+      -- autre est sacre pendant qu'il tenait encore le titre : le titre a
+      -- change de mains, et l'ancien s'eteint. Dans les deux cas, la ligne
+      -- reste — « champion de France du 5 au 26 septembre » est un fait, et
+      -- cette table est l'archive du systeme autant que son etat courant.
+      --
+      -- L'invariant que cette colonne tient : UN SEUL titre vivant par couple
+      -- (echelon, zone) a tout instant. Deux « Champion de France » simultanes
+      -- seraient un titre qui ne veut plus rien dire.
+      revoque_le INTEGER
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_titres_porteur
                   ON champ_titres(name_key, expire_le)`),
@@ -292,6 +360,26 @@ export async function ensureChampTables(db) {
     await db.prepare(`CREATE INDEX IF NOT EXISTS champ_editions_echeance
                         ON champ_editions(etat, cloture)`).run();
   } catch (e) { /* la colonne manque encore : l'index attendra le prochain tour */ }
+
+  // Le champion en titre est arrive apres les deux tables qu'il touche, et
+  // s'ajoute donc de la meme facon : seul, hors du batch, un ALTER par colonne.
+  //
+  // Les deux sont nullables ou a defaut zero, ce qui donne aux editions et aux
+  // titres d'avant exactement le comportement qu'ils avaient : aucun partant
+  // n'est tenant, aucun titre n'est revoque. Une migration de donnees serait
+  // ici une invention — on ne peut pas savoir apres coup qui aurait ete tenant
+  // d'une edition courue avant que la regle existe.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_partants ADD COLUMN tenant INTEGER NOT NULL DEFAULT 0`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_titres ADD COLUMN revoque_le INTEGER`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
 
   pret.add(db);
 }
@@ -459,6 +547,12 @@ async function classement(db, {
  * La table des duels est creee au besoin : un championnat peut s'ouvrir sur une
  * base ou personne n'a encore joue de duel, et lire une table absente y faisait
  * echouer toute l'ouverture avec une erreur cinq cents.
+ *
+ * `revoque_le IS NULL` est la seule chose que cette requete a apprise avec le
+ * champion en titre : un champion qui a perdu sa finale n'est plus champion, et
+ * il ne doit donc plus ouvrir la porte du continental a sa place. Sans cette
+ * clause, un titre perdu sur la piste continuait a qualifier son ancien
+ * porteur pendant les trois mois de son echeance d'origine.
  */
 async function championsEnTitre(db, echelon, filtreZone) {
   await ensureDuelTables(db);
@@ -466,7 +560,7 @@ async function championsEnTitre(db, echelon, filtreZone) {
     `SELECT t.name_key AS cle, t.nom, t.zone, t.sacre_le,
             COALESCE(d.mmr, 0) AS force, d.palier AS palier, d.lp AS lp
        FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
-      WHERE t.echelon = ? AND t.expire_le > ?
+      WHERE t.echelon = ? AND t.expire_le > ? AND t.revoque_le IS NULL
       ORDER BY t.sacre_le DESC`
   ).bind(echelon, Date.now()).all();
 
@@ -497,24 +591,62 @@ async function pool(db, echelon, zone, maintenant = Date.now()) {
   // suivants qu'on garde pour l'archive de la cloture.
   const large = FORMAT.partants + SUIVANTS_GARDES;
 
+  // LE TENANT DU TITRE DE CETTE EDITION, s'il y en a un.
+  //
+  // Il se cherche a tous les echelons et de la meme facon : le titre exactement
+  // en jeu, (echelon, zone). Au national c'est le champion du pays ; au
+  // continental celui du continent, et le champion national qui vient d'y
+  // arriver n'est pas ce joueur-la — il entre par sa qualification d'office et
+  // n'a rien a defendre ici.
+  //
+  // `prive` porte l'exception d'activite : un champion qui n'a plus joue depuis
+  // son sacre n'est le tenant de rien. Il repasse par le classement comme tout
+  // le monde, ce qui est le seul moyen d'empecher un titre de devenir une
+  // rente que l'on touche sans rejouer.
+  const tenant = await tenantDuTitre(db, echelon, zone, maintenant);
+  const boss = tenant && !tenant.prive ? tenant : null;
+  // Sa place lui est gardee sur la grille de depart, sauf si le levier est
+  // baisse. Sans elle, la finale d'office se ferait annuler par le calendrier :
+  // un champion absent de la grille n'a pas de finale a rejoindre.
+  const bossDOffice = TENANT.entreeDOffice ? boss : null;
+
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
     const n = await effectifPays(db, zone, cfg.fenetreActiviteJours);
     if (n < cfg.minJoueurs) {
       return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
     }
+    // Le tenant est exclu du classement pour ne pas y compter deux fois : il
+    // occupe une place, il ne doit pas en occuper deux. Trente-et-une places
+    // restent au classement, la trente-deuxieme est la sienne.
+    const exclure = new Set(bossDOffice ? [bossDOffice.cle] : []);
+    // La limite descend d'autant que le tenant occupe : sans cela l'archive de
+    // la barre garderait NEUF suivants au lieu de huit — une place de plus lue
+    // que declaree, dans la table meme qui existe pour repondre a qui reclame.
     const l = await classement(db, {
-      pays: zone, exclure: new Set(), limite: large, maintenant,
+      pays: zone, exclure, limite: large - exclure.size, maintenant,
     });
+    const place = Math.max(0, FORMAT.partants - (bossDOffice ? 1 : 0));
+    const joueurs = [...(bossDOffice ? [bossDOffice] : []), ...l.slice(0, place)];
     return {
-      joueurs: l.slice(0, FORMAT.partants),
-      suivants: l.slice(FORMAT.partants),
-      doffice: new Set(),
+      joueurs,
+      suivants: l.slice(place),
+      doffice: new Set(bossDOffice ? [bossDOffice.cle] : []),
+      // Le boss est rendu meme quand il n'a PAS eu besoin de sa place d'office
+      // — un champion bien classe entre par le classement, et reste le tenant.
+      // On le retrouve donc dans la grille plutot que de le supposer absent.
+      tenant: boss && joueurs.some(j => j.cle === boss.cle) ? boss : null,
+      tenantEcarte: tenant && tenant.prive ? tenant : null,
     };
   }
 
   // Continental et mondial partagent la meme mecanique : des champions
   // qualifies d'office, puis un repechage au classement de la zone jusqu'a 32.
+  //
+  // Cette qualification d'office-la est ANTERIEURE au champion en titre et
+  // n'est pas la meme chose : elle fait monter les champions de l'echelon du
+  // DESSOUS, et sans elle aucun continental ne peut s'ouvrir (`MIN_DOFFICE`).
+  // Elle donne une place sur la grille, jamais la finale ni la cinematique.
   const estContinental = echelon === 'continental';
   const champions = estContinental
     ? await championsEnTitre(db, 'national', z => continentDe(z) === zone)
@@ -529,20 +661,34 @@ async function pool(db, echelon, zone, maintenant = Date.now()) {
     };
   }
 
-  const exclure = new Set(champions.map(c => c.cle));
+  // Le tenant de CET echelon rejoint les qualifies d'office s'il n'y est pas
+  // deja. Il y est souvent : le champion d'Europe en titre est presque toujours
+  // aussi champion de son pays. Un `Set` de cles suffit a ne pas le compter
+  // deux fois, et l'ordre garde le tenant en tete — c'est lui qu'on annonce.
+  const dOffice = [];
+  const vus = new Set();
+  for (const c of [...(bossDOffice ? [bossDOffice] : []), ...champions]) {
+    if (vus.has(c.cle)) continue;
+    vus.add(c.cle);
+    dOffice.push(c);
+  }
+
   const complement = await classement(db, {
     continent: estContinental ? zone : null,
-    exclure, limite: large - champions.length, maintenant,
+    exclure: vus, limite: large - dOffice.length, maintenant,
   });
 
   // La barre tombe apres les trente-deux, champions d'office compris : c'est
   // eux qui reduisent le nombre de places ouvertes au repechage, et un
   // reclamant a le droit de le savoir.
-  const place = Math.max(0, FORMAT.partants - champions.length);
+  const place = Math.max(0, FORMAT.partants - dOffice.length);
+  const joueurs = [...dOffice, ...complement.slice(0, place)];
   return {
-    joueurs: [...champions, ...complement.slice(0, place)],
+    joueurs,
     suivants: complement.slice(place),
-    doffice: exclure,
+    doffice: vus,
+    tenant: boss && joueurs.some(j => j.cle === boss.cle) ? boss : null,
+    tenantEcarte: tenant && tenant.prive ? tenant : null,
   };
 }
 
@@ -728,18 +874,30 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   // sont champions desequilibrerait les series, ce que le serpentin existe
   // precisement pour eviter ; les y placer aux points de ligue mettrait en
   // couloir 4 celui qui a le plus joue.
+  // Le semis ne connait pas les titres non plus : le tenant est seme au MMR
+  // comme tout le monde, et peut tres bien tomber dans la serie 3. Le placer
+  // tete de serie parce qu'il est champion desequilibrerait les series, ce que
+  // le serpentin existe pour eviter — et un boss qu'on protege de ses
+  // adversaires n'est pas un boss.
   const joueurs = [...p.joueurs]
     .sort((a, b) => (b.force || 0) - (a.force || 0))
-    .map((j, i) => ({ cle: j.cle, nom: j.nom, rang: i + 1, doffice: p.doffice.has(j.cle) }));
+    .map((j, i) => ({
+      cle: j.cle, nom: j.nom, rang: i + 1,
+      doffice: p.doffice.has(j.cle),
+      // Le statut de tenant est FIGE ICI, avec la grille et pour la meme
+      // raison : apres la cloture, plus rien de ce qui decide de la
+      // competition ne doit dependre de l'heure a laquelle on le relit.
+      tenant: !!(p.tenant && p.tenant.cle === j.cle),
+    }));
 
   const grille = serpentin(joueurs, phase0.courses);
 
   const lignes = [];
   grille.forEach((course, ic) => course.forEach(j => {
     lignes.push(db.prepare(
-      `INSERT INTO champ_partants (edition, name_key, nom, rang_duel, phase, course)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).bind(e.id, j.cle, j.nom, j.rang, phase0.cle, ic + 1));
+      `INSERT INTO champ_partants (edition, name_key, nom, rang_duel, phase, course, tenant)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(e.id, j.cle, j.nom, j.rang, phase0.cle, ic + 1, j.tenant ? 1 : 0));
   }));
 
   // L'instantane de la barre. `rang` est la position dans le vivier tel qu'il a
@@ -771,12 +929,71 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
     donnees: { partants: joueurs.length, doffice: p.doffice.size, epreuve: ep },
   });
 
+  // L'ENTREE EN LICE DU TENANT — le declencheur de la cinematique.
+  //
+  // C'est une annonce et non un champ d'etat, parce que le fil est ce qui fait
+  // bouger l'ecran du championnat : chaque annonce y provoque une relecture, et
+  // les deux mises en scene qui existent deja — la revelation des repeches, le
+  // podium — sont declenchees exactement comme ceci. La cinematique du boss
+  // arrive donc par la meme porte que ses deux soeurs, et non par un chemin
+  // qu'elle serait seule a prendre.
+  //
+  // Le serveur dit QUI et QUAND ; il ne dit pas comment on le montre. `donnees`
+  // porte de quoi jouer la scene sans un second appel : le nom, le libelle du
+  // titre, sa serie, et son couloir.
+  if (p.tenant) {
+    const place = joueurs.find(j => j.cle === p.tenant.cle);
+    const saCourse = grille.findIndex(c => c.some(j => j.cle === p.tenant.cle)) + 1;
+    await annoncer(db, {
+      edition: e.id, echelon: e.echelon, zone: e.zone, type: 'boss',
+      titre: p.tenant.nom + ' — ' + p.tenant.libelle,
+      texte: 'Le tenant du titre entre en lice. Qualifié d’office pour la finale.',
+      donnees: {
+        cinematique: TENANT.cinematique,
+        champion: p.tenant.nom, cle: p.tenant.cle, libelle: p.tenant.libelle,
+        echelon: p.tenant.echelon, zone: p.tenant.zone,
+        sacre_le: p.tenant.sacre_le,
+        // Sa serie et son rang de semis : la scene se joue sur la piste, et il
+        // faut savoir ou le placer.
+        course: saCourse || null, rang: place ? place.rang : null,
+        finaleDOffice: TENANT.finaleDOffice,
+        entreeDOffice: p.doffice.has(p.tenant.cle),
+      },
+    });
+  }
+
+  // Le champion ecarte pour inactivite. Il court peut-etre quand meme — s'il
+  // etait classe assez haut — mais sans rien de ce que son titre donne, et
+  // c'est la seule chose que personne ne devinerait en regardant la grille.
+  //
+  // Aucune notification pour celle-la : `ANNONCES` ne la contient pas. Faire
+  // vibrer un pays pour annoncer qu'un joueur a perdu un privilege est une
+  // information de reglement, pas un evenement de competition.
+  if (p.tenantEcarte) {
+    await annoncer(db, {
+      edition: e.id, echelon: e.echelon, zone: e.zone, type: 'tenant-ecarte',
+      titre: p.tenantEcarte.nom + ' — ' + p.tenantEcarte.libelle,
+      texte: 'Aucun duel classé depuis son sacre : le tenant repart sans ses privilèges.',
+      donnees: {
+        champion: p.tenantEcarte.nom, cle: p.tenantEcarte.cle,
+        sacre_le: p.tenantEcarte.sacre_le, raison: 'inactif depuis le sacre',
+      },
+    });
+  }
+
   return {
     edition: e.id, echelon: e.echelon, zone: e.zone, epreuve: ep, etat: 'ouverte',
     pays: e.echelon === 'national' ? e.zone : undefined,
     partants: joueurs.length, doffice: p.doffice.size,
     suivants: p.suivants.length,
     cloture: e.cloture, debut: e.debut,
+    // Le tenant remonte a l'appelant : le harnais et le tableau de bord des
+    // championnats l'affichent, et sans lui une grille de trente-deux noms ne
+    // dit pas lequel a un titre a defendre.
+    tenant: p.tenant ? { cle: p.tenant.cle, nom: p.tenant.nom, libelle: p.tenant.libelle } : null,
+    tenantEcarte: p.tenantEcarte
+      ? { cle: p.tenantEcarte.cle, nom: p.tenantEcarte.nom, raison: 'inactif depuis le sacre' }
+      : null,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
     calendrier: calendrier(e.debut, CALENDRIER),
   };
@@ -939,6 +1156,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
   const nom = nomZone(e.zone, e.echelon);
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, zoneNom: nom.nom,
+    zoneNomEn: nom.nomEn,
     titre: e.echelon === 'mondial' ? ECHELONS.mondial.nom
          : ECHELONS[e.echelon].nom + ' ' + nom.avec,
     epreuve: e.epreuve || EPREUVE_DEFAUT,
@@ -999,8 +1217,12 @@ export async function rangSelection(db, nameKey) {
   // requete : sans eux il lui faudrait aussi demander `/champ/prochain` pour
   // savoir comment nommer le championnat dont elle affiche l'ecart.
   const ou = ed
-    ? { titre: ed.titre, epreuve: ed.epreuve, zoneNom: ed.zoneNom }
-    : { titre: null, epreuve: null, zoneNom: null };
+    ? { titre: ed.titre, epreuve: ed.epreuve, zoneNom: ed.zoneNom,
+        // `echelon` et `zoneNomEn` accompagnent le titre francais : sans eux
+        // la banderole n'a pas de quoi composer sa version anglaise, et elle
+        // affichait « Championnat de France » au milieu d'un ecran traduit.
+        echelon: ed.echelon, zoneNomEn: ed.zoneNomEn }
+    : { titre: null, epreuve: null, zoneNom: null, echelon: null, zoneNomEn: null };
 
   // Apres la cloture, la verite est dans l'instantane.
   if (ed && ed.etat === 'ouverte') {
@@ -1128,7 +1350,7 @@ export async function etatEdition(db, id) {
     `SELECT * FROM champ_editions WHERE id = ?`).bind(id).first();
   if (!e) return null;
   const { results: partants } = await db.prepare(
-    `SELECT name_key, nom, rang_duel, phase, course, sorti_en
+    `SELECT name_key, nom, rang_duel, phase, course, sorti_en, tenant
        FROM champ_partants WHERE edition = ? ORDER BY course, rang_duel`).bind(id).all();
   const { results: res } = await db.prepare(
     `SELECT phase, course, name_key, ms, place FROM champ_resultats
@@ -1150,6 +1372,8 @@ export async function etatEdition(db, id) {
     // valeur par defaut plutot que de rendre `null`, qu'aucun ecran n'attend.
     epreuve: e.epreuve || EPREUVE_DEFAUT,
     zoneNom: z.nom,
+    // Le nom anglais de la zone, pour que le client compose son propre titre.
+    zoneNomEn: z.nomEn,
     titre: e.echelon === 'mondial' ? ECHELONS.mondial.nom
          : ECHELONS[e.echelon].nom + ' ' + z.avec,
     phase: e.phase, etat: e.etat,
@@ -1161,7 +1385,38 @@ export async function etatEdition(db, id) {
     directsParCourse: cfg ? cfg.directsParCourse : 0,
     repechages: cfg ? cfg.repechages : 0,
     champion: e.champion_nom || null,
-    partants: partants || [], resultats: res || [],
+    partants: (partants || []).map(p => ({ ...p, tenant: !!p.tenant })),
+    resultats: res || [],
+
+    // LE TENANT DU TITRE, tel que la cloture l'a gele — et le declencheur de la
+    // cinematique avec lui.
+    //
+    // Il est publie ici EN PLUS de l'annonce `boss`, et les deux ne servent pas
+    // la meme chose. L'annonce est l'evenement : elle passe une fois, et c'est
+    // elle qui joue la scene en direct. Ce champ-ci est l'etat : un joueur qui
+    // ouvre l'ecran le dimanche matin n'a jamais vu passer l'annonce, et doit
+    // pourtant savoir lequel de ces trente-deux noms a un titre a defendre.
+    //
+    // `cinematique` est le nom de la mise en scene, pas la mise en scene. Le
+    // client decide de ce qu'il en fait — le serveur tient les regles de la
+    // competition, et « comment on montre un champion » n'en est pas une.
+    tenant: (() => {
+      const t = (partants || []).find(p => p.tenant);
+      if (!t) return null;
+      return {
+        name_key: t.name_key, nom: t.nom,
+        course: t.course, rang_duel: t.rang_duel,
+        sorti_en: t.sorti_en,
+        // Le titre remis en jeu, compose par la meme fonction que le sacre.
+        // Il se deduit de l'edition et non de `champ_titres` : le titre du
+        // tenant peut avoir ete revoque depuis, et l'ecran doit continuer a
+        // dire de quoi il etait champion en entrant en lice.
+        libelle: libelleTitre(e.echelon, e.zone),
+        cinematique: TENANT.cinematique,
+        finaleDOffice: TENANT.finaleDOffice,
+      };
+    })(),
+
     calendrier: calendrier(e.debut, CALENDRIER),
   };
 }
@@ -1258,8 +1513,16 @@ export async function cloturerPhase(db, edition) {
   const cfg = FORMAT.phases[iPhase];
 
   // On rassemble les chronos, course par course, avec de quoi departager.
+  //
+  // `p.tenant` voyage avec : c'est la colonne gelee a la cloture, et c'est
+  // volontairement elle qu'on lit plutot que `champ_titres`. Un titre porte une
+  // echeance, et le relire ici ferait qu'un titre expirant samedi soir
+  // changerait les regles de qualification entre la quatrieme serie et les
+  // demi-finales — la competition n'aurait alors pas ete la meme du debut a la
+  // fin, sans que personne l'ait decide.
   const { results: brut } = await db.prepare(
     `SELECT r.course, r.name_key AS cle, r.ms, p.nom, p.rang_duel AS rang,
+            p.tenant AS tenant,
             (SELECT MIN(x.ms) FROM champ_resultats x
               WHERE x.edition = r.edition AND x.name_key = r.name_key
                 AND x.phase <> r.phase) AS msPrecedent
@@ -1284,11 +1547,24 @@ export async function cloturerPhase(db, edition) {
     await db.batch(majPlaces);
     if (!p.champion) return { erreur: 'aucun finaliste n a de chrono' };
     await poserMedailles(db, edition, e, p.podium);
-    const sacre = await sacrer(db, edition, { cle: p.champion.cle, nom: p.champion.nom });
+    // Les finalistes partent avec le sacre : c'est de leur presence en finale
+    // que depend la perte du titre du tenant. Un ancien champion elimine en
+    // demi-finale garde son titre jusqu'a son echeance — il n'a pas perdu de
+    // finale, il n'y est pas arrive.
+    const sacre = await sacrer(db, edition,
+      { cle: p.champion.cle, nom: p.champion.nom },
+      p.classement.map(r => r.cle));
     return { phase: e.phase, finale: true, podium: p.podium, classement: p.classement, ...sacre };
   }
 
-  const q = qualifier(courses, cfg);
+  // La porte du tenant, passee au moteur. C'est un Set de cles et rien de plus :
+  // le moteur reste pur, et il n'a pas a savoir ce qu'est un titre — seulement
+  // qui passe quoi qu'il arrive.
+  const dOffice = TENANT.finaleDOffice
+    ? new Set((brut || []).filter(r => r.tenant).map(r => r.cle))
+    : null;
+
+  const q = qualifier(courses, cfg, dOffice);
   const suivante = FORMAT.phases[iPhase + 1];
 
   // Les qualifies repartent en serpentin, semes sur leur chrono du jour : le
@@ -1330,7 +1606,14 @@ export async function cloturerPhase(db, edition) {
       : 'Aucun repêchage.',
     donnees: {
       directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
-      repeches: q.repeches.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
+      // `doffice` distingue le tenant verse par son titre d'un repeche au
+      // chrono. L'ecran doit pouvoir le dire : presenter un passe-droit comme
+      // un repechage merite serait la seule facon de rendre cette regle
+      // detestable.
+      repeches: q.repeches.map(r => ({
+        nom: r.nom, course: r.course, place: r.place, ms: r.ms,
+        doffice: !!r.doffice,
+      })),
       elimines: q.elimines.length,
       grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
     },
@@ -1339,7 +1622,9 @@ export async function cloturerPhase(db, edition) {
   return {
     phase: e.phase, suivante: suivante.cle,
     directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
-    repeches: q.repeches.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
+    repeches: q.repeches.map(r => ({
+      nom: r.nom, course: r.course, place: r.place, ms: r.ms, doffice: !!r.doffice,
+    })),
     elimines: q.elimines.length,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
   };
@@ -1444,38 +1729,169 @@ export async function paysDe(db, cles) {
   return m;
 }
 
-/** Le titre porte par un joueur, s'il en porte un et qu'il court toujours. */
+/**
+ * Le titre porte par un joueur, s'il en porte un et qu'il court toujours.
+ *
+ * Un titre revoque n'en fait pas partie : il a ete perdu sur la piste, et le
+ * joueur ne le porte plus. La ligne reste en base — c'est l'archive — mais
+ * cette fonction repond a « qu'est-ce qu'il porte aujourd'hui », pas a
+ * « qu'a-t-il gagne ».
+ */
 export async function titresDe(db, nameKey) {
   await ensureChampTables(db);
   const { results } = await db.prepare(
     `SELECT echelon, zone, libelle, sacre_le, expire_le
-       FROM champ_titres WHERE name_key = ? AND expire_le > ?
+       FROM champ_titres
+      WHERE name_key = ? AND expire_le > ? AND revoque_le IS NULL
       ORDER BY sacre_le DESC`
   ).bind(String(nameKey).toLowerCase(), Date.now()).all();
   return results || [];
 }
 
-/** Sacre le vainqueur d'une finale et lui pose son titre pour trois mois. */
-export async function sacrer(db, edition, gagnant) {
+/**
+ * LE TENANT DU TITRE d'une edition — le seul joueur a qui son titre donne
+ * quelque chose ici.
+ *
+ * ETANCHEITE. On interroge sur le couple (echelon, zone), et c'est tout le
+ * fichier de cette regle. Filtrer sur le seul echelon aurait laisse passer le
+ * champion de France dans le championnat d'Espagne, puisque les deux editions
+ * sont 'national' — c'est le cas que la specification appelle « etancheite »,
+ * et c'est le seul qu'une comparaison d'echelon ne voit pas.
+ *
+ * Un champion national interroge sur un continental ne remonte donc jamais :
+ * ni l'echelon ni la zone ne correspondent. Il peut par ailleurs etre sur la
+ * grille de depart de ce continental — sa qualification d'office l'y met
+ * (`pool`) — mais il y arrive sans titre a defendre, donc sans finale acquise
+ * et sans cinematique. Les deux mecanismes ne se croisent pas.
+ *
+ * `prive` porte l'exception d'activite : un tenant qui n'a plus joue un seul
+ * duel classe DEPUIS SON SACRE perd ses privileges. On le rend quand meme,
+ * avec la raison — l'appelant a besoin de savoir qu'il y avait un tenant et
+ * qu'il a ete ecarte, sans quoi l'annonce ne peut pas le dire et personne ne
+ * comprend pourquoi le champion est parti du fond de la grille.
+ *
+ * `maintenant` se passe explicitement : la mesure d'activite se prend a la
+ * cloture annoncee, pas a l'instant ou le cron est passe.
+ */
+export async function tenantDuTitre(db, echelon, zone, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  await ensureDuelTables(db);
+  const r = await db.prepare(
+    `SELECT t.id AS id, t.name_key AS cle, t.nom, t.libelle, t.echelon, t.zone,
+            t.sacre_le, t.expire_le, t.edition AS edition_sacre,
+            COALESCE(d.mmr, 0) AS force, d.palier AS palier, d.lp AS lp,
+            d.updated_at AS vu_le,
+            COALESCE(d.wins + d.losses + d.draws, 0) AS duels
+       FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
+      WHERE t.echelon = ? AND t.zone = ? AND t.expire_le > ? AND t.revoque_le IS NULL
+      ORDER BY t.sacre_le DESC
+      LIMIT 1`
+  ).bind(echelon, String(zone || '').toUpperCase(), maintenant).first();
+  if (!r) return null;
+
+  // « Actif depuis son sacre » se mesure sur `updated_at`, la meme colonne que
+  // toute selection lit deja : un duel classe la met a jour, et rien d'autre
+  // ne le fait. Un champion sacre a 19 h 20 dimanche a forcement un
+  // `updated_at` anterieur a son sacre s'il n'a pas rejoue depuis — c'est
+  // exactement la question posee.
+  const actif = r.duels > 0 && Number(r.vu_le || 0) > Number(r.sacre_le);
+  return {
+    id: r.id,
+    cle: r.cle, nom: r.nom, libelle: r.libelle,
+    echelon: r.echelon, zone: r.zone,
+    sacre_le: r.sacre_le, expire_le: r.expire_le, edition_sacre: r.edition_sacre,
+    force: r.force, palier: r.palier, lp: r.lp,
+    actif,
+    prive: TENANT.actifDepuisLeSacre ? !actif : false,
+  };
+}
+
+/**
+ * Le libelle d'un titre : « Champion de France », « Champion d'Europe »,
+ * « Champion du monde ».
+ *
+ * Une seule definition, deux lecteurs — le sacre qui l'inscrit en base, et
+ * l'etat d'une edition qui le publie a l'ecran de la cinematique. Le composer
+ * deux fois, c'est se garantir qu'un jour le titre affiche pendant la
+ * competition ne sera pas celui inscrit apres.
+ *
+ * « Champion de {zone} » attend la forme avec preposition : de France, du
+ * Maroc, des Etats-Unis. Le mondial, lui, n'a pas de zone a nommer.
+ */
+export function libelleTitre(echelon, zone) {
+  const z = nomZone(zone, echelon);
+  if (echelon === 'mondial') return ECHELONS.mondial.titre;
+  return (ECHELONS[echelon].titre || '{zone}')
+    .replace('Champion de {zone}', 'Champion ' + z.avec)
+    .replace('Champion d’{zone}', 'Champion ' + z.avec)
+    .replace('{zone}', z.nom);
+}
+
+/**
+ * Le titre perdu s'eteint a la seconde ou la finale s'acheve.
+ *
+ * Rendu comme une requete plutot qu'execute, pour tenir dans le meme `batch`
+ * que le sacre du nouveau champion : les deux faits — celui-ci gagne, celui-la
+ * perd son statut — sont un seul evenement, et une base qui les enregistrerait
+ * separement pourrait s'arreter entre les deux et laisser deux champions du
+ * meme endroit.
+ *
+ * ON VISE L'IDENTIFIANT DE LA LIGNE, et c'est tout l'interet de cette
+ * signature. La version d'avant visait le couple (echelon, zone) et la cle du
+ * porteur — ce qui parait plus lisible et qui est faux : dans un `batch`, les
+ * instructions s'executent dans l'ordre et sur la meme transaction, si bien
+ * que l'UPDATE tombait aussi sur la ligne que l'INSERT venait de poser deux
+ * instructions plus haut. Un champion qui CONSERVAIT son titre le perdait donc
+ * — le nouveau et l'ancien d'un coup — et le pays se retrouvait sans champion.
+ *
+ * Le defaut ne se voyait que dans un cas : le tenant gagne sa finale. Tout le
+ * reste du systeme passait.
+ */
+function revoquerTitre(db, id, maintenant) {
+  return db.prepare(
+    `UPDATE champ_titres SET revoque_le = ? WHERE id = ? AND revoque_le IS NULL`
+  ).bind(maintenant, id);
+}
+
+/**
+ * Sacre le vainqueur d'une finale et lui pose son titre pour trois mois.
+ *
+ * ET ETEINT CELUI DU TENANT. C'est la troisieme regle du champion en titre, et
+ * elle s'applique dans le meme `batch` que le sacre : les deux faits — celui-ci
+ * gagne, celui-la n'est plus champion — sont un seul evenement. Les enregistrer
+ * separement laisserait une fenetre, courte mais reelle, ou deux joueurs
+ * portent le meme titre ; et si la base s'arretait entre les deux, elle y
+ * resterait trois mois.
+ *
+ * L'extinction est inconditionnelle, et c'est plus large que « il perd sa
+ * finale » : un ancien champion elimine en demi-finale perd aussi son titre
+ * quand un autre est sacre, tout simplement parce qu'il ne peut pas y avoir
+ * deux champions de France en meme temps. Le cas ou son titre survit existe
+ * quand meme, et c'est le bon : une edition ANNULEE ne sacre personne, donc
+ * n'eteint rien — le tenant reste champion jusqu'a son echeance.
+ *
+ * `finalistes` sert a dire POURQUOI le titre est tombe, et rien d'autre. Perdre
+ * une finale et etre depossede sans y avoir couru ne se racontent pas pareil.
+ */
+export async function sacrer(db, edition, gagnant, finalistes = null) {
   await ensureChampTables(db);
   const e = await db.prepare(
     `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
 
-  // « Champion de {zone} » attend la forme avec preposition : de France, du
-  // Maroc, des Etats-Unis. Le mondial, lui, n'a pas de zone a nommer.
-  const z = nomZone(e.zone, e.echelon);
-  const libelle = e.echelon === 'mondial'
-    ? ECHELONS.mondial.titre
-    : (ECHELONS[e.echelon].titre || '{zone}')
-        .replace('Champion de {zone}', 'Champion ' + z.avec)
-        .replace('Champion d’{zone}', 'Champion ' + z.avec)
-        .replace('{zone}', z.nom);
+  const libelle = libelleTitre(e.echelon, e.zone);
   const maintenant = Date.now();
   const expire = new Date(maintenant);
   expire.setMonth(expire.getMonth() + TITRE_MOIS);
 
-  await db.batch([
+  // Le tenant tel qu'il est A CETTE SECONDE, et non celui gele a la cloture :
+  // ici la question n'est plus « qui avait des privileges ce weekend » mais
+  // « qui porte le titre que l'on vient de remettre en jeu ».
+  const ancien = await tenantDuTitre(db, e.echelon, e.zone, maintenant);
+  const detrone = ancien && ancien.cle !== gagnant.cle ? ancien : null;
+  const conserve = ancien && ancien.cle === gagnant.cle ? ancien : null;
+
+  const ecritures = [
     db.prepare(
       `INSERT INTO champ_titres (echelon, zone, name_key, nom, libelle, edition, sacre_le, expire_le)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -1484,16 +1900,48 @@ export async function sacrer(db, edition, gagnant) {
       `UPDATE champ_editions SET etat = 'terminee', champion_key = ?, champion_nom = ?, fini_le = ?
         WHERE id = ?`
     ).bind(gagnant.cle, gagnant.nom, maintenant, edition),
-  ]);
+  ];
+
+  // Le titre precedent s'eteint, que son porteur ait perdu la finale ou qu'il
+  // ait ete depossede sans y courir. Le tenant qui CONSERVE son titre voit
+  // aussi son ancienne ligne s'eteindre — il en a une neuve, avec une echeance
+  // neuve, ce qui est exact : il vient de le regagner, il ne le prolonge pas.
+  if (ancien) {
+    ecritures.push(revoquerTitre(db, ancien.id, maintenant));
+  }
+
+  await db.batch(ecritures);
 
   await annoncer(db, {
     edition, echelon: e.echelon, zone: e.zone, type: 'sacre',
     titre: gagnant.nom + ' — ' + libelle,
-    texte: 'Titre porté ' + TITRE_MOIS + ' mois.',
-    donnees: { champion: gagnant.nom, libelle, expire_le: expire.getTime() },
+    texte: conserve
+      ? 'Titre conservé, porté ' + TITRE_MOIS + ' mois de plus.'
+      : 'Titre porté ' + TITRE_MOIS + ' mois.',
+    donnees: {
+      champion: gagnant.nom, libelle, expire_le: expire.getTime(),
+      // Le tenant a defendu son titre, ou l'a perdu. Les deux se racontent, et
+      // c'est la moitie de ce que la regle du champion en titre apporte au
+      // recit : un sacre qui detrone quelqu'un n'est pas un sacre ordinaire.
+      titre_conserve: !!conserve,
+      detrone: detrone ? detrone.nom : null,
+      detrone_en_finale: detrone && Array.isArray(finalistes)
+        ? finalistes.includes(detrone.cle) : null,
+    },
   });
 
-  return { libelle, champion: gagnant.nom, expire_le: expire.getTime() };
+  return {
+    libelle, champion: gagnant.nom, expire_le: expire.getTime(),
+    titre_conserve: !!conserve,
+    // `detrone` remonte a l'appelant : le harnais l'affiche, et le tableau de
+    // bord des championnats en a besoin pour dire ce qui vient de changer.
+    detrone: detrone
+      ? {
+          cle: detrone.cle, nom: detrone.nom, libelle: detrone.libelle,
+          en_finale: Array.isArray(finalistes) ? finalistes.includes(detrone.cle) : null,
+        }
+      : null,
+  };
 }
 
 /**

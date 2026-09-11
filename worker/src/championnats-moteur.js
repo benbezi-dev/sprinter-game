@@ -10,7 +10,7 @@
    Tout est pur : memes entrees, memes sorties, testable sans rien monter.
 --------------------------------------------------------------------------- */
 
-import { DEPARTAGE } from './championnats-config.js';
+import { DEPARTAGE, TENANT } from './championnats-config.js';
 
 /**
  * Repartition en serpentin.
@@ -77,17 +77,33 @@ export function ordonner(resultats) {
 /**
  * Qui passe a la phase suivante.
  *
- * Deux portes, et l'ordre compte. On prend d'abord les premiers de chaque
+ * Trois portes, et l'ordre compte. On prend d'abord les premiers de chaque
  * course — c'est la porte qu'on gagne en course, la seule que le public voit
  * se franchir en direct. Puis on repeche au chrono parmi TOUS les autres,
  * toutes courses confondues : c'est la porte qui recompense un bon chrono
  * couru dans une course rapide, et c'est elle qui reste a reveler apres la
  * derniere course.
  *
+ * LA TROISIEME PORTE EST CELLE DU TENANT DU TITRE, et elle ne s'ouvre que pour
+ * lui. `dOffice` est l'ensemble des cles qui passent quoi qu'il arrive : le
+ * champion en titre de cette edition-la, verse en finale par son titre
+ * (`TENANT.finaleDOffice`). Il court quand meme, ses chronos comptent pour le
+ * classement de sa course, mais aucun resultat ne l'elimine — pas meme un
+ * abandon, qui le laisserait sinon sans chrono a comparer.
+ *
+ * Ce que ce passe-droit coute est pris au repechage, et seulement quand il
+ * coute quelque chose : un tenant qui se qualifie au merite — premier de sa
+ * course, ou meilleur chrono des repeches — ne prend la place de personne, et
+ * le repechage garde ses quatre places. C'est la distinction que la version
+ * naive de cette regle rate : retirer une place de repechage a chaque fois
+ * qu'un tenant est engage punirait tout le monde pour un privilege qui n'a pas
+ * servi.
+ *
  * `courses` est un tableau de tableaux de resultats bruts.
+ * `dOffice` est un Set de cles, ou null.
  * Renvoie { directs, repeches, elimines, ordreParCourse }.
  */
-export function qualifier(courses, { directsParCourse, repechages }) {
+export function qualifier(courses, { directsParCourse, repechages }, dOffice = null) {
   const ordreParCourse = courses.map(ordonner);
 
   const directs = [];
@@ -107,7 +123,28 @@ export function qualifier(courses, { directsParCourse, repechages }) {
   // Un abandon ne se repeche pas : sans chrono, il n'y a rien a comparer.
   const classables = restants.filter(r => r.ms != null);
   const ordreRepechage = ordonner(classables);
-  const repeches = ordreRepechage.slice(0, repechages);
+
+  // Le repechage au merite, tel qu'il a toujours ete. On le calcule AVANT de
+  // regarder les titres : c'est lui qui dit si le passe-droit du tenant sert a
+  // quelque chose ou s'il se serait qualifie tout seul.
+  const auMerite = ordreRepechage.slice(0, repechages);
+  const dejaPris = new Set(auMerite.map(r => r.cle));
+
+  // Les tenants qui ne passaient pas, et qui passent quand meme. Ils sont zero
+  // ou un dans les faits — une edition n'a qu'un tenant — mais rien ici ne
+  // suppose ce nombre : le compte des places cedees se derive de la liste.
+  const versesDOffice = dOffice
+    ? restants.filter(r => dOffice.has(r.cle) && !dejaPris.has(r.cle))
+    : [];
+
+  const places = Math.max(0, repechages - versesDOffice.length * TENANT.repechagesCedes);
+  const repeches = [
+    // Le tenant ouvre la liste. L'ordre est celui de la revelation, et un
+    // passe-droit annonce apres les chronos ressemblerait a un rattrapage
+    // decide sur le moment.
+    ...versesDOffice.map(r => ({ ...r, doffice: true })),
+    ...ordreRepechage.slice(0, places),
+  ];
   const prisDansRepechage = new Set(repeches.map(r => r.cle));
   const elimines = restants.filter(r => !prisDansRepechage.has(r.cle));
 

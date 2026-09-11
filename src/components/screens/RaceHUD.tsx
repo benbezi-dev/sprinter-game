@@ -205,13 +205,8 @@ export function RaceHUD() {
       {/* Countdown Center Display */}
       {isCount && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          {n > 0 && (
-            <div className="mb-3 md:mb-5 bg-card/70 backdrop-blur-md px-4 py-1.5 md:px-6 md:py-2 rounded-full border border-white/10 shadow-lg">
-              <span className="font-bold text-foreground tracking-widest text-xs sm:text-sm md:text-lg uppercase">
-                {n >= 3 ? N.t('ready') : N.t('get_set')}
-              </span>
-            </div>
-          )}
+          {/* Pas de pastille « A VOS MARQUES / PRETS » : le decompte se lit au
+              chiffre, et l'appel du starter n'a pas a etre ecrit. */}
           <div
             className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
             style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}

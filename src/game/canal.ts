@@ -46,6 +46,18 @@ export const RECOMMENCER_OUVERT = true;
 export const RELAIS_OUVERT = true;
 
 /**
+ * La flamme des series de victoires, a cote du nom dans les duels.
+ *
+ * Nouvelle : elle commence la ou les deux precedentes ont commence, sur le
+ * canal de test. Le serveur, lui, compte la serie de TOUT LE MONDE des
+ * maintenant — c'est delibere. Un compteur qu'on n'allume qu'au moment de
+ * montrer la flamme demarrerait a zero pour tous le jour de l'ouverture, et
+ * effacerait les series en cours ; en le tenant des maintenant, ouvrir se
+ * reduit a remplacer ce mot par `true`, sans rien remettre a zero.
+ */
+export const SERIE_OUVERTE = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

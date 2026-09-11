@@ -5,8 +5,9 @@ import { RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { Swords, ChevronUp, ChevronDown, Loader2, Radio, Check } from 'lucide-react';
 import { fetchDuels, defierDepuisClassement, type DuelBoard, type DuelRow } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
-import { Drapeau, Medaille, Ecusson, nomDuRang } from '@/components/Insignes';
+import { Drapeau, Medaille, Ecusson, Flamme, nomDuRang } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
+import { SERIE_OUVERTE } from '@/game/canal';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -221,6 +222,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                   {N.ord(board.moi.rank)}
                 </span>
                 <span className="font-bold text-primary truncate">{N.t('duel_you')}</span>
+                {SERIE_OUVERTE && <Flamme serie={board.moi.serie} taille="grand" />}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Mouvement move={board.moi.move || 0} reduit={reduit} />
@@ -315,6 +317,12 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                               ${moi ? 'text-primary' : 'text-foreground'}`}>
                               {r.name}
                             </span>
+                            {/* La flamme reste sur la ligne du pseudo, la ou
+                                la medaille n'a pas pu rester : elle tient en
+                                une vingtaine de pixels, et elle ne veut rien
+                                dire ailleurs. Une serie se lit A COTE DU NOM,
+                                sinon c'est une statistique de plus. */}
+                            {SERIE_OUVERTE && <Flamme serie={r.serie} />}
                           </span>
                           <span className="flex items-center gap-1.5 min-w-0">
                             <Medaille m={r.medaille} />
