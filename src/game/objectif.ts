@@ -350,10 +350,31 @@ export function ecartALaCible(ms: number | null, cibleMs: number): number | null
   return Math.max(0, ms - cibleMs);
 }
 
-/** Combien de temps reste-t-il ? En minutes, ou null si pas de fenetre. */
+/**
+ * Combien de temps reste-t-il ? En minutes, ou null si pas de fenetre.
+ *
+ * ARRONDI VERS LE HAUT, et c'est la seule regle qui tienne a l'affichage. Au
+ * plus proche, les trente dernieres secondes rendaient zero : les deux ecrans
+ * qui lisent cette valeur cachent le decompte quand il est nul, et il
+ * s'effacait donc une demi-minute AVANT la fin du creneau — la seule minute ou
+ * il sert a quelque chose. Vers le haut, « 1 min avant la fin » tient jusqu'a
+ * la derniere seconde, et zero ne dit plus qu'une chose : c'est fini.
+ */
 export function minutesRestantes(o: Objectif | null): number | null {
   if (!o || !o.expire_le) return null;
-  return Math.max(0, Math.round((o.expire_le - Date.now()) / 60000));
+  return Math.max(0, Math.ceil((o.expire_le - Date.now()) / 60000));
+}
+
+/**
+ * Le creneau est-il passe ?
+ *
+ * Distinct de « il reste zero minute » : le serveur peut rendre un defi SANS
+ * `expire_le`, et il n'y a alors rien a fermer. Confondre les deux griserait
+ * le bouton sur une absence de fenetre, c'est-a-dire rendrait injouable le cas
+ * ou rien ne presse.
+ */
+export function fenetreFinie(o: Objectif | null): boolean {
+  return !!o && o.expire_le != null && Date.now() >= o.expire_le;
 }
 
 /* ------------------------------------------------------- la notification */

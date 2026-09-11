@@ -5,7 +5,7 @@ import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
 import { Timer, Trophy, RotateCcw, Lightbulb, Check, Play } from 'lucide-react';
 import {
   useObjectif, soumettreCourse, relancerObjectif, quitterObjectif,
-  minutesRestantes, s2, type Resultat, type Objectif,
+  minutesRestantes, fenetreFinie, s2, type Resultat, type Objectif,
 } from '@/game/objectif';
 
 /**
@@ -254,16 +254,68 @@ export function Revanche() {
  * pas. Le temps restant, lui, est le meme pour les trois — c'est un creneau,
  * pas trois — et se dit donc une seule fois, en tete.
  */
-export function CarteObjectif({ onLancer }: { onLancer: (o: Objectif) => void }) {
+export function CarteObjectif({ onLancer, onFin }: {
+  onLancer: (o: Objectif) => void;
+  /** Le creneau vient de se fermer : de quoi redemander les defis du suivant. */
+  onFin?: () => void;
+}) {
   const { N } = SprinterApp;
   const s = useObjectif();
   const [choisie, setChoisie] = useState<string | null>(null);
   const liste = s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []);
-  if (!liste.length) return null;
 
   const o = liste.find(x => x.epreuve === choisie)
     ?? liste.find(x => !x.valide)
-    ?? liste[0];
+    ?? liste[0]
+    ?? null;
+
+  // L'HORLOGE, ET CE QU'ELLE NE FAIT PAS. Elle ne decremente rien : la valeur
+  // affichee se recalcule depuis `expire_le` a chaque rendu. Un compteur qu'on
+  // decremente derive des que l'onglet passe en arriere-plan — le telephone
+  // gele les minuteurs, il ne gele pas l'heure — et l'accueil affichait « 12
+  // min avant la fin » sur un creneau clos depuis une heure.
+  //
+  // Dix secondes et pas une : le decompte se dit a la minute, et rien d'autre
+  // ne bouge entre deux battements. Une seconde ferait redessiner l'ecran le
+  // plus regarde du jeu soixante fois par minute pour un chiffre qui change
+  // une fois.
+  const fenetre = liste[0]?.expire_le ?? null;
+  const [, battement] = useState(0);
+  useEffect(() => {
+    if (!fenetre) return;
+    const id = setInterval(() => battement(n => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, [fenetre]);
+
+  // ET UN REVEIL POSE SUR LA SECONDE DE LA FERMETURE. Le battement de dix
+  // secondes suffit a un chiffre qui change une fois par minute, pas au
+  // bouton : il resterait jaune jusqu'a dix secondes apres la fin, et une
+  // course lancee dans cet intervalle part pour un defi que le serveur
+  // refusera. Le minuteur, lui, tombe juste.
+  useEffect(() => {
+    if (!fenetre) return;
+    const dans = fenetre - Date.now();
+    if (dans <= 0) return;
+    const t = setTimeout(() => battement(n => n + 1), dans + 50);
+    return () => clearTimeout(t);
+  }, [fenetre]);
+
+  // LE CRENEAU SE FERME PENDANT QU'ON REGARDE L'ACCUEIL. Sans cela le bouton
+  // restait jaune et lancait une course pour un defi que le serveur refuse.
+  // On le dit UNE fois — pas a chaque battement — et le drapeau se rearme
+  // quand un creneau neuf ouvre : la carte vit plus longtemps que le creneau
+  // qu'elle montre.
+  const fini = fenetreFinie(liste[0] ?? null);
+  const prevenu = useRef(false);
+  useEffect(() => {
+    if (!fini) { prevenu.current = false; return; }
+    if (prevenu.current) return;
+    prevenu.current = true;
+    onFin?.();
+  }, [fini, onFin]);
+
+  if (!o) return null;
+
   const minutes = minutesRestantes(liste[0]);
 
   // Les fleches deplacent le choix, comme dans tout groupe de boutons radio.
@@ -285,9 +337,9 @@ export function CarteObjectif({ onLancer }: { onLancer: (o: Objectif) => void })
                        flex items-center gap-2">
         <Timer className="w-4 h-4 shrink-0" />
         <span className="truncate">{N.t('obj_titre')}</span>
-        {minutes !== null && minutes > 0 && (
+        {(fini || (minutes !== null && minutes > 0)) && (
           <span className="ml-auto shrink-0 text-muted-foreground">
-            {N.t('obj_minutes', { n: minutes })}
+            {fini ? N.t('obj_fini') : N.t('obj_minutes', { n: minutes })}
           </span>
         )}
       </span>
@@ -344,11 +396,18 @@ export function CarteObjectif({ onLancer }: { onLancer: (o: Objectif) => void })
           </span>
         </span>
 
-        {/* UN SEUL BOUTON. Il court le defi affiche, reussi ou pas. */}
-        <button type="button" onClick={() => onLancer(o)} aria-label={N.t('obj_lancer')}
-          className="shrink-0 rounded-full bg-primary text-background font-display font-black
+        {/* UN SEUL BOUTON. Il court le defi affiche, reussi ou pas — et il
+            s'eteint avec le creneau plutot que de disparaitre : une carte qui
+            s'evapore sous le doigt se lit comme un bug, un bouton gris se lit
+            comme une echeance. */}
+        <button type="button" onClick={() => onLancer(o)} disabled={fini}
+          aria-label={N.t('obj_lancer')}
+          className={`shrink-0 rounded-full font-display font-black
                      uppercase tracking-wide text-sm px-3.5 py-2.5 flex items-center gap-1.5
-                     active:scale-[0.96] transition-transform">
+                     transition-transform
+            ${fini
+              ? 'bg-white/10 text-muted-foreground cursor-not-allowed'
+              : 'bg-primary text-background active:scale-[0.96]'}`}>
           <Play className="w-3.5 h-3.5 fill-current" />
           <span className="max-[379px]:hidden">{N.t('obj_courir')}</span>
         </button>

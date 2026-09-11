@@ -226,7 +226,10 @@ export function TitleScreen() {
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
                 classement, ou serveur muet, la carte disparait plutot que
                 d'annoncer un defi qui n'existe pas. */}
-            <CarteObjectif onLancer={(o) => lancerObjectif(o)} />
+            <CarteObjectif
+              onLancer={(o) => lancerObjectif(o)}
+              onFin={() => { void lireObjectif(); }}
+            />
 
             {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
                 Sous le défi du jour et au-dessus du sélecteur de mode : c'est
