@@ -284,10 +284,50 @@
   // La Riviera est un meeting d'ete au bord de l'eau : le plateau est fort,
   // d'un cheveu sous la finale olympique, mais on n'y elimine personne.
   const STADES_HORS_SERIE = [
+    // LE STADE DU DANUBE — l'edition speciale, ouverte a tout le monde.
+    //
+    // Elle sort pendant qu'une grande reunion d'athletisme se court pour de
+    // vrai au bord de ce fleuve. Ce stade-ci en prend les COULEURS, et rien
+    // d'autre : la piste terre cuite, le liseret d'ocre qui l'entoure, la
+    // couronne d'acier blanc posee au-dessus des gradins, et le
+    // rouge-blanc-vert du pays sur les panneaux.
+    //
+    // CE QU'IL NE PREND PAS, ET POURQUOI C'EST ECRIT ICI. Ni le nom de la
+    // competition, ni celui du stade, ni son embleme, ni un seul athlete reel
+    // sur la ligne de depart. Une teinte ne s'accapare pas ; un nom depose,
+    // si — et une reprise de nom est la seule chose, dans tout ce fichier,
+    // qui puisse valoir une lettre d'avocat. Les sept noms ci-dessous sont
+    // inventes, comme partout ailleurs dans le jeu. Voir
+    // juridique/edition-danube.md, qui tient la liste de ce qu'on s'interdit.
+    //
+    // `ouvert` LE DISTINGUE DES DEUX AUTRES. La Riviera et les Trois Soleils
+    // n'existent que sur le canal de test ; celui-ci part dans la version
+    // publique, sinon il n'y a pas d'edition speciale — juste un stade que
+    // personne ne peut atteindre.
+    //
+    // LE PLATEAU EST CELUI D'UNE FINALE SUR INVITATION : sept coureurs entre
+    // 9,55 et 9,88 au 100 m. Au-dessus du championnat du monde, sous la
+    // finale olympique, et tres loin sous les ZEZE — l'echelle du
+    // championnat reste ce qu'elle etait.
+    { cle: 'danube', name: 'Stade du Danube', theme: 'danube',
+      pool: 'sprint',
+      horsSerie: true,
+      ouvert: true,
+      // Une finale sur invitation remplit un stade : les gradins sont pleins,
+      // juste sous la finale intergalactique.
+      foule: 0.97,
+      plateau: { '100': [9.55, 9.88], '200': [19.25, 19.92],
+                 '400': [43.15, 44.10], '4x100': [37.35, 38.30] },
+      names: ['Zoltan Arrow', 'Bela Volt', 'Marko Surge', 'Gabor Onyx',
+              'Levente Spark', 'Emese Vega', 'Dorka Swift'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
       horsSerie: true,
+      // Un meeting d'ete au bord de l'eau : gradins bien garnis, sans
+      // l'affluence d'une finale mondiale.
+      foule: 0.72,
       plateau: { '100': [9.62, 9.92], '200': [19.30, 19.90],
                  '400': [43.30, 44.00], '4x100': [37.60, 38.60] },
       names: ['Rick Palma', 'Sunny Marino', 'Kenji Aoyama', 'Milo Cabana',
@@ -314,12 +354,15 @@
     { cle: 'namek', name: 'Stade des Trois Soleils', theme: 'namek',
       pool: 'namek',
       horsSerie: true,
+      // Un tournoi qui deplace une planete entiere : gradins pleins, juste
+      // sous la finale ZEZE.
+      foule: 0.94,
       plateau: { '100': [9.28, 9.66], '200': [18.60, 19.20],
                  '400': [41.80, 43.00], '4x100': [37.05, 37.85] },
       // Sept noms tires des instruments de musique, comme le veut la
       // coutume de ce peuple. Ils sont inventes : aucun ne sort de l'oeuvre.
       names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
-              'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] }
+              'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
   ];
 
   // ---------------------------------------------------------------------
@@ -468,7 +511,14 @@
 
     // Frequence elevee ET grande amplitude, talon qui claque tres haut sous
     // la fesse, buste redresse jusqu'a paraitre en arriere, epaules relachees.
-    lyles: {
+    //
+    // Ce profil portait le nom d'un sprinteur reel. Les six autres decrivent
+    // un geste — cadence, sharp, power, fluid, drive, glide — et celui-ci
+    // designait une personne. Il ne s'affichait nulle part, mais il partait
+    // dans le build public, lisible par qui ouvre le fichier : le nom d'un
+    // athlete vivant accroche a la foulee d'un personnage de jeu. On decrit
+    // donc le geste, comme partout ailleurs. Voir juridique/edition-danube.md.
+    whip: {
       thigh: catmull([[0, 0.38], [0.75, -0.04], [1.50, -0.58], [2.20, -0.32],
                       [3.10, 0.24], [4.10, 0.78], [4.85, 0.92], [5.55, 0.74]]),
       knee: catmull([[0, -0.28], [0.50, -0.62], [1.10, -0.34], [1.50, -0.18],
@@ -633,7 +683,7 @@
     // Le profil (voir GAITS) porte la biomecanique, morph le gabarit.
     'Benbezi ZEZE': look({ build: 'm', skin: 'ebene', jersey: [214, 48, 62],
       shorts: [26, 26, 40], hair: 'fade', h: 1.86,
-      gait: 'lyles', morph: { sh: 1.06, hip: 0.98, arm: 1.04, leg: 1.04 } }),
+      gait: 'whip', morph: { sh: 1.06, hip: 0.98, arm: 1.04, leg: 1.04 } }),
     'Ryan ZEZE': look({ build: 'm', skin: 'ebene', jersey: [48, 132, 232],
       shorts: [24, 30, 52], shoe: [250, 224, 70], hair: 'crop', h: 1.78,
       gait: 'sharp', morph: { sh: 1.02, hip: 0.98, arm: 1.02, leg: 1.06 } }),

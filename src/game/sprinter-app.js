@@ -163,6 +163,62 @@
       eau: [96, 214, 176], eauFond: [22, 150, 132],
       roche: [122, 176, 168], rocheSombre: [56, 110, 116],
       namekTronc: [206, 186, 142], namekChapeau: [34, 148, 118]
+    },
+    // Stade du Danube : les couleurs d'une soiree d'athletisme au bord du
+    // fleuve, relevees sur les visuels de la reunion et rien de plus.
+    //
+    // CE STADE SE COURT LA NUIT, ET TOUT DECOULE DE LA.
+    //
+    // Une premiere version l'avait peint en plein jour — piste terre cuite,
+    // pelouse verte, ciel pale — d'apres des photographies du lieu prises
+    // trois ans plus tot, l'apres-midi. Le batiment etait le bon et le decor
+    // etait faux : une grande reunion ne se court pas l'apres-midi sur du
+    // gazon vert, elle se court le soir, sous les projecteurs, et le stade
+    // est alors habille pour la television.
+    //
+    // TROIS CHOSES FONT CE DECOR, ET AUCUNE N'EST UN NOM.
+    //
+    // 1. LA PISTE EST ORANGE VIF, pas rouge brique. C'est la surface la plus
+    //    claire de toute l'image, et la seule chose vraiment eclairee.
+    // 2. TOUT LE RESTE DU SOL EST NOIR. L'aire interieure comme le pourtour :
+    //    la piste ne pose pas sur de l'herbe, elle flotte dans du noir. C'est
+    //    ce contraste-la qui fait le decor, et c'est aussi ce qui le distingue
+    //    au premier coup d'oeil des six etapes du championnat, qui ont toutes
+    //    de la pelouse.
+    // 3. LES PROJECTEURS. Le ciel est un violet de nuit, la toiture s'y noie,
+    //    et ce qu'on voit en haut de l'image est une rangee de lampes tres
+    //    blanches (voir `projecteurs` et drawProjecteurs). Sans elles, un
+    //    stade de nuit n'est qu'un stade sombre.
+    //
+    // Les panneaux prennent le magenta, le cyan et le violet des bandeaux
+    // lumineux qui font le tour de l'enceinte. Ce sont des couleurs ; aucun
+    // nom, aucun embleme, aucune typographie n'entre dans ce theme — voir
+    // juridique/edition-danube.md.
+    danube: {
+      // LE CIEL EST PLUS CLAIR QUE LE TOIT, et c'est ce qui donne au stade sa
+      // silhouette. Peints tous les deux dans le meme violet sombre, la
+      // toiture disparaissait purement et simplement : il ne restait qu'une
+      // bande noire sans bord, et les projecteurs n'avaient plus rien a
+      // surplomber.
+      skyTop: [30, 20, 52], skyBot: [84, 56, 112], stars: 0,
+      // L'AIRE INTERIEURE EST NOIRE, et le pourtour aussi. `grass` ne parle
+      // plus d'herbe ici : c'est la couleur du sol autour de la piste, et
+      // dans ce stade ce sol est une surface sombre, pas une pelouse.
+      grass: [22, 21, 26], grassEdge: [33, 32, 39],
+      trackA: [232, 104, 38], trackB: [206, 86, 28],
+      lane: [255, 255, 255], kerb: [244, 244, 250],
+      // Gradins violet-noir : la foule est dedans, pas devant. Des sieges
+      // clairs, dans une scene de nuit, auraient ramene le regard en haut de
+      // l'image alors que tout se passe sur la piste.
+      tread: [52, 44, 68], riser: [30, 26, 44], roof: [20, 17, 32],
+      barrier: [74, 62, 98],
+      panels: [[236, 46, 150], [56, 214, 236], [128, 78, 222], [240, 122, 40]],
+      crowdLo: [26, 22, 36], crowdHi: [196, 182, 214],
+      accent: [236, 46, 150], dust: [130, 108, 150],
+      // La rangee de lampes au-dessus des tribunes. Elle remplace les fanions
+      // a damier, qui n'ont rien a faire dans une enceinte de nuit : un
+      // fanion ne se voit que le jour, une lampe ne se voit que la nuit.
+      projecteurs: true
     }
   };
 
@@ -211,11 +267,42 @@
   // avant meme le coup de pistolet, et que le joueur peut lire sans qu'on le
   // lui ecrive.
   const ETAPE_BORD_DE_MER = 2, ETAPE_ZEZE = 5;
+  // Un stade `ouvert` part avec la version publique ; les autres n'existent
+  // que sur le canal de test. La condition garde la forme litterale exacte
+  // decrite plus haut, sans quoi elle cesserait de se replier a la
+  // compilation et le code des stades fermes repartirait dans le build.
+  //
+  // L'ORDRE DE `STADES_HORS_SERIE` EST UN CONTRAT, ET IL SE LIT ICI.
+  //
+  // Les stades ouverts viennent EN PREMIER dans cette liste, et ce n'est pas
+  // une question de gout : l'index d'un stade voyage avec les courses —
+  // l'historique le garde, le classement l'affiche, LEVEL_NAMES s'en sert
+  // pour le nommer. Si le canal de test poussait deux stades fermes avant le
+  // stade ouvert, l'index 6 designerait la Riviera ici et le Danube la-bas,
+  // et le classement public se mettrait a annoncer un stade que personne
+  // n'a couru. Ouverts d'abord, fermes ensuite : l'index veut alors dire la
+  // meme chose sur les deux canaux.
+  for (const stade of K.STADES_HORS_SERIE) {
+    if (stade.ouvert || import.meta.env.VITE_CANAL === 'test') LEVELS.push(stade);
+  }
   if (import.meta.env.VITE_CANAL === 'test') {
-    for (const stade of K.STADES_HORS_SERIE) LEVELS.push(stade);
     LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';
     LEVELS[ETAPE_ZEZE].stades = { aNiveau: 'cosmos', enDessous: 'nuit' };
   }
+
+  /**
+   * Combien d'ETAPES compte le championnat — six, et six seulement.
+   *
+   * A ne pas confondre avec `LEVELS.length`, qui compte aussi les stades hors
+   * serie. La confusion n'etait pas theorique : la fin du championnat se
+   * testait sur `LEVELS.length`, si bien que sur le canal de test — le seul
+   * ou des stades hors serie entraient dans la liste — la finale ZEZE ne
+   * terminait plus rien. Le jeu enchainait sur la Riviera, puis sur les Trois
+   * Soleils, et l'ecran de sacre n'arrivait jamais.
+   *
+   * On compte donc les barreaux de l'echelle, pas les lieux.
+   */
+  const NB_ETAPES = LEVELS.filter(l => !l.horsSerie).length;
 
   // Public dans les gradins : des personnages a facettes cuits dans une
   // tuile (voir getCrowdPattern), et non plus des sprites plats. Le
@@ -223,12 +310,18 @@
   // scolaire n'attire pas la meme foule qu'une finale intergalactique.
   const CROWD_BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
-  // Les six etapes du championnat, puis les stades hors serie. La Riviera est
-  // un meeting d'ete au bord de l'eau : gradins bien garnis, sans l'affluence
-  // d'une finale mondiale.
-  // Puis le stade des trois soleils : un tournoi qui deplace une planete
-  // entiere, donc des gradins pleins — juste sous la finale ZEZE.
-  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00, 0.72, 0.94];
+  // LES SIX ETAPES DU CHAMPIONNAT, ET ELLES SEULES.
+  //
+  // Les stades hors serie portaient autrefois leur remplissage a la suite de
+  // ce tableau, par position. Ca tenait tant qu'ils entraient tous, dans le
+  // meme ordre, sur le meme canal — c'est-a-dire tant qu'il n'y en avait
+  // qu'une sorte. Des qu'un stade s'ouvre a la version publique pendant que
+  // les autres restent sur le canal de test, les positions ne coincident
+  // plus et un stade herite de la foule d'un autre.
+  //
+  // Chaque stade hors serie porte donc SON remplissage (`foule`), et ce
+  // tableau ne parle plus que de l'echelle du championnat.
+  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
 
@@ -2052,7 +2145,7 @@
       G.runSplits.push(G.player.finishTime);
       G.runTime += G.player.finishTime;
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
-      if (G.levelIdx + 1 >= LEVELS.length) {
+      if (G.levelIdx + 1 >= NB_ETAPES) {
         G.runRank = recordRun(G.runTime); save(); G.flash = 1;
         Audio_.sfx('win'); queueCuts(['defeat', 'champion'], 'winall'); return;
       }
@@ -2274,7 +2367,9 @@
   const crowdPatternCache = {};
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
-    const density = CROWD_DENSITY[levelIdx] ?? 1;
+    const lvl = LEVELS[levelIdx];
+    const density = (lvl && lvl.foule != null) ? lvl.foule
+                  : (CROWD_DENSITY[levelIdx] ?? 1);
     const count = Math.max(15, Math.round(90 * density));
     const tile = document.createElement('canvas');
     tile.width = CROWD_TILE; tile.height = CROWD_TILE;
@@ -3818,6 +3913,117 @@
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
     // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
     for (let i = 0; i + stp < sm.length; i += stp) {
+  /**
+   * Les positions d'une rangee d'objets le long du toit, espacees en METRES.
+   *
+   * A NE PAS CONFONDRE AVEC LES ECHANTILLONS DU DECOR, et c'est tout l'objet
+   * de cette fonction. `samples()` produit un point tous les DOUZE metres en
+   * ligne droite — une douzaine pour tout le cent metres. C'est le bon pas
+   * pour des bandes (pelouse, gradins, piste) et pour des panneaux
+   * publicitaires, qui font justement quarante-huit metres de large. C'est
+   * beaucoup trop grossier pour une suite de petits objets : a douze metres
+   * d'ecart, deux voisins sont separes de plus de trois cents pixels a
+   * l'ecran, soit plus large que le cadre d'un telephone.
+   *
+   * Mesure faite sur le cent metres : sur les treize positions que donnait
+   * `sm`, UNE SEULE tombait dans le cadre, quelle que soit la hauteur
+   * essayee. Les fanions a damier du toit, eux, etaient pris un echantillon
+   * sur huit — un tous les quatre-vingt-seize metres, soit deux pour toute la
+   * ligne droite. Un asset dessine deux fois par course n'est pas un decor,
+   * c'est une rumeur.
+   *
+   * On rend donc des positions a l'espacement demande. Dans le virage, les
+   * echantillons sont deja tres serres (quatre-vingt-seize pour un demi-tour,
+   * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
+   * n, calcule depuis le meme espacement.
+   */
+  function rangeeDeToiture(sm, pasMetres) {
+    const out = [];
+    if (G.track.curved) {
+      // Longueur d'arc entre deux echantillons de virage, pour convertir
+      // l'espacement demande en nombre d'echantillons.
+      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
+      const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
+      for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
+      return out;
+    }
+    // La rangee deborde de part et d'autre de la piste : le cadre montre du
+    // decor avant la ligne de depart et apres l'arrivee.
+    const fin = G.track.straight + C.RUNOUT + 12;
+    for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
+    return out;
+  }
+
+  /**
+   * La rangee de projecteurs au-dessus des tribunes.
+   *
+   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
+   *
+   * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
+   * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
+   * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
+   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
+   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
+   * qui la rattache au toit, sans quoi la rampe flotte.
+   *
+   * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
+   * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
+   * en bas. La seule variation est fixe et tiree de la position : deux
+   * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
+   * ce que la rangee ne paraisse pas imprimee.
+   */
+  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
+    const m = scaleM();
+    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
+    //
+    // La bonne : dans un stade couvert, les projecteurs sont accroches au
+    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
+    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
+    //
+    // La contraignante : la hauteur compte plus de deux fois la distance au
+    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
+    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
+    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
+    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
+    // jamais en course, sur telephone comme sur grand ecran.
+    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
+    // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
+    // d'eclairage de stade, une suite serree de projecteurs et non trois
+    // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
+    const positions = rangeeDeToiture(sm, 4);
+    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
+
+    ctx.save();
+    for (let i = 0; i < positions.length; i++) {
+      const p = solid(...ptOf(positions[i], fr), fz);
+      if (p[0] < -160 || p[0] > G.VW + 160 || p[1] < -160 || p[1] > G.VH + 160) continue;
+
+      // Variation fixe, tiree de l'indice : deux lampes voisines ne sont pas
+      // jumelles, et ca ne bouge pas d'une frame a l'autre.
+      const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
+
+      // 1. le halo
+      const R = m * 1.35;
+      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
+      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
+      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
+      halo.addColorStop(1, 'rgba(228,214,255,0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
+
+      // 2. le mat, sous la rampe
+      ctx.fillStyle = rgb(th.roof, 1.5);
+      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
+
+      // 3. la rampe
+      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
+    }
+    ctx.restore();
+  }
+
       wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
            th.panels[(i / stp) % th.panels.length], stp);
     }
@@ -3882,16 +4088,34 @@
            1.05 + tiers * sz + 2.4);
     }
 
-    // Fanions a damier le long du toit des tribunes, pour donner plus de
-    // "definition" au decor (accent visuel base sur un asset plutot que sur
-    // un aplat de couleur uni). Sans toit, ils n'ont rien ou pendre.
+    // Au-dessus du toit : des fanions le jour, des projecteurs la nuit.
+    //
+    // Les deux occupent la meme place et repondent au meme besoin — donner
+    // de la definition a une bande qui serait sinon un aplat — mais ils ne
+    // vont pas ensemble. Un fanion a damier ne se lit que sous le soleil ;
+    // dans une enceinte de nuit il devient un confetti gris. Et un stade de
+    // nuit sans lampes n'est pas un stade de nuit, c'est un stade sombre.
+    //
+    // Sans toit, ni l'un ni l'autre n'a ou se poser.
     if (th.toiture !== false) {
-      const fh = scaleM() * 0.42, fw = fh * (32 / 27);
-      const fz = 1.05 + tiers * sz + 2.55, fr = near + tiers * sr + 0.5;
-      const fstp = decorStride() * 2;
-      if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
-        for (let i = 0; i < sm.length; i += fstp) {
-          const p = solid(...ptOf(sm[i], fr), fz);
+      if (th.projecteurs) {
+        drawProjecteurs(ctx, th, sm, near, tiers, sr, sz);
+      } else if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
+        const fh = scaleM() * 0.42, fw = fh * (32 / 27);
+        // MEME CORRECTION QUE POUR LES PROJECTEURS, ET ELLE VIENT DE LOIN.
+        //
+        // Les fanions etaient poses un echantillon sur huit, soit un tous les
+        // QUATRE-VINGT-SEIZE metres en ligne droite : deux pour tout le cent
+        // metres, et le plus souvent aucun dans le cadre. L'asset existait,
+        // il avait meme ete redessine en quatre fois plus fin, et il ne se
+        // voyait pratiquement jamais. Un fanion tous les six metres donne la
+        // guirlande qu'on voulait depuis le debut.
+        //
+        // La hauteur descend aussi sous le toit, pour la meme raison que les
+        // projecteurs : au-dessus, tout sort du cadre.
+        const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
+        for (const q of rangeeDeToiture(sm, 6)) {
+          const p = solid(...ptOf(q, fr), fz);
           if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
           ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);
         }

@@ -106,8 +106,8 @@ export function OneShotPanel() {
             {/* Les stades hors serie, a part et SANS numero. Les numeroter
                 les ferait passer pour une septieme etape, alors qu'ils ne
                 sont pas sur l'echelle : ce sont des lieux ou courir, que le
-                championnat ignore. Le groupe n'a de contenu que sur le canal
-                de test, et un <optgroup> vide ne s'affiche pas. */}
+                championnat ignore. Un <optgroup> vide ne s'affiche pas, si
+                bien que le groupe disparait quand aucun stade n'est ouvert. */}
             {LEVELS.some((l: any) => l.horsSerie) && (
               <optgroup label={N.t('pick_venue')} className="bg-neutral-900">
                 {LEVELS.map((l: any, i: number) => (l.horsSerie ? (
