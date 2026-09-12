@@ -103,3 +103,7 @@ assets-stores/promo/source-video/preview/
 assets-stores/promo/out/
 assets-stores/promo/explications/images/
 assets-stores/promo/explications/controle/
+
+# Les cartes de riposte se refabriquent en une commande, et chaque soiree en
+# produit une nouvelle serie. Elles ne se versionnent pas.
+cartes/
