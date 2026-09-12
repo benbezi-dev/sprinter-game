@@ -1747,6 +1747,116 @@
   }
 
   /**
+   * LES COEQUIPIERS D'UN RELAIS, DANS LE MEME COULOIR QUE MOI.
+   *
+   * Le relais ne montrait personne : `CourseRelais` appelait `startRelais`
+   * avec `autres: []`, si bien que le porteur arrivait, le temoin changeait
+   * de main, et l'ecran du receveur n'avait jamais rien affiche d'autre que
+   * lui-meme. Or c'est la transmission qui fait le relais — un passage qu'on
+   * ne voit pas est un chiffre, pas une course.
+   *
+   * On ne peut pas reutiliser `armLives` pour cela : elle DISTRIBUE les
+   * couloirs, un par adversaire, pour qu'on puisse se doubler. Une equipe de
+   * relais, elle, court dans UN SEUL couloir. Repartis, le porteur arriverait
+   * cinq metres a cote et la transmission se ferait dans le vide.
+   *
+   * Le decalage est donc lateral et FRACTIONNAIRE : `Track.radius()` accepte
+   * un couloir non entier, si bien que 3,3 et 2,7 sont deux trajectoires
+   * paralleles dans le meme couloir, ecartees d'un tiers de sa largeur.
+   * C'est exactement le geste reel — le receveur serre la corde et tend le
+   * bras en arriere, le porteur arrive par l'exterieur.
+   *
+   * `autres` : [{ id, nom, relais }] — les trois autres, sans moi.
+   */
+  /**
+   * LES DEUX MOITIES D'UN COULOIR.
+   *
+   * Une equipe de relais court dans UN couloir, et les quatre s'y repartissent
+   * comme sur une vraie piste : les relayeurs impairs a gauche — cote corde,
+   * l'interieur — les pairs a droite. Ce n'est pas decoratif : c'est ce qui
+   * fait que le porteur et son receveur se voient arriver l'un a cote de
+   * l'autre au lieu de se marcher dessus, et que la main tendue part du bon
+   * cote.
+   *
+   * Les nombres sont des indices de couloir, pas des metres, et ils sont
+   * calcules pour que PERSONNE NE DEBORDE. `Track.radius(l)` vaut
+   * `R1 + l × 1,22 + 0,20` : la ligne de mesure passe a vingt centimetres du
+   * bord interieur, si bien que le couloir l s'etend de l − 0,164 a l + 0,836
+   * dans cette unite. Les deux moities sont donc centrees a +0,09 et +0,58,
+   * ce qui laisse de chaque cote la demi-largeur d'un coureur avant la ligne
+   * blanche.
+   */
+  const ZONE_RELAIS = 30;          // la zone de transmission, comme au serveur
+  /*
+   * Les deux moities, en METRES depuis la ligne de mesure du couloir — et non
+   * en fractions de couloir. Un couloir fait 1,22 m et sa ligne de mesure
+   * passe a 0,20 m du bord interieur : les centres des deux moities tombent
+   * donc a 0,305 m et 0,915 m de ce bord, soit +0,105 m et +0,715 m de la
+   * ligne. Il reste 0,305 m de chaque cote avant la ligne blanche, de quoi
+   * loger un coureur sans deborder.
+   */
+  const DEMI_GAUCHE = 0.105, DEMI_DROITE = 0.715;
+  const demiCouloir = (relais) => (relais % 2 === 1 ? DEMI_GAUCHE : DEMI_DROITE);
+
+  /**
+   * Qui porte le temoin, a cet instant.
+   *
+   * Le dessin le lit sur le coureur lui-meme (`r.temoin`, voir `pose` dans
+   * sprinter-core) : un seul l'a en main, et il change de main a chaque
+   * transmission. C'est la salle qui tranche, comme pour tout le reste du
+   * relais ; l'ecran ne fait que suivre.
+   */
+  function porteurDuTemoin(rang) {
+    for (const r of G.runners) {
+      if (r.relaisRang == null) continue;
+      // La main du cote de la camera : de dos, l'autre est masquee par le
+      // corps, et un temoin a moitie cache ne raconte rien.
+      r.temoin = (r.relaisRang === rang) ? -1 : null;
+    }
+  }
+
+  function armRelayeurs(autres, monRelais) {
+    // ON AJOUTE, ON NE REMPLACE PAS. En confrontation, `startLive` vient
+    // d'armer les temoins adverses — un par couloir — et remettre la table a
+    // zero ici les effacerait tous : les sept autres equipes disparaitraient
+    // de la piste tout en figurant au classement d'arrivee.
+    if (!G.lives) G.lives = new Map();
+    if (!autres || !autres.length) return;
+    // Le couloir de l'equipe, en entier : `startRelais` decalera ensuite le
+    // joueur local dans sa propre moitie, et deux moities ne s'additionnent
+    // pas.
+    const monCouloir = Math.round(G.player ? G.player.lane : 3);
+    const teinte = couleurCouloir(Math.round(monCouloir));
+    for (const a of autres) {
+      // Celui qui me precede arrive par l'exterieur, celui qui me suit attend
+      // a l'interieur : de mon ecran, l'un entre par derriere et l'autre est
+      // devant, du bon cote.
+      // Sa moitie de couloir depend de SON rang, pas de sa position par
+      // rapport a moi : les quatre ecrans doivent placer les memes coureurs
+      // aux memes endroits, sinon la transmission se voit d'un cote et pas
+      // de l'autre.
+      const r = new Runner(a.nom || '', monCouloir, {
+        maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool,
+      });
+      r.isGhost = true; r.isLive = true; r.relaisRang = a.relais;
+      r.demi = demiCouloir(a.relais);
+      // Chacun s'arrete au bout de SA zone : le troisieme ne doit pas
+      // continuer dans la portion du quatrieme.
+      r.relaisFin = a.relais < 4 ? a.relais * 100 + 30 : null;
+      // Un relayeur attend a SA marque, pas sur la ligne de depart. Le poser a
+      // zero le ferait traverser la piste entiere a la premiere position
+      // recue, et le troisieme coureur apparaitrait en train de remonter
+      // deux cents metres en une image.
+      r.d = Math.max(0, ((a.relais || 1) - 1) * 100);
+      r.v = 0;
+      r.repere = { couleur: teinte, nom: a.nom || '' };
+      G.runners.push(r);
+      G.lives.set(a.id, { live: true, equipier: true, cible: r.d, vEst: 0, depuis: 0,
+                          runner: r, trace: [], step: REC_STEP, time: 0 });
+    }
+  }
+
+  /**
    * Une portion de relais.
    *
    * On ne joue PAS un cent metres. La piste est celle du 4x100 — un tour
@@ -1769,6 +1879,7 @@
    * @param opts.relais 1 a 4 — le rang de ce coureur.
    * @param opts.marque ou il est pose, en metres absolus.
    * @param opts.autres les temoins adverses : [{ id, nom, couloir }].
+   * @param opts.equipiers mes trois coequipiers : [{ id, nom, relais }].
    */
   function startRelais(opts) {
     opts = opts || {};
@@ -1778,9 +1889,21 @@
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
     });
+    // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
+    // les coequipiers viennent par-dessus, dans mon couloir a moi.
+    if (opts.equipiers && opts.equipiers.length) armRelayeurs(opts.equipiers, relais);
     const p = G.player;
     p.legStart = marque;
     p.d = marque;
+    p.relaisRang = relais;
+    // Ma moitie de couloir, par mon rang — la meme que celle que les trois
+    // autres ecrans me donneront. Le COULOIR, lui, ne bouge pas : c'est de
+    // lui que vient l'abscisse, et deux coequipiers doivent la partager.
+    p.demi = demiCouloir(relais);
+    /* LE DONNEUR NE VA PAS PLUS LOIN QUE SA ZONE. Sa portion s'arrete au bout
+       des trente metres de transmission ; au-dela, il courrait celle du
+       suivant. Le quatrieme, lui, va jusqu'a la ligne. */
+    p.relaisFin = relais < 4 ? relais * 100 + ZONE_RELAIS : null;
     // Le premier part des blocs, avec sa poussee et sa reaction ; les trois
     // autres partent lances, et c'est la zone que l'on note.
     if (relais > 1) {
@@ -2120,6 +2243,13 @@
       const moi = G.player ? G.player.d : 0;
       for (const g of G.lives.values()) {
         avancerLive(g, dt);
+        // UN COEQUIPIER N'EST PAS UN ADVERSAIRE. Il avance comme les autres —
+        // il faut bien le dessiner — mais il ne peut pas etre designe « le
+        // fantome » : le bandeau qui en decoule annonce « MODE FANTÔME,
+        // +8,5 m », ce qui, au moment ou l'on tend la main a son porteur,
+        // dit exactement le contraire de ce qui se passe. La distance qui
+        // compte a cet instant est sur le bouton du temoin.
+        if (g.equipier) continue;
         const e = Math.abs(g.runner.d - moi);
         if (e < ecart) { ecart = e; meilleur = g; }
       }
@@ -3831,6 +3961,117 @@
     }
   }
 
+  /**
+   * Les positions d'une rangee d'objets le long du toit, espacees en METRES.
+   *
+   * A NE PAS CONFONDRE AVEC LES ECHANTILLONS DU DECOR, et c'est tout l'objet
+   * de cette fonction. `samples()` produit un point tous les DOUZE metres en
+   * ligne droite — une douzaine pour tout le cent metres. C'est le bon pas
+   * pour des bandes (pelouse, gradins, piste) et pour des panneaux
+   * publicitaires, qui font justement quarante-huit metres de large. C'est
+   * beaucoup trop grossier pour une suite de petits objets : a douze metres
+   * d'ecart, deux voisins sont separes de plus de trois cents pixels a
+   * l'ecran, soit plus large que le cadre d'un telephone.
+   *
+   * Mesure faite sur le cent metres : sur les treize positions que donnait
+   * `sm`, UNE SEULE tombait dans le cadre, quelle que soit la hauteur
+   * essayee. Les fanions a damier du toit, eux, etaient pris un echantillon
+   * sur huit — un tous les quatre-vingt-seize metres, soit deux pour toute la
+   * ligne droite. Un asset dessine deux fois par course n'est pas un decor,
+   * c'est une rumeur.
+   *
+   * On rend donc des positions a l'espacement demande. Dans le virage, les
+   * echantillons sont deja tres serres (quatre-vingt-seize pour un demi-tour,
+   * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
+   * n, calcule depuis le meme espacement.
+   */
+  function rangeeDeToiture(sm, pasMetres) {
+    const out = [];
+    if (G.track.curved) {
+      // Longueur d'arc entre deux echantillons de virage, pour convertir
+      // l'espacement demande en nombre d'echantillons.
+      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
+      const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
+      for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
+      return out;
+    }
+    // La rangee deborde de part et d'autre de la piste : le cadre montre du
+    // decor avant la ligne de depart et apres l'arrivee.
+    const fin = G.track.straight + C.RUNOUT + 12;
+    for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
+    return out;
+  }
+
+  /**
+   * La rangee de projecteurs au-dessus des tribunes.
+   *
+   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
+   *
+   * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
+   * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
+   * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
+   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
+   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
+   * qui la rattache au toit, sans quoi la rampe flotte.
+   *
+   * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
+   * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
+   * en bas. La seule variation est fixe et tiree de la position : deux
+   * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
+   * ce que la rangee ne paraisse pas imprimee.
+   */
+  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
+    const m = scaleM();
+    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
+    //
+    // La bonne : dans un stade couvert, les projecteurs sont accroches au
+    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
+    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
+    //
+    // La contraignante : la hauteur compte plus de deux fois la distance au
+    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
+    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
+    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
+    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
+    // jamais en course, sur telephone comme sur grand ecran.
+    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
+    // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
+    // d'eclairage de stade, une suite serree de projecteurs et non trois
+    // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
+    const positions = rangeeDeToiture(sm, 4);
+    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
+
+    ctx.save();
+    for (let i = 0; i < positions.length; i++) {
+      const p = solid(...ptOf(positions[i], fr), fz);
+      if (p[0] < -160 || p[0] > G.VW + 160 || p[1] < -160 || p[1] > G.VH + 160) continue;
+
+      // Variation fixe, tiree de l'indice : deux lampes voisines ne sont pas
+      // jumelles, et ca ne bouge pas d'une frame a l'autre.
+      const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
+
+      // 1. le halo
+      const R = m * 1.35;
+      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
+      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
+      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
+      halo.addColorStop(1, 'rgba(228,214,255,0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
+
+      // 2. le mat, sous la rampe
+      ctx.fillStyle = rgb(th.roof, 1.5);
+      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
+
+      // 3. la rampe
+      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
+    }
+    ctx.restore();
+  }
+
   function drawWorld(ctx, th) {
     const T = G.track;
     // ciel
@@ -3977,117 +4218,6 @@
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
     // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
     for (let i = 0; i + stp < sm.length; i += stp) {
-  /**
-   * Les positions d'une rangee d'objets le long du toit, espacees en METRES.
-   *
-   * A NE PAS CONFONDRE AVEC LES ECHANTILLONS DU DECOR, et c'est tout l'objet
-   * de cette fonction. `samples()` produit un point tous les DOUZE metres en
-   * ligne droite — une douzaine pour tout le cent metres. C'est le bon pas
-   * pour des bandes (pelouse, gradins, piste) et pour des panneaux
-   * publicitaires, qui font justement quarante-huit metres de large. C'est
-   * beaucoup trop grossier pour une suite de petits objets : a douze metres
-   * d'ecart, deux voisins sont separes de plus de trois cents pixels a
-   * l'ecran, soit plus large que le cadre d'un telephone.
-   *
-   * Mesure faite sur le cent metres : sur les treize positions que donnait
-   * `sm`, UNE SEULE tombait dans le cadre, quelle que soit la hauteur
-   * essayee. Les fanions a damier du toit, eux, etaient pris un echantillon
-   * sur huit — un tous les quatre-vingt-seize metres, soit deux pour toute la
-   * ligne droite. Un asset dessine deux fois par course n'est pas un decor,
-   * c'est une rumeur.
-   *
-   * On rend donc des positions a l'espacement demande. Dans le virage, les
-   * echantillons sont deja tres serres (quatre-vingt-seize pour un demi-tour,
-   * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
-   * n, calcule depuis le meme espacement.
-   */
-  function rangeeDeToiture(sm, pasMetres) {
-    const out = [];
-    if (G.track.curved) {
-      // Longueur d'arc entre deux echantillons de virage, pour convertir
-      // l'espacement demande en nombre d'echantillons.
-      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
-      const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
-      for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
-      return out;
-    }
-    // La rangee deborde de part et d'autre de la piste : le cadre montre du
-    // decor avant la ligne de depart et apres l'arrivee.
-    const fin = G.track.straight + C.RUNOUT + 12;
-    for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
-    return out;
-  }
-
-  /**
-   * La rangee de projecteurs au-dessus des tribunes.
-   *
-   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
-   *
-   * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
-   * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
-   * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
-   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
-   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
-   * qui la rattache au toit, sans quoi la rampe flotte.
-   *
-   * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
-   * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
-   * en bas. La seule variation est fixe et tiree de la position : deux
-   * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
-   * ce que la rangee ne paraisse pas imprimee.
-   */
-  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
-    const m = scaleM();
-    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
-    //
-    // La bonne : dans un stade couvert, les projecteurs sont accroches au
-    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
-    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
-    //
-    // La contraignante : la hauteur compte plus de deux fois la distance au
-    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
-    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
-    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
-    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
-    // jamais en course, sur telephone comme sur grand ecran.
-    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-    // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
-    // d'eclairage de stade, une suite serree de projecteurs et non trois
-    // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
-    const positions = rangeeDeToiture(sm, 4);
-    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
-
-    ctx.save();
-    for (let i = 0; i < positions.length; i++) {
-      const p = solid(...ptOf(positions[i], fr), fz);
-      if (p[0] < -160 || p[0] > G.VW + 160 || p[1] < -160 || p[1] > G.VH + 160) continue;
-
-      // Variation fixe, tiree de l'indice : deux lampes voisines ne sont pas
-      // jumelles, et ca ne bouge pas d'une frame a l'autre.
-      const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
-
-      // 1. le halo
-      const R = m * 1.35;
-      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
-      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
-      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
-      halo.addColorStop(1, 'rgba(228,214,255,0)');
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
-
-      // 2. le mat, sous la rampe
-      ctx.fillStyle = rgb(th.roof, 1.5);
-      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
-
-      // 3. la rampe
-      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
-    }
-    ctx.restore();
-  }
-
       wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
            th.panels[(i / stp) % th.panels.length], stp);
     }
@@ -4770,7 +4900,7 @@
     const all = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0)
       ? G.runners.concat([G.ghost.runner]) : G.runners;
     for (const r of all) {
-      const p = T.pos(r.d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(r.d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
@@ -4818,7 +4948,7 @@
     for (let k = 3; k >= 1; k--) {
       const d = ghostDistAt(G.elapsed - k * 0.13);
       if (d <= 0 || dNow - d < 0.05) continue;
-      const p = T.pos(d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] < -200 || g2[0] > G.VW + 200) continue;
       ctx.globalAlpha = 0.10 * (4 - k) / 3;
       r.d = d; r.stride = strideNow - (dNow - d) * (Math.PI / r.strideLength());
@@ -4845,6 +4975,7 @@
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
     armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
+    armRelayeurs, porteurDuTemoin,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle, coupDePistolet,
     REC_STEP, goHome,

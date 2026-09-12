@@ -4,7 +4,7 @@
 // donc lui poser les cas limites directement, ce qui est precieux — un passage
 // accepte a tort ressemble exactement a un passage valide, et ne se verrait
 // jamais a l'ecran.
-import { CourseEquipe, zoneDe, noterPasse, ZONE, LEG }
+import { CourseEquipe, zoneDe, noterPasse, ZONE, LEG, PORTEE }
   from '../worker/src/relais-course.js';
 
 let e = 0;
@@ -37,7 +37,10 @@ console.log('\n── UN PASSAGE VALIDE ─────────────�
 {
   const c = neuve();
   c.placer(2, 112);
-  c.avancer(1, 108);           // le porteur entre dans la zone
+  // A PORTEE DE BRAS, et non plus « chacun quelque part dans la zone » : le
+  // porteur etait pose a 108 m pour un receveur a 112 m, soit quatre metres
+  // d'ecart, ce que la regle du contact refuse maintenant.
+  c.avancer(1, 111);           // le porteur entre dans la zone, contre son receveur
   const r1 = c.taper(1, 1000);
   ok('une seule tape ne passe rien', !r1.passe && !r1.elimine);
   const r2 = c.taper(2, 1060);
@@ -85,18 +88,67 @@ console.log('\n── CE QUI ELIMINE ──────────────�
   ok('et n eliminent pas non plus : ce serait punir le reseau', !c.elimine);
 }
 
+console.log('\n── LA PORTEE : IL FAUT SE TOUCHER ───────────────────────────');
+//
+// La regle manquait, et c'etait le defaut le plus visible du relais : deux
+// coureurs chacun dans sa zone mais separes de vingt metres se passaient le
+// temoin, qui traversait la piste tout seul.
+{
+  const c = neuve(); c.placer(2, 129); c.avancer(1, 101);
+  c.taper(1, 1000);
+  const r = c.taper(2, 1020);              // 28 m d'ecart, tous deux en zone
+  ok('vingt-huit metres : pas de transmission', !r.passe && !!r.tropLoin,
+     JSON.stringify(r));
+  ok('et ce n est pas une elimination', !c.elimine);
+  ok('le temoin reste au donneur', c.porteur === 1);
+}
+{
+  const c = neuve(); c.placer(2, 113.2); c.avancer(1, 110);
+  c.taper(1, 1000);
+  const r = c.taper(2, 1020);              // 3,2 m : un pas de trop
+  ok('un pas de trop : refuse', !r.passe && r.tropLoin?.bras === 3.2, JSON.stringify(r));
+}
+{
+  const c = neuve(); c.placer(2, 112.4); c.avancer(1, 110);
+  c.taper(1, 1000);
+  const r = c.taper(2, 1020);              // 2,4 m : bras tendus, dans la portee
+  ok('bras tendus, juste a la portee : passe', !!r.passe, JSON.stringify(r));
+  ok('le passage porte la distance des deux corps', r.passe?.bras === 2.4,
+     String(r.passe?.bras));
+}
+{
+  const c = neuve(); c.placer(2, 112); c.avancer(1, 111.6);
+  c.taper(1, 1000);
+  const r = c.taper(2, 1020);
+  ok('le temoin pose dans la main : passe', !!r.passe && r.passe.bras <= PORTEE / 2,
+     String(r.passe?.bras));
+}
+{
+  // Une main tendue dans le vide ne doit pas laisser de trace : sans ce
+  // menage, la tape du donneur resterait en attente et se combinerait avec
+  // une tape du receveur arrivee bien plus tard, hors de tout geste commun.
+  const c = neuve(); c.placer(2, 125); c.avancer(1, 105);
+  c.taper(1, 1000); c.taper(2, 1020);       // refusee, hors de portee
+  ok('les deux tapes sont oubliees', c.touches.size === 0, String(c.touches.size));
+}
+
 console.log('\n── LA NOTE ──────────────────────────────────────────────────');
-ok('tapes ensemble au milieu de la zone : parfait', noterPasse(60, 15) === 2);
-ok('tapes ensemble mais colle a l entree : correct', noterPasse(60, 2) === 1);
-ok('tapes decalees : correct au mieux', noterPasse(280, 15) === 1);
-ok('tres decalees : rate', noterPasse(500, 15) === 0);
+ok('tapes ensemble, milieu de zone, main dans la main : parfait',
+   noterPasse(60, 15, 0.5) === 2);
+ok('tapes ensemble mais colle a l entree : correct', noterPasse(60, 2, 0.5) === 1);
+ok('tapes ensemble, bien place, mais au bout des doigts : correct',
+   noterPasse(60, 15, 2.4) === 1);
+ok('tapes decalees : correct au mieux', noterPasse(280, 15, 0.5) === 1);
+ok('tres decalees : rate', noterPasse(500, 15, 0.5) === 0);
 
 console.log('\n── LA COURSE ENTIERE ────────────────────────────────────────');
 {
   const c = neuve();
   for (const r of [2, 3, 4]) c.placer(r, (r - 1) * LEG + 12);
   for (const [d, v] of [[1, 2], [2, 3], [3, 4]]) {
-    c.avancer(d, (d - 1) * LEG + 110);
+    // Le porteur vient CHERCHER son receveur : 111 m, contre les 112 m de la
+    // marque. Un metre, c'est le temoin dans la main.
+    c.avancer(d, (d - 1) * LEG + 111);
     c.taper(d, 1000 * d);
     c.taper(v, 1000 * d + 70);
   }

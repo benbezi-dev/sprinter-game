@@ -214,6 +214,14 @@ export class SalleConfrontation {
   cloreSiFini() {
     if (!this.toutEstJoue()) return;
     this.departA = null;
+    // ON EFFACE LES DECLARATIONS DE PRESENCE — meme raison qu'en equipe
+    // seule (voir `cloreLaCourse` dans salle-relais.js), et la consequence
+    // est ici plus lourde : `case 'pret'` repart des que chaque equipe
+    // presente est complete et prete. Les flags survivant a l'arrivee, un
+    // seul joueur qui rebascule son bouton relancait le pistolet pour
+    // JUSQU'A HUIT equipes et effacait le classement que les autres etaient
+    // en train de lire.
+    for (const j of this.joueurs.values()) j.pret = false;
     this.programmerFermeture(APRES_COURSE_MS, 'confrontation terminee');
     this.diffuser({ t: 'termine', ...this.vue() });
     const ecrire = this.ecrire();
@@ -408,6 +416,14 @@ export class SalleConfrontation {
 
       case 'temoin': {
         const r = c.taper(j.relais, Date.now());
+        // Hors de portee : la meme regle qu'en equipe seule — les deux mains
+        // se sont tendues ensemble mais trop loin l'une de l'autre. Ce n'est
+        // pas une faute, et il faut le dire, sinon les deux coureurs tapent
+        // dans le vide jusqu'a sortir de la zone.
+        if (r.tropLoin) {
+          this.diffuser({ t: 'trop_loin', equipe: j.equipe, ...r.tropLoin });
+          return;
+        }
         if (r.elimine) {
           this.diffuser({ t: 'elimine', equipe: j.equipe, ...r.elimine, ...this.vue() });
           this.cloreSiFini();

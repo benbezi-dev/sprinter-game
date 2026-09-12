@@ -261,7 +261,7 @@
     { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
-    { name: 'Jeux olympiques', theme: 'olympic', pool: 'sprint',
+    { name: '0.Games', theme: 'olympic', pool: 'sprint',
       names: ['Blaze Kade', 'Jett Cruz', 'Rex Solar', 'Kai Volt',
               'Ash Comet', 'Neo Flash', 'Ray Quick'] },
     { name: 'Inter galactique', theme: 'cosmos', pool: 'sprint',
@@ -840,6 +840,45 @@
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
     return this.posAtR(s, this.radius(lane));
   };
+
+  /**
+   * LE MEME POINT, DECALE LATERALEMENT DANS LE COULOIR.
+   *
+   * `dr` est un ecart en metres par rapport a la ligne de mesure du couloir.
+   * Il sert au relais, ou deux coequipiers partagent un couloir : l'un serre
+   * la corde, l'autre court a l'exterieur.
+   *
+   * POURQUOI UNE FONCTION A PART, ET NON UN COULOIR FRACTIONNAIRE. `pos()`
+   * tire l'abscisse curviligne du rayon : `bend1(r)` raccourcit quand le
+   * rayon grandit, ce qui est exactement le depart en quinconce. Pour deux
+   * couloirs voisins c'est juste — chacun court sa propre distance. Pour deux
+   * coureurs du MEME couloir, c'est faux : places tous les deux a 112 m, ils
+   * se retrouvaient a **1,9 m l'un de l'autre** a l'ecran, le plus a
+   * l'exterieur en avant. Une transmission que le serveur declare au contact
+   * s'affichait donc a deux bonnes foulees d'ecart.
+   *
+   * On garde donc l'abscisse du couloir — le meme angle pour les deux — et on
+   * ne bouge que le rayon.
+   */
+  Track.prototype.posDemi = function (s, lane, dr) {
+    if (!dr) return this.pos(s, lane);
+    if (!this.curved) return [s, C.LANE_W * (lane + 0.5) + dr];
+    const rRef = this.radius(lane), r = rRef + dr;
+    const A = this.bend1(rRef);
+    if (this.fullLap && s >= A + this.straight) {
+      const s2 = s - A - this.straight, B = Math.PI * rRef;
+      if (s2 < B) {
+        const phi = (B - s2) / rRef;
+        return [this.straight + r * Math.sin(phi), -r * Math.cos(phi)];
+      }
+      return [this.straight - (s2 - B), -r];
+    }
+    if (s < A) {
+      const phi = (A - s) / rRef;
+      return [-r * Math.sin(phi), r * Math.cos(phi)];
+    }
+    return [s - A, r];
+  };
   // Le meme point, mais exprime comme un echantillon du rendu :
   // [surVirage, v, moitie]. Sur un virage v est l'angle, sur une ligne
   // droite c'est l'abscisse depuis le debut de cette droite. Cela permet de
@@ -919,6 +958,27 @@
     // reperes, la transition serait notee au mauvais endroit et le troisieme
     // relayeur serait juge sur une phase qu'il a franchie depuis longtemps.
     this.legStart = 0;
+    /**
+     * OU S'ARRETE CE RELAYEUR, en metres absolus.
+     *
+     * Un relayeur ne court pas jusqu'a l'arrivee : sa course finit au bout de
+     * SA zone de transmission. Sans cette borne, le donneur continuait tout
+     * droit apres avoir lache le temoin — on le voyait a trois cents metres
+     * du depart, courant une portion qui n'etait pas la sienne, pendant que
+     * son coequipier courait la vraie. `null` pour une course ordinaire et
+     * pour le quatrieme, que la ligne d'arrivee arrete deja.
+     */
+    this.relaisFin = null;
+    /**
+     * Ma moitie de couloir, en metres depuis la ligne de mesure.
+     * Zero pour une course ordinaire : on court sur sa ligne.
+     */
+    this.demi = 0;
+    /**
+     * Le temoin, et dans quelle main : 1 ou -1, `null` s'il ne l'a pas.
+     * Un seul coureur le porte a un instant donne. Voir `pose`.
+     */
+    this.temoin = null;
     this.driveEnd = C.DRIVE_END;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
@@ -1097,6 +1157,16 @@
     }
     const before = this.d;
     this.d += this.v * dt;
+    // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
+    //
+    // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
+    // fini une course, il a fini SA portion, et le chrono de l'equipe
+    // continue sans lui. On le retient donc sur place, et il s'arrete comme
+    // on s'arrete apres une transmission : en deceleration, pas net.
+    if (this.relaisFin != null && this.d >= this.relaisFin) {
+      this.d = this.relaisFin;
+      this.v *= Math.exp(-7 * dt);
+    }
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
     const fin = this.legStart + this.driveEnd;
@@ -1319,6 +1389,8 @@
     const sh = rot(0, 0.470, lean);
     /** Le poing du bras armé, garde pour y accrocher le pistolet. */
     let poing = null;
+    /** Le poing qui porte le temoin, quand ce coureur l'a en main. */
+    let main = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
@@ -1334,6 +1406,7 @@
       add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
           [armR - 0.010, armR - 0.008], 0.036, yawTop);
       if (r.pistolet === side) poing = [E, aFore];
+      if (r.temoin === side) main = [E, aFore];
     }
 
     // LES ANTENNES.
@@ -1395,6 +1468,25 @@
           0.034, yawTop);
       add(CANON, M, a, [-0.004, 0, -0.378], [0.015, 0.014], [0.018, 0.016],
           0.066, yawTop);
+    }
+
+    // LE TEMOIN, DANS LA MAIN DU PORTEUR.
+    //
+    // Il n'existait pas. Le relais se jouait sur un objet qu'on ne voyait
+    // jamais : deux coureurs se croisaient, un chiffre changeait de ligne, et
+    // rien a l'ecran ne disait que quelque chose etait passe d'une main a
+    // l'autre. C'est pourtant la seule piece du mode.
+    //
+    // Il chevauche le poing — trente centimetres, comme le vrai — plutot que
+    // de prolonger l'avant-bras comme le pistolet du starter : un baton tenu
+    // par son milieu se lit tout de suite comme un baton, et non comme une
+    // rallonge du bras. Jaune vif : sur une piste bleue et un maillot sombre,
+    // c'est la couleur qui accroche l'oeil de loin.
+    if (main) {
+      const [M, a] = main;
+      const TEMOIN = [250, 206, 62];
+      add(TEMOIN, M, a, [0.010, 0, -0.300], [0.019, 0.019], [0.019, 0.019],
+          0.085, yawTop);
     }
     return out;
   }

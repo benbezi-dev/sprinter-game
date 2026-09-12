@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye, Swords } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { TAILLE } from '@/game/salle-relais';
+import { TAILLE, PORTEE } from '@/game/salle-relais';
 import {
   SalleConfrontation,
   type EtatConfrontation, type EquipeEnCourse,
@@ -61,6 +61,31 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
    */
   const [temoins, setTemoins] = useState<Record<string, number>>({});
   const porteurs = useRef(new Map<string, number>());
+  /**
+   * Ou est chacun des quatre DE MON EQUIPE, par rang de relais.
+   *
+   * Les positions des autres equipes ne servent qu'a les dessiner ; celles-ci
+   * decident d'une transmission, depuis qu'un contact est exige
+   * (`PORTEE`, worker/src/relais-course.js).
+   */
+  const ou = useRef<Record<number, number>>({});
+  /** La distance entre mon partenaire de transmission et moi, en metres. */
+  const [bras, setBras] = useState<number | null>(null);
+  /** Une main tendue dans le vide, a montrer une seconde. */
+  const [rate, setRate] = useState(0);
+  const etatRef = useRef<EtatConfrontation | null>(null);
+
+  /** Mon partenaire : le porteur si je recois, le suivant si je donne. */
+  const majBras = () => {
+    const s = salle.current;
+    const moi = s?.monRelais || 0;
+    const p = porteurs.current.get(equipe) || 1;
+    const partenaire = moi === p + 1 ? p : (moi === p && moi < TAILLE ? moi + 1 : 0);
+    if (!partenaire || !moi) { setBras(null); return; }
+    const a = ou.current[moi], b = ou.current[partenaire];
+    if (a == null || b == null) { setBras(null); return; }
+    setBras(Math.abs(a - b));
+  };
 
   useEffect(() => {
     const s = new SalleConfrontation(code, equipe, {
@@ -71,9 +96,14 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
           }
           if (x.nom) noms.current.set(x.equipe, x.nom);
           porteurs.current.set(x.equipe, x.porteur);
+          // Le temoin de MON equipe : c'est le seul dont on dessine les
+          // quatre relayeurs, donc le seul qu'on puisse mettre en main.
+          if (x.equipe === equipe) SprinterApp.porteurDuTemoin(x.porteur);
         }
         setTemoins(Object.fromEntries(etat.equipes.map(x => [x.equipe, x.temoin_d])));
+        etatRef.current = etat;
         setE(etat);
+        majBras();
       },
       onDepart: (dansMs, departA) => {
         // Les adversaires entrent dans la course comme des coureurs a part
@@ -84,8 +114,18 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         const autres = [...couloirs.current.entries()]
           .filter(([id]) => id !== equipe)
           .map(([id, i]) => ({ id, nom: noms.current.get(id) || id, couloir: i + 1 }));
-        SprinterApp.startRelais({ relais: s.monRelais, marque: s.marque, autres });
+        // Et mes trois coequipiers dans MON couloir : sans eux, la
+        // transmission — qui exige maintenant un contact — se jouerait contre
+        // un partenaire invisible.
+        const mienne = (etatRef.current?.equipes || []).find(x => x.equipe === equipe);
+        const mesEquipiers = (mienne?.joueurs || [])
+          .filter(j => j.relais !== s.monRelais)
+          .map(j => ({ id: `moi:${j.relais}`, nom: j.nom, relais: j.relais }));
+        SprinterApp.startRelais({
+          relais: s.monRelais, marque: s.marque, autres, equipiers: mesEquipiers,
+        });
         SprinterApp.liveDepart(dansMs, departA);
+        SprinterApp.porteurDuTemoin(1);
         brancherSalle({
           position: (d) => {
             s.avancer(d);
@@ -94,6 +134,8 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
             if (s.monRelais === porteurs.current.get(equipe)) {
               setTemoins(t => ({ ...t, [equipe]: d }));
             }
+            ou.current[s.monRelais] = d;
+            majBras();
           },
           fini: () => s.terminer(),
         });
@@ -107,6 +149,15 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         programmerLeFilm('relais', dansMs);
       },
       onPos: (eq, relais, d, temoin) => {
+        // MON EQUIPE D'ABORD. Ses quatre positions ne servent pas a suivre un
+        // temoin : elles disent ou sont mes coequipiers sur MA piste, et a
+        // quelle distance de moi — c'est d'elle que depend la transmission.
+        if (eq === equipe && relais !== salle.current?.monRelais) {
+          ou.current[relais] = d;
+          SprinterApp.liveDistDe(`moi:${relais}`, d);
+          majBras();
+        }
+
         // LE TEMOIN, ET LUI SEUL.
         //
         // La salle annonce la position de chaque relayeur, y compris des trois
@@ -135,6 +186,12 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // absolus que les miens : la piste du 4x100 fait le tour complet, et
         // les deux reperes sont le meme. Rien a traduire.
         if (eq !== equipe) SprinterApp.liveDistDe(eq, dt);
+      },
+      // Hors de portee : on le dit, et la course continue.
+      onTropLoin: (eq, { de, vers }) => {
+        if (eq !== equipe) return;
+        if (de !== s.monRelais && vers !== s.monRelais) return;
+        setRate(Date.now());
       },
       onPasse: (eq, p) => {
         if (eq !== equipe) return;
@@ -189,7 +246,15 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
   const jeRecois = partie && mon === mienne.porteur + 1 && !maCourseEstFinie;
   const jeDonne = partie && mon === mienne.porteur && mon < TAILLE && !maCourseEstFinie;
   const dTemoin = (id: string) => temoins[id] ?? 0;
-  const aPortee = !!(jeRecois && zone && dTemoin(equipe) >= zone.debut - 12);
+  /**
+   * LA TAPE NE S'OFFRE QU'AU CONTACT — voir CourseRelais, meme regle.
+   *
+   * Elle s'armait sur l'approche du temoin, et le donneur l'avait des qu'il
+   * courait : deux coureurs separes de vingt metres se passaient le temoin.
+   * Le serveur exige desormais un contact, et le bouton dit la meme chose que
+   * l'arbitre.
+   */
+  const aPortee = !!((jeRecois || jeDonne) && bras != null && bras <= PORTEE);
 
   const couleur = (id: string) => couleurDe(couloirs.current.get(id) ?? 0);
   const rangee = (x: EquipeEnCourse) => (
@@ -268,7 +333,8 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
 
           {jeRecois || jeDonne ? (
             <BoutonTemoin role={jeDonne ? 'donne' : 'recoit'}
-                          arme={jeDonne || aPortee}
+                          arme={aPortee}
+                          bras={bras} portee={PORTEE} rate={rate}
                           onTaper={() => salle.current?.temoin()} />
           ) : (
             <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10

@@ -32,7 +32,7 @@ export type EtatRelais = {
   /** Le relayeur qui porte le temoin en ce moment, de 1 a 4. */
   porteur: number;
   temoin_d: number;
-  passes: { de: number; vers: number; a: number; note: number }[];
+  passes: { de: number; vers: number; a: number; note: number; bras?: number }[];
   elimine: { raison: string; relais: number } | null;
   total: number | null;
   /** Ma zone, envoyee a l'accueil. Le premier relayeur n'en a pas. */
@@ -46,11 +46,30 @@ type Ecouteurs = {
   /** Position d'un coequipier, par son rang de relais. */
   onPos?: (relais: number, d: number) => void;
   /** Le temoin est passe : note de 0 a 2, du rate au parfait. */
-  onPasse?: (p: { de: number; vers: number; note: number }, e: EtatRelais) => void;
+  onPasse?: (p: { de: number; vers: number; note: number; bras?: number }, e: EtatRelais) => void;
+  /**
+   * Les deux mains se sont tendues ensemble, mais hors de portee.
+   *
+   * Ce n'est pas une faute et la course continue — mais il faut le dire, sans
+   * quoi les deux coureurs tapent dans le vide sans comprendre, et le
+   * receveur sort de sa zone en insistant.
+   */
+  onTropLoin?: (i: { de: number; vers: number; bras: number; portee: number }) => void;
   onElimine?: (raison: string, relais: number) => void;
   onFini?: (totalMs: number, e: EtatRelais) => void;
   onFerme?: (raison: string) => void;
 };
+
+/**
+ * LA PORTEE : jusqu'ou le temoin peut passer d'une main a l'autre, en metres.
+ *
+ * RECOPIEE de `PORTEE` dans worker/src/relais-course.js, et il faut que les
+ * deux restent d'accord. Le serveur seul arbitre — c'est lui qui refuse une
+ * transmission hors de portee — mais l'ecran doit pouvoir armer le bouton au
+ * bon moment, sinon le joueur tape trop tot, ne comprend pas, et sort de sa
+ * zone en insistant.
+ */
+export const PORTEE = 2.5;
 
 /** Un relais fait cent metres, et la course entiere quatre cents. */
 export const LEG = 100;
@@ -113,8 +132,14 @@ export class SalleRelais {
         this.ec.onPos?.(m.relais, m.d);
         return;
       case 'passe':
-        this.ec.onPasse?.({ de: m.de, vers: m.vers, note: m.note }, m as EtatRelais);
+        this.ec.onPasse?.({ de: m.de, vers: m.vers, note: m.note, bras: m.bras },
+                          m as EtatRelais);
         this.majEtat(m);
+        return;
+      // Hors de portee : pas d'etat a mettre a jour, rien n'a change sur la
+      // piste — seulement une main qui s'est refermee sur du vide.
+      case 'trop_loin':
+        this.ec.onTropLoin?.({ de: m.de, vers: m.vers, bras: m.bras, portee: m.portee });
         return;
       case 'elimine':
         this.departPose = false;

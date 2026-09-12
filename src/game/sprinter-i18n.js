@@ -1052,15 +1052,6 @@
     // ouvert y figure sur les deux canaux ; les stades fermes n'apparaissent
     // que sur le canal de test.
     pick_venue:      ['STADES', 'VENUES'],
-    pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
-    launch_oneshot:  ['LANCER', 'GO'],
-    event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
-    next_event:      ['ÉPREUVE SUIVANTE', 'NEXT EVENT'],
-    oneshot_done:    ['ONE SHOT TERMINÉ', 'ONE SHOT COMPLETE'],
-    total_in:        ['cumul : ', 'total: '],
-
-    // défi différé
-    challenge_code:  ['CODE DU DÉFI', 'CHALLENGE CODE'],
 
     // ------------------------------------------------------ edition speciale
     //
@@ -1077,6 +1068,15 @@
     edition_reste_n: ['encore {n} jours', '{n} days left'],
     edition_reste_1: ['encore 1 jour', '1 day left'],
     edition_reste_0: ['dernier jour', 'last day'],
+    pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
+    launch_oneshot:  ['LANCER', 'GO'],
+    event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
+    next_event:      ['ÉPREUVE SUIVANTE', 'NEXT EVENT'],
+    oneshot_done:    ['ONE SHOT TERMINÉ', 'ONE SHOT COMPLETE'],
+    total_in:        ['cumul : ', 'total: '],
+
+    // défi différé
+    challenge_code:  ['CODE DU DÉFI', 'CHALLENGE CODE'],
     challenge_enter: ['entre le code reçu', 'enter the code you got'],
     challenge_load:  ['CHARGER', 'LOAD'],
     challenge_loading:['chargement du défi...', 'loading challenge...'],
@@ -1194,15 +1194,6 @@
     // ici meme quand le stade, lui, n'existe pas dans la version publique —
     // l'historique des courses garde l'index de l'etape ou elles ont ete
     // courues, et une partie jouee sur le canal de test se relit ailleurs.
-    ['Stade de la Riviera', 'Riviera Stadium'],
-    // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
-    // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
-    // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
-    // donc sur ces deux lignes, sans toucher au jeu.
-    ['Stade des Trois Soleils', 'Three Suns Stadium']
-  ];
-
-  const RACE_SUB = {
     //
     // LES STADES OUVERTS D'ABORD, LES FERMES ENSUITE. L'ordre de cette
     // suite n'est pas decoratif : il doit suivre exactement celui de
@@ -1214,6 +1205,15 @@
     // federation ne possede un fleuve. Le lieu qui l'inspire porte, lui, un
     // nom propre qu'on ne reprend pas — voir juridique/edition-danube.md.
     ['Stade du Danube', 'Danube Stadium'],
+    ['Stade de la Riviera', 'Riviera Stadium'],
+    // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
+    // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
+    // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
+    // donc sur ces deux lignes, sans toucher au jeu.
+    ['Stade des Trois Soleils', 'Three Suns Stadium']
+  ];
+
+  const RACE_SUB = {
     '100': ['la ligne droite', 'the straight'],
     '200': ['virage et ligne droite', 'bend and straight'],
     '400': ['un tour de piste', 'one lap of the track']

@@ -84,6 +84,31 @@ export class SalleRelais {
   }
 
   /**
+   * LA COURSE EST FINIE — par la ligne ou par l'elimination.
+   *
+   * Trois choses, et la deuxieme manquait : on desarme le depart, ON EFFACE
+   * LES DECLARATIONS DE PRESENCE, et on programme la fermeture.
+   *
+   * Sans l'effacement, les quatre restaient marques prets apres l'arrivee.
+   * Or `case 'pret'` rearme des que les quatre le sont et que `departA` est
+   * retombe a null : le PREMIER message `pret` venu — un seul joueur qui
+   * bascule son bouton pour recourir — relancait donc le pistolet pour tout
+   * le monde ET appelait `reinitialiser()`, qui efface le chrono, les passes
+   * et l'elimination. Les trois autres, encore sur leur ecran d'arrivee,
+   * voyaient leur resultat disparaitre au profit d'une course qu'ils
+   * n'avaient pas demandee.
+   *
+   * C'est exactement ce que dit l'intention d'origine, juste en dessous :
+   * « une equipe qui veut recourir n'a qu'a SE REDECLARER prete ». Encore
+   * fallait-il que la declaration precedente cesse de valoir.
+   */
+  cloreLaCourse(delai, raison) {
+    this.departA = null;
+    for (const j of this.joueurs.values()) j.pret = false;
+    this.programmerFermeture(delai, raison);
+  }
+
+  /**
    * Programme la fermeture. Toute activite la repousse : c'est le silence qui
    * ferme, pas l'horloge. Une equipe qui veut recourir n'a qu'a se redeclarer
    * prete.
@@ -204,8 +229,7 @@ export class SalleRelais {
   eliminer(raison, relais) {
     const el = this.laCourse().eliminer(raison, relais);
     if (!el) return;
-    this.departA = null;
-    this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+    this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
     this.diffuser({ t: 'elimine', ...el, ...this.vue() });
   }
 
@@ -253,8 +277,7 @@ export class SalleRelais {
         const r = c.avancer(j.relais, m.d,
                             this.departA ? Date.now() - this.departA : null);
         if (r.elimine) {
-          this.departA = null;
-          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
           return;
         }
@@ -267,9 +290,16 @@ export class SalleRelais {
       // Les deux touchent : le serveur date, verifie la geometrie, et tranche.
       case 'temoin': {
         const r = c.taper(j.relais, Date.now());
+        // Les deux mains se sont tendues ensemble, mais trop loin l'une de
+        // l'autre. Ce n'est pas une faute — on le DIT, sinon les deux
+        // coureurs tapent dans le vide sans comprendre pourquoi le temoin ne
+        // part pas, et le receveur finit par sortir de sa zone.
+        if (r.tropLoin) {
+          this.diffuser({ t: 'trop_loin', ...r.tropLoin });
+          return;
+        }
         if (r.elimine) {
-          this.departA = null;
-          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
           return;
         }
@@ -280,8 +310,7 @@ export class SalleRelais {
       case 'fini': {
         const r = c.terminer(j.relais, m.ms);
         if (r.total == null) return;
-        this.departA = null;
-        this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+        this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
         this.diffuser({ t: 'fini', total: r.total, passes: c.passes, ...this.vue() });
         const ecrire = this.ecrire();
         if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});

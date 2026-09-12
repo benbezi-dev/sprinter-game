@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { MONTEE, TRANSITION } from '@/lib/mouvement';
 import { Flag, XCircle, Hand, Swords } from 'lucide-react';
@@ -151,30 +151,59 @@ export function Couloir({ nom, code, d, porteur, couleur, moi, elimine, total, f
 /* --------------------------------------------------------- le bouton du temoin */
 
 /**
- * La tape.
+ * Le bouton du temoin — et la distance qui le commande.
  *
- * Elle n'est offerte que quand elle a un sens : le porteur peut donner des
- * qu'il court, le receveur seulement quand le temoin approche de sa zone.
- * Proposer le bouton plus tot inviterait a taper dans le vide, et une tape
- * hors zone elimine l'equipe entiere.
+ * `bras` est l'ecart entre les deux coureurs, en metres. Il ne decore pas :
+ * depuis qu'un CONTACT est exige, c'est lui qui dit si le geste peut aboutir,
+ * et le joueur doit le voir fondre pour savoir quand tendre la main. Sans ce
+ * chiffre, le bouton s'allume sans qu'on sache pourquoi, et s'eteint de meme.
+ *
+ * `rate` porte l'instant de la derniere main tendue dans le vide : on le
+ * montre une seconde, sinon deux coureurs hors de portee tapent en boucle
+ * sans comprendre que c'est la distance qui les separe, et non le minutage.
  */
-export function BoutonTemoin({ role, arme, onTaper }: {
-  role: 'donne' | 'recoit'; arme: boolean; onTaper: () => void;
+export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
+  role: 'donne' | 'recoit'; arme: boolean;
+  bras?: number | null; portee?: number; rate?: number; onTaper: () => void;
 }) {
   const { N } = SprinterApp;
   const donne = role === 'donne';
+  const [vide, setVide] = useState(false);
+  useEffect(() => {
+    if (!rate) return;
+    setVide(true);
+    const t = setTimeout(() => setVide(false), 1100);
+    return () => clearTimeout(t);
+  }, [rate]);
+
   return (
-    <button
-      onPointerDown={onTaper}
-      disabled={!arme}
-      className={`w-full py-5 rounded-2xl font-black font-display tracking-widest text-lg
-        pointer-events-auto transition-colors
-        ${!arme ? 'bg-white/5 text-white/25 border border-white/10'
-          : donne ? 'bg-primary text-background'
-                  : 'bg-emerald-400 text-background animate-pulse'}`}>
-      <Hand className="w-6 h-6 mx-auto mb-1" />
-      {N.t(donne ? 'relais_donne' : arme ? 'relais_prends' : 'relais_attends_temoin')}
-    </button>
+    <div className="flex flex-col gap-1 pointer-events-none">
+      {/* La distance, au-dessus du bouton : elle se lit d'un coup d'oeil
+          pendant qu'on court, et c'est la seule information qui compte a cet
+          instant precis. */}
+      {bras != null && (
+        <div className={`self-center px-3 py-1 rounded-full font-mono text-xs tabular-nums
+                         border backdrop-blur-md transition-colors
+          ${vide ? 'bg-destructive/25 border-destructive/50 text-destructive'
+                 : arme ? 'bg-emerald-400/20 border-emerald-400/50 text-emerald-200'
+                        : 'bg-black/60 border-white/15 text-muted-foreground'}`}>
+          {vide ? N.t('relais_trop_loin')
+                : `${bras.toFixed(1)} m${portee ? ` / ${portee.toFixed(1)} m` : ''}`}
+        </div>
+      )}
+      <button
+        onPointerDown={onTaper}
+        disabled={!arme}
+        className={`w-full py-5 rounded-2xl font-black font-display tracking-widest text-lg
+          pointer-events-auto transition-colors
+          ${!arme ? 'bg-white/5 text-white/25 border border-white/10'
+            : donne ? 'bg-primary text-background animate-pulse'
+                    : 'bg-emerald-400 text-background animate-pulse'}`}>
+        <Hand className="w-6 h-6 mx-auto mb-1" />
+        {N.t(donne ? (arme ? 'relais_donne' : 'relais_approche')
+                   : (arme ? 'relais_prends' : 'relais_attends_temoin'))}
+      </button>
+    </div>
   );
 }
 
