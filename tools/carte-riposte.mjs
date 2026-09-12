@@ -111,8 +111,12 @@ function carte({ epreuve, femmes, vainqueur, temps, rec, wr, hauteur }) {
   // Poser chaque ligne par rapport au milieu de l'image, c'est se condamner a
   // recalculer huit ordonnees des qu'on change un format — et c'est comme ca
   // qu'un libelle finit par chevaucher son chrono.
-  const BLOC = 1080;
-  const haut = (H - BLOC) / 2;
+  // Hauteur du bloc de contenu et ou il commence. En feed, on centre. En
+  // story, on vise le creux entre les deux bandes d'interface — et on s'arrete
+  // assez haut pour laisser le sticker de lien respirer.
+  const story = H >= 1700;
+  const BLOC = story ? 1180 : 1080;
+  const haut = story ? 300 : (H - BLOC) / 2;
   let y = 0;
   const ligne = (dy, contenu) => { y += dy; return contenu(y); };
 
@@ -130,14 +134,19 @@ function carte({ epreuve, femmes, vainqueur, temps, rec, wr, hauteur }) {
     ligne(172, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="url(#feu)" font-size="172" font-weight="800">${secondes(rec.ms)}</text>`),
     ligne(56, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#c6b48a" font-size="31">${esc(rec.nom)} · ${age(rec.le)}</text>`),
 
-    ligne(120, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#ffffff" font-size="41" font-weight="700">${ecart} s plus vite que le monde réel</text>`),
-    ligne(74, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#6f7c9b" font-size="32" letter-spacing="3">sprinter-game.com</text>`),
+    ligne(story ? 140 : 120, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#ffffff" font-size="41" font-weight="700">${ecart} s plus vite que le monde réel</text>`),
+    story
+      // En story le lien est un sticker qu'Instagram pose par dessus : on
+      // n'ecrit pas l'adresse, on montre ou regarder.
+      ? ligne(92, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#ffb037" font-size="34" letter-spacing="4">LE RECORD T'ATTEND  ↓</text>`)
+      : ligne(74, (y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#6f7c9b" font-size="32" letter-spacing="3">sprinter-game.com</text>`),
   ].join('\n    ');
 
   // Les couloirs de la piste, derriere le bloc : assez pour qu'on lise un
   // stade, assez peu pour qu'on lise les chiffres.
+  const basPiste = story ? haut + BLOC + 130 : H - 40;
   const couloirs = [...Array(9)].map((_, i) =>
-    `<line x1="0" y1="${H - 40 - i * 44}" x2="${L}" y2="${H - 40 - i * 44}" stroke="#ffffff" stroke-opacity="${0.055 - i * 0.005}" stroke-width="2"/>`).join('');
+    `<line x1="0" y1="${basPiste - i * 44}" x2="${L}" y2="${basPiste - i * 44}" stroke="#ffffff" stroke-opacity="${0.055 - i * 0.005}" stroke-width="2"/>`).join('');
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
   <defs>
