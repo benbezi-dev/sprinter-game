@@ -1,8 +1,8 @@
 # Sprinter
 
-Jeu d'athlétisme arcade bilingue (FR/EN) — 100 m et 200 m, six étapes, de la rencontre scolaire à la finale intergalactique. Alternez deux touches (flèches gauche/droite) ou les deux zones tactiles pour sprinter.
+Jeu d'athlétisme arcade bilingue (FR/EN) — 100 m, 200 m et 400 m, six étapes, de la rencontre scolaire à la finale intergalactique. Alternez deux touches (flèches gauche/droite) ou les deux zones tactiles pour sprinter.
 
-Bilingual (FR/EN) arcade sprinting game — 100 m and 200 m, six stages. Alternate two keys (left/right arrows) or the two touch zones to sprint.
+Bilingual (FR/EN) arcade sprinting game — 100 m, 200 m and 400 m, six stages. Alternate two keys (left/right arrows) or the two touch zones to sprint.
 
 ## Lancer en local / Run locally
 

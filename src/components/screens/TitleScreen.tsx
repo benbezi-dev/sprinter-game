@@ -15,6 +15,7 @@ import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
+import { BanderoleEdition } from './BanderoleEdition';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -221,6 +222,13 @@ export function TitleScreen() {
 
           {/* Right Side: Records and Controls */}
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
+
+            {/* L'EDITION DU MOMENT, tout en haut de la colonne.
+                Au-dessus du defi du jour parce qu'elle ne dure qu'une
+                semaine, quand le defi revient tous les jours : c'est la
+                seule chose de cet ecran qu'on peut rater. Hors fenetre,
+                elle disparait entierement. */}
+            <BanderoleEdition />
 
             {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
