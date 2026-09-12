@@ -109,3 +109,18 @@ assets-stores/promo/explications/controle/
 # (`*_raw_v1.mp4`) porte la meme matiere ; ce dossier ne sert qu'a remonter un
 # reel sans refilmer, et se supprime sans rien perdre d'irremplacable.
 content/instagram/gameplay/_travail/
+
+# Les rushes et les visuels Instagram. Le dossier `content/` garde ses
+# scripts — le harnais qui fabrique les videos est du code, il se versionne —
+# mais pas ce qu'ils produisent : cent mega-octets de .mp4 dans un depot
+# public, c'est un depot qu'on ne clone plus, et une video poussee ne se
+# retire pas de l'historique en la supprimant.
+content/**/*.mp4
+content/**/*.jpg
+content/**/*.png
+# Un lien symbolique vers un node_modules de cette machine : il ne veut rien
+# dire ailleurs.
+content/instagram/gameplay/harnais/node_modules
+
+# Traces de session du navigateur pilote. Rien a garder.
+.playwright-mcp/

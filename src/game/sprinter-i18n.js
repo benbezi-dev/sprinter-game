@@ -40,6 +40,15 @@
     skip_now:     ['touche à nouveau pour passer', 'tap again to skip'],
     skip_twice:   ['touche deux fois pour passer', 'tap twice to skip'],
 
+    // générique de fin de carrière
+    ending_over:  ['GÉNÉRIQUE', 'END CREDITS'],
+    ending_title: ['FIN DE CARRIÈRE', 'END OF CAREER'],
+    ending_run:   ['LE PARCOURS', 'THE RUN'],
+    ending_total: ['TOTAL', 'TOTAL'],
+    ending_thanks:['merci d\'avoir couru', 'thank you for running'],
+    ending_music: ['musique — Dance to the Rock', 'music — Dance to the Rock'],
+    ending_end:   ['FIN', 'THE END'],
+
     // départ et phases de course
     reaction:     ['RÉACTION', 'REACTION'],
     react_top:    ['RÉACTION PARFAITE', 'PERFECT REACTION'],
@@ -124,6 +133,11 @@
     obj_bonus_pris: ['bonus de persévérance acquis', 'perseverance bonus earned'],
     obj_quitter:    ['plus tard', 'later'],
     obj_lancer:     ['COURIR LE DÉFI', 'RUN THE CHALLENGE'],
+    obj_courir:     ['COURIR', 'RUN'],
+    obj_a_battre:   ['à battre', 'to beat'],
+    obj_reussi:     ['réussi', 'cleared'],
+    obj_distance:   ['distance', 'distance'],
+    obj_fini:       ['créneau terminé', 'window closed'],
     obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
     obj_rythme:     ['RAPPELS DU DÉFI', 'CHALLENGE REMINDERS'],
     obj_rythme_2:   ['deux par jour', 'twice a day'],
@@ -1077,6 +1091,22 @@
 
     // défi différé
     challenge_code:  ['CODE DU DÉFI', 'CHALLENGE CODE'],
+
+    // ------------------------------------------------------ edition speciale
+    //
+    // La banniere de l'accueil pendant la fenetre d'une edition (voir
+    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
+    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
+    // d'un fleuve. Voir juridique/edition-danube.md.
+    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
+    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
+                      'The Danube Stadium opens its gates'],
+    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
+                      'orange track, black infield, under the floodlights'],
+    edition_courir:  ['Y COURIR', 'RUN THERE'],
+    edition_reste_n: ['encore {n} jours', '{n} days left'],
+    edition_reste_1: ['encore 1 jour', '1 day left'],
+    edition_reste_0: ['dernier jour', 'last day'],
     challenge_enter: ['entre le code reçu', 'enter the code you got'],
     challenge_load:  ['CHARGER', 'LOAD'],
     challenge_loading:['chargement du défi...', 'loading challenge...'],
@@ -1572,6 +1602,40 @@
       "The choir rewrote its song. It says your name, at last."]]
   ];
 
+  /* Le générique de fin de carrière.
+     Une seule variante : ce texte ne se voit qu'une fois par carrière, et le
+     tirage au sort n'a d'intérêt que pour ce qu'on revoit. Les lignes défilent
+     au rythme du morceau, une toutes les six secondes environ — d'où leur
+     nombre, et leur brièveté. */
+  const CUT_ENDING = [
+    [["Le stade se vide dans l'ordre inverse de l'arrivée.",
+      "Les sept ZEZE restent assis. Personne ne les presse.",
+      "Sur l'écran géant, ton chrono tourne en boucle.",
+      "Quelqu'un demande s'il faut l'arrêter. On répond que non.",
+      "La lumière baisse sur les gradins, puis sur la piste.",
+      "Il ne reste éclairé qu'un couloir. Le tien.",
+      "Les balayeuses passent. La musique, elle, continue.",
+      "Une équipe repeint la ligne d'arrivée pour la saison prochaine.",
+      "Ils la tracent un mètre plus loin. Au cas où.",
+      "Sur la plaque, ton nom est toujours mal orthographié.",
+      "Il y restera. C'est devenu l'orthographe officielle.",
+      "Le stade ferme. La piste, elle, reste ouverte.",
+      "Reviens quand tu veux. Elle ne bouge pas."],
+     ["The stadium empties in reverse finishing order.",
+      "The seven ZEZE stay seated. Nobody hurries them.",
+      "On the big screen, your time loops over and over.",
+      "Someone asks whether to stop it. The answer is no.",
+      "The lights go down over the stands, then over the track.",
+      "One lane stays lit. Yours.",
+      "The sweepers come through. The music does not stop.",
+      "A crew repaints the finish line for next season.",
+      "They set it one metre further out. Just in case.",
+      "On the plaque, your name is still misspelled.",
+      "It will stay that way. It is the official spelling now.",
+      "The stadium closes. The track stays open.",
+      "Come back whenever. It is not going anywhere."]]
+  ];
+
   // Chambrage : trois variantes par etape, quand c'est TOI qui perds face
   // au rival. Meme registre absurde/pince-sans-rire que CUT_DEFEAT, mais
   // du point de vue du vainqueur qui savoure.
@@ -1815,6 +1879,7 @@
 
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
+    CUT_ENDING,
     LANGS, t, titreEdition, phaseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

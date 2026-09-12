@@ -33,6 +33,7 @@
 
 import { SprinterApp } from './engine';
 import { recordConnu, s2 } from './record';
+import { DEPART_STARTER } from './canal';
 
 /* ------------------------------------------------------------- la palette */
 
@@ -173,7 +174,7 @@ export function peindreLeHud(ctx: CanvasRenderingContext2D, l: number, h: number
   retours(ctx, l, { G, N, C, p, sm, paysage });
   if (etat === 'race' && G.ghost && !p.finished) bandeauFantome(ctx, l, { G, N, p, M, paysage });
   if (etat === 'race') ecartAuVoisin(ctx, l, { G, N, p, sm, M, paysage });
-  if (etat === 'count') starterAuMilieu(ctx, l, h, { G, N, sm });
+  if (etat === 'count') departAuMilieu(ctx, l, h, { G, N, sm });
 }
 
 /* --------------------------------------------------------- la barre du haut */
@@ -409,21 +410,24 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
   }
 }
 
-/* -------------------------------------------------------------- le starter */
+/* ------------------------------------------------- le depart, dans le film */
 
 /**
- * L'ECRAN DU DEPART, TEL QUE LE STARTER LE FAIT.
+ * L'ECRAN DU DEPART, TEL QUE LE JEU LE MONTRE.
  *
- * Il n'y a pas de nombre a peindre : le decompte a cede la place a un starter
- * qui appelle les marques, demande le « pret », et tire quand il veut. Le film
- * doit garder cette attente — c'est elle qui fait la sortie des blocs, et un
- * replay qui commencerait au coup de feu perdrait la seule seconde ou le
+ * Le film doit garder l'attente : c'est elle qui fait la sortie des blocs, et
+ * un replay qui commencerait au signal perdrait la seule seconde ou le
  * spectateur retient son souffle.
  *
- * `G.depart.dit` vaut 0 (rien), 1 (« a vos marques »), 2 (« pret »). C'est la
- * source du moteur ; le magasin React l'expose sous le nom `starter`.
+ * Reste a savoir CE QU'ON ATTENDAIT, et il y a deux reponses selon le canal —
+ * voir DEPART_STARTER dans canal.ts. Le jeu publie compte : un cercle, une
+ * seconde dedans, qui enfle a mesure qu'elle s'use. Le canal de test essaie un
+ * starter, et la il n'y a pas de nombre a peindre — il appelle les marques,
+ * demande le « pret », et tire quand il veut. `G.depart.dit` vaut alors 0
+ * (rien), 1 (« a vos marques ») ou 2 (« pret ») ; c'est la source du moteur,
+ * que le magasin React expose sous le nom `starter`.
  */
-function starterAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o: any) {
+function departAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o: any) {
   const { G, N, sm } = o;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(0, 0, l, h);
@@ -437,38 +441,69 @@ function starterAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o:
                  couleur: pret ? OR : '#FFFFFF', aligne: 'center' as CanvasTextAlign };
   const mot = String(N.t(pret ? 'get_set' : 'ready'));
   const lCarte = Math.min(l * 0.92, largeur(ctx, mot, eMot) + padX * 2);
-  const hCarte = tMot + padY * 2;
+  const diam = sm ? 128 : 96;                // w-24 / sm:w-32
+  // Le haut de l'ecran, mesure avant d'etre peint : la carte du starter, ou
+  // le cercle du decompte. Ce qui suit est centre avec lui, comme le fait
+  // `justify-center` a l'ecran.
+  const hCarte = DEPART_STARTER ? tMot + padY * 2 : diam;
 
   const tAttente = sm ? 12 : 10;
-  const hAttente = tAttente * 1.5;
+  // La consigne d'attente n'accompagne que le starter : un decompte ne demande
+  // pas d'attendre, il montre combien.
+  const hAttente = DEPART_STARTER ? tAttente * 1.5 : 0;
   const multiple = G.mode === 'oneshot' && (G.shotRaces || []).length > 1;
   const hEpreuve = multiple ? (sm ? 12 : 10) * 1.5 + (sm ? 32 : 16) : 0;
   const rival = leRival(G);
   const hRival = rival ? (sm ? 33 : 29) + 24 : 0;
   const hFantome = G.ghostName ? (sm ? 12 : 10) * 1.5 + (sm ? 10 : 9) * 1.5 + 8 : 0;
 
-  let y = (h - (hCarte + 12 + hAttente + hEpreuve + hRival + hFantome)) / 2;
+  let y = (h - (hCarte + (DEPART_STARTER ? 12 : 0) + hAttente + hEpreuve + hRival + hFantome)) / 2;
 
-  // Le « pret » respire, comme `animate-pulse` le fait a l'ecran : deux
-  // secondes de cycle, jamais en dessous de la moitie. Sans lui, le film
-  // montrerait un panneau fige la ou le joueur voyait un signal vivant.
-  const souffle = pret ? 0.75 + 0.25 * Math.cos(performance.now() / 1000 * Math.PI) : 1;
-  ctx.globalAlpha = souffle;
-  remplir(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16,
-          pret ? 'rgba(248,205,74,0.15)' : `rgba(${CARTE}, 0.6)`,
-          pret ? OR : 'rgba(255,255,255,0.25)');
-  ctx.lineWidth = 2;
-  boite(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16);
-  ctx.strokeStyle = pret ? OR : 'rgba(255,255,255,0.25)';
-  ctx.stroke();
-  ecrire(ctx, mot, cx, y + hCarte / 2, { ...eMot, alpha: souffle, ombre: !pret });
-  ctx.globalAlpha = 1;
-  y += hCarte + 12;
+  if (DEPART_STARTER) {
+    // Le « pret » respire, comme `animate-pulse` le fait a l'ecran : deux
+    // secondes de cycle, jamais en dessous de la moitie. Sans lui, le film
+    // montrerait un panneau fige la ou le joueur voyait un signal vivant.
+    const souffle = pret ? 0.75 + 0.25 * Math.cos(performance.now() / 1000 * Math.PI) : 1;
+    ctx.globalAlpha = souffle;
+    remplir(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16,
+            pret ? 'rgba(248,205,74,0.15)' : `rgba(${CARTE}, 0.6)`,
+            pret ? OR : 'rgba(255,255,255,0.25)');
+    ctx.lineWidth = 2;
+    boite(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16);
+    ctx.strokeStyle = pret ? OR : 'rgba(255,255,255,0.25)';
+    ctx.stroke();
+    ecrire(ctx, mot, cx, y + hCarte / 2, { ...eMot, alpha: souffle, ombre: !pret });
+    ctx.globalAlpha = 1;
+    y += hCarte + 12;
 
-  // La seule regle qui compte tant qu'il n'a pas tire.
-  ecrire(ctx, String(N.t('wait_gun')).toUpperCase(), cx, y + hAttente / 2,
-         { taille: tAttente, gras: 700, couleur: SOURDINE, espace: 1.2, aligne: 'center' });
-  y += hAttente;
+    // La seule regle qui compte tant qu'il n'a pas tire.
+    ecrire(ctx, String(N.t('wait_gun')).toUpperCase(), cx, y + hAttente / 2,
+           { taille: tAttente, gras: 700, couleur: SOURDINE, espace: 1.2, aligne: 'center' });
+    y += hAttente;
+  } else {
+    // LE CERCLE DU DECOMPTE. Il enfle a mesure que la seconde s'use — c'est ce
+    // que fait le `transform: scale` du HUD, et le film le refait ici pour que
+    // le depart s'y voie venir comme il se voyait venir a l'ecran.
+    const reste = 3 - (G.countT || 0);
+    const n = Math.ceil(reste);
+    const frac = reste - Math.floor(reste);
+    const r = diam / 2 * (1 + 0.1 * (1 - frac));
+    const cy = y + diam / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${CARTE}, 0.6)`;
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = OR;
+    ctx.stroke();
+    if (n > 0) {
+      const tNombre = sm ? 60 : 36;          // text-4xl / sm:text-6xl
+      ecrire(ctx, String(n), cx, cy, {
+        taille: tNombre, gras: 900, police: AFFICHE, espace: -tNombre * 0.03,
+        couleur: '#FFFFFF', aligne: 'center', ombre: true });
+    }
+    y += hCarte;
+  }
 
   if (multiple) {
     y += sm ? 32 : 16;

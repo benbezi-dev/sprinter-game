@@ -24,6 +24,7 @@ import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
+import { Generique } from '@/components/screens/Generique';
 import { RaceHUD } from '@/components/screens/RaceHUD';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
@@ -89,6 +90,7 @@ function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
+  const cut = useGameStore(s => s.cut);
   // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
   const defiEnCours = useObjectif().enCours;
 
@@ -175,6 +177,16 @@ function MainGame() {
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
 
+  /**
+   * Le generique de fin de carriere, plutot que la cinematique ordinaire.
+   *
+   * C'est une cinematique par l'etat — `cut` — mais rien d'autre ne lui
+   * ressemble : elle dure un morceau au lieu de quinze secondes, elle porte sa
+   * propre musique, et son texte defile. Elle a donc son ecran. Voir
+   * game/generique.ts et game/scene-generique.ts.
+   */
+  const generique = state === 'cut' && !!cut && cut.kind === 'ending';
+
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
       {EST_TEST && <PorteTest onOuvert={setAcces} />}
@@ -184,7 +196,8 @@ function MainGame() {
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
         {state === 'title' && <TitleScreen />}
-        {state === 'cut' && <CutScreen />}
+        {state === 'cut' && !generique && <CutScreen />}
+        {generique && <Generique />}
         {/* Pendant la presentation, le decompte est suspendu et l'etat vaut
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
             0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient

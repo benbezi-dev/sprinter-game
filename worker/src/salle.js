@@ -37,10 +37,11 @@ const APRES_RESULTAT_MS = 45 * 1000;
 // Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
-// Delai entre « tout le monde est pret » et le coup de pistolet : tire au
-// sort a chaque course, entre trois et dix secondes. Voir depart.js — c'est le
-// starter qui a rendu ce nombre variable, et le client applique la meme regle
-// pour les courses qu'on joue seul.
+// Delai entre « tout le monde est pret » et le depart. Assez long pour absorber
+// une latence mediocre, assez court pour ne pas ennuyer. Il ne vaut que pour le
+// jeu publie, qui part au decompte : sur le canal de test, ou le depart est
+// donne par un starter, il est tire au sort a chaque course. Voir depart.js.
+const AVANT_DEPART_MS = 4000;
 
 // --- presentation des participants, facon championnat ----------------------
 // Chaque participant passe face camera, un par un, avant la course. Les durees
@@ -335,7 +336,7 @@ export class SalleDirecte {
           this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
-          const attente = avantDepart();
+          const attente = avantDepart(this.test, AVANT_DEPART_MS);
           this.departA = seul
             ? Date.now() + attente
             : this.presentationA

@@ -45,7 +45,9 @@ export type GameState = {
   /**
    * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
    * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
-   * du decompte, qui n'existe plus.
+   * du decompte, sur le canal de test — celui qui essaie le starter. Dans le
+   * jeu publie, le depart reste un decompte et ce nombre ne bouge pas de 0 :
+   * c'est `countT` qu'on y lit.
    */
   starter: number;
   shake: number;
@@ -380,8 +382,13 @@ export function updateLogic(dt: number) {
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
   if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
-  else if (G.state === 'cut')
-    Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  else if (G.state === 'cut') {
+    // Le generique porte sa propre musique, et c'est la seule cinematique dans
+    // ce cas : la boucle du menu par-dessus un morceau ferait deux musiques a
+    // la fois. Voir game/generique.ts.
+    if (G.cut && G.cut.kind === 'ending') Audio_.stop();
+    else Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  }
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
@@ -390,8 +397,11 @@ export function updateLogic(dt: number) {
     if (G.openT > 6.4) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
-    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11 : 3.2);
-    if (G.cut.t > 15.4) SprinterApp.nextCut();
+    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
+      : G.cut.kind === 'ending' ? 7.5 : 3.2);
+    // Le generique dure ce que dure son morceau, pas quinze secondes : c'est
+    // l'ecran qui rend la main, a la derniere note ou au geste du joueur.
+    if (G.cut.kind !== 'ending' && G.cut.t > 15.4) SprinterApp.nextCut();
   } else if (G.state === 'count') {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
@@ -413,14 +423,18 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    G.countT += dt;
-    // LE STARTER, A LA PLACE DU DECOMPTE.
+    // LE DECOMPTE DANS LE JEU, LE STARTER SUR LE CANAL DE TEST.
     //
-    // Il n'y a plus de « 3, 2, 1 » : il y a « a vos marques », « pret », et
-    // un coup de pistolet qui tombe quand il tombe. Le bip a la seconde
-    // disait justement ce que le starter ne doit pas dire — dans combien de
-    // temps il va tirer. Voir poserLeDepart dans sprinter-app.js.
-    SprinterApp.starterParle();
+    // Le jeu publie compte trois secondes et marque chacune d'un bip. Le canal
+    // de test essaie autre chose : « a vos marques », « pret », et un coup de
+    // pistolet qui tombe quand il tombe — le bip a la seconde y dirait
+    // justement ce qu'un starter ne dit jamais, dans combien de temps il va
+    // tirer. `annoncerLeDepart` sait lequel des deux donne le depart ; il lui
+    // faut la seconde d'AVANT l'increment pour reconnaitre celle qui vient de
+    // passer. Voir « deux departs, un par canal » dans sprinter-app.js.
+    const avant = Math.floor(G.countT);
+    G.countT += dt;
+    SprinterApp.annoncerLeDepart(avant);
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
       SprinterApp.coupDePistolet();
