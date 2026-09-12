@@ -2438,14 +2438,29 @@
   // pour la finale) plutot que d'une opacite reduite sur tout le motif —
   // sinon le public entier parait transparent au lieu d'etre juste moins
   // nombreux.
-  const CROWD_TILE = 180;
+  // LA TAILLE DE LA TUILE EST UNE AFFAIRE DE REPETITION, PAS DE DENSITE.
+  //
+  // A cent-quatre-vingts pixels, la tuile se repetait cinq fois en travers du
+  // cadre : on reconnaissait les memes groupes de spectateurs, aux memes
+  // ecarts, d'un bout a l'autre du gradin. Une foule ne se lit pas a la
+  // personne, elle se lit au MOTIF — et un motif qui se voit n'est plus une
+  // foule, c'est un papier peint.
+  //
+  // Deux cent cinquante-six pixels, soit deux fois la surface, donc deux fois
+  // moins de raccords dans le cadre. La densite, elle, ne doit pas changer
+  // d'un pouce : on compte donc les spectateurs AU METRE CARRE de tuile
+  // (voir FOULE_PAR_TUILE), et non a la tuile. Sans cela, agrandir la tuile
+  // aurait vide les gradins de moitie.
+  const CROWD_TILE = 256;
+  const FOULE_REF = 180 * 180;       // la tuile d'origine, et son etalonnage
   const crowdPatternCache = {};
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
     const lvl = LEVELS[levelIdx];
     const density = (lvl && lvl.foule != null) ? lvl.foule
                   : (CROWD_DENSITY[levelIdx] ?? 1);
-    const count = Math.max(15, Math.round(90 * density));
+    const surface = (CROWD_TILE * CROWD_TILE) / FOULE_REF;
+    const count = Math.round(Math.max(15, 90 * density) * surface);
     const tile = document.createElement('canvas');
     tile.width = CROWD_TILE; tile.height = CROWD_TILE;
     const tctx = tile.getContext('2d');
@@ -4145,7 +4160,16 @@
       }
       for (let t = 0; t < tiers; t++) {
         const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
-        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, ox, oy);
+        // CHAQUE RANG DECALE LE MOTIF, ET C'EST CE QUI CASSE LA GRILLE.
+        //
+        // Les quatre rangs partageaient le meme decalage : les raccords de la
+        // tuile tombaient donc les uns AU-DESSUS des autres, et la repetition,
+        // deja lisible sur une ligne, devenait une grille de colonnes qu'on ne
+        // pouvait plus ne pas voir. Deux nombres premiers entre eux et avec la
+        // tuile suffisent a la defaire — la foule ne coute pas un pixel de
+        // plus, elle cesse simplement d'etre alignee avec elle-meme.
+        const dx = (ox + t * 71) % CROWD_TILE, dy = (oy + t * 47) % CROWD_TILE;
+        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, dx, dy);
       }
       // Les eclats d'appareils dans la foule. Ils suivent la meme densite que
       // le public — une rencontre scolaire ne scintille pas comme une finale —
