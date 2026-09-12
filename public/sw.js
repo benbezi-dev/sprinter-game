@@ -172,9 +172,21 @@ self.addEventListener('fetch', event => {
   event.respondWith((async () => {
     try {
       const res = await fetch(req);
-      if (res && res.ok && res.type === 'basic') {
-        const c = await caches.open(CACHE);
-        c.put(req, res.clone());
+      // UNE REPONSE PARTIELLE NE SE MET PAS EN CACHE.
+      //
+      // `Cache.put` refuse un 206 — « Partial response is unsupported » — et le
+      // refus remontait jusqu'ici : la requete elle-meme echouait, alors que le
+      // reseau avait repondu. Rien ne le signalait, sinon le media qui ne joue
+      // pas. C'est exactement ce qui arrive au morceau du generique de fin, que
+      // le navigateur demande par tranches.
+      const partiel = res && (res.status === 206 || req.headers.has('range'));
+      if (res && res.ok && res.type === 'basic' && !partiel) {
+        // Et le cache ne fait echouer personne : ce qu'on garde est un
+        // confort hors ligne, pas une condition pour servir la reponse.
+        try {
+          const c = await caches.open(CACHE);
+          await c.put(req, res.clone());
+        } catch { /* quota plein, reponse non cachable : tant pis */ }
       }
       return res;
     } catch (e) {

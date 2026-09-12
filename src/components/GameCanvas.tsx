@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
+import { dessinerLeGenerique } from '@/game/scene-generique';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -138,6 +139,12 @@ export function GameCanvas() {
             drawIcon(ctx, man, G.VW * (G.portrait ? 0.22 : 0.16) + i * SprinterApp.ui() * 96,
                        G.VH * (G.portrait ? 0.34 : 0.66), SprinterApp.ui() * 160);
           }
+        } else if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
+          // Le generique de fin de carriere a sa propre scene : la nuit sur le
+          // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
+          // est dessinee ailleurs — deux cents lignes qui n'ont rien a faire au
+          // milieu de la boucle.
+          dessinerLeGenerique(ctx, SprinterApp);
         } else if (G.state === 'cut') {
           // Cutscene athlete
           const cut = G.cut;

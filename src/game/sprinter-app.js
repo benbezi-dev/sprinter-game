@@ -344,6 +344,7 @@
   const t = (k, v) => N.t(k, v);
   const CUT_INTRO = N.CUT_INTRO, CUT_DEFEAT = N.CUT_DEFEAT;
   const CUT_CHAMPION = N.CUT_CHAMPION, CUT_TAUNT = N.CUT_TAUNT;
+  const CUT_ENDING = N.CUT_ENDING;
   // chaque variante est un couple [francais, anglais]
   const pickLang = a => a[Math.floor(Math.random() * a.length)][N.index()];
 
@@ -1482,7 +1483,14 @@
     if (!G.cutQueue.length) { G.cut = null; G.skipArm = 0; G.state = G.cutAfter; return; }
     const kind = G.cutQueue.shift();
     let lines, man;
-    if (kind === 'champion') {
+    if (kind === 'ending') {
+      // LE GENERIQUE. Une seule variante, et le tour d'honneur plutot que le
+      // salut fige du sacre : cette scene-la dure une chanson entiere, et un
+      // coureur immobile pendant deux minutes serait une photographie.
+      lines = CUT_ENDING[0][N.index()].slice();
+      man = { look: PLAYER_LOOK, stride: 0, v: G.race.maxSpeed * 0.30,
+              maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
+    } else if (kind === 'champion') {
       lines = pickLang(CUT_CHAMPION).slice();
       man = { look: PLAYER_LOOK, stride: 0, v: G.race.maxSpeed * 0.18,
               maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
@@ -2147,7 +2155,15 @@
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {
         G.runRank = recordRun(G.runTime); save(); G.flash = 1;
-        Audio_.sfx('win'); queueCuts(['defeat', 'champion'], 'winall'); return;
+        Audio_.sfx('win');
+        // LE GENERIQUE, APRES LE SACRE.
+        //
+        // La carriere s'arretait sur l'ecran de sacre, puis sur le tableau des
+        // chronos : six etapes gagnees se terminaient par un formulaire. Une
+        // fin en a maintenant une — sa scene et son morceau, voir
+        // game/generique.ts et game/scene-generique.ts.
+        queueCuts(['defeat', 'champion', 'ending'], 'winall');
+        return;
       }
       save(); G.flash = 1; Audio_.sfx('win');
       queueCuts(['defeat'], 'result'); return;
@@ -4791,7 +4807,8 @@
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
-    CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
+    CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,
+    GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,
     RED, MAGENTA };
 })();

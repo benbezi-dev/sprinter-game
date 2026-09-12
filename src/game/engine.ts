@@ -366,8 +366,13 @@ export function updateLogic(dt: number) {
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
   if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
-  else if (G.state === 'cut')
-    Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  else if (G.state === 'cut') {
+    // Le generique porte sa propre musique, et c'est la seule cinematique dans
+    // ce cas : la boucle du menu par-dessus un morceau ferait deux musiques a
+    // la fois. Voir game/generique.ts.
+    if (G.cut && G.cut.kind === 'ending') Audio_.stop();
+    else Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  }
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
@@ -376,8 +381,11 @@ export function updateLogic(dt: number) {
     if (G.openT > 6.4) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
-    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11 : 3.2);
-    if (G.cut.t > 15.4) SprinterApp.nextCut();
+    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
+      : G.cut.kind === 'ending' ? 7.5 : 3.2);
+    // Le generique dure ce que dure son morceau, pas quinze secondes : c'est
+    // l'ecran qui rend la main, a la derniere note ou au geste du joueur.
+    if (G.cut.kind !== 'ending' && G.cut.t > 15.4) SprinterApp.nextCut();
   } else if (G.state === 'count') {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
