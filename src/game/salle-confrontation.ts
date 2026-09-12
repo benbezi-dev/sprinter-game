@@ -68,8 +68,16 @@ type Ecouteurs = {
   onEtat?: (e: EtatConfrontation) => void;
   /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
   onDepart?: (dansMs: number, departA: number) => void;
-  /** Le temoin d'une equipe a bouge. */
-  onPos?: (equipe: string, relais: number, d: number) => void;
+  /**
+   * Un coureur d'une equipe a bouge.
+   *
+   * `relais` dit LEQUEL des quatre, et c'est indispensable : la salle annonce
+   * aussi les relayeurs qui attendent a leur marque, qui ne sont pas le temoin
+   * de l'equipe. `temoin` porte, lui, la position du temoin telle que la salle
+   * la tient — c'est elle qui fait foi, et elle seule qui doit avancer le
+   * coureur adverse en piste. Absente d'une salle plus ancienne que ce champ.
+   */
+  onPos?: (equipe: string, relais: number, d: number, temoin?: number) => void;
   onPasse?: (equipe: string, p: PasseRelais) => void;
   onElimine?: (equipe: string, raison: string, relais: number) => void;
   onFini?: (equipe: string, totalMs: number) => void;
@@ -134,7 +142,8 @@ export class SalleConfrontation {
       // seconde et par equipe, et rendre toute la salle a chaque fois ferait
       // du bruit dans React sans rien montrer de plus.
       case 'pos':
-        this.ec.onPos?.(m.equipe, m.relais, m.d);
+        this.ec.onPos?.(m.equipe, m.relais, m.d,
+                        typeof m.temoin === 'number' ? m.temoin : undefined);
         return;
       case 'passe':
         this.ec.onPasse?.(m.equipe, m as PasseRelais);

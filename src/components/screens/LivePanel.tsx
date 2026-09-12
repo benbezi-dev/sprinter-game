@@ -288,6 +288,11 @@ export function LivePanel() {
       SprinterApp.startLive([epreuve], {
         levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
       });
+    } else {
+      // La piste est deja montee — c'est le cas normal, elle l'a ete pour la
+      // presentation. On ne la remonte pas, mais on part avec la salle telle
+      // qu'elle est MAINTENANT et non telle qu'elle etait a l'annonce.
+      SprinterApp.majLives(autres);
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
@@ -312,6 +317,16 @@ export function LivePanel() {
     onEtat: (e: EtatSalle) => {
       setSalon(e);
       setEtape(p => (p === 'presentation' || p === 'partie' || p === 'review') ? p : 'salon');
+      // La piste est montee des le debut de la presentation, et la salle
+      // continue de vivre jusqu'au pistolet : quelqu'un ferme l'application,
+      // un invite arrive. Sans cette remise d'accord, un partant qui s'en va
+      // laissait son coureur plante sur la ligne de depart pour toute la
+      // course, et un partant arrive apres le montage ne se voyait nulle part
+      // — tout en figurant au classement rendu par la salle. Voir majLives.
+      const etat = SprinterApp.G.state;
+      if (SprinterApp.G.liveOn && (etat === 'count' || etat === 'race')) {
+        SprinterApp.majLives(lesAutres());
+      }
     },
     onPresentation: (p: Presentation) => {
       setPresentation(p);

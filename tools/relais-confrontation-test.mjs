@@ -29,7 +29,10 @@ async function monterEquipe(prefixe) {
 function relayeur(conf, equipe, nom, vitesse) {
   const c = { nom, equipe, relais: 0, zone: null, moi: null, etat: null,
               vus: new Set(), fini: false, tape: false, boucle: null,
-              porteur: 1, d: {} };
+              porteur: 1, d: {},
+              // Ce que le JEU dessinerait, selon les deux lectures possibles
+              // d'un message de position — voir le commentaire dans `pos`.
+              piste: {}, naif: {}, ecart: {}, sansTemoin: 0 };
   const url = `${WS}/relay/conf/${conf}?acces=${ACCES}&team=${equipe}&name=${encodeURIComponent(nom)}`;
   c.ws = new WebSocket(url);
   c.pret = new Promise(res => c.ws.addEventListener('open', res));
@@ -44,6 +47,27 @@ function relayeur(conf, equipe, nom, vitesse) {
       c.vus.add(m.equipe);
       if (!c.d[m.equipe]) c.d[m.equipe] = {};
       c.d[m.equipe][m.relais] = m.d;
+
+      // CE QUE LE JEU DESSINE, et c'est la que le harnais etait aveugle.
+      //
+      // Il verifiait qu'une position adverse arrive, jamais a quelle distance
+      // elle place le coureur. Or un client n'affiche qu'UN coureur par equipe
+      // adverse — le temoin — et l'avance par liveDistDe, qui ne retient que
+      // ce qui monte. La salle, elle, annonce la position de chacun des quatre
+      // relayeurs, les trois receveurs comprises : des le pistolet, une equipe
+      // emet 0, 100, 200 et 300. La lecture naive plantait donc l'equipe d'a
+      // cote a trois cents metres au coup de pistolet.
+      //
+      // On rejoue les deux lectures pour que l'ecart se voie ici plutot qu'a
+      // l'ecran : `piste` suit le champ `temoin`, qui fait foi ; `naif` prend
+      // la position de n'importe quel relayeur, comme avant le correctif.
+      if (m.temoin == null) c.sansTemoin++;
+      else c.piste[m.equipe] = Math.max(c.piste[m.equipe] ?? 0, m.temoin);
+      c.naif[m.equipe] = Math.max(c.naif[m.equipe] ?? 0, m.d);
+      if (m.temoin != null) {
+        c.ecart[m.equipe] = Math.max(c.ecart[m.equipe] ?? 0,
+                                     c.naif[m.equipe] - m.temoin);
+      }
     }
     if (m.t === 'passe' && m.equipe === c.equipe) { c.porteur = m.vers; c.tape = false; }
     if (m.t === 'termine') c.fini = m;
@@ -73,13 +97,21 @@ function demarrer(c, departA, vitesse) {
     // avant le temoin — ce qui elimine, a juste titre.
     if (porte) {
       d += vitesse * 0.1;
-      c.envoyer({ t: 'pos', d });
     } else if (recois && temoinD > d - 6) {
       c.lance = (c.lance || 0) + 0.1;
       const v = vitesse * Math.min(1, c.lance / 2.2);
       d += v * 0.1;
-      c.envoyer({ t: 'pos', d });
     }
+    // ON EMET A CHAQUE TOUR, QU'ON COURE OU NON.
+    //
+    // C'est ce que fait le jeu : `pousserPosition` transmet `G.player.d` dix
+    // fois par seconde des le coup de pistolet, et la salle du relais est
+    // branchee a ce moment-la pour les quatre relayeurs — celui qui attend a
+    // sa marque emet donc sa marque. Le harnais n'emettait, lui, que depuis le
+    // porteur et le receveur lance : il courait dans des conditions que le jeu
+    // ne connait pas, et c'est ainsi qu'il a pu declarer bonne une lecture qui
+    // posait l'equipe adverse a trois cents metres au depart.
+    c.envoyer({ t: 'pos', d });
     // Cote a cote dans la zone : les DEUX tapent. Le donneur aussi — c'est
     // tout l'objet d'un passage, et l'oublier condamne le relayeur 1 a courir
     // au-dela de la zone avec le temoin.
@@ -156,6 +188,25 @@ ok('la confrontation se termine', !!f);
 ok('chacun a vu courir l equipe adverse',
    cl.every(c => c.vus.size >= 2 || c.vus.has(c.equipe === A.id ? Bq.id : A.id)),
    cl.map(c => c.vus.size).join(','));
+
+// --- OU l'a-t-il vue courir ? ---------------------------------------------
+console.log('\n── LE TEMOIN ADVERSE, ET NON UN RELAYEUR A SA MARQUE ───────');
+const adverseDe = c => (c.equipe === A.id ? Bq.id : A.id);
+ok('la salle annonce la position du temoin', cl.every(c => c.sansTemoin === 0),
+   'messages sans le champ : ' + cl.map(c => c.sansTemoin).join(','));
+// La verite, c'est le temoin tenu par la salle. Le coureur dessine doit le
+// suivre exactement — au dixieme de metre pres, la salle arrondissant la.
+ok('le coureur dessine EST le temoin',
+   cl.every(c => Math.abs((c.piste[adverseDe(c)] ?? -1)
+                          - (c.etat?.equipes?.find(x => x.equipe === adverseDe(c))?.temoin_d ?? -2)) < 1),
+   cl.map(c => `${(c.piste[adverseDe(c)] ?? -1).toFixed(1)} vs ` +
+               `${c.etat?.equipes?.find(x => x.equipe === adverseDe(c))?.temoin_d}`).join(' | '));
+// Et voila ce que coutait la lecture naive : l'ecart maximal, en metres, entre
+// le coureur qu'elle dessinait et le temoin qu'il pretendait etre.
+const pire = Math.max(...cl.map(c => c.ecart[adverseDe(c)] ?? 0));
+console.log(`   la lecture d'avant le correctif s'ecartait du temoin de ${pire.toFixed(1)} m au pire`);
+ok('la lecture naive etait bien fautive (temoin de non-regression)', pire > 50,
+   `ecart maximal ${pire.toFixed(1)} m`);
 
 if (f) {
   console.log('');

@@ -1368,6 +1368,16 @@
     G.paused = false;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
+    // Et sur une piste sans adversaire en direct.
+    //
+    // La table ne mourait qu'a l'accueil. Une course lancee juste apres une
+    // course en direct — RECOMMENCER, un defi, un fantome — heritait donc de
+    // la table de la precedente, et stepGhost prend cette branche des qu'elle
+    // n'est pas vide : le fantome qu'on venait d'armer n'etait jamais avance,
+    // et la camera suivait un coureur qui n'est plus sur la piste. Les deux
+    // chemins du direct la reinstallent juste apres buildLevel — voir
+    // armLives et armLive.
+    G.lives = null;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
   }
@@ -1745,6 +1755,72 @@
   }
 
   /**
+   * Met la piste d'accord avec la salle, sans rien remettre a zero.
+   *
+   * `armLives` monte la piste une fois pour toutes, et pour la course en
+   * direct cela arrive au debut de la PRESENTATION — plusieurs dizaines de
+   * secondes avant le coup de pistolet. Entre les deux, la salle continue de
+   * vivre : quelqu'un ferme l'application, quelqu'un d'autre arrive. La piste,
+   * elle, ne le savait pas.
+   *
+   * Un partant qui s'en va laissait donc son coureur plante sur la ligne de
+   * depart, immobile toute la course sans faux depart ni elimination — il
+   * n'emet plus rien, et rien ne le retirait. Un partant qui arrive apres le
+   * montage, a l'inverse, n'avait aucun coureur a son identifiant : ses
+   * positions tombaient dans le vide (voir liveDistDe), il ne se voyait nulle
+   * part sur la piste, et il figurait pourtant au classement rendu par la
+   * salle, qui l'avait bien compte.
+   *
+   * On reconcilie donc plutot que de remonter : ceux qui restent gardent leur
+   * couloir, leur couleur et leur interpolation en cours, ce qu'un
+   * `armLives` neuf leur ferait perdre au milieu d'une course.
+   */
+  function majLives(autres) {
+    // Hors course en direct, la piste n'appartient pas a une salle : un
+    // message qui arriverait pendant une etape de campagne ou un defi n'a rien
+    // a y retirer ni a y ajouter.
+    if (!G.liveOn || !G.lives) return;
+    const voulus = new Map((autres || []).map(a => [a.id, a]));
+
+    // Ceux qui ne sont plus la quittent la piste.
+    for (const [id, g] of [...G.lives]) {
+      if (voulus.has(id)) continue;
+      const i = G.runners.indexOf(g.runner);
+      if (i >= 0) G.runners.splice(i, 1);
+      // Le fantome designe pointait peut-etre sur lui : stepGhost en redesigne
+      // un a l'image suivante, mais la camera ne doit pas suivre un absent
+      // d'ici la.
+      if (G.ghost === g) G.ghost = null;
+      G.lives.delete(id);
+    }
+
+    // Ceux qui viennent d'arriver prennent un couloir libre. Le couloir
+    // annonce par la salle est respecte quand il l'est encore : c'est ce qui
+    // fait que les huit telephones placent les memes gens aux memes endroits.
+    const pris = new Set(G.runners.map(r => r.lane));
+    for (const [id, a] of voulus) {
+      if (G.lives.has(id)) continue;
+      let lane = a.couloir;
+      if (!lane || lane < 1 || lane > 8 || pris.has(lane)) {
+        lane = 0;
+        for (let l = 1; l <= 8 && !lane; l++) if (!pris.has(l)) lane = l;
+        if (!lane) continue;             // piste pleine : cas theorique
+      }
+      pris.add(lane);
+      const i = G.runners.findIndex(r => !r.isPlayer && !r.isLive && r.lane === lane);
+      if (i >= 0) G.runners.splice(i, 1);
+      const r = new Runner(a.nom || 'ADVERSAIRE', lane, {
+        maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
+      });
+      r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
+      r.repere = { couleur: couleurCouloir(lane), nom: a.nom || '' };
+      G.runners.push(r);
+      G.lives.set(id, { live: true, cible: 0, vEst: 0, depuis: G.elapsed,
+                        runner: r, trace: [], step: REC_STEP, time: 0 });
+    }
+  }
+
+  /**
    * Ne laisse sur la piste que ceux qui courent vraiment.
    *
    * `buildLevel` remplit toujours les sept couloirs voisins avec le plateau de
@@ -1799,6 +1875,9 @@
 
   function armLive(nom) {
     G.ghost = null;
+    // Ce chemin-ci n'a qu'un adversaire, tenu par G.ghost : la table doit
+    // rester vide, sinon liveDistDe et stepGhost iraient la chercher.
+    G.lives = null;
     const lane = 4;
     const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
     if (idx >= 0) G.runners.splice(idx, 1);
@@ -1933,7 +2012,10 @@
     if (G.ghost) {
       const gr = G.ghost.runner;
       if (gr.finishTime == null) gr.finishTime = G.ghost.time || null;
-      field = G.runners.concat([gr]);
+      // A plusieurs, l'adversaire designe vit DANS G.runners : l'y ajouter une
+      // seconde fois le faisait figurer deux fois au classement d'arrivee, une
+      // ligne par exemplaire du meme coureur.
+      if (field.indexOf(gr) < 0) field = G.runners.concat([gr]);
     }
     const order = field.slice().sort((a, b) =>
       (a.finishTime === null ? 1e9 : a.finishTime) -
@@ -4478,7 +4560,7 @@
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
-    armLive, liveDist, armLives, liveDistDe, startLive, liveDepart,
+    armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
     annoncerLeDepart, coupDePistolet,

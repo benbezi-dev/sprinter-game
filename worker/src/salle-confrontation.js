@@ -112,8 +112,12 @@ export class SalleConfrontation {
         const r = c.rejouer(t, f.trace, f.total);
         if (r.total != null) { bouge = true; this.diffuser({ t: 'fini', equipe: cle, total: r.total, ...this.vue() }); }
         else if (r.d != null) {
+          // Un fantome n'a qu'un coureur, le temoin : les deux champs disent
+          // deja la meme chose. On envoie quand meme `temoin`, pour que le jeu
+          // n'ait pas a distinguer une equipe rejouee d'une equipe connectee.
           this.diffuser({ t: 'pos', equipe: cle, relais: c.porteur,
-                          d: Math.round(r.d * 10) / 10 });
+                          d: Math.round(r.d * 10) / 10,
+                          temoin: Math.round(c.temoinD * 10) / 10 });
         }
       }
       if (bouge) this.cloreSiFini();
@@ -390,9 +394,18 @@ export class SalleConfrontation {
         // La position part a TOUT LE MONDE, pas seulement a l'equipe : c'est
         // toute la difference d'une confrontation. Sans cela, chacun courrait
         // seul en croyant courir contre les autres.
+        //
+        // Deux nombres, et il faut les deux. `d` est la position de CE
+        // relayeur — celle qui juge les zones, et qui vaut sa marque tant
+        // qu'il attend. `temoin` est celle de l'equipe, la seule qui ait un
+        // sens pour dessiner un adversaire en piste : sans elle, le jeu ne
+        // pouvait que deviner lequel des quatre nombres qu'il recoit est le
+        // temoin, et posait l'equipe d'a cote a la marque de son dernier
+        // relayeur des le coup de pistolet.
         if (r.d != null) {
           this.diffuser({ t: 'pos', equipe: j.equipe, relais: j.relais,
-                          d: Math.round(r.d * 10) / 10 }, ws);
+                          d: Math.round(r.d * 10) / 10,
+                          temoin: Math.round(c.temoinD * 10) / 10 }, ws);
         }
         return;
       }

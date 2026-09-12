@@ -315,6 +315,27 @@ export function brancherSalle(s: typeof salleLive) {
   finEnvoyee = false;
 }
 
+/**
+ * Remet l'emission a zero pour la course qui commence.
+ *
+ * Les deux compteurs sont cales sur `G.elapsed`, qui repart de zero a chaque
+ * coup de pistolet — mais ils vivaient, eux, aussi longtemps que la salle.
+ * Une seconde course dans la meme salle heritait donc d'un `prochainEnvoi`
+ * pose a la fin de la premiere : dix secondes dans le futur, c'est-a-dire
+ * apres l'arrivee. Le joueur ne transmettait plus une seule position, et
+ * l'adversaire le voyait immobile sur la ligne de depart du debut a la fin,
+ * sans faux depart et sans erreur. `finEnvoyee`, reste vrai, retenait en plus
+ * le chrono d'arrivee : la salle n'avait alors plus de quoi trancher.
+ *
+ * Le relais rebranchait sa salle a chaque depart et echappait donc au piege ;
+ * le direct, qui branche la sienne a la connexion, tombait dedans des la
+ * revanche. La remise a zero appartient au depart, pas au branchement.
+ */
+export function reinitialiserEnvoi() {
+  prochainEnvoi = 0;
+  finEnvoyee = false;
+}
+
 function pousserPosition() {
   if (!salleLive) return;
   if (G.elapsed >= prochainEnvoi) {
@@ -394,6 +415,10 @@ export function updateLogic(dt: number) {
     if (G.countT >= 3) {
       SprinterApp.coupDePistolet();
       G.state = 'race'; G.elapsed = 0;
+      // Le chronometre de la course repart de zero : ce qui se compte sur lui
+      // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans
+      // le vide. Voir reinitialiserEnvoi.
+      reinitialiserEnvoi();
       resetInputRhythm();
     }
   } else if (G.state === 'race') {

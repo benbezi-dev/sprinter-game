@@ -106,14 +106,35 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // moment de la transmission.
         programmerLeFilm('relais', dansMs);
       },
-      onPos: (eq, relais, d) => {
-        if (relais === porteurs.current.get(eq)) {
-          setTemoins(t => (t[eq] === d ? t : { ...t, [eq]: d }));
-        }
+      onPos: (eq, relais, d, temoin) => {
+        // LE TEMOIN, ET LUI SEUL.
+        //
+        // La salle annonce la position de chaque relayeur, y compris des trois
+        // qui attendent a leur marque : des le pistolet, une equipe emet donc
+        // 0 pour son premier, 100, 200 et 300 pour les autres. Ces quatre
+        // nombres arrivaient tels quels au coureur adverse en piste, qui ne
+        // retient que le plus grand — l'equipe d'a cote se posait a la marque
+        // de son dernier relayeur au coup de pistolet, trois cents metres plus
+        // loin, hors du champ de la camera. Elle disparaissait donc de l'ecran,
+        // puis y reapparaissait immobile quand notre propre temoin la
+        // rejoignait, et le classement d'arrivee — tenu par la salle, qui elle
+        // ne s'est jamais trompee — la donnait pourtant comme ayant couru.
+        //
+        // `temoin` vient de la salle et fait foi. A defaut, on ne retient que
+        // ce qu'annonce le porteur connu, ce qui vaut aussi pour une salle
+        // deployee avant ce champ.
+        const dt = temoin != null ? temoin
+                 : (relais === porteurs.current.get(eq) ? d : null);
+        if (dt == null) return;
+        // Un temoin ne recule pas. Un paquet en retard, ou l'etat complet d'un
+        // passage qui croise une position plus fraiche, ne doit pas le faire
+        // revenir en arriere dans la bande des couloirs — c'est elle qui arme
+        // la tape du receveur.
+        setTemoins(t => (t[eq] != null && t[eq] >= dt ? t : { ...t, [eq]: dt }));
         // Le temoin adverse avance dans le couloir d'a cote, aux memes metres
         // absolus que les miens : la piste du 4x100 fait le tour complet, et
         // les deux reperes sont le meme. Rien a traduire.
-        if (eq !== equipe) SprinterApp.liveDistDe(eq, d);
+        if (eq !== equipe) SprinterApp.liveDistDe(eq, dt);
       },
       onPasse: (eq, p) => {
         if (eq !== equipe) return;
