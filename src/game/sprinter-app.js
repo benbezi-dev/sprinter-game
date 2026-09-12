@@ -3783,6 +3783,117 @@
     }
   }
 
+  /**
+   * Les positions d'une rangee d'objets le long du toit, espacees en METRES.
+   *
+   * A NE PAS CONFONDRE AVEC LES ECHANTILLONS DU DECOR, et c'est tout l'objet
+   * de cette fonction. `samples()` produit un point tous les DOUZE metres en
+   * ligne droite — une douzaine pour tout le cent metres. C'est le bon pas
+   * pour des bandes (pelouse, gradins, piste) et pour des panneaux
+   * publicitaires, qui font justement quarante-huit metres de large. C'est
+   * beaucoup trop grossier pour une suite de petits objets : a douze metres
+   * d'ecart, deux voisins sont separes de plus de trois cents pixels a
+   * l'ecran, soit plus large que le cadre d'un telephone.
+   *
+   * Mesure faite sur le cent metres : sur les treize positions que donnait
+   * `sm`, UNE SEULE tombait dans le cadre, quelle que soit la hauteur
+   * essayee. Les fanions a damier du toit, eux, etaient pris un echantillon
+   * sur huit — un tous les quatre-vingt-seize metres, soit deux pour toute la
+   * ligne droite. Un asset dessine deux fois par course n'est pas un decor,
+   * c'est une rumeur.
+   *
+   * On rend donc des positions a l'espacement demande. Dans le virage, les
+   * echantillons sont deja tres serres (quatre-vingt-seize pour un demi-tour,
+   * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
+   * n, calcule depuis le meme espacement.
+   */
+  function rangeeDeToiture(sm, pasMetres) {
+    const out = [];
+    if (G.track.curved) {
+      // Longueur d'arc entre deux echantillons de virage, pour convertir
+      // l'espacement demande en nombre d'echantillons.
+      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
+      const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
+      for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
+      return out;
+    }
+    // La rangee deborde de part et d'autre de la piste : le cadre montre du
+    // decor avant la ligne de depart et apres l'arrivee.
+    const fin = G.track.straight + C.RUNOUT + 12;
+    for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
+    return out;
+  }
+
+  /**
+   * La rangee de projecteurs au-dessus des tribunes.
+   *
+   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
+   *
+   * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
+   * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
+   * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
+   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
+   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
+   * qui la rattache au toit, sans quoi la rampe flotte.
+   *
+   * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
+   * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
+   * en bas. La seule variation est fixe et tiree de la position : deux
+   * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
+   * ce que la rangee ne paraisse pas imprimee.
+   */
+  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
+    const m = scaleM();
+    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
+    //
+    // La bonne : dans un stade couvert, les projecteurs sont accroches au
+    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
+    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
+    //
+    // La contraignante : la hauteur compte plus de deux fois la distance au
+    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
+    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
+    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
+    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
+    // jamais en course, sur telephone comme sur grand ecran.
+    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
+    // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
+    // d'eclairage de stade, une suite serree de projecteurs et non trois
+    // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
+    const positions = rangeeDeToiture(sm, 4);
+    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
+
+    ctx.save();
+    for (let i = 0; i < positions.length; i++) {
+      const p = solid(...ptOf(positions[i], fr), fz);
+      if (p[0] < -160 || p[0] > G.VW + 160 || p[1] < -160 || p[1] > G.VH + 160) continue;
+
+      // Variation fixe, tiree de l'indice : deux lampes voisines ne sont pas
+      // jumelles, et ca ne bouge pas d'une frame a l'autre.
+      const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
+
+      // 1. le halo
+      const R = m * 1.35;
+      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
+      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
+      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
+      halo.addColorStop(1, 'rgba(228,214,255,0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
+
+      // 2. le mat, sous la rampe
+      ctx.fillStyle = rgb(th.roof, 1.5);
+      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
+
+      // 3. la rampe
+      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
+      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
+    }
+    ctx.restore();
+  }
+
   function drawWorld(ctx, th) {
     const T = G.track;
     // ciel
@@ -3929,117 +4040,6 @@
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
     // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
     for (let i = 0; i + stp < sm.length; i += stp) {
-  /**
-   * Les positions d'une rangee d'objets le long du toit, espacees en METRES.
-   *
-   * A NE PAS CONFONDRE AVEC LES ECHANTILLONS DU DECOR, et c'est tout l'objet
-   * de cette fonction. `samples()` produit un point tous les DOUZE metres en
-   * ligne droite — une douzaine pour tout le cent metres. C'est le bon pas
-   * pour des bandes (pelouse, gradins, piste) et pour des panneaux
-   * publicitaires, qui font justement quarante-huit metres de large. C'est
-   * beaucoup trop grossier pour une suite de petits objets : a douze metres
-   * d'ecart, deux voisins sont separes de plus de trois cents pixels a
-   * l'ecran, soit plus large que le cadre d'un telephone.
-   *
-   * Mesure faite sur le cent metres : sur les treize positions que donnait
-   * `sm`, UNE SEULE tombait dans le cadre, quelle que soit la hauteur
-   * essayee. Les fanions a damier du toit, eux, etaient pris un echantillon
-   * sur huit — un tous les quatre-vingt-seize metres, soit deux pour toute la
-   * ligne droite. Un asset dessine deux fois par course n'est pas un decor,
-   * c'est une rumeur.
-   *
-   * On rend donc des positions a l'espacement demande. Dans le virage, les
-   * echantillons sont deja tres serres (quatre-vingt-seize pour un demi-tour,
-   * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
-   * n, calcule depuis le meme espacement.
-   */
-  function rangeeDeToiture(sm, pasMetres) {
-    const out = [];
-    if (G.track.curved) {
-      // Longueur d'arc entre deux echantillons de virage, pour convertir
-      // l'espacement demande en nombre d'echantillons.
-      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
-      const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
-      for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
-      return out;
-    }
-    // La rangee deborde de part et d'autre de la piste : le cadre montre du
-    // decor avant la ligne de depart et apres l'arrivee.
-    const fin = G.track.straight + C.RUNOUT + 12;
-    for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
-    return out;
-  }
-
-  /**
-   * La rangee de projecteurs au-dessus des tribunes.
-   *
-   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
-   *
-   * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
-   * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
-   * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
-   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
-   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
-   * qui la rattache au toit, sans quoi la rampe flotte.
-   *
-   * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
-   * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
-   * en bas. La seule variation est fixe et tiree de la position : deux
-   * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
-   * ce que la rangee ne paraisse pas imprimee.
-   */
-  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
-    const m = scaleM();
-    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
-    //
-    // La bonne : dans un stade couvert, les projecteurs sont accroches au
-    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
-    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
-    //
-    // La contraignante : la hauteur compte plus de deux fois la distance au
-    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
-    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
-    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
-    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
-    // jamais en course, sur telephone comme sur grand ecran.
-    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-    // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
-    // d'eclairage de stade, une suite serree de projecteurs et non trois
-    // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
-    const positions = rangeeDeToiture(sm, 4);
-    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
-
-    ctx.save();
-    for (let i = 0; i < positions.length; i++) {
-      const p = solid(...ptOf(positions[i], fr), fz);
-      if (p[0] < -160 || p[0] > G.VW + 160 || p[1] < -160 || p[1] > G.VH + 160) continue;
-
-      // Variation fixe, tiree de l'indice : deux lampes voisines ne sont pas
-      // jumelles, et ca ne bouge pas d'une frame a l'autre.
-      const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
-
-      // 1. le halo
-      const R = m * 1.35;
-      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
-      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
-      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
-      halo.addColorStop(1, 'rgba(228,214,255,0)');
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
-
-      // 2. le mat, sous la rampe
-      ctx.fillStyle = rgb(th.roof, 1.5);
-      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
-
-      // 3. la rampe
-      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
-    }
-    ctx.restore();
-  }
-
       wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
            th.panels[(i / stp) % th.panels.length], stp);
     }
