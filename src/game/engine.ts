@@ -1,6 +1,11 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
+// La couche de finition s'installe sur globalThis AVANT le rendu qui l'appelle.
+// L'ordre compte : `sprinter-app.js` la cherche a chaque image plutot qu'au
+// chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
+// demarrerait alors sans finition pendant les premieres images.
+import './rendu-premium.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
