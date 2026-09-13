@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <!-- Premiere place. Corps sombre (voir star.svg pour le pourquoi), et le
+       chiffre en or : sur le badge or il se lit comme une reserve, et sur
+       tout autre fond il reste lisible. -->
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2=".4" y2="1">
+      <stop offset="0" stop-color="#26344D"/>
+      <stop offset="1" stop-color="#060913"/>
+    </linearGradient>
+    <linearGradient id="ruban" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33435F"/>
+      <stop offset="1" stop-color="#131C2E"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#ruban)">
+    <path d="M18 5 H28 L36.5 26 L27 30.5 Z"/>
+    <path d="M46 5 H36 L27.5 26 L37 30.5 Z"/>
+  </g>
+  <circle cx="32" cy="41.5" r="18" fill="url(#nuit)"/>
+  <path fill="#F8CD4A"
+        d="M30 32.5 H35 V47 H40 V50.8 H25 V47 H30 V37.2 L26.4 38.9 L24.9 35.6 Z"/>
+</svg>
