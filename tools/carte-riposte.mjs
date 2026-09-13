@@ -53,16 +53,20 @@ const MONDE = {
 // Le dernier releve verifie en base, au cas ou le classement ne repond pas.
 // Il sert de filet, jamais de source : s'il sert, l'outil le dit a l'ecran.
 const FILET = {
-  '100': { ms: 8246,  nom: 'Timooo & Nathan', le: '2026-08-27' },
+  '100': { ms: 8246,  nom: 'Timooo & Nathan', le: '2026-08-27', podium: [
+    { name: 'Timooo & Nathan', best_split_ms: 8246 },
+    { name: 'Dc',              best_split_ms: 8275 },
+    { name: "971'gee",         best_split_ms: 8296 }] },
   '200': { ms: 16629, nom: "971'gee",         le: '2026-08-29' },
   '400': { ms: 34888, nom: 'Timooo & Nathan', le: '2026-08-27' },
 };
 
 function args(argv) {
-  const a = { epreuve: '100', femmes: false, vainqueur: null, temps: null, horsLigne: false };
+  const a = { epreuve: '100', femmes: false, vainqueur: null, temps: null, horsLigne: false, carrousel: false };
   for (let i = 2; i < argv.length; i++) {
     const cle = argv[i];
     if (cle === '--femmes') a.femmes = true;
+    else if (cle === '--carrousel') a.carrousel = true;
     else if (cle === '--hors-ligne') a.horsLigne = true;
     else if (cle === '--epreuve') a.epreuve = argv[++i];
     else if (cle === '--vainqueur') a.vainqueur = argv[++i];
@@ -98,7 +102,7 @@ async function record(epreuve, horsLigne) {
       console.error(`  ! classement injoignable (${e.message}) — on retombe sur le dernier releve verifie`);
     }
   }
-  return { ...FILET[epreuve], podium: null, direct: false };
+  return { podium: null, ...FILET[epreuve], direct: false };
 }
 
 function carte({ epreuve, femmes, vainqueur, temps, rec, wr, hauteur }) {
@@ -165,6 +169,68 @@ function carte({ epreuve, femmes, vainqueur, temps, rec, wr, hauteur }) {
 </svg>`;
 }
 
+
+// LE MOUCHOIR. La deuxieme diapositive ne rejoue pas la comparaison : elle
+// montre que le record est ATTAQUABLE. « 1,33 s plus vite que Bolt » impressionne
+// et decourage — c'est hors de portee. « Le podium tient en cinq centiemes »
+// dit l'inverse : trois joueurs se tiennent, et la place est prenable ce soir.
+function diapoMouchoir({ rec, epreuve }) {
+  const L = 1080, H = 1350;
+  const p = (rec.podium || []).slice(0, 3);
+  if (p.length < 3) return null;
+  const serre = ((p[2].best_split_ms - p[0].best_split_ms) / 1000).toFixed(3).replace('.', ',');
+  const centiemes = Math.round((p[2].best_split_ms - p[0].best_split_ms) / 10);
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const rangs = p.map((e, i) => {
+    const y = 660 + i * 132;
+    const or = i === 0;
+    return `<text x="132" y="${y}" fill="${or ? '#ffd15c' : 'rgba(255,255,255,0.68)'}" font-size="${or ? 52 : 46}" font-weight="${or ? 700 : 500}">${i + 1}. ${esc(e.name)}</text>`
+         + `<text x="948" y="${y}" text-anchor="end" fill="${or ? 'url(#feu)' : 'rgba(255,255,255,0.82)'}" font-size="${or ? 62 : 54}" font-weight="800" font-family="Space Mono, ui-monospace, monospace">${secondes(e.best_split_ms)}</text>`
+         + (i < 2 ? `<line x1="132" y1="${y + 44}" x2="948" y2="${y + 44}" stroke="#ffffff" stroke-opacity="0.07" stroke-width="2"/>` : '');
+  }).join('\n  ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0e1a"/><stop offset="55%" stop-color="#111a33"/><stop offset="100%" stop-color="#060810"/></linearGradient>
+    <linearGradient id="feu" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffd15c"/><stop offset="100%" stop-color="#ff7a18"/></linearGradient>
+  </defs>
+  <rect width="${L}" height="${H}" fill="url(#nuit)"/>
+  <text x="${L / 2}" y="250" text-anchor="middle" fill="#7e8aa8" font-size="30" letter-spacing="9">LE PODIUM DU ${epreuve} M</text>
+  <text x="${L / 2}" y="412" text-anchor="middle" fill="url(#feu)" font-size="${Math.min(132, Math.floor((L * 0.84) / (`${centiemes} CENTIÈMES`.length * 0.60)))}" font-weight="800">${centiemes} CENTIÈMES</text>
+  <text x="${L / 2}" y="482" text-anchor="middle" fill="#8794b3" font-size="34">c'est tout ce qui sépare les trois premiers</text>
+  ${rangs}
+  <text x="${L / 2}" y="1105" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="700">${serre} s entre la 1re et la 3e place.</text>
+  <text x="${L / 2}" y="1170" text-anchor="middle" fill="#8794b3" font-size="36">Une course suffit pour tout changer.</text>
+  <text x="${L / 2}" y="1243" text-anchor="middle" fill="#ffb037" font-size="34" letter-spacing="3">sprinter-game.com</text>
+</svg>`;
+}
+
+// LES TROIS RECORDS. La derniere diapositive donne la cible : trois chiffres,
+// trois noms, et rien d'autre a faire que d'essayer.
+function diapoRecords(recs) {
+  const L = 1080, H = 1350;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lignes = recs.map((r, i) => {
+    const y = 520 + i * 216;
+    return `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#8794b3" font-size="32" letter-spacing="6">${r.epreuve} MÈTRES</text>`
+         + `<text x="${L / 2}" y="${y + 108}" text-anchor="middle" fill="url(#feu)" font-size="112" font-weight="800">${secondes(r.ms)}</text>`
+         + `<text x="${L / 2}" y="${y + 156}" text-anchor="middle" fill="#c6b48a" font-size="30">${esc(r.nom)}</text>`;
+  }).join('\n  ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0e1a"/><stop offset="55%" stop-color="#111a33"/><stop offset="100%" stop-color="#060810"/></linearGradient>
+    <linearGradient id="feu" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffd15c"/><stop offset="100%" stop-color="#ff7a18"/></linearGradient>
+  </defs>
+  <rect width="${L}" height="${H}" fill="url(#nuit)"/>
+  <text x="${L / 2}" y="250" text-anchor="middle" fill="#7e8aa8" font-size="30" letter-spacing="9">TROIS RECORDS À PRENDRE</text>
+  <text x="${L / 2}" y="370" text-anchor="middle" fill="#ffffff" font-size="76" font-weight="800">Aucun n'est hors de portée</text>
+  ${lignes}
+  <text x="${L / 2}" y="1250" text-anchor="middle" fill="#ffb037" font-size="40" letter-spacing="3">sprinter-game.com</text>
+</svg>`;
+}
+
 // La conversion en PNG si un navigateur est la. Rien d'installe pour ca : les
 // reseaux n'acceptent pas le SVG, et personne ne convertit une image a la main
 // trois minutes apres une finale.
@@ -224,6 +290,26 @@ for (const [nom, H] of formats) {
   writeFileSync(cheminSvg, svg);
   const cheminPng = png(cheminSvg, `${base}-${nom}.png`, 1080, H);
   faits.push(cheminPng || cheminSvg);
+}
+
+// Le carrousel : la carte fait le stop, le mouchoir fait comprendre que la
+// place est prenable, les trois records disent quoi faire. Trois diapositives,
+// pas cinq — au-dela, plus personne ne glisse jusqu'au bout.
+if (a.carrousel) {
+  const mouchoir = diapoMouchoir({ rec, epreuve: a.epreuve });
+  if (mouchoir) {
+    writeFileSync(`${base}-2-mouchoir.svg`, mouchoir);
+    faits.push(png(`${base}-2-mouchoir.svg`, `${base}-2-mouchoir.png`, 1080, 1350)
+               || `${base}-2-mouchoir.svg`);
+  } else {
+    console.error('  ! podium indisponible — diapositive du mouchoir sautee');
+  }
+
+  const autres = await Promise.all(['100', '200', '400'].map(async (e) =>
+    ({ epreuve: e, ...(e === a.epreuve ? rec : await record(e, a.horsLigne)) })));
+  writeFileSync(`${base}-3-records.svg`, diapoRecords(autres));
+  faits.push(png(`${base}-3-records.svg`, `${base}-3-records.png`, 1080, 1350)
+             || `${base}-3-records.svg`);
 }
 
 const ageRec = age(rec.le);
