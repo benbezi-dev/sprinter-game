@@ -3899,6 +3899,89 @@
   }
 
   /**
+   * LES ESCALIERS DES TRIBUNES.
+   *
+   * Les gradins etaient trois bandes horizontales de public, du bord gauche au
+   * bord droit du cadre, sans une interruption. Aucune tribune n'est batie
+   * ainsi : on ne peut pas entrer dans un gradin de cent metres de long sans
+   * escalier, et c'est precisement ce qu'on voit sur toute photographie de
+   * stade — des volees de marches pales qui montent en travers du public, tous
+   * les quinze metres, et qui donnent au gradin son echelle et sa hauteur.
+   *
+   * PEINTES PAR-DESSUS LA FOULE, ET C'EST LA BONNE FACON. On pourrait croire
+   * qu'il faut retirer les spectateurs de l'emprise de l'escalier — c'est le
+   * contraire : un escalier vu de face EST une bande claire qui coupe le
+   * public, et le motif de foule est justement ce qu'on ne peut pas trouer
+   * (voir getCrowdPattern, une tuile repetee par le moteur canvas). On le
+   * recouvre donc, ce qui donne exactement le meme resultat pour un seul
+   * remplissage.
+   *
+   * ET C'EST UN VRAI ESCALIER, PAS UNE RAMPE PEINTE. Le premier essai posait
+   * un seul quadrilatere du bas au haut du gradin : une plaque de marbre
+   * blanc qui flottait au-dessus du stade, parce qu'une surface lisse sur des
+   * gradins en marches ne peut pas se lire autrement. Chaque marche est donc
+   * construite comme le sont les gradins eux-memes — une contremarche
+   * verticale, une marche horizontale — a ceci pres qu'aucun spectateur n'est
+   * assis dessus. Meme geometrie, meme lumiere, meme beton : c'est le vide qui
+   * fait tout le contraste.
+   */
+  function drawAllees(ctx, th, sm, near, tiers, sr, sz) {
+    // La largeur d'une volee se mesure en METRES sur le gradin, pas en
+    // echantillons : en ligne droite ils sont espaces de douze metres, en
+    // virage d'un peu plus d'un metre, et un escalier large de « un
+    // echantillon » aurait donc dix fois la bonne largeur d'un bout du tour a
+    // l'autre. On avance donc a partir de l'echantillon, au rayon ou
+    // l'escalier se trouve vraiment.
+    const rMoy = near + tiers * sr * 0.5;
+    const avancer = (q, metres) => q[0]
+      ? [true, q[1] - metres / rMoy, q[2]]
+      : [false, q[1] + metres, q[2]];
+    const coin = (q, r, z) => { const a = ptOf(q, r); return solid(a[0], a[1], z); };
+    // DEUX MARCHES PAR GRADIN, ET C'EST LA MESURE REELLE. Un rang de sieges
+    // est deux fois plus profond qu'une marche : l'escalier qui le dessert
+    // monte donc deux fois plus souvent que les gradins ne s'elevent. Une
+    // marche par gradin donnait un emmarchement d'un metre soixante-dix, ce
+    // qui n'est plus un escalier mais une terrasse.
+    const N = tiers * 2, pr = sr / 2, pz = sz / 2;
+    // A PEINE PLUS CLAIR QUE LES GRADINS, ET C'EST DEJA BEAUCOUP.
+    //
+    // Premier essai a +16 % : une volee de marbre blanc qui flottait au-dessus
+    // du stade. L'ecart de valeur ne vient pas de la peinture, il vient de ce
+    // qu'il n'y a PERSONNE dessus — a cote, le gradin est couvert de
+    // spectateurs sombres. Le beton de l'escalier est le meme que celui des
+    // gradins ; c'est le vide qui l'eclaircit.
+    const marche = rgb(th.tread, 0.97), contre = rgb(th.riser, 1.06);
+
+    ctx.save();
+    for (const q of rangeeDeToiture(sm, 15)) {
+      const q2 = avancer(q, 1.2);
+      // Un seul test de cadre, sur le bas de la volee : le haut n'en est
+      // jamais loin, et huit escaliers hors champ ne doivent rien couter.
+      const bas = coin(q, near, 1.05);
+      if (bas[0] < -120 || bas[0] > G.VW + 120 ||
+          bas[1] < -260 || bas[1] > G.VH + 120) continue;
+      const quad = (r0, z0, r1, z1, col) => {
+        const a = coin(q, r0, z0), b = coin(q2, r0, z0);
+        const c = coin(q2, r1, z1), d = coin(q, r1, z1);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+        ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+        ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+      };
+      // Meme geometrie que les gradins eux-memes (voir drawWorld : wall pour
+      // la contremarche, band pour la marche), a ceci pres qu'aucun
+      // spectateur n'est assis dessus. C'est exactement ce qu'est une volee :
+      // les memes marches, sans les sieges.
+      for (let t = 0; t < N; t++) {
+        const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz;
+        quad(r0, z1 - pz, r0, z1, contre);   // la contremarche, verticale
+        quad(r0, z1, r0 + pr, z1, marche);   // la marche, horizontale
+      }
+    }
+    ctx.restore();
+  }
+
+  /**
    * La rangee de projecteurs au-dessus des tribunes.
    *
    * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
@@ -4242,6 +4325,12 @@
         PREM().dessinerFlashs(ctx, PEINTRE);
       }
     }
+    // Les escaliers PAR-DESSUS le public, et hors du bloc qui le dessine : un
+    // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
+    // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
+    // simple bande. Voir drawAllees.
+    drawAllees(ctx, th, sm, near, tiers, sr, sz);
+
     // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
     //
     // Elle est posee tres haut, et la hauteur compte plus de deux fois la
