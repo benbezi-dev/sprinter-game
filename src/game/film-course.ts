@@ -80,6 +80,46 @@ export function etatDuFilm(): VueFilm { return vue; }
 /** A qui est le film en cours — ou `null` s'il n'y en a pas. */
 export function genreDuFilm(): GenreFilm | null { return genre; }
 
+/* ---------------------------------------------------------------------------
+   QUI LE FILM A FILME
+   ---------------------------------------------------------------------------
+   La course peint le pseudonyme de chaque adversaire sur une pastille au-dessus
+   de sa tete — c'est ce qui permet de le reconnaitre en pleine course, et c'est
+   la raison d'etre du repere. Le film capture le canevas : ces noms partent
+   donc avec la video, pendant toute sa duree, et le joueur qui l'envoie ne le
+   sait pas forcement — au moment ou il appuie, la piste n'est plus a l'ecran.
+
+   ON RELEVE EN FILMANT, PAS EN PARTAGEANT. A l'arrivee la piste est demontee
+   et le tri des noms n'aurait plus rien a lire.
+
+   Le releve vit ici, et pas dans `review.ts` : celui-la sait filmer un canevas
+   sans rien savoir de ce qu'il y a dessus, et il doit le rester. Il vit aussi
+   dans `demarrerLeFilm` plutot que chez les trois appelants — le one shot, le
+   direct, le relais — parce qu'un genre de film ajoute plus tard serait couvert
+   sans que personne ait a y penser. C'est deja ce qui est arrive au relais, et
+   ses relayeurs portent bien leur nom sur la piste.
+--------------------------------------------------------------------------- */
+
+let nommes: string[] = [];
+
+/** Les pseudonymes que la prise en cours a filmes. */
+export function nommesParLeFilm(): string[] { return nommes; }
+
+/**
+ * Ajoute a la liste ceux que la piste affiche maintenant.
+ *
+ * On ajoute au lieu de remplacer : un one shot enchaine trois epreuves dans la
+ * meme prise, et la seconde ne doit pas effacer ce que la premiere a montre.
+ */
+export function releverLesNoms() {
+  for (const nom of (SprinterApp as any).pseudonymesSurLaPiste?.() || []) {
+    if (!nommes.includes(nom)) nommes.push(nom);
+  }
+}
+
+/** La prise est jetee ou remplacee : ce qu'elle montrait ne vaut plus. */
+function oublierLesNoms() { nommes = []; }
+
 function abonner(prevenirMoi: () => void): () => void {
   abonnes.add(prevenirMoi);
   return () => { abonnes.delete(prevenirMoi); };
@@ -151,8 +191,12 @@ export function demarrerLeFilm(
 ) {
   annulerLeDepart();
   poserGenre(g);
+  oublierLesNoms();
   filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons],
                             peindreLeHud);
+  // Apres avoir pose la camera, pas avant : c'est la que la piste est armee et
+  // que les adversaires portent enfin leur pastille.
+  releverLesNoms();
 }
 
 /**
@@ -202,6 +246,7 @@ export function jeterLeFilm(g: GenreFilm | null) {
   if (!g || genre !== g) return;
   annulerLeDepart();
   filmDeLaCourse().jeter();
+  oublierLesNoms();
   poserGenre(null);
 }
 
@@ -267,8 +312,14 @@ export function useFilmerLeOneShot() {
       // Reprendre plutot que recommencer : la prise en cours contient deja les
       // epreuves precedentes, et la jeter ici ne laisserait au joueur que son
       // 400 m alors que son chrono, lui, additionne les trois.
-      if (shotIdx > 0 && genreDuFilm() === 'oneshot' && f.filme()) f.reprendre();
-      else demarrerLeFilm('oneshot');
+      if (shotIdx > 0 && genreDuFilm() === 'oneshot' && f.filme()) {
+        f.reprendre();
+        // La reprise ne repasse pas par `demarrerLeFilm` : le fantome d'un
+        // 200 m n'est pas forcement celui du 100 m qui le precede dans la
+        // meme prise, et sans ce releve-la il sortirait du film sans etre
+        // annonce.
+        releverLesNoms();
+      } else demarrerLeFilm('oneshot');
       return;
     }
 

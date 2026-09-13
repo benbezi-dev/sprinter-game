@@ -37,10 +37,16 @@ export const EPREUVE = r => String(r || '').replace(/^(\d+)$/, '$1 m');
 
 /** Le fond commun : la nuit du jeu, sa lueur doree, et trois couloirs.
  *
- *  Exporte depuis le 7 septembre 2026 : la video de nouveautes
+ *  Exporte depuis le 7 septembre 2026, et depuis pour deux raisons plutot
+ *  qu'une — ce qui confirme la premiere. La video de nouveautes
  *  (suivi/publications/2026-09-07-reel-nouveautes/) dessine seize plans sur
- *  ce meme fond. Le recopier la-bas aurait garanti la divergence que
- *  l'en-tete de ce fichier interdit — une lueur retouchee d'un cote et
+ *  ce meme fond. Et l'atelier de republication en a besoin tel quel : il
+ *  repose une affiche deja tracee et doit parfois REPEINDRE un morceau de
+ *  son fond, la ou un pseudonyme est masque — un aplat #060913 pose a la
+ *  main y ferait une tache sombre partout ou la lueur porte encore.
+ *
+ *  Recopier ces quinze lignes aurait garanti, des la premiere, la divergence
+ *  que l'en-tete de ce fichier interdit : une lueur retouchee d'un cote et
  *  oubliee de l'autre. L'appel interne ne change pas. */
 export function poserFond(c, L, H) {
   c.fillStyle = '#060913'; c.fillRect(0, 0, L, H);

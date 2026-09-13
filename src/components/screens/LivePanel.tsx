@@ -22,6 +22,7 @@ import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
 import {
   programmerLeFilm, arreterLeFilm, jeterLeFilm, useFilmDeLaCourse, partagerLeFilm,
+  nommesParLeFilm,
 } from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
@@ -665,7 +666,7 @@ export function LivePanel() {
           rien a faire dans ce salon. */}
       {film.genre === 'direct' &&
         (etape === 'review' || film.phase === 'prete' || film.phase === 'expiree') && (
-        <ReviewVideo etat={film} onPartager={partagerLeFilm} />
+        <ReviewVideo etat={film} nommes={nommesParLeFilm()} onPartager={partagerLeFilm} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}

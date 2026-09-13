@@ -1,9 +1,49 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Download, Loader2, Film, Timer } from 'lucide-react';
+import { Download, Loader2, Film, Timer, Users } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/review';
+
+/**
+ * « Théo », « Théo et Loïc », « Théo, Loïc et Naïm ».
+ *
+ * Enumerer plutot que compter : « cette vidéo montre 3 noms » n'apprend rien a
+ * qui veut savoir SI c'est genant. Lire les noms permet de decider en une
+ * seconde, ce qu'un nombre ne permet jamais.
+ */
+function enumerer(noms: string[], et: string): string {
+  if (noms.length <= 1) return noms[0] || '';
+  return noms.slice(0, -1).join(', ') + ' ' + et + ' ' + noms[noms.length - 1];
+}
+
+/**
+ * L'avertissement : cette video ne montre pas que soi.
+ *
+ * La piste peint le pseudonyme de chaque adversaire au-dessus de sa tete —
+ * c'est ce qui permet de le reconnaitre en pleine course — et le film capture
+ * la piste. Le joueur partage donc le nom de quelqu'un d'autre, ce qu'il n'a
+ * aucune raison de deviner : sur l'ecran de fin, la piste n'est plus la.
+ *
+ * Avant le bouton et non apres : une fois la feuille de partage refermee,
+ * l'image est partie et aucune phrase ne la rattrape. Et une phrase, pas un
+ * barrage — c'est sa course, et le nom d'un adversaire dans un replay qu'on
+ * envoie a trois amis n'est pas la meme chose qu'une publication.
+ *
+ * Rien ne s'affiche quand la course n'a nomme personne : un avertissement
+ * qu'on voit a chaque fois cesse d'etre lu des la troisieme.
+ */
+export function AvertissementDesNoms({ nommes }: { nommes: string[] }) {
+  const { N } = SprinterApp;
+  if (!nommes.length) return null;
+  const liste = enumerer(nommes, N.t('review_names_et'));
+  return (
+    <p className="flex items-start justify-center gap-1.5 text-[11px] text-amber-300/90 text-center">
+      <Users className="w-3.5 h-3.5 shrink-0 mt-px" />
+      <span>{N.t(nommes.length > 1 ? 'review_names_n' : 'review_names_1', { n: liste })}</span>
+    </p>
+  );
+}
 
 /**
  * La video de la course, et son compte a rebours.
@@ -17,8 +57,10 @@ import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/rev
  * feuille de partage refermee, le film est libere. Les deux fins ne se disent
  * pas pareil — voir l'en-tete de game/review.ts.
  */
-export function ReviewVideo({ etat, onPartager }: {
+export function ReviewVideo({ etat, nommes = [], onPartager }: {
   etat: EtatReview;
+  /** Les pseudonymes que le film a filmes. Voir `nommesParLeFilm`. */
+  nommes?: string[];
   onPartager: () => Promise<Sortie>;
 }) {
   const { N } = SprinterApp;
@@ -58,6 +100,7 @@ export function ReviewVideo({ etat, onPartager }: {
 
       {etat.phase === 'prete' && (
         <>
+          <AvertissementDesNoms nommes={nommes} />
           <button
             onClick={async () => setSortie(await onPartager())}
             className="w-full py-3 rounded-xl font-black font-display tracking-widest text-background
