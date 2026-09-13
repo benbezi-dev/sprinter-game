@@ -1,0 +1,155 @@
+<!-- =========================================================================
+     LA CASE « GRAND RENDEZ-VOUS » — a coller dans suivi/atelier-chrono.html
+     =========================================================================
+     A QUOI ELLE SERT. Un carrousel de riposte ne vaut que s'il part le bon
+     soir. Or les grandes soirees d'athletisme sont rares, espacees de mois, et
+     on ne les a pas en tete le jour ou elles tombent : Budapest 2026 a failli
+     se jouer sans nous parce que personne ne regardait le calendrier. Cette
+     case le regarde a notre place.
+     
+     ELLE NE DEPEND DE RIEN. Pas une ligne du style ou du script de la page
+     d'accueil : tout est porte ici, et tout est prefixe `cgr-`. On peut la
+     coller n'importe ou dans le corps de la page, la deplacer, ou la retirer
+     sans rien casser ailleurs.
+     
+     LES DATES NE SONT PAS TOUTES DE MEME VALEUR. Celles marquees `sur: false`
+     viennent d'extraits de recherche, pas du site de World Athletics, qui
+     etait injoignable le jour ou cette case a ete ecrite. La case le DIT a
+     l'ecran plutot que de les presenter comme acquises : une date fausse
+     affichee avec aplomb est pire qu'une date affichee avec son doute.
+     ========================================================================= -->
+<section id="cgr">
+  <style>
+    #cgr{--or:#F8CD4A;--nuit:#060913;--brume:#8794b3;
+      background:var(--nuit);border:1px solid #1d2438;border-radius:18px;
+      padding:26px 24px;margin:22px 0;color:#fff;
+      font-family:Outfit,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      position:relative;overflow:hidden}
+    #cgr::before{content:"";position:absolute;inset:0;pointer-events:none;
+      background:radial-gradient(120% 80% at 50% 0,rgba(248,205,74,.13),transparent 70%)}
+    #cgr>*{position:relative}
+    #cgr .cgr-sur{font-size:12px;letter-spacing:.22em;color:var(--brume);text-transform:uppercase}
+    #cgr .cgr-nom{font-size:30px;font-weight:800;line-height:1.15;margin:10px 0 4px}
+    #cgr .cgr-ou{font-size:15px;color:var(--brume)}
+    #cgr .cgr-compte{display:flex;align-items:baseline;gap:10px;margin:18px 0 4px}
+    #cgr .cgr-j{font-size:62px;font-weight:800;color:var(--or);line-height:1;
+      font-family:"Space Mono",ui-monospace,monospace}
+    #cgr .cgr-unite{font-size:15px;color:var(--brume)}
+    #cgr[data-vif="1"] .cgr-j{font-size:34px}
+    #cgr .cgr-cmd{margin-top:18px;background:#0d1222;border:1px solid #1d2438;
+      border-radius:10px;padding:12px 14px;font-family:"Space Mono",ui-monospace,monospace;
+      font-size:12.5px;color:#c6d0e8;word-break:break-all;line-height:1.6}
+    #cgr .cgr-bar{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+    #cgr button{background:var(--or);color:#1a1405;border:0;border-radius:9px;
+      padding:10px 16px;font-weight:700;font-size:13.5px;cursor:pointer;
+      font-family:inherit}
+    #cgr button.cgr-plat{background:transparent;color:var(--brume);border:1px solid #26304a}
+    #cgr .cgr-doute{margin-top:14px;font-size:12.5px;color:#b4894a;line-height:1.5}
+    #cgr .cgr-suite{margin-top:20px;border-top:1px solid #161d2e;padding-top:14px}
+    #cgr .cgr-ligne{display:flex;justify-content:space-between;gap:14px;
+      font-size:13px;padding:5px 0;color:var(--brume)}
+    #cgr .cgr-ligne b{color:#dbe3f5;font-weight:600}
+    #cgr .cgr-ligne .cgr-flou{opacity:.55}
+    @media(max-width:520px){#cgr .cgr-nom{font-size:23px}#cgr .cgr-j{font-size:46px}}
+  </style>
+
+  <div class="cgr-sur" id="cgr-sur">Prochain grand rendez-vous</div>
+  <div class="cgr-nom" id="cgr-nom">—</div>
+  <div class="cgr-ou" id="cgr-ou"></div>
+  <div class="cgr-compte"><span class="cgr-j" id="cgr-j">—</span>
+    <span class="cgr-unite" id="cgr-unite"></span></div>
+  <div class="cgr-cmd" id="cgr-cmd"></div>
+  <div class="cgr-bar">
+    <button id="cgr-copie">Copier la commande</button>
+    <button class="cgr-plat" id="cgr-suivant">Voir la suite du calendrier</button>
+  </div>
+  <div class="cgr-doute" id="cgr-doute"></div>
+  <div class="cgr-suite" id="cgr-suite" hidden></div>
+
+<script>
+(() => {
+  // `sur` : la date a-t-elle ete confirmee par une source officielle ?
+  // Tout ce qui est a false vient d'extraits de recherche et demande une
+  // verification sur worldathletics.org avant qu'on cale quoi que ce soit.
+  const CAL = [
+    { nom:'Ultimate Championship', ou:'Budapest \u2014 3e et derniere soiree, 18h\u201321h', d:'2026-09-11', f:'2026-09-13', sur:true },
+    // La saison en salle est le premier rendez-vous apres Budapest. Sans elle
+    // la case annoncait 236 jours d'attente, ce qui etait faux et decourageant.
+    { nom:'Championnats d\u2019Europe en salle', ou:'Valence, Velodrome Luis Puig', d:'2027-03-04', f:'2027-03-07', sur:true },
+    // Les marathons majeurs (Berlin, Chicago, New York, Tokyo) tombent entre
+    // les deux, mais ils ne portent pas de sprint : rien a comparer a un
+    // record du 100 m, donc rien a riposter. Ils ne sont pas listes.
+    { nom:'Diamond League — Doha',        ou:'Doha, ouverture de saison', d:'2027-05-07', f:'2027-05-07', sur:false },
+    { nom:'Diamond League — Shanghai',    ou:'Shanghai',                  d:'2027-05-15', f:'2027-05-15', sur:false },
+    { nom:'Diamond League — Xiamen',      ou:'Xiamen',                    d:'2027-05-22', f:'2027-05-22', sur:false },
+    { nom:'Diamond League — Rome',        ou:'Rome',                      d:'2027-05-27', f:'2027-05-27', sur:false },
+    { nom:'Diamond League — Rabat',       ou:'Rabat',                     d:'2027-05-30', f:'2027-05-30', sur:false },
+    { nom:'Diamond League — Oslo',        ou:'Oslo',                      d:'2027-06-03', f:'2027-06-03', sur:false },
+    { nom:'Diamond League — Stockholm',   ou:'Stockholm',                 d:'2027-06-06', f:'2027-06-06', sur:false },
+    { nom:'Diamond League — Paris',       ou:'Paris — la seule a domicile',d:'2027-06-18',f:'2027-06-18', sur:false },
+    { nom:'Championnats d’Europe par equipes', ou:'Istanbul',        d:'2027-06-25', f:'2027-06-27', sur:false },
+    { nom:'Diamond League — Eugene',      ou:'Eugene (date contestee)',   d:'2027-07-03', f:'2027-07-03', sur:false },
+    { nom:'Championnats du monde',        ou:'Pekin, Nid d’Oiseau — neuf jours', d:'2027-09-10', f:'2027-09-19', sur:true },
+  ];
+
+  const J = 86400000;
+  const jour = (s) => { const [a,m,d] = s.split('-').map(Number); return Date.UTC(a, m-1, d); };
+  const fr = (s) => new Date(jour(s)).toLocaleDateString('fr-FR',
+    { day:'numeric', month:'short', year:'numeric', timeZone:'UTC' });
+  const q = (id) => document.getElementById(id);
+
+  function poser() {
+    const today = new Date();
+    const auj = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    // « A venir » inclut ce qui se court aujourd'hui : le dernier soir d'une
+    // competition est precisement celui ou la case doit crier, pas se taire.
+    const suite = CAL.filter(e => jour(e.f) >= auj).sort((a,b) => jour(a.d) - jour(b.d));
+    if (!suite.length) { q('cgr-nom').textContent = 'Calendrier a completer'; return; }
+
+    const e = suite[0];
+    const reste = Math.round((jour(e.d) - auj) / J);
+    const dedans = auj >= jour(e.d) && auj <= jour(e.f);
+
+    q('cgr-nom').textContent = e.nom;
+    q('cgr-ou').textContent = e.ou + ' · ' + (e.d === e.f ? fr(e.d) : `${fr(e.d)} → ${fr(e.f)}`);
+
+    if (dedans) {
+      document.getElementById('cgr').dataset.vif = '1';
+      q('cgr-sur').textContent = 'En ce moment meme';
+      q('cgr-j').textContent = 'C’EST MAINTENANT';
+      q('cgr-unite').textContent = 'la carte part dans les trois minutes qui suivent la finale';
+    } else {
+      q('cgr-j').textContent = reste;
+      q('cgr-unite').textContent = reste <= 1 ? 'jour' : 'jours';
+    }
+
+    q('cgr-cmd').textContent =
+      'node tools/carte-riposte.mjs --epreuve 100 --vainqueur "NOM" --temps 9.XX --carrousel';
+
+    q('cgr-doute').textContent = e.sur ? ''
+      : '⚠ Date relevee sans source officielle — a confirmer sur worldathletics.org.';
+
+    q('cgr-suite').innerHTML = suite.slice(1, 9).map(x =>
+      `<div class="cgr-ligne"><b>${x.nom}</b><span class="${x.sur ? '' : 'cgr-flou'}">${fr(x.d)}${x.sur ? '' : ' ?'}</span></div>`
+    ).join('');
+  }
+
+  q('cgr-copie').onclick = async (ev) => {
+    try { await navigator.clipboard.writeText(q('cgr-cmd').textContent); }
+    catch { /* pas de presse-papier : le texte reste selectionnable a la main */ }
+    ev.target.textContent = 'Copie';
+    setTimeout(() => { ev.target.textContent = 'Copier la commande'; }, 1600);
+  };
+  q('cgr-suivant').onclick = (ev) => {
+    const s = q('cgr-suite');
+    s.hidden = !s.hidden;
+    ev.target.textContent = s.hidden ? 'Voir la suite du calendrier' : 'Masquer';
+  };
+
+  poser();
+  // La page de l'atelier reste ouverte des journees entieres : sans cela, le
+  // decompte afficherait encore « 1 jour » le lendemain matin.
+  setInterval(poser, 60 * 60 * 1000);
+})();
+</script>
+</section>
