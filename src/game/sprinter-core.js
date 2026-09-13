@@ -1348,12 +1348,43 @@
 
     add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
         [0.112, hipY + 0.032], 0.098, yawHip);
-    // taille marquee : plus etroite juste au-dessus du short qu'au niveau
-    // des cotes, pour rompre le profil "tube" entre bassin et buste.
-    add(L.jersey, hip, lean, [0, 0, 0.170], [0.084, shY * 0.78],
-        [0.113, shY * 1.05], 0.086, yawTop);
-    add(L.jersey, hip, lean, [0, 0, 0.352], [0.118, shY * 1.15],
-        [0.129, shY * 1.30], 0.128, yawTop);
+    // LE BUSTE EST FAIT DE DEUX TRONCS, ET ON VOYAIT LE JOINT.
+    //
+    // Taille marquee : plus etroite juste au-dessus du short qu'au niveau
+    // des cotes, pour rompre le profil "tube" entre bassin et buste. Mais
+    // le troncon du haut naissait PLUS LARGE que ne finissait celui du bas
+    // — 1,15 contre 1,05 — et un anneau plus large qui sort d'un anneau
+    // plus etroit, ca fait une arete. Elle courait en travers du maillot,
+    // a mi-poitrine, sur les trois coureurs de l'accueil comme sur celui
+    // qu'on presente avant la course : une ligne horizontale nette, que
+    // l'eclairage soulignait encore puisque les deux troncs n'ont pas la
+    // meme pente et donc pas la meme valeur.
+    //
+    // Deux corrections, et il a fallu les deux.
+    //
+    // Les rayons se rejoignent d'abord a la jonction : le troncon du bas
+    // finit ou l'autre commence, donc il entre dedans au lieu d'en
+    // depasser. L'arete de silhouette disparait — mais pas la ligne. Car
+    // un troncon est eclairee selon SA pente, et les deux n'avaient pas la
+    // meme : la taille s'evase vite (deux centimetres de rayon gagnes sur
+    // dix de hauteur), la poitrine presque pas. Deux pentes, deux valeurs,
+    // et une frontiere nette entre elles quoi qu'on fasse des rayons.
+    //
+    // Le buste est donc coupe en TROIS, avec des pentes qui se suivent —
+    // 0,19 puis 0,13 puis 0,045 — au lieu de deux qui s'opposent. Chaque
+    // jonction ne porte plus que la moitie de l'ecart, et il y en a deux :
+    // la transition s'etale au lieu de se lire d'un trait. Les troncons se
+    // chevauchent d'un bon centimetre, pour qu'aucune fente ne s'ouvre
+    // entre les facettes.
+    //
+    // La taille reste marquee : c'est le rayon du BAS (0,78) qui la creuse,
+    // et il ne bouge pas.
+    add(L.jersey, hip, lean, [0, 0, 0.142], [0.084, shY * 0.78],
+        [0.106, shY * 0.99], 0.058, yawTop);
+    add(L.jersey, hip, lean, [0, 0, 0.2545], [0.103, shY * 0.97],
+        [0.122, shY * 1.19], 0.0705, yawTop);
+    add(L.jersey, hip, lean, [0, 0, 0.3945], [0.119, shY * 1.17],
+        [0.129, shY * 1.30], 0.0855, yawTop);
     add(DOSSARD, hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
         [0.010, shY * 0.50], 0.060, yawTop);
     // bande de couleur sur le maillot et le short, assortie aux chaussures :
