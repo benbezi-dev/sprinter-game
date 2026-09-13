@@ -7,6 +7,7 @@ import {
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
 import { IdentityPanel } from './IdentityPanel';
+import { HistoriqueDefis } from './HistoriqueDefis';
 import { lienInstagram } from '@/game/identity';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -129,6 +130,9 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         {cat === 'mine' ? (
           <>
           <IdentityPanel />
+          {/* Qui nous a defies cette semaine, et de quoi repartir dans
+              l'autre sens. Replie : on vient d'abord ici pour ses chronos. */}
+          <HistoriqueDefis race={race} onDefier={onClose} />
           <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
             {mesCourses.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-6">{N.t('mine_empty')}</p>

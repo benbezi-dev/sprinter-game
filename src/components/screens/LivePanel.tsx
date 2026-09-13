@@ -14,6 +14,7 @@ import {
 } from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { inviterEnDirect } from '@/game/invitations-directes';
+import { noterDefi } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
@@ -758,6 +759,13 @@ export function LivePanel() {
             const r = await inviterEnDirect([nom], code);
             if (r.invites.length) {
               setConviesInfo(c => ({ ok: c.ok + 1, injoignable: null }));
+              // Au journal, pour qu'on sache une semaine plus tard qui on a
+              // convie. Seulement ceux qui ont ete joints : un injoignable
+              // n'a rien recu, et l'inscrire laisserait croire le contraire.
+              noterDefi({
+                cle: `direct:${code}:${nom.trim().toLowerCase()}`,
+                genre: 'direct', sens: 'lance', etat: 'attente', nom,
+              });
               return true;
             }
             // Injoignable n'est pas une panne : beaucoup de joueurs figurent au
