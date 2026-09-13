@@ -1042,6 +1042,35 @@
                       '{n} challenges you on {d} m'],
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
+
+    // Le journal des defis, deroulable dans MES COURSES. Une semaine de
+    // duels, de defis recus et d'invitations manquees — apres quoi tout part.
+    jd_title:        ['DÉFIS ET DUELS', 'CHALLENGES & DUELS'],
+    jd_sub:          ['les sept derniers jours — au-delà, ça s’efface',
+                      'the last seven days — older than that clears itself'],
+    jd_a_relever:    ['{n} à relever', '{n} to answer'],
+    jd_recus:        ['ILS T’ONT DÉFIÉ', 'THEY CHALLENGED YOU'],
+    jd_manques:      ['DÉFIS MANQUÉS', 'MISSED CHALLENGES'],
+    jd_histoire:     ['HISTORIQUE', 'HISTORY'],
+    jd_vide:         ['aucun défi cette semaine — défie quelqu’un depuis le classement',
+                      'no challenge this week — challenge someone from the ranking'],
+    jd_note:         ['Ce journal ne quitte pas ton téléphone, et tout ce qui date de plus d’une semaine s’efface tout seul.',
+                      'This log stays on your phone, and anything older than a week clears itself.'],
+    jd_redefier:     ['REDÉFIER', 'CHALLENGE BACK'],
+    jd_sans_nom:     ['adversaire inconnu', 'unknown opponent'],
+    // Ce que la ligne raconte : qui a tendu la main, et par quel chemin.
+    jd_l_recu:       ['{n} t’a défié', '{n} challenged you'],
+    jd_l_lance:      ['tu as défié {n}', 'you challenged {n}'],
+    jd_l_recu_live:  ['{n} t’a invité en direct', '{n} invited you live'],
+    jd_l_lance_live: ['tu as invité {n} en direct', 'you invited {n} live'],
+    jd_l_anonyme:    ['défi lancé, sans destinataire', 'challenge sent, no recipient'],
+    // Son etat, en un mot.
+    jd_e_attente:    ['en attente', 'waiting'],
+    jd_e_manque:     ['manqué', 'missed'],
+    jd_e_releve:     ['relevé', 'answered'],
+    jd_e_gagne:      ['gagné', 'won'],
+    jd_e_perdu:      ['perdu', 'lost'],
+    jd_e_nul:        ['nul', 'draw'],
     run_total_short: ['parcours complet :', 'full run:'],
     // Variantes courtes pour les lignes du classement : le libelle long
     // mangeait la largeur reservee au nom du joueur.
