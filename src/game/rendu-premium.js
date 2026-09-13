@@ -574,6 +574,26 @@
   // -------------------------------------------------------------------
   const flashs = [];
   let prochain = 0;
+  // La rafale de l'arrivee : le nombre d'eclats qu'il reste a lacher.
+  let rafaleRestante = 0;
+
+  /**
+   * Le passage de la ligne.
+   *
+   * C'est le seul instant de la course ou une tribune entiere fait la meme
+   * chose au meme moment, et il ne se voyait nulle part : le coureur franchit
+   * la ligne, le chrono s'arrete, et le stade derriere lui continue de
+   * scintiller a son rythme de croisiere comme s'il ne s'etait rien passe.
+   *
+   * On ne change rien au mecanisme — ce sont les memes eclats, poses sur les
+   * memes gradins — on en lache simplement trente d'un coup. Une seconde et
+   * demie plus tard le stade a repris son rythme, et c'est exactement la duree
+   * d'une arrivee.
+   */
+  function rafale(n) {
+    if (niveau < MOYEN) return;
+    rafaleRestante = n || 34;
+  }
 
   function avancerFlashs(densite, P, near, tiers, sr, sz) {
     const dt = _dt;
@@ -581,13 +601,28 @@
       flashs[i].t += dt;
       if (flashs[i].t > 0.26) flashs.splice(i, 1);
     }
-    if (niveau < MOYEN || densite <= 0) return;
+    if (niveau < MOYEN) { rafaleRestante = 0; return; }
+    if (rafaleRestante > 0) {
+      // Trois par image pendant une seconde et demie : assez dense pour que
+      // la tribune paraisse partir d'un bloc, assez etale pour qu'on distingue
+      // encore les eclats les uns des autres.
+      for (let k = 0; k < 3 && rafaleRestante > 0; k++) {
+        rafaleRestante--;
+        poserFlash(P, near, tiers, sr, sz);
+      }
+      return;
+    }
+    if (densite <= 0) return;
     prochain -= dt;
     if (prochain > 0) return;
     // Un toutes les 90 ms dans une finale, une toutes les 700 ms a la
     // rencontre scolaire. La foule n'a pas la meme densite d'une etape a
     // l'autre, l'eclat non plus.
     prochain = 0.07 + Math.random() * 0.16 / clamp(densite, 0.12, 1);
+    poserFlash(P, near, tiers, sr, sz);
+  }
+
+  function poserFlash(P, near, tiers, sr, sz) {
     const sm = P.samples();
     if (!sm.length) return;
     // On ne tire que dans les tranches qui sont a l'ecran : tirer sur tout le
@@ -626,7 +661,7 @@
     ctx.restore();
   }
 
-  function viderFlashs() { flashs.length = 0; }
+  function viderFlashs() { flashs.length = 0; rafaleRestante = 0; }
 
   // -------------------------------------------------------------------
   // LA PASSE FINALE.
@@ -743,7 +778,7 @@
     PLEIN, MOYEN, SOBRE,
     mesurer, brume, tonte, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
-    avancerFlashs, dessinerFlashs, viderFlashs,
+    avancerFlashs, dessinerFlashs, viderFlashs, rafale,
     vignette, vitesse,
   };
 })();

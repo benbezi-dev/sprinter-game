@@ -322,6 +322,19 @@
   // Chaque stade hors serie porte donc SON remplissage (`foule`), et ce
   // tableau ne parle plus que de l'echelle du championnat.
   const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
+  /**
+   * Combien de monde il y a dans les gradins, de 0 a 1.
+   *
+   * Un stade hors serie porte sa propre affluence (`foule`), les six etapes du
+   * championnat suivent l'echelle ci-dessus. Trois endroits le lisaient
+   * chacun de leur cote — la tuile de public, la cadence des flashs, la rafale
+   * de l'arrivee — et un quatrieme aurait fini par se tromper.
+   */
+  function fouleDe(idx) {
+    const lvl = LEVELS[idx];
+    if (lvl && lvl.foule != null) return lvl.foule;
+    return CROWD_DENSITY[idx] ?? 1;
+  }
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
 
@@ -1467,6 +1480,7 @@
     // noir entre deux courses : ils sont poses dans LE MONDE, et le monde
     // vient d'etre reconstruit — un autre stade, parfois une autre piste.
     if (PREM()) { PREM().viderPoussiere(); PREM().viderFlashs(); }
+    G.rafaleTiree = false;
     G.elapsed = 0; G.shake = 0; G.flash = 0;
     // Le depart de CETTE course : sa longueur, et l'heure de ses deux
     // commandes. Le direct et le relais le reposeront sur l'heure annoncee par
@@ -1513,6 +1527,15 @@
               maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
     } else {
       const tbl = kind === 'intro' ? CUT_INTRO : (kind === 'taunt' ? CUT_TAUNT : CUT_DEFEAT);
+      // UNE CINEMATIQUE QUI N'EXISTE PAS SE PASSE, ELLE NE FAIT PAS TOMBER LE
+      // JEU. Ces trois tables sont alignees sur les six ETAPES du championnat ;
+      // les stades hors serie n'y ont pas d'entree, et c'est normal — on y
+      // entre par le one-shot, qui ne demande aucune cinematique. Mais un
+      // index voyage : un defi enregistre sur le canal de test porte le sien,
+      // et `buildLevel` se garde deja contre exactement ce cas. Sans cette
+      // ligne, le meme index ouvrait ici sur un `undefined` et la partie
+      // s'arretait au lieu de simplement enchainer sur la course.
+      if (!tbl[G.levelIdx]) return nextCut();
       const first = (G.champion || 'Le favori').split(' ')[0];
       lines = pickLang(tbl[G.levelIdx]).map(s => s.split('{n}').join(first));
       man = { name: G.champion || '',
@@ -2457,8 +2480,7 @@
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
     const lvl = LEVELS[levelIdx];
-    const density = (lvl && lvl.foule != null) ? lvl.foule
-                  : (CROWD_DENSITY[levelIdx] ?? 1);
+    const density = fouleDe(levelIdx);
     const surface = (CROWD_TILE * CROWD_TILE) / FOULE_REF;
     const count = Math.round(Math.max(15, 90 * density) * surface);
     const tile = document.createElement('canvas');
@@ -4112,6 +4134,78 @@
     }
   }
 
+  /**
+   * LES POTEAUX D'ARRIVEE.
+   *
+   * Une ligne d'arrivee n'est pas qu'un damier peint : de chaque cote de la
+   * piste se dresse un poteau blanc, et c'est LUI que vise la camera de photo
+   * finish. Sans eux, le damier flottait au milieu du rouge sans que rien ne
+   * dise ou la course s'arrete vraiment — et c'est pourtant le seul endroit
+   * du stade que le joueur regarde pendant les dix derniers metres.
+   *
+   * Deux poteaux, donc, et une camera sur celui du dedans. Un vrai stade en a
+   * une de chaque cote, mais la seconde serait cachee par les tribunes : on ne
+   * dessine que ce qui se voit.
+   *
+   * Ils sont dessines AVANT les athletes, comme les palmiers du dedans : ils
+   * recouvrent la piste, pas les coureurs. Un poteau qui passerait devant le
+   * vainqueur sur la ligne serait la pire image possible de cette course.
+   */
+  const POTEAU_CLAIR = [246, 248, 252], POTEAU_OMBRE = [168, 174, 190],
+        POTEAU_BANDE = [34, 36, 46];
+
+  function drawPoteaux(ctx, th, rIn, rOut) {
+    const T = G.track, m = scaleM();
+    const at = (d, r) => T.curved ? T.posAtR(d, r) : [d, r];
+    const coin = (d, r, z) => { const q = at(d, r); return solid(q[0], q[1], z); };
+    const quad = (a, b, c, d, col) => {
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    };
+    const D = T.total, e = 0.07, H = 1.30;
+    for (const [rr, camera] of [[rIn - 0.80, true], [rOut + 1.00, false]]) {
+      const pied = coin(D, rr, 0);
+      if (pied[0] < -60 || pied[0] > G.VW + 60 ||
+          pied[1] < -120 || pied[1] > G.VH + 60) continue;
+      // Deux faces verticales du fut : celle qui regarde la ligne d'arrivee et
+      // celle qui regarde la piste. Un poteau n'a pas besoin de ses quatre
+      // faces pour se lire, il a besoin d'un clair et d'un sombre.
+      const bandes = [[0, H * 0.62, POTEAU_CLAIR], [H * 0.62, H * 0.78, POTEAU_BANDE],
+                      [H * 0.78, H, POTEAU_CLAIR]];
+      for (const [z0, z1, col] of bandes) {
+        quad(coin(D - e, rr - e, z0), coin(D + e, rr - e, z0),
+             coin(D + e, rr - e, z1), coin(D - e, rr - e, z1), rgb(col));
+        quad(coin(D + e, rr - e, z0), coin(D + e, rr + e, z0),
+             coin(D + e, rr + e, z1), coin(D + e, rr - e, z1),
+             col === POTEAU_BANDE ? rgb(col, 0.78) : rgb(POTEAU_OMBRE));
+      }
+      // Le dessus du fut : sans lui le poteau est deux rectangles colles.
+      quad(coin(D - e, rr - e, H), coin(D + e, rr - e, H),
+           coin(D + e, rr + e, H), coin(D - e, rr + e, H), rgb(POTEAU_CLAIR, 1.04));
+      if (!camera) continue;
+      // La camera de photo finish : un boitier sombre, pose en haut du poteau
+      // du dedans et tourne vers la piste. Elle ne fait rien — mais c'est elle
+      // qui dit a quoi sert ce poteau-la.
+      const cz0 = H, cz1 = H + 0.26, cr = rr + 0.10, ce = 0.13;
+      quad(coin(D - ce, cr - ce, cz0), coin(D + ce, cr - ce, cz0),
+           coin(D + ce, cr - ce, cz1), coin(D - ce, cr - ce, cz1), rgb(POTEAU_BANDE, 1.9));
+      quad(coin(D + ce, cr - ce, cz0), coin(D + ce, cr + ce, cz0),
+           coin(D + ce, cr + ce, cz1), coin(D + ce, cr - ce, cz1), rgb(POTEAU_BANDE, 1.2));
+      quad(coin(D - ce, cr - ce, cz1), coin(D + ce, cr - ce, cz1),
+           coin(D + ce, cr + ce, cz1), coin(D - ce, cr + ce, cz1), rgb(POTEAU_BANDE, 2.4));
+    }
+    // L'ombre des deux poteaux, pour qu'ils tiennent au sol comme le reste.
+    if (PREM()) {
+      for (const rr of [rIn - 0.80, rOut + 1.00]) {
+        const q = at(D, rr), p = ground(q[0], q[1]);
+        if (p[0] < -60 || p[0] > G.VW + 60) continue;
+        PREM().ombre(ctx, p[0], p[1], m * 0.42, 1, 0, th.projecteurs);
+      }
+    }
+  }
+
   function drawWorld(ctx, th) {
     const T = G.track;
     // ciel
@@ -4319,9 +4413,7 @@
       // le public — une rencontre scolaire ne scintille pas comme une finale —
       // et se posent sur un vrai gradin, pas sur l'ecran. Voir rendu-premium.js.
       if (PREM() && (G.state === 'race' || G.state === 'count')) {
-        const lvl = LEVELS[G.levelIdx];
-        const dens = (lvl && lvl.foule != null) ? lvl.foule : (CROWD_DENSITY[G.levelIdx] ?? 1);
-        PREM().avancerFlashs(dens, PEINTRE, near, tiers, sr, sz);
+        PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
         PREM().dessinerFlashs(ctx, PEINTRE);
       }
     }
@@ -4539,6 +4631,9 @@
     // celui du couloir 8 : `markAt` donne a chacun le sien, exactement comme
     // pour les reperes peints juste au-dessus.
     if (T.markAt) drawBlocs(ctx, th);
+
+    // Les poteaux d'arrivee, apres le damier qu'ils encadrent.
+    if (T.total) drawPoteaux(ctx, th, rIn, rOut);
 
     // LES NAPPES DES PROJECTEURS, APRES TOUT CE QUI EST PEINT AU SOL.
     //
@@ -5097,6 +5192,20 @@
         vis.push([r, g2, p]);
     }
     const prem = PREM();
+    // LE PASSAGE DE LA LIGNE, VU D'ICI ET NON DU MOTEUR.
+    //
+    // `finishRace` ne s'execute que trois secondes plus tard, quand tout le
+    // monde s'est arrete : c'est le bon endroit pour un classement, pas pour
+    // une reaction. L'instant ou le joueur coupe la ligne, lui, se lit sur
+    // `finished` — et le rendu est deja la, a chaque image. Le drapeau repart
+    // avec la course (voir buildLevel).
+    if (prem && G.player && G.player.finished && !G.rafaleTiree) {
+      G.rafaleTiree = true;
+      // A LA MESURE DU STADE. Trente photographes a une rencontre scolaire
+      // seraient aussi faux qu'aucun a une finale : la rafale suit
+      // l'affluence, comme tout le reste de ce gradin.
+      prem.rafale(Math.round(6 + 34 * fouleDe(G.levelIdx)));
+    }
     for (const [r, g2] of vis) {
       if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
       if (prem) {
