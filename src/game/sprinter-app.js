@@ -1788,6 +1788,94 @@
    * @param opts.marque ou il est pose, en metres absolus.
    * @param opts.autres les temoins adverses : [{ id, nom, couloir }].
    */
+  /**
+   * LES DEUX MOITIES D'UN COULOIR.
+   *
+   * Une equipe de relais court dans UN couloir, et les quatre s'y repartissent
+   * comme sur une vraie piste : les relayeurs impairs a gauche — cote corde,
+   * l'interieur — les pairs a droite. Ce n'est pas decoratif : c'est ce qui
+   * fait que le porteur et son receveur se voient arriver l'un a cote de
+   * l'autre au lieu de se marcher dessus, et que la main tendue part du bon
+   * cote.
+   *
+   * Les nombres sont des indices de couloir, pas des metres, et ils sont
+   * calcules pour que PERSONNE NE DEBORDE. `Track.radius(l)` vaut
+   * `R1 + l × 1,22 + 0,20` : la ligne de mesure passe a vingt centimetres du
+   * bord interieur, si bien que le couloir l s'etend de l − 0,164 a l + 0,836
+   * dans cette unite. Les deux moities sont donc centrees a +0,09 et +0,58,
+   * ce qui laisse de chaque cote la demi-largeur d'un coureur avant la ligne
+   * blanche.
+   */
+  const ZONE_RELAIS = 30;          // la zone de transmission, comme au serveur
+  /*
+   * Les deux moities, en METRES depuis la ligne de mesure du couloir — et non
+   * en fractions de couloir. Un couloir fait 1,22 m et sa ligne de mesure
+   * passe a 0,20 m du bord interieur : les centres des deux moities tombent
+   * donc a 0,305 m et 0,915 m de ce bord, soit +0,105 m et +0,715 m de la
+   * ligne. Il reste 0,305 m de chaque cote avant la ligne blanche, de quoi
+   * loger un coureur sans deborder.
+   */
+  const DEMI_GAUCHE = 0.105, DEMI_DROITE = 0.715;
+  const demiCouloir = (relais) => (relais % 2 === 1 ? DEMI_GAUCHE : DEMI_DROITE);
+
+  /**
+   * Qui porte le temoin, a cet instant.
+   *
+   * Le dessin le lit sur le coureur lui-meme (`r.temoin`, voir `pose` dans
+   * sprinter-core) : un seul l'a en main, et il change de main a chaque
+   * transmission. C'est la salle qui tranche, comme pour tout le reste du
+   * relais ; l'ecran ne fait que suivre.
+   */
+  function porteurDuTemoin(rang) {
+    for (const r of G.runners) {
+      if (r.relaisRang == null) continue;
+      // La main du cote de la camera : de dos, l'autre est masquee par le
+      // corps, et un temoin a moitie cache ne raconte rien.
+      r.temoin = (r.relaisRang === rang) ? -1 : null;
+    }
+  }
+
+  function armRelayeurs(autres, monRelais) {
+    // ON AJOUTE, ON NE REMPLACE PAS. En confrontation, `startLive` vient
+    // d'armer les temoins adverses — un par couloir — et remettre la table a
+    // zero ici les effacerait tous : les sept autres equipes disparaitraient
+    // de la piste tout en figurant au classement d'arrivee.
+    if (!G.lives) G.lives = new Map();
+    if (!autres || !autres.length) return;
+    // Le couloir de l'equipe, en entier : `startRelais` decalera ensuite le
+    // joueur local dans sa propre moitie, et deux moities ne s'additionnent
+    // pas.
+    const monCouloir = Math.round(G.player ? G.player.lane : 3);
+    const teinte = couleurCouloir(Math.round(monCouloir));
+    for (const a of autres) {
+      // Celui qui me precede arrive par l'exterieur, celui qui me suit attend
+      // a l'interieur : de mon ecran, l'un entre par derriere et l'autre est
+      // devant, du bon cote.
+      // Sa moitie de couloir depend de SON rang, pas de sa position par
+      // rapport a moi : les quatre ecrans doivent placer les memes coureurs
+      // aux memes endroits, sinon la transmission se voit d'un cote et pas
+      // de l'autre.
+      const r = new Runner(a.nom || '', monCouloir, {
+        maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool,
+      });
+      r.isGhost = true; r.isLive = true; r.relaisRang = a.relais;
+      r.demi = demiCouloir(a.relais);
+      // Chacun s'arrete au bout de SA zone : le troisieme ne doit pas
+      // continuer dans la portion du quatrieme.
+      r.relaisFin = a.relais < 4 ? a.relais * 100 + 30 : null;
+      // Un relayeur attend a SA marque, pas sur la ligne de depart. Le poser a
+      // zero le ferait traverser la piste entiere a la premiere position
+      // recue, et le troisieme coureur apparaitrait en train de remonter
+      // deux cents metres en une image.
+      r.d = Math.max(0, ((a.relais || 1) - 1) * 100);
+      r.v = 0;
+      r.repere = { couleur: teinte, nom: a.nom || '' };
+      G.runners.push(r);
+      G.lives.set(a.id, { live: true, equipier: true, cible: r.d, vEst: 0, depuis: 0,
+                          runner: r, trace: [], step: REC_STEP, time: 0 });
+    }
+  }
+
   function startRelais(opts) {
     opts = opts || {};
     const relais = Math.max(1, Math.min(4, opts.relais || 1));
@@ -1796,9 +1884,21 @@
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
     });
+    // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
+    // les coequipiers viennent par-dessus, dans mon couloir a moi.
+    if (opts.equipiers && opts.equipiers.length) armRelayeurs(opts.equipiers, relais);
     const p = G.player;
     p.legStart = marque;
     p.d = marque;
+    p.relaisRang = relais;
+    // Ma moitie de couloir, par mon rang — la meme que celle que les trois
+    // autres ecrans me donneront. Le COULOIR, lui, ne bouge pas : c'est de
+    // lui que vient l'abscisse, et deux coequipiers doivent la partager.
+    p.demi = demiCouloir(relais);
+    /* LE DONNEUR NE VA PAS PLUS LOIN QUE SA ZONE. Sa portion s'arrete au bout
+       des trente metres de transmission ; au-dela, il courrait celle du
+       suivant. Le quatrieme, lui, va jusqu'a la ligne. */
+    p.relaisFin = relais < 4 ? relais * 100 + ZONE_RELAIS : null;
     // Le premier part des blocs, avec sa poussee et sa reaction ; les trois
     // autres partent lances, et c'est la zone que l'on note.
     if (relais > 1) {
@@ -4328,6 +4428,10 @@
     // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
     // apres les deux aplats qu'elles habillent. Voir rendu-premium.js.
     if (PREM()) PREM().tonte(ctx, th, PEINTRE, rIn, rOut, horizon);
+    // Le grain de la pelouse, au meme endroit et pour la meme raison : c'est
+    // ce qui remplace les passes de tondeuse depuis qu'elles sont eteintes.
+    // Voir herbe() dans rendu-premium.js.
+    if (PREM()) PREM().herbe(ctx, th, PEINTRE, rIn, rOut, horizon);
     if (th.lointain) {
       // La bande de lointain est etroite A DESSEIN, et c'est mesure : la
       // hauteur a l'ecran compte plus de deux fois la distance au sol (voir
@@ -4545,6 +4649,10 @@
     // liseret contre la pelouse. Apres les lignes : un mur de vingt metres
     // assombrit aussi la peinture blanche qui court a son pied.
     if (PREM()) PREM().occlusion(ctx, PEINTRE, rIn, rOut);
+    // La grande ombre que les gradins posent sur les couloirs exterieurs :
+    // elle vient juste apres l'occlusion, qui ne traite que le demi-metre
+    // contre le muret. Voir tribunes() dans rendu-premium.js.
+    if (PREM()) PREM().tribunes(ctx, th, PEINTRE, rIn, rOut, horizon);
 
     // Rayon d'une ligne peinte, ligne droite comprise.
     const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
@@ -5225,7 +5333,7 @@
     const all = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0)
       ? G.runners.concat([G.ghost.runner]) : G.runners;
     for (const r of all) {
-      const p = T.pos(r.d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(r.d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
@@ -5324,7 +5432,7 @@
     for (let k = 3; k >= 1; k--) {
       const d = ghostDistAt(G.elapsed - k * 0.13);
       if (d <= 0 || dNow - d < 0.05) continue;
-      const p = T.pos(d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] < -200 || g2[0] > G.VW + 200) continue;
       ctx.globalAlpha = 0.10 * (4 - k) / 3;
       r.d = d; r.stride = strideNow - (dNow - d) * (Math.PI / r.strideLength());
@@ -5352,6 +5460,7 @@
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
     armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
+    armRelayeurs, porteurDuTemoin,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
     annoncerLeDepart, coupDePistolet,
