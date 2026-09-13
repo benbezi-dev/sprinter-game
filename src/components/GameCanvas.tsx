@@ -145,6 +145,13 @@ export function GameCanvas() {
       
       updateLogic(dt);
 
+      // La couche de finition prend le pouls de l'image AVANT qu'on dessine :
+      // c'est elle qui decide, au vu du temps reellement passe, si le
+      // telephone tient le grain de piste et la poussiere ou s'il faut les
+      // lui retirer. Voir game/rendu-premium.js.
+      const Prem = (globalThis as any).RenduPremium;
+      if (Prem) Prem.mesurer(dt);
+
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);
 
@@ -219,6 +226,40 @@ export function GameCanvas() {
         }
         
         ctx.restore();
+      }
+
+      // LA PASSE FINALE, SUR L'IMAGE ENTIERE.
+      //
+      // Elle vient apres tout — monde, athletes, cinematiques — parce que
+      // c'est ce qu'elle est : non plus un objet de plus dans le stade, mais
+      // la facon dont on REGARDE le stade. Le vignettage ferme les bords,
+      // l'etalonnage donne au lieu une lumiere commune, et a pleine vitesse
+      // l'image se resserre autour du coureur.
+      //
+      // Le HUD est en React, au-dessus du canvas : il reste donc franc, et
+      // c'est voulu — un chiffre de chrono assombri dans un coin serait
+      // illisible, alors qu'une piste assombrie dans un coin est du cinema.
+      if (Prem) {
+        const enCourse = G.state === 'race';
+        // La part de vitesse : rien jusqu'aux trois quarts de la vitesse
+        // maximale, puis une montee franche. En dessous, l'effet accompagnait
+        // la marche d'approche et ne voulait plus rien dire.
+        const v = enCourse && G.player ? G.player.v / (G.player.maxSpeed || 12) : 0;
+        const part = SprinterApp.clamp((v - 0.74) / 0.26, 0, 1);
+        // La direction de course A L'ECRAN, prise sur la piste elle-meme :
+        // un metre plus loin dans le couloir du joueur, et la difference des
+        // deux projections est l'axe que suivent les trainees. En virage il
+        // tourne avec le coureur, sans qu'on ait a rejouer la geometrie.
+        let dx = 0, dy = 0;
+        if (enCourse && G.player && G.track) {
+          const a = G.track.pos(G.player.d, G.player.lane);
+          const b = G.track.pos(G.player.d + 1, G.player.lane);
+          const pa = SprinterApp.ground(a[0], a[1]);
+          const pb = SprinterApp.ground(b[0], b[1]);
+          dx = pb[0] - pa[0]; dy = pb[1] - pa[1];
+        }
+        Prem.vitesse(ctx, G, part, dx, dy);
+        Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + part * 0.15);
       }
 
       rafRef.current = requestAnimationFrame(frame);

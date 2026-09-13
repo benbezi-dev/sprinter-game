@@ -261,7 +261,7 @@
     { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
-    { name: '0.Games', theme: 'olympic', pool: 'sprint',
+    { name: 'Jeux olympiques', theme: 'olympic', pool: 'sprint',
       names: ['Blaze Kade', 'Jett Cruz', 'Rex Solar', 'Kai Volt',
               'Ash Comet', 'Neo Flash', 'Ray Quick'] },
     { name: 'Inter galactique', theme: 'cosmos', pool: 'sprint',
@@ -840,45 +840,6 @@
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
     return this.posAtR(s, this.radius(lane));
   };
-
-  /**
-   * LE MEME POINT, DECALE LATERALEMENT DANS LE COULOIR.
-   *
-   * `dr` est un ecart en metres par rapport a la ligne de mesure du couloir.
-   * Il sert au relais, ou deux coequipiers partagent un couloir : l'un serre
-   * la corde, l'autre court a l'exterieur.
-   *
-   * POURQUOI UNE FONCTION A PART, ET NON UN COULOIR FRACTIONNAIRE. `pos()`
-   * tire l'abscisse curviligne du rayon : `bend1(r)` raccourcit quand le
-   * rayon grandit, ce qui est exactement le depart en quinconce. Pour deux
-   * couloirs voisins c'est juste — chacun court sa propre distance. Pour deux
-   * coureurs du MEME couloir, c'est faux : places tous les deux a 112 m, ils
-   * se retrouvaient a **1,9 m l'un de l'autre** a l'ecran, le plus a
-   * l'exterieur en avant. Une transmission que le serveur declare au contact
-   * s'affichait donc a deux bonnes foulees d'ecart.
-   *
-   * On garde donc l'abscisse du couloir — le meme angle pour les deux — et on
-   * ne bouge que le rayon.
-   */
-  Track.prototype.posDemi = function (s, lane, dr) {
-    if (!dr) return this.pos(s, lane);
-    if (!this.curved) return [s, C.LANE_W * (lane + 0.5) + dr];
-    const rRef = this.radius(lane), r = rRef + dr;
-    const A = this.bend1(rRef);
-    if (this.fullLap && s >= A + this.straight) {
-      const s2 = s - A - this.straight, B = Math.PI * rRef;
-      if (s2 < B) {
-        const phi = (B - s2) / rRef;
-        return [this.straight + r * Math.sin(phi), -r * Math.cos(phi)];
-      }
-      return [this.straight - (s2 - B), -r];
-    }
-    if (s < A) {
-      const phi = (A - s) / rRef;
-      return [-r * Math.sin(phi), r * Math.cos(phi)];
-    }
-    return [s - A, r];
-  };
   // Le meme point, mais exprime comme un echantillon du rendu :
   // [surVirage, v, moitie]. Sur un virage v est l'angle, sur une ligne
   // droite c'est l'abscisse depuis le debut de cette droite. Cela permet de
@@ -958,27 +919,6 @@
     // reperes, la transition serait notee au mauvais endroit et le troisieme
     // relayeur serait juge sur une phase qu'il a franchie depuis longtemps.
     this.legStart = 0;
-    /**
-     * OU S'ARRETE CE RELAYEUR, en metres absolus.
-     *
-     * Un relayeur ne court pas jusqu'a l'arrivee : sa course finit au bout de
-     * SA zone de transmission. Sans cette borne, le donneur continuait tout
-     * droit apres avoir lache le temoin — on le voyait a trois cents metres
-     * du depart, courant une portion qui n'etait pas la sienne, pendant que
-     * son coequipier courait la vraie. `null` pour une course ordinaire et
-     * pour le quatrieme, que la ligne d'arrivee arrete deja.
-     */
-    this.relaisFin = null;
-    /**
-     * Ma moitie de couloir, en metres depuis la ligne de mesure.
-     * Zero pour une course ordinaire : on court sur sa ligne.
-     */
-    this.demi = 0;
-    /**
-     * Le temoin, et dans quelle main : 1 ou -1, `null` s'il ne l'a pas.
-     * Un seul coureur le porte a un instant donne. Voir `pose`.
-     */
-    this.temoin = null;
     this.driveEnd = C.DRIVE_END;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
@@ -1157,16 +1097,6 @@
     }
     const before = this.d;
     this.d += this.v * dt;
-    // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
-    //
-    // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
-    // fini une course, il a fini SA portion, et le chrono de l'equipe
-    // continue sans lui. On le retient donc sur place, et il s'arrete comme
-    // on s'arrete apres une transmission : en deceleration, pas net.
-    if (this.relaisFin != null && this.d >= this.relaisFin) {
-      this.d = this.relaisFin;
-      this.v *= Math.exp(-7 * dt);
-    }
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
     const fin = this.legStart + this.driveEnd;
@@ -1237,15 +1167,8 @@
   // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
-  // Deux couleurs fixes, sorties de pose() : le rendu garde ses teintes en
-  // cache par couleur, et un tableau recree a chaque image n'aurait jamais
-  // ete retrouve dans ce cache — un dossard et un temoin repeints a chaque
-  // frame pour rien, huit fois par course.
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
-  const DOSSARD = [242, 242, 238];
-  const TEMOIN = [250, 206, 62];
-
   function pose(r) {
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
@@ -1328,18 +1251,8 @@
     const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
-    // LE DERNIER ARGUMENT DIT QUEL BOUT EST LIBRE.
-    //
-    // Le rendu arrondit le bout d'un segment quand on le lui demande, et
-    // seulement alors. Le squelette est le seul a savoir lequel merite de
-    // l'etre : un crane, une main, une pointe de chaussure se terminent
-    // dans le vide, tandis qu'une cuisse ou un buste s'emboitent dans le
-    // segment suivant. Arrondir ces derniers leur ajoutait une calotte qui
-    // sortait du corps — le buste portait une collerette au-dessus des
-    // epaules, parfaitement visible sur l'ecran de presentation.
-    const add = (c, pv, a, o, hb, ht, hz, yaw, bout) =>
-      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
-                bout ? 1 : 0]);
+    const add = (c, pv, a, o, hb, ht, hz, yaw) =>
+      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0]);
 
     add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
         [0.112, hipY + 0.032], 0.098, yawHip);
@@ -1349,7 +1262,7 @@
         [0.113, shY * 1.05], 0.086, yawTop);
     add(L.jersey, hip, lean, [0, 0, 0.352], [0.118, shY * 1.15],
         [0.129, shY * 1.30], 0.128, yawTop);
-    add(DOSSARD, hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
+    add([242, 242, 238], hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
         [0.010, shY * 0.50], 0.060, yawTop);
     // bande de couleur sur le maillot et le short, assortie aux chaussures :
     // un vrai kit d'athletisme plutot qu'un aplat uniforme.
@@ -1365,81 +1278,62 @@
     add(L.skin, hip, lean, [0, 0, 0.552], [0.042, 0.048], [0.040, 0.046],
         0.042, yawTop * 0.5);
     add(L.skin, hip, lean, [0.006, 0, 0.672 - bob * 0.55], [0.084, 0.081],
-        [0.088, 0.086], 0.086, yawTop * 0.2, true);
+        [0.088, 0.086], 0.086, yawTop * 0.2);
 
     const hy = yawTop * 0.2, hc = L.hairCol;
     switch (L.hair) {
       case 'shaved':
         add(hc, hip, lean, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
-            0.016, hy, true); break;
+            0.016, hy); break;
       case 'flattop':
         add(hc, hip, lean, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
-            0.048, hy, true); break;
+            0.048, hy); break;
       case 'fade':
         add(hc, hip, lean, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
-            0.030, hy, true);
+            0.030, hy);
         add(hc, hip, lean, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
-            0.046, hy, true); break;
+            0.046, hy); break;
       case 'bun':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
+            0.034, hy);
         add(hc, hip, lean, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
-            0.044, hy, true); break;
+            0.044, hy); break;
       case 'ponytail':
         add(hc, hip, lean, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
-            0.032, hy, true);
+            0.032, hy);
         add(hc, hip, lean + 0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
-            [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
+            [0.058, 0.032], [0.036, 0.022], 0.028, hy); break;
       case 'braids':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
+            0.034, hy);
         for (const dy of [-0.044, 0, 0.044]) {
           add(hc, hip, lean + 0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
-              [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
+              [0.046, 0.015], [0.030, 0.012], 0.018, hy);
         }
         break;
       default:
         add(hc, hip, lean, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
-            0.026, hy, true);
+            0.026, hy);
     }
 
     const sh = rot(0, 0.470, lean);
     /** Le poing du bras armé, garde pour y accrocher le pistolet. */
     let poing = null;
-    /** Le poing qui porte le temoin, quand ce coureur l'a en main. */
-    let main = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
       // seul cone, plus large au milieu qu'a l'epaule ou au coude.
-      add(L.skin, S, aArm, [0, 0, -0.012], [armR + 0.020, armR + 0.020],
-          [armR + 0.018, armR + 0.019], 0.026, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.05], [armR + 0.014, armR + 0.014],
           [armR + 0.004, armR + 0.008], 0.05, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.175], [armR - 0.010, armR - 0.008],
           [armR + 0.014, armR + 0.014], 0.075, yawTop);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
-      // LES ARTICULATIONS SE VOYAIENT.
-      //
-      // Chaque membre est une suite de troncs de cone, et deux troncs qui se
-      // rencontrent a un angle laissent une marche : le bras finissait a un
-      // rayon, l'avant-bras repartait a un autre, dans une autre direction.
-      // De pres — presentation, accueil, sacre — le coureur se lisait comme
-      // un mannequin articule, pas comme un corps.
-      //
-      // Une rotule par articulation suffit : un tonneau court, a peine plus
-      // large que les deux segments qu'il raccorde, pose sur le pivot. Il
-      // avale les deux bouts et la jointure disparait. Quatre segments de
-      // plus sur une quarantaine, et rien a changer au moteur de rendu.
-      add(L.skin, E, aFore, [0, 0, -0.014], [armR + 0.003, armR + 0.005],
-          [armR + 0.003, armR + 0.005], 0.028, yawTop);
       add(L.skin, E, aFore, [0, 0, -0.112], [armR - 0.012, armR - 0.010],
           [armR - 0.004, armR - 0.001], 0.112, yawTop);
       add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
-          [armR - 0.010, armR - 0.008], 0.036, yawTop, true);
+          [armR - 0.010, armR - 0.008], 0.036, yawTop);
       if (r.pistolet === side) poing = [E, aFore];
-      if (r.temoin === side) main = [E, aFore];
     }
 
     // LES ANTENNES.
@@ -1453,31 +1347,13 @@
         add(L.skin, hip, lean, [-0.012, dy, 0.806], [0.011, 0.011],
             [0.008, 0.008], 0.058, hy);
         add(r.antennes, hip, lean, [-0.018, dy, 0.884], [0.026, 0.026],
-            [0.024, 0.024], 0.016, hy, true);
+            [0.024, 0.024], 0.016, hy);
       }
     }
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
                                       [-1, rr[0], rr[1], rr[2]]]) {
       const H = [hip[0], side * hipY, hip[2] - 0.02];
-      // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
-      //
-      // Tout le monde portait la meme piece : un seul volume au bassin,
-      // coupe net a la hauteur du pli de l'aine. Ca passe pour un cuissard
-      // — ce que portent les femmes — mais un short d'athletisme masculin
-      // a des jambes, et c'est ce qu'on voyait manquer.
-      //
-      // La jambe de short est accrochee au pivot de la cuisse et suit son
-      // angle : elle se leve avec le genou, comme un vetement porte et non
-      // comme un anneau pose sur le bassin. Un rien plus large que la
-      // cuisse a chaque hauteur, pour qu'elle l'avale sans la pincer.
-      //
-      // Rien ne change pour les femmes : leur cuissard reste le seul
-      // volume du bassin.
-      if (!fem) {
-        add(L.shorts, H, th, [0, 0, -0.078], [legR + 0.034, legR + 0.036],
-            [legR + 0.030, legR + 0.032], 0.078, yawHip);
-      }
       // quadriceps galbe : meme principe que le bras, la cuisse gonfle
       // vers son tiers superieur puis s'affine jusqu'au genou.
       add(L.skin, H, th, [0, 0, -0.075], [legR + 0.026, legR + 0.026],
@@ -1486,8 +1362,6 @@
           [legR + 0.026, legR + 0.026], 0.115, yawHip);
       const k = rot(0, -0.392, th);
       const K = [H[0] + k[0], H[1], H[2] + k[1]];
-      add(L.skin, K, sk, [0, 0, -0.020], [legR + 0.003, legR + 0.006],
-          [legR + 0.003, legR + 0.006], 0.034, yawHip);
       add(L.skin, K, sk, [-0.008, 0, -0.098], [legR - 0.020, legR - 0.014],
           [legR - 0.004, legR + 0.002], 0.100, yawHip);
       add(L.skin, K, sk, [0, 0, -0.288], [legR - 0.034, legR - 0.030],
@@ -1497,9 +1371,9 @@
       // semelle claire, legerement plus large : elle deborde sous la
       // couleur de la chaussure pour suggerer une vraie basket bicolore.
       add([236, 236, 232], An, ft, [0.036, 0, -0.030], [0.098, 0.046],
-          [0.080, 0.052], 0.028, yawHip, true);
+          [0.080, 0.052], 0.028, yawHip);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
-          0.028, yawHip, true);
+          0.028, yawHip);
     }
 
     // LE PISTOLET DU STARTER, DANS LE PROLONGEMENT DE L'AVANT-BRAS.
@@ -1521,24 +1395,6 @@
           0.034, yawTop);
       add(CANON, M, a, [-0.004, 0, -0.378], [0.015, 0.014], [0.018, 0.016],
           0.066, yawTop);
-    }
-
-    // LE TEMOIN, DANS LA MAIN DU PORTEUR.
-    //
-    // Il n'existait pas. Le relais se jouait sur un objet qu'on ne voyait
-    // jamais : deux coureurs se croisaient, un chiffre changeait de ligne, et
-    // rien a l'ecran ne disait que quelque chose etait passe d'une main a
-    // l'autre. C'est pourtant la seule piece du mode.
-    //
-    // Il chevauche le poing — trente centimetres, comme le vrai — plutot que
-    // de prolonger l'avant-bras comme le pistolet du starter : un baton tenu
-    // par son milieu se lit tout de suite comme un baton, et non comme une
-    // rallonge du bras. Jaune vif : sur une piste bleue et un maillot sombre,
-    // c'est la couleur qui accroche l'oeil de loin.
-    if (main) {
-      const [M, a] = main;
-      add(TEMOIN, M, a, [0.010, 0, -0.300], [0.019, 0.019], [0.019, 0.019],
-          0.085, yawTop, true);
     }
     return out;
   }

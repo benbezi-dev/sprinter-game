@@ -37,5 +37,9 @@ Le jeu sera disponible sur `https://<votre-utilisateur>.github.io/<nom-du-repo>/
 ## Structure
 
 - `src/game/` — moteur du jeu (physique, rendu low-poly, audio procédural, i18n)
+- `src/game/rendu-premium.js` — la couche de finition : brume de distance,
+  passes de tondeuse, grain du tartan, occlusion des bords, ombres douces,
+  poussière des appuis, flashs dans les tribunes, vignettage. Elle se règle
+  seule sur le framerate de l'appareil, et le jeu tourne sans elle.
 - `src/components/` — interface React (écrans, HUD, contrôles tactiles)
 - `public/` — icônes de l'application
