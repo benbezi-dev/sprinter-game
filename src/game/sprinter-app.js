@@ -32,9 +32,9 @@
       crowdLo: [56, 44, 78], crowdHi: [214, 188, 244],
       accent: [232, 121, 216], dust: [216, 196, 236]
     },
-    // Jeux olympiques : piste bleue, lignes blanches et liseret vert au
+    // Jeux mondiaux : piste bleue, lignes blanches et liseret vert au
     // couloir interieur, comme la piste d'athletisme de Vallehermoso.
-    olympic: {
+    mondiaux: {
       skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
       grass: [30, 111, 0], grassEdge: [20, 88, 0],
       trackA: [21, 70, 158], trackB: [16, 56, 132],
@@ -322,6 +322,19 @@
   // Chaque stade hors serie porte donc SON remplissage (`foule`), et ce
   // tableau ne parle plus que de l'echelle du championnat.
   const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
+  /**
+   * Combien de monde il y a dans les gradins, de 0 a 1.
+   *
+   * Un stade hors serie porte sa propre affluence (`foule`), les six etapes du
+   * championnat suivent l'echelle ci-dessus. Trois endroits le lisaient
+   * chacun de leur cote — la tuile de public, la cadence des flashs, la rafale
+   * de l'arrivee — et un quatrieme aurait fini par se tromper.
+   */
+  function fouleDe(idx) {
+    const lvl = LEVELS[idx];
+    if (lvl && lvl.foule != null) return lvl.foule;
+    return CROWD_DENSITY[idx] ?? 1;
+  }
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
 
@@ -331,6 +344,15 @@
   const MAGENTA = 'rgb(232,121,216)';
   const rgb = (c, f) => 'rgb(' + Math.min(255, c[0] * (f || 1) | 0) + ',' +
     Math.min(255, c[1] * (f || 1) | 0) + ',' + Math.min(255, c[2] * (f || 1) | 0) + ')';
+  // Meme chose que rgb(), mais avec une part AJOUTEE apres la multiplication.
+  // C'est ce qu'il faut pour un liseret : multiplier du bleu marine par 1,3 le
+  // laisse bleu marine, lui ajouter trente donne le bord eclaire qu'on cherche.
+  const rgbEclaire = (c, f, add) => 'rgb(' +
+    Math.min(255, c[0] * f + add | 0) + ',' +
+    Math.min(255, c[1] * f + add | 0) + ',' +
+    Math.min(255, c[2] * f + add | 0) + ')';
+  const rgba = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' +
+    (c[2] | 0) + ',' + a + ')';
   const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t),
@@ -607,7 +629,7 @@
         bassDiv: 8, bassPat: [0, 0, 7, 0, 12, 0, 7, -1], bassAmp: 0.44,
         padAmp: 0.085, arp: 8, arpAmp: 0.11, drone: 0.10, droneSemi: 0, stab: 0
       });
-      this.buf.race2 = this.buildRace({          // jeux olympiques
+      this.buf.race2 = this.buildRace({          // jeux mondiaux
         bpm: 140, prog: [[0, MIN], [1, MAJ], [-4, MAJ], [7, AUG]],
         kick: [0, 1, 1.5, 2, 3, 3.5], snare: [1, 3, 3.75], hats: 16,
         bassDiv: 16, bassPat: [0, 0, 0, 12, 0, 0, 7, 0, 0, 0, 12, 0, 1, 0, 7, 0],
@@ -1072,6 +1094,9 @@
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
+    // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
+    // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
+    sortie: null,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
@@ -1101,7 +1126,7 @@
     paused: false,
 
     // Noms du haut du TOP 500 par discipline, charges en tache de fond et
-    // servis aux Jeux olympiques. Vides tant que le reseau n'a pas repondu :
+    // servis aux Jeux mondiaux. Vides tant que le reseau n'a pas repondu :
     // le plateau maison prend alors le relais.
     topNames: { '100': [], '200': [], '400': [] },
 
@@ -1186,7 +1211,7 @@
     return p < 0 ? null : p + 1;
   }
 
-  // Aux Jeux olympiques, le plateau n'est plus invente : ce sont les sept
+  // Aux Jeux mondiaux, le plateau n'est plus invente : ce sont les sept
   // meilleurs chronos mondiaux de la discipline, tires du TOP 500 par course.
   //
   // Trois regles. Un joueur peut occuper plusieurs lignes du tableau, il ne
@@ -1194,13 +1219,13 @@
   // joueur lui-meme est retire, sinon il courrait contre son propre fantome
   // homonyme. Et s'il n'y a pas encore sept noms au tableau, on complete avec
   // les adversaires maison, sans doublon.
-  const OLYMPIC = 4;
+  const MONDIAUX = 4;
   function myNameKey() {
     try { return (localStorage.getItem('sprinter_player_name') || '').trim().toLowerCase(); }
     catch (e) { return ''; }
   }
-  function olympicNames() {
-    const base = LEVELS[OLYMPIC].names;
+  function mondiauxNames() {
+    const base = LEVELS[MONDIAUX].names;
     const top = (G.topNames && G.topNames[G.raceKey]) || [];
     const mine = myNameKey();
     const seen = new Set(), out = [];
@@ -1407,6 +1432,10 @@
    * parti d'un canon, et un ecran qui tremble sur un bip ne raconterait rien.
    */
   function coupDePistolet() {
+    // Huit paires de pointes qui lachent les blocs en meme temps : c'est la
+    // seule image de la course ou toute la piste bouge d'un coup, et elle ne
+    // durait rien. La poussiere du depart la tient un demi-seconde.
+    if (PREM() && G.track && G.runners) PREM().depart(theme(), G.runners, G.track);
     if (!STARTER) { Audio_.sfx('go'); return; }
     Audio_.starter('feu');
     G.flash = 0.45; G.shake = 0.4;
@@ -1437,7 +1466,7 @@
       best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
-    const names = idx === OLYMPIC ? olympicNames() : lvl.names;
+    const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
     names.forEach((n, i) => {
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
@@ -1450,6 +1479,11 @@
       G.runners.push(r);
     });
     G.parts = [];
+    // La poussiere et les eclats de la course precedente ne traversent pas le
+    // noir entre deux courses : ils sont poses dans LE MONDE, et le monde
+    // vient d'etre reconstruit — un autre stade, parfois une autre piste.
+    if (PREM()) { PREM().viderPoussiere(); PREM().viderFlashs(); }
+    G.rafaleTiree = false;
     G.elapsed = 0; G.shake = 0; G.flash = 0;
     // Le depart de CETTE course : sa longueur, et l'heure de ses deux
     // commandes. Le direct et le relais le reposeront sur l'heure annoncee par
@@ -1477,11 +1511,42 @@
   }
 
   function queueCuts(kinds, after) {
-    G.cutAfter = after; G.cutQueue = kinds.slice(); nextCut();
+    G.cutAfter = after; G.cutQueue = kinds.slice(); G.sortie = null; nextCut();
   }
+
+  // LE SACRE NE COUPE PAS SUR LE GENERIQUE : IL S'Y FOND.
+  //
+  // Les cinematiques du jeu se succedent par une coupe — l'une s'arrete, la
+  // suivante commence a l'image d'apres — et c'est tres bien pour toutes sauf
+  // une. Entre la scenette du sacre (« L'ETRE LE PLUS RAPIDE ») et le
+  // generique, la jointure s'entend autant qu'elle se voit : le morceau part a
+  // cet instant precis. Une coupe franche y arrivait comme un raccord manque —
+  // la scenette disparaissait d'un coup, la nuit tombait d'un coup, et la
+  // premiere note tombait sur une image deja changee.
+  //
+  // Les deux se croisent donc pendant CUT_CROISEMENT secondes : le generique
+  // demarre — sa nuit monte, sa musique part — pendant que le sacre s'efface
+  // par-dessus. Ce qui reste du sacre tient dans G.sortie : son coureur, son
+  // texte, et l'opacite qui lui reste. La boucle le fait vieillir (engine.ts),
+  // le canvas et l'ecran de cinematique le lisent.
+  //
+  // LE SACRE N'EST PAS ALLONGE POUR AUTANT : il bascule un croisement plus
+  // tot, et dure au total exactement ce qu'il durait avant.
+  const CUT_DUREE = 15.4, CUT_CROISEMENT = 2;
+
   function nextCut() {
-    if (!G.cutQueue.length) { G.cut = null; G.skipArm = 0; G.state = G.cutAfter; return; }
+    const precedent = G.cut;
+    if (!G.cutQueue.length) {
+      G.cut = null; G.sortie = null; G.skipArm = 0; G.state = G.cutAfter; return;
+    }
     const kind = G.cutQueue.shift();
+    // Le seul fondu enchaine du jeu. Partout ailleurs, G.sortie retombe a
+    // nul : une cinematique passee ne doit pas trainer sur la suivante.
+    G.sortie = (kind === 'ending' && precedent && precedent.kind === 'champion')
+      ? { kind: precedent.kind, lines: precedent.lines, man: precedent.man,
+          name: precedent.name, t: precedent.t, age: 0, a: 1,
+          duree: CUT_CROISEMENT }
+      : null;
     let lines, man;
     if (kind === 'ending') {
       // LE GENERIQUE. Une seule variante, et le tour d'honneur plutot que le
@@ -1496,6 +1561,15 @@
               maxSpeed: G.race.maxSpeed, fallAnim: 0, celebrate: 1 };
     } else {
       const tbl = kind === 'intro' ? CUT_INTRO : (kind === 'taunt' ? CUT_TAUNT : CUT_DEFEAT);
+      // UNE CINEMATIQUE QUI N'EXISTE PAS SE PASSE, ELLE NE FAIT PAS TOMBER LE
+      // JEU. Ces trois tables sont alignees sur les six ETAPES du championnat ;
+      // les stades hors serie n'y ont pas d'entree, et c'est normal — on y
+      // entre par le one-shot, qui ne demande aucune cinematique. Mais un
+      // index voyage : un defi enregistre sur le canal de test porte le sien,
+      // et `buildLevel` se garde deja contre exactement ce cas. Sans cette
+      // ligne, le meme index ouvrait ici sur un `undefined` et la partie
+      // s'arretait au lieu de simplement enchainer sur la course.
+      if (!tbl[G.levelIdx]) return nextCut();
       const first = (G.champion || 'Le favori').split(' ')[0];
       lines = pickLang(tbl[G.levelIdx]).map(s => s.split('{n}').join(first));
       man = { name: G.champion || '',
@@ -1714,6 +1788,94 @@
    * @param opts.marque ou il est pose, en metres absolus.
    * @param opts.autres les temoins adverses : [{ id, nom, couloir }].
    */
+  /**
+   * LES DEUX MOITIES D'UN COULOIR.
+   *
+   * Une equipe de relais court dans UN couloir, et les quatre s'y repartissent
+   * comme sur une vraie piste : les relayeurs impairs a gauche — cote corde,
+   * l'interieur — les pairs a droite. Ce n'est pas decoratif : c'est ce qui
+   * fait que le porteur et son receveur se voient arriver l'un a cote de
+   * l'autre au lieu de se marcher dessus, et que la main tendue part du bon
+   * cote.
+   *
+   * Les nombres sont des indices de couloir, pas des metres, et ils sont
+   * calcules pour que PERSONNE NE DEBORDE. `Track.radius(l)` vaut
+   * `R1 + l × 1,22 + 0,20` : la ligne de mesure passe a vingt centimetres du
+   * bord interieur, si bien que le couloir l s'etend de l − 0,164 a l + 0,836
+   * dans cette unite. Les deux moities sont donc centrees a +0,09 et +0,58,
+   * ce qui laisse de chaque cote la demi-largeur d'un coureur avant la ligne
+   * blanche.
+   */
+  const ZONE_RELAIS = 30;          // la zone de transmission, comme au serveur
+  /*
+   * Les deux moities, en METRES depuis la ligne de mesure du couloir — et non
+   * en fractions de couloir. Un couloir fait 1,22 m et sa ligne de mesure
+   * passe a 0,20 m du bord interieur : les centres des deux moities tombent
+   * donc a 0,305 m et 0,915 m de ce bord, soit +0,105 m et +0,715 m de la
+   * ligne. Il reste 0,305 m de chaque cote avant la ligne blanche, de quoi
+   * loger un coureur sans deborder.
+   */
+  const DEMI_GAUCHE = 0.105, DEMI_DROITE = 0.715;
+  const demiCouloir = (relais) => (relais % 2 === 1 ? DEMI_GAUCHE : DEMI_DROITE);
+
+  /**
+   * Qui porte le temoin, a cet instant.
+   *
+   * Le dessin le lit sur le coureur lui-meme (`r.temoin`, voir `pose` dans
+   * sprinter-core) : un seul l'a en main, et il change de main a chaque
+   * transmission. C'est la salle qui tranche, comme pour tout le reste du
+   * relais ; l'ecran ne fait que suivre.
+   */
+  function porteurDuTemoin(rang) {
+    for (const r of G.runners) {
+      if (r.relaisRang == null) continue;
+      // La main du cote de la camera : de dos, l'autre est masquee par le
+      // corps, et un temoin a moitie cache ne raconte rien.
+      r.temoin = (r.relaisRang === rang) ? -1 : null;
+    }
+  }
+
+  function armRelayeurs(autres, monRelais) {
+    // ON AJOUTE, ON NE REMPLACE PAS. En confrontation, `startLive` vient
+    // d'armer les temoins adverses — un par couloir — et remettre la table a
+    // zero ici les effacerait tous : les sept autres equipes disparaitraient
+    // de la piste tout en figurant au classement d'arrivee.
+    if (!G.lives) G.lives = new Map();
+    if (!autres || !autres.length) return;
+    // Le couloir de l'equipe, en entier : `startRelais` decalera ensuite le
+    // joueur local dans sa propre moitie, et deux moities ne s'additionnent
+    // pas.
+    const monCouloir = Math.round(G.player ? G.player.lane : 3);
+    const teinte = couleurCouloir(Math.round(monCouloir));
+    for (const a of autres) {
+      // Celui qui me precede arrive par l'exterieur, celui qui me suit attend
+      // a l'interieur : de mon ecran, l'un entre par derriere et l'autre est
+      // devant, du bon cote.
+      // Sa moitie de couloir depend de SON rang, pas de sa position par
+      // rapport a moi : les quatre ecrans doivent placer les memes coureurs
+      // aux memes endroits, sinon la transmission se voit d'un cote et pas
+      // de l'autre.
+      const r = new Runner(a.nom || '', monCouloir, {
+        maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool,
+      });
+      r.isGhost = true; r.isLive = true; r.relaisRang = a.relais;
+      r.demi = demiCouloir(a.relais);
+      // Chacun s'arrete au bout de SA zone : le troisieme ne doit pas
+      // continuer dans la portion du quatrieme.
+      r.relaisFin = a.relais < 4 ? a.relais * 100 + 30 : null;
+      // Un relayeur attend a SA marque, pas sur la ligne de depart. Le poser a
+      // zero le ferait traverser la piste entiere a la premiere position
+      // recue, et le troisieme coureur apparaitrait en train de remonter
+      // deux cents metres en une image.
+      r.d = Math.max(0, ((a.relais || 1) - 1) * 100);
+      r.v = 0;
+      r.repere = { couleur: teinte, nom: a.nom || '' };
+      G.runners.push(r);
+      G.lives.set(a.id, { live: true, equipier: true, cible: r.d, vEst: 0, depuis: 0,
+                          runner: r, trace: [], step: REC_STEP, time: 0 });
+    }
+  }
+
   function startRelais(opts) {
     opts = opts || {};
     const relais = Math.max(1, Math.min(4, opts.relais || 1));
@@ -1722,9 +1884,21 @@
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
     });
+    // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
+    // les coequipiers viennent par-dessus, dans mon couloir a moi.
+    if (opts.equipiers && opts.equipiers.length) armRelayeurs(opts.equipiers, relais);
     const p = G.player;
     p.legStart = marque;
     p.d = marque;
+    p.relaisRang = relais;
+    // Ma moitie de couloir, par mon rang — la meme que celle que les trois
+    // autres ecrans me donneront. Le COULOIR, lui, ne bouge pas : c'est de
+    // lui que vient l'abscisse, et deux coequipiers doivent la partager.
+    p.demi = demiCouloir(relais);
+    /* LE DONNEUR NE VA PAS PLUS LOIN QUE SA ZONE. Sa portion s'arrete au bout
+       des trente metres de transmission ; au-dela, il courrait celle du
+       suivant. Le quatrieme, lui, va jusqu'a la ligne. */
+    p.relaisFin = relais < 4 ? relais * 100 + ZONE_RELAIS : null;
     // Le premier part des blocs, avec sa poussee et sa reaction ; les trois
     // autres partent lances, et c'est la zone que l'on note.
     if (relais > 1) {
@@ -2297,12 +2471,20 @@
   const ARC_STEPS = 96;
   function segLen() { return Math.PI * C.R1 / ARC_STEPS; }
   function decorStride() { return G.track.curved ? 12 : 4; }
-  function samples() {
+  /**
+   * @param pas  longueur d'une tranche, en metres. Sans argument, le pas de
+   *   rendu habituel — celui qui a ete regle pour que la courbe ne se voie pas
+   *   facettee. Un appelant qui a besoin de tranches PLUS FINES que le decor
+   *   (les passes de tondeuse, qui font six metres et non douze) le demande
+   *   ici plutot que de refaire la geometrie du tour de son cote.
+   */
+  function samples(pas) {
     const T = G.track, out = [];
     if (T.curved) {
-      const st = segLen();
-      for (let i = 0; i <= ARC_STEPS; i++)
-        out.push([true, Math.PI * (1 - i / ARC_STEPS), 0]);
+      const N = pas ? Math.max(8, Math.round(Math.PI * C.R1 / pas)) : ARC_STEPS;
+      const st = Math.PI * C.R1 / N;
+      for (let i = 0; i <= N; i++)
+        out.push([true, Math.PI * (1 - i / N), 0]);
       const s1End = T.fullLap ? T.straight : T.straight + C.RUNOUT;
       for (let x = st; x <= s1End; x += st) out.push([false, x, 0]);
       // Tour complet (400 m) : second virage + seconde ligne droite,
@@ -2310,12 +2492,13 @@
       // decor (pelouse, gradins, couloirs) existe sur tout le tour et pas
       // seulement sur la moitie ou demarre la course.
       if (T.fullLap) {
-        for (let i = 0; i <= ARC_STEPS; i++)
-          out.push([true, Math.PI * (1 - i / ARC_STEPS), 1]);
+        for (let i = 0; i <= N; i++)
+          out.push([true, Math.PI * (1 - i / N), 1]);
         for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
       }
     } else {
-      for (let x = -20; x <= T.straight + C.RUNOUT; x += 12) out.push([false, x, 0]);
+      const d = pas || 12;
+      for (let x = -20; x <= T.straight + C.RUNOUT + d; x += d) out.push([false, x, 0]);
     }
     return out;
   }
@@ -2344,6 +2527,39 @@
     }
     ctx.closePath(); ctx.fillStyle = col; ctx.fill();
   }
+  // Meme trace que band(), mais SANS teinte : elle remplit avec ce que
+  // l'appelant a deja pose dans fillStyle. C'est ce qu'il faut pour les voiles
+  // de la couche de finition — une occlusion n'a pas de couleur a elle, elle
+  // n'a qu'une opacite, et lui faire fabriquer une chaine « rgba(0,0,0,x) »
+  // par bande et par image serait payer un texte pour un noir.
+  function bandBrute(ctx, sm, rIn, rOut, z) {
+    if (sm.length < 2) return;
+    ctx.beginPath();
+    for (let i = 0; i < sm.length; i++) {
+      const p = solid(...ptOf(sm[i], rIn), z || 0);
+      i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+    }
+    for (let i = sm.length - 1; i >= 0; i--) {
+      const p = solid(...ptOf(sm[i], rOut), z || 0);
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  // LE PEINTRE : ce que la couche de finition a le droit de savoir du rendu.
+  //
+  // Les effets de rendu-premium.js doivent suivre la piste — les passes de
+  // tondeuse tournent dans le virage, le grain defile avec le sol, un flash
+  // se pose sur un gradin et pas sur l'ecran. Tout cela demande la projection
+  // et l'echantillonnage, qui vivent ici.
+  //
+  // On passe donc ces quelques fonctions plutot que d'exporter le module
+  // entier : la finition peut peindre dans le monde, elle ne peut ni changer
+  // l'etat du jeu ni s'inserer dans sa geometrie.
+  const PEINTRE = {
+    G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
+    band, bandBrute, bandPattern,
+  };
+  const PREM = () => globalThis.RenduPremium;
   // Meme trace que band(), mais rempli avec un motif au lieu d'une teinte
   // unie : utilise pour le public des gradins (voir getCrowdPattern), qui
   // doit paraitre completement dense sans dessiner un sprite par personne
@@ -2379,14 +2595,28 @@
   // pour la finale) plutot que d'une opacite reduite sur tout le motif —
   // sinon le public entier parait transparent au lieu d'etre juste moins
   // nombreux.
-  const CROWD_TILE = 180;
+  // LA TAILLE DE LA TUILE EST UNE AFFAIRE DE REPETITION, PAS DE DENSITE.
+  //
+  // A cent-quatre-vingts pixels, la tuile se repetait cinq fois en travers du
+  // cadre : on reconnaissait les memes groupes de spectateurs, aux memes
+  // ecarts, d'un bout a l'autre du gradin. Une foule ne se lit pas a la
+  // personne, elle se lit au MOTIF — et un motif qui se voit n'est plus une
+  // foule, c'est un papier peint.
+  //
+  // Deux cent cinquante-six pixels, soit deux fois la surface, donc deux fois
+  // moins de raccords dans le cadre. La densite, elle, ne doit pas changer
+  // d'un pouce : on compte donc les spectateurs AU METRE CARRE de tuile
+  // (voir FOULE_PAR_TUILE), et non a la tuile. Sans cela, agrandir la tuile
+  // aurait vide les gradins de moitie.
+  const CROWD_TILE = 256;
+  const FOULE_REF = 180 * 180;       // la tuile d'origine, et son etalonnage
   const crowdPatternCache = {};
   function getCrowdPattern(ctx, levelIdx) {
     if (crowdPatternCache[levelIdx]) return crowdPatternCache[levelIdx];
     const lvl = LEVELS[levelIdx];
-    const density = (lvl && lvl.foule != null) ? lvl.foule
-                  : (CROWD_DENSITY[levelIdx] ?? 1);
-    const count = Math.max(15, Math.round(90 * density));
+    const density = fouleDe(levelIdx);
+    const surface = (CROWD_TILE * CROWD_TILE) / FOULE_REF;
+    const count = Math.round(Math.max(15, 90 * density) * surface);
     const tile = document.createElement('canvas');
     tile.width = CROWD_TILE; tile.height = CROWD_TILE;
     const tctx = tile.getContext('2d');
@@ -3825,6 +4055,89 @@
   }
 
   /**
+   * LES ESCALIERS DES TRIBUNES.
+   *
+   * Les gradins etaient trois bandes horizontales de public, du bord gauche au
+   * bord droit du cadre, sans une interruption. Aucune tribune n'est batie
+   * ainsi : on ne peut pas entrer dans un gradin de cent metres de long sans
+   * escalier, et c'est precisement ce qu'on voit sur toute photographie de
+   * stade — des volees de marches pales qui montent en travers du public, tous
+   * les quinze metres, et qui donnent au gradin son echelle et sa hauteur.
+   *
+   * PEINTES PAR-DESSUS LA FOULE, ET C'EST LA BONNE FACON. On pourrait croire
+   * qu'il faut retirer les spectateurs de l'emprise de l'escalier — c'est le
+   * contraire : un escalier vu de face EST une bande claire qui coupe le
+   * public, et le motif de foule est justement ce qu'on ne peut pas trouer
+   * (voir getCrowdPattern, une tuile repetee par le moteur canvas). On le
+   * recouvre donc, ce qui donne exactement le meme resultat pour un seul
+   * remplissage.
+   *
+   * ET C'EST UN VRAI ESCALIER, PAS UNE RAMPE PEINTE. Le premier essai posait
+   * un seul quadrilatere du bas au haut du gradin : une plaque de marbre
+   * blanc qui flottait au-dessus du stade, parce qu'une surface lisse sur des
+   * gradins en marches ne peut pas se lire autrement. Chaque marche est donc
+   * construite comme le sont les gradins eux-memes — une contremarche
+   * verticale, une marche horizontale — a ceci pres qu'aucun spectateur n'est
+   * assis dessus. Meme geometrie, meme lumiere, meme beton : c'est le vide qui
+   * fait tout le contraste.
+   */
+  function drawAllees(ctx, th, sm, near, tiers, sr, sz) {
+    // La largeur d'une volee se mesure en METRES sur le gradin, pas en
+    // echantillons : en ligne droite ils sont espaces de douze metres, en
+    // virage d'un peu plus d'un metre, et un escalier large de « un
+    // echantillon » aurait donc dix fois la bonne largeur d'un bout du tour a
+    // l'autre. On avance donc a partir de l'echantillon, au rayon ou
+    // l'escalier se trouve vraiment.
+    const rMoy = near + tiers * sr * 0.5;
+    const avancer = (q, metres) => q[0]
+      ? [true, q[1] - metres / rMoy, q[2]]
+      : [false, q[1] + metres, q[2]];
+    const coin = (q, r, z) => { const a = ptOf(q, r); return solid(a[0], a[1], z); };
+    // DEUX MARCHES PAR GRADIN, ET C'EST LA MESURE REELLE. Un rang de sieges
+    // est deux fois plus profond qu'une marche : l'escalier qui le dessert
+    // monte donc deux fois plus souvent que les gradins ne s'elevent. Une
+    // marche par gradin donnait un emmarchement d'un metre soixante-dix, ce
+    // qui n'est plus un escalier mais une terrasse.
+    const N = tiers * 2, pr = sr / 2, pz = sz / 2;
+    // A PEINE PLUS CLAIR QUE LES GRADINS, ET C'EST DEJA BEAUCOUP.
+    //
+    // Premier essai a +16 % : une volee de marbre blanc qui flottait au-dessus
+    // du stade. L'ecart de valeur ne vient pas de la peinture, il vient de ce
+    // qu'il n'y a PERSONNE dessus — a cote, le gradin est couvert de
+    // spectateurs sombres. Le beton de l'escalier est le meme que celui des
+    // gradins ; c'est le vide qui l'eclaircit.
+    const marche = rgb(th.tread, 0.97), contre = rgb(th.riser, 1.06);
+
+    ctx.save();
+    for (const q of rangeeDeToiture(sm, 15)) {
+      const q2 = avancer(q, 1.2);
+      // Un seul test de cadre, sur le bas de la volee : le haut n'en est
+      // jamais loin, et huit escaliers hors champ ne doivent rien couter.
+      const bas = coin(q, near, 1.05);
+      if (bas[0] < -120 || bas[0] > G.VW + 120 ||
+          bas[1] < -260 || bas[1] > G.VH + 120) continue;
+      const quad = (r0, z0, r1, z1, col) => {
+        const a = coin(q, r0, z0), b = coin(q2, r0, z0);
+        const c = coin(q2, r1, z1), d = coin(q, r1, z1);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+        ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+        ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+      };
+      // Meme geometrie que les gradins eux-memes (voir drawWorld : wall pour
+      // la contremarche, band pour la marche), a ceci pres qu'aucun
+      // spectateur n'est assis dessus. C'est exactement ce qu'est une volee :
+      // les memes marches, sans les sieges.
+      for (let t = 0; t < N; t++) {
+        const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz;
+        quad(r0, z1 - pz, r0, z1, contre);   // la contremarche, verticale
+        quad(r0, z1, r0 + pr, z1, marche);   // la marche, horizontale
+      }
+    }
+    ctx.restore();
+  }
+
+  /**
    * La rangee de projecteurs au-dessus des tribunes.
    *
    * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
@@ -3892,6 +4205,139 @@
       ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
     }
     ctx.restore();
+  }
+
+  /**
+   * Un bloc de depart : un rail, deux cales inclinees.
+   *
+   * Tout est construit sur la piste elle-meme — `markAt` pour la distance,
+   * le rayon du couloir pour la largeur — donc l'objet suit le virage et la
+   * quinconce sans qu'on ait un angle a tenir quelque part. Les quatre coins
+   * de chaque cale passent par `solid()`, comme les gradins : l'inclinaison
+   * est portee par la hauteur, pas par une rotation a l'ecran.
+   *
+   * Le metal est le meme sur les six stades. Un bloc est du materiel, pas du
+   * decor : il ne prend pas la couleur du lieu, et c'est justement ce qui le
+   * fait lire comme un objet pose sur la piste plutot que comme une marque
+   * peinte de plus.
+   */
+  // Trois valeurs, et l'ecart entre elles compte plus que les teintes : la
+  // face inclinee est nettement plus claire que la piste, le chant nettement
+  // plus sombre. C'est ce contraste-la qui fait lire un VOLUME a quarante
+  // pixels de haut — deux gris voisins auraient donne une tache.
+  const BLOC_RAIL = [34, 36, 46], BLOC_CALE = [152, 160, 180],
+        BLOC_CHANT = [66, 70, 86];
+
+  function drawBlocs(ctx, th) {
+    const T = G.track;
+    const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
+    // Le point du monde, sur l'axe du couloir, a `d` metres de SA ligne de
+    // depart et `dr` metres de cote.
+    const pt = (d, e, dr, z) => {
+      const q = ptOf(T.markAt(d, e), lineR(e) + C.LANE_W * 0.5 + dr);
+      return solid(q[0], q[1], z || 0);
+    };
+    const quad = (a, b, c, d, col) => {
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    };
+    const W = 0.085;                 // demi-largeur du rail, en metres
+    const CW = 0.25;                 // demi-largeur d'une cale
+    for (let e = 0; e < C.LANE_COUNT; e++) {
+      // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
+      // dont sept hors champ ne doivent rien couter.
+      const centre = pt(-0.62, e, 0, 0);
+      if (centre[0] < -80 || centre[0] > G.VW + 80 ||
+          centre[1] < -80 || centre[1] > G.VH + 80) continue;
+      // Le rail, a plat sur la piste.
+      quad(pt(-0.18, e, -W), pt(-0.18, e, W),
+           pt(-1.12, e, W), pt(-1.12, e, -W), rgb(BLOC_RAIL));
+      // Les deux cales. Celle de devant est plus basse et plus redressee que
+      // celle de derriere : c'est la position reelle, et c'est aussi ce qui
+      // evite que les deux ne se lisent comme un seul bloc carre.
+      for (const [d0, d1, h] of [[-0.34, -0.56, 0.20], [-0.66, -0.92, 0.26]]) {
+        // La face inclinee, celle qui prend le pied.
+        quad(pt(d0, e, -CW), pt(d0, e, CW),
+             pt(d1, e, CW, h), pt(d1, e, -CW, h), rgb(BLOC_CALE));
+        // Le chant, du cote eclaire : sans lui la cale est un losange plat.
+        quad(pt(d1, e, CW, h), pt(d1, e, CW), pt(d1, e, -CW), pt(d1, e, -CW, h),
+             rgb(BLOC_CALE, 0.62));
+      }
+    }
+  }
+
+  /**
+   * LES POTEAUX D'ARRIVEE.
+   *
+   * Une ligne d'arrivee n'est pas qu'un damier peint : de chaque cote de la
+   * piste se dresse un poteau blanc, et c'est LUI que vise la camera de photo
+   * finish. Sans eux, le damier flottait au milieu du rouge sans que rien ne
+   * dise ou la course s'arrete vraiment — et c'est pourtant le seul endroit
+   * du stade que le joueur regarde pendant les dix derniers metres.
+   *
+   * Deux poteaux, donc, et une camera sur celui du dedans. Un vrai stade en a
+   * une de chaque cote, mais la seconde serait cachee par les tribunes : on ne
+   * dessine que ce qui se voit.
+   *
+   * Ils sont dessines AVANT les athletes, comme les palmiers du dedans : ils
+   * recouvrent la piste, pas les coureurs. Un poteau qui passerait devant le
+   * vainqueur sur la ligne serait la pire image possible de cette course.
+   */
+  const POTEAU_CLAIR = [246, 248, 252], POTEAU_OMBRE = [168, 174, 190],
+        POTEAU_BANDE = [34, 36, 46];
+
+  function drawPoteaux(ctx, th, rIn, rOut) {
+    const T = G.track, m = scaleM();
+    const at = (d, r) => T.curved ? T.posAtR(d, r) : [d, r];
+    const coin = (d, r, z) => { const q = at(d, r); return solid(q[0], q[1], z); };
+    const quad = (a, b, c, d, col) => {
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    };
+    const D = T.total, e = 0.07, H = 1.30;
+    for (const [rr, camera] of [[rIn - 0.80, true], [rOut + 1.00, false]]) {
+      const pied = coin(D, rr, 0);
+      if (pied[0] < -60 || pied[0] > G.VW + 60 ||
+          pied[1] < -120 || pied[1] > G.VH + 60) continue;
+      // Deux faces verticales du fut : celle qui regarde la ligne d'arrivee et
+      // celle qui regarde la piste. Un poteau n'a pas besoin de ses quatre
+      // faces pour se lire, il a besoin d'un clair et d'un sombre.
+      const bandes = [[0, H * 0.62, POTEAU_CLAIR], [H * 0.62, H * 0.78, POTEAU_BANDE],
+                      [H * 0.78, H, POTEAU_CLAIR]];
+      for (const [z0, z1, col] of bandes) {
+        quad(coin(D - e, rr - e, z0), coin(D + e, rr - e, z0),
+             coin(D + e, rr - e, z1), coin(D - e, rr - e, z1), rgb(col));
+        quad(coin(D + e, rr - e, z0), coin(D + e, rr + e, z0),
+             coin(D + e, rr + e, z1), coin(D + e, rr - e, z1),
+             col === POTEAU_BANDE ? rgb(col, 0.78) : rgb(POTEAU_OMBRE));
+      }
+      // Le dessus du fut : sans lui le poteau est deux rectangles colles.
+      quad(coin(D - e, rr - e, H), coin(D + e, rr - e, H),
+           coin(D + e, rr + e, H), coin(D - e, rr + e, H), rgb(POTEAU_CLAIR, 1.04));
+      if (!camera) continue;
+      // La camera de photo finish : un boitier sombre, pose en haut du poteau
+      // du dedans et tourne vers la piste. Elle ne fait rien — mais c'est elle
+      // qui dit a quoi sert ce poteau-la.
+      const cz0 = H, cz1 = H + 0.26, cr = rr + 0.10, ce = 0.13;
+      quad(coin(D - ce, cr - ce, cz0), coin(D + ce, cr - ce, cz0),
+           coin(D + ce, cr - ce, cz1), coin(D - ce, cr - ce, cz1), rgb(POTEAU_BANDE, 1.9));
+      quad(coin(D + ce, cr - ce, cz0), coin(D + ce, cr + ce, cz0),
+           coin(D + ce, cr + ce, cz1), coin(D + ce, cr - ce, cz1), rgb(POTEAU_BANDE, 1.2));
+      quad(coin(D - ce, cr - ce, cz1), coin(D + ce, cr - ce, cz1),
+           coin(D + ce, cr + ce, cz1), coin(D - ce, cr + ce, cz1), rgb(POTEAU_BANDE, 2.4));
+    }
+    // L'ombre des deux poteaux, pour qu'ils tiennent au sol comme le reste.
+    if (PREM()) {
+      for (const rr of [rIn - 0.80, rOut + 1.00]) {
+        const q = at(D, rr), p = ground(q[0], q[1]);
+        if (p[0] < -60 || p[0] > G.VW + 60) continue;
+        PREM().ombre(ctx, p[0], p[1], m * 0.42, 1, 0, th.projecteurs);
+      }
+    }
   }
 
   function drawWorld(ctx, th) {
@@ -3978,6 +4424,14 @@
     // enfin le haut de l'image pendant toute la course.
     const horizon = th.horizon || 46;
     band(ctx, sm, rOut, rOut + horizon, rgb(th.grass));
+    // Les passes de tondeuse, sur les deux pelouses a la fois. Elles viennent
+    // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
+    // apres les deux aplats qu'elles habillent. Voir rendu-premium.js.
+    if (PREM()) PREM().tonte(ctx, th, PEINTRE, rIn, rOut, horizon);
+    // Le grain de la pelouse, au meme endroit et pour la meme raison : c'est
+    // ce qui remplace les passes de tondeuse depuis qu'elles sont eteintes.
+    // Voir herbe() dans rendu-premium.js.
+    if (PREM()) PREM().herbe(ctx, th, PEINTRE, rIn, rOut, horizon);
     if (th.lointain) {
       // La bande de lointain est etroite A DESSEIN, et c'est mesure : la
       // hauteur a l'ecran compte plus de deux fois la distance au sol (voir
@@ -4082,9 +4536,31 @@
       }
       for (let t = 0; t < tiers; t++) {
         const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz + sr * 0.55;
-        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, ox, oy);
+        // CHAQUE RANG DECALE LE MOTIF, ET C'EST CE QUI CASSE LA GRILLE.
+        //
+        // Les quatre rangs partageaient le meme decalage : les raccords de la
+        // tuile tombaient donc les uns AU-DESSUS des autres, et la repetition,
+        // deja lisible sur une ligne, devenait une grille de colonnes qu'on ne
+        // pouvait plus ne pas voir. Deux nombres premiers entre eux et avec la
+        // tuile suffisent a la defaire — la foule ne coute pas un pixel de
+        // plus, elle cesse simplement d'etre alignee avec elle-meme.
+        const dx = (ox + t * 71) % CROWD_TILE, dy = (oy + t * 47) % CROWD_TILE;
+        for (const straightRun of straightRuns) bandPattern(ctx, straightRun, r0, r0 + sr, crowdPat, z1, dx, dy);
+      }
+      // Les eclats d'appareils dans la foule. Ils suivent la meme densite que
+      // le public — une rencontre scolaire ne scintille pas comme une finale —
+      // et se posent sur un vrai gradin, pas sur l'ecran. Voir rendu-premium.js.
+      if (PREM() && (G.state === 'race' || G.state === 'count')) {
+        PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
+        PREM().dessinerFlashs(ctx, PEINTRE);
       }
     }
+    // Les escaliers PAR-DESSUS le public, et hors du bloc qui le dessine : un
+    // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
+    // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
+    // simple bande. Voir drawAllees.
+    drawAllees(ctx, th, sm, near, tiers, sr, sz);
+
     // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
     //
     // Elle est posee tres haut, et la hauteur compte plus de deux fois la
@@ -4138,18 +4614,45 @@
       }
     }
 
-    // la piste par-dessus : elle reste toujours entierement lisible
+    // LA PISTE EST D'UNE SEULE COULEUR, ET C'EST UN RETOUR EN ARRIERE ASSUME.
+    //
+    // Elle etait peinte en deux teintes alternees — une bande sur deux en
+    // `trackB` par-dessus `trackA` —, ce qui donnait une piste rayee EN
+    // TRAVERS : un damier de jeu video, visible surtout dans les virages ou
+    // le pas d'echantillonnage passe a huit metres. Une piste de tartan est
+    // coulee d'un seul tenant ; ce qui la sauve de l'aplat, c'est le grain de
+    // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
+    // changement de couleur tous les huit metres.
     band(ctx, sm, rIn, rOut, rgb(th.trackA));
-    for (let i = 0; i + 1 < sm.length; i += stp) {
-      if ((i / stp) % 2 === 0)
-        band(ctx, sm.slice(i, i + stp + 1), rIn, rOut, rgb(th.trackB));
-    }
 
+    // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
+    // ne porte pas le granulat de la resine qu'elle recouvre.
+    if (PREM()) PREM().grain(ctx, PEINTRE, rIn, rOut);
+
+    // LES LIGNES DE COULOIR NE SONT PAS OPAQUES, ET C'EST VOULU.
+    //
+    // De la peinture sur du tartan ne recouvre pas le granulat, elle s'y
+    // depose : le grain de la resine transparait a travers, et c'est ce qui
+    // fait qu'une ligne peinte appartient a la piste. A cent pour cent elle
+    // etait posee DESSUS — un trait de logiciel de dessin, d'autant plus
+    // visible depuis que la piste a du grain (voir rendu-premium.js).
+    //
+    // Le liseret interieur et le bord exterieur, eux, restent francs : ce
+    // sont des reperes de course, pas des marques d'usage.
     rail(ctx, sm, rIn, rgb(th.kerb), 3);
     for (let e = 1; e < C.LANE_COUNT; e++) {
-      rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgb(th.lane), 1.6);
+      rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
     }
     rail(ctx, sm, rOut, rgb(th.lane), 2.2);
+
+    // L'ombre que les tribunes jettent sur le bord de la piste, et celle du
+    // liseret contre la pelouse. Apres les lignes : un mur de vingt metres
+    // assombrit aussi la peinture blanche qui court a son pied.
+    if (PREM()) PREM().occlusion(ctx, PEINTRE, rIn, rOut);
+    // La grande ombre que les gradins posent sur les couloirs exterieurs :
+    // elle vient juste apres l'occlusion, qui ne traite que le demi-metre
+    // contre le muret. Voir tribunes() dans rendu-premium.js.
+    if (PREM()) PREM().tribunes(ctx, th, PEINTRE, rIn, rOut, horizon);
 
     // Rayon d'une ligne peinte, ligne droite comprise.
     const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
@@ -4256,9 +4759,47 @@
       ctx.closePath(); ctx.fill();
     }
 
+    // LES BLOCS DE DEPART.
+    //
+    // Il manquait a ce stade la seule piece de materiel qu'un sprint ne peut
+    // pas ne pas avoir. Une ligne de depart nue, huit couloirs numerotes et
+    // personne accroupi dessus : c'etait une piste d'entrainement, pas une
+    // course. Les blocs se voient pendant les deux premieres secondes de
+    // chaque course, et c'est precisement le moment ou le joueur regarde la
+    // piste plutot que son chrono.
+    //
+    // Ils restent en place apres le coup, comme sur une vraie piste — on ne
+    // les retire pas pendant qu'on court — et ils sortent du cadre d'eux-memes
+    // puisqu'ils sont poses dans le monde.
+    //
+    // POSES AU COULOIR, PAS A LA COURSE. Sur un 400 m les huit departs sont
+    // en quinconce, et cinquante-trois metres separent le bloc du couloir 1 de
+    // celui du couloir 8 : `markAt` donne a chacun le sien, exactement comme
+    // pour les reperes peints juste au-dessus.
+    if (T.markAt) drawBlocs(ctx, th);
+
+    // Les poteaux d'arrivee, apres le damier qu'ils encadrent.
+    if (T.total) drawPoteaux(ctx, th, rIn, rOut);
+
+    // LES NAPPES DES PROJECTEURS, APRES TOUT CE QUI EST PEINT AU SOL.
+    //
+    // Apres, et non avant : la lumiere tombe aussi sur les lignes, sur le
+    // damier d'arrivee et sur les numeros de couloir. Peintes par-dessus, ces
+    // marques seraient restees les seules choses du stade que les lampes
+    // n'eclairent pas.
+    if (PREM()) PREM().nappes(ctx, PEINTRE, th, rIn, rOut);
+
     // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
     // doivent la recouvrir (voir drawArbresDedans).
     if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
+
+    // LA BRUME, APRES TOUT LE DECOR ET AVANT LES ATHLETES.
+    //
+    // C'est la seule place qui marche. Avant le decor, elle ne voilerait rien ;
+    // apres les coureurs, elle les voilerait AUTANT que l'horizon, alors qu'ils
+    // sont a trois metres de la camera. Entre les deux, elle fait exactement ce
+    // que fait l'air : elle mange le lointain et laisse le premier plan franc.
+    if (PREM()) PREM().brume(ctx, th, G);
   }
 
   // -------------------------------------------------------------------
@@ -4301,6 +4842,7 @@
   const _s1x = new Float64Array(RING_MAX), _s1y = new Float64Array(RING_MAX);
   const _fDepth = new Float64Array(RING_MAX + 2);
   const _fShade = new Float64Array(RING_MAX + 2);
+  const _fRim = new Float64Array(RING_MAX + 2);
   const _fKind = new Int32Array(RING_MAX + 2);
   const _fOrder = new Int32Array(RING_MAX + 2);
 
@@ -4309,6 +4851,54 @@
     if (rpx < 5) return 6;
     if (rpx < 10) return 8;
     return RING_MAX;
+  }
+
+  /**
+   * L'ECLAIRAGE D'UNE FACETTE, ET POURQUOI IL A FALLU TROIS TERMES DE PLUS.
+   *
+   * Le modele d'origine tenait en une ligne : une part fixe, plus la part de
+   * face tournee vers le soleil. C'est le plus simple des eclairages, et il a
+   * un defaut qu'on ne voit qu'une fois qu'il est corrige — TOUT CE QUI N'EST
+   * PAS FACE AU SOLEIL A EXACTEMENT LA MEME VALEUR. Le dessous d'un bras, le
+   * dos, l'interieur d'une cuisse, le talon : un seul et meme gris. Les
+   * volumes s'y fondaient, et un athlete de dos n'etait plus qu'une
+   * silhouette plate en deux tons.
+   *
+   * Trois termes le reparent, et aucun ne coute plus qu'une multiplication :
+   *
+   *   LE CIEL. Dehors, la lumiere ne vient pas que du soleil : la voute
+   *   entiere en renvoie. Une surface tournee vers le haut est donc toujours
+   *   plus claire qu'une surface tournee vers le sol, meme a l'ombre. C'est
+   *   ce terme qui redonne du relief a tout ce que le soleil ne touche pas.
+   *
+   *   LE SOL. Ce que le sol renvoie a son tour, teinte de sa couleur — la
+   *   piste rougeoie sous les mollets. Tres faible, mais c'est lui qui empeche
+   *   les dessous d'etre noirs.
+   *
+   *   LE LISERET. Les faces rasantes — celles qui tournent le dos a la camera
+   *   sans lui etre cachees — captent un filet de lumiere sur toute la
+   *   silhouette. Il est AJOUTE et non multiplie : multiplier une couleur
+   *   sombre par un facteur la laisse sombre, alors que le propre d'un bord
+   *   eclaire est d'etre clair quelle que soit la teinte qu'il borde. C'est ce
+   *   qui detache enfin les coureurs d'une piste de valeur voisine.
+   */
+  // Force du liseret pour le segment en cours. Un tube a quatre facettes n'a
+  // AUCUNE face de plein fouet : toutes y sont rasantes, et le liseret, qui
+  // devrait n'eclairer qu'un bord, repeint alors le personnage entier. C'est
+  // ce qui blanchissait les spectateurs — onze pixels de haut, donc quatre
+  // facettes chacun. On l'attenue donc a mesure que la silhouette se
+  // simplifie : pleine force a huit facettes et au-dela, moitie a quatre.
+  let _rimK = 1;
+
+  function eclairer(i, nl, nz, vd) {
+    const cle = nl > 0 ? nl : 0;                  // le soleil
+    const ciel = 0.5 + 0.5 * nz;                  // la voute, de haut en bas
+    const sol = 0.5 - 0.5 * nz;                   // le rebond du sol
+    _fShade[i] = 0.34 + 0.60 * cle + 0.20 * ciel + 0.06 * sol;
+    // vd vaut 0 pour une face rasante et -1 pour une face de plein fouet :
+    // le liseret ne prend donc que sur les bords de la silhouette.
+    const bord = 1 + (vd < 0 ? vd : 0);
+    _fRim[i] = _rimK * 42 * bord * bord * (0.26 + 0.74 * ciel);
   }
 
   function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k) {
@@ -4327,6 +4917,7 @@
     const vx = axy * uz - axz * uy, vy = axz * ux - axx * uz, vz = axx * uy - axy * ux;
 
     const N = facetCount(Math.max(r0, r1) * k);
+    _rimK = N >= 8 ? 1 : N / 8;
     const dr = (r1 - r0) / len;
 
     for (let i = 0; i < N; i++) {
@@ -4356,23 +4947,26 @@
       _fKind[nf] = i;
       _fDepth[nf] = (_p0x[i] + _p0y[i] + _p0x[j] + _p0y[j] +
                      _p1x[i] + _p1y[i] + _p1x[j] + _p1y[j]) * 0.25;
+      // n·L, avec LIGHT dirige VERS la source : positif = face au soleil.
+      // C'est la convention de wall(), et jusqu'ici le rendu des personnages
+      // prenait l'oppose — toutes les faces tournees vers la camera tombaient
+      // donc du cote sombre, et l'athlete n'avait plus qu'une seule valeur.
       const nl = mx * LIGHT[0] + my * LIGHT[1] + mz * LIGHT[2];
-      _fShade[nf] = 0.56 + 0.60 * (nl < 0 ? -nl : 0);
+      eclairer(nf, nl, mz, mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2]);
       nf++;
     }
     // bouchons : sans eux les extremites (mains, pieds, tete) sont creuses
-    if (-(axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2]) < 0) {
+    const vd = axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2];
+    if (-vd < 0) {
       _fKind[nf] = -1;
       _fDepth[nf] = e0[0] + e0[1];
-      const nl = -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]);
-      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
+      eclairer(nf, -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]), -axz, -vd);
       nf++;
     }
-    if (axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2] < 0) {
+    if (vd < 0) {
       _fKind[nf] = -2;
       _fDepth[nf] = e1[0] + e1[1];
-      const nl = axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2];
-      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
+      eclairer(nf, axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2], axz, vd);
       nf++;
     }
 
@@ -4402,7 +4996,7 @@
         for (let i = 1; i < N; i++) ctx.lineTo(_s1x[i], _s1y[i]);
       }
       ctx.closePath();
-      ctx.fillStyle = rgb(col, _fShade[id]);
+      ctx.fillStyle = rgbEclaire(col, _fShade[id], _fRim[id]);
       ctx.fill();
     }
   }
@@ -4713,8 +5307,21 @@
     }
   }
 
+  /**
+   * Le theme du stade en cours.
+   *
+   * Trois endroits le cherchaient chacun de leur cote — le monde le recoit en
+   * argument, la finition en a besoin aussi, et la boucle d'image le relit une
+   * troisieme fois. Un seul acces, et le niveau hors-serie (qui n'a pas
+   * d'entree dans LEVELS) ne peut plus faire tomber l'un des trois.
+   */
+  function theme() {
+    const lvl = LEVELS[G.levelIdx];
+    return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
+  }
+
   function drawAthletes(ctx) {
-    const T = G.track, m = scaleM();
+    const T = G.track, m = scaleM(), th = theme();
     // Le starter passe avant tout le monde : il se tient derriere la ligne,
     // donc derriere les coureurs.
     drawStarter(ctx);
@@ -4726,16 +5333,67 @@
     const all = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0)
       ? G.runners.concat([G.ghost.runner]) : G.runners;
     for (const r of all) {
-      const p = T.pos(r.d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(r.d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
+    const prem = PREM();
+    // LE PASSAGE DE LA LIGNE, VU D'ICI ET NON DU MOTEUR.
+    //
+    // `finishRace` ne s'execute que trois secondes plus tard, quand tout le
+    // monde s'est arrete : c'est le bon endroit pour un classement, pas pour
+    // une reaction. L'instant ou le joueur coupe la ligne, lui, se lit sur
+    // `finished` — et le rendu est deja la, a chaque image. Le drapeau repart
+    // avec la course (voir buildLevel).
+    if (prem && G.player && G.player.finished && !G.rafaleTiree) {
+      G.rafaleTiree = true;
+      // A LA MESURE DU STADE. Trente photographes a une rencontre scolaire
+      // seraient aussi faux qu'aucun a une finale : la rafale suit
+      // l'affluence, comme tout le reste de ce gradin.
+      prem.rafale(Math.round(6 + 34 * fouleDe(G.levelIdx)));
+    }
     for (const [r, g2] of vis) {
       if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
-      ctx.fillStyle = 'rgba(0,0,0,0.42)';
-      ctx.beginPath();
-      ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
-      ctx.fill();
+      if (prem) {
+        // Deux ombres — la penombre large et le contact serre — plutot qu'un
+        // disque noir a bord net. Voir rendu-premium.js : c'est ce qui pose
+        // reellement les athletes au sol.
+        prem.ombre(ctx, g2[0], g2[1], m, r.look.h / C.MODEL_H, r.stride,
+                   th.projecteurs);
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.42)';
+        ctx.beginPath();
+        ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
+        ctx.fill();
+      }
+    }
+    // LA POUSSIERE, ENTRE LES OMBRES ET LES COUREURS.
+    //
+    // Chaque appui en arrache au sol ; elle part en arriere, monte un peu et
+    // se disperse. Elle est dessinee ICI, donc sous les athletes : une
+    // poussiere qui passerait devant le coureur qui la souleve viendrait de
+    // nulle part.
+    if (prem && (G.state === 'race' || G.state === 'count')) {
+      for (const [r, , p] of vis) {
+        if (r.isGhost || r.finished) continue;
+        // Un appui par demi-cycle de foulee : les deux jambes sont a pi l'une
+        // de l'autre (voir pose()), donc le pas change quand stride/pi change
+        // d'entier. C'est l'instant ou un pied touche.
+        const phase = Math.floor(r.stride / Math.PI);
+        if (r._pasVu === undefined) { r._pasVu = phase; continue; }
+        if (phase === r._pasVu) continue;
+        r._pasVu = phase;
+        // La direction de la foulee, prise sur la piste elle-meme plutot que
+        // sur un angle : trente centimetres plus loin dans le meme couloir, et
+        // la difference EST la direction — juste en ligne droite comme en
+        // virage, sans avoir a rejouer la geometrie du tour.
+        const q = T.pos(r.d + 0.3, r.lane);
+        let dx = q[0] - p[0], dy = q[1] - p[1];
+        const dl = Math.hypot(dx, dy) || 1;
+        prem.appui(th, p[0], p[1], dx / dl, dy / dl, r.v);
+      }
+      prem.avancerPoussiere();
+      prem.dessinerPoussiere(ctx, PEINTRE);
     }
     // Les cerceaux passent apres toutes les ombres et avant tous les coureurs :
     // sinon l'ombre du voisin recouvrirait le cerceau de celui de devant.
@@ -4774,7 +5432,7 @@
     for (let k = 3; k >= 1; k--) {
       const d = ghostDistAt(G.elapsed - k * 0.13);
       if (d <= 0 || dNow - d < 0.05) continue;
-      const p = T.pos(d, r.lane), g2 = ground(p[0], p[1]);
+      const p = T.posDemi(d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
       if (g2[0] < -200 || g2[0] > G.VW + 200) continue;
       ctx.globalAlpha = 0.10 * (4 - k) / 3;
       r.d = d; r.stride = strideNow - (dNow - d) * (Math.PI / r.strideLength());
@@ -4798,13 +5456,16 @@
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
+    theme, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
     armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
+    armRelayeurs, porteurDuTemoin,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
     annoncerLeDepart, coupDePistolet,
     REC_STEP, goHome,
+    CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,

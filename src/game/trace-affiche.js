@@ -35,8 +35,14 @@ export const EPREUVE = r => String(r || '').replace(/^(\d+)$/, '$1 m');
 
 /* --------------------------------------------------------------- le dessin */
 
-/** Le fond commun : la nuit du jeu, sa lueur doree, et trois couloirs. */
-function poserFond(c, L, H) {
+/** Le fond commun : la nuit du jeu, sa lueur doree, et trois couloirs.
+ *
+ *  Exporte depuis le 7 septembre 2026 : la video de nouveautes
+ *  (suivi/publications/2026-09-07-reel-nouveautes/) dessine seize plans sur
+ *  ce meme fond. Le recopier la-bas aurait garanti la divergence que
+ *  l'en-tete de ce fichier interdit — une lueur retouchee d'un cote et
+ *  oubliee de l'autre. L'appel interne ne change pas. */
+export function poserFond(c, L, H) {
   c.fillStyle = '#060913'; c.fillRect(0, 0, L, H);
 
   const lueur = c.createRadialGradient(L / 2, H * 0.08, 0, L / 2, H * 0.08, L * 0.85);
@@ -99,6 +105,65 @@ function titre(c, texte, x, y, largeurMax, taille, interligne) {
 }
 
 /**
+ * Les morceaux d'un chrono a la virgule, et la largeur de l'ensemble.
+ *
+ * Avec virgule, elle occupe une chasse entiere, comme un chiffre. A 216 px cela
+ * creuse un trou au milieu du chrono — « 8 , 25 » — et c'est le chiffre qui est
+ * le sujet de l'image. Le resserrement global ne repare pas cela : il rapproche
+ * aussi les chiffres entre eux, qui n'ont rien demande.
+ *
+ * On compose donc en trois morceaux et on ne reprend de la place qu'autour du
+ * separateur. Les chiffres gardent leur chasse, la virgule perd la sienne.
+ *
+ * Mesure et trace sont separes parce que deux appelants en ont besoin a des
+ * moments differents : `chiffre` trace a une taille donnee, `chronoPleinCadre`
+ * cherche d'abord la taille qui remplit une largeur. Les laisser diverger,
+ * c'est se retrouver avec deux virgules qui ne tombent pas au meme endroit.
+ *
+ * Le contexte doit deja porter la police voulue : on ne mesure bien que ce
+ * qu'on s'apprete a tracer.
+ */
+export function morceauxChrono(c, str) {
+  const i = str.indexOf(',');
+
+  // Sans virgule — un cap, un decompte — rien a composer : la chasse fixe fait
+  // exactement ce qu'on lui demande, aligner des colonnes de chiffres.
+  if (i < 0) return { entier: str, virgule: '', deci: '',
+                      wEntier: c.measureText(str).width, wVirg: 0, wDeci: 0,
+                      largeur: c.measureText(str).width };
+
+  const entier = str.slice(0, i), deci = str.slice(i + 1);
+  const wEntier = c.measureText(entier).width;
+  const wDeci = c.measureText(deci).width;
+  // Deux cinquiemes de chasse : assez pour que la virgule respire sous le
+  // chiffre precedent, assez peu pour que l'oeil lise un seul nombre.
+  const wVirg = c.measureText('0').width * 0.40;
+
+  return { entier, virgule: ',', deci, wEntier, wVirg, wDeci,
+           largeur: wEntier + wVirg + wDeci };
+}
+
+/** Trace les morceaux mesures ci-dessus, a partir d'un bord gauche.
+ *  Exporte avec `morceauxChrono` le 7 septembre 2026, pour le reel de
+ *  nouveautes : un chrono de 176 px qui garde la chasse pleine de la virgule
+ *  se lit « 8 , 25 ». La composition en trois morceaux est la reponse, et
+ *  elle ne doit exister qu'ici. */
+export function poserMorceaux(c, m, gauche, y) {
+  let cur = gauche;
+  c.textAlign = 'left';
+  c.fillText(m.entier, cur, y);
+  if (!m.virgule) return;
+  cur += m.wEntier;
+  // La virgule est centree dans sa fente etroite, sinon elle colle au chiffre
+  // de gauche et l'on a deplace le trou au lieu de le boucher.
+  c.textAlign = 'center';
+  c.fillText(m.virgule, cur + m.wVirg / 2, y);
+  cur += m.wVirg;
+  c.textAlign = 'left';
+  c.fillText(m.deci, cur, y);
+}
+
+/**
  * Le chiffre, en grand, a chasse fixe.
  *
  * Space Mono et pas Outfit : les chronos se lisent en colonne, et une chasse
@@ -110,54 +175,16 @@ function chiffre(c, texte, x, y, taille, couleur = '#F8CD4A') {
   c.fillStyle = couleur;
   c.font = `700 ${taille}px 'Space Mono', monospace`;
   c.textBaseline = 'middle';
-
-  const str = String(texte);
-  const i = str.indexOf(',');
-
-  // Sans virgule — un cap, un decompte — rien a composer : la chasse fixe fait
-  // exactement ce qu'on lui demande, aligner des colonnes de chiffres.
-  if (i < 0) {
-    c.textAlign = 'center';
-    c.fillText(str, x, y);
-    c.restore();
-    return;
-  }
-
-  // Avec virgule, elle occupe une chasse entiere, comme un chiffre. A 216 px
-  // cela creuse un trou au milieu du chrono — « 8 , 25 » — et c'est le chiffre
-  // qui est le sujet de l'image. Le resserrement global ne repare pas cela : il
-  // rapproche aussi les chiffres entre eux, qui n'ont rien demande.
-  //
-  // On compose donc en trois morceaux et on ne reprend de la place qu'autour du
-  // separateur. Les chiffres gardent leur chasse, la virgule perd la sienne.
-  const entier = str.slice(0, i), virgule = ',', deci = str.slice(i + 1);
-  const chasse = c.measureText('0').width;
-  const wEntier = c.measureText(entier).width;
-  const wDeci = c.measureText(deci).width;
-  // Deux cinquiemes de chasse : assez pour que la virgule respire sous le
-  // chiffre precedent, assez peu pour que l'oeil lise un seul nombre.
-  const wVirg = chasse * 0.40;
-
-  const total = wEntier + wVirg + wDeci;
-  let cur = x - total / 2;
-  c.textAlign = 'left';
-  c.fillText(entier, cur, y);
-  cur += wEntier;
-  // La virgule est centree dans sa fente etroite, sinon elle colle au chiffre
-  // de gauche et l'on a deplace le trou au lieu de le boucher.
-  c.textAlign = 'center';
-  c.fillText(virgule, cur + wVirg / 2, y);
-  cur += wVirg;
-  c.textAlign = 'left';
-  c.fillText(deci, cur, y);
+  const m = morceauxChrono(c, String(texte));
+  poserMorceaux(c, m, x - m.largeur / 2, y);
   c.restore();
 }
 
 /** Le surtitre : petites capitales tres espacees, comme dans le jeu. */
-function surtitre(c, texte, x, y, taille) {
+function surtitre(c, texte, x, y, taille, gras = 700) {
   c.save();
   c.fillStyle = 'rgba(255,255,255,0.46)';
-  c.font = `700 ${taille}px Outfit, sans-serif`;
+  c.font = `${gras} ${taille}px Outfit, sans-serif`;
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.letterSpacing = `${taille * 0.36}px`;
   c.fillText(String(texte).toUpperCase(), x + taille * 0.18, y);
@@ -543,4 +570,336 @@ function epreuvesEnTexte(epreuves) {
   if (!l.length) return 'Sprinter';
   if (l.length === 1) return `Sprinter · ${EPREUVE(l[0])}`;
   return `Sprinter · ${l.join(' + ')} m`;
+}
+
+/* ---------------------------------------------------------------------------
+   UN SEUL CHRONO
+   ---------------------------------------------------------------------------
+   Le fil Instagram, 1080 x 1350, et une seule chose dedans : le temps a battre.
+
+   Les compositions du dessus racontent un evenement — une tete qui change, un
+   mouchoir de poche, un sacre — et pour cela elles ont besoin d'un titre. Ici
+   il n'y a pas d'evenement, il y a une borne : voila le chrono, la semaine est
+   ouverte. Un titre par-dessus n'ajouterait rien et volerait la place du seul
+   element qui doit etre vu de loin, dans un fil qui defile.
+
+   D'ou les deux regles de cette composition, et elles se tiennent :
+
+     - un chrono, pas une liste. Deux chronos cote a cote, et l'oeil compare au
+       lieu de retenir. Le classement complet est un autre format ;
+     - le chiffre prend toute la mesure. Pas une taille choisie dans l'echelle
+       des autres compositions : la largeur disponible, moins les marges, et
+       c'est elle qui decide de la taille du texte plutot que l'inverse.
+
+   Aucun pseudonyme. La charte editoriale (§5.4) interdit de publier celui d'un
+   joueur sans son accord ecrit, et la version masquee — « M... » — ne resout
+   qu'a moitie : sur un classement de cette taille, une initiale et un rang
+   designent souvent une seule personne. L'image n'en a pas besoin, on s'en
+   passe.
+--------------------------------------------------------------------------- */
+
+/**
+ * Le chrono a la taille que lui laisse la mesure, et son unite a cote.
+ *
+ * L'inverse des autres compositions, ou la taille est une fraction connue de la
+ * largeur : ici on part de la place disponible et on en deduit le corps. C'est
+ * la seule facon d'etre certain que le chiffre est aussi gros qu'il peut l'etre
+ * sans jamais toucher la marge — et « aussi gros que possible » etait la
+ * demande.
+ *
+ * L'unite reste attachee au nombre plutot que renvoyee sur une ligne a elle :
+ * la charte ecrit « 8,25 s », et c'est ce que l'image doit dire. Elle est posee
+ * sur la MEME ligne de pied que les chiffres, a un cinquieme de leur corps —
+ * une marque d'unite, pas un mot.
+ */
+function chronoPleinCadre(c, texte, unite, cx, yCentre, mesure, couleur) {
+  const REF = 100, RATIO_UNITE = 0.19, RATIO_BLANC = 0.10;
+  c.save();
+  c.fillStyle = couleur;
+  c.textBaseline = 'alphabetic';
+
+  // Trois coefficients mesures a un corps de reference, puis une division. On
+  // ne tatonne pas : Space Mono est a chasse fixe, la largeur est lineaire.
+  c.font = `700 ${REF}px 'Space Mono', monospace`;
+  const kNombre = morceauxChrono(c, texte).largeur / REF;
+  const kUnite = unite ? (c.measureText(unite).width / REF) * RATIO_UNITE : 0;
+  const kBlanc = unite ? RATIO_BLANC : 0;
+  const taille = Math.floor(mesure / (kNombre + kBlanc + kUnite));
+
+  // On remesure au corps reel : le hinting deplace les choses de quelques
+  // dixiemes, et a cette taille quelques dixiemes se voient au bord.
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  const m = morceauxChrono(c, texte);
+  const hautChiffre = c.measureText('8').actualBoundingBoxAscent || taille * 0.70;
+  const tUnite = Math.round(taille * RATIO_UNITE);
+  const blanc = unite ? taille * RATIO_BLANC : 0;
+  let wUnite = 0;
+  if (unite) { c.font = `700 ${tUnite}px 'Space Mono', monospace`; wUnite = c.measureText(unite).width; }
+
+  // Le groupe est centre sur sa largeur totale, unite comprise : centrer le
+  // seul nombre pousserait l'ensemble a gauche de la moitie de l'unite, et sur
+  // une image ou tout le reste est centre cela se voit tout de suite.
+  const gauche = cx - (m.largeur + blanc + wUnite) / 2;
+  // `yCentre` est le milieu des CHIFFRES, pas la ligne de pied : c'est ce que
+  // l'oeil centre, et les chiffres n'ont pas de jambage qui le decale.
+  const base = yCentre + hautChiffre / 2;
+
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  poserMorceaux(c, m, gauche, base);
+  if (unite) {
+    c.font = `700 ${tUnite}px 'Space Mono', monospace`;
+    c.textAlign = 'left';
+    c.fillText(unite, gauche + m.largeur + blanc, base);
+  }
+
+  // Le bas de l'encre, et non la ligne de pied. La virgule descend d'un
+  // cinquieme de corps sous les chiffres — 80 px a cette taille — et ce qui se
+  // range dessous doit partir de la. Mesure plutot que constante : la valeur
+  // depend de la fonte, et c'est la fonte qui sait.
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  const basChiffre = base + c.measureText(texte).actualBoundingBoxDescent;
+
+  c.restore();
+  return { taille, hautChiffre, base, basChiffre };
+}
+
+/**
+ * Le meme chrono, format story — 1080 x 1920.
+ *
+ * Ecrit le 8 septembre 2026 pour la reprise en story du post du fil (la
+ * commande de travail du mardi 8 dans calendrier-instagram.html). Elle demande
+ * de « reprendre la composition du post 1080x1350 et de la recadrer en
+ * 1080x1920, le chrono au centre optique, le haut et le bas combles avec le
+ * fond de la charte — pas avec des barres noires plates ».
+ *
+ * POURQUOI UNE FONCTION ET PAS UN RECADRAGE. Composer l'image du fil dans un
+ * cadre plus grand etait la voie evidente, et elle ne marche pas : `poserFond`
+ * place la lueur a 8 % de la hauteur et les trois traits a 62, 73 et 84 %.
+ * Ces fractions sont celles du cadre qu'on lui donne. Coller un fond de 1350
+ * au milieu d'un fond de 1920, c'est donc superposer deux stades dont les
+ * pistes ne sont pas au meme endroit, avec une couture la ou les deux degrades
+ * se rencontrent. La composition se refait, elle ne se recadre pas.
+ *
+ * ET POURQUOI ICI. Les internes dont elle a besoin — `chronoPleinCadre`,
+ * `surtitre`, `poserPied` — ne sont pas exportes. Les exporter pour qu'une
+ * page de `suivi/` les rassemble a sa facon, c'est reconstruire la composition
+ * dehors : la premiere retouche du fil ne suivrait pas, et c'est exactement la
+ * divergence que l'en-tete de ce fichier interdit. Les deux compositions sont
+ * donc cote a cote, et une retouche de l'une se voit en relisant l'autre.
+ *
+ * `d` porte les memes champs que `dessinerChrono` : { chrono_ms, ecart_ms,
+ * epreuve } — ou `mention` a la place de `ecart_ms`.
+ */
+export function dessinerChronoStory(cv, d = {}) {
+  const L = 1080, H = 1920;
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+
+  const marge = 80;
+  const cx = L / 2;
+
+  // LA ZONE SURE. Instagram mange les 250 px du haut (barre de progression et
+  // avatar) et les 250 px du bas (sticker et pouce). Toute la composition tient
+  // donc entre 250 et 1670 — le rectangle central de 1080 x 1420.
+  //
+  // Le fond, lui, est trace sur la HAUTEUR ENTIERE : c'est ce qui remplit le
+  // haut et le bas demandes, avec la nuit et la lueur plutot qu'avec du noir.
+  const SUR_HAUT = 250, SUR_BAS = H - 250;
+  poserFond(c, L, H);
+
+  // L'epreuve, contre le haut de la zone sure et non contre le bord de l'image :
+  // posee a 80 px comme au fil, elle passerait sous l'avatar.
+  surtitre(c, EPREUVE(d.epreuve || 100), cx, SUR_HAUT, Math.round(L * 0.030), 800);
+
+  // Le pied et la signature, remontes dans la zone sure.
+  //
+  // `poserPied` mesure depuis le bas du cadre qu'on lui donne : il tracerait
+  // son filet a 1800 et son texte a 1846, tous deux sous la limite de 1670. On
+  // ne touche pas au pied — meme filet, meme graisse, meme inter-lettrage — on
+  // translate le contexte de la difference, comme le fait deja `dessinerChrono`
+  // pour ses 14 px.
+  const REMONTEE = H - SUR_BAS;              // 250
+  const yPied = SUR_BAS - marge * 1.5;
+  const yCompte = Math.round(yPied - L * 0.036);
+
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${Math.round(L * 0.026)}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = `${Math.round(L * 0.004)}px`;
+  c.fillText('@sprintergame', cx, yCompte);
+  c.restore();
+
+  c.save();
+  c.translate(0, -REMONTEE - 14);
+  poserPied(c, L, H, marge);
+  c.restore();
+
+  // Le chrono, au centre optique de la zone sure.
+  //
+  // 45 % de la hauteur, et non 50 : le centre optique d'un cadre vertical est
+  // au-dessus de son centre geometrique, et le centre de la zone sure (960)
+  // tomberait a 6 px des premiers traits de piste, qui sont a 1190. A 864 le
+  // chiffre reste sur la piste et non dedans — la meme regle qu'au fil.
+  //
+  // La largeur de mesure est celle du fil : `L - marge * 2`. Le chiffre fait
+  // donc la MEME taille sur les deux images, ce qui est le propre d'une reprise
+  // — la story montre la meme information une seconde fois, pas une plus grosse.
+  const yChrono = Math.round(H * 0.45);
+  const { basChiffre } = chronoPleinCadre(c, s2(d.chrono_ms), 's', cx, yChrono,
+                                          L - marge * 2, '#F8CD4A');
+
+  // La deuxieme ligne, a l'identique du fil : Space Mono pour un nombre, Outfit
+  // pour une phrase. Voir `dessinerChrono` pour le pourquoi de ce partage.
+  const tLigne2 = Math.round(L * (d.ecart_ms != null ? 0.086 : 0.090));
+  const y2 = Math.round(basChiffre + L * 0.055 + tLigne2 / 2);
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.60)';
+  c.textBaseline = 'middle';
+
+  if (d.ecart_ms != null) {
+    c.font = `700 ${tLigne2}px 'Space Mono', monospace`;
+    const nombre = morceauxChrono(c, s2(d.ecart_ms));
+    const wSigne = c.measureText('+').width, wUnite = c.measureText('s').width;
+    const espace = tLigne2 * 0.34;
+    let x = cx - (wSigne + espace + nombre.largeur + espace + wUnite) / 2;
+    c.textAlign = 'left';
+    c.fillText('+', x, y2);
+    x += wSigne + espace;
+    poserMorceaux(c, nombre, x, y2);
+    x += nombre.largeur + espace;
+    c.textAlign = 'left';
+    c.fillText('s', x, y2);
+  } else if (d.mention) {
+    c.font = `700 ${tLigne2}px Outfit, sans-serif`;
+    c.textAlign = 'center';
+    c.fillText(String(d.mention), cx, y2);
+  }
+  c.restore();
+
+  return cv;
+}
+
+/**
+ * Le chrono de la semaine, format fil.
+ *
+ * `d` porte : { chrono_ms, ecart_ms, epreuve }.
+ *
+ * Un seul format, et il est ecrit en dur. Les autres compositions se plient aux
+ * trois formats parce qu'elles sont faites de blocs empiles, qui se resserrent.
+ * Celle-ci est faite d'un chiffre qui remplit la largeur : en 1600 x 900 il
+ * ferait 700 px de haut sur une image qui en fait 900, et en 1080 x 1920 il
+ * laisserait un vide de la hauteur d'une story. Un cadrage qui ne survit pas au
+ * changement de format n'a rien a y gagner a faire semblant.
+ */
+export function dessinerChrono(cv, d = {}) {
+  const L = 1080, H = 1350;
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+
+  // 80 px sur les quatre bords. Les autres compositions calculent leur marge en
+  // fraction de largeur (0.082, soit 89 px ici) ; celle-ci la recoit en clair,
+  // parce que le chiffre est cale dessus au pixel et qu'une fraction rendrait
+  // illisible ce qui est en jeu.
+  const marge = 80;
+  const cx = L / 2;
+
+  poserFond(c, L, H);
+
+  // L'epreuve, contre la marge haute. Elle ne participe pas au centrage : c'est
+  // une etiquette, elle tient sa place quoi qu'il arrive. En 800 plutot qu'en
+  // 700 — tres interlettree et a 46 % de blanc, le 700 se delave.
+  //
+  // 32 px et non les 22 px du surtitre des autres compositions : l'epreuve
+  // passe AVANT la signature dans la hierarchie de lecture, et `@sprintergame`
+  // fait 28 px. A 22 px, l'ordre demande etait inverse — invisible a l'oeil,
+  // net des qu'on mesure les deux hauteurs d'oeil.
+  surtitre(c, EPREUVE(d.epreuve || 100), cx, marge, Math.round(L * 0.030), 800);
+
+  // Le compte du jeu. Une image de fil se retrouve en capture d'ecran dans une
+  // conversation, sans le nom du compte au-dessus : sans cette ligne elle ne
+  // dit pas ou retrouver le jeu.
+  const yPied = H - marge * 1.5;
+  const yCompte = Math.round(yPied - L * 0.036);
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${Math.round(L * 0.026)}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = `${Math.round(L * 0.004)}px`;
+  c.fillText('@sprintergame', cx, yCompte);
+  c.restore();
+
+  // Le pied de la charte, remonte de 14 px.
+  //
+  // `poserPied` pose son texte a `marge * 0.92` du bas, c'est-a-dire qu'il
+  // traite la marge comme une ligne de pied et laisse les jambages la
+  // franchir. Sur les autres formats personne ne compte ; ici la marge de
+  // 80 px est une demande explicite sur les QUATRE bords, et l'encre du pied
+  // mordait de 13 px dedans. On ne touche pas au pied — meme filet, meme
+  // graisse, meme inter-lettrage — on le decale.
+  c.save();
+  c.translate(0, -14);
+  poserPied(c, L, H, marge);
+  c.restore();
+
+  // Le chrono, et sa place dans la hauteur.
+  //
+  // Il n'est pas centre dans l'image : il est pose AU-DESSUS des trois traits
+  // de piste, qui commencent a 62 % de la hauteur. Centre, il tombait au milieu
+  // d'eux et les traits se lisaient alors comme trois rayures egarees derriere
+  // un chiffre ; pousse au-dessus, ils redeviennent ce qu'ils sont — le sol.
+  // Le chiffre est sur la piste, pas dedans.
+  //
+  // La zone qu'il occupe va de `yChrono - 20 % de H` a `yChrono + 20 % de H`,
+  // soit les deux cinquiemes de la hauteur demandes, et rien d'autre n'a le
+  // droit d'y entrer.
+  const yChrono = Math.round(H * 0.32);
+  const { basChiffre } = chronoPleinCadre(c, s2(d.chrono_ms), 's', cx, yChrono,
+                                          L - marge * 2, '#F8CD4A');
+
+  // La deuxieme ligne, accrochee sous le chrono. Blanc a 60 % et non doré :
+  // l'or dit « c'est le sujet », et il n'y a qu'un sujet par image.
+  //
+  // Deux natures possibles, et la charte les separe depuis le debut : un nombre
+  // seul se compose en Space Mono, une ligne qui contient des mots se compose
+  // en Outfit — c'est deja le partage entre `chiffre` et `ligne` plus haut.
+  //
+  //   `ecart_ms`  « + 0,05 s »  : l'ecart avec le suivant. Un nombre.
+  //   `mention`   « 15e sur 98 » : ce que le chrono vaut. Une phrase courte.
+  //
+  // Les melanger dans la meme fonte ferait passer l'un pour l'autre, et ils ne
+  // disent pas du tout la meme chose : le premier qualifie une tete, le second
+  // situe un seuil. Une image qui annonce un seuil avec l'ecart d'une tete
+  // annonce un record qui n'existe pas.
+  const tLigne2 = Math.round(L * (d.ecart_ms != null ? 0.086 : 0.090));
+  const y2 = Math.round(basChiffre + L * 0.055 + tLigne2 / 2);
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.60)';
+  c.textBaseline = 'middle';
+
+  if (d.ecart_ms != null) {
+    // Compose en trois morceaux plutot qu'ecrit d'un trait : « + 0,05 s » en
+    // chasse fixe donne aux deux espaces la largeur d'un chiffre, et la ligne
+    // part en « +   0,05   s ». On leur rend un tiers de corps, ce qu'une
+    // espace vaut vraiment.
+    c.font = `700 ${tLigne2}px 'Space Mono', monospace`;
+    const nombre = morceauxChrono(c, s2(d.ecart_ms));
+    const wSigne = c.measureText('+').width, wUnite = c.measureText('s').width;
+    const espace = tLigne2 * 0.34;
+    let x = cx - (wSigne + espace + nombre.largeur + espace + wUnite) / 2;
+    c.textAlign = 'left';
+    c.fillText('+', x, y2);
+    x += wSigne + espace;
+    poserMorceaux(c, nombre, x, y2);
+    x += nombre.largeur + espace;
+    c.textAlign = 'left';
+    c.fillText('s', x, y2);
+  } else if (d.mention) {
+    c.font = `700 ${tLigne2}px Outfit, sans-serif`;
+    c.textAlign = 'center';
+    c.fillText(String(d.mention), cx, y2);
+  }
+  c.restore();
+
+  return cv;
 }

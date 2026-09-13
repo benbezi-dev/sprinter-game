@@ -199,7 +199,7 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
 
   const pays = s.pays;
   const reste = decompte(s.cloture);
-  const nom = s.titre || N.t('sel_titre');
+  const nom = N.titreEdition(s) || N.t('sel_titre');
 
   // Trois situations, trois phrases. Elles se lisent de haut en bas dans
   // l'ordre où elles deviennent vraies pour un joueur : pas de pays, pas
@@ -457,7 +457,7 @@ export function SceneSelection() {
             <span className="flex items-center gap-1.5">
               <Drapeau pays={s.pays} className="text-[13px]" />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-muted-foreground">
-                {s.titre || N.t('sel_titre')}
+                {N.titreEdition(s) || N.t('sel_titre')}
               </span>
             </span>
 

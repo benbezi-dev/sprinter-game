@@ -1,6 +1,11 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
+// La couche de finition s'installe sur globalThis AVANT le rendu qui l'appelle.
+// L'ordre compte : `sprinter-app.js` la cherche a chaque image plutot qu'au
+// chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
+// demarrerait alors sans finition pendant les premieres images.
+import './rendu-premium.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
@@ -13,6 +18,22 @@ export const SprinterApp = (globalThis as any).SprinterApp;
 SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
+
+/**
+ * LE STARTER EST MUET.
+ *
+ * Le decompte sonnait trois bips avant le coup de feu — l'appel aux marques,
+ * puis « prets ». On les a coupes : trois impulsions egalement espacees
+ * annoncent la quatrieme, et le joueur part alors sur une pulsation qu'il
+ * compte, et non au coup de feu. C'est la reaction elle-meme qu'on mesure
+ * faux. Le decompte se voit toujours a l'ecran ; seule la detonation
+ * s'entend.
+ *
+ * Le geste est garde dans la boucle plutot que supprime : ce reglage a
+ * change deux fois, il changera peut-etre encore, et le remettre ne doit
+ * pas demander de rouvrir la boucle de jeu.
+ */
+const STARTER_MUET = true;
 
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
@@ -41,6 +62,8 @@ export type GameState = {
   transFlash: number;
   falseFlash: number;
   cut: any;
+  /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
+  sortie: any;
   levelIdx: number;
   raceKey: '100' | '200' | '400';
   won: boolean;
@@ -174,7 +197,7 @@ let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
 
 /**
  * Charge en tache de fond les noms du haut du TOP 500, dont les Jeux
- * olympiques garnissent leur plateau. buildLevel est synchrone : les noms
+ * mondiaux garnissent leur plateau. buildLevel est synchrone : les noms
  * doivent etre la avant la course, pas pendant. Si le reseau ne repond pas,
  * G.topNames reste vide et le plateau maison sert de repli.
  */
@@ -383,9 +406,27 @@ export function updateLogic(dt: number) {
     G.cut.t += dt;
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
       : G.cut.kind === 'ending' ? 7.5 : 3.2);
+    // Le sacre qui s'efface par-dessus le generique continue de vivre le temps
+    // du croisement : son coureur court encore, ses confettis tombent encore,
+    // et son texte s'eteint avec lui. Un sacre fige pendant deux secondes se
+    // verrait autant qu'une coupe. Voir nextCut dans sprinter-app.js.
+    if (G.sortie) {
+      G.sortie.age += dt;
+      G.sortie.t += dt;
+      G.sortie.man.stride += dt * 3.2;
+      G.sortie.a = clamp(1 - G.sortie.age / G.sortie.duree, 0, 1);
+      if (G.sortie.a <= 0) G.sortie = null;
+    }
     // Le generique dure ce que dure son morceau, pas quinze secondes : c'est
     // l'ecran qui rend la main, a la derniere note ou au geste du joueur.
-    if (G.cut.kind !== 'ending' && G.cut.t > 15.4) SprinterApp.nextCut();
+    //
+    // Le sacre, lui, bascule un croisement plus tot quand c'est le generique
+    // qui suit : les deux se chevauchent, et le sacre dure au total ce qu'il
+    // durait avant.
+    const finDuCut = (G.cut.kind === 'champion' && G.cutQueue[0] === 'ending')
+      ? SprinterApp.CUT_DUREE - SprinterApp.CUT_CROISEMENT
+      : SprinterApp.CUT_DUREE;
+    if (G.cut.kind !== 'ending' && G.cut.t > finDuCut) SprinterApp.nextCut();
   } else if (G.state === 'count') {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
@@ -495,6 +536,7 @@ export function updateLogic(dt: number) {
     transFlash: G.transFlash,
     falseFlash: G.falseFlash,
     cut: G.cut,
+    sortie: G.sortie,
     levelIdx: G.levelIdx,
     raceKey: G.raceKey,
     won: G.won,

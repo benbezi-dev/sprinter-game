@@ -79,6 +79,9 @@ type Ecouteurs = {
    */
   onPos?: (equipe: string, relais: number, d: number, temoin?: number) => void;
   onPasse?: (equipe: string, p: PasseRelais) => void;
+  /** Hors de portee : les deux mains tendues ensemble, mais trop loin. */
+  onTropLoin?: (equipe: string,
+                i: { de: number; vers: number; bras: number; portee: number }) => void;
   onElimine?: (equipe: string, raison: string, relais: number) => void;
   onFini?: (equipe: string, totalMs: number) => void;
   /** Tout le monde a fini, d'une facon ou d'une autre. */
@@ -144,6 +147,11 @@ export class SalleConfrontation {
       case 'pos':
         this.ec.onPos?.(m.equipe, m.relais, m.d,
                         typeof m.temoin === 'number' ? m.temoin : undefined);
+        return;
+      // Rien n'a change sur la piste : seulement une main refermee sur du vide.
+      case 'trop_loin':
+        this.ec.onTropLoin?.(m.equipe,
+          { de: m.de, vers: m.vers, bras: m.bras, portee: m.portee });
         return;
       case 'passe':
         this.ec.onPasse?.(m.equipe, m as PasseRelais);

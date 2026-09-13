@@ -183,6 +183,18 @@ export async function ensureDuelTables(db) {
     // rien ne la ramenait. Un drapeau a lui permet au mot de revenir seul,
     // sans dependre de l'ordre dans lequel les deux se sont produits.
     `ALTER TABLE duel_results ADD COLUMN mot_vu INTEGER NOT NULL DEFAULT 0`,
+    // La serie de victoires en cours, et la plus longue jamais tenue. Elles
+    // vivent sur la ligne du joueur et non sur les rencontres : une serie est
+    // un etat, pas un evenement, et la lire demanderait sinon de remonter
+    // l'historique de quelqu'un a chaque affichage du classement.
+    //
+    // Les deux ensemble, parce qu'elles ne racontent pas la meme chose. La
+    // premiere s'eteint a la premiere defaite — c'est ce qui lui donne sa
+    // valeur. La seconde ne s'efface jamais : elle garde la trace de ce qui a
+    // ete tenu, pour que dix victoires d'affilee laissent autre chose qu'un
+    // zero une fois la onzieme perdue.
+    `ALTER TABLE duel_players ADD COLUMN serie INTEGER NOT NULL DEFAULT 0`,
+    `ALTER TABLE duel_players ADD COLUMN serie_max INTEGER NOT NULL DEFAULT 0`,
     // SUR QUOI la rencontre s'est jouee, donc quel classement elle deplace.
     // Sans valeur par defaut, volontairement : une rencontre d'avant les
     // disciplines doit se reconnaitre a son absence, pour que le recalcul
@@ -269,7 +281,7 @@ export async function duelBoard(db, epreuve = DISCIPLINE_DEFAUT) {
   const ep = disciplineValide(epreuve);
   const { results } = await db.prepare(
     `SELECT name, mmr, lp, palier, wins, losses, draws, launched, received,
-            last_delta
+            last_delta, serie, serie_max
        FROM duel_players WHERE epreuve = ? AND wins + losses + draws > 0
       ORDER BY ${ordreClassement()} LIMIT 500`
   ).bind(ep).all();
@@ -363,13 +375,15 @@ export async function appliquerDuel(db, r) {
  *  sens meme d'un classement par discipline. */
 async function etatDe(db, key, epreuve) {
   const r = await db.prepare(
-    `SELECT mmr, lp, palier, bouclier, wins, losses, draws
+    `SELECT mmr, lp, palier, bouclier, wins, losses, draws, serie, serie_max
        FROM duel_players WHERE name_key = ? AND epreuve = ?`).bind(key, epreuve).first();
   return {
     mmr: r?.mmr ?? MMR_DEPART,
     lp: r?.lp ?? 0,
     palier: r?.palier ?? 0,
     bouclier: r?.bouclier ?? 0,
+    serie: r?.serie ?? 0,
+    serie_max: r?.serie_max ?? 0,
     // Le K depend de l'experience, et l'experience est le nombre de duels
     // TRANCHES. Les defis lances sans reponse n'apprennent rien sur personne.
     //
@@ -395,13 +409,33 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
   ]);
   const apres = appliquerDuelAuClassement({ lanceur, releveur, issue });
 
+  // La serie ne passe pas par le module de calcul, et c'est voulu : elle ne
+  // depend d'aucun MMR, d'aucun bareme et d'aucun palier — seulement de
+  // l'issue. La faire transiter par appliquerDuelAuClassement melangerait une
+  // regle qu'on peut relire en une ligne a celles qui demandent une feuille de
+  // calcul pour etre verifiees.
+  //
+  // Un nul la GARDE sans l'allonger. C'est une egalite a la milliseconde : elle
+  // ne prouve pas qu'on a battu quelqu'un, mais elle ne prouve pas non plus le
+  // contraire, et eteindre une serie de douze sur un chrono identique serait
+  // vecu comme une injustice.
+  const serieApres = (avant, gagne) =>
+    issue === 'draw' ? avant.serie : gagne ? avant.serie + 1 : 0;
+  const series = {
+    [luiKey]: serieApres(lanceur, issue === 'challenger'),
+    [moiKey]: serieApres(releveur, issue === 'opponent'),
+  };
+  const maxAvant = { [luiKey]: lanceur.serie_max, [moiKey]: releveur.serie_max };
+
   const maj = (key, x, w, l, d, recu) => db.prepare(
     `UPDATE duel_players SET mmr = ?, lp = ?, palier = ?, bouclier = ?,
        wins = wins + ?, losses = losses + ?, draws = draws + ?,
-       received = received + ?, last_delta = ?, updated_at = ?
+       received = received + ?, last_delta = ?, serie = ?, serie_max = ?,
+       updated_at = ?
      WHERE name_key = ? AND epreuve = ?`
   ).bind(x.mmr, x.lp, x.palier, x.bouclier, w, l, d, recu,
-         x.delta_lp, Date.now(), key, ep);
+         x.delta_lp, series[key], Math.max(maxAvant[key], series[key]),
+         Date.now(), key, ep);
 
   const ecritures = [
     maj(luiKey, apres.lanceur,
@@ -434,6 +468,13 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
     monte: apres.releveur.monte > 0, descend: apres.releveur.descend > 0,
     monte_adverse: apres.lanceur.monte > 0,
     descend_adverse: apres.lanceur.descend > 0,
+    // La serie de chacun APRES le duel, et celle qu'il avait avant. L'ecran
+    // d'arrivee a besoin des deux : allumer une flamme et la voir s'eteindre
+    // sont deux nouvelles differentes, et aucune ne se deduit du seul nombre
+    // qui reste. Zero apres trois victoires, c'est une flamme perdue ; zero
+    // apres zero, il ne s'est rien passe.
+    serie: series[moiKey], serie_avant: releveur.serie,
+    serie_adverse: series[luiKey], serie_avant_adverse: lanceur.serie,
   };
 }
 

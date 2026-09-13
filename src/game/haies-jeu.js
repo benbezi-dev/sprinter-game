@@ -284,7 +284,7 @@ export function simuler(cle, { vitesse, foulee, precision = 1, usure = 0, repris
     // toujours et les pertes se multipliaient : un coureur a cinq appuis
     // perdait un cinquieme de sa vitesse sur la course entiere, et deux
     // plateaux du 110 m devenaient inatteignables — il y avait un trou de
-    // deux secondes entre le niveau olympique et le regional, ou aucun chrono
+    // deux secondes entre les Jeux mondiaux et le regional, ou aucun chrono
     // ne pouvait tomber.
     //
     // C'etait faux, et pas seulement pour le jeu : un hurdleur qui accroche

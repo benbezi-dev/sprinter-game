@@ -2,6 +2,66 @@ import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { dessinerLeGenerique } from '@/game/scene-generique';
 
+/**
+ * UNE CINEMATIQUE ORDINAIRE : les lignes de vitesse, le coureur qui entre par
+ * la gauche, et les confettis du sacre.
+ *
+ * Sortie de la boucle pour pouvoir etre dessinee DEUX fois dans la meme image :
+ * la cinematique en cours, et — pendant les deux secondes du croisement — le
+ * sacre qui s'efface par-dessus le generique qui vient de demarrer (G.sortie).
+ * C'est le meme dessin a une opacite pres ; le dupliquer aurait fait deux
+ * sacres a maintenir. Voir nextCut dans game/sprinter-app.js.
+ */
+function dessinerCinematique(ctx: CanvasRenderingContext2D, cut: any, theme: any) {
+  const { G, drawIcon } = SprinterApp;
+  const ct = cut.t;
+  const intro = cut.kind === 'intro';
+  const champ = cut.kind === 'champion';
+  const accent = champ ? [248, 205, 74] : theme.accent;
+  
+  // Speed lines
+  ctx.strokeStyle = `rgba(${accent.join(',')},0.07)`;
+  ctx.lineWidth = SprinterApp.ui() * 26;
+  for (let i = -4; i < 24; i++) {
+    const x = i * (SprinterApp.ui() * 62) + (ct * SprinterApp.ui() * 34) % (SprinterApp.ui() * 62);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - SprinterApp.ui() * 240, G.VH); ctx.stroke();
+  }
+
+  const gx = G.portrait ? G.VW * 0.5 : G.VW * 0.26;
+  const gy = G.portrait ? G.VH * 0.46 : G.VH * 0.72;
+  const app = SprinterApp.clamp(ct / 0.55, 0, 1);
+  const ease = 1 - Math.pow(1 - app, 3);
+  drawIcon(ctx, cut.man, gx - SprinterApp.ui() * 240 * (1 - ease), gy,
+             SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
+             
+  if (champ) {
+    // Confettis qui tournent sur eux-memes en tombant, plutot que
+    // de simples rectangles droits : plus vivant pour l'ecran de
+    // sacre.
+    for (let i = 0; i < 90; i++) {
+      const sd = (i * 7919) % 997;
+      const x = (sd * 13) % G.VW;
+      const y = ((ct * (60 + sd % 90) + sd * 3) % (G.VH + 120)) - 60;
+      if (y >= -10) {
+        const cols = ['rgb(248,205,74)', 'rgb(104,216,236)', 'rgb(232,121,216)', 'rgb(108,226,138)', 'rgb(238,240,248)'];
+        const cx2 = x + Math.sin(ct * 3 + sd) * 6;
+        const spin = ct * (2 + (sd % 5)) + sd;
+        const w = SprinterApp.ui() * (4 + sd % 4), h = SprinterApp.ui() * 7;
+        ctx.save();
+        ctx.translate(cx2, y);
+        ctx.rotate(spin);
+        ctx.fillStyle = cols[sd % 5];
+        if (sd % 7 === 0) {
+          ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillRect(-w / 2, -h / 2, w, h);
+        }
+        ctx.restore();
+      }
+    }
+  }
+}
+
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -28,7 +88,7 @@ export function GameCanvas() {
     // load() fixe la langue (sauvegardee ou detectee) : on aligne le
     // document dessus pour ne pas declencher la traduction navigateur.
     syncHtmlLang();
-    // Les Jeux olympiques courent contre le vrai TOP 500 : on va chercher les
+    // Les Jeux mondiaux courent contre le vrai TOP 500 : on va chercher les
     // noms des maintenant, bien avant que le joueur n'y arrive.
     primeTopNames();
 
@@ -84,6 +144,13 @@ export function GameCanvas() {
       lastTime = now;
       
       updateLogic(dt);
+
+      // La couche de finition prend le pouls de l'image AVANT qu'on dessine :
+      // c'est elle qui decide, au vu du temps reellement passe, si le
+      // telephone tient le grain de piste et la poussiere ou s'il faut les
+      // lui retirer. Voir game/rendu-premium.js.
+      const Prem = (globalThis as any).RenduPremium;
+      if (Prem) Prem.mesurer(dt);
 
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);
@@ -145,60 +212,54 @@ export function GameCanvas() {
           // est dessinee ailleurs — deux cents lignes qui n'ont rien a faire au
           // milieu de la boucle.
           dessinerLeGenerique(ctx, SprinterApp);
-        } else if (G.state === 'cut') {
-          // Cutscene athlete
-          const cut = G.cut;
-          if (cut) {
-            const ct = cut.t;
-            const intro = cut.kind === 'intro';
-            const champ = cut.kind === 'champion';
-            const accent = champ ? [248, 205, 74] : theme.accent;
-            
-            // Speed lines
-            ctx.strokeStyle = `rgba(${accent.join(',')},0.07)`;
-            ctx.lineWidth = SprinterApp.ui() * 26;
-            for (let i = -4; i < 24; i++) {
-              const x = i * (SprinterApp.ui() * 62) + (ct * SprinterApp.ui() * 34) % (SprinterApp.ui() * 62);
-              ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - SprinterApp.ui() * 240, G.VH); ctx.stroke();
-            }
-
-            const gx = G.portrait ? G.VW * 0.5 : G.VW * 0.26;
-            const gy = G.portrait ? G.VH * 0.46 : G.VH * 0.72;
-            const app = SprinterApp.clamp(ct / 0.55, 0, 1);
-            const ease = 1 - Math.pow(1 - app, 3);
-            drawIcon(ctx, cut.man, gx - SprinterApp.ui() * 240 * (1 - ease), gy,
-                       SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
-                       
-            if (champ) {
-              // Confettis qui tournent sur eux-memes en tombant, plutot que
-              // de simples rectangles droits : plus vivant pour l'ecran de
-              // sacre.
-              for (let i = 0; i < 90; i++) {
-                const sd = (i * 7919) % 997;
-                const x = (sd * 13) % G.VW;
-                const y = ((ct * (60 + sd % 90) + sd * 3) % (G.VH + 120)) - 60;
-                if (y >= -10) {
-                  const cols = ['rgb(248,205,74)', 'rgb(104,216,236)', 'rgb(232,121,216)', 'rgb(108,226,138)', 'rgb(238,240,248)'];
-                  const cx2 = x + Math.sin(ct * 3 + sd) * 6;
-                  const spin = ct * (2 + (sd % 5)) + sd;
-                  const w = SprinterApp.ui() * (4 + sd % 4), h = SprinterApp.ui() * 7;
-                  ctx.save();
-                  ctx.translate(cx2, y);
-                  ctx.rotate(spin);
-                  ctx.fillStyle = cols[sd % 5];
-                  if (sd % 7 === 0) {
-                    ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill();
-                  } else {
-                    ctx.fillRect(-w / 2, -h / 2, w, h);
-                  }
-                  ctx.restore();
-                }
-              }
-            }
+          // LE FONDU ENCHAINE. Le sacre est dessine par-dessus la nuit qui
+          // monte, a l'opacite qui lui reste : les deux scenes se croisent au
+          // lieu de se couper, le temps que la musique s'installe.
+          if (G.sortie && G.sortie.a > 0) {
+            ctx.save();
+            ctx.globalAlpha = G.sortie.a;
+            dessinerCinematique(ctx, G.sortie, theme);
+            ctx.restore();
           }
+        } else if (G.state === 'cut') {
+          if (G.cut) dessinerCinematique(ctx, G.cut, theme);
         }
         
         ctx.restore();
+      }
+
+      // LA PASSE FINALE, SUR L'IMAGE ENTIERE.
+      //
+      // Elle vient apres tout — monde, athletes, cinematiques — parce que
+      // c'est ce qu'elle est : non plus un objet de plus dans le stade, mais
+      // la facon dont on REGARDE le stade. Le vignettage ferme les bords,
+      // l'etalonnage donne au lieu une lumiere commune, et a pleine vitesse
+      // l'image se resserre autour du coureur.
+      //
+      // Le HUD est en React, au-dessus du canvas : il reste donc franc, et
+      // c'est voulu — un chiffre de chrono assombri dans un coin serait
+      // illisible, alors qu'une piste assombrie dans un coin est du cinema.
+      if (Prem) {
+        const enCourse = G.state === 'race';
+        // La part de vitesse : rien jusqu'aux trois quarts de la vitesse
+        // maximale, puis une montee franche. En dessous, l'effet accompagnait
+        // la marche d'approche et ne voulait plus rien dire.
+        const v = enCourse && G.player ? G.player.v / (G.player.maxSpeed || 12) : 0;
+        const part = SprinterApp.clamp((v - 0.74) / 0.26, 0, 1);
+        // La direction de course A L'ECRAN, prise sur la piste elle-meme :
+        // un metre plus loin dans le couloir du joueur, et la difference des
+        // deux projections est l'axe que suivent les trainees. En virage il
+        // tourne avec le coureur, sans qu'on ait a rejouer la geometrie.
+        let dx = 0, dy = 0;
+        if (enCourse && G.player && G.track) {
+          const a = G.track.pos(G.player.d, G.player.lane);
+          const b = G.track.pos(G.player.d + 1, G.player.lane);
+          const pa = SprinterApp.ground(a[0], a[1]);
+          const pb = SprinterApp.ground(b[0], b[1]);
+          dx = pb[0] - pa[0]; dy = pb[1] - pa[1];
+        }
+        Prem.vitesse(ctx, G, part, dx, dy);
+        Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + part * 0.15);
       }
 
       rafRef.current = requestAnimationFrame(frame);

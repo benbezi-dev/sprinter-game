@@ -471,12 +471,58 @@
     fantome_defier:  ['LES DÉFIER', 'CHALLENGE THEM'],
     // championnats
     champ_directs:   ['les {n} premiers passent', 'top {n} go through'],
+    // Les noms de phases, traduits par leur CLE et non par leur libelle.
+    //
+    // `FORMAT.phases` arrive du serveur avec ses libelles ecrits en francais —
+    // 'Séries', 'Demi-finales', 'Finale' — et le jeu les affichait tels quels :
+    // une interface en anglais montrait donc trois mots francais au milieu de
+    // son fil de phases et au-dessus de chaque grille. Le defaut ne se voyait
+    // pas parce que tout ce qui les entoure, lui, est traduit.
+    //
+    // On traduit la cle et non le libelle : 'series' ne bougera pas, la ou
+    // « Demi-finales » se reecrira le jour ou le format changera. « Heats »
+    // plutot que « Series » parce que c'est deja le mot du jeu pour une serie
+    // (voir `sel_ma_serie`), et le mot de l'athletisme en anglais.
+    // Le titre d'une edition.
+    //
+    // En francais il arrive tout compose du serveur (`titre`), article inclus,
+    // parce que « Championnat de France » et « Championnat du Maroc » ne se
+    // devinent pas d'un code pays. L'anglais, lui, pose le nom du pays devant
+    // et n'a besoin d'aucun article : on le compose donc ici, a partir de
+    // `zoneNomEn`. Le motif francais garde `{t}` — le titre du serveur — pour
+    // que rien ne change de ce cote.
+    champ_titre_national:    ['{t}', '{z} National Championship'],
+    champ_titre_continental: ['{t}', '{z} Championship'],
+    champ_titre_mondial:     ['{t}', 'World Championship'],
+    champ_phase_series: ['Séries', 'Heats'],
+    champ_phase_demies: ['Demi-finales', 'Semi-finals'],
+    champ_phase_finale: ['Finale', 'Final'],
     champ_reveal:    ['LES REPÊCHÉS', 'THE FASTEST LOSERS'],
     champ_reveal_desc: ['ils n’ont gagné aucune course. Ils sortent du chrono de toutes.',
                         'they won no race. They come from the clock of every race.'],
     champ_continue:  ['CONTINUER', 'CONTINUE'],
     champ_sacre:     ['{n} est sacré — voir le podium', '{n} is crowned — see the podium'],
     champ_titre_duree: ['titre porté trois mois', 'title held for three months'],
+    // le champion en titre.
+    //
+    // « Tenant du titre » et non « boss » : le second est le nom du declencheur
+    // dans le code, pas un mot d'athletisme. Un joueur qui lit « boss » sur un
+    // ecran de championnat sort du sport et entre dans le jeu video, et c'est
+    // exactement l'inverse de ce que tout le reste de ces textes fait.
+    champ_boss:        ['LE TENANT DU TITRE', 'THE DEFENDING CHAMPION'],
+    champ_boss_desc:   ['il remet son titre en jeu. Battez-le, ou il le garde trois mois de plus.',
+                        'he puts his title on the line. Beat him, or he keeps it three more months.'],
+    champ_boss_finale: ['QUALIFIÉ D’OFFICE POUR LA FINALE', 'STRAIGHT TO THE FINAL'],
+    // Le sigle sur sa ligne dans la grille. Court, parce qu'une ligne de
+    // couloir porte deja un drapeau, un nom, un rang et un chrono.
+    champ_tenant:      ['TENANT', 'HOLDER'],
+    // La ligne d'en-tete, pour qui ouvre l'ecran en cours de weekend et n'a
+    // jamais vu passer la cinematique.
+    champ_tenant_defend: ['{n} défend son titre', '{n} is defending the title'],
+    // Sur la revelation des repeches : dire qu'une place vient d'un titre et
+    // non d'un chrono. Presenter un passe-droit comme un repechage merite
+    // serait la seule facon de rendre cette regle detestable.
+    champ_repeche_doffice: ['d’office', 'by title'],
     champ_rv_course: ['PROCHAINE COURSE', 'NEXT RACE'],
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
@@ -750,6 +796,12 @@
     duel_regle:      ['relever un défi rapporte plus que le lancer : le chrono est déjà posé, et tu sais ce que tu dois battre.',
                       'answering a challenge pays more than sending one: the time is already on the board, and you know what to beat.'],
     duel_record:     ['{v}V · {d}D · {n}N', '{v}W · {d}L · {n}D'],
+    // La serie de victoires. Le nombre est deja a l'ecran a cote de la
+    // flamme : ces textes sont ce que lisent l'infobulle et le lecteur
+    // d'ecran, pour qui la couleur ne dit rien.
+    serie_titre:     ['{n} victoires d’affilée', '{n} wins in a row'],
+    serie_allumee:   ['SÉRIE DE {n}', '{n} IN A ROW'],
+    serie_eteinte:   ['série de {n} interrompue', '{n}-win streak broken'],
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],
@@ -1043,6 +1095,22 @@
     // ouvert y figure sur les deux canaux ; les stades fermes n'apparaissent
     // que sur le canal de test.
     pick_venue:      ['STADES', 'VENUES'],
+
+    // ------------------------------------------------------ edition speciale
+    //
+    // La banniere de l'accueil pendant la fenetre d'une edition (voir
+    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
+    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
+    // d'un fleuve. Voir juridique/edition-danube.md.
+    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
+    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
+                      'The Danube Stadium opens its gates'],
+    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
+                      'orange track, black infield, under the floodlights'],
+    edition_courir:  ['Y COURIR', 'RUN THERE'],
+    edition_reste_n: ['encore {n} jours', '{n} days left'],
+    edition_reste_1: ['encore 1 jour', '1 day left'],
+    edition_reste_0: ['dernier jour', 'last day'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
     launch_oneshot:  ['LANCER', 'GO'],
     event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
@@ -1178,7 +1246,7 @@
     ['Niveau régional', 'Regional level'],
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
-    ['Jeux olympiques', 'Olympic Games'],
+    ['0.Games', '0.Games'],
     ['Intergalactique', 'Intergalactic'],
     // Au-dela des six etapes du championnat : les stades hors serie, dans
     // l'ordre ou le moteur les ajoute (voir STADES_HORS_SERIE). Le nom reste
@@ -1772,6 +1840,40 @@
     return s;
   }
 
+  /**
+   * Le nom d'une phase de championnat, a partir de sa cle.
+   *
+   * `secours` est le libelle envoye par le serveur : on y retombe pour toute
+   * phase qu'il ajouterait sans passer ici, plutot que d'afficher une cle
+   * brute a l'ecran. `t()` seul ne suffisait pas — il rend la cle quand elle
+   * manque, et « champ_phase_barrages » n'est pas un nom de phase.
+   */
+  /**
+   * Le titre d'une edition — « Championnat de France », « France National
+   * Championship ».
+   *
+   * `e` est l'edition telle que le serveur l'envoie ; on y lit `echelon`,
+   * `titre` (deja compose, en francais) et `zoneNomEn`. Une edition d'avant
+   * l'ajout de `zoneNomEn` retombe sur `zoneNom`, puis sur le code de la
+   * zone : un titre approximatif se lit, un `undefined` non.
+   */
+  function titreEdition(e) {
+    // Pas de titre francais veut dire pas d'edition : on rend une chaine vide,
+    // que l'appelant remplace par son propre libelle. Sans ce garde-fou
+    // l'anglais rendait « National Championship » tout seul, sans pays devant,
+    // la ou le francais rendait '' — et un ecran sans championnat annoncait
+    // donc un championnat, en anglais seulement.
+    if (!e || !e.titre) return '';
+    const cle = 'champ_titre_' + (e.echelon === 'mondial' ? 'mondial'
+                                : e.echelon === 'continental' ? 'continental' : 'national');
+    return t(cle, { t: e.titre || '', z: e.zoneNomEn || e.zoneNom || e.zone || '' });
+  }
+
+  function phaseNom(cle, secours) {
+    const row = UI['champ_phase_' + String(cle || '')];
+    return row ? row[index()] : (secours || cle || '');
+  }
+
   // Un index inconnu rend une chaine vide plutot que de casser l'ecran.
   // Le classement affiche l'index range avec la course, et cet index vient
   // parfois d'une version du jeu qui connaissait un stade de plus.
@@ -1807,6 +1909,6 @@
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
     CUT_ENDING,
-    LANGS, t, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
+    LANGS, t, titreEdition, phaseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

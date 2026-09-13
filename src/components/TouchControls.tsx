@@ -27,6 +27,15 @@ const LIT_BG = 'rgba(248,205,74,0.20)';
 const LIT_BORDER = 'rgba(248,205,74,0.90)';
 const LIT_FG = 'rgb(248,205,74)';
 const IDLE_FG = 'rgba(255,255,255,0.34)';
+// L'ombre portee du pave allume. Elle deborde du bord, donc elle se voit du
+// coin de l'oeil — ce que ne fait pas un changement de couleur a l'interieur
+// d'un cadre, surtout sur une piste claire ou le jaune du pad se noie.
+const LIT_GLOW = '0 0 0 1px rgba(248,205,74,0.55), 0 0 22px rgba(248,205,74,0.32)';
+// Au repos, le pave n'est pas un rectangle sombre pose sur l'image : il a un
+// dessus et un dessous. Le degre est minuscule — huit pour cent de blanc en
+// haut, seize de noir en bas — mais c'est ce qui fait la difference entre une
+// surface et une decoupe.
+const REPOS_GLOW = 'inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,0.25)';
 // Duree minimale d'allumage. A pleine cadence (~10 appuis/s, soit un appui
 // tous les 200 ms sur un meme pad) la lumiere reste donc bien visible : elle
 // clignote au rythme de la foulee au lieu de disparaitre.
@@ -89,12 +98,15 @@ export function TouchControls() {
     el.style.backgroundColor = LIT_BG;
     el.style.borderColor = LIT_BORDER;
     el.style.color = LIT_FG;
+    el.style.boxShadow = LIT_GLOW;
     clearTimeout(timers.current[side]);
     timers.current[side] = window.setTimeout(() => {
-      el.style.transition = 'background-color 130ms ease-out, border-color 130ms ease-out, color 130ms ease-out';
+      el.style.transition = 'background-color 130ms ease-out, border-color 130ms ease-out, ' +
+        'color 130ms ease-out, box-shadow 160ms ease-out';
       el.style.backgroundColor = '';
       el.style.borderColor = '';
       el.style.color = IDLE_FG;
+      el.style.boxShadow = REPOS_GLOW;
     }, LIT_MS);
   }, []);
 
@@ -122,8 +134,14 @@ export function TouchControls() {
   // bord, sans interstice. Les cartes arrondies ne sont plus que du decor.
   const hitClass =
     'flex-1 h-full flex items-center justify-center select-none touch-none pointer-events-auto';
+  // La teinte de fond ET le degrade, pas l'un a la place de l'autre :
+  // `bg-card/40` pose une couleur, `bg-gradient-to-b` pose une image par
+  // dessus. Le degrade seul, essaye d'abord, laissait passer la pelouse : sur
+  // le stade olympique les deux paves devenaient deux rectangles vert clair
+  // ou le chevron ne se lisait plus.
   const cardClass =
-    'w-full h-full rounded-2xl border-2 border-white/10 bg-card/40 backdrop-blur-sm ' +
+    'w-full h-full rounded-2xl border-2 border-white/10 backdrop-blur-sm bg-card/45 ' +
+    'bg-gradient-to-b from-white/12 via-transparent to-black/30 ' +
     'flex items-center justify-center pointer-events-none';
 
   return (
@@ -146,6 +164,7 @@ export function TouchControls() {
           className={cardClass}
           style={{
             color: IDLE_FG,
+            boxShadow: REPOS_GLOW,
             marginLeft: 'max(env(safe-area-inset-left),0.5rem)',
             marginRight: '0.25rem',
             marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',
@@ -166,6 +185,7 @@ export function TouchControls() {
           className={cardClass}
           style={{
             color: IDLE_FG,
+            boxShadow: REPOS_GLOW,
             marginLeft: '0.25rem',
             marginRight: 'max(env(safe-area-inset-right),0.5rem)',
             marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',

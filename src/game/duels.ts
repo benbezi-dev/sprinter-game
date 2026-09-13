@@ -93,6 +93,16 @@ export type DuelRow = {
   launched: number;
   received: number;
   last_delta: number;
+  /**
+   * Victoires d'affilee, sans une seule defaite entre elles. Une defaite la
+   * ramene a zero ; un nul la laisse ou elle est. `serie_max` garde la plus
+   * longue jamais tenue, elle ne redescend jamais.
+   *
+   * Le serveur la compte pour tout le monde ; c'est l'affichage qui est
+   * reserve au canal de test — voir SERIE_OUVERTE dans canal.ts.
+   */
+  serie?: number;
+  serie_max?: number;
   rank: number;
   /** Places gagnees depuis la derniere consultation. Positif = montee. */
   move?: number;
@@ -127,6 +137,16 @@ export type DuelIssue = {
   rang_adverse?: { palier: number; etage: Etage; division: number };
   monte?: boolean;
   descend?: boolean;
+  /**
+   * La serie de celui qui releve, apres ce duel, et ce qu'elle valait avant.
+   * Les deux, parce qu'une flamme qui s'allume et une flamme qui s'eteint sont
+   * deux nouvelles differentes, et que le seul nombre d'apres ne les separe
+   * pas : zero apres six, c'est une serie perdue ; zero apres zero, rien.
+   */
+  serie?: number;
+  serie_avant?: number;
+  serie_adverse?: number;
+  serie_avant_adverse?: number;
   /** Duel deja tranche a une tentative precedente : rien n'a bouge. */
   deja?: boolean;
 };

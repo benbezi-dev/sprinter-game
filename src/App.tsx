@@ -91,6 +91,9 @@ function MainGame() {
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
   const cut = useGameStore(s => s.cut);
+  // La cinematique qui s'efface par-dessus celle qui commence — le sacre vers
+  // le generique, et rien d'autre. Nulle le reste du temps.
+  const sortie = useGameStore(s => s.sortie);
   // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
   const defiEnCours = useObjectif().enCours;
 
@@ -198,6 +201,10 @@ function MainGame() {
         {state === 'title' && <TitleScreen />}
         {state === 'cut' && !generique && <CutScreen />}
         {generique && <Generique />}
+        {/* Le sacre s'eteint par-dessus le generique plutot que de disparaitre
+            d'un coup : deux secondes ou les deux scenes se croisent, le temps
+            que la musique parte. Voir nextCut dans game/sprinter-app.js. */}
+        {generique && !!sortie && sortie.a > 0 && <CutScreen fige={sortie} />}
         {/* Pendant la presentation, le decompte est suspendu et l'etat vaut
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
             0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient
