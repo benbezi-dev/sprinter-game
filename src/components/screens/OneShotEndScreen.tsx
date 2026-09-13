@@ -153,7 +153,7 @@ export function OneShotEndScreen() {
         refuse = true;
       }
     }
-    primeTopNames();            // le plateau olympique se met a jour
+    primeTopNames();            // le plateau des Jeux mondiaux se met a jour
     setTopStatus(refuse ? 'error' : 'done');
   };
 
