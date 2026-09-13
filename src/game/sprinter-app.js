@@ -1201,6 +1201,9 @@
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
+    // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
+    // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
+    sortie: null,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
@@ -1606,11 +1609,42 @@
   }
 
   function queueCuts(kinds, after) {
-    G.cutAfter = after; G.cutQueue = kinds.slice(); nextCut();
+    G.cutAfter = after; G.cutQueue = kinds.slice(); G.sortie = null; nextCut();
   }
+
+  // LE SACRE NE COUPE PAS SUR LE GENERIQUE : IL S'Y FOND.
+  //
+  // Les cinematiques du jeu se succedent par une coupe — l'une s'arrete, la
+  // suivante commence a l'image d'apres — et c'est tres bien pour toutes sauf
+  // une. Entre la scenette du sacre (« L'ETRE LE PLUS RAPIDE ») et le
+  // generique, la jointure s'entend autant qu'elle se voit : le morceau part a
+  // cet instant precis. Une coupe franche y arrivait comme un raccord manque —
+  // la scenette disparaissait d'un coup, la nuit tombait d'un coup, et la
+  // premiere note tombait sur une image deja changee.
+  //
+  // Les deux se croisent donc pendant CUT_CROISEMENT secondes : le generique
+  // demarre — sa nuit monte, sa musique part — pendant que le sacre s'efface
+  // par-dessus. Ce qui reste du sacre tient dans G.sortie : son coureur, son
+  // texte, et l'opacite qui lui reste. La boucle le fait vieillir (engine.ts),
+  // le canvas et l'ecran de cinematique le lisent.
+  //
+  // LE SACRE N'EST PAS ALLONGE POUR AUTANT : il bascule un croisement plus
+  // tot, et dure au total exactement ce qu'il durait avant.
+  const CUT_DUREE = 15.4, CUT_CROISEMENT = 2;
+
   function nextCut() {
-    if (!G.cutQueue.length) { G.cut = null; G.skipArm = 0; G.state = G.cutAfter; return; }
+    const precedent = G.cut;
+    if (!G.cutQueue.length) {
+      G.cut = null; G.sortie = null; G.skipArm = 0; G.state = G.cutAfter; return;
+    }
     const kind = G.cutQueue.shift();
+    // Le seul fondu enchaine du jeu. Partout ailleurs, G.sortie retombe a
+    // nul : une cinematique passee ne doit pas trainer sur la suivante.
+    G.sortie = (kind === 'ending' && precedent && precedent.kind === 'champion')
+      ? { kind: precedent.kind, lines: precedent.lines, man: precedent.man,
+          name: precedent.name, t: precedent.t, age: 0, a: 1,
+          duree: CUT_CROISEMENT }
+      : null;
     let lines, man;
     if (kind === 'ending') {
       // LE GENERIQUE. Une seule variante, et le tour d'honneur plutot que le
@@ -4550,7 +4584,7 @@
     return [v[0] / n, v[1] / n, v[2] / n];
   })();
 
-  const RING_MAX = 10;
+  const RING_MAX = 16;
   // tampons reutilises d'une frame a l'autre : ce code tourne des
   // centaines de fois par image, il ne doit rien allouer.
   const _p0x = new Float64Array(RING_MAX), _p0y = new Float64Array(RING_MAX), _p0z = new Float64Array(RING_MAX);
@@ -4558,19 +4592,98 @@
   const _nx = new Float64Array(RING_MAX), _ny = new Float64Array(RING_MAX), _nz = new Float64Array(RING_MAX);
   const _s0x = new Float64Array(RING_MAX), _s0y = new Float64Array(RING_MAX);
   const _s1x = new Float64Array(RING_MAX), _s1y = new Float64Array(RING_MAX);
-  const _fDepth = new Float64Array(RING_MAX + 2);
-  const _fShade = new Float64Array(RING_MAX + 2);
-  const _fKind = new Int32Array(RING_MAX + 2);
-  const _fOrder = new Int32Array(RING_MAX + 2);
+  // rayon unitaire de chaque arete, garde pour la calotte
+  const _rrx = new Float64Array(RING_MAX), _rry = new Float64Array(RING_MAX),
+        _rrz = new Float64Array(RING_MAX);
+  // anneau de la calotte : ecran, et profondeur monde
+  const _cx = new Float64Array(RING_MAX), _cy = new Float64Array(RING_MAX),
+        _cw = new Float64Array(RING_MAX);
+  const FMAX = 2 * RING_MAX + 2;
+  const _fDepth = new Float64Array(FMAX);
+  const _fShade = new Float64Array(FMAX);
+  const _fSpec = new Float64Array(FMAX);
+  const _fKind = new Int32Array(FMAX);
+  const _fOrder = new Int32Array(FMAX);
+
+  // ECLAIRAGE DES FACETTES : DIFFUS, REFLET, CONTOUR.
+  //
+  // Il n'y avait qu'un lambert par face — un aplat chacune, donc un tube de
+  // dix faces qui se lit comme un prisme taille au couteau. Deux termes
+  // s'ajoutent, pour quelques multiplications par face :
+  //
+  //   - un reflet speculaire etroit (HALF, l'axe entre la lumiere et l'oeil)
+  //     qui pose un point brillant sur l'epaule, la cuisse et le crane :
+  //     c'est lui qui separe une matiere d'un carton mat ;
+  //   - une lumiere d'ambiance hemispherique : le ciel eclaire le dessus des
+  //     epaules, des cuisses et du crane, le sol renvoie peu. C'est ce qui
+  //     donne du volume sans souligner les tubes.
+  //
+  // Un contour tres leger reste, juste assez pour detacher la silhouette
+  // d'une piste sombre. Il avait d'abord ete pose trois fois plus fort :
+  // sur des membres cylindriques il allumait les DEUX bords de chaque
+  // segment, et le coureur se lisait comme un assemblage de tuyaux
+  // surlignes — exactement ce qu'on cherchait a faire oublier.
+  //
+  // Tout cela se voit surtout de pres — accueil, presentation, sacre.
+  const HALF = (function () {
+    const v = [-LIGHT[0] - VIEW[0], -LIGHT[1] - VIEW[1], -LIGHT[2] - VIEW[2]];
+    const n = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / n, v[1] / n, v[2] / n];
+  })();
+
+  // LE VRAI COUT DE CE RENDU, C'EST LA CHAINE 'rgb(...)'.
+  //
+  // Une par facette, des milliers par image, chacune allouee puis analysee
+  // par le canvas. On quantifie donc l'eclairage — cinquante-six niveaux de
+  // diffus, cinq de reflet, personne ne verra la marche — et on garde les
+  // chaines par couleur. Les couleurs d'un look sont des tableaux stables,
+  // un WeakMap suffit et rien ne s'accumule.
+  const TONE_D = 56, TONE_S = 5, TONE_STEP = 2 / TONE_D, SPEC_MAX = 0.38;
+  const _toneCache = new WeakMap();
+  const oct = v => v > 255 ? 255 : (v < 0 ? 0 : v | 0);
+  function toneOf(col, diff, spec) {
+    let tab = _toneCache.get(col);
+    if (tab === undefined) { tab = []; _toneCache.set(col, tab); }
+    let di = (diff / TONE_STEP) | 0;
+    if (di < 0) di = 0; else if (di >= TONE_D) di = TONE_D - 1;
+    let si = (spec * (TONE_S - 1) + 0.5) | 0;
+    if (si < 0) si = 0; else if (si >= TONE_S) si = TONE_S - 1;
+    const idx = di * TONE_S + si;
+    let out = tab[idx];
+    if (out === undefined) {
+      const f = (di + 0.5) * TONE_STEP;
+      const w = si * (SPEC_MAX / (TONE_S - 1)) * 255;
+      out = 'rgb(' + oct(col[0] * f + w) + ',' + oct(col[1] * f + w) + ',' +
+            oct(col[2] * f + w) + ')';
+      tab[idx] = out;
+    }
+    return out;
+  }
+
+  // Le nombre de faces suit la taille a l'ecran, et il monte maintenant plus
+  // haut qu'avant. Dix faces suffisent a un coureur de quarante pixels ; sur
+  // la presentation d'avant-course, ou le meme torse en fait trois cents, on
+  // lisait le prisme. Les paliers du bas n'ont pas bouge : une course a huit
+  // coute exactement ce qu'elle coutait.
+  // Reflet etroit : l'exposant 8 donne une tache courte, pas un lavis. Sans
+  // normaliser la normale moyennee — le diffus ne le fait pas non plus, et
+  // la difference se joue sous le niveau de quantification.
+  function specOf(sd) {
+    if (sd <= 0) return 0;
+    const a = sd * sd, b = a * a;
+    return b * b;
+  }
 
   function facetCount(rpx) {
     if (rpx < 2.5) return 4;
     if (rpx < 5) return 6;
     if (rpx < 10) return 8;
+    if (rpx < 17) return 10;
+    if (rpx < 28) return 13;
     return RING_MAX;
   }
 
-  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k) {
+  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k, bout) {
     const r0 = e0[3], r1 = e1[3];
     let dx = e1[0] - e0[0], dy = e1[1] - e0[1], dz = e1[2] - e0[2];
     let len = Math.hypot(dx, dy, dz);
@@ -4591,6 +4704,7 @@
     for (let i = 0; i < N; i++) {
       const a = TAU * i / N, ca = Math.cos(a), sa = Math.sin(a);
       const rx = ux * ca + vx * sa, ry = uy * ca + vy * sa, rz = uz * ca + vz * sa;
+      _rrx[i] = rx; _rry[i] = ry; _rrz[i] = rz;
       // normale d'un tronc de cone : radiale, inclinee par la variation de rayon
       let mx = rx - axx * dr, my = ry - axy * dr, mz = rz - axz * dr;
       const ml = Math.hypot(mx, my, mz) || 1;
@@ -4611,27 +4725,82 @@
     for (let i = 0; i < N; i++) {
       const j = (i + 1) % N;
       const mx = (_nx[i] + _nx[j]) * 0.5, my = (_ny[i] + _ny[j]) * 0.5, mz = (_nz[i] + _nz[j]) * 0.5;
-      if (mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2] >= 0) continue;   // dos a la camera
+      const fv = mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2];
+      if (fv >= 0) continue;   // dos a la camera
       _fKind[nf] = i;
       _fDepth[nf] = (_p0x[i] + _p0y[i] + _p0x[j] + _p0y[j] +
                      _p1x[i] + _p1y[i] + _p1x[j] + _p1y[j]) * 0.25;
       const nl = mx * LIGHT[0] + my * LIGHT[1] + mz * LIGHT[2];
-      _fShade[nf] = 0.56 + 0.60 * (nl < 0 ? -nl : 0);
+      // face de plein fouet : fv vaut -1 ; face rasante : fv vaut 0. Le
+      // contour ne s'allume donc que sur la tranche de la silhouette.
+      const rim = 1 + fv, sd = mx * HALF[0] + my * HALF[1] + mz * HALF[2];
+      _fShade[nf] = 0.50 + 0.58 * (nl < 0 ? -nl : 0) + 0.17 * (0.5 + 0.5 * mz) +
+                    0.09 * rim * rim * rim;
+      _fSpec[nf] = specOf(sd);
       nf++;
     }
     // bouchons : sans eux les extremites (mains, pieds, tete) sont creuses
-    if (-(axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2]) < 0) {
-      _fKind[nf] = -1;
-      _fDepth[nf] = e0[0] + e0[1];
-      const nl = -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]);
-      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
-      nf++;
+    // LE BOUT DES MEMBRES.
+    //
+    // Un tronc de cone se termine par un disque plat. Sur un doigt de pied
+    // a trois pixels, personne ne le voit ; sur le crane d'un coureur
+    // presente en gros plan, on voyait un cylindre coupe a la scie — et la
+    // meme coupe au bout des mains et des chaussures.
+    //
+    // Le bout visible recoit donc une calotte : un anneau intermediaire
+    // pousse vers l'exterieur, puis le disque, bien plus petit et vu de
+    // biais. La silhouette s'arrondit pour N faces de plus, et seulement
+    // sur le bout qu'on voit — l'autre est tourne vers la camera opposee et
+    // n'est jamais dessine. Sous six pixels de rayon, on garde le disque
+    // plat : il n'y a rien a arrondir a cette taille.
+    const axV = axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2];
+    const bout0 = axV > 0;                       // le disque de e0 est face a nous
+    const rBout = bout0 ? r0 : r1;
+    const rond = bout === 1 && rBout * k > 5;
+    const sgnB = bout0 ? -1 : 1;                 // sens sortant du bout visible
+    const eB = bout0 ? e0 : e1;
+    if (rond) {
+      const off = 0.55 * rBout, rc = 0.80 * rBout;
+      for (let i = 0; i < N; i++) {
+        const X = eB[0] + sgnB * axx * off + _rrx[i] * rc;
+        const Y = eB[1] + sgnB * axy * off + _rry[i] * rc;
+        const Z = eB[2] + sgnB * axz * off + _rrz[i] * rc;
+        _cx[i] = ax + (Y - X) * C.ISO_COS * k;
+        _cy[i] = ay - (X + Y) * C.ISO_SIN * k - Z * k;
+        _cw[i] = X + Y;
+      }
+      // les N faces de la calotte, entre l'anneau du bout et celui-ci
+      for (let i = 0; i < N; i++) {
+        const j = (i + 1) % N;
+        const rmx = (_rrx[i] + _rrx[j]) * 0.5, rmy = (_rry[i] + _rry[j]) * 0.5,
+              rmz = (_rrz[i] + _rrz[j]) * 0.5;
+        // normale de sphere, a mi-chemin entre l'equateur et le pole
+        const mx = 0.90 * rmx + sgnB * 0.28 * axx,
+              my = 0.90 * rmy + sgnB * 0.28 * axy,
+              mz = 0.90 * rmz + sgnB * 0.28 * axz;
+        const fv = mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2];
+        if (fv >= 0) continue;
+        _fKind[nf] = RING_MAX + i;
+        _fDepth[nf] = (_cw[i] + _cw[j]) * 0.5 - 0.001;
+        const nl = mx * LIGHT[0] + my * LIGHT[1] + mz * LIGHT[2];
+        const rim = 1 + fv;
+        _fShade[nf] = 0.50 + 0.58 * (nl < 0 ? -nl : 0) + 0.17 * (0.5 + 0.5 * mz) +
+                      0.09 * rim * rim * rim;
+        _fSpec[nf] = specOf(mx * HALF[0] + my * HALF[1] + mz * HALF[2]);
+        nf++;
+      }
     }
-    if (axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2] < 0) {
-      _fKind[nf] = -2;
-      _fDepth[nf] = e1[0] + e1[1];
-      const nl = axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2];
-      _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
+    {
+      // le disque : celui de la calotte s'il y en a une, sinon le bout nu
+      const nx2 = sgnB * axx, ny2 = sgnB * axy, nz2 = sgnB * axz;
+      _fKind[nf] = rond ? -3 : (bout0 ? -1 : -2);
+      _fDepth[nf] = eB[0] + eB[1] - (rond ? 0.4 * rBout : 0.002);
+      const nl = nx2 * LIGHT[0] + ny2 * LIGHT[1] + nz2 * LIGHT[2];
+      const fv = nx2 * VIEW[0] + ny2 * VIEW[1] + nz2 * VIEW[2];
+      const rim = 1 + fv;
+      _fShade[nf] = 0.50 + 0.58 * (nl < 0 ? -nl : 0) + 0.17 * (0.5 + 0.5 * nz2) +
+                    0.09 * rim * rim * rim;
+      _fSpec[nf] = specOf(nx2 * HALF[0] + ny2 * HALF[1] + nz2 * HALF[2]);
       nf++;
     }
 
@@ -4644,6 +4813,17 @@
       _fOrder[j + 1] = cur;
     }
 
+    // LES FENTES ENTRE FACETTES.
+    //
+    // Chaque face est remplie separement : entre deux voisines, l'anti-
+    // aliasing du canvas laisse une demi-teinte qui prend la couleur de ce
+    // qu'il y a derriere. Sur une piste rouge, ces coutures dessinaient un
+    // grillage sombre le long des cuisses et du torse. Un trait de la meme
+    // couleur que la face les ferme. On ne le paye que sur les corps assez
+    // grands pour que la fente se voie : en course, a quarante pixels, elle
+    // est sous le pixel et le trait ne sert a rien.
+    const seam = Math.max(r0, r1) * k > 1.6;
+    if (seam) { ctx.lineWidth = 0.75; ctx.lineJoin = 'round'; }
     for (let f = 0; f < nf; f++) {
       const id = _fOrder[f], kind = _fKind[id];
       ctx.beginPath();
@@ -4653,6 +4833,16 @@
         ctx.lineTo(_s0x[j], _s0y[j]);
         ctx.lineTo(_s1x[j], _s1y[j]);
         ctx.lineTo(_s1x[i], _s1y[i]);
+      } else if (kind >= RING_MAX) {
+        const i = kind - RING_MAX, j = (i + 1) % N;
+        const bx = bout0 ? _s0x : _s1x, by = bout0 ? _s0y : _s1y;
+        ctx.moveTo(bx[i], by[i]);
+        ctx.lineTo(bx[j], by[j]);
+        ctx.lineTo(_cx[j], _cy[j]);
+        ctx.lineTo(_cx[i], _cy[i]);
+      } else if (kind === -3) {
+        ctx.moveTo(_cx[0], _cy[0]);
+        for (let i = 1; i < N; i++) ctx.lineTo(_cx[i], _cy[i]);
       } else if (kind === -1) {
         ctx.moveTo(_s0x[0], _s0y[0]);
         for (let i = 1; i < N; i++) ctx.lineTo(_s0x[i], _s0y[i]);
@@ -4661,9 +4851,12 @@
         for (let i = 1; i < N; i++) ctx.lineTo(_s1x[i], _s1y[i]);
       }
       ctx.closePath();
-      ctx.fillStyle = rgb(col, _fShade[id]);
+      const teinte = toneOf(col, _fShade[id], _fSpec[id]);
+      ctx.fillStyle = teinte;
       ctx.fill();
+      if (seam) { ctx.strokeStyle = teinte; ctx.stroke(); }
     }
+    if (seam) { ctx.lineWidth = 1; ctx.lineJoin = 'miter'; }
   }
 
   function drawFacetFigure(ctx, caps, ax, ay, k) {
@@ -4675,7 +4868,7 @@
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
       const c = caps[order[n][1]];
-      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k);
+      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3]);
     }
   }
 
@@ -4691,7 +4884,7 @@
     const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
-    for (const [col, pv, ang, off, hf, yaw] of parts) {
+    for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
       const ca = Math.cos(ang), sa = Math.sin(ang);
       const yc = Math.cos(yaw), ys = Math.sin(yaw);
       const ends = [];
@@ -4711,7 +4904,7 @@
         if (applyCurve) { const t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
         ends.push([rx, ry, wz, (hx + hy) * 0.5]);
       }
-      caps.push([col, ends[0], ends[1]]);
+      caps.push([col, ends[0], ends[1], bout]);
     }
     return caps;
   }
@@ -4989,12 +5182,29 @@
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
+    // L'OMBRE : UN NOYAU DENSE QUI SE PERD SUR LES BORDS.
+    //
+    // C'etait une ellipse noire a 42 % d'un bout a l'autre, bord net : un
+    // autocollant sous les pieds, et sur la piste rouge claire du plein
+    // soleil il se voyait comme tel. Un degrade radial coute un objet par
+    // coureur et par image — huit — et donne le contact au sol que l'aplat
+    // ne donnait pas.
     for (const [r, g2] of vis) {
       if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
-      ctx.fillStyle = 'rgba(0,0,0,0.42)';
+      const R = 17 * m / 30;
+      ctx.save();
+      ctx.translate(g2[0], g2[1]);
+      ctx.scale(1, 0.38);
+      const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+      gr.addColorStop(0, 'rgba(0,0,0,0.50)');
+      gr.addColorStop(0.5, 'rgba(0,0,0,0.38)');
+      gr.addColorStop(0.82, 'rgba(0,0,0,0.13)');
+      gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr;
       ctx.beginPath();
-      ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
+      ctx.arc(0, 0, R, 0, TAU);
       ctx.fill();
+      ctx.restore();
     }
     // Les cerceaux passent apres toutes les ombres et avant tous les coureurs :
     // sinon l'ombre du voisin recouvrirait le cerceau de celui de devant.
@@ -5065,6 +5275,7 @@
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
     annoncerLeDepart, coupDePistolet,
     REC_STEP, goHome,
+    CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,

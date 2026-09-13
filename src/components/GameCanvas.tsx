@@ -2,6 +2,66 @@ import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { dessinerLeGenerique } from '@/game/scene-generique';
 
+/**
+ * UNE CINEMATIQUE ORDINAIRE : les lignes de vitesse, le coureur qui entre par
+ * la gauche, et les confettis du sacre.
+ *
+ * Sortie de la boucle pour pouvoir etre dessinee DEUX fois dans la meme image :
+ * la cinematique en cours, et — pendant les deux secondes du croisement — le
+ * sacre qui s'efface par-dessus le generique qui vient de demarrer (G.sortie).
+ * C'est le meme dessin a une opacite pres ; le dupliquer aurait fait deux
+ * sacres a maintenir. Voir nextCut dans game/sprinter-app.js.
+ */
+function dessinerCinematique(ctx: CanvasRenderingContext2D, cut: any, theme: any) {
+  const { G, drawIcon } = SprinterApp;
+  const ct = cut.t;
+  const intro = cut.kind === 'intro';
+  const champ = cut.kind === 'champion';
+  const accent = champ ? [248, 205, 74] : theme.accent;
+  
+  // Speed lines
+  ctx.strokeStyle = `rgba(${accent.join(',')},0.07)`;
+  ctx.lineWidth = SprinterApp.ui() * 26;
+  for (let i = -4; i < 24; i++) {
+    const x = i * (SprinterApp.ui() * 62) + (ct * SprinterApp.ui() * 34) % (SprinterApp.ui() * 62);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - SprinterApp.ui() * 240, G.VH); ctx.stroke();
+  }
+
+  const gx = G.portrait ? G.VW * 0.5 : G.VW * 0.26;
+  const gy = G.portrait ? G.VH * 0.46 : G.VH * 0.72;
+  const app = SprinterApp.clamp(ct / 0.55, 0, 1);
+  const ease = 1 - Math.pow(1 - app, 3);
+  drawIcon(ctx, cut.man, gx - SprinterApp.ui() * 240 * (1 - ease), gy,
+             SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
+             
+  if (champ) {
+    // Confettis qui tournent sur eux-memes en tombant, plutot que
+    // de simples rectangles droits : plus vivant pour l'ecran de
+    // sacre.
+    for (let i = 0; i < 90; i++) {
+      const sd = (i * 7919) % 997;
+      const x = (sd * 13) % G.VW;
+      const y = ((ct * (60 + sd % 90) + sd * 3) % (G.VH + 120)) - 60;
+      if (y >= -10) {
+        const cols = ['rgb(248,205,74)', 'rgb(104,216,236)', 'rgb(232,121,216)', 'rgb(108,226,138)', 'rgb(238,240,248)'];
+        const cx2 = x + Math.sin(ct * 3 + sd) * 6;
+        const spin = ct * (2 + (sd % 5)) + sd;
+        const w = SprinterApp.ui() * (4 + sd % 4), h = SprinterApp.ui() * 7;
+        ctx.save();
+        ctx.translate(cx2, y);
+        ctx.rotate(spin);
+        ctx.fillStyle = cols[sd % 5];
+        if (sd % 7 === 0) {
+          ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill();
+        } else {
+          ctx.fillRect(-w / 2, -h / 2, w, h);
+        }
+        ctx.restore();
+      }
+    }
+  }
+}
+
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -145,57 +205,17 @@ export function GameCanvas() {
           // est dessinee ailleurs — deux cents lignes qui n'ont rien a faire au
           // milieu de la boucle.
           dessinerLeGenerique(ctx, SprinterApp);
-        } else if (G.state === 'cut') {
-          // Cutscene athlete
-          const cut = G.cut;
-          if (cut) {
-            const ct = cut.t;
-            const intro = cut.kind === 'intro';
-            const champ = cut.kind === 'champion';
-            const accent = champ ? [248, 205, 74] : theme.accent;
-            
-            // Speed lines
-            ctx.strokeStyle = `rgba(${accent.join(',')},0.07)`;
-            ctx.lineWidth = SprinterApp.ui() * 26;
-            for (let i = -4; i < 24; i++) {
-              const x = i * (SprinterApp.ui() * 62) + (ct * SprinterApp.ui() * 34) % (SprinterApp.ui() * 62);
-              ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - SprinterApp.ui() * 240, G.VH); ctx.stroke();
-            }
-
-            const gx = G.portrait ? G.VW * 0.5 : G.VW * 0.26;
-            const gy = G.portrait ? G.VH * 0.46 : G.VH * 0.72;
-            const app = SprinterApp.clamp(ct / 0.55, 0, 1);
-            const ease = 1 - Math.pow(1 - app, 3);
-            drawIcon(ctx, cut.man, gx - SprinterApp.ui() * 240 * (1 - ease), gy,
-                       SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
-                       
-            if (champ) {
-              // Confettis qui tournent sur eux-memes en tombant, plutot que
-              // de simples rectangles droits : plus vivant pour l'ecran de
-              // sacre.
-              for (let i = 0; i < 90; i++) {
-                const sd = (i * 7919) % 997;
-                const x = (sd * 13) % G.VW;
-                const y = ((ct * (60 + sd % 90) + sd * 3) % (G.VH + 120)) - 60;
-                if (y >= -10) {
-                  const cols = ['rgb(248,205,74)', 'rgb(104,216,236)', 'rgb(232,121,216)', 'rgb(108,226,138)', 'rgb(238,240,248)'];
-                  const cx2 = x + Math.sin(ct * 3 + sd) * 6;
-                  const spin = ct * (2 + (sd % 5)) + sd;
-                  const w = SprinterApp.ui() * (4 + sd % 4), h = SprinterApp.ui() * 7;
-                  ctx.save();
-                  ctx.translate(cx2, y);
-                  ctx.rotate(spin);
-                  ctx.fillStyle = cols[sd % 5];
-                  if (sd % 7 === 0) {
-                    ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill();
-                  } else {
-                    ctx.fillRect(-w / 2, -h / 2, w, h);
-                  }
-                  ctx.restore();
-                }
-              }
-            }
+          // LE FONDU ENCHAINE. Le sacre est dessine par-dessus la nuit qui
+          // monte, a l'opacite qui lui reste : les deux scenes se croisent au
+          // lieu de se couper, le temps que la musique s'installe.
+          if (G.sortie && G.sortie.a > 0) {
+            ctx.save();
+            ctx.globalAlpha = G.sortie.a;
+            dessinerCinematique(ctx, G.sortie, theme);
+            ctx.restore();
           }
+        } else if (G.state === 'cut') {
+          if (G.cut) dessinerCinematique(ctx, G.cut, theme);
         }
         
         ctx.restore();

@@ -1,10 +1,23 @@
 import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 
-export function CutScreen() {
-  const { cut, skipArm } = useGameStore();
+/**
+ * L'ecran d'une cinematique : le bandeau, le titre, et les lignes qui
+ * arrivent une a une.
+ *
+ * `fige` sert au seul fondu enchaine du jeu — le sacre qui s'efface par-dessus
+ * le generique qui vient de demarrer. Cet ecran-la n'est plus celui en cours :
+ * il lit la cinematique sortante plutot que le store, s'affiche a l'opacite
+ * qui lui reste, et ne prend plus les touches — elles reviennent au generique,
+ * dessous. Voir nextCut dans game/sprinter-app.js.
+ */
+export function CutScreen({ fige }: { fige?: any } = {}) {
+  const { cut: courant, skipArm } = useGameStore();
   const { N } = SprinterApp;
-  
+
+  const cut = fige || courant;
+  const sortant = !!fige;
+
   if (!cut) return null;
   
   const ct = cut.t;
@@ -17,8 +30,9 @@ export function CutScreen() {
   
   return (
     <div 
-      className="w-full h-full absolute inset-0 pointer-events-auto"
-      onClick={() => {
+      className={`w-full h-full absolute inset-0 ${sortant ? 'pointer-events-none' : 'pointer-events-auto'}`}
+      style={sortant ? { opacity: cut.a } : undefined}
+      onClick={sortant ? undefined : () => {
         if (skipArm > 0) SprinterApp.nextCut(); 
         else SprinterApp.G.skipArm = 1.6;
       }}
@@ -80,7 +94,8 @@ export function CutScreen() {
         </span>
       </div>
 
-      <div className="absolute bottom-[max(env(safe-area-inset-bottom),1.5rem)] w-full text-center z-10">
+      <div className="absolute bottom-[max(env(safe-area-inset-bottom),1.5rem)] w-full text-center z-10"
+           style={sortant ? { display: 'none' } : undefined}>
         <span className={`text-[10px] sm:text-xs md:text-base font-bold tracking-widest ${skipArm > 0 ? 'text-primary animate-pulse' : 'text-muted-foreground'}`}>
           {skipArm > 0 ? N.t('skip_now') : N.t('skip_twice')}
         </span>

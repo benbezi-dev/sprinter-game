@@ -57,6 +57,8 @@ export type GameState = {
   transFlash: number;
   falseFlash: number;
   cut: any;
+  /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
+  sortie: any;
   levelIdx: number;
   raceKey: '100' | '200' | '400';
   won: boolean;
@@ -399,9 +401,27 @@ export function updateLogic(dt: number) {
     G.cut.t += dt;
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
       : G.cut.kind === 'ending' ? 7.5 : 3.2);
+    // Le sacre qui s'efface par-dessus le generique continue de vivre le temps
+    // du croisement : son coureur court encore, ses confettis tombent encore,
+    // et son texte s'eteint avec lui. Un sacre fige pendant deux secondes se
+    // verrait autant qu'une coupe. Voir nextCut dans sprinter-app.js.
+    if (G.sortie) {
+      G.sortie.age += dt;
+      G.sortie.t += dt;
+      G.sortie.man.stride += dt * 3.2;
+      G.sortie.a = clamp(1 - G.sortie.age / G.sortie.duree, 0, 1);
+      if (G.sortie.a <= 0) G.sortie = null;
+    }
     // Le generique dure ce que dure son morceau, pas quinze secondes : c'est
     // l'ecran qui rend la main, a la derniere note ou au geste du joueur.
-    if (G.cut.kind !== 'ending' && G.cut.t > 15.4) SprinterApp.nextCut();
+    //
+    // Le sacre, lui, bascule un croisement plus tot quand c'est le generique
+    // qui suit : les deux se chevauchent, et le sacre dure au total ce qu'il
+    // durait avant.
+    const finDuCut = (G.cut.kind === 'champion' && G.cutQueue[0] === 'ending')
+      ? SprinterApp.CUT_DUREE - SprinterApp.CUT_CROISEMENT
+      : SprinterApp.CUT_DUREE;
+    if (G.cut.kind !== 'ending' && G.cut.t > finDuCut) SprinterApp.nextCut();
   } else if (G.state === 'count') {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
@@ -511,6 +531,7 @@ export function updateLogic(dt: number) {
     transFlash: G.transFlash,
     falseFlash: G.falseFlash,
     cut: G.cut,
+    sortie: G.sortie,
     levelIdx: G.levelIdx,
     raceKey: G.raceKey,
     won: G.won,

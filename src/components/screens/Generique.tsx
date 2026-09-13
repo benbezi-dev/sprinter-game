@@ -70,8 +70,13 @@ export function Generique() {
   // Le rouleau part sous l'ecran et sort par le haut.
   const decalage = hauteur ? -avance * (hauteur + window.innerHeight) : 0;
 
-  const titreVisible = SprinterApp.clamp((ct - 0.8) / 1.2, 0, 1) *
-                       (1 - SprinterApp.clamp((ct - 7.2) / 1.6, 0, 1));
+  // Le titre attend que le sacre ait fini de s'eteindre. Les deux premieres
+  // secondes de la scene sont le croisement — « L'ETRE LE PLUS RAPIDE » est
+  // encore a l'ecran, en train de disparaitre — et deux titres l'un sur
+  // l'autre ne se lisent ni l'un ni l'autre. Voir nextCut dans
+  // game/sprinter-app.js.
+  const titreVisible = SprinterApp.clamp((ct - 1.6) / 1.2, 0, 1) *
+                       (1 - SprinterApp.clamp((ct - 7.6) / 1.4, 0, 1));
   // « FIN » : les dernieres secondes, quand le rouleau est sorti.
   const finVisible = avance > 0.985 ? 1 : 0;
 
