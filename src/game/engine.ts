@@ -1,6 +1,11 @@
 import './sprinter-i18n.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
+// La couche de finition s'installe sur globalThis AVANT le rendu qui l'appelle.
+// L'ordre compte : `sprinter-app.js` la cherche a chaque image plutot qu'au
+// chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
+// demarrerait alors sans finition pendant les premieres images.
+import './rendu-premium.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
@@ -14,6 +19,22 @@ SprinterApp.RACES = SprinterCore.RACES;
 SprinterApp.LEVELS = SprinterCore.LEVELS;
 SprinterApp.C = SprinterCore.C;
 
+/**
+ * LE STARTER EST MUET.
+ *
+ * Le decompte sonnait trois bips avant le coup de feu — l'appel aux marques,
+ * puis « prets ». On les a coupes : trois impulsions egalement espacees
+ * annoncent la quatrieme, et le joueur part alors sur une pulsation qu'il
+ * compte, et non au coup de feu. C'est la reaction elle-meme qu'on mesure
+ * faux. Le decompte se voit toujours a l'ecran ; seule la detonation
+ * s'entend.
+ *
+ * Le geste est garde dans la boucle plutot que supprime : ce reglage a
+ * change deux fois, il changera peut-etre encore, et le remettre ne doit
+ * pas demander de rouvrir la boucle de jeu.
+ */
+const STARTER_MUET = true;
+
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
@@ -26,6 +47,14 @@ export type GameState = {
   elapsed: number;
   countT: number;
   openT: number;
+  /**
+   * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
+   * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
+   * du decompte, sur le canal de test — celui qui essaie le starter. Dans le
+   * jeu publie, le depart reste un decompte et ce nombre ne bouge pas de 0 :
+   * c'est `countT` qu'on y lit.
+   */
+  starter: number;
   shake: number;
   flash: number;
   stumbleFlash: number;
@@ -33,6 +62,8 @@ export type GameState = {
   transFlash: number;
   falseFlash: number;
   cut: any;
+  /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
+  sortie: any;
   levelIdx: number;
   raceKey: '100' | '200' | '400';
   won: boolean;
@@ -166,7 +197,7 @@ let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
 
 /**
  * Charge en tache de fond les noms du haut du TOP 500, dont les Jeux
- * olympiques garnissent leur plateau. buildLevel est synchrone : les noms
+ * mondiaux garnissent leur plateau. buildLevel est synchrone : les noms
  * doivent etre la avant la course, pas pendant. Si le reseau ne repond pas,
  * G.topNames reste vide et le plateau maison sert de repli.
  */
@@ -307,6 +338,27 @@ export function brancherSalle(s: typeof salleLive) {
   finEnvoyee = false;
 }
 
+/**
+ * Remet l'emission a zero pour la course qui commence.
+ *
+ * Les deux compteurs sont cales sur `G.elapsed`, qui repart de zero a chaque
+ * coup de pistolet — mais ils vivaient, eux, aussi longtemps que la salle.
+ * Une seconde course dans la meme salle heritait donc d'un `prochainEnvoi`
+ * pose a la fin de la premiere : dix secondes dans le futur, c'est-a-dire
+ * apres l'arrivee. Le joueur ne transmettait plus une seule position, et
+ * l'adversaire le voyait immobile sur la ligne de depart du debut a la fin,
+ * sans faux depart et sans erreur. `finEnvoyee`, reste vrai, retenait en plus
+ * le chrono d'arrivee : la salle n'avait alors plus de quoi trancher.
+ *
+ * Le relais rebranchait sa salle a chaque depart et echappait donc au piege ;
+ * le direct, qui branche la sienne a la connexion, tombait dedans des la
+ * revanche. La remise a zero appartient au depart, pas au branchement.
+ */
+export function reinitialiserEnvoi() {
+  prochainEnvoi = 0;
+  finEnvoyee = false;
+}
+
 function pousserPosition() {
   if (!salleLive) return;
   if (G.elapsed >= prochainEnvoi) {
@@ -337,8 +389,13 @@ export function updateLogic(dt: number) {
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
   if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
-  else if (G.state === 'cut')
-    Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  else if (G.state === 'cut') {
+    // Le generique porte sa propre musique, et c'est la seule cinematique dans
+    // ce cas : la boucle du menu par-dessus un morceau ferait deux musiques a
+    // la fois. Voir game/generique.ts.
+    if (G.cut && G.cut.kind === 'ending') Audio_.stop();
+    else Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
+  }
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
@@ -347,8 +404,29 @@ export function updateLogic(dt: number) {
     if (G.openT > 6.4) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
-    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11 : 3.2);
-    if (G.cut.t > 15.4) SprinterApp.nextCut();
+    G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
+      : G.cut.kind === 'ending' ? 7.5 : 3.2);
+    // Le sacre qui s'efface par-dessus le generique continue de vivre le temps
+    // du croisement : son coureur court encore, ses confettis tombent encore,
+    // et son texte s'eteint avec lui. Un sacre fige pendant deux secondes se
+    // verrait autant qu'une coupe. Voir nextCut dans sprinter-app.js.
+    if (G.sortie) {
+      G.sortie.age += dt;
+      G.sortie.t += dt;
+      G.sortie.man.stride += dt * 3.2;
+      G.sortie.a = clamp(1 - G.sortie.age / G.sortie.duree, 0, 1);
+      if (G.sortie.a <= 0) G.sortie = null;
+    }
+    // Le generique dure ce que dure son morceau, pas quinze secondes : c'est
+    // l'ecran qui rend la main, a la derniere note ou au geste du joueur.
+    //
+    // Le sacre, lui, bascule un croisement plus tot quand c'est le generique
+    // qui suit : les deux se chevauchent, et le sacre dure au total ce qu'il
+    // durait avant.
+    const finDuCut = (G.cut.kind === 'champion' && G.cutQueue[0] === 'ending')
+      ? SprinterApp.CUT_DUREE - SprinterApp.CUT_CROISEMENT
+      : SprinterApp.CUT_DUREE;
+    if (G.cut.kind !== 'ending' && G.cut.t > finDuCut) SprinterApp.nextCut();
   } else if (G.state === 'count') {
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
@@ -370,12 +448,26 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    const prev = Math.floor(G.countT);
+    // LE DECOMPTE DANS LE JEU, LE STARTER SUR LE CANAL DE TEST.
+    //
+    // Le jeu publie compte trois secondes et marque chacune d'un bip. Le canal
+    // de test essaie autre chose : « a vos marques », « pret », et un coup de
+    // pistolet qui tombe quand il tombe — le bip a la seconde y dirait
+    // justement ce qu'un starter ne dit jamais, dans combien de temps il va
+    // tirer. `annoncerLeDepart` sait lequel des deux donne le depart ; il lui
+    // faut la seconde d'AVANT l'increment pour reconnaitre celle qui vient de
+    // passer. Voir « deux departs, un par canal » dans sprinter-app.js.
+    const avant = Math.floor(G.countT);
     G.countT += dt;
-    if (Math.floor(G.countT) !== prev && G.countT < 3) Audio_.sfx('beep');
+    SprinterApp.annoncerLeDepart(avant);
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
-      Audio_.sfx('go'); G.state = 'race'; G.elapsed = 0;
+      SprinterApp.coupDePistolet();
+      G.state = 'race'; G.elapsed = 0;
+      // Le chronometre de la course repart de zero : ce qui se compte sur lui
+      // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans
+      // le vide. Voir reinitialiserEnvoi.
+      reinitialiserEnvoi();
       resetInputRhythm();
     }
   } else if (G.state === 'race') {
@@ -435,6 +527,7 @@ export function updateLogic(dt: number) {
     state: G.state,
     elapsed: G.elapsed,
     countT: G.countT,
+    starter: G.depart ? G.depart.dit : 0,
     openT: G.openT,
     shake: G.shake,
     flash: G.flash,
@@ -443,6 +536,7 @@ export function updateLogic(dt: number) {
     transFlash: G.transFlash,
     falseFlash: G.falseFlash,
     cut: G.cut,
+    sortie: G.sortie,
     levelIdx: G.levelIdx,
     raceKey: G.raceKey,
     won: G.won,

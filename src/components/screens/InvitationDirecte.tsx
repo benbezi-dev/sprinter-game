@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TRANSITION } from '@/lib/mouvement';
 import { Radio, X } from 'lucide-react';
 import { mesInvitations, trancher, type InvitationRecue } from '@/game/invitations-directes';
+import { noterDefi } from '@/game/journal-defis';
 import { demanderRejoindre } from '@/game/salon-direct';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
@@ -36,7 +37,22 @@ export function InvitationDirecte() {
 
   const interroger = useRef(() => {});
   interroger.current = () => {
-    mesInvitations().then(l => { if (!annule.current) setInvitations(l); });
+    mesInvitations().then(l => {
+      if (annule.current) return;
+      setInvitations(l);
+      // Une invitation en direct ne laissait rien derriere elle : elle expire
+      // au bout de dix minutes, et celle qu'on rate pendant qu'on fait autre
+      // chose disparaissait sans qu'on sache meme qu'elle avait existe. On
+      // l'inscrit des l'arrivee, avec son heure d'expiration — le journal
+      // saura tout seul, a la relecture, qu'elle a ete manquee.
+      for (const i of l) {
+        noterDefi({
+          cle: `direct:${i.id}`, genre: 'direct', sens: 'recu', etat: 'attente',
+          nom: i.de, epreuves: i.epreuve ? [String(i.epreuve)] : [],
+          expire: Date.now() + Math.max(0, i.reste_ms),
+        });
+      }
+    });
   };
 
   // Cinq secondes, et sans attendre quand la boite sonne. Le sondage reste
@@ -74,6 +90,10 @@ export function InvitationDirecte() {
 
   const rejoindre = () => {
     trancher(inv.id);
+    noterDefi({
+      cle: `direct:${inv.id}`, genre: 'direct', sens: 'recu', etat: 'releve',
+      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [],
+    });
     setInvitations(l => l.filter(x => x.id !== inv.id));
     // Le panneau du direct sait rejoindre ; nous, non. On depose la demande,
     // il la ramasse — qu'il soit deja monte ou qu'il arrive apres.
@@ -82,6 +102,13 @@ export function InvitationDirecte() {
 
   const plusTard = () => {
     trancher(inv.id);
+    // Refusee est une forme de manquee : la personne a tendu la main, on n'y
+    // est pas alle. Elle reste une semaine dans MES COURSES, avec de quoi la
+    // redefier — c'est tout l'interet de la noter.
+    noterDefi({
+      cle: `direct:${inv.id}`, genre: 'direct', sens: 'recu', etat: 'manque',
+      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [],
+    });
     setInvitations(l => l.filter(x => x.id !== inv.id));
   };
 

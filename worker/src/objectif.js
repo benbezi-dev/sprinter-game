@@ -1,8 +1,26 @@
 // L'Objectif du jour — un chrono a battre, taille pour chaque joueur.
 //
 // Deux fois par jour, midi et dix-neuf heures, chaque joueur classe recoit un
-// temps a passer sur le 100 m. Ce temps n'est pas le meme pour tout le monde :
-// il est calcule a partir de SES courses a lui.
+// temps a passer : UN PAR DISTANCE OU IL EST CLASSE, jusqu'a trois. Ce temps
+// n'est pas le meme pour tout le monde — il est calcule a partir de SES
+// courses a lui, sur CETTE distance-la.
+//
+// TROIS DEFIS PLUTOT QU'UN, ET C'EST LE CLASSEMENT QUI LE DIT. Le 100 m les a
+// portes seul tant qu'il etait la seule distance a avoir de quoi calibrer. Le
+// 200 m et le 400 m en ont maintenant — huit cents courses chacun, une
+// soixantaine de joueurs classes — et surtout, un niveau de 100 m ne dit rien
+// de ce qu'on vaut sur un tour de piste : ce sont deja trois classements, ce
+// sont donc trois defis. Celui qui n'a jamais couru un 400 m n'en recoit pas :
+// il n'y aurait rien a calibrer, et un objectif tire d'un record qu'on n'a pas
+// n'est pas un objectif.
+//
+// MESURE AVANT D'OUVRIR, sur les vraies courses : passees dans la calibration,
+// les huit joueurs du 200 m et du 400 m les plus assidus recoivent une cible
+// qu'ils atteignent une fois sur 2,7 a 3,0 — exactement la ou le 100 m la
+// place, et exactement ce que le systeme vise. La marge, elle, s'ecarte : 0,9 %
+// pour le metronome du 200 m, 6,5 % pour un joueur en dents de scie sur le
+// tour de piste. C'est le calibrage qui fait son travail — il ne demandait pas
+// le 100 m, il demandait des courses.
 //
 // POURQUOI PAS UNE MARGE FIXE. L'idee naturelle est « ton record + 3 % ». Elle
 // ne marche pas, et elle se trompe dans le sens le moins intuitif : plus un
@@ -27,13 +45,29 @@
 // L'envoi est le travail de push.js, le declenchement celui du cron dans
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
-import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur } from './epreuves.js';
+import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur,
+         DISCIPLINES_SIMPLES, epreuve as fiche } from './epreuves.js';
 import { decalageDe } from './journal.js';
 
 /* ------------------------------------------------------------- reglages */
 
-/** L'epreuve qui porte les objectifs. Le 100 m est la seule qui ait assez de
- *  courses par joueur pour calibrer : 4300 courses contre 750 sur le 200 m. */
+/**
+ * Les epreuves qui portent un defi : les trois du jeu.
+ *
+ * Un joueur en recoit autant qu'il a de distances ou il est classe, de une a
+ * trois, et chacune a sa cible, son plateau et sa fenetre. L'ordre est celui
+ * du programme — 100, 200, 400 — et il compte : c'est celui dans lequel le
+ * jeu les affiche, et celui qui decide de l'epreuve de tete a rang egal.
+ */
+export const EPREUVES_DEFI = DISCIPLINES_SIMPLES;
+
+/**
+ * Celle qu'on suppose quand personne ne dit laquelle.
+ *
+ * Un client d'avant les trois distances poste sa tentative sans nommer
+ * l'epreuve, et sa course est un 100 m — c'etait la seule qui portait un defi.
+ * Ce defaut est donc un fait sur ces clients-la, pas une preference.
+ */
 export const EPREUVE = '100';
 
 /** Combien de joueurs du classement sont servis. Le meme nombre que le
@@ -632,7 +666,10 @@ export async function ensureObjectifTables(db) {
       graine INTEGER,
       palier TEXT,
       derniere_le INTEGER,
-      PRIMARY KEY (name_key, jour, creneau)
+      -- La cle porte l'EPREUVE : un joueur a un defi par distance ou il est
+      -- classe, donc jusqu'a trois lignes par creneau. Voir la reprise de
+      -- table plus bas pour les bases qui portent encore l'ancienne cle.
+      PRIMARY KEY (name_key, jour, creneau, race_key)
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS objectif_classement (
       name_key TEXT PRIMARY KEY,
@@ -667,6 +704,68 @@ export async function ensureObjectifTables(db) {
     `ALTER TABLE objectif_classement ADD COLUMN vie_utilisee_le TEXT`,
   ]) {
     try { await db.prepare(sql).run(); } catch { /* colonne deja presente */ }
+  }
+
+  // LA CLE PORTE MAINTENANT L'EPREUVE, ET LES BASES EXISTANTES NE LE SAVENT PAS.
+  //
+  // Tant qu'il n'y avait qu'un defi par creneau, (joueur, jour, creneau)
+  // suffisait a designer une ligne. Il y en a trois — un par distance ou le
+  // joueur est classe — et cette cle-la les confond : les deux derniers
+  // INSERT tomberaient sur la premiere ligne et seraient ignores, en silence,
+  // parce que c'est exactement ce qu'on demande a `INSERT OR IGNORE`. Le
+  // joueur aurait alors son 100 m, et rien d'autre, sans qu'aucune erreur ne
+  // le dise.
+  //
+  // SQLite ne sait pas changer une cle primaire : la procedure est de refaire
+  // la table et de recopier. Elle est sans danger ici — toutes les lignes
+  // existantes portent '100', donc aucune ne peut en heurter une autre sous la
+  // nouvelle cle — et elle ne se fait qu'une fois : on lit le SCHEMA plutot que
+  // de tenir un numero de version quelque part.
+  try {
+    const { results: colonnes } = await db.prepare(
+      `PRAGMA table_info(objectifs)`).all();
+    const porte = (colonnes || []).some(c => c.name === 'race_key' && c.pk > 0);
+    if (colonnes && colonnes.length && !porte) {
+      const COLS = `name_key, jour, creneau, race_key, cible_ms, pb_ms, marge,
+                    methode, cree_le, tentatives, meilleur_ms, valide_le,
+                    points, ouvre_le, expire_le, graine, palier, derniere_le`;
+      await db.batch([
+        db.prepare(`CREATE TABLE IF NOT EXISTS objectifs_neuf (
+          name_key TEXT NOT NULL,
+          jour TEXT NOT NULL,
+          creneau TEXT NOT NULL,
+          race_key TEXT NOT NULL,
+          cible_ms INTEGER NOT NULL,
+          pb_ms INTEGER NOT NULL,
+          marge REAL NOT NULL,
+          methode TEXT NOT NULL,
+          cree_le INTEGER NOT NULL,
+          tentatives INTEGER NOT NULL DEFAULT 0,
+          meilleur_ms INTEGER,
+          valide_le INTEGER,
+          points INTEGER NOT NULL DEFAULT 0,
+          ouvre_le INTEGER,
+          expire_le INTEGER,
+          graine INTEGER,
+          palier TEXT,
+          derniere_le INTEGER,
+          PRIMARY KEY (name_key, jour, creneau, race_key)
+        )`),
+        db.prepare(`INSERT OR IGNORE INTO objectifs_neuf (${COLS})
+                    SELECT ${COLS} FROM objectifs`),
+        db.prepare(`DROP TABLE objectifs`),
+        db.prepare(`ALTER TABLE objectifs_neuf RENAME TO objectifs`),
+        // Les index appartenaient a la table qu'on vient de jeter : ils sont
+        // partis avec elle, et se reposent ici.
+        db.prepare(`CREATE INDEX IF NOT EXISTS idx_objectifs_jour
+                    ON objectifs (jour, creneau)`),
+      ]);
+    }
+  } catch (e) {
+    // Une reprise qui echoue ne doit pas emporter les routes : le joueur garde
+    // l'objectif qu'il a, et la table reprendra au prochain passage. Le silence
+    // serait pire que le message, celui-la se lit dans les journaux du worker.
+    console.log('objectifs[cle]', String(e && e.message || e));
   }
 
   // L'INDEX DE LA FENETRE VIENT APRES LES COLONNES, ET SEUL.
@@ -717,39 +816,55 @@ export async function joueursAServir(db, maintenant) {
   // Le nom, parce que « Anonyme » n'en est pas un : d'anciennes lignes le
   // portent, et lui envoyer un objectif viserait trois cents personnes a la
   // fois — ou personne, ce qui revient au meme.
+  //
+  // ET LES TROIS DISTANCES DANS LA MEME REQUETE. Le classement est deja par
+  // distance : le rang se calcule donc distance par distance, par ROW_NUMBER
+  // dans la base. C'est le meme nombre qu'avant — le rang parmi les actifs de
+  // CETTE distance — et il n'y a toujours pas une requete par joueur, ni meme
+  // une par epreuve.
   const depuis = (maintenant ? maintenant.getTime() : Date.now())
     - ACTIF_JOURS * 86400000;
+  const trous = EPREUVES_DEFI.map(() => '?').join(',');
 
   const { results: classes } = await db.prepare(
-    `SELECT lower(trim(s.name)) AS k, s.name AS nom, MIN(s.best_split_ms) AS pb,
-            COALESCE(r.vu, MAX(s.updated_at)) AS vu
-       FROM scores s
-       LEFT JOIN (SELECT name_key, MAX(created_at) AS vu FROM races GROUP BY name_key) r
-              ON r.name_key = lower(trim(s.name))
-      WHERE s.race_key = ? AND s.best_split_ms > 0
-        AND lower(trim(s.name)) <> 'anonyme'
-      GROUP BY lower(trim(s.name))
-     HAVING COALESCE(r.vu, MAX(s.updated_at)) >= ?
-      ORDER BY pb ASC
-      LIMIT ${TOP_N}`
-  ).bind(EPREUVE, depuis).all();
+    `SELECT ep, k, nom, pb, rang FROM (
+       SELECT ep, k, nom, pb,
+              ROW_NUMBER() OVER (PARTITION BY ep ORDER BY pb ASC) AS rang
+         FROM (
+           SELECT s.race_key AS ep, lower(trim(s.name)) AS k, s.name AS nom,
+                  MIN(s.best_split_ms) AS pb,
+                  COALESCE(r.vu, MAX(s.updated_at)) AS vu
+             FROM scores s
+             LEFT JOIN (SELECT name_key, MAX(created_at) AS vu
+                          FROM races GROUP BY name_key) r
+                    ON r.name_key = lower(trim(s.name))
+            WHERE s.race_key IN (${trous}) AND s.best_split_ms > 0
+              AND lower(trim(s.name)) <> 'anonyme'
+            GROUP BY s.race_key, lower(trim(s.name))
+           HAVING COALESCE(r.vu, MAX(s.updated_at)) >= ?
+         )
+     ) WHERE rang <= ${TOP_N}`
+  ).bind(...EPREUVES_DEFI, depuis).all();
 
   if (!classes || !classes.length) return [];
 
   const { results: courses } = await db.prepare(
-    `SELECT k, time_ms FROM (
-       SELECT lower(trim(name)) AS k, time_ms,
+    `SELECT ep, k, time_ms FROM (
+       SELECT race_key AS ep, lower(trim(name)) AS k, time_ms,
               ROW_NUMBER() OVER (
-                PARTITION BY lower(trim(name)) ORDER BY created_at DESC
+                PARTITION BY race_key, lower(trim(name)) ORDER BY created_at DESC
               ) AS rn
-         FROM races WHERE race_key = ?
+         FROM races WHERE race_key IN (${trous})
      ) WHERE rn <= ${FENETRE}`
-  ).bind(EPREUVE).all();
+  ).bind(...EPREUVES_DEFI).all();
 
-  const parJoueur = new Map();
+  // La fenetre de trente courses, par joueur ET par distance : c'est sur les
+  // 400 m d'un joueur qu'on calibre son 400 m, jamais sur ses 100 m.
+  const parEpreuve = new Map();
   for (const r of courses || []) {
-    if (!parJoueur.has(r.k)) parJoueur.set(r.k, []);
-    parJoueur.get(r.k).push(r.time_ms);
+    const cle = `${r.ep}:${r.k}`;
+    if (!parEpreuve.has(cle)) parEpreuve.set(cle, []);
+    parEpreuve.get(cle).push(r.time_ms);
   }
 
   const { results: pays } = await db.prepare(
@@ -758,20 +873,38 @@ export async function joueursAServir(db, maintenant) {
   const fuseaux = new Map();
   for (const p of pays || []) fuseaux.set(p.name_key, fuseauDe(p.pays, p.continent));
 
+  // Un joueur, ses distances. Classe sur les trois, il aura trois defis.
+  const joueurs = new Map();
+  for (const c of classes) {
+    if (!joueurs.has(c.k)) joueurs.set(c.k, { nom: c.nom, epreuves: [] });
+    joueurs.get(c.k).epreuves.push({
+      epreuve: c.ep, pb: c.pb, rang: c.rang,
+      courses: parEpreuve.get(`${c.ep}:${c.k}`) || [],
+    });
+  }
+
   const dus = [];
-  for (let i = 0; i < classes.length; i++) {
-    const j = classes[i];
-    // `i + 1` est le rang PARMI LES ACTIFS, et c'est ce qu'on annonce. Le rang
-    // au tableau complet se lit par `getRank`, qui compte tout le monde ; le
-    // dire ici obligerait a une requete par joueur pour un nombre que la
-    // notification n'utilise qu'en decor.
-    const fuseau = fuseaux.get(j.k) || 'Europe/Paris';
-    const du = creneauMaintenant(maintenant, fuseau, decalageDe(j.k));
+  for (const [k, j] of joueurs) {
+    const fuseau = fuseaux.get(k) || 'Europe/Paris';
+    const du = creneauMaintenant(maintenant, fuseau, decalageDe(k));
     if (!du) continue;
+    // L'ordre du programme, pas celui que la base a rendu : c'est celui dans
+    // lequel le jeu pose les cartes, et il doit etre le meme partout.
+    j.epreuves.sort((a, b) =>
+      EPREUVES_DEFI.indexOf(a.epreuve) - EPREUVES_DEFI.indexOf(b.epreuve));
+    // L'EPREUVE DE TETE : celle ou il est le mieux classe.
+    //
+    // Une notification ne tient pas trois phrases, et « tu es 3e au 400 m »
+    // n'a de force que si c'est vrai la ou le joueur se reconnait. A rang egal,
+    // l'ordre du programme tranche — d'ou le `<` strict.
+    const tete = j.epreuves.reduce((m, e) => (e.rang < m.rang ? e : m), j.epreuves[0]);
     dus.push({
-      nameKey: j.k, nom: j.nom, rang: i + 1, pb: j.pb, fuseau,
-      courses: parJoueur.get(j.k) || [],
+      nameKey: k, nom: j.nom, fuseau,
       jour: du.jour, creneau: du.creneau,
+      epreuves: j.epreuves,
+      // Ce que l'ancienne forme portait, et que la notification lit encore :
+      // le rang, le record et l'epreuve de tete.
+      rang: tete.rang, pb: tete.pb, epreuve: tete.epreuve,
     });
   }
   return dus;
@@ -780,22 +913,41 @@ export async function joueursAServir(db, maintenant) {
 /* ---------------------------------------------------------------- emission */
 
 /**
- * Cree l'objectif d'un joueur pour un creneau, ou rend celui qui existe deja.
+ * Cree les objectifs d'un joueur pour un creneau, ou rend ceux qui existent.
  *
- * L'insertion porte sa propre cle (joueur, jour, creneau) : deux passages du
- * cron sur la meme minute ne creent pas deux objectifs, et n'envoient donc pas
- * deux notifications. C'est la seule protection dont on a besoin, et elle est
- * dans la base plutot que dans le code qui appelle.
+ * UN PAR DISTANCE OU IL EST CLASSE, jusqu'a trois, chacun calibre sur les
+ * courses qu'il a faites LA. Il en manquera pour qui n'a jamais couru un
+ * 400 m, et c'est juste : on ne taille pas une cible sur un record qui
+ * n'existe pas.
+ *
+ * L'insertion porte sa propre cle (joueur, jour, creneau, epreuve) : deux
+ * passages du cron sur la meme minute ne creent pas deux fois les memes
+ * objectifs, et n'envoient donc pas deux notifications. C'est la seule
+ * protection dont on a besoin, et elle est dans la base plutot que dans le
+ * code qui appelle.
+ *
+ * Rend `objectifs` (tous, poses ou deja la) et `nouveaux` (ceux que CE passage
+ * vient de creer). `objectif` et `nouveau` restent la, au singulier : ils
+ * disent l'epreuve de tete et « y a-t-il quelque chose de neuf a annoncer »,
+ * ce que l'appelant demandait deja.
  */
 export async function creerObjectif(db, joueur, maintenant) {
   await ensureObjectifTables(db);
 
-  const existant = await db.prepare(
-    `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
-  ).bind(joueur.nameKey, joueur.jour, joueur.creneau).first();
-  if (existant) return { objectif: existant, nouveau: false, silencieux: false };
+  // Les distances de ce joueur. Un appelant qui n'en passe qu'une — l'ancienne
+  // forme, ou un harnais — reste servi : elle devient une liste d'un element.
+  const epreuves = (joueur.epreuves && joueur.epreuves.length)
+    ? joueur.epreuves
+    : [{ epreuve: joueur.epreuve || EPREUVE, pb: joueur.pb,
+         rang: joueur.rang, courses: joueur.courses || [] }];
 
-  // Le silence : quatre objectifs de suite sans une seule tentative, et on
+  const { results: deja } = await db.prepare(
+    `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
+  ).bind(joueur.nameKey, joueur.jour, joueur.creneau).all();
+  const poses = new Map();
+  for (const o of deja || []) poses.set(o.race_key || EPREUVE, o);
+
+  // Le silence : quatre creneaux de suite sans une seule tentative, et on
   // cesse de sonner. Quelqu'un qui ne repond plus n'a pas besoin d'etre
   // relance deux fois par jour — il a besoin qu'on le laisse revenir de
   // lui-meme.
@@ -808,38 +960,73 @@ export async function creerObjectif(db, joueur, maintenant) {
   // l'objectif quand meme — celui qui ouvre le jeu le trouve, le joue, et sa
   // tentative rompt le silence — et c'est l'appelant qui s'abstient de
   // notifier.
+  //
+  // ET IL SE COMPTE PAR CRENEAU, PAS PAR LIGNE. Trois defis font trois lignes ;
+  // les compter une par une ferait taire le joueur trois fois plus vite —
+  // quatre lignes, ce ne serait plus deux jours de silence mais un seul
+  // creneau et demi. Le regroupement les ramene a ce qu'ils sont : une
+  // occasion de repondre, pas trois.
   const { results: recents } = await db.prepare(
-    `SELECT tentatives FROM objectifs WHERE name_key = ?
-      ORDER BY cree_le DESC LIMIT ?`
+    `SELECT SUM(tentatives) AS tentatives FROM objectifs
+      WHERE name_key = ?
+      GROUP BY jour, creneau
+      ORDER BY MAX(cree_le) DESC LIMIT ?`
   ).bind(joueur.nameKey, SILENCE_APRES).all();
   const silencieux = !!(recents && recents.length >= SILENCE_APRES
-      && recents.every(o => o.tentatives === 0));
+      && recents.every(o => !o.tentatives));
 
-  const c = calibrer(joueur.pb, joueur.courses, {
-    direction: directionDe(EPREUVE), pas: pasDe(EPREUVE),
-  });
   const t = Date.now();
-
   // La fenetre est calculee dans le fuseau du joueur et rangee en instants
   // absolus : une fois ecrite, plus personne n'a besoin de savoir ou il vit.
+  // Elle est la meme pour les trois distances — c'est un creneau, pas trois.
   const f = fenetreDe(joueur.jour, joueur.creneau, joueur.fuseau, maintenant)
     || { ouvre: t, expire: t + 6 * 3600 * 1000 };
-  const graine = graineDe(joueur.jour, joueur.creneau, EPREUVE);
 
-  await db.prepare(
-    `INSERT OR IGNORE INTO objectifs
-       (name_key, jour, creneau, race_key, cible_ms, pb_ms, marge, methode,
-        cree_le, ouvre_le, expire_le, graine)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(joueur.nameKey, joueur.jour, joueur.creneau, EPREUVE,
-         c.cibleMs, joueur.pb, c.marge, c.methode, t,
-         f.ouvre, f.expire, graine).run();
+  const objectifs = [], nouveaux = [], calibrages = [];
+  for (const e of epreuves) {
+    const ancien = poses.get(e.epreuve);
+    if (ancien) { objectifs.push(ancien); continue; }
 
-  const objectif = await db.prepare(
-    `SELECT * FROM objectifs WHERE name_key = ? AND jour = ? AND creneau = ?`
-  ).bind(joueur.nameKey, joueur.jour, joueur.creneau).first();
+    const c = calibrer(e.pb, e.courses, {
+      direction: directionDe(e.epreuve), pas: pasDe(e.epreuve),
+    });
+    // LA GRAINE PORTE L'EPREUVE, et c'est ce qui separe les trois defis d'un
+    // meme creneau : trois plateaux, trois courses. Sans cela, le joueur
+    // retrouverait les memes adversaires aux memes places sur les trois
+    // distances, et le 200 m ne serait plus qu'un 100 m plus long.
+    const graine = graineDe(joueur.jour, joueur.creneau, e.epreuve);
 
-  return { objectif, nouveau: true, silencieux, calibrage: c };
+    await db.prepare(
+      `INSERT OR IGNORE INTO objectifs
+         (name_key, jour, creneau, race_key, cible_ms, pb_ms, marge, methode,
+          cree_le, ouvre_le, expire_le, graine)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(joueur.nameKey, joueur.jour, joueur.creneau, e.epreuve,
+           c.cibleMs, e.pb, c.marge, c.methode, t,
+           f.ouvre, f.expire, graine).run();
+
+    const o = await db.prepare(
+      `SELECT * FROM objectifs
+        WHERE name_key = ? AND jour = ? AND creneau = ? AND race_key = ?`
+    ).bind(joueur.nameKey, joueur.jour, joueur.creneau, e.epreuve).first();
+    if (!o) continue;
+    objectifs.push(o); nouveaux.push(o); calibrages.push(c);
+  }
+
+  // L'epreuve de tete d'abord : c'est elle qui parle dans la notification, et
+  // l'appelant qui ne lit qu'un objectif doit tomber sur celui-la.
+  const tete = joueur.epreuve || EPREUVE;
+  const enTete = l => l.slice().sort((a, b) =>
+    ((b.race_key === tete) - (a.race_key === tete))
+    || (EPREUVES_DEFI.indexOf(a.race_key) - EPREUVES_DEFI.indexOf(b.race_key)));
+
+  const tous = enTete(objectifs);
+  const neufs = enTete(nouveaux);
+  return {
+    objectifs: tous, nouveaux: neufs, silencieux, calibrages,
+    objectif: tous[0] || null, nouveau: neufs.length > 0,
+    calibrage: calibrages[0] || null,
+  };
 }
 
 /* -------------------------------------------------------------- tentative */
@@ -847,19 +1034,27 @@ export async function creerObjectif(db, joueur, maintenant) {
 /**
  * Une course vient d'etre jouee : voici ce qu'elle fait a l'objectif du jour.
  *
- * Appelee a chaque course terminee sur l'epreuve, meme quand il n'y a pas
- * d'objectif ouvert — elle rend alors null, et l'appelant n'a rien a verifier.
+ * Appelee a chaque course terminee, meme quand il n'y a pas d'objectif ouvert
+ * — elle rend alors null, et l'appelant n'a rien a verifier.
+ *
+ * `epreuve` DIT LEQUEL DES TROIS. Ils sont ouverts en meme temps, sur trois
+ * distances, et un 400 m ne valide pas le defi du 100 m : c'est la course
+ * jouee qui designe l'objectif, jamais l'ordre dans lequel ils ont ete crees.
+ * Absente — un client d'avant les trois distances — elle vaut 100 m, la seule
+ * que ces clients-la savent courir en defi.
  *
  * Les points ne tombent qu'une fois : `valide_le` fait office de verrou, et
  * une seconde validation du meme objectif ne rapporte rien. En revanche le
  * record, lui, se met a jour a chaque fois — battre son record sans valider
  * l'objectif reste un record.
  */
-export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant) {
+export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant,
+                                           epreuve) {
   await ensureObjectifTables(db);
 
   const t = (maintenant || new Date()).getTime();
   const jourFr = heureLocale(maintenant || new Date(), 'Europe/Paris').jour;
+  const ep = EPREUVES_DEFI.includes(String(epreuve)) ? String(epreuve) : EPREUVE;
 
   // L'objectif ouvert MAINTENANT.
   //
@@ -875,11 +1070,11 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
   // reussir — exactement le joueur qu'on voulait garder.
   const objectif = await db.prepare(
     `SELECT * FROM objectifs
-      WHERE name_key = ?
+      WHERE name_key = ? AND race_key = ?
         AND (ouvre_le IS NULL OR ouvre_le <= ?)
         AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
       ORDER BY cree_le DESC LIMIT 1`
-  ).bind(nameKey, t, jourFr, t).first();
+  ).bind(nameKey, ep, t, jourFr, t).first();
   if (!objectif) return null;
 
   // Trop tot pour avoir couru. On rend un refus explicite plutot que null :
@@ -928,9 +1123,9 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
         SET tentatives = ?, meilleur_ms = ?, palier = ?,
             valide_le = COALESCE(valide_le, ?),
             points = ?, derniere_le = ?
-      WHERE name_key = ? AND jour = ? AND creneau = ?`
+      WHERE name_key = ? AND jour = ? AND creneau = ? AND race_key = ?`
   ).bind(essai, meilleur, palier, reussi ? Date.now() : null, compte.total, t,
-         nameKey, objectif.jour, objectif.creneau).run();
+         nameKey, objectif.jour, objectif.creneau, objectif.race_key).run();
 
   if (gain > 0) {
     await crediter(db, nameKey, nom, gain, objectif.jour,
@@ -951,6 +1146,9 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
     avantBonus: Math.max(0, POINTS.courses_perseverance - essai),
     dejaValide,
     tempsMs,
+    // La distance de CE defi. L'ecran d'arrivee en a besoin : trois cartes
+    // ouvertes, et « objectif validé » sans distance ne dit pas laquelle.
+    epreuve: objectif.race_key || EPREUVE,
     cibleMs: objectif.cible_ms,
     pbMs: objectif.pb_ms,
     meilleurMs: meilleur,
@@ -1023,14 +1221,14 @@ const TOURNURES = {
     fr: [
       o => `Ton record est de ${o.pb} s. Passe sous ${o.cible} s avant ce soir — ça compte pour le Classement des Objectifs.`,
       o => `${o.cible} s. C'est ${o.ecart} s de ton record. Le temps d'une pause, pas plus.`,
-      o => `Tu es ${o.rang}e au 100 m. Ton record dit ${o.pb} s, l'objectif dit ${o.cible} s. L'un des deux ment.`,
+      o => `Tu es ${o.rang}e au ${o.epreuve}. Ton record dit ${o.pb} s, l'objectif dit ${o.cible} s. L'un des deux ment.`,
       o => `Objectif : ${o.cible} s. Record : ${o.pb} s. Tu sais déjà que tu peux le faire — reste à le refaire.`,
       o => `${o.cible} s à passer. Tu as jusqu'à ce soir, et ça rapporte au Classement des Objectifs.`,
     ],
     en: [
       o => `Your best is ${o.pb} s. Get under ${o.cible} s before tonight — it counts for the Objectives ranking.`,
       o => `${o.cible} s. That is ${o.ecart} s off your best. One break is enough. Or not.`,
-      o => `You are ${o.rang} in the 100 m. Your best says ${o.pb} s, the objective says ${o.cible} s. One of them is lying.`,
+      o => `You are ${o.rang} in the ${o.epreuve}. Your best says ${o.pb} s, the objective says ${o.cible} s. One of them is lying.`,
       o => `Target: ${o.cible} s. Best: ${o.pb} s. You already know you can — now do it on demand.`,
       o => `${o.cible} s to beat. You have until tonight, and it scores in the Objectives ranking.`,
     ],
@@ -1041,14 +1239,14 @@ const TOURNURES = {
       o => `${o.ecart} s séparent ton record de l'objectif du soir : ${o.cible} s. Cinq essais maximum, on se connaît.`,
       o => `Record ${o.pb} s, cible ${o.cible} s. Les autres sont déjà dessus. Minuit, dernier délai.`,
       o => `On te demande ${o.cible} s. Tu as déjà fait ${o.pb} s. Techniquement, c'est réglé.`,
-      o => `${o.rang}e au 100 m, record ${o.pb} s. Alors ${o.cible} s ne devrait pas te faire peur.`,
+      o => `${o.rang}e au ${o.epreuve}, record ${o.pb} s. Alors ${o.cible} s ne devrait pas te faire peur.`,
     ],
     en: [
       o => `Last chance: ${o.cible} s to beat, your best is ${o.pb} s. Close the day properly.`,
       o => `${o.ecart} s between your best and tonight's target: ${o.cible} s. Five tries tops, we know you.`,
       o => `Best ${o.pb} s, target ${o.cible} s. The others are already on it. Midnight, last call.`,
       o => `We are asking for ${o.cible} s. You have already run ${o.pb} s. Technically, it is settled.`,
-      o => `${o.rang} in the 100 m, best ${o.pb} s. So ${o.cible} s should not scare you.`,
+      o => `${o.rang} in the ${o.epreuve}, best ${o.pb} s. So ${o.cible} s should not scare you.`,
     ],
   },
 };
@@ -1129,19 +1327,54 @@ function indice(clef, n) {
 }
 
 /**
+ * « Le 200 m et le 400 m attendent aussi. »
+ *
+ * La notification annonce UN defi — celui de l'epreuve de tete — parce qu'une
+ * notification qui en annonce trois n'en annonce aucun : le chrono cible, le
+ * rang et la tournure ne valent que pour une distance a la fois. Taire les
+ * deux autres les rendrait pourtant invisibles a qui ne rouvre pas le jeu de
+ * lui-meme. Une phrase de plus, a la fin, et il sait qu'il y a autre chose a
+ * aller chercher.
+ */
+function phraseDesAutres(autres, l) {
+  const noms = (autres || [])
+    .map(c => (fiche(c) || {}).libelle)
+    .filter(Boolean)
+    .map(n => (l === 'en' ? 'the ' : 'le ') + n);
+  if (!noms.length) return '';
+  const dernier = noms.pop();
+  const liste = noms.length
+    ? `${noms.join(', ')} ${l === 'en' ? 'and' : 'et'} ${dernier}` : dernier;
+  const phrase = l === 'en'
+    ? `${liste} ${noms.length ? 'are' : 'is'} waiting too.`
+    : `${liste} ${noms.length ? 'attendent' : 'attend'} aussi.`;
+  return ' ' + phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+/**
  * Le titre et le texte d'un objectif, prets pour la notification.
+ *
+ * `autres` porte les distances des AUTRES defis ouverts dans le meme creneau.
+ * Voir phraseDesAutres : le corps en dit un mot, et un seul.
  * @returns {{titre:string, corps:string}}
  */
 export function texteObjectif(objectif, rang, langue,
-                              avecChrono = CHRONO_DANS_LA_NOTIF, midi = null) {
+                              avecChrono = CHRONO_DANS_LA_NOTIF, midi = null,
+                              autres = null) {
   const l = langue === 'en' ? 'en' : 'fr';
   const creneau = objectif.creneau === 'soir' ? 'soir' : 'midi';
+  const encore = phraseDesAutres(autres, l);
   if (!avecChrono) {
-    return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l],
+    return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l] + encore,
              variante: null, contexte: 'discret' };
   }
 
   const vue = {
+    // La distance de ce defi. Les tournures la nommaient en dur — « tu es 3e
+    // au 100 m » — et il y en a trois maintenant : la dire fausse serait pire
+    // que de ne pas la dire, puisque le rang, lui, est bien celui de CETTE
+    // distance.
+    epreuve: (fiche(objectif.race_key || EPREUVE) || {}).libelle || '',
     pb: s2(objectif.pb_ms),
     cible: s2(objectif.cible_ms),
     ecart: ((objectif.cible_ms - objectif.pb_ms) / 1000).toFixed(2),
@@ -1159,7 +1392,8 @@ export function texteObjectif(objectif, rang, langue,
   // sous les yeux du joueur n'est la parole de personne.
   const clef = `${objectif.name_key}:${objectif.jour}:${creneau}`;
   const variante = indice(clef, jeu.length);
-  return { titre: TITRES[creneau][l], corps: jeu[variante](vue), variante, contexte };
+  return { titre: TITRES[creneau][l], corps: jeu[variante](vue) + encore,
+           variante, contexte };
 }
 
 /**
@@ -1169,12 +1403,16 @@ export function texteObjectif(objectif, rang, langue,
  * il n'y avait pas d'objectif a midi — un joueur servi pour la premiere fois
  * le soir n'a pas de midi a commenter.
  */
-export async function midiDuJour(db, nameKey, jour) {
+export async function midiDuJour(db, nameKey, jour, epreuve) {
   try {
+    // LA MEME DISTANCE QUE CE QU'ON S'APPRETE A ECRIRE. Midi en a servi trois ;
+    // commenter le 400 m dans une phrase qui annonce le 100 m raconterait la
+    // journee de quelqu'un d'autre.
+    const ep = EPREUVES_DEFI.includes(String(epreuve)) ? String(epreuve) : EPREUVE;
     const o = await db.prepare(
       `SELECT tentatives, meilleur_ms, cible_ms, valide_le FROM objectifs
-        WHERE name_key = ? AND jour = ? AND creneau = 'midi'`
-    ).bind(nameKey, jour).first();
+        WHERE name_key = ? AND jour = ? AND creneau = 'midi' AND race_key = ?`
+    ).bind(nameKey, jour, ep).first();
     if (!o) return null;
     return {
       etat: o.valide_le ? 'valide' : (o.tentatives > 0 ? 'tente' : 'absent'),

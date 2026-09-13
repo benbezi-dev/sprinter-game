@@ -247,7 +247,7 @@
   };
 
   // pool : carnation du plateau. 'divers' pour les etapes locales,
-  // 'sprint' pour le mondial, les Jeux et la finale ZEZE.
+  // 'sprint' pour le mondial, les Jeux mondiaux et la finale ZEZE.
   const LEVELS = [
     { name: 'Competition scolaire', theme: 'day', pool: 'divers',
       names: ['Paul Martin', 'Leo Dubois', 'Noah Petit', 'Enzo Roy',
@@ -261,12 +261,113 @@
     { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
-    { name: 'Jeux olympiques', theme: 'olympic', pool: 'sprint',
+    // « 0.Games » : le nom de l'etape, dans les deux langues. Il ne traduit
+    // rien et ne se traduit pas — c'est un nom propre, pose la ou le terme
+    // olympique ne peut pas l'etre (article L141-5 du code du sport, voir
+    // juridique/lettre-scellee.html annexe E). La cle du theme reste
+    // `mondiaux` : elle est interne au moteur et ne s'affiche nulle part.
+    { name: '0.Games', theme: 'mondiaux', pool: 'sprint',
       names: ['Blaze Kade', 'Jett Cruz', 'Rex Solar', 'Kai Volt',
               'Ash Comet', 'Neo Flash', 'Ray Quick'] },
     { name: 'Inter galactique', theme: 'cosmos', pool: 'sprint',
       names: ['Benbezi ZEZE', 'Ryan ZEZE', 'Mickeal ZEZE', 'Greta ZEZE',
               'Herman ZEZE', 'Ervie ZEZE', 'Victoire ZEZE'] }
+  ];
+
+  // ------------------------------------------------------- stades hors serie
+  //
+  // Un stade qui n'est pas une etape du championnat. La difference n'est pas
+  // cosmetique : les six etapes ci-dessus forment une echelle — on monte de la
+  // cour d'ecole a l'intergalactique — et y accrocher un septieme barreau
+  // reviendrait a dire que la finale ZEZE n'est plus la fin. Celui-ci est un
+  // LIEU, qu'on choisit pour y courir une epreuve, et le championnat l'ignore.
+  //
+  // Il porte donc son plateau avec lui, au lieu d'ajouter une septieme entree
+  // aux `ranges` de chaque epreuve : ces tableaux-la sont alignes sur les six
+  // etapes, et une entree de plus y ferait croire a une etape de plus.
+  //
+  // La Riviera est un meeting d'ete au bord de l'eau : le plateau est fort,
+  // d'un cheveu sous la finale olympique, mais on n'y elimine personne.
+  const STADES_HORS_SERIE = [
+    // LE STADE DU DANUBE — l'edition speciale, ouverte a tout le monde.
+    //
+    // Elle sort pendant qu'une grande reunion d'athletisme se court pour de
+    // vrai au bord de ce fleuve. Ce stade-ci en prend les COULEURS, et rien
+    // d'autre : la piste terre cuite, le liseret d'ocre qui l'entoure, la
+    // couronne d'acier blanc posee au-dessus des gradins, et le
+    // rouge-blanc-vert du pays sur les panneaux.
+    //
+    // CE QU'IL NE PREND PAS, ET POURQUOI C'EST ECRIT ICI. Ni le nom de la
+    // competition, ni celui du stade, ni son embleme, ni un seul athlete reel
+    // sur la ligne de depart. Une teinte ne s'accapare pas ; un nom depose,
+    // si — et une reprise de nom est la seule chose, dans tout ce fichier,
+    // qui puisse valoir une lettre d'avocat. Les sept noms ci-dessous sont
+    // inventes, comme partout ailleurs dans le jeu. Voir
+    // juridique/edition-danube.md, qui tient la liste de ce qu'on s'interdit.
+    //
+    // `ouvert` LE DISTINGUE DES DEUX AUTRES. La Riviera et les Trois Soleils
+    // n'existent que sur le canal de test ; celui-ci part dans la version
+    // publique, sinon il n'y a pas d'edition speciale — juste un stade que
+    // personne ne peut atteindre.
+    //
+    // LE PLATEAU EST CELUI D'UNE FINALE SUR INVITATION : sept coureurs entre
+    // 9,55 et 9,88 au 100 m. Au-dessus du championnat du monde, sous la
+    // finale olympique, et tres loin sous les ZEZE — l'echelle du
+    // championnat reste ce qu'elle etait.
+    { cle: 'danube', name: 'Stade du Danube', theme: 'danube',
+      pool: 'sprint',
+      horsSerie: true,
+      ouvert: true,
+      // Une finale sur invitation remplit un stade : les gradins sont pleins,
+      // juste sous la finale intergalactique.
+      foule: 0.97,
+      plateau: { '100': [9.55, 9.88], '200': [19.25, 19.92],
+                 '400': [43.15, 44.10], '4x100': [37.35, 38.30] },
+      names: ['Zoltan Arrow', 'Bela Volt', 'Marko Surge', 'Gabor Onyx',
+              'Levente Spark', 'Emese Vega', 'Dorka Swift'] },
+
+    { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
+      pool: 'divers',
+      // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
+      horsSerie: true,
+      // Un meeting d'ete au bord de l'eau : gradins bien garnis, sans
+      // l'affluence d'une finale mondiale.
+      foule: 0.72,
+      plateau: { '100': [9.62, 9.92], '200': [19.30, 19.90],
+                 '400': [43.30, 44.00], '4x100': [37.60, 38.60] },
+      names: ['Rick Palma', 'Sunny Marino', 'Kenji Aoyama', 'Milo Cabana',
+              'Vince Corsair', 'Lisa Miramar', 'Nina Solaris'] },
+
+    // LE STADE DES TROIS SOLEILS — la planete verte des mangas de combat.
+    //
+    // Trois soleils, donc jamais de nuit : c'est le detail qui fait toute la
+    // planete, et c'est pour lui que le ciel de ce stade est jaune-vert au
+    // lieu d'etre bleu. Le reste suit — une mer d'emeraude, des aiguilles de
+    // roche et leurs arches au fond, des arbres a chapeau, et un plateau de
+    // sept coureurs a la peau verte et au crane nu (pool 'namek').
+    //
+    // Le nom affiche vit dans les traductions, pas ici (voir LEVEL_NAMES) :
+    // c'est la un seul endroit a changer si l'on veut le rapprocher — ou
+    // l'eloigner — de l'oeuvre qui l'inspire, ce qui, pour un jeu publie sur
+    // les magasins, n'est pas une question de gout mais de droit.
+    //
+    // LE PLATEAU EST FORT, ET IL S'ARRETE SOUS LES ZEZE. Ces sept-la sortent
+    // du 100 m entre 9,28 et 9,66 — au-dessus de la finale olympique, sous
+    // la finale intergalactique. Les faire courir plus vite que les ZEZE
+    // aurait donne la meme chose qu'une septieme etape : la fin du
+    // championnat n'aurait plus ete la fin.
+    { cle: 'namek', name: 'Stade des Trois Soleils', theme: 'namek',
+      pool: 'namek',
+      horsSerie: true,
+      // Un tournoi qui deplace une planete entiere : gradins pleins, juste
+      // sous la finale ZEZE.
+      foule: 0.94,
+      plateau: { '100': [9.28, 9.66], '200': [18.60, 19.20],
+                 '400': [41.80, 43.00], '4x100': [37.05, 37.85] },
+      // Sept noms tires des instruments de musique, comme le veut la
+      // coutume de ce peuple. Ils sont inventes : aucun ne sort de l'oeuvre.
+      names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
+              'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
   ];
 
   // ---------------------------------------------------------------------
@@ -415,7 +516,14 @@
 
     // Frequence elevee ET grande amplitude, talon qui claque tres haut sous
     // la fesse, buste redresse jusqu'a paraitre en arriere, epaules relachees.
-    lyles: {
+    //
+    // Ce profil portait le nom d'un sprinteur reel. Les six autres decrivent
+    // un geste — cadence, sharp, power, fluid, drive, glide — et celui-ci
+    // designait une personne. Il ne s'affichait nulle part, mais il partait
+    // dans le build public, lisible par qui ouvre le fichier : le nom d'un
+    // athlete vivant accroche a la foulee d'un personnage de jeu. On decrit
+    // donc le geste, comme partout ailleurs. Voir juridique/edition-danube.md.
+    whip: {
       thigh: catmull([[0, 0.38], [0.75, -0.04], [1.50, -0.58], [2.20, -0.32],
                       [3.10, 0.24], [4.10, 0.78], [4.85, 0.92], [5.55, 0.74]]),
       knee: catmull([[0, -0.28], [0.50, -0.62], [1.10, -0.34], [1.50, -0.18],
@@ -509,7 +617,12 @@
     noisette: [120, 76, 50], bronze: [142, 92, 58],
     ambre: [176, 122, 78], miel: [198, 150, 104],
     olive: [206, 166, 118], sable: [224, 186, 142],
-    clair: [238, 204, 166], porcelaine: [246, 220, 190]
+    clair: [238, 204, 166], porcelaine: [246, 220, 190],
+    // La onzieme n'est pas une carnation humaine, et n'entre dans aucun
+    // tirage : elle n'existe que pour le plateau du stade des trois soleils
+    // (voir SKIN_POOL.namek). Rangee ici quand meme, parce que c'est le seul
+    // endroit ou le moteur sait traduire un nom de peau en trois octets.
+    vert: [104, 176, 96]
   };
   // Les etapes locales reunissent un plateau tire au hasard parmi toutes
   // les carnations (rien n'empeche deux ou six coureurs de sortir avec la
@@ -518,7 +631,30 @@
   const SKIN_POOL = {
     divers: ['ebene', 'cacao', 'acajou', 'noisette', 'bronze', 'ambre',
              'miel', 'olive', 'sable', 'clair', 'porcelaine'],
-    sprint: ['ebene']
+    sprint: ['ebene'],
+    namek: ['vert']
+  };
+  // Un plateau peut imposer sa coiffure.
+  //
+  // Le peuple du stade des trois soleils est CHAUVE, tous autant qu'ils sont,
+  // et c'est la moitie de ce qui le rend reconnaissable : la peau verte sous
+  // une natte ou une queue de cheval ne dit plus rien du tout. Le tirage de
+  // `lookFor` reste fait quand meme, puis on ecrase le resultat — retirer le
+  // tirage decalerait la suite aleatoire, et les huit athletes des deux autres
+  // plateaux changeraient tous de visage pour une raison qui ne les concerne
+  // pas.
+  const POOL_CRANE = { namek: 'shaved' };
+  const crane = (pool, tire) => POOL_CRANE[pool] || tire;
+  // Et sa tenue.
+  //
+  // Les sept maillots ordinaires sont vifs et melanges, ce qui va bien a une
+  // carnation humaine. Sur une peau verte, un tirage sur deux sortait un
+  // maillot vert ou turquoise : l'athlete devenait une silhouette d'une seule
+  // couleur, et on ne distinguait plus le torse des bras a trois couloirs de
+  // distance. Blanc et violet, la tenue de ce peuple, redonnent le contraste
+  // que la peau ne donne plus.
+  const POOL_TENUE = {
+    namek: [[240, 240, 246], [152, 112, 210], [232, 232, 238], [126, 94, 190]]
   };
   const HAIR_COLS = {
     noir: [28, 22, 22], brun: [56, 36, 24], chatain: [92, 62, 36],
@@ -552,7 +688,7 @@
     // Le profil (voir GAITS) porte la biomecanique, morph le gabarit.
     'Benbezi ZEZE': look({ build: 'm', skin: 'ebene', jersey: [214, 48, 62],
       shorts: [26, 26, 40], hair: 'fade', h: 1.86,
-      gait: 'lyles', morph: { sh: 1.06, hip: 0.98, arm: 1.04, leg: 1.04 } }),
+      gait: 'whip', morph: { sh: 1.06, hip: 0.98, arm: 1.04, leg: 1.04 } }),
     'Ryan ZEZE': look({ build: 'm', skin: 'ebene', jersey: [48, 132, 232],
       shorts: [24, 30, 52], shoe: [250, 224, 70], hair: 'crop', h: 1.78,
       gait: 'sharp', morph: { sh: 1.02, hip: 0.98, arm: 1.02, leg: 1.06 } }),
@@ -607,11 +743,12 @@
     return look({
       build: nx() < 0.34 ? 'f' : 'm',
       skin: skin,
-      jersey: JERSEYS[Math.floor(nx() * JERSEYS.length)],
+      jersey: (POOL_TENUE[pool] || JERSEYS)[
+        Math.floor(nx() * (POOL_TENUE[pool] || JERSEYS).length)],
       shorts: [26 + Math.floor(nx() * 14), 26 + Math.floor(nx() * 10),
                36 + Math.floor(nx() * 16)],
       shoe: SHOES[Math.floor(nx() * SHOES.length)],
-      hair: HAIRS[Math.floor(nx() * HAIRS.length)],
+      hair: crane(pool, HAIRS[Math.floor(nx() * HAIRS.length)]),
       hairCol: HAIR_COLS[hairs[Math.floor(nx() * hairs.length)]],
       h: C.MIN_H + nx() * (C.MAX_H - C.MIN_H)
     });
@@ -708,6 +845,45 @@
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5)];
     return this.posAtR(s, this.radius(lane));
   };
+
+  /**
+   * LE MEME POINT, DECALE LATERALEMENT DANS LE COULOIR.
+   *
+   * `dr` est un ecart en metres par rapport a la ligne de mesure du couloir.
+   * Il sert au relais, ou deux coequipiers partagent un couloir : l'un serre
+   * la corde, l'autre court a l'exterieur.
+   *
+   * POURQUOI UNE FONCTION A PART, ET NON UN COULOIR FRACTIONNAIRE. `pos()`
+   * tire l'abscisse curviligne du rayon : `bend1(r)` raccourcit quand le
+   * rayon grandit, ce qui est exactement le depart en quinconce. Pour deux
+   * couloirs voisins c'est juste — chacun court sa propre distance. Pour deux
+   * coureurs du MEME couloir, c'est faux : places tous les deux a 112 m, ils
+   * se retrouvaient a **1,9 m l'un de l'autre** a l'ecran, le plus a
+   * l'exterieur en avant. Une transmission que le serveur declare au contact
+   * s'affichait donc a deux bonnes foulees d'ecart.
+   *
+   * On garde donc l'abscisse du couloir — le meme angle pour les deux — et on
+   * ne bouge que le rayon.
+   */
+  Track.prototype.posDemi = function (s, lane, dr) {
+    if (!dr) return this.pos(s, lane);
+    if (!this.curved) return [s, C.LANE_W * (lane + 0.5) + dr];
+    const rRef = this.radius(lane), r = rRef + dr;
+    const A = this.bend1(rRef);
+    if (this.fullLap && s >= A + this.straight) {
+      const s2 = s - A - this.straight, B = Math.PI * rRef;
+      if (s2 < B) {
+        const phi = (B - s2) / rRef;
+        return [this.straight + r * Math.sin(phi), -r * Math.cos(phi)];
+      }
+      return [this.straight - (s2 - B), -r];
+    }
+    if (s < A) {
+      const phi = (A - s) / rRef;
+      return [-r * Math.sin(phi), r * Math.cos(phi)];
+    }
+    return [s - A, r];
+  };
   // Le meme point, mais exprime comme un echantillon du rendu :
   // [surVirage, v, moitie]. Sur un virage v est l'angle, sur une ligne
   // droite c'est l'abscisse depuis le debut de cette droite. Cela permet de
@@ -787,6 +963,27 @@
     // reperes, la transition serait notee au mauvais endroit et le troisieme
     // relayeur serait juge sur une phase qu'il a franchie depuis longtemps.
     this.legStart = 0;
+    /**
+     * OU S'ARRETE CE RELAYEUR, en metres absolus.
+     *
+     * Un relayeur ne court pas jusqu'a l'arrivee : sa course finit au bout de
+     * SA zone de transmission. Sans cette borne, le donneur continuait tout
+     * droit apres avoir lache le temoin — on le voyait a trois cents metres
+     * du depart, courant une portion qui n'etait pas la sienne, pendant que
+     * son coequipier courait la vraie. `null` pour une course ordinaire et
+     * pour le quatrieme, que la ligne d'arrivee arrete deja.
+     */
+    this.relaisFin = null;
+    /**
+     * Ma moitie de couloir, en metres depuis la ligne de mesure.
+     * Zero pour une course ordinaire : on court sur sa ligne.
+     */
+    this.demi = 0;
+    /**
+     * Le temoin, et dans quelle main : 1 ou -1, `null` s'il ne l'a pas.
+     * Un seul coureur le porte a un instant donne. Voir `pose`.
+     */
+    this.temoin = null;
     this.driveEnd = C.DRIVE_END;
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
@@ -965,6 +1162,16 @@
     }
     const before = this.d;
     this.d += this.v * dt;
+    // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
+    //
+    // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
+    // fini une course, il a fini SA portion, et le chrono de l'equipe
+    // continue sans lui. On le retient donc sur place, et il s'arrete comme
+    // on s'arrete apres une transmission : en deceleration, pas net.
+    if (this.relaisFin != null && this.d >= this.relaisFin) {
+      this.d = this.relaisFin;
+      this.v *= Math.exp(-7 * dt);
+    }
     this.stride += this.v * dt * (Math.PI / this.strideLength());
     this.drivePitch = this.pitchAt();
     const fin = this.legStart + this.driveEnd;
@@ -1035,8 +1242,15 @@
   // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
+  // Deux couleurs fixes, sorties de pose() : le rendu garde ses teintes en
+  // cache par couleur, et un tableau recree a chaque image n'aurait jamais
+  // ete retrouve dans ce cache — un dossard et un temoin repeints a chaque
+  // frame pour rien, huit fois par course.
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
+  const DOSSARD = [242, 242, 238];
+  const TEMOIN = [250, 206, 62];
+
   function pose(r) {
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
@@ -1078,6 +1292,16 @@
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
     }
+    // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
+    //
+    // Le starter n'est pas un athlete : il se tient debout, le pistolet le
+    // long du corps, puis le bras bien haut. `bras` impose donc l'angle des
+    // deux bras — [gauche, droit, coude gauche, coude droit] — la ou
+    // `celebrate` se contente de les lever ensemble.
+    if (r.bras) {
+      al = [r.bras[0], r.bras[0] + (r.bras[2] || 0.18)];
+      ar = [r.bras[1], r.bras[1] + (r.bras[3] || 0.18)];
+    }
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -1109,18 +1333,59 @@
     const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
-    const add = (c, pv, a, o, hb, ht, hz, yaw) =>
-      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0]);
+    // LE DERNIER ARGUMENT DIT QUEL BOUT EST LIBRE.
+    //
+    // Le rendu arrondit le bout d'un segment quand on le lui demande, et
+    // seulement alors. Le squelette est le seul a savoir lequel merite de
+    // l'etre : un crane, une main, une pointe de chaussure se terminent
+    // dans le vide, tandis qu'une cuisse ou un buste s'emboitent dans le
+    // segment suivant. Arrondir ces derniers leur ajoutait une calotte qui
+    // sortait du corps — le buste portait une collerette au-dessus des
+    // epaules, parfaitement visible sur l'ecran de presentation.
+    const add = (c, pv, a, o, hb, ht, hz, yaw, bout) =>
+      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
+                bout ? 1 : 0]);
 
     add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
         [0.112, hipY + 0.032], 0.098, yawHip);
-    // taille marquee : plus etroite juste au-dessus du short qu'au niveau
-    // des cotes, pour rompre le profil "tube" entre bassin et buste.
-    add(L.jersey, hip, lean, [0, 0, 0.170], [0.084, shY * 0.78],
-        [0.113, shY * 1.05], 0.086, yawTop);
-    add(L.jersey, hip, lean, [0, 0, 0.352], [0.118, shY * 1.15],
-        [0.129, shY * 1.30], 0.128, yawTop);
-    add([242, 242, 238], hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
+    // LE BUSTE EST FAIT DE DEUX TRONCS, ET ON VOYAIT LE JOINT.
+    //
+    // Taille marquee : plus etroite juste au-dessus du short qu'au niveau
+    // des cotes, pour rompre le profil "tube" entre bassin et buste. Mais
+    // le troncon du haut naissait PLUS LARGE que ne finissait celui du bas
+    // — 1,15 contre 1,05 — et un anneau plus large qui sort d'un anneau
+    // plus etroit, ca fait une arete. Elle courait en travers du maillot,
+    // a mi-poitrine, sur les trois coureurs de l'accueil comme sur celui
+    // qu'on presente avant la course : une ligne horizontale nette, que
+    // l'eclairage soulignait encore puisque les deux troncs n'ont pas la
+    // meme pente et donc pas la meme valeur.
+    //
+    // Deux corrections, et il a fallu les deux.
+    //
+    // Les rayons se rejoignent d'abord a la jonction : le troncon du bas
+    // finit ou l'autre commence, donc il entre dedans au lieu d'en
+    // depasser. L'arete de silhouette disparait — mais pas la ligne. Car
+    // un troncon est eclairee selon SA pente, et les deux n'avaient pas la
+    // meme : la taille s'evase vite (deux centimetres de rayon gagnes sur
+    // dix de hauteur), la poitrine presque pas. Deux pentes, deux valeurs,
+    // et une frontiere nette entre elles quoi qu'on fasse des rayons.
+    //
+    // Le buste est donc coupe en TROIS, avec des pentes qui se suivent —
+    // 0,19 puis 0,13 puis 0,045 — au lieu de deux qui s'opposent. Chaque
+    // jonction ne porte plus que la moitie de l'ecart, et il y en a deux :
+    // la transition s'etale au lieu de se lire d'un trait. Les troncons se
+    // chevauchent d'un bon centimetre, pour qu'aucune fente ne s'ouvre
+    // entre les facettes.
+    //
+    // La taille reste marquee : c'est le rayon du BAS (0,78) qui la creuse,
+    // et il ne bouge pas.
+    add(L.jersey, hip, lean, [0, 0, 0.142], [0.084, shY * 0.78],
+        [0.106, shY * 0.99], 0.058, yawTop);
+    add(L.jersey, hip, lean, [0, 0, 0.2545], [0.103, shY * 0.97],
+        [0.122, shY * 1.19], 0.0705, yawTop);
+    add(L.jersey, hip, lean, [0, 0, 0.3945], [0.119, shY * 1.17],
+        [0.129, shY * 1.30], 0.0855, yawTop);
+    add(DOSSARD, hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
         [0.010, shY * 0.50], 0.060, yawTop);
     // bande de couleur sur le maillot et le short, assortie aux chaussures :
     // un vrai kit d'athletisme plutot qu'un aplat uniforme.
@@ -1136,64 +1401,119 @@
     add(L.skin, hip, lean, [0, 0, 0.552], [0.042, 0.048], [0.040, 0.046],
         0.042, yawTop * 0.5);
     add(L.skin, hip, lean, [0.006, 0, 0.672 - bob * 0.55], [0.084, 0.081],
-        [0.088, 0.086], 0.086, yawTop * 0.2);
+        [0.088, 0.086], 0.086, yawTop * 0.2, true);
 
     const hy = yawTop * 0.2, hc = L.hairCol;
     switch (L.hair) {
       case 'shaved':
         add(hc, hip, lean, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
-            0.016, hy); break;
+            0.016, hy, true); break;
       case 'flattop':
         add(hc, hip, lean, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
-            0.048, hy); break;
+            0.048, hy, true); break;
       case 'fade':
         add(hc, hip, lean, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
-            0.030, hy);
+            0.030, hy, true);
         add(hc, hip, lean, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
-            0.046, hy); break;
+            0.046, hy, true); break;
       case 'bun':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy);
+            0.034, hy, true);
         add(hc, hip, lean, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
-            0.044, hy); break;
+            0.044, hy, true); break;
       case 'ponytail':
         add(hc, hip, lean, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
-            0.032, hy);
+            0.032, hy, true);
         add(hc, hip, lean + 0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
-            [0.058, 0.032], [0.036, 0.022], 0.028, hy); break;
+            [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
       case 'braids':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy);
+            0.034, hy, true);
         for (const dy of [-0.044, 0, 0.044]) {
           add(hc, hip, lean + 0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
-              [0.046, 0.015], [0.030, 0.012], 0.018, hy);
+              [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
         }
         break;
       default:
         add(hc, hip, lean, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
-            0.026, hy);
+            0.026, hy, true);
     }
 
     const sh = rot(0, 0.470, lean);
+    /** Le poing du bras armé, garde pour y accrocher le pistolet. */
+    let poing = null;
+    /** Le poing qui porte le temoin, quand ce coureur l'a en main. */
+    let main = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
       // seul cone, plus large au milieu qu'a l'epaule ou au coude.
+      add(L.skin, S, aArm, [0, 0, -0.012], [armR + 0.020, armR + 0.020],
+          [armR + 0.018, armR + 0.019], 0.026, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.05], [armR + 0.014, armR + 0.014],
           [armR + 0.004, armR + 0.008], 0.05, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.175], [armR - 0.010, armR - 0.008],
           [armR + 0.014, armR + 0.014], 0.075, yawTop);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
+      // LES ARTICULATIONS SE VOYAIENT.
+      //
+      // Chaque membre est une suite de troncs de cone, et deux troncs qui se
+      // rencontrent a un angle laissent une marche : le bras finissait a un
+      // rayon, l'avant-bras repartait a un autre, dans une autre direction.
+      // De pres — presentation, accueil, sacre — le coureur se lisait comme
+      // un mannequin articule, pas comme un corps.
+      //
+      // Une rotule par articulation suffit : un tonneau court, a peine plus
+      // large que les deux segments qu'il raccorde, pose sur le pivot. Il
+      // avale les deux bouts et la jointure disparait. Quatre segments de
+      // plus sur une quarantaine, et rien a changer au moteur de rendu.
+      add(L.skin, E, aFore, [0, 0, -0.014], [armR + 0.003, armR + 0.005],
+          [armR + 0.003, armR + 0.005], 0.028, yawTop);
       add(L.skin, E, aFore, [0, 0, -0.112], [armR - 0.012, armR - 0.010],
           [armR - 0.004, armR - 0.001], 0.112, yawTop);
       add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
-          [armR - 0.010, armR - 0.008], 0.036, yawTop);
+          [armR - 0.010, armR - 0.008], 0.036, yawTop, true);
+      if (r.pistolet === side) poing = [E, aFore];
+      if (r.temoin === side) main = [E, aFore];
+    }
+
+    // LES ANTENNES.
+    //
+    // Deux tiges et deux bulbes au-dessus du crane, et c'est tout ce qu'il
+    // faut : le reste de la silhouette est celle de n'importe qui, et c'est
+    // justement ce qui rend la difference lisible d'un coup d'oeil. Sert au
+    // starter du stade des ZEZE, qui n'est pas d'ici.
+    if (r.antennes) {
+      for (const dy of [-0.042, 0.042]) {
+        add(L.skin, hip, lean, [-0.012, dy, 0.806], [0.011, 0.011],
+            [0.008, 0.008], 0.058, hy);
+        add(r.antennes, hip, lean, [-0.018, dy, 0.884], [0.026, 0.026],
+            [0.024, 0.024], 0.016, hy, true);
+      }
     }
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
                                       [-1, rr[0], rr[1], rr[2]]]) {
       const H = [hip[0], side * hipY, hip[2] - 0.02];
+      // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
+      //
+      // Tout le monde portait la meme piece : un seul volume au bassin,
+      // coupe net a la hauteur du pli de l'aine. Ca passe pour un cuissard
+      // — ce que portent les femmes — mais un short d'athletisme masculin
+      // a des jambes, et c'est ce qu'on voyait manquer.
+      //
+      // La jambe de short est accrochee au pivot de la cuisse et suit son
+      // angle : elle se leve avec le genou, comme un vetement porte et non
+      // comme un anneau pose sur le bassin. Un rien plus large que la
+      // cuisse a chaque hauteur, pour qu'elle l'avale sans la pincer.
+      //
+      // Rien ne change pour les femmes : leur cuissard reste le seul
+      // volume du bassin.
+      if (!fem) {
+        add(L.shorts, H, th, [0, 0, -0.078], [legR + 0.034, legR + 0.036],
+            [legR + 0.030, legR + 0.032], 0.078, yawHip);
+      }
       // quadriceps galbe : meme principe que le bras, la cuisse gonfle
       // vers son tiers superieur puis s'affine jusqu'au genou.
       add(L.skin, H, th, [0, 0, -0.075], [legR + 0.026, legR + 0.026],
@@ -1202,6 +1522,8 @@
           [legR + 0.026, legR + 0.026], 0.115, yawHip);
       const k = rot(0, -0.392, th);
       const K = [H[0] + k[0], H[1], H[2] + k[1]];
+      add(L.skin, K, sk, [0, 0, -0.020], [legR + 0.003, legR + 0.006],
+          [legR + 0.003, legR + 0.006], 0.034, yawHip);
       add(L.skin, K, sk, [-0.008, 0, -0.098], [legR - 0.020, legR - 0.014],
           [legR - 0.004, legR + 0.002], 0.100, yawHip);
       add(L.skin, K, sk, [0, 0, -0.288], [legR - 0.034, legR - 0.030],
@@ -1211,9 +1533,48 @@
       // semelle claire, legerement plus large : elle deborde sous la
       // couleur de la chaussure pour suggerer une vraie basket bicolore.
       add([236, 236, 232], An, ft, [0.036, 0, -0.030], [0.098, 0.046],
-          [0.080, 0.052], 0.028, yawHip);
+          [0.080, 0.052], 0.028, yawHip, true);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
-          0.028, yawHip);
+          0.028, yawHip, true);
+    }
+
+    // LE PISTOLET DU STARTER, DANS LE PROLONGEMENT DE L'AVANT-BRAS.
+    //
+    // C'est ce qui lui donne son geste sans qu'on ait rien a animer de plus :
+    // bras le long du corps, l'arme pend vers le sol ; bras leve, elle vise le
+    // ciel. Un vrai starter ne fait pas autre chose.
+    //
+    // ELLE EST AJOUTEE EN DERNIER, ET C'EST UN CONTRAT : le rendu prend la
+    // derniere capsule pour savoir ou allumer l'eclair du coup de feu — voir
+    // `drawStarter` dans sprinter-app.js.
+    if (poing) {
+      const [M, a] = poing;
+      // Une crosse sombre et un canon d'acier : sur un short bleu nuit, une
+      // arme entierement noire ne se voit pas, et c'est pourtant la seule
+      // chose que le joueur doit repérer dans la main du starter.
+      const CROSSE = [38, 40, 50], CANON = [176, 182, 196];
+      add(CROSSE, M, a, [0.030, 0, -0.300], [0.022, 0.018], [0.026, 0.020],
+          0.034, yawTop);
+      add(CANON, M, a, [-0.004, 0, -0.378], [0.015, 0.014], [0.018, 0.016],
+          0.066, yawTop);
+    }
+
+    // LE TEMOIN, DANS LA MAIN DU PORTEUR.
+    //
+    // Il n'existait pas. Le relais se jouait sur un objet qu'on ne voyait
+    // jamais : deux coureurs se croisaient, un chiffre changeait de ligne, et
+    // rien a l'ecran ne disait que quelque chose etait passe d'une main a
+    // l'autre. C'est pourtant la seule piece du mode.
+    //
+    // Il chevauche le poing — trente centimetres, comme le vrai — plutot que
+    // de prolonger l'avant-bras comme le pistolet du starter : un baton tenu
+    // par son milieu se lit tout de suite comme un baton, et non comme une
+    // rallonge du bras. Jaune vif : sur une piste bleue et un maillot sombre,
+    // c'est la couleur qui accroche l'oeil de loin.
+    if (main) {
+      const [M, a] = main;
+      add(TEMOIN, M, a, [0.010, 0, -0.300], [0.019, 0.019], [0.019, 0.019],
+          0.085, yawTop, true);
     }
     return out;
   }
@@ -1230,7 +1591,8 @@
   })();
 
   root.SprinterCore = {
-    TAU, C, RACES, LEVELS, GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
+    GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
     pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };

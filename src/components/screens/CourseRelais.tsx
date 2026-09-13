@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { SalleRelais, TAILLE, type EtatRelais } from '@/game/salle-relais';
+import { SalleRelais, TAILLE, PORTEE, type EtatRelais } from '@/game/salle-relais';
+import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
 
 /**
@@ -42,20 +43,77 @@ export function CourseRelais({ equipe, onQuitter }: {
    * faire de toute la course.
    */
   const [temoinD, setTemoinD] = useState(0);
+  /**
+   * LA DISTANCE ENTRE MON PARTENAIRE ET MOI, en metres.
+   *
+   * C'est elle qui decide de la transmission depuis qu'un contact est exige
+   * (`PORTEE` dans worker/src/relais-course.js). Avant, le bouton s'armait
+   * sur la seule approche du temoin — « le porteur est a douze metres de ma
+   * zone » — et le temoin sautait par-dessus vingt metres de piste.
+   *
+   * `null` tant qu'il n'y a personne a qui tendre la main.
+   */
+  const [bras, setBras] = useState<number | null>(null);
+  /** Une main tendue dans le vide, a montrer une seconde. */
+  const [rate, setRate] = useState(0);
   const salle = useRef<SalleRelais | null>(null);
   const porteur = useRef(1);
+  /** Ou est chacun, par rang de relais — nourri par la salle, dix fois par seconde. */
+  const ou = useRef<Record<number, number>>({});
+  /**
+   * Le dernier etat recu, en miroir.
+   *
+   * Les rappels de la salle sont poses UNE FOIS, au montage : ils capturent
+   * le `e` de ce rendu-la, c'est-a-dire `null`. Lire l'etat depuis une ref
+   * est ce qui leur donne acces a l'etat courant — la liste des joueurs, sans
+   * laquelle on ne sait pas a quel identifiant appartient un rang de relais.
+   */
+  const etatRef = useRef<EtatRelais | null>(null);
+
+  /**
+   * Recalcule la distance qui me separe de mon partenaire de transmission.
+   *
+   * Mon partenaire n'est pas n'importe qui : c'est le porteur si je recois,
+   * le relayeur suivant si je donne, et personne le reste du temps. Hors de
+   * ces deux cas, le bouton n'a pas a s'armer.
+   */
+  const majBras = () => {
+    const moi = salle.current?.monRelais || 0;
+    const p = porteur.current;
+    const partenaire = moi === p + 1 ? p : (moi === p && moi < TAILLE ? moi + 1 : 0);
+    if (!partenaire || !moi) { setBras(null); return; }
+    const a = ou.current[moi], b = ou.current[partenaire];
+    if (a == null || b == null) { setBras(null); return; }
+    setBras(Math.abs(a - b));
+  };
 
   useEffect(() => {
     const s = new SalleRelais(equipe, {
       onEtat: (etat) => {
         porteur.current = etat.porteur;
+        etatRef.current = etat;
+        // Le temoin change de main : le dessin le lit sur le coureur, et
+        // c'est la salle qui dit lequel l'a.
+        SprinterApp.porteurDuTemoin(etat.porteur);
         setTemoinD(etat.temoin_d);
         setE(etat);
+        majBras();
       },
       // Le porteur ne recoit pas ses propres positions en echo : les siennes
       // lui viennent du moteur, celles des autres de la salle.
-      onPos: (relais, d) => { if (relais === porteur.current) setTemoinD(d); },
-      onDepart: (dansMs) => {
+      //
+      // On ne s'en sert plus seulement pour suivre le temoin. Chaque position
+      // recue fait DEUX choses de plus : elle fait avancer le coequipier sur
+      // ma piste — sans quoi il n'y serait pas — et elle remet a jour la
+      // distance qui nous separe, celle dont depend la transmission.
+      onPos: (relais, d) => {
+        ou.current[relais] = d;
+        if (relais === porteur.current) setTemoinD(d);
+        const j = (etatRef.current?.joueurs || []).find(x => x.relais === relais);
+        if (j) SprinterApp.liveDistDe(j.id, d);
+        majBras();
+      },
+      onDepart: (dansMs, departA) => {
         // Le coup de pistolet est celui de TOUT LE MONDE, pas seulement du
         // premier relayeur. Les quatre entrent en course a la meme seconde :
         // les trois autres sont debout dans leur zone, libres de s'elancer
@@ -63,17 +121,47 @@ export function CourseRelais({ equipe, onQuitter }: {
         // partir trop tot fait sortir de la zone, partir trop tard laisse le
         // porteur depasser — et cela ne demande aucun bouton : s'elancer,
         // c'est se mettre a courir.
-        SprinterApp.startRelais({ relais: s.monRelais, marque: s.marque, autres: [] });
-        SprinterApp.liveDepart(dansMs);
+        // LES TROIS AUTRES ENTRENT SUR MA PISTE, dans mon couloir.
+        //
+        // `autres: []` laissait l'ecran vide de tout coequipier : on voyait
+        // un coureur seul, et le temoin changeait de main sans que rien ne se
+        // croise a l'image. `equipiers` les pose a leur marque, decales d'un
+        // tiers de couloir pour qu'on lise les deux corps au moment ou ils se
+        // rejoignent.
+        const mesEquipiers = (etatRef.current?.joueurs || [])
+          .filter(j => j.relais !== s.monRelais)
+          .map(j => ({ id: j.id, nom: j.nom, relais: j.relais }));
+        SprinterApp.startRelais({
+          relais: s.monRelais, marque: s.marque, autres: [], equipiers: mesEquipiers,
+        });
+        SprinterApp.liveDepart(dansMs, departA);
+        // Au coup de pistolet, le temoin est dans la main du premier.
+        SprinterApp.porteurDuTemoin(1);
         brancherSalle({
           position: (d) => {
             s.avancer(d);
+            ou.current[s.monRelais] = d;
             if (s.monRelais === porteur.current) setTemoinD(d);
+            majBras();
           },
           fini: () => s.terminer(),
         });
+
+        // ET LA CAMERA TOURNE, POUR LES QUATRE CENTS METRES ENTIERS.
+        //
+        // Pas seulement pour sa portion : un relais ne se raconte pas par un
+        // quart de relais. Le film part du coup de pistolet et s'arrete au
+        // chrono de l'equipe — on y voit donc son propre passage, mais aussi
+        // les trois autres, la transmission qu'on a recue et celle qu'on a
+        // donnee. C'est la seule course du jeu ou ce qu'on partage appartient
+        // a quatre personnes.
+        //
+        // La date du pistolet vient de la salle, comme en direct : on prend
+        // l'avance qu'il faut pour ne pas perdre la sortie des blocs.
+        programmerLeFilm('relais', dansMs);
       },
       onPasse: (p, etat) => {
+        SprinterApp.porteurDuTemoin(p.vers);
         // Le temoin est parti de mes mains : ma course est finie, et il n'y a
         // plus de raison d'annoncer ou je vais.
         if (p.de === s.monRelais) brancherSalle(null);
@@ -85,13 +173,33 @@ export function CourseRelais({ equipe, onQuitter }: {
           SprinterApp.recevoirTemoin(derniere?.ecart ?? 0);
         }
       },
-      onElimine: (raison) => { brancherSalle(null); setErreur(raison); },
-      onFini: () => brancherSalle(null),
+      // Hors de portee : on l'annonce, et la course continue. Sans ce retour,
+      // les deux coureurs tapent dans le vide sans comprendre pourquoi le
+      // temoin ne part pas — et le receveur finit par sortir de sa zone, ce
+      // qui, lui, elimine l'equipe.
+      onTropLoin: ({ de, vers }) => {
+        if (de !== s.monRelais && vers !== s.monRelais) return;
+        setRate(Date.now());
+      },
+      // La course s'arrete ici, et le film avec elle — dans les deux cas.
+      //
+      // Un relais elimine garde sa video : le passage rate est justement ce
+      // qu'on veut revoir, et l'ecran d'arrivee est la pour le proposer. C'est
+      // ce qui le distingue d'un faux depart en one shot, qui ne laisse aucune
+      // course derriere lui.
+      onElimine: (raison) => {
+        brancherSalle(null); setErreur(raison);
+        void arreterLeFilm('relais');
+      },
+      onFini: () => { brancherSalle(null); void arreterLeFilm('relais'); },
       onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
     });
     salle.current = s;
     s.connecter();
-    return () => { brancherSalle(null); s.fermer(); };
+    // En sortant de la piste, le film s'en va aussi : l'ecran d'arrivee est le
+    // seul a le proposer, et un fichier que plus personne ne peut voir n'a
+    // aucune raison d'occuper la memoire de l'onglet pendant deux heures.
+    return () => { brancherSalle(null); s.fermer(); jeterLeFilm('relais'); };
   }, [equipe]);
 
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et
@@ -115,9 +223,18 @@ export function CourseRelais({ equipe, onQuitter }: {
   const fini = e.total != null || !!e.elimine;
   const jeRecois = partie && mon === e.porteur + 1;
   const jeDonne = partie && mon === e.porteur && mon < TAILLE;
-  // La tape ne s'offre au receveur que quand le porteur approche : douze
-  // metres avant l'entree de zone, il est deja dans le champ de vision.
-  const aPortee = !!(jeRecois && zone && temoinD >= zone.debut - 12);
+  /**
+   * LA TAPE NE S'OFFRE QU'AU CONTACT.
+   *
+   * Elle s'armait sur l'approche — « le porteur est a douze metres de ma
+   * zone » — et le donneur, lui, l'avait des qu'il courait. Deux coureurs
+   * separes de vingt metres se passaient donc le temoin, qui traversait la
+   * piste tout seul. La regle exige maintenant un contact
+   * (`PORTEE`, worker/src/relais-course.js) et le bouton dit la meme chose
+   * que l'arbitre : il s'allume quand les deux corps sont a portee de bras,
+   * pour le donneur comme pour le receveur.
+   */
+  const aPortee = !!((jeRecois || jeDonne) && bras != null && bras <= PORTEE);
 
   if (fini) {
     return (
@@ -150,7 +267,8 @@ export function CourseRelais({ equipe, onQuitter }: {
 
           {jeRecois || jeDonne ? (
             <BoutonTemoin role={jeDonne ? 'donne' : 'recoit'}
-                          arme={jeDonne || aPortee}
+                          arme={aPortee}
+                          bras={bras} portee={PORTEE} rate={rate}
                           onTaper={() => salle.current?.temoin()} />
           ) : (
             <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10

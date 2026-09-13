@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <!-- Trophee. Pose sur fond sombre, a cote d'un titre or (text-primary) :
+       il est donc dore, du meme or que le titre. -->
+  <defs>
+    <linearGradient id="or" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF0C4"/>
+      <stop offset=".42" stop-color="#F8CD4A"/>
+      <stop offset="1" stop-color="#C08A1C"/>
+    </linearGradient>
+    <linearGradient id="orSocle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3C64A"/>
+      <stop offset="1" stop-color="#A8761A"/>
+    </linearGradient>
+  </defs>
+  <!-- anses, derriere le bol -->
+  <g fill="none" stroke="#C9962C" stroke-width="5" stroke-linecap="round">
+    <path d="M18 15 C7 15 5 23 9.5 28.5 C12 31.5 15 33 18 33"/>
+    <path d="M46 15 C57 15 59 23 54.5 28.5 C52 31.5 49 33 46 33"/>
+  </g>
+  <!-- levre, bol, tige, socle -->
+  <rect x="14" y="8.5" width="36" height="6.5" rx="3.25" fill="url(#or)"/>
+  <path d="M17 15 H47 V23 C47 34.5 40.5 42 32 42 C23.5 42 17 34.5 17 23 Z" fill="url(#or)"/>
+  <rect x="28.5" y="41" width="7" height="7" fill="#D9A52E"/>
+  <path d="M24 47.5 H40 L42.5 53.5 H21.5 Z" fill="url(#orSocle)"/>
+  <rect x="18" y="52.5" width="28" height="7" rx="3.5" fill="url(#orSocle)"/>
+  <!-- reflet -->
+  <ellipse cx="24" cy="25" rx="3.4" ry="8.5" transform="rotate(-13 24 25)" fill="#FFFFFF" opacity=".32"/>
+</svg>

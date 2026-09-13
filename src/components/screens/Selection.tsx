@@ -199,7 +199,7 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
 
   const pays = s.pays;
   const reste = decompte(s.cloture);
-  const nom = s.titre || N.t('sel_titre');
+  const nom = N.titreEdition(s) || N.t('sel_titre');
 
   // Trois situations, trois phrases. Elles se lisent de haut en bas dans
   // l'ordre où elles deviennent vraies pour un joueur : pas de pays, pas
@@ -305,15 +305,23 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
  *
  * La position vient du serveur (`barre`) et jamais d'un comptage local : voir
  * le champ dans `MaSelection`.
+ *
+ * `epreuve` est la discipline du classement affiché, et c'est une quatrième
+ * raison de ne rien tracer : les niveaux ne sont pas partagés, une édition se
+ * court sur UNE distance, et sa barre n'a de sens que dans le classement de
+ * cette distance-là. Tracée dans celui du 400 m, la barre d'un championnat du
+ * 100 m désignerait des gens qui ne courent pas — et le rang lu au-dessus
+ * d'elle serait celui d'une autre course.
  */
-export function useBarreSelection(rows: { name: string }[]) {
+export function useBarreSelection(rows: { name: string }[], epreuve?: string) {
   const s = useMaSelection();
   return React.useMemo(() => {
     if (!s || !s.edition || !s.pays || s.gele || !s.barre) return null;
+    if (epreuve && s.epreuve && s.epreuve !== epreuve) return null;
     const visible = rows.some(r => r.name.trim().toLowerCase() === s.barre);
     if (!visible) return null;
     return { apres: s.barre, titre: s.titre, places: s.places, cloture: s.cloture };
-  }, [s, rows]);
+  }, [s, rows, epreuve]);
 }
 
 /** La ligne elle-même : un trait, un nom, un décompte. */
@@ -449,7 +457,7 @@ export function SceneSelection() {
             <span className="flex items-center gap-1.5">
               <Drapeau pays={s.pays} className="text-[13px]" />
               <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-muted-foreground">
-                {s.titre || N.t('sel_titre')}
+                {N.titreEdition(s) || N.t('sel_titre')}
               </span>
             </span>
 

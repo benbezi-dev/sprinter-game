@@ -40,6 +40,15 @@
     skip_now:     ['touche à nouveau pour passer', 'tap again to skip'],
     skip_twice:   ['touche deux fois pour passer', 'tap twice to skip'],
 
+    // générique de fin de carrière
+    ending_over:  ['GÉNÉRIQUE', 'END CREDITS'],
+    ending_title: ['FIN DE CARRIÈRE', 'END OF CAREER'],
+    ending_run:   ['LE PARCOURS', 'THE RUN'],
+    ending_total: ['TOTAL', 'TOTAL'],
+    ending_thanks:['merci d\'avoir couru', 'thank you for running'],
+    ending_music: ['musique — Dance to the Rock', 'music — Dance to the Rock'],
+    ending_end:   ['FIN', 'THE END'],
+
     // départ et phases de course
     reaction:     ['RÉACTION', 'REACTION'],
     react_top:    ['RÉACTION PARFAITE', 'PERFECT REACTION'],
@@ -62,8 +71,10 @@
     // Un defi recu se court sans connaitre le chrono d'en face : on sait
     // contre qui, pas contre quoi.
     to_race:      ['tu cours contre ', 'you are racing '],
-    ready:        ['À VOS MARQUES', 'READY'],
-    get_set:      ['PRÊTS', 'GET SET'],
+    // Les deux commandes du starter, dans les termes de la piste — ce sont
+    // celles qu'il dit à haute voix, et l'écran ne peut pas en dire d'autres.
+    ready:        ['À VOS MARQUES', 'ON YOUR MARKS'],
+    get_set:      ['PRÊT', 'SET'],
     go:           ['PARTEZ', 'GO'],
     alternate:    ['alterne les deux touches', 'alternate the two buttons'],
     alternate_kb: ['alterne les deux flèches', 'alternate the two arrows'],
@@ -122,6 +133,11 @@
     obj_bonus_pris: ['bonus de persévérance acquis', 'perseverance bonus earned'],
     obj_quitter:    ['plus tard', 'later'],
     obj_lancer:     ['COURIR LE DÉFI', 'RUN THE CHALLENGE'],
+    obj_courir:     ['COURIR', 'RUN'],
+    obj_a_battre:   ['à battre', 'to beat'],
+    obj_reussi:     ['réussi', 'cleared'],
+    obj_distance:   ['distance', 'distance'],
+    obj_fini:       ['créneau terminé', 'window closed'],
     obj_conseil:    ['UN DÉTAIL', 'ONE DETAIL'],
     obj_rythme:     ['RAPPELS DU DÉFI', 'CHALLENGE REMINDERS'],
     obj_rythme_2:   ['deux par jour', 'twice a day'],
@@ -197,10 +213,15 @@
     duel_rules_why:  ['lancer un défi, c’est montrer son chrono le premier',
                       'sending a challenge means showing your time first'],
     duel_counts:     ['{l} lancés · {r} relevés', '{l} sent · {r} answered'],
-    // Le selecteur d'epreuve du classement des duels. « SUR » et pas
+    // Le selecteur de discipline du classement des duels. « SUR » et pas
     // « CHOISIS » : l'epreuve est deja posee — celle qu'on vient de courir, ou
     // le 100 m — et la ligne dit sur quoi part le duel, elle ne reclame rien.
-    duel_sur:        ['LE DUEL SE COURT SUR', 'THE DUEL IS RUN ON'],
+    //
+    // Elle dit deux choses depuis que les niveaux ne sont plus partages : le
+    // classement qu'on lit, et le duel qui partira. Ce sont les deux faces du
+    // meme choix, et les separer en deux selecteurs demanderait de choisir
+    // deux fois la meme distance.
+    duel_sur:        ['LE CLASSEMENT ET LE DUEL, SUR', 'RANKING AND DUEL ON'],
     // identite du joueur, sur l'accueil
     name_set:        ['CHOISIS TON NOM', 'PICK YOUR NAME'],
     name_title:      ['TON NOM', 'YOUR NAME'],
@@ -209,6 +230,11 @@
     name_save:       ['ENREGISTRER', 'SAVE'],
     name_saved:      ['ENREGISTRÉ', 'SAVED'],
     name_taken:      ['ce nom est déjà pris par quelqu’un d’autre', 'that name is already taken'],
+    // Le nom est bien le sien, mais pas sur CET appareil : ses courses partent
+    // sans lui. Voir src/game/identity.ts — le serveur le signale par
+    // `nom_refuse` a chaque course.
+    name_wall:       ['ce nom n’est pas à cet appareil — tes courses ne comptent pas pour toi. touche pour le relier',
+                      'this name isn’t linked to this device — your races don’t count for you. tap to link it'],
     name_code:       ['TON CODE DE RÉCUPÉRATION', 'YOUR RECOVERY CODE'],
     // La nationalite. OPTIONNELLE, et elle le reste : un joueur sans drapeau
     // court, se classe et gagne exactement comme les autres. Elle ne sert qu'a
@@ -445,12 +471,58 @@
     fantome_defier:  ['LES DÉFIER', 'CHALLENGE THEM'],
     // championnats
     champ_directs:   ['les {n} premiers passent', 'top {n} go through'],
+    // Les noms de phases, traduits par leur CLE et non par leur libelle.
+    //
+    // `FORMAT.phases` arrive du serveur avec ses libelles ecrits en francais —
+    // 'Séries', 'Demi-finales', 'Finale' — et le jeu les affichait tels quels :
+    // une interface en anglais montrait donc trois mots francais au milieu de
+    // son fil de phases et au-dessus de chaque grille. Le defaut ne se voyait
+    // pas parce que tout ce qui les entoure, lui, est traduit.
+    //
+    // On traduit la cle et non le libelle : 'series' ne bougera pas, la ou
+    // « Demi-finales » se reecrira le jour ou le format changera. « Heats »
+    // plutot que « Series » parce que c'est deja le mot du jeu pour une serie
+    // (voir `sel_ma_serie`), et le mot de l'athletisme en anglais.
+    // Le titre d'une edition.
+    //
+    // En francais il arrive tout compose du serveur (`titre`), article inclus,
+    // parce que « Championnat de France » et « Championnat du Maroc » ne se
+    // devinent pas d'un code pays. L'anglais, lui, pose le nom du pays devant
+    // et n'a besoin d'aucun article : on le compose donc ici, a partir de
+    // `zoneNomEn`. Le motif francais garde `{t}` — le titre du serveur — pour
+    // que rien ne change de ce cote.
+    champ_titre_national:    ['{t}', '{z} National Championship'],
+    champ_titre_continental: ['{t}', '{z} Championship'],
+    champ_titre_mondial:     ['{t}', 'World Championship'],
+    champ_phase_series: ['Séries', 'Heats'],
+    champ_phase_demies: ['Demi-finales', 'Semi-finals'],
+    champ_phase_finale: ['Finale', 'Final'],
     champ_reveal:    ['LES REPÊCHÉS', 'THE FASTEST LOSERS'],
     champ_reveal_desc: ['ils n’ont gagné aucune course. Ils sortent du chrono de toutes.',
                         'they won no race. They come from the clock of every race.'],
     champ_continue:  ['CONTINUER', 'CONTINUE'],
     champ_sacre:     ['{n} est sacré — voir le podium', '{n} is crowned — see the podium'],
     champ_titre_duree: ['titre porté trois mois', 'title held for three months'],
+    // le champion en titre.
+    //
+    // « Tenant du titre » et non « boss » : le second est le nom du declencheur
+    // dans le code, pas un mot d'athletisme. Un joueur qui lit « boss » sur un
+    // ecran de championnat sort du sport et entre dans le jeu video, et c'est
+    // exactement l'inverse de ce que tout le reste de ces textes fait.
+    champ_boss:        ['LE TENANT DU TITRE', 'THE DEFENDING CHAMPION'],
+    champ_boss_desc:   ['il remet son titre en jeu. Battez-le, ou il le garde trois mois de plus.',
+                        'he puts his title on the line. Beat him, or he keeps it three more months.'],
+    champ_boss_finale: ['QUALIFIÉ D’OFFICE POUR LA FINALE', 'STRAIGHT TO THE FINAL'],
+    // Le sigle sur sa ligne dans la grille. Court, parce qu'une ligne de
+    // couloir porte deja un drapeau, un nom, un rang et un chrono.
+    champ_tenant:      ['TENANT', 'HOLDER'],
+    // La ligne d'en-tete, pour qui ouvre l'ecran en cours de weekend et n'a
+    // jamais vu passer la cinematique.
+    champ_tenant_defend: ['{n} défend son titre', '{n} is defending the title'],
+    // Sur la revelation des repeches : dire qu'une place vient d'un titre et
+    // non d'un chrono. Presenter un passe-droit comme un repechage merite
+    // serait la seule facon de rendre cette regle detestable.
+    champ_repeche_doffice: ['d’office', 'by title'],
     champ_rv_course: ['PROCHAINE COURSE', 'NEXT RACE'],
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
@@ -726,15 +798,29 @@
     duel_monte_a11y: ['monte de {n} places', 'up {n} places'],
     duel_descend_a11y: ['descend de {n} places', 'down {n} places'],
     duel_lp_long:    ['points de ligue', 'league points'],
-    duel_promu:      ['TU MONTES EN {r}', 'PROMOTED TO {r}'],
-    duel_relegue:    ['TU DESCENDS EN {r}', 'RELEGATED TO {r}'],
+    // La distance fait partie de l'annonce : un joueur monte en national sur
+    // 400 m, pas sur les trois distances a la fois.
+    duel_promu:      ['TU MONTES EN {r} — {e}', 'PROMOTED TO {r} — {e}'],
+    duel_relegue:    ['TU DESCENDS EN {r} — {e}', 'RELEGATED TO {r} — {e}'],
     duel_reste:      ['{n} avant la division suivante', '{n} to the next division'],
     duel_regle:      ['relever un défi rapporte plus que le lancer : le chrono est déjà posé, et tu sais ce que tu dois battre.',
                       'answering a challenge pays more than sending one: the time is already on the board, and you know what to beat.'],
     duel_record:     ['{v}V · {d}D · {n}N', '{v}W · {d}L · {n}D'],
+    // La serie de victoires. Le nombre est deja a l'ecran a cote de la
+    // flamme : ces textes sont ce que lisent l'infobulle et le lecteur
+    // d'ecran, pour qui la couleur ne dit rien.
+    serie_titre:     ['{n} victoires d’affilée', '{n} wins in a row'],
+    serie_allumee:   ['SÉRIE DE {n}', '{n} IN A ROW'],
+    serie_eteinte:   ['série de {n} interrompue', '{n}-win streak broken'],
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],
+    // Deux phrases, parce que ce sont deux situations : n'avoir jamais joué de
+    // duel, et en avoir joué ailleurs. Dire « tu n'es pas classé » à quelqu'un
+    // qui est régional sur 100 m serait faux — il n'est pas classé ICI.
+    duel_unranked_ici: ['pas encore classé sur cette distance — chaque distance a son échelle',
+                        'not ranked on this distance yet — each distance has its own ladder'],
+    duel_ailleurs:   ['TES AUTRES DISTANCES', 'YOUR OTHER DISTANCES'],
     duel_won:        ['DUEL GAGNÉ', 'DUEL WON'],
     duel_lost:       ['DUEL PERDU', 'DUEL LOST'],
     duel_tie:        ['MATCH NUL', 'DRAW'],
@@ -919,7 +1005,15 @@
     wr_save:         ['INSCRIRE MON NOM', 'PUT MY NAME ON IT'],
     wr_saving:       ['enregistrement...', 'saving...'],
     wr_done:         ['{n} est {r} au TOP 500', '{n} is {r} on the TOP 500'],
-    wr_fail:         ["échec de l'envoi, réessaie", 'failed to send, try again'],
+    wr_fail:         ["échec de l'envoi", 'failed to send'],
+    wr_too_fast:     ['trop de tentatives coup sur coup', 'too many attempts at once'],
+    // Le record est GARDÉ sur l'appareil avant que ces phrases s'affichent :
+    // elles disent ce qui va se passer, elles ne demandent rien. Voir
+    // src/game/record-attente.ts.
+    wr_kept:         ['ton record est gardé — il repartira tout seul',
+                      'your record is saved — it will be sent on its own'],
+    wr_taken_help:   ['ton record est gardé. relie cet appareil à ton nom dans MES COURSES, ou inscris-le sous un autre nom',
+                      'your record is saved. link this device to your name in MY RACES, or put another name on it'],
     wr_see:          ['VOIR LE TOP 500', 'VIEW TOP 500'],
     wr_later:        ['plus tard', 'later'],
 
@@ -958,6 +1052,35 @@
                       '{n} challenges you on {d} m'],
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
+
+    // Le journal des defis, deroulable dans MES COURSES. Une semaine de
+    // duels, de defis recus et d'invitations manquees — apres quoi tout part.
+    jd_title:        ['DÉFIS ET DUELS', 'CHALLENGES & DUELS'],
+    jd_sub:          ['les sept derniers jours — au-delà, ça s’efface',
+                      'the last seven days — older than that clears itself'],
+    jd_a_relever:    ['{n} à relever', '{n} to answer'],
+    jd_recus:        ['ILS T’ONT DÉFIÉ', 'THEY CHALLENGED YOU'],
+    jd_manques:      ['DÉFIS MANQUÉS', 'MISSED CHALLENGES'],
+    jd_histoire:     ['HISTORIQUE', 'HISTORY'],
+    jd_vide:         ['aucun défi cette semaine — défie quelqu’un depuis le classement',
+                      'no challenge this week — challenge someone from the ranking'],
+    jd_note:         ['Ce journal ne quitte pas ton téléphone, et tout ce qui date de plus d’une semaine s’efface tout seul.',
+                      'This log stays on your phone, and anything older than a week clears itself.'],
+    jd_redefier:     ['REDÉFIER', 'CHALLENGE BACK'],
+    jd_sans_nom:     ['adversaire inconnu', 'unknown opponent'],
+    // Ce que la ligne raconte : qui a tendu la main, et par quel chemin.
+    jd_l_recu:       ['{n} t’a défié', '{n} challenged you'],
+    jd_l_lance:      ['tu as défié {n}', 'you challenged {n}'],
+    jd_l_recu_live:  ['{n} t’a invité en direct', '{n} invited you live'],
+    jd_l_lance_live: ['tu as invité {n} en direct', 'you invited {n} live'],
+    jd_l_anonyme:    ['défi lancé, sans destinataire', 'challenge sent, no recipient'],
+    // Son etat, en un mot.
+    jd_e_attente:    ['en attente', 'waiting'],
+    jd_e_manque:     ['manqué', 'missed'],
+    jd_e_releve:     ['relevé', 'answered'],
+    jd_e_gagne:      ['gagné', 'won'],
+    jd_e_perdu:      ['perdu', 'lost'],
+    jd_e_nul:        ['nul', 'draw'],
     run_total_short: ['parcours complet :', 'full run:'],
     // Variantes courtes pour les lignes du classement : le libelle long
     // mangeait la largeur reservee au nom du joueur.
@@ -978,6 +1101,26 @@
                       "race another player's ghost"],
     pick_events:     ['ÉPREUVES', 'EVENTS'],
     pick_level:      ['NIVEAU', 'LEVEL'],
+    // Le groupe des stades hors serie, dans le choix du niveau. Un stade
+    // ouvert y figure sur les deux canaux ; les stades fermes n'apparaissent
+    // que sur le canal de test.
+    pick_venue:      ['STADES', 'VENUES'],
+
+    // ------------------------------------------------------ edition speciale
+    //
+    // La banniere de l'accueil pendant la fenetre d'une edition (voir
+    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
+    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
+    // d'un fleuve. Voir juridique/edition-danube.md.
+    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
+    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
+                      'The Danube Stadium opens its gates'],
+    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
+                      'orange track, black infield, under the floodlights'],
+    edition_courir:  ['Y COURIR', 'RUN THERE'],
+    edition_reste_n: ['encore {n} jours', '{n} days left'],
+    edition_reste_1: ['encore 1 jour', '1 day left'],
+    edition_reste_0: ['dernier jour', 'last day'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
     launch_oneshot:  ['LANCER', 'GO'],
     event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
@@ -987,6 +1130,22 @@
 
     // défi différé
     challenge_code:  ['CODE DU DÉFI', 'CHALLENGE CODE'],
+
+    // ------------------------------------------------------ edition speciale
+    //
+    // La banniere de l'accueil pendant la fenetre d'une edition (voir
+    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
+    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
+    // d'un fleuve. Voir juridique/edition-danube.md.
+    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
+    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
+                      'The Danube Stadium opens its gates'],
+    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
+                      'orange track, black infield, under the floodlights'],
+    edition_courir:  ['Y COURIR', 'RUN THERE'],
+    edition_reste_n: ['encore {n} jours', '{n} days left'],
+    edition_reste_1: ['encore 1 jour', '1 day left'],
+    edition_reste_0: ['dernier jour', 'last day'],
     challenge_enter: ['entre le code reçu', 'enter the code you got'],
     challenge_load:  ['CHARGER', 'LOAD'],
     challenge_loading:['chargement du défi...', 'loading challenge...'],
@@ -1097,8 +1256,30 @@
     ['Niveau régional', 'Regional level'],
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
-    ['Jeux olympiques', 'Olympic Games'],
-    ['Intergalactique', 'Intergalactic']
+    ['0.Games', '0.Games'],
+    ['Intergalactique', 'Intergalactic'],
+    // Au-dela des six etapes du championnat : les stades hors serie, dans
+    // l'ordre ou le moteur les ajoute (voir STADES_HORS_SERIE). Le nom reste
+    // ici meme quand le stade, lui, n'existe pas dans la version publique —
+    // l'historique des courses garde l'index de l'etape ou elles ont ete
+    // courues, et une partie jouee sur le canal de test se relit ailleurs.
+    //
+    // LES STADES OUVERTS D'ABORD, LES FERMES ENSUITE. L'ordre de cette
+    // suite n'est pas decoratif : il doit suivre exactement celui de
+    // STADES_HORS_SERIE, sinon un stade prend le nom d'un autre dans le
+    // classement. Le Danube est ouvert a tout le monde, il vient donc avant
+    // les deux stades du canal de test.
+    //
+    // Le nom du Danube est celui d'un FLEUVE, et c'est delibere : aucune
+    // federation ne possede un fleuve. Le lieu qui l'inspire porte, lui, un
+    // nom propre qu'on ne reprend pas — voir juridique/edition-danube.md.
+    ['Stade du Danube', 'Danube Stadium'],
+    ['Stade de la Riviera', 'Riviera Stadium'],
+    // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
+    // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
+    // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
+    // donc sur ces deux lignes, sans toucher au jeu.
+    ['Stade des Trois Soleils', 'Three Suns Stadium']
   ];
 
   const RACE_SUB = {
@@ -1460,6 +1641,40 @@
       "The choir rewrote its song. It says your name, at last."]]
   ];
 
+  /* Le générique de fin de carrière.
+     Une seule variante : ce texte ne se voit qu'une fois par carrière, et le
+     tirage au sort n'a d'intérêt que pour ce qu'on revoit. Les lignes défilent
+     au rythme du morceau, une toutes les six secondes environ — d'où leur
+     nombre, et leur brièveté. */
+  const CUT_ENDING = [
+    [["Le stade se vide dans l'ordre inverse de l'arrivée.",
+      "Les sept ZEZE restent assis. Personne ne les presse.",
+      "Sur l'écran géant, ton chrono tourne en boucle.",
+      "Quelqu'un demande s'il faut l'arrêter. On répond que non.",
+      "La lumière baisse sur les gradins, puis sur la piste.",
+      "Il ne reste éclairé qu'un couloir. Le tien.",
+      "Les balayeuses passent. La musique, elle, continue.",
+      "Une équipe repeint la ligne d'arrivée pour la saison prochaine.",
+      "Ils la tracent un mètre plus loin. Au cas où.",
+      "Sur la plaque, ton nom est toujours mal orthographié.",
+      "Il y restera. C'est devenu l'orthographe officielle.",
+      "Le stade ferme. La piste, elle, reste ouverte.",
+      "Reviens quand tu veux. Elle ne bouge pas."],
+     ["The stadium empties in reverse finishing order.",
+      "The seven ZEZE stay seated. Nobody hurries them.",
+      "On the big screen, your time loops over and over.",
+      "Someone asks whether to stop it. The answer is no.",
+      "The lights go down over the stands, then over the track.",
+      "One lane stays lit. Yours.",
+      "The sweepers come through. The music does not stop.",
+      "A crew repaints the finish line for next season.",
+      "They set it one metre further out. Just in case.",
+      "On the plaque, your name is still misspelled.",
+      "It will stay that way. It is the official spelling now.",
+      "The stadium closes. The track stays open.",
+      "Come back whenever. It is not going anywhere."]]
+  ];
+
   // Chambrage : trois variantes par etape, quand c'est TOI qui perds face
   // au rival. Meme registre absurde/pince-sans-rire que CUT_DEFEAT, mais
   // du point de vue du vainqueur qui savoure.
@@ -1635,7 +1850,47 @@
     return s;
   }
 
-  function levelName(i) { return LEVEL_NAMES[i][index()]; }
+  /**
+   * Le nom d'une phase de championnat, a partir de sa cle.
+   *
+   * `secours` est le libelle envoye par le serveur : on y retombe pour toute
+   * phase qu'il ajouterait sans passer ici, plutot que d'afficher une cle
+   * brute a l'ecran. `t()` seul ne suffisait pas — il rend la cle quand elle
+   * manque, et « champ_phase_barrages » n'est pas un nom de phase.
+   */
+  /**
+   * Le titre d'une edition — « Championnat de France », « France National
+   * Championship ».
+   *
+   * `e` est l'edition telle que le serveur l'envoie ; on y lit `echelon`,
+   * `titre` (deja compose, en francais) et `zoneNomEn`. Une edition d'avant
+   * l'ajout de `zoneNomEn` retombe sur `zoneNom`, puis sur le code de la
+   * zone : un titre approximatif se lit, un `undefined` non.
+   */
+  function titreEdition(e) {
+    // Pas de titre francais veut dire pas d'edition : on rend une chaine vide,
+    // que l'appelant remplace par son propre libelle. Sans ce garde-fou
+    // l'anglais rendait « National Championship » tout seul, sans pays devant,
+    // la ou le francais rendait '' — et un ecran sans championnat annoncait
+    // donc un championnat, en anglais seulement.
+    if (!e || !e.titre) return '';
+    const cle = 'champ_titre_' + (e.echelon === 'mondial' ? 'mondial'
+                                : e.echelon === 'continental' ? 'continental' : 'national');
+    return t(cle, { t: e.titre || '', z: e.zoneNomEn || e.zoneNom || e.zone || '' });
+  }
+
+  function phaseNom(cle, secours) {
+    const row = UI['champ_phase_' + String(cle || '')];
+    return row ? row[index()] : (secours || cle || '');
+  }
+
+  // Un index inconnu rend une chaine vide plutot que de casser l'ecran.
+  // Le classement affiche l'index range avec la course, et cet index vient
+  // parfois d'une version du jeu qui connaissait un stade de plus.
+  function levelName(i) {
+    const ligne = LEVEL_NAMES[i];
+    return ligne ? ligne[index()] : '';
+  }
   function raceSub(key) { return (RACE_SUB[key] || ['', ''])[index()]; }
 
   // 1er / 1re en français, 1st / 2nd / 3rd en anglais
@@ -1663,6 +1918,7 @@
 
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
-    LANGS, t, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
+    CUT_ENDING,
+    LANGS, t, titreEdition, phaseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

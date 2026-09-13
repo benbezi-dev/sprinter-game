@@ -4,17 +4,20 @@ import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
-  getSavedName, saveName, qualifyingRaces, submitRaceRecord, NO_RUN_MS,
+  getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
+import { garder, oublier } from '@/game/record-attente';
 import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { noterDefi } from '@/game/journal-defis';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
+import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
@@ -41,6 +44,20 @@ const DSQ_MS = NO_RUN_MS;
 /** Chrono ou abandon, sans jamais appeler toFixed sur un null. */
 function fmt(v: number | null | undefined, dnf: string) {
   return v == null ? dnf : `${v.toFixed(2)} s`;
+}
+
+/**
+ * Le defi qu'on vient de lancer entre au journal.
+ *
+ * Sans nom quand le code part sans destinataire : la ligne dit alors « defi
+ * lance », et c'est honnete — on ne sait pas encore qui le relevera. Le nom
+ * arrivera avec l'issue, qui reprend la meme cle.
+ */
+function noterDefiLance(id: string, nom: string, epreuves: string[]) {
+  noterDefi({
+    cle: `defi:${id}`, genre: 'defi', sens: 'lance', etat: 'attente',
+    nom, epreuves,
+  });
 }
 
 export function OneShotEndScreen() {
@@ -137,13 +154,23 @@ export function OneShotEndScreen() {
   const envoyer = async (nom: string, liste: RaceOutcome[]) => {
     saveName(nom);
     setTopStatus('sending');
-    try {
-      for (const t of liste) await submitRaceRecord(t.race, nom, t.ms);
-      primeTopNames();          // le plateau olympique se met a jour
-      setTopStatus('done');
-    } catch {
-      setTopStatus('error');
+    // Un refus sur une epreuve ne doit ni faire tomber les suivantes, ni
+    // emporter le chrono avec lui : chacune est tentee pour elle-meme, et
+    // celles qui echouent sont gardees pour un prochain envoi. Un `for` qui
+    // laisse filer la premiere erreur abandonnait les deux dernieres courses
+    // d'un one shot a cause de la premiere.
+    let refuse = false;
+    for (const t of liste) {
+      try {
+        await submitRaceRecord(t.race, nom, t.ms);
+        oublier(t.race);
+      } catch (e) {
+        garder(t.race, t.ms, nom, raisonDe(e));
+        refuse = true;
+      }
     }
+    primeTopNames();            // le plateau des Jeux mondiaux se met a jour
+    setTopStatus(refuse ? 'error' : 'done');
   };
 
   // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
@@ -206,6 +233,16 @@ export function OneShotEndScreen() {
     setVideo(await partagerLeFilm());
   }
 
+  /**
+   * La distance ou ce duel a compte.
+   *
+   * Elle sert aux annonces de montee et de descente, qui ne veulent plus rien
+   * dire sans elle : les niveaux ne sont pas partages, on monte sur 400 m et
+   * pas partout. Le serveur la dit quand il repond ; sinon c'est la course
+   * qu'on vient de faire, ce qui revient au meme et tient meme hors ligne.
+   */
+  const disciplineCourue = nomDiscipline(cleDiscipline(shotRaces as string[]));
+
   const beaten = !!challenge && complete && runTime < ghostTime;
   /**
    * Un fantome a-t-il couru dans ce couloir ?
@@ -252,7 +289,22 @@ export function OneShotEndScreen() {
       // rien enregistre, et il n'y a rien a faire courir.
       traces: falseOut ? [] : (SprinterApp.G.shotTraces || []),
     })
-      .then(r => { setSent(true); setDuel(r.duel || null); })
+      .then(r => {
+        setSent(true); setDuel(r.duel || null);
+        // Le defi qu'on vient de relever trouve son issue dans le journal :
+        // c'est lui qui la gardera une semaine, quand cet ecran sera ferme.
+        const iss = r.duel?.issue;
+        noterDefi({
+          cle: `defi:${challenge.id}`, genre: 'defi', sens: 'recu',
+          etat: !iss ? 'releve' : iss === 'draw' ? 'nul'
+              : iss === (r.duel?.role || 'opponent') ? 'gagne' : 'perdu',
+          nom: r.owner_name || challenge.owner_name || '',
+          epreuves: shotRaces,
+          lp: r.duel?.lp,
+          mon_ms: r.your_total_ms,
+          son_ms: r.owner_total_ms,
+        });
+      })
       .catch(() => { /* le chrono local reste affiche */ })
       .finally(() => setDuelEnCours(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,6 +352,7 @@ export function OneShotEndScreen() {
           revancheDe: revancheId,
         });
         setCode(id);
+        noterDefiLance(id, prevenu || revancheNom || '', shotRaces);
         setRevancheVise(revancheNom || '');
         // On annonce « envoye a X » seulement si le serveur a bien touche
         // quelqu'un. Sinon le code existe et c'est tout : on le dira comme
@@ -344,7 +397,7 @@ export function OneShotEndScreen() {
     if (finalName) saveName(finalName);
     setBusy(true); setErr(false);
     try {
-      const { id } = await createChallenge({
+      const { id, cible: prevenu } = await createChallenge({
         races: shotRaces as ('100' | '200' | '400')[],
         levelIdx: SprinterApp.G.shotLevel,
         totalMs: runTime * 1000,
@@ -354,6 +407,7 @@ export function OneShotEndScreen() {
         targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
       });
       setCode(id);
+      noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
     } catch {
       setErr(true);
     } finally {
@@ -675,6 +729,7 @@ export function OneShotEndScreen() {
                       ${mesPoints.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                       {N.t(mesPoints.monte ? 'duel_promu' : 'duel_relegue', {
                         r: nomDuRang(mesPoints.rang.etage, mesPoints.rang.division),
+                        e: disciplineCourue,
                       })}
                     </span>
                   )}
@@ -804,6 +859,7 @@ export function OneShotEndScreen() {
                           ${duel.monte ? 'text-emerald-400' : 'text-destructive'}`}>
                           {N.t(duel.monte ? 'duel_promu' : 'duel_relegue', {
                             r: nomDuRang(duel.rang.etage, duel.rang.division),
+                            e: duel.epreuve ? nomDiscipline(duel.epreuve) : disciplineCourue,
                           })}
                         </span>
                       )}

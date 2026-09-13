@@ -66,10 +66,22 @@ export type EtatConfrontation = {
 
 type Ecouteurs = {
   onEtat?: (e: EtatConfrontation) => void;
-  onDepart?: (dansMs: number) => void;
-  /** Le temoin d'une equipe a bouge. */
-  onPos?: (equipe: string, relais: number, d: number) => void;
+  /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
+  onDepart?: (dansMs: number, departA: number) => void;
+  /**
+   * Un coureur d'une equipe a bouge.
+   *
+   * `relais` dit LEQUEL des quatre, et c'est indispensable : la salle annonce
+   * aussi les relayeurs qui attendent a leur marque, qui ne sont pas le temoin
+   * de l'equipe. `temoin` porte, lui, la position du temoin telle que la salle
+   * la tient — c'est elle qui fait foi, et elle seule qui doit avancer le
+   * coureur adverse en piste. Absente d'une salle plus ancienne que ce champ.
+   */
+  onPos?: (equipe: string, relais: number, d: number, temoin?: number) => void;
   onPasse?: (equipe: string, p: PasseRelais) => void;
+  /** Hors de portee : les deux mains tendues ensemble, mais trop loin. */
+  onTropLoin?: (equipe: string,
+                i: { de: number; vers: number; bras: number; portee: number }) => void;
   onElimine?: (equipe: string, raison: string, relais: number) => void;
   onFini?: (equipe: string, totalMs: number) => void;
   /** Tout le monde a fini, d'une facon ou d'une autre. */
@@ -133,7 +145,13 @@ export class SalleConfrontation {
       // seconde et par equipe, et rendre toute la salle a chaque fois ferait
       // du bruit dans React sans rien montrer de plus.
       case 'pos':
-        this.ec.onPos?.(m.equipe, m.relais, m.d);
+        this.ec.onPos?.(m.equipe, m.relais, m.d,
+                        typeof m.temoin === 'number' ? m.temoin : undefined);
+        return;
+      // Rien n'a change sur la piste : seulement une main refermee sur du vide.
+      case 'trop_loin':
+        this.ec.onTropLoin?.(m.equipe,
+          { de: m.de, vers: m.vers, bras: m.bras, portee: m.portee });
         return;
       case 'passe':
         this.ec.onPasse?.(m.equipe, m as PasseRelais);
@@ -161,7 +179,7 @@ export class SalleConfrontation {
     if (m.depart_a && !this.departPose) {
       this.departPose = true;
       this.finEnvoyee = false;
-      this.ec.onDepart?.(m.depart_a - this.maintenant());
+      this.ec.onDepart?.(m.depart_a - this.maintenant(), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
   }

@@ -26,10 +26,16 @@
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE } from './relais-course.js';
 import { fantomeRelais } from './relais.js';
+import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
-const AVANT_DEPART_MS = 6000;   // un peu plus qu'a une equipe : il y a du monde
+// Un peu plus qu'a une equipe : il y a du monde a mettre en place. C'est le
+// delai du jeu publie, qui part au decompte ; sur le canal de test, ou un
+// starter donne le depart, il est tire au sort — et le meme pour toutes les
+// equipes engagees, parce qu'il n'y a qu'un seul coup de pistolet. Voir
+// depart.js.
+const AVANT_DEPART_MS = 6000;
 const VIE_MS = 30 * 60 * 1000;
 const APRES_COURSE_MS = 90 * 1000;
 const INACTIVITE_MS = 8 * 60 * 1000;
@@ -106,8 +112,12 @@ export class SalleConfrontation {
         const r = c.rejouer(t, f.trace, f.total);
         if (r.total != null) { bouge = true; this.diffuser({ t: 'fini', equipe: cle, total: r.total, ...this.vue() }); }
         else if (r.d != null) {
+          // Un fantome n'a qu'un coureur, le temoin : les deux champs disent
+          // deja la meme chose. On envoie quand meme `temoin`, pour que le jeu
+          // n'ait pas a distinguer une equipe rejouee d'une equipe connectee.
           this.diffuser({ t: 'pos', equipe: cle, relais: c.porteur,
-                          d: Math.round(r.d * 10) / 10 });
+                          d: Math.round(r.d * 10) / 10,
+                          temoin: Math.round(c.temoinD * 10) / 10 });
         }
       }
       if (bouge) this.cloreSiFini();
@@ -208,6 +218,14 @@ export class SalleConfrontation {
   cloreSiFini() {
     if (!this.toutEstJoue()) return;
     this.departA = null;
+    // ON EFFACE LES DECLARATIONS DE PRESENCE — meme raison qu'en equipe
+    // seule (voir `cloreLaCourse` dans salle-relais.js), et la consequence
+    // est ici plus lourde : `case 'pret'` repart des que chaque equipe
+    // presente est complete et prete. Les flags survivant a l'arrivee, un
+    // seul joueur qui rebascule son bouton relancait le pistolet pour
+    // JUSQU'A HUIT equipes et effacait le classement que les autres etaient
+    // en train de lire.
+    for (const j of this.joueurs.values()) j.pret = false;
     this.programmerFermeture(APRES_COURSE_MS, 'confrontation terminee');
     this.diffuser({ t: 'termine', ...this.vue() });
     const ecrire = this.ecrire();
@@ -344,7 +362,7 @@ export class SalleConfrontation {
         const tous = humaines >= 1 && pretes === humaines &&
                      (humaines + this.fantomes.size) >= MIN_EQUIPES;
         if (tous && !this.departA) {
-          this.departA = Date.now() + AVANT_DEPART_MS;
+          this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           for (const course of this.equipes.values()) course.reinitialiser();
           for (const cle of this.fantomes.keys()) {
             const c = this.equipes.get(cle);
@@ -384,15 +402,32 @@ export class SalleConfrontation {
         // La position part a TOUT LE MONDE, pas seulement a l'equipe : c'est
         // toute la difference d'une confrontation. Sans cela, chacun courrait
         // seul en croyant courir contre les autres.
+        //
+        // Deux nombres, et il faut les deux. `d` est la position de CE
+        // relayeur — celle qui juge les zones, et qui vaut sa marque tant
+        // qu'il attend. `temoin` est celle de l'equipe, la seule qui ait un
+        // sens pour dessiner un adversaire en piste : sans elle, le jeu ne
+        // pouvait que deviner lequel des quatre nombres qu'il recoit est le
+        // temoin, et posait l'equipe d'a cote a la marque de son dernier
+        // relayeur des le coup de pistolet.
         if (r.d != null) {
           this.diffuser({ t: 'pos', equipe: j.equipe, relais: j.relais,
-                          d: Math.round(r.d * 10) / 10 }, ws);
+                          d: Math.round(r.d * 10) / 10,
+                          temoin: Math.round(c.temoinD * 10) / 10 }, ws);
         }
         return;
       }
 
       case 'temoin': {
         const r = c.taper(j.relais, Date.now());
+        // Hors de portee : la meme regle qu'en equipe seule — les deux mains
+        // se sont tendues ensemble mais trop loin l'une de l'autre. Ce n'est
+        // pas une faute, et il faut le dire, sinon les deux coureurs tapent
+        // dans le vide jusqu'a sortir de la zone.
+        if (r.tropLoin) {
+          this.diffuser({ t: 'trop_loin', equipe: j.equipe, ...r.tropLoin });
+          return;
+        }
         if (r.elimine) {
           this.diffuser({ t: 'elimine', equipe: j.equipe, ...r.elimine, ...this.vue() });
           this.cloreSiFini();
