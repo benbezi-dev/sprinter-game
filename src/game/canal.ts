@@ -58,6 +58,23 @@ export const RELAIS_OUVERT = true;
 export const SERIE_OUVERTE = EST_TEST;
 
 /**
+ * Le coup de poussee : ce qui part du coureur quand il reussit son geste.
+ *
+ * Sa trainee, l'onde au sol sous ses appuis, l'aura sur son buste — le tout
+ * le temps d'un tiers de seconde, sur une reaction parfaite au pistolet ou
+ * une transition parfaite en sortie de poussee. Il remplace les trainees de
+ * vitesse qui barraient l'ecran des que le coureur passait les trois quarts
+ * de son maximum : elles etaient la deux images sur trois, et des traits
+ * blancs suspendus en l'air se lisaient comme du vent de face plutot que
+ * comme de la vitesse.
+ *
+ * Il commence donc la ou les autres nouveautes ont commence : sur le canal
+ * de test. A false, le bundler retire l'effet du build public — le dessin
+ * comme son declenchement.
+ */
+export const POUSSEE_OUVERTE = EST_TEST;
+
+/**
  * LE STARTER : « a vos marques », « pret », et un coup de pistolet qui tombe
  * quand il tombe.
  *

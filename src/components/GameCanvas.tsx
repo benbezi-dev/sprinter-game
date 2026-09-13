@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { dessinerLeGenerique } from '@/game/scene-generique';
+import { POUSSEE_OUVERTE } from '@/game/canal';
 
 /**
  * UNE CINEMATIQUE ORDINAIRE : les lignes de vitesse, le coureur qui entre par
@@ -139,6 +140,10 @@ export function GameCanvas() {
     // Frame loop
     let lastTime = performance.now();
     
+    // Un coup de vitesse par geste, pas un par image : on retient si le
+    // geste a deja ete vu pour cette course.
+    let vuReaction = false, vuTrans = false;
+
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
       lastTime = now;
@@ -241,25 +246,33 @@ export function GameCanvas() {
       // illisible, alors qu'une piste assombrie dans un coin est du cinema.
       if (Prem) {
         const enCourse = G.state === 'race';
-        // La part de vitesse : rien jusqu'aux trois quarts de la vitesse
-        // maximale, puis une montee franche. En dessous, l'effet accompagnait
-        // la marche d'approche et ne voulait plus rien dire.
-        const v = enCourse && G.player ? G.player.v / (G.player.maxSpeed || 12) : 0;
-        const part = SprinterApp.clamp((v - 0.74) / 0.26, 0, 1);
-        // La direction de course A L'ECRAN, prise sur la piste elle-meme :
-        // un metre plus loin dans le couloir du joueur, et la difference des
-        // deux projections est l'axe que suivent les trainees. En virage il
-        // tourne avec le coureur, sans qu'on ait a rejouer la geometrie.
-        let dx = 0, dy = 0;
-        if (enCourse && G.player && G.track) {
-          const a = G.track.pos(G.player.d, G.player.lane);
-          const b = G.track.pos(G.player.d + 1, G.player.lane);
-          const pa = SprinterApp.ground(a[0], a[1]);
-          const pb = SprinterApp.ground(b[0], b[1]);
-          dx = pb[0] - pa[0]; dy = pb[1] - pa[1];
+        // DEUX GESTES, DEUX COUPS DE VITESSE.
+        //
+        // L'effet suivait la vitesse : au-dela des trois quarts du maximum il
+        // s'allumait, et comme une course se court presque entierement
+        // au-dela de ce seuil, il etait la deux images sur trois. Ce qui est
+        // toujours la n'est plus un effet.
+        //
+        // Il recompense maintenant ce que le joueur est venu chercher : la
+        // reaction parfaite au pistolet et la transition parfaite en sortie
+        // de poussee. Les memes deux gestes que le HUD annonce en toutes
+        // lettres — l'image dit desormais la meme chose que le texte.
+        const p = enCourse ? G.player : null;
+        if (!enCourse) { vuReaction = false; vuTrans = false; }
+        else if (p && POUSSEE_OUVERTE) {
+          if (!vuReaction && p.reaction !== null) {
+            vuReaction = true;
+            const seuil = SprinterApp.C.REACT_BONUS * 0.82;
+            if (!p.jumped && p.reactBonus > seuil) Prem.poussee(1);
+          }
+          if (!vuTrans && p.transGrade !== null) {
+            vuTrans = true;
+            if (p.transGrade === 2) Prem.poussee(1);
+          }
         }
-        Prem.vitesse(ctx, G, part, dx, dy);
-        Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + part * 0.15);
+        // La vignette se resserre avec le coup de poussee, et avec lui seul.
+        const pouss = POUSSEE_OUVERTE && Prem.partPoussee ? Prem.partPoussee() : 0;
+        Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + pouss * 0.15);
       }
 
       rafRef.current = requestAnimationFrame(frame);

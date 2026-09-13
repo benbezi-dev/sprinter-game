@@ -812,55 +812,60 @@
   }
 
   /**
-   * LES TRAINEES DE VITESSE, ET POURQUOI ELLES NE SONT PAS RADIALES.
+   * LE COUP DE VITESSE, ET POURQUOI CELUI D'AVANT DISAIT LE CONTRAIRE.
    *
-   * Le premier essai les faisait partir du centre de l'ecran vers les bords,
-   * comme le tunnel d'un jeu de course vu de la voiture. Sauf qu'on ne voit
-   * pas cette piste depuis le coureur : on la voit de trois quarts, d'en
-   * haut. Rien n'y fonce vers l'objectif — tout y GLISSE, dans l'axe du
-   * couloir. Des rayons partant du centre ne racontaient donc pas la vitesse,
-   * ils faisaient un motif par-dessus l'image.
+   * Il y avait ici trente traits blancs tires en travers de l'ecran des que
+   * le coureur passait les trois quarts de sa vitesse. Mesure sur une course
+   * entiere, cela faisait DEUX IMAGES SUR TROIS — 65 %, part moyenne 0,50.
+   * Un effet permanent n'est plus un effet, c'est un decor.
    *
-   * Elles suivent maintenant la direction de course a l'ecran, passee en
-   * argument : le meme axe que les couloirs, que la foulee, que tout ce qui
-   * defile. Et elles evitent le centre, ou se tient le coureur — une trainee
-   * qui lui passe dessus le rend flou au lieu de le rendre rapide.
+   * Et il disait le contraire de ce qu'on voulait. Des traits blancs
+   * suspendus en l'air, qui filent vers le coureur par-dessus les gradins et
+   * le ciel, ne se lisent pas comme de la vitesse : ils se lisent comme du
+   * VENT DE FACE. Un sprinteur avec du vent de face, c'est un sprinteur
+   * qu'on freine.
+   *
+   * Deux changements, donc.
+   *
+   * QUAND. L'effet ne suit plus la vitesse, il recompense un geste : la
+   * reaction parfaite au coup de pistolet, la transition parfaite en sortie
+   * de poussee. Deux fois par course au mieux, et seulement quand le joueur
+   * l'a merite. C'est ce qu'il vient chercher, c'est maintenant ce qui se
+   * voit.
+   *
+   * QUOI. Rien dans l'air, rien sur le decor. Tout part du coureur : sa
+   * trainee, l'onde au sol sous ses appuis, l'aura sur son buste. Le dessin
+   * vit dans sprinter-app.js, qui seul connait sa position ; ici on ne tient
+   * que l'horloge de l'impulsion, dont les deux lectures sont utiles — la
+   * FORCE pour ce qui s'allume et s'eteint, l'AGE pour ce qui s'ouvre.
    */
-  function vitesse(ctx, G, part, dx, dy) {
-    if (part <= 0.01 || niveau < MOYEN) return;
-    const W = G.VW, H = G.VH, cx = W / 2, cy = H / 2;
-    // Sans direction utilisable, on garde l'axe des couloirs par defaut.
-    let ux = dx || -0.86, uy = dy || -0.51;
-    const ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
-    const px = -uy, py = ux;                  // la perpendiculaire
-    const garde = Math.min(W, H) * 0.19;      // le rond ou l'on ne trace rien
-    const port = Math.hypot(W, H) * 0.62;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#fff';
-    const tm = performance.now() / 1000;
-    for (let i = 0; i < 30; i++) {
-      // Semis fixe qui defile dans le temps : des traits tires au hasard a
-      // chaque image scintillent, ce qui ressemble a du bruit et non a de la
-      // vitesse.
-      const lat = ((i * 0.6180339887) % 1 - 0.5) * port * 2;
-      const ph = ((i * 0.7548776662 + tm * 1.35) % 1);
-      const le = port * (0.6 - ph * 1.2);     // du fond vers l'avant
-      const lg = Math.min(W, H) * (0.09 + 0.16 * part);
-      const ax = cx + px * lat + ux * le, ay = cy + py * lat * 0.62 + uy * le;
-      // Le trait ne doit ni passer sur le coureur ni sortir du cadre.
-      const d = Math.hypot(ax - cx, (ay - cy) / 0.62);
-      if (d < garde) continue;
-      ctx.globalAlpha = part * 0.30 * Math.sin(ph * Math.PI) *
-                        clamp((d - garde) / garde, 0, 1);
-      ctx.lineWidth = 1.0 + part * 1.3;
-      ctx.beginPath();
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(ax + ux * lg, ay + uy * lg);
-      ctx.stroke();
-    }
-    ctx.restore();
+  const POUSS_DUREE = 0.85;
+  let poussT0 = -1e9, poussF = 0;
+
+  /** Arme le coup de vitesse. `force` vaut 1 pour un geste parfait. */
+  function poussee(force) {
+    poussF = clamp(force, 0, 1);
+    poussT0 = performance.now() / 1000;
+  }
+
+  /**
+   * L'age de l'impulsion : 0 au declenchement, 1 a la fin. C'est lui qu'il
+   * faut pour une onde qui s'ouvre — la force, elle, monte puis retombe, et
+   * une onde qui se retracte n'existe pas.
+   */
+  function agePoussee() {
+    const t = performance.now() / 1000 - poussT0;
+    if (t < 0 || t > POUSS_DUREE) return -1;
+    return t / POUSS_DUREE;
+  }
+
+  /** Ou en est l'impulsion : elle monte d'un trait et retombe doucement. */
+  function partPoussee() {
+    const t = performance.now() / 1000 - poussT0;
+    if (t < 0 || t > POUSS_DUREE) return 0;
+    const u = t / POUSS_DUREE;
+    return poussF * (u < 0.10 ? u / 0.10
+                              : Math.pow(1 - (u - 0.10) / 0.90, 1.9));
   }
 
   globalThis.RenduPremium = {
@@ -872,6 +877,6 @@
     mesurer, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
-    vignette, vitesse,
+    vignette, poussee, partPoussee, agePoussee,
   };
 })();

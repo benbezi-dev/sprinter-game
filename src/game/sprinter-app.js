@@ -5486,6 +5486,32 @@
     // Les cerceaux passent apres toutes les ombres et avant tous les coureurs :
     // sinon l'ombre du voisin recouvrirait le cerceau de celui de devant.
     for (const [r, g2] of vis) drawRepere(ctx, r, g2[0], g2[1], m);
+    // LES ECHOS DE POUSSEE.
+    //
+    // Trois copies du joueur, derriere lui, le temps d'un tiers de seconde,
+    // quand il vient de reussir sa reaction ou sa transition. Rien n'est
+    // ajoute dans l'air et rien n'est floute dans le decor : c'est LUI qui
+    // porte l'effet, puisque c'est lui qui vient de faire le geste. Un stade
+    // ne va pas plus vite parce qu'un coureur part bien.
+    //
+    // Le procede est celui de la trainee du fantome, juste au-dessus : on
+    // recule le coureur sur sa propre foulee et on le redessine. Il n'y a
+    // donc rien de nouveau a maintenir, et les echos sont aussi nets que le
+    // coureur — ce sont les memes facettes.
+    // SUR LE CANAL DE TEST SEULEMENT, comme les nouveautes avant lui. Ecrit
+    // ainsi, `import.meta.env.VITE_CANAL` devient `false` en dur dans le
+    // build public et le bundler retire l'effet entier — voir POUSSEE_OUVERTE
+    // dans game/canal.ts, qui garde l'autre bout, le declenchement.
+    const pouss = import.meta.env.VITE_CANAL === 'test' && PREM() &&
+                  PREM().partPoussee ? PREM().partPoussee() : 0;
+    if (pouss > 0.02 && G.player) {
+      const age = PREM().agePoussee ? PREM().agePoussee() : -1;
+      for (const [r, g2] of vis) {
+        if (r !== G.player || r.isGhost) continue;
+        drawOndePoussee(ctx, g2, m, pouss, age);
+        drawPousseeTrail(ctx, r, m, pouss);
+      }
+    }
     for (const [r, g2, p] of vis) {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui
@@ -5513,6 +5539,66 @@
    * devient lisible sans quitter la piste des yeux, ce que ne donne aucun
    * chiffre affiche en haut de l'ecran.
    */
+  /**
+   * CE QUI PART DU COUREUR, ET RIEN D'AUTRE.
+   *
+   * Une onde au sol qui s'ouvre depuis ses appuis, et une aura courte posee
+   * sur lui. Les deux naissent a SA position, pas au centre de l'ecran :
+   * l'effet appartient a celui qui vient de reussir son geste, et le stade
+   * autour n'a aucune raison de changer d'aspect.
+   *
+   * L'onde est couchee dans le plan du sol — meme aplatissement que les
+   * ombres — sans quoi elle flotterait comme un cerceau debout. Elle s'ouvre
+   * avec l'AGE de l'impulsion et s'efface avec sa FORCE : les deux ne suivent
+   * pas la meme courbe, et il faut les deux.
+   */
+  function drawOndePoussee(ctx, g2, m, force, age) {
+    if (age < 0) return;
+    // m est le nombre de PIXELS PAR METRE : ces rayons sont donc des metres,
+    // comme l'ellipse d'ombre juste au-dessus. Premier essai a 0,34 m de
+    // rayon d'aura : sept pixels a l'ecran, on ne voyait rien du tout.
+    const r = m * (0.5 + 3.6 * age);
+    ctx.save();
+    ctx.globalAlpha = force * 0.55 * (1 - age);
+    ctx.strokeStyle = 'rgb(248,205,74)';
+    ctx.lineWidth = Math.max(1.5, m * 0.13 * force);
+    ctx.beginPath();
+    ctx.ellipse(g2[0], g2[1], r, r * 0.38, 0, 0, TAU);
+    ctx.stroke();
+    // l'aura, serree sur lui, qui donne le depart de l'onde
+    const ra = m * (1.15 + 0.75 * force), hy = g2[1] - m * 0.95;
+    const gr = ctx.createRadialGradient(g2[0], hy, 0, g2[0], hy, ra);
+    gr.addColorStop(0, 'rgba(248,205,74,' + (0.34 * force).toFixed(3) + ')');
+    gr.addColorStop(0.5, 'rgba(250,190,64,' + (0.16 * force).toFixed(3) + ')');
+    gr.addColorStop(1, 'rgba(248,205,74,0)');
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = gr;
+    ctx.beginPath();
+    ctx.ellipse(g2[0], hy, ra, ra * 0.92, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Les echos de poussee : le joueur, recule sur sa propre foulee. */
+  function drawPousseeTrail(ctx, r, m, force) {
+    const T = G.track;
+    const dNow = r.d, strideNow = r.stride;
+    for (let k = 3; k >= 1; k--) {
+      const recul = Math.max(0.35, r.v * 0.055) * k;
+      const d = dNow - recul;
+      if (d <= 0) continue;
+      const q = T.posDemi(d, r.lane, r.demi || 0), g2 = ground(q[0], q[1]);
+      ctx.globalAlpha = force * 0.30 * (4 - k) / 3;
+      r.d = d; r.stride = strideNow - recul * (Math.PI / r.strideLength());
+      drawRunner(ctx, r, g2[0], g2[1], depthOf(q[0], q[1]),
+                 m * (r.look.h / C.MODEL_H),
+                 T.heading(d, r.lane), T.lean(d, r.lane, r.v));
+    }
+    r.d = dNow; r.stride = strideNow;
+    ctx.globalAlpha = 1;
+  }
+
   function drawGhostTrail(ctx, r, m) {
     const T = G.track;
     const dNow = r.d;
