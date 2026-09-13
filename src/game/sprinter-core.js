@@ -1249,6 +1249,7 @@
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
   const DOSSARD = [242, 242, 238];
+  const SEMELLE = [236, 236, 232];
   const TEMOIN = [250, 206, 62];
 
   function pose(r) {
@@ -1532,7 +1533,7 @@
       const An = [K[0] + a[0], K[1], K[2] + a[1]];
       // semelle claire, legerement plus large : elle deborde sous la
       // couleur de la chaussure pour suggerer une vraie basket bicolore.
-      add([236, 236, 232], An, ft, [0.036, 0, -0.030], [0.098, 0.046],
+      add(SEMELLE, An, ft, [0.036, 0, -0.030], [0.098, 0.046],
           [0.080, 0.052], 0.028, yawHip, true);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
           0.028, yawHip, true);
