@@ -57,8 +57,14 @@ const FILET = {
     { name: 'Timooo & Nathan', best_split_ms: 8246 },
     { name: 'Dc',              best_split_ms: 8275 },
     { name: "971'gee",         best_split_ms: 8296 }] },
-  '200': { ms: 16629, nom: "971'gee",         le: '2026-08-29' },
-  '400': { ms: 34888, nom: 'Timooo & Nathan', le: '2026-08-27' },
+  '200': { ms: 16629, nom: "971'gee",         le: '2026-08-29', podium: [
+    { name: "971'gee",         best_split_ms: 16629 },
+    { name: 'Timooo & Nathan', best_split_ms: 16754 },
+    { name: 'Barnabe',         best_split_ms: 16933 }] },
+  '400': { ms: 34888, nom: 'Timooo & Nathan', le: '2026-08-27', podium: [
+    { name: 'Timooo & Nathan', best_split_ms: 34888 },
+    { name: 'EL BOA PROD',     best_split_ms: 34892 },
+    { name: 'Andiii',          best_split_ms: 35042 }] },
 };
 
 function args(argv) {
