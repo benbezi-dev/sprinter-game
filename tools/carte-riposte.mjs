@@ -53,6 +53,11 @@ const MONDE = {
 // Le dernier releve verifie en base, au cas ou le classement ne repond pas.
 // Il sert de filet, jamais de source : s'il sert, l'outil le dit a l'ecran.
 const FILET = {
+  // Releve du 13 septembre 2026, 14h10 UTC. CE BLOC PERIME : le 400 m est
+  // tombe deux fois dans la matinee du 13 (34,892 -> 34,829 -> 34,729) et ce
+  // filet annoncait encore l'ancien. Il ne sert que quand le classement ne
+  // repond pas, et l'outil le dit alors a l'ecran — mais un chiffre de secours
+  // vieux d'une semaine reste un chiffre faux.
   '100': { ms: 8246,  nom: 'Timooo & Nathan', le: '2026-08-27', podium: [
     { name: 'Timooo & Nathan', best_split_ms: 8246 },
     { name: 'Dc',              best_split_ms: 8275 },
@@ -61,18 +66,20 @@ const FILET = {
     { name: "971'gee",         best_split_ms: 16629 },
     { name: 'Timooo & Nathan', best_split_ms: 16754 },
     { name: 'Barnabe',         best_split_ms: 16933 }] },
-  '400': { ms: 34888, nom: 'Timooo & Nathan', le: '2026-08-27', podium: [
-    { name: 'Timooo & Nathan', best_split_ms: 34888 },
-    { name: 'EL BOA PROD',     best_split_ms: 34892 },
+  '400': { ms: 34729, nom: 'Timooo & Nathan', le: '2026-09-13', podium: [
+    { name: 'Timooo & Nathan', best_split_ms: 34729 },
+    { name: 'EL BOA PROD',     best_split_ms: 34829 },
     { name: 'Andiii',          best_split_ms: 35042 }] },
 };
 
 function args(argv) {
-  const a = { epreuve: '100', femmes: false, vainqueur: null, temps: null, horsLigne: false, carrousel: false };
+  const a = { epreuve: '100', femmes: false, vainqueur: null, temps: null, horsLigne: false, carrousel: false, defi: null, entete: null };
   for (let i = 2; i < argv.length; i++) {
     const cle = argv[i];
     if (cle === '--femmes') a.femmes = true;
     else if (cle === '--carrousel') a.carrousel = true;
+    else if (cle === '--defi') a.defi = argv[++i] || '100';
+    else if (cle === '--entete') a.entete = argv[++i];
     else if (cle === '--hors-ligne') a.horsLigne = true;
     else if (cle === '--epreuve') a.epreuve = argv[++i];
     else if (cle === '--vainqueur') a.vainqueur = argv[++i];
@@ -212,6 +219,80 @@ function diapoMouchoir({ rec, epreuve }) {
 </svg>`;
 }
 
+
+// LE DEFI. Les trois records d'un coup, avec en vedette celui de l'epreuve qui
+// se court ce soir-la. Les deux autres restent visibles : on ne sait pas quelle
+// distance parle au lecteur, et trois cibles valent mieux qu'une.
+//
+// Le pied porte l'ecart entre le premier et le second de l'epreuve en vedette,
+// en millemes. C'est le chiffre qui rend la place prenable — « 8,246 s » dit
+// qu'un record existe, « le deuxieme est a 29 millemes » dit qu'il se prend.
+function diapoDefi({ recs, vedette, entete, hauteur }) {
+  const L = 1080, H = hauteur;
+  const story = H >= 1700;
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const v = recs.find((r) => r.epreuve === vedette) || recs[0];
+  const p = v.podium || [];
+  const ecart = p.length >= 2 ? p[1].best_split_ms - p[0].best_split_ms : null;
+
+  // La deuxieme ligne du titre en story n'est pas dans l'accumulateur : elle se
+  // dessine a y+132 sans faire avancer y. On l'ajoute au total, sinon le bloc
+  // deborde de 132 px vers le bas sans que le centrage le sache.
+  const pas = [
+    40,
+    story ? 150 : 118,
+    story ? 190 : 62,
+    190, 128, 128,
+    story ? 200 : 150,
+    62, 92,
+  ];
+  const total = pas.reduce((a, b) => a + b, 0) + (story ? 132 : 0);
+  const haut = Math.round((H - total) / 2);
+  let y = 0, k = 0;
+  const l = (f) => { y += pas[k++]; return f(y); };
+
+  const titre = 'DÉFI BUDAPEST';
+  // Le titre tient sur deux lignes en story, sur une en feed : a 1080 de large
+  // « DÉFI BUDAPEST » d'un seul tenant plafonne a 118 px, ce qui est petit pour
+  // un titre. Coupe, il respire.
+  const titreSvg = (y) => story
+    ? `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="url(#feu)" font-size="132" font-weight="800">DÉFI</text>`
+      + `<text x="${L / 2}" y="${y + 132}" text-anchor="middle" fill="url(#feu)" font-size="132" font-weight="800">BUDAPEST</text>`
+    : `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="url(#feu)" font-size="${Math.min(118, Math.floor((L * 0.88) / (titre.length * 0.62)))}" font-weight="800">${titre}</text>`;
+
+  const rangs = recs.map((r, i) => {
+    const yy = 0;
+    const or = r.epreuve === vedette;
+    return { or, r };
+  });
+
+  const corps = [
+    l((y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#7e8aa8" font-size="30" letter-spacing="9">${esc(entete)}</text>`),
+    l(titreSvg),
+    l((y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#8794b3" font-size="36">les trois records à battre avant la fin</text>`),
+    ...rangs.map(({ or, r }, i) => l((y) =>
+      `<text x="88" y="${y}" fill="${or ? '#ffd15c' : '#6f7c9b'}" font-size="42" font-weight="500">${r.epreuve} m</text>`
+      + `<text x="212" y="${y}" fill="${or ? '#ffd15c' : 'rgba(255,255,255,0.86)'}" font-size="46" font-weight="700">${esc(r.nom)}</text>`
+      + `<text x="992" y="${y}" text-anchor="end" fill="${or ? 'url(#feu)' : 'rgba(255,255,255,0.92)'}" font-size="${or ? 64 : 58}" font-weight="800" font-family="Space Mono, ui-monospace, monospace">${secondes(r.ms)}</text>`
+      + (i < 2 ? `<line x1="88" y1="${y + 42}" x2="992" y2="${y + 42}" stroke="#ffffff" stroke-opacity="0.08" stroke-width="2"/>` : ''))),
+    l((y) => ecart == null ? ''
+      : `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="700">Sur le ${vedette} m, le deuxième est à ${ecart} millièmes.</text>`),
+    l((y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#8794b3" font-size="36">Une course suffit pour tout changer.</text>`),
+    l((y) => `<text x="${L / 2}" y="${y}" text-anchor="middle" fill="#ffb037" font-size="38" letter-spacing="2">sprinter-game.com</text>`),
+  ].join('\n    ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${H}" viewBox="0 0 ${L} ${H}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0e1a"/><stop offset="55%" stop-color="#111a33"/><stop offset="100%" stop-color="#060810"/></linearGradient>
+    <linearGradient id="feu" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#ffd15c"/><stop offset="100%" stop-color="#ff7a18"/></linearGradient>
+  </defs>
+  <rect width="${L}" height="${H}" fill="url(#nuit)"/>
+  <g transform="translate(0 ${haut})">
+    ${corps}
+  </g>
+</svg>`;
+}
+
 // LES TROIS RECORDS. La derniere diapositive donne la cible : trois chiffres,
 // trois noms, et rien d'autre a faire que d'essayer.
 function diapoRecords(recs) {
@@ -316,6 +397,17 @@ if (a.carrousel) {
   writeFileSync(`${base}-3-records.svg`, diapoRecords(autres));
   faits.push(png(`${base}-3-records.svg`, `${base}-3-records.png`, 1080, 1350)
              || `${base}-3-records.svg`);
+}
+
+if (a.defi) {
+  const trois = await Promise.all(['100', '200', '400'].map(async (e) =>
+    ({ epreuve: e, ...(e === a.epreuve ? rec : await record(e, a.horsLigne)) })));
+  const entete = a.entete || `DERNIÈRE SOIRÉE · ${a.defi} M CE SOIR`;
+  for (const [nom, H] of [['feed', 1350], ['story', 1920]]) {
+    const chemin = `${SORTIE}/defi-${a.defi}m-${nom}.svg`;
+    writeFileSync(chemin, diapoDefi({ recs: trois, vedette: a.defi, entete, hauteur: H }));
+    faits.push(png(chemin, chemin.replace(/\.svg$/, '.png'), 1080, H) || chemin);
+  }
 }
 
 const ageRec = age(rec.le);
