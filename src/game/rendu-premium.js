@@ -276,6 +276,88 @@
   }
 
   // -------------------------------------------------------------------
+  // LES NAPPES DES PROJECTEURS.
+  //
+  // Le stade de nuit avait ses lampes — une rangee de rampes tres blanches
+  // au-dessus des tribunes, avec leur halo — ET UNE PISTE ECLAIREE PAR
+  // PERSONNE. La surface orange y avait partout exactement la meme valeur,
+  // d'un bout du cadre a l'autre, comme en plein midi. Les projecteurs
+  // etaient un objet du decor, pas une source de lumiere, et c'est la
+  // difference entre un stade de nuit et un stade sombre avec des lampes
+  // dessinees dedans.
+  //
+  // Une reunion nocturne se reconnait justement a CA : la piste n'y est pas
+  // uniformement claire, elle est une suite de nappes qui se recouvrent, avec
+  // des coutures un peu plus sombres entre deux rampes. On les pose donc au
+  // sol, sous la rangee, a l'echelle de la piste.
+  //
+  // LA NAPPE EST UNE ELLIPSE PROJETEE, PAS UNE ELLIPSE DESSINEE. Un cercle
+  // pose a plat sur le sol devient, a l'ecran, un parallelogramme incline qui
+  // tourne avec le virage. On prend donc deux vecteurs sur le sol lui-meme —
+  // un le long de la piste, un en travers —, on en fait la matrice du
+  // contexte, et on remplit un simple disque : c'est la projection qui se
+  // charge de l'incliner, exactement comme pour le reste du stade.
+  // -------------------------------------------------------------------
+  const NAPPE_PAS = 16;          // une nappe tous les seize metres
+
+  function nappes(ctx, P, th, rIn, rOut) {
+    if (niveau < MOYEN || !th.projecteurs) return;
+    const sm = P.samples(NAPPE_PAS);
+    if (sm.length < 2) return;
+    const G = P.G;
+    // LE CENTRE DE LA NAPPE N'EST PAS LE MILIEU DE LA PISTE.
+    //
+    // Les rampes sont d'un seul cote — celui des tribunes qu'on voit — et une
+    // lampe n'eclaire pas aussi bien ce qui est loin d'elle. La nappe se pose
+    // donc un peu vers l'exterieur, et le couloir 1, contre la pelouse, reste
+    // le plus sombre. C'est exactement ce qu'on lit sur une photographie de
+    // nocturne, et ca ne coute qu'un coefficient.
+    const rc = rIn + (rOut - rIn) * 0.60;
+    // Un peu plus large que la piste : une nappe qui s'arreterait pile au
+    // liseret aurait un bord, et la lumiere n'a pas de bord.
+    const demiLarge = (rOut - rIn) * 0.74;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i + 1 < sm.length; i++) {
+      const a = P.ptOf(sm[i], rc);
+      const p = P.ground(a[0], a[1]);
+      // Le long de la piste : jusqu'a la nappe suivante, et un peu au-dela,
+      // pour que deux nappes voisines se recouvrent au lieu de se toucher.
+      const b = P.ptOf(sm[i + 1], rc);
+      const pb = P.ground(b[0], b[1]);
+      const lx = (pb[0] - p[0]) * 0.68, ly = (pb[1] - p[1]) * 0.68;
+      // En travers : un metre, puis mis a l'echelle de la demi-largeur.
+      const c = P.ptOf(sm[i], rc + 1);
+      const pc = P.ground(c[0], c[1]);
+      const tx = (pc[0] - p[0]) * demiLarge, ty = (pc[1] - p[1]) * demiLarge;
+      if (!(Math.abs(lx) + Math.abs(ly) > 0.5)) continue;
+      // Le cadrage se fait sur l'EMPRISE REELLE de la nappe, pas sur son
+      // centre avec une marge au jugé. Une nappe fait presque mille pixels de
+      // long : une marge fixe assez large pour ne jamais en couper une en
+      // laissait passer trois ou quatre entierement hors champ, et un degrade
+      // radial hors champ se paie au meme prix qu'un degrade visible.
+      const ex = Math.abs(lx) + Math.abs(tx), ey = Math.abs(ly) + Math.abs(ty);
+      if (p[0] + ex < 0 || p[0] - ex > G.VW ||
+          p[1] + ey < 0 || p[1] - ey > G.VH) continue;
+      ctx.save();
+      ctx.transform(lx, ly, tx, ty, p[0], p[1]);
+      // Variation fixe tiree de la position : deux rampes voisines n'ont pas
+      // exactement la meme puissance, et une rangee de nappes rigoureusement
+      // identiques se lit comme un motif imprime. Voir drawProjecteurs, qui
+      // fait deja la meme chose sur les lampes elles-memes.
+      const v = 0.82 + ((Math.imul(i + 1, 2654435761) >>> 0) % 100) / 100 * 0.18;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(0, 'rgba(255,248,228,' + (0.145 * v).toFixed(4) + ')');
+      g.addColorStop(0.55, 'rgba(255,244,216,' + (0.062 * v).toFixed(4) + ')');
+      g.addColorStop(1, 'rgba(255,240,208,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------------
   // LES OMBRES DES COUREURS.
   //
   // C'etait une ellipse noire a 42 % — un disque de peinture pose sous les
@@ -319,7 +401,12 @@
    * @param k  1 pour un coureur, plus petit pour une silhouette lointaine
    * @param phase  la foulee, pour que l'ombre respire avec les appuis
    */
-  function ombre(ctx, x, y, m, k, phase) {
+  // L'eventail d'une rampe de projecteurs : les deux lobes lateraux, en
+  // fractions de la largeur du contact, et leur part de densite. Le lobe
+  // central, lui, reste l'ombre ordinaire — voir `ombre`.
+  const FAN = [[-0.78, -0.18, 0.42], [0.86, -0.12, 0.42]];
+
+  function ombre(ctx, x, y, m, k, phase, lampes) {
     const t = tache();
     // A l'appui l'ombre se resserre et fonce, en suspension elle s'etale et
     // palit. Deux appuis par cycle de foulee, donc le double de la phase.
@@ -332,9 +419,35 @@
       ctx.globalAlpha = 0.26 + 0.06 * appui;
       ctx.drawImage(t, x - large, y - haut, large * 2, haut * 2);
     }
-    // Le contact : etroit, dense, il pose les pieds au sol.
-    ctx.globalAlpha = 0.40 + 0.18 * appui;
     const p = large * 0.40, ph = p * 0.44;
+    // SOUS UNE RAMPE, UN CORPS A TROIS OMBRES, ET ELLES S'ECARTENT EN EVENTAIL.
+    //
+    // C'est la premiere chose qu'on remarque sur une photographie de meeting
+    // en nocturne, et c'est ce qui ne trompe pas : le soleil est une source,
+    // une rangee de projecteurs en est une dizaine, et chacune pose sa propre
+    // ombre. Une seule ombre franche sous une rampe de lampes est une image de
+    // plein jour a laquelle on aurait baisse la luminosite.
+    //
+    // Trois suffisent — au-dela, elles se recouvrent et redeviennent une
+    // tache — et chacune ne porte qu'un peu plus du tiers de la densite d'une
+    // ombre de soleil : dix lampes ne font pas dix fois plus sombre.
+    const dense = 0.40 + 0.18 * appui;
+    if (lampes && niveau >= MOYEN) {
+      // Les deux lobes lateraux D'ABORD, sous le contact : une lampe est plus
+      // proche que les autres, son ombre reste la plus franche, et c'est elle
+      // qui plante les pieds au sol. Trois ombres de meme densite donnaient
+      // une tache large sans centre — un coureur qui flotte.
+      for (const [ex, ey, part] of FAN) {
+        ctx.globalAlpha = dense * part;
+        ctx.drawImage(t, x - p + p * ex, y - ph + ph * ey, p * 2, ph * 2);
+      }
+      ctx.globalAlpha = dense * 0.82;
+      ctx.drawImage(t, x - p + m * 0.04, y - ph + m * 0.01, p * 2, ph * 2);
+      ctx.restore();
+      return;
+    }
+    // Le contact : etroit, dense, il pose les pieds au sol.
+    ctx.globalAlpha = dense;
     // Decale a l'oppose de la lumiere (elle vient de la gauche et du haut,
     // cf. LIGHT dans sprinter-core) : une ombre parfaitement centree sous les
     // pieds est une ombre de midi, et le stade n'est pas eclaire a midi.
@@ -628,7 +741,7 @@
     get auto() { return !verrou; },
     set auto(v) { verrou = !v; },
     PLEIN, MOYEN, SOBRE,
-    mesurer, brume, tonte, grain, occlusion, ombre,
+    mesurer, brume, tonte, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs,
     vignette, vitesse,

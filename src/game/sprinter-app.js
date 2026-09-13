@@ -3968,6 +3968,67 @@
     ctx.restore();
   }
 
+  /**
+   * Un bloc de depart : un rail, deux cales inclinees.
+   *
+   * Tout est construit sur la piste elle-meme — `markAt` pour la distance,
+   * le rayon du couloir pour la largeur — donc l'objet suit le virage et la
+   * quinconce sans qu'on ait un angle a tenir quelque part. Les quatre coins
+   * de chaque cale passent par `solid()`, comme les gradins : l'inclinaison
+   * est portee par la hauteur, pas par une rotation a l'ecran.
+   *
+   * Le metal est le meme sur les six stades. Un bloc est du materiel, pas du
+   * decor : il ne prend pas la couleur du lieu, et c'est justement ce qui le
+   * fait lire comme un objet pose sur la piste plutot que comme une marque
+   * peinte de plus.
+   */
+  // Trois valeurs, et l'ecart entre elles compte plus que les teintes : la
+  // face inclinee est nettement plus claire que la piste, le chant nettement
+  // plus sombre. C'est ce contraste-la qui fait lire un VOLUME a quarante
+  // pixels de haut — deux gris voisins auraient donne une tache.
+  const BLOC_RAIL = [34, 36, 46], BLOC_CALE = [152, 160, 180],
+        BLOC_CHANT = [66, 70, 86];
+
+  function drawBlocs(ctx, th) {
+    const T = G.track;
+    const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
+    // Le point du monde, sur l'axe du couloir, a `d` metres de SA ligne de
+    // depart et `dr` metres de cote.
+    const pt = (d, e, dr, z) => {
+      const q = ptOf(T.markAt(d, e), lineR(e) + C.LANE_W * 0.5 + dr);
+      return solid(q[0], q[1], z || 0);
+    };
+    const quad = (a, b, c, d, col) => {
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    };
+    const W = 0.085;                 // demi-largeur du rail, en metres
+    const CW = 0.25;                 // demi-largeur d'une cale
+    for (let e = 0; e < C.LANE_COUNT; e++) {
+      // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
+      // dont sept hors champ ne doivent rien couter.
+      const centre = pt(-0.62, e, 0, 0);
+      if (centre[0] < -80 || centre[0] > G.VW + 80 ||
+          centre[1] < -80 || centre[1] > G.VH + 80) continue;
+      // Le rail, a plat sur la piste.
+      quad(pt(-0.18, e, -W), pt(-0.18, e, W),
+           pt(-1.12, e, W), pt(-1.12, e, -W), rgb(BLOC_RAIL));
+      // Les deux cales. Celle de devant est plus basse et plus redressee que
+      // celle de derriere : c'est la position reelle, et c'est aussi ce qui
+      // evite que les deux ne se lisent comme un seul bloc carre.
+      for (const [d0, d1, h] of [[-0.34, -0.56, 0.20], [-0.66, -0.92, 0.26]]) {
+        // La face inclinee, celle qui prend le pied.
+        quad(pt(d0, e, -CW), pt(d0, e, CW),
+             pt(d1, e, CW, h), pt(d1, e, -CW, h), rgb(BLOC_CALE));
+        // Le chant, du cote eclaire : sans lui la cale est un losange plat.
+        quad(pt(d1, e, CW, h), pt(d1, e, CW), pt(d1, e, -CW), pt(d1, e, -CW, h),
+             rgb(BLOC_CALE, 0.62));
+      }
+    }
+  }
+
   function drawWorld(ctx, th) {
     const T = G.track;
     // ciel
@@ -4370,6 +4431,33 @@
       for (let j = 1; j < 4; j++) ctx.lineTo(q[j][0], q[j][1]);
       ctx.closePath(); ctx.fill();
     }
+
+    // LES BLOCS DE DEPART.
+    //
+    // Il manquait a ce stade la seule piece de materiel qu'un sprint ne peut
+    // pas ne pas avoir. Une ligne de depart nue, huit couloirs numerotes et
+    // personne accroupi dessus : c'etait une piste d'entrainement, pas une
+    // course. Les blocs se voient pendant les deux premieres secondes de
+    // chaque course, et c'est precisement le moment ou le joueur regarde la
+    // piste plutot que son chrono.
+    //
+    // Ils restent en place apres le coup, comme sur une vraie piste — on ne
+    // les retire pas pendant qu'on court — et ils sortent du cadre d'eux-memes
+    // puisqu'ils sont poses dans le monde.
+    //
+    // POSES AU COULOIR, PAS A LA COURSE. Sur un 400 m les huit departs sont
+    // en quinconce, et cinquante-trois metres separent le bloc du couloir 1 de
+    // celui du couloir 8 : `markAt` donne a chacun le sien, exactement comme
+    // pour les reperes peints juste au-dessus.
+    if (T.markAt) drawBlocs(ctx, th);
+
+    // LES NAPPES DES PROJECTEURS, APRES TOUT CE QUI EST PEINT AU SOL.
+    //
+    // Apres, et non avant : la lumiere tombe aussi sur les lignes, sur le
+    // damier d'arrivee et sur les numeros de couloir. Peintes par-dessus, ces
+    // marques seraient restees les seules choses du stade que les lampes
+    // n'eclairent pas.
+    if (PREM()) PREM().nappes(ctx, PEINTRE, th, rIn, rOut);
 
     // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
     // doivent la recouvrir (voir drawArbresDedans).
@@ -4903,7 +4991,7 @@
   }
 
   function drawAthletes(ctx) {
-    const T = G.track, m = scaleM();
+    const T = G.track, m = scaleM(), th = theme();
     // Le starter passe avant tout le monde : il se tient derriere la ligne,
     // donc derriere les coureurs.
     drawStarter(ctx);
@@ -4926,7 +5014,8 @@
         // Deux ombres — la penombre large et le contact serre — plutot qu'un
         // disque noir a bord net. Voir rendu-premium.js : c'est ce qui pose
         // reellement les athletes au sol.
-        prem.ombre(ctx, g2[0], g2[1], m, r.look.h / C.MODEL_H, r.stride);
+        prem.ombre(ctx, g2[0], g2[1], m, r.look.h / C.MODEL_H, r.stride,
+                   th.projecteurs);
       } else {
         ctx.fillStyle = 'rgba(0,0,0,0.42)';
         ctx.beginPath();
@@ -4957,7 +5046,7 @@
         const q = T.pos(r.d + 0.3, r.lane);
         let dx = q[0] - p[0], dy = q[1] - p[1];
         const dl = Math.hypot(dx, dy) || 1;
-        prem.appui(theme(), p[0], p[1], dx / dl, dy / dl, r.v);
+        prem.appui(th, p[0], p[1], dx / dl, dy / dl, r.v);
       }
       prem.avancerPoussiere();
       prem.dessinerPoussiere(ctx, PEINTRE);
