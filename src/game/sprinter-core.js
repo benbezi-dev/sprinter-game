@@ -261,7 +261,12 @@
     { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
-    { name: 'Jeux mondiaux', theme: 'mondiaux', pool: 'sprint',
+    // « 0.Games » : le nom de l'etape, dans les deux langues. Il ne traduit
+    // rien et ne se traduit pas — c'est un nom propre, pose la ou le terme
+    // olympique ne peut pas l'etre (article L141-5 du code du sport, voir
+    // juridique/lettre-scellee.html annexe E). La cle du theme reste
+    // `mondiaux` : elle est interne au moteur et ne s'affiche nulle part.
+    { name: '0.Games', theme: 'mondiaux', pool: 'sprint',
       names: ['Blaze Kade', 'Jett Cruz', 'Rex Solar', 'Kai Volt',
               'Ash Comet', 'Neo Flash', 'Ray Quick'] },
     { name: 'Inter galactique', theme: 'cosmos', pool: 'sprint',

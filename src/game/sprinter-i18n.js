@@ -1217,7 +1217,7 @@
     ['Niveau régional', 'Regional level'],
     ['Niveau national', 'National level'],
     ['Championnat du monde', 'World Championships'],
-    ['Jeux mondiaux', 'World Games'],
+    ['0.Games', '0.Games'],
     ['Intergalactique', 'Intergalactic'],
     // Au-dela des six etapes du championnat : les stades hors serie, dans
     // l'ordre ou le moteur les ajoute (voir STADES_HORS_SERIE). Le nom reste
