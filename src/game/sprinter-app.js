@@ -321,12 +321,7 @@
   //
   // Chaque stade hors serie porte donc SON remplissage (`foule`), et ce
   // tableau ne parle plus que de l'echelle du championnat.
-  // Les gradins sont pleins des la premiere etape, comme dans le one shot.
-  // L'echelle montait de 25 % a 100 % au fil du championnat : la premiere
-  // course, celle que tout le monde joue en premier, se courait donc dans un
-  // stade presque vide. Meme raison que pour le theme (voir LEVELS) — on
-  // montre le meilleur stade tout de suite.
-  const CROWD_DENSITY = [0.95, 0.95, 0.95, 0.95, 0.95, 1.00];
+  const CROWD_DENSITY = [0.25, 0.40, 0.60, 0.80, 0.95, 1.00];
   /**
    * Combien de monde il y a dans les gradins, de 0 a 1.
    *

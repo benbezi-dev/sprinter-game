@@ -248,31 +248,26 @@
 
   // pool : carnation du plateau. 'divers' pour les etapes locales,
   // 'sprint' pour le mondial, les Jeux mondiaux et la finale ZEZE.
-  // LES QUATRE PREMIERES ETAPES PRENNENT LE STADE DU ONE SHOT.
+  // CHAQUE ETAPE GARDE SON STADE.
   //
-  // Elles couraient sur le theme `day` : piste rouge presque marron
-  // (138,10,10), lignes creme, et des gradins remplis au quart pour la
-  // premiere. Le one shot, lui, se court sur `mondiaux` — piste bleue,
-  // lignes blanc franc, bordure verte, gradins pleins. Cote a cote, les
-  // deux ne paraissaient pas du meme jeu, et c'est le mode que tout le
-  // monde traverse qui avait le moins bon stade.
-  //
-  // On perd la montee en puissance du decor — une cour d'ecole ne
-  // ressemblait pas a une finale — et c'etait assume jusqu'ici. Le choix
-  // est de montrer le meilleur stade tout de suite : la progression se lit
-  // deja dans les noms d'etape, les adversaires et les chronos a battre.
-  // L'intergalactique garde son `cosmos`, qui ne ressemble a rien d'autre.
+  // Les quatre premieres sont passees un temps sur `mondiaux`, le stade du
+  // one shot, pour que la carriere ne commence pas dans le decor le plus
+  // pauvre. Le resultat n'etait pas celui qu'on cherchait : cinq etapes sur
+  // six dans le meme stade bleu, et la traversee du championnat ne racontait
+  // plus rien. On revient donc a l'echelle d'origine — la qualite d'un stade
+  // se travaille dans son theme, pas en les remplacant les uns par les
+  // autres.
   const LEVELS = [
-    { name: 'Competition scolaire', theme: 'mondiaux', pool: 'divers',
+    { name: 'Competition scolaire', theme: 'day', pool: 'divers',
       names: ['Paul Martin', 'Leo Dubois', 'Noah Petit', 'Enzo Roy',
               'Nathan Blanc', 'Lina Fontaine', 'Rayan Girard'] },
-    { name: 'Niveau regional', theme: 'mondiaux', pool: 'divers',
+    { name: 'Niveau regional', theme: 'day', pool: 'divers',
       names: ['Karim Faure', 'Yanis Perrin', 'Bilal Moreau', 'Malik Simon',
               'Idris Laurent', 'Ana Ferreira', 'Souleymane Garcia'] },
-    { name: 'Niveau national', theme: 'mondiaux', pool: 'divers',
+    { name: 'Niveau national', theme: 'day', pool: 'divers',
       names: ['Vince Rapido', 'Max Eclair', 'Eddie Foudre', 'Timo Flash',
               'Ken Turbo', 'Dan Sonic', 'Lea Comet'] },
-    { name: 'Championnat du monde', theme: 'mondiaux', pool: 'sprint',
+    { name: 'Championnat du monde', theme: 'day', pool: 'sprint',
       names: ['Erik Rocket', 'Ivan Blitz', 'Otto Rush', 'Sven Dash',
               'Lars Zoom', 'Nils Storm', 'Freya Comet'] },
     // « 0.Games » : le nom de l'etape, dans les deux langues. Il ne traduit
