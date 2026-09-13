@@ -90,6 +90,21 @@ class_name = "Boite"
 [vars]
 OBJECTIF = "actif"
 
+# OU PARTENT LES ALERTES DE RECUPERATION DE COMPTE.
+#
+# Aucune des deux n'etait posee, et le code retombait donc sur ses valeurs par
+# defaut : contact@sprinter-game.com. Sept demandes deposees depuis le
+# 5 septembre, sept alertes envoyees la-bas, et personne pour les lire — on a
+# cherche la panne du cote de la cle Resend pendant ce temps.
+#
+# L'expediteur reste onboarding@resend.dev tant que sprinter-game.com n'est pas
+# verifie chez Resend (SPF/DKIM) : un domaine non verifie fait refuser TOUS les
+# envois, et on ne s'en apercevrait qu'a la prochaine demande perdue. A
+# remplacer par « Sprinter <recuperations@sprinter-game.com> » une fois la
+# verification faite.
+MAIL_DEST = "contact.pro@sprinter-game.com"
+MAIL_EXPEDITEUR = "Sprinter <onboarding@resend.dev>"
+
 # POURQUOI CINQ MINUTES ET NON QUINZE. Chaque joueur recoit a quelques minutes
 # pres de son heure, toujours les memes : trois cents telephones qui vibrent a
 # la meme seconde, ca se voit, et un rendez-vous a 12:45:00 tous les jours a

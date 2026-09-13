@@ -98,6 +98,13 @@ export async function alerterRecuperation(env, d) {
     `chercher sa réponse, et lui seul en profite.`,
     ``,
     `Demande n° ${d.id ?? '?'} · déposée le ${quand(d.cree_le || Date.now())}`,
+    ...(d.etat && d.etat !== 'attente' ? [
+      ``,
+      `CELLE-CI N'ATTEND RIEN DE VOUS : elle s'est reglée seule (état`,
+      `« ${d.etat} »). Le joueur a deja retrouvé son nom. Ce mot est la pour`,
+      `que vous sachiez qu'il l'avait perdu — c'est la seule trace qu'on ait`,
+      `de ceux qui se perdent, et tous ne reviennent pas.`,
+    ] : []),
   ].join('\n');
 
   try {
@@ -107,7 +114,9 @@ export async function alerterRecuperation(env, d) {
       body: JSON.stringify({
         from: (env.MAIL_EXPEDITEUR || EXPEDITEUR_DEFAUT),
         to: [(env.MAIL_DEST || DEST_DEFAUT)],
-        subject: `Récupération de compte — ${nom}`
+        subject: (d.etat && d.etat !== 'attente'
+                  ? `Compte retrouvé tout seul — ${nom}`
+                  : `Récupération de compte — ${nom}`)
                + (d.insta ? '' : ' (sans Instagram)'),
         text: corps,
       }),

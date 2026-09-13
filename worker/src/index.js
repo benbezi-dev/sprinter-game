@@ -2482,10 +2482,25 @@ async function servir(request, env, ctx, porteur) {
        *
        * `waitUntil` et pas `await` : le joueur n'attend pas apres un courriel,
        * et un refus de Resend n'a pas a devenir un echec de sa demande. */
-      if (!canal.test && r.etat === 'attente' && !r.deja) {
+      /* TOUTE demande neuve previent, y compris celle qui se regle seule.
+       *
+       * L'alerte ne partait que sur `attente`, c'est-a-dire quand il y avait
+       * quelque chose a arbitrer. Mais les demandes se reglent presque
+       * toujours toutes seules — sept sur sept depuis l'ouverture — si bien
+       * que la boite n'a jamais sonne une fois, et qu'on a pu croire que
+       * l'envoi etait casse alors qu'il n'avait simplement rien a dire.
+       *
+       * Or savoir qu'un joueur a perdu son compte compte AUSSI quand il le
+       * retrouve tout seul : c'est la seule trace qu'on ait de ceux qui se
+       * perdent, et ceux-la ne reviennent pas toujours. Le sujet du courriel
+       * dit lequel des deux cas on tient.
+       *
+       * Un second appui sur le bouton (`deja`) ne sonne toujours pas : meme
+       * demande, meme mot de passage. */
+      if (!canal.test && !r.deja) {
         ctx.waitUntil(alerterRecuperation(env, {
           id: r.id, nom: propre, insta: r.insta, phrase: r.phrase,
-          compte: r.compte, indice, cree_le: Date.now(),
+          compte: r.compte, indice, cree_le: Date.now(), etat: r.etat,
         }));
       }
       return json(r);
