@@ -107,3 +107,7 @@ assets-stores/promo/explications/controle/
 # Les cartes de riposte se refabriquent en une commande, et chaque soiree en
 # produit une nouvelle serie. Elles ne se versionnent pas.
 cartes/
+
+# Les images et le film d une course filmee se refont en une commande.
+film-course/
+gameplay-course.mp4
