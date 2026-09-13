@@ -4828,7 +4828,7 @@
     return [v[0] / n, v[1] / n, v[2] / n];
   })();
 
-  const RING_MAX = 10;
+  const RING_MAX = 16;
   // tampons reutilises d'une frame a l'autre : ce code tourne des
   // centaines de fois par image, il ne doit rien allouer.
   const _p0x = new Float64Array(RING_MAX), _p0y = new Float64Array(RING_MAX), _p0z = new Float64Array(RING_MAX);
@@ -4836,16 +4836,33 @@
   const _nx = new Float64Array(RING_MAX), _ny = new Float64Array(RING_MAX), _nz = new Float64Array(RING_MAX);
   const _s0x = new Float64Array(RING_MAX), _s0y = new Float64Array(RING_MAX);
   const _s1x = new Float64Array(RING_MAX), _s1y = new Float64Array(RING_MAX);
-  const _fDepth = new Float64Array(RING_MAX + 2);
-  const _fShade = new Float64Array(RING_MAX + 2);
-  const _fRim = new Float64Array(RING_MAX + 2);
-  const _fKind = new Int32Array(RING_MAX + 2);
-  const _fOrder = new Int32Array(RING_MAX + 2);
+  // rayon unitaire de chaque arete, garde pour asseoir la calotte dessus
+  const _rrx = new Float64Array(RING_MAX), _rry = new Float64Array(RING_MAX),
+        _rrz = new Float64Array(RING_MAX);
+  // l'anneau de la calotte : a l'ecran, et sa profondeur dans le monde
+  const _cx = new Float64Array(RING_MAX), _cy = new Float64Array(RING_MAX),
+        _cw = new Float64Array(RING_MAX);
+  // un segment porte au plus ses N faces laterales, les N de sa calotte et
+  // un disque
+  const FMAX = 2 * RING_MAX + 2;
+  const _fDepth = new Float64Array(FMAX);
+  const _fShade = new Float64Array(FMAX);
+  const _fRim = new Float64Array(FMAX);
+  const _fKind = new Int32Array(FMAX);
+  const _fOrder = new Int32Array(FMAX);
 
+  // Le nombre de faces suit la taille a l'ecran, et il monte plus haut
+  // qu'avant. Dix faces suffisent a un coureur de quarante pixels ; sur la
+  // presentation d'avant-course, ou le meme torse en fait trois cents, on
+  // lisait le prisme taille au couteau. Les paliers du bas ne bougent pas :
+  // une course a huit coute exactement ce qu'elle coutait, et les
+  // spectateurs des gradins gardent leurs quatre facettes.
   function facetCount(rpx) {
     if (rpx < 2.5) return 4;
     if (rpx < 5) return 6;
     if (rpx < 10) return 8;
+    if (rpx < 17) return 10;
+    if (rpx < 28) return 13;
     return RING_MAX;
   }
 
@@ -4897,7 +4914,7 @@
     _fRim[i] = _rimK * 42 * bord * bord * (0.26 + 0.74 * ciel);
   }
 
-  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k) {
+  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k, bout) {
     const r0 = e0[3], r1 = e1[3];
     let dx = e1[0] - e0[0], dy = e1[1] - e0[1], dz = e1[2] - e0[2];
     let len = Math.hypot(dx, dy, dz);
@@ -4919,6 +4936,7 @@
     for (let i = 0; i < N; i++) {
       const a = TAU * i / N, ca = Math.cos(a), sa = Math.sin(a);
       const rx = ux * ca + vx * sa, ry = uy * ca + vy * sa, rz = uz * ca + vz * sa;
+      _rrx[i] = rx; _rry[i] = ry; _rrz[i] = rz;
       // normale d'un tronc de cone : radiale, inclinee par la variation de rayon
       let mx = rx - axx * dr, my = ry - axy * dr, mz = rz - axz * dr;
       const ml = Math.hypot(mx, my, mz) || 1;
@@ -4951,23 +4969,74 @@
       eclairer(nf, nl, mz, mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2]);
       nf++;
     }
-    // bouchons : sans eux les extremites (mains, pieds, tete) sont creuses
+    // LE BOUT DES MEMBRES : UN DISQUE, PUIS UNE CALOTTE.
+    //
+    // Sans bouchon, les extremites — mains, pieds, tete — sont creuses. Mais
+    // un bouchon seul est un disque plat : sur un orteil de trois pixels
+    // personne ne le voit, sur le crane d'un coureur presente en gros plan
+    // on voyait un cylindre coupe a la scie, et la meme coupe au bout des
+    // mains et des chaussures.
+    //
+    // Le bout visible recoit donc une calotte : un anneau pousse vers
+    // l'exterieur, puis le disque, bien plus petit et vu de biais. Deux
+    // garde-fous la retiennent :
+    //
+    //   - elle ne va que sur un bout DECLARE LIBRE par le squelette. Posee
+    //     partout, elle depassait des segments qui s'emboitent — le buste
+    //     portait une collerette au-dessus des epaules ;
+    //   - et seulement au-dela de cinq pixels de rayon. En dessous il n'y a
+    //     rien a arrondir, et la course a huit ne paye pas un pixel de plus.
+    //
+    // Un seul bout est traite : l'autre tourne le dos a la camera et n'est
+    // de toute facon jamais dessine.
     const vd = axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2];
-    if (-vd < 0) {
-      _fKind[nf] = -1;
-      _fDepth[nf] = e0[0] + e0[1];
-      eclairer(nf, -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]), -axz, -vd);
-      nf++;
+    const bout0 = vd > 0;                  // le disque de e0 nous fait face
+    const rBout = bout0 ? r0 : r1;
+    const sgnB = bout0 ? -1 : 1;           // sens sortant du bout visible
+    const eB = bout0 ? e0 : e1;
+    const rond = bout === 1 && rBout * k > 5;
+    if (rond) {
+      const off = 0.55 * rBout, rc = 0.80 * rBout;
+      for (let i = 0; i < N; i++) {
+        const X = eB[0] + sgnB * axx * off + _rrx[i] * rc;
+        const Y = eB[1] + sgnB * axy * off + _rry[i] * rc;
+        const Z = eB[2] + sgnB * axz * off + _rrz[i] * rc;
+        _cx[i] = ax + (Y - X) * C.ISO_COS * k;
+        _cy[i] = ay - (X + Y) * C.ISO_SIN * k - Z * k;
+        _cw[i] = X + Y;
+      }
+      for (let i = 0; i < N; i++) {
+        const j = (i + 1) % N;
+        const rmx = (_rrx[i] + _rrx[j]) * 0.5, rmy = (_rry[i] + _rry[j]) * 0.5,
+              rmz = (_rrz[i] + _rrz[j]) * 0.5;
+        // normale de sphere, a mi-chemin entre l'equateur et le pole
+        const mx = 0.90 * rmx + sgnB * 0.28 * axx,
+              my = 0.90 * rmy + sgnB * 0.28 * axy,
+              mz = 0.90 * rmz + sgnB * 0.28 * axz;
+        const fv = mx * VIEW[0] + my * VIEW[1] + mz * VIEW[2];
+        if (fv >= 0) continue;
+        _fKind[nf] = RING_MAX + i;
+        _fDepth[nf] = (_cw[i] + _cw[j]) * 0.5 - 0.001;
+        eclairer(nf, mx * LIGHT[0] + my * LIGHT[1] + mz * LIGHT[2], mz, fv);
+        nf++;
+      }
     }
-    if (vd < 0) {
-      _fKind[nf] = -2;
-      _fDepth[nf] = e1[0] + e1[1];
-      eclairer(nf, axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2], axz, vd);
+    {
+      // le disque : celui de la calotte s'il y en a une, sinon le bout nu.
+      // Le bout visible est toujours le plus proche de l'oeil, d'ou
+      // l'epsilon qui le tire vers l'avant du tri, quel que soit le sens de
+      // l'axe du segment.
+      const nx2 = sgnB * axx, ny2 = sgnB * axy, nz2 = sgnB * axz;
+      _fKind[nf] = rond ? -3 : (bout0 ? -1 : -2);
+      _fDepth[nf] = eB[0] + eB[1] - (rond ? 0.4 * rBout : 0.002);
+      eclairer(nf, nx2 * LIGHT[0] + ny2 * LIGHT[1] + nz2 * LIGHT[2], nz2, sgnB * vd);
       nf++;
     }
 
     for (let i = 0; i < nf; i++) _fOrder[i] = i;
-    // tri par insertion : nf vaut au plus 12, c'est plus rapide qu'un sort()
+    // tri par insertion : nf vaut au plus trente-trois — N faces laterales,
+    // autant pour la calotte, un disque — et reste sous la dizaine dans une
+    // course. Plus rapide qu'un sort() a ces tailles, et sans allocation.
     for (let i = 1; i < nf; i++) {
       const cur = _fOrder[i], d = _fDepth[cur];
       let j = i - 1;
@@ -4975,6 +5044,16 @@
       _fOrder[j + 1] = cur;
     }
 
+    // LES FENTES ENTRE FACETTES.
+    //
+    // Chaque face est remplie separement : entre deux voisines, l'anti-
+    // aliasing laisse une demi-teinte qui prend la couleur de ce qu'il y a
+    // derriere. Sur une piste rouge, ces coutures dessinaient un grillage
+    // sombre le long des cuisses et du torse. Un trait de la meme couleur
+    // que la face les ferme, et on ne le paye que sur les corps assez grands
+    // pour que la fente se voie.
+    const seam = Math.max(r0, r1) * k > 1.6;
+    if (seam) { ctx.lineWidth = 0.75; ctx.lineJoin = 'round'; }
     for (let f = 0; f < nf; f++) {
       const id = _fOrder[f], kind = _fKind[id];
       ctx.beginPath();
@@ -4984,6 +5063,16 @@
         ctx.lineTo(_s0x[j], _s0y[j]);
         ctx.lineTo(_s1x[j], _s1y[j]);
         ctx.lineTo(_s1x[i], _s1y[i]);
+      } else if (kind >= RING_MAX) {
+        const i = kind - RING_MAX, j = (i + 1) % N;
+        const bx = bout0 ? _s0x : _s1x, by = bout0 ? _s0y : _s1y;
+        ctx.moveTo(bx[i], by[i]);
+        ctx.lineTo(bx[j], by[j]);
+        ctx.lineTo(_cx[j], _cy[j]);
+        ctx.lineTo(_cx[i], _cy[i]);
+      } else if (kind === -3) {
+        ctx.moveTo(_cx[0], _cy[0]);
+        for (let i = 1; i < N; i++) ctx.lineTo(_cx[i], _cy[i]);
       } else if (kind === -1) {
         ctx.moveTo(_s0x[0], _s0y[0]);
         for (let i = 1; i < N; i++) ctx.lineTo(_s0x[i], _s0y[i]);
@@ -4992,9 +5081,12 @@
         for (let i = 1; i < N; i++) ctx.lineTo(_s1x[i], _s1y[i]);
       }
       ctx.closePath();
-      ctx.fillStyle = rgbEclaire(col, _fShade[id], _fRim[id]);
+      const teinte = rgbEclaire(col, _fShade[id], _fRim[id]);
+      ctx.fillStyle = teinte;
       ctx.fill();
+      if (seam) { ctx.strokeStyle = teinte; ctx.stroke(); }
     }
+    if (seam) { ctx.lineWidth = 1; ctx.lineJoin = 'miter'; }
   }
 
   function drawFacetFigure(ctx, caps, ax, ay, k) {
@@ -5006,7 +5098,7 @@
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
       const c = caps[order[n][1]];
-      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k);
+      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3]);
     }
   }
 
@@ -5022,7 +5114,7 @@
     const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
-    for (const [col, pv, ang, off, hf, yaw] of parts) {
+    for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
       const ca = Math.cos(ang), sa = Math.sin(ang);
       const yc = Math.cos(yaw), ys = Math.sin(yaw);
       const ends = [];
@@ -5042,7 +5134,7 @@
         if (applyCurve) { const t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
         ends.push([rx, ry, wz, (hx + hy) * 0.5]);
       }
-      caps.push([col, ends[0], ends[1]]);
+      caps.push([col, ends[0], ends[1], bout]);
     }
     return caps;
   }
