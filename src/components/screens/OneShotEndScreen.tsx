@@ -13,6 +13,7 @@ import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { noterDefi } from '@/game/journal-defis';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang } from '@/components/Insignes';
@@ -42,6 +43,20 @@ const DSQ_MS = NO_RUN_MS;
 /** Chrono ou abandon, sans jamais appeler toFixed sur un null. */
 function fmt(v: number | null | undefined, dnf: string) {
   return v == null ? dnf : `${v.toFixed(2)} s`;
+}
+
+/**
+ * Le defi qu'on vient de lancer entre au journal.
+ *
+ * Sans nom quand le code part sans destinataire : la ligne dit alors « defi
+ * lance », et c'est honnete — on ne sait pas encore qui le relevera. Le nom
+ * arrivera avec l'issue, qui reprend la meme cle.
+ */
+function noterDefiLance(id: string, nom: string, epreuves: string[]) {
+  noterDefi({
+    cle: `defi:${id}`, genre: 'defi', sens: 'lance', etat: 'attente',
+    nom, epreuves,
+  });
 }
 
 export function OneShotEndScreen() {
@@ -273,7 +288,22 @@ export function OneShotEndScreen() {
       // rien enregistre, et il n'y a rien a faire courir.
       traces: falseOut ? [] : (SprinterApp.G.shotTraces || []),
     })
-      .then(r => { setSent(true); setDuel(r.duel || null); })
+      .then(r => {
+        setSent(true); setDuel(r.duel || null);
+        // Le defi qu'on vient de relever trouve son issue dans le journal :
+        // c'est lui qui la gardera une semaine, quand cet ecran sera ferme.
+        const iss = r.duel?.issue;
+        noterDefi({
+          cle: `defi:${challenge.id}`, genre: 'defi', sens: 'recu',
+          etat: !iss ? 'releve' : iss === 'draw' ? 'nul'
+              : iss === (r.duel?.role || 'opponent') ? 'gagne' : 'perdu',
+          nom: r.owner_name || challenge.owner_name || '',
+          epreuves: shotRaces,
+          lp: r.duel?.lp,
+          mon_ms: r.your_total_ms,
+          son_ms: r.owner_total_ms,
+        });
+      })
       .catch(() => { /* le chrono local reste affiche */ })
       .finally(() => setDuelEnCours(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,6 +351,7 @@ export function OneShotEndScreen() {
           revancheDe: revancheId,
         });
         setCode(id);
+        noterDefiLance(id, prevenu || revancheNom || '', shotRaces);
         setRevancheVise(revancheNom || '');
         // On annonce « envoye a X » seulement si le serveur a bien touche
         // quelqu'un. Sinon le code existe et c'est tout : on le dira comme
@@ -365,7 +396,7 @@ export function OneShotEndScreen() {
     if (finalName) saveName(finalName);
     setBusy(true); setErr(false);
     try {
-      const { id } = await createChallenge({
+      const { id, cible: prevenu } = await createChallenge({
         races: shotRaces as ('100' | '200' | '400')[],
         levelIdx: SprinterApp.G.shotLevel,
         totalMs: runTime * 1000,
@@ -375,6 +406,7 @@ export function OneShotEndScreen() {
         targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
       });
       setCode(id);
+      noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
     } catch {
       setErr(true);
     } finally {

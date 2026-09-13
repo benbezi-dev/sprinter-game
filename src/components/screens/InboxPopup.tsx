@@ -3,7 +3,8 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { VOILE, PANNEAU, TRANSITION } from '@/lib/mouvement';
 import { Swords, Loader2 } from 'lucide-react';
-import { fetchInbox, fetchChallenge, type InboxChallenge } from '@/game/challenge';
+import { fetchInboxEtat, fetchChallenge, type InboxChallenge } from '@/game/challenge';
+import { noterDefi, rapprocherBoite } from '@/game/journal-defis';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 
@@ -33,7 +34,21 @@ export function InboxPopup() {
   useEffect(() => { annule.current = false; return () => { annule.current = true; }; }, []);
   const interroger = useRef(() => {});
   interroger.current = () => {
-    fetchInbox().then(list => { if (!annule.current) setDefis(list); });
+    fetchInboxEtat().then(({ defis: list, ok }) => {
+      if (annule.current) return;
+      setDefis(list);
+      // Le journal garde la trace de qui nous a defies, meme quand on ferme
+      // la fenetre sans repondre : c'est la, une semaine durant, qu'on
+      // retrouvera le nom pour le redefier.
+      if (!ok) return;                    // boite injoignable : on ne conclut rien
+      for (const d of list) {
+        noterDefi({
+          cle: `defi:${d.id}`, genre: 'defi', sens: 'recu', etat: 'attente',
+          nom: d.owner_name, epreuves: d.races, at: d.created_at || Date.now(),
+        });
+      }
+      rapprocherBoite(list.map(d => d.id));
+    });
   };
   useSondageAuRepos(() => interroger.current(), 20000);
 
@@ -52,6 +67,10 @@ export function InboxPopup() {
     try {
       const ch = await fetchChallenge(d.id);
       if (!ch) { vu.current.add(d.id); setDefis(x => [...x]); return; }
+      noterDefi({
+        cle: `defi:${d.id}`, genre: 'defi', sens: 'recu', etat: 'releve',
+        nom: ch.owner_name, epreuves: ch.races,
+      });
       setOuvert(false);
       SprinterApp.startOneShot(ch.races, {
         levelIdx: ch.level_idx,
