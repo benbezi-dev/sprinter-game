@@ -134,7 +134,14 @@
   const PASSE = 6;      // la largeur d'une passe de tondeuse, en metres
 
   function tonte(ctx, th, P, rIn, rOut, horizon) {
-    if (niveau < MOYEN || th.pinceau || th.tonte === false) return;
+    // LA PELOUSE EST UNIE PAR DEFAUT, ET IL FAUT LA DEMANDER POUR L'AVOIR
+    // RAYEE. Le drapeau existait deja, mais dans l'autre sens : tous les
+    // stades etaient tondus, et un theme pouvait s'en dispenser. A l'ecran ou
+    // se joue la course — la camera colle au coureur — ces passes ne se
+    // lisaient pas comme une tonte mais comme deux verts qui alternent, la
+    // meme rayure que la piste avait en travers. Un stade qui veut ses passes
+    // pose maintenant `tonte: true` dans son theme.
+    if (niveau < MOYEN || th.pinceau || !th.tonte) return;
     // Des tranches DEUX FOIS plus fines que celles du decor. Le pas de rendu
     // ordinaire fait douze metres : a l'echelle ou la camera tient le
     // coureur, une passe de douze metres barre le tiers de l'ecran, et ce
@@ -246,6 +253,92 @@
     const a = P.ground(0, 0);
     P.bandPattern(ctx, P.samples(), rIn, rOut, m, 0,
                   a[0] % TUILE_GRAIN, a[1] % TUILE_GRAIN);
+  }
+
+  // -------------------------------------------------------------------
+  // LE GRAIN DE LA PELOUSE.
+  //
+  // La pelouse est la plus grande surface de l'image — un bon tiers du cadre
+  // en course — et depuis que les passes de tondeuse sont eteintes (voir
+  // `tonte`) c'est un aplat parfait. Un aplat de cette taille ne se lit pas
+  // comme de l'herbe : il se lit comme du papier de couleur, et il tire tout
+  // le reste de l'image vers l'illustration.
+  //
+  // Le remede n'est pas de remettre des rayures, c'est de rendre la surface
+  // IRREGULIERE. Une pelouse de stade n'est jamais d'une seule valeur : elle
+  // a des plaques plus denses, des reprises plus pales, l'ombre du gradin sur
+  // un bord. Rien de tout cela n'est aligne, et c'est ce qui la distingue
+  // d'une tonte.
+  //
+  // Meme machinerie que le grain du tartan — une tuile noir et blanc
+  // translucide, cuite une fois, ancree au monde — avec trois reglages
+  // opposes : des taches DEUX FOIS plus larges (l'herbe pousse par plaques),
+  // deux fois plus contrastees, et un bruit fin plus doux (un gazon n'a pas
+  // de granulat, il a des brins).
+  // -------------------------------------------------------------------
+  const TUILE_HERBE = 256;
+  let _herbeMotif = null;
+
+  function motifHerbe(ctx) {
+    if (_herbeMotif) return _herbeMotif;
+    const t = document.createElement('canvas');
+    t.width = TUILE_HERBE; t.height = TUILE_HERBE;
+    const c = t.getContext('2d');
+    // Meme suite deterministe que le grain de piste, autre graine : deux
+    // surfaces qui partageraient leur semis se reconnaitraient l'une l'autre.
+    let s = 0x85ebca6b >>> 0;
+    const al = () => {
+      s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
+      return s / 4294967296;
+    };
+    for (let i = 0; i < 34; i++) {
+      const x = al() * TUILE_HERBE, y = al() * TUILE_HERBE;
+      const r = TUILE_HERBE * (0.10 + al() * 0.22), clair = al() < 0.48;
+      for (const dx of [0, -TUILE_HERBE, TUILE_HERBE]) {
+        for (const dy of [0, -TUILE_HERBE, TUILE_HERBE]) {
+          const g = c.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
+          g.addColorStop(0, clair ? 'rgba(255,255,255,0.065)' : 'rgba(0,0,0,0.075)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          c.fillStyle = g;
+          c.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
+        }
+      }
+    }
+    // Les brins : de courts traits, tous dans des sens differents. C'est la
+    // difference avec le granulat de la piste, qui est un semis de points —
+    // et c'est ce qui empeche l'oeil d'y lire une direction, donc une tonte.
+    //
+    // ILS DOIVENT SE SENTIR ET NON SE VOIR. A pleine opacite le semis se
+    // lisait comme des confettis poses sur du vert : on comptait les traits.
+    // Un tiers de cette densite, et l'oeil ne voit plus qu'une surface qui
+    // n'est pas lisse — ce qui est exactement le but.
+    c.lineWidth = 1;
+    for (let i = 0; i < 620; i++) {
+      const x = al() * TUILE_HERBE, y = al() * TUILE_HERBE;
+      const a = al() * Math.PI, lg = 2 + al() * 3.5;
+      c.strokeStyle = al() < 0.5 ? 'rgba(255,255,255,0.032)' : 'rgba(0,0,0,0.036)';
+      c.beginPath();
+      c.moveTo(x - Math.cos(a) * lg, y - Math.sin(a) * lg);
+      c.lineTo(x + Math.cos(a) * lg, y + Math.sin(a) * lg);
+      c.stroke();
+    }
+    _herbeMotif = ctx.createPattern(t, 'repeat');
+    return _herbeMotif;
+  }
+
+  /**
+   * Les deux pelouses : celle du dedans, celle qui court jusqu'a l'horizon.
+   * Memes bornes que `tonte`, qui habillait les memes surfaces.
+   */
+  function herbe(ctx, th, P, rIn, rOut, horizon) {
+    if (niveau < MOYEN || th.pinceau) return;
+    const m = motifHerbe(ctx);
+    if (!m) return;
+    const a = P.ground(0, 0);
+    const ox = a[0] % TUILE_HERBE, oy = a[1] % TUILE_HERBE;
+    const sm = P.samples(), courbe = P.G.track.curved;
+    P.bandPattern(ctx, sm, courbe ? 0 : rIn - 60, rIn, m, 0, ox, oy);
+    P.bandPattern(ctx, sm, rOut, rOut + horizon, m, 0, ox, oy);
   }
 
   // -------------------------------------------------------------------
@@ -776,7 +869,7 @@
     get auto() { return !verrou; },
     set auto(v) { verrou = !v; },
     PLEIN, MOYEN, SOBRE,
-    mesurer, brume, tonte, grain, occlusion, nappes, ombre,
+    mesurer, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
     vignette, vitesse,

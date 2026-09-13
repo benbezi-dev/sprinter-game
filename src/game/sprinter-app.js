@@ -4649,10 +4649,6 @@
     // liseret contre la pelouse. Apres les lignes : un mur de vingt metres
     // assombrit aussi la peinture blanche qui court a son pied.
     if (PREM()) PREM().occlusion(ctx, PEINTRE, rIn, rOut);
-    // La grande ombre que les gradins posent sur les couloirs exterieurs :
-    // elle vient juste apres l'occlusion, qui ne traite que le demi-metre
-    // contre le muret. Voir tribunes() dans rendu-premium.js.
-    if (PREM()) PREM().tribunes(ctx, th, PEINTRE, rIn, rOut, horizon);
 
     // Rayon d'une ligne peinte, ligne droite comprise.
     const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
