@@ -7,8 +7,8 @@
   "background_color": "#05070d",
   "theme_color": "#05070d",
   "icons": [
-    { "src": "../icons/icon-192.webp", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
-    { "src": "../icons/icon-512.webp", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+    { "src": "../icons/icon-192.webp", "type": "image/webp", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "../icons/icon-512.webp", "type": "image/webp", "sizes": "512x512", "purpose": "any maskable" }
   ],
   "id": "/sprinter-game/dashboard/",
   "scope": "/sprinter-game/dashboard/",

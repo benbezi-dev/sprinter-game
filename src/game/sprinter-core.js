@@ -1237,8 +1237,15 @@
   // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
+  // Deux couleurs fixes, sorties de pose() : le rendu garde ses teintes en
+  // cache par couleur, et un tableau recree a chaque image n'aurait jamais
+  // ete retrouve dans ce cache — un dossard et un temoin repeints a chaque
+  // frame pour rien, huit fois par course.
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
+  const DOSSARD = [242, 242, 238];
+  const TEMOIN = [250, 206, 62];
+
   function pose(r) {
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
@@ -1321,8 +1328,18 @@
     const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
-    const add = (c, pv, a, o, hb, ht, hz, yaw) =>
-      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0]);
+    // LE DERNIER ARGUMENT DIT QUEL BOUT EST LIBRE.
+    //
+    // Le rendu arrondit le bout d'un segment quand on le lui demande, et
+    // seulement alors. Le squelette est le seul a savoir lequel merite de
+    // l'etre : un crane, une main, une pointe de chaussure se terminent
+    // dans le vide, tandis qu'une cuisse ou un buste s'emboitent dans le
+    // segment suivant. Arrondir ces derniers leur ajoutait une calotte qui
+    // sortait du corps — le buste portait une collerette au-dessus des
+    // epaules, parfaitement visible sur l'ecran de presentation.
+    const add = (c, pv, a, o, hb, ht, hz, yaw, bout) =>
+      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
+                bout ? 1 : 0]);
 
     add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
         [0.112, hipY + 0.032], 0.098, yawHip);
@@ -1332,7 +1349,7 @@
         [0.113, shY * 1.05], 0.086, yawTop);
     add(L.jersey, hip, lean, [0, 0, 0.352], [0.118, shY * 1.15],
         [0.129, shY * 1.30], 0.128, yawTop);
-    add([242, 242, 238], hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
+    add(DOSSARD, hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
         [0.010, shY * 0.50], 0.060, yawTop);
     // bande de couleur sur le maillot et le short, assortie aux chaussures :
     // un vrai kit d'athletisme plutot qu'un aplat uniforme.
@@ -1348,42 +1365,42 @@
     add(L.skin, hip, lean, [0, 0, 0.552], [0.042, 0.048], [0.040, 0.046],
         0.042, yawTop * 0.5);
     add(L.skin, hip, lean, [0.006, 0, 0.672 - bob * 0.55], [0.084, 0.081],
-        [0.088, 0.086], 0.086, yawTop * 0.2);
+        [0.088, 0.086], 0.086, yawTop * 0.2, true);
 
     const hy = yawTop * 0.2, hc = L.hairCol;
     switch (L.hair) {
       case 'shaved':
         add(hc, hip, lean, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
-            0.016, hy); break;
+            0.016, hy, true); break;
       case 'flattop':
         add(hc, hip, lean, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
-            0.048, hy); break;
+            0.048, hy, true); break;
       case 'fade':
         add(hc, hip, lean, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
-            0.030, hy);
+            0.030, hy, true);
         add(hc, hip, lean, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
-            0.046, hy); break;
+            0.046, hy, true); break;
       case 'bun':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy);
+            0.034, hy, true);
         add(hc, hip, lean, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
-            0.044, hy); break;
+            0.044, hy, true); break;
       case 'ponytail':
         add(hc, hip, lean, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
-            0.032, hy);
+            0.032, hy, true);
         add(hc, hip, lean + 0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
-            [0.058, 0.032], [0.036, 0.022], 0.028, hy); break;
+            [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
       case 'braids':
         add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy);
+            0.034, hy, true);
         for (const dy of [-0.044, 0, 0.044]) {
           add(hc, hip, lean + 0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
-              [0.046, 0.015], [0.030, 0.012], 0.018, hy);
+              [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
         }
         break;
       default:
         add(hc, hip, lean, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
-            0.026, hy);
+            0.026, hy, true);
     }
 
     const sh = rot(0, 0.470, lean);
@@ -1395,16 +1412,32 @@
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
       // seul cone, plus large au milieu qu'a l'epaule ou au coude.
+      add(L.skin, S, aArm, [0, 0, -0.012], [armR + 0.020, armR + 0.020],
+          [armR + 0.018, armR + 0.019], 0.026, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.05], [armR + 0.014, armR + 0.014],
           [armR + 0.004, armR + 0.008], 0.05, yawTop);
       add(L.skin, S, aArm, [0, 0, -0.175], [armR - 0.010, armR - 0.008],
           [armR + 0.014, armR + 0.014], 0.075, yawTop);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
+      // LES ARTICULATIONS SE VOYAIENT.
+      //
+      // Chaque membre est une suite de troncs de cone, et deux troncs qui se
+      // rencontrent a un angle laissent une marche : le bras finissait a un
+      // rayon, l'avant-bras repartait a un autre, dans une autre direction.
+      // De pres — presentation, accueil, sacre — le coureur se lisait comme
+      // un mannequin articule, pas comme un corps.
+      //
+      // Une rotule par articulation suffit : un tonneau court, a peine plus
+      // large que les deux segments qu'il raccorde, pose sur le pivot. Il
+      // avale les deux bouts et la jointure disparait. Quatre segments de
+      // plus sur une quarantaine, et rien a changer au moteur de rendu.
+      add(L.skin, E, aFore, [0, 0, -0.014], [armR + 0.003, armR + 0.005],
+          [armR + 0.003, armR + 0.005], 0.028, yawTop);
       add(L.skin, E, aFore, [0, 0, -0.112], [armR - 0.012, armR - 0.010],
           [armR - 0.004, armR - 0.001], 0.112, yawTop);
       add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
-          [armR - 0.010, armR - 0.008], 0.036, yawTop);
+          [armR - 0.010, armR - 0.008], 0.036, yawTop, true);
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
     }
@@ -1420,13 +1453,31 @@
         add(L.skin, hip, lean, [-0.012, dy, 0.806], [0.011, 0.011],
             [0.008, 0.008], 0.058, hy);
         add(r.antennes, hip, lean, [-0.018, dy, 0.884], [0.026, 0.026],
-            [0.024, 0.024], 0.016, hy);
+            [0.024, 0.024], 0.016, hy, true);
       }
     }
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
                                       [-1, rr[0], rr[1], rr[2]]]) {
       const H = [hip[0], side * hipY, hip[2] - 0.02];
+      // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
+      //
+      // Tout le monde portait la meme piece : un seul volume au bassin,
+      // coupe net a la hauteur du pli de l'aine. Ca passe pour un cuissard
+      // — ce que portent les femmes — mais un short d'athletisme masculin
+      // a des jambes, et c'est ce qu'on voyait manquer.
+      //
+      // La jambe de short est accrochee au pivot de la cuisse et suit son
+      // angle : elle se leve avec le genou, comme un vetement porte et non
+      // comme un anneau pose sur le bassin. Un rien plus large que la
+      // cuisse a chaque hauteur, pour qu'elle l'avale sans la pincer.
+      //
+      // Rien ne change pour les femmes : leur cuissard reste le seul
+      // volume du bassin.
+      if (!fem) {
+        add(L.shorts, H, th, [0, 0, -0.078], [legR + 0.034, legR + 0.036],
+            [legR + 0.030, legR + 0.032], 0.078, yawHip);
+      }
       // quadriceps galbe : meme principe que le bras, la cuisse gonfle
       // vers son tiers superieur puis s'affine jusqu'au genou.
       add(L.skin, H, th, [0, 0, -0.075], [legR + 0.026, legR + 0.026],
@@ -1435,6 +1486,8 @@
           [legR + 0.026, legR + 0.026], 0.115, yawHip);
       const k = rot(0, -0.392, th);
       const K = [H[0] + k[0], H[1], H[2] + k[1]];
+      add(L.skin, K, sk, [0, 0, -0.020], [legR + 0.003, legR + 0.006],
+          [legR + 0.003, legR + 0.006], 0.034, yawHip);
       add(L.skin, K, sk, [-0.008, 0, -0.098], [legR - 0.020, legR - 0.014],
           [legR - 0.004, legR + 0.002], 0.100, yawHip);
       add(L.skin, K, sk, [0, 0, -0.288], [legR - 0.034, legR - 0.030],
@@ -1444,9 +1497,9 @@
       // semelle claire, legerement plus large : elle deborde sous la
       // couleur de la chaussure pour suggerer une vraie basket bicolore.
       add([236, 236, 232], An, ft, [0.036, 0, -0.030], [0.098, 0.046],
-          [0.080, 0.052], 0.028, yawHip);
+          [0.080, 0.052], 0.028, yawHip, true);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
-          0.028, yawHip);
+          0.028, yawHip, true);
     }
 
     // LE PISTOLET DU STARTER, DANS LE PROLONGEMENT DE L'AVANT-BRAS.
@@ -1484,9 +1537,8 @@
     // c'est la couleur qui accroche l'oeil de loin.
     if (main) {
       const [M, a] = main;
-      const TEMOIN = [250, 206, 62];
       add(TEMOIN, M, a, [0.010, 0, -0.300], [0.019, 0.019], [0.019, 0.019],
-          0.085, yawTop);
+          0.085, yawTop, true);
     }
     return out;
   }
