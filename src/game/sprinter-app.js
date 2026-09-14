@@ -330,6 +330,31 @@
    * chacun de leur cote — la tuile de public, la cadence des flashs, la rafale
    * de l'arrivee — et un quatrieme aurait fini par se tromper.
    */
+  // LA TRIBUNE GRANDIT AVEC LA COMPETITION.
+  //
+  // Le stade des quatre premieres etapes est le meme, et il avait la meme
+  // tribune de quatre rangs couverte d'un toit du scolaire au championnat du
+  // monde. Or une rencontre scolaire se court devant deux rangs de bancs a
+  // ciel ouvert, et un mondial devant une enceinte. La foule grossissait deja
+  // d'une etape a l'autre ; la tribune qui la porte grossit maintenant avec
+  // elle, et c'est le premier signe de la montee qu'on lit a l'ecran.
+  //
+  // Seul le stade de ces quatre etapes est concerne : les stades a theme ont
+  // chacun leur tribune, reglee pour leur ciel (voir `gradins`).
+  const TRIBUNE_ETAPE = [
+    { gradins: 2, toiture: false },   // scolaire : deux rangs de bancs
+    { gradins: 3, toiture: false },   // regional
+    { gradins: 4, toiture: true },    // national
+    { gradins: 5, toiture: true },    // championnat du monde
+  ];
+  function tribuneDe(th) {
+    const etape = th === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
+    return {
+      gradins: etape ? etape.gradins : (th.gradins || 4),
+      toiture: etape ? etape.toiture : th.toiture !== false,
+    };
+  }
+
   function fouleDe(idx) {
     const lvl = LEVELS[idx];
     if (lvl && lvl.foule != null) return lvl.foule;
@@ -2612,6 +2637,16 @@
     band, bandBrute, bandPattern,
   };
   const PREM = () => globalThis.RenduPremium;
+  // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
+  // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
+  const DEC = () => globalThis.DecorsStades;
+  let _apiDecor = null;
+  function apiDecor() {
+    if (!_apiDecor) {
+      _apiDecor = { G, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
+    }
+    return _apiDecor;
+  }
   // Meme trace que band(), mais rempli avec un motif au lieu d'une teinte
   // unie : utilise pour le public des gradins (voir getCrowdPattern), qui
   // doit paraitre completement dense sans dessiner un sprite par personne
@@ -4299,7 +4334,23 @@
     };
     const W = 0.085;                 // demi-largeur du rail, en metres
     const CW = 0.25;                 // demi-largeur d'une cale
+    // LE BLOC RENDU DANS BLENDER, AU PIED DU COUREUR.
+    //
+    // Pose exactement la ou pose() met le coureur au coup de feu — T.pos(0)
+    // et T.heading(0) du couloir —, et non plus au milieu geometrique du
+    // couloir : ses pedales sont modelisees sous les pieds de la posture de
+    // depart, et quelques centimetres d'ecart suffisaient a faire flotter un
+    // pied a cote de sa plaque. L'ancien bloc au trait reste en secours tant
+    // que l'image n'est pas chargee.
+    const vue = T.curved ? WROT * 180 / Math.PI : 0;
     for (let e = 0; e < C.LANE_COUNT; e++) {
+      if (DEC()) {
+        const q = T.pos(0, e);
+        const g2 = ground(q[0], q[1]);
+        if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) continue;
+        const cap = T.heading(0, e) * 180 / Math.PI + vue;
+        if (DEC().bloc(ctx, apiDecor(), q[0], q[1], cap)) continue;
+      }
       // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
       // dont sept hors champ ne doivent rien couter.
       const centre = pt(-0.62, e, 0, 0);
@@ -4528,6 +4579,10 @@
     // La piscine, posee dans la pelouse interieure (voir drawPiscine).
     if (th.piscine) drawPiscine(ctx, th, rIn);
     if (th.transats) drawMobilier(ctx, th, rIn);
+    // Les marquages au sol rendus dans Blender — fosse, cercle de lancer —
+    // avec la pelouse, sous les gradins, la piste et tout ce qui se tient
+    // debout.
+    if (DEC()) DEC().sol(ctx, apiDecor(), th, G.levelIdx);
 
     // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
     // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
@@ -4542,7 +4597,8 @@
     // Le nombre de gradins est un reglage de THEME, pas une constante : une
     // tribune haute remplit le haut de l'image (voir la toiture, plus bas), et
     // un stade dont le sujet est le ciel ne peut pas se le permettre.
-    const near = rOut + 1.6, tiers = th.gradins || 4, sr = 1.7, sz = 0.58;
+    const tribune = tribuneDe(th);
+    const near = rOut + 1.6, tiers = tribune.gradins, sr = 1.7, sz = 0.58;
     const stp = decorStride();
     band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
@@ -4629,7 +4685,7 @@
     // gradins A CIEL OUVERT : le public s'arrete, et au-dessus commence
     // l'horizon. C'est aussi ce que sont vraiment un stade de bord de mer et
     // une reunion nocturne.
-    if (th.toiture !== false) {
+    if (tribune.toiture) {
       band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
            1.05 + tiers * sz + 2.4);
     }
@@ -4643,7 +4699,7 @@
     // nuit sans lampes n'est pas un stade de nuit, c'est un stade sombre.
     //
     // Sans toit, ni l'un ni l'autre n'a ou se poser.
-    if (th.toiture !== false) {
+    if (tribune.toiture) {
       if (th.projecteurs) {
         drawProjecteurs(ctx, th, sm, near, tiers, sr, sz);
       } else if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
@@ -4842,6 +4898,12 @@
     // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
     // doivent la recouvrir (voir drawArbresDedans).
     if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
+
+    // Hors course, les decors debout se posent ici. En course, ils passent
+    // apres les coureurs : voir la fin de drawAthletes.
+    if (DEC() && G.state !== 'race' && G.state !== 'count') {
+      DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    }
 
     // LA BRUME, APRES TOUT LE DECOR ET AVANT LES ATHLETES.
     //
@@ -5266,7 +5328,11 @@
     const fsh = K.fallShape(person.fallAnim);
     const roll = (lean || 0) + (fsh ? fsh.roll : 0);
     const rc = Math.cos(roll), rs = Math.sin(roll);
-    const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
+    // Dans les blocs, le corps n'est pas « penche en avant » : il est pose,
+    // mains au sol. L'inclinaison de sortie des blocs ne revient qu'avec la
+    // course, a mesure que le coureur quitte sa posture (voir enBloc, pose).
+    const fall = (fsh ? fsh.pitch : 0) -
+      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
     for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
@@ -5577,8 +5643,55 @@
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
 
+  /**
+   * OU EN EST CHAQUE COUREUR DE SON DEPART.
+   *
+   * Pose `enBloc` (0 en course, 1 dans les blocs) et `prets` (0 a vos marques,
+   * 1 prets) sur chaque coureur, pour pose(). C'est un etat d'AFFICHAGE : la
+   * physique de la course n'en lit rien.
+   *
+   * - Pendant le decompte, tout le monde est dans ses blocs. Au starter, on
+   *   s'y installe a « a vos marques » et on se leve a « prets », a l'heure
+   *   ou il les dit. Au decompte a trois bips, on est a vos marques des le
+   *   depart et prets au dernier bip.
+   * - Au coup de feu, on quitte la posture en poussant : sur les quatre-vingt-
+   *   dix premiers centimetres, pendant que la poussee de sortie (drivePitch)
+   *   prend le relais. Pas au chronometre — un joueur qui n'a pas encore
+   *   reagi reste en position de prets, au lieu de se relever sur place.
+   * - Un coureur qui ne part pas de la ligne — un relayeur qui attend son
+   *   temoin — n'a pas de blocs.
+   */
+  const SORTIE_BLOCS = 0.9;
+  function phaseBlocs(r) {
+    const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+    if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; return; }
+    if (G.state === 'count') {
+      const d = G.depart;
+      let marques, prets;
+      if (STARTER && d) {
+        marques = doux((G.countT - (3 - d.duree)) / 0.7);
+        prets = doux((G.countT - (3 - d.tenue)) / 0.45);
+        // avant « a vos marques », debout derriere les blocs
+        r.enBloc = marques;
+      } else {
+        r.enBloc = doux(G.countT / 0.6);
+        prets = doux((G.countT - (DECOMPTE - 1)) / 0.45);
+      }
+      r.prets = prets;
+      return;
+    }
+    if (G.state === 'race') {
+      r.enBloc = 1 - doux(r.d / SORTIE_BLOCS);
+      r.prets = 1;
+      return;
+    }
+    r.enBloc = 0;
+  }
+
   function drawAthletes(ctx) {
     const T = G.track, m = scaleM(), th = theme();
+    for (const r of G.runners) phaseBlocs(r);
+    if (G.ghost && G.ghost.runner) phaseBlocs(G.ghost.runner);
     // Le starter passe avant tout le monde : il se tient derriere la ligne,
     // donc derriere les coureurs.
     drawStarter(ctx);
@@ -5696,6 +5809,14 @@
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
       if (r.isGhost) ctx.globalAlpha = 1;
     }
+    // LES DECORS DEBOUT, APRES LES COUREURS ET AVANT LEURS NOMS.
+    //
+    // Tout ce qui se tient dans la pelouse interieure est plus pres de la
+    // camera que le couloir 1 : une cage de lancer ou un chandelier de perche
+    // doit donc passer DEVANT le coureur qui court derriere, jamais
+    // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
+    // un mat ne se lit plus.
+    if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
     // Les noms tout en haut de la pile : une pastille a demi cachee par le
     // coureur de devant ne se lit pas, et c'est la seule chose qui distingue
     // deux adversaires de couleurs voisines.

@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu du depart en blocs</title>
+<style>body{margin:0;background:#14161f;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8d93a8;margin:14px 16px 6px}
+canvas{display:block;margin:0 16px;background:#1b1e29;border-radius:6px}</style>
+<h2>a vos marques · entre deux · prets · sortie 40 % · sortie 80 %</h2>
+<canvas id="c1" width="1180" height="330"></canvas>
+<h2>meme sequence, de l'autre cote</h2>
+<canvas id="c2" width="1180" height="330"></canvas>
+<script type="module">
+  // La posture de depart, isolee de la course : cinq instants, deux cotes.
+  // La physique n'y est pour rien — on pose `enBloc` et `prets` a la main et
+  // on regarde ce que pose() en fait.
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+  const etapes = [[1, 0], [1, 0.5], [1, 1], [0.6, 1], [0.2, 1]];
+  for (const [id, miroir] of [['c1', false], ['c2', true]]) {
+    const ctx = document.getElementById(id).getContext('2d');
+    etapes.forEach(([enBloc, prets], i) => {
+      const man = { look: SprinterCore.lookFor('apercu-h', 'divers'), stride: 0.4,
+                    v: (1 - enBloc) * 4, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+                    drivePitch: 0.62, enBloc, prets };
+      SprinterApp.drawIcon(ctx, man, 150 + i * 225, 300, 420, miroir);
+    });
+  }
+</script>

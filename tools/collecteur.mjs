@@ -28,8 +28,12 @@ createServer((req, res) => {
   const bouts = [];
   req.on('data', b => bouts.push(b));
   req.on('end', () => {
-    const data = Buffer.concat(bouts).toString('utf8').replace(/^data:image\/png;base64,/, '');
-    writeFileSync(join(dossier, 'f' + String(m[1]).padStart(4, '0') + '.png'),
+    const brut = Buffer.concat(bouts).toString('utf8');
+    // PNG pour une image a examiner, JPEG pour une sequence video : sept cents
+    // images de 1280 x 720 en PNG pesent pres d'un gigaoctet.
+    const ext = brut.startsWith('data:image/jpeg') ? '.jpg' : '.png';
+    const data = brut.replace(/^data:image\/(png|jpeg);base64,/, '');
+    writeFileSync(join(dossier, 'f' + String(m[1]).padStart(6, '0') + ext),
                   Buffer.from(data, 'base64'));
     recues++;
     if (recues % 25 === 0) process.stdout.write(`  ${recues} images\n`);

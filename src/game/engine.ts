@@ -8,6 +8,11 @@ import './chiffres-piste.js';
 // chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
 // demarrerait alors sans finition pendant les premieres images.
 import './rendu-premium.js';
+// Les decors des stades, rendus dans Blender : le manifeste d'abord (ou est le
+// pied de chaque piece dans son image), puis le module qui les pose.
+import decorsManifeste from './decors-manifeste.json';
+(globalThis as any).SprinterDecorsManifeste = decorsManifeste;
+import './decors-stades.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 

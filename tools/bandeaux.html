@@ -9,10 +9,19 @@
   // faire cela depuis toujours. On fabrique donc les bandeaux ici, en PNG
   // transparents, et ffmpeg n'a plus qu'a les poser par-dessus.
   const COLLECTEUR = 'http://localhost:5299';
+  // [bandeau du bas, etiquette du haut]
   const L = [
-    ['Blender — le corps sculpté, puis mesuré os par os', null],
-    ['Même foulée, même instant — 31 volumes par coureur, puis 72', 'AVANT|APRÈS'],
-    ['Dans le jeu — 200 m, le virage, huit coureurs', null],
+    ['Le départ dans les blocs — à vos marques, prêts, partez', null],
+    ['Plus la compétition est grande, plus le stade l’est', 'SCOLAIRE'],
+    ['Plus la compétition est grande, plus le stade l’est', 'RÉGIONAL'],
+    ['Plus la compétition est grande, plus le stade l’est', 'NATIONAL'],
+    ['Plus la compétition est grande, plus le stade l’est', 'CHAMPIONNAT DU MONDE'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'JEUX MONDIAUX'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'INTER GALACTIQUE'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'NUIT ÉTOILÉE'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'STADE DU DANUBE'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'RIVIERA'],
+    ['Chaque stade son décor, modélisé et rendu dans Blender', 'TROIS SOLEILS'],
   ];
   const cv = document.createElement('canvas');
   cv.width = 1280; cv.height = 720;
@@ -28,13 +37,11 @@
     c.textBaseline = 'middle';
     c.fillText(titre, 54, 654);
     if (cotes) {
-      const [g, d] = cotes.split('|');
-      c.font = '600 26px -apple-system, Helvetica, Arial, sans-serif';
-      for (const [t, x, col] of [[g, 40, '#eef0f8'], [d, 1240 - c.measureText(d).width, '#f8cd4a']]) {
-        c.fillStyle = 'rgba(11,13,20,0.8)';
-        c.beginPath(); c.roundRect(x - 14, 30, c.measureText(t).width + 28, 46, 8); c.fill();
-        c.fillStyle = col; c.fillText(t, x, 53);
-      }
+      c.font = '700 26px -apple-system, Helvetica, Arial, sans-serif';
+      const tw = c.measureText(cotes).width;
+      c.fillStyle = 'rgba(11,13,20,0.8)';
+      c.beginPath(); c.roundRect(26, 26, tw + 30, 48, 8); c.fill();
+      c.fillStyle = '#f8cd4a'; c.fillText(cotes, 41, 50);
     }
     envois.push(fetch(COLLECTEUR + '/f/' + i, { method: 'POST', body: cv.toDataURL('image/png') }));
   });

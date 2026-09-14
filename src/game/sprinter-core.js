@@ -1249,6 +1249,52 @@
   }
 
   // ---------------------------------------------------------------------
+  // LE DEPART DANS LES BLOCS
+  // ---------------------------------------------------------------------
+  //
+  // Un sprinteur ne part pas debout. A « a vos marques », il est dans ses
+  // blocs : genou arriere au sol, mains posees juste derriere la ligne,
+  // epaules a l'aplomb des mains, pieds calés contre les pedales. A « prets »,
+  // le bassin monte au-dessus des epaules, le genou avant se ferme a angle
+  // droit, le poids passe sur les mains. Au coup de feu, il pousse.
+  //
+  // Les deux postures se donnent par ce qui TOUCHE : ou sont les chevilles
+  // (sur les pedales, voir le bloc de tools/blender/decors), ou sont les
+  // mains (sur la ligne), ou est le bassin. Les angles des membres ne sont
+  // pas ecrits a la main — ils se deduisent par une cinematique inverse a deux
+  // segments, avec les longueurs memes du rig. Changer la hauteur du bassin
+  // ne peut donc pas decoller un pied de sa pedale ni une main du sol.
+  //
+  // Reperes en metres, x vers l'avant, 0 sur la ligne de depart, z en haut.
+  const BLOC = {
+    marques: { hanche: [-0.55, 0.45], buste: -1.42 },
+    prets:   { hanche: [-0.46, 0.70], buste: -1.96 },
+    // les chevilles sur les pedales, les bouts des doigts sur la piste
+    piedAvant: [-0.56, 0.16], piedArriere: [-0.86, 0.19], main: [-0.03, 0.01],
+    // le pied sur la pedale inclinee : pointe en bas, talon contre la plaque
+    cheville: -0.80,
+  };
+
+  /**
+   * Deux segments de longueurs a et b, du pivot (px, pz) jusqu'a (tx, tz).
+   * Rend les deux angles absolus du rig (0 = vers le bas, positif = vers
+   * l'avant). `devant` choisit le coude — ou le genou — qui pointe vers
+   * l'avant.
+   */
+  function deuxSegments(px, pz, tx, tz, a, b, devant) {
+    const dx = tx - px, dz = tz - pz;
+    const d = Math.min(Math.max(Math.hypot(dx, dz), Math.abs(a - b) + 1e-4), a + b - 1e-4);
+    const base = Math.atan2(dx, -dz);
+    const c = (a * a + d * d - b * b) / (2 * a * d);
+    const ouv = Math.acos(Math.max(-1, Math.min(1, c)));
+    const t1 = devant ? base + ouv : base - ouv;
+    const kx = px + a * Math.sin(t1), kz = pz - a * Math.cos(t1);
+    return [t1, Math.atan2(tx - kx, -(tz - kz))];
+  }
+
+  const melange = (x, y, t) => x + (y - x) * t;
+
+  // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
   // Deux couleurs fixes, sorties de pose() : le rendu garde ses teintes en
@@ -1267,7 +1313,7 @@
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
     const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
-    const lean = -(0.05 + 0.16 * sp) * P.lean;
+    let lean = -(0.05 + 0.16 * sp) * P.lean;
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -1293,7 +1339,7 @@
     // cote +1 : jambe en phase p, donc bras cale en opposition sur cette
     // meme phase ; cote -1 : tout est decale d'un demi-cycle.
     const AP = armPhaseOf(P);
-    const l = leg(p), rr = leg(p + Math.PI);
+    let l = leg(p), rr = leg(p + Math.PI);
     let al = arm(p + AP), ar = arm(p + Math.PI + AP);
     const cel = r.celebrate || 0;
     if (cel > 0) {
@@ -1324,10 +1370,38 @@
       ar = [ar[0] * (1 - f) + wr * f, ar[1] * (1 - f) + (wr + 0.55) * f];
     }
 
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob;
-    const yawHip = -0.16 * A * Math.sin(p);
-    const yawTop = 0.21 * A * Math.sin(p);
-    const sway = 0.016 * A * Math.sin(p);
+    // DANS LES BLOCS. `enBloc` va de 0 (en course) a 1 (pose dans les blocs),
+    // `prets` de 0 (a vos marques) a 1 (prets) ; le rendu les tient a jour
+    // pendant le decompte et pendant la sortie des blocs (phaseBlocs,
+    // sprinter-app.js). Tout ce qui balance en course — rebond, lacet,
+    // roulis — s'efface a mesure qu'on est dans les blocs : on n'y bouge pas.
+    const wB = Math.max(0, Math.min(1, r.enBloc || 0));
+    const calme = 1 - wB;
+    let hipX = 0, hipZ = null;
+    if (wB > 0) {
+      const t = Math.max(0, Math.min(1, r.prets || 0));
+      const hx = melange(BLOC.marques.hanche[0], BLOC.prets.hanche[0], t);
+      const hz = melange(BLOC.marques.hanche[1], BLOC.prets.hanche[1], t);
+      const bu = melange(BLOC.marques.buste, BLOC.prets.buste, t);
+      // les jambes : genou vers l'avant, cheville sur sa pedale
+      const jA = deuxSegments(hx, hz - 0.02, BLOC.piedAvant[0], BLOC.piedAvant[1], 0.392, 0.380, true);
+      const jR = deuxSegments(hx, hz - 0.02, BLOC.piedArriere[0], BLOC.piedArriere[1], 0.392, 0.380, true);
+      // les bras : de l'epaule aux doigts poses sur la piste, coude en arriere
+      const sx = hx - 0.470 * Math.sin(bu), sz = hz + 0.470 * Math.cos(bu);
+      const br = deuxSegments(sx, sz, BLOC.main[0], BLOC.main[1], 0.25, 0.274, false);
+      l = [melange(l[0], jA[0], wB), melange(l[1], jA[1], wB), melange(l[2], BLOC.cheville, wB)];
+      rr = [melange(rr[0], jR[0], wB), melange(rr[1], jR[1], wB), melange(rr[2], BLOC.cheville, wB)];
+      al = [melange(al[0], br[0], wB), melange(al[1], br[1], wB)];
+      ar = [melange(ar[0], br[0], wB), melange(ar[1], br[1], wB)];
+      lean = melange(lean, bu, wB);
+      hipX = hx * wB;
+      hipZ = hz;
+    }
+
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * calme;
+    const yawHip = -0.16 * A * Math.sin(p) * calme;
+    const yawTop = 0.21 * A * Math.sin(p) * calme;
+    const sway = 0.016 * A * Math.sin(p) * calme;
 
     // Gabarit plus athletique qu'un mannequin filiforme : torse et epaules
     // elargis, cuisses epaisses qui s'affinent vers le mollet, bras avec
@@ -1339,7 +1413,7 @@
     const MO = L.morph || EMPTY_MORPH;
     const shY = (fem ? 0.130 : 0.154) * (MO.sh || 1);
     const hipY = (fem ? 0.094 : 0.082) * (MO.hip || 1);
-    const hip = [0, sway, 0.87 + bob];
+    const hip = [hipX, sway, hipZ === null ? 0.87 + bob : melange(0.87 + bob, hipZ, wB)];
     const out = [];
     // LE DERNIER ARGUMENT DIT CE QUE DEVIENNENT LES BOUTS.
     //
