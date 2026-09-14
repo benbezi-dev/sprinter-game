@@ -1,4 +1,6 @@
 import './sprinter-i18n.js';
+import './coureur-hd.js';
+import './coureur-premium.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
 // La couche de finition s'installe sur globalThis AVANT le rendu qui l'appelle.

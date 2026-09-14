@@ -1261,7 +1261,7 @@
   const SEMELLE = [236, 236, 232];
   const TEMOIN = [250, 206, 62];
 
-  function pose(r) {
+  function pose(r, lod) {
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
@@ -1339,11 +1339,9 @@
     const MO = L.morph || EMPTY_MORPH;
     const shY = (fem ? 0.130 : 0.154) * (MO.sh || 1);
     const hipY = (fem ? 0.094 : 0.082) * (MO.hip || 1);
-    const armR = (fem ? 0.052 : 0.060) * (MO.arm || 1);
-    const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
-    // LE DERNIER ARGUMENT DIT QUEL BOUT EST LIBRE.
+    // LE DERNIER ARGUMENT DIT CE QUE DEVIENNENT LES BOUTS.
     //
     // Le rendu arrondit le bout d'un segment quand on le lui demande, et
     // seulement alors. Le squelette est le seul a savoir lequel merite de
@@ -1352,66 +1350,68 @@
     // segment suivant. Arrondir ces derniers leur ajoutait une calotte qui
     // sortait du corps — le buste portait une collerette au-dessus des
     // epaules, parfaitement visible sur l'ecran de presentation.
+    //
+    // `true` reste le bout libre d'autrefois. Les corps mesures y ajoutent
+    // les bouts ENFOUIS, qui ne recoivent aucun disque : voir
+    // coureur-premium.js.
     const add = (c, pv, a, o, hb, ht, hz, yaw, bout) =>
       out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
-                bout ? 1 : 0]);
+                bout === true ? 1 : (bout | 0)]);
 
-    add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
-        [0.112, hipY + 0.032], 0.098, yawHip);
-    // LE BUSTE EST FAIT DE DEUX TRONCS, ET ON VOYAIT LE JOINT.
+    // LE CORPS VIENT DE BLENDER. Chaque os porte une suite de troncs de
+    // cone dont l'epaisseur a ete relevee sur un maillage sculpte — un
+    // sprinter en metaballs, converti en maillage, puis sonde par vingt-
+    // quatre rayons a chaque hauteur — et non choisie a vue. La ou il y
+    // avait deux ou trois troncs par membre, il y en a jusqu'a sept : le
+    // ventre du biceps tombe au tiers superieur, la taille se pince sous les
+    // cotes, le mollet est haut et court, la cheville fine, et le fessier
+    // comme la poitrine debordent de l'os. Voir coureur-hd.js et
+    // tools/blender/.
     //
-    // Taille marquee : plus etroite juste au-dessus du short qu'au niveau
-    // des cotes, pour rompre le profil "tube" entre bassin et buste. Mais
-    // le troncon du haut naissait PLUS LARGE que ne finissait celui du bas
-    // — 1,15 contre 1,05 — et un anneau plus large qui sort d'un anneau
-    // plus etroit, ca fait une arete. Elle courait en travers du maillot,
-    // a mi-poitrine, sur les trois coureurs de l'accueil comme sur celui
-    // qu'on presente avant la course : une ligne horizontale nette, que
-    // l'eclairage soulignait encore puisque les deux troncs n'ont pas la
-    // meme pente et donc pas la meme valeur.
-    //
-    // Deux corrections, et il a fallu les deux.
-    //
-    // Les rayons se rejoignent d'abord a la jonction : le troncon du bas
-    // finit ou l'autre commence, donc il entre dedans au lieu d'en
-    // depasser. L'arete de silhouette disparait — mais pas la ligne. Car
-    // un troncon est eclairee selon SA pente, et les deux n'avaient pas la
-    // meme : la taille s'evase vite (deux centimetres de rayon gagnes sur
-    // dix de hauteur), la poitrine presque pas. Deux pentes, deux valeurs,
-    // et une frontiere nette entre elles quoi qu'on fasse des rayons.
-    //
-    // Le buste est donc coupe en TROIS, avec des pentes qui se suivent —
-    // 0,19 puis 0,13 puis 0,045 — au lieu de deux qui s'opposent. Chaque
-    // jonction ne porte plus que la moitie de l'ecart, et il y en a deux :
-    // la transition s'etale au lieu de se lire d'un trait. Les troncons se
-    // chevauchent d'un bon centimetre, pour qu'aucune fente ne s'ouvre
-    // entre les facettes.
-    //
-    // La taille reste marquee : c'est le rayon du BAS (0,78) qui la creuse,
-    // et il ne bouge pas.
-    add(L.jersey, hip, lean, [0, 0, 0.142], [0.084, shY * 0.78],
-        [0.106, shY * 0.99], 0.058, yawTop);
-    add(L.jersey, hip, lean, [0, 0, 0.2545], [0.103, shY * 0.97],
-        [0.122, shY * 1.19], 0.0705, yawTop);
-    add(L.jersey, hip, lean, [0, 0, 0.3945], [0.119, shY * 1.17],
-        [0.129, shY * 1.30], 0.0855, yawTop);
-    add(DOSSARD, hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
-        [0.010, shY * 0.50], 0.060, yawTop);
-    // bande de couleur sur le maillot et le short, assortie aux chaussures :
-    // un vrai kit d'athletisme plutot qu'un aplat uniforme.
-    add(L.shoe, hip, lean, [0.078, 0, 0.28], [0.015, 0.015],
-        [0.017, 0.017], 0.19, yawTop);
-    add(L.shoe, hip, 0, [0.09, 0, 0], [0.014, 0.014],
-        [0.014, 0.014], 0.09, yawHip);
+    // Rien d'autre ne change : memes pivots, memes longueurs, memes angles.
+    // C'est la seule raison pour laquelle ces coureurs-la courent dans le
+    // virage comme les autres — personCapsules fait tourner des segments, et
+    // un coureur mesure n'est fait que de segments.
+    const PREM = root.SprinterPremium;
+    const LIBRE = PREM.LIBRE, SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
+    const PR = PREM.profils(fem);
+    const niv = lod === undefined ? PREM.PRES : lod;
+    const kSh = MO.sh || 1, kHip = MO.hip || 1;
+    const kArm = MO.arm || 1, kLeg = MO.leg || 1;
 
+    // Le bassin : son ourlet se voit, sa ceinture disparait sous le maillot.
+    PREM.chaine(add, PR, 'pelvis', niv, L.shorts, hip, 0, 0, yawHip, kHip,
+                0, 0, SOUS_HAUT);
+    // Le maillot descend par-dessus la ceinture du short. Sans ce
+    // recouvrement, le buste bascule en course et decouvre le haut du short
+    // par l'arriere. Son bas est donc enfoui ; son haut garde un disque nu,
+    // sans calotte — c'est elle qui faisait la collerette.
+    PREM.chaine(add, PR, 'torso', niv, L.jersey, hip, lean, 0, yawTop, kSh,
+                0, SOUS_BAS, 0);
+    // Dossard et bandes de couleur : un vrai kit d'athletisme plutot qu'un
+    // aplat uniforme. Ils se posent sur la peau MESUREE et non a une
+    // abscisse fixe — sinon ils s'enfoncent dans un torse epais et flottent
+    // devant un torse mince.
+    add(DOSSARD, hip, lean,
+        [PREM.avant(PR, 'torso', niv, 0.352, kSh) * 0.90, 0, 0.352],
+        [0.010, shY * 0.46], [0.010, shY * 0.50], 0.060, yawTop);
+    add(L.shoe, hip, lean,
+        [PREM.avant(PR, 'torso', niv, 0.280, kSh) * 0.94, 0, 0.28],
+        [0.015, 0.015], [0.017, 0.017], 0.19, yawTop);
+    add(L.shoe, hip, 0,
+        [PREM.avant(PR, 'pelvis', niv, 0, kHip) * 0.94, 0, 0],
+        [0.014, 0.014], [0.014, 0.014], 0.09, yawHip);
+
+    // Le deltoide : c'est lui qui fait la carrure. Son sommet garde un
+    // disque nu — une calotte y posait un bouton clair sur l'epaule.
     for (const side of [1, -1]) {
-      add(L.skin, hip, lean, [0, side * shY, 0.462], [0.073, 0.057],
-          [0.065, 0.049], 0.050, yawTop);
+      PREM.chaine(add, PR, 'deltoid', niv, L.skin, hip, lean, side * shY,
+                  yawTop, kSh, 0, SOUS_BAS, 0);
     }
-    add(L.skin, hip, lean, [0, 0, 0.552], [0.042, 0.048], [0.040, 0.046],
-        0.042, yawTop * 0.5);
-    add(L.skin, hip, lean, [0.006, 0, 0.672 - bob * 0.55], [0.084, 0.081],
-        [0.088, 0.086], 0.086, yawTop * 0.2, true);
+    PREM.chaine(add, PR, 'neck', niv, L.skin, hip, lean, 0, yawTop * 0.5, 1,
+                0, SOUS_BAS, SOUS_HAUT);
+    PREM.chaine(add, PR, 'head', niv, L.skin, hip, lean, 0, yawTop * 0.2, 1,
+                -bob * 0.55, SOUS_BAS, LIBRE);
 
     const hy = yawTop * 0.2, hc = L.hairCol;
     switch (L.hair) {
@@ -1456,34 +1456,24 @@
     let main = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
-      // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
-      // seul cone, plus large au milieu qu'a l'epaule ou au coude.
-      add(L.skin, S, aArm, [0, 0, -0.012], [armR + 0.020, armR + 0.020],
-          [armR + 0.018, armR + 0.019], 0.026, yawTop);
-      add(L.skin, S, aArm, [0, 0, -0.05], [armR + 0.014, armR + 0.014],
-          [armR + 0.004, armR + 0.008], 0.05, yawTop);
-      add(L.skin, S, aArm, [0, 0, -0.175], [armR - 0.010, armR - 0.008],
-          [armR + 0.014, armR + 0.014], 0.075, yawTop);
+      // Le haut du bras entre dans le deltoide ; la main est un bout libre.
+      PREM.chaine(add, PR, 'upperarm', niv, L.skin, S, aArm, 0, yawTop, kArm,
+                  0, 0, SOUS_HAUT);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
       // LES ARTICULATIONS SE VOYAIENT.
       //
-      // Chaque membre est une suite de troncs de cone, et deux troncs qui se
-      // rencontrent a un angle laissent une marche : le bras finissait a un
-      // rayon, l'avant-bras repartait a un autre, dans une autre direction.
-      // De pres — presentation, accueil, sacre — le coureur se lisait comme
-      // un mannequin articule, pas comme un corps.
-      //
-      // Une rotule par articulation suffit : un tonneau court, a peine plus
-      // large que les deux segments qu'il raccorde, pose sur le pivot. Il
-      // avale les deux bouts et la jointure disparait. Quatre segments de
-      // plus sur une quarantaine, et rien a changer au moteur de rendu.
-      add(L.skin, E, aFore, [0, 0, -0.014], [armR + 0.003, armR + 0.005],
-          [armR + 0.003, armR + 0.005], 0.028, yawTop);
-      add(L.skin, E, aFore, [0, 0, -0.112], [armR - 0.012, armR - 0.010],
-          [armR - 0.004, armR - 0.001], 0.112, yawTop);
-      add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
-          [armR - 0.010, armR - 0.008], 0.036, yawTop, true);
+      // Deux troncs qui se rencontrent a un angle laissent une marche : le
+      // bras finit a un rayon, l'avant-bras repart a un autre, dans une autre
+      // direction. Une rotule sur le pivot avale les deux bouts. Elle prend
+      // le plus epais des deux rayons MESURES a la jonction, un rien au-dela,
+      // pour couvrir sans faire de bosse.
+      const rCoude = Math.max(PREM.rayon(PR, 'upperarm', niv, 'bas', kArm),
+                              PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * 1.06;
+      add(L.skin, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
+          0.026, yawTop);
+      PREM.chaine(add, PR, 'forearm', niv, L.skin, E, aFore, 0, yawTop, kArm,
+                  0, LIBRE, SOUS_HAUT);
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
     }
@@ -1508,36 +1498,26 @@
       const H = [hip[0], side * hipY, hip[2] - 0.02];
       // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
       //
-      // Tout le monde portait la meme piece : un seul volume au bassin,
-      // coupe net a la hauteur du pli de l'aine. Ca passe pour un cuissard
-      // — ce que portent les femmes — mais un short d'athletisme masculin
-      // a des jambes, et c'est ce qu'on voyait manquer.
-      //
-      // La jambe de short est accrochee au pivot de la cuisse et suit son
-      // angle : elle se leve avec le genou, comme un vetement porte et non
-      // comme un anneau pose sur le bassin. Un rien plus large que la
-      // cuisse a chaque hauteur, pour qu'elle l'avale sans la pincer.
-      //
-      // Rien ne change pour les femmes : leur cuissard reste le seul
-      // volume du bassin.
+      // Un short d'athletisme masculin a des jambes. La jambe de short est
+      // accrochee au pivot de la cuisse et suit son angle : elle se leve avec
+      // le genou, comme un vetement porte et non comme un anneau pose sur le
+      // bassin. Elle reprend le haut de la cuisse MESUREE, un rien plus
+      // large a chaque hauteur, pour l'avaler sans la pincer. Rien ne change
+      // pour les femmes : leur cuissard reste le seul volume du bassin.
       if (!fem) {
-        add(L.shorts, H, th, [0, 0, -0.078], [legR + 0.034, legR + 0.036],
-            [legR + 0.030, legR + 0.032], 0.078, yawHip);
+        PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yawHip,
+                    kLeg * 1.08, 0, 0, SOUS_HAUT, -0.156);
       }
-      // quadriceps galbe : meme principe que le bras, la cuisse gonfle
-      // vers son tiers superieur puis s'affine jusqu'au genou.
-      add(L.skin, H, th, [0, 0, -0.075], [legR + 0.026, legR + 0.026],
-          [legR + 0.008, legR + 0.012], 0.075, yawHip);
-      add(L.skin, H, th, [0, 0, -0.265], [legR - 0.024, legR - 0.020],
-          [legR + 0.026, legR + 0.026], 0.115, yawHip);
-      const k = rot(0, -0.392, th);
-      const K = [H[0] + k[0], H[1], H[2] + k[1]];
-      add(L.skin, K, sk, [0, 0, -0.020], [legR + 0.003, legR + 0.006],
-          [legR + 0.003, legR + 0.006], 0.034, yawHip);
-      add(L.skin, K, sk, [-0.008, 0, -0.098], [legR - 0.020, legR - 0.014],
-          [legR - 0.004, legR + 0.002], 0.100, yawHip);
-      add(L.skin, K, sk, [0, 0, -0.288], [legR - 0.034, legR - 0.030],
-          [legR - 0.022, legR - 0.018], 0.092, yawHip);
+      PREM.chaine(add, PR, 'thigh', niv, L.skin, H, th, 0, yawHip, kLeg,
+                  0, SOUS_BAS, SOUS_HAUT);
+      const kv = rot(0, -0.392, th);
+      const K = [H[0] + kv[0], H[1], H[2] + kv[1]];
+      const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
+                              PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * 1.04;
+      add(L.skin, K, sk, [0, 0, -0.020], [rGenou, rGenou], [rGenou, rGenou],
+          0.034, yawHip);
+      PREM.chaine(add, PR, 'shank', niv, L.skin, K, sk, 0, yawHip, kLeg,
+                  0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
       const An = [K[0] + a[0], K[1], K[2] + a[1]];
       // semelle claire, legerement plus large : elle deborde sous la
