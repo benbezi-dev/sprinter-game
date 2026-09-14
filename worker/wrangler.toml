@@ -97,13 +97,21 @@ OBJECTIF = "actif"
 # 5 septembre, sept alertes envoyees la-bas, et personne pour les lire — on a
 # cherche la panne du cote de la cle Resend pendant ce temps.
 #
-# L'expediteur reste onboarding@resend.dev tant que sprinter-game.com n'est pas
-# verifie chez Resend (SPF/DKIM) : un domaine non verifie fait refuser TOUS les
-# envois, et on ne s'en apercevrait qu'a la prochaine demande perdue. A
-# remplacer par « Sprinter <recuperations@sprinter-game.com> » une fois la
-# verification faite.
+# Il y avait en fait DEUX murs empiles, et le second ne pouvait pas se voir tant
+# que le premier tenait. La cle Resend etait refusee, oui ; mais derriere elle,
+# le compte etait en bac a sable — sans domaine verifie, Resend n'expedie que
+# depuis onboarding@resend.dev et n'ecrit qu'a l'adresse du compte. Toute autre
+# destination repartait en 403. Une cle neuve seule n'aurait donc rien repare,
+# et on aurait cherche ailleurs.
+#
+# Le 14 septembre 2026, sprinter-game.com a ete verifie chez Resend (DKIM sur
+# resend._domainkey, SPF et MX sur le sous-domaine send, region eu-west-1). Les
+# deux lignes ci-dessous sont libres depuis. Le sous-domaine send tient Resend a
+# l'ecart de la messagerie du domaine : les MX de la racine restent ceux de
+# Google, et « Enable Receiving » chez Resend doit rester eteint — l'activer
+# poserait des MX sur la racine et couperait la reception.
 MAIL_DEST = "contact.pro@sprinter-game.com"
-MAIL_EXPEDITEUR = "Sprinter <onboarding@resend.dev>"
+MAIL_EXPEDITEUR = "Sprinter <recuperations@sprinter-game.com>"
 
 # POURQUOI CINQ MINUTES ET NON QUINZE. Chaque joueur recoit a quelques minutes
 # pres de son heure, toujours les memes : trois cents telephones qui vibrent a
