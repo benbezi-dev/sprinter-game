@@ -1,5 +1,7 @@
 import './sprinter-i18n.js';
 import './langues/index.js';
+import './coureur-hd.js';
+import './coureur-premium.js';
 import './sprinter-core.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';

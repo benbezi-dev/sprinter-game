@@ -51,3 +51,10 @@ android/keystore*
 *.keystore
 # Icônes PWA regenerees par @capacitor/assets a la racine.
 /icons/
+
+# Sorties de la chaine Blender : images de rendu, sequences de verification,
+# videos de presentation. Tout est reengendre par tools/blender/coureur.py et
+# tools/blender/rendu.py — seules les mesures recopiees dans
+# src/game/coureur-hd.js font partie du jeu.
+tools/blender/sortie/
+__pycache__/

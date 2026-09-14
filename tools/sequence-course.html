@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — enregistrer une course</title>
+<style>body{margin:0;background:#0b0d14;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}
+#etat{padding:8px 12px}canvas{display:block}</style>
+<div id="etat">demarrage...</div>
+<canvas id="cv" width="1280" height="720"></canvas>
+<script type="module">
+  import { SprinterApp, updateLogic, padPress, setTouchInput } from '/src/game/engine.ts';
+
+  const P = new URLSearchParams(location.search);
+  const IMAGES = +(P.get('n') || 150);
+  const EPREUVE = P.get('epreuve') || '200';
+  const NIVEAU = +(P.get('niveau') || 3);
+  const COLLECTEUR = P.get('vers') || 'http://localhost:5299';
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const etat = document.getElementById('etat');
+  const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
+
+  G.cv = cv; G.dpr = 1; G.VW = cv.width; G.VH = cv.height;
+  G.portrait = false;
+  SprinterApp.load();
+  SprinterApp.startOneShot([EPREUVE], { levelIdx: NIVEAU });
+
+  const DT = 1 / 30;
+  const couts = [];
+  let n = 0, envois = [];
+
+  // Le joueur ne peut pas taper tout seul : on alterne les deux zones a sa
+  // place, un appui toutes les deux images, soit quinze par seconde — la
+  // cadence d'un joueur qui va vite. On passe par padPress et non par un
+  // evenement clavier : c'est la porte d'entree reelle du jeu, celle que
+  // le doigt et la touche empruntent tous les deux, et elle seule compte
+  // la cadence et les fautes d'alternance.
+  let cote = 0;
+  function taper() { padPress((cote++ % 2) ? 'right' : 'left'); }
+
+  async function image(i) {
+    if (G.state === 'race' && i % 2 === 0) taper();
+    updateLogic(DT);
+    const t0 = performance.now();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, G.VW, G.VH);
+    const theme = THEMES[LEVELS[G.levelIdx].theme];
+    drawWorld(ctx, theme);
+    if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
+    couts.push(performance.now() - t0);
+    envois.push(fetch(COLLECTEUR + '/f/' + i, { method: 'POST', body: cv.toDataURL('image/png') }));
+    if (envois.length > 8) { await Promise.all(envois); envois = []; }
+  }
+
+  for (n = 0; n < IMAGES; n++) {
+    await image(n);
+    if (n % 20 === 0) etat.textContent = `image ${n}/${IMAGES} — ${G.state} — ${G.player ? Math.round(G.player.d) : 0} m`;
+  }
+  await Promise.all(envois);
+
+  couts.sort((a, b) => a - b);
+  const moy = couts.reduce((a, b) => a + b, 0) / couts.length;
+  etat.textContent =
+    `fini : ${IMAGES} images. Rendu d'une image, ${G.runners.length} coureurs a l'ecran — ` +
+    `median ${couts[couts.length >> 1].toFixed(2)} ms, moyenne ${moy.toFixed(2)} ms, ` +
+    `pire ${couts[couts.length - 1].toFixed(2)} ms`;
+  window.__bilan = { median: couts[couts.length >> 1], moy, pire: couts[couts.length - 1] };
+</script>

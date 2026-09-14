@@ -1309,8 +1309,9 @@
         // bras leves : un public qui encourage, pas qui court
         celebrate: 0.72 + (seed % 28) / 100
       };
-      const caps = personCapsules(fan, 0, 0, (seed & 1) === 1, false);
       const k = 11 + (seed % 5);
+      const caps = personCapsules(fan, 0, 0, (seed & 1) === 1, false,
+                                  niveauDetail(k));
       const x = seed % CROWD_TILE;
       const y = ((seed / 211) | 0) % CROWD_TILE;
       // dessine aussi les copies debordantes, sinon la tuile se raccorde
@@ -1643,34 +1644,74 @@
     return RING_MAX;
   }
 
-  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k) {
-    const r0 = e0[3], r1 = e1[3];
+  // Un segment n'est pas un tuyau rond.
+  //
+  // Les mesures prises dans Blender donnent, a chaque hauteur, une
+  // PROFONDEUR et une LARGEUR distinctes : un buste de sprinter est une
+  // fois et demie plus large que profond, un crane et une cuisse sont
+  // l'inverse. Les ecraser en un rayon unique — ce que faisait ce code —
+  // rendait ces corps-la sous forme de colonnes, et toute la mesure
+  // partait a la poubelle.
+  //
+  // La section est donc une ellipse. Il faut pour cela savoir ou est la
+  // largeur du coureur une fois qu'il a tourne : c'est W, la direction
+  // laterale du corps, transportee par personCapsules a travers les memes
+  // rotations que les points (lacet, inclinaison, cap, virage). On la
+  // redresse perpendiculairement a l'os, et l'autre axe suit.
+  function drawSegmentFacets(ctx, col, e0, e1, W, bouts, ax, ay, k) {
+    const hx0 = e0[3], hy0 = e0[4], hx1 = e1[3], hy1 = e1[4];
+    const r0 = (hx0 + hy0) * 0.5, r1 = (hx1 + hy1) * 0.5;
     let dx = e1[0] - e0[0], dy = e1[1] - e0[1], dz = e1[2] - e0[2];
     let len = Math.hypot(dx, dy, dz);
     if (len < 1e-6) { dx = 0; dy = 0; dz = 1; len = 1e-6; }
     const axx = dx / len, axy = dy / len, axz = dz / len;
 
-    // base orthonormee perpendiculaire a l'axe du segment
-    let hx = 0, hy = 0, hz = 1;
-    if (Math.abs(axz) > 0.9) { hx = 1; hz = 0; }
-    let ux = axy * hz - axz * hy, uy = axz * hx - axx * hz, uz = axx * hy - axy * hx;
-    const ul = Math.hypot(ux, uy, uz) || 1;
-    ux /= ul; uy /= ul; uz /= ul;
-    const vx = axy * uz - axz * uy, vy = axz * ux - axx * uz, vz = axx * uy - axy * ux;
+    // v = la largeur du corps, redressee perpendiculairement a l'os.
+    let vx, vy, vz;
+    const wd = W[0] * axx + W[1] * axy + W[2] * axz;
+    vx = W[0] - axx * wd; vy = W[1] - axy * wd; vz = W[2] - axz * wd;
+    let vl = Math.hypot(vx, vy, vz);
+    if (vl < 1e-4) {
+      // os parallele a la largeur du corps : le plan de l'ellipse n'est
+      // plus defini. On retombe sur une base quelconque — a cet angle-la,
+      // profondeur et largeur ne se distinguent de toute facon pas.
+      let bx = 0, by = 0, bz = 1;
+      if (Math.abs(axz) > 0.9) { bx = 1; bz = 0; }
+      vx = axy * bz - axz * by; vy = axz * bx - axx * bz; vz = axx * by - axy * bx;
+      vl = Math.hypot(vx, vy, vz) || 1;
+    }
+    vx /= vl; vy /= vl; vz /= vl;
+    const ux = axy * vz - axz * vy, uy = axz * vx - axx * vz,
+          uz = axx * vy - axy * vx;
 
-    const N = facetCount(Math.max(r0, r1) * k);
+    const N = facetCount(Math.max(hx0, hy0, hx1, hy1) * k);
     const dr = (r1 - r0) / len;
+    // pour la normale, l'ellipse moyenne du tronc suffit : l'ombrage ne se
+    // joue pas au dixieme de degre, et cela evite deux racines par facette.
+    const mhx = (hx0 + hx1) * 0.5, mhy = (hy0 + hy1) * 0.5;
 
     for (let i = 0; i < N; i++) {
       const a = TAU * i / N, ca = Math.cos(a), sa = Math.sin(a);
-      const rx = ux * ca + vx * sa, ry = uy * ca + vy * sa, rz = uz * ca + vz * sa;
-      // normale d'un tronc de cone : radiale, inclinee par la variation de rayon
-      let mx = rx - axx * dr, my = ry - axy * dr, mz = rz - axz * dr;
+      // La normale d'une ellipse ne pointe pas vers son centre : elle se
+      // redresse vers le petit axe. C'est ce qui fait qu'un dos large
+      // prend la lumiere a plat au lieu de la rouler comme un tube.
+      let mx = ux * ca * mhy + vx * sa * mhx,
+          my = uy * ca * mhy + vy * sa * mhx,
+          mz = uz * ca * mhy + vz * sa * mhx;
+      const mn = Math.hypot(mx, my, mz) || 1;
+      mx /= mn; my /= mn; mz /= mn;
+      mx -= axx * dr; my -= axy * dr; mz -= axz * dr;
       const ml = Math.hypot(mx, my, mz) || 1;
       _nx[i] = mx / ml; _ny[i] = my / ml; _nz[i] = mz / ml;
 
-      const X0 = e0[0] + rx * r0, Y0 = e0[1] + ry * r0, Z0 = e0[2] + rz * r0;
-      const X1 = e1[0] + rx * r1, Y1 = e1[1] + ry * r1, Z1 = e1[2] + rz * r1;
+      const ex0 = ux * ca * hx0 + vx * sa * hy0,
+            ey0 = uy * ca * hx0 + vy * sa * hy0,
+            ez0 = uz * ca * hx0 + vz * sa * hy0;
+      const ex1 = ux * ca * hx1 + vx * sa * hy1,
+            ey1 = uy * ca * hx1 + vy * sa * hy1,
+            ez1 = uz * ca * hx1 + vz * sa * hy1;
+      const X0 = e0[0] + ex0, Y0 = e0[1] + ey0, Z0 = e0[2] + ez0;
+      const X1 = e1[0] + ex1, Y1 = e1[1] + ey1, Z1 = e1[2] + ez1;
       _p0x[i] = X0; _p0y[i] = Y0; _p0z[i] = Z0;
       _p1x[i] = X1; _p1y[i] = Y1; _p1z[i] = Z1;
       _s0x[i] = ax + (Y0 - X0) * C.ISO_COS * k;
@@ -1693,14 +1734,14 @@
       nf++;
     }
     // bouchons : sans eux les extremites (mains, pieds, tete) sont creuses
-    if (-(axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2]) < 0) {
+    if ((bouts & 1) && -(axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2]) < 0) {
       _fKind[nf] = -1;
       _fDepth[nf] = e0[0] + e0[1];
       const nl = -(axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2]);
       _fShade[nf] = 0.56 + 0.60 * (nl > 0 ? nl : 0);
       nf++;
     }
-    if (axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2] < 0) {
+    if ((bouts & 2) && axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2] < 0) {
       _fKind[nf] = -2;
       _fDepth[nf] = e1[0] + e1[1];
       const nl = axx * LIGHT[0] + axy * LIGHT[1] + axz * LIGHT[2];
@@ -1748,12 +1789,26 @@
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
       const c = caps[order[n][1]];
-      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k);
+      drawSegmentFacets(ctx, c[0], c[1], c[2], c[3], c[4], ax, ay, k);
     }
   }
 
-  function personCapsules(person, headAng, lean, mirror, applyCurve) {
-    const parts = pose(person);
+  // Combien de volumes vaut la peine de payer, a cette taille-la.
+  //
+  // Le corps mesure dans Blender existe en trois echantillonnages du meme
+  // maillage. Un coureur qui occupe soixante-dix pixels merite ses
+  // soixante-douze troncs de cone ; un spectateur qui en occupe dix-huit
+  // n'en tirerait rien, et il y en a des centaines dans les gradins. Le
+  // niveau le plus grossier coute exactement ce que coutait l'ancien
+  // modele — les huit coureurs a l'ecran n'ont donc rien perdu.
+  function niveauDetail(k) {
+    if (k >= 40) return 0;      // pres
+    if (k >= 20) return 1;      // moyen
+    return 2;                   // loin
+  }
+
+  function personCapsules(person, headAng, lean, mirror, applyCurve, lod) {
+    const parts = pose(person, lod);
     const sgn = mirror ? -1 : 1;
     const hc = Math.cos(headAng || 0), hs = Math.sin(headAng || 0);
     // La chute ajoute son propre deport lateral par-dessus l'inclinaison
@@ -1764,7 +1819,7 @@
     const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
-    for (const [col, pv, ang, off, hf, yaw] of parts) {
+    for (const [col, pv, ang, off, hf, yaw, bouts] of parts) {
       const ca = Math.cos(ang), sa = Math.sin(ang);
       const yc = Math.cos(yaw), ys = Math.sin(yaw);
       const ends = [];
@@ -1782,9 +1837,23 @@
         let rx = wx, ry = wy;
         if (headAng) { const t = wx * hc - wy * hs; ry = wx * hs + wy * hc; rx = t; }
         if (applyCurve) { const t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
-        ends.push([rx, ry, wz, (hx + hy) * 0.5]);
+        ends.push([rx, ry, wz, hx, hy]);
       }
-      caps.push([col, ends[0], ends[1]]);
+      // OU EST LA LARGEUR DU CORPS, UNE FOIS LE COUREUR TOURNE.
+      //
+      // Les sections sont des ellipses : pour les orienter, le rendu a
+      // besoin de savoir de quel cote regarde la largeur du coureur. On
+      // promene donc le vecteur lateral du corps dans exactement les memes
+      // rotations que les points. Deux d'entre elles manquent a l'appel et
+      // c'est normal : l'angle de l'os et le pique du buste tournent tous
+      // deux autour de cet axe-la, et le laissent intact.
+      let Wx = -ys, Wy = yc, Wz = 0, t;
+      if (lean) { t = Wy * rc - Wz * rs; Wz = Wy * rs + Wz * rc; Wy = t; }
+      if (Math.abs(fall) > 0.001) { t = Wx * fc - Wz * fs; Wz = Wx * fs + Wz * fc; Wx = t; }
+      Wx *= sgn;
+      if (headAng) { t = Wx * hc - Wy * hs; Wy = Wx * hs + Wy * hc; Wx = t; }
+      if (applyCurve) { t = Wx * WC - Wy * WS; Wy = Wx * WS + Wy * WC; Wx = t; }
+      caps.push([col, ends[0], ends[1], [Wx, Wy, Wz], bouts]);
     }
     return caps;
   }
@@ -1792,7 +1861,8 @@
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
     const curved = !!(G.track && G.track.curved);
-    const caps = personCapsules(r, headAng, lean, false, curved);
+    const caps = personCapsules(r, headAng, lean, false, curved,
+                                niveauDetail(k));
     drawFacetFigure(ctx, caps, ax, ay, k);
   }
 
@@ -1951,7 +2021,7 @@
   // pendant la course, sans rotation de virage (personnage pose seul).
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
-    const caps = personCapsules(man, 0, 0, mirror, false);
+    const caps = personCapsules(man, 0, 0, mirror, false, niveauDetail(k));
     drawFacetFigure(ctx, caps, cx2, cy2, k);
   }
 
@@ -1966,6 +2036,11 @@
     REC_STEP, goHome,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
+    // Le rendu des personnages, sorti tel quel : c'est par la que
+    // tools/apercu-coureur.html verifie les corps hors course — de face, de
+    // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
+    // arreter sur l'image qu'on veut regarder.
+    personCapsules, drawFacetFigure, niveauDetail,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,
     RED, MAGENTA };

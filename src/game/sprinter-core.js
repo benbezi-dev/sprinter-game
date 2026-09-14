@@ -920,7 +920,7 @@
   // ---------------------------------------------------------------------
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
-  function pose(r) {
+  function pose(r, lod) {
     const L = r.look, fem = L.build === 'f';
     const p = r.stride;
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
@@ -988,38 +988,61 @@
     const MO = L.morph || EMPTY_MORPH;
     const shY = (fem ? 0.130 : 0.154) * (MO.sh || 1);
     const hipY = (fem ? 0.094 : 0.082) * (MO.hip || 1);
-    const armR = (fem ? 0.052 : 0.060) * (MO.arm || 1);
-    const legR = (fem ? 0.082 : 0.090) * (MO.leg || 1);
     const hip = [0, sway, 0.87 + bob];
     const out = [];
-    const add = (c, pv, a, o, hb, ht, hz, yaw) =>
-      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0]);
+    // `bouts` dit lesquelles des deux extremites doivent etre bouchees :
+    // 1 le bas, 2 le haut, 3 les deux. A l'interieur d'une chaine de troncs
+    // empiles sur le meme os, ces disques sont invisibles — mais ils sont
+    // DESSINES, et comme deux troncs voisins sont a la meme profondeur,
+    // l'ordre entre eux flotte : les disques ressortaient en anneaux clairs
+    // le long des cuisses et des bras. Les chaines ne bouchent donc que
+    // leurs vrais bouts.
+    const add = (c, pv, a, o, hb, ht, hz, yaw, bouts) =>
+      out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
+                bouts === undefined ? 3 : bouts]);
 
-    add(L.shorts, hip, 0, [0, 0, 0], [0.122, hipY + 0.045],
-        [0.112, hipY + 0.032], 0.098, yawHip);
-    // taille marquee : plus etroite juste au-dessus du short qu'au niveau
-    // des cotes, pour rompre le profil "tube" entre bassin et buste.
-    add(L.jersey, hip, lean, [0, 0, 0.170], [0.084, shY * 0.78],
-        [0.113, shY * 1.05], 0.086, yawTop);
-    add(L.jersey, hip, lean, [0, 0, 0.352], [0.118, shY * 1.15],
-        [0.129, shY * 1.30], 0.128, yawTop);
-    add([242, 242, 238], hip, lean, [0.086, 0, 0.352], [0.010, shY * 0.46],
-        [0.010, shY * 0.50], 0.060, yawTop);
-    // bande de couleur sur le maillot et le short, assortie aux chaussures :
-    // un vrai kit d'athletisme plutot qu'un aplat uniforme.
-    add(L.shoe, hip, lean, [0.078, 0, 0.28], [0.015, 0.015],
-        [0.017, 0.017], 0.19, yawTop);
-    add(L.shoe, hip, 0, [0.09, 0, 0], [0.014, 0.014],
-        [0.014, 0.014], 0.09, yawHip);
+    // LE CORPS VIENT DE BLENDER. Chaque os porte une suite de troncs de
+    // cone dont l'epaisseur a ete relevee sur un maillage sculpte — un
+    // sprinter en metaballs, converti en maillage, puis sonde par vingt-
+    // quatre rayons a chaque hauteur — et non choisie a vue. La ou il y
+    // avait deux troncs par membre, il y en a jusqu'a six : le ventre du
+    // biceps tombe au tiers superieur, la taille se pince sous les cotes,
+    // le mollet est haut et court, la cheville fine. Voir coureur-hd.js et
+    // tools/blender/.
+    //
+    // Rien d'autre ne change : memes pivots, memes longueurs, memes
+    // angles. C'est la seule raison pour laquelle ces coureurs-la courent
+    // dans le virage comme les autres — personCapsules fait tourner des
+    // segments, et un coureur premium n'est fait que de segments.
+    const PREM = root.SprinterPremium;
+    const PR = PREM.profils(fem);
+    const niv = lod === undefined ? PREM.PRES : lod;
+    const kSh = MO.sh || 1, kHip = MO.hip || 1;
+    const kArm = MO.arm || 1, kLeg = MO.leg || 1;
 
+    PREM.chaine(add, PR, 'pelvis', niv, L.shorts, hip, 0, 0, yawHip, kHip, 0, 1);
+    PREM.chaine(add, PR, 'torso', niv, L.jersey, hip, lean, 0, yawTop, kSh, 0, 2);
+    PREM.chaine(add, PR, 'neck', niv, L.skin, hip, lean, 0, yawTop * 0.5, 1);
+    PREM.chaine(add, PR, 'head', niv, L.skin, hip, lean, 0, yawTop * 0.2, 1,
+                -bob * 0.55);
     for (const side of [1, -1]) {
-      add(L.skin, hip, lean, [0, side * shY, 0.462], [0.073, 0.057],
-          [0.065, 0.049], 0.050, yawTop);
+      PREM.chaine(add, PR, 'deltoid', niv, L.skin, hip, lean, side * shY,
+                  yawTop, kSh);
     }
-    add(L.skin, hip, lean, [0, 0, 0.552], [0.042, 0.048], [0.040, 0.046],
-        0.042, yawTop * 0.5);
-    add(L.skin, hip, lean, [0.006, 0, 0.672 - bob * 0.55], [0.084, 0.081],
-        [0.088, 0.086], 0.086, yawTop * 0.2);
+
+    // Dossard et bandes de couleur : un vrai kit d'athletisme plutot qu'un
+    // aplat uniforme. Ils se posent sur la peau MESUREE et non a une
+    // abscisse fixe — sinon ils s'enfoncent dans un torse epais et
+    // flottent devant un torse mince.
+    add([242, 242, 238], hip, lean,
+        [PREM.avant(PR, 'torso', niv, 0.352, kSh) * 0.90, 0, 0.352],
+        [0.010, shY * 0.46], [0.010, shY * 0.50], 0.060, yawTop);
+    add(L.shoe, hip, lean,
+        [PREM.avant(PR, 'torso', niv, 0.280, kSh) * 0.94, 0, 0.28],
+        [0.015, 0.015], [0.017, 0.017], 0.19, yawTop);
+    add(L.shoe, hip, 0,
+        [PREM.avant(PR, 'pelvis', niv, 0, kHip) * 0.94, 0, 0],
+        [0.014, 0.014], [0.014, 0.014], 0.09, yawHip);
 
     const hy = yawTop * 0.2, hc = L.hairCol;
     switch (L.hair) {
@@ -1060,35 +1083,19 @@
     const sh = rot(0, 0.470, lean);
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
-      // biceps galbe : le bras se scinde en deux tronçons au lieu d'un
-      // seul cone, plus large au milieu qu'a l'epaule ou au coude.
-      add(L.skin, S, aArm, [0, 0, -0.05], [armR + 0.014, armR + 0.014],
-          [armR + 0.004, armR + 0.008], 0.05, yawTop);
-      add(L.skin, S, aArm, [0, 0, -0.175], [armR - 0.010, armR - 0.008],
-          [armR + 0.014, armR + 0.014], 0.075, yawTop);
+      PREM.chaine(add, PR, 'upperarm', niv, L.skin, S, aArm, 0, yawTop, kArm, 0, 1);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
-      add(L.skin, E, aFore, [0, 0, -0.112], [armR - 0.012, armR - 0.010],
-          [armR - 0.004, armR - 0.001], 0.112, yawTop);
-      add(L.skin, E, aFore, [0.006, 0, -0.238], [armR - 0.006, armR - 0.004],
-          [armR - 0.010, armR - 0.008], 0.036, yawTop);
+      PREM.chaine(add, PR, 'forearm', niv, L.skin, E, aFore, 0, yawTop, kArm);
     }
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
                                       [-1, rr[0], rr[1], rr[2]]]) {
       const H = [hip[0], side * hipY, hip[2] - 0.02];
-      // quadriceps galbe : meme principe que le bras, la cuisse gonfle
-      // vers son tiers superieur puis s'affine jusqu'au genou.
-      add(L.skin, H, th, [0, 0, -0.075], [legR + 0.026, legR + 0.026],
-          [legR + 0.008, legR + 0.012], 0.075, yawHip);
-      add(L.skin, H, th, [0, 0, -0.265], [legR - 0.024, legR - 0.020],
-          [legR + 0.026, legR + 0.026], 0.115, yawHip);
-      const k = rot(0, -0.392, th);
-      const K = [H[0] + k[0], H[1], H[2] + k[1]];
-      add(L.skin, K, sk, [-0.008, 0, -0.098], [legR - 0.020, legR - 0.014],
-          [legR - 0.004, legR + 0.002], 0.100, yawHip);
-      add(L.skin, K, sk, [0, 0, -0.288], [legR - 0.034, legR - 0.030],
-          [legR - 0.022, legR - 0.018], 0.092, yawHip);
+      PREM.chaine(add, PR, 'thigh', niv, L.skin, H, th, 0, yawHip, kLeg, 0, 1);
+      const kv = rot(0, -0.392, th);
+      const K = [H[0] + kv[0], H[1], H[2] + kv[1]];
+      PREM.chaine(add, PR, 'shank', niv, L.skin, K, sk, 0, yawHip, kLeg);
       const a = rot(0, -0.380, sk);
       const An = [K[0] + a[0], K[1], K[2] + a[1]];
       // semelle claire, legerement plus large : elle deborde sous la

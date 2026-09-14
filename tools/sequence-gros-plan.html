@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — gros plan d'un coureur</title>
+<style>body{margin:0;background:#0b0d14;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}#etat{padding:8px 12px}</style>
+<div id="etat">...</div>
+<canvas id="cv" width="1280" height="720"></canvas>
+<script type="module">
+  // Un seul coureur, en grand, en foulee continue.
+  //
+  // La course entiere ne montre pas ce qui a change : a cinquante pixels
+  // de haut, deux corps se ressemblent. Ici le personnage occupe l'ecran,
+  // et le galbe se lit. La page ne dessine QUE par drawIcon, present dans
+  // les deux versions du moteur — c'est ce qui permet d'enregistrer la
+  // meme sequence avant et apres et de les mettre cote a cote.
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+
+  const P = new URLSearchParams(location.search);
+  const IMAGES = +(P.get('n') || 180);
+  const COLLECTEUR = P.get('vers') || 'http://localhost:5299';
+
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const man = {
+    look: SprinterCore.lookFor('gros-plan', 'divers'),
+    stride: 0, v: 11.6, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0,
+  };
+
+  let envois = [];
+  for (let i = 0; i < IMAGES; i++) {
+    const g = ctx.createLinearGradient(0, 0, 0, 720);
+    g.addColorStop(0, '#1a1e2b'); g.addColorStop(1, '#0d1018');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
+    // une ombre au sol, sinon le personnage flotte
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(596, 622, 126, 21, 0, 0, Math.PI * 2); ctx.fill();
+    man.stride = i * 0.085 * Math.PI;
+    SprinterApp.drawIcon(ctx, man, 596, 624, 470, false);
+    envois.push(fetch(COLLECTEUR + '/f/' + i, { method: 'POST', body: cv.toDataURL('image/png') }));
+    if (envois.length > 8) { await Promise.all(envois); envois = []; }
+  }
+  await Promise.all(envois);
+  document.getElementById('etat').textContent = 'fini : ' + IMAGES + ' images';
+</script>

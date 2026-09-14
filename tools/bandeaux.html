@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — bandeaux de la video</title>
+<style>body{margin:0;background:#0b0d14;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace;padding:10px}</style>
+<div id="etat">...</div>
+<script type="module">
+  // ffmpeg n'a pas ete compile avec freetype sur cette machine : il ne sait
+  // pas ecrire une ligne de texte sur une image. Le navigateur, lui, sait
+  // faire cela depuis toujours. On fabrique donc les bandeaux ici, en PNG
+  // transparents, et ffmpeg n'a plus qu'a les poser par-dessus.
+  const COLLECTEUR = 'http://localhost:5299';
+  const L = [
+    ['Blender — le corps sculpté, puis mesuré os par os', null],
+    ['Même foulée, même instant — 31 volumes par coureur, puis 72', 'AVANT|APRÈS'],
+    ['Dans le jeu — 200 m, le virage, huit coureurs', null],
+  ];
+  const cv = document.createElement('canvas');
+  cv.width = 1280; cv.height = 720;
+  const c = cv.getContext('2d');
+  const envois = [];
+  L.forEach(([titre, cotes], i) => {
+    c.clearRect(0, 0, 1280, 720);
+    c.font = '600 30px -apple-system, Helvetica, Arial, sans-serif';
+    const w = c.measureText(titre).width;
+    c.fillStyle = 'rgba(11,13,20,0.78)';
+    c.beginPath(); c.roundRect(32, 624, w + 44, 58, 10); c.fill();
+    c.fillStyle = '#eef0f8';
+    c.textBaseline = 'middle';
+    c.fillText(titre, 54, 654);
+    if (cotes) {
+      const [g, d] = cotes.split('|');
+      c.font = '600 26px -apple-system, Helvetica, Arial, sans-serif';
+      for (const [t, x, col] of [[g, 40, '#eef0f8'], [d, 1240 - c.measureText(d).width, '#f8cd4a']]) {
+        c.fillStyle = 'rgba(11,13,20,0.8)';
+        c.beginPath(); c.roundRect(x - 14, 30, c.measureText(t).width + 28, 46, 8); c.fill();
+        c.fillStyle = col; c.fillText(t, x, 53);
+      }
+    }
+    envois.push(fetch(COLLECTEUR + '/f/' + i, { method: 'POST', body: cv.toDataURL('image/png') }));
+  });
+  await Promise.all(envois);
+  document.getElementById('etat').textContent = 'bandeaux envoyes : ' + L.length;
+</script>
