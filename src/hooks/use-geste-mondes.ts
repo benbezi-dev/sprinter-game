@@ -32,6 +32,10 @@ export function useGesteMondes(
   cible: React.RefObject<HTMLElement | null>,
   onGeste: (d: Direction) => void,
   actif = true,
+  // Ce qui defile, quand ce n'est pas la cible elle-meme. Sur l'accueil, le
+  // doigt se pose partout mais seul le menu defile : c'est lui qui dit si l'on
+  // est au bout.
+  defilant?: React.RefObject<HTMLElement | null>,
 ) {
   // La fonction change a chaque rendu ; les ecouteurs, non. Sans cela on les
   // decroche et on les raccroche a chaque image, ce qui n'est pas faux mais
@@ -51,7 +55,8 @@ export function useGesteMondes(
       // On note si l'on part du bas : c'est la condition du geste vers les
       // haies, et elle se juge au DEBUT du geste. La juger a la fin laisserait
       // passer un defilement rapide qui atteint le bout en route.
-      auBout = el.scrollTop + el.clientHeight >= el.scrollHeight - BOUT;
+      const r = defilant?.current || el;
+      auBout = r.scrollTop + r.clientHeight >= r.scrollHeight - BOUT;
     };
 
     const fin = (e: PointerEvent) => {
@@ -79,5 +84,5 @@ export function useGesteMondes(
       el.removeEventListener('pointerdown', debut);
       el.removeEventListener('pointerup', fin);
     };
-  }, [cible, actif]);
+  }, [cible, actif, defilant]);
 }

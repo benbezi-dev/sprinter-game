@@ -20,6 +20,7 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
+import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 
@@ -161,23 +162,27 @@ export function TitleScreen() {
 
   const currentRuns = runs[raceKey] || [];
 
-  // Le geste qui mene aux trois autres jeux. Il se pose sur le rouleau de
-  // l'accueil, pas sur la fenetre : c'est la position de ce rouleau qui dit si
-  // l'on est au bout, et donc si tirer encore veut dire « montre-moi les
-  // haies » plutot que « fais defiler ».
   // On demande l'objectif du jour a l'ouverture de l'accueil. Sans nom, sans
   // reseau ou hors fenetre, il n'y en a pas et la carte ne s'affiche pas.
   React.useEffect(() => { void lireObjectif(); }, []);
 
+  // Le geste qui mene aux trois autres jeux. Le doigt se pose n'importe ou sur
+  // l'accueil, mais c'est la position du MENU, seul a defiler, qui dit si l'on
+  // est au bout — et donc si tirer encore veut dire « montre-moi les haies »
+  // plutot que « fais defiler ».
+  const zoneGeste = React.useRef<HTMLDivElement>(null);
   const rouleau = React.useRef<HTMLDivElement>(null);
-  useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
+  useGesteMondes(zoneGeste, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS, rouleau);
+
+  // Le canvas a dessine l'image ou l'on arrive ici avant que cet ecran existe :
+  // on la lui fait refaire, scene en place, avant qu'elle s'affiche.
+  React.useLayoutEffect(() => { accueilPose(); }, []);
 
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
-      {/* Ce qui defile defile ici, et seulement ici : le pied de page reste
-          en dehors, pose au bas de l'ecran. */}
-      <div ref={rouleau} className="flex-1 min-h-0 overflow-y-auto">
-      <div className="min-h-full flex flex-col w-full">
+      {/* Tout ce qui recoit le geste des mondes : l'accueil entier, le pied de
+          page et les fenetres posees par-dessus exceptes. */}
+      <div ref={zoneGeste} className="flex-1 min-h-0 flex flex-col">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
           <button 
@@ -204,11 +209,24 @@ export function TitleScreen() {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col landscape:flex-row justify-between items-center landscape:items-stretch gap-6 landscape:gap-8 max-w-5xl mx-auto w-full pb-4">
-          
-          {/* Left Side: Title */}
-          <div className="flex-1 flex flex-col justify-center items-center landscape:items-start text-center landscape:text-left mt-4 md:mt-0">
-            <div className="bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 rounded-2xl w-full max-w-md border-t-white/20">
+        <div className="flex-1 min-h-0 flex flex-col landscape:flex-row items-center landscape:items-stretch gap-2 landscape:gap-8 max-w-5xl mx-auto w-full">
+
+          {/* LE TITRE, ET LA SCENE DES TROIS COUREURS DU STADE.
+
+              Cette moitie-la ne defile jamais. Les coureurs sont dessines
+              dans le stade, derriere l'accueil : une carte qui passerait sur
+              leur scene les couvrirait, et un stade qui defilerait pour les
+              suivre bougerait sous les doigts. La scene est donc une vraie
+              place dans la mise en page, que le canvas relit a chaque image
+              (data-accueil-scene, voir game/scene-accueil.ts).
+
+              En portrait elle suit le titre et prend la hauteur que le menu
+              laisse, sans descendre sous un minimum ; le menu defile en
+              dessous s'il le faut. En paysage elle se tient au-dessus du
+              titre, la ou la piste traverse deja l'ecran, et le titre reste
+              au milieu de sa moitie. */}
+          <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
+            <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 rounded-2xl landscape:w-full max-w-md border-t-white/20">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black font-display tracking-tight text-primary drop-shadow-md">
                 SPRINTER
               </h1>
@@ -218,10 +236,18 @@ export function TitleScreen() {
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
               </p>
             </div>
+            <div data-accueil-scene aria-hidden
+                 className="order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] landscape:min-h-[96px]" />
+            <div className="hidden landscape:block order-3 flex-1" />
           </div>
 
-          {/* Right Side: Records and Controls */}
-          <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
+          {/* LE MENU, SEUL A DEFILER. Sa zone deborde de sa colonne, marge
+              interieure comprise : le halo de COMMENCER (trente pixels) s'y
+              dessine en entier au lieu d'etre coupe net au bord. */}
+          <div ref={rouleau}
+               className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
+                          w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
+          <div className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 w-full pt-2 pb-6">
 
             {/* L'EDITION DU MOMENT, tout en haut de la colonne.
                 Au-dessus du defi du jour parce qu'elle ne dure qu'une
@@ -435,8 +461,8 @@ export function TitleScreen() {
             </>}
 
           </div>
+          </div>
         </div>
-      </div>
       </div>
 
       <PiedLiens onTour={() => setTour(true)} onTuto={() => setTuto(true)} />

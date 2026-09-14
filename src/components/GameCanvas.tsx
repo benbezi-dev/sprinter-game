@@ -3,6 +3,7 @@ import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } f
 import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
+import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin } from '@/game/scene-accueil';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -186,28 +187,39 @@ export function GameCanvas() {
     // geste a deja ete vu pour cette course.
     let vuReaction = false, vuTrans = false;
 
-    const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - lastTime) / 1000 || 0.016);
-      lastTime = now;
-      
-      updateLogic(dt);
+    // `redessin` : refaire l'image de cet instant sans faire avancer le jeu.
+    // L'accueil le demande au moment ou il apparait — voir accueilPose dans
+    // game/scene-accueil.ts.
+    const frame = (now: number, redessin = false) => {
+      const dt = redessin ? 0 : Math.min(0.05, (now - lastTime) / 1000 || 0.016);
+      if (!redessin) {
+        lastTime = now;
+        updateLogic(dt);
+      }
 
       // La couche de finition prend le pouls de l'image AVANT qu'on dessine :
       // c'est elle qui decide, au vu du temps reellement passe, si le
       // telephone tient le grain de piste et la poussiere ou s'il faut les
       // lui retirer. Voir game/rendu-premium.js.
       const Prem = (globalThis as any).RenduPremium;
-      if (Prem) Prem.mesurer(dt);
+      if (Prem && !redessin) Prem.mesurer(dt);
 
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);
 
-      const { G, THEMES, LEVELS, drawWorld, drawAthletes, drawIcon } = SprinterApp;
+      const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
       const { SprinterCore } = (globalThis as any);
       // We only draw the canvas world if we are in certain states, or we just draw it always?
       // Original UI draws world for title, cut, result, over, winall, race, count.
       // For open, it draws a gradient.
-      if (G.state === 'open') {
+      //
+      // L'accueil pose sa camera avant tout le reste : la piste doit passer sur
+      // la scene qu'il reserve a ses coureurs. Tant qu'il n'a jamais pu la
+      // mesurer — l'image ou le jeu y arrive, avant que React ne le monte — on
+      // garde le fond de l'ouverture plutot que de montrer le stade sous une
+      // camera qui n'est pas la sienne. Voir game/scene-accueil.ts.
+      const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
+      if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
         g.addColorStop(0, '#0a0f1c'); g.addColorStop(1, '#05070d');
         ctx.fillStyle = g; ctx.fillRect(0, 0, G.VW, G.VH);
@@ -256,14 +268,8 @@ export function GameCanvas() {
         if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') {
           drawAthletes(ctx);
         } else if (G.state === 'title') {
-          // Title screen athletes
-          const tick = performance.now() / 1000;
-          const zeze = Object.values(SprinterCore.ZEZE);
-          for (let i = 0; i < 3; i++) {
-            const man = { look: zeze[i], stride: tick * 10 + i * 2.1, v: 12, maxSpeed: 12, fallAnim: 0, celebrate: 0 };
-            drawIcon(ctx, man, G.VW * (G.portrait ? 0.22 : 0.16) + i * SprinterApp.ui() * 96,
-                       G.VH * (G.portrait ? 0.34 : 0.66), SprinterApp.ui() * 160);
-          }
+          // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
+          dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);
         } else if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
           // Le generique de fin de carriere a sa propre scene : la nuit sur le
           // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
@@ -325,16 +331,18 @@ export function GameCanvas() {
         }
         // La vignette se resserre avec le coup de poussee, et avec lui seul.
         const pouss = POUSSEE_OUVERTE && Prem.partPoussee ? Prem.partPoussee() : 0;
-        Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + pouss * 0.15);
+        Prem.vignette(ctx, G, G.state === 'open' || accueilSansScene ? 0.5 : 0.85 + pouss * 0.15);
       }
 
-      rafRef.current = requestAnimationFrame(frame);
+      if (!redessin) rafRef.current = requestAnimationFrame(frame);
     };
-    
+
     rafRef.current = requestAnimationFrame(frame);
-    
+    brancherLeRedessin(() => frame(performance.now(), true));
+
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      brancherLeRedessin(null);
       observateur.disconnect();
     };
   }, []);
