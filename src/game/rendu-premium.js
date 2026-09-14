@@ -105,8 +105,10 @@
       // Trois arrets plutot que deux : une brume lineaire se voit comme un
       // voile pose sur l'image, une brume qui s'eteint en courbe se lit comme
       // de l'air.
-      g.addColorStop(0, col((0.17 * f).toFixed(3)));
-      g.addColorStop(0.45, col((0.06 * f).toFixed(3)));
+      // Deux fois plus legere qu'avant : a 17 %, elle delavait le haut de
+      // l'image et retirait aux gradins et au decor l'eclat de leurs couleurs.
+      g.addColorStop(0, col((0.08 * f).toFixed(3)));
+      g.addColorStop(0.45, col((0.025 * f).toFixed(3)));
       g.addColorStop(1, col(0));
       _brumeDeg = g; _brumeCle = cle;
     }
@@ -205,7 +207,11 @@
     // se pose dessus, pixel par pixel. Aucun des deux ne se voit seul, et
     // c'est ainsi qu'il faut les regler : un grain qui SE VOIT est un defaut
     // d'impression, pas une piste.
-    for (let i = 0; i < 26; i++) {
+    // LES GRANDES TACHES SONT RETIREES. Elles devaient figurer l'usure du
+    // tartan ; a l'ecran elles faisaient des plaques claires et sombres qui
+    // couraient sur toute la piste, et se lisaient comme un filtre sale pose
+    // sur l'image. Il ne reste que le grain fin, qui ne se voit pas.
+    for (let i = 0; i < 0; i++) {
       const x = al() * TUILE_GRAIN, y = al() * TUILE_GRAIN;
       const r = TUILE_GRAIN * (0.08 + al() * 0.16), clair = al() < 0.5;
       for (const dx of [0, -TUILE_GRAIN, TUILE_GRAIN]) {
@@ -291,7 +297,9 @@
       s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0;
       return s / 4294967296;
     };
-    for (let i = 0; i < 34; i++) {
+    // Meme retrait que sur la piste : les plaques d'herbe se lisaient comme
+    // des taches d'ombre semees sur tout le jeu. Les brins restent.
+    for (let i = 0; i < 0; i++) {
       const x = al() * TUILE_HERBE, y = al() * TUILE_HERBE;
       const r = TUILE_HERBE * (0.10 + al() * 0.22), clair = al() < 0.48;
       for (const dx of [0, -TUILE_HERBE, TUILE_HERBE]) {
@@ -800,8 +808,8 @@
       const r = Math.hypot(VIG_L, h) * 0.5;
       const g = c.createRadialGradient(VIG_L / 2, h / 2, r * 0.36, VIG_L / 2, h / 2, r);
       g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.62, 'rgba(0,0,0,0.10)');
-      g.addColorStop(1, 'rgba(0,0,0,0.40)');
+      g.addColorStop(0.62, 'rgba(0,0,0,0.05)');
+      g.addColorStop(1, 'rgba(0,0,0,0.26)');
       c.fillStyle = g; c.fillRect(0, 0, VIG_L, h);
       _vigCle = cle;
     }

@@ -222,6 +222,44 @@
     }
   };
 
+  // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
+  // vers le gris : une piste brique, une pelouse olive, des panneaux ternes —
+  // et par-dessus, la brume et le vignettage retiraient encore de l'eclat.
+  // Plutot que de reprendre soixante couleurs a la main, chacune gagne vingt-
+  // deux pour cent de saturation, a luminosite egale : les blancs et les gris
+  // n'en prennent pas, les couleurs franches deviennent franches. Fait une
+  // fois, au chargement, sur les tableaux eux-memes — les caches de teintes
+  // les retrouvent tels quels.
+  (function aviver(gain) {
+    const vive = (c) => {
+      const r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+      if (mx - mn < 1e-3) return;
+      const d = mx - mn;
+      let s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      let h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h /= 6; s = Math.min(1, s * gain);
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+      const f = (t) => {
+        t = (t + 1) % 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      c[0] = Math.round(f(h + 1 / 3) * 255);
+      c[1] = Math.round(f(h) * 255);
+      c[2] = Math.round(f(h - 1 / 3) * 255);
+    };
+    const estCouleur = (v) => Array.isArray(v) && v.length === 3 && v.every(n => typeof n === 'number');
+    for (const th of Object.values(THEMES)) {
+      for (const v of Object.values(th)) {
+        if (estCouleur(v)) vive(v);
+        else if (Array.isArray(v)) for (const w of v) if (estCouleur(w)) vive(w);
+      }
+    }
+  })(1.22);
+
   // Le stade en plus n'entre dans la liste que sur le canal de test.
   //
   // Pourquoi ici, et pas dans le moteur ou vivent les donnees de jeu : le
@@ -2508,6 +2546,16 @@
     if (T.curved) {
       const N = pas ? Math.max(8, Math.round(Math.PI * C.R1 / pas)) : ARC_STEPS;
       const st = Math.PI * C.R1 / N;
+      // LA PISTE NE COMMENCE PAS AU DEPART. Un 200 m part a l'entree du
+      // virage, et le trace du jeu commencait la : derriere le couloir 1 il
+      // n'y avait rien, et le coureur de ce couloir — qui part le plus en
+      // arriere — posait ses blocs au bord du vide. Une piste est un ovale :
+      // avant le virage vient la ligne opposee. On en dessine donc quarante
+      // metres, dans le prolongement exact du trace (voir Track.posLap2).
+      if (!T.fullLap) {
+        const debut = Math.max(st, T.straight - 40);
+        for (let x = debut; x < T.straight - st * 0.5; x += st) out.push([false, x, 1]);
+      }
       for (let i = 0; i <= N; i++)
         out.push([true, Math.PI * (1 - i / N), 0]);
       const s1End = T.fullLap ? T.straight : T.straight + C.RUNOUT;
@@ -2522,8 +2570,11 @@
         for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
       }
     } else {
+      // Le terrain continue derriere la ligne de depart. A vingt metres, un
+      // telephone tenu debout montrait deja le bout du stade — un coin de
+      // ciel en bas de l'image, sous les blocs.
       const d = pas || 12;
-      for (let x = -20; x <= T.straight + C.RUNOUT + d; x += d) out.push([false, x, 0]);
+      for (let x = -60; x <= T.straight + C.RUNOUT + d; x += d) out.push([false, x, 0]);
     }
     return out;
   }
@@ -2641,6 +2692,44 @@
   // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
   const DEC = () => globalThis.DecorsStades;
   let _apiDecor = null;
+  /**
+   * Les troncons du trace ou la tribune est AU FOND de l'image, et non du
+   * cote de la camera : s'eloigner de la piste y fait gagner en profondeur.
+   * Chaque troncon garde un echantillon de recouvrement avec le suivant, pour
+   * que les bandes se rejoignent sans fente.
+   */
+  // FRANCHEMENT au fond : un metre vers l'exterieur doit y gagner au moins
+  // les deux tiers de la profondeur qu'il gagne face a la camera (racine de
+  // deux). Vue de profil, a la bascule entre les deux cotes, la tribune
+  // montrait encore son toit en travers de ses spectateurs.
+  function auFond(q, r) {
+    const a = ptOf(q, r), b = ptOf(q, r + 1);
+    return (depthOf(b[0], b[1]) - depthOf(a[0], a[1])) / scaleM() > 0.9;
+  }
+
+  function tribunesDuFond(sm, r) {
+    const runs = [];
+    let run = null;
+    for (let i = 0; i < sm.length; i++) {
+      const fond = auFond(sm[i], r);
+      if (fond) {
+        if (!run) { run = i > 0 ? [sm[i - 1]] : []; runs.push(run); }
+        run.push(sm[i]);
+      } else if (run) {
+        run.push(sm[i]);
+        run = null;
+      }
+    }
+    return runs.filter(r2 => r2.length > 1);
+  }
+
+  let _apiTribune = null;
+  function apiTribune() {
+    if (!_apiTribune) {
+      _apiTribune = { G, ptOf, solid, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
+    }
+    return _apiTribune;
+  }
   function apiDecor() {
     if (!_apiDecor) {
       _apiDecor = { G, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
@@ -4262,7 +4351,8 @@
     // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
     // d'eclairage de stade, une suite serree de projecteurs et non trois
     // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
-    const positions = rangeeDeToiture(sm, 4);
+    // seulement au-dessus de la tribune d'en face : voir tribunesDuFond
+    const positions = rangeeDeToiture(sm, 4).filter(q => auFond(q, near));
     const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
 
     ctx.save();
@@ -4607,13 +4697,36 @@
       wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
            th.panels[(i / stp) % th.panels.length], stp);
     }
-    for (let t = 0; t < tiers; t++) {
-      const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz, f = 1 - t * 0.05;
+    // DEUX RANGEES DE SIEGES PAR GRADIN. Un « gradin » du decor fait un
+    // metre soixante-dix de profondeur : c'est la mesure de deux rangees
+    // reelles, pas d'une. En une seule marche, la tribune se lisait comme
+    // trois terrasses ; en marches de quatre-vingt-cinq centimetres, comme
+    // un gradin. L'enveloppe ne change pas — meme pied, meme sommet, meme
+    // toiture —, seul l'escalier se resserre.
+    const TR = globalThis.Tribune;
+    const rangs = tiers * 2, pr = sr / 2, pz = sz / 2;
+    for (let t = 0; t < rangs; t++) {
+      const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz, f = 1 - t * 0.025;
       // contremarche : vraie face verticale, du gradin precedent a celui-ci,
       // eclairee selon son orientation -> l'escalier a du relief
-      wall(ctx, sm, r0, z1 - sz, z1, th.riser, stp);
+      wall(ctx, sm, r0, z1 - pz, z1, th.riser, stp);
       // marche : surface horizontale, pleinement exposee a la lumiere
-      band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
+      band(ctx, sm, r0, r0 + pr, rgb(th.tread, f), z1);
+    }
+    // LE PUBLIC ASSIS, rangee par rangee, quand ses images sont la (voir
+    // tribune.js). Les escaliers passent d'abord, et personne ne s'assied
+    // dessus. Sinon, l'ancienne foule en tuile, plus bas.
+    let publicAssis = false;
+    if (TR && TR.pret()) {
+      drawAllees(ctx, th, sm, near, tiers, sr, sz);
+      const rMoy = near + tiers * sr * 0.5;
+      const allees = rangeeDeToiture(sm, 15).map(q => {
+        const q2 = q[0] ? [true, q[1] - 0.6 / rMoy, q[2]] : [false, q[1] + 0.6, q[2]];
+        return ptOf(q2, rMoy);
+      });
+      const nomTheme = (LEVELS[G.levelIdx] && LEVELS[G.levelIdx].theme) || 'day';
+      publicAssis = TR.dessiner(ctx, apiTribune(), th, nomTheme, sm, near, rangs, pr, pz,
+                                fouleDe(G.levelIdx), allees);
     }
     // Public dans les gradins : motif de foule dense (getCrowdPattern) plutot
     // que des sprites individuels. Multiplier encore le nombre de personnes
@@ -4623,7 +4736,7 @@
     // aucun cout supplementaire quelle que soit la "densite" recherchee.
     // Uniquement sur les lignes droites : dans le virage, seuls les gradins
     // nus restent visibles (pas de tribune principale en courbe).
-    const crowdPat = getCrowdPattern(ctx, G.levelIdx);
+    const crowdPat = publicAssis ? null : getCrowdPattern(ctx, G.levelIdx);
     if (crowdPat) {
       // Le motif est ancre au MONDE, pas a l'ecran : on le decale de la
       // position ecran d'un point fixe du terrain (l'origine). Comme la
@@ -4668,8 +4781,13 @@
     // Les escaliers PAR-DESSUS le public, et hors du bloc qui le dessine : un
     // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
     // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
-    // simple bande. Voir drawAllees.
-    drawAllees(ctx, th, sm, near, tiers, sr, sz);
+    // simple bande. Voir drawAllees. Avec le public assis, ils sont deja la.
+    if (!publicAssis) drawAllees(ctx, th, sm, near, tiers, sr, sz);
+    // les eclats d'appareils suivent le public, quel qu'il soit
+    if (publicAssis && PREM() && (G.state === 'race' || G.state === 'count')) {
+      PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
+      PREM().dessinerFlashs(ctx, PEINTRE);
+    }
 
     // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
     //
@@ -4685,9 +4803,16 @@
     // gradins A CIEL OUVERT : le public s'arrete, et au-dessus commence
     // l'horizon. C'est aussi ce que sont vraiment un stade de bord de mer et
     // une reunion nocturne.
+    // LE TOIT NE SE POSE QUE SUR LA TRIBUNE D'EN FACE. Dans un virage, la
+    // tribune exterieure passe du cote de la camera : son toit se retrouvait
+    // alors ENTRE l'objectif et le public, et une grande bande gris-bleu
+    // couvrait tous les spectateurs de la sortie du virage. Une camera placee
+    // dans le stade ne voit pas le toit qui est au-dessus d'elle.
     if (tribune.toiture) {
-      band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
-           1.05 + tiers * sz + 2.4);
+      for (const run of tribunesDuFond(sm, near)) {
+        band(ctx, run, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
+             1.05 + tiers * sz + 2.4);
+      }
     }
 
     // Au-dessus du toit : des fanions le jour, des projecteurs la nuit.
@@ -4716,7 +4841,7 @@
         // La hauteur descend aussi sous le toit, pour la meme raison que les
         // projecteurs : au-dessus, tout sort du cadre.
         const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-        for (const q of rangeeDeToiture(sm, 6)) {
+        for (const q of rangeeDeToiture(sm, 6).filter(q2 => auFond(q2, near))) {
           const p = solid(...ptOf(q, fr), fz);
           if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
           ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);

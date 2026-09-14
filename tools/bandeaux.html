@@ -10,18 +10,14 @@
   // transparents, et ffmpeg n'a plus qu'a les poser par-dessus.
   const COLLECTEUR = 'http://localhost:5299';
   // [bandeau du bas, etiquette du haut]
+  // [bandeau du bas, etiquette du haut]
   const L = [
-    ['Le départ dans les blocs — à vos marques, prêts, partez', null],
-    ['Plus la compétition est grande, plus le stade l’est', 'SCOLAIRE'],
-    ['Plus la compétition est grande, plus le stade l’est', 'RÉGIONAL'],
-    ['Plus la compétition est grande, plus le stade l’est', 'NATIONAL'],
-    ['Plus la compétition est grande, plus le stade l’est', 'CHAMPIONNAT DU MONDE'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'JEUX MONDIAUX'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'INTER GALACTIQUE'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'NUIT ÉTOILÉE'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'STADE DU DANUBE'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'RIVIERA'],
-    ['Chaque stade son décor, modélisé et rendu dans Blender', 'TROIS SOLEILS'],
+    ['La piste continue derrière le départ : le couloir 1 n’est plus dans le vide', '200 M'],
+    ['Des gradins en marches, des sièges, un public assis face à la piste', 'SCOLAIRE — PEU DE MONDE'],
+    ['Des gradins en marches, des sièges, un public assis face à la piste', 'CHAMPIONNAT DU MONDE — COMPLET'],
+    ['Couleurs plus franches, plus de taches sur la piste ni la pelouse', 'STADE DU DANUBE'],
+    ['Couleurs plus franches, plus de taches sur la piste ni la pelouse', 'RIVIERA'],
+    ['Dans le virage, le public de la tribune côté caméra, vu de dos', 'INTER GALACTIQUE'],
   ];
   const cv = document.createElement('canvas');
   cv.width = 1280; cv.height = 720;

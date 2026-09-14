@@ -13,6 +13,10 @@ import './rendu-premium.js';
 import decorsManifeste from './decors-manifeste.json';
 (globalThis as any).SprinterDecorsManifeste = decorsManifeste;
 import './decors-stades.js';
+// Le public des gradins, rendu dans Blender : son manifeste, puis ses rangees.
+import tribuneManifeste from './tribune-manifeste.json';
+(globalThis as any).SprinterTribuneManifeste = tribuneManifeste;
+import './tribune.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 
