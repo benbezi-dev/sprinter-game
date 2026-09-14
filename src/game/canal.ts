@@ -75,16 +75,15 @@ export const SERIE_OUVERTE = EST_TEST;
 export const POUSSEE_OUVERTE = EST_TEST;
 
 /**
- * LE STARTER : « a vos marques », « pret », et un coup de pistolet qui tombe
- * quand il tombe.
+ * LE STARTER : « a vos marques » au 3, « pret » au 1, et le coup au signal.
  *
- * Il ne va pas dans l'autre sens que les deux drapeaux ci-dessus. Ceux-la
- * sont des modes eprouves sur le canal de test puis ouverts a tout le monde ;
- * celui-ci est un DEPART, et le depart du jeu publie reste ce qu'il etait :
- * un decompte de trois secondes, un bip a chaque seconde franchie, un signal
- * au bout. Le starter — l'attente tiree au sort entre trois et dix secondes,
- * la voix, le juge en blanc sur la pelouse — ne se voit et ne s'entend que sur
- * le canal de test, le temps qu'on decide s'il a sa place dans le jeu.
+ * Le depart reste partout le decompte de trois secondes — c'est la consigne,
+ * et l'essai d'un starter qui tirait quand il voulait (entre trois et dix
+ * secondes) s'est arrete la. Ce drapeau n'ajoute qu'un personnage CALE sur le
+ * chiffre : sa voix, son geste, son coup de pistolet — le prof d'ecole, livre
+ * a la main, a la competition scolaire ; le juge en blanc ensuite. Il ne se
+ * voit et ne s'entend que sur le canal de test, le temps qu'on decide s'il a
+ * sa place dans le jeu.
  *
  * La forme compte, comme partout dans ce fichier : `EST_TEST` se replie a la
  * compilation, donc ce drapeau vaut `false` en dur dans le build public et

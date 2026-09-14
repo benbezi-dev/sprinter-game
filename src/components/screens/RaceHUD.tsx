@@ -64,10 +64,9 @@ export function RaceHUD() {
    * deja tout ce qu'il y a a savoir, et l'annoncer par-dessus ne ferait que
    * meubler.
    *
-   * Le canal de test essaie un starter, et la il n'y a plus de nombre a
-   * afficher : montrer une seconde quelconque reviendrait a vendre la meche.
-   * Reste la commande, en toutes lettres — le son ne peut pas porter seul une
-   * consigne, sur un telephone qui se joue dans le bruit ou son coupe.
+   * Le canal de test ajoute le starter, et ses commandes en toutes lettres
+   * au-dessus du meme chiffre : son depart est cale sur le 3, 2, 1 comme
+   * l'autre.
    */
   const isCount = state === 'count';
   const left = 3 - countT;
@@ -216,64 +215,91 @@ export function RaceHUD() {
         </div>
       )}
 
-      {/* Le depart, au milieu de l'ecran : le decompte, ou le starter */}
-      {isCount && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          {DEPART_STARTER ? (
-            <>
-              {/* LA COMMANDE, EN TOUTES LETTRES.
-                  Le son dit la meme chose au meme instant — mais un telephone se
-                  joue aussi dans le bruit, ou son coupe, et la consigne ne peut
-                  pas dependre de ce qu'on entend. Le « pret » passe a l'or et
-                  respire : c'est le signe qu'il ne reste plus que l'attente. */}
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={pret ? 'pret' : 'marques'}
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.04 }}
-                  transition={{ duration: 0.18 }}
-                  className={`px-5 py-3 md:px-10 md:py-5 rounded-2xl border-2 backdrop-blur-md max-w-[92vw]
-                    ${pret ? 'border-primary bg-primary/15 shadow-[0_0_60px_rgba(248,205,74,0.28)] animate-pulse'
-                           : 'border-white/25 bg-card/60 shadow-2xl'}`}
-                >
-                  <span className={`block font-display font-black tracking-widest text-center leading-none
-                    text-2xl sm:text-4xl md:text-6xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
-                    {pret ? N.t('get_set') : N.t('ready')}
-                  </span>
-                </motion.div>
-              </AnimatePresence>
+      {/* Le depart : le decompte, et le starter.
 
-              {/* Et la seule regle qui compte tant qu'il n'a pas tire. */}
-              <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest
-                              text-muted-foreground uppercase">
-                {N.t('wait_gun')}
-              </div>
-            </>
-          ) : (
-            /* LE DECOMPTE, ET RIEN QUE LUI. Le cercle enfle a mesure que la
-               seconde s'use : le depart se voit venir du coin de l'oeil, sur
-               un ecran ou le regard est deja pris par la piste. Le chiffre
-               tombe a la derniere seconde plutot que d'ecrire « partez » —
-               le signal, lui, s'entend, et la course a deja commence. */
-            <div
-              className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
-              style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
-            >
-              <span className="text-4xl sm:text-6xl md:text-8xl font-black font-display tracking-tighter text-white drop-shadow-md">
-                {n > 0 ? n : ''}
-              </span>
-            </div>
+          SANS VOILE, ET PLUS AU MILIEU. Tout le stade passait sous un noir a
+          40 % et un flou de deux pixels pendant les trois secondes ou il y a le
+          plus a voir — les coureurs poses dans leurs blocs, le starter, la
+          tribune — et le cercle du chiffre se posait au centre exact de
+          l'ecran, c'est-a-dire sur le joueur et ses blocs, que la camera y
+          tient. Le chiffre monte donc au-dessus de la ligne de depart, et
+          l'adversaire a battre descend au-dessus des touches : entre les
+          deux, la piste reste libre. Chaque piece porte son propre fond ; ce
+          qui n'en a pas garde une ombre sous les lettres. */}
+      {isCount && (
+        <div className="absolute inset-0 z-20 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+          <div className="absolute inset-x-0 flex flex-col items-center px-4
+                          portrait:top-[calc(max(env(safe-area-inset-top),0.5rem)_+_8rem)]
+                          landscape:top-[max(env(safe-area-inset-top),7.5vh,2.75rem)]">
+          {/* LA COMMANDE DU STARTER, AU-DESSUS DU CHIFFRE.
+              Sur la version de test, le starter parle : « a vos marques » au 3,
+              « pret » au 1. Sa voix dit la meme chose au meme instant — mais un
+              telephone se joue aussi son coupe, et la consigne ne peut pas
+              dependre de ce qu'on entend. Le chiffre, lui, reste : le depart
+              est toujours cale sur le 3, 2, 1. */}
+          {DEPART_STARTER && starter >= 1 && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pret ? 'pret' : 'marques'}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+                className={`mb-3 md:mb-5 px-4 py-2 md:px-7 md:py-3 rounded-xl border-2 backdrop-blur-md max-w-[92vw]
+                  [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1.5
+                  ${pret ? 'border-primary bg-primary/15' : 'border-white/25 bg-card/60'}`}
+              >
+                <span className={`block font-display font-black tracking-widest text-center leading-none
+                  text-lg sm:text-2xl md:text-4xl [@media(max-height:500px)]:text-xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
+                  {pret ? N.t('get_set') : N.t('ready')}
+                </span>
+              </motion.div>
+            </AnimatePresence>
           )}
+          {/* LE DECOMPTE. Le cercle enfle a mesure que la seconde s'use : le
+              depart se voit venir du coin de l'oeil, sur un ecran ou le regard
+              est deja pris par la piste. Le chiffre tombe a la derniere seconde
+              plutot que d'ecrire « partez » — le signal, lui, s'entend, et la
+              course a deja commence. */}
+          <div
+            className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 [@media(max-height:500px)]:w-16 [@media(max-height:500px)]:h-16
+                       rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
+            style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
+          >
+            <span className="text-4xl sm:text-6xl md:text-7xl [@media(max-height:500px)]:text-3xl font-black font-display tracking-tighter text-white drop-shadow-md">
+              {n > 0 ? n : ''}
+            </span>
+          </div>
           {mode === 'oneshot' && shotRaces.length > 1 && (
-            <div className="mt-4 md:mt-8 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
+            <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
               {N.t('event_n', { n: shotIdx + 1, t: shotRaces.length })}
             </div>
           )}
-          {rival && (
-            <div className={`mt-6 md:mt-12 bg-black/60 px-4 py-1.5 md:px-6 md:py-2 rounded-full border max-w-[90vw] text-center
+          </div>
+        </div>
+      )}
+
+      {/* En bas, au-dessus des touches (20 % de la hauteur en portrait, 17 % en
+          paysage, bornes comprises — voir TouchControls) : le faux depart s'il
+          vient d'etre commis, et pendant le decompte l'adversaire. Le faux
+          depart s'affichait en haut, la ou le chiffre se tient maintenant ; il
+          reste ici apres le coup de pistolet, le temps de son eclair, plutot
+          que de sauter d'un bout de l'ecran a l'autre. */}
+      {(isCount || falseFlash > 0) && (
+        <div className="absolute inset-x-0 z-20 flex flex-col items-center gap-2 md:gap-3 px-4 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]
+                        portrait:bottom-[calc(min(max(20vh,70px),250px)_+_3rem)]
+                        landscape:bottom-[calc(min(max(17vh,70px),250px)_+_3rem)]">
+          <AnimatePresence>
+            {falseFlash > 0 && (
+              <motion.div {...SURGISSEMENT} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
+                {N.t('false_start')}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {isCount && rival && (
+            <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
-              <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base block truncate
+              <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate
                 ${ghostName ? 'text-cyan-300' : 'text-fuchsia-400'}`}>
                 {aveugle
                   ? `${N.t('to_race')}${rival.name}`
@@ -281,12 +307,12 @@ export function RaceHUD() {
               </span>
             </div>
           )}
-          {ghostName && (
-            <div className="mt-2 md:mt-3 flex flex-col items-center gap-0.5">
+          {isCount && ghostName && (
+            <div className="flex flex-col items-center gap-0.5">
               <span className="text-[10px] md:text-xs font-black tracking-[0.3em] text-cyan-300">
                 {N.t('ghost_mode')}
               </span>
-              <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
+              <span className="text-[9px] md:text-[10px] text-foreground/75 tracking-wide">
                 {N.t('ghost_live')}
               </span>
             </div>
@@ -297,11 +323,7 @@ export function RaceHUD() {
       {/* Feedback Overlays */}
       <div className="absolute top-[130px] landscape:top-[80px] w-full flex flex-col items-center gap-1 sm:gap-2 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pointer-events-none z-0">
         <AnimatePresence>
-          {falseFlash > 0 && (
-            <motion.div {...SURGISSEMENT} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
-              {N.t('false_start')}
-            </motion.div>
-          )}
+          {/* Le faux depart ne s'affiche plus ici : voir la pile du bas, au-dessus des touches. */}
           {stumbleFlash > 0 && (
             <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: Math.min(stumbleFlash, 1), y: 0 }} exit={{ opacity: 0 }} className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-destructive tracking-widest uppercase drop-shadow-lg">
               {N.t('stumble')}

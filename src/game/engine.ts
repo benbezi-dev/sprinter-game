@@ -459,15 +459,14 @@ export function updateLogic(dt: number) {
     // pendant celle-ci redescendent. Sans cela, le dernier athlete presente
     // courait toute la course en saluant.
     SprinterApp.finirLesSaluts(dt);
-    // LE DECOMPTE DANS LE JEU, LE STARTER SUR LE CANAL DE TEST.
+    // LE DECOMPTE PARTOUT, LE STARTER EN PLUS SUR LE CANAL DE TEST.
     //
-    // Le jeu publie compte trois secondes et marque chacune d'un bip. Le canal
-    // de test essaie autre chose : « a vos marques », « pret », et un coup de
-    // pistolet qui tombe quand il tombe — le bip a la seconde y dirait
-    // justement ce qu'un starter ne dit jamais, dans combien de temps il va
-    // tirer. `annoncerLeDepart` sait lequel des deux donne le depart ; il lui
-    // faut la seconde d'AVANT l'increment pour reconnaitre celle qui vient de
-    // passer. Voir « deux departs, un par canal » dans sprinter-app.js.
+    // Les deux canaux comptent trois secondes. Le jeu publie marque chacune
+    // d'un bip ; sur le canal de test, la voix du starter prend la place du
+    // bip au 3 (« a vos marques ») et au 1 (« pret »). `annoncerLeDepart` sait
+    // qui parle ; il lui faut la seconde d'AVANT l'increment pour reconnaitre
+    // celle qui vient de passer. Voir « deux departs, un par canal » dans
+    // sprinter-app.js.
     const avant = Math.floor(G.countT);
     G.countT += dt;
     SprinterApp.annoncerLeDepart(avant);

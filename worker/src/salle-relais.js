@@ -26,9 +26,8 @@ import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE, LEG } from './relais-course.js';
 import { avantDepart } from './depart.js';
 
-// Le temps de se mettre en place — quatre joueurs, quatre relais. C'est le
-// delai du jeu publie, qui part au decompte ; sur le canal de test, ou un
-// starter donne le depart, il est tire au sort. Voir depart.js.
+// Le temps de se mettre en place — quatre joueurs, quatre relais. Le depart
+// part au decompte, sur les deux canaux. Voir depart.js.
 const AVANT_DEPART_MS = 5000;
 const VIE_MS = 20 * 60 * 1000;
 // Un Durable Object se facture au temps ou il reste eveille, et une WebSocket

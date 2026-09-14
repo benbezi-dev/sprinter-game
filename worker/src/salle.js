@@ -38,9 +38,8 @@ const APRES_RESULTAT_MS = 45 * 1000;
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
 // Delai entre « tout le monde est pret » et le depart. Assez long pour absorber
-// une latence mediocre, assez court pour ne pas ennuyer. Il ne vaut que pour le
-// jeu publie, qui part au decompte : sur le canal de test, ou le depart est
-// donne par un starter, il est tire au sort a chaque course. Voir depart.js.
+// une latence mediocre, assez court pour ne pas ennuyer. Le depart part au
+// decompte, sur les deux canaux. Voir depart.js.
 const AVANT_DEPART_MS = 4000;
 
 // --- presentation des participants, facon championnat ----------------------

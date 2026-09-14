@@ -116,8 +116,31 @@
     return (best[2] + (best[3] + best[5]) * 0.5) * k;
   }
 
+  /**
+   * La section mesuree a une hauteur donnee : [cambrure, demi-profondeur,
+   * demi-largeur], a l'echelle k. `avant` n'en donne que la somme des deux
+   * premieres ; il faut les trois pour poser une piece qui EPOUSE la courbe
+   * du corps au lieu de s'y planter — le dossard, voir pose().
+   */
+  function section(pro, nom, niv, z, k) {
+    var tr = pro[nom][niv], best = null, dmin = 1e9;
+    for (var i = 0; i < tr.length; i++) {
+      var dd = Math.abs(tr[i][0] - z);
+      if (dd < dmin) { dmin = dd; best = tr[i]; }
+    }
+    if (!best) return [0, 0, 0];
+    // Dans le tronc, la section va lineairement du bas au haut : on la lit a
+    // la hauteur demandee plutot qu'en moyenne, pour qu'une piece posee a mi-
+    // tronc colle a la peau et non a une epaisseur moyenne.
+    var f = best[1] > 0 ? (z - (best[0] - best[1])) / (2 * best[1]) : 0.5;
+    f = Math.max(0, Math.min(1, f));
+    return [best[2] * k,
+            (best[3] + (best[5] - best[3]) * f) * k,
+            (best[4] + (best[6] - best[4]) * f) * k];
+  }
+
   root.SprinterPremium = {
-    chaine: chaine, avant: avant, rayon: rayon,
+    chaine: chaine, avant: avant, rayon: rayon, section: section,
     PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
     profils: function (fem) { return fem ? HD.f : HD.m; }

@@ -90,7 +90,7 @@ export function Generique() {
     >
       {/* Le titre, au centre, le temps que le stade s'eteigne. */}
       <div
-        className="absolute inset-x-0 top-[26%] flex flex-col items-center text-center px-6 z-10"
+        className="absolute inset-x-0 top-[26%] flex flex-col items-center text-center px-6 z-10 [text-shadow:0_1px_2px_rgba(0,0,0,0.9),0_0_14px_rgba(0,0,0,0.8)]"
         style={{ opacity: titreVisible }}
       >
         <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-[0.35em] uppercase text-primary/80">
@@ -109,7 +109,7 @@ export function Generique() {
       {/* Le defile. */}
       <div
         ref={rouleau}
-        className="absolute left-1/2 top-full w-[min(34rem,calc(100vw-2.5rem))] flex flex-col items-center text-center gap-8 md:gap-10 z-10 will-change-transform"
+        className="absolute left-1/2 top-full w-[min(34rem,calc(100vw-2.5rem))] flex flex-col items-center text-center gap-8 md:gap-10 z-10 will-change-transform [text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_12px_rgba(0,0,0,0.85)]"
         // Le centrage horizontal tient dans ce meme transform, et non dans une
         // classe : Tailwind v4 pose ses utilitaires de translation sur la
         // propriete `translate`, qui se cumule avec `transform` au lieu de la
@@ -120,7 +120,10 @@ export function Generique() {
           // Le texte passe devant un stade eclaire et un coureur en mouvement :
           // sans ombre portee, une ligne sur deux devient illisible au moment ou
           // le tour d'honneur la traverse. Une ombre plutot qu'un panneau — on
-          // veut lire le generique ET voir la scene.
+          // veut lire le generique ET voir la scene. Depuis que la scene se
+          // joue devant la vraie tribune et ses spectateurs, une seule ombre
+          // large ne suffisait plus : chaque lettre porte aussi la sienne,
+          // serree (voir la classe text-shadow ci-dessus).
           filter: 'drop-shadow(0 2px 7px rgba(0,0,0,0.95))',
         }}
       >
@@ -196,8 +199,8 @@ export function Generique() {
         style={{ opacity: skipArm > 0 ? 1 : SprinterApp.clamp((13 - ct) / 2, 0, 1) }}
       >
         <span
-          className={`text-[10px] sm:text-xs md:text-base font-bold tracking-widest ${
-            skipArm > 0 ? 'text-primary animate-pulse' : 'text-muted-foreground'
+          className={`inline-block rounded-full bg-[rgba(8,11,22,0.72)] px-3 py-1 md:px-4 md:py-1.5 text-[10px] sm:text-xs md:text-base font-bold tracking-widest ${
+            skipArm > 0 ? 'text-primary animate-pulse' : 'text-foreground/70'
           }`}
         >
           {skipArm > 0 ? N.t('skip_now') : N.t('skip_twice')}

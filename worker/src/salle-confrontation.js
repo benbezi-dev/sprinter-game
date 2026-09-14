@@ -30,9 +30,8 @@ import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
-// Un peu plus qu'a une equipe : il y a du monde a mettre en place. C'est le
-// delai du jeu publie, qui part au decompte ; sur le canal de test, ou un
-// starter donne le depart, il est tire au sort — et le meme pour toutes les
+// Un peu plus qu'a une equipe : il y a du monde a mettre en place. Le depart
+// part au decompte, sur les deux canaux, et a la meme date pour toutes les
 // equipes engagees, parce qu'il n'y a qu'un seul coup de pistolet. Voir
 // depart.js.
 const AVANT_DEPART_MS = 6000;

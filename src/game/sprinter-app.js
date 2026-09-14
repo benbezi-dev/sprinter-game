@@ -439,8 +439,9 @@
   /**
    * « A VOS MARQUES »… « PRET »… ET LE COUP DE PISTOLET.
    *
-   * Tout ce qui suit ne sert que le canal de test : le jeu publie donne son
-   * depart au decompte, sans une parole (voir « deux departs, un par canal »).
+   * Tout ce qui suit ne sert que le canal de test : le jeu publie donne le
+   * meme depart au decompte, mais sans une parole (voir « deux departs, un
+   * par canal »).
    * Les tampons ne s'y fabriquent donc pas — le code, lui, reste, parce qu'il
    * n'attend qu'un drapeau pour resservir.
    *
@@ -1339,13 +1340,13 @@
   /**
    * DEUX DEPARTS, UN PAR CANAL.
    *
-   * Le jeu publie part au DECOMPTE : trois secondes, un bip par seconde, un
-   * signal au bout. Le canal de test part au STARTER : « a vos marques »,
-   * « pret », et un coup de pistolet qui tombe entre trois et dix secondes
-   * plus tard, sans que rien n'annonce lequel. Les deux existent en meme
-   * temps parce que le second n'a pas encore fait ses preuves — c'est un
-   * changement de ce qu'on demande au joueur, pas un reglage, et il s'essaie
-   * la ou on peut le reprendre.
+   * Les deux partent au DECOMPTE : trois secondes, un signal au bout. Le jeu
+   * publie marque chaque seconde d'un bip. Le canal de test y ajoute le
+   * STARTER, cale sur le meme chiffre : « a vos marques » au 3, « pret » au 1,
+   * le coup de pistolet au signal — et, sur la pelouse, le prof d'ecole a la
+   * competition scolaire, le juge en blanc ensuite. L'essai d'un starter qui
+   * tirait quand il voulait, entre trois et dix secondes, est abandonne : le
+   * depart est toujours le 3, 2, 1.
    *
    * La forme compte : ecrite ainsi, la condition se replie a la compilation
    * publique, et tout ce qui pend au starter — sa voix de synthese, le juge
@@ -1358,62 +1359,28 @@
   /** Le decompte du jeu publie : trois secondes, et le joueur les connait. */
   const DECOMPTE = 3;
 
-  /**
-   * LA LONGUEUR DU DEPART, QUAND C'EST LE STARTER QUI LE DONNE.
-   *
-   * C'est le pari de ce depart-la, et ce qui le distingue du decompte. Trois
-   * secondes, toujours les memes, c'est un metronome : au bout de deux courses
-   * on ne part plus sur le signal mais sur le rythme, et le temps de reaction
-   * ne mesure plus rien du tout. Un starter, lui, ne dit jamais quand il va
-   * tirer — c'est meme toute sa fonction. Entre trois et dix secondes separent
-   * donc « a vos marques » du coup de pistolet, et la seule facon de bien
-   * partir redevient d'attendre vraiment.
-   *
-   * Le tirage penche vers les departs courts. Dix secondes existent, et c'est
-   * parce qu'elles sont rares qu'elles sont redoutables : une attente qui
-   * arriverait une fois sur deux ne serait plus une surprise, seulement une
-   * lenteur.
-   */
-  const DEPART_MIN = 3, DEPART_MAX = 10;
-  /** Ce que le starter TIENT, entre « pret » et le coup. */
-  const TENUE_MIN = 1.2, TENUE_MAX = 3.0;
-  /** Et ce qu'il laisse pour se placer, entre les marques et « pret ». */
-  const MARQUES_MIN = 1.5;
-
-  /** Une longueur de depart, tiree au sort — ou les trois secondes du jeu. */
+  // LE DEPART EST TOUJOURS CALE SUR LE 3, 2, 1.
+  //
+  // Le canal de test avait essaye un starter qui tirait quand il voulait,
+  // entre trois et dix secondes apres « a vos marques ». L'essai s'arrete la,
+  // a la demande : le joueur part sur le decompte, partout. Le starter reste
+  // sur la pelouse de la version de test, mais il suit le chiffre — « a vos
+  // marques » au 3, « pret » au 1, le coup au signal.
   function tirerLeDepart() {
-    // Au decompte, il n'y a rien a tirer : trois secondes, les memes a chaque
-    // course, et c'est bien ce qui les separe d'un starter.
-    if (!STARTER) return DECOMPTE;
-    return DEPART_MIN + (DEPART_MAX - DEPART_MIN) * Math.pow(Math.random(), 1.5);
-  }
-
-  /**
-   * Un tirage reproductible a partir d'un nombre.
-   *
-   * Mulberry32, comme `K.alea`, mais sans etat : semer le hasard du jeu pour
-   * une histoire de depart rejouerait le meme plateau d'adversaires a la
-   * course suivante.
-   */
-  function tirageDe(graine) {
-    let t = ((graine >>> 0) + 0x6D2B79F5) >>> 0;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return DECOMPTE;
   }
 
   /**
    * POSE LE DEPART : ou tombent les deux commandes, et le coup.
    *
-   * `secondes` est le temps qui reste jusqu'au pistolet. Seul, il est tire au
-   * sort ici meme. En direct et en relais, c'est la SALLE qui l'annonce et il
-   * n'est pas negociable : le coup doit tomber a la meme milliseconde sur tous
-   * les telephones, sinon ce n'est plus la meme course.
+   * `secondes` est le temps qui reste jusqu'au pistolet. Seul, c'est le
+   * decompte (voir tirerLeDepart). En direct et en relais, c'est la SALLE qui
+   * l'annonce et il n'est pas negociable : le coup doit tomber a la meme
+   * milliseconde sur tous les telephones, sinon ce n'est plus la meme course.
    *
-   * `graine` rend la tenue reproductible. Sans elle, deux joueurs de la meme
-   * course entendraient « pret » a deux instants differents — le pistolet
-   * serait bien commun, mais l'un aurait ete prevenu plus tot que l'autre. Les
-   * salles passent donc la date du depart, qui est la meme partout.
+   * `graine` rendait reproductible une tenue tiree au sort ; les commandes
+   * tombent maintenant sur le 3 et sur le 1, identiques sur tous les
+   * telephones, et elle n'est plus lue. Les salles la passent toujours.
    *
    * LE DECOMPTE NE CHANGE PAS DE FORME. `countT` monte toujours jusqu'a 3, et
    * 3 reste le coup de pistolet ; c'est son POINT DE DEPART qui bouge. Tout ce
@@ -1434,14 +1401,14 @@
    */
   function dessinerLeDepart(secondes, graine) {
     const d = Math.max(0, Number(secondes) || 0);
-    // La sequence tient dans ses bornes : un starter n'appelle pas les marques
-    // vingt secondes avant de tirer, et il ne tire pas non plus dans la foulee
-    // de son annonce.
-    const seq = clamp(d, DEPART_MIN, DEPART_MAX);
-    const r = graine == null ? Math.random() : tirageDe(graine);
-    const haut = Math.min(TENUE_MAX, Math.max(0.6, seq - MARQUES_MIN));
-    const bas = Math.min(TENUE_MIN, haut);
-    return { duree: seq, tenue: bas + r * (haut - bas), dit: 0 };
+    // Sur le decompte : « a vos marques » quand le 3 s'affiche, « pret »
+    // quand c'est le 1. Une salle en direct peut annoncer un depart plus
+    // lointain — le chiffre compte alors depuis plus haut, et les deux
+    // commandes tombent toujours sur le 3 et sur le 1. `graine` ne sert plus :
+    // il n'y a plus de tenue a tirer au sort.
+    void graine;
+    const duree = Math.min(d, DECOMPTE);
+    return { duree, tenue: Math.min(1, duree), dit: 0 };
   }
 
   /**
@@ -1472,15 +1439,17 @@
    * de reconnaitre le passage d'une seconde a la suivante sans tenir un
    * compteur de plus.
    *
-   * Au decompte, chaque seconde franchie vaut un bip — il dit dans combien de
-   * temps le signal tombe, ce qui est toute la fonction d'un decompte, et
-   * exactement ce qu'un starter ne dirait jamais. Au starter, il n'y a pas de
-   * seconde a marquer : il y a deux commandes a donner quand leur heure vient.
+   * Chaque seconde franchie vaut un bip — il dit dans combien de temps le
+   * signal tombe, ce qui est toute la fonction d'un decompte. Quand le
+   * starter est la, ses deux commandes tombent sur le 3 et sur le 1 et y
+   * remplacent le bip ; le 2 garde le sien.
    */
   function annoncerLeDepart(avant) {
-    if (STARTER) return starterParle();
-    if (Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
-    return 0;
+    // Au starter, sa voix prend la place du bip au 3 et au 1 ; le 2 garde son
+    // bip. Le rythme du decompte s'entend donc toujours, seconde par seconde.
+    const dit = STARTER ? starterParle() : 0;
+    if (!dit && Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
+    return dit;
   }
 
   /**
@@ -2417,17 +2386,28 @@
     return Math.max(0.62, Math.min(1.7, Math.min(G.VW / 430, G.VH / 660)));
   }
   function scaleM() {
-    return ui() * (G.race.arc > 0 ? 44 : 30);
+    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique();
+  }
+  // LE PLAN SERRE DU GENERIQUE. Le tour d'honneur se joue dans le stade, a
+  // l'echelle du monde (voir game/scene-generique.ts) ; a l'echelle de la
+  // course, le champion n'y mesurait qu'une soixantaine de pixels. La scene
+  // pose son cadrage dans `G.zoomScene`, et il ne vaut QUE pendant elle : lu
+  // ici sous condition, il ne peut pas deborder sur l'ecran d'apres.
+  function zoomDuGenerique() {
+    return (G.state === 'cut' && G.cut && G.cut.kind === 'ending' && G.zoomScene) || 1;
   }
   // Pendant la course, le joueur doit rester au centre exact de l'image ;
   // ailleurs (titre, cinematiques...) on garde la composition d'origine,
   // decalee pour laisser de la place au HUD et au decor.
+  // L'elimination au faux depart garde le cadre de la course : c'est la meme
+  // piste, figee, et elle ne doit pas sauter d'un dixieme d'ecran a l'instant
+  // ou le joueur est elimine.
   function originX() {
-    if (G.state === 'race' || G.state === 'count') return G.VW * 0.5;
+    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VW * 0.5;
     return G.VW * (G.portrait ? 0.58 : 0.60);
   }
   function originY() {
-    if (G.state === 'race' || G.state === 'count') return G.VH * 0.5;
+    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VH * 0.5;
     return G.VH * (G.portrait ? 0.44 : 0.56);
   }
 
@@ -2558,7 +2538,7 @@
       }
       for (let i = 0; i <= N; i++)
         out.push([true, Math.PI * (1 - i / N), 0]);
-      const s1End = T.fullLap ? T.straight : T.straight + C.RUNOUT;
+      const s1End = T.fullLap ? T.straight : T.straight + finDuDecor();
       for (let x = st; x <= s1End; x += st) out.push([false, x, 0]);
       // Tour complet (400 m) : second virage + seconde ligne droite,
       // symetriques du premier couple (voir Track.posLap2), pour que le
@@ -2574,9 +2554,25 @@
       // telephone tenu debout montrait deja le bout du stade — un coin de
       // ciel en bas de l'image, sous les blocs.
       const d = pas || 12;
-      for (let x = -60; x <= T.straight + C.RUNOUT + d; x += d) out.push([false, x, 0]);
+      for (let x = -60; x <= T.straight + finDuDecor() + d; x += d) out.push([false, x, 0]);
     }
     return out;
+  }
+  // ET IL CONTINUE APRES L'ARRIVEE. Le stade s'arretait douze metres apres la
+  // zone de decelaration : en course la camera, centree sur le coureur, n'y
+  // arrivait jamais. Les scenettes d'apres course, elles, cadrent plus a droite
+  // et plus bas — et depuis qu'elles ne sont plus voilees de noir et de flou,
+  // le coin du haut montrait le bout du monde : un aplat de ciel au bout de la
+  // piste. On prolonge donc le decor de quarante metres de plus, comme
+  // derriere le depart.
+  function finDuDecor() {
+    return C.RUNOUT + 40;
+  }
+  // Les eclats d'appareils dans la tribune : en course, et dans les scenettes,
+  // qui se jouent devant le meme public — un sacre sans un flash dans les
+  // gradins serait une photo de stade vide.
+  function flashsActifs() {
+    return G.state === 'race' || G.state === 'count' || G.state === 'cut';
   }
   // TROIS FONCTIONS PORTENT LE RENDU DU DECOR, ET CHACUNE ALLOUAIT.
   //
@@ -4227,7 +4223,7 @@
     }
     // La rangee deborde de part et d'autre de la piste : le cadre montre du
     // decor avant la ligne de depart et apres l'arrivee.
-    const fin = G.track.straight + C.RUNOUT + 12;
+    const fin = G.track.straight + finDuDecor();
     for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
     return out;
   }
@@ -4596,7 +4592,7 @@
         // referme simplement la boucle plutot que de couper par le centre.
         ctx.closePath();
       } else {
-        let p = ground(T.straight + C.RUNOUT, 0); ctx.lineTo(p[0], p[1]);
+        let p = ground(T.straight + finDuDecor(), 0); ctx.lineTo(p[0], p[1]);
         p = ground(0, 0); ctx.lineTo(p[0], p[1]);
         ctx.closePath();
       }
@@ -4773,7 +4769,7 @@
       // Les eclats d'appareils dans la foule. Ils suivent la meme densite que
       // le public — une rencontre scolaire ne scintille pas comme une finale —
       // et se posent sur un vrai gradin, pas sur l'ecran. Voir rendu-premium.js.
-      if (PREM() && (G.state === 'race' || G.state === 'count')) {
+      if (PREM() && flashsActifs()) {
         PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
         PREM().dessinerFlashs(ctx, PEINTRE);
       }
@@ -4784,7 +4780,7 @@
     // simple bande. Voir drawAllees. Avec le public assis, ils sont deja la.
     if (!publicAssis) drawAllees(ctx, th, sm, near, tiers, sr, sz);
     // les eclats d'appareils suivent le public, quel qu'il soit
-    if (publicAssis && PREM() && (G.state === 'race' || G.state === 'count')) {
+    if (publicAssis && PREM() && flashsActifs()) {
       PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
       PREM().dessinerFlashs(ctx, PEINTRE);
     }
@@ -5379,19 +5375,25 @@
     for (let f = 0; f < nf; f++) {
       const id = _fOrder[f], kind = _fKind[id];
       ctx.beginPath();
-      if (kind >= 0) {
-        const i = kind, j = (i + 1) % N;
-        ctx.moveTo(_s0x[i], _s0y[i]);
-        ctx.lineTo(_s0x[j], _s0y[j]);
-        ctx.lineTo(_s1x[j], _s1y[j]);
-        ctx.lineTo(_s1x[i], _s1y[i]);
-      } else if (kind >= RING_MAX) {
+      // LA CALOTTE D'ABORD. Ses faces portent un numero a partir de RING_MAX,
+      // qui est aussi un nombre positif : testees apres les faces laterales,
+      // elles tombaient dans leur branche, avec un indice hors de l'anneau, et
+      // n'etaient jamais dessinees. Il ne restait du bout arrondi que son
+      // disque, qui flottait au-dessus du cylindre — la chevelure en anneau
+      // sous un couvercle detache, les poings et les pieds coupes net.
+      if (kind >= RING_MAX) {
         const i = kind - RING_MAX, j = (i + 1) % N;
         const bx = bout0 ? _s0x : _s1x, by = bout0 ? _s0y : _s1y;
         ctx.moveTo(bx[i], by[i]);
         ctx.lineTo(bx[j], by[j]);
         ctx.lineTo(_cx[j], _cy[j]);
         ctx.lineTo(_cx[i], _cy[i]);
+      } else if (kind >= 0) {
+        const i = kind, j = (i + 1) % N;
+        ctx.moveTo(_s0x[i], _s0y[i]);
+        ctx.lineTo(_s0x[j], _s0y[j]);
+        ctx.lineTo(_s1x[j], _s1y[j]);
+        ctx.lineTo(_s1x[i], _s1y[i]);
       } else if (kind === -3) {
         ctx.moveTo(_cx[0], _cy[0]);
         for (let i = 1; i < N; i++) ctx.lineTo(_cx[i], _cy[i]);
@@ -5412,10 +5414,15 @@
   }
 
   function drawFacetFigure(ctx, caps, ax, ay, k) {
+    // LA PROFONDEUR SE MESURE DANS L'AXE DE LA VUE, HAUTEUR COMPRISE. La
+    // camera regarde d'en haut : un segment plus haut est plus PRES d'elle.
+    // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
+    // cheveux posee dessus, et la chevelure ne restait qu'un anneau.
     const order = [];
     for (let i = 0; i < caps.length; i++) {
       const e0 = caps[i][1], e1 = caps[i][2];
-      order.push([(e0[0] + e0[1] + e1[0] + e1[1]) * 0.5, i]);
+      order.push([(e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                  (e0[2] + e1[2]) * VIEW[2], i]);
     }
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
@@ -5615,10 +5622,29 @@
   const STARTER_D = 2.0;           // deux metres APRES la ligne, donc devant eux
   const STARTER_COULOIR = -1.0;    // en dedans du premier couloir, sur l'herbe
 
-  /** Sa tenue : le blanc des officiels, et des chaussures de ville. */
+  /** Sa tenue : le blanc des officiels, un pantalon, des chaussures de ville. */
   const LOOK_STARTER = K.look({
     build: 'm', skin: 'ambre', jersey: [234, 238, 246], shorts: [34, 38, 58],
-    shoe: [38, 40, 50], hair: 'crop', h: 1.78,
+    pantalon: [34, 38, 58], shoe: [38, 40, 50], hair: 'crop', h: 1.78,
+    civil: true,
+  });
+
+  /**
+   * A LA RENCONTRE SCOLAIRE, LE STARTER EST LE PROF.
+   *
+   * Pas d'officiel en blanc pour une course entre eleves : c'est le prof qui
+   * donne le depart, et il n'en fait pas une affaire. Gilet bordeaux sur
+   * chemise, pantalon beige, lunettes, les cheveux qui grisonnent — et un livre
+   * ouvert dans la main gauche, qu'il ne quitte pas des yeux. Il leve le
+   * pistolet au 1 sans relever la tete, a moitie, et tire sur le signal comme
+   * on tourne une page. C'est le premier stade du jeu : tout y dit que rien
+   * n'est encore serieux.
+   */
+  const LOOK_PROF = K.look({
+    build: 'm', skin: 'clair', jersey: [132, 46, 54], manches: [132, 46, 54],
+    shorts: [196, 174, 134], pantalon: [196, 174, 134], shoe: [96, 64, 42],
+    hair: 'fade', hairCol: [150, 146, 142], lunettes: [34, 34, 40], h: 1.76,
+    civil: true, morph: { sh: 0.94, hip: 1.10, arm: 0.90, leg: 0.94 },
   });
 
   /**
@@ -5636,8 +5662,8 @@
     // detache sa peau verte sur une piste violette.
     const l = K.look({
       build: 'm', skin: 'ambre', jersey: [230, 236, 250], shorts: [58, 26, 96],
-      shoe: [186, 128, 246], hair: 'shaved', h: 1.96,
-      morph: { sh: 0.92, hip: 0.90, arm: 1.16, leg: 1.14 },
+      pantalon: [58, 26, 96], shoe: [186, 128, 246], hair: 'shaved', h: 1.96,
+      morph: { sh: 0.92, hip: 0.90, arm: 1.16, leg: 1.14 }, civil: true,
     });
     // Une peau qui n'est dans aucune table de carnations, et c'est voulu :
     // celles-la sont humaines, celle-ci ne l'est pas.
@@ -5700,23 +5726,27 @@
     // exactement le temps ecoule depuis, ce qui donne le recul, l'eclair et
     // la fumee sans qu'on ait a tenir un chronometre de plus.
     const tir = G.state === 'race' ? G.elapsed : -1;
-    if (G.state !== 'count' && !(tir >= 0 && tir < 2.6)) return;
+    if (G.state !== 'count' && G.state !== 'falseout' && !(tir >= 0 && tir < 2.6)) return;
     // Pendant la presentation des athletes, il attend comme les autres.
     const p = T.pos(STARTER_D, STARTER_COULOIR);
     const g2 = ground(p[0], p[1]);
     if (g2[0] < -240 || g2[0] > G.VW + 240 || g2[1] < -280 || g2[1] > G.VH + 260) return;
 
     const alien = G.levelIdx === ETAPE_ZEZE;
-    const look = alien ? LOOK_ALIEN : LOOK_STARTER;
+    const prof = G.levelIdx === 0;
+    const look = alien ? LOOK_ALIEN : (prof ? LOOK_PROF : LOOK_STARTER);
     const m = scaleM(), k = m * (look.h / C.MODEL_H);
 
     // Le bras monte au « pret », en une demi-seconde — un starter ne leve pas
-    // son arme d'un coup sec — et redescend une fois la course partie.
-    let leve = d.dit >= 2 ? clamp((G.countT - (3 - d.tenue)) / 0.45, 0, 1) : 0;
+    // son arme d'un coup sec — et redescend une fois la course partie. Le prof
+    // prend son temps, et ne le leve qu'a moitie.
+    const montee = prof ? 0.9 : 0.45;
+    let leve = d.dit >= 2 ? clamp((G.countT - (3 - d.tenue)) / montee, 0, 1) : 0;
     if (tir >= 0) leve = 1 - clamp((tir - 0.7) / 0.9, 0, 1);
-    const recul = tir >= 0 && tir < 1 ? 0.30 * Math.exp(-tir * 8) : 0;
-    const BAS = 0.12, HAUT = 2.98;
+    const recul = tir >= 0 && tir < 1 ? (prof ? 0.16 : 0.30) * Math.exp(-tir * 8) : 0;
+    const BAS = 0.12, HAUT = prof ? 2.15 : 2.98;
     const bras = BAS + (HAUT - BAS) * leve + recul;
+    const lecture = performance.now() / 1000;
 
     const person = {
       look: look, stride: 0.55, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
@@ -5727,8 +5757,16 @@
       // C'est le bras du COTE DE LA CAMERA qui tient l'arme. Sur l'autre, le
       // corps la masque a moitie — et une arme a moitie cachee ne raconte pas
       // grand-chose.
-      bras: [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
+      //
+      // Le prof, lui, garde le bras gauche plie devant la poitrine, le livre
+      // dans la main, et le coude du bras arme reste casse : il ne vise rien.
+      bras: prof ? [0.30, bras, 1.72, 0.55 * (1 - leve) + 0.30]
+                 : [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
       pistolet: -1,
+      livre: prof ? 1 : 0,
+      // le nez dans son livre, et il lit vraiment : la tete bouge a peine
+      tete: prof ? -0.62 + 0.03 * Math.sin(lecture * 0.8) : 0,
+      buste: prof ? 0.07 : 0,
       // Les bulbes prennent l'accent du stade : le magenta des tribunes
       // cosmos. Il est d'ici, lui, et cela se voit jusque sur sa tete.
       antennes: alien ? [236, 132, 220] : null,
@@ -5790,6 +5828,9 @@
   function phaseBlocs(r) {
     const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
     if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; return; }
+    // Elimine au faux depart : la piste est figee, et chacun reste la ou le
+    // decompte l'a laisse — dans ses blocs, pas debout d'un coup derriere eux.
+    if (G.state === 'falseout') return;
     if (G.state === 'count') {
       const d = G.depart;
       let marques, prets;
@@ -6062,6 +6103,8 @@
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
     // arreter sur l'image qu'on veut regarder.
     personCapsules, drawFacetFigure, niveauDetail,
+    // les tenues des starters, pour tools/apercu-starter.html
+    LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,
     GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,

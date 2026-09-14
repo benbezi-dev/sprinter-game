@@ -685,7 +685,15 @@
       // de meme taille doivent pouvoir avoir une silhouette et une gestuelle
       // reconnaissables. Absents => foulee historique et gabarit standard.
       gait: o.gait || 'base',
-      morph: o.morph || null
+      morph: o.morph || null,
+      // UNE TENUE DE VILLE, pour ceux qui ne courent pas. Des manches et un
+      // pantalon a la couleur donnee au lieu de bras et de jambes nus, des
+      // lunettes, et `civil` : ni dossard ni bandes de kit sur le buste — un
+      // starter en dossard avait l'air d'un coureur qui s'est trompe de place.
+      manches: o.manches || null,
+      pantalon: o.pantalon || null,
+      lunettes: o.lunettes || null,
+      civil: !!o.civil
     };
   }
 
@@ -1313,7 +1321,9 @@
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
     const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
-    let lean = -(0.05 + 0.16 * sp) * P.lean;
+    // `buste` penche le haut du corps a la demande (positif = en arriere) :
+    // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
+    let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -1462,64 +1472,108 @@
     // sans calotte — c'est elle qui faisait la collerette.
     PREM.chaine(add, PR, 'torso', niv, L.jersey, hip, lean, 0, yawTop, kSh,
                 0, SOUS_BAS, 0);
-    // Dossard et bandes de couleur : un vrai kit d'athletisme plutot qu'un
-    // aplat uniforme. Ils se posent sur la peau MESUREE et non a une
-    // abscisse fixe — sinon ils s'enfoncent dans un torse epais et flottent
-    // devant un torse mince.
-    add(DOSSARD, hip, lean,
-        [PREM.avant(PR, 'torso', niv, 0.352, kSh) * 0.90, 0, 0.352],
-        [0.010, shY * 0.46], [0.010, shY * 0.50], 0.060, yawTop);
-    add(L.shoe, hip, lean,
-        [PREM.avant(PR, 'torso', niv, 0.280, kSh) * 0.94, 0, 0.28],
-        [0.015, 0.015], [0.017, 0.017], 0.19, yawTop);
-    add(L.shoe, hip, 0,
-        [PREM.avant(PR, 'pelvis', niv, 0, kHip) * 0.94, 0, 0],
-        [0.014, 0.014], [0.014, 0.014], 0.09, yawHip);
+    // Le dossard : un vrai kit d'athletisme plutot qu'un aplat uniforme. Il se
+    // pose sur la peau MESUREE et non a une abscisse fixe — sinon il
+    // s'enfonce dans un torse epais et flotte devant un torse mince.
+    if (!L.civil) {
+      // LE DOSSARD EST UNE FEUILLE, PAS UNE BOITE DE CONSERVE.
+      //
+      // Il etait decrit mince et large (1 cm sur 14), mais sans le drapeau
+      // MESURE : le rendu arrondissait donc sa section en moyenne, et posait
+      // devant la poitrine un cylindre blanc de dix centimetres de diametre.
+      // En course, a trente pixels le metre, cela passait pour un dossard ; en
+      // gros plan dans les scenettes, le coureur tenait une canette.
+      //
+      // La feuille garde maintenant sa section, et une section qui a la MEME
+      // COURBURE que le torse sur le devant (demi-profondeur = largeur² x
+      // profondeur du torse / largeur du torse²) : elle suit la poitrine a six
+      // millimetres de la peau, et ses bords rentrent dans le corps au lieu de
+      // flotter devant.
+      const [cT, pT, lT] = PREM.section(PR, 'torso', niv, 0.352, kSh);
+      const lB = Math.min(lT * 0.60, shY * 0.55);
+      const pB = lT > 0 ? lB * lB * pT / (lT * lT) : 0.01;
+      add(DOSSARD, hip, lean, [cT + pT + 0.006 - pB, 0, 0.352],
+          [pB, lB], [pB, lB], 0.066, yawTop, PREM.MESURE);
+      // LES DEUX BANDES VERTICALES NE SONT PLUS LA. Un trait de la couleur des
+      // chaussures descendait au milieu du maillot, un autre au milieu du
+      // short. A l'echelle de la course, un pixel d'accent ; en gros plan, la
+      // premiere passait sous la feuille et en faisait un panneau plante sur
+      // un piquet, la seconde un baton pendu a la ceinture.
+    }
+    const peauBras = L.manches || L.skin;
+    const peauJambes = L.pantalon || L.skin;
 
     // Le deltoide : c'est lui qui fait la carrure. Son sommet garde un
     // disque nu — une calotte y posait un bouton clair sur l'epaule.
     for (const side of [1, -1]) {
-      PREM.chaine(add, PR, 'deltoid', niv, L.skin, hip, lean, side * shY,
+      PREM.chaine(add, PR, 'deltoid', niv, peauBras, hip, lean, side * shY,
                   yawTop, kSh, 0, SOUS_BAS, 0);
     }
     PREM.chaine(add, PR, 'neck', niv, L.skin, hip, lean, 0, yawTop * 0.5, 1,
                 0, SOUS_BAS, SOUS_HAUT);
-    PREM.chaine(add, PR, 'head', niv, L.skin, hip, lean, 0, yawTop * 0.2, 1,
-                -bob * 0.55, SOUS_BAS, LIBRE);
+    // LA TETE SE PENCHE AUTOUR DU COU, PAS DU BASSIN. `tete` l'incline
+    // (negatif = vers l'avant, le nez dans un livre) : la tete, les cheveux,
+    // les lunettes et les antennes tournent alors autour de la base du cou.
+    // Sans ce pivot, incliner la tete revenait a pencher tout le haut du
+    // corps depuis les hanches.
+    const tete = r.tete || 0;
+    const cou = rot(0, 0.52, lean);
+    const pvT = tete ? [hip[0] + cou[0], hip[1], hip[2] + cou[1]] : hip;
+    const angT = lean + tete, dzT = tete ? -0.52 : 0;
+    const addT = (c, da, o, hb, ht, hz, yaw, bout) =>
+      add(c, pvT, angT + da, [o[0], o[1], o[2] + dzT], hb, ht, hz, yaw, bout);
+    // Le sommet du crane ne s'arrondit pas : les cheveux s'en chargent. Arrondi
+    // lui aussi, il depassait de la calotte de cheveux, et la chevelure ne
+    // formait plus qu'un anneau autour d'un crane nu.
+    PREM.chaine(add, PR, 'head', niv, L.skin, pvT, angT, 0, yawTop * 0.2, 1,
+                -bob * 0.55 + dzT, SOUS_BAS, 0);
+    // des lunettes : deux verres minces devant les yeux
+    if (L.lunettes) {
+      for (const side of [1, -1]) {
+        addT(L.lunettes, 0, [0.090, side * 0.036, 0.690], [0.005, 0.020],
+             [0.005, 0.020], 0.016, yawTop * 0.2, PREM.MESURE);
+      }
+    }
 
     const hy = yawTop * 0.2, hc = L.hairCol;
+    // LES CHEVEUX COIFFENT LE CRANE MESURE. Leurs rayons avaient ete regles
+    // sur l'ancienne tete, plus etroite : sur le crane releve dans Blender,
+    // la calotte ne le couvrait plus et la peau ressortait entre deux
+    // bandes de cheveux. Dix pour cent de plus, et elle le coiffe.
+    const addH = (da, o, hb, ht, hz, yaw, bout) =>
+      addT(hc, da, o, [hb[0] * 1.10, hb[1] * 1.10], [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
     switch (L.hair) {
       case 'shaved':
-        add(hc, hip, lean, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
+        addH(0, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
             0.016, hy, true); break;
       case 'flattop':
-        add(hc, hip, lean, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
+        addH(0, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
             0.048, hy, true); break;
       case 'fade':
-        add(hc, hip, lean, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
+        addH(0, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
             0.030, hy, true);
-        add(hc, hip, lean, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
+        addH(0, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
             0.046, hy, true); break;
       case 'bun':
-        add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
+        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
             0.034, hy, true);
-        add(hc, hip, lean, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
+        addH(0, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
             0.044, hy, true); break;
       case 'ponytail':
-        add(hc, hip, lean, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
+        addH(0, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
             0.032, hy, true);
-        add(hc, hip, lean + 0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
+        addH(0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
             [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
       case 'braids':
-        add(hc, hip, lean, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
+        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
             0.034, hy, true);
         for (const dy of [-0.044, 0, 0.044]) {
-          add(hc, hip, lean + 0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
+          addH(0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
               [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
         }
         break;
       default:
-        add(hc, hip, lean, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
+        addH(0, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
             0.026, hy, true);
     }
 
@@ -1528,11 +1582,13 @@
     let poing = null;
     /** Le poing qui porte le temoin, quand ce coureur l'a en main. */
     let main = null;
+    /** La main qui tient le livre du prof. */
+    let livre = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
       // Le haut du bras entre dans le deltoide ; la main est un bout libre.
-      PREM.chaine(add, PR, 'upperarm', niv, L.skin, S, aArm, 0, yawTop, kArm,
-                  0, 0, SOUS_HAUT);
+      PREM.chaine(add, PR, 'upperarm', niv, peauBras, S, aArm, 0, yawTop,
+                  kArm * (L.manches ? 1.10 : 1), 0, 0, SOUS_HAUT);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
       // LES ARTICULATIONS SE VOYAIENT.
@@ -1544,10 +1600,16 @@
       // pour couvrir sans faire de bosse.
       const rCoude = Math.max(PREM.rayon(PR, 'upperarm', niv, 'bas', kArm),
                               PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * 1.06;
-      add(L.skin, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
+      add(peauBras, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
           0.026, yawTop);
-      PREM.chaine(add, PR, 'forearm', niv, L.skin, E, aFore, 0, yawTop, kArm,
-                  0, LIBRE, SOUS_HAUT);
+      PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
+                  kArm * (L.manches ? 1.12 : 1), 0, LIBRE, SOUS_HAUT);
+      // au bout d'une manche, une main
+      if (L.manches) {
+        add(L.skin, E, aFore, [0.004, 0, -0.268], [0.032, 0.030], [0.028, 0.026],
+            0.030, yawTop, true);
+      }
+      if (r.livre === side) livre = [E, aFore];
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
     }
@@ -1560,10 +1622,10 @@
     // starter du stade des ZEZE, qui n'est pas d'ici.
     if (r.antennes) {
       for (const dy of [-0.042, 0.042]) {
-        add(L.skin, hip, lean, [-0.012, dy, 0.806], [0.011, 0.011],
-            [0.008, 0.008], 0.058, hy);
-        add(r.antennes, hip, lean, [-0.018, dy, 0.884], [0.026, 0.026],
-            [0.024, 0.024], 0.016, hy, true);
+        addT(L.skin, 0, [-0.012, dy, 0.806], [0.011, 0.011],
+             [0.008, 0.008], 0.058, hy);
+        addT(r.antennes, 0, [-0.018, dy, 0.884], [0.026, 0.026],
+             [0.024, 0.024], 0.016, hy, true);
       }
     }
 
@@ -1578,20 +1640,22 @@
       // bassin. Elle reprend le haut de la cuisse MESUREE, un rien plus
       // large a chaque hauteur, pour l'avaler sans la pincer. Rien ne change
       // pour les femmes : leur cuissard reste le seul volume du bassin.
-      if (!fem) {
+      if (!fem && !L.pantalon) {
         PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yawHip,
                     kLeg * 1.08, 0, 0, SOUS_HAUT, -0.156);
       }
-      PREM.chaine(add, PR, 'thigh', niv, L.skin, H, th, 0, yawHip, kLeg,
+      // un pantalon tombe plus large que la jambe qu'il habille
+      const kPant = L.pantalon ? 1.10 : 1;
+      PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yawHip, kLeg * kPant,
                   0, SOUS_BAS, SOUS_HAUT);
       const kv = rot(0, -0.392, th);
       const K = [H[0] + kv[0], H[1], H[2] + kv[1]];
       const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
                               PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * 1.04;
-      add(L.skin, K, sk, [0, 0, -0.020], [rGenou, rGenou], [rGenou, rGenou],
-          0.034, yawHip);
-      PREM.chaine(add, PR, 'shank', niv, L.skin, K, sk, 0, yawHip, kLeg,
-                  0, 0, SOUS_HAUT);
+      add(peauJambes, K, sk, [0, 0, -0.020], [rGenou * kPant, rGenou * kPant],
+          [rGenou * kPant, rGenou * kPant], 0.034, yawHip);
+      PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yawHip,
+                  kLeg * (L.pantalon ? 1.18 : 1), 0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
       const An = [K[0] + a[0], K[1], K[2] + a[1]];
       // semelle claire, legerement plus large : elle deborde sous la
@@ -1600,6 +1664,28 @@
           [0.080, 0.052], 0.028, yawHip, true);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
           0.028, yawHip, true);
+    }
+
+    // LE LIVRE DU PROF, OUVERT DANS SA MAIN.
+    //
+    // Il part de la main et monte, incline d'une trentaine de degres : c'est
+    // l'angle d'un livre qu'on lit debout. Tenu dans le prolongement de
+    // l'avant-bras, il se couchait a plat comme un plateau. La couverture
+    // regarde la camera, les pages le lecteur — deux plaques minces, dont la
+    // section aplatie (MESURE) fait un livre et non un rouleau. Pose AVANT le
+    // pistolet, qui doit rester la derniere capsule.
+    if (livre) {
+      const [E, aF] = livre;
+      const h = rot(0, -0.262, aF);
+      const main = [E[0] + h[0], E[1], E[2] + h[1]];
+      const aL = Math.PI - 0.55;                 // vers le haut, le haut du livre en avant
+      const COUV = r.livreCol || [168, 44, 52], PAGES = [244, 238, 222];
+      // Un grand livre, a dessein : a la taille ou le jeu montre le prof, un
+      // livre de poche ne se lisait pas.
+      add(PAGES, main, aL, [0.008, 0, -0.120], [0.016, 0.094], [0.016, 0.094],
+          0.118, yawTop, PREM.MESURE);
+      add(COUV, main, aL, [-0.012, 0, -0.120], [0.007, 0.102], [0.007, 0.102],
+          0.126, yawTop, PREM.MESURE);
     }
 
     // LE PISTOLET DU STARTER, DANS LE PROLONGEMENT DE L'AVANT-BRAS.

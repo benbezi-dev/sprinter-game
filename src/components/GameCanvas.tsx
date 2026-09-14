@@ -1,40 +1,82 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
-import { dessinerLeGenerique } from '@/game/scene-generique';
+import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
+import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
 
+/** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
+function pointDuPersonnage(G: any): [number, number] {
+  return G.portrait ? [G.VW * 0.5, G.VH * 0.46] : [G.VW * 0.26, G.VH * 0.72];
+}
+
 /**
- * UNE CINEMATIQUE ORDINAIRE : les lignes de vitesse, le coureur qui entre par
- * la gauche, et les confettis du sacre.
+ * LE PERSONNAGE D'UNE SCENETTE SE TIENT SUR LA PISTE.
+ *
+ * La camera restait ou la course l'avait laissee — au depart pour l'intro, sur
+ * le coureur arrete pour les autres — et le personnage etait peint a une place
+ * fixe de l'ecran, sans regarder ce qu'il y avait dessous. Sous le voile et le
+ * flou, cela ne se voyait pas. Sur le stade net, on le trouvait debout dans la
+ * pelouse, ou les pieds dans les sieges de la tribune du 200 et du 400, et le
+ * coin du cadre montrait le bout du decor.
+ *
+ * On cadre maintenant l'inverse : le point de piste ou il se tient — couloir 4,
+ * trois metres derriere la ligne de depart pour l'intro, la ou la course s'est
+ * arretee pour les autres — tombe exactement sous ses pieds. Sous lui il y a
+ * donc toujours la piste, et autour la ligne qui compte : les blocs avant la
+ * course, la ligne d'arrivee apres. Recalcule a chaque image, le cadrage suit
+ * aussi un telephone qu'on tourne. Le decompte, derriere l'intro, ramene la
+ * camera sur le joueur en glissant (followCam).
+ */
+function placerLaCameraDeLaScenette(cut: any) {
+  const { G, clamp } = SprinterApp;
+  const T = G.track;
+  if (!T) return;
+  const d = cut.kind === 'intro'
+    ? -3
+    : clamp(G.player ? G.player.d : T.total + 9, T.total + 2, T.total + 14);
+  const [x, y] = cameraPour(SprinterApp, T.pos(d, 3), pointDuPersonnage(G));
+  G.camX = x; G.camY = y;
+}
+
+/**
+ * UNE CINEMATIQUE ORDINAIRE : le coureur qui entre par la gauche, et les
+ * confettis du sacre.
  *
  * Sortie de la boucle pour pouvoir etre dessinee DEUX fois dans la meme image :
  * la cinematique en cours, et — pendant les deux secondes du croisement — le
  * sacre qui s'efface par-dessus le generique qui vient de demarrer (G.sortie).
  * C'est le meme dessin a une opacite pres ; le dupliquer aurait fait deux
  * sacres a maintenir. Voir nextCut dans game/sprinter-app.js.
+ *
+ * PLUS DE BANDES EN TRAVERS DE L'ECRAN. Vingt-huit traits larges de la couleur
+ * du stade balayaient toute l'image : sur le stade refait, c'etaient justement
+ * les taches claires qu'on a retirees de la course. Le mouvement est porte par
+ * le coureur, qui entre en courant.
  */
 function dessinerCinematique(ctx: CanvasRenderingContext2D, cut: any, theme: any) {
   const { G, drawIcon } = SprinterApp;
   const ct = cut.t;
   const intro = cut.kind === 'intro';
   const champ = cut.kind === 'champion';
-  const accent = champ ? [248, 205, 74] : theme.accent;
-  
-  // Speed lines
-  ctx.strokeStyle = `rgba(${accent.join(',')},0.07)`;
-  ctx.lineWidth = SprinterApp.ui() * 26;
-  for (let i = -4; i < 24; i++) {
-    const x = i * (SprinterApp.ui() * 62) + (ct * SprinterApp.ui() * 34) % (SprinterApp.ui() * 62);
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x - SprinterApp.ui() * 240, G.VH); ctx.stroke();
-  }
+  void theme;
 
-  const gx = G.portrait ? G.VW * 0.5 : G.VW * 0.26;
-  const gy = G.portrait ? G.VH * 0.46 : G.VH * 0.72;
+  const [gx, gy] = pointDuPersonnage(G);
   const app = SprinterApp.clamp(ct / 0.55, 0, 1);
   const ease = 1 - Math.pow(1 - app, 3);
-  drawIcon(ctx, cut.man, gx - SprinterApp.ui() * 240 * (1 - ease), gy,
-             SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250)), !intro && !champ);
-             
+  const taille = SprinterApp.ui() * (champ ? 300 : (intro ? 280 : 250));
+  const x = gx - SprinterApp.ui() * 240 * (1 - ease);
+  // SON OMBRE, CELLE DE LA COURSE. Un personnage de cette taille pose sur un
+  // stade net sans rien sous les pieds flotte : on lui donne la meme double
+  // ombre — penombre large, contact serre — que sur la piste, a son echelle
+  // (taille = pixels pour deux metres). Voir ombre() dans rendu-premium.js.
+  const Prem = (globalThis as any).RenduPremium;
+  const { SprinterCore } = (globalThis as any);
+  if (Prem && SprinterCore) {
+    Prem.ombre(ctx, x, gy, taille / 2, cut.man.look.h / SprinterCore.C.MODEL_H,
+               cut.man.stride, false);
+  }
+  drawIcon(ctx, cut.man, x, gy, taille, !intro && !champ);
+
   if (champ) {
     // Confettis qui tournent sur eux-memes en tombant, plutot que
     // de simples rectangles droits : plus vivant pour l'ecran de
@@ -198,9 +240,20 @@ export function GameCanvas() {
           const a = G.shake * (9 * SprinterApp.ui());
           ctx.translate((Math.random() * 2 - 1) * a, (Math.random() * 2 - 1) * a);
         }
+        // Les scenes posent leur camera avant que le monde soit dessine : le
+        // personnage d'une scenette sur la piste, le generique sur le tour
+        // d'honneur.
+        if (G.state === 'cut' && G.cut) {
+          if (G.cut.kind === 'ending') placerLaCameraDuGenerique(SprinterApp);
+          else placerLaCameraDeLaScenette(G.cut);
+        }
         drawWorld(ctx, theme);
         
-        if (G.state === 'race' || G.state === 'count') {
+        // L'elimination au faux depart se joue sur la piste figee : les
+        // coureurs y restent. Sous l'ancien voile noir a 78 %, on ne voyait pas
+        // qu'ils avaient disparu ; sous le voile allege, on voyait des blocs
+        // vides.
+        if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') {
           drawAthletes(ctx);
         } else if (G.state === 'title') {
           // Title screen athletes
@@ -214,8 +267,8 @@ export function GameCanvas() {
         } else if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
           // Le generique de fin de carriere a sa propre scene : la nuit sur le
           // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
-          // est dessinee ailleurs — deux cents lignes qui n'ont rien a faire au
-          // milieu de la boucle.
+          // est dessinee ailleurs — trois cents lignes qui n'ont rien a faire
+          // au milieu de la boucle.
           dessinerLeGenerique(ctx, SprinterApp);
           // LE FONDU ENCHAINE. Le sacre est dessine par-dessus la nuit qui
           // monte, a l'opacite qui lui reste : les deux scenes se croisent au
