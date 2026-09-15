@@ -43,8 +43,11 @@ type Ecouteurs = {
   onEtat?: (e: EtatRelais) => void;
   /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
   onDepart?: (dansMs: number, departA: number) => void;
-  /** Position d'un coequipier, par son rang de relais. */
-  onPos?: (relais: number, d: number) => void;
+  /** Position d'un coequipier, par son rang de relais. `c` est l'instant de SA
+   *  course ou il y etait, en millisecondes depuis le coup de pistolet —
+   *  absent d'une salle deployee avant ce champ. Voir recevoirPosition dans
+   *  sprinter-app.js : c'est ce qui le montre ou il EST, pas ou il etait. */
+  onPos?: (relais: number, d: number, c?: number) => void;
   /** Le temoin est passe : note de 0 a 2, du rate au parfait. */
   onPasse?: (p: { de: number; vers: number; note: number; bras?: number }, e: EtatRelais) => void;
   /**
@@ -129,7 +132,7 @@ export class SalleRelais {
         this.majEtat(m);
         return;
       case 'pos':
-        this.ec.onPos?.(m.relais, m.d);
+        this.ec.onPos?.(m.relais, m.d, Number.isFinite(m.c) ? m.c : undefined);
         return;
       case 'passe':
         this.ec.onPasse?.({ de: m.de, vers: m.vers, note: m.note, bras: m.bras },
@@ -190,7 +193,11 @@ export class SalleRelais {
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
   /** Placer sa marque dans sa zone, avant le depart. */
   placer(d: number) { this.marque = d; this.envoyer({ t: 'marque', d }); }
-  position(d: number) { this.envoyer({ t: 'pos', d }); }
+  /** `c` : l'instant de notre course, en millisecondes. Une salle qui ne le
+   *  connait pas l'ignore. */
+  position(d: number, c?: number) {
+    this.envoyer(c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) });
+  }
 
   /**
    * Le moteur a avance : ce que la salle doit en savoir.
@@ -201,8 +208,8 @@ export class SalleRelais {
    * une portion posee sur une piste de cent metres aurait fait franchir au
    * troisieme relayeur une ligne d'arrivee au trois cent quinzieme metre.
    */
-  avancer(dAbs: number) {
-    this.position(dAbs);
+  avancer(dAbs: number, c?: number) {
+    this.position(dAbs, c);
     if (dAbs >= ARRIVEE) this.terminer();
   }
 

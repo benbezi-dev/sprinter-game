@@ -1179,6 +1179,9 @@
     // dit si la course en a un — la course en direct, pas le relais, dont les
     // chronos d'arrivee ne passent pas par ici.
     photo: null, photoFinish: false,
+    // L'horloge sur laquelle on reporte les adversaires en direct, quand ce
+    // n'est pas celle de la course : voir instantLive.
+    horlogeLive: null,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
@@ -1779,6 +1782,8 @@
     G.liveResultat = null;
     G.photo = null;
     G.photoFinish = !!opts.photoFinish;
+    // Par defaut, l'horloge de la course. Le relais pose la sienne apres ceci.
+    G.horlogeLive = null;
     // Une revanche ne rejoue pas les points de la course d'avant.
     G.liveDuel = null;
     G.shotRaces = races.slice();
@@ -2272,16 +2277,23 @@
       // qu'on apprend qu'il s'est arrete, et qu'on cesse de l'extrapoler.
       d = Math.max(d, g.cible);
       noterPoint(g, t, d, 0.15);
-      g.cible = d; g.c = t; g.depuis = G.elapsed;
+      g.cible = d; g.c = t; g.depuis = instantLive();
       return;
     }
+    // Un point sans instant, quand les precedents en avaient : on l'ignore
+    // plutot que de melanger dans la meme trace deux horloges — l'instant de
+    // l'emetteur et celui de l'arrivee chez nous — qui n'ont rien a voir.
+    if (g.c != null) return;
     // Sans horloge : l'instant est celui ou le paquet arrive chez nous. Il
     // porte donc toute l'irregularite du reseau, et la vitesse se prend sur
     // une base plus longue pour ne pas en heriter.
+    // L'arrivee se date sur la meme horloge que celle ou on le dessinera
+    // (instantLive) : sur deux horloges differentes, son age serait faux.
     if (d > g.cible) {
-      noterPoint(g, G.elapsed, d, 0.3);
+      const ici = instantLive();
+      noterPoint(g, ici, d, 0.3);
       g.cible = d;
-      g.depuis = G.elapsed;
+      g.depuis = ici;
     }
   }
 
@@ -2298,7 +2310,9 @@
   function noterPoint(g, t, d, fenetre) {
     const h = g.hist || (g.hist = []);
     h.push([t, d]);
-    if (h.length > 8) h.shift();
+    // Deux secondes et demie de trace : de quoi relire ou il etait quand
+    // notre instant est en retard sur le sien (voir viseLive).
+    if (h.length > 24) h.shift();
     const n = h.length;
     if (n < 2) return;
     let k = n - 2;
@@ -2374,8 +2388,9 @@
    * etait a `cible` quand SON chrono marquait `c`, notre chrono marque `T`, il
    * a donc couru `T - c` de plus a sa vitesse. L'ecart est de l'ordre du
    * trajet d'un paquet, et il peut etre negatif — si notre pistolet est parti
-   * apres le sien, son point vient de « notre futur », et on le reprend en
-   * arriere. Sans horloge, on part de l'instant d'arrivee, comme avant.
+   * apres le sien, ou si notre telephone a gele, son point vient de « notre
+   * futur », et on relit sa trace a notre instant. Sans horloge, on part de
+   * l'instant d'arrivee, comme avant.
    *
    * L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire, ni au
    * dela de quelques dixiemes : quand un paquet tarde, mieux vaut un
@@ -2391,8 +2406,24 @@
     const vmax = G.race.maxSpeed * 1.15;
     const v = Math.min(g.vEst, vmax);
     let vise;
-    if (g.c != null) {
-      vise = g.cible + v * Math.max(-0.5, Math.min(0.5, T - g.c));
+    if (g.c != null && T < g.c && g.hist && g.hist.length > 1) {
+      // NOTRE INSTANT EST EN RETARD SUR LE SIEN. Ce n'est pas seulement
+      // l'ecart des pistolets : un telephone qui gele une seconde — un appel,
+      // le volet des notifications — perd cette seconde sur son chronometre,
+      // chaque image etant bornee a un vingtieme. Extrapoler a l'envers sur
+      // une seconde a la vitesse du moment serait faux des qu'il accelere ;
+      // on relit donc sa trace, ou il etait vraiment a cet instant-la.
+      const h = g.hist;
+      vise = h[0][1];
+      for (let i = h.length - 1; i > 0; i--) {
+        if (h[i - 1][0] <= T) {
+          const [t0, d0] = h[i - 1], [t1, d1] = h[i];
+          vise = t1 > t0 ? d0 + (d1 - d0) * (T - t0) / (t1 - t0) : d1;
+          break;
+        }
+      }
+    } else if (g.c != null) {
+      vise = g.cible + v * Math.min(0.5, T - g.c);
     } else {
       vise = g.cible + v * Math.min(0.4, Math.max(0, T - g.depuis));
     }
@@ -2419,11 +2450,30 @@
    * le dernier paquet a appris de neuf — quelques centimetres, resorbes en un
    * dixieme de seconde. A vitesse constante il ne reste plus d'ecart du tout.
    */
+  /**
+   * L'instant, en secondes depuis le coup de pistolet, sur lequel on reporte
+   * les adversaires en direct — celui de l'horloge qui rend le verdict.
+   *
+   * En course en direct, c'est le chronometre de la course, `G.elapsed` : la
+   * salle compare les chronos que chacun y a mesures, et c'est la meme echelle
+   * qui doit dessiner l'arrivee. Au relais, c'est l'horloge de la salle : le
+   * temps d'une equipe se compte sur elle (msCourse), et c'est elle aussi qui
+   * arbitre la distance entre deux relayeurs. Les deux ne different que
+   * lorsqu'un telephone gele — ses images sont bornees, son chronometre prend
+   * du retard sur le temps qui passe — mais alors la difference atteint la
+   * seconde, et un coequipier se dessinait cinq metres a cote de sa place.
+   * Le relais pose donc la sienne dans `G.horlogeLive`.
+   */
+  function instantLive() {
+    return G.horlogeLive ? G.horlogeLive() : G.elapsed;
+  }
+
   function avancerLive(g, dt) {
     const r = g.runner;
     const vmax = G.race.maxSpeed * 1.15;
     const L = G.track.total;
-    const vise = viseLive(g, G.elapsed);
+    const T = instantLive();
+    const vise = viseLive(g, T);
     // La pente est prise sur la cible elle-meme, a paquet egal. Elle vaut la
     // vitesse estimee tant qu'on extrapole, zero quand l'extrapolation a
     // atteint sa borne — un coureur dont on n'a plus de nouvelles ne file pas
@@ -2434,11 +2484,11 @@
     // le seul saut de la cible — quand son chrono le fait passer la ligne —
     // se rattrape par la glissade, pas en filant a la vitesse maximale.
     const pente = Math.max(0, Math.min(g.vEst, vmax,
-      (viseLive(g, G.elapsed + 0.001) - vise) / 0.001));
+      (viseLive(g, T + 0.001) - vise) / 0.001));
     // Deja arrive selon son propre chrono, et encore dessine avant la ligne :
     // l'image a du retard sur ce que l'on sait. On le rattrape en quelques
     // images plutot qu'en un dixieme de seconde.
-    const enRetard = g.fin != null && G.elapsed >= g.fin && r.d < L;
+    const enRetard = g.fin != null && T >= g.fin && r.d < L;
     const avant = r.d;
     const prevu = r.d + pente * dt;
     r.d = prevu + (vise - prevu) * Math.min(1, dt * (enRetard ? 30 : 11));
@@ -2455,7 +2505,7 @@
       // Son chrono fait foi, pour le classement en course comme pour l'ordre
       // d'arrivee : l'instant ou on l'a VU passer n'est qu'une estimation, et
       // elle est remplacee des que le vrai temps arrive.
-      if (G.elapsed >= g.fin) { r.finished = true; r.finishTime = g.fin; }
+      if (T >= g.fin) { r.finished = true; r.finishTime = g.fin; }
     } else if (!r.finished && r.d >= L) {
       r.finished = true; r.finishTime = g.time || G.elapsed;
     }
@@ -2542,7 +2592,7 @@
     const lui = g.fin != null ? g.fin
       : r.finished ? r.finishTime
       : G.elapsed + Math.max(0, L - r.d) / Math.max(5, r.v);
-    const frais = g.c != null && G.elapsed - g.c < 0.25;
+    const frais = g.c != null && instantLive() - g.c < 0.25;
     const doute = frais ? PHOTO_DOUTE_HORODATE : PHOTO_DOUTE;
     return {
       id, g, nom: r.name,

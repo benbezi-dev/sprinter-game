@@ -256,6 +256,8 @@ export class SalleRelais {
         if (tous && !this.departA) {
           this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           c.reinitialiser();
+          // Les instants de course repartent de zero avec le pistolet.
+          for (const x of this.joueurs.values()) { x.dch = 0; x.ch = null; }
         }
         this.etat();
         return;
@@ -283,7 +285,20 @@ export class SalleRelais {
           return;
         }
         if (r.d != null) {
-          this.diffuser({ t: 'pos', relais: j.relais, d: Math.round(r.d * 10) / 10 }, ws);
+          // Avec l'instant de SA course (`c`, en millisecondes depuis le coup
+          // de pistolet), quand le client l'envoie : chaque ecran montre le
+          // coequipier ou il en est a son propre instant, et non ou il etait
+          // quand le paquet est parti. C'est le meme remede qu'en course en
+          // direct, voir salle.js et recevoirPosition dans sprinter-app.js.
+          // L'instant ne va qu'avec la distance la plus lointaine annoncee,
+          // puisque c'est elle que la course garde.
+          const ch = Number(m.c);
+          const date = m.c != null && Number.isFinite(ch) && ch >= 0 && ch <= 20 * 60000;
+          const v = Number(m.d);
+          if (v >= (j.dch || 0)) { j.dch = v; j.ch = date ? Math.round(ch) : null; }
+          const pos = { t: 'pos', relais: j.relais, d: Math.round(r.d * 100) / 100 };
+          if (j.ch != null) pos.c = j.ch;
+          this.diffuser(pos, ws);
         }
         return;
       }

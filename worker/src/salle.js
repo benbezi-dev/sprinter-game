@@ -436,9 +436,15 @@ export class SalleDirecte {
 
     // L'ordre d'arrivee, quel que soit le nombre de partants. Un abandon porte
     // un chrono sentinelle, donc il se range naturellement en dernier.
+    //
+    // Une egalite a la milliseconde partage la place, comme sur une vraie
+    // piste : on compte ceux qui sont arrives STRICTEMENT avant. Numeroter
+    // dans l'ordre du tri donnait « 1er » a l'un et « 2e » a l'autre pour le
+    // meme temps, selon l'ordre ou les telephones s'etaient connectes — et
+    // contredisait le tableau de course, qui donne deja la meme place aux deux.
     const ordre = [...tous].sort((a, b) => a.fin - b.fin);
-    const classement = ordre.map((x, i) => ({
-      place: i + 1, id: x.id, nom: x.nom, ms: x.fin,
+    const classement = ordre.map(x => ({
+      place: 1 + ordre.filter(y => y.fin < x.fin).length, id: x.id, nom: x.nom, ms: x.fin,
       abandon: x.fin >= ABANDON_MS,
     }));
 

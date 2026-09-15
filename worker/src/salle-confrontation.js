@@ -114,9 +114,12 @@ export class SalleConfrontation {
           // Un fantome n'a qu'un coureur, le temoin : les deux champs disent
           // deja la meme chose. On envoie quand meme `temoin`, pour que le jeu
           // n'ait pas a distinguer une equipe rejouee d'une equipe connectee.
+          // L'instant qui va avec est celui de l'echantillon rejoue — un
+          // point tous les dixiemes, voir rejouer — et non l'instant du tic.
+          const ch = Math.floor(t / 100) * 100;
           this.diffuser({ t: 'pos', equipe: cle, relais: c.porteur,
-                          d: Math.round(r.d * 10) / 10,
-                          temoin: Math.round(c.temoinD * 10) / 10 });
+                          d: Math.round(r.d * 100) / 100,
+                          temoin: Math.round(c.temoinD * 100) / 100, c: ch, ct: ch });
         }
       }
       if (bouge) this.cloreSiFini();
@@ -362,7 +365,9 @@ export class SalleConfrontation {
                      (humaines + this.fantomes.size) >= MIN_EQUIPES;
         if (tous && !this.departA) {
           this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
-          for (const course of this.equipes.values()) course.reinitialiser();
+          for (const course of this.equipes.values()) { course.reinitialiser(); course.temoinCh = null; }
+          // Les instants de course repartent de zero avec le pistolet.
+          for (const x of this.joueurs.values()) { x.dch = 0; x.ch = null; }
           for (const cle of this.fantomes.keys()) {
             const c = this.equipes.get(cle);
             if (c) c.fantome = true;
@@ -409,10 +414,27 @@ export class SalleConfrontation {
         // pouvait que deviner lequel des quatre nombres qu'il recoit est le
         // temoin, et posait l'equipe d'a cote a la marque de son dernier
         // relayeur des le coup de pistolet.
+        //
+        // ET LES INSTANTS QUI VONT AVEC. `c` est l'instant de SA course ou ce
+        // relayeur etait a `d`, en millisecondes depuis le coup de pistolet ;
+        // `ct` celui du temoin, c'est-a-dire du dernier porteur qui l'a fait
+        // avancer. Ils permettent a chaque ecran de montrer les autres ou ils
+        // en sont a son propre instant de course, et non ou ils etaient quand
+        // le paquet est parti : sans eux, une arrivee serree entre deux
+        // equipes pouvait se dessiner a l'envers de l'ordre que la salle
+        // proclame. Voir salle.js et recevoirPosition dans sprinter-app.js.
         if (r.d != null) {
-          this.diffuser({ t: 'pos', equipe: j.equipe, relais: j.relais,
-                          d: Math.round(r.d * 10) / 10,
-                          temoin: Math.round(c.temoinD * 10) / 10 }, ws);
+          const ch = Number(m.c);
+          const date = m.c != null && Number.isFinite(ch) && ch >= 0 && ch <= 20 * 60000;
+          const v = Number(m.d);
+          if (v >= (j.dch || 0)) { j.dch = v; j.ch = date ? Math.round(ch) : null; }
+          if (j.relais === c.porteur) c.temoinCh = j.ch;
+          const pos = { t: 'pos', equipe: j.equipe, relais: j.relais,
+                        d: Math.round(r.d * 100) / 100,
+                        temoin: Math.round(c.temoinD * 100) / 100 };
+          if (j.ch != null) pos.c = j.ch;
+          if (c.temoinCh != null) pos.ct = c.temoinCh;
+          this.diffuser(pos, ws);
         }
         return;
       }
@@ -432,7 +454,15 @@ export class SalleConfrontation {
           this.cloreSiFini();
           return;
         }
-        if (r.passe) this.diffuser({ t: 'passe', equipe: j.equipe, ...r.passe, ...this.vue() });
+        if (r.passe) {
+          // Le temoin a change de main, et de position : il vaut maintenant
+          // celle du receveur, datee par le dernier point que celui-ci a
+          // annonce.
+          const receveur = [...this.joueurs.values()]
+            .find(x => x.equipe === j.equipe && x.relais === r.passe.vers);
+          c.temoinCh = receveur ? receveur.ch : null;
+          this.diffuser({ t: 'passe', equipe: j.equipe, ...r.passe, ...this.vue() });
+        }
         return;
       }
 

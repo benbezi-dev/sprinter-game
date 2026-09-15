@@ -409,13 +409,18 @@ export function LivePanel() {
       // l'ordre d'arrivee. Sans cette seconde lecture, le vainqueur d'une
       // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
       // que pour un duel, et personne ne parlait.
-      const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      // Premier, c'est avoir la premiere PLACE, pas la premiere ligne : une
+      // egalite a la milliseconde partage la place, et les deux vainqueurs
+      // ont droit au mot. La premiere ligne seule le donnait a celui que le
+      // tri avait pose en tete.
+      const maLigne = Array.isArray(r.classement)
+        ? r.classement.find((l: any) => l.id === salle.current?.moi) : null;
       // L'ecoute se rebranche : la course est finie, on peut se reparler.
       voixCourante()?.reveil();
       const jaiGagne = r.issue
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
-        : !!premier && premier.id === salle.current?.moi;
+        : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
       if (jaiGagne) voixCourante()?.ouvrirMicro(MICRO_VAINQUEUR_MS);
       else voixCourante()?.fermerMicro();
 
