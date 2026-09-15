@@ -1,9 +1,10 @@
 // LE DEPART, DANS L'UN ET L'AUTRE CANAL.
 //
-// Le jeu publie part au DECOMPTE : trois secondes, un bip a chaque seconde
-// franchie, un signal au bout. Le canal de test essaie un STARTER : « a vos
-// marques », « pret », et un coup de pistolet qui tombe entre trois et dix
-// secondes plus tard, sans que rien n'annonce lequel.
+// Les deux canaux partent au DECOMPTE : trois secondes, un signal au bout. Le
+// jeu publie marque chaque seconde franchie d'un bip. Le canal de test y
+// ajoute un STARTER CALE SUR LE CHIFFRE : « a vos marques » au 3, « pret » au
+// 1, le coup de pistolet au signal. L'essai d'un starter qui tirait entre
+// trois et dix secondes est abandonne — le depart est toujours le 3, 2, 1.
 //
 // Les deux departs vivent dans les memes fonctions, separees par un drapeau
 // qui se replie a la compilation (voir DEPART_STARTER dans game/canal.ts).
@@ -19,7 +20,7 @@ import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avantDepart, DEPART_MIN_MS, DEPART_MAX_MS } from '../worker/src/depart.js';
+import { avantDepart } from '../worker/src/depart.js';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -128,29 +129,38 @@ ok('et donnent un bip de plus', compte(salle.entendu, 'beep') === 3,
 
 const test = await moteurDe('test');
 
-titre('LE CANAL DE TEST : UN STARTER');
+titre('LE CANAL DE TEST : LE MEME DECOMPTE, ET UN STARTER');
 
 const t20 = Array.from({ length: 200 }, () => test.SprinterApp.tirerLeDepart());
-ok('la longueur est tiree entre trois et dix secondes',
-   t20.every(t => t >= 3 && t <= 10), `${Math.min(...t20)} a ${Math.max(...t20)}`);
-ok('et elle change d\'une course a l\'autre', new Set(t20).size > 150);
-ok('le tirage penche vers les departs courts',
-   t20.filter(t => t < 5).length > t20.filter(t => t > 7).length);
+ok('trois secondes aussi, a chaque course : plus de tirage au sort',
+   t20.every(t => t === 3), `tire ${[...new Set(t20)].join(', ')}`);
 
 const s = jusquAuSignal(test);
-ok('« a vos marques », puis « pret », puis le coup',
-   s.entendu.join(' ') === 'marques pret feu', s.entendu.join(' '));
-ok('pas un bip : rien ne doit dire quand le coup va partir',
-   compte(s.entendu, 'beep') === 0);
+ok('le signal tombe trois secondes plus tard',
+   Math.abs(s.secondes - 3) <= 1 / 60 + 1e-9, `${s.secondes.toFixed(3)} s`);
+// La voix du starter prend la place du bip au 3 et au 1 ; le 2 garde le sien.
+ok('« a vos marques » au 3, le bip au 2, « pret » au 1, le coup au signal',
+   s.entendu.join(' ') === 'marques beep pret feu', s.entendu.join(' '));
 // `dit` est ce que le starter a deja donne, et c'est de lui que le dessin tire
 // la position de son bras : le pistolet le long du corps aux marques, leve au
 // « pret », le recul au coup.
 ok('il passe des marques au pret, puis au coup',
    s.dit[0] === 1 && s.dit.includes(2) && s.dit[s.dit.length - 1] === 3);
+// Le « pret » tombe quand le 1 s'affiche : a deux secondes du debut, a la
+// soixantieme pres.
+const auPret = s.dit.indexOf(2) / 60;
+ok('« pret » tombe au 1, pas avant', Math.abs(auPret - 2) <= 1 / 60 + 1e-9,
+   `a ${auPret.toFixed(3)} s`);
 ok('le coup fait l\'eclair et la secousse', s.flash > 0);
-ok('l\'attente dure ce que le tirage a dit',
-   Math.abs(s.secondes - s.longueur) <= 1 / 60 + 1e-9,
-   `${s.secondes.toFixed(3)} s pour ${s.longueur.toFixed(3)} tires`);
+
+// Une salle en direct peut annoncer plus de trois secondes : le chiffre compte
+// alors depuis plus haut, et les deux commandes tombent toujours sur le 3 et
+// sur le 1.
+const st = jusquAuSignal(test, 4);
+ok('une salle a quatre secondes : le 4 se tait, « a vos marques » au 3',
+   st.entendu.join(' ') === 'marques beep pret feu', st.entendu.join(' '));
+ok('et le signal tombe bien quatre secondes plus tard',
+   Math.abs(st.secondes - 4) <= 1 / 60 + 1e-9, `${st.secondes.toFixed(3)} s`);
 
 /* ------------------------------------------------- ce qu'annoncent les salles */
 
@@ -158,12 +168,9 @@ titre('LE DELAI ANNONCE PAR LES SALLES');
 
 ok('en production, la salle garde son delai, connu et fixe',
    avantDepart(false, 4000) === 4000 && avantDepart(false, 6000) === 6000);
-
-const tirs = Array.from({ length: 200 }, () => avantDepart(true, 4000));
-ok('sur le canal de test, il est tire entre trois et dix secondes',
-   tirs.every(t => t >= DEPART_MIN_MS && t <= DEPART_MAX_MS),
-   `${Math.min(...tirs)} a ${Math.max(...tirs)} ms`);
-ok('et il change d\'une course a l\'autre', new Set(tirs).size > 150);
+ok('sur le canal de test aussi : plus de tirage au sort',
+   Array.from({ length: 50 }, () => avantDepart(true, 4000)).every(t => t === 4000) &&
+   avantDepart(true, 6000) === 6000);
 
 console.log(e ? `\n${e} erreur(s)\n` : '\nTout est en ordre.\n');
 process.exit(e ? 1 : 0);

@@ -56,6 +56,8 @@ const CHIFFRES = '"Space Mono", ui-monospace, monospace';
 
 /** Le palier `sm:` de Tailwind. En deca, les tailles de base. */
 const SM = 640;
+/** Le palier `md:` de Tailwind. */
+const MD = 768;
 
 /* -------------------------------------------------------------- le pinceau */
 
@@ -175,6 +177,7 @@ export function peindreLeHud(ctx: CanvasRenderingContext2D, l: number, h: number
   if (etat === 'race' && G.ghost && !p.finished) bandeauFantome(ctx, l, { G, N, p, M, paysage });
   if (etat === 'race') ecartAuVoisin(ctx, l, { G, N, p, sm, M, paysage });
   if (etat === 'count') departAuMilieu(ctx, l, h, { G, N, sm });
+  pileDuBas(ctx, l, h, { G, N, sm });
 }
 
 /* --------------------------------------------------------- la barre du haut */
@@ -377,8 +380,8 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
     }
   };
 
-  if (G.falseFlash > 0)
-    bloc(String(N.t('false_start')), ROUGE, sm ? 24 : 20, null, '', Math.min(G.falseFlash, 1));
+  // Le faux depart n'est plus peint ici : il vit dans la pile du bas, au-dessus
+  // des touches, comme dans RaceHUD.
 
   if (G.stumbleFlash > 0)
     bloc(String(N.t('stumble')).toUpperCase(), ROUGE, sm ? 30 : 24, null, '',
@@ -419,68 +422,61 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
  * un replay qui commencerait au signal perdrait la seule seconde ou le
  * spectateur retient son souffle.
  *
- * Reste a savoir CE QU'ON ATTENDAIT, et il y a deux reponses selon le canal —
- * voir DEPART_STARTER dans canal.ts. Le jeu publie compte : un cercle, une
- * seconde dedans, qui enfle a mesure qu'elle s'use. Le canal de test essaie un
- * starter, et la il n'y a pas de nombre a peindre — il appelle les marques,
- * demande le « pret », et tire quand il veut. `G.depart.dit` vaut alors 0
- * (rien), 1 (« a vos marques ») ou 2 (« pret ») ; c'est la source du moteur,
+ * Le jeu compte : un cercle, une seconde dedans, qui enfle a mesure qu'elle
+ * s'use — sur les deux canaux, le depart etant toujours cale sur le 3, 2, 1.
+ * Le canal de test ajoute au-dessus la commande du starter : `G.depart.dit`
+ * vaut 1 (« a vos marques ») ou 2 (« pret ») ; c'est la source du moteur,
  * que le magasin React expose sous le nom `starter`.
+ *
+ * Sans voile sur l'image, comme a l'ecran : les coureurs dans leurs blocs et
+ * le starter sont justement ce que ces trois secondes ont a montrer. Et plus
+ * au milieu : le chiffre se tient AU-DESSUS de la ligne de depart, et
+ * l'adversaire au-dessus des touches — voir `pileDuBas`.
  */
 function departAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o: any) {
   const { G, N, sm } = o;
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(0, 0, l, h);
+  const md = l >= MD;
+  // `[@media(max-height:500px)]` : un telephone en paysage.
+  const court = h <= 500;
+  const paysage = l > h;
 
   const cx = l / 2;
   const pret = (G.depart ? G.depart.dit : 0) >= 2;
 
-  const tMot = sm ? 36 : 24;                 // text-2xl / sm:text-4xl
-  const padX = sm ? 40 : 20, padY = sm ? 20 : 12;
+  // text-lg / sm:text-2xl / md:text-4xl, et text-xl sur un ecran court
+  const tMot = court ? 20 : md ? 36 : sm ? 24 : 18;
+  const padX = court ? 16 : md ? 28 : 16, padY = court ? 6 : md ? 12 : 8;
   const eMot = { taille: tMot, gras: 900, police: AFFICHE, espace: tMot * 0.1,
                  couleur: pret ? OR : '#FFFFFF', aligne: 'center' as CanvasTextAlign };
   const mot = String(N.t(pret ? 'get_set' : 'ready'));
   const lCarte = Math.min(l * 0.92, largeur(ctx, mot, eMot) + padX * 2);
-  const diam = sm ? 128 : 96;                // w-24 / sm:w-32
-  // Le haut de l'ecran, mesure avant d'etre peint : la carte du starter, ou
-  // le cercle du decompte. Ce qui suit est centre avec lui, comme le fait
-  // `justify-center` a l'ecran.
-  const hCarte = DEPART_STARTER ? tMot + padY * 2 : diam;
-
-  const tAttente = sm ? 12 : 10;
-  // La consigne d'attente n'accompagne que le starter : un decompte ne demande
-  // pas d'attendre, il montre combien.
-  const hAttente = DEPART_STARTER ? tAttente * 1.5 : 0;
+  const diam = court ? 64 : md ? 160 : sm ? 128 : 96;
+  const avecCarte = DEPART_STARTER && (G.depart ? G.depart.dit : 0) >= 1;
+  const hCarte = avecCarte ? tMot + padY * 2 : 0;
   const multiple = G.mode === 'oneshot' && (G.shotRaces || []).length > 1;
-  const hEpreuve = multiple ? (sm ? 12 : 10) * 1.5 + (sm ? 32 : 16) : 0;
-  const rival = leRival(G);
-  const hRival = rival ? (sm ? 33 : 29) + 24 : 0;
-  const hFantome = G.ghostName ? (sm ? 12 : 10) * 1.5 + (sm ? 10 : 9) * 1.5 + 8 : 0;
 
-  let y = (h - (hCarte + (DEPART_STARTER ? 12 : 0) + hAttente + hEpreuve + hRival + hFantome)) / 2;
+  // Le haut de la pile : 8,5 rem sous le bord en portrait (le bandeau du HUD
+  // est au-dessus), 7,5 % de la hauteur en paysage, jamais moins de 2,75 rem.
+  let y = paysage ? Math.max(h * 0.075, 44) : 136;
 
-  if (DEPART_STARTER) {
+  if (avecCarte) {
     // Le « pret » respire, comme `animate-pulse` le fait a l'ecran : deux
     // secondes de cycle, jamais en dessous de la moitie. Sans lui, le film
     // montrerait un panneau fige la ou le joueur voyait un signal vivant.
     const souffle = pret ? 0.75 + 0.25 * Math.cos(performance.now() / 1000 * Math.PI) : 1;
     ctx.globalAlpha = souffle;
-    remplir(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16,
+    remplir(ctx, cx - lCarte / 2, y, lCarte, hCarte, 12,
             pret ? 'rgba(248,205,74,0.15)' : `rgba(${CARTE}, 0.6)`,
             pret ? OR : 'rgba(255,255,255,0.25)');
     ctx.lineWidth = 2;
-    boite(ctx, cx - lCarte / 2, y, lCarte, hCarte, 16);
+    boite(ctx, cx - lCarte / 2, y, lCarte, hCarte, 12);
     ctx.strokeStyle = pret ? OR : 'rgba(255,255,255,0.25)';
     ctx.stroke();
     ecrire(ctx, mot, cx, y + hCarte / 2, { ...eMot, alpha: souffle, ombre: !pret });
     ctx.globalAlpha = 1;
-    y += hCarte + 12;
-
-    // La seule regle qui compte tant qu'il n'a pas tire.
-    ecrire(ctx, String(N.t('wait_gun')).toUpperCase(), cx, y + hAttente / 2,
-           { taille: tAttente, gras: 700, couleur: SOURDINE, espace: 1.2, aligne: 'center' });
-    y += hAttente;
-  } else {
+    y += hCarte + (court ? 8 : md ? 20 : 12);
+  }
+  {
     // LE CERCLE DU DECOMPTE. Il enfle a mesure que la seconde s'use — c'est ce
     // que fait le `transform: scale` du HUD, et le film le refait ici pour que
     // le depart s'y voie venir comme il se voyait venir a l'ecran.
@@ -497,48 +493,82 @@ function departAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o: 
     ctx.strokeStyle = OR;
     ctx.stroke();
     if (n > 0) {
-      const tNombre = sm ? 60 : 36;          // text-4xl / sm:text-6xl
+      const tNombre = court ? 30 : md ? 72 : sm ? 60 : 36;  // text-4xl / sm:text-6xl / md:text-7xl
       ecrire(ctx, String(n), cx, cy, {
         taille: tNombre, gras: 900, police: AFFICHE, espace: -tNombre * 0.03,
         couleur: '#FFFFFF', aligne: 'center', ombre: true });
     }
-    y += hCarte;
+    y += diam;
   }
 
   if (multiple) {
-    y += sm ? 32 : 16;
+    y += md ? 20 : 12;
+    const t = md ? 14 : sm ? 12 : 10;
     ecrire(ctx, String(N.t('event_n', { n: G.shotIdx + 1, t: G.shotRaces.length })).toUpperCase(),
-           cx, y, { taille: sm ? 12 : 10, gras: 700, couleur: OR, alpha: 0.8,
-                    espace: 1, aligne: 'center' });
-    y += (sm ? 12 : 10) * 1.5;
+           cx, y + t * 0.75, { taille: t, gras: 700, couleur: OR, alpha: 0.8,
+                               espace: 1, aligne: 'center', ombre: true });
+  }
+}
+
+/**
+ * LA PILE DU BAS : le faux depart, et pendant le decompte l'adversaire.
+ *
+ * Posee au-dessus des touches — 20 % de la hauteur en portrait, 17 % en
+ * paysage, entre 70 et 250 points — plus 3 rem, comme dans RaceHUD. Le film
+ * n'a pas de touches, mais il garde leur place : c'est l'ecran du joueur
+ * qu'il rejoue, pas un autre.
+ */
+function pileDuBas(ctx: CanvasRenderingContext2D, l: number, h: number, o: any) {
+  const { G, N, sm } = o;
+  const md = l >= MD;
+  const paysage = l > h;
+  const cx = l / 2;
+  const enDecompte = G.state === 'count';
+  const rival = enDecompte ? leRival(G) : null;
+  const fantome = enDecompte && !!G.ghostName;
+  const faux = G.falseFlash > 0;
+  if (!faux && !rival && !fantome) return;
+
+  const ecart = md ? 12 : 8;
+  const tFaux = md ? 30 : sm ? 24 : 20, hFaux = md ? 36 : sm ? 32 : 28;
+  const hRival = sm ? 33 : 29;
+  const t1 = sm ? 12 : 10, t2 = sm ? 10 : 9;
+  const hFantome = t1 * 1.5 + t2 * 1.5 + 2;
+  const morceaux = [faux ? hFaux : 0, rival ? hRival : 0, fantome ? hFantome : 0].filter(v => v > 0);
+  const hPile = morceaux.reduce((s, v) => s + v, 0) + ecart * (morceaux.length - 1);
+  const touches = Math.min(Math.max((paysage ? 0.17 : 0.20) * h, 70), 250);
+  let y = h - touches - 48 - hPile;
+
+  if (faux) {
+    ecrire(ctx, String(N.t('false_start')), cx, y + hFaux / 2,
+           { taille: tFaux, gras: 900, couleur: ROUGE, espace: tFaux * 0.1,
+             alpha: Math.min(G.falseFlash, 1), aligne: 'center', ombre: true });
+    y += hFaux + ecart;
   }
 
   if (rival) {
-    y += 24;
     // Un defi RECU se court a l'aveugle : le nom, jamais le chrono. Meme regle
     // que le HUD — voir RaceHUD, `aveugle`.
     const txt = G.challenge
       ? `${N.t('to_race')}${rival.nom}`
       : `${N.t('to_beat')}${rival.nom} — ${rival.temps.toFixed(2)} s`;
-    pastille(ctx, txt, cx, y, sm ? 33 : 29,
+    pastille(ctx, txt, cx, y, hRival,
              { taille: sm ? 12 : 10, gras: 700, espace: 1,
                couleur: G.ghostName ? CYAN_CLAIR : FUCHSIA },
              'rgba(0,0,0,0.6)',
              G.ghostName ? 'rgba(34,211,238,0.4)' : 'rgba(232,121,249,0.3)');
-    y += sm ? 33 : 29;
+    y += hRival + ecart;
   }
 
   // « MODE FANTOME · il court sa course, pas la tienne ». Deux lignes qui
   // disent contre QUOI l'on court — sans elles, un spectateur du replay prend
   // le fantome pour un adversaire ordinaire.
-  if (G.ghostName) {
-    y += 8;
-    const t1 = sm ? 12 : 10, t2 = sm ? 10 : 9;
+  if (fantome) {
     ecrire(ctx, String(N.t('ghost_mode')).toUpperCase(), cx, y + t1 * 0.75,
-           { taille: t1, gras: 900, couleur: CYAN_CLAIR, espace: t1 * 0.3, aligne: 'center' });
+           { taille: t1, gras: 900, couleur: CYAN_CLAIR, espace: t1 * 0.3, aligne: 'center', ombre: true });
     y += t1 * 1.5;
     ecrire(ctx, String(N.t('ghost_live')), cx, y + t2 * 0.75,
-           { taille: t2, gras: 400, couleur: SOURDINE, espace: 0.5, aligne: 'center' });
+           { taille: t2, gras: 400, couleur: TEXTE, alpha: 0.75, espace: 0.5, aligne: 'center', ombre: true });
   }
 }
 

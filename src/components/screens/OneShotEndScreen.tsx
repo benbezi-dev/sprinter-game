@@ -446,6 +446,31 @@ export function OneShotEndScreen() {
   const sonMs = duo ? liveResultat[monRole === 'hote' ? 'invite' : 'hote'].ms : 0;
 
   /**
+   * LES DEUX CHRONOS ET LEUR ECART, LISIBLES ENSEMBLE.
+   *
+   * Constate sur l'arrivee serree du 15 septembre : « 9.37 », « 9.35 », et
+   * dessous « 0.01 s d'ecart ». Chaque nombre etait juste — 9 366 et 9 354 ms,
+   * douze millisecondes d'ecart — mais arrondis chacun de son cote, ils ne se
+   * soustrayaient plus : on lisait deux centiemes au-dessus d'un seul.
+   *
+   * Deux regimes, chacun coherent :
+   *   - une arrivee serree (moins d'un dixieme, egalite comprise) se lit au
+   *     millieme, comme le photo-finish qui vient de la trancher en course :
+   *     9.366, 9.354, 0.012 ;
+   *   - au-dela, au centieme, et l'ecart est la difference des deux chronos
+   *     AFFICHES, pas celle des millisecondes : ce qu'on lit se soustrait.
+   * Les centiemes sont arrondis a l'entier, pas par `toFixed`, qui arrondit
+   * la representation binaire et peut rendre 9.36 pour 9 365 ms.
+   */
+  const centiemes = (ms: number) => Math.round(ms / 10);
+  const duelAuMillieme = duo && Math.abs(monMs - sonMs) < 100;
+  const chronoDuel = (ms: number) => duelAuMillieme
+    ? (ms / 1000).toFixed(3) : (centiemes(ms) / 100).toFixed(2);
+  const ecartDuel = duelAuMillieme
+    ? (Math.abs(monMs - sonMs) / 1000).toFixed(3)
+    : (Math.abs(centiemes(monMs) - centiemes(sonMs)) / 100).toFixed(2);
+
+  /**
    * Les points que CETTE course a rapportes, de mon cote.
    *
    * La salle annonce les deux joueurs par leur identifiant : on prend le sien,
@@ -466,6 +491,28 @@ export function OneShotEndScreen() {
   const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
     (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
   const maLigne = classement.find(x => x.id === liveResultat?.moi) || null;
+  /**
+   * Un chrono de l'ordre d'arrivee, au centieme — et au millieme seulement
+   * quand un voisin affiche le meme centieme sans avoir le meme temps. C'est
+   * la regle des resultats d'athletisme : deux coureurs a « 9.35 » classes
+   * 1er et 2e se lisaient comme une erreur, 9.351 et 9.354 comme un
+   * photo-finish. Une vraie egalite partage la place (la salle la rend ainsi)
+   * et n'a pas besoin de millieme pour se comprendre.
+   */
+  const chronoClasse = (i: number) => {
+    const l = classement[i];
+    const voisinSerre = [classement[i - 1], classement[i + 1]].some(v =>
+      v && !v.abandon && v.ms !== l.ms && centiemes(v.ms) === centiemes(l.ms));
+    return voisinSerre ? (l.ms / 1000).toFixed(3) : (centiemes(l.ms) / 100).toFixed(2);
+  };
+  // Le temps affiche en tete, en direct : le MEME nombre que la carte du duel
+  // ou la ligne de l'ordre d'arrivee, et non le chrono local arrondi a part —
+  // a une demi-milliseconde pres d'un demi-centieme, les deux arrondis ne
+  // tombaient pas du meme cote, et l'ecran affichait deux temps differents.
+  const iMaLigne = maLigne ? classement.indexOf(maLigne) : -1;
+  const tempsEnTete = duo && monMs > 0 ? chronoDuel(monMs)
+    : iMaLigne >= 0 && !maLigne!.abandon ? chronoClasse(iMaLigne)
+    : runTime.toFixed(2);
 
   /**
    * Ceux que cette course a devances, pour l'image qu'on partage.
@@ -525,7 +572,7 @@ export function OneShotEndScreen() {
   const liveGagne = duo
     ? ((monRole === 'hote' && liveResultat.issue === 'challenger') ||
        (monRole === 'invite' && liveResultat.issue === 'opponent'))
-    : !!maLigne && maLigne.place === 1;
+    : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
 
   // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
   //
@@ -658,7 +705,7 @@ export function OneShotEndScreen() {
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
-                {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
+                {N.t('total_in')}<span className="text-white font-bold ml-1 md:ml-2">{tempsEnTete} s</span>
               </div>
             )}
             {aFantome && !falseOut && (
@@ -689,7 +736,7 @@ export function OneShotEndScreen() {
                 <div className="flex items-center justify-between px-3 py-2">
                   <span className="text-xs md:text-sm font-bold tracking-wide text-primary">{N.t('duel_you')}</span>
                   <span className={`font-mono font-bold text-sm md:text-base ${liveGagne ? 'text-emerald-400' : 'text-foreground'}`}>
-                    {(monMs / 1000).toFixed(2)} s
+                    {chronoDuel(monMs)} s
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2">
@@ -697,13 +744,13 @@ export function OneShotEndScreen() {
                     {liveNom || '—'}
                   </span>
                   <span className={`font-mono font-bold text-sm md:text-base ${liveGagne ? 'text-foreground' : 'text-destructive'}`}>
-                    {(sonMs / 1000).toFixed(2)} s
+                    {chronoDuel(sonMs)} s
                   </span>
                 </div>
               </div>
               {!liveNul && (
                 <span className="text-[10px] md:text-xs text-muted-foreground">
-                  {N.t('live_gap', { s: (Math.abs(monMs - sonMs) / 1000).toFixed(2) })}
+                  {N.t('live_gap', { s: ecartDuel })}
                 </span>
               )}
 
@@ -755,7 +802,7 @@ export function OneShotEndScreen() {
                 </span>
               </div>
               <div className="w-full rounded-xl border border-white/10 bg-black/25 divide-y divide-white/5">
-                {classement.map(l => {
+                {classement.map((l, i) => {
                   const moi = l.id === liveResultat.moi;
                   return (
                     <div key={l.id} className={`flex items-center justify-between px-3 py-2
@@ -773,7 +820,7 @@ export function OneShotEndScreen() {
                       </span>
                       <span className={`font-mono font-bold shrink-0 text-sm md:text-base
                         ${l.abandon ? 'text-destructive' : 'text-foreground'}`}>
-                        {l.abandon ? N.t('dnf') : `${(l.ms / 1000).toFixed(2)} s`}
+                        {l.abandon ? N.t('dnf') : `${chronoClasse(i)} s`}
                       </span>
                     </div>
                   );

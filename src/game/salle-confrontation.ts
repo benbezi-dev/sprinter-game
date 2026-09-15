@@ -76,8 +76,16 @@ type Ecouteurs = {
    * de l'equipe. `temoin` porte, lui, la position du temoin telle que la salle
    * la tient — c'est elle qui fait foi, et elle seule qui doit avancer le
    * coureur adverse en piste. Absente d'une salle plus ancienne que ce champ.
+   *
+   * `c` et `ct` sont les instants de course, en millisecondes depuis le coup
+   * de pistolet, ou valaient `d` et `temoin` : celui du relayeur qui parle,
+   * et celui du temoin — le porteur qui l'a fait avancer en dernier. Ils
+   * montrent chaque coureur ou il EST a notre instant, pas ou il etait quand
+   * le paquet est parti ; voir recevoirPosition dans sprinter-app.js. Absents
+   * d'une salle plus ancienne.
    */
-  onPos?: (equipe: string, relais: number, d: number, temoin?: number) => void;
+  onPos?: (equipe: string, relais: number, d: number, temoin?: number,
+           c?: number, ct?: number) => void;
   onPasse?: (equipe: string, p: PasseRelais) => void;
   /** Hors de portee : les deux mains tendues ensemble, mais trop loin. */
   onTropLoin?: (equipe: string,
@@ -146,7 +154,9 @@ export class SalleConfrontation {
       // du bruit dans React sans rien montrer de plus.
       case 'pos':
         this.ec.onPos?.(m.equipe, m.relais, m.d,
-                        typeof m.temoin === 'number' ? m.temoin : undefined);
+                        typeof m.temoin === 'number' ? m.temoin : undefined,
+                        Number.isFinite(m.c) ? m.c : undefined,
+                        Number.isFinite(m.ct) ? m.ct : undefined);
         return;
       // Rien n'a change sur la piste : seulement une main refermee sur du vide.
       case 'trop_loin':
@@ -199,13 +209,16 @@ export class SalleConfrontation {
 
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
   placer(d: number) { this.marque = d; this.envoyer({ t: 'marque', d }); }
-  position(d: number) { this.envoyer({ t: 'pos', d }); }
+  /** `c` : l'instant de notre course, en millisecondes. Voir salle-relais.ts. */
+  position(d: number, c?: number) {
+    this.envoyer(c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) });
+  }
   temoin() { this.envoyer({ t: 'temoin' }); }
   fini(ms: number) { this.envoyer({ t: 'fini', ms: Math.round(ms) }); }
 
   /** Voir salle-relais.ts : le moteur compte deja en metres absolus. */
-  avancer(dAbs: number) {
-    this.position(dAbs);
+  avancer(dAbs: number, c?: number) {
+    this.position(dAbs, c);
     if (dAbs >= ARRIVEE) this.terminer();
   }
 

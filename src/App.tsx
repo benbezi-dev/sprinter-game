@@ -39,6 +39,7 @@ import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
+import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { InviteNotifs } from '@/components/screens/InviteNotifs';
@@ -233,6 +234,7 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      <AnnoncePopup />
       <InvitationDirecte />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. Comme pour PisteRelais

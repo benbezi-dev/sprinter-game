@@ -106,11 +106,15 @@ export function CourseRelais({ equipe, onQuitter }: {
       // recue fait DEUX choses de plus : elle fait avancer le coequipier sur
       // ma piste — sans quoi il n'y serait pas — et elle remet a jour la
       // distance qui nous separe, celle dont depend la transmission.
-      onPos: (relais, d) => {
+      onPos: (relais, d, c) => {
         ou.current[relais] = d;
         if (relais === porteur.current) setTemoinD(d);
         const j = (etatRef.current?.joueurs || []).find(x => x.relais === relais);
-        if (j) SprinterApp.liveDistDe(j.id, d);
+        // Avec l'instant de SA course, quand la salle le transmet : le
+        // coequipier est dessine ou il en est a notre instant, et non ou il
+        // etait quand le paquet est parti — la transmission se voit la ou
+        // elle se joue. Voir recevoirPosition dans sprinter-app.js.
+        if (j) SprinterApp.liveDistDe(j.id, d, c);
         majBras();
       },
       onDepart: (dansMs, departA) => {
@@ -137,9 +141,18 @@ export function CourseRelais({ equipe, onQuitter }: {
         SprinterApp.liveDepart(dansMs, departA);
         // Au coup de pistolet, le temoin est dans la main du premier.
         SprinterApp.porteurDuTemoin(1);
+        // L'HORLOGE DU RELAIS EST CELLE DE LA SALLE. Le temps de l'equipe se
+        // compte sur elle, et c'est elle qui arbitre la distance entre deux
+        // relayeurs : chaque position part donc datee sur elle, et les
+        // coequipiers se dessinent sur elle. Le chronometre du moteur, lui,
+        // prend du retard des qu'un telephone gele une seconde, et un
+        // coequipier se dessinait alors cinq metres a cote de sa place. Voir
+        // instantLive dans sprinter-app.js. APRES `startRelais`, qui remet
+        // l'horloge par defaut.
+        SprinterApp.G.horlogeLive = () => s.msCourse() / 1000;
         brancherSalle({
           position: (d) => {
-            s.avancer(d);
+            s.avancer(d, Math.max(0, s.msCourse()));
             ou.current[s.monRelais] = d;
             if (s.monRelais === porteur.current) setTemoinD(d);
             majBras();
@@ -199,7 +212,12 @@ export function CourseRelais({ equipe, onQuitter }: {
     // En sortant de la piste, le film s'en va aussi : l'ecran d'arrivee est le
     // seul a le proposer, et un fichier que plus personne ne peut voir n'a
     // aucune raison d'occuper la memoire de l'onglet pendant deux heures.
-    return () => { brancherSalle(null); s.fermer(); jeterLeFilm('relais'); };
+    return () => {
+      // L'horloge de la salle part avec elle : une course suivante reporterait
+      // ses adversaires sur une salle fermee.
+      SprinterApp.G.horlogeLive = null;
+      brancherSalle(null); s.fermer(); jeterLeFilm('relais');
+    };
   }, [equipe]);
 
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et

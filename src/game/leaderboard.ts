@@ -9,6 +9,48 @@ const PLAYER_NAME_KEY = 'sprinter_player_name';
 
 export type RaceKey = '100' | '200' | '400';
 
+/**
+ * LES EPREUVES QUI ONT UN CLASSEMENT INDIVIDUEL — et le relais n'en est pas.
+ *
+ * Le relais 4 x 100 passe par la meme plomberie que le one shot : il monte sa
+ * piste avec `startLive(['4x100'])`, finit sur l'ecran d'arrivee du one
+ * shot, range sa course comme les autres. Si bien que chaque relayeur
+ * demandait au serveur ce que le serveur n'a pas : son record personnel au
+ * 4 x 100 au coup de pistolet (`/record`), puis a l'arrivee le TOP 500 de
+ * l'epreuve, sa place dedans, et l'envoi de sa course a l'historique
+ * (`/leaderboard` deux fois, `/rank`, `/race`). Cinq requetes, cinq refus
+ * 400 — constate le 15 septembre 2026 sur un relais a quatre telephones, et
+ * en production pour `/record`.
+ *
+ * Le serveur a raison de refuser. Un temps de relais est celui d'une EQUIPE,
+ * compte par la salle, et il a son propre classement, par equipe, avec ses
+ * fantomes (relais.ts, routes `/relay/*`). Le mettre au TOP 500 du 100 m, ou
+ * en faire le record personnel d'un seul des quatre, n'aurait pas de sens ;
+ * `ALLOWED_RACES` (worker/src/index.js) ne connait donc que les trois
+ * epreuves individuelles, et le jeu doit s'y tenir.
+ *
+ * A TENIR D'ACCORD avec ALLOWED_RACES (worker/src/index.js) et EPREUVES
+ * (worker/src/epreuves.js).
+ */
+const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['100', '200', '400']);
+
+export function estEpreuveIndividuelle(cle: unknown): cle is RaceKey {
+  return typeof cle === 'string' && EPREUVES_INDIVIDUELLES.has(cle);
+}
+
+/**
+ * L'erreur d'une route individuelle demandee pour une epreuve qui n'en a pas.
+ *
+ * Levee, et non un tableau vide rendu en silence : un classement vide se lit
+ * « personne n'a encore couru », et l'annonce du record du monde
+ * (RecordPopup) couronnerait alors le premier relais venu, avant de tenter
+ * de l'enregistrer. Une erreur, les ecrans savent deja la traiter — c'est ce
+ * qu'ils faisaient du refus du serveur, la requete en moins.
+ */
+function sansClassement(race: string): Error {
+  return new Error(`pas de classement individuel pour « ${race} »`);
+}
+
 export type LeaderboardEntry = {
   name: string;
   time_ms: number;
@@ -124,6 +166,7 @@ export function makesTop(entries: LeaderboardEntry[], splitMs: number): boolean 
 export async function fetchLeaderboardRaw(
   race: RaceKey, by: 'race' | 'run' = 'race'
 ): Promise<LeaderboardEntry[]> {
+  if (!estEpreuveIndividuelle(race)) throw sansClassement(race);
   const res = await fetch(`${API_BASE}/leaderboard?race=${race}&by=${by}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
@@ -272,6 +315,9 @@ export async function qualifyingRaces(
   for (let i = 0; i < races.length; i++) {
     const s = splitsSec[i];
     if (s == null || s <= 0) continue;
+    // Un relais n'entre pas au TOP 500 : son classement est celui des
+    // equipes. Voir estEpreuveIndividuelle.
+    if (!estEpreuveIndividuelle(races[i])) continue;
     const ms = s * 1000;
     try {
       const [list, mine] = await Promise.all([
@@ -348,6 +394,7 @@ export async function fetchMyRank(race: RaceKey): Promise<{
   time_ms?: number;
   best_split_ms?: number;
 }> {
+  if (!estEpreuveIndividuelle(race)) throw sansClassement(race);
   const res = await fetch(`${API_BASE}/rank?race=${race}&device_id=${getDeviceId()}`);
   if (!res.ok) throw new Error('rank fetch failed');
   return res.json();

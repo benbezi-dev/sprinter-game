@@ -243,7 +243,7 @@ export function LivePanel() {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
     SprinterApp.startLive([epreuve], {
       levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
-      autres: lesAutres(), sansOrdinateur: true,
+      autres: lesAutres(), sansOrdinateur: true, photoFinish: true,
     });
   };
 
@@ -288,6 +288,7 @@ export function LivePanel() {
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
       SprinterApp.startLive([epreuve], {
         levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
+        photoFinish: true,
       });
     } else {
       // La piste est deja montee — c'est le cas normal, elle l'a ete pour la
@@ -384,8 +385,16 @@ export function LivePanel() {
     },
     // A huit, savoir qui a bouge est la moitie de l'information : la position
     // part vers le coureur qui porte cet identifiant, pas vers « l'adversaire ».
-    onPos: (id: string, d: number) => SprinterApp.liveDistDe(id, d),
-    onFini: (_n: string, ms: number) => { SprinterApp.G.liveFin = ms; },
+    // Avec l'instant de SA course, quand la salle le transmet : c'est lui qui
+    // permet de le montrer ou il en est a NOTRE instant, et non ou il etait.
+    onPos: (id: string, d: number, c?: number) => SprinterApp.liveDistDe(id, d, c),
+    // Son chrono pose son coureur sur la ligne a son vrai temps, et resout le
+    // photo-finish. La salle nous renvoie aussi le notre : liveFiniDe ne le
+    // trouve pas parmi les adversaires et l'ignore.
+    onFini: (_n: string, ms: number, abandon: boolean, id?: string) => {
+      SprinterApp.G.liveFin = ms;
+      if (id) SprinterApp.liveFiniDe(id, ms, abandon);
+    },
     onResultat: (r: any) => {
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
       SprinterApp.G.liveOn = true;
@@ -400,13 +409,18 @@ export function LivePanel() {
       // l'ordre d'arrivee. Sans cette seconde lecture, le vainqueur d'une
       // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
       // que pour un duel, et personne ne parlait.
-      const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      // Premier, c'est avoir la premiere PLACE, pas la premiere ligne : une
+      // egalite a la milliseconde partage la place, et les deux vainqueurs
+      // ont droit au mot. La premiere ligne seule le donnait a celui que le
+      // tri avait pose en tete.
+      const maLigne = Array.isArray(r.classement)
+        ? r.classement.find((l: any) => l.id === salle.current?.moi) : null;
       // L'ecoute se rebranche : la course est finie, on peut se reparler.
       voixCourante()?.reveil();
       const jaiGagne = r.issue
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
-        : !!premier && premier.id === salle.current?.moi;
+        : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
       if (jaiGagne) voixCourante()?.ouvrirMicro(MICRO_VAINQUEUR_MS);
       else voixCourante()?.fermerMicro();
 
@@ -447,7 +461,7 @@ export function LivePanel() {
     // millisecondes qui precedent l'annonce du premier athlete.
     prechargerGlace();
     brancherSalle({
-      position: (d: number) => s.position(d),
+      position: (d: number, c?: number) => s.position(d, c),
       fini: (ms: number) => s.fini(ms),
     });
     // La salle annonce le terrain de la course : le meme qu'on monte ici.

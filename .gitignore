@@ -124,3 +124,9 @@ content/instagram/gameplay/harnais/node_modules
 
 # Traces de session du navigateur pilote. Rien a garder.
 .playwright-mcp/
+
+# Sorties de la chaine Blender : rendus, sequences de verification, videos.
+# Tout se reengendre avec tools/blender/ — seules les mesures recopiees dans
+# src/game/coureur-hd.js font partie du jeu.
+tools/blender/sortie/
+__pycache__/

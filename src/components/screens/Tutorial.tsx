@@ -65,11 +65,10 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
   /**
    * OU EN EST LE DEPART, DANS LES TERMES DE SON CANAL.
    *
-   * Au decompte — le depart du jeu publie — c'est la seconde qui reste : 3, 2,
-   * 1, puis 0 quand le signal est tombe. Au starter, celui que le canal de
-   * test essaie, il n'y a pas de seconde a compter : 1 « a vos marques », 2
-   * « pret », 0 le coup est parti. `null` dans les deux cas tant que rien n'a
-   * commence, et dans les deux cas `compte > 0` signe un depart anticipe.
+   * La seconde qui reste : 3, 2, 1, puis 0 quand le signal est tombe — sur les
+   * deux canaux, puisque le depart est toujours cale sur le 3, 2, 1. Sur celui
+   * qui a un starter, sa voix remplace le bip au 3 et au 1. `null` tant que
+   * rien n'a commence, et `compte > 0` signe un depart anticipe.
    *
    * Ce qu'on repete ici est le VRAI depart, tirage au sort compris la ou il y
    * en a un : faire repeter un rythme qu'on ne retrouvera pas en course
@@ -133,6 +132,18 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
     setCompte(null); setModeleVus(0); dernier.current = null;
   };
 
+  // LE SON D'UNE SECONDE DU DECOMPTE, SELON LE CANAL. Au starter, sa voix dit
+  // le 3 (« a vos marques ») et le 1 (« pret ») ; le 2 garde son bip, comme en
+  // course. Sans starter, le bip marque le passage au 2 et au 1.
+  const annonce = (i: number) => {
+    if (DEPART_STARTER) {
+      if (i === 0) starter('marques');
+      else if (i === 2) starter('pret');
+      else son('beep');
+    } else if (i) son('beep');
+  };
+  const signal = () => { if (DEPART_STARTER) starter('feu'); else son('go'); };
+
   // --- les trois demonstrations --------------------------------------------
   const lancerDemo = useCallback((e: number) => {
     reinit();
@@ -150,23 +161,14 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
         t += 0.34;
       }
       ev.push({ t: t + 0.25, f: () => {} });
-    } else if (e === 1 && DEPART_STARTER) {
-      // Le starter, puis l'appui juste apres le coup. La demonstration garde
-      // une attente courte et fixe : elle montre la SEQUENCE, et c'est l'essai
-      // qui vient ensuite qui apprend a ne pas anticiper.
-      ev.push({ t: 0.3, f: () => { setCompte(1); starter('marques'); } });
-      ev.push({ t: 1.5, f: () => { setCompte(2); starter('pret'); } });
-      ev.push({ t: 2.9, f: () => { setCompte(0); starter('feu'); } });
-      ev.push({ t: 3.05, f: () => setFlash('left') });
-      ev.push({ t: 3.25, f: () => setFlash(null) });
-      ev.push({ t: 3.8, f: () => {} });
     } else if (e === 1) {
       // Le decompte, puis l'appui juste apres le signal. Le bip ne tombe pas
       // sur le premier chiffre : en course il marque le PASSAGE d'une seconde
       // a la suivante, et la demonstration compte comme la course compte.
+      // Avec un starter, sa voix dit le 3 et le 1, et son coup donne le signal.
       [3, 2, 1].forEach((n, i) => ev.push({
-        t: 0.3 + i * 0.7, f: () => { setCompte(n); if (i) son('beep'); } }));
-      ev.push({ t: 2.4, f: () => { setCompte(0); son('go'); } });
+        t: 0.3 + i * 0.7, f: () => { setCompte(n); annonce(i); } }));
+      ev.push({ t: 2.4, f: () => { setCompte(0); signal(); } });
       ev.push({ t: 2.55, f: () => setFlash('left') });
       ev.push({ t: 2.75, f: () => setFlash(null) });
       ev.push({ t: 3.3, f: () => {} });
@@ -196,28 +198,14 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
   /**
    * LE VRAI DEPART DE L'ETAPE 2 — celui du canal ou l'on joue.
    *
-   * Au decompte, trois secondes pleines, comme en course. Au starter, la
-   * longueur et la tenue viennent du moteur lui-meme, de la fonction qui pose
-   * le depart d'une course reelle : c'est ce qui fait de cet exercice une
-   * repetition et non une imitation — on y attend aussi longtemps, et aussi
-   * mal, que sur la piste.
+   * Trois secondes pleines, comme en course, sur les deux canaux.
    */
   const departReel = useCallback(() => {
     setReaction(null); setTropTot(false);
     const ev: { t: number; f: () => void }[] = [];
-    if (DEPART_STARTER) {
-      const d = SprinterApp.dessinerLeDepart(SprinterApp.tirerLeDepart());
-      const marques = 0.4;
-      const pret = marques + Math.max(0, d.duree - d.tenue);
-      const feu = marques + d.duree;
-      ev.push({ t: marques, f: () => { setCompte(1); starter('marques'); } });
-      ev.push({ t: pret, f: () => { setCompte(2); starter('pret'); } });
-      ev.push({ t: feu, f: () => { setCompte(0); starter('feu'); setPistolet(performance.now()); } });
-    } else {
-      [3, 2, 1].forEach((n, i) => ev.push({
-        t: i, f: () => { setCompte(n); if (i) son('beep'); } }));
-      ev.push({ t: 3, f: () => { setCompte(0); son('go'); setPistolet(performance.now()); } });
-    }
+    [3, 2, 1].forEach((n, i) => ev.push({
+      t: i, f: () => { setCompte(n); annonce(i); } }));
+    ev.push({ t: 3, f: () => { setCompte(0); signal(); setPistolet(performance.now()); } });
     jouer(ev, () => {});
   }, [jouer]);
 
@@ -376,21 +364,6 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
                       : N.t('tuto_v_late')}
                   </span>
                 </motion.div>
-              ) : DEPART_STARTER ? (
-                /* La commande du starter, telle qu'elle s'affiche en course.
-                   Le cercle tenait un chiffre ; il n'y a plus de chiffre. */
-                <div className={`min-w-[10rem] md:min-w-[13rem] px-4 py-3 md:px-6 md:py-4 rounded-2xl
-                                 border-2 flex items-center justify-center transition-colors
-                  ${compte === 0 ? 'border-primary bg-primary/25'
-                    : compte === 2 ? 'border-primary/60 bg-primary/10'
-                    : 'border-white/20 bg-card/60'}`}>
-                  <span className={`text-lg md:text-2xl font-black font-display tracking-widest text-center
-                    ${compte === 0 || compte === 2 ? 'text-primary' : 'text-white'}`}>
-                    {compte === 0 ? N.t('go')
-                      : compte === 2 ? N.t('get_set')
-                      : compte === 1 ? N.t('ready') : ''}
-                  </span>
-                </div>
               ) : (
                 /* Le cercle du decompte, tel qu'il s'affiche en course : la
                    seconde qui reste, et le cercle qui passe a l'or quand le

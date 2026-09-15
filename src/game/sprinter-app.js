@@ -222,6 +222,44 @@
     }
   };
 
+  // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
+  // vers le gris : une piste brique, une pelouse olive, des panneaux ternes —
+  // et par-dessus, la brume et le vignettage retiraient encore de l'eclat.
+  // Plutot que de reprendre soixante couleurs a la main, chacune gagne vingt-
+  // deux pour cent de saturation, a luminosite egale : les blancs et les gris
+  // n'en prennent pas, les couleurs franches deviennent franches. Fait une
+  // fois, au chargement, sur les tableaux eux-memes — les caches de teintes
+  // les retrouvent tels quels.
+  (function aviver(gain) {
+    const vive = (c) => {
+      const r = c[0] / 255, g = c[1] / 255, b = c[2] / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+      if (mx - mn < 1e-3) return;
+      const d = mx - mn;
+      let s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      let h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h /= 6; s = Math.min(1, s * gain);
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+      const f = (t) => {
+        t = (t + 1) % 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      c[0] = Math.round(f(h + 1 / 3) * 255);
+      c[1] = Math.round(f(h) * 255);
+      c[2] = Math.round(f(h - 1 / 3) * 255);
+    };
+    const estCouleur = (v) => Array.isArray(v) && v.length === 3 && v.every(n => typeof n === 'number');
+    for (const th of Object.values(THEMES)) {
+      for (const v of Object.values(th)) {
+        if (estCouleur(v)) vive(v);
+        else if (Array.isArray(v)) for (const w of v) if (estCouleur(w)) vive(w);
+      }
+    }
+  })(1.22);
+
   // Le stade en plus n'entre dans la liste que sur le canal de test.
   //
   // Pourquoi ici, et pas dans le moteur ou vivent les donnees de jeu : le
@@ -330,6 +368,31 @@
    * chacun de leur cote — la tuile de public, la cadence des flashs, la rafale
    * de l'arrivee — et un quatrieme aurait fini par se tromper.
    */
+  // LA TRIBUNE GRANDIT AVEC LA COMPETITION.
+  //
+  // Le stade des quatre premieres etapes est le meme, et il avait la meme
+  // tribune de quatre rangs couverte d'un toit du scolaire au championnat du
+  // monde. Or une rencontre scolaire se court devant deux rangs de bancs a
+  // ciel ouvert, et un mondial devant une enceinte. La foule grossissait deja
+  // d'une etape a l'autre ; la tribune qui la porte grossit maintenant avec
+  // elle, et c'est le premier signe de la montee qu'on lit a l'ecran.
+  //
+  // Seul le stade de ces quatre etapes est concerne : les stades a theme ont
+  // chacun leur tribune, reglee pour leur ciel (voir `gradins`).
+  const TRIBUNE_ETAPE = [
+    { gradins: 2, toiture: false },   // scolaire : deux rangs de bancs
+    { gradins: 3, toiture: false },   // regional
+    { gradins: 4, toiture: true },    // national
+    { gradins: 5, toiture: true },    // championnat du monde
+  ];
+  function tribuneDe(th) {
+    const etape = th === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
+    return {
+      gradins: etape ? etape.gradins : (th.gradins || 4),
+      toiture: etape ? etape.toiture : th.toiture !== false,
+    };
+  }
+
   function fouleDe(idx) {
     const lvl = LEVELS[idx];
     if (lvl && lvl.foule != null) return lvl.foule;
@@ -376,8 +439,9 @@
   /**
    * « A VOS MARQUES »… « PRET »… ET LE COUP DE PISTOLET.
    *
-   * Tout ce qui suit ne sert que le canal de test : le jeu publie donne son
-   * depart au decompte, sans une parole (voir « deux departs, un par canal »).
+   * Tout ce qui suit ne sert que le canal de test : le jeu publie donne le
+   * meme depart au decompte, mais sans une parole (voir « deux departs, un
+   * par canal »).
    * Les tampons ne s'y fabriquent donc pas — le code, lui, reste, parce qu'il
    * n'attend qu'un drapeau pour resservir.
    *
@@ -1111,6 +1175,13 @@
     // Un adversaire par identifiant de joueur. Vide en duel a deux ancienne
     // maniere, remplie des qu'on court a plusieurs.
     lives: null,
+    // Le photo-finish de la course en direct : voir suivrePhoto. `photoFinish`
+    // dit si la course en a un — la course en direct, pas le relais, dont les
+    // chronos d'arrivee ne passent pas par ici.
+    photo: null, photoFinish: false,
+    // L'horloge sur laquelle on reporte les adversaires en direct, quand ce
+    // n'est pas celle de la course : voir instantLive.
+    horlogeLive: null,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
@@ -1276,13 +1347,13 @@
   /**
    * DEUX DEPARTS, UN PAR CANAL.
    *
-   * Le jeu publie part au DECOMPTE : trois secondes, un bip par seconde, un
-   * signal au bout. Le canal de test part au STARTER : « a vos marques »,
-   * « pret », et un coup de pistolet qui tombe entre trois et dix secondes
-   * plus tard, sans que rien n'annonce lequel. Les deux existent en meme
-   * temps parce que le second n'a pas encore fait ses preuves — c'est un
-   * changement de ce qu'on demande au joueur, pas un reglage, et il s'essaie
-   * la ou on peut le reprendre.
+   * Les deux partent au DECOMPTE : trois secondes, un signal au bout. Le jeu
+   * publie marque chaque seconde d'un bip. Le canal de test y ajoute le
+   * STARTER, cale sur le meme chiffre : « a vos marques » au 3, « pret » au 1,
+   * le coup de pistolet au signal — et, sur la pelouse, le prof d'ecole a la
+   * competition scolaire, le juge en blanc ensuite. L'essai d'un starter qui
+   * tirait quand il voulait, entre trois et dix secondes, est abandonne : le
+   * depart est toujours le 3, 2, 1.
    *
    * La forme compte : ecrite ainsi, la condition se replie a la compilation
    * publique, et tout ce qui pend au starter — sa voix de synthese, le juge
@@ -1295,62 +1366,28 @@
   /** Le decompte du jeu publie : trois secondes, et le joueur les connait. */
   const DECOMPTE = 3;
 
-  /**
-   * LA LONGUEUR DU DEPART, QUAND C'EST LE STARTER QUI LE DONNE.
-   *
-   * C'est le pari de ce depart-la, et ce qui le distingue du decompte. Trois
-   * secondes, toujours les memes, c'est un metronome : au bout de deux courses
-   * on ne part plus sur le signal mais sur le rythme, et le temps de reaction
-   * ne mesure plus rien du tout. Un starter, lui, ne dit jamais quand il va
-   * tirer — c'est meme toute sa fonction. Entre trois et dix secondes separent
-   * donc « a vos marques » du coup de pistolet, et la seule facon de bien
-   * partir redevient d'attendre vraiment.
-   *
-   * Le tirage penche vers les departs courts. Dix secondes existent, et c'est
-   * parce qu'elles sont rares qu'elles sont redoutables : une attente qui
-   * arriverait une fois sur deux ne serait plus une surprise, seulement une
-   * lenteur.
-   */
-  const DEPART_MIN = 3, DEPART_MAX = 10;
-  /** Ce que le starter TIENT, entre « pret » et le coup. */
-  const TENUE_MIN = 1.2, TENUE_MAX = 3.0;
-  /** Et ce qu'il laisse pour se placer, entre les marques et « pret ». */
-  const MARQUES_MIN = 1.5;
-
-  /** Une longueur de depart, tiree au sort — ou les trois secondes du jeu. */
+  // LE DEPART EST TOUJOURS CALE SUR LE 3, 2, 1.
+  //
+  // Le canal de test avait essaye un starter qui tirait quand il voulait,
+  // entre trois et dix secondes apres « a vos marques ». L'essai s'arrete la,
+  // a la demande : le joueur part sur le decompte, partout. Le starter reste
+  // sur la pelouse de la version de test, mais il suit le chiffre — « a vos
+  // marques » au 3, « pret » au 1, le coup au signal.
   function tirerLeDepart() {
-    // Au decompte, il n'y a rien a tirer : trois secondes, les memes a chaque
-    // course, et c'est bien ce qui les separe d'un starter.
-    if (!STARTER) return DECOMPTE;
-    return DEPART_MIN + (DEPART_MAX - DEPART_MIN) * Math.pow(Math.random(), 1.5);
-  }
-
-  /**
-   * Un tirage reproductible a partir d'un nombre.
-   *
-   * Mulberry32, comme `K.alea`, mais sans etat : semer le hasard du jeu pour
-   * une histoire de depart rejouerait le meme plateau d'adversaires a la
-   * course suivante.
-   */
-  function tirageDe(graine) {
-    let t = ((graine >>> 0) + 0x6D2B79F5) >>> 0;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return DECOMPTE;
   }
 
   /**
    * POSE LE DEPART : ou tombent les deux commandes, et le coup.
    *
-   * `secondes` est le temps qui reste jusqu'au pistolet. Seul, il est tire au
-   * sort ici meme. En direct et en relais, c'est la SALLE qui l'annonce et il
-   * n'est pas negociable : le coup doit tomber a la meme milliseconde sur tous
-   * les telephones, sinon ce n'est plus la meme course.
+   * `secondes` est le temps qui reste jusqu'au pistolet. Seul, c'est le
+   * decompte (voir tirerLeDepart). En direct et en relais, c'est la SALLE qui
+   * l'annonce et il n'est pas negociable : le coup doit tomber a la meme
+   * milliseconde sur tous les telephones, sinon ce n'est plus la meme course.
    *
-   * `graine` rend la tenue reproductible. Sans elle, deux joueurs de la meme
-   * course entendraient « pret » a deux instants differents — le pistolet
-   * serait bien commun, mais l'un aurait ete prevenu plus tot que l'autre. Les
-   * salles passent donc la date du depart, qui est la meme partout.
+   * `graine` rendait reproductible une tenue tiree au sort ; les commandes
+   * tombent maintenant sur le 3 et sur le 1, identiques sur tous les
+   * telephones, et elle n'est plus lue. Les salles la passent toujours.
    *
    * LE DECOMPTE NE CHANGE PAS DE FORME. `countT` monte toujours jusqu'a 3, et
    * 3 reste le coup de pistolet ; c'est son POINT DE DEPART qui bouge. Tout ce
@@ -1371,14 +1408,14 @@
    */
   function dessinerLeDepart(secondes, graine) {
     const d = Math.max(0, Number(secondes) || 0);
-    // La sequence tient dans ses bornes : un starter n'appelle pas les marques
-    // vingt secondes avant de tirer, et il ne tire pas non plus dans la foulee
-    // de son annonce.
-    const seq = clamp(d, DEPART_MIN, DEPART_MAX);
-    const r = graine == null ? Math.random() : tirageDe(graine);
-    const haut = Math.min(TENUE_MAX, Math.max(0.6, seq - MARQUES_MIN));
-    const bas = Math.min(TENUE_MIN, haut);
-    return { duree: seq, tenue: bas + r * (haut - bas), dit: 0 };
+    // Sur le decompte : « a vos marques » quand le 3 s'affiche, « pret »
+    // quand c'est le 1. Une salle en direct peut annoncer un depart plus
+    // lointain — le chiffre compte alors depuis plus haut, et les deux
+    // commandes tombent toujours sur le 3 et sur le 1. `graine` ne sert plus :
+    // il n'y a plus de tenue a tirer au sort.
+    void graine;
+    const duree = Math.min(d, DECOMPTE);
+    return { duree, tenue: Math.min(1, duree), dit: 0 };
   }
 
   /**
@@ -1409,15 +1446,17 @@
    * de reconnaitre le passage d'une seconde a la suivante sans tenir un
    * compteur de plus.
    *
-   * Au decompte, chaque seconde franchie vaut un bip — il dit dans combien de
-   * temps le signal tombe, ce qui est toute la fonction d'un decompte, et
-   * exactement ce qu'un starter ne dirait jamais. Au starter, il n'y a pas de
-   * seconde a marquer : il y a deux commandes a donner quand leur heure vient.
+   * Chaque seconde franchie vaut un bip — il dit dans combien de temps le
+   * signal tombe, ce qui est toute la fonction d'un decompte. Quand le
+   * starter est la, ses deux commandes tombent sur le 3 et sur le 1 et y
+   * remplacent le bip ; le 2 garde le sien.
    */
   function annoncerLeDepart(avant) {
-    if (STARTER) return starterParle();
-    if (Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
-    return 0;
+    // Au starter, sa voix prend la place du bip au 3 et au 1 ; le 2 garde son
+    // bip. Le rythme du decompte s'entend donc toujours, seconde par seconde.
+    const dit = STARTER ? starterParle() : 0;
+    if (!dit && Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
+    return dit;
   }
 
   /**
@@ -1602,6 +1641,7 @@
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.liveDuel = null;
     G.lives = null;
+    G.photo = null; G.photoFinish = false;
     G.challengeTarget = null;
     G.defiSansCible = null;
     G.mode = 'campaign';
@@ -1622,6 +1662,9 @@
     // defaut. Le joueur croirait rejouer et courrait autre chose.
     G.shotOpts = opts;
     G.mode = 'oneshot';
+    // Un one-shot n'a pas de photo-finish : l'adversaire, s'il y en a un, est
+    // une trace dont on connait deja chaque centieme.
+    G.photo = null; G.photoFinish = false;
     G.shotRaces = races.slice();
     G.shotIdx = 0;
     G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;
@@ -1678,6 +1721,7 @@
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
     G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null;
+    G.photo = null; G.photoFinish = false;
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
     // de la meme revanche — pour ca, c'est le bouton dedie qui relance
@@ -1723,6 +1767,11 @@
    *   c'est ce que veut la course en direct. Le relais, qui passe par ici
    *   aussi, garde son plateau : une portion courue seule contre le chrono n'a
    *   sinon plus personne autour.
+   * @param opts.photoFinish trancher les arrivees serrees sur les chronos
+   *   reels, voir suivrePhoto. Seule la course en direct le demande : c'est
+   *   elle qui transmet le chrono de chacun a chacun (liveFiniDe). Le relais ne
+   *   le fait pas, et une photo qui attend un chrono qui ne viendra jamais
+   *   resterait « en cours » jusqu'a la fin de la course.
    */
   function startLive(races, opts) {
     opts = opts || {};
@@ -1731,6 +1780,10 @@
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;
     G.liveResultat = null;
+    G.photo = null;
+    G.photoFinish = !!opts.photoFinish;
+    // Par defaut, l'horloge de la course. Le relais pose la sienne apres ceci.
+    G.horlogeLive = null;
     // Une revanche ne rejoue pas les points de la course d'avant.
     G.liveDuel = null;
     G.shotRaces = races.slice();
@@ -1871,8 +1924,7 @@
       r.v = 0;
       r.repere = { couleur: teinte, nom: a.nom || '' };
       G.runners.push(r);
-      G.lives.set(a.id, { live: true, equipier: true, cible: r.d, vEst: 0, depuis: 0,
-                          runner: r, trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(a.id, suiviLive(r, 0, { equipier: true }));
     }
   }
 
@@ -2024,9 +2076,27 @@
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
       r.repere = { couleur: couleurCouloir(lane), nom: autre.nom || '' };
       G.runners.push(r);
-      G.lives.set(autre.id, { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
-                              trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(autre.id, suiviLive(r, 0));
     });
+  }
+
+  /**
+   * Ce que le jeu retient d'un adversaire en direct.
+   *
+   * `cible`, `vEst` et `depuis` sont la derniere position recue, la vitesse
+   * qu'on en tire et l'instant de NOTRE course ou elle est arrivee. `c` est
+   * l'instant de SA course a lui ou il y etait, quand la salle le transmet —
+   * voir recevoirPosition, c'est toute la difference entre montrer ou il EST
+   * et montrer ou il ETAIT. `hist` garde les derniers points pour en tirer une
+   * vitesse qui ne tressaute pas ; `fin` est son chrono reel des qu'il
+   * l'annonce, voir liveFiniDe.
+   */
+  function suiviLive(r, depuis, extra) {
+    return Object.assign({
+      live: true, cible: r.d, vEst: 0, depuis: depuis || 0, runner: r,
+      trace: [], step: REC_STEP, time: 0,
+      c: null, hist: [[0, r.d]], fin: null, abandon: false,
+    }, extra || {});
   }
 
   /**
@@ -2090,8 +2160,7 @@
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
       r.repere = { couleur: couleurCouloir(lane), nom: a.nom || '' };
       G.runners.push(r);
-      G.lives.set(id, { live: true, cible: 0, vEst: 0, depuis: G.elapsed,
-                        runner: r, trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(id, suiviLive(r, G.elapsed));
     }
   }
 
@@ -2133,19 +2202,144 @@
     G.player.repere = { couleur: couleurCouloir(G.player.lane), nom: t('you'), moi: true };
   }
 
-  /** Position annoncee par un adversaire donne. */
-  function liveDistDe(id, d) {
+  /**
+   * Position annoncee par un adversaire donne.
+   *
+   * `c`, quand la salle le transmet, est l'instant de SA course — en
+   * millisecondes depuis SON coup de pistolet — ou il etait a `d`. Voir
+   * recevoirPosition.
+   */
+  function liveDistDe(id, d, c) {
     // Le filet : si la table est vide, c'est qu'on est sur l'ancien chemin a
     // un seul adversaire. Mieux vaut le faire avancer que de laisser la course
     // se jouer contre une statue.
     const g = (G.lives && G.lives.get(id)) || (!G.lives || !G.lives.size ? G.ghost : null);
     if (!g || !g.live) return;
-    const dt = Math.max(0.02, G.elapsed - g.depuis);
-    if (d > g.cible) {
-      g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
-      g.cible = d;
-      g.depuis = G.elapsed;
+    recevoirPosition(g, d, c);
+  }
+
+  /**
+   * LE DIRECT MONTRAIT L'ADVERSAIRE LA OU IL ETAIT, PAS LA OU IL EST.
+   *
+   * Constate le 15 septembre 2026 sur une arrivee filmee (rush
+   * 06-arrivee-serree) : VOLT termine en 9,37 s, ZEPHYR en 9,35 s, l'ecran de
+   * fin dit « COURSE PERDUE » — et sur le telephone de VOLT, son coureur passe
+   * la ligne AVANT celui de ZEPHYR, le panneau d'ecart affichant encore
+   * « +0,8 m » un dixieme avant la ligne. Un joueur se voyait gagner, puis
+   * lisait qu'il avait perdu.
+   *
+   * La cause n'etait pas le resultat, calcule juste sur les deux chronos : elle
+   * etait dans l'image. L'adversaire s'affichait avec un retard qui
+   * s'additionnait en trois morceaux :
+   *
+   *   - le trajet du paquet, de son telephone a la salle puis au notre, que
+   *     rien ne compensait : la position arrivee etait posee comme celle de
+   *     l'instant ou elle arrivait ;
+   *   - l'ecart entre les deux coups de pistolet, chaque telephone partant sur
+   *     sa propre horloge recalee — quelques centiemes, dans un sens ou dans
+   *     l'autre ;
+   *   - et surtout le lissage : le coureur glissait vers sa cible a raison
+   *     d'un onzieme de l'ecart par image, ce qui, a vitesse constante, le
+   *     laisse durablement un douzieme de seconde derriere elle.
+   *
+   * Mesure en rejouant ce code sur une trajectoire connue : 0,10 s de retard
+   * pour 20 ms de trajet, 0,14 s pour 60 ms — 1,3 a 1,8 m a pleine vitesse.
+   * Sur le rush, ZEPHYR franchit la ligne a l'ecran quand le chrono affiche
+   * 9,45 a 9,50. Toute arrivee plus serree que ce retard pouvait donc
+   * s'afficher a l'envers, et c'est le cas ordinaire d'un duel.
+   *
+   * Le remede tient en une idee : l'emetteur date chaque position sur SON
+   * chronometre de course, et on la reporte sur le NOTRE. Les deux comptent
+   * depuis leur propre coup de pistolet, exactement comme les chronos que la
+   * salle compare pour rendre le verdict. Montrer l'adversaire a « notre
+   * instant de course », c'est donc le montrer sur la meme echelle que celle
+   * du resultat : le trajet et l'ecart des pistolets s'effacent ensemble, sans
+   * avoir a les mesurer. Il ne reste qu'a extrapoler d'un ou deux dixiemes a
+   * sa vitesse — quelques centimetres d'erreur au pire — et a supprimer le
+   * retard du lissage (voir avancerLive).
+   *
+   * Sans `c` — une salle deployee avant ce champ, ou le relais qui passe par
+   * ici sans le transmettre — on retombe sur l'instant d'arrivee, comme avant.
+   * Le retard du lissage disparait quand meme ; celui du trajet reste, et le
+   * photo-finish (suivrePhoto) tranche ce que l'image ne peut pas garantir.
+   */
+  function recevoirPosition(g, d, c) {
+    if (!Number.isFinite(d)) return;
+    if (Number.isFinite(c) && c >= 0) {
+      const t = c / 1000;
+      // La salle renvoie le meme point tant qu'il n'y en a pas de plus loin :
+      // un instant deja vu n'apprend rien. Les paquets d'un meme emetteur
+      // arrivent dans l'ordre — une WebSocket ne les melange pas — donc un
+      // instant plus ancien ne peut etre qu'un doublon.
+      if (g.c != null && t <= g.c) return;
+      // Un meme instant plus loin, jamais moins loin : un coureur ne recule
+      // pas. Un point qui n'avance pas, en revanche, compte — c'est ainsi
+      // qu'on apprend qu'il s'est arrete, et qu'on cesse de l'extrapoler.
+      d = Math.max(d, g.cible);
+      noterPoint(g, t, d, 0.15);
+      g.cible = d; g.c = t; g.depuis = instantLive();
+      return;
     }
+    // Un point sans instant, quand les precedents en avaient : on l'ignore
+    // plutot que de melanger dans la meme trace deux horloges — l'instant de
+    // l'emetteur et celui de l'arrivee chez nous — qui n'ont rien a voir.
+    if (g.c != null) return;
+    // Sans horloge : l'instant est celui ou le paquet arrive chez nous. Il
+    // porte donc toute l'irregularite du reseau, et la vitesse se prend sur
+    // une base plus longue pour ne pas en heriter.
+    // L'arrivee se date sur la meme horloge que celle ou on le dessinera
+    // (instantLive) : sur deux horloges differentes, son age serait faux.
+    if (d > g.cible) {
+      const ici = instantLive();
+      noterPoint(g, ici, d, 0.3);
+      g.cible = d;
+      g.depuis = ici;
+    }
+  }
+
+  /**
+   * Retient un point et en tire la vitesse.
+   *
+   * Deux points consecutifs ne suffisent pas toujours. Le dernier paquet
+   * avant la ligne et celui de la ligne elle-meme peuvent etre separes de
+   * quatre millisecondes : sur une base aussi courte, le centimetre
+   * d'arrondi devient une vitesse fantaisiste. On remonte donc au point le
+   * plus ancien qui tient dans `fenetre`, sans jamais descendre sous six
+   * centiemes de base.
+   */
+  function noterPoint(g, t, d, fenetre) {
+    const h = g.hist || (g.hist = []);
+    h.push([t, d]);
+    // Deux secondes et demie de trace : de quoi relire ou il etait quand
+    // notre instant est en retard sur le sien (voir viseLive).
+    if (h.length > 24) h.shift();
+    const n = h.length;
+    if (n < 2) return;
+    let k = n - 2;
+    while (k > 0 && (t - h[k][0] < 0.06 || t - h[k - 1][0] <= fenetre)) k--;
+    const base = t - h[k][0];
+    if (base > 0) g.vEst = Math.max(0, Math.min(15, (d - h[k][1]) / base));
+  }
+
+  /**
+   * Le chrono reel d'un adversaire, tel qu'il l'a annonce en passant la ligne.
+   *
+   * Il arrive un trajet de reseau APRES son passage : trop tard pour dessiner
+   * l'arrivee a sa place, mais assez tot pour qu'elle ne soit jamais dessinee
+   * a l'envers — des cet instant, il est pose au-dela de la ligne a la
+   * distance que son chrono impose (voir viseLive), il se classe sur ce
+   * chrono et non sur l'instant ou on l'a vu passer, et le photo-finish peut
+   * trancher. Un abandon n'est pas un chrono : la salle en envoie un
+   * sentinelle, qu'on ne doit surtout pas prendre pour un temps de passage.
+   *
+   * On ne cherche que dans la table : la salle renvoie aussi notre propre
+   * arrivee, et elle ne doit pas etre prise pour celle d'un adversaire.
+   */
+  function liveFiniDe(id, ms, abandon) {
+    const g = G.lives && G.lives.get(id);
+    if (!g || !g.live) return;
+    if (abandon || !(ms > 0)) { g.abandon = true; return; }
+    g.fin = ms / 1000;
   }
 
   function armLive(nom) {
@@ -2163,21 +2357,15 @@
     // Un duel n'a qu'un adversaire, et c'est justement la ou le repere compte
     // le plus : sept coureurs de l'ordinateur l'entourent, tous pareils.
     r.repere = { couleur: couleurCouloir(lane), nom: nom || t('opponent') };
-    G.ghost = { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
-                trace: [], step: REC_STEP, time: 0 };
+    G.ghost = suiviLive(r, 0);
     marquerJoueur();
   }
 
   /** Derniere position connue de l'adversaire, telle qu'annoncee par lui. */
-  function liveDist(d) {
+  function liveDist(d, c) {
     const g = G.ghost;
     if (!g || !g.live) return;
-    const dt = Math.max(0.02, G.elapsed - g.depuis);
-    if (d > g.cible) {
-      g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
-      g.cible = d;
-      g.depuis = G.elapsed;
-    }
+    recevoirPosition(g, d, c);
   }
 
   function ghostDistAt(t) {
@@ -2194,27 +2382,116 @@
   }
 
   /**
+   * Ou doit se trouver un adversaire en direct a l'instant `T` de NOTRE course.
+   *
+   * Avec un point horodate, c'est son dernier point porte a notre instant : il
+   * etait a `cible` quand SON chrono marquait `c`, notre chrono marque `T`, il
+   * a donc couru `T - c` de plus a sa vitesse. L'ecart est de l'ordre du
+   * trajet d'un paquet, et il peut etre negatif — si notre pistolet est parti
+   * apres le sien, ou si notre telephone a gele, son point vient de « notre
+   * futur », et on relit sa trace a notre instant. Sans horloge, on part de
+   * l'instant d'arrivee, comme avant.
+   *
+   * L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire, ni au
+   * dela de quelques dixiemes : quand un paquet tarde, mieux vaut un
+   * adversaire legerement en retard qu'un adversaire qui file a vingt metres
+   * par seconde puis s'arrete net au paquet suivant.
+   *
+   * Et quand son chrono est connu, il decide de la ligne : avant cet instant il
+   * ne l'a pas encore franchie, apres il l'a passee d'autant qu'il a couru
+   * depuis. C'est ce qui interdit de dessiner son arrivee a contretemps de
+   * celle que la salle va proclamer.
+   */
+  function viseLive(g, T) {
+    const vmax = G.race.maxSpeed * 1.15;
+    const v = Math.min(g.vEst, vmax);
+    let vise;
+    if (g.c != null && T < g.c && g.hist && g.hist.length > 1) {
+      // NOTRE INSTANT EST EN RETARD SUR LE SIEN. Ce n'est pas seulement
+      // l'ecart des pistolets : un telephone qui gele une seconde — un appel,
+      // le volet des notifications — perd cette seconde sur son chronometre,
+      // chaque image etant bornee a un vingtieme. Extrapoler a l'envers sur
+      // une seconde a la vitesse du moment serait faux des qu'il accelere ;
+      // on relit donc sa trace, ou il etait vraiment a cet instant-la.
+      const h = g.hist;
+      vise = h[0][1];
+      for (let i = h.length - 1; i > 0; i--) {
+        if (h[i - 1][0] <= T) {
+          const [t0, d0] = h[i - 1], [t1, d1] = h[i];
+          vise = t1 > t0 ? d0 + (d1 - d0) * (T - t0) / (t1 - t0) : d1;
+          break;
+        }
+      }
+    } else if (g.c != null) {
+      vise = g.cible + v * Math.min(0.5, T - g.c);
+    } else {
+      vise = g.cible + v * Math.min(0.4, Math.max(0, T - g.depuis));
+    }
+    if (g.fin != null) {
+      const L = G.track.total;
+      vise = T < g.fin ? Math.min(vise, L - 0.01) : Math.max(vise, L + v * (T - g.fin));
+    }
+    return vise;
+  }
+
+  /**
    * Avance un adversaire en direct d'une image.
    *
    * Les positions arrivent par paquets, dix fois par seconde au mieux. Sauter
    * d'un paquet a l'autre ferait tressauter l'adversaire a chaque message : on
-   * extrapole doucement depuis la derniere position connue et sa vitesse, puis
-   * on glisse vers cette cible. Le resultat est une foulee continue, avec un
-   * retard de quelques centiemes — invisible a l'oeil, alors qu'un saut de
-   * quarante centimetres ne l'est pas.
+   * extrapole depuis la derniere position connue et sa vitesse (viseLive),
+   * puis on glisse vers cette cible.
+   *
+   * GLISSER SANS TRAINER. La glissade seule — un onzieme de l'ecart par image
+   * — laissait le coureur, a vitesse constante, un douzieme de seconde
+   * DERRIERE sa cible : c'etait la plus grosse part du retard constate a
+   * l'arrivee (voir recevoirPosition). Le coureur avance maintenant de lui-meme
+   * a la vitesse ou la cible avance, et la glissade ne corrige plus que ce que
+   * le dernier paquet a appris de neuf — quelques centimetres, resorbes en un
+   * dixieme de seconde. A vitesse constante il ne reste plus d'ecart du tout.
    */
+  /**
+   * L'instant, en secondes depuis le coup de pistolet, sur lequel on reporte
+   * les adversaires en direct — celui de l'horloge qui rend le verdict.
+   *
+   * En course en direct, c'est le chronometre de la course, `G.elapsed` : la
+   * salle compare les chronos que chacun y a mesures, et c'est la meme echelle
+   * qui doit dessiner l'arrivee. Au relais, c'est l'horloge de la salle : le
+   * temps d'une equipe se compte sur elle (msCourse), et c'est elle aussi qui
+   * arbitre la distance entre deux relayeurs. Les deux ne different que
+   * lorsqu'un telephone gele — ses images sont bornees, son chronometre prend
+   * du retard sur le temps qui passe — mais alors la difference atteint la
+   * seconde, et un coequipier se dessinait cinq metres a cote de sa place.
+   * Le relais pose donc la sienne dans `G.horlogeLive`.
+   */
+  function instantLive() {
+    return G.horlogeLive ? G.horlogeLive() : G.elapsed;
+  }
+
   function avancerLive(g, dt) {
     const r = g.runner;
     const vmax = G.race.maxSpeed * 1.15;
-    // L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire : quand
-    // un paquet tarde, mieux vaut un adversaire legerement en retard qu'un
-    // adversaire qui file a vingt metres par seconde puis s'arrete net au
-    // paquet suivant.
-    const age = Math.min(0.4, Math.max(0, G.elapsed - g.depuis));
-    const vise = Math.min(g.cible + Math.min(g.vEst, vmax) * age,
-                          g.cible + vmax * age);
+    const L = G.track.total;
+    const T = instantLive();
+    const vise = viseLive(g, T);
+    // La pente est prise sur la cible elle-meme, a paquet egal. Elle vaut la
+    // vitesse estimee tant qu'on extrapole, zero quand l'extrapolation a
+    // atteint sa borne — un coureur dont on n'a plus de nouvelles ne file pas
+    // tout seul. Elle se mesure EN AVANT, sur une milliseconde : mesuree en
+    // arriere, elle tombait a zero a chaque image ou un paquet arrive — sans
+    // horloge, l'extrapolation repart de cet instant-la — et le coureur
+    // butait dix fois par seconde. Elle ne depasse jamais la vitesse estimee :
+    // le seul saut de la cible — quand son chrono le fait passer la ligne —
+    // se rattrape par la glissade, pas en filant a la vitesse maximale.
+    const pente = Math.max(0, Math.min(g.vEst, vmax,
+      (viseLive(g, T + 0.001) - vise) / 0.001));
+    // Deja arrive selon son propre chrono, et encore dessine avant la ligne :
+    // l'image a du retard sur ce que l'on sait. On le rattrape en quelques
+    // images plutot qu'en un dixieme de seconde.
+    const enRetard = g.fin != null && T >= g.fin && r.d < L;
     const avant = r.d;
-    r.d += (vise - r.d) * Math.min(1, dt * 11);
+    const prevu = r.d + pente * dt;
+    r.d = prevu + (vise - prevu) * Math.min(1, dt * (enRetard ? 30 : 11));
     if (r.d < avant) r.d = avant;          // un adversaire ne recule jamais
     // La vitesse sert a animer la foulee et a chiffrer l'ecart : elle doit
     // etre lisse. Une difference brute d'une image a l'autre, avec des paquets
@@ -2224,9 +2501,114 @@
     r.v = r.v * 0.78 + Math.max(0, Math.min(vmax, brut)) * 0.22;
     r.stride += r.v * dt * (Math.PI / r.strideLength());
     r.drivePitch = r.pitchAt();
-    if (!r.finished && r.d >= G.track.total) {
+    if (g.fin != null) {
+      // Son chrono fait foi, pour le classement en course comme pour l'ordre
+      // d'arrivee : l'instant ou on l'a VU passer n'est qu'une estimation, et
+      // elle est remplacee des que le vrai temps arrive.
+      if (T >= g.fin) { r.finished = true; r.finishTime = g.fin; }
+    } else if (!r.finished && r.d >= L) {
       r.finished = true; r.finishTime = g.time || G.elapsed;
     }
+  }
+
+  /**
+   * LE PHOTO-FINISH.
+   *
+   * Recaler l'adversaire sur notre chronometre (recevoirPosition) rend l'image
+   * juste a quelques centimetres pres — mais pas a coup sur. Au moment ou l'on
+   * franchit la ligne, ce qu'on sait de lui date d'un trajet de reseau, et une
+   * arrivee a un centieme se joue sur onze centimetres : l'extrapolation peut
+   * encore se tromper de cote. Sans horloge (une salle d'avant ce champ), elle
+   * se trompe a coup sur des qu'on est plus pres que le trajet d'un paquet.
+   *
+   * On fait donc comme un vrai stade : quand l'oeil ne peut pas trancher, on
+   * ne tranche pas a l'oeil. Au passage de la ligne, si l'adversaire le plus
+   * proche est a portee de doute, le tableau de course cesse d'afficher une
+   * place et annonce un PHOTO-FINISH ; il le resout des que le chrono de
+   * l'adversaire arrive (liveFiniDe), avec les deux temps au millieme pres — les
+   * memes millisecondes que la salle compare pour rendre le verdict, arrondies
+   * de la meme facon. L'ecran de fin ne peut donc plus dire autre chose que
+   * ce que la photo vient de montrer.
+   *
+   * La photo s'affiche aussi quand l'image s'est trompee sans qu'on ait eu de
+   * doute (un paquet reste coince, et l'adversaire qu'on voyait derriere
+   * etait devant), et pour toute arrivee plus serree que PHOTO_SERRE, meme
+   * juste — c'est une arrivee qu'on a envie de voir tranchee.
+   *
+   * Etats : 'attente' (on attend son chrono, affiche), 'tranche' (affiche,
+   * resolu), 'veille' (pas de doute, on surveille seulement une
+   * contradiction), 'aucun' (rien a montrer).
+   */
+  // Avec horloge, l'image ne se trompe que de quelques centimetres.
+  const PHOTO_DOUTE_HORODATE = 0.06;
+  // Sans elle, du trajet d'un paquet : jusqu'a deux dixiemes sur un mauvais reseau.
+  const PHOTO_DOUTE = 0.25;
+  const PHOTO_SERRE = 0.05;
+  // Un chrono qui ne vient pas — l'adversaire a ferme l'application — ne
+  // laisse pas « photo-finish » affiche jusqu'a la fin de la course.
+  const PHOTO_ATTENTE_MAX = 2.5;
+
+  function suivrePhoto() {
+    if (!G.photoFinish || !G.player || !G.player.finished || G.player.finishTime == null) return;
+    if (!G.photo) G.photo = ouvrirPhoto();
+    const p = G.photo;
+    if (p.etat !== 'attente' && p.etat !== 'veille') return;
+    const g = G.lives && G.lives.get(p.id);
+    // Parti, ou abandon : il n'y a plus de chrono a attendre, et la salle
+    // rendra de toute facon son verdict.
+    if (!g || g !== p.g || g.abandon) { p.etat = 'aucun'; return; }
+    if (g.fin != null) {
+      p.luiMs = Math.round(g.fin * 1000);
+      const ecart = p.luiMs - p.moiMs;
+      const contredit = (ecart < 0) !== p.devant && ecart !== 0;
+      if (p.etat === 'attente' || contredit || Math.abs(ecart) <= PHOTO_SERRE * 1000) {
+        p.etat = 'tranche';
+        // L'ecart en metres au moment ou le premier passe la ligne : celui du
+        // second, a sa vitesse d'arrivee. C'est ce que montrerait la photo.
+        const vmax = G.race.maxSpeed * 1.15;
+        const vSecond = ecart >= 0 ? Math.min(g.vEst, vmax) : (p.vMoi || 0);
+        p.ecartM = Math.abs(ecart) / 1000 * vSecond;
+      } else {
+        p.etat = 'aucun';
+      }
+      return;
+    }
+    if (p.etat === 'attente' && G.elapsed - p.depuis > PHOTO_ATTENTE_MAX) p.etat = 'aucun';
+  }
+
+  /** Le premier instant apres la ligne : contre qui, et y a-t-il doute ? */
+  function ouvrirPhoto() {
+    const moi = G.player;
+    let id = null, g = null, ecart = Infinity;
+    for (const [k, x] of G.lives || []) {
+      if (x.equipier) continue;
+      const e = Math.abs(x.runner.d - moi.d);
+      if (e < ecart) { ecart = e; g = x; id = k; }
+    }
+    if (!g) return { etat: 'aucun' };
+    const r = g.runner, L = G.track.total;
+    // Ou en est-il, en temps, par rapport a nous ? Son chrono s'il est connu,
+    // sinon l'instant ou on l'a vu passer, sinon ce qu'il lui reste a courir.
+    const lui = g.fin != null ? g.fin
+      : r.finished ? r.finishTime
+      : G.elapsed + Math.max(0, L - r.d) / Math.max(5, r.v);
+    const frais = g.c != null && instantLive() - g.c < 0.25;
+    const doute = frais ? PHOTO_DOUTE_HORODATE : PHOTO_DOUTE;
+    return {
+      id, g, nom: r.name,
+      moiMs: Math.round(moi.finishTime * 1000), luiMs: null, vMoi: moi.v,
+      // Ce que l'image montrait a cet instant : lui devant, ou lui derriere.
+      devant: r.d >= moi.d,
+      etat: Math.abs(lui - moi.finishTime) <= doute ? 'attente' : 'veille',
+      depuis: G.elapsed, ecartM: 0,
+    };
+  }
+
+  /** Ce que le tableau de course affiche de la photo, ou rien. */
+  function photoPourHud() {
+    const p = G.photo;
+    if (!p || (p.etat !== 'attente' && p.etat !== 'tranche')) return null;
+    return { etat: p.etat, nom: p.nom, moi: p.moiMs, lui: p.luiMs, ecartM: p.ecartM };
   }
 
   function stepGhost(dt) {
@@ -2242,6 +2624,7 @@
         if (e < ecart) { ecart = e; meilleur = g; }
       }
       G.ghost = meilleur;
+      suivrePhoto();
       return;
     }
     const g = G.ghost;
@@ -2354,17 +2737,28 @@
     return Math.max(0.62, Math.min(1.7, Math.min(G.VW / 430, G.VH / 660)));
   }
   function scaleM() {
-    return ui() * (G.race.arc > 0 ? 44 : 30);
+    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique();
+  }
+  // LE PLAN SERRE DU GENERIQUE. Le tour d'honneur se joue dans le stade, a
+  // l'echelle du monde (voir game/scene-generique.ts) ; a l'echelle de la
+  // course, le champion n'y mesurait qu'une soixantaine de pixels. La scene
+  // pose son cadrage dans `G.zoomScene`, et il ne vaut QUE pendant elle : lu
+  // ici sous condition, il ne peut pas deborder sur l'ecran d'apres.
+  function zoomDuGenerique() {
+    return (G.state === 'cut' && G.cut && G.cut.kind === 'ending' && G.zoomScene) || 1;
   }
   // Pendant la course, le joueur doit rester au centre exact de l'image ;
   // ailleurs (titre, cinematiques...) on garde la composition d'origine,
   // decalee pour laisser de la place au HUD et au decor.
+  // L'elimination au faux depart garde le cadre de la course : c'est la meme
+  // piste, figee, et elle ne doit pas sauter d'un dixieme d'ecran a l'instant
+  // ou le joueur est elimine.
   function originX() {
-    if (G.state === 'race' || G.state === 'count') return G.VW * 0.5;
+    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VW * 0.5;
     return G.VW * (G.portrait ? 0.58 : 0.60);
   }
   function originY() {
-    if (G.state === 'race' || G.state === 'count') return G.VH * 0.5;
+    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VH * 0.5;
     return G.VH * (G.portrait ? 0.44 : 0.56);
   }
 
@@ -2483,9 +2877,19 @@
     if (T.curved) {
       const N = pas ? Math.max(8, Math.round(Math.PI * C.R1 / pas)) : ARC_STEPS;
       const st = Math.PI * C.R1 / N;
+      // LA PISTE NE COMMENCE PAS AU DEPART. Un 200 m part a l'entree du
+      // virage, et le trace du jeu commencait la : derriere le couloir 1 il
+      // n'y avait rien, et le coureur de ce couloir — qui part le plus en
+      // arriere — posait ses blocs au bord du vide. Une piste est un ovale :
+      // avant le virage vient la ligne opposee. On en dessine donc quarante
+      // metres, dans le prolongement exact du trace (voir Track.posLap2).
+      if (!T.fullLap) {
+        const debut = Math.max(st, T.straight - 40);
+        for (let x = debut; x < T.straight - st * 0.5; x += st) out.push([false, x, 1]);
+      }
       for (let i = 0; i <= N; i++)
         out.push([true, Math.PI * (1 - i / N), 0]);
-      const s1End = T.fullLap ? T.straight : T.straight + C.RUNOUT;
+      const s1End = T.fullLap ? T.straight : T.straight + finDuDecor();
       for (let x = st; x <= s1End; x += st) out.push([false, x, 0]);
       // Tour complet (400 m) : second virage + seconde ligne droite,
       // symetriques du premier couple (voir Track.posLap2), pour que le
@@ -2497,10 +2901,29 @@
         for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
       }
     } else {
+      // Le terrain continue derriere la ligne de depart. A vingt metres, un
+      // telephone tenu debout montrait deja le bout du stade — un coin de
+      // ciel en bas de l'image, sous les blocs.
       const d = pas || 12;
-      for (let x = -20; x <= T.straight + C.RUNOUT + d; x += d) out.push([false, x, 0]);
+      for (let x = -60; x <= T.straight + finDuDecor() + d; x += d) out.push([false, x, 0]);
     }
     return out;
+  }
+  // ET IL CONTINUE APRES L'ARRIVEE. Le stade s'arretait douze metres apres la
+  // zone de decelaration : en course la camera, centree sur le coureur, n'y
+  // arrivait jamais. Les scenettes d'apres course, elles, cadrent plus a droite
+  // et plus bas — et depuis qu'elles ne sont plus voilees de noir et de flou,
+  // le coin du haut montrait le bout du monde : un aplat de ciel au bout de la
+  // piste. On prolonge donc le decor de quarante metres de plus, comme
+  // derriere le depart.
+  function finDuDecor() {
+    return C.RUNOUT + 40;
+  }
+  // Les eclats d'appareils dans la tribune : en course, et dans les scenettes,
+  // qui se jouent devant le meme public — un sacre sans un flash dans les
+  // gradins serait une photo de stade vide.
+  function flashsActifs() {
+    return G.state === 'race' || G.state === 'count' || G.state === 'cut';
   }
   // TROIS FONCTIONS PORTENT LE RENDU DU DECOR, ET CHACUNE ALLOUAIT.
   //
@@ -2612,6 +3035,54 @@
     band, bandBrute, bandPattern,
   };
   const PREM = () => globalThis.RenduPremium;
+  // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
+  // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
+  const DEC = () => globalThis.DecorsStades;
+  let _apiDecor = null;
+  /**
+   * Les troncons du trace ou la tribune est AU FOND de l'image, et non du
+   * cote de la camera : s'eloigner de la piste y fait gagner en profondeur.
+   * Chaque troncon garde un echantillon de recouvrement avec le suivant, pour
+   * que les bandes se rejoignent sans fente.
+   */
+  // FRANCHEMENT au fond : un metre vers l'exterieur doit y gagner au moins
+  // les deux tiers de la profondeur qu'il gagne face a la camera (racine de
+  // deux). Vue de profil, a la bascule entre les deux cotes, la tribune
+  // montrait encore son toit en travers de ses spectateurs.
+  function auFond(q, r) {
+    const a = ptOf(q, r), b = ptOf(q, r + 1);
+    return (depthOf(b[0], b[1]) - depthOf(a[0], a[1])) / scaleM() > 0.9;
+  }
+
+  function tribunesDuFond(sm, r) {
+    const runs = [];
+    let run = null;
+    for (let i = 0; i < sm.length; i++) {
+      const fond = auFond(sm[i], r);
+      if (fond) {
+        if (!run) { run = i > 0 ? [sm[i - 1]] : []; runs.push(run); }
+        run.push(sm[i]);
+      } else if (run) {
+        run.push(sm[i]);
+        run = null;
+      }
+    }
+    return runs.filter(r2 => r2.length > 1);
+  }
+
+  let _apiTribune = null;
+  function apiTribune() {
+    if (!_apiTribune) {
+      _apiTribune = { G, ptOf, solid, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
+    }
+    return _apiTribune;
+  }
+  function apiDecor() {
+    if (!_apiDecor) {
+      _apiDecor = { G, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
+    }
+    return _apiDecor;
+  }
   // Meme trace que band(), mais rempli avec un motif au lieu d'une teinte
   // unie : utilise pour le public des gradins (voir getCrowdPattern), qui
   // doit paraitre completement dense sans dessiner un sprite par personne
@@ -2687,8 +3158,9 @@
         // bras leves : un public qui encourage, pas qui court
         celebrate: 0.72 + (seed % 28) / 100
       };
-      const caps = personCapsules(fan, 0, 0, (seed & 1) === 1, false);
       const k = 11 + (seed % 5);
+      const caps = personCapsules(fan, 0, 0, (seed & 1) === 1, false,
+                                  niveauDetail(k));
       const x = seed % CROWD_TILE;
       const y = ((seed / 211) | 0) % CROWD_TILE;
       // dessine aussi les copies debordantes, sinon la tuile se raccorde
@@ -4102,7 +4574,7 @@
     }
     // La rangee deborde de part et d'autre de la piste : le cadre montre du
     // decor avant la ligne de depart et apres l'arrivee.
-    const fin = G.track.straight + C.RUNOUT + 12;
+    const fin = G.track.straight + finDuDecor();
     for (let x = -24; x <= fin; x += pasMetres) out.push([false, x, 0]);
     return out;
   }
@@ -4226,7 +4698,8 @@
     // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
     // d'eclairage de stade, une suite serree de projecteurs et non trois
     // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
-    const positions = rangeeDeToiture(sm, 4);
+    // seulement au-dessus de la tribune d'en face : voir tribunesDuFond
+    const positions = rangeeDeToiture(sm, 4).filter(q => auFond(q, near));
     const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
 
     ctx.save();
@@ -4298,7 +4771,23 @@
     };
     const W = 0.085;                 // demi-largeur du rail, en metres
     const CW = 0.25;                 // demi-largeur d'une cale
+    // LE BLOC RENDU DANS BLENDER, AU PIED DU COUREUR.
+    //
+    // Pose exactement la ou pose() met le coureur au coup de feu — T.pos(0)
+    // et T.heading(0) du couloir —, et non plus au milieu geometrique du
+    // couloir : ses pedales sont modelisees sous les pieds de la posture de
+    // depart, et quelques centimetres d'ecart suffisaient a faire flotter un
+    // pied a cote de sa plaque. L'ancien bloc au trait reste en secours tant
+    // que l'image n'est pas chargee.
+    const vue = T.curved ? WROT * 180 / Math.PI : 0;
     for (let e = 0; e < C.LANE_COUNT; e++) {
+      if (DEC()) {
+        const q = T.pos(0, e);
+        const g2 = ground(q[0], q[1]);
+        if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) continue;
+        const cap = T.heading(0, e) * 180 / Math.PI + vue;
+        if (DEC().bloc(ctx, apiDecor(), q[0], q[1], cap)) continue;
+      }
       // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
       // dont sept hors champ ne doivent rien couter.
       const centre = pt(-0.62, e, 0, 0);
@@ -4454,7 +4943,7 @@
         // referme simplement la boucle plutot que de couper par le centre.
         ctx.closePath();
       } else {
-        let p = ground(T.straight + C.RUNOUT, 0); ctx.lineTo(p[0], p[1]);
+        let p = ground(T.straight + finDuDecor(), 0); ctx.lineTo(p[0], p[1]);
         p = ground(0, 0); ctx.lineTo(p[0], p[1]);
         ctx.closePath();
       }
@@ -4527,6 +5016,10 @@
     // La piscine, posee dans la pelouse interieure (voir drawPiscine).
     if (th.piscine) drawPiscine(ctx, th, rIn);
     if (th.transats) drawMobilier(ctx, th, rIn);
+    // Les marquages au sol rendus dans Blender — fosse, cercle de lancer —
+    // avec la pelouse, sous les gradins, la piste et tout ce qui se tient
+    // debout.
+    if (DEC()) DEC().sol(ctx, apiDecor(), th, G.levelIdx);
 
     // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
     // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
@@ -4541,7 +5034,8 @@
     // Le nombre de gradins est un reglage de THEME, pas une constante : une
     // tribune haute remplit le haut de l'image (voir la toiture, plus bas), et
     // un stade dont le sujet est le ciel ne peut pas se le permettre.
-    const near = rOut + 1.6, tiers = th.gradins || 4, sr = 1.7, sz = 0.58;
+    const tribune = tribuneDe(th);
+    const near = rOut + 1.6, tiers = tribune.gradins, sr = 1.7, sz = 0.58;
     const stp = decorStride();
     band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
     // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
@@ -4550,13 +5044,36 @@
       wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
            th.panels[(i / stp) % th.panels.length], stp);
     }
-    for (let t = 0; t < tiers; t++) {
-      const r0 = near + t * sr, z1 = 1.05 + (t + 1) * sz, f = 1 - t * 0.05;
+    // DEUX RANGEES DE SIEGES PAR GRADIN. Un « gradin » du decor fait un
+    // metre soixante-dix de profondeur : c'est la mesure de deux rangees
+    // reelles, pas d'une. En une seule marche, la tribune se lisait comme
+    // trois terrasses ; en marches de quatre-vingt-cinq centimetres, comme
+    // un gradin. L'enveloppe ne change pas — meme pied, meme sommet, meme
+    // toiture —, seul l'escalier se resserre.
+    const TR = globalThis.Tribune;
+    const rangs = tiers * 2, pr = sr / 2, pz = sz / 2;
+    for (let t = 0; t < rangs; t++) {
+      const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz, f = 1 - t * 0.025;
       // contremarche : vraie face verticale, du gradin precedent a celui-ci,
       // eclairee selon son orientation -> l'escalier a du relief
-      wall(ctx, sm, r0, z1 - sz, z1, th.riser, stp);
+      wall(ctx, sm, r0, z1 - pz, z1, th.riser, stp);
       // marche : surface horizontale, pleinement exposee a la lumiere
-      band(ctx, sm, r0, r0 + sr, rgb(th.tread, f), z1);
+      band(ctx, sm, r0, r0 + pr, rgb(th.tread, f), z1);
+    }
+    // LE PUBLIC ASSIS, rangee par rangee, quand ses images sont la (voir
+    // tribune.js). Les escaliers passent d'abord, et personne ne s'assied
+    // dessus. Sinon, l'ancienne foule en tuile, plus bas.
+    let publicAssis = false;
+    if (TR && TR.pret()) {
+      drawAllees(ctx, th, sm, near, tiers, sr, sz);
+      const rMoy = near + tiers * sr * 0.5;
+      const allees = rangeeDeToiture(sm, 15).map(q => {
+        const q2 = q[0] ? [true, q[1] - 0.6 / rMoy, q[2]] : [false, q[1] + 0.6, q[2]];
+        return ptOf(q2, rMoy);
+      });
+      const nomTheme = (LEVELS[G.levelIdx] && LEVELS[G.levelIdx].theme) || 'day';
+      publicAssis = TR.dessiner(ctx, apiTribune(), th, nomTheme, sm, near, rangs, pr, pz,
+                                fouleDe(G.levelIdx), allees);
     }
     // Public dans les gradins : motif de foule dense (getCrowdPattern) plutot
     // que des sprites individuels. Multiplier encore le nombre de personnes
@@ -4566,7 +5083,7 @@
     // aucun cout supplementaire quelle que soit la "densite" recherchee.
     // Uniquement sur les lignes droites : dans le virage, seuls les gradins
     // nus restent visibles (pas de tribune principale en courbe).
-    const crowdPat = getCrowdPattern(ctx, G.levelIdx);
+    const crowdPat = publicAssis ? null : getCrowdPattern(ctx, G.levelIdx);
     if (crowdPat) {
       // Le motif est ancre au MONDE, pas a l'ecran : on le decale de la
       // position ecran d'un point fixe du terrain (l'origine). Comme la
@@ -4603,7 +5120,7 @@
       // Les eclats d'appareils dans la foule. Ils suivent la meme densite que
       // le public — une rencontre scolaire ne scintille pas comme une finale —
       // et se posent sur un vrai gradin, pas sur l'ecran. Voir rendu-premium.js.
-      if (PREM() && (G.state === 'race' || G.state === 'count')) {
+      if (PREM() && flashsActifs()) {
         PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
         PREM().dessinerFlashs(ctx, PEINTRE);
       }
@@ -4611,8 +5128,13 @@
     // Les escaliers PAR-DESSUS le public, et hors du bloc qui le dessine : un
     // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
     // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
-    // simple bande. Voir drawAllees.
-    drawAllees(ctx, th, sm, near, tiers, sr, sz);
+    // simple bande. Voir drawAllees. Avec le public assis, ils sont deja la.
+    if (!publicAssis) drawAllees(ctx, th, sm, near, tiers, sr, sz);
+    // les eclats d'appareils suivent le public, quel qu'il soit
+    if (publicAssis && PREM() && flashsActifs()) {
+      PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
+      PREM().dessinerFlashs(ctx, PEINTRE);
+    }
 
     // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
     //
@@ -4628,9 +5150,16 @@
     // gradins A CIEL OUVERT : le public s'arrete, et au-dessus commence
     // l'horizon. C'est aussi ce que sont vraiment un stade de bord de mer et
     // une reunion nocturne.
-    if (th.toiture !== false) {
-      band(ctx, sm, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
-           1.05 + tiers * sz + 2.4);
+    // LE TOIT NE SE POSE QUE SUR LA TRIBUNE D'EN FACE. Dans un virage, la
+    // tribune exterieure passe du cote de la camera : son toit se retrouvait
+    // alors ENTRE l'objectif et le public, et une grande bande gris-bleu
+    // couvrait tous les spectateurs de la sortie du virage. Une camera placee
+    // dans le stade ne voit pas le toit qui est au-dessus d'elle.
+    if (tribune.toiture) {
+      for (const run of tribunesDuFond(sm, near)) {
+        band(ctx, run, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
+             1.05 + tiers * sz + 2.4);
+      }
     }
 
     // Au-dessus du toit : des fanions le jour, des projecteurs la nuit.
@@ -4642,7 +5171,7 @@
     // nuit sans lampes n'est pas un stade de nuit, c'est un stade sombre.
     //
     // Sans toit, ni l'un ni l'autre n'a ou se poser.
-    if (th.toiture !== false) {
+    if (tribune.toiture) {
       if (th.projecteurs) {
         drawProjecteurs(ctx, th, sm, near, tiers, sr, sz);
       } else if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
@@ -4659,7 +5188,7 @@
         // La hauteur descend aussi sous le toit, pour la meme raison que les
         // projecteurs : au-dessus, tout sort du cadre.
         const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-        for (const q of rangeeDeToiture(sm, 6)) {
+        for (const q of rangeeDeToiture(sm, 6).filter(q2 => auFond(q2, near))) {
           const p = solid(...ptOf(q, fr), fz);
           if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
           ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);
@@ -4842,6 +5371,12 @@
     // doivent la recouvrir (voir drawArbresDedans).
     if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
 
+    // Hors course, les decors debout se posent ici. En course, ils passent
+    // apres les coureurs : voir la fin de drawAthletes.
+    if (DEC() && G.state !== 'race' && G.state !== 'count') {
+      DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    }
+
     // LA BRUME, APRES TOUT LE DECOR ET AVANT LES ATHLETES.
     //
     // C'est la seule place qui marche. Avant le decor, elle ne voilerait rien ;
@@ -5000,36 +5535,78 @@
     return out;
   }
 
-  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k, bout) {
+  // UN SEGMENT N'EST PAS UN TUYAU ROND.
+  //
+  // Les corps mesures dans Blender donnent, a chaque hauteur, une PROFONDEUR
+  // et une LARGEUR distinctes : un buste de sprinter est une fois et demie
+  // plus large que profond, un crane et une cuisse sont l'inverse. Les
+  // ecraser en un rayon unique rendait ces corps-la sous forme de colonnes,
+  // et la mesure partait a la poubelle.
+  //
+  // La section est donc une ellipse. Pour l'orienter il faut savoir ou est
+  // la largeur du coureur une fois qu'il a tourne : c'est W, le cote du
+  // corps, promene par personCapsules a travers les memes rotations que les
+  // points (lacet, inclinaison, cap, virage). On le redresse
+  // perpendiculairement a l'os, et l'autre axe suit. Un segment aux deux
+  // demi-axes egaux — cheveux, chaussures, tout ce qui n'est pas mesure — se
+  // dessine exactement comme avant.
+  function drawSegmentFacets(ctx, col, e0, e1, ax, ay, k, bout, W) {
     const r0 = e0[3], r1 = e1[3];
+    const hx0 = e0[4], hy0 = e0[5], hx1 = e1[4], hy1 = e1[5];
     let dx = e1[0] - e0[0], dy = e1[1] - e0[1], dz = e1[2] - e0[2];
     let len = Math.hypot(dx, dy, dz);
     if (len < 1e-6) { dx = 0; dy = 0; dz = 1; len = 1e-6; }
     const axx = dx / len, axy = dy / len, axz = dz / len;
 
-    // base orthonormee perpendiculaire a l'axe du segment
-    let hx = 0, hy = 0, hz = 1;
-    if (Math.abs(axz) > 0.9) { hx = 1; hz = 0; }
-    let ux = axy * hz - axz * hy, uy = axz * hx - axx * hz, uz = axx * hy - axy * hx;
-    const ul = Math.hypot(ux, uy, uz) || 1;
-    ux /= ul; uy /= ul; uz /= ul;
-    const vx = axy * uz - axz * uy, vy = axz * ux - axx * uz, vz = axx * uy - axy * ux;
+    // v = la largeur du corps, redressee perpendiculairement a l'os.
+    const wd = W[0] * axx + W[1] * axy + W[2] * axz;
+    let vx = W[0] - axx * wd, vy = W[1] - axy * wd, vz = W[2] - axz * wd;
+    let vl = Math.hypot(vx, vy, vz);
+    if (vl < 1e-4) {
+      // os parallele a la largeur du corps : le plan de l'ellipse n'est plus
+      // defini. A cet angle-la profondeur et largeur ne se distinguent de
+      // toute facon pas, une base quelconque suffit.
+      let bx = 0, by = 0, bz = 1;
+      if (Math.abs(axz) > 0.9) { bx = 1; bz = 0; }
+      vx = axy * bz - axz * by; vy = axz * bx - axx * bz; vz = axx * by - axy * bx;
+      vl = Math.hypot(vx, vy, vz) || 1;
+    }
+    vx /= vl; vy /= vl; vz /= vl;
+    const ux = axy * vz - axz * vy, uy = axz * vx - axx * vz, uz = axx * vy - axy * vx;
 
-    const N = facetCount(Math.max(r0, r1) * k);
+    const N = facetCount(Math.max(hx0, hy0, hx1, hy1) * k);
     _rimK = N >= 8 ? 1 : N / 8;
     const dr = (r1 - r0) / len;
+    // pour la normale, l'ellipse moyenne du tronc suffit : l'ombrage ne se
+    // joue pas au dixieme de degre.
+    const mhx = (hx0 + hx1) * 0.5, mhy = (hy0 + hy1) * 0.5;
+    // la calotte s'assied sur le bout visible : son ellipse a elle
+    const vd0 = axx * VIEW[0] + axy * VIEW[1] + axz * VIEW[2];
+    const qx = (vd0 > 0 ? hx0 / (r0 || 1) : hx1 / (r1 || 1)),
+          qy = (vd0 > 0 ? hy0 / (r0 || 1) : hy1 / (r1 || 1));
 
     for (let i = 0; i < N; i++) {
       const a = TAU * i / N, ca = Math.cos(a), sa = Math.sin(a);
-      const rx = ux * ca + vx * sa, ry = uy * ca + vy * sa, rz = uz * ca + vz * sa;
-      _rrx[i] = rx; _rry[i] = ry; _rrz[i] = rz;
-      // normale d'un tronc de cone : radiale, inclinee par la variation de rayon
-      let mx = rx - axx * dr, my = ry - axy * dr, mz = rz - axz * dr;
+      _rrx[i] = ux * ca * qx + vx * sa * qy;
+      _rry[i] = uy * ca * qx + vy * sa * qy;
+      _rrz[i] = uz * ca * qx + vz * sa * qy;
+      // La normale d'une ellipse ne pointe pas vers son centre : elle se
+      // redresse vers le petit axe. C'est ce qui fait qu'un dos large prend
+      // la lumiere a plat au lieu de la rouler comme un tube.
+      let mx = ux * ca * mhy + vx * sa * mhx,
+          my = uy * ca * mhy + vy * sa * mhx,
+          mz = uz * ca * mhy + vz * sa * mhx;
+      const mn = Math.hypot(mx, my, mz) || 1;
+      mx = mx / mn - axx * dr; my = my / mn - axy * dr; mz = mz / mn - axz * dr;
       const ml = Math.hypot(mx, my, mz) || 1;
       _nx[i] = mx / ml; _ny[i] = my / ml; _nz[i] = mz / ml;
 
-      const X0 = e0[0] + rx * r0, Y0 = e0[1] + ry * r0, Z0 = e0[2] + rz * r0;
-      const X1 = e1[0] + rx * r1, Y1 = e1[1] + ry * r1, Z1 = e1[2] + rz * r1;
+      const X0 = e0[0] + ux * ca * hx0 + vx * sa * hy0,
+            Y0 = e0[1] + uy * ca * hx0 + vy * sa * hy0,
+            Z0 = e0[2] + uz * ca * hx0 + vz * sa * hy0;
+      const X1 = e1[0] + ux * ca * hx1 + vx * sa * hy1,
+            Y1 = e1[1] + uy * ca * hx1 + vy * sa * hy1,
+            Z1 = e1[2] + uz * ca * hx1 + vz * sa * hy1;
       _p0x[i] = X0; _p0y[i] = Y0; _p0z[i] = Z0;
       _p1x[i] = X1; _p1y[i] = Y1; _p1z[i] = Z1;
       _s0x[i] = ax + (Y0 - X0) * C.ISO_COS * k;
@@ -5080,7 +5657,13 @@
     const rBout = bout0 ? r0 : r1;
     const sgnB = bout0 ? -1 : 1;           // sens sortant du bout visible
     const eB = bout0 ? e0 : e1;
-    const rond = bout === 1 && rBout * k > 5;
+    // Un bout ENFOUI dans le segment voisin ne recoit ni calotte ni disque.
+    // Dans une chaine de troncs empiles sur un meme os, ces disques-la ne
+    // devraient jamais se voir — mais deux troncs voisins sont a la meme
+    // profondeur, leur ordre tient au millimetre, et ils ressortaient en
+    // anneaux le long des membres.
+    const enfoui = (bout & (bout0 ? 2 : 4)) !== 0;
+    const rond = !enfoui && (bout & 1) === 1 && rBout * k > 5;
     if (rond) {
       const off = 0.55 * rBout, rc = 0.80 * rBout;
       for (let i = 0; i < N; i++) {
@@ -5107,7 +5690,7 @@
         nf++;
       }
     }
-    {
+    if (!enfoui) {
       // le disque : celui de la calotte s'il y en a une, sinon le bout nu.
       // Le bout visible est toujours le plus proche de l'oeil, d'ou
       // l'epsilon qui le tire vers l'avant du tri, quel que soit le sens de
@@ -5143,19 +5726,25 @@
     for (let f = 0; f < nf; f++) {
       const id = _fOrder[f], kind = _fKind[id];
       ctx.beginPath();
-      if (kind >= 0) {
-        const i = kind, j = (i + 1) % N;
-        ctx.moveTo(_s0x[i], _s0y[i]);
-        ctx.lineTo(_s0x[j], _s0y[j]);
-        ctx.lineTo(_s1x[j], _s1y[j]);
-        ctx.lineTo(_s1x[i], _s1y[i]);
-      } else if (kind >= RING_MAX) {
+      // LA CALOTTE D'ABORD. Ses faces portent un numero a partir de RING_MAX,
+      // qui est aussi un nombre positif : testees apres les faces laterales,
+      // elles tombaient dans leur branche, avec un indice hors de l'anneau, et
+      // n'etaient jamais dessinees. Il ne restait du bout arrondi que son
+      // disque, qui flottait au-dessus du cylindre — la chevelure en anneau
+      // sous un couvercle detache, les poings et les pieds coupes net.
+      if (kind >= RING_MAX) {
         const i = kind - RING_MAX, j = (i + 1) % N;
         const bx = bout0 ? _s0x : _s1x, by = bout0 ? _s0y : _s1y;
         ctx.moveTo(bx[i], by[i]);
         ctx.lineTo(bx[j], by[j]);
         ctx.lineTo(_cx[j], _cy[j]);
         ctx.lineTo(_cx[i], _cy[i]);
+      } else if (kind >= 0) {
+        const i = kind, j = (i + 1) % N;
+        ctx.moveTo(_s0x[i], _s0y[i]);
+        ctx.lineTo(_s0x[j], _s0y[j]);
+        ctx.lineTo(_s1x[j], _s1y[j]);
+        ctx.lineTo(_s1x[i], _s1y[i]);
       } else if (kind === -3) {
         ctx.moveTo(_cx[0], _cy[0]);
         for (let i = 1; i < N; i++) ctx.lineTo(_cx[i], _cy[i]);
@@ -5176,20 +5765,45 @@
   }
 
   function drawFacetFigure(ctx, caps, ax, ay, k) {
+    // LA PROFONDEUR SE MESURE DANS L'AXE DE LA VUE, HAUTEUR COMPRISE. La
+    // camera regarde d'en haut : un segment plus haut est plus PRES d'elle.
+    // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
+    // cheveux posee dessus, et la chevelure ne restait qu'un anneau.
     const order = [];
     for (let i = 0; i < caps.length; i++) {
       const e0 = caps[i][1], e1 = caps[i][2];
-      order.push([(e0[0] + e0[1] + e1[0] + e1[1]) * 0.5, i]);
+      order.push([(e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                  (e0[2] + e1[2]) * VIEW[2], i]);
     }
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
       const c = caps[order[n][1]];
-      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3]);
+      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
     }
   }
 
-  function personCapsules(person, headAng, lean, mirror, applyCurve) {
-    const parts = pose(person);
+  // Combien de volumes vaut la peine de payer, a cette taille-la.
+  //
+  // Le corps mesure dans Blender existe en trois echantillonnages du meme
+  // maillage. Un coureur presente en gros plan merite ses soixante-dix
+  // troncs de cone ; un spectateur de onze pixels n'en tirerait rien, et il
+  // y en a des centaines dans les gradins. Le niveau le plus grossier coute
+  // a peu pres ce que coutait le corps d'avant.
+  //
+  // Et le telephone qui rame paye moins. La couche de finition mesure deja
+  // le temps d'image et descend d'elle-meme en palier sobre quand il ne
+  // tient plus : les corps suivent alors d'un cran. Sur une course a huit,
+  // c'est eux qui coutent — mesure sur ordinateur, 3,4 ms d'image sans les
+  // corps mesures, 4,9 ms avec.
+  function niveauDetail(k) {
+    let n = k >= 40 ? 0 : (k >= 20 ? 1 : 2);   // pres, moyen, loin
+    const fin = PREM();
+    if (fin && fin.niveau === 0 && n < 2) n++;
+    return n;
+  }
+
+  function personCapsules(person, headAng, lean, mirror, applyCurve, lod) {
+    const parts = pose(person, lod === undefined ? 0 : lod);
     const sgn = mirror ? -1 : 1;
     const hc = Math.cos(headAng || 0), hs = Math.sin(headAng || 0);
     // La chute ajoute son propre deport lateral par-dessus l'inclinaison
@@ -5197,7 +5811,11 @@
     const fsh = K.fallShape(person.fallAnim);
     const roll = (lean || 0) + (fsh ? fsh.roll : 0);
     const rc = Math.cos(roll), rs = Math.sin(roll);
-    const fall = (fsh ? fsh.pitch : 0) - (person.drivePitch || 0);
+    // Dans les blocs, le corps n'est pas « penche en avant » : il est pose,
+    // mains au sol. L'inclinaison de sortie des blocs ne revient qu'avec la
+    // course, a mesure que le coureur quitte sa posture (voir enBloc, pose).
+    const fall = (fsh ? fsh.pitch : 0) -
+      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
     for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
@@ -5218,9 +5836,23 @@
         let rx = wx, ry = wy;
         if (headAng) { const t = wx * hc - wy * hs; ry = wx * hs + wy * hc; rx = t; }
         if (applyCurve) { const t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
-        ends.push([rx, ry, wz, (hx + hy) * 0.5]);
+        // Seule une section mesuree garde ses deux demi-axes : les pieces
+        // ecrites a la main restent arrondies en moyenne, comme toujours.
+        const rm = (hx + hy) * 0.5;
+        if (bout & 8) ends.push([rx, ry, wz, rm, hx, hy]);
+        else ends.push([rx, ry, wz, rm, rm, rm]);
       }
-      caps.push([col, ends[0], ends[1], bout]);
+      // OU EST LA LARGEUR DU CORPS, UNE FOIS LE COUREUR TOURNE. On promene
+      // le vecteur lateral dans exactement les memes rotations que les
+      // points. L'angle de l'os et le pique du buste tournent autour de cet
+      // axe-la et le laissent intact, d'ou leur absence.
+      let Wx = -ys, Wy = yc, Wz = 0, t;
+      if (lean) { t = Wy * rc - Wz * rs; Wz = Wy * rs + Wz * rc; Wy = t; }
+      if (Math.abs(fall) > 0.001) { t = Wx * fc - Wz * fs; Wz = Wx * fs + Wz * fc; Wx = t; }
+      Wx *= sgn;
+      if (headAng) { t = Wx * hc - Wy * hs; Wy = Wx * hs + Wy * hc; Wx = t; }
+      if (applyCurve) { t = Wx * WC - Wy * WS; Wy = Wx * WS + Wy * WC; Wx = t; }
+      caps.push([col, ends[0], ends[1], bout, [Wx, Wy, Wz]]);
     }
     return caps;
   }
@@ -5228,7 +5860,7 @@
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
     const curved = !!(G.track && G.track.curved);
-    const caps = personCapsules(r, headAng, lean, false, curved);
+    const caps = personCapsules(r, headAng, lean, false, curved, niveauDetail(k));
     drawFacetFigure(ctx, caps, ax, ay, k);
   }
 
@@ -5341,10 +5973,29 @@
   const STARTER_D = 2.0;           // deux metres APRES la ligne, donc devant eux
   const STARTER_COULOIR = -1.0;    // en dedans du premier couloir, sur l'herbe
 
-  /** Sa tenue : le blanc des officiels, et des chaussures de ville. */
+  /** Sa tenue : le blanc des officiels, un pantalon, des chaussures de ville. */
   const LOOK_STARTER = K.look({
     build: 'm', skin: 'ambre', jersey: [234, 238, 246], shorts: [34, 38, 58],
-    shoe: [38, 40, 50], hair: 'crop', h: 1.78,
+    pantalon: [34, 38, 58], shoe: [38, 40, 50], hair: 'crop', h: 1.78,
+    civil: true,
+  });
+
+  /**
+   * A LA RENCONTRE SCOLAIRE, LE STARTER EST LE PROF.
+   *
+   * Pas d'officiel en blanc pour une course entre eleves : c'est le prof qui
+   * donne le depart, et il n'en fait pas une affaire. Gilet bordeaux sur
+   * chemise, pantalon beige, lunettes, les cheveux qui grisonnent — et un livre
+   * ouvert dans la main gauche, qu'il ne quitte pas des yeux. Il leve le
+   * pistolet au 1 sans relever la tete, a moitie, et tire sur le signal comme
+   * on tourne une page. C'est le premier stade du jeu : tout y dit que rien
+   * n'est encore serieux.
+   */
+  const LOOK_PROF = K.look({
+    build: 'm', skin: 'clair', jersey: [132, 46, 54], manches: [132, 46, 54],
+    shorts: [196, 174, 134], pantalon: [196, 174, 134], shoe: [96, 64, 42],
+    hair: 'fade', hairCol: [150, 146, 142], lunettes: [34, 34, 40], h: 1.76,
+    civil: true, morph: { sh: 0.94, hip: 1.10, arm: 0.90, leg: 0.94 },
   });
 
   /**
@@ -5362,8 +6013,8 @@
     // detache sa peau verte sur une piste violette.
     const l = K.look({
       build: 'm', skin: 'ambre', jersey: [230, 236, 250], shorts: [58, 26, 96],
-      shoe: [186, 128, 246], hair: 'shaved', h: 1.96,
-      morph: { sh: 0.92, hip: 0.90, arm: 1.16, leg: 1.14 },
+      pantalon: [58, 26, 96], shoe: [186, 128, 246], hair: 'shaved', h: 1.96,
+      morph: { sh: 0.92, hip: 0.90, arm: 1.16, leg: 1.14 }, civil: true,
     });
     // Une peau qui n'est dans aucune table de carnations, et c'est voulu :
     // celles-la sont humaines, celle-ci ne l'est pas.
@@ -5426,23 +6077,27 @@
     // exactement le temps ecoule depuis, ce qui donne le recul, l'eclair et
     // la fumee sans qu'on ait a tenir un chronometre de plus.
     const tir = G.state === 'race' ? G.elapsed : -1;
-    if (G.state !== 'count' && !(tir >= 0 && tir < 2.6)) return;
+    if (G.state !== 'count' && G.state !== 'falseout' && !(tir >= 0 && tir < 2.6)) return;
     // Pendant la presentation des athletes, il attend comme les autres.
     const p = T.pos(STARTER_D, STARTER_COULOIR);
     const g2 = ground(p[0], p[1]);
     if (g2[0] < -240 || g2[0] > G.VW + 240 || g2[1] < -280 || g2[1] > G.VH + 260) return;
 
     const alien = G.levelIdx === ETAPE_ZEZE;
-    const look = alien ? LOOK_ALIEN : LOOK_STARTER;
+    const prof = G.levelIdx === 0;
+    const look = alien ? LOOK_ALIEN : (prof ? LOOK_PROF : LOOK_STARTER);
     const m = scaleM(), k = m * (look.h / C.MODEL_H);
 
     // Le bras monte au « pret », en une demi-seconde — un starter ne leve pas
-    // son arme d'un coup sec — et redescend une fois la course partie.
-    let leve = d.dit >= 2 ? clamp((G.countT - (3 - d.tenue)) / 0.45, 0, 1) : 0;
+    // son arme d'un coup sec — et redescend une fois la course partie. Le prof
+    // prend son temps, et ne le leve qu'a moitie.
+    const montee = prof ? 0.9 : 0.45;
+    let leve = d.dit >= 2 ? clamp((G.countT - (3 - d.tenue)) / montee, 0, 1) : 0;
     if (tir >= 0) leve = 1 - clamp((tir - 0.7) / 0.9, 0, 1);
-    const recul = tir >= 0 && tir < 1 ? 0.30 * Math.exp(-tir * 8) : 0;
-    const BAS = 0.12, HAUT = 2.98;
+    const recul = tir >= 0 && tir < 1 ? (prof ? 0.16 : 0.30) * Math.exp(-tir * 8) : 0;
+    const BAS = 0.12, HAUT = prof ? 2.15 : 2.98;
     const bras = BAS + (HAUT - BAS) * leve + recul;
+    const lecture = performance.now() / 1000;
 
     const person = {
       look: look, stride: 0.55, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
@@ -5453,8 +6108,16 @@
       // C'est le bras du COTE DE LA CAMERA qui tient l'arme. Sur l'autre, le
       // corps la masque a moitie — et une arme a moitie cachee ne raconte pas
       // grand-chose.
-      bras: [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
+      //
+      // Le prof, lui, garde le bras gauche plie devant la poitrine, le livre
+      // dans la main, et le coude du bras arme reste casse : il ne vise rien.
+      bras: prof ? [0.30, bras, 1.72, 0.55 * (1 - leve) + 0.30]
+                 : [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
       pistolet: -1,
+      livre: prof ? 1 : 0,
+      // le nez dans son livre, et il lit vraiment : la tete bouge a peine
+      tete: prof ? -0.62 + 0.03 * Math.sin(lecture * 0.8) : 0,
+      buste: prof ? 0.07 : 0,
       // Les bulbes prennent l'accent du stade : le magenta des tribunes
       // cosmos. Il est d'ici, lui, et cela se voit jusque sur sa tete.
       antennes: alien ? [236, 132, 220] : null,
@@ -5464,7 +6127,7 @@
     // course — de dos ; un starter de dos ne montrerait ni son bras ni son
     // arme, et surtout ne regarderait personne.
     const caps = personCapsules(person, T.heading(STARTER_D, 0) + Math.PI,
-                                0, false, !!T.curved);
+                                0, false, !!T.curved, niveauDetail(k));
     ctx.fillStyle = 'rgba(0,0,0,0.42)';
     ctx.beginPath();
     ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
@@ -5494,8 +6157,58 @@
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
 
+  /**
+   * OU EN EST CHAQUE COUREUR DE SON DEPART.
+   *
+   * Pose `enBloc` (0 en course, 1 dans les blocs) et `prets` (0 a vos marques,
+   * 1 prets) sur chaque coureur, pour pose(). C'est un etat d'AFFICHAGE : la
+   * physique de la course n'en lit rien.
+   *
+   * - Pendant le decompte, tout le monde est dans ses blocs. Au starter, on
+   *   s'y installe a « a vos marques » et on se leve a « prets », a l'heure
+   *   ou il les dit. Au decompte a trois bips, on est a vos marques des le
+   *   depart et prets au dernier bip.
+   * - Au coup de feu, on quitte la posture en poussant : sur les quatre-vingt-
+   *   dix premiers centimetres, pendant que la poussee de sortie (drivePitch)
+   *   prend le relais. Pas au chronometre — un joueur qui n'a pas encore
+   *   reagi reste en position de prets, au lieu de se relever sur place.
+   * - Un coureur qui ne part pas de la ligne — un relayeur qui attend son
+   *   temoin — n'a pas de blocs.
+   */
+  const SORTIE_BLOCS = 0.9;
+  function phaseBlocs(r) {
+    const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+    if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; return; }
+    // Elimine au faux depart : la piste est figee, et chacun reste la ou le
+    // decompte l'a laisse — dans ses blocs, pas debout d'un coup derriere eux.
+    if (G.state === 'falseout') return;
+    if (G.state === 'count') {
+      const d = G.depart;
+      let marques, prets;
+      if (STARTER && d) {
+        marques = doux((G.countT - (3 - d.duree)) / 0.7);
+        prets = doux((G.countT - (3 - d.tenue)) / 0.45);
+        // avant « a vos marques », debout derriere les blocs
+        r.enBloc = marques;
+      } else {
+        r.enBloc = doux(G.countT / 0.6);
+        prets = doux((G.countT - (DECOMPTE - 1)) / 0.45);
+      }
+      r.prets = prets;
+      return;
+    }
+    if (G.state === 'race') {
+      r.enBloc = 1 - doux(r.d / SORTIE_BLOCS);
+      r.prets = 1;
+      return;
+    }
+    r.enBloc = 0;
+  }
+
   function drawAthletes(ctx) {
     const T = G.track, m = scaleM(), th = theme();
+    for (const r of G.runners) phaseBlocs(r);
+    if (G.ghost && G.ghost.runner) phaseBlocs(G.ghost.runner);
     // Le starter passe avant tout le monde : il se tient derriere la ligne,
     // donc derriere les coureurs.
     drawStarter(ctx);
@@ -5613,6 +6326,14 @@
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
       if (r.isGhost) ctx.globalAlpha = 1;
     }
+    // LES DECORS DEBOUT, APRES LES COUREURS ET AVANT LEURS NOMS.
+    //
+    // Tout ce qui se tient dans la pelouse interieure est plus pres de la
+    // camera que le couloir 1 : une cage de lancer ou un chandelier de perche
+    // doit donc passer DEVANT le coureur qui court derriere, jamais
+    // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
+    // un mat ne se lit plus.
+    if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
     // Les noms tout en haut de la pile : une pastille a demi cachee par le
     // coureur de devant ne se lit pas, et c'est la seule chose qui distingue
     // deux adversaires de couleurs voisines.
@@ -5708,7 +6429,7 @@
   // pendant la course, sans rotation de virage (personnage pose seul).
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
-    const caps = personCapsules(man, 0, 0, mirror, false);
+    const caps = personCapsules(man, 0, 0, mirror, false, niveauDetail(k));
     drawFacetFigure(ctx, caps, cx2, cy2, k);
   }
 
@@ -5719,7 +6440,8 @@
     theme, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
-    armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
+    armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
+    startLive, liveDepart,
     armRelayeurs, porteurDuTemoin,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
@@ -5728,6 +6450,13 @@
     CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
+    // Le rendu des personnages, sorti tel quel : c'est par la que
+    // tools/apercu-coureur.html verifie les corps hors course — de face, de
+    // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
+    // arreter sur l'image qu'on veut regarder.
+    personCapsules, drawFacetFigure, niveauDetail,
+    // les tenues des starters, pour tools/apercu-starter.html
+    LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,
     GOLD, CREAM, MUTED, CYAN, GREEN,
     N, t,

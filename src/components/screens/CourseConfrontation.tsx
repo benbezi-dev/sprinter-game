@@ -126,9 +126,13 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         });
         SprinterApp.liveDepart(dansMs, departA);
         SprinterApp.porteurDuTemoin(1);
+        // L'horloge de la confrontation est celle de la salle : le temps de
+        // chaque equipe se compte sur elle, et l'ordre d'arrivee aussi. Voir
+        // CourseRelais, meme regle, et instantLive dans sprinter-app.js.
+        SprinterApp.G.horlogeLive = () => s.msCourse() / 1000;
         brancherSalle({
           position: (d) => {
-            s.avancer(d);
+            s.avancer(d, Math.max(0, s.msCourse()));
             // Mes propres positions ne me reviennent pas en echo : quand je
             // porte le temoin, c'est le moteur qui me dit ou il est.
             if (s.monRelais === porteurs.current.get(equipe)) {
@@ -148,13 +152,18 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // moment de la transmission.
         programmerLeFilm('relais', dansMs);
       },
-      onPos: (eq, relais, d, temoin) => {
+      onPos: (eq, relais, d, temoin, c, ct) => {
         // MON EQUIPE D'ABORD. Ses quatre positions ne servent pas a suivre un
         // temoin : elles disent ou sont mes coequipiers sur MA piste, et a
         // quelle distance de moi — c'est d'elle que depend la transmission.
+        //
+        // Chaque position porte l'instant de course ou elle valait (`c`, et
+        // `ct` pour le temoin) quand la salle le transmet : c'est lui qui
+        // montre chacun ou il EST a notre instant, et non ou il etait. Voir
+        // recevoirPosition dans sprinter-app.js.
         if (eq === equipe && relais !== salle.current?.monRelais) {
           ou.current[relais] = d;
-          SprinterApp.liveDistDe(`moi:${relais}`, d);
+          SprinterApp.liveDistDe(`moi:${relais}`, d, c);
           majBras();
         }
 
@@ -174,9 +183,12 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // `temoin` vient de la salle et fait foi. A defaut, on ne retient que
         // ce qu'annonce le porteur connu, ce qui vaut aussi pour une salle
         // deployee avant ce champ.
-        const dt = temoin != null ? temoin
-                 : (relais === porteurs.current.get(eq) ? d : null);
+        const porte = relais === porteurs.current.get(eq);
+        const dt = temoin != null ? temoin : (porte ? d : null);
         if (dt == null) return;
+        // L'instant qui va avec : celui du temoin, ou a defaut celui du
+        // porteur qui vient de parler.
+        const cDuTemoin = temoin != null ? ct : (porte ? c : undefined);
         // Un temoin ne recule pas. Un paquet en retard, ou l'etat complet d'un
         // passage qui croise une position plus fraiche, ne doit pas le faire
         // revenir en arriere dans la bande des couloirs — c'est elle qui arme
@@ -185,7 +197,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // Le temoin adverse avance dans le couloir d'a cote, aux memes metres
         // absolus que les miens : la piste du 4x100 fait le tour complet, et
         // les deux reperes sont le meme. Rien a traduire.
-        if (eq !== equipe) SprinterApp.liveDistDe(eq, dt);
+        if (eq !== equipe) SprinterApp.liveDistDe(eq, dt, cDuTemoin);
       },
       // Hors de portee : on le dit, et la course continue.
       onTropLoin: (eq, { de, vers }) => {
@@ -220,7 +232,10 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
     s.connecter(max, fantomes);
     // Le film ne survit pas a la sortie de piste : l'ecran d'arrivee est le
     // seul a le proposer. Voir CourseRelais, meme regle.
-    return () => { brancherSalle(null); s.fermer(); jeterLeFilm('relais'); };
+    return () => {
+      SprinterApp.G.horlogeLive = null;
+      brancherSalle(null); s.fermer(); jeterLeFilm('relais');
+    };
   }, [code, equipe]);
 
   useEffect(() => {
