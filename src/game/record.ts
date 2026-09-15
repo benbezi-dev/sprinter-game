@@ -16,7 +16,7 @@
 // encore deployee : on retombe sur l'appareil, et la course continue.
 
 import { useEffect, useSyncExternalStore } from 'react';
-import { getSavedName, type RaceKey } from './leaderboard';
+import { getSavedName, estEpreuveIndividuelle, type RaceKey } from './leaderboard';
 import { SprinterApp } from './engine';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -90,7 +90,10 @@ export function recordConnu(epreuve: RaceKey): Record {
 export async function rafraichirRecord(epreuve: RaceKey): Promise<Record> {
   const local = recordLocal(epreuve);
   const nom = getSavedName();
-  if (!nom) {
+  // Pas de nom, ou une epreuve sans record individuel — le relais, qui se
+  // court et se classe en equipe, et que le serveur refuse ici (voir
+  // estEpreuveIndividuelle) : rien a demander, on s'en tient a l'appareil.
+  if (!nom || !estEpreuveIndividuelle(epreuve)) {
     const r = { epreuve, direction: 'plus_bas', ms: local, rang: null, courses: 0, distant: false };
     poser(epreuve, r);
     return r;
