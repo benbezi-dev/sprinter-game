@@ -1043,6 +1043,10 @@
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
 
+    // Une annonce ecrite a la main a tous les joueurs (AnnoncePopup)
+    annonce_pastille: ['UN MESSAGE', 'A MESSAGE'],
+    annonce_ok:       ['COMPRIS', 'GOT IT'],
+
     // Le journal des defis, deroulable dans MES COURSES. Une semaine de
     // duels, de defis recus et d'invitations manquees — apres quoi tout part.
     jd_title:        ['DÉFIS ET DUELS', 'CHALLENGES & DUELS'],

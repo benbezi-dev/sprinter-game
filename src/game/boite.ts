@@ -23,8 +23,10 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // voir InvitationDirecte.tsx, qui la lit autrement qu'un defi differe.
 // 'relais' : on veut de toi dans une equipe. Le contraire du direct — elle
 // attend, et se releve sur l'ecran des equipes.
+// 'annonce_dispo' : la boite dit qu'un message a tous les joueurs vient de
+// partir. 'annonce' : on a touche sa notification. Voir AnnoncePopup.tsx.
 export type Courrier = 'defi' | 'duel' | 'mot' | 'ouverte' | 'direct' | 'relais'
-                     | 'objectif';
+                     | 'objectif' | 'annonce' | 'annonce_dispo';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;

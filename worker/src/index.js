@@ -525,6 +525,22 @@ async function ensureAttemptTraces(db) {
   attemptTracesReady.add(db);
 }
 
+// Les annonces ecrites a la main (`/push/diffuser`), que le jeu lit par
+// `GET /annonce`. Le detail est le texte long du panneau ; sans lui, le jeu
+// montre le texte de la notification.
+const annoncesPretes = new WeakSet();
+async function ensureAnnonces(db) {
+  if (annoncesPretes.has(db)) return;
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS annonces (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fr_titre TEXT NOT NULL, fr_texte TEXT NOT NULL, fr_detail TEXT,
+      en_titre TEXT NOT NULL, en_texte TEXT NOT NULL, en_detail TEXT,
+      cree_le INTEGER NOT NULL
+    )`).run();
+  annoncesPretes.add(db);
+}
+
 const pushTableReady = new WeakSet();
 async function ensurePushTable(db) {
   if (pushTableReady.has(db)) return;
@@ -3835,26 +3851,45 @@ async function servir(request, env, ctx, porteur) {
     }
 
     /* -------------------------------------------------------------------
-       UNE ANNONCE A TOUS LES APPAREILS ABONNES
+       UNE ANNONCE A TOUS LES JOUEURS
 
        Le seul message qui ne suit pas une nouvelle de jeu : un texte ecrit a
-       la main, envoye une fois a chaque appareil joignable — web et natif —
-       dans la langue de son abonnement. Il faut donc le fournir dans les
-       deux : `{ fr: [titre, texte], en: [titre, texte] }`.
+       la main. Il part par trois portes a la fois :
+
+       - la notification du telephone, pour les appareils abonnes — dans la
+         langue de leur abonnement, d'ou les deux langues exigees ;
+       - la boite, pour ceux qui ont le jeu ouvert a cet instant : la pastille
+         apparait dans la seconde, comme pour un defi recu ;
+       - la table `annonces`, que le jeu lit a chaque retour au calme
+         (`GET /annonce`) : c'est elle qui touche tous les autres, c'est-a-dire
+         presque tout le monde — la plupart des joueurs n'ont pas accepte les
+         notifications.
+
+       `{ fr: [titre, texte], en: [titre, texte] }` fait la notification ;
+       `detail: { fr, en }`, facultatif, est le texte plus long que montre le
+       jeu quand on ouvre l'annonce. Sans lui, le jeu montre le texte court.
 
        Sous cle d'administration : la route fait vibrer tous les telephones.
-       `essai: true` rend le nombre d'appareils vises sans rien envoyer.
+       `essai: true` rend le nombre d'appareils vises sans rien envoyer ni
+       rien enregistrer.
     ------------------------------------------------------------------- */
     if (url.pathname === '/push/diffuser' && request.method === 'POST') {
       if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { fr, en, essai } = body || {};
+      const { fr, en, essai, detail } = body || {};
       const bon = t => Array.isArray(t) && t.length === 2
         && t.every(s => typeof s === 'string' && s.trim() && s.length <= 240);
       if (!bon(fr) || !bon(en)) {
         return json({ error: 'fr et en requis : [titre, texte], 240 caracteres au plus chacun' }, 400);
       }
+      const long = s => (s == null || s === '') ? null
+        : (typeof s === 'string' && s.length <= 1500 ? s.trim() : undefined);
+      const detailFr = long(detail && detail.fr), detailEn = long(detail && detail.en);
+      if (detailFr === undefined || detailEn === undefined) {
+        return json({ error: 'detail.fr et detail.en : 1500 caracteres au plus' }, 400);
+      }
+
       await ensurePushTable(env.DB);
       let jetons = [];
       try {
@@ -3862,11 +3897,48 @@ async function servir(request, env, ctx, porteur) {
       } catch { /* table pas encore creee : aucun appareil natif */ }
       const web = (await env.DB.prepare('SELECT DISTINCT device_id FROM push_subscriptions').all()).results || [];
       const appareils = [...new Set([...web, ...jetons].map(r => r.device_id))];
-      if (essai) return json({ essai: true, appareils: appareils.length });
+
+      // Ceux qui ont joue hier ou aujourd'hui : les seuls dont la boite peut
+      // avoir une liaison ouverte. Sonner les autres reveillerait des boites
+      // vides pour rien — ils trouveront l'annonce a leur prochaine visite.
+      const hier = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      let recents = [];
+      try {
+        recents = ((await env.DB.prepare(
+          'SELECT DISTINCT device_id FROM visits WHERE day >= ?').bind(hier).all()).results || [])
+          .map(r => r.device_id);
+      } catch { /* pas de visites sur ce canal : personne a sonner */ }
+      if (essai) return json({ essai: true, appareils: appareils.length, en_jeu: recents.length });
+
+      await ensureAnnonces(env.DB);
+      const r = await env.DB.prepare(
+        `INSERT INTO annonces (fr_titre, fr_texte, fr_detail, en_titre, en_texte, en_detail, cree_le)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(fr[0].trim(), fr[1].trim(), detailFr, en[0].trim(), en[1].trim(), detailEn, Date.now()).run();
 
       const texte = langue => (langue === 'en' ? en : fr);
-      await Promise.allSettled(appareils.map(d => notifierAppareil(env.DB, d, 'annonce', env, texte)));
-      return json({ ok: true, appareils: appareils.length });
+      await Promise.allSettled([
+        ...appareils.map(d => notifierAppareil(env.DB, d, 'annonce', env, texte)),
+        // Genre distinct de celui de la notification : la sonnerie fait
+        // apparaitre la pastille, le toucher de la notification ouvre le mot.
+        ...recents.map(d => sonner(env, d, 'annonce_dispo', canal.test)),
+      ]);
+      return json({ ok: true, id: r.meta && r.meta.last_row_id, appareils: appareils.length, en_jeu: recents.length });
+    }
+
+    // La derniere annonce, dans la langue demandee. Un mois apres, elle se
+    // tait : un joueur arrive en novembre n'a pas a lire le mot de septembre.
+    if (url.pathname === '/annonce' && request.method === 'GET') {
+      await ensureAnnonces(env.DB);
+      const a = await env.DB.prepare(
+        `SELECT * FROM annonces WHERE cree_le > ? ORDER BY id DESC LIMIT 1`
+      ).bind(Date.now() - 30 * 86400000).first();
+      if (!a) return json({ annonce: null });
+      const l = url.searchParams.get('langue') === 'en' ? 'en' : 'fr';
+      return json({ annonce: {
+        id: a.id, titre: a[l + '_titre'],
+        texte: a[l + '_detail'] || a[l + '_texte'], cree_le: a.cree_le,
+      } });
     }
 
     if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {
