@@ -623,6 +623,10 @@
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
     live_vs:         ['en direct contre {n}', 'live against {n}'],
     live_gap:        ['{s} s d’écart', '{s} s apart'],
+    // Le photo-finish d'une arrivee serree en direct : le tableau de course
+    // cesse d'afficher une place tant que le chrono de l'autre n'est pas la.
+    photo_finish:    ['PHOTO-FINISH', 'PHOTO FINISH'],
+    photo_attente:   ['on regarde la photo…', 'checking the photo…'],
     link_in_app:     ['TU AS LE JEU INSTALLÉ ?', 'GAME INSTALLED?'],
     link_in_app_sub: ['ouvre-le depuis ton écran d’accueil et saisis ce code — touche-le pour le copier',
                       'open it from your home screen and enter this code — tap to copy'],

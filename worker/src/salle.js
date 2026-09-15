@@ -135,7 +135,7 @@ export class SalleDirecte {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    /** @type {Map<WebSocket, {id:string,nom:string,pret:boolean,d:number,fin:number|null,parti:boolean}>} */
+    /** @type {Map<WebSocket, {id:string,nom:string,pret:boolean,d:number,c:number|null,fin:number|null,parti:boolean}>} */
     this.joueurs = new Map();
     this.epreuves = null;      // fixees par le premier arrive
     this.niveau = 4;
@@ -267,7 +267,7 @@ export class SalleDirecte {
     }
 
     this.joueurs.set(serveur, {
-      id, nom, pret: false, d: 0, fin: null, parti: false,
+      id, nom, pret: false, d: 0, c: null, fin: null, parti: false,
     });
     this.vivante();
 
@@ -342,7 +342,7 @@ export class SalleDirecte {
               + this.ordre.length * creneauPresentation()
               + attente;
           this.termine = false;
-          for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
+          for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; }
         }
         this.envoyerEtat();
         return;
@@ -364,15 +364,33 @@ export class SalleDirecte {
       // Position en course. On ne renvoie que ce qui bouge, et on ne le
       // renvoie qu'a l'autre : se recevoir soi-meme en retard ferait sauter
       // son propre coureur.
+      //
+      // AVEC L'INSTANT DE SA COURSE. `c` est le chronometre de l'emetteur au
+      // moment ou il etait a `d`, en millisecondes depuis son coup de
+      // pistolet. Le relayer permet a chaque ecran de montrer les autres la ou
+      // ils en sont a SON instant de course, sur la meme echelle que les
+      // chronos que l'on compare a l'arrivee — et non la ou ils etaient quand
+      // le paquet est parti. Sans lui, un duel serre s'affichait a l'envers :
+      // voir recevoirPosition dans src/game/sprinter-app.js. Un client qui ne
+      // l'envoie pas n'en recoit simplement pas.
+      //
+      // Au centimetre, plus au decimetre : l'autre en tire une vitesse sur un
+      // dixieme de seconde, et dix centimetres d'arrondi y faisaient un metre
+      // par seconde d'erreur.
       case 'pos': {
         const d = Number(m.d);
         if (!Number.isFinite(d) || d < 0 || d > 2000) return;
+        const c = Number(m.c);
+        const date = m.c != null && Number.isFinite(c) && c >= 0 && c <= MAX_MS;
         // La distance ne recule pas : un paquet en retard ne doit pas faire
-        // reculer l'adversaire a l'ecran.
-        if (d > j.d) j.d = d;
+        // reculer l'adversaire a l'ecran. A distance egale, l'instant avance
+        // quand meme : c'est ainsi que l'autre apprend qu'on s'est arrete.
+        if (d >= j.d) { j.d = d; j.c = date ? Math.round(c) : null; }
         j.parti = true;
         this.vivante();
-        this.diffuser({ t: 'pos', id: j.id, d: Math.round(j.d * 10) / 10 }, ws);
+        const pos = { t: 'pos', id: j.id, d: Math.round(j.d * 100) / 100 };
+        if (j.c != null) pos.c = j.c;
+        this.diffuser(pos, ws);
         return;
       }
 

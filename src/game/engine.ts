@@ -109,6 +109,12 @@ export type GameState = {
   liveResultat: any;
   /** Les points du duel du direct, tels que la salle les a annonces. */
   liveDuel: any;
+  /**
+   * Le photo-finish d'une arrivee serree en direct, voir suivrePhoto dans
+   * sprinter-app.js. `lui` est nul tant que son chrono n'est pas arrive.
+   */
+  photo: { etat: 'attente' | 'tranche'; nom: string; moi: number;
+           lui: number | null; ecartM: number } | null;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -338,8 +344,15 @@ export function resumeRace() {
  * position, et cette couche la transmet. Dix envois par seconde suffisent —
  * l'adversaire est interpole a l'affichage, et un flux plus dense n'ajoute
  * que du trafic.
+ *
+ * Chaque position part avec l'instant de NOTRE course ou on y etait, en
+ * millisecondes depuis notre coup de pistolet : c'est ce qui permet a l'autre
+ * de nous montrer la ou nous en sommes a SON instant de course, et non la ou
+ * nous etions quand le paquet est parti. Voir recevoirPosition dans
+ * sprinter-app.js. Le relais branche ici des fonctions qui ne prennent que la
+ * distance ; le second argument leur est simplement inutile.
  */
-let salleLive: { position(d: number): void; fini(ms: number): void } | null = null;
+let salleLive: { position(d: number, c?: number): void; fini(ms: number): void } | null = null;
 let prochainEnvoi = 0;
 let finEnvoyee = false;
 
@@ -372,14 +385,19 @@ export function reinitialiserEnvoi() {
 
 function pousserPosition() {
   if (!salleLive) return;
-  if (G.elapsed >= prochainEnvoi) {
-    prochainEnvoi = G.elapsed + 0.1;
-    salleLive.position(G.player.d);
-  }
+  // La ligne d'abord, et a son instant exact : le chrono, pas l'image ou on
+  // s'en apercoit, qui arrive jusqu'a un soixantieme plus tard et un peu plus
+  // loin. Envoyee apres la position ordinaire de la meme image, elle serait
+  // moins loin qu'elle — et la salle, qui ne garde que la plus lointaine,
+  // l'aurait jetee.
   if (!finEnvoyee && G.player.finished && G.player.finishTime != null) {
     finEnvoyee = true;
-    salleLive.position(G.track.total);
+    salleLive.position(G.track.total, G.player.finishTime * 1000);
     salleLive.fini(G.player.finishTime * 1000);
+  }
+  if (G.elapsed >= prochainEnvoi) {
+    prochainEnvoi = G.elapsed + 0.1;
+    salleLive.position(G.player.d, G.elapsed * 1000);
   }
 }
 
@@ -578,5 +596,6 @@ export function updateLogic(dt: number) {
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
     liveDuel: G.liveDuel,
+    photo: SprinterApp.photoPourHud(),
   });
 }

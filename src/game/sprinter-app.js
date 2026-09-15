@@ -1175,6 +1175,10 @@
     // Un adversaire par identifiant de joueur. Vide en duel a deux ancienne
     // maniere, remplie des qu'on court a plusieurs.
     lives: null,
+    // Le photo-finish de la course en direct : voir suivrePhoto. `photoFinish`
+    // dit si la course en a un — la course en direct, pas le relais, dont les
+    // chronos d'arrivee ne passent pas par ici.
+    photo: null, photoFinish: false,
     scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
@@ -1634,6 +1638,7 @@
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.liveDuel = null;
     G.lives = null;
+    G.photo = null; G.photoFinish = false;
     G.challengeTarget = null;
     G.defiSansCible = null;
     G.mode = 'campaign';
@@ -1654,6 +1659,9 @@
     // defaut. Le joueur croirait rejouer et courrait autre chose.
     G.shotOpts = opts;
     G.mode = 'oneshot';
+    // Un one-shot n'a pas de photo-finish : l'adversaire, s'il y en a un, est
+    // une trace dont on connait deja chaque centieme.
+    G.photo = null; G.photoFinish = false;
     G.shotRaces = races.slice();
     G.shotIdx = 0;
     G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;
@@ -1710,6 +1718,7 @@
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
     G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null;
+    G.photo = null; G.photoFinish = false;
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
     // de la meme revanche — pour ca, c'est le bouton dedie qui relance
@@ -1755,6 +1764,11 @@
    *   c'est ce que veut la course en direct. Le relais, qui passe par ici
    *   aussi, garde son plateau : une portion courue seule contre le chrono n'a
    *   sinon plus personne autour.
+   * @param opts.photoFinish trancher les arrivees serrees sur les chronos
+   *   reels, voir suivrePhoto. Seule la course en direct le demande : c'est
+   *   elle qui transmet le chrono de chacun a chacun (liveFiniDe). Le relais ne
+   *   le fait pas, et une photo qui attend un chrono qui ne viendra jamais
+   *   resterait « en cours » jusqu'a la fin de la course.
    */
   function startLive(races, opts) {
     opts = opts || {};
@@ -1763,6 +1777,8 @@
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;
     G.liveResultat = null;
+    G.photo = null;
+    G.photoFinish = !!opts.photoFinish;
     // Une revanche ne rejoue pas les points de la course d'avant.
     G.liveDuel = null;
     G.shotRaces = races.slice();
@@ -1903,8 +1919,7 @@
       r.v = 0;
       r.repere = { couleur: teinte, nom: a.nom || '' };
       G.runners.push(r);
-      G.lives.set(a.id, { live: true, equipier: true, cible: r.d, vEst: 0, depuis: 0,
-                          runner: r, trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(a.id, suiviLive(r, 0, { equipier: true }));
     }
   }
 
@@ -2056,9 +2071,27 @@
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
       r.repere = { couleur: couleurCouloir(lane), nom: autre.nom || '' };
       G.runners.push(r);
-      G.lives.set(autre.id, { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
-                              trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(autre.id, suiviLive(r, 0));
     });
+  }
+
+  /**
+   * Ce que le jeu retient d'un adversaire en direct.
+   *
+   * `cible`, `vEst` et `depuis` sont la derniere position recue, la vitesse
+   * qu'on en tire et l'instant de NOTRE course ou elle est arrivee. `c` est
+   * l'instant de SA course a lui ou il y etait, quand la salle le transmet —
+   * voir recevoirPosition, c'est toute la difference entre montrer ou il EST
+   * et montrer ou il ETAIT. `hist` garde les derniers points pour en tirer une
+   * vitesse qui ne tressaute pas ; `fin` est son chrono reel des qu'il
+   * l'annonce, voir liveFiniDe.
+   */
+  function suiviLive(r, depuis, extra) {
+    return Object.assign({
+      live: true, cible: r.d, vEst: 0, depuis: depuis || 0, runner: r,
+      trace: [], step: REC_STEP, time: 0,
+      c: null, hist: [[0, r.d]], fin: null, abandon: false,
+    }, extra || {});
   }
 
   /**
@@ -2122,8 +2155,7 @@
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
       r.repere = { couleur: couleurCouloir(lane), nom: a.nom || '' };
       G.runners.push(r);
-      G.lives.set(id, { live: true, cible: 0, vEst: 0, depuis: G.elapsed,
-                        runner: r, trace: [], step: REC_STEP, time: 0 });
+      G.lives.set(id, suiviLive(r, G.elapsed));
     }
   }
 
@@ -2165,19 +2197,135 @@
     G.player.repere = { couleur: couleurCouloir(G.player.lane), nom: t('you'), moi: true };
   }
 
-  /** Position annoncee par un adversaire donne. */
-  function liveDistDe(id, d) {
+  /**
+   * Position annoncee par un adversaire donne.
+   *
+   * `c`, quand la salle le transmet, est l'instant de SA course — en
+   * millisecondes depuis SON coup de pistolet — ou il etait a `d`. Voir
+   * recevoirPosition.
+   */
+  function liveDistDe(id, d, c) {
     // Le filet : si la table est vide, c'est qu'on est sur l'ancien chemin a
     // un seul adversaire. Mieux vaut le faire avancer que de laisser la course
     // se jouer contre une statue.
     const g = (G.lives && G.lives.get(id)) || (!G.lives || !G.lives.size ? G.ghost : null);
     if (!g || !g.live) return;
-    const dt = Math.max(0.02, G.elapsed - g.depuis);
+    recevoirPosition(g, d, c);
+  }
+
+  /**
+   * LE DIRECT MONTRAIT L'ADVERSAIRE LA OU IL ETAIT, PAS LA OU IL EST.
+   *
+   * Constate le 15 septembre 2026 sur une arrivee filmee (rush
+   * 06-arrivee-serree) : VOLT termine en 9,37 s, ZEPHYR en 9,35 s, l'ecran de
+   * fin dit « COURSE PERDUE » — et sur le telephone de VOLT, son coureur passe
+   * la ligne AVANT celui de ZEPHYR, le panneau d'ecart affichant encore
+   * « +0,8 m » un dixieme avant la ligne. Un joueur se voyait gagner, puis
+   * lisait qu'il avait perdu.
+   *
+   * La cause n'etait pas le resultat, calcule juste sur les deux chronos : elle
+   * etait dans l'image. L'adversaire s'affichait avec un retard qui
+   * s'additionnait en trois morceaux :
+   *
+   *   - le trajet du paquet, de son telephone a la salle puis au notre, que
+   *     rien ne compensait : la position arrivee etait posee comme celle de
+   *     l'instant ou elle arrivait ;
+   *   - l'ecart entre les deux coups de pistolet, chaque telephone partant sur
+   *     sa propre horloge recalee — quelques centiemes, dans un sens ou dans
+   *     l'autre ;
+   *   - et surtout le lissage : le coureur glissait vers sa cible a raison
+   *     d'un onzieme de l'ecart par image, ce qui, a vitesse constante, le
+   *     laisse durablement un douzieme de seconde derriere elle.
+   *
+   * Mesure en rejouant ce code sur une trajectoire connue : 0,10 s de retard
+   * pour 20 ms de trajet, 0,14 s pour 60 ms — 1,3 a 1,8 m a pleine vitesse.
+   * Sur le rush, ZEPHYR franchit la ligne a l'ecran quand le chrono affiche
+   * 9,45 a 9,50. Toute arrivee plus serree que ce retard pouvait donc
+   * s'afficher a l'envers, et c'est le cas ordinaire d'un duel.
+   *
+   * Le remede tient en une idee : l'emetteur date chaque position sur SON
+   * chronometre de course, et on la reporte sur le NOTRE. Les deux comptent
+   * depuis leur propre coup de pistolet, exactement comme les chronos que la
+   * salle compare pour rendre le verdict. Montrer l'adversaire a « notre
+   * instant de course », c'est donc le montrer sur la meme echelle que celle
+   * du resultat : le trajet et l'ecart des pistolets s'effacent ensemble, sans
+   * avoir a les mesurer. Il ne reste qu'a extrapoler d'un ou deux dixiemes a
+   * sa vitesse — quelques centimetres d'erreur au pire — et a supprimer le
+   * retard du lissage (voir avancerLive).
+   *
+   * Sans `c` — une salle deployee avant ce champ, ou le relais qui passe par
+   * ici sans le transmettre — on retombe sur l'instant d'arrivee, comme avant.
+   * Le retard du lissage disparait quand meme ; celui du trajet reste, et le
+   * photo-finish (suivrePhoto) tranche ce que l'image ne peut pas garantir.
+   */
+  function recevoirPosition(g, d, c) {
+    if (!Number.isFinite(d)) return;
+    if (Number.isFinite(c) && c >= 0) {
+      const t = c / 1000;
+      // La salle renvoie le meme point tant qu'il n'y en a pas de plus loin :
+      // un instant deja vu n'apprend rien. Les paquets d'un meme emetteur
+      // arrivent dans l'ordre — une WebSocket ne les melange pas — donc un
+      // instant plus ancien ne peut etre qu'un doublon.
+      if (g.c != null && t <= g.c) return;
+      // Un meme instant plus loin, jamais moins loin : un coureur ne recule
+      // pas. Un point qui n'avance pas, en revanche, compte — c'est ainsi
+      // qu'on apprend qu'il s'est arrete, et qu'on cesse de l'extrapoler.
+      d = Math.max(d, g.cible);
+      noterPoint(g, t, d, 0.15);
+      g.cible = d; g.c = t; g.depuis = G.elapsed;
+      return;
+    }
+    // Sans horloge : l'instant est celui ou le paquet arrive chez nous. Il
+    // porte donc toute l'irregularite du reseau, et la vitesse se prend sur
+    // une base plus longue pour ne pas en heriter.
     if (d > g.cible) {
-      g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
+      noterPoint(g, G.elapsed, d, 0.3);
       g.cible = d;
       g.depuis = G.elapsed;
     }
+  }
+
+  /**
+   * Retient un point et en tire la vitesse.
+   *
+   * Deux points consecutifs ne suffisent pas toujours. Le dernier paquet
+   * avant la ligne et celui de la ligne elle-meme peuvent etre separes de
+   * quatre millisecondes : sur une base aussi courte, le centimetre
+   * d'arrondi devient une vitesse fantaisiste. On remonte donc au point le
+   * plus ancien qui tient dans `fenetre`, sans jamais descendre sous six
+   * centiemes de base.
+   */
+  function noterPoint(g, t, d, fenetre) {
+    const h = g.hist || (g.hist = []);
+    h.push([t, d]);
+    if (h.length > 8) h.shift();
+    const n = h.length;
+    if (n < 2) return;
+    let k = n - 2;
+    while (k > 0 && (t - h[k][0] < 0.06 || t - h[k - 1][0] <= fenetre)) k--;
+    const base = t - h[k][0];
+    if (base > 0) g.vEst = Math.max(0, Math.min(15, (d - h[k][1]) / base));
+  }
+
+  /**
+   * Le chrono reel d'un adversaire, tel qu'il l'a annonce en passant la ligne.
+   *
+   * Il arrive un trajet de reseau APRES son passage : trop tard pour dessiner
+   * l'arrivee a sa place, mais assez tot pour qu'elle ne soit jamais dessinee
+   * a l'envers — des cet instant, il est pose au-dela de la ligne a la
+   * distance que son chrono impose (voir viseLive), il se classe sur ce
+   * chrono et non sur l'instant ou on l'a vu passer, et le photo-finish peut
+   * trancher. Un abandon n'est pas un chrono : la salle en envoie un
+   * sentinelle, qu'on ne doit surtout pas prendre pour un temps de passage.
+   *
+   * On ne cherche que dans la table : la salle renvoie aussi notre propre
+   * arrivee, et elle ne doit pas etre prise pour celle d'un adversaire.
+   */
+  function liveFiniDe(id, ms, abandon) {
+    const g = G.lives && G.lives.get(id);
+    if (!g || !g.live) return;
+    if (abandon || !(ms > 0)) { g.abandon = true; return; }
+    g.fin = ms / 1000;
   }
 
   function armLive(nom) {
@@ -2195,21 +2343,15 @@
     // Un duel n'a qu'un adversaire, et c'est justement la ou le repere compte
     // le plus : sept coureurs de l'ordinateur l'entourent, tous pareils.
     r.repere = { couleur: couleurCouloir(lane), nom: nom || t('opponent') };
-    G.ghost = { live: true, cible: 0, vEst: 0, depuis: 0, runner: r,
-                trace: [], step: REC_STEP, time: 0 };
+    G.ghost = suiviLive(r, 0);
     marquerJoueur();
   }
 
   /** Derniere position connue de l'adversaire, telle qu'annoncee par lui. */
-  function liveDist(d) {
+  function liveDist(d, c) {
     const g = G.ghost;
     if (!g || !g.live) return;
-    const dt = Math.max(0.02, G.elapsed - g.depuis);
-    if (d > g.cible) {
-      g.vEst = Math.max(0, Math.min(15, (d - g.cible) / dt));
-      g.cible = d;
-      g.depuis = G.elapsed;
-    }
+    recevoirPosition(g, d, c);
   }
 
   function ghostDistAt(t) {
@@ -2226,27 +2368,80 @@
   }
 
   /**
+   * Ou doit se trouver un adversaire en direct a l'instant `T` de NOTRE course.
+   *
+   * Avec un point horodate, c'est son dernier point porte a notre instant : il
+   * etait a `cible` quand SON chrono marquait `c`, notre chrono marque `T`, il
+   * a donc couru `T - c` de plus a sa vitesse. L'ecart est de l'ordre du
+   * trajet d'un paquet, et il peut etre negatif — si notre pistolet est parti
+   * apres le sien, son point vient de « notre futur », et on le reprend en
+   * arriere. Sans horloge, on part de l'instant d'arrivee, comme avant.
+   *
+   * L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire, ni au
+   * dela de quelques dixiemes : quand un paquet tarde, mieux vaut un
+   * adversaire legerement en retard qu'un adversaire qui file a vingt metres
+   * par seconde puis s'arrete net au paquet suivant.
+   *
+   * Et quand son chrono est connu, il decide de la ligne : avant cet instant il
+   * ne l'a pas encore franchie, apres il l'a passee d'autant qu'il a couru
+   * depuis. C'est ce qui interdit de dessiner son arrivee a contretemps de
+   * celle que la salle va proclamer.
+   */
+  function viseLive(g, T) {
+    const vmax = G.race.maxSpeed * 1.15;
+    const v = Math.min(g.vEst, vmax);
+    let vise;
+    if (g.c != null) {
+      vise = g.cible + v * Math.max(-0.5, Math.min(0.5, T - g.c));
+    } else {
+      vise = g.cible + v * Math.min(0.4, Math.max(0, T - g.depuis));
+    }
+    if (g.fin != null) {
+      const L = G.track.total;
+      vise = T < g.fin ? Math.min(vise, L - 0.01) : Math.max(vise, L + v * (T - g.fin));
+    }
+    return vise;
+  }
+
+  /**
    * Avance un adversaire en direct d'une image.
    *
    * Les positions arrivent par paquets, dix fois par seconde au mieux. Sauter
    * d'un paquet a l'autre ferait tressauter l'adversaire a chaque message : on
-   * extrapole doucement depuis la derniere position connue et sa vitesse, puis
-   * on glisse vers cette cible. Le resultat est une foulee continue, avec un
-   * retard de quelques centiemes — invisible a l'oeil, alors qu'un saut de
-   * quarante centimetres ne l'est pas.
+   * extrapole depuis la derniere position connue et sa vitesse (viseLive),
+   * puis on glisse vers cette cible.
+   *
+   * GLISSER SANS TRAINER. La glissade seule — un onzieme de l'ecart par image
+   * — laissait le coureur, a vitesse constante, un douzieme de seconde
+   * DERRIERE sa cible : c'etait la plus grosse part du retard constate a
+   * l'arrivee (voir recevoirPosition). Le coureur avance maintenant de lui-meme
+   * a la vitesse ou la cible avance, et la glissade ne corrige plus que ce que
+   * le dernier paquet a appris de neuf — quelques centimetres, resorbes en un
+   * dixieme de seconde. A vitesse constante il ne reste plus d'ecart du tout.
    */
   function avancerLive(g, dt) {
     const r = g.runner;
     const vmax = G.race.maxSpeed * 1.15;
-    // L'extrapolation ne va pas au-dela de ce qu'un coureur peut faire : quand
-    // un paquet tarde, mieux vaut un adversaire legerement en retard qu'un
-    // adversaire qui file a vingt metres par seconde puis s'arrete net au
-    // paquet suivant.
-    const age = Math.min(0.4, Math.max(0, G.elapsed - g.depuis));
-    const vise = Math.min(g.cible + Math.min(g.vEst, vmax) * age,
-                          g.cible + vmax * age);
+    const L = G.track.total;
+    const vise = viseLive(g, G.elapsed);
+    // La pente est prise sur la cible elle-meme, a paquet egal. Elle vaut la
+    // vitesse estimee tant qu'on extrapole, zero quand l'extrapolation a
+    // atteint sa borne — un coureur dont on n'a plus de nouvelles ne file pas
+    // tout seul. Elle se mesure EN AVANT, sur une milliseconde : mesuree en
+    // arriere, elle tombait a zero a chaque image ou un paquet arrive — sans
+    // horloge, l'extrapolation repart de cet instant-la — et le coureur
+    // butait dix fois par seconde. Elle ne depasse jamais la vitesse estimee :
+    // le seul saut de la cible — quand son chrono le fait passer la ligne —
+    // se rattrape par la glissade, pas en filant a la vitesse maximale.
+    const pente = Math.max(0, Math.min(g.vEst, vmax,
+      (viseLive(g, G.elapsed + 0.001) - vise) / 0.001));
+    // Deja arrive selon son propre chrono, et encore dessine avant la ligne :
+    // l'image a du retard sur ce que l'on sait. On le rattrape en quelques
+    // images plutot qu'en un dixieme de seconde.
+    const enRetard = g.fin != null && G.elapsed >= g.fin && r.d < L;
     const avant = r.d;
-    r.d += (vise - r.d) * Math.min(1, dt * 11);
+    const prevu = r.d + pente * dt;
+    r.d = prevu + (vise - prevu) * Math.min(1, dt * (enRetard ? 30 : 11));
     if (r.d < avant) r.d = avant;          // un adversaire ne recule jamais
     // La vitesse sert a animer la foulee et a chiffrer l'ecart : elle doit
     // etre lisse. Une difference brute d'une image a l'autre, avec des paquets
@@ -2256,9 +2451,114 @@
     r.v = r.v * 0.78 + Math.max(0, Math.min(vmax, brut)) * 0.22;
     r.stride += r.v * dt * (Math.PI / r.strideLength());
     r.drivePitch = r.pitchAt();
-    if (!r.finished && r.d >= G.track.total) {
+    if (g.fin != null) {
+      // Son chrono fait foi, pour le classement en course comme pour l'ordre
+      // d'arrivee : l'instant ou on l'a VU passer n'est qu'une estimation, et
+      // elle est remplacee des que le vrai temps arrive.
+      if (G.elapsed >= g.fin) { r.finished = true; r.finishTime = g.fin; }
+    } else if (!r.finished && r.d >= L) {
       r.finished = true; r.finishTime = g.time || G.elapsed;
     }
+  }
+
+  /**
+   * LE PHOTO-FINISH.
+   *
+   * Recaler l'adversaire sur notre chronometre (recevoirPosition) rend l'image
+   * juste a quelques centimetres pres — mais pas a coup sur. Au moment ou l'on
+   * franchit la ligne, ce qu'on sait de lui date d'un trajet de reseau, et une
+   * arrivee a un centieme se joue sur onze centimetres : l'extrapolation peut
+   * encore se tromper de cote. Sans horloge (une salle d'avant ce champ), elle
+   * se trompe a coup sur des qu'on est plus pres que le trajet d'un paquet.
+   *
+   * On fait donc comme un vrai stade : quand l'oeil ne peut pas trancher, on
+   * ne tranche pas a l'oeil. Au passage de la ligne, si l'adversaire le plus
+   * proche est a portee de doute, le tableau de course cesse d'afficher une
+   * place et annonce un PHOTO-FINISH ; il le resout des que le chrono de
+   * l'adversaire arrive (liveFiniDe), avec les deux temps au millieme pres — les
+   * memes millisecondes que la salle compare pour rendre le verdict, arrondies
+   * de la meme facon. L'ecran de fin ne peut donc plus dire autre chose que
+   * ce que la photo vient de montrer.
+   *
+   * La photo s'affiche aussi quand l'image s'est trompee sans qu'on ait eu de
+   * doute (un paquet reste coince, et l'adversaire qu'on voyait derriere
+   * etait devant), et pour toute arrivee plus serree que PHOTO_SERRE, meme
+   * juste — c'est une arrivee qu'on a envie de voir tranchee.
+   *
+   * Etats : 'attente' (on attend son chrono, affiche), 'tranche' (affiche,
+   * resolu), 'veille' (pas de doute, on surveille seulement une
+   * contradiction), 'aucun' (rien a montrer).
+   */
+  // Avec horloge, l'image ne se trompe que de quelques centimetres.
+  const PHOTO_DOUTE_HORODATE = 0.06;
+  // Sans elle, du trajet d'un paquet : jusqu'a deux dixiemes sur un mauvais reseau.
+  const PHOTO_DOUTE = 0.25;
+  const PHOTO_SERRE = 0.05;
+  // Un chrono qui ne vient pas — l'adversaire a ferme l'application — ne
+  // laisse pas « photo-finish » affiche jusqu'a la fin de la course.
+  const PHOTO_ATTENTE_MAX = 2.5;
+
+  function suivrePhoto() {
+    if (!G.photoFinish || !G.player || !G.player.finished || G.player.finishTime == null) return;
+    if (!G.photo) G.photo = ouvrirPhoto();
+    const p = G.photo;
+    if (p.etat !== 'attente' && p.etat !== 'veille') return;
+    const g = G.lives && G.lives.get(p.id);
+    // Parti, ou abandon : il n'y a plus de chrono a attendre, et la salle
+    // rendra de toute facon son verdict.
+    if (!g || g !== p.g || g.abandon) { p.etat = 'aucun'; return; }
+    if (g.fin != null) {
+      p.luiMs = Math.round(g.fin * 1000);
+      const ecart = p.luiMs - p.moiMs;
+      const contredit = (ecart < 0) !== p.devant && ecart !== 0;
+      if (p.etat === 'attente' || contredit || Math.abs(ecart) <= PHOTO_SERRE * 1000) {
+        p.etat = 'tranche';
+        // L'ecart en metres au moment ou le premier passe la ligne : celui du
+        // second, a sa vitesse d'arrivee. C'est ce que montrerait la photo.
+        const vmax = G.race.maxSpeed * 1.15;
+        const vSecond = ecart >= 0 ? Math.min(g.vEst, vmax) : (p.vMoi || 0);
+        p.ecartM = Math.abs(ecart) / 1000 * vSecond;
+      } else {
+        p.etat = 'aucun';
+      }
+      return;
+    }
+    if (p.etat === 'attente' && G.elapsed - p.depuis > PHOTO_ATTENTE_MAX) p.etat = 'aucun';
+  }
+
+  /** Le premier instant apres la ligne : contre qui, et y a-t-il doute ? */
+  function ouvrirPhoto() {
+    const moi = G.player;
+    let id = null, g = null, ecart = Infinity;
+    for (const [k, x] of G.lives || []) {
+      if (x.equipier) continue;
+      const e = Math.abs(x.runner.d - moi.d);
+      if (e < ecart) { ecart = e; g = x; id = k; }
+    }
+    if (!g) return { etat: 'aucun' };
+    const r = g.runner, L = G.track.total;
+    // Ou en est-il, en temps, par rapport a nous ? Son chrono s'il est connu,
+    // sinon l'instant ou on l'a vu passer, sinon ce qu'il lui reste a courir.
+    const lui = g.fin != null ? g.fin
+      : r.finished ? r.finishTime
+      : G.elapsed + Math.max(0, L - r.d) / Math.max(5, r.v);
+    const frais = g.c != null && G.elapsed - g.c < 0.25;
+    const doute = frais ? PHOTO_DOUTE_HORODATE : PHOTO_DOUTE;
+    return {
+      id, g, nom: r.name,
+      moiMs: Math.round(moi.finishTime * 1000), luiMs: null, vMoi: moi.v,
+      // Ce que l'image montrait a cet instant : lui devant, ou lui derriere.
+      devant: r.d >= moi.d,
+      etat: Math.abs(lui - moi.finishTime) <= doute ? 'attente' : 'veille',
+      depuis: G.elapsed, ecartM: 0,
+    };
+  }
+
+  /** Ce que le tableau de course affiche de la photo, ou rien. */
+  function photoPourHud() {
+    const p = G.photo;
+    if (!p || (p.etat !== 'attente' && p.etat !== 'tranche')) return null;
+    return { etat: p.etat, nom: p.nom, moi: p.moiMs, lui: p.luiMs, ecartM: p.ecartM };
   }
 
   function stepGhost(dt) {
@@ -2274,6 +2574,7 @@
         if (e < ecart) { ecart = e; meilleur = g; }
       }
       G.ghost = meilleur;
+      suivrePhoto();
       return;
     }
     const g = G.ghost;
@@ -6089,7 +6390,8 @@
     theme, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
-    armLive, liveDist, armLives, majLives, liveDistDe, startLive, liveDepart,
+    armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
+    startLive, liveDepart,
     armRelayeurs, porteurDuTemoin,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,

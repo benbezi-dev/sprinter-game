@@ -10,7 +10,7 @@ export function RaceHUD() {
     state, elapsed, countT, starter, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
-    ghostOn, ghostD, ghostDone, challenge, raceKey
+    ghostOn, ghostD, ghostDone, challenge, raceKey, photo
   } = useGameStore();
 
   const { N, C } = SprinterApp;
@@ -78,12 +78,18 @@ export function RaceHUD() {
   const isRace = state === 'race';
   const T = SprinterApp.G.track;
   
-  // Order logic matches original
+  // Order logic matches original.
+  //
+  // Les arrivees se comparent a la milliseconde entiere, comme la salle du
+  // direct compare les chronos qu'on lui annonce : sur des secondes a virgule,
+  // une egalite au millieme — que la salle declare EX AEQUO — donnait une
+  // place a l'un et pas a l'autre selon la derniere decimale.
+  const msDe = (r: any) => Math.round(r.finishTime * 1000);
   const order = [...runners].sort((a, b) => {
     const fa = a.finished ? 0 : 1;
     const fb = b.finished ? 0 : 1;
     if (fa !== fb) return fa - fb;
-    return a.finished ? a.finishTime - b.finishTime : b.d - a.d;
+    return a.finished ? msDe(a) - msDe(b) : b.d - a.d;
   });
   
   // Mode fantome : l'ecart avec l'adversaire, en direct. Les metres se lisent
@@ -100,8 +106,34 @@ export function RaceHUD() {
   const devant = ecartM > 0.15;
   const derriere = ecartM < -0.15;
 
-  const pos = order.indexOf(player) + 1;
-  const posTxt = N.ord(pos);
+  // Une egalite partage la place : on compte ceux qui sont arrives strictement
+  // avant, pas ceux que le tri a poses devant.
+  const pos = player?.finished && player.finishTime != null
+    ? 1 + runners.filter((r: any) => r !== player && r.finished && msDe(r) < msDe(player)).length
+    : order.indexOf(player) + 1;
+  /**
+   * LE PHOTO-FINISH, voir suivrePhoto dans sprinter-app.js.
+   *
+   * Tant qu'il est « en attente », personne n'a encore de place : le chrono de
+   * l'adversaire le plus proche n'est pas arrive, et l'ordre de l'image n'est
+   * qu'une estimation. Annoncer « 1er » a cet instant, c'etait precisement le
+   * defaut constate — le joueur se voyait gagner, puis lisait « COURSE
+   * PERDUE ». La place revient des que la photo est tranchee, calculee sur
+   * les chronos reels.
+   */
+  const photoAttente = photo?.etat === 'attente';
+  const photoTranche = photo?.etat === 'tranche' && photo.lui != null;
+  const posTxt = photoAttente ? '…' : N.ord(pos);
+  // Les deux lignes de la photo, dans l'ordre de passage. Les memes
+  // millisecondes que la salle compare : le verdict ne peut pas differer.
+  const photoLignes = photoTranche
+    ? [{ nom: N.t('you'), ms: photo!.moi, moi: true },
+       { nom: photo!.nom, ms: photo!.lui as number, moi: false }]
+        .sort((a, b) => a.ms - b.ms)
+    : [];
+  const photoEcart = photoTranche ? (photo!.lui as number) - photo!.moi : 0;
+  const photoNul = photoTranche && photoEcart === 0;
+  const photoGagne = photoTranche && photoEcart > 0;
   const ph = player?.phase ? player.phase() : 0;
   const total = T?.total || 100;
 
@@ -114,7 +146,7 @@ export function RaceHUD() {
           <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {N.levelName(levelIdx)}
           </div>
-          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 ? 'text-primary' : 'text-foreground'}`}>
+          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 && !photoAttente ? 'text-primary' : 'text-foreground'}`}>
             {posTxt}
           </div>
         </div>
@@ -210,6 +242,71 @@ export function RaceHUD() {
               <span className="text-[8px] sm:text-[9px] text-center tracking-wide text-cyan-300/70">
                 {N.t('ghost_home')}
               </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* LE PHOTO-FINISH, a la place du panneau de l'adversaire qui s'efface a
+          la ligne. En attente, il dit seulement qu'on regarde : pas de place,
+          pas d'ecart. Tranche, il donne les deux chronos au millieme, dans
+          l'ordre de passage, et la reglette montre ou etait le second quand
+          le premier a touche la ligne. */}
+      {isRace && photo && (photoAttente || photoTranche) && (
+        <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
+                        px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
+          <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
+                           flex flex-col gap-1 shadow-lg
+            ${photoAttente || photoNul ? 'border-cyan-400/40 bg-black/50'
+              : photoGagne ? 'border-emerald-400/50 bg-emerald-500/[0.12]'
+              : 'border-destructive/50 bg-destructive/[0.12]'}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.25em] text-cyan-300/90">
+                {N.t('photo_finish')}
+              </span>
+              {photoTranche && (
+                <span className={`font-mono text-[8px] sm:text-[9px] font-bold tracking-widest tabular-nums
+                  ${photoNul ? 'text-cyan-300' : photoGagne ? 'text-emerald-400' : 'text-destructive'}`}>
+                  {photoNul ? N.t('live_tie')
+                    : `${(Math.abs(photoEcart) / 1000).toFixed(3)} s · ${photo.ecartM.toFixed(2)} m`}
+                </span>
+              )}
+            </div>
+
+            {photoAttente ? (
+              <div className="text-center text-[10px] sm:text-xs tracking-wide text-foreground/75 animate-pulse py-1">
+                {N.t('photo_attente')}
+              </div>
+            ) : (
+              <>
+                {photoLignes.map((l, i) => (
+                  <div key={l.moi ? 'moi' : 'lui'} className="flex items-baseline justify-between gap-2 leading-none">
+                    <span className={`text-xs sm:text-sm font-black tracking-wide truncate
+                      ${l.moi ? 'text-primary' : 'text-cyan-300'}`}>
+                      {photoNul ? '=' : `${i + 1}.`} {l.nom}
+                    </span>
+                    <span className={`font-mono font-black tabular-nums text-sm sm:text-base
+                      ${l.moi ? 'text-primary' : 'text-cyan-300'}`}>
+                      {(l.ms / 1000).toFixed(3)}
+                    </span>
+                  </div>
+                ))}
+                {/* La reglette : les deux derniers metres avant la ligne. Le
+                    premier est dessus ; le second a la distance qu'il lui
+                    restait a courir. */}
+                <div className="relative h-1.5 rounded-full bg-black/60 border border-white/10 overflow-hidden">
+                  <div className="absolute inset-y-0 w-[2px] bg-white/80" style={{ left: 'calc(88% - 1px)' }} />
+                  {photoLignes.map((l, i) => {
+                    const derriere = i === 0 || photoNul ? 0 : Math.min(2, photo.ecartM);
+                    return (
+                      <div key={l.moi ? 'moi' : 'lui'}
+                           className={`absolute inset-y-0 w-[3px] rounded-full
+                             ${l.moi ? 'bg-primary shadow-[0_0_6px_rgba(248,205,74,0.9)]' : 'bg-cyan-300'}`}
+                           style={{ left: `calc(${88 - (derriere / 2) * 80}% - 1.5px)` }} />
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -369,7 +466,7 @@ export function RaceHUD() {
           return (
             <div key={i} className={`flex justify-between items-center px-4 py-2 border-b border-white/5 last:border-0 ${r.isPlayer ? 'bg-primary/10' : ''}`}>
               <span className={`text-xs font-bold tracking-wide ${col}`}>
-                {i + 1}. {(r.isPlayer ? N.t('you') : r.name).slice(0, 15)}
+                {photoAttente ? '–' : i + 1}. {(r.isPlayer ? N.t('you') : r.name).slice(0, 15)}
               </span>
               <span className={`text-xs font-mono font-bold ${col}`}>
                 {Math.round(r.d)} m
@@ -382,6 +479,10 @@ export function RaceHUD() {
       {/* gap to next runner (Mobile only) */}
       <div className="block md:hidden absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10">
         {(() => {
+          // Pendant le photo-finish, c'est lui qui dit l'ecart : cet
+          // indicateur-ci le mesure sur l'image, et c'est justement l'image
+          // qu'on ne croit plus a cet instant.
+          if (photo) return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {
