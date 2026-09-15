@@ -1,0 +1,137 @@
+{
+  "nom": "teaser-championnat",
+  "ecrans": [
+    {
+      "cle": "accroche",
+      "kicker": "Sprinter",
+      "titre": "IL N’Y A\nPAS ENCORE\nDE CHAMPION",
+      "sous": "de France",
+      "fort": "Le titre se court le week-end du 26 septembre.",
+      "doux": "La sélection ferme mercredi 23, à 23 h 59.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "titre",
+      "kicker": "Ce qui est en jeu",
+      "titre": "3 MOIS",
+      "sous": "c’est la durée d’un titre",
+      "lignes": [
+        {
+          "gauche": "4",
+          "droite": "championnats nationaux par an"
+        },
+        {
+          "gauche": "1",
+          "droite": "champion de France à la fois"
+        },
+        {
+          "gauche": "100 m",
+          "droite": "une seule épreuve par édition"
+        }
+      ],
+      "fort": "Le titre se porte, puis il se défend.",
+      "doux": "Trois mois plus tard, quelqu’un vient le chercher.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "selection",
+      "kicker": "Comment on entre",
+      "titre": "PAS\nD’INSCRIPTION",
+      "sous": "c’est le classement des duels qui donne les 32 places",
+      "lignes": [
+        {
+          "gauche": "32",
+          "droite": "partants, pas un de plus"
+        },
+        {
+          "gauche": "60 j",
+          "droite": "sans duel classé, tu sors du classement"
+        },
+        {
+          "gauche": "J-3",
+          "droite": "la grille est gelée le mercredi soir"
+        }
+      ],
+      "fort": "Tu montes au classement, tu es pris.",
+      "doux": "Personne ne t’invite et personne ne te tire au sort.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "barre",
+      "kicker": "La barre",
+      "titre": "33e",
+      "sous": "et les sept suivants sont gardés en mémoire",
+      "lignes": [
+        {
+          "gauche": "1.",
+          "droite": "le palier"
+        },
+        {
+          "gauche": "2.",
+          "droite": "les points de ligue"
+        },
+        {
+          "gauche": "3.",
+          "droite": "puis le départage, jusqu’au nom"
+        }
+      ],
+      "fort": "« Je n’étais pas 33e » se vérifie.",
+      "doux": "La sélection est relue, pas affirmée.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "format",
+      "kicker": "Le week-end",
+      "titre": "4 · 2 · 1",
+      "sous": "samedi les séries, dimanche les demies et la finale",
+      "lignes": [
+        {
+          "gauche": "Séries",
+          "droite": "4 courses de 8 · les 2 premiers passent\n+ 8 repêchés au chrono"
+        },
+        {
+          "gauche": "Demies",
+          "droite": "2 courses de 8 · les 2 premiers passent\n+ 4 repêchés au chrono"
+        },
+        {
+          "gauche": "Finale",
+          "droite": "8 couloirs · un titre"
+        }
+      ],
+      "fort": "Un mauvais départ et le week-end est fini.",
+      "doux": "Le chrono repêche, mais pas tout le monde.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "tenant",
+      "kicker": "Le champion en titre",
+      "titre": "EN FINALE\nD’OFFICE",
+      "sous": "mais il court quand même ses séries",
+      "lignes": [
+        {
+          "gauche": "32e",
+          "droite": "sa place sur la grille lui est gardée"
+        },
+        {
+          "gauche": "−1",
+          "droite": "repêché, c’est ce que son couloir coûte"
+        },
+        {
+          "gauche": "0",
+          "droite": "duel joué depuis son sacre, et il perd tout"
+        }
+      ],
+      "fort": "Un titre n’est pas une rente.",
+      "doux": "Qui ne joue plus redevient un joueur comme les autres.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "cloture",
+      "kicker": "La clôture",
+      "titre": "MERCREDI\n23 H 59",
+      "sous": "la grille des 32 est gelée",
+      "fort": "Après, plus rien ne bouge.",
+      "doux": "Samedi, les séries. Dimanche, le titre."
+    }
+  ]
+}

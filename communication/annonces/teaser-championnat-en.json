@@ -1,0 +1,131 @@
+{
+  "nom": "teaser-championnat-en",
+  "pied": "SPRINT GAME",
+  "ecrans": [
+    {
+      "cle": "hook",
+      "kicker": "France National Championship",
+      "titre": "THERE IS\nNO CHAMPION\nYET",
+      "fort": "The title is decided the weekend of 26 September.",
+      "doux": "Selection closes Wednesday 23 at 11:59 pm, Paris time."
+    },
+    {
+      "cle": "title",
+      "kicker": "What's at stake",
+      "titre": "3 MONTHS",
+      "sous": "that's how long a title lasts",
+      "lignes": [
+        {
+          "gauche": "4",
+          "droite": "national championships a year"
+        },
+        {
+          "gauche": "1",
+          "droite": "champion of France at a time"
+        },
+        {
+          "gauche": "100 m",
+          "droite": "one event per edition"
+        }
+      ],
+      "fort": "You win the title, then you defend it.",
+      "doux": "Three months later, someone comes for it."
+    },
+    {
+      "cle": "selection",
+      "kicker": "How you get in",
+      "titre": "NO\nSIGN-UP",
+      "sous": "the duel ranking hands out the 32 places",
+      "lignes": [
+        {
+          "gauche": "32",
+          "droite": "starters, not one more"
+        },
+        {
+          "gauche": "60 d",
+          "droite": "without a ranked duel, you drop off the ranking"
+        },
+        {
+          "gauche": "D-3",
+          "droite": "the grid freezes on Wednesday night"
+        }
+      ],
+      "fort": "You climb the ranking, you're in.",
+      "doux": "Nobody invites you. Nobody draws lots."
+    },
+    {
+      "cle": "cutoff",
+      "kicker": "The cut-off",
+      "titre": "33rd",
+      "sous": "and the next seven are kept on record",
+      "lignes": [
+        {
+          "gauche": "1.",
+          "droite": "the tier"
+        },
+        {
+          "gauche": "2.",
+          "droite": "league points"
+        },
+        {
+          "gauche": "3.",
+          "droite": "then tie-breaks, down to the name"
+        }
+      ],
+      "fort": "“I wasn't 33rd” can be checked.",
+      "doux": "The selection is on record, not just claimed."
+    },
+    {
+      "cle": "format",
+      "kicker": "The weekend",
+      "titre": "4 · 2 · 1",
+      "sous": "Saturday the heats, Sunday the semis and the final",
+      "lignes": [
+        {
+          "gauche": "Heats",
+          "droite": "4 races of 8 · top 2 go through\n+ 8 fastest losers"
+        },
+        {
+          "gauche": "Semis",
+          "droite": "2 races of 8 · top 2 go through\n+ 4 fastest losers"
+        },
+        {
+          "gauche": "Final",
+          "droite": "8 lanes · one title"
+        }
+      ],
+      "fort": "One bad start and your weekend is over.",
+      "doux": "The clock saves some losers. Not all of them."
+    },
+    {
+      "cle": "holder",
+      "kicker": "The reigning champion",
+      "titre": "STRAIGHT\nTO THE FINAL",
+      "sous": "but still runs the heats",
+      "lignes": [
+        {
+          "gauche": "32nd",
+          "droite": "their place on the grid is kept"
+        },
+        {
+          "gauche": "−1",
+          "droite": "fastest-loser spot, the price of their lane"
+        },
+        {
+          "gauche": "0",
+          "droite": "duels since the title, and they lose it all"
+        }
+      ],
+      "fort": "A title is not a pension.",
+      "doux": "Stop playing and you're a player like any other."
+    },
+    {
+      "cle": "closing",
+      "kicker": "Closing",
+      "titre": "WEDNESDAY\n11:59 PM",
+      "sous": "Paris time · the grid of 32 freezes",
+      "fort": "After that, nothing moves.",
+      "doux": "Saturday, the heats. Sunday, the title."
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "nom": "cloture-budapest",
+  "ecrans": [
+    {
+      "cle": "bilan",
+      "kicker": "Budapest · c’est fini",
+      "titre": "44 RECORDS",
+      "sous": "battus chez nous pendant que Budapest courait",
+      "lignes": [
+        { "gauche": "8,246", "droite": "100 m · Timooo & Nathan" },
+        { "gauche": "16,629", "droite": "200 m · 971'gee" },
+        { "gauche": "34,729", "droite": "400 m · Timooo & Nathan" }
+      ],
+      "fort": "Là-bas, le record du 400 m haies\na tenu à quatre centièmes près.",
+      "doux": "Ici, quinze records tombent par jour.\nSans dotation.",
+      "bouton": "sprinter-game.com"
+    }
+  ]
+}

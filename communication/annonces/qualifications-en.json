@@ -1,0 +1,88 @@
+{
+  "nom": "qualifications-en",
+  "pied": "SPRINT GAME",
+  "ecrans": [
+    {
+      "cle": "title",
+      "kicker": "France National Championship",
+      "titre": "THE TITLE\nIS UP\nFOR GRABS",
+      "sous": "nobody has held it yet",
+      "fort": "32 places. None are given away.",
+      "doux": "The duel ranking decides who gets them."
+    },
+    {
+      "cle": "calendar",
+      "kicker": "The calendar",
+      "titre": "26 SEPTEMBER",
+      "sous": "first start",
+      "lignes": [
+        {
+          "gauche": "23 SEP",
+          "droite": "the grid closes at 11:59 pm, Paris time"
+        },
+        {
+          "gauche": "26 SEP",
+          "droite": "Saturday: the heats"
+        },
+        {
+          "gauche": "27 SEP",
+          "droite": "Sunday: semis and final"
+        }
+      ],
+      "fort": "One champion of France.",
+      "doux": "They hold the title for three months."
+    },
+    {
+      "cle": "places",
+      "kicker": "The starting grid",
+      "titre": "32 PLACES",
+      "sous": "and the duel ranking hands them out",
+      "lignes": [
+        {
+          "gauche": "32",
+          "droite": "starters, not one more"
+        },
+        {
+          "gauche": "60 d",
+          "droite": "without a ranked duel, you're out of the selection"
+        },
+        {
+          "gauche": "D-3",
+          "droite": "the grid freezes three days before"
+        }
+      ],
+      "fort": "No sign-up. No draw.",
+      "doux": "You climb the ranking, you're in. That's it."
+    },
+    {
+      "cle": "format",
+      "kicker": "The format",
+      "titre": "4 · 2 · 1",
+      "sous": "four heats, two semi-finals, one final",
+      "lignes": [
+        {
+          "gauche": "Heats",
+          "droite": "4 races of 8 · top 2 go through\n+ 8 fastest losers"
+        },
+        {
+          "gauche": "Semis",
+          "droite": "2 races of 8 · top 2 go through\n+ 4 fastest losers"
+        },
+        {
+          "gauche": "Final",
+          "droite": "8 lanes · one title"
+        }
+      ],
+      "fort": "One bad start and your weekend is over.",
+      "doux": "The clock saves some losers. Not all of them."
+    },
+    {
+      "cle": "closing",
+      "kicker": "Closing",
+      "titre": "WEDNESDAY\n11:59 PM",
+      "sous": "Paris time · the grid of 32 freezes",
+      "fort": "After that, nothing moves.",
+      "doux": "Saturday, the heats. Sunday, the title."
+    }
+  ]
+}

@@ -65,8 +65,10 @@ export function poserFond(c, L, H) {
   c.restore();
 }
 
-/** La signature, en bas. Discrete : le compte se nomme deja au-dessus. */
-function poserPied(c, L, H, marge) {
+/** La signature, en bas. Discrete : le compte se nomme deja au-dessus.
+ *  `droite` ne change que pour les cartes d'annonce en anglais (« SPRINT GAME ») ;
+ *  toutes les images du jeu gardent « JEU DE SPRINT ». */
+function poserPied(c, L, H, marge, droite = 'JEU DE SPRINT') {
   c.save();
   c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
   c.beginPath(); c.moveTo(marge, H - marge * 1.5); c.lineTo(L - marge, H - marge * 1.5); c.stroke();
@@ -77,12 +79,35 @@ function poserPied(c, L, H, marge) {
   c.fillText('SPRINTER', marge, H - marge * 0.92);
   c.textAlign = 'right';
   c.fillStyle = 'rgba(255,255,255,0.30)';
-  c.fillText('JEU DE SPRINT', L - marge, H - marge * 0.92);
+  c.fillText(droite, L - marge, H - marge * 0.92);
   c.restore();
 }
 
+/**
+ * Les lignes d'un titre, coupees aux mots. Le contexte porte deja sa police.
+ *
+ * Un `\n` est un retour voulu et il est garde : « FAIS\nUN DUEL » tiendrait
+ * sur une ligne, et c'est justement ce que l'auteur ne veut pas. La mesure et
+ * le trace passent tous deux par ici — deux boucles de coupe finissent par ne
+ * plus couper au meme endroit, et le titre deborde alors sur ce qui le suit.
+ */
+function couperTitre(c, texte, largeurMax, majuscules) {
+  const brut = majuscules ? String(texte).toUpperCase() : String(texte);
+  const lignes = [];
+  for (const para of brut.split('\n')) {
+    let ligne = '';
+    for (const m of para.split(' ')) {
+      const essai = ligne ? ligne + ' ' + m : m;
+      if (c.measureText(essai).width > largeurMax && ligne) { lignes.push(ligne); ligne = m; }
+      else ligne = essai;
+    }
+    if (ligne) lignes.push(ligne);
+  }
+  return lignes;
+}
+
 /** Un titre sur plusieurs lignes, coupe aux mots. */
-function titre(c, texte, x, y, largeurMax, taille, interligne) {
+function titre(c, texte, x, y, largeurMax, taille, interligne, majuscules = true) {
   // save/restore, comme les trois autres fonctions de trace. Sans lui, le
   // `letterSpacing` negatif du titre restait pose sur le contexte et le chrono
   // suivant sortait « 8 . 2 5 » : un reglage qui fuit ne se voit pas dans le
@@ -91,14 +116,7 @@ function titre(c, texte, x, y, largeurMax, taille, interligne) {
   c.font = `900 ${taille}px Outfit, sans-serif`;
   c.textAlign = 'center'; c.textBaseline = 'top';
   c.letterSpacing = `${-taille * 0.022}px`;
-  const mots = String(texte).toUpperCase().split(' ');
-  const lignes = []; let ligne = '';
-  for (const m of mots) {
-    const essai = ligne ? ligne + ' ' + m : m;
-    if (c.measureText(essai).width > largeurMax && ligne) { lignes.push(ligne); ligne = m; }
-    else ligne = essai;
-  }
-  if (ligne) lignes.push(ligne);
+  const lignes = couperTitre(c, texte, largeurMax, majuscules);
   lignes.forEach((l, i) => c.fillText(l, x, y + i * interligne));
   c.restore();
   return y + lignes.length * interligne;
@@ -217,17 +235,11 @@ function empiler(elements, hautDispo, basDispo) {
 }
 
 /** La hauteur qu'occupera un titre, sans le tracer. */
-function mesurerTitre(c, texte, largeurMax, taille, interligne) {
+function mesurerTitre(c, texte, largeurMax, taille, interligne, majuscules = true) {
   c.save();
   c.font = `900 ${taille}px Outfit, sans-serif`;
   c.letterSpacing = `${-taille * 0.022}px`;
-  const mots = String(texte).toUpperCase().split(' ');
-  let n = 1, ligne = '';
-  for (const m of mots) {
-    const essai = ligne ? ligne + ' ' + m : m;
-    if (c.measureText(essai).width > largeurMax && ligne) { n++; ligne = m; }
-    else ligne = essai;
-  }
+  const n = Math.max(1, couperTitre(c, texte, largeurMax, majuscules).length);
   c.restore();
   return n * interligne;
 }
@@ -901,5 +913,209 @@ export function dessinerChrono(cv, d = {}) {
   }
   c.restore();
 
+  return cv;
+}
+
+/**
+ * UNE CARTE D'ANNONCE : une regle, pas un chrono.
+ *
+ * Les compositions au-dessus portent un resultat — un chrono, un podium, un
+ * classement — et le jeu les fabrique. Celle-ci porte ce qu'on ECRIT a la main
+ * avant que la course existe : une date d'ouverture, un format de competition,
+ * un nombre de places. Elle vit ici quand meme, et c'est tout l'objet de ce
+ * fichier : une carte d'annonce publiee a cote d'une carte de chrono doit
+ * sortir du meme compte. Elle avait ete ecrite en HTML/CSS dans
+ * `tools/carte-annonce.mjs`, avec ses propres couleurs et sa propre typo, et
+ * le fil montrait deux marques.
+ *
+ * `e` porte : { kicker, titre, sous, lignes: [{ gauche, droite }], fort, doux,
+ * pied }. `pied` remplace « JEU DE SPRINT » dans la signature — « SPRINT GAME »
+ * pour les cartes en anglais.
+ * `gauche` est la valeur qu'on retient — elle se trace comme un chrono, en
+ * Space Mono et en or ; `droite` est ce qu'elle designe. Un `\n` dans un texte
+ * est un retour voulu, et il est garde. Le titre garde aussi sa casse : il
+ * s'ecrit deja en capitales dans le fichier, et « 33e » ne doit pas sortir
+ * « 33E ».
+ *
+ * Le `bouton` (« sprinter-game.com ») n'est pas lu. Le pied porte deja
+ * @sprintergame, et c'est le compte, pas l'adresse, que les images du jeu
+ * donnent — voir `dessinerCourse` : dans une story une adresse ne se clique
+ * pas, un @ se cherche d'un geste.
+ *
+ * `rapport`, facultatif, recoit l'echelle a laquelle la carte a ete tracee
+ * (1 quand elle tient telle quelle) et `deborde` si meme reduite elle ne tient
+ * pas.
+ *
+ * `revele`, facultatif, sert a la video (`tools/carte-annonce.mjs --video`) :
+ * pour chaque bloc — kicker, titre, sous, ligne0, ligne1…, fort, doux — ou il
+ * en est de son entree, de 0 a 1, et dans `opacite` la sortie de toute la
+ * carte. Chaque bloc apparait a sa place finale : la carte se construit sous
+ * l'oeil, elle ne se recompose pas. Le fond et la signature ne bougent pas
+ * d'une carte a l'autre — c'est le meme stade du debut a la fin du film.
+ * Sans `revele`, tout est trace plein : c'est la carte fixe, au pixel pres.
+ */
+export function dessinerAnnonce(cv, e = {}, format = 'feed', rapport = {}, revele = null) {
+  const L = 1080, H = format === 'story' ? 1920 : 1350;
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+  const T = f => Math.round(L * f);
+  const marge = 80, cx = L / 2, largeur = L - marge * 2;
+
+  // La zone sure de la story, comme `dessinerChronoStory` : Instagram mange
+  // 250 px en haut et 250 px en bas. Au fil, le cadre entier est disponible.
+  const story = H > 1500;
+  const SUR_HAUT = story ? 250 : marge;
+  const SUR_BAS = story ? H - 250 : H;
+
+  // L'entree d'un bloc : il monte de 32 px en se devoilant, et ralentit en
+  // arrivant — un texte qui s'arrete net a l'air pose par erreur.
+  const montrer = (cle, dessin) => y => {
+    if (!revele) return dessin(y);
+    const p = Math.max(0, Math.min(1, revele[cle] ?? 1));
+    if (p <= 0) return;
+    const q = 1 - Math.pow(1 - p, 3);
+    c.save();
+    c.globalAlpha = q * Math.max(0, Math.min(1, revele.opacite ?? 1));
+    c.translate(0, (1 - q) * T(0.030));
+    dessin(y);
+    c.restore();
+  };
+  const avec = (cle, el) => ({ h: el.h, dessine: montrer(cle, el.dessine) });
+
+  poserFond(c, L, H);
+  if (e.kicker) montrer('kicker', y => surtitre(c, e.kicker, cx, y, T(0.026), 800))(SUR_HAUT);
+
+  // Le compte et le pied, remontes dans la zone sure — meme geste que le chrono.
+  const yPied = SUR_BAS - marge * 1.5;
+  const yCompte = Math.round(yPied - L * 0.036);
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${T(0.026)}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = `${Math.round(L * 0.004)}px`;
+  c.fillText('@sprintergame', cx, yCompte);
+  c.restore();
+  c.save(); c.translate(0, -(H - SUR_BAS) - 14); poserPied(c, L, H, marge, e.pied || undefined); c.restore();
+
+  /* Un paragraphe centre, coupe aux mots. `ligne()` ne coupe pas — elle porte
+     un nom de joueur ou un chrono, qui tiennent toujours. Une regle de
+     competition, non : « c'est le classement des duels qui donne les 32
+     places » deborde du cadre a la taille ou elle se lit. */
+  const decouper = (texte, taille, gras) => {
+    c.save();
+    c.font = `${gras} ${taille}px Outfit, sans-serif`;
+    const out = [];
+    for (const para of String(texte).split('\n')) {
+      let l = '';
+      for (const m of para.split(' ')) {
+        const essai = l ? l + ' ' + m : m;
+        if (c.measureText(essai).width > largeur && l) { out.push(l); l = m; }
+        else l = essai;
+      }
+      if (l) out.push(l);
+    }
+    c.restore();
+    return out;
+  };
+  const paragraphe = (texte, taille, couleur, gras, apres = 0) => {
+    const ls = decouper(texte, taille, gras);
+    const inter = Math.round(taille * 1.36);
+    return { h: ls.length * inter + apres,
+             dessine: y => ls.forEach((t, i) => ligne(c, t, cx, y + i * inter, taille, couleur, gras)) };
+  };
+
+  /* Une valeur en Space Mono, composee comme le chrono. La virgule passe par
+     `morceauxChrono` ; les espaces prennent un tiers de corps, comme dans le
+     « + 0,05 s » de `dessinerChrono` — en chasse fixe, « 60 j » sortait
+     « 60  j » ; et le point d'un « 1. » ou le point median de « 4 · 2 · 1 »
+     prennent la fente etroite de la virgule, sans quoi le premier se
+     detachait du chiffre et le second etalait le titre bord a bord. Mesure
+     d'abord, trace ensuite : le titre-nombre a besoin de sa largeur avant de
+     choisir sa taille. */
+  const valeur = (texte, taille) => {
+    c.save();
+    c.font = `700 ${taille}px 'Space Mono', monospace`;
+    const fente = c.measureText('0').width * 0.40;
+    const blocs = String(texte).split(/( |\.|·)/).filter(Boolean).map(b =>
+      b === ' ' ? { largeur: taille * 0.34 }
+      : b === '.' || b === '·' ? { point: b, largeur: fente }
+      : (m => ({ m, largeur: m.largeur }))(morceauxChrono(c, b)));
+    c.restore();
+    const total = blocs.reduce((n, b) => n + b.largeur, 0);
+    return { largeur: total, poser: (x, y, couleur) => {
+      c.save();
+      c.fillStyle = couleur;
+      c.font = `700 ${taille}px 'Space Mono', monospace`;
+      c.textBaseline = 'middle';
+      let cur = x - total / 2;
+      for (const b of blocs) {
+        if (b.m) poserMorceaux(c, b.m, cur, y);
+        else if (b.point) { c.textAlign = 'center'; c.fillText(b.point, cur + b.largeur / 2, y); }
+        cur += b.largeur;
+      }
+      c.restore();
+    } };
+  };
+
+  const lignes = Array.isArray(e.lignes) ? e.lignes : [];
+
+  // Un titre qui n'est qu'un nombre — « 33e », « 4 · 2 · 1 » — est le sujet
+  // de la carte au meme titre que le chrono l'est de la sienne : il se trace
+  // comme lui, en or et en Space Mono. C'est le partage que `dessinerChrono`
+  // rappelle : un nombre seul en Space Mono, une ligne qui a des mots en
+  // Outfit. Les valeurs de la liste passent alors a l'or a 80 %, comme les
+  // ecarts sous le chrono de `dessinerCourse` : l'or plein reste au sujet.
+  // Les ordinaux des deux langues : « 33e » et « 33rd ».
+  const titreNombre = e.titre != null && /^[−+-]?\d[\d\s,.·:−-]*(e|er|re|st|nd|rd|th)?$/.test(String(e.titre).trim());
+  const orListe = titreNombre ? 'rgba(248,205,74,0.80)' : '#F8CD4A';
+
+  // Toutes les tailles en fraction de la largeur, multipliees par `k`.
+  const composer = k => {
+    const U = f => Math.round(L * f * k);
+    const els = [];
+    if (titreNombre) {
+      // La taille du chiffre de `dessinerMoment`, ramenee a la mesure si le
+      // nombre est long.
+      let t = U(lignes.length ? 0.20 : 0.26);
+      const w = valeur(String(e.titre).trim(), t).largeur;
+      if (w > largeur) t = Math.floor(t * largeur / w);
+      const v = valeur(String(e.titre).trim(), t);
+      els.push({ h: Math.round(t * 1.2), dessine: montrer('titre', y => v.poser(cx, y + t * 0.6, '#F8CD4A')) });
+    } else if (e.titre) {
+      // Un ecran sans liste est une affiche : son titre prend la taille que la
+      // place lui laisse.
+      const tTitre = U(lignes.length ? 0.096 : 0.114);
+      const inter = Math.round(tTitre * 1.06);
+      els.push({ h: mesurerTitre(c, e.titre, largeur, tTitre, inter, false) + U(0.020),
+                 dessine: montrer('titre', y => { c.fillStyle = '#FFFFFF';
+                                                  titre(c, e.titre, cx, y, largeur, tTitre, inter, false); }) });
+    }
+    if (e.sous) els.push(avec('sous', paragraphe(e.sous, U(0.033), 'rgba(255,255,255,0.55)', 500, U(0.030))));
+    lignes.forEach((l, i) => {
+      const v = valeur(l.gauche, U(0.058));
+      els.push({ h: U(0.076), dessine: montrer(`ligne${i}`, y => v.poser(cx, y + U(0.038), orListe)) });
+      els.push(avec(`ligne${i}`, paragraphe(l.droite, U(0.029), 'rgba(255,255,255,0.55)', 500, U(0.032))));
+    });
+    if (e.fort) els.push(avec('fort', paragraphe(e.fort, U(0.036), '#FFFFFF', 700, U(0.012))));
+    if (e.doux) els.push(avec('doux', paragraphe(e.doux, U(0.030), 'rgba(255,255,255,0.46)', 500)));
+    return els;
+  };
+
+  // Le fil a 570 px de moins que la story pour le meme texte, et une carte qui
+  // deborde ne se voit pas dans le code : `empiler` centre, donc le titre
+  // passe sous le surtitre et le dernier paragraphe sous le compte. On reduit
+  // le tout d'un meme facteur jusqu'a ce qu'il tienne — les rapports entre les
+  // blocs, qui font la hierarchie, ne bougent pas.
+  const haut = SUR_HAUT + T(0.11), bas = yCompte - T(0.07);
+  const hauteur = els => els.reduce((n, x) => n + x.h, 0);
+  let k = 1, els = composer(k);
+  for (let pas = 1; pas <= 25 && hauteur(els) > bas - haut; pas++) {
+    k = 1 - pas * 0.02;
+    els = composer(k);
+  }
+  rapport.echelle = Math.round(k * 100) / 100;
+  rapport.deborde = hauteur(els) > bas - haut;
+
+  empiler(els, haut, bas);
   return cv;
 }

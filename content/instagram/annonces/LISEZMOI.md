@@ -1,5 +1,65 @@
 # Teaser — championnats nationaux · FR et EN
 
+## v4 — 15 septembre · la signature ne pose plus de question
+
+| Fichier | Ce que c'est | Durée / poids |
+|---|---|---|
+| `…_teaser_fr_v4.mp4` · `…_en_v4.mp4` | **le teaser, musique seule** | 18,1 s · 5,1 Mo |
+| `…_teaser_fr_v4_muet.mp4` · `…_en_v4_muet.mp4` | les mêmes, sans aucun son | 18,1 s · 4,7 Mo |
+
+Seule différence avec la v3 : la dernière phrase. « Es-tu dans les 32 ? » /
+« Are you in the 32? » devient **« Chaque place se gagne. » / « Every place
+is earned. »**. Le film ne pose plus de question au spectateur. Tout ce qui
+précède la signature est identique à la v3 (images comparées à 5 et 12 s :
+identiques au pixel). Même musique (−14,7 dB RMS, −2,0 dB crête).
+
+L'affiche et la vignette ne portent pas cette phrase : **ce sont celles de la
+v3**, inchangées. Tout ce qui est écrit plus bas sur la clôture du mercredi
+23 h 59 vaut aussi pour la v4.
+
+## v3 — 15 septembre · FR et EN, sans voix, les deux dates
+
+| Fichier | Ce que c'est | Durée / poids |
+|---|---|---|
+| `…_teaser_fr_v3.mp4` · `…_en_v3.mp4` | **le teaser, musique seule** | 18,1 s · 5,1 Mo |
+| `…_teaser_fr_v3_muet.mp4` · `…_en_v3_muet.mp4` | les mêmes, sans aucun son | 18,1 s · 4,7 Mo |
+| `…_affiche_fr_v3.jpg` · `…_affiche_en_v3.jpg` | le podium, les deux dates posées dessus | ~215 Ko |
+| `…_cover_fr_v3.jpg` · `…_cover_en_v3.jpg` | le podium seul (identique à la v2) | ~154 Ko |
+
+En anglais : « Selection closes · Wednesday 23 September » et « Championship
+starts · Saturday 26 September ».
+
+Ce qui change par rapport à la v2 : le carton de la date donne **la fin de la
+sélection (mercredi 23 septembre) et le début du championnat (samedi 26
+septembre)** en toutes lettres, au lieu d'une ligne en petit sous le départ. Le
+dernier plan dure 0,6 s de plus pour que les deux dates se lisent. Pas de voix
+(`VOIX=oui` la rend encore, mais sa partition n'a pas été reprise). La
+musique mesure −14,7 dB de RMS, −2,0 dB de crête, dans les deux langues. La
+v2 est intacte à côté.
+
+La clôture est calculée depuis le départ avec `CLOTURE_JOURS_AVANT`, lu dans
+`worker/src/championnats-config.js`.
+
+**⚠ Pour que « mercredi 23 » soit vrai.** Par défaut le serveur ferme la
+sélection à J-3 00:00 UTC, soit **mercredi 23 à 2 h du matin, heure de
+Paris** : un joueur qui jouerait son duel mercredi soir serait hors délai.
+L'édition doit donc être annoncée avec une clôture explicite au mercredi
+23 h 59 (heure de Paris), par pays et non en `cycle` (le cycle ignore
+`cloture`) :
+
+```bash
+curl -X POST "$API/champ/annoncer" -H "X-Sprinter-Admin: $ADMIN_CLE" \
+  -H "Content-Type: application/json" \
+  -d '{"pays":"FR","echelon":"national","debut":1790380800000,"cloture":1790200799000}'
+```
+
+`debut` = samedi 26 septembre 00:00 UTC (première série à 11 h, heure de
+Paris) ; `cloture` = mercredi 23 septembre 21:59:59 UTC. Le serveur refuse
+cette annonce tant que la France n'a pas **32 joueurs classés** (`pays trop
+petit`) : au 15 septembre, `/champ/pays` donne FR à 21.
+
+---
+
 > Monté le **9 septembre 2026**, voix off ajoutée le **10 septembre**, pour un
 > départ annoncé au **samedi 26 septembre**.
 > Format livré : **MP4 H.264, 1080 × 1920, 30 i/s**, son **AAC 48 kHz stéréo** —

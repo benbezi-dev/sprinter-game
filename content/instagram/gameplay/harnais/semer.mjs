@@ -81,10 +81,16 @@ if (vider || !process.argv.includes('--garder')) {
 }
 if (vider) { ecrire(); process.exit(0); }
 
+// Le classement des duels se tient PAR DISTANCE depuis la migration
+// « disciplines » du serveur (worker/src/duels.js) : la cle est le couple
+// (joueur, epreuve), et la colonne `points` n'existe plus. On seme le 100 m,
+// la seule distance que les captures filment.
+const EPREUVE_DUEL = '100';
+
 function poser(cle, nom, { pays, continent, palier, lp, mmr, wins, losses, source = MARQUE }) {
   lignes.push(
-    `INSERT OR REPLACE INTO duel_players (name_key, name, points, wins, losses, draws, launched, last_delta, updated_at, received, mmr, lp, palier, bouclier) ` +
-    `VALUES ('${ech(cle)}', '${ech(nom)}', ${wins*12}, ${wins}, ${losses}, 0, ${wins+losses}, 0, ${maintenant - Math.floor(hasard()*12*86400000)}, 0, ${mmr}, ${lp}, ${palier}, 0);`);
+    `INSERT OR REPLACE INTO duel_players (name_key, epreuve, name, wins, losses, draws, launched, last_delta, updated_at, received, mmr, lp, palier, bouclier) ` +
+    `VALUES ('${ech(cle)}', '${EPREUVE_DUEL}', '${ech(nom)}', ${wins}, ${losses}, 0, ${wins+losses}, 0, ${maintenant - Math.floor(hasard()*12*86400000)}, 0, ${mmr}, ${lp}, ${palier}, 0);`);
   if (pays) lignes.push(
     `INSERT OR REPLACE INTO player_pays (name_key, pays, continent, source, vu_le) ` +
     `VALUES ('${ech(cle)}', '${pays}', '${continent}', '${source}', ${maintenant});`);

@@ -36,15 +36,20 @@ async function appui(cdp, t) {
  * raison.
  */
 export async function attendrePistolet(page, ms = 25000) {
+  // Deux decomptes possibles. Le canal de test ecrit la commande en toutes
+  // lettres (« À VOS MARQUES », « PRÊTS ») ; le jeu publie ne montre plus que
+  // le chiffre dans son cercle (RaceHUD.tsx, « LE DECOMPTE, ET RIEN QUE LUI »).
+  // Guetter le seul texte faisait attendre le jeu publie pour rien : le coureur
+  // ne partait jamais. On reconnait donc aussi le voile du decompte lui-meme.
   const decompte = () => {
     const t = document.body.innerText.toUpperCase();
-    return t.includes('VOS MARQUES') || t.includes('PRÊTS') || t.includes('PRETS');
+    if (t.includes('VOS MARQUES') || t.includes('PRÊTS') || t.includes('PRETS')) return true;
+    return [...document.querySelectorAll('div')].some(d =>
+      typeof d.className === 'string' && d.className.includes('backdrop-blur-[2px]')
+      && d.className.includes('z-20') && d.querySelector('.rounded-full.border-4'));
   };
-  await page.waitForFunction(decompte, null, { timeout: ms });
-  await page.waitForFunction(() => {
-    const t = document.body.innerText.toUpperCase();
-    return !t.includes('VOS MARQUES') && !t.includes('PRÊTS') && !t.includes('PRETS');
-  }, null, { timeout: ms });
+  await page.waitForFunction(decompte, null, { timeout: ms, polling: 16 });
+  await page.waitForFunction(`!(${decompte.toString()})()`, null, { timeout: ms, polling: 16 });
 }
 
 /**
@@ -53,8 +58,16 @@ export async function attendrePistolet(page, ms = 25000) {
  * `niveau` regle la qualite : 'fort' pour le coureur qu'on filme, 'moyen'
  * pour un adversaire qu'on veut battre de peu — une course gagnee de vingt
  * metres ne raconte rien.
+ *
+ * `relache` — { apres, pendant }, en millisecondes depuis le premier appui —
+ * fait lever les doigts au coureur un instant, puis reprendre. C'est la faute
+ * que met en scene le reel de l'arrivee serree (f6) : le jeu ralentit un
+ * coureur qui n'appuie plus, et c'est tout ce qu'on lui demande. `quand`
+ * recoit deux rappels facultatifs, `depart` et `relache`, pour que la camera
+ * marque ces instants au lieu qu'on les devine au montage.
  */
-export async function courir(page, { niveau = 'fort', duree = 13000, reaction = 130 } = {}) {
+export async function courir(page, { niveau = 'fort', duree = 13000, reaction = 130,
+                                     relache = null, quand = {} } = {}) {
   const P = {
     fort:  { depart: 145, poussee: 98,  train: 91,  jitter: 0.05 },
     bon:    { depart: 150, poussee: 105, train: 100, jitter: 0.07 },
@@ -65,12 +78,27 @@ export async function courir(page, { niveau = 'fort', duree = 13000, reaction = 
 
   const cdp = await page.context().newCDPSession(page);
   await attendrePistolet(page);
+  if (quand.depart) quand.depart();
   await dormir(reaction);
 
   const t0 = Date.now(), fin = t0 + duree;
-  let touche = 'ArrowLeft', prochain = Date.now(), i = 0;
+  let touche = 'ArrowLeft', prochain = Date.now(), i = 0, relachee = false;
   const MONTEE = 14;                      // les appuis de la poussee
   while (Date.now() < fin) {
+    if (relache && !relachee && Date.now() - t0 >= relache.apres) {
+      relachee = true;
+      if (quand.relache) quand.relache();
+      if (relache.tant) {
+        // Relachement PILOTE : on ne reprend que lorsque `tant()` repond non
+        // — en pratique, quand le panneau d'ecart du jeu est descendu a un
+        // seuil. `pendant` n'est alors qu'un plafond.
+        const fin = Date.now() + (relache.pendant || 1500);
+        while (Date.now() < fin && await relache.tant()) await dormir(12);
+      } else {
+        await dormir(relache.pendant);
+      }
+      prochain = Date.now();
+    }
     await appui(cdp, touche);
     touche = touche === 'ArrowLeft' ? 'ArrowRight' : 'ArrowLeft';
     // Pendant la poussee l'ecart se resserre ; ensuite il tient.

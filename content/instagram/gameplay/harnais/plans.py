@@ -29,6 +29,26 @@ def douceur(a):
     return 0.5 - 0.5 * math.cos(math.pi * max(0.0, min(1.0, a)))
 
 
+def image_a(rush, pos):
+    """L'image du rush a la position `pos`, qui peut tomber ENTRE deux images.
+
+    C'est ce qui fait un ralenti lisible : a 0,4 fois la vitesse, repeter
+    chaque image deux ou trois fois donne un mouvement qui saute ; fondre les
+    deux voisines au prorata donne un mouvement continu, legerement file —
+    celui qu'on attend d'un ralenti. Rend None au-dela de la fin du rush."""
+    import math
+    k0 = int(math.floor(pos))
+    a = rush / f'f{k0:06d}.jpg'
+    if not a.exists():
+        return None
+    im = Image.open(a).convert('RGB')
+    frac = pos - k0
+    b = rush / f'f{k0 + 1:06d}.jpg'
+    if frac > 0.01 and b.exists():
+        im = Image.blend(im, Image.open(b).convert('RGB'), frac)
+    return im
+
+
 def composer(rush, sortie, plans, ips):
     rush, sortie = Path(rush), Path(sortie)
     sortie.mkdir(parents=True, exist_ok=True)
@@ -36,15 +56,30 @@ def composer(rush, sortie, plans, ips):
         vieux.unlink()
     k = 0
     for plan in plans:
-        debut = round(plan['de'] * ips)
-        n = max(1, round((plan['a'] - plan['de']) * ips))
         z0, z1 = plan.get('zoom', [1.0, 1.0])
         ax, ay = plan.get('ancre', [0.5, 0.5])
+        # `vitesse` (1 par defaut) ralentit le plan — 0 le fige sur `de` — et
+        # `duree` fixe sa longueur DANS LE FILM, qui n'est plus alors `a - de`.
+        # Sans l'un ni l'autre, on reste sur le calcul d'origine, a l'image
+        # pres : les montages deja livres doivent se refaire a l'identique.
+        ralenti = 'vitesse' in plan or 'duree' in plan
+        vitesse = float(plan.get('vitesse', 1.0))
+        if ralenti:
+            n = max(1, round(float(plan['duree'] if 'duree' in plan
+                                   else (plan['a'] - plan['de']) / vitesse) * ips))
+        else:
+            n = max(1, round((plan['a'] - plan['de']) * ips))
+        debut = round(plan['de'] * ips)
         for i in range(n):
-            src = rush / f'f{debut + i:06d}.jpg'
-            if not src.exists():
-                break
-            im = Image.open(src).convert('RGB')
+            if ralenti:
+                im = image_a(rush, plan['de'] * ips + i * vitesse)
+                if im is None:
+                    break
+            else:
+                src = rush / f'f{debut + i:06d}.jpg'
+                if not src.exists():
+                    break
+                im = Image.open(src).convert('RGB')
             w, h = im.size
             z = z0 + (z1 - z0) * douceur(i / max(1, n - 1))
             # La fenetre garde le rapport 9:16 du cadre livre ; l'ancre dit ce

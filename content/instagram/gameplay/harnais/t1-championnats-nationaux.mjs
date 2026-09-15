@@ -10,10 +10,10 @@
  * date, il y a trente-deux places, et l'une d'elles est peut-etre la tienne.
  *
  *   · Il OUVRE et il FERME sur la barre. « 32 partants, un seul titre » est la
- *     premiere chose lue et « es-tu dans les 32 ? » la derniere, parce que ce
- *     sont les deux seules qui posent une question au spectateur au lieu de
- *     lui decrire un produit. Premiere image et derniere image : les deux
- *     places qu'un fil ne fait pas defiler.
+ *     premiere chose lue et « chaque place se gagne » la derniere, parce que
+ *     ce sont les deux seules qui parlent de l'enjeu au lieu de decrire un
+ *     produit. Premiere image et derniere image : les deux places qu'un fil ne
+ *     fait pas defiler. Et la derniere CONSTATE, elle ne demande rien (v4).
  *   · Il porte une DATE. C'est ce qui fait un teaser plutot qu'une vitrine :
  *     sans echeance il n'y a rien a attendre. La cloture y figure aussi —
  *     trois jours avant le depart (`CLOTURE_JOURS_AVANT`), et c'est la vraie
@@ -42,11 +42,28 @@
 import { rendre, accroche, legende, chiffre, signature } from './cartons.mjs';
 import { monter, photo } from './monter.mjs';
 import { marques, bornes } from './commun.mjs';
+import { CLOTURE_JOURS_AVANT } from '../../../../worker/src/championnats-config.js';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
 const LANGUE = process.env.LANGUE === 'en' ? 'en' : 'fr';
 const EN = LANGUE === 'en';
+
+/**
+ * v3, 15 septembre : le carton de la date donne les DEUX dates en clair, et le
+ * film sort sans voix. L'image change, donc la version change — la v2 reste
+ * dans le dossier, telle qu'elle a ete relue.
+ *
+ * La voix se rend encore sur demande (`VOIX=oui`), mais sa partition n'a pas
+ * ete reprise pour la v3 : la ligne du carton de la date ne dit que le depart.
+ *
+ * v4, 15 septembre : la signature ne pose plus de question. « Es-tu dans les
+ * 32 ? » interpellait le spectateur ; « Chaque place se gagne. » constate
+ * l'enjeu et le laisse venir. C'est la seule difference avec la v3 : meme
+ * rush, memes plans, memes cartons jusqu'a la signature.
+ */
+const VERSION = 'v4';
+const AVEC_VOIX = process.env.VOIX === 'oui';
 const TRAVAIL = '/Volumes/MUSIQUE/BENBEZI/Sprinter/content/instagram/gameplay/_travail';
 const RUSH    = `${TRAVAIL}/05-championnats${EN ? '-en' : ''}`;
 const LIVRE   = '/Volumes/MUSIQUE/BENBEZI/Sprinter/content/instagram/annonces';
@@ -75,17 +92,36 @@ const CHRONO = {
 };
 
 /**
- * La date, au seul endroit ou elle s'ecrit.
+ * Les deux dates, au seul endroit ou elles s'ecrivent.
  *
- * La cloture n'est pas une deuxieme date libre : c'est le depart moins trois
- * jours, comme chez le serveur (`CLOTURE_JOURS_AVANT`). Deux dates saisies
- * independamment finissent toujours par se contredire, et c'est la
- * contradiction qu'un spectateur retient.
+ * La cloture n'est pas une deuxieme date libre : c'est le depart moins
+ * `CLOTURE_JOURS_AVANT` jours, LU chez le serveur et non plus recopie ici.
+ * Deux dates saisies independamment finissent toujours par se contredire, et
+ * c'est la contradiction qu'un spectateur retient.
+ *
+ * Le carton les donne toutes les deux, en toutes lettres (v3). La fin de la
+ * selection n'etait qu'une ligne en petit sous le depart ; or c'est elle
+ * l'echeance du spectateur, la seule sur laquelle il peut encore agir — et
+ * c'est elle qui doit faire jouer des duels cette semaine.
+ *
+ * ATTENTION A L'HEURE. Par defaut le serveur ferme a J-3 00:00 UTC, soit le
+ * mercredi a 2 h du matin a Paris : un joueur qui lit « mercredi 23 » et joue
+ * le mercredi soir serait deja hors delai. Pour que le carton dise vrai,
+ * l'edition doit etre annoncee avec une `cloture` explicite au mercredi
+ * 23 h 59, heure de Paris — la commande est dans le LISEZMOI des annonces.
  */
+const DEPART = Date.UTC(2026, 8, 26);                          // un samedi, minuit UTC
+const CLOTURE = DEPART - CLOTURE_JOURS_AVANT * 24 * 3600 * 1000;
+const enLettres = (t) => {
+  const l = EN ? 'en-GB' : 'fr-FR';
+  const jour = new Intl.DateTimeFormat(l, { weekday: 'long', timeZone: 'Europe/Paris' }).format(t);
+  return { jour: jour[0].toUpperCase() + jour.slice(1),
+           date: new Intl.DateTimeFormat(l, { day: 'numeric', month: 'long', timeZone: 'Europe/Paris' }).format(t) };
+};
 const DATE = {
-  fr: { jour: 'Samedi', date: '26 septembre', cloture: 'sélection close le mercredi 23' },
-  en: { jour: 'Saturday', date: '26 September', cloture: 'selection closes Wednesday 23' },
-}[LANGUE];
+  cloture: { ...enLettres(CLOTURE), etiquette: EN ? 'Selection closes' : 'Fin de la sélection' },
+  depart:  { ...enLettres(DEPART),  etiquette: EN ? 'Championship starts' : 'Début du championnat' },
+};
 
 /**
  * LES MOTS, et ils ne sont pas de moi.
@@ -105,7 +141,7 @@ const T = {
     etages:   `Séries <span class="or">·</span> demies <span class="or">·</span> finale`,
     finale:   `la finale`,
     echelon:  `Championnat national`,
-    fin:      `Es-tu dans<br>les 32 ?`,
+    fin:      `Chaque place<br>se gagne.`,
     // LE SPEAKER, ET SA PARTITION.
     //
     // Chaque ligne est accrochee au CARTON qu'elle accompagne, et non a une
@@ -145,9 +181,10 @@ const T = {
     // DESCEND sur ce qu'elle acte : d'ou 47 → 41 sur l'accroche, 48 → 42 sur
     // le sacre. La liste des etages monte d'un cran au milieu (44 → 46) puis
     // retombe plus bas qu'elle n'avait commence (40), ce qui la fait atterrir
-    // au lieu de s'arreter. Et la question finale est la seule qui MONTE en
-    // finissant (42 → 50), parce que c'est la seule phrase du film adressee
-    // au spectateur.
+    // au lieu de s'arreter. La phrase finale DESCEND comme les autres
+    // (46 → 40) : depuis la v4 elle constate au lieu de questionner, et une
+    // voix qui monte en finissant redemanderait ce que le carton ne demande
+    // plus. Ligne recrite a la v4 et JAMAIS RENDUE : le film sort sans voix.
     //
     // IL DIT LES CARTONS, mot pour mot, et c'est voulu. Un speaker qui
     // paraphrase le texte a l'ecran apprend deux formulations pour une seule
@@ -176,7 +213,7 @@ const T = {
       { carton: 'a2',  apres:  0.80, texte:
         `[[rate 158]][[pbas 46]]Samedi[[slnc 110]][[pbas 40]]vingt-six septembre.` },
       { carton: 'fin', apres:  0.70, texte:
-        `[[rate 142]][[pbas 42]]Es-tu dans les[[pbas 50]]trente-deux ?` },
+        `[[rate 150]][[pbas 46]]Chaque place[[slnc 120]][[pbas 40]]se gagne.` },
     ],
   },
   en: {
@@ -186,10 +223,7 @@ const T = {
     etages:   `Heats <span class="or">·</span> semis <span class="or">·</span> final`,
     finale:   `the final`,
     echelon:  `National Championship`,
-    // Pas d'espace avant le point d'interrogation : c'est une regle
-    // francaise, et l'anglais ne la porte pas. Elle etait passee par copie
-    // de la ligne francaise juste au-dessus.
-    fin:      `Are you in<br>the 32?`,
+    fin:      `Every place<br>is earned.`,
     // L'ANGLAIS EST PLUS LONG, ET IL FAUT LE PAYER EN DEBIT. A la meme
     // partition que le francais, « The top thirty-two of your country are
     // selected » durait 2,62 s et finissait 0,7 s APRES l'arrivee du carton
@@ -210,7 +244,7 @@ const T = {
       { carton: 'a2',  apres:  0.80, texte:
         `[[rate 200]][[pbas 48]]Saturday,[[slnc 110]][[pbas 45]]twenty-six September.` },
       { carton: 'fin', apres:  0.80, texte:
-        `[[rate 155]][[pbas 45]]Are you in the[[pbas 55]]thirty-two?` },
+        `[[rate 165]][[pbas 50]]Every place[[slnc 110]][[pbas 43]]is earned.` },
     ],
   },
 }[LANGUE];
@@ -235,7 +269,21 @@ const T = {
 const SPEAKER = { fr: { nom: 'Thomas', debit: 175 },
                   en: { nom: 'Daniel', debit: 190 } }[LANGUE];
 
-console.log(`── teaser · championnats nationaux · ${LANGUE.toUpperCase()} ─────────────`);
+// Une date du carton plein : l'etiquette en petites capitales, le jour en
+// blanc, la date en or. Les deux blocs ont la meme taille ; la cloture passe
+// en premier parce qu'elle arrive en premier — et parce que c'est elle qu'on
+// vise.
+const blocDate = (d, haut = 0) => `<div style="display:flex;flex-direction:column;
+      align-items:center;gap:12px;margin-top:${haut}px">
+      <div style="font-weight:800;font-size:40px;letter-spacing:0.2em;
+                  text-transform:uppercase;opacity:.72">${d.etiquette}</div>
+      <div style="font-weight:900;font-size:100px;line-height:0.96;
+                  text-transform:uppercase;letter-spacing:-0.01em">${d.jour}<span
+           style="display:block;color:#F8CD4A">${d.date}</span></div>
+    </div>`;
+
+console.log(`── teaser · championnats nationaux · ${LANGUE.toUpperCase()} · ${VERSION}` +
+            `${AVEC_VOIX ? ' · avec voix' : ' · sans voix'} ─────────────`);
 const png = await rendre([
   accroche('a1', T.accroche),
   legende('l1', T.barre, 1500),
@@ -266,14 +314,11 @@ const png = await rendre([
       <div style="font-weight:800;font-size:44px;letter-spacing:0.22em;
                   text-transform:uppercase;opacity:.85">${T.echelon}</div>
       <div class="filet"></div>
-      <div style="font-weight:900;font-size:112px;line-height:0.96;
-                  text-transform:uppercase;letter-spacing:-0.01em">${DATE.jour}<span
-           style="display:block;color:#F8CD4A">${DATE.date}</span></div>
-      <div style="font-family:'Space Mono',monospace;font-weight:700;font-size:38px;
-                  letter-spacing:0.04em;opacity:.78">${DATE.cloture}</div>
+      ${blocDate(DATE.cloture)}
+      ${blocDate(DATE.depart, 22)}
     </div></div>` },
   signature('fin', T.fin),
-], `${TRAVAIL}/_cartons/t1-${LANGUE}`);
+], `${TRAVAIL}/_cartons/t1-${LANGUE}-${VERSION}`);
 const C = Object.fromEntries(png.map(p => [p.split('/').pop().replace('.png', ''), p]));
 
 /**
@@ -334,7 +379,11 @@ const plans = [
   // 5 · le podium, et tout ce qui reste du film. Le seul fond du rush qui
   //     tienne un chiffre de 190 px, et le seul assez beau pour qu'on s'y
   //     attarde six secondes.
-  { de: 28.40, a: 34.20, zoom: [1.02, 1.16], ancre: [0.5, 0.46] },
+  //     v3 : six dixiemes de plus (34,20 → 34,80, le podium du rush tient
+  //     jusqu'a 34,9). Ils vont au carton de la date, qui porte maintenant deux
+  //     dates au lieu d'une et a besoin de ce temps pour se lire. Ces images-la
+  //     sont sous le carton plein : on ne les voit pas, on gagne leur duree.
+  { de: 28.40, a: 34.80, zoom: [1.02, 1.16], ancre: [0.5, 0.46] },
 ];
 
 const B = bornes(plans);
@@ -367,42 +416,46 @@ const cartons = [
    carton pose mais le dernier plan, d'ou son entree prise sur les bornes. */
 const FIN_SIGNATURE = 2.7;
 const dureeFilm = B[B.length - 1].a + FIN_SIGNATURE;
-const DOSSIER = `${TRAVAIL}/_montage/t1-${LANGUE}`;
+// Un dossier par version : la v2 garde ses WAV et ses releves, que son
+// LISEZMOI donne a relire.
+const DOSSIER = `${TRAVAIL}/_montage/t1-${LANGUE}-${VERSION}`;
 mkdirSync(DOSSIER, { recursive: true });
 
-const POSE = Object.fromEntries(cartons.filter(c => c.nom).map(c => [c.nom, c.de]));
-POSE.fin = B[B.length - 1].a;
 const VOIX = `${DOSSIER}/voix.wav`;
-const specVoix = `${DOSSIER}/voix.json`;
-writeFileSync(specVoix, JSON.stringify({
-  sortie: VOIX,
-  duree: Number(dureeFilm.toFixed(3)),
-  voix: SPEAKER.nom,
-  debit: SPEAKER.debit,
-  lignes: T.voix.map(v => {
-    if (POSE[v.carton] === undefined) {
-      // Un carton renomme et une ligne restee sur l'ancien nom donneraient une
-      // voix posee a `NaN` — c'est-a-dire nulle part, sans un mot d'erreur.
-      throw new Error(`T.voix renvoie au carton « ${v.carton} », qui n'existe pas`);
-    }
-    return {
-      t: Number((POSE[v.carton] + v.apres).toFixed(3)),
-      texte: v.texte.replace('{champion}', F.champion)
-                    .replace('{chrono}', CHRONO.dit),
-      ...(v.debit ? { debit: v.debit } : {}),
-    };
-  }),
-}, null, 1));
-console.log('   voix off…');
-const rapportVoix = JSON.parse(execFileSync('python3',
-  [new URL('./voix.py', import.meta.url).pathname, specVoix],
-  { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim());
-// Le releve est GARDE a cote du WAV. C'est lui qui dit ou chaque phrase tombe
-// dans le film, et c'est la seule trace consultable une fois le WAV rendu :
-// une voix mal calee ne se voit pas dans un fichier son.
-writeFileSync(`${DOSSIER}/voix-rapport.json`, JSON.stringify(rapportVoix, null, 1));
-for (const l of rapportVoix.lignes) {
-  console.log(`     ${l.de.toFixed(2)} → ${l.a.toFixed(2)} s  « ${l.texte} »`);
+if (AVEC_VOIX) {
+  const POSE = Object.fromEntries(cartons.filter(c => c.nom).map(c => [c.nom, c.de]));
+  POSE.fin = B[B.length - 1].a;
+  const specVoix = `${DOSSIER}/voix.json`;
+  writeFileSync(specVoix, JSON.stringify({
+    sortie: VOIX,
+    duree: Number(dureeFilm.toFixed(3)),
+    voix: SPEAKER.nom,
+    debit: SPEAKER.debit,
+    lignes: T.voix.map(v => {
+      if (POSE[v.carton] === undefined) {
+        // Un carton renomme et une ligne restee sur l'ancien nom donneraient une
+        // voix posee a `NaN` — c'est-a-dire nulle part, sans un mot d'erreur.
+        throw new Error(`T.voix renvoie au carton « ${v.carton} », qui n'existe pas`);
+      }
+      return {
+        t: Number((POSE[v.carton] + v.apres).toFixed(3)),
+        texte: v.texte.replace('{champion}', F.champion)
+                      .replace('{chrono}', CHRONO.dit),
+        ...(v.debit ? { debit: v.debit } : {}),
+      };
+    }),
+  }, null, 1));
+  console.log('   voix off…');
+  const rapportVoix = JSON.parse(execFileSync('python3',
+    [new URL('./voix.py', import.meta.url).pathname, specVoix],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim());
+  // Le releve est GARDE a cote du WAV. C'est lui qui dit ou chaque phrase tombe
+  // dans le film, et c'est la seule trace consultable une fois le WAV rendu :
+  // une voix mal calee ne se voit pas dans un fichier son.
+  writeFileSync(`${DOSSIER}/voix-rapport.json`, JSON.stringify(rapportVoix, null, 1));
+  for (const l of rapportVoix.lignes) {
+    console.log(`     ${l.de.toFixed(2)} → ${l.a.toFixed(2)} s  « ${l.texte} »`);
+  }
 }
 
 /* -------------------------------------------------------------- la bande-son
@@ -434,35 +487,36 @@ const communMusique = {
 // derriere soi celle de la seconde — la version sans voix — et donnait a
 // relire une spec qui ne decrit pas ce qu'on ecoute.
 const musique = new URL('./musique.py', import.meta.url).pathname;
-for (const [nom, suffixe, sortie, voix] of [['avec voix', 'voix', WAV, VOIX],
-                                            ['sans voix', 'sansvoix', WAV_SANS, null]]) {
+const versions = [['sans voix', 'sansvoix', WAV_SANS, null]];
+if (AVEC_VOIX) versions.unshift(['avec voix', 'voix', WAV, VOIX]);
+for (const [nom, suffixe, sortie, voix] of versions) {
   console.log(`   bande-son, ${nom}…`);
   const spec = `${DOSSIER}/musique-${suffixe}.json`;
   writeFileSync(spec, JSON.stringify({ ...communMusique, sortie, voix }, null, 1));
   execFileSync('python3', [musique, spec], { stdio: ['ignore', 'ignore', 'inherit'] });
 }
 
-/* TROIS SORTIES, UNE SEULE IMAGE, ET LA VERSION QUI EXISTAIT NE BOUGE PAS.
-   Le film n'est pas repasse en v3 : son IMAGE est celle de la v2, au pixel —
-   memes plans, memes cartons. Seule la piste change, et c'est le suffixe qui
-   le dit. Le fichier sans suffixe reste donc celui qui a deja ete relu, et
-   `_voix` est la nouveaute ; une v3 dont l'image serait identique obligerait
-   a revoir la vignette et l'affiche pour rien. */
-const { final, muet, sonores, duree } = monter({
-  nom: `sprinter_championnats-nationaux_teaser_${LANGUE}_v2`,
+/* UNE SEULE IMAGE, UNE PISTE PAR VERSION SONORE, ET UN MUET.
+   La v2 avait trois sorties sur la meme image — avec voix, musique seule,
+   muet. La v3 change l'IMAGE (le carton de la date) : elle prend donc un
+   numero a elle, et la v2 reste telle quelle a cote. Sans `VOIX=oui`, il n'y
+   a que la musique seule et le muet. */
+const { muet, sonores, duree } = monter({
+  nom: `sprinter_championnats-nationaux_teaser_${LANGUE}_${VERSION}`,
   rush: RUSH, ips: IPS, plans, cartons,
   fin: { png: C.fin, duree: FIN_SIGNATURE }, fonduFin: 0.35,
-  pistes: [{ suffixe: '_voix', wav: WAV }, { suffixe: '', wav: WAV_SANS }],
+  pistes: AVEC_VOIX ? [{ suffixe: '_voix', wav: WAV }, { suffixe: '', wav: WAV_SANS }]
+                    : [{ suffixe: '', wav: WAV_SANS }],
   travail: DOSSIER, sortie: LIVRE,
 });
-console.log(`   ${final.split('/').pop()}  ·  ${duree.toFixed(1)} s  ·  speaker ${SPEAKER.nom}`
-            + `  ·  champion ${F.champion}`);
-console.log(`   ${sonores[1].split('/').pop()}  ·  musique seule`);
-console.log(`   ${muet.split('/').pop()}  ·  muet`);
+for (const f of sonores) {
+  console.log(`   ${f.split('/').pop()}  ·  ${f.includes('_voix') ? `speaker ${SPEAKER.nom}` : 'musique seule'}`);
+}
+console.log(`   ${muet.split('/').pop()}  ·  muet  ·  ${duree.toFixed(1)} s  ·  champion ${F.champion}`);
 
 // La vignette : le podium, drapeaux et chrono compris. C'est l'image qui doit
 // tenir seule dans un fil, avant qu'une seule seconde ait ete jouee.
-const COVER = `${LIVRE}/sprinter_championnats-nationaux_cover_${LANGUE}_v2.jpg`;
+const COVER = `${LIVRE}/sprinter_championnats-nationaux_cover_${LANGUE}_${VERSION}.jpg`;
 photo(RUSH, IPS, M['podium'] + 3.2, COVER, { zoom: 1.14, ancre: [0.5, 0.46] });
 
 // L'AFFICHE. Le meme texte que `a2`, mais sur PLAQUE et non sur fond plein :
@@ -475,20 +529,23 @@ photo(RUSH, IPS, M['podium'] + 3.2, COVER, { zoom: 1.14, ancre: [0.5, 0.46] });
 //   `.legende span` du gabarit vise les DESCENDANTS, si bien que trois spans
 //   imbriques rendaient trois plaques emboitees — un formulaire, pas une
 //   affiche.
-// · L'intitule dit « Départ » et non le nom du championnat : le podium le
-//   nomme deja a l'image, et deux facons de nommer la meme chose a 300 px
-//   d'ecart, c'est le defaut que le carton plein a servi a supprimer.
+// · Les etiquettes disent « Fin de la sélection » et « Début du championnat »
+//   et non le nom du championnat : le podium le nomme deja a l'image, et deux
+//   facons de nommer la meme chose a 300 px d'ecart, c'est le defaut que le
+//   carton plein a servi a supprimer.
+// · La date en or est un `b` et non un `span`, pour la meme raison que
+//   ci-dessus.
+const ligneAffiche = (d, haut = 0) => `
+      <div style="font-size:32px;letter-spacing:0.2em;opacity:.8;margin-top:${haut}px">${d.etiquette}</div>
+      <div style="font-size:52px;line-height:1.0;margin-top:10px">${d.jour} <b
+           style="color:#F8CD4A;font-weight:inherit">${d.date}</b></div>`;
 const [affiche] = await rendre([
-  { nom: 'affiche', html: `<div class="legende" style="top:1210px"><span style="padding:40px 56px">
-      <div style="font-size:38px;letter-spacing:0.2em;opacity:.8">${EN ? 'Start' : 'Départ'}</div>
-      <div style="font-size:94px;line-height:1.0;margin-top:14px">${DATE.jour}<div
-           style="color:#F8CD4A">${DATE.date}</div></div>
-      <div style="font-family:'Space Mono',monospace;font-weight:700;font-size:31px;
-                  letter-spacing:0.02em;text-transform:none;margin-top:26px;
-                  opacity:.85">${DATE.cloture}</div>
+  { nom: 'affiche', html: `<div class="legende" style="top:1210px"><span style="padding:38px 52px">
+      ${ligneAffiche(DATE.cloture)}
+      ${ligneAffiche(DATE.depart, 30)}
     </span></div>` },
-], `${TRAVAIL}/_cartons/t1-${LANGUE}`);
-const AFFICHE = `${LIVRE}/sprinter_championnats-nationaux_affiche_${LANGUE}_v2.jpg`;
+], `${TRAVAIL}/_cartons/t1-${LANGUE}-${VERSION}`);
+const AFFICHE = `${LIVRE}/sprinter_championnats-nationaux_affiche_${LANGUE}_${VERSION}.jpg`;
 execFileSync('python3', ['-c', `
 from PIL import Image
 fond = Image.open(${JSON.stringify(COVER)}).convert('RGBA')
