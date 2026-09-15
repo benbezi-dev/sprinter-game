@@ -194,6 +194,7 @@
     cat_race:        ['PAR COURSE', 'BY RACE'],
     cat_run:         ['PARCOURS', 'FULL RUN'],
     cat_mine:        ['MES COURSES', 'MY RACES'],
+    cat_nations:     ['NATIONS', 'NATIONS'],
     cat_mine_sub:    ['toutes tes courses', 'every race you ran'],
     mine_empty:      ['aucune course sur cette épreuve pour l’instant',
                       'no race on this event yet'],
@@ -503,6 +504,41 @@
     champ_continue:  ['CONTINUER', 'CONTINUE'],
     champ_sacre:     ['{n} est sacré — voir le podium', '{n} is crowned — see the podium'],
     champ_titre_duree: ['titre porté trois mois', 'title held for three months'],
+    // L'entracte : ce qui passe entre deux courses.
+    //
+    // Les libellés sont courts parce qu'ils se lisent en six secondes, entre
+    // deux séries, par quelqu'un qui attend autre chose. Une carte d'entracte
+    // qu'on n'a pas fini de lire quand elle part est une carte ratée.
+    entracte_tenant: ['IL DÉFEND SON TITRE', 'DEFENDING THE TITLE'],
+    entracte_nations: ['NATIONS EN LICE', 'NATIONS IN THE FIELD'],
+    entracte_chrono: ['MEILLEUR CHRONO DU TOUR', 'FASTEST TIME SO FAR'],
+    entracte_restants: ['ENCORE EN COURSE', 'STILL IN'],
+    entracte_sortis: ['{n} éliminés', '{n} out'],
+    // Le tableau des medailles par nation.
+    //
+    // « Nations » et non « pays » : c'est le mot des tableaux de medailles
+    // partout ailleurs, et il dit qu'on lit un palmares, pas une carte.
+    nations_or:      ['Or', 'Gold'],
+    nations_argent:  ['Argent', 'Silver'],
+    nations_bronze:  ['Bronze', 'Bronze'],
+    nations_total:   ['Tot.', 'Tot.'],
+    nations_tous:    ['Tous', 'All'],
+    nations_national: ['Nationaux', 'National'],
+    nations_continental: ['Continentaux', 'Continental'],
+    nations_mondial: ['Mondiaux', 'World'],
+    nations_vide:    ['Aucune médaille distribuée pour l’instant.',
+                      'No medals awarded yet.'],
+    nations_athletes: ['{n} athlète médaillé', '{n} medallist'],
+    nations_athletes_pl: ['{n} athlètes médaillés', '{n} medallists'],
+    // La ligne d'honnêteté : une somme qui ne tombe pas juste sans expliquer
+    // pourquoi vaut moins qu'un tableau qui dit ce qui lui manque.
+    nations_sans_pays: ['{n} médaille sans drapeau connu, hors tableau.',
+                        '{n} medal without a known flag, outside the table.'],
+    nations_sans_pays_pl: ['{n} médailles sans drapeau connu, hors tableau.',
+                           '{n} medals without a known flag, outside the table.'],
+    nations_moi:     ['mon pays', 'my country'],
+    nations_compte:  ['{n} pays médaillé', '{n} country with medals'],
+    nations_compte_pl: ['{n} pays médaillés', '{n} countries with medals'],
     // le champion en titre.
     //
     // « Tenant du titre » et non « boss » : le second est le nom du declencheur
@@ -651,6 +687,22 @@
     monde_thrower_sous: ['un cercle, un engin, et tout le corps',
                          'a circle, an implement, and the whole body'],
     monde_bientot:   ['BIENTÔT', 'SOON'],
+    monde_jouer:     ['JOUER', 'PLAY'],
+    // Le lancer du poids.
+    //
+    // « Mordu » et non « faute » : c'est le mot du terrain, celui que crie le
+    // juge quand un lanceur sort du cercle. Un jeu d'athlétisme qui dit
+    // « faute » parle comme un jeu, pas comme un stade.
+    poids_poussee:   ['POUSSÉE', 'PUSH'],
+    poids_angle:     ['ANGLE', 'ANGLE'],
+    poids_figer:     ['essai {n} sur {t} — appuie pour figer',
+                      'attempt {n} of {t} — tap to lock'],
+    poids_suite:     ['appuie pour l’essai suivant', 'tap for the next attempt'],
+    poids_mordu:     ['MORDU', 'FOUL'],
+    poids_aucune:    ['aucune marque', 'no valid mark'],
+    poids_relancer:  ['REFAIRE LE CONCOURS', 'THROW AGAIN'],
+    poids_record:    ['record du monde {m} m — {n}, {a}',
+                      'world record {m} m — {n}, {a}'],
     monde_retour:    ['REVENIR À SPRINTER', 'BACK TO SPRINTER'],
     disc_100:        ['100 MÈTRES', '100 METRES'],
     disc_200:        ['200 MÈTRES', '200 METRES'],
@@ -982,6 +1034,7 @@
     mode_oneshot_s:  ['one shot', 'one shot'],
     cat_race_sub:    ['meilleur chrono sur une course', 'best time on a single race'],
     cat_run_sub:     ['cumul des six étapes', 'total of all six stages'],
+    cat_nations_sub: ['médailles par pays', 'medals by country'],
     empty_cat_run:   ['aucun parcours complet enregistré', 'no full run recorded yet'],
     will_enter:      ['{s} s : {r} au TOP 500, inscris ton nom',
                       '{s} s: {r} on the TOP 500, add your name'],

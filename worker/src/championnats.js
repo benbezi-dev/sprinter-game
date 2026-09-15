@@ -298,7 +298,20 @@ export async function ensureChampTables(db) {
       place INTEGER NOT NULL,
       edition TEXT NOT NULL,
       obtenu_le INTEGER NOT NULL,
-      expire_le INTEGER NOT NULL
+      expire_le INTEGER NOT NULL,
+      -- LE PAYS AU MOMENT DU PODIUM, et non celui du joueur aujourd'hui.
+      --
+      -- Le tableau des nations pourrait se calculer en joignant player_pays,
+      -- et c'est ce qu'il a fait d'abord. Mais un pays detecte par Cloudflare
+      -- se laisse corriger plus tard par le joueur (choisirPays) : la
+      -- jointure aurait alors deplace une medaille deja gagnee d'un pays a
+      -- l'autre, et le tableau aurait change tout seul entre deux ouvertures
+      -- de l'ecran. Un palmares qui se reecrit n'est pas un palmares.
+      --
+      -- Null pour les medailles posees avant cette colonne : l'agregation
+      -- retombe alors sur la jointure, faute de mieux. On ne peut pas savoir
+      -- apres coup sous quel drapeau elles ont ete gagnees.
+      pays TEXT
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS champ_medailles_porteur
                   ON champ_medailles(name_key, expire_le)`),
@@ -380,6 +393,21 @@ export async function ensureChampTables(db) {
       `ALTER TABLE champ_titres ADD COLUMN revoque_le INTEGER`
     ).run();
   } catch (e) { /* la colonne est deja la */ }
+
+  // Le pays grave sur la medaille. Meme motif que les precedents, et l'index
+  // vient APRES pour la meme raison que celui de la cloture : sur une base
+  // existante la colonne n'arrive qu'ici, et un index pose dans le batch
+  // aurait emporte la creation de toutes les autres tables avec lui.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_medailles ADD COLUMN pays TEXT`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+
+  try {
+    await db.prepare(`CREATE INDEX IF NOT EXISTS champ_medailles_pays
+                        ON champ_medailles(pays)`).run();
+  } catch (e) { /* la colonne manque encore : l'index attendra le prochain tour */ }
 
   pret.add(db);
 }
@@ -1708,11 +1736,23 @@ export async function poserMedailles(db, edition, e, podiumTrois) {
   const maintenant = Date.now();
   const expire = new Date(maintenant);
   expire.setMonth(expire.getMonth() + TITRE_MOIS);
+
+  // Le pays des trois, lu ICI et grave dans la ligne. Voir le commentaire de
+  // la colonne : le lire au moment de l'affichage laisserait le palmares d'un
+  // pays bouger apres coup.
+  //
+  // Un national se court entre gens d'un meme pays, et `e.zone` le nomme ;
+  // mais le lire de la sorte ferait deux chemins pour une seule donnee, dont
+  // l'un ne vaudrait que pour un echelon. On demande donc a `player_pays`
+  // dans tous les cas, et ce qui manque reste null.
+  const pays = await paysDe(db, podiumTrois.map(r => r.cle));
+
   const lignes = podiumTrois.map(r => db.prepare(
     `INSERT INTO champ_medailles
-       (echelon, zone, name_key, nom, place, edition, obtenu_le, expire_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(e.echelon, e.zone, r.cle, r.nom, r.place, edition, maintenant, expire.getTime()));
+       (echelon, zone, name_key, nom, place, edition, obtenu_le, expire_le, pays)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(e.echelon, e.zone, r.cle, r.nom, r.place, edition, maintenant, expire.getTime(),
+         pays.get(String(r.cle || '').toLowerCase()) || null));
   if (lignes.length) await db.batch(lignes);
 }
 
@@ -2037,6 +2077,95 @@ export async function fluxDirect(db, { zone = null, depuis = 0, limite = 50 } = 
   return {
     annonces,
     curseur: annonces.length ? annonces[annonces.length - 1].id : depuis,
+  };
+}
+
+/**
+ * LE TABLEAU DES MEDAILLES PAR NATION.
+ *
+ * Le jeu savait deja qui avait gagne quoi, et sous quel drapeau. Il ne savait
+ * pas l'additionner. C'est pourtant la seule chose qui fasse regarder un
+ * championnat en se demandant ou en est SON pays plutot que ou en est son
+ * pseudo — un classement individuel ne fabrique pas de clan.
+ *
+ * Deux choix demandent a etre dits.
+ *
+ * 1. LES MEDAILLES EXPIREES COMPTENT. `medaillesDe` filtre sur `expire_le`
+ *    parce qu'elle repond a « qu'est-ce qu'il porte aujourd'hui » ; celle-ci
+ *    repond a « qu'est-ce que ce pays a gagne », et un palmares ne se vide pas
+ *    au bout de trois mois. C'est la meme distinction qu'entre un titre porte
+ *    et la ligne qui reste en base apres lui.
+ *
+ * 2. LES MEDAILLES SANS PAYS NE SONT PAS RANGEES AILLEURS, elles sont
+ *    COMPTEES A PART. Les repartir au prorata ou les taire donnerait un
+ *    tableau dont la somme ne tombe pas juste, et personne ne saurait
+ *    pourquoi. `sansPays` dit combien manquent ; le total, lui, est exact.
+ */
+export async function tableauNations(db, { echelon = null, epreuve = null } = {}) {
+  await ensureChampTables(db);
+
+  const args = [], ou = [];
+  if (echelon) { ou.push('m.echelon = ?'); args.push(echelon); }
+  if (epreuve) { ou.push('e.epreuve = ?'); args.push(epreuve); }
+  const filtre = ou.length ? 'WHERE ' + ou.join(' AND ') : '';
+
+  // `COALESCE(m.pays, p.pays)` : la medaille porte son drapeau depuis qu'elle
+  // a une colonne pour ca ; celles d'avant retombent sur le pays actuel du
+  // joueur, qui est la moins mauvaise reponse disponible pour elles.
+  const { results } = await db.prepare(
+    `SELECT COALESCE(m.pays, p.pays) AS pays,
+            SUM(CASE WHEN m.place = 1 THEN 1 ELSE 0 END) AS o,
+            SUM(CASE WHEN m.place = 2 THEN 1 ELSE 0 END) AS a,
+            SUM(CASE WHEN m.place = 3 THEN 1 ELSE 0 END) AS b,
+            COUNT(*) AS total,
+            COUNT(DISTINCT m.name_key) AS athletes,
+            MAX(m.obtenu_le) AS derniere
+       FROM champ_medailles m
+       LEFT JOIN player_pays p ON p.name_key = m.name_key
+       LEFT JOIN champ_editions e ON e.id = m.edition
+       ${filtre}
+      GROUP BY COALESCE(m.pays, p.pays)`
+  ).bind(...args).all();
+
+  let sansPays = 0;
+  const nations = [];
+  for (const r of results || []) {
+    if (!r.pays) { sansPays += r.total; continue; }
+    nations.push({
+      pays: String(r.pays).toUpperCase(),
+      continent: continentDe(r.pays),
+      or: r.o, argent: r.a, bronze: r.b,
+      total: r.total,
+      athletes: r.athletes,
+      derniere: r.derniere,
+    });
+  }
+
+  // L'ordre olympique : l'or d'abord, et aucune quantite d'argent ne rattrape
+  // un or. Un classement au total ferait passer trois bronzes devant un titre
+  // mondial, ce qu'aucun tableau des medailles n'a jamais fait.
+  nations.sort((x, y) =>
+    y.or - x.or || y.argent - x.argent || y.bronze - x.bronze
+    || x.pays.localeCompare(y.pays));
+
+  // Le rang est calcule ici et non a l'ecran, parce qu'il doit gerer les
+  // ex aequo : deux pays au meme palmares portent le meme rang, et le suivant
+  // saute d'autant. Laisser l'ecran numeroter les lignes donnerait un 4e et un
+  // 5e a deux pays strictement egaux.
+  let rang = 0, vus = 0, precedent = null;
+  for (const n of nations) {
+    vus += 1;
+    const cle = `${n.or}/${n.argent}/${n.bronze}`;
+    if (cle !== precedent) { rang = vus; precedent = cle; }
+    n.rang = rang;
+  }
+
+  return {
+    echelon: echelon || null,
+    epreuve: epreuve || null,
+    nations,
+    sansPays,
+    medailles: nations.reduce((s, n) => s + n.total, 0) + sansPays,
   };
 }
 

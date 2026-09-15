@@ -20,7 +20,7 @@ import {
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations,
-  fluxDirect, recapMondial,
+  fluxDirect, recapMondial, tableauNations,
 } from './championnats.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -1690,6 +1690,23 @@ async function servir(request, env, ctx, porteur) {
         return json(await fluxDirect(env.DB, {
           zone: url.searchParams.get('zone'), depuis, limite,
         }));
+      }
+
+      // Le tableau des medailles par nation.
+      //
+      // Sans filtre il additionne tout : les trois echelons, les trois
+      // distances, depuis la premiere edition. C'est la vue qui repond a « ou
+      // en est mon pays », et c'est celle qu'on montre en premier. Les deux
+      // filtres servent a repondre plus precisement — le tableau du mondial,
+      // le tableau du 400 m — et non a decouper par defaut.
+      if (sous === 'nations' && request.method === 'GET') {
+        const ech = url.searchParams.get('echelon');
+        if (ech && !['national', 'continental', 'mondial'].includes(ech)) {
+          return json({ error: 'echelon inconnu', echelon: ech }, 400);
+        }
+        const ep = url.searchParams.get('epreuve');
+        if (ep && !ALLOWED_RACES.has(ep)) return json({ error: 'epreuve inconnue', epreuve: ep }, 400);
+        return json(await tableauNations(env.DB, { echelon: ech || null, epreuve: ep || null }));
       }
 
       // Le recapitulatif mondial : qui court, qui vient d'etre sacre.

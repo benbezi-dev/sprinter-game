@@ -47,8 +47,15 @@ export type MedailleInfo = {
   place: number;
 };
 
-/** Or, argent, bronze. */
-const COULEURS = ['#F8CD4A', '#CBD5E1', '#C1803F'];
+/**
+ * Or, argent, bronze.
+ *
+ * Exportees pour la meme raison que le reste de ce fichier existe : le tableau
+ * des medailles par nation peint les memes trois couleurs, et les y recopier
+ * serait se garantir qu'un jour l'or d'un ecran ne sera plus celui de l'autre.
+ */
+export const COULEURS_MEDAILLE = ['#F8CD4A', '#CBD5E1', '#C1803F'];
+const COULEURS = COULEURS_MEDAILLE;
 
 /**
  * Le sigle de la competition, pas son nom complet.

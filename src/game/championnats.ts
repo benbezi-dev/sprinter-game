@@ -350,6 +350,55 @@ export const etatEdition = (id: string) =>
 export const recapMondial = (echelon?: string) =>
   json<Monde>('/champ/monde' + (echelon ? '?echelon=' + echelon : ''));
 
+/* ------------------------------------------ le tableau des medailles */
+
+export type LigneNation = {
+  pays: string;
+  continent: string | null;
+  or: number; argent: number; bronze: number;
+  total: number;
+  /** Combien de joueurs distincts de ce pays ont ete medailles. */
+  athletes: number;
+  /** La derniere medaille du pays, en millisecondes. */
+  derniere: number;
+  /**
+   * Le rang, ex aequo compris — deux pays au meme palmares le partagent.
+   *
+   * Il vient du serveur et non de la position dans la liste : numeroter les
+   * lignes a l'ecran donnerait un 4e et un 5e a deux pays strictement egaux.
+   */
+  rang: number;
+};
+
+export type TableauNations = {
+  echelon: string | null;
+  epreuve: string | null;
+  nations: LigneNation[];
+  /**
+   * Les medailles dont on ne connait pas le drapeau.
+   *
+   * Elles ne sont rangees sous aucun pays, et l'ecran le dit plutot que de
+   * laisser une somme qui ne tombe pas juste.
+   */
+  sansPays: number;
+  medailles: number;
+};
+
+/**
+ * Le palmares de chaque pays.
+ *
+ * Sans argument il additionne tout — les trois echelons, les trois distances,
+ * depuis la premiere edition. C'est la vue qui repond a « ou en est mon
+ * pays », et c'est celle qu'on montre d'abord.
+ */
+export const tableauNations = (o: { echelon?: string; epreuve?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (o.echelon) q.set('echelon', o.echelon);
+  if (o.epreuve) q.set('epreuve', o.epreuve);
+  const s = q.toString();
+  return json<TableauNations>('/champ/nations' + (s ? '?' + s : ''));
+};
+
 /** La suite du fil apres `depuis`. Renvoie aussi le curseur a garder. */
 export const fluxDirect = (depuis = 0, zone?: string) =>
   json<{ annonces: Annonce[]; curseur: number }>(

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, RESSORT } from '@/lib/mouvement';
 import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Crown } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
-import { Drapeau } from '@/components/Insignes';
+import { Drapeau, drapeauDe } from '@/components/Insignes';
 import {
   etatEdition, fluxDirect, prochain, grille, arrivee,
   bossVu, marquerBossVu,
@@ -425,6 +425,155 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
   );
 }
 
+
+/* ------------------------------------------------------------- l'entracte */
+
+/**
+ * CE QUI SE PASSE ENTRE DEUX COURSES.
+ *
+ * Le defaut que cet ecran avait, et que toute competition d'athletisme a :
+ * entre deux series il ne se passe rien. On avait un chronometre qui descend
+ * et quatre lignes de fil qui ne bougent plus. Un stade fait mieux que ca — il
+ * presente les engages, il rappelle qui defend son titre, il ressort le
+ * meilleur chrono du tour.
+ *
+ * L'entracte ne fabrique AUCUNE information. Il n'y a pas une donnee ici qui
+ * ne soit deja dans `Edition` : le tenant, les partants, leurs pays, les
+ * chronos deja courus. C'est deliberé — une animation qui invente du contenu
+ * pour meubler se voit au deuxieme passage, et ce qu'on regarde entre deux
+ * courses doit rester la competition, pas un habillage pose dessus.
+ *
+ * Il ne parait QUE s'il reste du temps. A moins de trente secondes du depart,
+ * le compte a rebours redevient la seule chose interessante de l'ecran, et lui
+ * passer des cartes devant serait le cacher au moment ou il compte.
+ */
+
+const ENTRACTE_MS = 6000;
+const ENTRACTE_SEUIL_S = 30;
+
+type Carte = { cle: string; haut: string; bas: string; fort?: string };
+
+/**
+ * Les cartes de l'entracte, dans l'ordre ou elles se presentent.
+ *
+ * L'ordre n'est pas decoratif : on ouvre sur le tenant du titre parce que
+ * c'est l'enjeu, et on finit sur le meilleur chrono parce que c'est la barre a
+ * battre a la course suivante. Ce qui manque de donnees ne produit pas de
+ * carte — une carte vide serait pire que pas de carte.
+ */
+function cartesDe(e: Edition): Carte[] {
+  const { N } = SprinterApp;
+  const c: Carte[] = [];
+
+  if (e.tenant && e.etat !== 'terminee') {
+    c.push({
+      cle: 'tenant',
+      haut: N.t('entracte_tenant'),
+      fort: e.tenant.nom,
+      bas: e.tenant.finaleDOffice ? N.t('champ_boss_finale') : e.tenant.libelle,
+    });
+  }
+
+  // Les nations en lice. Elle ne parait qu'a partir de deux pays : « 1 pays
+  // represente » sur un championnat national est une evidence ecrite en gros.
+  const pays = new Map<string, number>();
+  for (const p of e.partants) if (p.pays) pays.set(p.pays, (pays.get(p.pays) || 0) + 1);
+  if (pays.size >= 2) {
+    const tete = [...pays.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    c.push({
+      cle: 'nations',
+      haut: N.t('entracte_nations'),
+      fort: String(pays.size),
+      bas: tete.map(([k, n]) => `${drapeauDe(k) || k.toUpperCase()} ${n}`).join('   '),
+    });
+  }
+
+  // Le meilleur chrono couru depuis le debut de l'edition. C'est la barre.
+  const best = e.resultats.filter(r => r.ms != null)
+    .sort((a, b) => (a.ms as number) - (b.ms as number))[0];
+  if (best) {
+    const qui = e.partants.find(p => p.name_key === best.name_key);
+    c.push({
+      cle: 'chrono',
+      haut: N.t('entracte_chrono'),
+      fort: chrono(best.ms),
+      bas: qui ? qui.nom : '',
+    });
+  }
+
+  // Combien restent en lice, et combien sont deja sortis. Le chiffre dit
+  // l'entonnoir mieux qu'une phrase.
+  const restants = e.partants.filter(p => !p.sorti_en).length;
+  if (restants && restants < e.partants.length) {
+    c.push({
+      cle: 'restants',
+      haut: N.t('entracte_restants'),
+      fort: String(restants),
+      bas: N.t('entracte_sortis', { n: String(e.partants.length - restants) }),
+    });
+  }
+
+  return c;
+}
+
+function Entracte({ e, secondes }: { e: Edition; secondes: number }) {
+  const cartes = cartesDe(e);
+  const [i, setI] = useState(0);
+
+  // Le carrousel ne tourne que s'il y a plus d'une carte a montrer. Une seule
+  // carte qui se remplace par elle-meme toutes les six secondes est un
+  // clignotement, pas une animation.
+  useEffect(() => {
+    if (cartes.length < 2) return;
+    const t = setInterval(() => setI(v => (v + 1) % cartes.length), ENTRACTE_MS);
+    return () => clearInterval(t);
+  }, [cartes.length]);
+
+  if (!cartes.length || secondes < ENTRACTE_SEUIL_S) return null;
+  const carte = cartes[i % cartes.length];
+
+  return (
+    <div className="relative h-[58px] overflow-hidden rounded-xl bg-black/25 border border-white/8">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={carte.cle}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={FONDU}
+          className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-3"
+        >
+          <span className="text-[8px] tracking-[0.25em] uppercase text-muted-foreground/70">
+            {carte.haut}
+          </span>
+          <span className="flex items-baseline gap-2 max-w-full">
+            {carte.fort && (
+              <span className="font-display font-black tracking-tight text-base leading-none truncate"
+                    style={{ color: OR }}>
+                {carte.fort}
+              </span>
+            )}
+            <span className="text-[10px] text-foreground/60 truncate">{carte.bas}</span>
+          </span>
+        </motion.div>
+      </AnimatePresence>
+      {/* Les temoins de progression : ils disent qu'il y a autre chose a voir,
+          et que ca tourne tout seul. Sans eux, une carte qui change surprend. */}
+      {cartes.length > 1 && (
+        <div className="absolute bottom-1 inset-x-0 flex justify-center gap-1">
+          {cartes.map((c, k) => (
+            <span key={c.cle} className="h-[2px] rounded-full transition-all"
+                  style={{
+                    width: k === i % cartes.length ? 10 : 4,
+                    backgroundColor: k === i % cartes.length ? OR : 'rgba(255,255,255,0.2)',
+                  }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ l'ecran */
 
 export function Championnat({ edition, onQuitter }: {
@@ -593,6 +742,11 @@ export function Championnat({ edition, onQuitter }: {
               {delai(rv.at - maintenant)}
             </span>
           </div>
+        )}
+
+        {/* L'entracte : entre deux courses, le stade continue de parler. */}
+        {rv && e.etat !== 'terminee' && (
+          <Entracte e={e} secondes={(rv.at - maintenant) / 1000} />
         )}
 
         <Grille e={e} />
