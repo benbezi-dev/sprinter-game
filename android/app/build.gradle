@@ -68,7 +68,9 @@ android {
         applicationId "dev.benbezi.sprinter"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // 2 et non 1 : des paquets en versionCode 1 ont ete construits les 2 et
+        // 8 septembre, et la Play Console refuse un numero deja televerse.
+        versionCode 2
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
