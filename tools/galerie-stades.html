@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — galerie des stades</title>
+<style>body{margin:0;background:#0b0d14;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}#etat{padding:8px 12px}</style>
+<div id="etat">...</div>
+<canvas id="cv" width="1280" height="720"></canvas>
+<script type="module">
+  // UNE IMAGE DE CHAQUE STADE, PRISE AU MEME MOMENT DE LA MEME COURSE.
+  //
+  // Pour juger un decor il faut le voir tel que le joueur le voit — la
+  // camera collee au coureur, en pleine course — et pouvoir comparer deux
+  // versions image pour image. La page court donc la course a pas fixe, dans
+  // chaque stade tour a tour, et n'envoie au collecteur que les instants
+  // demandes : l'attente au depart, et le plein effort.
+  //
+  //   ?stades=0,4,5:nuit,6,7,8   index de LEVELS, avec un theme force apres ':'
+  //   ?instants=40,230           les images a envoyer
+  //   ?epreuve=100
+  import { SprinterApp, updateLogic, padPress } from '/src/game/engine.ts';
+
+  const P = new URLSearchParams(location.search);
+  const STADES = (P.get('stades') || '0,4,5,6,7,8').split(',');
+  // `instants` accepte des plages : 60-130 envoie chaque image de 60 a 130,
+  // pour filmer une sequence et non plus seulement des vues.
+  const INSTANTS = (P.get('instants') || '40,230').split(',').flatMap(t => {
+    const [a, b] = t.split('-').map(Number);
+    return b === undefined ? [a] : Array.from({ length: b - a + 1 }, (_, k) => a + k);
+  });
+  const EPREUVE = P.get('epreuve') || '100';
+  const COLLECTEUR = P.get('vers') || 'http://localhost:5299';
+  const FIN = Math.max(...INSTANTS);
+
+  const cv = document.getElementById('cv');
+  // Le format de l'ecran : ?w=390&h=844&portrait=1 pour un telephone tenu
+  // debout — le cadre y montre une tout autre bande de pelouse.
+  cv.width = +(P.get('w') || 1280); cv.height = +(P.get('h') || 720);
+  const ctx = cv.getContext('2d');
+  const etat = document.getElementById('etat');
+  const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
+  G.cv = cv; G.dpr = 1; G.VW = cv.width; G.VH = cv.height; G.portrait = P.get('portrait') === '1';
+  SprinterApp.load();
+
+  const DT = 1 / 30;
+  let rang = 0;
+  for (const spec of STADES) {
+    const [idxS, themeForce] = spec.split(':');
+    const idx = +idxS;
+    const lvl = LEVELS[idx];
+    const themeAvant = lvl.theme, stadesAvant = lvl.stades;
+    if (themeForce) { lvl.theme = themeForce; lvl.stades = null; }
+    SprinterApp.startOneShot([EPREUVE], { levelIdx: idx });
+    // Une image pour que le stade demande ses decors, puis le temps de les
+    // recevoir : la course est simulee plus vite que le temps reel, et sans
+    // cette attente les premieres vues sortiraient sans rien.
+    drawWorld(ctx, THEMES[LEVELS[G.levelIdx].theme]);
+    if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
+    await new Promise(r => setTimeout(r, 1500));
+    let cote = 0;
+    for (let i = 0; i <= FIN; i++) {
+      if (G.state === 'race' && i % 2 === 0) padPress((cote++ % 2) ? 'right' : 'left');
+      updateLogic(DT);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, G.VW, G.VH);
+      const th = THEMES[LEVELS[G.levelIdx].theme];
+      drawWorld(ctx, th);
+      if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
+      const k = INSTANTS.indexOf(i);
+      if (k >= 0) {
+        // rang du stade sur deux chiffres, rang de l'image sur quatre
+        const nom = String(rang).padStart(2, '0') + String(k).padStart(4, '0');
+        const format = P.get('jpeg') ? cv.toDataURL('image/jpeg', 0.93) : cv.toDataURL('image/png');
+        await fetch(COLLECTEUR + '/f/' + nom, { method: 'POST', body: format });
+      }
+    }
+    etat.textContent = `stade ${spec} (${LEVELS[idx].theme}) fait`;
+    lvl.theme = themeAvant; lvl.stades = stadesAvant;
+    rang++;
+  }
+  etat.textContent = 'fini : ' + STADES.length + ' stades';
+</script>

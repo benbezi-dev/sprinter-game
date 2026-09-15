@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu des starters</title>
+<style>body{margin:0;background:#14161f;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8d93a8;margin:14px 16px 6px}
+canvas{display:block;margin:0 16px;background:#2b6f2e;border-radius:6px}</style>
+<h2>le prof du scolaire — il lit · au 1 il leve · le coup · apres</h2>
+<canvas id="c1" width="1180" height="420"></canvas>
+<h2>l'officiel des autres stades</h2>
+<canvas id="c2" width="1180" height="420"></canvas>
+<script type="module">
+  // Les starters en grand, hors course, avec les memes gestes que drawStarter
+  // (sprinter-app.js) : le bras qui monte au 1, le coup au signal.
+  import { SprinterApp } from '/src/game/engine.ts';
+  const etats = [0, 0.5, 1, 0.3];
+  function dessiner(id, look, prof) {
+    const ctx = document.getElementById(id).getContext('2d');
+    etats.forEach((leve, i) => {
+      const BAS = 0.12, HAUT = prof ? 2.15 : 2.98;
+      const bras = BAS + (HAUT - BAS) * leve;
+      const p = {
+        look, stride: 0.55, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+        bras: prof ? [0.30, bras, 1.72, 0.55 * (1 - leve) + 0.30]
+                   : [0.08, bras, 0.16, 0.20 * (1 - leve) + 0.04],
+        pistolet: -1, livre: prof ? 1 : 0, tete: prof ? -0.62 : 0, buste: prof ? 0.07 : 0,
+      };
+      // de face, comme sur la pelouse : demi-tour
+      const caps = SprinterApp.personCapsules(p, Math.PI + 0.5, 0, false, false, 0);
+      SprinterApp.drawFacetFigure(ctx, caps, 150 + i * 290, 390, 190);
+    });
+  }
+  dessiner('c1', SprinterApp.LOOK_PROF, true);
+  dessiner('c2', SprinterApp.LOOK_STARTER, false);
+</script>

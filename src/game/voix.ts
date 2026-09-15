@@ -61,23 +61,7 @@
 //    course parce qu'on a dit non a une permission serait absurde.
 
 import { rendreLeSonAuJeu } from './session-audio';
-
-/**
- * Serveurs de mise en relation.
- *
- * STUN suffit a la grande majorite des connexions : il sert seulement a
- * decouvrir son adresse publique. Les joueurs derriere un NAT symetrique —
- * certains reseaux mobiles, beaucoup de reseaux d'entreprise — ne peuvent pas
- * etablir de lien direct et ont besoin d'un relais TURN, qui est un service
- * payant. La liste est ici pour qu'on puisse en ajouter un sans toucher au
- * reste : `TURN` rempli, la connexion aboutit pour tout le monde.
- */
-const STUN = [
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:stun.l.google.com:19302' },
-];
-/** A remplir le jour ou l'on prend un service TURN. Voir la note ci-dessus. */
-const TURN: RTCIceServer[] = [];
+import { serveursGlace } from './turn';
 
 /** Ce qu'on demande a la capture, une fois pour toutes. */
 const AUDIO: MediaTrackConstraints = {
@@ -151,6 +135,8 @@ export class Voix {
   private liberation: any = null;
   private relance: any = null;
   private enAttente: RTCIceCandidateInit[] = [];
+  /** Signalisation arrivee avant que la connexion existe. Voir `recu`. */
+  private enAvance: { type: 'sdp' | 'ice'; charge: any }[] = [];
   private distantPose = false;
   private initiateur = false;
   private enVeille = false;
@@ -233,9 +219,16 @@ export class Voix {
 
     this.initiateur = initiateur;
 
+    // Par ou la voix passera : STUN seul, ou STUN plus un relais pour les
+    // reseaux qui refusent le lien direct. La liste est prechargee a l'entree
+    // du salon, donc cette attente est presque toujours nulle — et quand elle
+    // ne l'est pas, `recu` met de cote ce qui arrive entre-temps.
+    const glace = await serveursGlace();
+
     try {
-      this.pc = new RTCPeerConnection({ iceServers: [...STUN, ...TURN] });
+      this.pc = new RTCPeerConnection({ iceServers: glace });
     } catch {
+      this.enAvance = [];
       return;
     }
 
@@ -286,6 +279,13 @@ export class Voix {
         this.o.envoyer('sdp', this.pc.localDescription);
       } catch { /* la voix se passera de cette course */ }
     }
+
+    // Ce qui est arrive pendant que la liste des serveurs se chargeait.
+    // L'ordre est celui de la salle, et il compte : la description avant les
+    // candidats qui la suivent.
+    const enAvance = this.enAvance;
+    this.enAvance = [];
+    for (const m of enAvance) await this.recu(m.type, m.charge);
 
     // Volontairement apres la negociation, et sans l'attendre : la boite de
     // dialogue de permission ne doit retarder ni l'offre ni la reponse.
@@ -360,7 +360,15 @@ export class Voix {
 
   /** Un message de signalisation arrive de l'autre pair. */
   async recu(type: 'sdp' | 'ice', charge: any) {
-    if (!this.pc || !charge) return;
+    if (!charge) return;
+    // La connexion n'est pas encore montee : monter demande d'aller chercher
+    // les serveurs de mise en relation, et une offre peut arriver pendant ce
+    // temps. La jeter, c'est une negociation qui n'aboutit jamais et un duel
+    // entier sans voix — on la garde, `demarrer` la rejouera.
+    if (!this.pc) {
+      if (this.enAvance.length < 32) this.enAvance.push({ type, charge });
+      return;
+    }
     try {
       if (type === 'sdp') {
         // Deux offres qui se croisent. Cela ne devrait pas arriver — seul
@@ -439,6 +447,27 @@ export class Voix {
    * chercher a chaque battement.
    */
   lireEtat(): EtatVoix { return this.etat; }
+
+  /**
+   * LA VOIX DE L'AUTRE, POUR LE REPLAY.
+   *
+   * Un duel en direct se court en se parlant : le replay qui n'en garde que
+   * le bruit du stade a perdu la moitie de ce qui s'est passe. On prete donc
+   * la piste distante a l'enregistreur — la MEME que celle qui joue dans les
+   * haut-parleurs, pas une seconde capture : on la lui prete, il ne l'arrete
+   * jamais, et la couper ici couperait la conversation.
+   *
+   * Nulle tant que rien n'est arrive : avant la premiere piste distante, ou
+   * apres la fin de la connexion. L'appelant filme alors sans.
+   *
+   * Ma propre voix n'y est pas, et c'est normal : elle n'a jamais fait un
+   * aller-retour par le reseau, elle sort de mon micro. Le replay rend ce que
+   * le joueur a ENTENDU.
+   */
+  pisteDistante(): MediaStreamTrack | null {
+    try { return this.fluxDistant?.getAudioTracks()[0] || null; }
+    catch { return null; }
+  }
 
   /**
    * Rebranche l'affichage sur cette liaison.
@@ -666,7 +695,7 @@ export class Voix {
     this.pc = null; this.emetteur = null; this.fluxLocal = null;
     this.fluxDistant = null;
     this.enVeille = false;
-    this.enAttente = []; this.distantPose = false;
+    this.enAttente = []; this.enAvance = []; this.distantPose = false;
     this.prevenir({ micro: false, ouvert: false, connecte: false });
   }
 }

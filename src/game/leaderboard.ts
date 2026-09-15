@@ -9,6 +9,48 @@ const PLAYER_NAME_KEY = 'sprinter_player_name';
 
 export type RaceKey = '100' | '200' | '400';
 
+/**
+ * LES EPREUVES QUI ONT UN CLASSEMENT INDIVIDUEL — et le relais n'en est pas.
+ *
+ * Le relais 4 x 100 passe par la meme plomberie que le one shot : il monte sa
+ * piste avec `startLive(['4x100'])`, finit sur l'ecran d'arrivee du one
+ * shot, range sa course comme les autres. Si bien que chaque relayeur
+ * demandait au serveur ce que le serveur n'a pas : son record personnel au
+ * 4 x 100 au coup de pistolet (`/record`), puis a l'arrivee le TOP 500 de
+ * l'epreuve, sa place dedans, et l'envoi de sa course a l'historique
+ * (`/leaderboard` deux fois, `/rank`, `/race`). Cinq requetes, cinq refus
+ * 400 — constate le 15 septembre 2026 sur un relais a quatre telephones, et
+ * en production pour `/record`.
+ *
+ * Le serveur a raison de refuser. Un temps de relais est celui d'une EQUIPE,
+ * compte par la salle, et il a son propre classement, par equipe, avec ses
+ * fantomes (relais.ts, routes `/relay/*`). Le mettre au TOP 500 du 100 m, ou
+ * en faire le record personnel d'un seul des quatre, n'aurait pas de sens ;
+ * `ALLOWED_RACES` (worker/src/index.js) ne connait donc que les trois
+ * epreuves individuelles, et le jeu doit s'y tenir.
+ *
+ * A TENIR D'ACCORD avec ALLOWED_RACES (worker/src/index.js) et EPREUVES
+ * (worker/src/epreuves.js).
+ */
+const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['100', '200', '400']);
+
+export function estEpreuveIndividuelle(cle: unknown): cle is RaceKey {
+  return typeof cle === 'string' && EPREUVES_INDIVIDUELLES.has(cle);
+}
+
+/**
+ * L'erreur d'une route individuelle demandee pour une epreuve qui n'en a pas.
+ *
+ * Levee, et non un tableau vide rendu en silence : un classement vide se lit
+ * « personne n'a encore couru », et l'annonce du record du monde
+ * (RecordPopup) couronnerait alors le premier relais venu, avant de tenter
+ * de l'enregistrer. Une erreur, les ecrans savent deja la traiter — c'est ce
+ * qu'ils faisaient du refus du serveur, la requete en moins.
+ */
+function sansClassement(race: string): Error {
+  return new Error(`pas de classement individuel pour « ${race} »`);
+}
+
 export type LeaderboardEntry = {
   name: string;
   time_ms: number;
@@ -124,6 +166,7 @@ export function makesTop(entries: LeaderboardEntry[], splitMs: number): boolean 
 export async function fetchLeaderboardRaw(
   race: RaceKey, by: 'race' | 'run' = 'race'
 ): Promise<LeaderboardEntry[]> {
+  if (!estEpreuveIndividuelle(race)) throw sansClassement(race);
   const res = await fetch(`${API_BASE}/leaderboard?race=${race}&by=${by}`);
   if (!res.ok) throw new Error('leaderboard fetch failed');
   const data = await res.json();
@@ -151,9 +194,66 @@ export async function fetchLeaderboard(race: RaceKey): Promise<LeaderboardEntry[
   return rankByRaceTime(await fetchLeaderboardRaw(race));
 }
 
+/* ---------------------------------------------------------------------------
+   POURQUOI UN CHRONO N'ARRIVE PAS
+   ---------------------------------------------------------------------------
+   `submitScore` ne rendait qu'une erreur nue — « score submit failed ». Toutes
+   les causes s'y confondaient, et les ecrans n'avaient donc qu'une phrase a
+   dire : « echec de l'envoi, reessaie ».
+
+   Elle est fausse pour la moitie d'entre elles, et elle l'est de la pire
+   maniere. Un nom reserve par un AUTRE appareil vaut 403, et ce 403 ne
+   s'arrangera jamais : le serveur refusera le meme envoi ce soir, demain et le
+   mois prochain. Le joueur relance, relance, puis ferme la fenetre — et le
+   record du monde qu'il vient de courir n'existe nulle part.
+
+   Ce n'est pas une hypothese. Le 10 septembre 2026 a 01:31 UTC, un 8,22 s au
+   100 m — record du monde du jeu — est parti sous le nom « Léo », reserve la
+   veille par un autre appareil. Le serveur a note le pays du joueur (cette
+   ecriture-la precede le controle du nom) puis a refuse : rien dans `scores`,
+   rien dans `races`, et un joueur devant « reessaie » qui ne pouvait pas
+   marcher.
+
+   On distingue donc les refus, parce qu'ils n'appellent pas la meme suite :
+   celui qui ne s'arrangera pas demande un geste du joueur, les autres
+   demandent de la patience — et c'est le jeu qui la prend a sa charge, voir
+   `record-attente.ts`.
+--------------------------------------------------------------------------- */
+
+export type RaisonRefus =
+  /** Ce nom appartient a un autre appareil. Reessayer n'y changera rien. */
+  | 'nom-reserve'
+  /** Trop d'envois depuis cette adresse. Ca repassera tout seul. */
+  | 'trop-vite'
+  /** Reseau, serveur, inconnu. Le prochain essai peut aboutir. */
+  | 'reseau';
+
+export class EnvoiRefuse extends Error {
+  readonly raison: RaisonRefus;
+  constructor(raison: RaisonRefus) {
+    super(`envoi refuse : ${raison}`);
+    this.name = 'EnvoiRefuse';
+    this.raison = raison;
+  }
+}
+
+/**
+ * La raison d'un echec, quelle que soit la forme de l'erreur attrapee.
+ *
+ * Un `catch` recoit ce qui passe : notre refus type, une panne de `fetch`, ou
+ * une erreur d'un tout autre etage. Tout ce qu'on ne sait pas nommer est du
+ * reseau — c'est le seul classement qui ne promette rien de faux au joueur.
+ */
+export function raisonDe(e: unknown): RaisonRefus {
+  return e instanceof EnvoiRefuse ? e.raison : 'reseau';
+}
+
 /**
  * `rank` porte sur le meilleur chrono realise sur UNE course (best_split_ms),
  * pas sur le cumul du parcours : c'est ce que classe le TOP 500.
+ *
+ * Leve `EnvoiRefuse` et rien d'autre : l'appelant lit `raison` plutot que de
+ * deviner.
  */
 export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number): Promise<{
   rank: number;
@@ -161,18 +261,25 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
   best_split_ms: number;
   entries: LeaderboardEntry[];
 }> {
-  const res = await fetch(`${API_BASE}/submit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      device_id: getDeviceId(),
-      race_key: race,
-      name,
-      time_ms: Math.round(timeMs),
-      best_split_ms: Math.round(bestSplitMs),
-    }),
-  });
-  if (!res.ok) throw new Error('score submit failed');
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: getDeviceId(),
+        race_key: race,
+        name,
+        time_ms: Math.round(timeMs),
+        best_split_ms: Math.round(bestSplitMs),
+      }),
+    });
+  } catch {
+    throw new EnvoiRefuse('reseau');       // hors ligne, DNS, coupure
+  }
+  if (res.status === 403) throw new EnvoiRefuse('nom-reserve');
+  if (res.status === 429) throw new EnvoiRefuse('trop-vite');
+  if (!res.ok) throw new EnvoiRefuse('reseau');
   return res.json();
 }
 
@@ -208,6 +315,9 @@ export async function qualifyingRaces(
   for (let i = 0; i < races.length; i++) {
     const s = splitsSec[i];
     if (s == null || s <= 0) continue;
+    // Un relais n'entre pas au TOP 500 : son classement est celui des
+    // equipes. Voir estEpreuveIndividuelle.
+    if (!estEpreuveIndividuelle(races[i])) continue;
     const ms = s * 1000;
     try {
       const [list, mine] = await Promise.all([
@@ -284,6 +394,7 @@ export async function fetchMyRank(race: RaceKey): Promise<{
   time_ms?: number;
   best_split_ms?: number;
 }> {
+  if (!estEpreuveIndividuelle(race)) throw sansClassement(race);
   const res = await fetch(`${API_BASE}/rank?race=${race}&device_id=${getDeviceId()}`);
   if (!res.ok) throw new Error('rank fetch failed');
   return res.json();

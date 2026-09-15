@@ -57,7 +57,12 @@ export function FalseStartCut() {
       className="fixed inset-0 z-50 pointer-events-auto flex flex-col items-center justify-center
                  px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]"
     >
-      {/* Coup de rouge : bref, violent, puis un voile qui reste */}
+      {/* Coup de rouge : bref, violent, puis un voile qui reste.
+          LE VOILE NE COUVRE PLUS QUE LE COULOIR DU TEXTE. Il etait noir a 78 %
+          sur tout l'ecran : le stade ou l'on vient d'etre elimine disparaissait,
+          et la scene ne se passait plus nulle part. Il reste un assombrissement
+          leger partout, et une bande franche entre les deux traits rouges, la
+          ou le texte doit se lire. */}
       <motion.div
         className="absolute inset-0 bg-destructive"
         initial={{ opacity: 0.85 }}
@@ -67,7 +72,14 @@ export function FalseStartCut() {
       <motion.div
         className="absolute inset-0 bg-black"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 0.78 }}
+        animate={{ opacity: 0.30 }}
+        transition={{ duration: 1.1, delay: 0.35 }}
+      />
+      <motion.div
+        className="absolute left-0 right-0 top-[32%] bottom-[32%]
+                   bg-[linear-gradient(180deg,rgba(0,0,0,0.55),rgba(0,0,0,0.72)_50%,rgba(0,0,0,0.55))]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         transition={{ duration: 1.1, delay: 0.35 }}
       />
 

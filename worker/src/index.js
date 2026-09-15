@@ -1,6 +1,7 @@
 import {
   recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
+  mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
 import { poserMot, MAX_TEXTE } from './mot.js';
 import { nettoyerInsta } from './insta.js';
@@ -19,7 +20,7 @@ import {
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations,
-  fluxDirect, recapMondial,
+  fluxDirect, recapMondial, tableauNations,
 } from './championnats.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -29,6 +30,7 @@ import {
 import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
 } from './records.js';
+import { noterRefus, refusResume } from './refus.js';
 import {
   verifierTrace, vraisemblance, signaler, listerSuspectes,
 } from './preuve.js';
@@ -38,10 +40,11 @@ import {
 } from './journal.js';
 import { mesures } from './mesures.js';
 import {
-  EPREUVE as OBJ_EPREUVE, joueursAServir, creerObjectif, seuilsDe,
+  EPREUVE as OBJ_EPREUVE, EPREUVES_DEFI, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
+import { directionDe } from './epreuves.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -137,6 +140,13 @@ const ALLOWED_RACES = new Set(['100', '200', '400']);
 const MAX_NAME_LEN = 20;
 const MIN_TIME_MS = 1000;       // en dessous, forcement invalide
 const MAX_TIME_MS = 20 * 60000; // 20 minutes, plafond large
+// ATTENTION EN Y TOUCHANT. NO_RUN_MS, plus bas, vaut exactement MAX_TIME_MS,
+// et ne franchit donc ce plafond que parce que le test est `>` et non `>=`.
+// C'est le cumul sentinelle qu'envoie TOUT record du monde couru hors
+// carriere : baisser le plafond d'un millieme referait de chacun d'eux un 400
+// silencieux. /submit ne depend plus de cette coincidence — il laisse passer
+// la sentinelle explicitement. Les autres routes n'attendent que de vrais
+// chronos et gardent le plafond tel quel.
 // Un defi porte les traces des courses de son auteur, pour que l'adversaire
 // puisse l'affronter en fantome. On plafonne pour qu'un client ne puisse pas
 // remplir la base : 6 epreuves, ~13 releves/s, largement de quoi tenir un
@@ -545,6 +555,22 @@ async function ensureAttemptTraces(db) {
   attemptTracesReady.add(db);
 }
 
+// Les annonces ecrites a la main (`/push/diffuser`), que le jeu lit par
+// `GET /annonce`. Le detail est le texte long du panneau ; sans lui, le jeu
+// montre le texte de la notification.
+const annoncesPretes = new WeakSet();
+async function ensureAnnonces(db) {
+  if (annoncesPretes.has(db)) return;
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS annonces (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fr_titre TEXT NOT NULL, fr_texte TEXT NOT NULL, fr_detail TEXT,
+      en_titre TEXT NOT NULL, en_texte TEXT NOT NULL, en_detail TEXT,
+      cree_le INTEGER NOT NULL
+    )`).run();
+  annoncesPretes.add(db);
+}
+
 const pushTableReady = new WeakSet();
 async function ensurePushTable(db) {
   if (pushTableReady.has(db)) return;
@@ -721,14 +747,21 @@ async function envoyerObjectifs(env, maintenant) {
   const joueurs = await joueursAServir(db, maintenant);
   if (!joueurs.length) return { mode, servis: 0 };
 
-  const bilan = { mode, dus: joueurs.length, crees: 0, notifies: 0,
+  const bilan = { mode, dus: joueurs.length, crees: 0, defis: 0, notifies: 0,
                   tus: 0, sans_push: 0, simules: 0, erreurs: 0 };
 
   for (const j of joueurs) {
     try {
-      const { objectif, nouveau, silencieux } = await creerObjectif(db, j, maintenant);
+      // UN JOUEUR, JUSQU'A TROIS DEFIS — un par distance ou il est classe. Le
+      // premier de la liste est celui de son epreuve de tete : c'est lui qui
+      // parle dans la notification, les autres y tiennent en une phrase. Une
+      // notification par creneau, comme avant ; trois sonneries pour un meme
+      // midi seraient trois fois la meme interruption.
+      const { objectif, objectifs, nouveaux, nouveau, silencieux } =
+        await creerObjectif(db, j, maintenant);
       if (!objectif || !nouveau) continue;
       bilan.crees++;
+      bilan.defis += nouveaux.length;
 
       // Le silence ne retient que la sonnerie : l'objectif existe, et celui
       // qui rouvre le jeu de lui-meme le trouve. C'est ce qui lui permet de
@@ -739,18 +772,25 @@ async function envoyerObjectifs(env, maintenant) {
       // arriver, ou pas ouvert du tout. Lu une fois par joueur, pas par
       // appareil — c'est la meme journee sur les deux telephones.
       const midi = objectif.creneau === 'soir'
-        ? await midiDuJour(db, j.nameKey, objectif.jour) : null;
+        ? await midiDuJour(db, j.nameKey, objectif.jour, objectif.race_key) : null;
+
+      // Les autres distances ouvertes dans le meme creneau. Le corps en dit
+      // un mot a la fin — sans lui, deux defis sur trois n'existeraient que
+      // pour qui rouvre le jeu de lui-meme.
+      const autres = (objectifs || [])
+        .filter(o => o.race_key !== objectif.race_key)
+        .map(o => o.race_key);
 
       // Le texte est fabrique par appareil, dans la langue de son abonnement :
       // on ne le calcule pas ici, on donne de quoi le calculer.
       const texte = (langue) => {
-        const t = texteObjectif(objectif, j.rang, langue, undefined, midi);
+        const t = texteObjectif(objectif, j.rang, langue, undefined, midi, autres);
         return [t.titre, t.corps];
       };
       // ...et on retient CE QUI a ete choisi, pour pouvoir un jour dire quel
       // texte fait ouvrir. La langue importe peu ici : la variante est la meme
       // des deux cotes, c'est le tirage qui la fixe.
-      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi);
+      const choix = texteObjectif(objectif, j.rang, 'fr', undefined, midi, autres);
 
       // `appareilsDe` est celui de ce fichier : il prend une liste, dedoublonne
       // et avale ses erreurs. Inutile d'en ecrire un second dans objectif.js.
@@ -790,6 +830,7 @@ async function envoyerObjectifs(env, maintenant) {
         // pas la langue de l'abonnement, qu'on n'a pas cherchee.
         console.log('objectif[essai]', JSON.stringify({
           joueur: j.nameKey, rang: j.rang, appareils: joignables.length,
+          epreuve: objectif.race_key, autres,
           cible_ms: objectif.cible_ms, pb_ms: objectif.pb_ms,
           creneau: objectif.creneau, expire_le: objectif.expire_le,
           contexte: choix.contexte, variante: choix.variante,
@@ -1104,7 +1145,11 @@ async function servir(request, env, ctx, porteur) {
       const cle = nom.toLowerCase();
 
       await ensureObjectifTables(env.DB);
-      // L'objectif OUVERT MAINTENANT, a l'instant pres.
+      // LES DEFIS DU CRENEAU OUVERT, ET ILS SONT JUSQU'A TROIS.
+      //
+      // Un par distance ou le joueur est classe. On prend le creneau le plus
+      // recent parmi ceux qui sont ouverts, puis TOUTES ses lignes : trois
+      // defis d'un meme midi sont un seul midi, et le jeu les pose cote a cote.
       //
       // Les instants d'ouverture et d'expiration sont ranges dans la ligne :
       // la route n'a donc pas a savoir dans quel fuseau vit le joueur, ce
@@ -1113,19 +1158,30 @@ async function servir(request, env, ctx, porteur) {
       // minuit. Les lignes d'avant la fenetre gardent la regle du jour.
       const t = Date.now();
       const jour = heureLocale(new Date(), 'Europe/Paris').jour;
-      const o = await env.DB.prepare(
+      const { results: ouverts } = await env.DB.prepare(
         `SELECT * FROM objectifs
           WHERE name_key = ?
             AND (ouvre_le IS NULL OR ouvre_le <= ?)
             AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
-          ORDER BY cree_le DESC LIMIT 1`
-      ).bind(cle, t, jour, t).first();
-      if (!o) return json({ objectif: null });
+          ORDER BY cree_le DESC`
+      ).bind(cle, t, jour, t).all();
+      if (!ouverts || !ouverts.length) return json({ objectif: null, objectifs: [] });
 
-      const rang = await getRank(env.DB, OBJ_EPREUVE, o.pb_ms);
-      const texte = texteObjectif(o, rang, langue, true);
-      return json({
-        objectif: {
+      const recent = ouverts[0];
+      const duCreneau = ouverts
+        .filter(o => o.jour === recent.jour && o.creneau === recent.creneau)
+        // L'ordre du programme : 100, 200, 400. C'est celui des cartes a
+        // l'ecran, et il ne doit pas dependre de l'ordre d'insertion.
+        .sort((a, b) => EPREUVES_DEFI.indexOf(a.race_key)
+                      - EPREUVES_DEFI.indexOf(b.race_key));
+
+      const vus = [];
+      for (const o of duCreneau) {
+        // Le rang est celui de SA distance : etre deuxieme au 100 m ne dit
+        // rien de ce qu'on vaut sur un tour de piste.
+        const rang = await getRank(env.DB, o.race_key || OBJ_EPREUVE, o.pb_ms);
+        const texte = texteObjectif(o, rang, langue, true);
+        vus.push({
           creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
           cible_ms: o.cible_ms, pb_ms: o.pb_ms,
           tentatives: o.tentatives, meilleur_ms: o.meilleur_ms,
@@ -1141,11 +1197,17 @@ async function servir(request, env, ctx, porteur) {
           // Les trois seuils, calcules ici plutot que dans le jeu : ils
           // dependent du bareme, et un bareme recopie cote client est un
           // bareme qui derive au premier reglage.
-          seuils: seuilsDe(o.pb_ms, o.cible_ms, 'plus_bas'),
+          seuils: seuilsDe(o.pb_ms, o.cible_ms, directionDe(o.race_key)),
           palier: o.palier ?? null,
           titre: texte.titre, texte: texte.corps,
-        },
-      });
+        });
+      }
+
+      // `objectif` au singulier reste rendu, et c'est le 100 m quand il existe :
+      // un jeu d'avant les trois distances ne lit que ce champ-la, et doit
+      // continuer a trouver le defi qu'il sait courir.
+      const seul = vus.find(v => v.epreuve === OBJ_EPREUVE) || vus[0] || null;
+      return json({ objectif: seul, objectifs: vus });
     }
 
     /* -----------------------------------------------------------------
@@ -1184,22 +1246,29 @@ async function servir(request, env, ctx, porteur) {
       const deviceId = body?.device_id;
       const ms = Math.round(Number(body?.ms));
       const langue = body?.langue === 'en' ? 'en' : 'fr';
+      // QUELLE DISTANCE A ETE COURUE. Trois defis sont ouverts en meme temps,
+      // et c'est la course qui designe celui qu'elle vise — un 400 m ne valide
+      // pas le 100 m. Un jeu d'avant les trois distances n'envoie rien : sa
+      // course est un 100 m, la seule qu'il sache courir en defi.
+      const epreuve = String(body?.epreuve || OBJ_EPREUVE);
 
       if (!nom) return json({ error: 'nom requis' }, 400);
       if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!EPREUVES_DEFI.includes(epreuve)) return json({ error: 'epreuve invalide' }, 400);
       if (!Number.isFinite(ms) || ms < MIN_TIME_MS || ms > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
 
       const cle = nom.toLowerCase();
       if (!await peutUtiliser(env.DB, cle, deviceId)) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/objectif/tentative', nameKey: cle, deviceId: deviceId }));
         return json({ error: 'nom reserve', pris: true }, 403);
       }
 
       // La preuve, avant tout enregistrement. Une course qui ne tient pas
       // debout ne doit pas compter comme tentative — sinon la refuser
       // reviendrait quand meme a faire avancer le compteur du bonus.
-      const griefs = verifierTrace(cleanTrace(body?.trace), ms, OBJ_EPREUVE);
+      const griefs = verifierTrace(cleanTrace(body?.trace), ms, epreuve);
       if (griefs.length) {
         await signaler(env.DB, {
           nameKey: cle, deviceId, quoi: 'trace',
@@ -1208,7 +1277,7 @@ async function servir(request, env, ctx, porteur) {
         return json({ error: 'course invalide', griefs }, 422);
       }
 
-      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date());
+      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date(), epreuve);
       if (!res) return json({ objectif: null });
       if (res.refuse) return json({ refuse: res.refuse, attendreMs: res.attendreMs }, 429);
 
@@ -1262,6 +1331,7 @@ async function servir(request, env, ctx, porteur) {
         // Le meme controle que partout : un reglage se change depuis un
         // appareil du proprietaire, pas depuis n'importe lequel.
         if (!await peutUtiliser(env.DB, n.toLowerCase(), deviceId)) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/notifications/rythme', nameKey: n.toLowerCase(), deviceId: deviceId }));
           return json({ error: 'nom reserve', pris: true }, 403);
         }
         await poserRythme(env.DB, n.toLowerCase(), rythme);
@@ -1375,8 +1445,14 @@ async function servir(request, env, ctx, porteur) {
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
+      // Le cumul sentinelle n'est pas un chrono : il dit « pas de parcours
+      // complet derriere », et c'est ce que porte tout record du monde couru
+      // hors carriere. Il passe donc quel que soit le plafond des vrais
+      // chronos. La garde est ICI et pas dans MAX_TIME_MS : elargir le plafond
+      // partage desserrerait du meme geste /race, /objectif/tentative et les
+      // deux routes de duel, qui n'attendent que des courses reelles.
       const t = Math.round(Number(time_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
+      if (t !== NO_RUN_MS && (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS)) {
         return json({ error: 'temps invalide' }, 400);
       }
       // le meilleur chrono individuel ne peut pas depasser le temps total
@@ -1386,6 +1462,7 @@ async function servir(request, env, ctx, porteur) {
       // Un nom reserve n'accepte que les appareils de son proprietaire :
       // sans cela la reservation ne protegerait rien.
       if (!await peutUtiliser(env.DB, cleanedName.trim().toLowerCase(), device_id)) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/submit', nameKey: cleanedName.trim().toLowerCase(), deviceId: device_id }));
         return json({ error: 'nom reserve', pris: true }, 403);
       }
       const now = Date.now();
@@ -1504,8 +1581,14 @@ async function servir(request, env, ctx, porteur) {
       const sous = url.pathname.slice('/champ/'.length);
 
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
+      //
+      // Sur une epreuve, forcement : un pays de sprinters tient son 100 m sans
+      // tenir son 400 m, et une liste sans distance ne repondrait a aucune
+      // question. Le 100 m par defaut, comme partout ailleurs.
       if (sous === 'pays' && request.method === 'GET') {
-        return json({ pays: await paysEligibles(env.DB) });
+        const ep = url.searchParams.get('epreuve') || '100';
+        if (!ALLOWED_RACES.has(ep)) return json({ error: 'epreuve inconnue', epreuve: ep }, 400);
+        return json({ epreuve: ep, pays: await paysEligibles(env.DB, ep) });
       }
 
       // Le joueur corrige son pays.
@@ -1517,6 +1600,7 @@ async function servir(request, env, ctx, porteur) {
         const key = cleanName(name).trim().toLowerCase();
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
         if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/pays', nameKey: key, deviceId: device_id }));
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
@@ -1652,6 +1736,23 @@ async function servir(request, env, ctx, porteur) {
         return json(await fluxDirect(env.DB, {
           zone: url.searchParams.get('zone'), depuis, limite,
         }));
+      }
+
+      // Le tableau des medailles par nation.
+      //
+      // Sans filtre il additionne tout : les trois echelons, les trois
+      // distances, depuis la premiere edition. C'est la vue qui repond a « ou
+      // en est mon pays », et c'est celle qu'on montre en premier. Les deux
+      // filtres servent a repondre plus precisement — le tableau du mondial,
+      // le tableau du 400 m — et non a decouper par defaut.
+      if (sous === 'nations' && request.method === 'GET') {
+        const ech = url.searchParams.get('echelon');
+        if (ech && !['national', 'continental', 'mondial'].includes(ech)) {
+          return json({ error: 'echelon inconnu', echelon: ech }, 400);
+        }
+        const ep = url.searchParams.get('epreuve');
+        if (ep && !ALLOWED_RACES.has(ep)) return json({ error: 'epreuve inconnue', epreuve: ep }, 400);
+        return json(await tableauNations(env.DB, { echelon: ech || null, epreuve: ep || null }));
       }
 
       // Le recapitulatif mondial : qui court, qui vient d'etre sacre.
@@ -1922,6 +2023,7 @@ async function servir(request, env, ctx, porteur) {
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
         await ensurePlayerTables(env.DB);
         if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/direct/inviter', nameKey: key, deviceId: device_id }));
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
 
@@ -2024,7 +2126,12 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/duels' && request.method === 'GET') {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
-      const board = await duelBoard(env.DB);
+      // UN CLASSEMENT PAR DISCIPLINE. Sans `epreuve`, c'est celui du 100 m —
+      // la distance par defaut du jeu — et non un melange des trois : un
+      // classement toutes distances confondues annoncerait a un sprinter une
+      // division qu'il n'a gagnee nulle part.
+      const epreuve = disciplineValide(url.searchParams.get('epreuve'));
+      const board = await duelBoard(env.DB, epreuve);
 
       // Le drapeau et la medaille se posent ici, pas dans duelBoard : le
       // classement des duels ne doit rien savoir des championnats, sans quoi
@@ -2046,6 +2153,12 @@ async function servir(request, env, ctx, porteur) {
       }
 
       const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      // Mes divisions sur les AUTRES distances. L'accueil n'a la place que
+      // d'un ecusson et doit bien dire duquel il parle ; l'ecran du classement
+      // s'en sert pour montrer, sous le selecteur, ou en est le joueur sur ce
+      // qu'il n'est pas en train de regarder. Une liste vide pour qui n'a
+      // encore joue aucun duel.
+      const mes = nom ? await mesDisciplines(env.DB, nom) : [];
       return json({
         // L'echelle voyage avec le classement : le jeu doit pouvoir dessiner
         // une progression — « il te reste tant avant la division suivante » —
@@ -2055,7 +2168,12 @@ async function servir(request, env, ctx, porteur) {
           legende: LEGENDE, lp_par_palier: LP_PAR_PALIER,
         },
         bareme: { lanceur: LP.lanceur, releveur: LP.releveur },
-        classement: board, moi,
+        // La discipline lue, et celles qu'un ecran peut proposer. Les combines
+        // — un 100 + 200 court d'un bloc — ont leur classement mais ne
+        // figurent pas dans cette liste : on y entre en en courant un, pas en
+        // le choisissant dans un menu de sept boutons.
+        epreuve, epreuves: DISCIPLINES_SIMPLES,
+        classement: board, moi, mes_epreuves: mes,
       });
     }
 
@@ -2511,10 +2629,25 @@ async function servir(request, env, ctx, porteur) {
        *
        * `waitUntil` et pas `await` : le joueur n'attend pas apres un courriel,
        * et un refus de Resend n'a pas a devenir un echec de sa demande. */
-      if (!canal.test && r.etat === 'attente' && !r.deja) {
+      /* TOUTE demande neuve previent, y compris celle qui se regle seule.
+       *
+       * L'alerte ne partait que sur `attente`, c'est-a-dire quand il y avait
+       * quelque chose a arbitrer. Mais les demandes se reglent presque
+       * toujours toutes seules — sept sur sept depuis l'ouverture — si bien
+       * que la boite n'a jamais sonne une fois, et qu'on a pu croire que
+       * l'envoi etait casse alors qu'il n'avait simplement rien a dire.
+       *
+       * Or savoir qu'un joueur a perdu son compte compte AUSSI quand il le
+       * retrouve tout seul : c'est la seule trace qu'on ait de ceux qui se
+       * perdent, et ceux-la ne reviennent pas toujours. Le sujet du courriel
+       * dit lequel des deux cas on tient.
+       *
+       * Un second appui sur le bouton (`deja`) ne sonne toujours pas : meme
+       * demande, meme mot de passage. */
+      if (!canal.test && !r.deja) {
         ctx.waitUntil(alerterRecuperation(env, {
           id: r.id, nom: propre, insta: r.insta, phrase: r.phrase,
-          compte: r.compte, indice, cree_le: Date.now(),
+          compte: r.compte, indice, cree_le: Date.now(), etat: r.etat,
         }));
       }
       return json(r);
@@ -2600,6 +2733,7 @@ async function servir(request, env, ctx, porteur) {
 
       await ensurePlayerTables(env.DB);
       if (!(await peutUtiliser(env.DB, key, device_id))) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/profil', nameKey: key, deviceId: device_id }));
         return json({ error: 'ce nom ne t appartient pas' }, 403);
       }
       const p = await env.DB.prepare(
@@ -2687,10 +2821,32 @@ async function servir(request, env, ctx, porteur) {
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
+      /* UNE COURSE NE SE JETTE PAS.
+
+         Cette route rendait 403 et n'ecrivait rien quand le nom n'appartenait
+         pas a l'appareil. La regle du nom etait bonne ; la sanction, non. Un
+         joueur qui change de telephone garde son nom dans son navigateur et
+         perd le droit de l'employer : chacune de ses courses partait alors a
+         la poubelle, sans qu'il le sache et sans que personne le sache. Des
+         jours de jeu ont disparu ainsi, record du monde compris.
+
+         Ce qu'il fallait refuser, c'est l'ATTRIBUTION, pas la course. On
+         l'enregistre donc sous cet appareil sans le nom conteste — le
+         classement reste protege, `noterRecord` ne cree aucune ligne pour un
+         anonyme — et le jour ou le joueur relie son appareil, `recalculerRecords`
+         retrouve ces courses et les lui rend.
+
+         Et on le DIT au jeu, qui n'avait aucun moyen de l'apprendre : c'est
+         `nom_refuse` qui allume l'avertissement sur la puce du nom. */
       const cleaned = cleanName(name);
       const key = cleaned.trim().toLowerCase();
+      let nomRefuse = false;
+      let nom = cleaned, cle = key;
       if (!await peutUtiliser(env.DB, key, device_id)) {
-        return json({ error: 'nom reserve', pris: true }, 403);
+        ctx.waitUntil(noterRefus(env.DB, { route: '/race', nameKey: key, deviceId: device_id }));
+        nomRefuse = true;
+        nom = 'Anonyme';
+        cle = 'anonyme';
       }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
       const md = mode === 'oneshot' ? 'oneshot' : 'campaign';
@@ -2698,7 +2854,7 @@ async function servir(request, env, ctx, porteur) {
       await env.DB.prepare(
         `INSERT INTO races (device_id, name_key, name, race_key, time_ms, mode, level_idx, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(device_id, key, cleaned, race_key, t, md, lvl, Date.now()).run();
+      ).bind(device_id, cle, nom, race_key, t, md, lvl, Date.now()).run();
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -2718,11 +2874,11 @@ async function servir(request, env, ctx, porteur) {
       let record = null;
       try {
         const r = await noterRecord(env.DB, {
-          deviceId: device_id, epreuve: race_key, nom: cleaned, valeur: t,
+          deviceId: device_id, epreuve: race_key, nom, valeur: t,
         });
         if (r.record) record = { ancien_ms: r.ancien, ms: r.valeur };
       } catch (e) { /* le record se rattrapera au recalcul */ }
-      return json({ ok: true, record });
+      return json({ ok: true, record, nom_refuse: nomRefuse });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
@@ -2993,6 +3149,24 @@ async function servir(request, env, ctx, porteur) {
       return json({ error: 'not found' }, 404);
     }
 
+    /* --------------------------------------------------- les refus de nom
+       Combien de joueurs se cognent au mur, et depuis quand.
+
+       Meme cle que le tableau de bord, et pour la meme raison : c'est un
+       compteur de frequentation, pas un geste. Les pseudonymes restent
+       masques sauf `?noms=1` — la demande est alors dans l'adresse, donc
+       visible dans le journal comme dans la barre du navigateur, ce qui est
+       la seule facon qu'un masquage tienne.
+
+       `?jours=` borne la fenetre, sept par defaut. */
+    if (url.pathname === '/refus' && request.method === 'GET') {
+      if (!estTableau(request, env)) return json({ error: 'introuvable' }, 404);
+      return json(await refusResume(env.DB, {
+        jours: url.searchParams.get('jours'),
+        avecNoms: url.searchParams.get('noms') === '1',
+      }));
+    }
+
     if (url.pathname === '/stats' && request.method === 'GET') {
       // Le tableau de bord se lit sous cle, et pas autrement.
       //
@@ -3215,15 +3389,24 @@ async function servir(request, env, ctx, porteur) {
         const { results: pm } = await DB.prepare(
           `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
              FROM duel_results GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+        // Une ligne par joueur ET par discipline : ce qui se compte en
+        // JOUEURS se compte donc en cles distinctes. Un COUNT(*) comptait
+        // trois fois celui qui court les trois distances, et le nombre
+        // d'inscrits aurait triple sans que personne n'arrive.
         const p = await DB.prepare(
           `SELECT COALESCE(SUM(launched),0) AS lances,
                   COALESCE(SUM(received),0) AS releves,
-                  COUNT(*) AS inscrits,
-                  SUM(CASE WHEN wins+losses+draws > 0 THEN 1 ELSE 0 END) AS classes
+                  COUNT(DISTINCT name_key) AS inscrits,
+                  COUNT(DISTINCT CASE WHEN wins+losses+draws > 0
+                                      THEN name_key END) AS classes
              FROM duel_players`).first();
+        // La repartition des divisions, discipline par discipline : c'est le
+        // seul decoupage qui veuille dire quelque chose maintenant qu'un meme
+        // joueur peut etre elite sur 100 m et departemental sur 400 m.
         const { results: paliers } = await DB.prepare(
-          `SELECT palier, COUNT(*) AS n FROM duel_players
-             WHERE wins+losses+draws > 0 GROUP BY palier ORDER BY palier`).all();
+          `SELECT epreuve, palier, COUNT(*) AS n FROM duel_players
+             WHERE wins+losses+draws > 0
+             GROUP BY epreuve, palier ORDER BY epreuve, palier`).all();
         return {
           joues: r?.joues || 0,
           issues: { lanceur: r?.lanceur_gagne || 0, releveur: r?.releveur_gagne || 0, nul: r?.nul || 0 },
@@ -3360,7 +3543,12 @@ async function servir(request, env, ctx, porteur) {
         q1(`SELECT COUNT(*) AS n FROM challenge_attempts`),
         q1(`SELECT COUNT(*) AS n FROM duel_results`),
         qN(`SELECT outcome, COUNT(*) AS n FROM duel_results GROUP BY outcome`),
-        qN(`SELECT name, launched, wins, losses, draws FROM duel_players ORDER BY launched DESC LIMIT 10`),
+        // Les lanceurs se comptent sur toutes leurs disciplines : c'est la
+        // personne qu'on regarde ici, pas son classement au 200 m.
+        qN(`SELECT name, SUM(launched) AS launched, SUM(wins) AS wins,
+                   SUM(losses) AS losses, SUM(draws) AS draws
+              FROM duel_players GROUP BY name_key
+             ORDER BY launched DESC LIMIT 10`),
         q1(`SELECT COUNT(*) AS n FROM relay_teams`),
         q1(`SELECT COUNT(*) AS n FROM relay_scores`),
         q1(`SELECT COUNT(*) AS n FROM champ_editions`),
@@ -3506,7 +3694,10 @@ async function servir(request, env, ctx, porteur) {
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = cleanName(name).trim().toLowerCase();
-      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name));
+      // Le compteur est tenu par discipline, comme le reste : « douze defis
+      // lances » ne veut plus rien dire quand les trois distances ne sont plus
+      // le meme classement.
+      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name), races);
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
@@ -3687,6 +3878,11 @@ async function servir(request, env, ctx, porteur) {
         opponentName: cleanName(name),
         challengerMs: ch.total_ms,
         opponentMs: t,
+        // SUR QUOI le duel s'est couru, donc quel classement il deplace. Les
+        // epreuves viennent du defi et jamais de la tentative : c'est le
+        // lanceur qui a pose le programme, et un client qui annoncerait autre
+        // chose se classerait sur une distance qu'il n'a pas courue.
+        epreuves: epreuvesDuDefi,
       });
       if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
 
@@ -3843,6 +4039,97 @@ async function servir(request, env, ctx, porteur) {
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       await ensurePushTable(env.DB);
       return json(await diagnostiquerAppareil(env.DB, device_id, env, envoyer !== false));
+    }
+
+    /* -------------------------------------------------------------------
+       UNE ANNONCE A TOUS LES JOUEURS
+
+       Le seul message qui ne suit pas une nouvelle de jeu : un texte ecrit a
+       la main. Il part par trois portes a la fois :
+
+       - la notification du telephone, pour les appareils abonnes — dans la
+         langue de leur abonnement, d'ou les deux langues exigees ;
+       - la boite, pour ceux qui ont le jeu ouvert a cet instant : la pastille
+         apparait dans la seconde, comme pour un defi recu ;
+       - la table `annonces`, que le jeu lit a chaque retour au calme
+         (`GET /annonce`) : c'est elle qui touche tous les autres, c'est-a-dire
+         presque tout le monde — la plupart des joueurs n'ont pas accepte les
+         notifications.
+
+       `{ fr: [titre, texte], en: [titre, texte] }` fait la notification ;
+       `detail: { fr, en }`, facultatif, est le texte plus long que montre le
+       jeu quand on ouvre l'annonce. Sans lui, le jeu montre le texte court.
+
+       Sous cle d'administration : la route fait vibrer tous les telephones.
+       `essai: true` rend le nombre d'appareils vises sans rien envoyer ni
+       rien enregistrer.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/diffuser' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { fr, en, essai, detail } = body || {};
+      const bon = t => Array.isArray(t) && t.length === 2
+        && t.every(s => typeof s === 'string' && s.trim() && s.length <= 240);
+      if (!bon(fr) || !bon(en)) {
+        return json({ error: 'fr et en requis : [titre, texte], 240 caracteres au plus chacun' }, 400);
+      }
+      const long = s => (s == null || s === '') ? null
+        : (typeof s === 'string' && s.length <= 1500 ? s.trim() : undefined);
+      const detailFr = long(detail && detail.fr), detailEn = long(detail && detail.en);
+      if (detailFr === undefined || detailEn === undefined) {
+        return json({ error: 'detail.fr et detail.en : 1500 caracteres au plus' }, 400);
+      }
+
+      await ensurePushTable(env.DB);
+      let jetons = [];
+      try {
+        jetons = (await env.DB.prepare('SELECT DISTINCT device_id FROM push_jetons').all()).results || [];
+      } catch { /* table pas encore creee : aucun appareil natif */ }
+      const web = (await env.DB.prepare('SELECT DISTINCT device_id FROM push_subscriptions').all()).results || [];
+      const appareils = [...new Set([...web, ...jetons].map(r => r.device_id))];
+
+      // Ceux qui ont joue hier ou aujourd'hui : les seuls dont la boite peut
+      // avoir une liaison ouverte. Sonner les autres reveillerait des boites
+      // vides pour rien — ils trouveront l'annonce a leur prochaine visite.
+      const hier = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      let recents = [];
+      try {
+        recents = ((await env.DB.prepare(
+          'SELECT DISTINCT device_id FROM visits WHERE day >= ?').bind(hier).all()).results || [])
+          .map(r => r.device_id);
+      } catch { /* pas de visites sur ce canal : personne a sonner */ }
+      if (essai) return json({ essai: true, appareils: appareils.length, en_jeu: recents.length });
+
+      await ensureAnnonces(env.DB);
+      const r = await env.DB.prepare(
+        `INSERT INTO annonces (fr_titre, fr_texte, fr_detail, en_titre, en_texte, en_detail, cree_le)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(fr[0].trim(), fr[1].trim(), detailFr, en[0].trim(), en[1].trim(), detailEn, Date.now()).run();
+
+      const texte = langue => (langue === 'en' ? en : fr);
+      await Promise.allSettled([
+        ...appareils.map(d => notifierAppareil(env.DB, d, 'annonce', env, texte)),
+        // Genre distinct de celui de la notification : la sonnerie fait
+        // apparaitre la pastille, le toucher de la notification ouvre le mot.
+        ...recents.map(d => sonner(env, d, 'annonce_dispo', canal.test)),
+      ]);
+      return json({ ok: true, id: r.meta && r.meta.last_row_id, appareils: appareils.length, en_jeu: recents.length });
+    }
+
+    // La derniere annonce, dans la langue demandee. Un mois apres, elle se
+    // tait : un joueur arrive en novembre n'a pas a lire le mot de septembre.
+    if (url.pathname === '/annonce' && request.method === 'GET') {
+      await ensureAnnonces(env.DB);
+      const a = await env.DB.prepare(
+        `SELECT * FROM annonces WHERE cree_le > ? ORDER BY id DESC LIMIT 1`
+      ).bind(Date.now() - 30 * 86400000).first();
+      if (!a) return json({ annonce: null });
+      const l = url.searchParams.get('langue') === 'en' ? 'en' : 'fr';
+      return json({ annonce: {
+        id: a.id, titre: a[l + '_titre'],
+        texte: a[l + '_detail'] || a[l + '_texte'], cree_le: a.cree_le,
+      } });
     }
 
     if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {

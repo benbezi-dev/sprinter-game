@@ -47,6 +47,7 @@
 
 import {
   calibrer, quantile, fuseauDe, creneauMaintenant, heureLocale, creerObjectif,
+  texteObjectif,
   fenetreDe, graineDe, hash32, CRENEAUX, enregistrerTentative,
   seuilsDe, palierDe, pointsDe, serieSuivante, serieEnCours, POINTS,
   SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS,
@@ -341,24 +342,31 @@ titre('LE SILENCE NE SE REFERME PAS SUR LE JOUEUR');
 //
 // Une fausse base plutot qu'un worker : ce qu'on verifie est une decision, et
 // une decision se lit dans ce qu'elle rend.
-function fausseBase({ derniers = [], deja = null }) {
+function fausseBase({ derniers = [], deja = [] }) {
   const ecrits = [];
+  const lignes = () => [...deja, ...ecrits];
   const reponse = (sql, args) => ({
     first: async () => {
       if (/SELECT \* FROM objectifs/.test(sql)) {
-        if (deja) return deja;
-        return ecrits.length ? ecrits[ecrits.length - 1] : null;
+        // La relecture qui suit l'insertion : (joueur, jour, creneau, epreuve).
+        const ep = args[3];
+        return lignes().find(o => o.race_key === ep) || null;
       }
       return null;
     },
-    all: async () => ({
-      results: /SELECT tentatives/.test(sql)
-        ? derniers.map(t => ({ tentatives: t })) : [],
-    }),
+    all: async () => {
+      // Les defis DEJA poses pour ce creneau.
+      if (/SELECT \* FROM objectifs/.test(sql)) return { results: lignes() };
+      // Le compte du silence : une ligne par creneau, tentatives cumulees.
+      if (/SUM\(tentatives\)/.test(sql)) {
+        return { results: derniers.map(t => ({ tentatives: t })) };
+      }
+      return { results: [] };
+    },
     run: async () => {
       if (/INSERT OR IGNORE INTO objectifs/.test(sql)) {
         ecrits.push({
-          name_key: args[0], jour: args[1], creneau: args[2],
+          name_key: args[0], jour: args[1], creneau: args[2], race_key: args[3],
           cible_ms: args[4], pb_ms: args[5], tentatives: 0,
         });
       }
@@ -372,9 +380,11 @@ function fausseBase({ derniers = [], deja = null }) {
   };
 }
 
+const courses = (base) => Array.from({ length: 30 }, (_, i) => base + i * 10);
 const joueur = {
   nameKey: 'zoe', nom: 'Zoe', rang: 12, pb: 8500, fuseau: 'Europe/Paris',
-  courses: Array.from({ length: 30 }, (_, i) => 8600 + i * 10),
+  epreuve: '100',
+  epreuves: [{ epreuve: '100', pb: 8500, rang: 12, courses: courses(8600) }],
   jour: '2026-09-05', creneau: 'midi',
 };
 
@@ -390,11 +400,100 @@ ok('une seule tentative dans les quatre rompt le silence', parle.silencieux === 
 const jeune = await creerObjectif(fausseBase({ derniers: [0, 0] }), joueur, new Date());
 ok('deux creneaux ne suffisent pas a se taire', jeune.silencieux === false);
 
+// Le silence se compte PAR CRENEAU. Trois defis font trois lignes, et les
+// compter une par une ferait taire le joueur trois fois plus vite qu'avant :
+// la requete regroupe, et le harnais lui rend ce qu'elle demande — un total
+// par creneau, pas une ligne par defi.
+const troisParCreneau = await creerObjectif(
+  fausseBase({ derniers: [0, 2] }), joueur, new Date());
+ok('deux creneaux, dont un joue : on sonne encore',
+   troisParCreneau.silencieux === false);
+
 const rejoue = await creerObjectif(
-  fausseBase({ deja: { name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', tentatives: 1 } }),
+  fausseBase({ deja: [{ name_key: 'zoe', jour: '2026-09-05', creneau: 'midi',
+                        race_key: '100', tentatives: 1 }] }),
   joueur, new Date());
 ok('un cron rejoue ne cree pas de doublon', rejoue.nouveau === false,
-   'c est la PK (joueur, jour, creneau) qui le garantit, pas l appelant');
+   'c est la PK (joueur, jour, creneau, epreuve) qui le garantit, pas l appelant');
+
+titre('UN DEFI PAR DISTANCE, ET PAS UN DE PLUS');
+
+// Trois distances classees, trois defis. C'est le classement qui decide : il
+// est deja par distance, et etre deuxieme au 100 m ne dit rien de ce qu'on
+// vaut sur un tour de piste.
+const zoeTrois = {
+  ...joueur, epreuve: '200', rang: 3,
+  epreuves: [
+    { epreuve: '100', pb: 8500, rang: 12, courses: courses(8600) },
+    { epreuve: '200', pb: 17200, rang: 3, courses: courses(17400) },
+    { epreuve: '400', pb: 38000, rang: 7, courses: courses(38400) },
+  ],
+};
+const trois = await creerObjectif(fausseBase({}), zoeTrois, new Date());
+ok('trois distances classees donnent trois defis', trois.objectifs.length === 3);
+ok('...un par distance, sans doublon',
+   new Set(trois.objectifs.map(o => o.race_key)).size === 3);
+ok('...chacun calibre sur les courses de SA distance',
+   trois.objectifs.every(o => o.cible_ms > o.pb_ms)
+   && trois.objectifs.find(o => o.race_key === '400').cible_ms > 38000,
+   'une cible de 400 m tiree des 100 m serait deja courue');
+ok('l epreuve de tete vient en premier', trois.objectif.race_key === '200',
+   'c est elle qui parle dans la notification : celle ou il est le mieux classe');
+
+// Une seule distance classee, un seul defi : on ne fabrique pas une cible sur
+// un record qui n'existe pas.
+const unSeul = await creerObjectif(fausseBase({}), joueur, new Date());
+ok('une seule distance classee ne donne qu un defi', unSeul.objectifs.length === 1);
+
+// Le cron repasse : il retrouve les trois, et n'en cree aucun.
+const dejaTrois = await creerObjectif(
+  fausseBase({ deja: [
+    { name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', race_key: '100', tentatives: 0 },
+    { name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', race_key: '200', tentatives: 0 },
+    { name_key: 'zoe', jour: '2026-09-05', creneau: 'midi', race_key: '400', tentatives: 0 },
+  ] }), zoeTrois, new Date());
+ok('un cron rejoue retrouve les trois sans en creer un seul',
+   dejaTrois.objectifs.length === 3 && dejaTrois.nouveaux.length === 0
+   && dejaTrois.nouveau === false);
+
+titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
+
+// Une notification qui annonce trois defis n'en annonce aucun : le chrono, le
+// rang et la tournure ne valent que pour une distance. Elle en porte donc un
+// — celui de tete — et les deux autres tiennent en une phrase, a la fin.
+{
+  const o = { name_key: 'zoe', jour: '2026-09-05', creneau: 'midi',
+              race_key: '200', cible_ms: 17400, pb_ms: 17200 };
+
+  const seul = texteObjectif(o, 3, 'fr', true, null, []);
+  ok('un defi seul ne cite personne', !/attend/.test(seul.corps), seul.corps);
+
+  const deux = texteObjectif(o, 3, 'fr', true, null, ['400']);
+  ok('un autre defi tient en une phrase',
+     deux.corps.endsWith('Le 400 m attend aussi.'), deux.corps);
+
+  const trois = texteObjectif(o, 3, 'fr', true, null, ['100', '400']);
+  ok('deux autres s accordent au pluriel',
+     trois.corps.endsWith('Le 100 m et le 400 m attendent aussi.'), trois.corps);
+
+  const en = texteObjectif(o, 3, 'en', true, null, ['100', '400']);
+  ok('...et l anglais s accorde aussi',
+     en.corps.endsWith('The 100 m and the 400 m are waiting too.'), en.corps);
+
+  // Les tournures nommaient la distance EN DUR — « tu es 3e au 100 m ». Avec
+  // trois defis, cette phrase ment sur un defi de 200 m, et elle ment sur le
+  // seul chiffre que le joueur peut verifier : son rang.
+  const variantes = [];
+  for (let i = 0; i < 40; i++) {
+    variantes.push(
+      texteObjectif({ ...o, name_key: 'joueur' + i }, 3, 'fr', true, null, []).corps);
+  }
+  ok('aucune tournure ne parle du 100 m sur un defi de 200 m',
+     variantes.every(c => !/100 m/.test(c)),
+     variantes.find(c => /100 m/.test(c)));
+  ok('...et celles qui nomment la distance disent la bonne',
+     variantes.some(c => /200 m/.test(c)));
+}
 
 titre('TROIS PALIERS, ET PERSONNE NE REPART LES MAINS VIDES');
 
@@ -530,7 +629,11 @@ function baseObjectif(ligne) {
   const rep = (sql, args) => ({
     first: async () => {
       if (/FROM objectifs/.test(sql)) {
-        const [, t1, jour, t2] = args;
+        // La distance est liee juste apres le nom : c'est elle qui choisit
+        // l'objectif, puisqu'il y en a trois d'ouverts. Une course de 400 m
+        // ne doit pas tomber sur le defi du 100 m.
+        const [, ep, t1, jour, t2] = args;
+        if (ep && ep !== etat.race_key) return null;
         const ouvert = etat.ouvre_le == null || etat.ouvre_le <= t1;
         const vivant = etat.expire_le == null ? etat.jour >= jour : etat.expire_le > t2;
         return ouvert && vivant ? { ...etat } : null;
@@ -567,6 +670,24 @@ function baseObjectif(ligne) {
 
 const t0 = new Date('2026-09-05T13:00:00Z');
 const ouverte = { ouvre_le: t0.getTime() - 3600000, expire_le: t0.getTime() + 3600000 };
+
+{
+  // TROIS DEFIS OUVERTS, ET UNE COURSE N'EN VISE QU'UN. C'est la distance
+  // courue qui designe le sien : sans elle, un tour de piste irait valider le
+  // 100 m, qui n'a rien demande — et le joueur toucherait les points d'un defi
+  // qu'il n'a pas couru.
+  const db = baseObjectif(ouverte);          // un defi de 100 m, et lui seul
+  ok('un 400 m ne touche pas au defi du 100 m',
+     (await enregistrerTentative(db, 'zoe', 'Zoe', 34000, t0, '400')) === null);
+  ok('...ni un 200 m',
+     (await enregistrerTentative(db, 'zoe', 'Zoe', 17000, t0, '200')) === null);
+  const juste = await enregistrerTentative(db, 'zoe', 'Zoe', 8600, t0, '100');
+  ok('...et la course de la bonne distance, elle, compte',
+     !!juste && juste.epreuve === '100');
+  const muet = baseObjectif(ouverte);
+  ok('sans distance annoncee, c est le 100 m — les jeux d avant n en courent pas d autre',
+     !!(await enregistrerTentative(muet, 'zoe', 'Zoe', 8600, t0)));
+}
 
 {
   // Quatre courses sur le meme defi, et le compte a la fin doit valoir
@@ -948,6 +1069,12 @@ if (!joignable) {
   ok('/objectif existe', inconnu.statut !== 404, `statut ${inconnu.statut}`);
   ok('...et rend null pour qui n a pas d objectif',
      inconnu.corps.objectif === null, JSON.stringify(inconnu.corps).slice(0, 80));
+  // La liste est la forme d'aujourd'hui — un defi par distance — et `objectif`
+  // reste rendu au singulier pour les jeux qui n'en lisent qu'un. Les deux
+  // doivent partir ensemble : un serveur qui rendrait la liste seule laisserait
+  // sans defi tous les telephones qui n'ont pas encore recharge la page.
+  ok('...et une liste, meme vide', Array.isArray(inconnu.corps.objectifs),
+     JSON.stringify(inconnu.corps).slice(0, 80));
 
   const sansNom = await lire('/objectif');
   ok('/objectif sans nom repond 400, pas 404', sansNom.statut === 400,

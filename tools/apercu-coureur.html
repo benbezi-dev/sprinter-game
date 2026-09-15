@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu des coureurs</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #1b1e29; border-radius: 6px; }
+</style>
+<h2 id="t1">foulee, grande echelle</h2><canvas id="c1" width="1180" height="430"></canvas>
+<h2>niveaux de detail — pres / moyen / loin</h2><canvas id="c2" width="1180" height="330"></canvas>
+<h2>gabarits et morphologies</h2><canvas id="c3" width="1180" height="460"></canvas>
+<h2 id="t4">virage — cap du coureur de -40 a +40 degres, inclinaison vers l'interieur</h2>
+<canvas id="c4" width="1180" height="430"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+
+  const perso = (cle, opts = {}) => Object.assign({
+    look: SprinterCore.lookFor(cle, 'divers'),
+    stride: 0, v: 11.4, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+    drivePitch: 0,
+  }, opts);
+
+  // Six instants d'une meme foulee : appui, poussee, suspension, reprise.
+  const c1 = document.getElementById('c1').getContext('2d');
+  const homme = perso('apercu-h');
+  for (let i = 0; i < 6; i++) {
+    homme.stride = i * Math.PI / 3;
+    SprinterApp.drawIcon(c1, homme, 110 + i * 192, 400, 380, false);
+  }
+
+  const c2 = document.getElementById('c2').getContext('2d');
+  const m2 = perso('apercu-h');
+  m2.stride = 1.1;
+  // memes tailles a l'ecran que dans le jeu : coureur au premier plan,
+  // coureur de couloir exterieur, spectateur des gradins.
+  let x = 120;
+  for (const px of [380, 190, 96]) {
+    SprinterApp.drawIcon(c2, m2, x, 300, px, false);
+    x += px * 0.9 + 40;
+  }
+
+  const c3 = document.getElementById('c3').getContext('2d');
+  const cles = ['apercu-1', 'apercu-2', 'apercu-3', 'apercu-4', 'apercu-5', 'apercu-6'];
+  cles.forEach((cle, i) => {
+    const p = perso(cle, { stride: 0.6 + i * 0.9 });
+    SprinterApp.drawIcon(c3, p, 110 + i * 192, 420, 360, false);
+  });
+
+  // EN VIRAGE. C'est la seule chose que ces corps devaient savoir faire et
+  // que rien d'autre ne montre : le cap tourne le coureur autour de la
+  // verticale, l'inclinaison le couche vers la corde, et la piste ajoute
+  // sa propre rotation. Si la largeur du corps ne suivait pas ces
+  // rotations, les sections elliptiques se presenteraient de travers — un
+  // torse qui s'aplatirait dans le mauvais sens en plein virage.
+  const c4 = document.getElementById('c4').getContext('2d');
+  const v4 = perso('apercu-h', { stride: 1.4 });
+  const caps = [];
+  for (let i = 0; i < 6; i++) {
+    const cap = (-40 + i * 16) * Math.PI / 180;
+    const inc = -0.16 * (i / 5);
+    const cp = SprinterApp.personCapsules(v4, cap, inc, false, true,
+                                          SprinterApp.niveauDetail(95));
+    SprinterApp.drawFacetFigure(c4, cp, 110 + i * 192, 360, 95);
+    caps.push(cp.length);
+  }
+  document.getElementById('t4').textContent =
+    'virage — cap de -40 a +40 degres, inclinaison vers la corde (' +
+    caps[0] + ' volumes, courbe de piste appliquee)';
+
+  document.getElementById('t1').textContent =
+    'foulee, grande echelle — ' + SprinterCore.pose(homme, 0).length + ' volumes par coureur';
+</script>

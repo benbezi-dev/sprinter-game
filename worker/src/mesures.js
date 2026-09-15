@@ -50,7 +50,16 @@ export async function coursesParDefi(db, depuis) {
   };
 }
 
-/** Combien de defis servis ont ete joues. */
+/**
+ * Combien de defis servis ont ete joues.
+ *
+ * UNE LIGNE EST UN DEFI, PAS UN CRENEAU, et depuis que le defi existe sur les
+ * trois distances un creneau en sert jusqu'a trois. La part jouee baisse donc
+ * mecaniquement le jour ou l'on ouvre — un joueur qui ne court que le 100 m
+ * passe de 1/1 a 1/3 — sans que personne ait rien change a sa facon de jouer.
+ * Le chiffre reste vrai pour ce qu'il dit ; c'est sa comparaison avec la
+ * semaine d'avant qui ne veut plus rien dire.
+ */
 export async function participation(db, depuis) {
   const r = await db.prepare(
     `SELECT COUNT(*) AS servis,

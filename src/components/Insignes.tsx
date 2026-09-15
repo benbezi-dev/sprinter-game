@@ -47,8 +47,15 @@ export type MedailleInfo = {
   place: number;
 };
 
-/** Or, argent, bronze. */
-const COULEURS = ['#F8CD4A', '#CBD5E1', '#C1803F'];
+/**
+ * Or, argent, bronze.
+ *
+ * Exportees pour la meme raison que le reste de ce fichier existe : le tableau
+ * des medailles par nation peint les memes trois couleurs, et les y recopier
+ * serait se garantir qu'un jour l'or d'un ecran ne sera plus celui de l'autre.
+ */
+export const COULEURS_MEDAILLE = ['#F8CD4A', '#CBD5E1', '#C1803F'];
+const COULEURS = COULEURS_MEDAILLE;
 
 /**
  * Le sigle de la competition, pas son nom complet.
@@ -88,7 +95,8 @@ export function Medaille({ m, taille = 'petit' }: {
 /* ------------------------------------------------------------- l'ecusson */
 
 import { SprinterApp } from '@/game/engine';
-import type { Etage } from '@/game/duels';
+import { Flame as IconeFlamme } from 'lucide-react';
+import { nomDiscipline, type Etage } from '@/game/duels';
 
 /**
  * La couleur d'un etage.
@@ -129,21 +137,119 @@ function abrege(etage: Etage, division: number): string {
   return division > 0 ? `${court}${ROMAINS[division] || ''}` : court;
 }
 
-export function Ecusson({ etage, division, lp, compact = false, className = '' }: {
-  etage: Etage; division: number; lp?: number;
+/**
+ * `epreuve` nomme la DISCIPLINE de ce rang, et l'ecusson ne devrait presque
+ * jamais s'en passer.
+ *
+ * Les niveaux ne sont pas partagés : « NATIONAL II » tout seul ne dit pas sur
+ * quoi. Dans une liste on l'omet — l'écran entier porte déjà la distance en
+ * titre, et la répéter sur trois cents lignes ne dirait rien de plus — mais
+ * partout où l'écusson voyage seul, sur l'accueil notamment, il la porte.
+ */
+export function Ecusson({ etage, division, lp, epreuve, compact = false, className = '' }: {
+  etage: Etage; division: number; lp?: number; epreuve?: string | null;
   compact?: boolean; className?: string;
 }) {
   if (!etage) return null;
   const teinte = TEINTES[etage] || TEINTES.departemental;
   const complet = nomDuRang(etage, division);
+  const distance = epreuve ? nomDiscipline(epreuve) : '';
+  const lu = distance ? `${distance}, ${complet}` : complet;
   return (
     <span className={`shrink-0 inline-flex items-baseline gap-1 px-1.5 py-0.5 rounded-md
                       border font-mono text-[9px] tracking-widest ${teinte} ${className}`}
-          title={complet} aria-label={lp != null ? `${complet}, ${lp}` : complet}>
+          title={distance ? `${complet} — ${distance}` : complet}
+          aria-label={lp != null ? `${lu}, ${lp}` : lu}>
+      {distance && <span className="opacity-70" aria-hidden>{distance}</span>}
       <span className="font-bold" aria-hidden>
         {compact ? abrege(etage, division) : complet}
       </span>
       {lp != null && <span className="tabular-nums opacity-80" aria-hidden>{lp}</span>}
+    </span>
+  );
+}
+
+
+/* -------------------------------------------------------------- la flamme */
+
+/**
+ * La serie de victoires, quand elle devient remarquable.
+ *
+ * Elle ne compte pas les duels joues mais ceux gagnes SANS EN PERDRE UN : une
+ * seule defaite la ramene a zero. C'est ce qui la distingue de tout le reste
+ * de l'ecran — le palier, les points, le bilan sont des acquis, elle est la
+ * seule chose qu'on peut perdre en entier d'un coup.
+ *
+ * POURQUOI UN DESSIN ET PAS UN EMOJI. La flamme doit changer de couleur, et un
+ * emoji ne le permet pas : le systeme le dessine lui-meme, toujours de la meme
+ * couleur, et aucun style ne l'atteint. C'est l'inverse du drapeau plus haut,
+ * ou l'on veut justement que le systeme dessine.
+ */
+
+/**
+ * A partir de combien la flamme s'allume.
+ *
+ * Cinq, parce qu'en dessous ce n'est pas une serie, c'est une bonne journee.
+ */
+export const SERIE_MIN = 5;
+
+/**
+ * Les couleurs suivent la temperature d'une vraie flamme : rouge, orange,
+ * jaune, blanc-bleu, violet. C'est la seule progression que l'oeil lit comme
+ * « de plus en plus chaud » sans qu'on ait a l'expliquer — et le sommet tombe
+ * sur le violet de LEGENDE, deja porte par l'ecusson le plus haut.
+ *
+ * Les seuils sont ici et nulle part ailleurs : les deplacer est une ligne.
+ * Ils sont serres a dessein — sur un classement de trente joueurs, un palier
+ * qu'on atteint une fois par an n'existe pas.
+ */
+const SERIES = [
+  { seuil: 5,  corps: '#DC2626', coeur: '#FCA5A5', halo: 0.30 },
+  { seuil: 8,  corps: '#F97316', coeur: '#FDBA74', halo: 0.40 },
+  { seuil: 12, corps: '#F8CD4A', coeur: '#FEF3C7', halo: 0.55 },
+  { seuil: 18, corps: '#67E8F9', coeur: '#F0FDFF', halo: 0.70 },
+  { seuil: 25, corps: '#E879F9', coeur: '#FDF4FF', halo: 0.85 },
+];
+
+/** Le palier d'une serie, ou rien si elle n'a pas encore allume la flamme. */
+export function palierDeSerie(serie?: number | null) {
+  const n = Number(serie) || 0;
+  if (n < SERIE_MIN) return null;
+  let p = SERIES[0];
+  for (const s of SERIES) if (n >= s.seuil) p = s;
+  return p;
+}
+
+export function Flamme({ serie, taille = 'petit', className = '' }: {
+  serie?: number | null; taille?: 'petit' | 'grand'; className?: string;
+}) {
+  const p = palierDeSerie(serie);
+  if (!p) return null;
+  const n = Number(serie);
+  const { N } = SprinterApp;
+  const petit = taille === 'petit';
+  const px = petit ? 13 : 17;
+  const halo = Math.round(p.halo * 255).toString(16).padStart(2, '0');
+  // Le nombre accompagne toujours le dessin. Sans lui, la couleur devrait etre
+  // apprise pour vouloir dire quelque chose, et quelqu'un qui distingue mal le
+  // rouge de l'orange ne lirait rien du tout.
+  return (
+    <span className={`shrink-0 inline-flex items-center gap-1 font-bold tabular-nums
+                      ${petit ? 'text-[9px]' : 'text-[11px]'} ${className}`}
+          style={{ color: p.corps }}
+          title={N.t('serie_titre', { n })} aria-label={N.t('serie_titre', { n })}>
+      {/* Deux flammes l'une dans l'autre : le corps, et le coeur plus clair
+          pose a sa base. Une seule couleur pleine faisait une goutte — c'est
+          le coeur qui donne la lecture « ca brule » a treize pixels. */}
+      <span className="relative inline-block shrink-0"
+            style={{ width: px, height: px }} aria-hidden>
+        <IconeFlamme size={px} fill={p.corps} stroke={p.corps} strokeWidth={1.6}
+                     style={{ filter: `drop-shadow(0 0 ${petit ? 3 : 5}px ${p.corps}${halo})` }} />
+        <IconeFlamme size={px * 0.52} fill={p.coeur} stroke={p.coeur} strokeWidth={2}
+                     className="absolute"
+                     style={{ left: px * 0.24, top: px * 0.40 }} />
+      </span>
+      {n}
     </span>
   );
 }

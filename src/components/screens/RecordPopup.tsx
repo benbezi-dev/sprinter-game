@@ -5,8 +5,10 @@ import { VOILE, PANNEAU, RESSORT, TRANSITION } from '@/lib/mouvement';
 import { Trophy, Loader2 } from 'lucide-react';
 import {
   fetchRaceBest, submitRaceRecord, fetchLeaderboardRaw,
-  rankByRaceTime, rankOf, getSavedName, saveName, type RaceKey,
+  rankByRaceTime, rankOf, getSavedName, saveName, raisonDe,
+  type RaceKey, type RaisonRefus,
 } from '@/game/leaderboard';
+import { garder, oublier } from '@/game/record-attente';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
 /** Ecrans qui suivent une course. La cinematique n'en fait pas partie. */
@@ -41,6 +43,10 @@ export function RecordPopup() {
   const [race, setRace] = useState<RaceKey>('100');
   const [name, setName] = useState(getSavedName());
   const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  // Pourquoi le dernier envoi a echoue. Un nom reserve par un autre appareil
+  // ne se debloque pas en reappuyant : l'ecran doit dire autre chose que
+  // « reessaie », sans quoi le joueur reessaie jusqu'a renoncer.
+  const [refus, setRefus] = useState<RaisonRefus>('reseau');
   const [rank, setRank] = useState<number | null>(null);
   const [showTop, setShowTop] = useState(false);
 
@@ -82,13 +88,22 @@ export function RecordPopup() {
   const envoyer = async (finalName: string, key: RaceKey, chrono: number) => {
     saveName(finalName);
     setStatus('sending');
+    const ms = chrono * 1000;
     try {
-      await submitRaceRecord(key, finalName, chrono * 1000);
+      await submitRaceRecord(key, finalName, ms);
+      oublier(key);                  // s'il attendait depuis une course d'avant
       // On relit le tableau pour annoncer une place reellement constatee.
       const list = rankByRaceTime(await fetchLeaderboardRaw(key));
-      setRank(rankOf(list, chrono * 1000));
+      setRank(rankOf(list, ms));
       setStatus('done');
-    } catch {
+    } catch (e) {
+      // LE RECORD NE SE PERD PLUS ICI. Il est garde sur l'appareil avant meme
+      // que l'ecran annonce l'echec : le joueur peut fermer la fenetre, elle
+      // ne reviendra pas pour cette course, et le renvoi ne depend plus de lui
+      // — voir `record-attente.ts`.
+      const raison = raisonDe(e);
+      garder(key, ms, finalName, raison);
+      setRefus(raison);
       setStatus('error');
     }
   };
@@ -182,8 +197,24 @@ export function RecordPopup() {
                       {status === 'sending' ? N.t('wr_saving') : N.t('wr_save')}
                     </button>
                   </div>
+                  {/* L'echec, et ce qu'il reste a faire.
+
+                      Le record est deja garde quand ce bloc s'affiche : les
+                      trois messages disent donc ce qui se passe ensuite, et
+                      aucun ne demande de reessayer bêtement. Le nom reserve
+                      est le seul qui attende un geste — et le champ pour le
+                      poser est juste au-dessus. */}
                   {status === 'error' && (
-                    <p className="text-center text-xs text-destructive">{N.t('wr_fail')}</p>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-center text-xs text-destructive">
+                        {refus === 'nom-reserve' ? N.t('name_taken')
+                          : refus === 'trop-vite' ? N.t('wr_too_fast')
+                          : N.t('wr_fail')}
+                      </p>
+                      <p className="text-center text-[10px] leading-snug text-muted-foreground">
+                        {refus === 'nom-reserve' ? N.t('wr_taken_help') : N.t('wr_kept')}
+                      </p>
+                    </div>
                   )}
                   <button
                     onClick={() => setOpen(false)}

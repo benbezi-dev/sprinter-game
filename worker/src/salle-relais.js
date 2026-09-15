@@ -24,8 +24,11 @@
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE, LEG } from './relais-course.js';
+import { avantDepart } from './depart.js';
 
-const AVANT_DEPART_MS = 5000;          // le temps de se mettre en place
+// Le temps de se mettre en place — quatre joueurs, quatre relais. Le depart
+// part au decompte, sur les deux canaux. Voir depart.js.
+const AVANT_DEPART_MS = 5000;
 const VIE_MS = 20 * 60 * 1000;
 // Un Durable Object se facture au temps ou il reste eveille, et une WebSocket
 // ouverte l'y maintient. Le probleme est particulierement net ici : un relais
@@ -79,6 +82,31 @@ export class SalleRelais {
       porteur: c.porteur, temoin_d: Math.round(c.temoinD * 10) / 10,
       passes: c.passes, elimine: c.elimine, total: c.total,
     };
+  }
+
+  /**
+   * LA COURSE EST FINIE — par la ligne ou par l'elimination.
+   *
+   * Trois choses, et la deuxieme manquait : on desarme le depart, ON EFFACE
+   * LES DECLARATIONS DE PRESENCE, et on programme la fermeture.
+   *
+   * Sans l'effacement, les quatre restaient marques prets apres l'arrivee.
+   * Or `case 'pret'` rearme des que les quatre le sont et que `departA` est
+   * retombe a null : le PREMIER message `pret` venu — un seul joueur qui
+   * bascule son bouton pour recourir — relancait donc le pistolet pour tout
+   * le monde ET appelait `reinitialiser()`, qui efface le chrono, les passes
+   * et l'elimination. Les trois autres, encore sur leur ecran d'arrivee,
+   * voyaient leur resultat disparaitre au profit d'une course qu'ils
+   * n'avaient pas demandee.
+   *
+   * C'est exactement ce que dit l'intention d'origine, juste en dessous :
+   * « une equipe qui veut recourir n'a qu'a SE REDECLARER prete ». Encore
+   * fallait-il que la declaration precedente cesse de valoir.
+   */
+  cloreLaCourse(delai, raison) {
+    this.departA = null;
+    for (const j of this.joueurs.values()) j.pret = false;
+    this.programmerFermeture(delai, raison);
   }
 
   /**
@@ -202,8 +230,7 @@ export class SalleRelais {
   eliminer(raison, relais) {
     const el = this.laCourse().eliminer(raison, relais);
     if (!el) return;
-    this.departA = null;
-    this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+    this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
     this.diffuser({ t: 'elimine', ...el, ...this.vue() });
   }
 
@@ -227,8 +254,10 @@ export class SalleRelais {
         const tous = this.joueurs.size === TAILLE &&
                      [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
-          this.departA = Date.now() + AVANT_DEPART_MS;
+          this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           c.reinitialiser();
+          // Les instants de course repartent de zero avec le pistolet.
+          for (const x of this.joueurs.values()) { x.dch = 0; x.ch = null; }
         }
         this.etat();
         return;
@@ -251,13 +280,25 @@ export class SalleRelais {
         const r = c.avancer(j.relais, m.d,
                             this.departA ? Date.now() - this.departA : null);
         if (r.elimine) {
-          this.departA = null;
-          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
           return;
         }
         if (r.d != null) {
-          this.diffuser({ t: 'pos', relais: j.relais, d: Math.round(r.d * 10) / 10 }, ws);
+          // Avec l'instant de SA course (`c`, en millisecondes depuis le coup
+          // de pistolet), quand le client l'envoie : chaque ecran montre le
+          // coequipier ou il en est a son propre instant, et non ou il etait
+          // quand le paquet est parti. C'est le meme remede qu'en course en
+          // direct, voir salle.js et recevoirPosition dans sprinter-app.js.
+          // L'instant ne va qu'avec la distance la plus lointaine annoncee,
+          // puisque c'est elle que la course garde.
+          const ch = Number(m.c);
+          const date = m.c != null && Number.isFinite(ch) && ch >= 0 && ch <= 20 * 60000;
+          const v = Number(m.d);
+          if (v >= (j.dch || 0)) { j.dch = v; j.ch = date ? Math.round(ch) : null; }
+          const pos = { t: 'pos', relais: j.relais, d: Math.round(r.d * 100) / 100 };
+          if (j.ch != null) pos.c = j.ch;
+          this.diffuser(pos, ws);
         }
         return;
       }
@@ -265,9 +306,16 @@ export class SalleRelais {
       // Les deux touchent : le serveur date, verifie la geometrie, et tranche.
       case 'temoin': {
         const r = c.taper(j.relais, Date.now());
+        // Les deux mains se sont tendues ensemble, mais trop loin l'une de
+        // l'autre. Ce n'est pas une faute — on le DIT, sinon les deux
+        // coureurs tapent dans le vide sans comprendre pourquoi le temoin ne
+        // part pas, et le receveur finit par sortir de sa zone.
+        if (r.tropLoin) {
+          this.diffuser({ t: 'trop_loin', ...r.tropLoin });
+          return;
+        }
         if (r.elimine) {
-          this.departA = null;
-          this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
           return;
         }
@@ -278,8 +326,7 @@ export class SalleRelais {
       case 'fini': {
         const r = c.terminer(j.relais, m.ms);
         if (r.total == null) return;
-        this.departA = null;
-        this.programmerFermeture(APRES_COURSE_MS, 'course terminee');
+        this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
         this.diffuser({ t: 'fini', total: r.total, passes: c.passes, ...this.vue() });
         const ecrire = this.ecrire();
         if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});

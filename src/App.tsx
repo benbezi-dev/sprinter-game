@@ -24,6 +24,7 @@ import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
+import { Generique } from '@/components/screens/Generique';
 import { RaceHUD } from '@/components/screens/RaceHUD';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
@@ -38,6 +39,7 @@ import { QuitRace } from '@/components/screens/QuitRace';
 import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
+import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { InviteNotifs } from '@/components/screens/InviteNotifs';
@@ -49,6 +51,8 @@ import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
+import { brancherRattrapage } from '@/game/record-attente';
+import { useFilmerLeOneShot } from '@/game/film-course';
 
 const queryClient = new QueryClient();
 
@@ -87,6 +91,10 @@ function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
   const countT = useGameStore(s => s.countT);
+  const cut = useGameStore(s => s.cut);
+  // La cinematique qui s'efface par-dessus celle qui commence — le sacre vers
+  // le generique, et rien d'autre. Nulle le reste du temps.
+  const sortie = useGameStore(s => s.sortie);
   // Le defi du jour est-il en cours ? C'est lui qui decide de l'ecran de fin.
   const defiEnCours = useObjectif().enCours;
 
@@ -102,6 +110,10 @@ function MainGame() {
   }), []);
   useVisualViewportHeight();
   useBackGuard();
+  // La camera du one shot. Elle se pose ici parce que c'est le seul endroit
+  // qui voie passer TOUTE la course : l'ecran de fin, lui, n'existe qu'une
+  // fois la derniere ligne franchie. Voir game/film-course.ts.
+  useFilmerLeOneShot();
 
   // Sur le canal de test, le jeu ne se monte qu'une fois l'acces accorde.
   //
@@ -141,6 +153,19 @@ function MainGame() {
     reprendrePush().catch(() => { /* best-effort */ });
   }, [acces]);
 
+  // Le record du monde qui n'est pas passe la premiere fois.
+  //
+  // Un chrono refuse — reseau coupe, nom reserve par un autre appareil —
+  // etait perdu pour de bon : la fenetre ne s'ouvre qu'une fois par course.
+  // Il est desormais garde sur l'appareil, et ce branchement le renvoie au
+  // lancement puis a chaque changement de nom. C'est ce dernier moment qui
+  // compte : un nom reserve ne se debloque qu'en reliant l'appareil, et le
+  // record part alors sans que le joueur ait a y repenser.
+  useEffect(() => {
+    if (!acces) return;
+    brancherRattrapage();
+  }, [acces]);
+
   // La permission push se demande depuis un bouton, et depuis rien d'autre.
   //
   // Elle se demandait ici, après le premier résultat de course : le moment
@@ -156,6 +181,16 @@ function MainGame() {
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
 
+  /**
+   * Le generique de fin de carriere, plutot que la cinematique ordinaire.
+   *
+   * C'est une cinematique par l'etat — `cut` — mais rien d'autre ne lui
+   * ressemble : elle dure un morceau au lieu de quinze secondes, elle porte sa
+   * propre musique, et son texte defile. Elle a donc son ecran. Voir
+   * game/generique.ts et game/scene-generique.ts.
+   */
+  const generique = state === 'cut' && !!cut && cut.kind === 'ending';
+
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
       {EST_TEST && <PorteTest onOuvert={setAcces} />}
@@ -165,7 +200,12 @@ function MainGame() {
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
         {state === 'title' && <TitleScreen />}
-        {state === 'cut' && <CutScreen />}
+        {state === 'cut' && !generique && <CutScreen />}
+        {generique && <Generique />}
+        {/* Le sacre s'eteint par-dessus le generique plutot que de disparaitre
+            d'un coup : deux secondes ou les deux scenes se croisent, le temps
+            que la musique parte. Voir nextCut dans game/sprinter-app.js. */}
+        {generique && !!sortie && sortie.a > 0 && <CutScreen fige={sortie} />}
         {/* Pendant la presentation, le decompte est suspendu et l'etat vaut
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
             0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient
@@ -194,6 +234,7 @@ function MainGame() {
       <RecordPopup />
       <QuitRace />
       <InboxPopup />
+      <AnnoncePopup />
       <InvitationDirecte />
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. Comme pour PisteRelais

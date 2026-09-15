@@ -79,7 +79,7 @@ export const ECART_MONDIAL = 0.30 / 12.80;
  * CONTRE la marque reelle plutot qu'apres elle.
  *
  * Les deux derniers descendent, et il le fallait. A l'ecart demande SOUS le
- * record, le mondial serait passe devant les Jeux olympiques, qui partaient du
+ * record, le mondial serait passe devant les Jeux mondiaux, qui partaient du
  * record lui-meme : la course serait devenue plus facile en montant d'un
  * niveau.
  */

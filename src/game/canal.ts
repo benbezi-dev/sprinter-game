@@ -75,6 +75,53 @@ export const RECOMMENCER_OUVERT = true;
 export const RELAIS_OUVERT = true;
 
 /**
+ * La flamme des series de victoires, a cote du nom dans les duels.
+ *
+ * Nouvelle : elle commence la ou les deux precedentes ont commence, sur le
+ * canal de test. Le serveur, lui, compte la serie de TOUT LE MONDE des
+ * maintenant — c'est delibere. Un compteur qu'on n'allume qu'au moment de
+ * montrer la flamme demarrerait a zero pour tous le jour de l'ouverture, et
+ * effacerait les series en cours ; en le tenant des maintenant, ouvrir se
+ * reduit a remplacer ce mot par `true`, sans rien remettre a zero.
+ */
+export const SERIE_OUVERTE = EST_TEST;
+
+/**
+ * Le coup de poussee : ce qui part du coureur quand il reussit son geste.
+ *
+ * Sa trainee, l'onde au sol sous ses appuis, l'aura sur son buste — le tout
+ * le temps d'un tiers de seconde, sur une reaction parfaite au pistolet ou
+ * une transition parfaite en sortie de poussee. Il remplace les trainees de
+ * vitesse qui barraient l'ecran des que le coureur passait les trois quarts
+ * de son maximum : elles etaient la deux images sur trois, et des traits
+ * blancs suspendus en l'air se lisaient comme du vent de face plutot que
+ * comme de la vitesse.
+ *
+ * Il commence donc la ou les autres nouveautes ont commence : sur le canal
+ * de test. A false, le bundler retire l'effet du build public — le dessin
+ * comme son declenchement.
+ */
+export const POUSSEE_OUVERTE = EST_TEST;
+
+/**
+ * LE STARTER : « a vos marques » au 3, « pret » au 1, et le coup au signal.
+ *
+ * Le depart reste partout le decompte de trois secondes — c'est la consigne,
+ * et l'essai d'un starter qui tirait quand il voulait (entre trois et dix
+ * secondes) s'est arrete la. Ce drapeau n'ajoute qu'un personnage CALE sur le
+ * chiffre : sa voix, son geste, son coup de pistolet — le prof d'ecole, livre
+ * a la main, a la competition scolaire ; le juge en blanc ensuite. Il ne se
+ * voit et ne s'entend que sur le canal de test, le temps qu'on decide s'il a
+ * sa place dans le jeu.
+ *
+ * La forme compte, comme partout dans ce fichier : `EST_TEST` se replie a la
+ * compilation, donc ce drapeau vaut `false` en dur dans le build public et
+ * tout ce qui en depend en sort — la voix de synthese comme le dessin du
+ * starter.
+ */
+export const DEPART_STARTER = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

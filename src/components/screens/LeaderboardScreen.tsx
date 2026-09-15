@@ -7,18 +7,35 @@ import {
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
 import { IdentityPanel } from './IdentityPanel';
+import { HistoriqueDefis } from './HistoriqueDefis';
 import { lienInstagram } from '@/game/identity';
+import { PanneauNations } from './TableauNations';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-// Deux facons de classer une meme discipline : le meilleur chrono realise sur
-// une seule course, et le cumul du parcours complet en six etapes.
-type Cat = 'race' | 'run' | 'mine';
+// Quatre facons de lire les memes gens. Les trois premieres classent la
+// vitesse — meilleur chrono sur une course, cumul du parcours complet, et ses
+// propres courses. La quatrieme ne classe pas la vitesse mais le palmares :
+// elle additionne les medailles par pays. Elle est ici, et pas sur un ecran a
+// elle, parce qu'on vient y chercher une reponse au meme moment que les trois
+// autres, et parce qu'elle se sert du meme selecteur de distance.
+type Cat = 'race' | 'run' | 'mine' | 'nations';
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   const { N, RACES } = SprinterApp;
   const [race, setRace] = useState<RaceKey>(initialRace);
   const [cat, setCat] = useState<Cat>('race');
+  /**
+   * Le tableau des nations additionne-t-il TOUTES les distances ?
+   *
+   * Un drapeau a part plutot qu'une quatrieme valeur de `race` : les trois
+   * autres categories n'ont aucun sens sans distance, et elargir leur type
+   * pour un besoin qui n'appartient qu'a la quatrieme les obligerait toutes a
+   * gerer un cas qu'elles ne rencontrent jamais.
+   *
+   * Vrai par defaut : « ou en est mon pays » se demande d'abord en general.
+   */
+  const [toutesDistances, setToutesDistances] = useState(true);
   const [raw, setRaw] = useState<LeaderboardEntry[] | null>(null);
   const [mySplit, setMySplit] = useState<number | null>(null);
   const [error, setError] = useState(false);
@@ -34,6 +51,10 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
   }, [race]);
 
   useEffect(() => {
+    // Le tableau des nations ne lit pas le classement : il a sa propre source,
+    // et demander les cinq cents chronos pour ne pas les afficher serait un
+    // aller-retour reseau par clic d'onglet.
+    if (cat === 'nations') return;
     let cancelled = false;
     setRaw(null);
     setError(false);
@@ -76,7 +97,8 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                 {N.t('top500')}
               </h2>
               <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
-                {N.t(cat === 'race' ? 'cat_race_sub' : cat === 'run' ? 'cat_run_sub' : 'cat_mine_sub')}
+                {N.t(cat === 'race' ? 'cat_race_sub' : cat === 'run' ? 'cat_run_sub'
+                     : cat === 'nations' ? 'cat_nations_sub' : 'cat_mine_sub')}
               </span>
             </div>
           </div>
@@ -86,27 +108,47 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         </div>
 
         <div className="flex gap-2 w-full">
-          {(['100', '200', '400'] as const).map(k => (
+          {/* TOUTES n'existe que pour les nations, et pour une raison de fond :
+              un palmares se lit d'abord en entier. Les trois autres categories
+              classent des chronos, qui ne s'additionnent pas d'une distance a
+              l'autre — leur proposer « toutes » n'aurait aucun sens. */}
+          {cat === 'nations' && (
             <button
-              key={k}
-              onClick={() => setRace(k)}
+              onClick={() => setToutesDistances(true)}
               className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                ${race === k
+                ${toutesDistances
                   ? 'bg-primary/20 text-primary border-primary'
                   : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
             >
-              {k} M
+              {N.t('nations_tous')}
             </button>
-          ))}
+          )}
+          {(['100', '200', '400'] as const).map(k => {
+            const actif = cat === 'nations' ? (!toutesDistances && race === k) : race === k;
+            return (
+              <button
+                key={k}
+                onClick={() => { setRace(k); setToutesDistances(false); }}
+                className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
+                  ${actif
+                    ? 'bg-primary/20 text-primary border-primary'
+                    : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
+              >
+                {k} M
+              </button>
+            );
+          })}
         </div>
 
         {/* Categorie de classement */}
         <div className="flex gap-1 p-1 rounded-2xl bg-black/30 border border-white/10 w-full">
-          {([['race', 'cat_race'], ['run', 'cat_run'], ['mine', 'cat_mine']] as const).map(([id, key]) => (
+          {([['race', 'cat_race'], ['run', 'cat_run'], ['mine', 'cat_mine'],
+             ['nations', 'cat_nations']] as const).map(([id, key]) => (
             <button
               key={id}
               onClick={() => setCat(id)}
-              className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
+              className={`flex-1 py-2 rounded-xl font-bold tracking-widest
+                          text-[9px] md:text-[11px] leading-tight transition-all
                 ${cat === id
                   ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
@@ -126,9 +168,14 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
 
         {/* Historique personnel : tout ce qu'on a couru, y compris ce que le
             classement ne peut pas garder. Lu sur l'appareil, sans reseau. */}
-        {cat === 'mine' ? (
+        {cat === 'nations' ? (
+          <PanneauNations epreuve={toutesDistances ? '' : race} />
+        ) : cat === 'mine' ? (
           <>
           <IdentityPanel />
+          {/* Qui nous a defies cette semaine, et de quoi repartir dans
+              l'autre sens. Replie : on vient d'abord ici pour ses chronos. */}
+          <HistoriqueDefis race={race} onDefier={onClose} />
           <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">
             {mesCourses.length === 0 ? (
               <p className="text-center text-sm text-muted-foreground py-6">{N.t('mine_empty')}</p>

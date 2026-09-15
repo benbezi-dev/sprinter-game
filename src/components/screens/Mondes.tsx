@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { RESSORT } from '@/lib/mouvement';
 import { ChevronUp, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
@@ -8,6 +8,7 @@ import {
 } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { HAIES } from '@/game/haies.js';
+import { Poids } from './Poids';
 
 /**
  * Les trois autres jeux, et le passage de l'un a l'autre.
@@ -53,6 +54,15 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
   const { N } = SprinterApp;
   const d = MONDES[monde];
   const direction = PLACE[monde];
+  /**
+   * La discipline ouverte, s'il y en a une d'ouverte.
+   *
+   * L'accueil d'un monde ne disparait pas quand on entre dans une epreuve : il
+   * reste dessous, et l'epreuve se pose par-dessus. C'est ce qui permet d'en
+   * ressortir sans avoir a rejouer l'entree dans le monde — et c'est deja
+   * comme cela que Sprinter pose ses ecrans sur son accueil.
+   */
+  const [epreuve, setEpreuve] = useState<string | null>(null);
   const Fleche = FLECHE[direction];
   const rouleau = useRef<HTMLDivElement>(null);
 
@@ -110,9 +120,19 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
 
             <div className="w-full flex flex-col gap-2">
               {d.disciplines.map(e => (
+                /* Une discipline jouable est un BOUTON, les autres restent des
+                   lignes. Le meme element pour les deux aurait donne un bouton
+                   qu'on appuie sans rien obtenir — exactement ce que l'en-tete
+                   de ce fichier interdit. */
                 <div key={e.cle}
+                     role={e.jouable ? 'button' : undefined}
+                     tabIndex={e.jouable ? 0 : undefined}
+                     onClick={e.jouable ? () => setEpreuve(e.cle) : undefined}
+                     onKeyDown={e.jouable
+                       ? (ev) => { if (ev.key === 'Enter' || ev.key === ' ') setEpreuve(e.cle); }
+                       : undefined}
                      className={`w-full px-4 py-3.5 rounded-2xl border flex items-center gap-3
-                       ${e.jouable ? 'border-white/20 bg-white/[0.06]'
+                       ${e.jouable ? 'border-white/20 bg-white/[0.06] cursor-pointer hover:bg-white/[0.10] transition-colors'
                                    : 'border-white/8 bg-white/[0.02]'}`}>
                   <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                     <span className="font-bold tracking-widest text-sm md:text-base"
@@ -128,13 +148,16 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
                       </span>
                     )}
                   </span>
-                  {!e.jouable && (
-                    <span className="flex items-center gap-1.5 text-[9px] tracking-widest
-                                     text-white/35 shrink-0">
-                      <Lock className="w-3 h-3" />
-                      {N.t('monde_bientot')}
-                    </span>
-                  )}
+                  {e.jouable
+                    ? <span className="text-[9px] tracking-widest shrink-0"
+                            style={{ color: d.accent }}>
+                        {N.t('monde_jouer')}
+                      </span>
+                    : <span className="flex items-center gap-1.5 text-[9px] tracking-widest
+                                       text-white/35 shrink-0">
+                        <Lock className="w-3 h-3" />
+                        {N.t('monde_bientot')}
+                      </span>}
                 </div>
               ))}
             </div>
@@ -152,6 +175,8 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
             {N.t('monde_retour')}
           </button>
         </div>
+
+        {epreuve === 'poids' && <Poids onQuitter={() => setEpreuve(null)} />}
       </motion.div>
     </AnimatePresence>
   );

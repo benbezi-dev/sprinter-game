@@ -1,0 +1,89 @@
+{
+  "nom": "qualifications",
+  "ecrans": [
+    {
+      "cle": "titre",
+      "kicker": "Championnat de France",
+      "titre": "LE TITRE\nEST LIBRE",
+      "sous": "personne ne l’a encore porté",
+      "fort": "32 places. Aucune n’est donnée.",
+      "doux": "C’est le classement des duels qui les attribue."
+    },
+    {
+      "cle": "calendrier",
+      "kicker": "Le calendrier",
+      "titre": "26 SEPTEMBRE",
+      "sous": "premier départ",
+      "lignes": [
+        {
+          "gauche": "23/09",
+          "droite": "la grille se ferme à 23 h 59"
+        },
+        {
+          "gauche": "26/09",
+          "droite": "samedi : les séries"
+        },
+        {
+          "gauche": "27/09",
+          "droite": "dimanche : demies et finale"
+        }
+      ],
+      "fort": "Un seul champion de France.",
+      "doux": "Il porte le titre trois mois."
+    },
+    {
+      "cle": "places",
+      "kicker": "La grille de départ",
+      "titre": "32 PLACES",
+      "sous": "et c’est le classement des duels qui les donne",
+      "lignes": [
+        {
+          "gauche": "32",
+          "droite": "partants, pas un de plus"
+        },
+        {
+          "gauche": "60 j",
+          "droite": "sans duel classé, tu sors de la sélection"
+        },
+        {
+          "gauche": "J-3",
+          "droite": "la grille est gelée trois jours avant"
+        }
+      ],
+      "fort": "Pas d’inscription. Pas de tirage au sort.",
+      "doux": "Tu montes au classement, tu es pris. C’est tout.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "format",
+      "kicker": "Le format",
+      "titre": "4 · 2 · 1",
+      "sous": "quatre séries, deux demi-finales, une finale",
+      "lignes": [
+        {
+          "gauche": "Séries",
+          "droite": "4 courses de 8 · les 2 premiers passent\n+ 8 repêchés au chrono"
+        },
+        {
+          "gauche": "Demies",
+          "droite": "2 courses de 8 · les 2 premiers passent\n+ 4 repêchés au chrono"
+        },
+        {
+          "gauche": "Finale",
+          "droite": "8 couloirs · un titre"
+        }
+      ],
+      "fort": "Un mauvais départ et le week-end est fini.",
+      "doux": "Le chrono repêche, mais pas tout le monde.",
+      "bouton": "sprinter-game.com"
+    },
+    {
+      "cle": "cloture",
+      "kicker": "La clôture",
+      "titre": "MERCREDI\n23 H 59",
+      "sous": "la grille des 32 est gelée",
+      "fort": "Après, plus rien ne bouge.",
+      "doux": "Samedi, les séries. Dimanche, le titre."
+    }
+  ]
+}

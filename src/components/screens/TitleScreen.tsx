@@ -4,10 +4,10 @@ import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
 import { CarteObjectif } from './Revanche';
-import { lireObjectif, lancerObjectif, sessionCourante } from '@/game/objectif';
+import { lireObjectif, lancerObjectif } from '@/game/objectif';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
-import { DUELS_OUVERTS, fetchDuels, type DuelRow } from '@/game/duels';
+import { DUELS_OUVERTS, fetchDuels, type MonRang } from '@/game/duels';
 import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
@@ -15,6 +15,7 @@ import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
+import { BanderoleEdition } from './BanderoleEdition';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -102,18 +103,26 @@ export function TitleScreen() {
   const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl());
   const [tour, setTour] = useState(() => !tourVu() && !venuPourUnDuel);
   /**
-   * Ma division, affichee a l'entree du classement.
+   * Ma MEILLEURE division, affichee a l'entree du classement.
+   *
+   * Il n'y a plus une division mais une par distance, et l'accueil n'a la
+   * place que d'une : c'est la plus haute qu'on montre, avec la distance ou
+   * elle a ete gagnee. Un ecusson sans distance mentirait maintenant par
+   * omission — « NATIONAL II » ferait croire a un niveau partout, alors qu'il
+   * est peut-etre departemental sur les deux autres.
    *
    * Sans marquer la visite : ouvrir le jeu ne doit pas effacer les fleches
    * qu'on n'a pas encore vues. C'est le meme piege que sur l'ecran du
    * classement, ou un rafraichissement automatique les aurait fait
    * disparaitre toutes seules.
    */
-  const [monRang, setMonRang] = useState<DuelRow | null>(null);
+  const [monRang, setMonRang] = useState<MonRang | null>(null);
   useEffect(() => {
     if (!DUELS_OUVERTS) return;
     let annule = false;
-    fetchDuels(false).then(b => { if (!annule) setMonRang(b?.moi || null); });
+    // Le serveur rend mes disciplines classees, la plus haute en tete.
+    fetchDuels(undefined, false)
+      .then(b => { if (!annule) setMonRang(b?.mes_epreuves?.[0] || null); });
     return () => { annule = true; };
   }, []);
   const [propose, setPropose] = useState(false);
@@ -214,14 +223,21 @@ export function TitleScreen() {
           {/* Right Side: Records and Controls */}
           <div className="flex-1 flex flex-col justify-center gap-3 sm:gap-4 md:gap-6 max-w-md w-full">
 
+            {/* L'EDITION DU MOMENT, tout en haut de la colonne.
+                Au-dessus du defi du jour parce qu'elle ne dure qu'une
+                semaine, quand le defi revient tous les jours : c'est la
+                seule chose de cet ecran qu'on peut rater. Hors fenetre,
+                elle disparait entierement. */}
+            <BanderoleEdition />
+
             {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
                 classement, ou serveur muet, la carte disparait plutot que
                 d'annoncer un defi qui n'existe pas. */}
-            <CarteObjectif onLancer={() => {
-              const o = sessionCourante().objectif;
-              if (o) lancerObjectif(o);
-            }} />
+            <CarteObjectif
+              onLancer={(o) => lancerObjectif(o)}
+              onFin={() => { void lireObjectif(); }}
+            />
 
             {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
                 Sous le défi du jour et au-dessus du sélecteur de mode : c'est
@@ -284,6 +300,7 @@ export function TitleScreen() {
                   d'oeil, c'est sa division. */}
               {monRang
                 ? <Ecusson etage={monRang.etage} division={monRang.division}
+                           epreuve={monRang.epreuve}
                            lp={monRang.etage === 'legende' ? monRang.lp : undefined} />
                 : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
                                    shrink-0 tracking-wider">—</span>}

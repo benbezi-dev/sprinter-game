@@ -1,0 +1,76 @@
+name: Deploy worker
+
+# Le worker se deployait a la main, depuis une machine ou `wrangler login`
+# avait ete fait un jour. C'est le genre d'etape qui se saute : le jeu part
+# tout seul sur GitHub Pages a chaque poussee sur main, et le serveur restait
+# en arriere sans que rien ne le dise — un classement par discipline cote jeu
+# qui parle a un serveur qui ne connait pas les disciplines, par exemple.
+#
+# Les deux moities partent donc du meme geste. Ce fichier ne se declenche que
+# lorsque `worker/` a bouge : redeployer le serveur parce qu'on a change une
+# couleur dans le jeu ne servirait a rien et brouillerait l'historique des
+# deploiements.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      # Ce fichier lui-meme : le corriger doit pouvoir se verifier tout de
+      # suite, sans avoir a toucher au worker pour provoquer un passage.
+      - '.github/workflows/worker.yml'
+  # Et a la demande, depuis l'onglet Actions : un redeploiement sans changement
+  # (un secret qu'on vient de poser, un doute a lever) ne doit pas obliger a
+  # fabriquer un commit vide.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deux deploiements en meme temps se marcheraient dessus, et le second gagnerait
+# sans qu'on sache lequel est en ligne. On attend plutot que le premier finisse :
+# `cancel-in-progress: false`, parce qu'un deploiement a moitie annule est pire
+# qu'un deploiement en retard.
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Le jeton se pose une fois dans Settings > Secrets and variables >
+      # Actions du depot. Sans lui, `wrangler deploy` echoue sur un « You are
+      # not authenticated » qui ne dit pas ou aller ; on prefere dire ou aller.
+      #
+      # CLOUDFLARE_ACCOUNT_ID est facultatif : il ne sert que si le jeton ouvre
+      # plusieurs comptes, auquel cas wrangler refuse de choisir a votre place.
+      - name: Verifier que la cle de deploiement est posee
+        env:
+          JETON: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$JETON" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN absent. Le poser dans" \
+                 "Settings > Secrets and variables > Actions, avec les droits" \
+                 "« Edit Cloudflare Workers » et l'acces D1 — voir worker/README.md."
+            exit 1
+          fi
+
+      - name: Installer les dependances du worker
+        working-directory: worker
+        run: npm ci
+
+      # Le deploiement lui-meme. Il embarque le code ET la configuration de
+      # wrangler.toml : liaisons D1, objets durables, cron. Les secrets du
+      # worker (VAPID, FCM, ADMIN_CLE...) ne sont PAS touches — ils vivent chez
+      # Cloudflare et survivent aux deploiements.
+      - name: Deployer sur Cloudflare
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy

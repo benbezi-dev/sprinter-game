@@ -104,6 +104,103 @@ export const ECHELONS = {
 export const MIN_DOFFICE = { continental: 2, mondial: 2 };
 
 /**
+ * LE CHAMPION EN TITRE — ce que porter un titre donne dans l'edition suivante.
+ *
+ * Un titre ne servait a rien. Il se gagnait, il s'affichait trois mois, et le
+ * championnat suivant repartait comme si personne ne l'avait remporte : le
+ * champion de France reprenait sa place au classement des duels, exactement
+ * comme le trente-deuxieme. Ces quatre leviers font du titre un statut avec
+ * des consequences — et, ce qui compte autant, avec un statut a defendre.
+ *
+ * L'ETANCHEITE EST LA REGLE QUI PORTE TOUTES LES AUTRES. Les privileges ci-
+ * dessous ne valent que pour le titre EXACTEMENT remporte, c'est-a-dire pour le
+ * couple (echelon, zone). Le champion de France arrive au continental sans
+ * aucun d'eux, et le champion de France arrive au championnat d'Espagne sans
+ * aucun d'eux non plus — le second cas est celui qu'un test qui ne regarde que
+ * l'echelon laisserait passer, puisque les deux editions y sont 'national'.
+ *
+ * Ce que ces leviers ne touchent PAS : la qualification d'office des champions
+ * NATIONAUX vers le continental, et des champions CONTINENTAUX vers le mondial
+ * (`ECHELONS[…].qualifiesDOffice`, lue par `pool`). Celle-la est une regle
+ * d'entree qui existait avant, et sans elle aucun continental ne peut s'ouvrir
+ * — `MIN_DOFFICE` refuse d'en ouvrir un sans deux champions nationaux sacres.
+ * Elle donne une place sur la grille de depart ; elle ne donne ni la finale ni
+ * la cinematique, qui restent etanches.
+ */
+export const TENANT = {
+  /**
+   * Le tenant est en finale, quoi qu'il fasse de son weekend.
+   *
+   * Il court quand meme ses series et ses demies — c'est le choix qui garde la
+   * grille a trente-deux et le tenant a l'ecran les deux jours. Un bye complet
+   * l'aurait fait disparaitre jusqu'au dimanche soir, ce qui est exactement le
+   * contraire de ce qu'on cherche : on veut qu'il soit la, visible, et qu'on
+   * compte les centiemes qui separent chacun de lui.
+   *
+   * Ce qui change, c'est qu'aucun resultat ne l'elimine. Ses chronos comptent
+   * pour le classement de sa course et pour le spectacle, jamais pour sa
+   * survie.
+   */
+  finaleDOffice: true,
+
+  /**
+   * Ce que le passe-droit coute, et a qui.
+   *
+   * La finale a huit couloirs, et quatre qualifies directs plus quatre
+   * repeches la remplissent exactement. Verser un tenant dedans prend donc une
+   * place a quelqu'un ; la seule question est laquelle.
+   *
+   * On la prend au repechage, jamais a une qualification directe. Un premier
+   * de demi-finale a gagne sa course devant tout le monde : lui retirer sa
+   * place parce qu'un absent de sa course porte un titre serait la seule chose
+   * qu'un spectateur ne pardonnerait pas. Le repechage, lui, est la porte
+   * douce — celle qu'on franchit sans avoir battu personne.
+   *
+   * UN, et pas autre chose : c'est la conservation des couloirs. Un tenant
+   * verse d'office occupe un couloir, donc un couloir de moins s'ouvre au
+   * chrono. Changer ce nombre ne change pas une regle, cela casse le compte —
+   * la valeur est ici pour etre lue, pas pour etre reglee.
+   */
+  repechagesCedes: 1,
+
+  /**
+   * Le titre ouvre aussi la grille de depart de son propre echelon.
+   *
+   * Sans cela, `finaleDOffice` se fait annuler par le calendrier : un champion
+   * qui joue peu sort du classement des duels, n'est pas selectionne, et son
+   * privilege de finale ne s'applique a rien. Le titre donne donc la 32e place
+   * — les trente-et-une autres restant au classement.
+   */
+  entreeDOffice: true,
+
+  /**
+   * L'exception, et c'est elle qui empeche un titre de devenir une rente.
+   *
+   * Le tenant doit avoir joue au moins un duel classe DEPUIS SON SACRE. S'il
+   * n'a plus rien joue depuis qu'il a gagne, il n'a ni entree d'office, ni
+   * finale d'office, ni cinematique : il redevient un joueur comme les autres
+   * et repasse par le classement.
+   *
+   * La mesure se prend a la CLOTURE, c'est-a-dire a J-3 du premier depart
+   * (`CLOTURE_JOURS_AVANT`). Ce n'est pas un choix d'implementation : c'est le
+   * seul instant ou la question a une reponse stable. Apres la cloture la
+   * grille ne bouge plus, et un tenant qui rejouerait le samedi matin ne peut
+   * pas entrer dans une competition dont les couloirs sont attribues.
+   */
+  actifDepuisLeSacre: true,
+
+  /**
+   * La cinematique d'entree en lice du tenant.
+   *
+   * Le nom est publie tel quel au client, qui decide de la mise en scene : le
+   * serveur dit QUI est le boss et QUAND, jamais comment on le montre. C'est la
+   * meme frontiere que partout ailleurs ici — le format est une regle de
+   * competition, la mise en scene n'en est pas une.
+   */
+  cinematique: 'boss',
+};
+
+/**
  * Combien de temps un titre se porte.
  *
  * Trois mois : assez long pour que le titre vaille quelque chose et que son
@@ -213,7 +310,7 @@ export const CALENDRIER = {
  * l'edition la trouveront.
  */
 export const ANNONCES = new Set([
-  'annonce', 'ouverture', 'serie-depart', 'qualification-directe',
+  'annonce', 'ouverture', 'boss', 'serie-depart', 'qualification-directe',
   'reveal-demies', 'demie-depart', 'reveal-finale', 'finale-depart', 'sacre',
 ]);
 

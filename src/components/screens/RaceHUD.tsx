@@ -3,13 +3,14 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
+import { DEPART_STARTER } from '@/game/canal';
 
 export function RaceHUD() {
   const { 
-    state, elapsed, countT, champion, championTime, levelIdx, runners, player,
+    state, elapsed, countT, starter, champion, championTime, levelIdx, runners, player,
     shake, falseFlash, reactFlash, transFlash, stumbleFlash,
     mode, shotRaces, shotIdx, ghostName,
-    ghostOn, ghostD, ghostDone, challenge, raceKey
+    ghostOn, ghostD, ghostDone, challenge, raceKey, photo
   } = useGameStore();
 
   const { N, C } = SprinterApp;
@@ -55,22 +56,40 @@ export function RaceHUD() {
    */
   const aveugle = !!challenge;
   
-  // Countdown overlay
+  /**
+   * L'ECRAN DU DEPART — deux departs, deux ecrans.
+   *
+   * Le jeu publie compte : le cercle tient la seconde qui reste, et rien
+   * d'autre. Pas de commande en toutes lettres au-dessus — le chiffre dit
+   * deja tout ce qu'il y a a savoir, et l'annoncer par-dessus ne ferait que
+   * meubler.
+   *
+   * Le canal de test ajoute le starter, et ses commandes en toutes lettres
+   * au-dessus du meme chiffre : son depart est cale sur le 3, 2, 1 comme
+   * l'autre.
+   */
   const isCount = state === 'count';
   const left = 3 - countT;
   const n = Math.ceil(left);
   const frac = left - Math.floor(left);
+  const pret = starter >= 2;
   
   // Race state
   const isRace = state === 'race';
   const T = SprinterApp.G.track;
   
-  // Order logic matches original
+  // Order logic matches original.
+  //
+  // Les arrivees se comparent a la milliseconde entiere, comme la salle du
+  // direct compare les chronos qu'on lui annonce : sur des secondes a virgule,
+  // une egalite au millieme — que la salle declare EX AEQUO — donnait une
+  // place a l'un et pas a l'autre selon la derniere decimale.
+  const msDe = (r: any) => Math.round(r.finishTime * 1000);
   const order = [...runners].sort((a, b) => {
     const fa = a.finished ? 0 : 1;
     const fb = b.finished ? 0 : 1;
     if (fa !== fb) return fa - fb;
-    return a.finished ? a.finishTime - b.finishTime : b.d - a.d;
+    return a.finished ? msDe(a) - msDe(b) : b.d - a.d;
   });
   
   // Mode fantome : l'ecart avec l'adversaire, en direct. Les metres se lisent
@@ -87,8 +106,34 @@ export function RaceHUD() {
   const devant = ecartM > 0.15;
   const derriere = ecartM < -0.15;
 
-  const pos = order.indexOf(player) + 1;
-  const posTxt = N.ord(pos);
+  // Une egalite partage la place : on compte ceux qui sont arrives strictement
+  // avant, pas ceux que le tri a poses devant.
+  const pos = player?.finished && player.finishTime != null
+    ? 1 + runners.filter((r: any) => r !== player && r.finished && msDe(r) < msDe(player)).length
+    : order.indexOf(player) + 1;
+  /**
+   * LE PHOTO-FINISH, voir suivrePhoto dans sprinter-app.js.
+   *
+   * Tant qu'il est « en attente », personne n'a encore de place : le chrono de
+   * l'adversaire le plus proche n'est pas arrive, et l'ordre de l'image n'est
+   * qu'une estimation. Annoncer « 1er » a cet instant, c'etait precisement le
+   * defaut constate — le joueur se voyait gagner, puis lisait « COURSE
+   * PERDUE ». La place revient des que la photo est tranchee, calculee sur
+   * les chronos reels.
+   */
+  const photoAttente = photo?.etat === 'attente';
+  const photoTranche = photo?.etat === 'tranche' && photo.lui != null;
+  const posTxt = photoAttente ? '…' : N.ord(pos);
+  // Les deux lignes de la photo, dans l'ordre de passage. Les memes
+  // millisecondes que la salle compare : le verdict ne peut pas differer.
+  const photoLignes = photoTranche
+    ? [{ nom: N.t('you'), ms: photo!.moi, moi: true },
+       { nom: photo!.nom, ms: photo!.lui as number, moi: false }]
+        .sort((a, b) => a.ms - b.ms)
+    : [];
+  const photoEcart = photoTranche ? (photo!.lui as number) - photo!.moi : 0;
+  const photoNul = photoTranche && photoEcart === 0;
+  const photoGagne = photoTranche && photoEcart > 0;
   const ph = player?.phase ? player.phase() : 0;
   const total = T?.total || 100;
 
@@ -101,7 +146,7 @@ export function RaceHUD() {
           <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {N.levelName(levelIdx)}
           </div>
-          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 ? 'text-primary' : 'text-foreground'}`}>
+          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 && !photoAttente ? 'text-primary' : 'text-foreground'}`}>
             {posTxt}
           </div>
         </div>
@@ -202,33 +247,156 @@ export function RaceHUD() {
         </div>
       )}
 
-      {/* Countdown Center Display */}
-      {isCount && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-[2px] z-20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          {n > 0 && (
-            <div className="mb-3 md:mb-5 bg-card/70 backdrop-blur-md px-4 py-1.5 md:px-6 md:py-2 rounded-full border border-white/10 shadow-lg">
-              <span className="font-bold text-foreground tracking-widest text-xs sm:text-sm md:text-lg uppercase">
-                {n >= 3 ? N.t('ready') : N.t('get_set')}
+      {/* LE PHOTO-FINISH, a la place du panneau de l'adversaire qui s'efface a
+          la ligne. En attente, il dit seulement qu'on regarde : pas de place,
+          pas d'ecart. Tranche, il donne les deux chronos au millieme, dans
+          l'ordre de passage, et la reglette montre ou etait le second quand
+          le premier a touche la ligne. */}
+      {isRace && photo && (photoAttente || photoTranche) && (
+        <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
+                        px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
+          <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
+                           flex flex-col gap-1 shadow-lg
+            ${photoAttente || photoNul ? 'border-cyan-400/40 bg-black/50'
+              : photoGagne ? 'border-emerald-400/50 bg-emerald-500/[0.12]'
+              : 'border-destructive/50 bg-destructive/[0.12]'}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[8px] sm:text-[9px] font-bold tracking-[0.25em] text-cyan-300/90">
+                {N.t('photo_finish')}
               </span>
+              {photoTranche && (
+                <span className={`font-mono text-[8px] sm:text-[9px] font-bold tracking-widest tabular-nums
+                  ${photoNul ? 'text-cyan-300' : photoGagne ? 'text-emerald-400' : 'text-destructive'}`}>
+                  {photoNul ? N.t('live_tie')
+                    : `${(Math.abs(photoEcart) / 1000).toFixed(3)} s · ${photo.ecartM.toFixed(2)} m`}
+                </span>
+              )}
             </div>
+
+            {photoAttente ? (
+              <div className="text-center text-[10px] sm:text-xs tracking-wide text-foreground/75 animate-pulse py-1">
+                {N.t('photo_attente')}
+              </div>
+            ) : (
+              <>
+                {photoLignes.map((l, i) => (
+                  <div key={l.moi ? 'moi' : 'lui'} className="flex items-baseline justify-between gap-2 leading-none">
+                    <span className={`text-xs sm:text-sm font-black tracking-wide truncate
+                      ${l.moi ? 'text-primary' : 'text-cyan-300'}`}>
+                      {photoNul ? '=' : `${i + 1}.`} {l.nom}
+                    </span>
+                    <span className={`font-mono font-black tabular-nums text-sm sm:text-base
+                      ${l.moi ? 'text-primary' : 'text-cyan-300'}`}>
+                      {(l.ms / 1000).toFixed(3)}
+                    </span>
+                  </div>
+                ))}
+                {/* La reglette : les deux derniers metres avant la ligne. Le
+                    premier est dessus ; le second a la distance qu'il lui
+                    restait a courir. */}
+                <div className="relative h-1.5 rounded-full bg-black/60 border border-white/10 overflow-hidden">
+                  <div className="absolute inset-y-0 w-[2px] bg-white/80" style={{ left: 'calc(88% - 1px)' }} />
+                  {photoLignes.map((l, i) => {
+                    const derriere = i === 0 || photoNul ? 0 : Math.min(2, photo.ecartM);
+                    return (
+                      <div key={l.moi ? 'moi' : 'lui'}
+                           className={`absolute inset-y-0 w-[3px] rounded-full
+                             ${l.moi ? 'bg-primary shadow-[0_0_6px_rgba(248,205,74,0.9)]' : 'bg-cyan-300'}`}
+                           style={{ left: `calc(${88 - (derriere / 2) * 80}% - 1.5px)` }} />
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Le depart : le decompte, et le starter.
+
+          SANS VOILE, ET PLUS AU MILIEU. Tout le stade passait sous un noir a
+          40 % et un flou de deux pixels pendant les trois secondes ou il y a le
+          plus a voir — les coureurs poses dans leurs blocs, le starter, la
+          tribune — et le cercle du chiffre se posait au centre exact de
+          l'ecran, c'est-a-dire sur le joueur et ses blocs, que la camera y
+          tient. Le chiffre monte donc au-dessus de la ligne de depart, et
+          l'adversaire a battre descend au-dessus des touches : entre les
+          deux, la piste reste libre. Chaque piece porte son propre fond ; ce
+          qui n'en a pas garde une ombre sous les lettres. */}
+      {isCount && (
+        <div className="absolute inset-0 z-20 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
+          <div className="absolute inset-x-0 flex flex-col items-center px-4
+                          portrait:top-[calc(max(env(safe-area-inset-top),0.5rem)_+_8rem)]
+                          landscape:top-[max(env(safe-area-inset-top),7.5vh,2.75rem)]">
+          {/* LA COMMANDE DU STARTER, AU-DESSUS DU CHIFFRE.
+              Sur la version de test, le starter parle : « a vos marques » au 3,
+              « pret » au 1. Sa voix dit la meme chose au meme instant — mais un
+              telephone se joue aussi son coupe, et la consigne ne peut pas
+              dependre de ce qu'on entend. Le chiffre, lui, reste : le depart
+              est toujours cale sur le 3, 2, 1. */}
+          {DEPART_STARTER && starter >= 1 && (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={pret ? 'pret' : 'marques'}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18 }}
+                className={`mb-3 md:mb-5 px-4 py-2 md:px-7 md:py-3 rounded-xl border-2 backdrop-blur-md max-w-[92vw]
+                  [@media(max-height:500px)]:mb-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1.5
+                  ${pret ? 'border-primary bg-primary/15' : 'border-white/25 bg-card/60'}`}
+              >
+                <span className={`block font-display font-black tracking-widest text-center leading-none
+                  text-lg sm:text-2xl md:text-4xl [@media(max-height:500px)]:text-xl ${pret ? 'text-primary' : 'text-white drop-shadow-md'}`}>
+                  {pret ? N.t('get_set') : N.t('ready')}
+                </span>
+              </motion.div>
+            </AnimatePresence>
           )}
+          {/* LE DECOMPTE. Le cercle enfle a mesure que la seconde s'use : le
+              depart se voit venir du coin de l'oeil, sur un ecran ou le regard
+              est deja pris par la piste. Le chiffre tombe a la derniere seconde
+              plutot que d'ecrire « partez » — le signal, lui, s'entend, et la
+              course a deja commence. */}
           <div
-            className="w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
+            className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 [@media(max-height:500px)]:w-16 [@media(max-height:500px)]:h-16
+                       rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
             style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
           >
-            <span className={`text-4xl sm:text-6xl md:text-8xl font-black font-display tracking-tighter ${n > 0 ? 'text-white drop-shadow-md' : 'text-primary'}`}>
-              {n > 0 ? n : N.t('go')}
+            <span className="text-4xl sm:text-6xl md:text-7xl [@media(max-height:500px)]:text-3xl font-black font-display tracking-tighter text-white drop-shadow-md">
+              {n > 0 ? n : ''}
             </span>
           </div>
           {mode === 'oneshot' && shotRaces.length > 1 && (
-            <div className="mt-4 md:mt-8 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
+            <div className="mt-3 md:mt-5 text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-primary/80 uppercase">
               {N.t('event_n', { n: shotIdx + 1, t: shotRaces.length })}
             </div>
           )}
-          {rival && (
-            <div className={`mt-6 md:mt-12 bg-black/60 px-4 py-1.5 md:px-6 md:py-2 rounded-full border max-w-[90vw] text-center
+          </div>
+        </div>
+      )}
+
+      {/* En bas, au-dessus des touches (20 % de la hauteur en portrait, 17 % en
+          paysage, bornes comprises — voir TouchControls) : le faux depart s'il
+          vient d'etre commis, et pendant le decompte l'adversaire. Le faux
+          depart s'affichait en haut, la ou le chiffre se tient maintenant ; il
+          reste ici apres le coup de pistolet, le temps de son eclair, plutot
+          que de sauter d'un bout de l'ecran a l'autre. */}
+      {(isCount || falseFlash > 0) && (
+        <div className="absolute inset-x-0 z-20 flex flex-col items-center gap-2 md:gap-3 px-4 [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]
+                        portrait:bottom-[calc(min(max(20vh,70px),250px)_+_3rem)]
+                        landscape:bottom-[calc(min(max(17vh,70px),250px)_+_3rem)]">
+          <AnimatePresence>
+            {falseFlash > 0 && (
+              <motion.div {...SURGISSEMENT} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
+                {N.t('false_start')}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {isCount && rival && (
+            <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
-              <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base block truncate
+              <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate
                 ${ghostName ? 'text-cyan-300' : 'text-fuchsia-400'}`}>
                 {aveugle
                   ? `${N.t('to_race')}${rival.name}`
@@ -236,12 +404,12 @@ export function RaceHUD() {
               </span>
             </div>
           )}
-          {ghostName && (
-            <div className="mt-2 md:mt-3 flex flex-col items-center gap-0.5">
+          {isCount && ghostName && (
+            <div className="flex flex-col items-center gap-0.5">
               <span className="text-[10px] md:text-xs font-black tracking-[0.3em] text-cyan-300">
                 {N.t('ghost_mode')}
               </span>
-              <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide">
+              <span className="text-[9px] md:text-[10px] text-foreground/75 tracking-wide">
                 {N.t('ghost_live')}
               </span>
             </div>
@@ -252,11 +420,7 @@ export function RaceHUD() {
       {/* Feedback Overlays */}
       <div className="absolute top-[130px] landscape:top-[80px] w-full flex flex-col items-center gap-1 sm:gap-2 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pointer-events-none z-0">
         <AnimatePresence>
-          {falseFlash > 0 && (
-            <motion.div {...SURGISSEMENT} className="text-xl sm:text-2xl md:text-3xl font-black text-destructive tracking-widest drop-shadow-md">
-              {N.t('false_start')}
-            </motion.div>
-          )}
+          {/* Le faux depart ne s'affiche plus ici : voir la pile du bas, au-dessus des touches. */}
           {stumbleFlash > 0 && (
             <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: Math.min(stumbleFlash, 1), y: 0 }} exit={{ opacity: 0 }} className="text-2xl sm:text-3xl md:text-4xl font-black font-display text-destructive tracking-widest uppercase drop-shadow-lg">
               {N.t('stumble')}
@@ -302,7 +466,7 @@ export function RaceHUD() {
           return (
             <div key={i} className={`flex justify-between items-center px-4 py-2 border-b border-white/5 last:border-0 ${r.isPlayer ? 'bg-primary/10' : ''}`}>
               <span className={`text-xs font-bold tracking-wide ${col}`}>
-                {i + 1}. {(r.isPlayer ? N.t('you') : r.name).slice(0, 15)}
+                {photoAttente ? '–' : i + 1}. {(r.isPlayer ? N.t('you') : r.name).slice(0, 15)}
               </span>
               <span className={`text-xs font-mono font-bold ${col}`}>
                 {Math.round(r.d)} m
@@ -315,6 +479,10 @@ export function RaceHUD() {
       {/* gap to next runner (Mobile only) */}
       <div className="block md:hidden absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10">
         {(() => {
+          // Pendant le photo-finish, c'est lui qui dit l'ecart : cet
+          // indicateur-ci le mesure sur l'image, et c'est justement l'image
+          // qu'on ne croit plus a cet instant.
+          if (photo) return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {

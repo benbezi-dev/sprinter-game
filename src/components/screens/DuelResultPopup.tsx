@@ -6,6 +6,7 @@ import { Swords, ChevronRight, Loader2 } from 'lucide-react';
 import {
   fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel,
 } from '@/game/duels';
+import { noterDefi } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
 import { pique, boost } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
@@ -13,6 +14,29 @@ import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
+
+/**
+ * Un duel tranche, tel que le journal des defis le retient.
+ *
+ * La cle est celle du defi dont il sort — l'identifiant du duel EST celui du
+ * defi — si bien que la ligne « X t'a defie » devient « perdu contre X »
+ * plutot que de se dedoubler.
+ */
+function noterDuel(d: MonDuel) {
+  const gagne = d.issue === d.role;
+  noterDefi({
+    cle: `defi:${d.id}`,
+    genre: 'defi',
+    sens: d.role === 'challenger' ? 'lance' : 'recu',
+    etat: d.issue === 'draw' ? 'nul' : gagne ? 'gagne' : 'perdu',
+    nom: d.adversaire,
+    epreuves: d.races || [],
+    at: d.at,
+    lp: d.lp,
+    mon_ms: d.mon_ms,
+    son_ms: d.son_ms,
+  });
+}
 
 /**
  * « Ton defi a ete releve. »
@@ -56,6 +80,11 @@ export function DuelResultPopup() {
     dernier.current = t;
     fetchMesDuels().then(list => {
       if (annule.current || !list.length) return;
+      // L'issue rejoint le journal des defis, ou elle retrouve la ligne du
+      // defi dont elle sort. C'est le seul endroit qui la connaisse : la
+      // fenetre ci-dessous ne s'annonce qu'une fois, et le classement des
+      // duels ne garde que des totaux.
+      for (const d of list) noterDuel(d);
       // Une reponse arrivee entre-temps s'ajoute a la file sans doubler
       // celles qu'on est en train de montrer.
       setFile(f => {

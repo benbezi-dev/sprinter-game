@@ -3,6 +3,7 @@ import { SprinterApp, SprinterCore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT, TRANSITION } from '@/lib/mouvement';
 import { ChevronLeft, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
+import { DEPART_STARTER } from '@/game/canal';
 
 const { C } = SprinterCore;
 
@@ -61,6 +62,18 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
 
   // Pad allume par la demo, pour que le rythme se voie sur les pads memes.
   const [flash, setFlash] = useState<Cote | null>(null);
+  /**
+   * OU EN EST LE DEPART, DANS LES TERMES DE SON CANAL.
+   *
+   * La seconde qui reste : 3, 2, 1, puis 0 quand le signal est tombe — sur les
+   * deux canaux, puisque le depart est toujours cale sur le 3, 2, 1. Sur celui
+   * qui a un starter, sa voix remplace le bip au 3 et au 1. `null` tant que
+   * rien n'a commence, et `compte > 0` signe un depart anticipe.
+   *
+   * Ce qu'on repete ici est le VRAI depart, tirage au sort compris la ou il y
+   * en a un : faire repeter un rythme qu'on ne retrouvera pas en course
+   * apprendrait exactement ce qu'il ne faut pas faire.
+   */
   const [compte, setCompte] = useState<number | null>(null);
   const [modeleVus, setModeleVus] = useState(0);  // barres jouees par la demo
 
@@ -75,6 +88,23 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
 
   const dernier = useRef<Cote | null>(null);
   const raf = useRef(0);
+
+  /**
+   * LE SON DU DEPART, CELUI DE LA COURSE.
+   *
+   * Le tutoriel ne fabrique pas ses propres sons : ce qu'on repete ici doit
+   * s'entendre exactement comme ce qu'on entendra en piste, sans quoi
+   * l'exercice apprend un autre depart que le vrai. Le decompte a son bip a la
+   * seconde et son signal ; le starter, sa voix et son pistolet.
+   */
+  const son = (quoi: 'beep' | 'go') => {
+    try { SprinterApp.Audio_.init(); SprinterApp.Audio_.sfx(quoi); }
+    catch { /* pas de son sur cet appareil : l'ecran suffit */ }
+  };
+  const starter = (quoi: 'marques' | 'pret' | 'feu') => {
+    try { SprinterApp.Audio_.init(); SprinterApp.Audio_.starter(quoi); }
+    catch { /* idem : l'ecran porte la consigne */ }
+  };
 
   const stop = () => { cancelAnimationFrame(raf.current); raf.current = 0; };
 
@@ -102,6 +132,18 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
     setCompte(null); setModeleVus(0); dernier.current = null;
   };
 
+  // LE SON D'UNE SECONDE DU DECOMPTE, SELON LE CANAL. Au starter, sa voix dit
+  // le 3 (« a vos marques ») et le 1 (« pret ») ; le 2 garde son bip, comme en
+  // course. Sans starter, le bip marque le passage au 2 et au 1.
+  const annonce = (i: number) => {
+    if (DEPART_STARTER) {
+      if (i === 0) starter('marques');
+      else if (i === 2) starter('pret');
+      else son('beep');
+    } else if (i) son('beep');
+  };
+  const signal = () => { if (DEPART_STARTER) starter('feu'); else son('go'); };
+
   // --- les trois demonstrations --------------------------------------------
   const lancerDemo = useCallback((e: number) => {
     reinit();
@@ -120,9 +162,13 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
       }
       ev.push({ t: t + 0.25, f: () => {} });
     } else if (e === 1) {
-      // Le decompte, puis l'appui juste apres le signal.
-      [3, 2, 1].forEach((n, i) => ev.push({ t: 0.3 + i * 0.7, f: () => setCompte(n) }));
-      ev.push({ t: 2.4, f: () => setCompte(0) });
+      // Le decompte, puis l'appui juste apres le signal. Le bip ne tombe pas
+      // sur le premier chiffre : en course il marque le PASSAGE d'une seconde
+      // a la suivante, et la demonstration compte comme la course compte.
+      // Avec un starter, sa voix dit le 3 et le 1, et son coup donne le signal.
+      [3, 2, 1].forEach((n, i) => ev.push({
+        t: 0.3 + i * 0.7, f: () => { setCompte(n); annonce(i); } }));
+      ev.push({ t: 2.4, f: () => { setCompte(0); signal(); } });
       ev.push({ t: 2.55, f: () => setFlash('left') });
       ev.push({ t: 2.75, f: () => setFlash(null) });
       ev.push({ t: 3.3, f: () => {} });
@@ -149,12 +195,17 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jouer]);
 
-  /** Le vrai decompte de l'etape 2, une fois la demo passee. */
+  /**
+   * LE VRAI DEPART DE L'ETAPE 2 — celui du canal ou l'on joue.
+   *
+   * Trois secondes pleines, comme en course, sur les deux canaux.
+   */
   const departReel = useCallback(() => {
     setReaction(null); setTropTot(false);
     const ev: { t: number; f: () => void }[] = [];
-    [3, 2, 1].forEach((n, i) => ev.push({ t: i * 1, f: () => setCompte(n) }));
-    ev.push({ t: 3, f: () => { setCompte(0); setPistolet(performance.now()); } });
+    [3, 2, 1].forEach((n, i) => ev.push({
+      t: i, f: () => { setCompte(n); annonce(i); } }));
+    ev.push({ t: 3, f: () => { setCompte(0); signal(); setPistolet(performance.now()); } });
     jouer(ev, () => {});
   }, [jouer]);
 
@@ -314,11 +365,15 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
                   </span>
                 </motion.div>
               ) : (
+                /* Le cercle du decompte, tel qu'il s'affiche en course : la
+                   seconde qui reste, et le cercle qui passe a l'or quand le
+                   signal tombe. Le mot ne s'ecrit pas — en course, l'ecran du
+                   depart disparait a cet instant-la, et c'est cette disparition
+                   qui dit de partir. */
                 <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full border-4 flex items-center justify-center transition-colors
                   ${compte === 0 ? 'border-primary bg-primary/25' : 'border-white/20 bg-card/60'}`}>
-                  <span className={`text-3xl md:text-4xl font-black font-display
-                    ${compte === 0 ? 'text-primary' : 'text-white'}`}>
-                    {compte === 0 ? N.t('go') : compte ?? ''}
+                  <span className="text-3xl md:text-4xl font-black font-display text-white">
+                    {compte || ''}
                   </span>
                 </div>
               )}

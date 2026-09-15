@@ -14,17 +14,32 @@ import {
 } from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { inviterEnDirect } from '@/game/invitations-directes';
+import { noterDefi } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
-import { Review, TTL_MS, type EtatReview } from '@/game/review';
+import { prechargerGlace } from '@/game/turn';
+import {
+  programmerLeFilm, arreterLeFilm, jeterLeFilm, useFilmDeLaCourse, partagerLeFilm,
+} from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
 const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
+/**
+ * Combien de temps la liaison audio reste ouverte apres la course.
+ *
+ * Elle valait la duree de vie de la video, et l'accord tenait tant que les
+ * deux faisaient dix minutes. La video vit maintenant deux heures — ce qui est
+ * bien pour un fichier dans une memoire, et absurde pour un micro ouvert entre
+ * deux inconnus. Les deux durees ont donc repris leur independance, et celle-ci
+ * garde la valeur qu'elle a toujours eue.
+ */
+const FIN_VOIX_MS = 10 * 60 * 1000;
+
 const MICRO_VAINQUEUR_MS = 5000;
 /**
  * Ce qu'on ajoute a la duree annoncee d'une presentation pour garder le micro.
@@ -109,15 +124,35 @@ export function LivePanel() {
   const [voixEtat, setVoixEtat] = useState<EtatVoix>({
     micro: false, refuse: false, ouvert: false, connecte: false,
   });
-  const [review, setReview] = useState<EtatReview>({
-    phase: 'inactif', url: null, fichier: '', reste: 0, taille: 0,
-  });
+  /**
+   * LE FILM DE LA COURSE, QUI NE VIT PLUS ICI.
+   *
+   * Il tenait dans un `useRef` de ce composant, et c'etait le seul endroit ou
+   * il ne pouvait pas tenir : ce panneau vit dans l'ecran-titre, qui disparait
+   * au coup de pistolet. La camera tournait bien — la salle garde les
+   * fonctions qu'on lui a confiees — mais au retour de la course, le panneau
+   * se remontait a neuf, avec un `ref` vide : la video etait en memoire, et
+   * plus un seul ecran ne pouvait la proposer.
+   *
+   * Elle vit donc dans `game/film-course`, au-dessus des composants, comme
+   * celle du one shot. Deux ecrans la montrent maintenant : celui de fin de
+   * course, tout de suite, et ce panneau au retour dans le salon.
+   */
+  const film = useFilmDeLaCourse();
 
   const salle = useRef<Salle | null>(null);
-  const film = useRef<Review | null>(null);
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
   const cibleDepart = useRef<number | null>(null);
+  /**
+   * Cette meme date, mais dans l'horloge de la SALLE.
+   *
+   * Elle ne sert pas a compter — chacun compte chez lui, sur l'ecart qu'il a
+   * mesure — mais a tirer la tenue du starter : c'est le seul nombre que les
+   * huit telephones ont en commun, et donc le seul qui puisse leur faire
+   * entendre « pret » au meme instant. Voir poserLeDepart.
+   */
+  const dateDepart = useRef<number | null>(null);
   const presEnCours = useRef(false);
 
   // Un lien ?direct=CODE tombe directement dans le salon.
@@ -208,7 +243,7 @@ export function LivePanel() {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
     SprinterApp.startLive([epreuve], {
       levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
-      autres: lesAutres(), sansOrdinateur: true,
+      autres: lesAutres(), sansOrdinateur: true, photoFinish: true,
     });
   };
 
@@ -253,24 +288,47 @@ export function LivePanel() {
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
       SprinterApp.startLive([epreuve], {
         levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
+        photoFinish: true,
       });
+    } else {
+      // La piste est deja montee — c'est le cas normal, elle l'a ete pour la
+      // presentation. On ne la remonte pas, mais on part avec la salle telle
+      // qu'elle est MAINTENANT et non telle qu'elle etait a l'annonce.
+      SprinterApp.majLives(autres);
     }
     SprinterApp.G.liveNom = adverse;
     SprinterApp.G.ghostName = adverse;
-    SprinterApp.liveDepart(dans);
+    SprinterApp.liveDepart(dans, dateDepart.current);
     setEtape('partie');
 
     // On ne filme que la course. Un peu avant le coup de pistolet, pour ne pas
     // perdre les premieres images le temps que l'encodeur demarre.
-    if (!film.current) film.current = new Review(setReview);
-    const f = film.current;
-    setTimeout(() => f.demarrer(SprinterApp.G.cv || null), Math.max(0, dans - 300));
+    //
+    // AVEC LE SON, ET AVEC LA VOIX. Le stade sort du moteur, la voix de
+    // l'adversaire de la connexion — deux pistes empruntees, jamais arretees
+    // par l'enregistreur (voir Review.demarrer). Un duel en direct se court en
+    // se parlant : le replay qui n'en garderait que l'image aurait retire ce
+    // qui distingue cette course de toutes les autres.
+    //
+    // La piste distante est relue au moment du depart et non ici : a la
+    // seconde ou l'on programme, la connexion peut n'avoir rien recu encore.
+    programmerLeFilm('direct', dans, () => [voixCourante()?.pisteDistante()]);
   };
 
   const ecouteurs = (monCode: string) => ({
     onEtat: (e: EtatSalle) => {
       setSalon(e);
       setEtape(p => (p === 'presentation' || p === 'partie' || p === 'review') ? p : 'salon');
+      // La piste est montee des le debut de la presentation, et la salle
+      // continue de vivre jusqu'au pistolet : quelqu'un ferme l'application,
+      // un invite arrive. Sans cette remise d'accord, un partant qui s'en va
+      // laissait son coureur plante sur la ligne de depart pour toute la
+      // course, et un partant arrive apres le montage ne se voyait nulle part
+      // — tout en figurant au classement rendu par la salle. Voir majLives.
+      const etat = SprinterApp.G.state;
+      if (SprinterApp.G.liveOn && (etat === 'count' || etat === 'race')) {
+        SprinterApp.majLives(lesAutres());
+      }
     },
     onPresentation: (p: Presentation) => {
       setPresentation(p);
@@ -320,20 +378,29 @@ export function LivePanel() {
           { micro: false, refuse: false, ouvert: false, connecte: false },
       });
     },
-    onDepart: (dansMs: number) => {
+    onDepart: (dansMs: number, departA: number) => {
       cibleDepart.current = Date.now() + dansMs;
+      dateDepart.current = departA;
       if (!presEnCours.current) lancerCourse();
     },
     // A huit, savoir qui a bouge est la moitie de l'information : la position
     // part vers le coureur qui porte cet identifiant, pas vers « l'adversaire ».
-    onPos: (id: string, d: number) => SprinterApp.liveDistDe(id, d),
-    onFini: (_n: string, ms: number) => { SprinterApp.G.liveFin = ms; },
+    // Avec l'instant de SA course, quand la salle le transmet : c'est lui qui
+    // permet de le montrer ou il en est a NOTRE instant, et non ou il etait.
+    onPos: (id: string, d: number, c?: number) => SprinterApp.liveDistDe(id, d, c),
+    // Son chrono pose son coureur sur la ligne a son vrai temps, et resout le
+    // photo-finish. La salle nous renvoie aussi le notre : liveFiniDe ne le
+    // trouve pas parmi les adversaires et l'ignore.
+    onFini: (_n: string, ms: number, abandon: boolean, id?: string) => {
+      SprinterApp.G.liveFin = ms;
+      if (id) SprinterApp.liveFiniDe(id, ms, abandon);
+    },
     onResultat: (r: any) => {
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
       SprinterApp.G.liveOn = true;
       presEnCours.current = false;
       setPresentation(null);
-      film.current?.arreter();
+      void arreterLeFilm('direct');
 
       // Le mot du vainqueur : cinq secondes, et seulement pour lui. Le perdant
       // garde son micro coupe, ce qui est aussi une facon de ne pas transformer
@@ -342,29 +409,33 @@ export function LivePanel() {
       // l'ordre d'arrivee. Sans cette seconde lecture, le vainqueur d'une
       // course a quatre ou huit n'avait jamais le micro : `issue` n'existe
       // que pour un duel, et personne ne parlait.
-      const premier = Array.isArray(r.classement) ? r.classement[0] : null;
+      // Premier, c'est avoir la premiere PLACE, pas la premiere ligne : une
+      // egalite a la milliseconde partage la place, et les deux vainqueurs
+      // ont droit au mot. La premiere ligne seule le donnait a celui que le
+      // tri avait pose en tete.
+      const maLigne = Array.isArray(r.classement)
+        ? r.classement.find((l: any) => l.id === salle.current?.moi) : null;
       // L'ecoute se rebranche : la course est finie, on peut se reparler.
       voixCourante()?.reveil();
       const jaiGagne = r.issue
         ? ((r.issue === 'challenger' && salle.current?.suisHote) ||
            (r.issue === 'opponent' && !salle.current?.suisHote))
-        : !!premier && premier.id === salle.current?.moi;
+        : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
       if (jaiGagne) voixCourante()?.ouvrirMicro(MICRO_VAINQUEUR_MS);
       else voixCourante()?.fermerMicro();
 
       // Puis la liaison se coupe d'elle-meme a la fin de la review.
       //
-      // La review n'a pas d'autre fin que celle de sa video : dix minutes,
-      // comptees a partir d'ici, apres quoi l'ecran ne montre plus rien qu'on
-      // puisse encore appeler une course. La meme duree sert quand il n'y a
-      // pas eu de video du tout — un appareil qui ne sait pas encoder n'a
-      // aucune raison de garder une connexion ouverte plus longtemps que les
-      // autres.
+      // Dix minutes, comptees a partir d'ici, apres quoi l'ecran ne montre
+      // plus rien qu'on puisse encore appeler une course. La meme duree sert
+      // quand il n'y a pas eu de video du tout — un appareil qui ne sait pas
+      // encoder n'a aucune raison de garder une connexion ouverte plus
+      // longtemps que les autres.
       //
       // Le micro, lui, est deja rendu : il ne l'est que pendant les fenetres
       // de parole. Ce qui s'eteint ici, c'est le canal d'ecoute — de quoi se
       // parler apres la course, sans que cela dure indefiniment.
-      programmerFinVoix(TTL_MS);
+      programmerFinVoix(FIN_VOIX_MS);
 
       setEtape('review');
     },
@@ -384,8 +455,13 @@ export function LivePanel() {
     const s = new Salle(c, ecouteurs(c));
     salle.current = s;
     poserSalon(s);
+    // Par ou passera la voix, demande maintenant plutot qu'au debut de la
+    // presentation : l'aller-retour au serveur se fait pendant qu'on attend
+    // l'adversaire dans le salon, et non dans les mille cinq cents
+    // millisecondes qui precedent l'annonce du premier athlete.
+    prechargerGlace();
     brancherSalle({
-      position: (d: number) => s.position(d),
+      position: (d: number, c?: number) => s.position(d, c),
       fini: (ms: number) => s.fini(ms),
     });
     // La salle annonce le terrain de la course : le meme qu'on monte ici.
@@ -422,6 +498,14 @@ export function LivePanel() {
   const quitter = () => {
     quitterSalon(); salle.current = null;
     brancherSalle(null);
+    // La camera part avec la salle.
+    //
+    // Quitter, c'est renoncer a la course : celle qui tournait encore n'aura
+    // pas de fin a filmer, et celle qui etait prete n'a plus d'ecran ou se
+    // montrer — le panneau revient a son etat de repos, sans la carte video.
+    // Garder le fichier serait garder quelques dizaines de mega-octets pour
+    // personne.
+    jeterLeFilm('direct');
     // Partir pendant la presentation laissait le jeu sur la piste, decompte
     // suspendu, sans rien pour le relancer ni pour en sortir : la piste montee
     // avant le pistolet doit se demonter par le meme chemin.
@@ -433,6 +517,7 @@ export function LivePanel() {
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
     couperVoix();
     presEnCours.current = false; cibleDepart.current = null;
+    dateDepart.current = null;
     setPresentation(null);
     setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
   };
@@ -587,9 +672,14 @@ export function LivePanel() {
       {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"
     >
-      {/* Apres la course : la video, et son compte a rebours. */}
-      {(etape === 'review' || review.phase === 'prete' || review.phase === 'expiree') && (
-        <ReviewVideo etat={review} onPartager={async () => (await film.current?.partager()) ?? 'echec'} />
+      {/* Apres la course : la video, et son compte a rebours.
+
+          Celle du DIRECT, et pas une autre. L'enregistreur est partage avec le
+          one shot et le relais — un film qui n'est pas de cette course-ci n'a
+          rien a faire dans ce salon. */}
+      {film.genre === 'direct' &&
+        (etape === 'review' || film.phase === 'prete' || film.phase === 'expiree') && (
+        <ReviewVideo etat={film} onPartager={partagerLeFilm} />
       )}
 
       {/* Le mot du vainqueur, pendant qu'il l'a. */}
@@ -683,6 +773,13 @@ export function LivePanel() {
             const r = await inviterEnDirect([nom], code);
             if (r.invites.length) {
               setConviesInfo(c => ({ ok: c.ok + 1, injoignable: null }));
+              // Au journal, pour qu'on sache une semaine plus tard qui on a
+              // convie. Seulement ceux qui ont ete joints : un injoignable
+              // n'a rien recu, et l'inscrire laisserait croire le contraire.
+              noterDefi({
+                cle: `direct:${code}:${nom.trim().toLowerCase()}`,
+                genre: 'direct', sens: 'lance', etat: 'attente', nom,
+              });
               return true;
             }
             // Injoignable n'est pas une panne : beaucoup de joueurs figurent au

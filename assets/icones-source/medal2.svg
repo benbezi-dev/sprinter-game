@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <!-- Podium. Sert pour les rangs 2 ET 3 (runRank <= 3) : pas de chiffre,
+       donc — un « 2 » mentirait a un troisieme. Une etoile au centre. -->
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2=".4" y2="1">
+      <stop offset="0" stop-color="#26344D"/>
+      <stop offset="1" stop-color="#060913"/>
+    </linearGradient>
+    <linearGradient id="ruban" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33435F"/>
+      <stop offset="1" stop-color="#131C2E"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#ruban)">
+    <path d="M18 5 H28 L36.5 26 L27 30.5 Z"/>
+    <path d="M46 5 H36 L27.5 26 L37 30.5 Z"/>
+  </g>
+  <circle cx="32" cy="41.5" r="18" fill="url(#nuit)"/>
+  <path fill="#F8CD4A" stroke="#F8CD4A" stroke-width="1.6" stroke-linejoin="round"
+        d="M32 30.5 L35.06 37.29 L42.46 38.10 L36.95 43.11 L38.47 50.40
+           L32 46.7 L25.53 50.40 L27.05 43.11 L21.54 38.10 L28.94 37.29 Z"/>
+</svg>

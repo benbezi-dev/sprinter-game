@@ -107,11 +107,21 @@ export type DuelDirect = { hote: PointsDuel; invite: PointsDuel };
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
   onPresentation?: (p: Presentation) => void;
-  onDepart?: (dansMs: number) => void;
+  /**
+   * Le pistolet. `dansMs` est l'attente restante, comptee chez soi ; `departA`
+   * la date du coup en temps serveur — la meme pour tout le monde, et c'est ce
+   * qui permet aux huit couloirs d'entendre « pret » au meme instant. Voir
+   * poserLeDepart dans sprinter-app.js.
+   */
+  onDepart?: (dansMs: number, departA: number) => void;
   /** Position d'un adversaire. `id` le designe : a huit, savoir QUI a bouge
-   *  est la moitie de l'information. */
-  onPos?: (id: string, d: number) => void;
-  onFini?: (nom: string, ms: number, abandon: boolean) => void;
+   *  est la moitie de l'information. `c` est l'instant de SA course ou il y
+   *  etait, en millisecondes depuis son coup de pistolet — absent d'une salle
+   *  deployee avant ce champ. Voir recevoirPosition dans sprinter-app.js. */
+  onPos?: (id: string, d: number, c?: number) => void;
+  /** Un chrono d'arrivee. `id` dit a qui il appartient : c'est lui qui permet
+   *  de poser CE coureur sur la ligne a son vrai temps. Voir liveFiniDe. */
+  onFini?: (nom: string, ms: number, abandon: boolean, id?: string) => void;
   onResultat?: (r: ResultatDirect) => void;
   /** Les points du duel, juste apres le resultat. Absent s'il n'y en a pas. */
   onDuel?: (d: DuelDirect) => void;
@@ -255,10 +265,10 @@ export class Salle {
         this.majEtat(m);
         return;
       case 'pos':
-        this.ec.onPos?.(m.id, m.d);
+        this.ec.onPos?.(m.id, m.d, Number.isFinite(m.c) ? m.c : undefined);
         return;
       case 'fini':
-        this.ec.onFini?.(m.nom, m.ms, !!m.abandon);
+        this.ec.onFini?.(m.nom, m.ms, !!m.abandon, m.id);
         return;
       case 'sorti':
         this.ec.onSorti?.(m.nom);
@@ -308,7 +318,7 @@ export class Salle {
       this.departPose = true;
       // Le depart est une date, pas un signal : on la ramene dans notre
       // propre horloge et on laisse le jeu compter tout seul.
-      this.ec.onDepart?.(m.depart_a - (Date.now() + this.decalage));
+      this.ec.onDepart?.(m.depart_a - (Date.now() + this.decalage), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
   }
@@ -326,7 +336,11 @@ export class Salle {
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
   /** Passe une offre, une reponse ou un candidat ICE a l'autre pair. */
   signaler(type: 'sdp' | 'ice', charge: any) { this.envoyer({ t: type, charge }); }
-  position(d: number) { this.envoyer({ t: 'pos', d }); }
+  /** `c` : l'instant de notre course, en millisecondes. Une salle qui ne le
+   *  connait pas l'ignore, et la course se joue comme avant. */
+  position(d: number, c?: number) {
+    this.envoyer(c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) });
+  }
   fini(ms: number) { this.envoyer({ t: 'fini', ms: Math.round(ms) }); }
   abandon() { this.envoyer({ t: 'abandon' }); }
 

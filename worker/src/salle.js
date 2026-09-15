@@ -22,6 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { avantDepart } from './depart.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
@@ -36,8 +37,9 @@ const APRES_RESULTAT_MS = 45 * 1000;
 // Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
-// Delai entre « tout le monde est pret » et le coup de pistolet. Assez long
-// pour absorber une latence mediocre, assez court pour ne pas ennuyer.
+// Delai entre « tout le monde est pret » et le depart. Assez long pour absorber
+// une latence mediocre, assez court pour ne pas ennuyer. Le depart part au
+// decompte, sur les deux canaux. Voir depart.js.
 const AVANT_DEPART_MS = 4000;
 
 // --- presentation des participants, facon championnat ----------------------
@@ -133,7 +135,7 @@ export class SalleDirecte {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    /** @type {Map<WebSocket, {id:string,nom:string,pret:boolean,d:number,fin:number|null,parti:boolean}>} */
+    /** @type {Map<WebSocket, {id:string,nom:string,pret:boolean,d:number,c:number|null,fin:number|null,parti:boolean}>} */
     this.joueurs = new Map();
     this.epreuves = null;      // fixees par le premier arrive
     this.niveau = 4;
@@ -265,7 +267,7 @@ export class SalleDirecte {
     }
 
     this.joueurs.set(serveur, {
-      id, nom, pret: false, d: 0, fin: null, parti: false,
+      id, nom, pret: false, d: 0, c: null, fin: null, parti: false,
     });
     this.vivante();
 
@@ -333,13 +335,14 @@ export class SalleDirecte {
           this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
+          const attente = avantDepart(this.test, AVANT_DEPART_MS);
           this.departA = seul
-            ? Date.now() + AVANT_DEPART_MS
+            ? Date.now() + attente
             : this.presentationA
               + this.ordre.length * creneauPresentation()
-              + AVANT_DEPART_MS;
+              + attente;
           this.termine = false;
-          for (const x of this.joueurs.values()) { x.d = 0; x.fin = null; x.parti = false; }
+          for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; }
         }
         this.envoyerEtat();
         return;
@@ -361,15 +364,33 @@ export class SalleDirecte {
       // Position en course. On ne renvoie que ce qui bouge, et on ne le
       // renvoie qu'a l'autre : se recevoir soi-meme en retard ferait sauter
       // son propre coureur.
+      //
+      // AVEC L'INSTANT DE SA COURSE. `c` est le chronometre de l'emetteur au
+      // moment ou il etait a `d`, en millisecondes depuis son coup de
+      // pistolet. Le relayer permet a chaque ecran de montrer les autres la ou
+      // ils en sont a SON instant de course, sur la meme echelle que les
+      // chronos que l'on compare a l'arrivee — et non la ou ils etaient quand
+      // le paquet est parti. Sans lui, un duel serre s'affichait a l'envers :
+      // voir recevoirPosition dans src/game/sprinter-app.js. Un client qui ne
+      // l'envoie pas n'en recoit simplement pas.
+      //
+      // Au centimetre, plus au decimetre : l'autre en tire une vitesse sur un
+      // dixieme de seconde, et dix centimetres d'arrondi y faisaient un metre
+      // par seconde d'erreur.
       case 'pos': {
         const d = Number(m.d);
         if (!Number.isFinite(d) || d < 0 || d > 2000) return;
+        const c = Number(m.c);
+        const date = m.c != null && Number.isFinite(c) && c >= 0 && c <= MAX_MS;
         // La distance ne recule pas : un paquet en retard ne doit pas faire
-        // reculer l'adversaire a l'ecran.
-        if (d > j.d) j.d = d;
+        // reculer l'adversaire a l'ecran. A distance egale, l'instant avance
+        // quand meme : c'est ainsi que l'autre apprend qu'on s'est arrete.
+        if (d >= j.d) { j.d = d; j.c = date ? Math.round(c) : null; }
         j.parti = true;
         this.vivante();
-        this.diffuser({ t: 'pos', id: j.id, d: Math.round(j.d * 10) / 10 }, ws);
+        const pos = { t: 'pos', id: j.id, d: Math.round(j.d * 100) / 100 };
+        if (j.c != null) pos.c = j.c;
+        this.diffuser(pos, ws);
         return;
       }
 
@@ -415,9 +436,15 @@ export class SalleDirecte {
 
     // L'ordre d'arrivee, quel que soit le nombre de partants. Un abandon porte
     // un chrono sentinelle, donc il se range naturellement en dernier.
+    //
+    // Une egalite a la milliseconde partage la place, comme sur une vraie
+    // piste : on compte ceux qui sont arrives STRICTEMENT avant. Numeroter
+    // dans l'ordre du tri donnait « 1er » a l'un et « 2e » a l'autre pour le
+    // meme temps, selon l'ordre ou les telephones s'etaient connectes — et
+    // contredisait le tableau de course, qui donne deja la meme place aux deux.
     const ordre = [...tous].sort((a, b) => a.fin - b.fin);
-    const classement = ordre.map((x, i) => ({
-      place: i + 1, id: x.id, nom: x.nom, ms: x.fin,
+    const classement = ordre.map(x => ({
+      place: 1 + ordre.filter(y => y.fin < x.fin).length, id: x.id, nom: x.nom, ms: x.fin,
       abandon: x.fin >= ABANDON_MS,
     }));
 
@@ -475,6 +502,11 @@ export class SalleDirecte {
         opponentName: invite.nom,
         challengerMs: hote.fin,
         opponentMs: invite.fin,
+        // La distance decide du classement touche : depuis que les niveaux ne
+        // sont plus partages, une course en direct sur 400 m ne doit rien
+        // deplacer au classement du 100 m. La salle les tient depuis le
+        // premier arrive, et c'est le meme programme pour tout le monde.
+        epreuves: this.epreuves,
       });
       this.annoncerPoints(hote, invite, points);
     } catch (e) { /* le classement se passera de ce duel */ }

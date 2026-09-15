@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye, Swords } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { TAILLE } from '@/game/salle-relais';
+import { TAILLE, PORTEE } from '@/game/salle-relais';
 import {
   SalleConfrontation,
   type EtatConfrontation, type EquipeEnCourse,
@@ -11,6 +11,7 @@ import {
 import {
   Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe, chrono,
 } from './relais-pieces';
+import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 
 /**
  * La confrontation : deux a huit equipes, un seul coup de pistolet.
@@ -60,6 +61,31 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
    */
   const [temoins, setTemoins] = useState<Record<string, number>>({});
   const porteurs = useRef(new Map<string, number>());
+  /**
+   * Ou est chacun des quatre DE MON EQUIPE, par rang de relais.
+   *
+   * Les positions des autres equipes ne servent qu'a les dessiner ; celles-ci
+   * decident d'une transmission, depuis qu'un contact est exige
+   * (`PORTEE`, worker/src/relais-course.js).
+   */
+  const ou = useRef<Record<number, number>>({});
+  /** La distance entre mon partenaire de transmission et moi, en metres. */
+  const [bras, setBras] = useState<number | null>(null);
+  /** Une main tendue dans le vide, a montrer une seconde. */
+  const [rate, setRate] = useState(0);
+  const etatRef = useRef<EtatConfrontation | null>(null);
+
+  /** Mon partenaire : le porteur si je recois, le suivant si je donne. */
+  const majBras = () => {
+    const s = salle.current;
+    const moi = s?.monRelais || 0;
+    const p = porteurs.current.get(equipe) || 1;
+    const partenaire = moi === p + 1 ? p : (moi === p && moi < TAILLE ? moi + 1 : 0);
+    if (!partenaire || !moi) { setBras(null); return; }
+    const a = ou.current[moi], b = ou.current[partenaire];
+    if (a == null || b == null) { setBras(null); return; }
+    setBras(Math.abs(a - b));
+  };
 
   useEffect(() => {
     const s = new SalleConfrontation(code, equipe, {
@@ -70,11 +96,16 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
           }
           if (x.nom) noms.current.set(x.equipe, x.nom);
           porteurs.current.set(x.equipe, x.porteur);
+          // Le temoin de MON equipe : c'est le seul dont on dessine les
+          // quatre relayeurs, donc le seul qu'on puisse mettre en main.
+          if (x.equipe === equipe) SprinterApp.porteurDuTemoin(x.porteur);
         }
         setTemoins(Object.fromEntries(etat.equipes.map(x => [x.equipe, x.temoin_d])));
+        etatRef.current = etat;
         setE(etat);
+        majBras();
       },
-      onDepart: (dansMs) => {
+      onDepart: (dansMs, departA) => {
         // Les adversaires entrent dans la course comme des coureurs a part
         // entiere, un par couloir : tout le rendu, la camera et le classement
         // en course continuent de fonctionner sans savoir qu'ils viennent du
@@ -83,46 +114,128 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         const autres = [...couloirs.current.entries()]
           .filter(([id]) => id !== equipe)
           .map(([id, i]) => ({ id, nom: noms.current.get(id) || id, couloir: i + 1 }));
-        SprinterApp.startRelais({ relais: s.monRelais, marque: s.marque, autres });
-        SprinterApp.liveDepart(dansMs);
+        // Et mes trois coequipiers dans MON couloir : sans eux, la
+        // transmission — qui exige maintenant un contact — se jouerait contre
+        // un partenaire invisible.
+        const mienne = (etatRef.current?.equipes || []).find(x => x.equipe === equipe);
+        const mesEquipiers = (mienne?.joueurs || [])
+          .filter(j => j.relais !== s.monRelais)
+          .map(j => ({ id: `moi:${j.relais}`, nom: j.nom, relais: j.relais }));
+        SprinterApp.startRelais({
+          relais: s.monRelais, marque: s.marque, autres, equipiers: mesEquipiers,
+        });
+        SprinterApp.liveDepart(dansMs, departA);
+        SprinterApp.porteurDuTemoin(1);
+        // L'horloge de la confrontation est celle de la salle : le temps de
+        // chaque equipe se compte sur elle, et l'ordre d'arrivee aussi. Voir
+        // CourseRelais, meme regle, et instantLive dans sprinter-app.js.
+        SprinterApp.G.horlogeLive = () => s.msCourse() / 1000;
         brancherSalle({
           position: (d) => {
-            s.avancer(d);
+            s.avancer(d, Math.max(0, s.msCourse()));
             // Mes propres positions ne me reviennent pas en echo : quand je
             // porte le temoin, c'est le moteur qui me dit ou il est.
             if (s.monRelais === porteurs.current.get(equipe)) {
               setTemoins(t => ({ ...t, [equipe]: d }));
             }
+            ou.current[s.monRelais] = d;
+            majBras();
           },
           fini: () => s.terminer(),
         });
+
+        // ET LA CAMERA TOURNE, DU PISTOLET AU CHRONO DE MON EQUIPE.
+        //
+        // C'est ici que le film a le plus a montrer : les temoins adverses
+        // courent dans les couloirs voisins, et ce qui se partage apres n'est
+        // pas un chrono mais un ecart — celui qu'on a pris, ou rendu, au
+        // moment de la transmission.
+        programmerLeFilm('relais', dansMs);
       },
-      onPos: (eq, relais, d) => {
-        if (relais === porteurs.current.get(eq)) {
-          setTemoins(t => (t[eq] === d ? t : { ...t, [eq]: d }));
+      onPos: (eq, relais, d, temoin, c, ct) => {
+        // MON EQUIPE D'ABORD. Ses quatre positions ne servent pas a suivre un
+        // temoin : elles disent ou sont mes coequipiers sur MA piste, et a
+        // quelle distance de moi — c'est d'elle que depend la transmission.
+        //
+        // Chaque position porte l'instant de course ou elle valait (`c`, et
+        // `ct` pour le temoin) quand la salle le transmet : c'est lui qui
+        // montre chacun ou il EST a notre instant, et non ou il etait. Voir
+        // recevoirPosition dans sprinter-app.js.
+        if (eq === equipe && relais !== salle.current?.monRelais) {
+          ou.current[relais] = d;
+          SprinterApp.liveDistDe(`moi:${relais}`, d, c);
+          majBras();
         }
+
+        // LE TEMOIN, ET LUI SEUL.
+        //
+        // La salle annonce la position de chaque relayeur, y compris des trois
+        // qui attendent a leur marque : des le pistolet, une equipe emet donc
+        // 0 pour son premier, 100, 200 et 300 pour les autres. Ces quatre
+        // nombres arrivaient tels quels au coureur adverse en piste, qui ne
+        // retient que le plus grand — l'equipe d'a cote se posait a la marque
+        // de son dernier relayeur au coup de pistolet, trois cents metres plus
+        // loin, hors du champ de la camera. Elle disparaissait donc de l'ecran,
+        // puis y reapparaissait immobile quand notre propre temoin la
+        // rejoignait, et le classement d'arrivee — tenu par la salle, qui elle
+        // ne s'est jamais trompee — la donnait pourtant comme ayant couru.
+        //
+        // `temoin` vient de la salle et fait foi. A defaut, on ne retient que
+        // ce qu'annonce le porteur connu, ce qui vaut aussi pour une salle
+        // deployee avant ce champ.
+        const porte = relais === porteurs.current.get(eq);
+        const dt = temoin != null ? temoin : (porte ? d : null);
+        if (dt == null) return;
+        // L'instant qui va avec : celui du temoin, ou a defaut celui du
+        // porteur qui vient de parler.
+        const cDuTemoin = temoin != null ? ct : (porte ? c : undefined);
+        // Un temoin ne recule pas. Un paquet en retard, ou l'etat complet d'un
+        // passage qui croise une position plus fraiche, ne doit pas le faire
+        // revenir en arriere dans la bande des couloirs — c'est elle qui arme
+        // la tape du receveur.
+        setTemoins(t => (t[eq] != null && t[eq] >= dt ? t : { ...t, [eq]: dt }));
         // Le temoin adverse avance dans le couloir d'a cote, aux memes metres
         // absolus que les miens : la piste du 4x100 fait le tour complet, et
         // les deux reperes sont le meme. Rien a traduire.
-        if (eq !== equipe) SprinterApp.liveDistDe(eq, d);
+        if (eq !== equipe) SprinterApp.liveDistDe(eq, dt, cDuTemoin);
+      },
+      // Hors de portee : on le dit, et la course continue.
+      onTropLoin: (eq, { de, vers }) => {
+        if (eq !== equipe) return;
+        if (de !== s.monRelais && vers !== s.monRelais) return;
+        setRate(Date.now());
       },
       onPasse: (eq, p) => {
         if (eq !== equipe) return;
         if (p.de === s.monRelais) brancherSalle(null);
         if (p.vers === s.monRelais) SprinterApp.recevoirTemoin(p.ecart);
       },
+      // Ma course s'arrete, par la ligne ou par l'elimination : le film
+      // s'arrete au meme instant. Pas a la fin de TOUTE la confrontation — a
+      // partir de la, mon ecran montre l'arrivee et le classement, qui n'ont
+      // rien a faire dans une video de course.
       onElimine: (eq, raison) => {
         if (eq !== equipe) return;
         brancherSalle(null);
         setErreur(raison);
+        void arreterLeFilm('relais');
       },
-      onFini: (eq) => { if (eq === equipe) brancherSalle(null); },
+      onFini: (eq) => {
+        if (eq !== equipe) return;
+        brancherSalle(null);
+        void arreterLeFilm('relais');
+      },
       onTermine: () => setTermine(true),
       onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
     });
     salle.current = s;
     s.connecter(max, fantomes);
-    return () => { brancherSalle(null); s.fermer(); };
+    // Le film ne survit pas a la sortie de piste : l'ecran d'arrivee est le
+    // seul a le proposer. Voir CourseRelais, meme regle.
+    return () => {
+      SprinterApp.G.horlogeLive = null;
+      brancherSalle(null); s.fermer(); jeterLeFilm('relais');
+    };
   }, [code, equipe]);
 
   useEffect(() => {
@@ -148,7 +261,15 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
   const jeRecois = partie && mon === mienne.porteur + 1 && !maCourseEstFinie;
   const jeDonne = partie && mon === mienne.porteur && mon < TAILLE && !maCourseEstFinie;
   const dTemoin = (id: string) => temoins[id] ?? 0;
-  const aPortee = !!(jeRecois && zone && dTemoin(equipe) >= zone.debut - 12);
+  /**
+   * LA TAPE NE S'OFFRE QU'AU CONTACT — voir CourseRelais, meme regle.
+   *
+   * Elle s'armait sur l'approche du temoin, et le donneur l'avait des qu'il
+   * courait : deux coureurs separes de vingt metres se passaient le temoin.
+   * Le serveur exige desormais un contact, et le bouton dit la meme chose que
+   * l'arbitre.
+   */
+  const aPortee = !!((jeRecois || jeDonne) && bras != null && bras <= PORTEE);
 
   const couleur = (id: string) => couleurDe(couloirs.current.get(id) ?? 0);
   const rangee = (x: EquipeEnCourse) => (
@@ -227,7 +348,8 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
 
           {jeRecois || jeDonne ? (
             <BoutonTemoin role={jeDonne ? 'donne' : 'recoit'}
-                          arme={jeDonne || aPortee}
+                          arme={aPortee}
+                          bras={bras} portee={PORTEE} rate={rate}
                           onTaper={() => salle.current?.temoin()} />
           ) : (
             <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10

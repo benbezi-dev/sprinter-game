@@ -104,7 +104,7 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
     cle: 'thrower', nom: 'THROWER', sous: 'monde_thrower_sous',
     fond: '#160f0c', accent: 'rgb(251,146,60)',
     disciplines: [
-      { cle: 'poids', nom: 'disc_poids', jouable: false },
+      { cle: 'poids', nom: 'disc_poids', jouable: true },
       { cle: 'marteau', nom: 'disc_marteau', jouable: false },
       { cle: 'disque', nom: 'disc_disque', jouable: false },
       { cle: 'javelot', nom: 'disc_javelot', jouable: false },

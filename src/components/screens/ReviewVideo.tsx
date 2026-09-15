@@ -9,9 +9,13 @@ import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/rev
  * La video de la course, et son compte a rebours.
  *
  * Le decompte n'est pas decoratif : le fichier vit dans la memoire de l'onglet
- * et disparait au bout de dix minutes, telecharge ou non. L'afficher est la
+ * et disparait au bout de deux heures, telecharge ou non. L'afficher est la
  * seule facon honnete de presenter un bouton qui va s'eteindre — et accessoire-
  * ment ce qui donne envie d'appuyer maintenant.
+ *
+ * Le bouton s'eteint aussi, et bien plus souvent, DES QU'ON L'A UTILISE : la
+ * feuille de partage refermee, le film est libere. Les deux fins ne se disent
+ * pas pareil — voir l'en-tete de game/review.ts.
  */
 export function ReviewVideo({ etat, onPartager }: {
   etat: EtatReview;
@@ -64,14 +68,12 @@ export function ReviewVideo({ etat, onPartager }: {
             {N.t('review_share')}{mo ? ` · ${mo}` : ''}
           </button>
 
-          {/* Le partage, lui, se voit : la feuille du telephone s'ouvre et
-              repond d'elle-meme. Ne restent a dire que les deux issues
-              muettes — le fichier tombe dans les telechargements d'un
-              ordinateur, ou rien n'a pu sortir du tout. */}
-          {(sortie === 'telechargement' || sortie === 'echec') && (
-            <p className={`text-center text-[11px] ${sortie === 'echec' ? 'text-red-300' : 'text-muted-foreground'}`}>
-              {sortie === 'telechargement' ? N.t('review_saved') : N.t('review_failed')}
-            </p>
+          {/* Seul l'echec se dit encore ici : c'est la seule issue qui laisse
+              le film en place, donc la seule qui puisse coexister avec un
+              bouton encore vivant. Les deux autres emmenent l'ecran plus bas,
+              ou elles ont leur phrase. */}
+          {sortie === 'echec' && (
+            <p className="text-center text-[11px] text-red-300">{N.t('review_failed')}</p>
           )}
 
           {/* La barre se vide en meme temps que le temps restant. */}
@@ -90,7 +92,12 @@ export function ReviewVideo({ etat, onPartager }: {
         </>
       )}
 
-      {etat.phase === 'expiree' && (
+      {/* Plus de fichier — par depart ou par expiration. Le bouton reste, gris :
+          le faire disparaitre laisserait l'ecran se retasser tout seul, et un
+          panneau qui change de taille apres coup se lit comme un bug. Ce qui
+          change, c'est la phrase dessous, parce que « la video a ete effacee »
+          et « la video est sortie du jeu » ne racontent pas la meme chose. */}
+      {(etat.phase === 'rendue' || etat.phase === 'expiree') && (
         <>
           <button
             disabled
@@ -101,7 +108,11 @@ export function ReviewVideo({ etat, onPartager }: {
             <Download className="w-4 h-4" />
             {N.t('review_share')}
           </button>
-          <p className="text-center text-[11px] text-muted-foreground">{N.t('review_gone')}</p>
+          <p className="text-center text-[11px] text-muted-foreground">
+            {etat.phase === 'rendue'
+              ? (sortie === 'telechargement' ? N.t('review_saved') : N.t('review_rendue'))
+              : N.t('review_gone')}
+          </p>
           <p className="text-center text-[10px] text-muted-foreground/70">{N.t('review_kept')}</p>
         </>
       )}

@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
-import { Timer, Trophy, RotateCcw, Lightbulb } from 'lucide-react';
+import { Timer, Trophy, RotateCcw, Lightbulb, Check, Play } from 'lucide-react';
 import {
   useObjectif, soumettreCourse, relancerObjectif, quitterObjectif,
-  minutesRestantes, s2, type Resultat,
+  minutesRestantes, fenetreFinie, s2, type Resultat, type Objectif,
 } from '@/game/objectif';
 
 /**
@@ -231,49 +231,187 @@ export function Revanche() {
     </div>
   );
 }
-
 /**
- * L'entree dans le defi, posee sur l'accueil.
+ * L'entree dans les defis, posee sur l'accueil.
  *
- * Elle ne s'affiche que s'il y a un objectif ouvert : hors fenetre, hors
- * classement, ou serveur muet, il n'y a rien a proposer et la carte disparait
- * plutot que d'annoncer un defi qui n'existe pas.
+ * UNE CARTE, UNE SEULE LIGNE. Les trois defis — un par distance ou le joueur
+ * est classe — restent trois defis distincts, mais ils ne s'empilent plus :
+ * un selecteur 100 / 200 / 400 choisit la distance, la ligne montre SA cible
+ * et UN bouton la court. Trois lignes identiques se lisaient comme un tableau
+ * et poussaient le selecteur de mode sous la ligne de flottaison ; une ligne
+ * se lit comme une action.
+ *
+ * LE SELECTEUR PLUTOT QU'UN MENU. Trois choix tiennent a l'ecran : les montrer
+ * dit qu'il y a trois defis, et on change de distance en un geste au lieu de
+ * deux. Un point vert marque une distance deja reussie.
+ *
+ * LA DISTANCE PROPOSEE D'ABORD est la premiere qui n'est pas encore reussie :
+ * rouvrir l'accueil sur un defi valide, c'est proposer de refaire ce qui est
+ * fait.
+ *
+ * Rien ne s'affiche s'il n'y a rien : hors fenetre, hors classement, ou
+ * serveur muet, la carte disparait plutot que d'annoncer un defi qui n'existe
+ * pas. Le temps restant, lui, est le meme pour les trois — c'est un creneau,
+ * pas trois — et se dit donc une seule fois, en tete.
  */
-export function CarteObjectif({ onLancer }: { onLancer: () => void }) {
+export function CarteObjectif({ onLancer, onFin }: {
+  onLancer: (o: Objectif) => void;
+  /** Le creneau vient de se fermer : de quoi redemander les defis du suivant. */
+  onFin?: () => void;
+}) {
   const { N } = SprinterApp;
   const s = useObjectif();
-  const o = s.objectif;
+  const [choisie, setChoisie] = useState<string | null>(null);
+  const liste = s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []);
+
+  const o = liste.find(x => x.epreuve === choisie)
+    ?? liste.find(x => !x.valide)
+    ?? liste[0]
+    ?? null;
+
+  // L'HORLOGE, ET CE QU'ELLE NE FAIT PAS. Elle ne decremente rien : la valeur
+  // affichee se recalcule depuis `expire_le` a chaque rendu. Un compteur qu'on
+  // decremente derive des que l'onglet passe en arriere-plan — le telephone
+  // gele les minuteurs, il ne gele pas l'heure — et l'accueil affichait « 12
+  // min avant la fin » sur un creneau clos depuis une heure.
+  //
+  // Dix secondes et pas une : le decompte se dit a la minute, et rien d'autre
+  // ne bouge entre deux battements. Une seconde ferait redessiner l'ecran le
+  // plus regarde du jeu soixante fois par minute pour un chiffre qui change
+  // une fois.
+  const fenetre = liste[0]?.expire_le ?? null;
+  const [, battement] = useState(0);
+  useEffect(() => {
+    if (!fenetre) return;
+    const id = setInterval(() => battement(n => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, [fenetre]);
+
+  // ET UN REVEIL POSE SUR LA SECONDE DE LA FERMETURE. Le battement de dix
+  // secondes suffit a un chiffre qui change une fois par minute, pas au
+  // bouton : il resterait jaune jusqu'a dix secondes apres la fin, et une
+  // course lancee dans cet intervalle part pour un defi que le serveur
+  // refusera. Le minuteur, lui, tombe juste.
+  useEffect(() => {
+    if (!fenetre) return;
+    const dans = fenetre - Date.now();
+    if (dans <= 0) return;
+    const t = setTimeout(() => battement(n => n + 1), dans + 50);
+    return () => clearTimeout(t);
+  }, [fenetre]);
+
+  // LE CRENEAU SE FERME PENDANT QU'ON REGARDE L'ACCUEIL. Sans cela le bouton
+  // restait jaune et lancait une course pour un defi que le serveur refuse.
+  // On le dit UNE fois — pas a chaque battement — et le drapeau se rearme
+  // quand un creneau neuf ouvre : la carte vit plus longtemps que le creneau
+  // qu'elle montre.
+  const fini = fenetreFinie(liste[0] ?? null);
+  const prevenu = useRef(false);
+  useEffect(() => {
+    if (!fini) { prevenu.current = false; return; }
+    if (prevenu.current) return;
+    prevenu.current = true;
+    onFin?.();
+  }, [fini, onFin]);
+
   if (!o) return null;
-  const minutes = minutesRestantes(o);
+
+  const minutes = minutesRestantes(liste[0]);
+
+  // Les fleches deplacent le choix, comme dans tout groupe de boutons radio.
+  const auClavier = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    const i = liste.indexOf(o);
+    const n = liste.length;
+    const suivant = liste[(i + (e.key === 'ArrowRight' ? 1 : -1) + n) % n];
+    setChoisie(suivant.epreuve);
+    const bouton = e.currentTarget.querySelector<HTMLButtonElement>(`[data-epreuve="${suivant.epreuve}"]`);
+    bouton?.focus();
+  };
 
   return (
-    <button onClick={onLancer}
-      className="w-full rounded-2xl border-2 border-primary/50 bg-primary/[0.08]
-                 px-4 py-3 flex items-center gap-3 text-left
-                 hover:bg-primary/[0.14] transition-colors">
-      <Timer className="w-5 h-5 text-primary shrink-0" />
-      <div className="flex-1 min-w-0 flex flex-col">
-        <span className="text-[9px] font-bold tracking-[0.25em] text-primary uppercase">
-          {N.t('obj_titre')}
-          {minutes !== null && minutes > 0 && (
-            <span className="ml-2 text-muted-foreground">
-              {N.t('obj_minutes', { n: minutes })}
-            </span>
-          )}
-        </span>
-        <span className="font-mono font-black tabular-nums text-lg text-foreground">
-          {s2(o.cible_ms)} s
-          <span className="text-[10px] font-sans font-bold uppercase tracking-widest
-                           text-muted-foreground ml-2">
-            {N.t('obj_a_passer')}
+    <div className="w-full rounded-2xl border-2 border-primary/50 bg-primary/[0.08]
+                    px-4 py-3 flex flex-col gap-2.5">
+      <span className="text-[9px] font-bold tracking-[0.25em] text-primary uppercase
+                       flex items-center gap-2">
+        <Timer className="w-4 h-4 shrink-0" />
+        <span className="truncate">{N.t('obj_titre')}</span>
+        {(fini || (minutes !== null && minutes > 0)) && (
+          <span className="ml-auto shrink-0 text-muted-foreground">
+            {fini ? N.t('obj_fini') : N.t('obj_minutes', { n: minutes })}
+          </span>
+        )}
+      </span>
+
+      <div className="flex items-center gap-2">
+        {/* LA DISTANCE. Seule, elle se dit ; a plusieurs, elle se choisit. */}
+        {liste.length > 1 ? (
+          <div role="radiogroup" aria-label={N.t('obj_distance')} onKeyDown={auClavier}
+            className="shrink-0 flex rounded-xl border border-primary/30 bg-white/[0.06] p-[3px]">
+            {liste.map(x => {
+              const actif = x.epreuve === o.epreuve;
+              return (
+                <button key={x.epreuve} type="button" role="radio"
+                  data-epreuve={x.epreuve}
+                  aria-checked={actif} tabIndex={actif ? 0 : -1}
+                  aria-label={`${x.epreuve} m`}
+                  onClick={() => setChoisie(x.epreuve)}
+                  className={`relative w-9 py-2 rounded-lg font-display font-black text-sm
+                              tabular-nums transition-colors
+                              ${actif ? 'text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                  {actif && (
+                    <motion.span layoutId="obj-pastille" transition={RESSORT.rang}
+                      className="absolute inset-0 rounded-lg bg-primary" />
+                  )}
+                  <span className="relative">{x.epreuve}</span>
+                  {x.valide && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <span className="shrink-0 font-display font-black text-primary text-sm tabular-nums">
+            {o.epreuve} M
+          </span>
+        )}
+
+        {/* LA CIBLE de la distance choisie. */}
+        <span className="flex-1 min-w-0 flex flex-col leading-none" aria-live="polite">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span key={o.epreuve}
+              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.15 }}
+              className="font-mono font-black tabular-nums text-lg text-foreground whitespace-nowrap">
+              {s2(o.cible_ms)} s
+            </motion.span>
+          </AnimatePresence>
+          <span className={`mt-1 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap
+                            flex items-center gap-1
+                            ${o.valide ? 'text-emerald-300' : 'text-muted-foreground'}`}>
+            {o.valide && <Check className="w-3 h-3 shrink-0" />}
+            {o.valide ? N.t('obj_reussi') : N.t('obj_a_battre')}
           </span>
         </span>
+
+        {/* UN SEUL BOUTON. Il court le defi affiche, reussi ou pas — et il
+            s'eteint avec le creneau plutot que de disparaitre : une carte qui
+            s'evapore sous le doigt se lit comme un bug, un bouton gris se lit
+            comme une echeance. */}
+        <button type="button" onClick={() => onLancer(o)} disabled={fini}
+          aria-label={N.t('obj_lancer')}
+          className={`shrink-0 rounded-full font-display font-black
+                     uppercase tracking-wide text-sm px-3.5 py-2.5 flex items-center gap-1.5
+                     transition-transform
+            ${fini
+              ? 'bg-white/10 text-muted-foreground cursor-not-allowed'
+              : 'bg-primary text-background active:scale-[0.96]'}`}>
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span className="max-[379px]:hidden">{N.t('obj_courir')}</span>
+        </button>
       </div>
-      {o.valide
-        ? <Trophy className="w-5 h-5 text-primary shrink-0" />
-        : <span className="text-[10px] font-bold uppercase tracking-widest text-primary shrink-0">
-            {N.t('obj_lancer')}
-          </span>}
-    </button>
+    </div>
   );
 }

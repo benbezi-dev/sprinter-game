@@ -90,6 +90,29 @@ class_name = "Boite"
 [vars]
 OBJECTIF = "actif"
 
+# OU PARTENT LES ALERTES DE RECUPERATION DE COMPTE.
+#
+# Aucune des deux n'etait posee, et le code retombait donc sur ses valeurs par
+# defaut : contact@sprinter-game.com. Sept demandes deposees depuis le
+# 5 septembre, sept alertes envoyees la-bas, et personne pour les lire — on a
+# cherche la panne du cote de la cle Resend pendant ce temps.
+#
+# Il y avait en fait DEUX murs empiles, et le second ne pouvait pas se voir tant
+# que le premier tenait. La cle Resend etait refusee, oui ; mais derriere elle,
+# le compte etait en bac a sable — sans domaine verifie, Resend n'expedie que
+# depuis onboarding@resend.dev et n'ecrit qu'a l'adresse du compte. Toute autre
+# destination repartait en 403. Une cle neuve seule n'aurait donc rien repare,
+# et on aurait cherche ailleurs.
+#
+# Le 14 septembre 2026, sprinter-game.com a ete verifie chez Resend (DKIM sur
+# resend._domainkey, SPF et MX sur le sous-domaine send, region eu-west-1). Les
+# deux lignes ci-dessous sont libres depuis. Le sous-domaine send tient Resend a
+# l'ecart de la messagerie du domaine : les MX de la racine restent ceux de
+# Google, et « Enable Receiving » chez Resend doit rester eteint — l'activer
+# poserait des MX sur la racine et couperait la reception.
+MAIL_DEST = "contact.pro@sprinter-game.com"
+MAIL_EXPEDITEUR = "Sprinter <recuperations@sprinter-game.com>"
+
 # POURQUOI CINQ MINUTES ET NON QUINZE. Chaque joueur recoit a quelques minutes
 # pres de son heure, toujours les memes : trois cents telephones qui vibrent a
 # la meme seconde, ca se voit, et un rendez-vous a 12:45:00 tous les jours a

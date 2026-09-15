@@ -22,6 +22,15 @@ export type Partant = {
   sorti_en: string | null;
   /** Code du pays : un continental ou un mondial n'a aucun sens sans lui. */
   pays?: string | null;
+  /**
+   * Le tenant du titre de cette edition. Un seul partant le porte, ou aucun.
+   *
+   * Le serveur l'a gele a la cloture et ne le recalcule plus : l'ecran n'a donc
+   * jamais a comparer une date d'expiration a l'heure qu'il est, ce qui est
+   * exactement le genre de regle qu'un client finit par dire differemment du
+   * serveur.
+   */
+  tenant?: boolean;
 };
 
 export type Resultat = {
@@ -30,6 +39,36 @@ export type Resultat = {
 };
 
 export type PhaseInfo = { cle: string; nom: string; courses: number };
+
+/**
+ * LE CHAMPION EN TITRE de l'edition en cours, et ce que son titre lui donne.
+ *
+ * `cinematique` est un NOM de mise en scene, pas la mise en scene : le serveur
+ * dit qui est le tenant et ce que son titre lui accorde, le jeu decide de ce
+ * qu'il en montre. C'est la meme frontiere que pour le format des phases —
+ * recopier ici la regle « le tenant est en finale » garantirait qu'un jour les
+ * deux ne disent plus la meme chose.
+ *
+ * Ce champ est l'ETAT ; l'annonce de type `boss` est l'EVENEMENT. Les deux
+ * existent parce qu'ils ne servent pas la meme chose : l'annonce passe une fois
+ * et declenche la scene en direct, ce champ-la reste et permet a qui ouvre
+ * l'ecran le dimanche matin de savoir lequel de ces trente-deux noms a un titre
+ * a defendre.
+ */
+export type TenantEnTitre = {
+  name_key: string;
+  nom: string;
+  /** Sa serie au premier tour. */
+  course: number | null;
+  rang_duel: number | null;
+  /** Phase ou il est sorti — normalement jamais, et c'est tout le privilege. */
+  sorti_en: string | null;
+  /** « Champion de France » — le titre remis en jeu, compose par le serveur. */
+  libelle: string;
+  cinematique: string;
+  /** Vrai si son titre le qualifie d'office pour la finale. */
+  finaleDOffice: boolean;
+};
 
 export type RendezVous = {
   cle: string; phase: string; course?: number; minute: number; at: number;
@@ -41,6 +80,7 @@ export type Edition = {
   echelon: 'national' | 'continental' | 'mondial';
   zone: string;
   zoneNom: string;
+  zoneNomEn?: string;
   /**
    * La distance de l'edition : '100', '200' ou '400'.
    *
@@ -82,6 +122,13 @@ export type Edition = {
   directsParCourse: number;
   repechages: number;
   champion: string | null;
+  /**
+   * Le tenant du titre, ou `null` — et `null` est le cas ordinaire pour
+   * l'instant : il n'y a de tenant que si une edition precedente a sacre
+   * quelqu'un dans cette meme zone et a ce meme echelon, et que ce quelqu'un a
+   * rejoue depuis.
+   */
+  tenant: TenantEnTitre | null;
   partants: Partant[];
   resultats: Resultat[];
   calendrier: RendezVous[];
@@ -93,6 +140,7 @@ export type Annonce = {
   echelon: string;
   zone: string;
   zoneNom: string;
+  zoneNomEn?: string;
   type: string;
   titre: string;
   texte: string | null;
@@ -128,6 +176,7 @@ export type Rendezvous = {
   echelon: string;
   zone: string;
   zoneNom: string;
+  zoneNomEn?: string;
   titre: string;
   epreuve: string;
   debut: number;
@@ -192,6 +241,58 @@ export type MaSelection = {
   raison?: string;
 };
 
+/* --------------------------------------------- la memoire de la cinematique
+ *
+ * L'ENTREE EN LICE DU TENANT NE PEUT PAS SE DECLENCHER SUR UNE ANNONCE, et
+ * c'est le fil d'annonces lui-meme qui l'interdit.
+ *
+ * Le serveur emet `boss` a la cloture — c'est l'instant juste : le statut est
+ * fige, le couloir existe. Mais avant la cloture il n'y a aucun partant, donc
+ * `/champ/mien` ne rend rien et le panneau du championnat n'est pas a l'ecran.
+ * Personne n'a donc jamais son ecran ouvert pour recevoir cette annonce en
+ * direct ; et au montage, le rattrapage du curseur marque toutes les annonces
+ * passees comme vues sans les jouer — sans quoi il rejouerait la revelation des
+ * repeches d'un championnat termine il y a des jours. La cinematique ne serait
+ * donc JAMAIS jouee.
+ *
+ * Elle se declenche donc sur l'ETAT — `edition.tenant` — et cette memoire-ci
+ * remplace ce que le curseur du fil apporte aux deux autres scenes : jouee une
+ * fois par edition et par appareil, pas a chaque ouverture de l'accueil.
+ *
+ * On garde par identifiant d'edition et non par un simple drapeau : deux
+ * championnats se suivent, et le second doit presenter son tenant meme si l'on
+ * a vu celui du premier.
+ */
+const BOSS_VU = 'sprinter_champ_boss_vu';
+
+function lireBossVus(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(BOSS_VU) || '{}'); } catch { return {}; }
+}
+
+/** La cinematique de cette edition a-t-elle deja ete jouee sur cet appareil ? */
+export function bossVu(edition: string): boolean {
+  return !!lireBossVus()[edition];
+}
+
+export function marquerBossVu(edition: string) {
+  try {
+    const v = lireBossVus();
+    v[edition] = Date.now();
+    // On ne garde que les vingt dernieres : sans plafond, cette cle grossit
+    // d'une ligne par championnat et pour toujours. Vingt couvre cinq ans de
+    // championnats nationaux a quatre par an, ce qui est tres au-dela de ce
+    // qu'un appareil verra.
+    const gardees = Object.entries(v)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20);
+    localStorage.setItem(BOSS_VU, JSON.stringify(Object.fromEntries(gardees)));
+  } catch {
+    // Sans memoire, la scene se rejoue a chaque ouverture. C'est degrade et
+    // pas casse — et c'est le bon compromis : l'inverse (ne jamais la jouer)
+    // rendrait la fonctionnalite invisible.
+  }
+}
+
 async function json<T>(chemin: string): Promise<T | null> {
   try {
     const r = await fetch(API_BASE + chemin);
@@ -248,6 +349,55 @@ export const etatEdition = (id: string) =>
 
 export const recapMondial = (echelon?: string) =>
   json<Monde>('/champ/monde' + (echelon ? '?echelon=' + echelon : ''));
+
+/* ------------------------------------------ le tableau des medailles */
+
+export type LigneNation = {
+  pays: string;
+  continent: string | null;
+  or: number; argent: number; bronze: number;
+  total: number;
+  /** Combien de joueurs distincts de ce pays ont ete medailles. */
+  athletes: number;
+  /** La derniere medaille du pays, en millisecondes. */
+  derniere: number;
+  /**
+   * Le rang, ex aequo compris — deux pays au meme palmares le partagent.
+   *
+   * Il vient du serveur et non de la position dans la liste : numeroter les
+   * lignes a l'ecran donnerait un 4e et un 5e a deux pays strictement egaux.
+   */
+  rang: number;
+};
+
+export type TableauNations = {
+  echelon: string | null;
+  epreuve: string | null;
+  nations: LigneNation[];
+  /**
+   * Les medailles dont on ne connait pas le drapeau.
+   *
+   * Elles ne sont rangees sous aucun pays, et l'ecran le dit plutot que de
+   * laisser une somme qui ne tombe pas juste.
+   */
+  sansPays: number;
+  medailles: number;
+};
+
+/**
+ * Le palmares de chaque pays.
+ *
+ * Sans argument il additionne tout — les trois echelons, les trois distances,
+ * depuis la premiere edition. C'est la vue qui repond a « ou en est mon
+ * pays », et c'est celle qu'on montre d'abord.
+ */
+export const tableauNations = (o: { echelon?: string; epreuve?: string } = {}) => {
+  const q = new URLSearchParams();
+  if (o.echelon) q.set('echelon', o.echelon);
+  if (o.epreuve) q.set('epreuve', o.epreuve);
+  const s = q.toString();
+  return json<TableauNations>('/champ/nations' + (s ? '?' + s : ''));
+};
 
 /** La suite du fil apres `depuis`. Renvoie aussi le curseur a garder. */
 export const fluxDirect = (depuis = 0, zone?: string) =>

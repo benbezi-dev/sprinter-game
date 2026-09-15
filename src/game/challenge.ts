@@ -49,13 +49,26 @@ export type InboxChallenge = {
  * d'appareil ne quitte jamais le serveur.
  */
 export async function fetchInbox(): Promise<InboxChallenge[]> {
+  return (await fetchInboxEtat()).defis;
+}
+
+/**
+ * La meme boite, en disant si le serveur a repondu.
+ *
+ * Une boite vide et une boite injoignable rendent la meme liste, et pour
+ * l'affichage cela n'a aucune importance : dans les deux cas il n'y a rien a
+ * montrer. Pour le journal des defis, la difference est tout : il en deduit
+ * qu'un defi qui n'est plus la n'a pas ete releve, et une panne de reseau lui
+ * ferait declarer manques tous les defis qui nous attendent.
+ */
+export async function fetchInboxEtat(): Promise<{ defis: InboxChallenge[]; ok: boolean }> {
   try {
     const res = await fetch(`${API_BASE}/inbox?device_id=${getDeviceId()}`);
-    if (!res.ok) return [];
+    if (!res.ok) return { defis: [], ok: false };
     const data = await res.json();
-    return data.defis || [];
+    return { defis: data.defis || [], ok: true };
   } catch {
-    return [];
+    return { defis: [], ok: false };
   }
 }
 

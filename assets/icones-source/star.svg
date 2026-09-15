@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%">
+  <!-- ATTENTION AU FOND. Cette etoile, medal1 et medal2 ne sont jamais
+       posees sur le fond sombre du jeu : elles vivent dans le badge de rang
+       de l'ecran de sacre, qui est un aplat OR plein (bg-primary) avec un
+       texte sombre (text-background). Les anciennes versions etaient
+       blanches — blanc sur or, on ne les voyait pas. Elles sont donc
+       sombres, comme le texte a cote duquel elles s'alignent. -->
+  <defs>
+    <linearGradient id="nuit" x1="0" y1="0" x2=".65" y2="1">
+      <stop offset="0" stop-color="#2B3B57"/>
+      <stop offset=".55" stop-color="#111A2C"/>
+      <stop offset="1" stop-color="#050810"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#nuit)" stroke="url(#nuit)" stroke-width="3" stroke-linejoin="round"
+        d="M32 8 L38.91 23.49 L55.78 25.28 L43.18 36.63 L46.70 53.23
+           L32 44.75 L17.30 53.23 L20.82 36.63 L8.22 25.28 L25.09 23.49 Z"/>
+</svg>
