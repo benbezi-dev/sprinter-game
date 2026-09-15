@@ -68,18 +68,21 @@ function lireArgs(argv) {
 }
 
 const args = lireArgs(process.argv.slice(2));
-if (!args.vainqueur || !args.temps) {
-  console.error(`
-Il manque le vainqueur ou le temps.
 
-  node tools/carte-riposte.mjs --epreuve 100 --vainqueur "Oblique Seville" --temps 9.79
-  node tools/carte-riposte.mjs --epreuve 100 --femmes --vainqueur "Julien Alfred" --temps 10.75
+/* ---------------------------------------------------------------------------
+   DEUX MOMENTS, UNE CARTE.
 
-  --epreuve    100, 200 ou 400            (defaut : 100)
-  --femmes     finale femmes              (defaut : hommes)
-  --temps      9.79  ou  9,79  ou  43.35
-  --nom        nom des fichiers de sortie (defaut : budapest-<epreuve>m-<h|f>)
-`);
+   AVANT la course, on n'a que deux chronos : le notre et le record du monde.
+   La carte se pose quand meme — c'est meme le seul visuel disponible pendant
+   les deux heures ou tout le monde attend la finale.
+
+   APRES, le chrono du vainqueur s'ajoute au milieu, et c'est lui qui date la
+   carte. On passe de l'un a l'autre en donnant --vainqueur et --temps.
+--------------------------------------------------------------------------- */
+const avantCourse = !args.vainqueur || !args.temps;
+
+if (!avantCourse && (!args.vainqueur || !args.temps)) {
+  console.error('Donne --vainqueur ET --temps, ou aucun des deux.');
   process.exit(1);
 }
 
@@ -88,8 +91,8 @@ if (!['100', '200', '400'].includes(args.epreuve)) {
   process.exit(1);
 }
 
-const tempsVainqueur = Number(String(args.temps).replace(',', '.'));
-if (!Number.isFinite(tempsVainqueur) || tempsVainqueur <= 0) {
+const tempsVainqueur = avantCourse ? null : Number(String(args.temps).replace(',', '.'));
+if (!avantCourse && (!Number.isFinite(tempsVainqueur) || tempsVainqueur <= 0)) {
   console.error(`Temps illisible : « ${args.temps} ». Attendu par exemple 9.79.`);
   process.exit(1);
 }
@@ -139,31 +142,54 @@ const secJeu = jeu.ms / 1000;
    — il ne passe pas, ce qui est le cas quasi certain : le record du monde
      tient, et c'est ce contraste-la qu'on montre.
 --------------------------------------------------------------------------- */
-const recordTombe = tempsVainqueur < rm.t;
-const ecart = (tempsVainqueur - secJeu).toFixed(2).replace('.', ',');
+const recordTombe = !avantCourse && tempsVainqueur < rm.t;
+/* Avant la course, l'ecart qui compte est celui avec le RECORD DU MONDE : il
+   n'y a encore personne d'autre a qui se comparer. Apres, c'est celui avec le
+   vainqueur — c'est la course qu'on vient de voir. */
+const ecart = ((avantCourse ? rm.t : tempsVainqueur) - secJeu).toFixed(2).replace('.', ',');
 const anneesRM = new Date().getFullYear() - rm.an;
 
-const titre = recordTombe
-  ? ['NOUVEAU', 'RECORD DU MONDE.']
-  : ['LE RECORD', 'TIENT TOUJOURS.'];
-
 const age = ageDuRecord(jeu.pose);
-
-const note = recordTombe
-  ? [`Il aura fallu ${anneesRM} ans.`,
-     age ? `Le nôtre est tombé ${age}.` : `${ecart} s d’écart avec le nôtre.`]
-  : [`${anneesRM} ans que personne n’y touche.`,
-     `${ecart} s d’écart avec le nôtre.`];
-
-const epreuveTexte = `${args.epreuve} M ${args.femmes ? 'FEMMES' : 'HOMMES'}`;
+const epreuveTexte = `${args.epreuve} m ${args.femmes ? 'femmes' : 'hommes'}`;
 
 /* Le nombre de decimales n'est pas une question de gout : c'est la precision
    de la source. L'athletisme chronometre au centieme et publie 9.58 — ecrire
    « 9.580 » invente un millieme que personne n'a mesure. Le jeu, lui, compte
    en millisecondes et son record EST 8.246. Chaque chrono garde donc la
-   precision de l'endroit d'ou il vient. */
-const fmtReel = n => n.toFixed(2);
-const fmtJeu = n => n.toFixed(3);
+   precision de l'endroit d'ou il vient. Et la virgule est francaise, comme
+   partout ailleurs sur les cartes. */
+const fmtReel = n => n.toFixed(2).replace('.', ',');
+const fmtJeu = n => n.toFixed(3).replace('.', ',');
+
+/* ---------------------------------------------------------------------------
+   Le titre est un CHIFFRE, pas une phrase.
+
+   « LE RECORD TIENT TOUJOURS » se lit ; « 2,56 S D'AVANCE » se voit. Dans un
+   fil ou la carte passe en une demi-seconde, c'est le chiffre qui arrete, et
+   la phrase qui explique vient juste dessous. Le seul cas ou le titre
+   redevient un mot est celui ou le record du monde tombe : ce soir-la, la
+   nouvelle n'est plus notre ecart.
+--------------------------------------------------------------------------- */
+const titre = recordTombe ? 'RECORD DU MONDE' : `${ecart} S D’AVANCE`;
+const sousTitre = recordTombe
+  ? `le ${epreuveTexte} vient de tomber à Budapest`
+  : avantCourse
+    ? `sur le record du monde du ${args.epreuve} m`
+    : `sur le vainqueur de ce soir à Budapest`;
+
+const basFort = recordTombe
+  ? `Il aura fallu ${anneesRM} ans.`
+  : `Le record du monde du ${args.epreuve} m tient depuis ${rm.an}.`;
+const basDoux = age
+  ? `Le nôtre est tombé ${age}.`
+  : 'Le nôtre a deux semaines.';
+
+const lignes = [
+  { etiq: 'Jeu',   qui: jeu.nom,                chrono: fmtJeu(secJeu) },
+  ...(avantCourse ? [] : [
+  { etiq: 'Ce soir', qui: args.vainqueur,       chrono: fmtReel(tempsVainqueur) }]),
+  { etiq: 'Monde', qui: `${rm.qui} · ${rm.an}`, chrono: fmtReel(rm.t) },
+];
 
 /* ------------------------------------------------------------------- la page */
 const echappe = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -172,57 +198,70 @@ function page({ w, h }) {
   // Les proportions suivent la hauteur : la meme page sert au 1080x1350 et au
   // 1080x1920 sans qu'on entretienne deux maquettes qui finiraient par diverger.
   const story = h > 1500;
+  const k = story ? 1.12 : 1;
   return `<!doctype html><meta charset="utf-8"><style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{width:${w}px;height:${h}px;background:#14121e;overflow:hidden}
-  body{font:400 16px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;color:#f2f0f5;
-       display:flex;flex-direction:column;padding:${story ? 132 : 96}px 84px;
-       border-top:12px solid #e8622a;border-bottom:12px solid #e8622a}
-  .kicker{font-family:Menlo,monospace;font-size:26px;letter-spacing:.34em;
-          color:#8f8a9e;text-transform:uppercase;margin-bottom:${story ? 108 : 78}px}
-  h1{font-size:${story ? 108 : 96}px;font-weight:700;line-height:1.04;letter-spacing:-.02em;
-     margin-bottom:${story ? 84 : 60}px}
-  .ligne{display:flex;align-items:center;justify-content:space-between;
-         background:#1e1a2b;border-radius:18px;padding:${story ? 34 : 28}px 36px;
-         margin-bottom:16px;border:3px solid transparent}
-  .ligne.nous{border-color:#e8622a;background:#1b1726}
-  .etiq{font-family:Menlo,monospace;font-size:24px;letter-spacing:.2em;color:#8f8a9e;
-        text-transform:uppercase;margin-right:26px;flex:0 0 auto}
-  .ligne.nous .etiq{color:#e8622a}
-  .qui{font-size:34px;font-weight:700;color:#cfcad8;flex:1 1 auto;
+  html,body{width:${w}px;height:${h}px;overflow:hidden}
+  body{background:#070b16;
+       background-image:radial-gradient(ellipse 88% 62% at 50% 46%,
+                        #17213a 0%,#101728 46%,#070b16 100%);
+       font:400 16px/1.2 "Helvetica Neue",Helvetica,Arial,sans-serif;
+       display:flex;flex-direction:column;align-items:center;text-align:center;
+       padding:${Math.round(118 * k)}px 78px ${Math.round(96 * k)}px}
+  .kicker{font-family:Menlo,monospace;font-size:${Math.round(27 * k)}px;
+          letter-spacing:.34em;color:#8494ad;text-transform:uppercase;
+          margin-bottom:${Math.round(46 * k)}px}
+  h1{font-size:${Math.round(112 * k)}px;font-weight:700;line-height:1;
+     letter-spacing:-.015em;
+     background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 48%,#ef7526 96%);
+     -webkit-background-clip:text;background-clip:text;color:transparent;
+     margin-bottom:${Math.round(26 * k)}px}
+  .sous{font-size:${Math.round(35 * k)}px;color:#93a2ba;
+        margin-bottom:${Math.round(92 * k)}px}
+  .liste{width:100%;margin-top:auto}
+  .l{display:flex;align-items:baseline;justify-content:space-between;
+     padding:${Math.round(30 * k)}px 6px;border-bottom:1px solid #253049}
+  .l:last-child{border-bottom:none}
+  .g{display:flex;align-items:baseline;gap:20px;min-width:0}
+  .etiq{font-family:Menlo,monospace;font-size:${Math.round(26 * k)}px;letter-spacing:.2em;
+        color:#7e8da6;text-transform:uppercase;flex:0 0 auto}
+  .qui{font-size:${Math.round(40 * k)}px;font-weight:700;color:#b8c4d6;
        white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ligne.nous .qui{color:#f2f0f5}
-  .chrono{font-family:Menlo,monospace;font-size:${story ? 82 : 74}px;font-weight:700;
-          color:#b9b3c6;flex:0 0 auto;margin-left:28px;letter-spacing:-.02em}
-  .ligne.nous .chrono{color:#e8622a}
-  .note{margin-top:${story ? 60 : 44}px;font-size:34px;line-height:1.5;color:#a49eb3}
-  /* margin-top:auto pousse le pied en bas quand il reste de la place, mais
-     quand le titre passe sur trois lignes il ne reste rien et l'url venait se
-     coller a la note. Le padding minimum garde l'air dans les deux cas. */
-  .pied{margin-top:auto;padding-top:${story ? 72 : 52}px;
-        font-size:40px;font-weight:700;color:#e8622a;letter-spacing:-.01em}
+  .chrono{font-family:Menlo,monospace;font-size:${Math.round(56 * k)}px;font-weight:700;
+          color:#e6ecf6;letter-spacing:-.02em;flex:0 0 auto;padding-left:24px}
+  /* Notre chrono est le seul en couleur : c'est celui qu'on vient chercher. */
+  .l.nous .etiq,.l.nous .qui,.l.nous .chrono{color:#f7a93f}
+  .bas{margin-top:auto;padding-top:${Math.round(70 * k)}px}
+  .fort{font-size:${Math.round(40 * k)}px;font-weight:700;color:#eef2f8;
+        margin-bottom:${Math.round(16 * k)}px}
+  .doux{font-size:${Math.round(36 * k)}px;color:#8d9cb4}
+  /* Le lien n'est plus une ligne de texte mais un bouton : sur un fond bleu
+     nuit, une url orange se lit comme une signature — on la survole du regard.
+     Le meme degrade que le titre, pose en aplat, la transforme en appel a
+     l'action et c'est la derniere chose que l'oeil accroche avant de scroller. */
+  .pied{margin-top:${Math.round(54 * k)}px;display:inline-block;
+        background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 50%,#ef7526 96%);
+        color:#0a1020;font-weight:700;font-size:${Math.round(38 * k)}px;
+        padding:${Math.round(26 * k)}px ${Math.round(56 * k)}px;
+        border-radius:999px;letter-spacing:.005em}
   </style>
   <div class="kicker">Budapest &nbsp;·&nbsp; ${epreuveTexte}</div>
-  <h1>${titre[0]}<br>${titre[1]}</h1>
+  <h1>${echappe(titre)}</h1>
+  <div class="sous">${echappe(sousTitre)}</div>
 
-  <div class="ligne nous">
-    <span class="etiq">Jeu</span>
-    <span class="qui">${echappe(jeu.nom)}</span>
-    <span class="chrono">${fmtJeu(secJeu)}</span>
-  </div>
-  <div class="ligne">
-    <span class="etiq">Ce soir</span>
-    <span class="qui">${echappe(args.vainqueur)}</span>
-    <span class="chrono">${fmtReel(tempsVainqueur)}</span>
-  </div>
-  <div class="ligne">
-    <span class="etiq">Monde</span>
-    <span class="qui">${echappe(rm.qui)} · ${rm.an}</span>
-    <span class="chrono">${fmtReel(rm.t)}</span>
+  <div class="liste">${lignes.map((l, i) => `
+    <div class="l${i === 0 ? ' nous' : ''}">
+      <span class="g"><span class="etiq">${echappe(l.etiq)}</span>
+      <span class="qui">${echappe(l.qui)}</span></span>
+      <span class="chrono">${l.chrono}</span>
+    </div>`).join('')}
   </div>
 
-  <div class="note">${echappe(note[0])}<br>${echappe(note[1])}</div>
-  <div class="pied">sprinter-game.com</div>`;
+  <div class="bas">
+    <div class="fort">${echappe(basFort)}</div>
+    <div class="doux">${echappe(basDoux)}</div>
+    <div class="pied">sprinter-game.com</div>
+  </div>`;
 }
 
 /* ------------------------------------------------------------------- le rendu */
@@ -254,6 +293,7 @@ await navigateur.close();
 
 console.log(`
 Record du jeu relu a l'instant : ${fmtJeu(secJeu)} s — ${jeu.nom}
-Vainqueur                      : ${fmtReel(tempsVainqueur)} s — ${args.vainqueur}
+${avantCourse ? '(avant la course — ni vainqueur ni chrono)' :
+  `Vainqueur                      : ${fmtReel(tempsVainqueur)} s — ${args.vainqueur}`}
 Record du monde                : ${fmtReel(rm.t)} s — ${rm.qui}, ${rm.an}${recordTombe ? '  (BATTU CE SOIR)' : ''}
 `);
