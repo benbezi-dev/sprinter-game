@@ -3834,6 +3834,41 @@ async function servir(request, env, ctx, porteur) {
       return json(await diagnostiquerAppareil(env.DB, device_id, env, envoyer !== false));
     }
 
+    /* -------------------------------------------------------------------
+       UNE ANNONCE A TOUS LES APPAREILS ABONNES
+
+       Le seul message qui ne suit pas une nouvelle de jeu : un texte ecrit a
+       la main, envoye une fois a chaque appareil joignable — web et natif —
+       dans la langue de son abonnement. Il faut donc le fournir dans les
+       deux : `{ fr: [titre, texte], en: [titre, texte] }`.
+
+       Sous cle d'administration : la route fait vibrer tous les telephones.
+       `essai: true` rend le nombre d'appareils vises sans rien envoyer.
+    ------------------------------------------------------------------- */
+    if (url.pathname === '/push/diffuser' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { fr, en, essai } = body || {};
+      const bon = t => Array.isArray(t) && t.length === 2
+        && t.every(s => typeof s === 'string' && s.trim() && s.length <= 240);
+      if (!bon(fr) || !bon(en)) {
+        return json({ error: 'fr et en requis : [titre, texte], 240 caracteres au plus chacun' }, 400);
+      }
+      await ensurePushTable(env.DB);
+      let jetons = [];
+      try {
+        jetons = (await env.DB.prepare('SELECT DISTINCT device_id FROM push_jetons').all()).results || [];
+      } catch { /* table pas encore creee : aucun appareil natif */ }
+      const web = (await env.DB.prepare('SELECT DISTINCT device_id FROM push_subscriptions').all()).results || [];
+      const appareils = [...new Set([...web, ...jetons].map(r => r.device_id))];
+      if (essai) return json({ essai: true, appareils: appareils.length });
+
+      const texte = langue => (langue === 'en' ? en : fr);
+      await Promise.allSettled(appareils.map(d => notifierAppareil(env.DB, d, 'annonce', env, texte)));
+      return json({ ok: true, appareils: appareils.length });
+    }
+
     if (url.pathname === '/push/natif/desabonner' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }

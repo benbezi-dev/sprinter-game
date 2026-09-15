@@ -84,6 +84,7 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/push/unsubscribe`   | Oublie les abonnements web d'un appareil |
 | POST    | `/push/natif/abonner`   | Enregistre un jeton Firebase (iOS, Android) |
 | POST    | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
+| POST    | `/push/diffuser`      | Annonce écrite à la main, à tous les appareils abonnés (clé d'administration) |
 | POST    | `/direct/turn`        | Identifiants du relais de la voix, valables une heure |
 
 ## Un classement de duels par discipline
