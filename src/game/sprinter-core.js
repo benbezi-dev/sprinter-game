@@ -1008,6 +1008,20 @@
     this.maxSpeed = opts.maxSpeed || 12;
     this.best = opts.best || 9.1;
     this.total = opts.total || 100;
+    /**
+     * LA FOULEE DU HURDLEUR, en part de celle du sprinteur. 1 partout ailleurs.
+     *
+     * Un hurdleur ne court pas comme un sprinteur a la meme vitesse : entre
+     * deux haies du 110 m il couvre 5,59 m en trois foulees, 1,86 m chacune,
+     * la ou un sprinteur lance en met 2,2 a 2,5. Il court plus serre et plus
+     * vite en frequence. Sans ce facteur, le nombre d'appuis que le reglement
+     * attend d'un intervalle ne tombait qu'a une vitesse de footing.
+     *
+     * C'est une propriete du coureur, posee par le jeu des haies a l'armement
+     * et retiree au rangement : le moteur n'a pas a savoir pourquoi elle
+     * change, et une course plate ne la voit jamais bouger.
+     */
+    this.foulee = 1;
     if (this.target) this.setPace(this.target);
   }
 
@@ -1034,7 +1048,7 @@
     // frequence. La vitesse ne change pas, seul le nombre d'appuis pour la
     // couvrir - c'est la difference entre un finisseur et un frequenciel.
     const P = gaitOf(this.look);
-    return Math.max(0.85, 4 * leg * P.stride *
+    return Math.max(0.85, 4 * leg * P.stride * (this.foulee || 1) *
                     Math.sin(Math.min(1.15, 0.70 * amp)));
   };
 

@@ -7,9 +7,10 @@
 // verifie.
 
 import {
-  HAIES, RECORDS, PLATEAUX, APPUIS_IDEAL, NB_HAIES, ECART_MONDIAL,
+  HAIES, RECORDS, PLATEAUX, APPUIS, NB_HAIES, ECART_MONDIAL,
   distanceDe, positionsDes, verifierGeometrie, fouleeIdeale,
 } from '../src/game/haies.js';
+import { APPEL } from '../src/game/haies-jeu.js';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -57,15 +58,30 @@ for (const c of CLES) {
   ok(`${c} : aucune haie avant le depart`, p[0] > 10, String(p[0]));
 }
 
+titre('LE RYTHME EST CELUI DE L ENTRAINEUR');
+
+// Les nombres de l'utilisateur, recopies ici expres : un changement dans
+// haies.js doit se voir dans ce harnais, pas passer en silence.
+ok('100 m haies : 7 appuis puis 4',
+   APPUIS['100h'].premiere.join('-') === '7-7' && APPUIS['100h'].intervalle.join('-') === '4-4');
+ok('110 m haies : 7 appuis puis 4',
+   APPUIS['110h'].premiere.join('-') === '7-7' && APPUIS['110h'].intervalle.join('-') === '4-4');
+ok('400 m haies : 21 a 23 appuis puis 13 a 17',
+   APPUIS['400h'].premiere.join('-') === '21-23' && APPUIS['400h'].intervalle.join('-') === '13-17');
+
 titre('LA FOULEE DEMANDEE RESTE HUMAINE');
 
-// Le moteur pose lui-meme la fourchette : un sprinteur d'elite pose le pied
-// tous les 2,2 a 2,5 m a pleine vitesse. Une cible hors de cette fourchette
-// serait injouable, ou trop facile.
+// Entre deux haies, un hurdleur ne court pas a la foulee d'un sprinteur lance
+// (2,2 a 2,5 m) : il court plus serre, 1,8 a 2 m sur les courtes, un peu plus
+// ample sur le tour. Une cible hors de cette fourchette serait injouable, ou
+// dirait autre chose que l'epreuve.
 for (const c of CLES) {
-  const f = fouleeIdeale(c);
-  ok(`${c} : ${APPUIS_IDEAL[c]} appuis font ${f.toFixed(2)} m de foulee`,
-     f >= 2.05 && f <= 2.55, `${f.toFixed(2)} m`);
+  const a = APPEL[c], h = HAIES[c].haies;
+  const f = fouleeIdeale(c, h.ecart - a.avant - a.apres);
+  ok(`${c} : le rythme vise demande ${f.toFixed(2)} m de foulee`,
+     f >= 1.6 && f <= 2.6, `${f.toFixed(2)} m`);
+  ok(`${c} : la foulee du hurdleur est plus serree que celle du sprinteur, sans l'ecraser`,
+     HAIES[c].foulee > 0.7 && HAIES[c].foulee <= 1, String(HAIES[c].foulee));
 }
 
 titre('LE PLATEAU MONDIAL ENCADRE LE RECORD');

@@ -24,18 +24,29 @@
 export const NB_HAIES = 10;
 
 /**
- * Les appuis d'un intervalle, pour un athlete lance.
+ * LE RYTHME DES APPUIS, tel que l'entraineur le compte. Bornes incluses.
  *
- * Trois foulees entre deux haies sur les courses courtes — quatre appuis, en
- * comptant celui de l'appel — et treize foulees sur le tour. Ce ne sont pas des
- * chiffres decoratifs : c'est la cible du jeu. Y arriver demande d'entrer dans
- * l'intervalle avec assez de vitesse ; arriver lent oblige a en rajouter un, et
- * chaque appui de plus est une occasion de plus de se tromper de pied.
+ * Un appui est un pied pose au sol, l'appel compris. Deux troncons :
  *
- * On verifie que la foulee demandee reste humaine : entre 2,1 et 2,5 m par
- * appui a pleine vitesse, ce que le moteur admet deja pour le plat.
+ *   premiere   — du depart jusqu'a l'appel de la premiere haie. Le 7e appui
+ *                des courses courtes EST l'appel.
+ *   intervalle — de la reception d'une haie jusqu'a l'appel de la suivante,
+ *                les deux comptes : reception, deux appuis, appel = quatre.
+ *
+ * Apres la dixieme haie, le compte est libre jusqu'a la ligne.
+ *
+ * Les courtes ne tolerent qu'un nombre : c'est la cadence parfaite, celle qui
+ * ramene le meme pied a chaque haie. Le tour tolere une fourchette, parce
+ * qu'un hurdleur y court a treize, quinze ou dix-sept appuis selon sa vitesse
+ * et que la fatigue le fait glisser de l'un a l'autre sans que ce soit une
+ * faute. Ces nombres viennent de l'utilisateur, pas d'un calcul : c'est le jeu
+ * qui doit les rendre atteignables, pas eux qui doivent s'adapter au moteur.
  */
-export const APPUIS_IDEAL = { '100h': 4, '110h': 4, '400h': 14 };
+export const APPUIS = {
+  '100h': { premiere: [7, 7], intervalle: [4, 4] },
+  '110h': { premiere: [7, 7], intervalle: [4, 4] },
+  '400h': { premiere: [21, 23], intervalle: [13, 17] },
+};
 
 /**
  * Les records du monde, au 29 aout 2026.
@@ -127,22 +138,26 @@ export const PLATEAUX = {
  * Le tour garde celui du plat : la ou l'intervalle fait trente-cinq metres, ce
  * qui coute est la gene repetee, et elle suffit.
  */
+// `foulee` : la foulee du hurdleur en part de celle du sprinteur (Runner.foulee
+// dans sprinter-core.js). Calee par tools/haies-course-test.mjs pour qu'une
+// cadence de doigt soutenue donne exactement le rythme d'APPUIS ; voir ce
+// harnais avant d'y toucher.
 export const HAIES = {
   '100h': {
     key: '100h', label: '100 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 100, maxSpeed: 11.000, best: RECORDS['100h'].s,
+    arc: 0, straight: 100, maxSpeed: 11.000, best: RECORDS['100h'].s, foulee: 0.82,
     haies: { nombre: NB_HAIES, hauteur: 0.838, premiere: 13.00, ecart: 8.50, fin: 10.50 },
     ranges: PLATEAUX['100h'],
   },
   '110h': {
     key: '110h', label: '110 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 110, maxSpeed: 11.000, best: RECORDS['110h'].s,
+    arc: 0, straight: 110, maxSpeed: 11.000, best: RECORDS['110h'].s, foulee: 0.86,
     haies: { nombre: NB_HAIES, hauteur: 1.067, premiere: 13.72, ecart: 9.14, fin: 14.02 },
     ranges: PLATEAUX['110h'],
   },
   '400h': {
     key: '400h', label: '400 M HAIES', sub: 'dix haies, un tour de piste',
-    fullLap: true, arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: RECORDS['400h'].s,
+    fullLap: true, arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: RECORDS['400h'].s, foulee: 0.90,
     haies: { nombre: NB_HAIES, hauteur: 0.914, premiere: 45.00, ecart: 35.00, fin: 40.00 },
     ranges: PLATEAUX['400h'],
   },
@@ -176,7 +191,14 @@ export function verifierGeometrie(cle) {
   return { somme, attendu, exact: Math.abs(somme - attendu) < 0.005 };
 }
 
-/** Metres par appui dans un intervalle, pour un athlete au rythme ideal. */
-export function fouleeIdeale(cle) {
-  return HAIES[cle].haies.ecart / APPUIS_IDEAL[cle];
+/**
+ * Metres par foulee dans la partie COURUE d'un intervalle, au rythme vise.
+ *
+ * `courue` est ce qui reste entre la reception et l'appel (haies-jeu.js, APPEL).
+ * Quatre appuis font trois foulees : on divise par le nombre d'appuis moins un.
+ * Sur le tour, c'est le milieu de la fourchette qu'on mesure.
+ */
+export function fouleeIdeale(cle, courue) {
+  const [min, max] = APPUIS[cle].intervalle;
+  return courue / ((min + max) / 2 - 1);
 }

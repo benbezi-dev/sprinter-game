@@ -5,16 +5,19 @@
 // ont des PROPRIETES, et ce sont elles qu'on verifie ici.
 //
 // La premiere de ces proprietes a deja ete violee une fois, et c'est pour cela
-// qu'elle est en tete : sur le tour, la regle de parite faisait qu'accelerer
-// de 2,20 a 2,40 m de foulee DEGRADAIT le rythme, avant que 2,60 le repare.
-// Un jeu ou le progres peut nuire n'est pas difficile, il est casse. Rien
-// dans le fichier de geometrie ne pouvait le montrer.
+// qu'elle est en tete : sur le tour, l'ancienne regle de parite faisait
+// qu'accelerer de 2,20 a 2,40 m de foulee DEGRADAIT le rythme, avant que 2,60
+// le repare. Un jeu ou le progres peut nuire n'est pas difficile, il est casse.
+// Rien dans le fichier de geometrie ne pouvait le montrer.
 
+import '../src/game/sprinter-core.js';
 import {
-  APPEL, TOLERANCE, GARDE, GARDE_RYTHME_ROMPU, REGLE,
+  APPEL, TOLERANCE, GARDE, GARDE_RYTHME_ROMPU,
   appuisPour, rythmeDe, jugerAppel, franchir, simuler, fouleeRelative,
 } from '../src/game/haies-jeu.js';
-import { PLATEAUX, HAIES, APPUIS_IDEAL } from '../src/game/haies.js';
+import { PLATEAUX, HAIES, APPUIS } from '../src/game/haies.js';
+
+const { Runner } = globalThis.SprinterCore;
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -22,12 +25,23 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 
 const CLES = ['100h', '110h', '400h'];
 
-// Le coureur type de chaque epreuve, a une vitesse donnee. La foulee et
-// l'usure suivent la vitesse : un coureur lent n'a pas la foulee d'un rapide,
-// et le tour se paie plus cher que la ligne droite.
-const coureur = (cle, v) => cle === '400h'
-  ? { vitesse: v, foulee: 0.30 * v - 0.10, usure: 0.28 - 0.019 * v }
-  : { vitesse: v, foulee: 0.185 * v + 0.30, usure: 0.02 };
+// Le coureur type de chaque epreuve, a une vitesse donnee. SA FOULEE EST CELLE
+// DU MOTEUR : le coureur du joueur, avec la foulee du hurdleur de l'epreuve,
+// mesure a cette vitesse. Une formule a part avait vecu ici ; elle donnait
+// 3,35 m de foulee a 11,5 m/s sur le tour, une enjambee qu'aucun coureur du jeu
+// ne fait, et la simulation calait alors les plateaux sur un rythme que la
+// course ne produit pas. L'usure suit la vitesse : le tour se paie plus cher
+// que la ligne droite.
+const fouleeMoteur = (cle, v) => {
+  const r = new Runner('TOI', 3, { isPlayer: true, maxSpeed: HAIES[cle].maxSpeed });
+  r.foulee = HAIES[cle].foulee;
+  r.v = v;
+  return r.strideLength();
+};
+const coureur = (cle, v) => ({
+  vitesse: v, foulee: fouleeMoteur(cle, v),
+  usure: cle === '400h' ? 0.28 - 0.019 * v : 0.02,
+});
 
 titre('ACCELERER NE PEUT JAMAIS NUIRE');
 
@@ -65,11 +79,19 @@ titre('LE RYTHME EST UNE CONSEQUENCE, PAS UN REGLAGE');
 for (const c of CLES) {
   const h = HAIES[c].haies, a = APPEL[c];
   const courue = h.ecart - a.avant - a.apres;
-  // A la foulee ideale de l'epreuve, on doit tomber sur le nombre d'appuis
-  // vise. Sans cela, la cible annoncee au joueur serait un mensonge.
-  const ideale = courue / (APPUIS_IDEAL[c] - 1);
-  ok(`${c} : la foulee de ${ideale.toFixed(2)} m donne les ${APPUIS_IDEAL[c]} appuis vises`,
-     appuisPour(c, ideale) === APPUIS_IDEAL[c], String(appuisPour(c, ideale)));
+  // A la foulee ideale de l'epreuve, on doit tomber dans le rythme du
+  // reglement. Sans cela, la cible annoncee au joueur serait un mensonge.
+  const [min, max] = APPUIS[c].intervalle;
+  const vise = Math.round((min + max) / 2);
+  const ideale = courue / (vise - 1);
+  ok(`${c} : la foulee de ${ideale.toFixed(2)} m donne les ${vise} appuis vises`,
+     appuisPour(c, ideale) === vise, String(appuisPour(c, ideale)));
+
+  // A pleine vitesse, la foulee du moteur tient le rythme. C'est ce que la
+  // foulee du hurdleur a ete calee pour donner.
+  const pleine = appuisPour(c, fouleeMoteur(c, HAIES[c].maxSpeed));
+  ok(`${c} : a pleine vitesse, ${pleine} appuis tiennent le rythme`,
+     rythmeDe(c, pleine, 'intervalle').tenu, `${pleine} hors de ${min}-${max}`);
 
   // Plus lent veut dire plus d'appuis, toujours.
   let monte = true;
@@ -78,25 +100,29 @@ for (const c of CLES) {
   ok(`${c} : allonger la foulee ne rajoute jamais d'appui`, monte);
 }
 
-titre('LES DEUX REGLES FONT CE QU ELLES DISENT');
+titre('LE RYTHME SE COMPTE COMME L ENTRAINEUR LE COMPTE');
 
-ok('les courses courtes se jouent sur le pied d appel',
-   REGLE['100h'] === 'parite' && REGLE['110h'] === 'parite');
-ok('le tour se joue sur la constance du rythme', REGLE['400h'] === 'constance');
-
-// Parite : quatre appuis ramenent au meme pied, cinq non.
-ok('110h : quatre appuis tiennent le rythme', rythmeDe('110h', 4).tenu);
-ok('110h : cinq appuis le rompent', !rythmeDe('110h', 5).tenu);
-ok('110h : six appuis le tiennent a nouveau', rythmeDe('110h', 6).tenu,
-   'la parite, pas le nombre');
-
-// Constance : c'est le CHANGEMENT qui coute, pas la valeur.
-ok('400h : quinze appuis apres quinze, le rythme tient',
-   rythmeDe('400h', 15, 15).tenu, 'meme loin de la cible');
-ok('400h : quinze appuis apres quatorze, le rythme casse',
-   !rythmeDe('400h', 15, 14).tenu);
-ok('400h : le premier intervalle ne peut rien rompre',
-   rythmeDe('400h', 17, undefined).tenu);
+for (const c of ['100h', '110h']) {
+  ok(`${c} : sept appuis jusqu a la premiere tiennent`, rythmeDe(c, 7, 'premiere').tenu);
+  ok(`${c} : six ou huit la rompent`,
+     !rythmeDe(c, 6, 'premiere').tenu && !rythmeDe(c, 8, 'premiere').tenu);
+  ok(`${c} : quatre appuis par intervalle tiennent`, rythmeDe(c, 4).tenu);
+  ok(`${c} : trois, cinq ou six rompent`,
+     !rythmeDe(c, 3).tenu && !rythmeDe(c, 5).tenu && !rythmeDe(c, 6).tenu,
+     'le nombre, et non plus la parite');
+}
+{
+  const tient = n => rythmeDe('400h', n, 'premiere').tenu;
+  ok('400h : de 21 a 23 appuis jusqu a la premiere, tout tient',
+     [21, 22, 23].every(tient));
+  ok('400h : 20 ou 24 rompent', !tient(20) && !tient(24));
+  const int = n => rythmeDe('400h', n).tenu;
+  ok('400h : de 13 a 17 appuis par intervalle, tout tient',
+     [13, 14, 15, 16, 17].every(int));
+  ok('400h : 12 ou 18 rompent', !int(12) && !int(18));
+}
+ok('l ecart dit de combien on sort, et dans quel sens',
+   rythmeDe('110h', 6).ecart === 2 && rythmeDe('400h', 11).ecart === -2);
 
 titre('L APPEL SE PAIE A SA JUSTE MESURE');
 
@@ -116,10 +142,10 @@ ok('un rythme rompu coute, mais moins qu un appel hache',
    GARDE.hache < GARDE_RYTHME_ROMPU && GARDE_RYTHME_ROMPU < 1);
 
 // Les deux causes se multiplient : la haie ou l'on tombe est celle ou le
-// mauvais pied rencontre le mauvais appel.
+// rythme perdu rencontre le mauvais appel.
 const seul = franchir('110h', 10, APPEL['110h'].avant - 1, true).v;
 const double = franchir('110h', 10, APPEL['110h'].avant - 1, false).v;
-ok('mauvais pied ET appel hache coutent plus que l un des deux',
+ok('rythme rompu ET appel hache coutent plus que l un des deux',
    double < seul, `${double.toFixed(2)} contre ${seul.toFixed(2)}`);
 
 titre('UNE FAUTE NE S INSTALLE PAS');

@@ -5,39 +5,29 @@
    tient un intervalle, d'ou l'on doit attaquer la haie, et ce que coute une
    attaque manquee.
 
-   Le moteur de Sprinter fait deja la moitie du travail sans le savoir. Un
-   coureur y avance par appuis alternes, et taper deux fois du meme pied fait
-   trebucher. C'est exactement la contrainte du hurdleur : la haie se franchit
-   d'un pied donne, et le nombre d'appuis dans l'intervalle decide duquel.
+   LE RYTHME EST CELUI QUE COMPTE L'ENTRAINEUR (haies.js, APPUIS) :
 
-   D'ou la regle qui porte les deux courses courtes :
+       100 m et 110 m haies : 7 appuis jusqu'a la premiere, puis 4 par
+                              intervalle, libre apres la dixieme.
+       400 m haies          : 21 a 23 appuis jusqu'a la premiere, puis 13 a 17
+                              par intervalle selon la vitesse, libre apres.
 
-       QUATRE APPUIS — nombre PAIR — on repart du meme pied a chaque haie.
-       CINQ APPUIS   — nombre IMPAIR — on change de pied a chaque haie.
+   Il remplace deux regles qui vivaient ici et qui jugeaient autre chose : la
+   PARITE sur les courtes (quatre ou six appuis tenaient, cinq cassaient) et
+   la CONSTANCE sur le tour (c'etait le changement de nombre qui coutait, pas
+   le nombre). Toutes deux se deduisaient du moteur ; le reglement, lui, se
+   compte. Ce que la constance avait appris reste vrai : une regle qui punit
+   le progres est un defaut. C'est pourquoi le tour tient une FOURCHETTE, et
+   que le harnais verifie qu'accelerer ne fait jamais sortir du rythme.
 
-   Un athlete lent a la foulee courte, il lui faut cinq appuis la ou un rapide
-   en met quatre, et il attaque alors une haie sur deux du mauvais pied. Ce
-   n'est pas une penalite ajoutee sur le lent : c'est la meme penalite pour
-   tout le monde, et c'est sa lenteur qui la lui fait rencontrer. C'est ce que
-   demandait le cahier des charges — plus d'appuis, donc plus d'occasions de se
-   tromper — mais par la cause plutot que par un malus.
-
-   LE TOUR NE MARCHE PAS COMME CA, et il a fallu s'en rendre compte. Sur 35 m
-   d'intervalle, exiger un nombre d'appuis pair rendait le jeu absurde : a
-   2,20 m de foulee le rythme tombait juste, a 2,40 m il cassait, a 2,60 m il
-   retombait juste. Accelerer pouvait nuire. Une regle qui punit le progres
-   n'est pas une difficulte, c'est un defaut.
-
-   Le vrai 400 m haies ne se joue pas sur la parite — les hurdleurs y courent
-   a treize ou quinze foulees, l'un comme l'autre, et changent de jambe sans
-   drame. Ce qui casse un 400 m haies, c'est de DEVOIR CHANGER de rythme en
-   course : la fatigue raccourcit la foulee, l'intervalle ne passe plus au
-   meme nombre d'appuis, et il faut se reorganiser en pleine ligne droite.
-   C'est cela que le jeu fait payer sur le tour — non pas le nombre, mais le
-   changement de nombre.
+   Le joueur ne pose pas ses pieds : il tape, et c'est sa vitesse qui decide
+   de sa foulee, donc du nombre d'appuis. Le rythme se gagne donc a la cadence
+   du doigt, et c'est la foulee du hurdleur (Runner.foulee) qui fait tomber le
+   compte juste a une cadence soutenue — voir haies-pas.js pour la facon dont
+   le pied d'appel se cale sur la haie.
 --------------------------------------------------------------------------- */
 
-import { HAIES, APPUIS_IDEAL, positionsDes } from './haies.js';
+import { HAIES, APPUIS, positionsDes } from './haies.js';
 
 /**
  * Ou l'on quitte le sol devant la haie, et ou l'on retombe derriere.
@@ -54,17 +44,6 @@ export const APPEL = {
   '110h': { avant: 2.15, apres: 1.40 },
   '400h': { avant: 2.15, apres: 1.20 },
 };
-
-/**
- * Ce qui fait perdre le rythme, selon l'epreuve.
- *
- * PARITE  : le pied d'appel doit revenir. C'est le jeu des courses courtes,
- *           ou l'intervalle est trop bref pour se reorganiser.
- * CONSTANCE : le nombre d'appuis ne doit pas changer d'un intervalle a
- *           l'autre. C'est le jeu du tour, ou l'on tient un rythme quarante
- *           secondes durant et ou c'est la fatigue qui vient le prendre.
- */
-export const REGLE = { '100h': 'parite', '110h': 'parite', '400h': 'constance' };
 
 /**
  * CE QUE COUTE UNE HAIE, et pourquoi les deux epreuves ne le paient pas pareil.
@@ -138,40 +117,59 @@ export const GARDE = { parfait: 1, bon: 0.985, plane: 0.945, hache: 0.90 };
 /**
  * Ce que coute un rythme rompu, en part de vitesse gardee.
  *
- * Le mauvais pied sur les courtes, le changement d'appuis sur le tour : deux
- * facons de perdre le fil, un seul cout. Ils meritent le meme parce qu'ils
- * font la meme chose au coureur — il arrive sur la haie sans savoir comment
- * il va la passer.
+ * Un compte d'appuis hors du reglement, sur la premiere ligne droite comme
+ * dans un intervalle, sur les courtes comme sur le tour : un seul cout, parce
+ * que c'est la meme chose qui arrive au coureur — il arrive sur la haie sans
+ * savoir comment il va la passer.
+ *
+ * IL SE PAIE ENTRE DEUX BORNES, toutes deux mesurees par les harnais.
+ *
+ * Par le haut : un rythme rompu doit couter assez pour qu'un coureur lance ne
+ * prefere pas le casser plutot que de hacher sa foulee. Entre sept appuis
+ * haches (0,90) et six appuis planes (0,945 x ce cout), il doit choisir sept :
+ * le cout doit rester sous 0,952. A 0,955, il prenait six.
+ *
+ * Par le bas : trop cher, le rythme creuse un fosse entre le coureur qui le
+ * tient et celui qui le manque, et un plateau tombe dedans. A 0,93 plus aucune
+ * cadence de doigt ne donnait le niveau national du 110 m haies : on passait
+ * de quinze secondes a treize sans s'y arreter.
  */
-export const GARDE_RYTHME_ROMPU = 0.955;
+export const GARDE_RYTHME_ROMPU = 0.94;
 
 /**
  * Combien d'appuis pour couvrir un intervalle, a cette longueur de foulee.
  *
- * Le calcul porte sur la partie COURUE de l'intervalle : ni l'appel ni la
- * reception ne sont des foulees, ils sont du vol. C'est ce qui fait qu'un
- * intervalle de 9,14 m se boucle en trois foulees et non en quatre.
+ * Le calcul porte sur la partie COURUE de l'intervalle, entre la reception et
+ * l'appel. Les deux sont des appuis ; ce qui les separe se couvre en foulees,
+ * chacune finissant sur un appui : quatre appuis font trois foulees.
+ *
+ * L'ARRONDI EST AU PLUS PROCHE, et plus a l'entier superieur. Un hurdleur ne
+ * pose pas le pied la ou sa foulee naturelle tomberait : il l'allonge ou la
+ * raccourcit pour arriver sur son point d'appel, et c'est ce reglage que
+ * l'appel note. C'est la regle que haies-pas.js applique en course ; les deux
+ * doivent rester la meme, sans quoi la simulation calerait un plateau sur un
+ * rythme que le jeu ne produit pas.
  */
 export function appuisPour(cle, foulee) {
   const h = HAIES[cle].haies;
   const a = APPEL[cle];
   const courue = h.ecart - a.avant - a.apres;
-  return 1 + Math.max(1, Math.ceil(courue / Math.max(0.85, foulee) - 1e-6));
+  return 1 + Math.max(1, Math.round(courue / Math.max(0.85, foulee)));
 }
 
 /**
- * Le rythme est-il celui de l'epreuve ?
+ * Le rythme est-il celui du reglement ?
  *
- * Un nombre d'appuis PAIR ramene au meme pied d'appel a chaque haie : c'est le
- * rythme que cherche un hurdleur, et c'est celui de la cible. Un nombre IMPAIR
- * fait alterner, et alterner sur dix haies est ce qui casse les courses.
+ * `troncon` : 'premiere' (du depart a l'appel de la premiere haie) ou
+ * 'intervalle' (de la reception a l'appel suivant). Le compte tient s'il tombe
+ * dans la fourchette d'APPUIS, bornes comprises. `ecart` dit de combien il en
+ * sort : negatif trop peu d'appuis, positif trop.
  */
-export function rythmeDe(cle, appuis, precedent) {
-  const ideal = APPUIS_IDEAL[cle];
-  const tenu = REGLE[cle] === 'parite'
-    ? appuis % 2 === ideal % 2
-    : precedent === undefined || appuis === precedent;
-  return { appuis, ideal, tenu, ecart: appuis - ideal, regle: REGLE[cle] };
+export function rythmeDe(cle, appuis, troncon = 'intervalle') {
+  const [min, max] = APPUIS[cle][troncon];
+  const tenu = appuis >= min && appuis <= max;
+  const ecart = appuis < min ? appuis - min : appuis > max ? appuis - max : 0;
+  return { appuis, min, max, tenu, ecart, troncon };
 }
 
 /**
@@ -231,16 +229,20 @@ export function fouleeRelative(part) {
  * peser sur toute la course.
  *
  * `usure` est la part de vitesse perdue de la premiere haie a la derniere.
- * Sur le tour elle n'est pas un detail : c'est elle qui raccourcit la foulee,
- * fait passer l'intervalle de quatorze a quinze appuis, et declenche le
- * changement de rythme que l'epreuve fait payer. Sur les courses courtes elle
- * est presque nulle — on ne fatigue pas en treize secondes.
+ * Sur le tour elle n'est pas un detail : c'est elle qui raccourcit la foulee
+ * et fait monter le compte d'appuis d'un intervalle a l'autre, jusqu'a sortir
+ * de la fourchette du reglement si le coureur s'effondre. Sur les courses
+ * courtes elle est presque nulle — on ne fatigue pas en treize secondes.
+ *
+ * LE PREMIER TRONCON EST SUPPOSE TENU. Il se court en accelerant depuis les
+ * blocs, ce qu'un modele a vitesse tenue ne sait pas compter. C'est le harnais
+ * sur le vrai moteur (tools/haies-course-test.mjs) qui le verifie.
  */
 export function simuler(cle, { vitesse, foulee, precision = 1, usure = 0, reprise = 0.55 }) {
   const positions = positionsDes(cle);
   const a = APPEL[cle];
 
-  let v = vitesse, t = 0, d = 0, pied = 0, tenues = 0, precedent;
+  let v = vitesse, t = 0, d = 0, tenues = 0;
   const detail = [];
 
   for (let i = 0; i < positions.length; i++) {
@@ -254,12 +256,8 @@ export function simuler(cle, { vitesse, foulee, precision = 1, usure = 0, repris
     // rend 11 % de foulee pour 20 % de vitesse : on ralentit, on ne s'ecroule
     // pas.
     const f = foulee * fouleeRelative(v / vitesse);
-    const appuis = appuisPour(cle, f);
-    const r = rythmeDe(cle, appuis, precedent);
-
-    // Sur les courtes, la parite decide du pied ; le premier appel est
-    // toujours bon, on choisit sa jambe avant le depart.
-    const tenu = REGLE[cle] === 'parite' ? (r.tenu || pied === 0) : r.tenu;
+    const appuis = i === 0 ? null : appuisPour(cle, f);
+    const tenu = i === 0 ? true : rythmeDe(cle, appuis, 'intervalle').tenu;
 
     // L'ecart d'appel : parfait au centre, degrade quand la precision baisse.
     // Le signe alterne pour ne pas simuler un joueur qui se trompe toujours
@@ -273,8 +271,6 @@ export function simuler(cle, { vitesse, foulee, precision = 1, usure = 0, repris
     const p = franchir(cle, v, avant, tenu);
     if (p.note === 'parfait' && tenu) tenues++;
     v = p.v;
-    if (REGLE[cle] === 'parite' && !r.tenu) pied = 1 - pied;
-    precedent = appuis;
 
     // Le vol par-dessus la haie, a la vitesse de sortie.
     t += (a.avant + a.apres) / v;
