@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { nomEnLigne } from '@/game/jeux';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
@@ -214,7 +215,7 @@ export function Revanche() {
             className="w-full mt-1 rounded-2xl bg-primary text-background font-black font-display
                        uppercase tracking-tight text-2xl sm:text-3xl py-5
                        flex items-center justify-center gap-3
-                       shadow-[0_0_40px_rgba(248,205,74,0.3)]
+                       shadow-[0_0_40px_rgb(var(--primaire-rgb)/0.3)]
                        active:scale-[0.98] transition-transform"
           >
             <RotateCcw className="w-6 h-6" />
@@ -355,7 +356,7 @@ export function CarteObjectif({ onLancer, onFin }: {
                 <button key={x.epreuve} type="button" role="radio"
                   data-epreuve={x.epreuve}
                   aria-checked={actif} tabIndex={actif ? 0 : -1}
-                  aria-label={`${x.epreuve} m`}
+                  aria-label={nomEnLigne(x.epreuve)}
                   onClick={() => setChoisie(x.epreuve)}
                   className={`relative w-9 py-2 rounded-lg font-display font-black text-sm
                               tabular-nums transition-colors

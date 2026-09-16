@@ -124,7 +124,7 @@ export function RecordPopup() {
           >
             <motion.div
               {...PANNEAU}
-              className="relative w-full max-w-sm rounded-3xl border-2 border-primary/60 bg-card/95 p-6 md:p-8 flex flex-col items-center gap-3 shadow-[0_0_60px_rgba(248,205,74,0.35)]"
+              className="relative w-full max-w-sm rounded-3xl border-2 border-primary/60 bg-card/95 p-6 md:p-8 flex flex-col items-center gap-3 shadow-[0_0_60px_rgb(var(--primaire-rgb)/0.35)]"
             >
               {/* halo qui respire : le record doit se voir de loin */}
               <motion.div
@@ -139,7 +139,7 @@ export function RecordPopup() {
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ ...RESSORT.trophee, delay: 0.1 }}
               >
-                <Trophy className="w-10 h-10 md:w-12 md:h-12 text-primary drop-shadow-[0_0_16px_rgba(248,205,74,0.7)]" />
+                <Trophy className="w-10 h-10 md:w-12 md:h-12 text-primary drop-shadow-[0_0_16px_rgb(var(--primaire-rgb)/0.7)]" />
               </motion.div>
 
               <h2 className="font-black font-display tracking-tight uppercase text-2xl md:text-3xl text-primary text-center leading-none">

@@ -10,6 +10,7 @@ import { IdentityPanel } from './IdentityPanel';
 import { HistoriqueDefis } from './HistoriqueDefis';
 import { lienInstagram } from '@/game/identity';
 import { PanneauNations } from './TableauNations';
+import { useJeu, epreuvesDuJeu, nomCourt } from '@/game/jeux';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -23,6 +24,8 @@ type Cat = 'race' | 'run' | 'mine' | 'nations';
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   const { N, RACES } = SprinterApp;
+  const jeu = useJeu();
+  const haies = jeu === 'hurdlers';
   const [race, setRace] = useState<RaceKey>(initialRace);
   const [cat, setCat] = useState<Cat>('race');
   /**
@@ -35,7 +38,10 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
    *
    * Vrai par defaut : « ou en est mon pays » se demande d'abord en general.
    */
-  const [toutesDistances, setToutesDistances] = useState(true);
+  //
+  // Sauf dans Hurdlers : le cumul du serveur est celui des trois distances de
+  // sprint, et on ne le presente pas comme celui des haies.
+  const [toutesDistances, setToutesDistances] = useState(!haies);
   const [raw, setRaw] = useState<LeaderboardEntry[] | null>(null);
   const [mySplit, setMySplit] = useState<number | null>(null);
   const [error, setError] = useState(false);
@@ -112,7 +118,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               un palmares se lit d'abord en entier. Les trois autres categories
               classent des chronos, qui ne s'additionnent pas d'une distance a
               l'autre — leur proposer « toutes » n'aurait aucun sens. */}
-          {cat === 'nations' && (
+          {cat === 'nations' && !haies && (
             <button
               onClick={() => setToutesDistances(true)}
               className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
@@ -123,7 +129,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               {N.t('nations_tous')}
             </button>
           )}
-          {(['100', '200', '400'] as const).map(k => {
+          {epreuvesDuJeu(jeu).map(k => {
             const actif = cat === 'nations' ? (!toutesDistances && race === k) : race === k;
             return (
               <button
@@ -134,7 +140,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                     ? 'bg-primary/20 text-primary border-primary'
                     : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
               >
-                {k} M
+                {nomCourt(k)}
               </button>
             );
           })}
@@ -150,7 +156,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               className={`flex-1 py-2 rounded-xl font-bold tracking-widest
                           text-[9px] md:text-[11px] leading-tight transition-all
                 ${cat === id
-                  ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
+                  ? 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
             >
               {N.t(key)}

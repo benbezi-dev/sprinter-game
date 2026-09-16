@@ -7,7 +7,13 @@ const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const DEVICE_ID_KEY = 'sprinter_device_id';
 const PLAYER_NAME_KEY = 'sprinter_player_name';
 
-export type RaceKey = '100' | '200' | '400';
+/**
+ * Les six epreuves individuelles : les trois de Sprinter, puis les trois de
+ * Hurdlers (game/jeux.ts). Une seule famille de cles pour les deux jeux — le
+ * serveur les range dans les memes tables, le classement, les duels et le
+ * direct les traitent de la meme facon.
+ */
+export type RaceKey = '100' | '200' | '400' | '100h' | '110h' | '400h';
 
 /**
  * LES EPREUVES QUI ONT UN CLASSEMENT INDIVIDUEL — et le relais n'en est pas.
@@ -26,13 +32,14 @@ export type RaceKey = '100' | '200' | '400';
  * compte par la salle, et il a son propre classement, par equipe, avec ses
  * fantomes (relais.ts, routes `/relay/*`). Le mettre au TOP 500 du 100 m, ou
  * en faire le record personnel d'un seul des quatre, n'aurait pas de sens ;
- * `ALLOWED_RACES` (worker/src/index.js) ne connait donc que les trois
- * epreuves individuelles, et le jeu doit s'y tenir.
+ * `ALLOWED_RACES` (worker/src/index.js) ne connait donc que les six
+ * epreuves individuelles — trois de sprint, trois de haies —, et le jeu doit
+ * s'y tenir.
  *
  * A TENIR D'ACCORD avec ALLOWED_RACES (worker/src/index.js) et EPREUVES
  * (worker/src/epreuves.js).
  */
-const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['100', '200', '400']);
+const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['100', '200', '400', '100h', '110h', '400h']);
 
 export function estEpreuveIndividuelle(cle: unknown): cle is RaceKey {
   return typeof cle === 'string' && EPREUVES_INDIVIDUELLES.has(cle);

@@ -132,6 +132,22 @@
   --destructive-foreground: #EEF0F8;
   
   --radius: 0.75rem;
+
+  /* La couleur du jeu, en composantes, pour les halos et les ombres
+     (`rgb(var(--primaire-rgb)/0.25)`), et sa nuance sombre pour les
+     bordures de bouton. */
+  --primaire-rgb: 248 205 74;
+  --primaire-fonce: #D97706;
+}
+
+/* HURDLERS : le bleu de son monde a la place du jaune de Sprinter. Le
+   selecteur porte deux conditions pour passer devant `.dark`, qui repose le
+   jaune plus bas. Voir game/jeux.ts. */
+:root[data-jeu="hurdlers"] {
+  --primary: #60A5FA;
+  --ring: #60A5FA;
+  --primaire-rgb: 96 165 250;
+  --primaire-fonce: #2563EB;
 }
 
 .dark {

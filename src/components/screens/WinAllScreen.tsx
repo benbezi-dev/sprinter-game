@@ -80,7 +80,7 @@ export function WinAllScreen() {
         <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
-            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgba(248,205,74,0.4)]">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)]">
               {N.t('run_done')}
             </h1>
             
@@ -117,7 +117,7 @@ export function WinAllScreen() {
 
           {/* Rank Badge */}
           {runRank && (
-            <motion.div {...retarde(MONTEE, 0.5)} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center flex items-center gap-2 md:gap-3">
+            <motion.div {...retarde(MONTEE, 0.5)} className="bg-primary text-background font-black font-display tracking-widest uppercase px-6 py-3 md:px-8 md:py-4 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] text-center flex items-center gap-2 md:gap-3">
               <img
                 src={`${BASE}/icons/${runRank === 1 ? 'medal1' : runRank <= 3 ? 'medal2' : 'star'}.png`}
                 alt=""
@@ -200,7 +200,7 @@ export function WinAllScreen() {
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button onClick={handleReplay} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
+            <button onClick={handleReplay} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1">
               {N.t('replay')}
             </button>
             <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">

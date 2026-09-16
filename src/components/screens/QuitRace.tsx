@@ -68,7 +68,7 @@ export function QuitRace() {
                 onClick={resumeRace}
                 className="w-full py-3 rounded-xl font-black font-display text-lg md:text-xl
                            tracking-widest text-background bg-primary hover:bg-primary/90
-                           transition-all border-b-4 border-amber-600
+                           transition-all border-b-4 border-[var(--primaire-fonce)]
                            active:border-b-0 active:translate-y-1"
               >
                 {N.t('resume')}

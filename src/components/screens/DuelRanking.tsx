@@ -13,11 +13,10 @@ import {
 } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
 import { SERIE_OUVERTE } from '@/game/canal';
+import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt } from '@/game/jeux';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-/** Les trois epreuves, dans l'ordre d'un programme d'athletisme. */
-const RACE_KEYS = ['100', '200', '400'];
 
 /**
  * Fleche de deplacement depuis la derniere visite.
@@ -92,6 +91,8 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
     if (ok) setConvies(c => [...c, nom]);
   };
   const [defiEnCours, setDefiEnCours] = useState<string | null>(null);
+  /** Les trois epreuves du jeu courant, dans l'ordre d'un programme. */
+  const RACE_KEYS: readonly string[] = epreuvesDuJeu(useJeu());
 
   /**
    * L'epreuve du duel a venir.
@@ -104,7 +105,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    */
   const [choix, setChoix] = useState<string[]>(() => {
     const e = (epreuves || []).filter(k => RACE_KEYS.includes(k));
-    return e.length ? e : ['100'];
+    return e.length ? e : [epreuvesDuJeu(jeuCourant())[0]];
   });
 
   const defier = async (nom: string) => {
@@ -227,7 +228,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                     ? 'bg-primary/20 text-primary border-primary'
                     : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
               >
-                {k} M
+                {nomCourt(k)}
               </button>
             ))}
           </div>

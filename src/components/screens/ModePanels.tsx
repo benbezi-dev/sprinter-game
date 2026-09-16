@@ -12,15 +12,18 @@ import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
 import { Repliable } from './Repliable';
-
-const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
+import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne } from '@/game/jeux';
 
 /* ------------------------------------------------------------------ one shot
    Une ou plusieurs epreuves choisies, courues une seule fois. Pas de
    cinematique, pas d'elimination : seul le cumul des chronos compte. */
 export function OneShotPanel() {
   const { N, LEVELS } = SprinterApp;
-  const [picked, setPicked] = useState<RaceKey[]>(['100']);
+  // Les epreuves du jeu courant : le one shot de Hurdlers enchaine des haies.
+  const jeu = useJeu();
+  const RACE_KEYS = epreuvesDuJeu(jeu);
+  const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
+  useEffect(() => { setPicked([epreuvesDuJeu(jeu)[0]]); }, [jeu]);
   const [level, setLevel] = useState(4);
 
   const toggle = (k: RaceKey) => {
@@ -78,10 +81,10 @@ export function OneShotPanel() {
                 onClick={() => toggle(k)}
                 className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
                   ${picked.includes(k)
-                    ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgba(248,205,74,0.2)]'
+                    ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]'
                     : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/10'}`}
               >
-                {k} M
+                {nomCourt(k)}
               </button>
             ))}
           </div>
@@ -124,7 +127,7 @@ export function OneShotPanel() {
       <button
         onClick={launch}
         disabled={!picked.length}
-        className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgba(248,205,74,0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
+        className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
       >
         {N.t('launch_oneshot')}
       </button>
@@ -142,6 +145,7 @@ export function OneShotPanel() {
    les memes epreuves contre son fantome. */
 export function ChallengePanel() {
   const { N } = SprinterApp;
+  const jeu = useJeu();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<'none' | 'bad' | 'net'>('none');
@@ -209,10 +213,12 @@ export function ChallengePanel() {
           que la seconde, elle passe donc par le meme interrupteur. */}
       {DUELS_OUVERTS && <LivePanel />}
       {/* Le championnat n'apparait que si le joueur y est engage. */}
-      {DUELS_OUVERTS && <ChampPanel />}
+      {/* Le championnat et le relais sont a Sprinter : la selection se tient
+          sur les duels de sprint, et le relais ne se court pas avec des haies. */}
+      {DUELS_OUVERTS && jeu === 'sprinter' && <ChampPanel />}
       {/* Le relais, ouvert comme le reste. Le drapeau vit dans game/canal :
           a false, le bundler retire tout le panneau du build. */}
-      {RELAIS_OUVERT && <RelaisPanel />}
+      {RELAIS_OUVERT && jeu === 'sprinter' && <RelaisPanel />}
 
       <Repliable
         titre={N.t('challenge_code')}
@@ -290,7 +296,7 @@ export function ChallengePanel() {
             <div className="flex flex-wrap gap-1.5 justify-center">
               {ch.races.map((r, i) => (
                 <span key={i} className="text-[10px] md:text-xs font-mono bg-black/30 border border-white/10 rounded-md px-2 py-1">
-                  {r} m
+                  {nomEnLigne(r)}
                 </span>
               ))}
             </div>
@@ -310,7 +316,7 @@ export function ChallengePanel() {
         <button
           onClick={accept}
           disabled={!ch}
-          className="w-full py-3 md:py-5 rounded-xl font-black font-display text-lg md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgba(248,205,74,0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
+          className="w-full py-3 md:py-5 rounded-xl font-black font-display text-lg md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
         >
           {N.t('challenge_accept')}
         </button>

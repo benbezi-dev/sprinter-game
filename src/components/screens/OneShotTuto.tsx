@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
+import { epreuvesDuJeu, nomCourt } from '@/game/jeux';
 import { motion } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, COURBE, TRANSITION, retarde } from '@/lib/mouvement';
 import { X, Timer, Ghost, Globe2 } from 'lucide-react';
@@ -86,7 +87,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
           {/* Plan 1 : les trois epreuves s'allument l'une apres l'autre. */}
           {plan === 0 && (
             <div className="flex gap-2 w-full max-w-xs">
-              {['100', '200', '400'].map((k, i) => (
+              {epreuvesDuJeu().map((k, i) => (
                 <motion.div
                   key={k}
                   initial={{ opacity: 0.25, scale: 0.94 }}
@@ -95,7 +96,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
                   className="flex-1 py-4 rounded-xl bg-primary/20 border-b-2 border-primary
                              text-primary font-bold tracking-wider text-center text-sm md:text-base"
                 >
-                  {k} M
+                  {nomCourt(k)}
                 </motion.div>
               ))}
             </div>
@@ -153,7 +154,7 @@ export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void })
           onClick={() => onClose(true)}
           className="w-full py-4 rounded-xl font-black font-display text-lg md:text-xl tracking-widest
                      text-background bg-primary hover:bg-primary/90 transition-all
-                     border-b-4 border-amber-600 active:border-b-0 active:translate-y-1"
+                     border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1"
         >
           {N.t('os_tuto_go')}
         </button>

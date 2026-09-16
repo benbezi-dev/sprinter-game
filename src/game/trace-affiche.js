@@ -31,7 +31,12 @@ export const FORMATS = {
 // 30 aout « 8,25 s en tete » : le point venait de toFixed, pas d'un choix. Un
 // chrono francais s'ecrit a la virgule, y compris — et surtout — en 216 px.
 export const s2 = ms => (Number(ms) / 1000).toFixed(2).replace('.', ',');
-export const EPREUVE = r => String(r || '').replace(/^(\d+)$/, '$1 m');
+export const EPREUVE = r => String(r || '')
+  .replace(/^(\d+)$/, '$1 m')
+  .replace(/^(\d+)h$/, '$1 m H');
+
+/** Le jeu d'une epreuve, pour la signature de l'image : les haies sont a Hurdlers. */
+const MARQUE = r => (/^\d+h$/.test(String(r || '')) ? 'Hurdlers' : 'Sprinter');
 
 /* --------------------------------------------------------------- le dessin */
 
@@ -410,7 +415,7 @@ function entete(m) {
   if (m.type === 'sacre') {
     return [d.echelon, d.pays].filter(Boolean).join(' · ') || 'championnat';
   }
-  if (d.race) return `Sprinter · ${EPREUVE(d.race)}`;
+  if (d.race) return `${MARQUE(d.race)} · ${EPREUVE(d.race)}`;
   return 'Sprinter';
 }
 
@@ -580,8 +585,12 @@ export function dessinerCourse(cv, course) {
 function epreuvesEnTexte(epreuves) {
   const l = (Array.isArray(epreuves) ? epreuves : [epreuves]).filter(Boolean);
   if (!l.length) return 'Sprinter';
-  if (l.length === 1) return `Sprinter · ${EPREUVE(l[0])}`;
-  return `Sprinter · ${l.join(' + ')} m`;
+  const marque = MARQUE(l[0]);
+  if (l.length === 1) return `${marque} · ${EPREUVE(l[0])}`;
+  // Les haies gardent leur H a chaque epreuve : « 100 + 110 m » ne dirait pas
+  // qu'on a franchi quoi que ce soit.
+  if (marque === 'Hurdlers') return `${marque} · ${l.map(EPREUVE).join(' + ')}`;
+  return `${marque} · ${l.join(' + ')} m`;
 }
 
 /* ---------------------------------------------------------------------------

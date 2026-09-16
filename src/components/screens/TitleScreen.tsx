@@ -19,10 +19,12 @@ import { BanderoleEdition } from './BanderoleEdition';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
+import { useJeu, epreuvesDuJeu, nomCourt } from '@/game/jeux';
+import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
-import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -89,6 +91,10 @@ function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void 
 export function TitleScreen() {
   const { raceKey, runs, furthest } = useGameStore();
   const { Audio_, N, RACES } = SprinterApp;
+  // Sprinter ou Hurdlers : le meme accueil, avec les epreuves du jeu courant.
+  const jeu = useJeu();
+  const haies = jeu === 'hurdlers';
+  const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
@@ -154,7 +160,7 @@ export function TitleScreen() {
     if (lancer) SprinterApp.startRun();
   };
 
-  const handleRaceToggle = (key: '100' | '200' | '400') => {
+  const handleRaceToggle = (key: RaceKey) => {
     SprinterApp.G.raceKey = key;
     SprinterApp.G.race = RACES[key];
     SprinterApp.buildLevel(0);
@@ -172,7 +178,24 @@ export function TitleScreen() {
   // plutot que « fais defiler ».
   const zoneGeste = React.useRef<HTMLDivElement>(null);
   const rouleau = React.useRef<HTMLDivElement>(null);
-  useGesteMondes(zoneGeste, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS, rouleau);
+  //
+  // Depuis Hurdlers, le meme geste vers le bas ramene a Sprinter — c'est ce
+  // que faisait deja l'ancien accueil des haies — et les deux cotes ne menent
+  // nulle part : les concours sont autour de Sprinter, pas autour des haies.
+  useGesteMondes(zoneGeste, (d: Direction) => {
+    if (!haies) allerAu(mondeVers(d));
+    else if (d === 'bas') allerAu('sprinter');
+  }, MONDES_OUVERTS, rouleau);
+
+  // La touche « retour » du telephone ramene de Hurdlers a Sprinter plutot
+  // que de sortir du jeu : on y est entre par un geste, on en sort par celui
+  // que le systeme propose.
+  useEffect(() => {
+    if (!haies) return;
+    const sortir = () => allerAu('sprinter');
+    window.addEventListener('popstate', sortir);
+    return () => window.removeEventListener('popstate', sortir);
+  }, [haies]);
 
   // Le canvas a dessine l'image ou l'on arrive ici avant que cet ecran existe :
   // on la lui fait refaire, scene en place, avant qu'elle s'affiche.
@@ -228,7 +251,7 @@ export function TitleScreen() {
           <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
             <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 rounded-2xl landscape:w-full max-w-md border-t-white/20">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black font-display tracking-tight text-primary drop-shadow-md">
-                SPRINTER
+                {haies ? 'HURDLERS' : 'SPRINTER'}
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
@@ -254,16 +277,19 @@ export function TitleScreen() {
                 semaine, quand le defi revient tous les jours : c'est la
                 seule chose de cet ecran qu'on peut rater. Hors fenetre,
                 elle disparait entierement. */}
-            <BanderoleEdition />
+            {/* L'edition et le defi du jour lancent un 100 m : ce sont des
+                rendez-vous de Sprinter, que Hurdlers ne montre pas tant que le
+                serveur ne propose rien avec des haies. */}
+            {!haies && <BanderoleEdition />}
 
             {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
                 classement, ou serveur muet, la carte disparait plutot que
                 d'annoncer un defi qui n'existe pas. */}
-            <CarteObjectif
+            {!haies && <CarteObjectif
               onLancer={(o) => lancerObjectif(o)}
               onFin={() => { void lireObjectif(); }}
-            />
+            />}
 
             {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
                 Sous le défi du jour et au-dessus du sélecteur de mode : c'est
@@ -277,7 +303,7 @@ export function TitleScreen() {
 
                 Fermée avec les duels : la sélection lit leur classement, elle
                 ne peut pas ouvrir avant lui. */}
-            {DUELS_OUVERTS && <BanderoleSelection onVoir={() => setTab('versus')} />}
+            {DUELS_OUVERTS && !haies && <BanderoleSelection onVoir={() => setTab('versus')} />}
 
             {/* Selecteur de mode */}
             {/* Le selecteur flotte au-dessus de la piste, tres claire : sans
@@ -289,7 +315,7 @@ export function TitleScreen() {
                   onClick={() => setTab(t.id)}
                   className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
                     ${tab === t.id
-                      ? 'bg-primary text-background shadow-[0_0_15px_rgba(248,205,74,0.25)]'
+                      ? 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]'
                       : 'text-foreground/70 hover:text-foreground hover:bg-white/10'}`}
                 >
                   {N.t(t.key)}
@@ -305,7 +331,7 @@ export function TitleScreen() {
               onClick={() => setShowDuels(true)}
               className="w-full px-4 py-3 rounded-2xl bg-black/70 backdrop-blur-md
                          border border-primary/50 hover:bg-black/85 transition-colors
-                         shadow-[0_0_25px_rgba(248,205,74,0.2)]
+                         shadow-[0_0_25px_rgb(var(--primaire-rgb)/0.2)]
                          flex items-center justify-between gap-3 text-left"
             >
               <span className="flex items-center gap-2.5 min-w-0">
@@ -338,7 +364,16 @@ export function TitleScreen() {
                 trois reperes sont la pour etre remarques une fois, et oublies
                 ensuite — c'est pourquoi ils sont discrets et ne prennent pas
                 de place. */}
-            {MONDES_OUVERTS && (
+            {MONDES_OUVERTS && haies && (
+              <div className="flex items-center justify-center gap-2 px-1 pt-1 pb-0.5">
+                <button onClick={() => allerAu('sprinter')}
+                        className="flex items-center gap-1 text-[9px] tracking-widest
+                                   text-white/40 hover:text-white/80 transition-colors">
+                  <ChevronUp className="w-3 h-3" /> SPRINTER
+                </button>
+              </div>
+            )}
+            {MONDES_OUVERTS && !haies && (
               <div className="flex items-center justify-between gap-2 px-1 pt-1 pb-0.5">
                 <button onClick={() => allerAu('thrower')}
                         className="flex items-center gap-1 text-[9px] tracking-widest
@@ -436,16 +471,16 @@ export function TitleScreen() {
 
             {/* Race Selectors */}
             <div className="flex gap-2">
-              {(['100', '200', '400'] as const).map(k => (
+              {epreuves.map(k => (
                 <button
                   key={k}
                   onClick={() => handleRaceToggle(k)}
                   className={`flex-1 py-2 md:py-4 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
                     ${raceKey === k 
-                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgba(248,205,74,0.2)]' 
+                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]' 
                       : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
                 >
-                  {k} M
+                  {nomCourt(k)}
                 </button>
               ))}
             </div>
@@ -453,7 +488,7 @@ export function TitleScreen() {
             {/* Start Button */}
             <button 
               onClick={handleStart}
-              className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgba(248,205,74,0.4)]"
+              className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)]"
             >
               {N.t('start')}
             </button>

@@ -9,7 +9,7 @@
 // division, et des points de ligue. Le bareme depend du role — relever un defi
 // dont le chrono est deja pose rapporte plus que le lancer.
 
-import { getDeviceId, getSavedName } from './leaderboard';
+import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 import { EST_TEST } from './canal';
 
 /**
@@ -40,7 +40,7 @@ export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legen
  * 400, sans quoi deux ecrans demanderaient deux classements pour la meme
  * course. `cleDiscipline` est le seul endroit ou cette cle se fabrique.
  */
-export const EPREUVES_DUEL = ['100', '200', '400'];
+export const EPREUVES_DUEL = ['100', '200', '400', '100h', '110h', '400h'];
 export const DISCIPLINE_DEFAUT = '100';
 
 export function cleDiscipline(epreuves?: string[] | null): string {
@@ -413,7 +413,7 @@ export async function defierDepuisClassement(
   // la personne a le plus de chances de figurer si elle nous y a croises.
   for (const e of [...new Set(epreuves)]) {
     try {
-      const liste = await fetchLeaderboard(e as '100' | '200' | '400');
+      const liste = await fetchLeaderboard(e as RaceKey);
       const l = liste.find(x => x.id != null && x.name.trim().toLowerCase() === cherche);
       if (l && l.id != null) { trouve = { scoreId: l.id, name: l.name }; break; }
     } catch { /* le reseau a manque : on part sans cible */ }

@@ -140,7 +140,7 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
             onClick={() => (dernier ? onClose(true) : aller(i + 1))}
             className="flex-1 py-4 rounded-xl font-black font-display text-lg md:text-xl tracking-widest
                        text-background bg-primary hover:bg-primary/90 transition-all
-                       border-b-4 border-amber-600 active:border-b-0 active:translate-y-1"
+                       border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1"
           >
             {N.t(dernier ? 'tour_play' : 'tuto_next')}
           </button>

@@ -6,8 +6,9 @@ import {
   lireJournal, surJournal, type EntreeDefi, type EtatDefi,
 } from '@/game/journal-defis';
 import { Repliable } from './Repliable';
+import { TOUTES_LES_EPREUVES, nomEnLigne } from '@/game/jeux';
 
-const RACE_KEYS = ['100', '200', '400'];
+const RACE_KEYS: readonly string[] = TOUTES_LES_EPREUVES;
 
 /**
  * LE JOURNAL DES DEFIS, DEROULABLE DANS MES COURSES.
@@ -113,7 +114,7 @@ export function HistoriqueDefis({ race, onDefier }: {
         </span>
         <span className="text-[9px] md:text-[10px] text-muted-foreground/80 truncate">
           {quand(e.at)}
-          {e.epreuves.length ? ` · ${e.epreuves.join(' + ')} m` : ''}
+          {e.epreuves.length ? ` · ${nomEnLigne(e.epreuves)}` : ''}
           {/* Les points ne s'affichent que s'il y en a eu : un duel nul en
               rapporte zero, et « +0 LP » se lit comme une panne. */}
           {e.lp ? ` · ${e.lp > 0 ? '+' : ''}${e.lp} LP` : ''}

@@ -7,6 +7,7 @@ import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
 import { RecordChip } from './RecordPerso';
 import { lireRythme, poserRythme, type Rythme } from '@/game/objectif';
+import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 
 /**
  * Identite du joueur : son nom, le code qui le lui reserve, et de quoi relier
@@ -15,6 +16,8 @@ import { lireRythme, poserRythme, type Rythme } from '@/game/objectif';
  */
 export function IdentityPanel() {
   const { N } = SprinterApp;
+  // Les records du jeu courant : la fiche de Hurdlers montre ses haies.
+  const jeu = useJeu();
   const [nom, setNom] = useState(getSavedName());
   const [code, setCode] = useState(savedCode());
   const [voirCode, setVoirCode] = useState(false);
@@ -92,7 +95,7 @@ export function IdentityPanel() {
           Chaque pastille se tait tant qu'il n'a pas couru l'epreuve : trois
           lignes de tirets ne disent rien de plus qu'une absence. */}
       <div className="flex flex-wrap gap-1.5">
-        {(['100', '200', '400'] as const).map(r => (
+        {epreuvesDuJeu(jeu).map(r => (
           <RecordChip key={r} race={r} compact avecEpreuve />
         ))}
       </div>

@@ -433,7 +433,7 @@ export function SceneSelection() {
             className={`relative w-full max-w-sm rounded-3xl border-2 bg-card/95 p-6 md:p-8
                         flex flex-col items-center gap-3 text-center
               ${dedans
-                ? 'border-primary/60 shadow-[0_0_60px_rgba(248,205,74,0.35)]'
+                ? 'border-primary/60 shadow-[0_0_60px_rgb(var(--primaire-rgb)/0.35)]'
                 : 'border-white/20 shadow-[0_0_40px_rgba(0,0,0,0.6)]'}`}
           >
             {dedans && (
@@ -466,7 +466,7 @@ export function SceneSelection() {
               {dedans ? N.t('sel_dedans_fige') : N.t('sel_dehors_fige')}
             </h2>
 
-            <div className="h-1 w-2/3" style={{ backgroundColor: dedans ? '#F8CD4A' : 'rgba(255,255,255,0.2)' }} />
+            <div className="h-1 w-2/3" style={{ backgroundColor: dedans ? 'var(--primary)' : 'rgba(255,255,255,0.2)' }} />
 
             {/* Le fait, nu. Une série et une heure pour qui court, un rang pour
                 qui ne court pas — et dans les deux cas quelque chose de vrai

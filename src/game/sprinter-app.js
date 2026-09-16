@@ -510,6 +510,49 @@
   // -------------------------------------------------------------------
   // SON
   // -------------------------------------------------------------------
+  // Les morceaux de Hurdlers : l'accueil, puis les quatre paliers de course,
+  // qui montent comme ceux de Sprinter — tempo, densite, bourdon — mais sur
+  // leurs propres accords. Voir buildHaies.
+  const SUS2 = [0, 2, 7], SUS4 = [0, 5, 7], ADD9 = [0, 4, 7, 14],
+        MIN9 = [0, 3, 7, 14], MAJ7 = [0, 4, 7, 11];
+  const MUSIQUES_HAIES = {
+    h_menu: {
+      bpm: 96, cle: 5, prog: [[0, ADD9], [-5, SUS2], [-3, MIN9], [-7, SUS4]],
+      kick: [0, 2], snare: [], hats: 4,
+      bassPat: [0, null, null, null, 7, null, null, null], bassAmp: 0.22,
+      padAmp: 0.10, arp: 8, motif: [0, 1, 2, 3, 2, 1, 2, 3], arpOct: 4,
+      arpAmp: 0.07, swing: 0.18, envol: 0.05, drone: 0,
+    },
+    h_race0: {                              // etapes 1 a 3
+      bpm: 118, cle: 5, prog: [[0, ADD9], [-2, SUS2], [3, MAJ7], [-5, SUS4]],
+      kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
+      bassPat: [0, 12, 0, 7, 0, 12, 5, 7], bassAmp: 0.30,
+      padAmp: 0.08, arp: 8, motif: [0, 1, 2, 1, 0, 1, 2, 3], arpOct: 5,
+      arpAmp: 0.09, swing: 0.22, envol: 0.10, drone: 0,
+    },
+    h_race1: {                              // championnat du monde
+      bpm: 128, cle: 5, prog: [[0, MIN9], [-2, SUS2], [-4, ADD9], [-5, SUS4]],
+      kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
+      bassPat: [0, 12, 0, 7, 0, 12, 3, 7], bassAmp: 0.34,
+      padAmp: 0.085, arp: 8, motif: [0, 2, 1, 3, 0, 2, 1, 3], arpOct: 5,
+      arpAmp: 0.10, swing: 0.16, envol: 0.12, drone: 0.06,
+    },
+    h_race2: {                              // jeux mondiaux
+      bpm: 138, cle: 5, prog: [[0, MIN9], [1, ADD9], [-4, MAJ7], [-5, SUS4]],
+      kick: [0, 0.5, 1, 2], snare: [1, 2.5, 2.75], hats: 16,
+      bassPat: [0, 0, 12, 7, 0, 0, 12, 10], bassAmp: 0.38,
+      padAmp: 0.09, arp: 12, motif: [0, 1, 2, 3, 2, 1], arpOct: 5,
+      arpAmp: 0.11, swing: 0, envol: 0.14, drone: 0.10,
+    },
+    h_race3: {                              // inter galactique
+      bpm: 148, cle: 5, prog: [[0, SUS4], [-1, SUS4], [-2, SUS2], [-3, ADD9]],
+      kick: [0, 0.5, 1, 1.5, 2], snare: [1, 2.5, 2.75], hats: 16,
+      bassPat: [0, 0, 6, 0, 12, 0, 6, 11], bassAmp: 0.42,
+      padAmp: 0.095, arp: 16, motif: [0, 1, 2, 3, 3, 2, 1, 0], arpOct: 5,
+      arpAmp: 0.12, swing: 0, envol: 0.16, drone: 0.14,
+    },
+  };
+
   const Audio_ = {
     ok: false, on: true, ctx: null, buf: {}, src: null, cur: null, gain: null,
     // La SORTIE unique, et la prise branchee dessus.
@@ -672,6 +715,63 @@
                     cfg.stab, 'saw', 7);
       });
       return this.norm(d);
+    },
+
+    // HURDLERS A SA MUSIQUE, ET ELLE SE RECONNAIT A L'OREILLE.
+    //
+    // Meme synthese que Sprinter, autre morceau : une autre tonalite (re au
+    // lieu de la), des accords suspendus plutot que des triades, une basse
+    // carree qui rebondit au lieu d'une scie qui pousse, un arpege en
+    // triangle, et surtout LE RYTHME DES HAIES. Chaque mesure compte quatre
+    // temps comme un intervalle compte quatre appuis : la grosse caisse frappe
+    // les trois premiers, se tait sur le quatrieme, et un glissando monte a sa
+    // place — l'envol. On entend la course avant de la voir.
+    //
+    // Une fabrique a part, et non des options de plus dans buildRace : les
+    // morceaux de Sprinter restent ce qu'ils sont, a l'echantillon pres.
+    buildHaies(cfg) {
+      const sr = this.ctx.sampleRate;
+      const beat = 60 / cfg.bpm, bar = beat * 4, tot = bar * cfg.prog.length;
+      const d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
+      const F = (st, o) => this.semi(st + cfg.cle, o);
+      // Les croches impaires tombent un peu en retard : le balancement d'une
+      // foulee de hurdleur, qui n'est jamais tout a fait reguliere.
+      const croche = i => (i + (i % 2 ? cfg.swing : 0)) * beat / 2;
+      cfg.prog.forEach((ch, b) => {
+        const t = b * bar, root = ch[0], acc = ch[1], haut = acc[acc.length - 1];
+        cfg.kick.forEach(x => this.drum(d, t + x * beat, 'k'));
+        cfg.snare.forEach(x => this.drum(d, t + x * beat, 's'));
+        for (let i = 0; i < cfg.hats; i++) {
+          this.drum(d, t + (cfg.hats === 8 ? croche(i) : i * bar / cfg.hats), 'h');
+        }
+        cfg.bassPat.forEach((st, i) => {
+          if (st === null) return;
+          this.tone(d, t + croche(i), beat * 0.42, F(root + st, 2), cfg.bassAmp, 'sq', 7);
+        });
+        acc.forEach(n => this.tone(d, t, bar * 0.96, F(root + n, 3), cfg.padAmp, 'sin', 0.9));
+        for (let i = 0; i < cfg.arp; i++) {
+          const n = acc[cfg.motif[i % cfg.motif.length] % acc.length];
+          const at = cfg.arp === 8 ? croche(i) : i * bar / cfg.arp;
+          this.tone(d, t + at, bar / cfg.arp * 0.6, F(root + n, cfg.arpOct), cfg.arpAmp, 'tri', 6);
+        }
+        this.envol(d, t + beat * 3, beat * 0.9, F(root + haut, 3), F(root + haut, 5), cfg.envol);
+        if (cfg.drone > 0) this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25);
+      });
+      return this.norm(d);
+    },
+    /** Un glissando qui monte d'une octave ou deux, en cloche : l'envol. */
+    envol(d, t0, dur, f0, f1, amp) {
+      if (!amp) return;
+      const sr = d.sampleRate, ch = d.getChannelData(0);
+      const i0 = (t0 * sr) | 0, n = (dur * sr) | 0;
+      let ph = 0;
+      for (let i = 0; i < n; i++) {
+        const k = i0 + i; if (k >= ch.length) break;
+        const q = i / n;
+        ph += f0 * Math.pow(f1 / f0, q) / sr;
+        const env = Math.pow(Math.sin(Math.PI * Math.min(1, q * 1.15)), 2);
+        ch[k] += amp * env * Math.sin(TAU * ph);
+      }
     },
 
     build() {
@@ -1099,8 +1199,23 @@
       if (th && th.musique && this.buf[th.musique]) return th.musique;
       return 'race' + (level <= 2 ? 0 : Math.min(3, level - 2));
     },
+    /**
+     * Le morceau de CE jeu. Hurdlers joue les siens a la place de ceux de
+     * Sprinter — l'accueil et les quatre paliers de course —, et les fabrique a
+     * la premiere ecoute : un joueur qui ne quitte jamais Sprinter ne paie ni
+     * leur calcul ni leur memoire. Un stade qui porte sa propre musique la
+     * garde dans les deux jeux.
+     */
+    duJeu(name) {
+      const h = 'h_' + name;
+      if (G.jeu !== 'hurdlers' || !MUSIQUES_HAIES[h]) return name;
+      if (!this.buf[h]) this.buf[h] = this.buildHaies(MUSIQUES_HAIES[h]);
+      return h;
+    },
     music(name) {
-      if (!this.ok || !this.on || this.cur === name) return;
+      if (!this.ok || !this.on) return;
+      name = this.duJeu(name);
+      if (this.cur === name) return;
       if (this.src) { try { this.src.stop(); } catch (e) { } }
       const b = this.buf[name]; if (!b) return;
       const s = this.ctx.createBufferSource();
@@ -1182,7 +1297,8 @@
     // L'horloge sur laquelle on reporte les adversaires en direct, quand ce
     // n'est pas celle de la course : voir instantLive.
     horlogeLive: null,
-    scores: {}, runs: { '100': [], '200': [], '400': [] }, furthest: { '100': 0, '200': 0, '400': 0 },
+    scores: {}, runs: { '100': [], '200': [], '400': [], '100h': [], '110h': [], '400h': [] },
+    furthest: { '100': 0, '200': 0, '400': 0, '100h': 0, '110h': 0, '400h': 0 },
     keyLeft: false, touches: {}, acc: 0, last: 0, fps: 60,
 
     // Joueur du TOP 500 que l'on est en train de defier : retenu le temps de
@@ -1199,7 +1315,7 @@
     // Noms du haut du TOP 500 par discipline, charges en tache de fond et
     // servis aux Jeux mondiaux. Vides tant que le reseau n'a pas repondu :
     // le plateau maison prend alors le relais.
-    topNames: { '100': [], '200': [], '400': [] },
+    topNames: { '100': [], '200': [], '400': [], '100h': [], '110h': [], '400h': [] },
 
     // --- mode one-shot ---------------------------------------------------
     // 'campaign' : les six etapes d'affilee, comme avant.
@@ -1547,6 +1663,11 @@
     G.lives = null;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
+    // CE QU'UN AUTRE JEU AJOUTE A LA PISTE. Les haies se posent ici, a chaque
+    // course construite, quel que soit le chemin qui l'a construite — carriere,
+    // one-shot, defi ou direct. Le moteur ne sait pas qu'elles existent : c'est
+    // game/jeux.ts qui pose ce crochet.
+    if (G.apresConstruction) G.apresConstruction();
   }
 
   function queueCuts(kinds, after) {

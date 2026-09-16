@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { nomEnLigne } from '@/game/jeux';
 import { Loader2 } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau, COULEURS_MEDAILLE } from '@/components/Insignes';
@@ -186,7 +187,7 @@ export function PanneauNations({ epreuve }: { epreuve: string }) {
                      { n: String(nations.length) })}
               </span>
               <span className="text-[9px] md:text-[10px] text-muted-foreground/70">
-                {epreuve ? `${epreuve} m` : N.t('nations_tous')}
+                {epreuve ? nomEnLigne(epreuve) : N.t('nations_tous')}
               </span>
             </div>
 

@@ -715,6 +715,16 @@
     disc_110h:       ['110 M HAIES', '110 M HURDLES'],
     disc_400h:       ['400 M HAIES', '400 M HURDLES'],
     disc_longueur:   ['SAUT EN LONGUEUR', 'LONG JUMP'],
+    // Hurdlers : ce que la course dit d'une haie, a l'instant ou on la passe.
+    // « Trop pres » et « trop loin » plutot que « hache » et « plane » : le
+    // joueur doit savoir dans quel sens corriger, pas apprendre un vocabulaire.
+    haie_parfait:    ['PARFAIT', 'PERFECT'],
+    haie_bon:        ['BIEN', 'GOOD'],
+    haie_plane:      ['TROP LOIN', 'TOO FAR'],
+    haie_hache:      ['TROP PRÈS', 'TOO CLOSE'],
+    haie_appuis:     ['{n} appuis', '{n} steps'],
+    haie_rythme:     ['rythme cassé', 'rhythm broken'],
+    haie_n:          ['haie {n}/{t}', 'hurdle {n}/{t}'],
     disc_hauteur:    ['SAUT EN HAUTEUR', 'HIGH JUMP'],
     disc_triple:     ['TRIPLE SAUT', 'TRIPLE JUMP'],
     disc_perche:     ['SAUT À LA PERCHE', 'POLE VAULT'],

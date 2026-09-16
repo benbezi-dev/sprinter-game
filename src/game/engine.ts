@@ -19,6 +19,7 @@ import tribuneManifeste from './tribune-manifeste.json';
 import './tribune.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
+import type { RaceKey } from './leaderboard';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -76,17 +77,17 @@ export type GameState = {
   /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
   sortie: any;
   levelIdx: number;
-  raceKey: '100' | '200' | '400';
+  raceKey: RaceKey;
   won: boolean;
   player: any;
   runners: any[];
   champion: string;
   championTime: number;
   runTime: number;
-  furthest: { '100': number, '200': number, '400': number };
+  furthest: Record<RaceKey, number>;
   badge: [string, string] | null;
   runRank: number | null;
-  runs: { '100': number[], '200': number[], '400': number[] };
+  runs: Record<RaceKey, number[]>;
   skipArm: number;
   overChoice: number;
   ranking: any[];
@@ -218,9 +219,9 @@ let cadence = 0;   // moyenne glissante de l'ecart entre deux appuis, en ms
  * doivent etre la avant la course, pas pendant. Si le reseau ne repond pas,
  * G.topNames reste vide et le plateau maison sert de repli.
  */
-export function primeTopNames() {
+export function primeTopNames(races: readonly RaceKey[] = ['100', '200', '400']) {
   import('./leaderboard').then(({ fetchTopNames }) => {
-    (['100', '200', '400'] as const).forEach(race => {
+    races.forEach(race => {
       fetchTopNames(race)
         .then(names => { G.topNames[race] = names; })
         .catch(() => { /* repli sur le plateau maison */ });

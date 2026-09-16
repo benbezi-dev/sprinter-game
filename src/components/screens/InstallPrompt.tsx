@@ -155,7 +155,7 @@ export function InstallPrompt() {
               onClick={installer}
               className="w-full py-3 rounded-xl font-black font-display text-lg tracking-widest
                          text-background bg-primary hover:bg-primary/90 transition-all
-                         border-b-4 border-amber-600 active:border-b-0 active:translate-y-1"
+                         border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1"
             >
               {N.t('install_do')}
             </button>

@@ -85,9 +85,11 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
     cle: 'hurdlers', nom: 'HURDLERS', sous: 'monde_hurdlers_sous',
     fond: '#0b1220', accent: 'rgb(96,165,250)',
     disciplines: [
-      { cle: '100h', nom: 'disc_100h', jouable: false, cotes: true },
-      { cle: '110h', nom: 'disc_110h', jouable: false, cotes: true },
-      { cle: '400h', nom: 'disc_400h', jouable: false, cotes: true },
+      // Jouables, et joues dans l'accueil de Sprinter : ce monde n'a pas
+      // d'ecran de disciplines a lui (voir game/jeux.ts).
+      { cle: '100h', nom: 'disc_100h', jouable: true, cotes: true },
+      { cle: '110h', nom: 'disc_110h', jouable: true, cotes: true },
+      { cle: '400h', nom: 'disc_400h', jouable: true, cotes: true },
     ],
   },
   jumper: {

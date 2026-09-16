@@ -8,6 +8,7 @@ import {
 } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { HAIES } from '@/game/haies.js';
+import { changerDeJeu, jeuDuMonde } from '@/game/jeux';
 import { Poids } from './Poids';
 
 /**
@@ -46,7 +47,12 @@ function cotesDe(cle: string): string {
 
 export function Mondes() {
   const monde = useMonde();
-  if (monde === 'sprinter') return null;
+  // HURDLERS SE JOUE DANS L'ENVELOPPE DE SPRINTER. Meme menu, memes modes,
+  // memes duels : entrer dans son monde bascule le jeu (couleur, epreuves,
+  // musique) et laisse l'accueil de Sprinter s'afficher, au lieu de poser
+  // par-dessus une liste d'epreuves a part. Voir game/jeux.ts.
+  useEffect(() => { changerDeJeu(jeuDuMonde(monde)); }, [monde]);
+  if (monde === 'sprinter' || monde === 'hurdlers') return null;
   return <AccueilMonde monde={monde} />;
 }
 

@@ -40,7 +40,7 @@ export function TutoPropose({ onChoix }: { onChoix: (apprendre: boolean) => void
             onClick={() => onChoix(true)}
             className="w-full py-3.5 rounded-xl font-black font-display text-base md:text-lg
                        tracking-widest text-background bg-primary hover:bg-primary/90
-                       transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
+                       transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1
                        flex items-center justify-center gap-2"
           >
             <GraduationCap className="w-4 h-4" />

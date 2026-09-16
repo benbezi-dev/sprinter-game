@@ -91,7 +91,7 @@ export function EcartRecord({ race, ms }: { race: RaceKey; ms: number | null }) 
       <motion.div
         {...SURGISSEMENT}
         className="relative flex items-center gap-2 rounded-2xl border-2 border-primary/60
-                   bg-primary/10 px-3 py-1.5 shadow-[0_0_28px_rgba(248,205,74,0.28)]"
+                   bg-primary/10 px-3 py-1.5 shadow-[0_0_28px_rgb(var(--primaire-rgb)/0.28)]"
       >
         {/* Le halo bat une fois, et s'arrete. Un clignotement perpetuel a cote
             d'un bouton REVANCHE finirait par se regarder au lieu de se lire. */}
@@ -107,7 +107,7 @@ export function EcartRecord({ race, ms }: { race: RaceKey; ms: number | null }) 
           animate={{ rotate: 0, scale: 1 }}
           transition={RESSORT.trophee}
         >
-          <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-primary drop-shadow-[0_0_10px_rgba(248,205,74,0.7)]" />
+          <Trophy className="w-4 h-4 sm:w-5 sm:h-5 text-primary drop-shadow-[0_0_10px_rgb(var(--primaire-rgb)/0.7)]" />
         </motion.div>
         <div className="flex flex-col leading-tight">
           <span className="font-black font-display uppercase tracking-tight text-primary

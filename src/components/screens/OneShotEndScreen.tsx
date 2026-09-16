@@ -689,7 +689,7 @@ export function OneShotEndScreen() {
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
-            <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgba(248,205,74,0.35)]
+            <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.35)]
               ${falseOut || (challenge && !beaten) || (live && !seul && !liveGagne && !liveNul)
                 ? 'text-destructive' : live && !seul && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
               {falseOut ? N.t('false_out')
@@ -1446,7 +1446,7 @@ export function OneShotEndScreen() {
               onClick={() => setVoirDuels(true)}
               className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
                          tracking-widest text-background bg-primary hover:bg-primary/90 transition-all
-                         border-b-4 border-amber-600 active:border-b-0 active:translate-y-1
+                         border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1
                          flex flex-col items-center leading-tight gap-0.5"
             >
               <span className="flex items-center gap-2">

@@ -17,6 +17,7 @@ import { inviterEnDirect } from '@/game/invitations-directes';
 import { noterDefi } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
+import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 import { Repliable } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
@@ -26,7 +27,6 @@ import {
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
 
-const RACE_KEYS: RaceKey[] = ['100', '200', '400'];
 
 /** Le mot du vainqueur, apres la course. */
 /**
@@ -94,7 +94,11 @@ export function LivePanel() {
   const [conviesInfo, setConviesInfo] = useState<{ ok: number; injoignable: string | null }>(
     { ok: 0, injoignable: null });
   const [saisie, setSaisie] = useState('');
-  const [epreuve, setEpreuve] = useState<RaceKey>('100');
+  // Les epreuves du jeu courant : un direct lance depuis Hurdlers se court
+  // avec des haies.
+  const jeu = useJeu();
+  const RACE_KEYS = epreuvesDuJeu(jeu);
+  const [epreuve, setEpreuve] = useState<RaceKey>(() => RACE_KEYS[0]);
   const [salon, setSalon] = useState<EtatSalle | null>(null);
   const [pret, setPret] = useState(false);
   const [erreur, setErreur] = useState('');

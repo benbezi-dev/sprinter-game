@@ -23,14 +23,14 @@ function Chevrons({ dir }: { dir: 1 | -1 }) {
   );
 }
 
-const LIT_BG = 'rgba(248,205,74,0.20)';
-const LIT_BORDER = 'rgba(248,205,74,0.90)';
-const LIT_FG = 'rgb(248,205,74)';
+const LIT_BG = 'rgb(var(--primaire-rgb) / 0.20)';
+const LIT_BORDER = 'rgb(var(--primaire-rgb) / 0.90)';
+const LIT_FG = 'rgb(var(--primaire-rgb))';
 const IDLE_FG = 'rgba(255,255,255,0.34)';
 // L'ombre portee du pave allume. Elle deborde du bord, donc elle se voit du
 // coin de l'oeil — ce que ne fait pas un changement de couleur a l'interieur
 // d'un cadre, surtout sur une piste claire ou le jaune du pad se noie.
-const LIT_GLOW = '0 0 0 1px rgba(248,205,74,0.55), 0 0 22px rgba(248,205,74,0.32)';
+const LIT_GLOW = '0 0 0 1px rgb(var(--primaire-rgb) / 0.55), 0 0 22px rgb(var(--primaire-rgb) / 0.32)';
 // Au repos, le pave n'est pas un rectangle sombre pose sur l'image : il a un
 // dessus et un dessous. Le degre est minuscule — huit pour cent de blanc en
 // haut, seize de noir en bas — mais c'est ce qui fait la difference entre une
@@ -73,7 +73,7 @@ export function TouchControls() {
       el.style.opacity = kind === 'trip' ? '1' : '0.42';
       el.style.background = kind === 'trip'
         ? `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgba(239,68,68,0.85), transparent)`
-        : `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgba(248,205,74,0.75), transparent)`;
+        : `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, rgb(var(--primaire-rgb) / 0.75), transparent)`;
       clearTimeout(edgeTimers.current[side]);
       edgeTimers.current[side] = window.setTimeout(() => {
         el.style.transition = `opacity ${kind === 'trip' ? 260 : 130}ms ease-out`;

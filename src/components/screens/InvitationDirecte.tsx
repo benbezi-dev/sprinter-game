@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { nomEnLigne } from '@/game/jeux';
 import { SprinterApp } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { TRANSITION } from '@/lib/mouvement';
@@ -137,7 +138,7 @@ export function InvitationDirecte() {
             {N.t('live_invit_recue', { n: inv.de })}
           </p>
           <p className="text-[10px] md:text-xs text-muted-foreground font-mono">
-            {inv.epreuve ? `${inv.epreuve} m · ` : ''}{reste} s
+            {inv.epreuve ? `${nomEnLigne(inv.epreuve)} · ` : ''}{reste} s
           </p>
         </div>
 

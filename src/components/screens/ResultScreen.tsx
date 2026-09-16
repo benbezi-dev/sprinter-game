@@ -94,14 +94,14 @@ export function ResultScreen() {
 
           {/* Badge */}
           {badge && (
-            <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-primary text-background font-black font-display tracking-widest uppercase px-4 py-2 md:px-6 md:py-3 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgba(248,205,74,0.4)] text-center">
+            <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-primary text-background font-black font-display tracking-widest uppercase px-4 py-2 md:px-6 md:py-3 rounded-xl text-lg sm:text-xl md:text-2xl shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] text-center">
               {N.t(badge[0])}
             </motion.div>
           )}
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3 md:gap-4 w-full max-w-md mt-2">
-            <button onClick={handleNext} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1">
+            <button onClick={handleNext} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1">
               {oneShot ? N.t('next_event') : N.t('next_stage', { n: levelIdx + 2 })}
             </button>
             <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-bold tracking-widest text-foreground bg-secondary hover:bg-secondary/80 transition-all border-b-4 border-black active:border-b-0 active:translate-y-1">

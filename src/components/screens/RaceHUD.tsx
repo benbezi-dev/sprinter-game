@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
+import { HaiesHUD } from './HaiesHUD';
 
 export function RaceHUD() {
   const { 
@@ -139,6 +140,8 @@ export function RaceHUD() {
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
+      {/* Le verdict de chaque haie. Rien hors d'une course de haies. */}
+      {isRace && <HaiesHUD />}
       
       {/* Top HUD Bar */}
       <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
@@ -234,7 +237,7 @@ export function RaceHUD() {
                    style={{ width: `${Math.min(100, (ghostD / total) * 100)}%` }} />
               <div className="absolute inset-y-0 w-[3px] bg-cyan-300 rounded-full"
                    style={{ left: `calc(${Math.min(100, (ghostD / total) * 100)}% - 1.5px)` }} />
-              <div className="absolute inset-y-0 w-[3px] bg-primary rounded-full shadow-[0_0_6px_rgba(248,205,74,0.9)]"
+              <div className="absolute inset-y-0 w-[3px] bg-primary rounded-full shadow-[0_0_6px_rgb(var(--primaire-rgb)/0.9)]"
                    style={{ left: `calc(${Math.min(100, ((player?.d || 0) / total) * 100)}% - 1.5px)` }} />
             </div>
 
@@ -301,7 +304,7 @@ export function RaceHUD() {
                     return (
                       <div key={l.moi ? 'moi' : 'lui'}
                            className={`absolute inset-y-0 w-[3px] rounded-full
-                             ${l.moi ? 'bg-primary shadow-[0_0_6px_rgba(248,205,74,0.9)]' : 'bg-cyan-300'}`}
+                             ${l.moi ? 'bg-primary shadow-[0_0_6px_rgb(var(--primaire-rgb)/0.9)]' : 'bg-cyan-300'}`}
                            style={{ left: `calc(${88 - (derriere / 2) * 80}% - 1.5px)` }} />
                     );
                   })}
@@ -360,7 +363,7 @@ export function RaceHUD() {
               course a deja commence. */}
           <div
             className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 [@media(max-height:500px)]:w-16 [@media(max-height:500px)]:h-16
-                       rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgba(248,205,74,0.3)]"
+                       rounded-full border-4 border-primary bg-card/60 flex items-center justify-center shadow-[0_0_50px_rgb(var(--primaire-rgb)/0.3)]"
             style={{ transform: `scale(${1 + 0.1 * (1 - frac)})` }}
           >
             <span className="text-4xl sm:text-6xl md:text-7xl [@media(max-height:500px)]:text-3xl font-black font-display tracking-tighter text-white drop-shadow-md">
