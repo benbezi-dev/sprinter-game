@@ -22,6 +22,22 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { EPREUVES } from './epreuves.js';
+
+/**
+ * Les epreuves qu'une salle va courir, a partir de ce que l'hote a demande.
+ *
+ * Celles d'un seul jeu : une salle court du sprint ou des haies, jamais les
+ * deux, et c'est la premiere epreuve reconnue qui decide du jeu. Trois au plus,
+ * le 100 m quand rien n'est reconnaissable.
+ */
+export function epreuvesDeSalle(demande) {
+  const connues = String(demande || '100').split(',')
+    .filter(r => Object.prototype.hasOwnProperty.call(EPREUVES, r));
+  const jeu = connues.length ? EPREUVES[connues[0]].jeu : 'sprinter';
+  const eps = connues.filter(r => EPREUVES[r].jeu === jeu).slice(0, 3);
+  return eps.length ? eps : ['100'];
+}
 import { avantDepart } from './depart.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
@@ -253,9 +269,7 @@ export class SalleDirecte {
     const premier = this.joueurs.size === 0;
     if (premier) {
       this.hote = id;
-      const eps = (url.searchParams.get('races') || '100').split(',')
-        .filter(r => r === '100' || r === '200' || r === '400').slice(0, 3);
-      this.epreuves = eps.length ? eps : ['100'];
+      this.epreuves = epreuvesDeSalle(url.searchParams.get('races'));
       const n = parseInt(url.searchParams.get('level') || '4', 10);
       this.niveau = Number.isFinite(n) && n >= 0 && n <= 5 ? n : 4;
       // Seul le premier arrive decide de la taille : la changer en cours de

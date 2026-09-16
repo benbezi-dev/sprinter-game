@@ -44,7 +44,7 @@ import {
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
-import { directionDe } from './epreuves.js';
+import { directionDe, CLES } from './epreuves.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -106,7 +106,9 @@ const championnatsOuverts = () => true;
  */
 const motOuvert = () => true;
 
-const ALLOWED_RACES = new Set(['100', '200', '400']);
+// Les six epreuves individuelles, tirees de la table des epreuves : ajouter
+// une epreuve la-bas l'ouvre ici, et nulle part ailleurs il ne faut y penser.
+const ALLOWED_RACES = new Set(CLES);
 const MAX_NAME_LEN = 20;
 const MIN_TIME_MS = 1000;       // en dessous, forcement invalide
 const MAX_TIME_MS = 20 * 60000; // 20 minutes, plafond large

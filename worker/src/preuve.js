@@ -33,7 +33,8 @@ export const PAS_S = 0.08;
 const DM_PAR_M = 10;
 
 /** Les distances, en metres. */
-const DISTANCE = { '100': 100, '200': 200, '400': 400 };
+const DISTANCE = { '100': 100, '200': 200, '400': 400,
+                   '100h': 100, '110h': 110, '400h': 400 };
 
 /**
  * Le plafond de vitesse, en m/s.
@@ -59,7 +60,7 @@ const TOLERANCE_PAS = 2;
  *
  * @param {number[]} trace   Distances en decimetres, un point tous les PAS_S.
  * @param {number} tempsMs   Le chrono annonce.
- * @param {string} epreuve   '100', '200' ou '400'.
+ * @param {string} epreuve   '100', '200', '400', '100h', '110h' ou '400h'.
  */
 export function verifierTrace(trace, tempsMs, epreuve) {
   const griefs = [];

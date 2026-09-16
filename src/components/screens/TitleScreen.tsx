@@ -19,7 +19,7 @@ import { BanderoleEdition } from './BanderoleEdition';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
-import { useJeu, epreuvesDuJeu, nomCourt } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe } from '@/game/jeux';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { accueilPose } from '@/game/scene-accueil';
@@ -123,15 +123,20 @@ export function TitleScreen() {
    * classement, ou un rafraichissement automatique les aurait fait
    * disparaitre toutes seules.
    */
-  const [monRang, setMonRang] = useState<MonRang | null>(null);
+  //
+  // Celle du jeu courant : un ecusson de haies n'a rien a faire sur l'accueil
+  // de Sprinter, ni l'inverse. Une discipline combinee appartient au jeu de sa
+  // premiere epreuve — un one shot ne melange jamais les deux jeux.
+  const [mesRangs, setMesRangs] = useState<MonRang[]>([]);
   useEffect(() => {
     if (!DUELS_OUVERTS) return;
     let annule = false;
     // Le serveur rend mes disciplines classees, la plus haute en tete.
     fetchDuels(undefined, false)
-      .then(b => { if (!annule) setMonRang(b?.mes_epreuves?.[0] || null); });
+      .then(b => { if (!annule) setMesRangs(b?.mes_epreuves || []); });
     return () => { annule = true; };
   }, []);
+  const monRang = mesRangs.find(r => jeuDe(String(r.epreuve).split('+')[0]) === jeu) || null;
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   const [tab, setTab] = useState<Tab>(() => (venuPourUnDuel ? 'versus' : 'career'));

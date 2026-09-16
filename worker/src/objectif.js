@@ -46,7 +46,7 @@
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
 import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur,
-         DISCIPLINES_SIMPLES, epreuve as fiche } from './epreuves.js';
+         CLES_DU_JEU, epreuve as fiche } from './epreuves.js';
 import { decalageDe } from './journal.js';
 
 /* ------------------------------------------------------------- reglages */
@@ -59,7 +59,11 @@ import { decalageDe } from './journal.js';
  * du programme — 100, 200, 400 — et il compte : c'est celui dans lequel le
  * jeu les affiche, et celui qui decide de l'epreuve de tete a rang egal.
  */
-export const EPREUVES_DEFI = DISCIPLINES_SIMPLES;
+//
+// Celles de Sprinter seulement. Hurdlers ne montre pas encore le defi du jour :
+// un objectif sur 110 m haies arriverait sur l'accueil de Sprinter, et le
+// relever y lancerait une course de haies.
+export const EPREUVES_DEFI = CLES_DU_JEU.sprinter;
 
 /**
  * Celle qu'on suppose quand personne ne dit laquelle.

@@ -1,6 +1,6 @@
 // Les epreuves, et le SENS dans lequel on les gagne.
 //
-// Les trois epreuves du jeu se courent au chrono le plus bas. C'est si vrai
+// Les six epreuves des deux jeux se courent au chrono le plus bas. C'est si vrai
 // partout qu'aucune ligne de code ne le dit : chaque requete ecrit MIN(),
 // chaque comparaison ecrit `<`, et la regle vit repartie dans une quarantaine
 // d'endroits qui ont tous raison aujourd'hui.
@@ -28,13 +28,32 @@ export const PLUS_HAUT = 'plus_haut';
  * annoncee doit tomber sur un nombre que le joueur peut lire sur son ecran.
  * Le jeu affiche deux decimales de seconde, donc dix millisecondes.
  */
+//
+// `jeu` dit a quel jeu appartient l'epreuve : Sprinter court les trois
+// distances de sprint, Hurdlers les trois courses de haies. Les deux jeux
+// partagent les memes tables, le meme classement et les memes duels ; ce qui
+// les separe, c'est la cle.
 export const EPREUVES = {
-  '100': { cle: '100', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m' },
-  '200': { cle: '200', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '200 m' },
-  '400': { cle: '400', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m' },
+  '100': { cle: '100', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m' },
+  '200': { cle: '200', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '200 m' },
+  '400': { cle: '400', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m' },
+  '100h': { cle: '100h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m haies' },
+  '110h': { cle: '110h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '110 m haies' },
+  '400h': { cle: '400h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m haies' },
 };
 
+/**
+ * Les six cles, dans l'ordre du programme : le sprint, puis les haies. L'ordre
+ * n'est pas decide ici — les cles entieres passent devant les autres dans un
+ * objet JavaScript —, et c'est celui qu'on veut.
+ */
 export const CLES = Object.keys(EPREUVES);
+
+/** Les epreuves d'un jeu, dans l'ordre du programme. */
+export const CLES_DU_JEU = {
+  sprinter: CLES.filter(c => EPREUVES[c].jeu === 'sprinter'),
+  hurdlers: CLES.filter(c => EPREUVES[c].jeu === 'hurdlers'),
+};
 
 export function epreuve(cle) {
   return EPREUVES[String(cle)] || null;
@@ -145,7 +164,8 @@ export function estDiscipline(cle) {
 }
 
 /**
- * Les disciplines qu'un ecran peut proposer : les trois epreuves seules.
+ * Les disciplines qu'un ecran peut proposer : les epreuves seules, les six
+ * des deux jeux — chaque jeu n'en montre que les siennes.
  *
  * Les combines existent au classement — on y entre en courant un — mais ils ne
  * se proposent pas : sept boutons pour trois distances demanderaient au joueur

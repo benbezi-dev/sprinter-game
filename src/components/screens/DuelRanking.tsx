@@ -13,7 +13,7 @@ import {
 } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
 import { SERIE_OUVERTE } from '@/game/canal';
-import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt, jeuDe } from '@/game/jeux';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -159,7 +159,10 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
   // désignerait des gens qui ne courent pas.
   const barre = useBarreSelection(rows, discipline);
   // Mes divisions ailleurs, pour la ligne qui les rappelle sous la mienne.
-  const ailleurs = (board?.mes_epreuves || []).filter(r => r.epreuve !== discipline);
+  // Les autres disciplines DU MEME JEU : les haies n'ont rien a dire sous un
+  // classement de sprint.
+  const ailleurs = (board?.mes_epreuves || []).filter(r => r.epreuve !== discipline
+    && jeuDe(String(r.epreuve).split('+')[0]) === jeuDe(String(discipline).split('+')[0]));
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center
