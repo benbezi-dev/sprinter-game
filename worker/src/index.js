@@ -2240,6 +2240,7 @@ async function servir(request, env, ctx, porteur) {
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger,
                 c.races, c.owner_name,
                 'challenger' AS role
            FROM duel_results r
@@ -2250,6 +2251,7 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger,
                 c.races, c.owner_name,
                 'challenger' AS role
            FROM duel_results r
@@ -2264,6 +2266,7 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger,
                 c.races, c.owner_name,
                 'opponent' AS role
            FROM duel_results r
@@ -2290,6 +2293,18 @@ async function servir(request, env, ctx, porteur) {
           // 'challenger' : c'est celui qui a lance qui l'emporte.
           issue: r.outcome,
           lp: r.role === 'challenger' ? (r.lp_challenger ?? 0) : (r.lp_opponent ?? 0),
+          // La serie telle qu'elle etait A CE DUEL-CI, et non celle du moment.
+          // Elle ne part qu'a celui qui a lance : ce sont ses deux nombres a
+          // lui, figes sur la rencontre. Celui qui releve les a deja recus a
+          // l'arrivee, dans la reponse du duel.
+          //
+          // Absentes sur les rencontres d'avant ces colonnes : `undefined`
+          // plutot que zero, pour que l'ecran sache se taire au lieu
+          // d'annoncer une serie de zero a quelqu'un qui en avait une.
+          serie: r.role === 'challenger' && r.serie_challenger != null
+            ? r.serie_challenger : undefined,
+          serie_avant: r.role === 'challenger' && r.serie_avant_challenger != null
+            ? r.serie_avant_challenger : undefined,
           mon_ms: r.role === 'challenger' ? r.challenger_ms : r.opponent_ms,
           son_ms: r.role === 'challenger' ? r.opponent_ms : r.challenger_ms,
           // Le mot ne part qu'a celui a qui il est destine : le perdant.

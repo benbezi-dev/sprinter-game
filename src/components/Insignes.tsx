@@ -220,6 +220,50 @@ export function palierDeSerie(serie?: number | null) {
   return p;
 }
 
+/**
+ * Le dessin seul : le corps de la flamme, et son coeur plus clair.
+ *
+ * Deux flammes l'une dans l'autre. Une seule couleur pleine faisait une
+ * goutte — c'est le coeur qui donne la lecture « ca brule » a douze pixels.
+ *
+ * `eteinte` la passe en gris sans halo : c'est la meme forme, et c'est
+ * justement ce qu'il faut. Une flamme eteinte doit se reconnaitre comme la
+ * flamme qu'on vient de perdre, pas comme un autre symbole.
+ */
+function Dessin({ px, p, ombre = 0, eteinte = false }: {
+  px: number; p: { corps: string; coeur: string; halo: number };
+  ombre?: number; eteinte?: boolean;
+}) {
+  const halo = Math.round(p.halo * 255).toString(16).padStart(2, '0');
+  return (
+    <span className="relative inline-block shrink-0"
+          style={{ width: px, height: px }} aria-hidden>
+      <IconeFlamme size={px} fill={p.corps} stroke={p.corps} strokeWidth={1.6}
+                   style={eteinte ? { opacity: 0.65 }
+                        : { filter: `drop-shadow(0 0 ${ombre}px ${p.corps}${halo})` }} />
+      <IconeFlamme size={px * 0.52} fill={p.coeur} stroke={p.coeur} strokeWidth={2}
+                   className="absolute"
+                   style={{ left: px * 0.24, top: px * 0.40, opacity: eteinte ? 0.65 : 1 }} />
+    </span>
+  );
+}
+
+/** Le gris d'une flamme qui ne brule pas : celle qu'on approche, celle qui casse. */
+const CENDRE = { corps: '#475569', coeur: '#64748B', halo: 0 };
+
+/**
+ * La serie en cours, a cote du nom : COMBO ×5.
+ *
+ * SOBRE PAR CONSTRUCTION. Ni cadre ni fond : la ligne du classement porte deja
+ * un drapeau, un ecusson, une medaille, un bilan et une fleche de mouvement —
+ * une forme de plus et plus rien ne se detache. Ce qui rend le combo visible
+ * n'est pas un encadre, c'est sa couleur : elle est la seule tache rouge,
+ * orange ou violette d'une ligne par ailleurs jaune et grise.
+ *
+ * Le nombre ne s'ecrit plus seul. « 5 » a cote d'un dessin demandait de
+ * deviner de quoi on parlait ; « COMBO ×5 » se lit sans legende, dans les deux
+ * langues, et dit au passage que le compteur monte.
+ */
 export function Flamme({ serie, taille = 'petit', className = '' }: {
   serie?: number | null; taille?: 'petit' | 'grand'; className?: string;
 }) {
@@ -228,28 +272,97 @@ export function Flamme({ serie, taille = 'petit', className = '' }: {
   const n = Number(serie);
   const { N } = SprinterApp;
   const petit = taille === 'petit';
-  const px = petit ? 13 : 17;
-  const halo = Math.round(p.halo * 255).toString(16).padStart(2, '0');
-  // Le nombre accompagne toujours le dessin. Sans lui, la couleur devrait etre
-  // apprise pour vouloir dire quelque chose, et quelqu'un qui distingue mal le
-  // rouge de l'orange ne lirait rien du tout.
+  const px = petit ? 12 : 16;
   return (
-    <span className={`shrink-0 inline-flex items-center gap-1 font-bold tabular-nums
+    <span className={`shrink-0 inline-flex items-center gap-1.5 font-mono font-bold
+                      tracking-widest tabular-nums whitespace-nowrap
                       ${petit ? 'text-[9px]' : 'text-[11px]'} ${className}`}
           style={{ color: p.corps }}
           title={N.t('serie_titre', { n })} aria-label={N.t('serie_titre', { n })}>
-      {/* Deux flammes l'une dans l'autre : le corps, et le coeur plus clair
-          pose a sa base. Une seule couleur pleine faisait une goutte — c'est
-          le coeur qui donne la lecture « ca brule » a treize pixels. */}
-      <span className="relative inline-block shrink-0"
-            style={{ width: px, height: px }} aria-hidden>
-        <IconeFlamme size={px} fill={p.corps} stroke={p.corps} strokeWidth={1.6}
-                     style={{ filter: `drop-shadow(0 0 ${petit ? 3 : 5}px ${p.corps}${halo})` }} />
-        <IconeFlamme size={px * 0.52} fill={p.coeur} stroke={p.coeur} strokeWidth={2}
-                     className="absolute"
-                     style={{ left: px * 0.24, top: px * 0.40 }} />
-      </span>
-      {n}
+      <Dessin px={px} p={p} ombre={petit ? 3 : 5} />
+      {N.t('serie_combo', { n })}
+    </span>
+  );
+}
+
+/**
+ * A une ou deux victoires du seuil : la flamme en cendre, et ce qui reste.
+ *
+ * C'est le ressort entier de la chose. Un palier qu'on ne voit qu'une fois
+ * atteint ne fait jouer personne ; celui qu'on voit approcher, si — et la
+ * donnee est deja la, il n'y avait qu'a la dire.
+ *
+ * Elle ne se montre QUE sur sa propre ligne, et sur l'ecran de fin de duel.
+ * Repetee sur les cinq cents lignes du classement, ce serait cinq cents
+ * comptes a rebours qui ne regardent pas celui qui lit.
+ */
+export function Approche({ serie, className = '' }: {
+  serie?: number | null; className?: string;
+}) {
+  const n = Number(serie) || 0;
+  if (n < SERIE_MIN - 2 || n >= SERIE_MIN) return null;
+  const reste = SERIE_MIN - n;
+  const { N } = SprinterApp;
+  return (
+    <span className={`shrink-0 inline-flex items-center gap-1.5 font-mono font-bold
+                      tracking-widest tabular-nums whitespace-nowrap text-[9px]
+                      text-muted-foreground ${className}`}>
+      <Dessin px={12} p={CENDRE} eteinte />
+      ×{n} · {N.t('serie_approche', { n: reste })}
+    </span>
+  );
+}
+
+/**
+ * La serie qui vient de casser : COMBO BREAK ×12.
+ *
+ * Le terme est celui des bornes de combat, et il dit exactement ce qui se
+ * passe. En rouge, et c'est la seule fois ou la serie hausse le ton : elle
+ * vient de couter douze victoires, ce n'est pas le moment de chuchoter.
+ *
+ * `serie` est ici celle d'AVANT le duel — le nombre qu'on avait, pas celui
+ * qui reste (zero, et qui ne raconte rien).
+ */
+export function ComboBreak({ serie, className = '' }: {
+  serie?: number | null; className?: string;
+}) {
+  const n = Number(serie) || 0;
+  if (n < SERIE_MIN) return null;
+  const { N } = SprinterApp;
+  return (
+    <span className={`shrink-0 inline-flex items-center gap-1.5 font-mono font-bold
+                      tracking-widest tabular-nums whitespace-nowrap text-[10px]
+                      text-destructive ${className}`}
+          aria-label={N.t('serie_eteinte', { n })}>
+      <Dessin px={13} p={CENDRE} eteinte />
+      {N.t('serie_eteinte', { n })}
+    </span>
+  );
+}
+
+/**
+ * La plus longue serie jamais tenue : BEST 14.
+ *
+ * `serie_max` etait compte, range et renvoye par le serveur depuis le premier
+ * jour — et affiche nulle part. Il vaut pourtant exactement ce que la serie en
+ * cours ne vaut pas : il ne s'efface jamais. C'est ce qui reste quand la
+ * flamme s'eteint, et la seule raison de ne pas vivre le COMBO BREAK comme une
+ * ardoise remise a zero.
+ *
+ * En gris, et seulement quand il depasse la serie du moment : « BEST 5 » a
+ * cote de « COMBO ×5 » repeterait le meme nombre deux fois.
+ */
+export function MeilleureSerie({ max, serie, className = '' }: {
+  max?: number | null; serie?: number | null; className?: string;
+}) {
+  const m = Number(max) || 0;
+  if (m < SERIE_MIN || m <= (Number(serie) || 0)) return null;
+  const { N } = SprinterApp;
+  return (
+    <span className={`shrink-0 font-mono font-bold tracking-widest tabular-nums
+                      text-[9px] text-muted-foreground/70 ${className}`}
+          aria-label={N.t('serie_best_a11y', { n: m })}>
+      {N.t('serie_best', { n: m })}
     </span>
   );
 }

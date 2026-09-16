@@ -16,13 +16,13 @@ import {
 import { noterDefi } from '@/game/journal-defis';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
-import { nomDuRang } from '@/components/Insignes';
+import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
-import { RECOMMENCER_OUVERT } from '@/game/canal';
+import { RECOMMENCER_OUVERT, SERIE_OUVERTE } from '@/game/canal';
 import { verrouDeReprise, fauxDepartEstUneDefaite } from '@/game/reprise';
 import { useTenirDansLEcran } from '@/hooks/use-tenir-dans-lecran';
 import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
@@ -908,6 +908,28 @@ export function OneShotEndScreen() {
                             e: duel.epreuve ? nomDiscipline(duel.epreuve) : disciplineCourue,
                           })}
                         </span>
+                      )}
+                      {/* LE COMBO, ici et pas seulement au classement.
+                          C'est le seul instant ou il se passe quelque chose :
+                          il s'allume, il monte d'un cran, ou il casse. Vu
+                          uniquement sur une ligne de classement qu'il faut
+                          aller ouvrir, un palier atteint ne se remarque
+                          jamais — et un palier perdu encore moins.
+
+                          Trois etats qui s'excluent, et l'ordre des conditions
+                          les separe : une serie a zero APRES en avoir eu une
+                          est une casse ; une serie a zero apres zero n'est
+                          rien du tout, et ne doit rien afficher. C'est pour
+                          cela que le serveur rend les deux nombres. */}
+                      {SERIE_OUVERTE && (
+                        (duel.serie ?? 0) >= 1 ? (
+                          <span className="flex items-center gap-2">
+                            <Flamme serie={duel.serie} taille="grand" />
+                            <Approche serie={duel.serie} />
+                          </span>
+                        ) : (
+                          <ComboBreak serie={duel.serie_avant} />
+                        )
                       )}
                     </div>
                   )}

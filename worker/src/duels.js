@@ -195,6 +195,20 @@ export async function ensureDuelTables(db) {
     // zero une fois la onzieme perdue.
     `ALTER TABLE duel_players ADD COLUMN serie INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE duel_players ADD COLUMN serie_max INTEGER NOT NULL DEFAULT 0`,
+    // LA SERIE DE CELUI QUI A LANCE, apres ce duel et juste avant.
+    //
+    // Sur la rencontre, et pas seulement sur sa ligne de classement, parce
+    // qu'il apprend son duel APRES COUP — parfois des jours plus tard, et
+    // souvent apres en avoir joue d'autres. Sa serie du moment ne dirait alors
+    // rien de ce duel-ci : elle a bouge depuis. Les deux nombres figes ici
+    // sont les seuls qui permettent de lui annoncer « ton combo s'allume » ou
+    // « il casse » avec ce qui s'est vraiment passe a cet instant.
+    //
+    // Rien de tel pour celui qui releve : il est devant son ecran a l'arrivee,
+    // le serveur lui rend les deux nombres dans la reponse du duel. Les garder
+    // une seconde fois ici ne servirait personne.
+    `ALTER TABLE duel_results ADD COLUMN serie_challenger INTEGER`,
+    `ALTER TABLE duel_results ADD COLUMN serie_avant_challenger INTEGER`,
     // SUR QUOI la rencontre s'est jouee, donc quel classement elle deplace.
     // Sans valeur par defaut, volontairement : une rencontre d'avant les
     // disciplines doit se reconnaitre a son absence, pour que le recalcul
@@ -461,9 +475,11 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
   ];
   if (id) {
     ecritures.push(db.prepare(
-      `UPDATE duel_results SET lp_challenger = ?, lp_opponent = ?
+      `UPDATE duel_results SET lp_challenger = ?, lp_opponent = ?,
+              serie_challenger = ?, serie_avant_challenger = ?
         WHERE challenge_id = ? AND opponent_key = ?`
-    ).bind(apres.lanceur.delta_lp, apres.releveur.delta_lp, id, moiKey));
+    ).bind(apres.lanceur.delta_lp, apres.releveur.delta_lp,
+           series[luiKey], lanceur.serie, id, moiKey));
   }
   await db.batch(ecritures);
 
@@ -647,6 +663,11 @@ export async function recalculerClassement(db) {
     // d'enchainer douze duels. Le rejeu la retrouve pourtant sans rien
     // deviner : l'historique donne les issues dans l'ordre, et c'est tout ce
     // dont la regle a besoin.
+    // Ce qu'elle valait AVANT est lu ici, avant que l'etat ne soit ecrase :
+    // c'est ce nombre-la qui repart sur la rencontre, et le relire apres
+    // l'affectation rendrait « ta serie s'eteint » avec la valeur d'apres,
+    // c'est-a-dire zero de chaque cote.
+    const serieAvantLanceur = lanceur.serie;
     const serieLanceur = serieApresDuel(lanceur.serie, d.issue, d.issue === 'challenger');
     const serieReleveur = serieApresDuel(releveur.serie, d.issue, d.issue === 'opponent');
 
@@ -676,9 +697,11 @@ export async function recalculerClassement(db) {
     // cela, un joueur revenant apres un recalcul lirait un gain qui n'a plus
     // de rapport avec le classement qu'il a sous les yeux.
     surRencontre.push(db.prepare(
-      `UPDATE duel_results SET lp_challenger = ?, lp_opponent = ?
+      `UPDATE duel_results SET lp_challenger = ?, lp_opponent = ?,
+              serie_challenger = ?, serie_avant_challenger = ?
         WHERE challenge_id = ? AND opponent_key = ?`
-    ).bind(apres.lanceur.delta_lp, apres.releveur.delta_lp, d.id, d.moi));
+    ).bind(apres.lanceur.delta_lp, apres.releveur.delta_lp,
+           serieLanceur, serieAvantLanceur, d.id, d.moi));
     joues++;
   }
 

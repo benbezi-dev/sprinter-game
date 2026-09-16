@@ -257,6 +257,19 @@ export type MonDuel = {
   lp: number;
   mon_ms: number;
   son_ms: number;
+  /**
+   * Ma serie apres CE duel-ci, et ce qu'elle valait juste avant.
+   *
+   * Figees sur la rencontre par le serveur, et non lues sur ma ligne de
+   * classement : j'apprends ce duel apres coup, parfois des jours plus tard et
+   * souvent apres en avoir joue d'autres. Ma serie du moment ne dirait alors
+   * rien de celui-ci.
+   *
+   * Absentes sur les duels d'avant ces colonnes : l'ecran se tait plutot que
+   * d'annoncer un combo de zero a quelqu'un qui en avait un.
+   */
+  serie?: number;
+  serie_avant?: number;
   /** Le mot du vainqueur, s'il en a laisse un. Nul pour le vainqueur lui-meme. */
   mot?: string | null;
   /** Sa voix, encodee. Effacee du serveur des que cette fenetre se ferme. */

@@ -8,7 +8,9 @@ import {
   type DuelBoard, type DuelRow, type MonRang,
 } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
-import { Drapeau, Medaille, Ecusson, Flamme, nomDuRang } from '@/components/Insignes';
+import {
+  Drapeau, Medaille, Ecusson, Flamme, Approche, MeilleureSerie, nomDuRang,
+} from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
 import { SERIE_OUVERTE } from '@/game/canal';
 
@@ -245,7 +247,16 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                   {N.ord(board.moi.rank)}
                 </span>
                 <span className="font-bold text-primary truncate">{N.t('duel_you')}</span>
-                {SERIE_OUVERTE && <Flamme serie={board.moi.serie} taille="grand" />}
+                {/* Sur SA ligne, et seulement la : le combo, ce qu'il reste
+                    avant de l'allumer quand on en est a une ou deux victoires,
+                    et le record a cote. Les trois sur cinq cents lignes
+                    seraient cinq cents comptes a rebours qui ne regardent
+                    personne ; sur la sienne, c'est ce qu'on vient chercher. */}
+                {SERIE_OUVERTE && <>
+                  <Flamme serie={board.moi.serie} taille="grand" />
+                  <Approche serie={board.moi.serie} />
+                  <MeilleureSerie max={board.moi.serie_max} serie={board.moi.serie} />
+                </>}
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <Mouvement move={board.moi.move || 0} reduit={reduit} />
@@ -368,11 +379,13 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                               ${moi ? 'text-primary' : 'text-foreground'}`}>
                               {r.name}
                             </span>
-                            {/* La flamme reste sur la ligne du pseudo, la ou
-                                la medaille n'a pas pu rester : elle tient en
-                                une vingtaine de pixels, et elle ne veut rien
-                                dire ailleurs. Une serie se lit A COTE DU NOM,
-                                sinon c'est une statistique de plus. */}
+                            {/* Le combo reste sur la ligne du pseudo, la ou la
+                                medaille n'a pas pu rester : une serie se lit A
+                                COTE DU NOM, sinon c'est une statistique de
+                                plus. Il y tient parce qu'il n'a ni cadre ni
+                                fond — c'est sa couleur qui le detache, pas une
+                                forme de plus sur une ligne qui en porte
+                                deja cinq. */}
                             {SERIE_OUVERTE && <Flamme serie={r.serie} />}
                           </span>
                           <span className="flex items-center gap-1.5 min-w-0">

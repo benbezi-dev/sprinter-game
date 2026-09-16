@@ -852,12 +852,31 @@
     duel_regle:      ['relever un défi rapporte plus que le lancer : le chrono est déjà posé, et tu sais ce que tu dois battre.',
                       'answering a challenge pays more than sending one: the time is already on the board, and you know what to beat.'],
     duel_record:     ['{v}V · {d}D · {n}N', '{v}W · {d}L · {n}D'],
-    // La serie de victoires. Le nombre est deja a l'ecran a cote de la
-    // flamme : ces textes sont ce que lisent l'infobulle et le lecteur
-    // d'ecran, pour qui la couleur ne dit rien.
+    /* LA SERIE DE VICTOIRES, dans le vocabulaire d'arcade.
+     *
+     * Les quatre textes qui suivent sont les SEULS du jeu identiques en
+     * francais et en anglais, et c'est voulu. COMBO se lit pareil des deux
+     * cotes — c'est le mot que tout joueur a appris devant une borne, sans
+     * qu'on le lui traduise — et le « × » dit multiplicateur sans qu'on ait a
+     * l'ecrire. Les traduire aurait donne « SERIE » d'un cote et « STREAK »
+     * de l'autre : deux mots corrects, aucun des deux arcade.
+     *
+     * `serie_titre`, lui, reste traduit : ce n'est pas ce qui s'affiche, c'est
+     * ce que lisent l'infobulle et le lecteur d'ecran — a qui « COMBO ×5 » ne
+     * dirait rien, et pour qui la couleur de la flamme ne dit rien non plus.
+     */
     serie_titre:     ['{n} victoires d’affilée', '{n} wins in a row'],
-    serie_allumee:   ['SÉRIE DE {n}', '{n} IN A ROW'],
-    serie_eteinte:   ['série de {n} interrompue', '{n}-win streak broken'],
+    /** Au classement, a cote du nom : la forme la plus courte. */
+    serie_combo:     ['COMBO ×{n}', 'COMBO ×{n}'],
+    /** En fin de duel, ou la place existe pour dire de quoi il s'agit. */
+    serie_allumee:   ['COMBO {n} WIN', 'COMBO {n} WIN'],
+    /** Quand elle casse. Le terme consacre, et il ne se traduit pas non plus. */
+    serie_eteinte:   ['COMBO BREAK ×{n}', 'COMBO BREAK ×{n}'],
+    /** A une ou deux victoires du seuil : ce qui reste a faire. */
+    serie_approche:  ['{n} AVANT COMBO', '{n} TO COMBO'],
+    /** La plus longue jamais tenue, gardee a cote de celle en cours. */
+    serie_best:      ['BEST {n}', 'BEST {n}'],
+    serie_best_a11y: ['meilleure série : {n}', 'best streak: {n}'],
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],

@@ -3,6 +3,8 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { Swords, ChevronRight, Loader2 } from 'lucide-react';
+import { Flamme, Approche, ComboBreak } from '@/components/Insignes';
+import { SERIE_OUVERTE } from '@/game/canal';
 import {
   fetchMesDuels, marquerDuelsVus, fantomeDuDuel, DUELS_OUVERTS, type MonDuel,
 } from '@/game/duels';
@@ -241,6 +243,26 @@ export function DuelResultPopup() {
                 {duel.lp > 0 ? '+' : ''}{duel.lp}
                 <span className="text-xs font-normal ml-1 text-muted-foreground">{N.t('duel_lp')}</span>
               </span>
+
+              {/* LE COMBO. Celui qui a lance ce defi etait parti : cette
+                  annonce est le seul endroit ou il apprend que sa serie s'est
+                  allongee, ou qu'elle vient de casser.
+
+                  Les deux nombres viennent de la rencontre elle-meme, figes au
+                  moment ou elle s'est jouee — pas de sa ligne de classement,
+                  qui a pu bouger depuis. Sans `serie_avant`, un zero ne se
+                  distinguerait pas d'un autre : zero apres douze est une
+                  casse, zero apres zero n'est rien. */}
+              {SERIE_OUVERTE && duel.serie != null && (
+                (duel.serie ?? 0) >= 1 ? (
+                  <span className="flex items-center gap-2">
+                    <Flamme serie={duel.serie} taille="grand" />
+                    <Approche serie={duel.serie} />
+                  </span>
+                ) : (
+                  <ComboBreak serie={duel.serie_avant} />
+                )
+              )}
 
               {/* L'epreuve, et le nombre de resultats qui attendent derriere
                   celui-ci. Il vivait sous les chronos ; il tient avec le
