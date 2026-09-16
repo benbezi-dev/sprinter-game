@@ -877,6 +877,11 @@
     /** La plus longue jamais tenue, gardee a cote de celle en cours. */
     serie_best:      ['BEST {n}', 'BEST {n}'],
     serie_best_a11y: ['meilleure série : {n}', 'best streak: {n}'],
+    /** Le sursis, dans les derniers jours : « COMBO ×9 · 2 J ». */
+    serie_reste:     ['{n} J', '{n} D'],
+    serie_reste_1:   ['DERNIER JOUR', 'LAST DAY'],
+    serie_reste_a11y: ['le combo s’éteint dans {n} jours sans duel',
+                       'combo ends in {n} days without a duel'],
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],

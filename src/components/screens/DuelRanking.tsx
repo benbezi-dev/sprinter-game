@@ -9,7 +9,7 @@ import {
 } from '@/game/duels';
 import { getSavedName } from '@/game/leaderboard';
 import {
-  Drapeau, Medaille, Ecusson, Flamme, Approche, MeilleureSerie, nomDuRang,
+  Drapeau, Medaille, Ecusson, Flamme, Approche, Sursis, MeilleureSerie, nomDuRang,
 } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
 import { SERIE_OUVERTE } from '@/game/canal';
@@ -254,6 +254,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                     personne ; sur la sienne, c'est ce qu'on vient chercher. */}
                 {SERIE_OUVERTE && <>
                   <Flamme serie={board.moi.serie} taille="grand" />
+                  <Sursis fin={board.moi.serie_fin} />
                   <Approche serie={board.moi.serie} />
                   <MeilleureSerie max={board.moi.serie_max} serie={board.moi.serie} />
                 </>}

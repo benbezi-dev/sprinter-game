@@ -103,6 +103,18 @@ export type DuelRow = {
    */
   serie?: number;
   serie_max?: number;
+  /**
+   * Quand cette serie s'eteindra faute de duel, en millisecondes.
+   *
+   * Le serveur rend une DATE, pas une duree : « huit jours » est sa regle, et
+   * la recopier ici en ferait une regle qui vit a deux endroits — celui des
+   * deux qui changerait seul ferait mentir l'autre. Le jeu n'a qu'a comparer
+   * cette date a l'heure qu'il est.
+   *
+   * Absente quand il n'y a pas de serie en cours, ou sur une ligne d'avant
+   * cette colonne.
+   */
+  serie_fin?: number;
   rank: number;
   /** Places gagnees depuis la derniere consultation. Positif = montee. */
   move?: number;

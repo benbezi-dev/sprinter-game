@@ -195,6 +195,15 @@ export async function ensureDuelTables(db) {
     // zero une fois la onzieme perdue.
     `ALTER TABLE duel_players ADD COLUMN serie INTEGER NOT NULL DEFAULT 0`,
     `ALTER TABLE duel_players ADD COLUMN serie_max INTEGER NOT NULL DEFAULT 0`,
+    // Le dernier duel qui a fait bouger cette serie. C'est l'horloge du repos
+    // — voir SERIE_REPOS_MS.
+    //
+    // Une colonne a elle, alors que `updated_at` existe deja sur la ligne :
+    // `updated_at` ment pour cet usage. Il bouge quand on lance un defi que
+    // personne n'a releve, et le recalcul le repose a l'instant present sur
+    // TOUTES les lignes — apres un recalcul, plus une seule serie ne serait
+    // jamais au repos.
+    `ALTER TABLE duel_players ADD COLUMN serie_at INTEGER`,
     // LA SERIE DE CELUI QUI A LANCE, apres ce duel et juste avant.
     //
     // Sur la rencontre, et pas seulement sur sa ligne de classement, parce
@@ -295,7 +304,7 @@ export async function duelBoard(db, epreuve = DISCIPLINE_DEFAUT) {
   const ep = disciplineValide(epreuve);
   const { results } = await db.prepare(
     `SELECT name, mmr, lp, palier, wins, losses, draws, launched, received,
-            last_delta, serie, serie_max
+            last_delta, serie, serie_max, serie_at
        FROM duel_players WHERE epreuve = ? AND wins + losses + draws > 0
       ORDER BY ${ordreClassement()} LIMIT 500`
   ).bind(ep).all();
@@ -308,9 +317,20 @@ export async function duelBoard(db, epreuve = DISCIPLINE_DEFAUT) {
   // cacher a l'ecran est la seule facon que ce soit vrai — sinon il reste
   // lisible dans les outils du navigateur, et toute la couche visible devient
   // un habillage qu'on peut retirer d'un clic droit.
-  return (results || []).map(({ mmr, ...r }, i) => ({
-    ...r, epreuve: ep, rank: i + 1, ...rangDe(r.palier),
-  }));
+  //
+  // La serie part deja eteinte quand elle est au repos, et avec la date a
+  // laquelle elle expirera quand elle brule encore. Le jeu n'a donc aucune
+  // regle a connaitre : il compare une date a l'heure qu'il est. Recopier
+  // « trois semaines » cote client aurait fait vivre la meme regle a deux
+  // endroits, et un jour l'un des deux aurait change seul.
+  const maintenant = Date.now();
+  return (results || []).map(({ mmr, serie_at, ...r }, i) => {
+    const serie = serieVivante(r.serie, serie_at, maintenant);
+    return {
+      ...r, serie, epreuve: ep, rank: i + 1, ...rangDe(r.palier),
+      serie_fin: serie > 0 && serie_at ? serie_at + SERIE_REPOS_MS : undefined,
+    };
+  });
 }
 
 /**
@@ -389,14 +409,18 @@ export async function appliquerDuel(db, r) {
  *  sens meme d'un classement par discipline. */
 async function etatDe(db, key, epreuve) {
   const r = await db.prepare(
-    `SELECT mmr, lp, palier, bouclier, wins, losses, draws, serie, serie_max
+    `SELECT mmr, lp, palier, bouclier, wins, losses, draws, serie, serie_max, serie_at
        FROM duel_players WHERE name_key = ? AND epreuve = ?`).bind(key, epreuve).first();
   return {
     mmr: r?.mmr ?? MMR_DEPART,
     lp: r?.lp ?? 0,
     palier: r?.palier ?? 0,
     bouclier: r?.bouclier ?? 0,
-    serie: r?.serie ?? 0,
+    // Deja passee au repos : un joueur qui revient apres cinq semaines
+    // repart de un, et non de treize. La regle doit valoir ICI et pas
+    // seulement a l'affichage — sinon le classement lui montre zero pendant
+    // que le serveur, lui, continue de compter en douce.
+    serie: serieVivante(r?.serie, r?.serie_at),
     serie_max: r?.serie_max ?? 0,
     // Le K depend de l'experience, et l'experience est le nombre de duels
     // TRANCHES. Les defis lances sans reponse n'apprennent rien sur personne.
@@ -406,6 +430,68 @@ async function etatDe(db, key, epreuve) {
     // une distance qu'il decouvre le laisserait des mois au mauvais etage.
     duels: (r?.wins ?? 0) + (r?.losses ?? 0) + (r?.draws ?? 0),
   };
+}
+
+/**
+ * COMBIEN DE TEMPS UNE SERIE SURVIT SANS DUEL : huit jours.
+ *
+ * Une serie dit « en ce moment, personne ne me bat ». Gardee indefiniment,
+ * elle finit par dire autre chose : « un jour, personne ne me battait » — et
+ * elle est alors mieux racontee par `serie_max`, qui existe pour ca et ne
+ * s'efface jamais. Le repos n'efface donc que la serie EN COURS ; le record
+ * reste.
+ *
+ * POURQUOI HUIT, ET NON TROIS SEMAINES. Le chiffre sort des duels joues, pas
+ * d'une intuition. Sur les rencontres en base, l'ecart entre deux duels d'un
+ * meme joueur sur une meme distance est de QUARANTE-TROIS MINUTES en mediane —
+ * on joue par rafales — de 2,7 jours au neuvieme decile, et le plus grand
+ * ecart jamais observe chez quelqu'un qui est revenu est de 4,4 jours. Une
+ * limite a vingt et un jours ne coupait donc rien du tout : aucune serie
+ * n'aurait jamais expire, et la regle n'aurait existe que sur le papier.
+ *
+ * Huit jours tient les deux bouts :
+ *
+ *   — la semaine est le rythme reel des gens. Qui joue le samedi doit
+ *     retrouver sa flamme le samedi suivant ; a sept jours pile, une session
+ *     commencee une heure plus tard l'aurait eteinte, d'ou le jour de
+ *     battement. C'est la seule raison du huitieme jour, et elle suffit ;
+ *   — plus du double du plus long retour observe (4,4 j) : personne parmi
+ *     ceux qui reviennent vraiment ne perd sa serie ;
+ *   — assez court pour mordre. Sur l'etat actuel de la base, la moitie des
+ *     series en cours s'eteignent — ce qui est exactement ce qu'on veut dire
+ *     par « en ce moment ».
+ *
+ * Et une flamme qui expire dans deux jours est une raison de revenir jouer ce
+ * week-end. A vingt et un jours, personne ne se souvient qu'il en a une.
+ *
+ * L'horloge est celle de la DISCIPLINE, pas du joueur. Une serie vit sur une
+ * ligne (joueur, distance) et nulle part ailleurs : courir un 200 m ne dit
+ * rien de la forme sur 100 m, et rallumer l'une par l'autre ferait tenir une
+ * flamme de 400 m pendant des mois a quelqu'un qui ne court que le 100.
+ */
+export const SERIE_REPOS_MS = 8 * 24 * 60 * 60 * 1000;
+
+
+/**
+ * La serie telle qu'elle vaut AUJOURD'HUI : celle-ci, ou zero si le dernier
+ * duel de cette discipline date de plus de trois semaines.
+ *
+ * Une regle appliquee A LA LECTURE, et non par un balayage nocturne. Le
+ * balayage aurait demande de parcourir toutes les lignes tous les jours pour
+ * n'en changer presque aucune, et surtout il aurait fait dependre le resultat
+ * de l'heure a laquelle il a tourne — une serie eteinte par un cron en retard
+ * est une serie qui vaut encore douze pour qui la lit avant. Ici, la meme
+ * ligne lue au meme instant vaut la meme chose partout, et il n'y a rien a
+ * rattraper si le serveur dort.
+ *
+ * `at` absent : les lignes d'avant cette colonne n'ont pas de date. On les
+ * laisse vivre plutot que de les eteindre toutes d'un coup — le premier duel
+ * qui suit leur en donnera une.
+ */
+export function serieVivante(serie, at, maintenant = Date.now()) {
+  const n = Number(serie) || 0;
+  if (n <= 0 || !at) return n;
+  return (maintenant - Number(at)) > SERIE_REPOS_MS ? 0 : n;
 }
 
 /**
@@ -455,15 +541,20 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
   };
   const maxAvant = { [luiKey]: lanceur.serie_max, [moiKey]: releveur.serie_max };
 
+  // L'horloge du repos repart des DEUX cotes, et pour les deux issues : ce qui
+  // la remet a zero est d'avoir joue, pas d'avoir gagne. Le perdant dont la
+  // serie tombe a zero n'en a pas besoin ; celui qui fait match nul garde la
+  // sienne, et elle doit repartir pour trois semaines comme les autres.
+  const quand = Date.now();
   const maj = (key, x, w, l, d, recu) => db.prepare(
     `UPDATE duel_players SET mmr = ?, lp = ?, palier = ?, bouclier = ?,
        wins = wins + ?, losses = losses + ?, draws = draws + ?,
        received = received + ?, last_delta = ?, serie = ?, serie_max = ?,
-       updated_at = ?
+       serie_at = ?, updated_at = ?
      WHERE name_key = ? AND epreuve = ?`
   ).bind(x.mmr, x.lp, x.palier, x.bouclier, w, l, d, recu,
          x.delta_lp, series[key], Math.max(maxAvant[key], series[key]),
-         Date.now(), key, ep);
+         quand, quand, key, ep);
 
   const ecritures = [
     maj(luiKey, apres.lanceur,
@@ -526,7 +617,7 @@ function etatNeuf(cle, nom, epreuve) {
     cle, epreuve, nom,
     mmr: MMR_DEPART, lp: 0, palier: 0, bouclier: 0,
     wins: 0, losses: 0, draws: 0, received: 0, last_delta: 0, updated_at: 0,
-    serie: 0, serie_max: 0,
+    serie: 0, serie_max: 0, serie_at: 0,
   };
 }
 
@@ -552,7 +643,8 @@ function epreuveDeLigne(d) {
  *  retrouver la discipline de celles d'avant les disciplines. */
 async function historique(db) {
   const colonnes = `r.challenge_id AS id, r.challenger_key AS lui,
-                    r.opponent_key AS moi, r.outcome AS issue, r.epreuve AS epreuve`;
+                    r.opponent_key AS moi, r.outcome AS issue, r.epreuve AS epreuve,
+                    r.created_at AS at`;
   const ordre = `ORDER BY r.created_at ASC, r.rowid ASC`;
   try {
     const { results } = await db.prepare(
@@ -667,9 +759,20 @@ export async function recalculerClassement(db) {
     // c'est ce nombre-la qui repart sur la rencontre, et le relire apres
     // l'affectation rendrait « ta serie s'eteint » avec la valeur d'apres,
     // c'est-a-dire zero de chaque cote.
-    const serieAvantLanceur = lanceur.serie;
-    const serieLanceur = serieApresDuel(lanceur.serie, d.issue, d.issue === 'challenger');
-    const serieReleveur = serieApresDuel(releveur.serie, d.issue, d.issue === 'opponent');
+    //
+    // Le repos se rejoue AVEC LES DATES DE L'HISTORIQUE, et non avec l'heure
+    // qu'il est : trois semaines sans duel entre deux rencontres de 2024 ont
+    // eteint la serie a l'epoque, et un recalcul qui l'ignorerait rendrait un
+    // classement different de celui que les joueurs ont vu passer. C'est toute
+    // la propriete du rejeu : deux executions, le meme resultat, et le meme
+    // que le direct.
+    const quand = Number(d.at) || 0;
+    const vivanteLanceur = serieVivante(lanceur.serie, lanceur.serie_at, quand);
+    const vivanteReleveur = serieVivante(releveur.serie, releveur.serie_at, quand);
+
+    const serieAvantLanceur = vivanteLanceur;
+    const serieLanceur = serieApresDuel(vivanteLanceur, d.issue, d.issue === 'challenger');
+    const serieReleveur = serieApresDuel(vivanteReleveur, d.issue, d.issue === 'opponent');
 
     Object.assign(lanceur, {
       mmr: apres.lanceur.mmr, lp: apres.lanceur.lp,
@@ -680,6 +783,7 @@ export async function recalculerClassement(db) {
       draws: lanceur.draws + (d.issue === 'draw' ? 1 : 0),
       serie: serieLanceur,
       serie_max: Math.max(lanceur.serie_max, serieLanceur),
+      serie_at: quand,
     });
     Object.assign(releveur, {
       mmr: apres.releveur.mmr, lp: apres.releveur.lp,
@@ -691,6 +795,7 @@ export async function recalculerClassement(db) {
       received: releveur.received + 1,
       serie: serieReleveur,
       serie_max: Math.max(releveur.serie_max, serieReleveur),
+      serie_at: quand,
     });
 
     // Les mouvements inscrits sur chaque rencontre sont refaits aussi : sans
@@ -721,11 +826,11 @@ export async function recalculerClassement(db) {
     ecritures.push(db.prepare(
       `INSERT INTO duel_players (name_key, epreuve, name, mmr, lp, palier, bouclier,
          wins, losses, draws, launched, received, last_delta, updated_at,
-         serie, serie_max)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         serie, serie_max, serie_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(e.cle, e.epreuve, e.nom, e.mmr, e.lp, e.palier, e.bouclier,
            e.wins, e.losses, e.draws, l, e.received, e.last_delta, e.updated_at,
-           e.serie, e.serie_max));
+           e.serie, e.serie_max, e.serie_at || null));
   }
   // Un defi lance sans reponse ne fait pas entrer au classement — le lanceur
   // n'a pas de duel derriere lui — mais son compteur l'attend le jour ou

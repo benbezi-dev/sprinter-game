@@ -341,6 +341,45 @@ export function ComboBreak({ serie, className = '' }: {
 }
 
 /**
+ * LE SURSIS : « 2 J » a cote du combo, quand il va s'eteindre faute de jouer.
+ *
+ * Une serie s'eteint apres huit jours sans duel sur la distance — c'est la
+ * regle du serveur, et lui seul la connait : il rend une DATE de fin, que
+ * voici comparee a l'heure qu'il est. Rien a recopier, donc rien a faire
+ * diverger.
+ *
+ * Pourquoi le dire. Une flamme qui disparait sans prevenir n'est pas une
+ * regle, c'est une panne : le joueur l'a vue rouge hier, elle n'est plus la
+ * ce matin, et rien a l'ecran ne lui apprendra jamais pourquoi. Prevenu trois
+ * jours avant, il a le temps d'y faire quelque chose — et une flamme qui
+ * expire ce week-end est une raison de revenir jouer.
+ *
+ * Trois jours, et pas plus : au-dela, le compte a rebours serait affiche en
+ * permanence et ne voudrait plus rien dire. Le dernier jour se dit en toutes
+ * lettres — « 1 J » est le moment ou on ne veut pas que le joueur compte.
+ */
+const ALERTE_MS = 3 * 24 * 60 * 60 * 1000;
+
+export function Sursis({ fin, className = '' }: {
+  fin?: number | null; className?: string;
+}) {
+  const t = Number(fin) || 0;
+  if (!t) return null;
+  const reste = t - Date.now();
+  if (reste <= 0 || reste > ALERTE_MS) return null;
+  const jours = Math.max(1, Math.ceil(reste / (24 * 60 * 60 * 1000)));
+  const { N } = SprinterApp;
+  return (
+    <span className={`shrink-0 font-mono font-bold tracking-widest tabular-nums
+                      text-[9px] text-amber-400/80 whitespace-nowrap ${className}`}
+          title={N.t('serie_reste_a11y', { n: jours })}
+          aria-label={N.t('serie_reste_a11y', { n: jours })}>
+      {jours <= 1 ? N.t('serie_reste_1') : N.t('serie_reste', { n: jours })}
+    </span>
+  );
+}
+
+/**
  * La plus longue serie jamais tenue : BEST 14.
  *
  * `serie_max` etait compte, range et renvoye par le serveur depuis le premier
