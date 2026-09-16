@@ -395,6 +395,32 @@ async function etatDe(db, key, epreuve) {
 }
 
 /**
+ * La serie de quelqu'un apres un duel : allongee d'un cran par une victoire,
+ * eteinte par une defaite, gardee telle quelle par un nul.
+ *
+ * La serie ne passe pas par le module de calcul, et c'est voulu : elle ne
+ * depend d'aucun MMR, d'aucun bareme et d'aucun palier — seulement de l'issue.
+ * La faire transiter par appliquerDuelAuClassement melangerait une regle qu'on
+ * peut relire en une ligne a celles qui demandent une feuille de calcul pour
+ * etre verifiees.
+ *
+ * Un nul la GARDE sans l'allonger. C'est une egalite a la milliseconde : elle
+ * ne prouve pas qu'on a battu quelqu'un, mais elle ne prouve pas non plus le
+ * contraire, et eteindre une serie de douze sur un chrono identique serait
+ * vecu comme une injustice.
+ *
+ * Elle vit ici, et non dans noterDuel, parce que DEUX chemins la calculent : le
+ * duel qui arrive, et le recalcul qui rejoue tout l'historique. Deux copies de
+ * cette ligne, c'est la certitude qu'un jour elles divergeront — et un joueur
+ * verrait sa flamme changer de hauteur au passage d'un recalcul.
+ */
+export function serieApresDuel(avant, issue, gagne) {
+  const n = Number(avant) || 0;
+  if (issue === 'draw') return n;
+  return gagne ? n + 1 : 0;
+}
+
+/**
  * Ecrit un duel dans les deux couches, sur le classement de sa discipline.
  *
  * Les deux joueurs sont lus AVANT d'ecrire l'un ou l'autre : la montee de
@@ -409,21 +435,9 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
   ]);
   const apres = appliquerDuelAuClassement({ lanceur, releveur, issue });
 
-  // La serie ne passe pas par le module de calcul, et c'est voulu : elle ne
-  // depend d'aucun MMR, d'aucun bareme et d'aucun palier — seulement de
-  // l'issue. La faire transiter par appliquerDuelAuClassement melangerait une
-  // regle qu'on peut relire en une ligne a celles qui demandent une feuille de
-  // calcul pour etre verifiees.
-  //
-  // Un nul la GARDE sans l'allonger. C'est une egalite a la milliseconde : elle
-  // ne prouve pas qu'on a battu quelqu'un, mais elle ne prouve pas non plus le
-  // contraire, et eteindre une serie de douze sur un chrono identique serait
-  // vecu comme une injustice.
-  const serieApres = (avant, gagne) =>
-    issue === 'draw' ? avant.serie : gagne ? avant.serie + 1 : 0;
   const series = {
-    [luiKey]: serieApres(lanceur, issue === 'challenger'),
-    [moiKey]: serieApres(releveur, issue === 'opponent'),
+    [luiKey]: serieApresDuel(lanceur.serie, issue, issue === 'challenger'),
+    [moiKey]: serieApresDuel(releveur.serie, issue, issue === 'opponent'),
   };
   const maxAvant = { [luiKey]: lanceur.serie_max, [moiKey]: releveur.serie_max };
 
@@ -496,6 +510,7 @@ function etatNeuf(cle, nom, epreuve) {
     cle, epreuve, nom,
     mmr: MMR_DEPART, lp: 0, palier: 0, bouclier: 0,
     wins: 0, losses: 0, draws: 0, received: 0, last_delta: 0, updated_at: 0,
+    serie: 0, serie_max: 0,
   };
 }
 
@@ -625,6 +640,16 @@ export async function recalculerClassement(db) {
       issue: d.issue,
     });
 
+    // La serie se rejoue comme le reste, et elle DOIT se rejouer ici. Elle ne
+    // l'a pas toujours fait : les lignes se reinserraient sans elle, la
+    // colonne retombait a son defaut, et chaque recalcul eteignait toutes les
+    // flammes du jeu d'un coup — y compris celle de quelqu'un qui venait
+    // d'enchainer douze duels. Le rejeu la retrouve pourtant sans rien
+    // deviner : l'historique donne les issues dans l'ordre, et c'est tout ce
+    // dont la regle a besoin.
+    const serieLanceur = serieApresDuel(lanceur.serie, d.issue, d.issue === 'challenger');
+    const serieReleveur = serieApresDuel(releveur.serie, d.issue, d.issue === 'opponent');
+
     Object.assign(lanceur, {
       mmr: apres.lanceur.mmr, lp: apres.lanceur.lp,
       palier: apres.lanceur.palier, bouclier: apres.lanceur.bouclier,
@@ -632,6 +657,8 @@ export async function recalculerClassement(db) {
       wins: lanceur.wins + (d.issue === 'challenger' ? 1 : 0),
       losses: lanceur.losses + (d.issue === 'opponent' ? 1 : 0),
       draws: lanceur.draws + (d.issue === 'draw' ? 1 : 0),
+      serie: serieLanceur,
+      serie_max: Math.max(lanceur.serie_max, serieLanceur),
     });
     Object.assign(releveur, {
       mmr: apres.releveur.mmr, lp: apres.releveur.lp,
@@ -641,6 +668,8 @@ export async function recalculerClassement(db) {
       losses: releveur.losses + (d.issue === 'challenger' ? 1 : 0),
       draws: releveur.draws + (d.issue === 'draw' ? 1 : 0),
       received: releveur.received + 1,
+      serie: serieReleveur,
+      serie_max: Math.max(releveur.serie_max, serieReleveur),
     });
 
     // Les mouvements inscrits sur chaque rencontre sont refaits aussi : sans
@@ -668,10 +697,12 @@ export async function recalculerClassement(db) {
     const l = lances ? ((lances.get(k) || {}).n || 0) : (anciensLances.get(k) || 0);
     ecritures.push(db.prepare(
       `INSERT INTO duel_players (name_key, epreuve, name, mmr, lp, palier, bouclier,
-         wins, losses, draws, launched, received, last_delta, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         wins, losses, draws, launched, received, last_delta, updated_at,
+         serie, serie_max)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(e.cle, e.epreuve, e.nom, e.mmr, e.lp, e.palier, e.bouclier,
-           e.wins, e.losses, e.draws, l, e.received, e.last_delta, e.updated_at));
+           e.wins, e.losses, e.draws, l, e.received, e.last_delta, e.updated_at,
+           e.serie, e.serie_max));
   }
   // Un defi lance sans reponse ne fait pas entrer au classement — le lanceur
   // n'a pas de duel derriere lui — mais son compteur l'attend le jour ou

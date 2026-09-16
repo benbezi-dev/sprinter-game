@@ -98,8 +98,8 @@ export type DuelRow = {
    * ramene a zero ; un nul la laisse ou elle est. `serie_max` garde la plus
    * longue jamais tenue, elle ne redescend jamais.
    *
-   * Le serveur la compte pour tout le monde ; c'est l'affichage qui est
-   * reserve au canal de test — voir SERIE_OUVERTE dans canal.ts.
+   * Le serveur la compte pour tout le monde, et le jeu la montre depuis le
+   * 16 septembre 2026 — voir SERIE_OUVERTE dans canal.ts.
    */
   serie?: number;
   serie_max?: number;

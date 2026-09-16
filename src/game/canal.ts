@@ -48,14 +48,23 @@ export const RELAIS_OUVERT = true;
 /**
  * La flamme des series de victoires, a cote du nom dans les duels.
  *
- * Nouvelle : elle commence la ou les deux precedentes ont commence, sur le
- * canal de test. Le serveur, lui, compte la serie de TOUT LE MONDE des
- * maintenant — c'est delibere. Un compteur qu'on n'allume qu'au moment de
- * montrer la flamme demarrerait a zero pour tous le jour de l'ouverture, et
- * effacerait les series en cours ; en le tenant des maintenant, ouvrir se
- * reduit a remplacer ce mot par `true`, sans rien remettre a zero.
+ * Meme histoire que RECOMMENCER et le RELAIS : regardee tourner sur le canal
+ * de test, puis ouverte a tout le monde. Le serveur comptait deja la serie de
+ * TOUT LE MONDE pendant ce temps — c'etait le but : ouvrir se reduit a ce
+ * `true`, et les series en cours s'allument des la premiere ouverture du
+ * classement, au lieu de repartir de zero le jour de l'ouverture.
+ *
+ * Une reserve, et elle a coute les series d'avant le 15 septembre 2026 : le
+ * recalcul du classement les reconstruit depuis l'historique DEPUIS ce
+ * jour-la seulement. Avant, il refaisait les lignes sans elles, et chaque
+ * passage remettait toutes les flammes a zero — voir recalculerClassement
+ * dans worker/src/duels.js.
+ *
+ * La forme compte, comme pour les deux autres : une constante en tete d'un
+ * `&&` permet au bundler de suivre. A true, la flamme part dans le build ; a
+ * false, elle en sort entierement.
  */
-export const SERIE_OUVERTE = EST_TEST;
+export const SERIE_OUVERTE = true;
 
 /**
  * Le coup de poussee : ce qui part du coureur quand il reussit son geste.
