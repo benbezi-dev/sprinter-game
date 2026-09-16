@@ -3077,6 +3077,12 @@
     }
     return _apiTribune;
   }
+  // Ce que le rendu prete aux obstacles poses par un autre jeu (les haies).
+  let _apiObstacles = null;
+  function apiObstacles() {
+    if (!_apiObstacles) _apiObstacles = { G, C, ground, solid, depthOf, scaleM };
+    return _apiObstacles;
+  }
   function apiDecor() {
     if (!_apiDecor) {
       _apiDecor = { G, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
@@ -5814,8 +5820,15 @@
     // Dans les blocs, le corps n'est pas « penche en avant » : il est pose,
     // mains au sol. L'inclinaison de sortie des blocs ne revient qu'avec la
     // course, a mesure que le coureur quitte sa posture (voir enBloc, pose).
+    // Par-dessus une haie non plus : le saut porte sa propre inclinaison du
+    // buste (voir SAUT dans sprinter-core.js), et la bascule d'acceleration,
+    // qui tourne tout le corps autour du pied, le projetait a quatre-vingts
+    // centimetres devant son ombre une fois le bassin leve — a la premiere
+    // haie, elle vaut encore 0,36 rad.
+    const sautW = person.saut ? Math.max(0, Math.min(1, person.saut.w)) : 0;
     const fall = (fsh ? fsh.pitch : 0) -
-      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2);
+      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2) *
+      (1 - sautW);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
     for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
@@ -5859,6 +5872,10 @@
 
   // --- rendu d'un athlete en course --------------------------------------
   function drawRunner(ctx, r, ax, ay, adepth, k, headAng, lean) {
+    // Un obstacle sur la piste change la posture : c'est a lui de la poser,
+    // a chaque dessin — les echos et la trainee du fantome compris, qui
+    // dessinent le meme coureur un peu plus loin en arriere.
+    if (G.obstacles) G.obstacles.preparer(r, G, C);
     const curved = !!(G.track && G.track.curved);
     const caps = personCapsules(r, headAng, lean, false, curved, niveauDetail(k));
     drawFacetFigure(ctx, caps, ax, ay, k);
@@ -6311,7 +6328,7 @@
         drawPousseeTrail(ctx, r, m, pouss);
       }
     }
-    for (const [r, g2, p] of vis) {
+    const coureur = ([r, g2, p]) => {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui
       // La trainee raconte une trace enregistree. En direct il n'y a rien a
@@ -6325,6 +6342,26 @@
                  m * (r.look.h / C.MODEL_H),
                  T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
       if (r.isGhost) ctx.globalAlpha = 1;
+    };
+    // LES OBSTACLES, RANGES PARMI LES COUREURS.
+    //
+    // Une haie se franchit : le coureur passe devant elle tant qu'il ne l'a
+    // pas atteinte, derriere des qu'il l'a depassee. Rien de fixe ne peut
+    // donc la dessiner ni avant ni apres les athletes ; elle prend sa place
+    // dans l'ordre de profondeur, le plus loin d'abord. Sans obstacle, rien
+    // ne change : les coureurs gardent l'ordre ou ils ont toujours ete peints.
+    const pieces = G.obstacles ? G.obstacles.pieces(apiObstacles()) : null;
+    if (pieces && pieces.length) {
+      const pile = [];
+      for (const it of vis) pile.push([depthOf(it[2][0], it[2][1]), it, null]);
+      for (const pc of pieces) pile.push([pc.profondeur, null, pc]);
+      pile.sort((a, b) => b[0] - a[0]);
+      for (const [, it, pc] of pile) {
+        if (it) coureur(it);
+        else G.obstacles.dessiner(ctx, apiObstacles(), pc);
+      }
+    } else {
+      for (const it of vis) coureur(it);
     }
     // LES DECORS DEBOUT, APRES LES COUREURS ET AVANT LEURS NOMS.
     //

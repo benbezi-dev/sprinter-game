@@ -22,9 +22,16 @@
 import { SprinterApp } from './engine';
 import { HAIES } from './haies.js';
 import { nouvelleCourse, preparerCoureur, libererCoureur, pas } from './haies-pas.js';
+import { obstaclesDe } from './haies-rendu.js';
 
 /** L'etat d'une course de haies. Nul en dehors d'une course de haies. */
 let course = null;
+
+/**
+ * Les haies que le joueur a renversees : numero de la haie -> instant du
+ * choc, sur le chrono de la course. Le rendu les fait tomber a partir de la.
+ */
+const touchees = new Map();
 
 /** Y a-t-il des haies sur la piste en ce moment ? */
 export function haiesEnCours() { return course !== null; }
@@ -69,10 +76,23 @@ export function armerHaies(cle) {
   // C'est deja arrive une fois, sur la mise en forme des cotes. La dependance
   // va donc dans l'autre sens — l'ecran des haies charge ce module, ce module
   // se pose sur le moteur, et le moteur ne fait qu'appeler ce qui s'y trouve.
-  SprinterApp.G.pasHaies = pasHaies;
+  const G = SprinterApp.G;
+  G.pasHaies = pasHaies;
 
   course = nouvelleCourse(cle);
-  preparerCoureur(course, SprinterApp.G.player);
+  touchees.clear();
+  preparerCoureur(course, G.player);
+  // Le rendu, par le meme chemin : il trouve les haies sur `G.obstacles` et
+  // ne sait rien d'autre.
+  if (G.obstacles) oublierSur(G);
+  G.obstacles = obstaclesDe(course, touchees);
+}
+
+/** Retirer des coureurs la posture que le rendu des haies y a posee. */
+function oublierSur(G) {
+  const o = G.obstacles;
+  for (const r of G.runners || []) o.oublier(r);
+  if (G.ghost && G.ghost.runner) o.oublier(G.ghost.runner);
 }
 
 /**
@@ -81,14 +101,23 @@ export function armerHaies(cle) {
  */
 export function rangerHaies() {
   course = null;
+  touchees.clear();
   const G = SprinterApp.G;
   if (G) {
     G.pasHaies = null;
+    if (G.obstacles) oublierSur(G);
+    G.obstacles = null;
     libererCoureur(G.player);
   }
 }
 
 /** Un pas de simulation, apres celui du moteur. */
 export function pasHaies(joueur) {
-  pas(course, joueur);
+  const juge = pas(course, joueur);
+  // Une haie attaquee trop pres se prend dans le genou : elle tombe. Le
+  // jugement la note hachee, rythme tenu ou non — le coureur la touche dans
+  // les deux cas, il ne tombe lui-meme que si son rythme etait deja rompu.
+  if (juge && juge.note === 'hache') {
+    touchees.set(juge.haie - 1, SprinterApp.G.elapsed || 0);
+  }
 }

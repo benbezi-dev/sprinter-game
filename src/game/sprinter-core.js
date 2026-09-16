@@ -1317,6 +1317,63 @@
   const melange = (x, y, t) => x + (y - x) * t;
 
   // ---------------------------------------------------------------------
+  // PAR-DESSUS UNE HAIE
+  // ---------------------------------------------------------------------
+  // La posture du franchissement, du pied d'appel (t = 0) a la reception
+  // (t = 1). Memes angles que le rig : 0 vers le bas, positif vers l'avant,
+  // absolus. Chaque ligne : [t, valeurs...].
+  //
+  // LA JAMBE D'ATTAQUE part genou en avant, se tend au-dessus de la barre,
+  // talon devant, pied releve, puis redescend tendue sous le bassin : c'est
+  // elle qui se pose la premiere.
+  //
+  // LA JAMBE D'ESQUIVE est la seule qui sorte du plan de course. Poussee en
+  // arriere a l'appel, elle s'ouvre ensuite sur le cote, cuisse a
+  // l'horizontale et jambe repliee vers l'arriere, et revient genou haut
+  // devant pour la foulee suivante. Le rig ne sait tourner un segment que
+  // dans son plan ; l'ouverture passe donc par le LACET de chaque segment
+  // (valeurs impaires ci-dessous : cuisse, jambe, pied), compte vers
+  // l'exterieur de la hanche. Elle reste repliee a l'horizontale tant que le
+  // pied n'a pas franchi le plan de la haie : la hanche passe a t = 0,6, le
+  // pied, trente centimetres derriere elle, vers t = 0,75.
+  //
+  // LES BRAS croisent : celui qui est du cote de la jambe d'esquive part
+  // loin devant et balaie vers l'arriere, l'autre reste replie. Le buste
+  // plonge sur la haie — franchement : la vue du jeu raccourcit tout ce qui
+  // penche vers l'avant, et a quarante degres il paraissait droit — puis se
+  // redresse a la reception.
+  const SAUT = {
+    attaque: [[0, 0.95, -0.25, -0.10], [0.25, 1.60, 1.25, 1.40],
+              [0.50, 1.45, 1.40, 1.55], [0.75, 0.75, 0.55, 0.70],
+              [1, 0.12, 0.02, -0.20]],
+    esquive: [[0, -0.40, 0, -0.50, 0, -0.90, 0],
+              [0.30, -0.20, 0.40, -1.50, 0.10, -1.20, 0.10],
+              [0.55, 1.45, 1.35, -1.57, 0, 0.30, 1.40],
+              [0.74, 1.50, 1.05, -1.50, 0.15, 0.25, 1.10],
+              [0.90, 1.25, 0.45, -0.55, 0.25, 0, 0.30],
+              [1, 1.05, 0, -0.35, 0, -0.20, 0]],
+    brasAvant: [[0, 1.20, 1.50], [0.40, 1.55, 1.65], [0.80, 0.60, 1.20], [1, 0.10, 1.00]],
+    brasReplie: [[0, -0.55, 0.50], [0.50, -0.60, 0.40], [1, 0.30, 1.40]],
+    buste: [[0, -0.40], [0.30, -0.95], [0.60, -0.90], [1, -0.35]],
+  };
+
+  /** Une ligne de SAUT a l'instant t, adoucie entre deux reperes. */
+  function sautA(table, t) {
+    let j = 0;
+    while (j < table.length - 2 && t > table[j + 1][0]) j++;
+    const a = table[j], b = table[j + 1];
+    const f = Math.max(0, Math.min(1, (t - a[0]) / (b[0] - a[0])));
+    const e = f * f * (3 - 2 * f);
+    const out = [];
+    for (let i = 1; i < a.length; i++) out.push(melange(a[i], b[i], e));
+    return out;
+  }
+
+  /** Un point du corps tourne autour de la verticale du coureur. */
+  const lacer = (P, a) => [P[0] * Math.cos(a) - P[1] * Math.sin(a),
+                           P[0] * Math.sin(a) + P[1] * Math.cos(a), P[2]];
+
+  // ---------------------------------------------------------------------
   // SQUELETTE
   // ---------------------------------------------------------------------
   // Deux couleurs fixes, sorties de pose() : le rendu garde ses teintes en
@@ -1331,7 +1388,8 @@
 
   function pose(r, lod) {
     const L = r.look, fem = L.build === 'f';
-    const p = r.stride;
+    // `decalePas` n'avance que l'image, jamais le compte : voir haies-rendu.js.
+    const p = r.stride + (r.decalePas || 0);
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
     const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
@@ -1382,6 +1440,31 @@
       al = [r.bras[0], r.bras[0] + (r.bras[2] || 0.18)];
       ar = [r.bras[1], r.bras[1] + (r.bras[3] || 0.18)];
     }
+    // PAR-DESSUS UNE HAIE. `saut` est pose par le rendu des haies, et par
+    // lui seul (haies-rendu.js) : `t` va de l'appel a la reception, `w` est
+    // le poids de la posture — il monte avant l'appel et redescend apres la
+    // reception, pour que la foulee y entre et en sorte sans a-coup — et
+    // `pied` est le cote de la jambe d'attaque. `haut` leve le bassin au
+    // sommet du vol, en unites du rig.
+    const saut = r.saut;
+    const wS = saut ? Math.max(0, Math.min(1, saut.w)) : 0;
+    let lacets = null, leve = 0;
+    if (wS > 0) {
+      const t = Math.max(0, Math.min(1, saut.t));
+      const at = sautA(SAUT.attaque, t), es = sautA(SAUT.esquive, t);
+      const ba = sautA(SAUT.brasAvant, t), bp = sautA(SAUT.brasReplie, t);
+      const vers3 = (x, y) => [melange(x[0], y[0], wS), melange(x[1], y[1], wS),
+                               melange(x[2], y[2], wS)];
+      const vers2 = (x, y) => [melange(x[0], y[0], wS), melange(x[1], y[1], wS)];
+      const jA = [at[0], at[1], at[2]], jE = [es[0], es[2], es[4]];
+      const cA = saut.pied > 0 ? 1 : -1, cE = -cA;
+      if (cA > 0) { l = vers3(l, jA); rr = vers3(rr, jE); al = vers2(al, bp); ar = vers2(ar, ba); }
+      else { rr = vers3(rr, jA); l = vers3(l, jE); ar = vers2(ar, bp); al = vers2(al, ba); }
+      lacets = { cote: cE, cuisse: cE * es[1] * wS, jambe: cE * es[3] * wS, pied: cE * es[5] * wS };
+      lean = melange(lean, sautA(SAUT.buste, t)[0], wS);
+      leve = (saut.haut || 0) * 4 * t * (1 - t);
+    }
+
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -1400,7 +1483,7 @@
     // sprinter-app.js). Tout ce qui balance en course — rebond, lacet,
     // roulis — s'efface a mesure qu'on est dans les blocs : on n'y bouge pas.
     const wB = Math.max(0, Math.min(1, r.enBloc || 0));
-    const calme = 1 - wB;
+    const calme = (1 - wB) * (1 - wS);
     let hipX = 0, hipZ = null;
     if (wB > 0) {
       const t = Math.max(0, Math.min(1, r.prets || 0));
@@ -1437,7 +1520,7 @@
     const MO = L.morph || EMPTY_MORPH;
     const shY = (fem ? 0.130 : 0.154) * (MO.sh || 1);
     const hipY = (fem ? 0.094 : 0.082) * (MO.hip || 1);
-    const hip = [hipX, sway, hipZ === null ? 0.87 + bob : melange(0.87 + bob, hipZ, wB)];
+    const hip = [hipX, sway, (hipZ === null ? 0.87 + bob : melange(0.87 + bob, hipZ, wB)) + leve];
     const out = [];
     // LE DERNIER ARGUMENT DIT CE QUE DEVIENNENT LES BOUTS.
     //
@@ -1645,7 +1728,29 @@
 
     for (const [side, th, sk, ft] of [[1, l[0], l[1], l[2]],
                                       [-1, rr[0], rr[1], rr[2]]]) {
-      const H = [hip[0], side * hipY, hip[2] - 0.02];
+      let H = [hip[0], side * hipY, hip[2] - 0.02];
+      // UNE JAMBE QUI S'OUVRE SUR LE COTE. Le rendu tourne chaque segment
+      // autour de la verticale DU COUREUR, pas de sa propre articulation : un
+      // segment tourne de son lacet emporte donc son pivot avec lui. On le
+      // lui rend en le tournant d'avance en sens inverse, apres avoir place
+      // le genou et la cheville la ou le lacet de la cuisse et de la jambe
+      // les mettent. Sans ouverture, cette branche ne sert pas, et la jambe
+      // est construite comme elle l'a toujours ete.
+      let yT = yawHip, yS = yawHip, yF = yawHip, Kp = null, Ap = null;
+      if (lacets && lacets.cote === side) {
+        yT = yawHip + lacets.cuisse;
+        yS = yawHip + lacets.jambe;
+        yF = yawHip + lacets.pied;
+        const Hw = lacer(H, yawHip);
+        const kv0 = rot(0, -0.392, th), a0 = rot(0, -0.380, sk);
+        const dk = lacer([kv0[0], 0, kv0[1]], yT);
+        const Kw = [Hw[0] + dk[0], Hw[1] + dk[1], Hw[2] + dk[2]];
+        const da = lacer([a0[0], 0, a0[1]], yS);
+        const Aw = [Kw[0] + da[0], Kw[1] + da[1], Kw[2] + da[2]];
+        H = lacer(Hw, -yT);
+        Kp = lacer(Kw, -yS);
+        Ap = lacer(Aw, -yF);
+      }
       // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
       //
       // Un short d'athletisme masculin a des jambes. La jambe de short est
@@ -1655,29 +1760,29 @@
       // large a chaque hauteur, pour l'avaler sans la pincer. Rien ne change
       // pour les femmes : leur cuissard reste le seul volume du bassin.
       if (!fem && !L.pantalon) {
-        PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yawHip,
+        PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yT,
                     kLeg * 1.08, 0, 0, SOUS_HAUT, -0.156);
       }
       // un pantalon tombe plus large que la jambe qu'il habille
       const kPant = L.pantalon ? 1.10 : 1;
-      PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yawHip, kLeg * kPant,
+      PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yT, kLeg * kPant,
                   0, SOUS_BAS, SOUS_HAUT);
       const kv = rot(0, -0.392, th);
-      const K = [H[0] + kv[0], H[1], H[2] + kv[1]];
+      const K = Kp || [H[0] + kv[0], H[1], H[2] + kv[1]];
       const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
                               PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * 1.04;
       add(peauJambes, K, sk, [0, 0, -0.020], [rGenou * kPant, rGenou * kPant],
-          [rGenou * kPant, rGenou * kPant], 0.034, yawHip);
-      PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yawHip,
+          [rGenou * kPant, rGenou * kPant], 0.034, yS);
+      PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yS,
                   kLeg * (L.pantalon ? 1.18 : 1), 0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
-      const An = [K[0] + a[0], K[1], K[2] + a[1]];
+      const An = Ap || [K[0] + a[0], K[1], K[2] + a[1]];
       // semelle claire, legerement plus large : elle deborde sous la
       // couleur de la chaussure pour suggerer une vraie basket bicolore.
       add(SEMELLE, An, ft, [0.036, 0, -0.030], [0.098, 0.046],
-          [0.080, 0.052], 0.028, yawHip, true);
+          [0.080, 0.052], 0.028, yF, true);
       add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
-          0.028, yawHip, true);
+          0.028, yF, true);
     }
 
     // LE LIVRE DU PROF, OUVERT DANS SA MAIN.
