@@ -74,7 +74,22 @@ const CADENCE_DEMO = (BANDE[0] + BANDE[1]) / 2;
 const FRAPPES_CIBLE = 12;
 
 /** Combien de haies reussies avant de passer a la suite. */
-const REUSSITES = 3;
+const REUSSITES = 2;
+
+/**
+ * DE COMBIEN ON RALENTIT LES PREMIERS ESSAIS, et pendant combien.
+ *
+ * Le geste des haies se joue en quatre dixiemes de seconde a l'approche et en
+ * un sixieme au ciseau. C'est le jeu, et c'est trop rapide pour une premiere
+ * fois : le joueur n'a pas le temps de faire le lien entre ce qu'il voit et ce
+ * qu'il fait, donc il ne l'apprend pas, il le subit. On joue donc les deux
+ * premiers essais de chaque etape au ralenti, puis a la vitesse vraie.
+ *
+ * Le jugement, lui, ne ralentit pas : il porte sur la POSITION de la jauge, pas
+ * sur le temps ecoule. Un ciseau net au ralenti est un ciseau net.
+ */
+const RALENTI = 1.8;
+const ESSAIS_RALENTIS = 2;
 
 function mediane(v: number[]): number {
   if (!v.length) return 0;
@@ -100,6 +115,9 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
 
   const [note, setNote] = useState<string | null>(null);
   const [reussies, setReussies] = useState(0);
+  const [essais, setEssais] = useState(0);
+  const lent = essais < ESSAIS_RALENTIS;
+  const facteur = lent ? RALENTI : 1;
 
   // Etape de la cadence : les intervalles entre frappes, et leur mediane.
   const [frappes, setFrappes] = useState<number[]>([]);
@@ -198,11 +216,11 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     // verdict restait affiche pour toujours : `note` n'etait efface que par une
     // pression, et une pression est refusee hors approche. Le joueur qui ratait
     // sa toute premiere haie se retrouvait devant un tutoriel mort.
-    monter(APPROCHE_S, 1.6, () => {
-      setPhase('rien'); setNote('percute');
+    monter(APPROCHE_S * facteur, 1.6, () => {
+      setPhase('rien'); setNote('percute'); setEssais(e => e + 1);
       attendre(1200, () => { setNote(null); setJauge(0); });
     });
-  }, [monter, stop]);
+  }, [monter, stop, facteur]);
 
   useEffect(() => {
     if (demo || etape > 2 || etape === 2) return;
@@ -240,17 +258,19 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       setNote(j.note); setFlash(cote);
       attendre(220, () => setFlash(null));
       if (j.note === 'parfait' || j.note === 'bon') setReussies(r => r + 1);
+      setEssais(e => e + 1);
       attendre(1200, () => { setNote(null); setJauge(0); setPhase('rien'); });
       return;
     }
     // Etape du ciseau : l'appel ouvre le vol, et l'on attend le relache.
     tenu.current = cote; setFlash(cote);
     setPhase('vol');
-    monter(CISEAU_S, 2.2, () => {
+    monter(CISEAU_S * facteur, 2.2, () => {
       setPhase('rien'); setNote('absent'); setFlash(null); tenu.current = null;
+      setEssais(e => e + 1);
       attendre(1300, () => { setNote(null); setJauge(0); });
     });
-  }, [demo, etape, phase, jauge, note, monter, stop]);
+  }, [demo, etape, phase, jauge, note, monter, stop, facteur]);
 
   const relacher = useCallback((cote: Cote) => {
     if (demo || etape !== 1 || phase !== 'vol' || tenu.current !== cote) return;
@@ -258,13 +278,14 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     const jc = jugerCiseau(Math.min(1, jauge) * CISEAU_VISE, VOL_S);
     setNote(jc.note); setPhase('rien');
     if (jc.note === 'ciseau' || jc.note === 'bon') setReussies(r => r + 1);
+    setEssais(e => e + 1);
     attendre(1300, () => { setNote(null); setJauge(0); });
   }, [demo, etape, phase, jauge, stop]);
 
   // Trois haies reussies et l'on passe : on ne fait pas repeter pour repeter.
   useEffect(() => {
     if (reussies >= REUSSITES) {
-      setReussies(0);
+      setReussies(0); setEssais(0);
       attendre(500, () => setEtape(e => e + 1));
     }
   }, [reussies]);
@@ -343,6 +364,11 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
             <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
               ${demo ? 'text-cyan-300' : 'text-primary/70'}`}>
               {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
+              {/* On dit qu'on ralentit. Un geste qui change de vitesse sans
+                  prevenir se reapprend a la vitesse suivante. */}
+              {!demo && lent && etape < 2 && (
+                <span className="ml-2 text-amber-300/80">· {N.t('tutoh_ralenti')}</span>
+              )}
             </span>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase text-primary text-center">
               {N.t(titres[etape])}
@@ -429,7 +455,11 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
           <div className="grid grid-cols-2 gap-2 md:gap-3">
             {(['left', 'right'] as Cote[]).map(cote => {
               const allume = flash === cote;
-              const sienne = etape < 2 && (demo ? cote === 'left' : tenu.current === cote || phase === 'approche');
+              // LA JAUGE DU VOL S'ALLUME DES DEUX COTES : le pouce est pose sur
+              // le pave qu'il tient, et elle monte du bas — elle se remplissait
+              // donc sous le doigt. « Relache quand c'est plein » en cachant le
+              // plein. L'autre pave est libre, et il montre la meme chose.
+              const sienne = etape < 2 && (demo ? cote === 'left' : phase !== 'rien');
               return (
                 <button
                   key={cote}

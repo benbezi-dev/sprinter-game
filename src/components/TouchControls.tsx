@@ -158,14 +158,14 @@ export function TouchControls() {
   useEffect(() => {
     if (!APPEL_JOUEUR || !enCourse) return;
     let raf = 0;
-    let vuH = -1, vuZone = '', vuCote: string | null = null;
+    let vuH = -1, vuZone = '', vuCote: string | null = null, vuDeux = false;
     const tick = () => {
       const app = approcheHaies() as
         { cote: 'left' | 'right'; avance: number; zone: string } | null;
       const vol = ciseauHaies() as
         { cote: 'left' | 'right' | null; part: number; vise: number; fait: boolean; zone: string } | null;
 
-      let cote: string | null = null, h = 0, zone = '';
+      let cote: string | null = null, h = 0, zone = '', lesDeux = false;
       if (app) {
         cote = app.cote;
         h = Math.round(Math.min(1, app.avance) * 100);
@@ -173,18 +173,25 @@ export function TouchControls() {
       } else if (vol && !vol.fait && vol.cote) {
         // Le vol : pleine au point du ciseau, pas a la reception. La meme regle
         // que l'approche, donc le meme geste a apprendre.
-        cote = vol.cote;
+        //
+        // ET ELLE S'ALLUME DES DEUX COTES, parce qu'elle etait invisible. Le
+        // pouce est POSE sur le pave qu'il tient, et la jauge monte du bas :
+        // elle se remplissait donc exactement sous le doigt. Le jeu demandait
+        // « relache quand c'est plein » en cachant le plein. C'est la premiere
+        // cause de l'accrochage a repetition, avant meme la fenetre trop
+        // etroite. L'autre pave est libre, et il montre la meme chose.
+        cote = vol.cote; lesDeux = true;
         h = Math.round(Math.min(1, vol.part / Math.max(0.01, vol.vise)) * 100);
         zone = vol.zone;
       }
 
-      if (h !== vuH || zone !== vuZone || cote !== vuCote) {
-        vuH = h; vuZone = zone; vuCote = cote;
+      if (h !== vuH || zone !== vuZone || cote !== vuCote || lesDeux !== vuDeux) {
+        vuH = h; vuZone = zone; vuCote = cote; vuDeux = lesDeux;
         const t = ZONE_JAUGE[zone] || ZONE_JAUGE.plane;
         const paires = [[jaugeL.current, 'left'], [jaugeR.current, 'right']] as const;
         for (const [el, cle] of paires) {
           if (!el) continue;
-          const sien = cote === cle;
+          const sien = lesDeux ? cote !== null : cote === cle;
           el.style.height = sien ? `${h}%` : '0%';
           el.style.background = t.fond;
           el.style.boxShadow = sien && t.halo !== 'none' ? t.halo : 'none';

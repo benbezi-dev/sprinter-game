@@ -364,6 +364,7 @@
     // « Tu haches » et « tu t'etires » plutot que « trop vite » et « trop
     // lent » : le joueur doit savoir ce qui arrive a sa foulee, pas seulement
     // dans quel sens corriger.
+    tutoh_ralenti:   ['AU RALENTI', 'SLOWED DOWN'],
     tutoh_c_juste:   ['CADENCE JUSTE', 'RIGHT CADENCE'],
     tutoh_c_hache:   ['TU HACHES', 'YOU’RE CHOPPING'],
     tutoh_c_etire:   ['TU T’ÉTIRES', 'YOU’RE REACHING'],

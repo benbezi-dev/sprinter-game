@@ -207,8 +207,12 @@ titre("MITRAILLER LA TOUCHE D'ATTAQUE NE PAIE PAS");
 for (const cle of ['100h', '110h', '400h']) {
   const juste = courir(cle, { cadence: 9.5, cible: JUSTE(cle) });
   const fou = courir(cle, { cadence: 9.5, cible: JUSTE(cle), mitraille: true });
+  // Un dixieme, et pas trois. A la base de vitesse de Sprinter le coureur
+  // revient vite a son plafond : ce qu'un mauvais appel lui retire, il le
+  // reprend dans l'intervalle. Le cout reste reel — il doit rester mesurable —
+  // mais il ne pese plus ce qu'il pesait sous un plafond reduit.
   ok(`${cle} : appuyer des que la touche s'allume coute du chrono`,
-     fou.temps > juste.temps + 0.3,
+     fou.temps > juste.temps + 0.10,
      `${fou.temps?.toFixed(2)} s contre ${juste.temps?.toFixed(2)}`);
 }
 
@@ -322,8 +326,13 @@ ok('un ciseau net ne coute rien, et tout le reste coute',
 
 for (const cle of ['100h', '110h', '400h']) {
   const net = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
-  const tot = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.20 });
-  const tard = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.85 });
+  // ON SONDE AUX EXTREMES, et il a fallu y venir. A 0,20 et 0,85 du vol, le
+  // relache tombe encore dans la fenetre « bon » sur le 100 m haies : son vol
+  // ne dure que 243 ms, et la tolerance bornee y couvre presque tout. Un
+  // « bon » ne coute que trois centiemes et demi, que le moteur reprend — le
+  // chrono ne bougeait pas, et le test criait sur une verite.
+  const tot = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.05 });
+  const tard = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.95 });
   const jamais = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: null });
   ok(`${cle} : les dix ciseaux tombent nets quand on vise juste`,
      net.nets === 10, `${net.nets}/10`);

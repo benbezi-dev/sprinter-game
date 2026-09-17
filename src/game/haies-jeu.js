@@ -191,8 +191,36 @@ export const CISEAU_VISE = 0.50;
  * vitesse, la precision exigee non. C'est la meme regle que pour l'appel
  * (TOLERANCE_T) et pour la meme raison — une fenetre qui retrecit quand le
  * joueur progresse est une regle qui punit le progres.
+ *
+ * LE COTE TOT A ETE ELARGI, et c'etait un piege, pas une difficulte. A 85 ms,
+ * « accroche » se declenchait des qu'on relachait avant 65 a 98 ms selon la
+ * vitesse — or UNE FRAPPE ORDINAIRE SUR UN PAVE DURE 50 A 80 ms. Le reflexe
+ * qu'un joueur apporte de Sprinter tombait donc exactement dans l'accrochage,
+ * a chaque haie, sans qu'il puisse comprendre pourquoi. C'est ce que l'essai
+ * au pouce a remonte : « l'accrochage a la haie revient trop souvent ».
+ *
+ * A 135 ms, la frontiere descend sous 50 ms a toute vitesse de jeu : une
+ * frappe reflexe devient un
+ * ciseau moyen — on passe, on gratte — et TENIR le pave devient ce qui paie.
+ * Le joueur apprend en etant recompense d'avoir tenu plutot que puni d'avoir
+ * tape, ce qui n'est pas la meme chose a vivre.
  */
-export const TOLERANCE_CISEAU = { parfait: 0.040, bon: 0.085 };
+export const TOLERANCE_CISEAU = { parfait: 0.045, bon: 0.135 };
+
+/**
+ * ET ELLE NE PEUT PAS AVALER LE VOL, en part de sa duree.
+ *
+ * L'elargissement du cote tot a eu une consequence qu'on n'attendait pas sur
+ * la plus courte des trois courses : le vol du 100 m haies dure 243 ms, et une
+ * tolerance de 135 ms de part et d'autre d'une cible a 121 ms couvrait
+ * l'integralite du vol. Plus aucun relache n'y etait faux — ni trop tot, ni
+ * trop tard. Le geste existait encore, il ne se jugeait plus.
+ *
+ * La tolerance est donc bornee a ces parts du vol. Sur les longues elle ne
+ * mord pas ; sur les courtes elle se resserre juste assez pour qu'il reste, de
+ * chaque cote, de quoi se tromper.
+ */
+export const PART_TOLERANCE_CISEAU = { parfait: 0.18, bon: 0.40 };
 
 /**
  * CE QUE LE CISEAU GARDE DE LA VITESSE, et c'est ici que le jeu cesse d'etre
@@ -241,10 +269,14 @@ export const GARDE_CISEAU = {
  */
 export function jugerCiseau(part, vol) {
   if (part === null || part === undefined) return { note: 'absent', garde: GARDE_CISEAU.absent, ecart: null };
-  const ecart = (part - CISEAU_VISE) * Math.max(0.05, vol);
+  const v = Math.max(0.05, vol);
+  const ecart = (part - CISEAU_VISE) * v;
   const e = Math.abs(ecart);
-  if (e <= TOLERANCE_CISEAU.parfait) return { note: 'ciseau', garde: GARDE_CISEAU.ciseau, ecart };
-  if (e <= TOLERANCE_CISEAU.bon) return { note: 'bon', garde: GARDE_CISEAU.bon, ecart };
+  // La tolerance est en temps, mais bornee a une part du vol : voir
+  // PART_TOLERANCE_CISEAU, qui dit ce que l'oubli coutait sur le 100 m haies.
+  const seuil = k => Math.min(TOLERANCE_CISEAU[k], PART_TOLERANCE_CISEAU[k] * v);
+  if (e <= seuil('parfait')) return { note: 'ciseau', garde: GARDE_CISEAU.ciseau, ecart };
+  if (e <= seuil('bon')) return { note: 'bon', garde: GARDE_CISEAU.bon, ecart };
   return ecart < 0
     ? { note: 'accroche', garde: GARDE_CISEAU.accroche, ecart }
     : { note: 'traine', garde: GARDE_CISEAU.traine, ecart };
