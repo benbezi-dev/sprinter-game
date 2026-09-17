@@ -23,7 +23,7 @@ import { SprinterApp } from './engine';
 import { APPEL_JOUEUR } from './canal';
 import { HAIES } from './haies.js';
 import { nouvelleCourse, preparerCoureur, libererCoureur, pas,
-         appeler, frappeEnVol, approche } from './haies-pas.js';
+         appeler, frappeEnVol, approche, relacher, ciseauDe } from './haies-pas.js';
 import { obstaclesDe } from './haies-rendu.js';
 
 /** L'etat d'une course de haies. Nul en dehors d'une course de haies. */
@@ -51,12 +51,21 @@ export function dernierFranchissement() {
   return d;
 }
 
+/** Le dernier ciseau juge, pour l'affichage. Se vide apres lecture. */
+export function dernierCiseau() {
+  if (!course || !course.dernierCiseau) return null;
+  const d = course.dernierCiseau;
+  course.dernierCiseau = null;
+  return d;
+}
+
 /** Le bilan de la course : ce que le joueur a tenu, et ce qu'il a paye. */
 export function bilanHaies() {
   if (!course) return null;
-  const { parfaites, rompus, percutees, mauvaisesJambes, frappesEnVol, appuis, notes } = course;
+  const { parfaites, rompus, percutees, mauvaisesJambes, frappesEnVol, appuis, notes, ciseaux } = course;
   return {
     cle: course.cle, parfaites, rompus, percutees, mauvaisesJambes, frappesEnVol,
+    ciseaux: ciseaux.slice(),
     appuis: appuis.slice(),
     notes: notes.slice(),
     rythme: [...new Set(appuis.slice(1))].join('/'),
@@ -84,6 +93,11 @@ export function armerHaies(cle) {
   // pouvoir detourner une frappe donnee en l'air sans que le moteur importe
   // quoi que ce soit des haies.
   G.volHaies = APPEL_JOUEUR ? frappeHaiesEnVol : null;
+  // LE PAVE FAIT LA HAIE. Dans la fenetre d'approche, un appui sur le pave
+  // n'est plus une foulee de course : c'est l'appel. padPress() passe donc par
+  // ici AVANT le moteur, et le relache y repasse pour le ciseau.
+  G.appelHaies = APPEL_JOUEUR ? appelHaies : null;
+  G.relacherHaies = APPEL_JOUEUR ? relacherHaies : null;
 
   course = nouvelleCourse(cle, { appelJoueur: APPEL_JOUEUR });
   touchees.clear();
@@ -112,6 +126,8 @@ export function rangerHaies() {
   if (G) {
     G.pasHaies = null;
     G.volHaies = null;
+    G.appelHaies = null;
+    G.relacherHaies = null;
     if (G.obstacles) oublierSur(G);
     G.obstacles = null;
     libererCoureur(G.player);
@@ -166,4 +182,26 @@ export function appelHaies(cote) {
  */
 export function frappeHaiesEnVol() {
   return frappeEnVol(course);
+}
+
+/**
+ * LE POUCE SE LEVE — le ciseau. Rend le jugement, ou `null` si ce relache ne
+ * ciseautait rien (hors vol, mauvais cote, ou deja ciseaute).
+ */
+export function relacherHaies(cote) {
+  const G = SprinterApp.G;
+  if (!course || !G || !G.player) return null;
+  return relacher(course, G.player, cote);
+}
+
+/**
+ * Le vol en cours : ou l'on en est, et ce que vaudrait un relache maintenant.
+ *
+ * Lu a chaque image par la jauge des paves, donc sans allocation inutile —
+ * comme `approcheHaies`.
+ */
+export function ciseauHaies() {
+  const G = SprinterApp.G;
+  if (!course || !G || !G.player) return null;
+  return ciseauDe(course, G.player);
 }

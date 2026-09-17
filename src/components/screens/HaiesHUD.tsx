@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { dernierFranchissement, haiesPosees } from '@/game/haies-course.js';
+import { dernierFranchissement, dernierCiseau, haiesPosees } from '@/game/haies-course.js';
 
 type Juge = {
   haie: number; note: 'parfait' | 'bon' | 'plane' | 'hache' | 'percute';
@@ -14,6 +14,23 @@ type Juge = {
 
 /** Combien de temps le verdict d'une haie reste a l'ecran, en secondes. */
 const TENUE = 1.1;
+
+/**
+ * Le ciseau tient moins longtemps : il arrive a la reception, donc a peine
+ * plus d'un tiers de seconde apres le verdict de l'appel, et il doit avoir
+ * disparu avant la haie suivante.
+ */
+const TENUE_CISEAU = 0.8;
+
+type Ciseau = { haie: number; note: 'ciseau' | 'bon' | 'accroche' | 'traine' | 'absent'; ms: number | null };
+
+const COULEUR_CISEAU: Record<Ciseau['note'], string> = {
+  ciseau: 'text-emerald-400',
+  bon: 'text-primary',
+  accroche: 'text-amber-400',
+  traine: 'text-amber-400',
+  absent: 'text-destructive',
+};
 
 const COULEUR: Record<Juge['note'], string> = {
   parfait: 'text-emerald-400',
@@ -39,6 +56,7 @@ export function HaiesHUD() {
   const { N } = SprinterApp;
   const elapsed = useGameStore(s => s.elapsed);
   const [juge, setJuge] = useState<{ j: Juge; t: number } | null>(null);
+  const [cis, setCis] = useState<{ c: Ciseau; t: number } | null>(null);
 
   // Le jugement se lit une fois, puis s'efface cote moteur : on le garde ici le
   // temps de l'afficher.
@@ -47,6 +65,16 @@ export function HaiesHUD() {
     if (j) setJuge({ j, t: elapsed });
     else if (juge && elapsed - juge.t > TENUE) setJuge(null);
     else if (juge && elapsed < juge.t) setJuge(null);   // une course neuve
+  }, [elapsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // LE SECOND TEMPS DU GESTE. Il a son propre canal parce qu'il arrive a la
+  // reception, vingt-deux images apres l'appel : le verdict de l'appel est lu
+  // et efface depuis longtemps quand celui-ci tombe.
+  useEffect(() => {
+    const c = dernierCiseau() as Ciseau | null;
+    if (c) setCis({ c, t: elapsed });
+    else if (cis && elapsed - cis.t > TENUE_CISEAU) setCis(null);
+    else if (cis && elapsed < cis.t) setCis(null);
   }, [elapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const posees = haiesPosees();
@@ -73,6 +101,28 @@ export function HaiesHUD() {
               {!juge.j.tenu && <> · {N.t('haie_rythme')}</>}
               {juge.j.jambe === false && <> · {N.t('haie_jambe')}</>}
             </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Le ciseau, sous le verdict de l'appel et plus discret : c'est le meme
+          franchissement qui continue, pas un second evenement. Les
+          millisecondes sont la charge utile — « ton ciseau traine a partir de
+          la sixieme » est une phrase d'entrainement. */}
+      <AnimatePresence>
+        {cis && (
+          <motion.div key={'c' + cis.c.haie} {...SURGISSEMENT}
+                      className="mt-1 flex flex-col items-center
+                                 drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+            <span className={`font-black font-display tracking-wider text-base sm:text-lg
+                              ${COULEUR_CISEAU[cis.c.note]}`}>
+              {N.t('haie_c_' + cis.c.note)}
+            </span>
+            {cis.c.ms !== null && (
+              <span className="font-mono text-[10px] sm:text-xs tracking-widest text-white/70">
+                {N.t('haie_c_ms', { n: String(cis.c.ms) })}
+              </span>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

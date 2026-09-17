@@ -42,8 +42,8 @@
 
 import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
-         GARDE_RYTHME_ROMPU, APPEL_MINI, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
-         GARDE_VOL_MINI, POUSSEE_APPEL } from './haies-jeu.js';
+         GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
+         GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -193,6 +193,11 @@ export function nouvelleCourse(cle, { appelJoueur = false } = {}) {
     vitesseSol: 0,     // celle qu'il retrouvera a la reception
     reception_d: null, // ou il se recoit, en metres ; null sur un vol en duree
     penaliteVol: 1,    // ce que les frappes donnees en l'air ont deja coute
+    // LE CISEAU. `dAppel` et `volDuree` figent le vol au moment ou il commence,
+    // pour qu'on sache a tout instant ou l'on en est ; `ciseauPart` recoit la
+    // part du vol ecoulee au relache, et reste null tant qu'on n'a pas relache.
+    dAppel: 0, volDuree: 0, volCiseau: 0, coteAppel: null, ciseauPart: null,
+    ciseaux: [], dernierCiseau: null,
     parfaites: 0, rompus: 0, percutees: 0, mauvaisesJambes: 0, frappesEnVol: 0,
     appuis: [], notes: [], dernier: null,
   };
@@ -229,21 +234,21 @@ export function pas(course, j) {
   // EN VOL : la phase reste celle de l'appel. A la reception, le pied suivant
   // se pose, et c'est le premier appui du nouvel intervalle.
   if (course.enVol) {
+    // ON NE FREINE PAS EN L'AIR COMME ON FREINE AU SOL, et c'est la correction
+    // la plus lourde de tout ce fichier.
+    //
+    // Le moteur freine un coureur qui ne pousse pas, en l'air comme au sol :
+    // C.DRAG = 0,8, soit exp(-0,8 x 0,36) = 0,75 sur un vol de 110 m haies. Le
+    // coureur se recevait donc a trois quarts de sa vitesse. Jackson, lui, perd
+    // 0,34 m/s sur 9,11 — 3,7 % (Coh 2003). Le jeu payait SEPT FOIS le prix
+    // reel d'une haie, et aucun hurdleur ne se serait reconnu la-dedans : toute
+    // sa doctrine dit qu'on ne perd pas de vitesse sur une haie.
+    //
+    // La perte se calcule donc une fois, a l'appel, sur la duree du vol et avec
+    // le freinage de l'air (haies-jeu.js, DRAG_VOL). Pendant le vol, le coureur
+    // tient la vitesse de son appel — c'est la distance, ou la duree, qui le
+    // pose — et il retrouve `vitesseSol` en touchant la piste.
     if (course.reception_d !== null) {
-      // SUR LES COURTES, ON NE FREINE PAS EN L'AIR, ET L'ON SE RECOIT OU LE
-      // REGLEMENT LE DIT. Le moteur freine un coureur qui ne pousse pas, en
-      // l'air comme au sol : parti pour 3,55 m sur un 110 m haies, le coureur
-      // n'en couvrait que trois, et retombait a 0,95 m derriere la haie au lieu
-      // de 1,40 — encore dans la posture du saut. On lui rend donc, a chaque
-      // pas, la vitesse de son appel, et c'est la distance qui le pose.
-      //
-      // LE FREINAGE N'EST PAS EFFACE, IL EST PAYE A LA RECEPTION. Il faisait
-      // l'essentiel de ce que coute une haie : sans lui, neuf frappes par
-      // seconde bouclaient le 110 m haies en 11,5 s, sous le record du monde.
-      // Ce que le moteur retire a chaque pas s'inscrit dans `vitesseSol`, et
-      // c'est la vitesse que le coureur retrouve en touchant la piste — la
-      // meme qu'avant, apres un vol de la meme duree.
-      course.vitesseSol *= j.v / course.vitesseVol;
       j.v = course.vitesseVol;
       const reste = course.reception_d - j.d;
       if (reste > 0) {
@@ -251,18 +256,40 @@ export function pas(course, j) {
         j.stride = course.phaseVol;
         return null;
       }
-      j.v = course.vitesseSol;
       j.freeze = 0;
     } else if (j.freeze > 0) {
+      // Sur le tour, le vol est une duree : le moteur la decompte, et l'on tient
+      // la vitesse pendant ce temps-la comme sur les courtes.
+      j.v = course.vitesseVol;
       j.stride = course.phaseVol;
       return null;
     }
-    // CE QUE LES FRAPPES DONNEES EN L'AIR ONT COUTE se paie ICI, a la
-    // reception : c'est la qu'on retrouve le sol, et c'est la vitesse qu'on y
-    // retrouve qui doit s'en ressentir. Sous l'appel automatique, penaliteVol
-    // vaut 1 et cette ligne ne fait rien.
+    j.v = course.vitesseSol;
+    // LA RECEPTION PAIE LE CISEAU, et c'est le coeur du jeu.
+    //
+    // Le freinage de l'air est de la physique, il est deja dans `vitesseSol`.
+    // Ce qui se paie ici est de la TECHNIQUE : un ciseau net remet le coureur
+    // en course, un ciseau en retard le fait retomber derriere son appui. Voir
+    // haies-jeu.js, GARDE_CISEAU.
+    //
+    // Sous l'appel automatique il n'y a pas de ciseau a juger — la machine ne
+    // relache rien — et le franchissement ne coute alors que l'air.
+    if (course.appelJoueur) {
+      const jc = jugerCiseau(course.ciseauPart, course.volCiseau);
+      j.v *= jc.garde;
+      const ms = course.ciseauPart === null ? null
+        : Math.round(course.ciseauPart * course.volCiseau * 1000);
+      course.ciseaux.push({ note: jc.note, ms });
+      // SON PROPRE CANAL, et pas un champ de plus sur le verdict de l'appel :
+      // le bandeau a lu et vide `dernier` depuis longtemps quand on se recoit —
+      // le vol dure vingt-deux images. Les deux temps du geste se disent donc
+      // l'un apres l'autre, ce qui est aussi la facon dont on les joue.
+      course.dernierCiseau = { haie: course.i, note: jc.note, ms };
+    }
+    // Et ce que les frappes donnees en l'air ont coute.
     j.v *= course.penaliteVol;
     course.penaliteVol = 1;
+    course.ciseauPart = null;
     course.enVol = false;
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
@@ -273,7 +300,9 @@ export function pas(course, j) {
   if (course.i >= course.positions.length) return null;
 
   const a = APPEL[course.cle];
-  const point = course.positions[course.i] - a.avant;
+  // LE POINT D'APPEL EST CELUI DU CORPS : le pied quitte le sol a `avant`
+  // metres de la haie, mais le corps est deja AVANCE_CM devant lui.
+  const point = course.positions[course.i] - a.avant + AVANCE_CM;
 
   // L'APPEL DU JOUEUR. Tout ce qui suit — la fenetre de reglage, viser(), la
   // phase menee droit sur l'appui, l'appel qui part tout seul — n'existe que
@@ -317,13 +346,18 @@ export function pas(course, j) {
   // jusqu'a la reception (voir plus haut) ; sur le tour, le vol est une duree
   // et le freinage fait partie de ce qu'elle coute (haies-jeu.js, COUT).
   j.freeze = volDe(course.cle, j.v);
-  if (COUT[course.cle].vol === 'distance') {
-    j.v = Math.max(VITESSE_VOL_MIN, j.v);
-    course.vitesseVol = course.vitesseSol = j.v;
-    course.reception_d = course.positions[course.i] + a.apres;
-  } else {
-    course.reception_d = null;
-  }
+  j.v = Math.max(VITESSE_VOL_MIN, j.v);
+  course.vitesseVol = j.v;
+  // LA PERTE DU VOL, calculee une seule fois : sa duree, et le freinage de
+  // l'air. Un vol plus long — appel donne de trop loin — coute donc davantage,
+  // sans qu'aucune penalite n'ait eu besoin d'etre inventee. Voir DRAG_VOL.
+  course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
+  course.reception_d = COUT[course.cle].vol === 'distance'
+    ? course.positions[course.i] + a.apres
+    : null;
+  course.dAppel = j.d; course.volDuree = j.freeze;
+  course.volCiseau = volDe(course.cle === '400h' ? '110h' : course.cle, j.v);
+  course.coteAppel = null; course.ciseauPart = null;
   // ET LA REMISE A ZERO DU DERNIER PIED. press() sort a la premiere ligne quand
   // le coureur est gele, avant de noter la touche : sans cette ligne, le premier
   // appui apres la reception avait une chance sur deux de passer pour un double
@@ -419,7 +453,7 @@ function veille(course, j, point) {
   // l'ecran : la jauge et le jugement doivent etre le meme calcul, sans quoi
   // le joueur apprendrait a viser une lumiere qui ment. jugerAppel() est la
   // fonction qui notera son appel une image plus tard.
-  a.zone = jugerAppel(course.cle, haie - j.d, j.v).note;
+  a.zone = jugerAppel(course.cle, haie - j.d + AVANCE_CM, j.v).note;
 
   // TROP TARD : le coureur est sur la haie et n'a pas appele. Il la percute.
   if (j.d >= haie - APPEL_MINI) return percuter(course, j);
@@ -439,8 +473,14 @@ export function appeler(course, j, cote) {
   const cle = course.cle;
   const a = APPEL[cle];
   const haie = course.positions[course.i];
-  const avant = haie - j.d;
+  // Ce que le joueur est juge sur : la distance du PIED a la haie. Le corps
+  // est AVANCE_CM plus loin — voir haies-jeu.js.
+  const avant = haie - j.d + AVANCE_CM;
   if (avant <= 0) return null;
+  // TROP LOIN POUR ETRE UN APPEL : c'est une foulee, pas un decollage. On rend
+  // `null`, et padPress() laisse alors le moteur la traiter comme une frappe
+  // ordinaire. Voir APPEL_MAXI — c'est ce qui rend a la cadence son role.
+  if (avant > APPEL[cle].avant + APPEL_MAXI) return null;
 
   // LE PIED D'APPEL SE CALE SUR L'APPUI LE PLUS PROCHE, et non sur celui qui
   // vient de se poser. On ne quitte pas le sol au milieu d'une foulee : arrondir
@@ -456,16 +496,18 @@ export function appeler(course, j, cote) {
   const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v });
 
   j.v = p.v;
-  // L'APPEL EST UNE POUSSEE. Sans cette ligne, le pouce qui monte vers la
-  // touche est un pouce qui a cesse de courir, et bien jouer coutait une
-  // seconde et demie sur le 110 m haies. Voir POUSSEE_APPEL, qui dit tout.
-  if (bonneJambe) j.v = Math.min(j.maxSpeed, j.v + (POUSSEE_APPEL[p.note] || 0));
+  // L'APPEL EST UNE POUSSEE, et elle se compte en PART de la vitesse : Jackson
+  // gagne 3,3 % entre l'amortissement et la poussee, pas trois dixiemes de m/s
+  // en toutes circonstances. Voir POUSSEE_APPEL.
+  if (bonneJambe) j.v = Math.min(j.maxSpeed, j.v * (1 + (POUSSEE_APPEL[p.note] || 0)));
   j.stride = nAppel * PI;
 
   if (COUT[cle].vol === 'distance') {
     j.v = Math.max(VITESSE_VOL_MIN, j.v);
-    j.freeze = (avant + a.apres) / j.v;
-    course.vitesseVol = course.vitesseSol = j.v;
+    // Sur le chemin du centre de masse, pas d un pied a l autre — voir AVANCE_CM.
+    j.freeze = Math.max(0.05, avant + a.apres - AVANCE_CM) / j.v;
+    course.vitesseVol = j.v;
+    course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
     course.reception_d = haie + a.apres;
   } else {
     // SUR LE TOUR, LE VOL EST UNE DUREE, ET ELLE NE SE REMBOURSE PAS.
@@ -485,8 +527,17 @@ export function appeler(course, j, cote) {
     // d'air en trop, partir plus pres ne retire rien. Le hache se paie en
     // vitesse (GARDE), comme sur les courtes, et jamais en temps gagne.
     j.freeze = COUT[cle].duree + Math.max(0, avant - a.avant) / Math.max(VITESSE_VOL_MIN, j.v);
+    j.v = Math.max(VITESSE_VOL_MIN, j.v);
+    course.vitesseVol = j.v;
+    course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
     course.reception_d = null;
   }
+
+  // Le vol est fige ici : on saura a tout instant ou l'on en est, donc quand
+  // tombe le relache. Voir `ciseauDe`.
+  course.dAppel = j.d; course.volDuree = j.freeze;
+  course.volCiseau = volDe(cle === '400h' ? '110h' : cle, j.v);
+  course.coteAppel = cote; course.ciseauPart = null;
 
   // Meme raison que sur l'appel automatique : press() ne note pas la touche
   // pendant le gel, donc le premier appui apres la reception passerait une fois
@@ -548,7 +599,8 @@ function percuter(course, j) {
   course.notes.push('percute');
   const juge = {
     haie: course.i + 1, note: 'percute', tenu: r.tenu, appuis,
-    min: r.min, max: r.max, avant: +(course.positions[course.i] - j.d).toFixed(2),
+    min: r.min, max: r.max,
+    avant: +(course.positions[course.i] - j.d + AVANCE_CM).toFixed(2),
     jambe: null,
   };
   course.dernier = juge;
@@ -580,4 +632,62 @@ export function approche(course) {
 /** Le coureur est-il en l'air ? */
 export function enVol(course) {
   return !!(course && course.enVol);
+}
+
+
+/**
+ * OU EN EST LE VOL, de 0 (on quitte le sol) a 1 (on touche la piste).
+ *
+ * Sur les courtes le vol est une distance et la vitesse y est tenue : la part
+ * parcourue EST la part du temps ecoule. Sur le tour c'est une duree, et le
+ * moteur la decompte dans `freeze`. Deux lectures, un seul nombre.
+ */
+function partDuVol(course, j) {
+  if (!course.enVol) return null;
+  if (course.reception_d !== null) {
+    const total = course.reception_d - course.dAppel;
+    return total <= 0 ? 1 : Math.min(1, Math.max(0, (j.d - course.dAppel) / total));
+  }
+  // SUR LE TOUR, LE GEL N'EST PAS LE TEMPS EN L'AIR. La seconde de COUT
+  // represente le fait de courir POUR la haie sur trente-cinq metres ; le vrai
+  // vol y dure environ un tiers de seconde comme partout ailleurs. Le ciseau se
+  // rapporte donc au vol reel (`volCiseau`), sans quoi il faudrait le placer a
+  // une demi-seconde du decollage, c'est-a-dire longtemps apres avoir atterri.
+  if (!course.volCiseau) return 1;
+  const ecoule = course.volDuree - Math.max(0, j.freeze);
+  return Math.min(1, Math.max(0, ecoule / course.volCiseau));
+}
+
+/**
+ * LE POUCE SE LEVE — le ciseau.
+ *
+ * Appuyer lance la jambe d'attaque, relacher ramene la jambe arriere : un seul
+ * geste continu, comme un hurdleur qui ne fait pas deux choses mais une. Le
+ * relache ne compte que du cote ou l'on s'est appele ; lever l'autre pouce ne
+ * ciseaute rien.
+ *
+ * Un seul ciseau par haie : le premier relache est le bon. Sans cela, un joueur
+ * qui pianote pendant le vol finirait par en placer un dans la fenetre sans
+ * l'avoir vise.
+ */
+export function relacher(course, j, cote) {
+  if (!course || !j || !course.appelJoueur) return null;
+  if (!course.enVol || course.ciseauPart !== null) return null;
+  if (course.coteAppel && cote !== course.coteAppel) return null;
+  course.ciseauPart = partDuVol(course, j);
+  return jugerCiseau(course.ciseauPart, course.volCiseau);
+}
+
+/**
+ * Le vol en cours, pour la jauge : ou l'on en est, ou tombe le ciseau, et ce
+ * que vaudrait un relache maintenant. `null` hors vol.
+ */
+export function ciseauDe(course, j) {
+  if (!course || !course.appelJoueur || !course.enVol) return null;
+  const part = partDuVol(course, j);
+  return {
+    part, vise: CISEAU_VISE, fait: course.ciseauPart !== null,
+    zone: jugerCiseau(part, course.volCiseau).note,
+    cote: course.coteAppel,
+  };
 }

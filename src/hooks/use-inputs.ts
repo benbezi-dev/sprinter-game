@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
-import { SprinterApp, padPress, useGameStore, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
-import { APPEL_JOUEUR } from '@/game/canal';
-import { appelHaies } from '@/game/haies-course.js';
+import { SprinterApp, padPress, padRelease, useGameStore, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
 
 /* Le jeu ecoute le clavier sur window, donc il recoit aussi les frappes
    destinees aux champs de texte. Sans ce filtre, taper son nom pilotait la
@@ -29,29 +27,14 @@ export function useInputHandlers() {
       // Le clavier reprend la main : on revient a la rigueur d'origine.
       if (e.key.startsWith('Arrow')) setTouchInput(false);
 
-      // LES TOUCHES D'ATTAQUE AU CLAVIER (canal.ts, APPEL_JOUEUR).
-      //
-      // `e.code` et non `e.key` : il designe la POSITION PHYSIQUE de la touche
-      // et non le caractere imprime dessus. KeyQ et KeyP restent donc les deux
-      // extremites de la rangee du haut sur azerty comme sur qwerty ou qwertz —
-      // sur azerty, KeyQ est la touche marquee A, c'est-a-dire le meme endroit
-      // sous les doigts. Le jeu se lit en quatorze langues sur la branche d'a
-      // cote ; ses commandes ne peuvent pas dependre d'un clavier.
-      //
-      // Le clavier n'existe ici que pour eprouver la regle au bureau. Ce qui
-      // doit etre juge se joue au pouce, sur telephone.
-      if (APPEL_JOUEUR && (e.code === 'KeyQ' || e.code === 'KeyP')) {
-        appelHaies(e.code === 'KeyQ' ? 'left' : 'right');
-        e.preventDefault();
-        return;
-      }
-
+      // LA REPETITION DU CLAVIER NE DOIT PAS MARTELER. Une fleche maintenue
+      // emet des `keydown` en rafale au bout d'une demi-seconde ; depuis que le
+      // maintien porte le vol d'une haie, cette rafale serait une pluie de
+      // foulees fantomes. `G.touches` sait deja si la touche est baissee.
       if (e.key === 'ArrowLeft') {
-        padPress('left');
-        SprinterApp.G.touches.left = 1;
+        if (!SprinterApp.G.touches.left) { padPress('left'); SprinterApp.G.touches.left = 1; }
       } else if (e.key === 'ArrowRight') {
-        padPress('right');
-        SprinterApp.G.touches.right = 1;
+        if (!SprinterApp.G.touches.right) { padPress('right'); SprinterApp.G.touches.right = 1; }
       } else if (e.key === 's' || e.key === 'S') {
         toggleAudio();
       } else if (e.key === 'l' || e.key === 'L') {
@@ -62,8 +45,8 @@ export function useInputHandlers() {
     };
     
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') delete SprinterApp.G.touches.left;
-      if (e.key === 'ArrowRight') delete SprinterApp.G.touches.right;
+      if (e.key === 'ArrowLeft') { delete SprinterApp.G.touches.left; padRelease('left'); }
+      if (e.key === 'ArrowRight') { delete SprinterApp.G.touches.right; padRelease('right'); }
     };
     
     window.addEventListener('keydown', handleKeyDown);
@@ -90,6 +73,8 @@ export function useInputHandlers() {
     },
     handleTouchEnd: (side: 'left' | 'right') => {
       delete SprinterApp.G.touches[side];
+      // Le pouce qui se leve ciseaute, quand il se leve pendant un vol.
+      padRelease(side);
     }
   };
 }

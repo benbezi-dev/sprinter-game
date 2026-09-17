@@ -297,6 +297,21 @@ export function padPress(side: 'left' | 'right') {
   }
   if (G.state !== 'race') return;
 
+  // LE PAVE FAIT LA HAIE.
+  //
+  // Dans la fenetre d'approche, cet appui n'est pas une foulee de plus : c'est
+  // l'APPEL, et le moteur ne doit pas le voir passer une seconde fois —
+  // appeler() fait deja tout ce que fait press(), et davantage (le rythme, la
+  // jambe, la poussee mesuree sur Jackson). On sort donc ici.
+  //
+  // C'est aussi ce qui rend le geste gratuit : le pouce ne quitte pas son pave,
+  // il y reste appuye. Le maintien porte le vol — ou l'on ne doit de toute
+  // facon plus marteler — et le relache fait le ciseau (padRelease).
+  if (G.appelHaies) {
+    const juge = G.appelHaies(side);
+    if (juge) { buzz(18); cue(side, 'step'); return; }
+  }
+
   // EN L'AIR, LES PAVES NE POUSSENT PLUS — ILS COUTENT.
   //
   // Runner.press() sort a sa premiere ligne quand le coureur est gele, AVANT
@@ -327,6 +342,26 @@ export function padPress(side: 'left' | 'right') {
     buzz(6);
     cue(side, 'step');
   }
+}
+
+/**
+ * LE POUCE SE LEVE — le ciseau.
+ *
+ * Appuyer lance la jambe d'attaque, relacher ramene la jambe arriere : un seul
+ * geste continu, comme un hurdleur qui ne fait pas deux choses mais une. Hors
+ * d'un vol, lever le pouce n'a jamais rien fait et ne fait toujours rien.
+ *
+ * Le retour est deliberement different des deux cotes du jugement : un ciseau
+ * net doit se sentir autrement qu'un ciseau rate, sans quoi le joueur
+ * n'apprendrait qu'au bandeau, une demi-seconde trop tard.
+ */
+export function padRelease(side: 'left' | 'right') {
+  if (G.paused) return;
+  if (!G.relacherHaies) return;
+  const jc = G.relacherHaies(side);
+  if (!jc) return;
+  if (jc.note === 'ciseau') { buzz(10); cue(side, 'step'); }
+  else { buzz(24); cue(side, 'trip'); }
 }
 
 // Garde l'attribut lang du document aligne sur la langue du jeu. Sans ca

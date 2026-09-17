@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { useInputHandlers } from '@/hooks/use-inputs';
 import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION } from '@/game/engine';
 import { APPEL_JOUEUR } from '@/game/canal';
-import { approcheHaies, appelHaies, haiesPosees } from '@/game/haies-course.js';
+import { approcheHaies, ciseauHaies } from '@/game/haies-course.js';
 
 // Double chevron : plus lisible et plus soigne qu'un caractere "<" ou ">",
 // et surtout parfaitement centrable puisqu'on maitrise le viewBox. La
@@ -20,28 +20,6 @@ function Chevrons({ dir }: { dir: 1 | -1 }) {
       >
         <path d="M-1 -11 L 10 0 L -1 11" />
         <path d="M-13 -11 L -2 0 L -13 11" opacity="0.45" />
-      </g>
-    </svg>
-  );
-}
-
-/**
- * La haie et l'arc par-dessus. Pas un mot : ces deux touches doivent se lire
- * d'un coup d'oeil en pleine course, et le jeu parle quatorze langues sur la
- * branche d'a cote. Le dessin est asymetrique — la jambe d'attaque part du
- * cote de la touche — pour que gauche et droite ne se confondent pas au coin
- * de l'oeil, la ou un pictogramme symetrique aurait ete illisible.
- */
-function Franchir({ dir }: { dir: 1 | -1 }) {
-  return (
-    <svg viewBox="-26 -20 52 40" className="w-10 h-8 md:w-14 md:h-11 block" aria-hidden="true">
-      <g transform={`scale(${dir} 1)`} fill="none" stroke="currentColor"
-         strokeLinecap="round" strokeLinejoin="round">
-        {/* l'arc du franchissement : on monte de loin, on retombe court */}
-        <path d="M-22 12 C -14 -16, 8 -18, 16 6" strokeWidth="4" />
-        {/* la haie */}
-        <path d="M6 -2 L 22 -2" strokeWidth="4" opacity="0.95" />
-        <path d="M14 -2 L 14 13" strokeWidth="3" opacity="0.5" />
       </g>
     </svg>
   );
@@ -66,53 +44,50 @@ const REPOS_GLOW = 'inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,
 const LIT_MS = 110;
 
 /* ---------------------------------------------------------------------------
-   LES TOUCHES D'ATTAQUE (canal.ts, APPEL_JOUEUR)
+   LA JAUGE DE LA HAIE, DANS LE PAVE (canal.ts, APPEL_JOUEUR)
    ---------------------------------------------------------------------------
-   Une bande au-dessus des paves, coupee en deux comme eux, bord a bord et sans
-   interstice — pour la meme raison qu'eux : ici, un appui perdu ne se contente
-   pas de manquer, il fait percuter la haie.
+   Il y avait deux touches d'attaque au-dessus des paves. Elles ont disparu, et
+   c'est le geste entier qui a change de nature.
 
-   ELLES S'ALLUMENT A L'APPROCHE, ET DU BON COTE. Le reste du temps elles sont
-   la, eteintes : une bande qui apparaitrait d'un coup deplacerait le pouce au
-   pire moment. La reserve tient toujours — ce prototype existe pour savoir si
-   un pouce peut quitter un pave qu'il martele et y revenir.
+   ON NE SAUTE PAS UNE HAIE, ON LA COURT — c'est la phrase que tous les
+   entraineurs repetent, et un bouton de saut separe enseignait exactement le
+   contraire. Le geste vit donc sur le pave de course, comme une foulee plus
+   longue : APPUYER lance la jambe d'attaque, MAINTENIR porte le vol, RELACHER
+   ramene la jambe arriere. Un seul geste continu, comme un hurdleur qui ne fait
+   pas deux choses mais une.
+
+   Le pouce ne quitte plus son pave. Et le maintien occupe le vol, ou l'on ne
+   doit de toute facon plus marteler : le geste ne prend rien a la course, il
+   occupe le temps que la haie lui prenait deja.
+
+   LA JAUGE A DEUX TEMPS, ET UNE SEULE REGLE : on agit quand elle est pleine.
+   Elle se remplit pendant l'approche, pleine au point d'appel — on appuie. Elle
+   repart de zero pendant le vol, pleine au point du ciseau — on relache.
 --------------------------------------------------------------------------- */
 
-/** Le cote annonce : allume, franc, il appelle le pouce. */
-const ATT_LIT = {
-  bg: 'rgb(var(--primaire-rgb) / 0.26)',
-  border: 'rgb(var(--primaire-rgb) / 0.95)',
-  fg: 'rgb(var(--primaire-rgb))',
-  glow: '0 0 0 1px rgb(var(--primaire-rgb) / 0.6), 0 0 26px rgb(var(--primaire-rgb) / 0.38)',
-};
-/** L'autre cote pendant l'approche : arme, mais ce n'est pas celui-la. */
-const ATT_ARME = {
-  bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.20)',
-  fg: 'rgba(255,255,255,0.30)', glow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
-};
-/** Hors approche : la bande existe, elle ne demande rien. */
-const ATT_REPOS = {
-  bg: 'rgba(0,0,0,0.22)', border: 'rgba(255,255,255,0.08)',
-  fg: 'rgba(255,255,255,0.16)', glow: 'none',
-};
-
 /**
- * CE QUE LA JAUGE VAUT, SELON CE QUE VAUDRAIT L'APPEL A CET INSTANT.
+ * CE QUE VAUT LE GESTE A CET INSTANT, en couleur.
  *
- * Trois etats, et un seul qu'on apprend a viser : le vert plein. Le joueur n'a
- * pas a lire une graduation en pleine course — il attend que ca devienne vert
- * et il appuie. Avant, c'est terne ; apres, c'est rouge, et il a compris sans
- * qu'on lui explique qu'il etait en retard.
+ * Les deux temps partagent la meme echelle, et ce n'est pas une economie : le
+ * joueur n'a qu'une chose a apprendre. Terne, c'est trop tot. Bleu, ca passe.
+ * Vert plein, c'est le moment. Rouge, c'est deja trop tard.
  *
- * Les couleurs sont celles que le bandeau de verdict emploie deja pour les
- * memes mots (HaiesHUD) : la jauge et le jugement doivent se reconnaitre.
+ * Les noms viennent de jugerAppel() et jugerCiseau() — les fonctions memes qui
+ * noteront le geste une image plus tard. Un ecran qui recalculerait sa propre
+ * couleur finirait par mentir, et le joueur apprendrait a viser le mensonge.
  */
 const ZONE_JAUGE: Record<string, { fond: string; halo: string }> = {
-  plane:   { fond: 'rgba(255,255,255,0.16)', halo: 'none' },
-  bon:     { fond: 'rgb(var(--primaire-rgb) / 0.55)', halo: 'none' },
-  parfait: { fond: 'rgba(52,211,153,0.85)',
-             halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
-  hache:   { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
+  // trop tot — dans l'approche comme dans le vol
+  plane:    { fond: 'rgba(255,255,255,0.16)', halo: 'none' },
+  accroche: { fond: 'rgba(255,255,255,0.16)', halo: 'none' },
+  // ca passe
+  bon:      { fond: 'rgb(var(--primaire-rgb) / 0.55)', halo: 'none' },
+  // le moment
+  parfait:  { fond: 'rgba(52,211,153,0.85)', halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
+  ciseau:   { fond: 'rgba(52,211,153,0.85)', halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
+  // trop tard
+  hache:    { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
+  traine:   { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
 };
 
 export function TouchControls() {
@@ -126,8 +101,6 @@ export function TouchControls() {
   const edgeR = useRef<HTMLDivElement | null>(null);
   const timers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const edgeTimers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
-  const attL = useRef<HTMLDivElement | null>(null);
-  const attR = useRef<HTMLDivElement | null>(null);
   const jaugeL = useRef<HTMLDivElement | null>(null);
   const jaugeR = useRef<HTMLDivElement | null>(null);
 
@@ -161,71 +134,60 @@ export function TouchControls() {
     return () => setStepCue(null);
   }, []);
 
-  // LA JAUGE D'APPEL, IMAGE PAR IMAGE ET NON PAR LE STORE.
+  // LA JAUGE, IMAGE PAR IMAGE ET NON PAR LE STORE.
   //
-  // L'approche vit dans la boucle de simulation, qui tourne a 240 pas par
-  // seconde. La faire passer par React ferait re-rendre tout l'ecran plusieurs
-  // fois par haie, en pleine course. On lit donc l'etat des haies a chaque
-  // image et on peint les noeuds — exactement ce que `light()` fait plus bas
-  // pour les paves, et pour la meme raison.
+  // L'approche et le vol vivent dans la boucle de simulation, qui tourne a 240
+  // pas par seconde. Les faire passer par React ferait re-rendre tout l'ecran
+  // plusieurs fois par haie, en pleine course. On lit donc l'etat des haies a
+  // chaque image et on peint le noeud — exactement ce que `light()` fait plus
+  // bas pour les paves, et pour la meme raison.
   //
-  // CE QUE LA JAUGE CORRIGE, et pourquoi une simple lumiere ne suffisait pas.
-  // La premiere version allumait le bon cote a l'approche, et c'est tout : elle
-  // disait QUEL POUCE, jamais QUAND. A l'essai, le joueur la voyait s'allumer
-  // puis jugeait l'instant sur une haie qui arrive en vue isometrique — donc il
-  // REAGISSAIT, et le temps de reaction plus le voyage du pouce le mettaient en
-  // retard de 150 ms a chaque haie, toujours du meme cote. 17,22 s sur le 110 m
-  // haies la ou le meme joueur a l'heure fait 13,12. Un retard systematique ne
-  // se rattrape par aucune tolerance elargie : il faut un signal qui se voie
-  // VENIR.
+  // CE QUE LA JAUGE CORRIGE. La premiere version allumait le bon cote a
+  // l'approche, et c'est tout : elle disait QUEL POUCE, jamais QUAND. A
+  // l'essai, le joueur la voyait s'allumer puis jugeait l'instant sur une haie
+  // qui arrive en vue isometrique — donc il REAGISSAIT, et le temps de reaction
+  // le mettait en retard de 150 ms a chaque haie, toujours du meme cote. 17,22 s
+  // sur le 110 m la ou le meme joueur a l'heure fait 13,12. Un retard
+  // systematique ne se rattrape par aucune tolerance elargie : il faut un signal
+  // qui se voie VENIR.
   //
-  // La jauge se remplit donc pendant toute l'approche et elle est PLEINE au
-  // point d'appel du reglement. Le joueur anticipe au lieu de reagir, ce qui
-  // est la seule facon de viser a 65 ms pres.
-  //
-  // LA COULEUR EST LE JUGEMENT, PAS UNE DECORATION. `zone` vient de
-  // jugerAppel() — la fonction meme qui notera l'appel une image plus tard. Un
-  // ecran qui recalculerait la sienne finirait par mentir, et le joueur
-  // apprendrait a viser le mensonge.
-  //
-  // Rien a eteindre a l'appel : quitter le sol referme l'approche et tout
-  // revient au repos de soi-meme.
+  // DEUX TEMPS, UNE SEULE REGLE : on agit quand c'est plein. Pendant
+  // l'approche, la jauge monte vers le point d'appel — on appuie. Pendant le
+  // vol, elle repart de zero et monte vers le point du ciseau — on relache.
   const enCourse = state === 'race' || state === 'count';
   useEffect(() => {
     if (!APPEL_JOUEUR || !enCourse) return;
     let raf = 0;
-    let vuCote: string | null | undefined;
-    let vuH = -1, vuZone = '';
+    let vuH = -1, vuZone = '', vuCote: string | null = null;
     const tick = () => {
-      const a = approcheHaies() as
+      const app = approcheHaies() as
         { cote: 'left' | 'right'; avance: number; zone: string } | null;
-      const cote = a ? a.cote : null;
+      const vol = ciseauHaies() as
+        { cote: 'left' | 'right' | null; part: number; vise: number; fait: boolean; zone: string } | null;
 
-      if (cote !== vuCote) {
-        vuCote = cote;
-        const paires = [[attL.current, 'left'], [attR.current, 'right']] as const;
-        for (const [el, cle] of paires) {
-          if (!el) continue;
-          const t = cote === null ? ATT_REPOS : cote === cle ? ATT_LIT : ATT_ARME;
-          el.style.backgroundColor = t.bg;
-          el.style.borderColor = t.border;
-          el.style.color = t.fg;
-          el.style.boxShadow = t.glow;
-        }
+      let cote: string | null = null, h = 0, zone = '';
+      if (app) {
+        cote = app.cote;
+        h = Math.round(Math.min(1, app.avance) * 100);
+        zone = app.zone;
+      } else if (vol && !vol.fait && vol.cote) {
+        // Le vol : pleine au point du ciseau, pas a la reception. La meme regle
+        // que l'approche, donc le meme geste a apprendre.
+        cote = vol.cote;
+        h = Math.round(Math.min(1, vol.part / Math.max(0.01, vol.vise)) * 100);
+        zone = vol.zone;
       }
 
-      // La jauge, sur les deux noeuds : celle du mauvais cote reste a zero.
-      const h = a ? Math.round(Math.min(1, a.avance) * 100) : 0;
-      const zone = a ? a.zone : '';
-      if (h !== vuH || zone !== vuZone) {
-        vuH = h; vuZone = zone;
-        const remplissage = ZONE_JAUGE[zone] || ZONE_JAUGE.plane;
-        for (const [el, cle] of [[jaugeL.current, 'left'], [jaugeR.current, 'right']] as const) {
+      if (h !== vuH || zone !== vuZone || cote !== vuCote) {
+        vuH = h; vuZone = zone; vuCote = cote;
+        const t = ZONE_JAUGE[zone] || ZONE_JAUGE.plane;
+        const paires = [[jaugeL.current, 'left'], [jaugeR.current, 'right']] as const;
+        for (const [el, cle] of paires) {
           if (!el) continue;
-          const sien = a && cote === cle;
+          const sien = cote === cle;
           el.style.height = sien ? `${h}%` : '0%';
-          el.style.background = remplissage.fond;
-          el.style.boxShadow = sien && zone === 'parfait' ? remplissage.halo : 'none';
+          el.style.background = t.fond;
+          el.style.boxShadow = sien && t.halo !== 'none' ? t.halo : 'none';
         }
       }
       raf = requestAnimationFrame(tick);
@@ -292,8 +254,17 @@ export function TouchControls() {
   // ou le chevron ne se lisait plus.
   const cardClass =
     'w-full h-full rounded-2xl border-2 border-white/10 backdrop-blur-sm bg-card/45 ' +
-    'bg-gradient-to-b from-white/12 via-transparent to-black/30 ' +
+    'bg-gradient-to-b from-white/12 via-transparent to-black/30 relative overflow-hidden ' +
     'flex items-center justify-center pointer-events-none';
+  // La jauge de la haie, posee DANS le pave : elle monte du bas, le chevron
+  // reste lisible par-dessus. Hors haies elle est a zero et ne se voit pas.
+  const jauge = (cote: 'left' | 'right') => (
+    <div
+      ref={cote === 'left' ? jaugeL : jaugeR}
+      className="absolute inset-x-0 bottom-0 pointer-events-none"
+      style={{ height: '0%', background: ZONE_JAUGE.plane.fond }}
+    />
+  );
 
   return (
     <>
@@ -302,50 +273,6 @@ export function TouchControls() {
         <div ref={edgeL} className="fixed left-0 top-0 h-full w-[14px] md:w-[20px] z-40 pointer-events-none" style={{ opacity: 0 }} />
         <div ref={edgeR} className="fixed right-0 top-0 h-full w-[14px] md:w-[20px] z-40 pointer-events-none" style={{ opacity: 0 }} />
       </>
-    )}
-    {APPEL_JOUEUR && haiesPosees() && (
-      // LA BANDE D'ATTAQUE. Elle se cale sur la hauteur des paves, en vh comme
-      // eux. Leur min-h/max-h peut l'en decoller de quelques pixels sur un
-      // ecran tres court ou tres long ; a la taille d'un telephone (20 vh
-      // valent 170 px sur 812 pt) les deux bandes se touchent, et c'est le seul
-      // format que ce prototype a a servir.
-      <div className="absolute w-full portrait:bottom-[20vh] landscape:bottom-[17vh]
-                      portrait:h-[9vh] landscape:h-[8vh] min-h-[46px] max-h-[110px]
-                      flex z-50 pointer-events-none">
-        {(['left', 'right'] as const).map(cote => (
-          <div
-            key={cote}
-            className={hitClass}
-            onPointerDown={(e) => { e.preventDefault(); appelHaies(cote); }}
-          >
-            <div
-              ref={cote === 'left' ? attL : attR}
-              className="w-full h-full rounded-xl border-2 backdrop-blur-sm relative
-                         overflow-hidden flex items-center justify-center pointer-events-none"
-              style={{
-                backgroundColor: ATT_REPOS.bg,
-                borderColor: ATT_REPOS.border,
-                color: ATT_REPOS.fg,
-                boxShadow: ATT_REPOS.glow,
-                marginLeft: cote === 'left' ? 'max(env(safe-area-inset-left),0.5rem)' : '0.25rem',
-                marginRight: cote === 'right' ? 'max(env(safe-area-inset-right),0.5rem)' : '0.25rem',
-                transition: 'background-color 90ms ease-out, border-color 90ms ease-out, ' +
-                            'color 90ms ease-out, box-shadow 120ms ease-out',
-              }}
-            >
-              {/* La jauge monte du bas : pleine au point d'appel du reglement. */}
-              <div
-                ref={cote === 'left' ? jaugeL : jaugeR}
-                className="absolute inset-x-0 bottom-0 pointer-events-none"
-                style={{ height: '0%', background: ZONE_JAUGE.plane.fond }}
-              />
-              <span className="relative">
-                <Franchir dir={cote === 'left' ? -1 : 1} />
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
     )}
     <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex z-50 pointer-events-none">
       <div
@@ -365,7 +292,8 @@ export function TouchControls() {
             marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',
           }}
         >
-          <Chevrons dir={-1} />
+          {APPEL_JOUEUR && jauge('left')}
+          <span className="relative"><Chevrons dir={-1} /></span>
         </div>
       </div>
 
@@ -386,21 +314,17 @@ export function TouchControls() {
             marginBottom: 'max(env(safe-area-inset-bottom),0.5rem)',
           }}
         >
-          <Chevrons dir={1} />
+          {APPEL_JOUEUR && jauge('right')}
+          <span className="relative"><Chevrons dir={1} /></span>
         </div>
       </div>
 
-      {/* La consigne « alterne les deux touches » vit juste au-dessus des paves,
-          c'est-a-dire exactement la ou la bande d'attaque se pose. Elle lui cede
-          la place : sur une course de haies, l'alternance n'est plus la seule
-          chose a savoir, et deux consignes superposees n'en font aucune. */}
-      {!(APPEL_JOUEUR && haiesPosees()) && (
-        <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
-          <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
-            {SprinterApp.N.t('alternate')}
-          </span>
-        </div>
-      )}
+      {/* La bande d'attaque a disparu : la consigne retrouve sa place. */}
+      <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
+        <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
+          {SprinterApp.N.t('alternate')}
+        </span>
+      </div>
     </div>
     </>
   );

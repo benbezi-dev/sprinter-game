@@ -41,9 +41,41 @@ import { HAIES, APPUIS, positionsDes } from './haies.js';
  */
 export const APPEL = {
   '100h': { avant: 2.00, apres: 1.05 },
-  '110h': { avant: 2.15, apres: 1.40 },
+  // MESURE SUR COLIN JACKSON, 4e haie (Coh 2003, New Studies in Athletics
+  // 18:1, analyse cinematique 3-D a 50 Hz). Foulee de haie totale 3,67 m :
+  // appel a 2,09 m, reception a 1,58 m, soit un rapport de 56,9/43,1.
+  //
+  // Le jeu portait 2,15/1,40, c'est-a-dire 60,6/39,4 — exactement le rapport
+  // 60/40 que la litterature donne pour optimal, mais avec une foulee totale
+  // trop courte de 12 cm. On prend le mesure plutot que le theorique : c'est un
+  // hurdleur reel, chronometre, et c'est a des hurdleurs que ce jeu doit
+  // ressembler. Si une moyenne sur plusieurs athletes arrive un jour, c'est
+  // ici qu'elle remplacera Jackson.
+  '110h': { avant: 2.09, apres: 1.58 },
   '400h': { avant: 2.15, apres: 1.20 },
 };
+
+/**
+ * DE COMBIEN LE CORPS EST DEJA DEVANT LE PIED QUAND ON QUITTE LE SOL, en metres.
+ *
+ * La foulee de haie se mesure d'un pied a l'autre — 3,67 m chez Jackson. Mais
+ * ce n'est pas cette distance-la qui decide du TEMPS passe en l'air : le corps
+ * a deja depasse le pied d'appel au moment du decollage, et il retombe
+ * pratiquement a l'aplomb du pied de reception. Chez Jackson, le centre de
+ * masse est 0,38 m devant le pied dans la phase de poussee, et 0,05 m derriere
+ * le pied a la reception. Son centre de masse ne parcourt donc que 3,30 m — et
+ * 3,30 / 9,11 donne 0,362 s, soit exactement le vol de 0,36 s mesure.
+ *
+ * LE DECALAGE EST A L'APPEL, PAS A LA RECEPTION, et l'avoir mis au mauvais bout
+ * a coute un harnais : les dix receptions tombaient alors a 1,25 m derriere la
+ * haie au lieu de 1,58. Le coureur quitte donc le sol quand SON CORPS atteint
+ * `haie - avant + AVANCE_CM`, et il se recoit ou le reglement le dit.
+ *
+ * Sans cette correction, le vol se chronometrait sur 3,67 m et durait 0,42 s a
+ * la vitesse reelle de Jackson : cinq centiemes de trop par haie, une
+ * demi-seconde sur la course.
+ */
+export const AVANCE_CM = 0.38;
 
 /**
  * CE QUE COUTE UNE HAIE, et pourquoi les deux epreuves ne le paient pas pareil.
@@ -92,11 +124,130 @@ export const COUT = {
  */
 export const VITESSE_VOL_MIN = 1;
 
-/** Combien de temps le coureur reste en l'air, a cette vitesse. */
+/**
+ * Combien de temps le coureur reste en l'air, a cette vitesse.
+ *
+ * Sur le chemin du CENTRE DE MASSE, pas sur la foulee d'un pied a l'autre —
+ * voir AVANCE_CM, qui dit pourquoi et ce que l'erreur coutait.
+ */
 export function volDe(cle, v) {
   const c = COUT[cle];
   if (c.vol === 'duree') return c.duree;
-  return (APPEL[cle].avant + APPEL[cle].apres) / Math.max(VITESSE_VOL_MIN, v);
+  const a = APPEL[cle];
+  return Math.max(0.05, a.avant + a.apres - AVANCE_CM) / Math.max(VITESSE_VOL_MIN, v);
+}
+
+/**
+ * CE QU'UN CORPS EN L'AIR PERD VRAIMENT, en freinage par seconde.
+ *
+ * C'est la correction la plus lourde de tout ce travail, et elle vient d'une
+ * mesure : Jackson passe sa 4e haie en perdant 0,34 m/s sur 9,11, soit 3,7 %.
+ * Le jeu en perdait 26.
+ *
+ * LA CAUSE ETAIT IDENTIFIEE A LA LIGNE PRES. Pendant le vol, le moteur
+ * continuait d'appliquer le freinage du coureur, C.DRAG = 0,8 : sur 0,36 s de
+ * vol, exp(-0,8 x 0,36) = 0,75, et le coureur se recevait a trois quarts de sa
+ * vitesse. Mais UN CORPS EN L'AIR NE FREINE PAS COMME UN COUREUR QUI A CESSE
+ * DE POUSSER : il n'y a plus de contact au sol, il ne reste que l'air.
+ *
+ * 0,105 par seconde rend exactement les 3,7 % de Jackson sur ses 0,36 s de vol,
+ * et c'est le huitieme du freinage au sol. Le vol garde ainsi son cout — on n'y
+ * pousse pas, et c'est ce que `freeze` represente — sans plus faire du
+ * franchissement une punition. Toute la doctrine du hurdling tient dans cette
+ * phrase : on ne perd pas de vitesse sur la haie.
+ *
+ * Le cout reste proportionnel a la duree : un appel donne de trop loin fait
+ * planer plus longtemps, et se paie donc davantage, sans qu'aucune penalite
+ * n'ait besoin d'etre inventee.
+ */
+export const DRAG_VOL = 0.105;
+
+/**
+ * OU TOMBE LE CISEAU DANS LE VOL, en part de sa duree.
+ *
+ * Le ciseau est le geste qui definit le hurdling : la jambe d'attaque griffe
+ * vers le bas pendant que la jambe arriere passe, genou vers l'aisselle. C'est
+ * lui qui remet le coureur en course au lieu de le faire retomber en arriere.
+ *
+ * CE NOMBRE EST UNE HYPOTHESE, ET IL FAUT LE DIRE. Coh (2003) chronometre tout
+ * le reste du franchissement de Jackson — vol 0,36 s, contact d'appel 0,100 s,
+ * contact de reception 0,080 s, genou de la jambe d'attaque a 13,8 m/s, pied a
+ * 18,2 — mais pas l'instant ou la jambe arriere passe. La moitie du vol est le
+ * point le plus defendable a defaut de mesure : c'est a peu pres le sommet de
+ * la trajectoire, la ou la jambe d'attaque est tendue et ou il faut commencer
+ * a l'abattre. Le jour ou une mesure arrive, elle remplace ce 0,50.
+ *
+ * LA CIBLE SUIT LE VOL, DONC ELLE SE RESSERRE AVEC LA VITESSE — et c'est toute
+ * la lecon de dynamisme. A 9,2 m/s le vol dure 0,37 s et le ciseau se place a
+ * 185 ms ; a 11 il dure 0,32 et il faut couper a 160. Un hurdleur rapide n'a
+ * pas le loisir de trainer sa jambe arriere.
+ */
+export const CISEAU_VISE = 0.50;
+
+/**
+ * La tolerance autour du ciseau, en secondes.
+ *
+ * CONSTANTE, elle, et pas une part du vol : la cible se resserre avec la
+ * vitesse, la precision exigee non. C'est la meme regle que pour l'appel
+ * (TOLERANCE_T) et pour la meme raison — une fenetre qui retrecit quand le
+ * joueur progresse est une regle qui punit le progres.
+ */
+export const TOLERANCE_CISEAU = { parfait: 0.040, bon: 0.085 };
+
+/**
+ * CE QUE LE CISEAU GARDE DE LA VITESSE, et c'est ici que le jeu cesse d'etre
+ * Sprinter avec des haies dessinees dessus.
+ *
+ * Le freinage de l'air (DRAG_VOL) est de la physique : on le subit, on n'y peut
+ * rien. Ce qui suit est de la TECHNIQUE, et c'est ce que le joueur decide.
+ *
+ * Jackson perd 3,7 % en passant sa haie. Un hurdleur de club en perd le triple,
+ * et pas parce qu'il vole plus longtemps : parce qu'il retombe DERRIERE son
+ * appui, jambe arriere en retard, et qu'il passe sa premiere foulee a se
+ * remettre sous lui. C'est exactement ce que ces cinq nombres representent.
+ *
+ *   ciseau     le relache tombe dans la fenetre : on repart en courant
+ *   bon        un peu tot ou un peu tard, on gratte
+ *   accroche   relache trop tot : la jambe d'attaque n'est pas tendue, on
+ *              touche la barre
+ *   traine     relache trop tard : la jambe arriere suit, on se recoit assis
+ *   absent     jamais relache : on franchit a plat, pieds joints, et l'on
+ *              retombe sans avoir couru
+ *
+ * LES VALEURS SONT CALEES SUR CE QUE LE GESTE DOIT PESER, mesure au harnais
+ * sur le 110 m haies a dix frappes par seconde, appel juste a chaque haie :
+ *
+ *     ciseau net   12,75 s      un ciseau mal place coute trois dixiemes,
+ *     un peu tot   13,10 s      ne jamais ciseauter en coute pres d'un et
+ *     un peu tard  13,08 s      demi. C'est l'ordre de grandeur voulu : la
+ *     jamais       14,15 s      faute se sent sans que la course soit finie.
+ *
+ * Un premier jeu de valeurs (absent a 0,86) ne donnait que trois dixiemes entre
+ * le meilleur et le pire ciseau de la course entiere — le geste existait, il ne
+ * pesait rien, et le moteur reprenait la vitesse plus vite que la haie ne la
+ * retirait. C'est le piege que COUT nomme deja, et il ressort a chaque fois
+ * qu'on ajoute un cout ponctuel dans ce jeu.
+ */
+export const GARDE_CISEAU = {
+  ciseau: 1, bon: 0.965, accroche: 0.85, traine: 0.88, absent: 0.70,
+};
+
+/**
+ * Juger un ciseau : le relache est-il tombe au bon moment du vol ?
+ *
+ * `part` est l'instant du relache rapporte a la duree du vol, de 0 (a l'appel)
+ * a 1 (a la reception). `vol` est cette duree, en secondes — elle sert a
+ * ramener la tolerance, qui est en temps, sur la meme echelle.
+ */
+export function jugerCiseau(part, vol) {
+  if (part === null || part === undefined) return { note: 'absent', garde: GARDE_CISEAU.absent, ecart: null };
+  const ecart = (part - CISEAU_VISE) * Math.max(0.05, vol);
+  const e = Math.abs(ecart);
+  if (e <= TOLERANCE_CISEAU.parfait) return { note: 'ciseau', garde: GARDE_CISEAU.ciseau, ecart };
+  if (e <= TOLERANCE_CISEAU.bon) return { note: 'bon', garde: GARDE_CISEAU.bon, ecart };
+  return ecart < 0
+    ? { note: 'accroche', garde: GARDE_CISEAU.accroche, ecart }
+    : { note: 'traine', garde: GARDE_CISEAU.traine, ecart };
 }
 
 /**
@@ -197,6 +348,32 @@ export const TOLERANCE_T = { parfait: 0.065, bon: 0.110 };
 export const APPEL_MINI = 0.50;
 
 /**
+ * A QUELLE DISTANCE DE LA HAIE UN APPUI DEVIENT L'APPEL, en metres devant elle.
+ *
+ * LE DEFAUT QU'ELLE CORRIGE, et c'en etait un gros. Depuis que le geste vit sur
+ * le pave, n'importe quel appui donne dans la fenetre d'approche declenchait
+ * l'appel — or cette fenetre couvre les DEUX dernieres foulees. Le joueur ne
+ * pouvait donc plus courir pendant deux foulees : sa premiere frappe le faisait
+ * decoller trois metres trop tot, a chaque haie.
+ *
+ * LA CORRECTION RECONNECTE LA CADENCE A LA HAIE, et c'est ce qui manquait le
+ * plus au jeu. Un appui ne devient l'appel que dans cette derniere fenetre ;
+ * avant, c'est une foulee comme une autre. Or le joueur ne choisit pas ou
+ * tombent ses appuis — c'est sa cadence qui en decide. LE RYTHME DOIT DONC
+ * POSER UN APPUI ICI, faute de quoi on arrive sur la haie sans pied pour
+ * s'appeler, et on la percute.
+ *
+ * C'est exactement ce qu'un entraineur demande, et ce que le jeu ne demandait
+ * plus : la derniere foulee ne se choisit pas, elle se prepare.
+ *
+ * UN METRE DEVANT LE POINT D'APPEL. Avec APPEL_MINI, la fenetre fait 2,59 m sur
+ * le 110 m haies, soit un peu plus d'une foulee de hurdleur (1,9 m) : une
+ * cadence juste y pose un appui, une cadence fausse le pose a cote. Plus large,
+ * la cadence cesserait de compter ; plus etroite, elle deviendrait une loterie.
+ */
+export const APPEL_MAXI = 1.00;
+
+/**
  * Ce que garde un coureur qui attaque de la mauvaise jambe.
  *
  * Un peu moins qu'un rythme rompu (0,94), et pour une raison physique : un
@@ -236,52 +413,37 @@ export const GARDE_FRAPPE_VOL = 0.97;
 export const GARDE_VOL_MINI = 0.70;
 
 /**
- * CE QUE REND UN APPEL REUSSI, en m/s — et c'est le correctif le plus
- * important de tout le prototype.
+ * CE QUE REND UN APPEL REUSSI, en part de la vitesse — et c'est une MESURE.
  *
- * LE DEFAUT, mesure a l'ecran puis au harnais. Rendre l'appel au joueur ne
- * rendait pas le jeu plus exigeant, il le rendait plus LENT, et pour une
- * raison qui n'avait rien a voir avec les haies : le pouce qui monte vers la
- * touche d'attaque est un pouce qui ne martele plus. Deux frappes perdues par
- * haie, dix haies. A dix frappes par seconde sur le 110 m haies, un joueur qui
- * passait les DIX haies en « parfait » bouclait en 14,12 s la ou l'appel
- * automatique donnait 12,52 — une seconde et demie payee pour avoir bien joue.
- * Le jeu punissait le geste qu'il demandait.
+ * LE DEFAUT QU'ELLE CORRIGE, trouve au pouce. Rendre l'appel au joueur ne
+ * rendait pas le jeu plus exigeant, il le rendait plus LENT, parce que le pouce
+ * qui monte vers la touche d'attaque ne martele plus. A dix frappes par seconde
+ * sur le 110 m haies, un joueur qui passait les DIX haies en « parfait »
+ * bouclait en 14,12 s la ou l'appel automatique donnait 12,52. Le jeu punissait
+ * le geste qu'il demandait.
  *
  * On ne corrige pas cela en baissant les penalites : elles n'y sont pour rien.
- * Ce qui manquait etait a l'endroit exact du trou. UN HURDLEUR POUSSE A
- * L'APPEL — c'est la foulee la plus puissante de l'intervalle, celle qui
- * l'arrache du sol. Le pouce qui quitte les paves ne cesse donc pas de courir :
- * il donne son appui ailleurs.
+ * Ce qui manquait etait a l'endroit exact du trou, et le papier de Coh le
+ * chiffre : CHEZ JACKSON, L'APPEL ACCELERE. Sa vitesse horizontale passe de
+ * 8,81 m/s dans la phase d'amortissement a 9,11 dans la phase de poussee, soit
+ * +3,3 %. Un hurdleur ne subit pas sa haie, il pousse dedans — « the take-off
+ * leg actively placed on the ground and the shoulders aggressively pushed
+ * towards the hurdle ». Le pouce qui quitte les paves ne cesse donc pas de
+ * courir : il donne son appui ailleurs.
  *
- * ELLE SE MERITE, et c'est ce qui la rend interessante. Un appel parfait rend
- * la poussee entiere, un appel correct en rend la moitie, un appel plane ou
- * hache ne rend rien, et la mauvaise jambe non plus — on ne s'arrache pas du
- * sol en enjambant des deux pieds. Viser juste cesse ainsi d'etre seulement
- * une facon d'eviter une punition pour devenir une facon de gagner du temps,
- * ce qui n'est pas la meme chose a jouer.
+ * CETTE VALEUR AVAIT ETE CALEE A L'AVEUGLE AVANT D'ETRE MESUREE, et les deux
+ * se sont rejointes. Un balayage sur le seul chrono avait donne 0,50 m/s ; la
+ * mesure biomecanique donne 3,3 % de 8,81, soit 0,30 m/s. On garde la mesure —
+ * elle vaut mieux qu'un reglage, et elle suit la vitesse au lieu d'etre un
+ * forfait.
  *
- * LA VALEUR EST CALEE, PAS CHOISIE, et le calage tient en une phrase : rendre
- * l'appel au joueur ne doit changer ni le bareme ni les plateaux. Ils ont ete
- * cales sur l'appel automatique (haies.js) apres beaucoup de mesures, et une
- * commande qui change n'est pas une raison de les refaire.
- *
- * On a donc balaye la poussee et garde celle qui rapproche le plus le chrono
- * d'un joueur — dix haies parfaites, voyage de pouce de 160 ms — de celui que
- * l'appel automatique donnait a la meme cadence, sur les TROIS courses et de
- * huit a douze frappes par seconde :
- *
- *     poussee   0     0,50   0,70   0,90   1,10   1,30
- *     ecart max 1,87  0,70   0,95   1,05   1,91   3,21   (secondes)
- *
- * 0,50 double donc la precision de tout le reste du balayage. Au-dela, la
- * poussee cesse d'etre une compensation et devient le levier principal : a
- * 1,30 un joueur a huit frappes par seconde gagnait trois secondes sur la
- * machine, et la cadence — qui est le coeur de Sprinter — ne comptait plus.
- *
- * Verrouille par tools/haies-appel-test.mjs, qui refait la mesure.
+ * ELLE SE MERITE. Un appel parfait la rend entiere, un appel correct la moitie,
+ * un appel plane ou hache rien, et la mauvaise jambe non plus — on ne s'arrache
+ * pas du sol en enjambant des deux pieds. Viser juste cesse ainsi d'etre
+ * seulement une facon d'eviter une punition pour devenir une facon de gagner du
+ * temps, ce qui n'est pas la meme chose a jouer.
  */
-export const POUSSEE_APPEL = { parfait: 0.50, bon: 0.25, plane: 0, hache: 0 };
+export const POUSSEE_APPEL = { parfait: 0.033, bon: 0.017, plane: 0, hache: 0 };
 
 /**
  * Combien d'appuis pour couvrir un intervalle, a cette longueur de foulee.

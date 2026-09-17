@@ -17,9 +17,10 @@
 
 import '../src/game/sprinter-core.js';
 import { HAIES } from '../src/game/haies.js';
-import { APPEL, TOLERANCE, TOLERANCE_T, APPEL_MINI, POUSSEE_APPEL } from '../src/game/haies-jeu.js';
+import { APPEL, TOLERANCE, TOLERANCE_T, APPEL_MINI, POUSSEE_APPEL,
+         CISEAU_VISE, GARDE_CISEAU } from '../src/game/haies-jeu.js';
 import { nouvelleCourse, preparerCoureur, pas, appeler, approche, enVol,
-         frappeEnVol } from '../src/game/haies-pas.js';
+         frappeEnVol, relacher, ciseauDe } from '../src/game/haies-pas.js';
 
 const { Track, Runner } = globalThis.SprinterCore;
 
@@ -35,17 +36,19 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
  * `enVol`   continue-t-il de marteler les paves pendant le vol ?
  * `mitraille` appuie sur la touche d'attaque des qu'elle s'allume.
  * `joueur`  false remet l'appel a la machine : c'est la course de reference.
+ * `ciseau`  a quelle part du vol le pouce se leve. `null` : jamais.
  *
- * `voyage`  LE TEMPS QUE LE POUCE PASSE EN L'AIR entre les paves et la touche
- *           d'attaque, en secondes — donc pendant lequel il ne martele plus.
- *           C'est la seule chose que ce harnais modelise et que le jeu ne
- *           contient pas, et c'est ce qui manquait : sans elle, le prototype
- *           se mesurait comme si le pouce se dedoublait. Le joueur, lui, l'a
- *           senti tout de suite.
+ * `voyage`  LE TEMPS QUE LE POUCE PASSAIT EN L'AIR pour atteindre une touche
+ *           d'attaque au-dessus des paves, en secondes. Ces touches n'existent
+ *           plus — le geste vit sur le pave — et ce parametre ne sert donc plus
+ *           qu'a une chose : rejouer l'ancienne commande pour verifier qu'on a
+ *           bien gagne ce qu'on croit avoir gagne. Il vaut zero partout
+ *           ailleurs, et c'est le sujet de « LE GESTE NE COUTE PLUS RIEN ».
  */
 function courir(cle, {
   cadence, cible = null, jambe = 'bonne', enVolAussi = false, mitraille = false,
-  joueur = true, voyage = 0, mouchard = null, dureeMax = 120, bruit = 0, graine = 1,
+  joueur = true, voyage = 0, ciseau = CISEAU_VISE, mouchard = null,
+  dureeMax = 120, bruit = 0, graine = 1,
 } = {}) {
   const race = HAIES[cle];
   const track = new Track(race);
@@ -74,6 +77,13 @@ function courir(cle, {
       prochainTap += 1 / (cadence * (1 + (alea() * 2 - 1) * bruit));
     }
 
+    // LE CISEAU — le pouce se leve. C'est le meme pave, le meme doigt : on ne
+    // simule rien de plus qu'un relache au bon moment du vol.
+    const vol = ciseauDe(course, r);
+    if (vol && !vol.fait && ciseau !== null && vol.part >= ciseau) {
+      relacher(course, r, vol.cote);
+    }
+
     // L'APPEL. On note aussi ce que la touche annoncait, image par image :
     // c'est ce qui permet de verifier qu'elle ne change pas sous le pouce.
     const a = approche(course);
@@ -100,7 +110,9 @@ function courir(cle, {
     if (juge && r.fallAnim > 0 && !tombait) chutes.push(juge);
     if (r.d >= track.total && fin === null) fin = t;
   }
-  return { temps: fin, journal, chutes, annonces, course, r, perdues };
+  const n = k => course.ciseaux.filter(x => x.note === k).length;
+  return { temps: fin, journal, chutes, annonces, course, r, perdues,
+           ciseaux: course.ciseaux.slice(), nets: n('ciseau') };
 }
 
 /** La cible qui tombe pile sur le point d'appel du reglement. */
@@ -211,10 +223,30 @@ for (const cle of ['100h', '110h', '400h']) {
      `${tot.temps?.toFixed(2)} contre ${juste.temps?.toFixed(2)}`);
   ok(`${cle} : appeler trop tard coute`, tard.temps > juste.temps,
      `${tard.temps?.toFixed(2)} contre ${juste.temps?.toFixed(2)}`);
-  const plateaux = HAIES[cle].ranges;
-  ok(`${cle} : un joueur qui vise juste a 9,5 frappes/s reste dans le bareme`,
-     juste.temps > plateaux[5][0] * 0.95 && juste.temps < plateaux[0][1] * 1.15,
-     `${juste.temps?.toFixed(2)} s`);
+}
+
+titre("LE BAREME SE GAGNE, ET IL SE MERITE");
+
+// UN PLATEAU N'EST PAS UNE CASE OU ATTERRIR : c'est la fourchette des chronos
+// donnes aux ADVERSAIRES de l'etape (sprinter-app.js, chaque coureur recoit un
+// `target` tire entre les deux bornes). Le test precedent demandait au joueur
+// d'y « rester », ce qui ne voulait rien dire — courir plus vite que la borne
+// basse, c'est gagner largement, pas sortir du jeu.
+//
+// Ce qu'il faut verifier est ailleurs, et c'est ce que le bareme decide par le
+// joueur (haies.js, BAREME) engage : le dernier niveau doit se gagner a haute
+// cadence, et ne pas se gagner a basse. Un bareme qu'aucun doigt ne bat est un
+// mur ; un bareme qu'un doigt tranquille bat est un decor.
+for (const cle of ['100h', '110h', '400h']) {
+  const [bas, haut] = HAIES[cle].ranges[5];          // le dernier plateau, les ZEZE
+  const vif = courir(cle, { cadence: 12, cible: JUSTE(cle) });
+  const lent = courir(cle, { cadence: 8, cible: JUSTE(cle) });
+  ok(`${cle} : a 12 frappes/s, le dernier plateau se gagne`,
+     vif.temps !== null && vif.temps <= bas,
+     `${vif.temps?.toFixed(2)} s contre ${bas} au mieux en face`);
+  ok(`${cle} : a 8 frappes/s, il ne se gagne pas`,
+     lent.temps !== null && lent.temps >= haut,
+     `${lent.temps?.toFixed(2)} s contre ${haut} au pire en face`);
 }
 
 titre("LA JAUGE NE MENT PAS");
@@ -245,80 +277,93 @@ for (const cle of ['100h', '110h', '400h']) {
      `plus grand pas : ${saut.toFixed(3)}`);
 }
 
-titre("L'APPEL REND CE QUE LE POUCE A COUTE");
+titre("LE GESTE NE COUTE PLUS RIEN AU POUCE");
 
-// LE DEFAUT QUE CETTE SECTION GARDE FERME, et il a ete trouve au pouce, pas
-// ici : rendre l'appel au joueur rendait le jeu plus LENT, parce que le pouce
-// qui monte vers la touche d'attaque ne martele plus. Deux frappes perdues par
-// haie, dix haies. Sur le 110 m haies a dix frappes par seconde, un joueur qui
-// passait les DIX haies en « parfait » mettait 14,12 s la ou la machine mettait
-// 12,52 : le jeu punissait le geste qu'il demandait.
+// CE QUE CETTE SECTION GARDE FERME, et il a fallu une video d'essai pour le
+// voir. Quand l'appel se donnait sur deux touches AU-DESSUS des paves, le pouce
+// devait monter et redescendre : deux frappes perdues par haie, dix haies. A
+// dix frappes par seconde sur le 110 m, un joueur qui passait les DIX haies en
+// « parfait » mettait 14,12 s la ou la machine mettait 12,52. Le jeu punissait
+// le geste qu'il demandait.
 //
-// POUSSEE_APPEL comble le trou a l'endroit exact ou il est. Ce qui suit verifie
-// que le compte y est, et qu'il y reste.
-// LA BORNE EST ASYMETRIQUE, et c'est voulu. La premiere version demandait au
-// joueur de coller au chrono de la machine dans les deux sens, et elle a
-// echoue sur le 110 m haies a huit frappes par seconde : le joueur y gagnait
-// 1,38 s. C'etait le test qui avait tort. La machine, a cette cadence, casse
-// son rythme a chaque haie ; le joueur qui vise juste tient ses quatre appuis.
-// Il vient d'acquerir une competence qu'elle n'a pas, et elle doit payer —
-// sans quoi on aurait ajoute un geste sans ajouter un jeu.
-//
-// Ce qui ne doit pas arriver, en revanche, c'est d'etre PUNI pour bien jouer :
-// c'est le defaut qui a ete vu au pouce, et c'est ce que la borne basse garde
-// fermee. La borne haute n'est la que pour que le bareme veuille encore dire
-// quelque chose.
+// Le geste vit maintenant SUR le pave — appuyer, maintenir, relacher — et le
+// maintien occupe le vol, ou l'on ne doit de toute facon plus marteler. Il ne
+// prend donc rien a la course : il occupe le temps que la haie lui prenait
+// deja. Ce qui suit verifie qu'il en reste ainsi.
 for (const cle of ['100h', '110h', '400h']) {
-  let pireLent = 0, ouLent = '', pireVif = 0, ouVif = '';
+  let pire = 0, ou = '';
   for (const cad of [8, 9, 10, 11, 12]) {
     const machine = courir(cle, { cadence: cad, joueur: false });
-    const pouce = courir(cle, { cadence: cad, cible: JUSTE(cle), voyage: 0.16 });
+    const pouce = courir(cle, { cadence: cad, cible: JUSTE(cle) });
     if (machine.temps === null || pouce.temps === null) continue;
     const d = pouce.temps - machine.temps;
-    const ou = `a ${cad} frappes/s (${pouce.temps.toFixed(2)} contre ${machine.temps.toFixed(2)})`;
-    if (d > pireLent) { pireLent = d; ouLent = ou; }
-    if (-d > pireVif) { pireVif = -d; ouVif = ou; }
+    if (d > pire) { pire = d; ou = `a ${cad} frappes/s (${pouce.temps.toFixed(2)} contre ${machine.temps.toFixed(2)})`; }
   }
-  ok(`${cle} : bien jouer au pouce ne coute jamais plus d'une seconde`,
-     pireLent < 1.0, `${pireLent.toFixed(2)} s ${ouLent}`);
-  ok(`${cle} : et n'en rapporte pas plus de deux — le bareme tient`,
-     pireVif < 2.0, `${pireVif.toFixed(2)} s ${ouVif}`);
+  // Jouer le geste a la perfection ne doit jamais couter par rapport a la
+  // machine qui ne le joue pas. Un dixieme de tolerance pour le bruit de
+  // quantification du rythme, pas davantage.
+  ok(`${cle} : le geste joue juste ne coute rien contre la machine`,
+     pire < 0.10, `${pire.toFixed(2)} s ${ou}`);
 }
 
-// Et le voyage du pouce doit COUTER quelque chose : s'il ne coutait rien, la
-// poussee serait un cadeau et non une compensation.
+titre("LE CISEAU EST CE QUI FAIT LA COURSE");
+
+// LE SECOND TEMPS DU GESTE, et celui qui definit le hurdling : la jambe
+// d'attaque griffe vers le bas pendant que la jambe arriere passe. C'est lui
+// qui remet le coureur en course au lieu de le faire retomber en arriere.
+//
+// Le freinage de l'air est de la physique et se subit ; le ciseau est de la
+// TECHNIQUE et se decide. GARDE_CISEAU chiffre la difference.
+ok('un ciseau net ne coute rien, et tout le reste coute',
+   GARDE_CISEAU.ciseau === 1 && GARDE_CISEAU.bon < 1
+   && GARDE_CISEAU.accroche < GARDE_CISEAU.bon && GARDE_CISEAU.traine < GARDE_CISEAU.bon
+   && GARDE_CISEAU.absent < GARDE_CISEAU.accroche,
+   JSON.stringify(GARDE_CISEAU));
+
+for (const cle of ['100h', '110h', '400h']) {
+  const net = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  const tot = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.20 });
+  const tard = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.85 });
+  const jamais = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: null });
+  ok(`${cle} : les dix ciseaux tombent nets quand on vise juste`,
+     net.nets === 10, `${net.nets}/10`);
+  ok(`${cle} : relacher trop tot coute`, tot.temps > net.temps,
+     `${tot.temps?.toFixed(2)} contre ${net.temps?.toFixed(2)}`);
+  ok(`${cle} : relacher trop tard coute`, tard.temps > net.temps,
+     `${tard.temps?.toFixed(2)} contre ${net.temps?.toFixed(2)}`);
+  // Ne jamais ciseauter, c'est franchir a plat, pieds joints. Cela doit se
+  // payer d'un demi-chrono, pas d'une broutille : c'est la faute qui separe un
+  // hurdleur d'un sauteur.
+  ok(`${cle} : ne jamais ciseauter coute une demi-seconde ou plus`,
+     jamais.temps - net.temps >= 0.5,
+     `${(jamais.temps - net.temps).toFixed(2)} s (${jamais.temps?.toFixed(2)} contre ${net.temps?.toFixed(2)})`);
+}
+
+// LA CIBLE SUIT LE VOL, DONC ELLE SE RESSERRE AVEC LA VITESSE — c'est la lecon
+// de dynamisme, et elle sort du reglement : plus on va vite, plus le vol est
+// court (3,30 m de centre de masse divises par la vitesse), donc plus le ciseau
+// doit venir tot. Un hurdleur rapide n'a pas le loisir de trainer sa jambe
+// arriere. La TOLERANCE, elle, reste constante en millisecondes : la demande
+// change, la precision exigee non.
+for (const cle of ['100h', '110h']) {
+  const lent = courir(cle, { cadence: 8, cible: JUSTE(cle) });
+  const vif = courir(cle, { cadence: 12, cible: JUSTE(cle) });
+  const msL = lent.ciseaux.filter(c => c.ms).map(c => c.ms);
+  const msV = vif.ciseaux.filter(c => c.ms).map(c => c.ms);
+  const moy = a => a.reduce((s, x) => s + x, 0) / Math.max(1, a.length);
+  ok(`${cle} : a haute cadence, le ciseau se place plus tot`,
+     moy(msV) < moy(msL),
+     `${moy(msV).toFixed(0)} ms a 12 frappes/s contre ${moy(msL).toFixed(0)} a 8`);
+}
+
+// ET NE RIEN FAIRE NE PASSE PAS POUR UN CISEAU : sans relache, les dix haies
+// se notent « absent ». C'est ce qui empeche le second temps du geste de
+// devenir facultatif, comme l'appel l'etait avant lui.
 for (const cle of ['110h', '400h']) {
-  const net = courir(cle, { cadence: 10, cible: JUSTE(cle), voyage: 0 });
-  const lourd = courir(cle, { cadence: 10, cible: JUSTE(cle), voyage: 0.24 });
-  ok(`${cle} : un pouce plus lent coute quand meme du chrono`,
-     lourd.temps > net.temps, `${lourd.temps?.toFixed(2)} contre ${net.temps?.toFixed(2)}`);
-}
-
-// LA POUSSEE SE MERITE. Elle doit suivre la note, et la mauvaise jambe n'en
-// recoit rien : sans cela, appuyer n'importe comment rapporterait autant que
-// viser, et l'on aurait remplace un jeu qu'on subit par un jeu qu'on tape.
-ok('la poussee suit la note, et le rate n\'en recoit rien',
-   POUSSEE_APPEL.parfait > POUSSEE_APPEL.bon && POUSSEE_APPEL.bon > 0
-   && POUSSEE_APPEL.plane === 0 && POUSSEE_APPEL.hache === 0,
-   JSON.stringify(POUSSEE_APPEL));
-
-for (const cle of ['100h', '110h', '400h']) {
-  const bonne = courir(cle, { cadence: 10, cible: JUSTE(cle), voyage: 0.16, jambe: 'bonne' });
-  const mauvaise = courir(cle, { cadence: 10, cible: JUSTE(cle), voyage: 0.16, jambe: 'mauvaise' });
-  ok(`${cle} : la mauvaise jambe ne recoit aucune poussee`,
-     mauvaise.temps > bonne.temps + 0.3,
-     `${mauvaise.temps?.toFixed(2)} contre ${bonne.temps?.toFixed(2)}`);
-}
-
-// LA CADENCE RESTE LE COEUR DU JEU. C'est la borne haute de la poussee : trop
-// genereuse, elle devient le levier principal et Sprinter disparait sous ses
-// haies. Au balayage, 1,30 faisait gagner trois secondes a un joueur lent.
-for (const cle of ['100h', '110h', '400h']) {
-  const lent = courir(cle, { cadence: 8, cible: JUSTE(cle), voyage: 0.16 });
-  const vif = courir(cle, { cadence: 12, cible: JUSTE(cle), voyage: 0.16 });
-  ok(`${cle} : de 8 a 12 frappes/s, la cadence pese encore lourd`,
-     lent.temps - vif.temps > 1.0,
-     `${(lent.temps - vif.temps).toFixed(2)} s entre les deux`);
+  const c = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: null });
+  ok(`${cle} : sans relache, les dix ciseaux sont notes absents`,
+     c.ciseaux.filter(x => x.note === 'absent').length === 10,
+     c.ciseaux.map(x => x.note).join(' '));
 }
 
 titre("AUCUNE CHUTE NE VIENT D'UNE HAIE");

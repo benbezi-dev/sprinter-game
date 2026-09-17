@@ -726,6 +726,15 @@
     // plutot que « ratee » : le joueur doit entendre le choc, pas un constat.
     haie_percute:    ['PERCUTÉE', 'HIT'],
     haie_jambe:      ['mauvaise jambe', 'wrong leg'],
+    // Le ciseau, second temps du geste : on relache le pave et la jambe arriere
+    // passe. Les mots sont ceux du bord de piste — un hurdleur doit reconnaitre
+    // ce que son entraineur lui dit, pas apprendre un vocabulaire de jeu.
+    haie_c_ciseau:   ['CISEAU NET', 'CLEAN SCISSOR'],
+    haie_c_bon:      ['CISEAU', 'SCISSOR'],
+    haie_c_accroche: ['ACCROCHÉE', 'CLIPPED'],
+    haie_c_traine:   ['JAMBE ARRIÈRE', 'TRAIL LEG'],
+    haie_c_absent:   ['PAS DE CISEAU', 'NO SCISSOR'],
+    haie_c_ms:       ['{n} ms', '{n} ms'],
     haie_appuis:     ['{n} appuis', '{n} steps'],
     haie_rythme:     ['rythme cassé', 'rhythm broken'],
     haie_n:          ['haie {n}/{t}', 'hurdle {n}/{t}'],
