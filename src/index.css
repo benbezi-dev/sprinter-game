@@ -115,12 +115,16 @@
   --foreground: #EEF0F8;
   --border: #1E293B;
   --input: #1E293B;
-  --ring: #F8CD4A;
+  --ring: #FFD426;
   --card: #0B0F19;
   --card-foreground: #EEF0F8;
   --popover: #0B0F19;
   --popover-foreground: #EEF0F8;
-  --primary: #F8CD4A;
+  /* SPRINTER : l'or, monte d'un cran. Il etait a #F8CD4A — un jaune sable,
+     poli, qui s'eteignait sur la piste rouge et sous le soleil d'un ecran de
+     telephone. #FFD426 garde la meme teinte mais gagne en saturation et en
+     lumiere : c'est la meme couleur, plus forte. */
+  --primary: #FFD426;
   --primary-foreground: #060913;
   --secondary: #1E293B;
   --secondary-foreground: #EEF0F8;
@@ -136,18 +140,29 @@
   /* La couleur du jeu, en composantes, pour les halos et les ombres
      (`rgb(var(--primaire-rgb)/0.25)`), et sa nuance sombre pour les
      bordures de bouton. */
-  --primaire-rgb: 248 205 74;
-  --primaire-fonce: #D97706;
+  --primaire-rgb: 255 212 38;
+  --primaire-fonce: #E08A00;
 }
 
-/* HURDLERS : le bleu de son monde a la place du jaune de Sprinter. Le
-   selecteur porte deux conditions pour passer devant `.dark`, qui repose le
-   jaune plus bas. Voir game/jeux.ts. */
+/* HURDLERS : LE CYAN, ET NON PLUS LE BLEU DOUX.
+   ---------------------------------------------------------------------------
+   Deux jeux, deux couleurs, et il faut qu'on les distingue d'un coup d'oeil —
+   sur une vignette de partage comme sur un ecran de telephone au soleil.
+   L'ancien bleu (#60A5FA) etait le voisin poli du jaune : lisible, mais tiede,
+   et il se confondait avec l'`--accent` bleu que Sprinter porte deja.
+
+   Le cyan est le plus loin qu'on puisse aller de l'or sans quitter la famille
+   froide du monde des haies. Il est aussi plus LUMINEUX a saturation egale —
+   l'oeil y est plus sensible qu'au bleu — donc il tient sur la piste rouge et
+   sur la pelouse, ou un bleu moyen s'eteint.
+
+   Le selecteur porte deux conditions pour passer devant `.dark`, qui repose
+   l'or plus bas. Voir game/jeux.ts. */
 :root[data-jeu="hurdlers"] {
-  --primary: #60A5FA;
-  --ring: #60A5FA;
-  --primaire-rgb: 96 165 250;
-  --primaire-fonce: #2563EB;
+  --primary: #22D3EE;
+  --ring: #22D3EE;
+  --primaire-rgb: 34 211 238;
+  --primaire-fonce: #0891B2;
 }
 
 .dark {
@@ -155,12 +170,12 @@
   --foreground: #EEF0F8;
   --border: #1E293B;
   --input: #1E293B;
-  --ring: #F8CD4A;
+  --ring: #FFD426;
   --card: #0B0F19;
   --card-foreground: #EEF0F8;
   --popover: #0B0F19;
   --popover-foreground: #EEF0F8;
-  --primary: #F8CD4A;
+  --primary: #FFD426;
   --primary-foreground: #060913;
   --secondary: #1E293B;
   --secondary-foreground: #EEF0F8;

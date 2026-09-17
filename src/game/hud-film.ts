@@ -40,7 +40,11 @@ import { DEPART_STARTER } from './canal';
 // Les valeurs de `index.css` et de Tailwind, en dur : un canvas ne sait pas
 // lire une variable CSS, et `getComputedStyle` a chaque image coute une lecture
 // de style par frame pour des couleurs qui ne bougent jamais.
-const OR        = '#F8CD4A';  // --primary
+// --primary de Sprinter, monte d'un cran en meme temps que lui (index.css).
+// Ce n'est PAS l'or des medailles (Insignes.tsx, COULEURS_MEDAILLE), qui reste
+// a #F8CD4A : celui-la est un metal, pas la couleur d'un jeu, et il ne doit
+// pas suivre les humeurs du theme.
+const OR        = '#FFD426';  // --primary
 const TEXTE     = '#EEF0F8';  // --foreground
 const SOURDINE  = '#94A3B8';  // --muted-foreground
 const CARTE     = '11, 15, 25';  // --card, en composantes pour les fonds voiles

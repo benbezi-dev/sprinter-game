@@ -25,15 +25,22 @@ const TENUE_CISEAU = 0.8;
 type Ciseau = { haie: number; note: 'ciseau' | 'bon' | 'accroche' | 'traine' | 'absent'; ms: number | null };
 
 const COULEUR_CISEAU: Record<Ciseau['note'], string> = {
-  ciseau: 'text-emerald-400',
+  ciseau: 'text-green-400',
   bon: 'text-primary',
   accroche: 'text-amber-400',
   traine: 'text-amber-400',
   absent: 'text-destructive',
 };
 
+/**
+ * LE VERT EST UN VERT, ET PAS UN EMERAUDE. Il l'etait — #34D399 — et ca
+ * marchait tant que la couleur de Hurdlers etait un bleu doux. Depuis qu'elle
+ * est cyan (index.css), l'emeraude n'en est plus qu'a vingt-sept degres de
+ * teinte : « PARFAIT » et « BIEN » se lisaient pareil d'un coup d'oeil, et un
+ * verdict qui dure une seconde ne se lit que d'un coup d'oeil.
+ */
 const COULEUR: Record<Juge['note'], string> = {
-  parfait: 'text-emerald-400',
+  parfait: 'text-green-400',
   bon: 'text-primary',
   plane: 'text-amber-400',
   hache: 'text-destructive',

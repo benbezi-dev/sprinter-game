@@ -83,8 +83,8 @@ const ZONE_JAUGE: Record<string, { fond: string; halo: string }> = {
   // ca passe
   bon:      { fond: 'rgb(var(--primaire-rgb) / 0.55)', halo: 'none' },
   // le moment
-  parfait:  { fond: 'rgba(52,211,153,0.85)', halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
-  ciseau:   { fond: 'rgba(52,211,153,0.85)', halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
+  parfait:  { fond: 'rgba(74,222,128,0.9)', halo: '0 0 18px 2px rgba(74,222,128,0.8)' },
+  ciseau:   { fond: 'rgba(74,222,128,0.9)', halo: '0 0 18px 2px rgba(74,222,128,0.8)' },
   // trop tard
   hache:    { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
   traine:   { fond: 'rgba(239,68,68,0.70)', halo: 'none' },

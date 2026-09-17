@@ -376,7 +376,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     : ['ciseau', 'accroche', 'traine', 'absent'].includes(note) ? 'haie_c_' + note
     : note === 'bon' && etape === 1 ? 'haie_c_bon'
     : 'haie_' + note;
-  const tonVerdict = note === 'parfait' || note === 'ciseau' ? 'text-emerald-400'
+  const tonVerdict = note === 'parfait' || note === 'ciseau' ? 'text-green-400'
     : note === 'bon' ? 'text-primary'
     : note === 'plane' || note === 'accroche' || note === 'traine' ? 'text-amber-400'
     : 'text-destructive';
@@ -504,7 +504,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
               {verdictCadence && (
                 <motion.span {...SURGISSEMENT}
                              className={`font-black font-display tracking-wider text-xl
-                               ${verdictCadence === 'juste' ? 'text-emerald-400' : 'text-destructive'}`}>
+                               ${verdictCadence === 'juste' ? 'text-green-400' : 'text-destructive'}`}>
                   {N.t('tutoh_c_' + verdictCadence)}
                 </motion.span>
               )}
