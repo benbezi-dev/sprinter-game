@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { SprinterApp, padPress, useGameStore, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
+import { APPEL_JOUEUR } from '@/game/canal';
+import { appelHaies } from '@/game/haies-course.js';
 
 /* Le jeu ecoute le clavier sur window, donc il recoit aussi les frappes
    destinees aux champs de texte. Sans ce filtre, taper son nom pilotait la
@@ -26,6 +28,23 @@ export function useInputHandlers() {
       SprinterApp.Audio_.init();
       // Le clavier reprend la main : on revient a la rigueur d'origine.
       if (e.key.startsWith('Arrow')) setTouchInput(false);
+
+      // LES TOUCHES D'ATTAQUE AU CLAVIER (canal.ts, APPEL_JOUEUR).
+      //
+      // `e.code` et non `e.key` : il designe la POSITION PHYSIQUE de la touche
+      // et non le caractere imprime dessus. KeyQ et KeyP restent donc les deux
+      // extremites de la rangee du haut sur azerty comme sur qwerty ou qwertz —
+      // sur azerty, KeyQ est la touche marquee A, c'est-a-dire le meme endroit
+      // sous les doigts. Le jeu se lit en quatorze langues sur la branche d'a
+      // cote ; ses commandes ne peuvent pas dependre d'un clavier.
+      //
+      // Le clavier n'existe ici que pour eprouver la regle au bureau. Ce qui
+      // doit etre juge se joue au pouce, sur telephone.
+      if (APPEL_JOUEUR && (e.code === 'KeyQ' || e.code === 'KeyP')) {
+        appelHaies(e.code === 'KeyQ' ? 'left' : 'right');
+        e.preventDefault();
+        return;
+      }
 
       if (e.key === 'ArrowLeft') {
         padPress('left');

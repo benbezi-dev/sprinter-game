@@ -5,8 +5,11 @@ import { SURGISSEMENT } from '@/lib/mouvement';
 import { dernierFranchissement, haiesPosees } from '@/game/haies-course.js';
 
 type Juge = {
-  haie: number; note: 'parfait' | 'bon' | 'plane' | 'hache';
+  haie: number; note: 'parfait' | 'bon' | 'plane' | 'hache' | 'percute';
   tenu: boolean; appuis: number;
+  // `jambe` n'existe que sous l'appel du joueur : true bonne jambe, false
+  // mauvaise, null sur une haie percutee — on ne l'a attaquee d'aucune.
+  jambe?: boolean | null;
 };
 
 /** Combien de temps le verdict d'une haie reste a l'ecran, en secondes. */
@@ -17,6 +20,7 @@ const COULEUR: Record<Juge['note'], string> = {
   bon: 'text-primary',
   plane: 'text-amber-400',
   hache: 'text-destructive',
+  percute: 'text-destructive',
 };
 
 /**
@@ -67,6 +71,7 @@ export function HaiesHUD() {
                               ${juge.j.tenu ? 'text-white/80' : 'text-destructive'}`}>
               {N.t('haie_appuis', { n: String(juge.j.appuis) })}
               {!juge.j.tenu && <> · {N.t('haie_rythme')}</>}
+              {juge.j.jambe === false && <> · {N.t('haie_jambe')}</>}
             </span>
           </motion.div>
         )}

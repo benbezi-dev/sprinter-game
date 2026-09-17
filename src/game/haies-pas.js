@@ -42,7 +42,8 @@
 
 import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
-         GARDE_RYTHME_ROMPU } from './haies-jeu.js';
+         GARDE_RYTHME_ROMPU, APPEL_MINI, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
+         GARDE_VOL_MINI } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -66,6 +67,63 @@ const FENETRE = 1.5;
  * foulee tombe pile entre les deux.
  */
 const REGLAGE_MAX = 0.5;
+
+/**
+ * A combien de FOULEES de la haie les touches d'attaque s'allument.
+ *
+ * Deux : a 9,5 m/s, la fenetre s'ouvre environ six metres avant la haie, soit
+ * six dixiemes de seconde. Assez pour voir la touche s'allumer, lever le
+ * pouce et viser ; trop peu pour que le joueur ait le temps d'hesiter, ce qui
+ * est exactement ce qu'on veut lui faire ressentir.
+ *
+ * C'est aussi ce qui empeche le martelement de la touche d'attaque : LE
+ * PREMIER APPUI DONNE DANS LA FENETRE EST L'APPEL. Un joueur qui mitraille
+ * decolle donc six metres avant la haie, retombe devant, et la percute. Sans
+ * cette regle, mitrailler garantissait un appel au bord de la fenetre.
+ */
+const FENETRE_APPEL = 2.0;
+
+/**
+ * CE QU'UNE HAIE PERCUTEE COUTE EN PLUS D'UN VOL, en secondes.
+ *
+ * Le temps d'arret d'une percussion ne se pose pas dans le vide : il se pose
+ * SUR la duree du vol qu'on aurait fait. Le harnais a montre pourquoi, et
+ * c'etait un vrai defaut du prototype.
+ *
+ * A la premiere version, percuter ne coutait que de la vitesse (GARDE_PERCUTE)
+ * et deux dixiemes d'arret. Sur les courtes, cela suffisait. Sur le tour, non :
+ * le vol y est une DUREE d'une seconde pendant laquelle on ne pousse plus
+ * (haies-jeu.js, COUT), et dix secondes de non-poussee coutaient plus cher que
+ * dix percussions dont le moteur se relevait a chaque fois. Un joueur qui ne
+ * touchait jamais les touches d'attaque bouclait le 400 m haies en 41,97 s
+ * quand celui qui visait juste mettait 44,23 : LE JEU PAYAIT POUR NE PAS
+ * JOUER, ce qui est la pire chose qu'un prototype puisse faire.
+ *
+ * C'est le meme piege que celui deja documente dans COUT — « le moteur
+ * reaccelere plus vite qu'une haie ne coute ». Il ressort des que franchir
+ * devient facultatif.
+ *
+ * Une percussion coute donc le vol qu'on n'a pas fait, PLUS ce quart de
+ * seconde. Elle est ainsi strictement plus chere que le pire franchissement
+ * legal sur les trois courses, et ce sera encore vrai si la duree du vol
+ * change un jour.
+ */
+const ACCROC_PERCUTE = 0.25;
+
+/**
+ * De quel pied on est parti, a ce compte d'appuis.
+ *
+ * `left` / `right` et non gauche/droite : c'est le vocabulaire de padPress()
+ * et de Runner.press(), et le cote fait tout le trajet du pouce jusqu'ici sans
+ * etre traduit. Une conversion au passage serait un bug de plus a ecrire.
+ *
+ * preparerCoureur() pose `stride = 0` — le depart se fait donc du gauche, et
+ * la parite du compte d'appuis suffit a savoir de quel pied on part.
+ */
+function piedDe(n) { return n % 2 === 0 ? 'left' : 'right'; }
+
+/** La jambe d'attaque est celle qui ne pousse pas : l'autre. */
+function attaqueDe(n) { return piedDe(n) === 'left' ? 'right' : 'left'; }
 
 /**
  * QUEL APPUI VISER, quand la foulee naturelle tombe entre deux.
@@ -112,20 +170,31 @@ function viser(course, j, naturel, s) {
 }
 
 /** L'etat d'une course de haies, neuf. */
-export function nouvelleCourse(cle) {
+export function nouvelleCourse(cle, { appelJoueur = false } = {}) {
   if (!HAIES[cle]) return null;
   return {
     cle,
+    // QUI QUITTE LE SOL. A false, viser() cale le pied d'appel sur la haie et
+    // le joueur n'a que sa cadence : c'est le jeu tel qu'il tourne aujourd'hui.
+    // A true, c'est le joueur, avec tout ce que cela ouvre — la mauvaise
+    // jambe, la haie percutee, les frappes en vol. Le drapeau vient de
+    // canal.ts (APPEL_JOUEUR) et descend par haies-course.js : ce fichier ne
+    // doit rien savoir du canal, sans quoi le harnais ne pourrait plus le
+    // charger seul.
+    appelJoueur,
     positions: positionsDes(cle),
     i: 0,              // la prochaine haie
     reception: 0,      // index de l'appui de reception (0 : on part des blocs)
     fenetre: null,     // le reglage en cours avant l'appel
+    approche: null,    // la haie a portee de touche, et de quelle jambe
     enVol: false,
     phaseVol: 0,
     vitesseVol: 0,     // la vitesse tenue en l'air, sur un vol en distance
     vitesseSol: 0,     // celle qu'il retrouvera a la reception
     reception_d: null, // ou il se recoit, en metres ; null sur un vol en duree
-    parfaites: 0, rompus: 0, appuis: [], notes: [], dernier: null,
+    penaliteVol: 1,    // ce que les frappes donnees en l'air ont deja coute
+    parfaites: 0, rompus: 0, percutees: 0, mauvaisesJambes: 0, frappesEnVol: 0,
+    appuis: [], notes: [], dernier: null,
   };
 }
 
@@ -188,6 +257,12 @@ export function pas(course, j) {
       j.stride = course.phaseVol;
       return null;
     }
+    // CE QUE LES FRAPPES DONNEES EN L'AIR ONT COUTE se paie ICI, a la
+    // reception : c'est la qu'on retrouve le sol, et c'est la vitesse qu'on y
+    // retrouve qui doit s'en ressentir. Sous l'appel automatique, penaliteVol
+    // vaut 1 et cette ligne ne fait rien.
+    j.v *= course.penaliteVol;
+    course.penaliteVol = 1;
     course.enVol = false;
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
@@ -199,6 +274,12 @@ export function pas(course, j) {
 
   const a = APPEL[course.cle];
   const point = course.positions[course.i] - a.avant;
+
+  // L'APPEL DU JOUEUR. Tout ce qui suit — la fenetre de reglage, viser(), la
+  // phase menee droit sur l'appui, l'appel qui part tout seul — n'existe que
+  // parce que la machine choisit. Quand c'est le joueur, on ne regle rien : on
+  // allume les touches, et on regarde s'il est trop tard.
+  if (course.appelJoueur) return veille(course, j, point);
 
   // L'OUVERTURE DU REGLAGE. On mesure combien d'appuis la foulee du moment
   // mettrait jusqu'au point d'appel — un nombre a virgule — et l'on vise
@@ -273,4 +354,203 @@ export function pas(course, j) {
   course.fenetre = null;
   course.i++;
   return juge;
+}
+
+
+/* ---------------------------------------------------------------------------
+   L'APPEL DECLENCHE PAR LE JOUEUR
+   ---------------------------------------------------------------------------
+   Trois fonctions, et une seule est appelee par le moteur : veille(), depuis
+   pas(). Les deux autres viennent du pouce, par haies-course.js.
+
+   CE QUI DISPARAIT : viser(), la fenetre de reglage, la phase menee droit sur
+   l'appui. La foulee court naturellement, et le coureur quitte le sol exactement
+   la ou le joueur a appuye. Ce qui etait le coeur du fichier devient la moitie
+   automatique, gardee telle quelle : le drapeau se retire.
+
+   CE QUI APPARAIT : la jambe d'attaque, la haie percutee, les frappes en vol.
+--------------------------------------------------------------------------- */
+
+/**
+ * L'APPROCHE. Ouvrir la fenetre des touches, puis guetter le trop-tard.
+ *
+ * LA JAMBE EST ANNONCEE, PUIS FIGEE, et c'est ce qui rend la regle jouable.
+ * Le pied d'appel se deduit de la parite du compte d'appuis ; or ce compte
+ * change si le joueur appuie une demi-foulee plus tot. Calcule a l'appui, le
+ * bon cote aurait donc bascule sous le pouce entre le moment ou la touche
+ * s'allume et celui ou on l'atteint : le joueur n'aurait pas joue, il aurait
+ * devine. On le calcule une fois, a l'ouverture de la fenetre, on l'affiche,
+ * et c'est celui-la qui compte — le jeu passe un contrat, il le tient.
+ *
+ * Le compte d'appuis, lui, reste honnete : il se lit sur la foulee reelle au
+ * moment de l'appel. Les deux jugements sont distincts, et doivent le rester —
+ * obeir a la touche annoncee ne doit jamais excuser un rythme casse.
+ */
+function veille(course, j, point) {
+  const haie = course.positions[course.i];
+
+  if (!course.approche) {
+    const s = j.strideLength();
+    const reste = point - j.d;
+    if (reste > FENETRE_APPEL * s) return null;
+    const naturel = j.stride / PI + Math.max(0, reste) / s;
+    const vise = Math.max(Math.floor(j.stride / PI) + 1, Math.round(naturel));
+    course.approche = { haie: course.i + 1, cote: attaqueDe(vise), vise };
+  }
+
+  // TROP TARD : le coureur est sur la haie et n'a pas appele. Il la percute.
+  if (j.d >= haie - APPEL_MINI) return percuter(course, j);
+  return null;
+}
+
+/**
+ * LE POUCE APPUIE. Rend le jugement de la haie, ou `null` si l'appui ne
+ * tombait pas sur une haie a portee — auquel cas il ne coute rien : hors
+ * fenetre, la touche d'attaque n'est pas une faute, elle n'est rien.
+ */
+export function appeler(course, j, cote) {
+  if (!course || !j || !course.appelJoueur) return null;
+  if (course.enVol || !course.approche) return null;
+  if (course.i >= course.positions.length) return null;
+
+  const cle = course.cle;
+  const a = APPEL[cle];
+  const haie = course.positions[course.i];
+  const avant = haie - j.d;
+  if (avant <= 0) return null;
+
+  // LE PIED D'APPEL SE CALE SUR L'APPUI LE PLUS PROCHE, et non sur celui qui
+  // vient de se poser. On ne quitte pas le sol au milieu d'une foulee : arrondir
+  // met la posture d'accord avec le saut, au prix d'un quart de foulee de
+  // fiction. Le jugement, lui, porte sur la distance REELLE au moment de
+  // l'appui — c'est cela que le joueur a dans les doigts, et c'est cela qui
+  // doit se noter.
+  const nAppel = Math.max(course.reception, Math.round(j.stride / PI));
+  const premiere = course.i === 0;
+  const appuis = premiere ? nAppel : nAppel - course.reception + 1;
+  const bonneJambe = cote === course.approche.cote;
+  const r = rythmeDe(cle, appuis, premiere ? 'premiere' : 'intervalle');
+  const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v });
+
+  j.v = p.v;
+  j.stride = nAppel * PI;
+
+  if (COUT[cle].vol === 'distance') {
+    j.v = Math.max(VITESSE_VOL_MIN, j.v);
+    j.freeze = (avant + a.apres) / j.v;
+    course.vitesseVol = course.vitesseSol = j.v;
+    course.reception_d = haie + a.apres;
+  } else {
+    // SUR LE TOUR, LE VOL EST UNE DUREE, ET ELLE NE SE REMBOURSE PAS.
+    //
+    // Cette seconde n'est pas le saut : c'est de courir POUR la haie sur
+    // trente-cinq metres, et haies-jeu.js le dit en toutes lettres. Elle ne
+    // depend donc pas de l'endroit d'ou l'on s'appelle.
+    //
+    // Deux versions se sont cassees dessus avant celle-ci. Une duree fixe
+    // rendait l'appel au plus tot gratuit — mitrailler la touche etait la
+    // meilleure facon de jouer le 400 m haies. La rapporter a la distance
+    // d'appel a retourne le defaut sans le corriger : l'appel le plus tardif
+    // raccourcissait le vol d'un tiers de seconde, et le harnais l'a mesure —
+    // 42,02 s en appelant au ras de la haie contre 44,23 en visant juste.
+    //
+    // Ce qui suit ne va que dans un sens : partir de plus loin AJOUTE le temps
+    // d'air en trop, partir plus pres ne retire rien. Le hache se paie en
+    // vitesse (GARDE), comme sur les courtes, et jamais en temps gagne.
+    j.freeze = COUT[cle].duree + Math.max(0, avant - a.avant) / Math.max(VITESSE_VOL_MIN, j.v);
+    course.reception_d = null;
+  }
+
+  // Meme raison que sur l'appel automatique : press() ne note pas la touche
+  // pendant le gel, donc le premier appui apres la reception passerait une fois
+  // sur deux pour un double appui.
+  j.lastKey = null;
+
+  if (p.note === 'parfait' && r.tenu && bonneJambe) course.parfaites++;
+  if (!r.tenu) course.rompus++;
+  if (!bonneJambe) course.mauvaisesJambes++;
+  course.appuis.push(appuis);
+  course.notes.push(p.note);
+  const juge = {
+    haie: course.i + 1, note: p.note, tenu: r.tenu, appuis,
+    min: r.min, max: r.max, avant: +avant.toFixed(2), jambe: bonneJambe,
+  };
+  course.dernier = juge;
+
+  course.enVol = true;
+  course.phaseVol = j.stride;
+  course.penaliteVol = 1;
+  course.approche = null;
+  course.fenetre = null;
+  course.i++;
+  return juge;
+}
+
+/**
+ * LA HAIE PERCUTEE. Le coureur arrive dessus sans avoir appele.
+ *
+ * C'est la seule faute de Hurdlers qui vienne entierement du joueur, et c'est
+ * elle qui rend le reste honnete : sans elle, ne rien faire reviendrait a
+ * franchir, et les touches d'attaque seraient une decoration.
+ *
+ * Il ne tombe pas (haies-jeu.js, GARDE_PERCUTE dit pourquoi) : il perd quatre
+ * dixiemes de sa vitesse, reste un instant sans pouvoir pousser, et la haie
+ * s'en va — haies-course.js la couche, comme une haie hachee.
+ */
+function percuter(course, j) {
+  const cle = course.cle;
+  const nAppel = Math.max(course.reception, Math.round(j.stride / PI));
+  const premiere = course.i === 0;
+  const appuis = premiere ? nAppel : nAppel - course.reception + 1;
+  const r = rythmeDe(cle, appuis, premiere ? 'premiere' : 'intervalle');
+
+  j.v = Math.max(VITESSE_VOL_MIN,
+                 j.v * GARDE_PERCUTE * (r.tenu ? 1 : GARDE_RYTHME_ROMPU));
+  // Le vol qu'on n'a pas fait, plus l'arret. Voir ACCROC_PERCUTE.
+  j.freeze = volDe(cle, j.v) + ACCROC_PERCUTE;
+  j.lastKey = null;
+
+  // On ne vole pas : la foulee continue, et l'intervalle suivant se compte
+  // depuis ici. Sans cette ligne, il repartirait du dernier appui d'avant la
+  // haie precedente et compterait une douzaine d'appuis.
+  course.reception = nAppel;
+
+  course.percutees++;
+  if (!r.tenu) course.rompus++;
+  course.appuis.push(appuis);
+  course.notes.push('percute');
+  const juge = {
+    haie: course.i + 1, note: 'percute', tenu: r.tenu, appuis,
+    min: r.min, max: r.max, avant: +(course.positions[course.i] - j.d).toFixed(2),
+    jambe: null,
+  };
+  course.dernier = juge;
+  course.approche = null;
+  course.i++;
+  return juge;
+}
+
+/**
+ * UNE FRAPPE DONNEE PENDANT LE VOL. Rend `true` si elle a compte.
+ *
+ * Elle ne passe pas par Runner.press(), qui sort a la premiere ligne quand le
+ * coureur est gele : c'est precisement pourquoi marteler en l'air ne coutait
+ * rien. L'interception se fait donc en amont, dans padPress().
+ */
+export function frappeEnVol(course) {
+  if (!course || !course.appelJoueur || !course.enVol) return false;
+  course.penaliteVol = Math.max(GARDE_VOL_MINI, course.penaliteVol * GARDE_FRAPPE_VOL);
+  course.frappesEnVol++;
+  return true;
+}
+
+/** La haie a portee de touche, et de quelle jambe l'attaquer. `null` sinon. */
+export function approche(course) {
+  if (!course || !course.appelJoueur || course.enVol) return null;
+  return course.approche;
+}
+
+/** Le coureur est-il en l'air ? */
+export function enVol(course) {
+  return !!(course && course.enVol);
 }

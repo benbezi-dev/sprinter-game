@@ -722,6 +722,10 @@
     haie_bon:        ['BIEN', 'GOOD'],
     haie_plane:      ['TROP LOIN', 'TOO FAR'],
     haie_hache:      ['TROP PRÈS', 'TOO CLOSE'],
+    // Ce que l'appel du joueur ajoute (canal.ts, APPEL_JOUEUR). « PERCUTE »
+    // plutot que « ratee » : le joueur doit entendre le choc, pas un constat.
+    haie_percute:    ['PERCUTÉE', 'HIT'],
+    haie_jambe:      ['mauvaise jambe', 'wrong leg'],
     haie_appuis:     ['{n} appuis', '{n} steps'],
     haie_rythme:     ['rythme cassé', 'rhythm broken'],
     haie_n:          ['haie {n}/{t}', 'hurdle {n}/{t}'],

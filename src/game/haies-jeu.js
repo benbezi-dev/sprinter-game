@@ -143,6 +143,90 @@ export const GARDE = { parfait: 1, bon: 0.985, plane: 0.945, hache: 0.90 };
  */
 export const GARDE_RYTHME_ROMPU = 0.94;
 
+/* ---------------------------------------------------------------------------
+   CE QUI NE SERT QU'A L'APPEL DECLENCHE PAR LE JOUEUR (canal.ts, APPEL_JOUEUR)
+   ---------------------------------------------------------------------------
+   Tant que la machine vise, rien de ce qui suit ne s'applique : viser() choisit
+   l'appui qui coute le moins, et le joueur ne peut ni rater sa jambe, ni
+   percuter, ni marteler en l'air puisque ses frappes y sont ignorees. Des que
+   c'est lui qui quitte le sol, les trois arrivent.
+--------------------------------------------------------------------------- */
+
+/**
+ * LA TOLERANCE, EN SECONDES — et pourquoi elle ne pouvait pas rester en metres.
+ *
+ * TOLERANCE est une distance. Rapportee au temps, elle donne ±32 ms a 9,5 m/s
+ * mais ±27 ms a 11 : PLUS LE JOUEUR VA VITE, PLUS SA FENETRE RETRECIT. Tant que
+ * la machine vise, c'est sans effet — elle tombe au centimetre quelle que soit
+ * la vitesse. Sous un pouce, c'est une regle qui punit le progres, et ce
+ * fichier dit deja en toutes lettres qu'une regle qui punit le progres est un
+ * defaut (voir le rythme du tour, plus haut).
+ *
+ * La fenetre se mesure donc en temps, et la distance ne sert plus que de
+ * PLANCHER : un coureur presque arrete garde la tolerance en metres, sans quoi
+ * elle se refermerait sur lui.
+ *
+ * CES DEUX NOMBRES NE SONT PAS MESURES, ils sont un point de depart. 65 ms
+ * vient des jeux de rythme, ou le « parfait » tient entre 40 et 50 ms — on
+ * l'ouvre parce qu'ici le pouce doit quitter un pave qu'il martele, ce qu'aucun
+ * jeu de rythme ne demande. Ils se calent a la main, sur telephone, et nulle
+ * part ailleurs : aucun harnais ne sait dire si une fenetre se sent.
+ */
+export const TOLERANCE_T = { parfait: 0.065, bon: 0.110 };
+
+/**
+ * A quelle distance de la haie il est trop tard pour s'appeler, en metres.
+ *
+ * Le joueur qui arrive la sans avoir appuye ne saute plus : il PERCUTE. C'est
+ * la seule faute de la course qui vienne entierement de lui, et c'est ce qui
+ * rend le reste honnete — sans elle, ne rien faire reviendrait a franchir.
+ *
+ * 80 cm : sous la fenetre « bon » a toute vitesse de jeu (elle se referme a
+ * 1,10 m a 9,5 m/s, a 0,94 m a 11), pour que la zone « trop pres » garde une
+ * existence entre les deux. Au-dessus, elle disparaissait et l'on passait sans
+ * transition d'un franchissement correct a un mur.
+ */
+export const APPEL_MINI = 0.80;
+
+/**
+ * Ce que garde un coureur qui attaque de la mauvaise jambe.
+ *
+ * Un peu moins qu'un rythme rompu (0,94), et pour une raison physique : un
+ * rythme casse, on le passe quand meme ; la mauvaise jambe devant, on ne
+ * ciseaute pas du tout — on enjambe des deux pieds.
+ */
+export const GARDE_MAUVAISE_JAMBE = 0.93;
+
+/**
+ * Ce que garde un coureur qui percute la haie.
+ *
+ * Severe, et pas une chute. La chute avait ete retiree parce que le joueur ne
+ * choisissait rien (haies-pas.js) ; maintenant il choisit, et une faute qui
+ * vient de lui peut couter. Mais une haie arrive a peu pres chaque seconde :
+ * une chute par haie manquee rendrait la course inracontable des la deuxieme.
+ * On perd donc quatre dixiemes de sa vitesse, la haie tombe, et l'on court
+ * encore — « une course perdue reste une course », comme le dit franchir().
+ */
+export const GARDE_PERCUTE = 0.60;
+
+/**
+ * Ce que coute CHAQUE frappe donnee pendant le vol.
+ *
+ * Aujourd'hui elles ne coutent rien : press() sort a la premiere ligne quand
+ * le coureur est gele (sprinter-core.js), si bien qu'on peut marteler a
+ * travers les dix haies sans jamais lever les pouces. C'est la deuxieme raison
+ * pour laquelle le jeu se joue comme Sprinter.
+ *
+ * A 0,97 par frappe et neuf frappes par seconde, un vol de 0,37 s en encaisse
+ * trois : le coureur se recoit a 91 % de sa vitesse. Assez pour que lever les
+ * pouces se sente, pas assez pour qu'une frappe de trop ruine la course. C'est
+ * ce qui donne le rythme « tap-tap-tap-HOP-silence » — celui de la musique.
+ */
+export const GARDE_FRAPPE_VOL = 0.97;
+
+/** Le plancher des frappes en vol : un vol ne peut pas tout prendre. */
+export const GARDE_VOL_MINI = 0.70;
+
 /**
  * Combien d'appuis pour couvrir un intervalle, a cette longueur de foulee.
  *
@@ -185,12 +269,16 @@ export function rythmeDe(cle, appuis, troncon = 'intervalle') {
  * `avant` est la distance restante devant la haie au moment de quitter le sol.
  * Positif toujours : on n'attaque pas une haie depuis derriere.
  */
-export function jugerAppel(cle, avant) {
+export function jugerAppel(cle, avant, v) {
   const vise = APPEL[cle].avant;
   const ecart = avant - vise;
   const e = Math.abs(ecart);
-  if (e <= TOLERANCE.parfait) return { note: 'parfait', garde: GARDE.parfait, ecart };
-  if (e <= TOLERANCE.bon) return { note: 'bon', garde: GARDE.bon, ecart };
+  // `v` absente : la machine vise, la tolerance reste celle du reglage, en
+  // metres. `v` donnee : c'est un pouce qui a appuye, et la fenetre se mesure
+  // en temps, jamais plus etroite que celle en metres (voir TOLERANCE_T).
+  const seuil = k => v > 0 ? Math.max(TOLERANCE[k], TOLERANCE_T[k] * v) : TOLERANCE[k];
+  if (e <= seuil('parfait')) return { note: 'parfait', garde: GARDE.parfait, ecart };
+  if (e <= seuil('bon')) return { note: 'bon', garde: GARDE.bon, ecart };
   return ecart > 0
     ? { note: 'plane', garde: GARDE.plane, ecart }
     : { note: 'hache', garde: GARDE.hache, ecart };
@@ -204,10 +292,17 @@ export function jugerAppel(cle, avant) {
  * exactement la haie ou l'on tombe. Le plancher evite qu'une serie noire
  * arrete le coureur net — une course perdue reste une course.
  */
-export function franchir(cle, v, avant, rythmeTenu) {
-  const j = jugerAppel(cle, avant);
-  const garde = j.garde * (rythmeTenu ? 1 : GARDE_RYTHME_ROMPU);
-  return { ...j, rythmeTenu, v: Math.max(v * 0.55, v * garde) };
+export function franchir(cle, v, avant, rythmeTenu, opt = {}) {
+  // `jambe` n'existe que sous l'appel du joueur : `undefined` veut dire « la
+  // question ne se pose pas », et se lit donc comme une bonne jambe. Ecrire
+  // `opt.jambe !== false` plutot que `opt.jambe === true` garde les deux
+  // appelants d'origine (viser(), simuler()) exactement ou ils etaient.
+  const bonneJambe = opt.jambe !== false;
+  const j = jugerAppel(cle, avant, opt.v);
+  const garde = j.garde
+    * (rythmeTenu ? 1 : GARDE_RYTHME_ROMPU)
+    * (bonneJambe ? 1 : GARDE_MAUVAISE_JAMBE);
+  return { ...j, rythmeTenu, bonneJambe, v: Math.max(v * 0.55, v * garde) };
 }
 
 /**

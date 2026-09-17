@@ -117,6 +117,29 @@ export const DEPART_STARTER = EST_TEST;
 export const HAIES_OUVERTES = EST_TEST;
 
 /**
+ * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
+ *
+ * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne
+ * saute pas. haies-pas.js choisit le pied d'appel, recale la foulee dessus et
+ * garde le meilleur des appuis a portee (viser()). La cadence reste le seul
+ * levier, et un harnais lui interdit meme de mal payer — « un point entier de
+ * cadence ne fait jamais perdre de chrono ». Le jeu se joue donc comme
+ * Sprinter, avec des haies dessinees par-dessus.
+ *
+ * A true, c'est le joueur qui quitte le sol : une touche par jambe d'attaque,
+ * au-dessus des paves, un seul appui par haie. Le reglage automatique de la
+ * foulee disparait, les frappes en vol se paient, et une haie que l'on
+ * n'attaque pas se percute.
+ *
+ * DRAPEAU SEPARE DE HAIES_OUVERTES, et c'est le but : les haies peuvent rester
+ * ouvertes sur le canal de test pendant qu'on rend l'appel au moteur, et
+ * inversement. La forme est celle du reste du fichier — une constante qui se
+ * replie a la compilation, pour que le prototype ne parte pas dans le build
+ * public.
+ */
+export const APPEL_JOUEUR = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

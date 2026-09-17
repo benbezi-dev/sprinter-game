@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useInputHandlers } from '@/hooks/use-inputs';
 import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION } from '@/game/engine';
+import { APPEL_JOUEUR } from '@/game/canal';
+import { approcheHaies, appelHaies, haiesPosees } from '@/game/haies-course.js';
 
 // Double chevron : plus lisible et plus soigne qu'un caractere "<" ou ">",
 // et surtout parfaitement centrable puisqu'on maitrise le viewBox. La
@@ -18,6 +20,28 @@ function Chevrons({ dir }: { dir: 1 | -1 }) {
       >
         <path d="M-1 -11 L 10 0 L -1 11" />
         <path d="M-13 -11 L -2 0 L -13 11" opacity="0.45" />
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * La haie et l'arc par-dessus. Pas un mot : ces deux touches doivent se lire
+ * d'un coup d'oeil en pleine course, et le jeu parle quatorze langues sur la
+ * branche d'a cote. Le dessin est asymetrique — la jambe d'attaque part du
+ * cote de la touche — pour que gauche et droite ne se confondent pas au coin
+ * de l'oeil, la ou un pictogramme symetrique aurait ete illisible.
+ */
+function Franchir({ dir }: { dir: 1 | -1 }) {
+  return (
+    <svg viewBox="-26 -20 52 40" className="w-10 h-8 md:w-14 md:h-11 block" aria-hidden="true">
+      <g transform={`scale(${dir} 1)`} fill="none" stroke="currentColor"
+         strokeLinecap="round" strokeLinejoin="round">
+        {/* l'arc du franchissement : on monte de loin, on retombe court */}
+        <path d="M-22 12 C -14 -16, 8 -18, 16 6" strokeWidth="4" />
+        {/* la haie */}
+        <path d="M6 -2 L 22 -2" strokeWidth="4" opacity="0.95" />
+        <path d="M14 -2 L 14 13" strokeWidth="3" opacity="0.5" />
       </g>
     </svg>
   );
@@ -41,6 +65,37 @@ const REPOS_GLOW = 'inset 0 1px 0 rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,
 // clignote au rythme de la foulee au lieu de disparaitre.
 const LIT_MS = 110;
 
+/* ---------------------------------------------------------------------------
+   LES TOUCHES D'ATTAQUE (canal.ts, APPEL_JOUEUR)
+   ---------------------------------------------------------------------------
+   Une bande au-dessus des paves, coupee en deux comme eux, bord a bord et sans
+   interstice — pour la meme raison qu'eux : ici, un appui perdu ne se contente
+   pas de manquer, il fait percuter la haie.
+
+   ELLES S'ALLUMENT A L'APPROCHE, ET DU BON COTE. Le reste du temps elles sont
+   la, eteintes : une bande qui apparaitrait d'un coup deplacerait le pouce au
+   pire moment. La reserve tient toujours — ce prototype existe pour savoir si
+   un pouce peut quitter un pave qu'il martele et y revenir.
+--------------------------------------------------------------------------- */
+
+/** Le cote annonce : allume, franc, il appelle le pouce. */
+const ATT_LIT = {
+  bg: 'rgb(var(--primaire-rgb) / 0.26)',
+  border: 'rgb(var(--primaire-rgb) / 0.95)',
+  fg: 'rgb(var(--primaire-rgb))',
+  glow: '0 0 0 1px rgb(var(--primaire-rgb) / 0.6), 0 0 26px rgb(var(--primaire-rgb) / 0.38)',
+};
+/** L'autre cote pendant l'approche : arme, mais ce n'est pas celui-la. */
+const ATT_ARME = {
+  bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.20)',
+  fg: 'rgba(255,255,255,0.30)', glow: 'inset 0 1px 0 rgba(255,255,255,0.10)',
+};
+/** Hors approche : la bande existe, elle ne demande rien. */
+const ATT_REPOS = {
+  bg: 'rgba(0,0,0,0.22)', border: 'rgba(255,255,255,0.08)',
+  fg: 'rgba(255,255,255,0.16)', glow: 'none',
+};
+
 export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
@@ -52,6 +107,8 @@ export function TouchControls() {
   const edgeR = useRef<HTMLDivElement | null>(null);
   const timers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const edgeTimers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
+  const attL = useRef<HTMLDivElement | null>(null);
+  const attR = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => () => {
     clearTimeout(timers.current.left);
@@ -82,6 +139,43 @@ export function TouchControls() {
     });
     return () => setStepCue(null);
   }, []);
+
+  // L'ALLUMAGE DES TOUCHES D'ATTAQUE, IMAGE PAR IMAGE ET NON PAR LE STORE.
+  //
+  // L'approche s'ouvre et se referme dans la boucle de simulation, qui tourne a
+  // 240 pas par seconde. La faire passer par React ferait re-rendre tout
+  // l'ecran plusieurs fois par haie, en pleine course. On lit donc l'etat des
+  // haies a chaque image et on peint les deux noeuds — exactement ce que
+  // `light()` fait plus bas pour les paves, et pour la meme raison.
+  //
+  // Rien a eteindre a l'appel : quitter le sol referme l'approche, le cote
+  // repasse a `null` et la lumiere s'en va d'elle-meme. C'est le retour du
+  // decollage, et il ne coute pas une ligne.
+  const enCourse = state === 'race' || state === 'count';
+  useEffect(() => {
+    if (!APPEL_JOUEUR || !enCourse) return;
+    let raf = 0;
+    let vu: string | null | undefined;
+    const peindre = (cote: string | null) => {
+      const paires = [[attL.current, 'left'], [attR.current, 'right']] as const;
+      for (const [el, cle] of paires) {
+        if (!el) continue;
+        const t = cote === null ? ATT_REPOS : cote === cle ? ATT_LIT : ATT_ARME;
+        el.style.backgroundColor = t.bg;
+        el.style.borderColor = t.border;
+        el.style.color = t.fg;
+        el.style.boxShadow = t.glow;
+      }
+    };
+    const tick = () => {
+      const a = approcheHaies() as { cote: 'left' | 'right' } | null;
+      const cote = a ? a.cote : null;
+      if (cote !== vu) { vu = cote; peindre(cote); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [enCourse]);
 
   // L'allumage est pilote directement sur le noeud, pas par une classe CSS
   // :active ni par un etat React :
@@ -152,6 +246,42 @@ export function TouchControls() {
         <div ref={edgeR} className="fixed right-0 top-0 h-full w-[14px] md:w-[20px] z-40 pointer-events-none" style={{ opacity: 0 }} />
       </>
     )}
+    {APPEL_JOUEUR && haiesPosees() && (
+      // LA BANDE D'ATTAQUE. Elle se cale sur la hauteur des paves, en vh comme
+      // eux. Leur min-h/max-h peut l'en decoller de quelques pixels sur un
+      // ecran tres court ou tres long ; a la taille d'un telephone (20 vh
+      // valent 170 px sur 812 pt) les deux bandes se touchent, et c'est le seul
+      // format que ce prototype a a servir.
+      <div className="absolute w-full portrait:bottom-[20vh] landscape:bottom-[17vh]
+                      portrait:h-[9vh] landscape:h-[8vh] min-h-[46px] max-h-[110px]
+                      flex z-50 pointer-events-none">
+        {(['left', 'right'] as const).map(cote => (
+          <div
+            key={cote}
+            className={hitClass}
+            onPointerDown={(e) => { e.preventDefault(); appelHaies(cote); }}
+          >
+            <div
+              ref={cote === 'left' ? attL : attR}
+              className="w-full h-full rounded-xl border-2 backdrop-blur-sm
+                         flex items-center justify-center pointer-events-none"
+              style={{
+                backgroundColor: ATT_REPOS.bg,
+                borderColor: ATT_REPOS.border,
+                color: ATT_REPOS.fg,
+                boxShadow: ATT_REPOS.glow,
+                marginLeft: cote === 'left' ? 'max(env(safe-area-inset-left),0.5rem)' : '0.25rem',
+                marginRight: cote === 'right' ? 'max(env(safe-area-inset-right),0.5rem)' : '0.25rem',
+                transition: 'background-color 90ms ease-out, border-color 90ms ease-out, ' +
+                            'color 90ms ease-out, box-shadow 120ms ease-out',
+              }}
+            >
+              <Franchir dir={cote === 'left' ? -1 : 1} />
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
     <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex z-50 pointer-events-none">
       <div
         className={hitClass}
@@ -195,11 +325,17 @@ export function TouchControls() {
         </div>
       </div>
 
-      <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
-        <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
-          {SprinterApp.N.t('alternate')}
-        </span>
-      </div>
+      {/* La consigne « alterne les deux touches » vit juste au-dessus des paves,
+          c'est-a-dire exactement la ou la bande d'attaque se pose. Elle lui cede
+          la place : sur une course de haies, l'alternance n'est plus la seule
+          chose a savoir, et deux consignes superposees n'en font aucune. */}
+      {!(APPEL_JOUEUR && haiesPosees()) && (
+        <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
+          <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
+            {SprinterApp.N.t('alternate')}
+          </span>
+        </div>
+      )}
     </div>
     </>
   );

@@ -296,6 +296,26 @@ export function padPress(side: 'left' | 'right') {
     return;
   }
   if (G.state !== 'race') return;
+
+  // EN L'AIR, LES PAVES NE POUSSENT PLUS — ILS COUTENT.
+  //
+  // Runner.press() sort a sa premiere ligne quand le coureur est gele, AVANT
+  // de noter la touche : une frappe donnee au-dessus d'une haie ne coutait donc
+  // rien, et l'on pouvait tenir sa cadence a travers les dix sans jamais lever
+  // les pouces. C'est la moitie de la raison pour laquelle Hurdlers se joue
+  // comme Sprinter. Le detour se fait ici, avant le moteur, et le crochet vient
+  // des haies (haies-course.js) — le moteur ne les connait toujours pas.
+  //
+  // Le retour rouge est volontaire : une frappe qui coute doit se voir a
+  // l'instant ou elle part, sans quoi le joueur n'apprend jamais a lever le
+  // pouce. Plus bref et plus pale qu'un vrai accroc — ce n'est pas une chute.
+  if (G.volHaies && G.volHaies()) {
+    G.stumbleFlash = 0.35;
+    cue(side, 'trip');
+    buzz(12);
+    return;
+  }
+
   // Appui manifestement perdu : le joueur a bien alterne, le moteur ne doit
   // pas y voir une repetition. On efface le dernier cote pour qu'il compte
   // comme une foulee normale, avec sa poussee pleine.

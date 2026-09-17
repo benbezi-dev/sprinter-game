@@ -20,8 +20,10 @@
 --------------------------------------------------------------------------- */
 
 import { SprinterApp } from './engine';
+import { APPEL_JOUEUR } from './canal';
 import { HAIES } from './haies.js';
-import { nouvelleCourse, preparerCoureur, libererCoureur, pas } from './haies-pas.js';
+import { nouvelleCourse, preparerCoureur, libererCoureur, pas,
+         appeler, frappeEnVol, approche } from './haies-pas.js';
 import { obstaclesDe } from './haies-rendu.js';
 
 /** L'etat d'une course de haies. Nul en dehors d'une course de haies. */
@@ -52,9 +54,9 @@ export function dernierFranchissement() {
 /** Le bilan de la course : ce que le joueur a tenu, et ce qu'il a paye. */
 export function bilanHaies() {
   if (!course) return null;
-  const { parfaites, rompus, appuis, notes } = course;
+  const { parfaites, rompus, percutees, mauvaisesJambes, frappesEnVol, appuis, notes } = course;
   return {
-    cle: course.cle, parfaites, rompus,
+    cle: course.cle, parfaites, rompus, percutees, mauvaisesJambes, frappesEnVol,
     appuis: appuis.slice(),
     notes: notes.slice(),
     rythme: [...new Set(appuis.slice(1))].join('/'),
@@ -78,8 +80,12 @@ export function armerHaies(cle) {
   // se pose sur le moteur, et le moteur ne fait qu'appeler ce qui s'y trouve.
   const G = SprinterApp.G;
   G.pasHaies = pasHaies;
+  // Le second crochet, pour la meme raison que le premier : padPress() doit
+  // pouvoir detourner une frappe donnee en l'air sans que le moteur importe
+  // quoi que ce soit des haies.
+  G.volHaies = APPEL_JOUEUR ? frappeHaiesEnVol : null;
 
-  course = nouvelleCourse(cle);
+  course = nouvelleCourse(cle, { appelJoueur: APPEL_JOUEUR });
   touchees.clear();
   preparerCoureur(course, G.player);
   // Le rendu, par le meme chemin : il trouve les haies sur `G.obstacles` et
@@ -105,6 +111,7 @@ export function rangerHaies() {
   const G = SprinterApp.G;
   if (G) {
     G.pasHaies = null;
+    G.volHaies = null;
     if (G.obstacles) oublierSur(G);
     G.obstacles = null;
     libererCoureur(G.player);
@@ -117,7 +124,46 @@ export function pasHaies(joueur) {
   // Une haie attaquee trop pres se prend dans le genou : elle tombe. Le
   // jugement la note hachee, rythme tenu ou non — le coureur la touche dans
   // les deux cas, et reste debout (voir haies-pas.js, « pas de chute »).
-  if (juge && juge.note === 'hache') {
+  // Une haie percutee — jamais attaquee du tout, sous l'appel du joueur —
+  // tombe pour la meme raison, et plus franchement encore.
+  if (juge && (juge.note === 'hache' || juge.note === 'percute')) {
     touchees.set(juge.haie - 1, SprinterApp.G.elapsed || 0);
   }
+}
+
+/* ---------------------------------------------------------------------------
+   CE QUI VIENT DU POUCE (canal.ts, APPEL_JOUEUR)
+   ---------------------------------------------------------------------------
+   Les trois fonctions que l'ecran appelle. Elles ne font que porter `course`
+   jusqu'a haies-pas.js : aucune regle ici, pour la meme raison que le reste du
+   fichier n'en contient pas — une regle a cet etage ne se teste qu'en lancant
+   une course.
+--------------------------------------------------------------------------- */
+
+/**
+ * La haie a portee de touche, et de quelle jambe l'attaquer.
+ *
+ * Lue a chaque image par les touches d'attaque (TouchControls), donc elle doit
+ * rester sans allocation ni calcul : c'est l'objet que haies-pas.js garde, tel
+ * quel, ou `null`.
+ */
+export function approcheHaies() {
+  return approche(course);
+}
+
+/** Le pouce a appuye sur une touche d'attaque. Rend le jugement, ou `null`. */
+export function appelHaies(cote) {
+  const G = SprinterApp.G;
+  if (!course || !G || !G.player) return null;
+  return appeler(course, G.player, cote);
+}
+
+/**
+ * Une frappe donnee pendant le vol. Rend `true` si elle a coute quelque chose.
+ *
+ * Le moteur ne peut pas la voir : Runner.press() sort avant de la noter quand
+ * le coureur est gele. C'est padPress() qui detourne ici, avant lui.
+ */
+export function frappeHaiesEnVol() {
+  return frappeEnVol(course);
 }
