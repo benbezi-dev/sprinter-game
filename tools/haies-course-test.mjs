@@ -26,8 +26,12 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 /**
  * Une course de haies jouee par un automate qui tape a cadence constante, au
  * rythme d'image du jeu (60 par seconde). `trace` recoit chaque image.
+ *
+ * `bruit` fait varier chaque intervalle entre deux frappes de plus ou moins
+ * cette part de la cadence, comme un vrai doigt ; `graine` rend ce bruit
+ * reproductible. Sans bruit, l'automate est un metronome.
  */
-function courir(cle, { cadence, dureeMax = 120, trace } = {}) {
+function courir(cle, { cadence, dureeMax = 120, trace, bruit = 0, graine = 1 } = {}) {
   const race = HAIES[cle];
   const track = new Track(race);
   const r = new Runner('TOI', 3, {
@@ -40,17 +44,22 @@ function courir(cle, { cadence, dureeMax = 120, trace } = {}) {
   let t = 0, fin = null, prochainTap = 0, gauche = true, auSol = 0, dernier = 0;
   let premierAppuiD = null;
   const journal = [];
+  const chutes = [];
+  let g = graine;
+  const alea = () => (g = (g * 16807) % 2147483647) / 2147483647;
   r.reaction = 0.15;
   while (t < dureeMax && r.d < track.total) {
     while (prochainTap <= t) {
       r.press(gauche ? 'a' : 'z', t);
       gauche = !gauche;
-      prochainTap += 1 / cadence;
+      prochainTap += 1 / (cadence * (1 + (alea() * 2 - 1) * bruit));
     }
     r.stepPlayer(dt, t);
     t += dt;
+    const tombait = r.fallAnim > 0;
     const juge = pas(course, r);
     if (juge) journal.push(juge);
+    if (juge && r.fallAnim > 0 && !tombait) chutes.push(juge);
     const n = Math.floor(r.stride / Math.PI + 1e-9);
     if (n > dernier) {
       auSol += n - dernier; dernier = n;
@@ -59,7 +68,7 @@ function courir(cle, { cadence, dureeMax = 120, trace } = {}) {
     if (trace) trace(r, course);
     if (r.d >= track.total && fin === null) fin = t;
   }
-  return { temps: fin, journal, r, track, appuisAuSol: auSol, premierAppuiD };
+  return { temps: fin, journal, chutes, r, track, appuisAuSol: auSol, premierAppuiD };
 }
 
 titre('LE MOTEUR COMPTE BIEN UN APPUI PAR DEMI-TOUR DE FOULEE');
@@ -147,6 +156,38 @@ for (const [cle, cad] of [['100h', 8], ['110h', 8], ['400h', 6]]) {
   const c = courir(cle, { cadence: cad });
   const rompus = c.journal.filter(j => !j.tenu).length;
   ok(`${cle} : a ${cad} frappes/s, le rythme se perd`, rompus >= 5, `${rompus}/10 rompus`);
+}
+
+titre('UNE HAIE NE FAIT PAS TOMBER LE COUREUR');
+
+// Le joueur ne choisit ni son pied d'appel ni l'endroit ou il quitte le sol :
+// c'est sa vitesse qui en decide. Une chute sur la haie tombait donc sans
+// qu'il ait rien fait de travers — a neuf frappes par seconde, un doigt qui
+// alternait parfaitement voyait son coureur plonger a peu pres une course sur
+// deux. Seule une repetition de touche fait tomber, comme dans Sprinter ; la
+// haie mal attaquee, elle, se renverse et coute sa vitesse.
+for (const cle of CLES) {
+  const fautes = [];
+  for (let cad = 5; cad <= 14; cad += 0.5) {
+    for (let graine = 1; graine <= 12; graine++) {
+      const c = courir(cle, { cadence: cad, bruit: 0.3, graine });
+      for (const j of c.chutes) fautes.push(`${cad}/s graine ${graine} : haie ${j.haie} ${j.note}, ${j.appuis} appuis`);
+    }
+  }
+  ok(`${cle} : de 5 a 14 frappes/s, doigt irregulier, aucune chute sur une haie`,
+     fautes.length === 0, `${fautes.length} chutes, dont ${fautes.slice(0, 3).join(' ; ')}`);
+}
+
+{
+  // Sans haie hachee a rythme casse, le test du dessus ne prouverait rien :
+  // c'est exactement la haie qui faisait tomber.
+  let visees = 0;
+  for (let graine = 1; graine <= 12; graine++) {
+    const c = courir('110h', { cadence: 9, bruit: 0.3, graine });
+    visees += c.journal.filter(j => j.note === 'hache' && !j.tenu).length;
+  }
+  ok('110h : a 9 frappes/s, des haies se hachent encore a rythme casse', visees > 0,
+     `${visees} haies concernees`);
 }
 
 titre('TAPER PLUS VITE FAIT COURIR PLUS VITE');

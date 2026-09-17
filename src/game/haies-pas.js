@@ -208,18 +208,15 @@ export function pas(course, j) {
   // appui apres la reception avait une chance sur deux de passer pour un double
   // appui et de faire trebucher un joueur qui a parfaitement alterne.
   j.lastKey = null;
-  // Une haie vraiment manquee se voit : on emprunte l'accroc du moteur plutot
-  // que d'inventer une animation qui ne ressemblerait a rien d'autre du jeu.
-  //
-  // L'ACCROC SE VOIT, IL NE FREINE PAS UNE SECONDE FOIS. La premiere version
-  // posait aussi `stumbleTimer`, le freinage du faux pas : 0,28 s a exp(-6 dt),
-  // soit quatre cinquiemes de la vitesse perdus en plein vol, EN PLUS de ce que
-  // franchir() venait de retirer. La haie se payait deux fois, et la seconde
-  // fois dix fois plus cher que la premiere : l'intervalle suivant passait a
-  // six appuis, et la course s'effondrait sur une seule faute.
-  if (p.note === 'hache' && !r.tenu) {
-    j.fallAnim = 1;
-  }
+  // PAS DE CHUTE SUR UNE HAIE. Il y en avait une — l'accroc du moteur, pose sur
+  // une haie hachee a rythme casse — et elle rendait le jeu injouable : le
+  // joueur ne choisit ni son pied d'appel ni l'endroit ou il quitte le sol, sa
+  // vitesse en decide. Le coureur plongeait donc sous un doigt qui avait
+  // parfaitement alterne, a peu pres une course sur deux a neuf frappes par
+  // seconde (tools/haies-course-test.mjs). Comme dans Sprinter, seule une
+  // repetition de touche fait tomber. La haie hachee se paie deja : franchir()
+  // retire la vitesse, la haie se renverse (haies-course.js) et le bandeau dit
+  // « trop pres ».
 
   if (p.note === 'parfait' && r.tenu) course.parfaites++;
   if (!r.tenu) course.rompus++;

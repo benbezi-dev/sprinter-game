@@ -116,7 +116,7 @@ export function pasHaies(joueur) {
   const juge = pas(course, joueur);
   // Une haie attaquee trop pres se prend dans le genou : elle tombe. Le
   // jugement la note hachee, rythme tenu ou non — le coureur la touche dans
-  // les deux cas, il ne tombe lui-meme que si son rythme etait deja rompu.
+  // les deux cas, et reste debout (voir haies-pas.js, « pas de chute »).
   if (juge && juge.note === 'hache') {
     touchees.set(juge.haie - 1, SprinterApp.G.elapsed || 0);
   }
