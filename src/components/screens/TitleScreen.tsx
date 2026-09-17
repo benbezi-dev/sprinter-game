@@ -13,13 +13,15 @@ import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
+import { TutorialHaies, tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
 import { BanderoleEdition } from './BanderoleEdition';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
-import { useJeu, epreuvesDuJeu, nomCourt, jeuDe } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
+import { APPEL_JOUEUR } from '@/game/canal';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { accueilPose } from '@/game/scene-accueil';
@@ -98,6 +100,7 @@ export function TitleScreen() {
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
+  const [tutoH, setTutoH] = useState(false);
   // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
   //
   // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
@@ -145,8 +148,20 @@ export function TitleScreen() {
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel
   // d'office, avec un lien « passer » en petit dans un coin, c'est lui donner
   // autre chose que ce qu'il a demande.
+  // LES HAIES ONT LEUR PROPRE TUTORIEL, et il fallait bien : leur geste n'est
+  // pas celui de Sprinter. On appuie sur le pave pour s'appeler, on le GARDE
+  // pendant le vol, on le relache pour ciseauter, et la cadence juste n'est
+  // plus la cadence maximale. Un joueur qui a appris Sprinter arriverait avec
+  // exactement les mauvais reflexes.
+  //
+  // Il ne se propose que la ou ce geste existe (canal.ts, APPEL_JOUEUR) : le
+  // proposer ailleurs enseignerait une commande que le jeu n'a pas.
+  const tutoDesHaies = APPEL_JOUEUR && estUneCourseDeHaies(raceKey);
+
   const handleStart = () => {
-    if (!tutoVu()) { setPropose(true); return; }
+    if (tutoDesHaies) {
+      if (!tutoHaiesVu()) { setPropose(true); return; }
+    } else if (!tutoVu()) { setPropose(true); return; }
     SprinterApp.startRun();
   };
 
@@ -154,14 +169,20 @@ export function TitleScreen() {
   // course suivante, et le tutoriel reste a portee depuis l'accueil.
   const repondrePropose = (apprendre: boolean) => {
     setPropose(false);
-    marquerTutoVu();
-    if (apprendre) setTuto(true);
+    if (tutoDesHaies) marquerTutoHaiesVu(); else marquerTutoVu();
+    if (apprendre) { if (tutoDesHaies) setTutoH(true); else setTuto(true); }
     else SprinterApp.startRun();
   };
 
   const fermerTuto = (lancer: boolean) => {
     marquerTutoVu();
     setTuto(false);
+    if (lancer) SprinterApp.startRun();
+  };
+
+  const fermerTutoH = (lancer: boolean) => {
+    marquerTutoHaiesVu();
+    setTutoH(false);
     if (lancer) SprinterApp.startRun();
   };
 
@@ -514,9 +535,17 @@ export function TitleScreen() {
           serait un de trop. */}
       {tour && <GameTour onClose={(jouer) => { marquerTourVu(); setTour(false); if (jouer) handleStart(); }} />}
 
-      {propose && <TutoPropose onChoix={repondrePropose} />}
+      {propose && (
+        <TutoPropose
+          onChoix={repondrePropose}
+          cles={tutoDesHaies
+            ? { t: 'tutoh_ask_t', s: 'tutoh_ask_s', oui: 'tutoh_ask_yes' }
+            : { t: 'tuto_ask_t', s: 'tuto_ask_s', oui: 'tuto_ask_yes' }}
+        />
+      )}
 
       {tuto && <Tutorial onClose={fermerTuto} />}
+      {tutoH && <TutorialHaies onClose={fermerTutoH} />}
 
       {DUELS_OUVERTS && showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 

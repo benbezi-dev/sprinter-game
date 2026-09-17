@@ -353,6 +353,21 @@
     tuto_replay:     ['revoir le tutoriel', 'watch again'],
     tuto_skip:       ['passer', 'skip'],
     tuto_open:       ['COMMENT ON JOUE', 'HOW TO PLAY'],
+    // tutoriel des haies — meme patron, trois gestes qui ne sont pas ceux de
+    // Sprinter. Deux mots par titre : ce qu'on peut montrer ne s'ecrit pas.
+    tutoh_ask_t:     ['PREMIÈRE HAIE', 'FIRST HURDLE'],
+    tutoh_ask_s:     ['le geste n’est pas celui de Sprinter', 'the gesture is not Sprinter’s'],
+    tutoh_ask_yes:   ['APPRENDRE LA HAIE', 'LEARN THE HURDLE'],
+    tutoh_1_t:       ['L’APPEL', 'THE TAKE-OFF'],
+    tutoh_2_t:       ['LE CISEAU', 'THE SCISSOR'],
+    tutoh_3_t:       ['LA CADENCE JUSTE', 'THE RIGHT CADENCE'],
+    // « Tu haches » et « tu t'etires » plutot que « trop vite » et « trop
+    // lent » : le joueur doit savoir ce qui arrive a sa foulee, pas seulement
+    // dans quel sens corriger.
+    tutoh_c_juste:   ['CADENCE JUSTE', 'RIGHT CADENCE'],
+    tutoh_c_hache:   ['TU HACHES', 'YOU’RE CHOPPING'],
+    tutoh_c_etire:   ['TU T’ÉTIRES', 'YOU’RE REACHING'],
+    tutoh_open:      ['COMMENT ON PASSE UNE HAIE', 'HOW TO CLEAR A HURDLE'],
     contact:         ['NOUS CONTACTER', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],

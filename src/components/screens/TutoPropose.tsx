@@ -15,8 +15,18 @@ import { GraduationCap, Play } from 'lucide-react';
  * reponses valent acceptation : on ne repose pas la question a la course
  * suivante, et le tutoriel reste accessible depuis l'accueil pour qui change
  * d'avis.
+ *
+ * LES MOTS SE CHANGENT, PAS LA FORME. Les haies ont leur propre tutoriel —
+ * leur geste n'est pas celui de Sprinter — mais poser la question deux fois de
+ * deux facons differentes n'apprendrait rien a personne. Le panneau reste le
+ * meme, seules ses trois cles bougent.
  */
-export function TutoPropose({ onChoix }: { onChoix: (apprendre: boolean) => void }) {
+export function TutoPropose({
+  onChoix, cles = { t: 'tuto_ask_t', s: 'tuto_ask_s', oui: 'tuto_ask_yes' },
+}: {
+  onChoix: (apprendre: boolean) => void;
+  cles?: { t: string; s: string; oui: string };
+}) {
   const { N } = SprinterApp;
   return (
     <div className="fixed inset-0 z-[58] bg-black/85 backdrop-blur-sm flex items-center justify-center
@@ -28,10 +38,10 @@ export function TutoPropose({ onChoix }: { onChoix: (apprendre: boolean) => void
       >
         <div className="flex flex-col items-center gap-1">
           <h2 className="text-xl md:text-2xl font-black font-display tracking-tight uppercase text-primary">
-            {N.t('tuto_ask_t')}
+            {N.t(cles.t)}
           </h2>
           <p className="text-xs md:text-sm text-foreground/70 max-w-[26ch] leading-snug">
-            {N.t('tuto_ask_s')}
+            {N.t(cles.s)}
           </p>
         </div>
 
@@ -44,7 +54,7 @@ export function TutoPropose({ onChoix }: { onChoix: (apprendre: boolean) => void
                        flex items-center justify-center gap-2"
           >
             <GraduationCap className="w-4 h-4" />
-            {N.t('tuto_ask_yes')}
+            {N.t(cles.oui)}
           </button>
           <button
             onClick={() => onChoix(false)}
