@@ -60,12 +60,19 @@ const TABS: { id: Tab; key: string }[] = [
  * 3 % de la largeur par point de police. Entre les deux bornes, personne ne
  * voit jamais un mot coupe ni un mot passe a la ligne — ni sur l'ecran de
  * couverture d'un pliable, ni sur un moniteur.
+ *
+ * `haies` change UN mot et UNE destination : sur Hurdlers, « comment on joue »
+ * devient « comment on passe une haie », et ouvre le tutoriel des haies. Le
+ * geste n'y est pas celui de Sprinter — appuyer, maintenir, relacher — et
+ * renvoyer le joueur vers le tutoriel du plat lui apprendrait exactement le
+ * contraire de ce qu'il doit faire.
  */
-function PiedLiens({ onTour, onTuto }: { onTour: () => void; onTuto: () => void }) {
+function PiedLiens({ onTour, onTuto, haies }:
+                   { onTour: () => void; onTuto: () => void; haies: boolean }) {
   const { N } = SprinterApp;
   const liens = [
     { cle: 'tour_open', action: onTour },
-    { cle: 'tuto_open', action: onTuto },
+    { cle: haies ? 'tutoh_open' : 'tuto_open', action: onTuto },
     // mailto: par window.location — un <a href> ne mene nulle part dans la
     // fenetre sans barre d'adresse d'une application installee.
     { cle: 'contact',
@@ -526,7 +533,8 @@ export function TitleScreen() {
         </div>
       </div>
 
-      <PiedLiens onTour={() => setTour(true)} onTuto={() => setTuto(true)} />
+      <PiedLiens onTour={() => setTour(true)} haies={tutoDesHaies}
+                 onTuto={() => (tutoDesHaies ? setTutoH(true) : setTuto(true))} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
