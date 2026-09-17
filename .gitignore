@@ -58,3 +58,8 @@ android/keystore*
 # src/game/coureur-hd.js font partie du jeu.
 tools/blender/sortie/
 __pycache__/
+
+# Le journal d'une campagne de defis : qui a deja recu quoi. C'est un etat
+# d'exploitation, pas du code — il vaut pour une base et une campagne donnees,
+# et le versionner ferait croire qu'un envoi deja fait reste a faire.
+tools/.defis-campagne.json
