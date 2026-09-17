@@ -181,12 +181,20 @@ export const TOLERANCE_T = { parfait: 0.065, bon: 0.110 };
  * la seule faute de la course qui vienne entierement de lui, et c'est ce qui
  * rend le reste honnete — sans elle, ne rien faire reviendrait a franchir.
  *
- * 80 cm : sous la fenetre « bon » a toute vitesse de jeu (elle se referme a
- * 1,10 m a 9,5 m/s, a 0,94 m a 11), pour que la zone « trop pres » garde une
- * existence entre les deux. Au-dessus, elle disparaissait et l'on passait sans
- * transition d'un franchissement correct a un mur.
+ * 50 cm. Il y avait 80, et la video d'essai a montre que c'etait trop haut :
+ * entre « trop pres mais passe » et « percutee » il ne restait que 36 ms a dix
+ * metres par seconde. Un joueur en retard ne glissait pas d'un cran, il tombait
+ * du mur — sept « trop pres » et trois percussions sur la meme course.
+ *
+ * A 50 cm, la zone « trop pres » fait 66 ms au lieu de 36 : on peut etre en
+ * retard et passer laid, ce qui est une facon de rater dont on apprend quelque
+ * chose. La percussion reste ce qu'elle etait, elle arrive juste plus tard.
+ *
+ * La borne basse ne bouge pas : il faut rester sous la fenetre « bon » a toute
+ * vitesse de jeu (elle se referme a 1,10 m a 9,5 m/s, a 0,94 m a 11), sans quoi
+ * « trop pres » n'existerait plus du tout.
  */
-export const APPEL_MINI = 0.80;
+export const APPEL_MINI = 0.50;
 
 /**
  * Ce que garde un coureur qui attaque de la mauvaise jambe.

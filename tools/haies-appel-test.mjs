@@ -45,7 +45,7 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
  */
 function courir(cle, {
   cadence, cible = null, jambe = 'bonne', enVolAussi = false, mitraille = false,
-  joueur = true, voyage = 0, dureeMax = 120, bruit = 0, graine = 1,
+  joueur = true, voyage = 0, mouchard = null, dureeMax = 120, bruit = 0, graine = 1,
 } = {}) {
   const race = HAIES[cle];
   const track = new Track(race);
@@ -79,6 +79,7 @@ function courir(cle, {
     const a = approche(course);
     if (a) {
       annonces.push({ haie: a.haie, cote: a.cote });
+      if (mouchard) mouchard(a);
       const reste = course.positions[course.i] - r.d;
       // Le pouce quitte les paves une demi-duree de voyage avant d'appuyer, et
       // y revient une demi-duree apres : le silence est centre sur l'appel.
@@ -214,6 +215,34 @@ for (const cle of ['100h', '110h', '400h']) {
   ok(`${cle} : un joueur qui vise juste a 9,5 frappes/s reste dans le bareme`,
      juste.temps > plateaux[5][0] * 0.95 && juste.temps < plateaux[0][1] * 1.15,
      `${juste.temps?.toFixed(2)} s`);
+}
+
+titre("LA JAUGE NE MENT PAS");
+
+// La jauge d'appel (TouchControls) se remplit pendant l'approche et doit etre
+// PLEINE au point du reglement. Le joueur apprend a viser le vert : si la jauge
+// et le jugement divergeaient d'un cheveu, il apprendrait a viser un mensonge,
+// et ce serait le pire des defauts — un jeu qui punit ce qu'il a montre.
+//
+// C'est aussi ce qui a manque a la premiere version : elle disait quel pouce et
+// jamais quand, et le joueur reagissait au lieu d'anticiper.
+for (const cle of ['100h', '110h', '400h']) {
+  const vus = [];
+  courir(cle, { cadence: 10, cible: 0.0001, mouchard: a => vus.push({ ...a }) });
+  const parfaits = vus.filter(v => v.zone === 'parfait');
+  const bornes = parfaits.length
+    ? [Math.min(...parfaits.map(v => v.avance)), Math.max(...parfaits.map(v => v.avance))]
+    : [NaN, NaN];
+  ok(`${cle} : la jauge pleine (avance = 1) tombe dans le « parfait »`,
+     bornes[0] < 1 && bornes[1] > 1,
+     `le parfait va de ${bornes[0]?.toFixed(2)} a ${bornes[1]?.toFixed(2)}`);
+  // Et elle doit monter, pas sauter : une jauge qui bondit ne s'anticipe pas.
+  let saut = 0;
+  for (let i = 1; i < vus.length; i++) {
+    if (vus[i].haie === vus[i - 1].haie) saut = Math.max(saut, vus[i].avance - vus[i - 1].avance);
+  }
+  ok(`${cle} : elle monte doucement, elle ne bondit pas`, saut < 0.12,
+     `plus grand pas : ${saut.toFixed(3)}`);
 }
 
 titre("L'APPEL REND CE QUE LE POUCE A COUTE");

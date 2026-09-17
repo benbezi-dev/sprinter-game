@@ -395,8 +395,31 @@ function veille(course, j, point) {
     if (reste > FENETRE_APPEL * s) return null;
     const naturel = j.stride / PI + Math.max(0, reste) / s;
     const vise = Math.max(Math.floor(j.stride / PI) + 1, Math.round(naturel));
-    course.approche = { haie: course.i + 1, cote: attaqueDe(vise), vise };
+    course.approche = { haie: course.i + 1, cote: attaqueDe(vise), vise, d0: j.d, point, avance: 0 };
   }
+
+  // L'AVANCE : ou en est le coureur sur son approche, de 0 a 1, ou 1 est le
+  // point d'appel du reglement. Au-dela de 1, il est en retard.
+  //
+  // CE CHIFFRE EST LE CORRECTIF LE PLUS UTILE DU PROTOTYPE, et il vient d'une
+  // video d'essai. La touche disait QUEL POUCE et jamais QUAND : le joueur la
+  // voyait s'allumer, puis jugeait l'instant sur une haie qui arrive en vue
+  // isometrique. Il REAGISSAIT au lieu d'anticiper, et le temps de reaction
+  // plus le voyage du pouce le mettaient en retard de 150 ms a chaque haie —
+  // toujours du meme cote. Mesure : 17,22 s sur le 110 m haies, sept « trop
+  // pres » et trois percussions, quand le meme joueur a l'heure fait 13,12 s.
+  // Aucune tolerance elargie ne rattrape un retard systematique ; il fallait un
+  // signal qui se voie VENIR. L'ecran en fait une jauge qui se remplit, pleine
+  // exactement au point d'appel (TouchControls).
+  const a = course.approche;
+  const course_totale = Math.max(1e-6, a.point - a.d0);
+  a.avance = Math.min(1.5, Math.max(0, (j.d - a.d0) / course_totale));
+
+  // ET CE QUE VAUDRAIT UN APPEL DONNE MAINTENANT. La regle vit ici, pas dans
+  // l'ecran : la jauge et le jugement doivent etre le meme calcul, sans quoi
+  // le joueur apprendrait a viser une lumiere qui ment. jugerAppel() est la
+  // fonction qui notera son appel une image plus tard.
+  a.zone = jugerAppel(course.cle, haie - j.d, j.v).note;
 
   // TROP TARD : le coureur est sur la haie et n'a pas appele. Il la percute.
   if (j.d >= haie - APPEL_MINI) return percuter(course, j);

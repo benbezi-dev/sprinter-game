@@ -96,6 +96,25 @@ const ATT_REPOS = {
   fg: 'rgba(255,255,255,0.16)', glow: 'none',
 };
 
+/**
+ * CE QUE LA JAUGE VAUT, SELON CE QUE VAUDRAIT L'APPEL A CET INSTANT.
+ *
+ * Trois etats, et un seul qu'on apprend a viser : le vert plein. Le joueur n'a
+ * pas a lire une graduation en pleine course — il attend que ca devienne vert
+ * et il appuie. Avant, c'est terne ; apres, c'est rouge, et il a compris sans
+ * qu'on lui explique qu'il etait en retard.
+ *
+ * Les couleurs sont celles que le bandeau de verdict emploie deja pour les
+ * memes mots (HaiesHUD) : la jauge et le jugement doivent se reconnaitre.
+ */
+const ZONE_JAUGE: Record<string, { fond: string; halo: string }> = {
+  plane:   { fond: 'rgba(255,255,255,0.16)', halo: 'none' },
+  bon:     { fond: 'rgb(var(--primaire-rgb) / 0.55)', halo: 'none' },
+  parfait: { fond: 'rgba(52,211,153,0.85)',
+             halo: '0 0 18px 2px rgba(52,211,153,0.75)' },
+  hache:   { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
+};
+
 export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
@@ -109,6 +128,8 @@ export function TouchControls() {
   const edgeTimers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const attL = useRef<HTMLDivElement | null>(null);
   const attR = useRef<HTMLDivElement | null>(null);
+  const jaugeL = useRef<HTMLDivElement | null>(null);
+  const jaugeR = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => () => {
     clearTimeout(timers.current.left);
@@ -140,37 +161,73 @@ export function TouchControls() {
     return () => setStepCue(null);
   }, []);
 
-  // L'ALLUMAGE DES TOUCHES D'ATTAQUE, IMAGE PAR IMAGE ET NON PAR LE STORE.
+  // LA JAUGE D'APPEL, IMAGE PAR IMAGE ET NON PAR LE STORE.
   //
-  // L'approche s'ouvre et se referme dans la boucle de simulation, qui tourne a
-  // 240 pas par seconde. La faire passer par React ferait re-rendre tout
-  // l'ecran plusieurs fois par haie, en pleine course. On lit donc l'etat des
-  // haies a chaque image et on peint les deux noeuds — exactement ce que
-  // `light()` fait plus bas pour les paves, et pour la meme raison.
+  // L'approche vit dans la boucle de simulation, qui tourne a 240 pas par
+  // seconde. La faire passer par React ferait re-rendre tout l'ecran plusieurs
+  // fois par haie, en pleine course. On lit donc l'etat des haies a chaque
+  // image et on peint les noeuds — exactement ce que `light()` fait plus bas
+  // pour les paves, et pour la meme raison.
   //
-  // Rien a eteindre a l'appel : quitter le sol referme l'approche, le cote
-  // repasse a `null` et la lumiere s'en va d'elle-meme. C'est le retour du
-  // decollage, et il ne coute pas une ligne.
+  // CE QUE LA JAUGE CORRIGE, et pourquoi une simple lumiere ne suffisait pas.
+  // La premiere version allumait le bon cote a l'approche, et c'est tout : elle
+  // disait QUEL POUCE, jamais QUAND. A l'essai, le joueur la voyait s'allumer
+  // puis jugeait l'instant sur une haie qui arrive en vue isometrique — donc il
+  // REAGISSAIT, et le temps de reaction plus le voyage du pouce le mettaient en
+  // retard de 150 ms a chaque haie, toujours du meme cote. 17,22 s sur le 110 m
+  // haies la ou le meme joueur a l'heure fait 13,12. Un retard systematique ne
+  // se rattrape par aucune tolerance elargie : il faut un signal qui se voie
+  // VENIR.
+  //
+  // La jauge se remplit donc pendant toute l'approche et elle est PLEINE au
+  // point d'appel du reglement. Le joueur anticipe au lieu de reagir, ce qui
+  // est la seule facon de viser a 65 ms pres.
+  //
+  // LA COULEUR EST LE JUGEMENT, PAS UNE DECORATION. `zone` vient de
+  // jugerAppel() — la fonction meme qui notera l'appel une image plus tard. Un
+  // ecran qui recalculerait la sienne finirait par mentir, et le joueur
+  // apprendrait a viser le mensonge.
+  //
+  // Rien a eteindre a l'appel : quitter le sol referme l'approche et tout
+  // revient au repos de soi-meme.
   const enCourse = state === 'race' || state === 'count';
   useEffect(() => {
     if (!APPEL_JOUEUR || !enCourse) return;
     let raf = 0;
-    let vu: string | null | undefined;
-    const peindre = (cote: string | null) => {
-      const paires = [[attL.current, 'left'], [attR.current, 'right']] as const;
-      for (const [el, cle] of paires) {
-        if (!el) continue;
-        const t = cote === null ? ATT_REPOS : cote === cle ? ATT_LIT : ATT_ARME;
-        el.style.backgroundColor = t.bg;
-        el.style.borderColor = t.border;
-        el.style.color = t.fg;
-        el.style.boxShadow = t.glow;
-      }
-    };
+    let vuCote: string | null | undefined;
+    let vuH = -1, vuZone = '';
     const tick = () => {
-      const a = approcheHaies() as { cote: 'left' | 'right' } | null;
+      const a = approcheHaies() as
+        { cote: 'left' | 'right'; avance: number; zone: string } | null;
       const cote = a ? a.cote : null;
-      if (cote !== vu) { vu = cote; peindre(cote); }
+
+      if (cote !== vuCote) {
+        vuCote = cote;
+        const paires = [[attL.current, 'left'], [attR.current, 'right']] as const;
+        for (const [el, cle] of paires) {
+          if (!el) continue;
+          const t = cote === null ? ATT_REPOS : cote === cle ? ATT_LIT : ATT_ARME;
+          el.style.backgroundColor = t.bg;
+          el.style.borderColor = t.border;
+          el.style.color = t.fg;
+          el.style.boxShadow = t.glow;
+        }
+      }
+
+      // La jauge, sur les deux noeuds : celle du mauvais cote reste a zero.
+      const h = a ? Math.round(Math.min(1, a.avance) * 100) : 0;
+      const zone = a ? a.zone : '';
+      if (h !== vuH || zone !== vuZone) {
+        vuH = h; vuZone = zone;
+        const remplissage = ZONE_JAUGE[zone] || ZONE_JAUGE.plane;
+        for (const [el, cle] of [[jaugeL.current, 'left'], [jaugeR.current, 'right']] as const) {
+          if (!el) continue;
+          const sien = a && cote === cle;
+          el.style.height = sien ? `${h}%` : '0%';
+          el.style.background = remplissage.fond;
+          el.style.boxShadow = sien && zone === 'parfait' ? remplissage.halo : 'none';
+        }
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -263,8 +320,8 @@ export function TouchControls() {
           >
             <div
               ref={cote === 'left' ? attL : attR}
-              className="w-full h-full rounded-xl border-2 backdrop-blur-sm
-                         flex items-center justify-center pointer-events-none"
+              className="w-full h-full rounded-xl border-2 backdrop-blur-sm relative
+                         overflow-hidden flex items-center justify-center pointer-events-none"
               style={{
                 backgroundColor: ATT_REPOS.bg,
                 borderColor: ATT_REPOS.border,
@@ -276,7 +333,15 @@ export function TouchControls() {
                             'color 90ms ease-out, box-shadow 120ms ease-out',
               }}
             >
-              <Franchir dir={cote === 'left' ? -1 : 1} />
+              {/* La jauge monte du bas : pleine au point d'appel du reglement. */}
+              <div
+                ref={cote === 'left' ? jaugeL : jaugeR}
+                className="absolute inset-x-0 bottom-0 pointer-events-none"
+                style={{ height: '0%', background: ZONE_JAUGE.plane.fond }}
+              />
+              <span className="relative">
+                <Franchir dir={cote === 'left' ? -1 : 1} />
+              </span>
             </div>
           </div>
         ))}
