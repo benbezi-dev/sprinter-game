@@ -374,11 +374,56 @@ export const APPEL_MINI = 0.50;
 export const APPEL_MAXI = 1.00;
 
 /**
- * Ce que garde un coureur qui attaque de la mauvaise jambe.
+ * LA FORME DES TROIS FOULEES DE L'INTERVALLE, en part de la foulee moyenne.
  *
- * Un peu moins qu'un rythme rompu (0,94), et pour une raison physique : un
- * rythme casse, on le passe quand meme ; la mauvaise jambe devant, on ne
- * ciseaute pas du tout — on enjambe des deux pieds.
+ * Elles ne sont pas egales, et c'est enseigne. Coh (2003) les mesure chez
+ * Jackson entre sa 4e et sa 5e haie : 1,51 m, puis 2,01, puis 1,98, pour une
+ * moyenne de 1,83. Leurs vitesses suivent la meme courbe — 8,81 puis 9,17 puis
+ * 8,53 m/s.
+ *
+ *   LA PREMIERE EST COURTE. On sort du vol, on doit se remettre SOUS soi. Un
+ *   hurdleur qui l'allonge retombe derriere son appui et perd l'intervalle.
+ *   LA DEUXIEME EST LA PLUS LONGUE. C'est la seule ou l'on court vraiment, et
+ *   c'est la qu'on reprend la vitesse laissee sur la haie.
+ *   LA TROISIEME SE RACCOURCIT UN PEU. On se rassemble pour poser le pied
+ *   d'appel au bon endroit — « a part of the horizontal velocity of the CM
+ *   transforms into the vertical velocity ».
+ *
+ * Le jeu faisait trois foulees presque egales (1,79 / 1,87 / 2,02). La somme
+ * etait bonne, la forme absente — et c'est la forme qui fait qu'un intervalle
+ * de haies ne ressemble pas a trois foulees de sprint.
+ *
+ * Au-dela de la troisieme, on rend 1 : le rythme est deja rompu, la forme n'a
+ * plus de sens a imposer.
+ */
+export const FORME_INTERVALLE = [0.825, 1.098, 1.082];
+
+/**
+ * Ce que garde un coureur qui attaque de SA MAUVAISE JAMBE.
+ *
+ * CE QUE CETTE REGLE A ETE, ET POURQUOI ELLE A CHANGE. Elle jugeait d'abord la
+ * jambe ANNONCEE : le jeu calculait le pied d'appel a l'ouverture de la
+ * fenetre, l'affichait, et punissait qui pressait l'autre pave. C'etait
+ * injouable, et la mesure l'a montre — obeir a l'annonce obligeait a doubler un
+ * pouce quatre a neuf fois par course.
+ *
+ * LA CAUSE EST PROFONDE ET ON NE LA CORRIGERA PAS : UNE FRAPPE N'EST PAS UN
+ * APPUI. Les pieds du coureur avancent a la DISTANCE — le moteur fait tourner
+ * `stride` avec les metres — tandis que les pouces du joueur alternent dans le
+ * TEMPS, a neuf frappes par seconde pour quatre appuis. Les deux horloges
+ * derivent l'une par rapport a l'autre, et aucune annonce absolue ne peut donc
+ * tomber sur le pouce dont c'est le tour.
+ *
+ * ON PREND DONC LA REGLE DU SPORT PLUTOT QUE CELLE DE LA GEOMETRIE. Un hurdleur
+ * a UNE jambe d'attaque. C'est la sienne, il la garde toute sa carriere, et
+ * attaquer de l'autre le rend mediocre d'un coup — c'est vrai au point que
+ * beaucoup ne savent pas le faire du tout. Le jeu ne dit donc plus de quel cote
+ * appeler : le pave sur lequel on appelle EST la jambe d'attaque, la premiere
+ * haie fixe celle du coureur pour la course, et en changer coute.
+ *
+ * Ce que le compte d'appuis devait enseigner reste enseigne, et par la fonction
+ * qui est faite pour : rythmeDe(). Deux regles pour la meme chose en faisaient
+ * une de trop.
  */
 export const GARDE_MAUVAISE_JAMBE = 0.93;
 

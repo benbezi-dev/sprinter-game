@@ -42,7 +42,7 @@
 
 import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
-         GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
+         GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, FORME_INTERVALLE, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
          GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau } from './haies-jeu.js';
 
 const PI = Math.PI;
@@ -109,21 +109,6 @@ const FENETRE_APPEL = 2.0;
  * change un jour.
  */
 const ACCROC_PERCUTE = 0.25;
-
-/**
- * De quel pied on est parti, a ce compte d'appuis.
- *
- * `left` / `right` et non gauche/droite : c'est le vocabulaire de padPress()
- * et de Runner.press(), et le cote fait tout le trajet du pouce jusqu'ici sans
- * etre traduit. Une conversion au passage serait un bug de plus a ecrire.
- *
- * preparerCoureur() pose `stride = 0` — le depart se fait donc du gauche, et
- * la parite du compte d'appuis suffit a savoir de quel pied on part.
- */
-function piedDe(n) { return n % 2 === 0 ? 'left' : 'right'; }
-
-/** La jambe d'attaque est celle qui ne pousse pas : l'autre. */
-function attaqueDe(n) { return piedDe(n) === 'left' ? 'right' : 'left'; }
 
 /**
  * QUEL APPUI VISER, quand la foulee naturelle tombe entre deux.
@@ -198,6 +183,9 @@ export function nouvelleCourse(cle, { appelJoueur = false } = {}) {
     // part du vol ecoulee au relache, et reste null tant qu'on n'a pas relache.
     dAppel: 0, volDuree: 0, volCiseau: 0, coteAppel: null, ciseauPart: null,
     ciseaux: [], dernierCiseau: null,
+    // LA JAMBE D'ATTAQUE DU COUREUR. Nulle avant la premiere haie ; la premiere
+    // l'arrete pour toute la course. Voir GARDE_MAUVAISE_JAMBE.
+    jambe: null,
     parfaites: 0, rompus: 0, percutees: 0, mauvaisesJambes: 0, frappesEnVol: 0,
     appuis: [], notes: [], dernier: null,
   };
@@ -294,6 +282,19 @@ export function pas(course, j) {
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
     return null;
+  }
+
+  // LA FORME DE L'INTERVALLE. Les trois foulees entre deux haies ne sont pas
+  // egales — courte, longue, un peu plus courte — et c'est ce qui distingue un
+  // intervalle de haies de trois foulees de sprint. Voir FORME_INTERVALLE.
+  //
+  // On la pose ici, a chaque pas, parce que la foulee du moteur se lit a chaque
+  // pas : `strideLength()` multiplie son amplitude par `Runner.foulee`, et il
+  // suffit de faire varier ce facteur d'un appui a l'autre.
+  if (course.reception > 0) {
+    const n = Math.floor(j.stride / PI) - course.reception;
+    const f = n >= 0 && n < FORME_INTERVALLE.length ? FORME_INTERVALLE[n] : 1;
+    j.foulee = (HAIES[course.cle].foulee || 1) * f;
   }
 
   // Apres la derniere haie, le compte est libre.
@@ -429,7 +430,10 @@ function veille(course, j, point) {
     if (reste > FENETRE_APPEL * s) return null;
     const naturel = j.stride / PI + Math.max(0, reste) / s;
     const vise = Math.max(Math.floor(j.stride / PI) + 1, Math.round(naturel));
-    course.approche = { haie: course.i + 1, cote: attaqueDe(vise), vise, d0: j.d, point, avance: 0 };
+    // `cote` n'est plus une consigne mais un RAPPEL : la jambe d'attaque que le
+    // coureur s'est choisie a la premiere haie. Nul avant elle — on ne rappelle
+    // rien tant que rien n'est choisi, et les deux paves s'allument.
+    course.approche = { haie: course.i + 1, cote: course.jambe, vise, d0: j.d, point, avance: 0 };
   }
 
   // L'AVANCE : ou en est le coureur sur son approche, de 0 a 1, ou 1 est le
@@ -491,7 +495,11 @@ export function appeler(course, j, cote) {
   const nAppel = Math.max(course.reception, Math.round(j.stride / PI));
   const premiere = course.i === 0;
   const appuis = premiere ? nAppel : nAppel - course.reception + 1;
-  const bonneJambe = cote === course.approche.cote;
+  // LA PREMIERE HAIE CHOISIT LA JAMBE, les suivantes la gardent. Un hurdleur ne
+  // change pas de jambe d'attaque en cours de course ; celui qui le fait le
+  // paie, et c'est tout ce que le jeu a besoin de dire.
+  const bonneJambe = course.jambe === null || cote === course.jambe;
+  if (course.jambe === null) course.jambe = cote;
   const r = rythmeDe(cle, appuis, premiere ? 'premiere' : 'intervalle');
   const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v });
 
