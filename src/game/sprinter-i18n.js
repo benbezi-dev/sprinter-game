@@ -371,6 +371,9 @@
                       'hold your thumb — release when it fills again'],
     tutoh_3_s:       ['ni plus vite, ni plus lent',
                       'no faster, no slower'],
+    tutoh_4_t:       ['LA RELANCE', 'REBUILDING'],
+    tutoh_4_s:       ['une réception ratée te coupe la vitesse — reprends-la en courant',
+                      'a bad landing cuts your speed — you run it back'],
     // Ce qu'on dit a celui qui tape au lieu de tenir. C'est la faute la plus
     // frequente, parce que c'est le geste de Sprinter.
     tutoh_tenir:     ['tenir, pas taper', 'hold, don’t tap'],

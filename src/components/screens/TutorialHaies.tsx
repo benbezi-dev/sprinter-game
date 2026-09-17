@@ -3,7 +3,8 @@ import { SprinterApp } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT, TRANSITION } from '@/lib/mouvement';
 import { ChevronLeft, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
-import { APPEL, CISEAU_VISE, volDe, jugerAppel, jugerCiseau } from '@/game/haies-jeu.js';
+import { APPEL, CISEAU_VISE, volDe, jugerAppel, jugerCiseau,
+         PLAFOND_INTERVALLE } from '@/game/haies-jeu.js';
 
 /**
  * Tutoriel des haies — montre, puis fais.
@@ -18,8 +19,14 @@ import { APPEL, CISEAU_VISE, volDe, jugerAppel, jugerCiseau } from '@/game/haies
  *   LE CISEAU   on garde le pouce pendant le vol, et on relache quand la jauge
  *               se remplit une seconde fois. Appuyer lance la jambe d'attaque,
  *               relacher ramene la jambe arriere : un seul geste continu.
- *   LA CADENCE  ni plus vite ni plus lent. C'est la seule des trois qui
- *               contredit Sprinter, et c'est celle qui merite le plus d'exister.
+ *   LA CADENCE  ni plus vite ni plus lent. C'est la seule qui contredit
+ *               Sprinter, et c'est celle qui merite le plus d'exister.
+ *   LA RELANCE  ce que la reception decide pour l'intervalle suivant. La
+ *               quatrieme etape est arrivee apres les autres, avec le systeme
+ *               qu'elle enseigne : mal se recevoir coupe la vitesse, et on ne
+ *               la reprend pas en tapant plus fort — on la reprend en courant
+ *               les trois foulees. C'est la synthese, et c'est ce qui fait que
+ *               les trois premieres comptent.
  *
  * LE TUTORIEL NE TOUCHE PAS AU MOTEUR — MAIS IL NOTE AVEC SES FORMULES. Les
  * verdicts sortent de jugerAppel() et de jugerCiseau(), les memes fonctions qui
@@ -104,7 +111,10 @@ const avantDe = (jauge: number) => APPEL[CLE].avant + (1 - jauge) * APPROCHE_M;
 export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void }) {
   const { N } = SprinterApp;
 
-  const [etape, setEtape] = useState(0);        // 0,1,2 puis 3 = fin
+  const [etape, setEtape] = useState(0);        // 0,1,2,3 puis 4 = fin
+  // L'etape du ciseau et celle de la relance se jouent de la meme facon : une
+  // approche, un appel, un vol, un relache. Seul change ce qu'on regarde.
+  const etapeHaie = etape === 0 || etape === 1 || etape === 3;
   const [demo, setDemo] = useState(true);       // on montre avant de rendre la main
 
   // La jauge, de 0 a 1 puis au-dela quand on est en retard. `phase` dit ce
@@ -116,6 +126,8 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
   const [note, setNote] = useState<string | null>(null);
   const [reussies, setReussies] = useState(0);
   const [essais, setEssais] = useState(0);
+  // Le plafond laisse par la derniere reception, et sa remontee — l'etape 4.
+  const [relance, setRelance] = useState<number | null>(null);
   const lent = essais < ESSAIS_RALENTIS;
   const facteur = lent ? RALENTI : 1;
 
@@ -175,7 +187,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       return;
     }
 
-    if (e === 1) {
+    if (e === 1 || e === 3) {
       attendre(400, () => {
         setPhase('approche');
         monter(APPROCHE_S, 1, () => {
@@ -184,6 +196,22 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
           monter(CISEAU_S, 1, () => {
             setFlash(null);                         // on relache : le ciseau
             setNote('ciseau');
+            // A l'etape de la relance, la demo montre AUSSI ce qu'un ciseau
+            // rate couterait : la barre tombe, puis se remplit.
+            if (e === 3) {
+              attendre(500, () => {
+                setRelance(PLAFOND_INTERVALLE.absent);
+                const t0r = performance.now();
+                const remonte = () => {
+                  const x = Math.min(1, (performance.now() - t0r) / 1400);
+                  setRelance(PLAFOND_INTERVALLE.absent + (1 - PLAFOND_INTERVALLE.absent) * x);
+                  if (x < 1) raf.current = requestAnimationFrame(remonte);
+                  else attendre(600, () => { setRelance(null); setPhase('rien'); setJauge(0); setDemo(false); setNote(null); });
+                };
+                raf.current = requestAnimationFrame(remonte);
+              });
+              return;
+            }
             attendre(1500, () => { setPhase('rien'); setJauge(0); setDemo(false); setNote(null); });
           });
         });
@@ -202,7 +230,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     attendre(400 + FRAPPES_CIBLE * gap + 700, () => setDemo(false));
   }, [monter, stop]);
 
-  useEffect(() => { if (etape < 3) lancerDemo(etape); return stop; }, [etape, lancerDemo, stop]);
+  useEffect(() => { if (etape < 4) lancerDemo(etape); return stop; }, [etape, lancerDemo, stop]);
 
   /* --- a toi ------------------------------------------------------------ */
 
@@ -223,10 +251,10 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
   }, [monter, stop, facteur]);
 
   useEffect(() => {
-    if (demo || etape > 2 || etape === 2) return;
+    if (demo || !etapeHaie) return;
     if (note !== null) return;
     if (phase === 'rien') attendre(400, armer);
-  }, [demo, etape, phase, note, armer]);
+  }, [demo, etapeHaie, phase, note, armer]);
 
   const presser = useCallback((cote: Cote) => {
     if (demo) return;
@@ -273,12 +301,28 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
   }, [demo, etape, phase, jauge, note, monter, stop, facteur]);
 
   const relacher = useCallback((cote: Cote) => {
-    if (demo || etape !== 1 || phase !== 'vol' || tenu.current !== cote) return;
+    if (demo || (etape !== 1 && etape !== 3) || phase !== 'vol' || tenu.current !== cote) return;
     stop(); setFlash(null); tenu.current = null;
     const jc = jugerCiseau(Math.min(1, jauge) * CISEAU_VISE, VOL_S);
     setNote(jc.note); setPhase('rien');
     if (jc.note === 'ciseau' || jc.note === 'bon') setReussies(r => r + 1);
     setEssais(e => e + 1);
+    if (etape === 3) {
+      // CE QUE LA RECEPTION VIENT DE DECIDER. La barre tombe a ce que le
+      // ciseau a laisse, puis remonte — comme en course, ou elle l'a retrouve
+      // au point d'appel suivant.
+      const bas = (PLAFOND_INTERVALLE as Record<string, number>)[jc.note] ?? 1;
+      setRelance(bas);
+      const t0r = performance.now();
+      const remonte = () => {
+        const x = Math.min(1, (performance.now() - t0r) / 1400);
+        setRelance(bas + (1 - bas) * x);
+        if (x < 1) raf.current = requestAnimationFrame(remonte);
+        else attendre(500, () => { setRelance(null); setNote(null); setJauge(0); });
+      };
+      raf.current = requestAnimationFrame(remonte);
+      return;
+    }
     attendre(1300, () => { setNote(null); setJauge(0); });
   }, [demo, etape, phase, jauge, stop]);
 
@@ -311,7 +355,8 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     return () => { window.removeEventListener('keydown', bas); window.removeEventListener('keyup', haut); };
   }, [presser, relacher, onClose]);
 
-  const titres = ['tutoh_1_t', 'tutoh_2_t', 'tutoh_3_t'];
+  const titres = ['tutoh_1_t', 'tutoh_2_t', 'tutoh_3_t', 'tutoh_4_t'];
+  const sous = ['tutoh_1_s', 'tutoh_2_s', 'tutoh_3_s', 'tutoh_4_s'];
   const avancement = etape === 2
     ? Math.min(1, frappes.length / FRAPPES_CIBLE)
     : Math.min(1, reussies / REUSSITES);
@@ -343,7 +388,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
 
       <div className="w-full max-w-lg mx-auto flex items-center gap-3 shrink-0">
         <div className="flex-1 flex gap-1.5">
-          {[0, 1, 2].map(i => (
+          {[0, 1, 2, 3].map(i => (
             <div key={i} className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
               <motion.div className="h-full bg-primary" initial={false}
                 animate={{ width: i < etape ? '100%' : i === etape ? `${avancement * 100}%` : '0%' }}
@@ -359,14 +404,14 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
 
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-3 py-3 min-h-0">
 
-        {etape < 3 && (
+        {etape < 4 && (
           <motion.div key={`t${etape}`} {...MONTEE} className="flex flex-col items-center gap-1">
             <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
               ${demo ? 'text-cyan-300' : 'text-primary/70'}`}>
               {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
               {/* On dit qu'on ralentit. Un geste qui change de vitesse sans
                   prevenir se reapprend a la vitesse suivante. */}
-              {!demo && lent && etape < 2 && (
+              {!demo && lent && etapeHaie && (
                 <span className="ml-2 text-amber-300/80">· {N.t('tutoh_ralenti')}</span>
               )}
             </span>
@@ -377,7 +422,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
                 qu'alterner se voit. Tenir ne se voit pas : un pouce pose et un
                 pouce qui tape ont la meme image. Il faut le dire. */}
             <p className="text-[11px] md:text-xs text-foreground/60 text-center max-w-[30ch] leading-snug">
-              {N.t(['tutoh_1_s', 'tutoh_2_s', 'tutoh_3_s'][etape])}
+              {N.t(sous[etape])}
             </p>
           </motion.div>
         )}
@@ -385,7 +430,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
         {/* --- la scene --- */}
         <div className="w-full flex-1 min-h-[110px] flex flex-col items-center justify-center gap-3">
 
-          {etape < 2 && (
+          {etapeHaie && (
             <>
               {/* La haie, et le coureur qui vient dessus. Rien d'autre : ce
                   qu'il faut regarder est la jauge, en bas, sur le pave. */}
@@ -402,6 +447,22 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
                   transition={{ duration: 0.06, ease: 'linear' }}
                 />
               </div>
+
+              {/* LA BARRE DE RELANCE — l'etape 4. Elle tombe a ce que la
+                  reception a laisse, puis remonte : on ne reprend pas sa
+                  vitesse en tapant plus fort, on la reprend en courant. C'est
+                  la meme barre qu'en course (HaiesHUD). */}
+              {relance !== null && (
+                <motion.div {...SURGISSEMENT} className="flex flex-col items-center gap-1">
+                  <span className="font-mono text-[9px] tracking-[0.3em] text-amber-300/90">
+                    {N.t('haie_relance')}
+                  </span>
+                  <div className="w-24 h-1.5 rounded-full bg-black/50 overflow-hidden">
+                    <div className="h-full bg-amber-300/80"
+                         style={{ width: `${Math.round(relance * 100)}%` }} />
+                  </div>
+                </motion.div>
+              )}
 
               {motVerdict && (
                 <motion.div {...SURGISSEMENT} className="flex flex-col items-center gap-0.5">
@@ -450,7 +511,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
             </div>
           )}
 
-          {etape === 3 && (
+          {etape === 4 && (
             <motion.div {...SURGISSEMENT} className="flex flex-col items-center gap-3">
               <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center">
                 <Check className="w-8 h-8 text-primary" />
@@ -464,7 +525,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       </div>
 
       {/* --- les paves : la jauge y vit, comme en course --- */}
-      {etape < 3 ? (
+      {etape < 4 ? (
         <div className="w-full max-w-lg mx-auto shrink-0 flex flex-col gap-2">
           <div className="grid grid-cols-2 gap-2 md:gap-3">
             {(['left', 'right'] as Cote[]).map(cote => {
@@ -473,7 +534,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
               // le pave qu'il tient, et elle monte du bas — elle se remplissait
               // donc sous le doigt. « Relache quand c'est plein » en cachant le
               // plein. L'autre pave est libre, et il montre la meme chose.
-              const sienne = etape < 2 && (demo ? cote === 'left' : phase !== 'rien');
+              const sienne = etapeHaie && (demo ? cote === 'left' : phase !== 'rien');
               return (
                 <button
                   key={cote}
