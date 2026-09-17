@@ -1753,9 +1753,16 @@
     let livre = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
-      // Le haut du bras entre dans le deltoide ; la main est un bout libre.
+      // LE HAUT DU BRAS SE FERME, LUI AUSSI.
+      //
+      // Il entre dans le deltoide, et c'est le deltoide qui le cachait —
+      // tant que le bras pend. Bras leve, ou ramene devant la poitrine,
+      // l'epaule sortait du deltoide, et le tube ouvert montrait le fond du
+      // stade par le haut du bras. Une calotte le referme : elle est de la
+      // couleur du bras, donc de celle du deltoide qui l'entoure, et le
+      // rendu ne la dessine que quand ce bout-la regarde la camera.
       PREM.chaine(add, PR, 'upperarm', niv, peauBras, S, aArm, 0, yawTop,
-                  kArm * (L.manches ? 1.10 : 1), 0, 0, SOUS_HAUT);
+                  kArm * (L.manches ? 1.10 : 1), 0, 0, LIBRE);
       const e = rot(0, -0.250, aArm);
       const E = [S[0] + e[0], S[1], S[2] + e[1]];
       // LES ARTICULATIONS SE VOYAIENT.
@@ -1764,11 +1771,12 @@
       // bras finit a un rayon, l'avant-bras repart a un autre, dans une autre
       // direction. Une rotule sur le pivot avale les deux bouts. Elle prend
       // le plus epais des deux rayons MESURES a la jonction, un rien au-dela,
-      // pour couvrir sans faire de bosse.
+      // pour couvrir sans faire de bosse. Elle s'arrondit : un disque plat en
+      // travers d'un coude ou d'un genou plie se lisait comme un coup de scie.
       const rCoude = Math.max(PREM.rayon(PR, 'upperarm', niv, 'bas', kArm),
                               PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * 1.06;
       add(peauBras, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
-          0.026, yawTop);
+          0.026, yawTop, LIBRE);
       PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
                   kArm * (L.manches ? 1.12 : 1), 0, LIBRE, SOUS_HAUT);
       // au bout d'une manche, une main
@@ -1821,28 +1829,60 @@
         Kp = lacer(Kw, -yS);
         Ap = lacer(Aw, -yF);
       }
-      // LE SHORT DES HOMMES DESCEND SUR LA CUISSE.
-      //
-      // Un short d'athletisme masculin a des jambes. La jambe de short est
-      // accrochee au pivot de la cuisse et suit son angle : elle se leve avec
-      // le genou, comme un vetement porte et non comme un anneau pose sur le
-      // bassin. Elle reprend le haut de la cuisse MESUREE, un rien plus
-      // large a chaque hauteur, pour l'avaler sans la pincer. Rien ne change
-      // pour les femmes : leur cuissard reste le seul volume du bassin.
-      if (!fem && !L.pantalon) {
-        PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yT,
-                    kLeg * 1.08, 0, 0, SOUS_HAUT, -0.156);
-      }
       // un pantalon tombe plus large que la jambe qu'il habille
       const kPant = L.pantalon ? 1.10 : 1;
+      // LE VETEMENT EST LE HAUT DE LA CUISSE, IL N'EST PAS POSE DESSUS.
+      //
+      // Un short d'athletisme masculin a des jambes, et elles se levent avec
+      // le genou : la jambe de short est donc accrochee au pivot de la
+      // cuisse et suit son angle, comme un vetement porte et non comme un
+      // anneau pose sur le bassin. Mais elle ne peut pas etre un SECOND cone
+      // un peu plus large autour du premier : deux volumes coaxiaux a la
+      // meme profondeur se departagent au millimetre, et le short
+      // ressortait en travers de la cuisse — deux lanieres noires et un
+      // eperon a la hanche des que le genou montait.
+      //
+      // La cuisse est donc COUPEE a l'ourlet : les troncs du haut sont
+      // dessines en couleur de short, ceux du bas en couleur de peau. Meme
+      // os, memes mesures, un seul volume — la couleur change en cours de
+      // route, et l'ourlet est exactement le joint entre deux troncs. Rien
+      // ne se recouvre, donc rien ne peut ressortir.
+      //
+      // OU TOMBE L'OURLET. Au tiers de la cuisse pour un short d'homme. Pour
+      // un cuissard de femme, au premier joint sous la hanche : le vetement
+      // reste le volume du bassin, comme avant, et cette bande-la ne sert
+      // qu'a fermer le haut de la cuisse. Un pantalon habille toute la
+      // jambe, de la meme couleur que la ceinture : la coupure ne se voit
+      // pas.
+      const ourlet = (!fem && !L.pantalon) ? -0.156 : 0;
+      // ET LES DEUX BOUTS DE LA CUISSE SE FERMENT.
+      //
+      // Le haut de la cuisse mesuree est le fessier : une ellipse de vingt-
+      // quatre centimetres, ouverte, que le bassin cachait tant que la jambe
+      // restait sous lui. Des que la hanche s'ouvre ou que le genou monte,
+      // cette ouverture sortait du short — et le rendu ne dessine pas
+      // l'interieur d'un tube : c'est la piste qu'on voyait en pleine
+      // cuisse, en coin, entre le short et la jambe. En bas, meme histoire au
+      // genou : la rotule couvre le joint quand la jambe est tendue, pas
+      // quand elle se replie au point d'ecarter les deux os.
+      //
+      // Une calotte ferme chaque bout. Elle se dessine a la couleur de sa
+      // chaine, et c'est tout l'interet d'avoir coupe la cuisse a l'ourlet :
+      // celle du haut est de la couleur du short, qui l'entoure de partout,
+      // celle du bas de la couleur de la peau, comme la rotule du genou. Un
+      // simple disque suffisait a boucher, mais un disque est plat : il
+      // prenait la lumiere d'un seul coup et se lisait comme un couvercle
+      // pose sur la hanche.
+      PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yT, kLeg * kPant,
+                  0, SOUS_BAS, LIBRE, ourlet);
       PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yT, kLeg * kPant,
-                  0, SOUS_BAS, SOUS_HAUT);
+                  0, LIBRE, SOUS_HAUT, undefined, ourlet);
       const kv = rot(0, -0.392, th);
       const K = Kp || [H[0] + kv[0], H[1], H[2] + kv[1]];
       const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
                               PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * 1.04;
       add(peauJambes, K, sk, [0, 0, -0.020], [rGenou * kPant, rGenou * kPant],
-          [rGenou * kPant, rGenou * kPant], 0.034, yS);
+          [rGenou * kPant, rGenou * kPant], 0.034, yS, LIBRE);
       PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yS,
                   kLeg * (L.pantalon ? 1.18 : 1), 0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
