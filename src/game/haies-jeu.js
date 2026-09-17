@@ -228,6 +228,54 @@ export const GARDE_FRAPPE_VOL = 0.97;
 export const GARDE_VOL_MINI = 0.70;
 
 /**
+ * CE QUE REND UN APPEL REUSSI, en m/s — et c'est le correctif le plus
+ * important de tout le prototype.
+ *
+ * LE DEFAUT, mesure a l'ecran puis au harnais. Rendre l'appel au joueur ne
+ * rendait pas le jeu plus exigeant, il le rendait plus LENT, et pour une
+ * raison qui n'avait rien a voir avec les haies : le pouce qui monte vers la
+ * touche d'attaque est un pouce qui ne martele plus. Deux frappes perdues par
+ * haie, dix haies. A dix frappes par seconde sur le 110 m haies, un joueur qui
+ * passait les DIX haies en « parfait » bouclait en 14,12 s la ou l'appel
+ * automatique donnait 12,52 — une seconde et demie payee pour avoir bien joue.
+ * Le jeu punissait le geste qu'il demandait.
+ *
+ * On ne corrige pas cela en baissant les penalites : elles n'y sont pour rien.
+ * Ce qui manquait etait a l'endroit exact du trou. UN HURDLEUR POUSSE A
+ * L'APPEL — c'est la foulee la plus puissante de l'intervalle, celle qui
+ * l'arrache du sol. Le pouce qui quitte les paves ne cesse donc pas de courir :
+ * il donne son appui ailleurs.
+ *
+ * ELLE SE MERITE, et c'est ce qui la rend interessante. Un appel parfait rend
+ * la poussee entiere, un appel correct en rend la moitie, un appel plane ou
+ * hache ne rend rien, et la mauvaise jambe non plus — on ne s'arrache pas du
+ * sol en enjambant des deux pieds. Viser juste cesse ainsi d'etre seulement
+ * une facon d'eviter une punition pour devenir une facon de gagner du temps,
+ * ce qui n'est pas la meme chose a jouer.
+ *
+ * LA VALEUR EST CALEE, PAS CHOISIE, et le calage tient en une phrase : rendre
+ * l'appel au joueur ne doit changer ni le bareme ni les plateaux. Ils ont ete
+ * cales sur l'appel automatique (haies.js) apres beaucoup de mesures, et une
+ * commande qui change n'est pas une raison de les refaire.
+ *
+ * On a donc balaye la poussee et garde celle qui rapproche le plus le chrono
+ * d'un joueur — dix haies parfaites, voyage de pouce de 160 ms — de celui que
+ * l'appel automatique donnait a la meme cadence, sur les TROIS courses et de
+ * huit a douze frappes par seconde :
+ *
+ *     poussee   0     0,50   0,70   0,90   1,10   1,30
+ *     ecart max 1,87  0,70   0,95   1,05   1,91   3,21   (secondes)
+ *
+ * 0,50 double donc la precision de tout le reste du balayage. Au-dela, la
+ * poussee cesse d'etre une compensation et devient le levier principal : a
+ * 1,30 un joueur a huit frappes par seconde gagnait trois secondes sur la
+ * machine, et la cadence — qui est le coeur de Sprinter — ne comptait plus.
+ *
+ * Verrouille par tools/haies-appel-test.mjs, qui refait la mesure.
+ */
+export const POUSSEE_APPEL = { parfait: 0.50, bon: 0.25, plane: 0, hache: 0 };
+
+/**
  * Combien d'appuis pour couvrir un intervalle, a cette longueur de foulee.
  *
  * Le calcul porte sur la partie COURUE de l'intervalle, entre la reception et

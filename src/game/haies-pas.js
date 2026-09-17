@@ -43,7 +43,7 @@
 import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
          GARDE_RYTHME_ROMPU, APPEL_MINI, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
-         GARDE_VOL_MINI } from './haies-jeu.js';
+         GARDE_VOL_MINI, POUSSEE_APPEL } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -433,6 +433,10 @@ export function appeler(course, j, cote) {
   const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v });
 
   j.v = p.v;
+  // L'APPEL EST UNE POUSSEE. Sans cette ligne, le pouce qui monte vers la
+  // touche est un pouce qui a cesse de courir, et bien jouer coutait une
+  // seconde et demie sur le 110 m haies. Voir POUSSEE_APPEL, qui dit tout.
+  if (bonneJambe) j.v = Math.min(j.maxSpeed, j.v + (POUSSEE_APPEL[p.note] || 0));
   j.stride = nAppel * PI;
 
   if (COUT[cle].vol === 'distance') {
