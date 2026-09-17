@@ -18,7 +18,7 @@
 import '../src/game/sprinter-core.js';
 import { HAIES } from '../src/game/haies.js';
 import { APPEL, TOLERANCE, TOLERANCE_T, APPEL_MINI, POUSSEE_APPEL,
-         CISEAU_VISE, GARDE_CISEAU } from '../src/game/haies-jeu.js';
+         CISEAU_VISE, GARDE_CISEAU, PLAFOND_INTERVALLE } from '../src/game/haies-jeu.js';
 import { nouvelleCourse, preparerCoureur, pas, appeler, approche, enVol,
          frappeEnVol, relacher, ciseauDe } from '../src/game/haies-pas.js';
 
@@ -47,7 +47,7 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
  */
 function courir(cle, {
   cadence, cible = null, jambe = 'bonne', enVolAussi = false, mitraille = false,
-  joueur = true, voyage = 0, ciseau = CISEAU_VISE, mouchard = null,
+  joueur = true, voyage = 0, ciseau = CISEAU_VISE, rate = null, mouchard = null,
   dureeMax = 120, bruit = 0, graine = 1,
 } = {}) {
   const race = HAIES[cle];
@@ -80,8 +80,10 @@ function courir(cle, {
     // LE CISEAU — le pouce se leve. C'est le meme pave, le meme doigt : on ne
     // simule rien de plus qu'un relache au bon moment du vol.
     const vol = ciseauDe(course, r);
-    if (vol && !vol.fait && ciseau !== null && vol.part >= ciseau) {
-      relacher(course, r, vol.cote);
+    if (vol && !vol.fait && ciseau !== null) {
+      // `rate` : la haie que le joueur passe mal, les autres etant nettes.
+      const c = (rate !== null && course.i === rate) ? 0.15 : ciseau;
+      if (vol.part >= c) relacher(course, r, vol.cote);
     }
 
     // L'APPEL. On note aussi ce que la touche annoncait, image par image :
@@ -396,6 +398,50 @@ for (const cle of ['110h', '400h']) {
   ok(`${cle} : sans relache, les dix ciseaux sont notes absents`,
      c.ciseaux.filter(x => x.note === 'absent').length === 10,
      c.ciseaux.map(x => x.note).join(' '));
+}
+
+titre("LA RECEPTION DECIDE DE L INTERVALLE SUIVANT");
+
+// LE SYSTEME QUI FAIT DE HURDLERS UN JEU ET NON UN MINI-JEU.
+//
+// Ce qu'une haie retirait au coureur, il le reprenait avant la suivante : au
+// plafond, integralement. La faute s'effacait, et dix franchissements
+// n'etaient qu'une taxe sur une course de Sprinter — mesure, au-dessus de dix
+// frappes par seconde tous les chronos s'ecrasaient entre 11,3 et 11,8 s
+// quelle que soit la technique.
+//
+// Maintenant la reception decide du plafond de l'intervalle, et il remonte au
+// fil des trois foulees. Trois choses doivent rester vraies.
+ok('un ciseau net ne coute aucun plafond, tout le reste en coute',
+   PLAFOND_INTERVALLE.ciseau === 1
+   && PLAFOND_INTERVALLE.bon < 1
+   && PLAFOND_INTERVALLE.accroche < PLAFOND_INTERVALLE.bon
+   && PLAFOND_INTERVALLE.absent < PLAFOND_INTERVALLE.accroche,
+   JSON.stringify(PLAFOND_INTERVALLE));
+
+for (const cle of ['100h', '110h', '400h']) {
+  // 1. BIEN JOUER N'EST JAMAIS PUNI. Un ciseau net ne declenche pas le
+  //    plafond, donc la severite qu'on donne au reste ne le touche pas.
+  const net = courir(cle, { cadence: 11, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  ok(`${cle} : le joueur qui passe bien ne voit jamais le plafond`,
+     net.course.plafondBas === 0 || net.ciseaux.every(x => x.note === 'ciseau'),
+     net.ciseaux.map(x => x.note).join(' '));
+
+  // 2. LA TECHNIQUE BAT LA CADENCE. C'est le renversement qu'on cherche :
+  //    savoir passer une haie doit valoir plus que deux frappes par seconde.
+  const bienLent = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  const malVif = courir(cle, { cadence: 12, cible: JUSTE(cle), ciseau: 0.15 });
+  ok(`${cle} : bien passer a 10 frappes/s bat marteler a 12`,
+     bienLent.temps < malVif.temps,
+     `${bienLent.temps?.toFixed(2)} contre ${malVif.temps?.toFixed(2)}`);
+
+  // 3. ET LA FAUTE SE RATTRAPE. Le plafond remonte d'ici a la haie suivante :
+  //    une mauvaise haie coute un intervalle, pas la course. Sans cela, une
+  //    course serait finie a la troisieme et le jeu deviendrait un couloir.
+  const uneSeule = courir(cle, { cadence: 11, cible: JUSTE(cle), ciseau: CISEAU_VISE, rate: 3 });
+  ok(`${cle} : une seule haie ratee coute moins d'une demi-seconde`,
+     uneSeule.temps - net.temps < 0.5 && uneSeule.temps > net.temps,
+     `${(uneSeule.temps - net.temps).toFixed(2)} s`);
 }
 
 titre("AUCUNE CHUTE NE VIENT D'UNE HAIE");

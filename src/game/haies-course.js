@@ -23,7 +23,7 @@ import { SprinterApp } from './engine';
 import { APPEL_JOUEUR } from './canal';
 import { HAIES } from './haies.js';
 import { nouvelleCourse, preparerCoureur, libererCoureur, pas,
-         appeler, frappeEnVol, approche, relacher, ciseauDe } from './haies-pas.js';
+         appeler, frappeEnVol, approche, relacher, ciseauDe, plafondDe } from './haies-pas.js';
 import { obstaclesDe } from './haies-rendu.js';
 
 /** L'etat d'une course de haies. Nul en dehors d'une course de haies. */
@@ -57,6 +57,19 @@ export function dernierCiseau() {
   const d = course.dernierCiseau;
   course.dernierCiseau = null;
   return d;
+}
+
+/**
+ * Ou en est le plafond de l'intervalle, de 0 a 1.
+ *
+ * Il faut que ca SE VOIE. Une mauvaise reception interdit de courir vite
+ * jusqu'a la haie suivante ; sans rien a l'ecran, le coureur parait lent sans
+ * raison et le joueur ne relie pas l'effet a sa cause — il croit a un bug.
+ */
+export function plafondHaies() {
+  const G = SprinterApp.G;
+  if (!course || !G || !G.player) return 1;
+  return plafondDe(course, G.player);
 }
 
 /** Le bilan de la course : ce que le joueur a tenu, et ce qu'il a paye. */

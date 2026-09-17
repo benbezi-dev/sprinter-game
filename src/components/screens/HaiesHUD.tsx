@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { dernierFranchissement, dernierCiseau, haiesPosees } from '@/game/haies-course.js';
+import { dernierFranchissement, dernierCiseau, haiesPosees, plafondHaies } from '@/game/haies-course.js';
 
 type Juge = {
   haie: number; note: 'parfait' | 'bon' | 'plane' | 'hache' | 'percute';
@@ -57,6 +57,9 @@ export function HaiesHUD() {
   const elapsed = useGameStore(s => s.elapsed);
   const [juge, setJuge] = useState<{ j: Juge; t: number } | null>(null);
   const [cis, setCis] = useState<{ c: Ciseau; t: number } | null>(null);
+  // Le plafond de l'intervalle, lu a chaque image du store : il change en
+  // continu pendant qu'on le rattrape, et il doit se voir remonter.
+  const [plafond, setPlafond] = useState(1);
 
   // Le jugement se lit une fois, puis s'efface cote moteur : on le garde ici le
   // temps de l'afficher.
@@ -76,6 +79,8 @@ export function HaiesHUD() {
     else if (cis && elapsed - cis.t > TENUE_CISEAU) setCis(null);
     else if (cis && elapsed < cis.t) setCis(null);
   }, [elapsed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { setPlafond(plafondHaies() as number); }, [elapsed]);
 
   const posees = haiesPosees();
   if (!posees) return null;
@@ -104,6 +109,22 @@ export function HaiesHUD() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* LE PLAFOND DE L'INTERVALLE, quand la reception l'a entame.
+          Une barre qui se remplit, et un mot. Sans elle, le coureur parait
+          lent sans raison : le joueur verrait l'effet et jamais la cause, ce
+          qui est la definition d'un jeu qu'on subit. */}
+      {plafond < 0.995 && (
+        <motion.div {...SURGISSEMENT} className="mt-1.5 flex flex-col items-center gap-1">
+          <span className="font-mono text-[9px] sm:text-[10px] tracking-[0.3em] text-amber-300/90">
+            {N.t('haie_relance')}
+          </span>
+          <div className="w-20 sm:w-24 h-1 rounded-full bg-black/50 overflow-hidden">
+            <div className="h-full bg-amber-300/80 transition-[width] duration-75"
+                 style={{ width: `${Math.round(plafond * 100)}%` }} />
+          </div>
+        </motion.div>
+      )}
 
       {/* Le ciseau, sous le verdict de l'appel et plus discret : c'est le meme
           franchissement qui continue, pas un second evenement. Les

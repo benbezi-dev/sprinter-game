@@ -254,6 +254,57 @@ export const PART_TOLERANCE_CISEAU = { parfait: 0.18, bon: 0.40 };
 export const CISEAU_PLANCHER = 0.30;
 
 /**
+ * LE PLAFOND DE L'INTERVALLE, en part de celui de l'epreuve, selon le ciseau.
+ *
+ * C'EST LE SYSTEME QUI FAIT DE HURDLERS UN JEU ET NON UN MINI-JEU.
+ *
+ * Jusqu'ici, ce qu'une haie retirait au coureur, il le reprenait avant la
+ * suivante : le moteur reaccelere vers son plafond, et au plafond il reprend
+ * TOUT. La faute s'effacait donc entre deux haies, et les dix franchissements
+ * n'etaient qu'une taxe sur une course de Sprinter. Mesure : au-dessus de dix
+ * frappes par seconde, tous les chronos du jeu s'ecrasaient entre 11,3 et
+ * 11,8 s, quelle que soit la technique.
+ *
+ * LA FAUTE NE S'EFFACE PLUS, ELLE SE PROPAGE. Un ciseau en retard fait
+ * retomber DERRIERE l'appui : on ne repart pas en courant, on se remet d'abord
+ * sous soi. Le plafond de l'intervalle est donc celui que la reception permet,
+ * et pas celui de l'epreuve. C'est la spirale que tout hurdleur connait — mal
+ * passer une haie, c'est mal aborder la suivante — et c'est ce qui relie
+ * enfin le franchissement au rythme d'intervalle au lieu d'en faire deux jeux
+ * cote a cote.
+ *
+ * MAIS ELLE SE RATTRAPE, ET C'EST CE QUI REND LE SYSTEME JOUABLE. Le plafond
+ * ne reste pas bas : il remonte a sa valeur pleine AU FIL DE L'INTERVALLE, et
+ * l'a retrouvee au point d'appel suivant (voir haies-pas.js). Une mauvaise haie
+ * coute donc le DEBUT d'un intervalle, pas la course — et c'est encore ce que
+ * fait un hurdleur, dont la premiere foulee sert a se remettre sous lui et dont
+ * la deuxieme est la plus longue (FORME_INTERVALLE, mesuree chez Jackson).
+ *
+ * Une course reste donc rattrapable jusqu'a la derniere haie, ce qu'une
+ * penalite qui s'accumulerait aurait tue des la troisieme.
+ *
+ * LA VALEUR EST CALEE SUR LE RENVERSEMENT QU'ON CHERCHE : un joueur qui passe
+ * ses haies a dix frappes par seconde doit battre un joueur qui martele a
+ * douze. Mesure sur le 110 m haies :
+ *
+ *     plafond   martele a 12 f/s   passe bien a 10 f/s
+ *     1,00          11,30 s              11,70 s      la technique ne sert a rien
+ *     0,70          12,15                11,70        elle sert a peine
+ *     0,60          13,02                11,70        ELLE DECIDE
+ *     0,50          13,78                11,70        elle ecrase la cadence
+ *
+ * A 0,60, savoir passer une haie vaut plus que deux frappes par seconde. En
+ * dessous, la cadence — qui est le coeur de Sprinter — cesserait de compter.
+ *
+ * Et la colonne de droite ne bouge pas d'une valeur a l'autre : un ciseau net
+ * ne declenche jamais le plafond. BIEN JOUER N'EST JAMAIS PUNI, quelle que
+ * soit la severite qu'on donne au reste.
+ */
+export const PLAFOND_INTERVALLE = {
+  ciseau: 1, bon: 0.94, accroche: 0.76, traine: 0.80, absent: 0.60,
+};
+
+/**
  * CE QUE LE CISEAU GARDE DE LA VITESSE, et c'est ici que le jeu cesse d'etre
  * Sprinter avec des haies dessinees dessus.
  *
@@ -273,8 +324,19 @@ export const CISEAU_PLANCHER = 0.30;
  *   absent     jamais relache : on franchit a plat, pieds joints, et l'on
  *              retombe sans avoir couru
  *
- * LES VALEURS SONT CALEES SUR CE QUE LE GESTE DOIT PESER, mesure au harnais
- * sur le 110 m haies a dix frappes par seconde, appel juste a chaque haie :
+ * ELLES NE SONT PLUS QUE LE CHOC DE LA RECEPTION, et c'est un renversement.
+ * Elles portaient tout le cout de la technique — jusqu'a 30 % sur un
+ * franchissement a plat — et le moteur le reprenait avant la haie suivante :
+ * au plafond, integralement. La faute s'effacait, et dix franchissements ne
+ * faisaient qu'une taxe sur une course de Sprinter.
+ *
+ * Ce que la technique coute vraiment est passe dans PLAFOND_INTERVALLE : un
+ * mauvais ciseau ne te ralentit pas une fois, il t'interdit de courir vite
+ * jusqu'a la haie suivante. Il ne reste ici que le choc lui-meme, quelques
+ * millièmes, parce qu'un pied mal pose freine aussi sur l'instant.
+ *
+ * Les valeurs d'avant, pour memoire, quand elles portaient tout — mesure au
+ * harnais sur le 110 m haies a dix frappes par seconde :
  *
  *     ciseau net   12,75 s      un ciseau mal place coute trois dixiemes,
  *     un peu tot   13,10 s      ne jamais ciseauter en coute pres d'un et
@@ -288,7 +350,7 @@ export const CISEAU_PLANCHER = 0.30;
  * qu'on ajoute un cout ponctuel dans ce jeu.
  */
 export const GARDE_CISEAU = {
-  ciseau: 1, bon: 0.965, accroche: 0.85, traine: 0.88, absent: 0.70,
+  ciseau: 1, bon: 0.995, accroche: 0.980, traine: 0.985, absent: 0.970,
 };
 
 /**

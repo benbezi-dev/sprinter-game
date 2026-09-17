@@ -764,6 +764,10 @@
     haie_c_traine:   ['JAMBE ARRIÈRE', 'TRAIL LEG'],
     haie_c_absent:   ['PAS DE CISEAU', 'NO SCISSOR'],
     haie_c_ms:       ['{n} ms', '{n} ms'],
+    // Ce qu'on dit quand la reception a coute le plafond de l'intervalle.
+    // « Relance » est le mot du bord de piste : on ne court pas encore, on
+    // repart.
+    haie_relance:    ['RELANCE', 'REBUILDING'],
     haie_appuis:     ['{n} appuis', '{n} steps'],
     haie_rythme:     ['rythme cassé', 'rhythm broken'],
     haie_n:          ['haie {n}/{t}', 'hurdle {n}/{t}'],

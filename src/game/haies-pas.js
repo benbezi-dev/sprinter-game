@@ -43,7 +43,8 @@
 import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
          GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, FORME_INTERVALLE, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
-         GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau } from './haies-jeu.js';
+         GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau,
+         PLAFOND_INTERVALLE } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -183,6 +184,10 @@ export function nouvelleCourse(cle, { appelJoueur = false } = {}) {
     // part du vol ecoulee au relache, et reste null tant qu'on n'a pas relache.
     dAppel: 0, volDuree: 0, volCiseau: 0, coteAppel: null, ciseauPart: null,
     ciseaux: [], dernierCiseau: null,
+    // LE PLAFOND DE L'INTERVALLE. `plafondBas` est celui que la reception
+    // permet ; il remonte au plafond de l'epreuve d'ici au point d'appel
+    // suivant. Voir haies-jeu.js, PLAFOND_INTERVALLE.
+    plafondBas: 0, dReception: 0,
     // LA JAMBE D'ATTAQUE DU COUREUR. Nulle avant la premiere haie ; la premiere
     // l'arrete pour toute la course. Voir GARDE_MAUVAISE_JAMBE.
     jambe: null,
@@ -265,6 +270,9 @@ export function pas(course, j) {
     if (course.appelJoueur) {
       const jc = jugerCiseau(course.ciseauPart, course.volCiseau);
       j.v *= jc.garde;
+      // LE PLAFOND DU PROCHAIN INTERVALLE SE DECIDE ICI. C'est la reception qui
+      // dit a quelle vitesse on peut repartir — pas l'epreuve.
+      course.plafondBas = HAIES[course.cle].maxSpeed * (PLAFOND_INTERVALLE[jc.note] ?? 1);
       const ms = course.ciseauPart === null ? null
         : Math.round(course.ciseauPart * course.volCiseau * 1000);
       course.ciseaux.push({ note: jc.note, ms });
@@ -281,7 +289,26 @@ export function pas(course, j) {
     course.enVol = false;
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
+    course.dReception = j.d;
     return null;
+  }
+
+  // LE PLAFOND QUE LA RECEPTION A LAISSE, et sa remontee.
+  //
+  // On plafonne la VITESSE, jamais `maxSpeed` : le moteur s'en sert aussi pour
+  // l'amplitude de la foulee (`strideLength`, qui lit v / maxSpeed), et le
+  // baisser ALLONGERAIT la foulee au lieu de la raccourcir — l'inverse de ce
+  // qu'un coureur ralenti fait. Ici la vitesse tombe, le rapport tombe avec, et
+  // la foulee se raccourcit d'elle-meme : le compte d'appuis de l'intervalle
+  // s'en trouve deplace, ce qui EST la spirale qu'on cherche a produire.
+  if (course.appelJoueur && course.plafondBas > 0 && course.reception > 0) {
+    const plein = HAIES[course.cle].maxSpeed;
+    const point = course.positions[Math.min(course.i, course.positions.length - 1)]
+                  - APPEL[course.cle].avant + AVANCE_CM;
+    const total = Math.max(0.5, point - course.dReception);
+    const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
+    const plafond = course.plafondBas + (plein - course.plafondBas) * t;
+    if (j.v > plafond) j.v = plafond;
   }
 
   // LA FORME DE L'INTERVALLE. Les trois foulees entre deux haies ne sont pas
@@ -698,4 +725,22 @@ export function ciseauDe(course, j) {
     zone: jugerCiseau(part, course.volCiseau).note,
     cote: course.coteAppel,
   };
+}
+
+
+/**
+ * Ou en est le plafond de l'intervalle, de 0 a 1 — 1 etant celui de l'epreuve.
+ *
+ * Pour l'ecran : une mauvaise reception doit SE VOIR, sans quoi le coureur
+ * parait lent sans raison et le joueur ne relie pas l'effet a sa cause.
+ */
+export function plafondDe(course, j) {
+  if (!course || !j || !course.appelJoueur || !course.plafondBas) return 1;
+  if (course.enVol || course.reception <= 0) return 1;
+  const plein = HAIES[course.cle].maxSpeed;
+  const point = course.positions[Math.min(course.i, course.positions.length - 1)]
+                - APPEL[course.cle].avant + AVANCE_CM;
+  const total = Math.max(0.5, point - course.dReception);
+  const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
+  return Math.min(1, (course.plafondBas + (plein - course.plafondBas) * t) / plein);
 }
