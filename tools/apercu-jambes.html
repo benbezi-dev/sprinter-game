@@ -20,6 +20,9 @@
 <h2>femme, de dos</h2><canvas id="c2" width="1180" height="500"></canvas>
 <h2>homme, trois quarts face</h2><canvas id="c3" width="1180" height="500"></canvas>
 <h2>femme, profil</h2><canvas id="c4" width="1180" height="500"></canvas>
+<h2 id="t8">en gros plan — la hanche, la cuisse, le genou (scenette de pres)</h2>
+<canvas id="c8" width="1180" height="620"></canvas>
+<canvas id="c9" width="1180" height="620" style="margin-top:8px"></canvas>
 <h2 id="t7">poses du jeu — a vos marques, prets, sortie des blocs, chute, celebration</h2>
 <canvas id="c7" width="1180" height="700"></canvas>
 <h2 id="t6">par-dessus une haie — homme de dos, homme de trois quarts, femme de profil</h2>
@@ -60,6 +63,28 @@
   rangee('c2', f, Math.PI / 2);
   rangee('c3', h, -Math.PI * 0.75);
   rangee('c4', f, Math.PI);
+
+  // LE GROS PLAN, LA OU LES DEFAUTS SE VOIENT D'ABORD.
+  //
+  // Une scenette montre le coureur trois fois plus grand qu'une course : un
+  // ecart de un millimetre entre deux troncs y fait une fente d'un pixel, et
+  // un bout de tube ouvert, un trou. Les rangees du haut, a la taille de la
+  // course, n'en montraient rien. Celle-ci cadre la hanche, la cuisse et le
+  // genou — c'est tout ce qui tient dans la hauteur a cette echelle.
+  const kp = 700;
+  [['c8', h, Math.PI / 2], ['c9', f, -Math.PI * 0.75]].forEach(([id, cle, cap]) => {
+    const c = document.getElementById(id).getContext('2d');
+    const p = perso(cle);
+    for (let i = 0; i < 3; i++) {
+      p.stride = 0.3 + i * 2 * Math.PI / 3;
+      const caps = SprinterApp.personCapsules(p, cap, 0, false, false,
+                                              SprinterApp.niveauDetail(kp));
+      // Le cadre va du mollet a la ceinture : a cette echelle un corps entier
+      // ne tient pas dans la page, et ce n'est pas lui qu'on regarde. Les
+      // pieds tombent donc sous le bas du cadre, les epaules au-dessus.
+      SprinterApp.drawFacetFigure(c, caps, 200 + i * 390, 830, kp);
+    }
+  });
 
   // LES POSES QUI PLIENT TOUT. Dans les blocs, genoux et hanches se ferment
   // bien plus qu'en course ; la chute et la celebration couchent et
@@ -113,12 +138,14 @@
       if (el.id !== 'c5' && el.id !== 't5') el.style.display = 'none';
     }
   }
-  // ?haies, ?poses : une rangee seule
+  // ?haies, ?poses, ?pres : une rangee seule
   const seule = location.search.includes('haies') ? '6'
-    : (location.search.includes('poses') ? '7' : null);
+    : (location.search.includes('poses') ? '7'
+    : (location.search.includes('pres') ? '8' : null));
   if (seule) {
     for (const el of document.querySelectorAll('h2, canvas')) {
-      if (el.id !== 'c' + seule && el.id !== 't' + seule) el.style.display = 'none';
+      const garde = seule === '8' ? ['c8', 'c9', 't8'] : ['c' + seule, 't' + seule];
+      if (!garde.includes(el.id)) el.style.display = 'none';
     }
   }
   window.__pret = true;

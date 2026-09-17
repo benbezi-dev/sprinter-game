@@ -5958,7 +5958,26 @@
       const ends = [];
       for (const zSign of [-1, 1]) {
         const hx = zSign < 0 ? hf[0] : hf[2], hy = zSign < 0 ? hf[1] : hf[3];
-        const lx = off[0], lz = off[2] + zSign * hf[4];
+        // UNE CAMBRURE PAR BOUT, ET LE MEMBRE NE SE FEND PLUS.
+        //
+        // La cambrure est de combien la chair deborde vers l'avant : elle
+        // court le long de l'os, de +3 mm a la cheville a -10 mm au mollet.
+        // Un tronc unique la portait tout entiere sur son axe, parallele a
+        // l'os : deux troncs voisins se retrouvaient donc decales de leur
+        // ecart de cambrure — jusqu'a cinq millimetres — et leurs bords de
+        // jonction, de meme taille mais plus au meme endroit, ne se
+        // rejoignaient plus. C'etait la marche, et la fente, qui traversaient
+        // la cuisse et le mollet a chaque joint, d'autant plus visibles que
+        // le coureur etait montre de pres.
+        //
+        // Un bout peut donc porter sa propre cambrure (off[3] pour le haut,
+        // off[0] pour le bas) : l'axe du tronc suit la courbe de la chair au
+        // lieu de rester parallele a l'os, et deux troncs qui se suivent
+        // partagent exactement le meme bord. Les pieces ecrites a la main
+        // n'ont qu'une cambrure : sans off[3], les deux bouts la partagent,
+        // comme avant.
+        const lx = zSign < 0 || off[3] === undefined ? off[0] : off[3];
+        const lz = off[2] + zSign * hf[4];
         let wx = pv[0] + lx * ca - lz * sa;
         let wz = pv[2] + lx * sa + lz * ca;
         let wy = pv[1] + off[1];

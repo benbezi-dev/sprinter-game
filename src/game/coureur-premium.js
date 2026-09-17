@@ -41,11 +41,24 @@
   // buste se penchait.
   var LIBRE = 1, ENFOUI_BAS = 2, ENFOUI_HAUT = 4;
 
+  // De combien un tronc mord dans son voisin, en part de sa demi-hauteur.
+  // Un bon cinquieme suffit — sept millimetres sur une cuisse — et c'est plus
+  // que le plus large des ecarts de bord mesures : cinq millimetres au
+  // mollet, la ou la cambrure tourne le plus vite.
+  var RECOUVRE = 0.22;
+
   // MESURE (8) dit au rendu que la section est une ellipse RELEVEE. Tout le
   // reste — cheveux, chaussures, dossard — garde ses dimensions ecrites a la
   // main, que le rendu a toujours arrondies en moyenne : les y dessiner en
   // ellipse changerait des pieces que personne n'a demande de toucher.
   var MESURE = 8;
+
+  /** Le premier tronc dont le centre atteint cette hauteur locale. */
+  function coupe(tr, h) {
+    var i = 0;
+    while (i < tr.length - 1 && tr[i][0] < h) i++;
+    return i;
+  }
 
   /**
    * Poser une chaine de troncs mesures sur un os.
@@ -67,26 +80,74 @@
    * @param depuis ne poser que les troncs centres au-dessus de cette hauteur
    *               locale (une jambe de short n'habille que le haut de la
    *               cuisse)
+   * @param jusqua ne poser que les troncs SOUS cette hauteur locale
+   *
+   * COUPER UN OS EN DEUX SANS LAISSER DE JOINT. `depuis` et `jusqua` se
+   * lisent a la meme regle — `coupe()` — et sont donc exactement
+   * complementaires : la chaine habillee prend `depuis: h`, la chaine de
+   * peau `jusqua: h`, et les deux se partagent les troncs sans en perdre ni
+   * en doubler un, a tous les niveaux de detail. C'est ce qui permet de
+   * vetir le haut d'une cuisse SANS poser par-dessus elle un second cone
+   * un peu plus large : deux volumes coaxiaux a la meme profondeur se
+   * departagent au millimetre, et le short ressortait en lanieres noires en
+   * travers de la cuisse des que le genou montait.
    */
-  function chaine(add, pro, nom, niv, col, pv, ang, oy, yaw, k, dz, bas, haut, depuis) {
+  function chaine(add, pro, nom, niv, col, pv, ang, oy, yaw, k, dz, bas, haut,
+                  depuis, jusqua) {
     var tr = pro[nom][niv], d = dz || 0;
-    var i0 = 0;
-    if (depuis !== undefined) {
-      while (i0 < tr.length - 1 && tr[i0][0] < depuis) i0++;
-    }
-    for (var i = i0; i < tr.length; i++) {
+    var i0 = depuis === undefined ? 0 : coupe(tr, depuis);
+    var i1 = jusqua === undefined ? tr.length - 1 : coupe(tr, jusqua) - 1;
+    for (var i = i0; i <= i1; i++) {
       var t = tr[i];
       // t = [centre z, demi-hauteur, cambrure, prof. bas, larg. bas,
       //      prof. haut, larg. haut]
       var f = MESURE;
       f |= (i === i0) ? (bas || 0) : ENFOUI_BAS;
-      f |= (i === tr.length - 1) ? (haut || 0) : ENFOUI_HAUT;
+      f |= (i === i1) ? (haut || 0) : ENFOUI_HAUT;
       // LIBRE ne dit pas QUEL bout s'arrondit : le rendu arrondit celui qui
       // fait face a la camera. Un bout libre ne se declare donc qu'en face
       // d'un bout enfoui — sinon, sur une chaine d'un seul tronc, la calotte
       // irait coiffer l'autre extremite.
-      add(col, pv, ang, [t[2] * k, oy, t[0] + d],
-          [t[3] * k, t[4] * k], [t[5] * k, t[6] * k], t[1], yaw, f);
+      var h = t[1];
+      // LES TRONCS D'UN MEME OS SE CHEVAUCHENT AUX JOINTS.
+      //
+      // Deux troncs poses bout a bout partagent un bord calcule DEUX FOIS,
+      // une fois par tronc, et jamais tout a fait de la meme facon : la
+      // section n'est pas facettee avec le meme nombre de cotes de part et
+      // d'autre si le rayon change de palier, et le bord n'est pas dans le
+      // meme plan si l'axe s'incline avec la cambrure. Il suffit d'un
+      // dixieme de millimetre d'ecart pour que la piste passe entre les
+      // deux, en fuseau, en travers du mollet ou de la cuisse — et ce
+      // fuseau-la grandit avec la taille du coureur a l'ecran.
+      //
+      // Aucun ajustement de bord ne ferme cela pour de bon. Ce qui le ferme,
+      // c'est que les troncs se RECOUVRENT : chaque tronc depasse d'un bon
+      // cinquieme dans son voisin, et le cone est prolonge a sa propre pente
+      // pour que sa peau reste exactement celle de la mesure. Les intervalles
+      // se chevauchent, donc il n'y a plus de bord commun par ou voir a
+      // travers. Seuls les joints INTERNES a l'os s'allongent : les deux
+      // bouts de l'os gardent leur place, et l'os sa longueur.
+      var eB = i > 0 ? RECOUVRE * h : 0;
+      var eH = i < tr.length - 1 ? RECOUVRE * h : 0;
+      // La cambrure de chaque BOUT, prise a mi-chemin des deux troncs qui
+      // s'y rencontrent : c'est la meme valeur des deux cotes du joint, donc
+      // les deux troncs suivent la meme courbe de chair au lieu de rester
+      // paralleles a l'os, chacun decale du sien. Elle se lit sur les
+      // voisins dans le profil, jamais sur les bornes de la chaine — une
+      // cuisse coupee a l'ourlet garde ainsi un joint continu entre sa part
+      // de short et sa part de peau. Aux extremites de l'os, le tronc garde
+      // la sienne : il n'y a rien au-dela avec quoi s'accorder.
+      var cb = i > 0 ? (tr[i - 1][2] + t[2]) * 0.5 : t[2];
+      var ch = i < tr.length - 1 ? (t[2] + tr[i + 1][2]) * 0.5 : t[2];
+      // Les pentes du tronc, par unite de hauteur : prolonger a la pente,
+      // c'est prolonger le cone mesure, pas en fabriquer un autre.
+      var pp = (t[5] - t[3]) / (2 * h), pl = (t[6] - t[4]) / (2 * h);
+      var pc = (ch - cb) / (2 * h);
+      add(col, pv, ang,
+          [(cb - pc * eB) * k, oy, t[0] + (eH - eB) * 0.5 + d, (ch + pc * eH) * k],
+          [(t[3] - pp * eB) * k, (t[4] - pl * eB) * k],
+          [(t[5] + pp * eH) * k, (t[6] + pl * eH) * k],
+          h + (eB + eH) * 0.5, yaw, f);
     }
   }
 
