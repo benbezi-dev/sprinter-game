@@ -51,8 +51,11 @@ export function Mondes() {
   // memes duels : entrer dans son monde bascule le jeu (couleur, epreuves,
   // musique) et laisse l'accueil de Sprinter s'afficher, au lieu de poser
   // par-dessus une liste d'epreuves a part. Voir game/jeux.ts.
+  //
+  // Tant que les haies sont fermees (canal.ts, HAIES_OUVERTES), jeuDuMonde
+  // rend Sprinter : le monde Hurdlers reste son accueil, qui les annonce.
   useEffect(() => { changerDeJeu(jeuDuMonde(monde)); }, [monde]);
-  if (monde === 'sprinter' || monde === 'hurdlers') return null;
+  if (monde === 'sprinter' || jeuDuMonde(monde) === 'hurdlers') return null;
   return <AccueilMonde monde={monde} />;
 }
 

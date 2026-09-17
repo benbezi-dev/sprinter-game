@@ -102,6 +102,21 @@ export const POUSSEE_OUVERTE = EST_TEST;
 export const DEPART_STARTER = EST_TEST;
 
 /**
+ * HURDLERS SE JOUE. Le 100 m, le 110 m et le 400 m haies, dans l'enveloppe de
+ * Sprinter (game/jeux.ts).
+ *
+ * Sur le canal de test d'abord, le temps de l'eprouver. Dans le build public, le monde Hurdlers reste ce qu'il etait : un accueil qui
+ * annonce ses trois epreuves « bientot ». L'ouvrir a tout le monde se reduit a
+ * ce `true`.
+ *
+ * Le code des haies part quand meme dans le build public : la table des
+ * courses les connait, parce qu'une quinzaine d'ecrans lisent
+ * `RACES[cle].label` sans garde et qu'un lien de defi ou un duel de haies ne
+ * doit pas les faire tomber. Ce drapeau ferme le chemin, pas le moteur.
+ */
+export const HAIES_OUVERTES = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

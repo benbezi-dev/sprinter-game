@@ -24,6 +24,7 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
+import { HAIES_OUVERTES } from './canal';
 
 export type Jeu = 'sprinter' | 'hurdlers';
 
@@ -101,7 +102,9 @@ G.apresConstruction = () => {
     const jeu = jeuDe(cle);
     if (jeu !== courant) {
       changerDeJeu(jeu, false);
-      if (jeuDuMonde(mondeCourant()) !== jeu) allerAu(jeu);
+      // Haies fermees, le monde Hurdlers est l'accueil « bientot » : y aller
+      // le poserait par-dessus la course qu'un lien vient de lancer.
+      if (HAIES_OUVERTES && jeuDuMonde(mondeCourant()) !== jeu) allerAu(jeu);
     }
   }
 };
@@ -124,9 +127,12 @@ export function epreuvesDuJeu(jeu: Jeu = courant): readonly RaceKey[] {
   return EPREUVES_DU_JEU[jeu];
 }
 
-/** Le jeu qu'on joue dans ce monde. Les concours n'en sont pas encore. */
+/**
+ * Le jeu qu'on joue dans ce monde. Les concours n'en sont pas encore, et
+ * Hurdlers ne l'est que la ou ses haies sont ouvertes (canal.ts).
+ */
 export function jeuDuMonde(m: Monde): Jeu {
-  return m === 'hurdlers' ? 'hurdlers' : 'sprinter';
+  return m === 'hurdlers' && HAIES_OUVERTES ? 'hurdlers' : 'sprinter';
 }
 
 /**
