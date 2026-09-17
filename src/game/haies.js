@@ -62,64 +62,51 @@ export const RECORDS = {
 };
 
 /**
- * LE BAREME, DONNE POUR LE 110 M HAIES.
+ * L'ecart du plateau mondial autour du record, en part du record.
  *
- * Il ne se calcule plus, il se decide — et c'est un renversement volontaire.
+ * Trois dixiemes sur le 110 m — le chiffre choisi — mais exprime en
+ * proportion, et c'est tout l'objet de cette constante.
  *
- * Jusqu'ici les six plateaux sortaient d'une formule : trois proportions
- * reprises de Sprinter, puis un ecart autour du record (ECART_MONDIAL, trois
- * dixiemes exprimes en part du record, pour que les trois epreuves respirent
- * pareil). La formule avait cette qualite-la, et un defaut qui a fini par
- * compter : elle decrivait un jeu ou la MACHINE sautait les haies a la place
- * du joueur. Depuis que l'appel lui revient (canal.ts, APPEL_JOUEUR), ce
- * qu'une cadence donne au chrono a change, et un bareme deduit du record du
- * monde ne dit plus rien de ce que la manette demande.
+ * En valeur absolue, trois dixiemes valent 2,3 % d'un 110 m haies et 0,65 %
+ * d'un tour complet. Le plateau du 400 m tenait alors dans six dixiemes apres
+ * quarante-six secondes de course : sept adversaires a portee de photo-finish
+ * a chaque tentative, ou l'on ne pouvait ni prendre de l'avance ni en perdre.
+ * Ce n'etait pas une decision, c'etait un effet de bord de l'unite choisie.
  *
- * Ces douze nombres viennent donc du joueur, apres essais au pouce. On ne les
- * arrondit pas et on ne les « corrige » pas : ce sont des decisions, pas des
- * mesures.
- *
- * TROIS CHOSES A SAVOIR EN LES LISANT, parce qu'elles surprennent et qu'elles
- * ne sont pas des coquilles :
- *
- *   - LE MONDIAL ET LES JEUX MONDIAUX ENCADRENT TOUS DEUX LE RECORD, et les
- *     ZEZE seuls passent dessous. Avant, le mondial l'encadrait et les deux
- *     derniers descendaient. Les Jeux mondiaux partagent d'ailleurs leur borne
- *     basse avec le mondial : on y demande le meme plancher, mais un plafond
- *     plus bas.
- *   - LES JEUX MONDIAUX TIENNENT DANS UN QUART DE SECONDE sur le 110 m. C'est
- *     tres serre — huit athletes a portee de photo-finish a chaque tentative,
- *     ce que l'ancien bareme s'interdisait explicitement. Si le niveau 5 se
- *     joue un jour comme une loterie, c'est ce nombre-la qu'il faut ouvrir.
- *   - ENTRE 14,50 ET 15,50 S, AUCUN PLATEAU. Un chrono peut tomber la sans
- *     appartenir a un niveau. L'ancien bareme avait deja de tels trous.
+ * En proportion, l'ecart vaut deux secondes sur le tour — l'ecart d'une vraie
+ * finale — et ne bouge pas d'un centieme sur le 110 m, ou le chiffre a ete
+ * pose.
  */
-const BAREME = [
-  [17.50, 19.00],   // 1 — scolaire
-  [15.50, 17.50],   // 2 — regional
-  [13.00, 14.50],   // 3 — national
-  [12.75, 13.20],   // 4 — mondial
-  [12.75, 13.00],   // 5 — Jeux mondiaux
-  [12.30, 12.75],   // 6 — ZEZE
-];
+export const ECART_MONDIAL = 0.30 / 12.80;
 
 /**
- * Les six plateaux d'une epreuve.
+ * Les six plateaux, du scolaire aux ZEZE.
  *
- * Le bareme est ecrit pour le 110 m haies ; les deux autres s'en deduisent par
- * le RAPPORT DES RECORDS. C'est ce que faisaient deja les proportions, et pour
- * la meme raison : une seule echelle de difficulte, pas trois. Un 400 m haies
- * « niveau national » doit demander au joueur du tour ce que le niveau national
- * demande au joueur du 110 m.
+ * Les trois premiers suivent les proportions de Sprinter rapportees a son
+ * propre record — l'echelle de difficulte du jeu est deja calee, il n'y avait
+ * aucune raison d'en inventer une seconde.
  *
- * Tant que le bareme ne vaut que pour le 110 m — la seule epreuve eprouvee au
- * pouce a ce jour — c'est la facon la plus honnete de servir les deux autres :
- * elles heritent d'une echelle mesuree plutot que d'une echelle inventee.
+ * Le mondial encadre le record : c'est le seul plateau du jeu ou l'on court
+ * CONTRE la marque reelle plutot qu'apres elle.
+ *
+ * Les deux derniers descendent, et il le fallait. A l'ecart demande SOUS le
+ * record, le mondial serait passe devant les Jeux mondiaux, qui partaient du
+ * record lui-meme : la course serait devenue plus facile en montant d'un
+ * niveau.
  */
+const PROPORTIONS = [[1.305, 1.566], [1.169, 1.305], [1.044, 1.096]];
+const ZEZE = [0.913, 0.939];
+
+/** Les six plateaux d'une epreuve, calcules depuis son record. */
 function plateauxDe(record) {
-  const r = record / RECORDS['110h'].s;
-  const c = x => Math.round(x * r * 100) / 100;
-  return BAREME.map(([a, b]) => [c(a), c(b)]);
+  const e = ECART_MONDIAL;
+  const arrondi = ([a, b]) => [Math.round(a * 100) / 100, Math.round(b * 100) / 100];
+  return [
+    ...PROPORTIONS.map(([a, b]) => arrondi([record * a, record * b])),
+    arrondi([record * (1 - e), record * (1 + e)]),
+    arrondi([record * (1 - e * 1.5), record * (1 - e * 0.5)]),
+    arrondi([record * ZEZE[0], record * ZEZE[1]]),
+  ];
 }
 
 export const PLATEAUX = {
@@ -131,37 +118,28 @@ export const PLATEAUX = {
 /**
  * Les trois courses, dans la forme que le moteur attend d'une epreuve.
  *
- * SUR LA VITESSE DE POINTE. Ce paragraphe a ete reecrit deux fois, et la
- * troisieme version est la premiere qui repose sur une mesure.
+ * SUR LA VITESSE DE POINTE. Ce paragraphe a ete ecrit trois fois, et la
+ * troisieme version est revenue a la premiere en sachant pourquoi.
  *
- * Il y avait d'abord : « la vitesse de pointe est celle de Sprinter,
- * volontairement — c'est au jeu des haies de couter ce qu'il coute, pas a un
- * plafond baisse en douce ». Puis : « un hurdleur ne court jamais un
- * intervalle libre, il regle sa foulee pour la suivante ». Le second argument
- * est juste ; il ne disait simplement pas DE COMBIEN.
+ * Il y a eu, un moment, des plafonds cales sur le reel : 9,40 au 110 m, parce
+ * que Coh (2003) chronometre Colin Jackson a 8,83 m/s entre sa 4e et sa 5e
+ * haie et a 9,11 a l'appel, quand le jeu portait 11,00. Vingt pour cent
+ * au-dessus d'un recordman du monde en pleine course.
  *
- * Maintenant on le sait. Coh (2003) chronometre Colin Jackson entre sa 4e et sa
- * 5e haie sur une course a 13,47 s : sa vitesse moyenne y est de 8,83 m/s, et
- * sa vitesse a l'appel de 9,11. Le jeu portait un plafond de 11,00 — vingt
- * pour cent au-dessus d'un recordman du monde en pleine course.
+ * C'ETAIT CONFONDRE LE MOUVEMENT ET LE CHRONO. Le mouvement doit etre juste —
+ * c'est pour cela que le vol ne freine plus comme la course (haies-jeu.js,
+ * DRAG_VOL) et que la foulee de haie fait 3,67 m. Le chrono, lui, n'a jamais
+ * eu a l'etre : SPRINTER COURT LE 100 M EN 8,25 s QUAND LE RECORD EST A 9,58,
+ * et c'est une regle du jeu, pas un accident. Ses plateaux le disent en
+ * clair — le mondial du 100 m part exactement du record, 9,58, et les ZEZE
+ * passent 9 % dessous, a 8,75. Battre le dernier plateau demande d'y tenir
+ * treize a quatorze appuis par seconde : c'est le geste d'un joueur qui
+ * s'entraine, et c'est ce qui donne au dernier niveau sa raison d'etre.
  *
- * Ce plafond faux etait compense par une haie fausse : le vol y coutait 26 %
- * de vitesse au lieu des 3,7 % mesures (haies-jeu.js, DRAG_VOL). Deux erreurs
- * qui se rattrapaient, un chrono plausible, et un mouvement qu'aucun hurdleur
- * n'aurait reconnu. Les deux sont corrigees ensemble ; l'une sans l'autre
- * donnait n'importe quoi.
- *
- * LES TROIS PLAFONDS SONT CALES SUR LE RECORD DE LEUR EPREUVE : la cadence la
- * plus haute qu'un doigt tienne doit donner a peu pres la marque mondiale, et
- * pas la battre d'une seconde. Mesure a l'appui (tools/haies-course-test.mjs) :
- *
- *     110 m H  plafond 9,40 — 13,48 s a 8 frappes/s, 12,85 a 12. Record 12,91,
- *              et la course analysee par Coh faisait 13,47.
- *     100 m H  plafond 9,00 — 12,63 a 8, 12,13 a 12. Record 12,12.
- *     400 m H  plafond 9,30 — 47,1 a 8, 45,9 a 12. Record 45,94.
- *
- * Le tour ne garde donc plus le plafond du plat : il n'y avait aucune raison
- * qu'un hurdleur du 400 m coure plus vite qu'un hurdleur du 110 m.
+ * Les haies gardent donc la base de vitesse de Sprinter, et leurs plateaux
+ * suivent ses proportions autour de leurs propres records. Ce qui doit etre
+ * respecte n'est pas la vitesse d'un hurdleur reel, c'est le RECORD comme
+ * ancre : il ouvre le niveau mondial, et le dernier niveau le depasse.
  */
 // `foulee` : la foulee du hurdleur en part de celle du sprinteur (Runner.foulee
 // dans sprinter-core.js). Calee par tools/haies-course-test.mjs pour qu'une
@@ -170,19 +148,19 @@ export const PLATEAUX = {
 export const HAIES = {
   '100h': {
     key: '100h', label: '100 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 100, maxSpeed: 9.000, best: RECORDS['100h'].s, foulee: 0.78,
+    arc: 0, straight: 100, maxSpeed: 11.000, best: RECORDS['100h'].s, foulee: 0.82,
     haies: { nombre: NB_HAIES, hauteur: 0.838, premiere: 13.00, ecart: 8.50, fin: 10.50 },
     ranges: PLATEAUX['100h'],
   },
   '110h': {
     key: '110h', label: '110 M HAIES', sub: 'dix haies, la ligne droite',
-    arc: 0, straight: 110, maxSpeed: 9.400, best: RECORDS['110h'].s, foulee: 0.86,
+    arc: 0, straight: 110, maxSpeed: 11.000, best: RECORDS['110h'].s, foulee: 0.86,
     haies: { nombre: NB_HAIES, hauteur: 1.067, premiere: 13.72, ecart: 9.14, fin: 14.02 },
     ranges: PLATEAUX['110h'],
   },
   '400h': {
     key: '400h', label: '400 M HAIES', sub: 'dix haies, un tour de piste',
-    fullLap: true, arc: 115.61, straight: 84.39, maxSpeed: 9.300, best: RECORDS['400h'].s, foulee: 0.90,
+    fullLap: true, arc: 115.61, straight: 84.39, maxSpeed: 11.536, best: RECORDS['400h'].s, foulee: 0.90,
     haies: { nombre: NB_HAIES, hauteur: 0.914, premiere: 45.00, ecart: 35.00, fin: 40.00 },
     ranges: PLATEAUX['400h'],
   },

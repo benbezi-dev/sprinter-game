@@ -7,7 +7,7 @@
 // verifie.
 
 import {
-  HAIES, RECORDS, PLATEAUX, APPUIS, NB_HAIES,
+  HAIES, RECORDS, PLATEAUX, APPUIS, NB_HAIES, ECART_MONDIAL,
   distanceDe, positionsDes, verifierGeometrie, fouleeIdeale,
 } from '../src/game/haies.js';
 import { APPEL } from '../src/game/haies-jeu.js';
@@ -84,70 +84,44 @@ for (const c of CLES) {
      HAIES[c].foulee > 0.7 && HAIES[c].foulee <= 1, String(HAIES[c].foulee));
 }
 
-titre('LE BAREME EST CELUI QUI A ETE DECIDE');
+titre('LE PLATEAU MONDIAL ENCADRE LE RECORD');
 
-// LE BAREME NE SE CALCULE PLUS, IL SE DECIDE (haies.js, BAREME), et ce harnais
-// change donc de metier. Il verifiait avant qu'une formule tombait juste ; il
-// verifie maintenant que DOUZE NOMBRES DECIDES PAR LE JOUEUR sont bien ceux
-// qui arrivent dans le jeu. C'est le seul garde-fou possible contre la tentation
-// de les « arranger » : quiconque les retouche doit le faire ici aussi, donc
-// sciemment.
-const VOULU = [
-  [17.50, 19.00], [15.50, 17.50], [13.00, 14.50],
-  [12.75, 13.20], [12.75, 13.00], [12.30, 12.75],
-];
-{
-  const g = PLATEAUX['110h'];
-  const pareil = VOULU.every(([a, b], i) =>
-    Math.abs(g[i][0] - a) < 0.005 && Math.abs(g[i][1] - b) < 0.005);
-  ok('110h : les six plateaux sont exactement ceux demandes', pareil,
-     g.map(x => `${x[0]}-${x[1]}`).join(' '));
-}
-
-// Les deux autres epreuves se deduisent par le rapport des records : une seule
-// echelle de difficulte, pas trois. Si un jour le 100 m ou le tour recoit son
-// propre bareme mesure au pouce, c'est cette verification-la qui tombera — et
-// elle doit tomber bruyamment, pas en silence.
-for (const c of ['100h', '400h']) {
-  const r = RECORDS[c].s / RECORDS['110h'].s;
-  const g = PLATEAUX[c];
-  const suit = VOULU.every(([a, b], i) =>
-    Math.abs(g[i][0] - a * r) < 0.01 && Math.abs(g[i][1] - b * r) < 0.01);
-  ok(`${c} : se deduit du 110 m par le rapport des records`, suit,
-     g.map(x => `${x[0]}-${x[1]}`).join(' '));
-}
-
-titre('LE RECORD DU MONDE TOMBE AU BON ENDROIT');
-
-// CE QUI A CHANGE, et c'est le renversement le plus visible du nouveau bareme.
-// Avant, le mondial SEUL encadrait le record et les deux niveaux au-dessus
-// passaient dessous. Maintenant, le mondial ET les Jeux mondiaux l'encadrent
-// tous deux ; seuls les ZEZE descendent.
 for (const c of CLES) {
+  const [a, b] = PLATEAUX[c][3];
   const R = RECORDS[c].s;
-  for (const [n, i] of [['mondial', 3], ['Jeux mondiaux', 4]]) {
-    const [a, b] = PLATEAUX[c][i];
-    ok(`${c} : le ${n} (${a}-${b}) encadre le record ${R}`, a <= R && R <= b,
-       `${a} · ${R} · ${b}`);
-  }
+  const attendu = R * ECART_MONDIAL;
+  ok(`${c} : ${a} a ${b} autour de ${R}`,
+     Math.abs((R - a) - attendu) < 0.01 && Math.abs((b - R) - attendu) < 0.01,
+     `${(R - a).toFixed(2)} avant, ${(b - R).toFixed(2)} apres`);
 }
 
-titre('CE QUI SE JOUE AU PHOTO-FINISH');
-
-// L'ancien bareme exigeait une demi-seconde au plateau mondial, « de quoi se
-// detacher » : un plateau trop serre n'est plus une course, tout s'y joue au
-// centieme. Le bareme decide passe sous cette barre — un quart de seconde aux
-// Jeux mondiaux du 110 m — et c'est assume : a ce niveau-la, la course DOIT se
-// jouer au centieme.
+// L'ecart est une PROPORTION, et c'est ce qui doit etre verifie.
 //
-// On garde donc une borne, beaucoup plus basse, et surtout on AFFICHE le plus
-// serre a chaque passage. Le jour ou le niveau 5 se jouera comme une loterie,
-// le chiffre sera la, sous les yeux, et ce sera lui qu'il faudra ouvrir.
+// Exprime en secondes, il valait 2,3 % d'un 110 m haies et 0,65 % d'un tour :
+// le plateau du 400 m tenait dans six dixiemes apres quarante-six secondes de
+// course, ou l'on ne pouvait ni prendre de l'avance ni en perdre. Le test
+// verifie donc que les trois epreuves respirent pareil, et que le 110 m — ou
+// le chiffre a ete pose — retombe exactement sur ses trois dixiemes.
+ok('les trois epreuves ont la meme respiration',
+   CLES.every(c => {
+     const [a, b] = PLATEAUX[c][3];
+     return Math.abs((b - a) / RECORDS[c].s - 2 * ECART_MONDIAL) < 0.002;
+   }),
+   CLES.map(c => {
+     const [a, b] = PLATEAUX[c][3];
+     return `${c} ${(100 * (b - a) / RECORDS[c].s).toFixed(1)}%`;
+   }).join(' · '));
+
+ok('le 110 m retombe sur les trois dixiemes demandes',
+   Math.abs((RECORDS['110h'].s - PLATEAUX['110h'][3][0]) - 0.30) < 0.005,
+   `${(RECORDS['110h'].s - PLATEAUX['110h'][3][0]).toFixed(3)} s`);
+
+// Un plateau trop serre n'est plus une course : personne ne prend d'avance,
+// tout se joue au centieme. On exige de quoi se detacher.
 for (const c of CLES) {
-  const g = PLATEAUX[c];
-  const serre = g.reduce((m, [a, b], i) => (b - a < m.l ? { l: b - a, i } : m), { l: Infinity, i: -1 });
-  ok(`${c} : le plus serre des six tient encore une course`, serre.l >= 0.2,
-     `niveau ${serre.i + 1}, ${serre.l.toFixed(2)} s entre le premier et le dernier`);
+  const [a, b] = PLATEAUX[c][3];
+  ok(`${c} : le plateau mondial laisse de quoi se detacher`,
+     b - a >= 0.5, `${(b - a).toFixed(2)} s entre le premier et le dernier`);
 }
 
 titre('CHAQUE NIVEAU EST PLUS DUR QUE LE PRECEDENT');
