@@ -62,57 +62,97 @@ export const RECORDS = {
 };
 
 /**
- * L'ecart du plateau mondial autour du record, en part du record.
+ * LE BAREME, DONNE POUR LE 110 M HAIES.
  *
- * Trois dixiemes sur le 110 m — le chiffre choisi — mais exprime en
- * proportion, et c'est tout l'objet de cette constante.
+ * Il ne se calcule plus, il se decide — et c'est un renversement volontaire.
  *
- * En valeur absolue, trois dixiemes valent 2,3 % d'un 110 m haies et 0,65 %
- * d'un tour complet. Le plateau du 400 m tenait alors dans six dixiemes apres
- * quarante-six secondes de course : sept adversaires a portee de photo-finish
- * a chaque tentative, ou l'on ne pouvait ni prendre de l'avance ni en perdre.
- * Ce n'etait pas une decision, c'etait un effet de bord de l'unite choisie.
+ * Jusqu'ici les six plateaux sortaient d'une formule : trois proportions
+ * reprises de Sprinter, puis un ecart autour du record. La formule donnait les
+ * trois epreuves d'un coup et les faisait respirer pareil, mais elle decrivait
+ * un jeu ou la MACHINE sautait les haies a la place du joueur. Depuis que
+ * l'appel lui revient (canal.ts, APPEL_JOUEUR), ce qu'une cadence donne au
+ * chrono a change, et un bareme deduit du record ne dit plus rien de ce que la
+ * manette demande.
  *
- * En proportion, l'ecart vaut deux secondes sur le tour — l'ecart d'une vraie
- * finale — et ne bouge pas d'un centieme sur le 110 m, ou le chiffre a ete
- * pose.
+ * Ces douze nombres viennent donc du joueur, apres essais au pouce. On ne les
+ * arrondit pas et on ne les « corrige » pas : ce sont des decisions, pas des
+ * mesures.
+ *
+ * TROIS CHOSES A SAVOIR EN LES LISANT, parce qu'elles surprennent et qu'elles
+ * ne sont pas des coquilles :
+ *
+ *   - LE MONDIAL ET LES JEUX MONDIAUX ENCADRENT TOUS DEUX LE RECORD, et les
+ *     ZEZE seuls passent dessous. Avant, le mondial l'encadrait et les deux
+ *     derniers descendaient. Les Jeux mondiaux partagent d'ailleurs leur borne
+ *     basse avec le mondial : on y demande le meme plancher, mais un plafond
+ *     plus bas.
+ *   - LES JEUX MONDIAUX TIENNENT DANS UN QUART DE SECONDE sur le 110 m. C'est
+ *     tres serre — huit athletes a portee de photo-finish a chaque tentative,
+ *     ce que l'ancien bareme s'interdisait explicitement. Si le niveau 5 se
+ *     joue un jour comme une loterie, c'est ce nombre-la qu'il faut ouvrir.
+ *   - ENTRE 14,50 ET 15,50 S, AUCUN PLATEAU. Un chrono peut tomber la sans
+ *     appartenir a un niveau. L'ancien bareme avait deja de tels trous.
+ *
+ * ET UN CHANTIER OUVERT, SU ET ASSUME : LE NIVEAU DES ZEZE. Ces nombres ont
+ * ete poses quand le jeu tournait a un plafond de vitesse reduit ; il a repris
+ * depuis celui de Sprinter (voir HAIES plus bas), et il va donc plus vite que
+ * l'echelle ne le prevoit. Mesure sur le 110 m haies : 13,80 s a huit frappes
+ * par seconde, 11,70 a dix, 11,25 a douze — le dernier plateau se gagne des
+ * dix frappes quand Sprinter en demande treize a quatorze. Les deux derniers
+ * niveaux sont a redescendre, et le 400 m haies demande sa propre reponse.
+ * Neuf verifications des harnais le disent, et elles ont raison de le dire.
  */
-export const ECART_MONDIAL = 0.30 / 12.80;
+const BAREME = [
+  [17.50, 19.00],   // 1 — scolaire
+  [15.50, 17.50],   // 2 — regional
+  [13.00, 14.50],   // 3 — national
+  [12.75, 13.20],   // 4 — mondial
+  [12.75, 13.00],   // 5 — Jeux mondiaux
+  [12.30, 12.75],   // 6 — ZEZE
+];
 
 /**
- * Les six plateaux, du scolaire aux ZEZE.
+ * CE QU'UNE EPREUVE NE DEDUIT PAS DU 110 M HAIES.
  *
- * Les trois premiers suivent les proportions de Sprinter rapportees a son
- * propre record — l'echelle de difficulte du jeu est deja calee, il n'y avait
- * aucune raison d'en inventer une seconde.
+ * Le rapport des records sert de defaut, pas de loi. Le tour ne se court pas
+ * comme une ligne droite : quinze foulees entre les haies au lieu de trois, une
+ * fatigue qui deplace le compte d'appuis, et un jeu qui y va plus vite que
+ * l'echelle ne le prevoit. Son dernier niveau est donc DONNE, comme les douze
+ * nombres du 110 m l'ont ete : 42,00 a 43,50 s, decides au pouce.
  *
- * Le mondial encadre le record : c'est le seul plateau du jeu ou l'on court
- * CONTRE la marque reelle plutot qu'apres elle.
+ * Deduit du 110 m, il aurait valu 44,15 a 45,76 — a un cheveu du record du
+ * monde (45,94), alors que Sprinter place ses ZEZE neuf pour cent dessous.
  *
- * Les deux derniers descendent, et il le fallait. A l'ecart demande SOUS le
- * record, le mondial serait passe devant les Jeux mondiaux, qui partaient du
- * record lui-meme : la course serait devenue plus facile en montant d'un
- * niveau.
+ * L'index est celui du plateau, de 0 a 5.
  */
-const PROPORTIONS = [[1.305, 1.566], [1.169, 1.305], [1.044, 1.096]];
-const ZEZE = [0.913, 0.939];
+const BAREME_PROPRE = {
+  '400h': { 5: [42.00, 43.50] },
+};
 
-/** Les six plateaux d'une epreuve, calcules depuis son record. */
-function plateauxDe(record) {
-  const e = ECART_MONDIAL;
-  const arrondi = ([a, b]) => [Math.round(a * 100) / 100, Math.round(b * 100) / 100];
-  return [
-    ...PROPORTIONS.map(([a, b]) => arrondi([record * a, record * b])),
-    arrondi([record * (1 - e), record * (1 + e)]),
-    arrondi([record * (1 - e * 1.5), record * (1 - e * 0.5)]),
-    arrondi([record * ZEZE[0], record * ZEZE[1]]),
-  ];
+/**
+ * Les six plateaux d'une epreuve.
+ *
+ * Le bareme est ecrit pour le 110 m haies ; les deux autres s'en deduisent par
+ * le RAPPORT DES RECORDS. C'est ce que faisaient deja les proportions, et pour
+ * la meme raison : une seule echelle de difficulte, pas trois. Un 400 m haies
+ * « niveau national » doit demander au joueur du tour ce que le niveau national
+ * demande au joueur du 110 m.
+ *
+ * Tant que le bareme ne vaut que pour le 110 m — la seule epreuve eprouvee au
+ * pouce a ce jour — c'est la facon la plus honnete de servir les deux autres :
+ * elles heritent d'une echelle mesuree plutot que d'une echelle inventee.
+ */
+function plateauxDe(cle) {
+  const r = RECORDS[cle].s / RECORDS['110h'].s;
+  const c = x => Math.round(x * r * 100) / 100;
+  const propre = BAREME_PROPRE[cle] || {};
+  return BAREME.map(([a, b], i) => propre[i] ? propre[i].slice() : [c(a), c(b)]);
 }
 
 export const PLATEAUX = {
-  '100h': plateauxDe(RECORDS['100h'].s),
-  '110h': plateauxDe(RECORDS['110h'].s),
-  '400h': plateauxDe(RECORDS['400h'].s),
+  '100h': plateauxDe('100h'),
+  '110h': plateauxDe('110h'),
+  '400h': plateauxDe('400h'),
 };
 
 /**
