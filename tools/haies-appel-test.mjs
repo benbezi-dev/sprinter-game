@@ -365,6 +365,29 @@ for (const cle of ['100h', '110h']) {
      `${moy(msV).toFixed(0)} ms a 12 frappes/s contre ${moy(msL).toFixed(0)} a 8`);
 }
 
+// ON NE JOUE PAS LES HAIES AVEC LES DOIGTS DE SPRINTER, et c'est le garde-fou
+// qui manquait. Il a fallu qu'un joueur le trouve : « quand j'appuie comme sur
+// le 100 m je fais 11 secondes sur le 110 m haies ».
+//
+// Le defaut venait d'une sur-correction — la fenetre du cote tot avait ete
+// elargie pour qu'une frappe reflexe ne soit plus un accrochage, et elle
+// devenait un ciseau MOYEN, qui ne coute presque rien. CISEAU_PLANCHER ferme
+// cela : sous trente pour cent du vol, on n'a pas ciseaute, on a tape.
+//
+// Une frappe ordinaire dure 50 a 80 ms sur un vol de 300 : elle tombe donc
+// sous le plancher. Ce test la joue a 0,15 du vol — plus genereux qu'un vrai
+// pouce — et exige qu'elle coute au moins une seconde sur la course.
+for (const cle of ['100h', '110h', '400h']) {
+  const tenu = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  const tape = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.15 });
+  ok(`${cle} : marteler comme sur le plat ne passe pas les haies`,
+     tape.temps - tenu.temps >= 1.0,
+     `${(tape.temps - tenu.temps).toFixed(2)} s (${tape.temps?.toFixed(2)} contre ${tenu.temps?.toFixed(2)})`);
+  ok(`${cle} : et le jeu le dit — aucun ciseau compte`,
+     tape.ciseaux.every(x => x.note === 'absent'),
+     [...new Set(tape.ciseaux.map(x => x.note))].join(' '));
+}
+
 // ET NE RIEN FAIRE NE PASSE PAS POUR UN CISEAU : sans relache, les dix haies
 // se notent « absent ». C'est ce qui empeche le second temps du geste de
 // devenir facultatif, comme l'appel l'etait avant lui.

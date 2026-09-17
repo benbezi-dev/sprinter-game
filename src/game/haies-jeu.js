@@ -223,6 +223,37 @@ export const TOLERANCE_CISEAU = { parfait: 0.045, bon: 0.135 };
 export const PART_TOLERANCE_CISEAU = { parfait: 0.18, bon: 0.40 };
 
 /**
+ * SOUS QUELLE PART DU VOL UN RELACHE N'EST PAS UN CISEAU DU TOUT.
+ *
+ * LE DEFAUT QUE CE NOMBRE FERME, et il etait grave : « quand j'appuie comme
+ * sur le 100 m je fais 11 secondes sur le 110 m haies ». Marteler les paves
+ * comme sur le plat passait les dix haies.
+ *
+ * C'est une sur-correction de ma part. La fenetre du cote tot avait ete
+ * elargie pour qu'une frappe reflexe ne soit plus un ACCROCHAGE — elle ne
+ * l'etait plus, mais elle devenait un ciseau MOYEN, qui ne coute que trois
+ * centiemes et demi. Le geste cessait d'etre obligatoire : on pouvait jouer
+ * Hurdlers avec les doigts de Sprinter.
+ *
+ * Le bon decoupage est en trois, pas en deux :
+ *
+ *   sous ce plancher   ON N'A PAS CISEAUTE. On a tape, on n'a pas tenu. Le
+ *                      coureur franchit a plat, et cela coute le prix entier
+ *                      (GARDE_CISEAU.absent) — le meme que si l'on n'avait
+ *                      jamais leve le pouce, parce que c'est la meme chose.
+ *   entre les deux     on a ciseaute trop tot : la jambe d'attaque n'etait pas
+ *                      tendue, on accroche la barre. C'est une faute de
+ *                      technique, pas une absence de geste.
+ *   dans la fenetre    le ciseau.
+ *
+ * 30 % du vol, soit 90 ms sur le 110 m haies a pleine vitesse. Une frappe
+ * ordinaire dure 50 a 80 ms : elle tombe donc sous le plancher, et le joueur
+ * lit « PAS DE CISEAU » — ce qui est exactement ce qu'il a fait, et ce qui lui
+ * dit quoi faire. L'ancien « ACCROCHEE » ne le lui disait pas.
+ */
+export const CISEAU_PLANCHER = 0.30;
+
+/**
  * CE QUE LE CISEAU GARDE DE LA VITESSE, et c'est ici que le jeu cesse d'etre
  * Sprinter avec des haies dessinees dessus.
  *
@@ -274,6 +305,9 @@ export function jugerCiseau(part, vol) {
   const e = Math.abs(ecart);
   // La tolerance est en temps, mais bornee a une part du vol : voir
   // PART_TOLERANCE_CISEAU, qui dit ce que l'oubli coutait sur le 100 m haies.
+  // RELACHE TROP TOT POUR ETRE UN CISEAU : on a tape, on n'a pas tenu. Voir
+  // CISEAU_PLANCHER — c'est ce qui empeche de jouer les haies au martelement.
+  if (part < CISEAU_PLANCHER) return { note: 'absent', garde: GARDE_CISEAU.absent, ecart };
   const seuil = k => Math.min(TOLERANCE_CISEAU[k], PART_TOLERANCE_CISEAU[k] * v);
   if (e <= seuil('parfait')) return { note: 'ciseau', garde: GARDE_CISEAU.ciseau, ecart };
   if (e <= seuil('bon')) return { note: 'bon', garde: GARDE_CISEAU.bon, ecart };

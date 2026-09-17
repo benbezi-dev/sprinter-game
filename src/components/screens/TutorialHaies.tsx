@@ -373,6 +373,12 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase text-primary text-center">
               {N.t(titres[etape])}
             </h2>
+            {/* UNE LIGNE, ET UNE SEULE. Celui de Sprinter n'en a pas, parce
+                qu'alterner se voit. Tenir ne se voit pas : un pouce pose et un
+                pouce qui tape ont la meme image. Il faut le dire. */}
+            <p className="text-[11px] md:text-xs text-foreground/60 text-center max-w-[30ch] leading-snug">
+              {N.t(['tutoh_1_s', 'tutoh_2_s', 'tutoh_3_s'][etape])}
+            </p>
           </motion.div>
         )}
 
@@ -398,10 +404,18 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
               </div>
 
               {motVerdict && (
-                <motion.span {...SURGISSEMENT}
-                             className={`font-black font-display tracking-wider text-xl ${tonVerdict}`}>
-                  {N.t(motVerdict)}
-                </motion.span>
+                <motion.div {...SURGISSEMENT} className="flex flex-col items-center gap-0.5">
+                  <span className={`font-black font-display tracking-wider text-xl ${tonVerdict}`}>
+                    {N.t(motVerdict)}
+                  </span>
+                  {/* La faute la plus frequente merite qu'on redise quoi faire,
+                      la, sous le verdict — pas dans un coin de l'ecran. */}
+                  {note === 'absent' && (
+                    <span className="text-[11px] tracking-widest text-amber-300/90">
+                      {N.t('tutoh_tenir')}
+                    </span>
+                  )}
+                </motion.div>
               )}
             </>
           )}

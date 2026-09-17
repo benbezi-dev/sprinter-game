@@ -361,6 +361,19 @@
     tutoh_1_t:       ['L’APPEL', 'THE TAKE-OFF'],
     tutoh_2_t:       ['LE CISEAU', 'THE SCISSOR'],
     tutoh_3_t:       ['LA CADENCE JUSTE', 'THE RIGHT CADENCE'],
+    // Une ligne par etape, et une seule. Le tutoriel de Sprinter n'en a pas —
+    // « ce qu'on peut montrer ne s'ecrit pas » — mais les haies demandent un
+    // geste que personne n'a jamais fait dans ce jeu : appuyer, TENIR,
+    // relacher. Sans la ligne, le joueur tape, et taper ne passe pas une haie.
+    tutoh_1_s:       ['appuie quand la jauge est pleine',
+                      'press when the gauge is full'],
+    tutoh_2_s:       ['garde le pouce — relâche quand elle se remplit à nouveau',
+                      'hold your thumb — release when it fills again'],
+    tutoh_3_s:       ['ni plus vite, ni plus lent',
+                      'no faster, no slower'],
+    // Ce qu'on dit a celui qui tape au lieu de tenir. C'est la faute la plus
+    // frequente, parce que c'est le geste de Sprinter.
+    tutoh_tenir:     ['tenir, pas taper', 'hold, don’t tap'],
     // « Tu haches » et « tu t'etires » plutot que « trop vite » et « trop
     // lent » : le joueur doit savoir ce qui arrive a sa foulee, pas seulement
     // dans quel sens corriger.
