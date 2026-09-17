@@ -1316,6 +1316,11 @@
 
   const melange = (x, y, t) => x + (y - x) * t;
 
+  // Jusqu'ou le buste penche sans emporter le bassin — en radians. La
+  // course n'y arrive jamais (un quart de radian au plus), les blocs et les
+  // haies le depassent largement. Voir pose().
+  const PLI_TAILLE = 0.3;
+
   // ---------------------------------------------------------------------
   // PAR-DESSUS UNE HAIE
   // ---------------------------------------------------------------------
@@ -1560,15 +1565,80 @@
     const kSh = MO.sh || 1, kHip = MO.hip || 1;
     const kArm = MO.arm || 1, kLeg = MO.leg || 1;
 
-    // Le bassin : son ourlet se voit, sa ceinture disparait sous le maillot.
-    PREM.chaine(add, PR, 'pelvis', niv, L.shorts, hip, 0, 0, yawHip, kHip,
-                0, 0, SOUS_HAUT);
+    // LE BASSIN SUIT LE BUSTE QUAND CELUI-CI SE COUCHE.
+    //
+    // Le buste tourne autour de la hanche ; le bassin, lui, restait droit.
+    // En course, le maillot descend assez bas sur le short pour que ce pli
+    // ne se voie pas. Mais a vos marques, prets, ou par-dessus une haie, le
+    // buste se couche et emporte le bas du maillot a vingt centimetres du
+    // haut du short. Les deux bouts sont enfouis — sans disque — et le rendu
+    // ne dessine pas l'interieur d'un tube : c'est la piste qu'on voyait au
+    // creux des reins, et, de face, par tout le haut du short.
+    //
+    // Aucune piece posee dans ce pli ne le bouchait vraiment. Un raccord qui
+    // tourne vers l'avant n'atteint jamais le bord arriere du short : on
+    // continuait de voir la piste de face. Un dome referme sur le short la
+    // cachait, mais se lisait comme un couvercle pose sur les fesses. Or
+    // c'est l'anatomie qui etait fausse : un sprinteur dans ses blocs a le
+    // bassin bascule avec le dos, et la cuisse plie a la hanche. Les pivots
+    // des cuisses ne dependent pas du bassin : le tourner ne deplace aucune
+    // jambe.
+    //
+    // En course, rien ne bouge : tant que le buste ne penche pas plus que
+    // PLI_TAILLE, le bassin reste droit, comme avant. Au-dela, il suit
+    // l'excedent. Dans les blocs et par-dessus une haie, il suit tout, et le
+    // maillot recouvre le short comme buste droit. Entre les deux — l'entree
+    // dans les blocs, la sortie, l'approche de la haie — il suit tout des le
+    // premier tiers de la posture : couche aux deux tiers mais pas tout a
+    // fait aligne, le bassin montrait deja un filet de piste de face. Le pli
+    // ne depasse donc jamais PLI_TAILLE, et il est nul des que le buste
+    // plonge vraiment.
+    const wP = Math.min(1, 3 * Math.max(wB, wS));
+    const angB = lean - Math.max(-PLI_TAILLE, Math.min(PLI_TAILLE, lean)) * (1 - wP);
+    // L'ourlet du short se voit ; sa ceinture disparait sous le maillot.
+    //
+    // Couche, le bassin presente son fond a la camera. Un disque l'y
+    // coupait net, en boite de conserve : il y prend une calotte, le
+    // fessier. Droit, il garde son disque, comme avant — une chute, qui
+    // pique tout le corps, le montre tel qu'il a toujours ete.
+    PREM.chaine(add, PR, 'pelvis', niv, L.shorts, hip, angB, 0, yawHip, kHip,
+                0, angB !== 0 ? LIBRE : 0, SOUS_HAUT);
     // Le maillot descend par-dessus la ceinture du short. Sans ce
     // recouvrement, le buste bascule en course et decouvre le haut du short
     // par l'arriere. Son bas est donc enfoui ; son haut garde un disque nu,
     // sans calotte — c'est elle qui faisait la collerette.
     PREM.chaine(add, PR, 'torso', niv, L.jersey, hip, lean, 0, yawTop, kSh,
                 0, SOUS_BAS, 0);
+    // LE MAILLOT S'EVASE SUR UN BASSIN PLUS LARGE QUE LUI.
+    //
+    // Chez les femmes, le haut du cuissard est plus large que le bas du
+    // maillot, d'un centimetre de chaque cote. Buste droit, ce rebord
+    // regarde le ciel et le buste le masque presque. Bassin couche, il
+    // regarde la camera, et depuis l'avant on voyait la piste en croissant
+    // entre le maillot et le cuissard.
+    //
+    // Le bas du maillot s'evase donc jusqu'a la section MESUREE du haut du
+    // bassin, un rien plus large, sur le modele du raccord de genou : un
+    // tronc dans l'axe du buste, dont le bas s'enfonce de deux centimetres
+    // dans le cuissard et le haut se perd dans le buste. Pas de disque : les
+    // deux bouts sont enfouis. Il n'apparait qu'a mesure que le bassin se
+    // couche, et pas du tout quand le buste recouvre deja le bassin — chez
+    // les hommes, c'est toujours le cas.
+    const trP = PR.pelvis[niv], hautP = trP[trP.length - 1];
+    const zP = hautP[0] + hautP[1];
+    const [cP, pP, lP] = PREM.section(PR, 'pelvis', niv, zP, kHip);
+    const [cT0, pT0, lT0] = PREM.section(PR, 'torso', niv, zP, kSh);
+    const evase = Math.min(1, Math.abs(angB) / 0.5);
+    if (evase > 0 && (pP > pT0 || lP > lT0)) {
+      const [cT1, pT1, lT1] = PREM.section(PR, 'torso', niv, 0.14, kSh);
+      const z0 = zP - 0.02;
+      const pb = pT0 + (Math.max(pP, pT0) * 1.03 - pT0) * evase;
+      const lb = lT0 + (Math.max(lP, lT0) * 1.03 - lT0) * evase;
+      const cb = cT0 + (cP - cT0) * evase;
+      add(L.jersey, hip, lean, [(cb + cT1) * 0.5, 0, (z0 + 0.14) * 0.5],
+          [pb, lb], [pT1 * 0.97, lT1 * 0.97], (0.14 - z0) * 0.5,
+          (yawHip + yawTop) * 0.5, PREM.MESURE | SOUS_BAS | SOUS_HAUT);
+    }
     // Le dossard : un vrai kit d'athletisme plutot qu'un aplat uniforme. Il se
     // pose sur la peau MESUREE et non a une abscisse fixe — sinon il
     // s'enfonce dans un torse epais et flotte devant un torse mince.

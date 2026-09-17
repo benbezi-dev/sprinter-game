@@ -1,0 +1,125 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — les jambes en gros plan</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #8e1f1a; border-radius: 6px; }
+</style>
+<!--
+  LA OU LES JAMBES SE DETACHAIENT.
+
+  Un coureur vu de pres, de dos, comme la camera le suit en ligne droite :
+  c'est la que le haut des cuisses ressortait du short en tige de botte.
+  Six instants de la foulee, homme puis femme, puis les memes de trois
+  quarts face. A la taille des scenettes, pas a celle de la course.
+-->
+<h2>homme, de dos (cap de la ligne droite)</h2><canvas id="c1" width="1180" height="500"></canvas>
+<h2>femme, de dos</h2><canvas id="c2" width="1180" height="500"></canvas>
+<h2>homme, trois quarts face</h2><canvas id="c3" width="1180" height="500"></canvas>
+<h2>femme, profil</h2><canvas id="c4" width="1180" height="500"></canvas>
+<h2 id="t7">poses du jeu — a vos marques, prets, sortie des blocs, chute, celebration</h2>
+<canvas id="c7" width="1180" height="700"></canvas>
+<h2 id="t6">par-dessus une haie — homme de dos, homme de trois quarts, femme de profil</h2>
+<canvas id="c6" width="1180" height="1080"></canvas>
+<h2 id="t5">tous les caps, douze instants de foulee — homme puis femme</h2>
+<canvas id="c5" width="1180" height="2290"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+
+  const perso = (cle, opts = {}) => Object.assign({
+    look: SprinterCore.lookFor(cle, 'divers'),
+    stride: 0, v: 11.4, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+    drivePitch: 0,
+  }, opts);
+
+  // la cle d'apercu qui donne un homme, puis une femme
+  const trouver = (fem) => {
+    for (let i = 0; i < 200; i++) {
+      const l = SprinterCore.lookFor('jambes-' + i, 'divers');
+      if ((l.build === 'f') === fem && !l.pantalon && !l.civil) return 'jambes-' + i;
+    }
+    return 'jambes-0';
+  };
+
+  const k = 210;
+  const rangee = (id, cle, cap) => {
+    const c = document.getElementById(id).getContext('2d');
+    const p = perso(cle);
+    for (let i = 0; i < 6; i++) {
+      p.stride = i * Math.PI / 3;
+      const caps = SprinterApp.personCapsules(p, cap, 0, false, false,
+                                              SprinterApp.niveauDetail(k));
+      SprinterApp.drawFacetFigure(c, caps, 100 + i * 196, 470, k);
+    }
+  };
+  const h = trouver(false), f = trouver(true);
+  rangee('c1', h, Math.PI / 2);
+  rangee('c2', f, Math.PI / 2);
+  rangee('c3', h, -Math.PI * 0.75);
+  rangee('c4', f, Math.PI);
+
+  // LES POSES QUI PLIENT TOUT. Dans les blocs, genoux et hanches se ferment
+  // bien plus qu'en course ; la chute et la celebration couchent et
+  // redressent le corps.
+  const c7 = document.getElementById('c7').getContext('2d');
+  const POSES = [
+    { enBloc: 1, prets: 0 }, { enBloc: 1, prets: 1 }, { enBloc: 0.5, prets: 1, drivePitch: 0.5 },
+    { fallAnim: 0.35 }, { fallAnim: 0.8 }, { celebrate: 1, v: 0 },
+  ];
+  [[h, Math.PI / 2], [f, -Math.PI * 0.75]].forEach(([cle, cap], rg) => {
+    POSES.forEach((o, i) => {
+      const p = perso(cle, Object.assign({ stride: 0.8 }, o));
+      const caps = SprinterApp.personCapsules(p, cap, 0, false, false,
+                                              SprinterApp.niveauDetail(150));
+      SprinterApp.drawFacetFigure(c7, caps, 100 + i * 196, 310 + rg * 340, 150);
+    });
+  });
+
+  // PAR-DESSUS UNE HAIE. La jambe d'esquive s'ouvre sur le cote : c'est la
+  // seule pose ou une cuisse sort du plan de course, et donc du bassin.
+  const c6 = document.getElementById('c6').getContext('2d');
+  [[h, Math.PI / 2], [h, -Math.PI * 0.75], [f, Math.PI]].forEach(([cle, cap], rg) => {
+    const p = perso(cle);
+    for (let i = 0; i < 6; i++) {
+      p.stride = 0.3;
+      p.saut = { t: i / 5, w: 1, pied: 1, haut: 0.22 };
+      const caps = SprinterApp.personCapsules(p, cap, 0, false, false,
+                                              SprinterApp.niveauDetail(150));
+      SprinterApp.drawFacetFigure(c6, caps, 100 + i * 196, 330 + rg * 350, 150);
+    }
+  });
+
+  // LA GRILLE. Un artefact de tri ne se montre que sous certains angles et a
+  // certains instants : huit caps, douze instants, pour qu'aucun n'echappe.
+  const c5 = document.getElementById('c5').getContext('2d');
+  const kg = 72;
+  [h, f].forEach((cle, g) => {
+    const p = perso(cle);
+    for (let a = 0; a < 8; a++) {
+      for (let i = 0; i < 12; i++) {
+        p.stride = i * Math.PI / 6;
+        const caps = SprinterApp.personCapsules(p, a * Math.PI / 4, 0, false, false,
+                                                SprinterApp.niveauDetail(kg));
+        SprinterApp.drawFacetFigure(c5, caps, 44 + i * 96, 136 + (g * 8 + a) * 142, kg);
+      }
+    }
+  });
+  // ?grille : la grille seule, en haut de page, pour la capturer d'un bloc
+  if (location.search.includes('grille')) {
+    for (const el of document.querySelectorAll('h2, canvas')) {
+      if (el.id !== 'c5' && el.id !== 't5') el.style.display = 'none';
+    }
+  }
+  // ?haies, ?poses : une rangee seule
+  const seule = location.search.includes('haies') ? '6'
+    : (location.search.includes('poses') ? '7' : null);
+  if (seule) {
+    for (const el of document.querySelectorAll('h2, canvas')) {
+      if (el.id !== 'c' + seule && el.id !== 't' + seule) el.style.display = 'none';
+    }
+  }
+  window.__pret = true;
+</script>
