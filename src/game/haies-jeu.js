@@ -85,11 +85,18 @@ export const COUT = {
   '400h': { vol: 'duree', duree: 1.00 },
 };
 
+/**
+ * La vitesse la plus basse a laquelle on passe une haie, en m/s. Un coureur
+ * arrive presque arrete sur son appel resterait sinon en l'air des secondes
+ * durant pour couvrir ses 3,55 m.
+ */
+export const VITESSE_VOL_MIN = 1;
+
 /** Combien de temps le coureur reste en l'air, a cette vitesse. */
 export function volDe(cle, v) {
   const c = COUT[cle];
   if (c.vol === 'duree') return c.duree;
-  return (APPEL[cle].avant + APPEL[cle].apres) / Math.max(1, v);
+  return (APPEL[cle].avant + APPEL[cle].apres) / Math.max(VITESSE_VOL_MIN, v);
 }
 
 /**

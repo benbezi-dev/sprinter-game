@@ -41,7 +41,8 @@
 --------------------------------------------------------------------------- */
 
 import { HAIES, positionsDes } from './haies.js';
-import { APPEL, volDe, franchir, rythmeDe, jugerAppel, GARDE_RYTHME_ROMPU } from './haies-jeu.js';
+import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
+         GARDE_RYTHME_ROMPU } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -121,6 +122,9 @@ export function nouvelleCourse(cle) {
     fenetre: null,     // le reglage en cours avant l'appel
     enVol: false,
     phaseVol: 0,
+    vitesseVol: 0,     // la vitesse tenue en l'air, sur un vol en distance
+    vitesseSol: 0,     // celle qu'il retrouvera a la reception
+    reception_d: null, // ou il se recoit, en metres ; null sur un vol en duree
     parfaites: 0, rompus: 0, appuis: [], notes: [], dernier: null,
   };
 }
@@ -156,7 +160,34 @@ export function pas(course, j) {
   // EN VOL : la phase reste celle de l'appel. A la reception, le pied suivant
   // se pose, et c'est le premier appui du nouvel intervalle.
   if (course.enVol) {
-    if (j.freeze > 0) { j.stride = course.phaseVol; return null; }
+    if (course.reception_d !== null) {
+      // SUR LES COURTES, ON NE FREINE PAS EN L'AIR, ET L'ON SE RECOIT OU LE
+      // REGLEMENT LE DIT. Le moteur freine un coureur qui ne pousse pas, en
+      // l'air comme au sol : parti pour 3,55 m sur un 110 m haies, le coureur
+      // n'en couvrait que trois, et retombait a 0,95 m derriere la haie au lieu
+      // de 1,40 — encore dans la posture du saut. On lui rend donc, a chaque
+      // pas, la vitesse de son appel, et c'est la distance qui le pose.
+      //
+      // LE FREINAGE N'EST PAS EFFACE, IL EST PAYE A LA RECEPTION. Il faisait
+      // l'essentiel de ce que coute une haie : sans lui, neuf frappes par
+      // seconde bouclaient le 110 m haies en 11,5 s, sous le record du monde.
+      // Ce que le moteur retire a chaque pas s'inscrit dans `vitesseSol`, et
+      // c'est la vitesse que le coureur retrouve en touchant la piste — la
+      // meme qu'avant, apres un vol de la meme duree.
+      course.vitesseSol *= j.v / course.vitesseVol;
+      j.v = course.vitesseVol;
+      const reste = course.reception_d - j.d;
+      if (reste > 0) {
+        j.freeze = reste / course.vitesseVol;
+        j.stride = course.phaseVol;
+        return null;
+      }
+      j.v = course.vitesseSol;
+      j.freeze = 0;
+    } else if (j.freeze > 0) {
+      j.stride = course.phaseVol;
+      return null;
+    }
     course.enVol = false;
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
@@ -200,9 +231,18 @@ export function pas(course, j) {
   const p = franchir(course.cle, j.v, avant, r.tenu);
 
   j.v = p.v;
-  // LE VOL. Le coureur avance et freine, mais ne peut plus pousser : c'est ce
-  // que `freeze` fait deja dans le moteur.
+  // LE VOL. Le coureur avance mais ne peut plus pousser : c'est ce que
+  // `freeze` fait deja dans le moteur. Sur les courtes, il tient sa vitesse
+  // jusqu'a la reception (voir plus haut) ; sur le tour, le vol est une duree
+  // et le freinage fait partie de ce qu'elle coute (haies-jeu.js, COUT).
   j.freeze = volDe(course.cle, j.v);
+  if (COUT[course.cle].vol === 'distance') {
+    j.v = Math.max(VITESSE_VOL_MIN, j.v);
+    course.vitesseVol = course.vitesseSol = j.v;
+    course.reception_d = course.positions[course.i] + a.apres;
+  } else {
+    course.reception_d = null;
+  }
   // ET LA REMISE A ZERO DU DERNIER PIED. press() sort a la premiere ligne quand
   // le coureur est gele, avant de noter la touche : sans cette ligne, le premier
   // appui apres la reception avait une chance sur deux de passer pour un double

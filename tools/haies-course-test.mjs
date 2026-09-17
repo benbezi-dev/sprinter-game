@@ -12,6 +12,7 @@
 
 import '../src/game/sprinter-core.js';
 import { HAIES, PLATEAUX, APPUIS } from '../src/game/haies.js';
+import { APPEL } from '../src/game/haies-jeu.js';
 import { nouvelleCourse, preparerCoureur, libererCoureur, pas } from '../src/game/haies-pas.js';
 
 const { Track, Runner } = globalThis.SprinterCore;
@@ -126,6 +127,38 @@ titre('LA FOULEE NE TOURNE PAS EN L AIR');
   });
   ok(`en vol, la phase de foulee reste celle de l appel (${vols} images de vol)`,
      vols > 100 && bouge === 0, `${bouge} images ou elle a bouge`);
+}
+
+titre('ON SE RECOIT OU LE REGLEMENT LE DIT');
+
+// Sur les courtes, le vol est une distance (haies-jeu.js, COUT). Le moteur
+// freinait le coureur en l'air : parti pour 3,55 m sur le 110 m haies, il
+// retombait un demi-metre trop tot, encore dans la posture du saut. La
+// reception tolere une image de depassement, 20 cm a 60 images par seconde.
+for (const cle of ['100h', '110h']) {
+  const receptions = [];
+  let vol = null, freinEnVol = 0, payees = 0;
+  courir(cle, {
+    cadence: 11,
+    trace: (r, course) => {
+      if (course.enVol) {
+        if (!vol) vol = { haie: course.positions[course.i - 1], v: r.v };
+        else if (Math.abs(r.v - vol.v) > 1e-9) freinEnVol++;
+      } else if (vol) {
+        receptions.push(r.d - vol.haie);
+        if (r.v < vol.v) payees++;
+        vol = null;
+      }
+    },
+  });
+  const apres = APPEL[cle].apres;
+  const hors = receptions.filter(x => x < apres - 1e-9 || x > apres + 0.2);
+  ok(`${cle} : les dix receptions tombent a ${apres} m derriere la haie`,
+     receptions.length === 10 && hors.length === 0,
+     receptions.map(x => x.toFixed(2)).join(' '));
+  ok(`${cle} : en l air, la vitesse ne bouge pas`, freinEnVol === 0,
+     `${freinEnVol} images ou elle a change`);
+  ok(`${cle} : la reception coute toujours de la vitesse`, payees === 10, `${payees}/10`);
 }
 
 titre('LE RYTHME DU REGLEMENT TOMBE A CADENCE SOUTENUE');
