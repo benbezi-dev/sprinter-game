@@ -1467,13 +1467,37 @@
     // referment. La main se creuse vers l'avant a mesure qu'on descend —
     // c'est le galbe d'une main qui se ferme, et il prolonge la cambrure de
     // l'avant-bras au lieu de repartir droit.
-    const zK = zPo + (DOIGTS - zPo) * 0.58;
+    const zK = zPo + (DOIGTS - zPo) * 0.48;
     add(peau, E, aF, [cb + 0.006, 0, (zPo + zK) * 0.5, cb],
         [0.048 * k, 0.031 * k], [sec[1], sec[2]], (zPo - zK) * 0.5, yaw,
         MESURE | SOUS_BAS | SOUS_HAUT);
-    add(peau, E, aF, [cb + 0.014, 0, (zK + DOIGTS) * 0.5, cb + 0.006],
-        [0.037 * k, 0.026 * k], [0.048 * k, 0.031 * k], (zK - DOIGTS) * 0.5,
-        yaw, MESURE | LIBRE | SOUS_HAUT);
+    // ET LES DOIGTS SE COMPTENT.
+    //
+    // Un seul volume au bout de la paume donnait une moufle : le poing avait
+    // la bonne taille et la bonne forme, mais rien ne disait qu'il etait fait
+    // de doigts. Ils sont donc trois — pas quatre : a trois, chacun fait deux
+    // centimetres et demi de large, ce qui est la largeur d'un vrai doigt, et
+    // le quatrieme n'ajouterait qu'un volume de plus a payer huit fois par
+    // image.
+    //
+    // Ils SE CHEVAUCHENT de deux millimetres : trois volumes poses cote a cote
+    // sans se toucher laisseraient voir la piste entre eux des que la main
+    // passe devant le vide, et un trait de stade en travers d'une main se voit
+    // de loin. Ce qui les separe, ce n'est pas un jour, c'est la calotte de
+    // chacun : trois bosses au bout, deux creux entre elles, et la main se lit
+    // comme une main fermee plutot que comme un gant.
+    // ILS NE FINISSENT PAS TOUS AU MEME ENDROIT. Trois doigts de meme
+    // longueur font un rateau ; sur une main, le majeur depasse et les deux
+    // autres suivent en arc. Sept millimetres suffisent — a cette taille,
+    // c'est ce decalage qu'on lit, bien avant le jour entre deux doigts.
+    const ecart = 0.026 * k, large = 0.018 * k;
+    for (const [dx, court] of [[-ecart, 0.007], [0, 0], [ecart, 0.007]]) {
+      const bout = DOIGTS + court;
+      add(peau, E, aF, [cb + 0.014 + dx, 0, (zK + bout) * 0.5 + 0.003,
+                        cb + 0.006 + dx * 0.92],
+          [large, 0.026 * k], [large * 1.04, 0.030 * k],
+          (zK - bout) * 0.5 + 0.003, yaw, MESURE | LIBRE | SOUS_HAUT);
+    }
     // LE POUCE, ET POURQUOI IL EST LE MEME DES DEUX COTES. Paume vers le
     // corps, les deux pouces pointent vers l'AVANT, pas vers l'interieur :
     // ils n'ont donc pas de cote, et une seule piece sert aux deux mains.
@@ -1502,6 +1526,11 @@
   // large, parce qu'un seul cone ne peut pas etre etroit au talon, large a
   // la plante et etroit a la pointe.
   //
+  // COMBIEN ELLE MESURE. Vingt-quatre centimetres du talon a la pointe et dix
+  // de large a la plante, sur un corps d'un metre soixante-douze : la
+  // proportion d'un vrai pied, et de quoi porter le coureur. Vingt-deux
+  // centimetres, sa premiere taille, le faisaient courir en chaussons.
+  //
   // REPERE LOCAL, une fois la piece tournee d'un quart de tour sur l'angle
   // de cheville : z va vers la POINTE, x va vers le BAS. La cheville du rig
   // est a 7,8 cm du sol, la semelle passe donc a 6,2 cm sous elle et touche
@@ -1509,8 +1538,8 @@
   // pointes sur les cales de depart, pied a plat a l'appui — sans que rien
   // ici n'ait a le savoir.
   const PIED = {
-    talon: -0.062, plante: 0.054, pointe: 0.158,   // le long du pied
-    sol: 0.062, releve: 0.058,                     // la semelle sous la cheville
+    talon: -0.068, plante: 0.058, pointe: 0.174,   // le long du pied
+    sol: 0.062, releve: 0.057,                     // la semelle sous la cheville
   };
 
   /**
@@ -1543,8 +1572,8 @@
     // une vraie pointe d'athletisme.
     const avance = (hx, hy) => 0.275 * (hx + hy);
     // les sections des quatre bouts : talon et pointe, tige puis semelle
-    const tT = [0.023, 0.026], tP = [0.012, 0.030];
-    const sT = [0.011, 0.029], sP = [0.009, 0.034];
+    const tT = [0.025, 0.028], tP = [0.013, 0.032];
+    const sT = [0.012, 0.031], sP = [0.010, 0.037];
     const zTt = P.talon + avance(tT[0], tT[1]), zTp = P.pointe - avance(tP[0], tP[1]);
     const zSt = P.talon + 0.008 + avance(sT[0], sT[1]);
     const zSp = P.pointe - 0.014 - avance(sP[0], sP[1]);
@@ -1553,9 +1582,9 @@
       // garde sa longueur et son profil de coin, il perd le galbe de la
       // plante. C'est le meme nombre de volumes qu'avant.
       add(SEMELLE, An, a, [P.sol, 0, mi(zSt, zSp), P.releve],
-          sT, [0.010, 0.038], dm(zSt, zSp), yaw, MESURE | LIBRE);
+          sT, [0.011, 0.041], dm(zSt, zSp), yaw, MESURE | LIBRE);
       add(col, An, a, [0.031, 0, mi(zTt, zTp), 0.045],
-          tT, [0.014, 0.032], dm(zTt, zTp), yaw, MESURE | LIBRE);
+          tT, [0.015, 0.035], dm(zTt, zTp), yaw, MESURE | LIBRE);
       return;
     }
     // LA SEMELLE. Elle deborde de deux millimetres sous la tige, tout du
@@ -1563,18 +1592,18 @@
     // Et elle se releve a la pointe — un pied qui deroule ne pose jamais le
     // bout de sa semelle a plat.
     add(SEMELLE, An, a, [P.sol, 0, mi(zSt, P.plante), P.sol],
-        sT, [0.012, 0.047], dm(zSt, P.plante), yaw,
+        sT, [0.013, 0.051], dm(zSt, P.plante), yaw,
         MESURE | LIBRE | SOUS_HAUT);
     add(SEMELLE, An, a, [P.sol, 0, mi(P.plante, zSp), P.releve],
-        [0.012, 0.047], sP, dm(P.plante, zSp), yaw,
+        [0.013, 0.051], sP, dm(P.plante, zSp), yaw,
         MESURE | SOUS_BAS | LIBRE);
     // LA TIGE. Haute au talon — le contrefort remonte jusque sous la
     // cheville et cache le joint du mollet — basse sur les orteils.
     add(col, An, a, [0.030, 0, mi(zTt, P.plante), 0.036],
-        tT, [0.020, 0.045], dm(zTt, P.plante), yaw,
+        tT, [0.022, 0.049], dm(zTt, P.plante), yaw,
         MESURE | LIBRE | SOUS_HAUT);
     add(col, An, a, [0.036, 0, mi(P.plante, zTp), 0.046],
-        [0.020, 0.045], tP, dm(P.plante, zTp), yaw,
+        [0.022, 0.049], tP, dm(P.plante, zTp), yaw,
         MESURE | SOUS_BAS | LIBRE);
   }
 
