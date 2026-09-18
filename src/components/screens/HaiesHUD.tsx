@@ -24,6 +24,9 @@ const TENUE_CISEAU = 0.8;
 
 type Ciseau = { haie: number; note: 'ciseau' | 'bon' | 'accroche' | 'traine' | 'absent'; ms: number | null };
 
+/** Les ciseaux ratés, et eux seuls, reçoivent une consigne de correction. */
+const AIDE_CISEAU = new Set<Ciseau['note']>(['absent', 'accroche', 'traine']);
+
 const COULEUR_CISEAU: Record<Ciseau['note'], string> = {
   ciseau: 'text-green-400',
   bon: 'text-primary',
@@ -149,6 +152,17 @@ export function HaiesHUD() {
             {cis.c.ms !== null && (
               <span className="font-mono text-[10px] sm:text-xs tracking-widest text-white/70">
                 {N.t('haie_c_ms', { n: String(cis.c.ms) })}
+              </span>
+            )}
+            {/* ET CE QU'IL FAUT FAIRE A LA SUIVANTE, quand le ciseau a manqué.
+                Un verdict dit ce qui s'est passé ; il ne dit pas dans quel
+                sens corriger, et c'est ce qui manquait — « je comprends pas le
+                pas de ciseau ». L'appel a toujours eu ses deux mots pour ça,
+                « trop près » et « trop loin » ; le ciseau n'avait rien. Trois
+                notes seulement en ont besoin : les deux autres sont réussies. */}
+            {AIDE_CISEAU.has(cis.c.note) && (
+              <span className="font-mono text-[10px] sm:text-xs tracking-wide text-white/60">
+                {N.t('haie_c_aide_' + cis.c.note)}
               </span>
             )}
           </motion.div>
