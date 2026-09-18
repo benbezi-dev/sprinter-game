@@ -223,33 +223,77 @@ export const TOLERANCE_CISEAU = { parfait: 0.045, bon: 0.135 };
 export const PART_TOLERANCE_CISEAU = { parfait: 0.18, bon: 0.40 };
 
 /**
- * SOUS QUELLE PART DU VOL UN RELACHE N'EST PAS UN CISEAU DU TOUT.
+ * COMBIEN DE TEMPS LE POUCE DOIT AVOIR TENU POUR QUE SON RELACHE SOIT UN
+ * CISEAU, en secondes.
  *
- * LE DEFAUT QUE CE NOMBRE FERME, et il etait grave : « quand j'appuie comme
+ * C'EST LA CORRECTION QUI VIENT D'UN HURDLEUR, plusieurs fois champion de
+ * France du 110 m haies, et c'est la plus importante de tout ce fichier :
+ *
+ *     « Quand je mets une frequence et que je reste un peu appuye pour passer
+ *       une haie, ca me coupe le perso, il s'arrete net. Et si je reste en
+ *       frequence, mon perso va assez vite mais les passages sont aleatoires. »
+ *
+ * IL AVAIT RAISON, ET LE HARNAIS L'A CHIFFRE. En course, l'appel n'est pas
+ * donne par une frappe QUE LE JOUEUR CHOISIT : c'est la premiere frappe de sa
+ * cadence qui tombe dans la fenetre d'appel (haies-pas.js, APPEL_MAXI). Cette
+ * frappe-la est deja en train de remonter — une frappe ordinaire dure 50 a 80
+ * ms — et son relache tombait donc sous le plancher du vol. Mesure, a dix
+ * frappes par seconde sur le 110 m haies :
+ *
+ *     contact du pouce    relaches mesures        ciseaux        chrono
+ *      50 ms              38 a 58 ms              10 absents     14,07 s
+ *      65 ms              51 a 64 ms              10 absents     14,07 s
+ *      80 ms              64 a 80 ms              10 absents     14,07 s
+ *     150 ms             116 a 156 ms             5 nets, 5 bons 12,47 s
+ *
+ * UNE SECONDE ET DEMIE DE CHRONO TENAIT DANS LA DUREE D'UN CONTACT, que rien
+ * a l'ecran ne mesurait et qu'aucun joueur ne controle a cette finesse. Le
+ * geste que le tutoriel enseigne — appuyer, TENIR, relacher — etait donc
+ * injouable en course : le pouce qui appelait n'etait pas celui que le joueur
+ * avait decide de tenir, et son retour immediat valait « PAS DE CISEAU ».
+ *
+ * LA REGLE EST DONC CELLE QUE LE TUTORIEL DIT DEJA : tenir, pas taper. Un
+ * relache qui suit sa propre frappe de moins de ce temps n'est pas un ciseau,
+ * c'est une frappe qui finit. Il ne se juge pas — ET IL NE CONSOMME PAS LE
+ * CISEAU : le pouce peut revenir sur le pave, tenir, et ciseauter. Le joueur
+ * qui martele ne place donc jamais de ciseau (tous ses relaches suivent leur
+ * frappe de 50 a 80 ms), et le joueur qui tient en place un a chaque haie.
+ * C'est exactement le partage que CISEAU_PLANCHER cherchait a faire, mais sur
+ * la grandeur que le joueur a dans les doigts — la duree de son appui — au
+ * lieu d'une part du vol qu'il ne voit pas.
+ *
+ * 110 ms : au-dessus des 80 ms d'une frappe ordinaire, sous les 150 ms d'un
+ * maintien volontaire. Se cale a la main, sur telephone, comme TOLERANCE_T.
+ */
+export const TENUE_POUCE = 0.110;
+
+/**
+ * SOUS QUELLE PART DU VOL UN RELACHE EST TROP TOT POUR ETRE UN BON CISEAU.
+ *
+ * LE DEFAUT QUE CE NOMBRE FERMAIT, et il etait grave : « quand j'appuie comme
  * sur le 100 m je fais 11 secondes sur le 110 m haies ». Marteler les paves
- * comme sur le plat passait les dix haies.
+ * comme sur le plat passait les dix haies. Le plancher l'a ferme, et il doit
+ * rester ferme : c'est TENUE_POUCE qui s'en charge maintenant, et mieux.
  *
- * C'est une sur-correction de ma part. La fenetre du cote tot avait ete
- * elargie pour qu'une frappe reflexe ne soit plus un ACCROCHAGE — elle ne
- * l'etait plus, mais elle devenait un ciseau MOYEN, qui ne coute que trois
- * centiemes et demi. Le geste cessait d'etre obligatoire : on pouvait jouer
- * Hurdlers avec les doigts de Sprinter.
+ * CE QU'IL NE DOIT PLUS FAIRE : PRONONCER « ABSENT ». Il le faisait, et le
+ * cout d'un relache donne une milliseconde trop tot etait alors celui d'un vol
+ * traverse sans jamais lever le pouce — le plafond de l'intervalle tombait de
+ * 0,94 a 0,60 d'un coup. Mesure a 9,5 m/s : relacher a 103 ms valait 0,60,
+ * relacher a 104 ms valait 0,94. UNE MILLISECONDE POUR UN TIERS DE LA VITESSE,
+ * sur une frontiere que rien n'affiche. C'est cela qui « coupe le perso », et
+ * c'est aussi cela qui rend les passages « aleatoires » : le meme geste, a
+ * quelques millisecondes pres, donne deux courses differentes.
  *
- * Le bon decoupage est en trois, pas en deux :
+ * Le decoupage reste en trois, mais les trois se suivent maintenant :
  *
- *   sous ce plancher   ON N'A PAS CISEAUTE. On a tape, on n'a pas tenu. Le
- *                      coureur franchit a plat, et cela coute le prix entier
- *                      (GARDE_CISEAU.absent) — le meme que si l'on n'avait
- *                      jamais leve le pouce, parce que c'est la meme chose.
- *   entre les deux     on a ciseaute trop tot : la jambe d'attaque n'etait pas
- *                      tendue, on accroche la barre. C'est une faute de
- *                      technique, pas une absence de geste.
+ *   sous ce plancher   CISEAU TROP TOT. La jambe d'attaque n'etait pas
+ *                      tendue : on accroche (GARDE_CISEAU.accroche). C'est une
+ *                      faute de technique, elle se paie comme telle.
  *   dans la fenetre    le ciseau.
+ *   jamais relache     la seule chose qui vaille encore « absent » : le vol
+ *                      entier passe sans que le pouce se leve.
  *
- * 30 % du vol, soit 90 ms sur le 110 m haies a pleine vitesse. Une frappe
- * ordinaire dure 50 a 80 ms : elle tombe donc sous le plancher, et le joueur
- * lit « PAS DE CISEAU » — ce qui est exactement ce qu'il a fait, et ce qui lui
- * dit quoi faire. L'ancien « ACCROCHEE » ne le lui disait pas.
+ * 30 % du vol, soit 90 a 116 ms selon la vitesse sur le 110 m haies.
  */
 export const CISEAU_PLANCHER = 0.30;
 
@@ -367,9 +411,10 @@ export function jugerCiseau(part, vol) {
   const e = Math.abs(ecart);
   // La tolerance est en temps, mais bornee a une part du vol : voir
   // PART_TOLERANCE_CISEAU, qui dit ce que l'oubli coutait sur le 100 m haies.
-  // RELACHE TROP TOT POUR ETRE UN CISEAU : on a tape, on n'a pas tenu. Voir
-  // CISEAU_PLANCHER — c'est ce qui empeche de jouer les haies au martelement.
-  if (part < CISEAU_PLANCHER) return { note: 'absent', garde: GARDE_CISEAU.absent, ecart };
+  // RELACHE TROP TOT : la jambe d'attaque n'etait pas tendue, on accroche. Ce
+  // n'est plus « absent » — voir CISEAU_PLANCHER, et TENUE_POUCE qui garde
+  // maintenant la porte du martelement.
+  if (part < CISEAU_PLANCHER) return { note: 'accroche', garde: GARDE_CISEAU.accroche, ecart };
   const seuil = k => Math.min(TOLERANCE_CISEAU[k], PART_TOLERANCE_CISEAU[k] * v);
   if (e <= seuil('parfait')) return { note: 'ciseau', garde: GARDE_CISEAU.ciseau, ecart };
   if (e <= seuil('bon')) return { note: 'bon', garde: GARDE_CISEAU.bon, ecart };
