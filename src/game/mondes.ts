@@ -15,6 +15,7 @@
 // se retrouve quelque part sans savoir comment en sortir.
 
 import { EST_TEST } from './canal';
+import { armerPassage } from './passage';
 import { useSyncExternalStore } from 'react';
 
 export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
@@ -126,6 +127,30 @@ const abonnes = new Set<() => void>();
 
 export function allerAu(m: Monde) {
   if (!MONDES_OUVERTS && m !== 'sprinter') return;
+  if (m === courant) return;
+
+  // LE PASSAGE S'ARME AVANT QUE LE MONDE NE CHANGE, et il garde l'axe du
+  // depuis-Sprinter meme au retour : on revient des haies en remontant par
+  // ou l'on est descendu. C'est la meme regle que celle du geste — le chemin
+  // doit etre le meme dans les deux sens.
+  //
+  // Le monde, lui, bascule tout de suite. Ce n'est pas un raccourci : c'est
+  // la camera qui porte le mouvement, et le panneau d'arrivee se contente de
+  // se poser dessus a la fin. Faire attendre `courant` obligerait a annuler
+  // un basculement en vol si un second geste arrivait entre-temps.
+  //
+  // La constante en tete du && n'est pas decorative : ecrite ainsi, elle vaut
+  // false en dur en production, le bundler suit la condition et sort tout le
+  // module du passage du build public. Sans elle, la camera d'un jeu ferme
+  // voyageait quand meme — c'est la regle posee en tete de game/canal.
+  const pivot = (m === 'sprinter' ? courant : m) as Exclude<Monde, 'sprinter'>;
+  if (MONDES_OUVERTS && PLACE[pivot]) {
+    armerPassage({
+      de: courant, vers: m, axe: PLACE[pivot],
+      fondDe: MONDES[courant].fond, fondVers: MONDES[m].fond,
+    });
+  }
+
   courant = m;
   for (const f of abonnes) f();
 }

@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
+import { cameraPassage, appliquerCamera } from '@/game/passage';
+import { dessinerMateriel } from '@/game/materiel';
+import { MONDES_OUVERTS } from '@/game/mondes';
 
 export function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +92,30 @@ export function GameCanvas() {
 
       const { G, THEMES, LEVELS, drawWorld, drawAthletes, drawIcon } = SprinterApp;
       const { SprinterCore } = (globalThis as any);
+      // LE PASSAGE D'UN JEU A L'AUTRE SE JOUE ICI, ET NULLE PART AILLEURS.
+      //
+      // Le stade ne se fait pas recouvrir par un panneau qui glisse : il s'en
+      // va. On peint d'abord la couleur du jeu ou l'on va, puis on dessine le
+      // monde par-dessus, decale — ce qui se decouvre sur les bords, c'est la
+      // destination. Rien de la projection n'est touche : `drawWorld` et les
+      // coureurs continuent de se dessiner comme d'habitude, dans un repere
+      // que la toile a simplement deplace.
+      //
+      // La camera se lit a l'horloge, pas a un etat React : un rendu en
+      // retard ne peut pas faire sauter le mouvement.
+      //
+      // La constante en tete garde le calcul hors du build public : les trois
+      // autres jeux n'y sont pas ouverts, aucun passage ne peut donc y etre
+      // arme, et le bundler retire tout le module plutot que de le livrer
+      // inerte.
+      const cam = MONDES_OUVERTS ? cameraPassage(now, G.VW, G.VH) : null;
+      if (cam) {
+        ctx.fillStyle = cam.fond;
+        ctx.fillRect(0, 0, G.VW, G.VH);
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+      }
+
       // We only draw the canvas world if we are in certain states, or we just draw it always?
       // Original UI draws world for title, cut, result, over, winall, race, count.
       // For open, it draws a gradient.
@@ -191,6 +218,24 @@ export function GameCanvas() {
           }
         }
         
+        ctx.restore();
+      }
+
+      if (cam) {
+        ctx.restore();
+        // La teinte du jeu ou l'on va, posee par-dessus le stade qui s'en va.
+        if (cam.voile > 0.002) {
+          ctx.globalAlpha = cam.voile;
+          ctx.fillStyle = cam.fond;
+          ctx.fillRect(0, 0, G.VW, G.VH);
+          ctx.globalAlpha = 1;
+        }
+        // Puis le materiel de ce jeu-la, DANS LE MEME REPERE mais par-dessus
+        // le voile : le stade se dissout dans la couleur du monde qu'on
+        // rejoint, et ce qui reste net dedans est ce qu'on vient y chercher.
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+        dessinerMateriel(ctx, cam, G.VW, G.VH);
         ctx.restore();
       }
 

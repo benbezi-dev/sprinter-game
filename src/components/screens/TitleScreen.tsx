@@ -17,6 +17,7 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { Compass } from 'lucide-react';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
+import { usePassage } from '@/game/passage';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronLeft as FlecheG, ChevronRight as FlecheD, Mail } from 'lucide-react';
@@ -105,8 +106,32 @@ export function TitleScreen() {
   const rouleau = React.useRef<HTMLDivElement>(null);
   useGesteMondes(rouleau, (d: Direction) => allerAu(mondeVers(d)), MONDES_OUVERTS);
 
+  /**
+   * PENDANT UN PASSAGE, L'ACCUEIL S'EFFACE.
+   *
+   * Le stade s'en va dans la toile, et laisser le menu pose dessus donnerait
+   * exactement ce qu'on cherchait a eviter : un calque qui ne bouge pas
+   * devant un monde qui bouge. Il revient une fois le passage fini — quelques
+   * dixiemes ou l'on ne voit que le stade, ce qui est tout l'objet du geste.
+   *
+   * Un voile, pas un demontage : l'ecran reste monte, sa position de
+   * defilement et l'onglet choisi survivent a l'aller-retour.
+   *
+   * IL PART SANS FONDU, ET REVIENT AVEC. Un fondu de sortie le laissait
+   * visible deux dixiemes de seconde de trop : au retour, il se decouvrait
+   * SOUS l'accueil des haies en train de disparaitre, et les deux menus se
+   * lisaient l'un sur l'autre. Partir net ne coute rien — a l'aller le stade
+   * s'ebranle au meme instant et on regarde ailleurs ; a l'arrivee, en
+   * revanche, le fondu compte : il pose le menu sur un stade deja immobile.
+   */
+  const passage = usePassage();
+
   return (
-    <div ref={rouleau} className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
+    <div ref={rouleau}
+      style={passage
+        ? { opacity: 0, pointerEvents: 'none' }
+        : { opacity: 1, transition: 'opacity 240ms ease-out' }}
+      className="w-full h-full flex flex-col pointer-events-auto overflow-y-auto bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col w-full">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">

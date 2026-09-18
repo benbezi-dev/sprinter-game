@@ -6,6 +6,7 @@ import {
   MONDES, PLACE, allerAu, useMonde, type Monde, type Direction,
 } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
+import { DUREE_ALLER, DUREE_RETOUR, DUREE_DOUCE, mouvementReduit } from '@/game/passage';
 import { HAIES } from '@/game/haies.js';
 
 /**
@@ -17,11 +18,19 @@ import { HAIES } from '@/game/haies.js';
  * le dire clairement plutot que de laisser appuyer sur un bouton mort.
  */
 
-/** D'ou entre le panneau, selon la direction prise. */
-const ENTREE: Record<Direction, { x?: string; y?: string }> = {
-  bas: { y: '100%' },
-  droite: { x: '100%' },
-  gauche: { x: '-100%' },
+/**
+ * D'ou se pose le panneau, selon la direction prise.
+ *
+ * Quelques pixels, plus un ecran entier : le panneau ne glisse plus, il se
+ * POSE. C'est la camera qui porte desormais le mouvement — le stade s'en va
+ * vraiment, dans le repere du jeu — et un panneau qui traverserait l'ecran en
+ * meme temps ferait deux mouvements concurrents au lieu d'un seul geste.
+ * Ce petit reste d'elan suffit a dire par ou l'on est arrive.
+ */
+const ENTREE: Record<Direction, { x?: number; y?: number }> = {
+  bas: { y: 30 },
+  droite: { x: 30 },
+  gauche: { x: -30 },
 };
 
 const FLECHE: Record<Direction, typeof ChevronUp> = {
@@ -44,8 +53,18 @@ function cotesDe(cle: string): string {
 
 export function Mondes() {
   const monde = useMonde();
-  if (monde === 'sprinter') return null;
-  return <AccueilMonde monde={monde} />;
+  // AnimatePresence se tient ICI, et non a l'interieur de l'accueil.
+  //
+  // Plus bas, il ne servait a rien : quand le monde repasse a « sprinter »,
+  // c'est tout le sous-arbre qui disparait d'un coup, et l'animation de
+  // sortie n'a jamais l'occasion de se jouer. Le panneau claquait donc au
+  // retour — ce qu'on ne voyait pas tant qu'il glissait par-dessus un stade
+  // immobile, et qui saute aux yeux maintenant que le stade revient.
+  return (
+    <AnimatePresence>
+      {monde !== 'sprinter' && <AccueilMonde key={monde} monde={monde} />}
+    </AnimatePresence>
+  );
 }
 
 function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
@@ -72,17 +91,31 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
     return () => window.removeEventListener('popstate', sortir);
   }, []);
 
+  // Le panneau arrive APRES la camera, ET APRES CE QU'ELLE EST ALLEE
+  // CHERCHER. Le travelling est freine : des les sept dixiemes du passage, la
+  // fosse de saut ou le cercle de lancer sont poses au milieu du cadre. Un
+  // accueil qui montait des la moitie les recouvrait au bout de cent
+  // millisecondes — on avait fait tout ce chemin pour ne rien voir. Il attend
+  // donc que l'installation ait eu le temps d'exister.
+  //
+  // Au retour il part le premier, sans attendre : il n'a aucune raison de
+  // retenir le stade qui revient.
+  const doux = mouvementReduit();
+  const aller = (doux ? DUREE_DOUCE : DUREE_ALLER) / 1000;
+  const retour = (doux ? DUREE_DOUCE : DUREE_RETOUR) / 1000;
+
   return (
-    <AnimatePresence>
-      <motion.div
-        key={monde}
-        initial={{ opacity: 0, ...ENTREE[direction] }}
-        animate={{ opacity: 1, x: 0, y: 0 }}
-        exit={{ opacity: 0, ...ENTREE[direction] }}
-        transition={{ type: 'spring', stiffness: 260, damping: 32 }}
-        className="fixed inset-0 z-[45] pointer-events-auto overflow-hidden"
-        style={{ background: d.fond }}
-      >
+    <motion.div
+      initial={{ opacity: 0, ...ENTREE[direction] }}
+      animate={{ opacity: 1, x: 0, y: 0 }}
+      exit={{
+        opacity: 0, ...ENTREE[direction],
+        transition: { duration: retour * 0.34, ease: 'easeOut' },
+      }}
+      transition={{ duration: aller * 0.28, delay: aller * 0.68, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed inset-0 z-[45] pointer-events-auto overflow-hidden"
+      style={{ background: d.fond }}
+    >
         <div
           ref={rouleau}
           className="w-full h-full overflow-y-auto flex flex-col
@@ -151,7 +184,6 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
             {N.t('monde_retour')}
           </button>
         </div>
-      </motion.div>
-    </AnimatePresence>
+    </motion.div>
   );
 }
