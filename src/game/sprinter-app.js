@@ -510,46 +510,130 @@
   // -------------------------------------------------------------------
   // SON
   // -------------------------------------------------------------------
+  // LE THEME DE HURDLERS — trois appuis et l'envol.
+  //
+  // Ce jeu avait une musique ; il n'avait pas d'air. Des accords, une basse,
+  // un arpege qui tournait sur les notes de l'accord : de la matiere, et rien
+  // qu'on puisse fredonner en attendant le bus. Or c'est exactement ce qu'on
+  // demande a la musique d'un jeu qu'on aime — qu'elle revienne toute seule
+  // quand on n'y joue pas, et qu'en revenant, elle donne envie d'y rejouer.
+  //
+  // Il fallait donc une MELODIE, et pas n'importe laquelle : celle-ci est
+  // batie sur le rythme du 110 metres haies lui-meme. Entre deux haies, le
+  // hurdleur pose trois appuis et s'envole sur le quatrieme. L'air fait la
+  // meme chose, mesure apres mesure : TROIS CROCHES SUR LA MEME NOTE, puis un
+  // saut de quarte tenu par-dessus la haie, et la retombee. Ta-ta-ta-TAAA.
+  // C'est la phrase la plus courte qui raconte le sport, et c'est pour cela
+  // qu'elle s'accroche : on l'a deja dans les jambes avant de l'avoir dans
+  // l'oreille.
+  //
+  // Les notes sont donnees en demi-tons depuis la tonique, et en CROCHES
+  // depuis le debut d'une cellule de deux mesures : [croche, demi-ton, duree].
+  // La hauteur ne bouge pas d'un palier a l'autre — ce sont les accords qui
+  // changent de couleur dessous. C'est ce qui fait qu'on reconnait Hurdlers
+  // au premier envol, a l'ecole comme en finale intergalactique.
+  //
+  // Aucune note du theme n'est une tierce : il n'emploie que la, si, re, mi,
+  // sol de la tonalite. Un air sans tierce se pose aussi bien sur un accord
+  // majeur que sur un mineur — c'est la condition pour que la meme melodie
+  // supporte les quatre paliers, du plus clair au plus sombre, sans jamais
+  // avoir a se transposer.
+
+  // A — LA QUESTION. Trois appuis sur le la, envol a la quarte, retombee.
+  //     La phrase reste en l'air sur la dominante : elle appelle une reponse.
+  const TH_A = [[0, 7, 1], [1, 7, 1], [2, 7, 1], [3, 12, 3], [6, 9, 1],
+                [7, 7, 1], [8, 5, 2], [11, 2, 1], [12, 5, 2], [14, 7, 2]];
+  // B — LA REPONSE. Le meme dessin un cran plus haut, et cette fois il
+  //     redescend jusqu'a la tonique : la phrase se ferme.
+  const TH_B = [[0, 9, 1], [1, 9, 1], [2, 9, 1], [3, 14, 3], [6, 12, 1],
+                [7, 9, 1], [8, 7, 2], [11, 5, 1], [12, 2, 2], [14, 0, 2]];
+  // C — LA DERNIERE HAIE. Le plus grand saut du morceau, une douzieme, sur la
+  //     note la plus haute — puis on retombe sur l'octave, debout. C'est la
+  //     mesure qui donne envie d'entendre la boucle repartir.
+  const TH_C = [[0, 12, 1], [1, 12, 1], [2, 12, 1], [3, 19, 3], [6, 17, 1],
+                [7, 14, 1], [8, 12, 3], [11, 9, 1], [12, 7, 2], [14, 12, 2]];
+  // Question, reponse, question, envol : huit mesures. La question revient
+  // telle quelle au troisieme quart — une melodie ne se retient pas si elle
+  // ne se repete pas —, et la quatrieme cellule est celle qu'on attend.
+  const THEME_HAIES = [TH_A, TH_B, TH_A, TH_C];
+
+  // -------------------------------------------------------------------
+  // SON
+  // -------------------------------------------------------------------
   // Les morceaux de Hurdlers : l'accueil, puis les quatre paliers de course,
   // qui montent comme ceux de Sprinter — tempo, densite, bourdon — mais sur
-  // leurs propres accords. Voir buildHaies.
+  // leurs propres accords, et tous sous LE MEME AIR. Voir buildHaies.
+  //
+  // La grille fait huit mesures et non quatre : une question et sa reponse ne
+  // tiennent pas dans quatre. Un tampon de huit mesures pese pres de quatre
+  // mega-octets, et les cinq morceaux montent a une quinzaine — ils ne sont
+  // fabriques qu'a la premiere ecoute, donc jamais pour qui ne quitte pas
+  // Sprinter. C'est le prix d'un air qui se tient, et il est paye au bon
+  // moment.
+  //
+  // Les accords ne se deplacent JAMAIS par demi-tons d'une mesure a l'autre,
+  // comme le font ceux du dernier palier de Sprinter : la melodie, elle, ne
+  // bouge pas, et un accord qui glisse chromatiquement sous une note fixe ne
+  // fait pas monter la tension — il fait une fausse note. La tension se prend
+  // donc ailleurs : le tempo, la densite de la batterie, le bourdon grave, le
+  // timbre de la nappe, et la quinte diminuee posee sur le silence de l'air.
   const SUS2 = [0, 2, 7], SUS4 = [0, 5, 7], ADD9 = [0, 4, 7, 14],
         MIN9 = [0, 3, 7, 14], MAJ7 = [0, 4, 7, 11];
+
+  // La grille commune aux cinq morceaux : re, sol, si mineur, la — deux fois,
+  // puis re et sol pour l'envol final. Chaque degre est choisi pour que les
+  // notes de l'air tombent DANS l'accord et non a cote.
+  const GRILLE = [[0, ADD9], [-7, SUS2], [-3, MIN9], [-5, SUS4],
+                  [0, ADD9], [-7, SUS2], [0, SUS4], [-7, ADD9]];
+  // La meme grille sans aucune tierce majeure : c'est la version sombre, pour
+  // les deux derniers paliers. L'air n'y change pas une note.
+  const GRILLE_SOMBRE = [[0, SUS2], [-7, SUS2], [-3, MIN9], [-5, SUS4],
+                         [0, SUS2], [-7, SUS4], [0, SUS4], [-7, SUS2]];
+
   const MUSIQUES_HAIES = {
     h_menu: {
-      bpm: 96, cle: 5, prog: [[0, ADD9], [-5, SUS2], [-3, MIN9], [-7, SUS4]],
+      // L'ACCUEIL, c'est-a-dire l'endroit ou le theme s'apprend. On l'y
+      // entend seul ou presque : pas de caisse claire, deux frappes par
+      // mesure, une basse qui ne fait que poser les fondamentales. Tout ce
+      // qui reste, c'est l'air — et c'est celui-la qu'on emporte en sortant.
+      bpm: 96, cle: 5, prog: GRILLE,
       kick: [0, 2], snare: [], hats: 4,
       bassPat: [0, null, null, null, 7, null, null, null], bassAmp: 0.22,
       padAmp: 0.10, arp: 8, motif: [0, 1, 2, 3, 2, 1, 2, 3], arpOct: 4,
-      arpAmp: 0.07, swing: 0.18, envol: 0.05, drone: 0,
+      arpAmp: 0.045, swing: 0.18, envol: 0.05, drone: 0,
+      lead: 0.35, leadOct: 4, stab: 0,
     },
     h_race0: {                              // etapes 1 a 3
-      bpm: 118, cle: 5, prog: [[0, ADD9], [-2, SUS2], [3, MAJ7], [-5, SUS4]],
+      bpm: 118, cle: 5, prog: GRILLE,
       kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
       bassPat: [0, 12, 0, 7, 0, 12, 5, 7], bassAmp: 0.30,
       padAmp: 0.08, arp: 8, motif: [0, 1, 2, 1, 0, 1, 2, 3], arpOct: 5,
-      arpAmp: 0.09, swing: 0.22, envol: 0.10, drone: 0,
+      arpAmp: 0.05, swing: 0.22, envol: 0.06, drone: 0,
+      lead: 0.44, leadOct: 4, stab: 0,
     },
     h_race1: {                              // championnat du monde
-      bpm: 128, cle: 5, prog: [[0, MIN9], [-2, SUS2], [-4, ADD9], [-5, SUS4]],
+      bpm: 128, cle: 5, prog: GRILLE,
       kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
       bassPat: [0, 12, 0, 7, 0, 12, 3, 7], bassAmp: 0.34,
       padAmp: 0.085, arp: 8, motif: [0, 2, 1, 3, 0, 2, 1, 3], arpOct: 5,
-      arpAmp: 0.10, swing: 0.16, envol: 0.12, drone: 0.06,
+      arpAmp: 0.055, swing: 0.16, envol: 0.07, drone: 0.06,
+      lead: 0.51, leadOct: 4, stab: 0,
     },
     h_race2: {                              // jeux mondiaux
-      bpm: 138, cle: 5, prog: [[0, MIN9], [1, ADD9], [-4, MAJ7], [-5, SUS4]],
+      bpm: 138, cle: 5, prog: GRILLE_SOMBRE,
       kick: [0, 0.5, 1, 2], snare: [1, 2.5, 2.75], hats: 16,
       bassPat: [0, 0, 12, 7, 0, 0, 12, 10], bassAmp: 0.38,
       padAmp: 0.09, arp: 12, motif: [0, 1, 2, 3, 2, 1], arpOct: 5,
-      arpAmp: 0.11, swing: 0, envol: 0.14, drone: 0.10,
+      arpAmp: 0.06, swing: 0, envol: 0.08, drone: 0.10,
+      lead: 0.57, leadOct: 4, stab: 0.10,
     },
     h_race3: {                              // inter galactique
-      bpm: 148, cle: 5, prog: [[0, SUS4], [-1, SUS4], [-2, SUS2], [-3, ADD9]],
+      bpm: 148, cle: 5, prog: GRILLE_SOMBRE,
       kick: [0, 0.5, 1, 1.5, 2], snare: [1, 2.5, 2.75], hats: 16,
       bassPat: [0, 0, 6, 0, 12, 0, 6, 11], bassAmp: 0.42,
       padAmp: 0.095, arp: 16, motif: [0, 1, 2, 3, 3, 2, 1, 0], arpOct: 5,
-      arpAmp: 0.12, swing: 0, envol: 0.16, drone: 0.14,
+      arpAmp: 0.065, swing: 0, envol: 0.09, drone: 0.14,
+      lead: 0.67, leadOct: 4, stab: 0.16,
     },
   };
 
@@ -717,25 +801,39 @@
       return this.norm(d);
     },
 
-    // HURDLERS A SA MUSIQUE, ET ELLE SE RECONNAIT A L'OREILLE.
+    // HURDLERS A SA MUSIQUE, ET ON LA FREDONNE EN SORTANT.
     //
-    // Meme synthese que Sprinter, autre morceau : une autre tonalite (re au
-    // lieu de la), des accords suspendus plutot que des triades, une basse
-    // carree qui rebondit au lieu d'une scie qui pousse, un arpege en
-    // triangle, et surtout LE RYTHME DES HAIES. Chaque mesure compte quatre
-    // temps comme un intervalle compte quatre appuis : la grosse caisse frappe
-    // les trois premiers, se tait sur le quatrieme, et un glissando monte a sa
-    // place — l'envol. On entend la course avant de la voir.
+    // Meme synthese que Sprinter, autre morceau — et surtout, autre ambition.
+    // Les quatre pistes de Sprinter sont des FONDS : elles tiennent la course
+    // sans jamais demander qu'on les ecoute. Celle-ci a un air (voir
+    // THEME_HAIES), et tout le reste est ecrit pour lui laisser la place.
+    //
+    // Ce qui vient de l'ancienne version et qu'on garde, parce que c'est deja
+    // le sport mis en musique : LE RYTHME DES HAIES. Chaque mesure compte
+    // quatre temps comme un intervalle compte quatre appuis — la grosse
+    // caisse frappe les trois premiers, se tait sur le quatrieme, et un
+    // glissando monte a sa place. On entend la course avant de la voir.
+    // L'air, maintenant, dit exactement la meme chose au-dessus : trois
+    // croches posees, puis le saut.
+    //
+    // Ce qui change autour de lui : l'arpege passe de la moitie au quart de
+    // sa force et redevient ce qu'il aurait toujours du etre, un scintillement
+    // derriere la melodie ; l'envol se range sous elle au lieu de lui passer
+    // dessus ; et la grille tient huit mesures, le temps d'une question et de
+    // sa reponse.
     //
     // Une fabrique a part, et non des options de plus dans buildRace : les
     // morceaux de Sprinter restent ce qu'ils sont, a l'echantillon pres.
     buildHaies(cfg) {
       const sr = this.ctx.sampleRate;
       const beat = 60 / cfg.bpm, bar = beat * 4, tot = bar * cfg.prog.length;
+      const cellule = bar * 2;              // deux mesures : une phrase
       const d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
       const F = (st, o) => this.semi(st + cfg.cle, o);
       // Les croches impaires tombent un peu en retard : le balancement d'une
-      // foulee de hurdleur, qui n'est jamais tout a fait reguliere.
+      // foulee de hurdleur, qui n'est jamais tout a fait reguliere. L'air se
+      // balance avec le reste — c'est a ce detail qu'une melodie posee sur un
+      // accompagnement swingue sonne jouee plutot que calculee.
       const croche = i => (i + (i % 2 ? cfg.swing : 0)) * beat / 2;
       cfg.prog.forEach((ch, b) => {
         const t = b * bar, root = ch[0], acc = ch[1], haut = acc[acc.length - 1];
@@ -756,9 +854,83 @@
         }
         this.envol(d, t + beat * 3, beat * 0.9, F(root + haut, 3), F(root + haut, 5), cfg.envol);
         if (cfg.drone > 0) this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25);
+        // La quinte diminuee des paliers sombres. Elle tombe sur la cinquieme
+        // croche de la seconde mesure de chaque cellule — le seul endroit ou
+        // l'air se tait. Une dissonance dans un trou de melodie inquiete ;
+        // la meme posee sur une note de la melodie fait seulement croire que
+        // le jeu a un bug.
+        if (cfg.stab && b % 2 === 1)
+          this.tone(d, t + beat * 2, beat * 0.4, F(root + 6, 4), cfg.stab, 'saw', 8);
+      });
+      // L'AIR, par-dessus tout ce qui precede. Une cellule de deux mesures par
+      // quart de grille, et les quatre quarts font question-reponse-question-
+      // envol.
+      THEME_HAIES.forEach((phrase, c) => {
+        const t = c * cellule;
+        phrase.forEach(([i, st, dur]) => {
+          // La note dure ce qu'elle dure moins un souffle, sinon deux croches
+          // de suite se collent et l'oreille n'entend plus deux appuis.
+          const fin = croche(i + dur) - croche(i);
+          this.chant(d, t + croche(i), fin * 0.88, F(st, cfg.leadOct), cfg.lead);
+        });
       });
       return this.norm(d);
     },
+
+    /**
+     * LA VOIX QUI PORTE L'AIR.
+     *
+     * `tone` ne sait faire que des notes qui meurent : son enveloppe est une
+     * exponentielle descendante, ce qui convient a une basse pincee ou a un
+     * arpege, et pas du tout a une melodie. Une note tenue par-dessus une haie
+     * doit TENIR — sinon il ne reste du saut que son attaque, et l'air se
+     * defait en une suite de petits chocs.
+     *
+     * Celle-ci tient donc : elle monte en vingt millisecondes, se maintient,
+     * et ne retombe qu'a la fin. Trois choses de plus, qui ne coutent presque
+     * rien et qui font toute la difference entre un signal et un chanteur :
+     *
+     *   — quatre harmoniques en decroissance douce, qui donnent un timbre de
+     *     cuivre. C'est le son des generiques d'arcade, et il traverse une
+     *     batterie sans avoir a etre plus fort qu'elle ;
+     *   — un second oscillateur desaccorde de quatre millieme de ton, qui
+     *     epaissit la note en la faisant battre lentement ;
+     *   — une octave en dessous, au tiers de la force. L'air est ecrit haut
+     *     pour passer par-dessus la batterie, et un air ecrit haut siffle :
+     *     l'octave grave lui rend un corps, et c'est elle qu'on fredonne —
+     *     personne ne fredonne a mille sept cents hertz ;
+     *   — un vibrato qui n'arrive qu'apres le premier tiers de la note. Pose
+     *     des le debut il sonne electronique ; pose en retard, il sonne comme
+     *     un souffle qu'on lache — et ce sont les notes longues, celles des
+     *     envols, qui en heritent.
+     */
+    chant(d, t0, dur, f, amp) {
+      const sr = d.sampleRate, ch = d.getChannelData(0);
+      const i0 = (t0 * sr) | 0, n = (dur * sr) | 0;
+      if (!amp || n <= 0) return;
+      const atk = Math.max(1, Math.min(n * 0.25, 0.02 * sr) | 0);
+      const rel = Math.max(1, (n * 0.3) | 0);
+      // Le timbre, normalise pour que `amp` veuille dire la meme chose ici que
+      // dans `tone` : la crete de la somme des harmoniques, les deux voix
+      // reunies, vaut un.
+      const G_ = 0.33;
+      const corps = p => Math.sin(TAU * p) + 0.46 * Math.sin(2 * TAU * p)
+                       + 0.24 * Math.sin(3 * TAU * p) + 0.10 * Math.sin(4 * TAU * p);
+      let ph = 0, ph2 = 0, pg = 0, pv = 0;
+      for (let i = 0; i < n; i++) {
+        const k = i0 + i; if (k >= ch.length) break;
+        const q = i / n;
+        pv += 5.4 / sr;
+        const v = 1 + 0.004 * Math.sin(TAU * pv) * Math.min(1, Math.max(0, (q - 0.33) * 3));
+        ph += f * v / sr; ph2 += f * v * 1.004 / sr; pg += f * v * 0.5 / sr;
+        let env = i < atk ? i / atk : i > n - rel ? (n - i) / rel : 1;
+        env *= 0.88 + 0.12 * Math.exp(-2.4 * i / sr);   // un rien de mordant
+        ch[k] += amp * G_ * env
+               * (corps(ph - (ph | 0)) + 0.6 * corps(ph2 - (ph2 | 0))
+                  + 0.62 * Math.sin(TAU * (pg - (pg | 0))));
+      }
+    },
+
     /** Un glissando qui monte d'une octave ou deux, en cloche : l'envol. */
     envol(d, t0, dur, f0, f1, amp) {
       if (!amp) return;
@@ -6611,6 +6783,11 @@
   }
 
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
+    // L'air de Hurdlers et sa grille, sortis tels quels : c'est par la que
+    // tools/haies-musique.mjs rend les cinq morceaux en fichiers qu'on peut
+    // ECOUTER. Une musique ne se relit pas, elle s'entend — et une melodie
+    // qui tombe a cote de ses accords ne se voit dans aucun diff.
+    MUSIQUES_HAIES, THEME_HAIES,
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
