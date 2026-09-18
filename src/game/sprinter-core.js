@@ -1291,8 +1291,11 @@
   const BLOC = {
     marques: { hanche: [-0.55, 0.45], buste: -1.42 },
     prets:   { hanche: [-0.46, 0.70], buste: -1.96 },
-    // les chevilles sur les pedales, les bouts des doigts sur la piste
-    piedAvant: [-0.56, 0.16], piedArriere: [-0.86, 0.19], main: [-0.03, 0.01],
+    // Les chevilles sur les pedales, les bouts des doigts sur la piste. La
+    // cible de la main est le bout de l'OS, et la main depasse de l'os : elle
+    // vise donc trois centimetres plus haut que la piste, pour que ce soit la
+    // pulpe des doigts qui la touche et non le dos de la main qui s'y enfonce.
+    piedAvant: [-0.56, 0.16], piedArriere: [-0.86, 0.19], main: [-0.03, 0.04],
     // le pied sur la pedale inclinee : pointe en bas, talon contre la plaque
     cheville: -0.80,
   };
@@ -1419,8 +1422,15 @@
   // Ce que la main et la chaussure donnent — au poignet, dans les blocs, en
   // tenue de ville, par-dessus une haie et aux trois niveaux de detail — se
   // regarde dans tools/apercu-mains-pieds.html.
+  //
+  // COMBIEN ELLE MESURE. Le dos de la main fait neuf centimetres et demi
+  // dans le sens de la course et six d'epaisseur — une main de sprinter,
+  // pas une main de mannequin. Elle depasse d'un centimetre et demi le bout
+  // de l'os : l'os s'arrete a la derniere phalange PLIEE, les doigts fermes
+  // vont un peu au-dela, et a la taille ou le jeu montre un coureur presente
+  // ou une scenette, une main juste anatomique se lisait comme un moignon.
   const POIGNET = -0.20;     // hauteur de coupe, dans le repere du coude
-  const DOIGTS = -0.276;     // le bout des doigts, au bout de l'os
+  const DOIGTS = -0.291;     // le bout des doigts, un peu au-dela de l'os
 
   /**
    * La main au bout d'un avant-bras coupe au poignet.
@@ -1448,7 +1458,7 @@
       // une main entiere mesure deux pixels : le pouce et les phalanges n'y
       // seraient qu'un supplement de calcul, huit fois par image.
       add(peau, E, aF, [cb + 0.008, 0, (zPo + DOIGTS) * 0.5, cb],
-          [0.033 * k, 0.023 * k], [sec[1], sec[2]], (zPo - DOIGTS) * 0.5, yaw,
+          [0.039 * k, 0.027 * k], [sec[1], sec[2]], (zPo - DOIGTS) * 0.5, yaw,
           MESURE | LIBRE | SOUS_HAUT);
       return;
     }
@@ -1459,10 +1469,10 @@
     // l'avant-bras au lieu de repartir droit.
     const zK = zPo + (DOIGTS - zPo) * 0.58;
     add(peau, E, aF, [cb + 0.006, 0, (zPo + zK) * 0.5, cb],
-        [0.040 * k, 0.026 * k], [sec[1], sec[2]], (zPo - zK) * 0.5, yaw,
+        [0.048 * k, 0.031 * k], [sec[1], sec[2]], (zPo - zK) * 0.5, yaw,
         MESURE | SOUS_BAS | SOUS_HAUT);
-    add(peau, E, aF, [cb + 0.013, 0, (zK + DOIGTS) * 0.5, cb + 0.006],
-        [0.030 * k, 0.022 * k], [0.040 * k, 0.026 * k], (zK - DOIGTS) * 0.5,
+    add(peau, E, aF, [cb + 0.014, 0, (zK + DOIGTS) * 0.5, cb + 0.006],
+        [0.037 * k, 0.026 * k], [0.048 * k, 0.031 * k], (zK - DOIGTS) * 0.5,
         yaw, MESURE | LIBRE | SOUS_HAUT);
     // LE POUCE, ET POURQUOI IL EST LE MEME DES DEUX COTES. Paume vers le
     // corps, les deux pouces pointent vers l'AVANT, pas vers l'interieur :
@@ -1470,8 +1480,8 @@
     // Sans lui la main reste un galet ; avec lui, elle se lit comme une
     // main a la premiere image.
     const Po = [E[0] - zPo * Math.sin(aF), E[1], E[2] + zPo * Math.cos(aF)];
-    add(peau, Po, aF + 0.42, [0.013, 0, -0.026], [0.013 * k, 0.012 * k],
-        [0.017 * k, 0.015 * k], 0.026, yaw, MESURE | LIBRE | SOUS_HAUT);
+    add(peau, Po, aF + 0.42, [0.015, 0, -0.030], [0.015 * k, 0.014 * k],
+        [0.020 * k, 0.018 * k], 0.030, yaw, MESURE | LIBRE | SOUS_HAUT);
   }
 
   // ---------------------------------------------------------------------
