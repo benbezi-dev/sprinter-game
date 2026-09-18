@@ -87,12 +87,26 @@ def masses(fem=False, morph=None):
 
     # --- bassin ---------------------------------------------------------
     # Large de hanche, et le fessier qui ressort vers l'arriere (x negatif).
+    #
+    # DE COMBIEN IL RESSORT. Le fessier allait chercher 120 mm derriere l'axe
+    # de la hanche, quand le creux des reins juste au-dessus en fait 97 :
+    # vingt-trois millimetres de saillie, que la vue du jeu — trois quarts
+    # arriere — prend en plein, et qui faisaient sous le short une boule
+    # ronde plutot qu'un fessier. Un sprinter l'a epais, pas bombe. La
+    # saillie retombe a huit millimetres : la masse recule d'un tiers de
+    # moins, s'etale d'un tiers de moins en profondeur, et perd trois
+    # millimetres de rayon.
+    #
+    # LA LARGEUR DE HANCHE NE BOUGE PAS. C'est elle qui fait le bassin, et
+    # c'est la profondeur seule qu'on etait venu chercher : les ecarts en
+    # largeur (dy) reprennent ce que le rayon perd, et le bassin mesure
+    # 125 mm de demi-largeur au lieu de 123 — aussi large de dos qu'avant.
     kb = f_bassin * khip
     G['pelvis'] = [
         (0.000, 0.960, 0.100 * kb, 0.000, 0.026 * kb),
-        (-0.010, 0.912, 0.110 * kb, 0.000, 0.032 * kb),
-        (-0.026, 0.868, 0.112 * kb, 0.016, 0.030 * kb),   # fessier
-        (0.000, 0.812, 0.102 * kb, 0.000, 0.026 * kb),
+        (-0.007, 0.912, 0.108 * kb, 0.000, 0.034 * kb),
+        (-0.017, 0.868, 0.109 * kb, 0.011, 0.033 * kb),   # fessier
+        (0.000, 0.812, 0.100 * kb, 0.000, 0.028 * kb),
         (0.004, 0.772, 0.092 * kb, 0.000, 0.020 * kb),
     ]
 
@@ -170,8 +184,33 @@ def masses(fem=False, morph=None):
     # nettement plus profonde que large.
     kc = f_cuisse * kleg
     G['thigh'] = [
-        (-0.006, 0.872, 0.104 * kc, 0.020, 0.000),
-        (-0.008, 0.812, 0.102 * kc, 0.024, 0.000),  # haut de cuisse
+        # CETTE MASSE-LA EST LE FESSIER, PAS LA CUISSE — ET SON RAYON EST BRUT.
+        #
+        # Elle est posee a 0,872, deux centimetres AU-DESSUS du pivot de la
+        # cuisse, et la chaine ne mesure que jusqu'a 0,850 : elle ne decrit
+        # aucune section, elle remplit le haut de la cuisse la ou il rejoint
+        # la fesse. Elle est aussi plus haute que la masse de fermeture que
+        # fermer() pose a 0,868 — la seule du corps dans ce cas — donc c'est
+        # ELLE qui coiffe le groupe, et la calibration l'ecarte comme toute
+        # masse de bout. Son rayon ne passe jamais par la boucle de mesure :
+        # ici, et ici seulement, le chiffre est celui de la bille et non
+        # celui de la peau finie.
+        #
+        # C'est de la que venait la fesse ronde. A 0,104, la peau relevee au
+        # ras du pivot faisait 121 mm de demi-profondeur — dix-neuf de plus
+        # que le bassin juste au-dessus — et, posee sur son axe de hanche,
+        # allait a 193 mm du milieu du corps quand le bassin s'arrete a 123.
+        # Le haut de la cuisse DEBORDAIT la fesse de sept centimetres au lieu
+        # de s'y fondre, et la vue du jeu ne montrait plus que cette boule.
+        # A 0,086 la peau retombe a 105 mm de profondeur et 177 de bord
+        # externe, la cuisse rentre dans le bassin, et la calibration du
+        # groupe, qui se battait contre cette masse-la, tombe sous le quart
+        # de millimetre d'ecart residuel la ou elle plafonnait a 1,7.
+        #
+        # Le ventre du quadriceps, lui, ne bouge pas : 90 mm a mi-cuisse et
+        # 60 au genou, avant comme apres.
+        (-0.006, 0.872, 0.086 * kc, 0.012, 0.000),  # fessier
+        (-0.008, 0.812, 0.099 * kc, 0.022, 0.000),  # haut de cuisse
         (-0.002, 0.740, 0.094 * kc, 0.022, 0.000),
         (0.000, 0.668, 0.084 * kc, 0.018, 0.000),
         (0.002, 0.598, 0.073 * kc, 0.014, 0.000),
