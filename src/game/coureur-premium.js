@@ -151,6 +151,27 @@
     }
   }
 
+  /**
+   * OU UNE CHAINE SE COUPE VRAIMENT.
+   *
+   * `depuis` et `jusqua` ne coupent pas a la hauteur demandee : ils coupent
+   * au JOINT DE TRONCS le plus proche, par `coupe()`, et ce joint tombe plus
+   * bas quand le corps est echantillonne grossierement. Tant que les deux
+   * parts sortent de la meme chaine — le short et la peau d'une cuisse —
+   * personne n'a besoin de savoir ou : elles se partagent les troncs sans
+   * en perdre ni en doubler un.
+   *
+   * Une piece ECRITE A LA MAIN qui prend la suite, elle, doit le savoir : une
+   * main posee au poignet suppose a -20 cm y serait bien au niveau fin, ou le
+   * joint tombe a -21,9 ; au niveau moyen il tombe a -18,3 et au plus
+   * grossier a -13,7, et le bras se serait ouvert de un a six centimetres
+   * entre les deux. Elle lit donc le bord au lieu de le supposer.
+   */
+  function bord(pro, nom, niv, h) {
+    var t = pro[nom][niv][coupe(pro[nom][niv], h)];
+    return t[0] - t[1];
+  }
+
   /** Le rayon moyen mesure a une extremite de chaine : 'bas' ou 'haut'. */
   function rayon(pro, nom, niv, cote, k) {
     var tr = pro[nom][niv];
@@ -201,7 +222,7 @@
   }
 
   root.SprinterPremium = {
-    chaine: chaine, avant: avant, rayon: rayon, section: section,
+    chaine: chaine, avant: avant, rayon: rayon, section: section, bord: bord,
     PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
     profils: function (fem) { return fem ? HD.f : HD.m; }
