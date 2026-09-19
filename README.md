@@ -41,5 +41,9 @@ Le jeu sera disponible sur `https://<votre-utilisateur>.github.io/<nom-du-repo>/
   passes de tondeuse, grain du tartan, occlusion des bords, ombres douces,
   poussière des appuis, flashs dans les tribunes, vignettage. Elle se règle
   seule sur le framerate de l'appareil, et le jeu tourne sans elle.
+- `src/3d/` — **maquette 3D** (three.js). Le même moteur — même physique, même
+  `pose()`, même piste — sous une caméra de télévision. Elle vit dans sa propre
+  page et n'entre dans aucun build : `npm run dev`, puis
+  http://localhost:5173/3d.html
 - `src/components/` — interface React (écrans, HUD, contrôles tactiles)
 - `public/` — icônes de l'application
