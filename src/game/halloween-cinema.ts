@@ -314,8 +314,20 @@ const TAU = Math.PI * 2;
 export function peindreLaScene(
   ctx: CanvasRenderingContext2D, L: number, H: number, t: number, mordu: boolean,
 ) {
-  const sol = H * 0.78;
-  const m = Math.min(L / 12, H / 7);
+  // LA LIGNE DE SOL REMONTE EN PORTRAIT, et c'est la carte de texte qui
+  // l'impose. En paysage elle occupe la moitie droite de l'ecran : la scene
+  // vit a gauche, et le sol peut rester bas. En portrait elle se pose EN BAS,
+  // sur toute la largeur — et les deux silhouettes, dessinees a 78 % de la
+  // hauteur, se retrouvaient entierement derriere elle. On ne voyait que la
+  // lune, ce qui est exactement la moitie de l'image qui ne raconte rien.
+  //
+  // Les personnages remontent donc au-dessus de la carte. Le seuil est large
+  // (une image un dixieme plus haute que large) : entre les deux, aucune des
+  // deux dispositions ne gene, et l'on prefere basculer trop tot que trop
+  // tard.
+  const portrait = H > L * 1.1;
+  const sol = H * (portrait ? 0.54 : 0.78);
+  const m = Math.min(L / 12, H / (portrait ? 11 : 7));
 
   // LE CIEL. Le meme degrade que le stade du cimetiere, pour qu'on reconnaisse
   // le lieu d'ou l'on sort.

@@ -327,8 +327,13 @@ export function toutesTenues(): boolean { return lire().tenues >= NUITS.length; 
 export function tenirLaNuit(n: number, chrono: number) {
   const c = lire();
   c.tenues = Math.max(c.tenues, n);
+  // AU CENTIEME, comme le jeu l'affiche. Le moteur rend un chrono issu d'une
+  // integration au 1/240 de seconde, donc quinze decimales dont treize ne
+  // veulent rien dire : les ranger telles quelles gonfle le carnet et rend
+  // deux chronos « egaux » comparables a l'insu du lecteur.
+  const pose = Math.round(chrono * 100) / 100;
   const av = c.chronos[String(n)];
-  if (av == null || chrono < av) c.chronos[String(n)] = chrono;
+  if (av == null || pose < av) c.chronos[String(n)] = pose;
   ecrire(c);
 }
 
