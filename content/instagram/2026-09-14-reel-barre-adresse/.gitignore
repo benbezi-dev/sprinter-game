@@ -1,0 +1,4 @@
+# Les sorties du banc d essai sont des mires, pas des prises : elles se
+# refabriquent par `node verifier-monteur.mjs` et n ont rien a faire dans un
+# depot public.
+banc-essai/
