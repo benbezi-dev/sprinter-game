@@ -99,7 +99,7 @@ export const TENUES: readonly Scene[] = [
       ['Il a d\'abord cru à un défaut de compression.',
        'At first he assumed it was a compression glitch.'],
       ['Il l\'a montrée à son fils, qui a dit : « papa, c\'est un monsieur ».',
-       'He showed his son, who said: "dad, that\'s a man".'],
+       'He showed his son, who said: "dad, that\'s a man."'],
       ['Il a démissionné le lendemain matin.', 'He resigned the next morning.'],
     ],
   },
@@ -227,9 +227,9 @@ export const MORSURES: readonly Scene[] = [
       ['C\'était la seconde moitié de son nom de famille.',
        'It was the second half of his surname.'],
       ['Il s\'appelle désormais Jean-Pierre Cour.',
-       'His name is now Jean-Pierre Brave.'],
+       'His name is now Jean-Pierre Cour.'],
       ['Il s\'appelait Jean-Pierre Courageux.',
-       'It used to be Jean-Pierre Bravery.'],
+       'It used to be Jean-Pierre Courage.'],
     ],
   },
   {
@@ -372,7 +372,17 @@ export function peindreLaScene(
   // sous les personnages, au seul endroit ou il ne se passe rien. Un
   // cimetiere de nuit n'a pas de pelouse visible — il a une masse sombre, et
   // la lune par-dessus.
-  ctx.fillStyle = 'rgb(9,11,10)';
+  //
+  // IL S'ASSOMBRIT VERS LE BAS, ET CE N'EST PAS UNE COQUETTERIE. En portrait
+  // la ligne de sol remonte a mi-hauteur : le sol occupe alors la moitie de
+  // l'image, et peint d'un seul aplat il devenait un rectangle noir mort
+  // sous la scene. Le degrade lui rend une profondeur — on lit une terre qui
+  // s'enfonce dans la nuit plutot qu'un bord d'ecran — et il coute deux
+  // lignes.
+  const terre = ctx.createLinearGradient(0, sol, 0, H);
+  terre.addColorStop(0, 'rgb(13,16,13)');
+  terre.addColorStop(1, 'rgb(4,5,5)');
+  ctx.fillStyle = terre;
   ctx.fillRect(0, sol, L, H - sol);
   ctx.fillStyle = 'rgba(140,116,74,0.22)';
   ctx.fillRect(0, sol, L, 2);
