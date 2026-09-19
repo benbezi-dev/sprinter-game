@@ -69,11 +69,11 @@
 export const NUITS = [
   { n: 1,  imparti: 15.00, retard: 14, nom: ['La ruelle', 'The alley'] },
   { n: 2,  imparti: 13.80, retard: 13, nom: ['Le portail', 'The gate'] },
-  { n: 3,  imparti: 12.80, retard: 12, nom: ['Les cypres', 'The cypresses'] },
+  { n: 3,  imparti: 12.80, retard: 12, nom: ['Les cyprès', 'The cypresses'] },
   { n: 4,  imparti: 12.00, retard: 12, nom: ['La lune rousse', 'The blood moon'] },
   { n: 5,  imparti: 11.30, retard: 11, nom: ['Le caveau', 'The vault'] },
   { n: 6,  imparti: 10.65, retard: 10, nom: ['Les corbeaux', 'The crows'] },
-  { n: 7,  imparti: 10.10, retard: 10, nom: ['La terre remuee', 'Turned earth'] },
+  { n: 7,  imparti: 10.10, retard: 10, nom: ['La terre remuée', 'Turned earth'] },
   { n: 8,  imparti: 9.60,  retard: 9,  nom: ['Le glas', 'The knell'] },
   { n: 9,  imparti: 9.35,  retard: 8,  nom: ['Les cendres', 'The ashes'] },
   { n: 10, imparti: 9.12,  retard: 7,  nom: ['Le souffle', 'The breath'] },

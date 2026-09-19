@@ -63,14 +63,14 @@ export const TENUES: readonly Scene[] = [
   {
     cle: 'facteur',
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
-    titre: ['LA TOURNEE', 'THE ROUND'],
+    titre: ['LA TOURNÉE', 'THE ROUND'],
     lignes: [
       ['Le facteur du quartier avait un chien.', 'The local postman had a dog.'],
-      ['Pendant six ans, il a distribue le courrier en marchant.',
+      ['Pendant six ans, il a distribué le courrier en marchant.',
        'For six years he delivered the mail at walking pace.'],
-      ['Depuis cette nuit-la, il fait sa tournee en quatre minutes.',
+      ['Depuis cette nuit-là, il fait sa tournée en quatre minutes.',
        'Since that night he does the whole round in four minutes.'],
-      ['La poste l\'a promu. Il n\'a jamais explique pourquoi.',
+      ['La poste l\'a promu. Il n\'a jamais expliqué pourquoi.',
        'The post office promoted him. He never explained why.'],
     ],
   },
@@ -79,11 +79,11 @@ export const TENUES: readonly Scene[] = [
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
     titre: ['LE RADAR', 'THE SPEED CAMERA'],
     lignes: [
-      ['Le radar de l\'avenue l\'a flashe a 2 h 40 du matin.',
+      ['Le radar de l\'avenue l\'a flashé à 2 h 40 du matin.',
        'The camera on the avenue flashed him at 2:40 in the morning.'],
-      ['Le dossier a ete classe : pas de plaque d\'immatriculation.',
+      ['Le dossier a été classé : pas de plaque d\'immatriculation.',
        'The case was dropped: no licence plate.'],
-      ['Il a demande un tirage. Il l\'a fait encadrer.',
+      ['Il a demandé un tirage. Il l\'a fait encadrer.',
        'He asked for a print. He had it framed.'],
       ['C\'est le seul document au monde qui dise ce qu\'il vaut.',
        'It is the only document in the world that states what he is worth.'],
@@ -94,13 +94,13 @@ export const TENUES: readonly Scene[] = [
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
     titre: ['LA BANDE', 'THE TAPE'],
     lignes: [
-      ['Le gardien du cimetiere a revu la video du portail.',
+      ['Le gardien du cimetière a revu la vidéo du portail.',
        'The cemetery keeper reviewed the footage from the gate.'],
-      ['Il a d\'abord cru a un defaut de compression.',
+      ['Il a d\'abord cru à un défaut de compression.',
        'At first he assumed it was a compression glitch.'],
-      ['Il l\'a montree a son fils, qui a dit : « papa, c\'est un monsieur ».',
+      ['Il l\'a montrée à son fils, qui a dit : « papa, c\'est un monsieur ».',
        'He showed his son, who said: "dad, that\'s a man".'],
-      ['Il a demissionne le lendemain matin.', 'He resigned the next morning.'],
+      ['Il a démissionné le lendemain matin.', 'He resigned the next morning.'],
     ],
   },
   {
@@ -108,12 +108,12 @@ export const TENUES: readonly Scene[] = [
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
     titre: ['LE 7 H 12', 'THE 7:12'],
     lignes: [
-      ['Il courait apres le bus de 7 h 12 depuis onze ans.',
+      ['Il courait après le bus de 7 h 12 depuis onze ans.',
        'He had been running for the 7:12 bus for eleven years.'],
-      ['Il ne l\'avait jamais attrape une seule fois.',
+      ['Il ne l\'avait jamais attrapé une seule fois.',
        'He had never once caught it.'],
-      ['Cette nuit-la, il a double le bus.', 'That night, he overtook the bus.'],
-      ['Puis le suivant. Puis un scooter. Puis il a continue a pied.',
+      ['Cette nuit-là, il a doublé le bus.', 'That night, he overtook the bus.'],
+      ['Puis le suivant. Puis un scooter. Puis il a continué à pied.',
        'Then the next one. Then a scooter. Then he just kept going.'],
     ],
   },
@@ -122,13 +122,13 @@ export const TENUES: readonly Scene[] = [
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
     titre: ['LA CANDIDATURE', 'THE APPLICATION'],
     lignes: [
-      ['Le club d\'athletisme refusait ses dossiers depuis quatre ans.',
+      ['Le club d\'athlétisme refusait ses dossiers depuis quatre ans.',
        'The athletics club had turned him down four years running.'],
-      ['« Monsieur, on ne recrute plus au-dela de trente ans. »',
+      ['« Monsieur, on ne recrute plus au-delà de trente ans. »',
        '"Sir, we no longer recruit over the age of thirty."'],
-      ['Il s\'est presente un mardi soir, un chien noir a six metres derriere.',
+      ['Il s\'est présenté un mardi soir, un chien noir à six mètres derrière.',
        'He turned up on a Tuesday evening, a black dog six metres behind him.'],
-      ['Le club a cree une categorie.', 'The club created a new category.'],
+      ['Le club a créé une catégorie.', 'The club created a new category.'],
     ],
   },
   {
@@ -136,13 +136,13 @@ export const TENUES: readonly Scene[] = [
     sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
     titre: ['CE QU\'ON LUI DISAIT', 'WHAT HE HAD BEEN TOLD'],
     lignes: [
-      ['Toute sa vie, on lui avait dit qu\'il etait lent.',
+      ['Toute sa vie, on lui avait dit qu\'il était lent.',
        'All his life he had been told he was slow.'],
-      ['Son professeur de sport le disait. Son pere le disait.',
+      ['Son professeur de sport le disait. Son père le disait.',
        'His PE teacher said it. His father said it.'],
       ['Le molosse, lui, n\'a rien dit du tout.',
        'The hound, for its part, said nothing at all.'],
-      ['Il a simplement couru tres vite. Et ca n\'a pas suffi.',
+      ['Il a simplement couru très vite. Et ça n\'a pas suffi.',
        'It simply ran very fast. And it was not enough.'],
     ],
   },
@@ -162,13 +162,13 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE MOLLET GAUCHE', 'THE LEFT CALF'],
     lignes: [
-      ['La bete n\'a pris qu\'une bouchee, et elle a bien choisi :',
+      ['La bête n\'a pris qu\'une bouchée, et elle a bien choisi :',
        'The beast took a single bite, and it chose well:'],
       ['le mollet gauche. Celui qui poussait.',
        'the left calf. The one that pushed.'],
       ['Il court toujours. Il tire un peu sur la droite.',
        'He still runs. He pulls slightly to the right.'],
-      ['On l\'a retrouve trois jours plus tard dans un rond-point.',
+      ['On l\'a retrouvé trois jours plus tard dans un rond-point.',
        'They found him three days later, circling a roundabout.'],
     ],
   },
@@ -179,11 +179,11 @@ export const MORSURES: readonly Scene[] = [
     lignes: [
       ['Le molosse lui a pris l\'auriculaire de la main gauche.',
        'The hound took the little finger of his left hand.'],
-      ['« Un detail », a dit le medecin des urgences.',
+      ['« Un détail », a dit le médecin des urgences.',
        '"A detail," said the doctor in A&E.'],
-      ['Il ne sait toujours pas boire un cafe sans lever le petit doigt.',
+      ['Il ne sait toujours pas boire un café sans lever le petit doigt.',
        'He still cannot drink a coffee without raising his little finger.'],
-      ['Il ne l\'a plus. Le geste, lui, est reste.',
+      ['Il ne l\'a plus. Le geste, lui, est resté.',
        'He no longer has it. The gesture stayed.'],
     ],
   },
@@ -192,13 +192,13 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE SHORT', 'THE SHORTS'],
     lignes: [
-      ['La gueule s\'est refermee sur le short, et non sur la jambe.',
+      ['La gueule s\'est refermée sur le short, et non sur la jambe.',
        'The jaws closed on the shorts, not on the leg.'],
-      ['Il a franchi la ligne d\'arrivee. Il l\'a franchie le premier.',
+      ['Il a franchi la ligne d\'arrivée. Il l\'a franchie le premier.',
        'He crossed the finish line. He crossed it first.'],
-      ['Les commissaires ont refuse d\'homologuer le chrono.',
+      ['Les commissaires ont refusé d\'homologuer le chrono.',
        'The officials refused to ratify the time.'],
-      ['Le reglement est tres clair au sujet de la tenue.',
+      ['Le règlement est très clair au sujet de la tenue.',
        'The rulebook is extremely clear on the subject of kit.'],
     ],
   },
@@ -207,13 +207,13 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['SON OMBRE', 'HIS SHADOW'],
     lignes: [
-      ['La bete n\'a mordu aucun morceau de lui.',
+      ['La bête n\'a mordu aucun morceau de lui.',
        'The beast did not bite any part of him.'],
-      ['Elle a happe son ombre, et elle l\'a emportee.',
+      ['Elle a happé son ombre, et elle l\'a emportée.',
        'It snapped up his shadow, and carried it off.'],
       ['Depuis, il marche en plein soleil sans rien projeter au sol.',
        'Since then he walks in full sun and casts nothing on the ground.'],
-      ['Personne ne l\'a jamais remarque. C\'est ca, le pire.',
+      ['Personne ne l\'a jamais remarqué. C\'est ça, le pire.',
        'Nobody has ever noticed. That is the worst part.'],
     ],
   },
@@ -222,11 +222,11 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LA FIN DE SON NOM', 'THE END OF HIS NAME'],
     lignes: [
-      ['Ce qu\'il a laisse cette nuit-la n\'etait pas un membre.',
+      ['Ce qu\'il a laissé cette nuit-là n\'était pas un membre.',
        'What he left behind that night was not a limb.'],
-      ['C\'etait la seconde moitie de son nom de famille.',
+      ['C\'était la seconde moitié de son nom de famille.',
        'It was the second half of his surname.'],
-      ['Il s\'appelle desormais Jean-Pierre Cour.',
+      ['Il s\'appelle désormais Jean-Pierre Cour.',
        'His name is now Jean-Pierre Brave.'],
       ['Il s\'appelait Jean-Pierre Courageux.',
        'It used to be Jean-Pierre Bravery.'],
@@ -237,12 +237,12 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE TALON DROIT', 'THE RIGHT HEEL'],
     lignes: [
-      ['Le molosse a emporte le talon droit.',
+      ['Le molosse a emporté le talon droit.',
        'The hound took the right heel.'],
-      ['Chez un sprinteur, le talon droit ne sert presque a rien.',
+      ['Chez un sprinteur, le talon droit ne sert presque à rien.',
        'On a sprinter, the right heel is of almost no use at all.'],
       ['Presque.', 'Almost.'],
-      ['Il aura mis douze secondes a apprendre ce mot-la.',
+      ['Il aura mis douze secondes à apprendre ce mot-là.',
        'It took him twelve seconds to learn that word.'],
     ],
   },
@@ -251,12 +251,12 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['SES DIMANCHES', 'HIS SUNDAYS'],
     lignes: [
-      ['Elle ne lui a arrache aucun morceau de viande.',
+      ['Elle ne lui a arraché aucun morceau de viande.',
        'It did not tear off a single piece of him.'],
       ['Elle a pris ses dimanches.', 'It took his Sundays.'],
       ['Il travaille depuis sept jours sur sept, sans savoir pourquoi.',
        'He has worked seven days a week ever since, without knowing why.'],
-      ['Le contrat etait oral. Il n\'y a aucun recours.',
+      ['Le contrat était oral. Il n\'y a aucun recours.',
        'The contract was verbal. There is no appeal.'],
     ],
   },
@@ -265,13 +265,13 @@ export const MORSURES: readonly Scene[] = [
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['L\'OREILLE GAUCHE', 'THE LEFT EAR'],
     lignes: [
-      ['Il a perdu l\'oreille gauche entre la sixieme et la septieme tombe.',
+      ['Il a perdu l\'oreille gauche entre la sixième et la septième tombe.',
        'He lost his left ear between the sixth and the seventh grave.'],
-      ['Il l\'a cherchee deux heures, avec une lampe de poche.',
+      ['Il l\'a cherchée deux heures, avec une lampe de poche.',
        'He searched for two hours with a torch.'],
-      ['Il l\'a retrouvee. Elle ecoutait encore.',
+      ['Il l\'a retrouvée. Elle écoutait encore.',
        'He found it. It was still listening.'],
-      ['Il a prefere la laisser la ou elle etait.',
+      ['Il a préféré la laisser là où elle était.',
        'He decided to leave it where it was.'],
     ],
   },
@@ -327,7 +327,18 @@ export function peindreLaScene(
 
   // LA LUNE, enorme et basse. Elle sert de projecteur : tout ce qui est devant
   // elle devient noir, ce qui est exactement le contre-jour qu'on cherche.
-  const lx = L * 0.74, ly = sol - H * 0.34, lr = Math.min(L, H) * 0.19;
+  //
+  // ELLE EST A GAUCHE, ET LES DEUX RAISONS SONT VENUES DE L'ECRAN.
+  //
+  // Posee a droite, elle ne servait a rien : les personnages etaient a gauche,
+  // donc personne n'etait en contre-jour, et le mot « contre-jour » ne
+  // decrivait plus que l'intention. Et en paysage, la carte de texte occupe
+  // toute la moitie droite (voir FinDeLaNuit) : la lune se retrouvait derriere
+  // elle, c'est-a-dire nulle part.
+  //
+  // A gauche, elle tombe dans la seule zone libre des deux orientations, et
+  // les silhouettes se decoupent dessus — ce qui etait le but depuis le debut.
+  const lx = L * 0.24, ly = sol - H * 0.36, lr = Math.min(L, H) * 0.19;
   const halo = ctx.createRadialGradient(lx, ly, lr * 0.7, lx, ly, lr * 3.1);
   halo.addColorStop(0, 'rgba(255,196,112,0.30)');
   halo.addColorStop(1, 'rgba(255,196,112,0)');
@@ -385,15 +396,20 @@ export function peindreLaScene(
 
   // LES DEUX SILHOUETTES. L'homme a gauche, la bete derriere lui, toutes deux
   // en noir plein sur la lune.
+  // Places pour que l'un des deux passe DEVANT la lune : le coureur qu'on
+  // poursuit, et la bete qui hurle. C'est la seule chose que cette image doit
+  // faire lire en une demi-seconde.
   const cycle = (t * (mordu ? 1.1 : 3.4)) % 1;
   ctx.fillStyle = 'rgb(5,5,8)';
   ctx.strokeStyle = 'rgb(5,5,8)';
   if (mordu) {
-    silhouetteAssise(ctx, L * 0.62, sol, m, t);
-    silhouetteTombee(ctx, L * 0.40, sol, m, t);
+    silhouetteAssise(ctx, L * 0.27, sol, m, t);
+    silhouetteTombee(ctx, L * 0.11, sol, m, t);
   } else {
-    silhouetteChien(ctx, L * 0.30, sol, m, cycle);
-    silhouetteCoureur(ctx, L * 0.54, sol, m, cycle);
+    // La bete garde une longueur de queue de marge sur le bord : posee plus a
+    // gauche, elle se faisait couper en deux par le cadre.
+    silhouetteChien(ctx, L * 0.09, sol, m, cycle);
+    silhouetteCoureur(ctx, L * 0.29, sol, m, cycle);
   }
 }
 

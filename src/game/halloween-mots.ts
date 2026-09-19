@@ -18,9 +18,9 @@ type Paire = [string, string];
 
 const MOTS: Record<string, Paire> = {
   // --- la banderole de l'accueil
-  hw_sur:        ['EDITION LIMITEE', 'LIMITED EDITION'],
+  hw_sur:        ['ÉDITION LIMITÉE', 'LIMITED EDITION'],
   hw_titre:      ['La nuit du molosse', "The hound's night"],
-  hw_sous:       ['treize nuits, un chien, et un chrono a l\'envers',
+  hw_sous:       ['treize nuits, un chien, et un chrono à l\'envers',
                   'thirteen nights, one hound, and a clock running backwards'],
   hw_courir:     ['ENTRER', 'ENTER'],
   hw_reprendre:  ['REPRENDRE', 'RESUME'],
@@ -30,16 +30,16 @@ const MOTS: Record<string, Paire> = {
   hw_nuit_n:     ['NUIT {n}', 'NIGHT {n}'],
   hw_imparti:    ['{s} s pour passer', '{s}s to get through'],
   hw_meilleur:   ['ton chrono : {s} s', 'your time: {s}s'],
-  hw_verrouille: ['tiens la nuit precedente', 'hold the previous night first'],
+  hw_verrouille: ['tiens la nuit précédente', 'hold the previous night first'],
   hw_tenue:      ['TENUE', 'HELD'],
   hw_partir:     ['PARTIR', 'GO'],
   hw_fermer:     ['PLUS TARD', 'LATER'],
 
   // --- la regle, dite une fois, sur l'ecran d'entree
-  hw_regle_titre: ['LA REGLE', 'THE RULE'],
+  hw_regle_titre: ['LA RÈGLE', 'THE RULE'],
   hw_regle: [
-    'Un molosse part derriere toi, et il franchira la ligne d\'arrivee a la seconde pres. '
-    + 'Passe-la avant lui. Le chrono en haut de l\'ecran ne compte pas ce que tu as couru : '
+    'Un molosse part derrière toi, et il franchira la ligne d\'arrivée à la seconde près. '
+    + 'Passe-la avant lui. Le chrono en haut de l\'écran ne compte pas ce que tu as couru : '
     + 'il compte ce qu\'il te reste.',
     'A hound starts behind you, and it will cross the finish line on the exact second. '
     + 'Get there first. The clock at the top of the screen does not count what you have run: '
@@ -52,7 +52,7 @@ const MOTS: Record<string, Paire> = {
   hw_dans_lecou: ['DANS TON COU', 'ON YOUR HEELS'],
 
   // --- apres la course
-  hw_passe:      ['TU ES PASSE', 'YOU MADE IT'],
+  hw_passe:      ['TU ES PASSÉ', 'YOU MADE IT'],
   hw_mordu:      ['IL T\'A EU', 'IT GOT YOU'],
   hw_chrono:     ['{s} s', '{s}s'],
   hw_marge:      ['{s} s d\'avance sur lui', '{s}s ahead of it'],
@@ -60,8 +60,8 @@ const MOTS: Record<string, Paire> = {
   hw_suivante:   ['NUIT SUIVANTE', 'NEXT NIGHT'],
   hw_encore:     ['ENCORE', 'AGAIN'],
   hw_sortir:     ['SORTIR', 'LEAVE'],
-  hw_toutes:     ['LES TREIZE NUITS SONT TOMBEES', 'ALL THIRTEEN NIGHTS ARE DOWN'],
-  hw_toutes_sous: ['Le cimetiere reste ouvert. Le chien aussi.',
+  hw_toutes:     ['LES TREIZE NUITS SONT TOMBÉES', 'ALL THIRTEEN NIGHTS ARE DOWN'],
+  hw_toutes_sous: ['Le cimetière reste ouvert. Le chien aussi.',
                    'The cemetery stays open. So does the hound.'],
   hw_suite:      ['toucher pour continuer', 'tap to continue'],
 };
