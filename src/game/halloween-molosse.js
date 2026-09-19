@@ -173,10 +173,33 @@ export function molosseDe(chasse) {
       if (g[0] < -marge || g[0] > G.VW + marge ||
           g[1] < -marge || g[1] > G.VH + marge) return vide;
 
+      // LE SENS DE LA COURSE, MESURE ET NON SUPPOSE.
+      //
+      // La bete etait peinte tournee vers la droite, en dur. Or la projection
+      // du jeu envoie la course vers le HAUT-GAUCHE de l'ecran : on le
+      // verifie en projetant deux points de la piste, trente et trente-cinq
+      // metres, et en comparant — cent quarante-cinq pixels vers la gauche.
+      // Le molosse a donc couru a reculons depuis le premier jour, museau en
+      // arriere et queue devant, et ca ne s'est pas vu tout de suite parce
+      // qu'une silhouette noire qui galope se lit mal a trente pixels le
+      // metre.
+      //
+      // On projette donc un point quelques metres plus loin sur la meme
+      // trajectoire : le signe de l'ecart horizontal dit de quel cote la bete
+      // regarde. Quatre metres, parce qu'en virage un pas plus court donne un
+      // ecart trop petit pour etre lu de facon stable.
+      const q2 = T.pos(Math.min(d + 4, T.total + 28), G.player.lane);
+      const g2 = ground(q2[0], q2[1]);
+      const dx = g2[0] - g[0];
+
       piece.profondeur = depthOf(q[0], q[1]);
       piece.x = g[0];
       piece.y = g[1];
       piece.m = m;
+      // Sur une trajectoire verticale a l'ecran l'ecart est nul et le signe
+      // n'existe pas : on garde alors le sens precedent plutot que de
+      // retourner la bete d'un coup.
+      piece.sens = dx < -0.001 ? -1 : dx > 0.001 ? 1 : (piece.sens || 1);
       return liste;
     },
 
@@ -184,8 +207,16 @@ export function molosseDe(chasse) {
     dessiner(ctx, api, pc) {
       const { G } = api;
       const m = pc.m;
-      const x = pc.x, y = pc.y;
       const t = G.elapsed || 0;
+      // TOUT LE DESSIN QUI SUIT REGARDE VERS LES X POSITIFS, et le miroir
+      // s'occupe du reste. C'est ce qui garde le trace lisible : on peint une
+      // bete tournee vers l'avant, une fois, et le jour ou une epreuve se
+      // courra dans l'autre sens — un virage, un retour — elle se retournera
+      // toute seule.
+      ctx.save();
+      ctx.translate(pc.x, pc.y);
+      if (pc.sens < 0) ctx.scale(-1, 1);
+      const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
       // le temps donnerait la meme foulee a l'arret et a pleine vitesse ; cale
@@ -209,8 +240,6 @@ export function molosseDe(chasse) {
       // l'ecran : c'est le sens ou courent tous les athletes du jeu.
       const avant = x + LONG * 0.5 * m;
       const arriere = x - LONG * 0.5 * m;
-
-      ctx.save();
 
       // L'OMBRE D'ABORD. Elle se resserre quand la bete decolle : une ombre
       // qui ne bouge pas fait flotter l'animal a dix centimetres du sol.
