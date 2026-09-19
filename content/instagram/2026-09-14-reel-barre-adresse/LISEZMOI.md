@@ -32,7 +32,8 @@ pas « du premier caractère tapé ». `legende.txt` est écrite comme cela.
 | durée réelle du fichier | **24,72 s** |
 | chronomètre à l'arrêt | **23,33 s** |
 | chrono de la course, lu à l'écran du jeu | **8,99 s** |
-| poids · format | 13,74 Mo · VP8/WebM, 1080 × 1920, 25 i/s |
+| à poster | **`video.mp4`** — H.264 High, 1080 × 1920, 30 i/s, 8,30 Mo |
+| sortie brute | `video.webm` — VP8, 25 i/s, 13,74 Mo |
 | accueil atteint | 6,9 s après l'ouverture |
 | coup de pistolet | 11,2 s |
 
@@ -45,8 +46,9 @@ Le dossier :
 
 | Fichier | Ce que c'est |
 |---|---|
-| `video.webm` | **la vidéo**, 24,72 s, un plan, capture d'écran — *non versionnée* |
-| `couverture.png` | 1080 × 1920, le chronomètre arrêté sur 23,33 s — *non versionnée* |
+| `video.mp4` | **la vidéo à poster**, H.264, 24,73 s — *non versionnée* |
+| `video.webm` | la sortie brute de l'enregistreur, VP8 — *non versionnée* |
+| `couverture.jpg` · `.png` | 1080 × 1920, le chronomètre arrêté sur 23,33 s — *non versionnées* |
 | `sous-titres.srt` | les deux cartons, aux temps réels du fichier |
 | `legende.txt` | la légende, les deux chiffres mesurés dedans |
 | `filmer-la-demonstration.mjs` | ce qui a produit la vidéo, et qui la refait |
@@ -56,6 +58,30 @@ Le dossier :
 | `banc-essai.mjs` | la mire de substitution et les relevés, appelée par le pilote |
 | `legende-modele.txt` | la légende, ses deux trous et les mots bannis |
 | `sous-titres-modele.srt` | la structure du SRT — le monteur écrit le vrai |
+
+### Le format, et deux pièges d'Instagram
+
+**Instagram n'accepte pas le WebM.** L'enregistreur sort du VP8/WebM — c'est le
+seul format que le ffmpeg livré avec le navigateur de test sait écrire. La
+conversion est donc une étape obligatoire, et elle demande un vrai ffmpeg
+(`npm install ffmpeg-static` suffit, le binaire porte libx264) :
+
+```bash
+FF=node_modules/ffmpeg-static/ffmpeg
+"$FF" -y -i video.webm -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
+  -c:v libx264 -profile:v high -level 4.0 -pix_fmt yuv420p -crf 20 -maxrate 8M -bufsize 12M \
+  -r 30 -vf "scale=1080:1920:flags=lanczos" -c:a aac -b:a 128k -shortest \
+  -movflags +faststart video.mp4
+```
+
+Deux détails de cette commande ne sont pas décoratifs :
+
+- **`anullsrc` ajoute une piste audio silencieuse.** Un reel sans AUCUNE piste
+  audio se dépose mal — l'envoi reste bloqué ou le fichier est refusé. Une piste
+  muette coûte deux kilobits par seconde et évite le problème. Ce reel-ci est
+  muet par nature : c'est une capture d'écran, et le jeu ne sonne pas.
+- **`-movflags +faststart`** remonte l'index en tête de fichier. Sans lui, la
+  lecture ne démarre qu'une fois tout le fichier reçu.
 
 ### Pourquoi la vidéo n'est pas dans le dépôt
 
