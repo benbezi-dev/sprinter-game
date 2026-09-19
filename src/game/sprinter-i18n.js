@@ -694,10 +694,6 @@
     // ligne dit ce que le code fait — et elle le CONSTATE, comme la charte le
     // demande. Ni « essaie », ni « à toi de jouer » : celui qui regarde décide.
     carton_defi:     ['CODE DU DÉFI', 'CHALLENGE CODE'],
-    // La signature du pied, a droite. La meme que celle de l'affiche
-    // partageable (`poserPied`, trace-affiche.js) : les deux visuels sortent
-    // du meme jeu et se croisent dans le meme fil.
-    carton_pied:     ['JEU DE SPRINT', 'SPRINT GAME'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
     live_vs:         ['en direct contre {n}', 'live against {n}'],
     live_gap:        ['{s} s d’écart', '{s} s apart'],

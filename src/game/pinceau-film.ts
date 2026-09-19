@@ -63,7 +63,17 @@ export const MD = 768;
 /* -------------------------------------------------------------- le pinceau */
 
 export type Ecriture = {
-  taille: number; gras?: number; police?: string; couleur?: string;
+  taille: number; gras?: number; police?: string;
+  /**
+   * Une couleur, ou un degrade.
+   *
+   * Le carton de fin ecrit son chrono dans le meme degrade or-vers-orange que
+   * les cartes de communication, et un canvas prend un `CanvasGradient` la ou
+   * il prend une couleur. Le degrade est construit par l'appelant, aux
+   * coordonnees du texte : un degrade se pose dans l'espace du canvas, pas
+   * dans celui de la lettre.
+   */
+  couleur?: string | CanvasGradient;
   aligne?: CanvasTextAlign; espace?: number; alpha?: number; ombre?: boolean;
 };
 
@@ -129,7 +139,8 @@ export function boite(ctx: CanvasRenderingContext2D, x: number, y: number,
 }
 
 export function remplir(ctx: CanvasRenderingContext2D, x: number, y: number,
-                        l: number, h: number, r: number, fond: string, filet?: string) {
+                        l: number, h: number, r: number,
+                        fond: string | CanvasGradient, filet?: string) {
   boite(ctx, x, y, l, h, r);
   ctx.fillStyle = fond; ctx.fill();
   if (filet) { ctx.strokeStyle = filet; ctx.lineWidth = 1; ctx.stroke(); }
