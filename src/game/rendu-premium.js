@@ -864,22 +864,32 @@
    * par ce qu'on laisse derriere soi. Qui porte quoi se dit a l'armement,
    * voir `poussee` ; ce que la machine peut s'en payer reste decide ici.
    *
-   * A QUEL PRIX, donc, et c'est ce qui decide du niveau de chacun. L'onde et
-   * l'aura sont une ellipse et un degrade : le prix d'une ombre, et elles
-   * suivent la regle des autres finitions — presentes des MOYEN, absentes en
-   * SOBRE. Les echos, eux, REDESSINENT LE COUREUR TROIS FOIS, facettes
-   * comprises : c'est l'effet le plus cher de ce fichier, au niveau de la
-   * poussiere des appuis, et il est reserve comme elle a PLEIN.
+   * A QUEL PRIX, donc — et la reponse a ete mesuree sur le jeu publie plutot
+   * que supposee, parce qu'une demi-journee a ete perdue a la supposer. Sur
+   * trois cents millisecondes de course, une image ordinaire demande environ
+   * deux cent cinquante remplissages. LE HALO EN AJOUTE DEUX : une ellipse au
+   * sol et un degrade sur le buste. LES TROIS COPIES DU COUREUR EN AJOUTENT
+   * QUATRE CENTS, soit a peu pres une image entiere de plus par image.
    *
-   * Un appareil qui n'y arrive plus garde donc sa recompense — il la recoit
-   * simplement sans les trois copies. C'est mieux que le tout ou rien : le
-   * geste reussi doit se voir, et il se voit d'abord a l'onde qui s'ouvre
-   * sous les appuis.
+   * Deux ordres de grandeur separent donc les deux moities de cet effet, et
+   * une seule merite qu'on la refuse. LE HALO NE SE REFUSE PLUS A PERSONNE :
+   * moins d'un pour cent d'une image, 0,85 s, au plus deux fois par course —
+   * le retirer a l'appareil qui peine ne lui rend rien de mesurable et lui
+   * prend sa recompense. Il l'a perdue le 19 septembre 2026 au matin et
+   * retrouvee le soir ; entre les deux, un appareil retombe en SOBRE ne
+   * recevait RIEN, ni au depart ni a la relance, et c'est exactement le
+   * contraire de ce que ce paragraphe disait vouloir.
    *
-   * LA MESURE PEUT TOMBER PENDANT L'IMPULSION, et c'est le sort de la rafale
-   * des tribunes juste au-dessus : il ne suffit pas de refuser d'armer. Les
-   * deux lectures de force relisent donc le niveau a chaque image, et ce qui
-   * etait allume s'eteint la ou la machine ne suit plus.
+   * LES COPIES, ELLES, SE NEGOCIENT : trois a PLEIN, deux a MOYEN, une en
+   * SOBRE. Un tiers du prix se paie la ou le tout ne se payait pas, et une
+   * copie derriere le coureur raconte deja une relance. Voir `echosCopies`.
+   *
+   * ET RIEN NE S'ETEINT PLUS SOUS LE JOUEUR. La mesure tombe PENDANT une
+   * course — c'est une moyenne glissante sur les temps d'image, et le depart
+   * est le moment le plus charge — si bien qu'une impulsion armee a PLEIN se
+   * coupait en plein vol. Une recompense qui s'evapore a mi-chemin est pire
+   * qu'une recompense absente. Ce que le niveau fait desormais pendant
+   * l'impulsion, il le fait sans la rompre : il retire une copie, pas l'effet.
    */
   const POUSS_DUREE = 0.85;
   let poussT0 = -1e9, poussF = 0, poussEchos = true;
@@ -898,7 +908,6 @@
    * qui ajoute, et un appel ecrit avant cette distinction garde son sens.
    */
   function poussee(force, echos) {
-    if (niveau < MOYEN) return;
     poussF = clamp(force, 0, 1);
     poussEchos = echos !== false;
     poussT0 = performance.now() / 1000;
@@ -919,9 +928,22 @@
     return t / POUSS_DUREE;
   }
 
-  /** Ou en est l'impulsion : elle monte d'un trait et retombe doucement. */
+  /**
+   * Ou en est l'impulsion : elle monte d'un trait et retombe doucement.
+   *
+   * LE NIVEAU NE SE LIT PAS ICI, ET C'EST UN RETOUR EN ARRIERE ASSUME. Le
+   * halo a porte la regle des autres finitions — absent en SOBRE — pendant
+   * une demi-journee, et c'etait une erreur de mesure autant que de jugement :
+   * il coute DEUX REMPLISSAGES par image, une ellipse et un degrade, sur
+   * environ deux cent cinquante qu'une image ordinaire demande. Moins d'un
+   * pour cent, le temps de 0,85 s, au plus deux fois par course.
+   *
+   * Le retirer a l'appareil qui peine ne lui rend donc rien de mesurable, et
+   * lui prend la seule chose que ce fichier existe pour donner : la preuve a
+   * l'ecran qu'un geste vient d'etre reussi. Ce qui se paie ici, ce sont les
+   * copies du coureur, et elles seules — voir `partEchos` et `echosCopies`.
+   */
   function partPoussee() {
-    if (niveau < MOYEN) return 0;
     const t = performance.now() / 1000 - poussT0;
     if (t < 0 || t > POUSS_DUREE) return 0;
     const u = t / POUSS_DUREE;
@@ -930,24 +952,40 @@
   }
 
   /**
-   * La meme impulsion, pour les trois copies du coureur — et zero partout
-   * ailleurs qu'a PLEIN, ou sur une impulsion qui ne les porte pas.
+   * La meme impulsion, pour les copies du coureur — et zero sur une impulsion
+   * qui ne les porte pas.
    *
-   * DEUX REFUS, ET ILS NE DISENT PAS LA MEME CHOSE. Le niveau est une
-   * question de prix : la machine ne tient pas trois dessins de coureur de
-   * plus, et l'onde lui reste. Le drapeau de l'impulsion est une question de
-   * sens : un depart canon ne les demande pas, meme sur un appareil qui les
-   * tiendrait sans peine. L'un varie d'une image a l'autre, l'autre est fixe
-   * pour toute la duree de l'impulsion.
-   *
-   * Le prix est lu ici plutot que decide chez l'appelant : le niveau de
-   * detail est la decision de cette couche-ci, et sprinter-app.js n'a pas a
-   * connaitre le prix de ce qu'il dessine. Il lui suffit de demander ce qu'il
-   * peut se payer.
+   * UN SEUL REFUS, ET IL EST DE SENS, PAS DE PRIX : un depart canon ne
+   * demande pas d'image remanente, meme sur un appareil qui la tiendrait sans
+   * peine. Le prix, lui, ne se refuse plus — il se negocie, voir
+   * `echosCopies` juste en dessous.
    */
   function partEchos() {
-    if (!poussEchos || niveau < PLEIN) return 0;
-    return partPoussee();
+    return poussEchos ? partPoussee() : 0;
+  }
+
+  /**
+   * COMBIEN DE COPIES L'APPAREIL PEUT S'EN PAYER : trois, deux, ou une.
+   *
+   * C'est ici que le niveau de detail se lit, et c'est la seule chose de cet
+   * effet qui lui reponde encore. Les copies sont ce qu'il a de cher — chacune
+   * redessine le coureur entier, facettes comprises, et les trois doublent a
+   * peu pres le nombre de remplissages d'une image. Une seule en coute donc
+   * le tiers.
+   *
+   * ET UN TIERS SE PAIE, LA OU LE TOUT NE SE PAYAIT PAS. Le refus net avait
+   * ceci de faux qu'il rendait l'effet binaire au pire endroit : l'appareil
+   * qui peine est celui a qui il faut le plus dire qu'il a bien joue, et il
+   * etait le seul a ne rien recevoir. Une copie derriere le coureur raconte
+   * deja une relance ; trois la racontent mieux, voila tout.
+   *
+   * Le nombre est decide ici plutot que chez l'appelant : le niveau de detail
+   * est la decision de cette couche-ci, et sprinter-app.js n'a pas a
+   * connaitre le prix de ce qu'il dessine. Il lui suffit de demander combien
+   * il peut se payer.
+   */
+  function echosCopies() {
+    return niveau >= PLEIN ? 3 : niveau >= MOYEN ? 2 : 1;
   }
 
   globalThis.RenduPremium = {
@@ -959,6 +997,6 @@
     mesurer, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
-    vignette, poussee, partPoussee, agePoussee, partEchos,
+    vignette, poussee, partPoussee, agePoussee, partEchos, echosCopies,
   };
 })();

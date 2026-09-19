@@ -6517,10 +6517,15 @@
       // armement. A zero, l'onde et l'aura restent, et c'est voulu — le halo
       // est ce que les deux gestes ont en commun.
       const echos = PREM().partEchos ? PREM().partEchos() : 0;
+      // ET COMBIEN DE COPIES, ce qui est l'autre question et la seule que le
+      // niveau de detail tranche encore : trois, deux ou une selon ce que la
+      // machine tient. On la pose plutot que d'y repondre — le prix d'un
+      // dessin est la decision de la couche de finition, pas d'ici.
+      const copies = PREM().echosCopies ? PREM().echosCopies() : 3;
       for (const [r, g2] of vis) {
         if (r !== G.player || r.isGhost) continue;
         drawOndePoussee(ctx, g2, m, pouss, age);
-        if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos);
+        if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos, copies);
       }
     }
     const coureur = ([r, g2, p]) => {
@@ -6619,11 +6624,19 @@
     ctx.restore();
   }
 
-  /** Les echos de poussee : le joueur, recule sur sa propre foulee. */
-  function drawPousseeTrail(ctx, r, m, force) {
+  /**
+   * Les echos de poussee : le joueur, recule sur sa propre foulee.
+   *
+   * `copies` vaut trois, deux ou une — ce que la machine tient. On compte a
+   * rebours depuis la plus lointaine, si bien que la copie perdue en premier
+   * est la plus pale et la plus loin derriere : celle qui manquera le moins.
+   * La plus proche du coureur, qui porte l'essentiel de la lecture, est la
+   * derniere a partir.
+   */
+  function drawPousseeTrail(ctx, r, m, force, copies) {
     const T = G.track;
     const dNow = r.d, strideNow = r.stride;
-    for (let k = 3; k >= 1; k--) {
+    for (let k = copies == null ? 3 : copies; k >= 1; k--) {
       const recul = Math.max(0.35, r.v * 0.055) * k;
       const d = dNow - recul;
       if (d <= 0) continue;

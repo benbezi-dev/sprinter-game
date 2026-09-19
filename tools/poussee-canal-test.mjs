@@ -29,12 +29,14 @@
 // facons, a niveau egal, et on verifie que la toile ne recoit pas la meme
 // chose : c'est le seul endroit ou le partage se voit sans jouer.
 //
-// ET ON LE FAIT A CHAQUE NIVEAU DE DETAIL, parce que l'effet n'est pas le
-// meme selon ce que l'appareil tient. A PLEIN, tout ; a MOYEN, l'onde et
-// l'aura sans les trois copies du coureur, qui sont ce que l'effet a de plus
-// cher ; en SOBRE, rien du tout, pas meme une impulsion armee. Un appareil en
-// difficulte garde donc sa recompense sans payer les echos — c'est la regle
-// de la poussiere des appuis, et l'effet la suit maintenant.
+// ET ON LE FAIT A CHAQUE NIVEAU DE DETAIL, parce que l'effet ne coute pas la
+// meme chose des deux cotes. LE HALO NE SE REFUSE A PERSONNE : deux
+// remplissages sur les quelque deux cent cinquante d'une image ordinaire, a
+// tous les niveaux, y compris en SOBRE — il l'a perdu une demi-journee, et
+// pendant cette demi-journee un appareil en difficulte ne recevait rien du
+// tout. LES COPIES DU COUREUR, elles, se negocient : trois a PLEIN, deux a
+// MOYEN, une en SOBRE, parce que les trois doublent a peu pres le nombre de
+// remplissages d'une image. Un tiers se paie la ou le tout ne se payait pas.
 //
 // Le declenchement, lui, vit dans le composant qui tient la boucle de rendu
 // (components/GameCanvas.tsx) et ne se joue pas sans navigateur : ce harnais
@@ -207,37 +209,53 @@ for (const canal of ['test', 'production']) {
      halo.vif.fills <= halo.repos.fills + 20,
      `${halo.vif.fills} contre ${halo.repos.fills}`);
 
-  // MOYEN : la recompense sans son prix. L'appareil ne tient plus la
-  // poussiere des appuis, il ne tiendra pas trois copies du coureur — mais le
-  // geste reussi doit continuer de se voir.
-  const moyen = await scene(A, prem, prem.MOYEN, true);
-  ok('a MOYEN l impulsion s arme encore', moyen.part > 0.02, String(moyen.part));
-  ok('et l onde comme l aura se dessinent', moyen.vif.onde && moyen.vif.aura);
-  ok('mais les echos ne redessinent rien', moyen.vif.fills <= moyen.repos.fills + 20,
-     `${moyen.vif.fills} contre ${moyen.repos.fills}`);
+  // LE HALO NE SE REFUSE A PERSONNE. C'est la lecon d'une demi-journee : un
+  // appareil retombe en SOBRE ne recevait RIEN, ni au depart ni a la relance,
+  // alors que le halo coute DEUX remplissages sur les quelque deux cent
+  // cinquante d'une image ordinaire. Le refuser ne rendait rien de mesurable
+  // a la machine et prenait au joueur la seule preuve qu'il avait bien joue.
+  // On le verifie donc aux DEUX niveaux bas, et on le verifie a l'image.
+  for (const [nom, niv] of [['a MOYEN', prem.MOYEN], ['en SOBRE', prem.SOBRE]]) {
+    const bas = await scene(A, prem, niv, false);
+    ok(`${nom} l impulsion s arme encore`, bas.part > 0.02, String(bas.part));
+    ok(`${nom} le halo se dessine`, bas.vif.onde && bas.vif.aura);
+    ok(`${nom} et il reste gratuit`, bas.vif.fills <= bas.repos.fills + 20,
+       `${bas.vif.fills} contre ${bas.repos.fills}`);
+  }
 
-  // SOBRE : rien, et rien d'arme. Ce niveau-la est celui d'un appareil qui ne
-  // rend deja plus les soixante images ; lui poser un effet de plus serait
-  // prendre au jeu ce qui lui reste.
-  const sobre = await scene(A, prem, prem.SOBRE, true);
-  ok('en SOBRE rien ne s arme', sobre.part === 0, String(sobre.part));
-  ok('et l image reste ordinaire', !sobre.vif.onde && !sobre.vif.aura);
+  // LES COPIES, ELLES, SE NEGOCIENT. Trois a PLEIN, deux a MOYEN, une en
+  // SOBRE : c'est la seule chose de cet effet qui reponde encore au niveau de
+  // detail, parce que c'est la seule qui coute. Un tiers du prix se paie la
+  // ou le tout ne se payait pas — et une copie derriere le coureur raconte
+  // deja une relance.
+  prem.niveau = prem.PLEIN;
+  ok('a PLEIN, trois copies', prem.echosCopies() === 3, String(prem.echosCopies()));
+  prem.niveau = prem.MOYEN;
+  ok('a MOYEN, deux', prem.echosCopies() === 2, String(prem.echosCopies()));
+  prem.niveau = prem.SOBRE;
+  ok('en SOBRE, une', prem.echosCopies() === 1, String(prem.echosCopies()));
+  const remanenceSobre = await scene(A, prem, prem.SOBRE, true);
+  ok('et la relance garde son image remanente',
+     remanenceSobre.vif.fills > remanenceSobre.repos.fills + 40,
+     `${remanenceSobre.vif.fills} contre ${remanenceSobre.repos.fills}`);
 
   // LA MESURE QUI TOMBE PENDANT L'IMPULSION. Elle tombe pendant une course et
   // non entre deux — c'est une moyenne glissante sur les temps d'image, et le
-  // depart est justement le moment le plus charge. Refuser d'armer ne suffit
-  // donc pas : ce qui est deja allume doit s'eteindre. La rafale des tribunes
-  // a la meme regle, et cet effet-ci la suit.
+  // depart est justement le moment le plus charge. Une impulsion armee a
+  // PLEIN se coupait donc en plein vol, et une recompense qui s'evapore a
+  // mi-chemin est pire qu'une recompense absente. Le niveau retire desormais
+  // une copie, pas l'effet.
   prem.niveau = prem.PLEIN;
   await attendre(950);
-  prem.poussee(1);
+  prem.poussee(1, true);
   await attendre(60);
   ok('armee a PLEIN, l impulsion est la', prem.partPoussee() > 0.02);
   prem.niveau = prem.SOBRE;
-  ok('le niveau tombe sous elle : elle s eteint', prem.partPoussee() === 0,
+  ok('le niveau tombe sous elle : elle tient', prem.partPoussee() > 0.02,
      String(prem.partPoussee()));
   const chute = image(A);
-  ok('et la toile ne garde rien', !chute.onde && !chute.aura);
+  ok('et la toile garde le halo', chute.onde && chute.aura);
+  ok('avec une copie au lieu de trois', prem.echosCopies() === 1);
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');
