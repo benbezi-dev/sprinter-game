@@ -6507,11 +6507,15 @@
     const pouss = PREM() && PREM().partPoussee ? PREM().partPoussee() : 0;
     if (pouss > 0.02 && G.player) {
       const age = PREM().agePoussee ? PREM().agePoussee() : -1;
-      // LES ECHOS SE DEMANDENT A PART. Ils redessinent le coureur trois fois,
-      // et la couche de finition les reserve aux appareils qui les tiennent —
-      // comme la poussiere des appuis. C'est elle qui sait ce qu'ils coutent,
-      // donc elle qui decide : on lit ce qu'on peut se payer, on ne teste pas
-      // son niveau d'ici. A zero, l'onde et l'aura restent, et c'est voulu.
+      // LES ECHOS SE DEMANDENT A PART, et pour deux raisons qui se lisent au
+      // meme endroit. Ils redessinent le coureur trois fois : la couche de
+      // finition les reserve aux appareils qui les tiennent, comme la
+      // poussiere des appuis, et c'est elle qui sait ce qu'ils coutent — on
+      // lit ce qu'on peut se payer, on ne teste pas son niveau d'ici. Et ils
+      // n'appartiennent qu'a UN des deux gestes : la transition parfaite les
+      // porte, le depart canon non, ce que l'impulsion sait depuis son
+      // armement. A zero, l'onde et l'aura restent, et c'est voulu — le halo
+      // est ce que les deux gestes ont en commun.
       const echos = PREM().partEchos ? PREM().partEchos() : 0;
       for (const [r, g2] of vis) {
         if (r !== G.player || r.isGhost) continue;

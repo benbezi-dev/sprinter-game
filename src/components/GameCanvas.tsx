@@ -378,17 +378,29 @@ export function GameCanvas() {
         // reaction parfaite au pistolet et la transition parfaite en sortie
         // de poussee. Les memes deux gestes que le HUD annonce en toutes
         // lettres — l'image dit desormais la meme chose que le texte.
+        //
+        // ET DEUX GESTES, DEUX SIGNATURES. Ils recevaient la meme image, si
+        // bien que la seconde recompense n'apprenait rien de plus que la
+        // premiere. Le depart canon se signe donc du HALO — l'onde qui
+        // s'ouvre sous ses appuis, l'aura sur son buste — et la transition
+        // parfaite y ajoute l'IMAGE REMANENTE, les trois copies du coureur
+        // derriere lui. Un declic contre une relance : ce qu'on laisse
+        // derriere soi appartient a celle qui relance.
+        //
+        // C'est ici que ca se dit, parce que c'est ici qu'on sait quel geste
+        // vient de tomber ; ce que la machine peut s'en payer reste la
+        // decision de la couche de finition, qui seule connait son prix.
         const p = enCourse ? G.player : null;
         if (!enCourse) { vuReaction = false; vuTrans = false; }
         else if (p && POUSSEE_OUVERTE) {
           if (!vuReaction && p.reaction !== null) {
             vuReaction = true;
             const seuil = SprinterApp.C.REACT_BONUS * 0.82;
-            if (!p.jumped && p.reactBonus > seuil) Prem.poussee(1);
+            if (!p.jumped && p.reactBonus > seuil) Prem.poussee(1, false);
           }
           if (!vuTrans && p.transGrade !== null) {
             vuTrans = true;
-            if (p.transGrade === 2) Prem.poussee(1);
+            if (p.transGrade === 2) Prem.poussee(1, true);
           }
         }
         // La vignette se resserre avec le coup de poussee, et avec lui seul.

@@ -849,6 +849,21 @@
    * celle des ECHOS, qui n'est pas la meme parce qu'ils ne coutent pas la
    * meme chose.
    *
+   * ET DEUX GESTES FONT DEUX SIGNATURES. Un depart canon et une transition
+   * parfaite ne se ressemblent pas — le premier est un declic sur un coup de
+   * feu, le second une relance tenue en sortie de poussee — et ils
+   * recevaient pourtant la meme image. La seconde recompense n'apprenait
+   * alors rien de plus que la premiere : deux gestes differents, un seul
+   * effet, et le joueur n'avait aucun moyen de lire lequel des deux venait de
+   * tomber.
+   *
+   * LE DEPART GARDE LE HALO : l'onde qui s'ouvre sous ses appuis et l'aura
+   * posee sur son buste, qui partent de la ligne au moment ou il la quitte.
+   * LA TRANSITION Y AJOUTE L'IMAGE REMANENTE, les trois copies du coureur
+   * derriere lui — elle recompense une relance, et une relance se raconte
+   * par ce qu'on laisse derriere soi. Qui porte quoi se dit a l'armement,
+   * voir `poussee` ; ce que la machine peut s'en payer reste decide ici.
+   *
    * A QUEL PRIX, donc, et c'est ce qui decide du niveau de chacun. L'onde et
    * l'aura sont une ellipse et un degrade : le prix d'une ombre, et elles
    * suivent la regle des autres finitions — presentes des MOYEN, absentes en
@@ -867,12 +882,25 @@
    * etait allume s'eteint la ou la machine ne suit plus.
    */
   const POUSS_DUREE = 0.85;
-  let poussT0 = -1e9, poussF = 0;
+  let poussT0 = -1e9, poussF = 0, poussEchos = true;
 
-  /** Arme le coup de vitesse. `force` vaut 1 pour un geste parfait. */
-  function poussee(force) {
+  /**
+   * Arme le coup de vitesse. `force` vaut 1 pour un geste parfait.
+   *
+   * `echos` dit si CETTE impulsion-ci porte les trois copies du coureur. Ce
+   * n'est pas une question de prix — le prix se regle plus bas, au niveau de
+   * detail, et cette couche-ci ne le delegue a personne — mais de sens : le
+   * depart canon se signe d'un halo, la transition parfaite d'un halo et
+   * d'une image remanente. Seul l'appelant sait quel geste vient de tomber.
+   *
+   * Par defaut l'impulsion les porte, pour que `poussee(1)` continue de
+   * vouloir dire « tout l'effet » : c'est l'appelant qui retire, jamais lui
+   * qui ajoute, et un appel ecrit avant cette distinction garde son sens.
+   */
+  function poussee(force, echos) {
     if (niveau < MOYEN) return;
     poussF = clamp(force, 0, 1);
+    poussEchos = echos !== false;
     poussT0 = performance.now() / 1000;
   }
 
@@ -903,15 +931,23 @@
 
   /**
    * La meme impulsion, pour les trois copies du coureur — et zero partout
-   * ailleurs qu'a PLEIN.
+   * ailleurs qu'a PLEIN, ou sur une impulsion qui ne les porte pas.
    *
-   * Elle est lue separement plutot que decidee chez l'appelant : le niveau de
+   * DEUX REFUS, ET ILS NE DISENT PAS LA MEME CHOSE. Le niveau est une
+   * question de prix : la machine ne tient pas trois dessins de coureur de
+   * plus, et l'onde lui reste. Le drapeau de l'impulsion est une question de
+   * sens : un depart canon ne les demande pas, meme sur un appareil qui les
+   * tiendrait sans peine. L'un varie d'une image a l'autre, l'autre est fixe
+   * pour toute la duree de l'impulsion.
+   *
+   * Le prix est lu ici plutot que decide chez l'appelant : le niveau de
    * detail est la decision de cette couche-ci, et sprinter-app.js n'a pas a
    * connaitre le prix de ce qu'il dessine. Il lui suffit de demander ce qu'il
    * peut se payer.
    */
   function partEchos() {
-    return niveau < PLEIN ? 0 : partPoussee();
+    if (!poussEchos || niveau < PLEIN) return 0;
+    return partPoussee();
   }
 
   globalThis.RenduPremium = {

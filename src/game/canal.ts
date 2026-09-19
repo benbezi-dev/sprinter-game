@@ -69,9 +69,11 @@ export const SERIE_OUVERTE = true;
 /**
  * Le coup de poussee : ce qui part du coureur quand il reussit son geste.
  *
- * Sa trainee, l'onde au sol sous ses appuis, l'aura sur son buste — le tout
- * le temps d'un tiers de seconde, sur une reaction parfaite au pistolet ou
- * une transition parfaite en sortie de poussee. Il remplace les trainees de
+ * L'onde au sol sous ses appuis et l'aura sur son buste — le halo — sur une
+ * reaction parfaite au pistolet ; les memes, plus sa trainee, sur une
+ * transition parfaite en sortie de poussee. Le tout le temps d'un tiers de
+ * seconde, et deux gestes qui ne se ressemblent pas ne se signent pas de la
+ * meme image. Il remplace les trainees de
  * vitesse qui barraient l'ecran des que le coureur passait les trois quarts
  * de son maximum : elles etaient la deux images sur trois, et des traits
  * blancs suspendus en l'air se lisaient comme du vent de face plutot que
