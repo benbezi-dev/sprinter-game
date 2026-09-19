@@ -25,6 +25,7 @@ Tout le reste est fait, et vérifié :
 |---|---|
 | `monteur-barre-adresse.html` | **la page de montage**, prête. Charge la prise, relève les deux repères image par image, incruste le chronomètre, pose les deux cartons, garde le son, enregistre, et écrit la vidéo, la couverture, le SRT et la légende |
 | `verifier-monteur.mjs` | le pilote qui prouve la chaîne sans prise : `node verifier-monteur.mjs` |
+| `reperer-le-chemin.mjs` | ouvre le jeu en émulation téléphone et vérifie le chemin de tournage écran par écran, avant chaque prise |
 | `banc-essai.mjs` | la mire de substitution et les relevés, appelée par le pilote |
 | `legende-modele.txt` | la légende, ses deux trous et les mots bannis |
 | `sous-titres-modele.srt` | la structure du SRT — le monteur écrit le vrai |
@@ -51,24 +52,69 @@ remet tout à sa place sur la machine de montage.
 
 ### Le chemin, à répéter trois fois avant de filmer
 
+Vérifié le 19 septembre 2026 en pilotant le jeu du dépôt, en émulation
+téléphone 390 × 844 au facteur 3.
+
 1. barre d'adresse vide, on tape `sprinter-game.com` **en entier** ;
-2. la page s'ouvre — logo, puis écran titre
-   (`01-ouverture-02-ecran-titre.png`) ;
-3. l'accueil (`-03-accueil.png`) ;
-4. JOUER, puis la première course (`-04-premiere-course.png`) ;
-5. À VOS MARQUES, le coup de pistolet, les deux touches, la ligne.
+2. la page s'ouvre — le logo se forme, puis l'écran titre, puis l'accueil ;
+3. sur l'accueil : **ONE SHOT**, puis **100 M**, puis **GO** ;
+4. le décompte part, huit couloirs, chrono à 0,00 ;
+5. les deux touches alternées, et la ligne.
 
-### Laquelle des deux ouvertures on montre
+**ONE SHOT, et surtout pas CARRIÈRE — qui est le mode sélectionné par
+défaut.** En carrière, le bouton s'appelle START et il n'ouvre pas la course :
+il ouvre « STAGE 1 — SCHOOL MEETING » et une carte d'adversaire (« THE ONE TO
+BEAT · NOAH PETIT · announced time: 12.80 s ») qu'il faut congédier en tapant
+deux fois. Plusieurs secondes perdues, et une carte de présentation à l'image
+là où le conducteur dit « la course part ». En ONE SHOT le bouton s'appelle
+**GO** et il mène directement à la ligne de départ.
 
-Au premier lancement, le jeu ouvre une visite guidée ; sur un navigateur déjà
-venu, non. **On tourne sur un navigateur déjà venu, sans visite guidée.** Deux
-raisons : le chemin de référence ci-dessus est celui-là, et la visite coûte des
-secondes à une démonstration dont le sujet est le temps.
+### L'état du navigateur : cinq panneaux à avoir déjà écartés
 
-Conséquence à tenir : un navigateur déjà venu **complète l'adresse** au bout de
-deux caractères. On tape quand même les dix-sept caractères sans toucher la
-suggestion. Le chronomètre part au premier caractère : accepter la complétion
-ferait gagner deux secondes et perdre la démonstration.
+Le conducteur parle d'une « visite guidée » au premier lancement. La lecture du
+code et la vérification à l'écran donnent plus précis, et plus gênant : sur un
+navigateur vierge, **cinq choses s'interposent**, dont deux sont
+rédhibitoires ici.
+
+| Ce qui s'ouvre | Marqueur qui l'éteint | Pourquoi ça tue la prise |
+|---|---|---|
+| le carrousel en cinq volets (ALTERNE, LE TOP 500, LE FANTÔME, EN DIRECT) | `sprinter_tour_vu` | un plein écran à refermer avant même l'accueil |
+| la bannière **INSTALLER LE JEU** | `sprinter_install_refuse` | **la légende dit « pas d'installation »** — le contraire à l'image |
+| la fenêtre de bienvenue (nom, pays, Instagram) | `sprinter_bienvenue_vue` | un formulaire, en plein milieu de la démonstration |
+| la question « tu veux apprendre le geste, ou tu cours ? » (carrière) | `sprinter_tuto_vu` | un panneau noir sur toute la surface, au moment du départ |
+| la même question en ONE SHOT | `sprinter_tuto_oneshot_vu` | idem, sur le mode qu'on tourne |
+
+Tous valent `'1'`, et tous se posent en **faisant une première visite avant de
+filmer et en fermant chaque panneau un par un**. C'est cela, « tourner sur un
+navigateur déjà venu » : pas un réglage, une répétition.
+
+La question du tutoriel ne se pose qu'une fois et **les deux réponses valent
+acceptation** — répondre « je cours » suffit, elle ne revient pas. À noter
+aussi : quand `localStorage` est inaccessible (navigation privée, stockage
+bloqué), le jeu considère tout comme déjà vu et n'ouvre rien. Une fenêtre
+privée est donc une seconde façon d'obtenir un écran propre — au prix de
+l'auto-complétion, qui disparaît aussi.
+
+**Ce qui reste à l'image et ne s'éteint pas :** la carte orange
+« SPECIAL EDITION — The Danube Stadium opens its gates · RUN THERE · last
+day » occupe le milieu de l'accueil. `sprinter_annonce_vue` ne la referme pas —
+essayé, elle revient. Ce n'est pas un défaut, c'est du contenu de jeu, mais
+elle porte **« last day »** : à regarder avant de filmer, pour ne pas publier
+un plan qui annonce une édition déjà close.
+
+### L'auto-complétion de la barre d'adresse
+
+Un navigateur déjà venu **complète l'adresse** au bout de deux caractères. On
+tape quand même les dix-sept caractères sans toucher la suggestion. Le
+chronomètre part au premier caractère : accepter la complétion ferait gagner
+deux secondes et perdre la démonstration.
+
+### Ce que cette vérification ne dit PAS
+
+Elle a tourné sur un serveur local, dans un conteneur sans tête. **Les durées
+qu'on y mesure ne sont pas celles d'un téléphone sur une vraie connexion**, et
+aucune ne doit être reprise nulle part. C'est précisément le travail du
+chronomètre incrusté : le seul chiffre qui vaille se mesure sur le rush.
 
 ### Le cadre
 
@@ -248,6 +294,9 @@ secondes sur 100 mètres.
 
 ### Le reste
 
+- [ ] les cinq panneaux écartés par une première visite, juste avant de filmer
+- [ ] le mode **ONE SHOT** sélectionné, pas CARRIÈRE
+- [ ] la carte « SPECIAL EDITION » de l'accueil : encore d'actualité ?
 - [ ] la prise tournée, entre 18 et 25 s, sans coupe
 - [ ] A et B relevés image par image, notés dans ce fichier
 - [ ] le journal de la page relu : format retenu, cadence, calage
@@ -284,7 +333,8 @@ sujet.
 |---|---|
 | le langage visuel, `s2`, `morceauxChrono`, `poserMorceaux` | `src/game/trace-affiche.js` |
 | la recherche du binaire de Chrome | `tools/chrome.mjs` |
-| le chemin d'ouverture, écran par écran | captures `01-ouverture-02…-04` (dossier `suivi/`, hors dépôt) |
+| le chemin d'ouverture, écran par écran | vérifié en pilotant le jeu du dépôt, le 19 septembre 2026 |
+| les marqueurs des cinq panneaux | `GameTour.tsx`, `InstallPrompt.tsx`, `Bienvenue.tsx`, `Tutorial.tsx`, `TitleScreen.tsx` |
 
 Rien de ce qui se dessine ne vient d'ailleurs que de `trace-affiche.js` : la
 composition est locale — les internes de la charte ne sont pas exportés — mais
