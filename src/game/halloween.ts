@@ -40,6 +40,7 @@
 
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
+import { molosseDe } from './halloween-molosse.js';
 
 /** Une nuit : ce qu'elle laisse comme temps, et d'ou part la bete. */
 export type Nuit = {
@@ -224,7 +225,15 @@ export function armerLaNuit(n: number) {
   // connaitre : un import de ce module depuis engine.ts ferait repartir tout le
   // mode dans le paquet public, ou il n'aurait rien a y faire une fois le
   // drapeau ferme. La dependance va donc dans l'autre sens.
-  if (G) { G.pasMolosse = pasDuMolosse; G.molosseMord = false; }
+  if (G) {
+    G.pasMolosse = pasDuMolosse;
+    G.molosseMord = false;
+    // Le dessin passe par le meme chemin que celui des haies : la bete se
+    // pose sur `G.obstacles`, et le rendu la range parmi les coureurs sans
+    // rien savoir d'elle. La place est libre — une nuit se court sur le 100 m
+    // plat, et le rangement des haies l'a videe a la construction.
+    G.obstacles = molosseDe(chasse);
+  }
 }
 
 /**
@@ -234,7 +243,14 @@ export function armerLaNuit(n: number) {
 export function rangerLaNuit() {
   chasse = null;
   const G = SprinterApp.G;
-  if (G) { G.pasMolosse = null; G.molosseMord = false; }
+  if (G) {
+    G.pasMolosse = null;
+    G.molosseMord = false;
+    // On ne rend la place que si c'est bien la bete qui l'occupe : une course
+    // de haies lancee entre-temps y aurait pose les siennes, et les effacer
+    // ici les ferait disparaitre de la piste.
+    if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
+  }
 }
 
 /**
