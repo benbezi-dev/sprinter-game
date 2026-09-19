@@ -1,14 +1,19 @@
-// HURDLERS, OUVERT SUR LE CANAL DE TEST ET LUI SEUL.
+// HURDLERS, OUVERT PARTOUT.
 //
-// Le drapeau HAIES_OUVERTES (game/canal.ts) se replie a la compilation. Comme
-// depart-test, ce harnais COMPILE le jeu une fois par canal et regarde ce que
-// chaque version fait du monde Hurdlers :
+// Ce harnais a d'abord servi a prouver le CONTRAIRE : que les haies ne
+// s'ouvraient que sur le canal de test, et que le build public les annoncait
+// « bientot ». Elles sont ouvertes a tout le monde depuis le 19 septembre
+// 2026, et il verifie donc maintenant que les deux canaux en disent la meme
+// chose — c'est-a-dire qu'aucun reste de garde ne s'est glisse quelque part.
 //
-//   - test : le monde bascule l'accueil de Sprinter sur les haies, et ses
-//     trois epreuves sont jouables ;
-//   - production : le monde reste l'accueil qui les annonce « bientot », et
-//     une course de haies lancee par un lien se court sans que cet accueil
-//     vienne se poser par-dessus.
+// On garde la compilation PAR CANAL, et ce n'est pas une precaution pour
+// rien : HAIES_OUVERTES se replie a la compilation, un seul `EST_TEST` oublie
+// dans une condition suffirait a redonner deux jeux differents sans que
+// personne ne s'en apercoive avant de l'ouvrir sur un telephone.
+//
+// Ce que les deux versions doivent faire : basculer l'accueil de Sprinter sur
+// les haies, rendre les trois epreuves jouables, et courir une course de haies
+// venue d'un lien en suivant l'epreuve.
 
 import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -64,29 +69,15 @@ function courseDeHaies(M) {
 
 const jouables = M => M.MONDES.hurdlers.disciplines.filter(d => d.jouable).length;
 
-titre('LE CANAL DE TEST');
-
-{
-  const M = await jeuDe('test');
+for (const canal of ['test', 'production']) {
+  titre(canal === 'test' ? 'LE CANAL DE TEST' : 'LE JEU PUBLIE');
+  const M = await jeuDe(canal);
   ok('les haies y sont ouvertes', M.HAIES_OUVERTES === true);
   ok('le monde Hurdlers y joue Hurdlers', M.jeuDuMonde('hurdlers') === 'hurdlers');
   ok('ses trois epreuves y sont jouables', jouables(M) === 3, `${jouables(M)}/3`);
   courseDeHaies(M);
   ok('une course de haies y arme les haies', M.haiesEnCours());
   ok('et ramene au monde Hurdlers', M.mondeCourant() === 'hurdlers', M.mondeCourant());
-}
-
-titre('LE JEU PUBLIE');
-
-{
-  const M = await jeuDe('production');
-  ok('les haies y sont fermees', M.HAIES_OUVERTES === false);
-  ok('le monde Hurdlers y reste Sprinter', M.jeuDuMonde('hurdlers') === 'sprinter');
-  ok('ses trois epreuves y sont annoncees, pas jouables', jouables(M) === 0, `${jouables(M)}/3`);
-  courseDeHaies(M);
-  ok('une course de haies venue d un lien se court quand meme', M.haiesEnCours());
-  ok('sans que l accueil « bientot » se pose par-dessus', M.mondeCourant() === 'sprinter',
-     M.mondeCourant());
   ok('le jeu suit l epreuve le temps de la course', M.jeuCourant() === 'hurdlers', M.jeuCourant());
 }
 

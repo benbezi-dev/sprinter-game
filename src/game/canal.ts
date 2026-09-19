@@ -105,16 +105,22 @@ export const DEPART_STARTER = EST_TEST;
  * HURDLERS SE JOUE. Le 100 m, le 110 m et le 400 m haies, dans l'enveloppe de
  * Sprinter (game/jeux.ts).
  *
- * Sur le canal de test d'abord, le temps de l'eprouver. Dans le build public, le monde Hurdlers reste ce qu'il etait : un accueil qui
- * annonce ses trois epreuves « bientot ». L'ouvrir a tout le monde se reduit a
- * ce `true`.
+ * OUVERT A TOUT LE MONDE LE 19 SEPTEMBRE 2026. Il a vecu deux jours sur le
+ * canal de test, le temps d'eprouver ce qui manquait : le bareme du 110 m,
+ * ecrit au pouce plutot que deduit des proportions de Sprinter, et le dernier
+ * plateau du 400 m, qui se serait sinon joue a un cheveu du record du monde
+ * (voir BAREME et BAREME_PROPRE dans game/haies).
  *
- * Le code des haies part quand meme dans le build public : la table des
- * courses les connait, parce qu'une quinzaine d'ecrans lisent
- * `RACES[cle].label` sans garde et qu'un lien de defi ou un duel de haies ne
- * doit pas les faire tomber. Ce drapeau ferme le chemin, pas le moteur.
+ * Le drapeau reste, et ne vaut plus `EST_TEST` : le remettre a `false` referme
+ * le monde sur son accueil « bientot » sans rien deranger d'autre. C'est la
+ * seule chose a faire si les haies devaient repartir.
+ *
+ * Le code des haies partait deja dans le build public : la table des courses
+ * les connait, parce qu'une quinzaine d'ecrans lisent `RACES[cle].label` sans
+ * garde et qu'un lien de defi ou un duel de haies ne doit pas les faire
+ * tomber. Ce drapeau fermait le chemin, pas le moteur.
  */
-export const HAIES_OUVERTES = EST_TEST;
+export const HAIES_OUVERTES = true;
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
@@ -132,12 +138,12 @@ export const HAIES_OUVERTES = EST_TEST;
  * n'attaque pas se percute.
  *
  * DRAPEAU SEPARE DE HAIES_OUVERTES, et c'est le but : les haies peuvent rester
- * ouvertes sur le canal de test pendant qu'on rend l'appel au moteur, et
- * inversement. La forme est celle du reste du fichier — une constante qui se
- * replie a la compilation, pour que le prototype ne parte pas dans le build
- * public.
+ * ouvertes pendant qu'on retouche l'appel, et inversement. Les deux ont ete
+ * ouverts le meme jour, le 19 septembre 2026 — ouvrir les haies sans rendre
+ * l'appel au joueur aurait publie precisement la version decrite ci-dessus,
+ * celle ou il ne saute pas.
  */
-export const APPEL_JOUEUR = EST_TEST;
+export const APPEL_JOUEUR = true;
 
 /**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
