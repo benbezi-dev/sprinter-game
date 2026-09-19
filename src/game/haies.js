@@ -118,15 +118,19 @@ const BAREME = [
  * comme une ligne droite : quinze foulees entre les haies au lieu de trois, une
  * fatigue qui deplace le compte d'appuis, et un jeu qui y va plus vite que
  * l'echelle ne le prevoit. Son dernier niveau est donc DONNE, comme les douze
- * nombres du 110 m l'ont ete : 42,00 a 43,50 s, decides au pouce.
+ * nombres du 110 m l'ont ete : 40,80 a 41,20 s, decides au pouce.
  *
  * Deduit du 110 m, il aurait valu 44,15 a 45,76 — a un cheveu du record du
  * monde (45,94), alors que Sprinter place ses ZEZE neuf pour cent dessous.
+ * Un premier passage l'avait pose a 42,00-43,50, et c'etait encore trop
+ * large : le jeu y descend a 40,13 s avec un doigt a huit frappes par
+ * seconde, si bien que le dernier plateau tombait sans qu'on l'ait cherche.
+ * La fourchette est desormais serree autour de ce que le jeu donne vraiment.
  *
  * L'index est celui du plateau, de 0 a 5.
  */
 const BAREME_PROPRE = {
-  '400h': { 5: [42.00, 43.50] },
+  '400h': { 5: [40.80, 41.20] },
 };
 
 /**
