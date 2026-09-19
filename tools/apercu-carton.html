@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu du carton de fin</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>body{margin:0;background:#14161f;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}
+h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8d93a8;margin:14px 16px 6px}
+.rang{display:flex;gap:16px;padding:0 16px 16px;align-items:flex-start;flex-wrap:wrap}
+figure{margin:0}figcaption{color:#6b7182;font-size:11px;margin-top:6px}
+canvas{display:block;border-radius:6px}</style>
+
+<h2>le carton pose — les trois formats ou le film sort</h2>
+<div class="rang">
+  <figure><canvas id="tel" width="405" height="720"></canvas>
+    <figcaption>telephone portrait · un defi releve</figcaption></figure>
+  <figure><canvas id="couche" width="720" height="405"></canvas>
+    <figcaption>telephone paysage · sans code</figcaption></figure>
+  <figure><canvas id="bureau" width="900" height="560"></canvas>
+    <figcaption>ordinateur · one shot a trois epreuves</figcaption></figure>
+</div>
+
+<h2>l'entree — le voile se pose sur les premiers 22 %</h2>
+<div class="rang" id="entree"></div>
+
+<script type="module">
+  // Le carton de fin, hors film et hors course : `carton-film.ts` ne lit que
+  // `SprinterApp.G`, on lui en pose donc un faux et on l'appelle a la main.
+  //
+  // Pourquoi une page plutot qu'un essai : le carton est du dessin. Une
+  // couleur trop sourde, un chrono qui deborde sur un 400 m haies, un pied
+  // qui touche la pastille — rien de tout cela ne se voit dans un test, et
+  // tout se voit ici en une seconde. Le mecanisme, lui, a le sien :
+  // `tools/carton-film-test.mjs`.
+  //
+  //     npx vite  puis  http://localhost:5173/tools/apercu-carton.html
+  import { SprinterApp } from '/src/game/engine.ts';
+  import { peindreLeCarton } from '/src/game/carton-film.ts';
+
+  // Un faux stade. Un fond uni ne dirait pas si le voile tient sur une piste
+  // claire — et c'est justement la que le texte devient illisible.
+  function stade(c, l, h) {
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#0b1020'); g.addColorStop(0.55, '#16233d'); g.addColorStop(1, '#8a4230');
+    c.fillStyle = g; c.fillRect(0, 0, l, h);
+    for (let i = 0; i < 9; i++) {
+      c.strokeStyle = 'rgba(255,255,255,0.5)'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(0, h * 0.58 + i * h * 0.05);
+      c.lineTo(l, h * 0.58 + i * h * 0.052); c.stroke();
+    }
+    c.fillStyle = '#E879F9'; c.fillRect(l * 0.42, h * 0.5, l * 0.05, h * 0.12);
+  }
+
+  const COURSES = {
+    defi:   { shotRaces: ['100'], raceKey: '100', runTime: 9.12,
+              player: { name: 'KENZA', finishTime: 9.12 }, challenge: { id: 'K7M2QX' } },
+    haies:  { shotRaces: ['400h'], raceKey: '400h', runTime: 51.78,
+              player: { name: 'KENZA', finishTime: 51.78 }, challenge: null },
+    triple: { shotRaces: ['100', '200', '400'], raceKey: '400', runTime: 63.45,
+              player: { name: 'KENZA', finishTime: 45.9 }, challenge: null },
+  };
+
+  function peindre(cv, course, avancement) {
+    const c = cv.getContext('2d');
+    stade(c, cv.width, cv.height);
+    SprinterApp.G = course;
+    peindreLeCarton(c, cv.width, cv.height, avancement);
+  }
+
+  await document.fonts.ready;
+  peindre(document.getElementById('tel'), COURSES.defi, 1);
+  peindre(document.getElementById('couche'), COURSES.haies, 1);
+  peindre(document.getElementById('bureau'), COURSES.triple, 1);
+
+  // La montee, image par image : c'est la seule facon de voir si le voile
+  // arrive trop vite ou trop lentement.
+  for (const a of [0.04, 0.09, 0.15, 0.22, 0.4]) {
+    const f = document.createElement('figure');
+    const cv = document.createElement('canvas');
+    cv.width = 240; cv.height = 427;
+    f.append(cv, Object.assign(document.createElement('figcaption'),
+                               { textContent: `avancement ${a}` }));
+    document.getElementById('entree').append(f);
+    peindre(cv, COURSES.defi, a);
+  }
+</script>

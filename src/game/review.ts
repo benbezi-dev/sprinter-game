@@ -26,6 +26,12 @@
 // Ce que l'utilisateur a telecharge, en revanche, est sorti de l'application et
 // ne nous appartient plus — c'est un fichier a lui, sur son appareil, que rien
 // ici ne peut ni ne doit effacer.
+//
+// ET ELLE SE TERMINE SUR UN CARTON. Le film s'arretait sur la ligne d'arrivee,
+// puis partait dans une conversation ou rien ne disait de quel jeu il venait.
+// Les derniers instants portent donc le chrono, l'epreuve et l'adresse — voir
+// `Carton`, `poserLeCarton` et `carton-film.ts`. C'est du ressort de ce module
+// parce que lui seul sait a quel moment l'enregistreur ecrit encore.
 
 /**
  * Deux heures, comme demande.
@@ -75,6 +81,34 @@ export type Sortie = 'partage' | 'telechargement' | 'annule' | 'echec';
  * Voir `hud-film.ts`, qui en est la seule implementation.
  */
 export type Surcouche = (ctx: CanvasRenderingContext2D, l: number, h: number) => void;
+
+/**
+ * LE CARTON DE FIN — ce qui ferme le film.
+ *
+ * Meme pinceau que la surcouche, a un nombre pres : `avancement` va de 0 a 1
+ * sur la duree du carton, de quoi le faire entrer plutot qu'apparaitre d'un
+ * coup. Il est peint sur l'image GELEE de l'arrivee, pas sur le stade en
+ * cours — voir `poserLeCarton`.
+ *
+ * Ce module ne sait toujours rien du jeu : il ne connait ni le chrono, ni le
+ * code du defi, ni l'adresse du site. Il sait seulement qu'un film se termine
+ * mieux avec un carton qu'avec un noir. Voir `carton-film.ts`, qui en est la
+ * seule implementation.
+ */
+export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
+                      avancement: number) => void;
+
+/**
+ * LA DUREE DU CARTON.
+ *
+ * Une seconde et demie. En deca, personne ne lit une adresse sur un telephone
+ * tenu a bout de bras ; au-dela, le lecteur d'une story a deja touche l'ecran
+ * pour passer a la suivante, et on aura rallonge le fichier pour rien.
+ *
+ * C'est aussi ce que le bouton de partage attend avant de s'allumer : voir
+ * `arreter`, qui ne publie le fichier qu'une fois le carton ecrit dedans.
+ */
+export const CARTON_MS = 1500;
 
 export type EtatReview = {
   phase: PhaseReview;
@@ -196,6 +230,18 @@ export class Review {
   private pinceau: CanvasRenderingContext2D | null = null;
   private source: HTMLCanvasElement | null = null;
   private surcouche: Surcouche | null = null;
+  /**
+   * LE CARTON, QUAND IL EST POSE — et l'image qu'il recouvre.
+   *
+   * Tant qu'il est nul, la boucle recopie le stade : c'est la course. Des
+   * qu'il existe, elle repose `gel` et peint le carton dessus, et plus rien
+   * du jeu n'entre dans le film. Les deux vivent ensemble et tombent
+   * ensemble ; voir `poserLeCarton` et `rendreLeCanvas`.
+   */
+  private carton: Carton | null = null;
+  private gel: HTMLCanvasElement | null = null;
+  /** Quand le carton a ete pose, pour savoir ou en est son entree. */
+  private cartonA = 0;
   /** L'appel a `requestAnimationFrame` en cours, pour pouvoir l'arreter. */
   private trait = 0;
   /** Pixels du film par point CSS. Recalcule quand le canvas change de taille. */
@@ -338,8 +384,13 @@ export class Review {
    */
   private tracer = () => {
     this.trait = requestAnimationFrame(this.tracer);
-    const s = this.source, m = this.montage, ctx = this.pinceau;
-    if (!s || !m || !ctx) return;
+    const m = this.montage, ctx = this.pinceau;
+    if (!m || !ctx) return;
+    // LE CARTON PREND LA MAIN, ET LA GARDE. A partir de la, le canvas du jeu
+    // n'entre plus dans le film : il montre deja autre chose.
+    if (this.carton) { this.tracerLeCarton(ctx, m); return; }
+    const s = this.source;
+    if (!s) return;
     if (m.width !== s.width || m.height !== s.height) {
       m.width = s.width; m.height = s.height;
       this.caler();
@@ -353,6 +404,85 @@ export class Review {
       ctx.restore();
     } catch { /* cette image sortira sans son HUD, la suivante l'aura */ }
   };
+
+  /**
+   * Une image du carton : le gel, puis ce que le pinceau veut bien y poser.
+   *
+   * `restore` est dans un `finally`, et ce n'est pas du zele : le pinceau est
+   * mis a l'echelle avant l'appel, et une exception qui sauterait la remise en
+   * etat laisserait cette echelle posee. L'image suivante la remultiplierait
+   * par elle-meme, puis la suivante encore — le carton sortirait en gonflant
+   * jusqu'a ne plus montrer qu'un pixel.
+   */
+  private tracerLeCarton(ctx: CanvasRenderingContext2D, m: HTMLCanvasElement) {
+    const k = this.echelle;
+    ctx.save();
+    try {
+      if (this.gel) ctx.drawImage(this.gel, 0, 0);
+      ctx.scale(k, k);
+      this.carton?.(ctx, m.width / k, m.height / k,
+                    Math.min(1, (performance.now() - this.cartonA) / CARTON_MS));
+    } catch {
+      /* cette image sortira sans son carton, la suivante l'aura */
+    } finally {
+      ctx.restore();
+    }
+  }
+
+  /**
+   * POSE LE CARTON, ET REND LA MAIN QUAND IL EST ECRIT DANS LE FILM.
+   *
+   * Trois choses s'y jouent, et chacune a coute un film pour etre comprise.
+   *
+   * L'ENREGISTREUR EST EN PAUSE QUAND LE ONE SHOT ARRIVE ICI. Il s'est arrete
+   * sur l'ecran de resultat de la derniere epreuve — c'est `useFilmerLeOneShot`
+   * qui le met en pause, pour ne pas filmer une attente — et un enregistreur en
+   * pause n'ecrit rien. Sans cette reprise, le carton se peignait
+   * consciencieusement sur un montage que plus personne n'enregistrait.
+   *
+   * L'IMAGE EST GELEE. Au moment ou l'on arrete, le canvas du jeu ne montre
+   * deja plus la course : l'ecran de fin se monte, le moteur passe a la suite.
+   * Continuer a le recopier ferait defiler n'importe quoi sous le carton. On
+   * garde donc la derniere image peinte — celle de l'arrivee — et le carton se
+   * pose dessus.
+   *
+   * ON N'ATTEND QUE CE QU'ON PEUT TENIR. Pas de montage, pas de carton, un
+   * enregistreur deja arrete, un navigateur sans `resume` : dans tous ces cas
+   * on rend la main tout de suite. Faire patienter le joueur une seconde et
+   * demie devant un bouton eteint, pour un carton qui n'ira nulle part, serait
+   * la seule facon de rendre cette fonctionnalite pire que son absence.
+   */
+  private poserLeCarton(carton: Carton | null | undefined): Promise<void> {
+    const m = this.montage, ctx = this.pinceau, r = this.rec;
+    if (!carton || !m || !ctx || !r) return Promise.resolve();
+
+    if (r.state === 'paused') {
+      if (typeof r.resume !== 'function') return Promise.resolve();
+      try { r.resume(); } catch { return Promise.resolve(); }
+    } else if (r.state !== 'recording') {
+      return Promise.resolve();
+    }
+
+    let gel: HTMLCanvasElement | null = null;
+    try {
+      gel = document.createElement('canvas');
+      gel.width = m.width; gel.height = m.height;
+      gel.getContext('2d')?.drawImage(m, 0, 0);
+    } catch {
+      // Sans gel le carton se posera sur la derniere image du montage, qui y
+      // est toujours : on perd le fond fige si la boucle repasse, pas le carton.
+      gel = null;
+    }
+
+    this.gel = gel;
+    this.carton = carton;
+    this.cartonA = performance.now();
+    // La boucle est a l'arret quand on arrive d'une pause. Sans cette ligne,
+    // le carton serait peint exactement zero fois.
+    if (!this.trait) this.tracer();
+
+    return new Promise(res => setTimeout(res, CARTON_MS));
+  }
 
   /** Arrete la boucle, sans defaire le montage. */
   private suspendreLeTrait() {
@@ -378,6 +508,7 @@ export class Review {
     this.suspendreLeTrait();
     this.montage = null; this.pinceau = null;
     this.source = null; this.surcouche = null;
+    this.carton = null; this.gel = null; this.cartonA = 0;
     const f = this.fluxVideo;
     this.fluxVideo = null;
     if (!f) return;
@@ -428,8 +559,19 @@ export class Review {
   /** L'etat courant, pour qui arrive apres coup. */
   lireEtat(): EtatReview { return this.etat; }
 
-  /** Arrete la capture et publie le fichier. Demarre le compte a rebours. */
-  arreter(): Promise<void> {
+  /**
+   * Arrete la capture et publie le fichier. Demarre le compte a rebours.
+   *
+   * LE CARTON PASSE AVANT L'ARRET, et c'est tout l'objet du parametre : une
+   * seconde et demie de plus dans le film, ou tiennent le chrono, l'epreuve et
+   * l'adresse du jeu. Sans lui, la video part dans une conversation sans que
+   * personne puisse dire d'ou elle vient — voir `carton-film.ts`.
+   *
+   * Il est FACULTATIF, et le rester : un appelant qui n'en passe pas obtient
+   * exactement le comportement d'avant, arret immediat compris.
+   */
+  async arreter(carton?: Carton | null): Promise<void> {
+    await this.poserLeCarton(carton);
     return new Promise(resolve => {
       const r = this.rec;
       if (!r || r.state === 'inactive') { resolve(); return; }

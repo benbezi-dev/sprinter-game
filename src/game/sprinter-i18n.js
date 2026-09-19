@@ -688,6 +688,14 @@
                       'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
                       'this device cannot record the race'],
+    // Le carton de fin du film — voir game/carton-film.ts. Deux lignes, et pas
+    // une de plus : le carton dure une seconde et demie, et il porte deja le
+    // chrono, l'epreuve et l'adresse. « DÉFI » précède le code, la seconde
+    // ligne dit ce que le code fait — et elle le CONSTATE, comme la charte le
+    // demande. Ni « essaie », ni « à toi de jouer » : celui qui regarde décide.
+    carton_defi:     ['DÉFI', 'CHALLENGE'],
+    carton_defi_sous: ['ce code rejoue la même course',
+                       'this code replays the same race'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
     live_vs:         ['en direct contre {n}', 'live against {n}'],
     live_gap:        ['{s} s d’écart', '{s} s apart'],

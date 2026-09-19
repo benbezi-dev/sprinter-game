@@ -22,6 +22,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Review, type EtatReview } from './review';
 import { SprinterApp, useGameStore } from './engine';
 import { peindreLeHud } from './hud-film';
+import { peindreLeCarton } from './carton-film';
 
 /**
  * A QUELLE COURSE APPARTIENT LE FILM.
@@ -190,11 +191,17 @@ export function programmerLeFilm(
  * Rien ne garantit qu'un message de fin arrive apres la course qui l'a
  * demande : une salle peut annoncer un resultat alors que le joueur est deja
  * reparti sur autre chose. Le genre tranche.
+ *
+ * LE CARTON DE FIN EST POSE ICI, et pour les trois courses sans distinction.
+ * C'est le pendant exact de `peindreLeHud` a `demarrerLeFilm` : `review.ts`
+ * sait quand l'enregistreur ecrit encore, ce module sait ce qu'il faut y
+ * ecrire. Le film gagne donc une seconde et demie — d'ou l'attente avant que
+ * le bouton de partage ne s'allume, voir `Review.arreter`.
  */
 export function arreterLeFilm(g: GenreFilm): Promise<void> {
   if (genre !== g) return Promise.resolve();
   annulerLeDepart();
-  return filmDeLaCourse().arreter();
+  return filmDeLaCourse().arreter(peindreLeCarton);
 }
 
 /** Libere le film de cette course-la, et rien d'autre. */
