@@ -15,7 +15,7 @@ les deux.
 
 ## 1 · X — le lien marche, le post est court
 
-Image : `cartes/CODE-x.png`
+Image : `cartes/CODE-affiche-x.png`
 
 **Variante A — le chrono posé**
 > J'ai posé CHRONO sur DISTANCE.
@@ -37,7 +37,7 @@ Image : `cartes/CODE-x.png`
 
 ## 2 · Instagram — le code remplace le lien
 
-Image : `cartes/CODE-feed.png` (fil) · `cartes/CODE-story.png` (story)
+Image : `cartes/CODE-affiche-feed.png` (fil) · `cartes/CODE-affiche-story.png` (story)
 
 **La première ligne est tout ce qu'on lit** avant le « … plus ». Elle doit
 contenir l'accroche, pas le contexte.
@@ -66,7 +66,7 @@ contenir l'accroche, pas le contexte.
 ## 3 · TikTok — le code se dit à voix haute
 
 Montage : l'écran de course, sans commentaire, avec le son du jeu.
-Format : `cartes/CODE-story.png` en dernière image (1080×1920).
+Format : `cartes/CODE-affiche-story.png` en dernière image (1080×1920).
 
 **Script, 12 secondes**
 
