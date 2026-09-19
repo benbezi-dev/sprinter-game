@@ -6,6 +6,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
+import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
@@ -186,9 +187,16 @@ export function GameCanvas() {
     // Frame loop
     let lastTime = performance.now();
     
-    // Un coup de vitesse par geste, pas un par image : on retient si le
-    // geste a deja ete vu pour cette course.
-    let vuReaction = false, vuTrans = false;
+    // QUEL GESTE ALLUME QUOI : la regle est sortie d'ici, dans
+    // game/poussee-gestes.ts, pour qu'un harnais puisse la jouer. Elle n'a
+    // besoin ni de toile ni de stade — un coureur et trois nombres — et tant
+    // qu'elle vivait dans cette boucle, personne ne pouvait verifier qu'un
+    // depart manque laisse la relance se signer quand meme.
+    //
+    // Le guetteur tient le « une seule fois par course » : les deux notes
+    // restent posees sur le coureur jusqu'a l'arrivee, et sans lui
+    // l'impulsion se rearmerait a chaque image.
+    const guetterLesGestes = guetteurDePoussee();
 
     // `redessin` : refaire l'image de cet instant sans faire avancer le jeu.
     // L'accueil le demande au moment ou il apparait — voir accueilPose dans
@@ -390,18 +398,13 @@ export function GameCanvas() {
         // C'est ici que ca se dit, parce que c'est ici qu'on sait quel geste
         // vient de tomber ; ce que la machine peut s'en payer reste la
         // decision de la couche de finition, qui seule connait son prix.
-        const p = enCourse ? G.player : null;
-        if (!enCourse) { vuReaction = false; vuTrans = false; }
-        else if (p && POUSSEE_OUVERTE) {
-          if (!vuReaction && p.reaction !== null) {
-            vuReaction = true;
-            const seuil = SprinterApp.C.REACT_BONUS * 0.82;
-            if (!p.jumped && p.reactBonus > seuil) Prem.poussee(1, false);
-          }
-          if (!vuTrans && p.transGrade !== null) {
-            vuTrans = true;
-            if (p.transGrade === 2) Prem.poussee(1, true);
-          }
+        // Le guetteur est consulte a chaque image, meme quand le
+        // declenchement est ferme : c'est lui qui se remet a zero hors
+        // course, et POUSSEE_OUVERTE ne ferme que l'armement, pas le
+        // jugement du geste — voir canal.ts.
+        for (const geste of guetterLesGestes(enCourse ? G.player : null, enCourse,
+                                             SprinterApp.C.REACT_BONUS)) {
+          if (POUSSEE_OUVERTE) Prem.poussee(geste.force, geste.echos);
         }
         // La vignette se resserre avec le coup de poussee, et avec lui seul.
         const pouss = POUSSEE_OUVERTE && Prem.partPoussee ? Prem.partPoussee() : 0;

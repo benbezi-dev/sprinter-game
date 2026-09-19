@@ -38,9 +38,16 @@
 // MOYEN, une en SOBRE, parce que les trois doublent a peu pres le nombre de
 // remplissages d'une image. Un tiers se paie la ou le tout ne se payait pas.
 //
-// Le declenchement, lui, vit dans le composant qui tient la boucle de rendu
-// (components/GameCanvas.tsx) et ne se joue pas sans navigateur : ce harnais
-// arme l'impulsion a la main, comme le fait une reaction parfaite.
+// QUEL GESTE ALLUME QUOI SE JOUE MAINTENANT ICI AUSSI. Cette regle vivait
+// dans la boucle de rendu, hors de portee de tout harnais, et c'est par cet
+// angle mort que deux changements de comportement sont passes inapercus le
+// 19 septembre 2026. Elle est sortie dans game/poussee-gestes.ts, ou elle n'a
+// besoin ni de toile ni de stade : un coureur et trois nombres. Les quatre
+// combinaisons de gestes se jouent donc en memoire, a la fin de ce fichier.
+//
+// L'ARMEMENT, lui, vit toujours dans le composant qui tient la boucle de
+// rendu (components/GameCanvas.tsx) : ce harnais arme l'impulsion a la main,
+// comme le fait une reaction parfaite.
 
 import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -96,6 +103,7 @@ async function jeuDe(canal) {
   writeFileSync(entree, [
     `export { SprinterApp, updateLogic } from '${src('engine.ts')}';`,
     `export { POUSSEE_OUVERTE } from '${src('canal.ts')}';`,
+    `export { guetteurDePoussee } from '${src('poussee-gestes.ts')}';`,
   ].join('\n'));
   await build({
     entryPoints: [entree], outfile: sortie, bundle: true,
@@ -169,6 +177,36 @@ async function scene(A, prem, niveau, echos) {
   prem.poussee(1, echos);
   await attendre(60);
   return { repos, vif: image(A), part: prem.partPoussee() };
+}
+
+/**
+ * Une course jouee au guetteur, image par image, sans toile ni stade.
+ *
+ * L'ORDRE COMPTE, et c'est tout ce que cette fonction raconte : les deux
+ * notes n'arrivent pas ensemble. La reaction tombe au premier appui, la
+ * transition a la fin de la phase de poussee — deux ou trois secondes plus
+ * tard dans une vraie course. Les jouer dans le meme souffle ne dirait rien
+ * de l'independance des deux gestes.
+ *
+ * Chaque etape est jouee PLUSIEURS FOIS parce que rien ne s'efface : une fois
+ * posees, `reaction` et `transGrade` restent sur le coureur jusqu'a
+ * l'arrivee. Un guetteur qui ne retiendrait pas ce qu'il a deja vu rendrait
+ * donc son geste a chaque image, et ces repetitions le prouvent.
+ */
+function courseDeGestes(M, RB, { reaction, bonus, grade, faux = false }) {
+  const guetter = M.guetteurDePoussee();
+  const vus = [];
+  const image = (p, enCourse) => {
+    for (const g of guetter(p, enCourse, RB)) vus.push(g.echos ? 'halo + remanence' : 'halo');
+  };
+  image(null, false);                                  // l'ecran d'avant : remise a zero
+  const p = { reaction: null, reactBonus: 0, transGrade: null, jumped: false };
+  image(p, true); image(p, true);                      // sur la ligne : rien n'est juge
+  p.reaction = reaction; p.reactBonus = bonus; p.jumped = faux;
+  image(p, true); image(p, true); image(p, true);      // le pistolet, et deux images de plus
+  p.transGrade = grade;
+  image(p, true); image(p, true); image(p, true);      // la fin de la poussee, et deux de plus
+  return vus;
 }
 
 for (const canal of ['test', 'production']) {
@@ -256,6 +294,68 @@ for (const canal of ['test', 'production']) {
   const chute = image(A);
   ok('et la toile garde le halo', chute.onde && chute.aura);
   ok('avec une copie au lieu de trois', prem.echosCopies() === 1);
+
+  // ------------------------------------------------------- quel geste allume quoi
+  //
+  // LES DEUX GESTES SONT INDEPENDANTS, et c'est la moitie de la regle : un
+  // depart manque n'empeche pas la relance de se signer, et l'inverse non
+  // plus. Il suffirait d'un « sinon » entre les deux tests pour que la
+  // relance se taise a jamais — le depart se juge toujours en premier — et
+  // rien dans le jeu ne le dirait avant qu'un joueur ne s'en apercoive.
+  //
+  // On joue donc les quatre combinaisons image par image, sans toile ni
+  // stade. Chaque etape est jouee plusieurs fois de suite : les deux notes
+  // restent posees sur le coureur jusqu'a l'arrivee, et sans le « une seule
+  // fois » du guetteur l'impulsion se rearmerait a chaque image.
+  const RB = A.C.REACT_BONUS;
+  const cas = (nom, attendu, o) => {
+    const eu = courseDeGestes(M, RB, o).join(' puis ') || '(rien)';
+    ok(nom, eu === attendu, `${eu} au lieu de ${attendu}`);
+  };
+  cas('depart parfait seul', 'halo', { reaction: 0.11, bonus: RB, grade: 0 });
+  cas('transition parfaite seule', 'halo + remanence', { reaction: 0.50, bonus: 0, grade: 2 });
+  cas('les deux parfaits', 'halo puis halo + remanence', { reaction: 0.11, bonus: RB, grade: 2 });
+  cas('ni l un ni l autre', '(rien)', { reaction: 0.50, bonus: 0, grade: 0 });
+
+  // Un faux depart n'est pas un depart canon, si vif soit-il — mais il ne
+  // prend rien a la relance. Et une transition seulement bonne (note 1) n'est
+  // pas une transition parfaite : il n'y a qu'une note qui porte les echos.
+  cas('un faux depart perd le halo, pas la relance', 'halo + remanence',
+      { reaction: 0.11, bonus: RB, grade: 2, faux: true });
+  cas('une transition bonne mais pas parfaite ne porte rien', 'halo',
+      { reaction: 0.11, bonus: RB, grade: 1 });
+
+  // LE SEUIL EST STRICT, et il est celui du HUD : l'image et le texte
+  // annoncent le meme geste, a la meme frontiere.
+  cas('juste sous le seuil, rien', '(rien)', { reaction: 0.14, bonus: RB * 0.82, grade: 0 });
+  cas('juste au-dessus, le halo', 'halo', { reaction: 0.14, bonus: RB * 0.82 + 1e-9, grade: 0 });
+
+  // LES DEUX NOTES PEUVENT ETRE CONNUES D'UN COUP, sur une premiere image ou
+  // le coureur les porte deja toutes les deux. C'est le seul cas ou un
+  // « sinon » entre les deux tests se verrait — partout ailleurs il passe,
+  // parce que les notes tombent a plusieurs secondes d'ecart et que la
+  // relance serait jugee a l'image suivante. Verifie par sabotage : c'est
+  // cette ligne-ci, et elle seule, qui tombe quand on les met en alternative.
+  {
+    const guetter = M.guetteurDePoussee();
+    const p = { reaction: 0.11, reactBonus: RB, transGrade: 2, jumped: false };
+    const gestes = guetter(p, true, RB);
+    ok('deux notes connues d un coup : les deux gestes', gestes.length === 2,
+       `${gestes.length} au lieu de 2`);
+  }
+
+  // ET LA COURSE SUIVANTE REPART A ZERO. Sans la remise a zero hors course,
+  // le guetteur garderait ses deux gestes juges : la deuxieme course
+  // n'allumerait plus rien, et c'est la panne qu'on ne voit qu'a la
+  // deuxieme partie.
+  {
+    const guetter = M.guetteurDePoussee();
+    const p = { reaction: 0.11, reactBonus: RB, transGrade: 2, jumped: false };
+    const une = guetter(p, true, RB).length;
+    guetter(null, false, RB);                       // retour au menu
+    const deux = guetter(p, true, RB).length;
+    ok('la course suivante repart a zero', une === 2 && deux === 2, `${une} puis ${deux}`);
+  }
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');
