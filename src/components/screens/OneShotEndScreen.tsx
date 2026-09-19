@@ -14,6 +14,7 @@ import {
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
 import { noterDefi } from '@/game/journal-defis';
+import { cleAdmin } from '@/game/identity';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
@@ -71,6 +72,12 @@ export function OneShotEndScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(false);
+  /* Le code choisi. Le champ n'existe que pour qui a deja la cle
+     d'administration dans ce navigateur — voir cleAdmin(). Un joueur ordinaire
+     ne le voit pas, et n'a aucune raison de le vouloir : un code tire ne se
+     devine pas, c'est ce qui protege son defi. */
+  const [codeVoulu, setCodeVoulu] = useState('');
+  const [errMot, setErrMot] = useState('');
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
   // Retient le defi deja envoye, pas un simple booleen : si l'ecran survit
@@ -394,7 +401,7 @@ export function OneShotEndScreen() {
   const handleCreate = async () => {
     const finalName = name.trim();
     if (finalName) saveName(finalName);
-    setBusy(true); setErr(false);
+    setBusy(true); setErr(false); setErrMot('');
     try {
       const { id, cible: prevenu } = await createChallenge({
         races: shotRaces as ('100' | '200' | '400')[],
@@ -404,11 +411,15 @@ export function OneShotEndScreen() {
         traces: SprinterApp.G.shotTraces || [],
         name: finalName || undefined,
         targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
+        code: codeVoulu.trim() || null,
       });
       setCode(id);
       noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
-    } catch {
+    } catch (e) {
       setErr(true);
+      // « code deja pris », « code invalide » : deux refus qui se corrigent en
+      // une frappe, a condition de les lire.
+      setErrMot(e instanceof Error && e.message !== 'challenge create failed' ? e.message : '');
     } finally {
       setBusy(false);
     }
@@ -1206,7 +1217,22 @@ export function OneShotEndScreen() {
                       {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                     </button>
                   </div>
-                  {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
+                  {/* Le code choisi : la campagne des sept couloirs a besoin
+                      de ZEZE22 a ZEZE88, et rien d'autre dans le jeu n'a
+                      besoin de choisir. Le champ suit donc la cle, pas la
+                      langue — comme l'ecran de la file de recuperation, il
+                      reste en francais : personne d'autre ne le verra. */}
+                  {!!cleAdmin() && !code && (
+                    <input
+                      value={codeVoulu}
+                      onChange={e => setCodeVoulu(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                      placeholder="code choisi — ZEZE44 (facultatif)"
+                      maxLength={10}
+                      spellCheck={false}
+                      className="w-full bg-black/30 border border-primary/25 rounded-xl px-3 py-2 court:px-2 court:py-1.5 font-mono text-xs court:text-[10px] tracking-[0.2em] text-primary placeholder:text-muted-foreground placeholder:tracking-normal placeholder:font-sans focus:outline-none focus:border-primary/60"
+                    />
+                  )}
+                  {err && <p className="text-center text-xs text-destructive">{errMot || N.t('challenge_net')}</p>}
                 </>
               )}
 
