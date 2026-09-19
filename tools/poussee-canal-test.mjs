@@ -16,9 +16,17 @@
 // L'AUTRE MOITIE DE CE QU'ON VERIFIE tient a ce que l'effet doit etre : une
 // IMPULSION, et non un etat. Ce qu'il remplace s'allumait des que le coureur
 // passait les trois quarts de son maximum, soit deux images sur trois, et un
-// effet permanent n'est plus un effet. On dessine donc la meme image trois
-// fois — avant l'impulsion, pendant, puis une fois passee — et on regarde ce
-// que la toile recoit a chaque fois.
+// effet permanent n'est plus un effet. On dessine donc la meme image deux
+// fois — au repos puis pendant l'impulsion — et on regarde ce que la toile
+// recoit de plus, avant de verifier qu'elle est bien redevenue ordinaire une
+// fois l'impulsion passee.
+//
+// ET ON LE FAIT A CHAQUE NIVEAU DE DETAIL, parce que l'effet n'est pas le
+// meme selon ce que l'appareil tient. A PLEIN, tout ; a MOYEN, l'onde et
+// l'aura sans les trois copies du coureur, qui sont ce que l'effet a de plus
+// cher ; en SOBRE, rien du tout, pas meme une impulsion armee. Un appareil en
+// difficulte garde donc sa recompense sans payer les echos — c'est la regle
+// de la poussiere des appuis, et l'effet la suit maintenant.
 //
 // Le declenchement, lui, vit dans le composant qui tient la boucle de rendu
 // (components/GameCanvas.tsx) et ne se joue pas sans navigateur : ce harnais
@@ -132,6 +140,27 @@ function image(A) {
 
 const attendre = ms => new Promise(r => setTimeout(r, ms));
 
+/**
+ * Un niveau de detail, mesure au repos puis sous l'impulsion.
+ *
+ * Le repos se reprend A CHAQUE NIVEAU, et ce n'est pas une precaution pour
+ * rien : la brume, les ombres et la poussiere changent avec lui, donc le
+ * nombre de remplissages d'une image ordinaire aussi. Compare a la ligne de
+ * repos d'un autre niveau, l'ecart ne dirait rien de l'effet.
+ *
+ * L'attente qui ouvre la scene laisse l'impulsion precedente retomber : une
+ * impulsion dure 0,85 s, et sans elle la ligne de repos porterait encore la
+ * fin de la scene d'avant.
+ */
+async function scene(A, prem, niveau) {
+  prem.niveau = niveau;
+  await attendre(950);
+  const repos = image(A);
+  prem.poussee(1);
+  await attendre(60);
+  return { repos, vif: image(A), part: prem.partPoussee() };
+}
+
 for (const canal of ['test', 'production']) {
   titre(canal === 'test' ? 'LE CANAL DE TEST' : 'LE JEU PUBLIE');
   const M = await jeuDe(canal);
@@ -140,30 +169,56 @@ for (const canal of ['test', 'production']) {
   const { A } = courseLancee(M);
   const prem = globalThis.RenduPremium;
 
-  // AVANT. Une image de course ordinaire : le coureur court, et rien ne
-  // l'accompagne. C'est l'etat dans lequel se passent les neuf dixiemes d'une
-  // course, et l'effet qu'on remplacait y etait, lui, deja allume.
-  const avant = image(A);
-  ok('une course ordinaire n allume rien', !avant.onde && !avant.aura);
+  // PLEIN : l'effet entier. C'est l'impulsion armee comme le fait une
+  // reaction parfaite au pistolet ou une transition parfaite en sortie de
+  // poussee, sur un appareil qui tient les soixante images.
+  const plein = await scene(A, prem, prem.PLEIN);
+  ok('une course ordinaire n allume rien', !plein.repos.onde && !plein.repos.aura);
+  ok('l impulsion monte', plein.part > 0.02, String(plein.part));
+  ok('l onde au sol se dessine', plein.vif.onde);
+  ok('l aura sur le buste se dessine', plein.vif.aura);
+  ok('les echos redessinent le coureur', plein.vif.fills > plein.repos.fills + 100,
+     `${plein.vif.fills} contre ${plein.repos.fills}`);
 
-  // PENDANT. L'impulsion armee, comme le fait une reaction parfaite au
-  // pistolet ou une transition parfaite en sortie de poussee.
-  prem.poussee(1);
-  await attendre(60);
-  ok('l impulsion monte', prem.partPoussee() > 0.02, String(prem.partPoussee()));
-  const pendant = image(A);
-  ok('l onde au sol se dessine', pendant.onde);
-  ok('l aura sur le buste se dessine', pendant.aura);
-  ok('les echos redessinent le coureur', pendant.fills > avant.fills + 100,
-     `${pendant.fills} contre ${avant.fills}`);
-
-  // APRES. Un tiers de seconde plus tard — la duree de l'impulsion est de
-  // 0,85 s en tout, montee comprise — la toile doit retrouver son image
-  // ordinaire. Un effet qui reste allume est un decor, pas une recompense.
+  // Un tiers de seconde plus tard — la duree de l'impulsion est de 0,85 s en
+  // tout, montee comprise — la toile doit retrouver son image ordinaire. Un
+  // effet qui reste allume est un decor, pas une recompense.
   await attendre(950);
   ok('l impulsion retombe', prem.partPoussee() === 0, String(prem.partPoussee()));
   const apres = image(A);
   ok('et l image redevient ordinaire', !apres.onde && !apres.aura);
+
+  // MOYEN : la recompense sans son prix. L'appareil ne tient plus la
+  // poussiere des appuis, il ne tiendra pas trois copies du coureur — mais le
+  // geste reussi doit continuer de se voir.
+  const moyen = await scene(A, prem, prem.MOYEN);
+  ok('a MOYEN l impulsion s arme encore', moyen.part > 0.02, String(moyen.part));
+  ok('et l onde comme l aura se dessinent', moyen.vif.onde && moyen.vif.aura);
+  ok('mais les echos ne redessinent rien', moyen.vif.fills <= moyen.repos.fills + 20,
+     `${moyen.vif.fills} contre ${moyen.repos.fills}`);
+
+  // SOBRE : rien, et rien d'arme. Ce niveau-la est celui d'un appareil qui ne
+  // rend deja plus les soixante images ; lui poser un effet de plus serait
+  // prendre au jeu ce qui lui reste.
+  const sobre = await scene(A, prem, prem.SOBRE);
+  ok('en SOBRE rien ne s arme', sobre.part === 0, String(sobre.part));
+  ok('et l image reste ordinaire', !sobre.vif.onde && !sobre.vif.aura);
+
+  // LA MESURE QUI TOMBE PENDANT L'IMPULSION. Elle tombe pendant une course et
+  // non entre deux — c'est une moyenne glissante sur les temps d'image, et le
+  // depart est justement le moment le plus charge. Refuser d'armer ne suffit
+  // donc pas : ce qui est deja allume doit s'eteindre. La rafale des tribunes
+  // a la meme regle, et cet effet-ci la suit.
+  prem.niveau = prem.PLEIN;
+  await attendre(950);
+  prem.poussee(1);
+  await attendre(60);
+  ok('armee a PLEIN, l impulsion est la', prem.partPoussee() > 0.02);
+  prem.niveau = prem.SOBRE;
+  ok('le niveau tombe sous elle : elle s eteint', prem.partPoussee() === 0,
+     String(prem.partPoussee()));
+  const chute = image(A);
+  ok('et la toile ne garde rien', !chute.onde && !chute.aura);
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');

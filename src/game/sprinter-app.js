@@ -6507,10 +6507,16 @@
     const pouss = PREM() && PREM().partPoussee ? PREM().partPoussee() : 0;
     if (pouss > 0.02 && G.player) {
       const age = PREM().agePoussee ? PREM().agePoussee() : -1;
+      // LES ECHOS SE DEMANDENT A PART. Ils redessinent le coureur trois fois,
+      // et la couche de finition les reserve aux appareils qui les tiennent —
+      // comme la poussiere des appuis. C'est elle qui sait ce qu'ils coutent,
+      // donc elle qui decide : on lit ce qu'on peut se payer, on ne teste pas
+      // son niveau d'ici. A zero, l'onde et l'aura restent, et c'est voulu.
+      const echos = PREM().partEchos ? PREM().partEchos() : 0;
       for (const [r, g2] of vis) {
         if (r !== G.player || r.isGhost) continue;
         drawOndePoussee(ctx, g2, m, pouss, age);
-        drawPousseeTrail(ctx, r, m, pouss);
+        if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos);
       }
     }
     const coureur = ([r, g2, p]) => {
