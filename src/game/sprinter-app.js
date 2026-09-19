@@ -275,6 +275,16 @@
       // est plus noir et moins vert que celui de Van Gogh — il doit se lire
       // comme une silhouette contre le ciel, pas comme un arbre.
       cypresSombre: [12, 18, 16], cypresClair: [34, 52, 38],
+      // LE SEUL STADE DU JEU QUI DEMANDE UN MORCEAU ENREGISTRE. Les autres
+      // musiques sortent de `buildRace`, quelques oscillateurs et pas un
+      // octet de donnees ; celle-ci est ecrite note a note et rendue en
+      // audio (voir game/halloween-musique.ts et tools/musique/). La
+      // synthese du jeu sait faire une pulsation, pas un orgue d'eglise.
+      //
+      // `raceTrack` ne retient ce nom que si le buffer est la. Tant que le
+      // fichier n'est pas charge — ou s'il ne l'est jamais — la course part
+      // sur la musique ordinaire, et personne ne court en silence.
+      musique: 'halloween',
       village: true, villageSombre: [16, 10, 28],
       lointain: [30, 18, 44],
       // Les lampes au-dessus des tribunes, comme au Danube : une enceinte de

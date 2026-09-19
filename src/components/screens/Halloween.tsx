@@ -12,6 +12,7 @@ import {
   CLES_TENUES, CLES_MORSURES, sceneDe, dit, peindreLaScene,
 } from '@/game/halloween-cinema';
 import { mot, chrono } from '@/game/halloween-mots';
+import { chargerLaMusique } from '@/game/halloween-musique';
 
 /* ---------------------------------------------------------------------------
    LA NUIT DU MOLOSSE — les trois ecrans du mode
@@ -39,6 +40,14 @@ const abonnes = new Set<() => void>();
 function poserOuvert(v: boolean) {
   if (ouvert === v) return;
   ouvert = v;
+  // LE MORCEAU SE DEMANDE EN OUVRANT LE TABLEAU, pas au lancement de la
+  // course : il reste alors quelques secondes — le temps de choisir une nuit
+  // — pour que sept cents kilo-octets arrivent et se decodent. Demande au
+  // coup de pistolet, il serait pret vers la troisieme foulee.
+  //
+  // L'appel ne bloque rien et son echec ne se voit pas : sans lui, la course
+  // part sur la musique ordinaire.
+  if (v) void chargerLaMusique();
   for (const f of abonnes) f();
 }
 function usePanneau(): boolean {
