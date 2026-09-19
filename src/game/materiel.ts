@@ -97,6 +97,15 @@ const ecartDesRangs = (n: number, total: number) => total / Math.max(1, n - 1);
  */
 const SOMMET = Math.PI / 15;
 
+/**
+ * De quel cote des coureurs de l'accueil dessiner.
+ *
+ * `audela` est leur profondeur ; `loin` dit si l'on veut ce qui est derriere
+ * eux (vrai) ou devant (faux). Les haies se dessinent donc en deux passes, de
+ * part et d'autre de la meute, au lieu d'atterrir toutes du meme cote.
+ */
+export type Tranche = { audela: number; loin: boolean };
+
 /** La hauteur atteinte par le rang `k`, sur `n`, a cet instant du passage. */
 function niveauDuRang(cam: Camera, k: number, n: number): number {
   if (cam.sens === 'aller') {
@@ -243,7 +252,9 @@ function horsCadre(A: Moteur, p: number[]) {
  * dix haies couchees qui apparaissent d'un coup sur la piste se verraient
  * plus que leur mise en place.
  */
-export function dessinerLesHaies(ctx: CanvasRenderingContext2D, cam: Camera | null) {
+export function dessinerLesHaies(
+  ctx: CanvasRenderingContext2D, cam: Camera | null, tranche?: Tranche,
+) {
   const A: Moteur = (globalThis as any).SprinterApp;
   if (!A || !A.G || !A.G.obstacles || !A.apiObstacles) return;
   const api = A.apiObstacles();
@@ -270,13 +281,19 @@ export function dessinerLesHaies(ctx: CanvasRenderingContext2D, cam: Camera | nu
       programmerLesClaquements(A, { ...cam, u: 0 }, rangs.length, p.duree);
     }
   }
-  const vague: Camera | null = cam && p
+  // Mouvement reduit : les haies sont debout, point. Les redresser en cent
+  // vingt millisecondes serait une animation de plus, en plus brusque —
+  // exactement ce que ce reglage demande d'eviter.
+  const vague: Camera | null = cam && p && !cam.doux
     ? { ...cam, u: borne((performance.now() - debutDesHaies) / p.duree, 0, 1) }
     : null;
 
   // Les plus lointaines d'abord : une haie proche doit couvrir celle qui est
   // derriere elle, jamais l'inverse.
-  const ordre = pieces.slice().sort((a: any, b: any) => b.profondeur - a.profondeur);
+  const ordre = pieces.slice()
+    .filter((pc: any) => !tranche
+      || (pc.profondeur > tranche.audela) === tranche.loin)
+    .sort((a: any, b: any) => b.profondeur - a.profondeur);
   for (const pc of ordre) {
     const k = rangDe.get(pc.haie) ?? 0;
     const couchee = vague ? 1 - niveauDuRang(vague, k, rangs.length) : 0;

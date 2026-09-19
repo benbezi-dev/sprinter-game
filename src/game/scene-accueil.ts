@@ -152,6 +152,22 @@ export function placerLaCameraDeLAccueil(A: any): boolean {
  * Les trois coureurs, chacun dans son couloir, avec leur ombre. Appelee apres
  * le monde, et apres placerLaCameraDeLAccueil.
  */
+/**
+ * A quelle profondeur court la meute de l'accueil.
+ *
+ * Sert a ranger ce qui se tient sur la piste autour d'elle : une haie plus
+ * loin passe derriere les coureurs, une haie plus pres passe devant. Sans ce
+ * reperage, tout ce qu'un autre jeu pose sur la piste se retrouvait d'un seul
+ * cote — et une haie du premier plan traversait la jambe du coureur qu'elle
+ * aurait du cacher.
+ */
+export function profondeurDeLaMeute(A: any): number | null {
+  const G = A.G, T = G.track;
+  if (!T || !place) return null;
+  const milieu = T.pos(distance(T), COULOIR);
+  return A.depthOf(milieu[0], milieu[1]);
+}
+
 export function dessinerLesCoureursDeLAccueil(ctx: CanvasRenderingContext2D, A: any, theme: any): void {
   const G = A.G, T = G.track, P = place;
   if (!T || !P) return;

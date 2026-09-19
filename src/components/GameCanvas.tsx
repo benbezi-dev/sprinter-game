@@ -6,7 +6,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
-import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin } from '@/game/scene-accueil';
+import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -284,9 +284,19 @@ export function GameCanvas() {
         // LES HAIES VIVENT SUR LA PISTE TANT QUE LE MONDE EST HURDLERS,
         // passage ou non : un accueil de Hurdlers sans haies dans les couloirs
         // serait un accueil de Sprinter repeint. Le passage ne fait que les
-        // relever — voir game/materiel. Elles se posent avant les coureurs de
-        // l'accueil, qui sont au premier plan et doivent rester devant.
-        if (G.state === 'title' && mondeCourant() === 'hurdlers') {
+        // relever — voir game/materiel.
+        //
+        // EN DEUX PASSES, DE PART ET D'AUTRE DES COUREURS. Une haie se
+        // franchit : celles qui sont derriere la meute passent derriere elle,
+        // celles qui sont devant la cachent. Toutes du meme cote, on voyait un
+        // montant du premier plan traverser la jambe du coureur qu'il aurait
+        // du masquer. C'est exactement ce que fait le rendu en course, ou les
+        // haies prennent leur place dans l'ordre de profondeur.
+        const haiesIci = G.state === 'title' && mondeCourant() === 'hurdlers';
+        const meute = haiesIci ? profondeurDeLaMeute(SprinterApp) : null;
+        if (haiesIci && meute !== null) {
+          dessinerLesHaies(ctx, cam, { audela: meute, loin: true });
+        } else if (haiesIci) {
           dessinerLesHaies(ctx, cam);
         }
         
@@ -299,6 +309,10 @@ export function GameCanvas() {
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
           dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);
+          // Puis les haies qui sont devant eux.
+          if (haiesIci && meute !== null) {
+            dessinerLesHaies(ctx, cam, { audela: meute, loin: false });
+          }
         } else if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
           // Le generique de fin de carriere a sa propre scene : la nuit sur le
           // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
