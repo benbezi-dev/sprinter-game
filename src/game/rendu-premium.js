@@ -844,14 +844,34 @@
    * QUOI. Rien dans l'air, rien sur le decor. Tout part du coureur : sa
    * trainee, l'onde au sol sous ses appuis, l'aura sur son buste. Le dessin
    * vit dans sprinter-app.js, qui seul connait sa position ; ici on ne tient
-   * que l'horloge de l'impulsion, dont les deux lectures sont utiles — la
-   * FORCE pour ce qui s'allume et s'eteint, l'AGE pour ce qui s'ouvre.
+   * que l'horloge de l'impulsion, dont les trois lectures sont utiles — la
+   * FORCE pour ce qui s'allume et s'eteint, l'AGE pour ce qui s'ouvre, et
+   * celle des ECHOS, qui n'est pas la meme parce qu'ils ne coutent pas la
+   * meme chose.
+   *
+   * A QUEL PRIX, donc, et c'est ce qui decide du niveau de chacun. L'onde et
+   * l'aura sont une ellipse et un degrade : le prix d'une ombre, et elles
+   * suivent la regle des autres finitions — presentes des MOYEN, absentes en
+   * SOBRE. Les echos, eux, REDESSINENT LE COUREUR TROIS FOIS, facettes
+   * comprises : c'est l'effet le plus cher de ce fichier, au niveau de la
+   * poussiere des appuis, et il est reserve comme elle a PLEIN.
+   *
+   * Un appareil qui n'y arrive plus garde donc sa recompense — il la recoit
+   * simplement sans les trois copies. C'est mieux que le tout ou rien : le
+   * geste reussi doit se voir, et il se voit d'abord a l'onde qui s'ouvre
+   * sous les appuis.
+   *
+   * LA MESURE PEUT TOMBER PENDANT L'IMPULSION, et c'est le sort de la rafale
+   * des tribunes juste au-dessus : il ne suffit pas de refuser d'armer. Les
+   * deux lectures de force relisent donc le niveau a chaque image, et ce qui
+   * etait allume s'eteint la ou la machine ne suit plus.
    */
   const POUSS_DUREE = 0.85;
   let poussT0 = -1e9, poussF = 0;
 
   /** Arme le coup de vitesse. `force` vaut 1 pour un geste parfait. */
   function poussee(force) {
+    if (niveau < MOYEN) return;
     poussF = clamp(force, 0, 1);
     poussT0 = performance.now() / 1000;
   }
@@ -860,6 +880,10 @@
    * L'age de l'impulsion : 0 au declenchement, 1 a la fin. C'est lui qu'il
    * faut pour une onde qui s'ouvre — la force, elle, monte puis retombe, et
    * une onde qui se retracte n'existe pas.
+   *
+   * L'horloge, et rien d'autre : le niveau ne se lit pas ici. Un age ne se
+   * dessine pas tout seul, il accompagne une force — et celle-ci vaut zero
+   * des que la machine ne suit plus, ce qui suffit a tout eteindre.
    */
   function agePoussee() {
     const t = performance.now() / 1000 - poussT0;
@@ -869,11 +893,25 @@
 
   /** Ou en est l'impulsion : elle monte d'un trait et retombe doucement. */
   function partPoussee() {
+    if (niveau < MOYEN) return 0;
     const t = performance.now() / 1000 - poussT0;
     if (t < 0 || t > POUSS_DUREE) return 0;
     const u = t / POUSS_DUREE;
     return poussF * (u < 0.10 ? u / 0.10
                               : Math.pow(1 - (u - 0.10) / 0.90, 1.9));
+  }
+
+  /**
+   * La meme impulsion, pour les trois copies du coureur — et zero partout
+   * ailleurs qu'a PLEIN.
+   *
+   * Elle est lue separement plutot que decidee chez l'appelant : le niveau de
+   * detail est la decision de cette couche-ci, et sprinter-app.js n'a pas a
+   * connaitre le prix de ce qu'il dessine. Il lui suffit de demander ce qu'il
+   * peut se payer.
+   */
+  function partEchos() {
+    return niveau < PLEIN ? 0 : partPoussee();
   }
 
   globalThis.RenduPremium = {
@@ -885,6 +923,6 @@
     mesurer, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
-    vignette, poussee, partPoussee, agePoussee,
+    vignette, poussee, partPoussee, agePoussee, partEchos,
   };
 })();

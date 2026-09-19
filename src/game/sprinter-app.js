@@ -6498,18 +6498,25 @@
     // recule le coureur sur sa propre foulee et on le redessine. Il n'y a
     // donc rien de nouveau a maintenir, et les echos sont aussi nets que le
     // coureur — ce sont les memes facettes.
-    // SUR LE CANAL DE TEST SEULEMENT, comme les nouveautes avant lui. Ecrit
-    // ainsi, `import.meta.env.VITE_CANAL` devient `false` en dur dans le
-    // build public et le bundler retire l'effet entier — voir POUSSEE_OUVERTE
-    // dans game/canal.ts, qui garde l'autre bout, le declenchement.
-    const pouss = import.meta.env.VITE_CANAL === 'test' && PREM() &&
-                  PREM().partPoussee ? PREM().partPoussee() : 0;
+    // OUVERT AUX DEUX CANAUX LE 19 SEPTEMBRE 2026. La garde qui tenait ici —
+    // `import.meta.env.VITE_CANAL === 'test'` — retirait le dessin du build
+    // public ; ce qui decide desormais est l'autre bout, et lui seul : le
+    // declenchement, POUSSEE_OUVERTE dans game/canal.ts. Sans impulsion armee
+    // la, `partPoussee()` rend zero et rien ne se dessine — une image de
+    // course ordinaire ne paie donc que ce test.
+    const pouss = PREM() && PREM().partPoussee ? PREM().partPoussee() : 0;
     if (pouss > 0.02 && G.player) {
       const age = PREM().agePoussee ? PREM().agePoussee() : -1;
+      // LES ECHOS SE DEMANDENT A PART. Ils redessinent le coureur trois fois,
+      // et la couche de finition les reserve aux appareils qui les tiennent —
+      // comme la poussiere des appuis. C'est elle qui sait ce qu'ils coutent,
+      // donc elle qui decide : on lit ce qu'on peut se payer, on ne teste pas
+      // son niveau d'ici. A zero, l'onde et l'aura restent, et c'est voulu.
+      const echos = PREM().partEchos ? PREM().partEchos() : 0;
       for (const [r, g2] of vis) {
         if (r !== G.player || r.isGhost) continue;
         drawOndePoussee(ctx, g2, m, pouss, age);
-        drawPousseeTrail(ctx, r, m, pouss);
+        if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos);
       }
     }
     const coureur = ([r, g2, p]) => {

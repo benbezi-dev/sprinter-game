@@ -77,11 +77,22 @@ export const SERIE_OUVERTE = true;
  * blancs suspendus en l'air se lisaient comme du vent de face plutot que
  * comme de la vitesse.
  *
- * Il commence donc la ou les autres nouveautes ont commence : sur le canal
- * de test. A false, le bundler retire l'effet du build public — le dessin
- * comme son declenchement.
+ * OUVERT A TOUT LE MONDE LE 19 SEPTEMBRE 2026, comme les nouveautes avant
+ * lui. Il a commence la ou elles ont commence — sur le canal de test — le
+ * temps de verifier ce qui ne se voit qu'en jouant : qu'il recompense bien
+ * deux gestes et non un etat, et qu'une course ordinaire n'en allume aucun.
+ *
+ * Le drapeau reste, et ne vaut plus `EST_TEST` : le remettre a `false`
+ * eteint le declenchement, et le coureur repart sans rien qui l'accompagne.
+ * C'est la seule chose a faire si l'effet devait repartir.
+ *
+ * Le dessin, lui, part desormais dans les deux builds. Il vit dans
+ * sprinter-app.js, qui seul connait la position du coureur, et ne s'allume
+ * que si l'impulsion a ete armee ici : sans elle, `partPoussee()` rend zero
+ * et rien ne se dessine. Ce drapeau ferme donc le declenchement, pas le
+ * dessin — voir drawOndePoussee et drawPousseeTrail.
  */
-export const POUSSEE_OUVERTE = EST_TEST;
+export const POUSSEE_OUVERTE = true;
 
 /**
  * LE STARTER : « a vos marques » au 3, « pret » au 1, et le coup au signal.
