@@ -19,6 +19,7 @@ import tribuneManifeste from './tribune-manifeste.json';
 import './tribune.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
+import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
@@ -52,6 +53,11 @@ const STARTER_MUET = true;
 // charge de l'envoyer.
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
   pushFinishedRace(race, t, mode, level);
+  // Le chrono se juge ici et nulle part ailleurs : c'est le seul endroit ou
+  // l'on voit passer TOUTES les courses terminees, carriere comme one shot,
+  // et ou l'historique de la distance est encore sous la main. L'ecran de fin
+  // n'aura plus qu'a laisser tomber les confettis.
+  jugerLaCourse(race, t, SprinterApp.G.player);
 };
 
 export type GameState = {
