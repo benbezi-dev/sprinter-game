@@ -50,6 +50,7 @@ export const FUCHSIA    = '#E879F9';  // fuchsia-400
  */
 export const NUIT = '5, 7, 13';
 
+
 export const SANS = '"Plus Jakarta Sans", system-ui, sans-serif';
 export const AFFICHE = 'Outfit, system-ui, sans-serif';
 export const CHIFFRES = '"Space Mono", ui-monospace, monospace';

@@ -41,12 +41,11 @@
 // plutot que d'inventer un code qui n'ouvrirait rien.
 
 import { SprinterApp } from './engine';
-import { s2 } from './record';
 import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import {
-  OR, TEXTE, SOURDINE, NUIT, CYAN_CLAIR, AFFICHE, CHIFFRES,
-  ecrire, largeur, tailler, pastille,
+  CYAN, TEXTE, SOURDINE, NUIT, AFFICHE, CHIFFRES,
+  ecrire, largeur, tailler,
 } from './pinceau-film';
 
 /**
@@ -60,17 +59,46 @@ import {
  */
 const SITE = 'sprinter-game.com';
 
+/**
+ * L'ACCENT DU CARTON : le cyan, et non l'or.
+ *
+ * `OR` est la couleur de Sprinter et suit `--primary` ; elle bougera le jour
+ * ou le theme bougera, et un carton doit sortir pareil d'un post a l'autre.
+ * Surtout, c'est la couleur que le HUD met sur le chrono PENDANT la course :
+ * la reprendre ici ferait de la derniere image une image de plus, alors que
+ * le carton dit justement que la course est finie.
+ *
+ * Le cyan, lui, est celui des LED du stade et des bandeaux du jeu — deja fixe,
+ * deja de la maison, et franchement detache de l'or. Voir `CYAN` dans
+ * `pinceau-film.ts` : cyan-400, ecrit en dur comme le reste de la palette.
+ */
+const ACCENT = CYAN;
+
+/**
+ * LE CHRONO, ECRIT COMME LES CARTES L'ECRIVENT.
+ *
+ * Virgule en francais, point en anglais. Le HUD, lui, garde le point partout :
+ * il compte pendant la course, il n'est pas lu, il est surveille. Le carton de
+ * fin est l'inverse — une image qui se pose dans un fil, a cote des cartes de
+ * `tools/carte-*.mjs`, qui ecrivent « 8,64 ». Deux conventions dans le meme
+ * fil, sur le meme chrono, et c'est le jeu qui a l'air mal fini.
+ */
+function chronoEcrit(ms: number, fr: boolean): string {
+  const s = (ms / 1000).toFixed(2);
+  return fr ? s.replace('.', ',') : s;
+}
+
 /** Le voile est pose en {V} sur cette part de la duree, puis il tient. */
 const OUVERTURE = 0.22;
 
 /**
- * Le temps que met la pastille du code a se poser, une fois le code arrive.
+ * Le temps que met le code a se poser, une fois arrive.
  *
- * Elle ne suit pas l'entree du carton : le code arrive quand le serveur
- * repond, c'est-a-dire a n'importe quel moment des une seconde et demie. Un
- * fondu court le pose sans qu'il ait l'air d'un defaut d'affichage — et sans
- * le faire attendre, ce qui serait du temps de lecture pris a un carton qui
- * n'en a pas beaucoup.
+ * Il ne suit pas l'entree du carton : il arrive quand le serveur repond,
+ * c'est-a-dire a n'importe quel moment des une seconde et demie. Un fondu
+ * court le pose sans qu'il ait l'air d'un defaut d'affichage — et sans le
+ * faire attendre, ce qui serait du temps de lecture pris a un carton qui n'en
+ * a pas beaucoup.
  */
 const POSE_CODE_MS = 280;
 
@@ -160,12 +188,20 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   const cx = l / 2;
   const dispo = l - M * 2;
 
-  const tSur    = Math.round(base * 0.037);
-  const tChrono = Math.round(base * 0.235);
-  const tUnite  = Math.round(base * 0.072);
-  const tNom    = Math.round(base * 0.042);
-  const tCode   = Math.round(base * 0.038);
-  const tPied   = Math.round(base * 0.034);
+  // Les corps suivent ceux des cartes : un surtitre discret et lettre, un
+  // chrono qui prend toute la place, et LE CODE JUSTE DERRIERE LUI. Sur
+  // Instagram et TikTok aucun lien n'est cliquable — le code a six caracteres
+  // est le seul chemin vers le jeu, et il doit se lire sur un telephone tenu
+  // a bout de bras, dans un fil qui defile. C'est ce qui lui vaut sa taille et
+  // son inter-lettrage : un code se recopie caractere par caractere.
+  const tSur    = Math.round(base * 0.034);
+  const tChrono = Math.round(base * 0.220);
+  const tUnite  = Math.round(base * 0.068);
+  const tNom    = Math.round(base * 0.040);
+  const tEtiq   = Math.round(base * 0.030);
+  const tCode   = Math.round(base * 0.085);
+  const tUrl    = Math.round(base * 0.030);
+  const tPied   = Math.round(base * 0.032);
 
   const epreuve = libelleEpreuves(G, N);
   const chronoMs = chronoDuCarton(G);
@@ -186,12 +222,18 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     ? 1
     : Math.max(0, Math.min(1, (performance.now() - duFilm.arriveA) / POSE_CODE_MS));
 
+  // LE BILLET DU CODE : deux filets, une etiquette, le code, l'adresse. Il
+  // n'existe que si un code est attendu — sans lui l'adresse redescend dans le
+  // pied, et le carton ne perd rien de ce qu'il devait dire.
+  const hEtiq   = tEtiq * 2.0;
+  const hLigne  = tCode * 1.35;
+  const hUrl    = tUrl * 2.2;
+  const hBillet = attendu ? tEtiq * 1.4 + hEtiq + hLigne + hUrl + tEtiq * 1.4 : 0;
+
   const hSur    = epreuve ? tSur * 1.9 : 0;
   const hChrono = chronoMs !== null ? tChrono * 1.16 : 0;
-  const hNom    = nom ? tNom * 2.1 : 0;
-  const hPast   = tCode * 2.5;
-  const hCode   = attendu ? hPast + tCode * 1.9 : 0;
-  const hBloc   = hSur + hChrono + hNom + hCode;
+  const hNom    = nom ? tNom * 2.2 : 0;
+  const hBloc   = hSur + hChrono + hNom + hBillet;
 
   // Le bloc est centre un peu au-dessus du milieu — le centre optique d'un
   // cadre est au-dessus de son centre geometrique — et jamais si haut qu'il
@@ -205,9 +247,11 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   const A = (v = 1) => v * doux;
 
   if (epreuve) {
-    const e = { taille: tSur, gras: 700, couleur: SOURDINE, espace: tSur * 0.18,
-                alpha: A(0.95), aligne: 'center' as CanvasTextAlign };
-    ecrire(ctx, tailler(ctx, epreuve, dispo, e), cx, y + tSur / 2, e);
+    // « SPRINTER · 100 MÈTRES » : le nom du jeu d'abord, comme sur les cartes.
+    // Celui qui recoit la video ne sait pas encore de quoi il s'agit.
+    const e = { taille: tSur, gras: 700, couleur: SOURDINE, espace: tSur * 0.30,
+                alpha: A(0.9), aligne: 'center' as CanvasTextAlign };
+    ecrire(ctx, tailler(ctx, `SPRINTER · ${epreuve}`, dispo, e), cx, y + tSur / 2, e);
     y += hSur;
   }
 
@@ -215,11 +259,11 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     // Le chiffre et son unite, poses ensemble et centres ensemble. L'unite
     // s'aligne sur la LIGNE DE PIED des chiffres, pas sur leur milieu : une
     // petite lettre centree sur un grand nombre flotte au milieu du vide.
-    const eCh = { taille: tChrono, gras: 900, police: CHIFFRES, couleur: OR,
+    const eCh = { taille: tChrono, gras: 900, police: AFFICHE, couleur: ACCENT,
                   espace: -tChrono * 0.02, alpha: A() };
-    const eUn = { taille: tUnite, gras: 700, police: CHIFFRES, couleur: SOURDINE,
+    const eUn = { taille: tUnite, gras: 700, police: AFFICHE, couleur: SOURDINE,
                   alpha: A(0.75) };
-    const txt = s2(chronoMs);
+    const txt = chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true);
     const lCh = largeur(ctx, txt, eCh);
     const ecart = tUnite * 0.34;
     const lUn = largeur(ctx, 's', eUn);
@@ -232,7 +276,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     // un carton a moitie vide. Le cas est rare — une prise arretee sans que le
     // coureur ait franchi la ligne — mais il ne doit pas sortir un trou.
     const e = { taille: Math.round(base * 0.1), gras: 900, police: AFFICHE,
-                couleur: OR, espace: base * 0.004, alpha: A(),
+                couleur: ACCENT, espace: base * 0.004, alpha: A(),
                 aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, tailler(ctx, epreuve, dispo, e), cx, y + base * 0.06, e);
     y += base * 0.14;
@@ -245,50 +289,95 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     y += hNom;
   }
 
-  // La place a deja ete comptee si un code est attendu ; on ne peint que
-  // lorsqu'il est la, et le fondu est le sien.
-  if (code) {
+  // LE BILLET DU CODE. Deux filets, une etiquette, le code, l'adresse — le
+  // meme bloc que les cartes de communication, pour la meme raison : c'est la
+  // seule partie de l'image qu'on doit pouvoir recopier.
+  //
+  // La place est comptee des que le code est ATTENDU, meme s'il n'est pas
+  // encore la. Le filet, l'etiquette et l'adresse se posent avec le carton ;
+  // seul le code a son fondu a lui, compte depuis son arrivee.
+  if (attendu) {
     const P = (v = 1) => v * doux * poseCode;
-    const e = { taille: tCode, gras: 800, police: CHIFFRES, couleur: CYAN_CLAIR,
-                espace: tCode * 0.16, alpha: P() };
-    pastille(ctx, `${N?.t ? N.t('carton_defi') : 'CODE'} ${code}`, cx, y, hPast, e,
-             `rgba(0,0,0,${P(0.5)})`, `rgba(34,211,238,${P(0.45)})`, tCode * 1.2);
-    y += hPast + tCode * 1.2;
-    const eS = { taille: tCode * 0.82, gras: 500, couleur: SOURDINE, alpha: P(0.8),
-                 aligne: 'center' as CanvasTextAlign };
-    ecrire(ctx, String(N?.t ? N.t('carton_defi_sous') : ''), cx, y, eS);
+    const haut = y;
+    filet(ctx, M, haut, l - M, doux);
+    let yb = haut + tEtiq * 1.4;
+
+    ecrire(ctx, String(N?.t ? N.t('carton_defi') : 'CODE'), cx, yb + tEtiq / 2,
+           { taille: tEtiq, gras: 700, couleur: SOURDINE, espace: tEtiq * 0.34,
+             alpha: A(0.85), aligne: 'center' });
+    yb += hEtiq;
+
+    if (code) {
+      const e = { taille: tCode, gras: 800, police: CHIFFRES, couleur: TEXTE,
+                  espace: tCode * 0.14, alpha: P() };
+      // CENTRER UN TEXTE LETTRE. `letterSpacing` ajoute son espace APRES chaque
+      // caractere, le dernier compris : un `textAlign: center` cale donc le
+      // code d'un demi-espace trop a gauche. On mesure avec et sans pour
+      // retrancher exactement le dernier — et l'ecart vaut zero de lui-meme
+      // sur les navigateurs qui ignorent `letterSpacing`, ou rien n'est
+      // ajoute. La feuille de style de la carte fait la meme correction, sous
+      // le nom de `text-indent`.
+      const lLettre = largeur(ctx, code, e);
+      const lNu = largeur(ctx, code, { ...e, espace: 0 });
+      const trop = code.length ? (lLettre - lNu) / code.length : 0;
+      ecrire(ctx, code, cx - (lLettre - trop) / 2, yb + hLigne / 2, e);
+    }
+    yb += hLigne;
+
+    ecrire(ctx, SITE, cx, yb + hUrl / 2,
+           { taille: tUrl, gras: 500, couleur: SOURDINE, alpha: A(0.8),
+             aligne: 'center' });
+
+    filet(ctx, M, haut + hBillet, l - M, doux);
+    y += hBillet;
   }
 
-  pied(ctx, l, h, M, tPied, doux);
+  // L'ADRESSE DESCEND DANS LE PIED quand il n'y a pas de billet pour la
+  // porter. Elle ne disparait jamais : c'est la seule chose du carton dont on
+  // ne peut pas se passer.
+  const fr = N?.getLang ? N.getLang() === 'fr' : true;
+  pied(ctx, l, h, M, tPied, doux,
+       attendu ? String(N?.t ? N.t('carton_pied') : (fr ? 'JEU DE SPRINT' : 'SPRINT GAME'))
+               : SITE,
+       !attendu);
+}
+
+/** Un filet, de marge a marge. Le meme que celui du pied. */
+function filet(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number,
+               doux: number) {
+  ctx.save();
+  ctx.globalAlpha = doux;
+  ctx.strokeStyle = 'rgba(34,211,238,0.22)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x1, Math.round(y) + 0.5);
+  ctx.lineTo(x2, Math.round(y) + 0.5);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
- * Le pied : la signature a gauche, l'adresse a droite.
+ * Le pied : la signature a gauche, et a droite ce qui reste a dire.
  *
  * Le meme geste que l'affiche partageable (`trace-affiche.js`, `poserPied`) —
- * un filet, deux mots, rien au milieu — a une difference pres qui compte :
- * l'adresse est ECRITE, et elle est en or. L'affiche pouvait s'en passer,
- * elle se publie sur un compte qui porte deja le lien ; un film, lui, voyage
- * seul dans une conversation ou personne ne portera le lien a sa place.
+ * un filet, deux mots, rien au milieu. Ce qui va a droite depend de ce que le
+ * carton porte au-dessus : la signature du jeu quand le billet affiche deja
+ * l'adresse, et l'adresse elle-meme sinon. Un film voyage seul dans une
+ * conversation ou personne ne portera le lien a sa place ; il ne doit jamais
+ * sortir sans lui.
  */
 function pied(ctx: CanvasRenderingContext2D, l: number, h: number, M: number,
-              t: number, doux: number) {
+              t: number, doux: number, droite: string, accent: boolean) {
   const y = h - M;
-  ctx.save();
-  ctx.globalAlpha = doux;
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(M, y - t * 1.75);
-  ctx.lineTo(l - M, y - t * 1.75);
-  ctx.stroke();
-  ctx.restore();
+  filet(ctx, M, y - t * 1.75, l - M, doux);
 
   const ligne = y - t * 0.55;
   ecrire(ctx, 'SPRINTER', M, ligne,
          { taille: t, gras: 700, police: AFFICHE, couleur: TEXTE,
            alpha: doux * 0.5, espace: t * 0.28 });
-  ecrire(ctx, SITE, l - M, ligne,
-         { taille: t, gras: 700, police: AFFICHE, couleur: OR,
-           alpha: doux * 0.9, espace: t * 0.04, aligne: 'right' });
+  ecrire(ctx, droite, l - M, ligne,
+         { taille: t, gras: 700, police: AFFICHE,
+           couleur: accent ? ACCENT : SOURDINE,
+           alpha: doux * (accent ? 0.9 : 0.5),
+           espace: t * (accent ? 0.04 : 0.28), aligne: 'right' });
 }
