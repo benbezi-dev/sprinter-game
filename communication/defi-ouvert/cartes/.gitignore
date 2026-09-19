@@ -1,0 +1,5 @@
+# Les cartes se refabriquent en une commande, et un code ne sert qu'une fois :
+# les versionner alourdirait le depot d'images qui ne resserviront jamais.
+# Celles de riposte-danube/ sont versionnees pour la raison inverse — elles
+# accompagnent une campagne datee, et on veut pouvoir la relire.
+*.png
