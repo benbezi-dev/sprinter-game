@@ -38,19 +38,21 @@
      <code>-story.png   1080x1920  story, Reels, TikTok
      <code>-x.png       1600x900   X
 
-   DEUX MAQUETTES, LE TEMPS DE CHOISIR.
+   DEUX MAQUETTES, ET CHACUNE SON JOUR.
 
-     --style carte    (defaut) celle de carte-defi.mjs : bleu nuit, degrade
-                      orange, filets. C'est le style du pack de communication.
-     --style affiche  celle que le JEU dessine deja quand un joueur partage sa
-                      course — fond #060913, lueur doree, titre en Outfit 900,
-                      chrono en Space Mono, pied « SPRINTER / JEU DE SPRINT ».
-                      Les proportions sont recopiees de game/trace-affiche.js,
-                      pas approchees a l'oeil : meme marge, memes tailles, meme
-                      inter-lettrage.
-
-   Une des deux partira quand la comparaison aura tranche. Deux styles qui
-   restent, c'est une marque qui n'en a plus.
+     --style affiche  (defaut) celle que le JEU dessine deja quand un joueur
+                      partage sa course — fond #060913, lueur doree, titre en
+                      Outfit 900, chrono en Space Mono, pied « SPRINTER / JEU
+                      DE SPRINT ». Les proportions sont recopiees de
+                      game/trace-affiche.js, pas approchees a l'oeil : meme
+                      marge, memes tailles, meme inter-lettrage. C'est la voix
+                      ordinaire du compte, celle des defis.
+     --style carte    bleu nuit et degrade orange, celle de carte-defi.mjs et
+                      carte-riposte.mjs. Elle est reservee aux JOURS DE
+                      COMPETITION du calendrier World Athletics, ou le compte
+                      parle d'autre chose que de lui : un record du monde, une
+                      finale, un chrono d'ailleurs. Deux voix, deux occasions —
+                      et on ne melange pas les deux dans la meme semaine.
 
    LES POLICES du style affiche viennent de Google Fonts, comme dans le jeu
    (voir src/index.css). Sur une machine sans reseau, pose les woff2 et le CSS
@@ -71,7 +73,7 @@ const SITE = 'sprinter-game.com';
 
 function lireArgs(argv) {
   const a = { code: null, titre: null, nom: null, chrono: null, epreuve: null,
-              nom_fichier: null, style: 'carte' };
+              nom_fichier: null, style: 'affiche' };
   for (let i = 0; i < argv.length; i++) {
     const v = () => String(argv[++i] || '');
     switch (argv[i]) {

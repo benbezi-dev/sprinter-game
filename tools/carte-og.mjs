@@ -6,6 +6,12 @@
    c'est l'habit permanent du lien, et c'est la premiere image du jeu que
    beaucoup verront.
 
+   ELLE PORTE LES COULEURS DU JEU, pas celles du pack de communication : fond
+   #060913, or #F8CD4A, Outfit 900 — la meme charte que l'affiche que le jeu
+   dessine a la fin d'une course, et que les cartes de defi. Le bleu nuit et le
+   degrade orange sont reserves aux jours de competition ; l'apercu du lien,
+   lui, est servi tous les jours de l'annee.
+
    ELLE NE PORTE AUCUN CHIFFRE, ET C'EST LA REGLE QUI LA DEFINIT. Les cartes de
    campagne annoncent un record et se refabriquent a chaque fois pour cette
    raison (voir l'en-tete de carte-defi.mjs). Celle-ci est servie par le site
@@ -37,7 +43,7 @@ const page = `<!doctype html><meta charset="utf-8"><style>
   ${enTetePolices()}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:${W}px;height:${H}px;overflow:hidden}
-  body{background:#070b16;position:relative;
+  body{background:#060913;position:relative;
        font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
   /* La piste occupe toute la carte ; le texte se pose sur sa moitie gauche,
      qui est la partie sombre de l'image. Le degrade fait le reste : sans lui,
@@ -45,24 +51,23 @@ const page = `<!doctype html><meta charset="utf-8"><style>
      reduit a la taille d'un pouce. */
   img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
   .voile{position:absolute;inset:0;
-         background:linear-gradient(100deg,#060a14 0%,rgba(6,10,20,.94) 38%,
-                    rgba(6,10,20,.55) 62%,rgba(6,10,20,.15) 100%)}
+         background:linear-gradient(100deg,#060913 0%,rgba(6,9,19,.94) 38%,
+                    rgba(6,9,19,.55) 62%,rgba(6,9,19,.15) 100%)}
   .texte{position:absolute;inset:0;padding:70px 64px;
          display:flex;flex-direction:column;justify-content:center;
          align-items:flex-start;max-width:760px}
   .kicker{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;font-size:22px;
-          letter-spacing:.42em;text-transform:uppercase;color:#f7a93f;
+          letter-spacing:.42em;text-transform:uppercase;color:#F8CD4A;
           margin-bottom:26px}
   h1{font-size:76px;font-weight:900;letter-spacing:-.022em;line-height:.98;letter-spacing:-.02em;
      color:#eef2f8;margin-bottom:24px}
-  /* Le seul mot en couleur est celui qui pose la question. */
-  h1 em{font-style:normal;
-        background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 48%,#ef7526 96%);
-        -webkit-background-clip:text;background-clip:text;color:transparent}
-  .sous{font-size:31px;color:#a7b4c8;line-height:1.28;margin-bottom:38px}
-  .pied{display:inline-block;
-        background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 50%,#ef7526 96%);
-        color:#0a1020;font-weight:700;font-size:28px;
+  /* Le seul mot en couleur est celui qui pose la question. En aplat d'or et
+     non en degrade : le degrade appartient aux cartes de competition. */
+  h1 em{font-style:normal;color:#F8CD4A}
+  .sous{font-size:31px;color:rgba(255,255,255,.55);line-height:1.28;
+        margin-bottom:38px}
+  .pied{display:inline-block;background:#F8CD4A;
+        color:#060913;font-weight:700;font-size:28px;
         padding:18px 40px;border-radius:999px}
   </style>
   <img src="file://${FOND}" alt="">
