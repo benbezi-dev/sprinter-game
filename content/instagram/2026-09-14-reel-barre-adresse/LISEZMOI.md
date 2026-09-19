@@ -7,22 +7,49 @@
 
 ## Ce que ce dossier contient, et ce qu'il ne contient pas
 
-**Il n'y a pas de `video.mp4` ici, et c'est la seule réponse honnête.**
+**`video.webm` EST une capture d'écran, et non la prise à la caméra.** C'est la
+première chose à savoir avant de la publier, parce qu'elle change ce que la
+légende a le droit d'affirmer.
 
-Ce reel est une démonstration filmée : un écran de téléphone vu de haut, une
-main qui tape `sprinter-game.com` dans la barre d'adresse, la page qui s'ouvre,
-JOUER, la course, la ligne. Le conducteur le dit en toutes lettres — *ce reel se
-tourne, et il ne se monte pas*. Cette prise demande une caméra, un téléphone et
-une main, et elle n'existe nulle part : le dépôt ne contient aucune image
-d'appareil filmé de l'extérieur, et rien dans la machine de montage ne peut en
-fabriquer une. Une prise reconstituée à partir d'une capture d'écran du jeu
-serait pire qu'une coupe : la coupe abîme la preuve, la reconstitution la
-supprime.
+Le conducteur demande un écran de téléphone **filmé de haut**, avec une main qui
+tape `sprinter-game.com` dans la barre d'adresse. Cette prise demande une
+caméra, un téléphone et une main. Elle n'existe pas, et rien ici ne peut en
+fabriquer une : reconstituer une main et une barre d'adresse à partir d'une
+capture serait pire qu'une coupe — la coupe abîme la preuve, la reconstitution
+la supprime.
 
-Tout le reste est fait, et vérifié :
+Ce qui a été produit à la place est vrai, et se tient : **un seul plan, sans
+coupe, de l'ouverture à froid de la page jusqu'à la ligne d'arrivée**, avec un
+chronomètre réel incrusté. Le jeu y est réellement joué — la course se court, le
+serveur rend un chrono, l'écran d'arrivée l'affiche.
+
+Ce qu'elle ne montre pas, et que la légende ne doit donc pas dire : la frappe de
+l'adresse. Le chiffre annoncé est **« de l'ouverture de la page à l'arrivée »**,
+pas « du premier caractère tapé ». `legende.txt` est écrite comme cela.
+
+| Mesure | Valeur |
+|---|---|
+| durée réelle du fichier | **24,72 s** |
+| chronomètre à l'arrêt | **23,33 s** |
+| chrono de la course, lu à l'écran du jeu | **8,99 s** |
+| poids · format | 13,74 Mo · VP8/WebM, 1080 × 1920, 25 i/s |
+| accueil atteint | 6,9 s après l'ouverture |
+| coup de pistolet | 11,2 s |
+
+**Le jour où la prise à la caméra existe**, `monteur-barre-adresse.html` la
+monte et produit la vraie version, celle qui peut dire « du premier caractère
+tapé ». Ce fichier-ci est ce qui se publie en attendant, pas ce qui le
+remplace.
+
+Le dossier :
 
 | Fichier | Ce que c'est |
 |---|---|
+| `video.webm` | **la vidéo**, 24,72 s, un plan, capture d'écran — *non versionnée* |
+| `couverture.png` | 1080 × 1920, le chronomètre arrêté sur 23,33 s — *non versionnée* |
+| `sous-titres.srt` | les deux cartons, aux temps réels du fichier |
+| `legende.txt` | la légende, les deux chiffres mesurés dedans |
+| `filmer-la-demonstration.mjs` | ce qui a produit la vidéo, et qui la refait |
 | `monteur-barre-adresse.html` | **la page de montage**, prête. Charge la prise, relève les deux repères image par image, incruste le chronomètre, pose les deux cartons, garde le son, enregistre, et écrit la vidéo, la couverture, le SRT et la légende |
 | `verifier-monteur.mjs` | le pilote qui prouve la chaîne sans prise : `node verifier-monteur.mjs` |
 | `reperer-le-chemin.mjs` | ouvre le jeu en émulation téléphone et vérifie le chemin de tournage écran par écran, avant chaque prise |
@@ -30,9 +57,44 @@ Tout le reste est fait, et vérifié :
 | `legende-modele.txt` | la légende, ses deux trous et les mots bannis |
 | `sous-titres-modele.srt` | la structure du SRT — le monteur écrit le vrai |
 
-Le jour où la prise existe, une seule passe dans la page produit `video.mp4`,
-`couverture.png`, `sous-titres.srt` et `legende.txt`, et il ne reste qu'à les
-déposer ici.
+### Pourquoi la vidéo n'est pas dans le dépôt
+
+Elle existe, elle est finie, et elle **ne se versionne pas**. La racine exclut
+`content/**/*.mp4`, `*.jpg` et `*.png`, et la raison qu'elle en donne vaut pour
+tous les formats : *« le dépôt est public, et une vidéo poussée ne se retire pas
+de l'historique en la supprimant »*. Le `.webm` n'y avait échappé que par
+omission d'extension ; le `.gitignore` de ce dossier le couvre désormais.
+
+La vidéo et la couverture se livrent donc comme les autres reels du compte — par
+le Drive — et se refabriquent ici en une commande :
+
+```bash
+npm run build && node -e "…"   # ou : npx vite preview
+node content/instagram/2026-09-14-reel-barre-adresse/filmer-la-demonstration.mjs
+```
+
+### Comment `video.webm` a été fabriquée
+
+`filmer-la-demonstration.mjs` ouvre le jeu en émulation téléphone, pose les cinq
+marqueurs d'un navigateur déjà venu, puis **charge la page à froid** et
+enregistre sans s'arrêter : ONE SHOT, LANCER, le décompte, la course jouée à
+quinze appuis par seconde — une cadence de main, pas de machine —, la ligne.
+
+Trois choix méritent d'être connus :
+
+- **On n'est pas passé par MediaRecorder.** Cette machine n'a pas de sortie
+  audio, la lecture n'y est freinée par rien, et le banc d'essai a mesuré une
+  dérive allant jusqu'à six fois le temps réel. On capture donc par
+  `Page.startScreencast`, qui horodate chaque image, on rééchantillonne à
+  cadence fixe, et on encode en VP8 avec le ffmpeg du navigateur de test. La
+  ligne de temps est construite, pas subie.
+- **La capture se fait à 720 × 1280, agrandie d'un facteur 1,5.**
+  `startScreencast` ne rend que les pixels CSS du viewport ;
+  `Page.captureScreenshot` rend bien 1080 × 1920 mais à 6,7 images par seconde,
+  ce qui ne filme pas une course. 720 px est juste sous la bascule `md:` de
+  Tailwind : la mise en page du téléphone tient.
+- **Les polices sont injectées en data: URI.** `fonts.googleapis.com` n'est pas
+  joignable d'ici, et un jeu rendu en police de repli est un film à refaire.
 
 ## Où ce dossier devrait vivre
 

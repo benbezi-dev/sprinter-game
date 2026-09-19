@@ -1,0 +1,7 @@
+1
+00:00:00,200 --> 00:00:02,500
+Le temps de lire cette phrase…
+
+2
+00:00:23,330 --> 00:00:24,720
+… la course est déjà finie.
