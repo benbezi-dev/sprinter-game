@@ -21,7 +21,7 @@
    ignoree par la moitie des lecteurs d'apercu.
    =========================================================================== */
 import path from 'node:path';
-import { capturer } from './chrome.mjs';
+import { capturer, enTetePolices } from './chrome.mjs';
 
 const ICI = path.dirname(new URL(import.meta.url).pathname);
 const RACINE = path.resolve(ICI, '..');
@@ -34,10 +34,11 @@ const FOND = path.join(RACINE, 'communication/riposte-danube/stade/x-1600x900-li
 const W = 1200, H = 630;
 
 const page = `<!doctype html><meta charset="utf-8"><style>
+  ${enTetePolices()}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:${W}px;height:${H}px;overflow:hidden}
   body{background:#070b16;position:relative;
-       font:400 16px/1.2 "Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
+       font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
   /* La piste occupe toute la carte ; le texte se pose sur sa moitie gauche,
      qui est la partie sombre de l'image. Le degrade fait le reste : sans lui,
      un titre blanc sur du tartan orange devient illisible des que l'apercu est
@@ -49,10 +50,10 @@ const page = `<!doctype html><meta charset="utf-8"><style>
   .texte{position:absolute;inset:0;padding:70px 64px;
          display:flex;flex-direction:column;justify-content:center;
          align-items:flex-start;max-width:760px}
-  .kicker{font-family:Menlo,"DejaVu Sans Mono",monospace;font-size:22px;
+  .kicker{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;font-size:22px;
           letter-spacing:.42em;text-transform:uppercase;color:#f7a93f;
           margin-bottom:26px}
-  h1{font-size:76px;font-weight:700;line-height:.98;letter-spacing:-.02em;
+  h1{font-size:76px;font-weight:900;letter-spacing:-.022em;line-height:.98;letter-spacing:-.02em;
      color:#eef2f8;margin-bottom:24px}
   /* Le seul mot en couleur est celui qui pose la question. */
   h1 em{font-style:normal;
@@ -75,7 +76,7 @@ const page = `<!doctype html><meta charset="utf-8"><style>
   </div>`;
 
 try {
-  capturer({ html: page, w: W, h: H, sortie: SORTIE });
+  await capturer({ html: page, w: W, h: H, sortie: SORTIE });
   console.log(`  ${path.relative(RACINE, SORTIE)}`);
 } catch (e) {
   console.error(e.message);

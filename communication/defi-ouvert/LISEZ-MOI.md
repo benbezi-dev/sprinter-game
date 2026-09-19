@@ -29,6 +29,15 @@ un jeu, il lui demande **s'il tient le chrono**.
    Reels, TikTok), `-x` (X). Le chrono, le nom et le **compteur de tentatives**
    sont relus sur le serveur au moment du rendu — rien n'est recopié à la main,
    donc rien ne peut être périmé.
+
+   **Deux styles, le temps de choisir** — `--style carte` (défaut) est celui du
+   pack de communication, bleu nuit et dégradé orange ; `--style affiche` est
+   celui que le jeu dessine déjà quand un joueur partage sa course : fond
+   `#060913`, lueur dorée, Outfit 900, chrono en Space Mono. Les proportions du
+   second sont recopiées de `src/game/trace-affiche.js`, pas approchées à
+   l'œil. Les fichiers portent le style dans leur nom (`zeze42-affiche-feed`),
+   donc les deux cohabitent le temps de la comparaison. Une fois tranché, on en
+   supprime un : deux styles qui restent, c'est une marque qui n'en a plus.
 4. **Tu postes**, en prenant la légende dans `legendes.md`.
 
 Relance la commande deux jours plus tard : la carte dit alors « 14 ont essayé,
@@ -91,6 +100,7 @@ perd pour de bon.
 |---|---|
 | `legendes.md` | Les légendes prêtes à coller, par réseau, et les accroches à faire tourner. |
 | `cartes/` | Ce que produit l'outil. Un jeu de trois images par code. |
-| `../../tools/carte-defi-ouvert.mjs` | L'outil. Lit le défi sur l'API, rend les trois formats. |
+| `../../tools/carte-defi-ouvert.mjs` | L'outil. Lit le défi sur l'API, rend les trois formats, dans l'un des deux styles. |
+| `../../tools/chrome.mjs` | La capture et les polices de la charte. Sans réseau, pose les woff2 dans un dossier et donne-le par `SPRINTER_POLICES`. |
 | `../../tools/carte-og.mjs` | L'aperçu permanent du lien (`public/og-1200x630.png`). |
 | `../riposte-danube/` | L'autre campagne : l'actualité de l'athlétisme, pas le défi. Le style des cartes vient de là. |
