@@ -3446,7 +3446,7 @@ async function servir(request, env, ctx, porteur) {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { device_id, name, races, level_idx, total_ms, splits, traces,
-              target_score_id, revanche_de } = body || {};
+              target_score_id, revanche_de, code: codeVoulu } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
       const t = Math.round(Number(total_ms));
@@ -3528,12 +3528,46 @@ async function servir(request, env, ctx, porteur) {
         }
       }
 
-      const id = makeCode();
-      await env.DB.prepare(
-        `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, Date.now(), device_id, cleanName(name), JSON.stringify(races),
-             lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces), target).run();
+      /* ------------------------------------------------------- LE CODE
+         Tire au hasard, sauf quand on le choisit — ce que la campagne demande :
+         des codes qui se retiennent, ZEZE22 a ZEZE88, un par couloir.
+
+         SOUS LA CLE D'ADMINISTRATION, ET SEULEMENT LA. Un code qu'on choisit
+         est un code qu'on squatte : sans ce verrou, n'importe qui poserait
+         ZEZE88 et se ferait passer pour la famille. Le joueur, lui, n'a aucune
+         raison de choisir : un code tire ne se devine pas, et c'est ce qui
+         protege son defi.
+
+         L'ALPHABET NE BOUGE PAS, meme choisi. Pas de 0/O ni de 1/I/L : un code
+         sert a etre dicte a voix haute dans une video, et une marque qui coute
+         la dictee ne vaut pas la marque. C'est pourquoi « ZEZE07 » n'existera
+         jamais, et pourquoi les sept couloirs se numerotent de 2 a 8. */
+      let id = makeCode();
+      const voulu = String(codeVoulu || '').toUpperCase().replace(/\s+/g, '');
+      if (voulu) {
+        if (!estAdmin(request, env)) return json({ error: 'code choisi refuse' }, 403);
+        if (voulu.length < 4 || voulu.length > 10 ||
+            [...voulu].some(ch => !CODE_ALPHABET.includes(ch))) {
+          return json({ error: 'code invalide', alphabet: CODE_ALPHABET }, 400);
+        }
+        id = voulu;
+      }
+
+      try {
+        await env.DB.prepare(
+          `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(id, Date.now(), device_id, cleanName(name), JSON.stringify(races),
+               lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces), target).run();
+      } catch (e) {
+        // L'unicite est tranchee par la CLE PRIMAIRE et non par une lecture
+        // prealable : entre un SELECT et l'INSERT, deux creations du meme code
+        // passeraient toutes les deux. Et la collision ne peut venir que d'un
+        // code CHOISI — un code tire vaut trente et un caracteres puissance
+        // six, on ne la verra jamais de ce cote.
+        if (voulu) return json({ error: 'code deja pris', code: voulu }, 409);
+        throw e;
+      }
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = cleanName(name).trim().toLowerCase();

@@ -4,6 +4,7 @@
 
 import type { DuelIssue } from './duels';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
+import { cleAdmin } from './identity';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -91,10 +92,25 @@ export async function createChallenge(input: {
    * chrono — voir /challenge, cote worker.
    */
   revancheDe?: string | null;
+  /**
+   * Un code CHOISI plutot que tire — ZEZE22 a ZEZE88, un par couloir.
+   *
+   * Le serveur ne l'accepte que sous la cle d'administration : un code qu'on
+   * choisit est un code qu'on squatte, et sans ce verrou n'importe qui poserait
+   * ZEZE88 pour se faire passer pour la famille. Le champ n'apparait donc qu'a
+   * qui a deja cette cle dans son navigateur.
+   */
+  code?: string | null;
 }): Promise<{ id: string; cible: string }> {
+  // La cle n'est presentee que s'il y en a une, et elle ne sert qu'au code
+  // choisi : un defi ordinaire part sans en-tete, comme avant.
+  const cle = input.code ? cleAdmin() : '';
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(cle ? { 'X-Sprinter-Admin': cle } : {}),
+    },
     body: JSON.stringify({
       device_id: getDeviceId(),
       name: input.name || getSavedName() || 'Anonyme',
@@ -105,9 +121,16 @@ export async function createChallenge(input: {
       traces: input.traces,
       target_score_id: input.targetScoreId ?? null,
       revanche_de: input.revancheDe ?? null,
+      code: input.code || undefined,
     }),
   });
-  if (!res.ok) throw new Error('challenge create failed');
+  // Le message du serveur plutot qu'un echec muet : « code deja pris » et
+  // « code invalide » se corrigent en une frappe, encore faut-il les lire.
+  if (!res.ok) {
+    let dit = '';
+    try { dit = (await res.json())?.error || ''; } catch { /* corps illisible */ }
+    throw new Error(dit || 'challenge create failed');
+  }
   const data = await res.json();
   if (!data.id) throw new Error('challenge create failed');
   /**
