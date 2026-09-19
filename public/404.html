@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex" />
+<title>Sprinter</title>
+
+<!--
+  LA PORTE DES DEFIS — sprinter-game.com/d/K7M2QX
+  ===========================================================================
+
+  POURQUOI CETTE PAGE EXISTE. Le code d'un defi voyage sur une VIDEO. Celui qui
+  le recoit ne peut pas le cliquer : il le lit a l'ecran, ou il l'entend. Le
+  chemin qu'il avait jusqu'ici tenait en trois gestes — ouvrir le site, trouver
+  le champ du code, taper les six caracteres — et chaque geste perd du monde.
+  « sprinter-game.com/d/K7M2QX » n'en demande qu'un, dans la barre d'adresse
+  que le telephone propose deja.
+
+  Sur Instagram et TikTok, ou une legende ne rend aucun lien cliquable, cette
+  forme-la est aussi la seule qui se DICTE : « slash d slash K7M2QX ». Un
+  « point com slash point d e f i egale » ne se dit pas a voix haute.
+
+  POURQUOI C'EST UNE PAGE 404 ET PAS UNE ROUTE. Le jeu est servi par GitHub
+  Pages, qui rend des FICHIERS. « /d/K7M2QX » n'est pas un fichier : aucun
+  routage cote navigateur — wouter compris — n'a la moindre chance d'etre
+  atteint, puisque rien ne se charge. Pages a un seul repli pour les chemins
+  qu'il ne connait pas, et c'est ce fichier. C'est donc ici, et nulle part
+  ailleurs, que la porte peut s'ouvrir. (Voir le commentaire de `App.tsx`, qui
+  explique pourquoi le tableau de bord passe lui aussi par un parametre.)
+
+  CE QU'ELLE NE FAIT PAS. Elle ne devient pas le jeu. Un repli SPA complet —
+  404.html recopie de index.html — enverrait « /test/d/CODE » sur la
+  PRODUCTION, puisque Pages sert le repli de la racine : un lien de test
+  ouvrirait le vrai jeu et sa vraie base, sans que rien ne le dise. C'est
+  exactement la confusion que les deux bases D1 existent pour empecher. Cette
+  page relit donc le chemin DEMANDE, y lit le canal, et renvoie dans le bon.
+
+  ELLE NE DEVINE PAS LE CODE NON PLUS. Elle transporte ce qu'elle a lu ;
+  `normalizeCode` (challenge.ts) reste seul juge de ce qui est un code. Deux
+  avis sur la question, c'est un jour ou l'un accepte ce que l'autre refuse.
+
+  LE LIEN PARTAGE, LUI, RESTE « ?defi= ». Cette page repond avec un statut 404
+  — c'est ce que Pages envoie pour tout chemin sans fichier, et on ne peut pas
+  le changer. Un humain ne le voit jamais : il est redirige avant d'avoir lu.
+  Un robot d'apercu, si : la plupart refusent de montrer une vignette pour une
+  404. Le lien qu'on ENVOIE (WhatsApp, SMS, X, la feuille de partage) garde
+  donc la forme « ?defi= », qui repond 200 et porte l'apercu. Celle-ci est la
+  forme qu'on LIT et qu'on TAPE. Deux formes, deux usages, et la meme course.
+-->
+
+<style>
+  /* Le fond du jeu, tout de suite. Une page blanche d'un dixieme de seconde
+     entre une video et le jeu, c'est un ecran qui clignote au moment precis ou
+     l'on demande a quelqu'un de nous faire confiance. Les valeurs sont celles
+     de `src/game/palette-affiche.js` ; ce fichier est servi tel quel, sans
+     passer par le bundle, il ne peut pas l'importer. */
+  html, body { margin: 0; height: 100%; background: #060913; color: #fff; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; box-sizing: border-box; text-align: center;
+    font: 500 16px/1.5 Outfit, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  /* Rien ne s'affiche pendant la redirection : le cas courant doit etre un
+     fond noir et rien d'autre, pas un message qui passe trop vite pour etre
+     lu. `.perdu` n'est rendu visible que si l'on reste. */
+  .perdu { display: none; max-width: 22rem; }
+  .perdu h1 { font-weight: 900; font-size: 1.5rem; margin: 0 0 .5rem;
+              letter-spacing: -.022em; }
+  .perdu p { margin: 0 0 1.5rem; color: rgba(255,255,255,.55); }
+  .perdu a { display: inline-block; padding: .75rem 1.5rem; border-radius: 999px;
+             background: #F8CD4A; color: #060913; font-weight: 700;
+             text-decoration: none; letter-spacing: .02em; }
+  .montre .perdu { display: block; }
+</style>
+</head>
+<body>
+
+<div class="perdu">
+  <h1>Cette adresse n’existe pas</h1>
+  <p>Le défi que tu cherches a peut-être expiré, ou le code a été mal recopié.</p>
+  <a id="retour" href="/">Aller courir</a>
+</div>
+
+<script>
+/*
+  LA PORTE, EN UNE FONCTION.
+  ---------------------------------------------------------------------------
+  Elle est ecrite a part, et rend une chaine plutot que de rediriger elle-meme,
+  pour une raison : `tools/lien-court-test.mjs` execute CE FICHIER et lui pose
+  la trentaine de chemins qu'on peut recevoir. Un test qui verifierait une
+  copie de cette logique ne verifierait rien du tout — c'est la copie qui
+  partirait a la derive, et on ne s'en apercevrait qu'en perdant des joueurs.
+*/
+function porteDuDefi(chemin, recherche) {
+  // Le canal vit dans le chemin, pas dans ce fichier. Pages sert le repli de
+  // la racine meme pour « /test/... » : si on lisait le canal ici, tout
+  // atterrirait en production.
+  var canal = chemin.indexOf('/test/') === 0 ? '/test/' : '/';
+  var reste = chemin.slice(canal.length);
+
+  // « d/CODE », et rien d'autre. Une barre finale se pardonne — les claviers
+  // de telephone en ajoutent une tout seuls apres un chemin — mais un segment
+  // de plus veut dire qu'on ne sait pas de quoi il s'agit.
+  var m = /^d\/([^/?#]+)\/?$/.exec(reste);
+  if (!m) return null;
+
+  // On ne juge pas le code, on le transporte : `normalizeCode` le fera, une
+  // seule fois, du cote du jeu. On le decode quand meme, parce qu'un lien
+  // recopie depuis une application peut arriver pourcent-encode.
+  var brut = m[1];
+  try { brut = decodeURIComponent(brut); } catch (e) { /* on garde le brut */ }
+  if (!brut) return null;
+
+  // CE QUI ACCOMPAGNAIT L'ADRESSE LA SUIT. Un lien pose dans une bio ou dans
+  // une publicite arrive avec sa provenance accrochee — « ?utm_source=tiktok ».
+  // La jeter ici, c'est perdre la reponse a « d'ou viennent les joueurs ? »
+  // sur le seul chemin qu'on vient de creer pour en amener. On ecarte un
+  // « defi= » qui trainerait : c'est le chemin qui fait foi, pas la question.
+  var garde = [], bruts = String(recherche || '').replace(/^\?/, '').split('&');
+  for (var i = 0; i < bruts.length; i++) {
+    if (bruts[i] && bruts[i].split('=')[0] !== 'defi') garde.push(bruts[i]);
+  }
+
+  return canal + '?defi=' + encodeURIComponent(brut) +
+         (garde.length ? '&' + garde.join('&') : '');
+}
+
+(function () {
+  var vers = null;
+  try {
+    vers = porteDuDefi(window.location.pathname, window.location.search);
+  } catch (e) { vers = null; }
+
+  if (vers) {
+    // `replace` et non `assign` : le bouton « retour » doit ramener a la
+    // video, pas a cette page, qui redirigerait a nouveau — un piege dont on
+    // ne sort qu'en fermant l'onglet.
+    window.location.replace(vers + window.location.hash);
+    return;
+  }
+
+  // On reste. Le bouton ramene au canal d'ou l'on vient : quelqu'un perdu
+  // dans « /test/quelquechose » cherche le jeu de test, pas l'autre.
+  try {
+    var canal = window.location.pathname.indexOf('/test/') === 0 ? '/test/' : '/';
+    document.getElementById('retour').setAttribute('href', canal);
+  } catch (e) { /* le lien garde « / », qui est vrai neuf fois sur dix */ }
+  document.body.parentNode.className += ' montre';
+})();
+</script>
+
+<noscript>
+  <!-- Le jeu lui-meme ne tourne pas sans JavaScript ; cette page n'a donc rien
+       de plus a promettre que l'adresse du jeu. -->
+  <div style="display:block;max-width:22rem">
+    <h1 style="font-weight:900;font-size:1.5rem;margin:0 0 .5rem">Sprinter</h1>
+    <p style="color:rgba(255,255,255,.55)">Le jeu a besoin de JavaScript.</p>
+    <a href="/" style="color:#F8CD4A">sprinter-game.com</a>
+  </div>
+</noscript>
+
+</body>
+</html>

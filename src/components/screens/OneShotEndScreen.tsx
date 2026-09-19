@@ -13,6 +13,7 @@ import {
   createChallenge, submitAttempt, challengeLink,
   shareText, whatsappUrl, smsUrl, canNativeShare, nativeShare,
 } from '@/game/challenge';
+import { lancerLeDefiDeLaCamera } from '@/game/defi-camera';
 import { noterDefi } from '@/game/journal-defis';
 import { pushReprise } from '@/game/history';
 import { DuelRanking } from './DuelRanking';
@@ -341,15 +342,24 @@ export function OneShotEndScreen() {
     (async () => {
       setBusy(true); setErr(false);
       try {
-        const { id, cible: prevenu } = await createChallenge({
-          races: shotRaces as ('100' | '200' | '400')[],
-          levelIdx: SprinterApp.G.shotLevel,
-          totalMs: runTime * 1000,
-          splits: runSplits.map(s => (s || 0) * 1000),
-          traces: SprinterApp.G.shotTraces || [],
-          name: name.trim() || undefined,
-          revancheDe: revancheId,
-        });
+        // LE DEFI DE LA CAMERA D'ABORD. Elle en a pose un a l'arrivee, et
+        // c'est son code qui est ecrit sur le carton de fin du film. En creer
+        // un second ici donnerait deux codes pour une seule course — celui
+        // qu'on voit dans la video, et celui qui est parti a l'adversaire. On
+        // lance donc celui qui existe, et on ne retombe sur la creation que
+        // s'il n'y en a pas (hors ligne a l'arrivee, course qui ne pouvait pas
+        // faire un defi).
+        const { id, cible: prevenu } =
+          await lancerLeDefiDeLaCamera({ name: name.trim() || undefined, revancheDe: revancheId })
+          ?? await createChallenge({
+            races: shotRaces as ('100' | '200' | '400')[],
+            levelIdx: SprinterApp.G.shotLevel,
+            totalMs: runTime * 1000,
+            splits: runSplits.map(s => (s || 0) * 1000),
+            traces: SprinterApp.G.shotTraces || [],
+            name: name.trim() || undefined,
+            revancheDe: revancheId,
+          });
         setCode(id);
         noterDefiLance(id, prevenu || revancheNom || '', shotRaces);
         setRevancheVise(revancheNom || '');
@@ -396,15 +406,24 @@ export function OneShotEndScreen() {
     if (finalName) saveName(finalName);
     setBusy(true); setErr(false);
     try {
-      const { id, cible: prevenu } = await createChallenge({
-        races: shotRaces as ('100' | '200' | '400')[],
-        levelIdx: SprinterApp.G.shotLevel,
-        totalMs: runTime * 1000,
-        splits: runSplits.map(s => (s || 0) * 1000),
-        traces: SprinterApp.G.shotTraces || [],
-        name: finalName || undefined,
-        targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
-      });
+      // Le defi que la camera a pose a l'arrivee, s'il existe : c'est son
+      // code qui est ecrit sur la video, et il n'y en a qu'un par course.
+      // Voir `defi-camera.ts` — poser n'est pas lancer, et ce bouton est le
+      // lancement.
+      const { id, cible: prevenu } =
+        await lancerLeDefiDeLaCamera({
+          name: finalName || undefined,
+          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
+        })
+        ?? await createChallenge({
+          races: shotRaces as ('100' | '200' | '400')[],
+          levelIdx: SprinterApp.G.shotLevel,
+          totalMs: runTime * 1000,
+          splits: runSplits.map(s => (s || 0) * 1000),
+          traces: SprinterApp.G.shotTraces || [],
+          name: finalName || undefined,
+          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
+        });
       setCode(id);
       noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
     } catch {

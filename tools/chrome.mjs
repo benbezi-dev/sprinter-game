@@ -134,7 +134,7 @@ function client(ws) {
  * porte parfois une image ou une police locale, et une page `data:` n'a pas de
  * dossier d'ou les charger.
  */
-export async function capturer({ html, w, h, sortie, chrome }) {
+export async function capturer({ html, w, h, sortie, chrome, attente = 0 }) {
   const bin = chrome || trouverChrome();
   const atelier = fs.mkdtempSync(path.join(os.tmpdir(), 'carte-'));
   const page = path.join(atelier, 'page.html');
@@ -173,6 +173,20 @@ export async function capturer({ html, w, h, sortie, chrome }) {
     await c.envoyer('Runtime.evaluate',
                     { expression: 'document.fonts.ready.then(() => true)', awaitPromise: true },
                     sessionId);
+
+    /* UNE PAUSE, POUR CE QUI N'EST PAS FINI QUAND LA PAGE EST CHARGEE.
+       Les cartes n'en ont pas besoin : elles sont du CSS, et une fois les
+       polices pretes elles sont dessinees. Un ecran du jeu, lui, monte en
+       fondu — `MONTEE` part d'une opacite nulle — et la capture tombait sur
+       une image entierement transparente. On ne l'attend donc que quand
+       l'appelant le demande, pour ne pas ralentir les rendus qui n'en ont
+       aucun besoin. */
+    if (attente > 0) {
+      await c.envoyer('Runtime.evaluate', {
+        expression: `new Promise(ok => setTimeout(ok, ${Math.round(attente)}))`,
+        awaitPromise: true,
+      }, sessionId);
+    }
 
     const { data } = await c.envoyer('Page.captureScreenshot', {
       format: 'png', captureBeyondViewport: true,

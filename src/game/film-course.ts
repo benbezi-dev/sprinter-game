@@ -22,6 +22,8 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Review, type EtatReview } from './review';
 import { SprinterApp, useGameStore } from './engine';
 import { peindreLeHud } from './hud-film';
+import { peindreLeCarton } from './carton-film';
+import { poserLeDefiDeLaCamera, oublierLeDefiDeLaCamera } from './defi-camera';
 
 /**
  * A QUELLE COURSE APPARTIENT LE FILM.
@@ -151,6 +153,9 @@ export function demarrerLeFilm(
 ) {
   annulerLeDepart();
   poserGenre(g);
+  // Une prise neuve n'herite pas du code de la precedente : le carton
+  // afficherait le defi d'une course qui n'est pas celle qu'on regarde.
+  oublierLeDefiDeLaCamera();
   filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons],
                             peindreLeHud);
 }
@@ -190,11 +195,23 @@ export function programmerLeFilm(
  * Rien ne garantit qu'un message de fin arrive apres la course qui l'a
  * demande : une salle peut annoncer un resultat alors que le joueur est deja
  * reparti sur autre chose. Le genre tranche.
+ *
+ * LE CARTON DE FIN EST POSE ICI, et pour les trois courses sans distinction.
+ * C'est le pendant exact de `peindreLeHud` a `demarrerLeFilm` : `review.ts`
+ * sait quand l'enregistreur ecrit encore, ce module sait ce qu'il faut y
+ * ecrire. Le film gagne donc une seconde et demie — d'ou l'attente avant que
+ * le bouton de partage ne s'allume, voir `Review.arreter`.
  */
 export function arreterLeFilm(g: GenreFilm): Promise<void> {
   if (genre !== g) return Promise.resolve();
   annulerLeDepart();
-  return filmDeLaCourse().arreter();
+  // LA CAMERA POSE SON DEFI AVANT DE S'ARRETER, et d'un cheveu : le carton met
+  // une seconde et demie a se peindre, c'est tout ce dont le serveur dispose
+  // pour rendre un code. On n'attend pas sa reponse — voir
+  // `poserLeDefiDeLaCamera` — le carton lui garde sa place et sort sans lui
+  // s'il tarde.
+  poserLeDefiDeLaCamera(g);
+  return filmDeLaCourse().arreter(peindreLeCarton);
 }
 
 /** Libere le film de cette course-la, et rien d'autre. */
@@ -202,6 +219,7 @@ export function jeterLeFilm(g: GenreFilm | null) {
   if (!g || genre !== g) return;
   annulerLeDepart();
   filmDeLaCourse().jeter();
+  oublierLeDefiDeLaCamera();
   poserGenre(null);
 }
 

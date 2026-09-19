@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu du classement des nations</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>html,body{margin:0;height:100%;background:#060913}</style>
+<div id="ici"></div>
+<script type="module">
+  /* Le classement des nations, hors serveur.
+   *
+   * L'ecran ne lit qu'une chose — `/nations` — et on la lui sert ici. Peupler
+   * douze pays de cinquante joueurs pour regarder un dessin coute une demi-
+   * heure ; le dessin, lui, se regarde en une seconde.
+   *
+   * Les trois cas qu'on oublie de regarder, et qui sont pourtant les premiers
+   * que verra un joueur :
+   *
+   *   ?cas=petit    mon pays n'atteint pas le seuil — l'ecran doit alors dire
+   *                 ce qui lui MANQUE, et non « pas classé » ;
+   *   ?cas=premiere la toute premiere semaine : aucune fleche, parce qu'il n'y
+   *                 a rien a comparer. Un tableau plein de « 0 » serait pire ;
+   *   ?cas=vide     une base neuve, ou aucun pays n'a encore l'effectif.
+   *
+   *     npx vite  puis  http://localhost:5173/tools/apercu-nations.html
+   */
+  const cas = new URLSearchParams(location.search).get('cas') || 'plein';
+
+  const PAYS = [
+    ['JM', 'Jamaïque',          9170, 50,  1],
+    ['US', 'États-Unis',        9370, 50, -1],
+    ['TT', 'Trinité-et-Tobago', 9530, 12,  1],
+    ['GB', 'Royaume-Uni',       9600, 50, -1],
+    ['CA', 'Canada',            9700, 31,  0],
+    ['FR', 'France',            9730, 50,  2],
+    ['ZA', 'Afrique du Sud',    9800, 18,  0],
+    ['IT', 'Italie',            9870, 24, -2],
+    ['JP', 'Japon',             9950, 16,  3],
+    ['MA', 'Maroc',            10110, 14, -1],
+    ['DE', 'Allemagne',        10190, 22,  0],
+  ];
+  const tete = PAYS[0][2];
+  const classement = cas === 'vide' ? [] : PAYS.map(([pays, nom, median, joueurs, m], i) => ({
+    pays, nom, median, joueurs, meilleur: median - 400, rang: i + 1,
+    ecart: median - tete,
+    rangPrecedent: cas === 'premiere' ? null : i + 1 + m,
+    mouvement: cas === 'premiere' ? null : m,
+    medianPrecedent: cas === 'premiere' ? null : median + 60,
+  }));
+
+  const moi =
+    cas === 'vide' ? null
+    : cas === 'petit'
+      ? { pays: 'SN', nom: 'Sénégal', median: null, joueurs: 3, meilleur: null,
+          rang: null, ecart: 0, rangPrecedent: null, mouvement: null,
+          medianPrecedent: null, manque: 2 }
+      : { ...classement[5], manque: 0 };
+
+  const vrai = window.fetch;
+  window.fetch = (u, o) => String(u).includes('/nations')
+    ? Promise.resolve(new Response(JSON.stringify({
+        epreuve: '100', semaine: '2026-09-14', precedente: '2026-09-07',
+        top: 50, minJoueurs: 5, classement, moi,
+      }), { headers: { 'Content-Type': 'application/json' } }))
+    : vrai(u, o);
+
+  const [{ createRoot }, React, { Nations }] = await Promise.all([
+    import('react-dom/client'), import('react'),
+    import('/src/components/screens/Nations.tsx'),
+  ]);
+  createRoot(document.getElementById('ici'))
+    .render(React.createElement(Nations, { onClose: () => {} }));
+</script>

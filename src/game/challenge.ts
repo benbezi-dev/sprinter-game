@@ -123,6 +123,95 @@ export async function createChallenge(input: {
   return { id: data.id as string, cible: String(data.target_name || '') };
 }
 
+/**
+ * LE DEFI DE LA CAMERA — pose a l'arrivee, sans etre lance.
+ *
+ * Le carton de fin du film porte un code, et il ne peut le porter que si le
+ * defi existe DEJA quand la camera s'arrete : avant, donc, que le joueur ait
+ * decide d'envoyer quoi que ce soit. Celui-la existe et se court, mais il ne
+ * vise personne, ne fait sonner aucun telephone et ne compte pas au tableau
+ * des defis lances.
+ *
+ * CE N'EST PAS UN « DEFI OUVERT ». Ce nom designe deja, dans ce projet, un
+ * defi sans cible qu'on publie avec son code sur Instagram ou TikTok pour
+ * qu'un passant le releve (tools/carte-defi-ouvert.mjs). Celui-la est LANCE ;
+ * celui de la camera ne l'est pas. Le meme mot pour les deux, et la premiere
+ * lecture rapide se trompe de moitie.
+ *
+ * SA PROPRE ROUTE, ET NON UN DRAPEAU SUR LA CREATION. L'anti-abus du serveur
+ * compte par route et par adresse : partager la route, c'est laisser la camera
+ * puiser dans le quota du bouton « DEFIER UN AMI » — et le lui refuser un jour
+ * de bonne forme. Separees, c'est la camera qui cede en premier, et un carton
+ * sans code reste un carton.
+ *
+ * Le second geste est `lancerChallenge`, juste en dessous.
+ */
+export async function ouvrirChallengeCamera(input: {
+  races: RaceKey[];
+  levelIdx: number;
+  totalMs: number;
+  splits: number[];
+  traces: number[][];
+  name?: string;
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/challenge/camera`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_id: getDeviceId(),
+      name: input.name || getSavedName() || 'Anonyme',
+      races: input.races,
+      level_idx: input.levelIdx,
+      total_ms: Math.round(input.totalMs),
+      splits: input.splits.map(s => Math.round(s)),
+      traces: input.traces,
+    }),
+  });
+  if (!res.ok) throw new Error('challenge open failed');
+  const data = await res.json();
+  if (!data.id) throw new Error('challenge open failed');
+  return { id: String(data.id) };
+}
+
+/**
+ * Lance le defi que la camera a pose : celui dont le code est sur la video.
+ *
+ * C'est la seconde moitie de `ouvrirChallengeCamera`, et elle porte tout ce
+ * que la camera s'etait interdit — la cible, le compteur, la sonnette. Le serveur verifie que le defi nous appartient : le code circule
+ * en clair dans une video, et le lire ne doit pas suffire a faire sonner le
+ * telephone de quelqu'un.
+ *
+ * Idempotente : deux appuis sur le meme defi ne valent pas deux defis au
+ * compteur ni deux sonneries chez l'autre.
+ *
+ * `cible` est le nom de qui a ete PREVENU, et une chaine vide veut dire
+ * « personne » — meme convention que `createChallenge`, pour la meme raison :
+ * l'ecran ne doit pas annoncer une remise qui n'a pas eu lieu.
+ */
+export async function lancerChallenge(input: {
+  id: string;
+  name?: string;
+  targetScoreId?: number | null;
+  /** L'identifiant du duel qu'on venge. Meme regle qu'a la creation. */
+  revancheDe?: string | null;
+}): Promise<{ id: string; cible: string }> {
+  const res = await fetch(`${API_BASE}/challenge/lance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: normalizeCode(input.id),
+      device_id: getDeviceId(),
+      name: input.name || getSavedName() || 'Anonyme',
+      target_score_id: input.targetScoreId ?? null,
+      revanche_de: input.revancheDe ?? null,
+    }),
+  });
+  if (!res.ok) throw new Error('challenge launch failed');
+  const data = await res.json();
+  if (!data.id) throw new Error('challenge launch failed');
+  return { id: String(data.id), cible: String(data.target_name || '') };
+}
+
 export async function fetchChallenge(code: string): Promise<Challenge | null> {
   const id = normalizeCode(code);
   if (!id) return null;
@@ -168,7 +257,21 @@ export async function submitAttempt(input: {
   return res.json();
 }
 
-/** Lien partageable. On reste sur la page du jeu, le code passe en `?defi=`. */
+/**
+ * LE LIEN QU'ON ENVOIE. Il garde `?defi=`, et ce n'est pas par habitude.
+ *
+ * Il existe une forme plus courte — `sprinter-game.com/d/K7M2QX` — et elle est
+ * meilleure partout ou un humain LIT l'adresse : sur le carton d'une video,
+ * sur une carte, a l'oral. Mais GitHub Pages sert des fichiers, et ce
+ * chemin-la n'en est pas un : il passe par `public/404.html`, qui repond donc
+ * avec un statut 404. Un humain ne le voit jamais — il est redirige avant
+ * d'avoir lu. Un robot d'apercu, si, et la plupart refusent de montrer une
+ * vignette pour une 404.
+ *
+ * Un lien envoye sur WhatsApp ou sur X sans son image perd ce que l'apercu lui
+ * donnait. Celui-ci reste donc en `?defi=`, qui repond 200. Deux formes, deux
+ * usages : celle qu'on envoie, et celle qu'on lit.
+ */
 export function challengeLink(id: string): string {
   const base = window.location.origin + window.location.pathname;
   return `${base}?defi=${id}`;
@@ -223,21 +326,52 @@ export async function nativeShare(text: string, id: string): Promise<boolean> {
   }
 }
 
-/** Code present dans l'URL au chargement, s'il y en a un. */
+/**
+ * Le code du chemin court, `<base>d/K7M2QX`, s'il y en a un.
+ *
+ * En temps normal le jeu ne voit jamais cette forme : `public/404.html` la
+ * traduit en `?defi=` avant que quoi que ce soit ne se charge, parce que sur
+ * GitHub Pages rien ne se charge pour un chemin sans fichier.
+ *
+ * On la lit quand meme, et pour une raison precise : le jour ou le site
+ * passera derriere un serveur capable de repondre 200 sur ce chemin — ce qui
+ * lui rendrait son apercu de lien —, l'adresse arrivera telle quelle. Cinq
+ * lignes ici evitent que ce jour-la soit un jour de panne silencieuse, ou
+ * chaque lien de defi ouvrirait l'accueil sans dire pourquoi.
+ */
+function codeDuChemin(): string {
+  const m = /(?:^|\/)d\/([^/?#]+)\/?$/.exec(window.location.pathname);
+  if (!m) return '';
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+/**
+ * Code present dans l'URL au chargement, s'il y en a un.
+ *
+ * `?defi=` d'abord : c'est la forme ordinaire, celle qu'on envoie et celle
+ * vers laquelle la porte redirige. Le chemin court ensuite.
+ */
 export function codeFromUrl(): string {
   try {
-    const p = new URLSearchParams(window.location.search).get('defi');
+    const p = new URLSearchParams(window.location.search).get('defi') || codeDuChemin();
     return p ? normalizeCode(p) : '';
   } catch {
     return '';
   }
 }
 
-/** Retire le code de l'URL une fois pris en compte, sans recharger la page. */
+/**
+ * Retire le code de l'URL une fois pris en compte, sans recharger la page.
+ *
+ * Le chemin court se retire aussi, et jusqu'au segment `d/` : laisser
+ * `/d/K7M2QX` dans la barre d'adresse ferait rouvrir le meme defi au moindre
+ * rechargement, longtemps apres qu'on l'a couru.
+ */
 export function clearUrlCode() {
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete('defi');
+    url.pathname = url.pathname.replace(/(^|\/)d\/[^/?#]+\/?$/, '$1');
     window.history.replaceState({}, '', url.toString());
   } catch {
     // pas d'History API : le code restera dans l'URL, sans consequence

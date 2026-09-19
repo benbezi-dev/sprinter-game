@@ -688,6 +688,64 @@
                       'what you saved stays on your phone'],
     review_none:     ['cet appareil ne sait pas enregistrer la course',
                       'this device cannot record the race'],
+    // Le carton de fin du film — voir game/carton-film.ts. Deux lignes, et pas
+    // une de plus : le carton dure une seconde et demie, et il porte deja le
+    // chrono, l'epreuve et l'adresse. « DÉFI » précède le code, la seconde
+    // ligne dit ce que le code fait — et elle le CONSTATE, comme la charte le
+    // demande. Ni « essaie », ni « à toi de jouer » : celui qui regarde décide.
+    carton_defi:     ['CODE DU DÉFI', 'CHALLENGE CODE'],
+    // Le classement des recruteurs. « Recrue » et non « adversaire » : ce
+    // qu'on compte n'est pas qui vous a battu, c'est qui est venu courir —
+    // et le mot doit dire que c'est vous qui l'avez amene.
+    recr_ouvrir:     ['RECRUTEURS', 'RECRUITERS'],
+    recr_title:      ['LES RECRUTEURS', 'THE RECRUITERS'],
+    recr_sub:        ['contre qui on court le plus', 'who gets raced the most'],
+    // La regle, en une phrase. Elle dit le geste qui fait monter, parce que
+    // c'est la seule chose qu'on vient chercher ici.
+    recr_regle:      ['Chaque personne qui relève un de tes défis te fait une recrue. Ton code est sur la vidéo de ta course.',
+                      'Every person who takes one of your challenges is a recruit. Your code is on the video of your race.'],
+    // Le singulier a sa cle. « 1 recrues » est la premiere chose que lira
+    // celui qui vient d'en faire une — c'est-a-dire exactement celui qu'on
+    // voulait accrocher, et le moment ou le jeu doit avoir l'air soigne.
+    recr_recrue:     ['recrue', 'recruit'],
+    recr_recrues:    ['recrues', 'recruits'],
+    recr_course:     ['course', 'race'],
+    recr_courses:    ['courses', 'races'],
+    recr_rien:       ['Personne n’a encore couru contre toi.', 'Nobody has raced you yet.'],
+    // Pas « partage ! » : on constate qu'une place est libre. La charte
+    // bannit l'injonction, et elle a raison — un tableau qui reclame se lit
+    // comme une publicite.
+    recr_rien_sous:  ['Il suffit d’un code donné.', 'One code given is enough.'],
+    recr_vide:       ['le tableau est encore vide', 'the board is still empty'],
+
+    /* LE CLASSEMENT DES NATIONS — le seul tableau qu'on ne gagne pas seul.
+       ---------------------------------------------------------------------
+       « NATIONS » et non « PAYS » : le mot du sport, celui des championnats
+       du jeu, et celui qui dit qu'il s'agit d'une competition entre eux et
+       non d'un filtre geographique. */
+    nat_ouvrir:      ['NATIONS', 'NATIONS'],
+    nat_title:       ['LES NATIONS', 'THE NATIONS'],
+    nat_sub:         ['qui court le plus vite, ensemble', 'who runs fastest, together'],
+    /* LA REGLE DIT « MEDIANE » ET NON « MOYENNE », parce que ce n'en est pas
+       une et que la difference est tout le sujet : une moyenne se laisse
+       tirer par un seul chrono, une mediane non. On l'explique en une phrase
+       plutot que de laisser croire a un classement au record. */
+    nat_regle:       ['Le temps médian des {n} meilleurs de chaque pays. Un seul joueur rapide ne suffit pas : il faut être plusieurs.',
+                      'The median time of each country’s top {n}. One fast player is not enough: it takes several.'],
+    nat_joueur:      ['joueur', 'player'],
+    nat_joueurs:     ['joueurs', 'players'],
+    nat_sur_tete:    ['sur la tête', 'behind the leader'],
+    /* CE QU'IL MANQUE, ET PAS « TON PAYS N'EST PAS CLASSE ». La premiere
+       formule donne un geste a faire, la seconde une porte fermee — et c'est
+       precisement le joueur d'un petit pays qu'on veut voir donner son code. */
+    nat_manque_un:   ['il manque 1 joueur classé', '1 more ranked player needed'],
+    nat_manque:      ['il manque {n} joueurs classés', '{n} more ranked players needed'],
+    nat_vide:        ['Aucun pays n’a encore {n} joueurs classés. Le tableau s’ouvrira tout seul.',
+                      'No country has {n} ranked players yet. The board will open on its own.'],
+    // La signature du pied, a droite — la meme que celle de l'affiche
+    // partageable (`poserPied`, trace-affiche.js) et des cartes. Les trois
+    // visuels sortent du meme jeu et se croisent dans le meme fil.
+    carton_pied:     ['JEU DE SPRINT', 'SPRINT GAME'],
     live_tie:        ['EX AEQUO', 'DEAD HEAT'],
     live_vs:         ['en direct contre {n}', 'live against {n}'],
     live_gap:        ['{s} s d’écart', '{s} s apart'],

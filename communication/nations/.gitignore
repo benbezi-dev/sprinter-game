@@ -1,0 +1,10 @@
+# LES CARTES DU LUNDI NE SE VERSIONNENT PAS.
+#
+# Elles sont refabriquees a chaque fois par `tools/carte-nations.mjs`, qui
+# relit le classement sur l'API au moment du rendu. Une carte gardee ici
+# serait un classement perime qu'on finirait par reposter — c'est exactement
+# ce qui est arrive avec les cartes fixes du pack promo.
+#
+# Ce qui se versionne, c'est le programme qui les dessine.
+*.png
+*.jpg

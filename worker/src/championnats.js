@@ -100,6 +100,41 @@ const PAYS_NOMS = {
   RU: ['Russie', 'de Russie', 'Russia'],
   UA: ['Ukraine', "d'Ukraine", 'Ukraine'],
   RO: ['Roumanie', 'de Roumanie', 'Romania'],
+
+  /* LES NATIONS D'ATHLETISME QUI MANQUAIENT.
+     ------------------------------------------------------------------------
+     Ajoutees le 19 septembre 2026, et c'est le classement des nations qui l'a
+     revele : un pays dont Cloudflare donne le code sans que cette table le
+     nomme sort au tableau sous son code — « JM · 9,84 ». Passe inapercu tant
+     que le nom ne servait qu'a composer un titre de championnat, ou aucun
+     joueur jamaiquain ne s'etait encore inscrit ; impardonnable sur une carte
+     qu'on poste, ou la Jamaique est precisement le pays qu'on cite.
+
+     Elles etaient deja dans CONTINENTS — le continent se calculait, le nom
+     non. Les nommer les rend aussi choisissables dans le jeu (`listeNations`)
+     et leur ouvre un championnat des qu'elles ont l'effectif : c'est la
+     consequence voulue, pas un effet de bord. */
+  JM: ['Jamaïque', 'de Jamaïque', 'Jamaica'],
+  TT: ['Trinité-et-Tobago', 'de Trinité-et-Tobago', 'Trinidad and Tobago'],
+  CU: ['Cuba', 'de Cuba', 'Cuba'],
+  ET: ['Éthiopie', "d'Éthiopie", 'Ethiopia'],
+  GH: ['Ghana', 'du Ghana', 'Ghana'],
+  UG: ["Ouganda", "de l'Ouganda", 'Uganda'],
+  TZ: ['Tanzanie', 'de Tanzanie', 'Tanzania'],
+  ZM: ['Zambie', 'de Zambie', 'Zambia'],
+  ZW: ['Zimbabwe', 'du Zimbabwe', 'Zimbabwe'],
+  CO: ['Colombie', 'de Colombie', 'Colombia'],
+  CL: ['Chili', 'du Chili', 'Chile'],
+  HU: ['Hongrie', 'de Hongrie', 'Hungary'],
+  CZ: ['Tchéquie', 'de Tchéquie', 'Czechia'],
+  IL: ['Israël', "d'Israël", 'Israel'],
+  QA: ['Qatar', 'du Qatar', 'Qatar'],
+  SA: ['Arabie saoudite', "d'Arabie saoudite", 'Saudi Arabia'],
+  AE: ['Émirats arabes unis', 'des Émirats arabes unis', 'United Arab Emirates'],
+  ID: ['Indonésie', "d'Indonésie", 'Indonesia'],
+  PH: ['Philippines', 'des Philippines', 'Philippines'],
+  TH: ['Thaïlande', 'de Thaïlande', 'Thailand'],
+  VN: ['Viêt Nam', 'du Viêt Nam', 'Vietnam'],
 };
 
 const CONTINENT_NOMS = {

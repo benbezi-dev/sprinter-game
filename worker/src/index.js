@@ -22,6 +22,7 @@ import {
   medaillesDe, paysDe, listeNations,
   fluxDirect, recapMondial, tableauNations,
 } from './championnats.js';
+import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -266,6 +267,50 @@ function cleanTraces(v, nRaces) {
   return out;
 }
 
+/**
+ * CE QU'UNE COURSE DOIT PRESENTER POUR DEVENIR UN DEFI.
+ *
+ * Deux routes ecrivent un defi — /challenge, que le joueur declenche en
+ * appuyant, et /challenge/camera, que la camera declenche a l'arrivee — et
+ * elles n'acceptent evidemment pas deux choses differentes. La validation vit
+ * donc ici, une fois. Deux copies auraient diverge, et c'est la copie la plus
+ * laxiste qui aurait fait foi : celle qu'un client mal intentionne choisirait.
+ *
+ * Rend `{ erreur }` a refuser tel quel, ou la course nettoyee.
+ */
+function courseDuDefi(body) {
+  const { device_id, name, races, level_idx, total_ms, splits, traces } = body || {};
+  if (!isValidDeviceId(device_id)) return { erreur: 'device_id invalide' };
+  if (!validRaces(races)) return { erreur: 'epreuves invalides' };
+  const t = Math.round(Number(total_ms));
+  if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
+    return { erreur: 'temps invalide' };
+  }
+  const cleanedTraces = cleanTraces(traces, races.length);
+  if (!cleanedTraces) return { erreur: 'traces invalides' };
+  return {
+    deviceId: device_id,
+    nom: cleanName(name),
+    races,
+    lvl: Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0)),
+    t,
+    splits: (Array.isArray(splits) ? splits : []).slice(0, races.length)
+      .map(v => Math.max(0, Math.round(Number(v)) || 0)),
+    traces: cleanedTraces,
+  };
+}
+
+/** Ecrit la ligne, et rend son code. `lance` dit lequel des deux gestes l'a fait. */
+async function ecrireLeDefi(db, c, { target = null, lance = 1 } = {}) {
+  const id = makeCode();
+  await db.prepare(
+    `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device, lance)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(id, Date.now(), c.deviceId, c.nom, JSON.stringify(c.races),
+         c.lvl, c.t, JSON.stringify(c.splits), JSON.stringify(c.traces), target, lance).run();
+  return id;
+}
+
 // Migration paresseuse : la table scores existe depuis longtemps, on lui
 // ajoute les colonnes du fantome au premier passage. ALTER TABLE echoue si la
 // colonne est deja la — c'est le cas nominal, on ignore.
@@ -408,6 +453,105 @@ async function ensureChallengeTarget(db) {
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
   targetReady.add(db);
+}
+
+/**
+ * LE DEFI DE LA CAMERA, OU LE DEFI LANCE PAR LE JOUEUR.
+ *
+ * Le carton de fin de la video porte un code de defi, et pour qu'il le porte
+ * il faut que le defi existe AU MOMENT OU LA CAMERA S'ARRETE — c'est-a-dire
+ * avant que le joueur ait decide quoi que ce soit. Ces deux gestes ne sont
+ * pas le meme, et les confondre coute deux choses :
+ *
+ *   - le compteur « defis lances » du classement des duels, qui compterait
+ *     une course courue au lieu d'un defi envoye ;
+ *   - la sonnette chez la personne visee, qui sonnerait avant que son
+ *     adversaire ait choisi de l'appeler.
+ *
+ * `lance` vaut donc 0 pour un DEFI DE LA CAMERA — il existe, il se court, il
+ * ne compte pour personne et ne derange personne — et 1 des que son auteur
+ * l'envoie, par /challenge/lance. Le defaut est 1 : toutes les lignes qui
+ * precedent cette colonne ont bien ete lancees a la main.
+ *
+ * ON NE DIT PAS « DEFI OUVERT », ET C'EST DELIBERE. Ce nom designe deja autre
+ * chose ici : un defi qui ne vise personne, publie avec son code sur Instagram
+ * ou TikTok pour qu'un passant le releve (voir tools/carte-defi-ouvert.mjs).
+ * Celui-la est LANCE — `lance` vaut 1 — et n'a de commun avec le defi de la
+ * camera que de n'avoir pas de cible. Deux sens pour un mot dans le meme
+ * depot, et la premiere personne a lire vite se trompe de moitie.
+ *
+ * LA COLONNE, ELLE, GARDE SON NOM. `lance` dit l'etat, pas l'auteur, et c'est
+ * ce que lisent les compteurs : « WHERE lance = 1 » se lit « les defis
+ * envoyes ». La renommer `camera` retournerait chaque predicat en « ceux qui
+ * ne sont pas a la camera », ce qui est la meme chose et se lit moins bien —
+ * et fermerait la porte au jour ou autre chose que la camera en ouvrira.
+ */
+const lanceReady = new WeakSet();
+async function ensureChallengeLance(db) {
+  if (lanceReady.has(db)) return;
+  try { await db.prepare(`ALTER TABLE challenges ADD COLUMN lance INTEGER NOT NULL DEFAULT 1`).run(); }
+  catch (e) { /* colonne deja presente */ }
+  lanceReady.add(db);
+}
+
+/* --------------------------------------------------------------- la revanche
+
+   Un defi qui repart CHEZ CELUI QUI VIENT DE NOUS BATTRE, sans code a
+   recopier. On ne passe pas par le TOP 500 comme ailleurs : la personne peut
+   ne pas y figurer sur cette epreuve, et surtout on la connait deja — elle est
+   l'autre partie d'une rencontre qui vient d'avoir lieu. On repart donc du
+   duel lui-meme, ou les deux appareils sont inscrits.
+
+   Deux conditions, et elles ne sont pas decoratives :
+
+   1. SEUL LE PERDANT prend sa revanche. Sans cela, l'identifiant d'un duel —
+      qui circule des deux cotes — suffirait a s'adresser a n'importe qui.
+   2. IL FAUT AVOIR BATTU SON CHRONO. C'est la regle du jeu : on ne derange pas
+      quelqu'un avec un temps moins bon que le sien. Le jeu la tient deja a
+      l'ecran ; le serveur la tient aussi, parce qu'une regle qui ne vit que
+      dans l'ecran n'est pas une regle.
+
+   DEUX ROUTES L'APPELLENT, et c'est la raison de cette fonction. /challenge
+   la joue quand il cree le defi ; /challenge/lance quand il lance le defi que
+   la camera avait pose. Deux copies de ces deux conditions auraient diverge,
+   et la premiere a diverger aurait ouvert la porte que la premiere condition
+   ferme. */
+async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
+  const ref = String(duelRef || '').toUpperCase();
+  if (!/^[A-Z0-9]{4,10}$/.test(ref)) return null;
+  await ensureDuelTables(db);
+  const d = await db.prepare(
+    `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
+            c.owner_device, c.owner_name
+       FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
+      WHERE r.challenge_id = ?`
+  ).bind(ref).first();
+  if (!d || d.outcome === 'draw') return null;
+
+  // L'appareil de celui qui a releve : la rencontre ne garde que son nom, sa
+  // tentative garde son appareil.
+  const rep = await db.prepare(
+    `SELECT device_id, name FROM challenge_attempts
+      WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
+  ).bind(ref).first();
+
+  const moiCle = cleanName(nom).trim().toLowerCase();
+  const suisLanceur = d.owner_device === deviceId ||
+    (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
+  const suisReleveur = (!!rep && rep.device_id === deviceId) ||
+    (!!moiCle && String(d.opponent_key || '') === moiCle);
+  const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
+  const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
+  // Le chrono du vainqueur, celui qu'il fallait battre.
+  const aBattre = d.outcome === 'opponent' ? d.opponent_ms : d.challenger_ms;
+  if (!monRole || monRole !== perdant || !(tMs < aBattre)) return null;
+
+  const cible = suisLanceur ? (rep ? rep.device_id : null) : d.owner_device;
+  const cibleNom = suisLanceur
+    ? (d.opponent_name || (rep && rep.name) || '')
+    : (d.owner_name || '');
+  if (!cible || cible === deviceId) return null;
+  return { device: cible, nom: cibleNom };
 }
 
 // Historique des courses. Indexe sur le nom autant que sur l'appareil : c'est
@@ -853,8 +997,22 @@ export default {
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
 
+    /* LA SEMAINE DES NATIONS, FIGEE UNE FOIS. Le tableau du lundi ne vaut que
+       s'il peut se comparer a celui d'avant : « la France passe 7e » est un
+       post, « la France est 7e » n'en est pas un. `figerLaSemaine` ecrit a la
+       toute premiere execution du lundi et ne fait rien les 2015 suivantes —
+       c'est ce qui evite d'avoir a poser, surveiller et rattraper une tache
+       hebdomadaire de plus.
+
+       Sur LES DEUX bases, comme les clotures : c'est en test qu'on repete le
+       rendez-vous avant de le tenir pour de vrai. */
     for (const [nom, db] of [['prod', env.DB], ['test', env.DB_TEST]]) {
       if (!db) continue;
+      ctx.waitUntil(
+        figerLaSemaine(db, quand)
+          .then(b => { if (b.figees) console.log('nations figees', nom, JSON.stringify(b)); })
+          .catch(e => console.log('nations KO', nom, String(e && e.message || e)))
+      );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
           .then(b => {
@@ -2095,6 +2253,114 @@ async function servir(request, env, ctx, porteur) {
       return json(await recalculerClassement(env.DB));
     }
 
+    /* ------------------------------------------------- LE CLASSEMENT DES RECRUTEURS
+
+       Non pas qui court le plus vite, mais CONTRE QUI ON COURT LE PLUS.
+
+       Le classement des chronos ne recompense qu'une chose, et tout le monde
+       n'y arrivera pas. Celui-ci en recompense une autre, que n'importe qui
+       peut faire des sa premiere course : donner son code. Un joueur lent a
+       enfin un tableau ou il peut gagner — et partager cesse d'etre un service
+       rendu au jeu pour devenir un coup joue.
+
+       ON COMPTE DES PERSONNES, PAS DES COURSES. Un ami qui reprend vingt fois
+       le meme code est une recrue, pas vingt : c'est la portee qu'on mesure,
+       pas l'acharnement d'un seul. `challenge_attempts` a pour cle primaire
+       (defi, appareil), donc une ligne par personne et par defi ; le DISTINCT
+       ramene celui qui a releve plusieurs defis du meme joueur a un seul nom.
+
+       ET ON NE SE COMPTE PAS SOI-MEME. Rien n'empeche de relever son propre
+       defi depuis un second telephone. La ligne qui l'ecarte tient en un
+       `<>` et evite un classement ou le premier serait celui qui a deux
+       appareils.
+
+       LES DEFIS DE LA CAMERA COMPTENT ICI, et c'est le seul endroit. Ailleurs
+       ils ne comptent pas — voir `ensureChallengeLance` — parce qu'ouvrir
+       n'est pas lancer. Mais ce tableau ne mesure pas une intention : il
+       mesure que quelqu'un a couru. Un code lu sur une video et releve vaut
+       exactement ce qu'il dit.
+
+       TOUTES DISTANCES CONFONDUES, contrairement aux duels. On regarde la
+       personne, pas son 200 m : « contre qui on court le plus » n'a pas de
+       sens par epreuve, et le decouper diviserait par trois des nombres qui
+       partent deja de zero. */
+    if (url.pathname === '/recruteurs' && request.method === 'GET') {
+      await ensureChallengeTables(env.DB);
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+
+      const { results } = await env.DB.prepare(
+        `SELECT lower(trim(c.owner_name)) AS cle,
+                MAX(c.owner_name) AS name,
+                COUNT(DISTINCT a.device_id) AS recrues,
+                COUNT(*) AS courses,
+                MAX(a.created_at) AS derniere
+           FROM challenges c
+           JOIN challenge_attempts a ON a.id = c.id
+          WHERE a.device_id <> c.owner_device
+            AND trim(c.owner_name) <> ''
+          GROUP BY cle
+          ORDER BY recrues DESC, courses DESC, derniere ASC
+          LIMIT ?`
+      ).bind(TOP_N).all();
+
+      const classement = (results || []).map((r, i) => ({
+        name: r.name, recrues: r.recrues, courses: r.courses, rank: i + 1,
+      }));
+
+      // Le drapeau, comme au classement des duels — et pour la meme raison :
+      // c'est ce qui fait d'une liste de noms un tableau ou l'on se cherche.
+      const pays = await paysDe(env.DB, classement.map(r => r.name.trim().toLowerCase()));
+      for (const r of classement) r.pays = pays.get(r.name.trim().toLowerCase()) || null;
+
+      /* MOI, MEME HORS DU TOP. Le tableau s'arrete a cinq cents noms, et celui
+         qui n'y est pas encore est precisement celui qu'on veut accrocher :
+         lui montrer son chiffre, meme a la 900e place, est tout l'interet du
+         classement pour lui. On le recalcule pour lui seul plutot que de le
+         chercher dans une liste ou il n'est pas. */
+      let moi = nom ? classement.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      if (nom && !moi) {
+        const r = await env.DB.prepare(
+          `SELECT MAX(c.owner_name) AS name,
+                  COUNT(DISTINCT a.device_id) AS recrues,
+                  COUNT(*) AS courses
+             FROM challenges c
+             JOIN challenge_attempts a ON a.id = c.id
+            WHERE a.device_id <> c.owner_device
+              AND lower(trim(c.owner_name)) = ?`
+        ).bind(nom).first();
+        if (r && r.recrues > 0) moi = { name: r.name, recrues: r.recrues, courses: r.courses, rank: null };
+      }
+
+      return json({ classement, moi });
+    }
+
+    /* LE CLASSEMENT DES NATIONS — la mediane des cinquante meilleurs de chaque
+       pays, et le mouvement depuis lundi dernier.
+
+       PAS UN NOM N'EN SORT. C'est un tableau de drapeaux et de chronos ; la
+       charte interdit de publier le pseudonyme de quelqu'un sans son accord
+       (§5.4), et ce tableau est fait pour etre poste. Celui qui veut nommer le
+       joueur de la semaine le tape a la main dans `carte-nations.mjs`, ce qui
+       est le moment ou il confirme avoir demande.
+
+       `name` ne sert qu'a retrouver SON pays, pour la ligne « moi » — jamais a
+       classer quelqu'un. */
+    if (url.pathname === '/nations' && request.method === 'GET') {
+      const race = url.searchParams.get('race') || EPREUVE_NATIONS;
+      if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
+      // `best_split_ms` est lu par le calcul : la table doit avoir ses colonnes.
+      await ensureScoreGhost(env.DB);
+
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      let sien = (url.searchParams.get('pays') || '').trim().toUpperCase();
+      if (!sien && nom) {
+        const m = await paysDe(env.DB, [nom]);
+        sien = m.get(nom) || '';
+      }
+
+      return json(await tableauDesNations(env.DB, { epreuve: race, pays: sien || null }));
+    }
+
     if (url.pathname === '/duels' && request.method === 'GET') {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
@@ -3133,8 +3399,15 @@ async function servir(request, env, ctx, porteur) {
 
       // --- defis (forme d'origine + colonnes en plus) ----------------
       await bloc(() => ensureChallengeTarget(DB), null);
+      await bloc(() => ensureChallengeLance(DB), null);
+      // « DEFIS » VEUT TOUJOURS DIRE DEFIS ENVOYES. La camera en pose un a
+      // chaque course filmee, pour le code du carton de fin ; les compter ici
+      // ferait bondir la courbe d'un facteur dix sans que personne n'ait
+      // defie personne, et toute comparaison avec l'avant serait perdue. Ceux
+      // de la camera se comptent a part, sous `camera`.
       const c = await DB.prepare(
-        `SELECT (SELECT COUNT(*) FROM challenges) AS defis,
+        `SELECT (SELECT COUNT(*) FROM challenges WHERE lance = 1) AS defis,
+                (SELECT COUNT(*) FROM challenges WHERE lance = 0) AS camera,
                 (SELECT COUNT(*) FROM challenge_attempts) AS tentatives`
       ).first();
       const defisPlus = await bloc(async () => {
@@ -3143,16 +3416,16 @@ async function servir(request, env, ctx, porteur) {
              SUM(CASE WHEN target_device IS NOT NULL THEN 1 ELSE 0 END) AS adresses,
              SUM(CASE WHEN target_device IS NULL THEN 1 ELSE 0 END) AS publics,
              (SELECT COUNT(DISTINCT id) FROM challenge_attempts) AS repondus
-           FROM challenges`).first();
+           FROM challenges WHERE lance = 1`).first();
         const { results: pj } = await DB.prepare(
           `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
-             FROM challenges GROUP BY day ORDER BY day DESC LIMIT 30`).all();
+             FROM challenges WHERE lance = 1 GROUP BY day ORDER BY day DESC LIMIT 30`).all();
         const { results: tpj } = await DB.prepare(
           `SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS n
              FROM challenge_attempts GROUP BY day ORDER BY day DESC LIMIT 30`).all();
         const { results: pm } = await DB.prepare(
           `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
-             FROM challenges GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
+             FROM challenges WHERE lance = 1 GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
         const { results: tpm } = await DB.prepare(
           `SELECT strftime('%Y-%m', created_at/1000, 'unixepoch') AS mois, COUNT(*) AS n
              FROM challenge_attempts GROUP BY mois ORDER BY mois DESC LIMIT 24`).all();
@@ -3344,7 +3617,7 @@ async function servir(request, env, ctx, porteur) {
       await Promise.all([
         ensureVisitTable(db), ensureChallengeTables(db), ensureScoreGhost(db),
         ensureRaceTable(db), ensurePlayerTables(db), ensureDuelTables(db),
-        ensureRelayTables(db), ensureChampTables(db),
+        ensureRelayTables(db), ensureChampTables(db), ensureChallengeLance(db),
       ]);
 
       const q1 = async (sql, ...args) => {
@@ -3381,8 +3654,10 @@ async function servir(request, env, ctx, porteur) {
         qN(`SELECT mode, COUNT(*) AS parties FROM races GROUP BY mode`),
         qN(`SELECT level_idx, COUNT(*) AS parties FROM races GROUP BY level_idx ORDER BY level_idx`),
         qN(`SELECT name, COUNT(*) AS parties FROM races GROUP BY name_key ORDER BY parties DESC LIMIT 10`),
-        q1(`SELECT COUNT(*) AS n FROM challenges`),
-        qN(`SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS crees FROM challenges GROUP BY day ORDER BY day DESC LIMIT 30`),
+        // Comme plus haut : « defis » compte ce qui a ete envoye, pas ce que
+        // la camera a pose pour le carton de fin d'une video.
+        q1(`SELECT COUNT(*) AS n FROM challenges WHERE lance = 1`),
+        qN(`SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS crees FROM challenges WHERE lance = 1 GROUP BY day ORDER BY day DESC LIMIT 30`),
         q1(`SELECT COUNT(*) AS n FROM challenge_attempts`),
         q1(`SELECT COUNT(*) AS n FROM duel_results`),
         qN(`SELECT outcome, COUNT(*) AS n FROM duel_results GROUP BY outcome`),
@@ -3445,22 +3720,14 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/challenge' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, races, level_idx, total_ms, splits, traces,
-              target_score_id, revanche_de } = body || {};
-      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
-      if (!validRaces(races)) return json({ error: 'epreuves invalides' }, 400);
-      const t = Math.round(Number(total_ms));
-      if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
-        return json({ error: 'temps invalide' }, 400);
-      }
-      const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
-      const cleanedTraces = cleanTraces(traces, races.length);
-      if (!cleanedTraces) return json({ error: 'traces invalides' }, 400);
-      const cleanSplits = (Array.isArray(splits) ? splits : []).slice(0, races.length)
-        .map(v => Math.max(0, Math.round(Number(v)) || 0));
+      const { device_id, target_score_id, revanche_de } = body || {};
+      const c = courseDuDefi(body);
+      if (c.erreur) return json({ error: c.erreur }, 400);
+      const t = c.t;
 
       await ensureChallengeTables(env.DB);
       await ensureChallengeTarget(env.DB);
+      await ensureChallengeLance(env.DB);
 
       // Defi adresse a quelqu'un : on le designe par la ligne de classement
       // qu'il occupe, jamais par son device_id — celui-ci ne sort pas d'ici.
@@ -3474,76 +3741,153 @@ async function servir(request, env, ctx, porteur) {
         if (row && row.device_id !== device_id) { target = row.device_id; targetName = row.name; }
       }
 
-      /* ------------------------------------------------------- la revanche
-         Un defi qui repart CHEZ CELUI QUI VIENT DE NOUS BATTRE, sans code a
-         recopier. On ne passe pas par le TOP 500 comme ailleurs : la personne
-         peut ne pas y figurer sur cette epreuve, et surtout on la connait
-         deja — elle est l'autre partie d'une rencontre qui vient d'avoir
-         lieu. On repart donc du duel lui-meme, ou les deux appareils sont
-         inscrits.
-
-         Deux conditions, et elles ne sont pas decoratives :
-
-         1. SEUL LE PERDANT prend sa revanche. Sans cela, l'identifiant d'un
-            duel — qui circule des deux cotes — suffirait a s'adresser a
-            n'importe qui.
-         2. IL FAUT AVOIR BATTU SON CHRONO. C'est la regle du jeu : on ne
-            derange pas quelqu'un avec un temps moins bon que le sien. Le jeu
-            la tient deja a l'ecran ; le serveur la tient aussi, parce qu'une
-            regle qui ne vit que dans l'ecran n'est pas une regle. */
-      const duelRef = String(revanche_de || '').toUpperCase();
-      if (!target && /^[A-Z0-9]{4,10}$/.test(duelRef)) {
-        await ensureDuelTables(env.DB);
-        const d = await env.DB.prepare(
-          `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
-                  c.owner_device, c.owner_name
-             FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
-            WHERE r.challenge_id = ?`
-        ).bind(duelRef).first();
-        if (d && d.outcome !== 'draw') {
-          // L'appareil de celui qui a releve : la rencontre ne garde que son
-          // nom, sa tentative garde son appareil.
-          const rep = await env.DB.prepare(
-            `SELECT device_id, name FROM challenge_attempts
-              WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
-          ).bind(duelRef).first();
-
-          const moiCle = cleanName(name).trim().toLowerCase();
-          const suisLanceur = d.owner_device === device_id ||
-            (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
-          const suisReleveur = (!!rep && rep.device_id === device_id) ||
-            (!!moiCle && String(d.opponent_key || '') === moiCle);
-          const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
-          const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
-          // Le chrono du vainqueur, celui qu'il fallait battre.
-          const aBattre = d.outcome === 'opponent' ? d.opponent_ms : d.challenger_ms;
-
-          if (monRole && monRole === perdant && t < aBattre) {
-            const cible = suisLanceur ? (rep ? rep.device_id : null) : d.owner_device;
-            const cibleNom = suisLanceur
-              ? (d.opponent_name || (rep && rep.name) || '')
-              : (d.owner_name || '');
-            if (cible && cible !== device_id) { target = cible; targetName = cibleNom; }
-          }
-        }
+      // La revanche : un defi qui repart chez celui qui vient de nous battre.
+      // Voir `cibleDeLaRevanche`, que /challenge/lance appelle aussi — la
+      // regle du perdant et du chrono a battre ne vit qu'a un seul endroit.
+      if (!target) {
+        const v = await cibleDeLaRevanche(env.DB, {
+          duelRef: revanche_de, deviceId: device_id, nom: c.nom, tMs: t,
+        });
+        if (v) { target = v.device; targetName = v.nom; }
       }
 
-      const id = makeCode();
-      await env.DB.prepare(
-        `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, Date.now(), device_id, cleanName(name), JSON.stringify(races),
-             lvl, t, JSON.stringify(cleanSplits), JSON.stringify(cleanedTraces), target).run();
+      const id = await ecrireLeDefi(env.DB, c, { target, lance: 1 });
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
-      const lanceurKey = cleanName(name).trim().toLowerCase();
+      const lanceurKey = c.nom.trim().toLowerCase();
       // Le compteur est tenu par discipline, comme le reste : « douze defis
       // lances » ne veut plus rien dire quand les trois distances ne sont plus
       // le meme classement.
-      if (lanceurKey) await compterLance(env.DB, lanceurKey, cleanName(name), races);
+      if (lanceurKey) await compterLance(env.DB, lanceurKey, c.nom, c.races);
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
+      if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
+      return json({ id, target_name: targetName });
+    }
+
+    /* ------------------------------------------------------- LE DEFI DE LA CAMERA
+
+       Elle appelle cette route a l'arrivee de chaque course filmee, pour que
+       le carton de fin de la video puisse porter un code. Le defi existe, il
+       se court, son fantome est complet — mais il ne vise personne, ne fait
+       sonner aucun telephone, et ne compte pas au tableau des defis lances.
+       Voir `ensureChallengeLance`, qui dit aussi pourquoi ce n'est pas un
+       « defi ouvert » : ce nom est pris, et il designe autre chose.
+
+       UNE ROUTE A PART, ET C'EST LA RAISON PRINCIPALE DE CE DECOUPAGE. L'anti-
+       abus compte par (route, IP) : 30 ecritures par minute. Poser ce defi-la
+       depuis /challenge aurait fait puiser la camera dans le quota du bouton —
+       une course filmee toutes les dix secondes derriere la meme adresse, et
+       le joueur qui appuie enfin sur « DEFIER UN AMI » se serait vu refuser
+       son defi par les images qu'il venait de tourner. Ici les deux compteurs
+       sont distincts, et c'est la camera qui cede en premier : un carton sans
+       code reste un carton, un bouton qui refuse est une panne. */
+    if (url.pathname === '/challenge/camera' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const c = courseDuDefi(body);
+      if (c.erreur) return json({ error: c.erreur }, 400);
+
+      await ensureChallengeTables(env.DB);
+      await ensureChallengeTarget(env.DB);
+      await ensureChallengeLance(env.DB);
+
+      // Ni cible ni revanche : ce n'est pas qu'on les refuse, c'est qu'on ne
+      // les lit pas. Adresser un defi est une decision, et elle se prend a
+      // l'ecran de fin — par /challenge/lance.
+      const id = await ecrireLeDefi(env.DB, c, { target: null, lance: 0 });
+      return json({ id });
+    }
+
+    /* --------------------------------------- LANCER LE DEFI QUE LA CAMERA A POSE
+
+       La camera l'a pose a l'arrivee, pour que son code puisse figurer sur le
+       carton de fin du film. Cette route est le second geste : celui du joueur
+       qui decide d'envoyer. Elle fait exactement ce que /challenge faisait en
+       plus de l'INSERT — la cible, le compteur, la sonnette — et rien d'autre.
+
+       Pourquoi deux routes plutot qu'un INSERT tardif : parce que le code doit
+       exister AVANT, sans quoi le carton ne peut pas le porter. C'est tout
+       l'objet de la manoeuvre. */
+    if (url.pathname === '/challenge/lance' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { id: brut, device_id, name, target_score_id, revanche_de } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const id = String(brut || '').toUpperCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(id)) return json({ error: 'code invalide' }, 400);
+
+      await ensureChallengeTables(env.DB);
+      await ensureChallengeTarget(env.DB);
+      await ensureChallengeLance(env.DB);
+
+      const d = await env.DB.prepare(
+        `SELECT owner_device, owner_name, races, total_ms, lance, target_device
+           FROM challenges WHERE id = ?`
+      ).bind(id).first();
+      if (!d) return json({ error: 'defi introuvable' }, 404);
+      // SEUL SON AUTEUR LE LANCE. Le code circule — il est ecrit en clair sur
+      // une video que n'importe qui peut recevoir — et sans cette ligne il
+      // suffirait de le lire pour faire sonner le telephone d'un inconnu.
+      if (d.owner_device !== device_id) return json({ error: 'defi d un autre' }, 403);
+
+      const dejaLance = Number(d.lance) === 1;
+
+      // La cible, designee par sa ligne de classement et jamais par son
+      // appareil — celui-ci ne sort pas d'ici. Meme regle que /challenge : on
+      // ne s'adresse pas un defi a soi-meme.
+      let target = d.target_device || null, targetName = '';
+      const sid = Math.round(Number(target_score_id));
+      if (!dejaLance && Number.isFinite(sid) && sid > 0) {
+        const row = await env.DB.prepare(
+          `SELECT device_id, name FROM scores WHERE rowid = ?`
+        ).bind(sid).first();
+        if (row && row.device_id !== device_id) { target = row.device_id; targetName = row.name; }
+      } else if (target) {
+        const row = await env.DB.prepare(
+          `SELECT name FROM scores WHERE device_id = ? ORDER BY rowid DESC LIMIT 1`
+        ).bind(target).first();
+        targetName = row ? row.name : '';
+      }
+
+      // La revanche, exactement comme a la creation : le chrono a battre est
+      // celui que ce defi porte, puisque c'est la course qu'on vient de courir.
+      if (!target && !dejaLance) {
+        const v = await cibleDeLaRevanche(env.DB, {
+          duelRef: revanche_de, deviceId: device_id, nom: name,
+          tMs: Number(d.total_ms) || 0,
+        });
+        if (v) { target = v.device; targetName = v.nom; }
+      }
+
+      // Deja lance : on rend ce qu'on sait sans recompter ni resonner. Un
+      // second appui — un reseau qui hesite, un ecran qui se rejoue — ne doit
+      // pas valoir deux defis au compteur ni deux sonneries chez l'autre.
+      if (dejaLance) return json({ id, target_name: targetName, deja: true });
+
+      /* LE NOM PEUT AVOIR CHANGE ENTRE LES DEUX GESTES. La camera ouvre le
+         defi avec le nom enregistre ; l'ecran de fin laisse le corriger juste
+         avant d'envoyer, et c'est meme la qu'on le saisit la premiere fois.
+
+         On ne le reecrit pourtant QUE SI PERSONNE N'A ENCORE COURU contre ce
+         fantome. Le code part avec la video, parfois avant l'appui : une
+         rencontre peut donc exister deja, et elle porte l'ancien nom. Le
+         changer ici ferait diverger le defi de la rencontre qu'il a produite,
+         et personne ne saurait laquelle des deux dit vrai. */
+      const joue = await env.DB.prepare(
+        `SELECT 1 FROM challenge_attempts WHERE id = ? LIMIT 1`
+      ).bind(id).first();
+      const nomFinal = joue ? d.owner_name : (cleanName(name) || d.owner_name);
+
+      await env.DB.prepare(
+        `UPDATE challenges SET lance = 1, target_device = ?, owner_name = ? WHERE id = ?`
+      ).bind(target, nomFinal, id).run();
+
+      const lanceurKey = String(nomFinal || '').trim().toLowerCase();
+      let races = [];
+      try { races = JSON.parse(d.races || '[]'); } catch { races = []; }
+      if (lanceurKey) await compterLance(env.DB, lanceurKey, nomFinal, races);
       if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
       return json({ id, target_name: targetName });
     }

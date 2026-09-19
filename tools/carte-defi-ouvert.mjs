@@ -61,6 +61,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
+import { FOND, OR, BLANC, ENCRE, LUEUR, encre, or, unite, RETRAIT_VIRGULE }
+  from '../src/game/palette-affiche.js';
+// L'autre voix, celle des jours de competition. Les deux maquettes de ce
+// fichier prennent chacune la sienne a sa source : c'est la seule facon qu'un
+// or qui bouge atteigne toutes les cartes du meme coup.
+import { NUIT, ENCRE as ENCRE_NUIT, fond, flamme, echelle } from './voix-competition.mjs';
 
 const ICI = path.dirname(new URL(import.meta.url).pathname);
 const RACINE = path.resolve(ICI, '..');
@@ -195,7 +201,7 @@ function page({ w, h }) {
   // format de X : 900 pixels de haut pour le meme contenu que 1350, c'est un
   // tiers de hauteur en moins et la carte deborde si l'on se contente de
   // reduire les polices.
-  const k = horizontal ? 0.6 : (h > 1500 ? 1.12 : 1);
+  const k = echelle(w, h);
   // En vertical le billet pousse le reste aux deux bouts ; en horizontal il n'y
   // a pas de place a repartir, et `auto` sortait le bouton de l'image.
   const respire = horizontal ? `${Math.round(30 * k)}px` : 'auto';
@@ -210,22 +216,20 @@ function page({ w, h }) {
   html,body{width:${w}px;height:${h}px;overflow:hidden}
   /* Le fond n'est pas un aplat : un halo bleu au centre detache la carte du
      fil, qui est blanc ou noir selon le telephone de celui qui la voit. */
-  body{background:#070b16;
-       background-image:radial-gradient(ellipse 88% 62% at 50% 46%,
-                        #17213a 0%,#101728 46%,#070b16 100%);
+  body{${fond()};
        font:400 16px/1.2 "Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
        display:flex;flex-direction:column;align-items:center;text-align:center;
        justify-content:${horizontal ? 'center' : 'flex-start'};
        padding:${Math.round(110 * k)}px ${Math.round(78 * k)}px ${Math.round(92 * k)}px}
   .kicker{font-family:Menlo,"DejaVu Sans Mono",monospace;font-size:${Math.round(27 * k)}px;
-          letter-spacing:.34em;color:#8494ad;text-transform:uppercase;
+          letter-spacing:.34em;color:${ENCRE_NUIT.kicker};text-transform:uppercase;
           margin-bottom:${Math.round(40 * k)}px}
   h1{font-size:${Math.round(150 * k)}px;font-weight:700;line-height:1;
      letter-spacing:-.02em;
-     background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 48%,#ef7526 96%);
+     background:${flamme(48)};
      -webkit-background-clip:text;background-clip:text;color:transparent;
      margin-bottom:${Math.round(20 * k)}px}
-  .sous{font-size:${Math.round(35 * k)}px;color:#93a2ba;line-height:1.3;
+  .sous{font-size:${Math.round(35 * k)}px;color:${ENCRE_NUIT.sous};line-height:1.3;
         max-width:${Math.round(860 * k)}px}
   /* LE CODE EST LA RAISON D'ETRE DE LA CARTE. Sur Instagram et TikTok il n'y a
      pas de lien a suivre : ce bloc est le seul chemin vers le jeu, et il doit
@@ -233,24 +237,24 @@ function page({ w, h }) {
      defile. D'ou la taille, le monospace, et l'espacement des lettres — un
      code se recopie caractere par caractere. */
   .billet{margin-top:${respire};margin-bottom:${respire};width:100%;
-          border-top:1px solid #253049;border-bottom:1px solid #253049;
+          border-top:1px solid ${ENCRE_NUIT.filet};border-bottom:1px solid ${ENCRE_NUIT.filet};
           padding:${Math.round(44 * k)}px 0 ${Math.round(48 * k)}px}
   .etiquette{font-family:Menlo,"DejaVu Sans Mono",monospace;font-size:${Math.round(26 * k)}px;
-             letter-spacing:.34em;color:#7e8da6;text-transform:uppercase;
+             letter-spacing:.34em;color:${ENCRE_NUIT.etiquette};text-transform:uppercase;
              margin-bottom:${Math.round(18 * k)}px}
   .code{font-family:Menlo,"DejaVu Sans Mono",monospace;font-weight:700;
-        font-size:${Math.round(128 * k)}px;letter-spacing:.1em;color:#eef2f8;
+        font-size:${Math.round(128 * k)}px;letter-spacing:.1em;color:${ENCRE_NUIT.vif};
         line-height:1;text-indent:.1em}
-  .ou{font-size:${Math.round(30 * k)}px;color:#7e8da6;margin-top:${Math.round(26 * k)}px}
-  .fort{font-size:${Math.round(42 * k)}px;font-weight:700;color:#eef2f8;
+  .ou{font-size:${Math.round(30 * k)}px;color:${ENCRE_NUIT.etiquette};margin-top:${Math.round(26 * k)}px}
+  .fort{font-size:${Math.round(42 * k)}px;font-weight:700;color:${ENCRE_NUIT.vif};
         margin-bottom:${Math.round(14 * k)}px}
-  .doux{font-size:${Math.round(34 * k)}px;color:#8d9cb4}
+  .doux{font-size:${Math.round(34 * k)}px;color:${ENCRE_NUIT.doux}}
   /* Le lien n'est pas une ligne de texte mais un bouton : sur un fond bleu
      nuit, une url orange se lit comme une signature — on la survole du regard.
      C'est la derniere chose que l'oeil accroche avant de scroller. */
   .pied{margin-top:${Math.round(46 * k)}px;display:inline-block;
-        background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 50%,#ef7526 96%);
-        color:#0a1020;font-weight:700;font-size:${Math.round(36 * k)}px;
+        background:${flamme(50)};
+        color:${ENCRE_NUIT.surPastille};font-weight:700;font-size:${Math.round(36 * k)}px;
         padding:${Math.round(24 * k)}px ${Math.round(52 * k)}px;
         border-radius:999px;letter-spacing:.005em}
   </style>
@@ -266,7 +270,7 @@ function page({ w, h }) {
 
   <div class="fort">${echappe(bas.fort)}</div>
   <div class="doux">${echappe(bas.doux)}</div>
-  <div class="pied">${SITE}/?defi=${echappe(args.code)}</div>`;
+  <div class="pied">${SITE}/d/${echappe(args.code)}</div>`;
 }
 
 
@@ -285,12 +289,15 @@ function page({ w, h }) {
 
 function pageAffiche({ w, h }) {
   const L = w, H = h;
-  const large = w > h;
   const marge = Math.round(L * 0.082);
-  // Le format large est trois fois moins haut que large : une taille exprimee
-  // en fraction de la LARGEUR y devient enorme. Le jeu la ramene a la hauteur,
-  // qui est la dimension rare de ce format-la — on fait pareil.
-  const u = large ? H * 0.62 : L;
+  // L'unite de mesure vient de la palette, et pas d'une ligne recopiee : un
+  // format large est trois fois moins haut que large, et une taille exprimee
+  // en fraction de sa LARGEUR y devient enorme. `unite` le sait pour tout le
+  // monde.
+  const u = unite(L, H);
+  // 0,08 * 100 ne fait pas 8 en virgule flottante. On arrondit avant d'ecrire
+  // un pourcentage, sinon la feuille de style porte « 8.000000000000002% ».
+  const pc = v => `${+(v * 100).toFixed(3)}%`;
   const T = t => Math.round(u * t);
   const hautY = Math.round(H * 0.105);
   const haut = hautY + Math.round(L * 0.055);
@@ -307,31 +314,32 @@ function pageAffiche({ w, h }) {
   ${enTetePolices()}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:${L}px;height:${H}px;overflow:hidden}
-  body{position:relative;background:#060913;
+  body{position:relative;background:${FOND};
        font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
   /* La lueur doree du jeu : centree en haut, large comme la carte. */
   .lueur{position:absolute;inset:0;
-         background:radial-gradient(circle ${Math.round(L * 0.85)}px at 50% 8%,
-                    rgba(248,205,74,.20) 0%,rgba(248,205,74,0) 100%)}
+         background:radial-gradient(circle ${Math.round(L * LUEUR.rayon)}px
+                    at ${pc(LUEUR.x)} ${pc(LUEUR.y)},
+                    ${or(LUEUR.alpha)} 0%,${or(0)} 100%)}
   .couloir{position:absolute;left:0;width:100%;height:${trait}px;opacity:.14;
-           background:linear-gradient(90deg,rgba(248,205,74,0) 0%,
-                      rgba(248,205,74,1) 50%,rgba(248,205,74,0) 100%)}
+           background:linear-gradient(90deg,${or(0)} 0%,
+                      ${or(1)} 50%,${or(0)} 100%)}
   /* L'etiquette de provenance ne participe pas au centrage : elle tient sa
      place quoi qu'il arrive, exactement comme dans le jeu. */
   .surtitre{position:absolute;top:${hautY}px;left:0;width:100%;text-align:center;
             font-weight:700;font-size:${Math.round(L * 0.0205)}px;
             letter-spacing:.36em;text-indent:.36em;text-transform:uppercase;
-            color:rgba(255,255,255,.46)}
+            color:${encre(ENCRE.surtitre)}}
   /* La zone ou le sujet a le droit de vivre, et il s'y centre. */
   .pile{position:absolute;left:${marge}px;right:${marge}px;
         top:${haut}px;height:${Math.round(basZone - haut)}px;
         display:flex;flex-direction:column;align-items:center;
         justify-content:center;text-align:center}
   h1{font-weight:900;font-size:${T(0.082)}px;line-height:${T(0.078)}px;
-     letter-spacing:-.022em;color:#fff;text-transform:uppercase;
+     letter-spacing:-.022em;color:${BLANC};text-transform:uppercase;
      margin-bottom:${T(0.03)}px}
   .chrono{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
-          font-weight:700;font-size:${T(0.20)}px;line-height:1;color:#F8CD4A}
+          font-weight:700;font-size:${T(0.20)}px;line-height:1;color:${OR}}
   /* LA VIRGULE NE PREND PAS UNE CHASSE ENTIERE. Space Mono est a chasse fixe :
      laissee telle quelle, elle fait lire « 8 , 64 » — deux nombres au lieu
      d'un. Le jeu lui donne deux cinquiemes de la chasse d'un chiffre
@@ -340,34 +348,34 @@ function pageAffiche({ w, h }) {
      Des marges negatives plutot qu'une fente etroite ou la centrer — la fente
      deplacait le trou au lieu de le boucher, la virgule allait se coller au
      chiffre suivant. */
-  .virgule{display:inline-block;margin:0 -.30ch}
-  .qui{font-size:${T(0.034)}px;color:rgba(255,255,255,.55);
+  .virgule{display:inline-block;margin:0 -${RETRAIT_VIRGULE}ch}
+  .qui{font-size:${T(0.034)}px;color:${encre(ENCRE.nom)};
        margin-top:${T(0.045)}px}
-  .etat{font-weight:600;font-size:${T(0.030)}px;color:rgba(248,205,74,.85);
+  .etat{font-weight:600;font-size:${T(0.030)}px;color:${or(0.85)};
         margin-top:${T(0.022)}px}
   /* LE CODE. L'affiche du jeu garde cette zone pour la trace de la course ;
      ici elle porte la seule chose qui ramene quelqu'un dans le jeu. */
   .billet{margin-top:${T(0.085)}px;padding-top:${T(0.055)}px;width:100%;
-          border-top:1px solid rgba(255,255,255,.10)}
+          border-top:1px solid ${encre(ENCRE.filet)}}
   .etiquette{font-weight:700;font-size:${T(0.022)}px;letter-spacing:.36em;
              text-indent:.36em;text-transform:uppercase;
-             color:rgba(255,255,255,.46);margin-bottom:${T(0.028)}px}
+             color:${encre(ENCRE.etiquette)};margin-bottom:${T(0.028)}px}
   .code{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
-        font-weight:700;font-size:${T(0.105)}px;line-height:1;color:#fff;
+        font-weight:700;font-size:${T(0.105)}px;line-height:1;color:${BLANC};
         letter-spacing:.12em;text-indent:.12em}
-  .lien{font-size:${T(0.026)}px;color:rgba(255,255,255,.38);
+  .lien{font-size:${T(0.026)}px;color:${encre(ENCRE.lien)};
         margin-top:${T(0.030)}px}
   /* Le pied du jeu, au pixel : meme filet, meme graisse, meme inter-lettrage. */
   .filet{position:absolute;left:${marge}px;right:${marge}px;
          top:${Math.round(H - marge * 1.5)}px;height:1px;
-         background:rgba(255,255,255,.10)}
+         background:${encre(ENCRE.filet)}}
   .pied{position:absolute;left:${marge}px;right:${marge}px;
         top:${Math.round(H - marge * 0.92)}px;transform:translateY(-50%);
         display:flex;justify-content:space-between;
         font-weight:700;font-size:${Math.round(L * 0.0205)}px;
         letter-spacing:${(L * 0.006).toFixed(1)}px;text-transform:uppercase}
-  .pied .g{color:rgba(255,255,255,.46)}
-  .pied .d{color:rgba(255,255,255,.30)}
+  .pied .g{color:${encre(ENCRE.pied)}}
+  .pied .d{color:${encre(ENCRE.piedDroit)}}
   </style>
   <div class="lueur"></div>
   ${couloirs}
@@ -382,7 +390,7 @@ function pageAffiche({ w, h }) {
     <div class="billet">
       <div class="etiquette">Code du défi</div>
       <div class="code">${echappe(args.code)}</div>
-      <div class="lien">${SITE}/?defi=${echappe(args.code)}</div>
+      <div class="lien">${SITE}/d/${echappe(args.code)}</div>
     </div>
   </div>
 
@@ -415,6 +423,11 @@ Défi ${args.code} — ${virgule(totalMs)} s sur ${libelleEpreuve}, par ${nom}.
 ${horsLigne ? 'Valeurs données à la main : le compteur d’essais n’a pas été lu.'
             : `${essais} tentative(s) enregistrée(s), ${battus} meilleure(s) que la tienne.`}
 
-Le lien, pour X et pour la bio :  https://${SITE}/?defi=${args.code}
+Le lien a ENVOYER (X, WhatsApp) :  https://${SITE}/?defi=${args.code}
+  Celui-la repond 200 et garde son apercu. L'autre passe par la page de repli.
+
+Le lien a LIRE et a TAPER (bio, video) :  ${SITE}/d/${args.code}
+  C'est celui qui est ecrit sur la carte, et le seul qui se dicte a voix haute.
+
 Le code, pour Instagram et TikTok :  ${args.code}
 `);
