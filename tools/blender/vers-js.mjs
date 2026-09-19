@@ -48,7 +48,7 @@ const js = `/* -----------------------------------------------------------------
    FORME D'UNE ENTREE : [centre en z, demi-hauteur, cambrure, profondeur
    bas, largeur bas, profondeur haut, largeur haut], dans le repere du pivot
    du rig — le meme que pose(). La CAMBRURE est de combien la chair deborde
-   vers l'avant plutot que vers l'arriere : elle vaut -17 mm au fessier,
+   vers l'avant plutot que vers l'arriere : elle vaut -11 mm au fessier,
    -10 mm au mollet, +9 mm a la poitrine. Sans elle, un corps n'est qu'une
    pile de tubes centres sur l'os.
 

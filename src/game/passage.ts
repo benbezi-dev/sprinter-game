@@ -261,10 +261,17 @@ export function cameraPassage(maintenant: number, VW: number, VH: number): Camer
     // partie. En repartant vers Sprinter elle fait l'inverse — elle prend du
     // recul le temps que les haies se couchent — et le chemin se lit dans
     // les deux sens, comme le geste qui l'a declenche.
+    // L'AMPLITUDE EST CELLE D'UN PLAN, PAS D'UN AJUSTEMENT.
+    //
+    // Premier reglage : quinze pour cent de la hauteur et un quart de zoom.
+    // Mesure faite, c'etait juste — et invisible. Un mouvement qui ne se
+    // remarque pas ne raconte rien : autant ne pas l'avoir. Quarante pour
+    // cent de la hauteur et moitie plus gros, on descend VRAIMENT vers le
+    // couloir, et les haies qui s'y dressent arrivent au premier plan.
     const plongee = Math.sin(Math.PI * Math.pow(u, 0.75));
     const vers = p.sens === 'aller' ? 1 : -1;
-    dy = -VH * 0.15 * plongee * vers;
-    zoom = 1 + 0.24 * plongee * vers;
+    dy = -VH * 0.40 * plongee * vers;
+    zoom = 1 + 0.50 * plongee * vers;
   } else if (p.axe === 'bas') {
     // Les haies fermees : c'est leur accueil qui les annonce, et le stade lui
     // laisse la place en sortant par le haut. L'oeil se rapproche du sol —
@@ -308,7 +315,7 @@ export function cameraPassage(maintenant: number, VW: number, VH: number): Camer
   // plongee, pour que la piste ne change pas d'etat sans que rien ne passe
   // dessus.
   const voile = p.surPlace
-    ? 0.22 * Math.sin(Math.PI * Math.pow(u, 0.75))
+    ? 0.30 * Math.sin(Math.PI * Math.pow(u, 0.75))
     : 0.92 * Math.pow(part, 2.2);
 
   return { u, sens: p.sens, axe: p.axe, doux: false, surPlace: p.surPlace, part,
