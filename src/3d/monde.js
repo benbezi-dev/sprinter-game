@@ -288,8 +288,19 @@ function tribunes(THREE, T, th, sMin, sMax, rBord, groupe, opts) {
   })));
 
   // LE PUBLIC. Un corps, une tete, et quinze mille exemplaires.
-  const corps = new THREE.CapsuleGeometry(0.19, 0.42, 6, 12);
-  const tete = new THREE.SphereGeometry(0.13, 12, 10);
+  //
+  // LA SILHOUETTE EST GROSSIERE, ET C'EST UNE MESURE, PAS UN RENONCEMENT. Le
+  // premier essai donnait a chaque spectateur une capsule a douze pans et une
+  // tete a douze meridiens — cinq cents triangles. Multiplie par vingt-quatre
+  // mille, cela fait TREIZE MILLIONS de triangles par image pour des gens qui
+  // occupent six pixels de haut. Mesure faite : 6,9 secondes par image sur un
+  // rasteriseur logiciel, et baisser la resolution ou le filtrage n'y changeait
+  // rien — le cout n'etait pas dans le remplissage, il etait dans les sommets.
+  //
+  // Six pans suffisent : a la distance ou on les voit, la silhouette est
+  // identique au pixel pres, et la tribune coute neuf fois moins.
+  const corps = new THREE.CapsuleGeometry(0.19, 0.42, 2, 6);
+  const tete = new THREE.SphereGeometry(0.13, 6, 4);
   tete.translate(0, 0.42, 0);
   const merge = fusionner(THREE, [corps, tete]);
   merge.rotateX(Math.PI / 2);          // debout dans un monde en Z
@@ -488,13 +499,15 @@ export function construireStade(THREE, scene, T, th) {
   // exactement comme le fait la ligne droite opposee d'un vrai anneau — et
   // c'est elle qu'on voit derriere les coureurs sur toutes les images de
   // television.
-  tribunes(THREE, T, th, sMin, sMax, rOut, groupe, { sens: 1, foule: 15000 });
-  tribunes(THREE, T, th, sMin, sMax, rFond, groupe,
-           { sens: -1, rangs: 16, foule: 9000 });
+  const foules = [
+    tribunes(THREE, T, th, sMin, sMax, rOut, groupe, { sens: 1, foule: 15000 }),
+    tribunes(THREE, T, th, sMin, sMax, rFond, groupe,
+             { sens: -1, rangs: 16, foule: 9000 }),
+  ];
   blocs(THREE, T, groupe);
   poteaux(THREE, T, groupe, rIn, rOut);
   ciel(THREE, th, scene);
 
   scene.add(groupe);
-  return { groupe, rIn, rOut, sMin, sMax };
+  return { groupe, rIn, rOut, sMin, sMax, foules };
 }

@@ -89,6 +89,12 @@ let themeCle = 'jour';
 let etat = 'compte', compte = 3, elapsed = 0, acc = 0;
 // L'etat d'alternance du pilote automatique (voir Sprinter3D.simuler).
 let simCote = 0, simProchain = 0;
+// MODE CAPTURE. La boucle d'image avance normalement la course du temps ecoule
+// depuis l'image precedente. Pour filmer, c'est exactement ce qu'il ne faut
+// pas : on veut qu'UNE image rendue vaille UN pas de temps choisi, sinon la
+// videa obtenue rejoue une course dont chaque image dure ce qu'a dure son
+// calcul. Le drapeau gele donc la simulation, et le harnais l'avance lui-meme.
+let capture = false;
 
 function monterCourse(cle) {
   themeCle = cle;
@@ -281,6 +287,11 @@ function image(now) {
   const dt = Math.min(0.05, (now - dernier) / 1000 || 0.016);
   dernier = now;
 
+  if (capture) {
+    // Ni physique ni dessin : le harnais mene les deux, une image a la fois.
+    requestAnimationFrame(image);
+    return;
+  }
   if (etat === 'compte') {
     compte -= dt;
     if (compte <= 0) { etat = 'course'; elapsed = 0; }
@@ -298,6 +309,20 @@ function image(now) {
     if (joueur.finished && joueur.d > T.total + 22) etat = 'fini';
   }
 
+  dessiner(dt);
+  requestAnimationFrame(image);
+}
+
+/**
+ * Une image : poser les squelettes, placer la camera, rendre.
+ *
+ * Elle est sortie de la boucle pour que le harnais de capture puisse
+ * l'appeler lui-meme, une fois par image filmee. Sans cela il fallait rendre
+ * la main au navigateur et attendre deux rafraichissements pour etre sur
+ * qu'une image avait ete calculee — soit le double du travail pour le meme
+ * resultat, et sur un rasteriseur logiciel le double de trois secondes.
+ */
+function dessiner(dt) {
   for (let i = 0; i < coureurs.length; i++) {
     const r = coureurs[i], a = athletes[i];
     const p = T.pos(r.d, r.lane);
@@ -305,11 +330,9 @@ function image(now) {
     a.groupe.rotation.z = T.heading(r.d, r.lane);
     a.poser(T.lean(r.d, r.lane, r.v));
   }
-
   placerCamera(dt);
   majHud();
   renderer.render(scene, camera);
-  requestAnimationFrame(image);
 }
 
 redimensionner();
@@ -324,6 +347,54 @@ globalThis.Sprinter3D = {
   get joueur() { return joueur; },
   get coureurs() { return coureurs; },
   vue: (n) => { vue = n; },
+  get capture() { return capture; },
+  set capture(v) { capture = !!v; },
+  get compte() { return compte; },
+  set compte(v) { compte = v; },
+  get chrono() { return elapsed; },
+  /**
+   * Un pas de film : on avance la course de `dt`, puis on dessine UNE image.
+   * Tout est synchrone, donc une image rendue vaut exactement un pas de temps
+   * choisi — c'est ce qui permet de filmer a vitesse reelle une maquette qui
+   * met une seconde et demie a calculer chaque image.
+   */
+  pas: (dt, cadence) => {
+    if (etat === 'compte') compte -= dt;
+    else if (etat === 'course') globalThis.Sprinter3D.simuler(dt, cadence);
+    dessiner(dt);
+    return { d: joueur.d, t: elapsed, compte };
+  },
+  /**
+   * Le mode leger, pour filmer sur un rasteriseur logiciel.
+   *
+   * Sans carte graphique, le cout d'une image est domine par deux choses : le
+   * filtrage anisotrope de la piste — jusqu'a seize echantillons de texture par
+   * pixel, sur une surface qui remplit l'ecran — et la carte d'ombre. Les deux
+   * se baissent sans toucher a la geometrie ni a la lumiere, donc sans changer
+   * ce que la maquette DEMONTRE. Sur une vraie carte, rien de tout cela ne se
+   * pose : on laisse le reglage plein par defaut.
+   */
+  leger: (on) => {
+    scene.traverse((n) => {
+      if (n.material && n.material.map) {
+        n.material.map.anisotropy = on ? 2 : 16;
+        n.material.map.needsUpdate = true;
+      }
+    });
+    if (soleil) {
+      soleil.shadow.mapSize.set(on ? 1024 : 2048, on ? 1024 : 2048);
+      if (soleil.shadow.map) { soleil.shadow.map.dispose(); soleil.shadow.map = null; }
+    }
+    // Et surtout : on ne dessine qu'une partie du public. `count` sur un
+    // maillage instancie coupe le nombre d'exemplaires sans rien reconstruire,
+    // et c'est LA depense qui compte sans carte graphique.
+    if (stade && stade.foules) {
+      for (const f of stade.foules) {
+        if (f.__plein == null) f.__plein = f.count;
+        f.count = on ? Math.round(f.__plein * 0.28) : f.__plein;
+      }
+    }
+  },
   stade: (cle) => monterCourse(cle),
   avancer: (d, v) => { for (const r of coureurs) { r.d = d + (r.isPlayer ? 0 : (K.alea() - 0.5) * 6); r.v = v; r.stride += 0.7; } },
   /**
@@ -349,7 +420,9 @@ globalThis.Sprinter3D = {
     for (let t = 0; t < duree; t += pas) {
       if (elapsed >= simProchain) {
         joueur.press(simCote ? 'L' : 'R', elapsed);
-        simCote ^= 1; simProchain = elapsed + inter;
+        // Un peu de flottement : un pouce n'est pas un metronome, et une
+        // cadence parfaitement reguliere donne une foulee de machine.
+        simCote ^= 1; simProchain = elapsed + inter * (0.86 + Math.random() * 0.28);
       }
       elapsed += pas;
       joueur.stepPlayer(pas, elapsed);
