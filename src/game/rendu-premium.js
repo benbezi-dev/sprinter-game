@@ -732,6 +732,12 @@
    * argument : le meme axe que les couloirs, que la foulee, que tout ce qui
    * defile. Et elles evitent le centre, ou se tient le coureur — une trainee
    * qui lui passe dessus le rend flou au lieu de le rendre rapide.
+   *
+   * ET ELLE N'EST APPELEE QUE SUR LE CANAL DE TEST. Si vous cherchez pourquoi
+   * cette fonction ne se declenche jamais dans le jeu publie, la reponse n'est
+   * pas ici : voir TRAINEES_VITESSE dans game/canal.ts, qui porte la decision
+   * et la raison. Le seul appel, dans la boucle d'image, est derriere ce
+   * drapeau.
    */
   function vitesse(ctx, G, part, dx, dy) {
     if (part <= 0.01 || niveau < MOYEN) return;

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
+import { TRAINEES_VITESSE } from '@/game/canal';
 import { dessinerLeGenerique } from '@/game/scene-generique';
 
 export function GameCanvas() {
@@ -226,19 +227,27 @@ export function GameCanvas() {
         // la marche d'approche et ne voulait plus rien dire.
         const v = enCourse && G.player ? G.player.v / (G.player.maxSpeed || 12) : 0;
         const part = SprinterApp.clamp((v - 0.74) / 0.26, 0, 1);
-        // La direction de course A L'ECRAN, prise sur la piste elle-meme :
-        // un metre plus loin dans le couloir du joueur, et la difference des
-        // deux projections est l'axe que suivent les trainees. En virage il
-        // tourne avec le coureur, sans qu'on ait a rejouer la geometrie.
-        let dx = 0, dy = 0;
-        if (enCourse && G.player && G.track) {
-          const a = G.track.pos(G.player.d, G.player.lane);
-          const b = G.track.pos(G.player.d + 1, G.player.lane);
-          const pa = SprinterApp.ground(a[0], a[1]);
-          const pb = SprinterApp.ground(b[0], b[1]);
-          dx = pb[0] - pa[0]; dy = pb[1] - pa[1];
+        // Les trainees ne partent que sur le canal de test — voir
+        // TRAINEES_VITESSE dans game/canal.ts. Le drapeau se replie a la
+        // compilation : dans le build public, ce bloc entier disparait, le
+        // calcul de direction compris.
+        if (TRAINEES_VITESSE) {
+          // La direction de course A L'ECRAN, prise sur la piste elle-meme :
+          // un metre plus loin dans le couloir du joueur, et la difference des
+          // deux projections est l'axe que suivent les trainees. En virage il
+          // tourne avec le coureur, sans qu'on ait a rejouer la geometrie.
+          let dx = 0, dy = 0;
+          if (enCourse && G.player && G.track) {
+            const a = G.track.pos(G.player.d, G.player.lane);
+            const b = G.track.pos(G.player.d + 1, G.player.lane);
+            const pa = SprinterApp.ground(a[0], a[1]);
+            const pb = SprinterApp.ground(b[0], b[1]);
+            dx = pb[0] - pa[0]; dy = pb[1] - pa[1];
+          }
+          Prem.vitesse(ctx, G, part, dx, dy);
         }
-        Prem.vitesse(ctx, G, part, dx, dy);
+        // Le vignettage, lui, reste dans les deux versions : il se resserre
+        // avec la meme vitesse, mais il ne pose aucun trait sur la course.
         Prem.vignette(ctx, G, G.state === 'open' ? 0.5 : 0.85 + part * 0.15);
       }
 

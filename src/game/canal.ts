@@ -65,6 +65,28 @@ export const RELAIS_OUVERT = true;
 export const DEPART_STARTER = EST_TEST;
 
 /**
+ * LES TRAINEES DE VITESSE, sur l'image, quand le coureur approche son maximum.
+ *
+ * Meme sens que le starter ci-dessus, et pour la meme raison : ce sont de
+ * fines traces blanches qui filent dans l'axe du couloir des que la vitesse
+ * passe les trois quarts du maximum. Elles racontent l'effort, mais elles le
+ * racontent PAR-DESSUS la course — et une piste vue de trois quarts n'a pas
+ * besoin qu'on lui ajoute des traits pour qu'on voie qu'on va vite : la
+ * poussiere des appuis, la foulee et le chrono le disent deja, sans rien
+ * poser devant les coureurs.
+ *
+ * Elles restent donc sur le canal de test, le temps de decider si elles ont
+ * leur place dans le jeu. Le RESSERREMENT DU VIGNETTAGE, lui, n'est pas
+ * concerne : il suit la meme vitesse mais ne dessine rien, il ferme un peu
+ * les bords, et il reste dans les deux versions.
+ *
+ * La forme compte, comme partout dans ce fichier : `EST_TEST` se replie a la
+ * compilation, ce drapeau vaut donc `false` en dur dans le build public, et
+ * l'appel comme le calcul de la direction de course en sortent entierement.
+ */
+export const TRAINEES_VITESSE = EST_TEST;
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le
