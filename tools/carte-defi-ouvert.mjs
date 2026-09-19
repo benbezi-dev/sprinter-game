@@ -63,6 +63,10 @@ import path from 'node:path';
 import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
 import { FOND, OR, BLANC, ENCRE, LUEUR, encre, or, unite, RETRAIT_VIRGULE }
   from '../src/game/palette-affiche.js';
+// L'autre voix, celle des jours de competition. Les deux maquettes de ce
+// fichier prennent chacune la sienne a sa source : c'est la seule facon qu'un
+// or qui bouge atteigne toutes les cartes du meme coup.
+import { NUIT, ENCRE as ENCRE_NUIT, fond, flamme, echelle } from './voix-competition.mjs';
 
 const ICI = path.dirname(new URL(import.meta.url).pathname);
 const RACINE = path.resolve(ICI, '..');
@@ -197,7 +201,7 @@ function page({ w, h }) {
   // format de X : 900 pixels de haut pour le meme contenu que 1350, c'est un
   // tiers de hauteur en moins et la carte deborde si l'on se contente de
   // reduire les polices.
-  const k = horizontal ? 0.6 : (h > 1500 ? 1.12 : 1);
+  const k = echelle(w, h);
   // En vertical le billet pousse le reste aux deux bouts ; en horizontal il n'y
   // a pas de place a repartir, et `auto` sortait le bouton de l'image.
   const respire = horizontal ? `${Math.round(30 * k)}px` : 'auto';
@@ -212,22 +216,20 @@ function page({ w, h }) {
   html,body{width:${w}px;height:${h}px;overflow:hidden}
   /* Le fond n'est pas un aplat : un halo bleu au centre detache la carte du
      fil, qui est blanc ou noir selon le telephone de celui qui la voit. */
-  body{background:#070b16;
-       background-image:radial-gradient(ellipse 88% 62% at 50% 46%,
-                        #17213a 0%,#101728 46%,#070b16 100%);
+  body{${fond()};
        font:400 16px/1.2 "Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
        display:flex;flex-direction:column;align-items:center;text-align:center;
        justify-content:${horizontal ? 'center' : 'flex-start'};
        padding:${Math.round(110 * k)}px ${Math.round(78 * k)}px ${Math.round(92 * k)}px}
   .kicker{font-family:Menlo,"DejaVu Sans Mono",monospace;font-size:${Math.round(27 * k)}px;
-          letter-spacing:.34em;color:#8494ad;text-transform:uppercase;
+          letter-spacing:.34em;color:${ENCRE_NUIT.kicker};text-transform:uppercase;
           margin-bottom:${Math.round(40 * k)}px}
   h1{font-size:${Math.round(150 * k)}px;font-weight:700;line-height:1;
      letter-spacing:-.02em;
-     background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 48%,#ef7526 96%);
+     background:${flamme(48)};
      -webkit-background-clip:text;background-clip:text;color:transparent;
      margin-bottom:${Math.round(20 * k)}px}
-  .sous{font-size:${Math.round(35 * k)}px;color:#93a2ba;line-height:1.3;
+  .sous{font-size:${Math.round(35 * k)}px;color:${ENCRE_NUIT.sous};line-height:1.3;
         max-width:${Math.round(860 * k)}px}
   /* LE CODE EST LA RAISON D'ETRE DE LA CARTE. Sur Instagram et TikTok il n'y a
      pas de lien a suivre : ce bloc est le seul chemin vers le jeu, et il doit
@@ -235,24 +237,24 @@ function page({ w, h }) {
      defile. D'ou la taille, le monospace, et l'espacement des lettres — un
      code se recopie caractere par caractere. */
   .billet{margin-top:${respire};margin-bottom:${respire};width:100%;
-          border-top:1px solid #253049;border-bottom:1px solid #253049;
+          border-top:1px solid ${ENCRE_NUIT.filet};border-bottom:1px solid ${ENCRE_NUIT.filet};
           padding:${Math.round(44 * k)}px 0 ${Math.round(48 * k)}px}
   .etiquette{font-family:Menlo,"DejaVu Sans Mono",monospace;font-size:${Math.round(26 * k)}px;
-             letter-spacing:.34em;color:#7e8da6;text-transform:uppercase;
+             letter-spacing:.34em;color:${ENCRE_NUIT.etiquette};text-transform:uppercase;
              margin-bottom:${Math.round(18 * k)}px}
   .code{font-family:Menlo,"DejaVu Sans Mono",monospace;font-weight:700;
-        font-size:${Math.round(128 * k)}px;letter-spacing:.1em;color:#eef2f8;
+        font-size:${Math.round(128 * k)}px;letter-spacing:.1em;color:${ENCRE_NUIT.vif};
         line-height:1;text-indent:.1em}
-  .ou{font-size:${Math.round(30 * k)}px;color:#7e8da6;margin-top:${Math.round(26 * k)}px}
-  .fort{font-size:${Math.round(42 * k)}px;font-weight:700;color:#eef2f8;
+  .ou{font-size:${Math.round(30 * k)}px;color:${ENCRE_NUIT.etiquette};margin-top:${Math.round(26 * k)}px}
+  .fort{font-size:${Math.round(42 * k)}px;font-weight:700;color:${ENCRE_NUIT.vif};
         margin-bottom:${Math.round(14 * k)}px}
-  .doux{font-size:${Math.round(34 * k)}px;color:#8d9cb4}
+  .doux{font-size:${Math.round(34 * k)}px;color:${ENCRE_NUIT.doux}}
   /* Le lien n'est pas une ligne de texte mais un bouton : sur un fond bleu
      nuit, une url orange se lit comme une signature — on la survole du regard.
      C'est la derniere chose que l'oeil accroche avant de scroller. */
   .pied{margin-top:${Math.round(46 * k)}px;display:inline-block;
-        background:linear-gradient(100deg,#fbc44e 4%,#f7a03c 50%,#ef7526 96%);
-        color:#0a1020;font-weight:700;font-size:${Math.round(36 * k)}px;
+        background:${flamme(50)};
+        color:${ENCRE_NUIT.surPastille};font-weight:700;font-size:${Math.round(36 * k)}px;
         padding:${Math.round(24 * k)}px ${Math.round(52 * k)}px;
         border-radius:999px;letter-spacing:.005em}
   </style>

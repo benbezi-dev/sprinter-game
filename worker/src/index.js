@@ -22,6 +22,7 @@ import {
   medaillesDe, paysDe, listeNations,
   fluxDirect, recapMondial, tableauNations,
 } from './championnats.js';
+import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -996,8 +997,22 @@ export default {
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
 
+    /* LA SEMAINE DES NATIONS, FIGEE UNE FOIS. Le tableau du lundi ne vaut que
+       s'il peut se comparer a celui d'avant : « la France passe 7e » est un
+       post, « la France est 7e » n'en est pas un. `figerLaSemaine` ecrit a la
+       toute premiere execution du lundi et ne fait rien les 2015 suivantes —
+       c'est ce qui evite d'avoir a poser, surveiller et rattraper une tache
+       hebdomadaire de plus.
+
+       Sur LES DEUX bases, comme les clotures : c'est en test qu'on repete le
+       rendez-vous avant de le tenir pour de vrai. */
     for (const [nom, db] of [['prod', env.DB], ['test', env.DB_TEST]]) {
       if (!db) continue;
+      ctx.waitUntil(
+        figerLaSemaine(db, quand)
+          .then(b => { if (b.figees) console.log('nations figees', nom, JSON.stringify(b)); })
+          .catch(e => console.log('nations KO', nom, String(e && e.message || e)))
+      );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
           .then(b => {
@@ -2317,6 +2332,33 @@ async function servir(request, env, ctx, porteur) {
       }
 
       return json({ classement, moi });
+    }
+
+    /* LE CLASSEMENT DES NATIONS — la mediane des cinquante meilleurs de chaque
+       pays, et le mouvement depuis lundi dernier.
+
+       PAS UN NOM N'EN SORT. C'est un tableau de drapeaux et de chronos ; la
+       charte interdit de publier le pseudonyme de quelqu'un sans son accord
+       (§5.4), et ce tableau est fait pour etre poste. Celui qui veut nommer le
+       joueur de la semaine le tape a la main dans `carte-nations.mjs`, ce qui
+       est le moment ou il confirme avoir demande.
+
+       `name` ne sert qu'a retrouver SON pays, pour la ligne « moi » — jamais a
+       classer quelqu'un. */
+    if (url.pathname === '/nations' && request.method === 'GET') {
+      const race = url.searchParams.get('race') || EPREUVE_NATIONS;
+      if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
+      // `best_split_ms` est lu par le calcul : la table doit avoir ses colonnes.
+      await ensureScoreGhost(env.DB);
+
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      let sien = (url.searchParams.get('pays') || '').trim().toUpperCase();
+      if (!sien && nom) {
+        const m = await paysDe(env.DB, [nom]);
+        sien = m.get(nom) || '';
+      }
+
+      return json(await tableauDesNations(env.DB, { epreuve: race, pays: sien || null }));
     }
 
     if (url.pathname === '/duels' && request.method === 'GET') {

@@ -16,7 +16,7 @@ Le brief était à trous. Voici ce que le dépôt dit réellement du produit :
 |---|---|
 | **Nom** | Sprinter — `sprinter-game.com` |
 | **Genre** | Athlétisme arcade compétitif en ligne (100 m, 200 m, 400 m, 400 m haies, relais 4 × 100) |
-| **USP** | La mécanique la plus simple du jeu vidéo — **deux touches, alternées** — branchée sur une infrastructure compétitive complète : duels classés, courses en direct au même coup de pistolet, relais à quatre, 51 nationalités, championnats nationaux hebdomadaires, titres qui expirent |
+| **USP** | La mécanique la plus simple du jeu vidéo — **deux touches, alternées** — branchée sur une infrastructure compétitive complète : duels classés, courses en direct au même coup de pistolet, relais à quatre, 71 nationalités, championnats nationaux hebdomadaires, titres qui expirent |
 | **DA** | 3D low-poly, stade de nuit, LED magenta/cyan, tartan, brume de distance, grain — couche « premium » qui s'adapte seule au framerate |
 | **Cible** | 1. Gen Z mobile (TikTok, le jeu se joue à deux pouces) · 2. Nostalgiques *Track & Field / Hyper Sports* (30-45 ans, X) · 3. Communauté athlé francophone (la chaîne L'Équipe, les meetings) |
 | **Plateformes** | **Navigateur** (PC + mobile, gratuit, sans compte) · **App Store / Play Store** via Capacitor (`dev.benbezi.sprinter`) · bilingue FR/EN |
@@ -88,7 +88,7 @@ touches » est la promesse de friction zéro : personne ne se dit « je n'ai pas
 
 | Temps | Image | Texte |
 |---|---|---|
-| 0,0 – 1,0 s | Le défilé des **51 drapeaux**, rapide | « Tu choisis ton pays une seule fois. » |
+| 0,0 – 1,0 s | Le défilé des **71 drapeaux**, rapide | « Tu choisis ton pays une seule fois. » |
 | 1,0 – 2,0 s | Le choix, la confirmation, **le cadenas qui se ferme** | « Après, c'est définitif. » |
 | 2,0 – 3,5 s | Le classement des nations | « La France est 7e. » |
 | 3,5 – 12 s | Le podium d'un championnat national, drapeaux | « Huit championnats s'ouvrent samedi. Le tien décide lequel tu cours. » |
@@ -298,7 +298,7 @@ désamorce le réflexe « encore un dev qui veut de la promo gratuite ».
 >
 > Sprinter est un jeu d'athlétisme qui se joue à deux touches, dans le navigateur, gratuitement. Pas de compte, pas de téléchargement : le lien s'ouvre, la course démarre.
 >
-> Ce n'est pas une démo. Le jeu tourne avec des duels classés, des courses en direct à huit, un relais 4 × 100 où le témoin peut tomber, 51 nationalités et des championnats nationaux chaque week-end. Le record du 100 m est à **8,246 s** et il change de main toutes les deux semaines.
+> Ce n'est pas une démo. Le jeu tourne avec des duels classés, des courses en direct à huit, un relais 4 × 100 où le témoin peut tomber, 71 nationalités et des championnats nationaux chaque week-end. Le record du 100 m est à **8,246 s** et il change de main toutes les deux semaines.
 >
 > Je vous ai ouvert un défi : **sprinter-game.com** — code **K7M2QX**, mon temps est 9,12 s.
 >
@@ -375,7 +375,7 @@ Cinq chantiers, classés par rapport effort / impact. Rien d'autre n'est bloquan
 | 1 bis | ~~**Le code sur TOUS les cartons**~~ — **fait.** La caméra *pose* un défi à l'arrivée de chaque course filmée (`/challenge/camera`), le carton lui garde sa place et l'affiche quand il arrive. Poser n'est pas lancer : le défi de la caméra se court mais ne vise personne, ne sonne nulle part et ne compte pas au tableau des défis lancés. Le bouton « DÉFIER UN AMI » lance celui-là — une course, un code. À ne pas confondre avec le **défi ouvert** de la communication, qui est sans cible mais bel et bien lancé | `defi-camera.ts`, `carton-film.ts`, worker | — | Le levier est complet : la vidéo ne se contente plus d'inviter, elle défie |
 | 2 | ~~**Code de défi en lien cliquable**~~ — **fait.** `sprinter-game.com/d/K7M2QX` ouvre la course contre le fantôme. Ce n'est pas une route `wouter` : GitHub Pages sert des fichiers, rien ne se charge pour un chemin qu'il ne connaît pas, donc aucun routage côté navigateur ne peut être atteint. C'est `public/404.html` — son seul repli — qui traduit le chemin en `?defi=`, en gardant le canal de test dans le canal de test. **Deux formes, deux usages :** `?defi=` reste le lien qu'on **envoie** (il répond 200, il garde son aperçu), `/d/CODE` est celui qu'on **lit, tape et dicte** — carton de vidéo, cartes, bio | `public/404.html`, `challenge.ts`, `carton-film.ts` | — | Un code à recopier à la main perd 80 % des gens |
 | 3 | ~~**Classement des recruteurs**~~ — **fait.** `GET /recruteurs` compte les **personnes** qui ont relevé vos défis, pas les courses : un ami qui reprend vingt fois le même code fait une recrue, et on ne se compte pas soi-même. Les défis de la caméra y comptent — ailleurs non, mais ici le tableau mesure que quelqu'un a couru, pas une intention. Accessible par « RECRUTEURS » dans le classement des duels | `worker/src/index.js`, `src/game/recruteurs.ts`, `Recruteurs.tsx` | — | Le moteur d'UGC de la §4.2 : **le seul classement qu'un joueur lent puisse gagner**, et donner son code y rapporte |
-| 4 | **Page publique du classement par nation**, partageable en image | worker + `tools/` | Moyen | Alimente la guerre des drapeaux chaque lundi, sans travail manuel |
+| 4 | ~~**Classement par nation, partageable en image**~~ — **fait.** `GET /nations` donne la **médiane des 50 meilleurs** de chaque pays — pas son record : un seul joueur rapide ne doit pas placer son pays premier. Le serveur fige le tableau chaque lundi, d'où les **flèches** (« la France passe 6e, +2 »), qui sont la nouvelle de la semaine. Écran « NATIONS » dans le jeu, et `tools/carte-nations.mjs` sort les trois formats en une commande | `worker/src/nations.js`, `src/game/nations.ts`, `Nations.tsx`, `tools/carte-nations.mjs` | — | Alimente la guerre des drapeaux chaque lundi, sans travail manuel |
 | 5 | **Carte de partage automatique** au moment où un joueur bat son record ou passe sous 9 s | `tools/carte-riposte.mjs` (à réutiliser) | Faible | Le partage doit être proposé **à l'instant de la fierté**, pas plus tard |
 
 ---
@@ -403,5 +403,10 @@ retaper six caractères. Elle en demande un, maintenant :
 `sprinter-game.com/d/K7M2QX`, écrit sur le carton de la vidéo comme sur les
 cartes. Et il se **dicte**, ce qui compte là où aucun lien n'est cliquable.
 
-Le suivant est **le 4** : la page publique du classement par nation, celle qui
-alimente la guerre des drapeaux du lundi sans travail manuel.
+Le chantier 4 est fait : la carte du lundi sort en une commande,
+`node tools/carte-nations.mjs --moi FR`, et elle relit le classement au moment
+du rendu — aucun chiffre n'est recopié à la main, donc aucun chiffre périmé ne
+part dans un fil. Le rendez-vous hebdomadaire ne coûte plus que la légende.
+
+Ne reste que **le 5** : la carte de partage automatique à l'instant où un
+joueur bat son record. `tools/carte-riposte.mjs` est à réutiliser.

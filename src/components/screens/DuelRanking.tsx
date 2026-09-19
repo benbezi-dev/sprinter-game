@@ -13,6 +13,7 @@ import {
 } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
 import { Recruteurs } from './Recruteurs';
+import { Nations } from './Nations';
 import { SERIE_OUVERTE } from '@/game/canal';
 import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt, jeuDe } from '@/game/jeux';
 
@@ -101,6 +102,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    * premier ne recompensera jamais.
    */
   const [voirRecruteurs, setVoirRecruteurs] = useState(false);
+  const [voirNations, setVoirNations] = useState(false);
   /** Les trois epreuves du jeu courant, dans l'ordre d'un programme. */
   const RACE_KEYS: readonly string[] = epreuvesDuJeu(useJeu());
 
@@ -193,7 +195,18 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
               </span>
             </div>
           </div>
+          {/* LES TROIS TABLEAUX SONT VOISINS, ET C'EST LE PROPOS. Celui des
+              duels classe des chronos, celui des recruteurs classe ce qu'on
+              amene, celui des nations classe ce qu'on est ensemble. Un joueur
+              qui ne gagnera jamais le premier peut gagner les deux autres —
+              encore faut-il qu'il les voie depuis le premier. */}
           <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setVoirNations(true)}
+                    className="px-3 py-2 rounded-xl bg-card/80 border border-white/10
+                               hover:bg-white/10 transition-colors
+                               text-[10px] font-bold tracking-widest text-muted-foreground">
+              {N.t('nat_ouvrir')}
+            </button>
             <button onClick={() => setVoirRecruteurs(true)}
                     className="px-3 py-2 rounded-xl bg-card/80 border border-white/10
                                hover:bg-white/10 transition-colors
@@ -487,6 +500,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
           un oeil et on revient, sans perdre l'epreuve choisie ni la position
           de defilement de celui qu'on etait en train de regarder. */}
       {voirRecruteurs && <Recruteurs onClose={() => setVoirRecruteurs(false)} />}
+      {voirNations && <Nations onClose={() => setVoirNations(false)} />}
     </div>
   );
 }
