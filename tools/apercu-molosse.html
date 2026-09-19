@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu de la nuit du molosse</title>
+<!--
+  CE QUE LA COURSE NE LAISSE PAS REGARDER.
+
+  La bete traverse l'ecran en huit secondes, de nuit, derriere un coureur, et
+  l'on n'y voit jamais que ce que la camera veut bien montrer. Cette page
+  l'arrete sur l'image : son galop decompose, sa taille face a un athlete, et
+  les deux scenettes de fin.
+
+  Elle ne charge ni React, ni le moteur de course, ni le reseau : les deux
+  dessins du mode sont des fonctions pures qui prennent un contexte de canvas
+  et des nombres. C'est la meme raison qui fait vivre la loi dans
+  halloween-loi.js — ce qui se regarde sans jouer doit pouvoir se regarder
+  sans jouer.
+
+  Elle s'ouvre sur le serveur de developpement : /tools/apercu-molosse.html
+-->
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  .note { margin: 0 0 8px 16px; color: #6d7386; font-size: 11px; max-width: 70ch; }
+  canvas { display: block; margin: 0 16px 4px; background: #0d0814; border-radius: 6px; }
+</style>
+
+<h2>le galop, decompose — huit instants d'un cycle</h2>
+<p class="note">Les deux posterieurs poussent ensemble, les anterieurs rattrapent, et
+  il y a un temps ou les quatre pieds quittent le sol. Si l'un des huit dessins
+  ressemble a un cheval a bascule, c'est la que ca se voit.</p>
+<canvas id="c1" width="1180" height="230"></canvas>
+
+<h2>a l'echelle, et a trois distances de la camera</h2>
+<p class="note">A gauche la bete telle qu'on la voit sur la piste (trente pixels le
+  metre), puis deux fois plus grande, puis en gros plan. Le trait doit tenir aux
+  trois tailles : c'est la petite qui compte, c'est celle du jeu.</p>
+<canvas id="c2" width="1180" height="300"></canvas>
+
+<h2>la scenette d'une nuit tenue</h2>
+<canvas id="c3" width="1180" height="330"></canvas>
+
+<h2>la scenette d'une morsure</h2>
+<canvas id="c4" width="1180" height="330"></canvas>
+
+<script type="module">
+  import { molosseDe } from '/src/game/halloween-molosse.js';
+  import { peindreLaScene } from '/src/game/halloween-cinema.ts';
+  import { NUITS, constantes, positionDe } from '/src/game/halloween-loi.js';
+
+  /**
+   * Un faux moteur, juste assez pour que le dessin de la bete trouve ce qu'il
+   * cherche : une distance, une vitesse, un chrono et une echelle.
+   *
+   * On ne monte pas de piste : `pieces()` calcule une position sur la piste,
+   * or ici on veut la poser ou l'on veut. On appelle donc `dessiner` en lui
+   * donnant la piece a la main — c'est exactement ce que fait le rendu du
+   * jeu, une fois la profondeur calculee.
+   */
+  function bete(chasse) { return molosseDe(chasse); }
+  const chasseDe = (d, v) => ({ d, v, ecart: 4, nuit: NUITS[10], verdict: 'court' });
+  const faussetG = (t) => ({ G: { elapsed: t, VW: 1180, VH: 400 } });
+
+  // ---- le galop decompose ------------------------------------------------
+  {
+    const ctx = document.getElementById('c1').getContext('2d');
+    const m = 60;
+    for (let i = 0; i < 8; i++) {
+      // Un huitieme de cycle a chaque fois. `FOULEE` vaut 2,6 cycles par
+      // metre dans le module : on avance donc d'un huitieme de 1/2,6 metre.
+      const d = 20 + (i / 8) * (1 / 2.6);
+      const c = chasseDe(d, 9);
+      bete(c).dessiner(ctx, faussetG(i * 0.05), { x: 90 + i * 140, y: 190, m });
+      ctx.fillStyle = '#4a4f63';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText(String(i + 1), 86 + i * 140, 215);
+    }
+  }
+
+  // ---- a l'echelle -------------------------------------------------------
+  {
+    const ctx = document.getElementById('c2').getContext('2d');
+    // La hauteur d'un coureur du jeu, pour comparer : 1,75 m.
+    const repere = (x, m) => {
+      ctx.strokeStyle = '#2c3142'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x - 30, 250); ctx.lineTo(x - 30, 250 - 1.75 * m);
+      ctx.stroke();
+      ctx.fillStyle = '#4a4f63'; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText('1,75 m', x - 26, 250 - 1.75 * m - 4);
+    };
+    const tailles = [[150, 30], [430, 62], [880, 110]];
+    for (const [x, m] of tailles) {
+      repere(x, m);
+      bete(chasseDe(20.3, 10)).dessiner(ctx, faussetG(0.4), { x, y: 250, m });
+      ctx.fillStyle = '#4a4f63'; ctx.font = '10px ui-monospace, monospace';
+      ctx.fillText(m + ' px/m', x - 20, 272);
+    }
+  }
+
+  // ---- les deux scenettes -------------------------------------------------
+  peindreLaScene(document.getElementById('c3').getContext('2d'), 1180, 330, 2.4, false);
+  peindreLaScene(document.getElementById('c4').getContext('2d'), 1180, 330, 2.4, true);
+</script>

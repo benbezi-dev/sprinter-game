@@ -31,14 +31,20 @@ const PI = Math.PI;
 const TAU = PI * 2;
 
 /* --- les mesures de la bete, en metres ------------------------------------
-   Un molosse n'est pas un chien : soixante-quinze centimetres au garrot,
-   un metre soixante du poitrail a la croupe. Il fait donc les deux tiers de
-   la hauteur d'un coureur et le double de sa largeur — c'est exactement ce
-   qu'on veut voir arriver dans le coin de l'ecran. */
-const GARROT = 0.78;      // hauteur du dos au-dessus du sol
-const LONG = 1.55;        // poitrail -> croupe
-const EPAIS = 0.34;       // epaisseur du tronc
-const PATTE = 0.74;       // longueur d'une patte tendue
+   Un molosse n'est pas un chien : quatre-vingt-dix centimetres au garrot,
+   un metre soixante-dix du poitrail a la croupe. Il fait donc la moitie de
+   la hauteur d'un coureur et le double de sa longueur — c'est exactement ce
+   qu'on veut voir arriver dans le coin de l'ecran.
+
+   ELLES ONT ETE RELEVEES APRES COUP, et c'est la page d'apercu qui l'a dit
+   (tools/apercu-molosse.html). A soixante-dix-huit centimetres au garrot, la
+   bete etait juste un chien : posee a cote du repere d'un coureur, elle ne
+   faisait pas peur. Dix centimetres de plus et quinze de long suffisent — au
+   dela, elle cesse d'etre un chien et devient un cheval. */
+const GARROT = 0.88;      // hauteur du dos au-dessus du sol
+const LONG = 1.70;        // poitrail -> croupe
+const EPAIS = 0.36;       // epaisseur du tronc
+const PATTE = 0.82;       // longueur d'une patte tendue
 const TETE = 0.46;        // crane + museau
 
 /* Les couleurs. Un noir pur aurait fait un trou dans l'image : la bete se
@@ -304,11 +310,19 @@ function pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, couleur) 
   capsule(ctx, fx - 0.04 * m, fy, fx + 0.06 * m, fy, 0.045 * m, couleur);
 }
 
-/** La queue, fouettee par le galop. */
+/**
+ * La queue, fouettee par le galop.
+ *
+ * ELLE EST TENDUE VERS L'ARRIERE, PRESQUE A L'HORIZONTALE, et c'est ainsi
+ * qu'un chien lance la porte : elle sert de balancier, elle ne salue pas.
+ * Dressee a quarante-cinq degres — ce qu'elle faisait — elle donnait a la
+ * bete l'air d'un animal content, et une grande diagonale claire partait du
+ * coin de l'image sans qu'on sache ce que c'etait.
+ */
 function queue(ctx, cycle, m, x, y, vitesse) {
-  const bat = Math.sin(cycle * TAU * 1.5) * 0.22 * (0.4 + vitesse);
-  const x1 = x - 0.30 * m, y1 = y - 0.22 * m + bat * m;
-  const x2 = x - 0.62 * m, y2 = y - 0.34 * m + bat * 1.8 * m;
+  const bat = Math.sin(cycle * TAU * 1.5) * 0.16 * (0.4 + vitesse);
+  const x1 = x - 0.34 * m, y1 = y - 0.06 * m + bat * m;
+  const x2 = x - 0.70 * m, y2 = y - 0.10 * m + bat * 2.1 * m;
   capsule(ctx, x, y, x1, y1, 0.06 * m, POIL);
   capsule(ctx, x1, y1, x2, y2, 0.035 * m, POIL);
 }

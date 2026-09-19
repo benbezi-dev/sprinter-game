@@ -265,6 +265,16 @@
       // allumees. Il ne prend ni les tourbillons ni le coup de pinceau : la
       // piste doit rester nette sous les pieds de quelqu'un qui fuit.
       arbres: 'cypres',
+      // LES DEUX TEINTES DU CYPRES SONT OBLIGATOIRES DES QU'ON DEMANDE CET
+      // ARBRE. Le dessin les lit sans garde (cypresTile), et un theme qui
+      // reclame des cypres sans les fournir fait tomber toute l'image du
+      // stade sur un « cannot read properties of undefined ». C'est arrive
+      // ici meme, a la premiere course lancee au cimetiere.
+      //
+      // Elles ne sont pas celles de la nuit etoilee : un cypres de cimetiere
+      // est plus noir et moins vert que celui de Van Gogh — il doit se lire
+      // comme une silhouette contre le ciel, pas comme un arbre.
+      cypresSombre: [12, 18, 16], cypresClair: [34, 52, 38],
       village: true, villageSombre: [16, 10, 28],
       lointain: [30, 18, 44],
       // Les lampes au-dessus des tribunes, comme au Danube : une enceinte de

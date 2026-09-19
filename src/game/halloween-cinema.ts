@@ -342,10 +342,16 @@ export function peindreLaScene(
     ctx.beginPath(); ctx.arc(lx + dx * lr, ly + dy * lr, r * lr, 0, TAU); ctx.fill();
   }
 
-  // LE SOL, et la ligne d'horizon qui le separe du ciel.
-  ctx.fillStyle = 'rgb(14,18,14)';
+  // LE SOL. Presque noir, et une simple ligne pour le separer du ciel.
+  //
+  // Il a ete un vert de pelouse, et c'etait une erreur que la page d'apercu a
+  // rendue evidente : une bande claire en bas de l'image tirait le regard
+  // sous les personnages, au seul endroit ou il ne se passe rien. Un
+  // cimetiere de nuit n'a pas de pelouse visible — il a une masse sombre, et
+  // la lune par-dessus.
+  ctx.fillStyle = 'rgb(9,11,10)';
   ctx.fillRect(0, sol, L, H - sol);
-  ctx.fillStyle = 'rgba(120,96,60,0.20)';
+  ctx.fillStyle = 'rgba(140,116,74,0.22)';
   ctx.fillRect(0, sol, L, 2);
 
   // LES TOMBES ET LES CYPRES, en contre-jour. Ils defilent lentement vers la
@@ -430,48 +436,85 @@ function silhouetteCoureur(ctx: CanvasRenderingContext2D, x: number, sol: number
   ctx.arc(x + m * 0.10, epaule - bond - m * 0.20, m * 0.17, 0, TAU); ctx.fill();
 }
 
-/** La bete en contre-jour, au galop. */
+/**
+ * La bete en contre-jour, au galop.
+ *
+ * SES PATTES SUIVENT LA MEME FOULEE QUE CELLE DU JEU, et pas un cercle.
+ * Elles en decrivaient un — un cosinus pour l'avancee, un sinus pour la
+ * hauteur — et le resultat se voyait a la page d'apercu : quatre pieds qui
+ * tournaient comme des pedales sous un corps immobile. Le contact se fait
+ * donc au sol, en reculant sous le corps, et le rappel ramene la patte
+ * devant en la repliant, exactement comme `pied()` dans halloween-molosse.js.
+ */
 function silhouetteChien(ctx: CanvasRenderingContext2D, x: number, sol: number,
-                         m: number, cycle: number) {
-  const dos = sol - m * 0.80;
+                         mesure: number, cycle: number) {
+  // LA BETE EST PLUS GRANDE ICI QUE SUR LA PISTE, ET C'EST VOULU.
+  //
+  // A l'echelle exacte — la moitie d'un coureur — elle faisait quarante
+  // pixels de haut dans cette scene, et ses pattes se confondaient en une
+  // masse : on voyait une barre noire avec un oeil rouge. Or cette image
+  // n'est pas une vue de la piste, c'est un souvenir, et un souvenir grossit
+  // ce qui a fait peur. Un tiers de plus suffit a rendre le galop lisible
+  // sans qu'elle depasse l'homme.
+  const m = mesure * 1.35;
+  const dos = sol - m * 0.86;
   const bond = Math.max(0, Math.sin(cycle * TAU - 0.6)) * m * 0.12;
   const y = dos - bond;
+  const amp = m * 0.52;
   ctx.lineCap = 'round';
-  // pattes
+
+  // Les quatre pattes, aux memes decalages de phase que le galop du jeu.
   const phases = [0, 0.12, 0.45, 0.57];
   for (let k = 0; k < 4; k++) {
     const u = (cycle + phases[k]) % 1;
     const avant = k >= 2;
-    const hx = x + (avant ? m * 0.62 : -m * 0.52);
-    const px = hx + Math.cos(u * TAU) * m * 0.42;
-    const py = sol - bond - Math.max(0, Math.sin(u * TAU)) * m * 0.34;
-    ctx.lineWidth = m * 0.11;
-    ctx.beginPath(); ctx.moveTo(hx, y + m * 0.06); ctx.lineTo(px, py); ctx.stroke();
+    const hx = x + (avant ? m * 0.58 : -m * 0.50);
+    const hy = y + m * 0.06;
+    // Contact sur la premiere moitie, rappel sur la seconde : la patte quitte
+    // le sol, se replie et revient devant.
+    let px: number, py: number;
+    if (u < 0.5) { px = amp * (0.5 - u / 0.5); py = 0; }
+    else { const q = (u - 0.5) / 0.5; px = amp * (-0.5 + q); py = Math.sin(q * Math.PI) * amp * 0.52; }
+    const fx = hx + px;
+    const fy = sol - bond - py;
+    // Le coude, pousse vers l'avant devant et vers l'arriere derriere : c'est
+    // lui qui fait lire un quadrupede plutot qu'un homme a quatre jambes.
+    const mx = (hx + fx) * 0.5 + (avant ? m * 0.07 : -m * 0.10);
+    const my = (hy + fy) * 0.5;
+    ctx.lineWidth = m * 0.10;
+    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(mx, my); ctx.lineTo(fx, fy); ctx.stroke();
   }
-  // tronc
-  ctx.lineWidth = m * 0.36;
-  ctx.beginPath(); ctx.moveTo(x - m * 0.58, y + m * 0.04); ctx.lineTo(x + m * 0.62, y); ctx.stroke();
-  // queue
-  ctx.lineWidth = m * 0.09;
+
+  // Le tronc : le poitrail plus haut et plus epais que le rein.
+  ctx.lineWidth = m * 0.30;
+  ctx.beginPath(); ctx.moveTo(x - m * 0.54, y + m * 0.06); ctx.lineTo(x + m * 0.58, y); ctx.stroke();
+  ctx.lineWidth = m * 0.38;
+  ctx.beginPath(); ctx.moveTo(x + m * 0.24, y); ctx.lineTo(x + m * 0.56, y + m * 0.02); ctx.stroke();
+
+  // La queue, tendue vers l'arriere comme celle du jeu.
+  ctx.lineWidth = m * 0.08;
   ctx.beginPath();
-  ctx.moveTo(x - m * 0.58, y);
-  ctx.lineTo(x - m * 1.05, y - m * 0.22 + Math.sin(cycle * TAU * 1.5) * m * 0.16);
+  ctx.moveTo(x - m * 0.54, y + m * 0.04);
+  ctx.lineTo(x - m * 1.02, y - m * 0.04 + Math.sin(cycle * TAU * 1.5) * m * 0.14);
   ctx.stroke();
-  // cou, crane, museau
-  ctx.lineWidth = m * 0.24;
-  ctx.beginPath(); ctx.moveTo(x + m * 0.55, y); ctx.lineTo(x + m * 0.92, y + m * 0.12); ctx.stroke();
-  ctx.lineWidth = m * 0.17;
-  ctx.beginPath(); ctx.moveTo(x + m * 0.92, y + m * 0.12); ctx.lineTo(x + m * 1.28, y + m * 0.16); ctx.stroke();
-  // oreille couchee
+
+  // Cou, crane, museau — la tete basse, en position de poursuite.
+  ctx.lineWidth = m * 0.22;
+  ctx.beginPath(); ctx.moveTo(x + m * 0.52, y); ctx.lineTo(x + m * 0.88, y + m * 0.16); ctx.stroke();
+  ctx.lineWidth = m * 0.16;
+  ctx.beginPath(); ctx.moveTo(x + m * 0.88, y + m * 0.16); ctx.lineTo(x + m * 1.24, y + m * 0.20); ctx.stroke();
+
+  // L'oreille, couchee vers l'arriere.
   ctx.beginPath();
-  ctx.moveTo(x + m * 0.90, y - m * 0.02);
-  ctx.lineTo(x + m * 0.66, y - m * 0.28);
-  ctx.lineTo(x + m * 0.88, y + m * 0.06);
+  ctx.moveTo(x + m * 0.86, y + m * 0.02);
+  ctx.lineTo(x + m * 0.62, y - m * 0.24);
+  ctx.lineTo(x + m * 0.84, y + m * 0.10);
   ctx.closePath(); ctx.fill();
+
   // L'OEIL, le seul point clair de la silhouette. Sans lui la bete n'est
   // qu'une masse noire, et une masse noire ne regarde personne.
   ctx.fillStyle = 'rgb(255,86,42)';
-  ctx.beginPath(); ctx.arc(x + m * 1.00, y + m * 0.08, m * 0.055, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + m * 0.96, y + m * 0.12, m * 0.055, 0, TAU); ctx.fill();
   ctx.fillStyle = 'rgb(5,5,8)';
 }
 
