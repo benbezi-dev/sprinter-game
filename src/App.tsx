@@ -48,6 +48,8 @@ import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
+import { PanneauMolosse, FinDeLaNuit, finDeNuitEnCours } from '@/components/screens/Halloween';
+import { HALLOWEEN_OUVERT } from '@/game/canal';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -222,8 +224,15 @@ function MainGame() {
             celui du one shot : il repond a une autre question. Le recapitulatif
             ordinaire demande de choisir entre huit choses ; apres avoir rate de
             neuf centiemes, choisir c'est fermer le jeu. */}
+        {/* LA NUIT DU MOLOSSE PASSE AVANT LE RECAPITULATIF DU ONE SHOT.
+            Une nuit EST un one shot — c'est ce qui lui donne le faux depart,
+            la pause et l'enregistrement de la trace — mais son ecran de fin
+            n'a rien a voir : le tableau ordinaire propose huit choses, et
+            apres une morsure la seule question est de savoir si l'on y
+            retourne. Il rend la main de lui-meme hors du mode. */}
         {state === 'winall' && (
-          defiEnCours ? <Revanche />
+          HALLOWEEN_OUVERT && finDeNuitEnCours() ? <FinDeLaNuit />
+            : defiEnCours ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       
@@ -277,6 +286,10 @@ function MainGame() {
           une course de carriere, une epreuve one shot ou meme une defaite ou
           le chrono est tombe quand meme ont droit a la meme fete. */}
       <FeteRecords />
+      {/* Le tableau des treize nuits. Pose ici plutot que dans l'ecran-titre
+          pour la meme raison que Bienvenue : il doit passer AU-DESSUS de
+          l'accueil, pas dedans. Il decide seul de s'afficher. */}
+      {HALLOWEEN_OUVERT && <PanneauMolosse />}
       </>)}
     </div>
   );

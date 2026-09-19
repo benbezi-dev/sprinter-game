@@ -17,11 +17,12 @@ import { TutorialHaies, tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies'
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
 import { BanderoleEdition } from './BanderoleEdition';
+import { BanderoleMolosse } from './Halloween';
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR } from '@/game/canal';
+import { APPEL_JOUEUR, HALLOWEEN_OUVERT } from '@/game/canal';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
@@ -335,6 +336,12 @@ export function TitleScreen() {
             {/* L'edition et le defi du jour lancent un 100 m : ce sont des
                 rendez-vous de Sprinter, que Hurdlers ne montre pas tant que le
                 serveur ne propose rien avec des haies. */}
+            {/* LA NUIT DU MOLOSSE, au-dessus de l'edition de stade : c'est un
+                mode entier et date, quand l'autre est un lieu de plus. Il
+                s'affiche sous les memes reserves — dans Sprinter, pas dans
+                Hurdlers, qui ne court pas apres les chiens. */}
+            {!haies && HALLOWEEN_OUVERT && <BanderoleMolosse />}
+
             {!haies && <BanderoleEdition />}
 
             {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.

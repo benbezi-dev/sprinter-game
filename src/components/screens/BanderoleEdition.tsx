@@ -38,6 +38,11 @@ export function BanderoleEdition() {
   const { N } = SprinterApp;
   const edition = editionEnCours();
   if (!edition) return null;
+  // UNE EDITION QUI PORTE UN MODE A SA PROPRE BANNIERE. Celle-ci ne sait
+  // annoncer qu'un stade — elle lance un 100 m et lit des textes ecrits pour
+  // le Danube. Servie sur une edition-mode, elle aurait annonce le bon lieu
+  // avec les mauvais mots, et lance la course sans ce qui la rend jouable.
+  if (edition.mode) return null;
 
   const idx = indexDuStade(edition.stade);
   if (idx < 0) return null;

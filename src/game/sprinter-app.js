@@ -1865,6 +1865,17 @@
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
     G.shotRaces = []; G.shotIdx = 0;
     G.state = 'title';
+    // CE QUI S'EST GREFFE SUR LA COURSE S'EN VA AVEC ELLE.
+    //
+    // Le crochet est pose par les modes qui ajoutent quelque chose par-dessus
+    // une course ordinaire — aujourd'hui la nuit du molosse, qui doit
+    // remballer sa bete. On les previent ICI parce que c'est le seul passage
+    // que TOUS les chemins de sortie empruntent : le bouton de l'ecran de
+    // fin, l'abandon en pleine course, le retour arriere du telephone. Un
+    // mode qui rangerait ses affaires depuis son propre bouton les aurait
+    // oubliees sur les deux autres chemins — et le 100 m suivant serait parti
+    // avec un chien derriere.
+    if (G.surRetourAccueil) { try { G.surRetourAccueil(); } catch (e) { /* un mode qui tombe ne retient pas le joueur */ } }
     buildLevel(0);
   }
 

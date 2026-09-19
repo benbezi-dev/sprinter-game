@@ -5,6 +5,7 @@ import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
 import { HaiesHUD } from './HaiesHUD';
+import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
 
 export function RaceHUD() {
   const { 
@@ -32,6 +33,11 @@ export function RaceHUD() {
   const record = useRecord(raceKey);
   const recordMs = record.ms;
   const chronoMs = elapsed * 1000;
+  // LE CHRONO A L'ENVERS. Une nuit du molosse ne compte pas ce qui a ete
+  // couru, elle compte ce qu'il reste : le grand nombre du haut change donc
+  // de sens, et rien d'autre ne bouge dans ce tableau. Nul hors du mode, ou
+  // le chronometre ordinaire reprend sa place sans rien savoir de tout ceci.
+  const rebours = reboursDeLaNuit();
   const dansLeRecord = recordMs !== null && chronoMs <= recordMs;
   const recordPerdu = recordMs !== null && chronoMs > recordMs;
 
@@ -142,6 +148,10 @@ export function RaceHUD() {
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
       {/* Le verdict de chaque haie. Rien hors d'une course de haies. */}
       {isRace && <HaiesHUD />}
+
+      {/* La bete, et l'ecart qu'il lui reste. Rien hors d'une nuit du
+          molosse — voir game/halloween.ts. */}
+      {isRace && <HalloweenHUD />}
       
       {/* Top HUD Bar */}
       <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
@@ -162,9 +172,10 @@ export function RaceHUD() {
             <div className={`font-black font-mono text-2xl sm:text-3xl md:text-4xl tabular-nums
                              transition-colors duration-200
                              landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]
-              ${!isRace || recordMs === null ? 'text-primary'
+              ${rebours !== null ? couleurDuRebours(rebours)
+                : !isRace || recordMs === null ? 'text-primary'
                 : dansLeRecord ? 'text-emerald-400' : 'text-destructive'}`}>
-              {elapsed.toFixed(2)}
+              {rebours !== null ? texteDuRebours(rebours) : elapsed.toFixed(2)}
             </div>
             {recordMs !== null && (
               <div className={`font-mono font-bold tabular-nums tracking-widest

@@ -233,6 +233,10 @@ export function armerLaNuit(n: number) {
     // rien savoir d'elle. La place est libre — une nuit se court sur le 100 m
     // plat, et le rangement des haies l'a videe a la construction.
     G.obstacles = molosseDe(chasse);
+    // Et le retour a l'accueil remballe la bete, par quelque chemin qu'il
+    // arrive : le bouton de l'ecran de fin, l'abandon, le retour arriere du
+    // telephone (voir goHome dans sprinter-app.js).
+    G.surRetourAccueil = rangerLaNuit;
   }
 }
 
@@ -250,6 +254,7 @@ export function rangerLaNuit() {
     // de haies lancee entre-temps y aurait pose les siennes, et les effacer
     // ici les ferait disparaitre de la piste.
     if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
+    if (G.surRetourAccueil === rangerLaNuit) G.surRetourAccueil = null;
   }
 }
 

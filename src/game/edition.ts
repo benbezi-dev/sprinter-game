@@ -30,6 +30,20 @@ export type Edition = {
   /** Debut et fin de l'annonce, en millisecondes depuis l'epoque (UTC). */
   debut: number;
   fin: number;
+  /**
+   * L'edition ouvre-t-elle un MODE, plutot qu'un simple stade ?
+   *
+   * Le Danube n'ouvre qu'un lieu : sa banniere lance un 100 m ordinaire, et
+   * BanderoleEdition sait tout faire toute seule. Halloween ouvre un mode —
+   * treize nuits, une bete, un compte a rebours — et sa banniere doit mener a
+   * son tableau, pas a une course.
+   *
+   * Sans cette distinction, la banniere generique aurait annonce le cimetiere
+   * avec les textes du Danube et lance un 100 m sans chien : le bug etait
+   * silencieux et immediat, puisque `editionEnCours` rend la premiere edition
+   * ouverte, quelle qu'elle soit.
+   */
+  mode?: 'halloween';
 };
 
 /**
@@ -78,6 +92,7 @@ export const EDITION_HALLOWEEN: Edition = {
   debut: Date.UTC(2026, 9, 23, 22, 0, 0),
   // mardi 3 novembre 2026, 00 h 00 a Paris (UTC+1)
   fin: Date.UTC(2026, 10, 2, 23, 0, 0),
+  mode: 'halloween',
 };
 
 /** Toutes les editions connues du jeu, passees et a venir. */
