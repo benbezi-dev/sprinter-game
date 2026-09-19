@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier — Samedi 26 septembre, la finale du mode en direct</title>
+
+<!-- Les graisses demandees plus bas : 900 pour la date, 800 pour le mot de
+     tete, 600 pour la mention et le compte. `display=block` et non `swap` :
+     un canvas ne se redessine pas quand la police arrive, et un trace lance
+     trop tot sort en police de repli sans que rien ne le signale. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;800;900&display=block">
+
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 40px 20px 72px;
+    background: #060913; color: #EEF0F8;
+    font: 500 15px/1.6 Outfit, system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 22px;
+  }
+  h1 { font: 800 19px/1.3 Outfit, sans-serif; letter-spacing: .02em; margin: 0; }
+  p  { margin: 0; color: rgba(238,240,248,.55); max-width: 46ch; text-align: center; }
+  canvas {
+    width: min(540px, 92vw); height: auto;
+    border: 1px solid #1E293B; border-radius: 4px;
+  }
+  button {
+    font: 600 14px Outfit, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+    color: #060913; background: #F8CD4A; border: 0; border-radius: 3px;
+    padding: 13px 26px; cursor: pointer;
+  }
+  button:disabled { opacity: .35; cursor: default; }
+  #souci {
+    display: none; max-width: 52ch; padding: 16px 18px;
+    border: 1px solid #1E293B; border-radius: 4px;
+    background: rgba(248,205,74,.05); color: rgba(238,240,248,.78);
+  }
+  code { font-family: 'Space Mono', ui-monospace, monospace; color: #F8CD4A; }
+</style>
+</head>
+
+<body>
+  <h1>Finale du mode en direct — 1080 × 1350</h1>
+  <p>Le mot de tete, le jour et le mois sont isoles en haut du script :
+     le 25, on remplace <code>SAMEDI</code> par <code>VENDREDI</code> et
+     <code>26</code> par <code>25</code>, rien d'autre.</p>
+
+  <div id="souci"></div>
+  <canvas id="toile" width="1080" height="1350"></canvas>
+  <button id="png" disabled>Telecharger le PNG</button>
+
+<script type="module">
+/* ---------------------------------------------------------------------------
+   SAMEDI 26 SEPTEMBRE — LA FINALE DU MODE EN DIRECT
+   ---------------------------------------------------------------------------
+   Une image qui annonce une date, et rien d'autre. Pas de compte a rebours,
+   pas d'heure : elle doit pouvoir etre republiee le 19 comme le 25 sans
+   mentir, et une image qui perime se repere de loin.
+
+   Ce qu'elle porte, du plus gros au plus petit — c'est la composition, pas
+   une indication :
+
+     1. la date, dont le 26 est le plus gros element de l'image ;
+     2. les huit couloirs, dont un seul est allume ;
+     3. la mention du mode ;
+     4. la signature.
+
+   Le couloir allume est VIDE, et c'est le sujet. Personne n'y court encore.
+
+   Le fond, la lueur doree et les trois traits de piste viennent de
+   `poserFond`, importe de src/game/trace-affiche.js. Les recopier ici aurait
+   garanti la divergence que l'en-tete de ce fichier-la interdit : on retouche
+   une lueur d'un cote, on l'oublie de l'autre. La page est servie depuis la
+   racine du depot (`npm run tableau`), pas ouverte en file://, precisement
+   pour que cet import fonctionne.
+--------------------------------------------------------------------------- */
+
+/* ------------------------------------------------- ce qui change au reprise */
+
+// Le mot de tete. C'est lui, et lui seul, qui bouge d'une reprise a l'autre :
+// le 25 septembre 2026 tombe un vendredi, le 26 un samedi.
+const MOT_DE_TETE = 'SAMEDI';
+
+const JOUR    = '26';
+const MOIS    = 'SEPTEMBRE';
+const MENTION = 'FINALE DU MODE EN DIRECT';
+
+// Le couloir 4 : sur une vraie piste il revient au meilleur temps des demies.
+// Le prendre plutot que le couloir central pose l'allume legerement a gauche
+// de l'axe — c'est juste, et c'est plus vivant qu'une symetrie parfaite.
+const COULOIR_ALLUME = 4;
+const COULOIRS = 8;
+
+/* ------------------------------------------------------------- la charte */
+
+const OR      = '248,205,74';        // #F8CD4A
+const ENCRE   = '#EEF0F8';
+const L = 1080, H = 1350, MARGE = 80, CX = L / 2;
+
+/* --------------------------------------------------------------- le trace */
+
+/** fillText centre, corrige de l'interlettrage.
+ *
+ *  Le canvas ajoute l'espace APRES chaque caractere, le dernier compris : un
+ *  texte centre se retrouve donc pousse d'un demi-espace vers la gauche. A
+ *  22 px cela ne se voit pas ; a 400 px le chiffre n'est plus sur l'axe.
+ *  `surtitre`, dans trace-affiche.js, fait deja exactement ce geste. */
+function centre(c, texte, y, inter) {
+  c.textAlign = 'center';
+  c.fillText(texte, CX + inter / 2, y);
+}
+
+/** Pose un texte par le HAUT DE SES CAPITALES, et rend le bas de son encre.
+ *
+ *  `textBaseline = 'top'` passe par les metriques declarees de la police :
+ *  Outfit 900 reserve une trentaine de pixels d'interligne interne au-dessus
+ *  du 2, qui a 400 px deviennent un trou que l'oeil compte comme une marge.
+ *  L'oeil mesure depuis le haut du chiffre ; on mesure comme lui. */
+function poserParLeHaut(c, texte, hautCapitales, inter) {
+  const m = c.measureText(texte);
+  c.textBaseline = 'alphabetic';
+  centre(c, texte, hautCapitales + m.actualBoundingBoxAscent, inter);
+  return hautCapitales + m.actualBoundingBoxAscent + Math.max(0, m.actualBoundingBoxDescent);
+}
+
+/**
+ * Les huit couloirs, en perspective legere.
+ *
+ * Les bords sont des droites qui convergent vers un point de fuite place au
+ * haut de l'image : c'est ce qui rend l'interpolation lineaire des largeurs
+ * exacte, et non approchee. Une perspective d'un plan se trace a la regle.
+ *
+ * Chaque couloir se fond dans la nuit a son extremite lointaine plutot que
+ * de s'arreter net. Un champ de couloirs coupe a l'horizontale par une arete
+ * franche ne se lit pas comme une piste qui s'eloigne : il se lit comme une
+ * image recadree trop court. Le fond de la charte dit deja cela de ses trois
+ * traits — transparents aux extremites, pleins au milieu.
+ *
+ * Les sept eteints et l'allume partagent le meme profil de fondu : c'est le
+ * meme couloir, seule change son intensite. Sept a 12 % d'or, un a l'or plein.
+ */
+function poserCouloirs(c, yLoin, yPres) {
+  const largeurPres = L - MARGE * 2;          // bord a bord dans les marges
+  const largeurLoin = largeurPres * 0.55;     // « legere » : le point de fuite
+                                              // tombe vers le haut du cadre.
+
+  const bord = (i, largeur) => CX + (i / COULOIRS - 0.5) * largeur;
+
+  // Le creux entre deux couloirs, pris en fraction du pas LOCAL : il se
+  // resserre donc avec la distance, comme tout le reste. Un creux constant
+  // en pixels trahirait la perspective a l'endroit meme ou elle se joue.
+  const CREUX = 0.14;
+  const creuxPres = CREUX * largeurPres / COULOIRS;
+  const creuxLoin = CREUX * largeurLoin / COULOIRS;
+
+  // La lueur de celui qui est allume, posee avant les couloirs pour rester
+  // dessous. Tres basse — 9 % : « eclaire » doit se sentir, pas se voir.
+  const PROF = 0.72;
+  const milieu = i => (bord(i, largeurLoin) * (1 - PROF)) + (bord(i, largeurPres) * PROF);
+  const cAllume = (milieu(COULOIR_ALLUME - 1) + milieu(COULOIR_ALLUME)) / 2;
+  const yLueur = yLoin + (yPres - yLoin) * PROF;
+  const lueur = c.createRadialGradient(cAllume, yLueur, 0, cAllume, yLueur, (yPres - yLoin) * 0.78);
+  lueur.addColorStop(0, `rgba(${OR},0.09)`);
+  lueur.addColorStop(1, `rgba(${OR},0)`);
+  c.fillStyle = lueur;
+  // Tout le cadre, et non la seule bande des couloirs : au-dela de son rayon
+  // le degrade est transparent, tandis qu'un rectangle trop court le tranche
+  // la ou il vaut encore trois pour cent — et cette coupe se voit.
+  c.fillRect(0, 0, L, H);
+
+  for (let i = 0; i < COULOIRS; i++) {
+    const pic = (i + 1 === COULOIR_ALLUME) ? 1 : 0.12;
+    const a = f => `rgba(${OR},${+(pic * f).toFixed(4)})`;
+
+    const g = c.createLinearGradient(0, yLoin, 0, yPres);
+    g.addColorStop(0.00, a(0));
+    g.addColorStop(0.20, a(0.28));
+    g.addColorStop(0.48, a(0.85));
+    g.addColorStop(0.66, a(1));
+    g.addColorStop(0.90, a(1));
+    g.addColorStop(1.00, a(0));
+
+    c.fillStyle = g;
+    c.beginPath();
+    c.moveTo(bord(i,     largeurLoin) + creuxLoin / 2, yLoin);
+    c.lineTo(bord(i + 1, largeurLoin) - creuxLoin / 2, yLoin);
+    c.lineTo(bord(i + 1, largeurPres) - creuxPres / 2, yPres);
+    c.lineTo(bord(i,     largeurPres) + creuxPres / 2, yPres);
+    c.closePath();
+    c.fill();
+  }
+}
+
+/** L'image entiere. */
+function dessiner(cv, poserFond) {
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+
+  poserFond(c, L, H);
+
+  /* --- 1. la date, en tete ------------------------------------------------ */
+
+  // Le mot de tete : petites capitales tres espacees, comme le surtitre du jeu.
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.50)';
+  c.font = '800 34px Outfit, sans-serif';
+  const interTete = 34 * 0.36;
+  c.letterSpacing = `${interTete}px`;
+  let y = poserParLeHaut(c, MOT_DE_TETE, MARGE, interTete);
+  c.restore();
+
+  // Le jour. Le plus gros element de l'image : la regle veut un chiffre, et
+  // qu'il domine. Outfit 900 et non Space Mono — une date n'est pas un chrono,
+  // et la chasse fixe ne sert qu'a aligner des colonnes de resultats.
+  c.save();
+  c.fillStyle = `rgb(${OR})`;
+  const TAILLE_JOUR = 400;
+  const interJour = -TAILLE_JOUR * 0.022;      // l'interlettrage serre des titres
+  c.font = `900 ${TAILLE_JOUR}px Outfit, sans-serif`;
+  c.letterSpacing = `${interJour}px`;
+  const largeurJour = c.measureText(JOUR).width;
+  y = poserParLeHaut(c, JOUR, y + 34, interJour);
+  c.restore();
+
+  // Le mois, cale EXACTEMENT sur la largeur du jour. C'est ce calage qui fait
+  // lire les deux lignes comme un seul bloc plutot que comme deux textes
+  // empiles. On garde l'interlettrage — qui est le geste — et on cherche la
+  // taille : l'inverse donnerait « S E P T E M B R E » pour un mois court.
+  c.save();
+  c.fillStyle = `rgb(${OR})`;
+  const INTER_MOIS = 0.12;
+  c.font = '900 100px Outfit, sans-serif';
+  c.letterSpacing = `${100 * INTER_MOIS}px`;
+  // Borne haute et basse : un mois de trois lettres ne doit pas enfler jusqu'a
+  // disputer sa place au jour, ni un mois long se reduire a une ligne de pied.
+  const tailleMois = Math.min(112, Math.max(48,
+    Math.round(100 * largeurJour / c.measureText(MOIS).width)));
+  const interMois = tailleMois * INTER_MOIS;
+  c.font = `900 ${tailleMois}px Outfit, sans-serif`;
+  c.letterSpacing = `${interMois}px`;
+  y = poserParLeHaut(c, MOIS, y + 52, interMois);
+  c.restore();
+
+  /* --- 2. les huit couloirs ----------------------------------------------- */
+
+  // Le haut suit la date ; le bas est fixe. Le champ respire donc si la date
+  // change de hauteur, sans jamais descendre sur la mention.
+  poserCouloirs(c, y + 62, 1015);
+
+  /* --- 3. la mention du mode ---------------------------------------------- */
+
+  // Posee entre le deuxieme et le troisieme trait de piste de la charte — a
+  // 985 et a 1134. Cale ailleurs, le filet dore passerait dans les jambages.
+  c.save();
+  c.fillStyle = ENCRE;
+  c.font = '600 42px Outfit, sans-serif';
+  const interMention = 42 * 0.18;
+  c.letterSpacing = `${interMention}px`;
+  c.textBaseline = 'middle';
+  centre(c, MENTION, 1072, interMention);
+  c.restore();
+
+  /* --- 4. le pied et la signature ----------------------------------------- */
+
+  // Le compte du jeu, pas l'adresse du site : une publication se regarde DANS
+  // Instagram, ou une adresse ne se clique pas et ne se recopie pas, tandis
+  // qu'un @ se cherche d'un geste sans quitter l'application.
+  const ySignature = H - Math.round(H * 0.088);
+  const yFilet = Math.round(ySignature - L * 0.036);   // l'ecart de la charte
+
+  c.save();
+  c.strokeStyle = 'rgba(255,255,255,0.10)';
+  c.lineWidth = 1;
+  c.beginPath();
+  // Le demi-pixel : un trait de 1 px trace sur un entier s'etale sur deux
+  // rangees a 5 % chacune, et le filet disparait.
+  c.moveTo(MARGE, yFilet + 0.5); c.lineTo(L - MARGE, yFilet + 0.5);
+  c.stroke();
+
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${Math.round(L * 0.026)}px Outfit, sans-serif`;
+  c.textBaseline = 'middle';
+  const interCompte = Math.round(L * 0.004);
+  c.letterSpacing = `${interCompte}px`;
+  centre(c, '@sprintergame', ySignature, interCompte);
+  c.restore();
+}
+
+/* ------------------------------------------------------------- la page */
+
+const toile  = document.getElementById('toile');
+const bouton = document.getElementById('png');
+const souci  = document.getElementById('souci');
+
+function echouer(message) {
+  souci.style.display = 'block';
+  souci.innerHTML = message;
+}
+
+try {
+  // Les memes faces que celles demandees plus haut, et le texte reellement
+  // trace : Google decoupe ses polices par plages de caracteres, et une plage
+  // absente au moment du trace sort en police de repli — sans rien signaler,
+  // puisque le canvas ne se redessine pas quand elle finit par arriver.
+  const texte = MOT_DE_TETE + JOUR + MOIS + MENTION + '@sprintergame';
+  await Promise.all([
+    document.fonts.load(`800 34px Outfit`, texte),
+    document.fonts.load(`900 400px Outfit`, texte),
+    document.fonts.load(`600 42px Outfit`, texte),
+  ]);
+  await document.fonts.ready;
+
+  const { poserFond } = await import('../src/game/trace-affiche.js');
+  dessiner(toile, poserFond);
+  bouton.disabled = false;
+} catch (e) {
+  // On ne recopie pas `poserFond` en secours : une copie de secours est une
+  // copie, et c'est par la que le compte du jeu cesserait de ressembler au jeu.
+  // On se tait bruyamment plutot que de diverger en silence.
+  echouer(`<strong>Le fond de la charte n'a pas pu etre charge.</strong><br>
+           Cette page importe <code>src/game/trace-affiche.js</code> et doit donc
+           etre servie depuis la racine du depot — <code>npm run tableau</code> —
+           et non ouverte en <code>file://</code>.<br><br>
+           <span style="opacity:.6">${e.message}</span>`);
+}
+
+bouton.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = `${JOUR}-${MOIS.toLowerCase()}-finale-direct-feed.png`;
+  a.href = toile.toDataURL('image/png');
+  a.click();
+});
+</script>
+</body>
+</html>
