@@ -294,8 +294,16 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 
 function App() {
   // Le tableau de bord passe par un parametre d'URL plutot que par une route :
-  // GitHub Pages n'a pas de repli SPA ici, un chemin dedie renverrait une 404
-  // au chargement direct. Meme convention que le lien de defi, ?defi=.
+  // GitHub Pages sert des fichiers, et un chemin dedie renverrait une 404 au
+  // chargement direct — rien ne se chargerait, donc aucune route de wouter ne
+  // serait atteinte.
+  //
+  // `public/404.html` ouvre une exception, et une seule : le chemin court des
+  // defis, `/d/CODE`, qu'elle traduit en `?defi=` avant que quoi que ce soit
+  // ne demarre. Ce n'est PAS un repli SPA — elle ne sert pas le jeu, elle
+  // redirige — et c'est voulu : un repli complet enverrait les chemins de
+  // `/test/` sur la production, puisque Pages sert le repli de la racine. Le
+  // tableau de bord reste donc sur son parametre, comme le lien de defi.
   const [stats] = useState(dashboardRequested);
   // La file des recuperations suit la meme convention, et reste separee du
   // tableau de bord : elle ne s'ouvre pas avec la meme cle.

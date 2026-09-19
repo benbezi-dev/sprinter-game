@@ -268,7 +268,7 @@ function page({ w, h }) {
 
   <div class="fort">${echappe(bas.fort)}</div>
   <div class="doux">${echappe(bas.doux)}</div>
-  <div class="pied">${SITE}/?defi=${echappe(args.code)}</div>`;
+  <div class="pied">${SITE}/d/${echappe(args.code)}</div>`;
 }
 
 
@@ -388,7 +388,7 @@ function pageAffiche({ w, h }) {
     <div class="billet">
       <div class="etiquette">Code du défi</div>
       <div class="code">${echappe(args.code)}</div>
-      <div class="lien">${SITE}/?defi=${echappe(args.code)}</div>
+      <div class="lien">${SITE}/d/${echappe(args.code)}</div>
     </div>
   </div>
 
@@ -421,6 +421,11 @@ Défi ${args.code} — ${virgule(totalMs)} s sur ${libelleEpreuve}, par ${nom}.
 ${horsLigne ? 'Valeurs données à la main : le compteur d’essais n’a pas été lu.'
             : `${essais} tentative(s) enregistrée(s), ${battus} meilleure(s) que la tienne.`}
 
-Le lien, pour X et pour la bio :  https://${SITE}/?defi=${args.code}
+Le lien a ENVOYER (X, WhatsApp) :  https://${SITE}/?defi=${args.code}
+  Celui-la repond 200 et garde son apercu. L'autre passe par la page de repli.
+
+Le lien a LIRE et a TAPER (bio, video) :  ${SITE}/d/${args.code}
+  C'est celui qui est ecrit sur la carte, et le seul qui se dicte a voix haute.
+
 Le code, pour Instagram et TikTok :  ${args.code}
 `);

@@ -350,9 +350,28 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     }
     y += tCode * 1.1 + T(0.030);
 
+    /* L'ADRESSE PORTE LE DEFI, PAS SEULEMENT LE JEU.
+
+       « sprinter-game.com » demandait trois gestes a qui regardait la video :
+       ouvrir le site, trouver le champ du code, retaper les six caracteres.
+       « sprinter-game.com/d/K7M2QX » n'en demande qu'un, dans la barre
+       d'adresse que le telephone propose deja. C'est la meme ligne, au meme
+       endroit, avec la fin du chemin en plus — et cette fin est exactement ce
+       que le code, juste au-dessus, sert a taper.
+
+       Elle s'allonge a l'instant ou le code se pose. C'est le seul endroit du
+       carton qui bouge, et il bouge pour la meme raison et au meme moment que
+       ce que l'oeil regarde deja. Le plus souvent cela se produit pendant
+       l'ouverture du voile, ou rien n'est encore net.
+
+       SI ELLE NE TIENT PAS, ON REVIENT A L'ADRESSE SEULE. Couper par la fin
+       mangerait le code — « sprinter-game.com/d/K7M2… » n'ouvre rien. Le code
+       est de toute facon ecrit en grand deux lignes plus haut : l'adresse
+       courte perd sa commodite, pas son contenu. */
     const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: encre(ENCRE.lien),
                  alpha: A(), aligne: 'center' as CanvasTextAlign };
-    ecrire(ctx, SITE, cx, y + tLien / 2, eL);
+    const porte = code ? `${SITE}/d/${code}` : SITE;
+    ecrire(ctx, largeur(ctx, porte, eL) <= dispo ? porte : SITE, cx, y + tLien / 2, eL);
   }
 
   /* LE PIED DU JEU, AU PIXEL : meme filet, meme graisse, meme inter-lettrage.

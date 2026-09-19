@@ -373,7 +373,7 @@ Cinq chantiers, classés par rapport effort / impact. Rien d'autre n'est bloquan
 |---|---|---|---|---|
 | 1 | ~~**Carton de fin sur la vidéo exportée**~~ — **fait.** Le film gagne 1,5 s : épreuve, chrono, nom, `sprinter-game.com`, et le code du défi quand il y en a un. Voir `src/game/carton-film.ts` | `review.ts`, `carton-film.ts`, `film-course.ts` | — | Sans lui, chaque partage de joueur était perdu. **Reste la moitié du levier : le code (voir 1 bis).** |
 | 1 bis | ~~**Le code sur TOUS les cartons**~~ — **fait.** La caméra *pose* un défi à l'arrivée de chaque course filmée (`/challenge/camera`), le carton lui garde sa place et l'affiche quand il arrive. Poser n'est pas lancer : le défi de la caméra se court mais ne vise personne, ne sonne nulle part et ne compte pas au tableau des défis lancés. Le bouton « DÉFIER UN AMI » lance celui-là — une course, un code. À ne pas confondre avec le **défi ouvert** de la communication, qui est sans cible mais bel et bien lancé | `defi-camera.ts`, `carton-film.ts`, worker | — | Le levier est complet : la vidéo ne se contente plus d'inviter, elle défie |
-| 2 | **Code de défi en lien cliquable** — `sprinter-game.com/d/K7M2QX` ouvre directement la course contre le fantôme | `src/game/challenge.ts` + routage `wouter` | Faible | Un code à recopier à la main perd 80 % des gens |
+| 2 | ~~**Code de défi en lien cliquable**~~ — **fait.** `sprinter-game.com/d/K7M2QX` ouvre la course contre le fantôme. Ce n'est pas une route `wouter` : GitHub Pages sert des fichiers, rien ne se charge pour un chemin qu'il ne connaît pas, donc aucun routage côté navigateur ne peut être atteint. C'est `public/404.html` — son seul repli — qui traduit le chemin en `?defi=`, en gardant le canal de test dans le canal de test. **Deux formes, deux usages :** `?defi=` reste le lien qu'on **envoie** (il répond 200, il garde son aperçu), `/d/CODE` est celui qu'on **lit, tape et dicte** — carton de vidéo, cartes, bio | `public/404.html`, `challenge.ts`, `carton-film.ts` | — | Un code à recopier à la main perd 80 % des gens |
 | 3 | ~~**Classement des recruteurs**~~ — **fait.** `GET /recruteurs` compte les **personnes** qui ont relevé vos défis, pas les courses : un ami qui reprend vingt fois le même code fait une recrue, et on ne se compte pas soi-même. Les défis de la caméra y comptent — ailleurs non, mais ici le tableau mesure que quelqu'un a couru, pas une intention. Accessible par « RECRUTEURS » dans le classement des duels | `worker/src/index.js`, `src/game/recruteurs.ts`, `Recruteurs.tsx` | — | Le moteur d'UGC de la §4.2 : **le seul classement qu'un joueur lent puisse gagner**, et donner son code y rapporte |
 | 4 | **Page publique du classement par nation**, partageable en image | worker + `tools/` | Moyen | Alimente la guerre des drapeaux chaque lundi, sans travail manuel |
 | 5 | **Carte de partage automatique** au moment où un joueur bat son record ou passe sous 9 s | `tools/carte-riposte.mjs` (à réutiliser) | Faible | Le partage doit être proposé **à l'instant de la fierté**, pas plus tard |
@@ -397,6 +397,11 @@ son chrono, l'adresse, et **un code de défi jouable** — et donner ce code fai
 maintenant monter dans un classement. La boucle de la mécanique n° 1 est fermée :
 partager n'est plus un service rendu au dev, c'est un coup joué, et il rapporte.
 
-Le suivant est **le 2** : rendre le code cliquable (`sprinter-game.com/d/K7M2QX`).
-Un code à recopier à la main perd la plupart des gens sur mobile, et c'est
-aujourd'hui la dernière marche entre une vidéo vue et une course courue.
+Le chantier 2 est fait aussi : la dernière marche entre une vidéo vue et une
+course courue tenait en trois gestes — ouvrir le site, trouver le champ du code,
+retaper six caractères. Elle en demande un, maintenant :
+`sprinter-game.com/d/K7M2QX`, écrit sur le carton de la vidéo comme sur les
+cartes. Et il se **dicte**, ce qui compte là où aucun lien n'est cliquable.
+
+Le suivant est **le 4** : la page publique du classement par nation, celle qui
+alimente la guerre des drapeaux du lundi sans travail manuel.

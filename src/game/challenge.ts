@@ -257,7 +257,21 @@ export async function submitAttempt(input: {
   return res.json();
 }
 
-/** Lien partageable. On reste sur la page du jeu, le code passe en `?defi=`. */
+/**
+ * LE LIEN QU'ON ENVOIE. Il garde `?defi=`, et ce n'est pas par habitude.
+ *
+ * Il existe une forme plus courte — `sprinter-game.com/d/K7M2QX` — et elle est
+ * meilleure partout ou un humain LIT l'adresse : sur le carton d'une video,
+ * sur une carte, a l'oral. Mais GitHub Pages sert des fichiers, et ce
+ * chemin-la n'en est pas un : il passe par `public/404.html`, qui repond donc
+ * avec un statut 404. Un humain ne le voit jamais — il est redirige avant
+ * d'avoir lu. Un robot d'apercu, si, et la plupart refusent de montrer une
+ * vignette pour une 404.
+ *
+ * Un lien envoye sur WhatsApp ou sur X sans son image perd ce que l'apercu lui
+ * donnait. Celui-ci reste donc en `?defi=`, qui repond 200. Deux formes, deux
+ * usages : celle qu'on envoie, et celle qu'on lit.
+ */
 export function challengeLink(id: string): string {
   const base = window.location.origin + window.location.pathname;
   return `${base}?defi=${id}`;
@@ -312,21 +326,52 @@ export async function nativeShare(text: string, id: string): Promise<boolean> {
   }
 }
 
-/** Code present dans l'URL au chargement, s'il y en a un. */
+/**
+ * Le code du chemin court, `<base>d/K7M2QX`, s'il y en a un.
+ *
+ * En temps normal le jeu ne voit jamais cette forme : `public/404.html` la
+ * traduit en `?defi=` avant que quoi que ce soit ne se charge, parce que sur
+ * GitHub Pages rien ne se charge pour un chemin sans fichier.
+ *
+ * On la lit quand meme, et pour une raison precise : le jour ou le site
+ * passera derriere un serveur capable de repondre 200 sur ce chemin — ce qui
+ * lui rendrait son apercu de lien —, l'adresse arrivera telle quelle. Cinq
+ * lignes ici evitent que ce jour-la soit un jour de panne silencieuse, ou
+ * chaque lien de defi ouvrirait l'accueil sans dire pourquoi.
+ */
+function codeDuChemin(): string {
+  const m = /(?:^|\/)d\/([^/?#]+)\/?$/.exec(window.location.pathname);
+  if (!m) return '';
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
+
+/**
+ * Code present dans l'URL au chargement, s'il y en a un.
+ *
+ * `?defi=` d'abord : c'est la forme ordinaire, celle qu'on envoie et celle
+ * vers laquelle la porte redirige. Le chemin court ensuite.
+ */
 export function codeFromUrl(): string {
   try {
-    const p = new URLSearchParams(window.location.search).get('defi');
+    const p = new URLSearchParams(window.location.search).get('defi') || codeDuChemin();
     return p ? normalizeCode(p) : '';
   } catch {
     return '';
   }
 }
 
-/** Retire le code de l'URL une fois pris en compte, sans recharger la page. */
+/**
+ * Retire le code de l'URL une fois pris en compte, sans recharger la page.
+ *
+ * Le chemin court se retire aussi, et jusqu'au segment `d/` : laisser
+ * `/d/K7M2QX` dans la barre d'adresse ferait rouvrir le meme defi au moindre
+ * rechargement, longtemps apres qu'on l'a couru.
+ */
 export function clearUrlCode() {
   try {
     const url = new URL(window.location.href);
     url.searchParams.delete('defi');
+    url.pathname = url.pathname.replace(/(^|\/)d\/[^/?#]+\/?$/, '$1');
     window.history.replaceState({}, '', url.toString());
   } catch {
     // pas d'History API : le code restera dans l'URL, sans consequence
