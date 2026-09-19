@@ -177,8 +177,23 @@ export const APPEL_JOUEUR = true;
  * A false, le mode ne repart pas de zero pour autant : les nuits deja tenues
  * restent rangees sur l'appareil, et se retrouvent telles quelles a la
  * reouverture.
+ *
+ * IL VIT SUR LE CANAL DE TEST, comme toutes les nouveautes de ce jeu avant
+ * lui — le relais, la poussee, les haies, la flamme des series. La forme
+ * compte, et c'est celle du reste du fichier : `EST_TEST` se replie a la
+ * compilation, donc ce drapeau vaut `false` EN DUR dans le build public et
+ * tout ce qui en depend en sort — le molosse, les quatorze scenettes, les
+ * treize nuits et le morceau de cinquante secondes.
+ *
+ * Ce qui reste en production, et qu'on assume : la definition du stade, qui
+ * vit dans le moteur et voyage donc avec lui (voir le commentaire de la
+ * boucle qui remplit LEVELS dans sprinter-app.js). Sept noms et huit chronos
+ * font le voyage ; le lieu, lui, est inatteignable — aucune banniere ne le
+ * propose et aucun ecran ne le lance.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
  */
-export const HALLOWEEN_OUVERT = true;
+export const HALLOWEEN_OUVERT = EST_TEST;
 
 /**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux

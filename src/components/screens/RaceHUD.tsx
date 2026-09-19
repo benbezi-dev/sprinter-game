@@ -6,6 +6,7 @@ import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
 import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
+import { HALLOWEEN_OUVERT } from '@/game/canal';
 
 export function RaceHUD() {
   const { 
@@ -37,7 +38,7 @@ export function RaceHUD() {
   // couru, elle compte ce qu'il reste : le grand nombre du haut change donc
   // de sens, et rien d'autre ne bouge dans ce tableau. Nul hors du mode, ou
   // le chronometre ordinaire reprend sa place sans rien savoir de tout ceci.
-  const rebours = reboursDeLaNuit();
+  const rebours = HALLOWEEN_OUVERT ? reboursDeLaNuit() : null;
   const dansLeRecord = recordMs !== null && chronoMs <= recordMs;
   const recordPerdu = recordMs !== null && chronoMs > recordMs;
 
@@ -150,8 +151,9 @@ export function RaceHUD() {
       {isRace && <HaiesHUD />}
 
       {/* La bete, et l'ecart qu'il lui reste. Rien hors d'une nuit du
-          molosse — voir game/halloween.ts. */}
-      {isRace && <HalloweenHUD />}
+          molosse — voir game/halloween.ts. Le drapeau en tete permet au
+          bundler de sortir tout le mode du build public. */}
+      {HALLOWEEN_OUVERT && isRace && <HalloweenHUD />}
       
       {/* Top HUD Bar */}
       <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
 import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
@@ -17,7 +17,11 @@ import { TutorialHaies, tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies'
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
 import { BanderoleEdition } from './BanderoleEdition';
-import { BanderoleMolosse } from './Halloween';
+// Charge a la demande, pour la raison expliquee dans App.tsx : un import
+// ordinaire fait voyager tout le mode dans le build public, drapeau ferme ou
+// non.
+const BanderoleMolosse = lazy(() => import('./Halloween')
+  .then(m => ({ default: m.BanderoleMolosse })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -340,7 +344,7 @@ export function TitleScreen() {
                 mode entier et date, quand l'autre est un lieu de plus. Il
                 s'affiche sous les memes reserves — dans Sprinter, pas dans
                 Hurdlers, qui ne court pas apres les chiens. */}
-            {!haies && HALLOWEEN_OUVERT && <BanderoleMolosse />}
+            {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}
 
             {!haies && <BanderoleEdition />}
 
