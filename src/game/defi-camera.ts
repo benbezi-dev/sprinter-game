@@ -1,4 +1,4 @@
-// LE DEFI DE LA VIDEO — celui dont le code est ecrit sur le carton de fin.
+// LE DEFI DE LA CAMERA — celui dont le code est ecrit sur le carton de fin.
 //
 // Le carton portait le code d'un defi seulement quand il y en avait deja un,
 // c'est-a-dire quand le joueur venait d'en relever un. Partout ailleurs il se
@@ -11,18 +11,18 @@
 // arretee. Le code n'existait pas encore a l'instant ou il aurait fallu le
 // peindre.
 //
-// Ce module avance ce moment. A l'arrivee, quand le film se termine, il ouvre
-// le defi sans attendre personne. Le carton l'affiche si le serveur repond a
-// temps, et se tait sinon — voir `carton-film.ts`, qui lui garde sa place
-// pendant qu'il arrive pour que rien ne bouge quand il se pose.
+// Ce module avance ce moment. A l'arrivee, quand le film se termine, la camera
+// pose son defi sans attendre personne. Le carton l'affiche si le serveur
+// repond a temps, et se tait sinon — voir `carton-film.ts`, qui lui garde sa
+// place pendant qu'il arrive pour que rien ne bouge quand il se pose.
 //
-// OUVRIR N'EST PAS LANCER, et c'est tout l'equilibre de ce fichier.
+// POSER N'EST PAS LANCER, et c'est tout l'equilibre de ce fichier.
 //
-//   OUVRIR est un geste de la camera. Le defi existe, son code est imprimable,
+//   POSER est le geste de la camera. Le defi existe, son code est imprimable,
 //     n'importe qui peut courir contre ce fantome. Il ne vise personne, ne
 //     fait sonner aucun telephone, et ne compte pas au tableau des defis
 //     lances — une course courue n'est pas un defi envoye.
-//   LANCER est un geste du joueur, et il n'a pas change : c'est le bouton de
+//   LANCER est le geste du joueur, et il n'a pas change : c'est le bouton de
 //     l'ecran de fin. Il vise, il compte, il sonne.
 //
 // Les confondre aurait ete facile — une seule route, un seul appel — et ca
@@ -30,17 +30,25 @@
 // « defi lance » chaque course filmee par quelqu'un qui n'a jamais appuye sur
 // rien. Voir `ensureChallengeLance`, cote serveur.
 //
+// ON NE DIT PAS « DEFI OUVERT ». Le nom est pris, et il designe presque le
+// contraire : un defi SANS CIBLE mais bel et bien LANCE, publie avec son code
+// sur Instagram ou TikTok pour qu'un passant le releve — voir
+// `tools/carte-defi-ouvert.mjs` et `communication/defi-ouvert/`. Les deux
+// n'ont en commun que de ne viser personne, et un seul des deux compte au
+// tableau des defis lances. Un mot pour les deux, et la premiere lecture
+// rapide se trompe de moitie.
+//
 // ET C'EST LE MEME DEFI DES DEUX COTES. Le bouton ne cree plus le sien : il
-// lance celui que la camera a ouvert. Sans cela le joueur aurait deux codes
+// lance celui que la camera a pose. Sans cela le joueur aurait deux codes
 // pour une seule course — celui de sa video et celui de son ecran — et aucune
 // facon de deviner lequel donner.
 
 import { SprinterApp } from './engine';
-import { ouvrirChallenge, lancerChallenge } from './challenge';
+import { ouvrirChallengeCamera, lancerChallenge } from './challenge';
 import type { GenreFilm } from './film-course';
 
 /** Ce que le carton a besoin de savoir, et rien de plus. */
-export type DefiDuFilm = {
+export type DefiDeLaCamera = {
   /** Un code est en route. Le carton lui garde sa place plutot que de sauter. */
   attendu: boolean;
   /** Le code, une fois arrive. Vide tant qu'il ne l'est pas. */
@@ -49,16 +57,16 @@ export type DefiDuFilm = {
   arriveA: number;
 };
 
-const REPOS: DefiDuFilm = { attendu: false, id: '', arriveA: 0 };
-let etat: DefiDuFilm = REPOS;
+const REPOS: DefiDeLaCamera = { attendu: false, id: '', arriveA: 0 };
+let etat: DefiDeLaCamera = REPOS;
 
-export function defiDuFilm(): DefiDuFilm { return etat; }
+export function defiDeLaCamera(): DefiDeLaCamera { return etat; }
 
 /** Le code de la video, ou une chaine vide. Pour l'ecran de fin. */
-export function codeDuFilm(): string { return etat.id; }
+export function codeDeLaCamera(): string { return etat.id; }
 
 /** Une prise neuve, un defi neuf : celui d'avant ne la concerne pas. */
-export function oublierLeDefiDuFilm() { etat = REPOS; }
+export function oublierLeDefiDeLaCamera() { etat = REPOS; }
 
 /**
  * LA COURSE PEUT-ELLE DEVENIR UN DEFI ?
@@ -101,7 +109,7 @@ function courseDefiable(G: any, genre: GenreFilm): { races: string[]; traces: nu
 }
 
 /**
- * Ouvre le defi de cette course, sans attendre sa reponse.
+ * Pose le defi de cette course, sans attendre sa reponse.
  *
  * On ne rend pas de promesse, et c'est voulu : l'appelant est `arreterLeFilm`,
  * dont le travail est d'arreter une camera. Le faire patienter sur un
@@ -110,26 +118,26 @@ function courseDefiable(G: any, genre: GenreFilm): { races: string[]; traces: nu
  * un carton. Le code arrive quand il arrive ; s'il arrive trop tard, ou pas
  * du tout, le carton sort sans lui.
  *
- * DEJA UN DEFI EN MAIN : on n'en ouvre pas un second. Un joueur qui vient de
+ * DEJA UN DEFI EN MAIN : on n'en pose pas un second. Un joueur qui vient de
  * relever un defi a deja un code, celui de la course qu'il vient de courir, et
  * c'est exactement celui que le carton doit montrer — il rejoue la meme course
  * contre le meme fantome.
  */
-export function ouvrirLeDefiDuFilm(genre: GenreFilm) {
+export function poserLeDefiDeLaCamera(genre: GenreFilm) {
   const G: any = SprinterApp.G;
-  if (G?.challenge?.id) { oublierLeDefiDuFilm(); return; }
+  if (G?.challenge?.id) { oublierLeDefiDeLaCamera(); return; }
 
   const course = courseDefiable(G, genre);
-  if (!course) { oublierLeDefiDuFilm(); return; }
+  if (!course) { oublierLeDefiDeLaCamera(); return; }
 
   // Une prise a la fois, et la place est prise des maintenant : le carton
   // commence a se peindre dans la milliseconde qui suit.
-  const ouverture = { attendu: true, id: '', arriveA: 0 };
-  etat = ouverture;
+  const pose = { attendu: true, id: '', arriveA: 0 };
+  etat = pose;
 
   void (async () => {
     try {
-      const { id } = await ouvrirChallenge({
+      const { id } = await ouvrirChallengeCamera({
         races: course.races as any,
         levelIdx: course.levelIdx,
         totalMs: course.totalMs,
@@ -138,12 +146,12 @@ export function ouvrirLeDefiDuFilm(genre: GenreFilm) {
       });
       // La prise a pu etre jetee pendant le voyage — le joueur est reparti a
       // l'ecran-titre. On ne ressuscite pas un carton qui n'existe plus.
-      if (etat !== ouverture) return;
+      if (etat !== pose) return;
       etat = { attendu: true, id, arriveA: performance.now() };
     } catch {
       // Hors ligne, serveur muet, defi refuse : le carton rend sa place et
       // sort avec le chrono et l'adresse, ce qui reste l'essentiel.
-      if (etat === ouverture) etat = REPOS;
+      if (etat === pose) etat = REPOS;
     }
   })();
 }
@@ -151,11 +159,11 @@ export function ouvrirLeDefiDuFilm(genre: GenreFilm) {
 /**
  * Lance le defi de la video : le geste du joueur, sur le bouton.
  *
- * Rend `null` quand il n'y a rien a lancer — pas de defi ouvert, ou une
- * ouverture qui n'a jamais abouti. L'appelant retombe alors sur la creation
- * ordinaire, exactement comme avant ce module.
+ * Rend `null` quand il n'y a rien a lancer — la camera n'a rien pose, ou sa
+ * pose n'a jamais abouti. L'appelant retombe alors sur la creation ordinaire,
+ * exactement comme avant ce module.
  */
-export async function lancerLeDefiDuFilm(input: {
+export async function lancerLeDefiDeLaCamera(input: {
   name?: string;
   targetScoreId?: number | null;
   revancheDe?: string | null;

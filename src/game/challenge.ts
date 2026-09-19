@@ -124,23 +124,29 @@ export async function createChallenge(input: {
 }
 
 /**
- * OUVRE UN DEFI SANS LE LANCER — ce que fait la camera a l'arrivee.
+ * LE DEFI DE LA CAMERA — pose a l'arrivee, sans etre lance.
  *
  * Le carton de fin du film porte un code, et il ne peut le porter que si le
  * defi existe DEJA quand la camera s'arrete : avant, donc, que le joueur ait
- * decide d'envoyer quoi que ce soit. Un defi ouvert existe et se court, mais
- * il ne vise personne, ne fait sonner aucun telephone et ne compte pas au
- * tableau des defis lances.
+ * decide d'envoyer quoi que ce soit. Celui-la existe et se court, mais il ne
+ * vise personne, ne fait sonner aucun telephone et ne compte pas au tableau
+ * des defis lances.
+ *
+ * CE N'EST PAS UN « DEFI OUVERT ». Ce nom designe deja, dans ce projet, un
+ * defi sans cible qu'on publie avec son code sur Instagram ou TikTok pour
+ * qu'un passant le releve (tools/carte-defi-ouvert.mjs). Celui-la est LANCE ;
+ * celui de la camera ne l'est pas. Le meme mot pour les deux, et la premiere
+ * lecture rapide se trompe de moitie.
  *
  * SA PROPRE ROUTE, ET NON UN DRAPEAU SUR LA CREATION. L'anti-abus du serveur
  * compte par route et par adresse : partager la route, c'est laisser la camera
  * puiser dans le quota du bouton « DEFIER UN AMI » — et le lui refuser un jour
- * de bonne forme. Separees, c'est l'ouverture qui cede en premier, et un
- * carton sans code reste un carton.
+ * de bonne forme. Separees, c'est la camera qui cede en premier, et un carton
+ * sans code reste un carton.
  *
  * Le second geste est `lancerChallenge`, juste en dessous.
  */
-export async function ouvrirChallenge(input: {
+export async function ouvrirChallengeCamera(input: {
   races: RaceKey[];
   levelIdx: number;
   totalMs: number;
@@ -148,7 +154,7 @@ export async function ouvrirChallenge(input: {
   traces: number[][];
   name?: string;
 }): Promise<{ id: string }> {
-  const res = await fetch(`${API_BASE}/challenge/ouvrir`, {
+  const res = await fetch(`${API_BASE}/challenge/camera`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -168,11 +174,10 @@ export async function ouvrirChallenge(input: {
 }
 
 /**
- * Lance un defi deja ouvert : celui dont le code est ecrit sur la video.
+ * Lance le defi que la camera a pose : celui dont le code est sur la video.
  *
- * C'est la seconde moitie de `createChallenge({ ouvrir: true })`, et elle
- * porte tout ce que l'ouverture s'etait interdit — la cible, le compteur, la
- * sonnette. Le serveur verifie que le defi nous appartient : le code circule
+ * C'est la seconde moitie de `ouvrirChallengeCamera`, et elle porte tout ce
+ * que la camera s'etait interdit — la cible, le compteur, la sonnette. Le serveur verifie que le defi nous appartient : le code circule
  * en clair dans une video, et le lire ne doit pas suffire a faire sonner le
  * telephone de quelqu'un.
  *

@@ -23,7 +23,7 @@ import { Review, type EtatReview } from './review';
 import { SprinterApp, useGameStore } from './engine';
 import { peindreLeHud } from './hud-film';
 import { peindreLeCarton } from './carton-film';
-import { ouvrirLeDefiDuFilm, oublierLeDefiDuFilm } from './defi-du-film';
+import { poserLeDefiDeLaCamera, oublierLeDefiDeLaCamera } from './defi-camera';
 
 /**
  * A QUELLE COURSE APPARTIENT LE FILM.
@@ -155,7 +155,7 @@ export function demarrerLeFilm(
   poserGenre(g);
   // Une prise neuve n'herite pas du code de la precedente : le carton
   // afficherait le defi d'une course qui n'est pas celle qu'on regarde.
-  oublierLeDefiDuFilm();
+  oublierLeDefiDeLaCamera();
   filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons],
                             peindreLeHud);
 }
@@ -205,11 +205,12 @@ export function programmerLeFilm(
 export function arreterLeFilm(g: GenreFilm): Promise<void> {
   if (genre !== g) return Promise.resolve();
   annulerLeDepart();
-  // LE DEFI PART AVANT LA CAMERA NE S'ARRETE, et d'un cheveu : le carton met
+  // LA CAMERA POSE SON DEFI AVANT DE S'ARRETER, et d'un cheveu : le carton met
   // une seconde et demie a se peindre, c'est tout ce dont le serveur dispose
-  // pour rendre un code. On n'attend pas sa reponse — voir `ouvrirLeDefiDuFilm`
-  // — le carton lui garde sa place et sort sans lui s'il tarde.
-  ouvrirLeDefiDuFilm(g);
+  // pour rendre un code. On n'attend pas sa reponse — voir
+  // `poserLeDefiDeLaCamera` — le carton lui garde sa place et sort sans lui
+  // s'il tarde.
+  poserLeDefiDeLaCamera(g);
   return filmDeLaCourse().arreter(peindreLeCarton);
 }
 
@@ -218,7 +219,7 @@ export function jeterLeFilm(g: GenreFilm | null) {
   if (!g || genre !== g) return;
   annulerLeDepart();
   filmDeLaCourse().jeter();
-  oublierLeDefiDuFilm();
+  oublierLeDefiDeLaCamera();
   poserGenre(null);
 }
 

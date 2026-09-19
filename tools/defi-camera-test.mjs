@@ -1,14 +1,19 @@
-// LE DEFI DE LA VIDEO — ouvrir n'est pas lancer.
+// LE DEFI DE LA CAMERA — poser n'est pas lancer.
 //
-// La camera ouvre un defi a l'arrivee de chaque course filmee, pour que son
+// La camera pose un defi a l'arrivee de chaque course filmee, pour que son
 // code puisse figurer sur le carton de fin de la video. C'est du volume : une
 // ligne par course, la ou il n'y en avait une que par defi envoye.
+//
+// A NE PAS CONFONDRE avec le « defi ouvert » de la communication — un defi
+// sans cible mais bel et bien LANCE, publie avec son code sur Instagram ou
+// TikTok. Celui-la compte au tableau des defis lances ; celui de la camera
+// non, et c'est tout l'objet de ce fichier.
 //
 // Tout ce fichier tient a cette phrase, et a ce qu'elle casserait si on la
 // prenait a la legere : le compteur « defis lances » du classement des duels.
 // Un joueur qui court dix fois sans defier personne doit y lire zero. Le
 // compter au fil de l'eau ne suffit pas — le classement se REFAIT, a partir
-// de la table des defis, et un recalcul qui compterait les lignes ouvertes
+// de la table des defis, et un recalcul qui compterait les lignes de la camera
 // donnerait un autre chiffre que le compteur vivant. L'ecart n'apparaitrait
 // qu'au premier recalcul, des semaines apres le changement qui l'a cause.
 //
@@ -17,7 +22,7 @@
 // servir pour faire sonner le telephone de quelqu'un.
 //
 //     cd worker && npx wrangler dev --local --port 8788
-//     node tools/defi-du-film-test.mjs
+//     node tools/defi-camera-test.mjs
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
 const ACCES = process.env.ACCES || 'ECRAN1';
@@ -27,6 +32,14 @@ const ADMIN = process.env.ADMIN_CLE || 'cle-de-test-locale-uniquement';
 const H = { 'Content-Type': 'application/json', 'X-Sprinter-Test': ACCES };
 const post = (u, b, h = {}) => fetch(B + u, { method: 'POST', headers: { ...H, ...h }, body: JSON.stringify(b) })
   .then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
+/* LE MEME APPEL, MAIS HORS DU CANAL DE TEST.
+   Le canal de test est EXEMPTE de l'anti-abus — qui s'y trouve a deja presente
+   un code individuel, et les harnais de simulation le martellent volontairement.
+   Un essai qui verifie une limite de frequence en passant par lui ne verifie
+   donc rien du tout : il voit zero refus et se declare content. */
+const postHorsTest = (u, b) => fetch(B + u, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b),
+}).then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
 const lire = u => fetch(B + u, { headers: H }).then(r => r.json());
 
 let e = 0;
@@ -43,7 +56,7 @@ const course = ms => ({
   traces: [[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]],
 });
 
-const ouvrir = (n, d, ms) => post('/challenge/ouvrir', { ...course(ms), name: n, device_id: d });
+const poser = (n, d, ms) => post('/challenge/camera', { ...course(ms), name: n, device_id: d });
 const creer = (n, d, ms, plus = {}) => post('/challenge', { ...course(ms), name: n, device_id: d, ...plus });
 const lancer = (id, n, d, plus = {}) => post('/challenge/lance', { id, name: n, device_id: d, ...plus });
 const relever = (id, n, d, ms) => post('/challenge/attempt', {
@@ -57,17 +70,17 @@ async function ligne(n) {
 }
 
 console.log('\n╔══════════════════════════════════════════════════════════════╗');
-console.log('║  LE DEFI DE LA VIDEO — ouvrir n est pas lancer                ║');
+console.log('║  LE DEFI DE LA CAMERA — poser n est pas lancer                ║');
 console.log('╚══════════════════════════════════════════════════════════════╝');
 
 titre('TROIS COURSES FILMEES, UN SEUL DEFI LANCE');
 {
   const A = nom('A'), dA = dev('a');
-  // Trois courses filmees : la camera ouvre un defi a chacune.
+  // Trois courses filmees : la camera pose un defi a chacune.
   const o = [];
   for (const ms of [9120, 9340, 9080]) {
-    const r = await ouvrir(A, dA, ms);
-    ok(`un defi s ouvre (${ms} ms)`, r.statut === 200 && !!r.corps.id, JSON.stringify(r.corps));
+    const r = await poser(A, dA, ms);
+    ok(`la camera pose un defi (${ms} ms)`, r.statut === 200 && !!r.corps.id, JSON.stringify(r.corps));
     o.push(r.corps.id);
   }
   // Le joueur n'en envoie qu'un : il appuie une fois sur « DEFIER UN AMI ».
@@ -77,7 +90,7 @@ titre('TROIS COURSES FILMEES, UN SEUL DEFI LANCE');
   // LE CODE D'UNE VIDEO SE COURT SANS AVOIR ETE LANCE. C'est tout l'objet de
   // la manoeuvre : la video part, quelqu'un lit le code, il court.
   const r = await relever(o[2], nom('B'), dev('b'), 9500);
-  ok('un defi seulement ouvert se court quand meme',
+  ok('un defi seulement pose se court quand meme',
      r.statut === 200 && r.corps.owner_name === A, JSON.stringify(r.corps).slice(0, 120));
 
   // LE TEST QUI COMPTE.
@@ -104,7 +117,7 @@ titre('LE RECALCUL DIT LA MEME CHOSE QUE LE COMPTEUR');
 titre('SEUL SON AUTEUR LE LANCE');
 {
   const C = nom('C'), dC = dev('c');
-  const { corps } = await ouvrir(C, dC, 9200);
+  const { corps } = await poser(C, dC, 9200);
   // Le code est ecrit en clair sur une video : le lire ne doit pas suffire.
   const vol = await lancer(corps.id, nom('X'), dev('x'));
   ok('un inconnu est refuse', vol.statut === 403, `statut ${vol.statut}`);
@@ -115,7 +128,7 @@ titre('SEUL SON AUTEUR LE LANCE');
 titre('DEUX APPUIS NE VALENT PAS DEUX DEFIS');
 {
   const D = nom('D'), dD = dev('d');
-  const { corps } = await ouvrir(D, dD, 9150);
+  const { corps } = await poser(D, dD, 9150);
   await lancer(corps.id, D, dD);
   const encore = await lancer(corps.id, D, dD);
   ok('le second appui est sans effet', encore.corps.deja === true, JSON.stringify(encore.corps));
@@ -125,12 +138,12 @@ titre('DEUX APPUIS NE VALENT PAS DEUX DEFIS');
   ok('un seul defi au compteur', li?.launched === 1, `launched = ${li?.launched}`);
 }
 
-titre('LE NOM SAISI APRES COUP REMPLACE CELUI DE L OUVERTURE');
+titre('LE NOM SAISI APRES COUP REMPLACE CELUI DE LA POSE');
 {
-  // La camera ouvre avec le nom enregistre ; l'ecran de fin laisse le corriger
+  // La camera pose avec le nom enregistre ; l'ecran de fin laisse le corriger
   // juste avant d'envoyer, et c'est meme la qu'on le saisit la premiere fois.
   const F1 = nom('F'), F2 = nom('G'), dF = dev('f');
-  const { corps } = await ouvrir(F1, dF, 9300);
+  const { corps } = await poser(F1, dF, 9300);
   await lancer(corps.id, F2, dF);
   const d = await lire(`/challenge?id=${corps.id}`);
   ok('le defi porte le nom du lancement', d.owner_name === F2, d.owner_name);
@@ -142,14 +155,14 @@ titre('MAIS PAS SI QUELQU UN A DEJA COURU CONTRE');
   // exister deja, et elle porte l'ancien nom. Le changer ferait diverger le
   // defi de la rencontre qu'il a produite.
   const H1 = nom('H'), H2 = nom('I'), dH = dev('h');
-  const { corps } = await ouvrir(H1, dH, 9250);
+  const { corps } = await poser(H1, dH, 9250);
   await relever(corps.id, nom('J'), dev('j'), 9700);
   await lancer(corps.id, H2, dH);
   const d = await lire(`/challenge?id=${corps.id}`);
   ok('le nom d origine est garde', d.owner_name === H1, d.owner_name);
 }
 
-titre('UN DEFI OUVERT NE VISE PERSONNE, UN DEFI LANCE VISE');
+titre('LE DEFI DE LA CAMERA NE VISE PERSONNE, LE DEFI LANCE VISE');
 {
   const K = nom('K'), dK = dev('k');       // la cible
   const L = nom('L'), dL = dev('l');       // celui qui defie
@@ -160,10 +173,10 @@ titre('UN DEFI OUVERT NE VISE PERSONNE, UN DEFI LANCE VISE');
   const sa = (board.entries || []).find(x => x.name === K);
   ok('la cible est au classement', !!sa, 'absente');
 
-  const { corps } = await ouvrir(L, dL, 9100);
-  // On lui passe une cible a l'ouverture : elle doit etre IGNOREE. Sinon la
+  const { corps } = await poser(L, dL, 9100);
+  // On lui passe une cible a la pose : elle doit etre IGNOREE. Sinon la
   // sonnette partirait avant que son auteur ait choisi d'appeler.
-  const o2 = await post('/challenge/ouvrir',
+  const o2 = await post('/challenge/camera',
                         { ...course(9110), name: L, device_id: dL, target_score_id: sa?.id });
   const boite0 = await lire(`/inbox?device_id=${dK}`);
   ok('rien dans la boite de la cible',
@@ -180,17 +193,18 @@ titre('UN DEFI OUVERT NE VISE PERSONNE, UN DEFI LANCE VISE');
 titre('LA CAMERA NE PUISE PAS DANS LE QUOTA DU BOUTON');
 {
   // L'anti-abus compte par (route, IP) : 30 ecritures par minute. Si la camera
-  // ouvrait par /challenge, une soiree de courses filmees derriere la meme
+  // passait par /challenge, une soiree de courses filmees derriere la meme
   // adresse refuserait le defi que le joueur envoie enfin. Ici on epuise
-  // largement l'ouverture, puis on verifie que le bouton passe toujours.
+  // largement la route de la camera, puis on verifie que le bouton passe.
   const P = nom('P'), dP = dev('p');
+  const courseP = ms => ({ ...course(ms), name: P, device_id: dP });
   let refus = 0;
   for (let i = 0; i < 34; i++) {
-    const r = await ouvrir(P, dP, 9000 + i);
+    const r = await postHorsTest('/challenge/camera', courseP(9000 + i));
     if (r.statut === 429) refus++;
   }
-  ok('l ouverture finit par ceder', refus > 0, `${refus} refus sur 34`);
-  const bouton = await creer(P, dP, 9999);
+  ok('la camera finit par ceder', refus > 0, `${refus} refus sur 34`);
+  const bouton = await postHorsTest('/challenge', courseP(9999));
   ok('le bouton passe quand meme', bouton.statut === 200 && !!bouton.corps.id,
      `statut ${bouton.statut} ${JSON.stringify(bouton.corps)}`);
 }

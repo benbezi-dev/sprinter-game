@@ -270,7 +270,7 @@ function cleanTraces(v, nRaces) {
  * CE QU'UNE COURSE DOIT PRESENTER POUR DEVENIR UN DEFI.
  *
  * Deux routes ecrivent un defi — /challenge, que le joueur declenche en
- * appuyant, et /challenge/ouvrir, que la camera declenche a l'arrivee — et
+ * appuyant, et /challenge/camera, que la camera declenche a l'arrivee — et
  * elles n'acceptent evidemment pas deux choses differentes. La validation vit
  * donc ici, une fois. Deux copies auraient diverge, et c'est la copie la plus
  * laxiste qui aurait fait foi : celle qu'un client mal intentionne choisirait.
@@ -455,7 +455,7 @@ async function ensureChallengeTarget(db) {
 }
 
 /**
- * OUVERT PAR LA CAMERA, OU LANCE PAR LE JOUEUR.
+ * LE DEFI DE LA CAMERA, OU LE DEFI LANCE PAR LE JOUEUR.
  *
  * Le carton de fin de la video porte un code de defi, et pour qu'il le porte
  * il faut que le defi existe AU MOMENT OU LA CAMERA S'ARRETE — c'est-a-dire
@@ -467,10 +467,23 @@ async function ensureChallengeTarget(db) {
  *   - la sonnette chez la personne visee, qui sonnerait avant que son
  *     adversaire ait choisi de l'appeler.
  *
- * `lance` vaut donc 0 pour un defi ouvert par la camera — il existe, il se
- * court, il ne compte pour personne et ne derange personne — et 1 des que son
- * auteur l'envoie, par /challenge/lance. Le defaut est 1 : toutes les lignes
- * qui precedent cette colonne ont bien ete lancees a la main.
+ * `lance` vaut donc 0 pour un DEFI DE LA CAMERA — il existe, il se court, il
+ * ne compte pour personne et ne derange personne — et 1 des que son auteur
+ * l'envoie, par /challenge/lance. Le defaut est 1 : toutes les lignes qui
+ * precedent cette colonne ont bien ete lancees a la main.
+ *
+ * ON NE DIT PAS « DEFI OUVERT », ET C'EST DELIBERE. Ce nom designe deja autre
+ * chose ici : un defi qui ne vise personne, publie avec son code sur Instagram
+ * ou TikTok pour qu'un passant le releve (voir tools/carte-defi-ouvert.mjs).
+ * Celui-la est LANCE — `lance` vaut 1 — et n'a de commun avec le defi de la
+ * camera que de n'avoir pas de cible. Deux sens pour un mot dans le meme
+ * depot, et la premiere personne a lire vite se trompe de moitie.
+ *
+ * LA COLONNE, ELLE, GARDE SON NOM. `lance` dit l'etat, pas l'auteur, et c'est
+ * ce que lisent les compteurs : « WHERE lance = 1 » se lit « les defis
+ * envoyes ». La renommer `camera` retournerait chaque predicat en « ceux qui
+ * ne sont pas a la camera », ce qui est la meme chose et se lit moins bien —
+ * et fermerait la porte au jour ou autre chose que la camera en ouvrira.
  */
 const lanceReady = new WeakSet();
 async function ensureChallengeLance(db) {
@@ -498,9 +511,9 @@ async function ensureChallengeLance(db) {
       dans l'ecran n'est pas une regle.
 
    DEUX ROUTES L'APPELLENT, et c'est la raison de cette fonction. /challenge
-   la joue quand il cree le defi ; /challenge/lance quand il lance celui que la
-   camera avait ouvert. Deux copies de ces deux conditions auraient diverge, et
-   la premiere a diverger aurait ouvert la porte que la premiere condition
+   la joue quand il cree le defi ; /challenge/lance quand il lance le defi que
+   la camera avait pose. Deux copies de ces deux conditions auraient diverge,
+   et la premiere a diverger aurait ouvert la porte que la premiere condition
    ferme. */
 async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
   const ref = String(duelRef || '').toUpperCase();
@@ -3264,14 +3277,14 @@ async function servir(request, env, ctx, porteur) {
       // --- defis (forme d'origine + colonnes en plus) ----------------
       await bloc(() => ensureChallengeTarget(DB), null);
       await bloc(() => ensureChallengeLance(DB), null);
-      // « DEFIS » VEUT TOUJOURS DIRE DEFIS ENVOYES. La camera en ouvre un a
+      // « DEFIS » VEUT TOUJOURS DIRE DEFIS ENVOYES. La camera en pose un a
       // chaque course filmee, pour le code du carton de fin ; les compter ici
       // ferait bondir la courbe d'un facteur dix sans que personne n'ait
-      // defie personne, et toute comparaison avec l'avant serait perdue. Les
-      // defis ouverts se comptent a part, sous `ouverts`.
+      // defie personne, et toute comparaison avec l'avant serait perdue. Ceux
+      // de la camera se comptent a part, sous `camera`.
       const c = await DB.prepare(
         `SELECT (SELECT COUNT(*) FROM challenges WHERE lance = 1) AS defis,
-                (SELECT COUNT(*) FROM challenges WHERE lance = 0) AS ouverts,
+                (SELECT COUNT(*) FROM challenges WHERE lance = 0) AS camera,
                 (SELECT COUNT(*) FROM challenge_attempts) AS tentatives`
       ).first();
       const defisPlus = await bloc(async () => {
@@ -3519,7 +3532,7 @@ async function servir(request, env, ctx, porteur) {
         qN(`SELECT level_idx, COUNT(*) AS parties FROM races GROUP BY level_idx ORDER BY level_idx`),
         qN(`SELECT name, COUNT(*) AS parties FROM races GROUP BY name_key ORDER BY parties DESC LIMIT 10`),
         // Comme plus haut : « defis » compte ce qui a ete envoye, pas ce que
-        // la camera a ouvert pour le carton de fin d'une video.
+        // la camera a pose pour le carton de fin d'une video.
         q1(`SELECT COUNT(*) AS n FROM challenges WHERE lance = 1`),
         qN(`SELECT date(created_at/1000,'unixepoch') AS day, COUNT(*) AS crees FROM challenges WHERE lance = 1 GROUP BY day ORDER BY day DESC LIMIT 30`),
         q1(`SELECT COUNT(*) AS n FROM challenge_attempts`),
@@ -3630,23 +3643,24 @@ async function servir(request, env, ctx, porteur) {
       return json({ id, target_name: targetName });
     }
 
-    /* ------------------------------------------------ OUVRIR UN DEFI, SANS LE LANCER
+    /* ------------------------------------------------------- LE DEFI DE LA CAMERA
 
-       La camera appelle cette route a l'arrivee de chaque course filmee, pour
-       que le carton de fin de la video puisse porter un code. Le defi existe,
-       il se court, son fantome est complet — mais il ne vise personne, ne fait
+       Elle appelle cette route a l'arrivee de chaque course filmee, pour que
+       le carton de fin de la video puisse porter un code. Le defi existe, il
+       se court, son fantome est complet — mais il ne vise personne, ne fait
        sonner aucun telephone, et ne compte pas au tableau des defis lances.
-       Voir `ensureChallengeLance`.
+       Voir `ensureChallengeLance`, qui dit aussi pourquoi ce n'est pas un
+       « defi ouvert » : ce nom est pris, et il designe autre chose.
 
        UNE ROUTE A PART, ET C'EST LA RAISON PRINCIPALE DE CE DECOUPAGE. L'anti-
-       abus compte par (route, IP) : 30 ecritures par minute. Ouvrir depuis
-       /challenge aurait fait puiser la camera dans le quota du bouton — une
-       course filmee toutes les dix secondes derriere la meme adresse, et le
-       joueur qui appuie enfin sur « DEFIER UN AMI » se serait vu refuser son
-       defi par les images qu'il venait de tourner. Ici les deux compteurs sont
-       distincts, et c'est l'ouverture qui cede en premier : un carton sans
+       abus compte par (route, IP) : 30 ecritures par minute. Poser ce defi-la
+       depuis /challenge aurait fait puiser la camera dans le quota du bouton —
+       une course filmee toutes les dix secondes derriere la meme adresse, et
+       le joueur qui appuie enfin sur « DEFIER UN AMI » se serait vu refuser
+       son defi par les images qu'il venait de tourner. Ici les deux compteurs
+       sont distincts, et c'est la camera qui cede en premier : un carton sans
        code reste un carton, un bouton qui refuse est une panne. */
-    if (url.pathname === '/challenge/ouvrir' && request.method === 'POST') {
+    if (url.pathname === '/challenge/camera' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const c = courseDuDefi(body);
@@ -3663,13 +3677,12 @@ async function servir(request, env, ctx, porteur) {
       return json({ id });
     }
 
-    /* ------------------------------------------------- LANCER UN DEFI OUVERT
+    /* --------------------------------------- LANCER LE DEFI QUE LA CAMERA A POSE
 
-       La camera a ouvert le defi a l'arrivee, pour que son code puisse figurer
-       sur le carton de fin du film. Cette route est le second geste : celui du
-       joueur qui decide d'envoyer. Elle fait exactement ce que /challenge
-       faisait en plus de l'INSERT — la cible, le compteur, la sonnette — et
-       rien d'autre.
+       La camera l'a pose a l'arrivee, pour que son code puisse figurer sur le
+       carton de fin du film. Cette route est le second geste : celui du joueur
+       qui decide d'envoyer. Elle fait exactement ce que /challenge faisait en
+       plus de l'INSERT — la cible, le compteur, la sonnette — et rien d'autre.
 
        Pourquoi deux routes plutot qu'un INSERT tardif : parce que le code doit
        exister AVANT, sans quoi le carton ne peut pas le porter. C'est tout

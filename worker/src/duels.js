@@ -667,7 +667,7 @@ async function historique(db) {
  *  compteur qui derive. Nul quand la table n'existe pas. */
 async function lancesParDiscipline(db) {
   try {
-    /* LANCES, ET PAS SEULEMENT CREES. Depuis que la camera ouvre un defi a
+    /* LANCES, ET PAS SEULEMENT CREES. Depuis que la camera pose un defi a
        l'arrivee de chaque course filmee — pour que son code puisse figurer sur
        le carton de fin de la video — la table des defis ne contient plus
        seulement des defis envoyes. Compter ses lignes ici gonflerait le

@@ -26,7 +26,7 @@
 // publicite.
 //
 // LE CODE ARRIVE EN RETARD, ET LE CARTON L'ATTEND SANS BOUGER. Un defi s'ecrit
-// sur le serveur ; `defi-du-film.ts` l'ouvre a l'instant ou la camera
+// sur le serveur ; `defi-camera.ts` le pose a l'instant ou la camera
 // s'arrete, et la reponse met le temps qu'elle met. Le carton, lui, commence a
 // se peindre tout de suite.
 //
@@ -43,7 +43,7 @@
 import { SprinterApp } from './engine';
 import { s2 } from './record';
 import { getSavedName } from './leaderboard';
-import { defiDuFilm, type DefiDuFilm } from './defi-du-film';
+import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import {
   OR, TEXTE, SOURDINE, NUIT, CYAN_CLAIR, AFFICHE, CHIFFRES,
   ecrire, largeur, tailler, pastille,
@@ -129,7 +129,7 @@ function chronoDuCarton(G: any): number | null {
  * l'echelle de l'appareil. `avancement` va de 0 a 1 sur la duree du carton :
  * il ne sert qu'a l'entree, le carton tenant ensuite immobile jusqu'a la fin.
  *
- * `defi` est l'etat du defi ouvert par la camera, et il se lit tout seul : le
+ * `defi` est l'etat du defi de la camera, et il se lit tout seul : le
  * film ne le passe jamais. Il est la pour la page d'apercu, qui doit pouvoir
  * montrer les trois etats du code — absent, attendu, arrive — sans attendre
  * un serveur ni tripatouiller l'etat d'un module depuis le dehors.
@@ -141,7 +141,7 @@ function chronoDuCarton(G: any): number | null {
  * le meme carton, a la meme place, dans les trois.
  */
 export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: number,
-                                avancement: number, defi: DefiDuFilm = defiDuFilm()) {
+                                avancement: number, defi: DefiDeLaCamera = defiDeLaCamera()) {
   const G: any = SprinterApp.G;
   const N: any = SprinterApp.N;
 
@@ -174,7 +174,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   // DEUX PROVENANCES, ET LA PREMIERE PASSE DEVANT. Un joueur qui vient de
   // relever un defi a deja le bon code en main, sans un aller-retour : c'est
   // celui de la course qu'on regarde. Sinon c'est celui que la camera a
-  // ouvert a l'arrivee, et il peut n'etre pas encore la.
+  // pose a l'arrivee, et il peut n'etre pas encore la.
   const releve = String(G?.challenge?.id || '').trim();
   const duFilm = defi;
   const code = releve || duFilm.id;
