@@ -372,7 +372,7 @@ Cinq chantiers, classés par rapport effort / impact. Rien d'autre n'est bloquan
 | # | Chantier | Où | Effort | Pourquoi c'est bloquant |
 |---|---|---|---|---|
 | 1 | ~~**Carton de fin sur la vidéo exportée**~~ — **fait.** Le film gagne 1,5 s : épreuve, chrono, nom, `sprinter-game.com`, et le code du défi quand il y en a un. Voir `src/game/carton-film.ts` | `review.ts`, `carton-film.ts`, `film-course.ts` | — | Sans lui, chaque partage de joueur était perdu. **Reste la moitié du levier : le code (voir 1 bis).** |
-| 1 bis | **Le code sur TOUS les cartons.** Il n'y figure aujourd'hui que si le joueur venait de relever un défi. Ailleurs il n'existe pas encore : un défi s'écrit sur le serveur à la demande, depuis l'écran de fin, donc **après** l'arrêt de la caméra. Le débloquer suppose de créer le défi automatiquement à l'arrivée — une ligne en base par course courue. C'est une décision produit, pas une décision technique | `challenge.ts`, `film-course.ts`, worker | Moyen | La moitié manquante du levier viral : sans code la vidéo invite, avec code elle défie |
+| 1 bis | ~~**Le code sur TOUS les cartons**~~ — **fait.** La caméra *ouvre* un défi à l'arrivée de chaque course filmée (`/challenge/ouvrir`), le carton lui garde sa place et l'affiche quand il arrive. Ouvrir n'est pas lancer : un défi ouvert se court mais ne vise personne, ne sonne nulle part et ne compte pas au tableau des défis lancés. Le bouton « DÉFIER UN AMI » lance celui-là — une course, un code | `defi-du-film.ts`, `carton-film.ts`, worker | — | Le levier est complet : la vidéo ne se contente plus d'inviter, elle défie |
 | 2 | **Code de défi en lien cliquable** — `sprinter-game.com/d/K7M2QX` ouvre directement la course contre le fantôme | `src/game/challenge.ts` + routage `wouter` | Faible | Un code à recopier à la main perd 80 % des gens |
 | 3 | **Classement des recruteurs** (nb de tentatives reçues par joueur) | `worker/src/classement.js`, `challenge.attempts` | Moyen | Le moteur d'UGC de la §4.2 |
 | 4 | **Page publique du classement par nation**, partageable en image | worker + `tools/` | Moyen | Alimente la guerre des drapeaux chaque lundi, sans travail manuel |
@@ -392,8 +392,10 @@ Cinq chantiers, classés par rapport effort / impact. Rien d'autre n'est bloquan
 
 ## Le geste de demain matin
 
-Le chantier n° 1 est fait : toute vidéo de course sortie du jeu porte désormais son
-chrono et l'adresse. Le suivant est **le 1 bis** — mettre un code de défi sur chaque
-carton, et pas seulement sur ceux qui en ont déjà un. Tout le reste du plan est du
-contenu ; ces deux-là sont de la distribution, et ils travaillent pendant que vous
-dormez.
+Les chantiers 1 et 1 bis sont faits : toute vidéo de course sortie du jeu porte son
+chrono, l'adresse, et **un code de défi jouable**. La boucle de la mécanique n° 1
+est fermée — partager n'est plus un service rendu au dev, c'est un coup joué.
+
+Le suivant est **le 2** : rendre le code cliquable (`sprinter-game.com/d/K7M2QX`).
+Un code à recopier à la main perd la plupart des gens sur mobile, et c'est
+aujourd'hui la dernière marche entre une vidéo vue et une course courue.

@@ -21,6 +21,9 @@ canvas{display:block;border-radius:6px}</style>
 <h2>l'entree — le voile se pose sur les premiers 22 %</h2>
 <div class="rang" id="entree"></div>
 
+<h2>le code du defi — il arrive du reseau, et sa place l'attend</h2>
+<div class="rang" id="codes"></div>
+
 <script type="module">
   // Le carton de fin, hors film et hors course : `carton-film.ts` ne lit que
   // `SprinterApp.G`, on lui en pose donc un faux et on l'appelle a la main.
@@ -58,11 +61,14 @@ canvas{display:block;border-radius:6px}</style>
               player: { name: 'KENZA', finishTime: 45.9 }, challenge: null },
   };
 
-  function peindre(cv, course, avancement) {
+  /** Le repos du defi de la video : rien d'ouvert, rien d'attendu. */
+  const SANS = { attendu: false, id: '', arriveA: 0 };
+
+  function peindre(cv, course, avancement, defi = SANS) {
     const c = cv.getContext('2d');
     stade(c, cv.width, cv.height);
     SprinterApp.G = course;
-    peindreLeCarton(c, cv.width, cv.height, avancement);
+    peindreLeCarton(c, cv.width, cv.height, avancement, defi);
   }
 
   await document.fonts.ready;
@@ -80,5 +86,26 @@ canvas{display:block;border-radius:6px}</style>
                                { textContent: `avancement ${a}` }));
     document.getElementById('entree').append(f);
     peindre(cv, COURSES.defi, a);
+  }
+
+  /* LES TROIS ETATS DU CODE, cote a cote — c'est la qu'on verifie la seule
+     chose qui ne se voit pas dans un test : QUE RIEN NE BOUGE entre le
+     deuxieme et le troisieme. La pastille apparait, le reste tient sa place.
+     Un bloc qui sauterait d'un cran au milieu du film se verrait ici, et
+     nulle part ailleurs avant la publication. */
+  const maintenant = performance.now();
+  const ETATS = [
+    ['aucun code — la course ne peut pas en faire', { attendu: false, id: '', arriveA: 0 }],
+    ['attendu — la place est gardee, vide', { attendu: true, id: '', arriveA: 0 }],
+    ['arrive a l instant — le fondu commence', { attendu: true, id: 'K7M2QX', arriveA: maintenant - 60 }],
+    ['pose', { attendu: true, id: 'K7M2QX', arriveA: maintenant - 400 }],
+  ];
+  for (const [quoi, defi] of ETATS) {
+    const f = document.createElement('figure');
+    const cv = document.createElement('canvas');
+    cv.width = 260; cv.height = 462;
+    f.append(cv, Object.assign(document.createElement('figcaption'), { textContent: quoi }));
+    document.getElementById('codes').append(f);
+    peindre(cv, { ...COURSES.defi, challenge: null }, 1, defi);
   }
 </script>

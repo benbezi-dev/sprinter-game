@@ -667,8 +667,27 @@ async function historique(db) {
  *  compteur qui derive. Nul quand la table n'existe pas. */
 async function lancesParDiscipline(db) {
   try {
-    const { results } = await db.prepare(
-      `SELECT owner_name AS nom, races FROM challenges`).all();
+    /* LANCES, ET PAS SEULEMENT CREES. Depuis que la camera ouvre un defi a
+       l'arrivee de chaque course filmee — pour que son code puisse figurer sur
+       le carton de fin de la video — la table des defis ne contient plus
+       seulement des defis envoyes. Compter ses lignes ici gonflerait le
+       compteur de tout le monde, et d'une facon particulierement vicieuse :
+       le compteur tenu au fil de l'eau resterait juste, celui refait par le
+       recalcul serait faux, et l'ecart n'apparaitrait qu'au premier recalcul —
+       longtemps apres le changement qui l'a cause. Voir `ensureChallengeLance`.
+
+       LE REPLI N'EST PAS UNE APPROXIMATION. Sur une base qui precede la
+       colonne, la requete filtree echoue et l'on compte toutes les lignes :
+       c'est exactement juste, puisque avant cette colonne tout defi ecrit
+       etait un defi lance. */
+    let results;
+    try {
+      ({ results } = await db.prepare(
+        `SELECT owner_name AS nom, races FROM challenges WHERE lance = 1`).all());
+    } catch {
+      ({ results } = await db.prepare(
+        `SELECT owner_name AS nom, races FROM challenges`).all());
+    }
     const n = new Map();
     for (const c of results || []) {
       const cle = String(c.nom || '').trim().toLowerCase();

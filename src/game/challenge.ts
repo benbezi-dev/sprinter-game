@@ -123,6 +123,90 @@ export async function createChallenge(input: {
   return { id: data.id as string, cible: String(data.target_name || '') };
 }
 
+/**
+ * OUVRE UN DEFI SANS LE LANCER — ce que fait la camera a l'arrivee.
+ *
+ * Le carton de fin du film porte un code, et il ne peut le porter que si le
+ * defi existe DEJA quand la camera s'arrete : avant, donc, que le joueur ait
+ * decide d'envoyer quoi que ce soit. Un defi ouvert existe et se court, mais
+ * il ne vise personne, ne fait sonner aucun telephone et ne compte pas au
+ * tableau des defis lances.
+ *
+ * SA PROPRE ROUTE, ET NON UN DRAPEAU SUR LA CREATION. L'anti-abus du serveur
+ * compte par route et par adresse : partager la route, c'est laisser la camera
+ * puiser dans le quota du bouton « DEFIER UN AMI » — et le lui refuser un jour
+ * de bonne forme. Separees, c'est l'ouverture qui cede en premier, et un
+ * carton sans code reste un carton.
+ *
+ * Le second geste est `lancerChallenge`, juste en dessous.
+ */
+export async function ouvrirChallenge(input: {
+  races: RaceKey[];
+  levelIdx: number;
+  totalMs: number;
+  splits: number[];
+  traces: number[][];
+  name?: string;
+}): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/challenge/ouvrir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_id: getDeviceId(),
+      name: input.name || getSavedName() || 'Anonyme',
+      races: input.races,
+      level_idx: input.levelIdx,
+      total_ms: Math.round(input.totalMs),
+      splits: input.splits.map(s => Math.round(s)),
+      traces: input.traces,
+    }),
+  });
+  if (!res.ok) throw new Error('challenge open failed');
+  const data = await res.json();
+  if (!data.id) throw new Error('challenge open failed');
+  return { id: String(data.id) };
+}
+
+/**
+ * Lance un defi deja ouvert : celui dont le code est ecrit sur la video.
+ *
+ * C'est la seconde moitie de `createChallenge({ ouvrir: true })`, et elle
+ * porte tout ce que l'ouverture s'etait interdit — la cible, le compteur, la
+ * sonnette. Le serveur verifie que le defi nous appartient : le code circule
+ * en clair dans une video, et le lire ne doit pas suffire a faire sonner le
+ * telephone de quelqu'un.
+ *
+ * Idempotente : deux appuis sur le meme defi ne valent pas deux defis au
+ * compteur ni deux sonneries chez l'autre.
+ *
+ * `cible` est le nom de qui a ete PREVENU, et une chaine vide veut dire
+ * « personne » — meme convention que `createChallenge`, pour la meme raison :
+ * l'ecran ne doit pas annoncer une remise qui n'a pas eu lieu.
+ */
+export async function lancerChallenge(input: {
+  id: string;
+  name?: string;
+  targetScoreId?: number | null;
+  /** L'identifiant du duel qu'on venge. Meme regle qu'a la creation. */
+  revancheDe?: string | null;
+}): Promise<{ id: string; cible: string }> {
+  const res = await fetch(`${API_BASE}/challenge/lance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: normalizeCode(input.id),
+      device_id: getDeviceId(),
+      name: input.name || getSavedName() || 'Anonyme',
+      target_score_id: input.targetScoreId ?? null,
+      revanche_de: input.revancheDe ?? null,
+    }),
+  });
+  if (!res.ok) throw new Error('challenge launch failed');
+  const data = await res.json();
+  if (!data.id) throw new Error('challenge launch failed');
+  return { id: String(data.id), cible: String(data.target_name || '') };
+}
+
 export async function fetchChallenge(code: string): Promise<Challenge | null> {
   const id = normalizeCode(code);
   if (!id) return null;

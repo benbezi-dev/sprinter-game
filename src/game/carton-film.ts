@@ -25,17 +25,25 @@
 // passer le film entier pour une publicite — et personne ne partage une
 // publicite.
 //
-// LE CODE N'EST PAS TOUJOURS LA, ET ON NE LE FABRIQUE PAS POUR L'OCCASION. Un
-// defi s'ecrit sur le serveur, a la demande du joueur, depuis l'ecran de fin
-// (voir OneShotEndScreen) — donc APRES que la camera s'est arretee. Le carton
-// affiche celui qui existe deja, c'est-a-dire celui d'un defi qu'on vient de
-// relever : la course filmee est alors reproductible a l'identique, et c'est
-// exactement ce que le code promet. Ailleurs il n'y en a pas, et le carton se
-// tait plutot que d'inventer.
+// LE CODE ARRIVE EN RETARD, ET LE CARTON L'ATTEND SANS BOUGER. Un defi s'ecrit
+// sur le serveur ; `defi-du-film.ts` l'ouvre a l'instant ou la camera
+// s'arrete, et la reponse met le temps qu'elle met. Le carton, lui, commence a
+// se peindre tout de suite.
+//
+// D'ou la place gardee. Des qu'un code est ATTENDU, sa pastille compte dans la
+// hauteur du bloc, meme vide : sans cela le bloc serait centre sans elle, puis
+// recentre avec, et tout sauterait d'un cran a l'instant ou le code se pose —
+// au milieu d'un film qu'on ne peut plus remonter. La pastille apparait donc
+// en fondu, a sa place, et rien d'autre ne bouge.
+//
+// Et s'il n'arrive pas — hors ligne, serveur muet, course qui ne peut pas
+// faire un defi — le carton sort avec le chrono et l'adresse. Il se tait
+// plutot que d'inventer un code qui n'ouvrirait rien.
 
 import { SprinterApp } from './engine';
 import { s2 } from './record';
 import { getSavedName } from './leaderboard';
+import { defiDuFilm, type DefiDuFilm } from './defi-du-film';
 import {
   OR, TEXTE, SOURDINE, NUIT, CYAN_CLAIR, AFFICHE, CHIFFRES,
   ecrire, largeur, tailler, pastille,
@@ -54,6 +62,17 @@ const SITE = 'sprinter-game.com';
 
 /** Le voile est pose en {V} sur cette part de la duree, puis il tient. */
 const OUVERTURE = 0.22;
+
+/**
+ * Le temps que met la pastille du code a se poser, une fois le code arrive.
+ *
+ * Elle ne suit pas l'entree du carton : le code arrive quand le serveur
+ * repond, c'est-a-dire a n'importe quel moment des une seconde et demie. Un
+ * fondu court le pose sans qu'il ait l'air d'un defaut d'affichage — et sans
+ * le faire attendre, ce qui serait du temps de lecture pris a un carton qui
+ * n'en a pas beaucoup.
+ */
+const POSE_CODE_MS = 280;
 
 /** Ce que le voile laisse passer du stade, une fois pose. */
 const VOILE = 0.9;
@@ -110,6 +129,11 @@ function chronoDuCarton(G: any): number | null {
  * l'echelle de l'appareil. `avancement` va de 0 a 1 sur la duree du carton :
  * il ne sert qu'a l'entree, le carton tenant ensuite immobile jusqu'a la fin.
  *
+ * `defi` est l'etat du defi ouvert par la camera, et il se lit tout seul : le
+ * film ne le passe jamais. Il est la pour la page d'apercu, qui doit pouvoir
+ * montrer les trois etats du code — absent, attendu, arrive — sans attendre
+ * un serveur ni tripatouiller l'etat d'un module depuis le dehors.
+ *
  * TOUT SE MESURE SUR LE PLUS PETIT COTE. Un telephone tenu droit, le meme
  * couche, un navigateur sur un ecran large : le film sort dans les trois
  * formats, et un carton cale sur la largeur deborderait du premier ou se
@@ -117,7 +141,7 @@ function chronoDuCarton(G: any): number | null {
  * le meme carton, a la meme place, dans les trois.
  */
 export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: number,
-                                avancement: number) {
+                                avancement: number, defi: DefiDuFilm = defiDuFilm()) {
   const G: any = SprinterApp.G;
   const N: any = SprinterApp.N;
 
@@ -146,13 +170,27 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   const epreuve = libelleEpreuves(G, N);
   const chronoMs = chronoDuCarton(G);
   const nom = String(getSavedName() || G?.player?.name || '').trim();
-  const code = String(G?.challenge?.id || '').trim();
+
+  // DEUX PROVENANCES, ET LA PREMIERE PASSE DEVANT. Un joueur qui vient de
+  // relever un defi a deja le bon code en main, sans un aller-retour : c'est
+  // celui de la course qu'on regarde. Sinon c'est celui que la camera a
+  // ouvert a l'arrivee, et il peut n'etre pas encore la.
+  const releve = String(G?.challenge?.id || '').trim();
+  const duFilm = defi;
+  const code = releve || duFilm.id;
+  // Attendu vaut place gardee : voir l'en-tete du fichier.
+  const attendu = !!releve || duFilm.attendu;
+  // Un code deja en main se pose avec le carton ; un code qui arrive du
+  // reseau a son propre petit fondu, compte depuis son arrivee.
+  const poseCode = releve || !duFilm.arriveA
+    ? 1
+    : Math.max(0, Math.min(1, (performance.now() - duFilm.arriveA) / POSE_CODE_MS));
 
   const hSur    = epreuve ? tSur * 1.9 : 0;
   const hChrono = chronoMs !== null ? tChrono * 1.16 : 0;
   const hNom    = nom ? tNom * 2.1 : 0;
   const hPast   = tCode * 2.5;
-  const hCode   = code ? hPast + tCode * 1.9 : 0;
+  const hCode   = attendu ? hPast + tCode * 1.9 : 0;
   const hBloc   = hSur + hChrono + hNom + hCode;
 
   // Le bloc est centre un peu au-dessus du milieu — le centre optique d'un
@@ -207,13 +245,16 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     y += hNom;
   }
 
+  // La place a deja ete comptee si un code est attendu ; on ne peint que
+  // lorsqu'il est la, et le fondu est le sien.
   if (code) {
+    const P = (v = 1) => v * doux * poseCode;
     const e = { taille: tCode, gras: 800, police: CHIFFRES, couleur: CYAN_CLAIR,
-                espace: tCode * 0.16, alpha: A() };
+                espace: tCode * 0.16, alpha: P() };
     pastille(ctx, `${N?.t ? N.t('carton_defi') : 'CODE'} ${code}`, cx, y, hPast, e,
-             `rgba(0,0,0,${A(0.5)})`, `rgba(34,211,238,${A(0.45)})`, tCode * 1.2);
+             `rgba(0,0,0,${P(0.5)})`, `rgba(34,211,238,${P(0.45)})`, tCode * 1.2);
     y += hPast + tCode * 1.2;
-    const eS = { taille: tCode * 0.82, gras: 500, couleur: SOURDINE, alpha: A(0.8),
+    const eS = { taille: tCode * 0.82, gras: 500, couleur: SOURDINE, alpha: P(0.8),
                  aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, String(N?.t ? N.t('carton_defi_sous') : ''), cx, y, eS);
   }
