@@ -38,13 +38,29 @@
      <code>-story.png   1080x1920  story, Reels, TikTok
      <code>-x.png       1600x900   X
 
-   LE STYLE est celui de carte-defi.mjs — bleu nuit, degrade orange, chronos a
-   la francaise, lignes separees par un filet. Une carte de plus qui invente sa
-   maquette est une marque qui n'en a plus.
+   DEUX MAQUETTES, ET CHACUNE SON JOUR.
+
+     --style affiche  (defaut) celle que le JEU dessine deja quand un joueur
+                      partage sa course — fond #060913, lueur doree, titre en
+                      Outfit 900, chrono en Space Mono, pied « SPRINTER / JEU
+                      DE SPRINT ». Les proportions sont recopiees de
+                      game/trace-affiche.js, pas approchees a l'oeil : meme
+                      marge, memes tailles, meme inter-lettrage. C'est la voix
+                      ordinaire du compte, celle des defis.
+     --style carte    bleu nuit et degrade orange, celle de carte-defi.mjs et
+                      carte-riposte.mjs. Elle est reservee aux JOURS DE
+                      COMPETITION du calendrier World Athletics, ou le compte
+                      parle d'autre chose que de lui : un record du monde, une
+                      finale, un chrono d'ailleurs. Deux voix, deux occasions —
+                      et on ne melange pas les deux dans la meme semaine.
+
+   LES POLICES du style affiche viennent de Google Fonts, comme dans le jeu
+   (voir src/index.css). Sur une machine sans reseau, pose les woff2 et le CSS
+   qui les declare dans un dossier, et donne-le par SPRINTER_POLICES.
    =========================================================================== */
 import fs from 'node:fs';
 import path from 'node:path';
-import { trouverChrome, capturer } from './chrome.mjs';
+import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
 
 const ICI = path.dirname(new URL(import.meta.url).pathname);
 const RACINE = path.resolve(ICI, '..');
@@ -56,7 +72,8 @@ const SITE = 'sprinter-game.com';
 /* ------------------------------------------------------------- les arguments */
 
 function lireArgs(argv) {
-  const a = { code: null, titre: null, nom: null, chrono: null, epreuve: null, nom_fichier: null };
+  const a = { code: null, titre: null, nom: null, chrono: null, epreuve: null,
+              nom_fichier: null, style: 'affiche' };
   for (let i = 0; i < argv.length; i++) {
     const v = () => String(argv[++i] || '');
     switch (argv[i]) {
@@ -66,6 +83,7 @@ function lireArgs(argv) {
       case '--chrono': a.chrono = v(); break;
       case '--epreuve': a.epreuve = v().replace(/\s*m$/i, ''); break;
       case '--fichier': a.nom_fichier = v(); break;
+      case '--style': a.style = v().toLowerCase(); break;
       default:
         console.error(`Argument inconnu : ${argv[i]}`);
         process.exit(1);
@@ -74,6 +92,11 @@ function lireArgs(argv) {
   return a;
 }
 const args = lireArgs(process.argv.slice(2));
+
+if (args.style !== 'carte' && args.style !== 'affiche') {
+  console.error(`Style inconnu : ${args.style}. Attendu « carte » ou « affiche ».`);
+  process.exit(1);
+}
 
 if (!args.code) {
   console.error('Il faut un code : --code ZEZE42 (celui que le jeu te donne quand tu lances un defi).');
@@ -246,6 +269,127 @@ function page({ w, h }) {
   <div class="pied">${SITE}/?defi=${echappe(args.code)}</div>`;
 }
 
+
+/* ------------------------------------------- la maquette « affiche »
+
+   Celle que le JEU dessine deja. Les proportions sont RECOPIEES de
+   game/trace-affiche.js, pas approchees a l'oeil : marge a 8,2 % de la
+   largeur, surtitre a 10,5 % de la hauteur et 36 % d'inter-lettrage, titre en
+   Outfit 900 serre a -2,2 %, chrono en Space Mono 700 dore, pied a une marge
+   et demie du bas. Une carte qui ressemble au jeu de loin et pas de pres est
+   une carte qui dit que le compte et le jeu sont deux choses.
+
+   Ce que l'affiche du jeu n'a pas et que celle-ci doit porter : le CODE. Il
+   prend la zone basse, que l'affiche laisse a la trace de la course.
+--------------------------------------------------------------------------- */
+
+function pageAffiche({ w, h }) {
+  const L = w, H = h;
+  const large = w > h;
+  const marge = Math.round(L * 0.082);
+  // Le format large est trois fois moins haut que large : une taille exprimee
+  // en fraction de la LARGEUR y devient enorme. Le jeu la ramene a la hauteur,
+  // qui est la dimension rare de ce format-la — on fait pareil.
+  const u = large ? H * 0.62 : L;
+  const T = t => Math.round(u * t);
+  const hautY = Math.round(H * 0.105);
+  const haut = hautY + Math.round(L * 0.055);
+  // `basZone` et non `bas` : `bas` est deja le libelle du compteur, plus haut
+  // dans ce fichier, et le masquer ici affichait « undefined » sur la carte.
+  const basZone = H - marge * 2.1;
+  const trait = Math.max(2, Math.round(L / 540));
+
+  // Les trois traits en fuite du fond : ils posent le stade sans prendre
+  // l'oeil au chiffre, qui est le sujet.
+  const couloirs = [0, 1, 2].map(i => `<div class="couloir" style="top:${H * (0.62 + i * 0.11)}px"></div>`).join('');
+
+  return `<!doctype html><meta charset="utf-8"><style>
+  ${enTetePolices()}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:${L}px;height:${H}px;overflow:hidden}
+  body{position:relative;background:#060913;
+       font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
+  /* La lueur doree du jeu : centree en haut, large comme la carte. */
+  .lueur{position:absolute;inset:0;
+         background:radial-gradient(circle ${Math.round(L * 0.85)}px at 50% 8%,
+                    rgba(248,205,74,.20) 0%,rgba(248,205,74,0) 100%)}
+  .couloir{position:absolute;left:0;width:100%;height:${trait}px;opacity:.14;
+           background:linear-gradient(90deg,rgba(248,205,74,0) 0%,
+                      rgba(248,205,74,1) 50%,rgba(248,205,74,0) 100%)}
+  /* L'etiquette de provenance ne participe pas au centrage : elle tient sa
+     place quoi qu'il arrive, exactement comme dans le jeu. */
+  .surtitre{position:absolute;top:${hautY}px;left:0;width:100%;text-align:center;
+            font-weight:700;font-size:${Math.round(L * 0.0205)}px;
+            letter-spacing:.36em;text-indent:.36em;text-transform:uppercase;
+            color:rgba(255,255,255,.46)}
+  /* La zone ou le sujet a le droit de vivre, et il s'y centre. */
+  .pile{position:absolute;left:${marge}px;right:${marge}px;
+        top:${haut}px;height:${Math.round(basZone - haut)}px;
+        display:flex;flex-direction:column;align-items:center;
+        justify-content:center;text-align:center}
+  h1{font-weight:900;font-size:${T(0.082)}px;line-height:${T(0.078)}px;
+     letter-spacing:-.022em;color:#fff;text-transform:uppercase;
+     margin-bottom:${T(0.03)}px}
+  .chrono{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
+          font-weight:700;font-size:${T(0.20)}px;line-height:1;color:#F8CD4A}
+  /* LA VIRGULE NE PREND PAS UNE CHASSE ENTIERE. Space Mono est a chasse fixe :
+     laissee telle quelle, elle fait lire « 8 , 64 » — deux nombres au lieu
+     d'un. Le jeu lui donne deux cinquiemes de la chasse d'un chiffre
+     (morceauxChrono, trace-affiche.js), et l'unite ch est exactement cette
+     chasse-la : trois dixiemes retires de chaque cote en laissent quatre.
+     Des marges negatives plutot qu'une fente etroite ou la centrer — la fente
+     deplacait le trou au lieu de le boucher, la virgule allait se coller au
+     chiffre suivant. */
+  .virgule{display:inline-block;margin:0 -.30ch}
+  .qui{font-size:${T(0.034)}px;color:rgba(255,255,255,.55);
+       margin-top:${T(0.045)}px}
+  .etat{font-weight:600;font-size:${T(0.030)}px;color:rgba(248,205,74,.85);
+        margin-top:${T(0.022)}px}
+  /* LE CODE. L'affiche du jeu garde cette zone pour la trace de la course ;
+     ici elle porte la seule chose qui ramene quelqu'un dans le jeu. */
+  .billet{margin-top:${T(0.085)}px;padding-top:${T(0.055)}px;width:100%;
+          border-top:1px solid rgba(255,255,255,.10)}
+  .etiquette{font-weight:700;font-size:${T(0.022)}px;letter-spacing:.36em;
+             text-indent:.36em;text-transform:uppercase;
+             color:rgba(255,255,255,.46);margin-bottom:${T(0.028)}px}
+  .code{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
+        font-weight:700;font-size:${T(0.105)}px;line-height:1;color:#fff;
+        letter-spacing:.12em;text-indent:.12em}
+  .lien{font-size:${T(0.026)}px;color:rgba(255,255,255,.38);
+        margin-top:${T(0.030)}px}
+  /* Le pied du jeu, au pixel : meme filet, meme graisse, meme inter-lettrage. */
+  .filet{position:absolute;left:${marge}px;right:${marge}px;
+         top:${Math.round(H - marge * 1.5)}px;height:1px;
+         background:rgba(255,255,255,.10)}
+  .pied{position:absolute;left:${marge}px;right:${marge}px;
+        top:${Math.round(H - marge * 0.92)}px;transform:translateY(-50%);
+        display:flex;justify-content:space-between;
+        font-weight:700;font-size:${Math.round(L * 0.0205)}px;
+        letter-spacing:${(L * 0.006).toFixed(1)}px;text-transform:uppercase}
+  .pied .g{color:rgba(255,255,255,.46)}
+  .pied .d{color:rgba(255,255,255,.30)}
+  </style>
+  <div class="lueur"></div>
+  ${couloirs}
+  <div class="surtitre">Sprinter · ${echappe(libelleEpreuve)}</div>
+
+  <div class="pile">
+    <h1>${echappe(args.titre || 'Défi ouvert')}</h1>
+    <div class="chrono">${virgule(totalMs).replace(',', '<span class="virgule">,</span>')}</div>
+    <div class="qui">${echappe(nom)} · ${echappe(libelleEpreuve)}</div>
+    <div class="etat">${echappe(bas.fort)}</div>
+
+    <div class="billet">
+      <div class="etiquette">Code du défi</div>
+      <div class="code">${echappe(args.code)}</div>
+      <div class="lien">${SITE}/?defi=${echappe(args.code)}</div>
+    </div>
+  </div>
+
+  <div class="filet"></div>
+  <div class="pied"><span class="g">Sprinter</span><span class="d">Jeu de sprint</span></div>`;
+}
+
 /* ------------------------------------------------------------------- le rendu */
 
 const chrome = trouverChrome();
@@ -255,9 +399,10 @@ const base = (args.nom_fichier || args.code).toLowerCase();
 for (const f of [{ s: 'feed', w: 1080, h: 1350 },
                  { s: 'story', w: 1080, h: 1920 },
                  { s: 'x', w: 1600, h: 900 }]) {
-  const chemin = path.join(SORTIE, `${base}-${f.s}.png`);
+  const chemin = path.join(SORTIE, `${base}-${args.style}-${f.s}.png`);
   try {
-    capturer({ html: page(f), w: f.w, h: f.h, sortie: chemin, chrome });
+    const dessiner = args.style === 'affiche' ? pageAffiche : page;
+    await capturer({ html: dessiner(f), w: f.w, h: f.h, sortie: chemin, chrome });
   } catch (e) {
     console.error(`Rendu ${f.s} : ${e.message}`);
     process.exit(1);
