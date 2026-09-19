@@ -10,6 +10,7 @@ import {
 } from '@/game/leaderboard';
 import { garder, oublier } from '@/game/record-attente';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { feterRecordDuMonde } from '@/game/fete';
 
 /** Ecrans qui suivent une course. La cinematique n'en fait pas partie. */
 const AFTER_RACE = new Set(['result', 'winall', 'over']);
@@ -72,6 +73,12 @@ export function RecordPopup() {
         setSplit(t); setPrev(best); setRace(key);
         const nom = getSavedName();
         setName(nom);
+        // LE CIEL PART AVEC LA FENETRE. Le record du monde est le seul chrono
+        // du jeu qui merite autre chose que des confettis : il s'en prend un
+        // par an, pas un par soiree. Les feux sont armes ici, la ou le
+        // classement vient de trancher, et joues par le calque de la fete —
+        // qui les gardera si l'on ferme la fenetre avant la derniere gerbe.
+        feterRecordDuMonde(player);
         setStatus('idle'); setRank(null);
         setOpen(true);
         // Nom deja connu : le record part tout seul. C'est souvent la seule

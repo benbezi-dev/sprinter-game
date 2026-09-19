@@ -159,6 +159,20 @@ export const HAIES_OUVERTES = true;
 export const APPEL_JOUEUR = true;
 
 /**
+ * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
+ * d'artifice pour un record du monde.
+ *
+ * Elle devait s'ouvrir d'elle-meme le 5 septembre 2026 a 18 h de Paris, sans
+ * remise en ligne : la date voyageait dans le paquet deja chez les joueurs,
+ * pour qu'aucun humain n'ait a etre devant un clavier a l'heure dite. Cette
+ * date est passee. Le drapeau est donc vrai en dur, et la fonction reste parce
+ * que les ecrans l'appellent.
+ */
+export function feteDuRecordOuverte(): boolean {
+  return true;
+}
+
+/**
  * Le jeu tourne-t-il dans l'enveloppe native, plutot que dans un navigateur ?
  *
  * On interroge le global pose par Capacitor sans rien importer de lui : le

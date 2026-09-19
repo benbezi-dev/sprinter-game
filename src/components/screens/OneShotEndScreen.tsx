@@ -16,6 +16,8 @@ import {
 import { lancerLeDefiDeLaCamera } from '@/game/defi-camera';
 import { noterDefi } from '@/game/journal-defis';
 import { pushReprise } from '@/game/history';
+import { feterRecordPerso } from '@/game/fete';
+import { feteDuRecordOuverte } from '@/game/canal';
 import { DuelRanking } from './DuelRanking';
 import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
@@ -62,7 +64,7 @@ function noterDefiLance(id: string, nom: string, epreuves: string[]) {
 
 export function OneShotEndScreen() {
   const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
-          liveOn, liveNom, liveResultat, liveDuel } = useGameStore();
+          liveOn, liveNom, liveResultat, liveDuel, player } = useGameStore();
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
@@ -176,6 +178,20 @@ export function OneShotEndScreen() {
   // Seuls les chronos qui ameliorent le record personnel sont envoyes : le
   // serveur ecarterait les autres de toute facon.
   const tops = (outcomes || []).filter(o => o.beatsOwn);
+
+  /**
+   * LES CONFETTIS SONT DEMANDES ICI, ILS NE TOMBENT PLUS ICI.
+   *
+   * Le TOP 500 se mesure chez le serveur, et un record personnel battu hors
+   * ligne — ou en carriere, qui ne passe jamais par cet ecran — ne ferait
+   * voler aucun papier s'il fallait etre sur cet ecran pour le voir. Le calque
+   * de la fete ecoute les deux sources et n'en monte qu'une toile ; celle-ci
+   * reste la sienne pour le TOP 500, la seule que le moteur, seul sur
+   * l'appareil, ne peut pas juger.
+   */
+  useEffect(() => {
+    if (feteDuRecordOuverte() && tops.length > 0) feterRecordPerso(player);
+  }, [tops.length, player]);
   const kept = (outcomes || []).filter(o => !o.beatsOwn);
 
   const handleSaveTop = () => {

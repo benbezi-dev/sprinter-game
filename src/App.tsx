@@ -47,6 +47,7 @@ import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
+import { FeteRecords } from '@/components/screens/FeteRecords';
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -271,6 +272,11 @@ function MainGame() {
           et se pose au-dessus de tout le reste — c'est la seule chose que ce
           joueur-la ait demandee en ouvrant le jeu. */}
       <LiaisonEntrante />
+      {/* Les confettis d'un record personnel et les feux d'artifice d'un
+          record du monde. Montes ici, au-dessus de tous les ecrans de fin :
+          une course de carriere, une epreuve one shot ou meme une defaite ou
+          le chrono est tombe quand meme ont droit a la meme fete. */}
+      <FeteRecords />
       </>)}
     </div>
   );
