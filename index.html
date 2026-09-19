@@ -13,16 +13,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <meta name="google" content="notranslate" />
     <title>Sprinter</title>
-    <meta name="description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <!-- CE QUE MONTRE LE LIEN QUAND ON LE COLLE AILLEURS.
+         Ces lignes portaient encore le texte d'exemple de l'outil qui a servi
+         a demarrer le projet — « built on Replit. Update this description » —
+         et c'est ce que X, Discord, WhatsApp et iMessage affichaient sous
+         chaque lien partage, defis compris. L'apercu est la seule chose que
+         voit quelqu'un qui n'a jamais entendu parler du jeu : il dit
+         maintenant ce que le jeu est, en francais, comme le reste de la page.
+
+         L'image est designee par une ADRESSE ABSOLUE. Les lecteurs d'apercu
+         ne resolvent pas un chemin relatif : une image en /icon-512.png etait
+         ignoree par la moitie d'entre eux, et l'autre moitie affichait une
+         icone carree la ou un rectangle 1200x630 est attendu. Elle se
+         refabrique par `node tools/carte-og.mjs`, et ne porte aucun chiffre :
+         servie pendant des mois, un chrono y serait faux la semaine d'apres. -->
+    <meta name="description" content="Un 100 mètres en deux touches. Pose ton chrono, entre au TOP 500 mondial, défie n'importe qui avec un code." />
     <meta name="robots" content="index, follow" />
-    <meta property="og:title" content="Sprinter" />
-    <meta property="og:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
+    <meta property="og:site_name" content="Sprinter" />
+    <meta property="og:locale" content="fr_FR" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://sprinter-game.com/" />
+    <meta property="og:title" content="Sprinter — tu vaux quoi sur 100 mètres ?" />
+    <meta property="og:description" content="Un 100 mètres en deux touches. Pose ton chrono, entre au TOP 500 mondial, défie n'importe qui avec un code." />
+    <meta property="og:image" content="https://sprinter-game.com/og-1200x630.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Huit coureurs sur la piste d'un stade de nuit, dans le jeu Sprinter." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Sprinter" />
-    <meta name="twitter:description" content="Sprinter — built on Replit. Update this description to reflect the app." />
-    <meta property="og:image" content="/icon-512.png" />
-    <meta name="twitter:image" content="/icon-512.png" />
+    <meta name="twitter:title" content="Sprinter — tu vaux quoi sur 100 mètres ?" />
+    <meta name="twitter:description" content="Un 100 mètres en deux touches. Pose ton chrono, entre au TOP 500 mondial, défie n'importe qui avec un code." />
+    <meta name="twitter:image" content="https://sprinter-game.com/og-1200x630.png" />
     <meta name="theme-color" content="#0a0f1c" />
     <!-- Avant iOS 16.4, Safari ignorait le champ `display` du manifeste : seule
          cette balise faisait ouvrir l'application en plein ecran depuis
