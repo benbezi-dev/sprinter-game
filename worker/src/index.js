@@ -2238,6 +2238,87 @@ async function servir(request, env, ctx, porteur) {
       return json(await recalculerClassement(env.DB));
     }
 
+    /* ------------------------------------------------- LE CLASSEMENT DES RECRUTEURS
+
+       Non pas qui court le plus vite, mais CONTRE QUI ON COURT LE PLUS.
+
+       Le classement des chronos ne recompense qu'une chose, et tout le monde
+       n'y arrivera pas. Celui-ci en recompense une autre, que n'importe qui
+       peut faire des sa premiere course : donner son code. Un joueur lent a
+       enfin un tableau ou il peut gagner — et partager cesse d'etre un service
+       rendu au jeu pour devenir un coup joue.
+
+       ON COMPTE DES PERSONNES, PAS DES COURSES. Un ami qui reprend vingt fois
+       le meme code est une recrue, pas vingt : c'est la portee qu'on mesure,
+       pas l'acharnement d'un seul. `challenge_attempts` a pour cle primaire
+       (defi, appareil), donc une ligne par personne et par defi ; le DISTINCT
+       ramene celui qui a releve plusieurs defis du meme joueur a un seul nom.
+
+       ET ON NE SE COMPTE PAS SOI-MEME. Rien n'empeche de relever son propre
+       defi depuis un second telephone. La ligne qui l'ecarte tient en un
+       `<>` et evite un classement ou le premier serait celui qui a deux
+       appareils.
+
+       LES DEFIS DE LA CAMERA COMPTENT ICI, et c'est le seul endroit. Ailleurs
+       ils ne comptent pas — voir `ensureChallengeLance` — parce qu'ouvrir
+       n'est pas lancer. Mais ce tableau ne mesure pas une intention : il
+       mesure que quelqu'un a couru. Un code lu sur une video et releve vaut
+       exactement ce qu'il dit.
+
+       TOUTES DISTANCES CONFONDUES, contrairement aux duels. On regarde la
+       personne, pas son 200 m : « contre qui on court le plus » n'a pas de
+       sens par epreuve, et le decouper diviserait par trois des nombres qui
+       partent deja de zero. */
+    if (url.pathname === '/recruteurs' && request.method === 'GET') {
+      await ensureChallengeTables(env.DB);
+      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+
+      const { results } = await env.DB.prepare(
+        `SELECT lower(trim(c.owner_name)) AS cle,
+                MAX(c.owner_name) AS name,
+                COUNT(DISTINCT a.device_id) AS recrues,
+                COUNT(*) AS courses,
+                MAX(a.created_at) AS derniere
+           FROM challenges c
+           JOIN challenge_attempts a ON a.id = c.id
+          WHERE a.device_id <> c.owner_device
+            AND trim(c.owner_name) <> ''
+          GROUP BY cle
+          ORDER BY recrues DESC, courses DESC, derniere ASC
+          LIMIT ?`
+      ).bind(TOP_N).all();
+
+      const classement = (results || []).map((r, i) => ({
+        name: r.name, recrues: r.recrues, courses: r.courses, rank: i + 1,
+      }));
+
+      // Le drapeau, comme au classement des duels — et pour la meme raison :
+      // c'est ce qui fait d'une liste de noms un tableau ou l'on se cherche.
+      const pays = await paysDe(env.DB, classement.map(r => r.name.trim().toLowerCase()));
+      for (const r of classement) r.pays = pays.get(r.name.trim().toLowerCase()) || null;
+
+      /* MOI, MEME HORS DU TOP. Le tableau s'arrete a cinq cents noms, et celui
+         qui n'y est pas encore est precisement celui qu'on veut accrocher :
+         lui montrer son chiffre, meme a la 900e place, est tout l'interet du
+         classement pour lui. On le recalcule pour lui seul plutot que de le
+         chercher dans une liste ou il n'est pas. */
+      let moi = nom ? classement.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      if (nom && !moi) {
+        const r = await env.DB.prepare(
+          `SELECT MAX(c.owner_name) AS name,
+                  COUNT(DISTINCT a.device_id) AS recrues,
+                  COUNT(*) AS courses
+             FROM challenges c
+             JOIN challenge_attempts a ON a.id = c.id
+            WHERE a.device_id <> c.owner_device
+              AND lower(trim(c.owner_name)) = ?`
+        ).bind(nom).first();
+        if (r && r.recrues > 0) moi = { name: r.name, recrues: r.recrues, courses: r.courses, rank: null };
+      }
+
+      return json({ classement, moi });
+    }
+
     if (url.pathname === '/duels' && request.method === 'GET') {
       await ensureDuelTables(env.DB);
       const nom = (url.searchParams.get('name') || '').trim().toLowerCase();

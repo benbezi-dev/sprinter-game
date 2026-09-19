@@ -694,6 +694,29 @@
     // ligne dit ce que le code fait — et elle le CONSTATE, comme la charte le
     // demande. Ni « essaie », ni « à toi de jouer » : celui qui regarde décide.
     carton_defi:     ['CODE DU DÉFI', 'CHALLENGE CODE'],
+    // Le classement des recruteurs. « Recrue » et non « adversaire » : ce
+    // qu'on compte n'est pas qui vous a battu, c'est qui est venu courir —
+    // et le mot doit dire que c'est vous qui l'avez amene.
+    recr_ouvrir:     ['RECRUTEURS', 'RECRUITERS'],
+    recr_title:      ['LES RECRUTEURS', 'THE RECRUITERS'],
+    recr_sub:        ['contre qui on court le plus', 'who gets raced the most'],
+    // La regle, en une phrase. Elle dit le geste qui fait monter, parce que
+    // c'est la seule chose qu'on vient chercher ici.
+    recr_regle:      ['Chaque personne qui relève un de tes défis te fait une recrue. Ton code est sur la vidéo de ta course.',
+                      'Every person who takes one of your challenges is a recruit. Your code is on the video of your race.'],
+    // Le singulier a sa cle. « 1 recrues » est la premiere chose que lira
+    // celui qui vient d'en faire une — c'est-a-dire exactement celui qu'on
+    // voulait accrocher, et le moment ou le jeu doit avoir l'air soigne.
+    recr_recrue:     ['recrue', 'recruit'],
+    recr_recrues:    ['recrues', 'recruits'],
+    recr_course:     ['course', 'race'],
+    recr_courses:    ['courses', 'races'],
+    recr_rien:       ['Personne n’a encore couru contre toi.', 'Nobody has raced you yet.'],
+    // Pas « partage ! » : on constate qu'une place est libre. La charte
+    // bannit l'injonction, et elle a raison — un tableau qui reclame se lit
+    // comme une publicite.
+    recr_rien_sous:  ['Il suffit d’un code donné.', 'One code given is enough.'],
+    recr_vide:       ['le tableau est encore vide', 'the board is still empty'],
     // La signature du pied, a droite — la meme que celle de l'affiche
     // partageable (`poserPied`, trace-affiche.js) et des cartes. Les trois
     // visuels sortent du meme jeu et se croisent dans le meme fil.

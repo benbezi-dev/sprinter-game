@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu du classement des recruteurs</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>html,body{margin:0;height:100%;background:#060913}</style>
+<div id="ici"></div>
+<script type="module">
+  /* Le classement des recruteurs, hors serveur.
+   *
+   * L'ecran ne lit qu'une chose — `/recruteurs` — et on la lui sert ici. Pas
+   * de worker a lancer, pas de defis a relever a la main pour voir a quoi
+   * ressemble un tableau plein : c'est du dessin, et le dessin se regarde.
+   *
+   * `?cas=vide` montre le tableau d'une base neuve, `?cas=inconnu` celui de
+   * quelqu'un dont personne n'a encore releve le code — les deux etats qu'on
+   * oublie de regarder et qui sont pourtant les premiers que verra un joueur.
+   *
+   *     npx vite  puis  http://localhost:5173/tools/apercu-recruteurs.html
+   */
+  const cas = new URLSearchParams(location.search).get('cas') || 'plein';
+
+  const NOMS = ['KENZA', 'OMAR', 'NADIA', 'RAYAN', 'NINA', 'TIAGO', 'AMARA',
+                'IMANE', 'ELIO', 'SOFIA', 'YANIS', 'LOUKA'];
+  const PAYS = ['FR', 'IT', 'ES', 'FR', 'BE', 'PT', 'SN', 'MA', 'FR', 'BR', 'FR', 'CH'];
+  const classement = cas === 'vide' ? [] : NOMS.map((name, i) => ({
+    name, pays: PAYS[i], rank: i + 1,
+    recrues: [41, 33, 28, 19, 15, 12, 9, 7, 5, 4, 2, 1][i],
+    courses: [96, 71, 40, 55, 15, 30, 9, 18, 5, 4, 6, 1][i],
+  }));
+  const moi = cas === 'inconnu' || cas === 'vide' ? null
+            : { name: 'YANIS', pays: 'FR', rank: 11, recrues: 2, courses: 6 };
+
+  // Le nom enregistre : c'est lui qui surligne une ligne du tableau.
+  try { localStorage.setItem('sprinter_player_name', 'YANIS'); } catch {}
+
+  const vrai = window.fetch;
+  window.fetch = (u, o) => String(u).includes('/recruteurs')
+    ? Promise.resolve(new Response(JSON.stringify({ classement, moi }),
+                                   { headers: { 'Content-Type': 'application/json' } }))
+    : vrai(u, o);
+
+  const [{ createRoot }, React, { Recruteurs }] = await Promise.all([
+    import('react-dom/client'), import('react'),
+    import('/src/components/screens/Recruteurs.tsx'),
+  ]);
+  createRoot(document.getElementById('ici'))
+    .render(React.createElement(Recruteurs, { onClose: () => {} }));
+</script>

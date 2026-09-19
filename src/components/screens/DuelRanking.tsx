@@ -12,6 +12,7 @@ import {
   Drapeau, Medaille, Ecusson, Flamme, Approche, Sursis, MeilleureSerie, nomDuRang,
 } from '@/components/Insignes';
 import { useBarreSelection, LigneSelection } from './Selection';
+import { Recruteurs } from './Recruteurs';
 import { SERIE_OUVERTE } from '@/game/canal';
 import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt, jeuDe } from '@/game/jeux';
 
@@ -91,6 +92,15 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
     if (ok) setConvies(c => [...c, nom]);
   };
   const [defiEnCours, setDefiEnCours] = useState<string | null>(null);
+  /**
+   * L'AUTRE CLASSEMENT, a une touche d'ici.
+   *
+   * Celui-ci classe la vitesse ; l'autre classe la portee — contre qui on
+   * court le plus. Ils se lisent au meme endroit parce qu'on y vient pour la
+   * meme raison : se chercher. Et le second donne une place a ceux que le
+   * premier ne recompensera jamais.
+   */
+  const [voirRecruteurs, setVoirRecruteurs] = useState(false);
   /** Les trois epreuves du jeu courant, dans l'ordre d'un programme. */
   const RACE_KEYS: readonly string[] = epreuvesDuJeu(useJeu());
 
@@ -183,10 +193,18 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
               </span>
             </div>
           </div>
-          <button onClick={onClose}
-                  className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
-            <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => setVoirRecruteurs(true)}
+                    className="px-3 py-2 rounded-xl bg-card/80 border border-white/10
+                               hover:bg-white/10 transition-colors
+                               text-[10px] font-bold tracking-widest text-muted-foreground">
+              {N.t('recr_ouvrir')}
+            </button>
+            <button onClick={onClose}
+                    className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
+              <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
+            </button>
+          </div>
         </div>
 
         {/* La regle, en une phrase.
@@ -464,6 +482,11 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
           )}
         </div>
       </div>
+
+      {/* Il se pose PAR-DESSUS plutot que de remplacer la liste : on y jette
+          un oeil et on revient, sans perdre l'epreuve choisie ni la position
+          de defilement de celui qu'on etait en train de regarder. */}
+      {voirRecruteurs && <Recruteurs onClose={() => setVoirRecruteurs(false)} />}
     </div>
   );
 }
