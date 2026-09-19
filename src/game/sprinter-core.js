@@ -335,6 +335,44 @@
       names: ['Zoltan Arrow', 'Bela Volt', 'Marko Surge', 'Gabor Onyx',
               'Levente Spark', 'Emese Vega', 'Dorka Swift'] },
 
+    // LE CIMETIERE MUNICIPAL — la nuit du molosse.
+    //
+    // L'edition limitee d'Halloween. Elle vient APRES le Danube et AVANT les
+    // deux stades du canal de test, parce que l'ordre de cette liste est un
+    // contrat : un stade ouvert qui passerait derriere un stade ferme prendrait
+    // un index different selon le canal, et le classement public annoncerait
+    // un lieu que personne n'a couru (voir le commentaire de la boucle qui
+    // remplit LEVELS, dans sprinter-app.js).
+    //
+    // CE STADE NE SE COURT PAS COMME LES AUTRES, ET POURTANT IL EST ORDINAIRE
+    // ICI. Le molosse, le compte a rebours, la morsure : rien de tout cela
+    // n'est dans cette entree, et c'est voulu — le moteur pose une piste et
+    // sept adversaires, le reste se greffe par-dessus (game/halloween.ts),
+    // exactement comme les haies se greffent sur une course plate. Un stade qui
+    // porterait sa propre regle serait un stade qu'on ne peut plus ouvrir sans
+    // relire le moteur.
+    //
+    // LE PLATEAU EST CELUI D'UNE COURSE QU'ON NE REGARDE PAS. Sept coureurs
+    // entre 10,40 et 11,60 au 100 m — le niveau national, pas davantage. Ils
+    // sont la pour peupler les couloirs, et la nuit se joue contre le chien :
+    // un plateau mondial aurait mis un second enjeu dans une course qui n'en
+    // supporte qu'un, et le joueur aurait perdu contre le chien en croyant
+    // avoir perdu contre eux.
+    //
+    // Les sept noms sont ceux d'un cortege, et ils sont inventes comme partout
+    // ailleurs dans le jeu.
+    { cle: 'cimetiere', name: 'Cimetiere municipal', theme: 'halloween',
+      pool: 'divers',
+      horsSerie: true,
+      ouvert: true,
+      // Un cimetiere la nuit n'est pas un stade plein. Les gradins sont
+      // clairsemes, et ce qui s'y tient n'est pas venu pour applaudir.
+      foule: 0.34,
+      plateau: { '100': [10.40, 11.60], '200': [21.00, 23.00],
+                 '400': [47.00, 52.00], '4x100': [41.00, 45.00] },
+      names: ['Igor Tombal', 'Vlad Crampon', 'Morgue Belfort', 'Cyprien Caveau',
+              'Osselet Marchand', 'Lilith Corbeau', 'Nosfera Toussaint'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.

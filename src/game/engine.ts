@@ -570,6 +570,11 @@ export function updateLogic(dt: number) {
       // jeu des haies qui se pose ici a l'armement, et qui se retire en
       // partant. Sans course de haies, cette ligne est un test qui echoue.
       if (G.pasHaies) G.pasHaies(G.player);
+      // Le molosse, quand il y en a un. Meme arrangement que les haies, et
+      // pour la meme raison : le moteur ne connait pas la nuit d'Halloween,
+      // c'est elle qui se pose ici a l'armement et se retire en partant.
+      // Sans nuit en cours, cette ligne est un test qui echoue.
+      if (G.pasMolosse) G.pasMolosse(G.player);
       // Un adversaire en direct n'est pas pilote ici : sa position vient du
       // reseau, et `stepGhost` l'interpole plus bas. Le lui appliquer en plus
       // le detruisait — le modele de l'ordinateur se cale sur un chrono vise,
@@ -605,7 +610,15 @@ export function updateLogic(dt: number) {
     
     const out = G.player.finished && G.player.d >= G.track.total + C.RUNOUT;
     const slow = G.player.finished && G.elapsed >= G.player.finishTime + 3;
-    if (out || slow || G.elapsed >= 90) {
+    // LA MORSURE TERMINE LA COURSE, et il faut le dire ici parce que rien
+    // d'autre ne le dirait : un coureur rattrape est gele sur place, il
+    // n'atteindra jamais la ligne, et les deux conditions ci-dessus attendent
+    // toutes deux qu'il l'ait franchie. Sans cette troisieme, le jeu
+    // regarderait un athlete immobile pendant les quatre-vingt-dix secondes
+    // du garde-fou. Le drapeau est pose par game/halloween.ts et retire avec
+    // la nuit ; hors de ce mode il n'existe pas.
+    const mordu = !!G.molosseMord;
+    if (out || slow || mordu || G.elapsed >= 90) {
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;
       SprinterApp.finishRace();

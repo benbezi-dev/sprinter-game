@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, lazy, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -48,12 +48,34 @@ import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
+import { HALLOWEEN_OUVERT } from '@/game/canal';
+
+/* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
+   QU'ELLE SORTE DU BUILD PUBLIC.
+
+   Importe normalement, le mode partait en production malgre son drapeau
+   ferme : le bundler retire bien le code que `HALLOWEEN_OUVERT && ...` rend
+   inatteignable, mais il garde les MODULES importes — et avec eux les
+   quatorze scenettes en clair, les treize nuits et le morceau de cinquante
+   secondes. On lisait les blagues dans le paquet public d'un mode qui n'y
+   existe pas. C'est exactement l'accident que canal.ts raconte a propos des
+   37 Ko de WebRTC.
+
+   Derriere `lazy`, le mode devient un morceau separe que rien ne reference
+   quand le drapeau est faux. Le `Suspense` ne sert qu'a satisfaire React :
+   son repli est nul, parce qu'il n'y a rien a montrer pendant le chargement
+   d'un panneau que le joueur vient tout juste de demander. */
+const PanneauMolosse = lazy(() => import('@/components/screens/Halloween')
+  .then(m => ({ default: m.PanneauMolosse })));
+const FinDeLaNuit = lazy(() => import('@/components/screens/Halloween')
+  .then(m => ({ default: m.FinDeLaNuit })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
+import { nuitEnCours } from '@/game/halloween';
 
 const queryClient = new QueryClient();
 
@@ -222,8 +244,15 @@ function MainGame() {
             celui du one shot : il repond a une autre question. Le recapitulatif
             ordinaire demande de choisir entre huit choses ; apres avoir rate de
             neuf centiemes, choisir c'est fermer le jeu. */}
+        {/* LA NUIT DU MOLOSSE PASSE AVANT LE RECAPITULATIF DU ONE SHOT.
+            Une nuit EST un one shot — c'est ce qui lui donne le faux depart,
+            la pause et l'enregistrement de la trace — mais son ecran de fin
+            n'a rien a voir : le tableau ordinaire propose huit choses, et
+            apres une morsure la seule question est de savoir si l'on y
+            retourne. Il rend la main de lui-meme hors du mode. */}
         {state === 'winall' && (
-          defiEnCours ? <Revanche />
+          HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
+            : defiEnCours ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       
@@ -277,6 +306,10 @@ function MainGame() {
           une course de carriere, une epreuve one shot ou meme une defaite ou
           le chrono est tombe quand meme ont droit a la meme fete. */}
       <FeteRecords />
+      {/* Le tableau des treize nuits. Pose ici plutot que dans l'ecran-titre
+          pour la meme raison que Bienvenue : il doit passer AU-DESSUS de
+          l'accueil, pas dedans. Il decide seul de s'afficher. */}
+      {HALLOWEEN_OUVERT && <Suspense fallback={null}><PanneauMolosse /></Suspense>}
       </>)}
     </div>
   );

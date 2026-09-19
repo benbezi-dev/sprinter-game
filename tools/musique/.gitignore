@@ -1,0 +1,15 @@
+# CE QUI SE REFABRIQUE NE SE VERSIONNE PAS.
+#
+# La chaine part de molosse-partition.py et ne prend que quelques secondes a
+# rejouer en entier : tout ce qu'elle produit en chemin — des WAV de vingt-six
+# megaoctets, un binaire compile — n'a rien a faire dans l'historique du
+# depot, ou il resterait pour toujours. Un premier commit les y avait mis :
+# soixante-dix megaoctets pour un morceau de sept cents kilo-octets.
+#
+# Ce qui reste versionne : la partition (le source), le rendu (l'outil), le
+# MIDI a ouvrir dans une station (le livrable), et le mp3 final — qui vit
+# dans src/assets, parce que c'est le jeu qui le charge.
+*.wav
+molosse-x*.mid
+molosse.mp3
+molosse-rendu

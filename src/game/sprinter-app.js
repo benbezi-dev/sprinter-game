@@ -219,6 +219,77 @@
       // a damier, qui n'ont rien a faire dans une enceinte de nuit : un
       // fanion ne se voit que le jour, une lampe ne se voit que la nuit.
       projecteurs: true
+    },
+    // LE CIMETIERE MUNICIPAL — la nuit du molosse, edition limitee.
+    //
+    // Un stade d'Halloween peut virer a la decoration de supermarche en trois
+    // couleurs : citrouille, violet, vert fluo, et l'on ne voit plus la piste.
+    // Celui-ci s'en tient a UNE idee — on court de nuit dans un cimetiere,
+    // poursuivi — et range chaque teinte selon ce qu'elle doit faire voir.
+    //
+    // LA PISTE EST ORANGE PARCE QUE C'EST ELLE QU'ON REGARDE. C'est la seule
+    // grande surface saturee de l'image ; tout le reste est sombre. Un stade
+    // d'Halloween ou le ciel serait orange et la piste grise aurait mis la
+    // couleur la ou personne ne la cherche, et le joueur n'a pas le temps de
+    // lever les yeux : il a un chien derriere lui.
+    //
+    // LES GRADINS SONT DE LA PIERRE, PAS DU BETON. Gris-violet, froids, sous
+    // un toit presque noir. La foule est dedans et non devant : des silhouettes
+    // pales sur du sombre — ce qui, dans un cimetiere, se lit tout seul.
+    //
+    // Le vert ne prend que le liseret. Pose en grand il tirait le stade vers
+    // le neon, et c'est exactement le supermarche qu'on evite ; sur une
+    // bordure de dix centimetres il ne fait plus qu'une chose, mais il la fait
+    // bien : dire que ce qui est peint la n'est pas normal.
+    halloween: {
+      // Un ciel de pleine lune : noir-violet en haut, un peu moins bas, et
+      // beaucoup d'etoiles. La lune elle-meme est dessinee par le molosse
+      // (halloween-molosse.js) et non par le theme : elle doit passer DEVANT
+      // le degrade et derriere les gradins.
+      skyTop: [14, 8, 26], skyBot: [46, 24, 58], stars: 340,
+      // L'herbe d'un cimetiere la nuit : verte, mais eteinte. Le bord tire
+      // vers le brun — la terre remuee autour des tombes.
+      grass: [18, 34, 22], grassEdge: [30, 40, 24],
+      trackA: [226, 108, 26], trackB: [198, 88, 18],
+      // Les lignes sont couleur d'os, pas blanches : un blanc pur, sur cette
+      // piste-la, claquait plus fort que la piste elle-meme.
+      lane: [242, 232, 208], kerb: [124, 208, 78],
+      tread: [64, 58, 78], riser: [40, 36, 52], roof: [18, 16, 26],
+      barrier: [96, 88, 116],
+      panels: [[236, 124, 32], [138, 74, 200], [124, 208, 78], [242, 232, 208]],
+      crowdLo: [24, 20, 34], crowdHi: [206, 196, 218],
+      accent: [236, 124, 32], dust: [148, 136, 164],
+      // Ce que le stade emprunte au decor de la nuit etoilee : des cypres
+      // derriere les tribunes — l'arbre des cimetieres, et le seul du jeu qui
+      // monte droit et noir — et un village endormi a l'horizon, fenetres
+      // allumees. Il ne prend ni les tourbillons ni le coup de pinceau : la
+      // piste doit rester nette sous les pieds de quelqu'un qui fuit.
+      arbres: 'cypres',
+      // LES DEUX TEINTES DU CYPRES SONT OBLIGATOIRES DES QU'ON DEMANDE CET
+      // ARBRE. Le dessin les lit sans garde (cypresTile), et un theme qui
+      // reclame des cypres sans les fournir fait tomber toute l'image du
+      // stade sur un « cannot read properties of undefined ». C'est arrive
+      // ici meme, a la premiere course lancee au cimetiere.
+      //
+      // Elles ne sont pas celles de la nuit etoilee : un cypres de cimetiere
+      // est plus noir et moins vert que celui de Van Gogh — il doit se lire
+      // comme une silhouette contre le ciel, pas comme un arbre.
+      cypresSombre: [12, 18, 16], cypresClair: [34, 52, 38],
+      // LE SEUL STADE DU JEU QUI DEMANDE UN MORCEAU ENREGISTRE. Les autres
+      // musiques sortent de `buildRace`, quelques oscillateurs et pas un
+      // octet de donnees ; celle-ci est ecrite note a note et rendue en
+      // audio (voir game/halloween-musique.ts et tools/musique/). La
+      // synthese du jeu sait faire une pulsation, pas un orgue d'eglise.
+      //
+      // `raceTrack` ne retient ce nom que si le buffer est la. Tant que le
+      // fichier n'est pas charge — ou s'il ne l'est jamais — la course part
+      // sur la musique ordinaire, et personne ne court en silence.
+      musique: 'halloween',
+      village: true, villageSombre: [16, 10, 28],
+      lointain: [30, 18, 44],
+      // Les lampes au-dessus des tribunes, comme au Danube : une enceinte de
+      // nuit s'eclaire, sans quoi on ne comprend pas pourquoi on y voit.
+      projecteurs: true
     }
   };
 
@@ -1814,6 +1885,17 @@
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
     G.shotRaces = []; G.shotIdx = 0;
     G.state = 'title';
+    // CE QUI S'EST GREFFE SUR LA COURSE S'EN VA AVEC ELLE.
+    //
+    // Le crochet est pose par les modes qui ajoutent quelque chose par-dessus
+    // une course ordinaire — aujourd'hui la nuit du molosse, qui doit
+    // remballer sa bete. On les previent ICI parce que c'est le seul passage
+    // que TOUS les chemins de sortie empruntent : le bouton de l'ecran de
+    // fin, l'abandon en pleine course, le retour arriere du telephone. Un
+    // mode qui rangerait ses affaires depuis son propre bouton les aurait
+    // oubliees sur les deux autres chemins — et le 100 m suivant serait parti
+    // avec un chien derriere.
+    if (G.surRetourAccueil) { try { G.surRetourAccueil(); } catch (e) { /* un mode qui tombe ne retient pas le joueur */ } }
     buildLevel(0);
   }
 

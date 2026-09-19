@@ -30,6 +30,20 @@ export type Edition = {
   /** Debut et fin de l'annonce, en millisecondes depuis l'epoque (UTC). */
   debut: number;
   fin: number;
+  /**
+   * L'edition ouvre-t-elle un MODE, plutot qu'un simple stade ?
+   *
+   * Le Danube n'ouvre qu'un lieu : sa banniere lance un 100 m ordinaire, et
+   * BanderoleEdition sait tout faire toute seule. Halloween ouvre un mode —
+   * treize nuits, une bete, un compte a rebours — et sa banniere doit mener a
+   * son tableau, pas a une course.
+   *
+   * Sans cette distinction, la banniere generique aurait annonce le cimetiere
+   * avec les textes du Danube et lance un 100 m sans chien : le bug etait
+   * silencieux et immediat, puisque `editionEnCours` rend la premiere edition
+   * ouverte, quelle qu'elle soit.
+   */
+  mode?: 'halloween';
 };
 
 /**
@@ -51,8 +65,38 @@ export const EDITION_DANUBE: Edition = {
   fin: Date.UTC(2026, 8, 20, 22, 0, 0),
 };
 
+/**
+ * L'edition d'Halloween — la nuit du molosse.
+ *
+ * Elle ne suit pas une competition reelle : elle suit une DATE, celle que tout
+ * le monde partage. La fenetre s'ouvre donc une semaine avant le 31 octobre et
+ * se referme trois jours apres, le temps que le sujet retombe.
+ *
+ * Meme regle que le Danube, et c'est la meme phrase qui la porte : la banniere
+ * est datee, le stade ne l'est pas. Le cimetiere municipal reste ouvert le
+ * 4 novembre, et les treize nuits se courent encore en fevrier. Ce qui
+ * s'eteint, c'est l'annonce sur l'accueil — pas le lieu, pas la progression,
+ * pas les chronos.
+ *
+ * Les dates sont ecrites en UTC et commentees en heure de Paris, pour la
+ * raison donnee plus haut : un test qui verifie une frontiere veut un instant
+ * exact, et ne peut pas dependre du fuseau de la machine qui le lance. Le
+ * changement d'heure tombe au milieu de cette fenetre — Paris est a UTC+2
+ * jusqu'au 25 octobre 2026, a UTC+1 apres — d'ou les deux decalages
+ * differents.
+ */
+export const EDITION_HALLOWEEN: Edition = {
+  cle: 'halloween-2026-10',
+  stade: 'cimetiere',
+  // samedi 24 octobre 2026, 00 h 00 a Paris (UTC+2)
+  debut: Date.UTC(2026, 9, 23, 22, 0, 0),
+  // mardi 3 novembre 2026, 00 h 00 a Paris (UTC+1)
+  fin: Date.UTC(2026, 10, 2, 23, 0, 0),
+  mode: 'halloween',
+};
+
 /** Toutes les editions connues du jeu, passees et a venir. */
-export const EDITIONS: Edition[] = [EDITION_DANUBE];
+export const EDITIONS: Edition[] = [EDITION_DANUBE, EDITION_HALLOWEEN];
 
 /** L'edition qu'on annonce a cet instant, s'il y en a une. */
 export function editionEnCours(maintenant: number = Date.now()): Edition | null {

@@ -159,6 +159,43 @@ export const HAIES_OUVERTES = true;
 export const APPEL_JOUEUR = true;
 
 /**
+ * LA NUIT DU MOLOSSE — la competition d'Halloween, edition limitee.
+ *
+ * Treize nuits au cimetiere municipal, un chien demoniaque derriere soi, et un
+ * chrono qui descend au lieu de monter. Voir game/halloween.ts.
+ *
+ * DEUX CHOSES SE FERMENT ICI, ET UNE SEULE COMPTE. Ce drapeau ferme LE MODE :
+ * l'accueil ne le propose plus, aucune nuit ne se lance, et le code du molosse
+ * comme celui des cinematiques sort du build — la forme est celle du reste du
+ * fichier, une constante en tete d'un `&&`, et le bundler la suit.
+ *
+ * Ce qu'il ne ferme PAS, c'est le stade. Le cimetiere municipal est un lieu
+ * ouvert pour toujours, comme le Danube, et pour la meme raison ecrite dans
+ * game/edition.ts : un stade qui disparait est un chrono qu'on ne peut plus
+ * rejouer. C'est la BANNIERE qui est datee, pas le lieu.
+ *
+ * A false, le mode ne repart pas de zero pour autant : les nuits deja tenues
+ * restent rangees sur l'appareil, et se retrouvent telles quelles a la
+ * reouverture.
+ *
+ * IL VIT SUR LE CANAL DE TEST, comme toutes les nouveautes de ce jeu avant
+ * lui — le relais, la poussee, les haies, la flamme des series. La forme
+ * compte, et c'est celle du reste du fichier : `EST_TEST` se replie a la
+ * compilation, donc ce drapeau vaut `false` EN DUR dans le build public et
+ * tout ce qui en depend en sort — le molosse, les quatorze scenettes, les
+ * treize nuits et le morceau de cinquante secondes.
+ *
+ * Ce qui reste en production, et qu'on assume : la definition du stade, qui
+ * vit dans le moteur et voyage donc avec lui (voir le commentaire de la
+ * boucle qui remplit LEVELS dans sprinter-app.js). Sept noms et huit chronos
+ * font le voyage ; le lieu, lui, est inatteignable — aucune banniere ne le
+ * propose et aucun ecran ne le lance.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ */
+export const HALLOWEEN_OUVERT = EST_TEST;
+
+/**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
  * d'artifice pour un record du monde.
  *
