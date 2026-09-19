@@ -253,6 +253,11 @@ const LIGNE = 1.9;
  */
 export function FinDeLaNuit() {
   const state = useGameStore(s => s.state);
+  // Ce qui manquait au COUREUR, et non a la bete. Les deux sont au meme point
+  // a l'instant de la morsure, donc l'un valait l'autre — mais lire la
+  // position du chien pour parler de la course du joueur est le genre de
+  // raccourci qui devient faux le jour ou la morsure change de regle.
+  const joueur = useGameStore(s => s.player);
   const toile = useRef<HTMLCanvasElement | null>(null);
   const [t, setT] = useState(0);
   const depart = useRef(0);
@@ -339,7 +344,9 @@ export function FinDeLaNuit() {
             ? <>{mot('hw_chrono', { s: chrono(c.chrono) })}
                 {' · '}
                 {mot('hw_marge', { s: chrono(Math.max(0, nuit.imparti - c.chrono)) })}</>
-            : c && <>{mot('hw_manque', { m: (Math.max(0, 100 - Math.max(0, c.d))).toFixed(0) })}</>}
+            : <>{mot('hw_manque', {
+                m: Math.max(0, 100 - Math.max(0, joueur ? joueur.d : 0)).toFixed(0),
+              })}</>}
         </span>
       </div>
 
