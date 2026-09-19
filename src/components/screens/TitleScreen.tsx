@@ -24,6 +24,7 @@ import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/g
 import { APPEL_JOUEUR } from '@/game/canal';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
+import { usePassage } from '@/game/passage';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
@@ -234,8 +235,29 @@ export function TitleScreen() {
   // on la lui fait refaire, scene en place, avant qu'elle s'affiche.
   React.useLayoutEffect(() => { accueilPose(); }, []);
 
+  /**
+   * L'ACCUEIL S'EFFACE QUAND ON QUITTE VRAIMENT LE STADE, ET PAS AUTREMENT.
+   *
+   * Vers les concours, le stade sort de l'image pour laisser la place a leur
+   * accueil : un menu pose dessus donnerait exactement ce qu'on cherchait a
+   * eviter, un calque immobile devant un monde qui bouge. Vers Hurdlers, au
+   * contraire, on ne va nulle part — le menu RESTE, et c'est lui qui change de
+   * couleur pendant que les haies se dressent derriere.
+   *
+   * Il part sans fondu et revient avec. Un fondu de sortie le laissait visible
+   * deux dixiemes de trop : au retour, il se decouvrait sous l'accueil du
+   * concours en train de disparaitre, et les deux menus se lisaient l'un sur
+   * l'autre. A l'arrivee, en revanche, le fondu compte : il pose le menu sur
+   * un stade deja immobile.
+   */
+  const passage = usePassage();
+  const efface = !!passage && !passage.surPlace;
+
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
+    <div style={efface
+           ? { opacity: 0, pointerEvents: 'none' }
+           : { opacity: 1, transition: 'opacity 240ms ease-out' }}
+         className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
       {/* Tout ce qui recoit le geste des mondes : l'accueil entier, le pied de
           page et les fenetres posees par-dessus exceptes. */}
       <div ref={zoneGeste} className="flex-1 min-h-0 flex flex-col">

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
+import { cameraPassage, appliquerCamera } from '@/game/passage';
+import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
+import { mondeCourant } from '@/game/mondes';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin } from '@/game/scene-accueil';
@@ -209,6 +212,23 @@ export function GameCanvas() {
 
       const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
       const { SprinterCore } = (globalThis as any);
+
+      // LE PASSAGE D'UN JEU A L'AUTRE BOUGE LA CAMERA, ET RIEN D'AUTRE.
+      //
+      // On peint d'abord la couleur du jeu ou l'on va, puis le monde par
+      // dessus, decale : ce qui se decouvre sur les bords, c'est la
+      // destination. Rien de la projection n'est touche — `drawWorld` et les
+      // coureurs se dessinent comme d'habitude, dans un repere que la toile a
+      // simplement deplace. La camera se lit a l'horloge et non a un etat
+      // React : un rendu en retard ne peut pas faire sauter le mouvement, et
+      // un redessin a la demande retrouve la meme image.
+      const cam = cameraPassage(now, G.VW, G.VH);
+      if (cam) {
+        ctx.fillStyle = cam.fond;
+        ctx.fillRect(0, 0, G.VW, G.VH);
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+      }
       // We only draw the canvas world if we are in certain states, or we just draw it always?
       // Original UI draws world for title, cut, result, over, winall, race, count.
       // For open, it draws a gradient.
@@ -260,6 +280,15 @@ export function GameCanvas() {
           else placerLaCameraDeLaScenette(G.cut);
         }
         drawWorld(ctx, theme);
+
+        // LES HAIES VIVENT SUR LA PISTE TANT QUE LE MONDE EST HURDLERS,
+        // passage ou non : un accueil de Hurdlers sans haies dans les couloirs
+        // serait un accueil de Sprinter repeint. Le passage ne fait que les
+        // relever — voir game/materiel. Elles se posent avant les coureurs de
+        // l'accueil, qui sont au premier plan et doivent rester devant.
+        if (G.state === 'title' && mondeCourant() === 'hurdlers') {
+          dessinerLesHaies(ctx, cam);
+        }
         
         // L'elimination au faux depart se joue sur la piste figee : les
         // coureurs y restent. Sous l'ancien voile noir a 78 %, on ne voyait pas
@@ -303,6 +332,25 @@ export function GameCanvas() {
       // Le HUD est en React, au-dessus du canvas : il reste donc franc, et
       // c'est voulu — un chiffre de chrono assombri dans un coin serait
       // illisible, alors qu'une piste assombrie dans un coin est du cinema.
+      // La camera du passage se retire AVANT la couche de finition : une
+      // vignette est un effet d'image, elle n'a pas a glisser avec le stade.
+      if (cam) {
+        ctx.restore();
+        if (cam.voile > 0.002) {
+          ctx.globalAlpha = cam.voile;
+          ctx.fillStyle = cam.fond;
+          ctx.fillRect(0, 0, G.VW, G.VH);
+          ctx.globalAlpha = 1;
+        }
+        // Puis ce que la camera est allee chercher, dans le meme repere mais
+        // par-dessus le voile : le stade se dissout dans la couleur du jeu
+        // qu'on rejoint, et ce qui reste net dedans est la fosse ou le cercle.
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+        dessinerMateriel(ctx, cam, G.VW, G.VH);
+        ctx.restore();
+      }
+
       if (Prem) {
         const enCourse = G.state === 'race';
         // DEUX GESTES, DEUX COUPS DE VITESSE.
