@@ -1466,6 +1466,10 @@
     // federation ne possede un fleuve. Le lieu qui l'inspire porte, lui, un
     // nom propre qu'on ne reprend pas — voir juridique/edition-danube.md.
     ['Stade du Danube', 'Danube Stadium'],
+    // Le cimetiere municipal — l'edition d'Halloween. Ouvert lui aussi, donc
+    // a sa place ici : juste apres le Danube, juste avant les stades du canal
+    // de test, comme dans STADES_HORS_SERIE.
+    ['Cimetière municipal', 'Municipal Cemetery'],
     ['Stade de la Riviera', 'Riviera Stadium'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa

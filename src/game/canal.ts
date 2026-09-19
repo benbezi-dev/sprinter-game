@@ -159,6 +159,28 @@ export const HAIES_OUVERTES = true;
 export const APPEL_JOUEUR = true;
 
 /**
+ * LA NUIT DU MOLOSSE — la competition d'Halloween, edition limitee.
+ *
+ * Treize nuits au cimetiere municipal, un chien demoniaque derriere soi, et un
+ * chrono qui descend au lieu de monter. Voir game/halloween.ts.
+ *
+ * DEUX CHOSES SE FERMENT ICI, ET UNE SEULE COMPTE. Ce drapeau ferme LE MODE :
+ * l'accueil ne le propose plus, aucune nuit ne se lance, et le code du molosse
+ * comme celui des cinematiques sort du build — la forme est celle du reste du
+ * fichier, une constante en tete d'un `&&`, et le bundler la suit.
+ *
+ * Ce qu'il ne ferme PAS, c'est le stade. Le cimetiere municipal est un lieu
+ * ouvert pour toujours, comme le Danube, et pour la meme raison ecrite dans
+ * game/edition.ts : un stade qui disparait est un chrono qu'on ne peut plus
+ * rejouer. C'est la BANNIERE qui est datee, pas le lieu.
+ *
+ * A false, le mode ne repart pas de zero pour autant : les nuits deja tenues
+ * restent rangees sur l'appareil, et se retrouvent telles quelles a la
+ * reouverture.
+ */
+export const HALLOWEEN_OUVERT = true;
+
+/**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
  * d'artifice pour un record du monde.
  *
