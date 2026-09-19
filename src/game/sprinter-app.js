@@ -904,6 +904,37 @@
         [0, 0.00, 0.16], [4, 0.15, 0.16], [7, 0.30, 0.16],
         [12, 0.45, 0.22], [7, 0.68, 0.14], [12, 0.83, 0.85],
       ], 3);
+      // LE CLAQUEMENT D'UNE HAIE QU'ON POSE.
+      //
+      // Deux choses arrivent ensemble quand une haie se redresse : le choc du
+      // patin sur la piste, et le tube d'acier qui sonne juste derriere. Le
+      // choc est du bruit qui meurt en quelques millisecondes ; le metal, ce
+      // sont trois partiels INHARMONIQUES — un tube frappe ne donne pas une
+      // note, c'est ce qui le distingue d'un carillon.
+      //
+      // LE SON COMMENCE HUIT MILLISECONDES APRES LE DEBUT DU TAMPON, et ce
+      // detail fait tout : `norm` termine chaque son par un fondu de six
+      // millisecondes aux deux bouts, pour qu'aucun tampon ne commence ni ne
+      // finisse sur une marche. Sur une musique, on ne l'entend pas. Sur un
+      // claquement, ce fondu tombe pile sur l'attaque — la seule partie qui
+      // compte — et le « tac » devenait un « pof » a moitie moins fort. On
+      // laisse donc le fondu mordre sur du silence.
+      const claque = (dur, amp) => {
+        const debut = 0.008;
+        const b = this.ctx.createBuffer(1, ((dur + debut) * sr) | 0, sr);
+        const ch = b.getChannelData(0);
+        const i0 = (debut * sr) | 0;
+        let seed = 8675309;
+        for (let i = i0; i < ch.length; i++) {
+          const q = (i - i0) / (ch.length - i0);
+          seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+          ch[i] = 0.95 * Math.exp(-140 * q) * (seed / 0x3fffffff - 1);
+        }
+        [1830, 2740, 4310].forEach((f, k) =>
+          this.tone(b, debut, dur, f, amp * (0.52 - k * 0.13), 'sin', 28 + k * 10));
+        return this.norm(b);
+      };
+      this.buf.haie = claque(0.11, 0.5);
       this.buf.dirge = this.phrase([
         [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
         [-9, 1.10, 1.10],
@@ -1236,12 +1267,25 @@
       const g = this.ctx.createGain(); g.gain.value = 0.75;
       s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
     },
-    sfx(name) {
-      if (!this.ok || !this.on) return;
-      const b = this.buf[name]; if (!b) return;
+    // `reglages` est facultatif : { gain, rate, delay }. Dix haies qui se
+    // redressent l'une apres l'autre ont besoin de ces trois boutons — sans
+    // eux, dix copies du meme echantillon a la meme hauteur, au meme volume et
+    // au meme instant ne font pas une rangee de haies, elles font un bruit.
+    sfx(name, reglages) {
+      if (!this.ok || !this.on) return null;
+      const b = this.buf[name]; if (!b) return null;
       const s = this.ctx.createBufferSource();
-      const g = this.ctx.createGain(); g.gain.value = 0.55;
-      s.buffer = b; s.connect(g); g.connect(this.sortie); s.start();
+      const g = this.ctx.createGain();
+      g.gain.value = reglages && reglages.gain != null ? reglages.gain : 0.55;
+      if (reglages && reglages.rate) s.playbackRate.value = reglages.rate;
+      s.buffer = b; s.connect(g); g.connect(this.sortie);
+      // `delay` fait demarrer le son PLUS TARD, sur l'horloge audio, et la
+      // source est rendue pour qu'on puisse encore l'annuler. La boucle
+      // d'image ne sait placer un son qu'a seize millisecondes pres : dix
+      // haies espacees de dix-sept tombaient a deux par image, et deux
+      // claquements identiques au meme instant n'en font qu'un.
+      s.start(this.ctx.currentTime + (reglages && reglages.delay > 0 ? reglages.delay : 0));
+      return s;
     },
     toggle() { this.on = !this.on; if (!this.on) this.stop(); return this.on; }
   };
@@ -6627,6 +6671,9 @@
     CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
     drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
+    // Ce qu'il faut pour dessiner un obstacle hors d'une course : l'accueil
+    // de Hurdlers montre ses haies, et le passage les y installe.
+    apiObstacles,
     // Le rendu des personnages, sorti tel quel : c'est par la que
     // tools/apercu-coureur.html verifie les corps hors course — de face, de
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas

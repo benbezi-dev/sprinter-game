@@ -15,6 +15,7 @@
 // se retrouve quelque part sans savoir comment en sortir.
 
 import { useSyncExternalStore } from 'react';
+import { armerPassage } from './passage';
 import { HAIES_OUVERTES } from './canal';
 
 export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
@@ -131,6 +132,29 @@ const abonnes = new Set<() => void>();
 
 export function allerAu(m: Monde) {
   if (!MONDES_OUVERTS && m !== 'sprinter') return;
+  if (m === courant) return;
+
+  // LE PASSAGE S'ARME AVANT QUE LE MONDE NE CHANGE, et il garde l'axe du
+  // depuis-Sprinter meme au retour : on revient des haies en remontant par ou
+  // l'on est descendu. C'est la meme regle que celle du geste — le chemin doit
+  // etre le meme dans les deux sens.
+  //
+  // `surPlace` dit s'il y a un endroit ou aller. Hurdlers ouvert se joue dans
+  // l'enveloppe de Sprinter : aucun accueil ne se pose, le menu reste et
+  // change de couleur — le stade n'a donc pas a sortir de l'image, il plonge.
+  // Les deux concours, eux, ont encore leur accueil.
+  //
+  // La condition est ecrite ici plutot qu'empruntee a game/jeux : ce
+  // module-la importe `allerAu`, et aller le chercher fermerait le cercle.
+  const pivot = (m === 'sprinter' ? courant : m) as Exclude<Monde, 'sprinter'>;
+  if (PLACE[pivot]) {
+    armerPassage({
+      de: courant, vers: m, axe: PLACE[pivot],
+      fondDe: MONDES[courant].fond, fondVers: MONDES[m].fond,
+      surPlace: pivot === 'hurdlers' && HAIES_OUVERTES,
+    });
+  }
+
   courant = m;
   for (const f of abonnes) f();
 }

@@ -1,0 +1,161 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — les mains et les pieds en gros plan</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #8e1f1a; border-radius: 6px; }
+</style>
+<!--
+  CE QUE CETTE PAGE SURVEILLE.
+
+  Deux bouts de corps que la course ne laisse jamais regarder : la main, six
+  centimetres au bout d'un bras qui balance, et la chaussure, qui passe la
+  moitie du temps en l'air. L'une et l'autre sont des pieces ECRITES A LA
+  MAIN posees au bout d'os mesures — c'est la que ca se voit quand une
+  section ne rejoint pas la suivante.
+
+  On regarde, dans l'ordre : le joint du poignet (la main doit fermer
+  l'avant-bras coupe, sans marche ni trou), le pouce, le dessin de la
+  chaussure a tous les caps, les trois niveaux de detail (un pied lointain
+  reste un pied), les blocs — doigts sur la piste, pointes sur les cales —
+  et la haie, seule posture qui sorte une jambe du plan de course.
+-->
+<h2 id="t1">la main — quatre caps, de face a de dos</h2>
+<canvas id="c1" width="1180" height="420"></canvas>
+<h2>la main — six instants de foulee</h2>
+<canvas id="c2" width="1180" height="420"></canvas>
+<h2>le pied — quatre caps</h2>
+<canvas id="c3" width="1180" height="420"></canvas>
+<h2>le pied — six instants de foulee</h2>
+<canvas id="c4" width="1180" height="420"></canvas>
+<h2 id="t5">niveaux de detail — pres / moyen / loin, a la taille ou le jeu les emploie</h2>
+<canvas id="c5" width="1180" height="360"></canvas>
+<h2>les trois niveaux, tous en gros plan — pres, moyen, loin</h2>
+<canvas id="c9" width="1180" height="470"></canvas>
+<h2>dans les blocs — les doigts sur la piste, les pointes sur les cales</h2>
+<canvas id="c6" width="1180" height="460"></canvas>
+<h2>en tenue de ville — le poignet fait la fin de la manche</h2>
+<canvas id="c7" width="1180" height="420"></canvas>
+<h2>par-dessus une haie — la jambe d'esquive sort du plan, le pied avec</h2>
+<canvas id="c8" width="1180" height="460"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+  const C = SprinterCore.C;
+
+  const perso = (cle, opts = {}) => Object.assign({
+    look: SprinterCore.lookFor(cle, 'divers'),
+    stride: 0, v: 11.4, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+    drivePitch: 0,
+  }, opts);
+
+  // VISER UN POINT DU CORPS. Le rendu place le coureur a partir de son
+  // origine au sol ; pour cadrer une main ou une chaussure, on remonte la
+  // projection et on deduit l'ancre. Sans cela, un gros plan sur la main
+  // demande de deviner ou elle tombe a l'ecran.
+  function viser(ctx, caps, k, cible, cx, cy) {
+    const sx = (cible[1] - cible[0]) * C.ISO_COS * k;
+    const sy = -((cible[0] + cible[1]) * C.ISO_SIN + cible[2]) * k;
+    SprinterApp.drawFacetFigure(ctx, caps, cx - sx, cy - sy, k);
+  }
+
+  const cle = (() => {
+    for (let i = 0; i < 200; i++) {
+      const l = SprinterCore.lookFor('mains-' + i, 'divers');
+      if (l.build === 'm' && !l.pantalon && !l.civil) return 'mains-' + i;
+    }
+    return 'mains-0';
+  })();
+
+  /** Une rangee : n dessins, meme cible, un reglage par case. */
+  function rangee(id, n, k, cible, y, faire) {
+    const ctx = document.getElementById(id).getContext('2d');
+    const pas = 1180 / n;
+    for (let i = 0; i < n; i++) {
+      const [p, cap, inc] = faire(i);
+      const caps = SprinterApp.personCapsules(p, cap || 0, inc || 0, false, false,
+                                              SprinterApp.niveauDetail(k));
+      viser(ctx, caps, k, cible, pas * (i + 0.5), y);
+    }
+  }
+
+  const MAIN = [0, 0, 0.95], PIED = [0, 0, 0.16];
+  const CAPS = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+
+  // la main, quatre caps puis six instants
+  rangee('c1', 4, 330, MAIN, 250, i =>
+    [perso(cle, { stride: 1.35 }), CAPS[i]]);
+  rangee('c2', 6, 300, MAIN, 250, i =>
+    [perso(cle, { stride: i * Math.PI / 3 }), -0.6]);
+
+  // le pied, de meme
+  rangee('c3', 4, 480, PIED, 250, i =>
+    [perso(cle, { stride: 0.2 }), CAPS[i]]);
+  rangee('c4', 6, 380, PIED, 240, i =>
+    [perso(cle, { stride: i * Math.PI / 3 }), -0.6]);
+
+  // LES TROIS NIVEAUX, A LEUR TAILLE D'EMPLOI. Le jeu montre un coureur de
+  // course a une trentaine de pixels le metre, un coureur presente a deux
+  // cents : le pied ne doit se lire ni comme un sabot au loin ni comme une
+  // savate en gros plan.
+  {
+    const ctx = document.getElementById('c5').getContext('2d');
+    let x = 150;
+    for (const k of [200, 44, 30]) {
+      const p = perso(cle, { stride: 0.9 });
+      const caps = SprinterApp.personCapsules(p, -0.6, 0, false, false,
+                                              SprinterApp.niveauDetail(k));
+      SprinterApp.drawFacetFigure(ctx, caps, x, 330, k);
+      x += 320;
+    }
+    document.getElementById('t5').textContent =
+      'niveaux de detail — 200, 44 et 30 pixels le metre (' +
+      SprinterCore.pose(perso(cle), 0).length + ' / ' +
+      SprinterCore.pose(perso(cle), 1).length + ' / ' +
+      SprinterCore.pose(perso(cle), 2).length + ' volumes)';
+  }
+
+  // LE MEME CORPS, ECHANTILLONNE TROIS FOIS, ET GROSSI AUTANT. Personne ne
+  // verra jamais le niveau lointain a cette taille ; c'est justement pour
+  // cela qu'on le regarde ici. Un coureur de fond de piste n'est pas un
+  // autre personnage : il doit garder une main au bout du bras et une
+  // chaussure au bout de la jambe, en moins de volumes.
+  {
+    const ctx = document.getElementById('c9').getContext('2d');
+    for (let n = 0; n < 3; n++) {
+      const p = perso(cle, { stride: 0.9 });
+      viser(ctx, SprinterApp.personCapsules(p, -0.6, 0, false, false, n),
+            250, [0, 0, 0.72], 200 + n * 390, 250);
+    }
+  }
+
+  // les blocs : c'est la seule posture ou la main touche quelque chose
+  rangee('c6', 3, 340, [-0.24, 0, 0.30], 290, i => {
+    const e = [[1, 0], [1, 1], [0.55, 1]][i];
+    return [perso(cle, { stride: 0.4, v: (1 - e[0]) * 4, drivePitch: 0.62,
+                         enBloc: e[0], prets: e[1] }), -0.5];
+  });
+
+  // un civil : manches, pantalon, et la main qui en sort
+  rangee('c7', 4, 330, MAIN, 250, i => {
+    const p = perso(cle, { stride: 0.9 + i * 0.8 });
+    p.look = Object.assign({}, p.look, {
+      manches: [42, 58, 92], pantalon: [34, 38, 58], civil: true,
+      shoe: [38, 40, 50],
+    });
+    return [p, CAPS[i]];
+  });
+
+  // par-dessus une haie : le lacet de la jambe d'esquive emporte le pied
+  rangee('c8', 5, 360, [0, 0, 0.62], 300, i => {
+    const t = i / 4;
+    return [perso(cle, { stride: 1.2 + t * 3,
+                         saut: { t, w: 1, pied: 1, haut: 0.12 } }), -0.6];
+  });
+
+  document.getElementById('t1').textContent =
+    'la main — quatre caps, de face a de dos (' +
+    SprinterCore.pose(perso(cle), 0).length + ' volumes par coureur)';
+</script>

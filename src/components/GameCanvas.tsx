@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
+import { cameraPassage, appliquerCamera } from '@/game/passage';
+import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
+import { mondeCourant } from '@/game/mondes';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
-import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin } from '@/game/scene-accueil';
+import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -209,6 +212,23 @@ export function GameCanvas() {
 
       const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
       const { SprinterCore } = (globalThis as any);
+
+      // LE PASSAGE D'UN JEU A L'AUTRE BOUGE LA CAMERA, ET RIEN D'AUTRE.
+      //
+      // On peint d'abord la couleur du jeu ou l'on va, puis le monde par
+      // dessus, decale : ce qui se decouvre sur les bords, c'est la
+      // destination. Rien de la projection n'est touche — `drawWorld` et les
+      // coureurs se dessinent comme d'habitude, dans un repere que la toile a
+      // simplement deplace. La camera se lit a l'horloge et non a un etat
+      // React : un rendu en retard ne peut pas faire sauter le mouvement, et
+      // un redessin a la demande retrouve la meme image.
+      const cam = cameraPassage(now, G.VW, G.VH);
+      if (cam) {
+        ctx.fillStyle = cam.fond;
+        ctx.fillRect(0, 0, G.VW, G.VH);
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+      }
       // We only draw the canvas world if we are in certain states, or we just draw it always?
       // Original UI draws world for title, cut, result, over, winall, race, count.
       // For open, it draws a gradient.
@@ -260,6 +280,25 @@ export function GameCanvas() {
           else placerLaCameraDeLaScenette(G.cut);
         }
         drawWorld(ctx, theme);
+
+        // LES HAIES VIVENT SUR LA PISTE TANT QUE LE MONDE EST HURDLERS,
+        // passage ou non : un accueil de Hurdlers sans haies dans les couloirs
+        // serait un accueil de Sprinter repeint. Le passage ne fait que les
+        // relever — voir game/materiel.
+        //
+        // EN DEUX PASSES, DE PART ET D'AUTRE DES COUREURS. Une haie se
+        // franchit : celles qui sont derriere la meute passent derriere elle,
+        // celles qui sont devant la cachent. Toutes du meme cote, on voyait un
+        // montant du premier plan traverser la jambe du coureur qu'il aurait
+        // du masquer. C'est exactement ce que fait le rendu en course, ou les
+        // haies prennent leur place dans l'ordre de profondeur.
+        const haiesIci = G.state === 'title' && mondeCourant() === 'hurdlers';
+        const meute = haiesIci ? profondeurDeLaMeute(SprinterApp) : null;
+        if (haiesIci && meute !== null) {
+          dessinerLesHaies(ctx, cam, { audela: meute, loin: true });
+        } else if (haiesIci) {
+          dessinerLesHaies(ctx, cam);
+        }
         
         // L'elimination au faux depart se joue sur la piste figee : les
         // coureurs y restent. Sous l'ancien voile noir a 78 %, on ne voyait pas
@@ -270,6 +309,10 @@ export function GameCanvas() {
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
           dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);
+          // Puis les haies qui sont devant eux.
+          if (haiesIci && meute !== null) {
+            dessinerLesHaies(ctx, cam, { audela: meute, loin: false });
+          }
         } else if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
           // Le generique de fin de carriere a sa propre scene : la nuit sur le
           // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
@@ -303,6 +346,25 @@ export function GameCanvas() {
       // Le HUD est en React, au-dessus du canvas : il reste donc franc, et
       // c'est voulu — un chiffre de chrono assombri dans un coin serait
       // illisible, alors qu'une piste assombrie dans un coin est du cinema.
+      // La camera du passage se retire AVANT la couche de finition : une
+      // vignette est un effet d'image, elle n'a pas a glisser avec le stade.
+      if (cam) {
+        ctx.restore();
+        if (cam.voile > 0.002) {
+          ctx.globalAlpha = cam.voile;
+          ctx.fillStyle = cam.fond;
+          ctx.fillRect(0, 0, G.VW, G.VH);
+          ctx.globalAlpha = 1;
+        }
+        // Puis ce que la camera est allee chercher, dans le meme repere mais
+        // par-dessus le voile : le stade se dissout dans la couleur du jeu
+        // qu'on rejoint, et ce qui reste net dedans est la fosse ou le cercle.
+        ctx.save();
+        appliquerCamera(ctx, cam, G.VW, G.VH);
+        dessinerMateriel(ctx, cam, G.VW, G.VH);
+        ctx.restore();
+      }
+
       if (Prem) {
         const enCourse = G.state === 'race';
         // DEUX GESTES, DEUX COUPS DE VITESSE.

@@ -1291,8 +1291,11 @@
   const BLOC = {
     marques: { hanche: [-0.55, 0.45], buste: -1.42 },
     prets:   { hanche: [-0.46, 0.70], buste: -1.96 },
-    // les chevilles sur les pedales, les bouts des doigts sur la piste
-    piedAvant: [-0.56, 0.16], piedArriere: [-0.86, 0.19], main: [-0.03, 0.01],
+    // Les chevilles sur les pedales, les bouts des doigts sur la piste. La
+    // cible de la main est le bout de l'OS, et la main depasse de l'os : elle
+    // vise donc trois centimetres plus haut que la piste, pour que ce soit la
+    // pulpe des doigts qui la touche et non le dos de la main qui s'y enfonce.
+    piedAvant: [-0.56, 0.16], piedArriere: [-0.86, 0.19], main: [-0.03, 0.04],
     // le pied sur la pedale inclinee : pointe en bas, talon contre la plaque
     cheville: -0.80,
   };
@@ -1390,6 +1393,219 @@
   const DOSSARD = [242, 242, 238];
   const SEMELLE = [236, 236, 232];
   const TEMOIN = [250, 206, 62];
+
+  // ---------------------------------------------------------------------
+  // DES MAINS
+  // ---------------------------------------------------------------------
+  //
+  // Le rig s'arrete au bout des doigts — c'est la que les blocs posent la
+  // main sur la piste, voir BLOC.main — mais l'avant-bras s'y terminait en
+  // cone : un bras nu finissait en pointe de quille, et il fallait une
+  // manche pour qu'une main soit dessinee du tout. En gros plan, un athlete
+  // n'avait pas de mains.
+  //
+  // OU COMMENCE LA MAIN. L'os mesure porte le poignet a -20,6 cm du coude et
+  // la main dans ce qui reste (tools/blender/anatomie.py). On coupe donc la
+  // chaine mesuree au poignet, exactement comme la cuisse se coupe a
+  // l'ourlet du short : l'avant-bras garde ses troncs, la main prend la
+  // suite, et pas un volume ne se pose sur un autre — deux volumes coaxiaux
+  // a la meme profondeur se departagent au millimetre, et une main enfilee
+  // par-dessus le bout du bras en serait ressortie en manchon.
+  //
+  // LA MAIN D'UN SPRINTER EST PLATE, ET DE CHAMP. Paume tournee vers le
+  // corps, pouce en l'air, doigts a peine fermes : ce qu'on voit d'elle,
+  // c'est le dos de la main, large de huit centimetres dans le sens de la
+  // course et epais de cinq. C'est aussi ce qui la distingue de tout le
+  // reste du corps a cette taille-la — une section RELEVEE (MESURE), donc,
+  // et non arrondie en moyenne comme les pieces ecrites a la main.
+  //
+  // Ce que la main et la chaussure donnent — au poignet, dans les blocs, en
+  // tenue de ville, par-dessus une haie et aux trois niveaux de detail — se
+  // regarde dans tools/apercu-mains-pieds.html.
+  //
+  // COMBIEN ELLE MESURE. Le dos de la main fait neuf centimetres et demi
+  // dans le sens de la course et six d'epaisseur — une main de sprinter,
+  // pas une main de mannequin. Elle depasse d'un centimetre et demi le bout
+  // de l'os : l'os s'arrete a la derniere phalange PLIEE, les doigts fermes
+  // vont un peu au-dela, et a la taille ou le jeu montre un coureur presente
+  // ou une scenette, une main juste anatomique se lisait comme un moignon.
+  const POIGNET = -0.20;     // hauteur de coupe, dans le repere du coude
+  const DOIGTS = -0.291;     // le bout des doigts, un peu au-dela de l'os
+
+  /**
+   * La main au bout d'un avant-bras coupe au poignet.
+   *
+   * @param add  la fonction d'ajout de pose()
+   * @param PREM le module des corps mesures, pour ses drapeaux de bout
+   * @param niv  niveau de detail
+   * @param E    le pivot du coude, dans le repere du corps
+   * @param aF   l'angle de l'avant-bras — la main reste dans son axe
+   * @param zPo  la hauteur locale ou la chaine s'est vraiment arretee
+   * @param sec  la section mesuree de l'avant-bras a cette hauteur
+   * @param peau la couleur de la peau, qui n'est pas celle d'une manche
+   * @param k    le gabarit de bras de l'athlete
+   * @param yaw  le lacet du buste
+   */
+  function mainDe(add, PREM, niv, E, aF, zPo, sec, peau, k, yaw) {
+    const MESURE = PREM.MESURE, LIBRE = PREM.LIBRE;
+    const SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
+    const cb = sec[0];
+    if (niv >= PREM.MOYEN) {
+      // DES QUE LE COUREUR S'ELOIGNE, UN SEUL VOLUME : LE POING.
+      //
+      // Il coute exactement ce que coutait le tronc de chaine qu'il
+      // remplace, et a quarante pixels le metre — l'echelle d'une course —
+      // une main entiere mesure deux pixels : le pouce et les phalanges n'y
+      // seraient qu'un supplement de calcul, huit fois par image.
+      add(peau, E, aF, [cb + 0.008, 0, (zPo + DOIGTS) * 0.5, cb],
+          [0.039 * k, 0.027 * k], [sec[1], sec[2]], (zPo - DOIGTS) * 0.5, yaw,
+          MESURE | LIBRE | SOUS_HAUT);
+      return;
+    }
+    // LES PHALANGES tombent aux trois cinquiemes de la main : au-dessus, le
+    // dos de la main s'elargit depuis le poignet ; en dessous, les doigts se
+    // referment. La main se creuse vers l'avant a mesure qu'on descend —
+    // c'est le galbe d'une main qui se ferme, et il prolonge la cambrure de
+    // l'avant-bras au lieu de repartir droit.
+    const zK = zPo + (DOIGTS - zPo) * 0.48;
+    add(peau, E, aF, [cb + 0.006, 0, (zPo + zK) * 0.5, cb],
+        [0.048 * k, 0.031 * k], [sec[1], sec[2]], (zPo - zK) * 0.5, yaw,
+        MESURE | SOUS_BAS | SOUS_HAUT);
+    // ET LES DOIGTS SE COMPTENT.
+    //
+    // Un seul volume au bout de la paume donnait une moufle : le poing avait
+    // la bonne taille et la bonne forme, mais rien ne disait qu'il etait fait
+    // de doigts. Ils sont donc trois — pas quatre : a trois, chacun fait deux
+    // centimetres et demi de large, ce qui est la largeur d'un vrai doigt, et
+    // le quatrieme n'ajouterait qu'un volume de plus a payer huit fois par
+    // image.
+    //
+    // Ils SE CHEVAUCHENT de deux millimetres : trois volumes poses cote a cote
+    // sans se toucher laisseraient voir la piste entre eux des que la main
+    // passe devant le vide, et un trait de stade en travers d'une main se voit
+    // de loin. Ce qui les separe, ce n'est pas un jour, c'est la calotte de
+    // chacun : trois bosses au bout, deux creux entre elles, et la main se lit
+    // comme une main fermee plutot que comme un gant.
+    // ILS NE FINISSENT PAS TOUS AU MEME ENDROIT. Trois doigts de meme
+    // longueur font un rateau ; sur une main, le majeur depasse et les deux
+    // autres suivent en arc. Sept millimetres suffisent — a cette taille,
+    // c'est ce decalage qu'on lit, bien avant le jour entre deux doigts.
+    const ecart = 0.026 * k, large = 0.018 * k;
+    for (const [dx, court] of [[-ecart, 0.007], [0, 0], [ecart, 0.007]]) {
+      const bout = DOIGTS + court;
+      add(peau, E, aF, [cb + 0.014 + dx, 0, (zK + bout) * 0.5 + 0.003,
+                        cb + 0.006 + dx * 0.92],
+          [large, 0.026 * k], [large * 1.04, 0.030 * k],
+          (zK - bout) * 0.5 + 0.003, yaw, MESURE | LIBRE | SOUS_HAUT);
+    }
+    // LE POUCE, ET POURQUOI IL EST LE MEME DES DEUX COTES. Paume vers le
+    // corps, les deux pouces pointent vers l'AVANT, pas vers l'interieur :
+    // ils n'ont donc pas de cote, et une seule piece sert aux deux mains.
+    // Sans lui la main reste un galet ; avec lui, elle se lit comme une
+    // main a la premiere image.
+    const Po = [E[0] - zPo * Math.sin(aF), E[1], E[2] + zPo * Math.cos(aF)];
+    add(peau, Po, aF + 0.42, [0.015, 0, -0.030], [0.015 * k, 0.014 * k],
+        [0.020 * k, 0.018 * k], 0.030, yaw, MESURE | LIBRE | SOUS_HAUT);
+  }
+
+  // ---------------------------------------------------------------------
+  // ET DES PIEDS
+  // ---------------------------------------------------------------------
+  //
+  // La chaussure etait deux troncs ecrases, poses a plat sous la cheville,
+  // et ecrits comme des ellipses de vingt centimetres sur neuf. Mais une
+  // piece ecrite a la main sans le drapeau MESURE, le rendu l'arrondit en
+  // MOYENNE : ces ellipses-la se dessinaient en disques de quatorze
+  // centimetres. Les coureurs couraient sur deux boules.
+  //
+  // Un pied se construit donc dans SON axe, du talon vers la pointe, et non
+  // dans celui de la jambe : le tronc va de l'arriere vers l'avant, sa
+  // section porte l'epaisseur et la largeur, et il s'affine vers l'avant
+  // comme un pied s'affine. La semelle claire porte, la tige colore ;
+  // chacune est coupee au niveau de la plante, la ou un pied est le plus
+  // large, parce qu'un seul cone ne peut pas etre etroit au talon, large a
+  // la plante et etroit a la pointe.
+  //
+  // COMBIEN ELLE MESURE. Vingt-quatre centimetres du talon a la pointe et dix
+  // de large a la plante, sur un corps d'un metre soixante-douze : la
+  // proportion d'un vrai pied, et de quoi porter le coureur. Vingt-deux
+  // centimetres, sa premiere taille, le faisaient courir en chaussons.
+  //
+  // REPERE LOCAL, une fois la piece tournee d'un quart de tour sur l'angle
+  // de cheville : z va vers la POINTE, x va vers le BAS. La cheville du rig
+  // est a 7,8 cm du sol, la semelle passe donc a 6,2 cm sous elle et touche
+  // la piste. Tout le reste tourne avec l'angle de cheville — orteils
+  // pointes sur les cales de depart, pied a plat a l'appui — sans que rien
+  // ici n'ait a le savoir.
+  const PIED = {
+    talon: -0.068, plante: 0.058, pointe: 0.174,   // le long du pied
+    sol: 0.062, releve: 0.057,                     // la semelle sous la cheville
+  };
+
+  /**
+   * Chausser un pied.
+   *
+   * @param add  la fonction d'ajout de pose()
+   * @param PREM le module des corps mesures, pour ses drapeaux de bout
+   * @param An   la cheville, dans le repere du corps
+   * @param ft   l'angle de cheville du rig (0 = jambe tendue, pied a plat)
+   * @param yaw  le lacet de la jambe
+   * @param col  la couleur de la chaussure
+   * @param niv  niveau de detail
+   */
+  function chausser(add, PREM, An, ft, yaw, col, niv) {
+    const MESURE = PREM.MESURE, LIBRE = PREM.LIBRE;
+    const SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
+    const a = ft - Math.PI / 2;
+    const P = PIED, mi = (u, v) => (u + v) * 0.5, dm = (u, v) => (v - u) * 0.5;
+    // UNE CALOTTE DEPASSE, ET IL FAUT LUI FAIRE LA PLACE.
+    //
+    // Le bout LIBRE d'un volume s'arrondit, et cet arrondi sort du volume :
+    // d'un peu plus d'un demi-rayon (voir le rendu, `rond`). Un talon ecrit
+    // a sa vraie place se terminait donc un centimetre et demi plus loin, en
+    // bulbe, comme une chaussure a bout ferre ; et la semelle, finie a la
+    // meme abscisse que la tige, ressortait devant elle en museau blanc.
+    //
+    // Chaque bout est donc RECULE de ce que sa calotte va rendre. La
+    // chaussure occupe alors exactement la longueur qu'on lui a donnee, et la
+    // semelle reste dessous : on ne la voit que par son liseret, comme sur
+    // une vraie pointe d'athletisme.
+    const avance = (hx, hy) => 0.275 * (hx + hy);
+    // les sections des quatre bouts : talon et pointe, tige puis semelle
+    const tT = [0.025, 0.028], tP = [0.013, 0.032];
+    const sT = [0.012, 0.031], sP = [0.010, 0.037];
+    const zTt = P.talon + avance(tT[0], tT[1]), zTp = P.pointe - avance(tP[0], tP[1]);
+    const zSt = P.talon + 0.008 + avance(sT[0], sT[1]);
+    const zSp = P.pointe - 0.014 - avance(sP[0], sP[1]);
+    if (niv > PREM.PRES) {
+      // De loin, une semelle et une tige, d'un seul tenant chacune : le pied
+      // garde sa longueur et son profil de coin, il perd le galbe de la
+      // plante. C'est le meme nombre de volumes qu'avant.
+      add(SEMELLE, An, a, [P.sol, 0, mi(zSt, zSp), P.releve],
+          sT, [0.011, 0.041], dm(zSt, zSp), yaw, MESURE | LIBRE);
+      add(col, An, a, [0.031, 0, mi(zTt, zTp), 0.045],
+          tT, [0.015, 0.035], dm(zTt, zTp), yaw, MESURE | LIBRE);
+      return;
+    }
+    // LA SEMELLE. Elle deborde de deux millimetres sous la tige, tout du
+    // long : c'est ce liseret clair qui fait une basket et non un chausson.
+    // Et elle se releve a la pointe — un pied qui deroule ne pose jamais le
+    // bout de sa semelle a plat.
+    add(SEMELLE, An, a, [P.sol, 0, mi(zSt, P.plante), P.sol],
+        sT, [0.013, 0.051], dm(zSt, P.plante), yaw,
+        MESURE | LIBRE | SOUS_HAUT);
+    add(SEMELLE, An, a, [P.sol, 0, mi(P.plante, zSp), P.releve],
+        [0.013, 0.051], sP, dm(P.plante, zSp), yaw,
+        MESURE | SOUS_BAS | LIBRE);
+    // LA TIGE. Haute au talon — le contrefort remonte jusque sous la
+    // cheville et cache le joint du mollet — basse sur les orteils.
+    add(col, An, a, [0.030, 0, mi(zTt, P.plante), 0.036],
+        tT, [0.022, 0.049], dm(zTt, P.plante), yaw,
+        MESURE | LIBRE | SOUS_HAUT);
+    add(col, An, a, [0.036, 0, mi(P.plante, zTp), 0.046],
+        [0.022, 0.049], tP, dm(P.plante, zTp), yaw,
+        MESURE | SOUS_BAS | LIBRE);
+  }
 
   function pose(r, lod) {
     const L = r.look, fem = L.build === 'f';
@@ -1777,13 +1993,23 @@
                               PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * 1.06;
       add(peauBras, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
           0.026, yawTop, LIBRE);
+      // L'AVANT-BRAS S'ARRETE AU POIGNET, ET LA MAIN PREND LA SUITE.
+      //
+      // Le bord de coupe se lit sur la chaine (voir `bord`) : il tombe plus
+      // bas quand le corps est echantillonne grossierement, et la main le
+      // rejoint la ou il est plutot que la ou on l'aurait cru. Son bout bas
+      // n'est donc plus LIBRE — il ne s'arrondit plus en pointe de quille,
+      // il est ENFOUI sous la main.
+      //
+      // Une manche s'arrete au meme endroit, et c'en est une vraie : le
+      // poignet fait la fin de la manche, la main repart en peau. C'est ce
+      // qui remplace la main-bouchon qu'on ne posait qu'aux habilles.
+      const kAv = kArm * (L.manches ? 1.12 : 1);
+      const zPo = PREM.bord(PR, 'forearm', niv, POIGNET);
       PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
-                  kArm * (L.manches ? 1.12 : 1), 0, LIBRE, SOUS_HAUT);
-      // au bout d'une manche, une main
-      if (L.manches) {
-        add(L.skin, E, aFore, [0.004, 0, -0.268], [0.032, 0.030], [0.028, 0.026],
-            0.030, yawTop, true);
-      }
+                  kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET);
+      mainDe(add, PREM, niv, E, aFore, zPo,
+             PREM.section(PR, 'forearm', niv, zPo, kAv), L.skin, kArm, yawTop);
       if (r.livre === side) livre = [E, aFore];
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
@@ -1887,12 +2113,7 @@
                   kLeg * (L.pantalon ? 1.18 : 1), 0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
       const An = Ap || [K[0] + a[0], K[1], K[2] + a[1]];
-      // semelle claire, legerement plus large : elle deborde sous la
-      // couleur de la chaussure pour suggerer une vraie basket bicolore.
-      add(SEMELLE, An, ft, [0.036, 0, -0.030], [0.098, 0.046],
-          [0.080, 0.052], 0.028, yF, true);
-      add(L.shoe, An, ft, [0.036, 0, -0.030], [0.086, 0.040], [0.070, 0.046],
-          0.028, yF, true);
+      chausser(add, PREM, An, ft, yF, L.shoe, niv);
     }
 
     // LE LIVRE DU PROF, OUVERT DANS SA MAIN.
