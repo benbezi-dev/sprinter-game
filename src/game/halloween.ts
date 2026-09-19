@@ -41,6 +41,16 @@
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
 import { molosseDe } from './halloween-molosse.js';
+// Les treize nuits et la loi de la bete vivent a part, dans un module sans le
+// moindre import : c'est ce qui permet au harnais de les charger seuls, sans
+// navigateur ni piste (voir tools/molosse-test.mjs).
+import { NUITS as NUITS_LOI, nuitDe as nuitDeLoi,
+         constantes, positionDe } from './halloween-loi.js';
+
+export const NUITS = NUITS_LOI as unknown as readonly Nuit[];
+
+/** La nuit de ce rang, ou la derniere si le rang deborde. */
+export function nuitDe(n: number): Nuit { return nuitDeLoi(n) as unknown as Nuit; }
 
 /** Une nuit : ce qu'elle laisse comme temps, et d'ou part la bete. */
 export type Nuit = {
@@ -51,60 +61,17 @@ export type Nuit = {
   /**
    * Le retard du molosse sur la ligne de depart, en metres.
    *
-   * IL NE CHANGE PRESQUE RIEN A LA DIFFICULTE, ET BEAUCOUP A CE QU'ON VOIT.
-   * Quel que soit ce retard, la bete franchit la ligne au temps imparti : elle
-   * part de plus loin et court d'autant plus vite. Ce qu'il regle, c'est la
-   * DISTANCE A LAQUELLE ELLE SE TIENT pendant la course — quatorze metres, on
-   * l'entend derriere soi ; cinq metres, on la voit dans le coin de l'ecran
-   * pendant dix secondes. C'est le levier de mise en scene des dernieres
-   * nuits.
+   * IL NE CHANGE RIEN A LA DIFFICULTE, ET BEAUCOUP A CE QU'ON VOIT. Quel que
+   * soit ce retard, la bete le comble au temps imparti et pas avant (voir
+   * `positionDe` dans halloween-loi.js). Ce qu'il regle, c'est la DISTANCE A
+   * LAQUELLE ELLE SE TIENT pendant la course — quatorze metres, on l'entend
+   * derriere soi ; cinq metres, on la voit dans le coin de l'ecran pendant
+   * huit secondes. C'est le levier de mise en scene des dernieres nuits.
    */
   retard: number;
   /** Le nom de la nuit, en francais et en anglais. */
   nom: [string, string];
 };
-
-/**
- * LES TREIZE NUITS.
- *
- * Treize, parce que c'est le nombre de la fete, et parce que treize paliers
- * suffisent a aller de « tout le monde y arrive » a « presque personne ».
- *
- * L'ECHELLE EST CELLE DU JEU, PAS CELLE DU REEL. Mesure sur cette physique, le
- * 100 m se court en 10,25 s a huit appuis par seconde, 9,22 s a dix, 8,87 s a
- * treize et 8,61 s a dix-sept (voir RACES['100'] dans sprinter-core.js). Les
- * treize nuits sont posees sur cette regle-la :
- *
- *   - la premiere laisse 13,00 s, soit trois secondes de marge a un joueur qui
- *     tape mollement. On y perd si l'on ne comprend pas qu'il faut courir, et
- *     c'est tout ce qu'elle demande ;
- *   - la septieme, 10,40 s, tombe juste au-dessus des huit appuis par seconde :
- *     c'est la que le mode commence a se jouer ;
- *   - la treizieme, 8,80 s, se prend entre treize et dix-sept appuis par
- *     seconde. Au-dessus de ce que le championnat demande a sa finale
- *     mondiale, sous ce que les ZEZE exigent. Elle doit rester atteignable —
- *     une derniere nuit imprenable ne serait pas une derniere nuit, juste un
- *     mur.
- *
- * Ces nombres sont des DECISIONS, pas des mesures : on ne les recalcule pas
- * depuis une formule. Le jour ou la physique du jeu changera, c'est la liste
- * qu'il faudra rejouer au pouce, pas une constante a ajuster.
- */
-export const NUITS: readonly Nuit[] = [
-  { n: 1,  imparti: 13.00, retard: 14, nom: ['La ruelle', 'The alley'] },
-  { n: 2,  imparti: 12.40, retard: 13, nom: ['Le portail', 'The gate'] },
-  { n: 3,  imparti: 11.90, retard: 12, nom: ['Les cypres', 'The cypresses'] },
-  { n: 4,  imparti: 11.45, retard: 12, nom: ['La lune rousse', 'The blood moon'] },
-  { n: 5,  imparti: 11.05, retard: 11, nom: ['Le caveau', 'The vault'] },
-  { n: 6,  imparti: 10.70, retard: 10, nom: ['Les corbeaux', 'The crows'] },
-  { n: 7,  imparti: 10.40, retard: 10, nom: ['La terre remuee', 'Turned earth'] },
-  { n: 8,  imparti: 10.15, retard: 9,  nom: ['Le glas', 'The knell'] },
-  { n: 9,  imparti: 9.95,  retard: 8,  nom: ['Les cendres', 'The ashes'] },
-  { n: 10, imparti: 9.78,  retard: 7,  nom: ['Le souffle', 'The breath'] },
-  { n: 11, imparti: 9.62,  retard: 7,  nom: ['La gueule', 'The jaws'] },
-  { n: 12, imparti: 9.48,  retard: 6,  nom: ['Minuit', 'Midnight'] },
-  { n: 13, imparti: 8.80,  retard: 5,  nom: ['La nuit du molosse', "The hound's night"] },
-];
 
 /** L'index du cimetiere municipal dans la table des etapes du moteur. */
 export function etapeDuCimetiere(): number {
@@ -115,11 +82,6 @@ export function etapeDuCimetiere(): number {
   // theorique — c'est exactement ce qui arriverait si le stade sortait un jour
   // du build sans que ce module le sache.
   return i >= 0 ? i : 4;
-}
-
-/** La nuit de ce rang, ou la derniere si le rang deborde. */
-export function nuitDe(n: number): Nuit {
-  return NUITS[Math.max(0, Math.min(NUITS.length - 1, n - 1))];
 }
 
 /* ---------------------------------------------------------------------------
@@ -134,8 +96,8 @@ export type Verdict = 'court' | 'passe' | 'mordu';
 
 type Chasse = {
   nuit: Nuit;
-  /** La distance que la bete doit couvrir : la course, plus son retard. */
-  course: number;
+  /** Le temps imparti, recopie ici : la loi de position s'en sert a chaque pas. */
+  T: number;
   /** Les deux constantes de la loi de vitesse (voir stepAI). */
   tau: number;
   vmax: number;
@@ -199,32 +161,20 @@ export function armerLaNuit(n: number) {
   const G = SprinterApp.G;
   const total = G && G.track ? G.track.total : 100;
 
-  // LA LOI DE VITESSE DES COUREURS DE L'ORDINATEUR, recopiee de stepAI.
-  //
-  //   d(t) = vmax x (t - tau x (1 - exp(-t / tau)))
-  //
-  // `tau` est le temps de montee en vitesse, borne comme dans le moteur ;
-  // `vmax` s'en deduit pour que la distance soit couverte exactement au temps
-  // vise. Poser ces deux nombres ici, plutot que d'appeler le moteur, est ce
-  // qui permet a un harnais de verifier la course de la bete sans piste.
+  // Les deux constantes de sa course, et la loi qui les utilise, vivent dans
+  // halloween-loi.js — avec les quarante lignes qui expliquent pourquoi le
+  // retard se comble lineairement. Rien de tout cela n'a besoin du moteur, et
+  // rien de tout cela ne doit donc dependre de lui.
   const T = nuit.imparti;
-  const course = total + nuit.retard;
-  const tau = Math.max(0.35, Math.min(1.10, T * 0.16));
-  const den = T - tau * (1 - Math.exp(-T / tau));
+  const { tau, vmax } = constantes(T, total);
 
   chasse = {
-    nuit, course, tau,
-    vmax: course / Math.max(0.01, den),
+    nuit, T, tau, vmax,
     d: -nuit.retard, v: 0,
     ecart: nuit.retard,
     verdict: 'court', chrono: 0, morsure: 0,
   };
 
-  // LE CROCHET, PLUTOT QU'UN IMPORT — la meme regle que pour les haies, et
-  // pour la meme raison. Le moteur ne connait pas le molosse et ne doit pas le
-  // connaitre : un import de ce module depuis engine.ts ferait repartir tout le
-  // mode dans le paquet public, ou il n'aurait rien a y faire une fois le
-  // drapeau ferme. La dependance va donc dans l'autre sens.
   if (G) {
     G.pasMolosse = pasDuMolosse;
     G.molosseMord = false;
@@ -275,7 +225,7 @@ export function pasDuMolosse(joueur: any) {
   const c = chasse;
 
   const avant = c.d;
-  c.d = -c.nuit.retard + c.vmax * (t - c.tau * (1 - Math.exp(-t / c.tau)));
+  c.d = positionDe(c.nuit, t, c.tau, c.vmax);
   // La vitesse se lit sur le deplacement plutot que sur la derivee : elle sert
   // au galop et au grognement, qui n'ont que faire d'une exactitude analytique,
   // et elle vaut zero a la premiere image sans cas particulier.
