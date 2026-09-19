@@ -61,6 +61,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
+import { FOND, OR, BLANC, ENCRE, LUEUR, encre, or, unite, RETRAIT_VIRGULE }
+  from '../src/game/palette-affiche.js';
 
 const ICI = path.dirname(new URL(import.meta.url).pathname);
 const RACINE = path.resolve(ICI, '..');
@@ -285,12 +287,15 @@ function page({ w, h }) {
 
 function pageAffiche({ w, h }) {
   const L = w, H = h;
-  const large = w > h;
   const marge = Math.round(L * 0.082);
-  // Le format large est trois fois moins haut que large : une taille exprimee
-  // en fraction de la LARGEUR y devient enorme. Le jeu la ramene a la hauteur,
-  // qui est la dimension rare de ce format-la — on fait pareil.
-  const u = large ? H * 0.62 : L;
+  // L'unite de mesure vient de la palette, et pas d'une ligne recopiee : un
+  // format large est trois fois moins haut que large, et une taille exprimee
+  // en fraction de sa LARGEUR y devient enorme. `unite` le sait pour tout le
+  // monde.
+  const u = unite(L, H);
+  // 0,08 * 100 ne fait pas 8 en virgule flottante. On arrondit avant d'ecrire
+  // un pourcentage, sinon la feuille de style porte « 8.000000000000002% ».
+  const pc = v => `${+(v * 100).toFixed(3)}%`;
   const T = t => Math.round(u * t);
   const hautY = Math.round(H * 0.105);
   const haut = hautY + Math.round(L * 0.055);
@@ -307,31 +312,32 @@ function pageAffiche({ w, h }) {
   ${enTetePolices()}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:${L}px;height:${H}px;overflow:hidden}
-  body{position:relative;background:#060913;
+  body{position:relative;background:${FOND};
        font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
   /* La lueur doree du jeu : centree en haut, large comme la carte. */
   .lueur{position:absolute;inset:0;
-         background:radial-gradient(circle ${Math.round(L * 0.85)}px at 50% 8%,
-                    rgba(248,205,74,.20) 0%,rgba(248,205,74,0) 100%)}
+         background:radial-gradient(circle ${Math.round(L * LUEUR.rayon)}px
+                    at ${pc(LUEUR.x)} ${pc(LUEUR.y)},
+                    ${or(LUEUR.alpha)} 0%,${or(0)} 100%)}
   .couloir{position:absolute;left:0;width:100%;height:${trait}px;opacity:.14;
-           background:linear-gradient(90deg,rgba(248,205,74,0) 0%,
-                      rgba(248,205,74,1) 50%,rgba(248,205,74,0) 100%)}
+           background:linear-gradient(90deg,${or(0)} 0%,
+                      ${or(1)} 50%,${or(0)} 100%)}
   /* L'etiquette de provenance ne participe pas au centrage : elle tient sa
      place quoi qu'il arrive, exactement comme dans le jeu. */
   .surtitre{position:absolute;top:${hautY}px;left:0;width:100%;text-align:center;
             font-weight:700;font-size:${Math.round(L * 0.0205)}px;
             letter-spacing:.36em;text-indent:.36em;text-transform:uppercase;
-            color:rgba(255,255,255,.46)}
+            color:${encre(ENCRE.surtitre)}}
   /* La zone ou le sujet a le droit de vivre, et il s'y centre. */
   .pile{position:absolute;left:${marge}px;right:${marge}px;
         top:${haut}px;height:${Math.round(basZone - haut)}px;
         display:flex;flex-direction:column;align-items:center;
         justify-content:center;text-align:center}
   h1{font-weight:900;font-size:${T(0.082)}px;line-height:${T(0.078)}px;
-     letter-spacing:-.022em;color:#fff;text-transform:uppercase;
+     letter-spacing:-.022em;color:${BLANC};text-transform:uppercase;
      margin-bottom:${T(0.03)}px}
   .chrono{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
-          font-weight:700;font-size:${T(0.20)}px;line-height:1;color:#F8CD4A}
+          font-weight:700;font-size:${T(0.20)}px;line-height:1;color:${OR}}
   /* LA VIRGULE NE PREND PAS UNE CHASSE ENTIERE. Space Mono est a chasse fixe :
      laissee telle quelle, elle fait lire « 8 , 64 » — deux nombres au lieu
      d'un. Le jeu lui donne deux cinquiemes de la chasse d'un chiffre
@@ -340,34 +346,34 @@ function pageAffiche({ w, h }) {
      Des marges negatives plutot qu'une fente etroite ou la centrer — la fente
      deplacait le trou au lieu de le boucher, la virgule allait se coller au
      chiffre suivant. */
-  .virgule{display:inline-block;margin:0 -.30ch}
-  .qui{font-size:${T(0.034)}px;color:rgba(255,255,255,.55);
+  .virgule{display:inline-block;margin:0 -${RETRAIT_VIRGULE}ch}
+  .qui{font-size:${T(0.034)}px;color:${encre(ENCRE.nom)};
        margin-top:${T(0.045)}px}
-  .etat{font-weight:600;font-size:${T(0.030)}px;color:rgba(248,205,74,.85);
+  .etat{font-weight:600;font-size:${T(0.030)}px;color:${or(0.85)};
         margin-top:${T(0.022)}px}
   /* LE CODE. L'affiche du jeu garde cette zone pour la trace de la course ;
      ici elle porte la seule chose qui ramene quelqu'un dans le jeu. */
   .billet{margin-top:${T(0.085)}px;padding-top:${T(0.055)}px;width:100%;
-          border-top:1px solid rgba(255,255,255,.10)}
+          border-top:1px solid ${encre(ENCRE.filet)}}
   .etiquette{font-weight:700;font-size:${T(0.022)}px;letter-spacing:.36em;
              text-indent:.36em;text-transform:uppercase;
-             color:rgba(255,255,255,.46);margin-bottom:${T(0.028)}px}
+             color:${encre(ENCRE.etiquette)};margin-bottom:${T(0.028)}px}
   .code{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
-        font-weight:700;font-size:${T(0.105)}px;line-height:1;color:#fff;
+        font-weight:700;font-size:${T(0.105)}px;line-height:1;color:${BLANC};
         letter-spacing:.12em;text-indent:.12em}
-  .lien{font-size:${T(0.026)}px;color:rgba(255,255,255,.38);
+  .lien{font-size:${T(0.026)}px;color:${encre(ENCRE.lien)};
         margin-top:${T(0.030)}px}
   /* Le pied du jeu, au pixel : meme filet, meme graisse, meme inter-lettrage. */
   .filet{position:absolute;left:${marge}px;right:${marge}px;
          top:${Math.round(H - marge * 1.5)}px;height:1px;
-         background:rgba(255,255,255,.10)}
+         background:${encre(ENCRE.filet)}}
   .pied{position:absolute;left:${marge}px;right:${marge}px;
         top:${Math.round(H - marge * 0.92)}px;transform:translateY(-50%);
         display:flex;justify-content:space-between;
         font-weight:700;font-size:${Math.round(L * 0.0205)}px;
         letter-spacing:${(L * 0.006).toFixed(1)}px;text-transform:uppercase}
-  .pied .g{color:rgba(255,255,255,.46)}
-  .pied .d{color:rgba(255,255,255,.30)}
+  .pied .g{color:${encre(ENCRE.pied)}}
+  .pied .d{color:${encre(ENCRE.piedDroit)}}
   </style>
   <div class="lueur"></div>
   ${couloirs}

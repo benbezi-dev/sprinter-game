@@ -44,6 +44,13 @@ import { SprinterApp } from './engine';
 import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
+// DEUX ORS, ET ON PREND CELUI DE LA PALETTE. `pinceau-film` exporte aussi un
+// `OR` — mais c'est `--primary`, la couleur de l'INTERFACE, qui suit le theme.
+// Celui-ci est le metal des medailles, fixe : un visuel doit sortir pareil
+// d'un post a l'autre, quelle que soit l'humeur du theme ce jour-la. Les deux
+// noms sont les memes, les deux couleurs non.
+import { FOND, OR, BLANC, ENCRE, LUEUR, encre, or, unite, RETRAIT_VIRGULE }
+  from './palette-affiche';
 
 /**
  * L'ADRESSE, ECRITE EN DUR.
@@ -67,22 +74,15 @@ const SITE = 'sprinter-game.com';
    maquettes et l'explique.
 
    Le carton de fin joue a l'arrivee de CHAQUE course, tous les jours. Il est
-   donc de la voix ordinaire, et il en reprend les valeurs une par une : un
-   joueur qui voit le post, puis l'ecran de fin, doit reconnaitre la meme main.
+   donc de la voix ordinaire, et il la prend a sa source : `palette-affiche.js`
+   porte les couleurs, les encres, la lueur et les deux regles de mesure, et
+   l'outil des cartes lit le meme fichier depuis node. Les valeurs etaient
+   recopiees ici ; elles ne le sont plus, parce qu'une copie de couleur diverge
+   au premier or qui bouge et qu'on ne le voit que dans le fil, trop tard.
 
-   Les nombres sont recopies de la maquette `pageAffiche`, qui les tient
-   elle-meme de `game/trace-affiche.js`. Un canvas ne lit pas une feuille de
-   style, et l'outil des cartes est un programme que le jeu n'embarque pas :
-   c'est la seule facon de les avoir des deux cotes. */
-
-const FOND      = '#060913';
-const OR_JEU    = '#F8CD4A';                 // le chrono, et la lueur
-const BLANC     = '#ffffff';                 // le code
-const ENCRE_46  = 'rgba(255,255,255,0.46)';  // surtitre, etiquette, pied gauche
-const ENCRE_55  = 'rgba(255,255,255,0.55)';  // le nom
-const ENCRE_38  = 'rgba(255,255,255,0.38)';  // l'adresse
-const ENCRE_30  = 'rgba(255,255,255,0.30)';  // pied droit
-const FILET     = 'rgba(255,255,255,0.10)';
+   Ce qui RESTE ici, ce sont les proportions — elles tiennent de
+   `game/trace-affiche.js`, qui en est la source, et les remonter dans la
+   palette ferait un troisieme niveau de copie au lieu d'en supprimer un.
 
 /** Le voile est pose en {V} sur cette part de la duree, puis il tient. */
 const OUVERTURE = 0.22;
@@ -163,7 +163,7 @@ function filet(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number,
                alpha: number) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = FILET;
+  ctx.strokeStyle = encre(ENCRE.filet);
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x1, Math.round(y) + 0.5);
@@ -194,7 +194,7 @@ function ecrireLeChrono(ctx: CanvasRenderingContext2D, txt: string, cx: number,
 
   const g = txt.slice(0, i), d = txt.slice(i + 1);
   const chasse = largeur(ctx, '0', e);
-  const retrait = chasse * 0.30;
+  const retrait = chasse * RETRAIT_VIRGULE;
   const lG = largeur(ctx, g, e), lSep = largeur(ctx, sep, e), lD = largeur(ctx, d, e);
   const total = lG + lSep - retrait * 2 + lD;
 
@@ -243,17 +243,17 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   ctx.globalAlpha = VOILE * doux;
   ctx.fillStyle = FOND;
   ctx.fillRect(0, 0, l, h);
-  const lueur = ctx.createRadialGradient(l * 0.5, h * 0.08, 0,
-                                         l * 0.5, h * 0.08, l * 0.85);
-  lueur.addColorStop(0, 'rgba(248,205,74,0.20)');
-  lueur.addColorStop(1, 'rgba(248,205,74,0)');
+  const lueur = ctx.createRadialGradient(l * LUEUR.x, h * LUEUR.y, 0,
+                                         l * LUEUR.x, h * LUEUR.y, l * LUEUR.rayon);
+  lueur.addColorStop(0, or(LUEUR.alpha));
+  lueur.addColorStop(1, or(0));
   ctx.fillStyle = lueur;
   ctx.fillRect(0, 0, l, h);
   ctx.restore();
   if (doux <= 0.02) return;
 
   const paysage = l > h;
-  const u = paysage ? h * 0.62 : l;
+  const u = unite(l, h);
   const T = (t: number) => Math.round(u * t);
   const M = Math.round(l * 0.082);
   const cx = l / 2;
@@ -285,7 +285,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   /* LE SURTITRE NE PARTICIPE PAS AU CENTRAGE. Il tient sa place quoi qu'il
      arrive, a 10,5 % de la hauteur — exactement comme dans le jeu. */
   if (epreuve) {
-    const e = { taille: tSur, gras: 700, police: AFFICHE, couleur: ENCRE_46,
+    const e = { taille: tSur, gras: 700, police: AFFICHE, couleur: encre(ENCRE.surtitre),
                 espace: tSur * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, tailler(ctx, `SPRINTER · ${epreuve}`, dispo, e), cx, Math.round(h * 0.105), e);
   }
@@ -304,7 +304,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
               + (1 - doux) * u * 0.03;
 
   if (chronoMs !== null) {
-    const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur: OR_JEU,
+    const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur: OR,
                 alpha: A() };
     ecrireLeChrono(ctx, chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true),
                    cx, y + tChrono / 2, e);
@@ -313,7 +313,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
 
   if (nom || epreuve) {
     y += T(0.045);
-    const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: ENCRE_55,
+    const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: encre(ENCRE.nom),
                 alpha: A(), aligne: 'center' as CanvasTextAlign };
     const dit = [nom, epreuve].filter(Boolean).join(' · ');
     ecrire(ctx, tailler(ctx, dit, dispo, e), cx, y + tQui / 2, e);
@@ -329,7 +329,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     filet(ctx, M, y, l - M, doux);
     y += T(0.055);
 
-    const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: ENCRE_46,
+    const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: encre(ENCRE.etiquette),
                  espace: tEtiq * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, String(N?.t ? N.t('carton_defi') : 'CODE'), cx, y + tEtiq / 2, eE);
     y += tEtiq * 1.4 + T(0.028);
@@ -350,7 +350,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     }
     y += tCode * 1.1 + T(0.030);
 
-    const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: ENCRE_38,
+    const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: encre(ENCRE.lien),
                  alpha: A(), aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, SITE, cx, y + tLien / 2, eL);
   }
@@ -362,9 +362,9 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   filet(ctx, M, h - M * 1.5, l - M, doux);
   const yPied = h - M * 0.92;
   const eP = { taille: tPied, gras: 700, police: AFFICHE, espace: l * 0.006 };
-  ecrire(ctx, 'SPRINTER', M, yPied, { ...eP, couleur: ENCRE_46, alpha: A() });
+  ecrire(ctx, 'SPRINTER', M, yPied, { ...eP, couleur: encre(ENCRE.pied), alpha: A() });
   ecrire(ctx, attendu ? String(N?.t ? N.t('carton_pied') : 'JEU DE SPRINT') : SITE,
          l - M, yPied,
-         { ...eP, couleur: attendu ? ENCRE_30 : OR_JEU, alpha: A(attendu ? 1 : 0.9),
+         { ...eP, couleur: attendu ? encre(ENCRE.piedDroit) : OR, alpha: A(attendu ? 1 : 0.9),
            espace: attendu ? l * 0.006 : l * 0.001, aligne: 'right' });
 }
