@@ -15,7 +15,7 @@
 //     sur 100 m et 9,12 s sur 400 m ne racontent pas la meme histoire ;
 //   LE CODE DU DEFI, quand il y en a un : celui qui regarde peut alors courir
 //     EXACTEMENT la meme course, contre le meme fantome ;
-//   L'ADRESSE, une fois, en bas a droite, sans point d'exclamation.
+//   L'ADRESSE, une fois, sans point d'exclamation.
 //
 // CE QU'IL NE FAIT PAS, ET C'EST VOULU. Pas de « abonne-toi », pas de « lien
 // en bio », pas de logo qui tourne. La charte de communication bannit ces
@@ -30,11 +30,11 @@
 // s'arrete, et la reponse met le temps qu'elle met. Le carton, lui, commence a
 // se peindre tout de suite.
 //
-// D'ou la place gardee. Des qu'un code est ATTENDU, sa pastille compte dans la
+// D'ou la place gardee. Des qu'un code est ATTENDU, il compte dans la
 // hauteur du bloc, meme vide : sans cela le bloc serait centre sans elle, puis
-// recentre avec, et tout sauterait d'un cran a l'instant ou le code se pose —
+// recentre avec, et tout sauterait d'un cran a l'instant ou il se pose —
 // au milieu d'un film qu'on ne peut plus remonter. La pastille apparait donc
-// en fondu, a sa place, et rien d'autre ne bouge.
+// Le code apparait donc en fondu, a sa place, et rien d'autre ne bouge.
 //
 // Et s'il n'arrive pas — hors ligne, serveur muet, course qui ne peut pas
 // faire un defi — le carton sort avec le chrono et l'adresse. Il se tait
@@ -43,7 +43,7 @@
 import { SprinterApp } from './engine';
 import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
-import { AFFICHE, CHIFFRES, boite, ecrire, largeur, tailler } from './pinceau-film';
+import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
 
 /**
  * L'ADRESSE, ECRITE EN DUR.
@@ -56,69 +56,33 @@ import { AFFICHE, CHIFFRES, boite, ecrire, largeur, tailler } from './pinceau-fi
  */
 const SITE = 'sprinter-game.com';
 
-/* ------------------------------------------------ la palette des cartes
+/* -------------------------------------------- la maquette « affiche »
 
-   CELLE DE LA COMMUNICATION, ET NON CELLE DU JEU. Le carton de fin n'est pas
-   du HUD : c'est la derniere image d'un film qui va se poser dans un fil, a
-   cote des cartes de `tools/carte-defi-ouvert.mjs`. Il en reprend donc les
-   valeurs, une par une.
+   CELLE DU JEU, ET C'EST UNE REGLE, PAS UN GOUT. Le style de Sprinter — fond
+   #060913, lueur doree en haut, Outfit 900, chrono en Space Mono dore, pied
+   « SPRINTER / JEU DE SPRINT » — est la VOIX ORDINAIRE des visuels du compte.
+   Le bleu nuit et le degrade orange sont celle des JOURS DE COMPETITION, quand
+   le compte parle d'autre chose que de lui : un record du monde, une finale,
+   un chrono d'ailleurs. Voir `tools/carte-defi-ouvert.mjs`, qui porte les deux
+   maquettes et l'explique.
 
-   Elles sont recopiees ici parce qu'un canvas ne lit pas une feuille de style,
-   et que le generateur des cartes est un outil de ligne de commande que le jeu
-   n'embarque pas. `tools/carte-defi-ouvert.mjs` reste la source : une retouche
-   la-bas se reporte ici, et les deux visuels doivent continuer de se ressembler
-   dans le meme fil.
+   Le carton de fin joue a l'arrivee de CHAQUE course, tous les jours. Il est
+   donc de la voix ordinaire, et il en reprend les valeurs une par une : un
+   joueur qui voit le post, puis l'ecran de fin, doit reconnaitre la meme main.
 
-   Le bleu est partout — le fond, son halo, et jusqu'aux gris, qui sont des
-   gris bleutes. L'or ne sert qu'a une chose, et c'est ce qui lui donne sa
-   force : le chrono, et l'adresse qui ramene au jeu. */
+   Les nombres sont recopies de la maquette `pageAffiche`, qui les tient
+   elle-meme de `game/trace-affiche.js`. Un canvas ne lit pas une feuille de
+   style, et l'outil des cartes est un programme que le jeu n'embarque pas :
+   c'est la seule facon de les avoir des deux cotes. */
 
-/** Le fond, et le halo qui detache la carte d'un fil clair comme d'un fil noir. */
-const FOND       = '#070b16';
-const HALO_COEUR = '#17213a';
-const HALO_MI    = '#101728';
-
-/** Le degre de l'or, de gauche a droite. Les memes arrets que la carte. */
-const OR_1 = '#fbc44e';
-const OR_2 = '#f7a03c';
-const OR_3 = '#ef7526';
-
-const GRIS_SUR   = '#8494ad';  // le surtitre
-const GRIS_SOUS  = '#93a2ba';  // la ligne sous le chrono
-const GRIS_ETIQ  = '#7e8da6';  // l'etiquette du code
-const FILET      = '#253049';  // les deux filets du billet
-const ENCRE      = '#eef2f8';  // le code, et tout ce qui doit se lire net
-const ENCRE_PAST = '#0a1020';  // le texte pose SUR l'or de la pastille
-
-/**
- * L'or du chrono, pose aux coordonnees du texte.
- *
- * Un degrade de canvas vit dans l'espace du canvas et non dans celui de la
- * lettre : le construire sur toute la largeur de l'image donnerait a un chrono
- * centre les seules teintes du milieu. On le tend donc d'un bord a l'autre du
- * mot, comme le `background-clip: text` de la carte le fait.
- */
-function orDe(ctx: CanvasRenderingContext2D, x: number, l: number): CanvasGradient {
-  const g = ctx.createLinearGradient(x, 0, x + l, 0);
-  g.addColorStop(0.04, OR_1);
-  g.addColorStop(0.48, OR_2);
-  g.addColorStop(0.96, OR_3);
-  return g;
-}
-
-/**
- * LE CHRONO, ECRIT COMME LES CARTES L'ECRIVENT.
- *
- * Virgule en francais, point en anglais. Le HUD, lui, garde le point partout :
- * il compte pendant la course, il n'est pas lu, il est surveille. Le carton de
- * fin est l'inverse — une image qui se pose dans un fil, a cote des cartes de
- * `tools/carte-*.mjs`, qui ecrivent « 8,64 ». Deux conventions dans le meme
- * fil, sur le meme chrono, et c'est le jeu qui a l'air mal fini.
- */
-function chronoEcrit(ms: number, fr: boolean): string {
-  const s = (ms / 1000).toFixed(2);
-  return fr ? s.replace('.', ',') : s;
-}
+const FOND      = '#060913';
+const OR_JEU    = '#F8CD4A';                 // le chrono, et la lueur
+const BLANC     = '#ffffff';                 // le code
+const ENCRE_46  = 'rgba(255,255,255,0.46)';  // surtitre, etiquette, pied gauche
+const ENCRE_55  = 'rgba(255,255,255,0.55)';  // le nom
+const ENCRE_38  = 'rgba(255,255,255,0.38)';  // l'adresse
+const ENCRE_30  = 'rgba(255,255,255,0.30)';  // pied droit
+const FILET     = 'rgba(255,255,255,0.10)';
 
 /** Le voile est pose en {V} sur cette part de la duree, puis il tient. */
 const OUVERTURE = 0.22;
@@ -136,6 +100,18 @@ const POSE_CODE_MS = 280;
 
 /** Ce que le voile laisse passer du stade, une fois pose. */
 const VOILE = 0.9;
+
+/**
+ * LE CHRONO, ECRIT COMME LES CARTES L'ECRIVENT.
+ *
+ * Virgule en francais, point en anglais. Le HUD, lui, garde le point partout :
+ * il compte pendant la course, il n'est pas lu, il est surveille. Le carton de
+ * fin est l'inverse — une image qui se pose dans un fil, a cote des cartes.
+ */
+function chronoEcrit(ms: number, fr: boolean): string {
+  const s = (ms / 1000).toFixed(2);
+  return fr ? s.replace('.', ',') : s;
+}
 
 /* ------------------------------------------------------------- ce qu'il dit */
 
@@ -182,6 +158,55 @@ function chronoDuCarton(G: any): number | null {
 
 /* --------------------------------------------------------------- la peinture */
 
+/** Un filet, de marge a marge. */
+function filet(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number,
+               alpha: number) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = FILET;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x1, Math.round(y) + 0.5);
+  ctx.lineTo(x2, Math.round(y) + 0.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * LE CHRONO, ET SA VIRGULE QUI NE PREND PAS UNE CHASSE ENTIERE.
+ *
+ * Space Mono est a chasse fixe : la virgule y occupe la case d'un chiffre, et
+ * « 9,12 » se lit alors « 9 , 12 » — deux nombres au lieu d'un. La maquette
+ * lui retire trois dixiemes de chasse de chaque cote (`.virgule`, marges
+ * negatives) ; le jeu fait de meme dans `morceauxChrono`. On decoupe donc le
+ * chrono en trois et on rapproche, plutot que de poser une chaine d'un bloc.
+ *
+ * Le point anglais a exactement le meme defaut, et recoit le meme traitement :
+ * la maquette ne le traite pas parce qu'elle n'ecrit qu'en francais.
+ *
+ * Rend la largeur prise, pour que l'appelant sache ou il en est.
+ */
+function ecrireLeChrono(ctx: CanvasRenderingContext2D, txt: string, cx: number,
+                        y: number, e: any): number {
+  const sep = txt.includes(',') ? ',' : '.';
+  const i = txt.indexOf(sep);
+  if (i < 0) { ecrire(ctx, txt, cx, y, { ...e, aligne: 'center' }); return largeur(ctx, txt, e); }
+
+  const g = txt.slice(0, i), d = txt.slice(i + 1);
+  const chasse = largeur(ctx, '0', e);
+  const retrait = chasse * 0.30;
+  const lG = largeur(ctx, g, e), lSep = largeur(ctx, sep, e), lD = largeur(ctx, d, e);
+  const total = lG + lSep - retrait * 2 + lD;
+
+  let x = cx - total / 2;
+  ecrire(ctx, g, x, y, e);
+  x += lG - retrait;
+  ecrire(ctx, sep, x, y, e);
+  x += lSep - retrait;
+  ecrire(ctx, d, x, y, e);
+  return total;
+}
+
 /**
  * Peint le carton par-dessus l'image gelee de l'arrivee.
  *
@@ -189,16 +214,15 @@ function chronoDuCarton(G: any): number | null {
  * l'echelle de l'appareil. `avancement` va de 0 a 1 sur la duree du carton :
  * il ne sert qu'a l'entree, le carton tenant ensuite immobile jusqu'a la fin.
  *
- * `defi` est l'etat du defi de la camera, et il se lit tout seul : le
- * film ne le passe jamais. Il est la pour la page d'apercu, qui doit pouvoir
- * montrer les trois etats du code — absent, attendu, arrive — sans attendre
- * un serveur ni tripatouiller l'etat d'un module depuis le dehors.
+ * `defi` est l'etat du defi de la camera, et il se lit tout seul : le film ne
+ * le passe jamais. Il est la pour la page d'apercu, qui doit pouvoir montrer
+ * les trois etats du code — absent, attendu, arrive — sans attendre un serveur
+ * ni tripatouiller l'etat d'un module depuis le dehors.
  *
- * TOUT SE MESURE SUR LE PLUS PETIT COTE. Un telephone tenu droit, le meme
- * couche, un navigateur sur un ecran large : le film sort dans les trois
- * formats, et un carton cale sur la largeur deborderait du premier ou se
- * perdrait dans le dernier. Le plus petit cote est la seule mesure qui donne
- * le meme carton, a la meme place, dans les trois.
+ * L'UNITE DE MESURE EST CELLE DE LA MAQUETTE, et elle n'est pas le plus petit
+ * cote : c'est la LARGEUR en portrait, et 62 % de la hauteur en paysage. Un
+ * format large est trois fois moins haut que large — une taille exprimee en
+ * fraction de sa largeur y devient enorme, et le chrono mangerait le cadre.
  */
 export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: number,
                                 avancement: number, defi: DefiDeLaCamera = defiDeLaCamera()) {
@@ -210,45 +234,38 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   // monter tout droit — c'est ce qui le fait ressembler a une fin et non a une
   // coupure de courant.
   const doux = 1 - (1 - ouvert) * (1 - ouvert);
+  const A = (v = 1) => v * doux;
 
-  // LE VOILE, ET SON HALO. Un aplat sombre ferait un trou dans l'image. La
-  // carte pose un halo bleu au centre — c'est ce qui la detache d'un fil clair
-  // comme d'un fil noir — et le carton le refait par-dessus l'arrivee gelee.
-  //
-  // Le halo de la carte est une ELLIPSE (88 % sur 62 %) ; un degrade radial de
-  // canvas est rond. On prend le plus grand des deux rayons : la difference ne
-  // se voit pas sur un fond aussi sombre, et une ellipse demanderait de
-  // deformer le contexte autour du trace — trois lignes de plus pour rien.
-  const halo = ctx.createRadialGradient(l * 0.5, h * 0.46, 0,
-                                        l * 0.5, h * 0.46,
-                                        Math.max(l * 0.88, h * 0.62));
-  halo.addColorStop(0, HALO_COEUR);
-  halo.addColorStop(0.46, HALO_MI);
-  halo.addColorStop(1, FOND);
+  // LE FOND DU JEU, ET SA LUEUR. Un aplat ferait un trou dans l'image ; la
+  // lueur doree en haut est la signature de l'affiche, et c'est elle qui fait
+  // reconnaitre le jeu avant meme qu'on ait lu un mot.
   ctx.save();
   ctx.globalAlpha = VOILE * doux;
-  ctx.fillStyle = halo;
+  ctx.fillStyle = FOND;
+  ctx.fillRect(0, 0, l, h);
+  const lueur = ctx.createRadialGradient(l * 0.5, h * 0.08, 0,
+                                         l * 0.5, h * 0.08, l * 0.85);
+  lueur.addColorStop(0, 'rgba(248,205,74,0.20)');
+  lueur.addColorStop(1, 'rgba(248,205,74,0)');
+  ctx.fillStyle = lueur;
   ctx.fillRect(0, 0, l, h);
   ctx.restore();
   if (doux <= 0.02) return;
 
-  const base = Math.min(l, h);
-  const M = Math.round(base * 0.07);
+  const paysage = l > h;
+  const u = paysage ? h * 0.62 : l;
+  const T = (t: number) => Math.round(u * t);
+  const M = Math.round(l * 0.082);
   const cx = l / 2;
   const dispo = l - M * 2;
 
-  // Les corps suivent ceux des cartes : un surtitre discret et lettre, un
-  // chrono qui prend toute la place, et LE CODE JUSTE DERRIERE LUI. Sur
-  // Instagram et TikTok aucun lien n'est cliquable — le code a six caracteres
-  // est le seul chemin vers le jeu, et il doit se lire sur un telephone tenu
-  // a bout de bras, dans un fil qui defile. C'est ce qui lui vaut sa taille et
-  // son inter-lettrage : un code se recopie caractere par caractere.
-  const tSur    = Math.round(base * 0.034);
-  const tChrono = Math.round(base * 0.220);
-  const tNom    = Math.round(base * 0.040);
-  const tEtiq   = Math.round(base * 0.030);
-  const tCode   = Math.round(base * 0.085);
-  const tPast   = Math.round(base * 0.036);
+  const tSur   = Math.round(l * 0.0205);
+  const tChrono = T(0.20);
+  const tQui   = T(0.034);
+  const tEtiq  = T(0.022);
+  const tCode  = T(0.105);
+  const tLien  = T(0.026);
+  const tPied  = Math.round(l * 0.0205);
 
   const epreuve = libelleEpreuves(G, N);
   const chronoMs = chronoDuCarton(G);
@@ -256,168 +273,98 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
 
   // DEUX PROVENANCES, ET LA PREMIERE PASSE DEVANT. Un joueur qui vient de
   // relever un defi a deja le bon code en main, sans un aller-retour : c'est
-  // celui de la course qu'on regarde. Sinon c'est celui que la camera a
-  // pose a l'arrivee, et il peut n'etre pas encore la.
+  // celui de la course qu'on regarde. Sinon c'est celui que la camera a pose a
+  // l'arrivee, et il peut n'etre pas encore la.
   const releve = String(G?.challenge?.id || '').trim();
-  const duFilm = defi;
-  const code = releve || duFilm.id;
-  // Attendu vaut place gardee : voir l'en-tete du fichier.
-  const attendu = !!releve || duFilm.attendu;
-  // Un code deja en main se pose avec le carton ; un code qui arrive du
-  // reseau a son propre petit fondu, compte depuis son arrivee.
-  const poseCode = releve || !duFilm.arriveA
+  const code = releve || defi.id;
+  const attendu = !!releve || defi.attendu;
+  const poseCode = releve || !defi.arriveA
     ? 1
-    : Math.max(0, Math.min(1, (performance.now() - duFilm.arriveA) / POSE_CODE_MS));
+    : Math.max(0, Math.min(1, (performance.now() - defi.arriveA) / POSE_CODE_MS));
 
-  // LE BILLET DU CODE : deux filets, une etiquette, le code, l'adresse. Il
-  // n'existe que si un code est attendu — sans lui l'adresse redescend dans le
-  // pied, et le carton ne perd rien de ce qu'il devait dire.
-  const hEtiq   = tEtiq * 2.0;
-  const hLigne  = tCode * 1.35;
-  const hBillet = attendu ? tEtiq * 1.5 + hEtiq + hLigne + tEtiq * 1.5 : 0;
-
-  // LA PASTILLE DE L'ADRESSE SUIT LE TEXTE, elle n'est pas collee au bas du
-  // cadre. C'est ainsi que la carte l'enchaine, et cela vaut mieux ici aussi :
-  // ancree en bas d'une image de telephone, elle laissait un trou de deux
-  // cents points entre le code et elle — deux blocs au lieu d'un.
-  const hPast   = tPast * 2.1;
-  const hAvantPast = tPast * 1.6;
-
-  const hSur    = epreuve ? tSur * 1.9 : 0;
-  const hChrono = chronoMs !== null ? tChrono * 1.16 : 0;
-  const hNom    = nom ? tNom * 2.2 : 0;
-  const hBloc   = hSur + hChrono + hNom + hBillet + hAvantPast + hPast;
-
-  // Le bloc est centre un peu au-dessus du milieu — le centre optique d'un
-  // cadre est au-dessus de son centre geometrique — et jamais si haut qu'il
-  // monte dans la marge, ni si bas qu'il sorte par le bas.
-  const y0 = Math.max(M * 1.2,
-                      Math.min((h - hBloc) / 2 - base * 0.02, h - M - hBloc));
-  // L'entree : le bloc monte de trois points sur sa derniere fraction de
-  // seconde. Le voile, lui, ne bouge pas — sans quoi l'image entiere glisserait.
-  let y = y0 + (1 - doux) * base * 0.03;
-  const A = (v = 1) => v * doux;
-
+  /* LE SURTITRE NE PARTICIPE PAS AU CENTRAGE. Il tient sa place quoi qu'il
+     arrive, a 10,5 % de la hauteur — exactement comme dans le jeu. */
   if (epreuve) {
-    // « SPRINTER · 100 MÈTRES » : le nom du jeu d'abord, comme sur les cartes.
-    // Celui qui recoit la video ne sait pas encore de quoi il s'agit.
-    const e = { taille: tSur, gras: 700, police: CHIFFRES, couleur: GRIS_SUR,
-                espace: tSur * 0.34, alpha: A(0.95),
-                aligne: 'center' as CanvasTextAlign };
-    ecrire(ctx, tailler(ctx, `SPRINTER · ${epreuve}`, dispo, e), cx, y + tSur / 2, e);
-    y += hSur;
+    const e = { taille: tSur, gras: 700, police: AFFICHE, couleur: ENCRE_46,
+                espace: tSur * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
+    ecrire(ctx, tailler(ctx, `SPRINTER · ${epreuve}`, dispo, e), cx, Math.round(h * 0.105), e);
   }
+
+  /* LA PILE : la zone ou le sujet a le droit de vivre, et il s'y centre. */
+  const haut = Math.round(h * 0.105) + Math.round(l * 0.055);
+  const basZone = h - M * 2.1;
+
+  const hChrono = chronoMs !== null ? tChrono * 1.05 : 0;
+  const hQui    = nom || epreuve ? T(0.045) + tQui * 1.4 : 0;
+  const hBillet = attendu ? T(0.085) + T(0.055) + tEtiq * 1.4 + T(0.028)
+                          + tCode * 1.1 + T(0.030) + tLien * 1.4 : 0;
+  const hPile   = hChrono + hQui + hBillet;
+
+  let y = haut + Math.max(0, (basZone - haut - hPile) / 2)
+              + (1 - doux) * u * 0.03;
 
   if (chronoMs !== null) {
-    // « 9,12 s » d'un seul tenant, unite comprise, et tout dans le meme or :
-    // c'est ainsi que la carte l'ecrit. Le degrade se tend d'un bord a l'autre
-    // du mot — voir `orDe`.
-    const e0 = { taille: tChrono, gras: 900, police: AFFICHE,
-                 espace: -tChrono * 0.02 };
-    const txt = `${chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true)} s`;
-    const lTxt = largeur(ctx, txt, e0);
-    const x0 = cx - lTxt / 2;
-    ecrire(ctx, txt, x0, y + tChrono / 2,
-           { ...e0, couleur: orDe(ctx, x0, lTxt), alpha: A() });
+    const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur: OR_JEU,
+                alpha: A() };
+    ecrireLeChrono(ctx, chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true),
+                   cx, y + tChrono / 2, e);
     y += hChrono;
-  } else if (epreuve) {
-    // Sans chrono, l'epreuve reprend la place du chiffre plutot que de laisser
-    // un carton a moitie vide. Le cas est rare — une prise arretee sans que le
-    // coureur ait franchi la ligne — mais il ne doit pas sortir un trou.
-    const t0 = Math.round(base * 0.1);
-    const e0 = { taille: t0, gras: 900, police: AFFICHE, espace: base * 0.004 };
-    const txt = tailler(ctx, epreuve, dispo, e0);
-    const lTxt = largeur(ctx, txt, e0);
-    const x0 = cx - lTxt / 2;
-    ecrire(ctx, txt, x0, y + base * 0.06,
-           { ...e0, couleur: orDe(ctx, x0, lTxt), alpha: A() });
-    y += base * 0.14;
   }
 
-  if (nom) {
-    const e = { taille: tNom, gras: 600, couleur: GRIS_SOUS, espace: tNom * 0.10,
-                alpha: A(0.95), aligne: 'center' as CanvasTextAlign };
-    ecrire(ctx, tailler(ctx, nom.toUpperCase(), dispo, e), cx, y + tNom / 2, e);
-    y += hNom;
+  if (nom || epreuve) {
+    y += T(0.045);
+    const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: ENCRE_55,
+                alpha: A(), aligne: 'center' as CanvasTextAlign };
+    const dit = [nom, epreuve].filter(Boolean).join(' · ');
+    ecrire(ctx, tailler(ctx, dit, dispo, e), cx, y + tQui / 2, e);
+    y += tQui * 1.4;
   }
 
-  // LE BILLET DU CODE. Deux filets, une etiquette, le code, l'adresse — le
-  // meme bloc que les cartes de communication, pour la meme raison : c'est la
-  // seule partie de l'image qu'on doit pouvoir recopier.
-  //
-  // La place est comptee des que le code est ATTENDU, meme s'il n'est pas
-  // encore la. Le filet, l'etiquette et l'adresse se posent avec le carton ;
-  // seul le code a son fondu a lui, compte depuis son arrivee.
+  /* LE BILLET. L'affiche du jeu garde cette zone pour la trace de la course ;
+     ici elle porte la seule chose qui ramene quelqu'un dans le jeu. Un seul
+     filet, en haut — c'est ce que fait la maquette. */
   if (attendu) {
     const P = (v = 1) => v * doux * poseCode;
-    const haut = y;
-    filet(ctx, M, haut, l - M, doux);
-    let yb = haut + tEtiq * 1.4;
+    y += T(0.085);
+    filet(ctx, M, y, l - M, doux);
+    y += T(0.055);
 
-    ecrire(ctx, String(N?.t ? N.t('carton_defi') : 'CODE'), cx, yb + tEtiq / 2,
-           { taille: tEtiq, gras: 700, police: CHIFFRES, couleur: GRIS_ETIQ,
-             espace: tEtiq * 0.34, alpha: A(0.95), aligne: 'center' });
-    yb += hEtiq;
+    const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: ENCRE_46,
+                 espace: tEtiq * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
+    ecrire(ctx, String(N?.t ? N.t('carton_defi') : 'CODE'), cx, y + tEtiq / 2, eE);
+    y += tEtiq * 1.4 + T(0.028);
 
     if (code) {
-      const e = { taille: tCode, gras: 700, police: CHIFFRES, couleur: ENCRE,
-                  espace: tCode * 0.10, alpha: P() };
+      const e = { taille: tCode, gras: 700, police: CHIFFRES, couleur: BLANC,
+                  espace: tCode * 0.12, alpha: P() };
       // CENTRER UN TEXTE LETTRE. `letterSpacing` ajoute son espace APRES chaque
-      // caractere, le dernier compris : un `textAlign: center` cale donc le
-      // code d'un demi-espace trop a gauche. On mesure avec et sans pour
-      // retrancher exactement le dernier — et l'ecart vaut zero de lui-meme
-      // sur les navigateurs qui ignorent `letterSpacing`, ou rien n'est
-      // ajoute. La feuille de style de la carte fait la meme correction, sous
+      // caractere, le dernier compris : un `textAlign: center` calerait le code
+      // d'un demi-espace trop a gauche. On mesure avec et sans pour retrancher
+      // exactement le dernier — et l'ecart vaut zero de lui-meme la ou
+      // `letterSpacing` n'existe pas. La maquette fait la meme correction, sous
       // le nom de `text-indent`.
       const lLettre = largeur(ctx, code, e);
       const lNu = largeur(ctx, code, { ...e, espace: 0 });
       const trop = code.length ? (lLettre - lNu) / code.length : 0;
-      ecrire(ctx, code, cx - (lLettre - trop) / 2, yb + hLigne / 2, e);
+      ecrire(ctx, code, cx - (lLettre - trop) / 2, y + tCode / 2, e);
     }
-    filet(ctx, M, haut + hBillet, l - M, doux);
-    y += hBillet;
+    y += tCode * 1.1 + T(0.030);
+
+    const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: ENCRE_38,
+                 alpha: A(), aligne: 'center' as CanvasTextAlign };
+    ecrire(ctx, SITE, cx, y + tLien / 2, eL);
   }
 
-  pastilleDeLAdresse(ctx, l, M, y + hAvantPast, tPast, hPast, doux);
-}
-
-/**
- * L'ADRESSE, EN PASTILLE — et non en ligne de texte.
- *
- * C'est le geste de la carte, et sa raison est bonne : sur un fond bleu nuit,
- * une adresse en or se survole du regard. C'est la derniere chose que l'oeil
- * accroche avant de passer au film suivant, et la seule chose du carton dont
- * on ne peut pas se passer — elle est donc la avec ou sans code.
- */
-function pastilleDeLAdresse(ctx: CanvasRenderingContext2D, l: number, M: number,
-                            y: number, t: number, hPast: number, doux: number) {
-  const cx = l / 2;
-  const e = { taille: t, gras: 700, police: AFFICHE, couleur: ENCRE_PAST,
-              espace: t * 0.005, alpha: doux };
-  const padX = t * 1.45;
-  const lPast = Math.min(l - M * 2, largeur(ctx, SITE, e) + padX * 2);
-  const x = cx - lPast / 2;
-
-  ctx.save();
-  ctx.globalAlpha = doux;
-  boite(ctx, x, y, lPast, hPast, hPast / 2);
-  ctx.fillStyle = orDe(ctx, x, lPast);
-  ctx.fill();
-  ctx.restore();
-
-  ecrire(ctx, SITE, cx, y + hPast / 2, { ...e, aligne: 'center' });
-}
-
-/** Un filet, de marge a marge. Les deux bords du billet. */
-function filet(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number,
-               doux: number) {
-  ctx.save();
-  ctx.globalAlpha = doux;
-  ctx.strokeStyle = FILET;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x1, Math.round(y) + 0.5);
-  ctx.lineTo(x2, Math.round(y) + 0.5);
-  ctx.stroke();
-  ctx.restore();
+  /* LE PIED DU JEU, AU PIXEL : meme filet, meme graisse, meme inter-lettrage.
+     A droite, la signature quand le billet porte deja l'adresse — et l'adresse
+     elle-meme sinon. Elle ne disparait jamais : c'est la seule chose du carton
+     dont on ne peut pas se passer. */
+  filet(ctx, M, h - M * 1.5, l - M, doux);
+  const yPied = h - M * 0.92;
+  const eP = { taille: tPied, gras: 700, police: AFFICHE, espace: l * 0.006 };
+  ecrire(ctx, 'SPRINTER', M, yPied, { ...eP, couleur: ENCRE_46, alpha: A() });
+  ecrire(ctx, attendu ? String(N?.t ? N.t('carton_pied') : 'JEU DE SPRINT') : SITE,
+         l - M, yPied,
+         { ...eP, couleur: attendu ? ENCRE_30 : OR_JEU, alpha: A(attendu ? 1 : 0.9),
+           espace: attendu ? l * 0.006 : l * 0.001, aligne: 'right' });
 }
