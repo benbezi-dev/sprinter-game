@@ -1,3 +1,27 @@
+# CE SCRIPT NE SERT PAS AU JEU, ET IL FAUT LE SAVOIR AVANT DE LE RELANCER.
+#
+# Il a ete ecrit pour remplacer le trace du molosse par des images rendues.
+# La mesure l'a condamne apres coup, et elle est simple : `scaleM()` vaut
+# `ui() * 30` en ligne droite, `ui() * 44` en courbe — UNE CONSTANTE PAR
+# COURSE, sans terme de distance. La bete fait 49 x 26 pixels du premier
+# metre au dernier, et ne grandit jamais. A cette taille un rendu ne montre
+# rien qu'un trace ne montre deja.
+#
+# Les huit images rendues ont donc ete retirees de public/ : posees la, elles
+# partaient dans les DEUX builds — y compris le public, ou le mode n'existe
+# pas — sans qu'aucun drapeau ne puisse les retenir, puisque public/ est
+# recopie tel quel.
+#
+# CE QU'IL RESTE DE VRAI ICI, et c'est pourquoi on le garde : ce que les
+# metaballs demandent pour faire une bete d'un seul tenant. Elles ne fusionnent
+# que par la DENSITE et une RIGIDITE BASSE, jamais par la resolution ; et une
+# patte fine veut vingt-quatre masses la ou cinq donnaient un chapelet de
+# billes. Si un jour une image du molosse doit etre rendue en grand — une
+# affiche, un carton, une vignette de partage — cela se reprend ici.
+#
+# Pour le jeu, ce qui compte se joue dans game/halloween-molosse.js : la
+# silhouette, le rythme du galop, et les deux yeux.
+
 # -----------------------------------------------------------------------
 # LA NUIT DU MOLOSSE — la bete, sculptee et rendue sous la vue du jeu.
 #
