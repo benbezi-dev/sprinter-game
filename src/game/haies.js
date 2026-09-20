@@ -96,11 +96,14 @@ export const RECORDS = {
  * ET UN CHANTIER OUVERT, SU ET ASSUME : LE NIVEAU DES ZEZE. Ces nombres ont
  * ete poses quand le jeu tournait a un plafond de vitesse reduit ; il a repris
  * depuis celui de Sprinter (voir HAIES plus bas), et il va donc plus vite que
- * l'echelle ne le prevoit. Mesure sur le 110 m haies : 13,80 s a huit frappes
- * par seconde, 11,70 a dix, 11,25 a douze — le dernier plateau se gagne des
- * dix frappes quand Sprinter en demande treize a quatorze. Les deux derniers
- * niveaux sont a redescendre, et le 400 m haies demande sa propre reponse.
- * Neuf verifications des harnais le disent, et elles ont raison de le dire.
+ * l'echelle ne le prevoit. Mesure sur le 110 m haies, releve le 20 septembre
+ * 2026 : 11,93 s a huit frappes par seconde, 11,13 a dix, 10,88 a douze — le
+ * dernier plateau se gagne des huit frappes quand Sprinter en demande treize
+ * a quatorze. (Ce paragraphe annoncait 13,80 / 11,70 / 11,25 : le moteur a
+ * encore gagne en vitesse depuis, et l'ecart s'est donc creuse.) Les deux
+ * derniers niveaux sont a redescendre, et le 400 m haies a recu sa propre
+ * reponse au niveau 6 sans que cela suffise. Les harnais le disent, et ils
+ * ont raison de le dire.
  */
 const BAREME = [
   [17.50, 19.00],   // 1 — scolaire
@@ -122,15 +125,22 @@ const BAREME = [
  *
  * Deduit du 110 m, il aurait valu 44,15 a 45,76 — a un cheveu du record du
  * monde (45,94), alors que Sprinter place ses ZEZE neuf pour cent dessous.
- * Un premier passage l'avait pose a 42,00-43,50, et c'etait encore trop
- * large : le jeu y descend a 40,13 s avec un doigt a huit frappes par
- * seconde, si bien que le dernier plateau tombait sans qu'on l'ait cherche.
- * La fourchette est desormais serree autour de ce que le jeu donne vraiment.
+ * Un premier passage l'avait pose a 42,00-43,50, puis a 40,80-41,20. Il vaut
+ * 40,10 a 41,00 depuis le 20 septembre 2026, decide au pouce comme les
+ * douze autres.
+ *
+ * CE QUE CETTE FOURCHETTE FERME, ET CE QU'ELLE LAISSE OUVERT. Elle rend le
+ * niveau ATTEIGNABLE — 8,2 frappes par seconde donnent 40,60 s, qui tombe
+ * dedans, la ou 40,80-41,20 etait enjambe par le pas du chrono. Elle ne
+ * ferme pas le chantier des deux derniers niveaux : le jeu descend a 40,13 s
+ * a huit frappes et a 36,98 a douze, si bien que le dernier plateau se gagne
+ * encore a basse cadence. Deux verifications le disent toujours, et elles
+ * ont toujours raison de le dire.
  *
  * L'index est celui du plateau, de 0 a 5.
  */
 const BAREME_PROPRE = {
-  '400h': { 5: [40.80, 41.20] },
+  '400h': { 5: [40.10, 41.00] },
 };
 
 /**
