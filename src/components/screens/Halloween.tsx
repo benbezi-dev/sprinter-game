@@ -3,7 +3,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE } from '@/lib/mouvement';
 import { editionActive, EDITION_HALLOWEEN } from '@/game/edition';
-import { EST_TEST } from '@/game/canal';
+import { EST_TEST, HALLOWEEN_2026_OUVERT } from '@/game/canal';
+import {
+  NB_NUITS as CAL_NB, ouvertureDe, blocageDe, nuitsJouables,
+  maintenant, simuler, jourSimule, sourceDuTemps, decalageDeLAppareil,
+} from '@/game/halloween-calendrier';
+import { reglerLHorloge, horlogeImmediate } from '@/game/halloween-horloge';
 import {
   NUITS, nuitDe, nuitOuverte, carnet, chronoDe, etapeDuCimetiere,
   armerLaNuit, rangerLaNuit, nuitEnCours, nuitCourante, etatDeLaChasse,
@@ -182,11 +187,160 @@ export function BanderoleMolosse() {
  * pour y poser deux dixiemes de moins est exactement ce qu'on a envie de faire
  * quand la nuit 9 resiste.
  */
+/* ===========================================================================
+   L'EDITION DATEE — une nuit par jour, du 19 au 31 octobre
+   ===========================================================================
+   Le mode a d'abord vecu sans calendrier : les treize nuits s'enchainaient a
+   la victoire, et on pouvait toutes les courir dans la soiree. L'edition 2026
+   ajoute la DATE — une nuit par jour — et garde la victoire. Il faut donc les
+   DEUX pour ouvrir une nuit.
+
+   CE QUI SE DECIDE ICI ET CE QUI SE DECIDE AILLEURS. Tout le calcul est dans
+   game/halloween-calendrier.ts, ou un harnais l'eprouve sur les fuseaux, le
+   changement d'heure et les trois garde-fous contre la montre avancee. Cet
+   ecran ne fait que LIRE ce calcul et le dire. La seule chose qu'il tranche,
+   c'est ce que le canal de test change — et c'est le §9 bis du brief.
+
+   SUR /test, TOUT EST OUVERT PAR DEFAUT, et c'est la raison d'etre du canal :
+   la premiere nuit ouvre le 19 octobre, et sans cela un testeur du mois de
+   septembre trouverait treize cartes scellees et rien a essayer. Le voyageur
+   temporel, lui, REMET les verrous tels qu'un joueur les aura ce jour-la :
+   c'est l'outil qui permet de verifier le calendrier sans attendre octobre.
+=========================================================================== */
+
+/** Le jour choisi par le voyageur temporel, ou `null` pour l'heure reelle. */
+function useVoyageur(): [number | null, (n: number | null) => void] {
+  const [jour, setJour] = useState<number | null>(jourSimule() === null ? null : 1);
+  const poser = (n: number | null) => {
+    simuler(n === null ? null : ouvertureDe(n) + 3600000);  // 1 h du matin ce jour-la
+    setJour(n);
+  };
+  return [jour, poser];
+}
+
+/** Le compte a rebours jusqu'a l'ouverture d'une nuit, ecrit court. */
+function resteAvant(n: number, ms: number): string {
+  const d = ouvertureDe(n) - ms;
+  if (d <= 0) return '';
+  const j = Math.floor(d / 86400000);
+  const h = Math.floor((d % 86400000) / 3600000);
+  const m = Math.floor((d % 3600000) / 60000);
+  if (j > 0) return `${j} j ${h} h`;
+  if (h > 0) return `${h} h ${m} min`;
+  return `${m} min`;
+}
+
+/**
+ * Le bandeau du mode test, toujours visible pendant qu'on joue.
+ *
+ * LE BRIEF LE VEUT PERMANENT, et il a raison : un retour de testeur qui dit
+ * « la nuit 9 ne s'ouvre pas » ne vaut rien si l'on ignore quel jour il
+ * simulait. Il porte donc les trois choses qui rendent un retour exploitable —
+ * qu'on est en test, quel jour est simule, et d'ou vient l'heure.
+ */
+function BandeauTest({ jour }: { jour: number | null }) {
+  if (!EST_TEST) return null;
+  const source = sourceDuTemps();
+  return (
+    <div className="flex items-center gap-2 mb-3 rounded-lg border border-[#7CD04E]/30
+                    bg-[#7CD04E]/5 px-2.5 py-1.5">
+      <span className="shrink-0 text-[8px] font-black tracking-[0.2em] text-[#7CD04E]">
+        {mot('hw_test_bandeau')}
+      </span>
+      <span className="flex-1 min-w-0 text-[9px] font-mono text-foreground/60 truncate">
+        {jour === null
+          ? `${mot('hw_test_tout')} · ${mot('hw_test_source', { s: source })}`
+          : mot('hw_test_jour', { d: `${18 + jour} oct` })}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Le voyageur temporel — le selecteur de jour simule.
+ *
+ * IL PILOTE EXACTEMENT LA MEME LOGIQUE QUE LA DATE REELLE, et c'est une
+ * exigence du brief plutot qu'une commodite : `simuler()` SUBSTITUE l'instant
+ * dans game/halloween-calendrier.ts, il n'ajoute pas une branche. Ce qu'on
+ * verifie ici est donc ce qui tournera en octobre, pas une doublure.
+ */
+function Voyageur({ jour, poser }: { jour: number | null; poser: (n: number | null) => void }) {
+  if (!EST_TEST) return null;
+  return (
+    <div className="mb-4 rounded-xl border border-[#7CD04E]/25 bg-[#0A140A] px-3 py-2.5">
+      <div className="text-[8px] font-black tracking-[0.2em] text-[#7CD04E] mb-1.5">
+        {mot('hw_test_voyage')}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <button
+          onClick={() => poser(null)}
+          className={`px-2 py-1 rounded text-[9px] font-bold tracking-wider transition-colors
+            ${jour === null ? 'bg-[#7CD04E] text-black' : 'bg-white/5 text-foreground/50'}`}
+        >
+          {mot('hw_test_reel')}
+        </button>
+        {Array.from({ length: CAL_NB }, (_, i) => i + 1).map(n => (
+          <button
+            key={n}
+            onClick={() => poser(n)}
+            className={`w-7 py-1 rounded text-[9px] font-mono font-bold transition-colors
+              ${jour === n ? 'bg-[#7CD04E] text-black' : 'bg-white/5 text-foreground/50'}`}
+          >
+            {18 + n}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function PanneauMolosse() {
   const affiche = usePanneau();
   const state = useGameStore(s => s.state);
   const c = carnet();
-  const ouverte = nuitOuverte();
+  const [jour, poserJour] = useVoyageur();
+  const [, rafraichir] = useState(0);
+
+  /* L'HORLOGE SE REGLE A L'OUVERTURE DU PANNEAU, PAS AU CHARGEMENT DU JEU.
+     Un joueur qui n'entre jamais dans le mode n'a aucune raison d'appeler le
+     serveur, et l'edition n'a aucune raison de se signaler dans son trafic.
+
+     DEUX TEMPS, ET LE PREMIER EST IMMEDIAT. `horlogeImmediate` pose tout de
+     suite ce que le cliquet sait ; `reglerLHorloge` corrige quand le serveur
+     repond. Sans cela, le Calendrier s'afficherait une fraction de seconde
+     avec `Date.now()` — et sur la machine d'un joueur qui a avance sa montre,
+     cette fraction de seconde montrerait treize cartes ouvertes. */
+  useEffect(() => {
+    if (!affiche || !HALLOWEEN_2026_OUVERT) return;
+    horlogeImmediate();
+    let vivant = true;
+    reglerLHorloge().then(() => { if (vivant) rafraichir(x => x + 1); });
+    return () => { vivant = false; };
+  }, [affiche]);
+
+  /* CE QUE LE CANAL DE TEST CHANGE, ET RIEN D'AUTRE.
+
+     Sur /test SANS jour simule, LES TREIZE SONT OUVERTES, dans n'importe quel
+     ordre, verrou de victoire compris. Le §9 bis l'exige mot pour mot, et il a
+     raison deux fois : la premiere nuit n'ouvre que le 19 octobre, donc sans
+     cela un testeur de septembre trouverait treize cartes scellees ; et un
+     testeur a qui l'on demande d'essayer la nuit 11 ne doit pas avoir a en
+     gagner dix d'abord.
+
+     DES QU'UN JOUR EST SIMULE, LES DEUX VERROUS REPRENNENT — la date ET la
+     victoire, exactement dans la forme qu'ils auront ce jour-la pour un vrai
+     joueur. C'est l'outil de verification, et il ne vaut que s'il ne triche
+     pas : un voyageur temporel qui laisserait tout ouvert ne verifierait rien.
+
+     En production, `HALLOWEEN_2026_OUVERT` vaut `false` en dur et tout ce
+     bloc se replie : on retombe sur `nuitOuverte()`, l'enchainement par la
+     victoire seule, qui est le mode tel qu'il vit aujourd'hui. */
+  const toutOuvert = EST_TEST && jour === null;
+  const ms = maintenant();
+  const dec = decalageDeLAppareil();
+  const ouverte = !HALLOWEEN_2026_OUVERT ? nuitOuverte()
+    : toutOuvert ? CAL_NB
+    : nuitsJouables(c.tenues, ms, dec);
 
   // Le panneau appartient a l'accueil : une course lancee le referme, et il ne
   // se rouvre pas par-dessus une piste montee.
@@ -222,8 +376,11 @@ export function PanneauMolosse() {
           </div>
         )}
 
+        <BandeauTest jour={jour} />
+        <Voyageur jour={jour} poser={n => { poserJour(n); rafraichir(x => x + 1); }} />
+
         <div className="text-[9px] font-bold tracking-[0.2em] uppercase text-foreground/45 mb-2">
-          {mot('hw_nuits')}
+          {HALLOWEEN_2026_OUVERT ? mot('hw_cal_titre') : mot('hw_nuits')}
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -231,6 +388,12 @@ export function PanneauMolosse() {
             const tenue = nuit.n <= c.tenues;
             const jouable = nuit.n <= ouverte;
             const best = chronoDe(nuit.n);
+            /* CE QUI MANQUE, ET POURQUOI ON LE DISTINGUE. Une carte qui
+               affiche un compte a rebours alors que c'est la victoire de la
+               veille qui manque envoie le joueur attendre pour rien. */
+            const blocage = HALLOWEEN_2026_OUVERT && !toutOuvert
+              ? blocageDe(nuit.n, c.tenues, ms, dec) : 'ouverte';
+            const parLaDate = !jouable && blocage === 'date';
             return (
               <div key={nuit.n}
                    className={`rounded-xl border px-3 py-2 flex items-center gap-3
@@ -250,8 +413,13 @@ export function PanneauMolosse() {
                         douze suivantes : on ne se prepare pas a une ligne
                         droite de quatre cents metres comme a un cent
                         metres. */}
-                    {jouable ? <>{trace(nuit.epreuve)} · {mot('hw_imparti', { s: chrono(nuit.imparti) })}</>
-                             : mot('hw_verrouille')}
+                    {jouable
+                      ? <>{trace(nuit.epreuve)} · {mot('hw_imparti', { s: chrono(nuit.imparti) })}</>
+                      : parLaDate
+                        ? (nuit.n === CAL_NB && resteAvant(nuit.n, ms) === ''
+                            ? mot('hw_ce_soir')
+                            : mot('hw_ouvre_dans', { d: resteAvant(nuit.n, ms) || '—' }))
+                        : mot('hw_verrouille')}
                     {best !== null && <> · {mot('hw_meilleur', { s: chrono(best) })}</>}
                   </span>
                 </span>

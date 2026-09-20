@@ -60,6 +60,7 @@ import { molosseDe, FOULEE, proximite } from './halloween-molosse.js';
 import { NUITS as NUITS_LOI, nuitDe as nuitDeLoi,
          constantes, positionDe } from './halloween-loi.js';
 import { COURSES } from './halloween-courses.js';
+import { cameraDe, isoDe, CAMERA_DU_JEU } from './halloween-cameras.js';
 
 // LES CINQ TRACES ENTRENT DANS LA TABLE DU MOTEUR, comme les haies y entrent
 // (voir game/jeux.ts). `RACES[cle]` se lit a une quinzaine d'endroits — le
@@ -215,6 +216,7 @@ export function armerLaNuit(n: number) {
     // rien savoir d'elle. La place est libre — une nuit se court sur le 100 m
     // plat, et le rangement des haies l'a videe a la construction.
     G.obstacles = molosseDe(chasse);
+    poserLaCamera(n);
     // Et le retour a l'accueil remballe la bete, par quelque chemin qu'il
     // arrive : le bouton de l'ecran de fin, l'abandon, le retour arriere du
     // telephone (voir goHome dans sprinter-app.js).
@@ -226,6 +228,87 @@ export function armerLaNuit(n: number) {
  * Ranger la nuit. A appeler en quittant la course, sans quoi la bete suit — et
  * le prochain 100 m ordinaire se courrait avec un chien derriere.
  */
+/* ===========================================================================
+   LA CAMERA DE LA NUIT
+   ===========================================================================
+   Chaque nuit a son cadrage (game/halloween-cameras.js) : une ruelle se court
+   a sept degres au-dessus de l'horizon, une piste abandonnee a vingt-deux.
+
+   ON ECRIT DANS UNE CONSTANTE PARTAGEE, ET CA SE FAIT AVEC SOIN.
+   `C.ISO_COS` / `C.ISO_SIN` sont lus treize fois par le rendu, a chaque image,
+   et ils appartiennent a TOUT le jeu — pas au mode. Les changer, c'est changer
+   la camera du sprint aussi. Deux precautions, donc :
+
+     — on GARDE la valeur d'origine au lieu de la reconstruire. Reposer
+       « 2/racine(5) » en dur marcherait aujourd'hui et mentirait le jour ou
+       quelqu'un changerait la projection du jeu ;
+     — on remet TOUJOURS, par quelque chemin que la nuit se termine. C'est
+       pour cela que l'appel est dans `rangerLaNuit`, qui est deja branche sur
+       le bouton de fin, l'abandon ET le retour arriere du telephone.
+
+   Une camera laissee en place, c'est le sprint qui se joue a six degres — et
+   personne ne comprendrait d'ou ca vient.
+=========================================================================== */
+
+/** La camera du jeu, gardee telle qu'elle etait avant qu'on y touche. */
+let cameraGardee: { cos: number; sin: number; zoom: number } | null = null;
+
+function poserLaCamera(n: number) {
+  const G = SprinterApp.G;
+  const C = (SprinterApp as any).C;
+  if (!G || !C) return;
+  if (!cameraGardee) {
+    cameraGardee = { cos: C.ISO_COS, sin: C.ISO_SIN, zoom: G.zoomMode || 1 };
+  }
+  const cam = cameraDe(n);
+  const iso = isoDe(cam.deg);
+  C.ISO_COS = iso.cos;
+  C.ISO_SIN = iso.sin;
+  G.zoomMode = cam.zoom;
+}
+
+function rendreLaCamera() {
+  const G = SprinterApp.G;
+  const C = (SprinterApp as any).C;
+  if (!C || !cameraGardee) return;
+  C.ISO_COS = cameraGardee.cos;
+  C.ISO_SIN = cameraGardee.sin;
+  if (G) G.zoomMode = cameraGardee.zoom;
+  cameraGardee = null;
+}
+
+/**
+ * Le cadrage d'une phase, pour la finale qui descend.
+ *
+ * Les douze premieres nuits gardent leur camera du depart a l'arrivee. La
+ * treizieme en a trois, et elles se posent pendant qu'on court : a chaque
+ * vague, la camera descend et se rapproche. Rien d'autre dans le mode
+ * n'appelle ceci — c'est la finale, et elle est seule.
+ */
+export function poserLaPhase(i: number) {
+  const G = SprinterApp.G;
+  const C = (SprinterApp as any).C;
+  if (!G || !C || !chasse) return;
+  const cam = cameraDe(chasse.nuit.n);
+  const p = cam.phases && cam.phases[i];
+  if (!p) return;
+  const iso = isoDe(p.deg);
+  C.ISO_COS = iso.cos;
+  C.ISO_SIN = iso.sin;
+  G.zoomMode = p.zoom;
+}
+
+/** Ou en est la camera, pour les harnais et le bandeau du mode test. */
+export function cameraCourante(): { deg: number; zoom: number } {
+  const C = (SprinterApp as any).C;
+  const G = SprinterApp.G;
+  if (!C) return CAMERA_DU_JEU;
+  return {
+    deg: +(Math.atan2(C.ISO_SIN, C.ISO_COS) * 180 / Math.PI).toFixed(3),
+    zoom: (G && G.zoomMode) || 1,
+  };
+}
+
 export function rangerLaNuit() {
   chasse = null;
   const G = SprinterApp.G;
@@ -237,6 +320,7 @@ export function rangerLaNuit() {
     // ici les ferait disparaitre de la piste.
     if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
     if (G.surRetourAccueil === rangerLaNuit) G.surRetourAccueil = null;
+    rendreLaCamera();
   }
 }
 

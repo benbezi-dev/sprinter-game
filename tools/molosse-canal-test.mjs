@@ -204,7 +204,19 @@ const jsTest = texteDe(dossierTest, fichiersTest);
 
 // Des noms de nuits qui n'existent nulle part ailleurs dans le jeu.
 const SECRETS = ['La ruelle', 'Le caveau', 'La lune rousse', 'Le glas',
-                 'La terre remuee', 'La terre remuée'];
+                 'La terre remuee', 'La terre remuée',
+                 // L'edition datee : son calendrier, ses outils testeurs, et la
+                 // route qui donne l'heure. Rien de tout cela n'a a exister
+                 // dans le paquet public avant le 19 octobre — et « MODE TEST »
+                 // publie serait le plus embarrassant des trois.
+                 'LE CALENDRIER', 'VOYAGEUR TEMPOREL', 'MODE TEST',
+                 'halloween2026', '/now',
+                 // LES TREIZE LIEUX. Ils ne sont encore que dans la table des
+                 // cameras, mais ce sont eux la surprise : « Palais des
+                 // glaces » lisible en septembre dans le paquet public raconte
+                 // la dixieme course a qui sait lire un fichier.
+                 'Ruelle du Croissant', 'Parking souterrain', 'Palais des glaces',
+                 'Champ de crash', 'Toits de la ville', 'Egouts, tunnel'];
 for (const mot of SECRETS) {
   ok(`« ${mot} » absent du paquet public`, !jsProd.includes(mot));
 }
