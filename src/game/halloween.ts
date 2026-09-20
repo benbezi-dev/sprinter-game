@@ -40,7 +40,7 @@
 
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
-import { molosseDe } from './halloween-molosse.js';
+import { molosseDe, FOULEE, proximite } from './halloween-molosse.js';
 // Les treize nuits et la loi de la bete vivent a part, dans un module sans le
 // moindre import : c'est ce qui permet au harnais de les charger seuls, sans
 // navigateur ni piste (voir tools/molosse-test.mjs).
@@ -122,6 +122,15 @@ type Chasse = {
   chrono: number;
   /** L'instant de la morsure, sur le chrono de la course. */
   morsure: number;
+  /**
+   * La demi-foulee en cours, comptee depuis le depart.
+   *
+   * Elle ne sert qu'a savoir QUAND un pied vient de toucher le sol, pour en
+   * faire trembler la camera : on compare celle de cette image a celle de la
+   * precedente, et un changement est un appui. Indefinie a la premiere image,
+   * ou il n'y a pas de precedente a comparer.
+   */
+  demiFoulee?: number;
 };
 
 /** La nuit en cours. Nulle en dehors d'une nuit. */
@@ -241,6 +250,39 @@ export function pasDuMolosse(joueur: any) {
   // et elle vaut zero a la premiere image sans cas particulier.
   c.v = Math.max(0, (c.d - avant) * 240);
   c.ecart = joueur.d - c.d;
+
+  // LE SOL TREMBLE SOUS SES FOULEES, ET SEULEMENT QUAND ELLE EST PRES.
+  //
+  // C'est le seul sens que ce jeu peut toucher en plus de la vue : le moteur
+  // a deja `G.shake`, eprouve sur le faux pas, et Android y ajoute une
+  // vibration (voir engine.ts). Une bete qu'on voit arriver dans un coin de
+  // l'ecran reste une image ; une bete qu'on SENT arriver a travers le
+  // chassis de l'appareil est autre chose.
+  //
+  // DEUX BATTEMENTS PAR FOULEE, pas quatre : un galop se pose en deux temps —
+  // les posterieurs poussent ensemble, les anterieurs rattrapent — et c'est
+  // ce rythme a deux temps qu'on reconnait sans le compter. On regarde donc
+  // la phase franchir 0 et 0,5, calee sur la DISTANCE comme le galop dessine
+  // (halloween-molosse.js) : le pas se resserre quand elle accelere, tout
+  // seul.
+  //
+  // RIEN AU-DELA DE DOUZE METRES. `proximite` vaut alors zero et le sol ne
+  // bouge pas : une secousse presente d'un bout a l'autre de la course
+  // deviendrait un decor, et on cesserait de la sentir au moment precis ou
+  // elle doit dire quelque chose. C'est la meme regle que la jauge du HUD.
+  const pres = proximite(c);
+  const phase = c.d * FOULEE;
+  const demi = Math.floor(phase * 2);
+  if (c.demiFoulee === undefined) c.demiFoulee = demi;
+  if (demi !== c.demiFoulee) {
+    c.demiFoulee = demi;
+    if (pres > 0) {
+      // Le posterieur frappe plus fort que l'anterieur : c'est lui qui porte
+      // la poussee. Un battement egal aurait fait un moteur, pas un galop.
+      const lourd = demi % 2 === 0 ? 1 : 0.62;
+      G.shake = Math.max(G.shake || 0, 0.16 * pres * pres * lourd);
+    }
+  }
 
   // LE JOUEUR EST PASSE. On le juge sur `finished` et non sur sa distance :
   // c'est le moteur qui decide qu'une ligne est franchie, et le faire une

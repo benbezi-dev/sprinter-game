@@ -51,7 +51,54 @@ export function HalloweenHUD() {
   const menace = Math.max(0, Math.min(1, 1 - ecart / PORTEE));
 
   return (
-    <div className="absolute inset-x-0 bottom-[22%] flex flex-col items-center pointer-events-none">
+    <>
+      {/* LA NUIT SE REFERME.
+
+          Un voile sombre qui monte des BORDS de l'ecran a mesure que la bete
+          gagne du terrain. Il ne cache jamais le coureur — le degrade est
+          transparent au centre — mais il retrecit ce qu'on voit, et c'est
+          exactement ce que fait la peur : elle enleve la peripherie.
+
+          POURQUOI ICI ET PAS DANS LE DESSIN DE LA BETE. Le molosse est peint
+          dans la pile de profondeur, entre les coureurs (voir
+          halloween-molosse.js) : un voile plein ecran peint a cet endroit
+          passerait devant les uns et derriere les autres selon l'ordre du
+          moment. Le HUD, lui, est au-dessus de tout, et c'est sa place.
+
+          IL NE COMMENCE QU'A DOUZE METRES, comme la jauge et comme la
+          secousse. Les trois disent la meme chose au meme moment, et c'est
+          voulu : trois signaux qui arrivent ensemble se lisent comme un seul
+          evenement — elle est la — plutot que comme trois ornements.
+
+          `screen` plutot qu'une opacite : sur la piste orange du cimetiere,
+          un noir pose par-dessus donne une boue grise. En fondu multiplie,
+          les bords vont vers le noir profond et la piste garde sa couleur au
+          centre. */}
+      {proche && (
+        <div
+          className="absolute inset-0 pointer-events-none z-10"
+          style={{
+            background: `radial-gradient(ellipse 78% 62% at 50% 46%,`
+              + ` rgba(0,0,0,0) ${Math.round(38 - 16 * menace)}%,`
+              + ` rgba(4,2,8,${(0.62 * menace).toFixed(3)}) 100%)`,
+          }}
+        />
+      )}
+
+      {/* LE SOUFFLE DANS LA NUQUE. Un halo rouge, en bas, la ou la bete
+          arrive — et seulement dans le dernier quart. C'est la difference
+          entre « elle se rapproche » et « elle y est ». */}
+      {menace > 0.75 && (
+        <div
+          className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none z-10"
+          style={{
+            background: `linear-gradient(to top, rgba(196,26,12,`
+              + `${(0.30 * (menace - 0.75) / 0.25).toFixed(3)}), rgba(196,26,12,0))`,
+          }}
+        />
+      )}
+
+    <div className="absolute inset-x-0 bottom-[22%] flex flex-col items-center pointer-events-none z-20">
       {/* LE NOM DE LA NUIT, tout petit, le temps des deux premieres secondes.
           Il dit ou l'on est sans jamais rester : passe la premiere foulee, le
           joueur n'a plus rien a faire de ce nom. */}
@@ -93,6 +140,7 @@ export function HalloweenHUD() {
         </motion.div>
       )}
     </div>
+    </>
   );
 }
 
