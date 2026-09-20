@@ -362,6 +362,94 @@ rendu, à décider maintenant et pas en phase 4.
 
 ---
 
+## 3 bis. Décisions prises — 20 septembre 2026
+
+| # | décision | réponse |
+|---|---|---|
+| 1 | étendre ou repartir | **étendre** |
+| 2 | nom du mode | *non tranché — j'applique ma recommandation : renommer, « La nuit du molosse » devient le titre de la course 1* |
+| 3 | budget d'assets | **la meilleure qualité** → hébergement séparé, voir §3 bis.1 |
+| 4 | courses 8 et 10 | *non tranché — j'applique ma recommandation : à plat, et le double fantôme pour la 10* |
+| 5 | caméra | **on ouvre le chantier** → sonde faite, voir §3 bis.2 |
+| 6 | tests | *non tranché — j'applique ma recommandation : harnais maison `tools/*.mjs`* |
+| 7 | dates | *non tranché — j'applique ma recommandation : `EDITION_HALLOWEEN` recalée sur 19 → 31 octobre* |
+
+Les quatre non tranchées sont toutes réversibles à faible coût ; dis-le si l'une
+ne te convient pas, je reviendrai dessus.
+
+### 3 bis.1 — Qualité maximale : les assets sortent de `public/`
+
+« La meilleure qualité » et `public/` sont incompatibles : ce dossier est recopié
+tel quel dans les deux builds, sans qu'aucun drapeau puisse le retenir (§3.1).
+Plus on met de qualité, plus on alourdit le site public et plus on éventre la
+surprise.
+
+**Donc : un magasin d'assets séparé.** R2 (Cloudflare, déjà dans l'écosystème du
+worker) ou un dossier servi hors du build, avec :
+
+- chargement **à la demande, course par course**, derrière un écran de
+  préchargement diégétique ;
+- `manifest.json` versionné, avec taille, nombre d'images, fps et empreinte,
+  **validé au runtime** ;
+- rien dans `dist/` ni `dist-test/` : le paquet public ne contient ni les images
+  ni leurs noms ;
+- plus de plafond arbitraire par course — le plafond devient le **temps de
+  chargement** (≤ 3 s en 4G), qui est la vraie contrainte et qu'on mesure.
+
+C'est un chantier d'infrastructure en plus, assumé, et c'est le prix de la
+qualité maximale.
+
+### 3 bis.2 — La caméra : sonde faite, et elle change tout
+
+**Deux mesures avant de toucher à quoi que ce soit :**
+
+1. Les ~111 appels à la projection (`ground` 30, `solid` 27, `ptOf` 29,
+   `depthOf` 6, `scaleM` 19) sont **tous dans `sprinter-app.js`** — surface
+   bornée, un seul fichier.
+2. `C.ISO_COS` / `C.ISO_SIN` sont lus **13 fois, toujours via `C.`, jamais
+   inscrits en dur**. L'angle de vue est donc **déjà un paramètre vivant**.
+   Et `scaleM()` a déjà un crochet de zoom (`zoomDuGenerique()`), posé pour le
+   générique de fin.
+
+**La sonde :** même instant de course — la bête à 2,99 m — redessiné à quatre
+réglages, en écrivant dans `C` puis en le remettant.
+
+| réglage | angle au-dessus de l'horizon | ce qu'on voit |
+|---|---|---|
+| actuel | 26,6° | coureur et bête minuscules, vus de haut |
+| basse | 12,7° | la piste s'aplatit, les cyprès se dressent |
+| basse ×2 | 12,7° | **ça devient une poursuite** : la bête est une masse noire derrière l'homme |
+| rasante ×2,5 | 6,9° | la bête est grande, quadrupède net, œil rouge — c'est une image de chasse |
+
+**Conclusion : le chantier caméra est bon marché et il fonctionne.** Ce n'est pas
+un moteur de perspective à écrire, c'est deux paramètres déjà branchés.
+
+**Mais il invalide les décors déjà rendus, et c'est pour ça qu'il fallait le
+trancher avant les assets.** Les pièces Blender sont cuites « sous la vue du
+jeu » à 26,6° : à 6,9° les gradins s'écrasent en bande plate et les cyprès se
+déforment. Il faut re-rendre. Comme on fabrique treize décors neufs de toute
+façon, le surcoût se limite au cimetière existant.
+
+**Ce que la sonde rouvre :** à ×2,5 la bête mesure ~120 × 65 pixels au lieu de
+49 × 26. Mon verdict du §3.2 — « les sprite sheets sont une impasse » — a été
+mesuré à 49 × 26 et **ne vaut plus automatiquement**. À 120 × 65 un rendu
+commence à montrer quelque chose. Je maintiens ma préférence pour le tracé
+paramétré (il réagit : proximité, gueule, sens de course, braises — une image
+cuite ne réagit pas), mais je le re-mesurerai sur pièce en phase 2 au lieu de
+le décréter.
+
+**Ce qui reste à vérifier avant de figer l'angle :** le rendu des haies et des
+obstacles suppose peut-être le rapport 2:1 ; `depthOf` n'en dépend pas
+(`(ax+ay)·scaleM()`), donc le rangement en profondeur tient. À contrôler en
+phase 2.
+
+**Portée :** la caméra basse est **propre au mode Halloween**. Le sprint garde sa
+vue. Concrètement, `C.ISO_*` et le zoom deviennent des valeurs posées à
+l'armement du mode et remises au rangement — exactement comme `G.obstacles` et
+`G.pasMolosse` le sont déjà.
+
+---
+
 ## 4. Plan d'implémentation
 
 Phases telles que le brief les ordonne, ajustées aux constats ci-dessus.
@@ -389,8 +477,10 @@ Phases telles que le brief les ordonne, ajustées aux constats ci-dessus.
 
 *Livrable : le calendrier fonctionne, aucune course nouvelle, rien ne peut casser.*
 
-### Phase 2 — une course de bout en bout
+### Phase 2 — la caméra, puis une course de bout en bout
 
+8 bis. **La caméra du mode** : angle et zoom posés à l'armement, remis au rangement ; vérification des haies et du rangement en profondeur ; re-rendu du cimetière au nouvel angle.
+8 ter. **Le magasin d'assets séparé** et son manifeste, avec l'écran de préchargement.
 9. Cinématique en 3 temps + **départ lancé** (vitesse initiale non nulle, pas de
    blocs). ⚠️ Le départ du jeu est câblé sur le décompte 3-2-1 partout ; un
    départ lancé est une variante à ajouter proprement, pas à bricoler.
