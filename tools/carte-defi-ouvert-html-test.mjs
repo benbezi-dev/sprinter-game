@@ -28,9 +28,13 @@
      3. LES PHRASES DU COMPTEUR. « 23 ont essaye, 3 ont fait mieux » est la
         voix du compte, pas un detail de mise en page. Deux outils qui rendent
         la meme carte ne doivent pas ecrire deux phrases differentes.
-     4. L'ADRESSE DU SERVEUR ET CELLE DU SITE. Une page qui interroge un
+     4. L'ECRITURE DES EPREUVES. « 100 m », et « 100 m H » pour les haies :
+        c'est `EPREUVE` de `trace-affiche.js` qui en decide pour tout le jeu.
+        Les deux cartes collaient « m » sans regarder la cle et ecrivaient
+        « 100h m » sur un defi de haies.
+     5. L'ADRESSE DU SERVEUR ET CELLE DU SITE. Une page qui interroge un
         ancien worker rend une carte plausible avec un compteur faux.
-     5. QUE LA PAGE RESTE AUTONOME. Un `import` ajoute un jour de bonne foi —
+     6. QUE LA PAGE RESTE AUTONOME. Un `import` ajoute un jour de bonne foi —
         « c'est plus propre » — tue le double-clic, et la panne ne se voit
         qu'a la machine suivante.
 
@@ -42,6 +46,7 @@ import { FOND, OR, OR_RVB, BLANC, ENCRE, LUEUR, unite, RETRAIT_VIRGULE }
   from '../src/game/palette-affiche.js';
 import { NUIT, HALO, FLAMME, ENCRE as ENCRE_NUIT, echelle, FORMATS }
   from './voix-competition.mjs';
+import { EPREUVE } from '../src/game/trace-affiche.js';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -86,7 +91,7 @@ function lirePage() {
   });
   const rendus = ['API', 'SITE', 'FOND', 'OR', 'OR_RVB', 'BLANC', 'ENCRE', 'LUEUR',
                   'RETRAIT_VIRGULE', 'NUIT', 'HALO', 'FLAMME', 'ENCRE_NUIT',
-                  'FORMATS', 'unite', 'echelle', 'tally', 'virgule'];
+                  'FORMATS', 'unite', 'echelle', 'tally', 'virgule', 'EPREUVE'];
   return new vm.Script(`(function(){${scripts[0]}\nreturn {${rendus.join(',')}};})()`)
     .runInContext(contexte);
 }
@@ -192,6 +197,33 @@ titre('LES PHRASES DU COMPTEUR SONT CELLES DE L OUTIL');
     ok(`${nom} — « ${rendu.fort} »`, rendu.fort === attendu.fort, `l outil dit « ${attendu.fort} »`);
     ok(`${nom} — « ${rendu.doux} »`, rendu.doux === attendu.doux, `l outil dit « ${attendu.doux} »`);
   }
+}
+
+titre('L ECRITURE DES EPREUVES EST CELLE DE LA CHARTE');
+{
+  // Les deux cartes composaient `${e} m` : sur un defi de haies, la cle
+  // « 100h » donnait « 100h m ». La charte ecrit « 100 m H », et c'est
+  // `EPREUVE` de `trace-affiche.js` qui le decide pour tout le jeu — les
+  // affiches, les cartes de course, et maintenant celles du defi ouvert.
+  // Toutes les cles de `RaceKey` y passent : un test qui ne voit que « 100 »
+  // ne voit justement pas le defaut qu'on corrige.
+  for (const cle of ['100', '200', '400', '100h', '110h', '400h']) {
+    ok(`« ${cle} » s ecrit « ${EPREUVE(cle)} »`, page.EPREUVE(cle) === EPREUVE(cle),
+       `la page dit « ${page.EPREUVE(cle)} »`);
+  }
+  // Une epreuve absente ne doit pas devenir une unite toute seule.
+  ok('une epreuve vide reste vide', page.EPREUVE('') === EPREUVE(''),
+     `la page dit « ${page.EPREUVE('')} »`);
+  // L'outil tourne sous node : il n'a aucune raison d'en garder une copie.
+  // Une deuxieme copie serait une deuxieme derive a surveiller.
+  ok('l outil prend EPREUVE a la source',
+     /import \{ EPREUVE \} from '\.\.\/src\/game\/trace-affiche\.js'/.test(outil));
+  // Le geste corrige, exige des deux cotes a la fois. On regarde ce que le
+  // code FAIT et non ce qu'il mentionne : les deux fichiers citent l'ancienne
+  // ecriture dans un commentaire, pour qu'on sache pourquoi elle a change.
+  ok('les deux composent le libelle avec EPREUVE',
+     /libelleEpreuve: epreuves\.map\(EPREUVE\)\.join/.test(html)
+     && /const libelleEpreuve = epreuves\.map\(EPREUVE\)\.join/.test(outil));
 }
 
 titre('LE SERVEUR ET LE SITE SONT LES MEMES');

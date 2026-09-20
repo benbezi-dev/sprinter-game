@@ -576,6 +576,15 @@ function dessinerCarte(c, L, H, d) {
 
 const virgule = ms => (ms / 1000).toFixed(2).replace('.', ',');
 
+/** L'ecriture des epreuves de la charte, copiee de `EPREUVE` de
+ *  `src/game/trace-affiche.js` : « 100 m », et « 100 m H » pour les haies.
+ *  Cette page composait `${e} m` sans regarder la cle, et sortait donc
+ *  « 100h m » sur un defi de haies. La copie est surveillee par
+ *  `carte-defi-ouvert-html-test.mjs`, comme les couleurs. */
+const EPREUVE = r => String(r || '')
+  .replace(/^(\d+)$/, '$1 m')
+  .replace(/^(\d+)h$/, '$1 m H');
+
 function msDepuisTexte(t) {
   const n = Number(String(t).replace(',', '.'));
   if (!Number.isFinite(n) || n <= 0) throw new Error(`Chrono illisible : ${t}. Attendu 8,64 ou 8.64.`);
@@ -699,7 +708,7 @@ async function fabriquer(evenement) {
     const donnees = {
       code, nom, totalMs,
       chronoTexte: virgule(totalMs),
-      libelleEpreuve: epreuves.map(e => `${e} m`).join(' + '),
+      libelleEpreuve: epreuves.map(EPREUVE).join(' + '),
       // Les deux maquettes n'ont pas le meme defaut, et c'est voulu : l'affiche
       // annonce le format, la carte de competition annonce le chrono.
       titreAffiche: titre || 'Défi ouvert',
