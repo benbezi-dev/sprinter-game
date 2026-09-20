@@ -34,9 +34,22 @@
 // formule coutent moins cher qu'un coureur fantome a exclure partout.
 //
 // CE FICHIER NE DESSINE RIEN ET NE FAIT AUCUN BRUIT. Le molosse a l'ecran vit
-// dans halloween-molosse.js, ses grognements dans halloween-son.ts, et ce
-// qu'on raconte apres la course dans halloween-cinema.ts. La regle reste ici,
-// seule, pour qu'un harnais puisse la verifier sans lancer une course.
+// dans halloween-molosse.js, et ce qu'on raconte apres la course dans
+// halloween-cinema.ts. La regle reste ici, seule, pour qu'un harnais puisse la
+// verifier sans lancer une course.
+//
+// ET LA BETE EST MUETTE — il faut le dire ici, parce que cette ligne a
+// longtemps renvoye a un `halloween-son.ts` qui n'a jamais existe. Le mode n'a
+// qu'un son : la musique du cimetiere (halloween-musique.ts). Le molosse
+// n'aboie pas, ne halete pas, et ne fait aucun bruit en se rapprochant. On le
+// voit dans un coin de l'ecran et on sent ses foulees dans le chassis de
+// l'appareil (`G.shake`), c'est tout.
+//
+// Ce n'est pas un oubli de detail. La peur d'une poursuite se joue d'abord a
+// l'oreille — c'est ce qui arrive DERRIERE soi, la ou l'on ne regarde pas — et
+// tout ce qu'il faudrait pour la porter est deja calcule ici, image par image :
+// `c.ecart`, `c.v`, et `proximite(c)`. Il manque le bus audio, pas la mesure.
+// Voir la phase 4 du plan (docs/HALLOWEEN_PLAN.md).
 
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
