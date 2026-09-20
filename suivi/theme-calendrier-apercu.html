@@ -191,6 +191,53 @@
 
   <hr>
 
+  <h2>Ce sur quoi on clique</h2>
+  <p>Un calendrier n'est pas qu'un texte : il a des filtres, des boutons, et
+     une publication qui se déplie. Sans ces règles, un seul <code>&lt;link&gt;</code>
+     laissait les boutons gris sur blanc et le focus invisible.</p>
+
+  <div class="carte">
+    <p class="surtitre">Filtrer le mois</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <select>
+        <option>Tous les formats</option>
+        <option>Reel</option><option>Post</option><option>Story</option>
+      </select>
+      <input type="search" placeholder="Chercher une accroche…" style="flex:1 1 220px">
+      <button>Réinitialiser</button>
+      <button class="primaire">Appliquer</button>
+    </div>
+    <label style="margin-top:14px;display:block">
+      <input type="checkbox" checked> N'afficher que ce qui reste à vérifier
+    </label>
+  </div>
+
+  <details>
+    <summary>Mardi 8 sept., 18h30 · Post — 8,25 s sur 100 m</summary>
+    <p><strong>Brief</strong> — Le chrono à battre de la semaine, plein cadre,
+       sur le fond de la charte. Un seul chiffre, et c'est lui le plus gros
+       élément de l'image.</p>
+    <p><strong>Légende</strong> — « 8,25 s sur 100 m. C'est le chrono à battre
+       cette semaine. La place est libre. »</p>
+    <p><strong>À vérifier</strong> — Relire le chrono et l'écart le jour même.
+       « Sprinter de la semaine » est une distinction du compte, pas une
+       mécanique du jeu (§5.3).</p>
+    <p style="margin-bottom:0"><strong>Fabrication</strong> —
+       <code>npm run tableau</code>, puis l'atelier d'image.</p>
+  </details>
+
+  <details>
+    <summary>Mercredi 9 sept., 19h00 · Story — 2 centièmes de retard</summary>
+    <p><strong>Brief</strong> — Le fond de story du sondage : « −0,02 » plein
+       cadre, l'écran d'arrivée très sombre derrière, la place du sticker
+       laissée vide vers 1460 px.</p>
+    <p style="margin-bottom:0"><strong>Sticker</strong> — sondage à deux
+       réponses, « je rejoue » / « je ferme ». Il se pose dans Instagram, pas
+       dans l'image.</p>
+  </details>
+
+  <hr>
+
   <h2>Les morceaux du thème</h2>
   <p>Les classes reprises de la carte du défi ouvert, pour qu'une page
      d'atelier puisse en poser un bloc sans le redessiner.</p>

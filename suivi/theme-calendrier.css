@@ -305,6 +305,105 @@ a.outil .surtitre { margin-bottom: 10px; }
 }
 .garde > :last-child { margin-bottom: 0; }
 
+/* ------------------------------------------------- ce sur quoi on clique
+
+   Sans cette section, la promesse « un seul <link> habille la page » était
+   fausse : le texte prenait le thème, mais chaque bouton restait gris sur
+   blanc — le réglage par défaut du navigateur — et il n'y avait aucun anneau
+   de focus visible, ce qui se paie au clavier.
+
+   Le thème se lie AVANT la feuille de la page, pour que celle-ci garde le
+   dernier mot sur ce qu'elle veut habiller elle-même. */
+
+/* L'anneau de focus. Il vient en premier parce que c'est le plus important :
+   une page d'atelier se parcourt souvent au clavier, et un focus invisible
+   fait perdre le fil à chaque tabulation. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-clair);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Le bouton ordinaire est discret. L'ambre est une couleur d'appel : si tous
+   les boutons la portent, aucun n'appelle plus rien. La pilule et
+   `button.primaire` la gardent pour l'action principale de la page. */
+button, input[type="button"], input[type="submit"], input[type="reset"] {
+  font: 600 14px/1 var(--police-corps);
+  color: var(--encre-2);
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+button:hover:not(:disabled), input[type="button"]:hover, input[type="submit"]:hover {
+  background: var(--survol);
+  border-color: rgba(251, 194, 78, 0.38);
+}
+button:disabled { opacity: .4; cursor: default; }
+
+button.primaire {
+  background: var(--accent);
+  color: var(--sur-accent);
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 24px;
+  font-weight: 700;
+}
+button.primaire:hover:not(:disabled) { filter: brightness(1.07); background: var(--accent); }
+
+/* Les champs. `color-scheme: dark` est déjà posé sur :root, ce qui donne les
+   bons ascenseurs et le bon calendrier natif ; le reste se dessine ici. */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+select, textarea {
+  font: 400 14.5px/1.45 var(--police-corps);
+  color: var(--encre-2);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--panneau-bord);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+input::placeholder, textarea::placeholder { color: var(--tres-muet); }
+input:focus, select:focus, textarea:focus { border-color: rgba(251, 194, 78, 0.45); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-fonce); }
+textarea { min-height: 96px; resize: vertical; }
+label { cursor: pointer; }
+
+/* Le bloc qui se déplie. Une publication du calendrier porte un brief, une
+   légende, des mots-clés, un KPI et un prompt : tout montrer d'un coup rend
+   le mois illisible, et c'est <details> qui fait ce travail. */
+details {
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon);
+  padding: 4px 18px;
+  margin: 12px 0;
+}
+summary {
+  font: 600 15px/1.4 var(--police-corps);
+  color: var(--encre-2);
+  cursor: pointer;
+  padding: 12px 0;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+/* Le chevron est dessiné plutôt qu'écrit : un caractère de flèche change de
+   dessin d'une police à l'autre, et tourne mal. */
+summary::before {
+  content: ""; display: inline-block;
+  width: 7px; height: 7px; margin-right: 11px;
+  border-right: 2px solid var(--accent-fonce);
+  border-bottom: 2px solid var(--accent-fonce);
+  transform: rotate(-45deg) translate(-1px, -1px);
+  transition: transform .18s;
+}
+details[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
+details > :last-child { margin-bottom: 14px; }
+
+/* Le texte sélectionné. Sans cela, le bleu du navigateur tombe sur la nuit. */
+::selection { background: rgba(251, 194, 78, 0.28); color: var(--encre); }
+
 /* -------------------------------------------------------------- le petit écran */
 
 @media (max-width: 720px) {
