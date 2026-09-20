@@ -340,9 +340,16 @@ for (const cle of CLES) {
 
 titre('CHAQUE PLATEAU SE GAGNE A UNE CADENCE DE DOIGT');
 
+// Le pas se compte en DIXIEMES ENTIERS, il ne s'accumule pas. Un `cad += 0.1`
+// derive en binaire : la boucle passait par 7,999999999999986 au lieu de 8, et
+// le moteur y est assez sensible pour que 1,4e-14 de cadence deplace le chrono
+// de 0,36 s — 11,47 s au 100 m haies au lieu de 11,83. La bande des ZEZE
+// (11,65-12,07) etait enjambee, et le harnais annoncait un niveau injouable
+// qui se joue tres bien a huit frappes rondes.
 for (const cle of CLES) {
   const atteints = new Set();
-  for (let cad = 4; cad <= 14; cad += 0.1) {
+  for (let d = 40; d <= 140; d++) {
+    const cad = d / 10;
     const t = courir(cle, { cadence: cad }).temps;
     if (t === null) continue;
     PLATEAUX[cle].forEach(([a, b], i) => { if (t >= a && t <= b) atteints.add(i); });
