@@ -196,6 +196,36 @@ export const APPEL_JOUEUR = true;
 export const HALLOWEEN_OUVERT = EST_TEST;
 
 /**
+ * L'EDITION LIMITEE D'HALLOWEEN 2026 — treize courses, une par jour.
+ *
+ * DRAPEAU SEPARE DE `HALLOWEEN_OUVERT`, et c'est le but. Le premier decide si
+ * « La nuit du molosse » existe ; celui-ci decide si elle est servie SOUS LA
+ * FORME D'UNE EDITION DATEE — un calendrier de treize cartes, une course par
+ * jour du 19 au 31 octobre, l'heure prise au serveur.
+ *
+ * Les deux peuvent diverger, et c'est utile : on peut ouvrir le mode sans le
+ * calendrier (ce qu'il est aujourd'hui sur /test, ou les nuits s'enchainent a
+ * la victoire), ou preparer le calendrier sans encore montrer le mode.
+ *
+ * FERME EN PRODUCTION JUSQU'A L'OUVERTURE. `EST_TEST` se replie a la
+ * compilation : le drapeau vaut `false` EN DUR dans le build public, et tout
+ * ce qui en depend en sort — le calendrier, les cartes, les compte-a-rebours.
+ *
+ * ET CE N'EST PAS SEULEMENT UNE QUESTION D'ACCES. Une edition limitee ne vaut
+ * que par la surprise : treize noms de courses lisibles dans le paquet public
+ * un mois avant, c'est l'edition eventee. On l'a deja paye une fois — le
+ * morceau `Halloween-*.js` et sa musique de 708 Ko se telechargeaient depuis
+ * le site public le 20 septembre — et les deux remedes sont en place :
+ * `@__PURE__` sur les `lazy` (App.tsx) et le greffon de vite.config.ts pour
+ * les assets. Ce qui est pose dans `public/`, en revanche, echappe a tout :
+ * les decors de l'edition ne doivent donc PAS y aller.
+ *
+ * Pour ouvrir a tout le monde le 19 octobre : `true` en dur, et rien d'autre
+ * a toucher. Les dates, elles, sont dans game/halloween-calendrier.ts.
+ */
+export const HALLOWEEN_2026_OUVERT = EST_TEST;
+
+/**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
  * d'artifice pour un record du monde.
  *
