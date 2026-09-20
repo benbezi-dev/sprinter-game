@@ -58,11 +58,22 @@ const TAU = PI * 2;
    bete etait juste un chien : posee a cote du repere d'un coureur, elle ne
    faisait pas peur. Dix centimetres de plus et quinze de long suffisent — au
    dela, elle cesse d'etre un chien et devient un cheval. */
-const GARROT = 0.86;      // hauteur du dos au-dessus du sol
-const LONG = 1.44;        // poitrail -> croupe
-const EPAIS = 0.50;       // epaisseur du tronc
-const PATTE = 0.82;       // longueur d'une patte tendue
-const TETE = 0.52;        // crane + museau
+const GARROT = 1.00;      // hauteur du dos au-dessus du sol
+const LONG = 1.66;        // poitrail -> croupe
+const EPAIS = 0.58;       // epaisseur du tronc
+const PATTE = 0.96;       // longueur d'une patte tendue
+const TETE = 0.60;        // crane + museau
+
+/* UN METRE AU GARROT : LE DOS DE LA BETE ARRIVE A LA HANCHE DU COUREUR.
+   A 0,86 elle restait un gros chien, et un gros chien ne fait pas peur a un
+   homme qui court — on en croise. A un metre, avec un poitrail de cinquante-
+   huit centimetres, ce n'est plus un animal qu'on identifie : c'est une masse
+   qui arrive. Le rapport du corps ne bouge pas (1,66 pour 1,00, comme 1,44
+   pour 0,86) — elle grandit sans redevenir longue et basse.
+
+   C'est le seul endroit ou la taille se decide. La projection, elle, ne la
+   changera jamais : la bete fait la meme chose en pixels du premier metre au
+   dernier (voir le bandeau en tete de ce fichier). */
 
 /* CES TROIS-LA SONT LIEES, ET ON NE PEUT PAS EN BOUGER UNE SEULE.
    La patte part de l'epaule, a `GARROT - 0.04`, et doit arriver AU SOL quand
@@ -141,8 +152,30 @@ const PATTES = [
    presque ensemble, ce qui refaisait la meme masse autrement. */
 const VOIE = 0.10;
 
-/** Combien de foulees la bete fait par metre parcouru. */
-const FOULEE = 2.6;
+/**
+ * Combien de foulees la bete fait par metre parcouru.
+ *
+ * ELLE EN FAISAIT 2,6 — SOIT UNE FOULEE TOUS LES TRENTE-HUIT CENTIMETRES.
+ * A onze metres par seconde, cela fait VINGT-HUIT FOULEES PAR SECONDE. Les
+ * pattes ne galopaient pas, elles vibraient, et une bete dont les pattes
+ * vibrent est drole — c'est la demarche des insectes et des dessins animes,
+ * pas celle de ce qui vous rattrape.
+ *
+ * ET LES PIEDS GLISSAIENT DE CINQ FOIS LEUR COURSE. Un pied au contact recule
+ * sous le corps de `amp` metres pendant une DEMI-foulee, donc pendant
+ * `0.5 / FOULEE` metres de terrain. Pour qu'il ne patine pas, il faut que les
+ * deux soient egaux. Avec une amplitude d'environ 1,07 m et une demi-foulee
+ * de 19 cm, le pied parcourait cinq fois et demie ce que le sol lui offrait :
+ * la bete pedalait sur place en avancant.
+ *
+ * A 0,45 — une foulee tous les 2,22 m, cinq par seconde a pleine vitesse —
+ * le compte tombe juste : `amp` vaut exactement `0.5 / FOULEE` au maximum de
+ * la vitesse, et le pied reste pose ou on le met.
+ */
+export const FOULEE = 0.45;
+
+/** La course d'un pied au contact, quand rien ne patine. */
+const AMPLITUDE = 0.5 / FOULEE;
 
 /**
  * Ou se trouve le pied d'une patte, dans le repere de la bete.
@@ -313,11 +346,33 @@ export function molosseDe(chasse) {
          negatif et le dessin se retourne — ce qu'on voulait — sans que le
          haut et le bas s'echangent.
 
-         LA LONGUEUR SE RACCOURCIT AUSSI, et c'est juste : un metre de piste
-         vu de biais occupe moins d'un metre d'ecran. */
-      const ex = pc.ex !== undefined ? pc.ex : m;
-      const ey = pc.ey !== undefined ? pc.ey : 0;
-      ctx.transform(ex / m, ey / m, 0, 1, 0, 0);
+         ON PREND LA DIRECTION, PAS LA LONGUEUR — et c'est le second reglage.
+
+         Le premier jet gardait l'axe mesure tel quel, raccourcissement
+         compris : un metre de piste vu de biais occupe moins d'un metre
+         d'ecran, ce qui semblait honnete. Ca ne l'etait pas, parce que la
+         HAUTEUR, elle, ne se raccourcit jamais — `solid` retranche
+         simplement `z * scaleM()`, quelle que soit la direction. Au virage,
+         l'axe de la piste vaut 36 pixels par metre quand la hauteur en vaut
+         42,7 : le corps se tassait de quinze pour cent pendant que les
+         pattes gardaient leur taille, et la bete y paraissait montee sur
+         echasses. Un quadrupede le montre tout de suite ; un coureur, qui
+         n'est presque que de la hauteur, ne le montrait pas.
+
+         LE MOTEUR TRAITE SES PERSONNAGES AINSI, et la bete en est un : ils
+         sont peints a `scaleM()` dans les deux sens, sans raccourci. Ce qui
+         se raccourcit dans cette projection, ce sont les POSITIONS sur la
+         piste — ou va la bete — pas la TAILLE de ce qu'on y pose. On ne
+         garde donc de l'axe mesure que sa DIRECTION, ramenee a l'unite : la
+         bete s'incline avec la piste et garde exactement les memes
+         proportions du premier metre au dernier, en ligne comme en courbe.
+
+         `c = 0` et `d = 1` restent : la hauteur se projette droit vers le
+         haut, et les pattes continuent de tomber comme la pesanteur. */
+      const bx = pc.ex !== undefined ? pc.ex : 1;
+      const by = pc.ey !== undefined ? pc.ey : 0;
+      const norme = Math.hypot(bx, by) || 1;
+      ctx.transform(bx / norme, by / norme, 0, 1, 0, 0);
       const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
@@ -329,7 +384,18 @@ export function molosseDe(chasse) {
       // developpe. Bornee pour qu'une premiere image a vitesse nulle ne le
       // fige pas les quatre pattes jointes.
       const vitesse = Math.min(1, chasse.v / 11);
-      const amp = PATTE * (0.55 + 0.75 * vitesse);
+      // LA PROXIMITE, ENFIN BRANCHEE. `proximite()` existait au bas de ce
+      // fichier depuis le premier jour et personne ne l'appelait : la bete
+      // avait exactement la meme presence a quinze metres et a un metre. Or
+      // c'est la seule chose que ce mode raconte — qu'elle se rapproche.
+      // Elle fume davantage, son oeil bat plus vite et plus fort, et elle
+      // halete plus court a mesure qu'elle gagne du terrain.
+      const pres = proximite(chasse);
+      // L'amplitude ne se prend plus sur la longueur de la patte mais sur ce
+      // que le SOL offre : a pleine vitesse elle vaut exactement la demi-
+      // foulee, donc le pied ne patine pas. Au demarrage la bete ramasse ses
+      // appuis, ce qui est aussi ce que fait un animal qui se lance.
+      const amp = AMPLITUDE * (0.45 + 0.55 * vitesse);
 
       // Le dos qui se cambre : deux fois par foulee, c'est la respiration du
       // galop. Sans elle la bete glisse sur ses pattes comme un jouet a roulettes.
@@ -380,7 +446,7 @@ export function molosseDe(chasse) {
       ctx.globalAlpha = 1;
 
       queue(ctx, cycle, m, arriere + LONG * 0.16 * m, croupe, vitesse);
-      tete(ctx, t, m, avant, garrot, cycle, vitesse);
+      tete(ctx, t, m, avant, garrot, cycle, vitesse, pres);
 
       // LES DEUX PATTES DE DEVANT, par-dessus le corps.
       for (const p of PATTES) {
@@ -393,7 +459,7 @@ export function molosseDe(chasse) {
       // une chose : une bete entierement noire, la nuit, sur un fond sombre,
       // a besoin de quelque chose qui bouge autour d'elle pour qu'on la sente
       // vivante plutot que collee sur l'image.
-      if (t - derniereBraise > 0.045 && vitesse > 0.15) {
+      if (t - derniereBraise > 0.045 - 0.028 * pres && vitesse > 0.15) {
         derniereBraise = t;
         braises.push({ x: arriere + Math.random() * LONG * m,
                        y: garrot - Math.random() * 0.1 * m,
@@ -477,7 +543,7 @@ function queue(ctx, cycle, m, x, y, vitesse) {
  * que la gueule ne se referme jamais completement : une bete qui court apres
  * quelqu'un et qui garde la bouche fermee ressemble a un chien qui se promene.
  */
-function tete(ctx, t, m, avant, garrot, cycle, vitesse) {
+function tete(ctx, t, m, avant, garrot, cycle, vitesse, pres) {
   /* LA TETE EST REFAITE EN MASSES, ET C'EST UNE LECON SUR LA TAILLE.
 
      Celle d'avant portait quatre crocs, deux machoires, un fond de gorge,
@@ -517,7 +583,8 @@ function tete(ctx, t, m, avant, garrot, cycle, vitesse) {
   // LA GUEULE : une fente, pas une bouche. Elle bat avec la foulee — une bete
   // lancee halete — et on ne peint le rouge que si la fente depasse un pixel
   // et demi, faute de quoi il ne resterait qu'une salissure sombre.
-  const ouvre = (0.085 + 0.055 * Math.sin(cycle * TAU)) * m;
+  // La gueule s'ouvre plus grand quand elle touche au but.
+  const ouvre = (0.085 + 0.045 * pres + 0.055 * Math.sin(cycle * TAU)) * m;
   if (ouvre > 1.5) {
     ctx.fillStyle = GUEULE;
     ctx.beginPath();
@@ -561,7 +628,9 @@ function tete(ctx, t, m, avant, garrot, cycle, vitesse) {
   //
   // L'ECLAT BLANC A ETE RETIRE : seize millimetres, soit un demi-pixel. Il ne
   // se voyait pas, et il eclaircissait l'oeil au lieu de le faire briller.
-  const pulse = 0.82 + 0.18 * Math.sin(t * 7.5);
+  // Le battement s'accelere et s'amplifie avec la proximite : de loin c'est
+  // une braise qui respire, a un metre c'est un stroboscope.
+  const pulse = (0.82 + 0.34 * pres) + (0.18 + 0.22 * pres) * Math.sin(t * (7.5 + 9 * pres));
   const ox = cx + TETE * 0.24 * m, oy = cy - 0.075 * m;
   const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, 0.34 * m * pulse);
   halo.addColorStop(0, 'rgba(255,96,48,0.90)');
