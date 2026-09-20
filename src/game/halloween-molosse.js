@@ -58,11 +58,25 @@ const TAU = PI * 2;
    bete etait juste un chien : posee a cote du repere d'un coureur, elle ne
    faisait pas peur. Dix centimetres de plus et quinze de long suffisent — au
    dela, elle cesse d'etre un chien et devient un cheval. */
-const GARROT = 0.94;      // hauteur du dos au-dessus du sol
+const GARROT = 0.86;      // hauteur du dos au-dessus du sol
 const LONG = 1.44;        // poitrail -> croupe
 const EPAIS = 0.50;       // epaisseur du tronc
-const PATTE = 0.76;       // longueur d'une patte tendue
+const PATTE = 0.82;       // longueur d'une patte tendue
 const TETE = 0.52;        // crane + museau
+
+/* CES TROIS-LA SONT LIEES, ET ON NE PEUT PAS EN BOUGER UNE SEULE.
+   La patte part de l'epaule, a `GARROT - 0.04`, et doit arriver AU SOL quand
+   le pied est au contact : il faut donc `PATTE = GARROT - 0.04`, exactement.
+   En raccourcissant la patte pour faire trapu tout en relevant le garrot, on
+   laisse un vide — quatorze centimetres, six pixels — et la bete galope en
+   flottant au-dessus de sa propre ombre. Ca ne se voit pas sur la page
+   d'apercu, ou l'ombre est loin sous le cadre ; ca creve les yeux dans le
+   jeu, ou l'ombre est peinte juste dessous.
+
+   LE TRAPU NE SE GAGNE DONC PAS SUR LES PATTES mais sur le RAPPORT du corps
+   et son EPAISSEUR — 1,44 de long pour 0,86 de haut au lieu de 1,70 pour
+   0,88, et un tronc epaissi de moitie. C'est la meme masse a l'ecran, et
+   elle porte enfin sur ses quatre pieds. */
 
 /* CES CHIFFRES ONT ETE REPRIS UNE SECONDE FOIS, ET A LA BONNE TAILLE.
    Les premiers avaient ete regles sur la page d'apercu, ou la bete s'affiche
@@ -238,16 +252,20 @@ export function molosseDe(chasse) {
       // ecart trop petit pour etre lu de facon stable.
       const q2 = T.pos(Math.min(d + 4, T.total + 28), G.player.lane);
       const g2 = ground(q2[0], q2[1]);
-      const dx = g2[0] - g[0];
 
       piece.profondeur = depthOf(q[0], q[1]);
       piece.x = g[0];
       piece.y = g[1];
       piece.m = m;
-      // Sur une trajectoire verticale a l'ecran l'ecart est nul et le signe
-      // n'existe pas : on garde alors le sens precedent plutot que de
-      // retourner la bete d'un coup.
-      piece.sens = dx < -0.001 ? -1 : dx > 0.001 ? 1 : (piece.sens || 1);
+      // L'AXE DE LA PISTE A L'ECRAN, en pixels par metre parcouru. On avait
+      // le SIGNE de cet ecart — de quel cote la bete regarde — et on jetait
+      // le reste. Le reste etait l'essentiel : sa DIRECTION.
+      const ex = (g2[0] - g[0]) / 4, ey = (g2[1] - g[1]) / 4;
+      // Une trajectoire degeneree — deux points confondus — ne donne pas de
+      // direction : on garde la precedente plutot que de coucher la bete.
+      if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) {
+        piece.ex = ex; piece.ey = ey;
+      }
       return liste;
     },
 
@@ -263,7 +281,43 @@ export function molosseDe(chasse) {
       // toute seule.
       ctx.save();
       ctx.translate(pc.x, pc.y);
-      if (pc.sens < 0) ctx.scale(-1, 1);
+
+      /* LE CORPS SE COUCHE SUR L'AXE DE LA PISTE, ET C'EST TOUT LE VIRAGE.
+
+         La bete etait peinte sur l'axe HORIZONTAL de l'ecran, toujours, avec
+         un simple miroir pour le sens. Or la course ne va presque jamais a
+         l'horizontale : la projection l'envoie en biais, et dans un virage
+         l'angle change a chaque metre. Le molosse traversait donc les
+         couloirs en travers pendant que les coureurs les suivaient — couche
+         sur la piste plutot que lance dessus.
+
+         C'est le meme defaut que le sens inverse corrige plus tot, et la
+         meme cause : on prenait UN point d'ecran et on etalait tout le corps
+         sur l'axe des x. Un quadrupede n'a pas ce luxe. Une haie ne l'a pas
+         non plus, et le moteur lui donne deja la reponse : elle passe chaque
+         point par `T.posDemi`, donc elle suit le virage « sans angle a tenir
+         nulle part » (voir dessinerHaie dans haies-rendu.js).
+
+         ON NE REECRIT PAS TOUT LE DESSIN POUR AUTANT. Il est ecrit en
+         (avant, haut) et il peut le rester : il suffit de dire a la toile
+         que « avant » n'est plus l'axe des x mais l'axe mesure de la piste.
+         La matrice ne touche QUE cet axe — `c = 0`, `d = 1` — parce que la
+         hauteur, elle, se projette toujours droit vers le haut de l'ecran
+         (voir `solid`, qui retranche simplement `z * scaleM()`). Le corps
+         s'incline et se raccourcit avec la piste ; les pattes continuent de
+         tomber vers le bas, comme le fait la pesanteur.
+
+         LE MIROIR DISPARAIT AVEC CELA : l'axe mesure pointe deja dans le
+         sens de la marche, donc la bete regarde du bon cote sans qu'on ait a
+         le lui dire. Quand il pointe vers la gauche, le determinant devient
+         negatif et le dessin se retourne — ce qu'on voulait — sans que le
+         haut et le bas s'echangent.
+
+         LA LONGUEUR SE RACCOURCIT AUSSI, et c'est juste : un metre de piste
+         vu de biais occupe moins d'un metre d'ecran. */
+      const ex = pc.ex !== undefined ? pc.ex : m;
+      const ey = pc.ey !== undefined ? pc.ey : 0;
+      ctx.transform(ex / m, ey / m, 0, 1, 0, 0);
       const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
