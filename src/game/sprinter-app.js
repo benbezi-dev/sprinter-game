@@ -1392,6 +1392,8 @@
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
     sortie: null,
     overChoice: 0, shake: 0, flash: 0, stumbleFlash: 0,
+    // Le cadrage pose par un mode. 1 = celui du sprint. Voir zoomDuMode().
+    zoomMode: 1,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
     reactShown: false, transShown: false,
     // Faux depart eliminatoire : vrai le temps de la cinematique et de
@@ -2984,7 +2986,30 @@
     return Math.max(0.62, Math.min(1.7, Math.min(G.VW / 430, G.VH / 660)));
   }
   function scaleM() {
-    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique();
+    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique() * zoomDuMode();
+  }
+  /* LE CADRAGE D'UN MODE — pose par le mode, remis par lui.
+     ---------------------------------------------------------------------
+     `G.zoomMode` et `G.angleMode` sont la moitie moteur du chantier de
+     camera de l'edition d'Halloween. Un sprint se court vu de 26,6° au-dessus
+     de l'horizon, ce qui montre bien une course ; une fuite se court plus bas
+     et plus pres, ou l'on ne voit plus la piste mais ce qui arrive derriere.
+
+     POURQUOI ICI ET PAS DANS LE MODE. `scaleM` est appele dix-neuf fois dans
+     ce fichier, et l'angle treize : un mode ne peut pas les intercepter de
+     l'exterieur. Il pose donc deux nombres sur `G`, et le rendu les lit —
+     exactement comme `G.obstacles` et `G.pasMolosse`, qui sont deja la
+     facon dont un mode parle au moteur sans que le moteur le connaisse.
+
+     L'ANGLE, LUI, N'EST PAS ICI : il vit dans `C.ISO_COS` / `C.ISO_SIN`, que
+     le mode ecrit a l'armement et remet au rangement. Deux endroits plutot
+     qu'un, parce que le zoom est un facteur d'echelle et l'angle une
+     direction — les melanger dans une seule valeur aurait demande de
+     recalculer l'un a partir de l'autre a chaque image.
+
+     VAUT 1 PARTOUT AILLEURS, donc le sprint ne change pas d'un pixel. */
+  function zoomDuMode() {
+    return G.zoomMode || 1;
   }
   // LE PLAN SERRE DU GENERIQUE. Le tour d'honneur se joue dans le stade, a
   // l'echelle du monde (voir game/scene-generique.ts) ; a l'echelle de la
