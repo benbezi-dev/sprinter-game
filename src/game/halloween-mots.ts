@@ -31,6 +31,24 @@ const MOTS: Record<string, Paire> = {
   hw_imparti:    ['{s} s pour passer', '{s}s to get through'],
   hw_meilleur:   ['ton chrono : {s} s', 'your time: {s}s'],
   hw_verrouille: ['tiens la nuit précédente', 'hold the previous night first'],
+
+  // --- l'edition datee : une nuit par jour, du 19 au 31 octobre
+  hw_cal_titre:  ['LE CALENDRIER', 'THE CALENDAR'],
+  hw_cal_sous:   ['une nuit par jour, du 19 au 31 octobre',
+                  'one night a day, 19 to 31 October'],
+  hw_scelle:     ['scellée', 'sealed'],
+  hw_ouvre_dans: ['ouvre dans {d}', 'opens in {d}'],
+  hw_ouvre_le:   ['ouvre le {d}', 'opens {d}'],
+  hw_ce_soir:    ['ouvre à 18 h', 'opens at 6 pm'],
+  hw_aujourdhui: ["CE SOIR", 'TONIGHT'],
+
+  // --- le mode test
+  hw_test_bandeau: ['MODE TEST', 'TEST MODE'],
+  hw_test_jour:    ['jour simulé : {d}', 'simulated day: {d}'],
+  hw_test_reel:    ['heure réelle', 'real time'],
+  hw_test_tout:    ['tout ouvert', 'all unlocked'],
+  hw_test_source:  ['heure : {s}', 'time: {s}'],
+  hw_test_voyage:  ['VOYAGEUR TEMPOREL', 'TIME TRAVELLER'],
   hw_tenue:      ['TENUE', 'HELD'],
   hw_partir:     ['PARTIR', 'GO'],
   hw_fermer:     ['PLUS TARD', 'LATER'],
