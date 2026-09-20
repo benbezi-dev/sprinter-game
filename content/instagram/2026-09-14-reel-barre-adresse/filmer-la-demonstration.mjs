@@ -43,6 +43,20 @@ const FPS = 25;
    Mesure a quatre cadences, le 100 m sort a 8,90 s a 15 Hz et 8,62 s a 40 Hz —
    on garde la cadence humaine, pas la meilleure. */
 const CADENCE = Number(process.env.CADENCE || 15);
+
+/* DEUX POINTS DE DEPART POSSIBLES, ET ILS NE RACONTENT PAS LA MEME CHOSE.
+     MODE=page    le plan part au chargement a froid. Le chronometre mesure
+                  « de l'ouverture de la page a l'arrivee ». Honnete, mais
+                  l'ouverture du jeu est une animation de sept secondes : sur
+                  une capture d'ecran ce sont sept secondes de logo fixe, et
+                  la promesse « le temps de lire cette phrase » s'effondre.
+     MODE=course  le plan part a l'accueil, le chronometre au moment ou le
+                  doigt lance la course. Le plan reste d'un seul tenant — on
+                  commence a filmer plus tard, on ne coupe rien dedans — et le
+                  chiffre devient celui qui compte : du depart a la ligne.
+   Le second n'a plus le droit de dire « de l'ouverture de la page » : sa
+   legende dit ce qu'il mesure, et rien d'autre. */
+const MODE = process.env.MODE === 'course' ? 'course' : 'page';
 /* LA TAILLE DE CAPTURE, ET POURQUOI CELLE-LA.
    Page.startScreencast rend les pixels CSS du viewport et rien d'autre : le
    facteur d'echelle ne l'agrandit pas, maxWidth ne fait que contraindre. A
@@ -171,8 +185,11 @@ const OVERLAY = `
     const carton2 = h.querySelector('#__carton2');
     const fondu = (t, d, f, dur = 220) => Math.max(0, Math.min(1, Math.min((t - d) / dur, (f - t) / dur)));
     window.__fige = null;
+    window.__arme = true;          // MODE=page : il court des la premiere image
     const tic = () => {
-      const t = window.__fige != null ? window.__fige : performance.now();
+      const depart = window.__depart || 0;
+      const t = window.__fige != null ? window.__fige
+              : (window.__arme ? Math.max(0, performance.now() - depart) : 0);
       chrono.textContent = virgule(t);
       // Carton d'ouverture : 0,2 -> 2,5 s. Carton de sortie : des que le chrono fige.
       if (window.__fige == null) {
@@ -182,7 +199,7 @@ const OVERLAY = `
       } else {
         carton.style.opacity = 0;
         carton2.textContent = '… la course est déjà finie.';
-        carton2.style.opacity = fondu(performance.now(), window.__figeA, window.__figeA + 2400);
+        carton2.style.opacity = fondu(performance.now(), window.__figeA, window.__figeA + 3400);
       }
       requestAnimationFrame(tic);
     };
@@ -210,6 +227,13 @@ async function toucherTexte(mots) {
   return false;
 }
 
+
+/** Un appui a l'endroit demande, par le protocole : l'ecran titre n'expose
+ *  aucun bouton, c'est la surface entiere qui attend le doigt. */
+async function taperEcran(x, y) {
+  await cdp('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }, sid);
+  await cdp('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }, sid);
+}
 
 /* LA COURSE SE JOUE DANS LA PAGE, ET PAS PAR LE PROTOCOLE.
    Chaque appui envoye par CDP coute deux allers-retours : a quinze appuis par
@@ -247,9 +271,12 @@ await ev(`localStorage.setItem('sprinter_player_name','SPRINTER')`);
 /* LA TAILLE DE SORTIE SE DEMANDE. Sans maxWidth/maxHeight, startScreencast rend
    la taille CSS du viewport — 360 x 640 — et ignore le facteur d'echelle : on
    obtient un reel de la taille d'une vignette. */
-await cdp('Page.startScreencast', { format: 'jpeg', quality: 92, everyNthFrame: 1 }, sid);
-const t0 = Date.now();
-await cdp('Page.navigate', { url: URL_JEU + '?t=' + t0 }, sid);   // LE PLAN COMMENCE ICI
+let t0 = Date.now();
+if (MODE === 'page') {
+  await cdp('Page.startScreencast', { format: 'jpeg', quality: 92, everyNthFrame: 1 }, sid);
+  t0 = Date.now();
+}
+await cdp('Page.navigate', { url: URL_JEU + '?t=' + Date.now() }, sid);
 
 /* L'accueil, puis ONE SHOT -> 100 M -> GO. On attend l'ecran, on ne parie pas
    sur une duree : une duree qui change fait rater le toucher, et le plan est
@@ -265,14 +292,41 @@ const attendre = async (mot, delai = 25000) => {
   return false;
 };
 
-if (!await attendre('ONE SHOT')) throw new Error("l'accueil n'est jamais venu");
+/* L'ECRAN TITRE ATTEND UN APPUI, ET IL FAUT LE LUI DONNER.
+   La premiere version attendait que l'accueil apparaisse tout seul : l'ecran
+   titre restait donc quatre secondes a l'image, a ne rien faire, sur un reel
+   dont le sujet est le temps. Un joueur, lui, touche des qu'il voit. On touche
+   au centre tant que l'accueil n'est pas la. */
+{
+  const fin = Date.now() + 25000;
+  while (Date.now() < fin) {
+    const la = await ev(`[...document.querySelectorAll('button,[role=button],a')]
+      .some(x => x.offsetParent !== null && (x.innerText||'').toUpperCase().includes('ONE SHOT'))`);
+    if (la) break;
+    await taperEcran(LARGEUR / 2, HAUTEUR / 2);
+    await dodo(260);
+  }
+}
+if (!await attendre('ONE SHOT', 6000)) throw new Error("l'accueil n'est jamais venu");
+if (MODE === 'course') {
+  // Le plan commence ici : l'accueil, le jeu, pas un logo qui se forme.
+  await dodo(500);
+  await ev(`window.__arme = false;`);     // zero a l'accueil, il partira au doigt
+  await cdp('Page.startScreencast', { format: 'jpeg', quality: 92, everyNthFrame: 1 }, sid);
+  t0 = Date.now();
+  await dodo(900);                       // on laisse l'accueil se lire
+}
 console.log(`  accueil a ${((Date.now() - t0) / 1000).toFixed(2)} s`);
 await toucherTexte('ONE SHOT'); await dodo(500);
 /* On ne touche PAS « 100 M ». En one-shot l'accueil dit « PICK YOUR EVENTS » :
    le 100 m y est deja coche, et l'appuyer le DECOCHE — GO n'ouvre alors plus
    rien, et le plan est perdu puisqu'on ne coupe pas. */
 if (!await toucherTexte(['LANCER', 'GO'])) throw new Error('le bouton de lancement est introuvable');
-console.log(`  GO a ${((Date.now() - t0) / 1000).toFixed(2)} s`);
+if (MODE === 'course') {
+  // Le chronometre part au doigt qui lance, pas avant.
+  await ev(`window.__depart = performance.now(); window.__arme = true;`);
+}
+console.log(`  LANCER a ${((Date.now() - t0) / 1000).toFixed(2)} s`);
 
 /* LA COURSE. Deux touches alternees, a la cadence d'un joueur qui va vite. On
    passe par le toucher reel, aux coordonnees des deux zones : c'est la porte
@@ -300,11 +354,15 @@ for (let i = 0; i < 250; i++) {
 }
 const chronoCourse = ((await lire()) || '').match(/(?:CUMUL|TOTAL)\s*:\s*([\d.,]+)\s*S/i);
 if (!fin) console.log('  ⚠ la course n\'a pas rendu d\'ecran d\'arrivee — on fige quand meme');
-const tFige = (fin || Date.now()) - t0;
+const tFige = MODE === 'course'
+  ? await ev(`performance.now() - (window.__depart || 0)`)
+  : (fin || Date.now()) - t0;
 await ev(`window.__fige = ${tFige}; window.__figeA = performance.now();`);
 console.log(`  ligne a ${(tFige / 1000).toFixed(2)} s`);
 if (chronoCourse) console.log(`  chrono de la course, lu a l'ecran : ${chronoCourse[1].replace('.', ',')} s`);
-await dodo(1400);                       // le carton de sortie, puis on coupe le flux
+/* L'ecran d'arrivee porte le chrono de la course : c'est l'image qui justifie
+   tout le reste, et elle ne restait qu'une seconde et demie. On la tient. */
+await dodo(3500);
 await cdp('Page.stopScreencast', {}, sid);
 await dodo(300);
 

@@ -29,13 +29,31 @@ pas « du premier caractère tapé ». `legende.txt` est écrite comme cela.
 
 | Mesure | Valeur |
 |---|---|
-| durée réelle du fichier | **24,72 s** |
-| chronomètre à l'arrêt | **23,33 s** |
-| chrono de la course, lu à l'écran du jeu | **8,99 s** |
-| à poster | **`video.mp4`** — H.264 High, 1080 × 1920, 30 i/s, 8,30 Mo |
-| sortie brute | `video.webm` — VP8, 25 i/s, 13,74 Mo |
-| accueil atteint | 6,9 s après l'ouverture |
-| coup de pistolet | 11,2 s |
+| durée réelle du fichier | **20,87 s** |
+| chronomètre à l'arrêt | **15,33 s** — du doigt qui lance à la ligne |
+| chrono de la course, lu à l'écran du jeu | **9,21 s** |
+| à poster | **`video.mp4`** — H.264 High, 1080 × 1920, 30 i/s, 8,05 Mo |
+| sortie brute | `video.webm` — VP8, 25 i/s, 12,29 Mo |
+
+### Pourquoi le plan ne part plus du chargement de la page
+
+La première version partait du chargement à froid et mesurait « de l'ouverture
+de la page à l'arrivée » : 23,33 s, dont **onze de vide**. L'ouverture du jeu
+est une animation d'environ sept secondes — le logo qui se forme, l'écran titre
+qui attend un appui — et sur une capture d'écran ce sont sept secondes de logo
+fixe. Pour un reel dont la promesse est « le temps de lire cette phrase », c'est
+l'inverse du message : ça donne l'impression d'un site lent. La course tenait
+dix secondes, et l'écran d'arrivée — celui qui porte le chrono, donc la seule
+image qui justifie le reste — ne restait qu'une seconde et demie.
+
+`MODE=course` part donc **à l'accueil** et arme le chronomètre **au doigt qui
+lance la course**. Le plan reste d'un seul tenant : on commence à filmer plus
+tard, on ne coupe rien dedans. La répartition devient 1,4 s d'accueil, 3,6 s de
+décompte, 9,2 s de course, 3,5 s d'arrivée tenue.
+
+**Ce que la légende a le droit de dire change avec.** Le chiffre est « du départ
+à la ligne », pas « de l'ouverture de la page ». `MODE=page` reste disponible
+pour qui veut l'autre revendication, avec ses sept secondes de logo.
 
 **Le jour où la prise à la caméra existe**, `monteur-barre-adresse.html` la
 monte et produit la vraie version, celle qui peut dire « du premier caractère

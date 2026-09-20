@@ -3,5 +3,5 @@
 Le temps de lire cette phrase…
 
 2
-00:00:23,330 --> 00:00:24,720
+00:00:17,070 --> 00:00:20,870
 … la course est déjà finie.
