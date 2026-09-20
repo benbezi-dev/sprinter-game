@@ -238,6 +238,33 @@ td.heure, td.chiffre { font: 700 14px var(--police-mono); color: var(--muet); wh
 }
 .pilule:hover { color: var(--sur-accent); filter: brightness(1.07); }
 
+/* Une carte qui EST un lien : la place d'un outil dans la page d'accueil.
+   Le bloc entier est cliquable, et pas seulement son titre — sur un tableau
+   de bord, viser trois mots au lieu d'un panneau se paie à chaque visite. */
+a.outil {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon);
+  padding: 20px 22px;
+  transition: border-color .15s, background .15s;
+}
+a.outil:hover {
+  color: inherit;
+  background: var(--survol);
+  border-color: rgba(251, 194, 78, 0.38);
+}
+a.outil h3 { margin: 0 0 6px; font-size: 19px; }
+a.outil p  { margin: 0; color: var(--muet); font-size: 14.5px; }
+a.outil .surtitre { margin-bottom: 10px; }
+/* Une grille d'outils, qui retombe en colonne sur un téléphone. */
+.outils {
+  display: grid; gap: 14px; margin: 22px 0;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+}
+
 /* Les trois formats. Pas de nouvelle teinte : l'accent, l'encre, le muet. */
 .badge {
   display: inline-block;

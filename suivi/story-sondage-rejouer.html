@@ -7,33 +7,94 @@
      Space Mono sous la main, et le chrono ressort en Helvetica. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Space+Mono:wght@400;700&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@100..900&family=Space+Mono:wght@400;700&display=block" rel="stylesheet">
+
+<!-- ---------------------------------------------------------------------
+     SA PLACE DANS LE TABLEAU DE BORD
+
+     Le site derrière suivi-calendrier.benbezi-sprinter.workers.dev sert ses
+     pages par le binding PAGES du Worker, et sa racine mène à
+     tableau-activite.html. Pour que cet outil y ait une place, coller la
+     carte ci-dessous dans ce fichier-là, dans un conteneur <div class="outils">,
+     la feuille theme-calendrier.css étant liée :
+
+       <a class="outil" href="story-sondage-rejouer.html">
+         <p class="surtitre">Atelier · image</p>
+         <h3>Fond de story — sondage</h3>
+         <p>« −0,02 » en 1080 × 1920, l'écran d'arrivée derrière,
+            la place du sticker réservée. Sort le PNG.</p>
+       </a>
+
+     Le Worker ne sert aucun contenu lui-même : il ne fait que demander le mot
+     de passe puis passer la main à PAGES. Rien à changer de son côté.
+     --------------------------------------------------------------------- -->
 
 <style>
-  :root { color-scheme: dark; }
-  body { margin: 0; background: #0b0d14; color: #cfd3e0;
-         font: 13px ui-monospace, Menlo, monospace; padding: 18px; }
-  h1 { font: 700 15px ui-monospace, monospace; color: #eef0f8; margin: 0 0 4px; }
-  .rangee { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+  /* Les couleurs de la carte « défi ouvert », comme suivi/theme-calendrier.css.
+     RECOPIÉES et non liées : cette page doit rester autonome — c'est la
+     première ligne de sa commande, et un <link> vers une feuille voisine la
+     casserait au premier double-clic hors du serveur. Si tu retouches la
+     palette dans theme-calendrier.css, reporte-la ici. */
+  :root {
+    --accent-clair: #FBC24E; --accent-fonce: #EF7627;
+    --encre: #F4F7FF; --encre-2: #EEF1F7; --texte: #A4ADC4; --muet: #919CB1;
+    --sur-accent: #0B1020;
+    --panneau: rgba(255,255,255,0.028); --panneau-bord: rgba(255,255,255,0.075);
+    color-scheme: dark;
+  }
+  html { background: #070B16; }
+  body {
+    margin: 0; padding: 40px 24px 72px;
+    background: radial-gradient(circle at 50% 50%, #181F39 0%, #161E35 19%,
+                #121A2D 38%, #0F1525 58%, #0B111F 78%, #070B16 100%) fixed;
+    background-color: #0F1525;
+    color: var(--texte);
+    font: 400 15px/1.6 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .surtitre { font: 700 12px/1 'Space Mono', monospace; letter-spacing: .34em;
+              text-transform: uppercase; color: var(--muet); margin: 0 0 12px; }
+  h1 { font: 800 30px/1.15 Outfit, sans-serif; letter-spacing: -.02em;
+       color: var(--encre); margin: 0 0 10px; }
+  p { margin: 0 0 14px; }
+  b { color: var(--encre-2); font-weight: 600; }
+  .rangee { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap;
+            margin-top: 26px; }
   .cadre { position: relative; width: 360px; height: 640px; flex: none; }
   .cadre canvas { position: absolute; inset: 0; width: 360px; height: 640px;
-                  border-radius: 10px; }
+                  border-radius: 14px; }
+  #affiche { border: 1px solid var(--panneau-bord); }
   #reperes { pointer-events: none; }
-  .colonne { max-width: 560px; }
-  button { font: 700 13px ui-monospace, monospace; color: #060913; background: #f8cd4a;
-           border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
-  button:disabled { opacity: .45; cursor: default; }
-  label { display: block; margin: 12px 0; color: #cfd3e0; cursor: pointer; }
-  table { border-collapse: collapse; margin-top: 10px; font-size: 12px; }
-  td { padding: 3px 14px 3px 0; vertical-align: top; }
-  td:first-child { color: #8b93a8; white-space: nowrap; }
-  .alerte { color: #ff8a8a; margin: 10px 0; }
-  p { line-height: 1.55; color: #8b93a8; }
-  b { color: #eef0f8; font-weight: 700; }
+  .colonne { flex: 1 1 360px; max-width: 560px; }
+  button {
+    font: 700 15px/1 Inter, sans-serif; color: var(--sur-accent);
+    background: linear-gradient(90deg, var(--accent-clair), var(--accent-fonce));
+    border: 0; border-radius: 999px; padding: 14px 28px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .4; cursor: default; }
+  label { display: block; margin: 18px 0; color: var(--texte); cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--accent-fonce); margin-right: 5px; }
+  table { border-collapse: collapse; margin-top: 18px; width: 100%;
+          background: var(--panneau); border: 1px solid var(--panneau-bord);
+          border-radius: 14px; overflow: hidden; }
+  td { padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,.045); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { color: var(--muet); white-space: nowrap; font-size: 13.5px; }
+  td:last-child { font: 700 13px 'Space Mono', monospace; color: var(--accent-clair);
+                  text-align: right; white-space: nowrap; }
+  .alerte { color: #FF9A9A; background: rgba(255,120,120,.07);
+            border-left: 2px solid #FF7A7A; border-radius: 0 12px 12px 0;
+            padding: 12px 16px; margin: 14px 0; }
+  @media (max-width: 720px) {
+    body { padding: 28px 16px 56px; }
+    .cadre, .cadre canvas { width: 270px; height: 480px; }
+  }
 </style>
 
-<h1>Story sondage — 1080 × 1920</h1>
-<p style="margin-top:4px">Le fond. Le sondage se pose dans Instagram, par-dessus.</p>
+<p class="surtitre">Atelier · image</p>
+<h1>Fond de story — sondage</h1>
+<p>1080 × 1920. Le sondage se pose dans Instagram, par-dessus.</p>
 
 <div class="rangee">
   <div class="cadre">
