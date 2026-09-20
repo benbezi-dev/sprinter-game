@@ -48,7 +48,8 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 function courir(cle, {
   cadence, cible = null, jambe = 'bonne', enVolAussi = false, mitraille = false,
   joueur = true, voyage = 0, ciseau = CISEAU_VISE, rate = null, mouchard = null,
-  dureeMax = 120, bruit = 0, graine = 1,
+  dureeMax = 120, bruit = 0, graine = 1, tape = false, contact = 0.065,
+  poser = null, trace = null,
 } = {}) {
   const race = HAIES[cle];
   const track = new Track(race);
@@ -60,6 +61,14 @@ function courir(cle, {
   const dt = 1 / 60;
 
   let t = 0, fin = null, prochainTap = 0, gauche = true, muetJusqua = -1, perdues = 0;
+  // LE POUCE NE SE LEVE QU'UNE FOIS PAR HAIE, et il faut le dire au harnais.
+  // Depuis TENUE_POUCE, un relache qui suit sa frappe de trop peu n'est pas un
+  // ciseau et NE LE CONSOMME PAS — c'est ce qui rend le geste rattrapable en
+  // course. Un automate qui rappellerait relacher() a chaque image finirait
+  // donc par en placer un sans l'avoir joue, et mesurerait un jeu qui n'existe
+  // pas. `appelT` retient l'instant de l'appel : c'est de lui que se compte la
+  // tenue du pouce.
+  let leve = -1, appelT = null, poseeH = -1;
   const journal = [], chutes = [], annonces = [];
   let g = graine;
   const alea = () => (g = (g * 16807) % 2147483647) / 2147483647;
@@ -79,11 +88,20 @@ function courir(cle, {
 
     // LE CISEAU — le pouce se leve. C'est le meme pave, le meme doigt : on ne
     // simule rien de plus qu'un relache au bon moment du vol.
+    //
+    // `tape` : le joueur ne TIENT pas. Son pouce quitte le pave au bout d'un
+    // contact ordinaire, comme celui de n'importe quelle frappe de cadence —
+    // c'est le joueur qui « reste en frequence », et c'est celui dont le
+    // hurdleur decrit la course. Voir haies-jeu.js, TENUE_POUCE.
     const vol = ciseauDe(course, r);
-    if (vol && !vol.fait && ciseau !== null) {
-      // `rate` : la haie que le joueur passe mal, les autres etant nettes.
-      const c = (rate !== null && course.i === rate) ? 0.15 : ciseau;
-      if (vol.part >= c) relacher(course, r, vol.cote);
+    if (vol && !vol.fait && vol.cote && leve !== course.i) {
+      if (tape) {
+        if (appelT !== null && t - appelT >= contact) { relacher(course, r, vol.cote); leve = course.i; }
+      } else if (ciseau !== null) {
+        // `rate` : la haie que le joueur passe mal, les autres etant nettes.
+        const c = (rate !== null && course.i === rate) ? 0.15 : ciseau;
+        if (vol.part >= c) { relacher(course, r, vol.cote); leve = course.i; }
+      }
     }
 
     // L'APPEL. On note aussi ce que la touche annoncait, image par image :
@@ -98,9 +116,25 @@ function courir(cle, {
       if (cible !== null && voyage > 0 && reste <= cible + r.v * voyage / 2 && muetJusqua < t) {
         muetJusqua = t + voyage;
       }
+      // `poser` : LE POUCE SE POSE AVANT LA FENETRE ET NE SE RELEVE PLUS.
+      // C'est le geste que le hurdleur decrit — « je reste un peu appuye pour
+      // passer une haie ». Il n'appelle pas : il s'engage, et c'est veille()
+      // qui fait partir l'appel quand il devient possible.
+      if (poser !== null && reste <= poser && poseeH !== course.i) {
+        appeler(course, r, a.cote || (gauche ? 'left' : 'right'));
+        poseeH = course.i;
+      }
       if (cible !== null && (mitraille || reste <= cible)) {
-        const cote = jambe === 'bonne' ? a.cote : (a.cote === 'left' ? 'right' : 'left');
-        appeler(course, r, cote);
+        // AVANT LA PREMIERE HAIE, RIEN N'EST ANNONCE : le coureur n'a pas
+        // encore de jambe d'attaque (haies-pas.js, veille) et les deux paves
+        // s'allument. Un vrai pouce appuie alors sur celui dont c'est le tour ;
+        // le harnais passait `null`, ce qui figeait la jambe du coureur a
+        // `null` pour la course entiere et rendait le cote du ciseau nul avec
+        // elle. Rien ne s'en plaignait — les regles laissent passer un cote
+        // nul — mais plus rien ne verifiait le cote non plus.
+        const annonce = a.cote || (gauche ? 'left' : 'right');
+        const cote = jambe === 'bonne' ? annonce : (annonce === 'left' ? 'right' : 'left');
+        if (appeler(course, r, cote)) appelT = t;
       }
     }
 
@@ -110,6 +144,7 @@ function courir(cle, {
     const juge = pas(course, r);
     if (juge) journal.push(juge);
     if (juge && r.fallAnim > 0 && !tombait) chutes.push(juge);
+    if (trace) trace(r, course, t);
     if (r.d >= track.total && fin === null) fin = t;
   }
   const n = k => course.ciseaux.filter(x => x.note === k).length;
@@ -373,12 +408,14 @@ for (const cle of ['100h', '110h']) {
 //
 // Le defaut venait d'une sur-correction — la fenetre du cote tot avait ete
 // elargie pour qu'une frappe reflexe ne soit plus un accrochage, et elle
-// devenait un ciseau MOYEN, qui ne coute presque rien. CISEAU_PLANCHER ferme
-// cela : sous trente pour cent du vol, on n'a pas ciseaute, on a tape.
+// devenait un ciseau MOYEN, qui ne coute presque rien.
 //
-// Une frappe ordinaire dure 50 a 80 ms sur un vol de 300 : elle tombe donc
-// sous le plancher. Ce test la joue a 0,15 du vol — plus genereux qu'un vrai
-// pouce — et exige qu'elle coute au moins une seconde sur la course.
+// CE QUI FERME LA PORTE AUJOURD'HUI EST TENUE_POUCE, et plus le plancher du
+// vol. Un relache qui suit sa frappe de moins de 110 ms n'est pas un ciseau :
+// c'est une frappe qui finit, et le pouce qui martele n'en donne jamais
+// d'autre sorte. Ce test joue un relache a 0,15 du vol — soit 50 ms sur le
+// 110 m haies, exactement le contact d'un pouce qui tape — et exige qu'il
+// coute au moins une seconde sur la course.
 for (const cle of ['100h', '110h', '400h']) {
   const tenu = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
   const tape = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: 0.15 });
@@ -398,6 +435,90 @@ for (const cle of ['110h', '400h']) {
   ok(`${cle} : sans relache, les dix ciseaux sont notes absents`,
      c.ciseaux.filter(x => x.note === 'absent').length === 10,
      c.ciseaux.map(x => x.note).join(' '));
+}
+
+
+titre("CE QUE LE HURDLEUR A TROUVE");
+
+// TROIS DEFAUTS, UN SEUL RETOUR. Un hurdleur plusieurs fois champion de France
+// du 110 m haies a joue, et a dit trois choses :
+//
+//   « Je comprends pas le "pas de ciseau". »
+//   « Quand je mets une frequence et que je reste un peu appuye pour passer
+//     une haie, ca me coupe le perso, il s'arrete net. »
+//   « Si je reste en frequence mon perso va assez vite mais les passages sont
+//     aleatoires. »
+//
+// Les trois se mesurent, les trois etaient vraies, et ce qui suit les garde
+// fermees. Voir haies-jeu.js (TENUE_POUCE, CISEAU_PLANCHER) et haies-pas.js
+// (veille, FREIN_RECEPTION) pour le detail de chacune.
+
+// 1. LE GESTE ENSEIGNE EST ATTEIGNABLE EN COURSE. Le tutoriel dit « tenir, pas
+// taper » ; encore faut-il que tenir soit possible. L'appel part de la premiere
+// frappe de cadence qui tombe dans la fenetre — le joueur ne la choisit pas —
+// et son pouce remonte 50 a 80 ms plus tard. Ce relache-la ne doit rien juger,
+// et surtout rien consommer : le pouce revient, tient, et ciseaute.
+for (const cle of ['100h', '110h', '400h']) {
+  const tient = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  const tape = courir(cle, { cadence: 10, cible: JUSTE(cle), tape: true, contact: 0.065 });
+  ok(`${cle} : le pouce qui tient ciseaute, celui qui tape jamais`,
+     tient.nets === 10 && tape.ciseaux.every(x => x.note === 'absent'),
+     `tenu ${tient.nets}/10 nets, tape ${[...new Set(tape.ciseaux.map(x => x.note))].join(' ')}`);
+  ok(`${cle} : et cela se voit au chrono`, tape.temps > tient.temps + 0.5,
+     `${tape.temps?.toFixed(2)} s contre ${tient.temps?.toFixed(2)}`);
+  // Une frappe ordinaire dure 50 a 80 ms : AUCUNE de ces durees ne doit passer
+  // pour un ciseau, sans quoi le partage se ferait au hasard du contact.
+  for (const contact of [0.05, 0.065, 0.08]) {
+    const c = courir(cle, { cadence: 10, cible: JUSTE(cle), tape: true, contact });
+    ok(`${cle} : un contact de ${(contact * 1000).toFixed(0)} ms ne ciseaute pas`,
+       c.ciseaux.every(x => x.note === 'absent'),
+       c.ciseaux.map(x => x.note).join(' '));
+  }
+}
+
+// 2. LE POUCE POSE TOT NE FAIT PLUS PERCUTER. La jauge s'allume cinq metres et
+// demi devant la haie, l'appel n'est accepte qu'a trois : le joueur qui appuie
+// entre les deux et GARDE le pouce — ce que le jeu lui demande — n'appuyait
+// plus jamais et percutait. Mesure d'alors : jusqu'a dix haies percutees et des
+// chronos de vingt a vingt-neuf secondes.
+for (const cle of ['100h', '110h', '400h']) {
+  for (const ou of [5.0, 4.0, 3.5, 3.0]) {
+    const c = courir(cle, { cadence: 10, cible: null, poser: ou, ciseau: CISEAU_VISE });
+    const percutees = c.journal.filter(j => j.note === 'percute').length;
+    ok(`${cle} : pouce pose a ${ou.toFixed(1)} m, aucune haie percutee`,
+       percutees === 0 && c.journal.length === 10,
+       `${percutees} percutee(s), ${c.journal.length} haie(s) jugee(s)`);
+  }
+  // S'ENGAGER TOT RESTE MOINS BON QUE VISER, sans quoi la fenetre d'appel ne
+  // voudrait plus rien dire : on decolle de plus loin, on plane davantage.
+  const tot = courir(cle, { cadence: 10, cible: null, poser: 4.0, ciseau: CISEAU_VISE });
+  const vise = courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: CISEAU_VISE });
+  ok(`${cle} : mais viser juste paie encore`, tot.temps >= vise.temps,
+     `${tot.temps?.toFixed(2)} s en s'engageant contre ${vise.temps?.toFixed(2)} en visant`);
+}
+
+// 3. LA RECEPTION FREINE, ELLE NE TELEPORTE PLUS. Le plafond de l'intervalle
+// s'appliquait par une affectation : le coureur touchait la piste a 9,5 m/s et
+// repartait a 6,6 sur la meme image. C'est cela, « il s'arrete net ». Il perd
+// maintenant la meme vitesse, mais sur la premiere foulee de reception.
+for (const cle of ['100h', '110h']) {
+  let pire = 0, precedent = null;
+  courir(cle, { cadence: 10, cible: JUSTE(cle), ciseau: null, trace: (r, course) => {
+    const enl = enVol(course);
+    // ON NE COMPARE QUE DES IMAGES AU SOL. Celle de la reception porte le choc
+    // du ciseau (GARDE_CISEAU) et le freinage de l'air : c'est un cout voulu,
+    // paye une fois, et ce n'est pas le plafond qu'on mesure ici.
+    if (precedent && !precedent.enVol && !enl) pire = Math.max(pire, precedent.v - r.v);
+    precedent = { v: r.v, enVol: enl };
+  } });
+  // CE HARNAIS TOURNE A 60 IMAGES PAR SECONDE, le jeu a 240 : ce qu'on lit ici
+  // est donc quatre fois plus gros que ce que le joueur voit. La descente du
+  // plafond s'etale sur FREIN_RECEPTION metres, soit environ huit images d'ici
+  // et une trentaine en jeu — 0,37 m/s au pire sur le 110 m haies. La
+  // teleportation d'avant en retirait 2,7 EN UNE SEULE, de 9,3 a 6,6. Un demi
+  // metre par seconde laisse passer la premiere et jamais la seconde.
+  ok(`${cle} : aucune image au sol ne retire plus de 0,5 m/s`,
+     pire < 0.5, `au pire ${pire.toFixed(2)} m/s en une image`);
 }
 
 titre("LA RECEPTION DECIDE DE L INTERVALLE SUIVANT");

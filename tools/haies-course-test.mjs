@@ -33,7 +33,8 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
  * cette part de la cadence, comme un vrai doigt ; `graine` rend ce bruit
  * reproductible. Sans bruit, l'automate est un metronome.
  */
-function courir(cle, { cadence, joueur = false, dureeMax = 120, trace, bruit = 0, graine = 1 } = {}) {
+function courir(cle, { cadence, joueur = false, dureeMax = 120, trace, bruit = 0, graine = 1,
+                      contact = 0.065 } = {}) {
   const race = HAIES[cle];
   const track = new Track(race);
   const r = new Runner('TOI', 3, {
@@ -45,6 +46,38 @@ function courir(cle, { cadence, joueur = false, dureeMax = 120, trace, bruit = 0
 
   let t = 0, fin = null, prochainTap = 0, gauche = true, auSol = 0, dernier = 0;
   let premierAppuiD = null;
+  // LE POUCE SE LEVE AUSSI, et il a fallu le hurdleur pour s'en apercevoir.
+  //
+  // Ce harnais n'appuyait jamais que sur des paves : il n'emettait pas de
+  // relache, et le jeu n'en demandait pas. Deux regles l'ont change, et toutes
+  // deux viennent du meme retour — « je reste un peu appuye et ca me coupe le
+  // perso » :
+  //
+  //   - la DUREE de l'appui separe maintenant une frappe d'un maintien
+  //     (haies-jeu.js, TENUE_POUCE) : un harnais qui ne leve pas le pouce ne
+  //     mesure plus le geste, il mesure une position ;
+  //   - un pave deja pose fait partir l'appel des que la fenetre s'ouvre
+  //     (haies-pas.js, veille) : un pave jamais relache appellerait tout seul a
+  //     chacune des dix haies, et la cadence du joueur ne deciderait plus rien.
+  //
+  // `contact` est la duree d'une frappe ordinaire — 50 a 80 ms sous un vrai
+  // pouce. Le pouce qui a appele, lui, TIENT : c'est le geste que le jeu
+  // enseigne, et c'est son relache au sommet du vol qui fait le ciseau.
+  const baisse = { left: null, right: null };
+  const lever = cote => {
+    if (baisse[cote] === null) return;
+    baisse[cote] = null;
+    if (joueur) relacher(course, r, cote);
+  };
+  const frapper = cote => {
+    if (baisse[cote] !== null) return null;
+    baisse[cote] = t;
+    if (!joueur) { r.press(cote === 'left' ? 'a' : 'z', t); return null; }
+    const juge = appeler(course, r, cote);
+    if (juge) return juge;
+    if (!enVol(course)) r.press(cote, t);
+    return null;
+  };
   const journal = [];
   const chutes = [];
   let g = graine;
@@ -54,21 +87,21 @@ function courir(cle, { cadence, joueur = false, dureeMax = 120, trace, bruit = 0
     // LE GESTE DU JOUEUR, quand c'est lui qui appelle : chaque frappe part sur
     // le pave, et c'est la fenetre qui decide si elle est une foulee ou un
     // appel. On relache a mi-vol pour le ciseau.
-    if (joueur) {
-      const vol = ciseauDe(course, r);
-      if (vol && !vol.fait && vol.part >= CISEAU_VISE) relacher(course, r, vol.cote);
+    {
+      const vol = joueur ? ciseauDe(course, r) : null;
+      for (const cote of ['left', 'right']) {
+        if (baisse[cote] === null) continue;
+        // Le pouce qui a appele tient jusqu'au sommet du vol : c'est le ciseau.
+        if (vol && !vol.fait && vol.cote === cote) { if (vol.part >= CISEAU_VISE) lever(cote); continue; }
+        if (t - baisse[cote] >= contact) lever(cote);
+      }
     }
     while (prochainTap <= t) {
-      const cote = gauche ? 'left' : 'right';
-      if (joueur) {
-        // Sous l'appel du joueur, le verdict d'une haie sort de appeler(), pas
-        // de pas() — qui ne rend plus que les percussions. Le journal doit
-        // donc ecouter les deux, sans quoi il resterait vide.
-        let juge = null;
-        if (!enVol(course)) juge = appeler(course, r, cote);
-        if (juge) journal.push(juge); else if (!enVol(course)) r.press(cote, t);
-      }
-      else r.press(gauche ? 'a' : 'z', t);
+      // Sous l'appel du joueur, le verdict d'une haie sort de appeler(), pas
+      // de pas() — qui ne rend plus que les percussions. Le journal doit donc
+      // ecouter les deux, sans quoi il resterait vide.
+      const juge = frapper(gauche ? 'left' : 'right');
+      if (juge) journal.push(juge);
       gauche = !gauche;
       prochainTap += 1 / (cadence * (1 + (alea() * 2 - 1) * bruit));
     }

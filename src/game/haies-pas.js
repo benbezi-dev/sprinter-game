@@ -44,7 +44,7 @@ import { HAIES, positionsDes } from './haies.js';
 import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
          GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, FORME_INTERVALLE, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
          GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau,
-         PLAFOND_INTERVALLE } from './haies-jeu.js';
+         PLAFOND_INTERVALLE, TENUE_POUCE } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -110,6 +110,58 @@ const FENETRE_APPEL = 2.0;
  * change un jour.
  */
 const ACCROC_PERCUTE = 0.25;
+
+/**
+ * SUR QUELLE DISTANCE LA RECEPTION RAMENE LA VITESSE A SON PLAFOND, en metres.
+ *
+ * LE DEFAUT QU'ELLE CORRIGE VIENT D'UN HURDLEUR : « ca me coupe le perso, il
+ * s'arrete net. » Il decrivait ce que le code faisait litteralement. Le plafond
+ * de l'intervalle s'appliquait par un `if (j.v > plafond) j.v = plafond` — une
+ * TELEPORTATION : le coureur touchait la piste a 9,5 m/s et repartait a 6,6 sur
+ * la meme image, en un deux-cent-quarantieme de seconde. Aucune animation, aucun
+ * son, aucun texte ne pouvait rendre cela lisible ; a l'ecran, le personnage
+ * s'arrete.
+ *
+ * Un hurdleur qui rate sa reception ne s'arrete pas non plus : il se recoit
+ * derriere son appui et PERD sa vitesse pendant sa premiere foulee, celle qui
+ * sert a se remettre sous soi. Cette foulee-la est mesuree — 1,51 m chez
+ * Jackson (FORME_INTERVALLE) — et c'est sur elle que la vitesse doit tomber.
+ *
+ * 1,20 m, soit environ 125 ms a la vitesse du jeu. Le plafond atteint est le
+ * meme, l'intervalle qui suit est le meme, le chrono ne bouge que de quelques
+ * centiemes par haie : ce qui change est qu'on VOIT le coureur se casser sur
+ * sa reception au lieu de le voir s'eteindre.
+ */
+const FREIN_RECEPTION = 1.20;
+
+/**
+ * LE PLAFOND DE VITESSE A CET INSTANT DE L'INTERVALLE, en m/s.
+ *
+ * Deux pentes, et le meme calcul pour tout le monde — le moteur (pas()) comme
+ * la jauge (plafondDe()). Elles ont vecu en double un temps, chacune avec sa
+ * copie de l'interpolation ; deux copies d'une regle finissent toujours par
+ * diverger, et c'est la jauge qui aurait menti.
+ *
+ *   sur FREIN_RECEPTION metres   on TOMBE de la vitesse de reception vers ce
+ *                                que le ciseau a laisse ;
+ *   jusqu'au point d'appel       on REMONTE vers le plafond de l'epreuve.
+ */
+function plafondCourant(course, j) {
+  const plein = HAIES[course.cle].maxSpeed;
+  const point = course.positions[Math.min(course.i, course.positions.length - 1)]
+                - APPEL[course.cle].avant + AVANCE_CM;
+  const total = Math.max(0.5, point - course.dReception);
+  const x = Math.max(0, j.d - course.dReception);
+  // LA REMONTEE est celle d'avant, au metre pres : le plafond part de ce que le
+  // ciseau a laisse et retrouve celui de l'epreuve au point d'appel suivant.
+  const t = Math.min(1, Math.max(0, x / total));
+  const montee = course.plafondBas + (plein - course.plafondBas) * t;
+  // LE FREIN s'ajoute par-dessus et s'efface sur FREIN_RECEPTION metres. Le
+  // plafond ne descend donc jamais SOUS ce qu'il valait avant cette correction
+  // — on n'a rien retire au joueur, on a seulement cesse de le teleporter.
+  const sursis = Math.max(0, course.vReception - course.plafondBas);
+  return montee + sursis * Math.max(0, 1 - x / FREIN_RECEPTION);
+}
 
 /**
  * QUEL APPUI VISER, quand la foulee naturelle tombe entre deux.
@@ -186,8 +238,23 @@ export function nouvelleCourse(cle, { appelJoueur = false } = {}) {
     ciseaux: [], dernierCiseau: null,
     // LE PLAFOND DE L'INTERVALLE. `plafondBas` est celui que la reception
     // permet ; il remonte au plafond de l'epreuve d'ici au point d'appel
-    // suivant. Voir haies-jeu.js, PLAFOND_INTERVALLE.
-    plafondBas: 0, dReception: 0,
+    // suivant. `vReception` est la vitesse a laquelle on a touche la piste :
+    // c'est d'elle que le plafond descend, sur FREIN_RECEPTION metres, au lieu
+    // de s'appliquer d'un coup. Voir haies-jeu.js, PLAFOND_INTERVALLE.
+    plafondBas: 0, dReception: 0, vReception: 0,
+    // OU EN ETAIT LE COUREUR QUAND CHAQUE PAVE A ETE BAISSE, en metres, ou
+    // `null` si le pouce n'y est pas. C'est la seule memoire du geste que ce
+    // fichier tient, et elle sert a deux choses :
+    //
+    //   - savoir si un relache a TENU (haies-jeu.js, TENUE_POUCE) ou s'il n'est
+    //     que la fin d'une frappe de cadence ;
+    //   - savoir qu'un pouce est deja pose quand la fenetre d'appel s'ouvre,
+    //     auquel cas l'appel part tout seul plutot que de laisser percuter.
+    //
+    // On la tient en METRES et non en secondes parce que ce fichier n'a pas
+    // d'horloge : `pas()` ne recoit pas de dt, et la distance divisee par la
+    // vitesse rend le temps avec la precision qui nous interesse ici.
+    presse: { left: null, right: null },
     // LA JAMBE D'ATTAQUE DU COUREUR. Nulle avant la premiere haie ; la premiere
     // l'arrete pour toute la course. Voir GARDE_MAUVAISE_JAMBE.
     jambe: null,
@@ -290,6 +357,7 @@ export function pas(course, j) {
     j.stride = course.phaseVol + PI;
     course.reception = Math.round(j.stride / PI);
     course.dReception = j.d;
+    course.vReception = j.v;
     return null;
   }
 
@@ -302,12 +370,7 @@ export function pas(course, j) {
   // la foulee se raccourcit d'elle-meme : le compte d'appuis de l'intervalle
   // s'en trouve deplace, ce qui EST la spirale qu'on cherche a produire.
   if (course.appelJoueur && course.plafondBas > 0 && course.reception > 0) {
-    const plein = HAIES[course.cle].maxSpeed;
-    const point = course.positions[Math.min(course.i, course.positions.length - 1)]
-                  - APPEL[course.cle].avant + AVANCE_CM;
-    const total = Math.max(0.5, point - course.dReception);
-    const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
-    const plafond = course.plafondBas + (plein - course.plafondBas) * t;
+    const plafond = plafondCourant(course, j);
     if (j.v > plafond) j.v = plafond;
   }
 
@@ -486,6 +549,53 @@ function veille(course, j, point) {
   // fonction qui notera son appel une image plus tard.
   a.zone = jugerAppel(course.cle, haie - j.d + AVANCE_CM, j.v).note;
 
+  // UN POUCE DEJA POSE APPELLE TOUT SEUL, et c'est la seconde moitie de la
+  // correction du hurdleur — « je reste un peu appuye pour passer une haie, ca
+  // me coupe le perso ».
+  //
+  // CE QUI SE PASSAIT. La jauge s'allume a deux foulees du point d'appel, soit
+  // cinq metres et demi devant la haie ; un appui n'est l'appel que dans le
+  // dernier metre avant le point (APPEL_MAXI), soit trois metres devant elle.
+  // Entre les deux, la jauge monte et invite a agir, mais la frappe donnee la
+  // n'est qu'une foulee — et le joueur qui la garde enfoncee, comme le
+  // tutoriel le lui demande, n'en donne plus jamais d'autre. Il arrivait donc
+  // sur la haie sans avoir appele et LA PERCUTAIT. Mesure au harnais, pouce
+  // pose entre trois et cinq metres : jusqu'a dix haies percutees et des
+  // chronos de vingt a vingt-neuf secondes, contre treize en jouant.
+  //
+  // UN POUCE POSE EST UNE INTENTION, ET ELLE NE DOIT PAS SE PERDRE. Des que
+  // l'appel devient possible, il part de la jambe posee. Il part tard — au
+  // bord de la fenetre, donc « bon » et non « parfait », et sans la poussee
+  // pleine — et c'est juste : s'engager trop tot, c'est decoller de trop loin.
+  // Viser reste ce qui paie ; s'engager ne fait plus percuter.
+  //
+  // IL FAUT AVOIR TENU. Sans cette condition, une frappe de cadence encore
+  // baissee au moment ou la fenetre s'ouvre ferait decoller le coureur au
+  // premier centimetre utile, et l'appel du joueur n'existerait plus. Voir
+  // haies-jeu.js, TENUE_POUCE : c'est la meme duree qui separe partout une
+  // frappe d'un maintien.
+  if (haie - j.d + AVANCE_CM <= APPEL[course.cle].avant + APPEL_MAXI) {
+    // DE QUEL POUCE, QUAND LES DEUX SONT POSES. Sa jambe d'attaque d'abord —
+    // le coureur en a une, il la garde, et en changer coute
+    // (GARDE_MAUVAISE_JAMBE) : le jeu ne va pas la lui prendre a sa place.
+    // Sinon le pouce pose depuis le plus longtemps, qui est celui qui s'est
+    // engage et non celui qui vient de frapper.
+    let choisi = null;
+    for (const cote of ['left', 'right']) {
+      const d0 = course.presse[cote];
+      if (d0 === null || d0 === undefined) continue;
+      if ((j.d - d0) / Math.max(1, j.v) < TENUE_POUCE) continue;
+      if (cote === course.jambe) { choisi = cote; break; }
+      if (!choisi || d0 < course.presse[choisi]) choisi = cote;
+    }
+    // On ne rend la main que si l'appel est bien parti : sinon la haie doit
+    // pouvoir se percuter comme avant, deux lignes plus bas.
+    if (choisi) {
+      const juge = appeler(course, j, choisi);
+      if (juge) return juge;
+    }
+  }
+
   // TROP TARD : le coureur est sur la haie et n'a pas appele. Il la percute.
   if (j.d >= haie - APPEL_MINI) return percuter(course, j);
   return null;
@@ -498,6 +608,41 @@ function veille(course, j, point) {
  */
 export function appeler(course, j, cote) {
   if (!course || !j || !course.appelJoueur) return null;
+  // LE PAVE EST BAISSE. On le note AVANT les portes de sortie, parce que
+  // toutes les frappes passent ici — padPress() appelle cette fonction la
+  // premiere, qu'il y ait une haie a portee ou non — et que c'est le seul
+  // endroit ou ce fichier apprend qu'un pouce vient de se poser.
+  //
+  // On ne recrit pas une pose deja notee : le meme pave peut etre « appuye »
+  // deux fois sans relache entre les deux (un evenement de relache perdu, un
+  // appel parti tout seul depuis veille()), et repartir de zero ferait passer
+  // un maintien pour une frappe.
+  if (course.presse[cote] === null || course.presse[cote] === undefined) {
+    course.presse[cote] = j.d;
+    // ET DANS L'APPROCHE, LE MEME PAVE DEUX FOIS N'EST PAS UN DOUBLE APPUI.
+    //
+    // TROISIEME CAUSE DU « il s'arrete net », et la plus brutale des trois.
+    // Le moteur de Sprinter fait trebucher qui frappe deux fois du meme cote :
+    // la moitie de la vitesse fond (STUMBLE_KEEP garde 20 %) et le coureur
+    // reste six dixiemes de seconde a se relever. C'est la regle de Sprinter,
+    // elle est juste — sur le plat, ou l'alternance est le jeu entier.
+    //
+    // MAIS LES HAIES DEMANDENT L'INVERSE, ET SUR CE PAVE-LA PRECISEMENT. Le
+    // jeu allume la jambe d'attaque du coureur, celle qu'il garde toute la
+    // course (GARDE_MAUVAISE_JAMBE), et lui demande d'appeler de ce cote. Une
+    // fois sur deux, c'est le pave qu'il vient de frapper : obeir a l'ecran
+    // revenait donc a tirer a pile ou face une chute a chaque haie. L'appel
+    // lui-meme etait protege — il ne passe pas par press() — mais pas la
+    // frappe donnee un peu trop tot, celle qui n'est encore qu'un engagement.
+    //
+    // Les deux dernieres foulees devant une haie ne sont pas une alternance
+    // que le joueur choisit : il pose sa jambe d'attaque. Le double appui ne
+    // se compte donc pas dans la fenetre d'approche. Marteler un seul pave n'y
+    // gagne rien pour autant — la frappe repetee rend la meme poussee qu'une
+    // alternee, et le pouce qui martele ne ciseaute jamais (TENUE_POUCE), donc
+    // il paie le plafond de l'intervalle a chaque haie.
+    if (course.approche && !course.enVol) j.lastKey = null;
+  }
   if (course.enVol || !course.approche) return null;
   if (course.i >= course.positions.length) return null;
 
@@ -707,8 +852,32 @@ function partDuVol(course, j) {
  */
 export function relacher(course, j, cote) {
   if (!course || !j || !course.appelJoueur) return null;
+  // Le pouce quitte le pave : il n'y est plus, et il n'arme plus rien.
+  const pose = course.presse[cote];
+  course.presse[cote] = null;
   if (!course.enVol || course.ciseauPart !== null) return null;
   if (course.coteAppel && cote !== course.coteAppel) return null;
+  // UN RELACHE QUI SUIT SA PROPRE FRAPPE N'EST PAS UN CISEAU : c'est une
+  // frappe qui finit.
+  //
+  // C'EST LA CORRECTION DU HURDLEUR, et elle rend jouable le geste que le
+  // tutoriel enseigne depuis toujours — « tenir, pas taper ». En course,
+  // l'appel part de la premiere frappe de cadence qui tombe dans la fenetre :
+  // le joueur ne l'a pas choisie, et ce pouce-la est deja en train de
+  // remonter. Son relache arrivait 50 a 80 ms apres le decollage, sous le
+  // plancher du vol, et valait « PAS DE CISEAU » A CHACUNE DES DIX HAIES,
+  // quoi que le joueur fasse ensuite. Mesure : 14,07 s contre 12,47 pour le
+  // meme joueur dont le contact durait 150 ms au lieu de 65.
+  //
+  // IL NE CONSOMME PAS LE CISEAU. C'est ce qui rend le geste rattrapable : le
+  // pouce revient sur le pave, tient, et ciseaute. Le joueur qui martele n'en
+  // place jamais — tous ses relaches suivent leur frappe de moins de
+  // TENUE_POUCE — et celui qui tient en place un a chaque haie. Le partage que
+  // CISEAU_PLANCHER faisait sur une part du vol invisible se fait maintenant
+  // sur la duree d'appui, qui est la seule chose que le joueur a dans les
+  // doigts.
+  if (pose !== null && pose !== undefined
+      && (j.d - pose) / Math.max(1, j.v) < TENUE_POUCE) return null;
   course.ciseauPart = partDuVol(course, j);
   return jugerCiseau(course.ciseauPart, course.volCiseau);
 }
@@ -737,10 +906,5 @@ export function ciseauDe(course, j) {
 export function plafondDe(course, j) {
   if (!course || !j || !course.appelJoueur || !course.plafondBas) return 1;
   if (course.enVol || course.reception <= 0) return 1;
-  const plein = HAIES[course.cle].maxSpeed;
-  const point = course.positions[Math.min(course.i, course.positions.length - 1)]
-                - APPEL[course.cle].avant + AVANCE_CM;
-  const total = Math.max(0.5, point - course.dReception);
-  const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
-  return Math.min(1, (course.plafondBas + (plein - course.plafondBas) * t) / plein);
+  return Math.min(1, plafondCourant(course, j) / HAIES[course.cle].maxSpeed);
 }

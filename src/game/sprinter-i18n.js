@@ -823,8 +823,21 @@
     haie_c_bon:      ['CISEAU', 'SCISSOR'],
     haie_c_accroche: ['ACCROCHÉE', 'CLIPPED'],
     haie_c_traine:   ['JAMBE ARRIÈRE', 'TRAIL LEG'],
-    haie_c_absent:   ['PAS DE CISEAU', 'NO SCISSOR'],
+    // « POUCE PAS LEVÉ » ET NON « PAS DE CISEAU », et c'est un hurdleur qui
+    // l'a demandé — « je comprends pas le pas de ciseau ». En français, « pas
+    // de ciseau » se lit deux fois : l'absence de ciseau, ou LE PAS de ciseau,
+    // qui est le nom du geste. Un athlète lit le second, cherche ce qu'on lui
+    // annonce, et ne trouve rien. Un verdict d'une seconde ne peut pas coûter
+    // une hésitation.
+    //
+    // Le mot dit donc ce que le joueur a fait, dans ses termes à lui : son
+    // pouce n'a pas quitté le pavé du vol. Les trois lignes d'aide en dessous
+    // disent l'autre moitié — quoi faire à la haie suivante.
+    haie_c_absent:   ['POUCE PAS LEVÉ', 'THUMB STAYED DOWN'],
     haie_c_ms:       ['{n} ms', '{n} ms'],
+    haie_c_aide_absent:   ['lève le pouce en l’air', 'lift your thumb in the air'],
+    haie_c_aide_accroche: ['tiens-le un peu plus', 'hold it a little longer'],
+    haie_c_aide_traine:   ['lève-le un peu plus tôt', 'lift it a little sooner'],
     // Ce qu'on dit quand la reception a coute le plafond de l'intervalle.
     // « Relance » est le mot du bord de piste : on ne court pas encore, on
     // repart.
