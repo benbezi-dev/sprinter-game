@@ -370,7 +370,7 @@ rendu, à décider maintenant et pas en phase 4.
 | 2 | nom du mode | *non tranché — j'applique ma recommandation : renommer, « La nuit du molosse » devient le titre de la course 1* |
 | 3 | budget d'assets | **la meilleure qualité** → hébergement séparé, voir §3 bis.1 |
 | 4 | courses 8 et 10 | *non tranché — j'applique ma recommandation : à plat, et le double fantôme pour la 10* |
-| 5 | caméra | **on ouvre le chantier** → sonde faite, voir §3 bis.2 |
+| 5 | caméra | **on ouvre le chantier**, et **angle variable par course** → §3 bis.2 |
 | 6 | tests | *non tranché — j'applique ma recommandation : harnais maison `tools/*.mjs`* |
 | 7 | dates | *non tranché — j'applique ma recommandation : `EDITION_HALLOWEEN` recalée sur 19 → 31 octobre* |
 
@@ -442,6 +442,18 @@ le décréter.
 obstacles suppose peut-être le rapport 2:1 ; `depthOf` n'en dépend pas
 (`(ax+ay)·scaleM()`), donc le rangement en profondeur tient. À contrôler en
 phase 2.
+
+**L'ANGLE EST VARIABLE PAR COURSE** — décision du 20 septembre. Chaque course
+fixe le sien : rasant dans la ruelle et le tunnel, plus haut sur la piste
+abandonnée où il faut lire les couloirs. C'est le choix le plus cher (treize
+jeux de pièces Blender, aucune mutualisation d'une course à l'autre) et le plus
+expressif.
+
+Conséquence heureuse sur l'architecture : la caméra devient un **champ de
+configuration par course** (`camera: { angle, zoom }` dans la table des
+courses), pas une constante de mode. C'est plus propre, et ça se teste — un
+harnais peut vérifier que les treize angles sont déclarés et que chacun est
+rendu par un jeu de pièces correspondant.
 
 **Portée :** la caméra basse est **propre au mode Halloween**. Le sprint garde sa
 vue. Concrètement, `C.ISO_*` et le zoom deviennent des valeurs posées à
