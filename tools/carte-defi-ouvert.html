@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carte du défi ouvert — sans terminal</title>
+<!-- ===========================================================================
+     LA CARTE DU DEFI OUVERT, PAR LA PORTE DU NAVIGATEUR
+     ---------------------------------------------------------------------------
+     `tools/carte-defi-ouvert.mjs` sort deja les trois images. Il demande node,
+     un Chrome installe, un depot clone et un terminal ouvert : quatre choses
+     qu'on n'a pas le soir ou l'on poste, et aucune qu'on a sur un telephone.
+     Le tableau de suivi, lui, n'a jamais su fabriquer une image — il n'a que
+     du texte a donner. Entre les deux il n'y avait rien, et « je n'ai pas la
+     partie qui fait sortir trois images » est exactement ce trou-la.
+
+     Cette page est la meme carte par l'autre porte. On tape un code, on
+     appuie, trois PNG tombent dans les telechargements. Rien a installer.
+
+     POURQUOI UN SEUL FICHIER, SANS UN SEUL import. Pour qu'un double-clic
+     suffise. Chrome refuse les modules ES a une page ouverte en `file://` —
+     importer `palette-affiche.js` rendrait la page morte precisement dans le
+     seul cas ou elle sert, celui d'une machine ou rien n'est monte. Le prix
+     est une copie des couleurs, et ce prix est paye par
+     `tools/carte-defi-ouvert-html-test.mjs`, qui compare cette page a
+     `src/game/palette-affiche.js` et a `tools/voix-competition.mjs` valeur par
+     valeur et echoue des que l'une des deux bouge. Une copie surveillee vaut
+     mieux qu'une page qui ne s'ouvre pas.
+
+     POURQUOI UN CANVAS ET NON LA FEUILLE DE STYLE DE L'OUTIL. L'outil ecrit du
+     CSS et le photographie avec Chrome ; un navigateur ne sait pas se
+     photographier lui-meme. Le seul chemin restant serait un `foreignObject`
+     SVG, qui casse sur `background-clip:text` — le titre de la maquette de
+     competition sortirait transparent — et qui rend blanc une fois sur deux
+     sous Safari. Le canvas, lui, dessine pareil partout, iPhone compris. Et
+     c'est deja le medium de cette voix : `src/game/trace-affiche.js` peint
+     l'affiche du jeu sur un canvas depuis toujours.
+
+     CE QUI EST RELU SUR LE SERVEUR, ET POURQUOI. Le chrono, le nom, et surtout
+     le COMPTEUR DE TENTATIVES. « 12 ont essaye » est vrai une heure. Rien
+     n'est recopie a la main ici, exactement comme dans l'outil : la carte
+     relancee deux jours plus tard dit « 23 ont essaye, 3 ont fait mieux », et
+     c'est un deuxieme post qu'on n'a pas eu a ecrire.
+
+     OU LA POSER. Elle marche par double-clic depuis `tools/`. Deposee dans
+     `suivi/`, elle marche aussi depuis le tableau — donc depuis un telephone,
+     derriere le mot de passe, le jour ou l'on poste depuis le canape.
+=========================================================================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --fond:#060913; --or:#F8CD4A; --encre:#e8ecf5; --doux:#8b97ad;
+    --champ:#111726; --filet:rgba(255,255,255,.12);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--encre);
+       font:500 16px/1.5 Outfit,-apple-system,"Helvetica Neue",Arial,sans-serif;
+       padding:32px 20px 80px}
+  .cadre{max-width:1080px;margin:0 auto}
+  h1{font-weight:900;font-size:30px;letter-spacing:-.02em;margin:0 0 6px}
+  .chapeau{color:var(--doux);margin:0 0 28px;max-width:70ch}
+  .chapeau code{font-family:'Space Mono',monospace;font-size:.9em;color:var(--or)}
+
+  form{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;
+       border:1px solid var(--filet);border-radius:14px;padding:20px;margin:0 0 10px}
+  label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--doux);
+        letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+  input,select{background:var(--champ);border:1px solid var(--filet);border-radius:9px;
+        color:var(--encre);font:600 17px/1.2 Outfit,sans-serif;padding:11px 13px;min-width:0}
+  input#code{font-family:'Space Mono',monospace;font-size:22px;letter-spacing:.14em;
+        text-transform:uppercase;width:190px}
+  input.court{width:112px}
+  button{background:var(--or);color:#1a1405;border:0;border-radius:999px;
+         font:700 16px/1 Outfit,sans-serif;padding:15px 26px;cursor:pointer}
+  button:disabled{opacity:.45;cursor:default}
+  button.second{background:transparent;color:var(--encre);border:1px solid var(--filet);
+                font-weight:600;padding:11px 18px}
+  details{margin:0 0 22px;color:var(--doux)}
+  details summary{cursor:pointer;font-size:14px;padding:6px 0}
+  details .corps{border:1px solid var(--filet);border-radius:12px;padding:16px;margin-top:8px}
+
+  #etat{min-height:26px;margin:14px 0 0;font-size:15px}
+  #etat.rouge{color:#ff9a8a}
+  #etat.or{color:var(--or)}
+
+  .cartes{display:grid;gap:26px;margin-top:26px;
+          grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .carte{display:flex;flex-direction:column;gap:10px}
+  .carte canvas{width:100%;height:auto;border-radius:10px;display:block;
+                border:1px solid var(--filet);background:#000}
+  .carte .titre{font-size:13px;color:var(--doux);text-transform:uppercase;
+                letter-spacing:.09em;font-weight:600}
+
+  .recap{margin-top:34px;border-top:1px solid var(--filet);padding-top:22px;
+         font-size:15px;color:var(--doux)}
+  .recap dt{font-weight:700;color:var(--encre);margin-top:14px;font-size:13px;
+            text-transform:uppercase;letter-spacing:.07em}
+  .recap dd{margin:4px 0 0;font-family:'Space Mono',monospace;font-size:15px;
+            color:var(--or);word-break:break-all}
+  .recap .note{font-family:Outfit,sans-serif;color:var(--doux);font-size:13px}
+  [hidden]{display:none !important}
+</style>
+
+<div class="cadre">
+  <h1>Carte du défi ouvert</h1>
+  <p class="chapeau">
+    Le code, le chrono et le compteur de tentatives sont relus sur le serveur
+    au moment du rendu — rien n'est recopié à la main, donc rien ne peut être
+    périmé. Trois images sortent : <code>-feed</code> (Instagram),
+    <code>-story</code> (story, Reels, TikTok), <code>-x</code> (X).
+  </p>
+
+  <form id="form">
+    <label>Code du défi
+      <input id="code" maxlength="10" autocomplete="off" spellcheck="false"
+             placeholder="ZEZE42" required>
+    </label>
+    <label>Maquette
+      <select id="style">
+        <option value="affiche">Affiche — la voix du jeu (défaut)</option>
+        <option value="carte">Carte — jours de compétition</option>
+      </select>
+    </label>
+    <label>Titre (facultatif)
+      <input id="titre" autocomplete="off" placeholder="TU TIENS COMBIEN ?">
+    </label>
+    <button id="lancer" type="submit">Fabriquer les trois cartes</button>
+  </form>
+
+  <details>
+    <summary>Fabriquer sans réseau (préparer une carte avant d'avoir couru)</summary>
+    <div class="corps">
+      <p style="margin:0 0 14px;font-size:14px">
+        Renseigne les <strong>trois</strong> champs et la page ne demande rien au
+        serveur. Le compteur de tentatives n'est alors pas lu : la carte dit
+        « Personne ne l'a encore relevé ».
+      </p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+        <label>Chrono<input id="chrono" class="court" placeholder="8,64" autocomplete="off"></label>
+        <label>Nom<input id="nom" class="court" placeholder="BEN" autocomplete="off"></label>
+        <label>Épreuve<input id="epreuve" class="court" placeholder="100" autocomplete="off"></label>
+        <label>Nom de fichier<input id="fichier" class="court" placeholder="zeze42" autocomplete="off"></label>
+      </div>
+    </div>
+  </details>
+
+  <p id="etat"></p>
+
+  <div class="cartes" id="cartes" hidden></div>
+
+  <button id="tout" class="second" hidden style="margin-top:22px">
+    Télécharger les trois
+  </button>
+
+  <dl class="recap" id="recap" hidden>
+    <dt>Le lien à envoyer (X, WhatsApp)</dt>
+    <dd id="lienEnvoi"></dd>
+    <dd class="note">Celui-là répond 200 et garde son aperçu.</dd>
+    <dt>Le lien à lire et à taper (bio, vidéo)</dt>
+    <dd id="lienLire"></dd>
+    <dd class="note">C'est celui qui est écrit sur la carte, et le seul qui se dicte à voix haute.</dd>
+    <dt>Le code, pour Instagram et TikTok</dt>
+    <dd id="lienCode"></dd>
+    <dd class="note">Les liens n'y sont pas cliquables : le code EST le lien.</dd>
+  </dl>
+</div>
+
+<script>
+/* =========================================================================
+   LES VALEURS DE LA CHARTE
+
+   Recopiees de `src/game/palette-affiche.js` (la voix ordinaire) et de
+   `tools/voix-competition.mjs` (les jours de competition), parce qu'un
+   `import` tuerait le double-clic. `carte-defi-ouvert-html-test.mjs` refuse
+   que l'une des deux derive.
+   ========================================================================= */
+const API  = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+const SITE = 'sprinter-game.com';
+
+const FOND = '#060913';
+const OR = '#F8CD4A';
+const OR_RVB = '248,205,74';
+const BLANC = '#ffffff';
+const ENCRE = { surtitre:0.46, nom:0.55, etiquette:0.46, lien:0.38, pied:0.46,
+                piedDroit:0.30, filet:0.10 };
+const LUEUR = { rayon:0.85, x:0.5, y:0.08, alpha:0.20 };
+const RETRAIT_VIRGULE = 0.30;
+
+const NUIT = '#070b16';
+const HALO = { coeur:'#17213a', bord:'#101728' };
+const FLAMME = { haut:'#fbc44e', milieu:'#f7a03c', bas:'#ef7526' };
+const ENCRE_NUIT = { kicker:'#8494ad', sous:'#93a2ba', etiquette:'#7e8da6',
+                     vif:'#eef2f8', doux:'#8d9cb4', filet:'#253049',
+                     surPastille:'#0a1020' };
+
+const or    = a => `rgba(${OR_RVB},${a})`;
+const encre = a => `rgba(255,255,255,${a})`;
+
+/** La largeur en portrait, 62 % de la hauteur en paysage. Un format large est
+ *  trois fois moins haut que large : une taille en fraction de sa LARGEUR y
+ *  devient enorme et le chrono mange le cadre. */
+const unite = (l, h) => (l > h ? h * 0.62 : l);
+
+/** L'echelle de la maquette de competition : le format de X tient le meme
+ *  contenu dans un tiers de hauteur en moins. */
+const echelle = (w, h) => (w > h ? 0.6 : (h > 1500 ? 1.12 : 1));
+
+const FORMATS = [
+  { cle:'feed',  w:1080, h:1350, nom:'Fil Instagram' },
+  { cle:'story', w:1080, h:1920, nom:'Story · Reels · TikTok' },
+  { cle:'x',     w:1600, h:900,  nom:'X' },
+];
+
+/* -------------------------------------------------------- l'ecriture au canvas
+
+   LA HAUTEUR D'UNE LIGNE EST 1,2 FOIS SA TAILLE, et ce n'est pas un detail :
+   c'est ce que le CSS de `carte-defi-ouvert.mjs` applique sans le dire (`font:
+   500 16px/1.2`). Empiler des blocs a leur seule taille de police tasserait
+   toute la carte d'une dizaine de pixels par ligne, et le centrage vertical
+   partirait avec.                                                             */
+const LH = 1.2;
+
+/**
+ * L'INTER-LETTRAGE DEBORDE A DROITE, DES DEUX COTES DU MUR.
+ *
+ * CSS comme canvas ajoutent l'espacement APRES le dernier caractere : un texte
+ * centre se retrouve pousse d'un demi-espacement vers la gauche. Le CSS de
+ * l'outil corrige par `text-indent`, `trace-affiche.js` par `+ taille * 0.18`
+ * sur un espacement de 0,36 em — la meme moitie, ecrite deux fois. Ici, une
+ * fois.
+ */
+function police(c, famille, taille, graisse, ls) {
+  c.font = `${graisse || 400} ${taille}px ${famille}`;
+  // Apres `font`, toujours : certaines versions de Chrome remettent
+  // l'espacement a zero quand la police change, et le surtitre sortait alors
+  // colle alors qu'il etait espace la ligne d'avant.
+  c.letterSpacing = `${ls || 0}px`;
+}
+
+function centre(c, texte, cx, cy, ls) {
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(texte, cx + (ls || 0) / 2, cy);
+}
+
+/** Coupe un texte aux mots, sans jamais sortir de la largeur donnee. */
+function decouper(c, texte, largeurMax) {
+  const mots = String(texte).trim().split(/\s+/);
+  const lignes = [];
+  let ligne = '';
+  for (const mot of mots) {
+    const essai = ligne ? `${ligne} ${mot}` : mot;
+    if (ligne && c.measureText(essai).width > largeurMax) { lignes.push(ligne); ligne = mot; }
+    else ligne = essai;
+  }
+  if (ligne) lignes.push(ligne);
+  return lignes;
+}
+
+/**
+ * LA VIRGULE NE PREND PAS UNE CHASSE ENTIERE.
+ *
+ * Space Mono est a chasse fixe : laissee telle quelle, « 8,64 » se lit
+ * « 8 , 64 » — deux nombres au lieu d'un. Trois dixiemes retires de chaque
+ * cote en laissent quatre, la mesure que `morceauxChrono` donne deja dans
+ * `trace-affiche.js`.
+ */
+function chrono(c, texte, cx, cy) {
+  const str = String(texte);
+  const i = str.indexOf(',');
+  c.textBaseline = 'middle';
+  if (i < 0) { centre(c, str, cx, cy, 0); return; }
+  const entier = str.slice(0, i), deci = str.slice(i + 1);
+  const wEntier = c.measureText(entier).width;
+  const wDeci = c.measureText(deci).width;
+  const wVirg = c.measureText('0').width * (1 - RETRAIT_VIRGULE * 2);
+  let cur = cx - (wEntier + wVirg + wDeci) / 2;
+  c.textAlign = 'left';  c.fillText(entier, cur, cy);
+  cur += wEntier;
+  // Centree dans sa fente etroite : collee a gauche, on aurait deplace le trou
+  // au lieu de le boucher.
+  c.textAlign = 'center'; c.fillText(',', cur + wVirg / 2, cy);
+  cur += wVirg;
+  c.textAlign = 'left';  c.fillText(deci, cur, cy);
+}
+
+/**
+ * Un degrade CSS, a l'angle CSS, sur la boite donnee.
+ *
+ * `0deg` monte, et les degres tournent dans le sens des aiguilles — rien de ce
+ * que `createLinearGradient` attend. La longueur de la ligne de degrade est
+ * celle qui fait toucher les deux coins opposes, sinon le dernier arret tombe
+ * avant le bord et la flamme s'eteint dans l'angle.
+ */
+function degradeCss(c, x, y, w, h, deg, arrets) {
+  const rad = (deg - 90) * Math.PI / 180;
+  const dx = Math.cos(rad), dy = Math.sin(rad);
+  const longueur = Math.abs(w * Math.sin(deg * Math.PI / 180))
+                 + Math.abs(h * Math.cos(deg * Math.PI / 180));
+  const cx = x + w / 2, cy = y + h / 2;
+  const g = c.createLinearGradient(cx - dx * longueur / 2, cy - dy * longueur / 2,
+                                   cx + dx * longueur / 2, cy + dy * longueur / 2);
+  for (const [p, col] of arrets) g.addColorStop(p, col);
+  return g;
+}
+
+const flamme = (c, x, y, w, h, milieu) => degradeCss(c, x, y, w, h, 100, [
+  [0.04, FLAMME.haut], [(milieu || 48) / 100, FLAMME.milieu], [0.96, FLAMME.bas],
+]);
+
+/* ==========================================================================
+   LA MAQUETTE « AFFICHE » — la voix du jeu, et le defaut.
+
+   Les proportions sont RECOPIEES de `pageAffiche` dans
+   `tools/carte-defi-ouvert.mjs`, lui-meme recopie de `game/trace-affiche.js` :
+   marge a 8,2 % de la largeur, surtitre a 10,5 % de la hauteur et 36 %
+   d'inter-lettrage, titre en Outfit 900 serre a -2,2 %, chrono en Space Mono
+   700 dore, pied a une marge et demie du bas. Une carte qui ressemble au jeu
+   de loin et pas de pres dit que le compte et le jeu sont deux choses.
+   ========================================================================== */
+function dessinerAffiche(c, L, H, d) {
+  const marge = Math.round(L * 0.082);
+  const u = unite(L, H);
+  const T = t => Math.round(u * t);
+  const hautY = Math.round(H * 0.105);
+  const haut = hautY + Math.round(L * 0.055);
+  const basZone = H - marge * 2.1;
+  const trait = Math.max(2, Math.round(L / 540));
+  const utile = L - marge * 2;
+  const OUTFIT = 'Outfit, sans-serif';
+  const MONO = "'Space Mono', monospace";
+
+  c.fillStyle = FOND; c.fillRect(0, 0, L, H);
+  const lueur = c.createRadialGradient(L * LUEUR.x, H * LUEUR.y, 0,
+                                       L * LUEUR.x, H * LUEUR.y, L * LUEUR.rayon);
+  lueur.addColorStop(0, or(LUEUR.alpha));
+  lueur.addColorStop(1, or(0));
+  c.fillStyle = lueur; c.fillRect(0, 0, L, H);
+
+  // Trois traits en fuite suffisent a poser le stade. Davantage, et l'oeil
+  // quitte le chiffre — qui est le sujet.
+  c.save(); c.globalAlpha = 0.14;
+  for (let i = 0; i < 3; i++) {
+    const y = H * (0.62 + i * 0.11);
+    const g = c.createLinearGradient(0, y, L, y);
+    g.addColorStop(0, or(0)); g.addColorStop(0.5, or(1)); g.addColorStop(1, or(0));
+    c.fillStyle = g; c.fillRect(0, y, L, trait);
+  }
+  c.restore();
+
+  // L'etiquette de provenance ne participe pas au centrage : elle tient sa
+  // place quoi qu'il arrive, exactement comme dans le jeu.
+  const tSur = Math.round(L * 0.0205);
+  police(c, OUTFIT, tSur, 700, tSur * 0.36);
+  c.fillStyle = encre(ENCRE.surtitre);
+  centre(c, `SPRINTER · ${d.libelleEpreuve}`.toUpperCase(), L / 2, hautY + LH * tSur / 2, tSur * 0.36);
+
+  const tTitre = T(0.082), lhTitre = T(0.078), mbTitre = T(0.03);
+  police(c, OUTFIT, tTitre, 900, -tTitre * 0.022);
+  const lignesTitre = decouper(c, d.titreAffiche.toUpperCase(), utile);
+
+  const tChrono = T(0.20);
+  const tQui = T(0.034), mtQui = T(0.045);
+  const tEtat = T(0.030), mtEtat = T(0.022);
+  const mtBillet = T(0.085), ptBillet = T(0.055);
+  const tEtiq = T(0.022), mbEtiq = T(0.028);
+  const tCode = T(0.105);
+  const tLien = T(0.026), mtLien = T(0.030);
+
+  const hBillet = 1 + ptBillet + LH * tEtiq + mbEtiq + tCode + mtLien + LH * tLien;
+  const total = lignesTitre.length * lhTitre + mbTitre + tChrono
+              + mtQui + LH * tQui + mtEtat + LH * tEtat + mtBillet + hBillet;
+
+  // La zone ou le sujet a le droit de vivre, et il s'y centre.
+  let y = haut + (basZone - haut - total) / 2;
+
+  c.fillStyle = BLANC;
+  police(c, OUTFIT, tTitre, 900, -tTitre * 0.022);
+  lignesTitre.forEach((ligne, i) =>
+    centre(c, ligne, L / 2, y + i * lhTitre + lhTitre / 2, -tTitre * 0.022));
+  y += lignesTitre.length * lhTitre + mbTitre;
+
+  police(c, MONO, tChrono, 700, 0);
+  c.fillStyle = OR;
+  chrono(c, d.chronoTexte, L / 2, y + tChrono / 2);
+  y += tChrono + mtQui;
+
+  police(c, OUTFIT, tQui, 500, 0);
+  c.fillStyle = encre(ENCRE.nom);
+  centre(c, `${d.nom} · ${d.libelleEpreuve}`, L / 2, y + LH * tQui / 2, 0);
+  y += LH * tQui + mtEtat;
+
+  police(c, OUTFIT, tEtat, 600, 0);
+  c.fillStyle = or(0.85);
+  centre(c, d.fort, L / 2, y + LH * tEtat / 2, 0);
+  y += LH * tEtat + mtBillet;
+
+  // LE CODE. L'affiche du jeu garde cette zone pour la trace de la course ;
+  // ici elle porte la seule chose qui ramene quelqu'un dans le jeu.
+  c.fillStyle = encre(ENCRE.filet); c.fillRect(marge, y, utile, 1);
+  y += 1 + ptBillet;
+
+  police(c, OUTFIT, tEtiq, 700, tEtiq * 0.36);
+  c.fillStyle = encre(ENCRE.etiquette);
+  centre(c, 'CODE DU DÉFI', L / 2, y + LH * tEtiq / 2, tEtiq * 0.36);
+  y += LH * tEtiq + mbEtiq;
+
+  police(c, MONO, tCode, 700, tCode * 0.12);
+  c.fillStyle = BLANC;
+  centre(c, d.code, L / 2, y + tCode / 2, tCode * 0.12);
+  y += tCode + mtLien;
+
+  police(c, OUTFIT, tLien, 500, 0);
+  c.fillStyle = encre(ENCRE.lien);
+  centre(c, `${SITE}/d/${d.code}`, L / 2, y + LH * tLien / 2, 0);
+
+  // Le pied du jeu, au pixel : meme filet, meme graisse, meme inter-lettrage.
+  c.fillStyle = encre(ENCRE.filet);
+  c.fillRect(marge, Math.round(H - marge * 1.5), utile, 1);
+  const tPied = Math.round(L * 0.0205);
+  police(c, OUTFIT, tPied, 700, L * 0.006);
+  c.textBaseline = 'middle';
+  c.textAlign = 'left';
+  c.fillStyle = encre(ENCRE.pied);
+  c.fillText('SPRINTER', marge, H - marge * 0.92);
+  c.textAlign = 'right';
+  c.fillStyle = encre(ENCRE.piedDroit);
+  c.fillText('JEU DE SPRINT', L - marge, H - marge * 0.92);
+}
+
+/* ==========================================================================
+   LA MAQUETTE « CARTE » — les jours de competition.
+
+   Bleu nuit et degrade orange, celle de `carte-defi.mjs` et
+   `carte-riposte.mjs`. Elle est reservee aux jours ou le compte parle d'autre
+   chose que de lui : un record du monde, une finale, un chrono d'ailleurs.
+   Deux voix, deux occasions — et on ne melange pas les deux dans la meme
+   semaine.
+   ========================================================================== */
+function dessinerCarte(c, L, H, d) {
+  const k = echelle(L, H);
+  const horizontal = L > H;
+  const R = v => Math.round(v * k);
+  const padHaut = R(110), padCote = R(78), padBas = R(92);
+  const utile = L - padCote * 2;
+  const SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
+  const MONO = "Menlo, 'DejaVu Sans Mono', monospace";
+
+  // Le fond n'est pas un aplat : un halo bleu au centre detache la carte du
+  // fil, qui est blanc ou noir selon le telephone de celui qui la voit.
+  c.fillStyle = NUIT; c.fillRect(0, 0, L, H);
+  c.save();
+  const rx = 0.88 * L, ry = 0.62 * H;
+  c.translate(L * 0.5, H * 0.46);
+  c.scale(1, ry / rx);
+  const halo = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+  halo.addColorStop(0, HALO.coeur);
+  halo.addColorStop(0.46, HALO.bord);
+  halo.addColorStop(1, NUIT);
+  c.fillStyle = halo;
+  c.fillRect(-L * 4, -H * 4 * rx / ry, L * 8, H * 8 * rx / ry);
+  c.restore();
+
+  const tKick = R(27), mbKick = R(40);
+  const tTitre = R(150), mbTitre = R(20);
+  const tSous = R(35), lhSous = Math.round(1.3 * tSous);
+  const ptBil = R(44), pbBil = R(48);
+  const tEtiq = R(26), mbEtiq = R(18);
+  const tCode = R(128);
+  const tOu = R(30), mtOu = R(26);
+  const tFort = R(42), mbFort = R(14);
+  const tDoux = R(34);
+  const tPied = R(36), mtPied = R(46), padPiedY = R(24), padPiedX = R(52);
+
+  police(c, SANS, tTitre, 700, -tTitre * 0.02);
+  const lignesTitre = decouper(c, d.titreCarte, utile);
+
+  // La phrase longue tient sur trois lignes en vertical. En horizontal elle en
+  // prendrait autant sur une carte deux fois moins haute : on la raccourcit.
+  const sous = horizontal
+    ? `le chrono de ${d.nom}. Tu cours contre son fantôme, pas contre un nombre.`
+    : `le chrono de ${d.nom}. Tu ne cours pas contre un nombre : tu cours contre son fantôme, dans ton couloir, en même temps que lui.`;
+  police(c, SANS, tSous, 400, 0);
+  const lignesSous = decouper(c, sous, Math.min(utile, R(860)));
+
+  const hHaut = LH * tKick + mbKick + lignesTitre.length * tTitre + mbTitre
+              + lignesSous.length * lhSous;
+  const hBillet = 1 + ptBil + LH * tEtiq + mbEtiq + tCode + mtOu + LH * tOu + pbBil + 1;
+  const hPastille = padPiedY * 2 + LH * tPied;
+  const hBas = LH * tFort + mbFort + LH * tDoux + mtPied + hPastille;
+
+  // En vertical le billet pousse le reste aux deux bouts (`margin:auto`) ; en
+  // horizontal il n'y a pas de place a repartir, et `auto` sortait la pastille
+  // de l'image.
+  const dispo = H - padHaut - padBas;
+  let y, respire;
+  if (horizontal) {
+    respire = R(30);
+    y = padHaut + (dispo - (hHaut + respire * 2 + hBillet + hBas)) / 2;
+  } else {
+    respire = Math.max(0, (dispo - hHaut - hBillet - hBas) / 2);
+    y = padHaut;
+  }
+
+  police(c, MONO, tKick, 400, tKick * 0.34);
+  c.fillStyle = ENCRE_NUIT.kicker;
+  centre(c, `DÉFI OUVERT · ${d.libelleEpreuve}`.toUpperCase(), L / 2, y + LH * tKick / 2, tKick * 0.34);
+  y += LH * tKick + mbKick;
+
+  police(c, SANS, tTitre, 700, -tTitre * 0.02);
+  lignesTitre.forEach((ligne, i) => {
+    const largeur = c.measureText(ligne).width;
+    c.fillStyle = flamme(c, (L - largeur) / 2, y + i * tTitre, largeur, tTitre, 48);
+    centre(c, ligne, L / 2, y + i * tTitre + tTitre / 2, -tTitre * 0.02);
+  });
+  y += lignesTitre.length * tTitre + mbTitre;
+
+  police(c, SANS, tSous, 400, 0);
+  c.fillStyle = ENCRE_NUIT.sous;
+  lignesSous.forEach((ligne, i) => centre(c, ligne, L / 2, y + i * lhSous + lhSous / 2, 0));
+  y += lignesSous.length * lhSous + respire;
+
+  // LE CODE EST LA RAISON D'ETRE DE LA CARTE. Sur Instagram et TikTok il n'y a
+  // pas de lien a suivre : ce bloc est le seul chemin vers le jeu, et il doit
+  // se lire d'un ecran de telephone tenu a bout de bras, dans un fil qui
+  // defile.
+  c.fillStyle = ENCRE_NUIT.filet;
+  c.fillRect(padCote, y, utile, 1);
+  y += 1 + ptBil;
+
+  police(c, MONO, tEtiq, 400, tEtiq * 0.34);
+  c.fillStyle = ENCRE_NUIT.etiquette;
+  centre(c, 'CODE DU DÉFI', L / 2, y + LH * tEtiq / 2, tEtiq * 0.34);
+  y += LH * tEtiq + mbEtiq;
+
+  police(c, MONO, tCode, 700, tCode * 0.1);
+  c.fillStyle = ENCRE_NUIT.vif;
+  centre(c, d.code, L / 2, y + tCode / 2, tCode * 0.1);
+  y += tCode + mtOu;
+
+  police(c, SANS, tOu, 400, 0);
+  c.fillStyle = ENCRE_NUIT.etiquette;
+  centre(c, 'à taper dans le jeu, onglet DÉFI', L / 2, y + LH * tOu / 2, 0);
+  y += LH * tOu + pbBil;
+
+  c.fillStyle = ENCRE_NUIT.filet;
+  c.fillRect(padCote, y, utile, 1);
+  y += 1 + respire;
+
+  police(c, SANS, tFort, 700, 0);
+  c.fillStyle = ENCRE_NUIT.vif;
+  centre(c, d.fort, L / 2, y + LH * tFort / 2, 0);
+  y += LH * tFort + mbFort;
+
+  police(c, SANS, tDoux, 400, 0);
+  c.fillStyle = ENCRE_NUIT.doux;
+  centre(c, d.doux, L / 2, y + LH * tDoux / 2, 0);
+  y += LH * tDoux + mtPied;
+
+  // Le lien n'est pas une ligne de texte mais un bouton : sur un fond bleu
+  // nuit, une url orange se lit comme une signature. C'est la derniere chose
+  // que l'oeil accroche avant de scroller.
+  const texteP = `${SITE}/d/${d.code}`;
+  police(c, SANS, tPied, 700, tPied * 0.005);
+  const wTexte = c.measureText(texteP).width;
+  const wPast = wTexte + padPiedX * 2, xPast = (L - wPast) / 2;
+  c.fillStyle = flamme(c, xPast, y, wPast, hPastille, 50);
+  c.beginPath();
+  c.roundRect(xPast, y, wPast, hPastille, hPastille / 2);
+  c.fill();
+  c.fillStyle = ENCRE_NUIT.surPastille;
+  centre(c, texteP, L / 2, y + hPastille / 2, tPied * 0.005);
+}
+
+/* ------------------------------------------------------------------ le defi */
+
+const virgule = ms => (ms / 1000).toFixed(2).replace('.', ',');
+
+function msDepuisTexte(t) {
+  const n = Number(String(t).replace(',', '.'));
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`Chrono illisible : ${t}. Attendu 8,64 ou 8.64.`);
+  return Math.round(n * 1000);
+}
+
+/**
+ * Ce que le serveur sait de ce defi.
+ *
+ * `attempts` est la liste de ceux qui l'ont releve, deja triee par chrono et
+ * plafonnee a cinquante cote worker. On n'en tire que deux nombres : combien
+ * ont essaye, combien ont fait mieux. Le detail nommerait des joueurs sur une
+ * image publique, ce qu'aucun d'eux n'a demande.
+ */
+async function lireDefi(code) {
+  const res = await fetch(`${API}/challenge?id=${encodeURIComponent(code)}`);
+  if (!res.ok) throw new Error(`le serveur répond ${res.status}`);
+  const d = await res.json();
+  if (!d.found) throw new Error('ce code ne correspond à aucun défi');
+  return d;
+}
+
+/**
+ * La ligne qui pique, tiree de ce qui s'est passe et de rien d'autre.
+ *
+ * Aucune n'invente un chiffre : une carte qui annonce « des centaines de
+ * joueurs » quand il y en a eu quatre se retourne contre le compte le jour ou
+ * quelqu'un regarde le classement.
+ */
+function tally(horsLigne, essais, battus) {
+  if (horsLigne) return { fort: 'Personne ne l’a encore relevé.', doux: 'Tu peux être le premier.' };
+  if (!essais) return { fort: 'Personne n’a encore osé.', doux: 'Le premier qui tape le code court contre mon fantôme.' };
+  if (!battus) {
+    return {
+      fort: essais === 1 ? '1 a essayé. Zéro a fait mieux.' : `${essais} ont essayé. Zéro a fait mieux.`,
+      doux: 'Le chrono tient toujours.',
+    };
+  }
+  return {
+    fort: `${essais} ont essayé. ${battus} ${battus === 1 ? 'a' : 'ont'} fait mieux.`,
+    doux: 'Ça se joue à quelques centièmes.',
+  };
+}
+
+/* ------------------------------------------------------------------ la page */
+
+const $ = id => document.getElementById(id);
+const etat = $('etat');
+let aTelecharger = [];
+
+function dire(texte, classe) {
+  etat.textContent = texte;
+  etat.className = classe || '';
+}
+
+/**
+ * LES POLICES AVANT LE DESSIN, ET PAS APRES.
+ *
+ * Un canvas qui peint avant que la police soit arrivee peint en police de
+ * repli, sans rien dire — et la carte part a la publication avec un chrono en
+ * Arial. `document.fonts.load` attend chaque graisse nommement : `fonts.ready`
+ * seul ne declenche pas le chargement de celles qu'aucun element de la page
+ * n'utilise encore, et le canvas n'est pas un element.
+ */
+async function attendreLesPolices() {
+  const voulues = ['900 100px Outfit', '700 100px Outfit', '600 100px Outfit',
+                   '500 100px Outfit', '700 100px "Space Mono"'];
+  try {
+    const lots = await Promise.all(voulues.map(f => document.fonts.load(f, 'Défi 0123456789')));
+    await document.fonts.ready;
+    // `document.fonts.check` MENT quand la feuille de Google Fonts n'est pas
+    // arrivee : sans une seule `@font-face` a comparer, il repond « oui, ca se
+    // dessine » — en police de repli. C'est le cas exact qu'on cherche a voir,
+    // et il repondait donc « tout va bien » sur une machine hors ligne. Le
+    // tableau que rend `load`, lui, est vide quand aucune fonte ne correspond.
+    return lots.every(fontes => fontes.length > 0
+                             && fontes.every(f => f.status === 'loaded'));
+  } catch { return false; }
+}
+
+async function fabriquer(evenement) {
+  evenement.preventDefault();
+  $('lancer').disabled = true;
+  $('cartes').hidden = true;
+  $('tout').hidden = true;
+  $('recap').hidden = true;
+
+  try {
+    const code = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!/^[A-Z0-9]{4,10}$/.test(code)) {
+      throw new Error(`Code invalide : ${code || '(vide)'}. Quatre à dix lettres ou chiffres.`);
+    }
+    const style = $('style').value;
+    const titre = $('titre').value.trim();
+    const nomSaisi = $('nom').value.trim();
+    const chronoSaisi = $('chrono').value.trim();
+    const epreuveSaisie = $('epreuve').value.trim().replace(/\s*m$/i, '');
+
+    // Tout donne a la main : on ne demande rien au reseau. C'est le mode « je
+    // prepare la carte dans le train ».
+    const horsLigne = !!(chronoSaisi && nomSaisi && epreuveSaisie);
+    let defi = null;
+    if (!horsLigne) {
+      dire('Lecture du défi sur le serveur…', 'or');
+      try {
+        defi = await lireDefi(code);
+      } catch (e) {
+        throw new Error(`Lecture du défi ${code} : ${e.message}. `
+          + 'Renseigne chrono, nom et épreuve dans « Fabriquer sans réseau » pour '
+          + 'fabriquer quand même la carte.');
+      }
+    }
+
+    const nom = nomSaisi || defi?.owner_name || 'ANONYME';
+    const epreuves = epreuveSaisie ? [epreuveSaisie] : (defi?.races || ['100']);
+    const totalMs = chronoSaisi ? msDepuisTexte(chronoSaisi) : defi.total_ms;
+    const essais = defi ? (defi.attempts || []).length : 0;
+    const battus = defi ? (defi.attempts || []).filter(a => a.total_ms < totalMs).length : 0;
+    const bas = tally(horsLigne, essais, battus);
+
+    const donnees = {
+      code, nom, totalMs,
+      chronoTexte: virgule(totalMs),
+      libelleEpreuve: epreuves.map(e => `${e} m`).join(' + '),
+      // Les deux maquettes n'ont pas le meme defaut, et c'est voulu : l'affiche
+      // annonce le format, la carte de competition annonce le chrono.
+      titreAffiche: titre || 'Défi ouvert',
+      titreCarte: titre || `${virgule(totalMs)} s`,
+      fort: bas.fort, doux: bas.doux,
+    };
+
+    dire('Chargement des polices de la charte…', 'or');
+    const policesPretes = await attendreLesPolices();
+
+    const base = ($('fichier').value.trim() || code).toLowerCase()
+                   .replace(/[^a-z0-9._-]/g, '');
+    const conteneur = $('cartes');
+    conteneur.innerHTML = '';
+    aTelecharger = [];
+
+    for (const f of FORMATS) {
+      const bloc = document.createElement('div');
+      bloc.className = 'carte';
+      const canvas = document.createElement('canvas');
+      canvas.width = f.w; canvas.height = f.h;
+      const c = canvas.getContext('2d');
+      (style === 'affiche' ? dessinerAffiche : dessinerCarte)(c, f.w, f.h, donnees);
+
+      const nomFichier = `${base}-${style}-${f.cle}.png`;
+      const titreBloc = document.createElement('div');
+      titreBloc.className = 'titre';
+      titreBloc.textContent = `${f.nom} — ${f.w}×${f.h}`;
+      const bouton = document.createElement('button');
+      bouton.className = 'second';
+      bouton.type = 'button';
+      bouton.textContent = `Télécharger ${nomFichier}`;
+      const enregistrer = () => canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = nomFichier;
+        a.click();
+        // Le revoquer tout de suite annule le telechargement sous Safari : il
+        // lit le blob APRES le clic.
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+      }, 'image/png');
+      bouton.addEventListener('click', enregistrer);
+      aTelecharger.push(enregistrer);
+
+      bloc.append(titreBloc, canvas, bouton);
+      conteneur.append(bloc);
+    }
+
+    conteneur.hidden = false;
+    $('tout').hidden = false;
+
+    $('lienEnvoi').textContent = `https://${SITE}/?defi=${code}`;
+    $('lienLire').textContent = `${SITE}/d/${code}`;
+    $('lienCode').textContent = code;
+    $('recap').hidden = false;
+
+    const compte = horsLigne
+      ? 'Valeurs données à la main : le compteur d’essais n’a pas été lu.'
+      : `${essais} tentative(s) enregistrée(s), ${battus} meilleure(s) que ce chrono.`;
+    dire(`Défi ${code} — ${virgule(totalMs)} s sur ${donnees.libelleEpreuve}, par ${nom}. ${compte}`
+         + (policesPretes ? '' : ' ⚠ Polices de la charte non chargées : les cartes sont'
+            + ' rendues en police de repli. Vérifie le réseau avant de poster.'),
+         policesPretes ? '' : 'rouge');
+  } catch (e) {
+    dire(e.message, 'rouge');
+  } finally {
+    $('lancer').disabled = false;
+  }
+}
+
+$('form').addEventListener('submit', fabriquer);
+// Trois telechargements de suite : les navigateurs demandent l'autorisation au
+// deuxieme. Les espacer evite que le troisieme passe pour une rafale.
+$('tout').addEventListener('click', () => {
+  aTelecharger.forEach((f, i) => setTimeout(f, i * 400));
+});
+
+// Le code arrive souvent par un lien ou un collage : ?code=ZEZE42.
+const depuisUrl = new URLSearchParams(location.search).get('code');
+if (depuisUrl) $('code').value = depuisUrl.toUpperCase().replace(/[^A-Z0-9]/g, '');
+</script>
+</html>
