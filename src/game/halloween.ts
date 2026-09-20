@@ -46,6 +46,14 @@ import { molosseDe } from './halloween-molosse.js';
 // navigateur ni piste (voir tools/molosse-test.mjs).
 import { NUITS as NUITS_LOI, nuitDe as nuitDeLoi,
          constantes, positionDe } from './halloween-loi.js';
+import { COURSES } from './halloween-courses.js';
+
+// LES CINQ TRACES ENTRENT DANS LA TABLE DU MOTEUR, comme les haies y entrent
+// (voir game/jeux.ts). `RACES[cle]` se lit a une quinzaine d'endroits — le
+// libelle, le record, le plateau des adversaires — et y poser les traces une
+// fois vaut mieux que d'apprendre a chacun de ces endroits qu'il existe une
+// seconde table.
+Object.assign((globalThis as any).SprinterCore.RACES, COURSES);
 
 export const NUITS = NUITS_LOI as unknown as readonly Nuit[];
 
@@ -56,6 +64,8 @@ export function nuitDe(n: number): Nuit { return nuitDeLoi(n) as unknown as Nuit
 export type Nuit = {
   /** Son rang, de 1 a 13. */
   n: number;
+  /** Le trace de cette nuit : une clef de COURSES (halloween-courses.js). */
+  epreuve: string;
   /** Le temps imparti, en secondes. C'est lui qui fait toute la difficulte. */
   imparti: number;
   /**

@@ -368,8 +368,17 @@
       // Un cimetiere la nuit n'est pas un stade plein. Les gradins sont
       // clairsemes, et ce qui s'y tient n'est pas venu pour applaudir.
       foule: 0.34,
+      // Les cinq traces de la nuit ont leur plateau ici : `buildLevel` lit
+      // `lvl.plateau[R.key]` pour un stade hors serie, et une clef manquante
+      // fait tomber la construction de la course. Les sept du cortege courent
+      // au niveau national, pas plus : la nuit se joue contre le chien, et un
+      // plateau mondial aurait mis un second enjeu dans une course qui n'en
+      // supporte qu'un.
       plateau: { '100': [10.40, 11.60], '200': [21.00, 23.00],
-                 '400': [47.00, 52.00], '4x100': [41.00, 45.00] },
+                 '400': [47.00, 52.00], '4x100': [41.00, 45.00],
+                 'nuit-100': [10.40, 11.60], 'nuit-100v': [10.60, 11.80],
+                 'nuit-200': [21.00, 23.00], 'nuit-300': [32.00, 35.00],
+                 'nuit-400': [47.00, 52.00] },
       names: ['Igor Tombal', 'Vlad Crampon', 'Morgue Belfort', 'Cyprien Caveau',
               'Osselet Marchand', 'Lilith Corbeau', 'Nosfera Toussaint'] },
 

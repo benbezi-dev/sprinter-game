@@ -12,6 +12,7 @@ import {
   CLES_TENUES, CLES_MORSURES, sceneDe, dit, peindreLaScene,
 } from '@/game/halloween-cinema';
 import { mot, chrono } from '@/game/halloween-mots';
+import { COURSES, distanceDe } from '@/game/halloween-courses.js';
 import { chargerLaMusique } from '@/game/halloween-musique';
 
 /* ---------------------------------------------------------------------------
@@ -57,10 +58,25 @@ function usePanneau(): boolean {
   );
 }
 
-/** Lancer une nuit : un 100 m au cimetiere, avec la bete par-dessus. */
+/** Le nom court d'un trace, pour le tableau des nuits. */
+function trace(cle: string): string {
+  const c = (COURSES as any)[cle];
+  return c ? c.label : cle;
+}
+
+/** La distance d'une nuit, en metres. */
+function distanceDeLaNuit(nuit: { epreuve: string } | null): number {
+  return nuit ? distanceDe(nuit.epreuve) : 100;
+}
+
+/** Lancer une nuit : son trace au cimetiere, avec la bete par-dessus. */
 function partir(n: number) {
   poserOuvert(false);
-  (SprinterApp as any).startOneShot(['100'], { levelIdx: etapeDuCimetiere() });
+  // CHAQUE NUIT A SON TRACE (halloween-loi.js) : cent metres, cent metres en
+  // courbe, ou une ligne droite de deux, trois ou quatre cents. C'est ce qui
+  // empeche les treize nuits d'etre treize fois la meme course.
+  const nuit = nuitDe(n);
+  (SprinterApp as any).startOneShot([nuit.epreuve], { levelIdx: etapeDuCimetiere() });
   // APRES `startOneShot`, ET PAS AVANT. C'est lui qui construit la course, et
   // la construction range les obstacles de la precedente — une bete armee
   // avant aurait ete balayee par le menage du 100 m qu'on vient de demander.
@@ -209,7 +225,12 @@ export function PanneauMolosse() {
                     {dit(nuit.nom)}
                   </span>
                   <span className="text-[10px] text-foreground/55 font-mono tabular-nums">
-                    {jouable ? mot('hw_imparti', { s: chrono(nuit.imparti) })
+                    {/* LE TRACE S'ANNONCE, et le temps avec. Le cacher aurait
+                        fait une surprise une fois et une frustration les
+                        douze suivantes : on ne se prepare pas a une ligne
+                        droite de quatre cents metres comme a un cent
+                        metres. */}
+                    {jouable ? <>{trace(nuit.epreuve)} · {mot('hw_imparti', { s: chrono(nuit.imparti) })}</>
                              : mot('hw_verrouille')}
                     {best !== null && <> · {mot('hw_meilleur', { s: chrono(best) })}</>}
                   </span>
@@ -354,7 +375,10 @@ export function FinDeLaNuit() {
                 {' · '}
                 {mot('hw_marge', { s: chrono(Math.max(0, nuit.imparti - c.chrono)) })}</>
             : <>{mot('hw_manque', {
-                m: Math.max(0, 100 - Math.max(0, joueur ? joueur.d : 0)).toFixed(0),
+                // La distance de CETTE nuit : cent metres en dur donnait
+                // « il te manquait 100 m » sur une ligne droite de quatre
+                // cents, ou il en manquait trois cent quatre-vingts.
+                m: Math.max(0, distanceDeLaNuit(nuit) - Math.max(0, joueur ? joueur.d : 0)).toFixed(0),
               })}</>}
         </span>
       </div>

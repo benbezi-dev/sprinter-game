@@ -25,6 +25,7 @@
 
 import '../src/game/sprinter-core.js';
 import { NUITS, nuitDe, constantes, positionDe } from '../src/game/halloween-loi.js';
+import { COURSES, distanceDe } from '../src/game/halloween-courses.js';
 
 const { RACES, Track, Runner, STADES_HORS_SERIE } = globalThis.SprinterCore;
 
@@ -43,9 +44,12 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 56 - t.
  * un harnais qui echantillonnerait plus grossierement mesurerait un autre
  * jeu que celui qu'on publie.
  */
-function courir(rang, cadence, { dureeMax = 40 } = {}) {
+function courir(rang, cadence, { dureeMax = 90 } = {}) {
   const nuit = nuitDe(rang);
-  const race = RACES['100'];
+  // CHAQUE NUIT A SON TRACE. Le harnais courait le cent metres pour les
+  // treize : depuis que la nuit 6 est une ligne droite de quatre cents, il
+  // mesurait une course qui n'existe plus.
+  const race = COURSES[nuit.epreuve] || RACES['100'];
   const track = new Track(race);
   const r = new Runner('TOI', 3, {
     isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total,
@@ -127,13 +131,18 @@ titre('les treize nuits se tiennent');
   ok('il y en a treize', NUITS.length === 13, `${NUITS.length}`);
   ok('leurs rangs vont de 1 a 13 dans l\'ordre',
      NUITS.every((n, k) => n.n === k + 1));
-  let stricte = true, retards = true;
-  for (let k = 1; k < NUITS.length; k++) {
-    if (NUITS[k].imparti >= NUITS[k - 1].imparti) stricte = false;
-    if (NUITS[k].retard > NUITS[k - 1].retard) retards = false;
-  }
-  ok('le temps imparti descend strictement', stricte);
-  ok('le retard de la bete ne remonte jamais', retards);
+  // LE TEMPS NE DESCEND PLUS, ET C'EST NORMAL DEPUIS QUE LES TRACES VARIENT :
+  // la nuit 6 est une ligne droite de quatre cents metres, elle laisse donc
+  // trente-neuf secondes la ou la nuit 5, un cent metres, en laissait onze.
+  // Ce qui doit monter, c'est la CADENCE exigee — et c'est la section de
+  // l'echelle, plus bas, qui le verifie.
+  ok('chaque nuit a un trace connu',
+     NUITS.every(n => !!COURSES[n.epreuve]),
+     NUITS.filter(n => !COURSES[n.epreuve]).map(n => n.epreuve).join(', '));
+  ok('les cinq traces sont tous employes',
+     new Set(NUITS.map(n => n.epreuve)).size === Object.keys(COURSES).length);
+  ok('aucune nuit ne repete le trace de la precedente',
+     NUITS.every((n, k) => k === 0 || n.epreuve !== NUITS[k - 1].epreuve));
   ok('chaque nuit a un nom dans les deux langues',
      NUITS.every(n => n.nom.length === 2 && n.nom[0] && n.nom[1]));
 }
@@ -142,9 +151,9 @@ titre('les treize nuits se tiennent');
 titre('LA PROMESSE : la bete est sur la ligne au temps imparti');
 // ---------------------------------------------------------------------------
 {
-  const total = new Track(RACES['100']).total;
   let pire = 0, pireNuit = 0;
   for (const nuit of NUITS) {
+    const total = distanceDe(nuit.epreuve);
     const { tau, vmax } = constantes(nuit.imparti, total);
     const e = Math.abs(positionDe(nuit, nuit.imparti, tau, vmax) - total);
     if (e > pire) { pire = e; pireNuit = nuit.n; }
@@ -155,7 +164,7 @@ titre('LA PROMESSE : la bete est sur la ligne au temps imparti');
   // Elle part bien derriere, et elle ne recule jamais.
   let derriere = true, monotone = true;
   for (const nuit of NUITS) {
-    const { tau, vmax } = constantes(nuit.imparti, total);
+    const { tau, vmax } = constantes(nuit.imparti, distanceDe(nuit.epreuve));
     if (Math.abs(positionDe(nuit, 0, tau, vmax) + nuit.retard) > 1e-9) derriere = false;
     let av = -1e9;
     for (let t = 0; t <= nuit.imparti + 2; t += 0.01) {
