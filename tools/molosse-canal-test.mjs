@@ -42,7 +42,7 @@ async function canalDe(canal) {
   const entree = join(dossier, 'entree.ts');
   const sortie = join(dossier, 'paquet.mjs');
   writeFileSync(entree, [
-    `export { EST_TEST, HALLOWEEN_OUVERT } from '${src('canal.ts')}';`,
+    `export { EST_TEST, HALLOWEEN_OUVERT, HALLOWEEN_2026_OUVERT } from '${src('canal.ts')}';`,
     `export { EDITION_HALLOWEEN, editionActive } from '${src('edition.ts')}';`,
   ].join('\n'));
   await build({
@@ -65,6 +65,12 @@ titre('LE PREMIER VERROU : QUI VOIT LE MODE');
 
 ok('sur /test, le mode est dans le paquet', test.M.HALLOWEEN_OUVERT === true);
 ok('en production, il n y est pas', prod.M.HALLOWEEN_OUVERT === false);
+
+// L'EDITION 2026 A SON PROPRE DRAPEAU, et il doit se replier pareillement.
+// Deux drapeaux separes valent mieux qu'un : on peut ouvrir le mode sans le
+// calendrier, ou preparer le calendrier sans montrer le mode.
+ok('sur /test, l edition datee est dans le paquet', test.M.HALLOWEEN_2026_OUVERT === true);
+ok('en production, l edition datee n y est pas', prod.M.HALLOWEEN_2026_OUVERT === false);
 ok('EST_TEST se replie bien a la compilation',
    test.M.EST_TEST === true && prod.M.EST_TEST === false,
    `test=${test.M.EST_TEST} prod=${prod.M.EST_TEST}`);
@@ -182,6 +188,29 @@ ok('sur /test, le morceau du mode est bien la',
    fichiersTest.filter(duMode).join(', '));
 ok('sur /test, la musique est bien la',
    fichiersTest.some(f => /^molosse-.*\.mp3$/.test(f)));
+
+// L'EDITION LIMITEE NE VAUT QUE PAR LA SURPRISE, et treize noms de courses
+// lisibles dans le paquet public un mois avant, c'est l'edition eventee. On
+// relit donc le JS publie, pas seulement la liste des fichiers.
+titre('LES TREIZE NUITS NE FUITENT PAS DANS LE PAQUET PUBLIC');
+
+const { readFileSync: lireF } = await import('fs');
+const texteDe = (dossier, fichiers) => fichiers
+  .filter(f => f.endsWith('.js'))
+  .map(f => lireF(join(dossier, 'assets', f), 'utf8')).join('\n');
+
+const jsProd = texteDe(dossierProd, fichiersProd);
+const jsTest = texteDe(dossierTest, fichiersTest);
+
+// Des noms de nuits qui n'existent nulle part ailleurs dans le jeu.
+const SECRETS = ['La ruelle', 'Le caveau', 'La lune rousse', 'Le glas',
+                 'La terre remuee', 'La terre remuée'];
+for (const mot of SECRETS) {
+  ok(`« ${mot} » absent du paquet public`, !jsProd.includes(mot));
+}
+ok('mais /test les a bien, sinon on ne verifierait rien',
+   SECRETS.some(m => jsTest.includes(m)),
+   'aucun nom de nuit dans /test non plus — le test ne prouve rien');
 
 rmSync(dossierProd, { recursive: true, force: true });
 rmSync(dossierTest, { recursive: true, force: true });
