@@ -24,62 +24,62 @@
  * Treize, parce que c'est le nombre de la fete, et parce que treize paliers
  * suffisent a aller de « tout le monde y arrive » a « presque personne ».
  *
- * CES NOMBRES SONT MESURES, PAS ESTIMES, et la difference a coute une
- * reecriture complete de la liste.
+ * CHAQUE NUIT A SON TRACE, et c'est ce qui a change en dernier. Les treize se
+ * couraient toutes sur le meme cent metres : le chrono descendait, la piste
+ * non, et au bout de la quatrieme nuit le joueur ne decouvrait plus rien — il
+ * refaisait le meme geste un peu plus vite. Le mode avait une progression de
+ * difficulte et aucune progression tout court.
  *
- * La premiere version descendait regulierement de 13,00 a 8,80 s, ce qui
- * paraissait raisonnable sur le papier. Passee au harnais — un doigt parfait,
- * alterne, a cadence fixe, sur la piste du cimetiere — elle donnait ceci :
- * les SIX premieres nuits tombaient toutes a huit appuis par seconde, les
- * cinq suivantes toutes a neuf, et la treizieme sautait d'un coup a treize.
- * Onze paliers pour deux points de cadence, puis un mur. Le joueur aurait
- * traverse la moitie du mode sans rien changer a son geste.
+ * Elles alternent maintenant cinq traces (voir halloween-courses.js), dont
+ * deux qui n'existent nulle part dans l'athletisme : le cent metres EN COURBE
+ * et les lignes droites de deux, trois et quatre cents metres. Le joueur ne
+ * sait pas ce qui l'attend a la nuit suivante, et c'est la moitie de l'envie
+ * d'y aller.
  *
- * La cause tient a la forme de la courbe, qui n'a rien de lineaire : le jeu
- * rend 16,17 s a cinq appuis par seconde, 10,57 a huit, 9,16 a dix, 8,79 a
- * treize et 8,67 a quinze. Une seconde et demie se gagne entre cinq et six
- * appuis ; un dixieme entre treize et quinze. Des paliers reguliers EN TEMPS
- * donnent donc des paliers tres irreguliers EN GESTE — et c'est le geste que
+ * LE VIRAGE NE COUTE RIEN AU CHRONO, et il faut le savoir : le moteur incline
+ * le coureur dans la courbe mais ne le ralentit pas — un cent metres en
+ * virage rend exactement le meme temps qu'un cent metres en ligne. C'est donc
+ * un changement de VUE, pas de difficulte, et les impartis en tiennent
+ * compte : la nuit 3 et la nuit 8 sont calees comme des cent metres.
+ *
+ * CES NOMBRES SONT MESURES, PAS ESTIMES, et la difference a deja coute une
+ * reecriture complete de la liste. La courbe chrono/cadence du jeu n'a rien
+ * de lineaire : elle s'aplatit fortement au-dela de neuf appuis par seconde
+ * — sur le cent metres, une seconde et demie se gagne entre cinq et six
+ * appuis, un dixieme entre treize et quinze. Des paliers reguliers EN TEMPS
+ * donnent donc des paliers tres irreguliers EN GESTE, et c'est le geste que
  * le joueur sent.
  *
- * Les treize nuits ci-dessous sont donc posees sur la CADENCE, et leur temps
- * imparti se lit sur la courbe mesuree, juste au-dessus du chrono qu'elle
- * rend. Ce que chaque nuit demande au pouce, verifie par le harnais :
+ * Les impartis sont donc poses sur la CADENCE, qui monte d'un demi-appui par
+ * nuit jusqu'a la dixieme puis davantage, et chacun se lit sur la courbe
+ * mesuree, deux centiemes au-dessus du chrono que cette cadence rend :
  *
- *     1 -> 5,50/s     5 -> 7,50/s     9  ->  9,50/s     13 -> 14,00/s
- *     2 -> 6,00/s     6 -> 8,00/s     10 -> 10,25/s
- *     3 -> 6,50/s     7 -> 8,50/s     11 -> 11,25/s
- *     4 -> 7,00/s     8 -> 9,00/s     12 -> 12,50/s
- *
- * Ces seuils sont ceux que rend `tools/molosse-test.mjs`, qui integre au pas
- * de la boucle de jeu. Le jeu reel en demande un quart d'appui de plus sur
- * les deux dernieres — la difference vient de l'accumulateur d'images, pas
- * de la regle, et elle va dans le bon sens : le harnais est un peu genereux.
- *
- * Un demi-appui par seconde de plus a chaque nuit jusqu'a la neuvieme, puis
- * davantage : c'est la seule facon de garder treize marches sur une courbe
- * qui s'aplatit. La derniere demande quatorze appuis par seconde, ce que
- * Sprinter exige de sa finale ZEZE — le geste d'un joueur qui s'entraine.
- * Le plancher du jeu est a 8,49 s, et la treizieme nuit laisse 8,72.
+ *     1 -> 5,5/s   100 m        8  ->  9,0/s   100 m en courbe
+ *     2 -> 6,0/s   200 m ligne  9  ->  9,5/s   300 m ligne
+ *     3 -> 6,5/s   100 m courbe 10 -> 10,0/s   200 m ligne
+ *     4 -> 7,0/s   300 m ligne  11 -> 11,0/s   100 m
+ *     5 -> 7,5/s   100 m        12 -> 12,0/s   400 m ligne
+ *     6 -> 8,0/s   400 m ligne  13 -> 14,0/s   100 m en courbe
+ *     7 -> 8,5/s   200 m ligne
  *
  * Le jour ou la physique du jeu changera, c'est le harnais qu'il faudra
- * rejouer et cette table qu'il faudra reecrire. Ces nombres ne se deduisent
- * d'aucune formule.
+ * rejouer (tools/molosse-test.mjs) et cette table qu'il faudra reecrire. Ces
+ * nombres ne se deduisent d'aucune formule.
  */
 export const NUITS = [
-  { n: 1,  imparti: 15.00, retard: 14, nom: ['La ruelle', 'The alley'] },
-  { n: 2,  imparti: 13.80, retard: 13, nom: ['Le portail', 'The gate'] },
-  { n: 3,  imparti: 12.80, retard: 12, nom: ['Les cyprès', 'The cypresses'] },
-  { n: 4,  imparti: 12.00, retard: 12, nom: ['La lune rousse', 'The blood moon'] },
-  { n: 5,  imparti: 11.30, retard: 11, nom: ['Le caveau', 'The vault'] },
-  { n: 6,  imparti: 10.65, retard: 10, nom: ['Les corbeaux', 'The crows'] },
-  { n: 7,  imparti: 10.10, retard: 10, nom: ['La terre remuée', 'Turned earth'] },
-  { n: 8,  imparti: 9.60,  retard: 9,  nom: ['Le glas', 'The knell'] },
-  { n: 9,  imparti: 9.35,  retard: 8,  nom: ['Les cendres', 'The ashes'] },
-  { n: 10, imparti: 9.12,  retard: 7,  nom: ['Le souffle', 'The breath'] },
-  { n: 11, imparti: 8.97,  retard: 7,  nom: ['La gueule', 'The jaws'] },
-  { n: 12, imparti: 8.83,  retard: 6,  nom: ['Minuit', 'Midnight'] },
-  { n: 13, imparti: 8.72,  retard: 5,  nom: ['La nuit du molosse', "The hound's night"] },
+  { n: 1,  epreuve: 'nuit-100',  imparti: 14.83, retard: 14, nom: ['La ruelle', 'The alley'] },
+  { n: 2,  epreuve: 'nuit-200',  imparti: 26.42, retard: 16, nom: ['Le portail', 'The gate'] },
+  { n: 3,  epreuve: 'nuit-100v', imparti: 12.75, retard: 12, nom: ['Les cyprès', 'The cypresses'] },
+  { n: 4,  epreuve: 'nuit-300',  imparti: 33.73, retard: 18, nom: ['La lune rousse', 'The blood moon'] },
+  { n: 5,  epreuve: 'nuit-100',  imparti: 11.22, retard: 11, nom: ['Le caveau', 'The vault'] },
+  { n: 6,  epreuve: 'nuit-400',  imparti: 39.21, retard: 20, nom: ['Les corbeaux', 'The crows'] },
+  { n: 7,  epreuve: 'nuit-200',  imparti: 19.02, retard: 13, nom: ['La terre remuée', 'Turned earth'] },
+  { n: 8,  epreuve: 'nuit-100v', imparti: 9.56,  retard: 9,  nom: ['Le glas', 'The knell'] },
+  { n: 9,  epreuve: 'nuit-300',  imparti: 27.27, retard: 14, nom: ['Les cendres', 'The ashes'] },
+  { n: 10, epreuve: 'nuit-200',  imparti: 17.94, retard: 10, nom: ['Le souffle', 'The breath'] },
+  { n: 11, epreuve: 'nuit-100',  imparti: 9.02,  retard: 7,  nom: ['La gueule', 'The jaws'] },
+  { n: 12, epreuve: 'nuit-400',  imparti: 36.40, retard: 12, nom: ['Minuit', 'Midnight'] },
+  { n: 13, epreuve: 'nuit-100v', imparti: 8.75,  retard: 5,  nom: ['La nuit du molosse', "The hound's night"] },
 ];
 
 /** La nuit de ce rang, ou la derniere si le rang deborde. */

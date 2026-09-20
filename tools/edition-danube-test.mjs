@@ -65,10 +65,28 @@ const noms = [...bloc.slice(0, bloc.indexOf('];')).matchAll(/\['([^']+)',\s*'([^
   .map(m => [m[1], m[2]]);
 ok('six etapes plus un nom par stade hors serie',
    noms.length === 6 + STADES.length, `${noms.length} noms pour ${6 + STADES.length} attendus`);
+
+// LES ACCENTS NE SE COMPARENT PAS, ET C'EST VOULU. Le moteur ecrit ses noms
+// sans accent — c'est la convention de tout sprinter-core.js, « Competition
+// scolaire », « Niveau regional » — tandis que l'i18n affiche le francais tel
+// qu'un joueur doit le lire : « Cimetiere municipal » d'un cote, « Cimetière
+// municipal » de l'autre. Les deux ont raison chez eux.
+//
+// Ce test ne verifie pas une egalite de chaines : il verifie que LES LIGNES NE
+// SONT PAS DECALEES, parce qu'une seule ligne de trop dans LEVEL_NAMES donne a
+// chaque stade le nom du suivant. Replier les accents laisse passer la
+// difference legitime et attrape toujours le decalage — deux noms de stades
+// differents ne se ressemblent pas a un accent pres.
+//
+// Il a ete rouge pendant tout le temps ou le cimetiere existait, et personne ne
+// l'a vu : un harnais qui echoue toujours ne dit plus rien quand il commence a
+// avoir raison.
+const replier = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 STADES.forEach((s, i) => {
   const attendu = s.name;
   const trouve = noms[6 + i] && noms[6 + i][0];
-  ok(`rang ${6 + i} : « ${attendu} »`, trouve === attendu, String(trouve));
+  ok(`rang ${6 + i} : « ${attendu} »`,
+     !!trouve && replier(trouve) === replier(attendu), String(trouve));
 });
 
 titre('LE PLATEAU TOMBE OU IL DOIT TOMBER');
@@ -103,7 +121,26 @@ ok('aucun doublon avec un autre plateau du jeu', (() => {
 
 titre("LA FENETRE DE L'EDITION");
 
-ok('une seule edition declaree pour l instant', EDITIONS.length === 1);
+// ON NE COMPTE PLUS LES EDITIONS. Ce test exigeait « une seule edition », et il
+// est devenu faux le jour ou Halloween est arrive — sans que rien ne casse, ce
+// qui est le pire cas : le harnais a vire au rouge et on a cesse de le lire.
+// Un nombre en dur devient faux a chaque ajout ; l'invariant, lui, tient.
+//
+// L'INVARIANT EST LE NON-RECOUVREMENT. `editionEnCours` rend LA PREMIERE
+// edition ouverte de la liste : deux fenetres qui se chevauchent, et la seconde
+// n'existe simplement jamais pour le joueur. Rien ne le signalerait — pas une
+// erreur, pas un avertissement, juste une banniere qui n'apparait pas.
+ok('au moins une edition declaree', EDITIONS.length >= 1, String(EDITIONS.length));
+ok('aucune fenetre n en recouvre une autre', (() => {
+  const l = [...EDITIONS].sort((a, b) => a.debut - b.debut);
+  return l.every((e, i) => i === 0 || l[i - 1].fin <= e.debut);
+})(), EDITIONS.map(e => `${e.cle} ${new Date(e.debut).toISOString().slice(0, 10)}` +
+                        `→${new Date(e.fin).toISOString().slice(0, 10)}`).join('  '));
+ok('chaque edition a une cle distincte',
+   new Set(EDITIONS.map(e => e.cle)).size === EDITIONS.length);
+ok('chaque edition pointe un stade hors serie qui existe',
+   EDITIONS.every(e => STADES.some(s => s.cle === e.stade)),
+   EDITIONS.map(e => e.stade).join(', '));
 ok('elle pointe le stade du Danube', EDITION_DANUBE.stade === 'danube');
 ok('la fin vient apres le debut', EDITION_DANUBE.fin > EDITION_DANUBE.debut);
 ok('elle dure au moins trois jours',

@@ -15,11 +15,28 @@
    se fait tout seul — derriere tant qu'il est derriere, devant des qu'il
    double.
 
-   AUCUNE IMAGE, ET CE N'EST PAS UNE ECONOMIE. Le molosse court a trente
-   pixels le metre : un rendu Blender n'en montrerait pas plus qu'un trace,
-   et il faudrait alors une image par phase de galop, par angle et par
-   distance. Un chien dessine se cabre, ouvre la gueule et fume sans qu'on
-   ait a le recuire.
+   AUCUNE IMAGE, ET C'EST MAINTENANT MESURE.
+
+   Ce paragraphe affirmait la chose ; on l'a essayee quand meme, et la mesure
+   a tranche. `scaleM()` vaut `ui() * 30` en ligne droite et `ui() * 44` en
+   courbe (sprinter-app.js) : UNE CONSTANTE PAR COURSE, sans aucun terme de
+   distance. La camera est un profil a echelle fixe — la bete ne grandit
+   jamais en approchant. Releve sur une nuit entiere, image par image :
+
+       49 pixels de long, 26 de haut, du premier metre au dernier.
+
+   A cette taille, un rendu Blender ne montre rien qu'un trace ne montre, et
+   il coute huit images par phase de galop. Les scenettes n'y changent rien :
+   la bete y est un peu plus grande — un tiers de plus, voir silhouetteChien
+   dans halloween-cinema.ts — mais elle y est dessinee en NOIR PLEIN sur la
+   lune, ou un rendu n'a rien a apporter par definition.
+
+   CE QUI SE LIT A QUARANTE-NEUF PIXELS, ce n'est donc pas la matiere : c'est
+   la SILHOUETTE, le RYTHME du galop, et les deux yeux. Un chien dessine se
+   cabre, ouvre la gueule et fume sans qu'on ait a le recuire.
+
+   L'essai est garde dans tools/blender/molosse.py, avec ce qu'il a appris
+   des metaballs et la raison pour laquelle il ne sert pas.
 
    LE MOTEUR NE CONNAIT PAS CE FICHIER : game/halloween.ts le pose sur
    `G.obstacles` a l'armement et l'en retire au rangement, comme les haies.
@@ -41,20 +58,47 @@ const TAU = PI * 2;
    bete etait juste un chien : posee a cote du repere d'un coureur, elle ne
    faisait pas peur. Dix centimetres de plus et quinze de long suffisent — au
    dela, elle cesse d'etre un chien et devient un cheval. */
-const GARROT = 0.88;      // hauteur du dos au-dessus du sol
-const LONG = 1.70;        // poitrail -> croupe
-const EPAIS = 0.36;       // epaisseur du tronc
+const GARROT = 0.86;      // hauteur du dos au-dessus du sol
+const LONG = 1.44;        // poitrail -> croupe
+const EPAIS = 0.50;       // epaisseur du tronc
 const PATTE = 0.82;       // longueur d'une patte tendue
-const TETE = 0.46;        // crane + museau
+const TETE = 0.52;        // crane + museau
+
+/* CES TROIS-LA SONT LIEES, ET ON NE PEUT PAS EN BOUGER UNE SEULE.
+   La patte part de l'epaule, a `GARROT - 0.04`, et doit arriver AU SOL quand
+   le pied est au contact : il faut donc `PATTE = GARROT - 0.04`, exactement.
+   En raccourcissant la patte pour faire trapu tout en relevant le garrot, on
+   laisse un vide — quatorze centimetres, six pixels — et la bete galope en
+   flottant au-dessus de sa propre ombre. Ca ne se voit pas sur la page
+   d'apercu, ou l'ombre est loin sous le cadre ; ca creve les yeux dans le
+   jeu, ou l'ombre est peinte juste dessous.
+
+   LE TRAPU NE SE GAGNE DONC PAS SUR LES PATTES mais sur le RAPPORT du corps
+   et son EPAISSEUR — 1,44 de long pour 0,86 de haut au lieu de 1,70 pour
+   0,88, et un tronc epaissi de moitie. C'est la meme masse a l'ecran, et
+   elle porte enfin sur ses quatre pieds. */
+
+/* CES CHIFFRES ONT ETE REPRIS UNE SECONDE FOIS, ET A LA BONNE TAILLE.
+   Les premiers avaient ete regles sur la page d'apercu, ou la bete s'affiche
+   en grand. A quarante-neuf pixels, ils donnaient tout autre chose : un corps
+   de 1,70 m de long pour 0,88 m de haut fait un rapport de 1,9 — une bete
+   LONGUE ET BASSE, qui se lit comme un levrier ou un loup, c'est-a-dire comme
+   un animal rapide et leger. Le mot « molosse » dit l'inverse : une masse.
+
+   Ce qui fait la masse a cette taille n'est pas la hauteur, c'est le RAPPORT
+   et l'EPAISSEUR. Le corps se raccourcit d'un quart, le tronc s'epaissit de
+   moitie, les pattes raccourcissent, la tete grossit. La bete garde la meme
+   emprise a l'ecran — on ne la voit pas rapetisser — mais elle cesse d'etre
+   une barre horizontale pour devenir un bloc qui avance. */
 
 /* Les couleurs. Un noir pur aurait fait un trou dans l'image : la bete se
    detache sur une piste orange et des gradins violets, il lui faut donc un
    noir BLEUTE, assez clair pour garder un volume, et des braises pour le
    relief. Le rouge ne sert qu'aux yeux et a la gueule — les deux endroits
    qu'on doit voir avant tout le reste. */
-const POIL = 'rgb(26,22,34)';
-const POIL_CLAIR = 'rgb(48,41,60)';
-const POIL_VENTRE = 'rgb(16,13,22)';
+const POIL = 'rgb(38,32,48)';
+const POIL_CLAIR = 'rgb(74,63,90)';
+const POIL_VENTRE = 'rgb(20,16,28)';
 const BRAISE = 'rgb(246,138,38)';
 const BRAISE_PALE = 'rgb(252,206,120)';
 const OEIL = 'rgb(255,72,40)';
@@ -74,10 +118,28 @@ const CROC = 'rgb(242,238,226)';
  */
 const PATTES = [
   { avant: false, cote: -1, phase: 0.00 },
-  { avant: false, cote: +1, phase: 0.12 },
+  { avant: false, cote: +1, phase: 0.20 },
   { avant: true,  cote: -1, phase: 0.45 },
-  { avant: true,  cote: +1, phase: 0.57 },
+  { avant: true,  cote: +1, phase: 0.65 },
 ];
+
+/* LA VOIE : DE COMBIEN LA PATTE DU FOND EST DECALEE DE CELLE DE DEVANT.
+   Sans elle, `cote` ne servait qu'a choisir une couleur, et les deux pattes
+   d'une meme paire etaient dessinees AU MEME ENDROIT, au pixel pres. Elles se
+   recouvraient donc exactement, et les quatre pattes se lisaient comme une
+   seule arche sombre sous le corps — un tabouret, pas un galop. C'est ce
+   qu'on voyait en grossissant une image du jeu, et ce que la page d'apercu ne
+   pouvait pas montrer : en grand, deux traits superposes se devinent encore.
+
+   Un quadrupede vu de profil ne cache pas ses pattes du fond : il les laisse
+   depasser, un peu en arriere et un peu plus haut, parce qu'elles sont de
+   l'autre cote du corps. Dix centimetres suffisent — trois pixels — et le
+   galop se remet a battre.
+
+   L'ecart de phase dans chaque paire a ete ouvert en meme temps, de douze a
+   vingt centiemes : deux pattes decalees d'un huitieme de foulee se posent
+   presque ensemble, ce qui refaisait la meme masse autrement. */
+const VOIE = 0.10;
 
 /** Combien de foulees la bete fait par metre parcouru. */
 const FOULEE = 2.6;
@@ -173,10 +235,37 @@ export function molosseDe(chasse) {
       if (g[0] < -marge || g[0] > G.VW + marge ||
           g[1] < -marge || g[1] > G.VH + marge) return vide;
 
+      // LE SENS DE LA COURSE, MESURE ET NON SUPPOSE.
+      //
+      // La bete etait peinte tournee vers la droite, en dur. Or la projection
+      // du jeu envoie la course vers le HAUT-GAUCHE de l'ecran : on le
+      // verifie en projetant deux points de la piste, trente et trente-cinq
+      // metres, et en comparant — cent quarante-cinq pixels vers la gauche.
+      // Le molosse a donc couru a reculons depuis le premier jour, museau en
+      // arriere et queue devant, et ca ne s'est pas vu tout de suite parce
+      // qu'une silhouette noire qui galope se lit mal a trente pixels le
+      // metre.
+      //
+      // On projette donc un point quelques metres plus loin sur la meme
+      // trajectoire : le signe de l'ecart horizontal dit de quel cote la bete
+      // regarde. Quatre metres, parce qu'en virage un pas plus court donne un
+      // ecart trop petit pour etre lu de facon stable.
+      const q2 = T.pos(Math.min(d + 4, T.total + 28), G.player.lane);
+      const g2 = ground(q2[0], q2[1]);
+
       piece.profondeur = depthOf(q[0], q[1]);
       piece.x = g[0];
       piece.y = g[1];
       piece.m = m;
+      // L'AXE DE LA PISTE A L'ECRAN, en pixels par metre parcouru. On avait
+      // le SIGNE de cet ecart — de quel cote la bete regarde — et on jetait
+      // le reste. Le reste etait l'essentiel : sa DIRECTION.
+      const ex = (g2[0] - g[0]) / 4, ey = (g2[1] - g[1]) / 4;
+      // Une trajectoire degeneree — deux points confondus — ne donne pas de
+      // direction : on garde la precedente plutot que de coucher la bete.
+      if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) {
+        piece.ex = ex; piece.ey = ey;
+      }
       return liste;
     },
 
@@ -184,8 +273,52 @@ export function molosseDe(chasse) {
     dessiner(ctx, api, pc) {
       const { G } = api;
       const m = pc.m;
-      const x = pc.x, y = pc.y;
       const t = G.elapsed || 0;
+      // TOUT LE DESSIN QUI SUIT REGARDE VERS LES X POSITIFS, et le miroir
+      // s'occupe du reste. C'est ce qui garde le trace lisible : on peint une
+      // bete tournee vers l'avant, une fois, et le jour ou une epreuve se
+      // courra dans l'autre sens — un virage, un retour — elle se retournera
+      // toute seule.
+      ctx.save();
+      ctx.translate(pc.x, pc.y);
+
+      /* LE CORPS SE COUCHE SUR L'AXE DE LA PISTE, ET C'EST TOUT LE VIRAGE.
+
+         La bete etait peinte sur l'axe HORIZONTAL de l'ecran, toujours, avec
+         un simple miroir pour le sens. Or la course ne va presque jamais a
+         l'horizontale : la projection l'envoie en biais, et dans un virage
+         l'angle change a chaque metre. Le molosse traversait donc les
+         couloirs en travers pendant que les coureurs les suivaient — couche
+         sur la piste plutot que lance dessus.
+
+         C'est le meme defaut que le sens inverse corrige plus tot, et la
+         meme cause : on prenait UN point d'ecran et on etalait tout le corps
+         sur l'axe des x. Un quadrupede n'a pas ce luxe. Une haie ne l'a pas
+         non plus, et le moteur lui donne deja la reponse : elle passe chaque
+         point par `T.posDemi`, donc elle suit le virage « sans angle a tenir
+         nulle part » (voir dessinerHaie dans haies-rendu.js).
+
+         ON NE REECRIT PAS TOUT LE DESSIN POUR AUTANT. Il est ecrit en
+         (avant, haut) et il peut le rester : il suffit de dire a la toile
+         que « avant » n'est plus l'axe des x mais l'axe mesure de la piste.
+         La matrice ne touche QUE cet axe — `c = 0`, `d = 1` — parce que la
+         hauteur, elle, se projette toujours droit vers le haut de l'ecran
+         (voir `solid`, qui retranche simplement `z * scaleM()`). Le corps
+         s'incline et se raccourcit avec la piste ; les pattes continuent de
+         tomber vers le bas, comme le fait la pesanteur.
+
+         LE MIROIR DISPARAIT AVEC CELA : l'axe mesure pointe deja dans le
+         sens de la marche, donc la bete regarde du bon cote sans qu'on ait a
+         le lui dire. Quand il pointe vers la gauche, le determinant devient
+         negatif et le dessin se retourne — ce qu'on voulait — sans que le
+         haut et le bas s'echangent.
+
+         LA LONGUEUR SE RACCOURCIT AUSSI, et c'est juste : un metre de piste
+         vu de biais occupe moins d'un metre d'ecran. */
+      const ex = pc.ex !== undefined ? pc.ex : m;
+      const ey = pc.ey !== undefined ? pc.ey : 0;
+      ctx.transform(ex / m, ey / m, 0, 1, 0, 0);
+      const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
       // le temps donnerait la meme foulee a l'arret et a pleine vitesse ; cale
@@ -209,8 +342,6 @@ export function molosseDe(chasse) {
       // l'ecran : c'est le sens ou courent tous les athletes du jeu.
       const avant = x + LONG * 0.5 * m;
       const arriere = x - LONG * 0.5 * m;
-
-      ctx.save();
 
       // L'OMBRE D'ABORD. Elle se resserre quand la bete decolle : une ombre
       // qui ne bouge pas fait flotter l'animal a dix centimetres du sol.
@@ -293,10 +424,13 @@ function pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, couleur) 
   const [px, py] = pied(u, amp);
   // L'epaule est devant, la hanche derriere, et leurs hauteurs different :
   // un chien est plus haut de l'avant.
-  const hx = p.avant ? avant - 0.34 * m : arriere + 0.30 * m;
-  const hy = p.avant ? garrot + 0.04 * m : croupe + 0.02 * m;
+  // La patte du fond (`cote` negatif) recule et remonte : elle est de l'autre
+  // cote du corps. C'est ce decalage qui separe les quatre pattes a l'ecran.
+  const voie = p.cote * VOIE * m;
+  const hx = (p.avant ? avant - 0.30 * m : arriere + 0.26 * m) + voie;
+  const hy = (p.avant ? garrot + 0.04 * m : croupe + 0.02 * m) - voie * 0.35;
   const fx = hx + px * m;
-  const fy = hy + (PATTE * m) - py * m;
+  const fy = hy + (PATTE * m) - py * m - voie * 0.30;
 
   // Le genou, pose au tiers et pousse vers l'avant pour l'anterieur, vers
   // l'arriere pour le posterieur : c'est ce coude inverse qui fait qu'on
@@ -304,10 +438,13 @@ function pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, couleur) 
   const mx = (hx + fx) * 0.5 + (p.avant ? 0.06 : -0.10) * m;
   const my = (hy + fy) * 0.5;
 
-  capsule(ctx, hx, hy, mx, my, 0.075 * m, couleur);
-  capsule(ctx, mx, my, fx, fy, 0.055 * m, couleur);
-  // La patte elle-meme, posee a plat au contact.
-  capsule(ctx, fx - 0.04 * m, fy, fx + 0.06 * m, fy, 0.045 * m, couleur);
+  // EPAISSES, comme le reste de la bete. A deux pixels de large, une patte
+  // n'est plus un membre mais un fil, et quatre fils sous un bloc noir ne
+  // font pas un animal. Le pied a disparu : quarante-cinq millimetres, soit
+  // un pixel et trois dixiemes — il n'ajoutait qu'un epaississement sale au
+  // bout de la patte.
+  capsule(ctx, hx, hy, mx, my, 0.105 * m, couleur);
+  capsule(ctx, mx, my, fx, fy, 0.075 * m, couleur);
 }
 
 /**
@@ -320,11 +457,16 @@ function pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, couleur) 
  * coin de l'image sans qu'on sache ce que c'etait.
  */
 function queue(ctx, cycle, m, x, y, vitesse) {
-  const bat = Math.sin(cycle * TAU * 1.5) * 0.16 * (0.4 + vitesse);
-  const x1 = x - 0.34 * m, y1 = y - 0.06 * m + bat * m;
-  const x2 = x - 0.70 * m, y2 = y - 0.10 * m + bat * 2.1 * m;
-  capsule(ctx, x, y, x1, y1, 0.06 * m, POIL);
-  capsule(ctx, x1, y1, x2, y2, 0.035 * m, POIL);
+  // COURTE ET EPAISSE, et c'est la seconde chose qui trahissait l'animal.
+  // Elle faisait soixante-dix centimetres pour trois centimetres et demi de
+  // rayon : a l'ecran, un trait d'un pixel de large et long comme la moitie
+  // du corps — une antenne. Un molosse porte une queue courte et lourde, qui
+  // prolonge la croupe au lieu de flotter derriere.
+  const bat = Math.sin(cycle * TAU * 1.5) * 0.12 * (0.4 + vitesse);
+  const x1 = x - 0.22 * m, y1 = y - 0.05 * m + bat * m;
+  const x2 = x - 0.42 * m, y2 = y - 0.12 * m + bat * 1.8 * m;
+  capsule(ctx, x, y, x1, y1, 0.085 * m, POIL);
+  capsule(ctx, x1, y1, x2, y2, 0.055 * m, POIL);
 }
 
 /**
@@ -336,87 +478,102 @@ function queue(ctx, cycle, m, x, y, vitesse) {
  * quelqu'un et qui garde la bouche fermee ressemble a un chien qui se promene.
  */
 function tete(ctx, t, m, avant, garrot, cycle, vitesse) {
-  // Le cou plonge vers l'avant quand la bete accelere : c'est la posture de
-  // la poursuite, museau bas. A l'arret elle releve la tete.
-  const plonge = (0.10 + 0.16 * vitesse) * m;
-  const cx = avant + 0.30 * m;
+  /* LA TETE EST REFAITE EN MASSES, ET C'EST UNE LECON SUR LA TAILLE.
+
+     Celle d'avant portait quatre crocs, deux machoires, un fond de gorge,
+     une oreille et un eclat dans l'oeil. Sur la page d'apercu c'etait une
+     gueule. Dans le jeu, a vingt-neuf pixels le metre, chaque croc mesurait
+     `0.045 * m`, soit UN PIXEL ET TROIS DIXIEMES, et l'eclat de l'oeil un
+     demi-pixel. Rien de tout cela ne pouvait se dessiner : les traits se
+     melangeaient en une tache rouge et blanche a l'avant de la bete, et la
+     tete elle-meme — un baton de 0,125 m de rayon, trois pixels et demi —
+     ne se lisait plus comme une tete.
+
+     ON NE DESSINE DONC QUE CE QUI TIENT EN TROIS PIXELS : un cou epais, un
+     crane haut, un museau court, et une fente de gueule. Les crocs restent,
+     mais DEUX seulement et deux fois plus gros, et uniquement quand la gueule
+     est assez ouverte pour qu'ils aient la place. Le reste — le fond de
+     gorge, la seconde machoire — disparait : il ne se voyait pas, il salissait.
+
+     LA REGLE VAUT AU-DELA DE CE FICHIER : un trait plus fin qu'un pixel et
+     demi n'ajoute pas du detail, il ajoute du bruit, et le bruit mange la
+     silhouette qui est la seule chose qu'on lise a cette distance. */
+
+  // LE COU. Epais, court, et il plonge : c'est la posture de la poursuite.
+  // C'est aussi la piece qui fait le molosse — un cou mince donnait un chien
+  // de course, quelle que soit la taille du reste.
+  const plonge = (0.08 + 0.14 * vitesse) * m;
+  const cx = avant + 0.24 * m;
   const cy = garrot + plonge + Math.sin(cycle * TAU) * 0.03 * m;
+  capsule(ctx, avant - 0.24 * m, garrot - 0.02 * m, cx, cy, 0.20 * m, POIL);
 
-  capsule(ctx, avant - 0.16 * m, garrot, cx, cy, 0.14 * m, POIL);
+  // LE CRANE, haut et carre, puis le museau, court et plus bas. Deux capsules
+  // de rayons differents suffisent a dire « grosse tete, petit museau », et
+  // c'est exactement ce qui distingue un molosse d'un berger.
+  capsule(ctx, cx - 0.04 * m, cy, cx + TETE * 0.30 * m, cy + 0.01 * m, 0.185 * m, POIL);
+  const mx = cx + TETE * 0.34 * m;
+  capsule(ctx, mx, cy + 0.045 * m, mx + TETE * 0.40 * m, cy + 0.055 * m, 0.115 * m, POIL);
 
-  // Le crane.
-  capsule(ctx, cx, cy, cx + TETE * 0.42 * m, cy + 0.03 * m, 0.125 * m, POIL);
-
-  // LA GUEULE. Elle bat legerement — une bete lancee halete — et le
-  // battement suit la foulee, comme chez un vrai quadrupede, dont la
-  // respiration est accrochee au galop.
-  const ouvre = (0.13 + 0.07 * Math.sin(cycle * TAU)) * m;
-  const mx = cx + TETE * 0.44 * m;
-  // Le fond de gorge, peint avant les machoires : rouge sombre, et il ne se
-  // voit que par l'ecart entre les deux.
-  ctx.fillStyle = GUEULE;
-  ctx.beginPath();
-  ctx.moveTo(mx - 0.06 * m, cy - ouvre * 0.4);
-  ctx.lineTo(mx + TETE * 0.56 * m, cy - ouvre * 0.9);
-  ctx.lineTo(mx + TETE * 0.56 * m, cy + ouvre * 1.1);
-  ctx.lineTo(mx - 0.06 * m, cy + ouvre * 0.5);
-  ctx.closePath();
-  ctx.fill();
-
-  // Les deux machoires.
-  capsule(ctx, mx, cy - ouvre * 0.55, mx + TETE * 0.54 * m, cy - ouvre * 0.95,
-          0.045 * m, POIL);
-  capsule(ctx, mx, cy + ouvre * 0.55, mx + TETE * 0.50 * m, cy + ouvre * 0.95,
-          0.042 * m, POIL);
-
-  // LES CROCS. Quatre traits, pas davantage : a cette taille, une dentition
-  // complete fait une bouillie blanche. Deux en haut, deux en bas, et ils
-  // pointent l'un vers l'autre.
-  ctx.fillStyle = CROC;
-  const croc = (dx, dy, sens) => {
+  // LA GUEULE : une fente, pas une bouche. Elle bat avec la foulee — une bete
+  // lancee halete — et on ne peint le rouge que si la fente depasse un pixel
+  // et demi, faute de quoi il ne resterait qu'une salissure sombre.
+  const ouvre = (0.085 + 0.055 * Math.sin(cycle * TAU)) * m;
+  if (ouvre > 1.5) {
+    ctx.fillStyle = GUEULE;
     ctx.beginPath();
-    ctx.moveTo(mx + dx, cy + dy);
-    ctx.lineTo(mx + dx + 0.045 * m, cy + dy);
-    ctx.lineTo(mx + dx + 0.022 * m, cy + dy + sens * 0.085 * m);
+    ctx.moveTo(mx - 0.02 * m, cy + 0.045 * m);
+    ctx.lineTo(mx + TETE * 0.44 * m, cy + 0.045 * m - ouvre * 0.55);
+    ctx.lineTo(mx + TETE * 0.44 * m, cy + 0.045 * m + ouvre * 0.55);
     ctx.closePath();
     ctx.fill();
-  };
-  croc(0.10 * m, -ouvre * 0.62, +1);
-  croc(0.26 * m, -ouvre * 0.72, +1);
-  croc(0.12 * m, ouvre * 0.62, -1);
-  croc(0.28 * m, ouvre * 0.70, -1);
 
-  // LES OREILLES, en pointe et couchees vers l'arriere : un chien lance
-  // plaque ses oreilles. Dressees, il aurait l'air attentif — pas menacant.
+    // DEUX CROCS, et deux fois plus gros que les quatre d'avant. A cette
+    // taille, deux traits blancs qui se voient valent mieux que quatre qui
+    // se melangent.
+    ctx.fillStyle = CROC;
+    const croc = (dx, dy, sens) => {
+      ctx.beginPath();
+      ctx.moveTo(mx + dx, cy + 0.045 * m + dy);
+      ctx.lineTo(mx + dx + 0.085 * m, cy + 0.045 * m + dy);
+      ctx.lineTo(mx + dx + 0.042 * m, cy + 0.045 * m + dy + sens * 0.15 * m);
+      ctx.closePath();
+      ctx.fill();
+    };
+    croc(TETE * 0.16 * m, -ouvre * 0.40, +1);
+    croc(TETE * 0.20 * m, ouvre * 0.40, -1);
+  }
+
+  // L'OREILLE, couchee vers l'arriere — un chien lance plaque ses oreilles ;
+  // dressee, il aurait l'air attentif, pas menacant. Elle est plus large
+  // qu'avant pour la meme raison que tout le reste.
   ctx.fillStyle = POIL;
   ctx.beginPath();
-  ctx.moveTo(cx + 0.02 * m, cy - 0.11 * m);
-  ctx.lineTo(cx - 0.20 * m, cy - 0.30 * m);
-  ctx.lineTo(cx - 0.02 * m, cy - 0.05 * m);
+  ctx.moveTo(cx + 0.04 * m, cy - 0.16 * m);
+  ctx.lineTo(cx - 0.30 * m, cy - 0.40 * m);
+  ctx.lineTo(cx - 0.04 * m, cy - 0.06 * m);
   ctx.closePath();
   ctx.fill();
 
   // L'OEIL. C'est le point le plus lumineux de toute l'image du mode, et il
   // doit l'etre : c'est ce qu'on cherche du regard quand on sent que la bete
-  // se rapproche. Il palpite — un halo qui respire se remarque a la peripherie
-  // de la vision, ce qu'un point fixe ne fait pas.
+  // se rapproche. Il palpite — un halo qui respire se remarque a la
+  // peripherie de la vision, ce qu'un point fixe ne fait pas.
+  //
+  // L'ECLAT BLANC A ETE RETIRE : seize millimetres, soit un demi-pixel. Il ne
+  // se voyait pas, et il eclaircissait l'oeil au lieu de le faire briller.
   const pulse = 0.82 + 0.18 * Math.sin(t * 7.5);
-  const ox = cx + TETE * 0.30 * m, oy = cy - 0.045 * m;
-  const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, 0.30 * m * pulse);
-  halo.addColorStop(0, 'rgba(255,96,48,0.85)');
-  halo.addColorStop(0.45, 'rgba(228,48,22,0.30)');
+  const ox = cx + TETE * 0.24 * m, oy = cy - 0.075 * m;
+  const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, 0.34 * m * pulse);
+  halo.addColorStop(0, 'rgba(255,96,48,0.90)');
+  halo.addColorStop(0.45, 'rgba(228,48,22,0.32)');
   halo.addColorStop(1, 'rgba(228,48,22,0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(ox, oy, 0.30 * m * pulse, 0, TAU);
+  ctx.arc(ox, oy, 0.34 * m * pulse, 0, TAU);
   ctx.fill();
   ctx.fillStyle = OEIL;
   ctx.beginPath();
-  ctx.arc(ox, oy, 0.042 * m, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = BRAISE_PALE;
-  ctx.beginPath();
-  ctx.arc(ox + 0.012 * m, oy - 0.012 * m, 0.016 * m, 0, TAU);
+  ctx.arc(ox, oy, 0.062 * m, 0, TAU);
   ctx.fill();
 }
 

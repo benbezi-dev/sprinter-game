@@ -38,6 +38,13 @@
   trois tailles : c'est la petite qui compte, c'est celle du jeu.</p>
 <canvas id="c2" width="1180" height="300"></canvas>
 
+<h2>ce que l'ecart lui fait — de douze metres a la morsure</h2>
+<p class="note">La gueule s'ouvre, l'echine se herisse, les cotes sortent, les
+  griffes apparaissent et la bave tombe. Rien de tout cela ne se decide : tout
+  est indexe sur la distance qui reste. Le dernier dessin court vers la GAUCHE,
+  comme la course du jeu.</p>
+<canvas id="c5" width="1180" height="260"></canvas>
+
 <h2>la scenette d'une nuit tenue</h2>
 <canvas id="c3" width="1180" height="330"></canvas>
 
@@ -59,7 +66,7 @@
    * jeu, une fois la profondeur calculee.
    */
   function bete(chasse) { return molosseDe(chasse); }
-  const chasseDe = (d, v) => ({ d, v, ecart: 4, nuit: NUITS[10], verdict: 'court' });
+  const chasseDe = (d, v, ecart = 14) => ({ d, v, ecart, nuit: NUITS[10], verdict: 'court' });
   const faussetG = (t) => ({ G: { elapsed: t, VW: 1180, VH: 400 } });
 
   // ---- le galop decompose ------------------------------------------------
@@ -71,7 +78,7 @@
       // metre dans le module : on avance donc d'un huitieme de 1/2,6 metre.
       const d = 20 + (i / 8) * (1 / 2.6);
       const c = chasseDe(d, 9);
-      bete(c).dessiner(ctx, faussetG(i * 0.05), { x: 90 + i * 140, y: 190, m });
+      bete(c).dessiner(ctx, faussetG(i * 0.05), { x: 90 + i * 140, y: 190, m, sens: 1 });
       ctx.fillStyle = '#4a4f63';
       ctx.font = '11px ui-monospace, monospace';
       ctx.fillText(String(i + 1), 86 + i * 140, 215);
@@ -92,10 +99,28 @@
     const tailles = [[150, 30], [430, 62], [880, 110]];
     for (const [x, m] of tailles) {
       repere(x, m);
-      bete(chasseDe(20.3, 10)).dessiner(ctx, faussetG(0.4), { x, y: 250, m });
+      bete(chasseDe(20.3, 10)).dessiner(ctx, faussetG(0.4), { x, y: 250, m, sens: 1 });
       ctx.fillStyle = '#4a4f63'; ctx.font = '10px ui-monospace, monospace';
       ctx.fillText(m + ' px/m', x - 20, 272);
     }
+  }
+
+  // ---- la montee de menace -------------------------------------------------
+  {
+    const ctx = document.getElementById('c5').getContext('2d');
+    const m = 74;
+    const ecarts = [12, 8, 5, 3, 1.2, 0.2];
+    ecarts.forEach((e, i) => {
+      bete(chasseDe(20.3, 10, e)).dessiner(ctx, faussetG(0.4 + i * 0.13),
+        { x: 110 + i * 190, y: 215, m, sens: 1 });
+      ctx.fillStyle = '#4a4f63';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillText(e + ' m', 94 + i * 190, 240);
+    });
+    // Le meme animal, tourne dans l'autre sens : c'est ce que le jeu demande.
+    bete(chasseDe(20.3, 10, 2)).dessiner(ctx, faussetG(0.9), { x: 1120, y: 215, m, sens: -1 });
+    ctx.fillStyle = '#7CD04E';
+    ctx.fillText('sens inverse', 1040, 240);
   }
 
   // ---- les deux scenettes -------------------------------------------------
