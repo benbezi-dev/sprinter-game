@@ -1,578 +1,588 @@
-# Halloween 2026 — architecture, écarts, et plan d'implémentation
+# Halloween 2026 — plan d'implémentation
 
-> **Phase 0.** Exploration du dépôt et plan, avant toute ligne de code nouvelle.
-> Écrit le **20 septembre 2026**, sur la branche `claude/sprinter-halloween-2026-r68w39`.
->
-> **À lire en premier, §3 :** une partie du mode demandé **existe déjà et
-> tourne**, construite autrement que ce que décrit le brief. Le reste du
-> document part de là.
+Phase 0 du brief « Édition limitée Halloween 2026 ». Exploration du dépôt, points
+d'extension, plan en phases, risques — et ce qui ne tient pas dans le brief.
 
----
-
-## 1. Ce que ce document est
-
-Le brief demande treize courses d'Halloween, une par jour du 19 au 31 octobre
-2026, chacune dans un décor différent, chacune ouverte par une cinématique et
-courue en départ lancé, avec un mode test pour les testeurs.
-
-Le dépôt contient déjà **un mode Halloween de treize nuits, jouable, mesuré et
-testé**, qui répond à une partie de cette demande — et qui répond
-différemment à l'autre partie. Ce document sert donc à trois choses :
-
-1. poser l'architecture du jeu telle qu'elle est (§2) ;
-2. dire ce qui est déjà construit, et ce que le brief ne sait pas (§3) ;
-3. dire franchement ce qui, dans le brief, **ne tient pas** contre ce moteur
-   (§5) — plutôt que de coder autour, ce que le brief lui-même demande.
-
-Les décisions qui vous reviennent sont rassemblées en §6, chacune avec deux
-options tranchées et une recommandation. Le plan par phases est en §7.
+Branche : `feature/halloween-2026`, créée sur `main` (70de401).
+Date de rédaction : 20 septembre 2026.
 
 ---
 
-## 2. L'architecture existante
+## 0. À lire avant tout le reste : un mode Halloween existe déjà
 
-### 2.1 La boucle de course
+Le brief est écrit comme un projet neuf. Il ne l'est pas.
 
-`src/game/sprinter-core.js` tient le modèle : `Track`, `Runner`, `RACES`,
-`LEVELS`, `STADES_HORS_SERIE`. C'est du JavaScript nu, sans dépendance au
-navigateur — ce qui est précisément ce qui permet aux harnais de le charger
-sous node et de mesurer une course sans ouvrir un onglet.
+**« La nuit du molosse » est en ligne sur `sprinter-game.com/test/` depuis
+aujourd'hui**, et représente 2 834 lignes :
 
-- La logique avance à **pas fixe de 1/240 s** (`updateLogic`), découplée du
-  rendu. Un harnais qui échantillonnerait plus grossièrement mesurerait un
-  autre jeu que celui qu'on publie.
-- `Runner.stepPlayer` intègre la foulée du joueur ; `stepAI` donne aux
-  adversaires une montée en vitesse exponentielle calée pour couvrir leur
-  distance en un temps visé.
-- `src/game/engine.ts` expose `SprinterApp` et `useGameStore` (zustand-like)
-  vers React. `G` est l'état de la course en cours.
+| fichier | lignes | rôle |
+|---|---|---|
+| `src/game/halloween.ts` | 434 | la règle : armement, position de la bête, morsure, carnet |
+| `src/game/halloween-loi.js` | 148 | les 13 nuits, leurs impartis, la loi de vitesse |
+| `src/game/halloween-courses.js` | 95 | les 5 tracés (100, 100 en courbe, 200, 300, 400) |
+| `src/game/halloween-molosse.js` | 653 | le dessin de la bête |
+| `src/game/halloween-cinema.ts` | 638 | 14 scènettes narratives |
+| `src/game/halloween-musique.ts` | 110 | la musique du mode |
+| `src/game/halloween-mots.ts` | 88 | les traductions FR/EN |
+| `src/components/screens/Halloween.tsx` | 493 | banderole d'accueil, panneau des nuits, fin de nuit |
+| `src/components/screens/HalloweenHUD.tsx` | 175 | l'écart, la jauge, le voile de menace |
 
-### 2.2 Le rendu
+Ce qui existe déjà et que le brief redemande :
 
-Un **seul canvas**, `src/components/GameCanvas.tsx`, piloté par
-`sprinter-app.js` (`requestAnimationFrame`). Tout le jeu est dessiné à la
-main : piste, couloirs, coureurs, tribunes, décor. React ne dessine que
-l'interface **par-dessus** — HUD, panneaux, écrans de fin — jamais la course.
+- **13 courses** (`NUITS`), nommées, avec un imparti mesuré chacune ;
+- un **poursuivant** — le molosse — avec loi de vitesse, morsure, et tout ce
+  qu'on lui a ajouté aujourd'hui : galop à cinq foulées/seconde, réaction à la
+  proximité, sol qui tremble sous ses appuis, voile qui se referme ;
+- un **stade dédié** (« Cimetière municipal ») avec thème de nuit, cyprès,
+  gradins clairsemés ;
+- des **cinématiques** (14 scènettes) et un **carnet de progression** sauvegardé ;
+- un **verrou de victoire** : `nuitOuverte() = tenues + 1`. La nuit N+1 s'ouvre
+  quand la N est tenue.
+- une **édition datée** (`EDITION_HALLOWEEN`, `src/game/edition.ts`).
 
-C'est la propriété la plus utile du projet pour ce qu'on veut ajouter : un
-effet de course (tremblement, vignette, halo, distorsion) se pose dans la
-boucle canvas sans toucher à un seul composant React, et inversement.
+Ce que le brief ajoute réellement :
 
-### 2.3 Les entrées
+- le **verrou calendaire** (1 course par jour, 19→31 octobre) et l'anti-triche ;
+- l'écran **« Le Calendrier »** en grille de 13 cartes ;
+- **13 décors distincts** au lieu d'un seul cimetière ;
+- **trois types de poursuivants** (molosses, zombies, martiens) au lieu d'un ;
+- les **cinématiques en 3 temps + départ lancé** ;
+- le **son réactif** (Web Audio, bus séparés, spatialisation) ;
+- les **options de confort** et `prefers-reduced-motion` ;
+- le **voyageur temporel** et les outils testeurs.
 
-`src/hooks/use-inputs.ts` pour le clavier, `src/components/TouchControls.tsx`
-pour les deux pavés tactiles. Le contrat est simple et unique :
-`Runner.press('left' | 'right', t)`. Les haies y ont ajouté l'appel
-(`APPEL_JOUEUR`, `haies-pas.js`) sans le casser.
+**Décision que j'attends : on étend l'existant, ou on repart à zéro ?**
+Ma recommandation ferme : **on étend**. Repartir jetterait un poursuivant qui
+vient d'être réglé au pouce, 14 scènettes écrites, une musique composée et un
+stade rendu dans Blender — et recréerait les mêmes bugs (j'en ai corrigé quatre
+aujourd'hui, dont deux invisibles).
 
-**Conséquence directe** : tout ce qu'on ajoute passe par ce même contrat, ou
-ne passe pas. Aucune régression sur les haies ni sur le sprint classique n'est
-acceptable, et c'est vérifiable (§8).
+Conséquence si on étend : le nom du mode change-t-il ? « La nuit du molosse »
+devient inexact avec des zombies et des martiens. Deux options en §7.
 
-### 2.4 Les épreuves, les stades
+---
 
-- `RACES[cle]` est la table des épreuves. Elle se lit **à une quinzaine
-  d'endroits** — libellé, record, plateau, partage, défi. Y ajouter une
-  épreuve suffit à la faire exister partout.
-- `LEVELS` / `STADES_HORS_SERIE` sont les lieux. Le **cimetière municipal**
-  (`cle: 'cimetiere'`, `theme: 'halloween'`) y est déjà, ouvert pour toujours,
-  avec son plateau de sept adversaires et sa foule clairsemée (`foule: 0.34`).
-- `Track` prend **un arc et une ligne droite**, et fabrique la géométrie
-  demandée. C'est tout ce qu'il sait faire. Retenir ce point : il commande
-  toute la §5.1.
+## 1. Architecture existante
 
-### 2.5 La sauvegarde
+### 1.1 Boucle de jeu
 
-`localStorage`, par clés nommées, sans schéma versionné ni somme de contrôle.
-Le mode Halloween utilise `sprinter_halloween` (`src/game/halloween.ts`,
-`Carnet`). Le reste du jeu parle à un worker Cloudflare (`worker/`, base D1)
-qui porte les classements, les duels, les championnats, le relais, les
-notifications et leur journal — mais **le mode Halloween ne parle à aucun
-serveur** : ni classement, ni duel.
+`src/game/engine.ts` (≈650 lignes) tient la boucle. Points saillants :
 
-### 2.6 Le build et les deux canaux
+- `updateLogic(dt)` fait avancer la logique ; le rendu est appelé séparément.
+  **Les deux sont dissociés** — c'est ce qui permet de piloter une course au pas
+  depuis un harnais sans navigateur, et j'ai utilisé ça toute la journée.
+- `G` est l'état global du jeu (`SprinterApp.G`), mutable, non réactif.
+- `gameStore` est un store maison (`getSnapshot` / `subscribe` / `setState`)
+  qui publie un instantané de `G` vers React via `useSyncExternalStore`.
+  **React ne lit jamais `G` directement.**
+- `G.shake` : secousse de caméra, décroissance à 3,2/s, déjà utilisée par le
+  faux pas et branchée sur la vibration Android.
+- **Crochets d'extension par image** : `G.pasHaies` et `G.pasMolosse` sont des
+  fonctions posées sur `G` par les modes, appelées à chaque image après
+  `stepPlayer`. C'est le point d'entrée propre d'un mode, et il est déjà utilisé.
 
-C'est le mécanisme le plus important du dépôt pour ce travail, et il est déjà
-en place (`src/game/canal.ts`).
+### 1.2 Moteur de rendu — **le point dur du brief**
 
-Deux versions sont publiées à la même adresse : le jeu, et **une version de
-test** où tout est ouvert et qui reçoit les nouveautés en premier.
+`src/game/sprinter-app.js` (6 794 lignes). Projection isométrique :
 
-```
-export const EST_TEST = import.meta.env.VITE_CANAL === 'test';
-export const HALLOWEEN_OUVERT = EST_TEST;
+```js
+ISO_COS = 2/√5   ISO_SIN = 1/√5
+ground(X, Y) → [originX - u·ISO_COS + v·ISO_COS,
+                originY - u·ISO_SIN - v·ISO_SIN]     où u = (X-camX)·m, v = (Y-camY)·m
+solid(X, Y, z) = ground(X, Y) - [0, z·scaleM()]
+scaleM() = ui() · (courbe ? 44 : 30)
 ```
 
-La forme compte : `import.meta.env.VITE_CANAL` est remplacé **par sa valeur
-littérale à la compilation**, si bien que `HALLOWEEN_OUVERT` devient `false`
-en dur dans le build public et que le bundler **supprime tout ce qui en
-dépend**. Les modes fermés ne sont pas cachés : ils ne sont pas embarqués.
-Un drapeau lu au chargement n'aurait pas cette propriété.
+Trois faits mesurés aujourd'hui, qui contraignent tout le reste :
 
-Le canal de test est protégé par un **code d'accès** (`sprinter_acces_test`),
-vérifié par le worker (`POST /test/entrer`), et porté par un `fetch` enveloppé
-sur toutes les requêtes vers notre serveur. Sans code, rien ne part — une
-requête non marquée atterrirait dans la base de production.
+1. **`scaleM()` est une constante par course.** Aucun terme de distance. La
+   caméra est un profil à échelle fixe : rien ne grandit en approchant.
+   Le molosse fait **49 × 26 pixels du premier mètre au dernier** (30 px/m),
+   72 × 38 en courbe (44 px/m).
+2. **La hauteur ne se raccourcit jamais** (`z · scaleM()`), alors que les
+   positions au sol, elles, se raccourcissent selon la direction. C'est ce qui
+   fait paraître un quadrupède monté sur échasses en virage si on n'y prend pas
+   garde.
+3. **Le monde est une piste World Athletics.** `Track` (`sprinter-core.js:838`)
+   est deux demi-cercles de 36,50 m reliés par deux droites de 84,39 m, et
+   **tout** est paramétré en `(distance le long du couloir, couloir)` :
+   `T.pos(s, lane)`, `T.posDemi(s, lane, écart)`. Les coureurs, les haies, les
+   obstacles, le molosse — tous.
 
-**C'est le mécanisme de mode test que le brief (§9 bis) demande d'identifier et
-sur lequel se brancher.** Il existe, il est hors du bundle en clair, il est
-validé par un endpoint. Il ne reste qu'à lui ajouter ce qui lui manque (§7,
-phase 4).
+**Conséquence directe : « on quitte la piste d'athlétisme au maximum » est
+faisable pour le DÉCOR, pas pour la GÉOMÉTRIE.** Voir §4.
 
-### 2.7 Le pipeline Blender
+### 1.3 Entrées
 
-Il existe, il est scripté, et il produit déjà les décors du jeu :
+Centralisées et propres, aucune raison d'y toucher :
 
-```
-tools/blender/decors/fabriquer.py   # une pièce → WebP + entrée de manifeste
-tools/blender/decors/{vue,matiere,palettes,pieces,tribune}.py
-src/game/decors-manifeste.json      # ax/ay (le pied de la pièce), w, h, portée
-public/decors/<stade>/*.webp        # 6 Mo pour LES HUIT STADES du jeu
-```
+- `src/hooks/use-inputs.ts` (80 lignes) — clavier, avec un filtre pour ne pas
+  piloter la course quand on tape dans un champ de texte ;
+- `src/components/TouchControls.tsx` (338 lignes) — les deux pavés tactiles ;
+- les deux appellent `padPress(side)` / `padRelease(side)` de `engine.ts`.
 
-Deux rendus par pièce (couleur en émission + ombre au sol par Cycles),
-recoupés au plus juste, avec `pxParM: 96`. Le manifeste dit au moteur où est
-le pied de la pièce et combien de pixels vaut un mètre.
+Un mode n'a rien à ajouter ici : il reçoit les mêmes appuis que le sprint.
 
-Le cimetière, lui, n'a **aucune pièce bakée** : il est dessiné
-procéduralement dans `sprinter-app.js` (cyprès, herbe éteinte, gradins
-clairsemés, dégradé de ciel).
+### 1.4 Système d'épreuves
 
-### 2.8 Les harnais de test
+- `sprinter-core.js` tient `LEVELS` (6 étapes) et `STADES_HORS_SERIE`
+  (danube, cimetière, riviera, namek…), chacun avec un `plateau` par clef
+  d'épreuve. **Une clef d'épreuve manquante fait tomber la construction de la
+  course** — c'est le piège que j'ai rencontré en ajoutant les tracés `nuit-*`.
+- `App.startOneShot([epreuve], { levelIdx })` lance une course isolée.
+- Les épreuves du mode (`nuit-100`, `nuit-100v`, `nuit-200/300/400`) sont
+  déclarées dans `halloween-courses.js` et leur plateau dans `sprinter-core.js`.
 
-Une cinquantaine dans `tools/*.mjs`, lancés à la main par `node`. Deux
-concernent ce mode et **passent tous les deux aujourd'hui** :
+### 1.5 Sauvegarde
 
-- `tools/molosse-test.mjs` — pose la loi de la bête sur le **vrai moteur** et
-  vérifie la promesse du mode et l'échelle des treize nuits. 25 vérifications.
-- `tools/molosse-canal-test.mjs` — compile le paquet **par canal** avec
-  esbuild et vérifie ce qui arrive dans le build du joueur, pas ce que dit la
-  source.
+`localStorage`, une clef par domaine, aucune abstraction commune :
+`sprinter_halloween` (le carnet du mode), `sprinter_acces_test` (le code
+testeur), etc. **Pas de versionnage, pas de migration, pas de somme de
+contrôle** — le brief en demande, il faudra les écrire.
 
-La discipline du projet, lisible partout : **ce qui se vérifie sans lancer une
-course doit pouvoir se vérifier sans lancer une course.** D'où des fichiers
-comme `halloween-loi.js` et `edition.ts` qui n'ont **aucun import**, pour être
-chargeables nus sous node.
+### 1.6 Build et déploiement
 
----
+- Vite. `npm run build` → `dist/` (production, `BASE_PATH=/`).
+- `VITE_CANAL=test npx vite build --outDir dist-test` → `dist-test/`
+  (`BASE_PATH=/test/`), déployé sous `sprinter-game.com/test/`.
+- GitHub Actions `.github/workflows/deploy.yml`. **Seul un push sur `main`
+  déploie — `/test` compris.**
+- `EST_TEST` se replie à la compilation ; tout ce qui est derrière est retiré du
+  paquet public par Rollup.
+- **Les harnais `tools/*.mjs` ne tournent PAS en CI.** Ils se lancent à la main.
 
-## 3. Ce qui est déjà construit — et que le brief ne sait pas
+### 1.7 Le serveur
 
-| Demande du brief | État réel |
-| --- | --- |
-| 13 courses | **Fait** — treize nuits, `halloween-loi.js` |
-| Difficulté au-dessus du jeu de base, brutale à la 13 | **Fait et mesuré** — de 5,5 à 13,75 appuis/s |
-| Une course jouable de bout en bout | **Fait** — le molosse, le HUD, les écrans de fin |
-| Poursuivant incarné, pas un compteur | **Fait** — le molosse, galop en quatre temps |
-| Décors variés | **Partiel** — un seul lieu, **cinq tracés** |
-| Cinématique | **Fait, mais APRÈS la course** — quatorze scénettes |
-| Départ lancé, sans blocks | **Non** — départ ordinaire du one shot |
-| Déverrouillage 1/jour, 19→31 oct | **Non** — déverrouillage **par victoire** |
-| Anti-triche sur la date | **Non** |
-| Écran « Le Calendrier » | **Non** — un tableau de treize lignes |
-| Son du poursuivant, spatialisé | **Non** — `halloween-son.ts` est cité dans un commentaire et **n'existe pas** |
-| Musique | **Fait** — une pièce écrite, 50 s, chargée à la demande |
-| Frayeur réduite, avertissement | **Non** |
-| Mode test | **Partiel** — le canal de test et son code existent |
+Worker Cloudflare, `worker/` — 16 335 lignes, 30 modules, D1 en base.
+Deux choses utiles au brief :
 
-### Le cœur du mode, tel qu'il est
+- `worker/src/acces.js` (222 lignes) : système complet de codes testeurs —
+  `creerAcces`, `verifierAcces`, `revoquerAcces`, `listerAcces`, avec
+  expiration et révocation. Côté client : `PorteTest.tsx` + `canal.ts`
+  (`codeAcces`, `verifierCode`). **C'est exactement ce que demande le §9 bis :
+  il n'y a rien à créer.**
+- `worker/src/depart.js` pose déjà le principe dont le brief a besoin :
+  *« POURQUOI LA DATE EST ICI ET PAS CHEZ LE CLIENT »*. Le serveur possède les
+  dates. Il n'y a pas encore d'endpoint `/now`, mais la place est faite.
 
-Une règle, et c'est sa qualité principale : **le molosse franchit la ligne
-exactement au temps imparti.** « Passer dans les temps » et « ne pas se faire
-rattraper » ne sont pas deux conditions, c'est la même écrite deux fois. Le
-chrono dit ce que la bête fait ; la bête montre ce que le chrono compte.
+### 1.8 La chaîne Blender — elle existe
 
-Le compte à rebours a pris la place du chronomètre ordinaire. Il n'y a **pas
-de barre de vie** : une jauge en bas d'écran n'apparaît qu'à douze mètres, et
-le sol tremble sous les foulées de la bête (deux battements par foulée, le
-postérieur plus lourd que l'antérieur), via `G.shake` et la vibration Android.
+**Blender est installé** (`/Applications/Blender.app/Contents/MacOS/Blender`).
 
-Cette règle a déjà coûté une réécriture : la première loi de position faisait
-mordre à 2,5 s un joueur qui avait dix secondes au compteur. C'est le harnais
-qui l'a dit. **Elle ne doit pas être cassée par ce qu'on ajoute**, et c'est le
-premier risque de régression (§8).
+`tools/blender/` contient déjà : `vue.py` (la caméra calée sur la projection du
+jeu), `matiere.py`, `palettes.py`, `pieces.py`, `rendu.py`, `decors/fabriquer.py`,
+`decors/verifier-vue.py`, plus `coureur.py`, `anatomie.py`, `molosse.py`.
 
----
+Sortie : `public/decors/<thème>/<pièce>.webp`, chargées par `decors-stades.js`.
 
-## 4. Les points d'extension identifiés
+**Mais le modèle n'est pas celui du brief.** Ce ne sont pas des couches de
+parallaxe : ce sont des **pièces** (une lanterne, une meule, un pan de tribune)
+rendues sous la vue du jeu, que le moteur **compose** et range dans sa pile de
+profondeur. Voir §4.3.
 
-Ce qu'on peut ajouter **sans toucher** au sprint classique ni aux haies :
-
-1. **`RACES` par `Object.assign`** — déjà fait par `halloween-courses.js`.
-   Toute épreuve nouvelle entre par là.
-2. **`STADES_HORS_SERIE`** — un lieu nouveau est une entrée dans la table plus
-   un `theme` traité dans le dessin de fond de `sprinter-app.js`.
-3. **Les crochets posés sur `G`** — `G.pasMolosse`, `G.surRetourAccueil`,
-   `G.obstacles`. C'est la boucle de course qui vient nous chercher, image
-   après image, exactement comme elle va chercher les haies. Aucun mode n'a
-   besoin de poser sa propre boucle.
-4. **Le canal et ses drapeaux** (`canal.ts`) — un `&&` en tête, et le bundler
-   suit. C'est l'interrupteur unique que demande le brief (§9 bis,
-   garde-fous).
-5. **Le calque React au-dessus du canvas** — HUD, panneaux, calendrier,
-   bandeau testeur : rien de tout cela ne touche au rendu.
-6. **Le manifeste de décors** (`decors-manifeste.json`) — une clé de stade
-   nouvelle, et le moteur place les pièces sans rien savoir d'elles.
-7. **Les harnais `tools/*.mjs`** — le voyageur temporel du brief (§9 bis) et
-   les tests de déverrouillage (§8.1, §8.2) doivent partager **une seule
-   source de vérité** ; le projet a déjà la discipline qu'il faut pour ça
-   (fichiers sans import).
+Coût actuel : `public/` pèse **7,0 Mo** en tout, dont 5,9 Mo de décors. Le thème
+le plus lourd (`day`) pèse 1,8 Mo ; le plus léger (`nuit`) 32 Ko.
 
 ---
 
-## 5. Ce qui ne tient pas dans le brief
+## 2. Points d'extension identifiés
 
-Le brief demande de le dire franchement plutôt que de coder autour. Voici les
-sept points, du plus lourd au plus léger.
+Par ordre de propreté :
 
-### 5.1 Le manoir, les toits, les escaliers — le moteur ne sait pas faire
+1. **`G.pasMolosse`** — crochet par image posé par le mode, déjà en place.
+   Tout ce qui est logique de poursuite passe par là.
+2. **`G.obstacles`** — objet à `pieces(api)` / `dessiner(ctx, api, pc)` que le
+   rendu range dans sa pile de profondeur. C'est ainsi que le molosse se peint
+   entre les coureurs. **Un poursuivant supplémentaire s'ajoute ici sans toucher
+   au moteur.**
+3. **`STADES_HORS_SERIE` + `THEMES`** — un décor nouveau est une entrée de
+   table, pas du code moteur.
+4. **`halloween-courses.js`** — un tracé nouveau est une entrée de table (+ son
+   plateau dans `sprinter-core.js`).
+5. **`canal.ts`** — les drapeaux d'ouverture, avec une convention déjà établie.
+6. **Le HUD** (`HalloweenHUD.tsx`) — tout ce qui se superpose à l'écran, au-dessus
+   de la pile de profondeur.
+7. **`worker/src/acces.js`** — les codes testeurs.
 
-`Track` prend **un arc et une ligne droite**. C'est toute sa géométrie.
+Ce qui **n'a pas** de point d'extension et qu'il faudra écrire :
 
-Sont donc hors de portée sans écrire un second moteur :
-
-- course 8, « manoir : hall, couloirs, escaliers », *changements de
-  direction, perte de repères* ;
-- course 9, « toits de la ville », *les haies deviennent des sauts de vide* —
-  le saut de vide demande une chute, donc un axe vertical que le jeu n'a pas ;
-- course 12, *gravité altérée par zones, sol instable* ;
-- course 6, *virages serrés* ;
-- course 10, *ton propre double te double* — demande un second coureur piloté
-  par l'historique du joueur.
-
-Ce n'est pas « difficile », c'est **un autre jeu**. Sprinter est un jeu de
-cadence sur une ligne : le joueur alterne deux appuis, et la seule variable
-est le rythme. Un couloir de manoir avec des virages n'a pas de geste à
-proposer au joueur — il n'y a rien à faire d'autre que taper plus vite, comme
-partout ailleurs, avec un décor qui prétend le contraire.
-
-**Ce qui se fait à la place, et qui est honnête** : le jeu a déjà prouvé qu'il
-sait dépayser sans changer de geste. Le 100 m **en virage** et les lignes
-droites de 200/300/400 m n'existent nulle part dans l'athlétisme, et suffisent
-à ce que le joueur ne sache pas ce qui l'attend. Un décor nouveau + un tracé
-nouveau + un effet de visibilité, c'est ce que le moteur rend bien.
-
-### 5.2 Le budget d'assets est hors d'échelle
-
-Le brief demande ≤ 8 Mo **par course**, soit jusqu'à 104 Mo pour treize.
-
-Aujourd'hui, **tout le décor du jeu pèse 6 Mo**, pour huit stades. Le jeu est
-une PWA installable qu'on ouvre sur un téléphone en 4G.
-
-Pire, et c'est un piège dans lequel ce mode est **déjà tombé une fois** :
-`public/` est **recopié tel quel dans les deux builds**. Huit images du
-molosse y ont été posées, sont parties dans le build public — où le mode
-n'existe pas — et ont dû être retirées, parce qu'aucun drapeau ne peut
-retenir `public/`.
-
-**Donc** : les assets d'Halloween ne peuvent pas aller dans `public/` tant que
-le mode est fermé au public. Ils doivent passer par `src/assets` + import
-dynamique (ce que fait déjà la musique, 700 Ko dans un morceau séparé chargé à
-l'ouverture du tableau), ou attendre l'ouverture du mode à tout le monde.
-
-**Proposition** : ≤ 900 Ko par course, ≤ 6 Mo pour les treize, chargés
-course par course. Un script de budget qui échoue au-delà (le brief le demande
-en §8.6, c'est la seule partie de son §4 qu'on peut tenir telle quelle).
-
-### 5.3 Blender n'est pas disponible ici
-
-Le brief demande de l'installer ou de le signaler immédiatement. **Il n'est
-pas dans cet environnement d'exécution** (`command -v blender` ne rend rien),
-et cette session tourne dans un conteneur éphémère sans accès réseau
-arbitraire. Les scripts existent et sont versionnés ; **ils ne peuvent pas
-être exécutés ici**.
-
-Deux conséquences :
-- les rendus doivent se faire sur une machine avec Blender (les scripts sont
-  écrits pour ça : `blender -b -P tools/blender/decors/fabriquer.py -- --stade X`) ;
-- ce que je peux produire ici, ce sont les **scripts** et le fallback
-  procédural canvas — qui est, comme le dit le brief, un placeholder.
-
-Et une remarque sur le molosse, parce qu'elle a déjà été payée : le rendu
-Blender de la bête a été **condamné par la mesure**. À l'écran elle fait
-49 × 26 pixels du premier mètre au dernier — `scaleM()` vaut `ui() * 30` en
-ligne droite, sans terme de distance. À cette taille, un rendu ne montre rien
-qu'un tracé ne montre déjà. Le script est gardé pour le jour où il faudra une
-affiche. **Pour les décors, c'est l'inverse** : ils sont grands, ils sont
-fixes, et le pipeline existe déjà pour eux.
-
-### 5.4 Le ton : quatorze scénettes drôles sont déjà écrites
-
-Le brief est catégorique : thriller, oppression, chair de poule, *pas de
-Halloween mignon*.
-
-`halloween-cinema.ts` contient quatorze scénettes d'après-course — six pour
-les nuits tenues, huit pour les morsures — écrites sous deux règles explicites
-et assumées : **la chute est toujours sur la dernière ligne**, et **on ne
-montre jamais la blessure** (le molosse arrache un mollet, et la scénette
-parle d'un rond-point et d'un règlement de compétition). Le héros n'est jamais
-fier : il est promu, flashé, filmé, refusé par un club.
-
-C'est délibéré, c'est bien écrit, c'est le contenu réel du mode (« la course
-dure onze secondes, la scène reste ») — et c'est **l'inverse** de ce que le
-brief demande. Il y a aussi une raison de fond : *« un jeu où l'on court se
-joue aussi chez des gens de douze ans. »*
-
-C'est une décision de direction artistique, pas une décision technique. Elle
-est en §6, décision A.
-
-### 5.5 Le double verrou de dates contre les treize nuits déjà ordonnées
-
-Le brief veut : une course par jour calendaire, du 19 au 31 octobre, verrou de
-date **et** verrou de victoire.
-
-Ce qui existe : verrou de victoire seul (`nuitOuverte() = tenues + 1`), sans
-date. L'édition (`edition.ts`) n'ouvre qu'une **bannière**, du 24 octobre au
-3 novembre, et la règle du dépôt est nette : *« ce qui est daté, c'est la
-bannière ; le lieu ne l'est pas »* — parce qu'un stade qui disparaît est un
-chrono qu'on ne peut plus rejouer.
-
-Ajouter le verrou de date est **faisable et propre** (c'est le gros de la
-phase 1), mais il faut savoir ce qu'on achète :
-
-- la fenêtre du brief est **13 jours** (19→31 oct) ; celle d'`edition.ts` est
-  de 10 jours et commence le **24** ; il faut la reculer ;
-- après le 31 octobre, le mode ne peut pas se refermer sans contredire la
-  règle du dépôt. Les treize nuits doivent rester jouables en février.
-  **Ce qui est daté, c'est l'ouverture progressive — pas l'accès.**
-- il est **déjà arrivé** que deux verrous justes séparément aient une
-  intersection vide, et que le mode soit déployé et injouable pendant des
-  jours sans que personne ne le voie. Un troisième verrou demande un harnais
-  qui calcule l'intersection, pas trois relectures.
-
-### 5.6 Le départ lancé coûte plus cher qu'il n'en a l'air
-
-Le mode **se pose sur le one shot**, il ne s'en fabrique pas un autre : une
-nuit *est* un 100 m au cimetière lancé par `startOneShot`. C'est ce qui lui
-donne gratuitement le faux départ, la pause, l'enregistrement de la trace, le
-film de la course, les records et le retour arrière du téléphone.
-
-Un départ lancé (vitesse initiale non nulle, pas de pistolet) demande de
-toucher à la machine à états du départ dans le moteur — partagée avec le
-sprint classique, les haies, le relais et la course en direct. **C'est le seul
-point du brief qui demande de modifier le jeu de base**, ce que le brief
-interdit par ailleurs.
-
-Faisable : `Runner` accepte une vitesse initiale, et l'état `'countdown'` peut
-être court-circuité pour une course marquée. Mais c'est du code dans le
-chemin commun, et ça se paie en tests de non-régression sur quatre modes.
-
-### 5.7 Deux contraintes de §7 sont en tension l'une avec l'autre
-
-« 60 fps sur mobile milieu de gamme », « ≤ 3 s de chargement en 4G », et
-« cinq couches de parallaxe par course, ≤ 250 Ko chacune » ne tiennent pas
-ensemble sur un seul canvas 2D qui dessine déjà huit coureurs, une piste, des
-tribunes et un HUD. Cinq couches en défilement, c'est cinq `drawImage`
-plein écran par image, avant d'avoir dessiné quoi que ce soit du jeu.
-
-Le fond actuel du cimetière est procédural et ne coûte presque rien. La
-proposition en §7 est : **deux couches bakées** (lointain, médian) + le sol
-procédural, ce que le moteur encaisse.
+- source de temps serveur (`/now`) ;
+- sauvegarde versionnée avec migration et somme de contrôle ;
+- harnais de temps simulé ;
+- `prefers-reduced-motion` (**totalement absent du dépôt** — zéro occurrence) ;
+- bus audio séparés et spatialisation (l'audio actuel est six effets et une
+  musique : `beep`, `go`, `haie`, `lose`, `trip`, `win`) ;
+- captures automatisées (pas de Playwright ; mais `tools/chrome.mjs` fait des
+  captures headless par le protocole DevTools **sans aucune dépendance npm** —
+  c'est la solution maison et elle marche).
 
 ---
 
-## 6. Les décisions à trancher
+## 3. Ce qui ne tient pas dans le brief
 
-### Décision A — le ton des scénettes
+Tu as demandé que je le dise plutôt que de coder autour. Sept points, du plus
+grave au plus bénin.
 
-> **Option A1 — on garde les quatorze scénettes, on durcit tout le reste.**
-> La peur est dans la course (son, proximité, obscurité, stinger) ; le
-> relâchement est après, quand c'est fini. C'est une structure connue et
-> efficace : on respire une fois la porte fermée. Coût : zéro. Risque : le
-> brief dit explicitement non.
->
-> **Option A2 — on écrit quatorze scénettes de remplacement, noires.**
-> Même dispositif (quatre lignes, servies une à une), ton de thriller. Les
-> anciennes restent dans le dépôt derrière un drapeau. Coût : une journée
-> d'écriture, aucun code. Risque : perdre le meilleur contenu du mode pour
-> quelque chose de moins bon, et déplacer le curseur d'âge.
+### 3.1 Le budget d'assets est irréalisable tel quel — **bloquant**
 
-**Ma recommandation : A2**, parce que le brief est non négociable sur ce
-point et que c'est votre appel, pas le mien — mais je vous dis que A1 est
-meilleur en l'état, et que la peur d'un jeu de sprint se joue **pendant** les
-onze secondes, pas après. Si vous prenez A2, la partie « chair de poule »
-doit être gagnée en §7 phase 3 (le son), pas dans les scénettes.
+Le brief demande ≤ 8 Mo par course. Treize courses : **104 Mo**.
 
-### Décision B — treize décors, ou cinq lieux tenus
+Aujourd'hui le site entier pèse 7 Mo d'assets. Et surtout :
 
-> **Option B1 — treize décors, un par nuit, comme le brief.**
-> Treize séries de rendus Blender, treize ambiances, treize fonds. Coût réel :
-> deux à trois semaines de production hors code, budget d'assets à négocier
-> (§5.2), et cinq des treize mécaniques restent impossibles (§5.1) — donc
-> treize décors dont cinq mentent sur ce qu'ils promettent.
->
-> **Option B2 — cinq lieux, tenus, sur les cinq tracés existants.**
-> Ruelle (100 m), cimetière (100 m en courbe), champ de maïs (200 m en
-> ligne), tunnel (300 m), grand cimetière (400 m + finale). Chaque lieu est
-> rendu correctement, avec sa brume, sa lumière et son poursuivant. Les
-> treize nuits les parcourent en alternance — ce qu'elles font déjà.
+> **`public/` est recopié tel quel dans les DEUX builds.** Aucun drapeau ne peut
+> le retenir. Je l'ai vérifié aujourd'hui en découvrant que 68 Ko de sprites
+> inutilisés partaient en production, et qu'un morceau de 21 Ko + une musique de
+> 708 Ko du mode Halloween étaient **téléchargeables depuis le site public**, un
+> mois avant l'ouverture. J'ai corrigé les deux — mais par un greffon Vite et une
+> annotation `@__PURE__`, ce qui ne marche que pour ce qui passe par le graphe de
+> modules. Ce qui est dans `public/` échappe à tout.
 
-**Ma recommandation : B2.** Le jeu vous a déjà dit ce qui marche : ce n'est
-pas le nombre de décors, c'est de ne pas savoir ce qui vient. Cinq lieux
-finis valent mieux que treize esquissés, et le budget tient.
+Donc 104 Mo de décors Halloween partiraient chez chaque joueur du vrai jeu,
+et révéleraient l'édition limitée avant l'heure.
 
-### Décision C — le départ lancé
+**Ce qu'il faut décider :** soit un budget réaliste (je propose **≤ 900 Ko par
+course, ≤ 8 Mo pour les treize**, soit l'ordre de grandeur des décors actuels),
+soit un hébergement séparé des assets Halloween (R2/CDN, chargés à la demande,
+absents des deux builds). La seconde option est propre mais ajoute une
+infrastructure.
 
-> **Option C1 — vrai départ lancé, dans le moteur.** Le brief à la lettre.
-> Coût : modification du chemin commun, tests de non-régression sur quatre
-> modes.
->
-> **Option C2 — la cinématique se termine sur le pistolet.** Les trois temps
-> du brief (poursuivants / visage / dézoom), puis « SURVIS », puis le départ
-> ordinaire enchaîné sans coupure de caméra. Le joueur ne voit pas de blocks
-> — le cadrage ne les montre pas — mais la machine à états ne bouge pas.
+### 3.2 Les sprite sheets de poursuivants sont une impasse — **mesurée aujourd'hui**
 
-**Ma recommandation : C2 pour la phase 2, C1 en phase 5 si le ressenti
-manque.** On ne touche pas au départ de quatre modes pour un effet qu'on n'a
-pas encore mesuré.
+Le brief demande des feuilles de 8–12 images par poursuivant, rendues dans
+Blender. **J'ai fait exactement ça aujourd'hui, et je l'ai annulé après mesure.**
 
-### Décision D — les retours des testeurs (§9 bis)
+À 30 px/m, le poursuivant fait 49 × 26 pixels, constamment. À cette taille un
+rendu ne montre rien qu'un tracé ne montre — mais il coûte huit images par
+phase, par type, et il ne peut pas réagir (la proximité, la gueule qui s'ouvre,
+les braises, le sens de la course : tout cela est du dessin paramétré).
 
-Le brief demande deux options si le projet ne collecte pas déjà les retours.
-Il n'a pas de route de retour utilisateur — mais il a **tout ce qu'il faut
-pour en avoir une** : une base D1, et un motif déjà établi deux fois pour
-noter ce qui échoue en silence (`worker/src/journal.js` pour les
-notifications, `worker/src/refus.js` pour les noms refusés, écrit après
-qu'un record du monde du jeu se soit perdu sans laisser de trace).
+Le commentaire d'origine du fichier le disait ; je l'ai écarté sans vérifier, et
+la mesure lui a donné raison. Les huit images rendues sont supprimées ;
+`tools/blender/molosse.py` est gardé avec la mesure en tête.
 
-> **Option D1 — un endpoint sur le worker existant.** `POST /test/retour`,
-> protégé par le code testeur déjà en place. Les retours arrivent dans D1 avec
-> le reste. Coût : une route, une table, une migration.
->
-> **Option D2 — export presse-papiers / JSON.** Le bouton « Signaler »
-> capture l'état et le copie ; le testeur le colle où vous lisez déjà. Coût :
-> quasi nul. Perte : rien n'est agrégé, et le journal par course que demande
-> le brief (où les testeurs meurent le plus) n'existe pas.
+**Ce que je propose :** Blender pour les **décors** (c'est ce pour quoi la chaîne
+existe et elle est bonne), **tracé paramétré** pour les **poursuivants**.
+Trois types de poursuivants = trois modules de dessin de ~400 lignes, comme
+`halloween-molosse.js`. Je peux prouver le rendu sur un type avant d'écrire les
+trois.
 
-**Ma recommandation : D1**, parce que le brief demande explicitement un
-journal par course pour régler la courbe de difficulté, et que D2 ne le donne
-pas. L'infrastructure d'accès testeur est déjà là.
+### 3.3 Cinq des treize décors demandent un autre moteur
 
----
+Le moteur ne connaît qu'une piste : une distance le long d'un couloir, sur un
+plan. Ce qui se re-décore sans problème (la piste devient une contrainte de
+largeur, les couloirs deviennent l'allée) :
 
-## 7. Le plan par phases
+| # | lieu | verdict |
+|---|---|---|
+| 1 | ruelle, pluie, néons | ✅ ligne droite re-décorée |
+| 2 | allée de cimetière | ✅ déjà fait (le cimetière existe) |
+| 3 | champ de maïs, brouillard | ✅ ligne droite + voile de visibilité |
+| 4 | parking souterrain | ✅ + stroboscope |
+| 5 | piste abandonnée | ✅ c'est littéralement le moteur |
+| 6 | égout / tunnel inondé | ✅ courbe + sol qui freine |
+| 7 | forêt, faisceaux | ✅ + zones de ralentissement |
+| 9 | toits | ⚠️ les haies deviennent des sauts de vide : le timing existe, mais « le vide » sous le coureur n'existe pas — il faudrait peindre un trou dans le sol, ce que le rendu de piste ne sait pas faire |
+| 12 | champ de crash, gravité par zones | ⚠️ un multiplicateur de vitesse par zone est faisable ; « gravité altérée » visuellement, non |
+| 8 | manoir, couloirs et **escaliers** | ❌ un escalier est un sol à hauteur variable. Le sol du jeu est plat par construction (`solid(X,Y,z)` élève un objet AU-DESSUS du sol, il ne déforme pas le sol) |
+| 10 | palais des glaces, reflets qui mentent | ❌ en tant que reflets. ✅ en tant que **double qui te double** : le système de fantômes existe (`G.ghost`) et c'est la moitié la plus forte de l'idée |
+| 11 | torche, cône de vision étroit | ✅ masque au-dessus du rendu |
+| 13 | finale, changement de décor **en course** | ⚠️ trois phases = trois thèmes ; le thème est lu à la construction de la course, pas par image. Faisable mais c'est une vraie modification du moteur — donc à te proposer, pas à faire en silence |
 
-Chaque phase finit par un résumé court, des captures, ce qui reste, ce qui
-m'inquiète — comme demandé. Commits atomiques, branche
-`claude/sprinter-halloween-2026-r68w39`, drapeau `HALLOWEEN_OUVERT`.
+**Ce que je propose :** garder les treize lieux, mais accepter que 8 (escaliers)
+devienne un couloir de manoir **à plat** avec portes qui claquent et virages
+serrés, et que 10 devienne le duel contre son propre double plutôt qu'un jeu de
+miroirs. Si tu veux les vrais escaliers et les vrais reflets, c'est un second
+moteur de rendu, et ce n'est pas une édition limitée : c'est un autre jeu.
 
-### Phase 1 — le calendrier et ses verrous *(la plus importante)*
+### 3.4 Les couches de parallaxe ne correspondent pas au moteur
 
-- `src/game/halloween-calendrier.ts` — **sans aucun import**, comme
-  `halloween-loi.js`, pour être chargeable nu par les harnais.
-  - les treize dates, 19→31 octobre 2026, écrites en UTC et commentées en
-    heure de Paris (le changement d'heure tombe le 25 octobre : UTC+2 avant,
-    UTC+1 après — c'est déjà le piège documenté dans `edition.ts`) ;
-  - la nuit 13 à **18 h 00 locales** le 31 octobre ;
-  - le double verrou : `dateAtteinte(n, maintenant) && tenue(n-1)`.
-- **L'heure, et à qui on la demande.** Source de vérité = en-tête `Date` d'un
-  `HEAD` sur le site, en cache court ; garde-fou monotone en `localStorage`
-  (on ne redescend jamais sous le plus haut jour atteint) ; hors ligne = le
-  dernier jour validé, jamais un jour futur.
-- **Le carnet versionné** `halloween2026.v1` avec migration depuis
-  `sprinter_halloween` (le carnet actuel) et somme de contrôle simple.
-  Migration, pas remplacement : des joueurs de `/test` ont déjà des nuits
-  tenues.
-- **Le voyageur temporel**, une seule implémentation, partagée par les tests
-  et le mode testeur — c'est ce que le brief exige en §9 bis, et c'est la
-  discipline du dépôt.
-- Harnais : `tools/molosse-calendrier-test.mjs` — dates, fuseaux, changement
-  d'heure, verrou de victoire, anti-triche, **et l'intersection des trois
-  verrous** (canal × fenêtre × date), parce que c'est l'erreur qui a déjà
-  coûté plusieurs jours.
-- Écran **« Le Calendrier »** : treize cartes, teaser, compte à rebours,
-  sceau qui se brise, marque sur les nuits tenues. Il remplace le tableau
-  actuel de treize lignes.
+Le brief décrit `layer-sky / far / mid / near / ground` — une architecture de
+jeu à défilement latéral. Le moteur est isométrique : il compose des **pièces**
+rangées par profondeur, et la caméra suit le coureur dans un monde, pas un
+décor qui défile.
 
-### Phase 2 — la cinématique d'ouverture et le départ
+Les deux ne se marient pas. La chaîne existante (`decors/fabriquer.py`) produit
+déjà la bonne chose. **Je propose de garder la structure existante** et
+d'adapter le brief sur ce point.
 
-- Trois temps (poursuivants / visage effrayé / dézoom), 6–8 s, variantes par
-  type de poursuivant, **skippable après la première vision** — le carnet
-  sait déjà retenir ce qui a été vu (`vues`).
-- Enchaînement sans coupure de caméra vers le départ (décision C).
-- Le canvas de cinématique réutilise `halloween-cinema.ts`, qui sait déjà
-  peindre une scène.
+### 3.5 Les dates entrent en conflit avec l'édition déjà déclarée
 
-### Phase 3 — le son *(là où se gagne la chair de poule)*
+`EDITION_HALLOWEEN` (`src/game/edition.ts`) est actuellement :
+**24 octobre 22:00 UTC → 3 novembre 23:00 UTC**. Le brief demande
+**19 → 31 octobre**.
 
-`src/game/halloween-son.ts` — **le fichier que les commentaires citent déjà et
-qui n'existe pas.** Aujourd'hui, la bête est muette.
+Il faut trancher, et un seul des deux peut vivre. Le brief est plus cohérent
+(13 jours, 13 courses, finale le soir d'Halloween) ; je recommande de recaler
+`EDITION_HALLOWEEN` sur le brief. **Un harnais vérifie déjà qu'aucune fenêtre
+d'édition n'en recouvre une autre** — l'édition du Danube se termine le
+20 septembre, il n'y a donc pas de collision.
 
-- Bus séparés : ambiance / poursuivant / joueur / interface / stinger.
-- Le poursuivant **spatialisé derrière**, qui se rapproche : pas de barre de
-  vie, la peur se mesure à l'oreille. Les données sont là (`c.ecart`, `c.v`,
-  `proximite(c)`), rien à calculer de neuf.
-- Souffle du coureur qui se dégrade ; battements de cœur sous 1,5 s d'écart.
-- Sous 1 s : vignette rouge qui pulse, saturation qui tombe, distorsion — tout
-  dans la boucle canvas, aucun composant React touché.
-- Un stinger par nuit, à un endroit imprévisible ; silence 0,4 s avant.
+Note : aujourd'hui, 20 septembre, la première course est **à 29 jours**. Tout se
+vérifiera par le voyageur temporel, jamais en conditions réelles avant l'heure.
 
-### Phase 4 — le mode testeur *(§9 bis)*
+### 3.6 Trois points de méthode où le brief s'écarte des conventions du dépôt
 
-- Branché sur `codeAcces()` / `verifierCode()` **existants** — pas de second
-  système. Expiration au 1er novembre 2026.
-- Les treize nuits ouvertes, verrou de victoire levé, voyageur temporel
-  (même harnais que la phase 1).
-- Bandeau permanent « MODE TEST — jour simulé : 27 oct ».
-- **Progression isolée** : `halloween2026.tester.v1`, namespace séparé ;
-  sortir du mode test restaure la progression réelle intacte.
-- Outils : saut de cinématique, rejeu instantané, vitesse de la bête, écart en
-  secondes, FPS, forcer victoire/défaite.
-- Bouton « Signaler » (décision D).
-- **Garde-fous** : `tools/molosse-testeur-canal-test.mjs` — compile le build
-  public et **échoue** si le code testeur ou les outils de debug y sont
-  joignables ; et un test qui vérifie qu'un joueur sans code voit bien douze
-  cartes verrouillées avant le 19 octobre.
+Aucun n'est grave, je les signale pour que tu choisisses :
 
-### Phase 5 — décors, confort, performance
+- **Le drapeau.** Le brief dit `HALLOWEEN_2026_ENABLED`. Le dépôt met tous ses
+  drapeaux dans `src/game/canal.ts`, en français, avec une forme établie
+  (`HAIES_OUVERTES`, `POUSSEE_OUVERTE`, `HALLOWEEN_OUVERT`) et un commentaire qui
+  dit comment refermer. Je propose **`HALLOWEEN_2026_OUVERT`** dans `canal.ts` —
+  mêmes garanties, même endroit, et le repli à la compilation est déjà éprouvé.
+- **Le chemin de config.** Le brief dit `src/modes/halloween/races.config.ts`.
+  Le dépôt n'a pas de dossier `modes/` : tout est dans `src/game/` avec un
+  préfixe (`halloween-*`, `haies-*`, `longueur-*`). Je propose de suivre la
+  maison : `src/game/halloween-courses.js` existe déjà et c'est exactement ce
+  fichier.
+- **Les tests.** Le brief demande des tests unitaires. Le dépôt n'a ni Vitest ni
+  Jest : il a des **harnais autonomes** `tools/*-test.mjs` qui se lancent à la
+  main (`node tools/molosse-test.mjs`) et impriment des ✓/✗. J'en ai écrit un
+  aujourd'hui. Je propose de suivre la maison plutôt que d'introduire un second
+  système — sauf si tu veux justement l'introduire, auquel cas c'est un chantier
+  à part entière qu'il faut décider explicitement.
 
-- Décors selon la décision B, via le pipeline Blender existant, **hors de
-  `public/`** tant que le mode est fermé (§5.2).
-- Écran d'avertissement à l'entrée ; option **« Frayeur réduite »** ;
-  `prefers-reduced-motion` (le jeu le respecte déjà ailleurs) ; volume des
-  stingers séparé ; tremblement désactivable ; pas de stroboscope > 3 Hz.
-- Budget d'assets vérifié par script qui échoue au-delà.
-- Captures Playwright headless des treize nuits et des trois temps de
-  cinématique, **que je regarde et critique avant de vous les montrer**.
-- Non-régression du jeu de base, drapeau désactivé **et** activé.
+### 3.7 « Chair de poule chaque jour » — ce que je peux et ne peux pas promettre
+
+Je peux livrer : la tension qui monte, le son qui se rapproche, le sol qui
+tremble, la nuit qui se referme, un poursuivant qui réagit. J'en ai livré une
+partie aujourd'hui et c'est mesurable.
+
+Je ne peux pas promettre la peur **à 49 × 26 pixels vu de trois quarts en
+plongée**. Ce cadrage est celui d'un jeu de sprint : il montre bien une course,
+il tient mal l'oppression, parce que la peur a besoin de proximité et que cette
+caméra n'en a aucune. La cinématique d'ouverture en 3 temps (§3 du brief) est
+la meilleure idée du document précisément pour ça : **elle donne le gros plan
+que le gameplay ne peut pas donner.** Je propose de l'exploiter à fond et de
+ne pas compter sur la course elle-même pour faire peur autrement que par la
+tension.
+
+Si tu veux de la peur **pendant** la course, il faut discuter du cadrage — une
+caméra basse derrière le coureur pour ce mode, ce qui est un vrai chantier de
+rendu, à décider maintenant et pas en phase 4.
 
 ---
 
-## 8. Les risques de régression
+## 3 bis. Décisions prises — 20 septembre 2026
 
-1. **Casser la promesse du mode.** Toute retouche à la loi de position, aux
-   temps impartis ou aux tracés doit rejouer `tools/molosse-test.mjs`. Cette
-   promesse a déjà été fausse une fois, et seul le harnais l'a vue.
-2. **L'intersection des verrous.** Trois verrous — canal, fenêtre, date — qui
-   sont chacun justes et dont l'intersection est vide. C'est arrivé, le mode
-   a été déployé et injouable plusieurs jours. Un harnais qui calcule
-   l'intersection, pas trois relectures.
-3. **`public/` part dans les deux builds.** Déjà payé une fois (les huit
-   images du molosse). Aucun asset d'Halloween dans `public/` tant que le mode
-   est fermé.
-4. **Le départ lancé touche au chemin commun** (décision C). Si C1 est
-   retenue : non-régression sur sprint, haies, relais et course en direct.
-5. **La migration du carnet.** Des joueurs de `/test` ont des nuits tenues
-   sous `sprinter_halloween`. `halloween2026.v1` doit migrer, pas remplacer.
-6. **`G.obstacles` est partagé** avec les haies. `rangerLaNuit` ne rend la
-   place que si c'est bien la bête qui l'occupe — cette précaution existe, ne
-   pas la perdre.
-7. **La perte du one shot.** Le mode hérite du faux départ, de la pause, du
-   film, des records. Fabriquer une boucle à part les perdrait tous.
-8. **Le poids du build public.** `HALLOWEEN_OUVERT` doit rester une constante
-   en tête d'un `&&`. Un `as any` ou un `?.` casse le remplacement littéral et
-   tout le mode part en production. C'est arrivé : 37 Ko de WebRTC.
+| # | décision | réponse |
+|---|---|---|
+| 1 | étendre ou repartir | **étendre** |
+| 2 | nom du mode | *non tranché — j'applique ma recommandation : renommer, « La nuit du molosse » devient le titre de la course 1* |
+| 3 | budget d'assets | **la meilleure qualité** → hébergement séparé, voir §3 bis.1 |
+| 4 | courses 8 et 10 | *non tranché — j'applique ma recommandation : à plat, et le double fantôme pour la 10* |
+| 5 | caméra | **on ouvre le chantier**, et **angle variable par course** → §3 bis.2 |
+| 6 | tests | *non tranché — j'applique ma recommandation : harnais maison `tools/*.mjs`* |
+| 7 | dates | *non tranché — j'applique ma recommandation : `EDITION_HALLOWEEN` recalée sur 19 → 31 octobre* |
+
+Les quatre non tranchées sont toutes réversibles à faible coût ; dis-le si l'une
+ne te convient pas, je reviendrai dessus.
+
+### 3 bis.1 — Qualité maximale : les assets sortent de `public/`
+
+« La meilleure qualité » et `public/` sont incompatibles : ce dossier est recopié
+tel quel dans les deux builds, sans qu'aucun drapeau puisse le retenir (§3.1).
+Plus on met de qualité, plus on alourdit le site public et plus on éventre la
+surprise.
+
+**Donc : un magasin d'assets séparé.** R2 (Cloudflare, déjà dans l'écosystème du
+worker) ou un dossier servi hors du build, avec :
+
+- chargement **à la demande, course par course**, derrière un écran de
+  préchargement diégétique ;
+- `manifest.json` versionné, avec taille, nombre d'images, fps et empreinte,
+  **validé au runtime** ;
+- rien dans `dist/` ni `dist-test/` : le paquet public ne contient ni les images
+  ni leurs noms ;
+- plus de plafond arbitraire par course — le plafond devient le **temps de
+  chargement** (≤ 3 s en 4G), qui est la vraie contrainte et qu'on mesure.
+
+C'est un chantier d'infrastructure en plus, assumé, et c'est le prix de la
+qualité maximale.
+
+### 3 bis.2 — La caméra : sonde faite, et elle change tout
+
+**Deux mesures avant de toucher à quoi que ce soit :**
+
+1. Les ~111 appels à la projection (`ground` 30, `solid` 27, `ptOf` 29,
+   `depthOf` 6, `scaleM` 19) sont **tous dans `sprinter-app.js`** — surface
+   bornée, un seul fichier.
+2. `C.ISO_COS` / `C.ISO_SIN` sont lus **13 fois, toujours via `C.`, jamais
+   inscrits en dur**. L'angle de vue est donc **déjà un paramètre vivant**.
+   Et `scaleM()` a déjà un crochet de zoom (`zoomDuGenerique()`), posé pour le
+   générique de fin.
+
+**La sonde :** même instant de course — la bête à 2,99 m — redessiné à quatre
+réglages, en écrivant dans `C` puis en le remettant.
+
+| réglage | angle au-dessus de l'horizon | ce qu'on voit |
+|---|---|---|
+| actuel | 26,6° | coureur et bête minuscules, vus de haut |
+| basse | 12,7° | la piste s'aplatit, les cyprès se dressent |
+| basse ×2 | 12,7° | **ça devient une poursuite** : la bête est une masse noire derrière l'homme |
+| rasante ×2,5 | 6,9° | la bête est grande, quadrupède net, œil rouge — c'est une image de chasse |
+
+**Conclusion : le chantier caméra est bon marché et il fonctionne.** Ce n'est pas
+un moteur de perspective à écrire, c'est deux paramètres déjà branchés.
+
+**Mais il invalide les décors déjà rendus, et c'est pour ça qu'il fallait le
+trancher avant les assets.** Les pièces Blender sont cuites « sous la vue du
+jeu » à 26,6° : à 6,9° les gradins s'écrasent en bande plate et les cyprès se
+déforment. Il faut re-rendre. Comme on fabrique treize décors neufs de toute
+façon, le surcoût se limite au cimetière existant.
+
+**Ce que la sonde rouvre :** à ×2,5 la bête mesure ~120 × 65 pixels au lieu de
+49 × 26. Mon verdict du §3.2 — « les sprite sheets sont une impasse » — a été
+mesuré à 49 × 26 et **ne vaut plus automatiquement**. À 120 × 65 un rendu
+commence à montrer quelque chose. Je maintiens ma préférence pour le tracé
+paramétré (il réagit : proximité, gueule, sens de course, braises — une image
+cuite ne réagit pas), mais je le re-mesurerai sur pièce en phase 2 au lieu de
+le décréter.
+
+**Ce qui reste à vérifier avant de figer l'angle :** le rendu des haies et des
+obstacles suppose peut-être le rapport 2:1 ; `depthOf` n'en dépend pas
+(`(ax+ay)·scaleM()`), donc le rangement en profondeur tient. À contrôler en
+phase 2.
+
+**L'ANGLE EST VARIABLE PAR COURSE** — décision du 20 septembre. Chaque course
+fixe le sien : rasant dans la ruelle et le tunnel, plus haut sur la piste
+abandonnée où il faut lire les couloirs. C'est le choix le plus cher (treize
+jeux de pièces Blender, aucune mutualisation d'une course à l'autre) et le plus
+expressif.
+
+Conséquence heureuse sur l'architecture : la caméra devient un **champ de
+configuration par course** (`camera: { angle, zoom }` dans la table des
+courses), pas une constante de mode. C'est plus propre, et ça se teste — un
+harnais peut vérifier que les treize angles sont déclarés et que chacun est
+rendu par un jeu de pièces correspondant.
+
+**Portée :** la caméra basse est **propre au mode Halloween**. Le sprint garde sa
+vue. Concrètement, `C.ISO_*` et le zoom deviennent des valeurs posées à
+l'armement du mode et remises au rangement — exactement comme `G.obstacles` et
+`G.pasMolosse` le sont déjà.
 
 ---
 
-## 9. Ce que je ne fais pas sans votre validation
+## 4. Plan d'implémentation
 
-- Réécrire les quatorze scénettes (décision A).
-- Produire treize décors plutôt que cinq (décision B).
-- Toucher à la machine à états du départ (décision C).
-- Ajouter une route au worker (décision D).
-- Reculer la fenêtre d'`EDITION_HALLOWEEN` du 24 au 19 octobre.
-- Remplacer le tableau des treize nuits par l'écran « Le Calendrier ».
+Phases telles que le brief les ordonne, ajustées aux constats ci-dessus.
 
-**Je m'arrête ici et j'attends votre retour**, comme le demande le brief
-(§9, phase 0). Dites-moi A/B/C/D, et j'enchaîne sur la phase 1.
+### Phase 1 — squelette, calendrier, verrous *(la plus sûre, aucun asset)*
+
+1. `HALLOWEEN_2026_OUVERT` dans `canal.ts`.
+2. Endpoint worker **`GET /now`** → `{ ms }`, plus la lecture du header `Date`
+   en repli. Cache court côté client.
+3. `src/game/halloween-calendrier.ts` : **source unique de vérité du temps**,
+   avec les trois garde-fous du brief (temps serveur, cliquet monotone en
+   localStorage, mode hors-ligne au dernier jour validé). **Le voyageur temporel
+   du mode test et le harnais de test tapent dans CE module et nulle part
+   ailleurs** — exigence explicite du §9 bis, et c'est la bonne.
+4. Sauvegarde `halloween2026.v1` : versionnage, migration depuis
+   `sprinter_halloween`, somme de contrôle. Namespace testeur séparé
+   `halloween2026.tester.v1`.
+5. Verrou double : date ET victoire. Le second existe (`tenues + 1`).
+6. Écran **« Le Calendrier »** : 13 cartes, compte à rebours, sceau qui se brise.
+7. Harnais `tools/halloween-calendrier-test.mjs` : les 13 jours, les fuseaux, le
+   changement d'heure (**Paris passe à UTC+1 le 25 octobre, au milieu de la
+   fenêtre** — le piège est déjà documenté dans `edition.ts`), l'ouverture de la
+   13 à 18h, l'anti-triche, la migration.
+8. Non-régression : drapeau fermé, le jeu de base est identique.
+
+*Livrable : le calendrier fonctionne, aucune course nouvelle, rien ne peut casser.*
+
+### Phase 2 — la caméra, puis une course de bout en bout
+
+8 bis. **La caméra du mode** : angle et zoom posés à l'armement, remis au rangement ; vérification des haies et du rangement en profondeur ; re-rendu du cimetière au nouvel angle.
+8 ter. **Le magasin d'assets séparé** et son manifeste, avec l'écran de préchargement.
+9. Cinématique en 3 temps + **départ lancé** (vitesse initiale non nulle, pas de
+   blocs). ⚠️ Le départ du jeu est câblé sur le décompte 3-2-1 partout ; un
+   départ lancé est une variante à ajouter proprement, pas à bricoler.
+10. Course 1 (« Ruelle du Croissant Noir ») : décor Blender, molosse existant,
+    départ lancé, victoire/défaite, écrans de fin.
+11. Budget d'assets vérifié par script qui échoue au dépassement.
+12. Captures headless via `tools/chrome.mjs`.
+
+*Livrable : une course jouable, belle, dans le budget. On juge sur pièce avant
+d'en faire douze autres.*
+
+### Phase 3 — les douze autres
+
+13. Zombies et martiens : deux modules de dessin paramétré.
+14. Les douze décors restants.
+15. Les modificateurs : brouillard, stroboscope, sol qui freine, faisceau,
+    torche, zones de gravité, double fantôme.
+16. La finale en 3 phases — **après t'avoir proposé comment changer de thème en
+    course**, puisque c'est une modification du moteur.
+17. Courbe de difficulté réglée sur les journaux de testeurs.
+
+### Phase 4 — son, peur, confort, perf
+
+18. Bus Web Audio séparés, spatialisation derrière le joueur, mix réactif.
+19. Souffle, battements, stingers placés différemment à chaque course, silence
+    comme outil.
+20. `prefers-reduced-motion`, « Frayeur réduite », avertissement à l'entrée,
+    réglages séparés.
+21. Perf : 60 fps milieu de gamme, budget de draw calls documenté.
+    Le dépôt sait déjà compter les appels de dessin plutôt que les pixels.
+22. Chargement ≤ 3 s en 4G.
+
+### En parallèle dès la phase 1 — le mode testeur (§9 bis)
+
+23. Branchement sur `acces.js` / `PorteTest.tsx` **existants** : rien à créer.
+24. Voyageur temporel piloté par le module de la phase 1.
+25. Bandeau « MODE TEST — jour simulé : 27 oct ».
+26. Outils de debug, bouton « Signaler », journalisation.
+27. Harnais qui **échoue** si le code testeur ou les outils sont joignables en
+    production.
+
+---
+
+## 5. Risques de régression
+
+| risque | gravité | parade |
+|---|---|---|
+| **Les haies du jeu de base** — le mode réutilise leur logique de timing | haute | harnais dédié avant/après, drapeau fermé et ouvert |
+| **`sprinter-core.js`** — chaque tracé nouveau veut sa clef de plateau, sinon la course ne se construit pas | haute | le harnais construit les 13 courses et vérifie qu'aucune ne tombe |
+| **`public/` part dans les deux canaux** | haute | script de budget + vérification que rien du mode n'est dans le build public |
+| **Fuite du morceau JS** — `lazy()` sans `@__PURE__` republie le mode | moyenne | `molosse-canal-test.mjs` le vérifie déjà par deux vrais builds Vite |
+| **Le store `gameStore`** — tout ajout au snapshot coûte à chaque image | moyenne | ne publier que ce que React lit |
+| **La pile de profondeur** — un poursuivant mal rangé passe devant/derrière | moyenne | vérification visuelle par captures |
+| **Le fuseau et l'heure d'été** — Paris change le 25 octobre, au milieu | moyenne | dates en UTC, harnais sur les frontières |
+| **Deux implémentations du temps** (jeu / test) | haute | une seule source, exigée par le §9 bis, imposée dès la phase 1 |
+
+---
+
+## 6. Ce que je n'ai pas fait, volontairement
+
+Conformément au §9 : aucun code de production écrit. La branche ne contient que
+ce document. Aucun refactor du jeu de base n'est engagé.
+
+---
+
+## 7. Décisions que j'attends de toi
+
+1. **Étendre « La nuit du molosse » ou repartir à zéro ?**
+   *Ma recommandation : étendre.*
+2. **Si on étend, le mode change-t-il de nom ?**
+   (a) garder « La nuit du molosse » et accepter que le molosse ne soit que le
+   premier des poursuivants ; (b) renommer, et le molosse devient la course 1.
+   *Ma recommandation : (b), avec « La nuit du molosse » comme titre de la
+   course 1 — le nom est trop bon pour le jeter et trop précis pour couvrir
+   treize nuits.*
+3. **Budget d'assets** : ≤ 900 Ko par course dans `public/`, ou hébergement
+   séparé à construire ?
+   *Ma recommandation : ≤ 900 Ko, quitte à revoir à la hausse après la course 1.*
+4. **Courses 8 et 10** : version à plat (faisable) ou vrai moteur de niveaux
+   (autre projet) ?
+   *Ma recommandation : à plat, et le double fantôme pour la 10.*
+5. **La peur pendant la course** : on s'en tient au cadrage actuel, ou on ouvre
+   le chantier d'une caméra basse pour ce mode ?
+   *À décider maintenant, pas en phase 4.*
+6. **Tests** : harnais maison `tools/*.mjs` (convention du dépôt) ou
+   introduction de Vitest ?
+   *Ma recommandation : harnais maison.*
+7. **Dates** : je recale `EDITION_HALLOWEEN` sur 19 → 31 octobre ?
+
+---
+
+*Fin de la phase 0. J'attends ta validation avant d'écrire la moindre ligne de
+code de production.*

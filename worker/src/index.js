@@ -1550,6 +1550,35 @@ async function servir(request, env, ctx, porteur) {
       return json(await recalculerRecords(env.DB, { creer }));
     }
 
+    /* ----------------------------------------------------------- l'heure
+       L'HEURE DU SERVEUR, ET RIEN D'AUTRE.
+
+       L'edition limitee d'Halloween ouvre une course par jour du 19 au
+       31 octobre. Si la date se lisait sur l'appareil du joueur, avancer sa
+       montre de treize jours ouvrirait toute l'edition en trente secondes —
+       et une edition limitee dont on peut voir la fin le premier jour n'est
+       plus une edition limitee.
+
+       C'est le meme principe que le depart des salles, et depart.js l'ecrit
+       deja : la date est ici PARCE QU'ELLE NE PEUT PAS ETRE LA-BAS. L'horloge
+       du joueur lui appartient ; celle-ci, non.
+
+       CETTE ROUTE NE SAIT RIEN DU MODE, et c'est voulu. Elle ne dit pas quelle
+       nuit est ouverte — elle dit l'heure. Le calendrier se calcule chez le
+       client (game/halloween-calendrier.ts), ou il est eprouve par un harnais ;
+       le mettre ici obligerait a le tenir a deux endroits, et a redeployer le
+       serveur pour corriger une date.
+
+       AUCUNE BASE, AUCUN CANAL, AUCUN SECRET. Elle repond la meme chose a
+       tout le monde, ce qui la rend triviale a mettre en cache cote client et
+       sans interet a marteler. Pas de limite d'appels pour la meme raison :
+       l'en-tete `Date` de n'importe quelle requete donne deja cette
+       information, et c'est d'ailleurs le repli du client quand cette route
+       ne repond pas. */
+    if (url.pathname === '/now' && request.method === 'GET') {
+      return json({ ms: Date.now() });
+    }
+
     // ------------------------------------------------------- classement
     if (url.pathname === '/leaderboard' && request.method === 'GET') {
       const race = url.searchParams.get('race');
