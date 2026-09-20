@@ -19,8 +19,10 @@ import { BanderoleSelection } from './Selection';
 import { BanderoleEdition } from './BanderoleEdition';
 // Charge a la demande, pour la raison expliquee dans App.tsx : un import
 // ordinaire fait voyager tout le mode dans le build public, drapeau ferme ou
-// non.
-const BanderoleMolosse = lazy(() => import('./Halloween')
+// non. Et `@__PURE__` pour la seconde moitie de la meme raison — sans elle,
+// Rollup garde l'appel a `lazy`, donc l'`import()`, donc le morceau, qui se
+// telechargeait alors depuis la production.
+const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
   .then(m => ({ default: m.BanderoleMolosse })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';

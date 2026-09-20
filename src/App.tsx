@@ -61,13 +61,32 @@ import { HALLOWEEN_OUVERT } from '@/game/canal';
    existe pas. C'est exactement l'accident que canal.ts raconte a propos des
    37 Ko de WebRTC.
 
-   Derriere `lazy`, le mode devient un morceau separe que rien ne reference
-   quand le drapeau est faux. Le `Suspense` ne sert qu'a satisfaire React :
-   son repli est nul, parce qu'il n'y a rien a montrer pendant le chargement
-   d'un panneau que le joueur vient tout juste de demander. */
-const PanneauMolosse = lazy(() => import('@/components/screens/Halloween')
+   Derriere `lazy`, le mode devient un morceau separe. Le `Suspense` ne sert
+   qu'a satisfaire React : son repli est nul, parce qu'il n'y a rien a montrer
+   pendant le chargement d'un panneau que le joueur vient tout juste de
+   demander.
+
+   ET IL FAUT `@__PURE__`, SANS QUOI LE MORCEAU EST PUBLIE QUAND MEME.
+
+   C'etait la moitie manquante, et elle s'est mesuree en ligne :
+   sprinter-game.com/assets/Halloween-*.js repondait 200 sur la PRODUCTION,
+   vingt-et-un kilo-octets, avec les treize nuits et leurs noms en clair. Le
+   `HALLOWEEN_OUVERT && ...` plus bas faisait bien son travail — aucun joueur
+   ne pouvait ouvrir le mode — mais quiconque lisait la liste des fichiers
+   avait la surprise entiere avant le 24 octobre.
+
+   La raison tient en une ligne : `lazy(...)` est un APPEL au niveau du module.
+   Rollup ne supprime pas un appel dont il ne sait rien, meme quand plus
+   personne ne se sert du resultat ; il garde donc la constante, et avec elle
+   l'`import()` qu'elle enferme, et avec lui le morceau. L'annotation dit ce
+   que Rollup ne peut pas deviner : cet appel ne fait rien d'autre que rendre
+   une valeur. Inutilisee, elle s'en va — et le morceau avec.
+
+   Ce qu'on verifie : tools/molosse-canal-test.mjs bâtit le vrai paquet de
+   production et exige qu'aucun fichier Halloween n'en sorte. */
+const PanneauMolosse = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.PanneauMolosse })));
-const FinDeLaNuit = lazy(() => import('@/components/screens/Halloween')
+const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.FinDeLaNuit })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';

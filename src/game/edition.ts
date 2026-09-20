@@ -21,6 +21,17 @@
 // AUCUN RESEAU, AUCUN STOCKAGE. La fenetre est en dur et se lit sur l'horloge
 // de l'appareil. Un joueur qui avance sa montre verra la banniere une semaine
 // plus tot : il n'y a rien a y gagner — le stade, lui, est deja ouvert.
+//
+// ET AUCUN IMPORT — la ligne vide sous ce bandeau est voulue. Le harnais charge
+// ce fichier NU (tools/edition-danube-test.mjs l'importe directement, node
+// enleve les types et c'est tout) : il n'y a ni Vite, ni resolution d'extension,
+// ni `import.meta.env`. Un seul `import { EST_TEST } from './canal'` ajoute ici
+// fait tomber le test sur ERR_MODULE_NOT_FOUND, et s'il passait la resolution
+// il tomberait ensuite sur `import.meta.env` qui n'existe pas sous node.
+//
+// Ce que le canal doit changer se decide donc CHEZ L'APPELANT, dans l'ecran qui
+// pose la question — voir BanderoleMolosse dans components/screens/Halloween.tsx.
+// Ici, on ne repond que sur des dates.
 
 export type Edition = {
   /** Clef de l'edition, pour les ecrans et les mesures. */
@@ -106,7 +117,16 @@ export function editionEnCours(maintenant: number = Date.now()): Edition | null 
   return null;
 }
 
-/** Cette edition est-elle en cours ? */
+/**
+ * Cette edition est-elle en cours ?
+ *
+ * PREDICAT PUR, ET IL DOIT LE RESTER : on lui donne un instant, il repond sur
+ * les dates, et rien d'autre n'entre dedans. Un test verifie qu'il dit toujours
+ * la meme chose que `editionEnCours` sur des instants choisis
+ * (tools/edition-danube-test.mjs) — un contournement de canal glisse ici
+ * rendrait ce test faux le jour ou il tournerait sur /test, et surtout il
+ * ferait mentir une fonction a qui l'on a passe une date explicite.
+ */
 export function editionActive(e: Edition, maintenant: number = Date.now()): boolean {
   return maintenant >= e.debut && maintenant < e.fin;
 }

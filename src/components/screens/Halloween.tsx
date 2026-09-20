@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE } from '@/lib/mouvement';
 import { editionActive, EDITION_HALLOWEEN } from '@/game/edition';
+import { EST_TEST } from '@/game/canal';
 import {
   NUITS, nuitDe, nuitOuverte, carnet, chronoDe, etapeDuCimetiere,
   armerLaNuit, rangerLaNuit, nuitEnCours, nuitCourante, etatDeLaChasse,
@@ -99,7 +100,26 @@ function partir(n: number) {
  */
 export function BanderoleMolosse() {
   const c = carnet();
-  const dansLaFenetre = editionActive(EDITION_HALLOWEEN);
+  // LA PORTE, ET LA FENETRE. `editionActive` ne repond que sur des dates —
+  // c'est un predicat pur, et le harnais s'y appuie. Savoir s'il faut MONTRER
+  // l'entree est une autre question, et le canal y entre : c'est ici qu'on la
+  // tranche, pas dans game/edition.ts, qui se charge nu sous node et ne peut
+  // rien importer.
+  //
+  // SUR /test, TOUJOURS OUVERTE, et c'est la raison d'etre de ce canal : il
+  // montre ce qui n'est pas encore ouvert, sans quoi il n'y a rien a y essayer.
+  //
+  // LE MODE A ETE INJOUABLE SUR /test PENDANT TOUT CE TEMPS, et c'est ce
+  // qu'aucun des deux verrous ne disait seul. `HALLOWEEN_OUVERT` decide QUI
+  // voit le mode — le canal de test, et lui seul ; la fenetre decide QUAND on
+  // l'annonce — a partir du 24 octobre. Chacun etait bien regle. Leur
+  // intersection, elle, etait vide : le code partait bien dans le paquet de
+  // /test, et l'accueil n'affichait rien, parce que cette banderole est la
+  // SEULE porte du mode et qu'un joueur neuf n'a pas de carnet pour la forcer.
+  //
+  // En production rien ne change : `EST_TEST` y vaut `false` en dur, le bundler
+  // replie la condition, et les dates restent seules maitresses.
+  const dansLaFenetre = EST_TEST || editionActive(EDITION_HALLOWEEN);
   const commence = c.tenues > 0 || c.morsures > 0;
   if (!dansLaFenetre && !commence) return null;
 
