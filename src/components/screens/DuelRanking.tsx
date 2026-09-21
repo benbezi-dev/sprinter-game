@@ -178,15 +178,23 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex flex-col items-center
-                    pointer-events-auto overflow-y-auto
+                    pointer-events-auto overflow-y-auto overflow-x-hidden
                     px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
                     pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="w-full max-w-lg mx-auto flex flex-col items-center py-6 md:py-8 gap-4">
 
-        <div className="w-full flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Swords className="w-5 h-5 text-primary" />
-            <div className="flex flex-col">
+        {/* L'EN-TETE TIENT DANS LA LARGEUR D'UN TELEPHONE, CROIX COMPRISE.
+            Le titre et les trois boutons sur une seule ligne demandaient 403 px
+            la ou un telephone en offre 375 : la croix tombait entierement hors
+            du cadre, et comme le panneau defile aussi de cote, il fallait
+            pousser la page vers la droite pour decouvrir qu'elle existait.
+            En dessous de 640 px, les deux tableaux voisins passent donc sur une
+            seconde ligne et la croix reste seule a droite du titre — la ou on
+            la cherche, visible des l'ouverture. */}
+        <div className="w-full flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Swords className="w-5 h-5 text-primary shrink-0" />
+            <div className="flex flex-col min-w-0">
               <h2 className="font-black font-display tracking-tight text-primary text-xl md:text-2xl leading-tight">
                 {N.t('duel_title')}
               </h2>
@@ -195,12 +203,20 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
               </span>
             </div>
           </div>
+          {/* La croix avant les deux autres dans le flux : c'est elle qui doit
+              rester collee au titre quand la ligne se casse en deux. `order`
+              la renvoie a sa place habituelle — tout a droite — des que la
+              largeur revient. */}
+          <button onClick={onClose}
+                  className="order-2 sm:order-3 shrink-0 p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
+            <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
+          </button>
           {/* LES TROIS TABLEAUX SONT VOISINS, ET C'EST LE PROPOS. Celui des
               duels classe des chronos, celui des recruteurs classe ce qu'on
               amene, celui des nations classe ce qu'on est ensemble. Un joueur
               qui ne gagnera jamais le premier peut gagner les deux autres —
               encore faut-il qu'il les voie depuis le premier. */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="order-3 sm:order-2 w-full sm:w-auto flex items-center justify-end gap-2 shrink-0">
             <button onClick={() => setVoirNations(true)}
                     className="px-3 py-2 rounded-xl bg-card/80 border border-white/10
                                hover:bg-white/10 transition-colors
@@ -212,10 +228,6 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                                hover:bg-white/10 transition-colors
                                text-[10px] font-bold tracking-widest text-muted-foreground">
               {N.t('recr_ouvrir')}
-            </button>
-            <button onClick={onClose}
-                    className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
-              <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
             </button>
           </div>
         </div>
