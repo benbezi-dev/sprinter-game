@@ -59,7 +59,23 @@ const COULEUR: Record<Juge['note'], string> = {
  * d'appuis dessous, et « rythme casse » seulement quand il l'est — un compte
  * juste ne merite pas qu'on le lise.
  */
-export function HaiesHUD() {
+/**
+ * `tuto` : le nombre de haies de la SEQUENCE en cours, quand ce bandeau sert
+ * le tutoriel plutot qu'une course.
+ *
+ * Il fait deux choses, et elles ont la meme cause — le tutoriel pose les haies
+ * d'un vrai 110 m mais n'en fait franchir que deux.
+ *
+ * LE COMPTE. « haie 1 sur 10 » etait faux : le joueur en a deux a passer, pas
+ * dix, et un compteur qui annonce huit haies de plus que ce qui vient
+ * enseigne a s'inquieter plutot qu'a courir.
+ *
+ * LA HAUTEUR. Le tutoriel ecrit son titre et sa consigne en haut de l'ecran,
+ * la ou ce bandeau vient : les verdicts tombaient par-dessus la phrase qu'on
+ * demande de lire. On le descend sous elle — c'est le tutoriel qui cede la
+ * place, pas la course, dont le haut d'ecran est libre.
+ */
+export function HaiesHUD({ tuto }: { tuto?: number } = {}) {
   const { N } = SprinterApp;
   const elapsed = useGameStore(s => s.elapsed);
   const [juge, setJuge] = useState<{ j: Juge; t: number } | null>(null);
@@ -91,10 +107,11 @@ export function HaiesHUD() {
 
   const posees = haiesPosees();
   if (!posees) return null;
-  const total = posees.positions.length;
+  const total = tuto ?? posees.positions.length;
 
   return (
-    <div className="absolute inset-x-0 top-[22%] flex flex-col items-center pointer-events-none">
+    <div className={`absolute inset-x-0 ${tuto ? 'top-[36%]' : 'top-[22%]'}
+                     flex flex-col items-center pointer-events-none`}>
       <AnimatePresence>
         {juge && (
           <motion.div key={juge.j.haie} {...SURGISSEMENT}

@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { MONTEE, TRANSITION } from '@/lib/mouvement';
 import { Check, X, RotateCcw } from 'lucide-react';
 import { bilanHaies } from '@/game/haies-course.js';
-import { demarrerSequence, pasDuTuto, rangerLeTuto } from '@/game/haies-tuto.js';
+import { demarrerSequence, pasDuTuto, rangerLeTuto, figerLaPiste } from '@/game/haies-tuto.js';
 import { HaiesHUD } from './HaiesHUD';
 
 /**
@@ -167,9 +167,12 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     setDemo(estDemo);
   }, []);
 
-  // A l'entree d'une etape : la demonstration.
+  // A l'entree d'une etape : la demonstration. A la fin des quatre, la piste
+  // se fige : la page de felicitations ne doit pas s'afficher au-dessus d'un
+  // coureur qui continue sa course.
   useEffect(() => {
     if (etape < ETAPES.length) lancer(true, 0);
+    else figerLaPiste();
   }, [etape, lancer]);
 
   // LA BOUCLE. Elle fait avancer le tutoriel — le pilote de la demo, le gel a
@@ -224,7 +227,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       {/* LE HUD DES HAIES, CELUI DE LA COURSE. Les verdicts que le joueur lit
           ici sont ceux qu'il lira demain, au meme endroit de l'ecran et dans
           les memes couleurs. C'est la moitie de ce que ce tutoriel enseigne. */}
-      {!fini && <HaiesHUD />}
+      {!fini && <HaiesHUD tuto={HAIES_PAR_SEQUENCE} />}
 
       {/* Un voile en haut seulement : la piste doit rester lisible, le texte
           aussi, et le bas de l'ecran appartient aux touches d'attaque. */}

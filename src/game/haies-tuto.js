@@ -169,6 +169,19 @@ export function demarrerSequence({ haie = 0, nb = 2, tempo = 1, demo = false } =
   return etatDuTuto();
 }
 
+/**
+ * Figer la piste sur place, sans rien ranger.
+ *
+ * L'ecran de fin du tutoriel s'affiche par-dessus le stade : le coureur doit
+ * s'arreter la ou il est. Sans cet appel, plus personne ne fait avancer le
+ * tutoriel — l'ecran a fini son travail — et le monde, lui, tourne toujours :
+ * le coureur part finir sa course seul derriere la page de felicitations.
+ */
+export function figerLaPiste() {
+  if (seq) seq.fini = true;
+  poserLeTempo(0);
+}
+
 /** Rejouer la meme sequence, aux memes conditions. */
 export function rejouerSequence() {
   if (!seq) return null;
@@ -199,9 +212,22 @@ export function rangerLeTuto() {
  * question « veux-tu quitter ? » n'a rien a faire au milieu d'une lecon.
  */
 export function pasDuTuto() {
-  if (!seq || seq.fini) return etatDuTuto();
+  if (!seq) return null;
   const G = SprinterApp.G;
   if (!G || !G.player) return etatDuTuto();
+
+  // LE GEL SE REPOSE A CHAQUE IMAGE TANT QU'IL N'A PAS PRIS, et c'est une
+  // correction, pas une precaution. On attend la fin du vol pour figer —
+  // couper le monde en plein saut donnerait un coureur suspendu en l'air. Mais
+  // sortir ici des que la sequence est finie laissait ce report sans seconde
+  // chance : si la derniere haie se terminait en l'air, le gel n'arrivait
+  // jamais. Le tutoriel affichait sa page de fin pendant que le coureur, lui,
+  // continuait de courir le 110 m tout seul derriere — vu une fois, une course
+  // entiere terminee en 23,67 s et un classement affiche sous l'ecran de fin.
+  if (seq.fini) {
+    if (!G.player.freeze) poserLeTempo(0);
+    return etatDuTuto();
+  }
 
   // LE COUREUR S'EST-IL ARRETE ? On ne regarde pas la demo : le pilote tape
   // toujours, et un faux positif la couperait en plein geste.
@@ -217,7 +243,7 @@ export function pasDuTuto() {
     seq.fini = true;
     // On laisse la reception se terminer avant de figer : couper le monde en
     // plein vol donnerait un coureur suspendu en l'air, ce qui n'est l'image
-    // de rien.
+    // de rien. Le gel differe se repose plus haut, a chaque image.
     if (!G.player.freeze) poserLeTempo(0);
     return etatDuTuto();
   }
