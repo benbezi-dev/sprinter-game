@@ -34,7 +34,11 @@
         « 100h m » sur un defi de haies.
      5. L'ADRESSE DU SERVEUR ET CELLE DU SITE. Une page qui interroge un
         ancien worker rend une carte plausible avec un compteur faux.
-     6. QUE LA PAGE RESTE AUTONOME. Un `import` ajoute un jour de bonne foi —
+     6. QUE LA CARTE LIBRE NE MENTE PAS. Chaque champ propose remplace une
+        ligne REELLEMENT dessinee, et un champ laisse vide rend la parole au
+        defi au lieu d'effacer sa ligne. Un champ qui ne fait rien est pire
+        qu'un champ absent : on croit avoir change la carte.
+     7. QUE LA PAGE RESTE AUTONOME. Un `import` ajoute un jour de bonne foi —
         « c'est plus propre » — tue le double-clic, et la panne ne se voit
         qu'a la machine suivante.
 
@@ -60,6 +64,9 @@ const PAGE = 'tools/carte-defi-ouvert.html';
 const OUTIL = 'tools/carte-defi-ouvert.mjs';
 const html = fs.readFileSync(PAGE, 'utf8');
 const outil = fs.readFileSync(OUTIL, 'utf8');
+// Le seul bloc <script> de la page. Deux sections le lisent : celle qui verifie
+// que la carte libre atteint de vraies lignes, et celle qui refuse un `import`.
+const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 /**
  * Les valeurs de la page, lues en la faisant tourner pour de vrai.
@@ -76,6 +83,16 @@ function lirePage() {
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
   if (scripts.length !== 1) throw new Error(`${scripts.length} blocs <script> au lieu d'un`);
 
+  // UN `import` SE DIT ICI, AVANT D'EVALUER. La derniere section du fichier
+  // refuse les imports, mais elle ne parlait jamais : un module ne s'evalue
+  // pas comme un script, si bien que la page partait en trace de pile deux
+  // cents lignes plus haut et on cherchait la panne dans le harnais.
+  if (/^\s*import\s/m.test(scripts[0])) {
+    throw new Error("la page porte un `import` : Chrome refuse les modules ES"
+      + ' en file://, et le double-clic ne marcherait plus. Voir la section'
+      + ' « LA PAGE RESTE OUVRABLE PAR UN DOUBLE-CLIC ».');
+  }
+
   // Le strict minimum de navigateur : la page accroche deux ecouteurs et lit
   // un champ au chargement. Tout le reste attend qu'on appuie.
   const element = () => new Proxy({}, {
@@ -91,7 +108,8 @@ function lirePage() {
   });
   const rendus = ['API', 'SITE', 'FOND', 'OR', 'OR_RVB', 'BLANC', 'ENCRE', 'LUEUR',
                   'RETRAIT_VIRGULE', 'NUIT', 'HALO', 'FLAMME', 'ENCRE_NUIT',
-                  'FORMATS', 'unite', 'echelle', 'tally', 'virgule', 'EPREUVE'];
+                  'FORMATS', 'unite', 'echelle', 'tally', 'virgule', 'EPREUVE',
+                  'ligne', 'CLES_LIBRE'];
   return new vm.Script(`(function(){${scripts[0]}\nreturn {${rendus.join(',')}};})()`)
     .runInContext(contexte);
 }
@@ -251,11 +269,81 @@ titre('LES DEUX MAQUETTES GARDENT CHACUNE SON DEFAUT');
   ok('le chrono s ecrit a la virgule', page.virgule(8640) === '8,64', page.virgule(8640));
 }
 
+titre('LA CARTE LIBRE REMPLACE DES LIGNES QUI EXISTENT');
+{
+  // `ligne` est tout le mecanisme : elle choisit entre ce qu'on a ecrit et ce
+  // que le defi dicte. Un champ vide n'est pas une ligne vide.
+  const d = { libre: { fort: 'Neuf ont essayé.' } };
+  ok('une ligne reecrite remplace la sienne',
+     page.ligne(d, 'fort', 'par defaut') === 'Neuf ont essayé.');
+  ok('un champ vide rend la parole au defi',
+     page.ligne({ libre: { fort: '' } }, 'fort', 'par defaut') === 'par defaut');
+  ok('un champ absent aussi', page.ligne(d, 'doux', 'par defaut') === 'par defaut');
+  ok('et une carte sans carte libre du tout',
+     page.ligne({}, 'fort', 'par defaut') === 'par defaut');
+
+  // CHAQUE CHAMP DOIT PEINDRE QUELQUE CHOSE. Le jour ou une maquette est
+  // remaniee et perd une ligne, le champ correspondant resterait dans le
+  // formulaire a ne rien faire — et on croirait la carte changee.
+  for (const cle of page.CLES_LIBRE) {
+    ok(`« ${cle} » est bien lue par une maquette`,
+       new RegExp(`ligne\\(d, '${cle}'`).test(script));
+  }
+
+  // ...ET CHAQUE LIGNE PEINTE DOIT AVOIR SON CHAMP. L'inverse du test du
+  // dessus : une ligne reecrite dans le script sans champ dans le formulaire
+  // serait une porte sans poignee.
+  //
+  // `titre` fait exception : il se reecrit lui aussi, mais par le champ du
+  // haut du formulaire, celui qui existait avant la carte libre. Il est donc
+  // atteignable sans figurer dans CLES_LIBRE.
+  const AILLEURS = ['titre'];
+  const lues = [...script.matchAll(/ligne\(d, '([a-zA-Z]+)'/g)].map(m => m[1]);
+  const sansChamp = [...new Set(lues)]
+    .filter(c => !page.CLES_LIBRE.includes(c) && !AILLEURS.includes(c));
+  ok('aucune ligne lue sans champ pour l ecrire', sansChamp.length === 0,
+     sansChamp.join(', '));
+  ok('le titre garde son champ a lui', /id="titre"/.test(html)
+     && /ligne\(d, 'titre', d\.titreAffiche\)/.test(script)
+     && /ligne\(d, 'titre', d\.titreCarte\)/.test(script));
+
+  // Le formulaire et la liste des clefs ne peuvent pas se desynchroniser.
+  const champs = [...html.matchAll(/id="l-([a-zA-Z]+)"/g)].map(m => m[1]);
+  ok('le formulaire porte exactement les clefs annoncees',
+     champs.slice().sort().join() === page.CLES_LIBRE.slice().sort().join(),
+     `formulaire : ${champs.join(' ')}`);
+
+  // Les textes qui etaient en dur sont maintenant des DEFAUTS, pas des
+  // constantes : s'ils redeviennent litteraux, le champ ne les atteint plus.
+  for (const dur of ['CODE DU DÉFI', 'à taper dans le jeu, onglet DÉFI',
+                     'SPRINTER', 'JEU DE SPRINT']) {
+    ok(`« ${dur} » n est plus qu un defaut`,
+       new RegExp(`ligne\\(d, '[a-zA-Z]+', '${dur.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}'\\)`).test(script));
+  }
+
+  // LE DEBORD SE MESURE SUR LES LIMITES DURES, pas sur la zone de centrage.
+  // Mesure a la main : le format paysage depasse sa zone de 7 px de chaque
+  // cote depuis toujours, sans rien toucher. Une alerte qui se declenche sur
+  // la carte par defaut est une alerte qu'on apprend a ignorer.
+  ok('le debord se mesure sur le surtitre et le pied',
+     /const limiteHaut = hautY \+ LH \* tSur;/.test(script)
+     && /const limiteBas = Math\.round\(H - marge \* 1\.5\);/.test(script));
+  // Chaque maquette mesure le sien sur SA geometrie, et le rendu garde le
+  // plus grand des trois formats : un debord qui n'arrive qu'en paysage doit
+  // se dire, meme si le carre tient.
+  ok('l affiche mesure son debord',
+     /const debord = Math\.max\(0, limiteHaut - y\) \+ Math\.max\(0, y \+ total - limiteBas\);/
+       .test(script));
+  ok('la carte mesure le sien sur sa propre zone',
+     /const debord = Math\.max\(0, hHaut \+ hBillet \+ hBas - dispo\);/.test(script));
+  ok('le rendu garde le plus grand des trois formats',
+     /debord = Math\.max\(debord, dessiner\(c, f\.w, f\.h, donnees\) \|\| 0\);/.test(script));
+}
+
 titre('LA PAGE RESTE OUVRABLE PAR UN DOUBLE-CLIC');
 {
   // Le jour ou l'une de ces trois lignes passe, la page ne s'ouvre plus qu'a
   // travers un serveur — c'est-a-dire plus du tout, le soir ou l'on poste.
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   ok('aucun import de module', !/^\s*import\s/m.test(script));
   ok('aucun require', !/\brequire\s*\(/.test(script));
   ok('aucun script exterieur', !/<script[^>]+src=/i.test(html));

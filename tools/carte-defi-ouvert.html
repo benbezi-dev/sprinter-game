@@ -71,6 +71,10 @@
   input#code{font-family:'Space Mono',monospace;font-size:22px;letter-spacing:.14em;
         text-transform:uppercase;width:190px}
   input.court{width:112px}
+  input.long{width:100%;font-size:15px}
+  .grille{display:grid;gap:13px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr))}
+  .grille label{text-transform:none;letter-spacing:.01em;font-size:12px}
+  .grille .ou{color:var(--or);opacity:.75;font-weight:600}
   button{background:var(--or);color:#1a1405;border:0;border-radius:999px;
          font:700 16px/1 Outfit,sans-serif;padding:15px 26px;cursor:pointer}
   button:disabled{opacity:.45;cursor:default}
@@ -142,6 +146,59 @@
         <label>Épreuve<input id="epreuve" class="court" placeholder="100" autocomplete="off"></label>
         <label>Nom de fichier<input id="fichier" class="court" placeholder="zeze42" autocomplete="off"></label>
       </div>
+    </div>
+  </details>
+
+  <details id="libre">
+    <summary>Carte libre — réécrire chaque ligne (le style ne bouge pas)</summary>
+    <div class="corps">
+      <p style="margin:0 0 14px;font-size:14px">
+        Chaque champ remplace <strong>une seule ligne</strong> de la carte : à sa place,
+        dans son encre, à sa taille. Laissé vide, il rend la parole au défi. Le titre,
+        lui, se change là-haut. L'aperçu se redessine à la frappe, sans rien redemander
+        au serveur — et la page prévient si une ligne trop longue déborde de sa zone.
+      </p>
+      <div class="grille">
+        <label>La ligne du haut <span class="ou">les deux</span>
+          <input id="l-surtitre" class="long" autocomplete="off" placeholder="SPRINTER · 100 M">
+        </label>
+        <label>Le grand nombre <span class="ou">affiche</span>
+          <input id="l-chrono" class="long" autocomplete="off" placeholder="8,64">
+        </label>
+        <label>La ligne sous le nombre <span class="ou">affiche</span>
+          <input id="l-qui" class="long" autocomplete="off" placeholder="BEN · 100 m">
+        </label>
+        <label>La phrase sous le titre <span class="ou">compétition</span>
+          <input id="l-sous" class="long" autocomplete="off" placeholder="le chrono de BEN. Tu cours contre son fantôme.">
+        </label>
+        <label>La phrase forte <span class="ou">les deux</span>
+          <input id="l-fort" class="long" autocomplete="off" placeholder="23 ont essayé, 3 ont fait mieux">
+        </label>
+        <label>La phrase douce <span class="ou">compétition</span>
+          <input id="l-doux" class="long" autocomplete="off" placeholder="Tu peux être le quatrième.">
+        </label>
+        <label>L'étiquette du code <span class="ou">les deux</span>
+          <input id="l-etiquette" class="long" autocomplete="off" placeholder="CODE DU DÉFI">
+        </label>
+        <label>Le code dessiné <span class="ou">les deux</span>
+          <input id="l-code" class="long" autocomplete="off" placeholder="ZEZE42">
+        </label>
+        <label>La ligne sous le code <span class="ou">compétition</span>
+          <input id="l-ou" class="long" autocomplete="off" placeholder="à taper dans le jeu, onglet DÉFI">
+        </label>
+        <label>Le lien <span class="ou">les deux</span>
+          <input id="l-lien" class="long" autocomplete="off" placeholder="sprinter-game.com/d/ZEZE42">
+        </label>
+        <label>Le pied, à gauche <span class="ou">affiche</span>
+          <input id="l-piedGauche" class="long" autocomplete="off" placeholder="SPRINTER">
+        </label>
+        <label>Le pied, à droite <span class="ou">affiche</span>
+          <input id="l-piedDroit" class="long" autocomplete="off" placeholder="JEU DE SPRINT">
+        </label>
+      </div>
+      <p style="margin:16px 0 0">
+        <button id="vider" class="second" type="button">Vider les lignes réécrites</button>
+      </p>
     </div>
   </details>
 
@@ -244,6 +301,21 @@ function centre(c, texte, cx, cy, ls) {
 }
 
 /** Coupe un texte aux mots, sans jamais sortir de la largeur donnee. */
+/**
+ * LE TEXTE D'UNE LIGNE : celui qu'on a ecrit a la main, sinon celui que le
+ * defi dicte.
+ *
+ * C'est tout ce que « carte libre » change. La mise en page, les tailles, les
+ * graisses, les inter-lettrages et les couleurs restent ceux de la carte :
+ * une ligne reecrite se dessine exactement la ou se dessinait l'ancienne, avec
+ * la meme encre. Un champ vide n'est pas une ligne vide — c'est l'absence de
+ * consigne, et la carte reprend la sienne.
+ */
+function ligne(d, cle, defaut) {
+  const v = d.libre && d.libre[cle];
+  return v === undefined || v === null || v === '' ? defaut : v;
+}
+
 function decouper(c, texte, largeurMax) {
   const mots = String(texte).trim().split(/\s+/);
   const lignes = [];
@@ -353,11 +425,12 @@ function dessinerAffiche(c, L, H, d) {
   const tSur = Math.round(L * 0.0205);
   police(c, OUTFIT, tSur, 700, tSur * 0.36);
   c.fillStyle = encre(ENCRE.surtitre);
-  centre(c, `SPRINTER · ${d.libelleEpreuve}`.toUpperCase(), L / 2, hautY + LH * tSur / 2, tSur * 0.36);
+  centre(c, ligne(d, 'surtitre', `SPRINTER · ${d.libelleEpreuve}`).toUpperCase(),
+         L / 2, hautY + LH * tSur / 2, tSur * 0.36);
 
   const tTitre = T(0.082), lhTitre = T(0.078), mbTitre = T(0.03);
   police(c, OUTFIT, tTitre, 900, -tTitre * 0.022);
-  const lignesTitre = decouper(c, d.titreAffiche.toUpperCase(), utile);
+  const lignesTitre = decouper(c, ligne(d, 'titre', d.titreAffiche).toUpperCase(), utile);
 
   const tChrono = T(0.20);
   const tQui = T(0.034), mtQui = T(0.045);
@@ -374,6 +447,17 @@ function dessinerAffiche(c, L, H, d) {
   // La zone ou le sujet a le droit de vivre, et il s'y centre.
   let y = haut + (basZone - haut - total) / 2;
 
+  // CE QUI DEPASSE EST RENDU A L'APPELANT, et il se mesure sur les DEUX
+  // limites dures — le bas du surtitre au-dessus, le filet du pied en dessous.
+  //
+  // Pas sur la zone : elle sert a centrer, pas a contenir. Le format paysage
+  // la depasse de sept pixels de chaque cote depuis toujours, sans rien
+  // toucher, et une alerte qui se declenche sur la carte par defaut est une
+  // alerte qu'on apprend a ignorer — c'est-a-dire pire que pas d'alerte.
+  const limiteHaut = hautY + LH * tSur;
+  const limiteBas = Math.round(H - marge * 1.5);
+  const debord = Math.max(0, limiteHaut - y) + Math.max(0, y + total - limiteBas);
+
   c.fillStyle = BLANC;
   police(c, OUTFIT, tTitre, 900, -tTitre * 0.022);
   lignesTitre.forEach((ligne, i) =>
@@ -382,17 +466,17 @@ function dessinerAffiche(c, L, H, d) {
 
   police(c, MONO, tChrono, 700, 0);
   c.fillStyle = OR;
-  chrono(c, d.chronoTexte, L / 2, y + tChrono / 2);
+  chrono(c, ligne(d, 'chrono', d.chronoTexte), L / 2, y + tChrono / 2);
   y += tChrono + mtQui;
 
   police(c, OUTFIT, tQui, 500, 0);
   c.fillStyle = encre(ENCRE.nom);
-  centre(c, `${d.nom} · ${d.libelleEpreuve}`, L / 2, y + LH * tQui / 2, 0);
+  centre(c, ligne(d, 'qui', `${d.nom} · ${d.libelleEpreuve}`), L / 2, y + LH * tQui / 2, 0);
   y += LH * tQui + mtEtat;
 
   police(c, OUTFIT, tEtat, 600, 0);
   c.fillStyle = or(0.85);
-  centre(c, d.fort, L / 2, y + LH * tEtat / 2, 0);
+  centre(c, ligne(d, 'fort', d.fort), L / 2, y + LH * tEtat / 2, 0);
   y += LH * tEtat + mtBillet;
 
   // LE CODE. L'affiche du jeu garde cette zone pour la trace de la course ;
@@ -402,17 +486,17 @@ function dessinerAffiche(c, L, H, d) {
 
   police(c, OUTFIT, tEtiq, 700, tEtiq * 0.36);
   c.fillStyle = encre(ENCRE.etiquette);
-  centre(c, 'CODE DU DÉFI', L / 2, y + LH * tEtiq / 2, tEtiq * 0.36);
+  centre(c, ligne(d, 'etiquette', 'CODE DU DÉFI'), L / 2, y + LH * tEtiq / 2, tEtiq * 0.36);
   y += LH * tEtiq + mbEtiq;
 
   police(c, MONO, tCode, 700, tCode * 0.12);
   c.fillStyle = BLANC;
-  centre(c, d.code, L / 2, y + tCode / 2, tCode * 0.12);
+  centre(c, ligne(d, 'code', d.code), L / 2, y + tCode / 2, tCode * 0.12);
   y += tCode + mtLien;
 
   police(c, OUTFIT, tLien, 500, 0);
   c.fillStyle = encre(ENCRE.lien);
-  centre(c, `${SITE}/d/${d.code}`, L / 2, y + LH * tLien / 2, 0);
+  centre(c, ligne(d, 'lien', `${SITE}/d/${d.code}`), L / 2, y + LH * tLien / 2, 0);
 
   // Le pied du jeu, au pixel : meme filet, meme graisse, meme inter-lettrage.
   c.fillStyle = encre(ENCRE.filet);
@@ -422,10 +506,11 @@ function dessinerAffiche(c, L, H, d) {
   c.textBaseline = 'middle';
   c.textAlign = 'left';
   c.fillStyle = encre(ENCRE.pied);
-  c.fillText('SPRINTER', marge, H - marge * 0.92);
+  c.fillText(ligne(d, 'piedGauche', 'SPRINTER'), marge, H - marge * 0.92);
   c.textAlign = 'right';
   c.fillStyle = encre(ENCRE.piedDroit);
-  c.fillText('JEU DE SPRINT', L - marge, H - marge * 0.92);
+  c.fillText(ligne(d, 'piedDroit', 'JEU DE SPRINT'), L - marge, H - marge * 0.92);
+  return debord;
 }
 
 /* ==========================================================================
@@ -473,13 +558,13 @@ function dessinerCarte(c, L, H, d) {
   const tPied = R(36), mtPied = R(46), padPiedY = R(24), padPiedX = R(52);
 
   police(c, SANS, tTitre, 700, -tTitre * 0.02);
-  const lignesTitre = decouper(c, d.titreCarte, utile);
+  const lignesTitre = decouper(c, ligne(d, 'titre', d.titreCarte), utile);
 
   // La phrase longue tient sur trois lignes en vertical. En horizontal elle en
   // prendrait autant sur une carte deux fois moins haute : on la raccourcit.
-  const sous = horizontal
+  const sous = ligne(d, 'sous', horizontal
     ? `le chrono de ${d.nom}. Tu cours contre son fantôme, pas contre un nombre.`
-    : `le chrono de ${d.nom}. Tu ne cours pas contre un nombre : tu cours contre son fantôme, dans ton couloir, en même temps que lui.`;
+    : `le chrono de ${d.nom}. Tu ne cours pas contre un nombre : tu cours contre son fantôme, dans ton couloir, en même temps que lui.`);
   police(c, SANS, tSous, 400, 0);
   const lignesSous = decouper(c, sous, Math.min(utile, R(860)));
 
@@ -493,6 +578,7 @@ function dessinerCarte(c, L, H, d) {
   // horizontal il n'y a pas de place a repartir, et `auto` sortait la pastille
   // de l'image.
   const dispo = H - padHaut - padBas;
+  const debord = Math.max(0, hHaut + hBillet + hBas - dispo);
   let y, respire;
   if (horizontal) {
     respire = R(30);
@@ -504,7 +590,8 @@ function dessinerCarte(c, L, H, d) {
 
   police(c, MONO, tKick, 400, tKick * 0.34);
   c.fillStyle = ENCRE_NUIT.kicker;
-  centre(c, `DÉFI OUVERT · ${d.libelleEpreuve}`.toUpperCase(), L / 2, y + LH * tKick / 2, tKick * 0.34);
+  centre(c, ligne(d, 'surtitre', `DÉFI OUVERT · ${d.libelleEpreuve}`).toUpperCase(),
+         L / 2, y + LH * tKick / 2, tKick * 0.34);
   y += LH * tKick + mbKick;
 
   police(c, SANS, tTitre, 700, -tTitre * 0.02);
@@ -530,17 +617,17 @@ function dessinerCarte(c, L, H, d) {
 
   police(c, MONO, tEtiq, 400, tEtiq * 0.34);
   c.fillStyle = ENCRE_NUIT.etiquette;
-  centre(c, 'CODE DU DÉFI', L / 2, y + LH * tEtiq / 2, tEtiq * 0.34);
+  centre(c, ligne(d, 'etiquette', 'CODE DU DÉFI'), L / 2, y + LH * tEtiq / 2, tEtiq * 0.34);
   y += LH * tEtiq + mbEtiq;
 
   police(c, MONO, tCode, 700, tCode * 0.1);
   c.fillStyle = ENCRE_NUIT.vif;
-  centre(c, d.code, L / 2, y + tCode / 2, tCode * 0.1);
+  centre(c, ligne(d, 'code', d.code), L / 2, y + tCode / 2, tCode * 0.1);
   y += tCode + mtOu;
 
   police(c, SANS, tOu, 400, 0);
   c.fillStyle = ENCRE_NUIT.etiquette;
-  centre(c, 'à taper dans le jeu, onglet DÉFI', L / 2, y + LH * tOu / 2, 0);
+  centre(c, ligne(d, 'ou', 'à taper dans le jeu, onglet DÉFI'), L / 2, y + LH * tOu / 2, 0);
   y += LH * tOu + pbBil;
 
   c.fillStyle = ENCRE_NUIT.filet;
@@ -549,18 +636,18 @@ function dessinerCarte(c, L, H, d) {
 
   police(c, SANS, tFort, 700, 0);
   c.fillStyle = ENCRE_NUIT.vif;
-  centre(c, d.fort, L / 2, y + LH * tFort / 2, 0);
+  centre(c, ligne(d, 'fort', d.fort), L / 2, y + LH * tFort / 2, 0);
   y += LH * tFort + mbFort;
 
   police(c, SANS, tDoux, 400, 0);
   c.fillStyle = ENCRE_NUIT.doux;
-  centre(c, d.doux, L / 2, y + LH * tDoux / 2, 0);
+  centre(c, ligne(d, 'doux', d.doux), L / 2, y + LH * tDoux / 2, 0);
   y += LH * tDoux + mtPied;
 
   // Le lien n'est pas une ligne de texte mais un bouton : sur un fond bleu
   // nuit, une url orange se lit comme une signature. C'est la derniere chose
   // que l'oeil accroche avant de scroller.
-  const texteP = `${SITE}/d/${d.code}`;
+  const texteP = ligne(d, 'lien', `${SITE}/d/${d.code}`);
   police(c, SANS, tPied, 700, tPied * 0.005);
   const wTexte = c.measureText(texteP).width;
   const wPast = wTexte + padPiedX * 2, xPast = (L - wPast) / 2;
@@ -570,6 +657,7 @@ function dessinerCarte(c, L, H, d) {
   c.fill();
   c.fillStyle = ENCRE_NUIT.surPastille;
   centre(c, texteP, L / 2, y + hPastille / 2, tPied * 0.005);
+  return debord;
 }
 
 /* ------------------------------------------------------------------ le defi */
@@ -635,6 +723,44 @@ const $ = id => document.getElementById(id);
 const etat = $('etat');
 let aTelecharger = [];
 
+/* --------------------------------------------------------- la carte libre */
+
+/**
+ * LES LIGNES QU'ON PEUT REECRIRE, dans l'ordre ou l'oeil les rencontre.
+ *
+ * Chaque clef est un emplacement de la carte, pas un morceau de phrase : la
+ * reecrire remplace SA ligne, a sa place, dans son encre et sa taille. Les
+ * deux maquettes n'ont pas les memes emplacements — l'affiche a un grand
+ * nombre et un pied, la carte de competition a une phrase douce et une
+ * pastille — et une clef inconnue d'une maquette y est simplement ignoree.
+ */
+const CLES_LIBRE = ['surtitre', 'chrono', 'qui', 'sous', 'fort', 'doux',
+                    'etiquette', 'code', 'ou', 'lien', 'piedGauche', 'piedDroit'];
+
+/** Ce qui est ecrit a la main, et rien d'autre : un champ vide n'entre pas. */
+function lignesEcrites() {
+  const o = {};
+  for (const cle of CLES_LIBRE) {
+    const v = $(`l-${cle}`).value.trim();
+    if (v) o[cle] = v;
+  }
+  return o;
+}
+
+/** Ce qu'il faut dire quand le texte ne tient plus dans sa zone. */
+const motDebord = d => d > 0
+  ? ` ⚠ Le texte dépasse sa zone de ${Math.round(d)} px sur le format le plus`
+    + ' serré : raccourcis une ligne, sinon la carte mord sur sa marge.'
+  : '';
+
+/**
+ * LA DERNIERE CARTE FABRIQUEE, pour la redessiner sans relire le defi.
+ *
+ * Tant qu'elle est nulle, la frappe ne declenche rien : il n'y a pas encore de
+ * chrono a mettre sous le titre, et un apercu vide vaudrait moins que rien.
+ */
+let dernier = null;
+
 function dire(texte, classe) {
   etat.textContent = texte;
   etat.className = classe || '';
@@ -663,6 +789,61 @@ async function attendreLesPolices() {
     return lots.every(fontes => fontes.length > 0
                              && fontes.every(f => f.status === 'loaded'));
   } catch { return false; }
+}
+
+/**
+ * LES TROIS FORMATS, DESSINES ET PRETS A TELECHARGER.
+ *
+ * Sortie de `fabriquer` pour une raison : une ligne reecrite doit pouvoir
+ * redessiner la carte SANS relire le defi. Le serveur a deja parle — le chrono,
+ * le nom et le compteur sont acquis — et seul le texte a change. Refaire
+ * l'appel a chaque frappe serait lent, et surtout ca rendrait l'apercu
+ * dependant du reseau la ou il n'a plus rien a lui demander.
+ *
+ * Rend le plus grand debord des trois formats, en pixels de la carte.
+ */
+function rendre(donnees, style, base) {
+  const conteneur = $('cartes');
+  conteneur.innerHTML = '';
+  aTelecharger = [];
+  let debord = 0;
+
+  for (const f of FORMATS) {
+    const bloc = document.createElement('div');
+    bloc.className = 'carte';
+    const canvas = document.createElement('canvas');
+    canvas.width = f.w; canvas.height = f.h;
+    const c = canvas.getContext('2d');
+    const dessiner = style === 'affiche' ? dessinerAffiche : dessinerCarte;
+    debord = Math.max(debord, dessiner(c, f.w, f.h, donnees) || 0);
+
+    const nomFichier = `${base}-${style}-${f.cle}.png`;
+    const titreBloc = document.createElement('div');
+    titreBloc.className = 'titre';
+    titreBloc.textContent = `${f.nom} — ${f.w}×${f.h}`;
+    const bouton = document.createElement('button');
+    bouton.className = 'second';
+    bouton.type = 'button';
+    bouton.textContent = `Télécharger ${nomFichier}`;
+    const enregistrer = () => canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = nomFichier;
+      a.click();
+      // Le revoquer tout de suite annule le telechargement sous Safari : il
+      // lit le blob APRES le clic.
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }, 'image/png');
+    bouton.addEventListener('click', enregistrer);
+    aTelecharger.push(enregistrer);
+
+    bloc.append(titreBloc, canvas, bouton);
+    conteneur.append(bloc);
+  }
+
+  conteneur.hidden = false;
+  $('tout').hidden = false;
+  return debord;
 }
 
 async function fabriquer(evenement) {
@@ -721,44 +902,9 @@ async function fabriquer(evenement) {
 
     const base = ($('fichier').value.trim() || code).toLowerCase()
                    .replace(/[^a-z0-9._-]/g, '');
-    const conteneur = $('cartes');
-    conteneur.innerHTML = '';
-    aTelecharger = [];
-
-    for (const f of FORMATS) {
-      const bloc = document.createElement('div');
-      bloc.className = 'carte';
-      const canvas = document.createElement('canvas');
-      canvas.width = f.w; canvas.height = f.h;
-      const c = canvas.getContext('2d');
-      (style === 'affiche' ? dessinerAffiche : dessinerCarte)(c, f.w, f.h, donnees);
-
-      const nomFichier = `${base}-${style}-${f.cle}.png`;
-      const titreBloc = document.createElement('div');
-      titreBloc.className = 'titre';
-      titreBloc.textContent = `${f.nom} — ${f.w}×${f.h}`;
-      const bouton = document.createElement('button');
-      bouton.className = 'second';
-      bouton.type = 'button';
-      bouton.textContent = `Télécharger ${nomFichier}`;
-      const enregistrer = () => canvas.toBlob(blob => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = nomFichier;
-        a.click();
-        // Le revoquer tout de suite annule le telechargement sous Safari : il
-        // lit le blob APRES le clic.
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-      }, 'image/png');
-      bouton.addEventListener('click', enregistrer);
-      aTelecharger.push(enregistrer);
-
-      bloc.append(titreBloc, canvas, bouton);
-      conteneur.append(bloc);
-    }
-
-    conteneur.hidden = false;
-    $('tout').hidden = false;
+    donnees.libre = lignesEcrites();
+    const debord = rendre(donnees, style, base);
+    dernier = { donnees, style, base };
 
     $('lienEnvoi').textContent = `https://${SITE}/?defi=${code}`;
     $('lienLire').textContent = `${SITE}/d/${code}`;
@@ -770,8 +916,9 @@ async function fabriquer(evenement) {
       : `${essais} tentative(s) enregistrée(s), ${battus} meilleure(s) que ce chrono.`;
     dire(`Défi ${code} — ${virgule(totalMs)} s sur ${donnees.libelleEpreuve}, par ${nom}. ${compte}`
          + (policesPretes ? '' : ' ⚠ Polices de la charte non chargées : les cartes sont'
-            + ' rendues en police de repli. Vérifie le réseau avant de poster.'),
-         policesPretes ? '' : 'rouge');
+            + ' rendues en police de repli. Vérifie le réseau avant de poster.')
+         + motDebord(debord),
+         policesPretes && !debord ? '' : 'rouge');
   } catch (e) {
     dire(e.message, 'rouge');
   } finally {
@@ -785,6 +932,54 @@ $('form').addEventListener('submit', fabriquer);
 $('tout').addEventListener('click', () => {
   aTelecharger.forEach((f, i) => setTimeout(f, i * 400));
 });
+
+/* ------------------------------------------- l apercu suit ce qu on ecrit */
+
+// Redessiner a chaque touche serait trois canvas de 1080x1920 par caractere.
+// Un repos de 160 ms rend la frappe fluide sans qu'on attende jamais l'apercu.
+let minuteur = null;
+function redessinerBientot() {
+  if (!dernier) return;          // rien de fabrique : rien a redessiner
+  clearTimeout(minuteur);
+  minuteur = setTimeout(() => {
+    dernier.donnees.libre = lignesEcrites();
+    dernier.style = $('style').value;
+    dernier.donnees.titreAffiche = $('titre').value.trim() || 'Défi ouvert';
+    dernier.donnees.titreCarte = $('titre').value.trim()
+                               || `${virgule(dernier.donnees.totalMs)} s`;
+    const debord = rendre(dernier.donnees, dernier.style, dernier.base);
+    dire(debord ? motDebord(debord).trim() : 'Aperçu à jour.', debord ? 'rouge' : '');
+    memoriser();
+  }, 160);
+}
+
+for (const cle of CLES_LIBRE) $(`l-${cle}`).addEventListener('input', redessinerBientot);
+$('titre').addEventListener('input', redessinerBientot);
+$('style').addEventListener('change', redessinerBientot);
+
+$('vider').addEventListener('click', () => {
+  for (const cle of CLES_LIBRE) $(`l-${cle}`).value = '';
+  redessinerBientot();
+  memoriser();
+});
+
+/* ----------------------------------------- se souvenir d une fois a l autre */
+
+// Un fichier ouvert en `file://` n'a pas de session : sans ca, chaque
+// double-clic repart d'une page blanche et il faut retaper les douze lignes.
+// C'est un confort local et rien d'autre — ca ne quitte jamais le navigateur,
+// et la page doit s'afficher meme quand le stockage est refuse.
+const MEMOIRE = 'carte-defi-ouvert:lignes';
+function memoriser() {
+  try {
+    localStorage.setItem(MEMOIRE, JSON.stringify({ ...lignesEcrites(), _titre: $('titre').value }));
+  } catch { /* navigation privee, stockage bloque : tant pis, pas grave */ }
+}
+try {
+  const garde = JSON.parse(localStorage.getItem(MEMOIRE) || '{}');
+  for (const cle of CLES_LIBRE) if (garde[cle]) $(`l-${cle}`).value = garde[cle];
+  if (garde._titre) $('titre').value = garde._titre;
+} catch { /* rien de memorise, ou illisible : on part du defaut */ }
 
 // Le code arrive souvent par un lien ou un collage : ?code=ZEZE42.
 const depuisUrl = new URLSearchParams(location.search).get('code');
