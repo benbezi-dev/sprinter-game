@@ -12,7 +12,8 @@ import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
-import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
+import { tutoVu, marquerTutoVu } from './Tutorial';
+import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
@@ -115,7 +116,6 @@ export function TitleScreen() {
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
-  const [tuto, setTuto] = useState(false);
   // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
   //
   // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
@@ -185,14 +185,8 @@ export function TitleScreen() {
   const repondrePropose = (apprendre: boolean) => {
     setPropose(false);
     if (tutoDesHaies) marquerTutoHaiesVu(); else marquerTutoVu();
-    if (apprendre) { if (tutoDesHaies) ouvrirLeTuto(); else setTuto(true); }
+    if (apprendre) { if (tutoDesHaies) ouvrirLeTuto(); else ouvrirLeTutoSprint(); }
     else SprinterApp.startRun();
-  };
-
-  const fermerTuto = (lancer: boolean) => {
-    marquerTutoVu();
-    setTuto(false);
-    if (lancer) SprinterApp.startRun();
   };
 
   const handleRaceToggle = (key: RaceKey) => {
@@ -563,7 +557,7 @@ export function TitleScreen() {
       </div>
 
       <PiedLiens onTour={() => setTour(true)} haies={tutoDesHaies}
-                 onTuto={() => (tutoDesHaies ? ouvrirLeTuto() : setTuto(true))} />
+                 onTuto={() => (tutoDesHaies ? ouvrirLeTuto() : ouvrirLeTutoSprint())} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
@@ -581,7 +575,6 @@ export function TitleScreen() {
         />
       )}
 
-      {tuto && <Tutorial onClose={fermerTuto} />}
 
       {DUELS_OUVERTS && showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 

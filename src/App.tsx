@@ -25,6 +25,9 @@ import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
 import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
+import { Tutorial, marquerTutoVu } from '@/components/screens/Tutorial';
+import { tutoOuvert as tutoSprintOuvert, abonnerAuTuto as abonnerAuTutoSprint,
+         fermerLeTuto as fermerLeStoreSprint } from '@/game/sprint-tuto.js';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { Generique } from '@/components/screens/Generique';
@@ -246,6 +249,17 @@ function MainGame() {
   // course — mais dans game/haies-tuto.js, ou elle decrit la meme chose que la
   // sequence en piste.
   const tutoHaies = useSyncExternalStore(abonnerAuTuto, tutoOuvert, tutoOuvert);
+  // Le tutoriel de Sprinter, pour la meme raison et par le meme chemin : lui
+  // aussi met le jeu en course — au compte d'abord, le starter fait partie de
+  // ce qu'il enseigne — et l'accueil qui l'ouvre se demonte aussitot.
+  const tutoSprint = useSyncExternalStore(abonnerAuTutoSprint, tutoSprintOuvert, tutoSprintOuvert);
+  const fermerLeTutoSprint = (lancer: boolean) => {
+    marquerTutoVu();
+    fermerLeStoreSprint();
+    // Le demontage rend la piste — il remet le monde a sa vitesse et l'etat a
+    // l'accueil. Lancer la course d'ici la ferait construire, puis defaire.
+    if (lancer) requestAnimationFrame(() => SprinterApp.startRun());
+  };
   const fermerLeTutoHaies = (lancer: boolean) => {
     marquerTutoHaiesVu();
     fermerLeTuto();
@@ -280,7 +294,8 @@ function MainGame() {
             classement et un record a battre sur une sequence de deux
             haies. Le tutoriel monte a la place le seul bandeau qui le
             concerne, celui des haies. */}
-        {(state === 'count' || state === 'race') && !enPresentation && !tutoHaies && <RaceHUD />}
+        {(state === 'count' || state === 'race') && !enPresentation
+          && !tutoHaies && !tutoSprint && <RaceHUD />}
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
@@ -313,6 +328,7 @@ function MainGame() {
           touches d'attaque pour que ses deux boutons restent cliquables,
           et le reste de sa surface laisse passer les appuis. */}
       {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
+      {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
 
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}

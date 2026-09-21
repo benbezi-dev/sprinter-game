@@ -339,6 +339,16 @@
     tuto_1_t:        ['ALTERNE', 'ALTERNATE'],
     tuto_2_t:        ['AU SIGNAL', 'ON THE GUN'],
     tuto_3_t:        ['LARGE, PUIS SERRÉ', 'WIDE, THEN TIGHT'],
+    // UNE LIGNE PAR ÉTAPE, et une seule. Le tutoriel se joue maintenant
+    // sur la piste : ce qui se voit — le pied qui se croise, le coureur
+    // qui part — ne s'écrit pas. Ne reste que ce qu'aucune image ne dit.
+    tuto_1_s:        ['une touche puis l’autre, jamais deux fois la même',
+                      'one pad then the other, never twice the same'],
+    tuto_2_s:        ['ne pars pas avant le coup de feu',
+                      'don’t go before the gun'],
+    tuto_3_s:        ['pars large, resserre à chaque appui, puis tiens',
+                      'start wide, tighten every step, then hold'],
+    tuto_v_croise:   ['TU T’ES PRIS LES PIEDS', 'YOU TRIPPED'],
     tuto_v_early:    ['TROP TÔT', 'TOO EARLY'],
     tuto_v_late:     ['trop tard', 'too late'],
     tuto_v_perfect:  ['PARFAIT', 'PERFECT'],
