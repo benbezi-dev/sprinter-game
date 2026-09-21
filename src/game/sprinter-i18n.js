@@ -380,7 +380,12 @@
     // « Tu haches » et « tu t'etires » plutot que « trop vite » et « trop
     // lent » : le joueur doit savoir ce qui arrive a sa foulee, pas seulement
     // dans quel sens corriger.
+    // Les trois paliers du tutoriel. On nomme aussi le dernier : savoir
+    // qu'on vient de tenir le geste a la vitesse de la course fait partie
+    // de ce que le tutoriel enseigne.
     tutoh_ralenti:   ['AU RALENTI', 'SLOWED DOWN'],
+    tutoh_mi_vitesse: ['À MI-VITESSE', 'HALF SPEED'],
+    tutoh_vitesse_vraie: ['VITESSE RÉELLE', 'FULL SPEED'],
     tutoh_c_juste:   ['CADENCE JUSTE', 'RIGHT CADENCE'],
     tutoh_c_hache:   ['TU HACHES', 'YOU’RE CHOPPING'],
     tutoh_c_etire:   ['TU T’ÉTIRES', 'YOU’RE REACHING'],

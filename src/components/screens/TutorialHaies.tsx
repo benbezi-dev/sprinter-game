@@ -80,23 +80,36 @@ const BANDE_MS = [1000 / BANDE[1], 1000 / BANDE[0]];   // 100 a 125 ms
 const CADENCE_DEMO = (BANDE[0] + BANDE[1]) / 2;
 const FRAPPES_CIBLE = 12;
 
-/** Combien de haies reussies avant de passer a la suite. */
-const REUSSITES = 2;
-
 /**
- * DE COMBIEN ON RALENTIT LES PREMIERS ESSAIS, et pendant combien.
+ * LES TROIS VITESSES, ET POURQUOI ON MONTE A LA REUSSITE.
  *
  * Le geste des haies se joue en quatre dixiemes de seconde a l'approche et en
  * un sixieme au ciseau. C'est le jeu, et c'est trop rapide pour une premiere
  * fois : le joueur n'a pas le temps de faire le lien entre ce qu'il voit et ce
- * qu'il fait, donc il ne l'apprend pas, il le subit. On joue donc les deux
- * premiers essais de chaque etape au ralenti, puis a la vitesse vraie.
+ * qu'il fait, donc il ne l'apprend pas, il le subit. On descend donc le geste
+ * au ralenti, on le remonte a mi-chemin, puis on le rend tel qu'il sera couru.
+ *
+ * Le palier suit les REUSSITES et non les essais, et c'est tout l'objet de ce
+ * tableau. Compte sur les essais, le ralenti tenait les deux premiers — mais
+ * deux reussites suffisaient a valider l'etape : le joueur juste du premier
+ * coup la quittait sans avoir jamais joue a la vitesse de la course. Le
+ * tutoriel certifiait un geste qu'il n'avait pas fait. Un palier par reussite,
+ * et la vitesse vraie devient la condition de sortie plutot qu'une option.
+ *
+ * Un echec ne fait pas redescendre. Celui qui rate a vitesse vraie n'a pas
+ * besoin d'etre renvoye au ralenti — il a deja montre qu'il l'y reussissait —
+ * il a besoin de recommencer la ou il est.
  *
  * Le jugement, lui, ne ralentit pas : il porte sur la POSITION de la jauge, pas
  * sur le temps ecoule. Un ciseau net au ralenti est un ciseau net.
  */
-const RALENTI = 1.8;
-const ESSAIS_RALENTIS = 2;
+const VITESSES = [1.8, 1.35, 1];
+
+/** Ce qu'on affiche au-dessus du geste, palier par palier. */
+const MOT_VITESSE = ['tutoh_ralenti', 'tutoh_mi_vitesse', 'tutoh_vitesse_vraie'];
+
+/** Une reussite par palier : on ne quitte l'etape qu'apres la vitesse vraie. */
+const REUSSITES = VITESSES.length;
 
 function mediane(v: number[]): number {
   if (!v.length) return 0;
@@ -125,11 +138,11 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
 
   const [note, setNote] = useState<string | null>(null);
   const [reussies, setReussies] = useState(0);
-  const [essais, setEssais] = useState(0);
   // Le plafond laisse par la derniere reception, et sa remontee — l'etape 4.
   const [relance, setRelance] = useState<number | null>(null);
-  const lent = essais < ESSAIS_RALENTIS;
-  const facteur = lent ? RALENTI : 1;
+  // Le palier courant : il monte d'un cran par reussite et ne redescend pas.
+  const palier = Math.min(reussies, VITESSES.length - 1);
+  const facteur = VITESSES[palier];
 
   // Etape de la cadence : les intervalles entre frappes, et leur mediane.
   const [frappes, setFrappes] = useState<number[]>([]);
@@ -169,7 +182,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
 
   /* --- la demo : on joue le geste devant le joueur ---------------------- */
 
-  const lancerDemo = useCallback((e: number) => {
+  const lancerDemo = useCallback((e: number, f: number) => {
     stop();
     setDemo(true); setNote(null); setJauge(0); setPhase('rien');
     setFlash(null); setFrappes([]); setVerdictCadence(null);
@@ -178,7 +191,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       // L'approche monte, le pave s'allume pile a la jauge pleine.
       attendre(500, () => {
         setPhase('approche');
-        monter(APPROCHE_S, 1, () => {
+        monter(APPROCHE_S * f, 1, () => {
           setFlash('left'); setNote('parfait');
           attendre(260, () => setFlash(null));
           attendre(1400, () => { setPhase('rien'); setJauge(0); setDemo(false); setNote(null); });
@@ -190,10 +203,10 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     if (e === 1 || e === 3) {
       attendre(400, () => {
         setPhase('approche');
-        monter(APPROCHE_S, 1, () => {
+        monter(APPROCHE_S * f, 1, () => {
           setFlash('left');                         // on appuie — et on GARDE
           setPhase('vol');
-          monter(CISEAU_S, 1, () => {
+          monter(CISEAU_S * f, 1, () => {
             setFlash(null);                         // on relache : le ciseau
             setNote('ciseau');
             // A l'etape de la relance, la demo montre AUSSI ce qu'un ciseau
@@ -220,6 +233,12 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     }
 
     // La cadence : les deux paves battent la bande juste, l'un apres l'autre.
+    //
+    // ELLE NE RALENTIT JAMAIS, et c'est la seule. Les trois autres etapes
+    // enseignent un instant — quand appeler, quand relacher — et un instant se
+    // montre a n'importe quelle vitesse. Celle-ci enseigne une FREQUENCE, huit
+    // a dix frappes par seconde. Ralentie, elle en montrerait une autre, et le
+    // joueur repartirait avec un tempo que la course punit.
     const gap = 1000 / CADENCE_DEMO;
     for (let i = 0; i < FRAPPES_CIBLE; i++) {
       attendre(400 + i * gap, () => {
@@ -230,7 +249,10 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     attendre(400 + FRAPPES_CIBLE * gap + 700, () => setDemo(false));
   }, [monter, stop]);
 
-  useEffect(() => { if (etape < 4) lancerDemo(etape); return stop; }, [etape, lancerDemo, stop]);
+  // A l'entree d'une etape, on montre TOUJOURS au ralenti : c'est la seule
+  // fois ou le joueur n'a encore rien vu. Le bouton, lui, rejoue au palier ou
+  // il en est — revoir un geste dans une vitesse qu'on ne joue plus n'aide pas.
+  useEffect(() => { if (etape < 4) lancerDemo(etape, VITESSES[0]); return stop; }, [etape, lancerDemo, stop]);
 
   /* --- a toi ------------------------------------------------------------ */
 
@@ -245,7 +267,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     // pression, et une pression est refusee hors approche. Le joueur qui ratait
     // sa toute premiere haie se retrouvait devant un tutoriel mort.
     monter(APPROCHE_S * facteur, 1.6, () => {
-      setPhase('rien'); setNote('percute'); setEssais(e => e + 1);
+      setPhase('rien'); setNote('percute');
       attendre(1200, () => { setNote(null); setJauge(0); });
     });
   }, [monter, stop, facteur]);
@@ -286,7 +308,6 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
       setNote(j.note); setFlash(cote);
       attendre(220, () => setFlash(null));
       if (j.note === 'parfait' || j.note === 'bon') setReussies(r => r + 1);
-      setEssais(e => e + 1);
       attendre(1200, () => { setNote(null); setJauge(0); setPhase('rien'); });
       return;
     }
@@ -295,7 +316,6 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     setPhase('vol');
     monter(CISEAU_S * facteur, 2.2, () => {
       setPhase('rien'); setNote('absent'); setFlash(null); tenu.current = null;
-      setEssais(e => e + 1);
       attendre(1300, () => { setNote(null); setJauge(0); });
     });
   }, [demo, etape, phase, jauge, note, monter, stop, facteur]);
@@ -306,7 +326,6 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     const jc = jugerCiseau(Math.min(1, jauge) * CISEAU_VISE, VOL_S);
     setNote(jc.note); setPhase('rien');
     if (jc.note === 'ciseau' || jc.note === 'bon') setReussies(r => r + 1);
-    setEssais(e => e + 1);
     if (etape === 3) {
       // CE QUE LA RECEPTION VIENT DE DECIDER. La barre tombe a ce que le
       // ciseau a laisse, puis remonte — comme en course, ou elle l'a retrouve
@@ -326,10 +345,11 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
     attendre(1300, () => { setNote(null); setJauge(0); });
   }, [demo, etape, phase, jauge, stop]);
 
-  // Trois haies reussies et l'on passe : on ne fait pas repeter pour repeter.
+  // Trois haies reussies — une par vitesse — et l'on passe : on ne fait pas
+  // repeter pour repeter, on fait repeter pour accelerer.
   useEffect(() => {
     if (reussies >= REUSSITES) {
-      setReussies(0); setEssais(0);
+      setReussies(0);
       attendre(500, () => setEtape(e => e + 1));
     }
   }, [reussies]);
@@ -409,10 +429,15 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
             <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
               ${demo ? 'text-cyan-300' : 'text-primary/70'}`}>
               {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
-              {/* On dit qu'on ralentit. Un geste qui change de vitesse sans
-                  prevenir se reapprend a la vitesse suivante. */}
-              {!demo && lent && etapeHaie && (
-                <span className="ml-2 text-amber-300/80">· {N.t('tutoh_ralenti')}</span>
+              {/* On dit a quelle vitesse on joue, DEMO COMPRISE. Un geste qui
+                  change de vitesse sans prevenir se reapprend a la suivante —
+                  et montrer un ralenti sans le dire le fait passer pour le
+                  vrai. On nomme aussi la vitesse vraie : le joueur doit savoir
+                  qu'il vient de tenir le geste de la course. */}
+              {etapeHaie && (
+                <span className={`ml-2 ${facteur > 1 ? 'text-amber-300/80' : 'text-emerald-300/80'}`}>
+                  · {N.t(MOT_VITESSE[palier])}
+                </span>
               )}
             </span>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase text-primary text-center">
@@ -563,7 +588,7 @@ export function TutorialHaies({ onClose }: { onClose: (lancer: boolean) => void 
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <button onClick={() => lancerDemo(etape)}
+            <button onClick={() => lancerDemo(etape, facteur)}
                     className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] tracking-widest
                                text-muted-foreground hover:text-cyan-300 transition-colors">
               <RotateCcw className="w-3 h-3" />{N.t('tuto_replay_demo')}
