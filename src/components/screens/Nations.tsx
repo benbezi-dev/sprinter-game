@@ -7,6 +7,7 @@ import { getSavedName } from '@/game/leaderboard';
 import { fetchNations, medianeDite, ecartDit, type TableauNations, type LigneNation }
   from '@/game/nations';
 import { Drapeau } from '@/components/Insignes';
+import { useRetour } from '@/hooks/use-retour';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -32,6 +33,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
  * levier.
  */
 export function Nations({ onClose }: { onClose: () => void }) {
+  // Le glissement depuis le bord gauche fait ce que fait la croix.
+  useRetour(onClose);
   const { N } = SprinterApp;
   const fr = N.getLang() === 'fr';
   const moiNom = getSavedName();

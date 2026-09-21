@@ -8,6 +8,7 @@ import {
 } from '@/game/annonce';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
+import { useRetour } from '@/hooks/use-retour';
 
 /**
  * Un message ecrit a la main a tous les joueurs.
@@ -72,13 +73,17 @@ export function AnnoncePopup() {
     if (quoi === 'annonce') interroger.current(prendreDemandeOuverture());
   }), []);
 
-  if (!annonce || annonceVue(annonce.id) || !estAuCalme()) return null;
-
+  // Defini AVANT le retour a vide : le glissement depuis le bord gauche s'en
+  // sert, et un hook ne peut pas se poser apres un `return`.
   const fermer = () => {
-    marquerAnnonceVue(annonce.id);
+    if (annonce) marquerAnnonceVue(annonce.id);
     setOuvert(false);
     setAnnonce(a => (a ? { ...a } : a));  // la pastille disparait avec
   };
+  // Le glissement fait ce que fait la croix du message : il le marque lu.
+  useRetour(fermer, ouvert);
+
+  if (!annonce || annonceVue(annonce.id) || !estAuCalme()) return null;
 
   return (
     <>

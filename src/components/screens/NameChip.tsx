@@ -10,6 +10,7 @@ import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInsta
 import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
 import { Recuperation } from './Recuperation';
+import { useRetour } from '@/hooks/use-retour';
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -30,6 +31,9 @@ export function NameChip() {
   const etatJeu = useGameStore(s => s.state);
   const [nom, setNom] = useState(getSavedName());
   const [ouvert, setOuvert] = useState(false);
+  // Le glissement depuis le bord gauche ferme le panneau de l'identite,
+  // comme sa croix — le nom deja enregistre le reste.
+  useRetour(() => { setOuvert(false); setNom(getSavedName()); }, ouvert);
 
   // Le nom peut aussi etre pose ailleurs — a la bienvenue, au bandeau de
   // record, a la fin d'un one shot. On le relit en revenant a l'accueil,

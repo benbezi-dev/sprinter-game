@@ -16,6 +16,7 @@ import { Recruteurs } from './Recruteurs';
 import { Nations } from './Nations';
 import { SERIE_OUVERTE } from '@/game/canal';
 import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt, jeuDe } from '@/game/jeux';
+import { useRetour } from '@/hooks/use-retour';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -81,6 +82,10 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    */
   surInviter?: (nom: string) => Promise<boolean>;
 }) {
+  // Le glissement depuis le bord gauche fait ce que fait la croix. Les
+  // tableaux ouverts d'ici — nations, recruteurs — s'annoncent a leur tour :
+  // un retour rend donc les duels avant de rendre l'accueil.
+  useRetour(onClose);
   /** Ceux qu'on vient de convier, pour que la ligne le montre. */
   const [convies, setConvies] = useState<string[]>([]);
   const [invitEnCours, setInvitEnCours] = useState<string | null>(null);

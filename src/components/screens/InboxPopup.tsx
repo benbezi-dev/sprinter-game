@@ -7,6 +7,7 @@ import { fetchInboxEtat, fetchChallenge, type InboxChallenge } from '@/game/chal
 import { noterDefi, rapprocherBoite } from '@/game/journal-defis';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
+import { useRetour } from '@/hooks/use-retour';
 
 /**
  * Defi recu.
@@ -23,6 +24,9 @@ export function InboxPopup() {
   const [ouvert, setOuvert] = useState(false);
   const [chargement, setChargement] = useState('');
   const vu = useRef<Set<string>>(new Set());
+  // Le glissement depuis le bord gauche referme la liste des defis recus, et
+  // rien de plus : la pastille reste, les defis aussi.
+  useRetour(() => setOuvert(false), ouvert);
 
   // Toutes les vingt secondes, et au retour dans le jeu.
   //

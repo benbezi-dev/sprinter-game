@@ -6,6 +6,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
 import { getSavedName } from '@/game/leaderboard';
 import { maSelection, restant, type MaSelection } from '@/game/championnats';
+import { useRetour } from '@/hooks/use-retour';
 
 /* ---------------------------------------------------------------------------
    LA SÉLECTION, VUE DU JEU
@@ -413,6 +414,9 @@ export function SceneSelection() {
     if (s?.edition) marquerVue(s.edition);
     setOuvert(false);
   };
+  // Le glissement depuis le bord gauche ferme le verdict, comme un clic a
+  // cote : la selection est lue, on n'y revient pas.
+  useRetour(fermer, ouvert);
 
   if (!s) return null;
   const dedans = !!s.retenu;

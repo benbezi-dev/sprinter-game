@@ -11,6 +11,7 @@ import { HistoriqueDefis } from './HistoriqueDefis';
 import { lienInstagram } from '@/game/identity';
 import { PanneauNations } from './TableauNations';
 import { useJeu, epreuvesDuJeu, nomCourt } from '@/game/jeux';
+import { useRetour } from '@/hooks/use-retour';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -23,6 +24,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 type Cat = 'race' | 'run' | 'mine' | 'nations';
 
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
+  // Le glissement depuis le bord gauche fait ce que fait la croix.
+  useRetour(onClose);
   const { N, RACES } = SprinterApp;
   const jeu = useJeu();
   const haies = jeu === 'hurdlers';

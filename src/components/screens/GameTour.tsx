@@ -3,6 +3,7 @@ import { SprinterApp } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, COURBE, TRANSITION } from '@/lib/mouvement';
 import { X, ChevronLeft, ChevronRight, Trophy, Ghost, Radio, Users, Flag } from 'lucide-react';
+import { useRetour } from '@/hooks/use-retour';
 
 const VU = 'sprinter_tour_vu';
 
@@ -48,6 +49,9 @@ type Plan = {
 const DUREE = 3400;
 
 export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
+  // Le glissement depuis le bord gauche fait ce que fait le bouton passer :
+  // on sort de la visite sans lancer de course.
+  useRetour(() => onClose(false));
   const { N } = SprinterApp;
   const [i, setI] = useState(0);
   const minuteur = useRef<any>(null);

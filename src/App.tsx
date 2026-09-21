@@ -13,6 +13,7 @@ import {
 
 import { useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
+import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
 import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
@@ -152,6 +153,11 @@ function MainGame() {
   }), []);
   useVisualViewportHeight();
   useBackGuard();
+  // Le glissement depuis le bord gauche referme le panneau ouvert. Pose
+  // ici, une fois pour tout le jeu : c'est un geste sur la fenetre, pas sur
+  // un panneau — et la ou le systeme le confisque, c'est useBackGuard
+  // ci-dessus qui recoit le retour a sa place.
+  useGesteRetour();
   // La camera du one shot. Elle se pose ici parce que c'est le seul endroit
   // qui voie passer TOUTE la course : l'ecran de fin, lui, n'existe qu'une
   // fois la derniere ligne franchie. Voir game/film-course.ts.
