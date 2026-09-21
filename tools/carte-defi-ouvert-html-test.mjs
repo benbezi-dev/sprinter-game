@@ -109,7 +109,7 @@ function lirePage() {
   const rendus = ['API', 'SITE', 'FOND', 'OR', 'OR_RVB', 'BLANC', 'ENCRE', 'LUEUR',
                   'RETRAIT_VIRGULE', 'NUIT', 'HALO', 'FLAMME', 'ENCRE_NUIT',
                   'FORMATS', 'unite', 'echelle', 'tally', 'virgule', 'EPREUVE',
-                  'ligne', 'CLES_LIBRE'];
+                  'ligne', 'CLES_LIBRE', 'TITRES'];
   return new vm.Script(`(function(){${scripts[0]}\nreturn {${rendus.join(',')}};})()`)
     .runInContext(contexte);
 }
@@ -338,6 +338,58 @@ titre('LA CARTE LIBRE REMPLACE DES LIGNES QUI EXISTENT');
      /const debord = Math\.max\(0, hHaut \+ hBillet \+ hBas - dispo\);/.test(script));
   ok('le rendu garde le plus grand des trois formats',
      /debord = Math\.max\(debord, dessiner\(c, f\.w, f\.h, donnees\) \|\| 0\);/.test(script));
+}
+
+titre('LES VINGT-CINQ ACCROCHES');
+{
+  // Ce que ce harnais peut verifier : la liste, sa forme, et qu'elle n'a qu'une
+  // seule source. Ce qu'il ne peut PAS verifier : qu'une accroche tienne dans
+  // le cadre — il faudrait un canvas et les fontes de la charte, que node n'a
+  // pas. Cette mesure-la se fait dans le navigateur, et les nombres releves
+  // sont ecrits dans le commentaire de TITRES pour qu'on sache le budget.
+  ok('vingt-cinq accroches', page.TITRES.length === 25, `${page.TITRES.length}`);
+  ok('cinq familles, cinq par famille',
+     new Set(page.TITRES.map(x => x.f)).size === 5
+     && [...new Set(page.TITRES.map(x => x.f))]
+          .every(f => page.TITRES.filter(x => x.f === f).length === 5));
+  ok('chacune a une forme courte et une longue',
+     page.TITRES.every(x => x.c && x.l && typeof x.c === 'string' && typeof x.l === 'string'));
+  ok('aucune forme courte en double',
+     new Set(page.TITRES.map(x => x.c)).size === 25);
+
+  // LE PLAFOND DE LONGUEUR. Mesure dans le navigateur : le cadre du titre se
+  // remplit vers vingt-cinq signes, et c'est la coupe aux mots qui decide, pas
+  // le compte — « Treize appuis par seconde » (25) tient, « Neuf secondes, pas
+  // une » (22) deborde. Ce plafond-ci n'est donc pas la mesure : c'est le
+  // garde-fou qui arrete une phrase entiere collee dans la colonne courte.
+  const longues = page.TITRES.filter(x => x.c.length > 26);
+  ok('aucune forme courte au-dela de 26 signes', longues.length === 0,
+     longues.map(x => `${x.c.length} — ${x.c}`).join(' ; '));
+  ok('les formes longues sont bien plus longues',
+     page.TITRES.every(x => x.l.length > x.c.length));
+
+  // Les deux listes se remplissent depuis TITRES et de nulle part ailleurs :
+  // une liste ecrite en dur dans le HTML derive au premier ajout.
+  ok('les deux listes se remplissent depuis TITRES',
+     /for \(const \[id, champ\] of \[\['titre-choix', 'c'\], \['sous-choix', 'l'\]\]\)/.test(script));
+  ok('le formulaire porte les deux listes vides',
+     /<select id="titre-choix">/.test(html) && /<select id="sous-choix"/.test(html)
+     && (html.match(/<optgroup/g) || []).length === 0);
+  // La forme longue va dans la phrase qui SE COUPE AUX MOTS. La phrase forte se
+  // dessine d'un seul trait : une accroche entiere y sortirait par le cote.
+  ok('la forme longue va dans « sous », pas dans « fort »',
+     /\$\('sous-choix'\)[\s\S]{0,200}\$\('l-sous'\)\.value/.test(script)
+     && !/'l-fort'\)\.value = /.test(script));
+
+  // LE DEBORD SE MESURE AUSSI EN LARGEUR. Sans ca, une phrase forte trop longue
+  // sortait du cadre par le cote et la page repondait « tout va bien ».
+  ok('centre() mesure la largeur de chaque ligne',
+     /debordLarge = Math\.max\(debordLarge, c\.measureText\(texte\)\.width - cadreLarge\);/
+       .test(script));
+  ok('les deux maquettes arment la mesure',
+     (script.match(/cadreLarge = utile; debordLarge = 0;/g) || []).length === 2);
+  ok('et la rendent avec le debord vertical',
+     (script.match(/return debord \+ Math\.max\(0, debordLarge\);/g) || []).length === 2);
 }
 
 titre('LA PAGE RESTE OUVRABLE PAR UN DOUBLE-CLIC');
