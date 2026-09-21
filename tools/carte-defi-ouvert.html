@@ -129,6 +129,11 @@
     <label>Titre (facultatif)
       <input id="titre" autocomplete="off" placeholder="TU TIENS COMBIEN ?">
     </label>
+    <label>…ou une accroche déjà écrite
+      <select id="titre-choix">
+        <option value="">— j'écris le mien —</option>
+      </select>
+    </label>
     <button id="lancer" type="submit">Fabriquer les trois cartes</button>
   </form>
 
@@ -196,6 +201,19 @@
           <input id="l-piedDroit" class="long" autocomplete="off" placeholder="JEU DE SPRINT">
         </label>
       </div>
+      <p style="margin:16px 0 0;font-size:13px;color:var(--doux)">
+        <label style="text-transform:none;letter-spacing:.01em;font-size:12px">
+          La phrase sous le titre, en version longue — les vingt-cinq accroches entières
+          <select id="sous-choix" class="long">
+            <option value="">— j'écris la mienne —</option>
+          </select>
+        </label>
+      </p>
+      <p style="margin:10px 0 0;font-size:13px;color:var(--doux)">
+        Pas de liste sur <strong>la phrase forte</strong> : elle se dessine d'un seul
+        trait, sans couper aux mots, et une accroche entière y sortirait du cadre par
+        le côté. La page le dit maintenant si ça arrive.
+      </p>
       <p style="margin:16px 0 0">
         <button id="vider" class="second" type="button">Vider les lignes réécrites</button>
       </p>
@@ -295,12 +313,43 @@ function police(c, famille, taille, graisse, ls) {
   c.letterSpacing = `${ls || 0}px`;
 }
 
+/**
+ * CE QUI SORT DU CADRE PAR LE COTE.
+ *
+ * Le debord vertical ne disait que la moitie de l'histoire. Le titre et la
+ * phrase sous le titre se coupent aux mots et restent donc dans la largeur ;
+ * toutes les autres lignes — la phrase forte, la douce, le surtitre, le lien —
+ * se dessinent d'un seul trait. Une phrase trop longue y sort du cadre par le
+ * cote, et la mesure verticale repondait zero.
+ *
+ * Mesure a la main dans la phrase forte du format carre, largeur utile 924 px :
+ * une accroche de cinquante signes depasse de 121 px, une de soixante-sept de
+ * 405. Rien ne le disait.
+ *
+ * `centre` est le seul passage de toutes ces lignes : on mesure ici, une fois,
+ * et aucun emplacement ne peut plus etre oublie le jour ou on en ajoute un.
+ */
+let cadreLarge = Infinity;
+let debordLarge = 0;
+
 function centre(c, texte, cx, cy, ls) {
   c.textAlign = 'center'; c.textBaseline = 'middle';
+  debordLarge = Math.max(debordLarge, c.measureText(texte).width - cadreLarge);
   c.fillText(texte, cx + (ls || 0) / 2, cy);
 }
 
-/** Coupe un texte aux mots, sans jamais sortir de la largeur donnee. */
+/**
+ * Coupe un texte AUX MOTS, et rien d'autre.
+ *
+ * Elle ne sort donc pas de la largeur donnee tant qu'aucun mot n'est a lui
+ * seul plus large qu'elle. Un mot qui l'est part quand meme sur sa ligne, en
+ * depassant : on ne coupe pas un mot en deux au milieu d'une affiche.
+ *
+ * Ce n'est pas theorique. « Recommence », a la taille du titre de la maquette
+ * de competition, mesure 961 px pour un cadre de 924 en carre et 1077 pour 906
+ * en story — le format story grossit la typo de 12 % sans elargir le cadre.
+ * Rien ne le disait avant que `centre` ne mesure la largeur.
+ */
 /**
  * LE TEXTE D'UNE LIGNE : celui qu'on a ecrit a la main, sinon celui que le
  * defi dicte.
@@ -399,6 +448,7 @@ function dessinerAffiche(c, L, H, d) {
   const basZone = H - marge * 2.1;
   const trait = Math.max(2, Math.round(L / 540));
   const utile = L - marge * 2;
+  cadreLarge = utile; debordLarge = 0;
   const OUTFIT = 'Outfit, sans-serif';
   const MONO = "'Space Mono', monospace";
 
@@ -510,7 +560,7 @@ function dessinerAffiche(c, L, H, d) {
   c.textAlign = 'right';
   c.fillStyle = encre(ENCRE.piedDroit);
   c.fillText(ligne(d, 'piedDroit', 'JEU DE SPRINT'), L - marge, H - marge * 0.92);
-  return debord;
+  return debord + Math.max(0, debordLarge);
 }
 
 /* ==========================================================================
@@ -528,6 +578,7 @@ function dessinerCarte(c, L, H, d) {
   const R = v => Math.round(v * k);
   const padHaut = R(110), padCote = R(78), padBas = R(92);
   const utile = L - padCote * 2;
+  cadreLarge = utile; debordLarge = 0;
   const SANS = "'Helvetica Neue', Helvetica, Arial, sans-serif";
   const MONO = "Menlo, 'DejaVu Sans Mono', monospace";
 
@@ -657,7 +708,7 @@ function dessinerCarte(c, L, H, d) {
   c.fill();
   c.fillStyle = ENCRE_NUIT.surPastille;
   centre(c, texteP, L / 2, y + hPastille / 2, tPied * 0.005);
-  return debord;
+  return debord + Math.max(0, debordLarge);
 }
 
 /* ------------------------------------------------------------------ le defi */
@@ -722,6 +773,110 @@ function tally(horsLigne, essais, battus) {
 const $ = id => document.getElementById(id);
 const etat = $('etat');
 let aTelecharger = [];
+
+/**
+ * VINGT-CINQ ACCROCHES, ECRITES POUR FAIRE JOUER.
+ *
+ * Elles suivent les cinq etages de Maslow — le geste, la maitrise, l'autre, le
+ * rang, le depassement — et chacune porte un des quatre leviers de frustration
+ * stimulante : le presque gagne, la reprise immediate, la recompense montree
+ * mais hors d'atteinte, et l'orgueil.
+ *
+ * DEUX LONGUEURS, ET CE N'EST PAS UN CONFORT. Le slot du titre est un slot
+ * d'AFFICHE : ses defauts font six et douze signes, et le cadre se remplit a
+ * une vingtaine. Mesure sur les trois formats et les deux maquettes : sur les
+ * vingt-cinq accroches ecrites en phrase entiere, les vingt-cinq debordaient,
+ * de 258 a 719 px. Ce n'est pas la longueur qui decide mais la coupe aux mots
+ * — « Treize appuis par seconde » (25 signes) tient, « Neuf secondes, pas
+ * une » (22) ajoute une ligne et deborde. Chaque `c` ci-dessous a donc ete
+ * mesure a zero, un par un.
+ *
+ * La forme longue va dans LA PHRASE SOUS LE TITRE, qui se coupe aux mots elle
+ * aussi. Elle n'a rien a faire dans la phrase forte, qui se dessine d'un seul
+ * trait et sortirait du cadre par le cote.
+ *
+ * On ne touche pas aux chiffres : aucun n'est cite qui ne soit tenu par du
+ * code — treize appuis par seconde, dix centiemes de faux depart, +25 en
+ * relevant, quatre etages, neuf pour cent sous le record. Le chrono du jour,
+ * lui, n'est dans aucune : il vieillit en une nuit et un titre ne se relit pas.
+ */
+const TITRES = [
+  { f:'Le geste — neuf secondes, deux touches',
+    c:'Neuf secondes',            l:"Neuf secondes. Tu n'auras pas le temps de réfléchir." },
+  { f:'Le geste — neuf secondes, deux touches',
+    c:'Deux touches',             l:"Deux touches. C'est tout ce qu'on te donne." },
+  { f:'Le geste — neuf secondes, deux touches',
+    c:'Faux départ. Encore',      l:'Faux départ. Retour à la ligne. Deux secondes.' },
+  { f:'Le geste — neuf secondes, deux touches',
+    c:'Treize appuis par seconde', l:'Ton pouce tiendra treize appuis par seconde. Pas quatorze.' },
+  { f:'Le geste — neuf secondes, deux touches',
+    c:'Dix centièmes',            l:'Sous dix centièmes de réaction, la piste te renvoie au départ.' },
+
+  { f:'La maîtrise — difficile, mais juste',
+    c:'Aucune excuse',            l:'Aucune installation. Aucun compte. Aucune excuse.' },
+  { f:'La maîtrise — difficile, mais juste',
+    c:'Le jeu ne bouge pas',      l:'Même piste, même pistolet, à chaque essai. Le jeu ne bouge pas.' },
+  { f:'La maîtrise — difficile, mais juste',
+    c:'Tu as lâché la cadence',   l:"Tu n'as pas perdu contre le hasard. Tu as lâché la cadence." },
+  { f:'La maîtrise — difficile, mais juste',
+    c:'Six niveaux. Un seul dur', l:'Six niveaux. Le premier tombe au premier essai. Le sixième se travaille.' },
+  { f:'La maîtrise — difficile, mais juste',
+    c:'Tout repart à zéro',       l:'Rien ne se sauvegarde contre toi. Chaque course repart de zéro.' },
+
+  { f:'Contre quelqu’un — le code, le direct, le relais',
+    c:'Envoie-lui ton chrono',    l:"Envoie ton chrono. Laisse-le découvrir ce que ça fait." },
+  { f:'Contre quelqu’un — le code, le direct, le relais',
+    c:'Un seul coup de pistolet', l:'Un code, deux couloirs, un seul coup de pistolet.' },
+  { f:'Contre quelqu’un — le code, le direct, le relais',
+    c:'Cours contre son fantôme', l:'Tu ne cours pas contre un nombre. Tu cours contre son fantôme.' },
+  { f:'Contre quelqu’un — le code, le direct, le relais',
+    c:'Le témoin, puis toi',      l:'Le relais ne pardonne pas : trois coéquipiers attendent ton témoin.' },
+  { f:'Contre quelqu’un — le code, le direct, le relais',
+    c:'Huit couloirs, un direct', l:'Huit couloirs en direct. Sept personnes verront ton écart.' },
+
+  { f:'Le rang — ce qui se lit dans un classement',
+    c:'Relever paie plus',        l:'Relever un défi paie plus que le lancer : +25 contre +20.' },
+  { f:'Le rang — ce qui se lit dans un classement',
+    c:'Personne ne naît élite',   l:'Quatre étages, quatre divisions. Personne ne commence en élite.' },
+  { f:'Le rang — ce qui se lit dans un classement',
+    c:'Le niveau au-dessus',      l:"Le niveau mondial part du record du monde. Celui d'au-dessus passe dessous." },
+  { f:'Le rang — ce qui se lit dans un classement',
+    c:'TOP 500, ou nulle part',   l:"Ton pseudonyme entre au TOP 500, ou il n'y entre pas." },
+  { f:'Le rang — ce qui se lit dans un classement',
+    c:'Quatre ont fait mieux',    l:'Quatre coureurs de cette finale ont déjà fait mieux que ton record.' },
+
+  { f:'Se dépasser — contre soi, et rien d’autre',
+    c:'Neuf pour cent dessous',   l:'Le record du monde est à 9,58 s. Ici, le dernier niveau passe dessous.' },
+  { f:'Se dépasser — contre soi, et rien d’autre',
+    c:'Dix haies, treize appuis', l:'Dix haies. Vingt-deux appuis avant la première, treize entre chacune.' },
+  { f:'Se dépasser — contre soi, et rien d’autre',
+    c:'Trois centièmes',          l:"Trois centièmes de mieux qu'hier. C'est une carrière." },
+  { f:'Se dépasser — contre soi, et rien d’autre',
+    c:'Le sixième se tient',      l:'Le sixième niveau ne se gagne pas par chance. Il se tient.' },
+  { f:'Se dépasser — contre soi, et rien d’autre',
+    c:'Un centième. Le deuxième', l:'Un centième séparait le premier du deuxième. Tu étais le deuxième.' },
+];
+
+/** Les deux listes deroulantes, remplies depuis TITRES et nulle part ailleurs. */
+function remplirLesChoix() {
+  for (const [id, champ] of [['titre-choix', 'c'], ['sous-choix', 'l']]) {
+    const sel = $(id);
+    let famille = null, groupe = null;
+    for (const [i, t] of TITRES.entries()) {
+      if (t.f !== famille) {
+        famille = t.f;
+        groupe = document.createElement('optgroup');
+        groupe.label = famille;
+        sel.append(groupe);
+      }
+      const o = document.createElement('option');
+      o.value = t[champ];
+      o.textContent = t[champ];
+      o.dataset.rang = String(i);
+      groupe.append(o);
+    }
+  }
+}
 
 /* --------------------------------------------------------- la carte libre */
 
@@ -956,6 +1111,22 @@ function redessinerBientot() {
 for (const cle of CLES_LIBRE) $(`l-${cle}`).addEventListener('input', redessinerBientot);
 $('titre').addEventListener('input', redessinerBientot);
 $('style').addEventListener('change', redessinerBientot);
+
+// Choisir une accroche remplit le champ et le laisse modifiable : la liste
+// propose, elle ne decide pas. Le champ reste la source de verite.
+remplirLesChoix();
+$('titre-choix').addEventListener('change', e => {
+  if (!e.target.value) return;
+  $('titre').value = e.target.value;
+  redessinerBientot();
+  memoriser();
+});
+$('sous-choix').addEventListener('change', e => {
+  if (!e.target.value) return;
+  $('l-sous').value = e.target.value;
+  redessinerBientot();
+  memoriser();
+});
 
 $('vider').addEventListener('click', () => {
   for (const cle of CLES_LIBRE) $(`l-${cle}`).value = '';
