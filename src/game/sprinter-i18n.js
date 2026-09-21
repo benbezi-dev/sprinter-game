@@ -1297,22 +1297,6 @@
     // ouvert y figure sur les deux canaux ; les stades fermes n'apparaissent
     // que sur le canal de test.
     pick_venue:      ['STADES', 'VENUES'],
-
-    // ------------------------------------------------------ edition speciale
-    //
-    // La banniere de l'accueil pendant la fenetre d'une edition (voir
-    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
-    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
-    // d'un fleuve. Voir juridique/edition-danube.md.
-    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
-    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
-                      'The Danube Stadium opens its gates'],
-    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
-                      'orange track, black infield, under the floodlights'],
-    edition_courir:  ['Y COURIR', 'RUN THERE'],
-    edition_reste_n: ['encore {n} jours', '{n} days left'],
-    edition_reste_1: ['encore 1 jour', '1 day left'],
-    edition_reste_0: ['dernier jour', 'last day'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
     launch_oneshot:  ['LANCER', 'GO'],
     event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
