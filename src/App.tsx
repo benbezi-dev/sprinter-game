@@ -1,4 +1,4 @@
-import { type ReactNode, Suspense, lazy, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, lazy, useEffect, useState, useSyncExternalStore } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,7 +11,7 @@ import {
   Router as WouterRouter,
 } from 'wouter';
 
-import { useGameStore } from '@/game/engine';
+import { SprinterApp, useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
 import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
@@ -23,6 +23,8 @@ import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
+import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
+import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { Generique } from '@/components/screens/Generique';
@@ -239,6 +241,21 @@ function MainGame() {
    */
   const generique = state === 'cut' && !!cut && cut.kind === 'ending';
 
+  // LE TUTORIEL DES HAIES. Son ouverture ne vit pas dans un etat React d'ecran
+  // — l'accueil qui l'ouvre se demonte des que le tutoriel met le jeu en
+  // course — mais dans game/haies-tuto.js, ou elle decrit la meme chose que la
+  // sequence en piste.
+  const tutoHaies = useSyncExternalStore(abonnerAuTuto, tutoOuvert, tutoOuvert);
+  const fermerLeTutoHaies = (lancer: boolean) => {
+    marquerTutoHaiesVu();
+    fermerLeTuto();
+    // LE DEMONTAGE REND LA PISTE, ET IL N'A PAS ENCORE EU LIEU. C'est lui qui
+    // remet le monde a sa vitesse et range les haies (rangerLeTuto). Lancer la
+    // course d'ici la ferait construire, puis defaire. On attend l'image
+    // suivante, ou le tutoriel a fini de ranger derriere lui.
+    if (lancer) requestAnimationFrame(() => SprinterApp.startRun());
+  };
+
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
       {EST_TEST && <PorteTest onOuvert={setAcces} />}
@@ -258,7 +275,12 @@ function MainGame() {
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
             0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient
             par-dessus la presentation alors que personne ne court encore. */}
-        {(state === 'count' || state === 'race') && !enPresentation && <RaceHUD />}
+        {/* LE TUTORIEL DES HAIES MET LE JEU EN COURSE, et le tableau de
+            course n'y a rien a faire : il annoncerait un chrono, un
+            classement et un record a battre sur une sequence de deux
+            haies. Le tutoriel monte a la place le seul bandeau qui le
+            concerne, celui des haies. */}
+        {(state === 'count' || state === 'race') && !enPresentation && !tutoHaies && <RaceHUD />}
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
@@ -283,6 +305,14 @@ function MainGame() {
       
       {/* Invisible overlay for receiving touches during the race */}
       <TouchControls />
+
+      {/* LE TUTORIEL DES HAIES SE JOUE SUR LA PISTE, donc il vit ici et non
+          dans l'accueil : il met le jeu en etat `race`, et l'accueil —
+          monte au seul etat `title` — se serait demonte en emportant le
+          tutoriel avec lui a la premiere sequence. Il passe APRES les
+          touches d'attaque pour que ses deux boutons restent cliquables,
+          et le reste de sa surface laisse passer les appuis. */}
+      {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
 
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}

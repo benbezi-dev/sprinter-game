@@ -13,7 +13,8 @@ import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
 import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
-import { TutorialHaies, tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
+import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
+import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
 import { BanderoleEdition } from './BanderoleEdition';
@@ -115,7 +116,6 @@ export function TitleScreen() {
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
   const [tuto, setTuto] = useState(false);
-  const [tutoH, setTutoH] = useState(false);
   // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
   //
   // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
@@ -185,19 +185,13 @@ export function TitleScreen() {
   const repondrePropose = (apprendre: boolean) => {
     setPropose(false);
     if (tutoDesHaies) marquerTutoHaiesVu(); else marquerTutoVu();
-    if (apprendre) { if (tutoDesHaies) setTutoH(true); else setTuto(true); }
+    if (apprendre) { if (tutoDesHaies) ouvrirLeTuto(); else setTuto(true); }
     else SprinterApp.startRun();
   };
 
   const fermerTuto = (lancer: boolean) => {
     marquerTutoVu();
     setTuto(false);
-    if (lancer) SprinterApp.startRun();
-  };
-
-  const fermerTutoH = (lancer: boolean) => {
-    marquerTutoHaiesVu();
-    setTutoH(false);
     if (lancer) SprinterApp.startRun();
   };
 
@@ -569,7 +563,7 @@ export function TitleScreen() {
       </div>
 
       <PiedLiens onTour={() => setTour(true)} haies={tutoDesHaies}
-                 onTuto={() => (tutoDesHaies ? setTutoH(true) : setTuto(true))} />
+                 onTuto={() => (tutoDesHaies ? ouvrirLeTuto() : setTuto(true))} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
@@ -588,7 +582,6 @@ export function TitleScreen() {
       )}
 
       {tuto && <Tutorial onClose={fermerTuto} />}
-      {tutoH && <TutorialHaies onClose={fermerTutoH} />}
 
       {DUELS_OUVERTS && showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 

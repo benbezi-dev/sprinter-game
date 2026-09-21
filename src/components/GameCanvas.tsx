@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
+import { tempoDuMonde } from '@/game/tempo';
 import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
 import { cameraPassage, appliquerCamera } from '@/game/passage';
 import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
@@ -202,7 +203,12 @@ export function GameCanvas() {
     // L'accueil le demande au moment ou il apparait — voir accueilPose dans
     // game/scene-accueil.ts.
     const frame = (now: number, redessin = false) => {
-      const dt = redessin ? 0 : Math.min(0.05, (now - lastTime) / 1000 || 0.016);
+      // LE TEMPO DU MONDE MULTIPLIE LE PAS, ET APRES LE PLAFOND. Plafonner
+      // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
+      // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit
+      // pas pouvoir le rouvrir. Voir game/tempo.ts.
+      const dt = redessin ? 0
+        : Math.min(0.05, (now - lastTime) / 1000 || 0.016) * tempoDuMonde();
       if (!redessin) {
         lastTime = now;
         updateLogic(dt);
