@@ -1155,5 +1155,34 @@ try {
 // Le code arrive souvent par un lien ou un collage : ?code=ZEZE42.
 const depuisUrl = new URLSearchParams(location.search).get('code');
 if (depuisUrl) $('code').value = depuisUrl.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/* ------------------------------------------- la barre du tableau, si servie */
+
+/**
+ * LA BARRE COMMUNE DU TABLEAU, POSEE A L'EXECUTION.
+ *
+ * Les dix autres pages de `suivi/` font `<script src="nav.js" defer>`. Celle-ci
+ * ne peut pas : son harnais interdit toute balise de script exterieure, et
+ * c'est cette interdiction qui garde le double-clic vivant. En `file://` une
+ * balise vers un fichier absent echoue en silence, et un module ES y est
+ * refuse net par Chrome.
+ *
+ * On la pose donc en JavaScript, et SEULEMENT quand la page est servie par un
+ * serveur. Ouverte par un double-clic, la condition est fausse : aucune
+ * requete n'est faite, rien ne change, la page reste le fichier autonome
+ * qu'elle doit etre. Servie depuis le tableau, la barre apparait et on repart
+ * vers les autres pages — c'etait le seul chemin qui manquait.
+ *
+ * `nav.js` se charge du reste tout seul : il pose son propre style, s'insere en
+ * tete de `<body>` sans emprunter nos classes, mesure le fond reellement peint
+ * pour choisir clair ou sombre, et porte deja l'entree « Défi » vers cette
+ * page. Il n'y a rien a lui preparer.
+ */
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  const barre = document.createElement('script');
+  barre.src = 'nav.js';
+  barre.defer = true;
+  document.head.append(barre);
+}
 </script>
 </html>
