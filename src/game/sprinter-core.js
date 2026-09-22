@@ -606,8 +606,22 @@
     academique: { transit: 0 },
   };
 
-  /** Qui court en veloce. Le reste — tour, relais, haies, sauts — est tenu. */
-  const FOULEE_DES_EPREUVES = { '100': 'veloce', '200': 'veloce' };
+  /**
+   * Qui court en veloce. Le reste — le tour, les haies, les sauts — est tenu.
+   *
+   * LE RELAIS EN FAIT PARTIE, et c'est la seule entree qui demande un mot
+   * d'explication. Sa cle dit « 4 x 100 » et sa geometrie est celle du tour,
+   * ce qui l'aurait range avec le 400 m ; mais personne n'y court un tour —
+   * quatre relayeurs y courent cent metres chacun, et c'est l'epreuve la plus
+   * rapide de la piste. L'allure suit donc ce que les jambes font, pas ce que
+   * la distance totale affiche.
+   *
+   * La cloche de transition se recale d'elle-meme sur chaque portion : elle
+   * est comptee depuis `legStart`, si bien que les quatre relayeurs recoivent
+   * chacun la sienne la ou il demarre, au lieu que le premier la prenne pour
+   * tout le monde.
+   */
+  const FOULEE_DES_EPREUVES = { '100': 'veloce', '200': 'veloce', '4x100': 'veloce' };
 
   /**
    * L'allure de la course en cours.
