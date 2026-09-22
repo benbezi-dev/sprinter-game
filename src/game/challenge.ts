@@ -4,6 +4,8 @@
 
 import type { DuelIssue } from './duels';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
+import { EPREUVE } from './trace-affiche';
+import { EPREUVES_APERCU } from './epreuve-titre';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -269,12 +271,30 @@ export async function submitAttempt(input: {
  * vignette pour une 404.
  *
  * Un lien envoye sur WhatsApp ou sur X sans son image perd ce que l'apercu lui
- * donnait. Celui-ci reste donc en `?defi=`, qui repond 200. Deux formes, deux
+ * donnait. Celui-ci reste donc sur un chemin qui repond 200. Deux formes, deux
  * usages : celle qu'on envoie, et celle qu'on lit.
+ *
+ * LA DISTANCE EST DANS LE CHEMIN, ET C'EST LE TITRE DE L'APERCU QUI LA VEUT.
+ *
+ * Constate sur un lien envoye : un defi sur 400 m haies s'annoncait « tu vaux
+ * quoi sur 100 mètres ? ». Les balises d'`index.html` sont ecrites en dur, et
+ * le robot qui fabrique la vignette ne lit pas le JavaScript — `?defi=` seul
+ * lui rend toujours la meme page. Le build ecrit donc une page par epreuve
+ * (voir `pagesDApercu` dans vite.config), et le lien passe par la sienne :
+ * `/defi/400h/?defi=K7M2QX`. Elle porte le bon titre, puis renvoie au jeu avec
+ * le code intact.
+ *
+ * UN DEFI A PLUSIEURS EPREUVES RETOMBE SUR LA RACINE. « 100 m + 200 m » n'a
+ * pas de page a lui, et en fabriquer une par combinaison ferait des dizaines
+ * de fichiers pour un cas rare. L'apercu y reste generique : moins precis,
+ * jamais faux.
  */
-export function challengeLink(id: string): string {
+export function challengeLink(id: string, races?: readonly string[]): string {
   const base = window.location.origin + window.location.pathname;
-  return `${base}?defi=${id}`;
+  const seule = races && races.length === 1 ? races[0] : null;
+  return seule && EPREUVES_APERCU.includes(seule)
+    ? `${base}defi/${seule}/?defi=${id}`
+    : `${base}?defi=${id}`;
 }
 
 /* ---------------------------------------------------------------- partage
@@ -288,10 +308,13 @@ export function challengeLink(id: string): string {
 /** Le message qu'on envoie a l'ami : chrono, code, lien. */
 export function shareText(id: string, races: string[], totalMs: number, fr: boolean): string {
   const t = (totalMs / 1000).toFixed(2);
-  const ep = races.map(r => r + ' m').join(' + ');
+  // « 400h m » n'existe pas : la charte ecrit « 400 m H », et `EPREUVE` est la
+  // pour cela. Le message composait la forme courte a la main et sortait donc
+  // « 45.49 s sur 400h m » — vu dans une conversation.
+  const ep = races.map(r => EPREUVE(r)).join(' + ');
   return fr
-    ? `Je te défie sur Sprinter : ${t} s sur ${ep}. Code ${id} — ${challengeLink(id)}`
-    : `I challenge you on Sprinter: ${t} s on ${ep}. Code ${id} — ${challengeLink(id)}`;
+    ? `Je te défie sur Sprinter : ${t} s sur ${ep}. Code ${id} — ${challengeLink(id, races)}`
+    : `I challenge you on Sprinter: ${t} s on ${ep}. Code ${id} — ${challengeLink(id, races)}`;
 }
 
 /** WhatsApp accepte un texte prerempli, sans destinataire impose. */

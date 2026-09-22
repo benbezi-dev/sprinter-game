@@ -21,10 +21,18 @@
    main finit par annoncer un format que le serveur n'applique plus, et
    personne ne s'en apercoit avant de voir les series partir a une autre heure.
 
-   LA VOIX EST CELLE DES JOURS DE COMPETITION — bleu nuit, degrade orange,
-   adresse en pastille. Un championnat en est un, et le jeu peint desormais
-   ses propres videos dans cette voix-la (voir src/game/voix-competition.js,
-   qui porte les valeurs). Deux voix pour un seul evenement se voient.
+   DEUX VOIX, ET ON CHOISIT AU MOMENT DE PUBLIER.
+
+     (defaut)      LES JOURS DE COMPETITION : bleu nuit, degrade orange,
+                   adresse en pastille. Un championnat en est un, et le jeu
+                   peint desormais ses propres videos dans cette voix-la
+                   (src/game/voix-competition.js porte les valeurs).
+     --voix jeu    CELLE DU JEU : fond #060913, lueur doree, Outfit 900, or.
+                   Celle de l'affiche d'une course et du carton d'une video de
+                   campagne, recopiee au pixel depuis `palette-affiche`.
+
+   Les deux sortent les memes ecrans, dans deux dossiers separes : ce sont les
+   memes fichiers, et les melanger ferait choisir au hasard en publiant.
 
    L'HEURE EST CELLE D'UN FUSEAU, ET LA CARTE LE DIT. Le calendrier du serveur
    est en UTC, parce que « le meme weekend partout » n'a de sens que sur une
@@ -36,6 +44,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
 import { ENCRE, fond, flamme, echelle, echappe } from './voix-competition.mjs';
+// LA VOIX ORDINAIRE DU JEU — fond #060913, lueur doree, Outfit 900, or. C'est
+// celle que le jeu dessine lui-meme sur l'affiche d'une course et sur le carton
+// d'une video de campagne. Les memes ecrans sortent dans les deux voix : la
+// competition parle fort dans un fil de competition, le jeu parle de lui le
+// reste du temps, et c'est au moment de publier qu'on choisit.
+import {
+  FOND, OR, BLANC, ENCRE as ENCRE_JEU, LUEUR, encre, or, unite,
+} from '../src/game/palette-affiche.js';
 // L'ecriture des epreuves, prise a la source : la charte ecrit « 100 m », et
 // « 100 m H » pour les haies.
 import { EPREUVE } from '../src/game/trace-affiche.js';
@@ -53,7 +69,8 @@ const FORMATS = [
 /* ------------------------------------------------------------- les arguments */
 
 function lireArgs(argv) {
-  const a = { edition: null, zone: 'FR', epreuve: '100', fuseau: 'Europe/Paris' };
+  const a = { edition: null, zone: 'FR', epreuve: '100', fuseau: 'Europe/Paris',
+              voix: 'competition' };
   for (let i = 0; i < argv.length; i++) {
     const v = () => String(argv[++i] || '');
     switch (argv[i]) {
@@ -61,6 +78,7 @@ function lireArgs(argv) {
       case '--zone': a.zone = v().toUpperCase(); break;
       case '--epreuve': a.epreuve = v(); break;
       case '--fuseau': a.fuseau = v(); break;
+      case '--voix': a.voix = v().toLowerCase(); break;
       default: break;
     }
   }
@@ -185,6 +203,127 @@ function page(e, { w, h }) {
   <div class="pied">${SITE}</div>`;
 }
 
+/* ------------------------------------------ la maquette de la voix du jeu
+
+   CELLE QUE LE JEU DESSINE DEJA, au pixel : marge a 8,2 % de la largeur,
+   surtitre a 10,5 % de la hauteur avec 36 % d'inter-lettrage, titre en Outfit
+   900 serre a -2,2 %, pied a une marge et demie du bas. Les proportions
+   viennent de `game/trace-affiche.js` par `palette-affiche`, pas d'un reglage
+   a l'oeil : une carte qui ressemble au jeu de loin et pas de pres dit que le
+   compte et le jeu sont deux choses.
+
+   LE TITRE EST EN OR, la ou l'affiche du jeu met son chrono. C'est le meme
+   role — le sujet, celui qu'on lit en premier — et cette voix n'a qu'une
+   couleur d'accent : lui donner du blanc le ferait passer derriere le billet.
+--------------------------------------------------------------------------- */
+
+function pageJeu(e, { w, h }) {
+  const L = w, H = h;
+  const marge = Math.round(L * 0.082);
+  const u = unite(L, H);
+  const pc = v => `${+(v * 100).toFixed(3)}%`;
+  const T = t => Math.round(u * t);
+  const hautY = Math.round(H * 0.105);
+  const haut = hautY + Math.round(L * 0.055);
+  const basZone = H - marge * 2.1;
+
+  /* PAS DE TRAITS EN FUITE ICI, et c'est un ecart assume avec l'affiche du jeu.
+     Ils y posent le stade derriere un gros chrono centre, au milieu de beaucoup
+     de vide. Ces cartes-ci portent un tableau : les traits passaient AU TRAVERS
+     des heures et barraient « 11:00 » d'un filet dore. Un decor qui rend un
+     chiffre moins lisible n'est plus un decor. */
+
+  const billet = e.billet ? `
+    <div class="billet">
+      <div class="etiquette">${echappe(e.billet.etiquette)}</div>
+      <div class="code">${echappe(e.billet.valeur)}</div>
+      ${e.billet.ou ? `<div class="lien">${echappe(e.billet.ou)}</div>` : ''}
+    </div>` : '';
+
+  const lignes = e.lignes && e.lignes.length ? `
+    <div class="grille">
+      ${e.lignes.map(l => `<div class="ligne">
+        <span class="g">${echappe(l.gauche)}</span>
+        <span class="d">${echappe(l.droite)}</span>
+      </div>`).join('')}
+    </div>` : '';
+
+  return `<!doctype html><meta charset="utf-8"><style>
+  ${enTetePolices()}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:${L}px;height:${H}px;overflow:hidden}
+  body{position:relative;background:${FOND};
+       font:500 16px/1.2 Outfit,"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif}
+  .lueur{position:absolute;inset:0;
+         background:radial-gradient(circle ${Math.round(L * LUEUR.rayon)}px
+                    at ${pc(LUEUR.x)} ${pc(LUEUR.y)},
+                    ${or(LUEUR.alpha)} 0%,${or(0)} 100%)}
+  .surtitre{position:absolute;top:${hautY}px;left:0;width:100%;text-align:center;
+            font-weight:700;font-size:${Math.round(L * 0.0205)}px;
+            letter-spacing:.36em;text-indent:.36em;text-transform:uppercase;
+            color:${encre(ENCRE_JEU.surtitre)}}
+  .pile{position:absolute;left:${marge}px;right:${marge}px;
+        top:${haut}px;height:${Math.round(basZone - haut)}px;
+        display:flex;flex-direction:column;align-items:center;
+        justify-content:center;text-align:center}
+  h1{font-weight:900;font-size:${T(e.tailleJeu || 0.082)}px;
+     line-height:${T((e.tailleJeu || 0.082) * 0.95)}px;
+     letter-spacing:-.022em;color:${OR};text-transform:uppercase;
+     ${e.nowrap ? 'white-space:nowrap;' : ''}margin-bottom:${T(0.03)}px}
+  .qui{font-size:${T(0.034)}px;color:${encre(ENCRE_JEU.nom)};line-height:1.35}
+  .billet{margin-top:${T(0.075)}px;padding-top:${T(0.055)}px;width:100%;
+          border-top:1px solid ${encre(ENCRE_JEU.filet)}}
+  .etiquette{font-weight:700;font-size:${T(0.022)}px;letter-spacing:.36em;
+             text-indent:.36em;text-transform:uppercase;
+             color:${encre(ENCRE_JEU.etiquette)};margin-bottom:${T(0.028)}px}
+  .code{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
+        font-weight:700;font-size:${T(0.095)}px;line-height:1;color:${BLANC};
+        letter-spacing:.08em;text-indent:.08em}
+  .lien{font-size:${T(0.026)}px;color:${encre(ENCRE_JEU.lien)};
+        margin-top:${T(0.030)}px}
+  /* LE TABLEAU, dans la voix du jeu : le filet est celui du pied, et l'heure
+     garde le Space Mono du chrono. Une liste d'horaires se lit en colonne. */
+  .grille{margin-top:${T(0.065)}px;width:100%;display:flex;flex-direction:column;
+          gap:${T(0.018)}px}
+  .ligne{display:flex;align-items:baseline;gap:${T(0.026)}px;
+         border-bottom:1px solid ${encre(ENCRE_JEU.filet)};
+         padding-bottom:${T(0.016)}px}
+  .ligne:last-child{border-bottom:none}
+  .ligne .g{font-family:'Space Mono',Menlo,"DejaVu Sans Mono",monospace;
+            font-weight:700;font-size:${T(0.040)}px;color:${BLANC};
+            min-width:${T(0.21)}px;text-align:right}
+  .ligne .d{font-size:${T(0.033)}px;color:${encre(ENCRE_JEU.nom)};
+            text-align:left;flex:1}
+  .etat{font-weight:700;font-size:${T(0.032)}px;color:${or(0.9)};
+        margin-top:${T(0.060)}px}
+  .doux{font-size:${T(0.028)}px;color:${encre(ENCRE_JEU.lien)};
+        margin-top:${T(0.014)}px}
+  .filet{position:absolute;left:${marge}px;right:${marge}px;
+         top:${Math.round(H - marge * 1.5)}px;height:1px;
+         background:${encre(ENCRE_JEU.filet)}}
+  .pied{position:absolute;left:${marge}px;right:${marge}px;
+        top:${Math.round(H - marge * 0.92)}px;transform:translateY(-50%);
+        display:flex;justify-content:space-between;
+        font-weight:700;font-size:${Math.round(L * 0.0205)}px;
+        letter-spacing:${(L * 0.006).toFixed(1)}px;text-transform:uppercase}
+  .pied .g{color:${encre(ENCRE_JEU.pied)}}
+  .pied .d{color:${OR};text-transform:none;letter-spacing:${(L * 0.001).toFixed(1)}px}
+  </style>
+  <div class="lueur"></div>
+  <div class="surtitre">${echappe(e.kicker)}</div>
+
+  <div class="pile">
+    <h1>${echappe(e.titre)}</h1>
+    ${e.sous ? `<div class="qui">${e.sous}</div>` : ''}
+    ${billet}${lignes}
+    ${e.fort ? `<div class="etat">${echappe(e.fort)}</div>` : ''}
+    ${e.doux ? `<div class="doux">${echappe(e.doux)}</div>` : ''}
+  </div>
+
+  <div class="filet"></div>
+  <div class="pied"><span class="g">Sprinter</span><span class="d">${SITE}</span></div>`;
+}
+
 /* ------------------------------------------------- ce que les ecrans disent */
 
 /** Le libelle d'un rendez-vous du calendrier. */
@@ -245,7 +384,7 @@ function composer(ed, rdv, args) {
       cle: 'affiche',
       kicker,
       titre: `${ed.partants.length} ENTRENT`,
-      taille: 122, nowrap: true,
+      taille: 122, tailleJeu: 0.105, nowrap: true,
       sous: `${jours.map(j => jourLong(j.at, tz)).join(' et ')}.`,
       billet: premierRdv ? {
         etiquette: 'Le premier coup de pistolet',
@@ -267,7 +406,7 @@ function composer(ed, rdv, args) {
       cle: 'qualifier',
       kicker: 'Se qualifier',
       titre: 'ON NE S’INSCRIT PAS',
-      taille: 76, nowrap: true,
+      taille: 76, tailleJeu: 0.062, nowrap: true,
       sous: `On se prend une place au classement des duels de son pays, sur le ${ep}.`,
       lignes: [
         { gauche: '1', droite: 'Déclare ton pays — sans lui, tu n’es dans aucun classement national' },
@@ -285,7 +424,7 @@ function composer(ed, rdv, args) {
          compte des series ; « 32 → 16 → 8 → 1 » compte des gens qui sortent, et
          c'est la meme competition racontee par ce qu'elle coute. */
       titre: `${ed.partants.length} → ${enDemies} → ${enFinale} → 1`,
-      taille: 92, nowrap: true,
+      taille: 92, tailleJeu: 0.075, nowrap: true,
       sous: `Deux tours pour en éliminer ${ed.partants.length - 1}.`,
       lignes: [
         { gauche: `${series.courses} séries`, droite: `${series.courses} courses de ${parSerie}` },
@@ -359,7 +498,8 @@ function composer(ed, rdv, args) {
     formats: ['story'],
     kicker,
     titre: reste === 0 ? 'AUJOURD’HUI' : reste === 1 ? 'DEMAIN' : `J−${reste}`,
-    taille: reste > 1 ? 210 : 132, nowrap: true,
+    taille: reste > 1 ? 210 : 132,
+    tailleJeu: reste > 1 ? 0.175 : 0.110, nowrap: true,
     sous: `${jourLong(premierRdv.at, tz)}, ${heure(premierRdv.at, tz)} —<br>`
         + 'le premier coup de pistolet.',
     billet: {
@@ -403,17 +543,28 @@ if (!cycle) {
 }
 
 const ecrans = composer(ed, cycle.rendezVous, args);
-const sortie = path.join(RACINE, 'communication/championnat', id);
+let ecrites = 0;
+const jeu = args.voix === 'jeu';
+// UN DOSSIER PAR VOIX. Les deux series portent les memes noms de fichier — ce
+// sont les memes ecrans — et les melanger dans un seul dossier ferait choisir
+// au hasard au moment de publier.
+const sortie = path.join(RACINE, 'communication/championnat', id, jeu ? 'voix-du-jeu' : '');
 const chrome = trouverChrome();
 
 for (const [i, e] of ecrans.entries()) {
   for (const f of FORMATS.filter(f => !e.formats || e.formats.includes(f.cle))) {
     const nom = `${String(i + 1).padStart(2, '0')}-${e.cle}-${f.cle}.png`;
     const chemin = path.join(sortie, nom);
-    await capturer({ html: page(e, f), w: f.w, h: f.h, sortie: chemin, chrome });
+    const html = jeu ? pageJeu(e, f) : page(e, f);
+    await capturer({ html, w: f.w, h: f.h, sortie: chemin, chrome });
+    ecrites++;
     console.log(path.relative(RACINE, chemin));
   }
 }
 
 console.log(`\n${ed.titre} — ${EPREUVE(ed.epreuve)}, édition ${id} (${ed.etat}).`);
-console.log(`${ecrans.length} écrans, ${ecrans.length * FORMATS.length} images.`);
+console.log(`Voix : ${jeu ? 'celle du jeu (fond noir, or)' : 'les jours de compétition (bleu nuit, orange)'}.`);
+// Les images se COMPTENT, elles ne se multiplient pas : l'ecran de tension ne
+// sort qu'en story, et `ecrans x formats` en annoncait une de plus qu'il n'en
+// existe sur le disque.
+console.log(`${ecrans.length} écrans, ${ecrites} images.`);
