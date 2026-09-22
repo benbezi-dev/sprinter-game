@@ -121,6 +121,29 @@
     DRIVE_THIGH: 0.80,        // amplitude de cuisse rendue a la sortie
     DRIVE_KNEE: 0.45,         // flexion de genou, idem
     DRIVE_ARM: 0.35,          // amplitude des bras, idem
+    // LE GENOU DEVANT, ET LUI SEUL.
+    //
+    // Les trois nombres ci-dessus rendent l'amplitude dans LES DEUX SENS :
+    // l'extension arriere autant que le genou avant. Un depart de sprint, lui,
+    // se reconnait a ce que le genou sort DEVANT, tres haut, tres tot.
+    //
+    // Ce gain-ci ne s'applique donc qu'a la moitie avant du cycle, la ou la
+    // cuisse est deja devant. Ajoute partout, il aurait leve la cuisse d'appui
+    // en meme temps que l'autre, et un coureur dont les deux cuisses montent
+    // n'est pas un sprinteur qui pousse : c'est quelqu'un d'assis.
+    //
+    // DRIVE_SHANK vient avec, et n'est pas un ornement : une cuisse projetee
+    // plus haut sans flexion de plus donne une jambe TENDUE devant — un coup
+    // de pied, pas un genou. Le tibia doit rester pendant sous le genou, comme
+    // il l'est sur toutes les photos de sortie de blocs.
+    //
+    // REGLES A L'OEIL, sur le monde fige a trois metres du depart et a la
+    // phase « genou haut » du cycle : a 0,30 la cuisse gagnait douze degres —
+    // reel mais discret — a 0,55 elle en gagne vingt-deux, et c'est la que la
+    // posture devient celle d'une sortie de blocs. Ce sont deux nombres, et
+    // ils se remontent ou se baissent sans rien toucher d'autre.
+    DRIVE_FRONT: 0.55,        // gain de cuisse sur la seule part avant
+    DRIVE_SHANK: 0.50,        // et le repli de tibia qui l'accompagne
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
     REACT_BEST: 0.12,
@@ -1703,8 +1726,16 @@
     // une impression de mouvement disloque plutot que coordonne.
     const LIMB_BOOST = P.boost;
     function leg(q) {
-      const th = gait(P.thigh, q) * (A + C.DRIVE_THIGH * sortie) * LIMB_BOOST;
-      const kn = gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie) * LIMB_BOOST;
+      const gt = gait(P.thigh, q);
+      // La part AVANT du cycle : nulle quand la cuisse est derriere, jusqu'a
+      // son maximum quand le genou est au plus haut devant. C'est elle qui
+      // porte le gain de depart, et c'est ce qui l'empeche de devenir un
+      // coureur assis — voir DRIVE_FRONT.
+      const devant = Math.max(0, gt);
+      const th = (gt * (A + C.DRIVE_THIGH * sortie)
+                  + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
+      const kn = (gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie)
+                  - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
       // La cheville ne recoit pas la sortie : au depart le pied reste arme,
       // il ne fouette pas. L'amplifier donnait un coup de talon de patineur.
       const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
