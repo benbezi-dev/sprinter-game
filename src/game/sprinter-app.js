@@ -1723,6 +1723,12 @@
     if (!LEVELS[idx]) idx = OLYMPIC;
     G.levelIdx = idx;
     const lvl = LEVELS[idx], R = G.race;
+    // L'ALLURE DE L'EPREUVE, posee ici et nulle part ailleurs : c'est le seul
+    // passage par lequel toutes les courses entrent — carriere, one-shot,
+    // defi, direct, relais, haies. Voir FOULEE_DES_EPREUVES dans
+    // sprinter-core.js : le cent et le deux cents courent en veloce, tout le
+    // reste dans la foulee tenue.
+    K.poserLAllure(R && R.key);
     // Deux decors pour une meme etape : lequel se decide en arrivant, sur le
     // chrono de la course precedente (voir enDessousDuNiveau).
     if (lvl.stades) {

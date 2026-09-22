@@ -575,6 +575,59 @@
   // d'appui (stride) qui arbitre entre foulee longue et haute frequence.
   // 'base' reprend a l'identique la foulee historique : tout athlete sans
   // profil declare court exactement comme avant.
+  /* ---------------------------------------------------------------------
+     LES DEUX FOULEES — VELOCE ET ACADEMIQUE
+     ---------------------------------------------------------------------
+     A ne pas confondre avec `GAITS`, juste en dessous, qui est un AUTRE AXE.
+     `GAITS` donne la biomecanique d'un ATHLETE — celui-ci court en frequence,
+     celui-la en puissance — et deux coureurs d'une meme course peuvent en
+     avoir deux differentes. Ceci donne l'allure d'une EPREUVE, et tout le
+     monde y court la meme : on ne s'engage pas dans un tour comme dans un
+     cent metres, et cela se voit avant meme de regarder le chrono.
+
+     LA FOULEE VELOCE est celle du sprint pur : on arrache la vitesse dans la
+     transition, talon claque sous la fesse, bras qui tirent. Elle coute cher
+     et ne se tient pas longtemps — c'est precisement pourquoi elle appartient
+     aux distances ou l'on n'a pas a la tenir.
+
+     LA FOULEE ACADEMIQUE est la foulee tenue : la meme mecanique de depart —
+     personne ne sort des blocs autrement — mais sans la surenchere du milieu.
+     C'est celle d'un tour de piste, d'une course de haies ou l'on doit rester
+     reglable entre les obstacles, et d'une course d'elan qui prepare un saut
+     plutot qu'un chrono.
+
+     TOUT CE QUI N'EST PAS NOMME EST ACADEMIQUE, et c'est voulu : les sauts
+     n'existent pas encore comme epreuves jouables, et le jour ou leur course
+     d'elan sera dessinee elle prendra l'allure tenue sans qu'on ait rien a
+     ajouter ici.
+  */
+  const FOULEES = {
+    veloce: { transit: 1 },
+    academique: { transit: 0 },
+  };
+
+  /** Qui court en veloce. Le reste — tour, relais, haies, sauts — est tenu. */
+  const FOULEE_DES_EPREUVES = { '100': 'veloce', '200': 'veloce' };
+
+  /**
+   * L'allure de la course en cours.
+   *
+   * Elle vit ici plutot que sur chaque coureur parce qu'elle appartient a
+   * l'epreuve : les huit couloirs la partagent, les fantomes et les coureurs
+   * en direct aussi, et aucun d'eux n'a a se la voir poser a la construction —
+   * ils sont crees a huit endroits differents, et l'un d'eux aurait ete oublie.
+   */
+  let allure = 'academique';
+
+  /** Poser l'allure depuis la cle de l'epreuve. A appeler en construisant. */
+  function poserLAllure(cle) {
+    allure = FOULEE_DES_EPREUVES[cle] || 'academique';
+    return allure;
+  }
+
+  /** L'allure courante, pour qui veut la lire. */
+  function allureCourante() { return allure; }
+
   const GAITS = {
     base: Object.assign({}, GAIT, {
       boost: 1.18, armAmp: 1.00, lean: 1.00, bob: 1.00, stride: 1.00
@@ -1754,7 +1807,11 @@
     // recale sur la portion de chaque relayeur.
     const dTr = (r.d - (r.legStart || 0));
     const uTr = (dTr - C.DRIVE_END) / Math.max(1, C.TRANS_END - C.DRIVE_END);
-    const transit = (uTr <= 0 || uTr >= 1 ? 0 : Math.sin(Math.PI * uTr)) * (1 - wBloc);
+    // ET ELLE NE BAT QU'EN FOULEE VELOCE. La mecanique de DEPART, elle, reste
+    // a tout le monde : personne ne sort des blocs autrement, et c'est la
+    // surenchere du milieu de course qui appartient au sprint pur.
+    const transit = (uTr <= 0 || uTr >= 1 ? 0 : Math.sin(Math.PI * uTr))
+                    * (1 - wBloc) * FOULEES[allure].transit;
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
     let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
@@ -2363,6 +2420,7 @@
   root.SprinterCore = {
     TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };
