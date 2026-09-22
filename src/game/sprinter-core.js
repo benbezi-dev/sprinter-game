@@ -1824,7 +1824,7 @@
     // ET ELLE NE BAT QU'EN FOULEE VELOCE. La mecanique de DEPART, elle, reste
     // a tout le monde : personne ne sort des blocs autrement, et c'est la
     // surenchere du milieu de course qui appartient au sprint pur.
-    const transit = (uTr <= 0 || uTr >= 1 ? 0 : Math.sin(Math.PI * uTr))
+    const transit = (!(uTr > 0 && uTr < 1) ? 0 : Math.sin(Math.PI * uTr))
                     * (1 - wBloc) * FOULEES[allure].transit;
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
