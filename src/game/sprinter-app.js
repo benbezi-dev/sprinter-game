@@ -1772,6 +1772,11 @@
     G.reactShown = G.transShown = false;
     G.falseOut = false; G.falseOutT = 0;
     G.paused = false;
+    // Toute course neuve efface le rejeu. Le drapeau est pose APRES l'armement
+    // par `champ-rejeu`, si bien qu'une course ordinaire lancee ensuite le
+    // trouve eteint : sans cela, un rejeu regarde une fois laisserait le
+    // joueur pilote par la machine pour toutes les courses suivantes.
+    G.rejeu = false; G.rejeuFini = false;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
     // Et sur une piste sans adversaire en direct.
@@ -6801,6 +6806,12 @@
     armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
     startLive, liveDepart,
     armRelayeurs, porteurDuTemoin,
+    // Le rejeu d'une course de championnat repeint les huit couloirs avec les
+    // noms et les chronos d'une course qui a deja eu lieu : il lui faut la
+    // meme couleur de repere que celle que la piste pose d'elle-meme, sans
+    // quoi le coureur du couloir 4 changerait de couleur selon qu'on le
+    // regarde courir ou qu'on le revoit.
+    couleurCouloir,
     startRelais, recevoirTemoin, presenterCoureur, stepPresentation,
     poserLeDepart, dessinerLeDepart, tirerLeDepart, starterParle,
     annoncerLeDepart, coupDePistolet,

@@ -236,6 +236,11 @@ export function TouchControls() {
   // recouvraient la moitie basse de la piste au moment ou l'on presente
   // quelqu'un.
   if (state === 'count' && countT <= -90) return null;
+  // Un rejeu de championnat non plus : la course a deja eu lieu, personne ne
+  // la pilote. Deux pavés « ALTERNE LES DEUX TOUCHES » sous une course qu'on
+  // regarde promettent une prise en main qui n'existe pas — et ils mangent la
+  // moitie basse de l'image au moment ou on la filme.
+  if (SprinterApp.G.rejeu) return null;
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //

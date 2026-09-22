@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
+import { lireRejeu } from '@/game/champ-rejeu';
 import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
@@ -63,6 +64,21 @@ export function RaceHUD() {
    * montre deja que les epreuves.
    */
   const aveugle = !!challenge;
+
+  /**
+   * UNE COURSE QU'ON REGARDE N'A PAS DE CONSIGNE.
+   *
+   * Le tableau de course s'adresse a deux pouces : « attends le signal »,
+   * « installe ta cadence », « a battre : X — 9,41 s », une jauge de poussee,
+   * l'ecart au coureur de devant. Dans un rejeu de championnat personne ne
+   * pilote, et le nom annonce comme rival est celui du coureur que la camera
+   * suit — on lui demandait de se battre contre lui-meme.
+   *
+   * Restent le chrono et la place : les deux seules choses qu'un spectateur
+   * lit. Le titre du stade cede la sienne au nom de la course.
+   */
+  const rejeu = !!SprinterApp.G.rejeu;
+  const course = rejeu ? lireRejeu() : null;
   
   /**
    * L'ECRAN DU DEPART — deux departs, deux ecrans.
@@ -145,6 +161,10 @@ export function RaceHUD() {
   const ph = player?.phase ? player.phase() : 0;
   const total = T?.total || 100;
 
+  // Le tableau d'arrivee occupe l'ecran : un chrono fige sous lui
+  // contredirait les chronos qu'il affiche.
+  if (course?.arrivee) return null;
+
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
       {/* Le verdict de chaque haie. Rien hors d'une course de haies. */}
@@ -159,7 +179,7 @@ export function RaceHUD() {
       <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
         <div className="flex justify-between w-1/2 landscape:w-auto landscape:flex-1 items-center gap-2 sm:gap-4 order-1 min-w-0">
           <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-            {N.levelName(levelIdx)}
+            {course ? (course.titre || course.sousTitre) : N.levelName(levelIdx)}
           </div>
           <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 && !photoAttente ? 'text-primary' : 'text-foreground'}`}>
             {posTxt}
@@ -168,7 +188,7 @@ export function RaceHUD() {
 
         <div className="w-1/2 landscape:w-auto landscape:flex-1 flex justify-end items-center gap-2 sm:gap-4 order-2 landscape:order-3">
           <div className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${ph === 0 ? 'text-primary' : ph === 1 ? 'text-cyan-400' : 'text-muted-foreground'}`}>
-            {N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])}
+            {rejeu ? '' : N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])}
           </div>
           <div className="flex flex-col items-end leading-none gap-0.5">
             <div className={`font-black font-mono text-2xl sm:text-3xl md:text-4xl tabular-nums
@@ -179,7 +199,7 @@ export function RaceHUD() {
                 : dansLeRecord ? 'text-emerald-400' : 'text-destructive'}`}>
               {rebours !== null ? texteDuRebours(rebours) : elapsed.toFixed(2)}
             </div>
-            {recordMs !== null && (
+            {recordMs !== null && !rejeu && (
               <div className={`font-mono font-bold tabular-nums tracking-widest
                                text-[8px] sm:text-[9px]
                                landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]
@@ -190,7 +210,9 @@ export function RaceHUD() {
           </div>
         </div>
 
-        <div className="w-full landscape:hidden flex justify-center order-3 px-4">
+        {/* La jauge de poussee est un instrument de pilotage : sur une
+            course qu'on regarde, c'est une barre qui avance toute seule. */}
+        <div className={`w-full landscape:hidden flex justify-center order-3 px-4 ${rejeu ? 'hidden' : ''}`}>
           {/* Progress Bar : retiree en paysage (place au classement/chrono,
               plus de largeur pour voir la course), gardee en portrait ou
               elle ne gene pas. */}
@@ -212,7 +234,7 @@ export function RaceHUD() {
       {/* Mode fantome : le seul repere qui compte pendant un duel. Il occupe
           la bande libre sous le HUD, la ou l'oeil revient naturellement entre
           deux foulees, et il disparait des que la course est finie. */}
-      {isRace && ghostOn && !player?.finished && (
+      {isRace && ghostOn && !player?.finished && !rejeu && (
         <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
                         px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
           <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
@@ -409,7 +431,7 @@ export function RaceHUD() {
               </motion.div>
             )}
           </AnimatePresence>
-          {isCount && rival && (
+          {isCount && rival && !rejeu && (
             <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate
@@ -470,13 +492,15 @@ export function RaceHUD() {
         
         {ph === 0 && elapsed > 0.1 && transFlash <= 0 && reactFlash <= 0 && !player?.finished && (
           <div className="text-xs md:text-sm font-medium text-muted-foreground tracking-widest uppercase mt-4 md:mt-8 animate-pulse">
-            {N.t('drive_hint')}
+            {rejeu ? '' : N.t('drive_hint')}
           </div>
         )}
       </div>
 
-      {/* Leaderboard Overlay (Desktop only) */}
-      <div className="hidden md:block absolute left-4 top-[100px] w-64 bg-card/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+      {/* Leaderboard Overlay (Desktop only) — masque sur un rejeu : le
+          classement en metres est un instrument de course, et il dit « TOI »
+          a quelqu'un qui ne court pas. */}
+      <div className={`${rejeu ? 'hidden' : 'hidden md:block'} absolute left-4 top-[100px] w-64 bg-card/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl`}>
         {order.map((r, i) => {
           const col = r.isPlayer ? 'text-primary' : r.name === champion ? 'text-fuchsia-400' : 'text-foreground/90';
           return (
@@ -492,8 +516,9 @@ export function RaceHUD() {
         })}
       </div>
       
-      {/* gap to next runner (Mobile only) */}
-      <div className="block md:hidden absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10">
+      {/* gap to next runner (Mobile only) — meme raison : « −1,0 m Louis »
+          repond a une question de coureur, pas de spectateur. */}
+      <div className={`${rejeu ? 'hidden' : 'block md:hidden'} absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10`}>
         {(() => {
           // Pendant le photo-finish, c'est lui qui dit l'ecart : cet
           // indicateur-ci le mesure sur l'image, et c'est justement l'image

@@ -565,7 +565,16 @@ export function updateLogic(dt: number) {
     const step = 1 / 240;
     while (G.acc >= step) {
       G.acc -= step; G.elapsed += step;
-      G.player.stepPlayer(step, G.elapsed);
+      // EN REJEU, PERSONNE N'APPUIE.
+      //
+      // Une course de championnat qu'on revoit n'a pas de joueur : les huit
+      // couloirs sont pilotes par leur chrono. Le coureur que la camera suit
+      // occupe la place du joueur — c'est ce qui fait que le cadrage, le HUD
+      // et l'ecart affiche continuent de fonctionner — mais il avance comme
+      // les sept autres, par `stepAI`. Sans cette ligne il resterait plante
+      // dans ses blocs pendant que la course se deroule autour de lui.
+      if (G.rejeu) G.player.stepAI(step, G.elapsed);
+      else G.player.stepPlayer(step, G.elapsed);
       // Les haies, quand il y en a. Le moteur ne les connait pas : c'est le
       // jeu des haies qui se pose ici a l'armement, et qui se retire en
       // partant. Sans course de haies, cette ligne est un test qui echoue.
@@ -618,7 +627,36 @@ export function updateLogic(dt: number) {
     // du garde-fou. Le drapeau est pose par game/halloween.ts et retire avec
     // la nuit ; hors de ce mode il n'existe pas.
     const mordu = !!G.molosseMord;
-    if (out || slow || mordu || G.elapsed >= 90) {
+    // UN REJEU SE TERMINE SUR LE DERNIER, PAS SUR LE PREMIER.
+    //
+    // Une course jouee s'arrete peu apres le joueur : ce qui se passe derriere
+    // lui ne l'interesse plus. Une course qu'on REGARDE est l'inverse — on la
+    // coupe au moment ou le huitieme franchit la ligne, sans quoi la moitie
+    // du peloton disparait en pleine piste, et c'est precisement la fin qu'on
+    // voulait revoir.
+    const dernier = G.rejeu
+      ? G.runners.reduce((m: number, r: any) => Math.max(m, r.target || 0), 0)
+      : 0;
+    // Un rejeu n'a aucun resultat a annoncer : la course a deja eu lieu, et
+    // l'ecran de fin du one shot proposerait de defier un ami avec le chrono
+    // de quelqu'un d'autre. Il rend la main a `champ-rejeu`, qui ferme la
+    // prise video et affiche le tableau d'arrivee.
+    //
+    // LE DRAPEAU NE S'ETEINT PAS ICI, et c'est tout le piege : `slow` est vrai
+    // depuis longtemps quand le huitieme franchit la ligne — le coureur suivi,
+    // lui, a fini deux ou trois secondes plus tot. Eteindre `rejeu` a cet
+    // instant ferait retomber l'image suivante dans la branche ordinaire, et
+    // `finishRace` ouvrirait l'ecran du one shot par-dessus le tableau. Le
+    // rejeu reste donc arme jusqu'a ce que le spectateur referme le tableau.
+    if (G.rejeu) {
+      if (!G.rejeuFini && G.elapsed >= dernier + 2.5) {
+        G.rejeuFini = true;
+        for (const r of G.runners)
+          if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+        const fin = G.rejeuFin; G.rejeuFin = null;
+        if (fin) fin(); else SprinterApp.goHome();
+      }
+    } else if (out || slow || mordu || G.elapsed >= 90) {
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;
       SprinterApp.finishRace();

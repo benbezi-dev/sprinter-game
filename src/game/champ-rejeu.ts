@@ -1,0 +1,339 @@
+// REVOIR UNE COURSE DE CHAMPIONNAT
+//
+// Le championnat ne s'echangeait que des chronos : `/champ/course` recoit huit
+// nombres, `champ_resultats` en garde le chrono, la place et le couloir. Il n'y
+// avait donc rien a regarder — l'ecran remplissait un tableau, et la finale se
+// jouait en trois millimes que personne ne voyait passer.
+//
+// Ce module rejoue la course sur la piste du jeu. Il ne diffuse rien et ne
+// telecharge aucune image : le moteur est deja dans le telephone, et huit
+// chronos suffisent a le faire courir.
+//
+// COMMENT, EXACTEMENT.
+//
+// `Runner.setPace(T)` existait pour les adversaires de la campagne : on donne
+// un chrono vise, et le coureur le court — v(t) = vmax·(1 − e^(−t/τ)), calee
+// pour franchir la ligne a la seconde demandee. Il suffit donc de poser sur
+// les huit couloirs les huit chronos de la course, et la course se rejoue
+// d'elle-meme, avec ses ecarts exacts et son ordre d'arrivee exact.
+//
+// Ce qui n'est PAS reconstitue : la forme de la foulee, la reaction au
+// pistolet, un depart manque. Le chrono ne les porte pas. Quand une vraie
+// trace sera enregistree — le format existe deja pour les fantomes du defi,
+// des decimetres tous les 80 ms — elle remplacera le modele ici, et rien
+// d'autre ne bougera.
+//
+// LE SPECTATEUR OCCUPE UN COULOIR. La camera suit `G.player`, le HUD lit
+// `G.player`, l'enregistreur filme ce que la camera cadre. Plutot que de leur
+// apprendre a tous qu'un coureur peut n'etre personne, on met le coureur suivi
+// a la place du joueur et on le fait avancer par `stepAI` (voir `G.rejeu` dans
+// engine.ts). Personne n'appuie, tout le reste fonctionne sans le savoir.
+
+import { programmerLeFilm, arreterLeFilm } from './film-course';
+
+const SprinterApp: any = (globalThis as any).SprinterApp;
+const SprinterCore: any = (globalThis as any).SprinterCore;
+
+export type CoureurRejeu = {
+  nom: string;
+  /** Le chrono couru, en millisecondes. `null` pour un abandon. */
+  ms: number | null;
+  /** Le couloir de la grille, 1 a 8. Absent : l'ordre de la liste. */
+  couloir?: number;
+  /** Celui que la camera suit. Un seul ; a defaut, le vainqueur. */
+  suivi?: boolean;
+  /**
+   * Le joueur de ce telephone, s'il courait cette course-la.
+   *
+   * Il est le seul a garder l'apparence du joueur (`PLAYER_LOOK`) : tous les
+   * autres reprennent celle que le jeu leur donne partout ailleurs, derivee de
+   * leur nom. Sans cette distinction, ou bien le joueur se voit en inconnu sur
+   * sa propre course, ou bien sept athletes portent son maillot.
+   */
+  moi?: boolean;
+};
+
+/**
+ * Le decor.
+ *
+ * Quatre, c'est le stade olympique : une piste d'athletisme et des gradins
+ * pleins. Cinq serait la finale intergalactique des ZEZE, ou la course en
+ * direct se tient — mais un championnat de France sous un ciel cosmos ne
+ * ressemble a rien de ce qu'il pretend etre, et une video tiree de la ne
+ * raconte plus une competition nationale.
+ */
+const NIVEAU = 4;
+
+/** Un abandon n'a pas de chrono ; il en faut un pour le dessiner quand meme. */
+const RETARD_ABANDON_MS = 2500;
+
+/* ---------------------------------------------------------------------------
+   CE QUE L'ECRAN SAIT DE LA COURSE EN COURS
+   ---------------------------------------------------------------------------
+   PAS DE NOM AU-DESSUS DES TETES.
+
+   Huit pastilles suspendues au-dessus de huit coureurs, sur un telephone
+   tenu a bout de bras, cachent exactement ce qu'on est venu voir : la piste
+   et les corps qui courent. Elles ont leur place dans un duel, ou l'on
+   cherche UN adversaire parmi sept figurants ; elles n'en ont aucune dans une
+   finale a huit, ou tout le monde compte.
+
+   On dit donc qui court AUTREMENT, et aux deux moments ou la question se
+   pose vraiment :
+
+   - AVANT le pistolet, la liste de depart — couloir par couloir, comme le
+     speaker l'annonce et comme la television l'affiche ;
+   - APRES la ligne, le tableau — place, nom, chrono.
+
+   Entre les deux, il ne reste que la course. La couleur du couloir, posee au
+   sol sous chaque coureur, suffit a suivre quelqu'un sur dix secondes : c'est
+   ce que fait un spectateur dans un stade, qui n'a pas d'etiquette non plus.
+--------------------------------------------------------------------------- */
+
+export type EtatRejeu = {
+  /** Une course est armee ou en train de se derouler. */
+  actif: boolean;
+  /**
+   * Ou en est la retransmission.
+   *
+   *   'presentation' le generique et les huit athletes, un par un
+   *   'course'       le pistolet a tire ; l'ecran se tait
+   *   'arrivee'      le tableau
+   */
+  phase: 'presentation' | 'course' | 'arrivee';
+  /** « Demi-finale 1 », « Finale » — ce qu'on regarde. */
+  titre: string;
+  /** Le nom de la competition, sous le titre. */
+  sousTitre: string;
+  /** La grille, dans l'ordre des couloirs. */
+  grille: { couloir: number; nom: string }[];
+  /** L'arrivee, une fois la ligne franchie par tout le monde. */
+  arrivee: { place: number; nom: string; ms: number | null }[] | null;
+};
+
+const VIDE: EtatRejeu = {
+  actif: false, phase: 'presentation', titre: '', sousTitre: '',
+  grille: [], arrivee: null,
+};
+
+let etat: EtatRejeu = VIDE;
+const guetteurs = new Set<() => void>();
+
+function poser(e: EtatRejeu) {
+  etat = e;
+  for (const g of guetteurs) { try { g(); } catch { /* un ecran casse n'arrete pas les autres */ } }
+}
+
+/** Pour `useSyncExternalStore` : l'abonnement, et la lecture. */
+export function suivreRejeu(f: () => void): () => void {
+  guetteurs.add(f);
+  return () => { guetteurs.delete(f); };
+}
+export function lireRejeu(): EtatRejeu { return etat; }
+
+/**
+ * Referme le tableau et rentre a l'accueil.
+ *
+ * C'est ici, et seulement ici, que le rejeu se desarme : tant que le tableau
+ * est a l'ecran, le moteur doit continuer de se savoir en rejeu — sans quoi il
+ * rattraperait la course par sa sortie ordinaire et ouvrirait l'ecran de fin
+ * du one shot par-dessus (voir engine.ts).
+ */
+export function fermerRejeu() {
+  const G = SprinterApp?.G;
+  if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; }
+  poser(VIDE);
+  SprinterApp?.goHome();
+}
+
+/**
+ * Rejoue une course a partir de ses chronos.
+ *
+ * @param epreuve  '100', '200', '400' — la distance de l'edition.
+ * @param coureurs les huit partants, avec leur chrono.
+ * @param dansMs   delai avant le coup de pistolet. Le decompte du starter est
+ *                 borne a [3 s, 10 s] par le moteur : en dessous de trois
+ *                 secondes il l'etire, et le pistolet tombe plus tard qu'on ne
+ *                 l'a demande. Voir `dessinerLeDepart`.
+ */
+export function rejouerCourse(
+  epreuve: string,
+  coureurs: CoureurRejeu[],
+  dansMs = 3500,
+  filmer = true,
+  intitule: { titre: string; sousTitre: string } = { titre: '', sousTitre: '' },
+): boolean {
+  const app = SprinterApp;
+  if (!app || !coureurs || coureurs.length === 0) return false;
+  const G = app.G;
+
+  // Le pire chrono de la course sert de base aux abandons : ils finissent
+  // derriere tout le monde, ce qui est exact, plutot que de disparaitre.
+  const chronos = coureurs.map(c => c.ms).filter((m): m is number => m != null);
+  const pire = chronos.length ? Math.max(...chronos) : 12000;
+  const secondes = (c: CoureurRejeu) => (c.ms == null ? pire + RETARD_ABANDON_MS : c.ms) / 1000;
+
+  // Qui la camera suit : le coureur demande, sinon le vainqueur — c'est lui
+  // qu'on veut cadrer quand on ne connait personne dans la course.
+  const suivi = coureurs.find(c => c.suivi) || coureurs.find(c => c.moi)
+    || coureurs.reduce((a, b) => (secondes(b) < secondes(a) ? b : a));
+
+  /**
+   * L'APPARENCE SE DERIVE DU NOM, comme partout ailleurs dans le jeu.
+   *
+   * `Runner` calcule son allure a la construction, depuis le nom qu'on lui
+   * donne : `lookFor(nom, pool)` — morphologie, carnation, maillot, chaussures.
+   * Renommer un coureur apres coup, ce que fait ce module, laisse donc en
+   * place l'apparence du figurant qu'il remplace : « Jules Bonnet » courait
+   * sous les traits de Blaze Kade, et le coureur suivi sous ceux du joueur.
+   * Deux personnes qui se connaissent ne se reconnaissaient pas sur la course
+   * qu'elles venaient de courir.
+   *
+   * On recalcule donc, avec le pool de l'etape — le meme que celui dont le jeu
+   * se sert pour dessiner un fantome ou un adversaire de cette etape-la.
+   */
+  const pool = SprinterCore?.LEVELS?.[NIVEAU]?.pool;
+  const habiller = (r: any, c: CoureurRejeu) => {
+    if (c.moi) { r.look = SprinterCore.PLAYER_LOOK; return; }
+    if (SprinterCore?.lookFor) r.look = SprinterCore.lookFor(c.nom, pool);
+  };
+
+  // Monte la piste et son plateau : huit couloirs, decompte suspendu
+  // (`startLive` laisse `countT` a −99 tant que le depart n'est pas pose).
+  // `autres: []` est volontaire — on ne branche aucun adversaire reseau, on
+  // garde les sept coureurs que `buildLevel` a poses et on les repeint.
+  app.startLive([epreuve], { levelIdx: NIVEAU, adversaire: '', autres: [] });
+
+  const ia = G.runners.filter((r: any) => !r.isPlayer);
+  const aPlacer = coureurs.filter(c => c !== suivi);
+
+  // Le couloir annonce par la grille quand il y en a un, sinon l'ordre de la
+  // liste. Le joueur garde le sien (3) : c'est celui que la camera vise.
+  const parCouloir = [...aPlacer].sort((a, b) => (a.couloir ?? 99) - (b.couloir ?? 99));
+
+  ia.forEach((r: any, i: number) => {
+    const c = parCouloir[i];
+    if (!c) {
+      // Plus de couloirs que de partants : on retire le figurant plutot que de
+      // le laisser courir un chrono invente a cote d'une vraie course.
+      r.horsCourse = true;
+      return;
+    }
+    r.name = c.nom;
+    habiller(r, c);
+    r.setPace(secondes(c));
+    // NI CERCEAU NI PASTILLE.
+    //
+    // Huit cercles de couleur et huit etiquettes suspendues, c'est l'interface
+    // d'un jeu ; une finale n'en a pas. Les couloirs sont numerotes sur la
+    // piste, les athletes ont ete presentes un par un, et ils restent chacun
+    // dans leur couloir du depart a l'arrivee : il n'en faut pas plus pour
+    // suivre quelqu'un sur dix secondes. Le repere reste pour le joueur, et
+    // pour lui seul — voir plus bas.
+    r.repere = null;
+  });
+  G.runners = G.runners.filter((r: any) => !r.horsCourse);
+
+  // Le coureur suivi prend la place du joueur — son nom, son allure, et son
+  // apparence : il n'est « le joueur » que s'il l'est vraiment.
+  G.player.name = suivi.nom;
+  habiller(G.player, suivi);
+  G.player.setPace(secondes(suivi));
+  // LE SEUL REPERE QUI RESTE EST CELUI DU JOUEUR, et il ne s'allume que s'il
+  // courait vraiment cette course-la. Se retrouver soi-meme parmi huit est la
+  // premiere chose qu'on cherche ; c'est aussi la seule qu'aucune liste de
+  // depart ne peut donner en pleine course. Un spectateur, lui, n'a personne a
+  // retrouver : la piste reste nue.
+  G.player.repere = suivi.moi
+    ? { couleur: app.couleurCouloir(G.player.lane + 1), nom: app.N.t('you'), moi: true }
+    : null;
+
+  // Le favori du HUD, c'est le vainqueur de cette course-la et pas un nom tire
+  // du plateau de la campagne.
+  const meilleur = coureurs.reduce((a, b) => (secondes(b) < secondes(a) ? b : a));
+  G.champion = meilleur.nom;
+  G.championTime = secondes(meilleur);
+
+  // Apres l'armement, jamais avant : `buildLevel` eteint le drapeau.
+  G.rejeu = true;
+
+  // La grille telle qu'elle sera annoncee avant le pistolet : les couloirs
+  // reels du moteur, et non l'ordre de la liste d'entree — c'est cette
+  // liste-la que le spectateur va comparer avec ce qu'il voit sur la piste.
+  const grille = [...G.runners]
+    .map((r: any) => ({ couloir: r.lane + 1, nom: r.name }))
+    .sort((a, b) => a.couloir - b.couloir);
+  poser({
+    actif: true, phase: 'presentation',
+    titre: intitule.titre, sousTitre: intitule.sousTitre,
+    grille, arrivee: null,
+  });
+
+  // CE QUI SE PASSE QUAND LE HUITIEME A FRANCHI LA LIGNE.
+  //
+  // Le moteur appelle ce rappel (voir engine.ts), et l'ordre compte : la
+  // prise se ferme AVANT le retour a l'accueil. Le crochet du film jette
+  // toute prise encore en cours d'enregistrement quand l'etat revient a
+  // « title » — une camera qu'on laisserait tourner jusque-la perdrait la
+  // course qu'elle vient de filmer, sans une erreur.
+  //
+  // Le genre est « direct », et pas « oneshot » : c'est ce qui met la prise
+  // hors d'atteinte de la regle qui jette les films du one shot en quittant
+  // une course.
+  //
+  // ET ON NE RENTRE PAS TOUT DE SUITE. La course finie, l'ecran passe au
+  // tableau : place, nom, chrono. C'est la reponse a « qui vient de courir »
+  // qu'on a retiree de la piste, et c'est aussi ce qu'on regarde deux fois
+  // quand l'arrivee s'est jouee en centiemes. Le retour a l'accueil attend
+  // que le spectateur ferme le tableau (voir `fermerRejeu`).
+  G.rejeuFin = () => {
+    const tableau = () => poser({
+      ...etat, phase: 'arrivee',
+      arrivee: [...coureurs]
+        .sort((a, b) => secondes(a) - secondes(b))
+        .map((c, i) => ({ place: i + 1, nom: c.nom, ms: c.ms })),
+    });
+    if (!filmer) return tableau();
+    // La prise se ferme d'abord : le tableau n'a pas a entrer dans le film.
+    void arreterLeFilm('direct').then(tableau, tableau);
+  };
+
+  // LE DEPART N'EST PAS DONNE ICI.
+  //
+  // La piste est montee, les huit sont dans leurs couloirs, et `startLive` a
+  // laisse le decompte suspendu (`countT` a −99) : c'est exactement l'etat ou
+  // le moteur joue la presentation — camera qui glisse d'un athlete a l'autre,
+  // bras leves, foule. On le laisse dans cet etat le temps du generique et des
+  // huit presentations ; c'est l'ecran qui rend la main en appelant
+  // `lancerLeDepartDuRejeu` (voir RejeuChampionnat).
+  //
+  // Le faire ici obligerait a annoncer un depart a vingt secondes — que
+  // `dessinerLeDepart` refuserait, sa sequence etant bornee a dix.
+  departProgramme = { dansMs, filmer };
+  return true;
+}
+
+/** Ce qu'il reste a faire quand la presentation s'acheve. */
+let departProgramme: { dansMs: number; filmer: boolean } | null = null;
+
+/**
+ * La presentation est finie : le starter peut appeler.
+ *
+ * Appelee par l'ecran, une seule fois. C'est ici que la camera commence a
+ * tourner, et pas avant : un film qui contiendrait vingt secondes de
+ * presentation ne serait plus une course.
+ */
+export function lancerLeDepartDuRejeu() {
+  const d = departProgramme;
+  if (!d) return;
+  departProgramme = null;
+  poser({ ...etat, phase: 'course' });
+  SprinterApp.liveDepart(d.dansMs, null);
+  if (d.filmer) programmerLeFilm('direct', d.dansMs);
+}
+
+/** Vrai si une course rejouee est en train de se derouler. */
+export function enRejeu(): boolean {
+  const G = SprinterApp?.G;
+  return !!(G && G.rejeu && (G.state === 'count' || G.state === 'race'));
+}

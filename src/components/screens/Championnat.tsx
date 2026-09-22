@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, RESSORT } from '@/lib/mouvement';
-import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Crown } from 'lucide-react';
+import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Crown, Play } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { Drapeau, drapeauDe } from '@/components/Insignes';
+import { rejouerCourse } from '@/game/champ-rejeu';
+import { getSavedName } from '@/game/leaderboard';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { ReviewVideo } from './ReviewVideo';
 import {
   etatEdition, fluxDirect, prochain, grille, arrivee,
   bossVu, marquerBossVu,
@@ -140,10 +144,55 @@ function Grille({ e }: { e: Edition }) {
                          direct={!!r && r.place <= e.directsParCourse} />
               );
             })}
+            {courue && (
+              <BoutonRevoir
+                epreuve={e.epreuve} arrivees={fin}
+                titre={`${SprinterApp.N.phaseNom(e.phase, e.phaseNom)}${e.courses > 1 ? ' ' + course : ''}`}
+                sousTitre={`${e.titre} · ${e.epreuve} M`} />
+            )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+/* ------------------------------------------------------- revoir la course */
+
+/**
+ * Une course courue se regarde.
+ *
+ * Le championnat n'echange que des chronos ; la piste, elle, est deja dans le
+ * telephone. Huit chronos suffisent donc a rejouer la course — voir
+ * `champ-rejeu`. Rien ne se telecharge, et l'ecart d'arrivee est exactement
+ * celui que le tableau affiche au-dessus.
+ *
+ * La camera suit le joueur s'il courait cette course-la, et le vainqueur
+ * sinon : on ne cadre pas un inconnu quand on regarde une finale.
+ */
+function BoutonRevoir({ epreuve, arrivees, titre, sousTitre }: {
+  epreuve: string;
+  arrivees: { name_key: string; nom: string; ms: number | null }[];
+  titre: string;
+  sousTitre: string;
+}) {
+  if (!arrivees.length) return null;
+  const moi = (getSavedName() || '').trim().toLowerCase();
+  const revoir = () => {
+    rejouerCourse(
+      epreuve,
+      arrivees.map(r => ({ nom: r.nom, ms: r.ms, moi: !!moi && r.name_key === moi })),
+      3500, true, { titre, sousTitre },
+    );
+  };
+  return (
+    <button onClick={revoir}
+      className="mt-1 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                 border border-primary/40 bg-primary/10 text-primary
+                 text-[10px] font-bold tracking-widest active:scale-95 transition">
+      <Play className="w-3 h-3" />
+      {SprinterApp.N.t('champ_revoir')}
+    </button>
   );
 }
 
@@ -586,6 +635,15 @@ export function Championnat({ edition, onQuitter }: {
   const [boss, setBoss] = useState(false);
   const [podium, setPodium] = useState(false);
   const [maintenant, setMaintenant] = useState(Date.now());
+
+  /**
+   * LA VIDEO DE LA COURSE QU'ON VIENT DE REVOIR.
+   *
+   * Le rejeu filme ce qu'il rejoue (voir `champ-rejeu`) et rentre ici. La
+   * prise porte le genre « direct », partage avec le salon du meme nom : on ne
+   * montre donc le bouton que lorsqu'elle est prete.
+   */
+  const film = useFilmDeLaCourse();
   const curseur = useRef(0);
   const vu = useRef(new Set<number>());
 
@@ -747,6 +805,10 @@ export function Championnat({ edition, onQuitter }: {
         {/* L'entracte : entre deux courses, le stade continue de parler. */}
         {rv && e.etat !== 'terminee' && (
           <Entracte e={e} secondes={(rv.at - maintenant) / 1000} />
+        )}
+
+        {film.genre === 'direct' && (film.phase === 'prete' || film.phase === 'expiree') && (
+          <ReviewVideo etat={film} onPartager={partagerLeFilm} />
         )}
 
         <Grille e={e} />

@@ -32,6 +32,7 @@ import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { Generique } from '@/components/screens/Generique';
 import { RaceHUD } from '@/components/screens/RaceHUD';
+import { RejeuChampionnat } from '@/components/screens/RejeuChampionnat';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
@@ -296,6 +297,11 @@ function MainGame() {
             concerne, celui des haies. */}
         {(state === 'count' || state === 'race') && !enPresentation
           && !tutoHaies && !tutoSprint && <RaceHUD />}
+        {/* Une course de championnat qu'on revoit : la presentation des
+            athletes avant le pistolet, le tableau apres la ligne. Elle se
+            monte a cote du HUD et non dedans — elle survit a la fin de la
+            course, ou le HUD n'a plus rien a dire. */}
+        <RejeuChampionnat />
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
