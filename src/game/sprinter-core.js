@@ -1819,7 +1819,7 @@
     // LA CLOCHE DE TRANSITION : nulle a la fin de la poussee, pleine au
     // milieu du redressement, nulle une fois le corps droit. `legStart` la
     // recale sur la portion de chaque relayeur.
-    const dTr = (r.d - (r.legStart || 0));
+    const dTr = (Number.isFinite(r.d) ? r.d : 0) - (r.legStart || 0);
     const uTr = (dTr - C.DRIVE_END) / Math.max(1, C.TRANS_END - C.DRIVE_END);
     // ET ELLE NE BAT QU'EN FOULEE VELOCE. La mecanique de DEPART, elle, reste
     // a tout le monde : personne ne sort des blocs autrement, et c'est la
