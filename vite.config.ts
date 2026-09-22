@@ -90,9 +90,20 @@ const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
 --------------------------------------------------------------------------- */
 
 function pagesDApercu(base: string) {
+  /* OU ECRIRE : LE DOSSIER DE SORTIE, JAMAIS « dist » EN DUR.
+     Le deploiement construit DEUX fois — la racine dans `dist`, puis la version
+     de test dans `dist-test` avec `--outDir` — et ne deplace la seconde dans
+     `dist/test` qu'ensuite. Ecrit en dur, ce plugin ecrivait les deux fois au
+     meme endroit : le second build ecrasait les pages de la racine avec
+     celles qui renvoient vers `/test/`, et tout lien de defi partage envoyait
+     les joueurs sur la version de test. Constate en production. */
+  let sortie = 'dist';
   return {
     name: 'sprinter-apercu-par-epreuve',
     apply: 'build' as const,
+    configResolved(config: { build: { outDir: string } }) {
+      sortie = config.build.outDir;
+    },
     closeBundle() {
       const source = fs.readFileSync(
         path.resolve(import.meta.dirname, 'index.html'), 'utf8');
@@ -140,11 +151,11 @@ function pagesDApercu(base: string) {
   </body>
 </html>
 `;
-        const dossier = path.resolve(import.meta.dirname, 'dist/defi', cle);
+        const dossier = path.resolve(import.meta.dirname, sortie, 'defi', cle);
         fs.mkdirSync(dossier, { recursive: true });
         fs.writeFileSync(path.join(dossier, 'index.html'), html);
       }
-      console.log(`  apercu : ${EPREUVES_APERCU.length} pages dans dist/defi/ (${EPREUVES_APERCU.map(titreLong).join(', ')})`);
+      console.log(`  apercu : ${EPREUVES_APERCU.length} pages dans ${sortie}/defi/ vers ${base}`);
     },
   };
 }
