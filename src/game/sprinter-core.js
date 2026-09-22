@@ -103,6 +103,24 @@
     DRIVE_END: 15.0,          // fin de la phase de poussee, en metres
     TRANS_END: 40.0,          // corps entierement redresse
     DRIVE_PITCH: 0.62,        // inclinaison du corps a la sortie des blocs
+    // LA MECANIQUE DE DEPART, et pourquoi elle ne peut pas venir de la vitesse.
+    //
+    // L'amplitude des membres suit `A`, qui suit la vitesse : 0,34 a l'arret,
+    // 1 a pleine vitesse. C'est juste en course — un coureur qui ralentit leve
+    // moins haut — et c'est FAUX a la sortie des blocs, ou la vitesse est
+    // presque nulle et la mecanique a son maximum. Le jeu jouait donc
+    // exactement l'inverse de ce qu'on voit sur une piste : trois petits pas
+    // timides, la ou un sprinteur projette son genou le plus loin devant de
+    // toute sa course.
+    //
+    // Ces trois nombres RENDENT l'amplitude pendant la sortie, et un peu plus
+    // que la pleine course : cuisse a 1,14 au premier appui contre 1,00 lance,
+    // genou a 1,07, bras a 1,05. Ils s'eteignent sur la meme courbe que
+    // l'inclinaison du buste (pitchAt, jusqu'a TRANS_END) — c'est la meme
+    // phase, et elle doit se lire dans la jambe comme elle se lit dans le dos.
+    DRIVE_THIGH: 0.80,        // amplitude de cuisse rendue a la sortie
+    DRIVE_KNEE: 0.45,         // flexion de genou, idem
+    DRIVE_ARM: 0.35,          // amplitude des bras, idem
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
     REACT_BEST: 0.12,
@@ -1661,6 +1679,16 @@
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
     const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
+    // OU L'ON EN EST DE LA SORTIE DES BLOCS : 1 au premier appui hors des
+    // blocs, 0 une fois le corps redresse (TRANS_END). On le lit sur
+    // l'inclinaison que le moteur tient deja plutot que de recalculer une
+    // distance : les deux doivent s'eteindre ensemble, sans quoi le buste se
+    // redresserait avant la jambe, ou l'inverse.
+    //
+    // DANS les blocs, rien : on n'y court pas, et la posture posee
+    // (BLOC, plus bas) doit rester exactement ce qu'elle est.
+    const wBloc = Math.max(0, Math.min(1, r.enBloc || 0));
+    const sortie = Math.max(0, Math.min(1, (r.drivePitch || 0) / C.DRIVE_PITCH)) * (1 - wBloc);
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
     let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
@@ -1675,13 +1703,16 @@
     // une impression de mouvement disloque plutot que coordonne.
     const LIMB_BOOST = P.boost;
     function leg(q) {
-      const th = gait(P.thigh, q) * A * LIMB_BOOST;
-      const kn = gait(P.knee, q) * (0.42 + 0.58 * A) * LIMB_BOOST;
+      const th = gait(P.thigh, q) * (A + C.DRIVE_THIGH * sortie) * LIMB_BOOST;
+      const kn = gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie) * LIMB_BOOST;
+      // La cheville ne recoit pas la sortie : au depart le pied reste arme,
+      // il ne fouette pas. L'amplifier donnait un coup de talon de patineur.
       const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(P.arm, q) * (0.55 + 0.45 * A) * LIMB_BOOST * P.armAmp;
+      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortie)
+                 * LIMB_BOOST * P.armAmp;
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
