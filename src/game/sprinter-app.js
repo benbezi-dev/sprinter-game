@@ -5070,7 +5070,7 @@
         const g2 = ground(q[0], q[1]);
         if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) continue;
         const cap = T.heading(0, e) * 180 / Math.PI + vue;
-        if (DEC().bloc(ctx, apiDecor(), q[0], q[1], cap)) continue;
+        DEC().bloc(ctx, apiDecor(), q[0], q[1], cap); continue;
       }
       // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
       // dont sept hors champ ne doivent rien couter.
