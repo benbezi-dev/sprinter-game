@@ -33,9 +33,23 @@
 // QUAND IL APPARAIT. Jamais tout seul. Une arrivee etalee n'a rien a faire
 // dans un releve : l'image ne dirait que ce que le tableau dit deja, en moins
 // clair. Voir `arriveeSerree`.
+//
+// IL EST DE LA VOIX DES JOURS DE COMPETITION — bleu nuit, degrade orange — et
+// non de la voix ordinaire du jeu. Il l'a d'abord ete, et c'etait un defaut :
+// le releve et l'affiche du resultat (`affiche-champ`) sortent de la MEME
+// course, le meme jour, par le meme bouton du meme tableau, et tombent dans le
+// meme fil a quelques secondes d'intervalle. Deux habillages pour un seul
+// evenement se voient — c'est la regle que `voix-competition` enonce, et elle
+// vaut ici plus qu'ailleurs puisque les deux images se suivent.
+//
+// Ce qu'on lui prend, ce sont les VALEURS : le bleu nuit, le halo, la flamme,
+// les encres par role. Pas la mise en page — un releve n'a pas la composition
+// d'une affiche de resultat, et remonter les proportions ferait un moule au
+// lieu d'une voix.
 
 import { policesPretes, sortir, type Sortie } from './affiche';
-import { FOND, OR, or, ENCRE } from './palette-affiche';
+import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
+import { NUIT, HALO, ENCRE, peindreLeFond, flammeSur } from './voix-competition';
 
 const SprinterCore: any = (globalThis as any).SprinterCore;
 
@@ -264,7 +278,11 @@ export function dessinerReleve(
 
   // le panneau du bord de piste, qui bouche l'horizon
   ctx.fillStyle = '#eceef2'; ctx.fillRect(X, Y, L, hPan);
-  ctx.fillStyle = 'rgba(104,28,84,0.9)';
+  // LE PANNEAU EST DU BLEU DE LA VOIX, et pas d'une couleur de stade prise au
+  // hasard : c'est la seule surface peinte du releve, tout le reste etant la
+  // piste telle que la fente la voit. Une teinte etrangere y ferait une tache
+  // au milieu d'une carte qui, elle, est tenue.
+  ctx.fillStyle = HALO.coeur;
   ctx.fillRect(X, Y + hPan * 0.14, L, hPan * 0.72);
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.font = `900 ${(hPan * 0.4).toFixed(0)}px Outfit, sans-serif`;
@@ -310,9 +328,9 @@ export function dessinerReleve(
   places.forEach((l, i) => {
     const x = xDe(l.ms as number), premier = i === 0;
     const w = hPan * 0.62, h = hPan * 0.48, y = Y + hPan - h - hPan * 0.1;
-    ctx.fillStyle = premier ? OR : 'rgba(10,12,18,0.88)';
+    ctx.fillStyle = premier ? flammeSur(ctx, x - w / 2, y, w, h) : 'rgba(10,12,18,0.88)';
     arrondi(ctx, x - w / 2, y, w, h, h * 0.26); ctx.fill();
-    ctx.fillStyle = premier ? FOND : '#fff';
+    ctx.fillStyle = premier ? ENCRE.surPastille : '#fff';
     ctx.font = `900 ${(h * 0.66).toFixed(0)}px Outfit, sans-serif`;
     ctx.fillText(String(i + 1), x, y + h / 2 + 1);
   });
@@ -321,7 +339,7 @@ export function dessinerReleve(
   ctx.textAlign = 'right';
   parCouloir.forEach(l => {
     const i = (l.couloir as number) - 1;
-    ctx.fillStyle = l.moi ? OR : 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = l.moi ? ENCRE.vif : ENCRE.etiquette;
     ctx.font = '700 15px "Space Mono", monospace';
     ctx.fillText(String(l.couloir), X - 10, (bord(i) + bord(i + 1)) / 2);
   });
@@ -329,13 +347,13 @@ export function dessinerReleve(
   // L'ECHELLE DU TEMPS, sous l'image. Sans elle, une bande de coureurs ne dit
   // pas de combien ils sont separes — et c'est la seule chose qu'on lui demande.
   const yE = Y + H, hE = Math.max(34, H * 0.09);
-  ctx.fillStyle = FOND; ctx.fillRect(X, yE, L, hE);
+  ctx.fillStyle = NUIT; ctx.fillRect(X, yE, L, hE);
   ctx.textAlign = 'center';
   const pas = (t1 - t0) > 400 ? 20 : 10;
   const fort = (t1 - t0) > 400 ? 100 : 50;
   for (let ms = Math.ceil(t0 / pas) * pas; ms <= t1; ms += pas) {
     const x = xDe(ms), gros = ms % fort === 0;
-    ctx.fillStyle = gros ? OR : 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = gros ? ENCRE.vif : ENCRE.etiquette;
     ctx.fillRect(x, yE, 1, gros ? hE * 0.3 : hE * 0.17);
     if (gros) {
       ctx.font = `700 ${(hE * 0.4).toFixed(0)}px "Space Mono", monospace`;
@@ -347,21 +365,45 @@ export function dessinerReleve(
 
 /* ---------------------------------------------------------- la carte */
 
-/** La date et l'heure de la course, dans la langue du joueur. */
-function quandEcrit(quand: number | null): string {
+/** La date et l'heure, a l'heure d'ici — le calendrier, lui, est en UTC. */
+function quandEcrit(quand: number | null, lang: string): string {
   if (quand == null) return '';
   try {
-    const N: any = (globalThis as any).SprinterApp?.N;
-    const lang = N?.getLang?.() === 'en' ? 'en-GB' : 'fr-FR';
     const d = new Date(quand);
-    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', year: 'numeric' })
-      + ' · ' + d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+    const j = d.toLocaleDateString(lang, { day: 'numeric', month: 'long', year: 'numeric' });
+    const h = d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+    return `${j} · ${h}`;
   } catch { return ''; }
 }
 
-/** Le format partageable : portrait, celui des visuels du compte. */
+/** Le chrono, comme les cartes l'ecrivent : virgule en francais. */
+function chronoEcrit(ms: number | null, fr: boolean): string {
+  if (ms == null) return '—';
+  const t = (ms / 1000).toFixed(3);
+  return (fr ? t.replace('.', ',') : t) + ' s';
+}
+
+/** Une gelule, comme le `border-radius:999px` des cartes. */
+function gelule(ctx: CanvasRenderingContext2D, x: number, y: number, l: number, h: number) {
+  const r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + l, y, x + l, y + h, r);
+  ctx.arcTo(x + l, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + l, y, r);
+  ctx.closePath();
+}
+
+/**
+ * LE FORMAT DU FIL, celui des cartes du compte et de l'affiche du resultat.
+ *
+ * Il tenait avant sur 1500 de haut, et les 150 en moins ne se prennent pas au
+ * releve — c'est lui le sujet. Elles se prennent aux huit lignes du tableau,
+ * qui se lisent aussi bien serrees.
+ */
 export const LARGEUR = 1080;
-export const HAUTEUR = 1500;
+export const HAUTEUR = 1350;
 
 /**
  * Dessine la carte complete dans un canvas.
@@ -371,18 +413,17 @@ export const HAUTEUR = 1500;
  * donc l'en-tete de la competition au-dessus et l'ordre d'arrivee au-dessous —
  * et c'est le tableau, pas l'image, qui donne les noms et les milliemes.
  */
-export function dessinerPhotoFinish(cv: HTMLCanvasElement, c: CoursePhoto) {
+export function dessinerPhotoFinish(cv: HTMLCanvasElement, c: CoursePhoto, fr = true) {
   cv.width = LARGEUR; cv.height = HAUTEUR;
   const ctx = cv.getContext('2d');
   if (!ctx) return;
-  const W = LARGEUR, H = HAUTEUR;
+  const L = LARGEUR, H = HAUTEUR;
 
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#0b1020'); g.addColorStop(1, FOND);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const lu = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, W * 0.7);
-  lu.addColorStop(0, or(0.13)); lu.addColorStop(1, or(0));
-  ctx.fillStyle = lu; ctx.fillRect(0, 0, W, H * 0.38);
+  peindreLeFond(ctx, L, H);
+
+  const M = Math.round(L * 0.082);
+  const dispo = L - M * 2;
+  const cx = L / 2;
 
   const N: any = (globalThis as any).SprinterApp?.N;
   const t = (cle: string, secours: string) => {
@@ -390,85 +431,106 @@ export function dessinerPhotoFinish(cv: HTMLCanvasElement, c: CoursePhoto) {
     return v && v !== cle ? v : secours;
   };
 
-  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.letterSpacing = '7px';
-  ctx.fillStyle = `rgba(255,255,255,${ENCRE.surtitre})`;
-  ctx.font = '700 19px Outfit, sans-serif';
-  ctx.fillText(c.competition.toUpperCase(), W / 2, 88);
-  ctx.letterSpacing = '4px';
-  ctx.fillStyle = OR;
-  ctx.font = '900 52px Outfit, sans-serif';
-  ctx.fillText(`${c.nomCourse.toUpperCase()} · ${c.epreuve} M`, W / 2, 152);
-  ctx.letterSpacing = '3px';
-  ctx.fillStyle = `rgba(255,255,255,${ENCRE.etiquette * 0.85})`;
-  ctx.font = '700 16px "Space Mono", monospace';
-  const quand = quandEcrit(c.quand);
-  if (quand) ctx.fillText(quand.toUpperCase(), W / 2, 188);
-  ctx.letterSpacing = '0px';
+  // --- le kicker : de quelle competition il s'agit.
+  let y = Math.round(H * 0.072);
+  const eKick = { taille: 28, gras: 700, police: AFFICHE, couleur: ENCRE.kicker,
+                  espace: 28 * 0.36, aligne: 'center' as CanvasTextAlign };
+  ecrire(ctx, tailler(ctx, `${c.competition} · ${c.epreuve}`.toUpperCase(), dispo, eKick),
+         cx, y, eKick);
 
-  const ecart = ecartLePlusSerre(c.lignes);
-  ctx.letterSpacing = '5px';
-  ctx.fillStyle = OR;
-  ctx.font = '900 17px Outfit, sans-serif';
-  ctx.fillText(t('pf_titre', 'PHOTO-FINISH'), W / 2, 236);
-  ctx.letterSpacing = '0px';
+  // --- le titre : la course, en grand, dans la flamme.
+  y += 72;
+  const eTitre = { taille: 88, gras: 900, police: AFFICHE,
+                   couleur: flammeSur(ctx, M, y - 56, dispo, 88),
+                   aligne: 'center' as CanvasTextAlign };
+  ecrire(ctx, tailler(ctx, c.nomCourse.toUpperCase(), dispo, eTitre), cx, y, eTitre);
 
-  dessinerReleve(ctx, 60, 268, 960, 430, c);
-
-  // CE QUE L'IMAGE A DEPARTAGE, juste sous elle. C'est la legende du releve et
-  // non un pied de carte : elle dit pourquoi cette image existe, et elle doit
-  // se lire dans le meme regard que la bande.
-  if (ecart != null) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = `rgba(255,255,255,${ENCRE.lien})`;
-    ctx.font = '700 17px "Space Mono", monospace';
-    ctx.fillText(t('pf_ecart', 'ÉCART LE PLUS SERRÉ') + ' : '
-      + (ecart / 1000).toFixed(3).replace('.', ',') + ' s', W / 2, 770);
+  const quand = quandEcrit(c.quand, fr ? 'fr-FR' : 'en-GB');
+  if (quand) {
+    y += 48;
+    ecrire(ctx, quand, cx, y, { taille: 26, gras: 500, police: AFFICHE,
+                                couleur: ENCRE.sous, aligne: 'center' as CanvasTextAlign });
   }
 
-  // l'ordre d'arrivee
+  // --- l'etiquette du releve, juste au-dessus de lui.
+  y += 54;
+  const eEtiq = { taille: 24, gras: 700, police: AFFICHE, couleur: ENCRE.etiquette,
+                  espace: 24 * 0.3, aligne: 'center' as CanvasTextAlign };
+  ecrire(ctx, t('pf_titre', 'PHOTO-FINISH'), cx, y, eEtiq);
+
+  // --- LE RELEVE.
+  y += 26;
+  dessinerReleve(ctx, M, y, dispo, 372, c);
+  y += 372 + Math.max(34, 372 * 0.09);
+
+  // --- ce que l'image a departage : la legende du releve, pas un pied de carte.
+  const ecart = ecartLePlusSerre(c.lignes);
+  if (ecart != null) {
+    y += 40;
+    const txt = t('pf_ecart', 'ÉCART LE PLUS SERRÉ') + ' : '
+      + (ecart / 1000).toFixed(3).replace('.', fr ? ',' : '.') + ' s';
+    ecrire(ctx, txt, cx, y, { taille: 24, gras: 500, police: CHIFFRES,
+                              couleur: ENCRE.doux, aligne: 'center' as CanvasTextAlign });
+  }
+
+  /* --- LE TABLEAU. Meme composition qu'a l'ecran et que l'affiche du resultat
+     — place, couloir, nom, chrono — parce que celui qui a vu la course doit
+     retrouver ce qu'il a lu, d'une image a l'autre. */
+  y += 34;
   const places = [...c.lignes]
     .filter(l => l.ms != null)
     .sort((a, b) => (a.ms as number) - (b.ms as number));
-  let y = 812;
-  const hL = 66, saut = 76;
-  places.forEach((r, i) => {
+  // Huit lignes de 54 laissent quarante points sous la derniere avant
+  // l'adresse. A 58 elles la touchaient — et une adresse collee a un chrono se
+  // lit comme une neuvieme ligne.
+  const hL = 54, ecartL = 7;
+  places.slice(0, 8).forEach((r, i) => {
     const premier = i === 0;
-    ctx.fillStyle = premier ? or(0.13) : 'rgba(255,255,255,0.035)';
-    arrondi(ctx, 60, y, 960, hL, 16); ctx.fill();
-    ctx.strokeStyle = premier ? or(0.5) : 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.save();
+    ctx.fillStyle = premier ? 'rgba(247,160,60,0.13)' : 'rgba(255,255,255,0.035)';
+    gelule(ctx, M, y, dispo, hL); ctx.fill();
+    if (premier) {
+      ctx.strokeStyle = 'rgba(251,196,78,0.55)'; ctx.lineWidth = 2;
+      gelule(ctx, M, y, dispo, hL); ctx.stroke();
+    }
+    ctx.restore();
 
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = premier ? OR : 'rgba(255,255,255,0.6)';
-    ctx.font = '900 30px Outfit, sans-serif';
-    ctx.fillText(String(i + 1), 104, y + hL / 2);
+    const cyL = y + hL / 2;
+    ecrire(ctx, String(i + 1), M + 30, cyL, {
+      taille: premier ? 36 : 31, gras: 900, police: AFFICHE,
+      couleur: premier ? flammeSur(ctx, M + 24, y, 54, hL) : ENCRE.rang,
+    });
 
-    // le couloir, dans sa case — la meme que le tableau d'arrivee du jeu
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1.5;
-    arrondi(ctx, 144, y + 18, 30, 30, 7); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = '700 16px "Space Mono", monospace';
-    ctx.fillText(r.couloir != null ? String(r.couloir) : '—', 159, y + hL / 2);
+    // le couloir dans sa case : le meme chiffre, la meme graisse qu'a l'ecran
+    const xC = M + 92;
+    ctx.save();
+    ctx.strokeStyle = ENCRE.filet; ctx.lineWidth = 2;
+    ctx.strokeRect(xC, cyL - 16, 32, 32);
+    ctx.restore();
+    ecrire(ctx, r.couloir == null ? '—' : String(r.couloir), xC + 16, cyL, {
+      taille: 22, gras: 400, police: CHIFFRES, couleur: ENCRE.etiquette,
+      aligne: 'center' as CanvasTextAlign,
+    });
 
-    ctx.textAlign = 'left';
-    ctx.fillStyle = r.moi ? OR : '#e8ecf5';
-    ctx.font = `${premier ? '900 27px' : '700 24px'} Outfit, sans-serif`;
-    ctx.fillText(r.nom, 200, y + hL / 2);
+    const eChrono = { taille: premier ? 34 : 30, gras: 700, police: CHIFFRES,
+                      couleur: premier ? ENCRE.vif : ENCRE.doux,
+                      aligne: 'right' as CanvasTextAlign };
+    const txtChrono = chronoEcrit(r.ms, fr);
+    ecrire(ctx, txtChrono, L - M - 26, cyL, eChrono);
 
-    ctx.textAlign = 'right';
-    ctx.fillStyle = premier ? OR : 'rgba(255,255,255,0.8)';
-    ctx.font = '700 26px "Space Mono", monospace';
-    ctx.fillText(((r.ms as number) / 1000).toFixed(3), 990, y + hL / 2);
-    y += saut;
+    const eNom = { taille: premier ? 32 : 28, gras: premier ? 900 : 700, police: AFFICHE,
+                   couleur: r.moi ? ENCRE.vif : premier ? ENCRE.vif : ENCRE.doux };
+    const placeNom = L - M - 26 - largeur(ctx, txtChrono, eChrono) - (xC + 58) - 24;
+    ecrire(ctx, tailler(ctx, r.nom, placeNom, eNom), xC + 58, cyL, eNom);
+
+    y += hL + ecartL;
   });
 
-  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-  ctx.letterSpacing = '5px';
-  ctx.fillStyle = `rgba(255,255,255,${ENCRE.piedDroit})`;
-  ctx.font = '700 17px Outfit, sans-serif';
-  ctx.fillText('SPRINTER-GAME.COM', W / 2, H - 48);
-  ctx.letterSpacing = '0px';
+  // --- l'adresse, une fois, sans point d'exclamation.
+  ecrire(ctx, 'SPRINTER-GAME.COM', cx, H - 44, {
+    taille: 22, gras: 700, police: AFFICHE, couleur: ENCRE.etiquette,
+    espace: 22 * 0.28, aligne: 'center' as CanvasTextAlign,
+  });
 }
 
 /* -------------------------------------------------------------- la sortie */
@@ -480,11 +542,11 @@ function nomDeFichier(c: CoursePhoto): string {
 }
 
 /** Fabrique l'image et la fait sortir de l'application. */
-export async function partagerPhotoFinish(c: CoursePhoto): Promise<Sortie> {
+export async function partagerPhotoFinish(c: CoursePhoto, fr: boolean): Promise<Sortie> {
   try {
     await policesPretes();
     const cv = document.createElement('canvas');
-    dessinerPhotoFinish(cv, c);
+    dessinerPhotoFinish(cv, c, fr);
     const blob = await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));
     if (!blob) return 'echec';
     return await sortir(blob, nomDeFichier(c));

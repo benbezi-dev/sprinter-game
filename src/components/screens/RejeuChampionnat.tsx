@@ -387,7 +387,7 @@ function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, 
       epreuve: EPREUVE(epreuve),
       quand,
       lignes,
-    });
+    }, N.getLang() !== 'en');
     setReleve(r === 'echec' ? 'rate' : 'fait');
   };
 
