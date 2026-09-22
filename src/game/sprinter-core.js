@@ -144,6 +144,27 @@
     // ils se remontent ou se baissent sans rien toucher d'autre.
     DRIVE_FRONT: 0.55,        // gain de cuisse sur la seule part avant
     DRIVE_SHANK: 0.50,        // et le repli de tibia qui l'accompagne
+    // LA LIGNE DE POUSSEE : cheville, genou, bassin, epaules sur UNE DROITE.
+    //
+    // C'est la photo de toute sortie de blocs, et le jeu la cassait a la
+    // hanche. Le rig tient le buste vertical et incline TOUT le corps de
+    // `drivePitch` au dessin : une jambe posee dans l'axe du buste y devient
+    // donc, apres rotation, une jambe qui part vers l'arriere-bas dans le
+    // prolongement exact du tronc — la droite cherchee. Or a la phase de
+    // poussee la table met le tibia a 0,66 rad de cet axe (cuisse -0,50,
+    // genou -0,16) : ajoutes aux 0,62 rad du buste, cela faisait une jambe
+    // couchee a 73 degres sous un tronc a 35, c'est-a-dire un angle marque a
+    // la hanche la ou il ne doit y en avoir aucun.
+    //
+    // On ramene donc la jambe ARRIERE vers l'axe du corps, d'autant plus
+    // qu'elle est loin derriere et qu'on sort des blocs. A 1 la ligne serait
+    // parfaitement droite ; on en garde un dixieme de cassure, parce qu'une
+    // articulation qui atteint exactement sa butee ne ressemble a rien de
+    // vivant.
+    DRIVE_LIGNE: 0.90,
+    // La reference qui fait le « loin derriere » : l'extension arriere la plus
+    // marquee des tables de foulee (profil `power`, cuisse a -0,64).
+    DRIVE_ARRIERE: 0.64,
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
     REACT_BEST: 0.12,
@@ -1732,10 +1753,19 @@
       // porte le gain de depart, et c'est ce qui l'empeche de devenir un
       // coureur assis — voir DRIVE_FRONT.
       const devant = Math.max(0, gt);
-      const th = (gt * (A + C.DRIVE_THIGH * sortie)
-                  + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
-      const kn = (gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie)
-                  - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
+      let th = (gt * (A + C.DRIVE_THIGH * sortie)
+                + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
+      let kn = (gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie)
+                - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
+      // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
+      // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
+      // redresserait la cuisse en laissant le tibia casse dessous. Le pied
+      // (`an`) n'est pas touche — une cheville qui pousse est en extension,
+      // elle ne s'aligne pas.
+      const derriere = Math.min(1, Math.max(0, -gt) / C.DRIVE_ARRIERE);
+      const ligne = C.DRIVE_LIGNE * sortie * derriere;
+      th *= (1 - ligne);
+      kn *= (1 - ligne);
       // La cheville ne recoit pas la sortie : au depart le pied reste arme,
       // il ne fouette pas. L'amplifier donnait un coup de talon de patineur.
       const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
