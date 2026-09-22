@@ -19,7 +19,6 @@ import { sautDe, piedDAttaque, leveeDe, obstaclesDe } from '../src/game/haies-re
 const { Track, Runner, C, pose, GAITS } = globalThis.SprinterCore;
 
 const CLES = ['100h', '110h', '400h'];
-const TAU = Math.PI * 2;
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -196,37 +195,33 @@ for (const cle of CLES) {
      `${(pireSaut / pireCourse).toFixed(2)} fois la course`);
 }
 
-titre('APRES LA RECEPTION, LES JAMBES TOURNENT');
+titre('LE VOL FINIT AVEC LE SAUT, SUR LES TROIS EPREUVES');
 
-{
-  let fige = 0, glisse = 0, sautDePhase = 0, avant = null, avantGel = false;
-  courir('400h', {
+// CE QUE CETTE SECTION A GARDE, ET POURQUOI ELLE DIT MAINTENANT L'INVERSE.
+//
+// Le tour payait sa haie par une seconde de gel (haies-jeu.js, COUT). Le saut
+// dessine n'en occupait qu'un tiers : le coureur finissait donc son vol AU SOL,
+// jambes figees, sur pres de six metres. haies-rendu.js avait un rattrapage
+// pour cela (`decaler`) et c'est lui qu'on verifiait ici.
+//
+// La seconde est partie — elle est devenue un plafond, qui ne fige rien. Le vol
+// du tour est maintenant une distance comme celui des courtes, il finit ou le
+// saut finit, et il n'y a plus rien a rattraper nulle part. C'est cela qu'on
+// verifie : non plus que le rattrapage marche, mais qu'aucun coureur n'en a
+// besoin.
+for (const cle of ['100h', '110h', '400h']) {
+  let glisse = 0;
+  const { r } = courir(cle, {
     cadence: 11,
-    image: (r, course) => {
-      const vue = r.stride + (r.decalePas || 0);
+    image: (rr, course) => {
       const i = course.i - 1;
-      const auSolGele = course.enVol && r.freeze > 0 && i >= 0 &&
-        r.d > course.positions[i] + APPEL['400h'].apres;
-      if (auSolGele) {
-        glisse++;
-        if (avant !== null && avantGel && Math.abs(vue - avant) < 1e-9) fige++;
-      }
-      if (avant !== null) {
-        const d = ((vue - avant) % TAU + TAU) % TAU;
-        const saut = Math.min(d, TAU - d);
-        sautDePhase = Math.max(sautDePhase, saut);
-      }
-      avant = vue; avantGel = auSolGele;
+      if (course.enVol && rr.freeze > 0 && i >= 0 &&
+          rr.d > course.positions[i] + APPEL[cle].apres) glisse++;
     },
   });
-  ok(`sur le tour, le coureur ne file pas jambes figees (${glisse} images au sol encore gele)`,
-     glisse > 50 && fige === 0, `${fige} images sans mouvement`);
-  ok(`et la foulee affichee ne saute jamais (au pire ${sautDePhase.toFixed(2)} rad par image)`,
-     sautDePhase < 0.6);
-}
-{
-  const { r } = courir('110h', { cadence: 11 });
-  ok('sur les courtes, le vol finit avec le saut : rien a rattraper', !(r.decalePas > 0));
+  ok(`${cle} : le coureur n'est jamais gele une fois retombe`, glisse === 0,
+     `${glisse} images au sol encore gelees`);
+  ok(`${cle} : rien a rattraper a l'image`, !(r.decalePas > 0));
 }
 
 titre('RANGER LES HAIES REND LE COUREUR D AVANT');

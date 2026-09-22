@@ -78,7 +78,13 @@ export const APPEL = {
 export const AVANCE_CM = 0.38;
 
 /**
- * CE QUE COUTE UNE HAIE, et pourquoi les deux epreuves ne le paient pas pareil.
+ * CE QUE COUTE UNE HAIE — la section, pas une constante.
+ *
+ * Elle a longtemps tenu dans une table par epreuve (`COUT`), parce que le tour
+ * payait autrement que les courtes. Il paie comme elles maintenant, la table
+ * n'avait plus qu'une seule ligne repetee trois fois, et elle est partie ; ce
+ * qu'elle documentait vit dans `volDe` juste dessous et dans PLAFOND_EPREUVE.
+ * Les renvois du reste du jeu a « haies-jeu.js, COUT » parlent de ce texte-ci.
  *
  * C'est la partie qui a demande le plus de mesures, et la seule qu'aucun
  * raisonnement ne donnait d'avance.
@@ -101,20 +107,64 @@ export const AVANCE_CM = 0.38;
  * a la vitesse du moment, le vol laisse toujours 5,59 m au sol, soit les trois
  * foulees d'un hurdleur.
  *
- * SUR LE TOUR, c'est une duree, et plus longue. L'intervalle y fait 35 m : le
- * vol n'en represente qu'un dixieme, et un 400 m haies calcule ainsi ne se
- * distinguait plus d'un 400 m plat — entre taper a neuf et taper a treize, le
- * chrono ne bougeait que d'une demi-seconde. Ce qui coute sur le tour n'est pas
- * le saut, c'est de courir POUR la haie sur trente-cinq metres : on regle sa
- * foulee bien avant, on ne court jamais librement. La seconde represente cela.
- * Elle ne coute d'ailleurs pas une seconde au chrono — le coureur reprend sa
- * vitesse ensuite, et la perte nette tourne autour de quatre dixiemes, ce qui
- * est l'ecart reel entre le tour plat et le tour de haies.
+ * SUR LE TOUR C'EST PAREIL — ET CE N'ETAIT PAS LE CAS.
+ *
+ * Le tour a longtemps paye sa haie par une DUREE d'une seconde pendant
+ * laquelle on ne poussait plus. L'intention etait juste : sur un intervalle de
+ * 35 m, le saut ne represente qu'un dixieme de la distance, et un 400 m haies
+ * calcule sur le seul saut ne se distinguait plus d'un 400 m plat. Ce qui
+ * coute sur le tour n'est pas le franchissement, c'est de courir POUR la haie
+ * sur trente-cinq metres : on regle sa foulee bien avant, on ne court jamais
+ * librement.
+ *
+ * MAIS LA SECONDE NE POUVAIT PAS PORTER CELA, et c'est ce qui se sentait
+ * manette en main. Mesure sur une course jouee a cadence 11 avec les dix
+ * ciseaux nets — donc un sans-faute :
+ *
+ *     vol             1,05 s et 11,4 m, de 2,5 m avant la haie a 8,9 m APRES
+ *     pendant le vol  la vitesse est figee : le pouce ne pousse plus
+ *     a la reception  -10,4 % de vitesse EN UNE IMAGE, puis on remonte
+ *
+ * Le 110 m haies, lui, perd 4,0 % sur un vol de 0,40 s, et il coule. Le tour
+ * avait donc, a chaque haie et meme parfaitement passee, une seconde plate
+ * suivie d'une marche d'escalier — l'a-coup que ce jeu n'a pas le droit
+ * d'avoir, puisque tout y dit que MIEUX PASSER REND LA COURSE PLUS FLUIDE.
+ *
+ * Le cout reste, il a seulement change de forme : il est passe dans
+ * PLAFOND_EPREUVE, qui est une contrainte CONTINUE — on ne peut pas courir le
+ * tour de haies a la vitesse du tour plat — la ou la seconde etait une
+ * interruption. Un plafond ne se sent pas comme un a-coup : il se sent comme
+ * une course qu'on mene, et un bon ciseau le releve.
+ *
+ * Mesure apres, meme course, memes dix ciseaux nets : vol de 0,35 s, -3,5 % a
+ * la reception — la haie du tour coute desormais ce que coute celle du 110 m.
  */
-export const COUT = {
-  '100h': { vol: 'distance' },
-  '110h': { vol: 'distance' },
-  '400h': { vol: 'duree', duree: 1.00 },
+
+/**
+ * LE PLAFOND DE L'EPREUVE, en part de la vitesse maximale du coureur.
+ *
+ * C'est ici que vit ce que la seconde de vol portait sur le tour (voir
+ * ci-dessus, CE QUE COUTE UNE HAIE).
+ *
+ * UN HURDLEUR DE 400 M NE COURT JAMAIS A SA VITESSE DE 400 M PLAT, et pas
+ * parce qu'il saute : parce qu'il passe les trente-cinq metres de l'intervalle
+ * a placer sa foulee pour arriver juste sur la haie suivante. Warholm court
+ * 45,94 s sur le tour de haies et 44,87 sur le tour plat — une seconde, et
+ * elle est repartie sur toute la course, pas concentree sur dix instants.
+ * C'est exactement ce qu'un plafond decrit, et exactement ce qu'une seconde de
+ * gel ne pouvait pas decrire.
+ *
+ * IL NE S'APPLIQUE QU'ENTRE LES HAIES. Des blocs a la premiere haie on sprinte
+ * — quarante-cinq metres pour se lancer — et apres la dixieme le compte est
+ * libre : les quarante derniers metres se courent sans plus rien a placer.
+ *
+ * ET IL SE MULTIPLIE AU PLAFOND DE L'INTERVALLE (PLAFOND_INTERVALLE) : un
+ * ciseau net laisse le coureur a ce plafond-ci tout de suite, un mauvais le
+ * met en dessous et il remonte. Bien passer reste donc le seul moyen de courir
+ * a la vitesse que l'epreuve autorise, jamais un moyen d'aller plus vite.
+ */
+export const PLAFOND_EPREUVE = {
+  '100h': 1, '110h': 1, '400h': 0.895,
 };
 
 /**
@@ -131,10 +181,19 @@ export const VITESSE_VOL_MIN = 1;
  * voir AVANCE_CM, qui dit pourquoi et ce que l'erreur coutait.
  */
 export function volDe(cle, v) {
-  const c = COUT[cle];
-  if (c.vol === 'duree') return c.duree;
   const a = APPEL[cle];
   return Math.max(0.05, a.avant + a.apres - AVANCE_CM) / Math.max(VITESSE_VOL_MIN, v);
+}
+
+/**
+ * Le plafond que l'epreuve laisse entre deux haies, en m/s.
+ *
+ * Un seul endroit ou le lire : le pas du hurdleur le pose sur la vitesse, la
+ * jauge de l'ecran le lit pour le montrer, et les deux se sont deja
+ * desynchronises une fois pour avoir recopie la meme formule.
+ */
+export function plafondPlein(cle) {
+  return HAIES[cle].maxSpeed * (PLAFOND_EPREUVE[cle] ?? 1);
 }
 
 /**
@@ -303,6 +362,42 @@ export const CISEAU_PLANCHER = 0.30;
 export const PLAFOND_INTERVALLE = {
   ciseau: 1, bon: 0.94, accroche: 0.76, traine: 0.80, absent: 0.60,
 };
+
+/**
+ * SUR QUELLE DISTANCE LE PLAFOND REMONTE, en metres apres la reception.
+ *
+ * Ce que le plafond decrit est court : on retombe derriere son appui, et l'on
+ * passe les foulees suivantes a se remettre sous soi avant de courir de
+ * nouveau. Ce n'est pas l'affaire de tout l'intervalle.
+ *
+ * SUR LES COURTES, CE NOMBRE NE FAIT RIEN : de la reception au point d'appel
+ * suivant il ne reste que 5,85 m sur le 110 m haies et 5,83 sur le 100 m, et
+ * la remontee se termine donc a la haie suivante comme avant, quelle que soit
+ * la valeur posee ici des lors qu'elle depasse six metres.
+ *
+ * SUR LE TOUR, IL DECIDE DE TOUT. L'intervalle y fait 35 m : faire remonter le
+ * plafond sur toute sa longueur revient a dire qu'un hurdleur met trente-cinq
+ * metres a se remettre a courir. Mesure au harnais, a onze frappes par
+ * seconde, ce que coutent dix ciseaux jamais donnes et ce que coute UNE seule
+ * haie ratee :
+ *
+ *     remontee sur    dix ratees    une ratee
+ *      6 m             +1,65 s       +0,37 s
+ *     11 m             +2,92 s       +0,30 s     <-- pose ici
+ *     16 m             +4,42 s       +0,60 s
+ *     35 m (tout)      +8,08 s       +0,97 s
+ *
+ * La colonne de droite est la contrainte : une seule mauvaise haie doit couter
+ * moins d'un demi-seconde, sans quoi une course serait finie a la troisieme
+ * (haies-appel-test.mjs le verifie, et c'est lui qui a barre 16 m et 35 m).
+ * La colonne de gauche est ce qu'on cherche : la technique doit peser sur le
+ * tour comme elle pese sur les courtes, ou elle vaut 15 %.
+ *
+ * ONZE METRES EST DONC CALE, PAS MESURE, et il faut le dire : aucune etude ne
+ * chronometre la distance qu'un hurdleur met a se remettre sous lui. C'est
+ * environ cinq foulees de tour de haies.
+ */
+export const RECUP_PLAFOND = 11.00;
 
 /**
  * CE QUE LE CISEAU GARDE DE LA VITESSE, et c'est ici que le jeu cesse d'etre
