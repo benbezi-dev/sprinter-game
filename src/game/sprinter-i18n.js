@@ -545,7 +545,22 @@
     champ_phase_series: ['Séries', 'Heats'],
     champ_phase_demies: ['Demi-finales', 'Semi-finals'],
     champ_phase_finale: ['Finale', 'Final'],
+    // LE NOM D'UNE COURSE, AU SINGULIER — et ce n'est pas un detail de style.
+    // Une PHASE s'appelle « Séries » ; une COURSE de cette phase est UNE série,
+    // la troisieme. « Séries 3 » en en-tete d'une video se lit comme un numero
+    // de lot ; « Série 3 » dit ce qu'on regarde. Le pluriel garde sa place la
+    // ou il est juste : le fil des phases, qui parle bien de toutes les series.
+    champ_course_series: ['Série', 'Heat'],
+    champ_course_demies: ['Demi-finale', 'Semi-final'],
+    champ_course_finale: ['Finale', 'Final'],
     champ_revoir:    ['REVOIR LA COURSE', 'WATCH THE RACE'],
+    // LE PHOTO-FINISH. Il ne s'affiche que sur une arrivee serree — voir
+    // `arriveeSerree` dans game/photo-finish.ts — et le bouton le dit : sur
+    // une course gagnee d'une demi-seconde, « photo-finish » serait un mot
+    // creux. `pf_ecart` legende l'image partagee.
+    pf_bouton:       ['PHOTO-FINISH', 'PHOTO FINISH'],
+    pf_titre:        ['PHOTO-FINISH', 'PHOTO FINISH'],
+    pf_ecart:        ['ÉCART LE PLUS SERRÉ', 'CLOSEST GAP'],
     champ_grille:    ['LISTE DE DÉPART', 'START LIST'],
     champ_partants:  ['PARTANTS', 'ON THE LINE'],
     champ_arrivee:   ['ARRIVÉE', 'FINISH'],
@@ -940,6 +955,19 @@
     mot_refaire:     ['recommencer', 'record again'],
     mot_envoyer:     ['ENVOYER', 'SEND'],
     mot_envoye:      ['{n} le lira en revenant', '{n} will read it when they come back'],
+    // LE MOT D'UNE COURSE s'adresse aux sept autres, pas a un adversaire.
+    // « Laisse un mot a Untel » n'a plus de sens quand ils sont sept ; et
+    // « il le lira » non plus quand c'est « ils le liront ».
+    mot_titre_course:  ['LAISSE UN MOT AUX AUTRES', 'LEAVE THE OTHERS A WORD'],
+    mot_envoye_course: ['les autres le liront en revenant', 'the others will read it when they come back'],
+    mot_du_vainqueur:  ['LE MOT DU VAINQUEUR', 'THE WINNER SPOKE'],
+    mot_ecouter_voix:  ['ÉCOUTER', 'LISTEN'],
+    // L'IMAGE DE L'ARRIVEE, a cote de la video. Le libelle dit lequel des deux
+    // on emporte : « partager » tout seul, sur un ecran qui propose deja une
+    // video, ne dit pas ce qui sortira.
+    champ_image:       ['L\u2019IMAGE DU RÉSULTAT', 'RESULT IMAGE'],
+    champ_image_faite: ['image enregistrée', 'image saved'],
+    champ_image_ratee: ['impossible de fabriquer l\u2019image', 'could not build the image'],
     mot_micro_refuse: ['le micro est refusé — le texte marche aussi',
                        'the mic was refused — text works too'],
     mot_ecouter_sa_voix: ['ÉCOUTER CE QU’IL A DIT', 'HEAR WHAT THEY SAID'],
@@ -2084,6 +2112,26 @@
     return row ? row[index()] : (secours || cle || '');
   }
 
+  /**
+   * Le nom d'UNE course : « Série 3 », « Demi-finale 1 », « Finale ».
+   *
+   * `numero` est celui de la course dans sa phase, `total` le nombre de
+   * courses que la phase compte. Le numero ne s'ecrit que s'il y en a
+   * plusieurs — « Finale 1 » n'existe pas, et « Série 1 » n'a de sens que
+   * s'il y a une serie 2.
+   *
+   * Les demi-finales gardent leur trait d'union et la finale reste la finale :
+   * on ne compose pas le libelle, on le prend dans la table, parce qu'un
+   * singulier ne s'obtient pas en retirant un « s » (« Demi-finales » →
+   * « Demi-finale », mais « Heats » → « Heat » et « Semi-finals » →
+   * « Semi-final » ne suivent pas la meme regle d'une langue a l'autre).
+   */
+  function courseNom(cle, numero, total, secours) {
+    const row = UI['champ_course_' + String(cle || '')];
+    const nom = row ? row[index()] : (secours || phaseNom(cle, secours) || '');
+    return total > 1 && numero ? nom + ' ' + numero : nom;
+  }
+
   // Un index inconnu rend une chaine vide plutot que de casser l'ecran.
   // Le classement affiche l'index range avec la course, et cet index vient
   // parfois d'une version du jeu qui connaissait un stade de plus.
@@ -2119,6 +2167,6 @@
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
     CUT_ENDING,
-    LANGS, t, titreEdition, phaseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
+    LANGS, t, titreEdition, phaseNom, courseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -5,6 +5,7 @@ import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
 import { lireRejeu } from '@/game/champ-rejeu';
+import { lireLeBandeau, quandDeLaCourse } from '@/game/bandeau-rejeu';
 import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
@@ -79,6 +80,22 @@ export function RaceHUD() {
    */
   const rejeu = !!SprinterApp.G.rejeu;
   const course = rejeu ? lireRejeu() : null;
+
+  /**
+   * L'EN-TETE DE LA RETRANSMISSION.
+   *
+   * Sous le chrono, et non par-dessus : le coin est occupe par le nombre le
+   * plus gros de l'ecran. La place qu'il prend est celle du record personnel,
+   * qui ne s'affiche pas sur une course qu'on regarde — on ne bat pas son
+   * record en spectateur. Rien ne bouge donc pour le joueur qui court.
+   *
+   * Il sort surtout avec la VIDEO : `hud-film.ts` le repeint au meme endroit,
+   * a partir de la meme source, parce que c'est la que la question se pose
+   * vraiment — une course de championnat partagee hors du jeu ne dit sinon ni
+   * de quelle competition il s'agit, ni quel jour elle s'est courue.
+   */
+  const bandeau = rejeu ? lireLeBandeau() : null;
+  const bandeauQuand = bandeau ? quandDeLaCourse(bandeau.quand) : null;
   
   /**
    * L'ECRAN DU DEPART — deux departs, deux ecrans.
@@ -205,6 +222,34 @@ export function RaceHUD() {
                                landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]
                 ${recordPerdu && isRace ? 'text-destructive/70' : 'text-muted-foreground'}`}>
                 {N.t('pb_label')} {s2(recordMs)}
+              </div>
+            )}
+            {bandeau && (
+              <div className="flex flex-col items-end leading-tight gap-px
+                              landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+                <div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.18em]
+                                text-primary/80 text-right">
+                  {bandeau.competition}
+                </div>
+                {/* SERIE, DEMI-FINALE OU FINALE — jamais « la course ».
+                    Un championnat tient en treize courses et douze d'entre
+                    elles ne sont pas la finale : une video qui ne dirait pas
+                    laquelle laisserait croire a chaque fois qu'on regarde le
+                    titre se jouer. Le nom est a gauche de la barre aussi,
+                    mais c'est ce coin-ci qui reste lisible quand la video
+                    est recadree. */}
+                {bandeau.course && (
+                  <div className="text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.18em]
+                                  text-foreground/70 text-right">
+                    {bandeau.course}
+                  </div>
+                )}
+                {bandeauQuand && (
+                  <div className="font-mono text-[8px] sm:text-[9px] tabular-nums
+                                  text-muted-foreground/80 text-right">
+                    {bandeauQuand}
+                  </div>
+                )}
               </div>
             )}
           </div>

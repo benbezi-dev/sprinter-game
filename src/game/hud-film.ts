@@ -32,6 +32,7 @@
 // donne les memes proportions et non un HUD decale.
 
 import { SprinterApp } from './engine';
+import { lireLeBandeau, quandDeLaCourse } from './bandeau-rejeu';
 import { recordConnu, s2 } from './record';
 import { DEPART_STARTER } from './canal';
 import {
@@ -74,8 +75,9 @@ export function peindreLeHud(ctx: CanvasRenderingContext2D, l: number, h: number
   barreDuHaut(ctx, l, { G, N, C, p, sm, paysage, M, etat });
   retours(ctx, l, { G, N, C, p, sm, paysage });
   if (etat === 'race' && G.ghost && !p.finished) bandeauFantome(ctx, l, { G, N, p, M, paysage });
-  if (etat === 'race') ecartAuVoisin(ctx, l, { G, N, p, sm, M, paysage });
+  if (etat === 'race' && !G.rejeu) ecartAuVoisin(ctx, l, { G, N, p, sm, M, paysage });
   if (etat === 'count') departAuMilieu(ctx, l, h, { G, N, sm });
+  if (G.rejeu) rappelDesCouloirs(ctx, l, h, { G, sm });
   pileDuBas(ctx, l, h, { G, N, sm });
 }
 
@@ -92,9 +94,28 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
   const tRecord  = sm ? 9 : 8;
   const padY     = sm ? 12 : 8;    // py-2 / sm:py-3
 
+  // CE QUE LE FILM DIT D'UNE COURSE QU'ON REGARDE.
+  //
+  // Le HUD du jeu se tait sur trois points des qu'on regarde au lieu de courir
+  // (voir `RaceHUD`) : le nom du niveau cede la place a celui de la course, la
+  // phase de foulee disparait, et la jauge de poussee avec. Le pinceau, lui,
+  // les peignait tous les trois — une video de Championnat de France sortait
+  // donc avec « ZEZE.GAMES » ecrit en haut a gauche et « VITESSE MAX » a
+  // droite. Il lit maintenant le meme en-tete que l'ecran.
+  //
+  // Il se lit AVANT les mesures parce qu'il en change : ses trois lignes
+  // descendent plus bas que le record qu'elles remplacent, et une barre
+  // dimensionnee sans elles les laisserait deborder sur la piste.
+  const bandeau = G.rejeu ? lireLeBandeau() : null;
+  const tBandeau = sm ? 9 : 8;
+  const lignesBandeau = bandeau
+    ? 1 + (bandeau.course ? 1 : 0) + (quandDeLaCourse(bandeau.quand) ? 1 : 0)
+    : 0;
+
   const hRang = tRang * 1.4;
   const hChrono = tChrono * 1.333;
-  const colChrono = hChrono + 2 + tRecord;     // gap-0.5
+  const colChrono = hChrono + 2
+    + (bandeau ? lignesBandeau * (tBandeau + 2) : tRecord);   // gap-0.5
   const rangee = Math.max(hRang, colChrono);
   const yBarre = padY + rangee + 8;            // gap-y-2
   const hautBarre = yBarre + 8 + padY + 2;     // reglette + marge + filet
@@ -121,7 +142,8 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
   ecrire(ctx, txtRang, M + demi, cy, { ...eRang, aligne: 'right' });
 
   const eNiveau = { taille: tPetit, gras: 700, couleur: SOURDINE, espace: 1, ombre };
-  const niveau = String(N.levelName(G.levelIdx) || '').toUpperCase();
+  const niveau = String(
+    (bandeau ? bandeau.course : N.levelName(G.levelIdx)) || '').toUpperCase();
   ecrire(ctx, tailler(ctx, niveau, demi - 8 - lRang, eNiveau), M, cy, eNiveau);
 
   // --- a droite : la phase, le chrono, le record.
@@ -145,6 +167,37 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
   const lChrono = ecrire(ctx, txtChrono, droite, yChrono, eChrono);
 
   let lCol = lChrono;
+  // L'EN-TETE DE LA RETRANSMISSION, sous le chrono.
+  //
+  // C'est le seul endroit du film qui dise ce qu'on regarde pendant qu'on le
+  // regarde : la video part hors du jeu, et le carton de fin arrive une
+  // seconde et demie trop tard pour celui qui decroche avant. Mesures et
+  // position sont celles de `RaceHUD` — le record occupe cette place quand il
+  // y en a un, et il n'y en a jamais sur une course qu'on regarde, donc les
+  // deux ne se disputent pas la ligne.
+  if (bandeau) {
+    let yB = padY + hChrono + 2 + tBandeau / 2;
+    const ligne = (txt: string, style: any) => {
+      lCol = Math.max(lCol, ecrire(ctx, txt, droite, yB, style));
+      yB += tBandeau + 2;
+    };
+    ligne(bandeau.competition.toUpperCase(),
+          { taille: tBandeau, gras: 700, espace: 1.5, couleur: OR, alpha: 0.8,
+            aligne: 'right' as CanvasTextAlign, ombre });
+    // SERIE, DEMI-FINALE OU FINALE. Douze des treize courses d'un championnat
+    // ne sont pas la finale : une video qui ne le dirait pas laisserait croire
+    // a chaque fois qu'on regarde le titre se jouer.
+    if (bandeau.course) {
+      ligne(bandeau.course.toUpperCase(),
+            { taille: tBandeau, gras: 700, espace: 1.5, couleur: TEXTE, alpha: 0.7,
+              aligne: 'right' as CanvasTextAlign, ombre });
+    }
+    const quand = quandDeLaCourse(bandeau.quand);
+    if (quand) {
+      ligne(quand, { taille: tBandeau, gras: 700, police: CHIFFRES, couleur: SOURDINE,
+                     alpha: 0.8, aligne: 'right' as CanvasTextAlign, ombre });
+    }
+  }
   if (recordMs !== null) {
     const perdu = chronoMs > recordMs && enCourse;
     const eRec = { taille: tRecord, gras: 700, police: CHIFFRES, espace: 0.8,
@@ -155,13 +208,19 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
     ecrire(ctx, txtRec, droite, padY + hChrono + 2 + tRecord / 2, eRec);
   }
 
-  const cPhase = ph === 0 ? OR : ph === 1 ? CYAN : SOURDINE;
-  ecrire(ctx, String(N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])).toUpperCase(),
-         droite - lCol - 8, cy,
-         { taille: tPetit, gras: 700, couleur: cPhase, espace: 1, aligne: 'right', ombre });
+  if (!bandeau) {
+    const cPhase = ph === 0 ? OR : ph === 1 ? CYAN : SOURDINE;
+    ecrire(ctx, String(N.t(['phase_drive', 'phase_trans', 'phase_max'][ph])).toUpperCase(),
+           droite - lCol - 8, cy,
+           { taille: tPetit, gras: 700, couleur: cPhase, espace: 1, aligne: 'right', ombre });
+  }
 
-  // --- la reglette de progression. Retiree en paysage, comme dans le HUD.
-  if (paysage) return;
+  // --- la reglette de progression. Retiree en paysage, comme dans le HUD —
+  // et retiree aussi sur une course qu'on regarde : « la jauge de poussee est
+  // un instrument de pilotage ; sur une course qu'on regarde, c'est une barre
+  // qui avance toute seule » (RaceHUD, qui la masque deja). Le film la peignait
+  // quand meme, et montrait donc un instrument que l'ecran venait de retirer.
+  if (paysage || G.rejeu) return;
   const total = (G.track && G.track.total) || 100;
   const lRegle = Math.min(l - 2 * M, 280);
   const xRegle = (l - lRegle) / 2;
@@ -176,6 +235,66 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
                dedans * ((C.TRANS_END - C.DRIVE_END) / total), 6);
   ctx.fillStyle = OR;
   ctx.fillRect(xRegle + 1, yBarre + 1, dedans * (Math.min(p.d || 0, total) / total), 6);
+  ctx.restore();
+}
+
+/* --------------------------------------------------- le rappel des couloirs */
+
+/**
+ * QUI EST QUI, DANS LA VIDEO.
+ *
+ * L'ecran repond a la question depuis le debut : un bandeau bas, couloir et
+ * nom, les quatre premieres secondes de course (`RappelCouloirs`). La VIDEO,
+ * elle, ne repondait rien — ce bandeau est du DOM React, et `captureStream()`
+ * ne voit que le canevas. Un film de championnat sortait donc avec huit
+ * inconnus sur une piste : ni etiquette au-dessus des tetes, ni cerceau au sol
+ * (le rejeu les retire), ni liste de depart. Celui qui recevait la video ne
+ * pouvait identifier personne, pas meme celui qui la lui envoyait.
+ *
+ * On le repeint donc ici, aux memes mesures et sur la meme regle de duree. La
+ * grille se relit dans `G.runners` plutot que dans l'etat du rejeu : c'est la
+ * meme source — l'etat la construit depuis la piste — et cela evite au pinceau
+ * d'importer `champ-rejeu`, qui le reimporterait par `film-course`.
+ */
+const RAPPEL_MS = 4000;
+/** Le fondu de sortie, comme celui de `RappelCouloirs` (0,5 s). */
+const RAPPEL_FONDU_MS = 500;
+
+function rappelDesCouloirs(ctx: CanvasRenderingContext2D, l: number, h: number, o: any) {
+  const { G, sm } = o;
+  const ecoule = (G.elapsed || 0) * 1000;
+  if (ecoule >= RAPPEL_MS + RAPPEL_FONDU_MS) return;
+  const alpha = ecoule <= RAPPEL_MS ? 1 : 1 - (ecoule - RAPPEL_MS) / RAPPEL_FONDU_MS;
+
+  const grille = (G.runners || [])
+    .map((r: any) => ({ couloir: r.lane + 1, nom: String(r.name || '') }))
+    .sort((a: any, b: any) => a.couloir - b.couloir);
+  if (!grille.length) return;
+
+  // Quatre colonnes, comme a l'ecran : huit noms sur deux lignes tiennent sous
+  // la course sans jamais monter dans le cadre ou les coureurs passent.
+  const COLS = 4;
+  const lignes = Math.ceil(grille.length / COLS);
+  const t = sm ? 10 : 9;
+  const hLigne = t + 3;
+  const padX = 10, padY2 = 6;
+  const lb = Math.min(l - 24, 380);
+  const hb = lignes * hLigne + 2 * padY2;
+  const x = (l - lb) / 2;
+  const y = h - 16 - hb;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  remplir(ctx, x, y, lb, hb, 8, 'rgba(0,0,0,0.45)');
+  const lCol = (lb - 2 * padX) / COLS;
+  grille.forEach((c: any, i: number) => {
+    const cx = x + padX + (i % COLS) * lCol;
+    const cy = y + padY2 + Math.floor(i / COLS) * hLigne + hLigne / 2;
+    const eNum = { taille: t - 1, gras: 400, police: CHIFFRES, couleur: 'rgba(255,255,255,0.40)' };
+    const lNum = ecrire(ctx, String(c.couloir), cx, cy, eNum);
+    const eNom = { taille: t - 1, gras: 600, couleur: 'rgba(255,255,255,0.75)', espace: 0.3 };
+    ecrire(ctx, tailler(ctx, c.nom, lCol - lNum - 8, eNom), cx + lNum + 4, cy, eNom);
+  });
   ctx.restore();
 }
 

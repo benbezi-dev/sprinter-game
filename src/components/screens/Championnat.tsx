@@ -66,8 +66,9 @@ function FilDesPhases({ e }: { e: Edition }) {
 
 /* ---------------------------------------------------- la grille de depart */
 
-function Couloir({ p, place, ms, direct }: {
-  p: Partant; place?: number | null; ms?: number | null; direct: boolean;
+function Couloir({ p, couloir, place, ms, direct }: {
+  p: Partant; couloir?: number | null; place?: number | null;
+  ms?: number | null; direct: boolean;
 }) {
   const couru = place != null;
   return (
@@ -79,6 +80,20 @@ function Couloir({ p, place, ms, direct }: {
         ${couru ? 'text-primary' : 'text-muted-foreground/60'}`}>
         {couru ? place : '·'}
       </span>
+      {/* LE COULOIR, QUE LA COURSE A FAIT DISPARAITRE.
+          Avant la course, les lignes SONT les couloirs : elles sont dans cet
+          ordre-la et le numero se compte tout seul. Des que la course est
+          courue, la liste se retrie par le chrono et cette lecture est
+          perdue — « qui etait dans le 5 » n'a plus de reponse, ni ici ni sur
+          le rejeu. On l'ecrit donc, et seulement une fois la course courue :
+          avant, ce serait un chiffre de plus qui repete la position. */}
+      {couru && (
+        <span className="font-mono text-[9px] w-4 h-4 shrink-0 grid place-items-center
+                         rounded border border-white/12 bg-white/[0.04]
+                         text-muted-foreground/70 tabular-nums leading-none">
+          {couloir ?? '—'}
+        </span>
+      )}
       <Drapeau pays={p.pays} className="text-[12px]" />
       <span className="text-[11px] font-bold tracking-wide truncate flex-1 text-foreground">
         {p.nom}
@@ -121,11 +136,32 @@ function Grille({ e }: { e: Edition }) {
         const fin = arrivee(e, e.phase, course);
         const places = new Map(fin.map((r, i) => [r.name_key, { place: i + 1, ms: r.ms }]));
         const courue = fin.length > 0;
+        // LE COULOIR SE DERIVE ICI, ET NULLE PART AILLEURS.
+        //
+        // Le serveur ne le stocke pas — il l'a dit explicitement : « le
+        // couloir se derive du rang de semis a l'affichage, et le deriver deux
+        // fois serait deux occasions de ne plus dire la meme chose » (voir
+        // championnats.js). `couloirs` arrive deja trie par rang de duel ; sa
+        // position EST le couloir. C'est cette table qui alimente a la fois la
+        // ligne du tableau et le rejeu, pour qu'ils ne puissent pas diverger.
+        const couloirDe = new Map(couloirs.map((p, i) => [p.name_key, i + 1]));
+        // L'HEURE DE CETTE COURSE-LA, prise au calendrier de l'edition.
+        //
+        // Elle part avec le rejeu et s'affiche en en-tete de la video (voir
+        // `bandeau-rejeu`). Une course numerotee a son propre rendez-vous ;
+        // une phase qui n'en a qu'un — la finale — le porte sans numero. On
+        // essaie donc le numero d'abord, puis la phase seule, et on se tait
+        // si le calendrier ne dit rien plutot que d'annoncer une heure qui
+        // serait celle d'une autre course.
+        const rv = (e.calendrier || []).find(r => r.phase === e.phase && r.course === course)
+                || (e.calendrier || []).find(r => r.phase === e.phase && r.course == null);
+        // Le mot que le vainqueur de CETTE course a laisse, s'il l'a fait.
+        const mot = (e.mots || []).find(m => m.phase === e.phase && m.course === course) || null;
         return (
           <div key={course} className="flex flex-col gap-1.5">
             <div className="flex items-baseline justify-between px-1">
               <span className="text-[10px] font-bold tracking-widest text-muted-foreground">
-                {SprinterApp.N.phaseNom(e.phase, e.phaseNom)} {e.courses > 1 ? course : ''}
+                {SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
               </span>
               {courue && e.directsParCourse > 0 && (
                 <span className="text-[9px] text-primary/70 tracking-wide">
@@ -140,15 +176,27 @@ function Grille({ e }: { e: Edition }) {
               const r = places.get(p.name_key);
               return (
                 <Couloir key={p.name_key} p={p}
+                         couloir={couloirDe.get(p.name_key)}
                          place={r?.place} ms={r?.ms}
                          direct={!!r && r.place <= e.directsParCourse} />
               );
             })}
+            {/* DEUX LIBELLES QUI PARTENT AVEC LA VIDEO.
+                `competition` : `e.titre` est compose par le serveur et reste
+                en francais ; `titreEdition` est la forme qui suit la langue du
+                joueur (voir sprinter-i18n).
+                `titre` : « Série 3 », « Demi-finale 1 », « Finale » — au
+                singulier et avec son numero, parce que c'est UNE course de la
+                phase et non la phase entiere. */}
             {courue && (
               <BoutonRevoir
-                epreuve={e.epreuve} arrivees={fin}
-                titre={`${SprinterApp.N.phaseNom(e.phase, e.phaseNom)}${e.courses > 1 ? ' ' + course : ''}`}
-                sousTitre={`${e.titre} · ${e.epreuve} M`} />
+                epreuve={e.epreuve} arrivees={fin} couloirs={couloirDe}
+                competition={SprinterApp.N.titreEdition(e) || e.titre}
+                quand={rv ? rv.at : null}
+                course={{ edition: e.id, phase: e.phase, numero: course }}
+                mot={mot && { nom: mot.nom, texte: mot.texte, a_voix: mot.a_voix }}
+                titre={SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
+                sousTitre={`${SprinterApp.N.titreEdition(e) || e.titre} · ${e.epreuve} M`} />
             )}
           </div>
         );
@@ -170,9 +218,19 @@ function Grille({ e }: { e: Edition }) {
  * La camera suit le joueur s'il courait cette course-la, et le vainqueur
  * sinon : on ne cadre pas un inconnu quand on regarde une finale.
  */
-function BoutonRevoir({ epreuve, arrivees, titre, sousTitre }: {
+function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, titre, sousTitre }: {
   epreuve: string;
   arrivees: { name_key: string; nom: string; ms: number | null }[];
+  /** Le couloir de chacun, derive du rang de semis par `Grille`. */
+  couloirs: Map<string, number>;
+  /** « Championnat de France » — l'en-tete que la video portera. */
+  competition: string;
+  /** L'heure de la course au calendrier, ou `null` s'il ne la dit pas. */
+  quand: number | null;
+  /** A quelle course adresser le mot du vainqueur. */
+  course: { edition: string; phase: string; numero: number };
+  /** Le mot deja pose, s'il y en a un. */
+  mot: { nom: string; texte: string | null; a_voix: boolean } | null;
   titre: string;
   sousTitre: string;
 }) {
@@ -181,8 +239,19 @@ function BoutonRevoir({ epreuve, arrivees, titre, sousTitre }: {
   const revoir = () => {
     rejouerCourse(
       epreuve,
-      arrivees.map(r => ({ nom: r.nom, ms: r.ms, moi: !!moi && r.name_key === moi })),
-      3500, true, { titre, sousTitre },
+      // LE COULOIR PART AVEC LE CHRONO.
+      //
+      // `arrivees` est trie par le chrono. Sans le couloir, le rejeu posait
+      // donc les coureurs sur la piste DANS L'ORDRE D'ARRIVEE — le vainqueur
+      // au couloir 1, le deuxieme au 2 — et le tableau de fin, qui affiche ce
+      // couloir, n'aurait fait que repeter la place sous un autre nom. Une
+      // course se regarde avec ses couloirs a leur place.
+      arrivees.map(r => ({
+        nom: r.nom, ms: r.ms,
+        couloir: couloirs.get(r.name_key),
+        moi: !!moi && r.name_key === moi,
+      })),
+      3500, true, { titre, sousTitre, competition, quand, course, mot },
     );
   };
   return (

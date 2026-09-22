@@ -59,6 +59,58 @@ function enBase64(b: Blob): Promise<string> {
   });
 }
 
+/**
+ * Depose le mot du vainqueur d'une COURSE DE CHAMPIONNAT.
+ *
+ * Meme geste que pour un duel, et volontairement la meme fonction d'envoi :
+ * seule l'adresse change. Ce qui change vraiment est de l'autre cote — le mot
+ * d'un duel va a une personne, celui d'une course va aux sept autres partants,
+ * et il reste tant que l'edition existe (voir `champ_mots` dans le worker).
+ *
+ * Le serveur relit lui-meme qui a gagne : rien de ce qu'on envoie ici ne le
+ * convainc d'accepter un mot d'un autre que le vainqueur.
+ */
+export async function poserMotDeCourse(
+  c: { edition: string; phase: string; course: number },
+  m: { texte?: string; voix?: Blob | null },
+): Promise<MotPose> {
+  try {
+    const corps: any = {
+      edition: c.edition, phase: c.phase, course: c.course,
+      name: getSavedName() || '',
+    };
+    if (m.texte) corps.texte = m.texte.slice(0, MAX_TEXTE);
+    if (m.voix) {
+      corps.voix = await enBase64(m.voix);
+      corps.voix_type = m.voix.type || 'audio/webm';
+    }
+    const r = await fetch(`${API_BASE}/champ/mot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return { error: (d && d.error) || 'refus du serveur' };
+    return d as MotPose;
+  } catch {
+    return { error: 'reseau' };
+  }
+}
+
+/** La voix d'un mot de course, a la demande — elle ne voyage pas avec l'edition. */
+export async function voixDuMotDeCourse(
+  c: { edition: string; phase: string; course: number },
+): Promise<{ voix: string; voix_type: string } | null> {
+  try {
+    const q = `edition=${encodeURIComponent(c.edition)}&phase=${encodeURIComponent(c.phase)}&course=${c.course}`;
+    const r = await fetch(`${API_BASE}/champ/mot?${q}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Une URL jouable a partir de ce que le serveur a renvoye. */
 export function urlDeLaVoix(b64: string, type: string): string {
   const brut = atob(b64);

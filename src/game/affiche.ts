@@ -57,21 +57,31 @@ function nomDeFichier(c: Course): string {
  * le poids compte : cette image part par la feuille de partage d'un telephone,
  * souvent en donnees mobiles.
  */
+/**
+ * Attend les polices du trace.
+ *
+ * Elles doivent etre chargees AVANT le trace : un canvas dessine pendant qu'une
+ * police arrive encore ecrit en police de repli, et il ne se redessine pas
+ * quand elle finit par arriver. Le jeu tourne depuis un moment quand ces
+ * boutons sont atteints, donc elles sont la — mais un premier partage sur une
+ * connexion lente ne doit pas sortir en Helvetica.
+ *
+ * Exporte parce que le releve de photo-finish dessine sur le meme principe et
+ * a exactement le meme piege (voir photo-finish.ts).
+ */
+export async function policesPretes(): Promise<void> {
+  if (typeof document === 'undefined' || !(document as any).fonts) return;
+  try {
+    await Promise.all([
+      (document as any).fonts.load('900 200px Outfit'),
+      (document as any).fonts.load('700 200px "Space Mono"'),
+    ]);
+  } catch { /* on dessinera avec ce qu'on a */ }
+}
+
 export async function fabriquer(course: Course): Promise<Blob | null> {
   try {
-    // Les polices doivent etre chargees AVANT le trace : un canvas dessine
-    // pendant qu'une police arrive encore ecrit en police de repli, et il ne se
-    // redessine pas quand elle finit par arriver. Le jeu tourne depuis un
-    // moment quand ce bouton est atteint, donc elles sont la — mais un premier
-    // partage sur une connexion lente ne doit pas sortir en Helvetica.
-    if (typeof document !== 'undefined' && (document as any).fonts) {
-      try {
-        await Promise.all([
-          (document as any).fonts.load('900 200px Outfit'),
-          (document as any).fonts.load('700 200px "Space Mono"'),
-        ]);
-      } catch { /* on dessinera avec ce qu'on a */ }
-    }
+    await policesPretes();
     const cv = document.createElement('canvas');
     dessinerCourse(cv, course);
     return await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));
@@ -118,8 +128,17 @@ export type Sortie = 'partage' | 'telechargement' | 'annule' | 'echec';
 export async function partager(course: Course): Promise<Sortie> {
   const blob = await fabriquer(course);
   if (!blob) return 'echec';
-  const nom = nomDeFichier(course);
+  return sortir(blob, nomDeFichier(course));
+}
 
+/**
+ * Le trajet de sortie, une fois l'image faite.
+ *
+ * Separe de `partager` parce qu'il ne depend pas de CE qu'on partage : le
+ * releve de photo-finish emprunte le meme chemin, avec les memes deux issues et
+ * la meme facon de ne pas mentir sur celle qui a servi.
+ */
+export async function sortir(blob: Blob, nom: string): Promise<Sortie> {
   if (peutPartagerImage()) {
     try {
       const fichier = new File([blob], nom, { type: 'image/jpeg' });

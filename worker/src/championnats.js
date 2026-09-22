@@ -27,6 +27,11 @@ import { serpentin, qualifier, podium, calendrier, ordonner } from './championna
 // des trente-deux qu'on dessine a l'ecran ne designe pas les trente-deux
 // qu'on selectionne. Une seule definition, deux lecteurs.
 import { ensureDuelTables, ordreClassement } from './duels.js';
+// Le mot d'une course suit les memes regles de proprete que celui d'un duel :
+// meme longueur, memes types de voix, meme nettoyage des caracteres invisibles.
+// Les recopier ici serait la garantie qu'un jour les deux ne refusent plus la
+// meme chose.
+import { motPropre, voixPropre } from './mot.js';
 
 const JOUR = 24 * 3600 * 1000;
 
@@ -288,6 +293,41 @@ export async function ensureChampTables(db) {
       voie TEXT,
       couru_le INTEGER NOT NULL,
       PRIMARY KEY (edition, phase, course, name_key)
+    )`),
+
+    /* -----------------------------------------------------------------
+       LE MOT DU VAINQUEUR D'UNE COURSE
+       -----------------------------------------------------------------
+       Le meme geste que dans un duel (voir mot.js), avec une difference qui
+       change la regle : un duel oppose deux personnes, une course en oppose
+       huit. Le mot ne va donc pas « a celui qui vient de perdre » mais aux
+       SEPT autres partants de cette course-la, et il tient tant que
+       l'edition existe — on ne peut pas l'effacer a la premiere lecture
+       comme on efface la voix d'un duel, parce qu'il en reste six qui ne
+       l'ont pas encore ouvert.
+
+       LA CLE PRIMAIRE PORTE LA REGLE. (edition, phase, course) sans le nom :
+       il n'y a qu'un mot par course, celui du vainqueur, et une seule fois.
+       Ce n'est pas une messagerie — personne ne repond, et le suivant ne
+       peut pas ecraser le precedent.
+
+       Ce qu'il faut savoir et ne pas se cacher, comme pour le duel : ce sont
+       des mots ecrits par des gens et montres a d'autres gens, sans filtre
+       automatique. Ici le cercle est plus large que deux — sept lecteurs, et
+       le texte part aussi dans la video que le vainqueur partage. Le jour ou
+       une edition reunira des inconnus, il faudra un signalement et de quoi
+       le traiter. */
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_mots (
+      edition TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      course INTEGER NOT NULL,
+      name_key TEXT NOT NULL,
+      nom TEXT NOT NULL,
+      texte TEXT,
+      voix TEXT,
+      voix_type TEXT,
+      au INTEGER NOT NULL,
+      PRIMARY KEY (edition, phase, course)
     )`),
 
     // Les titres, avec leur date d'expiration : un champion le reste trois
@@ -1432,6 +1472,76 @@ export async function rangSelection(db, nameKey) {
  * champions et a fabriquer l'attente, et ce sont exactement les nombres qu'on
  * voudra bouger apres le premier cycle.
  */
+/* ---------------------------------------------------------------------------
+   POSER ET LIRE LE MOT DU VAINQUEUR
+--------------------------------------------------------------------------- */
+
+/** Le nom, normalise — meme regle que le classement (voir relais.js). */
+const cleNom = (nom) => String(nom || '').trim().toLowerCase();
+
+/**
+ * Qui a gagne cette course-la, d'apres les chronos enregistres.
+ *
+ * On lit la PLACE quand elle est posee, et le chrono sinon : les places sont
+ * ecrites apres coup (voir la cloture de course), et un mot depose dans la
+ * seconde qui suit l'arrivee ne doit pas etre refuse parce qu'une colonne
+ * n'est pas encore remplie.
+ */
+export async function vainqueurDeLaCourse(db, edition, phase, course) {
+  const r = await db.prepare(
+    `SELECT name_key FROM champ_resultats
+      WHERE edition = ? AND phase = ? AND course = ? AND ms IS NOT NULL
+      ORDER BY CASE WHEN place IS NULL THEN 1 ELSE 0 END, place, ms
+      LIMIT 1`).bind(edition, phase, course).first();
+  return r ? r.name_key : null;
+}
+
+/**
+ * Depose le mot du vainqueur d'une course.
+ *
+ * Le serveur reverifie TOUT ce que le client a pu decider : que la course
+ * existe, que celui qui parle l'a bien gagnee, que le texte et la voix sont
+ * recevables, et qu'aucun mot n'a deja ete pose. Un client peut mentir sur
+ * chacun de ces points.
+ */
+export async function poserMotDeCourse(db, { edition, phase, course, nom, texte, voix, voix_type }) {
+  const k = cleNom(nom);
+  if (!k) return { error: 'nom manquant' };
+  if (!edition || !phase || !Number.isInteger(course)) return { error: 'course manquante' };
+
+  const gagnant = await vainqueurDeLaCourse(db, edition, phase, course);
+  if (!gagnant) return { error: 'course inconnue ou pas encore courue', code: 404 };
+  if (gagnant !== k) return { error: 'reserve au vainqueur de la course', code: 403 };
+
+  const t = texte ? motPropre(texte) : '';
+  const v = voix ? voixPropre(voix, voix_type) : null;
+  if (!t && !v) return { error: 'mot vide' };
+
+  // INSERT OR IGNORE plutot qu'un SELECT suivi d'un INSERT : deux envois
+  // partis en meme temps depuis deux onglets passeraient tous les deux le
+  // test, et le second ecraserait le premier. La cle primaire tranche.
+  const r = await db.prepare(
+    `INSERT OR IGNORE INTO champ_mots
+       (edition, phase, course, name_key, nom, texte, voix, voix_type, au)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(edition, phase, course, k, String(nom).trim(),
+         t || null, v ? v.b64 : null, v ? v.type : null, Date.now()).run();
+
+  if (!r.meta || r.meta.changes === 0) {
+    return { error: 'un mot a deja ete pose sur cette course', code: 409 };
+  }
+  return { ok: true, texte: t || null, voix: !!v };
+}
+
+/** La voix d'un mot, a la demande. Le texte, lui, voyage avec l'edition. */
+export async function voixDuMot(db, edition, phase, course) {
+  const r = await db.prepare(
+    `SELECT voix, voix_type FROM champ_mots
+      WHERE edition = ? AND phase = ? AND course = ?`).bind(edition, phase, course).first();
+  if (!r || !r.voix) return null;
+  return { voix: r.voix, voix_type: r.voix_type };
+}
+
 export function calendrierCycle(debutSamedi) {
   const SEMAINE = 7 * JOUR;
   const nat = debutSamedi;
@@ -1484,6 +1594,14 @@ export async function etatEdition(db, id) {
   const { results: res } = await db.prepare(
     `SELECT phase, course, name_key, ms, place FROM champ_resultats
       WHERE edition = ? ORDER BY phase, course, place`).bind(id).all();
+  // LES MOTS DES VAINQUEURS. La voix ne part pas d'ici : elle pese jusqu'a
+  // deux cents kilooctets encodee, et l'edition entiere se recharge a chaque
+  // ouverture de l'ecran. On annonce qu'elle existe ; qui veut l'entendre la
+  // demande a `/champ/mot?...`, une fois, pour la course qui l'interesse.
+  const { results: mots } = await db.prepare(
+    `SELECT phase, course, name_key, nom, texte, au,
+            CASE WHEN voix IS NULL THEN 0 ELSE 1 END AS a_voix
+       FROM champ_mots WHERE edition = ?`).bind(id).all();
   // Le nom lisible et la forme de la phase viennent d'ici, pas du jeu : le
   // format est une regle de competition, et la dupliquer cote client garantit
   // qu'un jour les deux ne diront plus la meme chose.
@@ -1516,6 +1634,7 @@ export async function etatEdition(db, id) {
     champion: e.champion_nom || null,
     partants: (partants || []).map(p => ({ ...p, tenant: !!p.tenant })),
     resultats: res || [],
+    mots: (mots || []).map(m => ({ ...m, a_voix: !!m.a_voix })),
 
     // LE TENANT DU TITRE, tel que la cloture l'a gele — et le declencheur de la
     // cinematique avec lui.

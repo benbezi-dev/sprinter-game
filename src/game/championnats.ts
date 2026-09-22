@@ -41,6 +41,24 @@ export type Resultat = {
 export type PhaseInfo = { cle: string; nom: string; courses: number };
 
 /**
+ * LE MOT DU VAINQUEUR D'UNE COURSE.
+ *
+ * Un seul par course, celui du premier, et il ne s'efface pas : les sept
+ * autres partants ne l'ouvrent pas tous au meme moment.
+ *
+ * `a_voix` dit qu'un enregistrement existe, jamais l'enregistrement lui-meme :
+ * six secondes encodees pesent jusqu'a deux cents kilooctets, et l'edition se
+ * recharge a chaque ouverture de l'ecran. Qui veut l'entendre le demande.
+ */
+export type MotDeCourse = {
+  phase: string; course: number;
+  name_key: string; nom: string;
+  texte: string | null;
+  a_voix: boolean;
+  au: number;
+};
+
+/**
  * LE CHAMPION EN TITRE de l'edition en cours, et ce que son titre lui donne.
  *
  * `cinematique` est un NOM de mise en scene, pas la mise en scene : le serveur
@@ -131,6 +149,8 @@ export type Edition = {
   tenant: TenantEnTitre | null;
   partants: Partant[];
   resultats: Resultat[];
+  /** Les mots deja poses, toutes phases confondues. */
+  mots?: MotDeCourse[];
   calendrier: RendezVous[];
 };
 

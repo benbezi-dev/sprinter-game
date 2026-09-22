@@ -11,12 +11,18 @@
    CELLE-CI est celle des JOURS DE COMPETITION : bleu nuit, degrade orange,
    pastille. Le compte la prend quand il parle d'autre chose que de lui — un
    record du monde, une finale, un chrono d'ailleurs — et quand il parle de
-   competition tout court : le classement des nations du lundi en est. Le jeu
-   ne la dessine jamais ; elle n'existe que dans les cartes qu'on poste, d'ou
-   sa place ici, dans `tools/`, et non dans `src/`.
+   competition tout court : le classement des nations du lundi en est.
+
+   LES VALEURS ONT DEMENAGE DANS `src/game/voix-competition.js`. Ce fichier
+   disait « le jeu ne la dessine jamais », et c'etait vrai tant que cette voix
+   n'existait que dans les cartes qu'on poste. Le championnat l'a rendu faux :
+   un jour de competition, le jeu peint le carton de ses videos dans cette
+   voix-la, parce que la video et les cartes se retrouvent dans le meme fil, le
+   meme jour, cote a cote. On reexporte donc, et l'on garde ici ce qui
+   n'appartient qu'aux cartes : le fond en CSS, les formats, les drapeaux.
 
    POURQUOI CE FICHIER EXISTE. Ces valeurs etaient recopiees dans trois cartes,
-   a l'identique et sans que rien ne le dise. Une quatriere carte en aurait
+   a l'identique et sans que rien ne le dise. Une quatrieme carte en aurait
    fait quatre. Un degrade qui bouge dans une carte et pas dans les autres, ce
    sont deux cartes du meme compte, la meme semaine, dans le meme fil, qui ne
    se ressemblent plus — et personne ne s'en apercoit avant de les voir cote a
@@ -35,19 +41,18 @@
    quand elles passeront par `chrome.mjs`, comme les autres.
 =========================================================================== */
 
-/** Le bleu nuit du fond, et les deux teintes du halo qui le detache du fil. */
-export const NUIT = '#070b16';
-export const HALO = { coeur: '#17213a', bord: '#101728' };
+// Les valeurs sont a la source, pas ici — voir l'en-tete.
+export { NUIT, HALO, FLAMME, ENCRE } from '../src/game/voix-competition.js';
+import { NUIT, HALO, FLAMME } from '../src/game/voix-competition.js';
 
 /**
  * LE DEGRADE, qui est la signature de cette voix.
  *
- * Trois arrets et non deux : le passage par l'ambre au milieu est ce qui le
- * fait ressembler a une flamme plutot qu'a un fondu. `deg` varie d'une carte a
- * l'autre — 48 % pour un titre, 50 % pour une pastille — parce qu'un bloc
- * large et un bloc etroit ne coupent pas le degrade au meme endroit.
+ * `deg` varie d'une carte a l'autre — 48 % pour un titre, 50 % pour une
+ * pastille — parce qu'un bloc large et un bloc etroit ne coupent pas le
+ * degrade au meme endroit. C'est la seule chose que le CSS ajoute aux trois
+ * arrets : le jeu, lui, peint la meme flamme au pinceau (`flammeSur`).
  */
-export const FLAMME = { haut: '#fbc44e', milieu: '#f7a03c', bas: '#ef7526' };
 export function flamme(milieu = 48) {
   return `linear-gradient(100deg,${FLAMME.haut} 4%,${FLAMME.milieu} ${milieu}%,${FLAMME.bas} 96%)`;
 }
@@ -58,24 +63,6 @@ export function fond() {
        background-image:radial-gradient(ellipse 88% 62% at 50% 46%,
                         ${HALO.coeur} 0%,${HALO.bord} 46%,${NUIT} 100%)`;
 }
-
-/**
- * LES ENCRES, PAR ROLE ET NON PAR VALEUR.
- *
- * `kicker` et `etiquette` partagent presque la meme, et ce n'est pas un
- * doublon : l'un coiffe la carte, l'autre un bloc interieur, et le jour ou
- * l'un bouge l'autre ne doit pas suivre par accident.
- */
-export const ENCRE = {
-  kicker: '#8494ad',
-  sous: '#93a2ba',
-  etiquette: '#7e8da6',
-  rang: '#7e8da6',
-  vif: '#eef2f8',
-  doux: '#8d9cb4',
-  filet: '#253049',
-  surPastille: '#0a1020',
-};
 
 /**
  * L'ECHELLE D'UN FORMAT.

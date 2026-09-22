@@ -1,8 +1,18 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Image as ImageIcon, ScanLine } from 'lucide-react';
 import { MONTEE, FONDU } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
 import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu } from '@/game/champ-rejeu';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { ReviewVideo } from './ReviewVideo';
+import { LaisserUnMot } from './MotDuel';
+import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
+import { getSavedName } from '@/game/leaderboard';
+import { arriveeSerree, ecartLePlusSerre, partagerPhotoFinish } from '@/game/photo-finish';
+import type { MotDuVainqueur } from '@/game/champ-rejeu';
+import { partagerLArrivee } from '@/game/affiche-champ';
+import { EPREUVE } from '@/game/trace-affiche';
 
 /**
  * LA RETRANSMISSION D'UNE COURSE DE CHAMPIONNAT.
@@ -27,7 +37,7 @@ import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu } from '@/ga
  *   generique         le titre de la reunion, puis celui de la course
  *   presentation      les huit, un par un, camera sur eux
  *   course            rien. La piste, et huit coureurs.
- *   arrivee           le tableau, revele du dernier au premier
+ *   arrivee           le tableau, du premier au dernier
  */
 
 const OR = '#F8CD4A';
@@ -37,7 +47,7 @@ const GENERIQUE_MS = 2400;
 /** Chaque athlete. Trois secondes seraient un meeting ; ici on enchaine. */
 const PAR_ATHLETE_MS = 1750;
 
-/** Le tableau se remplit du dernier vers le premier : le vainqueur en dernier. */
+/** Le pas entre deux lignes du tableau, qui tombent du premier au dernier. */
 const CASCADE_MS = 130;
 
 function chrono(ms: number | null): string {
@@ -177,16 +187,29 @@ function Presentation({ titre, sousTitre, grille }: {
  * quelqu'un.
  *
  * Un bandeau bas, monochrome, du numero de couloir et du nom. Il s'efface au
- * bout de quatre secondes et ne revient pas : passe ce delai, la course s'est
- * etiree et c'est la place qui compte, plus l'identite.
+ * bout de quatre secondes de COURSE et ne revient pas : passe ce delai, la
+ * course s'est etiree et c'est la place qui compte, plus l'identite.
+ *
+ * QUATRE SECONDES DE COURSE, ET NON QUATRE SECONDES D'ECRAN. Le compte partait
+ * du montage du bandeau, c'est-a-dire de la fin de la presentation — trois
+ * secondes et demie AVANT le coup de pistolet. Il ne restait donc qu'une
+ * demi-seconde de course affichee, exactement a l'instant ou la question « qui
+ * est qui » commence a se poser. Le bandeau se regle maintenant sur le chrono
+ * du moteur, qui ne bouge pas tant que le pistolet n'a pas tire.
  */
 const RAPPEL_MS = 4000;
 
 function RappelCouloirs({ grille }: { grille: { couloir: number; nom: string }[] }) {
   const [visible, setVisible] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setVisible(false), RAPPEL_MS);
-    return () => clearTimeout(t);
+    // Une horloge plutot qu'un `setTimeout` : le depart ne tombe pas a un
+    // instant connu d'ici — le moteur borne le decompte qu'on lui demande — et
+    // un onglet passe en arriere-plan etirerait un minuteur.
+    const t = setInterval(() => {
+      const G: any = SprinterApp.G;
+      if ((G.elapsed || 0) * 1000 >= RAPPEL_MS) setVisible(false);
+    }, 100);
+    return () => clearInterval(t);
   }, []);
 
   return (
@@ -216,23 +239,171 @@ function RappelCouloirs({ grille }: { grille: { couloir: number; nom: string }[]
   );
 }
 
-/* -------------------------------------------------------------- l'arrivee */
+/* ------------------------------------------------------ le mot du vainqueur */
 
-function Arrivee({ titre, sousTitre, lignes }: {
-  titre: string; sousTitre: string;
-  lignes: { place: number; nom: string; ms: number | null }[];
+/**
+ * CE QUE LE GAGNANT A DIT AUX AUTRES.
+ *
+ * Un duel oppose deux personnes et le mot va a celle qui vient de perdre ; une
+ * course en oppose huit, et il va aux sept autres. C'est la meme mecanique
+ * (voir `mot.ts`, `MotDuel`) avec une seule difference de fond : il ne
+ * s'efface pas a la lecture, parce qu'il en reste six qui ne l'ont pas encore
+ * ouvert.
+ *
+ * LA VOIX NE SE TELECHARGE QU'A LA DEMANDE. Six secondes encodees pesent
+ * jusqu'a deux cents kilooctets ; les faire voyager avec chaque edition, a
+ * chaque ouverture de l'ecran, pour un enregistrement que personne n'ecoutera
+ * peut-etre, serait payer cher un silence.
+ */
+function MotDuGagnant({ mot, course }: {
+  mot: MotDuVainqueur;
+  course: { edition: string; phase: string; numero: number } | null;
 }) {
   const { N } = SprinterApp;
-  // LE TABLEAU SE LIT DE HAUT EN BAS, MAIS IL SE REMPLIT DE BAS EN HAUT.
-  //
-  // Deux choses differentes, et les confondre coute la moitie de l'effet. Un
-  // classement ou le huitieme est en haut se lit a l'envers et personne n'y
-  // trouve le vainqueur. Mais un tableau qui s'affiche en commencant par le
-  // premier a tout dit a sa premiere ligne : les sept suivantes tombent dans
-  // le vide. On garde donc l'ordre du classement, et on inverse l'ordre
-  // D'APPARITION — le huitieme d'abord, le vainqueur en dernier.
-  const dernier = lignes.length - 1;
+  const [charge, setCharge] = useState(false);
 
+  const ecouter = async () => {
+    if (!course || charge) return;
+    setCharge(true);
+    const v = await voixDuMotDeCourse({
+      edition: course.edition, phase: course.phase, course: course.numero,
+    });
+    if (!v) { setCharge(false); return; }
+    try {
+      const a = new Audio(urlDeLaVoix(v.voix, v.voix_type));
+      a.onended = () => setCharge(false);
+      await a.play();
+    } catch { setCharge(false); }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border px-3 py-2.5"
+         style={{ borderColor: 'rgba(248,205,74,0.35)', background: 'rgba(248,205,74,0.08)' }}>
+      <span className="text-[8px] font-bold tracking-[0.3em] uppercase" style={{ color: OR }}>
+        {N.t('mot_du_vainqueur')} · {mot.nom}
+      </span>
+      {mot.texte && (
+        <p className="text-[12px] leading-snug text-white/85">« {mot.texte} »</p>
+      )}
+      {mot.a_voix && (
+        <button onClick={ecouter} disabled={charge}
+          className="self-start flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                     border border-white/20 bg-white/[0.06] text-[9px] font-bold
+                     tracking-[0.2em] active:scale-95 transition disabled:opacity-50">
+          {charge ? '…' : N.t('mot_ecouter_voix')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- l'arrivee */
+
+function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, quand }: {
+  titre: string; sousTitre: string;
+  lignes: { place: number; nom: string; ms: number | null; couloir: number | null }[];
+  course: { edition: string; phase: string; numero: number } | null;
+  mot: MotDuVainqueur | null;
+  competition: string; epreuve: string; quand: number | null;
+}) {
+  const { N } = SprinterApp;
+
+  /**
+   * LA VIDEO SE PROPOSE ICI, ET PAS TROIS ECRANS PLUS LOIN.
+   *
+   * Le rejeu filme ce qu'il rejoue, et le bouton de partage n'existait que
+   * dans le panneau du championnat : il fallait fermer le tableau, rentrer a
+   * l'accueil, rouvrir le championnat et faire defiler pour retrouver la
+   * course qu'on venait de regarder. La video se partage dans la minute qui
+   * suit l'arrivee ou elle ne se partage pas ; on la pose donc sous le
+   * tableau, la ou le regard est deja.
+   *
+   * La prise porte le genre « direct » (voir `champ-rejeu`), et le composant
+   * ne montre rien tant qu'elle n'est pas prete — l'arret de l'enregistreur
+   * precede l'ouverture du tableau, mais le montage, lui, prend le temps
+   * qu'il prend.
+   */
+  const film = useFilmDeLaCourse();
+
+  /**
+   * LE GAGNANT PEUT CLASHER LES AUTRES — et lui seul, une seule fois.
+   *
+   * On le reconnait au nom enregistre sur ce telephone, mais ce n'est qu'une
+   * politesse d'affichage : le serveur relit lui-meme qui a gagne cette
+   * course-la et refuse tout mot venu d'un autre. Un client qui mentirait ici
+   * n'obtiendrait qu'un 403.
+   *
+   * Le bloc ne s'ouvre que sur une course de CHAMPIONNAT : un rejeu lance a la
+   * main n'a pas d'edition a qui adresser le mot.
+   */
+  const [pose, setPose] = useState(false);
+
+  /**
+   * L'IMAGE DU RESULTAT, A COTE DE LA VIDEO.
+   *
+   * Deux gestes differents et non deux versions du meme : on envoie une video
+   * a quelqu'un qui va la regarder dix secondes, on poste une image qu'on lit
+   * d'un coup d'oeil en faisant defiler. Un jour de competition, le compte a
+   * besoin des deux — et elles sortent toutes les deux dans la voix des jours
+   * de competition (voir `affiche-champ`).
+   */
+  const [image, setImage] = useState<'' | 'en cours' | 'faite' | 'ratee'>('');
+  const fabriquerLImage = async () => {
+    setImage('en cours');
+    const r = await partagerLArrivee({
+      competition: competition || sousTitre,
+      course: titre,
+      epreuve: EPREUVE(epreuve),
+      quand,
+      lignes,
+      mot: mot && mot.texte ? { nom: mot.nom, texte: mot.texte } : null,
+      etiquetteMot: N.t('mot_du_vainqueur'),
+    }, N.getLang() !== 'en');
+    setImage(r === 'echec' ? 'ratee' : 'faite');
+  };
+
+  /**
+   * LE PHOTO-FINISH, ET POURQUOI IL N'EST PAS TOUJOURS LA.
+   *
+   * Un releve de camera a fente ne sert qu'a departager. Sur une course gagnee
+   * d'un dixieme, il ne dirait que ce que le tableau dit deja, en moins clair —
+   * et un bouton qui promet un photo-finish sur une arrivee etalee devient un
+   * mot creux au bout de deux courses. Il n'apparait donc que si deux places
+   * qui se suivent tiennent dans le meme centieme (voir `arriveeSerree`), ce
+   * qui est exactement le cas ou un juge va voir l'image.
+   *
+   * L'ecart affiche sur le bouton dit POURQUOI il est la. Sans lui, personne ne
+   * sait pourquoi cette course-ci a droit a une image que la precedente n'avait
+   * pas.
+   */
+  const serree = arriveeSerree(lignes);
+  const ecartMs = ecartLePlusSerre(lignes);
+  const [releve, setReleve] = useState<'' | 'en cours' | 'fait' | 'rate'>('');
+  const fabriquerLeReleve = async () => {
+    setReleve('en cours');
+    const r = await partagerPhotoFinish({
+      competition: competition || sousTitre,
+      nomCourse: titre,
+      epreuve: EPREUVE(epreuve),
+      quand,
+      lignes,
+    });
+    setReleve(r === 'echec' ? 'rate' : 'fait');
+  };
+
+  const moi = (getSavedName() || '').trim().toLowerCase();
+  const vainqueur = lignes.find(r => r.place === 1);
+  const jaiGagne = !!course && !!moi && !!vainqueur
+    && vainqueur.nom.trim().toLowerCase() === moi;
+
+  // LE TABLEAU SE LIT ET SE REMPLIT DANS LE MEME SENS : DU PREMIER AU DERNIER.
+  //
+  // Il a d'abord ete ecrit a l'envers — le huitieme affiche d'abord, le
+  // vainqueur en dernier — pour garder le nom du gagnant pour la fin. Mais
+  // c'est une feuille de resultats, pas une remise de medailles : on vient y
+  // chercher qui a gagne et en combien, et le regard part en haut. Une
+  // cascade qui descend depuis le vainqueur donne cette reponse tout de
+  // suite, puis deroule le reste dans l'ordre ou on le lira.
   return (
     <motion.div {...MONTEE}
       className="absolute inset-0 z-30 flex items-center justify-center
@@ -253,7 +424,7 @@ function Arrivee({ titre, sousTitre, lignes }: {
             <motion.div key={r.nom + r.place}
               initial={{ opacity: 0, x: 18 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: ((dernier - i) * CASCADE_MS) / 1000, duration: 0.22 }}
+              transition={{ delay: (i * CASCADE_MS) / 1000, duration: 0.22 }}
               className={`flex items-center gap-3 px-3 py-2 rounded-xl border
                 ${r.place === 1 ? 'border-primary/60 bg-primary/15'
                   : r.place <= 3 ? 'border-white/15 bg-white/[0.06]'
@@ -261,6 +432,17 @@ function Arrivee({ titre, sousTitre, lignes }: {
               <span className="font-display font-black text-base w-5 shrink-0 tabular-nums"
                     style={{ color: r.place === 1 ? OR : 'rgba(255,255,255,0.55)' }}>
                 {r.place}
+              </span>
+              {/* LE COULOIR, DANS SA CASE.
+                  Deux nombres sur une meme ligne se confondent : la place est
+                  en gros et pleine, le couloir est encadre et fin — c'est le
+                  meme chiffre, dans la meme graisse, que la liste de depart
+                  affichee quatre secondes apres le pistolet (`RappelCouloirs`),
+                  pour que l'oeil fasse le lien sans qu'on ait a l'ecrire. */}
+              <span className="font-mono text-[10px] w-5 h-5 shrink-0 grid place-items-center
+                               rounded border border-white/15 bg-white/[0.04]
+                               text-white/50 tabular-nums leading-none">
+                {r.couloir ?? '—'}
               </span>
               <span className={`flex-1 min-w-0 truncate tracking-wide
                 ${r.place === 1 ? 'text-[14px] font-black' : 'text-[12px] font-bold'}`}>
@@ -273,6 +455,52 @@ function Arrivee({ titre, sousTitre, lignes }: {
             </motion.div>
           ))}
         </div>
+
+        {/* CE QU'ON LIT, OU CE QU'ON ECRIT — jamais les deux : un mot pose
+            ferme la porte, et le vainqueur relit le sien comme les autres. */}
+        {mot ? (
+          <MotDuGagnant mot={mot} course={course} />
+        ) : jaiGagne && !pose && course ? (
+          <LaisserUnMot
+            duel="" adversaire=""
+            titre={N.t('mot_titre_course')}
+            confirme={N.t('mot_envoye_course')}
+            poser={m => poserMotDeCourse(
+              { edition: course.edition, phase: course.phase, course: course.numero }, m)}
+            onPose={() => setPose(true)} />
+        ) : null}
+
+        {film.genre === 'direct' && (film.phase === 'prete' || film.phase === 'expiree') && (
+          <ReviewVideo etat={film} onPartager={partagerLeFilm} />
+        )}
+
+        {serree && (
+          <button onClick={fabriquerLeReleve} disabled={releve === 'en cours'}
+            className="self-center flex items-center gap-2 px-4 py-2 rounded-full
+                       border border-primary/40 bg-primary/10 text-primary
+                       text-[10px] font-bold tracking-[0.2em]
+                       active:scale-95 transition disabled:opacity-50">
+            <ScanLine className="w-3.5 h-3.5" />
+            {releve === 'fait' ? N.t('champ_image_faite')
+              : releve === 'rate' ? N.t('champ_image_ratee')
+              : N.t('pf_bouton')}
+            {releve === '' && ecartMs != null && (
+              <span className="font-mono opacity-70">
+                {(ecartMs / 1000).toFixed(3).replace('.', ',')} s
+              </span>
+            )}
+          </button>
+        )}
+
+        <button onClick={fabriquerLImage} disabled={image === 'en cours'}
+          className="self-center flex items-center gap-2 px-4 py-2 rounded-full
+                     border border-white/20 bg-white/[0.06] text-[10px] font-bold
+                     tracking-[0.2em] active:scale-95 transition disabled:opacity-50">
+          <ImageIcon className="w-3.5 h-3.5" />
+          {image === 'faite' ? N.t('champ_image_faite')
+            : image === 'ratee' ? N.t('champ_image_ratee')
+            : N.t('champ_image')}
+        </button>
 
         <motion.button onClick={fermerRejeu}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -297,7 +525,11 @@ export function RejeuChampionnat() {
     return <Presentation titre={etat.titre} sousTitre={etat.sousTitre} grille={etat.grille} />;
   }
   if (etat.phase === 'arrivee' && etat.arrivee) {
-    return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee} />;
+    return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee}
+                    course={etat.course} mot={etat.mot}
+                    competition={SprinterApp.G.rejeuBandeau?.competition || etat.sousTitre}
+                    epreuve={etat.epreuve}
+                    quand={SprinterApp.G.rejeuBandeau?.quand ?? null} />;
   }
   // Pendant la course : le rappel des couloirs, quatre secondes, puis rien.
   return <RappelCouloirs grille={etat.grille} />;

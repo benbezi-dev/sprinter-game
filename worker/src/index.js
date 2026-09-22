@@ -21,6 +21,7 @@ import {
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations,
   fluxDirect, recapMondial, tableauNations,
+  poserMotDeCourse, voixDuMot,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import {
@@ -178,6 +179,11 @@ function json(data, status = 200) {
 const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  // Le mot d'une course de championnat : meme geste, meme cadence. Un joueur
+  // n'en pose qu'un par course, et il n'y a que treize courses dans une
+  // edition — six par minute laissent passer une reprise apres une coupure et
+  // arretent un script.
+  '/champ/mot': { max: 6, fenetreMs: 60_000 },
   // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
   // joueur en demande un par partie ; dix par minute et par adresse laissent
   // passer une famille derriere la meme box et arretent net un script.
@@ -1738,6 +1744,43 @@ async function servir(request, env, ctx, porteur) {
         return json({ error: 'championnats reserves au canal de test' }, 403);
       }
       const sous = url.pathname.slice('/champ/'.length);
+
+      /* LE MOT DU VAINQUEUR D'UNE COURSE.
+         Le serveur ne croit rien de ce que le client annonce : il relit
+         lui-meme qui a gagne (voir `poserMotDeCourse`).
+
+         `ensureChampTables` EN TETE DES DEUX ROUTES, et ce n'est pas une
+         precaution decorative : `champ_mots` est une table neuve, et le bloc
+         `/champ/` ne creait ses tables nulle part — elles existaient parce
+         que `/profil` les creait en passant. La premiere requete sur le mot
+         tombait donc sur « no such table », constate en local. */
+      if (sous === 'mot' && request.method === 'POST') {
+        await ensureChampTables(env.DB);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { edition, phase, course, name, texte, voix, voix_type } = body || {};
+        const r = await poserMotDeCourse(env.DB, {
+          edition, phase, course: Number(course), nom: cleanName(name),
+          texte, voix, voix_type,
+        });
+        if (r.error) return json({ error: r.error }, r.code || 400);
+        return json(r);
+      }
+
+      // La voix d'un mot, a la demande — jamais avec l'edition : elle pese
+      // jusqu'a deux cents kilooctets et l'edition se recharge sans cesse.
+      if (sous === 'mot' && request.method === 'GET') {
+        await ensureChampTables(env.DB);
+        const edition = url.searchParams.get('edition') || '';
+        const phase = url.searchParams.get('phase') || '';
+        const course = Number(url.searchParams.get('course'));
+        if (!edition || !phase || !Number.isInteger(course)) {
+          return json({ error: 'course manquante' }, 400);
+        }
+        const v = await voixDuMot(env.DB, edition, phase, course);
+        if (!v) return json({ error: 'pas de voix' }, 404);
+        return json(v);
+      }
 
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
       //

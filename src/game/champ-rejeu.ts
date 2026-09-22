@@ -83,11 +83,18 @@ const RETARD_ABANDON_MS = 2500;
 
    - AVANT le pistolet, la liste de depart — couloir par couloir, comme le
      speaker l'annonce et comme la television l'affiche ;
-   - APRES la ligne, le tableau — place, nom, chrono.
+   - APRES la ligne, le tableau — place, COULOIR, nom, chrono.
 
-   Entre les deux, il ne reste que la course. La couleur du couloir, posee au
-   sol sous chaque coureur, suffit a suivre quelqu'un sur dix secondes : c'est
-   ce que fait un spectateur dans un stade, qui n'a pas d'etiquette non plus.
+   LE COULOIR EST DANS LES DEUX, ET C'EST LUI QUI LES RELIE. La liste de
+   depart dit « 5 : Untel » ; sans le couloir, le tableau ne dit que « 2e :
+   Untel », et le spectateur qui a suivi du regard le coureur du 5 n'a aucun
+   moyen de savoir lequel des huit noms il vient de regarder courir. La piste
+   ne l'aidera qu'au depart : les couloirs y sont bien numerotes, peints au
+   sol devant les blocs, mais ces chiffres sortent du cadre au bout de
+   quelques metres — la camera suit le coureur — et les athletes n'ont ici ni
+   cerceau ni pastille (`r.repere = null` plus bas).
+
+   Entre les deux, il ne reste que la course.
 --------------------------------------------------------------------------- */
 
 export type EtatRejeu = {
@@ -105,15 +112,28 @@ export type EtatRejeu = {
   titre: string;
   /** Le nom de la competition, sous le titre. */
   sousTitre: string;
+  /** La distance courue : '100', '200', '400'. L'image de l'arrivee l'annonce. */
+  epreuve: string;
   /** La grille, dans l'ordre des couloirs. */
   grille: { couloir: number; nom: string }[];
-  /** L'arrivee, une fois la ligne franchie par tout le monde. */
-  arrivee: { place: number; nom: string; ms: number | null }[] | null;
+  /**
+   * L'arrivee, une fois la ligne franchie par tout le monde.
+   *
+   * `couloir` est celui que le coureur occupait REELLEMENT sur la piste, note
+   * au moment ou on l'y a place : c'est le meme numero que la liste de depart
+   * a annonce. `null` si la correspondance manque, ce qui ne devrait pas
+   * arriver — mieux vaut un tiret qu'un couloir invente.
+   */
+  arrivee: { place: number; nom: string; ms: number | null; couloir: number | null }[] | null;
+  /** La course dont il s'agit, quand elle vient d'un championnat. */
+  course: { edition: string; phase: string; numero: number } | null;
+  /** Le mot du vainqueur, deja pose. `null` tant que personne n'a parle. */
+  mot: MotDuVainqueur | null;
 };
 
 const VIDE: EtatRejeu = {
-  actif: false, phase: 'presentation', titre: '', sousTitre: '',
-  grille: [], arrivee: null,
+  actif: false, phase: 'presentation', titre: '', sousTitre: '', epreuve: '',
+  grille: [], arrivee: null, course: null, mot: null,
 };
 
 let etat: EtatRejeu = VIDE;
@@ -141,10 +161,47 @@ export function lireRejeu(): EtatRejeu { return etat; }
  */
 export function fermerRejeu() {
   const G = SprinterApp?.G;
-  if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; }
+  if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; G.rejeuBandeau = null; }
   poser(VIDE);
   SprinterApp?.goHome();
 }
+
+/** Ce qu'on affiche autour de la course : ce qu'on regarde, et quand ca s'est couru. */
+export type Intitule = {
+  /** « Finale », « Demi-finale 2 » — la course elle-meme. */
+  titre: string;
+  /** « Championnat de France · 100 M » — sous le titre, pendant la presentation. */
+  sousTitre: string;
+  /**
+   * La competition seule, sans l'epreuve : « Championnat de France ».
+   *
+   * Elle sert l'EN-TETE de la retransmission, celui qui reste en haut a droite
+   * pendant toute la course et qui part avec la video (voir `bandeau-rejeu`).
+   * Le sous-titre ne peut pas y servir : il porte l'epreuve, que le HUD annonce
+   * deja par ailleurs, et l'en-tete doit tenir en petit dans un coin.
+   */
+  competition?: string;
+  /** L'heure de la course, prise au calendrier de l'edition. */
+  quand?: number | null;
+  /**
+   * DE QUELLE COURSE IL S'AGIT, pour le mot du vainqueur.
+   *
+   * Le tableau d'arrivee est le seul endroit ou ce mot a du sens : c'est la
+   * qu'on vient de voir qui a gagne. Encore faut-il savoir a quelle course
+   * l'adresser — le rejeu, lui, ne connait que huit chronos.
+   */
+  course?: { edition: string; phase: string; numero: number } | null;
+  /** Le mot que le vainqueur a deja pose, s'il l'a fait. */
+  mot?: MotDuVainqueur | null;
+};
+
+/** Ce que le tableau d'arrivee sait du mot du vainqueur. */
+export type MotDuVainqueur = {
+  nom: string;
+  texte: string | null;
+  /** Un enregistrement existe ; il se demande au serveur, il ne voyage pas. */
+  a_voix: boolean;
+};
 
 /**
  * Rejoue une course a partir de ses chronos.
@@ -161,7 +218,7 @@ export function rejouerCourse(
   coureurs: CoureurRejeu[],
   dansMs = 3500,
   filmer = true,
-  intitule: { titre: string; sousTitre: string } = { titre: '', sousTitre: '' },
+  intitule: Intitule = { titre: '', sousTitre: '' },
 ): boolean {
   const app = SprinterApp;
   if (!app || !coureurs || coureurs.length === 0) return false;
@@ -207,12 +264,56 @@ export function rejouerCourse(
   const ia = G.runners.filter((r: any) => !r.isPlayer);
   const aPlacer = coureurs.filter(c => c !== suivi);
 
-  // Le couloir annonce par la grille quand il y en a un, sinon l'ordre de la
-  // liste. Le joueur garde le sien (3) : c'est celui que la camera vise.
-  const parCouloir = [...aPlacer].sort((a, b) => (a.couloir ?? 99) - (b.couloir ?? 99));
+  // LE COULOIR DE CHACUN, NOTE QUAND ON L'Y POSE.
+  //
+  // Le tableau d'arrivee l'affiche, et il doit etre celui que la liste de
+  // depart a annonce. Le retrouver apres coup en cherchant le nom dans
+  // `G.runners` marcherait presque : deux homonymes dans une meme finale —
+  // deux « Martin » d'un championnat de France — rendraient le premier des
+  // deux couloirs aux deux. On note la correspondance a la source, une fois.
+  const couloirDe = new Map<CoureurRejeu, number>();
 
-  ia.forEach((r: any, i: number) => {
-    const c = parCouloir[i];
+  // LE COUREUR SUIVI COURT DANS SON COULOIR, ET PAS DANS CELUI DU JOUEUR.
+  //
+  // Il prend la place de `G.player` (voir l'en-tete du module) et heritait donc
+  // du couloir 3, celui que le jeu donne au joueur. Tant que rien n'affichait
+  // de numero, cela ne se voyait pas ; mais cela decalait TOUS les autres d'un
+  // cran des que le suivi ne venait pas du 3, et le couloir annonce avant la
+  // course n'etait plus celui qu'on voyait courir. On echange donc les deux
+  // couloirs — `lane` n'est lu qu'au dessin (`T.pos(r.d, r.lane)`), rien n'en
+  // est derive a la construction, et la camera suit le joueur ou qu'il soit.
+  if (suivi.couloir != null) {
+    const occupant = ia.find((r: any) => r.lane + 1 === suivi.couloir);
+    if (occupant) {
+      const sienne = G.player.lane;
+      G.player.lane = occupant.lane;
+      occupant.lane = sienne;
+    }
+  }
+
+  // CHACUN SUR LE COULOIR QU'IL A COURU.
+  //
+  // Premiere passe : ceux dont on connait le couloir vont sur le couloir du
+  // meme numero. Deuxieme passe : les autres — une liste sans couloirs, un
+  // champ manquant — comblent ce qui reste dans l'ordre ou ils sont arrives,
+  // ce qui est exactement l'ancien comportement quand personne n'a de couloir.
+  const ordonnes = [...ia].sort((a: any, b: any) => a.lane - b.lane);
+  const assigne = new Map<any, CoureurRejeu>();
+  const places = new Set<CoureurRejeu>();
+  for (const c of aPlacer) {
+    if (c.couloir == null) continue;
+    const r = ordonnes.find((x: any) => x.lane + 1 === c.couloir && !assigne.has(x));
+    if (r) { assigne.set(r, c); places.add(c); }
+  }
+  const restants = aPlacer.filter(c => !places.has(c));
+  for (const r of ordonnes) {
+    if (assigne.has(r)) continue;
+    const c = restants.shift();
+    if (c) assigne.set(r, c);
+  }
+
+  ordonnes.forEach((r: any) => {
+    const c = assigne.get(r);
     if (!c) {
       // Plus de couloirs que de partants : on retire le figurant plutot que de
       // le laisser courir un chrono invente a cote d'une vraie course.
@@ -220,16 +321,19 @@ export function rejouerCourse(
       return;
     }
     r.name = c.nom;
+    couloirDe.set(c, r.lane + 1);
     habiller(r, c);
     r.setPace(secondes(c));
     // NI CERCEAU NI PASTILLE.
     //
     // Huit cercles de couleur et huit etiquettes suspendues, c'est l'interface
-    // d'un jeu ; une finale n'en a pas. Les couloirs sont numerotes sur la
-    // piste, les athletes ont ete presentes un par un, et ils restent chacun
-    // dans leur couloir du depart a l'arrivee : il n'en faut pas plus pour
-    // suivre quelqu'un sur dix secondes. Le repere reste pour le joueur, et
-    // pour lui seul — voir plus bas.
+    // d'un jeu ; une finale n'en a pas. Les athletes ont ete presentes un par
+    // un, la piste porte ses numeros de couloir devant les blocs, et chacun
+    // reste dans le sien du depart a l'arrivee : il n'en faut pas plus pour
+    // suivre quelqu'un sur dix secondes. Le numero revient ecrit apres la
+    // ligne, dans le tableau, parce que celui du sol est hors cadre des les
+    // premiers metres. Le repere reste pour le joueur, et pour lui seul —
+    // voir plus bas.
     r.repere = null;
   });
   G.runners = G.runners.filter((r: any) => !r.horsCourse);
@@ -237,6 +341,7 @@ export function rejouerCourse(
   // Le coureur suivi prend la place du joueur — son nom, son allure, et son
   // apparence : il n'est « le joueur » que s'il l'est vraiment.
   G.player.name = suivi.nom;
+  couloirDe.set(suivi, G.player.lane + 1);
   habiller(G.player, suivi);
   G.player.setPace(secondes(suivi));
   // LE SEUL REPERE QUI RESTE EST CELUI DU JOUEUR, et il ne s'allume que s'il
@@ -257,6 +362,22 @@ export function rejouerCourse(
   // Apres l'armement, jamais avant : `buildLevel` eteint le drapeau.
   G.rejeu = true;
 
+  // L'EN-TETE DE LA RETRANSMISSION, pose sur `G` pour que le pinceau du film
+  // le trouve sans avoir a remonter jusqu'ici — voir `bandeau-rejeu.ts`, qui
+  // explique pourquoi il ne peut pas lire l'etat du rejeu.
+  G.rejeuBandeau = intitule.competition
+    ? {
+        competition: intitule.competition,
+        course: intitule.titre || intitule.sousTitre,
+        quand: intitule.quand ?? null,
+        // Seul le TEXTE part dans le film : une voix ne se peint pas, et la
+        // bande-son de la prise est celle du stade.
+        mot: intitule.mot && intitule.mot.texte
+          ? { nom: intitule.mot.nom, texte: intitule.mot.texte }
+          : null,
+      }
+    : null;
+
   // La grille telle qu'elle sera annoncee avant le pistolet : les couloirs
   // reels du moteur, et non l'ordre de la liste d'entree — c'est cette
   // liste-la que le spectateur va comparer avec ce qu'il voit sur la piste.
@@ -265,8 +386,10 @@ export function rejouerCourse(
     .sort((a, b) => a.couloir - b.couloir);
   poser({
     actif: true, phase: 'presentation',
-    titre: intitule.titre, sousTitre: intitule.sousTitre,
+    titre: intitule.titre, sousTitre: intitule.sousTitre, epreuve,
     grille, arrivee: null,
+    course: intitule.course ?? null,
+    mot: intitule.mot ?? null,
   });
 
   // CE QUI SE PASSE QUAND LE HUITIEME A FRANCHI LA LIGNE.
@@ -291,7 +414,13 @@ export function rejouerCourse(
       ...etat, phase: 'arrivee',
       arrivee: [...coureurs]
         .sort((a, b) => secondes(a) - secondes(b))
-        .map((c, i) => ({ place: i + 1, nom: c.nom, ms: c.ms })),
+        .map((c, i) => ({
+          place: i + 1, nom: c.nom, ms: c.ms,
+          // Le couloir du moteur d'abord — c'est celui qui a ete couru et
+          // annonce. Celui de la liste d'entree ne sert que de repli : quand
+          // il y a plus de couloirs que de partants, le moteur renumerote.
+          couloir: couloirDe.get(c) ?? c.couloir ?? null,
+        })),
     });
     if (!filmer) return tableau();
     // La prise se ferme d'abord : le tableau n'a pas a entrer dans le film.
