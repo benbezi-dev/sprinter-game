@@ -162,6 +162,22 @@
     // articulation qui atteint exactement sa butee ne ressemble a rien de
     // vivant.
     DRIVE_LIGNE: 0.90,
+    // L'AGRESSIVITE DE LA TRANSITION, entre la poussee et la pleine vitesse.
+    //
+    // Entre DRIVE_END et TRANS_END le coureur se redresse. Le jeu n'y jouait
+    // rien de particulier : l'amplitude de sortie s'eteignait, celle de la
+    // vitesse montait, et la somme des deux passait sans accident. C'est
+    // pourtant la que se joue le moment le plus violent d'un cent metres —
+    // celui ou l'on arrache la vitesse en attaquant le sol, talon claque sous
+    // la fesse, bras qui tirent.
+    //
+    // Une cloche, donc : nulle a quinze metres, pleine a vingt-sept, nulle a
+    // quarante. Elle ne se superpose pas a la sortie de blocs, elle la releve
+    // — sans quoi les deux additionnees donneraient une foulee de dessin
+    // anime sur les vingt premiers metres.
+    TRANSIT_AMPL: 0.22,       // amplitude de cuisse en plus, au sommet
+    TRANSIT_TALON: 0.55,      // et le talon qui remonte sous la fesse
+    TRANSIT_ARM: 0.30,        // les bras qui tirent avec
     // La reference qui fait le « loin derriere » : l'extension arriere la plus
     // marquee des tables de foulee (profil `power`, cuisse a -0,64).
     DRIVE_ARRIERE: 0.64,
@@ -1733,6 +1749,12 @@
     // (BLOC, plus bas) doit rester exactement ce qu'elle est.
     const wBloc = Math.max(0, Math.min(1, r.enBloc || 0));
     const sortie = Math.max(0, Math.min(1, (r.drivePitch || 0) / C.DRIVE_PITCH)) * (1 - wBloc);
+    // LA CLOCHE DE TRANSITION : nulle a la fin de la poussee, pleine au
+    // milieu du redressement, nulle une fois le corps droit. `legStart` la
+    // recale sur la portion de chaque relayeur.
+    const dTr = (r.d - (r.legStart || 0));
+    const uTr = (dTr - C.DRIVE_END) / Math.max(1, C.TRANS_END - C.DRIVE_END);
+    const transit = (uTr <= 0 || uTr >= 1 ? 0 : Math.sin(Math.PI * uTr)) * (1 - wBloc);
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
     let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
@@ -1753,9 +1775,17 @@
       // porte le gain de depart, et c'est ce qui l'empeche de devenir un
       // coureur assis — voir DRIVE_FRONT.
       const devant = Math.max(0, gt);
-      let th = (gt * (A + C.DRIVE_THIGH * sortie)
+      let th = (gt * (A + C.DRIVE_THIGH * sortie + C.TRANSIT_AMPL * transit)
                 + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
-      let kn = (gait(P.knee, q) * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie)
+      // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
+      // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
+      // se voit et ou il veut dire quelque chose — une jambe qui se replie
+      // vite est une jambe qui repart vite. Amplifier le repli PARTOUT aurait
+      // aussi plie la jambe d'appui, qui doit rester tendue sous le bassin.
+      const gk = gait(P.knee, q);
+      const replie = Math.max(0, -gk) / 2.05;     // 1 au talon-fesse du cycle
+      let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie
+                      + C.TRANSIT_TALON * transit * replie)
                 - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
       // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
       // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
@@ -1772,7 +1802,8 @@
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortie)
+      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortie
+                                   + C.TRANSIT_ARM * transit)
                  * LIMB_BOOST * P.armAmp;
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];

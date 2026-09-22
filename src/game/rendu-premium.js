@@ -591,20 +591,45 @@
    * pied, jamais par le moteur : c'est un effet, il n'a pas a exister dans la
    * simulation.
    */
+  /**
+   * L'ARRACHEMENT SOUS L'APPUI, et pourquoi c'est ICI que se dit la vitesse.
+   *
+   * Un effet de vitesse a deja ete retire de ce fichier, et pour deux raisons
+   * qu'il ne faut pas reprendre : il tombait sur deux images sur trois, et il
+   * vivait DANS L'AIR, ou des traits se lisent comme du vent de face — donc
+   * comme un coureur qu'on freine. Voir le grand commentaire de `poussee`.
+   *
+   * La poussiere, elle, ne peut rien dire d'autre que ce qu'on veut : elle
+   * part du pied, elle file vers l'ARRIERE, elle reste au sol. Personne n'a
+   * jamais lu un gravier projete derriere un sprinteur comme un obstacle.
+   * C'est donc la qu'on accentue, et nulle part ailleurs.
+   *
+   * Ce qui a change : a pleine vitesse un appui arrachait deux a cinq grains,
+   * il en arrache maintenant deux a huit, projetes une fois et demie plus loin
+   * et vivant un tiers plus longtemps — de quoi laisser une trainee derriere
+   * le coureur plutot que trois points sous son pied. A basse vitesse, rien ne
+   * bouge : `f` vaut zero, et les trois termes retombent sur leurs anciennes
+   * valeurs. L'effet se gagne donc en allant vite, ce qui est tout ce qu'on
+   * lui demande.
+   */
+  const DUST_GRAINS = 5.0;    // grains en plus au maximum de vitesse
+  const DUST_JET = 3.6;       // et de combien ils partent plus loin
+  const DUST_VIE = 0.34;      // combien de temps de plus ils tiennent
+
   function appui(th, X, Y, dirX, dirY, v) {
     if (niveau < PLEIN || v < 5) return;
     const col = th.dust || [220, 200, 180];
     // Plus on va vite, plus l'arrachement est violent — et plus il part en
     // arriere, parce que le pied pousse vers l'arriere.
     const f = clamp((v - 5) / 7, 0, 1);
-    const n = 2 + ((Math.random() * (1 + f * 2)) | 0);
+    const n = 2 + ((Math.random() * (1 + f * DUST_GRAINS)) | 0);
     for (let i = 0; i < n; i++) {
       const ec = (Math.random() - 0.5) * 0.4;
       semer(X + ec * dirY, Y - ec * dirX,
-            -dirX * (1.0 + f * 2.2) * (0.5 + Math.random() * 0.9),
-            -dirY * (1.0 + f * 2.2) * (0.5 + Math.random() * 0.9),
+            -dirX * (1.0 + f * DUST_JET) * (0.5 + Math.random() * 0.9),
+            -dirY * (1.0 + f * DUST_JET) * (0.5 + Math.random() * 0.9),
             0.55 + Math.random() * 0.85,
-            0.26 + Math.random() * 0.22,
+            0.26 + Math.random() * 0.22 + f * DUST_VIE,
             0.015 + Math.random() * 0.030, col);
     }
   }
