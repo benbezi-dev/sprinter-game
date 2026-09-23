@@ -193,7 +193,20 @@ export type Intitule = {
   course?: { edition: string; phase: string; numero: number } | null;
   /** Le mot que le vainqueur a deja pose, s'il l'a fait. */
   mot?: MotDuVainqueur | null;
+  /**
+   * Le lieu impose par l'edition (`lieu` de /champ/edition), par sa cle :
+   * 'champdemars'. Absent, inconnu de ce jeu, ou absent de ce canal : le
+   * stade olympique, comme avant.
+   */
+  lieu?: string | null;
 };
+
+/** L'etape ou se rejoue une course : celle du lieu demande, sinon NIVEAU. */
+function niveauDuLieu(lieu?: string | null): number {
+  if (!lieu) return NIVEAU;
+  const i = (SprinterCore?.LEVELS || []).findIndex((l: any) => l.cle === lieu);
+  return i >= 0 ? i : NIVEAU;
+}
 
 /** Ce que le tableau d'arrivee sait du mot du vainqueur. */
 export type MotDuVainqueur = {
@@ -249,7 +262,8 @@ export function rejouerCourse(
    * On recalcule donc, avec le pool de l'etape — le meme que celui dont le jeu
    * se sert pour dessiner un fantome ou un adversaire de cette etape-la.
    */
-  const pool = SprinterCore?.LEVELS?.[NIVEAU]?.pool;
+  const niveau = niveauDuLieu(intitule.lieu);
+  const pool = SprinterCore?.LEVELS?.[niveau]?.pool;
   const habiller = (r: any, c: CoureurRejeu) => {
     if (c.moi) { r.look = SprinterCore.PLAYER_LOOK; return; }
     if (SprinterCore?.lookFor) r.look = SprinterCore.lookFor(c.nom, pool);
@@ -259,7 +273,7 @@ export function rejouerCourse(
   // (`startLive` laisse `countT` a −99 tant que le depart n'est pas pose).
   // `autres: []` est volontaire — on ne branche aucun adversaire reseau, on
   // garde les sept coureurs que `buildLevel` a poses et on les repeint.
-  app.startLive([epreuve], { levelIdx: NIVEAU, adversaire: '', autres: [] });
+  app.startLive([epreuve], { levelIdx: niveau, adversaire: '', autres: [] });
 
   const ia = G.runners.filter((r: any) => !r.isPlayer);
   const aPlacer = coureurs.filter(c => c !== suivi);

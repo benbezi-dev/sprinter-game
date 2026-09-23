@@ -16,7 +16,7 @@
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
-  TENANT,
+  TENANT, lieuDeLEdition,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
@@ -1608,8 +1608,18 @@ export async function etatEdition(db, id) {
   const z = nomZone(e.zone, e.echelon);
   const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
   const cfg = FORMAT.phases[iPhase] || null;
+  // Le rang de l'edition parmi celles de son echelon et de sa zone, a la date
+  // de creation — l'identifiant departage deux creations a la meme milliseconde.
+  const avant = await db.prepare(
+    `SELECT COUNT(*) AS n FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND (cree_le < ? OR (cree_le = ? AND id < ?))`)
+    .bind(e.echelon, e.zone, e.cree_le, e.cree_le, e.id).first();
+  const rang = ((avant && avant.n) || 0) + 1;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
+    // Le lieu ou l'edition se rejoue, s'il est impose (voir LIEUX), sinon
+    // `null` : le client garde alors le sien.
+    lieu: lieuDeLEdition(e.echelon, e.zone, rang),
     // `null` pour les editions ouvertes avant que la cloture existe, et pour
     // celles qu'on ouvre d'un geste sur le canal de test. C'est exact : elles
     // n'ont pas eu d'heure de cloture annoncee, et l'ecran ne doit pas

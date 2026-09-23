@@ -1527,16 +1527,16 @@
     // a sa place ici : juste apres le Danube, juste avant les stades du canal
     // de test, comme dans STADES_HORS_SERIE.
     ['Cimetière municipal', 'Municipal Cemetery'],
+    // La course hors stade du premier championnat de France. Reserve mais
+    // present dans la version publique : il vient donc avec les ouverts,
+    // avant les deux stades du canal de test, comme dans STADES_HORS_SERIE.
+    ['Champ-de-Mars', 'Champ-de-Mars'],
     ['Stade de la Riviera', 'Riviera Stadium'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
     // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
     // donc sur ces deux lignes, sans toucher au jeu.
-    ['Stade des Trois Soleils', 'Three Suns Stadium'],
-    // La course hors stade du premier championnat de France. Ferme, comme
-    // les deux precedents : il vient donc apres eux, dans le meme ordre que
-    // STADES_HORS_SERIE.
-    ['Champ-de-Mars', 'Champ-de-Mars']
+    ['Stade des Trois Soleils', 'Three Suns Stadium']
   ];
 
   const RACE_SUB = {

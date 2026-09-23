@@ -460,6 +460,36 @@
       names: ['Igor Tombal', 'Vlad Crampon', 'Morgue Belfort', 'Cyprien Caveau',
               'Osselet Marchand', 'Lilith Corbeau', 'Nosfera Toussaint'] },
 
+    // LE CHAMP-DE-MARS — la course hors stade du premier championnat de
+    // France. Une piste tricolore posee dans les parterres, la tour au bout.
+    //
+    // RESERVE, ET PAS FERME. Il part dans la version publique — sans quoi le
+    // championnat ne pourrait pas s'y rejouer — mais n'apparait dans aucune
+    // liste qu'un joueur puisse choisir : `reserve` le retire du choix du lieu
+    // en ONE SHOT (ModePanels.tsx) hors canal de test. C'est l'edition qui
+    // l'appelle, par le lieu que le serveur lui donne (LIEUX,
+    // worker/src/championnats-config.js) : le premier Championnat de France,
+    // et lui seul. Sur le canal de test il reste un lieu comme les autres.
+    //
+    // Il vient donc AVEC LES OUVERTS, juste apres le cimetiere et avant les
+    // deux stades du canal de test : l'index d'un lieu doit dire la meme chose
+    // sur les deux canaux (voir le commentaire de la boucle qui remplit
+    // LEVELS, dans sprinter-app.js).
+    //
+    // LE PLATEAU EST CELUI D'UNE FINALE NATIONALE : sept coureurs entre 9,95
+    // et 10,35 au 100 m, sous le championnat du monde.
+    { cle: 'champdemars', name: 'Champ-de-Mars', theme: 'champdemars',
+      pool: 'divers',
+      horsSerie: true,
+      ouvert: true,
+      reserve: true,
+      // Du monde le long des barrieres et une tribune provisoire pleine.
+      foule: 0.9,
+      plateau: { '100': [9.95, 10.35], '200': [20.05, 20.80],
+                 '400': [44.90, 46.20], '4x100': [38.40, 39.40] },
+      names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
+              'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
@@ -503,24 +533,6 @@
       names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
               'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
 
-    // LE CHAMP-DE-MARS — la course hors stade du premier championnat de
-    // France. Une piste tricolore posee dans les parterres, la tour au bout.
-    //
-    // FERME : il n'existe que sur le canal de test. C'est sa place definitive
-    // une fois le championnat couru ; pendant le championnat, c'est la
-    // competition qui l'ouvre a ses partants, pas la liste des stades.
-    //
-    // LE PLATEAU EST CELUI D'UNE FINALE NATIONALE : sept coureurs entre 9,95
-    // et 10,35 au 100 m, sous le championnat du monde.
-    { cle: 'champdemars', name: 'Champ-de-Mars', theme: 'champdemars',
-      pool: 'divers',
-      horsSerie: true,
-      // Du monde le long des barrieres et une tribune provisoire pleine.
-      foule: 0.9,
-      plateau: { '100': [9.95, 10.35], '200': [20.05, 20.80],
-                 '400': [44.90, 46.20], '4x100': [38.40, 39.40] },
-      names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
-              'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
   ];
 
   // ---------------------------------------------------------------------

@@ -109,6 +109,11 @@ export type Edition = {
   epreuve: string;
   /** « Championnat de France », deja accorde. */
   titre: string;
+  /**
+   * Le lieu ou l'edition se rejoue, s'il est impose par le serveur : la cle
+   * d'un stade ('champdemars'). `null` ou absent : le stade par defaut.
+   */
+  lieu?: string | null;
   debut: number;
   /**
    * L'heure ou la selection ferme : trois jours avant le depart.

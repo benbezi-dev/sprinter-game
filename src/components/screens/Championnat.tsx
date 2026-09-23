@@ -195,6 +195,7 @@ function Grille({ e }: { e: Edition }) {
                 quand={rv ? rv.at : null}
                 course={{ edition: e.id, phase: e.phase, numero: course }}
                 mot={mot && { nom: mot.nom, texte: mot.texte, a_voix: mot.a_voix }}
+                lieu={e.lieu}
                 titre={SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
                 sousTitre={`${SprinterApp.N.titreEdition(e) || e.titre} · ${e.epreuve} M`} />
             )}
@@ -218,7 +219,7 @@ function Grille({ e }: { e: Edition }) {
  * La camera suit le joueur s'il courait cette course-la, et le vainqueur
  * sinon : on ne cadre pas un inconnu quand on regarde une finale.
  */
-function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, titre, sousTitre }: {
+function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, lieu, titre, sousTitre }: {
   epreuve: string;
   arrivees: { name_key: string; nom: string; ms: number | null }[];
   /** Le couloir de chacun, derive du rang de semis par `Grille`. */
@@ -231,6 +232,8 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
   course: { edition: string; phase: string; numero: number };
   /** Le mot deja pose, s'il y en a un. */
   mot: { nom: string; texte: string | null; a_voix: boolean } | null;
+  /** Le lieu impose par l'edition, s'il y en a un. */
+  lieu?: string | null;
   titre: string;
   sousTitre: string;
 }) {
@@ -251,7 +254,7 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
         couloir: couloirs.get(r.name_key),
         moi: !!moi && r.name_key === moi,
       })),
-      3500, true, { titre, sousTitre, competition, quand, course, mot },
+      3500, true, { titre, sousTitre, competition, quand, course, mot, lieu },
     );
   };
   return (

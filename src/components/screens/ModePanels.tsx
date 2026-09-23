@@ -113,7 +113,12 @@ export function OneShotPanel() {
                 bien que le groupe disparait quand aucun stade n'est ouvert. */}
             {LEVELS.some((l: any) => l.horsSerie) && (
               <optgroup label={N.t('pick_venue')} className="bg-neutral-900">
-                {LEVELS.map((l: any, i: number) => (l.horsSerie ? (
+                {/* Un lieu `reserve` n'est pas a choisir : c'est une
+                    competition qui l'ouvre (le Champ-de-Mars, reserve au
+                    premier Championnat de France). Sur le canal de test,
+                    il se choisit comme les autres. */}
+                {LEVELS.map((l: any, i: number) => (l.horsSerie
+                  && (!l.reserve || import.meta.env.VITE_CANAL === 'test') ? (
                   <option key={i} value={i} className="bg-neutral-900">
                     {N.levelName(i)}
                   </option>

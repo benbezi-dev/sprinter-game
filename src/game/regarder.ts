@@ -174,6 +174,7 @@ export function regarderLaCourse(e: Edition, c: CourseDuProgramme): boolean {
       quand: c.at,
       course: { edition: e.id, phase: c.phase, numero: c.numero },
       mot: mot && { nom: mot.nom, texte: mot.texte, a_voix: mot.a_voix },
+      lieu: e.lieu,
     },
   );
 }

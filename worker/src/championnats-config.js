@@ -127,6 +127,32 @@ export const MIN_DOFFICE = { continental: 2, mondial: 2 };
  * Elle donne une place sur la grille de depart ; elle ne donne ni la finale ni
  * la cinematique, qui restent etanches.
  */
+/**
+ * LE LIEU D'UNE EDITION.
+ *
+ * Une edition se rejoue sur la piste du jeu, et le jeu a plusieurs lieux.
+ * Par defaut, le client choisit (le stade olympique, voir champ-rejeu.ts) ;
+ * une regle ci-dessous peut en imposer un autre a UNE edition precise.
+ *
+ * Le rang se compte a la date de creation, parmi les editions du meme echelon
+ * et de la meme zone : la premiere est 1. Il ne s'ecrit pas en base — il se
+ * deduit, si bien que l'edition deja ouverte au moment ou la regle arrive en
+ * profite sans migration, et qu'aucune autre ne peut la lui prendre.
+ *
+ * Le Champ-de-Mars est reserve au PREMIER Championnat de France : la course
+ * hors stade, piste tricolore et tour Eiffel au bout de l'allee. Apres lui,
+ * le lieu ne sert plus qu'au canal de test.
+ */
+export const LIEUX = [
+  { echelon: 'national', zone: 'FR', rang: 1, lieu: 'champdemars' },
+];
+
+/** Le lieu impose a la `rang`-ieme edition de cet echelon et de cette zone, ou `null`. */
+export function lieuDeLEdition(echelon, zone, rang) {
+  const r = LIEUX.find(l => l.echelon === echelon && l.zone === zone && l.rang === rang);
+  return r ? r.lieu : null;
+}
+
 export const TENANT = {
   /**
    * Le tenant est en finale, quoi qu'il fasse de son weekend.
