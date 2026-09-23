@@ -548,6 +548,47 @@ export async function choisirPays(db, nameKey, pays) {
 }
 
 /**
+ * L'administration corrige une nationalite. Le seul geste qui passe le verrou.
+ *
+ * Il existe parce que le verrou est total cote joueur : un doigt qui glisse sur
+ * une liste de cinquante pays coute la saison entiere, et sans cette porte la
+ * seule reparation serait d'ouvrir la base a la main. Mieux vaut un geste
+ * nomme, sous cle, qui dit ce qu'il remplace.
+ *
+ * Il rend l'ANCIEN pays autant que le nouveau. Une correction sans trace de ce
+ * qu'elle a efface ne se verifie pas : c'est ce que l'ecran affiche en retour,
+ * et c'est ce qui permet de s'apercevoir qu'on a corrige le mauvais joueur.
+ *
+ * Il ne cree rien. Corriger la nationalite de quelqu'un qui n'en a jamais
+ * declare serait la CHOISIR a sa place — precisement ce que tout le reste de ce
+ * fichier s'emploie a rendre impossible.
+ */
+export async function imposerPays(db, nameKey, pays) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  const p = String(pays || '').trim().toUpperCase();
+  if (!k) return { erreur: 'nom invalide' };
+  if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
+  await ensureChampTables(db);
+  const avant = await db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  // Il faut une nationalite DECLAREE, pas une simple detection. Ecrire par-dessus
+  // une ligne 'geo' reviendrait a choisir a la place du joueur — exactement ce
+  // que le verrou empeche partout ailleurs. L'ecran d'administration refusait
+  // deja ce cas ; c'est ici qu'il doit etre refuse, l'ecran ne fait foi de rien.
+  if (!avant || avant.source !== 'choix') {
+    return { erreur: 'ce joueur n a pas declare de nationalite' };
+  }
+  if (avant.pays === p) {
+    return { ok: true, avant: avant.pays, pays: p, inchange: true };
+  }
+  await db.prepare(
+    `UPDATE player_pays SET pays = ?, continent = ?, source = 'choix', vu_le = ?
+      WHERE name_key = ?`
+  ).bind(p, continentDe(p), Date.now(), k).run();
+  return { ok: true, avant: avant.pays, pays: p, continent: continentDe(p) };
+}
+
+/**
  * Combien de joueurs classes et actifs un pays compte-t-il SUR CETTE EPREUVE ?
  *
  * La distance n'est pas un detail de comptage : depuis que les niveaux ne sont

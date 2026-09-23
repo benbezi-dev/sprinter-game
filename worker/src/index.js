@@ -13,7 +13,7 @@ import { sonner } from './boite.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
-  ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
+  ensureChampTables, noterPays, choisirPays, imposerPays, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
   prochaineEdition, rangSelection,
@@ -1806,6 +1806,18 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
+        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      // Corriger la nationalite d'un joueur. Le seul geste qui passe le
+      // verrou, et il est sous cle : cote joueur, un choix ne se defait pas.
+      if (sous === 'nationalite' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const key = cleanName((body || {}).name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        const r = await imposerPays(env.DB, key, (body || {}).pays);
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
