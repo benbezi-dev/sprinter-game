@@ -471,7 +471,7 @@ function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, 
         ) : null}
 
         {film.genre === 'direct' && (film.phase === 'prete' || film.phase === 'expiree') && (
-          <ReviewVideo etat={film} onPartager={partagerLeFilm} />
+          <ReviewVideo etat={film} onPartager={partagerLeFilm} titre={N.t('review_title_rejeu')} />
         )}
 
         {serree && (

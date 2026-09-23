@@ -726,6 +726,10 @@
     mic_winner:      ['LE MOT DU VAINQUEUR', 'THE WINNER SPEAKS'],
     // video de la course : partageable jusqu'a ce qu'elle sorte, deux heures au plus
     review_title:    ['LA VIDÉO DE TA COURSE', 'YOUR RACE VIDEO'],
+    // Le rejeu d'un championnat se regarde aussi quand on n'y a pas couru :
+    // « ta course » y serait faux, pour un spectateur comme pour un joueur qui
+    // revoit la serie d'un autre.
+    review_title_rejeu: ['LA VIDÉO DE LA COURSE', 'RACE VIDEO'],
     review_making:   ['enregistrement en cours…', 'recording…'],
     // Un seul libellé pour les deux chemins, comme pour l'affiche : sur
     // téléphone le bouton ouvre la feuille de partage, sur ordinateur il

@@ -823,6 +823,12 @@
 
   function vignette(ctx, G, force) {
     const W = G.VW, H = G.VH;
+    // UNE TOILE PAS ENCORE MESUREE. Au premier dessin, avant que le
+    // ResizeObserver n'ait donne la taille, VW et VH valent 0 : le rapport est
+    // NaN et `createRadialGradient` leve une exception — dans la boucle
+    // d'images, qui s'arrete alors avant d'avoir redemande la suivante. Il n'y
+    // a rien a assombrir sur une toile vide.
+    if (!(W > 0 && H > 0)) return;
     const cle = (W / H).toFixed(3);
     if (cle !== _vigCle) {
       const h = Math.max(8, Math.round(VIG_L * H / W));
