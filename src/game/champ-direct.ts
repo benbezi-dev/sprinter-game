@@ -89,7 +89,7 @@ function autres() {
   const s = salle;
   return (s?.dernierEtat?.joueurs || [])
     .filter(j => j.id !== s?.moi && (!j.statut || j.statut === 'engage'))
-    .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0 }));
+    .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0, cible_ms: j.cible_ms }));
 }
 
 /**
@@ -113,10 +113,13 @@ function devenirSpectateur() {
   G.spectateur = true;
   const i = G.runners.indexOf(G.player);
   if (i >= 0) G.runners.splice(i, 1);
-  if (!G.suivi && G.lives) {
-    const premier = [...G.lives.entries()]
-      .sort((a: any, b: any) => a[1].runner.lane - b[1].runner.lane)[0];
-    if (premier) { G.suivi = premier[1].runner; publier({ suivi: premier[0] }); }
+  if (!G.suivi) {
+    // Les coureurs en lice : ceux du reseau et les fictifs, par couloir.
+    const tous: [string, any][] = [
+      ...[...(G.lives || new Map()).entries()].map(([id, g]: any) => [id, g.runner] as [string, any]),
+      ...[...(G.fictifs || new Map()).entries()] as [string, any][],
+    ].sort((a, b) => a[1].lane - b[1].lane);
+    if (tous[0]) { G.suivi = tous[0][1]; publier({ suivi: tous[0][0] }); }
   }
 }
 
@@ -183,8 +186,10 @@ function ecouteurs() {
         const reste = nouveauPistolet == null ? null : Math.max(0, nouveauPistolet - Date.now());
         SprinterApp.finRappelChamp(reste, r.depart_a);
         const G = SprinterApp.G;
-        const suivi = G.spectateur && G.suivi && G.lives
-          ? [...G.lives.entries()].find((x: any) => x[1].runner === G.suivi)?.[0] || null
+        const suivi = G.spectateur && G.suivi
+          ? [...(G.lives || new Map()).entries()].find((x: any) => x[1].runner === G.suivi)?.[0]
+            || [...(G.fictifs || new Map()).entries()].find((x: any) => x[1] === G.suivi)?.[0]
+            || null
           : etat.suivi;
         // La scene est finie : on repart, ou l'on attend le verdict si
         // personne ne repart.

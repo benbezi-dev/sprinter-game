@@ -1854,8 +1854,16 @@ export async function contexteCourse(db, edition, phase, course) {
   const grille = e.partants
     .filter(p => p.phase === phase && p.course === course)
     .sort((x, y) => (x.rang_duel || 99) - (y.rang_duel || 99))
-    .map((p, i) => ({ cle: p.name_key, nom: p.nom, couloir: i + 1 }));
+    .map((p, i) => ({ cle: p.name_key, nom: p.nom, couloir: i + 1, fictif: false }));
   if (!grille.length) return { erreur: 'course inconnue' };
+  // LES PARTANTS FICTIFS — ceux que `tools/champ-combler.mjs` a poses pour
+  // completer une grille (player_pays.source = 'fictif'). Ils courent : un
+  // chrono fixe d'avance, jamais de faux depart. Voir chronoFictif.
+  const fictifs = await clesFictives(db, grille.map(g => g.cle));
+  for (const g of grille) {
+    g.fictif = fictifs.has(g.cle);
+    if (g.fictif) g.ms = chronoFictif(e.id, phase, g.cle, e.epreuve);
+  }
   const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
   const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
   return {
@@ -1863,6 +1871,74 @@ export async function contexteCourse(db, edition, phase, course) {
     titre: e.titre, phaseNom: e.phaseNom, courses: e.courses,
     at: rv ? rv.at : null, grille, deja,
   };
+}
+
+/** Les cles marquees `fictif` dans player_pays, parmi celles demandees. */
+export async function clesFictives(db, cles) {
+  const out = new Set();
+  if (!cles.length) return out;
+  const { results } = await db.prepare(
+    `SELECT name_key FROM player_pays WHERE source = 'fictif' AND name_key IN (${cles.map(() => '?').join(',')})`
+  ).bind(...cles).all();
+  for (const r of results || []) out.add(r.name_key);
+  return out;
+}
+
+/**
+ * LE CHRONO D'UN PARTANT FICTIF.
+ *
+ * Deterministe — la meme edition, la meme phase, le meme partant donnent le
+ * meme temps, que la course se coure en direct devant huit telephones ou soit
+ * rangee par la tache planifiee — et pris dans un milieu de grille : entre
+ * 10,40 et 11,40 s au 100 m. `champ-combler` les a cales au milieu du
+ * classement pour qu'ils ne prennent le titre a personne ; leurs chronos
+ * suivent la meme idee. Un vrai joueur qui court sa course passe devant.
+ */
+const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7 };
+export function chronoFictif(edition, phase, cle, epreuve) {
+  let h = 2166136261;
+  for (const ch of `${edition}|${phase}|${cle}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  const u = ((h >>> 0) % 10000) / 10000;
+  return Math.round((10400 + u * 1000) * (FACTEUR_EPREUVE[String(epreuve)] || 1));
+}
+
+/**
+ * LES COURSES QUE PERSONNE N'EST VENU COURIR.
+ *
+ * Une salle de championnat ne s'eveille qu'a la premiere connexion : si aucun
+ * vrai partant — et aucun spectateur — n'entre dans le stade, la course n'a
+ * lieu nulle part, et la phase ne peut plus se clore. La tache planifiee la
+ * range donc elle-meme, un quart d'heure apres l'heure : les fictifs avec leur
+ * chrono, les vrais partants absents en forfait. Exactement ce qu'aurait
+ * range une salle ou personne n'etait a l'appel.
+ *
+ * Quinze minutes, parce qu'une salle eveillee en retard peut repousser son
+ * pistolet (voir RETARD_TOLERE_MS dans salle-championnat.js) et courir encore
+ * quelques minutes ; vingt-quatre heures au plus, pour ne pas remplir apres
+ * coup les vieilles editions d'essai de la base de test.
+ */
+export async function courirSansPersonne(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results: eds } = await db.prepare(
+    `SELECT id FROM champ_editions WHERE etat = 'ouverte'`).all();
+  const rangees = [];
+  for (const { id } of eds || []) {
+    const e = await etatEdition(db, id);
+    if (!e) continue;
+    for (const rv of e.calendrier || []) {
+      if (rv.phase !== e.phase || !rv.course) continue;
+      if (!(rv.at + 15 * 60 * 1000 < maintenant && maintenant < rv.at + 24 * 3600 * 1000)) continue;
+      if ((e.resultats || []).some(r => r.phase === e.phase && r.course === rv.course)) continue;
+      const c = await contexteCourse(db, id, e.phase, rv.course);
+      if (c.erreur || c.deja) continue;
+      const chronos = c.grille.map(g => g.fictif
+        ? { cle: g.cle, ms: g.ms }
+        : { cle: g.cle, ms: null, motif: 'forfait' });
+      const r = await enregistrerCourse(db, { edition: id, phase: e.phase, course: rv.course, chronos });
+      rangees.push({ edition: id, phase: e.phase, course: rv.course, ok: !r.erreur, erreur: r.erreur || null });
+    }
+  }
+  return rangees;
 }
 
 /**

@@ -1841,6 +1841,7 @@
     // chemins du direct la reinstallent juste apres buildLevel — voir
     // armLives et armLive.
     G.lives = null;
+    G.fictifs = null;
     const p0 = G.track.pos(0, 3);
     G.camX = p0[0]; G.camY = p0[1];
     // CE QU'UN AUTRE JEU AJOUTE A LA PISTE. Les haies se posent ici, a chaque
@@ -2369,6 +2370,7 @@
   function armLives(autres) {
     G.ghost = null;
     G.lives = new Map();
+    G.fictifs = new Map();
     marquerJoueur();
     if (!autres || !autres.length) return;
 
@@ -2392,6 +2394,20 @@
       pris.add(lane);
       const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
       if (idx >= 0) G.runners.splice(idx, 1);
+      // UN PARTANT FICTIF ne court pas par le reseau : son chrono est fixe
+      // d'avance par la salle, et le moteur le fait courir a ce temps comme
+      // un adversaire de campagne. Il reste hors de G.lives — rien n'arrive
+      // pour lui sur la socket.
+      if (autre.cible_ms > 0) {
+        const f = new Runner(autre.nom || 'ADVERSAIRE', lane, {
+          target: autre.cible_ms / 1000, maxSpeed: G.race.maxSpeed,
+          total: G.track.total, pool: LEVELS[G.levelIdx].pool,
+        });
+        f.fictif = true; f.cibleFictive = autre.cible_ms / 1000;
+        G.runners.push(f);
+        (G.fictifs || (G.fictifs = new Map())).set(autre.id, f);
+        return;
+      }
       const r = new Runner(autre.nom || 'ADVERSAIRE', lane, {
         maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
       });
@@ -2468,6 +2484,8 @@
     const [bas, haut] = bornesDesCouloirs();
     for (const [id, a] of voulus) {
       if (G.lives.has(id)) continue;
+      // Un fictif est deja sur la piste depuis armLives, et ne vit pas ici.
+      if (a.cible_ms > 0 || (G.fictifs && G.fictifs.has(id))) continue;
       let lane = indiceDuCouloir(a.couloir);
       if (lane == null || lane < bas || lane > haut || pris.has(lane)) {
         lane = null;
@@ -2530,7 +2548,7 @@
     // Le fantome vit hors de G.runners sur le chemin a un seul adversaire ; le
     // test le garde quand il y est, sur le chemin a plusieurs.
     const fantome = G.ghost ? G.ghost.runner : null;
-    G.runners = G.runners.filter(r => r.isPlayer || r.isLive || r === fantome);
+    G.runners = G.runners.filter(r => r.isPlayer || r.isLive || r.fictif || r === fantome);
     G.champion = ''; G.championTime = 0;
   }
 
@@ -3394,9 +3412,12 @@
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
                                      pool: LEVELS[G.levelIdx].pool });
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
-                    isGhost: r.isGhost, isLive: r.isLive, repere: r.repere };
+                    isGhost: r.isGhost, isLive: r.isLive, repere: r.repere,
+                    fictif: r.fictif, cibleFictive: r.cibleFictive };
     Object.assign(r, neuf, garde);
     r.retour = false; r.opacite = 1; r.celebrate = 0;
+    // Un fictif repart avec le chrono que la salle lui a fixe.
+    if (r.fictif && r.cibleFictive) r.setPace(r.cibleFictive);
   }
 
   /**
@@ -3444,10 +3465,12 @@
 
   /** Le coureur du plus petit couloir encore sur la piste, pour la camera. */
   function premierEnLice() {
-    if (!G.lives) return null;
     let mieux = null;
-    for (const g of G.lives.values()) {
+    for (const g of (G.lives || new Map()).values()) {
       if (!mieux || g.runner.lane < mieux.lane) mieux = g.runner;
+    }
+    for (const f of (G.fictifs || new Map()).values()) {
+      if (!mieux || f.lane < mieux.lane) mieux = f;
     }
     return mieux;
   }
@@ -3455,7 +3478,9 @@
   /** Spectateur : suivre ce coureur-la. */
   function suivreCoureurChamp(id) {
     const g = G.lives && G.lives.get(id);
-    if (g && g.runner) G.suivi = g.runner;
+    if (g && g.runner) { G.suivi = g.runner; return; }
+    const f = G.fictifs && G.fictifs.get(id);
+    if (f) G.suivi = f;
   }
 
   function followCam(dt) {

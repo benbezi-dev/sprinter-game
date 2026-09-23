@@ -45,6 +45,11 @@ export type JoueurSalle = {
   couloir?: number;
   /** En championnat seulement : 'engage', 'dq', 'abandon'... */
   statut?: string;
+  /**
+   * Championnat : le chrono vise d'un partant fictif. Il ne court pas par le
+   * reseau — le telephone le fait courir a ce temps, comme un rejeu.
+   */
+  cible_ms?: number;
 };
 
 /**

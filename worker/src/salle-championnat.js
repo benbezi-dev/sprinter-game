@@ -19,6 +19,11 @@
       spectateurs, les autres repartent. Les regles vivent dans faux-depart.js.
    4. L'ECRITURE. A l'arrivee, la salle range elle-meme les resultats — les
       chronos, et pour les autres la raison de leur absence.
+   5. LES FICTIFS. Une grille completee par des partants fictifs (voir
+      tools/champ-combler.mjs) les fait courir : engages d'office a l'appel,
+      un chrono fixe d'avance (chronoFictif), jamais de faux depart. Les
+      telephones les font courir a ce chrono ; la salle attend qu'ils aient
+      franchi la ligne avant de rendre son verdict.
 
    Le canal de test et la production sont deux objets distincts, adresses par
    des noms distincts (voir index.js), et chacun ecrit dans sa propre base.
@@ -103,6 +108,7 @@ export class SalleChampionnat {
     this.minuteurAppel = null;
     this.appelPrevuA = null;
     this.resultat = null;
+    this.finFictifsA = 0;
   }
 
   // --- utilitaires ---------------------------------------------------------
@@ -132,10 +138,15 @@ export class SalleChampionnat {
   vue() {
     const joueurs = [...this.coureurs.values()]
       .filter(c => c.statut !== 'forfait' && (c.statut !== 'attente' || c.ws))
-      .map(c => ({
-        id: c.cle, nom: c.nom, cle: c.cle, couloir: c.couloir, pret: true,
-        d: Math.round(c.d * 10) / 10, fin: c.fin, statut: c.statut,
-      }));
+      .map(c => {
+        const j = {
+          id: c.cle, nom: c.nom, cle: c.cle, couloir: c.couloir, pret: true,
+          d: Math.round(c.d * 10) / 10, fin: c.fictif ? null : c.fin, statut: c.statut,
+        };
+        // Le chrono vise d'un fictif : c'est lui que les telephones font courir.
+        if (c.fictif) j.cible_ms = c.cible;
+        return j;
+      });
     return {
       joueurs, epreuves: this.ctx ? [this.ctx.epreuve] : null, niveau: 4,
       max: this.ctx ? this.ctx.grille.length : 0,
@@ -152,7 +163,7 @@ export class SalleChampionnat {
         at: this.at, etat: this.phase, depart_n: this.departN,
         spectateurs: [...this.sockets.values()].filter(s => s.role === 'spectateur').length,
         grille: [...this.coureurs.values()].map(c => ({
-          cle: c.cle, nom: c.nom, couloir: c.couloir, present: !!c.ws,
+          cle: c.cle, nom: c.nom, couloir: c.couloir, present: !!c.ws || c.fictif,
           statut: c.statut, motif: c.motif, motif_ms: c.motif_ms,
         })),
       } : null,
@@ -186,6 +197,7 @@ export class SalleChampionnat {
       this.coureurs.set(g.cle, {
         cle: g.cle, nom: g.nom, couloir: g.couloir, ws: null,
         statut: 'attente', d: 0, c: null, fin: null, motif: null, motif_ms: null,
+        fictif: !!g.fictif, cible: g.fictif ? g.ms : null,
       });
     }
     if (c.deja) { this.phase = 'terminee'; this.erreur = 'course deja courue'; }
@@ -207,7 +219,7 @@ export class SalleChampionnat {
       // En retard sur l'appel : il faut quelqu'un pour l'ouvrir, et on laisse
       // aux autres le temps d'arriver. Le pistolet reculera d'autant qu'il le
       // faut pour presenter tout le monde (voir `appel`).
-      if (![...this.coureurs.values()].some(c => c.ws)) return;
+      if (!this.sockets.size) return;
       if (this.minuteurAppel) return;               // deja programme
       appel = maintenant + APPEL_TARDIF_MS;
     }
@@ -224,11 +236,12 @@ export class SalleChampionnat {
 
   appel() {
     if (this.phase !== 'ouverte') return;
-    const presents = [...this.coureurs.values()].filter(c => c.ws);
     for (const c of this.coureurs.values()) {
+      if (c.fictif) { c.statut = 'engage'; c.fin = c.cible; continue; }
       c.statut = c.ws ? 'engage' : 'forfait';
       if (!c.ws) c.motif = 'forfait';
     }
+    const presents = this.engages();
     if (!presents.length) {
       // Personne a l'appel : tous forfaits, et la course est rangee telle.
       this.terminer();
@@ -254,7 +267,7 @@ export class SalleChampionnat {
     this.departA = date;
     this.departN += 1;
     this.fautifs = [];
-    for (const c of this.engages()) { c.d = 0; c.c = null; c.fin = null; }
+    for (const c of this.engages()) { c.d = 0; c.c = null; if (!c.fictif) c.fin = null; }
     const n = this.departN;
     this.plus_tard(date - Date.now(), () => this.coupDePistolet(n));
   }
@@ -263,9 +276,16 @@ export class SalleChampionnat {
     if (n !== this.departN || this.phase === 'terminee') return;
     // Un partant parti entre l'appel et le pistolet n'est pas sur la ligne.
     for (const c of this.engages()) {
-      if (!c.ws) { c.statut = 'abandon'; c.motif = 'abandon'; }
+      if (!c.ws && !c.fictif) { c.statut = 'abandon'; c.motif = 'abandon'; }
     }
     this.phase = 'course';
+    // Le verdict n'arrive pas avant que le dernier fictif ait franchi la
+    // ligne : on le verrait sinon s'afficher par-dessus des coureurs encore
+    // lances. Une demi-seconde de marge, puis on regarde si tout est la.
+    const dernierFictif = Math.max(0, ...this.engages().filter(c => c.fictif).map(c => c.cible || 0));
+    // Sans fictif, aucun delai : le verdict tombe des le dernier chrono.
+    this.finFictifsA = dernierFictif ? Date.now() + dernierFictif + 500 : 0;
+    if (dernierFictif) this.plus_tard(dernierFictif + 500, () => this.peutTrancher());
     this.plus_tard(ABANDON_MS, () => this.fermerLaCourse(n));
     this.peutTrancher();
   }
@@ -319,6 +339,7 @@ export class SalleChampionnat {
   peutTrancher() {
     if (this.phase !== 'course') return;
     if (this.engages().some(c => c.fin == null)) return;
+    if (this.finFictifsA && Date.now() < this.finFictifsA) return;
     this.terminer();
   }
 
@@ -427,7 +448,9 @@ export class SalleChampionnat {
     // Avant l'appel, un partant prend son couloir. Apres, seulement s'il y
     // etait deja et que le reseau l'a lache : il le reprend, tant que le
     // pistolet n'est pas parti.
-    const peutCourir = !!partant && !partant.ws &&
+    // Un fictif ne se prend pas : il court seul, a son chrono. Quiconque se
+    // presente sous son nom — le nom n'est reserve par personne — regarde.
+    const peutCourir = !!partant && !partant.fictif && !partant.ws &&
       (this.phase === 'ouverte' || (this.phase === 'appel' && partant.statut === 'engage'));
     const id = peutCourir ? cle : 'spec-' + crypto.randomUUID().slice(0, 6);
     const place = { id, cle: peutCourir ? cle : null,

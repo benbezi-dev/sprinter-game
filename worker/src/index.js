@@ -16,7 +16,7 @@ import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
-  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
+  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances, courirSansPersonne,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
@@ -1044,6 +1044,12 @@ export default {
         figerLaSemaine(db, quand)
           .then(b => { if (b.figees) console.log('nations figees', nom, JSON.stringify(b)); })
           .catch(e => console.log('nations KO', nom, String(e && e.message || e)))
+      );
+      // Les series que personne n'est venu courir : voir courirSansPersonne.
+      ctx.waitUntil(
+        courirSansPersonne(db, quand)
+          .then(r => { if (r.length) console.log('champ courses rangees', nom, JSON.stringify(r)); })
+          .catch(e => console.log('champ rangement KO', nom, String(e && e.message || e)))
       );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
@@ -2099,6 +2105,18 @@ async function servir(request, env, ctx, porteur) {
           course: parseInt(course, 10), chronos,
         });
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
+      }
+
+      // Ranger d'un geste les series que personne n'est venu courir — ce que
+      // la tache planifiee fait toute seule un quart d'heure apres l'heure
+      // (voir courirSansPersonne). `maintenant` ne s'accepte que sur le canal
+      // de test : c'est lui qui permet de rejouer un samedi passe.
+      if (sous === 'ranger' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body = {};
+        try { body = await request.json(); } catch { /* sans corps : maintenant */ }
+        const t = canal.test && Number.isFinite(Number(body.maintenant)) ? Number(body.maintenant) : Date.now();
+        return json({ rangees: await courirSansPersonne(env.DB, t) });
       }
 
       // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
