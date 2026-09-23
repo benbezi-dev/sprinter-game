@@ -465,6 +465,8 @@ export type MonPays = {
   source: 'choix' | 'geo' | 'vu' | null;
   /** Vrai quand le pays a été choisi : il ne changera plus. */
   definitif: boolean;
+  /** La dernière demande de changement, et ce qu'on en a fait. */
+  demande: { pays: string; statut: 'attente' | 'acceptee' | 'refusee' } | null;
 };
 
 /**
@@ -477,11 +479,31 @@ export type MonPays = {
 export async function paysDe(nom: string): Promise<MonPays> {
   try {
     const res = await fetch(`${API_BASE}/profil?name=${encodeURIComponent(nom || '')}`);
-    if (!res.ok) return { pays: null, source: null, definitif: false };
+    if (!res.ok) return { pays: null, source: null, definitif: false, demande: null };
     const d = await res.json();
-    return { pays: d.pays || null, source: d.source || null, definitif: d.source === 'choix' };
+    return { pays: d.pays || null, source: d.source || null, definitif: d.source === 'choix',
+             demande: d.demande || null };
   } catch {
-    return { pays: null, source: null, definitif: false };
+    return { pays: null, source: null, definitif: false, demande: null };
+  }
+}
+
+/**
+ * Demande à changer de nationalité. Rien ne change tout de suite : la demande
+ * attend l'administration, qui l'accepte ou la refuse.
+ */
+export async function demanderPays(pays: string): Promise<'ok' | 'fait' | 'erreur'> {
+  try {
+    const res = await fetch(`${API_BASE}/profil/demande-pays`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name: getSavedName(), pays }),
+    });
+    if (res.ok) return 'ok';
+    // 409 : le changement unique a deja ete accorde.
+    return res.status === 409 ? 'fait' : 'erreur';
+  } catch {
+    return 'erreur';
   }
 }
 

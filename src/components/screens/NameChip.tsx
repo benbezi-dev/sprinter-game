@@ -6,7 +6,7 @@ import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeB
 import { getSavedName, saveName, NOM_CHANGE } from '@/game/leaderboard';
 import { nomRefuse, NOM_REFUSE } from '@/game/identity';
 import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInstagram,
-         nations, paysDe, poserPays, type Nation } from '@/game/identity';
+         nations, paysDe, poserPays, demanderPays, type Nation } from '@/game/identity';
 import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
 import { Recuperation } from './Recuperation';
@@ -196,6 +196,12 @@ export function PanneauIdentite({
   const [paysFige, setPaysFige] = useState('');
   const [paysVu, setPaysVu] = useState('');
   const [paysEtat, setPaysEtat] = useState<'repos' | 'envoi' | 'pose' | 'deja' | 'bad' | 'sansnom'>('repos');
+  // La demande de changement, seule porte apres un choix : `demande` est ce
+  // que le serveur en sait, `demPays` ce que le joueur est en train d'en dire.
+  const [demande, setDemande] = useState<{ pays: string; statut: string } | null>(null);
+  const [demOuvert, setDemOuvert] = useState(false);
+  const [demPays, setDemPays] = useState('');
+  const [demEtat, setDemEtat] = useState<'repos' | 'envoi' | 'bad'>('repos');
 
   useEffect(() => {
     // On rappelle le pseudo deja lie, pour ne pas le faire retaper.
@@ -206,7 +212,8 @@ export function PanneauIdentite({
     // (« Champion du Maroc », pas « Champion de MA »), et deux tables du meme
     // fait auraient diverge a la premiere retouche.
     nations().then(setNationsListe);
-    paysDe(n).then(({ pays: p, definitif }) => {
+    paysDe(n).then(({ pays: p, definitif, demande: d }) => {
+      setDemande(d);
       if (definitif) { setPays(p || ''); setPaysFige(p || ''); }
       else if (p) setPaysVu(p);     // vu, pas choisi : on propose, on ne coche pas
     });
@@ -246,6 +253,26 @@ export function PanneauIdentite({
     }
     else if (r.etat === 'sans-nom' || r.etat === 'pas-a-toi') setPaysEtat('sansnom');
     else setPaysEtat('bad');
+  };
+
+  /** Envoie la demande de changement. La nationalite ne bouge pas : elle
+   *  attend l'administration, et l'ecran le dit. */
+  const envoyerDemande = async () => {
+    const p = demPays.trim().toUpperCase();
+    if (!p || p === paysFige) return;
+    const nomPays = nationsListe.find(n => n.code === p)?.nom || p;
+    if (!window.confirm(N.t('pays_dem_confirm').replace('{pays}', nomPays))) return;
+    setDemEtat('envoi');
+    const r = await demanderPays(p);
+    if (r === 'ok') {
+      setDemande({ pays: p, statut: 'attente' });
+      setDemOuvert(false);
+      setDemEtat('repos');
+    } else if (r === 'fait') {
+      setDemande({ pays: paysFige, statut: 'acceptee' });
+      setDemOuvert(false);
+      setDemEtat('repos');
+    } else setDemEtat('bad');
   };
 
   /**
@@ -552,6 +579,7 @@ export function PanneauIdentite({
               )}
 
             {paysFige ? (
+              <>
               <div className="flex items-center gap-2 px-3 py-2 rounded-xl
                               bg-primary/[0.08] border border-primary/30 text-primary">
                 <Drapeau pays={paysFige} className="text-base shrink-0" />
@@ -560,6 +588,64 @@ export function PanneauIdentite({
                 </span>
                 <Lock className="w-3 h-3 ml-auto shrink-0 opacity-60" />
               </div>
+              {!bienvenue && (() => {
+                const nomDe = (c: string) => nationsListe.find(n => n.code === c)?.nom || c;
+                return (
+                  <>
+                    {demande && demande.statut !== 'acceptee' && (
+                      <span className="text-[9px] text-muted-foreground leading-snug">
+                        {N.t(demande.statut === 'attente' ? 'pays_dem_attente' : 'pays_dem_refus')
+                          .replace('{pays}', nomDe(demande.pays))}
+                      </span>
+                    )}
+                    {demande && demande.statut === 'acceptee' ? (
+                      <span className="text-[9px] text-muted-foreground leading-snug">{N.t('pays_dem_fait')}</span>
+                    ) : demOuvert ? (
+                      <div className="flex gap-2">
+                        <div className="flex-1 min-w-0 flex items-center gap-2 bg-black/35 border border-white/10
+                                        rounded-xl px-2 focus-within:border-primary/50">
+                          {demPays
+                            ? <Drapeau pays={demPays} className="text-base shrink-0" />
+                            : <Flag className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
+                          <select
+                            value={demPays}
+                            onChange={e => { setDemPays(e.target.value); setDemEtat('repos'); }}
+                            className="flex-1 min-w-0 bg-transparent py-2 text-sm text-foreground
+                                       focus:outline-none appearance-none cursor-pointer"
+                          >
+                            <option value="">{N.t('pays_aucun')}</option>
+                            {nationsListe.filter(n => n.code !== paysFige).map(n => (
+                              <option key={n.code} value={n.code}>{n.nom}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={envoyerDemande}
+                          disabled={demEtat === 'envoi' || !demPays}
+                          className="shrink-0 px-3 py-2 rounded-xl font-bold tracking-wide text-[10px]
+                                     border transition-colors flex items-center gap-1.5
+                                     text-foreground bg-white/5 border-white/15 hover:bg-white/10
+                                     disabled:opacity-40 disabled:pointer-events-none"
+                        >
+                          {demEtat === 'envoi' && <Loader2 className="w-3 h-3 animate-spin" />}
+                          {N.t('pays_dem_envoi')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setDemOuvert(true)}
+                        className="self-start text-[9px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+                      >
+                        {N.t('pays_dem_ouvrir')}
+                      </button>
+                    )}
+                    {demEtat === 'bad' && (
+                      <span className="text-[9px] text-muted-foreground leading-snug">{N.t('pays_dem_bad')}</span>
+                    )}
+                  </>
+                );
+              })()}
+              </>
             ) : (
               <>
                 <div className="flex gap-2">

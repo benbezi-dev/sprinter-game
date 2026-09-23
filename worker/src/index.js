@@ -13,7 +13,7 @@ import { sonner } from './boite.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
-  ensureChampTables, noterPays, choisirPays, imposerPays, paysEligibles, effectifPays,
+  ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
   prochaineEdition, rangSelection,
@@ -632,6 +632,31 @@ async function peutUtiliser(db, nameKey, deviceId) {
   return !!d;
 }
 
+/** Les noms deja pourvus d'un pays, dans cet isolat : une ecriture sur deux
+ *  vient d'un joueur deja note, et une lecture par requete pour le redire
+ *  serait du travail pour rien. */
+const PAYS_DEJA_NOTES = new Set();
+
+async function noterAuPassage(requete, db, pays) {
+  let body;
+  try { body = await requete.json(); } catch { return; }
+  const { device_id, name } = body || {};
+  if (!isValidDeviceId(device_id) || typeof name !== 'string') return;
+  const key = cleanName(name).trim().toLowerCase();
+  if (!key || key === 'anonyme' || PAYS_DEJA_NOTES.has(key)) return;
+  await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT 1 AS ok FROM player_pays WHERE name_key = ?`).bind(key).first();
+  if (!deja) {
+    const inscrit = await db.prepare(
+      `SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(key).first();
+    if (!inscrit) return;                 // nom libre : rien a qui l'attribuer
+    if (!(await peutUtiliser(db, key, device_id))) return;
+    await noterPays(db, key, pays);
+  }
+  PAYS_DEJA_NOTES.add(key);
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -1187,6 +1212,20 @@ async function servir(request, env, ctx, porteur) {
 
     canal.db = env.DB;
 
+    // ------------------------------------------ la nationalite automatique
+    //
+    // Un joueur qui ne choisit pas de nationalite en recoit une : celle du
+    // pays d'ou il se connecte. Elle etait notee sur `/submit` seulement, et
+    // qui ne jouait qu'en duel n'en avait jamais — donc aucun championnat.
+    // On la note desormais sur TOUTE ecriture qui porte un nom et un appareil,
+    // une seule fois (`noterPays` ne remplace rien), et seulement si le nom
+    // est a cet appareil : sinon n'importe qui, derriere un VPN, poserait le
+    // pays d'un nom qu'il ne porte pas.
+    if (request.method === 'POST' && request.cf && request.cf.country) {
+      ctx.waitUntil(noterAuPassage(request.clone(), env.DB, request.cf.country)
+        .catch(e => console.log('pays auto KO', String(e && e.message || e))));
+    }
+
     // --------------------------------------------------------- anti-abus
     //
     // Toute ecriture passe par une IP, et une IP qui insiste plus que de
@@ -1596,12 +1635,6 @@ async function servir(request, env, ctx, porteur) {
       return json({ race, by, entries });
     }
 
-    // Le pays d'un joueur, vu par Cloudflare sur la requete elle-meme. On le
-    // note au passage plutot que de le demander : personne n'a envie de
-    // remplir un formulaire pour courir un 100 metres. Le joueur peut le
-    // corriger, et son choix ne se fait jamais ecraser.
-    const paysVu = (request.cf && request.cf.country) || null;
-
     if (url.pathname === '/submit' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -1609,7 +1642,6 @@ async function servir(request, env, ctx, porteur) {
       const { device_id, race_key, name, time_ms, best_split_ms, trace } = body || {};
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
-      if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
       // Le cumul sentinelle n'est pas un chrono : il dit « pas de parcours
       // complet derriere », et c'est ce que porte tout record du monde couru
       // hors carriere. Il passe donc quel que soit le plafond des vrais
@@ -1819,6 +1851,22 @@ async function servir(request, env, ctx, porteur) {
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
         await ensurePlayerTables(env.DB);
         const r = await imposerPays(env.DB, key, (body || {}).pays);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
+      }
+
+      // Les demandes de changement faites depuis le jeu, et leur traitement.
+      if (sous === 'demandes' && request.method === 'GET') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        return json({ demandes: await demandesEnAttente(env.DB) });
+      }
+      if (sous === 'demande' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const key = String((body || {}).name_key || '').trim().toLowerCase();
+        if (!key) return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
+        const r = await traiterDemande(env.DB, key, (body || {}).accepter === true);
         return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
       }
 
@@ -2958,6 +3006,25 @@ async function servir(request, env, ctx, porteur) {
     // avec le classement : une seconde route du meme chemin ne serait jamais
     // atteinte.)
 
+    // Le joueur demande a changer de nationalite. Sous son nom et son appareil,
+    // comme tout ce qui s'ecrit a son nom ; la demande attend l'administration.
+    if (url.pathname === '/profil/demande-pays' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, pays, message } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const p = await env.DB.prepare(`SELECT name FROM players WHERE name_key = ?`).bind(key).first();
+      if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
+      if (!(await peutUtiliser(env.DB, key, device_id))) {
+        return json({ error: 'ce nom ne t appartient pas' }, 403);
+      }
+      const r = await demanderPays(env.DB, key, p.name, pays, message);
+      return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
+    }
+
     if (url.pathname === '/profil' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -3026,10 +3093,11 @@ async function servir(request, env, ctx, porteur) {
       if (!key) return json({ insta: null, pays: null, source: null });
       await ensurePlayerTables(env.DB);
       await ensureChampTables(env.DB);
-      const [p, g] = await Promise.all([
+      const [p, g, dem] = await Promise.all([
         env.DB.prepare(`SELECT insta FROM players WHERE name_key = ?`).bind(key).first(),
         env.DB.prepare(`SELECT pays, source FROM player_pays WHERE name_key = ?`)
           .bind(key).first(),
+        demandeDe(env.DB, key),
       ]);
       // `source` compte autant que le pays : 'choix' veut dire que le joueur
       // l'a dit, 'vu' que Cloudflare a devine d'ou venait la requete. Les
@@ -3042,6 +3110,8 @@ async function servir(request, env, ctx, porteur) {
         // Le nom est-il reserve ? L'ecran d'administration en a besoin pour
         // dire « joueur inconnu » AVANT d'ecrire, pas apres.
         inscrit: !!p,
+        // La derniere demande de changement, et ce qu'on en a fait.
+        demande: dem ? { pays: dem.pays, statut: dem.statut } : null,
       });
     }
 

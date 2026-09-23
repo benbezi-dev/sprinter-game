@@ -219,6 +219,20 @@ export async function ensureChampTables(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS player_pays_par_pays ON player_pays(pays)`),
 
+    // Les demandes de changement de nationalite, faites depuis le jeu et
+    // tranchees par l'administration. Une par joueur : une nouvelle demande
+    // remplace la precedente, on ne fait pas la queue contre soi-meme.
+    db.prepare(`CREATE TABLE IF NOT EXISTS demandes_pays (
+      name_key TEXT PRIMARY KEY,
+      nom TEXT NOT NULL,
+      pays_avant TEXT,
+      pays_demande TEXT NOT NULL,
+      message TEXT,
+      statut TEXT NOT NULL,
+      cree_le INTEGER NOT NULL,
+      traite_le INTEGER
+    )`),
+
     // Une edition : un championnat, un echelon, une zone, une epreuve, un
     // weekend.
     db.prepare(`CREATE TABLE IF NOT EXISTS champ_editions (
@@ -510,24 +524,25 @@ export async function annoncer(db, { edition, echelon, zone, type, titre, texte,
 }
 
 /**
- * Note le pays d'un joueur vu par Cloudflare.
+ * Donne a un joueur la nationalite du pays d'ou il se connecte, UNE FOIS.
  *
- * On n'ecrase jamais un choix explicite : quelqu'un en deplacement, ou derriere
- * un VPN, ne doit pas changer de nationalite sportive parce qu'il a joue une
- * course depuis un aeroport.
+ * C'est sa nationalite tant qu'il n'en choisit pas une autre : elle compte
+ * pour les championnats comme un choix. Elle ne suit donc plus la connexion —
+ * quelqu'un en deplacement, ou derriere un VPN, ne doit pas changer de
+ * nationalite sportive parce qu'il a joue une course depuis un aeroport. Pour
+ * en changer : son propre choix (une fois), ou une demande a l'administration.
+ *
+ * `XX` est le « pays inconnu » de Cloudflare : ce n'est pas une nationalite.
  */
 export async function noterPays(db, nameKey, pays) {
   const k = String(nameKey || '').trim().toLowerCase();
   const p = String(pays || '').trim().toUpperCase();
-  if (!k || !/^[A-Z]{2}$/.test(p)) return;
+  if (!k || !/^[A-Z]{2}$/.test(p) || p === 'XX') return;
   await ensureChampTables(db);
   await db.prepare(
     `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
      VALUES (?, ?, ?, 'geo', ?)
-     ON CONFLICT(name_key) DO UPDATE SET
-       pays = CASE WHEN player_pays.source = 'choix' THEN player_pays.pays ELSE excluded.pays END,
-       continent = CASE WHEN player_pays.source = 'choix' THEN player_pays.continent ELSE excluded.continent END,
-       vu_le = excluded.vu_le`
+     ON CONFLICT(name_key) DO NOTHING`
   ).bind(k, p, continentDe(p), Date.now()).run();
 }
 
@@ -592,6 +607,81 @@ export async function imposerPays(db, nameKey, pays) {
     ok: true, avant: avantPays, avant_source: avantSource,
     pays: p, continent: continentDe(p), cree: avantSource !== 'choix',
   };
+}
+
+/**
+ * Le joueur demande a changer de nationalite. Rien ne change encore : la
+ * demande attend l'administration, qui l'accepte (`imposerPays`) ou la refuse.
+ *
+ * UN SEUL changement par joueur : une demande acceptee ferme la porte. Une
+ * demande refusee, elle, n'a rien change — le joueur peut en refaire une.
+ * L'administration garde sa correction directe, qui ne passe pas par ici.
+ */
+export async function demanderPays(db, nameKey, nom, pays, message) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  const p = String(pays || '').trim().toUpperCase();
+  if (!k) return { erreur: 'nom invalide' };
+  if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
+  await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT statut FROM demandes_pays WHERE name_key = ?`).bind(k).first();
+  if (deja && deja.statut === 'acceptee') {
+    return { erreur: 'changement deja utilise', code: 409 };
+  }
+  const avant = await db.prepare(
+    `SELECT pays FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (avant && avant.pays === p) return { erreur: 'c est deja ta nationalite' };
+  const mot = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 280) || null;
+  await db.prepare(
+    `INSERT INTO demandes_pays (name_key, nom, pays_avant, pays_demande, message, statut, cree_le, traite_le)
+     VALUES (?, ?, ?, ?, ?, 'attente', ?, NULL)
+     ON CONFLICT(name_key) DO UPDATE SET
+       nom = excluded.nom, pays_avant = excluded.pays_avant,
+       pays_demande = excluded.pays_demande, message = excluded.message,
+       statut = 'attente', cree_le = excluded.cree_le, traite_le = NULL`
+  ).bind(k, String(nom || k), avant ? avant.pays : null, p, mot, Date.now()).run();
+  return { ok: true, pays: p, statut: 'attente' };
+}
+
+/** La demande d'un joueur, pour que le jeu lui dise ou elle en est. */
+export async function demandeDe(db, nameKey) {
+  await ensureChampTables(db);
+  const d = await db.prepare(
+    `SELECT pays_demande AS pays, statut, cree_le, traite_le FROM demandes_pays WHERE name_key = ?`
+  ).bind(String(nameKey || '').trim().toLowerCase()).first();
+  return d || null;
+}
+
+/** Les demandes en attente, les plus anciennes d'abord. */
+export async function demandesEnAttente(db) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT d.name_key, d.nom, d.pays_avant, d.pays_demande, d.message, d.cree_le,
+            g.pays AS pays_actuel, g.source AS source_actuelle
+       FROM demandes_pays d LEFT JOIN player_pays g ON g.name_key = d.name_key
+      WHERE d.statut = 'attente'
+      ORDER BY d.cree_le`
+  ).all();
+  return results || [];
+}
+
+/** L'administration tranche. Accepter pose le pays demande, comme une correction. */
+export async function traiterDemande(db, nameKey, accepter) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  await ensureChampTables(db);
+  const d = await db.prepare(
+    `SELECT pays_demande FROM demandes_pays WHERE name_key = ? AND statut = 'attente'`
+  ).bind(k).first();
+  if (!d) return { erreur: 'aucune demande en attente', code: 404 };
+  let r = { ok: true };
+  if (accepter) {
+    r = await imposerPays(db, k, d.pays_demande);
+    if (r.erreur) return r;
+  }
+  await db.prepare(
+    `UPDATE demandes_pays SET statut = ?, traite_le = ? WHERE name_key = ?`
+  ).bind(accepter ? 'acceptee' : 'refusee', Date.now(), k).run();
+  return { ...r, statut: accepter ? 'acceptee' : 'refusee', pays_demande: d.pays_demande };
 }
 
 /**
