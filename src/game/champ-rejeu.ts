@@ -539,7 +539,8 @@ let departProgramme: {
  * direct (rappelChamp dans le moteur), avec les memes durees.
  */
 const RAPPEL_APRES_COUP_MS = 350;
-const RAPPEL_MS = 4000;
+/** La duree de la scene, la meme qu'en direct (RAPPEL_MS de la salle). */
+const RAPPEL_MS = 6500;
 const minuteursRappel: ReturnType<typeof setTimeout>[] = [];
 function annulerLeRappel() {
   while (minuteursRappel.length) clearTimeout(minuteursRappel.pop()!);

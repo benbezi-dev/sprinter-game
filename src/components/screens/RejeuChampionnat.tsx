@@ -148,14 +148,16 @@ function Presentation({ titre, sousTitre, grille }: {
         ) : (
           <motion.div key={courant.couloir} {...MONTEE}
             className="relative self-center flex flex-col items-center gap-2 px-6 w-full">
-            <span className="font-mono text-[11px] tracking-[0.35em] text-white/55">
-              {SprinterApp.N.t('pres_lane')} {courant.couloir}
-            </span>
             <h2 className="font-display font-black tracking-tight text-white text-center
                            leading-none text-4xl md:text-6xl break-words max-w-full
                            drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)]">
               {courant.nom}
             </h2>
+            {/* Le couloir SOUS le nom, comme en direct : qui, puis ou. */}
+            <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
+                             drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+              {SprinterApp.N.t('pres_lane')} {courant.couloir}
+            </span>
           </motion.div>
         )}
       </AnimatePresence>

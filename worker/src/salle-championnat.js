@@ -55,13 +55,16 @@ const RETARD_TOLERE_MS = 2 * 60 * 1000;
  */
 const APPEL_TARDIF_MS = 5000;
 /**
- * LE RAPPEL : quatre secondes de scene, puis le decompte du nouveau depart.
+ * LE RAPPEL : six secondes et demie de scene, puis le decompte du nouveau
+ * depart.
  *
- * Assez pour voir les coureurs revenir, le carton se lever, le couloir se
- * vider ; pas assez pour que l'adrenaline retombe. Le decompte qui suit est le
- * meme qu'au premier depart.
+ * Le retour sur la ligne, puis le suspense — on sait qu'il y a eu faute, on
+ * ne sait pas encore qui : une roulette cherche le fautif de couloir en
+ * couloir —, puis le carton et le couloir qui se vide. Trois secondes de
+ * doute, pas davantage : au-dela, l'adrenaline retombe. Le decompte qui suit
+ * est le meme qu'au premier depart. Voir rappelChamp dans le moteur.
  */
-const RAPPEL_MS = 4000;
+const RAPPEL_MS = 6500;
 /**
  * Deux fautifs sur le meme depart sortent tous les deux. Le second signalement
  * peut arriver une latence apres le premier : le rappel attend donc un

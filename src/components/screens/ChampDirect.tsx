@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp } from '@/game/engine';
 import { DUREE, COURBE, MONTEE, VOILE } from '@/lib/mouvement';
@@ -141,34 +141,93 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
 /* -------------------------------------------------------- la scene du rappel */
 
 /**
- * LE RAPPEL : deux plans, cales sur ceux du moteur (voir rappelChamp).
+ * L'instant de la scene, lu dans le moteur a chaque image.
  *
- *   0 → 1,6 s   « FAUX DEPART », en rouge, sur le flash du double coup de feu,
- *               et « retour sur la ligne » pendant que les coureurs reviennent ;
- *   1,8 s →     le carton rouge se leve, avec le nom du fautif, son couloir et
- *               l'instant ou il est parti — que personne ne le conteste.
+ * Le moteur tient le calendrier (G.rappel : la roulette, ses reperes) et fait
+ * battre la camera et le son dessus ; l'ecran le lit au lieu de compter de
+ * son cote, pour que l'image, le tic et le numero allume tombent ensemble —
+ * en direct comme au rejeu, qui passent tous deux par rappelChamp.
+ */
+function useRappelDuMoteur() {
+  const [, battre] = useState(0);
+  // LE DERNIER ETAT CONNU. La scene se ferme en fondu, et le moteur a deja
+  // efface son rappel quand le fondu commence : sans ce souvenir, l'ecran
+  // retombait sur son premier plan et « FAUX DEPART » reapparaissait deux
+  // dixiemes de seconde, en sortant.
+  const dernier = useRef<ReturnType<typeof lire>>(null);
+  useEffect(() => {
+    let id = 0;
+    const tic = () => { battre(x => x + 1); id = requestAnimationFrame(tic); };
+    id = requestAnimationFrame(tic);
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const m = lire();
+  if (m) dernier.current = m;
+  return m || dernier.current;
+}
+
+function lire() {
+  const R = SprinterApp.G.rappel;
+  if (!R) return null;
+  let lane: number | null = null;
+  if (R.t >= R.qui) for (const e of R.roulette) { if (e.t <= R.t) lane = e.lane; else break; }
+  return { t: R.t as number, qui: R.qui as number, verdict: R.verdict as number,
+           lignes: R.lignes as number[], cibles: R.cibles as number[], lane };
+}
+
+/**
+ * LE RAPPEL, EN TROIS PLANS — cales sur le moteur (voir rappelChamp).
  *
- * Le voile reste leger : la scene se passe SUR la piste, on doit voir les
- * coureurs revenir et le couloir se vider.
+ *   « FAUX DEPART »  le double coup de feu ; tout le monde revient ;
+ *   « QUI ? »        on sait qu'il y a eu faute, pas qui. Les numeros de la
+ *                    ligne en haut d'ecran, une lumiere qui passe de l'un a
+ *                    l'autre en ralentissant, s'arrete sur un voisin… puis
+ *                    bascule. Le mot bat avec le coeur ;
+ *   LE VERDICT       le couloir vire au rouge, le carton tombe — nom,
+ *                    couloir, instant, que personne ne le conteste. Un second
+ *                    fautif a le sien, une demi-seconde apres.
+ *
+ * Rien n'est dessine sur la piste : ni nom ni cerceau en championnat. Le
+ * voile reste leger, la scene se passe SUR la piste.
  */
 export function RappelEnScene({ fautifs, moiSorti }: {
   fautifs: { id: string; nom: string; couloir: number; ms: number }[];
   moiSorti: boolean;
 }) {
   const { N } = SprinterApp;
-  const r = { fautifs, moiSorti };
-  const [plan, setPlan] = useState<1 | 2>(1);
-  useEffect(() => {
-    const t = setTimeout(() => setPlan(2), 1800);
-    return () => clearTimeout(t);
-  }, []);
+  const m = useRappelDuMoteur();
+  const t = m ? m.t : 0;
+  const qui = m ? m.qui : 1.4, verdict = m ? m.verdict : 4.3;
+  const plan: 'fd' | 'qui' | 'verdict' = t < qui ? 'fd' : t < verdict ? 'qui' : 'verdict';
+  // les couloirs tels qu'on les lit peints : l'indice du moteur plus un
+  const lignes = (m ? m.lignes : []).map(l => l + 1);
+  const rouges = new Set((m ? m.cibles : []).map(l => l + 1));
+  const allume = m && m.lane != null ? m.lane + 1 : null;
+  // le battement du « QUI ? », de plus en plus serre
+  const avance = Math.min(1, Math.max(0, (t - qui) / (verdict - qui)));
+  const periode = 0.62 - 0.26 * avance;
+  const phase = ((t - qui) % periode) / periode;
+  const pouls = plan === 'qui' ? 1 + 0.09 * Math.max(0, 1 - phase * 4) : 1;
+  const tries = [...fautifs].sort((a, b) => a.couloir - b.couloir);
+  const virgule = (ms: number) => (Math.abs(ms) / 1000).toFixed(3)
+    .replace('.', N.getLang() === 'en' ? '.' : ',') + ' s';
+
   return (
-    <motion.div className="absolute inset-0 z-40 pointer-events-none flex items-center justify-center"
+    <motion.div className="absolute inset-0 z-40 pointer-events-none flex flex-col items-center justify-center"
       initial={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: DUREE.rapide } }}>
+      {/* le flash du double coup de feu, puis celui du verdict */}
       <motion.div className="absolute inset-0 bg-destructive"
         initial={{ opacity: 0.8 }}
         animate={{ opacity: [0.8, 0.08, 0.45, 0.06] }}
         transition={{ duration: DUREE.scene, times: [0, 0.2, 0.35, 1] }} />
+      {plan === 'verdict' && (
+        <motion.div key="eclair" className="absolute inset-0 bg-destructive"
+          initial={{ opacity: 0.7 }} animate={{ opacity: 0 }} transition={{ duration: 0.5 }} />
+      )}
+      {/* pendant le doute, l'image s'assombrit sur les bords : on retient son souffle */}
+      <motion.div className="absolute inset-0"
+        style={{ background: 'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.55) 100%)' }}
+        animate={{ opacity: plan === 'qui' ? 1 : 0 }} transition={{ duration: 0.4 }} />
       {[0, 1].map(i => (
         <motion.div key={i} className="absolute left-0 right-0 h-px bg-destructive/70"
           style={{ top: i === 0 ? '34%' : '66%' }}
@@ -176,10 +235,33 @@ export function RappelEnScene({ fautifs, moiSorti }: {
           transition={{ duration: 0.6, delay: 0.2 + i * 0.1, ease: COURBE.sortie }} />
       ))}
 
+      {/* LA LIGNE, EN HAUT : les couloirs presents, la lumiere qui cherche */}
+      {plan !== 'fd' && lignes.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+          className="absolute top-[calc(max(env(safe-area-inset-top),0.75rem)+2.5rem)] flex gap-1.5">
+          {lignes.map(c => {
+            const cible = plan === 'verdict' && rouges.has(c);
+            const lumiere = plan === 'qui' && allume === c;
+            return (
+              <motion.div key={c}
+                animate={cible ? { scale: [1, 1.35, 1.15] } : { scale: lumiere ? 1.12 : 1 }}
+                transition={{ duration: cible ? 0.35 : 0.08 }}
+                className={`w-8 h-9 rounded-md grid place-items-center font-display font-black text-base
+                  tabular-nums border transition-colors duration-75
+                  ${cible ? 'bg-destructive border-destructive text-white shadow-[0_0_24px_rgba(239,68,68,0.8)]'
+                    : lumiere ? 'bg-white border-white text-black shadow-[0_0_18px_rgba(255,255,255,0.7)]'
+                    : 'bg-black/55 border-white/20 text-white/70'}`}>
+                {c}
+              </motion.div>
+            );
+          })}
+        </motion.div>
+      )}
+
       <AnimatePresence mode="wait">
-        {plan === 1 ? (
-          <motion.div key="p1" className="relative flex flex-col items-center gap-2 text-center"
-            exit={{ opacity: 0, y: -10, transition: { duration: 0.18 } }}>
+        {plan === 'fd' && (
+          <motion.div key="fd" className="relative flex flex-col items-center gap-2 text-center"
+            exit={{ opacity: 0, y: -10, transition: { duration: 0.15 } }}>
             <motion.h1
               initial={{ scale: 1.7, opacity: 0, letterSpacing: '0.3em' }}
               animate={{ scale: 1, opacity: 1, letterSpacing: '0em' }}
@@ -189,20 +271,38 @@ export function RappelEnScene({ fautifs, moiSorti }: {
               {N.t('champ_fd')}
             </motion.h1>
             <motion.span initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
+              transition={{ delay: 0.4 }}
               className="text-sm font-black tracking-[0.35em] uppercase text-white
                          drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
               {N.t('champ_fd_retour')}
             </motion.span>
           </motion.div>
-        ) : (
-          <motion.div key="p2" className="relative flex flex-col items-center gap-3">
+        )}
+
+        {plan === 'qui' && (
+          <motion.div key="qui" className="relative flex flex-col items-center gap-2 text-center"
+            initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.3, transition: { duration: 0.12 } }}>
+            <div style={{ transform: `scale(${pouls})` }}
+              className="font-display font-black text-7xl text-white tracking-tight
+                         drop-shadow-[0_0_30px_rgba(0,0,0,0.9)]">
+              {N.t('champ_qui')}
+            </div>
+            <span className="text-[11px] font-bold tracking-[0.3em] uppercase text-white/75
+                             drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
+              {N.t('champ_juge')}
+            </span>
+          </motion.div>
+        )}
+
+        {plan === 'verdict' && (
+          <motion.div key="verdict" className="relative flex flex-col items-center gap-3">
             <div className="flex gap-3">
-              {r.fautifs.map((f, i) => (
+              {tries.map((f, i) => (
                 <motion.div key={f.id}
-                  initial={{ y: 90, rotate: -18, opacity: 0 }}
-                  animate={{ y: 0, rotate: -6 + i * 8, opacity: 1 }}
-                  transition={{ type: 'spring', stiffness: 380, damping: 18, delay: i * 0.12 }}
+                  initial={{ y: -260, rotate: -24, opacity: 0, scale: 1.4 }}
+                  animate={{ y: 0, rotate: -6 + i * 10, opacity: 1, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 16, delay: i * 0.45 }}
                   className="w-[118px] h-[160px] rounded-lg flex flex-col items-center justify-between
                              py-3 px-2 shadow-[0_18px_40px_rgba(0,0,0,0.6)]"
                   style={{ background: `linear-gradient(160deg, #ff5a5a, ${ROUGE} 45%, #b91c1c)` }}>
@@ -218,16 +318,23 @@ export function RappelEnScene({ fautifs, moiSorti }: {
                 </motion.div>
               ))}
             </div>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
-              className="text-[10px] font-mono tracking-widest text-white/80
+            {tries.length > 1 && (
+              <motion.div initial={{ opacity: 0, scale: 1.4 }} animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-sm font-black tracking-widest uppercase text-destructive
+                           drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+                {N.t('champ_deuxieme')}
+              </motion.div>
+            )}
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ delay: 0.35 + (tries.length - 1) * 0.45 }}
+              className="text-[10px] font-mono tracking-widest text-white/85
                          drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)] text-center">
-              {r.fautifs.map(f => `${f.nom} — ${N.t('champ_fd_instant',
-                { ms: (Math.abs(f.ms) / 1000).toFixed(3).replace('.', N.getLang() === 'en' ? '.' : ',') + ' s' })}`
-              ).join('  ·  ')}
+              {tries.map(f => `${f.nom} — ${N.t('champ_fd_instant', { ms: virgule(f.ms) })}`).join('  ·  ')}
             </motion.div>
-            {r.moiSorti && (
+            {moiSorti && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
+                transition={{ delay: 0.7 }}
                 className="text-sm font-black tracking-widest uppercase text-white
                            drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]">
                 {N.t('champ_fd_moi')}

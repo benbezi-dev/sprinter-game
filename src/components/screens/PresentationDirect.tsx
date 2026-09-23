@@ -155,8 +155,16 @@ export function PresentationDirect() {
               {...MONTEE}
               className="flex flex-col items-center gap-2 w-full"
             >
+              <h2 className="font-display font-black tracking-tight text-white text-center
+                             leading-none text-4xl md:text-6xl break-words max-w-full
+                             drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+                {courant.nom}
+              </h2>
+              {/* LE COULOIR SOUS LE NOM : on lit d'abord qui, puis ou il court
+                  — et c'est le chiffre peint devant ses blocs. */}
               <div className="flex items-baseline gap-3">
-                <span className="font-mono text-xs tracking-widest text-white/55">
+                <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
+                                 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
                   {N.t('pres_lane')} {courant.couloir}
                 </span>
                 {estMoi && (
@@ -165,11 +173,6 @@ export function PresentationDirect() {
                   </span>
                 )}
               </div>
-              <h2 className="font-display font-black tracking-tight text-white text-center
-                             leading-none text-4xl md:text-6xl break-words max-w-full
-                             drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
-                {courant.nom}
-              </h2>
               <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />
             </motion.div>
           )}

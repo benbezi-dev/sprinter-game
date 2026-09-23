@@ -1010,6 +1010,10 @@
       this.buf.trip = blip(160, 0.22, 0.32, 0.55);
       this.buf.win = blip(760, 0.6, 0.3, 1.6);
       this.buf.lose = blip(300, 0.5, 0.3, 0.6);
+      // Le rappel d'un faux depart en championnat : le tic de la roulette qui
+      // cherche le fautif, et le coeur qui bat pendant qu'elle cherche.
+      this.buf.tic = blip(1480, 0.045, 0.22, 1);
+      this.buf.coeur = blip(58, 0.2, 0.55, 0.72);
       // Deux phrases pour les fins de duel. Un blip de 0,5 s ne porte pas un
       // resultat definitif : la fanfare monte a l'octave, la chute descend.
       this.buf.fanfare = this.phrase([
@@ -2111,7 +2115,8 @@
     if (opts.championnat) {
       G.champDirect = true;
       const l = opts.monCouloir;
-      if (l >= 1 && l <= 8 && G.player) G.player.lane = l;
+      // Le couloir peint est l'indice plus un : voir indiceDuCouloir.
+      if (l >= 1 && l <= C.LANE_COUNT && G.player) G.player.lane = l - 1;
     }
     // Un seul chemin, a deux comme a huit.
     //
@@ -2372,17 +2377,18 @@
     // repartissent sur les autres. On tient la liste de ce qui est pris, sinon
     // deux adversaires finissent superposes et l'un des deux devient invisible.
     const pris = new Set([monCouloir]);
+    const [bas, haut] = bornesDesCouloirs();
     const suivantLibre = () => {
-      for (let l = 1; l <= 8; l++) if (!pris.has(l)) return l;
-      return monCouloir === 1 ? 2 : 1;   // piste pleine : cas theorique
+      for (let l = bas; l <= haut; l++) if (!pris.has(l)) return l;
+      return monCouloir === bas ? bas + 1 : bas;   // piste pleine : cas theorique
     };
 
     autres.forEach((autre) => {
       // On respecte le couloir annonce par la salle quand il est libre : les
       // deux clients doivent placer les memes gens aux memes endroits, sans
       // quoi on ne se double pas au meme couloir.
-      let lane = autre.couloir;
-      if (!lane || lane < 1 || lane > 8 || pris.has(lane)) lane = suivantLibre();
+      let lane = indiceDuCouloir(autre.couloir);
+      if (lane == null || lane < bas || lane > haut || pris.has(lane)) lane = suivantLibre();
       pris.add(lane);
       const idx = G.runners.findIndex(r => !r.isPlayer && r.lane === lane);
       if (idx >= 0) G.runners.splice(idx, 1);
@@ -2459,13 +2465,14 @@
     // annonce par la salle est respecte quand il l'est encore : c'est ce qui
     // fait que les huit telephones placent les memes gens aux memes endroits.
     const pris = new Set(G.runners.map(r => r.lane));
+    const [bas, haut] = bornesDesCouloirs();
     for (const [id, a] of voulus) {
       if (G.lives.has(id)) continue;
-      let lane = a.couloir;
-      if (!lane || lane < 1 || lane > 8 || pris.has(lane)) {
-        lane = 0;
-        for (let l = 1; l <= 8 && !lane; l++) if (!pris.has(l)) lane = l;
-        if (!lane) continue;             // piste pleine : cas theorique
+      let lane = indiceDuCouloir(a.couloir);
+      if (lane == null || lane < bas || lane > haut || pris.has(lane)) {
+        lane = null;
+        for (let l = bas; l <= haut && lane == null; l++) if (!pris.has(l)) lane = l;
+        if (lane == null) continue;      // piste pleine : cas theorique
       }
       pris.add(lane);
       const i = G.runners.findIndex(r => !r.isPlayer && !r.isLive && r.lane === lane);
@@ -2498,6 +2505,27 @@
    * Le favori annonce disparait avec le plateau : il venait de ses chronos
    * vises, et le HUD n'a pas a afficher un nom a battre qui ne court pas.
    */
+  /**
+   * LE COULOIR ANNONCE, EN INDICE DU MOTEUR.
+   *
+   * Le moteur numerote ses couloirs a partir de zero : le chiffre peint devant
+   * les blocs est l'indice plus un (voir les numeros de couloir dans
+   * drawWorld), et le rejeu s'y tient (`r.lane + 1 === couloir`). Le direct,
+   * lui, pose chacun a l'indice du couloir de la salle — le « couloir 4 »
+   * court dans le 5 peint, le « couloir 8 » hors de la piste. Pour un duel la
+   * difference ne se voit pas ; pour une serie de championnat, ou le couloir
+   * est annonce, presente et affiche au tableau, c'est une erreur. En
+   * championnat, donc, le couloir est celui qu'on voit peint.
+   */
+  function indiceDuCouloir(c) {
+    const n = Number(c);
+    if (!Number.isFinite(n) || n < 1) return null;
+    return G.champDirect ? n - 1 : n;
+  }
+  function bornesDesCouloirs() {
+    return G.champDirect ? [0, C.LANE_COUNT - 1] : [1, 8];
+  }
+
   function retirerOrdinateur() {
     // Le fantome vit hors de G.runners sur le chemin a un seul adversaire ; le
     // test le garde quand il y est, sur le chemin a plusieurs.
@@ -3189,18 +3217,65 @@
   /* --------------------------------------------- LE RAPPEL, EN CHAMPIONNAT
    *
    * Le premier fautif declenche le rappel, et c'est la salle qui l'annonce :
-   * rien ici ne decide qu'il y a eu faux depart. La scene tient en quatre
-   * secondes, dites par la salle (`rappel_ms`), et elle a trois temps :
+   * rien ici ne decide qu'il y a eu faux depart. La scene dure ce que la
+   * salle a dit (`rappel_ms`, six secondes et demie), et elle est construite
+   * pour la TENSION : on sait qu'il y a eu faute, on ne sait pas encore qui.
    *
-   *   0 → 1,5 s   le double coup de feu, et tout le monde revient sur la
+   *   0 → 1,3 s   le double coup de feu, et tout le monde revient sur la
    *               ligne — en trottinant, tourne vers les blocs, en accelere ;
-   *   1,8 s       la camera va chercher le fautif : le carton se leve (il est
-   *               dessine par l'ecran, voir ChampDirect) ;
-   *   3,2 s       le fautif s'efface, et son couloir reste vide.
+   *   1,4 → 4,3 s « QUI ? » — une roulette passe de couloir en couloir en
+   *               ralentissant, un tic a chaque couloir, le coeur qui bat, et
+   *               la camera qui suit le long de la ligne. Juste avant la fin,
+   *               elle s'arrete sur un VOISIN… puis bascule sur le fautif ;
+   *   4,3 s       le verdict : secousse, eclair rouge, le carton tombe
+   *               (l'ecran le dessine, voir ChampDirect) ;
+   *   5,4 s       le fautif s'efface, et son couloir reste vide.
+   *
+   * La roulette n'est PAS dessinee sur la piste — ni nom ni cerceau en
+   * championnat : elle vit dans l'interface, et le moteur n'en tient que le
+   * calendrier, pour que la camera, le son et l'ecran battent ensemble.
    *
    * Puis le decompte du nouveau depart, le meme qu'au premier.
    */
-  const RAPPEL_RETOUR = 1.5, RAPPEL_CARTON = 1.8, RAPPEL_SORTIE = 3.2, RAPPEL_FONDU = 0.6;
+  const RAPPEL_RETOUR = 1.3, RAPPEL_QUI = 1.4, RAPPEL_VERDICT = 4.3;
+  const RAPPEL_SORTIE = 5.4, RAPPEL_FONDU = 0.6;
+  /** La fausse fin : l'arret sur le voisin avant la bascule sur le fautif. */
+  const RAPPEL_FAUSSE_FIN = 0.55;
+
+  /**
+   * Le calendrier de la roulette : [{ t, lane }], le dernier sur le fautif.
+   *
+   * Deterministe — memes couloirs, meme fautif, meme sequence — pour que deux
+   * spectateurs de la meme serie voient la meme scene. Elle va et vient le
+   * long de la ligne en ralentissant, et se pose sur un couloir VOISIN du
+   * fautif une demi-seconde avant le verdict.
+   */
+  function rouletteDuRappel(lignes, fautif) {
+    const L = lignes.length;
+    const iF = lignes.indexOf(fautif);
+    if (L < 2 || iF < 0) return [{ t: RAPPEL_VERDICT, lane: fautif }];
+    // le voisin : a cote du fautif, du cote ou il y a quelqu'un
+    const iV = iF + 1 < L ? iF + 1 : iF - 1;
+    const fin = RAPPEL_VERDICT - RAPPEL_FAUSSE_FIN;
+    const ecarts = [];
+    let g = 0.07, total = 0;
+    while (total + g < fin - RAPPEL_QUI) { ecarts.push(g); total += g; g *= 1.13; }
+    const echelle = (fin - RAPPEL_QUI) / (total || 1);
+    const n = ecarts.length;
+    // l'aller-retour le long de la ligne, cale pour finir sur le voisin
+    const periode = 2 * (L - 1);
+    const aller = (k) => { const m = ((k % periode) + periode) % periode; return m < L ? m : periode - m; };
+    let o = 0;
+    while (o < periode && aller(o + n) !== iV) o++;
+    const out = [];
+    let t = RAPPEL_QUI;
+    for (let k = 0; k <= n; k++) {
+      out.push({ t, lane: lignes[aller(o + k)] });
+      if (k < n) t += ecarts[k] * echelle;
+    }
+    out.push({ t: RAPPEL_VERDICT, lane: fautif });
+    return out;
+  }
 
   /**
    * @param fautifs identifiants de salle des fautifs (des cles de joueur)
@@ -3219,8 +3294,18 @@
     if (moiSorti && G.player) sortants.add(G.player);
     const depart = new Map();
     for (const r of G.runners) depart.set(r, r.d);
-    G.rappel = { t: 0, sortants, depart, moiSorti: !!moiSorti,
-                 vise: sortants.values().next().value || null };
+    const lignes = [...new Set(G.runners.map(r => r.lane))].sort((a, b) => a - b);
+    const cibles = [...sortants].map(r => r.lane).sort((a, b) => a - b);
+    const vise = [...sortants].sort((a, b) => a.lane - b.lane)[0] || null;
+    G.rappel = {
+      t: 0, sortants, depart, moiSorti: !!moiSorti, vise,
+      // ce que l'ecran lit : les couloirs sur la ligne (en indices du moteur),
+      // les fautifs, le calendrier de la roulette et ses trois reperes
+      lignes, cibles,
+      roulette: rouletteDuRappel(lignes, vise ? vise.lane : lignes[0]),
+      qui: RAPPEL_QUI, verdict: RAPPEL_VERDICT,
+      iTic: 0, prochainCoeur: RAPPEL_QUI, verdictDit: false,
+    };
     // La piste se fige sur la scene : le decompte est suspendu, comme pendant
     // la presentation, et c'est stepRappel qui fait vivre l'image.
     G.state = 'count'; G.countT = -99;
@@ -3228,6 +3313,14 @@
     // Le double coup de feu : c'est lui, sur une vraie piste, qui rappelle.
     Audio_.starter('feu');
     setTimeout(() => Audio_.starter('feu'), 190);
+  }
+
+  /** Le couloir que la roulette montre a l'instant t, ou null hors roulette. */
+  function couloirDeLaRoulette(R) {
+    if (!R || R.t < R.qui) return null;
+    let lane = null;
+    for (const e of R.roulette) { if (e.t <= R.t) lane = e.lane; else break; }
+    return lane;
   }
 
   function stepRappel(dt) {
@@ -3247,6 +3340,8 @@
       } else {
         if (d0 > 0.05) r.d = 0;
         r.retour = false;
+        // Sur la ligne, on attend le verdict : un souffle, pas une statue.
+        r.stride += dt * 0.5;
       }
       r.drivePitch = 0;
       r.celebrate = 0;
@@ -3255,14 +3350,34 @@
           : Math.max(0, 1 - (R.t - RAPPEL_SORTIE) / RAPPEL_FONDU);
       }
     }
-    // La camera : la ligne pendant le retour, le fautif pendant le carton.
-    const vise = R.t >= RAPPEL_CARTON && R.vise ? R.vise : (G.player || null);
-    if (vise) {
-      const p = G.track.pos(0, vise === G.player ? 3 : vise.lane);
-      const kc = 1 - Math.exp(-3.4 * dt);
-      G.camX += (p[0] - G.camX) * kc;
-      G.camY += (p[1] - G.camY) * kc;
+
+    // LE SON DE LA ROULETTE : un tic par couloir, le coeur entre les tics,
+    // de plus en plus vite a mesure qu'elle ralentit — puis le verdict.
+    while (R.iTic < R.roulette.length && R.roulette[R.iTic].t <= R.t) {
+      const dernier = R.iTic === R.roulette.length - 1;
+      if (!dernier) Audio_.sfx('tic', { gain: 0.34, rate: 0.9 + 0.2 * (R.iTic % 2) });
+      R.iTic++;
     }
+    if (R.t >= R.qui && R.t < R.verdict && R.t >= R.prochainCoeur) {
+      Audio_.sfx('coeur', { gain: 0.7 });
+      const avance = (R.t - R.qui) / (R.verdict - R.qui);
+      R.prochainCoeur = R.t + 0.62 - 0.26 * avance;
+    }
+    if (!R.verdictDit && R.t >= R.verdict) {
+      R.verdictDit = true;
+      G.flash = 1; G.shake = 1.8;
+      Audio_.sfx('trip', { gain: 0.8, rate: 0.7 });
+      Audio_.cue('dirge');
+    }
+
+    // LA CAMERA : la ligne pendant le retour, puis elle suit la roulette de
+    // couloir en couloir, et se pose sur le fautif au verdict.
+    const lane = R.t >= R.verdict && R.vise ? R.vise.lane
+      : (couloirDeLaRoulette(R) ?? 3);
+    const p = G.track.pos(0, lane);
+    const kc = 1 - Math.exp(-(R.t >= R.qui ? 7 : 3.4) * dt);
+    G.camX += (p[0] - G.camX) * kc;
+    G.camY += (p[1] - G.camY) * kc;
   }
 
   /**
