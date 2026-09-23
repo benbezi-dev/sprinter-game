@@ -2416,7 +2416,15 @@ async function servir(request, env, ctx, porteur) {
        est le moment ou il confirme avoir demande.
 
        `name` ne sert qu'a retrouver SON pays, pour la ligne « moi » — jamais a
-       classer quelqu'un. */
+       classer quelqu'un.
+
+       LA MEME ROUTE PORTE LA LISTE DES PAYS CHOISISSABLES (`nations`). Le
+       selecteur « TON PAYS » (identity.ts) et suivi/championnats.html lisent
+       `/nations` sans parametre et n'en prennent que ce champ ; une seconde
+       route `/nations` plus bas le servait, mais celle-ci la masquait et le
+       selecteur restait vide (constat du 23 septembre 2026). Les applis
+       publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
+       liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
     if (url.pathname === '/nations' && request.method === 'GET') {
       const race = url.searchParams.get('race') || EPREUVE_NATIONS;
       if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
@@ -2430,7 +2438,8 @@ async function servir(request, env, ctx, porteur) {
         sien = m.get(nom) || '';
       }
 
-      return json(await tableauDesNations(env.DB, { epreuve: race, pays: sien || null }));
+      const tableau = await tableauDesNations(env.DB, { epreuve: race, pays: sien || null });
+      return json({ ...tableau, nations: listeNations() });
     }
 
     if (url.pathname === '/duels' && request.method === 'GET') {
@@ -2932,20 +2941,9 @@ async function servir(request, env, ctx, porteur) {
     // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
     // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
     // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
-    /**
-     * Les pays qu'on peut se choisir.
-     *
-     * Le selecteur du jeu lisait cette liste depuis toujours ; elle n'a jamais
-     * existe. Il recevait donc 404, se repliait sur une liste vide, et
-     * proposait un choix entre rien — on ne pouvait pas se donner de
-     * nationalite, sur aucun des deux canaux.
-     *
-     * Pas de porte dessus : nommer les pays n'engage rien, et la liste est la
-     * meme pour tout le monde.
-     */
-    if (url.pathname === '/nations' && request.method === 'GET') {
-      return json({ nations: listeNations() });
-    }
+    // (La liste des pays choisissables est servie par `/nations`, plus haut,
+    // avec le classement : une seconde route du meme chemin ne serait jamais
+    // atteinte.)
 
     if (url.pathname === '/profil' && request.method === 'POST') {
       let body;
