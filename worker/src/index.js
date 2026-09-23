@@ -1809,16 +1809,17 @@ async function servir(request, env, ctx, porteur) {
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
-      // Corriger la nationalite d'un joueur. Le seul geste qui passe le
-      // verrou, et il est sous cle : cote joueur, un choix ne se defait pas.
+      // Poser ou corriger la nationalite d'un joueur. Le seul geste qui passe
+      // le verrou, et il est sous cle : cote joueur, un choix ne se defait pas.
       if (sous === 'nationalite' && request.method === 'POST') {
         if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const key = cleanName((body || {}).name).trim().toLowerCase();
         if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
         const r = await imposerPays(env.DB, key, (body || {}).pays);
-        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
       }
 
       if (sous === 'titres' && request.method === 'GET') {
@@ -3038,6 +3039,9 @@ async function servir(request, env, ctx, porteur) {
         insta: (p && p.insta) || null,
         pays: (g && g.pays) || null,
         source: (g && g.source) || null,
+        // Le nom est-il reserve ? L'ecran d'administration en a besoin pour
+        // dire « joueur inconnu » AVANT d'ecrire, pas apres.
+        inscrit: !!p,
       });
     }
 

@@ -548,20 +548,22 @@ export async function choisirPays(db, nameKey, pays) {
 }
 
 /**
- * L'administration corrige une nationalite. Le seul geste qui passe le verrou.
+ * L'administration pose ou corrige une nationalite. Le seul geste qui passe le
+ * verrou.
  *
  * Il existe parce que le verrou est total cote joueur : un doigt qui glisse sur
  * une liste de cinquante pays coute la saison entiere, et sans cette porte la
  * seule reparation serait d'ouvrir la base a la main. Mieux vaut un geste
  * nomme, sous cle, qui dit ce qu'il remplace.
  *
- * Il rend l'ANCIEN pays autant que le nouveau. Une correction sans trace de ce
- * qu'elle a efface ne se verifie pas : c'est ce que l'ecran affiche en retour,
- * et c'est ce qui permet de s'apercevoir qu'on a corrige le mauvais joueur.
+ * Il pose aussi la nationalite de qui n'en a jamais declare (un joueur qui la
+ * donne de vive voix, une detection 'geo' a confirmer). Ce qu'il exige, c'est
+ * un NOM RESERVE : la faute la plus probable ici n'est pas le mauvais pays,
+ * c'est le mauvais joueur, et ecrire une nationalite sur un nom que personne ne
+ * porte la ferait tomber sur le premier qui le reserverait.
  *
- * Il ne cree rien. Corriger la nationalite de quelqu'un qui n'en a jamais
- * declare serait la CHOISIR a sa place — precisement ce que tout le reste de ce
- * fichier s'emploie a rendre impossible.
+ * Il rend l'ANCIEN etat autant que le nouveau (`avant`, `avant_source`) : une
+ * correction sans trace de ce qu'elle a efface ne se verifie pas.
  */
 export async function imposerPays(db, nameKey, pays) {
   const k = String(nameKey || '').trim().toLowerCase();
@@ -569,23 +571,27 @@ export async function imposerPays(db, nameKey, pays) {
   if (!k) return { erreur: 'nom invalide' };
   if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
   await ensureChampTables(db);
+  const inscrit = await db.prepare(
+    `SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(k).first();
+  if (!inscrit) return { erreur: 'joueur inconnu', code: 404 };
   const avant = await db.prepare(
     `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
-  // Il faut une nationalite DECLAREE, pas une simple detection. Ecrire par-dessus
-  // une ligne 'geo' reviendrait a choisir a la place du joueur — exactement ce
-  // que le verrou empeche partout ailleurs. L'ecran d'administration refusait
-  // deja ce cas ; c'est ici qu'il doit etre refuse, l'ecran ne fait foi de rien.
-  if (!avant || avant.source !== 'choix') {
-    return { erreur: 'ce joueur n a pas declare de nationalite' };
-  }
-  if (avant.pays === p) {
-    return { ok: true, avant: avant.pays, pays: p, inchange: true };
+  const avantPays = avant ? avant.pays : null;
+  const avantSource = avant ? avant.source : null;
+  if (avantSource === 'choix' && avantPays === p) {
+    return { ok: true, avant: avantPays, avant_source: avantSource, pays: p, inchange: true };
   }
   await db.prepare(
-    `UPDATE player_pays SET pays = ?, continent = ?, source = 'choix', vu_le = ?
-      WHERE name_key = ?`
-  ).bind(p, continentDe(p), Date.now(), k).run();
-  return { ok: true, avant: avant.pays, pays: p, continent: continentDe(p) };
+    `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
+     VALUES (?, ?, ?, 'choix', ?)
+     ON CONFLICT(name_key) DO UPDATE SET
+       pays = excluded.pays, continent = excluded.continent,
+       source = 'choix', vu_le = excluded.vu_le`
+  ).bind(k, p, continentDe(p), Date.now()).run();
+  return {
+    ok: true, avant: avantPays, avant_source: avantSource,
+    pays: p, continent: continentDe(p), cree: avantSource !== 'choix',
+  };
 }
 
 /**
