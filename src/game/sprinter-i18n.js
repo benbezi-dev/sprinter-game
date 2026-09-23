@@ -554,6 +554,27 @@
     champ_course_demies: ['Demi-finale', 'Semi-final'],
     champ_course_finale: ['Finale', 'Final'],
     champ_revoir:    ['REVOIR LA COURSE', 'WATCH THE RACE'],
+    // LA PAGE PUBLIQUE « REGARDER » (voir game/regarder.ts). Celui qui la lit
+    // n'a pas le jeu : il suit un lien. Rien ici ne suppose qu'il a un nom.
+    regarder_direct:     ['EN DIRECT DU STADE', 'LIVE FROM THE STADIUM'],
+    regarder_prochaine:  ['PROCHAINE COURSE', 'NEXT RACE'],
+    regarder_dans:       ['dans {d}', 'in {d}'],
+    regarder_bouton:     ['REGARDER', 'WATCH'],
+    regarder_a_venir:    ['À VENIR', 'UPCOMING'],
+    regarder_attente:    ['Grille tirée à la fin du tour précédent.',
+                          'Start list drawn when the previous round ends.'],
+    regarder_nouveau:    ['{c} vient d’être courue', '{c} has just been run'],
+    regarder_partager:   ['PARTAGER LE LIEN', 'SHARE LINK'],
+    regarder_copie:      ['LIEN COPIÉ', 'LINK COPIED'],
+    regarder_jouer:      ['JOUER À SPRINTER', 'PLAY SPRINTER'],
+    regarder_rien:       ['Aucun championnat à regarder pour l’instant.',
+                          'No championship to watch right now.'],
+    regarder_chargement: ['Chargement du stade…', 'Loading the stadium…'],
+    regarder_annulee:    ['Championnat annulé : pas assez de partants.',
+                          'Championship cancelled: not enough runners.'],
+    regarder_champion:   ['CHAMPION', 'CHAMPION'],
+    regarder_rejeu_note: ['Chaque course est rejouée à partir des chronos officiels.',
+                          'Each race is replayed from the official times.'],
     // LE PHOTO-FINISH. Il ne s'affiche que sur une arrivee serree — voir
     // `arriveeSerree` dans game/photo-finish.ts — et le bouton le dit : sur
     // une course gagnee d'une demi-seconde, « photo-finish » serait un mot

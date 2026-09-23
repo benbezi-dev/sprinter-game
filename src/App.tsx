@@ -55,6 +55,8 @@ import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
+import { Regarder } from '@/components/screens/Regarder';
+import { demandeDeLUrl } from '@/game/regarder';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
@@ -432,8 +434,17 @@ function App() {
   // le tableau de bord ne doit pas gonfler ses propres chiffres.
   useEffect(() => { if (!stats && !file) pingVisit(); }, [stats, file]);
 
+  // LA PAGE PUBLIQUE D'UN CHAMPIONNAT — `?regarder=<edition>`. Meme convention
+  // que le tableau de bord : un parametre, parce que Pages ne sert que des
+  // fichiers. Elle ne monte pas `MainGame` : un spectateur venu d'un lien n'a
+  // ni nom a donner, ni tutoriel a suivre, ni jeu a installer. Voir
+  // game/regarder.ts. Le canal de test garde sa porte : sans code, la version
+  // de test ne montre rien, pas meme un championnat.
+  const [regarder] = useState(() => !!demandeDeLUrl());
+
   if (file) return <FileRecuperations />;
   if (stats) return <Dashboard />;
+  if (regarder && !EST_TEST) return <Regarder />;
 
   return (
     <QueryClientProvider client={queryClient}>
