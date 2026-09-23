@@ -308,8 +308,26 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
     ctx.restore();
   }
 
-  // Plus de confettis ici : ils sont reserves au record personnel (fete.ts).
-  // Le generique a ses feux d'artifice.
+  // ----------------------------------------------------------- les confettis
+  //
+  // Les memes qu'au sacre, en plus lents : ils tombent depuis deux scenes, et
+  // il n'y a plus rien qui presse.
+  for (let i = 0; i < 70; i++) {
+    const sd = (i * 7919) % 997;
+    const x = (sd * 13) % VW;
+    const y = ((ct * (34 + sd % 50) + sd * 3) % (VH + 140)) - 70;
+    if (y < -10) continue;
+    const c = COULEURS[sd % COULEURS.length];
+    ctx.save();
+    ctx.translate(x + Math.sin(ct * 2.2 + sd) * S(7), y);
+    ctx.rotate(ct * (1.4 + (sd % 5) * 0.5) + sd);
+    ctx.globalAlpha = 0.75 * nuit;
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    const w = S(4 + sd % 4), h = S(7);
+    if (sd % 7 === 0) { ctx.beginPath(); ctx.arc(0, 0, w * 0.6, 0, Math.PI * 2); ctx.fill(); }
+    else ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
 
   // ----------------------------------------------------------- le fondu final
   //
