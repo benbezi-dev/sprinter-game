@@ -5,6 +5,8 @@ import { Trophy, Loader2, Timer, Flag, Sparkles, Medal, Crown, Play } from 'luci
 import { SprinterApp } from '@/game/engine';
 import { Drapeau, drapeauDe } from '@/components/Insignes';
 import { rejouerCourse } from '@/game/champ-rejeu';
+import { entrerEnDirect } from '@/game/champ-direct';
+import { EST_TEST } from '@/game/canal';
 import { getSavedName } from '@/game/leaderboard';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
@@ -66,11 +68,18 @@ function FilDesPhases({ e }: { e: Edition }) {
 
 /* ---------------------------------------------------- la grille de depart */
 
-function Couloir({ p, couloir, place, ms, direct }: {
+function Couloir({ p, couloir, place, ms, direct, motif }: {
   p: Partant; couloir?: number | null; place?: number | null;
   ms?: number | null; direct: boolean;
+  /** Pourquoi il n'a pas de chrono, quand la course a ete courue en direct. */
+  motif?: string | null;
 }) {
   const couru = place != null;
+  // UN CARTON ROUGE N'EST PAS UNE HUITIEME PLACE. Sans chrono, pas de rang :
+  // la ligne dit pourquoi, en rouge pour la disqualification.
+  const raison = motif === 'faux_depart' ? SprinterApp.N.t('champ_dq')
+    : motif === 'forfait' ? SprinterApp.N.t('champ_dns')
+    : motif === 'abandon' ? SprinterApp.N.t('champ_dnf') : null;
   return (
     <div className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg border
       ${couru && direct ? 'bg-primary/12 border-primary/40'
@@ -78,7 +87,7 @@ function Couloir({ p, couloir, place, ms, direct }: {
         : 'bg-black/20 border-white/6'}`}>
       <span className={`font-mono text-[10px] w-4 shrink-0 tabular-nums
         ${couru ? 'text-primary' : 'text-muted-foreground/60'}`}>
-        {couru ? place : '·'}
+        {couru ? (raison ? '—' : place) : '·'}
       </span>
       {/* LE COULOIR, QUE LA COURSE A FAIT DISPARAITRE.
           Avant la course, les lignes SONT les couloirs : elles sont dans cet
@@ -116,8 +125,9 @@ function Couloir({ p, couloir, place, ms, direct }: {
         </span>
       )}
       {couru && (
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground shrink-0">
-          {chrono(ms ?? null)}
+        <span className={`font-mono text-[10px] tabular-nums shrink-0
+          ${motif === 'faux_depart' ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>
+          {raison || chrono(ms ?? null)}
         </span>
       )}
       {couru && direct && (
@@ -134,7 +144,7 @@ function Grille({ e }: { e: Edition }) {
     <div className="flex flex-col gap-3">
       {courses.map(({ course, couloirs }) => {
         const fin = arrivee(e, e.phase, course);
-        const places = new Map(fin.map((r, i) => [r.name_key, { place: i + 1, ms: r.ms }]));
+        const places = new Map(fin.map((r, i) => [r.name_key, { place: i + 1, ms: r.ms, motif: r.motif }]));
         const courue = fin.length > 0;
         // LE COULOIR SE DERIVE ICI, ET NULLE PART AILLEURS.
         //
@@ -177,8 +187,8 @@ function Grille({ e }: { e: Edition }) {
               return (
                 <Couloir key={p.name_key} p={p}
                          couloir={couloirDe.get(p.name_key)}
-                         place={r?.place} ms={r?.ms}
-                         direct={!!r && r.place <= e.directsParCourse} />
+                         place={r?.place} ms={r?.ms} motif={r?.motif}
+                         direct={!!r && r.ms != null && r.place <= e.directsParCourse} />
               );
             })}
             {/* DEUX LIBELLES QUI PARTENT AVEC LA VIDEO.
@@ -188,6 +198,10 @@ function Grille({ e }: { e: Edition }) {
                 `titre` : « Série 3 », « Demi-finale 1 », « Finale » — au
                 singulier et avec son numero, parce que c'est UNE course de la
                 phase et non la phase entiere. */}
+            {!courue && rv && (
+              <BoutonDirect e={e} course={course} at={rv.at}
+                partant={couloirs.some(p => p.name_key === (getSavedName() || '').trim().toLowerCase())} />
+            )}
             {courue && (
               <BoutonRevoir
                 epreuve={e.epreuve} arrivees={fin} couloirs={couloirDe}
@@ -206,6 +220,40 @@ function Grille({ e }: { e: Edition }) {
   );
 }
 
+/* ------------------------------------------------- la course en direct */
+
+/** La chambre d'appel ouvre un quart d'heure avant ; la course se manque a +2 min. */
+const OUVERTURE_DIRECT_MS = 15 * 60 * 1000;
+const RETARD_DIRECT_MS = 2 * 60 * 1000;
+
+/**
+ * Une course qui n'a pas encore eu lieu se court — ou se regarde — en direct,
+ * a son heure. Le partant entre dans le stade ; les autres y entrent aussi,
+ * en spectateurs : la salle sait qui est qui, l'ecran ne fait que proposer.
+ *
+ * Sur le canal de test, le bouton reste la une fois l'heure passee : les
+ * editions d'essai sont datees au hasard, et leurs courses se lancent a la
+ * main (`/champ/salle/.../lancer`).
+ */
+function BoutonDirect({ e, course, at, partant }: {
+  e: Edition; course: number; at: number; partant: boolean;
+}) {
+  const maintenant = Date.now();
+  if (maintenant < at - OUVERTURE_DIRECT_MS) return null;
+  if (!EST_TEST && maintenant > at + RETARD_DIRECT_MS) return null;
+  const entrer = () => entrerEnDirect(e.id, e.phase, course, { epreuve: e.epreuve, lieu: e.lieu });
+  return (
+    <button onClick={entrer}
+      className={`mt-1 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-full border
+                  text-[10px] font-bold tracking-widest active:scale-95 transition
+                  ${partant ? 'border-destructive/60 bg-destructive/15 text-destructive'
+                            : 'border-primary/40 bg-primary/10 text-primary'}`}>
+      <Play className="w-3 h-3" />
+      {SprinterApp.N.t(partant ? 'champ_entrer' : 'champ_regarder_dir')}
+    </button>
+  );
+}
+
 /* ------------------------------------------------------- revoir la course */
 
 /**
@@ -221,7 +269,8 @@ function Grille({ e }: { e: Edition }) {
  */
 function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, lieu, titre, sousTitre }: {
   epreuve: string;
-  arrivees: { name_key: string; nom: string; ms: number | null }[];
+  arrivees: { name_key: string; nom: string; ms: number | null;
+              motif?: 'faux_depart' | 'abandon' | 'forfait' | null; motif_ms?: number | null }[];
   /** Le couloir de chacun, derive du rang de semis par `Grille`. */
   couloirs: Map<string, number>;
   /** « Championnat de France » — l'en-tete que la video portera. */
@@ -250,7 +299,7 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
       // couloir, n'aurait fait que repeter la place sous un autre nom. Une
       // course se regarde avec ses couloirs a leur place.
       arrivees.map(r => ({
-        nom: r.nom, ms: r.ms,
+        nom: r.nom, ms: r.ms, motif: r.motif ?? null, motif_ms: r.motif_ms ?? null,
         couloir: couloirs.get(r.name_key),
         moi: !!moi && r.name_key === moi,
       })),

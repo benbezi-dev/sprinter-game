@@ -145,6 +145,7 @@ export class SalleChampionnat {
       champ: this.ctx ? {
         edition: this.ctx.edition, phase: this.ctx.phase, course: this.ctx.course,
         titre: this.ctx.titre, phaseNom: this.ctx.phaseNom, lieu: this.ctx.lieu,
+        courses: this.ctx.courses,
         at: this.at, etat: this.phase, depart_n: this.departN,
         spectateurs: [...this.sockets.values()].filter(s => s.role === 'spectateur').length,
         grille: [...this.coureurs.values()].map(c => ({

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useInputHandlers } from '@/hooks/use-inputs';
 import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION } from '@/game/engine';
+import { useChampDirect } from '@/game/champ-direct';
 import { APPEL_JOUEUR } from '@/game/canal';
 import { approcheHaies, ciseauHaies } from '@/game/haies-course.js';
 
@@ -94,6 +95,7 @@ export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
   const countT = useGameStore(s => s.countT);
+  const champ = useChampDirect();
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -241,6 +243,10 @@ export function TouchControls() {
   // regarde promettent une prise en main qui n'existe pas — et ils mangent la
   // moitie basse de l'image au moment ou on la filme.
   if (SprinterApp.G.rejeu) return null;
+  // Une serie de championnat en direct : le spectateur — carton rouge, ou pas
+  // partant — ne court pas, et une fois le verdict de la salle tombe personne
+  // ne court plus. Les pavés couvriraient le tableau d'arrivee et son bouton.
+  if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin')) return null;
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //

@@ -297,6 +297,23 @@ export function padPress(side: 'left' | 'right') {
   }
 
   if (G.state === 'count') {
+    // EN CHAMPIONNAT, LE TELEPHONE NE SE JUGE PAS. Il dit a la salle qu'on
+    // est parti avant le coup, et a quel instant ; c'est elle qui decide du
+    // rappel et du carton (voir worker/src/faux-depart.js). Rien ici ne
+    // gele le coureur ni ne l'elimine : si la salle ne retient rien, il part
+    // simplement sans bonus de reaction.
+    //
+    // Pas pendant la presentation ni pendant la scene du rappel (`countT`
+    // suspendu a -99) : aucun depart n'est annonce, on ne peut pas partir
+    // avant lui.
+    if (G.champDirect) {
+      if (!G.player.jumped && !G.spectateur && !G.rappel && G.countT > -90) {
+        G.player.jumped = true;
+        salleLive?.fauxDepart?.((G.countT - 3) * 1000);
+        buzz(40);
+      }
+      return;
+    }
     if (!G.player.jumped) {
       // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
       // En carriere il coute seulement un blocage au coup de pistolet.
@@ -420,7 +437,12 @@ export function resumeRace() {
  * sprinter-app.js. Le relais branche ici des fonctions qui ne prennent que la
  * distance ; le second argument leur est simplement inutile.
  */
-let salleLive: { position(d: number, c?: number): void; fini(ms: number): void } | null = null;
+let salleLive: {
+  position(d: number, c?: number): void;
+  fini(ms: number): void;
+  /** Championnat seulement : signaler un appui avant le coup. */
+  fauxDepart?(ms: number): void;
+} | null = null;
 let prochainEnvoi = 0;
 let finEnvoyee = false;
 
@@ -452,7 +474,8 @@ export function reinitialiserEnvoi() {
 }
 
 function pousserPosition() {
-  if (!salleLive) return;
+  // Un spectateur ne court plus : la salle ignorerait ce qu'il enverrait.
+  if (!salleLive || G.spectateur) return;
   // La ligne d'abord, et a son instant exact : le chrono, pas l'image ou on
   // s'en apercoit, qui arrive jusqu'a un soixantieme plus tard et un peu plus
   // loin. Envoyee apres la position ordinaire de la meme image, elle serait
@@ -529,6 +552,13 @@ export function updateLogic(dt: number) {
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
     // ferait partir les deux joueurs a des instants differents.
     if (G.liveOn && G.countT <= -90) {
+      // LE RAPPEL se joue sur le meme decompte suspendu que la presentation :
+      // c'est lui qui fait vivre l'image, le temps que la salle a annonce.
+      if (G.rappel) {
+        SprinterApp.stepRappel(dt);
+        gameStore.setState({ state: G.state, countT: G.countT });
+        return;
+      }
       // Decompte suspendu : c'est le temps de la presentation. La piste est
       // deja montee, tout le monde est dans son couloir — on fait vivre la
       // scene plutot que de la figer, sans quoi le joueur regarderait une
@@ -580,6 +610,9 @@ export function updateLogic(dt: number) {
       // les sept autres, par `stepAI`. Sans cette ligne il resterait plante
       // dans ses blocs pendant que la course se deroule autour de lui.
       if (G.rejeu) G.player.stepAI(step, G.elapsed);
+      // Sorti au faux depart : il n'est plus sur la piste, et rien ne le fait
+      // avancer. Ceux qu'il regarde avancent par le reseau, plus bas.
+      else if (G.spectateur) { /* il regarde */ }
       else G.player.stepPlayer(step, G.elapsed);
       // Les haies, quand il y en a. Le moteur ne les connait pas : c'est le
       // jeu des haies qui se pose ici a l'armement, et qui se retire en
@@ -662,6 +695,12 @@ export function updateLogic(dt: number) {
         const fin = G.rejeuFin; G.rejeuFin = null;
         if (fin) fin(); else SprinterApp.goHome();
       }
+    } else if (G.champDirect) {
+      // EN CHAMPIONNAT, C'EST LA SALLE QUI TRANCHE. Le joueur qui a franchi la
+      // ligne continue de voir les autres finir, et le tableau d'arrivee
+      // arrive avec le verdict de la salle (voir game/champ-direct.ts) —
+      // jamais l'ecran de fin du one shot, qui proposerait de recommencer une
+      // serie qui ne se recourt pas.
     } else if (out || slow || mordu || G.elapsed >= 90) {
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;

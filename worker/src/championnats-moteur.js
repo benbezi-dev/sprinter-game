@@ -108,10 +108,17 @@ export function qualifier(courses, { directsParCourse, repechages }, dOffice = n
 
   const directs = [];
   const restants = [];
+  // PAS DE CHRONO, PAS DE PORTE. Une place directe se gagne en franchissant
+  // la ligne : tant que les courses se remplissaient au harnais, chacun avait
+  // un chrono et la question ne se posait pas. Courues en direct, une serie
+  // peut compter moins d'arrivants que de places directes — forfaits, cartons
+  // rouges — et la place prise par le rang aurait qualifie un disqualifie.
+  // La place non gagnee reste vide : elle n'est pas donnee au repechage, qui
+  // garde son nombre.
   ordreParCourse.forEach((ordre, iCourse) => {
     ordre.forEach((r, pos) => {
       const enrichi = { ...r, course: iCourse + 1, place: pos + 1 };
-      if (pos < directsParCourse) directs.push(enrichi);
+      if (pos < directsParCourse && r.ms != null) directs.push(enrichi);
       else restants.push(enrichi);
     });
   });

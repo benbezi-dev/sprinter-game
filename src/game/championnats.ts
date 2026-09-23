@@ -36,6 +36,13 @@ export type Partant = {
 export type Resultat = {
   phase: string; course: number; name_key: string;
   ms: number | null; place: number | null;
+  /**
+   * Pourquoi il n'y a pas de chrono, pour une course courue en direct :
+   * carton rouge, abandon, forfait. Absent des courses remplies au harnais.
+   */
+  motif?: 'faux_depart' | 'abandon' | 'forfait' | null;
+  /** L'instant du faux depart, en millisecondes depuis le coup (negatif). */
+  motif_ms?: number | null;
 };
 
 export type PhaseInfo = { cle: string; nom: string; courses: number };

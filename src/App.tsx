@@ -21,6 +21,7 @@ import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
+import { ChampDirect } from '@/components/screens/ChampDirect';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
@@ -297,13 +298,19 @@ function MainGame() {
             classement et un record a battre sur une sequence de deux
             haies. Le tutoriel monte a la place le seul bandeau qui le
             concerne, celui des haies. */}
+        {/* Sorti au faux depart d'une serie en direct, on regarde : le HUD
+            dirait le chrono et la vitesse d'un coureur qui n'est plus sur la
+            piste. Le bandeau du spectateur le remplace (ChampDirect). */}
         {(state === 'count' || state === 'race') && !enPresentation
-          && !tutoHaies && !tutoSprint && <RaceHUD />}
+          && !tutoHaies && !tutoSprint && !SprinterApp.G.spectateur && <RaceHUD />}
         {/* Une course de championnat qu'on revoit : la presentation des
             athletes avant le pistolet, le tableau apres la ligne. Elle se
             monte a cote du HUD et non dedans — elle survit a la fin de la
             course, ou le HUD n'a plus rien a dire. */}
         <RejeuChampionnat />
+        {/* Une serie de championnat courue en direct : la chambre d'appel, le
+            rappel apres un faux depart, le spectateur, l'arrivee. */}
+        <ChampDirect />
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}

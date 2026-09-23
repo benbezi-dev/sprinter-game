@@ -1442,6 +1442,10 @@
     falseOut: false, falseOutT: 0,
     // Course en direct : l'adversaire court en meme temps que nous.
     liveOn: false, liveNom: '', liveFin: null, liveResultat: null,
+    // Championnat en direct : la salle juge le faux depart (voir rappelChamp).
+    // `spectateur` quand on a pris le carton rouge ; `suivi` est alors le
+    // coureur que la camera accompagne ; `rappel` vit le temps de la scene.
+    champDirect: false, spectateur: false, suivi: null, rappel: null,
     // Les points du duel, quand la salle les annonce : ils arrivent apres le
     // resultat et se lisent sur l'ecran de fin.
     liveDuel: null,
@@ -1818,6 +1822,9 @@
     // trouve eteint : sans cela, un rejeu regarde une fois laisserait le
     // joueur pilote par la machine pour toutes les courses suivantes.
     G.rejeu = false; G.rejeuFini = false;
+    // Et le championnat en direct : un carton rouge ne suit pas le joueur dans
+    // sa course suivante.
+    G.champDirect = false; G.spectateur = false; G.suivi = null; G.rappel = null;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
     // Et sur une piste sans adversaire en direct.
@@ -2098,6 +2105,14 @@
     G.raceKey = G.shotRaces[0];
     G.race = RACES[G.raceKey];
     buildLevel(G.shotLevel);
+    // UNE SERIE DE CHAMPIONNAT : chacun court dans le couloir que le semis
+    // lui donne, le joueur compris — ce n'est plus « le 3, chez soi ». Et le
+    // faux depart ne se juge plus ici : c'est la salle qui le fait.
+    if (opts.championnat) {
+      G.champDirect = true;
+      const l = opts.monCouloir;
+      if (l >= 1 && l <= 8 && G.player) G.player.lane = l;
+    }
     // Un seul chemin, a deux comme a huit.
     //
     // Il y en a eu deux un moment, et cela s'est paye tout de suite : les
@@ -3171,8 +3186,168 @@
     }
   }
 
+  /* --------------------------------------------- LE RAPPEL, EN CHAMPIONNAT
+   *
+   * Le premier fautif declenche le rappel, et c'est la salle qui l'annonce :
+   * rien ici ne decide qu'il y a eu faux depart. La scene tient en quatre
+   * secondes, dites par la salle (`rappel_ms`), et elle a trois temps :
+   *
+   *   0 → 1,5 s   le double coup de feu, et tout le monde revient sur la
+   *               ligne — en trottinant, tourne vers les blocs, en accelere ;
+   *   1,8 s       la camera va chercher le fautif : le carton se leve (il est
+   *               dessine par l'ecran, voir ChampDirect) ;
+   *   3,2 s       le fautif s'efface, et son couloir reste vide.
+   *
+   * Puis le decompte du nouveau depart, le meme qu'au premier.
+   */
+  const RAPPEL_RETOUR = 1.5, RAPPEL_CARTON = 1.8, RAPPEL_SORTIE = 3.2, RAPPEL_FONDU = 0.6;
+
+  /**
+   * @param fautifs identifiants de salle des fautifs (des cles de joueur)
+   * @param moiSorti vrai si le joueur de ce telephone est parmi eux
+   * @param coureurs des coureurs du moteur a sortir en plus, designes
+   *   directement : c'est ainsi que le rejeu, qui n'a pas de salle, rejoue le
+   *   faux depart d'une course deja courue.
+   */
+  function rappelChamp(fautifs, moiSorti, coureurs) {
+    if (!G.track || !G.runners) return;
+    const sortants = new Set(coureurs || []);
+    for (const id of fautifs || []) {
+      const g = G.lives && G.lives.get(id);
+      if (g && g.runner) sortants.add(g.runner);
+    }
+    if (moiSorti && G.player) sortants.add(G.player);
+    const depart = new Map();
+    for (const r of G.runners) depart.set(r, r.d);
+    G.rappel = { t: 0, sortants, depart, moiSorti: !!moiSorti,
+                 vise: sortants.values().next().value || null };
+    // La piste se fige sur la scene : le decompte est suspendu, comme pendant
+    // la presentation, et c'est stepRappel qui fait vivre l'image.
+    G.state = 'count'; G.countT = -99;
+    G.flash = 1; G.shake = 1.2;
+    // Le double coup de feu : c'est lui, sur une vraie piste, qui rappelle.
+    Audio_.starter('feu');
+    setTimeout(() => Audio_.starter('feu'), 190);
+  }
+
+  function stepRappel(dt) {
+    const R = G.rappel;
+    if (!R || !G.track) return;
+    R.t += dt;
+    const k = Math.min(1, R.t / RAPPEL_RETOUR);
+    const doux = k * k * (3 - 2 * k);
+    for (const r of G.runners) {
+      const d0 = R.depart.get(r) || 0;
+      if (d0 > 0.05 && k < 1) {
+        r.d = d0 * (1 - doux);
+        r.retour = true;
+        // Une foulee de footing, pas de course : on revient, on ne sprinte pas.
+        r.stride += dt * 9;
+        r.v = 0;
+      } else {
+        if (d0 > 0.05) r.d = 0;
+        r.retour = false;
+      }
+      r.drivePitch = 0;
+      r.celebrate = 0;
+      if (R.sortants.has(r)) {
+        r.opacite = R.t < RAPPEL_SORTIE ? 1
+          : Math.max(0, 1 - (R.t - RAPPEL_SORTIE) / RAPPEL_FONDU);
+      }
+    }
+    // La camera : la ligne pendant le retour, le fautif pendant le carton.
+    const vise = R.t >= RAPPEL_CARTON && R.vise ? R.vise : (G.player || null);
+    if (vise) {
+      const p = G.track.pos(0, vise === G.player ? 3 : vise.lane);
+      const kc = 1 - Math.exp(-3.4 * dt);
+      G.camX += (p[0] - G.camX) * kc;
+      G.camY += (p[1] - G.camY) * kc;
+    }
+  }
+
+  /**
+   * Remet un coureur dans ses blocs, neuf : ni reaction, ni foulee, ni chrono
+   * du depart annule. On repart d'un coureur construit a l'instant, dont on
+   * garde ce qui le distingue — son nom, son couloir, son apparence, et ce
+   * qui fait de lui le joueur ou un adversaire en direct.
+   */
+  function reposer(r) {
+    const R = G.race;
+    const neuf = r.isPlayer
+      ? new Runner(r.name, r.lane, { isPlayer: true, maxSpeed: R.maxSpeed,
+                                     best: R.best, total: G.track.total })
+      : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
+                                     pool: LEVELS[G.levelIdx].pool });
+    const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
+                    isGhost: r.isGhost, isLive: r.isLive, repere: r.repere };
+    Object.assign(r, neuf, garde);
+    r.retour = false; r.opacite = 1; r.celebrate = 0;
+  }
+
+  /**
+   * La fin de la scene : les fautifs quittent la piste, les autres repartent
+   * de leurs blocs, et le decompte du nouveau depart commence.
+   *
+   * @param dansMs l'attente jusqu'au nouveau pistolet, chez soi ; null si
+   *   personne ne repart (tous fautifs).
+   * @param reArmer appele une fois les coureurs remis dans leurs blocs, avant
+   *   le decompte : le rejeu y rend a chacun son chrono vise, que `reposer`
+   *   efface avec le reste.
+   */
+  function finRappelChamp(dansMs, departA, reArmer) {
+    const R = G.rappel;
+    G.rappel = null;
+    if (!R) return;
+    for (const r of R.sortants) {
+      const i = G.runners.indexOf(r);
+      if (i >= 0) G.runners.splice(i, 1);
+      if (G.lives) {
+        for (const [id, g] of [...G.lives]) {
+          if (g.runner === r) { G.lives.delete(id); if (G.ghost === g) G.ghost = null; }
+        }
+      }
+    }
+    if (R.moiSorti) {
+      G.spectateur = true;
+      if (!G.suivi || R.sortants.has(G.suivi)) G.suivi = premierEnLice();
+    }
+    for (const r of G.runners) reposer(r);
+    if (G.lives) {
+      for (const g of G.lives.values()) {
+        Object.assign(g, { cible: 0, vEst: 0, depuis: 0, c: null, hist: [[0, 0]],
+                           fin: null, abandon: false, trace: [], time: 0 });
+      }
+    }
+    G.elapsed = 0; G.acc = 0;
+    G.recTrace = []; G.recNext = 0;
+    G.reactShown = G.transShown = false;
+    G.reactFlash = G.transFlash = G.falseFlash = G.stumbleFlash = 0;
+    G.photo = null; G.liveFin = null;
+    if (reArmer) reArmer();
+    if (dansMs != null) liveDepart(dansMs, departA);
+  }
+
+  /** Le coureur du plus petit couloir encore sur la piste, pour la camera. */
+  function premierEnLice() {
+    if (!G.lives) return null;
+    let mieux = null;
+    for (const g of G.lives.values()) {
+      if (!mieux || g.runner.lane < mieux.lane) mieux = g.runner;
+    }
+    return mieux;
+  }
+
+  /** Spectateur : suivre ce coureur-la. */
+  function suivreCoureurChamp(id) {
+    const g = G.lives && G.lives.get(id);
+    if (g && g.runner) G.suivi = g.runner;
+  }
+
   function followCam(dt) {
-    const T = G.track, s = G.player ? G.player.d : 0, lane = 3;
+    // Sorti au faux depart, on regarde : la camera accompagne le coureur
+    // choisi, plus le joueur qui n'est plus sur la piste.
+    const vise = (G.spectateur && G.suivi) || G.player;
+    const T = G.track, s = vise ? vise.d : 0, lane = 3;
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
     const p = T.pos(s, lane);
@@ -6341,6 +6516,10 @@
   function drawRepere(ctx, r, x, y, m) {
     const rep = r.repere;
     if (!rep) return;
+    // PAS DE CERCEAU EN CHAMPIONNAT, pas meme sous le joueur (demande du
+    // 23 septembre 2026). Il s'y retrouve par « TOI », au-dessus de sa tete —
+    // voir drawNomRepere, qui garde cette pastille-la et elle seule.
+    if (G.champDirect || G.rejeu) return;
     const rx = 19 * m / 30, ry = 7.6 * m / 30;
     ctx.save();
     ctx.strokeStyle = rep.couleur;
@@ -6364,8 +6543,21 @@
   function drawNomRepere(ctx, r, x, y, m) {
     const rep = r.repere;
     if (!rep || !rep.nom) return;
+    // PAS DE NOM DES AUTRES SUR LA PISTE EN CHAMPIONNAT — ni en direct, ni
+    // au rejeu. Seul « TOI » reste, au-dessus du joueur. Decision deja prise
+    // pour le rejeu (voir « PAS DE NOM AU-DESSUS DES TETES » dans
+    // champ-rejeu.ts), redite le 23 septembre 2026 quand la serie en direct
+    // avait fait revenir les noms par la piste du direct. Les athletes sont
+    // presentes un par un avant le pistolet ; le cerceau au sol suffit.
+    if ((G.champDirect || G.rejeu) && !rep.moi) return;
     const taille = Math.max(9, 11 * ui());
-    const haut = y - m * (r.look.h / C.MODEL_H) * 1.34 - 6 * ui();
+    // En championnat, « TOI » flotte AU-DESSUS de la tete, il ne s'y pose pas
+    // (demande du 23 septembre 2026) : le bas de la pastille laisse un jour
+    // net entre elle et le crane. Ailleurs, le placement d'origine.
+    const hPastille = taille + 6 * ui();
+    const haut = (G.champDirect || G.rejeu)
+      ? y - m * (r.look.h / C.MODEL_H) * 1.5 - hPastille / 2 - 6 * ui()
+      : y - m * (r.look.h / C.MODEL_H) * 1.34 - 6 * ui();
     ctx.save();
     ctx.font = '800 ' + taille + 'px system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -6681,6 +6873,7 @@
     }
     for (const [r, g2] of vis) {
       if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
+      if (r.opacite != null && r.opacite < 0.5) continue;   // il s'efface
       if (prem) {
         // Deux ombres — la penombre large et le contact serre — plutot qu'un
         // disque noir a bord net. Voir rendu-premium.js : c'est ce qui pose
@@ -6724,7 +6917,10 @@
     }
     // Les cerceaux passent apres toutes les ombres et avant tous les coureurs :
     // sinon l'ombre du voisin recouvrirait le cerceau de celui de devant.
-    for (const [r, g2] of vis) drawRepere(ctx, r, g2[0], g2[1], m);
+    for (const [r, g2] of vis) {
+      if (r.opacite != null && r.opacite < 0.5) continue;
+      drawRepere(ctx, r, g2[0], g2[1], m);
+    }
     // LES ECHOS DE POUSSEE.
     //
     // Trois copies du joueur, derriere lui, le temps d'un tiers de seconde,
@@ -6772,15 +6968,22 @@
       // tout en suivant precisement l'ecart avec lui
       // La trainee raconte une trace enregistree. En direct il n'y a rien a
       // rejouer : l'adversaire est la, maintenant, et on le dessine plein.
+      // LE FAUTIF S'EFFACE : un carton rouge ne laisse pas de corps sur la
+      // piste. Voir stepRappel — c'est le seul endroit ou l'opacite bouge.
+      const op = r.opacite == null ? 1 : r.opacite;
+      if (op <= 0.01) return;
       if (r.isGhost) {
         const live = r.isLive || (G.ghost && G.ghost.live && G.ghost.runner === r);
         if (!live) drawGhostTrail(ctx, r, m);
-        ctx.globalAlpha = live ? 0.92 : 0.42;
-      }
+        ctx.globalAlpha = (live ? 0.92 : 0.42) * op;
+      } else if (op < 1) ctx.globalAlpha = op;
+      // Au rappel, on revient vers les blocs : tourne vers eux, pas a
+      // reculons.
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
-                 T.heading(r.d, r.lane), T.lean(r.d, r.lane, r.v));
-      if (r.isGhost) ctx.globalAlpha = 1;
+                 T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0),
+                 T.lean(r.d, r.lane, r.v));
+      ctx.globalAlpha = 1;
     };
     // LES OBSTACLES, RANGES PARMI LES COUREURS.
     //
@@ -6929,6 +7132,7 @@
     finirLesSaluts,
     armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
     startLive, liveDepart,
+    rappelChamp, stepRappel, finRappelChamp, suivreCoureurChamp,
     armRelayeurs, porteurDuTemoin,
     // Le rejeu d'une course de championnat repeint les huit couloirs avec les
     // noms et les chronos d'une course qui a deja eu lieu : il lui faut la

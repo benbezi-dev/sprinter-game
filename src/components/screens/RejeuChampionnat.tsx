@@ -11,6 +11,7 @@ import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
 import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, partagerPhotoFinish } from '@/game/photo-finish';
 import type { MotDuVainqueur } from '@/game/champ-rejeu';
+import { RappelEnScene } from './ChampDirect';
 import { partagerLArrivee } from '@/game/affiche-champ';
 import { EPREUVE } from '@/game/trace-affiche';
 
@@ -299,14 +300,20 @@ function MotDuGagnant({ mot, course }: {
 
 /* -------------------------------------------------------------- l'arrivee */
 
-function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, quand }: {
+function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, epreuve, quand }: {
   titre: string; sousTitre: string;
-  lignes: { place: number; nom: string; ms: number | null; couloir: number | null }[];
+  lignes: { place: number | null; nom: string; ms: number | null; couloir: number | null;
+            motif?: string | null }[];
   course: { edition: string; phase: string; numero: number } | null;
   mot: MotDuVainqueur | null;
   competition: string; epreuve: string; quand: number | null;
 }) {
   const { N } = SprinterApp;
+  // L'image, le releve et le photo-finish ne parlent que des arrives : un
+  // carton rouge n'a ni rang ni chrono a y porter. Le tableau, lui, les montre
+  // tous (`toutes`).
+  const lignes = toutes.filter(r => r.place != null) as
+    { place: number; nom: string; ms: number | null; couloir: number | null }[];
 
   /**
    * LA VIDEO SE PROPOSE ICI, ET PAS TROIS ECRANS PLUS LOIN.
@@ -420,7 +427,26 @@ function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, 
         </div>
 
         <div className="flex flex-col gap-1">
-          {lignes.map((r, i) => (
+          {toutes.map((r, i) => (r.place == null ? (
+            <motion.div key={r.nom + (r.motif || '')}
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: (i * CASCADE_MS) / 1000, duration: 0.22 }}
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl border
+                ${r.motif === 'faux_depart' ? 'border-destructive/40 bg-destructive/10' : 'border-white/8 bg-black/30'}`}>
+              <span className="font-display font-black text-base w-5 shrink-0 text-white/40">—</span>
+              <span className="font-mono text-[10px] w-5 h-5 shrink-0 grid place-items-center
+                               rounded border border-white/15 bg-white/[0.04]
+                               text-white/50 tabular-nums leading-none">
+                {r.couloir ?? '—'}
+              </span>
+              <span className="flex-1 min-w-0 truncate tracking-wide text-[12px] font-bold">{r.nom}</span>
+              <span className={`font-mono text-[12px] font-bold shrink-0
+                ${r.motif === 'faux_depart' ? 'text-destructive' : 'text-white/50'}`}>
+                {N.t(r.motif === 'faux_depart' ? 'champ_dq' : r.motif === 'forfait' ? 'champ_dns' : 'champ_dnf')}
+              </span>
+            </motion.div>
+          ) : (
             <motion.div key={r.nom + r.place}
               initial={{ opacity: 0, x: 18 }}
               animate={{ opacity: 1, x: 0 }}
@@ -453,7 +479,7 @@ function Arrivee({ titre, sousTitre, lignes, course, mot, competition, epreuve, 
                 {chrono(r.ms)}
               </span>
             </motion.div>
-          ))}
+          )))}
         </div>
 
         {/* CE QU'ON LIT, OU CE QU'ON ECRIT — jamais les deux : un mot pose
@@ -531,6 +557,14 @@ export function RejeuChampionnat() {
                     epreuve={etat.epreuve}
                     quand={SprinterApp.G.rejeuBandeau?.quand ?? null} />;
   }
-  // Pendant la course : le rappel des couloirs, quatre secondes, puis rien.
-  return <RappelCouloirs grille={etat.grille} />;
+  // Pendant la course : le rappel des couloirs, quatre secondes, puis rien —
+  // et, si quelqu'un est parti trop tot, la scene du faux depart par-dessus.
+  return (
+    <>
+      <RappelCouloirs grille={etat.grille} />
+      {etat.rappel && (
+        <RappelEnScene key={etat.rappel.debut} fautifs={etat.rappel.fautifs} moiSorti={false} />
+      )}
+    </>
+  );
 }

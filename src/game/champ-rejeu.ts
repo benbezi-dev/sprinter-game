@@ -51,6 +51,17 @@ export type CoureurRejeu = {
    * sa propre course, ou bien sept athletes portent son maillot.
    */
   moi?: boolean;
+  /**
+   * Pourquoi il n'a pas de chrono, si la course a ete courue en direct.
+   *
+   * Le forfait n'est pas sur la piste : son couloir reste vide. Le faux
+   * depart, lui, y est — il prend le depart, et le rejeu joue le rappel et
+   * son carton rouge avant de relancer la course sans lui. L'abandon court,
+   * derriere tout le monde, comme avant.
+   */
+  motif?: 'faux_depart' | 'abandon' | 'forfait' | null;
+  /** L'instant du faux depart, depuis le coup de pistolet (negatif). */
+  motif_ms?: number | null;
 };
 
 /**
@@ -124,7 +135,16 @@ export type EtatRejeu = {
    * a annonce. `null` si la correspondance manque, ce qui ne devrait pas
    * arriver — mieux vaut un tiret qu'un couloir invente.
    */
-  arrivee: { place: number; nom: string; ms: number | null; couloir: number | null }[] | null;
+  arrivee: {
+    /** `null` pour qui n'a pas de chrono : un carton rouge n'a pas de rang. */
+    place: number | null; nom: string; ms: number | null; couloir: number | null;
+    motif?: string | null;
+  }[] | null;
+  /**
+   * Le rappel d'un faux depart, le temps de sa scene : qui sort, et quand la
+   * scene a commence. L'ecran y pose le carton (voir ChampDirect).
+   */
+  rappel: { fautifs: { id: string; nom: string; couloir: number; ms: number }[]; debut: number } | null;
   /** La course dont il s'agit, quand elle vient d'un championnat. */
   course: { edition: string; phase: string; numero: number } | null;
   /** Le mot du vainqueur, deja pose. `null` tant que personne n'a parle. */
@@ -133,7 +153,7 @@ export type EtatRejeu = {
 
 const VIDE: EtatRejeu = {
   actif: false, phase: 'presentation', titre: '', sousTitre: '', epreuve: '',
-  grille: [], arrivee: null, course: null, mot: null,
+  grille: [], arrivee: null, course: null, mot: null, rappel: null,
 };
 
 let etat: EtatRejeu = VIDE;
@@ -160,6 +180,7 @@ export function lireRejeu(): EtatRejeu { return etat; }
  * du one shot par-dessus (voir engine.ts).
  */
 export function fermerRejeu() {
+  annulerLeRappel();
   const G = SprinterApp?.G;
   if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; G.rejeuBandeau = null; }
   poser(VIDE);
@@ -202,7 +223,7 @@ export type Intitule = {
 };
 
 /** L'etape ou se rejoue une course : celle du lieu demande, sinon NIVEAU. */
-function niveauDuLieu(lieu?: string | null): number {
+export function niveauDuLieu(lieu?: string | null): number {
   if (!lieu) return NIVEAU;
   const i = (SprinterCore?.LEVELS || []).findIndex((l: any) => l.cle === lieu);
   return i >= 0 ? i : NIVEAU;
@@ -236,6 +257,16 @@ export function rejouerCourse(
   const app = SprinterApp;
   if (!app || !coureurs || coureurs.length === 0) return false;
   const G = app.G;
+  annulerLeRappel();
+
+  // LE FORFAIT N'EST PAS SUR LA PISTE. Il n'est pas venu : son couloir reste
+  // vide, et il n'apparait qu'au tableau. Tout ce qui suit place `enPiste`.
+  const toute = coureurs;
+  coureurs = coureurs.filter(c => c.motif !== 'forfait');
+  if (coureurs.length === 0) return false;
+  // Ceux qui partiront trop tot : ils prennent le premier depart, puis le
+  // rappel les sort (voir lancerLeDepartDuRejeu).
+  const fautifs = coureurs.filter(c => c.motif === 'faux_depart');
 
   // Le pire chrono de la course sert de base aux abandons : ils finissent
   // derriere tout le monde, ce qui est exact, plutot que de disparaitre.
@@ -245,8 +276,12 @@ export function rejouerCourse(
 
   // Qui la camera suit : le coureur demande, sinon le vainqueur — c'est lui
   // qu'on veut cadrer quand on ne connait personne dans la course.
-  const suivi = coureurs.find(c => c.suivi) || coureurs.find(c => c.moi)
-    || coureurs.reduce((a, b) => (secondes(b) < secondes(a) ? b : a));
+  //
+  // Jamais un fautif : il quitte la piste au rappel, et la camera avec lui.
+  const regulier = coureurs.filter(c => c.motif !== 'faux_depart');
+  const candidats = regulier.length ? regulier : coureurs;
+  const suivi = candidats.find(c => c.suivi) || candidats.find(c => c.moi)
+    || candidats.reduce((a, b) => (secondes(b) < secondes(a) ? b : a));
 
   /**
    * L'APPARENCE SE DERIVE DU NOM, comme partout ailleurs dans le jeu.
@@ -286,6 +321,10 @@ export function rejouerCourse(
   // deux « Martin » d'un championnat de France — rendraient le premier des
   // deux couloirs aux deux. On note la correspondance a la source, une fois.
   const couloirDe = new Map<CoureurRejeu, number>();
+  // Et le coureur du moteur de chacun, avec son chrono vise : le rappel remet
+  // tout le monde dans ses blocs, neuf, et il faut alors rendre a chacun le
+  // chrono qu'il doit courir.
+  const coureurDe = new Map<CoureurRejeu, any>();
 
   // LE COUREUR SUIVI COURT DANS SON COULOIR, ET PAS DANS CELUI DU JOUEUR.
   //
@@ -336,6 +375,7 @@ export function rejouerCourse(
     }
     r.name = c.nom;
     couloirDe.set(c, r.lane + 1);
+    coureurDe.set(c, r);
     habiller(r, c);
     r.setPace(secondes(c));
     // NI CERCEAU NI PASTILLE.
@@ -356,6 +396,7 @@ export function rejouerCourse(
   // apparence : il n'est « le joueur » que s'il l'est vraiment.
   G.player.name = suivi.nom;
   couloirDe.set(suivi, G.player.lane + 1);
+  coureurDe.set(suivi, G.player);
   habiller(G.player, suivi);
   G.player.setPace(secondes(suivi));
   // LE SEUL REPERE QUI RESTE EST CELUI DU JOUEUR, et il ne s'allume que s'il
@@ -404,6 +445,7 @@ export function rejouerCourse(
     grille, arrivee: null,
     course: intitule.course ?? null,
     mot: intitule.mot ?? null,
+    rappel: null,
   });
 
   // CE QUI SE PASSE QUAND LE HUITIEME A FRANCHI LA LIGNE.
@@ -424,17 +466,30 @@ export function rejouerCourse(
   // quand l'arrivee s'est jouee en centiemes. Le retour a l'accueil attend
   // que le spectateur ferme le tableau (voir `fermerRejeu`).
   G.rejeuFin = () => {
+    // Les arrives au chrono, puis ceux qui n'en ont pas, chacun avec sa
+    // raison : l'abandon, le carton rouge, le forfait — dans cet ordre, et
+    // sans rang. Une course remplie au harnais n'a pas de motif : ses
+    // abandons gardent leur place derriere tout le monde, comme avant.
+    const RANG = { abandon: 1, faux_depart: 2, forfait: 3 } as Record<string, number>;
+    const avecMotif = (c: CoureurRejeu) => !!c.motif && c.ms == null;
+    const arrives = toute.filter(c => !avecMotif(c)).sort((a, b) => secondes(a) - secondes(b));
+    const autres = toute.filter(avecMotif)
+      .sort((a, b) => (RANG[a.motif!] || 9) - (RANG[b.motif!] || 9));
     const tableau = () => poser({
       ...etat, phase: 'arrivee',
-      arrivee: [...coureurs]
-        .sort((a, b) => secondes(a) - secondes(b))
-        .map((c, i) => ({
+      arrivee: [
+        ...arrives.map((c, i) => ({
           place: i + 1, nom: c.nom, ms: c.ms,
           // Le couloir du moteur d'abord — c'est celui qui a ete couru et
           // annonce. Celui de la liste d'entree ne sert que de repli : quand
           // il y a plus de couloirs que de partants, le moteur renumerote.
           couloir: couloirDe.get(c) ?? c.couloir ?? null,
         })),
+        ...autres.map(c => ({
+          place: null, nom: c.nom, ms: null, motif: c.motif,
+          couloir: couloirDe.get(c) ?? c.couloir ?? null,
+        })),
+      ],
     });
     if (!filmer) return tableau();
     // La prise se ferme d'abord : le tableau n'a pas a entrer dans le film.
@@ -452,12 +507,43 @@ export function rejouerCourse(
   //
   // Le faire ici obligerait a annoncer un depart a vingt secondes — que
   // `dessinerLeDepart` refuserait, sa sequence etant bornee a dix.
-  departProgramme = { dansMs, filmer };
+  departProgramme = {
+    dansMs, filmer,
+    fautifs: fautifs.map(c => ({
+      coureur: coureurDe.get(c), nom: c.nom, couloir: couloirDe.get(c) ?? c.couloir ?? 0,
+      ms: c.motif_ms ?? 0,
+    })).filter(f => f.coureur),
+    // Le chrono vise de chacun des autres, a rendre apres le rappel.
+    allures: [...coureurDe.entries()]
+      .filter(([c]) => c.motif !== 'faux_depart')
+      .map(([c, r]) => [r, secondes(c)] as [any, number]),
+  };
   return true;
 }
 
 /** Ce qu'il reste a faire quand la presentation s'acheve. */
-let departProgramme: { dansMs: number; filmer: boolean } | null = null;
+let departProgramme: {
+  dansMs: number; filmer: boolean;
+  fautifs: { coureur: any; nom: string; couloir: number; ms: number }[];
+  allures: [any, number][];
+} | null = null;
+
+/**
+ * LE FAUX DEPART, REJOUE.
+ *
+ * La salle ne garde pas la course du premier depart — personne ne l'a finie —
+ * mais elle garde qui est parti trop tot, et quand. C'est assez pour rejouer
+ * ce que le stade a vu : le coup de pistolet, les huit qui partent, le double
+ * coup de feu un tiers de seconde plus tard, le retour sur la ligne, le carton
+ * rouge, le couloir qui se vide, et le nouveau depart. La scene est celle du
+ * direct (rappelChamp dans le moteur), avec les memes durees.
+ */
+const RAPPEL_APRES_COUP_MS = 350;
+const RAPPEL_MS = 4000;
+const minuteursRappel: ReturnType<typeof setTimeout>[] = [];
+function annulerLeRappel() {
+  while (minuteursRappel.length) clearTimeout(minuteursRappel.pop()!);
+}
 
 /**
  * La presentation est finie : le starter peut appeler.
@@ -473,6 +559,23 @@ export function lancerLeDepartDuRejeu() {
   poser({ ...etat, phase: 'course' });
   SprinterApp.liveDepart(d.dansMs, null);
   if (d.filmer) programmerLeFilm('direct', d.dansMs);
+  if (!d.fautifs.length) return;
+  minuteursRappel.push(setTimeout(() => {
+    const G = SprinterApp.G;
+    if (!G.rejeu) return;
+    poser({ ...etat, rappel: {
+      fautifs: d.fautifs.map(f => ({ id: f.nom, nom: f.nom, couloir: f.couloir, ms: f.ms })),
+      debut: Date.now(),
+    } });
+    SprinterApp.rappelChamp([], false, d.fautifs.map(f => f.coureur));
+    minuteursRappel.push(setTimeout(() => {
+      if (!SprinterApp.G.rejeu) return;
+      SprinterApp.finRappelChamp(d.dansMs, null, () => {
+        for (const [r, s] of d.allures) r.setPace(s);
+      });
+      poser({ ...etat, rappel: null });
+    }, RAPPEL_MS));
+  }, d.dansMs + RAPPEL_APRES_COUP_MS));
 }
 
 /** Vrai si une course rejouee est en train de se derouler. */

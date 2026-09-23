@@ -1860,7 +1860,7 @@ export async function contexteCourse(db, edition, phase, course) {
   const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
   return {
     edition: e.id, phase, course, epreuve: e.epreuve, lieu: e.lieu || null,
-    titre: e.titre, phaseNom: e.phaseNom,
+    titre: e.titre, phaseNom: e.phaseNom, courses: e.courses,
     at: rv ? rv.at : null, grille, deja,
   };
 }
@@ -1902,7 +1902,8 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
     // Un motif n'accompagne qu'un chrono absent : un coureur arrive n'a pas
     // d'excuse a porter. Hors de la liste, il est tu plutot que range tel quel.
     const motif = ms == null && MOTIFS.has(c.motif) ? c.motif : null;
-    const mm = motif && Number.isFinite(Number(c.motif_ms)) ? Math.round(Number(c.motif_ms)) : null;
+    const mm = motif && c.motif_ms != null && Number.isFinite(Number(c.motif_ms))
+      ? Math.round(Number(c.motif_ms)) : null;
     lignes.push(db.prepare(
       `INSERT INTO champ_resultats (edition, phase, course, name_key, ms, motif, motif_ms, couru_le)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -1927,7 +1928,9 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   ).bind(edition, phase, course).all();
 
   const ordre = ordonner(arrivee || []);
-  const directs = ordre.slice(0, (cfgPhase && cfgPhase.directsParCourse) || 0);
+  // Les memes que `qualifier` : un chrono, et une place dans les premiers.
+  const directs = ordre.slice(0, (cfgPhase && cfgPhase.directsParCourse) || 0)
+    .filter(r => r.ms != null);
   const ed = await db.prepare(
     `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
 

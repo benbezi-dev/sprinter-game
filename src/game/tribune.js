@@ -20,8 +20,8 @@
 
    LE COUT. Une image par combinaison de pose, de cap, de carnation et de
    couleur, composee UNE FOIS a la premiere occasion puis reposee d'un seul
-   drawImage. Quelques dizaines de compositions par image au plus, pour ne
-   jamais faire d'a-coup : un spectateur pas encore compose apparait a
+   drawImage. Le travail de composition est borne en temps a chaque image
+   (voir BUDGET_COURSE_MS) : un spectateur pas encore compose apparait a
    l'image suivante.
    ----------------------------------------------------------------------- */
 (function (root) {
@@ -86,6 +86,22 @@
   const cache = new Map();
   let _tmp = null;
   let budget = 0;
+  // L'heure au-dela de laquelle on ne compose plus rien dans cette image.
+  let limite = 0;
+  /**
+   * LE BUDGET SE COMPTE EN TEMPS, PAS EN NOMBRE.
+   *
+   * Quarante-huit compositions par image, c'etait l'ancien plafond — et la
+   * promesse « jamais d'a-coup » ne tenait pas : a 1,7 ms la composition, la
+   * premiere apparition d'une tribune (vers 44 m au Champ-de-Mars) coutait
+   * une image de 84 ms, mesuree le 23 septembre 2026, en pleine course et
+   * sous les yeux des huit partants d'une serie de championnat.
+   *
+   * En course, trois millisecondes par image : la foule se complete en
+   * quelques images, sans que le coureur saute. Hors course — presentation,
+   * decompte, accueil —, douze : rien ne court, on peut avancer le travail.
+   */
+  const BUDGET_COURSE_MS = 3, BUDGET_REPOS_MS = 12;
 
   function couche(c, im, sx, sy, sw, sh, w, h, couleur) {
     const t = _tmp || (_tmp = document.createElement('canvas'));
@@ -110,7 +126,7 @@
     const cle = pose + '|' + capI + '|' + peau + '|' + haut + '|' + siege;
     let e = cache.get(cle);
     if (e) return e;
-    if (budget <= 0) return null;
+    if (budget <= 0 || performance.now() > limite) return null;
     budget--;
     const man = MAN();
     const [ax, ay] = man.ancres[pose][capI];
@@ -151,6 +167,9 @@
   };
 
   let _themeCourant = null;
+  /** Les caps de spectateurs de ce stade, pour tout le trace. */
+  const capsVus = new Set();
+  let capsDuTrace = null;
 
   /**
    * Le public d'un gradin.
@@ -168,9 +187,10 @@
    */
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
     if (!charger()) return false;
-    if (th !== _themeCourant) { cache.clear(); _themeCourant = th; }
+    if (th !== _themeCourant) { cache.clear(); capsVus.clear(); capsDuTrace = null; _themeCourant = th; }
     budget = 48;
     const G = api.G, T = G.track;
+    limite = performance.now() + (G.state === 'race' ? BUDGET_COURSE_MS : BUDGET_REPOS_MS);
     const vue = T.curved ? api.WROT_DEG : 0;
     const s = api.scaleM() / PPM_IMAGE;
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
@@ -187,6 +207,19 @@
     // Les echantillons dans le cadre, une fois pour toutes les rangees.
     const vis = new Uint8Array(sm.length);
     const rMil = near + rangs * pr * 0.5, zMil = 1.05 + rangs * pz * 0.5;
+    // LES CAPS DE TOUT LE TRACE, une fois par piste et hors course : la
+    // premiere tribune n'entre dans le champ qu'a 42 m au Champ-de-Mars, et
+    // composer d'avance suppose de savoir dans quel sens ses spectateurs
+    // regardent. Meme calcul que plus bas, sur la rangee du milieu.
+    if (G.state !== 'race' && capsDuTrace !== T) {
+      capsDuTrace = T;
+      for (let i = 0; i + 1 < sm.length; i++) {
+        const a = api.ptOf(sm[i], rMil), o = api.ptOf(sm[i], rMil + 1);
+        let nx = o[0] - a[0], ny = o[1] - a[1];
+        const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+        capsVus.add(capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue));
+      }
+    }
     for (let i = 0; i < sm.length; i++) {
       const q = api.ptOf(sm[i], rMil);
       const g = api.solid(q[0], q[1], zMil);
@@ -218,6 +251,7 @@
         let nx = o[0] - a[0], ny = o[1] - a[1];
         const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
         const capI = capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue);
+        capsVus.add(capI);
         const n = Math.max(1, Math.floor(L / PAS));
         for (let k = 0; k < n; k++) {
           const u = (k + 0.5) / n;
@@ -253,6 +287,26 @@
                        vide ? 0 : hautsL[(h >>> 9) % hautsL.length], siegeC);
       if (!im) continue;
       ctx.drawImage(im.cv, it[1] - im.ax * s, it[2] - im.ay * s, im.w * s, im.h * s);
+    }
+    // TOUT COMPOSER AVANT LE PISTOLET. Hors course, le temps qui reste dans
+    // l'image sert a composer d'avance TOUTES les combinaisons des caps du
+    // trace. Mesure le 23 septembre 2026 au Champ-de-Mars : aucune tribune
+    // n'est visible avant 42 m, rien n'etait donc compose, et la PREMIERE
+    // composition — celle qui reveille les quatre planches de l'atlas
+    // (4 862 × 1 188 chacune, decodees au premier dessin) — coutait 62 ms en
+    // pleine course ; les suivantes, 0,4 ms. Faite ici, elle tombe pendant la
+    // presentation ou le decompte.
+    if (G.state !== 'race') {
+      for (const capI of capsVus) {
+        if (!image(iVide, capI, 0, 0, siegeC)) return true;
+        for (let pose = 0; pose < 3; pose++) {
+          for (const peau of peauxC) {
+            for (const haut of hautsL) {
+              if (!image(pose, capI, peau, haut, siegeC)) return true;
+            }
+          }
+        }
+      }
     }
     return true;
   }

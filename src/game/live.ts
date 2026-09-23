@@ -16,7 +16,7 @@
 // 3. Ne pas mentir. Le chrono est calcule par le client — c'est inevitable,
 //    la physique tourne chez lui. Le serveur borne ce qu'il accepte.
 
-import { getSavedName } from './leaderboard';
+import { getSavedName, getDeviceId } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
 import type { Etage } from './duels';
 
@@ -43,6 +43,39 @@ export type JoueurSalle = {
   fin: number | null; hote: boolean;
   /** Couloir attribue par la salle, dans l'ordre d'arrivee. */
   couloir?: number;
+  /** En championnat seulement : 'engage', 'dq', 'abandon'... */
+  statut?: string;
+};
+
+/**
+ * Ce qu'une salle de CHAMPIONNAT ajoute a l'etat d'une salle en direct.
+ * Voir worker/src/salle-championnat.js.
+ */
+export type EtatChamp = {
+  edition: string; phase: string; course: number;
+  titre: string; phaseNom: string; lieu: string | null;
+  /** Nombre de courses de la phase : « Serie 2 », mais « Finale » tout court. */
+  courses: number;
+  /** Le pistolet prevu, horloge de la salle. */
+  at: number | null;
+  etat: 'ouverte' | 'appel' | 'course' | 'terminee';
+  depart_n: number;
+  spectateurs: number;
+  grille: {
+    cle: string; nom: string; couloir: number; present: boolean;
+    statut: 'attente' | 'engage' | 'dq' | 'abandon' | 'forfait';
+    motif: string | null; motif_ms: number | null;
+  }[];
+};
+
+/** Le rappel apres un faux depart, tel que la salle l'annonce. */
+export type Rappel = {
+  fautifs: { id: string; cle: string; nom: string; couloir: number; ms: number }[];
+  /** Le nouveau pistolet, horloge de la salle ; null si personne ne repart. */
+  depart_a: number | null;
+  depart_n?: number;
+  /** Duree de la scene du rappel, avant le decompte du nouveau depart. */
+  rappel_ms: number;
 };
 
 export type Couloir = { id: string; nom: string; couloir: number };
@@ -69,10 +102,15 @@ export type EtatSalle = {
   presentation?: {
     debut_a: number; par: number; micro: number; ordre: Couloir[];
   } | null;
+  champ?: EtatChamp | null;
 };
 
 export type Arrivee = {
   place: number; id: string; nom: string; ms: number; abandon?: boolean;
+  /** En championnat : pourquoi il n'y a pas de chrono. */
+  motif?: 'faux_depart' | 'abandon' | 'forfait' | null;
+  motif_ms?: number | null;
+  couloir?: number;
 };
 
 export type ResultatDirect = {
@@ -127,6 +165,13 @@ type Ecouteurs = {
   onDuel?: (d: DuelDirect) => void;
   onSorti?: (nom: string) => void;
   onFerme?: (raison: string) => void;
+  /**
+   * Championnat : le rappel apres un faux depart. `dansMs` est l'attente
+   * jusqu'au nouveau pistolet, comptee chez soi (null si personne ne repart).
+   */
+  onRappel?: (r: Rappel, dansMs: number | null) => void;
+  /** Championnat : la salle a range la course en base. */
+  onEnregistre?: (ok: boolean, erreur: string | null) => void;
   /** Signalisation WebRTC arrivee de l'autre pair. */
   onSignal?: (type: 'sdp' | 'ice', charge: any) => void;
 };
@@ -164,6 +209,14 @@ export class Salle {
   moi = '';
   code: string;
   suisHote = false;
+  /** Championnat : 'coureur' ou 'spectateur', dit par la salle a l'entree. */
+  role: 'coureur' | 'spectateur' = 'coureur';
+  /**
+   * Championnat : le numero du depart en cours. Chaque position et chaque
+   * chrono le portent, pour qu'apres un rappel la salle reconnaisse ce qui
+   * vient du depart annule. Nul hors championnat : rien n'est ajoute.
+   */
+  departN: number | null = null;
   adversaire = '';
   /**
    * Le dernier etat recu de la salle.
@@ -236,6 +289,40 @@ export class Salle {
     };
   }
 
+  /**
+   * Entrer dans la salle d'une serie de championnat.
+   *
+   * Meme protocole que le direct, autre adresse — et l'identifiant de
+   * l'appareil en plus : c'est avec lui que le serveur verifie que ce
+   * telephone porte bien le nom d'un partant. Sans cette preuve, on entre en
+   * spectateur.
+   */
+  connecterChampionnat(edition: string, phase: string, course: number) {
+    const q = new URLSearchParams({
+      name: getSavedName() || '', device: getDeviceId(),
+    });
+    if (EST_TEST && !codeAcces()) { this.ec.onFerme?.('acces'); return; }
+    this.departN = 0;
+    const chemin = `/champ/salle/${encodeURIComponent(edition)}/${encodeURIComponent(phase)}/${course}`;
+    this.ouvrir(new WebSocket(avecAcces(`${WS_BASE}${chemin}?${q}`)));
+  }
+
+  private ouvrir(ws: WebSocket) {
+    this.ws = ws;
+    ws.onopen = () => {
+      this.pings = 0;
+      this.meilleur = Infinity;
+      this.ping();
+      this.timerPing = setInterval(() => this.ping(), 700);
+    };
+    ws.onmessage = ev => this.recu(ev.data);
+    ws.onerror = () => this.ec.onFerme?.('reseau');
+    ws.onclose = () => {
+      clearInterval(this.timerPing);
+      this.ec.onFerme?.('fermee');
+    };
+  }
+
   private meilleur = Infinity;
 
   private ping() {
@@ -258,6 +345,7 @@ export class Salle {
       }
       case 'bienvenue':
         this.moi = m.moi;
+        if (m.role === 'spectateur' || m.role === 'coureur') this.role = m.role;
         this.suisHote = (m.joueurs || []).some((j: JoueurSalle) => j.id === m.moi && j.hote);
         this.majEtat(m);
         return;
@@ -285,6 +373,22 @@ export class Salle {
       case 'duel':
         this.ec.onDuel?.(m as DuelDirect);
         return;
+      // LE RAPPEL. Il porte le nouveau pistolet, qu'on ramene dans notre
+      // horloge comme le premier. `departPose` reste vrai : l'etat qui suit
+      // porte deja ce nouveau depart, et il ne doit pas le redonner une
+      // seconde fois par le chemin ordinaire.
+      case 'rappel': {
+        if (Number.isFinite(m.depart_n)) this.departN = m.depart_n;
+        if (m.champ) this.dernierEtat = m as EtatSalle;
+        const moiSorti = (m.fautifs || []).some((f: any) => f.id === this.moi);
+        if (moiSorti) this.role = 'spectateur';
+        this.ec.onRappel?.(m as Rappel,
+          m.depart_a ? m.depart_a - (Date.now() + this.decalage) : null);
+        return;
+      }
+      case 'enregistre':
+        this.ec.onEnregistre?.(!!m.ok, m.erreur || null);
+        return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.
       case 'sdp':
@@ -297,6 +401,9 @@ export class Salle {
   private presentationPose = false;
 
   private majEtat(m: any) {
+    if (m.champ && Number.isFinite(m.champ.depart_n) && this.departN != null) {
+      this.departN = Math.max(this.departN, m.champ.depart_n);
+    }
     const autre = (m.joueurs || []).find((j: JoueurSalle) => j.id !== this.moi);
     this.adversaire = autre ? autre.nom : '';
     this.dernierEtat = m as EtatSalle;
@@ -333,15 +440,32 @@ export class Salle {
     }
   }
 
+  /** Une date de la salle, ramenee dans notre horloge. */
+  versLocal(tServeur: number): number { return tServeur - this.decalage; }
+
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
   /** Passe une offre, une reponse ou un candidat ICE a l'autre pair. */
   signaler(type: 'sdp' | 'ice', charge: any) { this.envoyer({ t: type, charge }); }
   /** `c` : l'instant de notre course, en millisecondes. Une salle qui ne le
    *  connait pas l'ignore, et la course se joue comme avant. */
   position(d: number, c?: number) {
-    this.envoyer(c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) });
+    const o: any = c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) };
+    if (this.departN) o.n = this.departN;
+    this.envoyer(o);
   }
-  fini(ms: number) { this.envoyer({ t: 'fini', ms: Math.round(ms) }); }
+  fini(ms: number) {
+    const o: any = { t: 'fini', ms: Math.round(ms) };
+    if (this.departN) o.n = this.departN;
+    this.envoyer(o);
+  }
+  /**
+   * Championnat : parti avant le coup. `ms` est l'instant de l'appui compte
+   * depuis le pistolet, donc negatif. La salle juge et sanctionne ; le
+   * telephone ne fait que dire ce qu'il a vu.
+   */
+  fauxDepart(ms: number) {
+    this.envoyer({ t: 'faux_depart', ms: Math.round(ms), n: this.departN });
+  }
   abandon() { this.envoyer({ t: 'abandon' }); }
 
   fermer() {
