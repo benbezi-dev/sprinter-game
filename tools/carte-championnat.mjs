@@ -490,7 +490,15 @@ function composer(ed, rdv, args) {
      n'a pas de tenant du titre, et le serveur le dit (`tenant: null`). La
      ligne disparait le jour ou il y en aura un. */
   const finaleRdv = finale;
-  const reste = Math.max(0, Math.ceil((premierRdv.at - Date.now()) / 86400000));
+  /* J−3 SE COMPTE EN JOURS DE CALENDRIER, PAS EN TRANCHES DE 24 HEURES.
+     Une soustraction de millisecondes divisee par 86 400 000 donnait « J−4 »
+     un mercredi matin pour une course du samedi : il restait 3,34 jours, que
+     l'arrondi superieur montait a 4. Or « J−3 » veut dire « dans trois nuits »,
+     et personne ne compte autrement. Le decompte change donc a MINUIT, dans le
+     fuseau de la carte, et non a l'heure du coup de pistolet. */
+  const reste = Math.max(0, Math.round(
+    (Date.parse(cleDuJour(premierRdv.at, tz)) - Date.parse(cleDuJour(Date.now(), tz)))
+    / 86400000));
   const courses = ed.phases.reduce((n, p) => n + (p.courses || 0), 0);
 
   ecrans.push({
