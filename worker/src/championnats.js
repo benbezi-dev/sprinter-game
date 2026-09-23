@@ -498,6 +498,23 @@ export async function ensureChampTables(db) {
                         ON champ_medailles(pays)`).run();
   } catch (e) { /* la colonne manque encore : l'index attendra le prochain tour */ }
 
+  // POURQUOI UN CHRONO MANQUE. Tant que les courses se remplissaient au
+  // harnais, `ms = null` voulait dire « abandon » et rien d'autre. Courues en
+  // direct, elles connaissent trois absences qui ne se valent pas : le faux
+  // depart (carton rouge), l'abandon (il a couru, pas fini), le forfait (il
+  // n'est pas venu). `motif_ms` porte l'instant du faux depart, compte depuis
+  // le coup de pistolet — c'est ce que le rejeu public montre.
+  //
+  // Nullables, comme les precedentes : une ligne d'avant ne sait pas pourquoi
+  // elle n'a pas de chrono, et lui inventer un motif serait affirmer une chose
+  // qui n'a pas ete observee.
+  try {
+    await db.prepare(`ALTER TABLE champ_resultats ADD COLUMN motif TEXT`).run();
+  } catch (e) { /* la colonne est deja la */ }
+  try {
+    await db.prepare(`ALTER TABLE champ_resultats ADD COLUMN motif_ms INTEGER`).run();
+  } catch (e) { /* la colonne est deja la */ }
+
   pret.add(db);
 }
 
@@ -1729,7 +1746,7 @@ export async function etatEdition(db, id) {
     `SELECT name_key, nom, rang_duel, phase, course, sorti_en, tenant
        FROM champ_partants WHERE edition = ? ORDER BY course, rang_duel`).bind(id).all();
   const { results: res } = await db.prepare(
-    `SELECT phase, course, name_key, ms, place FROM champ_resultats
+    `SELECT phase, course, name_key, ms, place, motif, motif_ms FROM champ_resultats
       WHERE edition = ? ORDER BY phase, course, place`).bind(id).all();
   // LES MOTS DES VAINQUEURS. La voix ne part pas d'ici : elle pese jusqu'a
   // deux cents kilooctets encodee, et l'edition entiere se recharge a chaque
@@ -1817,6 +1834,44 @@ export async function etatEdition(db, id) {
 }
 
 /**
+ * Ce qu'une salle de championnat en direct doit savoir de SA course.
+ *
+ * La grille est la liste des partants de cette course, dans l'ordre des
+ * couloirs. Le couloir se derive du rang de semis — le client le fait deja
+ * dans `grille()` (src/game/championnats.ts) pour le tableau et le rejeu, sur
+ * la liste que `etatEdition` rend triee par course puis rang de duel. La salle
+ * fait la meme chose sur la meme liste : les couloirs de la course en direct
+ * sont ceux que le tableau affichera ensuite, et ceux du rejeu.
+ *
+ * `at` est l'heure du coup de pistolet au calendrier. `deja` dit que la course
+ * a des resultats : une salle ne la recourt pas.
+ */
+export async function contexteCourse(db, edition, phase, course) {
+  const e = await etatEdition(db, edition);
+  if (!e) return { erreur: 'edition introuvable' };
+  if (e.etat === 'terminee') return { erreur: 'edition terminee' };
+  if (e.phase !== phase) return { erreur: 'ce n est pas la phase en cours', phase: e.phase };
+  const grille = e.partants
+    .filter(p => p.phase === phase && p.course === course)
+    .sort((x, y) => (x.rang_duel || 99) - (y.rang_duel || 99))
+    .map((p, i) => ({ cle: p.name_key, nom: p.nom, couloir: i + 1 }));
+  if (!grille.length) return { erreur: 'course inconnue' };
+  const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
+  const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
+  return {
+    edition: e.id, phase, course, epreuve: e.epreuve, lieu: e.lieu || null,
+    titre: e.titre, phaseNom: e.phaseNom,
+    at: rv ? rv.at : null, grille, deja,
+  };
+}
+
+/**
+ * Les raisons pour lesquelles un partant n'a pas de chrono. Voir la colonne
+ * `motif` de `champ_resultats`.
+ */
+export const MOTIFS = new Set(['faux_depart', 'abandon', 'forfait']);
+
+/**
  * Enregistre les chronos d'une course.
  *
  * Le serveur ne recalcule rien : il range, et c'est la cloture de la phase qui
@@ -1844,12 +1899,17 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
     if (!attendus.has(k)) continue;                 // un intrus ne court pas
     const ms = c.ms == null ? null : Math.round(Number(c.ms));
     if (ms != null && (!Number.isFinite(ms) || ms < 1000 || ms > 600000)) continue;
+    // Un motif n'accompagne qu'un chrono absent : un coureur arrive n'a pas
+    // d'excuse a porter. Hors de la liste, il est tu plutot que range tel quel.
+    const motif = ms == null && MOTIFS.has(c.motif) ? c.motif : null;
+    const mm = motif && Number.isFinite(Number(c.motif_ms)) ? Math.round(Number(c.motif_ms)) : null;
     lignes.push(db.prepare(
-      `INSERT INTO champ_resultats (edition, phase, course, name_key, ms, couru_le)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO champ_resultats (edition, phase, course, name_key, ms, motif, motif_ms, couru_le)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(edition, phase, course, name_key) DO UPDATE SET
-         ms = excluded.ms, couru_le = excluded.couru_le`
-    ).bind(edition, phase, course, k, ms, Date.now()));
+         ms = excluded.ms, motif = excluded.motif, motif_ms = excluded.motif_ms,
+         couru_le = excluded.couru_le`
+    ).bind(edition, phase, course, k, ms, motif, mm, Date.now()));
   }
   if (!lignes.length) return { erreur: 'aucun chrono exploitable' };
   await db.batch(lignes);
@@ -1860,7 +1920,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   // cloture — c'est tout l'ecart entre ce qui se voit et ce qui se devine.
   const cfgPhase = FORMAT.phases.find(x => x.cle === phase);
   const { results: arrivee } = await db.prepare(
-    `SELECT r.name_key AS cle, r.ms, p.nom, p.rang_duel AS rang
+    `SELECT r.name_key AS cle, r.ms, r.motif, p.nom, p.rang_duel AS rang
        FROM champ_resultats r JOIN champ_partants p
          ON p.edition = r.edition AND p.name_key = r.name_key
       WHERE r.edition = ? AND r.phase = ? AND r.course = ?`
@@ -1881,7 +1941,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
         : 'Course terminée.',
       donnees: {
         phase, course,
-        arrivee: ordre.map((r, i) => ({ place: i + 1, nom: r.nom, ms: r.ms })),
+        arrivee: ordre.map((r, i) => ({ place: i + 1, nom: r.nom, ms: r.ms, motif: r.motif || null })),
         directs: directs.map(r => r.nom),
       },
     });

@@ -8,6 +8,7 @@ import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
+export { SalleChampionnat } from './salle-championnat.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
 import { identifiantsTurn } from './turn.js';
@@ -1776,6 +1777,49 @@ async function servir(request, env, ctx, porteur) {
         return json({ error: 'championnats reserves au canal de test' }, 403);
       }
       const sous = url.pathname.slice('/champ/'.length);
+
+      /* LA COURSE EN DIRECT D'UNE SERIE : /champ/salle/<edition>/<phase>/<course>
+         suivi de rien (la WebSocket), de /etat ou de /lancer.
+
+         Le worker ne fait qu'aiguiller, comme pour le direct — avec une
+         verification de plus, et c'est la seule qui compte : cet appareil
+         porte-t-il bien ce nom ? Un partant se reconnait a son nom ; sans
+         cette preuve, n'importe qui pourrait prendre son couloir, ou y
+         commettre un faux depart a sa place. Sans elle, on entre quand meme
+         — en spectateur. `verifie` et `canal` sont poses ICI, jamais repris
+         de la requete : la salle les croit sur parole. */
+      if (sous.startsWith('salle/')) {
+        const [edBrut, phase, courseBrut, tail] = sous.slice('salle/'.length).split('/');
+        const edition = String(edBrut || '').toUpperCase();
+        const course = parseInt(courseBrut || '', 10);
+        if (!/^[A-Z0-9]{4,12}$/.test(edition) || !/^[a-z]{3,20}$/.test(phase || '')
+            || !Number.isFinite(course) || course < 1 || course > 16) {
+          return json({ error: 'course invalide' }, 400);
+        }
+        if (!env.SALLES_CHAMP) return json({ error: 'salle indisponible' }, 503);
+        if (tail === 'lancer' && !estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : tail === 'lancer' ? '/lancer' : '/ws';
+        cible.searchParams.delete('verifie');
+        cible.searchParams.delete('canal');
+        cible.searchParams.set('edition', edition);
+        cible.searchParams.set('phase', phase);
+        cible.searchParams.set('course', String(course));
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        if (!tail) {
+          const cle = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+          const appareil = url.searchParams.get('device') || '';
+          const verifie = !!cle && cle !== 'anonyme' && isValidDeviceId(appareil)
+            && await peutUtiliser(env.DB, cle, appareil);
+          if (verifie) cible.searchParams.set('verifie', '1');
+        }
+        const id = env.SALLES_CHAMP.idFromName(
+          (canal.test ? 'CHT-' : 'CH-') + edition + '-' + phase + '-' + course);
+        const rep = await env.SALLES_CHAMP.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
+      }
 
       /* LE MOT DU VAINQUEUR D'UNE COURSE.
          Le serveur ne croit rien de ce que le client annonce : il relit
