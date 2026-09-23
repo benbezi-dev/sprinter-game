@@ -1532,7 +1532,11 @@
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
     // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
     // donc sur ces deux lignes, sans toucher au jeu.
-    ['Stade des Trois Soleils', 'Three Suns Stadium']
+    ['Stade des Trois Soleils', 'Three Suns Stadium'],
+    // La course hors stade du premier championnat de France. Ferme, comme
+    // les deux precedents : il vient donc apres eux, dans le meme ordre que
+    // STADES_HORS_SERIE.
+    ['Champ-de-Mars', 'Champ-de-Mars']
   ];
 
   const RACE_SUB = {

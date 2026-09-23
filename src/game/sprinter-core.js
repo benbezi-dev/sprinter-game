@@ -502,6 +502,25 @@
       // coutume de ce peuple. Ils sont inventes : aucun ne sort de l'oeuvre.
       names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
               'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
+
+    // LE CHAMP-DE-MARS — la course hors stade du premier championnat de
+    // France. Une piste tricolore posee dans les parterres, la tour au bout.
+    //
+    // FERME : il n'existe que sur le canal de test. C'est sa place definitive
+    // une fois le championnat couru ; pendant le championnat, c'est la
+    // competition qui l'ouvre a ses partants, pas la liste des stades.
+    //
+    // LE PLATEAU EST CELUI D'UNE FINALE NATIONALE : sept coureurs entre 9,95
+    // et 10,35 au 100 m, sous le championnat du monde.
+    { cle: 'champdemars', name: 'Champ-de-Mars', theme: 'champdemars',
+      pool: 'divers',
+      horsSerie: true,
+      // Du monde le long des barrieres et une tribune provisoire pleine.
+      foule: 0.9,
+      plateau: { '100': [9.95, 10.35], '200': [20.05, 20.80],
+                 '400': [44.90, 46.20], '4x100': [38.40, 39.40] },
+      names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
+              'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
   ];
 
   // ---------------------------------------------------------------------

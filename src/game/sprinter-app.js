@@ -290,7 +290,48 @@
       // Les lampes au-dessus des tribunes, comme au Danube : une enceinte de
       // nuit s'eclaire, sans quoi on ne comprend pas pourquoi on y voit.
       projecteurs: true
-    }
+    },
+    // LE CHAMP-DE-MARS — la course hors stade du premier championnat de France.
+    //
+    // IL N'Y A PAS DE STADE, ET C'EST LE SUJET. La piste est posee au milieu
+    // des parterres, entre les rideaux de tilleuls tailles au carre, et la
+    // tour se dresse au bout. Une seule tribune provisoire, d'un gradin, borde
+    // la piste : assez pour porter le public et ses drapeaux, trop basse pour
+    // cacher le parc. L'horizon est pose pres, comme a la Riviera, pour que le
+    // ciel — et donc la tour — tienne dans le cadre pendant toute la course.
+    //
+    // LA PISTE EST LE DRAPEAU. Elle passe du bleu au blanc puis au rouge le
+    // long de la course (voir decor-champ-de-mars.js) : `trackA` n'est que la
+    // teinte de secours, celle qu'utilisent les ecrans qui dessinent une piste
+    // sans passer par drawWorld.
+    //
+    // Tout le reste vient des photographies du lieu : l'herbe tondue en
+    // passes, le sable clair des allees, le bronze-gris de la tour, la pierre
+    // creme et le zinc bleu des facades du septieme.
+    champdemars: {
+      skyTop: [38, 104, 206], skyBot: [158, 204, 240], stars: 0,
+      grass: [86, 160, 52], grassEdge: [64, 134, 40],
+      trackA: [236, 238, 246], trackB: [222, 226, 236],
+      lane: [22, 40, 96], kerb: [255, 255, 255],
+      tread: [240, 240, 236], riser: [26, 60, 150], roof: [30, 44, 90],
+      barrier: [250, 250, 248],
+      // Un panneau court QUARANTE-HUIT metres en ligne droite : en trois
+      // couleurs, la barriere devenait trois grands aplats sans rapport avec
+      // le drapeau. Elle reste marine, et la couleur est aux drapeaux.
+      panels: [[22, 40, 96]],
+      crowdLo: [40, 44, 66], crowdHi: [250, 244, 236],
+      accent: [222, 34, 48], dust: [226, 214, 186],
+      horizon: 3, lointain: [226, 212, 176], lointainFond: [214, 198, 160],
+      toiture: false, gradins: 1, tonte: true, clouds: true,
+      // QUINZE DEGRES, et pas davantage. A 26,6° la tour ne montrait que sa
+      // pointe ; a 12° elle etait grande, mais la piste s'ecrasait et les
+      // coureurs se chevauchaient d'un couloir a l'autre. A quinze, le ciel
+      // prend le haut du cadre et on lit encore la course.
+      angle: 15,
+      champDeMars: true, arbres: 'if',
+      tour: [128, 100, 78], pierre: [232, 216, 186], zinc: [110, 126, 150],
+      rideau: [62, 130, 46], ifFeuille: [34, 94, 42]
+    },
   };
 
   // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
@@ -3321,6 +3362,17 @@
   // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
   // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
   const DEC = () => globalThis.DecorsStades;
+  // Le Champ-de-Mars : tout son decor vit dans decor-champ-de-mars.js, et ne
+  // se dessine que pour le theme qui porte `champDeMars`.
+  const CDM = () => globalThis.ChampDeMars;
+  let _apiCdm = null;
+  function apiCdm() {
+    if (!_apiCdm) {
+      _apiCdm = { G, C, ground, solid, ptOf, samples, scaleM, ui, band, wall, rail,
+                  auFond, rangeeDeToiture, finDuDecor };
+    }
+    return _apiCdm;
+  }
   let _apiDecor = null;
   /**
    * Les troncons du trace ou la tribune est AU FOND de l'image, et non du
@@ -4473,7 +4525,11 @@
     // cypres, sa calotte barrait le ciel d'un bout a l'autre de l'ecran et
     // avalait les trois soleils. On le tient donc entre le palmier et lui,
     // et on l'espace par deux.
-    namek:   { tuile: namekTile,  dehors: [7.6, 0.60], dedans: [5.6, 0.45], pas: 2 }
+    namek:   { tuile: namekTile,  dehors: [7.6, 0.60], dedans: [5.6, 0.45], pas: 2 },
+    // L'if taille en cone des parterres du Champ-de-Mars : bas, serre, un
+    // par echantillon. Il borde la pelouse, il ne l'ombrage pas.
+    if:      { tuile: (th, v) => globalThis.ChampDeMars.ifTile(th, v),
+               dehors: [2.0, 0.15], dedans: [1.8, 0.12], pas: 1 }
   };
 
   function drawArbres(ctx, th, sm, rOut) {
@@ -4851,7 +4907,17 @@
    * soit un peu plus d'un metre) : on y prend simplement un echantillon sur
    * n, calcule depuis le meme espacement.
    */
+  // Le trace ou se tient une tribune, quand elle ne fait pas tout le tour
+  // (voir le Champ-de-Mars dans drawWorld). Nul partout ailleurs.
+  let _dansTribune = null;
   function rangeeDeToiture(sm, pasMetres) {
+    if (_dansTribune) {
+      const f = _dansTribune;
+      _dansTribune = null;
+      const tout = rangeeDeToiture(sm, pasMetres);
+      _dansTribune = f;
+      return tout.filter(f);
+    }
     const out = [];
     if (G.track.curved) {
       // Longueur d'arc entre deux echantillons de virage, pour convertir
@@ -5171,7 +5237,29 @@
     }
   }
 
+  // L'ANGLE D'UN LIEU.
+  //
+  // Le jeu se regarde de 26,6° au-dessus de l'horizon, et a cet angle le
+  // haut du cadre est encore du sol : le ciel n'est qu'un coin. Un lieu dont
+  // le sujet est ce qui se dresse a l'horizon — la tour, au Champ-de-Mars —
+  // peut demander une camera plus basse (`angle`, en degres). Elle se pose
+  // quand on dessine ce lieu et se retire des qu'on en dessine un autre :
+  // un theme qui ne demande rien ne touche jamais a la camera, et celle du
+  // mode Halloween reste la sienne.
+  let angleGarde = null;
+  function angleDuLieu(th) {
+    if (th.angle) {
+      if (!angleGarde) angleGarde = { cos: C.ISO_COS, sin: C.ISO_SIN };
+      const r = th.angle * Math.PI / 180;
+      C.ISO_COS = Math.cos(r); C.ISO_SIN = Math.sin(r);
+    } else if (angleGarde) {
+      C.ISO_COS = angleGarde.cos; C.ISO_SIN = angleGarde.sin;
+      angleGarde = null;
+    }
+  }
+
   function drawWorld(ctx, th) {
+    angleDuLieu(th);
     const T = G.track;
     // ciel
     const g = ctx.createLinearGradient(0, 0, 0, G.VH);
@@ -5218,6 +5306,13 @@
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
     const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+    // La patrouille, puis la tour : tracees sur le ciel, avant tout le sol,
+    // pour que les rideaux d'arbres lui passent devant le pied.
+    const cdm = th.champDeMars && CDM();
+    if (cdm) {
+      cdm.patrouille(ctx, apiCdm());
+      cdm.tour(ctx, apiCdm(), th, sm, rOut, th.horizon || 46);
+    }
 
     // pelouse interieure
     if (T.curved) {
@@ -5283,6 +5378,7 @@
       if (th.rochers) drawRochers(ctx, th, sm, rOut, horizon);
       if (th.haie) drawHaie(ctx, th, sm, rOut, horizon);
       if (th.village) drawVillage(ctx, th, sm, rOut, horizon);
+      if (cdm) cdm.lointain(ctx, apiCdm(), th, sm, rOut, horizon);
     }
 
     // Grain sur la pelouse exterieure : quelques touches plus claires/sombres
@@ -5309,6 +5405,7 @@
     // avec la pelouse, sous les gradins, la piste et tout ce qui se tient
     // debout.
     if (DEC()) DEC().sol(ctx, apiDecor(), th, G.levelIdx);
+    if (cdm) cdm.pelouse(ctx, apiCdm(), th, rIn);
 
     // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
     // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
@@ -5324,14 +5421,26 @@
     // tribune haute remplit le haut de l'image (voir la toiture, plus bas), et
     // un stade dont le sujet est le ciel ne peut pas se le permettre.
     const tribune = tribuneDe(th);
+    // UNE COURSE HORS STADE N'A PAS DE STADE. Au Champ-de-Mars la tribune
+    // provisoire ne borde que la fin de course ; avant elle, du public debout
+    // derriere les barrieres. `smT` est le trace de la tribune, `sm` celui des
+    // barrieres — ailleurs les deux sont le meme.
+    const enTribune = cdm ? cdm.tribuneSur(apiCdm(), sm) : null;
+    const smT = enTribune ? enTribune.sm : sm;
+    _dansTribune = enTribune ? enTribune.dans : null;
     const near = rOut + 1.6, tiers = tribune.gradins, sr = 1.7, sz = 0.58;
     const stp = decorStride();
-    band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
-    // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
-    // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
-    for (let i = 0; i + stp < sm.length; i += stp) {
-      wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
-           th.panels[(i / stp) % th.panels.length], stp);
+    if (cdm) cdm.badauds(ctx, apiCdm(), th, sm, near, enTribune.dans);
+    // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
+    // les panneaux — quand elles sont chargees et valent pour cette vue.
+    if (!(cdm && cdm.barrieres(ctx, apiCdm(), th, near))) {
+      band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
+      // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
+      // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
+      for (let i = 0; i + stp < sm.length; i += stp) {
+        wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
+             th.panels[(i / stp) % th.panels.length], stp);
+      }
     }
     // DEUX RANGEES DE SIEGES PAR GRADIN. Un « gradin » du decor fait un
     // metre soixante-dix de profondeur : c'est la mesure de deux rangees
@@ -5345,23 +5454,23 @@
       const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz, f = 1 - t * 0.025;
       // contremarche : vraie face verticale, du gradin precedent a celui-ci,
       // eclairee selon son orientation -> l'escalier a du relief
-      wall(ctx, sm, r0, z1 - pz, z1, th.riser, stp);
+      wall(ctx, smT, r0, z1 - pz, z1, th.riser, stp);
       // marche : surface horizontale, pleinement exposee a la lumiere
-      band(ctx, sm, r0, r0 + pr, rgb(th.tread, f), z1);
+      band(ctx, smT, r0, r0 + pr, rgb(th.tread, f), z1);
     }
     // LE PUBLIC ASSIS, rangee par rangee, quand ses images sont la (voir
     // tribune.js). Les escaliers passent d'abord, et personne ne s'assied
     // dessus. Sinon, l'ancienne foule en tuile, plus bas.
     let publicAssis = false;
     if (TR && TR.pret()) {
-      drawAllees(ctx, th, sm, near, tiers, sr, sz);
+      drawAllees(ctx, th, smT, near, tiers, sr, sz);
       const rMoy = near + tiers * sr * 0.5;
-      const allees = rangeeDeToiture(sm, 15).map(q => {
+      const allees = rangeeDeToiture(smT, 15).map(q => {
         const q2 = q[0] ? [true, q[1] - 0.6 / rMoy, q[2]] : [false, q[1] + 0.6, q[2]];
         return ptOf(q2, rMoy);
       });
       const nomTheme = (LEVELS[G.levelIdx] && LEVELS[G.levelIdx].theme) || 'day';
-      publicAssis = TR.dessiner(ctx, apiTribune(), th, nomTheme, sm, near, rangs, pr, pz,
+      publicAssis = TR.dessiner(ctx, apiTribune(), th, nomTheme, smT, near, rangs, pr, pz,
                                 fouleDe(G.levelIdx), allees);
     }
     // Public dans les gradins : motif de foule dense (getCrowdPattern) plutot
@@ -5389,7 +5498,7 @@
       const oy = (anchor[1] + Math.cos(tnow * 0.85) * 1.2) % CROWD_TILE;
       const straightRuns = [];
       let run = null;
-      for (const s of sm) {
+      for (const s of smT) {
         if (!s[0]) { if (!run) { run = []; straightRuns.push(run); } run.push(s); }
         else run = null;
       }
@@ -5418,12 +5527,14 @@
     // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
     // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
     // simple bande. Voir drawAllees. Avec le public assis, ils sont deja la.
-    if (!publicAssis) drawAllees(ctx, th, sm, near, tiers, sr, sz);
+    if (!publicAssis) drawAllees(ctx, th, smT, near, tiers, sr, sz);
     // les eclats d'appareils suivent le public, quel qu'il soit
     if (publicAssis && PREM() && flashsActifs()) {
       PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
       PREM().dessinerFlashs(ctx, PEINTRE);
     }
+    // les drapeaux du public et les mats du Champ-de-Mars, sur la foule
+    if (cdm) cdm.tribune(ctx, apiCdm(), th, smT, near, tiers, sr, sz);
 
     // LA TOITURE, ET POURQUOI DEUX STADES S'EN PASSENT.
     //
@@ -5445,7 +5556,7 @@
     // couvrait tous les spectateurs de la sortie du virage. Une camera placee
     // dans le stade ne voit pas le toit qui est au-dessus d'elle.
     if (tribune.toiture) {
-      for (const run of tribunesDuFond(sm, near)) {
+      for (const run of tribunesDuFond(smT, near)) {
         band(ctx, run, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
              1.05 + tiers * sz + 2.4);
       }
@@ -5462,7 +5573,7 @@
     // Sans toit, ni l'un ni l'autre n'a ou se poser.
     if (tribune.toiture) {
       if (th.projecteurs) {
-        drawProjecteurs(ctx, th, sm, near, tiers, sr, sz);
+        drawProjecteurs(ctx, th, smT, near, tiers, sr, sz);
       } else if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
         const fh = scaleM() * 0.42, fw = fh * (32 / 27);
         // MEME CORRECTION QUE POUR LES PROJECTEURS, ET ELLE VIENT DE LOIN.
@@ -5477,13 +5588,15 @@
         // La hauteur descend aussi sous le toit, pour la meme raison que les
         // projecteurs : au-dessus, tout sort du cadre.
         const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-        for (const q of rangeeDeToiture(sm, 6).filter(q2 => auFond(q2, near))) {
+        for (const q of rangeeDeToiture(smT, 6).filter(q2 => auFond(q2, near))) {
           const p = solid(...ptOf(q, fr), fz);
           if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
           ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);
         }
       }
     }
+
+    _dansTribune = null;
 
     // LA PISTE EST D'UNE SEULE COULEUR, ET C'EST UN RETOUR EN ARRIERE ASSUME.
     //
@@ -5494,7 +5607,8 @@
     // coulee d'un seul tenant ; ce qui la sauve de l'aplat, c'est le grain de
     // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
     // changement de couleur tous les huit metres.
-    band(ctx, sm, rIn, rOut, rgb(th.trackA));
+    if (cdm) cdm.surface(ctx, apiCdm(), th, sm, rIn, rOut);
+    else band(ctx, sm, rIn, rOut, rgb(th.trackA));
 
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
     // ne porte pas le granulat de la resine qu'elle recouvre.
@@ -5510,11 +5624,14 @@
     //
     // Le liseret interieur et le bord exterieur, eux, restent francs : ce
     // sont des reperes de course, pas des marques d'usage.
-    rail(ctx, sm, rIn, rgb(th.kerb), 3);
-    for (let e = 1; e < C.LANE_COUNT; e++) {
-      rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+    if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
+                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
+      rail(ctx, sm, rIn, rgb(th.kerb), 3);
+      for (let e = 1; e < C.LANE_COUNT; e++) {
+        rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+      }
+      rail(ctx, sm, rOut, rgb(th.lane), 2.2);
     }
-    rail(ctx, sm, rOut, rgb(th.lane), 2.2);
 
     // L'ombre que les tribunes jettent sur le bord de la piste, et celle du
     // liseret contre la pelouse. Apres les lignes : un mur de vingt metres
@@ -5647,6 +5764,10 @@
 
     // Les poteaux d'arrivee, apres le damier qu'ils encadrent.
     if (T.total) drawPoteaux(ctx, th, rIn, rOut);
+    // Le portique d'arrivee du Champ-de-Mars. ICI, AVANT LES COUREURS, et
+    // c'est ce qui le rend sur : il enjambe les couloirs, mais un coureur
+    // n'est jamais dessine derriere lui.
+    if (cdm) cdm.portique(ctx, apiCdm(), th);
 
     // LES NAPPES DES PROJECTEURS, APRES TOUT CE QUI EST PEINT AU SOL.
     //
@@ -6689,6 +6810,9 @@
     // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
     // un mat ne se lit plus.
     if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    // Le haut du portique du Champ-de-Mars, par-dessus les coureurs qui sont
+    // passes dessous (voir portiqueDevant).
+    if (th && th.champDeMars && CDM()) CDM().portiqueDevant(ctx, apiCdm(), th);
     // Les noms tout en haut de la pile : une pastille a demi cachee par le
     // coureur de devant ne se lit pas, et c'est la seule chose qui distingue
     // deux adversaires de couleurs voisines.

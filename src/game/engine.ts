@@ -13,6 +13,12 @@ import './rendu-premium.js';
 import decorsManifeste from './decors-manifeste.json';
 (globalThis as any).SprinterDecorsManifeste = decorsManifeste;
 import './decors-stades.js';
+// Le Champ-de-Mars : ses pieces rendues dans Blender (tools/blender/decors/
+// champ-de-mars.py), puis le module qui les pose — et qui dessine a la main
+// ce qui n'est pas encore charge.
+import champDeMarsManifeste from './champ-de-mars-manifeste.json';
+(globalThis as any).ChampDeMarsManifeste = champDeMarsManifeste;
+import './decor-champ-de-mars.js';
 // Le public des gradins, rendu dans Blender : son manifeste, puis ses rangees.
 import tribuneManifeste from './tribune-manifeste.json';
 (globalThis as any).SprinterTribuneManifeste = tribuneManifeste;
