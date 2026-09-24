@@ -29,6 +29,8 @@ import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
 import { Tutorial, marquerTutoVu } from '@/components/screens/Tutorial';
 import { tutoOuvert as tutoSprintOuvert, abonnerAuTuto as abonnerAuTutoSprint,
          fermerLeTuto as fermerLeStoreSprint } from '@/game/sprint-tuto.js';
+import { CeremonieChampionnat } from '@/components/screens/Championnat';
+import { useCeremonieChampionnat } from '@/game/ceremonie-championnat';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { Generique } from '@/components/screens/Generique';
@@ -237,6 +239,14 @@ function MainGame() {
 
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
+  /**
+   * Le sacre d'un championnat, qui se joue sur la piste.
+   *
+   * Meme raison que la presentation juste au-dessus : l'ecran-titre s'efface,
+   * sans quoi le menu couvrirait la piste que la ceremonie a justement pour
+   * objet de montrer. Il revient tel quel a la fermeture.
+   */
+  const ceremonie = useCeremonieChampionnat();
 
   /**
    * Le generique de fin de carriere, plutot que la cinematique ordinaire.
@@ -282,7 +292,7 @@ function MainGame() {
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
-        {state === 'title' && <TitleScreen />}
+        {state === 'title' && !ceremonie && <TitleScreen />}
         {state === 'cut' && !generique && <CutScreen />}
         {generique && <Generique />}
         {/* Le sacre s'eteint par-dessus le generique plutot que de disparaitre
@@ -348,6 +358,7 @@ function MainGame() {
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}
       <RecordPopup />
+      {DUELS_OUVERTS && <CeremonieChampionnat />}
       <QuitRace />
       <InboxPopup />
       <AnnoncePopup />
