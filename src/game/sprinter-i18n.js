@@ -717,7 +717,7 @@
     sel_manque_1:    ['il te manque une place', 'you are one place short'],
     sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
     sel_dedans:      ['tu es qualifié', 'you are in'],
-    sel_dedans_fige: ['TU Y ES', 'YOU ARE IN'],
+    sel_dedans_fige: ['SÉLECTIONNÉ', 'YOU ARE IN'],
     sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
     sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
     sel_pour_entrer: ['un duel gagné et tu entres au classement',

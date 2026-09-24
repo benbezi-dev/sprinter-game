@@ -96,6 +96,9 @@ export function TouchControls() {
   const state = useGameStore(s => s.state);
   const countT = useGameStore(s => s.countT);
   const champ = useChampDirect();
+  // La ligne passee, le joueur d'une serie en direct ne court plus : il regarde
+  // les autres finir. Voir plus bas.
+  const fini = useGameStore(s => !!s.player?.finished);
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -246,7 +249,9 @@ export function TouchControls() {
   // Une serie de championnat en direct : le spectateur — carton rouge, ou pas
   // partant — ne court pas, et une fois le verdict de la salle tombe personne
   // ne court plus. Les pavés couvriraient le tableau d'arrivee et son bouton.
-  if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin')) return null;
+  // Pas davantage une fois SA ligne passee : il attend les autres, et « alterne
+  // les deux touches » sous un coureur qui freine promettait une course finie.
+  if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin' || fini)) return null;
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //

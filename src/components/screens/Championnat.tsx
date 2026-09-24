@@ -543,7 +543,12 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
           </h2>
         </div>
 
-        <div className="flex items-end justify-center gap-2 w-full mt-2">
+        {/* L'etiquette de chaque marche (medaille, nom, chrono) est posee
+            AU-DESSUS d'elle, en `-top-11` : 44 px hors de la boite. La marge
+            du haut les reserve. Avec 28 px seulement, l'etiquette de la
+            marche 1 — la plus haute — montait dans le titre, et la medaille
+            d'or se posait sur le nom du champion. */}
+        <div className="flex items-end justify-center gap-2 w-full mt-10">
           {ordre.map((r, i) => {
             const rang = trois.indexOf(r) + 1;
             return (

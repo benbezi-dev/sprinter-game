@@ -5,6 +5,7 @@ import { SURGISSEMENT } from '@/lib/mouvement';
 import { useRecord, s2 } from '@/game/record';
 import { DEPART_STARTER } from '@/game/canal';
 import { lireRejeu } from '@/game/champ-rejeu';
+import { useChampDirect } from '@/game/champ-direct';
 import { lireLeBandeau, quandDeLaCourse } from '@/game/bandeau-rejeu';
 import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
@@ -35,7 +36,20 @@ export function RaceHUD() {
    */
   const record = useRecord(raceKey);
   const recordMs = record.ms;
-  const chronoMs = elapsed * 1000;
+  /**
+   * UNE SERIE EN DIRECT, UNE FOIS LA LIGNE PASSEE.
+   *
+   * Le joueur reste sur la piste a regarder les autres finir (voir
+   * engine.ts), et la course continue donc de tourner — `elapsed` compris. Le
+   * chrono du haut est pourtant le SIEN : il se fige sur son temps, comme le
+   * tableau d'un stade sur celui du vainqueur. Sans cela, il affichait 54 s
+   * sous le tableau d'arrivee d'une course gagnee en 8,558.
+   */
+  const champ = useChampDirect();
+  const directFini = !!SprinterApp.G.champDirect && !!player?.finished
+    && player.finishTime != null;
+  const chronoS: number = directFini ? player.finishTime : elapsed;
+  const chronoMs = chronoS * 1000;
   // LE CHRONO A L'ENVERS. Une nuit du molosse ne compte pas ce qui a ete
   // couru, elle compte ce qu'il reste : le grand nombre du haut change donc
   // de sens, et rien d'autre ne bouge dans ce tableau. Nul hors du mode, ou
@@ -179,8 +193,9 @@ export function RaceHUD() {
   const total = T?.total || 100;
 
   // Le tableau d'arrivee occupe l'ecran : un chrono fige sous lui
-  // contredirait les chronos qu'il affiche.
-  if (course?.arrivee) return null;
+  // contredirait les chronos qu'il affiche. Celui du rejeu comme celui de la
+  // serie en direct (ChampDirect), qui s'ouvre sur le verdict de la salle.
+  if (course?.arrivee || (champ.ouvert && champ.etape === 'fin')) return null;
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
@@ -214,7 +229,7 @@ export function RaceHUD() {
               ${rebours !== null ? couleurDuRebours(rebours)
                 : !isRace || recordMs === null ? 'text-primary'
                 : dansLeRecord ? 'text-emerald-400' : 'text-destructive'}`}>
-              {rebours !== null ? texteDuRebours(rebours) : elapsed.toFixed(2)}
+              {rebours !== null ? texteDuRebours(rebours) : chronoS.toFixed(2)}
             </div>
             {recordMs !== null && !rejeu && (
               <div className={`font-mono font-bold tabular-nums tracking-widest
@@ -569,6 +584,11 @@ export function RaceHUD() {
           // indicateur-ci le mesure sur l'image, et c'est justement l'image
           // qu'on ne croit plus a cet instant.
           if (photo) return null;
+          // La ligne passee, il n'y a plus d'ecart a courir. Le vainqueur
+          // freine et s'arrete pendant que les autres finissent : mesure en
+          // metres, l'ecart s'inversait et le montrait « derriere » ceux
+          // qu'il venait de battre.
+          if (directFini) return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {
