@@ -1771,6 +1771,8 @@
     // court alors au stade olympique plutot que sur un ecran noir.
     if (!LEVELS[idx]) idx = OLYMPIC;
     G.levelIdx = idx;
+    // Aucun reste du plan serre d'une presentation interrompue.
+    G.zoomPres = 1; G.presPousse = 0; G.presDepuis = 0;
     const lvl = LEVELS[idx], R = G.race;
     // L'ALLURE DE L'EPREUVE, posee ici et nulle part ailleurs : c'est le seul
     // passage par lequel toutes les courses entrent — carriere, one-shot,
@@ -1937,7 +1939,7 @@
     // La revanche ne concerne qu'une course : de retour a l'accueil, le nom
     // de celui a qui renvoyer le code n'a plus rien a designer.
     G.revanche = null; G.revancheId = null; G.revancheMs = 0;
-    G.presente = null;
+    G.presente = null; G.zoomPres = 1; G.presPousse = 0;
     G.paused = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
@@ -3099,7 +3101,8 @@
     return Math.max(0.62, Math.min(1.7, Math.min(G.VW / 430, G.VH / 660)));
   }
   function scaleM() {
-    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique() * zoomDuMode();
+    return ui() * (G.race.arc > 0 ? 44 : 30) * zoomDuGenerique() * zoomDuMode()
+      * zoomDeLaPresentation();
   }
   /* LE CADRAGE D'UN MODE — pose par le mode, remis par lui.
      ---------------------------------------------------------------------
@@ -3131,6 +3134,12 @@
   // ici sous condition, il ne peut pas deborder sur l'ecran d'apres.
   function zoomDuGenerique() {
     return (G.state === 'cut' && G.cut && G.cut.kind === 'ending' && G.zoomScene) || 1;
+  }
+  // LE PLAN QUI SE RESSERRE sur l'athlete presente (voir presenterCoureur).
+  // Il ne vaut que pendant le decompte, ou vit la presentation : lu hors de
+  // lui, un reste de zoom deborderait sur la course.
+  function zoomDeLaPresentation() {
+    return (G.state === 'count' && G.zoomPres) || 1;
   }
   // Pendant la course, le joueur doit rester au centre exact de l'image ;
   // ailleurs (titre, cinematiques...) on garde la composition d'origine,
@@ -3181,11 +3190,41 @@
    * par les cinematiques, qui melange la position des bras vers le haut. Un
    * geste que le jeu sait deja faire vaut mieux qu'un geste de plus a entretenir.
    */
-  function presenterCoureur(r) {
+  function presenterCoureur(r, reglages) {
+    const nouveau = (r || null) !== G.presente;
     G.presente = r || null;
+    if (nouveau) {
+      G.presDepuis = 0;
+      G.presPousse = r && reglages && reglages.pousse > 0 ? reglages.pousse : 0;
+    }
   }
 
   const CELEBRE_MONTEE = 2.6, CELEBRE_DESCENTE = 3.4;
+
+  /**
+   * LE PLAN QUI SE RESSERRE — la grammaire des retransmissions quand elles
+   * veulent faire monter la tension : la camera ne se contente pas d'arriver
+   * sur l'athlete, elle avance lentement vers lui pendant qu'il leve les bras.
+   *
+   * `pousse` (dans `presenterCoureur`) est l'ampleur de ce zoom avant : 0,2
+   * veut dire un cinquieme plus pres a la fin du creneau. Zero, c'est le plan
+   * fixe d'avant — ce que demande le reglage « reduire les animations », et
+   * ce que garde le direct ordinaire.
+   *
+   * Au changement d'athlete, le plan se desserre VITE pendant que la camera
+   * glisse vers le suivant, puis se resserre LENTEMENT sur lui : la courbe de
+   * la poussee part a plat (smoothstep), ce qui laisse au recul le temps de
+   * finir avant que l'avancee ne commence.
+   */
+  const POUSSE_DUREE = 2.6;
+  function pousserLePlan(dt) {
+    G.presDepuis = (G.presDepuis || 0) + dt;
+    const t = Math.min(1, G.presDepuis / POUSSE_DUREE);
+    const cible = G.presente && G.presPousse ? 1 + G.presPousse * t * t * (3 - 2 * t) : 1;
+    const z = G.zoomPres || 1;
+    const vite = cible < z ? 7 : 12;
+    G.zoomPres = z + (cible - z) * (1 - Math.exp(-vite * dt));
+  }
 
   function stepPresentation(dt) {
     if (!G.track || !G.runners) return;
@@ -3208,6 +3247,7 @@
       r.stride += dt * (r === G.presente ? 1.1 : 0.5);
       r.drivePitch = 0;
     }
+    pousserLePlan(dt);
   }
 
   /**
@@ -3225,6 +3265,13 @@
    */
   function finirLesSaluts(dt) {
     G.presente = null;
+    // Le plan se desserre avec les bras : le decompte se regarde au cadre de
+    // la course, et le coup de pistolet ne doit pas faire sauter l'image.
+    G.presPousse = 0;
+    if (G.zoomPres && G.zoomPres !== 1) {
+      G.zoomPres = 1 + (G.zoomPres - 1) * Math.exp(-5 * dt);
+      if (Math.abs(G.zoomPres - 1) < 0.002) G.zoomPres = 1;
+    }
     if (!G.runners) return;
     for (const r of G.runners) {
       if (!r.celebrate) continue;

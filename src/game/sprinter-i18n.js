@@ -783,6 +783,8 @@
     fiche_n_pl:       ['MATCHS NULS', 'DRAWS'],
     fiche_palmares:   ['PALMARÈS', 'HONOURS'],
     fiche_monde:      ['MONDE', 'WORLD'],
+    // Le mieux classe en duel de la grille, s'il est seul en tete.
+    fiche_favori:     ['LE FAVORI', 'THE FAVOURITE'],
     pres_mic_on:     ['MICRO OUVERT', 'MIC LIVE'],
     pres_mic_off:    ['micro refusé', 'mic declined'],
     mic_winner:      ['LE MOT DU VAINQUEUR', 'THE WINNER SPEAKS'],

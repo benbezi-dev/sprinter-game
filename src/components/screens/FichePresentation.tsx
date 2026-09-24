@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { MONTEE, retarde } from '@/lib/mouvement';
+import { MONTEE, retarde, useAnimationsReduites, type Geste } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
 import { nomDiscipline } from '@/game/duels';
 import type { FicheAthlete, LignePalmares } from '@/game/fiches-champ';
 import { COULEURS_MEDAILLE, nomDuRang, teinteDuRang } from '@/components/Insignes';
+import { sortieVive } from './TensionPresentation';
 
 /**
  * LA FICHE D'UN ATHLETE, PENDANT SA PRESENTATION.
@@ -31,26 +32,54 @@ import { COULEURS_MEDAILLE, nomDuRang, teinteDuRang } from '@/components/Insigne
 const OR = '#F8CD4A';
 
 /** L'instant ou la premiere ligne tombe : juste apres le nom. */
-const DEPART = 0.18;
+const DEPART = 0.1;
 /** Le pas entre deux lignes. */
-const PAS = 0.14;
+const PAS = 0.1;
 /**
  * Au-dela, « +2 ». Trois lignes de palmares se lisent pendant qu'un athlete
  * leve les bras ; six ne se lisent plus, elles se survolent.
  */
 const PALMARES_MAX = 3;
 
+/** Les chiffres du bilan defilent le temps que la ligne se pose. */
+const DEFILEMENT_MS = 550;
+
 /** Le pluriel de chaque langue : « 0 victoire », mais « 0 wins ». */
 function pluriel(n: number): boolean {
   return SprinterApp.N.getLang() === 'en' ? n !== 1 : n > 1;
 }
 
-function Chiffre({ n, cle, teinte }: { n: number; cle: string; teinte: string }) {
+/**
+ * Un chiffre qui defile de zero jusqu'a sa valeur, comme au tableau d'un
+ * stade : on le regarde monter, et on se demande ou il va s'arreter. Il
+ * ralentit en arrivant — c'est la fin qu'on doit lire.
+ */
+function Compteur({ vers, delaiMs }: { vers: number; delaiMs: number }) {
+  const reduit = useAnimationsReduites();
+  const [v, setV] = useState(reduit ? vers : 0);
+  useEffect(() => {
+    if (reduit || vers <= 0) { setV(vers); return; }
+    let image = 0;
+    const debut = performance.now() + delaiMs;
+    const pas = (t: number) => {
+      const q = Math.min(1, Math.max(0, (t - debut) / DEFILEMENT_MS));
+      setV(Math.round(vers * (1 - Math.pow(1 - q, 3))));
+      if (q < 1) image = requestAnimationFrame(pas);
+    };
+    image = requestAnimationFrame(pas);
+    return () => cancelAnimationFrame(image);
+  }, [vers, delaiMs, reduit]);
+  return <>{v}</>;
+}
+
+function Chiffre({ n, cle, teinte, delaiMs }: {
+  n: number; cle: string; teinte: string; delaiMs: number;
+}) {
   const { N } = SprinterApp;
   return (
     <div className="flex flex-col items-center min-w-0">
       <span className={`font-display font-black text-2xl md:text-3xl leading-none tabular-nums ${teinte}`}>
-        {n}
+        <Compteur vers={n} delaiMs={delaiMs} />
       </span>
       <span className="mt-1 text-[8px] md:text-[9px] tracking-[0.2em] font-bold text-white/55
                        uppercase whitespace-nowrap">
@@ -61,6 +90,22 @@ function Chiffre({ n, cle, teinte }: { n: number; cle: string; teinte: string })
 }
 
 const COULEUR_MOT = ['nations_or', 'nations_argent', 'nations_bronze'];
+
+/** Un ruban qui se deplie a l'horizontale, comme un bandeau de television. */
+const RUBAN: Geste = {
+  initial: { opacity: 0, scaleX: 0.2 },
+  animate: { opacity: 1, scaleX: 1 },
+  exit: { opacity: 0 },
+  transition: { type: 'spring', stiffness: 460, damping: 30 },
+};
+
+/** Le coup de tampon : trop grand, puis plaque, avec un leger rebond. */
+const TAMPON: Geste = {
+  initial: { opacity: 0, scale: 1.9, rotate: -6 },
+  animate: { opacity: 1, scale: 1, rotate: 0 },
+  exit: { opacity: 0 },
+  transition: { type: 'spring', stiffness: 520, damping: 17 },
+};
 
 /**
  * Une ligne du palmares : la couleur, la competition, la distance, le nombre.
@@ -88,11 +133,13 @@ function LigneDePalmares({ l }: { l: LignePalmares }) {
   );
 }
 
-export function FichePresentation({ fiche, epreuve }: {
+export function FichePresentation({ fiche, epreuve, favori = false }: {
   /** `undefined` tant qu'elle n'est pas arrivee, `null` s'il n'y en a pas. */
   fiche: FicheAthlete | null | undefined;
   /** La distance de l'edition : c'est sur elle que le niveau se lit. */
   epreuve: string;
+  /** Le mieux classe de la grille (voir `favoriDe`). */
+  favori?: boolean;
 }) {
   const { N } = SprinterApp;
   if (!fiche) return null;
@@ -100,17 +147,32 @@ export function FichePresentation({ fiche, epreuve }: {
   const montrees = palmares.slice(0, PALMARES_MAX);
   const reste = palmares.length - montrees.length;
   let rang = 0;
-  const tombe = () => retarde(MONTEE, DEPART + PAS * rang++);
+  // Le retard vaut pour l'entree seulement : a la sortie, on coupe.
+  const tombe = () => sortieVive(retarde(MONTEE, DEPART + PAS * rang++));
+  // Les rubans d'abord — tenant, favori —, sur une seule ligne : c'est ce que
+  // le speaker dit en premier, et ce qui fait lever la tete.
+  const rubans = fiche.tenant || favori;
+  const instantRubans = rubans ? DEPART + PAS * rang++ : 0;
+  const instantCadre = DEPART + PAS * rang;
 
   return (
     <div className="w-full max-w-sm md:max-w-md flex flex-col items-stretch gap-1.5 mt-1">
-      {fiche.tenant && (
-        <motion.span {...tombe()}
-          className="self-center px-3 py-0.5 rounded-sm text-[10px] font-black tracking-[0.3em]
-                     uppercase text-black shadow-[0_2px_12px_rgba(0,0,0,0.6)]"
-          style={{ background: OR }}>
-          {N.t('champ_boss')}
-        </motion.span>
+      {rubans && (
+        <motion.div {...sortieVive(retarde(RUBAN, instantRubans))} className="self-center flex gap-1.5">
+          {fiche.tenant && (
+            <span className="px-3 py-0.5 rounded-sm text-[10px] font-black tracking-[0.3em]
+                             uppercase text-black shadow-[0_2px_12px_rgba(0,0,0,0.6)]"
+                  style={{ background: OR }}>
+              {N.t('champ_boss')}
+            </span>
+          )}
+          {favori && (
+            <span className="px-3 py-0.5 rounded-sm text-[10px] font-black tracking-[0.3em]
+                             uppercase text-white bg-red-600 shadow-[0_2px_12px_rgba(220,38,38,0.55)]">
+              {N.t('fiche_favori')}
+            </span>
+          )}
+        </motion.div>
       )}
 
       {/* LE NIVEAU ET LE BILAN, dans le meme cadre : ils parlent du meme
@@ -123,10 +185,13 @@ export function FichePresentation({ fiche, epreuve }: {
             {N.t('fiche_niveau')} · {nomDiscipline(epreuve)}
           </span>
           {niveau ? (
-            <span className={`shrink-0 px-2 py-0.5 rounded-md border font-mono text-[11px] md:text-xs
-                              font-bold tracking-wider ${teinteDuRang(niveau.etage)}`}>
+            /* L'ECUSSON TOMBE COMME UN TAMPON, un temps apres le cadre : le
+               niveau est ce qui situe l'athlete, il merite son propre coup. */
+            <motion.span {...sortieVive(retarde(TAMPON, instantCadre + 0.15))}
+              className={`shrink-0 px-2 py-0.5 rounded-md border font-mono text-[11px] md:text-xs
+                          font-bold tracking-wider ${teinteDuRang(niveau.etage)}`}>
               {nomDuRang(niveau.etage, niveau.division)}
-            </span>
+            </motion.span>
           ) : (
             <span className="shrink-0 font-mono text-[11px] font-bold tracking-wider text-white/45">
               {N.t('fiche_non_classe')}
@@ -135,9 +200,9 @@ export function FichePresentation({ fiche, epreuve }: {
         </div>
         {/* Dans l'ordre ou l'on compte un bilan : victoires, defaites, nuls. */}
         <div className="grid grid-cols-3 gap-2 px-3 py-2">
-          <Chiffre n={bilan.v} cle="fiche_v" teinte="text-emerald-300" />
-          <Chiffre n={bilan.d} cle="fiche_d" teinte="text-rose-300" />
-          <Chiffre n={bilan.n} cle="fiche_n" teinte="text-white/85" />
+          <Chiffre n={bilan.v} cle="fiche_v" teinte="text-emerald-300" delaiMs={instantCadre * 1000 + 80} />
+          <Chiffre n={bilan.d} cle="fiche_d" teinte="text-rose-300" delaiMs={instantCadre * 1000 + 140} />
+          <Chiffre n={bilan.n} cle="fiche_n" teinte="text-white/85" delaiMs={instantCadre * 1000 + 200} />
         </div>
       </motion.div>
 
