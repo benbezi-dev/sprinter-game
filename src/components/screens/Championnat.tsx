@@ -8,7 +8,7 @@ import {
 } from '@/game/ceremonie-championnat';
 import { saluerALAccueil } from '@/game/scene-accueil';
 import { Drapeau, drapeauDe } from '@/components/Insignes';
-import { rejouerCourse } from '@/game/champ-rejeu';
+import { rejouerCourse, niveauDuLieu } from '@/game/champ-rejeu';
 import { entrerEnDirect } from '@/game/champ-direct';
 import { EST_TEST } from '@/game/canal';
 import { getSavedName } from '@/game/leaderboard';
@@ -653,6 +653,36 @@ function PodiumSurLaPiste({ e, onFerme }: { e: Edition; onFerme: () => void }) {
 
   const fin = arrivee(e, 'finale', 1);
   const trois = fin.slice(0, 3);
+
+  /**
+   * LE SACRE SE TIENT DANS LE STADE DE L'EDITION.
+   *
+   * La piste qu'on voit derriere le podium est celle que l'accueil a construite
+   * — l'etape de la carriere, le plus souvent. Une edition qui impose son lieu
+   * (`lieu` de /champ/edition : le Champ-de-Mars pour le premier Championnat de
+   * France) y a couru toutes ses courses, en direct comme au rejeu ; son titre
+   * doit s'y remettre aussi. On construit donc ce stade a l'ouverture, et l'on
+   * remet celui d'avant a la fermeture.
+   *
+   * L'epreuve de l'accueil, elle, ne change pas. La camera de l'accueil tient
+   * sa place par epreuve (voir `placerLaCameraDeLAccueil`) et ne peut pas la
+   * remesurer pendant que l'ecran-titre est efface : changer d'epreuve ici
+   * laisserait un ecran sans stade.
+   *
+   * Un lieu que ce jeu ne connait pas ne deplace rien : on reste ou l'on est
+   * plutot que d'aller au stade olympique de `niveauDuLieu`.
+   */
+  useEffect(() => {
+    const G: any = SprinterApp.G;
+    const ici = niveauDuLieu(e.lieu);
+    if (!G || !e.lieu || SprinterApp.LEVELS?.[ici]?.cle !== e.lieu) return;
+    const avant = G.levelIdx;
+    if (avant === ici) return;
+    SprinterApp.buildLevel(ici);
+    return () => {
+      if (G.state === 'title' && G.levelIdx === ici) SprinterApp.buildLevel(avant);
+    };
+  }, [e.lieu]);
 
   /**
    * Un athlete salue sur la piste, derriere le podium.
