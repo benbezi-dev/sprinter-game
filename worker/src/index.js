@@ -17,6 +17,7 @@ import {
   ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
   annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances, courirSansPersonne,
+  cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
@@ -98,6 +99,32 @@ const relaisOuvert = () => true;
  * fil, les titres, sa propre edition — reste ouvert a tous.
  */
 const championnatsOuverts = () => true;
+
+/**
+ * Une finale sacre. C'est le moment le plus fort du bareme apres la tete d'un
+ * classement : une date, un nom, un titre.
+ *
+ * Deux chemins y menent — la cloture a la main (`/champ/cloturer`) et celle
+ * que la tache planifiee tient a l'heure du calendrier — et ils doivent dire la
+ * meme chose au dehors. D'ou une seule fonction, que les deux appellent avec
+ * ce que `cloturerPhase` a rendu. Elle ne rend rien pour une phase qui ne
+ * sacre pas, et `noter()` refuse d'elle-meme le canal de test.
+ */
+function signalerSacre(canal, edition, r) {
+  if (!r || r.erreur || !r.finale || !r.podium) return null;
+  const [or, argent] = r.podium;
+  return regarderSacre(canal, {
+    id: edition,
+    echelon: r.echelon || null,
+    pays: r.zone || null,
+    epreuve: r.epreuve || null,
+    champion: or ? or.nom : null,
+    chrono_ms: or ? or.ms : null,
+    deuxieme: argent ? argent.nom : null,
+    deuxieme_ms: argent ? argent.ms : null,
+    partants: Array.isArray(r.classement) ? r.classement.length : null,
+  });
+}
 /**
  * Le mot du vainqueur : ouvert avec les duels, comme annonce.
  *
@@ -1046,10 +1073,26 @@ export default {
           .catch(e => console.log('nations KO', nom, String(e && e.message || e)))
       );
       // Les series que personne n'est venu courir : voir courirSansPersonne.
+      //
+      // PUIS les phases dont l'heure est venue : voir cloturerAuxHeures. A la
+      // suite et non en parallele — une finale que personne n'est venu courir
+      // se range a +15 min, et son sacre tombe a +20 : le lire avant le
+      // rangement ferait attendre le sacre d'un passage pour rien.
+      const canalDuCron = { test: nom === 'test', nom: null, db };
       ctx.waitUntil(
         courirSansPersonne(db, quand)
           .then(r => { if (r.length) console.log('champ courses rangees', nom, JSON.stringify(r)); })
           .catch(e => console.log('champ rangement KO', nom, String(e && e.message || e)))
+          .then(() => cloturerAuxHeures(db, quand))
+          .then(closes => {
+            if (!closes.length) return;
+            console.log('champ phases closes', nom, JSON.stringify(closes.map(c => ({
+              edition: c.edition, moment: c.moment, erreur: c.erreur || null,
+              champion: c.finale ? c.champion : undefined,
+            }))));
+            return Promise.all(closes.map(c => signalerSacre(canalDuCron, c.edition, c)));
+          })
+          .catch(e => console.log('champ phases KO', nom, String(e && e.message || e)))
       );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
@@ -2126,31 +2169,8 @@ async function servir(request, env, ctx, porteur) {
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const edition = String(body.edition || '').toUpperCase();
         const r = await cloturerPhase(env.DB, edition);
-
-        // Une finale sacre. C'est le moment le plus fort du bareme apres la
-        // tete d'un classement : une date, un nom, un titre.
-        //
-        // A ce jour l'appel ne produit rien, et c'est normal : les
-        // championnats sont reserves au canal de test (`championnatsOuverts`
-        // juste au-dessus), et `noter()` refuse le canal de test. Le crochet
-        // est pose pour le jour ou ils s'ouvriront — le brancher ce jour-la,
-        // dans un fichier qu'on aura oublie, coute plus cher que de le poser
-        // maintenant a l'endroit qui sait.
-        if (r && !r.erreur && r.finale && r.podium) {
-          const [or, argent] = r.podium;
-          ctx.waitUntil(regarderSacre(canal, {
-            id: edition,
-            echelon: r.echelon || null,
-            pays: r.zone || null,
-            epreuve: r.epreuve || null,
-            champion: or ? or.nom : null,
-            chrono_ms: or ? or.ms : null,
-            deuxieme: argent ? argent.nom : null,
-            deuxieme_ms: argent ? argent.ms : null,
-            partants: Array.isArray(r.classement) ? r.classement.length : null,
-          }));
-        }
-
+        const signal = signalerSacre(canal, edition, r);
+        if (signal) ctx.waitUntil(signal);
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
 

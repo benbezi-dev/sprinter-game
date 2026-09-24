@@ -1969,6 +1969,43 @@ export async function courirSansPersonne(db, maintenant = Date.now()) {
 }
 
 /**
+ * LES PHASES SE CLOSENT A L'HEURE QUE LE CALENDRIER AFFICHE.
+ *
+ * Le calendrier annonce trois moments qui ne sont pas des courses : la
+ * revelation des repeches du samedi soir, celle du dimanche apres-midi, et le
+ * sacre. Chacun est une cloture de phase — `cloturerPhase` produit les deux
+ * revelations et le sacre, rien d'autre ne les produit. Tant que cette
+ * cloture n'etait appelee que par `/champ/cloturer`, a la main et avec la cle,
+ * le jeu affichait « cérémonie 21:20 » et l'heure passait sans que rien
+ * n'arrive : l'edition restait en series pour toujours.
+ *
+ * La tache planifiee tient donc le rendez-vous elle-meme. Le moment est celui
+ * de la phase EN COURS qui porte `reveal` ou `ceremonie` ; une fois la phase
+ * close, l'edition passe a la suivante et ce moment ne la concerne plus, ce qui
+ * rend l'appel sans danger a chaque passage.
+ *
+ * Une phase dont une course manque n'est pas forcee : `cloturerPhase` refuse,
+ * et le passage suivant reessaie. C'est le cas d'une salle qui a repousse son
+ * pistolet et court encore a l'heure du sacre. Vingt-quatre heures au plus,
+ * comme `courirSansPersonne`, pour ne pas clore apres coup les vieilles
+ * editions d'essai de la base de test.
+ */
+export async function cloturerAuxHeures(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results: eds } = await db.prepare(
+    `SELECT id FROM champ_editions WHERE etat = 'ouverte'`).all();
+  const closes = [];
+  for (const { id } of eds || []) {
+    const e = await etatEdition(db, id);
+    if (!e) continue;
+    const rv = (e.calendrier || []).find(r => r.phase === e.phase && (r.reveal || r.ceremonie));
+    if (!rv || !(rv.at <= maintenant && maintenant < rv.at + 24 * 3600 * 1000)) continue;
+    closes.push({ edition: id, phase: e.phase, moment: rv.cle, ...(await cloturerPhase(db, id)) });
+  }
+  return closes;
+}
+
+/**
  * Les raisons pour lesquelles un partant n'a pas de chrono. Voir la colonne
  * `motif` de `champ_resultats`.
  */
