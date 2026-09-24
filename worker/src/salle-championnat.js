@@ -21,9 +21,11 @@
       chronos, et pour les autres la raison de leur absence.
    5. LES FICTIFS. Une grille completee par des partants fictifs (voir
       tools/champ-combler.mjs) les fait courir : engages d'office a l'appel,
-      un chrono fixe d'avance (chronoFictif), jamais de faux depart. Les
-      telephones les font courir a ce chrono ; la salle attend qu'ils aient
-      franchi la ligne avant de rendre son verdict.
+      un chrono fixe d'avance (chronoFictif). Dans chaque serie et chaque
+      demie, l'un d'eux vole le premier depart (fauxDepartFictif) : la salle
+      le signale elle-meme avant le coup, et il prend son carton comme un
+      vrai. Les telephones font courir les autres a leur chrono ; la salle
+      attend qu'ils aient franchi la ligne avant de rendre son verdict.
 
    Le canal de test et la production sont deux objets distincts, adresses par
    des noms distincts (voir index.js), et chacun ecrit dans sa propre base.
@@ -198,6 +200,7 @@ export class SalleChampionnat {
         cle: g.cle, nom: g.nom, couloir: g.couloir, ws: null,
         statut: 'attente', d: 0, c: null, fin: null, motif: null, motif_ms: null,
         fictif: !!g.fictif, cible: g.fictif ? g.ms : null,
+        faux_ms: g.fictif ? (g.faux_ms ?? null) : null,
       });
     }
     if (c.deja) { this.phase = 'terminee'; this.erreur = 'course deja courue'; }
@@ -270,6 +273,17 @@ export class SalleChampionnat {
     for (const c of this.engages()) { c.d = 0; c.c = null; if (!c.fictif) c.fin = null; }
     const n = this.departN;
     this.plus_tard(date - Date.now(), () => this.coupDePistolet(n));
+    // Le fictif qui vole le depart ne le vole qu'une fois, au premier : la
+    // salle le signale a sa place, a l'instant ou il serait parti.
+    if (n === 1) {
+      for (const c of this.engages()) {
+        if (!c.fictif || c.faux_ms == null) continue;
+        const ms = c.faux_ms;
+        this.plus_tard(Math.max(0, date + ms - Date.now()), () => {
+          if (n === this.departN) this.signaler(c, { faux: true, ms });
+        });
+      }
+    }
   }
 
   coupDePistolet(n) {
@@ -314,7 +328,7 @@ export class SalleChampionnat {
       const c = this.coureurs.get(f.cle);
       if (!c || c.statut !== 'engage') continue;
       c.statut = 'dq'; c.motif = 'faux_depart'; c.motif_ms = f.ms;
-      c.fin = null;
+      c.fin = null; c.cible = null;
       for (const s of this.sockets.values()) if (s.cle === c.cle) s.role = 'spectateur';
       fautifs.push({ id: c.cle, cle: c.cle, nom: c.nom, couloir: c.couloir, ms: f.ms });
     }

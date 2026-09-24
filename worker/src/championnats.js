@@ -1857,13 +1857,16 @@ export async function contexteCourse(db, edition, phase, course) {
     .map((p, i) => ({ cle: p.name_key, nom: p.nom, couloir: i + 1, fictif: false }));
   if (!grille.length) return { erreur: 'course inconnue' };
   // LES PARTANTS FICTIFS — ceux que `tools/champ-combler.mjs` a poses pour
-  // completer une grille (player_pays.source = 'fictif'). Ils courent : un
-  // chrono fixe d'avance, jamais de faux depart. Voir chronoFictif.
+  // completer une grille (player_pays.source = 'fictif'). Ils courent un
+  // chrono fixe d'avance, ou volent le depart : voir chronoFictif et
+  // fauxDepartFictif.
   const fictifs = await clesFictives(db, grille.map(g => g.cle));
   for (const g of grille) {
     g.fictif = fictifs.has(g.cle);
-    if (g.fictif) g.ms = chronoFictif(e.id, phase, g.cle, e.epreuve);
+    if (g.fictif) { g.ms = chronoFictif(e.id, phase, g.cle, e.epreuve); g.faux_ms = null; }
   }
+  const fautif = fauxDepartFictif(e.id, phase, course, grille.filter(g => g.fictif).map(g => g.cle));
+  if (fautif) grille.find(g => g.cle === fautif.cle).faux_ms = fautif.ms;
   const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
   const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
   return {
@@ -1889,17 +1892,39 @@ export async function clesFictives(db, cles) {
  *
  * Deterministe — la meme edition, la meme phase, le meme partant donnent le
  * meme temps, que la course se coure en direct devant huit telephones ou soit
- * rangee par la tache planifiee — et pris dans un milieu de grille : entre
- * 10,40 et 11,40 s au 100 m. `champ-combler` les a cales au milieu du
- * classement pour qu'ils ne prennent le titre a personne ; leurs chronos
- * suivent la meme idee. Un vrai joueur qui court sa course passe devant.
+ * rangee par la tache planifiee — entre 9,05 et 9,15 s au 100 m (decide le
+ * 24/09/2026 : les cartes du championnat leur donnent un record entre 8,80 et
+ * 9,00, et un 10,90 en course aurait dementi l'affiche). C'est un chrono de
+ * repechage possible : un vrai joueur qui court en dessous de 9,05 passe
+ * devant, un vrai joueur plus lent ou absent peut rester derriere.
  */
 const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7 };
-export function chronoFictif(edition, phase, cle, epreuve) {
+function hacheFictif(texte) {
   let h = 2166136261;
-  for (const ch of `${edition}|${phase}|${cle}`) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
-  const u = ((h >>> 0) % 10000) / 10000;
-  return Math.round((10400 + u * 1000) * (FACTEUR_EPREUVE[String(epreuve)] || 1));
+  for (const ch of texte) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+export function chronoFictif(edition, phase, cle, epreuve) {
+  const u = (hacheFictif(`${edition}|${phase}|${cle}`) % 10000) / 10000;
+  return Math.round((9050 + u * 100) * (FACTEUR_EPREUVE[String(epreuve)] || 1));
+}
+
+/**
+ * LE FAUX DEPART D'UN PARTANT FICTIF : un par course, en series et en demies
+ * (choix du 24/09/2026), jamais en finale. Le fautif est tire parmi les
+ * fictifs de la course ; il part entre 30 et 150 ms avant le coup, au premier
+ * depart. Null si la course n'a pas de fictif, ou si c'est la finale.
+ *
+ * Deterministe comme le chrono : la salle le joue en direct (carton rouge,
+ * rappel, les autres repartent), la tache planifiee le range tel quel quand
+ * personne n'est venu, et le rejeu le montre — les trois disent la meme chose.
+ */
+const PHASES_A_FAUX_DEPART_FICTIF = new Set(['series', 'demies']);
+export function fauxDepartFictif(edition, phase, course, clesFictives) {
+  if (!PHASES_A_FAUX_DEPART_FICTIF.has(phase) || !clesFictives.length) return null;
+  const h = hacheFictif(`${edition}|${phase}|${course}|faux`);
+  const cles = [...clesFictives].sort();
+  return { cle: cles[h % cles.length], ms: -(30 + (Math.floor(h / cles.length) % 121)) };
 }
 
 /**
@@ -1931,9 +1956,11 @@ export async function courirSansPersonne(db, maintenant = Date.now()) {
       if ((e.resultats || []).some(r => r.phase === e.phase && r.course === rv.course)) continue;
       const c = await contexteCourse(db, id, e.phase, rv.course);
       if (c.erreur || c.deja) continue;
-      const chronos = c.grille.map(g => g.fictif
-        ? { cle: g.cle, ms: g.ms }
-        : { cle: g.cle, ms: null, motif: 'forfait' });
+      const chronos = c.grille.map(g => !g.fictif
+        ? { cle: g.cle, ms: null, motif: 'forfait' }
+        : g.faux_ms != null
+          ? { cle: g.cle, ms: null, motif: 'faux_depart', motif_ms: g.faux_ms }
+          : { cle: g.cle, ms: g.ms });
       const r = await enregistrerCourse(db, { edition: id, phase: e.phase, course: rv.course, chronos });
       rangees.push({ edition: id, phase: e.phase, course: rv.course, ok: !r.erreur, erreur: r.erreur || null });
     }

@@ -3308,6 +3308,10 @@
     for (const id of fautifs || []) {
       const g = G.lives && G.lives.get(id);
       if (g && g.runner) sortants.add(g.runner);
+      // Un fictif peut voler le depart : la salle le designe par sa cle, et
+      // il n'est pas dans G.lives — il court hors du reseau.
+      const f = G.fictifs && G.fictifs.get(id);
+      if (f) sortants.add(f);
     }
     if (moiSorti && G.player) sortants.add(G.player);
     const depart = new Map();
@@ -3442,11 +3446,16 @@
           if (g.runner === r) { G.lives.delete(id); if (G.ghost === g) G.ghost = null; }
         }
       }
+      if (G.fictifs) {
+        for (const [id, f] of [...G.fictifs]) if (f === r) G.fictifs.delete(id);
+      }
     }
     if (R.moiSorti) {
       G.spectateur = true;
       if (!G.suivi || R.sortants.has(G.suivi)) G.suivi = premierEnLice();
     }
+    // Le spectateur qui suivait un fautif — un fictif compris — change de couloir.
+    else if (G.suivi && R.sortants.has(G.suivi)) G.suivi = premierEnLice();
     for (const r of G.runners) reposer(r);
     if (G.lives) {
       for (const g of G.lives.values()) {
