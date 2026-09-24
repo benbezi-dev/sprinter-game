@@ -12,8 +12,11 @@ import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, partagerPhotoFinish } from '@/game/photo-finish';
 import type { MotDuVainqueur } from '@/game/champ-rejeu';
 import { RappelEnScene } from './ChampDirect';
+import { FichePresentation } from './FichePresentation';
+import { useFiches, type SourceFiches } from '@/game/fiches-champ';
 import { partagerLArrivee } from '@/game/affiche-champ';
 import { EPREUVE } from '@/game/trace-affiche';
+import { Drapeau } from '@/components/Insignes';
 
 /**
  * LA RETRANSMISSION D'UNE COURSE DE CHAMPIONNAT.
@@ -45,8 +48,14 @@ const OR = '#F8CD4A';
 
 /** Le generique, avant le premier athlete. */
 const GENERIQUE_MS = 2400;
-/** Chaque athlete. Trois secondes seraient un meeting ; ici on enchaine. */
-const PAR_ATHLETE_MS = 1750;
+/**
+ * Chaque athlete. On enchainait en une seconde trois quarts, du temps ou
+ * l'on ne lisait qu'un nom et un couloir. Chacun porte maintenant sa fiche —
+ * palmares, niveau en duel, bilan —, et elle se lit en trois secondes, comme
+ * en direct : la retransmission presente les athletes au meme rythme que le
+ * stade.
+ */
+const PAR_ATHLETE_MS = 3000;
 
 /** Le pas entre deux lignes du tableau, qui tombent du premier au dernier. */
 const CASCADE_MS = 130;
@@ -63,8 +72,9 @@ function coureurDuCouloir(couloir: number) {
 
 /* --------------------------------------------------------- la presentation */
 
-function Presentation({ titre, sousTitre, grille }: {
-  titre: string; sousTitre: string; grille: { couloir: number; nom: string }[];
+function Presentation({ titre, sousTitre, grille, fiches }: {
+  titre: string; sousTitre: string; grille: { couloir: number; nom: string; cle?: string }[];
+  fiches: (SourceFiches & { epreuve: string }) | null;
 }) {
   // −1 : le generique. 0..n−1 : l'athlete. n : fini, le starter prend la main.
   const [index, setIndex] = useState(-1);
@@ -108,6 +118,9 @@ function Presentation({ titre, sousTitre, grille }: {
     return () => { clearInterval(t); SprinterApp.presenterCoureur(null); };
   }, [grille]);
 
+  // Deja demandees au montage de la piste (voir rejouerCourse) : on relit.
+  const fiche = useFiches(fiches, grille.map(g => g.cle || '').filter(Boolean));
+
   const courant = index >= 0 && index < grille.length ? grille[index] : null;
 
   return (
@@ -117,7 +130,8 @@ function Presentation({ titre, sousTitre, grille }: {
       {/* Deux voiles plutot qu'un rideau : la piste reste visible, c'est elle
           qu'on est venu montrer. */}
       <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/85 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/90 to-transparent" />
+      <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent
+                       ${fiches ? 'h-96' : 'h-64'}`} />
 
       {/* Le bandeau de la reunion, tenu du debut a la fin : c'est lui qui dit
           qu'on n'est pas dans une course de campagne. */}
@@ -146,18 +160,31 @@ function Presentation({ titre, sousTitre, grille }: {
             </span>
           </motion.div>
         ) : (
+          /* Avec une fiche, le bloc descend au-dessus des traits de la
+             sequence, comme en direct : centre, il couvrait l'athlete que la
+             camera vient cadrer au milieu de l'ecran. */
           <motion.div key={courant.couloir} {...MONTEE}
-            className="relative self-center flex flex-col items-center gap-2 px-6 w-full">
+            className={`relative self-center flex flex-col items-center gap-2 px-6 w-full
+                        ${fiches ? 'mt-auto mb-3' : ''}`}>
             <h2 className="font-display font-black tracking-tight text-white text-center
                            leading-none text-4xl md:text-6xl break-words max-w-full
                            drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)]">
               {courant.nom}
             </h2>
             {/* Le couloir SOUS le nom, comme en direct : qui, puis ou. */}
-            <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
-                             drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
-              {SprinterApp.N.t('pres_lane')} {courant.couloir}
-            </span>
+            <div className="flex items-baseline gap-3">
+              {courant.cle && fiche(courant.cle)?.pays && (
+                <Drapeau pays={fiche(courant.cle)!.pays} className="text-base" />
+              )}
+              <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
+                               drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+                {SprinterApp.N.t('pres_lane')} {courant.couloir}
+              </span>
+            </div>
+            {/* Puis ce qu'il a gagne, a quel niveau il se bat, et son bilan. */}
+            {fiches && courant.cle && (
+              <FichePresentation fiche={fiche(courant.cle)} epreuve={fiches.epreuve} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -550,7 +577,8 @@ export function RejeuChampionnat() {
   if (!etat.actif) return null;
 
   if (etat.phase === 'presentation') {
-    return <Presentation titre={etat.titre} sousTitre={etat.sousTitre} grille={etat.grille} />;
+    return <Presentation titre={etat.titre} sousTitre={etat.sousTitre} grille={etat.grille}
+                         fiches={etat.fiches} />;
   }
   if (etat.phase === 'arrivee' && etat.arrivee) {
     return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee}

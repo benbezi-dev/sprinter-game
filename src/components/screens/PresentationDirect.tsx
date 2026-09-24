@@ -4,7 +4,10 @@ import { MONTEE, FONDU, SURGISSEMENT } from '@/lib/mouvement';
 import { Mic, MicOff } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { usePresentationDirecte } from '@/game/presentation-directe';
+import { useFiches } from '@/game/fiches-champ';
+import { Drapeau } from '@/components/Insignes';
 import type { EtatVoix } from '@/game/voix';
+import { FichePresentation } from './FichePresentation';
 
 /**
  * La presentation des participants, sur la piste.
@@ -119,10 +122,16 @@ export function PresentationDirect() {
     return () => { clearInterval(t); SprinterApp.presenterCoureur(null); };
   }, [enCours]);
 
+  // Les fiches du championnat. Le branchement les a deja demandees a la
+  // chambre d'appel (voir champ-direct) : ici on relit, et on ne redemande que
+  // ce qui manquerait.
+  const fiche = useFiches(enCours?.fiches, enCours?.fiches ? enCours.presentation.ordre.map(o => o.id) : []);
+
   if (!enCours) return null;
   const { ordre } = enCours.presentation;
   const courant = index >= 0 && index < ordre.length ? ordre[index] : null;
   const estMoi = !!courant && courant.id === enCours.moi;
+  const saFiche = courant && enCours.fiches ? fiche(courant.id) : undefined;
 
   return (
     <div className="fixed inset-0 z-40 pointer-events-none flex flex-col justify-between
@@ -131,7 +140,10 @@ export function PresentationDirect() {
       {/* Deux voiles, en haut et en bas, plutot qu'un rideau : la piste doit
           rester visible, c'est elle qu'on est venu montrer. */}
       <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/85 to-transparent" />
+      {/* Plus haut quand une fiche suit le nom : elle doit se lire sur la
+          piste, pas sur la pelouse claire d'un stade de jour. */}
+      <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent
+                       ${enCours.fiches ? 'h-96' : 'h-56'}`} />
 
       <p className="relative text-center text-[10px] tracking-[0.4em] text-emerald-400/90
                     font-bold uppercase">
@@ -163,6 +175,7 @@ export function PresentationDirect() {
               {/* LE COULOIR SOUS LE NOM : on lit d'abord qui, puis ou il court
                   — et c'est le chiffre peint devant ses blocs. */}
               <div className="flex items-baseline gap-3">
+                {saFiche?.pays && <Drapeau pays={saFiche.pays} className="text-base" />}
                 <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
                                  drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
                   {N.t('pres_lane')} {courant.couloir}
@@ -173,7 +186,10 @@ export function PresentationDirect() {
                   </span>
                 )}
               </div>
-              <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />
+              {/* En championnat, pas de micro : la fiche prend sa place. */}
+              {enCours.fiches
+                ? <FichePresentation fiche={saFiche} epreuve={enCours.fiches.epreuve} />
+                : <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />}
             </motion.div>
           )}
         </AnimatePresence>

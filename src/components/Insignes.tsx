@@ -114,6 +114,12 @@ const TEINTES: Record<Etage, string> = {
   legende:       'text-fuchsia-300 border-fuchsia-400/50 bg-fuchsia-400/12',
 };
 
+/** La teinte d'un etage, pour qui dessine son propre ecusson (la fiche de la
+ *  presentation, en plus grand) sans en inventer une autre. */
+export function teinteDuRang(etage: Etage): string {
+  return TEINTES[etage] || TEINTES.departemental;
+}
+
 const ROMAINS = ['', 'I', 'II', 'III', 'IV'];
 
 /** Le rang lisible : « NATIONAL II », ou « LÉGENDE ». */

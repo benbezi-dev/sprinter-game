@@ -20,7 +20,7 @@ import {
   prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
-  medaillesDe, paysDe, listeNations,
+  medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
   poserMotDeCourse, voixDuMot,
 } from './championnats.js';
@@ -1862,6 +1862,21 @@ async function servir(request, env, ctx, porteur) {
         const v = await voixDuMot(env.DB, edition, phase, course);
         if (!v) return json({ error: 'pas de voix' }, 404);
         return json(v);
+      }
+
+      /* LES FICHES DE LA PRESENTATION : palmares, niveau de duel et bilan de
+         chaque partant, pour la presentation sur la piste — en direct comme
+         en retransmission. `cles` : les partants a presenter, separes par
+         des virgules. `avant` : l'heure de la course, pour qu'un rejeu
+         n'annonce pas la medaille que la course va donner (voir fichesDe). */
+      if (sous === 'fiches' && request.method === 'GET') {
+        const edition = String(url.searchParams.get('edition') || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,12}$/.test(edition)) return json({ error: 'edition invalide' }, 400);
+        const cles = String(url.searchParams.get('cles') || '').split(',');
+        const avant = Number(url.searchParams.get('avant'));
+        const r = await fichesDe(env.DB, edition, cles, avant);
+        if (!r) return json({ error: 'edition introuvable' }, 404);
+        return json(r);
       }
 
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
