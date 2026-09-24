@@ -508,7 +508,12 @@ export function updateLogic(dt: number) {
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
-  if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
+  // Le championnat en direct joue son propre morceau, cale sur la salle (voir
+  // game/musique-championnat.ts) : la musique de course ferait deux morceaux a
+  // la fois. Tant qu'il n'est pas charge, ce drapeau reste faux et la course
+  // garde la sienne.
+  if (G.musiqueChamp) Audio_.stop();
+  else if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
   else if (G.state === 'cut') {
     // Le generique porte sa propre musique, et c'est la seule cinematique dans
     // ce cas : la boucle du menu par-dessus un morceau ferait deux musiques a

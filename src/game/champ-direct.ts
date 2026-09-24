@@ -22,6 +22,10 @@ import { brancherSalle } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
 import { chargerFiches } from './fiches-champ';
+import {
+  entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle,
+  verdictRendu, arreterLaMusique,
+} from './musique-championnat';
 
 const SprinterApp: any = (globalThis as any).SprinterApp;
 
@@ -155,6 +159,7 @@ function ecouteurs() {
     onPresentation: (p: Presentation) => {
       presEnCours = true;
       publier({ etape: 'presentation' });
+      presentationAnnoncee(p.dansMs, p.ordre.length);
       monterLaPiste();
       lancerPresentation({
         presentation: p,
@@ -174,6 +179,7 @@ function ecouteurs() {
     onDepart: (dansMs: number, departA: number) => {
       cibleDepart = Date.now() + dansMs;
       dateDepart = departA;
+      pistoletAnnonce(dansMs);
       if (!presEnCours) lancerCourse();
     },
     onPos: (id: string, d: number, c?: number) => SprinterApp.liveDistDe(id, d, c),
@@ -183,6 +189,9 @@ function ecouteurs() {
     onRappel: (r: Rappel, dansMs: number | null) => {
       const moiSorti = r.fautifs.some(f => f.id === etat.moi);
       const nouveauPistolet = dansMs == null ? null : Date.now() + dansMs;
+      // La musique se tait pendant la scene, et reprend au 3-2-1 du nouveau depart.
+      rappelSiffle();
+      if (dansMs != null) pistoletAnnonce(dansMs);
       // L'etat que porte le rappel est deja celui d'apres : les fautifs y sont
       // en `dq`. Sans le republier, l'ecran proposait encore de suivre un
       // coureur qui venait de quitter la piste.
@@ -208,6 +217,7 @@ function ecouteurs() {
       }, r.rappel_ms);
     },
     onResultat: (r: any) => {
+      verdictRendu();
       publier({ resultat: { classement: r.classement || [], partants: r.partants || 0 },
                 etape: etat.etape === 'rappel' ? 'rappel' : 'fin' });
     },
@@ -238,6 +248,9 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   epreuve = opts.epreuve || '100';
   niveau = niveauDuLieu(opts.lieu);
   cibleDepart = null; dateDepart = null; presEnCours = false;
+  // Le morceau du tour se charge des l'entree : la chambre d'appel laisse
+  // plusieurs minutes avant la presentation.
+  entrerDansLeTour(phase);
   const s = new Salle(`${ed}-${phase}-${course}`, ecouteurs());
   salle = s;
   brancherSalle({
@@ -273,6 +286,7 @@ export function quitterDirect(accueil = true) {
   }
   brancherSalle(null);
   lancerPresentation(null);
+  arreterLaMusique();
   const etaitOuvert = etat.ouvert;
   publier({ ...VIDE });
   if (accueil && etaitOuvert) {

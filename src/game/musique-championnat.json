@@ -1,0 +1,92 @@
+{
+  "sr": 48000,
+  "tours": {
+    "series": {
+      "marqueur": 0.10010416666666666,
+      "segments": {
+        "presentation": {
+          "debut": 0.75,
+          "duree": 29.5
+        },
+        "boucle": {
+          "debut": 31,
+          "duree": 12.8,
+          "boucle": true
+        },
+        "depart": {
+          "debut": 44.55,
+          "duree": 5.5
+        },
+        "ligne": {
+          "debut": 50.3,
+          "duree": 7.5
+        },
+        "fin": {
+          "debut": 58.05,
+          "duree": 5.5
+        }
+      }
+    },
+    "demies": {
+      "marqueur": 0.10010416666666666,
+      "segments": {
+        "presentation": {
+          "debut": 0.75,
+          "duree": 29.5
+        },
+        "boucle": {
+          "debut": 31,
+          "duree": 11.162792,
+          "boucle": true
+        },
+        "depart": {
+          "debut": 42.912792,
+          "duree": 5.5
+        },
+        "ligne": {
+          "debut": 48.662792,
+          "duree": 7.5
+        },
+        "fin": {
+          "debut": 56.412792,
+          "duree": 5.5
+        }
+      }
+    },
+    "finale": {
+      "marqueur": 0.10010416666666666,
+      "segments": {
+        "presentation": {
+          "debut": 0.75,
+          "duree": 29.5
+        },
+        "boucle": {
+          "debut": 31,
+          "duree": 12,
+          "boucle": true
+        },
+        "boucleMontee": {
+          "debut": 44.25,
+          "duree": 12,
+          "boucle": true
+        },
+        "depart": {
+          "debut": 57,
+          "duree": 5.5
+        },
+        "ligne": {
+          "debut": 62.75,
+          "duree": 7.5
+        },
+        "fin": {
+          "debut": 70.5,
+          "duree": 5.5
+        },
+        "finMontee": {
+          "debut": 76.25,
+          "duree": 5.5
+        }
+      }
+    }
+  }
+}

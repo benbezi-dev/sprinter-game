@@ -67,6 +67,13 @@ export function usePouls(): Pouls {
 
 /* ---------------------------------------------------------- la sequence */
 
+/**
+ * Le morceau du championnat joue-t-il ? Il porte deja son coup sourd et son
+ * coeur, a son tempo (voir game/musique-championnat.ts) : les notres, poses a
+ * une autre periode, tomberaient a contretemps. L'ecran bat toujours.
+ */
+const muetParLaMusique = (): boolean => !!app()?.G?.musiqueChamp;
+
 let sources: any[] = [];
 let minuteurs: ReturnType<typeof setTimeout>[] = [];
 
@@ -82,7 +89,7 @@ function toutAnnuler() {
  * aigu, comme un vrai coeur — et l'ecran recoit son pouls au premier coup.
  */
 function coeur(debut: number, fin: number, periode: number, force: number) {
-  const A = app()?.Audio_;
+  const A = muetParLaMusique() ? null : app()?.Audio_;
   for (let t = debut; t < fin; t += periode) {
     if (A) {
       sources.push(A.sfx('coeur', { gain: 0.45 + 0.3 * force, delay: t }));
@@ -101,7 +108,7 @@ function coeur(debut: number, fin: number, periode: number, force: number) {
  */
 export function ouvrirLaPresentation(avantMs: number, dureeMs: number) {
   toutAnnuler();
-  try { app()?.Audio_?.retrait?.(Math.max(0, (avantMs + dureeMs) / 1000)); } catch { /* sans le son */ }
+  if (!muetParLaMusique()) try { app()?.Audio_?.retrait?.(Math.max(0, (avantMs + dureeMs) / 1000)); } catch { /* sans le son */ }
   if (avantMs > 400) coeur(0.2, avantMs / 1000 - 0.3, 1.05, 0);
 }
 
@@ -116,7 +123,7 @@ export function ouvrirLeCreneau(i: number, n: number, parMs: number): { pousse: 
   toutAnnuler();
   const avance = n > 1 ? Math.min(1, Math.max(0, i / (n - 1))) : 1;
   const calme = sobre();
-  const A = app()?.Audio_;
+  const A = muetParLaMusique() ? null : app()?.Audio_;
   // L'IMPACT : le meme coup de coeur, joue plus grave et plus fort — un coup
   // de grosse caisse dans un stade qui s'est tu.
   try { A?.sfx('coeur', { gain: 0.85 + 0.15 * avance, rate: 0.6 }); } catch { /* sans le son */ }
