@@ -43,13 +43,42 @@
   // -------------------------------------------------------------------
   // LES IMAGES, CHARGEES A LA DEMANDE ET UNE SEULE FOIS.
   // -------------------------------------------------------------------
+  //
+  // ET RENDUES QUAND LE STADE N'EST PLUS A L'ECRAN. Une image se paie en
+  // memoire a sa taille DECODEE, pas a celle du fichier : les perches de
+  // « day » pesent 40 Ko sur le disque et 5 Mo chacune une fois decodees, et
+  // un stade complet monte a 160 Mo. Garder tous les stades visites d'une
+  // partie, c'etait cumuler pres d'un demi-giga de pixels que plus rien ne
+  // dessinait. Un stade qu'on n'a pas dessine depuis OUBLI_MS est donc
+  // oublie ; il se recharge du cache HTTP si l'on y revient. Le materiel
+  // (les blocs de depart) sert partout et reste.
   const images = new Map();
+  const vuLe = new Map();            // stade -> derniere fois dessine
+  const OUBLI_MS = 8000;
+  function oublier() {
+    const t = performance.now();
+    for (const [stade, quand] of vuLe) {
+      if (stade === 'materiel' || t - quand < OUBLI_MS) continue;
+      vuLe.delete(stade);
+      const pre = stade + '/';
+      for (const [cle, im] of images) {
+        if (!cle.startsWith(pre)) continue;
+        im.onerror = null;
+        im.removeAttribute('src');
+        images.delete(cle);
+      }
+    }
+  }
+  if (typeof setInterval === 'function') setInterval(oublier, OUBLI_MS / 2);
+
   function image(stade, f) {
     const cle = stade + '/' + f;
+    vuLe.set(stade, performance.now());
     let im = images.get(cle);
     if (!im) {
       im = new Image();
-      im.decoding = 'async'; im.onerror = () => setTimeout(() => images.delete(cle), 2000);
+      im.decoding = 'async';
+      im.onerror = () => setTimeout(() => { if (images.get(cle) === im) images.delete(cle); }, 2000);
       im.src = BASE + '/decors/' + cle;
       images.set(cle, im);
     }

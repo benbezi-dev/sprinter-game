@@ -36,9 +36,11 @@
   // -------------------------------------------------------------------
   const atlas = {};
   let pret = false;
+  let dernierDessin = 0;             // voir oublier()
   function charger() {
     const man = MAN();
     if (!man) return false;
+    dernierDessin = performance.now();
     if (pret) return true;
     let tous = true;
     for (const p of man.passes) {
@@ -82,7 +84,20 @@
   // LA COMPOSITION D'UNE IMAGE
   // -------------------------------------------------------------------
   const PPM_IMAGE = 80;           // pixels par metre des images composees
-  const MAX_IMAGES = 1400;        // au-dela, on oublie les plus anciennes
+  // LE PLAFOND DOIT TENIR TOUT CE QU'ON PRECOMPOSE — ou la precomposition ne
+  // s'arrete jamais. Une piste a virage presente ses spectateurs sous les
+  // vingt-six caps, soit 26 × (1 + 3 poses × 5 peaux × 7 hauts) = 2 756
+  // images, pour 1 400 places : chaque image hors course composait les
+  // premieres, chassait les plus anciennes, et recommencait a l'image
+  // suivante. Des dizaines de toiles creees et jetees par seconde, a l'accueil
+  // comme au decompte, et jusqu'a 70 Mo de pixels tenus pour rien.
+  //
+  // Le plafond descend donc a ce que l'ecran montre vraiment (quelques caps a
+  // la fois), la precomposition s'arrete aux trois quarts, et l'oubli suit
+  // le dernier USAGE et non la premiere composition : un spectateur a
+  // l'image n'est jamais chasse par un autre qu'on ne voit pas.
+  const MAX_IMAGES = 800;
+  const PRECOMPOSE_MAX = MAX_IMAGES * 0.75;
   const cache = new Map();
   let _tmp = null;
   let budget = 0;
@@ -122,10 +137,15 @@
     c.drawImage(t, 0, 0);
   }
 
-  function image(pose, capI, peau, haut, siege) {
+  function image(pose, capI, peau, haut, siege, avance) {
     const cle = pose + '|' + capI + '|' + peau + '|' + haut + '|' + siege;
     let e = cache.get(cle);
-    if (e) return e;
+    if (e) {
+      // dessine : il repasse en tete de file. Compose d'avance : on ne touche
+      // a rien, sans quoi la precomposition deciderait seule de ce qui reste.
+      if (!avance) { cache.delete(cle); cache.set(cle, e); }
+      return e;
+    }
     if (budget <= 0 || performance.now() > limite) return null;
     budget--;
     const man = MAN();
@@ -296,13 +316,14 @@
     // (4 862 × 1 188 chacune, decodees au premier dessin) — coutait 62 ms en
     // pleine course ; les suivantes, 0,4 ms. Faite ici, elle tombe pendant la
     // presentation ou le decompte.
-    if (G.state !== 'race') {
+    if (G.state !== 'race' && cache.size < PRECOMPOSE_MAX) {
       for (const capI of capsVus) {
-        if (!image(iVide, capI, 0, 0, siegeC)) return true;
+        if (cache.size >= PRECOMPOSE_MAX) return true;
+        if (!image(iVide, capI, 0, 0, siegeC, true)) return true;
         for (let pose = 0; pose < 3; pose++) {
           for (const peau of peauxC) {
             for (const haut of hautsL) {
-              if (!image(pose, capI, peau, haut, siegeC)) return true;
+              if (!image(pose, capI, peau, haut, siegeC, true)) return true;
             }
           }
         }
@@ -310,6 +331,22 @@
     }
     return true;
   }
+
+  // PLUS DE TRIBUNE A L'ECRAN, PLUS D'ATLAS EN MEMOIRE. Les quatre planches
+  // pesent 23 Mo chacune une fois decodees — 92 Mo, plus les images
+  // composees, gardes pendant tout un menu ou rien ne les dessine. Passe
+  // OUBLI_MS sans un seul dessin, on les rend ; elles reviennent du cache
+  // HTTP a la prochaine tribune, et se recomposent hors course, comme au
+  // premier passage.
+  const OUBLI_MS = 10000;
+  function oublier() {
+    if (!pret && !Object.keys(atlas).length) return;
+    if (performance.now() - dernierDessin < OUBLI_MS) return;
+    for (const p in atlas) { atlas[p].removeAttribute('src'); delete atlas[p]; }
+    pret = false;
+    cache.clear(); capsVus.clear(); capsDuTrace = null; _themeCourant = null;
+  }
+  if (typeof setInterval === 'function') setInterval(oublier, OUBLI_MS / 2);
 
   root.Tribune = { dessiner, pret: () => charger() };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
