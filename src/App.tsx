@@ -16,7 +16,7 @@ import { useBackGuard } from '@/hooks/use-back-guard';
 import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
-import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
+import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
@@ -53,6 +53,7 @@ import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { InviteNotifs } from '@/components/screens/InviteNotifs';
+import { TchatRapide } from '@/components/screens/TchatRapide';
 import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
@@ -385,6 +386,12 @@ function MainGame() {
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}
       <PresentationDirect />
+      {/* Le tchat rapide des salles de course : des phrases ecrites par le
+          jeu, envoyees par les joueurs. Il vit ici pour la meme raison que la
+          presentation — la salle survit au changement d'ecran, et ses bulles
+          avec elle. La constante en tete du && le sort du build tant qu'il
+          n'est ouvert que sur le canal de test. */}
+      {TCHAT_RAPIDE_OUVERT && <TchatRapide />}
       {/* Les trois autres jeux, atteints par un geste depuis l'accueil. */}
       {MONDES_OUVERTS && <Mondes />}
       <InstallPrompt />

@@ -18,6 +18,7 @@
 
 import { getSavedName, getDeviceId } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
+import { brancherRapide, debrancherRapide, recevoirRapide, refusRapide } from './tchat-rapide';
 import type { Etage } from './duels';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -275,6 +276,7 @@ export class Salle {
     }
     const ws = new WebSocket(avecAcces(`${WS_BASE}/live/${this.code}?${q}`));
     this.ws = ws;
+    brancherRapide(this);
 
     ws.onopen = () => {
       // Trois mesures d'horloge d'affilee : on garde la meilleure, celle dont
@@ -290,6 +292,7 @@ export class Salle {
     ws.onerror = () => this.ec.onFerme?.('reseau');
     ws.onclose = () => {
       clearInterval(this.timerPing);
+      debrancherRapide(this);
       this.ec.onFerme?.('fermee');
     };
   }
@@ -314,6 +317,7 @@ export class Salle {
 
   private ouvrir(ws: WebSocket) {
     this.ws = ws;
+    brancherRapide(this);
     ws.onopen = () => {
       this.pings = 0;
       this.meilleur = Infinity;
@@ -324,6 +328,7 @@ export class Salle {
     ws.onerror = () => this.ec.onFerme?.('reseau');
     ws.onclose = () => {
       clearInterval(this.timerPing);
+      debrancherRapide(this);
       this.ec.onFerme?.('fermee');
     };
   }
@@ -393,6 +398,14 @@ export class Salle {
       }
       case 'enregistre':
         this.ec.onEnregistre?.(!!m.ok, m.erreur || null);
+        return;
+      // Le tchat rapide : il ne regarde pas l'ecran en cours, et passe donc
+      // a cote des ecouteurs — les bulles vivent au-dessus des ecrans.
+      case 'rapide':
+        recevoirRapide(this, m);
+        return;
+      case 'rapide_refus':
+        refusRapide();
         return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.
@@ -472,9 +485,12 @@ export class Salle {
     this.envoyer({ t: 'faux_depart', ms: Math.round(ms), n: this.departN });
   }
   abandon() { this.envoyer({ t: 'abandon' }); }
+  /** Une phrase du tchat rapide : son identifiant, jamais son texte. */
+  rapide(q: string) { this.envoyer({ t: 'rapide', q }); }
 
   fermer() {
     clearInterval(this.timerPing);
+    debrancherRapide(this);
     try { this.ws?.close(); } catch { /* deja fermee */ }
     this.ws = null;
   }

@@ -26,6 +26,9 @@ import {
 } from '@/game/film-course';
 import { lancerPresentation } from '@/game/presentation-directe';
 import { ReviewVideo } from './ReviewVideo';
+import { IconeRapide } from './TchatRapide';
+import { ouvrirChoixRapide } from '@/game/tchat-rapide';
+import { TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 
 
 /** Le mot du vainqueur, apres la course. */
@@ -844,6 +847,18 @@ export function LivePanel() {
       >
         {N.t(pret ? 'live_unready' : 'live_go')}
       </button>
+
+      {/* Le tchat rapide (TchatRapide.tsx) : ici plutot qu'en bouton
+          flottant, qui aurait mordu sur JE SUIS PRET. */}
+      {TCHAT_RAPIDE_OUVERT && (
+        <button onClick={() => ouvrirChoixRapide()}
+                className="w-full py-2 rounded-xl text-[11px] font-black font-display tracking-[0.2em]
+                           text-primary bg-white/5 hover:bg-white/10 border border-white/10
+                           flex items-center justify-center gap-2 transition-colors">
+          <IconeRapide className="w-4 h-4" />
+          {N.t('rapide_ouvrir').toUpperCase()}
+        </button>
+      )}
 
       {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
 

@@ -34,6 +34,7 @@
 import { avantDepart } from './depart.js';
 import { contexteCourse, enregistrerCourse } from './championnats.js';
 import { jugerSignalement, jugerPosition, classerLaCourse } from './faux-depart.js';
+import { rapideRecevable, DebitRapide } from './tchat-rapide.js';
 
 /** La salle ouvre un quart d'heure avant le pistolet. */
 const OUVERTURE_AVANT_MS = 15 * 60 * 1000;
@@ -111,6 +112,7 @@ export class SalleChampionnat {
     this.appelPrevuA = null;
     this.resultat = null;
     this.finFictifsA = 0;
+    this.debitRapide = new DebitRapide();  // la cadence du tchat rapide
   }
 
   // --- utilitaires ---------------------------------------------------------
@@ -467,9 +469,19 @@ export class SalleChampionnat {
     const peutCourir = !!partant && !partant.fictif && !partant.ws &&
       (this.phase === 'ouverte' || (this.phase === 'appel' && partant.statut === 'engage'));
     const id = peutCourir ? cle : 'spec-' + crypto.randomUUID().slice(0, 6);
+    // Le nom que portent ses bulles du tchat rapide. Seul le coureur parle
+    // sous le nom d'un partant : un second telephone entre sous ce nom —
+    // `verifie` vaut aussi pour un nom que personne n'a reserve — regarde, et
+    // parle en « Tribune ». Un spectateur ne garde son nom que si ce telephone
+    // peut le porter et qu'il n'est celui d'aucun partant de la serie.
+    const nomDonne = String(url.searchParams.get('name') || '').trim()
+      .replace(/[<>]/g, '').slice(0, 20);
+    const nomTchat = peutCourir ? partant.nom
+      : (verifie && !this.coureurs.has(cle) && nomDonne) || null;
     const place = { id, cle: peutCourir ? cle : null,
                     nom: partant ? partant.nom : cle || 'Spectateur',
-                    role: peutCourir ? 'coureur' : 'spectateur' };
+                    role: peutCourir ? 'coureur' : 'spectateur',
+                    nomTchat };
     this.sockets.set(serveur, place);
     if (peutCourir) partant.ws = serveur;
 
@@ -489,6 +501,7 @@ export class SalleChampionnat {
     const s = this.sockets.get(ws);
     if (!s) return;
     this.sockets.delete(ws);
+    this.debitRapide.oublier(s.id);
     const c = s.cle ? this.coureurs.get(s.cle) : null;
     if (c && c.ws === ws) {
       c.ws = null;
@@ -503,6 +516,23 @@ export class SalleChampionnat {
     if (this.phase !== 'terminee') this.envoyerEtat();
   }
 
+  /**
+   * Le tchat rapide : un identifiant de la liste, jamais du texte (voir
+   * tchat-rapide.js). La tribune d'une serie peut etre pleine : la cadence de
+   * la salle entiere est tenue en plus de celle de chacun.
+   *
+   * Une bulle sans nom verifie part sans nom — l'ecran dit « Tribune ».
+   */
+  rapide(ws, s, q) {
+    if (!rapideRecevable(q)) return;
+    const refus = this.debitRapide.juger(s.id);
+    if (refus === 'debit') {
+      try { ws.send(JSON.stringify({ t: 'rapide_refus', raison: refus })); } catch (e) { }
+    }
+    if (refus) return;
+    this.diffuser({ t: 'rapide', id: s.id, nom: s.nomTchat || null, q });
+  }
+
   recu(ws, brut) {
     const s = this.sockets.get(ws);
     if (!s) return;
@@ -512,6 +542,8 @@ export class SalleChampionnat {
       try { ws.send(JSON.stringify({ t: 'pong', a: m.a, serveur: Date.now() })); } catch (e) { }
       return;
     }
+    // Le tchat rapide, lui, est ouvert a tout le monde, tribune comprise.
+    if (m && m.t === 'rapide') { this.rapide(ws, s, m.q); return; }
     // Un spectateur ne fait que regarder : rien de ce qu'il envoie ne compte.
     if (s.role !== 'coureur') return;
     const c = this.coureurs.get(s.cle);

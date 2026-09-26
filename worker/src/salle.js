@@ -39,6 +39,7 @@ export function epreuvesDeSalle(demande) {
   return eps.length ? eps : ['100'];
 }
 import { avantDepart } from './depart.js';
+import { rapideRecevable, DebitRapide } from './tchat-rapide.js';
 
 // Personne n'attend indefiniment : une salle sans vie est liberee.
 const VIE_SALLE_MS = 20 * 60 * 1000;
@@ -165,6 +166,7 @@ export class SalleDirecte {
     this.code = '';            // le code de la salle, pose au premier appel
     this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
+    this.debitRapide = new DebitRapide();  // la cadence du tchat rapide
   }
 
   // --- utilitaires ---------------------------------------------------------
@@ -302,6 +304,7 @@ export class SalleDirecte {
     const j = this.joueurs.get(ws);
     if (!j) return;
     this.joueurs.delete(ws);
+    this.debitRapide.oublier(j.id);
     // Un depart en pleine course laisse l'autre seul : on le lui dit plutot
     // que de le laisser courir contre un couloir vide.
     this.diffuser({ t: 'sorti', id: j.id, nom: j.nom, ...this.vue() });
@@ -424,6 +427,24 @@ export class SalleDirecte {
         j.fin = ABANDON_MS;
         this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms: j.fin, abandon: true });
         this.peutTrancher();
+        return;
+      }
+
+      // Le tchat rapide : un identifiant de la liste, jamais du texte (voir
+      // tchat-rapide.js). Il repart chez tout le monde, l'envoyeur compris :
+      // sa bulle s'affiche quand la salle l'a acceptee, pas avant.
+      //
+      // Il ne tient pas la salle en vie : une salle ferme quand on n'y court
+      // plus, et six phrases toutes les vingt secondes suffiraient sinon a la
+      // garder eveillee — et facturee — indefiniment.
+      case 'rapide': {
+        if (!rapideRecevable(m.q)) return;
+        const refus = this.debitRapide.juger(j.id);
+        if (refus === 'debit') {
+          try { ws.send(JSON.stringify({ t: 'rapide_refus', raison: refus })); } catch (e) { }
+        }
+        if (refus) return;
+        this.diffuser({ t: 'rapide', id: j.id, nom: j.nom, q: m.q });
         return;
       }
     }
