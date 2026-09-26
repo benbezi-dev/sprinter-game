@@ -16,7 +16,7 @@
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
-  TENANT, lieuDeLEdition,
+  TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
@@ -30,8 +30,9 @@ import { ensureDuelTables, ordreClassement, rangDe } from './duels.js';
 // Le mot d'une course suit les memes regles de proprete que celui d'un duel :
 // meme longueur, memes types de voix, meme nettoyage des caracteres invisibles.
 // Les recopier ici serait la garantie qu'un jour les deux ne refusent plus la
-// meme chose.
-import { motPropre, voixPropre } from './mot.js';
+// meme chose. Le filtre (`texteRecevable`) vient du meme endroit, pour la meme
+// raison : la bulle, le tchat et le mot refusent tous les memes textes.
+import { motPropre, voixPropre, texteRecevable, BULLE_MAX, MAX_TEXTE } from './mot.js';
 
 const JOUR = 24 * 3600 * 1000;
 
@@ -330,7 +331,11 @@ export async function ensureChampTables(db) {
        automatique. Ici le cercle est plus large que deux — sept lecteurs, et
        le texte part aussi dans la video que le vainqueur partage. Le jour ou
        une edition reunira des inconnus, il faudra un signalement et de quoi
-       le traiter. */
+       le traiter.
+
+       Depuis le 26/09, le mot est aussi diffuse en direct a ceux qui sont
+       encore dans la salle : le texte passe donc par le filtre de mot.js
+       (`texteRecevable`), et `/champ/moderer` le retire. */
     db.prepare(`CREATE TABLE IF NOT EXISTS champ_mots (
       edition TEXT NOT NULL,
       phase TEXT NOT NULL,
@@ -342,6 +347,28 @@ export async function ensureChampTables(db) {
       voix_type TEXT,
       au INTEGER NOT NULL,
       PRIMARY KEY (edition, phase, course)
+    )`),
+
+    /* LA BULLE DE PRESENTATION (26/09) : la phrase qu'un partant des demies
+       ou de la finale fait afficher au-dessus de sa tete pendant ses trois
+       secondes de presentation. Une par partant et par phase : la reposer
+       remplace la precedente, jusqu'a l'appel de sa course.
+
+       `retire` et non une suppression : une bulle retiree par l'organisation
+       reste lisible par elle (`/champ/moderation`), pour savoir ce qui a ete
+       retire et pourquoi. Reposer une bulle remet `retire` a zero — le texte
+       neuf repasse par le filtre, comme le premier.
+
+       Une table neuve, sans colonne ajoutee apres coup : elle a donc sa place
+       dans le batch (voir plus bas pourquoi les autres n'y sont pas). */
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_bulles (
+      edition TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      texte TEXT NOT NULL,
+      au INTEGER NOT NULL,
+      retire INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (edition, phase, name_key)
     )`),
 
     // Les titres, avec leur date d'expiration : un champion le reste trois
@@ -1779,8 +1806,20 @@ export async function poserMotDeCourse(db, { edition, phase, course, nom, texte,
   const gagnant = await vainqueurDeLaCourse(db, edition, phase, course);
   if (!gagnant) return { error: 'course inconnue ou pas encore courue', code: 404 };
   if (gagnant !== k) return { error: 'reserve au vainqueur de la course', code: 403 };
+  // Un fictif ne parle pas. Son nom n'est reserve par personne : sans cette
+  // porte, n'importe qui poserait un mot a sa place quand il gagne.
+  if ((await clesFictives(db, [gagnant])).has(gagnant)) {
+    return { error: 'un partant fictif ne laisse pas de mot', code: 403 };
+  }
 
-  const t = texte ? motPropre(texte) : '';
+  // Le texte passe le filtre (le mot est diffuse en direct, voir champ_mots).
+  // Un texte vide n'est pas un refus : le mot peut n'etre qu'une voix.
+  let t = '';
+  if (texte) {
+    const f = texteRecevable(texte, MAX_TEXTE);
+    if (f.ok) t = motPropre(f.texte);
+    else if (f.raison !== 'vide') return { error: 'texte refuse', raison: f.raison, code: 400 };
+  }
   const v = voix ? voixPropre(voix, voix_type) : null;
   if (!t && !v) return { error: 'mot vide' };
 
@@ -1807,6 +1846,139 @@ export async function voixDuMot(db, edition, phase, course) {
       WHERE edition = ? AND phase = ? AND course = ?`).bind(edition, phase, course).first();
   if (!r || !r.voix) return null;
   return { voix: r.voix, voix_type: r.voix_type };
+}
+
+/* ---------------------------------------------------------------------------
+   LA BULLE DE PRESENTATION
+--------------------------------------------------------------------------- */
+
+/**
+ * On ne pose plus sa bulle quand l'appel de sa course est passe : la salle lit
+ * les bulles a l'appel, trente secondes (et une demie) avant le pistolet, et
+ * une bulle posee apres ne serait vue de personne en direct — elle apparaitrait
+ * seulement au rejeu, ce qui ne serait pas la course qu'on a vue.
+ */
+const BULLE_AVANT_PISTOLET_MS = 29500;
+
+/**
+ * Pose (ou remplace) la bulle d'un partant.
+ *
+ * Tout ce que le client a pu decider est reverifie : l'edition, la phase, que
+ * ce nom est bien partant de cette phase, que sa course n'est pas deja
+ * appelee, et le texte. L'appartenance du nom a l'appareil, elle, est verifiee
+ * par la route (`peutUtiliser`), comme partout.
+ */
+export async function poserBulle(db, { edition, phase, nom, texte }, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const k = cleNom(nom);
+  if (!k || k === 'anonyme') return { error: 'nom manquant', code: 400 };
+  const id = String(edition || '').toUpperCase();
+  if (!id) return { error: 'edition manquante', code: 400 };
+  if (!PHASES_A_BULLE.includes(phase)) {
+    return { error: 'pas de bulle dans cette phase', code: 400 };
+  }
+  const e = await db.prepare(
+    `SELECT id, phase, etat, debut FROM champ_editions WHERE id = ?`).bind(id).first();
+  if (!e) return { error: 'edition introuvable', code: 404 };
+  if (e.etat !== 'ouverte') return { error: 'edition fermee', code: 409 };
+  if (e.phase !== phase) return { error: 'ce n est pas la phase en cours', code: 409 };
+
+  const p = await db.prepare(
+    `SELECT course FROM champ_partants
+      WHERE edition = ? AND name_key = ? AND phase = ?
+        AND course IS NOT NULL AND sorti_en IS NULL`).bind(id, k, phase).first();
+  if (!p) return { error: 'pas partant de cette phase', code: 403 };
+  // Meme porte que le mot : le nom d'un fictif n'est reserve par personne.
+  if ((await clesFictives(db, [k])).has(k)) {
+    return { error: 'un partant fictif n a pas de bulle', code: 403 };
+  }
+
+  const rv = calendrierDe(id, e.debut).find(x => x.phase === phase && x.course === p.course);
+  if (!rv) return { error: 'course hors calendrier', code: 409 };
+  if (maintenant >= rv.at - BULLE_AVANT_PISTOLET_MS) {
+    return { error: 'trop tard', code: 409 };
+  }
+
+  const f = texteRecevable(texte, BULLE_MAX);
+  if (!f.ok) return { error: 'texte refuse', raison: f.raison, code: 400 };
+
+  await db.prepare(
+    `INSERT INTO champ_bulles (edition, phase, name_key, texte, au, retire)
+     VALUES (?, ?, ?, ?, ?, 0)
+     ON CONFLICT(edition, phase, name_key) DO UPDATE SET
+       texte = excluded.texte, au = excluded.au, retire = 0`
+  ).bind(id, phase, k, f.texte, maintenant).run();
+  return { ok: true, texte: f.texte };
+}
+
+/**
+ * Les bulles d'une phase, par cle de partant — les retirees exclues.
+ *
+ * C'est ce que la salle relit a l'appel. Elle attrape elle-meme les erreurs :
+ * une base qui ne repond pas ne doit jamais empecher une course de partir.
+ */
+export async function bullesDe(db, edition, phase) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT name_key, texte FROM champ_bulles
+      WHERE edition = ? AND phase = ? AND retire = 0`).bind(edition, phase).all();
+  return new Map((results || []).map(r => [r.name_key, r.texte]));
+}
+
+/* ---------------------------------------------------------------------------
+   LA MODERATION — ce que le filtre a laisse passer
+   ---------------------------------------------------------------------------
+   Le filtre ne comprend pas ce qu'il lit (voir mot.js). L'organisation retire
+   donc a la main : une bulle (marquee retiree, elle ne sort plus nulle part),
+   ou un mot de vainqueur (efface, voix comprise). Le tchat n'est pas ici : il
+   ne vit que dans la salle et disparait avec elle.
+--------------------------------------------------------------------------- */
+
+export async function moderer(db, corps) {
+  await ensureChampTables(db);
+  const { quoi } = corps || {};
+  const edition = String((corps || {}).edition || '').toUpperCase();
+  const phase = String((corps || {}).phase || '');
+  if (!edition || !phase) return { error: 'edition ou phase manquante', code: 400 };
+
+  if (quoi === 'bulle') {
+    const k = cleNom((corps || {}).name);
+    if (!k) return { error: 'nom manquant', code: 400 };
+    const r = await db.prepare(
+      `UPDATE champ_bulles SET retire = 1
+        WHERE edition = ? AND phase = ? AND name_key = ?`).bind(edition, phase, k).run();
+    const n = (r.meta && r.meta.changes) || 0;
+    return n ? { ok: true, quoi, retire: n } : { error: 'bulle introuvable', code: 404 };
+  }
+
+  if (quoi === 'mot') {
+    const course = Number((corps || {}).course);
+    if (!Number.isInteger(course)) return { error: 'course manquante', code: 400 };
+    const r = await db.prepare(
+      `DELETE FROM champ_mots WHERE edition = ? AND phase = ? AND course = ?`
+    ).bind(edition, phase, course).run();
+    const n = (r.meta && r.meta.changes) || 0;
+    return n ? { ok: true, quoi, retire: n } : { error: 'mot introuvable', code: 404 };
+  }
+
+  return { error: 'quoi : bulle ou mot', code: 400 };
+}
+
+/** Tout ce qu'une edition montre d'ecrit par des joueurs, retire compris. */
+export async function moderation(db, edition) {
+  await ensureChampTables(db);
+  const { results: bulles } = await db.prepare(
+    `SELECT phase, name_key, texte, au, retire FROM champ_bulles
+      WHERE edition = ? ORDER BY phase, au`).bind(edition).all();
+  const { results: mots } = await db.prepare(
+    `SELECT phase, course, nom, texte, au,
+            CASE WHEN voix IS NULL THEN 0 ELSE 1 END AS a_voix
+       FROM champ_mots WHERE edition = ? ORDER BY phase, course`).bind(edition).all();
+  return {
+    edition,
+    bulles: (bulles || []).map(b => ({ ...b, retire: !!b.retire })),
+    mots: (mots || []).map(m => ({ ...m, a_voix: !!m.a_voix })),
+  };
 }
 
 export function calendrierCycle(debutSamedi) {
@@ -1869,6 +2041,11 @@ export async function etatEdition(db, id) {
     `SELECT phase, course, name_key, nom, texte, au,
             CASE WHEN voix IS NULL THEN 0 ELSE 1 END AS a_voix
        FROM champ_mots WHERE edition = ?`).bind(id).all();
+  // LES BULLES DE PRESENTATION, pour le rejeu : il presente les athletes comme
+  // le direct, bulle comprise. Les retirees n'en sortent pas.
+  const { results: bulles } = await db.prepare(
+    `SELECT phase, name_key, texte FROM champ_bulles
+      WHERE edition = ? AND retire = 0`).bind(id).all();
   // Le nom lisible et la forme de la phase viennent d'ici, pas du jeu : le
   // format est une regle de competition, et la dupliquer cote client garantit
   // qu'un jour les deux ne diront plus la meme chose.
@@ -1912,6 +2089,7 @@ export async function etatEdition(db, id) {
     partants: (partants || []).map(p => ({ ...p, tenant: !!p.tenant })),
     resultats: res || [],
     mots: (mots || []).map(m => ({ ...m, a_voix: !!m.a_voix })),
+    bulles: bulles || [],
 
     // LE TENANT DU TITRE, tel que la cloture l'a gele — et le declencheur de la
     // cinematique avec lui.
@@ -1980,6 +2158,12 @@ export async function contexteCourse(db, edition, phase, course) {
   }
   const fautif = fauxDepartFictif(e.id, phase, course, grille.filter(g => g.fictif).map(g => g.cle));
   if (fautif) grille.find(g => g.cle === fautif.cle).faux_ms = fautif.ms;
+  // La bulle de chacun, telle qu'elle est au chargement de la salle. La salle
+  // la relit a l'appel (voir `bullesDe`) : une bulle posee entre les deux doit
+  // compter. Un fictif n'en a pas.
+  const bulles = new Map((e.bulles || []).filter(b => b.phase === phase)
+    .map(b => [b.name_key, b.texte]));
+  for (const g of grille) g.bulle = g.fictif ? null : (bulles.get(g.cle) ?? null);
   const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
   const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
   return {

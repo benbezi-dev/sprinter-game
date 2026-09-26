@@ -360,6 +360,37 @@ export const CALENDRIER = {
 };
 
 /**
+ * LA BULLE DE PRESENTATION (26/09) : a partir des demi-finales, chaque partant
+ * peut poser une phrase courte, affichee au-dessus de sa tete pendant ses
+ * trois secondes de presentation — en direct et au rejeu.
+ *
+ * Pas dans les series : trente-deux bulles d'inconnus le samedi matin, c'est
+ * trente-deux textes a moderer pour une course que personne ne regarde encore.
+ * Des demies on connait les noms, et la bulle a quelqu'un pour la lire.
+ */
+export const PHASES_A_BULLE = ['demies', 'finale'];
+
+/**
+ * Les phrases pretes, dans l'esprit des piques (src/game/piques.ts) : on se
+ * pose, on ne vise personne. Le jeu propose la meme liste (src/game/mot.ts).
+ * Le serveur n'en fait pas une liste blanche : une phrase prete passe par le
+ * meme filtre qu'un texte libre (`texteRecevable`), et toutes y passent.
+ * Quarante caracteres au plus, comme la bulle.
+ */
+export const BULLES_PRETES = [
+  'Je suis venu gagner.',
+  'Rendez-vous sur la ligne.',
+  'Pour ma ville.',
+  'Personne ne me rattrape.',
+  'Premier départ, dernier mot.',
+  'Regardez bien mon couloir.',
+  'Ce soir, c\u2019est ma course.',
+  'Que le meilleur gagne.',
+  'Le chrono va parler.',
+  'Je viens chercher la finale.',
+];
+
+/**
  * Les moments qui meritent de sortir une notification.
  *
  * `annonce` ouvre la liste parce qu'elle ouvre la competition : c'est le seul

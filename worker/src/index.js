@@ -23,7 +23,7 @@ import {
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
-  poserMotDeCourse, voixDuMot,
+  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import {
@@ -212,6 +212,10 @@ const RATE_LIMITS = {
   // edition — six par minute laissent passer une reprise apres une coupure et
   // arretent un script.
   '/champ/mot': { max: 6, fenetreMs: 60_000 },
+  // La bulle de presentation : une par partant et par phase, reposable
+  // jusqu'a l'appel. Dix par minute laissent corriger une phrase refusee par
+  // le filtre, et arretent qui chercherait a le contourner par essais.
+  '/champ/bulle': { max: 10, fenetreMs: 60_000 },
   // S'engager ou se retirer : un geste par selection, quelques-uns au plus.
   '/champ/engager': { max: 10, fenetreMs: 60_000 },
   // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
@@ -1885,12 +1889,49 @@ async function servir(request, env, ctx, porteur) {
         await ensureChampTables(env.DB);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { edition, phase, course, name, texte, voix, voix_type } = body || {};
+        const { edition, phase, course, name, device_id, texte, voix, voix_type } = body || {};
+        // Le nom ne suffit plus (26/09) : le mot est diffuse en direct, et
+        // n'importe qui pouvait jusqu'ici parler sous le nom du vainqueur.
+        // Comme partout ailleurs, l'appareil doit porter ce nom.
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const nom = cleanName(name);
+        const cle = nom.trim().toLowerCase();
+        if (!(await peutUtiliser(env.DB, cle, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/mot', nameKey: cle, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
         const r = await poserMotDeCourse(env.DB, {
-          edition, phase, course: Number(course), nom: cleanName(name),
+          edition, phase, course: Number(course), nom,
           texte, voix, voix_type,
         });
-        if (r.error) return json({ error: r.error }, r.code || 400);
+        if (r.error) {
+          return json(r.raison ? { error: r.error, raison: r.raison } : { error: r.error },
+                      r.code || 400);
+        }
+        // LE MOT EN DIRECT : ceux qui sont encore dans la salle de la course
+        // le recoivent a l'instant. Par le worker seulement — la salle n'est
+        // joignable que par son nom, et l'aiguillage public ci-dessus ne
+        // produit jamais le chemin `/mot`. Un echec ici ne defait pas le mot :
+        // il est pose, les autres le liront en revenant.
+        if (env.SALLES_CHAMP) {
+          ctx.waitUntil((async () => {
+            try {
+              const n = Number(course);
+              const id = env.SALLES_CHAMP.idFromName(
+                (canal.test ? 'CHT-' : 'CH-') + edition + '-' + phase + '-' + n);
+              await env.SALLES_CHAMP.get(id).fetch(new Request('https://salle/mot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Interne': '1' },
+                body: JSON.stringify({
+                  edition, phase, course: n, canal: canal.test ? 'test' : '',
+                  mot: { nom, texte: r.texte, a_voix: !!r.voix },
+                }),
+              }));
+            } catch (e) {
+              console.log('mot en direct KO', String(e && e.message || e));
+            }
+          })());
+        }
         return json(r);
       }
 
@@ -1907,6 +1948,49 @@ async function servir(request, env, ctx, porteur) {
         const v = await voixDuMot(env.DB, edition, phase, course);
         if (!v) return json({ error: 'pas de voix' }, 404);
         return json(v);
+      }
+
+      /* LA BULLE DE PRESENTATION (26/09) : la phrase qu'un partant des demies
+         ou de la finale fait afficher au-dessus de sa tete pendant ses trois
+         secondes de presentation. Le nom doit etre a cet appareil ; le reste
+         — partant, phase, heure, texte — se verifie dans `poserBulle`.
+         `ensureChampTables` en tete, pour la raison dite au-dessus du mot. */
+      if (sous === 'bulle' && request.method === 'POST') {
+        await ensureChampTables(env.DB);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { edition, phase, name, device_id, texte } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const nom = cleanName(name);
+        const cle = nom.trim().toLowerCase();
+        if (!cle || cle === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        if (!(await peutUtiliser(env.DB, cle, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/bulle', nameKey: cle, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await poserBulle(env.DB, { edition, phase, nom, texte });
+        if (r.error) {
+          return json(r.raison ? { error: r.error, raison: r.raison } : { error: r.error },
+                      r.code || 400);
+        }
+        return json(r);
+      }
+
+      /* LA MODERATION : retirer une bulle ou un mot que le filtre a laisse
+         passer, et relire tout ce qu'une edition montre d'ecrit par des
+         joueurs. Sous cle d'administration. */
+      if (sous === 'moderer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const r = await moderer(env.DB, body || {});
+        return r.error ? json({ error: r.error }, r.code || 400) : json(r);
+      }
+      if (sous === 'moderation' && request.method === 'GET') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        const edition = String(url.searchParams.get('edition') || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,12}$/.test(edition)) return json({ error: 'edition invalide' }, 400);
+        return json(await moderation(env.DB, edition));
       }
 
       /* LES FICHES DE LA PRESENTATION : palmares, niveau de duel et bilan de

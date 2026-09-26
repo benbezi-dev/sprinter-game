@@ -35,6 +35,9 @@
 export const ROUTES = new Set([
   '/submit', '/race', '/profil', '/objectif/tentative',
   '/champ/pays', '/direct/inviter', '/notifications/rythme',
+  // Le mot du vainqueur et la bulle de presentation (26/09) : diffuses a des
+  // inconnus, ils exigent eux aussi que l'appareil porte le nom.
+  '/champ/mot', '/champ/bulle',
 ]);
 
 /** Au-dela, on ne garde que les appareils les plus recents pour ce nom.

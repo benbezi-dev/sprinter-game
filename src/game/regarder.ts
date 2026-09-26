@@ -169,11 +169,14 @@ export function regarderLaCourse(e: Edition, c: CourseDuProgramme): boolean {
   const couloirDe = new Map(partants.map((p, i) => [p.name_key, i + 1]));
   const fin = arrivee(e, c.phase, c.numero);
   const mot = (e.mots || []).find(m => m.phase === c.phase && m.course === c.numero) || null;
+  // Les bulles de presentation de cette phase (demi-finales et finale).
+  const bulles = new Map((e.bulles || []).filter(b => b.phase === c.phase).map(b => [b.name_key, b.texte]));
   const competition = N.titreEdition(e) || e.titre;
   return rejouerCourse(
     e.epreuve,
     fin.map(r => ({ nom: r.nom, cle: r.name_key, ms: r.ms, couloir: couloirDe.get(r.name_key),
-                    motif: r.motif ?? null, motif_ms: r.motif_ms ?? null })),
+                    motif: r.motif ?? null, motif_ms: r.motif_ms ?? null,
+                    bulle: bulles.get(r.name_key) ?? null })),
     3500, true,
     {
       titre: c.nom,

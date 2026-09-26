@@ -133,7 +133,10 @@ export function PresentationDirect() {
         // les bras, les autres reprennent leur place. En championnat, elle
         // avance aussi vers lui, et le stade retient son souffle.
         const plan = enCours.fiches ? ouvrirLeCreneau(i, ordre.length, par) : undefined;
-        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi), plan);
+        // Sa bulle, s'il en a pose une (demi-finales et finale) : le moteur
+        // la dessine au-dessus de lui le temps de son creneau, et seulement
+        // lui (voir drawBulle). L'objet se construit meme sans plan.
+        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi), { ...plan, bulle: c?.bulle ?? null });
         enCours.onTour(i, estMoi);
       }
     };
@@ -161,7 +164,9 @@ export function PresentationDirect() {
                     pb-[max(env(safe-area-inset-bottom),1rem)]">
       {/* Deux voiles, en haut et en bas, plutot qu'un rideau : la piste doit
           rester visible, c'est elle qu'on est venu montrer. */}
-      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 to-transparent" />
+      {/* Plus court sur un telephone couche : l'athlete presente est au
+          milieu de l'ecran, et sa bulle (drawBulle) monte dans ce voile. */}
+      <div className="absolute inset-x-0 top-0 h-40 court:h-24 bg-gradient-to-b from-black/80 to-transparent" />
       {/* Plus haut quand une fiche suit le nom : elle doit se lire sur la
           piste, pas sur la pelouse claire d'un stade de jour. */}
       <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent

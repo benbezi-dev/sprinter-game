@@ -17,7 +17,11 @@
 // sortir le jeu de l'ecran-titre, et tout ce qui vivait dedans avec lui.
 
 import { useSyncExternalStore } from 'react';
-import { Salle, type EtatSalle, type Rappel, type Arrivee, type Presentation } from './live';
+import {
+  Salle, type EtatSalle, type Rappel, type Arrivee, type Presentation,
+  type MotDirect,
+} from './live';
+import { poserBulle } from './mot';
 import { brancherSalle, reinitialiserEnvoi } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
@@ -47,12 +51,20 @@ export type EtatChampDirect = {
   erreur: string | null;
   /** Le coureur que la camera suit, en spectateur. */
   suivi: string | null;
+  /** Le mot du vainqueur, relaye par la salle. */
+  mot: MotDirect | null;
+  /** Ma bulle de presentation, telle que le serveur l'a acceptee. */
+  bulle: string | null;
+  bulleEtat: 'rien' | 'envoi' | 'ok' | 'refus';
+  /** Pourquoi la derniere bulle a ete refusee : raison du filtre, ou erreur. */
+  bulleRefus: string | null;
 };
 
 const VIDE: EtatChampDirect = {
   ouvert: false, etape: 'connexion', role: 'coureur', moi: '', salle: null,
   rappel: null, sorti: false, resultat: null, enregistre: null, erreur: null,
   suivi: null,
+  mot: null, bulle: null, bulleEtat: 'rien', bulleRefus: null,
 };
 
 let etat: EtatChampDirect = VIDE;
@@ -147,6 +159,8 @@ function ecouteurs() {
       publier({
         salle: e, moi: salle?.moi || '', role: salle?.role || 'coureur',
         etape: etat.etape === 'connexion' ? 'attente' : etat.etape,
+        // Entre apres le mot, on le lit dans l'etat de la salle.
+        ...(e.mot ? { mot: e.mot } : {}),
       });
       // LES FICHES PARTENT DE LA CHAMBRE D'APPEL, pas de la presentation : un
       // athlete y a trois secondes, et sa fiche doit etre la des la premiere.
@@ -227,6 +241,7 @@ function ecouteurs() {
                 etape: etat.etape === 'rappel' ? 'rappel' : 'fin' });
     },
     onEnregistre: (ok: boolean, erreur: string | null) => publier({ enregistre: { ok, erreur } }),
+    onMot: (mot: MotDirect) => publier({ mot }),
     onFerme: (raison: string) => {
       if (etat.etape === 'fin') return;
       publier({ etape: 'erreur', erreur: raison });
@@ -338,6 +353,27 @@ export function finirEchauffement() {
   if (G.state !== 'title' && G.state !== 'open') SprinterApp.goHome();
   if (lien) { brancherSalle(lien); reinitialiserEnvoi(); }
   publier({ etape: 'attente' });
+}
+
+/* ------------------------------------------------------------- la bulle */
+
+/**
+ * Poser ma bulle de presentation, pour la phase de cette salle.
+ *
+ * La reponse peut arriver apres qu'on a quitte la salle, ou qu'on en a
+ * rejoint une autre : elle ne s'applique alors a rien.
+ */
+export async function poserMaBulle(texte: string) {
+  const s = salle;
+  const c = etat.salle?.champ;
+  if (!s || !c) return;
+  const t = String(texte || '').trim();
+  if (!t) { publier({ bulleEtat: 'refus', bulleRefus: 'vide' }); return; }
+  publier({ bulleEtat: 'envoi', bulleRefus: null });
+  const r = await poserBulle({ edition: c.edition, phase: c.phase }, t);
+  if (salle !== s) return;
+  if (r.ok) publier({ bulle: r.texte, bulleEtat: 'ok', bulleRefus: null });
+  else publier({ bulleEtat: 'refus', bulleRefus: r.raison || r.erreur || 'refus' });
 }
 
 /** Spectateur : suivre ce coureur-la. */

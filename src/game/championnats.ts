@@ -165,6 +165,12 @@ export type Edition = {
   resultats: Resultat[];
   /** Les mots deja poses, toutes phases confondues. */
   mots?: MotDeCourse[];
+  /**
+   * Les bulles de presentation (demi-finales et finale), retirees exclues :
+   * le mot court qu'un partant a pose pour son creneau de trois secondes.
+   * Le rejeu les remet au-dessus des memes tetes (voir champ-rejeu).
+   */
+  bulles?: { phase: string; name_key: string; texte: string }[];
   calendrier: RendezVous[];
 };
 

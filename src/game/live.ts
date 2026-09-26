@@ -84,7 +84,18 @@ export type Rappel = {
   rappel_ms: number;
 };
 
-export type Couloir = { id: string; nom: string; couloir: number };
+export type Couloir = {
+  id: string; nom: string; couloir: number;
+  /**
+   * Championnat, demi-finales et finale : la phrase que ce partant a posee
+   * pour son creneau de presentation, affichee en bulle au-dessus de sa tete.
+   * Null ou absent : rien a dire, ou une salle d'avant les bulles.
+   */
+  bulle?: string | null;
+};
+
+/** Le mot du vainqueur, relaye par la salle a ceux qui y sont encore. */
+export type MotDirect = { nom: string; texte: string | null; a_voix: boolean };
 
 /** La sequence de presentation, telle que la salle l'annonce. */
 export type Presentation = {
@@ -109,6 +120,8 @@ export type EtatSalle = {
     debut_a: number; par: number; micro: number; ordre: Couloir[];
   } | null;
   champ?: EtatChamp | null;
+  /** Championnat : le mot du vainqueur, une fois pose. */
+  mot?: MotDirect | null;
 };
 
 export type Arrivee = {
@@ -180,6 +193,8 @@ type Ecouteurs = {
   onEnregistre?: (ok: boolean, erreur: string | null) => void;
   /** Signalisation WebRTC arrivee de l'autre pair. */
   onSignal?: (type: 'sdp' | 'ice', charge: any) => void;
+  /** Championnat : le vainqueur vient de poser son mot. */
+  onMot?: (mot: MotDirect) => void;
 };
 
 /** Demande un code de salle au serveur : meme alphabet que les defis. */
@@ -406,6 +421,9 @@ export class Salle {
         return;
       case 'rapide_refus':
         refusRapide();
+        return;
+      case 'mot':
+        if (m.mot) this.ec.onMot?.(m.mot as MotDirect);
         return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.

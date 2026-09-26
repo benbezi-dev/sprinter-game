@@ -1429,6 +1429,8 @@
     revancheId: null, revancheMs: 0,
     /** L'athlete mis en avant pendant la presentation, ou nul. */
     presente: null,
+    /** Sa bulle de presentation (championnat), ou nul : voir drawBulle. */
+    presBulle: null,
     champion: null, championTime: 0,
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
@@ -1939,7 +1941,7 @@
     // La revanche ne concerne qu'une course : de retour a l'accueil, le nom
     // de celui a qui renvoyer le code n'a plus rien a designer.
     G.revanche = null; G.revancheId = null; G.revancheMs = 0;
-    G.presente = null; G.zoomPres = 1; G.presPousse = 0;
+    G.presente = null; G.zoomPres = 1; G.presPousse = 0; G.presBulle = null;
     G.paused = false;
     G.echauffementChamp = false;
     G.falseOut = false;
@@ -3190,10 +3192,18 @@
    * Le salut n'est pas une animation nouvelle : c'est `celebrate`, deja utilise
    * par les cinematiques, qui melange la position des bras vers le haut. Un
    * geste que le jeu sait deja faire vaut mieux qu'un geste de plus a entretenir.
+   *
+   * `reglages.bulle` : le mot court que l'athlete a pose pour son creneau
+   * (demi-finales et finale du championnat), dessine en bulle au-dessus de
+   * lui par drawBulle. Pose a CHAQUE appel, et pas seulement au changement
+   * d'athlete : chaque appel ouvre un creneau, et une bulle ne doit jamais
+   * survivre a celui qui l'a posee.
    */
   function presenterCoureur(r, reglages) {
     const nouveau = (r || null) !== G.presente;
     G.presente = r || null;
+    const bulle = r && reglages && typeof reglages.bulle === 'string' ? reglages.bulle.trim() : '';
+    G.presBulle = bulle || null;
     if (nouveau) {
       G.presDepuis = 0;
       G.presPousse = r && reglages && reglages.pousse > 0 ? reglages.pousse : 0;
@@ -3266,6 +3276,8 @@
    */
   function finirLesSaluts(dt) {
     G.presente = null;
+    // La bulle part avec le creneau : elle ne se lit pas pendant le decompte.
+    G.presBulle = null;
     // Le plan se desserre avec les bras : le decompte se regarde au cadre de
     // la course, et le coup de pistolet ne doit pas faire sauter l'image.
     G.presPousse = 0;
@@ -6797,6 +6809,147 @@
     ctx.restore();
   }
 
+  /**
+   * LA BULLE DE PRESENTATION — le mot court qu'un partant de demi-finale ou
+   * de finale a pose pour ses trois secondes (decision du 26 septembre 2026).
+   *
+   * C'EST UNE EXCEPTION VOULUE a la regle « pas d'etiquette des autres sur la
+   * piste en championnat » (voir drawNomRepere) : elle ne vaut QUE pendant le
+   * creneau de presentation de celui qui l'a posee — `G.presente` et
+   * `G.presBulle`, poses ensemble par presenterCoureur et remis a nul par
+   * finirLesSaluts et goHome. Hors presentation, rien ne se dessine ici, et
+   * la course reste nue.
+   *
+   * Une bulle de bande dessinee blanche, la queue vers la tete. Elle se pose
+   * AU-DESSUS des bras leves (le salut de `celebrate`) et, si l'athlete
+   * presente est le joueur, au-dessus de sa pastille « TOI » : elle ne doit
+   * couvrir ni l'un ni l'autre. Deux lignes au plus, soixante pour cent de la
+   * largeur de l'ecran au plus, et jamais hors de l'ecran — on la pousse vers
+   * l'interieur, la queue continue de viser l'athlete.
+   */
+  /** Le haut des mains levees, en hauteurs de coureur au-dessus des pieds. */
+  const BULLE_BRAS_LEVES = 2.12;
+  let bulleMiseEnPage = null;
+  function lignesDeBulle(ctx, texte, largeurMax) {
+    const mots = texte.split(/\s+/).filter(Boolean);
+    const lignes = [];
+    let cour = '';
+    // Un mot plus long que la bulle se coupe a la lettre, plutot que de
+    // deborder : quarante caracteres sans espace existent.
+    const pousser = (mot) => {
+      if (ctx.measureText(mot).width <= largeurMax) { cour = mot; return; }
+      let bout = '';
+      for (const ch of Array.from(mot)) {
+        if (bout && ctx.measureText(bout + ch).width > largeurMax) { lignes.push(bout); bout = ch; }
+        else bout += ch;
+      }
+      cour = bout;
+    };
+    for (const mot of mots) {
+      if (!cour) { pousser(mot); continue; }
+      const essai = cour + ' ' + mot;
+      if (ctx.measureText(essai).width <= largeurMax) cour = essai;
+      else { lignes.push(cour); pousser(mot); }
+    }
+    if (cour) lignes.push(cour);
+    if (lignes.length <= 2) return lignes;
+    // Plus de deux lignes : la seconde se termine par des points de
+    // suspension, raccourcie jusqu'a tenir.
+    let fin = lignes.slice(1).join(' ');
+    while (fin.length > 1 && ctx.measureText(fin + '…').width > largeurMax) fin = fin.slice(0, -1);
+    return [lignes[0], fin.trimEnd() + '…'];
+  }
+  function drawBulle(ctx, vis, m) {
+    const texte = G.presBulle;
+    if (!texte || !G.presente || G.state !== 'count') return;
+    const vu = vis.find(v => v[0] === G.presente);
+    if (!vu) return;
+    const r = vu[0];
+    const x = vu[1][0], y = vu[1][1];
+    const u = ui();
+    // Lisible sur un telephone tenu en portrait : treize pixels au moins, et
+    // la bulle grandit avec le plan qui se resserre, comme l'athlete.
+    const taille = Math.round(Math.max(13, Math.min(26, 14.5 * u * zoomDeLaPresentation())));
+    const padX = Math.round(taille * 0.75), padY = Math.round(taille * 0.5);
+    const interligne = Math.round(taille * 1.22);
+    const largeurMax = Math.max(120, G.VW * 0.6) - padX * 2;
+    ctx.save();
+    ctx.font = '700 ' + taille + 'px system-ui, sans-serif';
+    const cle = texte + '|' + taille + '|' + Math.round(largeurMax);
+    if (!bulleMiseEnPage || bulleMiseEnPage.cle !== cle) {
+      const lignes = lignesDeBulle(ctx, texte, largeurMax);
+      let large = 0;
+      for (const l of lignes) large = Math.max(large, ctx.measureText(l).width);
+      bulleMiseEnPage = { cle, lignes, large };
+    }
+    const { lignes, large } = bulleMiseEnPage;
+    const w = Math.ceil(large) + padX * 2;
+    const h = lignes.length * interligne + padY * 2;
+    const rayon = Math.min(12 * u, h / 2);
+    const queue = Math.max(7, 9 * u);
+
+    // LA POINTE DE LA QUEUE : au-dessus des mains levees, et au-dessus de la
+    // pastille « TOI » quand elle est dessinee (memes calculs que
+    // drawNomRepere, qui la place).
+    const s = m * (r.look.h / C.MODEL_H);
+    let pointe = y - s * BULLE_BRAS_LEVES;
+    const rep = r.repere;
+    if (rep && rep.nom && (rep.moi || !(G.champDirect || G.rejeu || G.echauffementChamp))) {
+      const tNom = Math.max(9, 11 * u);
+      const hNom = tNom + 6 * u;
+      const hautNom = (G.champDirect || G.rejeu || G.echauffementChamp)
+        ? y - s * 1.5 - hNom / 2 - 6 * u
+        : y - s * 1.34 - 6 * u;
+      pointe = Math.min(pointe, hautNom - hNom / 2);
+    }
+    pointe -= 4 * u;
+
+    // Jamais hors de l'ecran : poussee vers l'interieur, en largeur comme en
+    // hauteur.
+    const marge = Math.max(8, 10 * u);
+    const gauche = Math.max(marge, Math.min(G.VW - marge - w, x - w / 2));
+    const haut = Math.max(marge, pointe - queue - h);
+    const bas = haut + h;
+    // La queue part du bas de la bulle, a l'aplomb de l'athlete tant que
+    // c'est possible, et ne mord jamais sur les coins arrondis.
+    const demiBase = Math.max(5, 7 * u);
+    const xBase = Math.max(gauche + rayon + demiBase, Math.min(gauche + w - rayon - demiBase, x));
+    const xPointe = Math.max(marge, Math.min(G.VW - marge, x));
+    const yPointe = bas + queue;
+
+    // Un fondu court a l'ouverture du creneau.
+    ctx.globalAlpha = Math.min(1, (G.presDepuis || 0) / 0.2);
+    ctx.beginPath();
+    ctx.moveTo(gauche + rayon, haut);
+    ctx.lineTo(gauche + w - rayon, haut);
+    ctx.arcTo(gauche + w, haut, gauche + w, haut + rayon, rayon);
+    ctx.lineTo(gauche + w, bas - rayon);
+    ctx.arcTo(gauche + w, bas, gauche + w - rayon, bas, rayon);
+    ctx.lineTo(xBase + demiBase, bas);
+    ctx.lineTo(xPointe, yPointe);
+    ctx.lineTo(xBase - demiBase, bas);
+    ctx.lineTo(gauche + rayon, bas);
+    ctx.arcTo(gauche, bas, gauche, bas - rayon, rayon);
+    ctx.lineTo(gauche, haut + rayon);
+    ctx.arcTo(gauche, haut, gauche + rayon, haut, rayon);
+    ctx.closePath();
+    ctx.fillStyle = '#F8F8F8';
+    ctx.fill();
+    // Un liseré sombre d'un pixel : sur la pelouse claire d'un stade de jour,
+    // le blanc seul ne se detache pas.
+    ctx.strokeStyle = 'rgba(11,16,32,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#0B1020';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const cx = gauche + w / 2;
+    lignes.forEach((l, i) => {
+      ctx.fillText(l, cx, haut + padY + interligne * (i + 0.5) + 0.5);
+    });
+    ctx.restore();
+  }
+
   /* ----------------------------------------------------------- le starter */
 
   /**
@@ -7240,6 +7393,8 @@
     // coureur de devant ne se lit pas, et c'est la seule chose qui distingue
     // deux adversaires de couleurs voisines.
     for (const [r, g2] of vis) drawNomRepere(ctx, r, g2[0], g2[1], m);
+    // La bulle de presentation, au-dessus de tout — pastilles comprises.
+    drawBulle(ctx, vis, m);
   }
 
   /**

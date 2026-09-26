@@ -80,7 +80,8 @@ function coureurDuCouloir(couloir: number) {
 /* --------------------------------------------------------- la presentation */
 
 function Presentation({ titre, sousTitre, grille, fiches }: {
-  titre: string; sousTitre: string; grille: { couloir: number; nom: string; cle?: string }[];
+  titre: string; sousTitre: string;
+  grille: { couloir: number; nom: string; cle?: string; bulle?: string | null }[];
   fiches: (SourceFiches & { epreuve: string }) | null;
 }) {
   // −1 : le generique. 0..n−1 : l'athlete. n : fini, le starter prend la main.
@@ -128,7 +129,10 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
         // les bras, les autres redescendent — et, avec une fiche, elle avance
         // vers lui au rythme du coeur (voir tension-presentation).
         const plan = i >= 0 && tendu ? ouvrirLeCreneau(i, grille.length, PAR_ATHLETE_MS) : undefined;
-        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir), plan);
+        // Et sa bulle, s'il en avait pose une : la meme qu'en direct, au-dessus
+        // de lui le temps de son creneau (voir drawBulle).
+        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir),
+          { ...plan, bulle: i < 0 ? null : grille[i].bulle ?? null });
       }
     };
 
@@ -152,8 +156,9 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
                     pt-[max(env(safe-area-inset-top),1rem)]
                     pb-[max(env(safe-area-inset-bottom),1.25rem)]">
       {/* Deux voiles plutot qu'un rideau : la piste reste visible, c'est elle
-          qu'on est venu montrer. */}
-      <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/85 to-transparent" />
+          qu'on est venu montrer. Celui du haut raccourcit sur un telephone
+          couche : la bulle de l'athlete presente (drawBulle) y monte. */}
+      <div className="absolute inset-x-0 top-0 h-44 court:h-24 bg-gradient-to-b from-black/85 to-transparent" />
       <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent
                        ${fiches ? 'h-96' : 'h-64'}`} />
       {tendu && <VoilePouls />}
@@ -319,7 +324,7 @@ function RappelCouloirs({ grille }: { grille: { couloir: number; nom: string }[]
  * chaque ouverture de l'ecran, pour un enregistrement que personne n'ecoutera
  * peut-etre, serait payer cher un silence.
  */
-function MotDuGagnant({ mot, course }: {
+export function MotDuGagnant({ mot, course }: {
   mot: MotDuVainqueur;
   course: { edition: string; phase: string; numero: number } | null;
 }) {

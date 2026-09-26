@@ -617,6 +617,31 @@
     champ_salle_fermee: ['La salle s’est fermée.', 'The room has closed.'],
     champ_pas_ouverte:  ['La chambre d’appel ouvre 15 min avant la course.',
                          'The call room opens 15 min before the race.'],
+    // LA BULLE DE PRESENTATION (demi-finales et finale) : une phrase au-dessus
+    // de la tete du partant, pendant ses trois secondes. Voir game/mot.ts.
+    champ_bulle_titre:  ['TA BULLE DE PRÉSENTATION', 'YOUR INTRO BUBBLE'],
+    champ_bulle_aide:   ['Au-dessus de ta tête pendant tes 3 s de présentation, en direct et au rejeu. Une phrase prête, ou la tienne.',
+                         'Above your head during your 3 s introduction, live and in the replay. A ready-made line, or your own.'],
+    champ_bulle_champ:  ['Ta phrase (40 caractères)', 'Your line (40 characters)'],
+    champ_bulle_poser:  ['POSER', 'SET'],
+    champ_bulle_posee:  ['Ta bulle : « {t} »', 'Your bubble: “{t}”'],
+    champ_bulle_refus_vide:     ['Écris quelque chose.', 'Write something.'],
+    champ_bulle_refus_long:     ['40 caractères au plus.', '40 characters at most.'],
+    champ_bulle_refus_lien:     ['Pas de lien dans une bulle.', 'No links in a bubble.'],
+    champ_bulle_refus_contact:  ['Pas de pseudo, de numéro ni de réseau social.', 'No handles, phone numbers or social accounts.'],
+    champ_bulle_refus_grossier: ['Refusée : ce langage n’est pas accepté.', 'Refused: that language is not allowed.'],
+    champ_bulle_refus_trop_tard: ['Trop tard : ta course est appelée.', 'Too late: your race has been called.'],
+    champ_bulle_refus:  ['Bulle refusée : {e}', 'Bubble refused: {e}'],
+    // LE MOT DU VAINQUEUR, EN DIRECT. Pas `mot_envoye_course` : il dit « les
+    // autres le liront en revenant », et ici ils sont encore dans la salle.
+    champ_mot_direct_titre:  ['TU AS GAGNÉ · UN MOT À LA SALLE', 'YOU WON · A WORD TO THE ROOM'],
+    champ_mot_direct_envoye: ['Mot posé : il s’affiche pour ceux encore dans la salle, et reste avec la course.',
+                              'Word posted: it shows for everyone still in the room, and stays with the race.'],
+    champ_mot_direct_refus_vide:     ['Écris quelque chose, ou enregistre ta voix.', 'Write something, or record your voice.'],
+    champ_mot_direct_refus_long:     ['140 caractères au plus.', '140 characters at most.'],
+    champ_mot_direct_refus_lien:     ['Pas de lien dans le mot.', 'No links in your word.'],
+    champ_mot_direct_refus_contact:  ['Pas de pseudo, de numéro ni de réseau social.', 'No handles, phone numbers or social accounts.'],
+    champ_mot_direct_refus_grossier: ['Refusé : ce langage n’est pas accepté.', 'Refused: that language is not allowed.'],
     // LA PAGE PUBLIQUE « REGARDER » (voir game/regarder.ts). Celui qui la lit
     // n'a pas le jeu : il suit un lien. Rien ici ne suppose qu'il a un nom.
     regarder_direct:     ['EN DIRECT DU STADE', 'LIVE FROM THE STADIUM'],

@@ -150,6 +150,9 @@ function Grille({ e }: { e: Edition }) {
   const heure = (n: number) => (e.calendrier || []).find(r => r.phase === e.phase && r.course === n)?.at ?? 0;
   const courses = grille(e).sort((a, b) => heure(a.course) - heure(b.course));
   if (!courses.length) return null;
+  // Les bulles de presentation de la phase (demi-finales et finale), par cle
+  // de joueur : le rejeu les remet au-dessus des memes tetes.
+  const bulles = new Map((e.bulles || []).filter(b => b.phase === e.phase).map(b => [b.name_key, b.texte]));
   return (
     <div className="flex flex-col gap-3">
       {courses.map(({ course, couloirs }) => {
@@ -219,6 +222,7 @@ function Grille({ e }: { e: Edition }) {
                 quand={rv ? rv.at : null}
                 course={{ edition: e.id, phase: e.phase, numero: course }}
                 mot={mot && { nom: mot.nom, texte: mot.texte, a_voix: mot.a_voix }}
+                bulles={bulles}
                 lieu={e.lieu}
                 fr={e.echelon === 'national' && e.zone === 'FR'}
                 titre={SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
@@ -279,7 +283,7 @@ function BoutonDirect({ e, course, at, partant }: {
  * La camera suit le joueur s'il courait cette course-la, et le vainqueur
  * sinon : on ne cadre pas un inconnu quand on regarde une finale.
  */
-function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, lieu, titre, sousTitre, fr }: {
+function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course, mot, bulles, lieu, titre, sousTitre, fr }: {
   /** Championnat de France : le rejeu joue la musique du championnat. */
   fr?: boolean;
   epreuve: string;
@@ -295,6 +299,8 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
   course: { edition: string; phase: string; numero: number };
   /** Le mot deja pose, s'il y en a un. */
   mot: { nom: string; texte: string | null; a_voix: boolean } | null;
+  /** Les bulles de presentation de la phase, par cle de joueur. */
+  bulles?: Map<string, string>;
   /** Le lieu impose par l'edition, s'il y en a un. */
   lieu?: string | null;
   titre: string;
@@ -317,6 +323,7 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
         ms: r.ms, motif: r.motif ?? null, motif_ms: r.motif_ms ?? null,
         couloir: couloirs.get(r.name_key),
         moi: !!moi && r.name_key === moi,
+        bulle: bulles?.get(r.name_key) ?? null,
       })),
       3500, true, { titre, sousTitre, competition, quand, course, mot, lieu, fr },
     );

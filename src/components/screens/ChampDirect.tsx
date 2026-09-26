@@ -7,8 +7,12 @@ import {
   useChampDirect, quitterDirect, suivre, versLocal,
   type EtatChampDirect,
   echauffer, finirEchauffement, peutSEchauffer, resteEchauffement,
+  poserMaBulle,
 } from '@/game/champ-direct';
 import type { Arrivee } from '@/game/live';
+import { poserMotDeCourse, BULLES_PRETES, BULLE_MAX, type MotPose } from '@/game/mot';
+import { LaisserUnMot } from './MotDuel';
+import { MotDuGagnant } from './RejeuChampionnat';
 
 /**
  * UNE SERIE DE CHAMPIONNAT EN DIRECT, VUE DE L'ECRAN.
@@ -94,6 +98,12 @@ function mmss(ms: number) {
  * nom avant d'entrer dans le stade — et ou l'on apprend qu'un absent est
  * forfait. On y voit sa serie, son couloir, qui est la, et le temps qui reste.
  * Les deux regles qui peuvent couter la course sont dites ici, avant.
+ *
+ * A partir des demies, chacun y pose aussi la bulle de sa presentation.
+ *
+ * ELLE DEFILE, ET ELLE TIENT COUCHEE. Huit couloirs et la bulle ne tiennent
+ * pas dans un telephone en paysage : la colonne defile, et en paysage
+ * (`court:`) elle se partage en deux — la grille a gauche, la bulle a droite.
  */
 function ChambreDAppel({ e }: { e: EtatChampDirect }) {
   const { N } = SprinterApp;
@@ -110,87 +120,189 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
     && grille.some(g => g.cle === monNom);
   const pistolet = c?.at ? versLocal(c.at) - maintenant : null;
   const erreur = e.etape === 'erreur' ? (e.erreur || '') : (e.salle as any)?.erreur;
+  // La bulle : un partant reconnu, a partir des demies, tant que l'appel n'est
+  // pas fait — l'ordre de presentation est fige a l'appel.
+  const bulleOuverte = !!moi && e.role === 'coureur' && c?.etat === 'ouverte'
+    && (c?.phase === 'demies' || c?.phase === 'finale');
   return (
     <motion.div {...VOILE}
-      className="absolute inset-0 z-40 flex items-center justify-center bg-black/85
+      className="absolute inset-0 z-40 overflow-y-auto overscroll-contain bg-black/85
                  px-[max(env(safe-area-inset-left),1rem)] pointer-events-auto">
-      <motion.div {...MONTEE} className="w-full max-w-[420px] flex flex-col gap-3">
-        <div className="text-center">
-          <div className="text-[9px] font-bold tracking-[0.45em] text-white/45 uppercase">
-            {c ? `${c.titre} · ${N.courseNom(c.phase, c.course, c.courses, c.phaseNom)}` : ''}
+      <div className="min-h-full flex pt-[max(env(safe-area-inset-top),1rem)]
+                      pb-[max(env(safe-area-inset-bottom),1rem)] court:pt-[max(env(safe-area-inset-top),0.5rem)]
+                      court:pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+      <motion.div {...MONTEE}
+        className={`m-auto w-full max-w-[420px] grid grid-cols-1 gap-3 court:gap-y-2 court:items-start
+                    ${bulleOuverte ? 'court:max-w-[880px] court:grid-cols-2 court:gap-x-5' : ''}`}>
+        <div className="flex flex-col gap-3 court:gap-2 min-w-0">
+          <div className="text-center">
+            <div className="text-[9px] font-bold tracking-[0.45em] text-white/45 uppercase">
+              {c ? `${c.titre} · ${N.courseNom(c.phase, c.course, c.courses, c.phaseNom)}` : ''}
+            </div>
+            <div className="font-display font-black text-2xl court:text-xl tracking-widest" style={{ color: OR }}>
+              {N.t('champ_appel')}
+            </div>
+            {moi && e.role === 'coureur' && (
+              <div className="text-[12px] font-bold tracking-widest text-white/80 mt-1 court:mt-0">
+                {N.t('champ_ton_couloir', { c: moi.couloir })}
+              </div>
+            )}
+            <div className="font-mono text-lg court:text-base tabular-nums mt-1 court:mt-0 text-white">
+              {pistolet == null ? '' : pistolet > 30000
+                ? N.t('champ_pistolet', { d: mmss(pistolet) })
+                : N.t('champ_pistolet_imm')}
+            </div>
           </div>
-          <div className="font-display font-black text-2xl tracking-widest" style={{ color: OR }}>
-            {N.t('champ_appel')}
+
+          <div className="flex flex-col gap-1">
+            {grille.map(g => {
+              const forfait = g.statut === 'forfait';
+              return (
+                <div key={g.cle}
+                  className={`flex items-center gap-3 px-3 py-1.5 court:py-1 rounded-xl border
+                    ${g.cle === e.moi ? 'border-primary/60 bg-primary/15' : 'border-white/8 bg-black/30'}
+                    ${forfait ? 'opacity-40' : ''}`}>
+                  <span className="font-mono text-[10px] w-5 h-5 shrink-0 grid place-items-center
+                                   rounded border border-white/15 bg-white/[0.04] text-white/50">
+                    {g.couloir}
+                  </span>
+                  <span className="flex-1 min-w-0 truncate text-[12px] font-bold tracking-wide">
+                    {g.nom}
+                  </span>
+                  <span className={`text-[9px] font-bold tracking-widest uppercase
+                    ${forfait ? 'text-destructive' : g.present ? 'text-emerald-400' : 'text-white/35'}`}>
+                    {forfait ? N.t('champ_dns') : g.present ? N.t('champ_present') : N.t('champ_attendu')}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          {moi && e.role === 'coureur' && (
-            <div className="text-[12px] font-bold tracking-widest text-white/80 mt-1">
-              {N.t('champ_ton_couloir', { c: moi.couloir })}
+
+          {partantEcarte && (
+            <div className="text-center text-[11px] leading-relaxed rounded-xl border px-3 py-2
+                            border-destructive/60 bg-destructive/15 text-white">
+              {N.t(c?.etat === 'ouverte' ? 'champ_pas_reconnu' : 'champ_appel_ferme',
+                   { n: getSavedName() || monNom })}
             </div>
           )}
-          <div className="font-mono text-lg tabular-nums mt-1 text-white">
-            {pistolet == null ? '' : pistolet > 30000
-              ? N.t('champ_pistolet', { d: mmss(pistolet) })
-              : N.t('champ_pistolet_imm')}
+          <div className="text-center text-[10px] tracking-wide text-white/55 leading-relaxed">
+            {e.role === 'spectateur'
+              ? N.t('champ_spectateur_n')
+              : <>{N.t('champ_regle_appel')}<br />{N.t('champ_regle_fd')}</>}
           </div>
+          {erreur && (
+            <div className="text-center text-[11px] text-destructive">
+              {erreur === 'fermee' || erreur === 'reseau' ? N.t('champ_salle_fermee') : String(erreur)}
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-col gap-1">
-          {grille.map(g => {
-            const forfait = g.statut === 'forfait';
-            return (
-              <div key={g.cle}
-                className={`flex items-center gap-3 px-3 py-1.5 rounded-xl border
-                  ${g.cle === e.moi ? 'border-primary/60 bg-primary/15' : 'border-white/8 bg-black/30'}
-                  ${forfait ? 'opacity-40' : ''}`}>
-                <span className="font-mono text-[10px] w-5 h-5 shrink-0 grid place-items-center
-                                 rounded border border-white/15 bg-white/[0.04] text-white/50">
-                  {g.couloir}
-                </span>
-                <span className="flex-1 min-w-0 truncate text-[12px] font-bold tracking-wide">
-                  {g.nom}
-                </span>
-                <span className={`text-[9px] font-bold tracking-widest uppercase
-                  ${forfait ? 'text-destructive' : g.present ? 'text-emerald-400' : 'text-white/35'}`}>
-                  {forfait ? N.t('champ_dns') : g.present ? N.t('champ_present') : N.t('champ_attendu')}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        {bulleOuverte && (
+          <div className="flex flex-col gap-3 court:gap-2 min-w-0">
+            <MaBulle e={e} />
+          </div>
+        )}
 
-        {partantEcarte && (
-          <div className="text-center text-[11px] leading-relaxed rounded-xl border px-3 py-2
-                          border-destructive/60 bg-destructive/15 text-white">
-            {N.t(c?.etat === 'ouverte' ? 'champ_pas_reconnu' : 'champ_appel_ferme',
-                 { n: getSavedName() || monNom })}
-          </div>
-        )}
-        <div className="text-center text-[10px] tracking-wide text-white/55 leading-relaxed">
-          {e.role === 'spectateur'
-            ? N.t('champ_spectateur_n')
-            : <>{N.t('champ_regle_appel')}<br />{N.t('champ_regle_fd')}</>}
-        </div>
-        {erreur && (
-          <div className="text-center text-[11px] text-destructive">
-            {erreur === 'fermee' || erreur === 'reseau' ? N.t('champ_salle_fermee') : String(erreur)}
-          </div>
-        )}
-        {/* S'echauffer : seulement pour un partant, et tant qu'il reste le
-            temps d'une course avant la fin forcee (40 s avant l'appel). */}
-        {peutSEchauffer() && (
-          <button onClick={() => echauffer()}
-            className="self-center px-4 py-2 rounded-full bg-primary text-background text-[11px]
-                       font-bold tracking-widest active:scale-95 transition">
-            {N.t('champ_echauffer')}
+        <div className={`flex flex-col items-center gap-3 court:gap-2
+                        court:flex-row court:justify-center ${bulleOuverte ? 'court:col-span-2' : ''}`}>
+          {/* S'echauffer : seulement pour un partant, et tant qu'il reste le
+              temps d'une course avant la fin forcee (40 s avant l'appel). */}
+          {peutSEchauffer() && (
+            <button onClick={() => echauffer()}
+              className="px-4 py-2 rounded-full bg-primary text-background text-[11px]
+                         font-bold tracking-widest active:scale-95 transition">
+              {N.t('champ_echauffer')}
+            </button>
+          )}
+          <button onClick={() => quitterDirect()}
+            className="px-4 py-1.5 rounded-full border border-white/20 text-[10px]
+                       font-bold tracking-widest text-white/70 active:scale-95 transition">
+            {N.t('champ_dir_quitter')}
           </button>
-        )}
-        <button onClick={() => quitterDirect()}
-          className="self-center px-4 py-1.5 rounded-full border border-white/20 text-[10px]
-                     font-bold tracking-widest text-white/70 active:scale-95 transition">
-          {N.t('champ_dir_quitter')}
-        </button>
+        </div>
       </motion.div>
+      </div>
     </motion.div>
+  );
+}
+
+/* ------------------------------------------------ la bulle de presentation */
+
+const RAISONS_BULLE = ['vide', 'long', 'lien', 'contact', 'grossier', 'trop_tard'];
+
+function refusBulle(r: string) {
+  const { N } = SprinterApp;
+  return RAISONS_BULLE.includes(r) ? N.t('champ_bulle_refus_' + r) : N.t('champ_bulle_refus', { e: r });
+}
+
+/**
+ * TA BULLE. Une phrase au-dessus de ta tete pendant tes trois secondes de
+ * presentation — demies et finale, en direct et au rejeu. Une puce l'envoie
+ * telle quelle, dans la langue du joueur ; le champ libre en prend quarante
+ * caracteres. Le serveur filtre les deux, et on peut la changer jusqu'a
+ * l'appel.
+ */
+function MaBulle({ e }: { e: EtatChampDirect }) {
+  const { N } = SprinterApp;
+  const en = N.getLang() === 'en';
+  const [texte, setTexte] = useState('');
+  // Le champ ne se vide que si c'est SON texte qui a ete accepte : une puce
+  // touchee entre-temps ne doit pas effacer ce qu'on etait en train d'ecrire.
+  const duChamp = useRef(false);
+  const envoi = e.bulleEtat === 'envoi';
+  useEffect(() => {
+    if (e.bulleEtat === 'ok' && duChamp.current) { duChamp.current = false; setTexte(''); }
+    if (e.bulleEtat === 'refus') duChamp.current = false;
+  }, [e.bulleEtat, e.bulle]);
+  const poser = (t: string, depuisLeChamp: boolean) => {
+    if (envoi) return;
+    duChamp.current = depuisLeChamp;
+    void poserMaBulle(t);
+  };
+  return (
+    <div className="flex flex-col gap-2 court:gap-1.5 rounded-xl border border-white/10 bg-black/30 p-3 court:p-2">
+      <div className="text-[9px] font-bold tracking-[0.3em] uppercase" style={{ color: OR }}>
+        {N.t('champ_bulle_titre')}
+      </div>
+      <div className="text-[10px] leading-snug text-white/55">{N.t('champ_bulle_aide')}</div>
+      <div className="flex flex-wrap gap-1.5 court:flex-nowrap court:overflow-x-auto court:pb-1">
+        {BULLES_PRETES.map(([fr, anglais]) => {
+          const p = en ? anglais : fr;
+          const choisie = e.bulle === p;
+          return (
+            <button key={fr} onClick={() => poser(p, false)} disabled={envoi}
+              className={`shrink-0 px-2.5 py-1 rounded-full border text-[10px] font-bold
+                active:scale-95 transition disabled:opacity-50
+                ${choisie ? 'bg-white text-black border-white' : 'bg-black/40 text-white/80 border-white/20'}`}>
+              {p}
+            </button>
+          );
+        })}
+      </div>
+      <form className="flex gap-2"
+        onSubmit={ev => { ev.preventDefault(); if (texte.trim()) poser(texte, true); }}>
+        <input value={texte} maxLength={BULLE_MAX} enterKeyHint="done"
+          onChange={ev => setTexte(ev.target.value.slice(0, BULLE_MAX))}
+          placeholder={N.t('champ_bulle_champ')}
+          className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5 text-[12px]
+                     text-foreground placeholder:text-muted-foreground
+                     focus:outline-none focus:border-primary/50" />
+        <button type="submit" disabled={envoi || !texte.trim()}
+          className="shrink-0 px-3 py-1.5 rounded-xl bg-primary text-background text-[10px] font-black
+                     tracking-widest active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none">
+          {envoi ? '…' : N.t('champ_bulle_poser')}
+        </button>
+      </form>
+      {/* Un refus ne retire pas la bulle deja posee : elle reste celle-la. */}
+      {e.bulle && (
+        <div className="text-[10px] text-emerald-400 leading-snug break-words">
+          {N.t('champ_bulle_posee', { t: e.bulle })}
+        </div>
+      )}
+      {e.bulleEtat === 'refus' && e.bulleRefus && (
+        <div className="text-[10px] text-destructive leading-snug">{refusBulle(e.bulleRefus)}</div>
+      )}
+    </div>
   );
 }
 
@@ -452,26 +564,50 @@ function marque(l: Arrivee): { texte: string; couleur: string } {
   return { texte: chrono(l.ms), couleur: l.place === 1 ? OR : 'rgba(255,255,255,0.75)' };
 }
 
+/** Les refus du filtre qu'on sait dire ; tout autre refus s'affiche tel quel. */
+const RAISONS_MOT = ['vide', 'long', 'lien', 'contact', 'grossier'];
+
 /**
  * L'ARRIVEE. Les classes au chrono, puis ceux qui n'en ont pas, chacun avec
  * la raison — DQ en rouge, abandon, forfait. Un carton rouge n'est pas une
  * neuvieme place : il n'a pas de rang.
+ *
+ * LE MOT DU VAINQUEUR SE POSE ICI, EN DIRECT. Le gagnant l'ecrit ou le dit
+ * sur l'ecran meme de sa victoire, une fois la course rangee (le serveur relit
+ * le vainqueur en base) ; la salle le relaie a ceux qui y sont encore. Un mot
+ * pose ferme la porte, et le vainqueur le relit comme les autres.
  */
 function TableauDArrivee({ e }: { e: EtatChampDirect }) {
   const { N } = SprinterApp;
   const c = e.salle?.champ;
   const lignes = e.resultat!.classement;
+  const premier = lignes.find(l => l.place === 1 && !l.motif && !l.abandon);
+  const jaiGagne = e.role === 'coureur' && !!premier && !!e.moi && premier.id === e.moi
+    && !!e.enregistre?.ok;
+  // Le refus du filtre, dit dans la langue du joueur plutot que tel que le
+  // serveur l'ecrit.
+  const poser = async (m: { texte?: string; voix?: Blob | null }): Promise<MotPose> => {
+    if (!c) return { error: 'course inconnue' };
+    const r = await poserMotDeCourse({ edition: c.edition, phase: c.phase, course: c.course }, m);
+    if (r.error && r.raison && RAISONS_MOT.includes(r.raison)) {
+      return { ...r, error: N.t('champ_mot_direct_refus_' + r.raison) };
+    }
+    return r;
+  };
   return (
     <motion.div {...MONTEE}
-      className="absolute inset-0 z-40 flex items-center justify-center
+      className="absolute inset-0 z-40 overflow-y-auto overscroll-contain
                  bg-gradient-to-b from-black/85 via-black/75 to-black/90
                  px-[max(env(safe-area-inset-left),1rem)] pointer-events-auto">
-      <div className="w-full max-w-[420px] flex flex-col gap-3">
+      <div className="min-h-full flex pt-[max(env(safe-area-inset-top),1rem)]
+                      pb-[max(env(safe-area-inset-bottom),1rem)] court:pt-[max(env(safe-area-inset-top),0.5rem)]
+                      court:pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+      <div className="m-auto w-full max-w-[420px] flex flex-col gap-3 court:gap-2">
         <div className="text-center">
           <div className="text-[9px] font-bold tracking-[0.45em] text-white/45 uppercase">
             {c ? c.titre : ''}
           </div>
-          <div className="font-display font-black text-2xl tracking-widest" style={{ color: OR }}>
+          <div className="font-display font-black text-2xl court:text-xl tracking-widest" style={{ color: OR }}>
             {c ? (N.courseNom(c.phase, c.course, c.courses, c.phaseNom)) : ''}
           </div>
         </div>
@@ -482,7 +618,7 @@ function TableauDArrivee({ e }: { e: EtatChampDirect }) {
               <motion.div key={l.id}
                 initial={{ opacity: 0, x: 18 }} animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.06, duration: 0.22 }}
-                className={`flex items-center gap-3 px-3 py-2 rounded-xl border
+                className={`flex items-center gap-3 px-3 py-2 court:py-1 rounded-xl border
                   ${l.id === e.moi ? 'border-primary/60 bg-primary/15'
                     : l.motif === 'faux_depart' ? 'border-destructive/40 bg-destructive/10'
                     : 'border-white/8 bg-black/30'}`}>
@@ -505,11 +641,22 @@ function TableauDArrivee({ e }: { e: EtatChampDirect }) {
           {e.enregistre ? (e.enregistre.ok ? N.t('champ_officiel')
             : N.t('champ_officiel_ko', { e: e.enregistre.erreur || '?' })) : ''}
         </div>
+        {e.mot && c ? (
+          <MotDuGagnant mot={e.mot}
+            course={{ edition: c.edition, phase: c.phase, numero: c.course }} />
+        ) : jaiGagne && c ? (
+          <LaisserUnMot
+            duel="" adversaire=""
+            titre={N.t('champ_mot_direct_titre')}
+            confirme={N.t('champ_mot_direct_envoye')}
+            poser={poser} />
+        ) : null}
         <button onClick={() => quitterDirect()}
           className="self-center px-4 py-2 rounded-full border border-primary/40 bg-primary/10
                      text-primary text-[10px] font-bold tracking-widest active:scale-95 transition">
           {N.t('champ_retour')}
         </button>
+      </div>
       </div>
     </motion.div>
   );

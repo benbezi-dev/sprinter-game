@@ -60,6 +60,11 @@ export type CoureurRejeu = {
    */
   moi?: boolean;
   /**
+   * Sa bulle de presentation, s'il en a pose une (demi-finales et finale) :
+   * dessinee au-dessus de lui pendant son creneau, comme en direct.
+   */
+  bulle?: string | null;
+  /**
    * Pourquoi il n'a pas de chrono, si la course a ete courue en direct.
    *
    * Le forfait n'est pas sur la piste : son couloir reste vide. Le faux
@@ -133,8 +138,11 @@ export type EtatRejeu = {
   sousTitre: string;
   /** La distance courue : '100', '200', '400'. L'image de l'arrivee l'annonce. */
   epreuve: string;
-  /** La grille, dans l'ordre des couloirs. `cle` : celle de sa fiche. */
-  grille: { couloir: number; nom: string; cle?: string }[];
+  /**
+   * La grille, dans l'ordre des couloirs. `cle` : celle de sa fiche ;
+   * `bulle` : le mot pose pour sa presentation, s'il y en a un.
+   */
+  grille: { couloir: number; nom: string; cle?: string; bulle?: string | null }[];
   /**
    * D'ou viennent les fiches de la presentation, et la distance ou le niveau
    * se lit. `avant` est l'heure de la course : la retransmission d'une finale
@@ -200,7 +208,7 @@ export function fermerRejeu() {
   annulerLeRappel();
   if (musique) { arreterLaMusique(); musique = false; }
   const G = SprinterApp?.G;
-  if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; G.rejeuBandeau = null; }
+  if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; G.presBulle = null; G.rejeuBandeau = null; }
   poser(VIDE);
   SprinterApp?.goHome();
 }
@@ -469,7 +477,10 @@ export function rejouerCourse(
   // liste-la que le spectateur va comparer avec ce qu'il voit sur la piste.
   const partantDe = new Map<any, CoureurRejeu>([...coureurDe].map(([c, r]) => [r, c]));
   const grille = [...G.runners]
-    .map((r: any) => ({ couloir: r.lane + 1, nom: r.name, cle: partantDe.get(r)?.cle }))
+    .map((r: any) => ({
+      couloir: r.lane + 1, nom: r.name, cle: partantDe.get(r)?.cle,
+      bulle: partantDe.get(r)?.bulle ?? null,
+    }))
     .sort((a, b) => a.couloir - b.couloir);
   // Les fiches partent maintenant, pas a l'arrivee du premier athlete : le
   // generique leur laisse deux secondes et demie pour revenir.
