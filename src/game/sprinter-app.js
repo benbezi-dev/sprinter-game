@@ -5480,6 +5480,28 @@
   const BLOC_RAIL = [34, 36, 46], BLOC_CALE = [152, 160, 180],
         BLOC_CHANT = [66, 70, 86];
 
+  // L'IMAGE DU BLOC SE CHOISIT A L'ECRAN, PAS DANS LE MONDE.
+  //
+  // Les blocs sont rendus dans Blender sous la vue standard (26,6°). Un theme
+  // peut incliner la vue autrement — le Champ-de-Mars la pose a 15° (`angle`
+  // du theme) — et le cap du couloir ne designe plus alors la bonne image :
+  // les blocs y partaient de biais, plus pentus que les lignes, depuis le
+  // 25/09. On mesure donc la direction du couloir A L'ECRAN, avec la vue du
+  // moment, et on retrouve le cap qui, sous la vue standard des images, donne
+  // cette meme direction. Sous la vue standard, c'est exactement le cap d'avant.
+  function capALEcran(q, cap, vue) {
+    const a = ground(q[0], q[1]);
+    const b = ground(q[0] + Math.cos(cap), q[1] + Math.sin(cap));
+    // La vue standard : gardee par le theme qui l'a changee, sinon la courante.
+    const std = angleGarde || { cos: C.ISO_COS, sin: C.ISO_SIN };
+    const sx = (b[0] - a[0]) / std.cos, sy = (b[1] - a[1]) / std.sin;
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || (sx === 0 && sy === 0)) {
+      return cap * 180 / Math.PI + vue;
+    }
+    // ground() : x = -u·cos + v·cos, y = -u·sin - v·sin (u, v : le monde).
+    return Math.atan2((sx - sy) / 2, -(sx + sy) / 2) * 180 / Math.PI;
+  }
+
   function drawBlocs(ctx, th) {
     const T = G.track;
     const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
@@ -5511,8 +5533,7 @@
         const q = T.pos(0, e);
         const g2 = ground(q[0], q[1]);
         if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) continue;
-        const cap = T.heading(0, e) * 180 / Math.PI + vue;
-        DEC().bloc(ctx, apiDecor(), q[0], q[1], cap); continue;
+        DEC().bloc(ctx, apiDecor(), q[0], q[1], capALEcran(q, T.heading(0, e), vue)); continue;
       }
       // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
       // dont sept hors champ ne doivent rien couter.
