@@ -588,6 +588,12 @@
     champ_dir_quitter:  ['QUITTER', 'LEAVE'],
     // L'echauffement en chambre d'appel : rien n'est chronometre.
     champ_echauffer:    ['S’ÉCHAUFFER SUR LA PISTE', 'WARM UP ON THE TRACK'],
+    // Le navigateur integre d'Instagram & co. : rien ne s'y telecharge.
+    iab_texte:  ['Ici, dans l’appli, les vidéos et les images ne peuvent pas être enregistrées. Ouvre la page dans ton navigateur pour les récupérer.',
+                 'Inside this app, videos and images cannot be saved. Open the page in your browser to get them.'],
+    iab_bouton: ['OUVRIR DANS LE NAVIGATEUR', 'OPEN IN BROWSER'],
+    iab_menu:   ['ou : menu ⋯ en haut → « Ouvrir dans le navigateur »',
+                 'or: ⋯ menu at the top → “Open in browser”'],
     champ_echauffement: ['ÉCHAUFFEMENT · retour dans {d}', 'WARM-UP · back in {d}'],
     champ_echauf_retour: ['RETOUR', 'BACK'],
     champ_fd:           ['FAUX DÉPART', 'FALSE START'],

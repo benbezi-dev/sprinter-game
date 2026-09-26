@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Share2, Radio, ChevronDown, Crown, Loader2 } from 'lucide-react';
+import { OuvrirDansLeNavigateur } from '@/components/OuvrirDansLeNavigateur';
 import { MONTEE } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { GameCanvas } from '@/components/GameCanvas';
@@ -193,6 +194,7 @@ function Programme({ e, focus }: { e: Edition; focus: string | null }) {
                  bg-[#060913]/80 backdrop-blur-[2px]">
       <div className="mx-auto w-full max-w-md px-4 flex flex-col gap-4
                       pt-[max(env(safe-area-inset-top),1.25rem)] pb-[max(env(safe-area-inset-bottom),1.5rem)]">
+        <OuvrirDansLeNavigateur />
         <header className="flex flex-col items-center gap-1.5 text-center">
           <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-red-400/40
                            bg-red-500/15 text-red-300 text-[9px] font-black tracking-[0.25em]">

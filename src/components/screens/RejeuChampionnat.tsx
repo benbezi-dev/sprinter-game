@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Image as ImageIcon, ScanLine } from 'lucide-react';
 import { MONTEE, FONDU } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
+import { OuvrirDansLeNavigateur } from '@/components/OuvrirDansLeNavigateur';
 import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu, presentationDuRejeu } from '@/game/champ-rejeu';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
@@ -558,6 +559,8 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
             onPose={() => setPose(true)} />
         ) : null}
 
+        {/* Dans Instagram et consorts, rien de ce qui suit ne peut sortir. */}
+        <OuvrirDansLeNavigateur compact />
         {film.genre === 'direct' && (film.phase === 'prete' || film.phase === 'expiree') && (
           <ReviewVideo etat={film} onPartager={partagerLeFilm} titre={N.t('review_title_rejeu')} />
         )}
