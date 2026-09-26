@@ -491,7 +491,8 @@ export function RaceHUD() {
               </motion.div>
             )}
           </AnimatePresence>
-          {isCount && rival && !rejeu && (
+          {/* Pas de « record à battre » en championnat, en direct comme en rejeu. */}
+          {isCount && rival && !rejeu && !SprinterApp.G.champDirect && (
             <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate

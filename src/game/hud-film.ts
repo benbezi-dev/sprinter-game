@@ -617,6 +617,10 @@ function record(G: any): number | null {
 }
 
 function leRival(G: any): { nom: string; temps: number } | null {
+  // Un championnat — en direct comme en rejeu — n'a pas de « record à
+  // battre » : l'etiquette du mode solo s'affichait dans la video d'une serie
+  // (« à battre : Jodyteacher — 9.00 s », 26/09).
+  if (G.rejeu || G.champDirect) return null;
   const split = (G.ghostSplits || [])[G.shotIdx];
   if (G.ghostName && split != null) return { nom: G.ghostName, temps: split };
   if (G.champion) return { nom: G.champion, temps: G.championTime || 0 };
