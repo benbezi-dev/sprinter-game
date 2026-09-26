@@ -1919,7 +1919,10 @@ export function chronoFictif(edition, phase, cle, epreuve) {
  * rappel, les autres repartent), la tache planifiee le range tel quel quand
  * personne n'est venu, et le rejeu le montre — les trois disent la meme chose.
  */
-const PHASES_A_FAUX_DEPART_FICTIF = new Set(['series', 'demies']);
+// Vide depuis le 26/09 (decision de l'organisateur) : un fictif ne vole plus
+// jamais le depart. Il en coutait un rappel aux vrais coureurs, et un
+// qualifiable de moins pour remplir les demies.
+const PHASES_A_FAUX_DEPART_FICTIF = new Set();
 export function fauxDepartFictif(edition, phase, course, clesFictives) {
   if (!PHASES_A_FAUX_DEPART_FICTIF.has(phase) || !clesFictives.length) return null;
   const h = hacheFictif(`${edition}|${phase}|${course}|faux`);
@@ -2164,6 +2167,53 @@ export async function cloturerPhase(db, edition) {
 
   const q = qualifier(courses, cfg, dOffice);
   const suivante = FORMAT.phases[iPhase + 1];
+
+  // PRIORITE AUX VRAIS JOUEURS, ET UNE PHASE SUIVANTE PLEINE (26/09).
+  //
+  // Le moteur laisse vide une place directe que personne n'a gagnee (forfait,
+  // carton rouge) : avec des vrais partants absents, les demies ne se
+  // remplissaient plus. Trois regles s'ajoutent, dans cet ordre (la 3e plus bas) :
+  //   1. tout vrai joueur qui a un chrono passe — a la place, s'il le faut,
+  //      du fictif qualifie le plus lent ;
+  //   2. les places encore libres vont aux fictifs elimines, du plus rapide
+  //      au plus lent, jusqu'a remplir la phase suivante.
+  // Un vrai joueur sans chrono (forfait, carton rouge) ne passe pas.
+  {
+    const fictives = await clesFictives(db, (brut || []).map(r => r.cle));
+    const places = suivante.courses * suivante.parCourse;
+    const parMs = (a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity);
+    const dehors = [...q.elimines];
+    const sortir = (r) => { const i = dehors.indexOf(r); if (i >= 0) dehors.splice(i, 1); };
+    const nb = () => q.directs.length + q.repeches.length;
+    for (const v of dehors.filter(r => !fictives.has(r.cle) && r.ms != null).sort(parMs)) {
+      if (nb() >= places) {
+        const lent = [...q.directs, ...q.repeches]
+          .filter(r => fictives.has(r.cle) && !r.doffice).sort(parMs).pop();
+        if (!lent) break;
+        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(lent); if (i >= 0) l.splice(i, 1); }
+        dehors.push(lent);
+      }
+      q.repeches.push({ ...v, complement: true });
+      sortir(v);
+    }
+    for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms != null).sort(parMs)) {
+      if (nb() >= places) break;
+      q.repeches.push({ ...f, complement: true });
+      sortir(f);
+    }
+    q.elimines = dehors;
+
+    //   3. s'il manque encore du monde, les fictifs de l'edition restes
+    //      dehors SANS chrono (un faux depart d'avant le 26/09) passent en
+    //      dernier. On ne cree jamais de fictif une fois le championnat
+    //      lance : si les coureurs manquent, la phase suivante court a moins.
+    for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms == null)) {
+      if (nb() >= places) break;
+      q.repeches.push({ ...f, complement: true });
+      sortir(f);
+    }
+    q.elimines = dehors;
+  }
 
   // Les qualifies repartent en serpentin, semes sur leur chrono du jour : le
   // meilleur temps de la phase est tete de serie de la suivante.
