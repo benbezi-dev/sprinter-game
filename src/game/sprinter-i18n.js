@@ -578,6 +578,11 @@
                          'Anyone not here 30 s before the start is a no-show.'],
     champ_regle_fd:     ['Un faux départ : carton rouge, tu regardes la fin.',
                          'One false start: red card, you watch the rest.'],
+    // Un partant que la salle fait regarder : on lui dit pourquoi, et quoi faire.
+    champ_pas_reconnu:  ['Tu es sur la grille, mais ce téléphone n’est pas relié à « {n} » : ici tu ne peux que regarder. Ouvre le jeu sur l’appareil où tu as créé ce nom, ou relie celui-ci dans MES COURSES avec ton code de récupération, puis reviens avant l’appel.',
+                         'You are on the grid, but this phone is not linked to “{n}”: here you can only watch. Open the game on the device where you created this name, or link this one in MY RACES with your recovery code, then come back before the call.'],
+    champ_appel_ferme:  ['Tu regardes cette série : l’appel est fermé (30 s avant le départ), ou ce téléphone n’est pas relié à « {n} ».',
+                         'You are watching this heat: the call is closed (30 s before the start), or this phone is not linked to “{n}”.'],
     champ_spectateur_n: ['Tu regardes : ce téléphone ne court pas cette série.',
                          'You are watching: this phone is not in this race.'],
     champ_dir_quitter:  ['QUITTER', 'LEAVE'],

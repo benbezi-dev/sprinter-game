@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp } from '@/game/engine';
+import { getSavedName } from '@/game/leaderboard';
 import { DUREE, COURBE, MONTEE, VOILE } from '@/lib/mouvement';
 import {
   useChampDirect, quitterDirect, suivre, versLocal,
@@ -68,6 +69,13 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
   const c = e.salle?.champ;
   const grille = c?.grille || [];
   const moi = grille.find(g => g.cle === e.moi);
+  // UN PARTANT QUE LA SALLE FAIT REGARDER. Son nom est sur la grille, mais la
+  // salle l'a range parmi les spectateurs : ce telephone n'est pas relie a ce
+  // nom, ou il arrive apres l'appel. Sans un mot, il attendait un depart qui
+  // ne venait pas et finissait forfait (Steph Grondin27, serie 1, 26/09).
+  const monNom = (getSavedName() || '').trim().toLowerCase();
+  const partantEcarte = e.role === 'spectateur' && !!monNom
+    && grille.some(g => g.cle === monNom);
   const pistolet = c?.at ? versLocal(c.at) - maintenant : null;
   const erreur = e.etape === 'erreur' ? (e.erreur || '') : (e.salle as any)?.erreur;
   return (
@@ -118,6 +126,13 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
           })}
         </div>
 
+        {partantEcarte && (
+          <div className="text-center text-[11px] leading-relaxed rounded-xl border px-3 py-2
+                          border-destructive/60 bg-destructive/15 text-white">
+            {N.t(c?.etat === 'ouverte' ? 'champ_pas_reconnu' : 'champ_appel_ferme',
+                 { n: getSavedName() || monNom })}
+          </div>
+        )}
         <div className="text-center text-[10px] tracking-wide text-white/55 leading-relaxed">
           {e.role === 'spectateur'
             ? N.t('champ_spectateur_n')
