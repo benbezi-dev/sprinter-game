@@ -1941,6 +1941,7 @@
     G.revanche = null; G.revancheId = null; G.revancheMs = 0;
     G.presente = null; G.zoomPres = 1; G.presPousse = 0;
     G.paused = false;
+    G.echauffementChamp = false;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.liveDuel = null;
@@ -6736,7 +6737,9 @@
     // PAS DE CERCEAU EN CHAMPIONNAT, pas meme sous le joueur (demande du
     // 23 septembre 2026). Il s'y retrouve par « TOI », au-dessus de sa tete —
     // voir drawNomRepere, qui garde cette pastille-la et elle seule.
-    if (G.champDirect || G.rejeu) return;
+    // L'echauffement en chambre d'appel aussi (G.echauffementChamp) : meme
+    // piste, meme regle que la course qui suit.
+    if (G.champDirect || G.rejeu || G.echauffementChamp) return;
     const rx = 19 * m / 30, ry = 7.6 * m / 30;
     ctx.save();
     ctx.strokeStyle = rep.couleur;
@@ -6766,13 +6769,13 @@
     // champ-rejeu.ts), redite le 23 septembre 2026 quand la serie en direct
     // avait fait revenir les noms par la piste du direct. Les athletes sont
     // presentes un par un avant le pistolet ; le cerceau au sol suffit.
-    if ((G.champDirect || G.rejeu) && !rep.moi) return;
+    if ((G.champDirect || G.rejeu || G.echauffementChamp) && !rep.moi) return;
     const taille = Math.max(9, 11 * ui());
     // En championnat, « TOI » flotte AU-DESSUS de la tete, il ne s'y pose pas
     // (demande du 23 septembre 2026) : le bas de la pastille laisse un jour
     // net entre elle et le crane. Ailleurs, le placement d'origine.
     const hPastille = taille + 6 * ui();
-    const haut = (G.champDirect || G.rejeu)
+    const haut = (G.champDirect || G.rejeu || G.echauffementChamp)
       ? y - m * (r.look.h / C.MODEL_H) * 1.5 - hPastille / 2 - 6 * ui()
       : y - m * (r.look.h / C.MODEL_H) * 1.34 - 6 * ui();
     ctx.save();

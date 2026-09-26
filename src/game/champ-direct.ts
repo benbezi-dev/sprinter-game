@@ -309,6 +309,9 @@ export function echauffer() {
   const G = SprinterApp.G;
   brancherSalle(null);
   G.champDirect = false;
+  // L'affichage reste celui du championnat — « TOI » au-dessus de la tete, pas
+  // de cerceau au sol — sans que le moteur se croie en course de championnat.
+  G.echauffementChamp = true;
   SprinterApp.startLive([epreuve], { levelIdx: niveau, autres: [], sansOrdinateur: true });
   SprinterApp.liveDepart(3000, null);
   publier({ etape: 'echauffement' });
@@ -331,6 +334,7 @@ export function finirEchauffement() {
   if (etat.etape !== 'echauffement') return;
   const G = SprinterApp.G;
   G.liveOn = false;
+  G.echauffementChamp = false;
   if (G.state !== 'title' && G.state !== 'open') SprinterApp.goHome();
   if (lien) { brancherSalle(lien); reinitialiserEnvoi(); }
   publier({ etape: 'attente' });
@@ -355,6 +359,7 @@ export function quitterDirect(accueil = true) {
   if (minuteurRappel) { clearTimeout(minuteurRappel); minuteurRappel = null; }
   if (veilleEchauffement) { clearInterval(veilleEchauffement); veilleEchauffement = null; }
   lien = null;
+  if (SprinterApp.G) SprinterApp.G.echauffementChamp = false;
   if (salle) {
     const s = salle; salle = null;
     s.ecouter({});
