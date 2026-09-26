@@ -728,6 +728,9 @@
     sel_convoque:    ['départ {n}', 'start {n}'],
     sel_bonne_chance: ['la grille est gelée. À samedi.',
                        'the grid is frozen. See you Saturday.'],
+    // Le dimanche, on est convoque en demi-finale ou en finale : « À samedi »
+    // y serait faux.
+    sel_qualifie:    ['tu es qualifié. Bonne course.', 'you made it through. Good luck.'],
     sel_prochaine:   ['le classement continue — la prochaine sélection viendra',
                       'the ranking goes on — the next selection will come'],
     sel_barre:       ['LIGNE DE SÉLECTION', 'SELECTION LINE'],

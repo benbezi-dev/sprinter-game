@@ -130,6 +130,18 @@ function dateLocale(at: number | null, avecDate = true): string | null {
 /** L'heure d'une convocation : le jour et l'heure suffisent, la date non. */
 const heureLocale = (at: number | null) => dateLocale(at, false);
 
+/**
+ * La course ou l'on est convoque, par son nom : « SÉRIE 2 », « DEMI-FINALE 1 »,
+ * « FINALE ». Le serveur donne la phase avec le numero ; sans elle, un qualifie
+ * lisait « SÉRIE 1 » le dimanche, pour sa demi-finale comme pour sa finale.
+ */
+function maCourse(c: { phase: string; numero: number }): string {
+  const { N } = SprinterApp;
+  if (c.phase !== 'demies' && c.phase !== 'finale') return N.t('sel_ma_serie', { n: c.numero });
+  const nom = String(N.t('champ_course_' + c.phase)).toUpperCase();
+  return c.phase === 'finale' ? nom : `${nom} ${c.numero}`;
+}
+
 /* -------------------------------------------------------------- le décompte */
 
 /**
@@ -256,7 +268,7 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
           <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
             {s.gele
               ? (dedans && s.course
-                  ? `${N.t('sel_ma_serie', { n: s.course.numero })} · ${heureLocale(s.course.at) || ''}`
+                  ? `${maCourse(s.course)} · ${heureLocale(s.course.at) || ''}`
                   : N.t('sel_prochaine'))
               : s.rang == null
                 ? (pays ? N.t('sel_pour_entrer') : N.t('sel_places', { n: s.places }))
@@ -479,7 +491,7 @@ export function SceneSelection() {
               <motion.div {...retarde(MONTEE, 0.25)} className="flex flex-col gap-1">
                 {s.course && (
                   <span className="font-black font-display text-2xl md:text-3xl text-foreground">
-                    {N.t('sel_ma_serie', { n: s.course.numero })}
+                    {maCourse(s.course)}
                   </span>
                 )}
                 {s.course && heureLocale(s.course.at) && (
@@ -488,7 +500,7 @@ export function SceneSelection() {
                   </span>
                 )}
                 <span className="text-[11px] text-muted-foreground mt-1">
-                  {N.t('sel_bonne_chance')}
+                  {s.course && s.course.phase !== 'series' ? N.t('sel_qualifie') : N.t('sel_bonne_chance')}
                 </span>
               </motion.div>
             ) : (
