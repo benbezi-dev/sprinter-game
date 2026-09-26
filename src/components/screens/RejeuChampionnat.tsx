@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Image as ImageIcon, ScanLine } from 'lucide-react';
 import { MONTEE, FONDU } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
-import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu } from '@/game/champ-rejeu';
+import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu, presentationDuRejeu } from '@/game/champ-rejeu';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { LaisserUnMot } from './MotDuel';
@@ -97,6 +97,9 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
     rendu.current = false;
     // Le coeur bat des le generique, lentement ; la musique s'efface.
     if (tendu) ouvrirLaPresentation(GENERIQUE_MS, grille.length * PAR_ATHLETE_MS);
+    // Au Championnat de France, la musique du championnat cale ses blocs
+    // d'athlete sur ceux-ci (le coeur se tait alors de lui-meme).
+    presentationDuRejeu(GENERIQUE_MS, grille.length);
 
     // Une horloge, pas une file de `setTimeout` : un onglet qui passe en
     // arriere-plan etire les minuteurs et la sequence se desynchroniserait de

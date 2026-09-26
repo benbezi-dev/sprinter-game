@@ -30,6 +30,7 @@
 // engine.ts). Personne n'appuie, tout le reste fonctionne sans le savoir.
 
 import { programmerLeFilm, arreterLeFilm } from './film-course';
+import { entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle, arreterLaMusique } from './musique-championnat';
 import { chargerFiches, type SourceFiches } from './fiches-champ';
 
 const SprinterApp: any = (globalThis as any).SprinterApp;
@@ -195,6 +196,7 @@ export function lireRejeu(): EtatRejeu { return etat; }
  */
 export function fermerRejeu() {
   annulerLeRappel();
+  if (musique) { arreterLaMusique(); musique = false; }
   const G = SprinterApp?.G;
   if (G) { G.rejeu = false; G.rejeuFini = false; G.presente = null; G.rejeuBandeau = null; }
   poser(VIDE);
@@ -234,6 +236,11 @@ export type Intitule = {
    * stade olympique, comme avant.
    */
   lieu?: string | null;
+  /**
+   * Vrai pour une course du Championnat de France : le rejeu joue alors la
+   * musique du championnat, comme le direct (voir musique-championnat.ts).
+   */
+  fr?: boolean;
 };
 
 /** L'etape ou se rejoue une course : celle du lieu demande, sinon NIVEAU. */
@@ -323,6 +330,14 @@ export function rejouerCourse(
   // `autres: []` est volontaire — on ne branche aucun adversaire reseau, on
   // garde les sept coureurs que `buildLevel` a poses et on les repeint.
   app.startLive([epreuve], { levelIdx: niveau, adversaire: '', autres: [] });
+
+  // LA MUSIQUE DU CHAMPIONNAT, AUSSI EN REJEU (26/09). Le lien « Regarder »
+  // et « Revoir la course » passent par ici, et jouaient la musique ordinaire
+  // du jeu. Le morceau du tour se charge maintenant ; la presentation, le
+  // pistolet et le rappel du rejeu le pilotent comme ceux de la salle.
+  musique = !!(intitule.fr && intitule.course?.phase);
+  if (musique) entrerDansLeTour(intitule.course!.phase);
+  else arreterLaMusique();
 
   const ia = G.runners.filter((r: any) => !r.isPlayer);
   const aPlacer = coureurs.filter(c => c !== suivi);
@@ -565,6 +580,16 @@ const RAPPEL_APRES_COUP_MS = 350;
 /** La duree de la scene, la meme qu'en direct (RAPPEL_MS de la salle). */
 const RAPPEL_MS = 6500;
 const minuteursRappel: ReturnType<typeof setTimeout>[] = [];
+/** Le rejeu en cours joue-t-il la musique du championnat ? */
+let musique = false;
+
+/**
+ * La presentation du rejeu commence : le generique dure `avantMs`, puis `n`
+ * athletes. La musique cale ses blocs dessus, comme en direct.
+ */
+export function presentationDuRejeu(avantMs: number, n: number) {
+  if (musique) presentationAnnoncee(avantMs, n);
+}
 function annulerLeRappel() {
   while (minuteursRappel.length) clearTimeout(minuteursRappel.pop()!);
 }
@@ -582,6 +607,7 @@ export function lancerLeDepartDuRejeu() {
   departProgramme = null;
   poser({ ...etat, phase: 'course' });
   SprinterApp.liveDepart(d.dansMs, null);
+  if (musique) pistoletAnnonce(d.dansMs);
   if (d.filmer) programmerLeFilm('direct', d.dansMs);
   if (!d.fautifs.length) return;
   minuteursRappel.push(setTimeout(() => {
@@ -592,11 +618,13 @@ export function lancerLeDepartDuRejeu() {
       debut: Date.now(),
     } });
     SprinterApp.rappelChamp([], false, d.fautifs.map(f => f.coureur));
+    if (musique) rappelSiffle();
     minuteursRappel.push(setTimeout(() => {
       if (!SprinterApp.G.rejeu) return;
       SprinterApp.finRappelChamp(d.dansMs, null, () => {
         for (const [r, s] of d.allures) r.setPace(s);
       });
+      if (musique) pistoletAnnonce(d.dansMs);
       poser({ ...etat, rappel: null });
     }, RAPPEL_MS));
   }, d.dansMs + RAPPEL_APRES_COUP_MS));
