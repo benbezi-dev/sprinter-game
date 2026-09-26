@@ -644,8 +644,8 @@
     champ_arrivee:   ['ARRIVÉE', 'FINISH'],
     champ_fermer:    ['FERMER', 'CLOSE'],
     champ_reveal:    ['LES REPÊCHÉS', 'THE FASTEST LOSERS'],
-    champ_reveal_desc: ['ils n’ont gagné aucune course. Ils sortent du chrono de toutes.',
-                        'they won no race. They come from the clock of every race.'],
+    champ_reveal_desc: ['ils n’ont gagné aucune course. Sous chaque nom, pourquoi il passe.',
+                        'they won no race. Under each name, why they go through.'],
     champ_continue:  ['CONTINUER', 'CONTINUE'],
     champ_sacre:     ['{n} est sacré — voir le podium', '{n} is crowned — see the podium'],
     champ_titre_duree: ['titre porté trois mois', 'title held for three months'],
@@ -704,6 +704,12 @@
     // non d'un chrono. Presenter un passe-droit comme un repechage merite
     // serait la seule facon de rendre cette regle detestable.
     champ_repeche_doffice: ['d’office', 'by title'],
+    // Sous chaque repeche, la raison en quelques mots.
+    champ_rep_chrono:       ['repêché au chrono', 'fastest non-qualifier'],
+    champ_rep_doffice:      ['tenant du titre, qualifié d’office', 'title holder, qualified by right'],
+    champ_rep_priorite:     ['a couru : priorité aux joueurs', 'ran the heat: players come first'],
+    champ_rep_place_libre:  ['prend une place laissée par un forfait', 'fills a place left by a no-show'],
+    champ_rep_organisation: ['choix de l’organisation', 'organisers’ decision'],
     champ_rv_course: ['PROCHAINE COURSE', 'NEXT RACE'],
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],

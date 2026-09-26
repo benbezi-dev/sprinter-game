@@ -338,6 +338,7 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
   const { N } = SprinterApp;
   const repeches: {
     nom: string; ms: number | null; course: number; doffice?: boolean;
+    motif?: 'chrono' | 'doffice' | 'priorite' | 'place_libre' | 'organisation';
   }[] = (a.donnees && a.donnees.repeches) || [];
   const [montres, setMontres] = useState(0);
 
@@ -371,8 +372,18 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
               className="flex items-center gap-3 px-3 py-2 rounded-xl
                          bg-primary/12 border border-primary/35">
               <span className="font-mono text-[10px] text-primary/70 w-4">{i + 1}</span>
-              <span className="flex-1 font-bold text-sm tracking-wide truncate text-foreground">
-                {r.nom}
+              {/* Le nom, et dessous POURQUOI il passe, en quelques mots : depuis
+                  le 26/09 un repeche peut aussi entrer pour completer la grille,
+                  ou par decision de l'organisation — ce que le chrono seul ne
+                  dit pas. Les annonces d'avant ne portent pas de motif : on les
+                  lit comme avant (d'office, sinon au chrono). */}
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="font-bold text-sm tracking-wide truncate text-foreground">
+                  {r.nom}
+                </span>
+                <span className="text-[9px] tracking-wide text-muted-foreground truncate">
+                  {N.t('champ_rep_' + (r.motif || (r.doffice ? 'doffice' : 'chrono')))}
+                </span>
               </span>
               {/* Une place prise par un titre n'est pas une place prise au
                   chrono, et l'ecran doit le dire. Le taire ferait passer un
@@ -383,9 +394,11 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
                   {N.t('champ_repeche_doffice')}
                 </span>
               ) : (
-                <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-                  {chrono(r.ms)}
-                </span>
+                r.ms != null && (
+                  <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+                    {chrono(r.ms)}
+                  </span>
+                )
               )}
             </motion.div>
           ))}

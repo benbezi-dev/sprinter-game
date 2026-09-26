@@ -436,6 +436,19 @@ export async function ensureChampTables(db) {
     ).run();
   } catch (e) { /* la colonne est deja la */ }
 
+  // LES INVITES DE L'ORGANISATION (26/09) : des joueurs que l'organisateur
+  // fait entrer dans la phase suivante, dans l'ordre. `force` = 1 : il prend
+  // au besoin la place du fictif le moins bon ; 0 : seulement une place libre,
+  // mais avant les fictifs qui completent. Lue par cloturerPhase.
+  await db.prepare(`CREATE TABLE IF NOT EXISTS champ_invites (
+    edition TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    ordre INTEGER NOT NULL,
+    force INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (edition, phase, name_key)
+  )`).run();
+
   // La cloture est arrivee apres la table elle aussi, et pour la meme raison
   // elle s'ajoute seule. Elle est nullable a dessein : les editions ouvertes
   // avant qu'elle existe n'ont jamais eu d'heure de cloture annoncee, et leur
@@ -2193,12 +2206,49 @@ export async function cloturerPhase(db, edition) {
         for (const l of [q.directs, q.repeches]) { const i = l.indexOf(lent); if (i >= 0) l.splice(i, 1); }
         dehors.push(lent);
       }
-      q.repeches.push({ ...v, complement: true });
+      q.repeches.push({ ...v, complement: true, motif: 'priorite' });
       sortir(v);
+    }
+
+    // Les invites de l'organisation pour la phase qui suit celle-ci.
+    const { results: invites } = await db.prepare(
+      `SELECT i.name_key AS cle, i.force AS force, COALESCE(p.nom, pl.name, i.name_key) AS nom,
+              p.name_key AS partant
+         FROM champ_invites i
+         LEFT JOIN champ_partants p ON p.edition = i.edition AND p.name_key = i.name_key
+         LEFT JOIN players pl ON pl.name_key = i.name_key
+        WHERE i.edition = ? AND i.phase = ? ORDER BY i.ordre`
+    ).bind(edition, suivante.cle).all().catch(() => ({ results: [] }));
+    const nouveaux = [];
+    for (const inv of invites || []) {
+      if ([...q.directs, ...q.repeches].some(r => r.cle === inv.cle)) continue;
+      if (nb() >= places) {
+        if (!inv.force) continue;
+        // Le fictif le moins bon : sans chrono d'abord, puis le plus lent.
+        const lent = [...q.directs, ...q.repeches]
+          .filter(r => fictives.has(r.cle) && !r.doffice)
+          .sort((a, b) => (a.ms == null) - (b.ms == null) || (a.ms ?? 0) - (b.ms ?? 0)).pop();
+        if (!lent) continue;
+        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(lent); if (i >= 0) l.splice(i, 1); }
+        dehors.push(lent);
+      }
+      const deDehors = dehors.find(r => r.cle === inv.cle);
+      if (deDehors) sortir(deDehors);
+      if (!inv.partant) nouveaux.push(inv);
+      q.repeches.push({ ...(deDehors || {}), cle: inv.cle, nom: inv.nom, ms: deDehors ? deDehors.ms : null,
+                        course: deDehors ? deDehors.course : null, place: deDehors ? deDehors.place : null,
+                        complement: true, motif: 'organisation' });
+    }
+    // Un invite qui n'etait pas partant recoit sa ligne, dans la phase qui se
+    // clot : la mise a jour plus bas le fait passer dans la suivante.
+    if (nouveaux.length) {
+      await db.batch(nouveaux.map((inv, i) => db.prepare(
+        `INSERT OR IGNORE INTO champ_partants (edition, name_key, nom, rang_duel, phase, course, tenant)
+         VALUES (?, ?, ?, ?, ?, NULL, 0)`).bind(edition, inv.cle, inv.nom, 800 + i, e.phase)));
     }
     for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms != null).sort(parMs)) {
       if (nb() >= places) break;
-      q.repeches.push({ ...f, complement: true });
+      q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
       sortir(f);
     }
     q.elimines = dehors;
@@ -2209,7 +2259,7 @@ export async function cloturerPhase(db, edition) {
     //      lance : si les coureurs manquent, la phase suivante court a moins.
     for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms == null)) {
       if (nb() >= places) break;
-      q.repeches.push({ ...f, complement: true });
+      q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
       sortir(f);
     }
     q.elimines = dehors;
@@ -2249,8 +2299,10 @@ export async function cloturerPhase(db, edition) {
     edition, echelon: e.echelon, zone: e.zone,
     type: suivante.cle === 'finale' ? 'reveal-finale' : 'reveal-demies',
     titre: 'Les repêchés — ' + suivante.nom,
+    // « au chrono » n'est plus vrai de tous : la raison de chacun est dans
+    // `donnees.repeches[].motif`, et l'ecran la dit.
     texte: q.repeches.length
-      ? q.repeches.map(r => r.nom).join(', ') + ' sont repêchés au chrono.'
+      ? 'Repêchés : ' + q.repeches.map(r => r.nom).join(', ') + '.'
       : 'Aucun repêchage.',
     donnees: {
       directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
@@ -2258,9 +2310,13 @@ export async function cloturerPhase(db, edition) {
       // chrono. L'ecran doit pouvoir le dire : presenter un passe-droit comme
       // un repechage merite serait la seule facon de rendre cette regle
       // detestable.
+      // La raison de chaque repechage, que l'ecran dit en une ligne : au
+      // chrono, d'office (tenant), vrai joueur prioritaire, place laissee par
+      // un forfait. « organisation » est posee a la main (liste d'attente).
       repeches: q.repeches.map(r => ({
         nom: r.nom, course: r.course, place: r.place, ms: r.ms,
         doffice: !!r.doffice,
+        motif: r.doffice ? 'doffice' : (r.motif || 'chrono'),
       })),
       elimines: q.elimines.length,
       grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
