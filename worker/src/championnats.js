@@ -2359,37 +2359,31 @@ export async function cloturerPhase(db, edition) {
     }
     q.elimines = dehors;
 
-    //   3. s'il manque encore du monde, les fictifs de l'edition restes
-    //      dehors SANS chrono (un faux depart d'avant le 26/09) passent en
-    //      dernier. On ne cree jamais de fictif une fois le championnat
-    //      lance : si les coureurs manquent, la phase suivante court a moins.
+    //   4. LES COURSES DE REPECHAGE (COURSES_EXTRA). Tous ceux qui ont fini
+    //      leur serie sont deja dedans (regles 1 et 2) ; les places qui restent
+    //      vont aux meilleurs chronos des repechages, fictifs compris, et
+    //      personne n'y prend la place d'un qualifie (decision de
+    //      l'organisateur, 26/09 18:15). Sans chrono, rien.
+    for (const x of extras.filter(r => r.ms != null).sort(parMs)) {
+      if (nb() >= places) break;
+      if ([...q.directs, ...q.repeches].some(r => r.cle === x.cle)) continue;
+      q.repeches.push({ ...x, complement: true, motif: 'repechage' });
+      // Sa course de serie d'origine (forfait, faux depart) l'avait laisse dehors.
+      for (let i = dehors.length - 1; i >= 0; i--) if (dehors[i].cle === x.cle) dehors.splice(i, 1);
+    }
+
+    //   3. s'il manque encore du monde APRES les repechages, les fictifs de
+    //      l'edition restes dehors SANS chrono passent en dernier. On ne cree
+    //      jamais de fictif une fois le championnat lance : si les coureurs
+    //      manquent, la phase suivante court a moins.
     for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms == null)) {
       if (nb() >= places) break;
+      if ([...q.directs, ...q.repeches].some(r => r.cle === f.cle)) continue;
       q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
       sortir(f);
     }
 
-    //   4. LA COURSE DE REPECHAGE (COURSES_EXTRA). Un coureur y gagne sa place
-    //      seulement s'il bat le chrono du fictif qu'il remplacerait — celui
-    //      qui n'en a pas d'abord, puis le plus lent ; sinon le fictif la
-    //      garde (decision de l'organisateur, 26/09). Sans chrono, rien.
-    for (const x of extras.filter(r => r.ms != null).sort(parMs)) {
-      if ([...q.directs, ...q.repeches].some(r => r.cle === x.cle)) continue;
-      if (nb() < places) {
-        q.repeches.push({ ...x, complement: true, motif: 'repechage' });
-      } else {
-        const cible = [...q.directs, ...q.repeches]
-          .filter(r => fictives.has(r.cle) && !r.doffice)
-          .sort((a, b) => (a.ms == null) - (b.ms == null) || (a.ms ?? 0) - (b.ms ?? 0)).pop();
-        if (!cible || (cible.ms != null && x.ms >= cible.ms)) continue;
-        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(cible); if (i >= 0) l.splice(i, 1); }
-        dehors.push(cible);
-        q.repeches.push({ ...x, complement: true, motif: 'repechage' });
-      }
-      // Sa course de serie d'origine (forfait) l'avait laisse dehors.
-      for (let i = dehors.length - 1; i >= 0; i--) if (dehors[i].cle === x.cle) dehors.splice(i, 1);
-    }
-    // Qui a couru le repechage sans y gagner sa place sort ici.
+    // Qui a couru un repechage sans y gagner sa place sort ici.
     for (const x of extras) {
       const dedans = [...q.directs, ...q.repeches].some(r => r.cle === x.cle);
       if (!dedans && !dehors.some(r => r.cle === x.cle)) dehors.push(x);

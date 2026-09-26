@@ -269,13 +269,20 @@ export const CLOTURE_JOURS_AVANT = 3;
  * DES COURSES HORS CALENDRIER, POUR UNE EDITION PRECISE.
  *
  * Le 26/09/2026, l'organisateur a ajoute au Championnat de France (HMW36AHQ)
- * une course de repechage a 20:30 (18:30 UTC), reservee a cinq joueurs
- * invites, avant la revelation de 21:00 : un invite n'entre en demie que s'il
- * bat le chrono du fictif qu'il remplacerait (voir cloturerPhase). Exceptionnel
- * — les championnats suivants n'en auront pas. `jour` : 1 = samedi, 2 = dimanche.
+ * trois courses de repechage avant la revelation de 21:00 — 19:50, 20:10 et
+ * 20:30 (heure de Paris) — pour tous ceux qui n'ont pas fini leur serie :
+ * faux departs et absents, invites compris. Ceux qui ont fini leur serie sont
+ * qualifies ; les places restantes vont aux meilleurs chronos des repechages
+ * (voir cloturerPhase). Huit couloirs par course, d'ou trois courses.
+ * Exceptionnel — les championnats suivants n'en auront pas. `minute` est en
+ * UTC ; `jour` : 1 = samedi, 2 = dimanche.
  */
 export const COURSES_EXTRA = {
-  HMW36AHQ: [{ cle: 'repechage', phase: 'series', course: 5, jour: 1, minute: 18 * 60 + 30 }],
+  HMW36AHQ: [
+    { cle: 'repechage-1950', phase: 'series', course: 6, jour: 1, minute: 17 * 60 + 50 },
+    { cle: 'repechage-2010', phase: 'series', course: 7, jour: 1, minute: 18 * 60 + 10 },
+    { cle: 'repechage',      phase: 'series', course: 5, jour: 1, minute: 18 * 60 + 30 },
+  ],
 };
 
 /**
