@@ -49,6 +49,7 @@
 
 import { policesPretes, sortir, type Sortie } from './affiche';
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
+import { C, OSWALD, MONO, WORK, deux, chronoTxt, jourHeure, peindreFond, arrondi as cadre, policesDeLaCarte } from './carte-resultats-jeu';
 import { NUIT, HALO, ENCRE, peindreLeFond, flammeSur } from './voix-competition';
 
 const SprinterCore: any = (globalThis as any).SprinterCore;
@@ -419,11 +420,11 @@ export function dessinerPhotoFinish(cv: HTMLCanvasElement, c: CoursePhoto, fr = 
   if (!ctx) return;
   const L = LARGEUR, H = HAUTEUR;
 
-  peindreLeFond(ctx, L, H);
-
-  const M = Math.round(L * 0.082);
-  const dispo = L - M * 2;
-  const cx = L / 2;
+  // LA VOIX DES CARTES DU CHAMPIONNAT (26/09) : fond de nuit a diagonales
+  // dorees, Oswald, Space Mono, Work Sans, or et rouge — la meme que la carte
+  // « RÉSULTATS » (carte-resultats-jeu.ts). Le releve lui-meme ne change pas.
+  peindreFond(ctx, L, H);
+  const MX = 78, w = L - MX * 2;
 
   const N: any = (globalThis as any).SprinterApp?.N;
   const t = (cle: string, secours: string) => {
@@ -431,106 +432,65 @@ export function dessinerPhotoFinish(cv: HTMLCanvasElement, c: CoursePhoto, fr = 
     return v && v !== cle ? v : secours;
   };
 
-  // --- le kicker : de quelle competition il s'agit.
-  let y = Math.round(H * 0.072);
-  const eKick = { taille: 28, gras: 700, police: AFFICHE, couleur: ENCRE.kicker,
-                  espace: 28 * 0.36, aligne: 'center' as CanvasTextAlign };
-  ecrire(ctx, tailler(ctx, `${c.competition} · ${c.epreuve}`.toUpperCase(), dispo, eKick),
-         cx, y, eKick);
+  // --- le kicker : la course a gauche, le jour et l'heure a droite.
+  let y = 64;
+  const eK = { taille: 24, gras: 700, police: MONO, couleur: C.or, espace: 24 * 0.3 };
+  ecrire(ctx, tailler(ctx, c.nomCourse.toUpperCase(), w * 0.5, eK), MX, y, eK);
+  const { jour, heure } = jourHeure(c.quand, fr);
+  if (jour) ecrire(ctx, `${jour} ${heure}`.toUpperCase(), L - MX, y, { ...eK, couleur: C.gris, aligne: 'right' as CanvasTextAlign });
 
-  // --- le titre : la course, en grand, dans la flamme.
-  y += 72;
-  const eTitre = { taille: 88, gras: 900, police: AFFICHE,
-                   couleur: flammeSur(ctx, M, y - 56, dispo, 88),
-                   aligne: 'center' as CanvasTextAlign };
-  ecrire(ctx, tailler(ctx, c.nomCourse.toUpperCase(), dispo, eTitre), cx, y, eTitre);
-
-  const quand = quandEcrit(c.quand, fr ? 'fr-FR' : 'en-GB');
-  if (quand) {
-    y += 48;
-    ecrire(ctx, quand, cx, y, { taille: 26, gras: 500, police: AFFICHE,
-                                couleur: ENCRE.sous, aligne: 'center' as CanvasTextAlign });
-  }
-
-  // --- l'etiquette du releve, juste au-dessus de lui.
-  y += 54;
-  const eEtiq = { taille: 24, gras: 700, police: AFFICHE, couleur: ENCRE.etiquette,
-                  espace: 24 * 0.3, aligne: 'center' as CanvasTextAlign };
-  ecrire(ctx, t('pf_titre', 'PHOTO-FINISH'), cx, y, eEtiq);
-
-  // --- LE RELEVE.
-  y += 26;
-  dessinerReleve(ctx, M, y, dispo, 372, c);
-  y += 372 + Math.max(34, 372 * 0.09);
-
-  // --- ce que l'image a departage : la legende du releve, pas un pied de carte.
+  // --- le surtitre rouge, puis le titre en deux lignes (la seconde en or).
+  y += 44;
+  ecrire(ctx, tailler(ctx, `${t('pf_titre', 'PHOTO-FINISH')} · ${c.competition} · ${c.epreuve}`.toUpperCase(), w,
+                      { taille: 22, gras: 700, police: MONO, espace: 22 * 0.24 }),
+         MX, y, { taille: 22, gras: 700, police: MONO, couleur: C.rouge, espace: 22 * 0.24 });
   const ecart = ecartLePlusSerre(c.lignes);
+  const [l1, l2] = ecart != null && ecart < 10 ? (fr ? ['Au millième', 'près'] : ['By a', 'thousandth'])
+    : ecart != null && ecart < 50 ? (fr ? ['À la', 'poitrine'] : ['On the', 'dip'])
+    : (fr ? ['La ligne', 'a parlé'] : ['The line', 'has spoken']);
+  y += 30;
+  const tT = 84, lh = Math.round(tT * 0.95);
+  ecrire(ctx, l1.toUpperCase(), MX, y + lh / 2, { taille: tT, gras: 700, police: OSWALD, couleur: C.texte });
+  ecrire(ctx, l2.toUpperCase(), MX, y + lh * 1.5, { taille: tT, gras: 700, police: OSWALD, couleur: C.or });
+  y += lh * 2 + 30;
+
+  // --- LE RELEVE, dans un cadre a filet.
+  const hR = 330;
+  ctx.save(); ctx.strokeStyle = C.bord; ctx.lineWidth = 2; cadre(ctx, MX - 4, y - 4, w + 8, hR + 8, 12); ctx.stroke(); ctx.restore();
+  dessinerReleve(ctx, MX, y, w, hR, c);
+  y += hR + Math.max(30, hR * 0.09);
+
+  // --- ce que l'image a departage.
   if (ecart != null) {
-    y += 40;
+    y += 22;
     const txt = t('pf_ecart', 'ÉCART LE PLUS SERRÉ') + ' : '
       + (ecart / 1000).toFixed(3).replace('.', fr ? ',' : '.') + ' s';
-    ecrire(ctx, txt, cx, y, { taille: 24, gras: 500, police: CHIFFRES,
-                              couleur: ENCRE.doux, aligne: 'center' as CanvasTextAlign });
+    ecrire(ctx, txt, L / 2, y, { taille: 22, gras: 700, police: MONO, couleur: C.texte, espace: 22 * 0.1,
+                                 aligne: 'center' as CanvasTextAlign });
   }
 
-  /* --- LE TABLEAU. Meme composition qu'a l'ecran et que l'affiche du resultat
-     — place, couloir, nom, chrono — parce que celui qui a vu la course doit
-     retrouver ce qu'il a lu, d'une image a l'autre. */
-  y += 34;
-  const places = [...c.lignes]
-    .filter(l => l.ms != null)
-    .sort((a, b) => (a.ms as number) - (b.ms as number));
-  // Huit lignes de 54 laissent quarante points sous la derniere avant
-  // l'adresse. A 58 elles la touchaient — et une adresse collee a un chrono se
-  // lit comme une neuvieme ligne.
-  const hL = 54, ecartL = 7;
+  // --- le tableau, comme sur la carte : place, nom, chrono, filets.
+  y += 30;
+  ctx.save(); ctx.fillStyle = C.bord; ctx.fillRect(MX, y, w, 2); ctx.restore();
+  const places = [...c.lignes].filter(l => l.ms != null).sort((a, b) => (a.ms as number) - (b.ms as number));
+  const hl = 50;
   places.slice(0, 8).forEach((r, i) => {
-    const premier = i === 0;
-    ctx.save();
-    ctx.fillStyle = premier ? 'rgba(247,160,60,0.13)' : 'rgba(255,255,255,0.035)';
-    gelule(ctx, M, y, dispo, hL); ctx.fill();
-    if (premier) {
-      ctx.strokeStyle = 'rgba(251,196,78,0.55)'; ctx.lineWidth = 2;
-      gelule(ctx, M, y, dispo, hL); ctx.stroke();
-    }
-    ctx.restore();
-
-    const cyL = y + hL / 2;
-    ecrire(ctx, String(i + 1), M + 30, cyL, {
-      taille: premier ? 36 : 31, gras: 900, police: AFFICHE,
-      couleur: premier ? flammeSur(ctx, M + 24, y, 54, hL) : ENCRE.rang,
-    });
-
-    // le couloir dans sa case : le meme chiffre, la meme graisse qu'a l'ecran
-    const xC = M + 92;
-    ctx.save();
-    ctx.strokeStyle = ENCRE.filet; ctx.lineWidth = 2;
-    ctx.strokeRect(xC, cyL - 16, 32, 32);
-    ctx.restore();
-    ecrire(ctx, r.couloir == null ? '—' : String(r.couloir), xC + 16, cyL, {
-      taille: 22, gras: 400, police: CHIFFRES, couleur: ENCRE.etiquette,
-      aligne: 'center' as CanvasTextAlign,
-    });
-
-    const eChrono = { taille: premier ? 34 : 30, gras: 700, police: CHIFFRES,
-                      couleur: premier ? ENCRE.vif : ENCRE.doux,
-                      aligne: 'right' as CanvasTextAlign };
-    const txtChrono = chronoEcrit(r.ms, fr);
-    ecrire(ctx, txtChrono, L - M - 26, cyL, eChrono);
-
-    const eNom = { taille: premier ? 32 : 28, gras: premier ? 900 : 700, police: AFFICHE,
-                   couleur: r.moi ? ENCRE.vif : premier ? ENCRE.vif : ENCRE.doux };
-    const placeNom = L - M - 26 - largeur(ctx, txtChrono, eChrono) - (xC + 58) - 24;
-    ecrire(ctx, tailler(ctx, r.nom, placeNom, eNom), xC + 58, cyL, eNom);
-
-    y += hL + ecartL;
+    const cy = y + hl / 2;
+    ecrire(ctx, deux(i + 1), MX, cy, { taille: 20, gras: 700, police: MONO, couleur: C.or2 });
+    const eCh = { taille: 28, gras: 700, police: MONO, couleur: i === 0 ? C.or : C.texte, aligne: 'right' as CanvasTextAlign };
+    const txt = chronoTxt(r.ms as number, fr);
+    const lCh = largeur(ctx, txt, eCh);
+    const eNom = { taille: 28, gras: 600, police: WORK, couleur: r.moi ? C.or : C.texte };
+    ecrire(ctx, tailler(ctx, r.nom, L - MX - lCh - 24 - (MX + 70), eNom), MX + 70, cy, eNom);
+    ecrire(ctx, txt, L - MX, cy, eCh);
+    y += hl;
+    ctx.save(); ctx.fillStyle = 'rgba(31,42,69,0.8)'; ctx.fillRect(MX, y, w, 1); ctx.restore();
   });
 
-  // --- l'adresse, une fois, sans point d'exclamation.
-  ecrire(ctx, 'SPRINTER-GAME.COM', cx, H - 44, {
-    taille: 22, gras: 700, police: AFFICHE, couleur: ENCRE.etiquette,
-    espace: 22 * 0.28, aligne: 'center' as CanvasTextAlign,
-  });
+  // --- le pied : l'adresse a gauche, SPRINTER en or a droite.
+  ecrire(ctx, 'sprinter-game.com', MX, H - 56, { taille: 20, gras: 400, police: MONO, couleur: C.gris, espace: 20 * 0.1 });
+  ecrire(ctx, 'SPRINTER', L - MX, H - 56, { taille: 32, gras: 700, police: OSWALD, couleur: C.or2, espace: 32 * 0.08,
+                                           aligne: 'right' as CanvasTextAlign });
 }
 
 /* -------------------------------------------------------------- la sortie */
@@ -545,6 +505,7 @@ function nomDeFichier(c: CoursePhoto): string {
 export async function partagerPhotoFinish(c: CoursePhoto, fr: boolean): Promise<Sortie> {
   try {
     await policesPretes();
+    await policesDeLaCarte();
     const cv = document.createElement('canvas');
     dessinerPhotoFinish(cv, c, fr);
     const blob = await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));

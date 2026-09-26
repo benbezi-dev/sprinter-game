@@ -23,6 +23,7 @@
 // chronos — et le joueur n'y est qu'une ligne parmi les autres, s'il y est.
 
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
+import { dessinerCarte, policesDeLaCarte, type Carte } from './carte-resultats-jeu';
 import { ENCRE, peindreLeFond, flammeSur } from './voix-competition';
 import { policesPretes, sortir, type Sortie } from './affiche';
 
@@ -55,6 +56,11 @@ export type AfficheChamp = {
    * et les deux disent donc la meme chose le meme jour.
    */
   etiquetteMot?: string;
+  /**
+   * La carte des championnats (carte-resultats-jeu.ts). Presente, c'est elle
+   * qui se dessine, au format story : la voix des cartes publiees.
+   */
+  carte?: Carte;
 };
 
 /** Le chrono, comme les cartes l'ecrivent : virgule en francais. */
@@ -250,7 +256,8 @@ export async function partagerLArrivee(a: AfficheChamp, fr: boolean): Promise<So
   try {
     await policesPretes();
     const cv = document.createElement('canvas');
-    dessiner(cv, a, fr);
+    if (a.carte) { await policesDeLaCarte(); dessinerCarte(cv, a.carte, fr); }
+    else dessiner(cv, a, fr);
     const blob = await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));
     if (!blob) return 'echec';
     const nom = `sprinter-${a.course}-${a.epreuve}`

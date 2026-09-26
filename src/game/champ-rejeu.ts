@@ -162,6 +162,8 @@ export type EtatRejeu = {
   rappel: { fautifs: { id: string; nom: string; couloir: number; ms: number }[]; debut: number } | null;
   /** La course dont il s'agit, quand elle vient d'un championnat. */
   course: { edition: string; phase: string; numero: number } | null;
+  /** Championnat de France : l'image du resultat porte le drapeau devant les noms. */
+  fr?: boolean;
   /** Le mot du vainqueur, deja pose. `null` tant que personne n'a parle. */
   mot: MotDuVainqueur | null;
 };
@@ -484,6 +486,7 @@ export function rejouerCourse(
     course: intitule.course ?? null,
     mot: intitule.mot ?? null,
     rappel: null,
+    fr: !!intitule.fr,
   });
 
   // CE QUI SE PASSE QUAND LE HUITIEME A FRANCHI LA LIGNE.

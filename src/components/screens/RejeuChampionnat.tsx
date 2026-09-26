@@ -363,7 +363,8 @@ function MotDuGagnant({ mot, course }: {
 
 /* -------------------------------------------------------------- l'arrivee */
 
-function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, epreuve, quand }: {
+function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, epreuve, quand, fr }: {
+  fr?: boolean;
   titre: string; sousTitre: string;
   lignes: { place: number | null; nom: string; ms: number | null; couloir: number | null;
             motif?: string | null }[];
@@ -421,6 +422,12 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
   const fabriquerLImage = async () => {
     setImage('en cours');
     const r = await partagerLArrivee({
+      // LA CARTE DES CHAMPIONNATS (26/09) : meme voix que les cartes publiees.
+      carte: course ? {
+        phase: course.phase, numero: course.numero, quand,
+        drapeau: fr ? '🇫🇷' : undefined,
+        lignes: toutes.map(r => ({ nom: r.nom, ms: r.ms, motif: r.motif ?? null })),
+      } : undefined,
       competition: competition || sousTitre,
       course: titre,
       epreuve: EPREUVE(epreuve),
@@ -618,7 +625,7 @@ export function RejeuChampionnat() {
   }
   if (etat.phase === 'arrivee' && etat.arrivee) {
     return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee}
-                    course={etat.course} mot={etat.mot}
+                    course={etat.course} mot={etat.mot} fr={!!etat.fr}
                     competition={SprinterApp.G.rejeuBandeau?.competition || etat.sousTitre}
                     epreuve={etat.epreuve}
                     quand={SprinterApp.G.rejeuBandeau?.quand ?? null} />;
