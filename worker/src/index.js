@@ -16,7 +16,7 @@ import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
   ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
-  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances, courirSansPersonne,
+  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances, courirSansPersonne, engager,
   cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
@@ -212,6 +212,8 @@ const RATE_LIMITS = {
   // edition — six par minute laissent passer une reprise apres une coupure et
   // arretent un script.
   '/champ/mot': { max: 6, fenetreMs: 60_000 },
+  // S'engager ou se retirer : un geste par selection, quelques-uns au plus.
+  '/champ/engager': { max: 10, fenetreMs: 60_000 },
   // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
   // joueur en demande un par partie ; dix par minute et par adresse laissent
   // passer une famille derriere la meme box et arretent net un script.
@@ -2049,6 +2051,24 @@ async function servir(request, env, ctx, porteur) {
       // manquent qui fait rejouer, et c'est une information que le joueur peut
       // recompter lui-meme dans le classement — ce qui est tout l'interet
       // d'avoir qualifie a l'echelle visible.
+      // S'engager pour l'edition a venir de son pays, ou se retirer. Sous
+      // preuve de nom, comme le choix du pays : sans elle, n'importe qui
+      // pourrait retirer un rival de la selection.
+      if (sous === 'engager' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, name, engage } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const key = cleanName(name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/engager', nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await engager(env.DB, key, engage !== false);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
+      }
+
       if (sous === 'selection' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
         if (!key) return json({ error: 'nom manquant' }, 400);

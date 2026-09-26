@@ -5,7 +5,7 @@ import { Flag, Trophy, ChevronRight } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
 import { getSavedName } from '@/game/leaderboard';
-import { maSelection, restant, type MaSelection } from '@/game/championnats';
+import { maSelection, restant, engager, type MaSelection } from '@/game/championnats';
 import { useRetour } from '@/hooks/use-retour';
 
 /* ---------------------------------------------------------------------------
@@ -35,9 +35,21 @@ import { useRetour } from '@/hooks/use-retour';
    ne se glisse pas dans un bandeau de deux lignes sur un écran d'accueil.
 --------------------------------------------------------------------------- */
 
+/**
+ * Une réponse fraîche du serveur, diffusée à toutes les copies du hook : la
+ * banderole, la scène et la barre du classement tiennent chacune la leur, et
+ * un engagement pris dans la banderole doit se voir partout à la fois.
+ */
+const abonnes = new Set<(s: MaSelection) => void>();
+const diffuser = (s: MaSelection) => abonnes.forEach(f => f(s));
+
 /** Le nombre de places, le rang, l'écart : tout vient du serveur, rien d'ici. */
 function useMaSelection() {
   const [s, setS] = useState<MaSelection | null>(null);
+  useEffect(() => {
+    abonnes.add(setS);
+    return () => { abonnes.delete(setS); };
+  }, []);
   // Le décompte s'affiche à la seconde près à la fin, à la journée près au
   // début. Un état qui n'existe que pour forcer le rendu : la valeur affichée
   // se recalcule depuis `s.cloture`, jamais depuis un compteur qu'on
@@ -245,6 +257,19 @@ function Decompte({ reste, urgent }: { reste: string; urgent: boolean }) {
 export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
   const s = useMaSelection();
   const { N } = SprinterApp;
+  const [envoi, setEnvoi] = useState<'' | 'attente' | 'erreur'>('');
+
+  // S'engager, ou se retirer. La réponse est la sélection relue par le
+  // serveur : elle remplace celle de toutes les copies du hook.
+  const basculer = async (oui: boolean) => {
+    const nom = getSavedName();
+    if (!nom || envoi === 'attente') return;
+    setEnvoi('attente');
+    const r = await engager(nom, oui);
+    if ('error' in r) { setEnvoi('erreur'); return; }
+    setEnvoi('');
+    diffuser(r);
+  };
 
   // Rien à dire : pas de nom, pas de championnat annoncé dans ce pays, ou un
   // pays qui n'en tient pas. On disparaît plutôt que d'annoncer une échéance
@@ -258,17 +283,30 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
   // Trois situations, trois phrases. Elles se lisent de haut en bas dans
   // l'ordre où elles deviennent vraies pour un joueur : pas de pays, pas
   // classé, puis un rang et un écart.
+  // L'engagement. Tant que la sélection est ouverte, qui ne s'est pas engagé
+  // lit d'abord qu'il doit le faire — son rang vient en dessous, c'est celui
+  // qu'il aurait en s'engageant. Après la clôture, qui ne l'a pas fait lit
+  // que sa place est partie.
+  const engagement = !!s.engagement && !!pays;
+  const aEngager = engagement && !s.gele;
+  const pasEngage = engagement && !s.engage;
+  const cede = s.gele && pasEngage;
+
   const ligne = !pays
     ? N.t('sel_pas_de_pays')
-    : s.rang == null
-      ? N.t('sel_pas_classe')
-      : s.retenu
-        ? (s.gele ? N.t('sel_dedans_fige') : N.t('sel_dedans'))
-        : s.manque === 1
-          ? N.t('sel_manque_1')
-          : N.t('sel_manque_n', { n: s.manque ?? 0 });
+    : cede
+      ? N.t('sel_pas_engage')
+      : aEngager && pasEngage
+        ? N.t('sel_engage_toi')
+        : s.rang == null
+          ? N.t('sel_pas_classe')
+          : s.retenu
+            ? (s.gele ? N.t('sel_dedans_fige') : N.t('sel_dedans'))
+            : s.manque === 1
+              ? N.t('sel_manque_1')
+              : N.t('sel_manque_n', { n: s.manque ?? 0 });
 
-  const dedans = !!s.retenu && !!pays && s.rang != null;
+  const dedans = !!s.retenu && !!pays && s.rang != null && !pasEngage;
   const cliquable = dedans && s.gele && !!onVoir;
   const Balise: any = cliquable ? 'button' : 'div';
 
@@ -307,7 +345,9 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
               décider quand jouer, « mercredi 02:00 » ne dit pas si c'est loin.
               Après le gel, c'est sa série. */}
           <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
-            {s.gele
+            {cede
+              ? N.t('sel_place_cedee')
+              : s.gele
               ? (dedans && s.course
                   ? (courue(s.course)
                       ? N.t('sel_courue', { c: maCourse(s.course) })
@@ -320,6 +360,41 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
                       ? N.t('sel_le', { d: dateLocale(s.cloture) })
                       : N.t('sel_ferme')}`}
           </span>
+
+          {/* LA CONFIRMATION DE PARTICIPATION, tant que la sélection est
+              ouverte. Sans elle, la clôture passe au suivant de la liste. */}
+          {aEngager && (
+            <span className="mt-1.5 flex items-center gap-2 flex-wrap"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+              {s.engage ? (
+                <>
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-primary">
+                    ✓ {N.t('sel_engage')}
+                  </span>
+                  <button type="button" onClick={() => basculer(false)} disabled={envoi === 'attente'}
+                          className="text-[10px] text-muted-foreground underline underline-offset-2
+                                     hover:text-foreground transition-colors disabled:opacity-50">
+                    {N.t('sel_retirer')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => basculer(true)} disabled={envoi === 'attente'}
+                          className="rounded-full bg-primary text-background px-3 py-1.5
+                                     text-[10px] font-bold tracking-widest uppercase
+                                     hover:bg-primary/90 transition-colors disabled:opacity-50">
+                    {N.t('sel_engager')}
+                  </button>
+                  <span className="text-[9px] text-muted-foreground leading-tight">
+                    {N.t('sel_engage_regle')}
+                  </span>
+                </>
+              )}
+              {envoi === 'erreur' && (
+                <span className="text-[9px] text-red-400">{N.t('sel_engager_err')}</span>
+              )}
+            </span>
+          )}
         </div>
 
         {/* À droite : le décompte tant que la sélection est ouverte, l'accès au

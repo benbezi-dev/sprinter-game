@@ -266,6 +266,23 @@ export const REPLI_PAYS_TROP_PETIT = 'attendre';
 export const CLOTURE_JOURS_AVANT = 3;
 
 /**
+ * L'ENGAGEMENT : on ne selectionne que ceux qui ont dit qu'ils viendraient.
+ *
+ * Une grille gelee au classement seul designait des joueurs qui ne savaient
+ * meme pas qu'ils couraient : ils ne venaient pas, leur couloir restait vide
+ * et le suivant de la liste, lui, serait venu. Desormais un joueur confirme sa
+ * participation pendant la selection, et a la cloture la grille prend les
+ * trente-deux premiers ENGAGES du classement. Qui ne s'engage pas laisse sa
+ * place au suivant.
+ *
+ * Vaut pour les editions annoncees apres la mise en ligne de cette regle : une
+ * edition deja annoncee a promis « les 32 meilleurs », et on ne change pas la
+ * regle d'une selection en cours. Les partants fictifs, qui completent une
+ * grille, sont engages d'office.
+ */
+export const ENGAGEMENT_REQUIS = true;
+
+/**
  * Combien de suivants on garde en memoire au moment de la cloture.
  *
  * Les trente-deux retenus sont dans `champ_partants`. Ceux-la sont ceux

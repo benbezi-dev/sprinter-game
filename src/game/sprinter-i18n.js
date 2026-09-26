@@ -748,6 +748,18 @@
     sel_gelee:       ['la grille est gelée.', 'the grid is frozen.'],
     // Apres la course : la convocation n'est plus a venir.
     sel_courue:      ['{c} courue', '{c} done'],
+    // L'engagement : on confirme sa participation avant la clôture, sinon la
+    // place va au suivant de la liste.
+    sel_engage_toi:  ['confirme ta participation', 'confirm you will race'],
+    sel_engager:     ['JE M’ENGAGE', 'I’M IN'],
+    sel_engage:      ['ENGAGÉ', 'ENTERED'],
+    sel_retirer:     ['se retirer', 'withdraw'],
+    sel_engage_regle: ['sans confirmation avant la clôture, ta place ira au suivant',
+                       'without confirming before the close, your place goes to the next player'],
+    sel_engager_err: ['échec — réessaie', 'failed — try again'],
+    sel_pas_engage:  ['PAS ENGAGÉ', 'NOT ENTERED'],
+    sel_place_cedee: ['ta place est allée au suivant de la liste',
+                      'your place went to the next player in line'],
     // Le dimanche, on est convoque en demi-finale ou en finale : « À samedi »
     // y serait faux.
     sel_qualifie:    ['tu es qualifié. Bonne course.', 'you made it through. Good luck.'],

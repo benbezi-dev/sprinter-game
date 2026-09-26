@@ -10,6 +10,8 @@
 // encore vu, sans trou ni doublon, meme si deux annonces tombent dans la meme
 // milliseconde et meme si le telephone s'est endormi entre-temps.
 
+import { getDeviceId } from './leaderboard';
+
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 export type Partant = {
@@ -270,6 +272,10 @@ export type MaSelection = {
    * n'existe pas — et `null` pour qui n'est pas retenu.
    */
   course: { phase: string; numero: number; at: number | null } | null;
+  /** L'edition ne selectionne que les joueurs engages (confirmes). */
+  engagement?: boolean;
+  /** Ce joueur a confirme sa participation. */
+  engage?: boolean;
   raison?: string;
 };
 
@@ -354,6 +360,25 @@ export const prochainChampionnat = (pays: string) =>
 /** A combien de places de la qualification ce joueur se trouve. */
 export const maSelection = (nom: string) =>
   json<MaSelection>('/champ/selection?name=' + encodeURIComponent(nom));
+
+/**
+ * Confirmer sa participation — ou la retirer — pour l'edition a venir.
+ * Rend la selection relue par le serveur, ou `{ error }`.
+ */
+export async function engager(nom: string, oui: boolean): Promise<MaSelection | { error: string }> {
+  try {
+    const r = await fetch(API_BASE + '/champ/engager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name: nom, engage: oui }),
+    });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j) return { error: (j && j.error) || 'erreur' };
+    return j as MaSelection;
+  } catch {
+    return { error: 'reseau' };
+  }
+}
 
 /**
  * Ce qu'il reste avant une echeance, ou `null` si elle est passee.

@@ -14,7 +14,7 @@
 --------------------------------------------------------------------------- */
 
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
+  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
   TENANT, lieuDeLEdition,
 } from './championnats-config.js';
@@ -449,6 +449,21 @@ export async function ensureChampTables(db) {
     PRIMARY KEY (edition, phase, name_key)
   )`).run();
 
+  // L'engagement (voir ENGAGEMENT_REQUIS) : 1 pour une edition qui ne
+  // selectionne que les joueurs engages. 0 par defaut, et c'est voulu : les
+  // editions deja annoncees ont promis « les 32 meilleurs », pas autre chose.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_editions ADD COLUMN engagement INTEGER NOT NULL DEFAULT 0`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+  await db.prepare(`CREATE TABLE IF NOT EXISTS champ_engagements (
+    edition TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    le INTEGER NOT NULL,
+    PRIMARY KEY (edition, name_key)
+  )`).run();
+
   // La cloture est arrivee apres la table elle aussi, et pour la meme raison
   // elle s'ajoute seule. Elle est nullable a dessein : les editions ouvertes
   // avant qu'elle existe n'ont jamais eu d'heure de cloture annoncee, et leur
@@ -806,12 +821,19 @@ function code(n = 8) {
  */
 async function classement(db, {
   pays = null, continent = null, exclure, limite, maintenant = Date.now(),
-  epreuve = EPREUVE_DEFAUT,
+  epreuve = EPREUVE_DEFAUT, engagesDe = null,
 }) {
   await ensureDuelTables(db);
   const depuis = maintenant - ECHELONS.national.fenetreActiviteJours * JOUR;
-  const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
+  let ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
   const args = pays ? [pays] : continent ? [continent] : [];
+  // `engagesDe` : l'edition dont on ne garde que les engages (et les fictifs,
+  // engages d'office). Les autres sont sautes, et le suivant monte d'un cran.
+  if (engagesDe) {
+    ou += ` AND (g.source = 'fictif' OR EXISTS (SELECT 1 FROM champ_engagements ce
+                 WHERE ce.edition = ? AND ce.name_key = d.name_key))`;
+    args.push(engagesDe);
+  }
   const { results } = await db.prepare(
     `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force,
             d.palier AS palier, d.lp AS lp
@@ -882,7 +904,8 @@ async function championsEnTitre(db, echelon, filtreZone, epreuve = EPREUVE_DEFAU
  * quand meme : c'est le seul moyen de repondre a qui reclame sa place. Sans
  * eux, la selection est une affirmation qu'on ne peut pas relire.
  */
-async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT) {
+async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT,
+                    engagesDe = null) {
   // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
   // suivants qu'on garde pour l'archive de la cloture.
   const large = FORMAT.partants + SUIVANTS_GARDES;
@@ -901,7 +924,11 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // le monde, ce qui est le seul moyen d'empecher un titre de devenir une
   // rente que l'on touche sans rejouer.
   const tenant = await tenantDuTitre(db, echelon, zone, maintenant);
-  const boss = tenant && !tenant.prive ? tenant : null;
+  // Engages seulement : le tenant aussi confirme sa venue. Un champion qui ne
+  // s'engage pas ne court pas, et sa place d'office ne bloque personne.
+  const engages = engagesDe ? await clesEngagees(db, engagesDe) : null;
+  const vient = (cle) => !engages || engages.has(cle);
+  const boss = tenant && !tenant.prive && vient(tenant.cle) ? tenant : null;
   // Sa place lui est gardee sur la grille de depart, sauf si le levier est
   // baisse. Sans elle, la finale d'office se ferait annuler par le calendrier :
   // un champion absent de la grille n'a pas de finale a rejoindre.
@@ -921,7 +948,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
     // la barre garderait NEUF suivants au lieu de huit — une place de plus lue
     // que declaree, dans la table meme qui existe pour repondre a qui reclame.
     const l = await classement(db, {
-      pays: zone, exclure, limite: large - exclure.size, maintenant, epreuve: ep,
+      pays: zone, exclure, limite: large - exclure.size, maintenant, epreuve: ep, engagesDe,
     });
     const place = Math.max(0, FORMAT.partants - (bossDOffice ? 1 : 0));
     const joueurs = [...(bossDOffice ? [bossDOffice] : []), ...l.slice(0, place)];
@@ -945,9 +972,9 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // DESSOUS, et sans elle aucun continental ne peut s'ouvrir (`MIN_DOFFICE`).
   // Elle donne une place sur la grille, jamais la finale ni la cinematique.
   const estContinental = echelon === 'continental';
-  const champions = estContinental
+  const champions = (estContinental
     ? await championsEnTitre(db, 'national', z => continentDe(z) === zone, ep)
-    : await championsEnTitre(db, 'continental', null, ep);
+    : await championsEnTitre(db, 'continental', null, ep)).filter(c => vient(c.cle));
 
   const minimum = MIN_DOFFICE[echelon] || 0;
   if (champions.length < minimum) {
@@ -972,7 +999,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
 
   const complement = await classement(db, {
     continent: estContinental ? zone : null,
-    exclure: vus, limite: large - dOffice.length, maintenant, epreuve: ep,
+    exclure: vus, limite: large - dOffice.length, maintenant, epreuve: ep, engagesDe,
   });
 
   // La barre tombe apres les trente-deux, champions d'office compris : c'est
@@ -1011,7 +1038,9 @@ export const clotureDe = (debutSamedi) => debutSamedi - CLOTURE_JOURS_AVANT * JO
  * heure. Ce n'est plus une consigne mais une condition : voir le refus dans le
  * corps, et pourquoi il vaut mieux qu'un commentaire.
  */
-export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, cloture }) {
+export async function annoncerEchelon(db, {
+  echelon, zone, debutSamedi, epreuve, cloture, engagement = ENGAGEMENT_REQUIS,
+}) {
   await ensureChampTables(db);
   if (!ECHELONS[echelon]) return { erreur: 'echelon inconnu' };
   const z = String(zone || 'MONDE').toUpperCase();
@@ -1103,17 +1132,20 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
   const phase0 = FORMAT.phases[0];
   await db.prepare(
     `INSERT INTO champ_editions
-       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?)`
-  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now()).run();
+       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le, engagement)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?, ?)`
+  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now(), engagement ? 1 : 0).run();
 
   const nom = nomZone(z, echelon);
   await annoncer(db, {
     edition: id, echelon, zone: z, type: 'annonce',
     titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
     texte: ep + ' m. Premier départ samedi. Sélection des '
-         + FORMAT.partants + ' meilleurs du classement, à la clôture.',
-    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants },
+         + FORMAT.partants + (engagement
+           ? ' meilleurs engagés du classement, à la clôture. Confirme ta participation avant.'
+           : ' meilleurs du classement, à la clôture.'),
+    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants,
+               engagement: !!engagement },
   });
 
   return {
@@ -1141,7 +1173,7 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
 export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
        FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat !== 'annoncee') return { erreur: 'edition deja cloturee', etat: e.etat };
@@ -1152,7 +1184,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   const intitule = e.echelon === 'mondial'
     ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
 
-  const p = await pool(db, e.echelon, e.zone, maintenant, ep);
+  const p = await pool(db, e.echelon, e.zone, maintenant, ep, e.engagement ? e.id : null);
   const manque = !p.erreur && p.joueurs.length < FORMAT.partants;
 
   // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
@@ -1337,7 +1369,9 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
  * ce que ce decoupage sert a rendre impossible.
  */
 export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve }) {
-  const a = await annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve });
+  // Sans engagement : annonce et cloture tombent dans la meme milliseconde,
+  // personne n'aurait eu le temps de s'engager.
+  const a = await annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, engagement: false });
   if (a.erreur) return a;
 
   const r = await cloturerSelection(db, a.edition);
@@ -1475,7 +1509,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
   const z = String(zone || '').toUpperCase();
   if (!z) return null;
   const e = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
        FROM champ_editions
       WHERE echelon = ? AND zone = ? AND etat IN ('annoncee', 'ouverte')
       ORDER BY debut LIMIT 1`
@@ -1489,9 +1523,49 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
          : ECHELONS[e.echelon].nom + ' ' + nom.avec,
     epreuve: e.epreuve || EPREUVE_DEFAUT,
     debut: e.debut, cloture: e.cloture, etat: e.etat,
+    engagement: !!e.engagement,
     partants: FORMAT.partants,
     calendrier: calendrier(e.debut, CALENDRIER),
   };
+}
+
+/** Les cles engagees pour une edition. */
+async function clesEngagees(db, edition) {
+  const { results } = await db.prepare(
+    `SELECT name_key FROM champ_engagements WHERE edition = ?`).bind(edition).all();
+  return new Set((results || []).map(r => r.name_key));
+}
+
+/**
+ * S'ENGAGER — ou se retirer — pour l'edition nationale a venir de son pays.
+ *
+ * Seulement pendant la selection : apres la cloture, la grille est gelee et
+ * un engagement ne changerait plus rien. Rend la selection relue, pour que
+ * l'ecran se mette a jour sans second appel.
+ */
+export async function engager(db, nameKey, oui = true, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return { erreur: 'nom invalide', code: 400 };
+  const g = await db.prepare(
+    `SELECT pays FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (!g || !g.pays) return { erreur: 'pays inconnu', code: 400 };
+  const ed = await prochaineEdition(db, g.pays, 'national');
+  if (!ed) return { erreur: 'aucune edition annoncee', code: 404 };
+  if (!ed.engagement) return { erreur: 'cette edition ne demande pas d engagement', code: 409 };
+  if (ed.etat !== 'annoncee' || (ed.cloture != null && maintenant >= ed.cloture)) {
+    return { erreur: 'selection close', code: 409 };
+  }
+  if (oui) {
+    await db.prepare(
+      `INSERT OR IGNORE INTO champ_engagements (edition, name_key, le) VALUES (?, ?, ?)`
+    ).bind(ed.id, k, maintenant).run();
+  } else {
+    await db.prepare(
+      `DELETE FROM champ_engagements WHERE edition = ? AND name_key = ?`
+    ).bind(ed.id, k).run();
+  }
+  return rangSelection(db, k);
 }
 
 /**
@@ -1552,13 +1626,19 @@ export async function rangSelection(db, nameKey) {
         echelon: ed.echelon, zoneNomEn: ed.zoneNomEn }
     : { titre: null, epreuve: null, zoneNom: null, echelon: null, zoneNomEn: null };
 
+  // L'engagement : l'edition le demande-t-elle, et ce joueur l'a-t-il donne ?
+  const engagement = !!(ed && ed.engagement);
+  const engage = engagement && !!(await db.prepare(
+    `SELECT 1 AS x FROM champ_engagements WHERE edition = ? AND name_key = ?`
+  ).bind(ed.id, k).first());
+
   // Apres la cloture, la verite est dans l'instantane.
   if (ed && ed.etat === 'ouverte') {
     const r = await db.prepare(
       `SELECT rang, retenu FROM champ_selection WHERE edition = ? AND name_key = ?`
     ).bind(ed.id, k).first();
     return {
-      pays: g.pays, ...ou, edition: ed.id, etat: ed.etat, places,
+      pays: g.pays, ...ou, edition: ed.id, etat: ed.etat, places, engagement, engage,
       cloture: ed.cloture, debut: ed.debut,
       // Pas de barre apres le gel : le classement du jour ne selectionne plus
       // rien, et une barre tracee dessus designerait des gens qui ne courent
@@ -1584,8 +1664,8 @@ export async function rangSelection(db, nameKey) {
   // une edition du 400 m. `epreuve` voyage donc avec le rang — l'ecran ne
   // dessine la barre que dans le classement ou elle veut dire quelque chose.
   const epSelection = (ed && ed.epreuve) || EPREUVE_DEFAUT;
-  const { results } = await db.prepare(
-    `SELECT d.name_key AS cle
+  const { results: tous } = await db.prepare(
+    `SELECT d.name_key AS cle, g.source AS source
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
       WHERE g.pays = ? AND d.epreuve = ?
         AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
@@ -1593,7 +1673,16 @@ export async function rangSelection(db, nameKey) {
   ).bind(g.pays, epSelection,
          Date.now() - ECHELONS.national.fenetreActiviteJours * JOUR).all();
 
-  const i = (results || []).findIndex(r => r.cle === k);
+  // Avec l'engagement, ne comptent que les engages (et les fictifs) : les
+  // autres laissent leur place. Le joueur lui-meme est compte meme s'il ne
+  // s'est pas engage — son rang dit ou il serait s'il le faisait. La barre,
+  // elle, ne le compte que s'il est engage.
+  const engages = engagement ? await clesEngagees(db, ed.id) : null;
+  const compte = (r) => !engages || r.source === 'fictif' || engages.has(r.cle);
+  const results = (tous || []).filter(r => compte(r) || r.cle === k);
+  const pourBarre = (tous || []).filter(compte);
+
+  const i = results.findIndex(r => r.cle === k);
   const rang = i < 0 ? null : i + 1;
 
   // Qui occupe la derniere place qualificative, nomme.
@@ -1607,8 +1696,8 @@ export async function rangSelection(db, nameKey) {
   //
   // On rend donc la cle du dernier qualifie plutot qu'un compte. Le jeu trace
   // apres cette ligne-la, ou ne trace rien s'il ne la voit pas.
-  const barre = (results || []).length >= places
-    ? (results[places - 1] || {}).cle || null
+  const barre = pourBarre.length >= places
+    ? (pourBarre[places - 1] || {}).cle || null
     : null;
   return {
     pays: g.pays, ...ou,
@@ -1616,7 +1705,8 @@ export async function rangSelection(db, nameKey) {
     etat: ed ? ed.etat : null,
     cloture: ed ? ed.cloture : null,
     debut: ed ? ed.debut : null,
-    places, classes: (results || []).length,
+    engagement, engage,
+    places, classes: pourBarre.length,
     barre,
     rang,
     // `null` quand le joueur n'est pas classe du tout : il n'a pas un ecart a
