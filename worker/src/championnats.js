@@ -14,7 +14,7 @@
 --------------------------------------------------------------------------- */
 
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS,
+  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
   TENANT, lieuDeLEdition,
 } from './championnats-config.js';
@@ -1355,7 +1355,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
       ? { cle: p.tenantEcarte.cle, nom: p.tenantEcarte.nom, raison: 'inactif depuis le sacre' }
       : null,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
 }
 
@@ -1504,6 +1504,16 @@ export async function cloturerEcheances(db, maintenant = Date.now()) {
  * permet de parler du championnat a qui n'y est pas — c'est-a-dire a ceux
  * qu'il faut convaincre de jouer.
  */
+/** Le calendrier d'une edition, courses hors calendrier comprises (COURSES_EXTRA). */
+export function calendrierDe(id, debut) {
+  const ex = COURSES_EXTRA[id];
+  if (!ex) return calendrier(debut, CALENDRIER);
+  return calendrier(debut, {
+    jour1: [...CALENDRIER.jour1, ...ex.filter(x => x.jour !== 2)],
+    jour2: [...CALENDRIER.jour2, ...ex.filter(x => x.jour === 2)],
+  });
+}
+
 export async function prochaineEdition(db, zone, echelon = 'national') {
   await ensureChampTables(db);
   const z = String(zone || '').toUpperCase();
@@ -1525,7 +1535,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
     debut: e.debut, cloture: e.cloture, etat: e.etat,
     engagement: !!e.engagement,
     partants: FORMAT.partants,
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
 }
 
@@ -1583,7 +1593,7 @@ async function courseDe(db, edition, nameKey) {
   if (!r || r.course == null) return null;
   const e = await db.prepare(
     `SELECT debut FROM champ_editions WHERE id = ?`).bind(edition).first();
-  const rv = calendrier(e ? e.debut : 0, CALENDRIER)
+  const rv = calendrierDe(edition, e ? e.debut : 0)
     .find(x => x.phase === r.phase && x.course === r.course);
   return { phase: r.phase, numero: r.course, at: rv ? rv.at : null };
 }
@@ -1932,7 +1942,7 @@ export async function etatEdition(db, id) {
       };
     })(),
 
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
 }
 
@@ -2235,7 +2245,13 @@ export async function cloturerPhase(db, edition) {
       WHERE r.edition = ? AND r.phase = ?`).bind(edition, e.phase).all();
 
   const courses = Array.from({ length: cfg.courses }, () => []);
-  for (const r of brut || []) courses[r.course - 1].push(r);
+  // Les courses HORS CALENDRIER (COURSES_EXTRA, le repechage du 26/09) ne
+  // passent pas par le moteur : elles se jugent a part, plus bas.
+  const extras = [];
+  for (const r of brut || []) {
+    if (r.course >= 1 && r.course <= cfg.courses) courses[r.course - 1].push(r);
+    else extras.push(r);
+  }
   const manquantes = courses
     .map((c, i) => (c.length ? null : i + 1)).filter(Boolean);
   if (manquantes.length) {
@@ -2351,6 +2367,32 @@ export async function cloturerPhase(db, edition) {
       if (nb() >= places) break;
       q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
       sortir(f);
+    }
+
+    //   4. LA COURSE DE REPECHAGE (COURSES_EXTRA). Un coureur y gagne sa place
+    //      seulement s'il bat le chrono du fictif qu'il remplacerait — celui
+    //      qui n'en a pas d'abord, puis le plus lent ; sinon le fictif la
+    //      garde (decision de l'organisateur, 26/09). Sans chrono, rien.
+    for (const x of extras.filter(r => r.ms != null).sort(parMs)) {
+      if ([...q.directs, ...q.repeches].some(r => r.cle === x.cle)) continue;
+      if (nb() < places) {
+        q.repeches.push({ ...x, complement: true, motif: 'repechage' });
+      } else {
+        const cible = [...q.directs, ...q.repeches]
+          .filter(r => fictives.has(r.cle) && !r.doffice)
+          .sort((a, b) => (a.ms == null) - (b.ms == null) || (a.ms ?? 0) - (b.ms ?? 0)).pop();
+        if (!cible || (cible.ms != null && x.ms >= cible.ms)) continue;
+        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(cible); if (i >= 0) l.splice(i, 1); }
+        dehors.push(cible);
+        q.repeches.push({ ...x, complement: true, motif: 'repechage' });
+      }
+      // Sa course de serie d'origine (forfait) l'avait laisse dehors.
+      for (let i = dehors.length - 1; i >= 0; i--) if (dehors[i].cle === x.cle) dehors.splice(i, 1);
+    }
+    // Qui a couru le repechage sans y gagner sa place sort ici.
+    for (const x of extras) {
+      const dedans = [...q.directs, ...q.repeches].some(r => r.cle === x.cle);
+      if (!dedans && !dehors.some(r => r.cle === x.cle)) dehors.push(x);
     }
     q.elimines = dehors;
   }

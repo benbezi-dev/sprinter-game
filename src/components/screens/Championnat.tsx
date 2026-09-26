@@ -341,7 +341,7 @@ function Revelation({ a, onFini }: { a: Annonce; onFini: () => void }) {
   const { N } = SprinterApp;
   const repeches: {
     nom: string; ms: number | null; course: number; doffice?: boolean;
-    motif?: 'chrono' | 'doffice' | 'priorite' | 'place_libre' | 'organisation';
+    motif?: 'chrono' | 'doffice' | 'priorite' | 'place_libre' | 'organisation' | 'repechage';
   }[] = (a.donnees && a.donnees.repeches) || [];
   const [montres, setMontres] = useState(0);
 

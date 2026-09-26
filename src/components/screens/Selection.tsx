@@ -157,6 +157,7 @@ const heureLocale = (at: number | null) => dateLocale(at, false);
  */
 function maCourse(c: { phase: string; numero: number }): string {
   const { N } = SprinterApp;
+  if (c.phase === 'series' && c.numero > 4) return String(N.courseNom('series', c.numero, 4)).toUpperCase();
   if (c.phase !== 'demies' && c.phase !== 'finale') return N.t('sel_ma_serie', { n: c.numero });
   const nom = String(N.t('champ_course_' + c.phase)).toUpperCase();
   return c.phase === 'finale' ? nom : `${nom} ${c.numero}`;

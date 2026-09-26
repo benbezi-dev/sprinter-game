@@ -266,6 +266,19 @@ export const REPLI_PAYS_TROP_PETIT = 'attendre';
 export const CLOTURE_JOURS_AVANT = 3;
 
 /**
+ * DES COURSES HORS CALENDRIER, POUR UNE EDITION PRECISE.
+ *
+ * Le 26/09/2026, l'organisateur a ajoute au Championnat de France (HMW36AHQ)
+ * une course de repechage a 20:30 (18:30 UTC), reservee a cinq joueurs
+ * invites, avant la revelation de 21:00 : un invite n'entre en demie que s'il
+ * bat le chrono du fictif qu'il remplacerait (voir cloturerPhase). Exceptionnel
+ * — les championnats suivants n'en auront pas. `jour` : 1 = samedi, 2 = dimanche.
+ */
+export const COURSES_EXTRA = {
+  HMW36AHQ: [{ cle: 'repechage', phase: 'series', course: 5, jour: 1, minute: 18 * 60 + 30 }],
+};
+
+/**
  * L'ENGAGEMENT : on ne selectionne que ceux qui ont dit qu'ils viendraient.
  *
  * Une grille gelee au classement seul designait des joueurs qui ne savaient

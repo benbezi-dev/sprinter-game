@@ -716,6 +716,8 @@
     champ_rep_priorite:     ['a couru : priorité aux joueurs', 'ran the heat: players come first'],
     champ_rep_place_libre:  ['prend une place laissée par un forfait', 'fills a place left by a no-show'],
     champ_rep_organisation: ['choix de l’organisation', 'organisers’ decision'],
+    champ_rep_repechage:    ['gagne sa place en course de repêchage', 'won a place in the repechage race'],
+    champ_course_repechage: ['Repêchage', 'Repechage'],
     champ_rv_course: ['PROCHAINE COURSE', 'NEXT RACE'],
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
@@ -2261,6 +2263,8 @@
    * « Semi-final » ne suivent pas la meme regle d'une langue a l'autre).
    */
   function courseNom(cle, numero, total, secours) {
+    // Une course au-dela des series du format : le repechage du 26/09.
+    if (cle === 'series' && numero > 4) return UI.champ_course_repechage[index()];
     const row = UI['champ_course_' + String(cle || '')];
     const nom = row ? row[index()] : (secours || phaseNom(cle, secours) || '');
     return total > 1 && numero ? nom + ' ' + numero : nom;
