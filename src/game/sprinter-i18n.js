@@ -1079,6 +1079,45 @@
     boost_6: ['garde cette course en tête. C’est ton niveau.',
               'remember this race. That’s your level.'],
     boost_7: ['la ligne était à toi.', 'that finish line was yours.'],
+    /* LE TCHAT RAPIDE, dans les salles de course (voir game/tchat-rapide.ts).
+     *
+     * Des phrases ecrites par le jeu, envoyees par les joueurs : c'est
+     * l'identifiant qui voyage, et chaque telephone ecrit la phrase dans SA
+     * langue. Trois familles, dans la voix du reste du jeu :
+     * - les PIQUES chambrent comme celles des duels, sans jamais blesser — on
+     *   les envoie a un inconnu autant qu'a un ami ;
+     * - les ENCOURAGEMENTS parlent comme le starter et les boosts ;
+     * - l'ARCADE parle comme la borne, et ses mots ne se traduisent pas, pour
+     *   la raison que donne COMBO plus bas.
+     * Une cle ajoutee ici doit l'etre aussi dans les deux listes : celle du jeu
+     * et celle du serveur (worker/src/tchat-rapide.js), qui refuse le reste. */
+    rapide_p_echauffement: ['Merci pour l’échauffement.', 'Thanks for the warm-up.'],
+    rapide_p_ralenti:      ['Je te la refais au ralenti ?', 'Want it again in slow motion?'],
+    rapide_p_personne:     ['J’ai regardé derrière. Personne.', 'I looked back. Nobody.'],
+    rapide_p_blocs:        ['Tu dors dans les blocs ?', 'Asleep in the blocks?'],
+    rapide_p_forcer:       ['Même pas forcé.', 'Didn’t even try.'],
+    rapide_p_ligne:        ['La ligne, c’est par là.', 'Finish line’s that way.'],
+    rapide_e_marques:      ['À vos marques.', 'On your marks.'],
+    rapide_e_meilleur:     ['Que le meilleur gagne.', 'May the best one win.'],
+    rapide_e_envoie:       ['Allez, envoie !', 'Come on, send it!'],
+    rapide_e_propre:       ['C’est propre.', 'That was clean.'],
+    rapide_e_bien:         ['Bien couru.', 'Well run.'],
+    rapide_e_revanche:     ['Revanche ?', 'Rematch?'],
+    rapide_a_go:           ['GO GO GO !', 'GO GO GO!'],
+    rapide_a_perfect:      ['PERFECT !', 'PERFECT!'],
+    rapide_a_photo:        ['PHOTO-FINISH !', 'PHOTO FINISH!'],
+    rapide_a_combo:        ['COMBO !', 'COMBO!'],
+    rapide_ouvrir:         ['Tchat rapide', 'Quick chat'],
+    rapide_piques:         ['PIQUES', 'TRASH TALK'],
+    rapide_encouragements: ['ENCOURAGEMENTS', 'CHEERS'],
+    rapide_arcade:         ['ARCADE', 'ARCADE'],
+    // Une bulle de la tribune dont le nom n'est pas verifie : elle part sans
+    // nom plutot que sous celui de quelqu'un d'autre.
+    rapide_tribune:        ['Tribune', 'Stands'],
+    rapide_couper:         ['Couper les bulles', 'Mute bubbles'],
+    rapide_remettre:       ['Remettre les bulles', 'Show bubbles'],
+    rapide_attends:        ['doucement…', 'easy…'],
+    rapide_fermer:         ['Fermer', 'Close'],
     // Le mot du vainqueur
     mot_titre:       ['LAISSE UN MOT À {n}', 'LEAVE {n} A WORD'],
     mot_placeholder: ['chambre-le en deux phrases', 'needle them in two lines'],
