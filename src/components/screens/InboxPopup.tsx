@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useRangeePastilles } from '@/hooks/use-pastilles';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { VOILE, PANNEAU, TRANSITION } from '@/lib/mouvement';
@@ -18,6 +20,7 @@ import { useRetour } from '@/hooks/use-retour';
  */
 export function InboxPopup() {
   const { state } = useGameStore();
+  const rangee = useRangeePastilles(state);
   const { N } = SprinterApp;
 
   const [defis, setDefis] = useState<InboxChallenge[]>([]);
@@ -94,26 +97,31 @@ export function InboxPopup() {
   return (
     <>
       {/* Pastille clignotante, discrete, en haut a droite */}
-      {!ouvert && (
-        <motion.button
-          onClick={() => setOuvert(true)}
-          animate={{ opacity: [1, 0.45, 1], scale: [1, 1.06, 1] }}
-          transition={TRANSITION.battement}
-          className="fixed z-[58] pointer-events-auto flex items-center gap-2
-                     rounded-full bg-primary text-background font-bold
-                     text-[10px] md:text-xs tracking-widest uppercase
-                     px-3 py-2 shadow-[0_0_24px_rgba(248,205,74,0.55)]"
-          style={{
-            right: 'calc(max(env(safe-area-inset-right), 0.75rem))',
-            top: 'calc(max(env(safe-area-inset-top), 0.75rem) + 3.4rem)',
-          }}
-        >
-          <Swords className="w-3.5 h-3.5" />
-          {enAttente.length > 1
-            ? N.t('inbox_many', { n: enAttente.length })
-            : N.t('inbox_one')}
-        </motion.button>
-      )}
+      {!ouvert && (() => {
+        // Sur l'accueil, dans la rangee des pastilles (voir use-pastilles.ts) ;
+        // ailleurs, a sa place fixe en haut a droite.
+        const pastille = (
+          <motion.button
+            onClick={() => setOuvert(true)}
+            animate={{ opacity: [1, 0.45, 1], scale: [1, 1.06, 1] }}
+            transition={TRANSITION.battement}
+            className={`${rangee ? 'order-1' : 'fixed'} z-[58] pointer-events-auto flex items-center gap-2
+                       rounded-full bg-primary text-background font-bold
+                       text-[10px] md:text-xs tracking-widest uppercase
+                       px-3 py-2 shadow-[0_0_24px_rgba(248,205,74,0.55)]`}
+            style={rangee ? undefined : {
+              right: 'calc(max(env(safe-area-inset-right), 0.75rem))',
+              top: 'calc(max(env(safe-area-inset-top), 0.75rem) + 3.4rem)',
+            }}
+          >
+            <Swords className="w-3.5 h-3.5" />
+            {enAttente.length > 1
+              ? N.t('inbox_many', { n: enAttente.length })
+              : N.t('inbox_one')}
+          </motion.button>
+        );
+        return rangee ? createPortal(pastille, rangee) : pastille;
+      })()}
 
       <AnimatePresence>
         {ouvert && (

@@ -18,6 +18,7 @@ import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
+import { ID_PASTILLES } from '@/hooks/use-pastilles';
 import { BanderoleEdition } from './BanderoleEdition';
 // Charge a la demande, pour la raison expliquee dans App.tsx : un import
 // ordinaire fait voyager tout le mode dans le build public, drapeau ferme ou
@@ -284,6 +285,12 @@ export function TitleScreen() {
             />
           </button>
         </div>
+
+        {/* La rangee des pastilles « UN DÉFI » et « UN MESSAGE ». Vide, elle
+            ne prend aucune place ; remplie, elle pousse le titre au lieu de
+            le recouvrir. Voir hooks/use-pastilles.ts. */}
+        <div id={ID_PASTILLES}
+             className="shrink-0 z-20 flex flex-wrap justify-end gap-2 mb-2 empty:hidden" />
 
         <div className="flex-1 min-h-0 flex flex-col landscape:flex-row items-center landscape:items-stretch gap-2 landscape:gap-8 max-w-5xl mx-auto w-full">
 
