@@ -303,7 +303,8 @@ function BoutonRevoir({ epreuve, arrivees, couloirs, competition, quand, course,
       // couloir, n'aurait fait que repeter la place sous un autre nom. Une
       // course se regarde avec ses couloirs a leur place.
       arrivees.map(r => ({
-        nom: r.nom, ms: r.ms, motif: r.motif ?? null, motif_ms: r.motif_ms ?? null,
+        nom: r.nom, cle: r.name_key,
+        ms: r.ms, motif: r.motif ?? null, motif_ms: r.motif_ms ?? null,
         couloir: couloirs.get(r.name_key),
         moi: !!moi && r.name_key === moi,
       })),

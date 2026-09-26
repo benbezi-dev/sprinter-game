@@ -18,6 +18,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Presentation } from './live';
 import type { EtatVoix } from './voix';
+import type { SourceFiches } from './fiches-champ';
 
 export type PresentationEnCours = {
   presentation: Presentation;
@@ -38,6 +39,14 @@ export type PresentationEnCours = {
    * demonte.
    */
   etatVoix: () => EtatVoix;
+  /**
+   * En championnat seulement : d'ou viennent les fiches des athletes, et la
+   * distance sur laquelle leur niveau se lit. Les identifiants de l'ordre sont
+   * alors les cles des joueurs, et chaque athlete est presente avec son
+   * palmares, son niveau en duel et son bilan (voir FichePresentation).
+   * Absent du direct ordinaire, dont les identifiants sont ceux d'une salle.
+   */
+  fiches?: SourceFiches & { epreuve: string };
 };
 
 let courante: PresentationEnCours | null = null;

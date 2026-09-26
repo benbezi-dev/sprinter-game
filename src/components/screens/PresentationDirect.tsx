@@ -4,7 +4,16 @@ import { MONTEE, FONDU, SURGISSEMENT } from '@/lib/mouvement';
 import { Mic, MicOff } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { usePresentationDirecte } from '@/game/presentation-directe';
+import { useFiches } from '@/game/fiches-champ';
+import { Drapeau } from '@/components/Insignes';
 import type { EtatVoix } from '@/game/voix';
+import { FichePresentation } from './FichePresentation';
+import {
+  ouvrirLaPresentation, ouvrirLeCreneau, fermerLaPresentation,
+} from '@/game/tension-presentation';
+import {
+  VoilePouls, EclairArrivee, CouloirGeant, Sablier, CLAQUE, favoriDe, sortieVive,
+} from './TensionPresentation';
 
 /**
  * La presentation des participants, sur la piste.
@@ -69,6 +78,8 @@ export function PresentationDirect() {
   const [index, setIndex] = useState(-1);
   const [dansMicro, setDansMicro] = useState(false);
   const [avant, setAvant] = useState(0);
+  /** Ou en est le creneau de l'athlete du moment, de 0 a 1 : le sablier. */
+  const [avancement, setAvancement] = useState(0);
   const [voix, setVoix] = useState<EtatVoix>({
     micro: false, refuse: false, ouvert: false, connecte: false,
   });
@@ -85,6 +96,14 @@ export function PresentationDirect() {
     dernier.current = -2;
     finiPose.current = false;
     setIndex(-1);
+    // LA TENSION, en championnat seulement. Le direct ordinaire presente ses
+    // joueurs micro ouvert : un coeur qui bat par-dessus leur voix, et une
+    // musique qu'on retire, gacheraient la seule chose qu'ils ont a dire.
+    if (enCours.fiches) {
+      const { dansMs, par, ordre } = enCours.presentation;
+      ouvrirLaPresentation(Math.max(0, dansMs), ordre.length * par);
+    }
+    return () => { if (enCours.fiches) fermerLaPresentation(); };
   }, [enCours]);
 
   useEffect(() => {
@@ -98,19 +117,23 @@ export function PresentationDirect() {
       if (i >= ordre.length) {
         setIndex(ordre.length);
         setDansMicro(false);
+        if (enCours.fiches) fermerLaPresentation();
         SprinterApp.presenterCoureur(null);
         if (!finiPose.current) { finiPose.current = true; enCours.onFini(); }
         return;
       }
       setIndex(i);
       setDansMicro(ecoule - i * par < micro);
+      setAvancement((ecoule - i * par) / par);
       if (i !== dernier.current) {
         dernier.current = i;
         const c = ordre[i];
         const estMoi = c?.id === enCours.moi;
         // On designe l'athlete au moteur : la camera vient sur lui, il leve
-        // les bras, les autres reprennent leur place.
-        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi));
+        // les bras, les autres reprennent leur place. En championnat, elle
+        // avance aussi vers lui, et le stade retient son souffle.
+        const plan = enCours.fiches ? ouvrirLeCreneau(i, ordre.length, par) : undefined;
+        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi), plan);
         enCours.onTour(i, estMoi);
       }
     };
@@ -119,10 +142,18 @@ export function PresentationDirect() {
     return () => { clearInterval(t); SprinterApp.presenterCoureur(null); };
   }, [enCours]);
 
+  // Les fiches du championnat. Le branchement les a deja demandees a la
+  // chambre d'appel (voir champ-direct) : ici on relit, et on ne redemande que
+  // ce qui manquerait.
+  const fiche = useFiches(enCours?.fiches, enCours?.fiches ? enCours.presentation.ordre.map(o => o.id) : []);
+
   if (!enCours) return null;
   const { ordre } = enCours.presentation;
   const courant = index >= 0 && index < ordre.length ? ordre[index] : null;
   const estMoi = !!courant && courant.id === enCours.moi;
+  const saFiche = courant && enCours.fiches ? fiche(courant.id) : undefined;
+  const tendu = !!enCours.fiches;
+  const favori = tendu ? favoriDe(ordre.map(o => o.id), fiche) : null;
 
   return (
     <div className="fixed inset-0 z-40 pointer-events-none flex flex-col justify-between
@@ -131,7 +162,12 @@ export function PresentationDirect() {
       {/* Deux voiles, en haut et en bas, plutot qu'un rideau : la piste doit
           rester visible, c'est elle qu'on est venu montrer. */}
       <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/80 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-56 bg-gradient-to-t from-black/85 to-transparent" />
+      {/* Plus haut quand une fiche suit le nom : elle doit se lire sur la
+          piste, pas sur la pelouse claire d'un stade de jour. */}
+      <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent
+                       ${enCours.fiches ? 'h-96' : 'h-56'}`} />
+      {tendu && <VoilePouls />}
+      {tendu && courant && <EclairArrivee cle={courant.id} />}
 
       <p className="relative text-center text-[10px] tracking-[0.4em] text-emerald-400/90
                     font-bold uppercase">
@@ -152,17 +188,20 @@ export function PresentationDirect() {
           {courant && (
             <motion.div
               key={courant.id}
-              {...MONTEE}
-              className="flex flex-col items-center gap-2 w-full"
+              {...(tendu ? sortieVive(MONTEE) : MONTEE)}
+              className="relative flex flex-col items-center gap-2 w-full"
             >
-              <h2 className="font-display font-black tracking-tight text-white text-center
-                             leading-none text-4xl md:text-6xl break-words max-w-full
-                             drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
+              {tendu && <CouloirGeant couloir={courant.couloir} />}
+              <motion.h2 {...(tendu ? CLAQUE : {})}
+                className="relative font-display font-black tracking-tight text-white text-center
+                           leading-none text-4xl md:text-6xl break-words max-w-full
+                           drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
                 {courant.nom}
-              </h2>
+              </motion.h2>
               {/* LE COULOIR SOUS LE NOM : on lit d'abord qui, puis ou il court
                   — et c'est le chiffre peint devant ses blocs. */}
-              <div className="flex items-baseline gap-3">
+              <div className="relative flex items-baseline gap-3">
+                {saFiche?.pays && <Drapeau pays={saFiche.pays} className="text-base" />}
                 <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
                                  drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
                   {N.t('pres_lane')} {courant.couloir}
@@ -173,20 +212,31 @@ export function PresentationDirect() {
                   </span>
                 )}
               </div>
-              <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />
+              {/* En championnat, pas de micro : la fiche prend sa place. */}
+              {enCours.fiches
+                ? <FichePresentation fiche={saFiche} epreuve={enCours.fiches.epreuve}
+                                     favori={favori === courant.id} />
+                : <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />}
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Ou l'on en est dans la sequence. */}
-        <div className="flex gap-1.5 mt-1">
-          {ordre.map((o, i) => (
-            <span key={o.id}
-                  className={`h-1 rounded-full transition-all duration-300
-                    ${i === index ? 'w-8 bg-emerald-400'
-                      : i < index ? 'w-4 bg-white/40' : 'w-4 bg-white/15'}`} />
-          ))}
-        </div>
+        {/* Ou l'on en est dans la sequence — et, en championnat, le temps
+            qui reste a l'athlete du moment, qui file sous ses yeux. */}
+        {tendu ? (
+          <div className="mt-1">
+            <Sablier n={ordre.length} index={index} avancement={avancement} couleur="#34d399" />
+          </div>
+        ) : (
+          <div className="flex gap-1.5 mt-1">
+            {ordre.map((o, i) => (
+              <span key={o.id}
+                    className={`h-1 rounded-full transition-all duration-300
+                      ${i === index ? 'w-8 bg-emerald-400'
+                        : i < index ? 'w-4 bg-white/40' : 'w-4 bg-white/15'}`} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

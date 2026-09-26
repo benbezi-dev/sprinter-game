@@ -165,7 +165,7 @@ export function regarderLaCourse(e: Edition, c: CourseDuProgramme): boolean {
   const competition = N.titreEdition(e) || e.titre;
   return rejouerCourse(
     e.epreuve,
-    fin.map(r => ({ nom: r.nom, ms: r.ms, couloir: couloirDe.get(r.name_key),
+    fin.map(r => ({ nom: r.nom, cle: r.name_key, ms: r.ms, couloir: couloirDe.get(r.name_key),
                     motif: r.motif ?? null, motif_ms: r.motif_ms ?? null })),
     3500, true,
     {

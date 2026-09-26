@@ -30,12 +30,19 @@
 // engine.ts). Personne n'appuie, tout le reste fonctionne sans le savoir.
 
 import { programmerLeFilm, arreterLeFilm } from './film-course';
+import { chargerFiches, type SourceFiches } from './fiches-champ';
 
 const SprinterApp: any = (globalThis as any).SprinterApp;
 const SprinterCore: any = (globalThis as any).SprinterCore;
 
 export type CoureurRejeu = {
   nom: string;
+  /**
+   * La cle du joueur, pour aller chercher sa fiche — palmares, niveau en
+   * duel, bilan — et la montrer quand la presentation arrive sur lui.
+   * Absente : il est presente par son nom et son couloir, comme avant.
+   */
+  cle?: string;
   /** Le chrono couru, en millisecondes. `null` pour un abandon. */
   ms: number | null;
   /** Le couloir de la grille, 1 a 8. Absent : l'ordre de la liste. */
@@ -125,8 +132,15 @@ export type EtatRejeu = {
   sousTitre: string;
   /** La distance courue : '100', '200', '400'. L'image de l'arrivee l'annonce. */
   epreuve: string;
-  /** La grille, dans l'ordre des couloirs. */
-  grille: { couloir: number; nom: string }[];
+  /** La grille, dans l'ordre des couloirs. `cle` : celle de sa fiche. */
+  grille: { couloir: number; nom: string; cle?: string }[];
+  /**
+   * D'ou viennent les fiches de la presentation, et la distance ou le niveau
+   * se lit. `avant` est l'heure de la course : la retransmission d'une finale
+   * n'annonce pas, avant le pistolet, la medaille que cette finale a donnee.
+   * `null` hors championnat.
+   */
+  fiches: (SourceFiches & { epreuve: string }) | null;
   /**
    * L'arrivee, une fois la ligne franchie par tout le monde.
    *
@@ -153,7 +167,7 @@ export type EtatRejeu = {
 
 const VIDE: EtatRejeu = {
   actif: false, phase: 'presentation', titre: '', sousTitre: '', epreuve: '',
-  grille: [], arrivee: null, course: null, mot: null, rappel: null,
+  grille: [], fiches: null, arrivee: null, course: null, mot: null, rappel: null,
 };
 
 let etat: EtatRejeu = VIDE;
@@ -436,13 +450,22 @@ export function rejouerCourse(
   // La grille telle qu'elle sera annoncee avant le pistolet : les couloirs
   // reels du moteur, et non l'ordre de la liste d'entree — c'est cette
   // liste-la que le spectateur va comparer avec ce qu'il voit sur la piste.
+  const partantDe = new Map<any, CoureurRejeu>([...coureurDe].map(([c, r]) => [r, c]));
   const grille = [...G.runners]
-    .map((r: any) => ({ couloir: r.lane + 1, nom: r.name }))
+    .map((r: any) => ({ couloir: r.lane + 1, nom: r.name, cle: partantDe.get(r)?.cle }))
     .sort((a, b) => a.couloir - b.couloir);
+  // Les fiches partent maintenant, pas a l'arrivee du premier athlete : le
+  // generique leur laisse deux secondes et demie pour revenir.
+  const fiches = intitule.course?.edition
+    ? { edition: intitule.course.edition, avant: intitule.quand ?? null, epreuve }
+    : null;
+  if (fiches) {
+    void chargerFiches(fiches, grille.map(g => g.cle).filter((c): c is string => !!c));
+  }
   poser({
     actif: true, phase: 'presentation',
     titre: intitule.titre, sousTitre: intitule.sousTitre, epreuve,
-    grille, arrivee: null,
+    grille, fiches, arrivee: null,
     course: intitule.course ?? null,
     mot: intitule.mot ?? null,
     rappel: null,

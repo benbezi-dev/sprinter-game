@@ -12,8 +12,17 @@ import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, partagerPhotoFinish } from '@/game/photo-finish';
 import type { MotDuVainqueur } from '@/game/champ-rejeu';
 import { RappelEnScene } from './ChampDirect';
+import { FichePresentation } from './FichePresentation';
+import {
+  ouvrirLaPresentation, ouvrirLeCreneau, fermerLaPresentation,
+} from '@/game/tension-presentation';
+import {
+  VoilePouls, EclairArrivee, CouloirGeant, Sablier, CLAQUE, favoriDe, sortieVive,
+} from './TensionPresentation';
+import { useFiches, type SourceFiches } from '@/game/fiches-champ';
 import { partagerLArrivee } from '@/game/affiche-champ';
 import { EPREUVE } from '@/game/trace-affiche';
+import { Drapeau } from '@/components/Insignes';
 
 /**
  * LA RETRANSMISSION D'UNE COURSE DE CHAMPIONNAT.
@@ -45,8 +54,14 @@ const OR = '#F8CD4A';
 
 /** Le generique, avant le premier athlete. */
 const GENERIQUE_MS = 2400;
-/** Chaque athlete. Trois secondes seraient un meeting ; ici on enchaine. */
-const PAR_ATHLETE_MS = 1750;
+/**
+ * Chaque athlete. On enchainait en une seconde trois quarts, du temps ou
+ * l'on ne lisait qu'un nom et un couloir. Chacun porte maintenant sa fiche —
+ * palmares, niveau en duel, bilan —, et elle se lit en trois secondes, comme
+ * en direct : la retransmission presente les athletes au meme rythme que le
+ * stade.
+ */
+const PAR_ATHLETE_MS = 3000;
 
 /** Le pas entre deux lignes du tableau, qui tombent du premier au dernier. */
 const CASCADE_MS = 130;
@@ -63,19 +78,25 @@ function coureurDuCouloir(couloir: number) {
 
 /* --------------------------------------------------------- la presentation */
 
-function Presentation({ titre, sousTitre, grille }: {
-  titre: string; sousTitre: string; grille: { couloir: number; nom: string }[];
+function Presentation({ titre, sousTitre, grille, fiches }: {
+  titre: string; sousTitre: string; grille: { couloir: number; nom: string; cle?: string }[];
+  fiches: (SourceFiches & { epreuve: string }) | null;
 }) {
   // −1 : le generique. 0..n−1 : l'athlete. n : fini, le starter prend la main.
   const [index, setIndex] = useState(-1);
+  /** Ou en est le creneau de l'athlete du moment, de 0 a 1 : le sablier. */
+  const [avancement, setAvancement] = useState(0);
   const debut = useRef(0);
   const designe = useRef(-2);
   const rendu = useRef(false);
+  const tendu = !!fiches;
 
   useEffect(() => {
     debut.current = Date.now();
     designe.current = -2;
     rendu.current = false;
+    // Le coeur bat des le generique, lentement ; la musique s'efface.
+    if (tendu) ouvrirLaPresentation(GENERIQUE_MS, grille.length * PAR_ATHLETE_MS);
 
     // Une horloge, pas une file de `setTimeout` : un onglet qui passe en
     // arriere-plan etire les minuteurs et la sequence se desynchroniserait de
@@ -89,26 +110,38 @@ function Presentation({ titre, sousTitre, grille }: {
       if (i >= grille.length) {
         if (!rendu.current) {
           rendu.current = true;
+          fermerLaPresentation();
           SprinterApp.presenterCoureur(null);
           lancerLeDepartDuRejeu();
         }
         return;
       }
       setIndex(i);
+      if (i >= 0) setAvancement((ecoule - GENERIQUE_MS - i * PAR_ATHLETE_MS) / PAR_ATHLETE_MS);
       if (i !== designe.current) {
         designe.current = i;
         // On designe l'athlete au moteur : la camera vient sur lui, il leve
-        // les bras, les autres redescendent.
-        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir));
+        // les bras, les autres redescendent — et, avec une fiche, elle avance
+        // vers lui au rythme du coeur (voir tension-presentation).
+        const plan = i >= 0 && tendu ? ouvrirLeCreneau(i, grille.length, PAR_ATHLETE_MS) : undefined;
+        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir), plan);
       }
     };
 
     battre();
     const t = setInterval(battre, 80);
-    return () => { clearInterval(t); SprinterApp.presenterCoureur(null); };
-  }, [grille]);
+    return () => {
+      clearInterval(t);
+      if (tendu) fermerLaPresentation();
+      SprinterApp.presenterCoureur(null);
+    };
+  }, [grille, tendu]);
+
+  // Deja demandees au montage de la piste (voir rejouerCourse) : on relit.
+  const fiche = useFiches(fiches, grille.map(g => g.cle || '').filter(Boolean));
 
   const courant = index >= 0 && index < grille.length ? grille[index] : null;
+  const favori = tendu ? favoriDe(grille.map(g => g.cle), fiche) : null;
 
   return (
     <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between
@@ -117,7 +150,10 @@ function Presentation({ titre, sousTitre, grille }: {
       {/* Deux voiles plutot qu'un rideau : la piste reste visible, c'est elle
           qu'on est venu montrer. */}
       <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/85 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-black/90 to-transparent" />
+      <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent
+                       ${fiches ? 'h-96' : 'h-64'}`} />
+      {tendu && <VoilePouls />}
+      {tendu && courant && <EclairArrivee cle={courant.couloir} />}
 
       {/* Le bandeau de la reunion, tenu du debut a la fin : c'est lui qui dit
           qu'on n'est pas dans une course de campagne. */}
@@ -146,33 +182,54 @@ function Presentation({ titre, sousTitre, grille }: {
             </span>
           </motion.div>
         ) : (
-          <motion.div key={courant.couloir} {...MONTEE}
-            className="relative self-center flex flex-col items-center gap-2 px-6 w-full">
-            <h2 className="font-display font-black tracking-tight text-white text-center
-                           leading-none text-4xl md:text-6xl break-words max-w-full
-                           drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)]">
+          /* Avec une fiche, le bloc descend au-dessus des traits de la
+             sequence, comme en direct : centre, il couvrait l'athlete que la
+             camera vient cadrer au milieu de l'ecran. */
+          <motion.div key={courant.couloir} {...(tendu ? sortieVive(MONTEE) : MONTEE)}
+            className={`relative self-center flex flex-col items-center gap-2 px-6 w-full
+                        ${fiches ? 'mt-auto mb-3' : ''}`}>
+            {tendu && <CouloirGeant couloir={courant.couloir} couleur="rgba(248,205,74,0.34)" />}
+            <motion.h2 {...(tendu ? CLAQUE : {})}
+              className="relative font-display font-black tracking-tight text-white text-center
+                         leading-none text-4xl md:text-6xl break-words max-w-full
+                         drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)]">
               {courant.nom}
-            </h2>
+            </motion.h2>
             {/* Le couloir SOUS le nom, comme en direct : qui, puis ou. */}
-            <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
-                             drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
-              {SprinterApp.N.t('pres_lane')} {courant.couloir}
-            </span>
+            <div className="relative flex items-baseline gap-3">
+              {courant.cle && fiche(courant.cle)?.pays && (
+                <Drapeau pays={fiche(courant.cle)!.pays} className="text-base" />
+              )}
+              <span className="font-mono text-sm tracking-[0.35em] text-white/75 font-bold
+                               drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+                {SprinterApp.N.t('pres_lane')} {courant.couloir}
+              </span>
+            </div>
+            {/* Puis ce qu'il a gagne, a quel niveau il se bat, et son bilan. */}
+            {fiches && courant.cle && (
+              <FichePresentation fiche={fiche(courant.cle)} epreuve={fiches.epreuve}
+                                 favori={favori === courant.cle} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Ou l'on en est dans la sequence : huit traits qui se remplissent. */}
-      <div className="relative flex justify-center gap-1.5">
-        {grille.map((c, i) => (
-          <span key={c.couloir}
-            className="h-1 rounded-full transition-all duration-300"
-            style={{
-              width: i === index ? 30 : 14,
-              background: i === index ? OR : i < index ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.14)',
-            }} />
-        ))}
-      </div>
+      {/* Ou l'on en est dans la sequence : huit traits qui se remplissent —
+          et, avec les fiches, celui du moment qui se vide comme un sablier. */}
+      {tendu ? (
+        <Sablier n={grille.length} index={index} avancement={avancement} couleur={OR} />
+      ) : (
+        <div className="relative flex justify-center gap-1.5">
+          {grille.map((c, i) => (
+            <span key={c.couloir}
+              className="h-1 rounded-full transition-all duration-300"
+              style={{
+                width: i === index ? 30 : 14,
+                background: i === index ? OR : i < index ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.14)',
+              }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -550,7 +607,8 @@ export function RejeuChampionnat() {
   if (!etat.actif) return null;
 
   if (etat.phase === 'presentation') {
-    return <Presentation titre={etat.titre} sousTitre={etat.sousTitre} grille={etat.grille} />;
+    return <Presentation titre={etat.titre} sousTitre={etat.sousTitre} grille={etat.grille}
+                         fiches={etat.fiches} />;
   }
   if (etat.phase === 'arrivee' && etat.arrivee) {
     return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee}

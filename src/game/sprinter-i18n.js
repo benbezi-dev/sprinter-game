@@ -769,6 +769,22 @@
     pres_title:      ['PRÉSENTATION DES ATHLÈTES', 'ATHLETE INTRODUCTIONS'],
     pres_lane:       ['COULOIR', 'LANE'],
     pres_you:        ['C’EST TOI', 'THAT IS YOU'],
+    // LA FICHE DE L'ATHLETE, sous son nom pendant la presentation d'une course
+    // de championnat (voir FichePresentation). Ce qu'un speaker dit de lui :
+    // son niveau en duel, son bilan, son palmares. Courts, parce qu'ils se
+    // lisent en trois secondes, pendant qu'il leve les bras.
+    fiche_niveau:     ['NIVEAU EN DUEL', 'DUEL LEVEL'],
+    fiche_non_classe: ['NON CLASSÉ', 'UNRANKED'],
+    fiche_v:          ['VICTOIRE', 'WIN'],
+    fiche_v_pl:       ['VICTOIRES', 'WINS'],
+    fiche_d:          ['DÉFAITE', 'LOSS'],
+    fiche_d_pl:       ['DÉFAITES', 'LOSSES'],
+    fiche_n:          ['MATCH NUL', 'DRAW'],
+    fiche_n_pl:       ['MATCHS NULS', 'DRAWS'],
+    fiche_palmares:   ['PALMARÈS', 'HONOURS'],
+    fiche_monde:      ['MONDE', 'WORLD'],
+    // Le mieux classe en duel de la grille, s'il est seul en tete.
+    fiche_favori:     ['LE FAVORI', 'THE FAVOURITE'],
     pres_mic_on:     ['MICRO OUVERT', 'MIC LIVE'],
     pres_mic_off:    ['micro refusé', 'mic declined'],
     mic_winner:      ['LE MOT DU VAINQUEUR', 'THE WINNER SPEAKS'],

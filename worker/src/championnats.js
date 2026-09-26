@@ -26,7 +26,7 @@ import { serpentin, qualifier, podium, calendrier, ordonner } from './championna
 // selection doit trier exactement comme le classement affiche, sinon la barre
 // des trente-deux qu'on dessine a l'ecran ne designe pas les trente-deux
 // qu'on selectionne. Une seule definition, deux lecteurs.
-import { ensureDuelTables, ordreClassement } from './duels.js';
+import { ensureDuelTables, ordreClassement, rangDe } from './duels.js';
 // Le mot d'une course suit les memes regles de proprete que celui d'un duel :
 // meme longueur, memes types de voix, meme nettoyage des caracteres invisibles.
 // Les recopier ici serait la garantie qu'un jour les deux ne refusent plus la
@@ -2356,6 +2356,118 @@ export async function titresDe(db, nameKey) {
       ORDER BY sacre_le DESC`
   ).bind(String(nameKey).toLowerCase(), Date.now()).all();
   return results || [];
+}
+
+/**
+ * LES FICHES DE LA PRESENTATION — ce que le speaker dit d'un athlete quand la
+ * camera vient sur lui : son palmares, son niveau au classement des duels, et
+ * son bilan de victoires, de nuls et de defaites.
+ *
+ * Une seule lecture pour les deux presentations, celle du direct et celle de
+ * la retransmission : les deux ecrans montrent le meme athlete de la meme
+ * facon, et une fiche composee a deux endroits finirait par ne plus dire la
+ * meme chose selon qu'on regarde la course en direct ou apres coup.
+ *
+ * LE NIVEAU EST CELUI DE LA DISCIPLINE DE L'EDITION. C'est ce classement-la
+ * qui a selectionne la grille (voir `classement`), et c'est le seul qui dise
+ * quelque chose de ce qu'on va voir : « national » sur 100 m ne dit rien d'un
+ * tour de piste. Le bilan est celui de la meme ligne, pour que les deux
+ * chiffres parlent de la meme chose.
+ *
+ * LE PALMARES NE SE VIDE PAS. Une medaille expiree ne se porte plus dans le
+ * classement, mais elle a ete gagnee — c'est la regle du tableau des nations,
+ * et c'est celle d'un palmares d'athlete. On les regroupe par competition,
+ * distance et couleur : « deux fois or au championnat de France du 100 m »
+ * se lit mieux que deux lignes identiques.
+ *
+ * `avant` borne le palmares dans le temps. La retransmission d'une finale ne
+ * doit pas annoncer, avant le coup de pistolet, la medaille que cette finale
+ * va donner : elle passe l'heure de la course, et seul ce qui a ete gagne
+ * avant compte. Le niveau, lui, est celui d'aujourd'hui — l'historique des
+ * duels pourrait le reconstituer, mais pas pour le prix d'une presentation.
+ *
+ * Seuls les partants de l'edition ont une fiche : la route ne sert pas a
+ * interroger n'importe qui, elle sert une grille de depart.
+ */
+const FICHES_MAX = 16;
+export async function fichesDe(db, edition, cles, avant = null) {
+  await ensureChampTables(db);
+  await ensureDuelTables(db);
+  const e = await db.prepare(
+    `SELECT id, echelon, zone, epreuve FROM champ_editions WHERE id = ?`
+  ).bind(String(edition || '').toUpperCase()).first();
+  if (!e) return null;
+  const epreuve = String(e.epreuve || EPREUVE_DEFAUT);
+  const vide = { edition: e.id, epreuve, fiches: {} };
+
+  const demandees = [...new Set((cles || [])
+    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean))].slice(0, FICHES_MAX);
+  if (!demandees.length) return vide;
+  const { results: partants } = await db.prepare(
+    `SELECT name_key, tenant FROM champ_partants
+      WHERE edition = ? AND name_key IN (${demandees.map(() => '?').join(',')})`
+  ).bind(e.id, ...demandees).all();
+  const liste = (partants || []).map(p => p.name_key);
+  if (!liste.length) return vide;
+
+  const trous = liste.map(() => '?').join(',');
+  const borne = Number.isFinite(avant) && avant > 0 ? avant : Date.now();
+  const [duels, medailles, pays] = await Promise.all([
+    db.prepare(
+      `SELECT name_key, palier, lp, wins, losses, draws
+         FROM duel_players WHERE epreuve = ? AND name_key IN (${trous})`
+    ).bind(epreuve, ...liste).all(),
+    db.prepare(
+      `SELECT m.name_key, m.echelon, m.zone, m.place, m.obtenu_le,
+              COALESCE(ed.epreuve, ?) AS epreuve
+         FROM champ_medailles m LEFT JOIN champ_editions ed ON ed.id = m.edition
+        WHERE m.name_key IN (${trous}) AND m.obtenu_le < ?`
+    ).bind(EPREUVE_DEFAUT, ...liste, borne).all(),
+    paysDe(db, liste),
+  ]);
+
+  const fiches = {};
+  for (const p of partants) {
+    fiches[p.name_key] = {
+      pays: pays.get(p.name_key) || null,
+      tenant: !!p.tenant,
+      // Null pour qui n'a aucune ligne sur cette distance : il n'est pas
+      // « departemental IV », il n'est pas classe — l'ecran le dit.
+      niveau: null,
+      bilan: { v: 0, n: 0, d: 0 },
+      palmares: [],
+    };
+  }
+  for (const d of duels.results || []) {
+    const f = fiches[d.name_key];
+    if (!f) continue;
+    const r = rangDe(d.palier);
+    f.niveau = { etage: r.etage, division: r.division, palier: r.palier, lp: d.lp || 0 };
+    f.bilan = { v: d.wins || 0, n: d.draws || 0, d: d.losses || 0 };
+  }
+
+  // Le palmares, regroupe. La competition prime sur la couleur, comme pour la
+  // medaille du classement (`medaillesDe`) : un bronze mondial passe devant un
+  // or national. A egalite, la couleur, puis la plus recente.
+  const groupes = new Map();
+  for (const m of medailles.results || []) {
+    if (!fiches[m.name_key]) continue;
+    const cle = [m.name_key, m.echelon, m.zone, m.epreuve, m.place].join('|');
+    const g = groupes.get(cle);
+    if (g) { g.n += 1; g.dernier = Math.max(g.dernier, m.obtenu_le); continue; }
+    const z = nomZone(m.zone, m.echelon);
+    groupes.set(cle, {
+      qui: m.name_key, echelon: m.echelon, zone: m.zone,
+      zoneNom: z.nom, zoneNomEn: z.nomEn,
+      epreuve: String(m.epreuve), place: m.place, n: 1, dernier: m.obtenu_le,
+    });
+  }
+  const ordonnes = [...groupes.values()].sort((a, b) =>
+    (PRESTIGE[b.echelon] || 0) - (PRESTIGE[a.echelon] || 0)
+    || a.place - b.place || b.dernier - a.dernier);
+  for (const { qui, ...g } of ordonnes) fiches[qui].palmares.push(g);
+
+  return { edition: e.id, epreuve, fiches };
 }
 
 /**

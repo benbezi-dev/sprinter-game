@@ -21,6 +21,11 @@ import { Salle, type EtatSalle, type Rappel, type Arrivee, type Presentation } f
 import { brancherSalle } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
+import { chargerFiches } from './fiches-champ';
+import {
+  entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle,
+  verdictRendu, arreterLaMusique,
+} from './musique-championnat';
 
 const SprinterApp: any = (globalThis as any).SprinterApp;
 
@@ -66,6 +71,7 @@ export function useChampDirect(): EtatChampDirect {
 }
 
 let salle: Salle | null = null;
+let edition = '';
 let epreuve = '100';
 let niveau = 4;
 /** Le pistolet annonce, dans notre horloge, en attendant la fin de la presentation. */
@@ -139,6 +145,12 @@ function ecouteurs() {
         salle: e, moi: salle?.moi || '', role: salle?.role || 'coureur',
         etape: etat.etape === 'connexion' ? 'attente' : etat.etape,
       });
+      // LES FICHES PARTENT DE LA CHAMBRE D'APPEL, pas de la presentation : un
+      // athlete y a trois secondes, et sa fiche doit etre la des la premiere.
+      // La grille entiere, absents compris — on ne sait pas encore qui sera
+      // la a l'appel. Deja demandees, elles ne repartent pas.
+      const grille = e.champ?.grille;
+      if (edition && grille?.length) void chargerFiches({ edition }, grille.map(g => g.cle));
       const G = SprinterApp.G;
       if (G.liveOn && G.champDirect && (G.state === 'count' || G.state === 'race') && !G.rappel) {
         SprinterApp.majLives(autres());
@@ -147,6 +159,7 @@ function ecouteurs() {
     onPresentation: (p: Presentation) => {
       presEnCours = true;
       publier({ etape: 'presentation' });
+      presentationAnnoncee(p.dansMs, p.ordre.length);
       monterLaPiste();
       lancerPresentation({
         presentation: p,
@@ -158,11 +171,15 @@ function ecouteurs() {
           if (cibleDepart != null) lancerCourse();
         },
         etatVoix: () => ({ micro: false, refuse: false, ouvert: false, connecte: false } as any),
+        // Chaque athlete presente avec son palmares, son niveau en duel et
+        // son bilan — sur la distance de l'edition.
+        fiches: edition ? { edition, epreuve } : undefined,
       });
     },
     onDepart: (dansMs: number, departA: number) => {
       cibleDepart = Date.now() + dansMs;
       dateDepart = departA;
+      pistoletAnnonce(dansMs);
       if (!presEnCours) lancerCourse();
     },
     onPos: (id: string, d: number, c?: number) => SprinterApp.liveDistDe(id, d, c),
@@ -172,6 +189,9 @@ function ecouteurs() {
     onRappel: (r: Rappel, dansMs: number | null) => {
       const moiSorti = r.fautifs.some(f => f.id === etat.moi);
       const nouveauPistolet = dansMs == null ? null : Date.now() + dansMs;
+      // La musique se tait pendant la scene, et reprend au 3-2-1 du nouveau depart.
+      rappelSiffle();
+      if (dansMs != null) pistoletAnnonce(dansMs);
       // L'etat que porte le rappel est deja celui d'apres : les fautifs y sont
       // en `dq`. Sans le republier, l'ecran proposait encore de suivre un
       // coureur qui venait de quitter la piste.
@@ -197,6 +217,7 @@ function ecouteurs() {
       }, r.rappel_ms);
     },
     onResultat: (r: any) => {
+      verdictRendu();
       publier({ resultat: { classement: r.classement || [], partants: r.partants || 0 },
                 etape: etat.etape === 'rappel' ? 'rappel' : 'fin' });
     },
@@ -213,7 +234,7 @@ function ecouteurs() {
  *
  * @param lieu la cle du stade impose par l'edition, s'il y en a un
  */
-export function entrerEnDirect(edition: string, phase: string, course: number,
+export function entrerEnDirect(ed: string, phase: string, course: number,
                                opts: { epreuve: string; lieu?: string | null }) {
   quitterDirect(false);
   // LE SON S'OUVRE DANS LE GESTE, comme sur la page Regarder. Ce clic est le
@@ -223,10 +244,14 @@ export function entrerEnDirect(edition: string, phase: string, course: number,
   // au coup de pistolet, sous les yeux de tout le monde. Il privait en plus
   // la presentation et le decompte de la voix du starter.
   try { SprinterApp.Audio_.init(); SprinterApp.Audio_.ctx?.resume?.(); } catch { /* sans le son, la course se court */ }
+  edition = String(ed || '').toUpperCase();
   epreuve = opts.epreuve || '100';
   niveau = niveauDuLieu(opts.lieu);
   cibleDepart = null; dateDepart = null; presEnCours = false;
-  const s = new Salle(`${edition}-${phase}-${course}`, ecouteurs());
+  // Le morceau du tour se charge des l'entree : la chambre d'appel laisse
+  // plusieurs minutes avant la presentation.
+  entrerDansLeTour(phase);
+  const s = new Salle(`${ed}-${phase}-${course}`, ecouteurs());
   salle = s;
   brancherSalle({
     position: (d: number, c?: number) => s.position(d, c),
@@ -234,7 +259,7 @@ export function entrerEnDirect(edition: string, phase: string, course: number,
     fauxDepart: (ms: number) => s.fauxDepart(ms),
   });
   publier({ ...VIDE, ouvert: true });
-  s.connecterChampionnat(edition, phase, course);
+  s.connecterChampionnat(ed, phase, course);
 }
 
 /** Spectateur : suivre ce coureur-la. */
@@ -261,6 +286,7 @@ export function quitterDirect(accueil = true) {
   }
   brancherSalle(null);
   lancerPresentation(null);
+  arreterLaMusique();
   const etaitOuvert = etat.ouvert;
   publier({ ...VIDE });
   if (accueil && etaitOuvert) {
