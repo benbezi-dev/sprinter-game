@@ -80,6 +80,8 @@ type Plan = {
   tour: Tour;
   presentation: { premier: number; n: number } | null;
   pistolet: number | null;
+  /** Le debut de la musique, a l'appel : fixe au premier depart, garde apres un rappel. */
+  appel: number | null;
   ligne: boolean;
   fin: boolean;
 };
@@ -199,16 +201,44 @@ function eteindre(cat?: Categorie, fondu = 0.05) {
   sons = sons.filter(s => cat && s.cat !== cat);
 }
 
-/** L'appel puis les blocs d'athlete, dans le morceau. */
+/**
+ * LA MUSIQUE PART A L'APPEL, 29,5 s avant le pistolet, quel que soit le nombre
+ * de presents — pour les coureurs comme pour les spectateurs.
+ *
+ * Elle partait avec la presentation : avec huit presents c'etait juste apres
+ * l'appel, avec deux il y avait dix-huit secondes de silence, et un coureur
+ * seul n'entendait rien avant le 3-2-1. Le morceau de presentation dure
+ * exactement le temps de l'appel au pistolet (1,5 s d'appel, huit blocs de
+ * 3 s, puis les 4 s du 3-2-1) : on le joue donc en entier depuis l'appel. Les
+ * athletes presentes tombent toujours sur les DERNIERS blocs, comme avant — la
+ * salle les place juste avant le 3-2-1.
+ *
+ * Qui arrive apres l'appel l'entend a l'endroit ou il en est (voir `poser`).
+ */
+function debutDeLAppel(): number | null {
+  if (!plan) return null;
+  if (plan.appel != null) return plan.appel;
+  if (plan.presentation) {
+    const { premier, n } = plan.presentation;
+    return premier - (APPEL + Math.max(0, 8 - n) * BLOC_ATHLETE) * 1000;
+  }
+  if (plan.pistolet != null) {
+    return plan.pistolet - (APPEL + 8 * BLOC_ATHLETE + AVANT_PISTOLET) * 1000;
+  }
+  return null;
+}
+
 function programmerLaPresentation() {
-  if (!plan?.presentation) return;
+  if (!plan) return;
+  const debut = debutDeLAppel();
+  if (debut == null) return;
+  // Deja lancee par le depart, la presentation qui arrive juste apres ne la
+  // coupe pas pour la relancer au meme endroit.
+  if (plan.appel != null && sons.some(x => x.cat === 'presentation')) return;
+  // Fige au premier depart : apres un faux depart, on ne rejoue pas l'appel.
+  plan.appel = debut;
   eteindre('presentation', 0.02);
-  const { premier, n } = plan.presentation;
-  poser('presentation', premier - APPEL * 1000, 'presentation', { de: 0, duree: APPEL });
-  // Les DERNIERS blocs : avec cinq presents, on joue les athletes 4 a 8.
-  const saut = Math.max(0, 8 - n) * BLOC_ATHLETE;
-  const combien = Math.min(8, n) * BLOC_ATHLETE;
-  poser('presentation', premier, 'presentation', { de: APPEL + saut, duree: combien });
+  poser('presentation', debut, 'presentation', { de: 0, duree: APPEL + 8 * BLOC_ATHLETE });
 }
 
 /** Le 3-2-1, puis la course au pistolet. */
@@ -291,7 +321,7 @@ export function entrerDansLeTour(phase: string) {
   const A = moteur();
   if (!A) return;
   const tour = tourDeLaPhase(phase);
-  plan = { tour, presentation: null, pistolet: null, ligne: false, fin: false };
+  plan = { tour, presentation: null, pistolet: null, appel: null, ligne: false, fin: false };
   muet = !A.on;
   if (!sortie || sortie.context !== A.ctx) {
     const g: GainNode = A.ctx.createGain();
@@ -317,6 +347,10 @@ export function pistoletAnnonce(dansMs: number) {
   plan.pistolet = Date.now() + Math.max(0, dansMs);
   plan.ligne = false; plan.fin = false;
   eteindre('fin', 0.05);
+  // Le premier depart arrive a l'appel : c'est lui qui lance la musique quand
+  // il n'y a pas de presentation (un seul present). Apres un rappel, `appel`
+  // est deja fige et deja passe : rien ne se rejoue.
+  if (plan.appel == null) programmerLaPresentation();
   programmerLeDepart();
 }
 
