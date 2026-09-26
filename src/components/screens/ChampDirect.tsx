@@ -6,6 +6,7 @@ import { DUREE, COURBE, MONTEE, VOILE } from '@/lib/mouvement';
 import {
   useChampDirect, quitterDirect, suivre, versLocal,
   type EtatChampDirect,
+  echauffer, finirEchauffement, peutSEchauffer, resteEchauffement,
 } from '@/game/champ-direct';
 import type { Arrivee } from '@/game/live';
 
@@ -35,9 +36,40 @@ export function ChampDirect() {
       {e.etape === 'rappel' && e.rappel &&
         <RappelEnScene key={'rappel' + e.rappel.debut}
                        fautifs={e.rappel.fautifs} moiSorti={e.rappel.moiSorti} />}
+      {e.etape === 'echauffement' && <BandeauEchauffement key="echauf" />}
       {e.etape === 'course' && e.role === 'spectateur' && <BandeauSpectateur key="spec" e={e} />}
       {e.etape === 'fin' && e.resultat && <TableauDArrivee key="fin" e={e} />}
     </AnimatePresence>
+  );
+}
+
+/* ---------------------------------------------------------- l'echauffement */
+
+/**
+ * Pendant l'echauffement, un bandeau en haut : combien de temps avant le
+ * retour force en chambre d'appel, et de quoi y revenir tout de suite. Le reste
+ * de l'ecran est la piste : rien ne doit s'y poser sur les touches de course.
+ */
+function BandeauEchauffement() {
+  const { N } = SprinterApp;
+  useMaintenant();
+  const r = resteEchauffement();
+  return (
+    <motion.div {...MONTEE}
+      className="absolute left-0 right-0 z-40 flex justify-center pointer-events-none
+                 px-[max(env(safe-area-inset-left),1rem)]"
+      style={{ top: 'calc(max(env(safe-area-inset-top), 0.5rem) + 3.2rem)' }}>
+      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-primary/50
+                      bg-black/80 px-4 py-1.5">
+        <span className="text-[10px] font-bold tracking-widest text-white/85">
+          {N.t('champ_echauffement', { d: r == null ? '—' : mmss(Math.max(0, r)) })}
+        </span>
+        <button onClick={() => finirEchauffement()}
+          className="text-[10px] font-bold tracking-widest text-primary active:scale-95 transition">
+          {N.t('champ_echauf_retour')}
+        </button>
+      </div>
+    </motion.div>
   );
 }
 
@@ -142,6 +174,15 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
           <div className="text-center text-[11px] text-destructive">
             {erreur === 'fermee' || erreur === 'reseau' ? N.t('champ_salle_fermee') : String(erreur)}
           </div>
+        )}
+        {/* S'echauffer : seulement pour un partant, et tant qu'il reste le
+            temps d'une course avant la fin forcee (40 s avant l'appel). */}
+        {peutSEchauffer() && (
+          <button onClick={() => echauffer()}
+            className="self-center px-4 py-2 rounded-full bg-primary text-background text-[11px]
+                       font-bold tracking-widest active:scale-95 transition">
+            {N.t('champ_echauffer')}
+          </button>
         )}
         <button onClick={() => quitterDirect()}
           className="self-center px-4 py-1.5 rounded-full border border-white/20 text-[10px]

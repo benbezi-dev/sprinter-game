@@ -586,6 +586,10 @@
     champ_spectateur_n: ['Tu regardes : ce téléphone ne court pas cette série.',
                          'You are watching: this phone is not in this race.'],
     champ_dir_quitter:  ['QUITTER', 'LEAVE'],
+    // L'echauffement en chambre d'appel : rien n'est chronometre.
+    champ_echauffer:    ['S’ÉCHAUFFER SUR LA PISTE', 'WARM UP ON THE TRACK'],
+    champ_echauffement: ['ÉCHAUFFEMENT · retour dans {d}', 'WARM-UP · back in {d}'],
+    champ_echauf_retour: ['RETOUR', 'BACK'],
     champ_fd:           ['FAUX DÉPART', 'FALSE START'],
     champ_fd_retour:    ['RETOUR SUR LA LIGNE', 'BACK TO THE LINE'],
     champ_qui:          ['QUI ?', 'WHO?'],

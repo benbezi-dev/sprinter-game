@@ -18,7 +18,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { Salle, type EtatSalle, type Rappel, type Arrivee, type Presentation } from './live';
-import { brancherSalle } from './engine';
+import { brancherSalle, reinitialiserEnvoi } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
 import { chargerFiches } from './fiches-champ';
@@ -30,7 +30,7 @@ import {
 const SprinterApp: any = (globalThis as any).SprinterApp;
 
 export type EtapeChamp =
-  'connexion' | 'attente' | 'presentation' | 'course' | 'rappel' | 'fin' | 'erreur';
+  'connexion' | 'attente' | 'echauffement' | 'presentation' | 'course' | 'rappel' | 'fin' | 'erreur';
 
 export type EtatChampDirect = {
   ouvert: boolean;
@@ -79,6 +79,9 @@ let cibleDepart: number | null = null;
 let dateDepart: number | null = null;
 let presEnCours = false;
 let minuteurRappel: ReturnType<typeof setTimeout> | null = null;
+/** Le lien moteur → salle, gardé pour le rebrancher après un échauffement. */
+let lien: Parameters<typeof brancherSalle>[0] = null;
+let veilleEchauffement: ReturnType<typeof setInterval> | null = null;
 
 /** Mon couloir dans la grille de la salle, s'il y en a un. */
 function monCouloir(): number | undefined {
@@ -157,6 +160,7 @@ function ecouteurs() {
       }
     },
     onPresentation: (p: Presentation) => {
+      if (etat.etape === 'echauffement') finirEchauffement();
       presEnCours = true;
       publier({ etape: 'presentation' });
       presentationAnnoncee(p.dansMs, p.ordre.length);
@@ -177,6 +181,7 @@ function ecouteurs() {
       });
     },
     onDepart: (dansMs: number, departA: number) => {
+      if (etat.etape === 'echauffement') finirEchauffement();
       cibleDepart = Date.now() + dansMs;
       dateDepart = departA;
       pistoletAnnonce(dansMs);
@@ -259,13 +264,76 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   else arreterLaMusique();
   const s = new Salle(`${ed}-${phase}-${course}`, ecouteurs());
   salle = s;
-  brancherSalle({
+  lien = {
     position: (d: number, c?: number) => s.position(d, c),
     fini: (ms: number) => s.fini(ms),
     fauxDepart: (ms: number) => s.fauxDepart(ms),
-  });
+  };
+  brancherSalle(lien);
   publier({ ...VIDE, ouvert: true });
   s.connecterChampionnat(ed, phase, course);
+}
+
+/* ----------------------------------------------------------- l'echauffement */
+
+/**
+ * S'ECHAUFFER SUR LA PISTE PENDANT L'ATTENTE (demande de l'organisateur, 26/09).
+ *
+ * Un partant qui attend en chambre d'appel peut courir un 100 m seul, sur la
+ * piste du championnat, autant de fois qu'il veut. Rien n'en part : le moteur
+ * est DEBRANCHE de la salle le temps de l'echauffement — un faux depart
+ * d'echauffement signale a la salle l'y aurait disqualifie, car elle juge les
+ * signalements quelle que soit la phase. Il revient en chambre d'appel apres
+ * chaque course, et d'office 40 s avant l'appel : la presentation monte la
+ * piste du championnat, et ne le ferait pas sur une course en cours.
+ */
+const FIN_ECHAUFFEMENT_AVANT_APPEL_MS = 40_000;
+const APPEL_AVANT_PISTOLET_MS = 29_500;
+
+/** Le temps qui reste avant la fin forcee de l'echauffement, ou null. */
+export function resteEchauffement(): number | null {
+  const at = etat.salle?.champ?.at;
+  if (!salle || !at) return null;
+  return salle.versLocal(at) - APPEL_AVANT_PISTOLET_MS - FIN_ECHAUFFEMENT_AVANT_APPEL_MS - Date.now();
+}
+
+/** Vrai quand ce joueur peut partir s'echauffer maintenant. */
+export function peutSEchauffer(): boolean {
+  const r = resteEchauffement();
+  return !!salle && etat.role === 'coureur' && etat.salle?.champ?.etat === 'ouverte'
+    && etat.etape === 'attente' && r != null && r > 5_000;
+}
+
+export function echauffer() {
+  if (!peutSEchauffer()) return;
+  const G = SprinterApp.G;
+  brancherSalle(null);
+  G.champDirect = false;
+  SprinterApp.startLive([epreuve], { levelIdx: niveau, autres: [], sansOrdinateur: true });
+  SprinterApp.liveDepart(3000, null);
+  publier({ etape: 'echauffement' });
+  let finiDepuis: number | null = null;
+  if (veilleEchauffement) clearInterval(veilleEchauffement);
+  veilleEchauffement = setInterval(() => {
+    const r = resteEchauffement();
+    if (r == null || r <= 0) { finirEchauffement(); return; }
+    // La course d'echauffement est finie (arrivee, faux depart) : on laisse
+    // le temps de voir son chrono, puis retour en chambre d'appel.
+    const enCourse = G.state === 'count' || G.state === 'race';
+    if (enCourse) { finiDepuis = null; return; }
+    if (finiDepuis == null) finiDepuis = Date.now();
+    else if (Date.now() - finiDepuis > 2_500) finirEchauffement();
+  }, 250);
+}
+
+export function finirEchauffement() {
+  if (veilleEchauffement) { clearInterval(veilleEchauffement); veilleEchauffement = null; }
+  if (etat.etape !== 'echauffement') return;
+  const G = SprinterApp.G;
+  G.liveOn = false;
+  if (G.state !== 'title' && G.state !== 'open') SprinterApp.goHome();
+  if (lien) { brancherSalle(lien); reinitialiserEnvoi(); }
+  publier({ etape: 'attente' });
 }
 
 /** Spectateur : suivre ce coureur-la. */
@@ -285,6 +353,8 @@ export function versLocal(t: number): number {
  */
 export function quitterDirect(accueil = true) {
   if (minuteurRappel) { clearTimeout(minuteurRappel); minuteurRappel = null; }
+  if (veilleEchauffement) { clearInterval(veilleEchauffement); veilleEchauffement = null; }
+  lien = null;
   if (salle) {
     const s = salle; salle = null;
     s.ecouter({});
