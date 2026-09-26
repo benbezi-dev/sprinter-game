@@ -44,7 +44,10 @@ function delai(ms: number): string {
   return `${s} s`;
 }
 
-const chrono = (ms: number | null) => ms == null ? '—' : (ms / 1000).toFixed(3) + ' s';
+// Virgule en francais, point en anglais — comme le tableau d'arrivee du
+// direct (`ChampDirect.tsx`), pour qu'un meme chrono s'ecrive pareil partout.
+const chrono = (ms: number | null) => ms == null ? '—'
+  : (ms / 1000).toFixed(3).replace('.', SprinterApp.N.getLang() === 'en' ? '.' : ',') + ' s';
 
 /* ------------------------------------------------------------------ phases */
 

@@ -64,7 +64,15 @@ function useMaSelection() {
       // jusqu'à cinq minutes de retard, et c'est le moment où l'écran doit
       // basculer sans qu'on recharge le jeu.
       const s0 = s;
-      if (!s0 || s0.gele || s0.cloture == null) return;
+      if (!s0) return;
+      // Apres une course, la revelation deplace les qualifies vers le tour
+      // suivant : on redemande toutes les cinq minutes, pour que la banderole
+      // passe a « DEMI-FINALE 1 » sans qu'on recharge le jeu.
+      if (s0.gele && courue(s0.course)) {
+        if (Date.now() - dernier.current >= 5 * 60_000) demander();
+        return;
+      }
+      if (s0.gele || s0.cloture == null) return;
       if (Date.now() < s0.cloture) return;
       if (Date.now() - dernier.current < 60_000) return;
       demander();
@@ -140,6 +148,39 @@ function maCourse(c: { phase: string; numero: number }): string {
   if (c.phase !== 'demies' && c.phase !== 'finale') return N.t('sel_ma_serie', { n: c.numero });
   const nom = String(N.t('champ_course_' + c.phase)).toUpperCase();
   return c.phase === 'finale' ? nom : `${nom} ${c.numero}`;
+}
+
+/**
+ * Vrai quand la course de la convocation est passée. Le serveur garde la
+ * derniere course du partant jusqu'a la revelation suivante — et pour toujours
+ * s'il est elimine — si bien que la banderole annoncait encore « SÉRIE 1 ·
+ * samedi 11:00 » a 21 h. Quinze minutes apres le depart : le cron range a ce
+ * moment-la les courses restees vides, la course est donc finie dans tous les
+ * cas.
+ */
+const COURUE_APRES = 15 * 60_000;
+const courue = (c: { at: number | null } | null) =>
+  !!c && c.at != null && Date.now() >= c.at + COURUE_APRES;
+
+/** Même jour du calendrier, dans le fuseau du joueur. */
+const memeJour = (a: number, b: number) =>
+  new Date(a).toDateString() === new Date(b).toDateString();
+
+/**
+ * La phrase sous la convocation d'une serie. « À samedi » etait ecrit en dur :
+ * faux le samedi meme, a une minute du depart. On nomme le jour de la course,
+ * ou l'on dit que c'est aujourd'hui.
+ */
+function aBientot(at: number | null): string {
+  const { N } = SprinterApp;
+  if (at == null) return N.t('sel_gelee');
+  if (memeJour(at, Date.now())) return N.t('sel_aujourdhui');
+  try {
+    const j = new Date(at).toLocaleDateString(N.getLang() === 'en' ? 'en-GB' : 'fr-FR', { weekday: 'long' });
+    return N.t('sel_bonne_chance', { j });
+  } catch {
+    return N.t('sel_gelee');
+  }
 }
 
 /* -------------------------------------------------------------- le décompte */
@@ -268,7 +309,9 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
           <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
             {s.gele
               ? (dedans && s.course
-                  ? `${maCourse(s.course)} · ${heureLocale(s.course.at) || ''}`
+                  ? (courue(s.course)
+                      ? N.t('sel_courue', { c: maCourse(s.course) })
+                      : `${maCourse(s.course)} · ${heureLocale(s.course.at) || ''}`)
                   : N.t('sel_prochaine'))
               : s.rang == null
                 ? (pays ? N.t('sel_pour_entrer') : N.t('sel_places', { n: s.places }))
@@ -500,7 +543,11 @@ export function SceneSelection() {
                   </span>
                 )}
                 <span className="text-[11px] text-muted-foreground mt-1">
-                  {s.course && s.course.phase !== 'series' ? N.t('sel_qualifie') : N.t('sel_bonne_chance')}
+                  {s.course && courue(s.course)
+                    ? N.t('sel_courue', { c: maCourse(s.course) })
+                    : s.course && s.course.phase !== 'series'
+                      ? N.t('sel_qualifie')
+                      : aBientot(s.course ? s.course.at : null)}
                 </span>
               </motion.div>
             ) : (

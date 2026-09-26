@@ -67,7 +67,7 @@ const PAR_ATHLETE_MS = 3000;
 const CASCADE_MS = 130;
 
 function chrono(ms: number | null): string {
-  return ms == null ? '—' : (ms / 1000).toFixed(3) + ' s';
+  return ms == null ? '—' : (ms / 1000).toFixed(3).replace('.', SprinterApp.N.getLang() === 'en' ? '.' : ',') + ' s';
 }
 
 /** Le coureur du moteur qui occupe ce couloir. */
@@ -571,7 +571,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
               : N.t('pf_bouton')}
             {releve === '' && ecartMs != null && (
               <span className="font-mono opacity-70">
-                {(ecartMs / 1000).toFixed(3).replace('.', ',')} s
+                {(ecartMs / 1000).toFixed(3).replace('.', SprinterApp.N.getLang() === 'en' ? '.' : ',')} s
               </span>
             )}
           </button>
