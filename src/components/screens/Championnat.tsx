@@ -145,7 +145,10 @@ function Couloir({ p, couloir, place, ms, direct, motif }: {
 }
 
 function Grille({ e }: { e: Edition }) {
-  const courses = grille(e);
+  // Dans l'ordre des heures : les repechages du 26/09 (series 5 a 7) ne
+  // courent pas dans l'ordre de leurs numeros.
+  const heure = (n: number) => (e.calendrier || []).find(r => r.phase === e.phase && r.course === n)?.at ?? 0;
+  const courses = grille(e).sort((a, b) => heure(a.course) - heure(b.course));
   if (!courses.length) return null;
   return (
     <div className="flex flex-col gap-3">
@@ -180,7 +183,7 @@ function Grille({ e }: { e: Edition }) {
               <span className="text-[10px] font-bold tracking-widest text-muted-foreground">
                 {SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
               </span>
-              {courue && e.directsParCourse > 0 && (
+              {courue && e.directsParCourse > 0 && course <= e.courses && (
                 <span className="text-[9px] text-primary/70 tracking-wide">
                   {SprinterApp.N.t('champ_directs', { n: e.directsParCourse })}
                 </span>
@@ -195,7 +198,7 @@ function Grille({ e }: { e: Edition }) {
                 <Couloir key={p.name_key} p={p}
                          couloir={couloirDe.get(p.name_key)}
                          place={r?.place} ms={r?.ms} motif={r?.motif}
-                         direct={!!r && r.ms != null && r.place <= e.directsParCourse} />
+                         direct={!!r && r.ms != null && r.place <= e.directsParCourse && course <= e.courses} />
               );
             })}
             {/* DEUX LIBELLES QUI PARTENT AVEC LA VIDEO.

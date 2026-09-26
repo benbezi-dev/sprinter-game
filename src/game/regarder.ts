@@ -124,7 +124,14 @@ export function programme(e: Edition): CourseDuProgramme[] {
   const cal = e.calendrier || [];
   const out: CourseDuProgramme[] = [];
   for (const ph of e.phases) {
-    for (let n = 1; n <= ph.courses; n++) {
+    // Les courses du format, plus celles que le calendrier ajoute au-dela (les
+    // repechages du 26/09, COURSES_EXTRA) — dans l'ordre de leurs heures.
+    const numeros = Array.from({ length: ph.courses }, (_, i) => i + 1);
+    for (const rv of cal) {
+      if (rv.phase === ph.cle && rv.course != null && rv.course > ph.courses && !numeros.includes(rv.course)) numeros.push(rv.course);
+    }
+    numeros.sort((a, b) => (heureDe(cal, ph.cle, a) ?? 0) - (heureDe(cal, ph.cle, b) ?? 0));
+    for (const n of numeros) {
       const partants = couloirsDe(e, ph.cle, n);
       const couloirDe = new Map(partants.map((p, i) => [p.name_key, i + 1]));
       const fin = arrivee(e, ph.cle, n);
