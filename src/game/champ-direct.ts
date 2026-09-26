@@ -233,9 +233,12 @@ function ecouteurs() {
  * Entrer dans la salle d'une serie.
  *
  * @param lieu la cle du stade impose par l'edition, s'il y en a un
+ * @param echelon, zone ce que l'edition est : la musique enregistree
+ *   (game/musique-championnat.ts) est celle du Championnat de France
  */
 export function entrerEnDirect(ed: string, phase: string, course: number,
-                               opts: { epreuve: string; lieu?: string | null }) {
+                               opts: { epreuve: string; lieu?: string | null;
+                                       echelon?: string; zone?: string }) {
   quitterDirect(false);
   // LE SON S'OUVRE DANS LE GESTE, comme sur la page Regarder. Ce clic est le
   // dernier appui avant le pistolet : sans lui, c'etait le PREMIER APPUI DE LA
@@ -249,8 +252,11 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   niveau = niveauDuLieu(opts.lieu);
   cibleDepart = null; dateDepart = null; presEnCours = false;
   // Le morceau du tour se charge des l'entree : la chambre d'appel laisse
-  // plusieurs minutes avant la presentation.
-  entrerDansLeTour(phase);
+  // plusieurs minutes avant la presentation. Il est ecrit pour le Championnat
+  // de France ; ailleurs, aucun tour ne s'ouvre, les annonces de la salle ne
+  // trouvent rien a programmer, et la course garde sa musique ordinaire.
+  if (opts.echelon === 'national' && opts.zone === 'FR') entrerDansLeTour(phase);
+  else arreterLaMusique();
   const s = new Salle(`${ed}-${phase}-${course}`, ecouteurs());
   salle = s;
   brancherSalle({

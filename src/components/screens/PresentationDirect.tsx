@@ -248,10 +248,15 @@ export function PresentationDirect() {
  * Le joueur local n'est pas dans la table des adversaires — il EST le coureur
  * du jeu. Les autres y sont, ranges par l'identifiant que la salle leur a
  * donne, ce qui est justement ce qui permet de les retrouver ici.
+ *
+ * LES PARTANTS FICTIFS AUSSI. Un qualifie absent court a un temps fixe par la
+ * salle, hors du reseau : il vit dans `G.fictifs`, pas dans `G.lives`. Sans
+ * eux, la camera restait sur le joueur et le plan ne se resserrait sur aucun
+ * des autres — et en championnat, les absents sont nombreux.
  */
 function coureurDe(id: string | undefined, estMoi: boolean) {
   const G = SprinterApp.G;
   if (estMoi) return G.player || null;
-  if (!id || !G.lives) return null;
-  return G.lives.get(id)?.runner || null;
+  if (!id) return null;
+  return G.lives?.get(id)?.runner || G.fictifs?.get(id) || null;
 }

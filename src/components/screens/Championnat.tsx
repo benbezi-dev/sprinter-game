@@ -245,7 +245,8 @@ function BoutonDirect({ e, course, at, partant }: {
   const maintenant = Date.now();
   if (maintenant < at - OUVERTURE_DIRECT_MS) return null;
   if (!EST_TEST && maintenant > at + RETARD_DIRECT_MS) return null;
-  const entrer = () => entrerEnDirect(e.id, e.phase, course, { epreuve: e.epreuve, lieu: e.lieu });
+  const entrer = () => entrerEnDirect(e.id, e.phase, course,
+    { epreuve: e.epreuve, lieu: e.lieu, echelon: e.echelon, zone: e.zone });
   return (
     <button onClick={entrer}
       className={`mt-1 self-center flex items-center gap-1.5 px-3 py-1.5 rounded-full border

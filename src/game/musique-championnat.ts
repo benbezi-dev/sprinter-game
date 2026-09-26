@@ -1,5 +1,9 @@
 // LA MUSIQUE DU CHAMPIONNAT EN DIRECT — trois morceaux, un par tour.
 //
+// Ils sont ceux du Championnat de France (national, zone FR) : les autres
+// championnats n'ouvrent pas de tour ici et gardent la musique de course
+// ordinaire (voir entrerEnDirect dans champ-direct.ts).
+//
 // Series « Debout », demi-finales « Galop », finale « Feu » : des morceaux
 // enregistres (livraison le-stade-bangers-2-allege : sans clap, et une finale
 // a deux « HEY! » seulement), et non la synthese de
