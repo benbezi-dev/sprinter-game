@@ -36,19 +36,19 @@
         },
         "boucle": {
           "debut": 31,
-          "duree": 12.387104,
+          "duree": 11.162792,
           "boucle": true
         },
         "depart": {
-          "debut": 44.137104,
+          "debut": 42.912792,
           "duree": 5.5
         },
         "ligne": {
-          "debut": 49.887104,
+          "debut": 48.662792,
           "duree": 7.5
         },
         "fin": {
-          "debut": 57.637104,
+          "debut": 56.412792,
           "duree": 5.5
         }
       }

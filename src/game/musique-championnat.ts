@@ -1,7 +1,8 @@
 // LA MUSIQUE DU CHAMPIONNAT EN DIRECT — trois morceaux, un par tour.
 //
 // Series « Debout », demi-finales « Galop », finale « Feu » : des morceaux
-// enregistres (livraison le-stade-bangers-2), et non la synthese de
+// enregistres (livraison le-stade-bangers-2-allege : sans clap, et une finale
+// a deux « HEY! » seulement), et non la synthese de
 // `buildRace`. Chacun est ecrit sur l'horloge de la salle
 // (worker/src/salle-championnat.js) : l'appel, trois secondes par athlete, le
 // silence et le 3-2-1, le pistolet, la course, la ligne, la fin. Le fichier
@@ -13,7 +14,8 @@
 //                  joue les DERNIERS blocs : la presentation finit toujours
 //                  sur le sommet, et le refrain du chœur s'entend toujours ;
 //   3-2-1          les 4 s avant le pistolet. Un « HEY! » de tribune tombe sur
-//                  chaque bip du jeu — les bips ne sont pas dans la musique ;
+//                  chaque bip du jeu (en finale, sur le « 1 » seulement) —
+//                  les bips ne sont pas dans la musique ;
 //   le pistolet    la boucle de course part, avec la clameur de la foule. En
 //                  finale, la boucle fait un tour puis monte d'un demi-ton ;
 //   la ligne       la fanfare, par-dessus la boucle, au passage du premier ;
