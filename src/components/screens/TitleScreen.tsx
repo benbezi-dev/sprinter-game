@@ -90,7 +90,10 @@ function PiedLiens({ onTour, onTuto, haies }:
   ];
 
   return (
-    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4
+    // mt-4 et non mt-3 : le menu au-dessus deborde de 16 px vers le bas
+    // (`-mb-4`, pour le halo de COMMENCER). Avec 12 px d'ecart, ses cartes
+    // passaient sous les liens — vu en 414 x 736 avec la carte du championnat.
+    <div className="relative z-10 shrink-0 w-full max-w-md mx-auto mt-4
                     flex items-center justify-between gap-1">
       {liens.map(({ cle, action }) => (
         <button
@@ -316,10 +319,14 @@ export function TitleScreen() {
 
           {/* LE MENU, SEUL A DEFILER. Sa zone deborde de sa colonne, marge
               interieure comprise : le halo de COMMENCER (trente pixels) s'y
-              dessine en entier au lieu d'etre coupe net au bord. */}
+              dessine en entier au lieu d'etre coupe net au bord.
+              Le bas s'estompe sur 24 px, la hauteur de `pb-6` : une carte
+              coupee par le defilement se fond au lieu de buter sur les liens
+              du pied, et en fin de defilement seule la marge vide s'efface. */}
           <div ref={rouleau}
                className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
-                          w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
+                          w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4
+                          [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]">
           <div className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 w-full pt-2 pb-6">
 
             {/* L'EDITION DU MOMENT, tout en haut de la colonne.
