@@ -2360,13 +2360,22 @@ export async function cloturerPhase(db, edition) {
     q.elimines = dehors;
 
     //   4. LES COURSES DE REPECHAGE (COURSES_EXTRA). Tous ceux qui ont fini
-    //      leur serie sont deja dedans (regles 1 et 2) ; les places qui restent
-    //      vont aux meilleurs chronos des repechages, fictifs compris, et
-    //      personne n'y prend la place d'un qualifie (decision de
-    //      l'organisateur, 26/09 18:15). Sans chrono, rien.
+    //      leur serie sont deja dedans (regles 1 et 2). Les places libres vont
+    //      aux meilleurs chronos des repechages, fictifs compris ; puis un
+    //      coureur de repechage plus rapide prend la place du plus lent des
+    //      qualifies AU CHRONO de sa serie. Les qualifies directs (les deux
+    //      premiers de chaque serie) ne la perdent jamais (decisions de
+    //      l'organisateur, 26/09 18:15 et 18:30). Sans chrono, rien.
     for (const x of extras.filter(r => r.ms != null).sort(parMs)) {
-      if (nb() >= places) break;
       if ([...q.directs, ...q.repeches].some(r => r.cle === x.cle)) continue;
+      if (nb() >= places) {
+        const cible = q.repeches
+          .filter(r => r.ms != null && !r.doffice && r.motif !== 'repechage' && r.motif !== 'organisation')
+          .sort(parMs).pop();
+        if (!cible || x.ms >= cible.ms) break;
+        q.repeches.splice(q.repeches.indexOf(cible), 1);
+        dehors.push(cible);
+      }
       q.repeches.push({ ...x, complement: true, motif: 'repechage' });
       // Sa course de serie d'origine (forfait, faux depart) l'avait laisse dehors.
       for (let i = dehors.length - 1; i >= 0; i--) if (dehors[i].cle === x.cle) dehors.splice(i, 1);
