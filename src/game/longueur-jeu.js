@@ -323,9 +323,12 @@ export function essaiAdversaire(niveau, etape, alea) {
  * tirage, seme ou non. L'ordre de passage est tire au sort, comme sur une
  * vraie feuille de concours.
  */
-export function nouveauConcours({ etape, noms, alea = Math.random, joueur = 'TOI' }) {
+export function nouveauConcours({ etape, noms, alea = Math.random, joueur = 'TOI', plateau = PLATEAU }) {
   const e = Math.max(0, Math.min(5, etape | 0));
-  const [lo, hi] = PLATEAU[e];
+  // Le plateau de l'epreuve : celui de la longueur par defaut, celui du
+  // triple saut (triple-jeu.js) quand c'est lui qu'on saute. Le reste du
+  // concours — l'ordre, la coupe, le classement — est le meme.
+  const [lo, hi] = plateau[e];
   const n = Math.min(CONCURRENTS[e], noms.length + 1);
   const athletes = [{ nom: joueur, joueur: true, niveau: 0, essais: [] }];
   for (let i = 0; i < n - 1; i++) {

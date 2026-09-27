@@ -1,4 +1,7 @@
-// LE SAUT EN LONGUEUR NE PART PAS EN PRODUCTION — et /test l'a bien.
+// LES SAUTS HORIZONTAUX NE PARTENT PAS EN PRODUCTION — et /test les a bien.
+//
+// Le saut en longueur et le triple saut (canal.ts, LONGUEUR_OUVERTE et
+// TRIPLE_OUVERT) partagent un ecran, un moteur et un sable : un seul morceau.
 //
 //   node tools/longueur-canal-test.mjs
 //
@@ -53,7 +56,9 @@ ok('pas une image de sable', !prod.some(f => /^(fosse|empreinte|gerbe)-/.test(f)
 
 // Des mots qui n'existent que dans le jeu du saut : l'epreuve telle que le
 // moteur la lit, la cle de la memoire, les finalistes des grands concours.
-const MOTS = ['la planche et le sable', 'sprinter.longueur.v1', 'Tomas Weit', 'Mike Powell'];
+const MOTS = ['la planche et le sable', 'sprinter.longueur.v1', 'Tomas Weit', 'Mike Powell',
+               // le triple saut, qui partage l'ecran et le morceau
+               'sprinter.triple.v1', 'Jonathan Edwards'];
 const jsProd = texte(dossierProd, prod), jsTest = texte(dossierTest, test);
 for (const m of MOTS) ok(`« ${m} » absent du paquet public`, !jsProd.includes(m));
 

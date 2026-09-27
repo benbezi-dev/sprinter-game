@@ -1,17 +1,18 @@
 /* ---------------------------------------------------------------------------
-   JUMPER — le saut en longueur pose sur le moteur de Sprinter
+   JUMPER — les sauts horizontaux poses sur le moteur de Sprinter
    ---------------------------------------------------------------------------
    Ce fichier est la charniere, comme haies-course.js l'est pour les haies :
    d'un cote le moteur, qui sait faire courir un athlete dans un stade ; de
-   l'autre le jeu du saut (longueur-jeu.js), qui sait ce que vaut un appel,
-   un angle et un ramene. Il n'y a rien d'autre ici que ce qui les relie.
+   l'autre le jeu du saut (longueur-jeu.js, triple-jeu.js), qui sait ce que
+   vaut un appel, un angle, une pose et un ramene. Il n'y a rien d'autre ici
+   que ce qui les relie.
 
    LE MOTEUR NE CONNAIT PAS LE SAUT. Il offre des portes, et ce fichier les
    ouvre a l'armement et les referme en partant :
 
      G.pasSauteur     le pas de simulation du joueur, a la place de stepPlayer
-     G.appuiSaut      un appui sur un pave : foulee, appel, ciseau ou ramene
-     G.relacheSaut    le pouce qui quitte la planche : l'angle est fixe
+     G.appuiSaut      un appui sur un pave : foulee, appel, pose, ciseau, ramene
+     G.relacheSaut    le pouce qui quitte le sol : l'angle est fixe
      G.viseCamera     ou regarder : la piste d'elan, puis la fosse
      G.obstacles      le calque au sol et ce qui se tient debout
      G.zoneReservee   la pelouse ou le decor ne se pose pas
@@ -21,6 +22,13 @@
    a quatre metres de la corde, comme dans tous les stades : on garde donc la
    piste du 100 m, et l'on pose le coureur a cote d'elle — `demi` est l'ecart
    lateral que le moteur sait deja lire, celui du relais.
+
+   DEUX EPREUVES, UNE PISTE, UNE FOSSE. Le saut en longueur et le triple saut
+   se sautent sur la meme piste d'elan, vers le meme sable : seule change la
+   planche, a deux metres du sable pour l'une, de sept a treize pour l'autre.
+   On voit les deux planches, comme dans tous les stades. Le triple saut ajoute
+   deux poses entre l'appel et le saut, et chacune est un appel de plus : le
+   pied se pose, on tient pour l'angle, on relache.
 --------------------------------------------------------------------------- */
 
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
@@ -31,12 +39,18 @@ import {
   vol as volDe, hauteurA, sauter, DISTANCE_ENVOL, RAMENE_VISE, RAMENE_TOLERANCE,
   CISEAU_TOLERANCE, CISEAU_APPUIS,
 } from './longueur-jeu.js';
+import { plancheDe, BONDS } from './triple.js';
+import {
+  bond as bondDe, hauteurBond, jugerPose, POSE, sauterTriple, ANGLES_VISES, BONDS_JEU,
+} from './triple-jeu.js';
 import {
   postureDe, dessinerSol, piecesDebout, dessinerPiece, prechargerSable,
 } from './longueur-rendu.js';
 
-/** La ligne d'appel, en metres le long de la ligne droite. */
+/** La ligne d'appel du saut en longueur, en metres le long de la ligne droite. */
 export const LIGNE = 50;
+/** Le debut du sable, que les deux epreuves partagent. */
+export const FOSSE_X = LIGNE + FOSSE.debut;
 /** L'axe de la piste d'elan : dans la pelouse, a 4,40 m de la corde. */
 export const PISTE_Y = -4.4;
 
@@ -48,7 +62,7 @@ export const PISTE_Y = -4.4;
  * meilleurs, parce qu'il doit encore poser un pied au centimetre et se
  * lever. Le plafond est donc celui-la, un peu au-dessus ; la transition
  * parfaite le releve comme au 100 m (TRANS_VMAX), et c'est ce qu'il faut pour
- * sauter avec les ZEZE. Voir tools/longueur-test.mjs.
+ * sauter avec les ZEZE. Voir tools/longueur-test.mjs et triple-test.mjs.
  */
 export const VITESSE_ELAN_MAX = 11.6;
 
@@ -56,7 +70,7 @@ export const VITESSE_ELAN_MAX = 11.6;
  * L'epreuve telle que le moteur la lit : une ligne droite de cent metres —
  * celle du stade —, et le plafond d'elan. Les `ranges` ne servent qu'a
  * buildLevel, qui tire un plateau de coureurs que l'on renvoie aussitot aux
- * vestiaires : au saut en longueur, on saute seul sur la piste.
+ * vestiaires : au saut, on s'elance seul sur la piste.
  */
 const EPREUVE = {
   key: 'longueur', label: 'SAUT EN LONGUEUR', sub: 'la planche et le sable',
@@ -90,7 +104,7 @@ function annoncer(evt) {
   for (const f of ecouteurs) { try { f(evt); } catch (err) { /* un ecran ne fait pas tomber le saut */ } }
 }
 
-/** Ecouter ce qui se passe sur la piste : appel, envol, contact, marque, fin. */
+/** Ecouter ce qui se passe sur la piste : appel, pose, envol, contact, marque, fin. */
 export function ecouterSaut(f) {
   ecouteurs.add(f);
   return () => { ecouteurs.delete(f); };
@@ -99,24 +113,39 @@ export function ecouterSaut(f) {
 /** L'etat du saut en cours, pour l'ecran. Nul hors d'un concours. */
 export function etatSaut() { return e; }
 
+/** Le triple saut est-il l'epreuve en cours ? */
+const triple = () => !!e && e.epreuve === 'triple';
+
+/** L'angle que vise l'impulsion en cours : celui du bond qu'elle lance. */
+function angleVise() {
+  if (!triple()) return 21.5;
+  return ANGLES_VISES[Math.min(2, e.bond)];
+}
+
 /* ------------------------------------------------------------ l'armement */
 
 /**
  * Monter le stade du concours, et ouvrir les portes du moteur.
  *
  * `etape` choisit le stade — les six etapes de Sprinter — et donc le public,
- * la piste et le sable.
+ * la piste et le sable ; au triple saut, elle choisit aussi la planche.
+ * `epreuve` : 'longueur' ou 'triple'.
  */
-export function armerConcoursSaut(etape) {
+export function armerConcoursSaut(etape, epreuve = 'longueur') {
   const A = SprinterApp, G = A.G;
   if (e) nettoyer();
   sauvegarde = { race: G.race, raceKey: G.raceKey, surRetour: G.surRetourAccueil };
   G.race = EPREUVE;
   A.buildLevel(etape);
+  const lignetriple = FOSSE_X - plancheDe(etape);
+  const ligne = epreuve === 'triple' ? lignetriple : LIGNE;
   e = {
-    ligne: LIGNE, pisteY: PISTE_Y, depart: LIGNE - ELAN,
+    epreuve, ligne, fosseX: FOSSE_X, pisteY: PISTE_Y, depart: ligne - ELAN,
+    // les deux planches, chacune a sa place : on ne se sert que d'une
+    planches: [{ x: LIGNE, actif: epreuve !== 'triple' }, { x: lignetriple, actif: epreuve === 'triple' }],
     phase: 'repos', t: 0, horlogeT: 0, horloge: TEMPS_ESSAI,
-    jambeAppel: 0, vHist: [], appel: null, vol: null, reception: null,
+    jambeAppel: 0, vHist: [], appel: null, vol: null, pose: null, reception: null,
+    bond: 0, angles: [], poses: [], pieds: [], planche: null,
     angleEnvol: null, angleVise: [19, 24], resultat: null,
     empreinte: null, gerbe: null, mesure: null, drapeau: null, traceMordue: null,
     lignes: [], vent: 0, posture: null, juge: null, pieces: [],
@@ -133,7 +162,8 @@ export function armerConcoursSaut(etape) {
   G.consigneSaut = consigne;
   G.pavesSaut = pavesDuSaut;
   // Le decor ne se pose pas sur la piste d'elan ni dans la fosse.
-  G.zoneReservee = { x0: LIGNE - 48, x1: LIGNE + FOSSE.fond + 3, y0: PISTE_Y - 4.6, y1: 0 };
+  const debut = Math.min(LIGNE, lignetriple) - ELAN - 8;
+  G.zoneReservee = { x0: debut, x1: FOSSE_X + (FOSSE.fond - FOSSE.debut) + 3, y0: PISTE_Y - 4.6, y1: 0 };
   G.obstacles = {
     saut: true,
     preparer(r, G2, C) {
@@ -183,6 +213,16 @@ function nouveauSauteur() {
   resetInputRhythm();
 }
 
+/** Tout ce qu'un essai laisse derriere lui, remis a zero. */
+function essaiNeuf() {
+  return {
+    t: 0, vHist: [], appel: null, vol: null, pose: null, reception: null,
+    bond: 0, angles: [], poses: [], pieds: [], planche: null,
+    angleEnvol: null, resultat: null, empreinte: null, gerbe: null,
+    mesure: null, drapeau: null, traceMordue: null, finAnnoncee: false,
+  };
+}
+
 /**
  * Appeler le joueur sur la piste : c'est a lui. La minute part, le vent de
  * cet essai est tire, les lignes de la television sont tracees.
@@ -192,11 +232,7 @@ export function appelerSauteur({ vent = 0, lignes = [] } = {}) {
   const G = SprinterApp.G;
   nouveauSauteur();
   rendreLeTempo();
-  Object.assign(e, {
-    phase: 'attente', t: 0, horloge: TEMPS_ESSAI, vHist: [], appel: null, vol: null,
-    reception: null, angleEnvol: null, resultat: null, empreinte: null, gerbe: null,
-    mesure: null, drapeau: null, traceMordue: null, vent, lignes,
-  });
+  Object.assign(e, essaiNeuf(), { phase: 'attente', horloge: TEMPS_ESSAI, vent, lignes });
   G.state = 'race';
   placerCamera(true);
 }
@@ -206,8 +242,7 @@ export function mettreAuRepos() {
   if (!e) return;
   nouveauSauteur();
   rendreLeTempo();
-  Object.assign(e, { phase: 'repos', t: 0, appel: null, vol: null, reception: null,
-                     gerbe: null, mesure: null, drapeau: null });
+  Object.assign(e, essaiNeuf(), { phase: 'repos' });
   placerCamera(true);
 }
 
@@ -227,7 +262,7 @@ function nettoyer() {
   G.zoneReservee = null;
   if (G.obstacles && G.obstacles.saut) G.obstacles = null;
   G.zoomMode = 1;
-  if (G.player) G.player.posture = null;
+  if (G.player) { G.player.posture = null; G.player.fallAnim = 0; }
   if (sauvegarde) {
     G.race = sauvegarde.race;
     G.raceKey = sauvegarde.raceKey;
@@ -249,9 +284,9 @@ export function rangerConcoursSaut() {
 /* ---------------------------------------------------------- les gestes */
 
 /**
- * Un appui sur un pave. Rend ce qu'il a ete — 'appel', 'ciseau', 'ramene' —
- * ou 'rien' s'il n'a rien fait, ou null pour une foulee ordinaire, que le
- * moteur traite alors comme au 100 m.
+ * Un appui sur un pave. Rend ce qu'il a ete — 'appel', 'pose', 'ciseau',
+ * 'ramene' —, ou 'rien' s'il n'a rien fait, ou null pour une foulee
+ * ordinaire, que le moteur traite alors comme au 100 m.
  */
 function appui(cote) {
   if (!e) return null;
@@ -264,19 +299,22 @@ function appui(cote) {
       return null;
     case 'elan': {
       const orteil = j.d + AVANCE_PIED;
-      const ecart = LIGNE - orteil;
+      const ecart = e.ligne - orteil;
       if (ecart > APPEL_MAXI) return null;
       // L'APPEL. Le pied se pose ICI, a l'instant de l'appui : c'est lui
       // que le juge regarde, et c'est lui que la mesure retranche.
+      const vElan = vitesseDElan();
+      e.planche = { orteil, ecart, vElan, cote };
       e.appel = {
-        cote, orteil, ecart, d0: j.d, t0: performance.now(), u: 0, charge: 0,
-        angle: ANGLE_MIN, vElan: vitesseDElan(),
+        cote, orteil, d0: j.d, t0: performance.now(), u: 0, charge: 0,
+        angle: ANGLE_MIN, vEntree: vElan,
       };
       e.jambeAppel = cote === 'left' ? 0 : 1;
+      e.bond = 0;
       e.phase = 'appel'; e.t = 0;
       if (ecart < 0) e.traceMordue = orteil;
       poserLeTempo(RALENTI);
-      annoncer({ type: 'appel', ecart, vElan: e.appel.vElan });
+      annoncer({ type: 'appel', ecart, vElan });
       return 'appel';
     }
     case 'appel':
@@ -284,6 +322,17 @@ function appui(cote) {
       return 'rien';
     case 'vol': {
       const v = e.vol;
+      // LES DEUX PREMIERS BONDS DU TRIPLE SAUT : un appui dans les derniers
+      // centiemes du vol est la pose. Plus tot, le pied n'est pas la — rien.
+      if (v.pose) {
+        if (v.tPose == null && v.duree - v.t <= POSE.bonAvance) {
+          v.tPose = v.t;
+          v.tPoseReel = performance.now();
+          v.cotePose = cote;
+          return 'pose';
+        }
+        return 'rien';
+      }
       const autre = cote === 'left' ? 'right' : 'left';
       // LES DEUX POUCES ENSEMBLE : les deux jambes devant. On le reconnait a
       // ce que l'autre pave est encore tenu quand celui-ci s'abaisse.
@@ -301,14 +350,33 @@ function appui(cote) {
       }
       return 'rien';
     }
+    case 'pose':
+      // Le pied est deja au sol, et l'appui arrive en retard : il compte, et
+      // son retard se paie (triple-jeu.js, jugerPose).
+      poser(cote, e.pose.t, performance.now());
+      return 'pose';
     default:
       return 'rien';
   }
 }
 
-/** Le pouce se leve. Sur la planche, c'est le decollage. */
+/**
+ * Le pouce se leve. Au sol, c'est le decollage.
+ *
+ * Au triple saut, il peut se lever AVANT que le pied touche : un joueur qui
+ * tape sa pose un rien en avance a deja fini son geste quand le pied arrive.
+ * On retient alors l'instant, et l'impulsion partira au contact avec l'angle
+ * qu'il a tenu — sans quoi il resterait plante sur la piste jusqu'a
+ * quarante degres, pour un geste parfaitement donne.
+ */
 function relache(cote) {
-  if (!e || e.phase !== 'appel' || cote !== e.appel.cote) return false;
+  if (!e) return false;
+  if (e.phase === 'vol' && e.vol.pose && e.vol.tPose != null && cote === e.vol.cotePose
+      && e.vol.relachePose == null) {
+    e.vol.relachePose = performance.now();
+    return true;
+  }
+  if (e.phase !== 'appel' || cote !== e.appel.cote) return false;
   decoller();
   return true;
 }
@@ -323,25 +391,70 @@ function vitesseDElan() {
   return n ? s / n : h[h.length - 1][1];
 }
 
-/** L'impulsion est finie : le pied quitte la planche a l'angle tenu. */
-function decoller() {
+/** Le pied quitte le sol a l'angle tenu (`h` secondes, horloge du joueur). */
+function decoller(h = tenu()) {
   const G = SprinterApp.G, j = G.player;
   const a = e.appel;
-  a.angle = angleDe(tenu());
+  a.angle = angleDe(h);
   e.angleEnvol = a.angle;
-  const V = volDe(a.vElan, a.angle);
-  const contact = a.orteil + DISTANCE_ENVOL + V.longueur;
-  e.vol = {
-    t: 0, duree: V.duree, x0: j.d, vx: (contact - j.d) / V.duree, V,
-    hauteur: (t) => hauteurA(V, t),
-    ciseaux: 0, phase: 0, phaseVise: 0, dernierCote: a.cote, tRamene: null,
-  };
+  e.angles[e.bond] = a.angle;
+  if (triple() && e.bond < 2) {
+    // UN DES DEUX PREMIERS BONDS : il finit sur un pied, pas dans le sable.
+    const B = bondDe(e.bond, a.vEntree, a.angle);
+    const p = BONDS_JEU[e.bond];
+    const pose = a.orteil + p.envol + B.vol;          // le centre de masse a la pose
+    e.vol = {
+      bond: e.bond, pose: true, t: 0, duree: B.duree, x0: j.d, vx: (pose - j.d) / B.duree, B,
+      hauteur: (t) => hauteurBond(B, t),
+      orteilSuivant: pose + p.pose,
+      // le pied qui doit toucher : le meme au cloche-pied, l'autre a la foulee
+      coteAttendu: BONDS[e.bond].pied === 'meme' ? a.cote : (a.cote === 'left' ? 'right' : 'left'),
+      tPose: null, cotePose: null, relachePose: null, ciseaux: 0, phase: 0, phaseVise: 0, dernierCote: a.cote, tRamene: null,
+    };
+  } else {
+    const V = volDe(a.vEntree, a.angle);
+    const contact = a.orteil + DISTANCE_ENVOL + V.longueur;
+    e.vol = {
+      bond: e.bond, pose: false, t: 0, duree: V.duree, x0: j.d, vx: (contact - j.d) / V.duree, V,
+      hauteur: (t) => hauteurA(V, t),
+      ciseaux: 0, phase: 0, phaseVise: 0, dernierCote: a.cote, tRamene: null,
+    };
+  }
   e.phase = 'vol'; e.t = 0;
   poserLeTempo(VOL_RALENTI);
-  annoncer({ type: 'envol', angle: a.angle, vElan: a.vElan });
+  annoncer({ type: 'envol', angle: a.angle, vElan: a.vEntree, bond: e.bond });
 }
 
-/** Depuis combien de temps le pouce tient la planche, sur l'horloge du joueur. */
+/**
+ * Une pose du triple saut : le pied touche, la pose est jugee, et un nouvel
+ * appel commence — on tient pour l'angle du bond suivant.
+ *
+ * `retard` est en secondes de jeu apres le contact, `t0` l'instant de
+ * l'appui sur l'horloge du joueur : le maintien se compte depuis lui.
+ */
+function poser(cote, retard, t0) {
+  const j = SprinterApp.G.player;
+  const v = e.vol;
+  const p = jugerPose(retard);
+  const bon = cote === v.coteAttendu;
+  e.poses[v.bond] = retard;
+  e.pieds[v.bond] = bon;
+  const vEntree = v.B.vApres * (p.garde || 0.9);
+  e.appel = {
+    cote, orteil: v.orteilSuivant, d0: j.d, t0, u: 0, charge: 0,
+    angle: ANGLE_MIN, vEntree,
+  };
+  e.jambeAppel = cote === 'left' ? 0 : 1;
+  e.bond = v.bond + 1;
+  e.pose = null;
+  e.phase = 'appel'; e.t = 0;
+  poserLeTempo(RALENTI);
+  annoncer({ type: 'pose', note: p.note, bonPied: bon, bond: v.bond });
+  // Le pouce etait deja leve au contact : on decolle tout de suite.
+  if (v.relachePose != null) decoller(Math.max(0, (v.relachePose - t0) / 1000));
+}
+
+/** Depuis combien de temps le pouce tient, sur l'horloge du joueur. */
 function tenu() {
   return e && e.appel ? (performance.now() - e.appel.t0) / 1000 : 0;
 }
@@ -356,6 +469,7 @@ function pas(j, dt, elapsed) {
   if (e.empreinte) e.empreinte.age += dt;
   if (e.gerbe) { e.gerbe.t += dt; if (e.gerbe.t > 0.7) e.gerbe = null; }
   if (e.drapeau) e.drapeau.age += dt;
+  if (j.fallAnim > 0) j.fallAnim = Math.max(0, j.fallAnim - dt / SprinterCore.C.FALL_TIME);
   zoomer(dt);
 
   switch (e.phase) {
@@ -367,8 +481,8 @@ function pas(j, dt, elapsed) {
       e.horloge -= dt;
       if (e.horloge <= 0) {
         // Une minute sans s'elancer : l'essai est perdu.
+        nul('temps');
         e.phase = 'temps'; e.t = 0;
-        e.resultat = { mordu: true, raison: 'temps', metres: 0, marque: null, vent: e.vent };
         e.drapeau = { blanc: false, age: 0 };
         annoncer({ type: 'marque', resultat: e.resultat });
       }
@@ -382,10 +496,10 @@ function pas(j, dt, elapsed) {
       if (e.vHist.length > 200) e.vHist.splice(0, e.vHist.length - 200);
       // COURU A TRAVERS LA PLANCHE : le pied a franchi la ligne sans appel.
       // C'est un essai, et il est nul.
-      if (j.d + AVANCE_PIED > LIGNE + 0.25) {
+      if (j.d + AVANCE_PIED > e.ligne + 0.25) {
         e.phase = 'traverse'; e.t = 0;
-        e.traceMordue = LIGNE + 0.06;
-        e.resultat = { mordu: true, raison: 'traverse', metres: 0, marque: null, vent: e.vent };
+        e.traceMordue = e.ligne + 0.06;
+        nul('traverse');
       }
       return;
     }
@@ -393,14 +507,14 @@ function pas(j, dt, elapsed) {
       const a = e.appel;
       const h = tenu();
       a.angle = angleDe(h);
-      // Le bassin passe au-dessus du pied en trois dixiemes de pouce ; tenu
-      // plus longtemps, il s'ecrase.
-      const bon = (21.5 - ANGLE_MIN) / ANGLE_PAR_S;
+      // Le bassin passe au-dessus du pied le temps d'atteindre le bon angle ;
+      // tenu plus longtemps, il s'ecrase.
+      const bon = (angleVise() - ANGLE_MIN) / ANGLE_PAR_S;
       a.u = Math.min(1, h / bon);
       a.charge = Math.max(0, Math.min(1, (h - bon) / 0.4));
-      const vise = a.orteil + DISTANCE_ENVOL;
+      const vise = a.orteil + (triple() && e.bond < 2 ? BONDS_JEU[e.bond].envol : DISTANCE_ENVOL);
       j.d = a.d0 + (vise - a.d0) * lisse(a.u);
-      j.v = a.vElan * (1 - 0.5 * a.u);
+      j.v = a.vEntree * (1 - 0.5 * a.u);
       if (h >= TENUE_MAXI) decoller();
       return;
     }
@@ -410,7 +524,39 @@ function pas(j, dt, elapsed) {
       j.d = v.x0 + v.vx * v.t;
       j.v = v.vx;
       v.phase += (v.phaseVise - v.phase) * (1 - Math.exp(-16 * dt));
-      if (v.t >= v.duree) contact();
+      if (v.t >= v.duree) {
+        if (!v.pose) contact();
+        else if (v.tPose != null) poser(v.cotePose, v.tPose - v.duree, v.tPoseReel);
+        else {
+          // Le pied touche et personne n'a appuye : on attend l'appui, un
+          // temps. Le corps passe au-dessus du pied, lentement.
+          e.pose = { t: 0, orteil: v.orteilSuivant, x0: j.d };
+          e.jambeAppel = v.coteAttendu === 'left' ? 0 : 1;
+          e.phase = 'pose'; e.t = 0;
+          poserLeTempo(RALENTI);
+        }
+      }
+      return;
+    }
+    case 'pose': {
+      const p = e.pose, v = e.vol;
+      p.t += dt;
+      j.d = p.x0 + v.vx * 0.35 * p.t;
+      j.v = v.vx * 0.5;
+      if (p.t > POSE.casse) casser();
+      return;
+    }
+    case 'casse': {
+      // Le bond casse : il trebuche, court encore trois pas, s'arrete.
+      j.v *= Math.exp(-2.6 * dt);
+      if (j.v < 0.25) j.v = 0;
+      j.d += j.v * dt;
+      j.stride += j.v * dt * (Math.PI / j.strideLength());
+      if (e.t >= 0.9 && !e.drapeau) {
+        e.drapeau = { blanc: false, age: 0 };
+        annoncer({ type: 'marque', resultat: e.resultat });
+      }
+      if (e.t >= 2.6 && !e.finAnnoncee) { e.finAnnoncee = true; annoncer({ type: 'fin', resultat: e.resultat }); }
       return;
     }
     case 'reception': {
@@ -438,13 +584,13 @@ function pas(j, dt, elapsed) {
     }
     case 'traverse': {
       // Il freine, entre dans le sable, s'arrete.
-      const dansLeSable = j.d > LIGNE + FOSSE.debut;
+      const dansLeSable = j.d > e.fosseX;
       j.v *= Math.exp(-(dansLeSable ? 3.2 : 1.6) * dt);
       if (j.v < 0.25) j.v = 0;
       j.d += j.v * dt;
       j.stride += j.v * dt * (Math.PI / j.strideLength());
       if (dansLeSable && !e.empreinte) {
-        e.empreinte = { x: LIGNE + FOSSE.debut + 0.05, y: PISTE_Y, variante: 'course', age: 0 };
+        e.empreinte = { x: e.fosseX + 0.05, y: PISTE_Y, variante: 'course', age: 0 };
       }
       if (e.t >= 0.9 && !e.drapeau) {
         e.drapeau = { blanc: false, age: 0 };
@@ -462,25 +608,65 @@ function pas(j, dt, elapsed) {
   }
 }
 
+/** Un essai nul sans marque, pour la raison donnee. */
+function nul(raison) {
+  e.resultat = {
+    mordu: true, raison, metres: 0, marque: null, vent: e.vent,
+    bonds: [], angles: e.angles.slice(), ecart: e.planche ? e.planche.ecart : null,
+  };
+}
+
+/**
+ * LE BOND CASSE : le pied a touche, et l'appui n'est jamais venu. L'athlete
+ * ne repart pas — il trebuche et court jusqu'a s'arreter. Pas de marque.
+ */
+function casser() {
+  const j = SprinterApp.G.player;
+  const v = e.vol;
+  e.poses[v.bond] = null;
+  nul('rompu');
+  e.pose = null;
+  e.phase = 'casse'; e.t = 0;
+  j.v = v.vx * 0.6;
+  j.fallAnim = 1;
+  rendreLeTempo();
+  annoncer({ type: 'pose', note: 'rompu', bonPied: true, bond: v.bond });
+}
+
 /** Les talons touchent le sable : le saut est fait, il reste a le mesurer. */
 function contact() {
   const j = SprinterApp.G.player;
-  const a = e.appel, v = e.vol;
+  const a = e.appel, v = e.vol, pl = e.planche;
   const avance = v.tRamene == null ? null : v.duree - v.tRamene;
-  const r = sauter({
-    vElan: a.vElan, ecart: a.ecart, angle: a.angle, avance,
-    ciseau: v.ciseaux >= CISEAU_APPUIS, vent: e.vent,
-  });
-  r.raison = r.mordu ? 'planche' : null;
+  const ciseau = v.ciseaux >= CISEAU_APPUIS;
+  let r;
+  if (triple()) {
+    r = sauterTriple({
+      vElan: pl.vElan, ecart: pl.ecart, angles: e.angles, poses: e.poses, pieds: e.pieds,
+      avance, ciseau, vent: e.vent,
+    });
+  } else {
+    r = sauter({ vElan: pl.vElan, ecart: pl.ecart, angle: a.angle, avance, ciseau, vent: e.vent });
+    r.raison = r.mordu ? 'planche' : null;
+    r.bonds = [];
+  }
+  // LA TRACE que le juge mesure : depuis la pointe du pied d'appel sur la
+  // planche, tout ce que le saut a valu. Mordu ou non, le sable la garde.
+  const trace = pl.orteil + r.depuisPointe;
+  const dansLeSable = trace >= e.fosseX + 0.02;
+  // Retombe avant le sable : au reglement, un essai qui touche le sol hors
+  // de la fosse est nul — et sur le tartan, il n'y a rien a mesurer.
+  if (!dansLeSable && !r.mordu) {
+    r.mordu = true; r.raison = 'hors'; r.metres = 0; r.marque = null;
+  }
   e.resultat = r;
   const variante = VARIANTE[r.ramene] || 'avant';
-  // LA TRACE que le juge mesure : depuis la pointe du pied d'appel, tout ce
-  // que le saut a valu. Mordu ou non, le sable la garde.
-  const trace = a.orteil + r.depuisPointe;
   const y = PISTE_Y + (Math.sin(trace * 7.3) * 0.08);
-  e.empreinte = { x: trace, y, variante, age: 0 };
   const talonX = trace + TALONS[variante];
-  e.gerbe = { x: talonX, y, t: 0, force: Math.max(0.6, Math.min(1.25, v.vx / 9)) };
+  if (dansLeSable) {
+    e.empreinte = { x: trace, y, variante, age: 0 };
+    e.gerbe = { x: talonX, y, t: 0, force: Math.max(0.6, Math.min(1.25, v.vx / 9)) };
+  }
   e.reception = {
     t: 0, x: j.d, variante, talonX, mordu: r.mordu,
     hz0: (v.hauteur(v.duree) - 0.08) * (SprinterCore.C.MODEL_H / j.look.h),
@@ -517,12 +703,12 @@ function viseCamera() {
   let avance = 1.2, cote = 0.8;
   if (e.phase === 'repos' || e.phase === 'attente') {
     avance = 2.5 + 2.5 * etroit; cote = 1.2;
-  } else if (e.phase === 'elan' || e.phase === 'traverse') {
+  } else if (e.phase === 'elan' || e.phase === 'traverse' || e.phase === 'casse') {
     // plus il approche, plus la planche et le sable entrent dans le cadre
-    const k = lisse((j.d - (LIGNE - 16)) / 12);
+    const k = lisse((j.d - (e.ligne - 16)) / 12);
     avance = 2.5 + 2.5 * etroit + k * (1.5 + 1.5 * etroit);
     cote = 1.2;
-  } else if (e.phase === 'appel' || e.phase === 'vol') {
+  } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
     avance = 3.0 + 2.0 * etroit; cote = 1.0;
   } else if (e.phase === 'reception') {
     return [Math.max(j.d, e.reception.x) + 0.6 + 0.8 * etroit, PISTE_Y + 0.8];
@@ -533,11 +719,13 @@ function viseCamera() {
 function zoomVise() {
   if (!e) return 1;
   const j = SprinterApp.G.player;
+  // Le triple saut s'etend sur vingt metres : on le regarde d'un peu plus loin.
+  const loin = triple() ? 0.9 : 1;
   switch (e.phase) {
     case 'repos': case 'attente': return 1.45;
-    case 'elan': return 1.20 + 0.35 * lisse((j.d - (LIGNE - 12)) / 10);
-    case 'appel': return 1.62;
-    case 'vol': return 1.58;
+    case 'elan': return 1.20 + 0.35 * loin * lisse((j.d - (e.ligne - 12)) / 10);
+    case 'appel': case 'pose': return 1.62 * loin;
+    case 'vol': return 1.58 * loin;
     case 'reception': return e.reception.t < 1.6 ? 1.72 : 1.55;
     default: return 1.45;
   }
@@ -562,7 +750,8 @@ function placerCamera(net) {
  * CE QUE MONTRENT LES PAVES, avec la regle de Hurdlers : on agit quand c'est
  * plein. Pendant l'elan, la jauge monte vers la ligne — on appuie. Pendant
  * l'impulsion, elle monte vers le bon angle — on relache. En l'air, elle
- * monte vers le ramene — les deux pouces.
+ * monte vers la pose (le bon pave seulement : c'est le pied qui doit toucher)
+ * ou vers le ramene — les deux pouces.
  *
  * Les couleurs viennent des memes regles que le jugement : un ecran qui
  * recalculerait les siennes finirait par mentir.
@@ -571,15 +760,27 @@ function jauge() {
   if (!e) return null;
   const j = SprinterApp.G.player;
   if (e.phase === 'elan') {
-    const ecart = LIGNE - (j.d + AVANCE_PIED);
+    const ecart = e.ligne - (j.d + AVANCE_PIED);
     if (ecart > 7) return null;
     const zone = ecart > APPEL_MAXI ? 'plane' : ecart > 0.20 ? 'bon' : ecart >= 0 ? 'parfait' : 'hache';
     return { cote: null, lesDeux: true, part: Math.max(0, Math.min(1, 1 - ecart / 7)), zone };
   }
   if (e.phase === 'appel') {
-    const a = e.appel.angle;
-    const zone = a < 17 ? 'plane' : a < 19 ? 'bon' : a <= 24 ? 'parfait' : a <= 27 ? 'bon' : 'hache';
-    return { cote: e.appel.cote, lesDeux: false, part: Math.min(1, (a - ANGLE_MIN) / (21.5 - ANGLE_MIN)), zone };
+    const a = e.appel.angle, o = angleVise();
+    const zone = a < o - 4.5 ? 'plane' : a < o - 2 ? 'bon' : a <= o + 2.5 ? 'parfait' : a <= o + 5.5 ? 'bon' : 'hache';
+    return { cote: e.appel.cote, lesDeux: false, part: Math.min(1, (a - ANGLE_MIN) / (o - ANGLE_MIN)), zone };
+  }
+  if (e.phase === 'vol' && e.vol.pose) {
+    const v = e.vol;
+    if (v.tPose != null) return null;
+    const avant = v.duree - v.t;
+    const zone = avant > POSE.bonAvance ? 'accroche' : avant > POSE.avance ? 'bon' : 'ciseau';
+    return { cote: v.coteAttendu, lesDeux: false, part: Math.max(0, Math.min(1, v.t / v.duree)), zone };
+  }
+  if (e.phase === 'pose') {
+    const t = e.pose.t;
+    const zone = t <= POSE.retard ? 'ciseau' : t <= POSE.bonRetard ? 'bon' : 'traine';
+    return { cote: e.vol.coteAttendu, lesDeux: false, part: 1, zone };
   }
   if (e.phase === 'vol') {
     const v = e.vol;
@@ -599,9 +800,12 @@ function consigne() {
   const j = SprinterApp.G.player;
   switch (e.phase) {
     case 'attente': return 'saut_c_partir';
-    case 'elan': return LIGNE - (j.d + AVANCE_PIED) < 7 ? 'saut_c_appel' : 'alternate';
+    case 'elan': return e.ligne - (j.d + AVANCE_PIED) < 7 ? 'saut_c_appel' : 'alternate';
     case 'appel': return 'saut_c_angle';
-    case 'vol': return e.vol.tRamene == null ? 'saut_c_ramene' : null;
+    case 'pose': return e.vol.bond === 0 ? 'triple_c_cloche' : 'triple_c_foulee';
+    case 'vol':
+      if (e.vol.pose) return e.vol.bond === 0 ? 'triple_c_cloche' : 'triple_c_foulee';
+      return e.vol.tRamene == null ? 'saut_c_ramene' : null;
     default: return null;
   }
 }
@@ -609,5 +813,6 @@ function consigne() {
 /** Les paves se montrent-ils ? Seulement quand on a quelque chose a y faire. */
 export function pavesDuSaut() {
   if (!e) return true;
-  return e.phase === 'attente' || e.phase === 'elan' || e.phase === 'appel' || e.phase === 'vol';
+  return e.phase === 'attente' || e.phase === 'elan' || e.phase === 'appel'
+    || e.phase === 'vol' || e.phase === 'pose';
 }

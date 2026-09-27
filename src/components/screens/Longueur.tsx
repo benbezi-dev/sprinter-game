@@ -5,6 +5,8 @@ import { SprinterApp } from '@/game/engine';
 import { MONDES } from '@/game/mondes';
 import { EST_TEST } from '@/game/canal';
 import { RECORDS, ESSAIS, TEMPS_ESSAI, lireVent, homologable } from '@/game/longueur.js';
+import { RECORDS as RECORDS_TRIPLE, plancheDe } from '@/game/triple.js';
+import { PLATEAU_TRIPLE } from '@/game/triple-jeu.js';
 import {
   PLATEAU, nouveauConcours, avancerJusquAuJoueur, inscrire, classement, aQui, tirerVent,
   joueurEnLice, placeDuJoueur, meilleur, tours,
@@ -14,7 +16,7 @@ import {
 } from '@/game/longueur-course.js';
 
 /**
- * LE CONCOURS DE SAUT EN LONGUEUR.
+ * LE CONCOURS DE SAUT EN LONGUEUR — ET DE TRIPLE SAUT.
  *
  * Le saut se joue dans le stade, sur le moteur de Sprinter : cet ecran ne
  * dessine pas l'athlete, il tient le CONCOURS — l'ordre de passage, les
@@ -27,18 +29,36 @@ import {
  * les paves de course sont en dessous, et ce sont eux qui sautent.
  */
 
-const CLE = 'sprinter.longueur.v1';
+export type Epreuve = 'longueur' | 'triple';
+
+/**
+ * CE QUI DISTINGUE LES DEUX EPREUVES A L'ECRAN, et rien d'autre : le nom, le
+ * plateau, le record, les quatre gestes, la memoire. Le concours lui-meme —
+ * l'ordre de passage, la minute, la coupe, le podium — est le meme, parce
+ * que le reglement est le meme.
+ */
+const EPREUVES = {
+  longueur: {
+    titre: 'disc_longueur', cle: 'sprinter.longueur.v1', plateau: PLATEAU, record: RECORDS.hommes,
+    aide: ['saut_aide_1', 'saut_aide_2', 'saut_aide_3', 'saut_aide_4'],
+  },
+  triple: {
+    titre: 'disc_triple', cle: 'sprinter.triple.v1', plateau: PLATEAU_TRIPLE, record: RECORDS_TRIPLE.hommes,
+    aide: ['triple_aide_1', 'triple_aide_2', 'triple_aide_3', 'triple_aide_4'],
+  },
+} as const;
+
 type Memoire = { debloque: number; pb: { m: number; vent: number } | null };
 
-function lireMemoire(): Memoire {
+function lireMemoire(cle: string): Memoire {
   try {
-    const m = JSON.parse(localStorage.getItem(CLE) || 'null');
+    const m = JSON.parse(localStorage.getItem(cle) || 'null');
     if (m && typeof m.debloque === 'number') return { debloque: m.debloque, pb: m.pb || null };
   } catch { /* stockage indisponible : on repart de zero */ }
   return { debloque: 0, pb: null };
 }
-function ecrireMemoire(m: Memoire) {
-  try { localStorage.setItem(CLE, JSON.stringify(m)); } catch { /* sans stockage, rien ne se retient */ }
+function ecrireMemoire(cle: string, m: Memoire) {
+  try { localStorage.setItem(cle, JSON.stringify(m)); } catch { /* sans stockage, rien ne se retient */ }
 }
 
 /**
@@ -59,13 +79,14 @@ const virgule = (m: number) => m.toFixed(2).replace('.', SprinterApp.N.getLang()
 
 type Essai = { mordu: boolean; marque: number | null; metres: number; vent: number;
                raison?: string | null; ramene?: string; ciseau?: boolean; ecart?: number;
-               angle?: number; vElan?: number; passe?: boolean };
+               angle?: number; vElan?: number; passe?: boolean; bonds?: number[] };
 type Fait = { index: number; nom: string; tour: number; essai: Essai };
 
-export function Longueur({ onQuitter }: { onQuitter: () => void }) {
+export function Longueur({ epreuve = 'longueur', onQuitter }: { epreuve?: Epreuve; onQuitter: () => void }) {
   const { N } = SprinterApp;
   const accent = MONDES.jumper.accent;
-  const [memoire, setMemoire] = useState<Memoire>(lireMemoire);
+  const cfg = EPREUVES[epreuve];
+  const [memoire, setMemoire] = useState<Memoire>(() => lireMemoire(cfg.cle));
   const [etape, setEtape] = useState<number | null>(null);
   // Chaque concours est une partie neuve : un compteur, et non l'etape seule,
   // pour que REFAIRE remonte le concours au lieu de garder l'ancien.
@@ -73,21 +94,22 @@ export function Longueur({ onQuitter }: { onQuitter: () => void }) {
   void N;
 
   if (etape === null) {
-    return <Choix memoire={memoire} accent={accent} onChoisir={setEtape} onQuitter={onQuitter} />;
+    return <Choix epreuve={epreuve} memoire={memoire} accent={accent} onChoisir={setEtape} onQuitter={onQuitter} />;
   }
   return (
-    <Concours key={partie} etape={etape} accent={accent} memoire={memoire}
-              onMemoire={(m) => { setMemoire(m); ecrireMemoire(m); }}
+    <Concours key={partie} epreuve={epreuve} etape={etape} accent={accent} memoire={memoire}
+              onMemoire={(m) => { setMemoire(m); ecrireMemoire(cfg.cle, m); }}
               onRejouer={(e) => { setEtape(e); setPartie(p => p + 1); }} onQuitter={onQuitter} />
   );
 }
 
 /* ----------------------------------------------------------- le choix */
 
-function Choix({ memoire, accent, onChoisir, onQuitter }: {
-  memoire: Memoire; accent: string; onChoisir: (e: number) => void; onQuitter: () => void;
+function Choix({ epreuve, memoire, accent, onChoisir, onQuitter }: {
+  epreuve: Epreuve; memoire: Memoire; accent: string; onChoisir: (e: number) => void; onQuitter: () => void;
 }) {
   const { N } = SprinterApp;
+  const cfg = EPREUVES[epreuve];
   return (
     <div className="fixed inset-0 z-[45] overflow-y-auto pointer-events-auto"
          style={{ background: MONDES.jumper.fond }}>
@@ -98,14 +120,14 @@ function Choix({ memoire, accent, onChoisir, onQuitter }: {
                       pt-[max(env(safe-area-inset-top),2rem)] pb-[max(env(safe-area-inset-bottom),1.5rem)]">
         <div className="text-center">
           <h1 className="font-display font-black tracking-tight text-3xl" style={{ color: accent }}>
-            {N.t('disc_longueur')}
+            {N.t(cfg.titre)}
           </h1>
           <p className="mt-1 text-[10px] tracking-widest uppercase text-white/50">{N.t('saut_choix')}</p>
         </div>
 
         {/* Les quatre gestes, dans l'ordre ou ils viennent. */}
         <ol className="flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-          {['saut_aide_1', 'saut_aide_2', 'saut_aide_3', 'saut_aide_4'].map((k, i) => (
+          {cfg.aide.map((k, i) => (
             <li key={k} className="flex gap-2 text-[11px] leading-snug text-white/75">
               <span className="font-mono font-bold shrink-0" style={{ color: accent }}>{i + 1}</span>
               <span>{N.t(k)}</span>
@@ -114,7 +136,7 @@ function Choix({ memoire, accent, onChoisir, onQuitter }: {
         </ol>
 
         <div className="flex flex-col gap-2">
-          {PLATEAU.map(([lo, hi], i) => {
+          {cfg.plateau.map(([lo, hi], i) => {
             const ouvert = i <= memoire.debloque;
             return (
               <button key={i} disabled={!ouvert} onClick={() => onChoisir(i)}
@@ -127,6 +149,8 @@ function Choix({ memoire, accent, onChoisir, onQuitter }: {
                   </span>
                   <span className="font-mono text-[9px] tracking-wide text-white/35">
                     {virgule(lo)} – {virgule(hi)} m
+                    {/* Au triple saut, la planche change avec l'etape. */}
+                    {epreuve === 'triple' && ` · ${N.t('triple_planche', { m: String(plancheDe(i)) })}`}
                   </span>
                 </span>
                 {ouvert
@@ -138,6 +162,7 @@ function Choix({ memoire, accent, onChoisir, onQuitter }: {
         </div>
         <p className="text-center text-[9px] tracking-wide text-white/35">
           {N.t('saut_regle')} · {N.t('saut_verrou')}
+          {epreuve === 'triple' && <><br />{N.t('triple_nul_pied')} → {N.t('saut_mordu')}</>}
         </p>
         {memoire.pb && (
           <p className="text-center text-[10px] tracking-widest text-white/55">
@@ -158,13 +183,16 @@ function Choix({ memoire, accent, onChoisir, onQuitter }: {
 
 type Temps = 'autres' | 'toi' | 'coupe' | 'fin';
 
-function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
-  etape: number; accent: string; memoire: Memoire;
+function Concours({ epreuve, etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
+  epreuve: Epreuve; etape: number; accent: string; memoire: Memoire;
   onMemoire: (m: Memoire) => void; onRejouer: (e: number) => void; onQuitter: () => void;
 }) {
   const { N } = SprinterApp;
+  const cfg = EPREUVES[epreuve];
   // Le concours vient d'un module JavaScript : on le tient pour ce qu'il est.
-  const c = useRef<any>(nouveauConcours({ etape, noms: nomsDe(etape), joueur: N.t('you') }));
+  const c = useRef<any>(nouveauConcours({
+    etape, noms: nomsDe(etape), joueur: N.t('you'), plateau: cfg.plateau as any,
+  }));
   const [temps, setTemps] = useState<Temps>('autres');
   const [file, setFile] = useState<Fait[]>([]);
   const [vus, setVus] = useState(0);
@@ -185,9 +213,9 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
 
   /* --- l'armement du stade, et son rangement --- */
   useEffect(() => {
-    armerConcoursSaut(etape);
+    armerConcoursSaut(etape, epreuve);
     return () => { if (!quitte.current) rangerConcoursSaut(); };
-  }, [etape]);
+  }, [etape, epreuve]);
 
   /* --- faire sauter les autres jusqu'a toi --- */
   const avancerRef = useRef<() => void>(() => {});
@@ -220,7 +248,7 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
     if (tete > 0) lignes.push({ m: tete, couleur: accent, texte: virgule(tete) });
     const moi = meilleur(C.athletes[joueur]);
     if (moi > 0) lignes.push({ m: moi, couleur: 'rgba(255,255,255,0.85)', texte: virgule(moi) });
-    if (etape >= 3) lignes.push({ m: RECORDS.hommes.m, couleur: 'rgb(248,113,113)', texte: N.t('saut_rm') + ' ' + virgule(RECORDS.hommes.m) });
+    if (etape >= 3) lignes.push({ m: cfg.record.m, couleur: 'rgb(248,113,113)', texte: N.t('saut_rm') + ' ' + virgule(cfg.record.m) });
     appelerSauteur({ vent: tirerVent(Math.random), lignes: lignes as any });
     setAnnonce(null);
     setTemps('toi');
@@ -231,7 +259,7 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
     mettreAuRepos();
     const place = placeDuJoueur(c.current) || 99;
     const m = { ...memoireRef.current };
-    if (place <= 3 && etape + 1 > m.debloque && etape + 1 < PLATEAU.length) m.debloque = etape + 1;
+    if (place <= 3 && etape + 1 > m.debloque && etape + 1 < cfg.plateau.length) m.debloque = etape + 1;
     onMemoire(m);
   };
 
@@ -262,6 +290,16 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
         : { sorte: 'planche', texte: `${N.t('saut_planche')} · ${Math.round(evt.ecart * 100)} cm`,
             couleur: evt.ecart <= 0.2 ? 'rgb(74,222,128)' : 'rgb(250,214,60)' });
     }
+    // LES POSES DU TRIPLE SAUT : ce que valait l'appui, et le pied. Un mauvais
+    // pied se dit tout de suite — contrairement au mordu, le joueur peut le
+    // voir lui-meme sur ses pouces, et il doit apprendre ou il s'est trompe.
+    if (evt.type === 'pose') {
+      const c2 = evt.note === 'actif' ? 'rgb(74,222,128)' : evt.note === 'bon' ? 'rgb(250,214,60)'
+        : evt.note === 'ecrase' ? 'rgb(251,146,60)' : '#f87171';
+      setAnnonce({ sorte: 'pose',
+        texte: N.t('triple_p_' + evt.note) + (evt.bonPied ? '' : ' · ' + N.t('triple_mauvais_pied')),
+        couleur: evt.bonPied ? c2 : '#f87171' });
+    }
     if (evt.type === 'envol') {
       const sous = `${N.t('saut_angle')} ${Math.round(evt.angle)}° · ${N.t('saut_elan')} ${evt.vElan.toFixed(1)} m/s`;
       setAnnonce(a => a ? { ...a, sous } : { sorte: 'envol', texte: '', sous, couleur: '#fff' });
@@ -276,12 +314,15 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
     if (evt.type === 'marque') {
       const r = evt.resultat as Essai;
       if (r.mordu) {
+        const propre = r.raison === 'pied' || r.raison === 'rompu' || r.raison === 'hors';
         setAnnonce({ sorte: 'marque', texte: N.t('saut_mordu'),
-          sous: N.t('saut_nul_' + (r.raison || 'planche')), couleur: '#f87171' });
+          sous: N.t((propre ? 'triple_nul_' : 'saut_nul_') + (r.raison || 'planche')), couleur: '#f87171' });
       } else {
         const vent = lireVent(r.vent);
+        // Au triple saut, les trois bonds, comme sur l'ecran de la television.
+        const bonds = r.bonds && r.bonds.length === 3 ? r.bonds.map(virgule).join(' · ') + ' — ' : '';
         setAnnonce(a => ({ sorte: 'marque', texte: `${virgule(r.marque!)} m`,
-          sous: (homologable(r.vent) ? N.t('saut_vent', { v: vent }) : N.t('saut_vent_trop', { v: vent }))
+          sous: bonds + (homologable(r.vent) ? N.t('saut_vent', { v: vent }) : N.t('saut_vent_trop', { v: vent }))
             + (a && a.sorte === 'ramene' ? ' · ' + a.texte : ''),
           couleur: accent }));
         // LE RECORD PERSONNEL : seul un vent de moins de deux metres le fait
@@ -338,7 +379,7 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
             <span className="font-display font-black tracking-tight text-base leading-none" style={{ color: accent }}>
-              {N.t('disc_longueur')}
+              {N.t(cfg.titre)}
             </span>
             <span className="text-[9px] tracking-widest uppercase text-white/50 truncate">{N.levelName(etape)}</span>
           </div>
@@ -494,7 +535,7 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
         {temps === 'fin' && (
           <motion.div key="fin" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             className="absolute inset-0 flex items-center justify-center pointer-events-auto bg-black/40">
-            <Fin C={C} etape={etape} accent={accent} memoire={memoire}
+            <Fin C={C} epreuve={epreuve} etape={etape} accent={accent} memoire={memoire}
                  onRejouer={() => { quitte.current = true; onRejouer(etape); }}
                  onSuivant={() => { quitte.current = true; onRejouer(etape + 1); }}
                  onQuitter={quitter} />
@@ -544,8 +585,8 @@ function Tableau({ lignes, accent, court = false }: { lignes: any[]; accent: str
   );
 }
 
-function Fin({ C, etape, accent, memoire, onRejouer, onSuivant, onQuitter }: {
-  C: any; etape: number; accent: string; memoire: Memoire;
+function Fin({ C, epreuve, etape, accent, memoire, onRejouer, onSuivant, onQuitter }: {
+  C: any; epreuve: Epreuve; etape: number; accent: string; memoire: Memoire;
   onRejouer: () => void; onSuivant: () => void; onQuitter: () => void;
 }) {
   const { N } = SprinterApp;
@@ -555,8 +596,8 @@ function Fin({ C, etape, accent, memoire, onRejouer, onSuivant, onQuitter }: {
   const medaille = moi && moi.meilleur > 0 && place <= 3
     ? ['saut_or', 'saut_argent', 'saut_bronze'][place - 1] : null;
   const couleur = medaille ? ['rgb(250,204,21)', 'rgb(203,213,225)', 'rgb(217,119,6)'][place - 1] : accent;
-  const suivant = etape + 1 < PLATEAU.length && etape + 1 <= memoire.debloque;
-  const r = RECORDS.hommes;
+  const suivant = etape + 1 < EPREUVES[epreuve].plateau.length && etape + 1 <= memoire.debloque;
+  const r = EPREUVES[epreuve].record;
   return (
     <div className="w-[min(94vw,24rem)] rounded-2xl border border-white/12 bg-black/80 backdrop-blur-md p-4 flex flex-col gap-3">
       <div className="text-center">

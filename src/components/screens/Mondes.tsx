@@ -11,7 +11,7 @@ import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { HAIES } from '@/game/haies.js';
 import { changerDeJeu, jeuDuMonde } from '@/game/jeux';
 import { Poids } from './Poids';
-import { LONGUEUR_OUVERTE } from '@/game/canal';
+import { LONGUEUR_OUVERTE, TRIPLE_OUVERT } from '@/game/canal';
 
 /* LE SAUT EN LONGUEUR SE CHARGE A LA DEMANDE — et c'est ce qui le sort du
    build public tant qu'il n'est ouvert que sur le canal de test. Meme forme
@@ -61,6 +61,7 @@ function cotesDe(cle: string): string {
   // La planche et la fosse, dans les memes termes que les haies : ce qu'un
   // sauteur lit sur le plan d'un stade.
   if (cle === 'longueur') return SprinterApp.N.t('saut_cotes');
+  if (cle === 'triple') return SprinterApp.N.t('triple_cotes');
   const r = (HAIES as any)[cle];
   if (!r) return '';
   const nb = (v: number) => String(v).replace('.', ',');
@@ -124,10 +125,10 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
   // UN CONCOURS DE SAUT SE JOUE DANS LE STADE, pas sur ce fond : l'accueil
   // s'efface et laisse le concours poser son tableau sur la piste. On en
   // revient ici en le quittant.
-  if (LONGUEUR_OUVERTE && epreuve === 'longueur') {
+  if ((LONGUEUR_OUVERTE && epreuve === 'longueur') || (TRIPLE_OUVERT && epreuve === 'triple')) {
     return (
       <Suspense fallback={null}>
-        <Longueur onQuitter={() => setEpreuve(null)} />
+        <Longueur epreuve={epreuve} onQuitter={() => setEpreuve(null)} />
       </Suspense>
     );
   }

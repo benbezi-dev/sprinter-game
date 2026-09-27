@@ -176,6 +176,19 @@ export const APPEL_JOUEUR = true;
 export const LONGUEUR_OUVERTE = EST_TEST;
 
 /**
+ * LE TRIPLE SAUT — la seconde epreuve de Jumper.
+ *
+ * Meme regime que le saut en longueur, et drapeau a part pour pouvoir ouvrir
+ * l'une sans l'autre : jouable sur le canal de test, « bientot » partout
+ * ailleurs. Il partage l'ecran du concours, le moteur et le sable de la
+ * longueur (Mondes.tsx, `lazy`) ; ce qui lui appartient — triple.js et
+ * triple-jeu.js — ne s'atteint que par lui, et sort du build public avec.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ */
+export const TRIPLE_OUVERT = EST_TEST;
+
+/**
  * LA NUIT DU MOLOSSE — la competition d'Halloween, edition limitee.
  *
  * Treize nuits au cimetiere municipal, un chien demoniaque derriere soi, et un

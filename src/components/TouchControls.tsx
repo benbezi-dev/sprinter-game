@@ -266,6 +266,10 @@ export function TouchControls() {
   // personne ne court, les paves n'ont rien a proposer.
   if (SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut && !SprinterApp.G.pavesSaut()) return null;
 
+  const consigne: string | null = SprinterApp.G.sautEnCours
+    ? (SprinterApp.G.consigneSaut ? SprinterApp.G.consigneSaut() : null)
+    : 'alternate';
+
   // Zone sensible et zone visible sont deux choses distinctes.
   //
   // Avant, c'etait la carte arrondie elle-meme qui recevait l'appui : les
@@ -355,12 +359,17 @@ export function TouchControls() {
         </div>
       </div>
 
-      {/* La bande d'attaque a disparu : la consigne retrouve sa place. */}
-      <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
-        <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
-          {SprinterApp.N.t((SprinterApp.G.consigneSaut && SprinterApp.G.consigneSaut()) || 'alternate')}
-        </span>
-      </div>
+      {/* La bande d'attaque a disparu : la consigne retrouve sa place. Au
+          saut, elle suit le geste en cours — et quand il n'y a plus rien a
+          faire, en l'air apres le ramene, elle se tait plutot que de redire
+          d'alterner. */}
+      {consigne && (
+        <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
+          <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
+            {SprinterApp.N.t(consigne)}
+          </span>
+        </div>
+      )}
     </div>
     </>
   );

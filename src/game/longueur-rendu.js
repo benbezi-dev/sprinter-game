@@ -94,14 +94,20 @@ export function postureDe(e, r, ech) {
     }
     case 'traverse':
       return null;
-    case 'appel': {
-      // LE PIED EST PLANTE SUR LA PLANCHE ET N'EN BOUGE PLUS. Le bassin passe
-      // au-dessus : de trente-cinq centimetres derriere la pointe a vingt-cinq
-      // devant. Au-dela du bon maintien, il s'ecrase — le genou plie, la
-      // vitesse part dans le sol, et cela doit se voir.
-      const u = e.appel.u, charge = e.appel.charge;
+    case 'appel':
+    case 'pose': {
+      // LE PIED EST PLANTE ET N'EN BOUGE PLUS — sur la planche, ou sur la
+      // piste entre deux bonds du triple saut. Le bassin passe au-dessus : de
+      // trente-cinq centimetres derriere la pointe a vingt-cinq devant.
+      // Au-dela du bon maintien, il s'ecrase — le genou plie, la vitesse part
+      // dans le sol, et cela doit se voir. Une pose qui attend l'appui en
+      // retard reste au debut de ce mouvement, jambe qui plie sous le poids.
+      const a = e.phase === 'pose'
+        ? { orteil: e.pose.orteil, u: 0.12 * Math.min(1, e.pose.t / 0.3), charge: Math.min(1, e.pose.t / 0.3) * 0.6 }
+        : e.appel;
+      const u = a.u, charge = a.charge;
       const hz = mix(0.82, 0.96, lisse(u)) - 0.10 * charge;
-      const pointe = (e.appel.orteil - r.d) * ech;
+      const pointe = (a.orteil - r.d) * ech;
       const cheville = pointe - 0.16;
       const pied = mix(0.12, -0.95, lisse(u));
       const zCh = mix(CHEVILLE, 0.13, lisse(u));
@@ -118,6 +124,7 @@ export function postureDe(e, r, ech) {
     case 'vol': {
       const v = e.vol;
       const t = v.t, T = v.duree;
+      if (v.pose) return postureBond(P, v, A, B, ech);
       // Le bassin suit le centre de masse, un peu en dessous de lui : bras
       // leves et genou haut, le centre de masse sort du bassin au decollage,
       // et y rentre jambes tendues devant.
@@ -238,6 +245,50 @@ export function postureDe(e, r, ech) {
   }
 }
 
+/**
+ * LES DEUX PREMIERS BONDS DU TRIPLE SAUT.
+ *
+ * LE CLOCHE-PIED retombe sur la jambe d'appel : elle part tendue derriere,
+ * revient sous le bassin talon a la fesse — le cycle, le geste qu'on
+ * reconnait de loin — et se tend devant pour griffer le sol. La jambe libre,
+ * elle, repart derriere et y reste.
+ *
+ * LA FOULEE BONDISSANTE retombe sur l'autre : c'est une foulee figee en
+ * l'air, genou libre haut devant, jambe d'appel tendue derriere, tenue le
+ * plus longtemps possible, puis la jambe avant descend chercher le sol.
+ *
+ * Les bras travaillent ensemble, vers l'arriere puis vers l'avant : c'est le
+ * double bras des triple-sauteurs, qui equilibre des bonds qu'aucune foulee
+ * ne relie.
+ */
+function postureBond(P, v, A, B, ech) {
+  const J = P.jambes, BR = P.bras;
+  const u = Math.max(0, Math.min(1, v.t / v.duree));
+  const zCM = v.hauteur(v.t);
+  const hz = (zCM - mix(0.20, 0.12, u)) * ech;
+  P.leve = hz - DEBOUT_Z;
+  const appel = [-0.45, -0.52, -0.95], genou = [1.45, 0.25, 0.35];
+  const griffe = [0.45, 0.30, 0.25];
+  if (v.bond === 0) {
+    const cycle = [0.55, -0.85, -0.50];
+    J[A] = u < 0.45 ? mix3(appel, cycle, lisse(u / 0.45)) : mix3(cycle, griffe, lisse((u - 0.45) / 0.5));
+    J[B] = mix3(genou, [-0.28, -1.28, -1.0], lisse(u / 0.6));
+    const arriere = [-0.70, -0.30], avant = [1.20, 1.55];
+    BR[A] = u < 0.5 ? mix2([2.30, 2.70], arriere, lisse(u / 0.5)) : mix2(arriere, avant, lisse((u - 0.5) / 0.45));
+    BR[B] = u < 0.5 ? mix2([-0.75, -0.30], arriere, lisse(u / 0.5)) : mix2(arriere, avant, lisse((u - 0.5) / 0.45));
+    P.buste = mix(-0.02, -0.10, u);
+  } else {
+    J[A] = mix3(appel, [-0.55, -1.20, -1.00], lisse(u / 0.4));
+    J[B] = u < 0.65 ? mix3(genou, [1.40, 0.15, 0.30], lisse(u / 0.3))
+      : mix3([1.40, 0.15, 0.30], griffe, lisse((u - 0.65) / 0.3));
+    BR[A] = mix2([2.10, 2.50], [1.20, 1.50], lisse((u - 0.55) / 0.4));
+    BR[B] = mix2([-0.60, -0.20], [1.10, 1.45], lisse((u - 0.45) / 0.5));
+    P.buste = -0.06;
+  }
+  P.w = 1;
+  return P;
+}
+
 /* ----------------------------------------------------------- les images */
 
 const BASE = (typeof import.meta !== 'undefined' && import.meta.env
@@ -324,8 +375,12 @@ export function dessinerSol(ctx, api, e, th) {
   ctx.lineCap = 'round';
 
   // LA PISTE D'ELAN : quarante-cinq metres de tartan, jusqu'au sable.
-  const debut = L - PISTE_ELAN.recommandee;
-  const sable0 = L + FOSSE.debut;
+  const planches = e.planches || [{ x: L, actif: true }];
+  const debut = Math.min(...planches.map(p => p.x)) - PISTE_ELAN.recommandee;
+  const sable0 = e.fosseX != null ? e.fosseX : L + FOSSE.debut;
+  // La fosse se lit depuis le debut du sable : c'est lui qui est fixe, les
+  // planches se placent devant lui.
+  const F0 = sable0 - FOSSE.debut, fondX = F0 + FOSSE.fond;
   dalle(ctx, api, debut, Y - demi, sable0, Y + demi, rgb(tartan));
   const lw = Math.max(1, 0.05 * m);
   trait(ctx, api, debut, Y - demi, sable0, Y - demi, rgb(blanc, 0.9), lw);
@@ -336,13 +391,18 @@ export function dessinerSol(ctx, api, e, th) {
   dalle(ctx, api, marque - 0.05, Y + demi + 0.04, marque + 0.05, Y + demi + 0.34,
         rgb(th && th.accent ? th.accent : [240, 158, 46]));
 
-  // LA PLANCHE, puis la plasticine juste apres la ligne.
-  dalle(ctx, api, L - PLANCHE.largeur, Y - PLANCHE.longueur / 2, L, Y + PLANCHE.longueur / 2,
-        'rgb(244,246,250)', 0.004);
-  trait(ctx, api, L, Y - PLANCHE.longueur / 2, L, Y + PLANCHE.longueur / 2,
-        'rgba(40,40,48,0.35)', Math.max(1, 0.012 * m), 0.005);
-  dalle(ctx, api, L, Y - PLANCHE.longueur / 2, L + PLASTICINE.largeur, Y + PLANCHE.longueur / 2,
-        'rgb(214,206,168)', 0.004);
+  // LES PLANCHES, chacune suivie de sa plasticine. Celle du saut en longueur
+  // et celle du triple saut sont sur la meme piste, et on voit les deux ; on
+  // ne s'appelle que sur celle de l'epreuve.
+  for (const p of planches) {
+    const X = p.x;
+    dalle(ctx, api, X - PLANCHE.largeur, Y - PLANCHE.longueur / 2, X, Y + PLANCHE.longueur / 2,
+          p.actif ? 'rgb(244,246,250)' : 'rgba(236,238,242,0.78)', 0.004);
+    trait(ctx, api, X, Y - PLANCHE.longueur / 2, X, Y + PLANCHE.longueur / 2,
+          'rgba(40,40,48,0.35)', Math.max(1, 0.012 * m), 0.005);
+    dalle(ctx, api, X, Y - PLANCHE.longueur / 2, X + PLASTICINE.largeur, Y + PLANCHE.longueur / 2,
+          p.actif ? 'rgb(214,206,168)' : 'rgba(170,166,150,0.8)', 0.004);
+  }
   // Le pied mordu y laisse sa pointe : c'est ce que le juge regarde.
   if (e.traceMordue != null && e.traceMordue > L && e.traceMordue < L + PLASTICINE.largeur + 0.3) {
     const x = Math.min(L + PLASTICINE.largeur - 0.01, e.traceMordue);
@@ -355,11 +415,11 @@ export function dessinerSol(ctx, api, e, th) {
   const mf = MANIFESTE.fosse && MANIFESTE.fosse[s];
   const imF = mf && image(mf.f);
   if (imF) {
-    plaquer(ctx, api, imF, L + mf.x0, Y + mf.y0, mf.mw);
+    plaquer(ctx, api, imF, F0 + mf.x0, Y + mf.y0, mf.mw);
   } else {
     const b = 0.12, w = FOSSE.largeur / 2;
-    dalle(ctx, api, L + FOSSE.debut - b, Y - w - b, L + FOSSE.fond + b, Y + w + b, 'rgb(196,194,188)');
-    dalle(ctx, api, L + FOSSE.debut, Y - w, L + FOSSE.fond, Y + w,
+    dalle(ctx, api, sable0 - b, Y - w - b, fondX + b, Y + w + b, 'rgb(196,194,188)');
+    dalle(ctx, api, sable0, Y - w, fondX, Y + w,
           s === 'cosmos' ? 'rgb(184,170,206)' : 'rgb(222,190,138)', 0.002);
   }
 
@@ -369,7 +429,7 @@ export function dessinerSol(ctx, api, e, th) {
   const w = FOSSE.largeur / 2;
   for (const l of e.lignes || []) {
     const x = L + l.m;
-    if (x < L + FOSSE.debut || x > L + FOSSE.fond) continue;
+    if (x < sable0 || x > fondX) continue;
     ctx.setLineDash([Math.max(3, 0.18 * m), Math.max(2, 0.10 * m)]);
     trait(ctx, api, x, Y - w, x, Y + w, l.couleur, Math.max(1.5, 0.04 * m), 0.01);
     ctx.setLineDash([]);
