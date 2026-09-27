@@ -312,19 +312,35 @@
         }
       }
     }
+    // LES TOUFFES, avant les brins. Pas les grandes plaques retirees plus
+    // haut — elles couraient sur des metres et salissaient l'image — mais de
+    // petites taches de quelques centimetres, a peine plus sombres ou plus
+    // claires : la difference entre un gazon et un feutre, c'est qu'il n'a
+    // pas partout la meme epaisseur. A cette taille, l'oeil ne lit pas des
+    // taches, il lit une matiere.
+    for (let i = 0; i < 1400; i++) {
+      const x = al() * TUILE_HERBE, y = al() * TUILE_HERBE;
+      const r = 2 + al() * 4, clair = al() < 0.5;
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, clair ? 'rgba(255,255,210,0.035)' : 'rgba(0,20,0,0.045)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g;
+      c.fillRect(x - r, y - r, r * 2, r * 2);
+    }
     // Les brins : de courts traits, tous dans des sens differents. C'est la
     // difference avec le granulat de la piste, qui est un semis de points —
     // et c'est ce qui empeche l'oeil d'y lire une direction, donc une tonte.
     //
     // ILS DOIVENT SE SENTIR ET NON SE VOIR. A pleine opacite le semis se
     // lisait comme des confettis poses sur du vert : on comptait les traits.
-    // Un tiers de cette densite, et l'oeil ne voit plus qu'une surface qui
-    // n'est pas lisse — ce qui est exactement le but.
+    // Six cent vingt traits a 3 % ne se sentaient plus du tout — la pelouse
+    // restait un aplat. Beaucoup plus de brins, plus courts et a peine plus
+    // marques : aucun ne se compte, et la surface cesse d'etre lisse.
     c.lineWidth = 1;
-    for (let i = 0; i < 620; i++) {
+    for (let i = 0; i < 2600; i++) {
       const x = al() * TUILE_HERBE, y = al() * TUILE_HERBE;
-      const a = al() * Math.PI, lg = 2 + al() * 3.5;
-      c.strokeStyle = al() < 0.5 ? 'rgba(255,255,255,0.032)' : 'rgba(0,0,0,0.036)';
+      const a = al() * Math.PI, lg = 1.2 + al() * 2.4;
+      c.strokeStyle = al() < 0.5 ? 'rgba(255,255,220,0.055)' : 'rgba(0,16,0,0.07)';
       c.beginPath();
       c.moveTo(x - Math.cos(a) * lg, y - Math.sin(a) * lg);
       c.lineTo(x + Math.cos(a) * lg, y + Math.sin(a) * lg);
@@ -339,7 +355,8 @@
    * Memes bornes que `tonte`, qui habillait les memes surfaces.
    */
   function herbe(ctx, th, P, rIn, rOut, horizon) {
-    if (niveau < MOYEN || th.pinceau) return;
+    // Pas de gazon dans l'espace : le vide a sa propre matiere (decor-cosmos.js).
+    if (niveau < MOYEN || th.pinceau || th.espace) return;
     const m = motifHerbe(ctx);
     if (!m) return;
     const a = P.ground(0, 0);
