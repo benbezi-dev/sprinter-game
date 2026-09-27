@@ -179,6 +179,24 @@ export function RaceHUD() {
   const photoAttente = photo?.etat === 'attente';
   const photoTranche = photo?.etat === 'tranche' && photo.lui != null;
   const posTxt = photoAttente ? '…' : N.ord(pos);
+  /**
+   * SEUL SUR LA PISTE — ET ALORS IL N'Y A PAS DE PLACE.
+   *
+   * Une place est une comparaison. Quand personne d'autre ne court, « 1er »
+   * ne compare rien : il est vrai en permanence, il ne change jamais, et il
+   * occupe le plus gros caractere de la barre du haut pour dire qu'on est
+   * premier de soi-meme. Pire, dans la nuit du molosse il MENT sur la
+   * situation — on peut etre « 1er » et se faire devorer une seconde plus
+   * tard, puisque le seul adversaire n'est pas dans le classement.
+   *
+   * Le meme raisonnement retire le tableau des ecarts en metres, qui n'a plus
+   * qu'une ligne, et la reglette de l'ecart au suivant, qui n'a pas de
+   * suivant.
+   *
+   * La condition se lit sur le nombre de coureurs et non sur le mode : une
+   * course solitaire est une course solitaire, d'ou qu'elle vienne.
+   */
+  const solitaire = runners.length <= 1;
   // Les deux lignes de la photo, dans l'ordre de passage. Les memes
   // millisecondes que la salle compare : le verdict ne peut pas differer.
   const photoLignes = photoTranche
@@ -213,9 +231,11 @@ export function RaceHUD() {
           <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {course ? (course.titre || course.sousTitre) : N.levelName(levelIdx)}
           </div>
-          <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 && !photoAttente ? 'text-primary' : 'text-foreground'}`}>
-            {posTxt}
-          </div>
+          {!solitaire && (
+            <div className={`shrink-0 font-black landscape:font-semibold font-display text-xl sm:text-2xl md:text-3xl landscape:!text-sm landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] ${pos === 1 && !photoAttente ? 'text-primary' : 'text-foreground'}`}>
+              {posTxt}
+            </div>
+          )}
         </div>
 
         <div className="w-1/2 landscape:w-auto landscape:flex-1 flex justify-end items-center gap-2 sm:gap-4 order-2 landscape:order-3">
@@ -561,7 +581,7 @@ export function RaceHUD() {
       {/* Leaderboard Overlay (Desktop only) — masque sur un rejeu : le
           classement en metres est un instrument de course, et il dit « TOI »
           a quelqu'un qui ne court pas. */}
-      <div className={`${rejeu ? 'hidden' : 'hidden md:block'} absolute left-4 top-[100px] w-64 bg-card/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl`}>
+      <div className={`${rejeu || solitaire ? 'hidden' : 'hidden md:block'} absolute left-4 top-[100px] w-64 bg-card/60 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-2xl`}>
         {order.map((r, i) => {
           const col = r.isPlayer ? 'text-primary' : r.name === champion ? 'text-fuchsia-400' : 'text-foreground/90';
           return (
@@ -579,7 +599,7 @@ export function RaceHUD() {
       
       {/* gap to next runner (Mobile only) — meme raison : « −1,0 m Louis »
           repond a une question de coureur, pas de spectateur. */}
-      <div className={`${rejeu ? 'hidden' : 'block md:hidden'} absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10`}>
+      <div className={`${rejeu || solitaire ? 'hidden' : 'block md:hidden'} absolute right-[max(env(safe-area-inset-right),1rem)] top-[110px] landscape:top-[70px] z-10`}>
         {(() => {
           // Pendant le photo-finish, c'est lui qui dit l'ecart : cet
           // indicateur-ci le mesure sur l'image, et c'est justement l'image
