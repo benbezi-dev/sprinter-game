@@ -14,6 +14,7 @@ import { EST_TEST } from '@/game/canal';
 import { getSavedName } from '@/game/leaderboard';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { CarteDefiDemie } from './DefiDemie';
 import {
   etatEdition, fluxDirect, prochain, grille, arrivee, telephoneRelie,
   bossVu, marquerBossVu,
@@ -1375,6 +1376,10 @@ export function Championnat({ edition, onQuitter }: {
         {rv && e.etat !== 'terminee' && (
           <Entracte e={e} secondes={(rv.at - maintenant) / 1000} />
         )}
+
+        {/* Le defi de la demi : entre les deux demi-finales, pour qui ne court
+            pas la deuxieme. Il ne rend rien hors de cette fenetre. */}
+        <CarteDefiDemie e={e} />
 
         {film.genre === 'direct' && (film.phase === 'prete' || film.phase === 'expiree') && (
           <ReviewVideo etat={film} onPartager={partagerLeFilm} />

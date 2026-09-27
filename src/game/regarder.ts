@@ -99,7 +99,7 @@ export const cleDeCourse = (phase: string, numero: number) => `${phase}-${numero
  * et les elimines l'ont gardee. On repart alors des resultats, qui disent
  * exactement qui a couru cette course-la, et on applique la meme regle.
  */
-function couloirsDe(e: Edition, phase: string, numero: number): Partant[] {
+export function couloirsDe(e: Edition, phase: string, numero: number): Partant[] {
   if (phase === e.phase) {
     const g = grille(e).find(x => x.course === numero);
     if (g) return g.couloirs;

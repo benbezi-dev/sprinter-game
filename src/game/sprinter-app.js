@@ -1497,6 +1497,9 @@
     // `spectateur` quand on a pris le carton rouge ; `suivi` est alors le
     // coureur que la camera accompagne ; `rappel` vit le temps de la scene.
     champDirect: false, spectateur: false, suivi: null, rappel: null,
+    // Le defi de la demi (game/defi-demie.ts) : une course contre les chronos
+    // de la demi-finale 1, en attendant la 2. `{ edition, essai }` ou null.
+    defiDemie: null,
     // Les points du duel, quand la salle les annonce : ils arrivent apres le
     // resultat et se lisent sur l'ecran de fin.
     liveDuel: null,
@@ -1878,6 +1881,10 @@
     // Et le championnat en direct : un carton rouge ne suit pas le joueur dans
     // sa course suivante.
     G.champDirect = false; G.spectateur = false; G.suivi = null; G.rappel = null;
+    // Et le defi de la demi : `defi-demie` le pose APRES startLive, comme le
+    // rejeu. Une course lancee ensuite le trouve eteint, et son ecran de fin
+    // n'est pas celui du defi.
+    G.defiDemie = null;
     // nouvelle course : on repart sur une trace vierge
     G.recTrace = []; G.recNext = 0; G.ghost = null;
     // Et sur une piste sans adversaire en direct.
@@ -1989,6 +1996,7 @@
     G.presente = null; G.zoomPres = 1; G.presPousse = 0; G.presBulle = null;
     G.paused = false;
     G.echauffementChamp = false;
+    G.defiDemie = null;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
     G.liveDuel = null;
