@@ -490,6 +490,57 @@
       names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
               'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
 
+    // LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers.
+    //
+    // Un 110 m haies contre un vrai hurdleur de l'equipe de France, qui a
+    // donne son accord pour y courir sous son nom (voir VEDETTES). Le battre
+    // debloque son skin (game/vedettes.ts, game/vestiaire.ts).
+    //
+    // UN EVENEMENT, PAS UN LIEU. `evenement` le retire de tout choix du lieu :
+    // on n'y entre que par sa banniere, et on n'y court que le 110 m haies.
+    // Le plateau porte quand meme toutes les epreuves — une clef manquante
+    // fait tomber la construction de la course, et un index voyage (un defi
+    // enregistre, une revanche) plus loin qu'on ne l'imagine.
+    //
+    // FERME, ET DEJA A SA PLACE. Il vient juste apres les stades ouverts et
+    // avant ceux du canal de test : l'ouvrir a tout le monde se reduira a
+    // passer `ouvert` a true (et DEFI_VEDETTE_OUVERT, dans canal.ts), sans
+    // rien deplacer — l'index qu'il a sur le canal de test sera celui qu'il
+    // aura en public. Voir le commentaire de la boucle qui remplit LEVELS,
+    // dans sprinter-app.js, et LEVEL_NAMES dans sprinter-i18n.js.
+    //
+    // LE PLATEAU LAISSE LE DUEL AU MILIEU. Aurel court au couloir 5, juste a
+    // droite du joueur (quatrieme nom : les trois premiers prennent les
+    // couloirs 1 a 3, le joueur le 4). Son chrono ne se tire pas : il est
+    // FIXE, dans `cibles`, pour que « battre Aurel Manga » veuille dire la
+    // meme chose a chaque tentative et pour tout le monde. Les six autres
+    // courent une demi-seconde derriere lui : ils peuplent une finale, ils ne
+    // la jouent pas.
+    //
+    // 12,45 s AU 110 m HAIES. Sur l'echelle du jeu (BAREME, game/haies.js),
+    // c'est le haut du plateau des ZEZE : il faut environ dix frappes par
+    // seconde ET des haies bien prises. Mesure sur le vrai moteur avec
+    // l'appel du joueur, doigt irregulier : 12,65 s a neuf frappes, 12,30 a
+    // dix, 11,50 a onze. Un joueur regulier le bat en quelques essais ; un
+    // joueur qui tape vite sans regarder ses haies, non.
+    //
+    // IL SE COURT AU STADE JEAN-DELBERT, A MONTREUIL — celui du meeting
+    // international de Montreuil (theme 'montreuil', sprinter-app.js).
+    { cle: 'defi-manga', name: 'Stade Jean-Delbert', theme: 'montreuil',
+      pool: 'sprint',
+      horsSerie: true,
+      evenement: true,
+      ouvert: false,
+      // Une finale, gradins pleins.
+      foule: 0.98,
+      plateau: { '100': [9.80, 10.20], '200': [19.80, 20.60],
+                 '400': [44.20, 45.40], '4x100': [38.00, 39.00],
+                 '100h': [12.00, 12.60], '110h': [12.95, 13.60],
+                 '400h': [42.50, 44.00] },
+      cibles: { '110h': { 'Aurel MANGA': 12.45 } },
+      names: ['Hugo Lestrade', 'Noa Berthier', 'Samuel Kane', 'Aurel MANGA',
+              'Liam Ferrand', 'Yohan Serre', 'Idriss Fofana'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
@@ -922,7 +973,9 @@
   function look(o) {
     return {
       build: o.build || 'm',
-      skin: SKIN[o.skin] || SKIN.cacao,
+      // Une carnation se donne par son nom (SKIN) ou, pour un athlete reel,
+      // par ses trois octets : la sienne n'a pas a tomber sur l'une des onze.
+      skin: Array.isArray(o.skin) ? o.skin : (SKIN[o.skin] || SKIN.cacao),
       jersey: o.jersey,
       shorts: o.shorts || [28, 28, 42],
       shoe: o.shoe || [250, 250, 255],
@@ -941,7 +994,20 @@
       manches: o.manches || null,
       pantalon: o.pantalon || null,
       lunettes: o.lunettes || null,
-      civil: !!o.civil
+      civil: !!o.civil,
+      // CE QUI FAIT QU'ON RECONNAIT UN ATHLETE REEL (voir VEDETTES).
+      //
+      // `profil` : son corps a lui, sculpte et mesure dans Blender
+      // (coureur-vedettes.js) au lieu du corps commun. Ses epaisseurs y sont
+      // deja : les facteurs de `morph` ne s'y appliquent plus qu'au squelette
+      // — l'ecart des epaules et des hanches.
+      // `bandeau` : la couleur d'un bandeau de front.
+      // `poignet` : { col, cote } — un poignet eponge, 1 a gauche, -1 a droite.
+      // `barbe`   : la couleur d'une barbe courte et d'une moustache.
+      profil: o.profil || null,
+      bandeau: o.bandeau || null,
+      poignet: o.poignet || null,
+      barbe: o.barbe || null
     };
   }
 
@@ -977,6 +1043,47 @@
   const PLAYER_LOOK = look({ build: 'm', skin: 'ebene', jersey: [248, 205, 74],
     shorts: [38, 40, 68], hair: 'crop', h: 1.82 });
 
+  // ---------------------------------------------------------------------
+  // LES ATHLETES REELS
+  // ---------------------------------------------------------------------
+  // Des athletes qui existent, et qui ont donne leur accord pour entrer dans
+  // le jeu : ils y ont leur nom, leur corps et leur allure. C'est l'exception
+  // a la regle du jeu, ou tous les noms sont inventes — et c'est pour cela
+  // qu'ils vivent ici, a part, plutot que dans un plateau. Un nom de cette
+  // table ne se tire jamais au sort : il n'apparait que la ou un defi
+  // l'appelle (voir game/vedettes.ts).
+  //
+  // Ce qui les rend reconnaissables, dans l'ordre ou l'oeil le lit :
+  //   - la silhouette : taille, carrure, et le corps sculpte a leurs mesures
+  //     (`profil`, tools/blender/anatomie.py, ATHLETES) ;
+  //   - les signes qu'ils portent en course : bandeau, poignet, barbe ;
+  //   - la carnation, relevee sur leurs photos et non choisie dans une liste ;
+  //   - la tenue, et la foulee.
+  const VEDETTES = {
+    // AUREL MANGA — 110 m haies, equipe de France. Bronze mondial en salle du
+    // 60 m haies (Birmingham, 2018), bronze europeen en salle (Glasgow, 2019).
+    //
+    // 1,90 m pour 89 kg. Le bandeau blanc haut sur le front, le poignet
+    // eponge blanc au bras GAUCHE — il le porte la d'une course a l'autre,
+    // photos de 2018 a aujourd'hui —, la barbe courte et la moustache, le
+    // cheveu ras au-dessus du bandeau. La carnation est relevee sur ses
+    // joues et ses bras, sous la lumiere des salles : un brun chaud, plus
+    // rouge que l'ebene du plateau. La tenue est la violette qu'il porte sur
+    // les videos d'entrainement, bandeau blanc compris.
+    //
+    // LA FOULEE EST PROVISOIRE. `sharp` est celle d'un coureur de frequence,
+    // buste haut — la plus proche d'un hurdleur parmi celles du jeu. Elle
+    // sera remplacee par la sienne, relevee sur ses videos.
+    'Aurel MANGA': look({ build: 'm', skin: [104, 62, 44], profil: 'manga',
+      jersey: [104, 58, 176], shorts: [58, 34, 108], shoe: [246, 246, 250],
+      hair: 'ras', h: 1.90, gait: 'sharp',
+      // `sh` DOIT valoir la `carrure` de son profil Blender (1,05) : c'est
+      // l'ecart des epaules du squelette, sur lequel ses bras ont ete mesures.
+      morph: { sh: 1.05 },
+      bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
+      barbe: [38, 27, 23] })
+  };
+
   const JERSEYS = [[64, 178, 235], [72, 214, 132], [236, 92, 88],
                    [176, 108, 235], [46, 206, 190], [246, 166, 52],
                    [226, 96, 168]];
@@ -997,6 +1104,7 @@
 
   function lookFor(name, pool) {
     if (ZEZE[name]) return ZEZE[name];
+    if (VEDETTES[name]) return VEDETTES[name];
     let s = hashSeed(name + '|' + (pool || 'divers'));
     const nx = () => (s = (Math.imul(s, 1103515245) + 12345) >>> 0) / 4294967296;
     const skins = SKIN_POOL[pool] || SKIN_POOL.divers;
@@ -1291,11 +1399,16 @@
   // chrono, plutot qu'un cycle deux fois trop rapide.
   Runner.prototype.strideLength = function () {
     const amp = 0.34 + 0.66 * Math.min(1, this.v / this.maxSpeed);
-    const leg = 0.87 * (this.look.h / C.MODEL_H);
+    // Le joueur compte ses appuis sur SON gabarit, quelle que soit la tenue
+    // qu'il porte : un skin (game/vestiaire.ts) est un dessin, pas une autre
+    // foulee. Un skin plus grand courrait sinon avec moins d'appuis, et aux
+    // haies un appui de moins par intervalle est une haie mal prise.
+    const Lp = this.isPlayer ? PLAYER_LOOK : this.look;
+    const leg = 0.87 * (Lp.h / C.MODEL_H);
     // stride > 1 : foulee qui avale, moins d'appuis. stride < 1 : haute
     // frequence. La vitesse ne change pas, seul le nombre d'appuis pour la
     // couvrir - c'est la difference entre un finisseur et un frequenciel.
-    const P = gaitOf(this.look);
+    const P = gaitOf(Lp);
     return Math.max(0.85, 4 * leg * P.stride * (this.foulee || 1) *
                     Math.sin(Math.min(1.15, 0.70 * amp)));
   };
@@ -2099,10 +2212,16 @@
     // un coureur mesure n'est fait que de segments.
     const PREM = root.SprinterPremium;
     const LIBRE = PREM.LIBRE, SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
-    const PR = PREM.profils(fem);
+    // UN ATHLETE REEL A SON CORPS A LUI (voir VEDETTES et coureur-vedettes.js).
+    // Ses epaisseurs sont celles de sa sculpture : les facteurs de gabarit ne
+    // s'y appliquent pas une seconde fois. Seul le squelette les garde —
+    // shY et hipY, plus haut —, parce que c'est sur SES epaules que ses bras
+    // ont ete mesures.
+    const PR = PREM.profils(fem, L.profil);
+    const sculpte = PREM.sculpte(L.profil);
     const niv = lod === undefined ? PREM.PRES : lod;
-    const kSh = MO.sh || 1, kHip = MO.hip || 1;
-    const kArm = MO.arm || 1, kLeg = MO.leg || 1;
+    const kSh = sculpte ? 1 : (MO.sh || 1), kHip = sculpte ? 1 : (MO.hip || 1);
+    const kArm = sculpte ? 1 : (MO.arm || 1), kLeg = sculpte ? 1 : (MO.leg || 1);
 
     // LE BASSIN SUIT LE BUSTE QUAND CELUI-CI SE COUCHE.
     //
@@ -2233,6 +2352,41 @@
     // formait plus qu'un anneau autour d'un crane nu.
     PREM.chaine(add, PR, 'head', niv, L.skin, pvT, angT, 0, yawTop * 0.2, 1,
                 -bob * 0.55 + dzT, SOUS_BAS, 0);
+    // CE QUI TIENT AU CRANE LE SUIT. La tete ne rebondit qu'a moitie avec le
+    // bassin (le -bob x 0,55 ci-dessus) ; un bandeau ou une barbe poses sur
+    // le bassin glisseraient donc de deux centimetres sur le visage a chaque
+    // foulee. Ils prennent le meme decalage que le crane.
+    const dzCrane = -bob * 0.55;
+    const addCrane = (c, o, hb, ht, hz, bout) =>
+      addT(c, 0, [o[0], o[1], o[2] + dzCrane], hb, ht, hz, yawTop * 0.2, bout);
+    // LA BARBE : une coque sur la machoire, poussee vers l'avant. Son centre
+    // est devant celui de la tete, si bien que le tri de profondeur la
+    // dessine APRES la machoire vue de face, et AVANT vue de dos — ou elle
+    // disparait derriere la nuque au lieu de s'y peindre. Elle couvre le
+    // menton et les joues jusqu'aux oreilles, pas la bouche : la moustache
+    // est une piece a part, un trait au-dessus de la levre.
+    //
+    // SON HAUT EST ENFOUI : c'est la joue, pas un rebord. Avec un disque, la
+    // camera — qui regarde d'en haut — voyait le dessus de la coque, et une
+    // ellipse sombre barrait le visage a hauteur de bouche, en masque. Le bas,
+    // lui, s'arrondit sous le menton.
+    //
+    // ET ELLE NE FAIT PAS LE TOUR. Une coque autour de toute la machoire
+    // se lisait de face comme une sangle noire d'une oreille a l'autre ; une
+    // barbe courte tient au menton et au devant des joues. La coque est donc
+    // avancee de la moitie de la profondeur du crane : son dos reste dans la
+    // tete, et vue de dos elle passe derriere la nuque. Son centre est un rien
+    // plus haut que celui du tronc de la machoire, pour que le tri la dessine
+    // apres lui, de face comme de profil.
+    if (L.barbe) {
+      const [cM, pM, lM] = PREM.section(PR, 'head', niv, 0.618, 1);
+      addCrane(L.barbe, [cM + pM * 0.55, 0, 0.622], [pM * 0.50, lM * 0.80],
+               [pM * 0.52, lM * 0.84], 0.019,
+               PREM.MESURE | PREM.LIBRE | PREM.ENFOUI_HAUT);
+      const [cL, pL] = PREM.section(PR, 'head', niv, 0.650, 1);
+      addCrane(L.barbe, [cL + pL - 0.003, 0, 0.651], [0.006, 0.022],
+               [0.006, 0.022], 0.004, PREM.MESURE | PREM.LIBRE);
+    }
     // des lunettes : deux verres minces devant les yeux
     if (L.lunettes) {
       for (const side of [1, -1]) {
@@ -2242,12 +2396,16 @@
     }
 
     const hy = yawTop * 0.2, hc = L.hairCol;
+    // Sous un bandeau, les cheveux tiennent au crane comme lui : sans quoi le
+    // bandeau, qui suit le crane, glisserait sur la calotte a chaque foulee.
+    const dzH = L.bandeau ? dzCrane : 0;
     // LES CHEVEUX COIFFENT LE CRANE MESURE. Leurs rayons avaient ete regles
     // sur l'ancienne tete, plus etroite : sur le crane releve dans Blender,
     // la calotte ne le couvrait plus et la peau ressortait entre deux
     // bandes de cheveux. Dix pour cent de plus, et elle le coiffe.
     const addH = (da, o, hb, ht, hz, yaw, bout) =>
-      addT(hc, da, o, [hb[0] * 1.10, hb[1] * 1.10], [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
+      addT(hc, da, [o[0], o[1], o[2] + dzH], [hb[0] * 1.10, hb[1] * 1.10],
+           [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
     switch (L.hair) {
       case 'shaved':
         addH(0, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
@@ -2278,9 +2436,35 @@
               [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
         }
         break;
+      case 'ras':
+        // Le cheveu court sous un bandeau : une calotte en dome, large a la
+        // base pour couvrir le crane, etroite au sommet. Un tube comme
+        // `shaved`, depassant d'un bandeau, se lisait en haut-de-forme.
+        addH(0, [-0.004, 0, 0.757], [0.072, 0.066], [0.050, 0.046],
+            0.015, hy, true); break;
       default:
         addH(0, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
             0.026, hy, true);
+    }
+    // LE BANDEAU, haut sur le front, a la lisiere des cheveux.
+    //
+    // Il se pose JUSTE APRES les cheveux, et COLLE a eux (PREM.COLLE) : il
+    // se dessine immediatement apres la calotte, par-dessus elle et par-
+    // dessus le crane. Laisse au tri de profondeur, il perdait contre le
+    // haut du crane, dont le centre est un rien plus haut que le sien — et
+    // un bandeau peint sous la tete ne se voit que par son liseré.
+    // Il epouse la section MESUREE du crane, un rien plus large : le front
+    // devant, la nuque derriere, sans flotter.
+    if (L.bandeau) {
+      const [cB, pB, lB] = PREM.section(PR, 'head', niv, 0.721, 1);
+      const [cH, pH, lH] = PREM.section(PR, 'head', niv, 0.747, 1);
+      // UN ANNEAU, OUVERT AUX DEUX BOUTS. Ferme, son disque du haut — qui
+      // fait face a une camera placee au-dessus — coiffait tout le crane
+      // d'une calotte blanche, cheveux compris. Ouvert, on voit par le haut
+      // ce qui est dessine dessous : les cheveux.
+      addCrane(L.bandeau, [cB, 0, 0.734, cH], [pB * 1.07, lB * 1.08],
+               [pH * 1.09, lH * 1.10], 0.0135,
+               PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
     }
 
     const sh = rot(0, 0.470, lean);
@@ -2329,8 +2513,28 @@
       // qui remplace la main-bouchon qu'on ne posait qu'aux habilles.
       const kAv = kArm * (L.manches ? 1.12 : 1);
       const zPo = PREM.bord(PR, 'forearm', niv, POIGNET);
-      PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
-                  kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET);
+      // LE POIGNET EPONGE est le bas de l'avant-bras, pas une piece posee
+      // dessus : les troncs qui partent du poignet sont dessines a sa
+      // couleur, les suivants en peau — la meme coupe que le short sur la
+      // cuisse, et pour la meme raison. Un anneau un peu plus large pose
+      // par-dessus se serait dispute la profondeur avec le tronc qu'il
+      // entoure, et serait ressorti en lanieres.
+      //
+      // Ou il s'arrete depend du niveau de detail, parce que les troncs n'y
+      // ont pas la meme longueur : un seul au plus fin (cinq centimetres),
+      // un seul au niveau moyen (neuf). Au plus grossier, rien : il ferait la
+      // moitie de l'avant-bras, pour un bras de trois pixels.
+      const bande = L.poignet && L.poignet.cote === side && !L.manches
+        ? [-0.14, -0.09, null][niv] : null;
+      if (bande !== null && bande !== undefined) {
+        PREM.chaine(add, PR, 'forearm', niv, L.poignet.col, E, aFore, 0, yawTop,
+                    kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET, bande);
+        PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
+                    kAv, 0, SOUS_BAS, SOUS_HAUT, bande);
+      } else {
+        PREM.chaine(add, PR, 'forearm', niv, peauBras, E, aFore, 0, yawTop,
+                    kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET);
+      }
       mainDe(add, PREM, niv, E, aFore, zPo,
              PREM.section(PR, 'forearm', niv, zPo, kAv), L.skin, kArm, yawTop);
       if (r.livre === side) livre = [E, aFore];
@@ -2518,6 +2722,7 @@
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
-    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
+    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL,
+    VEDETTES
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

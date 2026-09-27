@@ -2,6 +2,7 @@
 # SPRINTER — rendre le coureur sculpte, pour le regarder.
 #
 #   blender -b -P tools/blender/rendu.py -- --images tools/blender/sortie/tour
+#   blender -b -P tools/blender/rendu.py -- --athlete manga --nb 8 --cpu
 #
 # Le jeu n'affichera jamais ce maillage : il ne sait pas les lire, et c'est
 # tres bien ainsi. Ce rendu sert a VERIFIER — un corps qu'on ne voit qu'a
@@ -55,9 +56,9 @@ def matiere(nom, couleur, rugosite=0.62):
 # termine en pointe au-dessus du sol, ne donne pas une idee juste du
 # personnage. On en pose donc ici, aux cotes exactes de celle du rig :
 # vingt centimetres de long, neuf de large, centree devant la cheville.
-def pied(cote):
+def pied(cote, fem=False):
     z = anatomie.ANKLE_Z - 0.030
-    hy = anatomie.ecarts(False)['hip'] * cote
+    hy = anatomie.ecarts(fem)['hip'] * cote
     return [
         (-0.022, hy, z + 0.012, 0.030, 0.000, 0.014),
         (0.020, hy, z + 0.004, 0.030, 0.000, 0.018),
@@ -66,7 +67,7 @@ def pied(cote):
     ]
 
 
-def corps(groupes, rayons, resolution=0.004):
+def corps(groupes, rayons, resolution=0.004, fem=False):
     """Le corps, en trois volumes qui s'interpenetrent.
 
     Pas en un seul : dans le rig du jeu, l'axe d'une cuisse passe a huit
@@ -98,7 +99,7 @@ def corps(groupes, rayons, resolution=0.004):
                 masses.append((x, y * cote, z, r0, dx, dy))
                 rs.append(R)
         if nom.startswith('JAMBE'):
-            for m in pied(cote):
+            for m in pied(cote, fem):
                 masses.append(m)
                 rs.append(m[3] / C.SEUIL_BILLE)
         o = C.sculpter(nom, masses, rs, resolution)
@@ -108,7 +109,7 @@ def corps(groupes, rayons, resolution=0.004):
     return objets
 
 
-def scene(largeur=1280, hauteur=720, images=180):
+def scene(largeur=1280, hauteur=720, images=180, cycles=False):
     sc = bpy.context.scene
     sc.render.resolution_x = largeur
     sc.render.resolution_y = hauteur
@@ -161,22 +162,29 @@ def scene(largeur=1280, hauteur=720, images=180):
     c.track_axis = 'TRACK_NEGATIVE_Z'
     c.up_axis = 'UP_Y'
 
+    # Les cles se posent deja lineaires. Les reprendre apres coup par
+    # `action.fcurves` ne marche plus depuis Blender 4.4, ou les courbes
+    # vivent dans des calques ; la preference, elle, vaut partout.
+    bpy.context.preferences.edit.keyframe_new_interpolation_type = 'LINEAR'
     for f in range(1, images + 1):
         a = 2 * math.pi * (f - 1) / images
         r = 4.5
         # depart de face : le coureur avance vers +x, la camera l'attend la.
         cam.location = (r * math.cos(a), r * math.sin(a), 1.15)
         cam.keyframe_insert('location', frame=f)
-    for fc in cam.animation_data.action.fcurves:
-        for kp in fc.keyframe_points:
-            kp.interpolation = 'LINEAR'
 
     # EEVEE si la machine le permet, Cycles sinon : un rendu qui ne sort
-    # pas ne sert a rien, meme s'il aurait ete plus beau.
-    try:
-        sc.render.engine = 'BLENDER_EEVEE_NEXT'
-    except TypeError:
-        sc.render.engine = 'CYCLES'
+    # pas ne sert a rien, meme s'il aurait ete plus beau. `--cpu` force le
+    # second — c'est le seul qui rende sans carte graphique, par exemple
+    # depuis le module Python de Blender (`pip install bpy`) sur un serveur.
+    moteurs = [] if cycles else ['BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE']
+    for m in moteurs + ['CYCLES']:
+        try:
+            sc.render.engine = m
+            break
+        except TypeError:
+            continue
+    if sc.render.engine == 'CYCLES':
         sc.cycles.samples = 24
 
 
@@ -197,12 +205,18 @@ def main():
     if '--nb' in args:
         images = int(args[args.index('--nb') + 1])
 
-    groupes = anatomie.masses(fem=fem)
+    # Un athlete reel se rend avec SES masses (anatomie.ATHLETES).
+    athlete = args[args.index('--athlete') + 1] if '--athlete' in args else None
+    if athlete:
+        fem = anatomie.ATHLETES[athlete]['fem']
+        groupes = anatomie.masses_athlete(athlete)
+    else:
+        groupes = anatomie.masses(fem=fem)
     print('calibration du corps...')
     rayons, _ = C.calibrer(groupes, passes=12)
     C.vider()
-    corps(groupes, rayons)
-    scene(images=images)
+    corps(groupes, rayons, fem=fem)
+    scene(images=images, cycles='--cpu' in args)
     os.makedirs(dossier, exist_ok=True)
     bpy.context.scene.render.filepath = os.path.join(dossier, 'f')
     print('rendu de %d images dans %s' % (images, dossier))

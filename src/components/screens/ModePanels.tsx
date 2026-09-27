@@ -116,8 +116,10 @@ export function OneShotPanel() {
                 {/* Un lieu `reserve` n'est pas a choisir : c'est une
                     competition qui l'ouvre (le Champ-de-Mars, reserve au
                     premier Championnat de France). Sur le canal de test,
-                    il se choisit comme les autres. */}
-                {LEVELS.map((l: any, i: number) => (l.horsSerie
+                    il se choisit comme les autres. Un stade d'`evenement`
+                    (le defi Aurel Manga) ne se choisit nulle part : on n'y
+                    entre que par sa banniere, pour l'epreuve qu'il met en jeu. */}
+                {LEVELS.map((l: any, i: number) => (l.horsSerie && !l.evenement
                   && (!l.reserve || import.meta.env.VITE_CANAL === 'test') ? (
                   <option key={i} value={i} className="bg-neutral-900">
                     {N.levelName(i)}

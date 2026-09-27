@@ -53,6 +53,13 @@
   // ellipse changerait des pieces que personne n'a demande de toucher.
   var MESURE = 8;
 
+  // COLLE (16) dit au rendu de dessiner la piece JUSTE APRES celle qui la
+  // precede dans la liste de pose(), au lieu de la ranger a sa propre
+  // profondeur. C'est pour ce qui se porte PAR-DESSUS un volume de meme
+  // centre — un bandeau sur la calotte de cheveux : a profondeur egale, le
+  // tri les departageait au millimetre, et le bandeau passait dessous.
+  var COLLE = 16;
+
   /** Le premier tronc dont le centre atteint cette hauteur locale. */
   function coupe(tr, h) {
     var i = 0;
@@ -225,6 +232,20 @@
     chaine: chaine, avant: avant, rayon: rayon, section: section, bord: bord,
     PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
-    profils: function (fem) { return fem ? HD.f : HD.m; }
+    COLLE: COLLE,
+    /**
+     * Les profils d'un corps : celui d'un athlete reel s'il en a un
+     * (coureur-vedettes.js, lu a l'appel et non au chargement — il se pose
+     * sur SprinterHD apres ce fichier-ci), le corps commun sinon.
+     */
+    profils: function (fem, profil) {
+      var V = root.SprinterHD && root.SprinterHD.vedettes;
+      return (profil && V && V[profil]) || (fem ? HD.f : HD.m);
+    },
+    /** Ce corps a-t-il ete sculpte a part ? */
+    sculpte: function (profil) {
+      var V = root.SprinterHD && root.SprinterHD.vedettes;
+      return !!(profil && V && V[profil]);
+    }
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

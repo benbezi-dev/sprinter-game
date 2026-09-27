@@ -1753,6 +1753,11 @@
     // present dans la version publique : il vient donc avec les ouverts,
     // avant les deux stades du canal de test, comme dans STADES_HORS_SERIE.
     ['Champ-de-Mars', 'Champ-de-Mars'],
+    // Le stade du defi Aurel Manga — l'evenement de Hurdlers. Ferme pour
+    // l'instant, mais deja a la place qu'il aura ouvert : premier des stades
+    // du canal de test, juste apres les ouverts, comme dans STADES_HORS_SERIE.
+    // Un vrai lieu, et un vrai nom : c'est la que le defi se court.
+    ['Stade Jean-Delbert', 'Stade Jean-Delbert'],
     ['Stade de la Riviera', 'Riviera Stadium'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa

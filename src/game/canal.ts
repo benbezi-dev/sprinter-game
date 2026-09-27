@@ -136,6 +136,21 @@ export const DEPART_STARTER = EST_TEST;
 export const HAIES_OUVERTES = true;
 
 /**
+ * LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers, et le skin qu'il
+ * fait gagner (game/vedettes.ts, game/vestiaire.ts).
+ *
+ * Sur le canal de test d'abord, comme tout ce qui arrive : le temps de voir le
+ * duel se jouer, et le skin courir. La forme compte, comme partout dans ce
+ * fichier — `EST_TEST` se replie a la compilation, et la banniere, l'ecran de
+ * fin et le vestiaire sortent entierement du build public.
+ *
+ * L'OUVRIR A TOUT LE MONDE, c'est passer ce drapeau a `true` ET `ouvert` a
+ * true sur l'entree 'defi-manga' de STADES_HORS_SERIE (sprinter-core.js). Le
+ * stade est deja a sa place d'ouvert : rien d'autre ne bouge.
+ */
+export const DEFI_VEDETTE_OUVERT = EST_TEST;
+
+/**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
  *
  * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne

@@ -24,7 +24,8 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
-import { HAIES_OUVERTES, SAUTS_OUVERTS } from './canal';
+import { HAIES_OUVERTES, SAUTS_OUVERTS, DEFI_VEDETTE_OUVERT } from './canal';
+import { habillerLeJoueur } from './vestiaire';
 
 export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
 
@@ -101,6 +102,10 @@ G.apresConstruction = () => {
   const cle = G.race && G.race.key;
   if (estUneCourseDeHaies(cle)) armerHaies(cle);
   else rangerHaies();
+  // LE SKIN GAGNE SE PORTE SUR LES HAIES, et nulle part ailleurs pour
+  // l'instant (game/vestiaire.ts). Ici, parce que c'est le seul passage de
+  // toutes les courses : carriere, one shot, defi, duel, direct.
+  if (DEFI_VEDETTE_OUVERT) habillerLeJoueur(cle);
   if (cle && cle in SprinterCore.RACES && EPREUVES_CONNUES.has(cle)) {
     const jeu = jeuDe(cle);
     if (jeu !== courant) {

@@ -27,11 +27,15 @@ import { BanderoleEdition } from './BanderoleEdition';
 // telechargeait alors depuis la production.
 const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
   .then(m => ({ default: m.BanderoleMolosse })));
+// Le defi Aurel Manga : charge a la demande, pour qu'il ne parte pas dans le
+// paquet public tant que DEFI_VEDETTE_OUVERT est ferme (canal.ts).
+const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
+  .then(m => ({ default: m.BanderoleVedette })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT } from '@/game/canal';
+import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT } from '@/game/canal';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
@@ -354,6 +358,12 @@ export function TitleScreen() {
                 mode entier et date, quand l'autre est un lieu de plus. Il
                 s'affiche sous les memes reserves — dans Sprinter, pas dans
                 Hurdlers, qui ne court pas apres les chiens. */}
+            {/* LE DEFI AUREL MANGA, tout en haut, dans les DEUX jeux. C'est
+                l'evenement qui annonce Hurdlers : sur l'accueil de Sprinter il
+                dit que les haies sont la, sur celui de Hurdlers il dit contre
+                qui les courir. */}
+            {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
+
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}
 
             {!haies && <BanderoleEdition />}
