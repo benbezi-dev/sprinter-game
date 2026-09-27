@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
+import '@/game/sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { EST_TEST } from '@/game/canal';
 
 /**

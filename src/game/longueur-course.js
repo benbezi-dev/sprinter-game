@@ -32,6 +32,7 @@
 --------------------------------------------------------------------------- */
 
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
+import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
 import { ELAN, FOSSE, TEMPS_ESSAI } from './longueur.js';
 import {

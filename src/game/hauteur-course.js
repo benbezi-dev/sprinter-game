@@ -28,6 +28,7 @@
 --------------------------------------------------------------------------- */
 
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
+import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
 import { TAPIS, MONTANTS, BARRE } from './hauteur.js';
 import {

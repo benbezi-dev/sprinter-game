@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Globe, Lock, ChevronLeft, Swords, Trophy } from 'lucide-react';
 import { SprinterApp, toggleLang, toggleAudio, useGameStore } from '@/game/engine';
+import '@/game/sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { allerAu } from '@/game/mondes';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { LONGUEUR_OUVERTE, TRIPLE_OUVERT, HAUTEUR_OUVERTE } from '@/game/canal';
