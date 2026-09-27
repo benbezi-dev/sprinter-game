@@ -22,6 +22,7 @@ import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
 import { ChampDirect } from '@/components/screens/ChampDirect';
+import { BandeauDefi, FinDuDefi } from '@/components/screens/DefiDemie';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
@@ -325,6 +326,9 @@ function MainGame() {
         {/* Une serie de championnat courue en direct : la chambre d'appel, le
             rappel apres un faux depart, le spectateur, l'arrivee. */}
         <ChampDirect />
+        {/* Le defi de la demi : le couloir au depart. Son arrivee remplace
+            l'ecran de fin du one shot, plus bas. */}
+        {DUELS_OUVERTS && <BandeauDefi />}
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
@@ -341,8 +345,14 @@ function MainGame() {
             n'a rien a voir : le tableau ordinaire propose huit choses, et
             apres une morsure la seule question est de savoir si l'on y
             retourne. Il rend la main de lui-meme hors du mode. */}
+        {/* LE DEFI DE LA DEMI PASSE AVANT LE RECAPITULATIF DU ONE SHOT : c'est
+            une course du direct, seul contre les chronos d'une demi-finale, et
+            son ecran de fin dit la place qu'on y aurait eue — pas un TOP 500
+            ni un defi a envoyer. Le moteur eteint le drapeau a l'accueil et a
+            toute course neuve (voir game/defi-demie.ts). */}
         {state === 'winall' && (
-          HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
+          DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
+            : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
             : defiEnCours ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>

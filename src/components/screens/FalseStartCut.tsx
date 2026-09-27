@@ -21,7 +21,10 @@ export function FalseStartCut() {
   // piste, un faux depart arrete la course sans faire perdre a personne — et
   // la suivante se relance depuis l'ecran d'arrivee.
   const etat = {
-    courseEnDirect: !!SprinterApp.G.liveOn,
+    // Une course seul sur la piste du championnat — l'echauffement de la
+    // chambre d'appel, le defi de la demi — passe par le direct sans etre un
+    // duel : son faux depart ne fait perdre personne, et se reprend.
+    courseEnDirect: !!SprinterApp.G.liveOn && !SprinterApp.G.echauffementChamp,
     defiRecu: !!SprinterApp.G.challenge,
     defiEnvoye: false,
     fauxDepart: true,
