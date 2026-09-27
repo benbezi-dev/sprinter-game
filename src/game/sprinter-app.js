@@ -71,15 +71,9 @@
       // Ni brume ni grain sur cette piste : l'une posait un voile violet sur
       // le haut de l'image, l'autre du gris dans chaque couleur.
       brumeForce: 0, sansGrain: true,
-      // Les grandes planetes du fond, rendues dans Blender (astres.py) au lieu
-      // d'etre peintes : ou elles passent (part de la course, couloir du cote
-      // de la pelouse) et leur rayon en metres, avant parallaxe.
-      astres: [
-        { img: 'arcenciel/astre-geante.webp', f: 0.08, couloir: -16, R: 8.5 },
-        { img: 'arcenciel/astre-glace.webp', f: 0.40, couloir: -26, R: 11 },
-        { img: 'arcenciel/astre-lune.webp', f: 0.66, couloir: -11, R: 3.2 },
-        { img: 'arcenciel/astre-emeraude.webp', f: 0.9, couloir: -20, R: 7 },
-      ],
+      // `astres` (les grandes planetes du fond rendues dans Blender, voir
+      // astres.py et decor-cosmos.js) viendra quand leurs images seront
+      // rendues ; d'ici la, les planetes peintes du stade cosmos.
       toiture: false, gradins: 3,
     },
     // Jeux mondiaux : piste bleue, lignes blanches et liseret vert au
