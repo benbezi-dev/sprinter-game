@@ -34,9 +34,22 @@
 // formule coutent moins cher qu'un coureur fantome a exclure partout.
 //
 // CE FICHIER NE DESSINE RIEN ET NE FAIT AUCUN BRUIT. Le molosse a l'ecran vit
-// dans halloween-molosse.js, ses grognements dans halloween-son.ts, et ce
-// qu'on raconte apres la course dans halloween-cinema.ts. La regle reste ici,
-// seule, pour qu'un harnais puisse la verifier sans lancer une course.
+// dans halloween-molosse.js, et ce qu'on raconte apres la course dans
+// halloween-cinema.ts. La regle reste ici, seule, pour qu'un harnais puisse la
+// verifier sans lancer une course.
+//
+// ET LA BETE EST MUETTE — il faut le dire ici, parce que cette ligne a
+// longtemps renvoye a un `halloween-son.ts` qui n'a jamais existe. Le mode n'a
+// qu'un son : la musique du cimetiere (halloween-musique.ts). Le molosse
+// n'aboie pas, ne halete pas, et ne fait aucun bruit en se rapprochant. On le
+// voit dans un coin de l'ecran et on sent ses foulees dans le chassis de
+// l'appareil (`G.shake`), c'est tout.
+//
+// Ce n'est pas un oubli de detail. La peur d'une poursuite se joue d'abord a
+// l'oreille — c'est ce qui arrive DERRIERE soi, la ou l'on ne regarde pas — et
+// tout ce qu'il faudrait pour la porter est deja calcule ici, image par image :
+// `c.ecart`, `c.v`, et `proximite(c)`. Il manque le bus audio, pas la mesure.
+// Voir la phase 4 du plan (docs/HALLOWEEN_PLAN.md).
 
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
@@ -47,6 +60,11 @@ import { molosseDe, FOULEE, proximite } from './halloween-molosse.js';
 import { NUITS as NUITS_LOI, nuitDe as nuitDeLoi,
          constantes, positionDe } from './halloween-loi.js';
 import { COURSES } from './halloween-courses.js';
+// LE SON DE LA BETE. Il vit a part parce qu'il n'a rien a faire dans la regle :
+// un harnais qui verifie la loi de position n'a pas a monter un contexte audio,
+// et l'ecrire ici aurait rendu halloween.ts inchargeable sous node.
+import { armerLeSon, rangerLeSon, imageDeSon, fouleeDeLaBete,
+         morsureAuSon } from './halloween-son';
 import { cameraDe, isoDe, CAMERA_DU_JEU } from './halloween-cameras.js';
 
 // LES CINQ TRACES ENTRENT DANS LA TABLE DU MOTEUR, comme les haies y entrent
@@ -209,6 +227,12 @@ export function armerLaNuit(n: number) {
     // telephone (voir goHome dans sprinter-app.js).
     G.surRetourAccueil = rangerLaNuit;
   }
+
+  // ET LE SON, APRES LE RESTE : il tire l'instant de son stinger sur le temps
+  // imparti, et lance le grondement a volume nul. Il se monte tout seul au
+  // premier appel, ou ne se monte pas si le contexte audio n'est pas encore
+  // ouvert — la nuit se court alors en silence, comme avant lui.
+  armerLeSon(nuit.imparti);
 }
 
 /**
@@ -298,6 +322,10 @@ export function cameraCourante(): { deg: number; zoom: number } {
 
 export function rangerLaNuit() {
   chasse = null;
+  // Le grondement tourne en boucle : sans cet appel il suit le joueur jusqu'a
+  // l'accueil, et le prochain cent metres ordinaire se courrait avec un chien
+  // qu'on entend sans le voir.
+  rangerLeSon();
   const G = SprinterApp.G;
   if (G) {
     G.pasMolosse = null;
@@ -360,13 +388,24 @@ export function pasDuMolosse(joueur: any) {
   if (c.demiFoulee === undefined) c.demiFoulee = demi;
   if (demi !== c.demiFoulee) {
     c.demiFoulee = demi;
+    // LE POSTERIEUR FRAPPE PLUS FORT QUE L'ANTERIEUR : c'est lui qui porte la
+    // poussee. Un battement egal aurait fait un moteur, pas un galop.
+    const lourde = demi % 2 === 0;
     if (pres > 0) {
-      // Le posterieur frappe plus fort que l'anterieur : c'est lui qui porte
-      // la poussee. Un battement egal aurait fait un moteur, pas un galop.
-      const lourd = demi % 2 === 0 ? 1 : 0.62;
-      G.shake = Math.max(G.shake || 0, 0.16 * pres * pres * lourd);
+      G.shake = Math.max(G.shake || 0, 0.16 * pres * pres * (lourde ? 1 : 0.62));
     }
+    // ET LE SON PART AVEC LA SECOUSSE, sur la meme ligne et au meme instant.
+    // Ce n'est pas un detail de rangement : deux signaux desynchronises de
+    // quelques dizaines de millisecondes se lisent comme deux evenements, et
+    // l'on perd la sensation d'un poids qui tombe. Le son a sa propre portee
+    // (halloween-son-loi.js), d'ou l'absence de garde `pres > 0` ici.
+    fouleeDeLaBete(c.ecart, lourde);
   }
+
+  // ET L'IMAGE DE SON : le grondement suit la distance, le coeur bat s'il doit
+  // battre, le stinger tombe s'il est l'heure. Apres la foulee, pour qu'un
+  // silence programme juste avant le stinger ne soit pas rouvert par elle.
+  imageDeSon(c.ecart, c.v, t);
 
   // LE JOUEUR EST PASSE. On le juge sur `finished` et non sur sa distance :
   // c'est le moteur qui decide qu'une ligne est franchie, et le faire une
@@ -386,6 +425,10 @@ export function pasDuMolosse(joueur: any) {
   if (c.ecart <= 0) {
     c.verdict = 'mordu';
     c.morsure = t;
+    // Le grondement s'arrete net. Il continuerait sinon sous l'ecran de fin,
+    // ou il dirait que la bete est en train d'arriver — alors qu'elle est
+    // arrivee.
+    morsureAuSon();
     // Le coureur s'arrete net. On ne le fait pas tomber : le moteur reserve sa
     // chute au faux pas, et une chute ici aurait relance sa foulee au
     // relevement — le joueur aurait vu son athlete repartir apres s'etre fait
