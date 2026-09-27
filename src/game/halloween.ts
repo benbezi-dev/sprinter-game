@@ -214,6 +214,11 @@ export function armerLaNuit(n: number) {
   };
 
   if (G) {
+    // LE DEPART EST DEJA PRIS. Le moteur lit cette vitesse a sa premiere
+    // image de decompte et bascule aussitot en course, sans pistolet et sans
+    // « a vos marques » (voir updateLogic dans engine.ts) : on ne donne pas le
+    // depart d'une poursuite.
+    G.departLance = DEPART_LANCE;
     G.pasMolosse = pasDuMolosse;
     G.molosseMord = false;
     // Le dessin passe par le meme chemin que celui des haies : la bete se
@@ -234,6 +239,28 @@ export function armerLaNuit(n: number) {
   // ouvert — la nuit se court alors en silence, comme avant lui.
   armerLeSon(nuit.imparti);
 }
+
+/**
+ * LA VITESSE A LAQUELLE LA FUITE A DEJA COMMENCE, en metres par seconde.
+ *
+ * Sept metres par seconde, soit environ 55 % du plafond du jeu : l'allure de
+ * quelqu'un qui court depuis un moment sans etre encore au maximum. Il lui
+ * reste donc quelque chose a aller chercher — c'est ce que le joueur va faire
+ * avec ses doigts — mais il n'a plus a construire sa course.
+ *
+ * ON NE PART PAS A PLEINE VITESSE, et c'est une decision de jeu. A douze
+ * metres par seconde il n'y aurait plus rien a gagner : le joueur regarderait
+ * une course deja jouee. A l'arret, on retrouverait le depart classique qu'on
+ * vient de retirer, et la bete rattraperait avant la troisieme foulee.
+ *
+ * ELLE NE CHANGE RIEN AUX TEMPS IMPARTIS, et c'est ce qui compte le plus.
+ * Ceux-ci sont mesures au harnais sur un coureur qui part de l'arret
+ * (tools/molosse-test.mjs) : partir lance rend chaque nuit PLUS FACILE d'une
+ * poignee de dixiemes. C'est assume tant que le harnais n'a pas rejoue
+ * l'echelle avec cette vitesse de depart — une nuit un peu trop large se
+ * rattrape, une nuit devenue infaisable ne se rattrape pas.
+ */
+export const DEPART_LANCE = 7.0;
 
 /**
  * Ranger la nuit. A appeler en quittant la course, sans quoi la bete suit — et
@@ -322,6 +349,9 @@ export function cameraCourante(): { deg: number; zoom: number } {
 
 export function rangerLaNuit() {
   chasse = null;
+  // Et le depart lance se remballe avec le reste : laisse arme, il ferait
+  // partir lancee la prochaine course ordinaire du joueur, sans decompte.
+  if (SprinterApp.G) SprinterApp.G.departLance = 0;
   // Le grondement tourne en boucle : sans cet appel il suit le joueur jusqu'a
   // l'accueil, et le prochain cent metres ordinaire se courrait avec un chien
   // qu'on entend sans le voir.

@@ -250,10 +250,39 @@
       // L'herbe d'un cimetiere la nuit : verte, mais eteinte. Le bord tire
       // vers le brun — la terre remuee autour des tombes.
       grass: [18, 34, 22], grassEdge: [30, 40, 24],
-      trackA: [226, 108, 26], trackB: [198, 88, 18],
-      // Les lignes sont couleur d'os, pas blanches : un blanc pur, sur cette
-      // piste-la, claquait plus fort que la piste elle-meme.
-      lane: [242, 232, 208], kerb: [124, 208, 78],
+      // ON N'EST PLUS SUR UNE PISTE, ET LA COULEUR EST CE QUI LE DIT EN
+      // PREMIER.
+      //
+      // Le tartan orange etait defendu par un bon argument — c'est la seule
+      // grande surface saturee de l'image, donc celle qu'on regarde, et le
+      // joueur n'a pas le temps de lever les yeux. L'argument tenait tant que
+      // le lieu etait un stade. Il ne l'est plus : on fuit dans une allee de
+      // cimetiere, et une allee de cimetiere n'est pas orange.
+      //
+      // C'est de la TERRE BATTUE, sombre, a peine plus claire que ce qui
+      // l'entoure. Le chemin se lit par son grain et par ce qui le borde, pas
+      // par sa couleur — exactement comme la nuit, ou l'on devine un sentier
+      // sans le voir.
+      //
+      // Ce qu'on perd — la grande surface qui attire l'oeil — on le regagne
+      // ailleurs : quand il n'y a plus ni gradins, ni panneaux, ni lignes
+      // peintes, le chemin est la SEULE chose construite de l'image. Il
+      // n'avait besoin d'etre orange que pour se distinguer d'un stade.
+      trackA: [58, 44, 38], trackB: [46, 35, 30],
+      // Ni lignes ni liseret ne sont traces sur un couloir unique (voir
+      // `seul` dans drawWorld), mais les deux teintes restent lues ailleurs —
+      // le damier de la ligne d'arrivee, les reperes du HUD. On les garde
+      // couleur d'os, et sourdes.
+      lane: [176, 168, 148], kerb: [92, 104, 74],
+      // AUCUNE ENCEINTE : `gradins: 0` fait sauter tout le bloc de la
+      // tribune — bancs, muret, escaliers, barrieres, panneaux, toiture,
+      // projecteurs et fanions. Les teintes qui suivent ne sont plus lues ;
+      // elles restent parce qu'un theme incomplet fait tomber l'image du
+      // stade sans prevenir, et que ce mode en a deja fait les frais avec
+      // les cypres.
+      couloirs: 1,
+      gradins: 0,
+      toiture: false,
       tread: [64, 58, 78], riser: [40, 36, 52], roof: [18, 16, 26],
       barrier: [96, 88, 116],
       panels: [[236, 124, 32], [138, 74, 200], [124, 208, 78], [242, 232, 208]],
@@ -500,7 +529,12 @@
   function tribuneDe(th) {
     const etape = th === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
     return {
-      gradins: etape ? etape.gradins : (th.gradins || 4),
+      // `th.gradins || 4` NE PERMETTAIT PAS ZERO. Un theme qui demande
+      // explicitement aucun gradin — parce que son lieu n'est pas un stade —
+      // en recevait quatre, silencieusement : zero est faux en JavaScript, et
+      // le `||` reprend alors le defaut. Le bogue ne se voit qu'a l'ecran, et
+      // seulement le jour ou quelqu'un essaie de retirer les tribunes.
+      gradins: etape ? etape.gradins : (th.gradins != null ? th.gradins : 4),
       toiture: etape ? etape.toiture : th.toiture !== false,
     };
   }
@@ -1793,11 +1827,30 @@
     const [lo, hi] = lvl.plateau ? lvl.plateau[R.key] : R.ranges[idx];
     G.track = new Track(R);
     G.runners = [];
-    const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
+    // UN CHEMIN N'A PAS DE PLATEAU, ET LE COUREUR N'EST PAS AU COULOIR 4.
+    //
+    // Le couloir 3 (le quatrieme) est le bon couloir pour une finale : c'est
+    // celui du milieu, celui qu'on donne au meilleur temps, et la camera y
+    // trouve trois adversaires de chaque cote. Sur un lieu a couloir unique il
+    // n'y a pas de milieu — il y a le chemin, et c'est le zero.
+    const chemin = seul(THEMES[lvl.theme]);
+    const pl = new Runner('TOI', chemin ? 0 : 3, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
-    const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
+    // PERSONNE NE COURT A COTE DE QUELQU'UN QUI FUIT.
+    //
+    // Le cimetiere portait sept adversaires nommes — Igor Tombal, Vlad
+    // Crampon — et ils etaient drôles, mais ils racontaient une course. Or le
+    // mode ne raconte pas une course : il raconte une fuite, et une fuite est
+    // seule par definition. Sept athletes en tenue lances au meme moment dans
+    // la meme allee transformaient la bete en obstacle de competition.
+    //
+    // Le plateau reste dans la table du niveau : une nuit ou l'histoire dira
+    // que le coureur est accompagne le retrouvera en demandant deux couloirs
+    // plutot qu'un. C'est le nombre de couloirs qui commande, pas un drapeau
+    // separe qu'il faudrait penser a tenir d'accord avec lui.
+    const names = chemin ? [] : (idx === MONDIAUX ? mondiauxNames() : lvl.names);
     names.forEach((n, i) => {
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
@@ -5541,7 +5594,12 @@
     // pied a cote de sa plaque. L'ancien bloc au trait reste en secours tant
     // que l'image n'est pas chargee.
     const vue = T.curved ? WROT * 180 / Math.PI : 0;
-    for (let e = 0; e < C.LANE_COUNT; e++) {
+    // PAS DE BLOCS HORS STADE. Des starting-blocks sont du mobilier de
+    // competition : on les installe, on s'y cale, un juge verifie. Rien de
+    // cela n'arrive a quelqu'un qui fuit dans une allee de cimetiere — et
+    // deux cales boulonnees dans la terre auraient rendu la scene absurde au
+    // premier coup d'oeil.
+    for (let e = 0; seul(th) ? false : e < couloirs(th); e++) {
       if (DEC()) {
         const q = T.pos(0, e);
         const g2 = ground(q[0], q[1]);
@@ -5710,7 +5768,11 @@
     if (th.clouds) drawClouds(ctx);
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
-    const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+    // LE BORD EXTERIEUR SUIT LE NOMBRE DE COULOIRS DESSINES, pas les huit de
+    // la piste reglementaire : sur un lieu a couloir unique, la surface
+    // s'arrete a un metre vingt du bord interieur et tout le reste est du sol.
+    const NC = couloirs(th);
+    const rOut = T.curved ? T.edge(NC) : C.LANE_W * NC;
     // La patrouille, puis la tour : tracees sur le ciel, avant tout le sol,
     // pour que les rideaux d'arbres lui passent devant le pied.
     const cdm = th.champDeMars && CDM();
@@ -5835,6 +5897,18 @@
     _dansTribune = enTribune ? enTribune.dans : null;
     const near = rOut + 1.6, tiers = tribune.gradins, sr = 1.7, sz = 0.58;
     const stp = decorStride();
+    // AUCUN GRADIN, AUCUNE ENCEINTE — et c'est tout le bloc qui saute, pas
+    // seulement les rangees.
+    //
+    // `tiers` a zero suffisait a vider les bancs, mais laissait debout tout ce
+    // qui les accompagne : les panneaux publicitaires, le muret, les
+    // barrieres, les escaliers, la toiture, les projecteurs et la guirlande de
+    // fanions. On obtenait un stade sans public, ce qui est plus proche d'un
+    // stade abandonne que d'un cimetiere — et ce n'est pas ce qu'on raconte.
+    //
+    // Le mode d'Halloween ne se court pas dans une enceinte. Il n'y a pas de
+    // tribune vide au bord du chemin : il n'y a pas de tribune.
+    if (tribune.gradins > 0) {
     if (cdm) cdm.badauds(ctx, apiCdm(), th, sm, near, enTribune.dans);
     // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
     // les panneaux — quand elles sont chargees et valent pour cette vue.
@@ -6000,6 +6074,7 @@
         }
       }
     }
+    } // fin du bloc « il y a une enceinte »
 
     _dansTribune = null;
 
@@ -6030,12 +6105,19 @@
     // Le liseret interieur et le bord exterieur, eux, restent francs : ce
     // sont des reperes de course, pas des marques d'usage.
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
-                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
-      rail(ctx, sm, rIn, rgb(th.kerb), 3);
-      for (let e = 1; e < C.LANE_COUNT; e++) {
-        rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, NC))) {
+      // UN CHEMIN N'EST PAS PEINT. Sur un lieu a couloir unique, on ne trace
+      // ni liseret ni bord : de la peinture au sol dirait « piste », donc
+      // « competition », donc « regles » — et une fuite n'en a aucune. Le
+      // chemin se lit par sa matiere et par le sol qui l'entoure, pas par des
+      // lignes qui le bordent.
+      if (!seul(th)) {
+        rail(ctx, sm, rIn, rgb(th.kerb), 3);
+        for (let e = 1; e < NC; e++) {
+          rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+        }
+        rail(ctx, sm, rOut, rgb(th.lane), 2.2);
       }
-      rail(ctx, sm, rOut, rgb(th.lane), 2.2);
     }
 
     // L'ombre que les tribunes jettent sur le bord de la piste, et celle du
@@ -6071,9 +6153,14 @@
     if (T.total - 50 > 0) markerSet.add(T.total - 50);
     const markers = Array.from(markerSet).sort((a, b) => a - b);
 
-    for (const m of markers)
-      for (let e = 0; e < C.LANE_COUNT; e++)
-        tick(m, e, 'rgba(255,255,255,0.90)', m === 0 ? 3 : 1.6);
+    // LES REPERES DE DISTANCE DISPARAISSENT AVEC LA PISTE. Ils disent au
+    // coureur ou il en est de son effort ; celui qui fuit n'a pas ce genre de
+    // question, et un « 50 m » peint dans une allee de cimetiere ramenerait
+    // le stade par la fenetre.
+    if (!seul(th))
+      for (const m of markers)
+        for (let e = 0; e < NC; e++)
+          tick(m, e, 'rgba(255,255,255,0.90)', m === 0 ? 3 : 1.6);
 
     // Zones de transmission du relais, en jaune comme sur une piste.
     // La zone fait trente metres depuis 2018 — l'ancienne zone de vingt
@@ -6086,7 +6173,7 @@
     if (T.relay && T.legLength > 0) {
       for (let k = 1; k < T.legs; k++) {
         const z0 = k * T.legLength;
-        for (let e = 0; e < C.LANE_COUNT; e++) {
+        for (let e = 0; e < NC; e++) {
           tick(z0, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + C.RELAY_LAUNCH, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
@@ -6100,7 +6187,8 @@
     // peinte au sol nulle part. Voir chiffres-piste.js.
     const CH = globalThis.ChiffresPiste;
     if (CH) {
-      for (let e = 0; e < C.LANE_COUNT; e++) {
+      // Un chemin n'a pas de numero de couloir : il n'y a rien a numeroter.
+      for (let e = 0; seul(th) ? false : e < NC; e++) {
         const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
         const p = ground(q[0], q[1]);
         if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
@@ -6118,8 +6206,9 @@
     ctx.fillStyle = 'rgba(255,255,255,0.80)';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for (const m of markers) {
-      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + 2.4);
+    // Ni « DEPART » ni « 100 M » ecrits au bord : ce sont des mots de piste.
+    for (const m of (seul(th) ? [] : markers)) {
+      const q = ptOf(T.markAt(m, NC - 1), rOut + 2.4);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
@@ -6135,7 +6224,16 @@
     // complet. Elle, au moins, est bien radiale : tous les couloirs y
     // arrivent au meme endroit, c'est la definition d'une ligne d'arrivee.
     const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
-    for (let i = 0; i < C.LANE_COUNT * 2; i++) {
+    // PAS DE DAMIER SUR UN CHEMIN. Le damier noir et blanc est la marque
+    // d'une ligne d'arrivee, donc d'une course chronometree. Ici la fin du
+    // chemin n'est pas une ligne : c'est un ABRI — une porte, un portail, un
+    // bus a l'arret dont les phares sont allumes — et on n'y arrive pas
+    // premier, on y arrive VIVANT.
+    //
+    // Ce que le joueur doit lire de loin, c'est « je peux aller la ». Un
+    // damier peint au sol dirait « la course finit la », ce qui n'est pas la
+    // meme promesse : on peut finir une course sans etre sauve.
+    for (let i = 0; seul(th) ? false : i < NC * 2; i++) {
       const rr = rIn + i * C.LANE_W * 0.5;
       ctx.fillStyle = i % 2 ? 'rgb(56,58,72)' : '#fff';
       ctx.beginPath();
@@ -7076,6 +7174,17 @@
     // le jeu publie n'a pas de starter, et un officiel plante la sans rien
     // faire serait plus etrange que son absence.
     if (!STARTER) return;
+    // ET PERSONNE NON PLUS QUAND LE DEPART EST DEJA PRIS.
+    //
+    // Sur un depart lance, il n'y a pas eu de coup de pistolet : le coureur
+    // fuit depuis un moment quand le joueur en prend la main. Un officiel en
+    // chemise blanche, bras leve, plante au milieu d'une allee de cimetiere
+    // pendant qu'un molosse arrive derriere — c'est exactement l'image qui
+    // fait sortir le joueur du mode.
+    //
+    // On le reconnait a l'absence de blocs : un lieu a couloir unique n'a ni
+    // blocs ni starter, et les deux disparaissent pour la meme raison.
+    if (seul()) return;
     const T = G.track, d = G.depart;
     if (!T || !d) return;
     // Le coup est parti quand la course a commence : `elapsed` compte alors
@@ -7163,6 +7272,52 @@
   }
 
   /**
+   * COMBIEN DE COULOIRS ON DESSINE.
+   *
+   * Huit partout, sauf la ou le lieu n'est pas un stade.
+   *
+   * ON NE TOUCHE PAS A `C.LANE_COUNT`, et c'est le point important : cette
+   * constante porte la geometrie d'une piste reglementaire, et une quinzaine
+   * d'endroits en dependent — le relais et ses zones de transmission, le
+   * championnat, les duels, le photo-finish, la selection de couloir. La
+   * changer globalement pour un mode d'Halloween aurait casse tout le reste
+   * du jeu pour un decor.
+   *
+   * Le nombre se lit donc sur le THEME, au moment de dessiner, et lui seul
+   * change. Le moteur continue de raisonner sur huit couloirs : simplement,
+   * sept d'entre eux ne sont peints nulle part et personne n'y court.
+   *
+   * POURQUOI UN SEUL COULOIR DANS LA NUIT DU MOLOSSE. Le mode ne se court pas
+   * sur une piste : on fuit dans un cimetiere. Une piste a huit couloirs dit
+   * « competition », et une competition a des regles, un depart equitable et
+   * des adversaires — tout ce qu'une fuite n'a pas. Un couloir unique dit
+   * « un chemin, et rien autour », ce qui est exactement la situation.
+   *
+   * Le pluriel reste possible : une nuit ou l'histoire dit que le coureur est
+   * accompagne en demandera deux ou trois. C'est pour cela que c'est un
+   * nombre et non un booleen.
+   */
+  function couloirs(th) {
+    const t = th || theme();
+    // `|| C.LANE_COUNT` serait un piege ici : zero couloir n'a pas de sens,
+    // mais un theme qui demande 1 doit obtenir 1, et `1 || 8` vaut bien 1.
+    // C'est la meme famille d'erreur que `th.gradins || 4`, corrigee plus
+    // haut, et elle ne se voit qu'a l'execution.
+    return t && t.couloirs > 0 ? t.couloirs : C.LANE_COUNT;
+  }
+
+  /**
+   * LE COUREUR EST-IL SEUL SUR SON CHEMIN ?
+   *
+   * Un lieu a un seul couloir n'a pas de plateau : personne ne court a cote de
+   * quelqu'un qui fuit. La question se pose ici plutot qu'a chaque appelant,
+   * parce que trois endroits en dependent — la construction de la course, le
+   * couloir du joueur, et le dessin des blocs — et que trois lectures
+   * separees finissent toujours par diverger d'une.
+   */
+  function seul(th) { return couloirs(th) === 1; }
+
+  /**
    * OU EN EST CHAQUE COUREUR DE SON DEPART.
    *
    * Pose `enBloc` (0 en course, 1 dans les blocs) et `prets` (0 a vos marques,
@@ -7183,6 +7338,16 @@
   const SORTIE_BLOCS = 0.9;
   function phaseBlocs(r) {
     const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+    // SANS BLOCS, PAS DE POSITION DE DEPART. `enBloc` ne decrit pas une
+    // intention, il decrit un CORPS : mains au sol, bassin haut, pied cale
+    // contre une plaque. Un coureur qui prendrait cette posture sur une allee
+    // de terre s'appuierait sur un objet qui n'existe pas, et se releverait
+    // au pistolet d'un mouvement qui ne veut plus rien dire.
+    //
+    // Hors stade il reste donc DEBOUT pendant le decompte. C'est aussi ce que
+    // le mode raconte : on ne se prepare pas a partir, on est deja la, et la
+    // bete arrive.
+    if (seul()) { r.enBloc = 0; r.prets = 1; return; }
     if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; return; }
     // Elimine au faux depart : la piste est figee, et chacun reste la ou le
     // decompte l'a laisse — dans ses blocs, pas debout d'un coup derriere eux.

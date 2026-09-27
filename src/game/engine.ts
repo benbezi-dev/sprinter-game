@@ -553,6 +553,41 @@ export function updateLogic(dt: number) {
       : SprinterApp.CUT_DUREE;
     if (G.cut.kind !== 'ending' && G.cut.t > finDuCut) SprinterApp.nextCut();
   } else if (G.state === 'count') {
+    // LE DEPART LANCE — on ne compte pas, on est deja en train de courir.
+    //
+    // Une nuit du molosse ne commence pas par un decompte : elle commence au
+    // milieu d'une fuite. Le coureur est deja a pleine foulee, la bete est
+    // deja derriere, et il n'y a eu ni « a vos marques » ni coup de pistolet —
+    // personne ne donne le depart d'une poursuite.
+    //
+    // ON SAUTE L'ETAT PLUTOT QUE DE L'ACCELERER. Un decompte joue en une image
+    // aurait quand meme tire le coup de pistolet, arme la detection de faux
+    // depart et fait sortir les coureurs de blocs qui ne sont pas la. Ici
+    // l'etat `count` ne dure litteralement aucune image : le premier passage
+    // de la boucle bascule en course.
+    //
+    // `departLance` porte la VITESSE initiale, en metres par seconde, et non
+    // un booleen : c'est le mode qui sait a quelle allure la fuite a commence,
+    // pas le moteur (voir armerLaNuit dans game/halloween.ts).
+    if (G.departLance > 0) {
+      const v0 = G.departLance;
+      G.departLance = 0;
+      G.state = 'race'; G.elapsed = 0; G.countT = 3;
+      reinitialiserEnvoi();
+      resetInputRhythm();
+      for (const r of G.runners) {
+        r.v = Math.min(v0, r.maxSpeed);
+        // DEJA REDRESSE. `driveEnd` est la distance sur laquelle le coureur
+        // reste penche en poussee de sortie de blocs ; a zero, il court
+        // d'emblee en position haute. Sans cela il aurait parcouru quinze
+        // metres plie en deux a pleine vitesse, ce qui se lit comme une chute
+        // en avant.
+        r.driveEnd = 0;
+        r.prets = 1; r.enBloc = 0;
+      }
+      gameStore.setState({ state: G.state, countT: G.countT, elapsed: G.elapsed });
+      return;
+    }
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
     // ferait partir les deux joueurs a des instants differents.
