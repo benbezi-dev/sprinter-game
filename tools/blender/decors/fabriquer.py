@@ -30,8 +30,13 @@ import matiere
 import palettes
 import pieces
 import importlib
-for mod in (vue, matiere, palettes, pieces):
+import reel
+for mod in (vue, matiere, palettes, pieces, reel):
     importlib.reload(mod)
+# Les pieces en eclairage reel s'inscrivent dans pieces.DEBOUT : apres le
+# rechargement de `pieces`, sans quoi elles en seraient effacees.
+import pieces_arcenciel
+importlib.reload(pieces_arcenciel)
 
 RACINE_PROJET = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 PX_PAR_M = 96.0
@@ -49,6 +54,13 @@ CAPS = [0.0, 180.0, WROT, 180.0 + WROT]
 # c'est la qu'un tapis se lit contre les lignes de couloir.
 CAPS_VIRAGE = sorted(set(CAPS + [22.5 * k for k in range(16)]))
 CONTOURS = False
+# Echantillons d'anticrenelage du rendu couleur, et ombre au sol ou non :
+# reglages de stade (voir palettes.STADES).
+ECHANTILLONS = 32
+SANS_OMBRE = False
+# 'jeu' : la formule de lumiere du moteur, en emission (matiere.py).
+# 'reel' : Cycles, matieres physiques et halo des neons (reel.py).
+ECLAIRAGE = 'jeu'
 
 
 def cle_cap(cap):
@@ -143,7 +155,34 @@ def ecrire_webp(a, f, qualite=92):
     bpy.data.images.remove(img)
 
 
+def rendre_reel(stade, nom, cap, dossier):
+    """Une piece en eclairage reel : Cycles, puis le halo de ce qui brille."""
+    construire(stade, nom, cap)
+    pts = points_jeu()
+    x0, y0, x1, y1 = cadre(pts, False)
+    marge = 0.3
+    W = int(math.ceil((x1 - x0 + 2 * marge) * PX_PAR_M))
+    H = int(math.ceil((y1 - y0 + 2 * marge) * PX_PAR_M))
+    c = centre_jeu((x0 + x1) / 2, (y0 + y1) / 2)
+    sc = bpy.context.scene
+    cam = vue.camera(PX_PAR_M, W, H, centre=c)
+    reel.reglages(sc, ECHANTILLONS)
+    reel.monde_spatial(sc)
+    reel.lumieres(sc)
+    f_col = '/tmp/decor-reel.png'
+    sc.render.filepath = f_col
+    bpy.ops.render.render(write_still=True)
+    ancre = vue.ancre_pixel(cam, (0, 0, 0))
+    # Le halo deborde du cadre : on l'agrandit d'autant, et l'ancre suit.
+    bord = int(round(0.35 * PX_PAR_M))
+    out = reel.halo_lumineux(lire(f_col), marge=bord)
+    return recouper_et_ecrire(out, (ancre[0] + bord, ancre[1] + bord),
+                              os.path.join(dossier, '%s-%s.webp' % (nom, cle_cap(cap))))
+
+
 def rendre_debout(stade, nom, cap, dossier):
+    if ECLAIRAGE == 'reel':
+        return rendre_reel(stade, nom, cap, dossier)
     construire(stade, nom, cap)
     pts = points_jeu()
     x0, y0, x1, y1 = cadre(pts, True)
@@ -180,11 +219,15 @@ def rendre_debout(stade, nom, cap, dossier):
         ls.linestyle.color = (0.04, 0.10, 0.10)
         ls.linestyle.thickness = 2.6
     sc.render.engine = 'BLENDER_EEVEE_NEXT'
-    sc.eevee.taa_render_samples = 32
+    sc.eevee.taa_render_samples = ECHANTILLONS
     f_col = '/tmp/decor-couleur.png'
     sc.render.filepath = f_col
     bpy.ops.render.render(write_still=True)
     ancre = vue.ancre_pixel(cam, (0, 0, 0))
+    if SANS_OMBRE:
+        # Un stade sans sol : la couleur seule, sa lueur tient lieu d'ombre.
+        return recouper_et_ecrire(lire(f_col), ancre,
+                                  os.path.join(dossier, '%s-%s.webp' % (nom, cle_cap(cap))))
 
     # --- l'ombre : Cycles, la piece invisible a la camera mais pas au soleil
     for o in bpy.data.objects:
@@ -278,7 +321,7 @@ def rendre_sol(stade, nom, dossier, px_par_m=48.0):
 
 
 def main():
-    global PX_PAR_M, CONTOURS
+    global PX_PAR_M, CONTOURS, ECHANTILLONS, SANS_OMBRE, ECLAIRAGE
     args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     stade = args[args.index('--stade') + 1] if '--stade' in args else 'day'
     seules = args[args.index('--pieces') + 1].split(',') if '--pieces' in args else None
@@ -292,6 +335,9 @@ def main():
     PX_PAR_M = float(cfg.get('pxParM', 96.0))
     SYMETRIQUES = set(cfg.get('symetriques', []))
     CONTOURS = bool(cfg.get('contours'))
+    ECHANTILLONS = int(cfg.get('echantillons', 32))
+    SANS_OMBRE = bool(cfg.get('sansOmbre'))
+    ECLAIRAGE = cfg.get('eclairage', 'jeu')
     for nom in cfg['debout']:
         if seules and nom not in seules:
             continue
@@ -300,6 +346,9 @@ def main():
         else:
             caps = [0.0] if nom in SYMETRIQUES else \
                 (CAPS_VIRAGE if nom in cfg.get('virage', []) else CAPS)
+        # --apercu : un seul cap, pour juger une piece avant sa serie complete.
+        if '--apercu' in args:
+            caps = caps[:1]
         deja = entree['debout'].get(nom, {}) if '--completer' in args else {}
         entree['debout'][nom] = deja
         construire(stade, nom, 0.0)
