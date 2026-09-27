@@ -128,15 +128,80 @@ PATTE = 0.94
 #     d'un levrier lisait comme de la maigreur ; celle-ci lit comme un flanc.
 #   - LA CROUPE EPAISSIT (0,19 -> 0,235) : c'est elle qui pousse, et on doit
 #     voir d'ou vient la poussee.
+# ─────────────────────────────────────────────────────────────────────────
+# UNE CHAINE AXIALE DONNE UN TUBE, ET C'EST MATHEMATIQUE.
+#
+# Une masse posee sur l'axe a un rayon `r` : elle fait le dos a `h + r` et le
+# ventre a `h - r`, avec le MEME nombre. Pincer le rein pour remonter le
+# ventre descend donc le dos d'autant, et l'on obtient un tube qui maigrit au
+# milieu — jamais un animal. Le creux du flanc d'un chien n'est pas un
+# retrecissement : c'est un VENTRE QUI REMONTE SOUS UN DOS QUI NE BOUGE PAS.
+#
+# Il faut donc deux lignes independantes, plus une paire laterale :
+#
+#   DOS     la ligne du dessus, presque droite du garrot a la croupe ;
+#   VENTRE  la ligne du dessous, qui plonge au poitrail et remonte a l'aine ;
+#   FLANC   deux masses de chaque cote, a hauteur de cage thoracique, qui
+#           donnent la LARGEUR — un chien est profond devant et plat derriere.
+#
+# Les trois vivent dans la meme famille « tronc » : elles doivent fusionner
+# entre elles, c'est tout l'interet. C'est avec la tete et les pattes qu'elles
+# ne doivent pas se melanger.
+# ─────────────────────────────────────────────────────────────────────────
+
+# LA LIGNE DU DOS : (avancement, hauteur, rayon).
+#
+# Les rayons tombent de 0,30 a 0,19 : ils ne font plus tout le corps, ils n'en
+# font que le dessus. Les hauteurs montent en consequence — a 0,70 avec un
+# rayon de 0,19, le garrot culmine a 0,89, la ou l'ancienne table le mettait a
+# 0,92. La ligne du dessus ne change donc presque pas ; c'est ce qu'il y a
+# dessous qui change.
+#
+# Le rein remonte legerement (0,715) : le dos d'un chien qui galope n'est pas
+# plat, il est arque — et cette arche est ce qui distingue une course d'un
+# trot.
 COLONNE = [
-    (+0.86, 0.48, 0.175),  # la gorge, pleine
-    (+0.72, 0.55, 0.250),  # l'encolure, epaisse — la marque du molosse
-    (+0.54, 0.62, 0.300),  # le garrot, haut et large
-    (+0.34, 0.60, 0.320),  # le poitrail, le plus profond, et il descend
-    (+0.14, 0.61, 0.270),  # le dos
-    (-0.08, 0.61, 0.225),  # le rein, a peine pince
-    (-0.30, 0.62, 0.235),  # la croupe, qui pousse
-    (-0.50, 0.60, 0.170),  # la naissance de la queue
+    (+0.72, 0.660, 0.170),  # l'encolure, epaisse — la marque du molosse
+    (+0.54, 0.700, 0.195),  # le garrot, le point haut
+    (+0.34, 0.695, 0.200),  # le dos avant
+    (+0.14, 0.700, 0.185),  # le dos
+    (-0.08, 0.715, 0.170),  # le rein, arque
+    (-0.30, 0.710, 0.180),  # la croupe, qui pousse
+    (-0.50, 0.660, 0.140),  # la naissance de la queue
+]
+
+# LA LIGNE DU VENTRE : (avancement, hauteur, rayon).
+#
+# C'est elle qui fait tout, et elle n'existait pas.
+#
+# Elle plonge au POITRAIL — le point le plus bas de l'animal, sous les
+# coudes — puis remonte franchement a l'AINE. Entre les deux, le creux du
+# flanc : ce vide sous la derniere cote, qu'on voit se soulever quand une bete
+# souffle. Vingt-huit centimetres separent le bas du poitrail du bas de
+# l'aine ; c'est cette difference-la, et rien d'autre, qui fait qu'on reconnait
+# un animal qui court.
+VENTRE = [
+    (+0.44, 0.480, 0.170),  # la pointe du poitrail — reculee de six
+                            # centimetres : a 0,50 elle depassait DEVANT
+                            # l'epaule et pendait sous le cou comme un fanon.
+    (+0.28, 0.440, 0.190),  # le poitrail, LE POINT LE PLUS BAS
+    (+0.10, 0.490, 0.155),  # la derniere cote
+    (-0.08, 0.625, 0.110),  # LE CREUX DU FLANC — creuse davantage : a 0,560
+                            # avec un rayon de 0,135, le ventre ne remontait
+                            # que de treize centimetres sur le poitrail, et le
+                            # creux se lisait comme un simple amincissement.
+    (-0.26, 0.640, 0.115),  # l'aine, contre la cuisse
+]
+
+# LES FLANCS : (avancement, ecart lateral, hauteur, rayon).
+#
+# Un chien est PROFOND DEVANT ET PLAT DERRIERE : la cage thoracique porte les
+# poumons et le coeur, le rein ne porte rien. Deux paires suffisent a le dire,
+# posees a hauteur de cote — plus haut elles gonfleraient le dos, plus bas
+# elles rempliraient le creux qu'on vient de creuser.
+FLANCS = [
+    (+0.40, 0.125, 0.580, 0.155),
+    (+0.18, 0.120, 0.590, 0.145),
 ]
 
 # LA TETE — et le commentaire d'origine disait exactement l'inverse de la
@@ -174,12 +239,23 @@ COLONNE = [
 # museau garde une legere plongee (0,615 a la truffe contre 0,655 au crane) :
 # une tete parfaitement horizontale a l'air empaillee, une tete qui plonge un
 # peu regarde ou elle court.
+# LA TETE SUIT LA LIGNE DU DOS, ET IL FAUT Y PENSER A CHAQUE FOIS QU'ON LA
+# BOUGE. Le bogue a ete introduit deux fois : la premiere quand la table a ete
+# ecrite, la seconde en remontant COLONNE de 0,62 a 0,70 pour la separer du
+# ventre — la tete, restee a 0,655, est aussitot repassee SOUS le dos, et la
+# bete s'est remise a renifler la terre.
+#
+# La regle, pour la prochaine fois : LE CRANE EST AU NIVEAU DU GARROT OU
+# LEGEREMENT AU-DESSUS. Garrot a 0,700 avec un rayon de 0,195, donc sommet a
+# 0,895 ; crane a 0,760 avec un rayon de 0,205, donc sommet a 0,965. La tete
+# depasse le dos de sept centimetres, ce qui est la posture d'un chien qui
+# poursuit — le regard porte devant, pas au sol.
 TETE = [
-    (+0.86, 0.655, 0.205),  # le crane, large, au niveau du garrot
-    (+0.96, 0.650, 0.180),  # le front, plein
-    (+1.01, 0.622, 0.140),  # LE STOP — la cassure sous le front
-    (+1.09, 0.618, 0.130),  # le chanfrein, court et profond
-    (+1.165, 0.615, 0.105), # la truffe, large
+    (+0.86, 0.760, 0.205),  # le crane, large, au-dessus du garrot
+    (+0.96, 0.752, 0.180),  # le front, plein
+    (+1.01, 0.722, 0.140),  # LE STOP — la cassure sous le front
+    (+1.09, 0.715, 0.130),  # le chanfrein, court et profond
+    (+1.165, 0.710, 0.105), # la truffe, large
 ]
 
 # Les quatre pattes : (avancement de l'epaule, hauteur de l'epaule, phase).
@@ -307,6 +383,27 @@ def bete(phase):
     x, h, r = COLONNE[-1]
     masse(x * 0.925, 0.0, h * GARROT + bond, r)
 
+    # LE VENTRE, ET C'EST LUI QUI CREUSE LE FLANC. Meme interpolation que le
+    # dos, meme cambrure — les deux lignes respirent ensemble, sinon le corps
+    # se tord a chaque foulee.
+    for i in range(len(VENTRE) - 1):
+        x0, h0, r0 = VENTRE[i]
+        x1, h1, r1 = VENTRE[i + 1]
+        for k in range(4):
+            a2 = k / 4.0
+            x, h, r = (x0 + (x1 - x0) * a2, h0 + (h1 - h0) * a2, r0 + (r1 - r0) * a2)
+            poids = math.sin((i + a2) / (len(VENTRE) - 1) * math.pi)
+            masse(x * 0.925, 0.0, h * GARROT + bond + cambre * poids * 0.5, r)
+    x, h, r = VENTRE[-1]
+    masse(x * 0.925, 0.0, h * GARROT + bond, r)
+
+    # LES FLANCS, par paires. Ils donnent la profondeur de la cage thoracique,
+    # et ne descendent pas jusqu'au creux : c'est ce qui fait qu'on voit le
+    # thorax large ET le ventre pince, au lieu d'un cylindre.
+    for fx, fy, fh, fr in FLANCS:
+        for cote in (-1, 1):
+            masse(fx * 0.925, cote * fy, fh * GARROT + bond, fr)
+
     # LA TETE DANS SA PROPRE FAMILLE. C'est elle qui gagne le plus a la
     # separation : le stop, la machoire et les oreilles existaient deja dans
     # les tables, et le champ du tronc les lissait tous les trois. Ils sont
@@ -332,7 +429,22 @@ def bete(phase):
     # de se ressembler.
     for t in (0.0, 0.55):
         masse((0.60 + 0.15 * t) * 0.925, 0.0,
-              (0.630 + 0.012 * t) * GARROT + bond * 0.7, 0.150 - 0.012 * t)
+              (0.690 + 0.012 * t) * GARROT + bond * 0.7, 0.150 - 0.012 * t)
+
+    # LA NUQUE — sans elle, la tete est une excroissance du cou.
+    #
+    # De profil, on passait du crane au corps sans aucune articulation : une
+    # ligne continue, et le regard n'avait nulle part ou s'arreter pour
+    # reconnaitre une tete. Or ce qu'on lit d'un chien de loin, c'est
+    # precisement ce DECROCHEMENT — le crane se detache, la nuque plonge
+    # derriere lui, puis l'encolure remonte vers le garrot.
+    #
+    # Deux masses suffisent, et leur position compte plus que leur taille :
+    # elles sont EN ARRIERE du crane et PLUS HAUTES que l'encolure. C'est ce
+    # relief-la, trois centimetres, qui fait la difference entre un chien et
+    # un phoque.
+    masse(0.79 * 0.925, 0.0, 0.800 * GARROT + bond * 0.7, 0.130)
+    masse(0.73 * 0.925, 0.0, 0.755 * GARROT + bond * 0.7, 0.115)
 
     # Le cou et la tete plongent vers l'avant : la posture de la poursuite.
     # On interpole entre les points donnes pour que la chaine reste dense —
@@ -360,11 +472,11 @@ def bete(phase):
     # encore large a la pointe — c'est ce qui donne la gueule carree.
     for t, r in ((0.00, 0.115), (0.45, 0.098), (1.00, 0.072)):
         masse((0.96 + 0.20 * t) * 0.925, 0.0,
-              (0.565 - 0.020 * t) * GARROT + bond * 0.7, r)
+              (0.670 - 0.020 * t) * GARROT + bond * 0.7, r)
     # Et les babines, de part et d'autre : deux masses basses et ecartees qui
     # elargissent la gueule vue de trois quarts, l'angle exact du jeu.
     for cote in (-1, 1):
-        masse(1.05 * 0.925, cote * 0.062, 0.575 * GARROT + bond * 0.7, 0.072)
+        masse(1.05 * 0.925, cote * 0.062, 0.680 * GARROT + bond * 0.7, 0.072)
 
     # LES OREILLES — elles se lisaient comme des AILERONS.
     #
@@ -380,8 +492,8 @@ def bete(phase):
     # plus large. C'est la chute qui fait reconnaitre l'oreille — une bosse
     # ronde posee sur la tete ne se lit pas du tout.
     for cote in (-1, 1):
-        masse(0.87 * 0.925, cote * 0.105, 0.725 * GARROT + bond * 0.7, 0.058)
-        masse(0.84 * 0.925, cote * 0.118, 0.655 * GARROT + bond * 0.7, 0.070)
+        masse(0.87 * 0.925, cote * 0.105, 0.830 * GARROT + bond * 0.7, 0.058)
+        masse(0.84 * 0.925, cote * 0.118, 0.760 * GARROT + bond * 0.7, 0.070)
 
     # Les quatre pattes. Chacune est une chaine de masses qui va de l'epaule
     # au pied en passant par le coude, et le coude est pousse vers l'avant
@@ -581,7 +693,7 @@ def yeux(phase):
         # devant le stop : c'est l'emplacement d'une narine, pas d'un oeil.
         # L'oeil d'un chien est EN ARRIERE du stop, sur le cote du crane.
         o.location = (0.925 * 0.925, cote * 0.112,
-                      0.685 * GARROT + bond * 0.7)
+                      0.790 * GARROT + bond * 0.7)
         o.data.materials.append(mat)
         for poly in o.data.polygons:
             poly.use_smooth = True
@@ -764,17 +876,23 @@ if __name__ == '__main__':
 #
 # CE QUI RESTE A FAIRE, dans l'ordre ou ca se verra :
 #
-#   1. LE CREUX DU FLANC. Une chaine de masses le long de la colonne donne un
-#      tube, quel que soit le profil des rayons : le galbe d'un animal vient
-#      de masses posees DE COTE — cage thoracique large et haute, aine pincee
-#      et remontee — et non d'un axe central. C'est ce qui manque le plus.
-#   2. LA NUQUE. Une masse en arriere du crane, plus haute que l'encolure,
-#      qui fait le decrochement. Sans elle la tete est une excroissance.
-#   3. L'EPAULE ET LA HANCHE, posees de cote elles aussi, dans leur propre
-#      famille : elles doivent RESSORTIR du flanc. Les deux masses d'attache
-#      ajoutees aux membres sont trop petites pour se voir.
-#   4. VERIFIER AU JEU. Une correction jugee de profil doit encore se voir
-#      sous l'angle isometrique, ou la moitie du relief disparait.
+#   1. LE GALBE DU FLANC — FAIT. Voir les trois tables COLONNE / VENTRE /
+#      FLANCS et le commentaire qui les precede : une chaine axiale ne peut
+#      pas donner un dos haut ET un ventre remonte, puisque le rayon fait les
+#      deux bords avec le meme nombre.
+#   2. LA NUQUE — POSEE, mais elle ne se lit pas encore. Les deux masses sont
+#      la, en arriere et au-dessus du crane ; le raccord reste une rampe
+#      continue plutot qu'un decrochement. Il manque probablement un CREUX
+#      entre la nuque et le garrot — l'encolure descend a 0,660 quand le
+#      garrot est a 0,700, ce qui est trop peu pour se voir.
+#   3. L'EPAULE ET LA HANCHE, posees de cote dans leur propre famille : elles
+#      doivent RESSORTIR du flanc. Les deux masses d'attache ajoutees aux
+#      membres sont trop petites pour se voir.
+#   4. LE PIEGE A EVITER, ET IL A DEJA MORDU DEUX FOIS : quand on bouge la
+#      ligne du dos, IL FAUT BOUGER LA TETE AVEC. Elle est repassee sous le
+#      dos la premiere fois parce que la table etait ecrite trop bas, la
+#      seconde parce que COLONNE est montee de 0,62 a 0,70 sans elle. La
+#      regle : le crane est au niveau du garrot ou legerement au-dessus.
 #
 # TANT QUE 1 ET 2 NE SONT PAS FAITS, LE TRACE A LA MAIN DE
 # game/halloween-molosse.js RESTE CE QUI JOUE, et aucune image de ce script
