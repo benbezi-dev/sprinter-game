@@ -1060,36 +1060,6 @@
         return this.norm(b);
       };
       this.buf.haie = claque(0.11, 0.5);
-      // LE PAS SUR LE TARTAN.
-      //
-      // Une pointe qui mord la resine, c'est deux sons l'un sur l'autre : le
-      // « tk » sec des clous, du bruit qui meurt en quelques millisecondes et
-      // qui n'a que de l'aigu, et le choc sourd du pied, une sinusoide grave
-      // qui tombe en frequence. Trois variantes, tirees chacune de sa graine :
-      // le meme echantillon quatre fois par seconde se lit comme une horloge,
-      // trois qui tournent se lisent comme une foulee.
-      const pas = (graine, fChoc, clous) => {
-        const debut = 0.004, dur = 0.09;
-        const b = this.ctx.createBuffer(1, ((dur + debut) * sr) | 0, sr);
-        const ch = b.getChannelData(0);
-        const i0 = (debut * sr) | 0;
-        let seed = graine, prec = 0, ph = 0;
-        for (let i = i0; i < ch.length; i++) {
-          const t = (i - i0) / sr;
-          seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
-          const bruit = seed / 0x3fffffff - 1;
-          // La difference de deux echantillons successifs : un bruit sans
-          // grave, le grain des clous et pas un souffle.
-          const clou = (bruit - prec) * 0.5; prec = bruit;
-          ph += (fChoc * (1 + 1.6 * Math.exp(-t * 60))) / sr;
-          ch[i] = clous * Math.exp(-t * 170) * clou
-                + 0.8 * Math.exp(-t * 38) * Math.sin(TAU * ph);
-        }
-        return this.norm(b);
-      };
-      this.buf.pas0 = pas(4242, 92, 0.9);
-      this.buf.pas1 = pas(90210, 104, 1.0);
-      this.buf.pas2 = pas(1337, 84, 0.8);
       this.buf.dirge = this.phrase([
         [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
         [-9, 1.10, 1.10],
@@ -1443,135 +1413,6 @@
       return s;
     },
 
-    /**
-     * LE PUBLIC S'ENTEND.
-     *
-     * Deux nappes en boucle, posees une fois et jamais arretees : la RUMEUR,
-     * ce que fait un stade qui attend — des centaines de conversations dont on
-     * n'entend aucune —, et la CLAMEUR, ce qu'il fait quand il se leve. Le jeu
-     * ne les joue pas, il les DOSE : `ambiance` recoit la ferveur du stade
-     * (voir `majFerveur`) a chaque image et regle les deux volumes. C'est ce
-     * qui fait monter le bruit avec la course, sans un seul declenchement.
-     *
-     * Synthetisees comme tout le reste, et avec la machinerie du starter :
-     * une voix, c'est une source (des impulsions a la hauteur de la voix,
-     * plus un peu de souffle) qui passe dans deux resonateurs — les deux
-     * premiers formants, ce qui fait un « a » ou un « o ». Du bruit filtre
-     * seul donnerait du vent ; c'est la HAUTEUR qui fait entendre des gens.
-     * La rumeur est faite de syllabes — on parle —, la clameur de voyelles
-     * tenues et criees plus haut. Une vingtaine de ces voix melees, et
-     * l'oreille n'en distingue plus aucune : elle entend un stade.
-     *
-     * LA SYNTHESE SE FAIT PAR MORCEAUX. Une voix, c'est deux cent mille
-     * echantillons ; vingt d'un coup feraient un a-coup visible au premier
-     * decompte d'un telephone modeste. On en calcule donc UNE par tranche de
-     * temps libre, et la nappe s'entend quand elle est prete — une rumeur
-     * qui arrive une seconde plus tard ne manque a personne.
-     */
-    _foule: null, _fouleVu: [-1, -1],
-    tamponFoule(o, graine, fini) {
-      const sr = this.ctx.sampleRate, n = (4.5 * sr) | 0, fondu = (0.6 * sr) | 0;
-      const ch = new Float32Array(n + fondu);
-      let s = graine;
-      const al = () => { s = (Math.imul(1103515245, s) + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-      // Les voyelles, par leurs deux premiers formants (Hz).
-      const VOY = [[730, 1150], [450, 800], [520, 1750], [320, 2150], [620, 1650], [360, 900]];
-      const res = (f, bw) => {
-        const R = Math.exp(-Math.PI * bw / sr);
-        return [2 * R * Math.cos(TAU * f / sr), -R * R, 1 - R];
-      };
-      let v = 0;
-      const uneVoix = () => {
-        const f0 = o.f0[0] * Math.pow(o.f0[1] / o.f0[0], al());
-        // L'intonation : la hauteur ondule, lentement.
-        const wI = TAU * (0.2 + al() * 0.5) / sr, pI = al() * TAU;
-        // Parler, se taire, reprendre : l'enveloppe des phrases.
-        const wP = TAU * (0.08 + al() * 0.22 * o.vif) / sr, pP = al() * TAU;
-        const amp = 0.55 + 0.45 * al();
-        let ph = al(), sylLong = 1, sylPos = 0;
-        let r1 = null, r2 = null, a1 = 0, a2 = 0, b1 = 0, b2 = 0;
-        const nouvelleSyllabe = () => {
-          const vv = VOY[(al() * (o.voyelles || VOY.length)) | 0];
-          const k = 0.92 + al() * 0.16;
-          r1 = res(vv[0] * k, 80 + vv[0] * 0.1); r2 = res(vv[1] * k, 100 + vv[1] * 0.08);
-          sylLong = o.syllabe ? (sr / (o.syllabe * (0.7 + al() * 0.6))) | 0 : n + fondu;
-          sylPos = 0;
-        };
-        nouvelleSyllabe();
-        for (let i = 0; i < ch.length; i++) {
-          if (++sylPos >= sylLong) nouvelleSyllabe();
-          const f = f0 * (1 + 0.09 * Math.sin(wI * i + pI));
-          ph += f / sr;
-          if (ph >= 1) ph -= 1;
-          // Une dent de scie : riche en harmoniques, que les formants
-          // sculptent en voyelle.
-          const x = (1 - 2 * ph) * 0.8 + (al() * 2 - 1) * o.souffle;
-          const y1 = x * r1[2] + r1[0] * a1 + r1[1] * b1; b1 = a1; a1 = y1;
-          const y2 = x * r2[2] + r2[0] * a2 + r2[1] * b2; b2 = a2; a2 = y2;
-          const env = o.syllabe
-            ? Math.sin(Math.PI * sylPos / sylLong)
-            : 1;
-          const phrase = 0.5 + 0.5 * Math.sin(wP * i + pP);
-          ch[i] += amp * (y1 + 0.6 * y2) * env * phrase * phrase;
-        }
-      };
-      const tranche = () => {
-        if (!this.ctx) return;
-        uneVoix();
-        if (++v < o.voix) { setTimeout(tranche, 0); return; }
-        // La boucle sans couture : le debut recoit la queue en fondu, et
-        // la derniere image rejoint la premiere sans marche.
-        for (let i = 0; i < fondu; i++) {
-          const a = i / fondu;
-          ch[i] = ch[i] * a + ch[n + i] * (1 - a);
-        }
-        let pk = 0;
-        for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(ch[i]));
-        const b = this.ctx.createBuffer(1, n, sr);
-        const out = b.getChannelData(0), k = pk > 1e-6 ? 0.9 / pk : 1;
-        for (let i = 0; i < n; i++) out[i] = ch[i] * k;
-        fini(b);
-      };
-      setTimeout(tranche, 0);
-    },
-    monterFoule() {
-      if (this._foule || !this.ok) return;
-      const F = this._foule = { rumeur: this.ctx.createGain(), clameur: this.ctx.createGain() };
-      F.rumeur.gain.value = 0; F.clameur.gain.value = 0;
-      F.rumeur.connect(this.sortie); F.clameur.connect(this.sortie);
-      const brancher = (g) => (b) => {
-        const s = this.ctx.createBufferSource();
-        s.buffer = b; s.loop = true; s.connect(g); s.start();
-      };
-      // La rumeur parle : des syllabes, a hauteur de conversation.
-      this.tamponFoule({ voix: 22, f0: [95, 240], syllabe: 4.5, souffle: 0.25, vif: 1 },
-                       20260927, brancher(F.rumeur));
-      // La clameur crie : des voyelles ouvertes tenues, plus haut, qui
-      // enflent et retombent.
-      this.tamponFoule({ voix: 20, f0: [170, 420], syllabe: 0, souffle: 0.35, vif: 2.2, voyelles: 2 },
-                       7771, brancher(F.clameur));
-    },
-    ambiance(ferveur, densite) {
-      if (!this.ok) return;
-      const e = this.on && densite > 0 ? Math.max(0, Math.min(1, ferveur)) : 0;
-      if (!this._foule) { if (e <= 0.001) return; this.monterFoule(); }
-      const rumeur = e > 0 ? densite * (0.10 + 0.14 * e) : 0;
-      const clameur = densite * 0.55 * Math.pow(Math.max(0, e - 0.3) / 0.7, 1.5);
-      // Une consigne par image, mais seulement quand elle change : chaque
-      // `setTargetAtTime` s'ajoute a la ligne de temps du parametre.
-      const vu = this._fouleVu, t = this.ctx.currentTime;
-      if (Math.abs(vu[0] - rumeur) > 0.003) {
-        this._foule.rumeur.gain.setTargetAtTime(rumeur, t, 0.35); vu[0] = rumeur;
-      }
-      if (Math.abs(vu[1] - clameur) > 0.003) {
-        this._foule.clameur.gain.setTargetAtTime(clameur, t, 0.2); vu[1] = clameur;
-      }
-    },
-    // Un appui au sol : l'une des trois variantes, a une hauteur un peu
-    // differente a chaque fois.
-    pas(gain, n) {
-      return this.sfx('pas' + (n % 3), { gain, rate: 0.93 + ((n * 37) % 15) / 100 });
-    },
     toggle() { this.on = !this.on; if (!this.on) this.stop(); return this.on; }
   };
 
@@ -3731,10 +3572,7 @@
    * coude du joueur dans le dernier tiers, explose quand le premier franchit
    * la ligne, puis retombe.
    *
-   * Une seule source pour deux effets : les gradins le lisent pour se lever
-   * (voir tribune.js), le son pour doser la clameur (Audio_.ambiance). Un
-   * public qu'on entend crier assis, ou qu'on voit debout en silence, ne
-   * tromperait personne.
+   * Les gradins le lisent pour se lever et s'enflammer (voir tribune.js).
    *
    * La nuit d'Halloween n'en a pas : ce qui se tient dans ce cimetiere n'est
    * pas venu pour applaudir (voir son entree dans sprinter-core.js).
@@ -3774,40 +3612,6 @@
     const k = 1 - Math.exp(-(cible > cur ? 3.0 : 0.9) * dt);
     G.ferveur = cur + (cible - cur) * k;
     if (G.ferveur < 0.002 && cible === 0) G.ferveur = 0;
-    Audio_.ambiance(G.ferveur, G.ferveur > 0 ? fouleDe(G.levelIdx) : 0);
-  }
-
-  /**
-   * LES PAS S'ENTENDENT.
-   *
-   * Un appui par demi-cycle de foulee, au meme instant que la poussiere (voir
-   * drawAthletes) mais compte a part : la poussiere ne se dessine que pour les
-   * coureurs a l'image, le son doit suivre le joueur meme hors cadre.
-   *
-   * Le joueur s'entend net et d'autant plus fort qu'il va vite ; les autres,
-   * seulement quand ils sont a cote de lui, et d'autant plus bas qu'ils sont
-   * loin. Au-dela de douze metres, on ne les entend plus — sans cette borne,
-   * huit coureurs a quatre appuis par seconde feraient un crepitement.
-   */
-  function sonDesPas() {
-    if (G.state !== 'race' || !G.player) return;
-    const P = G.player;
-    for (const r of G.runners) {
-      if (r.isGhost || (r.opacite != null && r.opacite < 0.5)) continue;
-      const phase = Math.floor(r.stride / Math.PI);
-      if (r._pasSon === undefined || r._pasSon > phase) { r._pasSon = phase; continue; }
-      if (phase === r._pasSon) continue;
-      r._pasSon = phase;
-      if (r.v < 0.8) continue;
-      const vit = Math.min(1, r.v / 11);
-      if (r === P) {
-        if (!G.spectateur) Audio_.pas(0.22 + 0.26 * vit, phase);
-        continue;
-      }
-      const loin = Math.abs(r.d - P.d);
-      if (loin > 12) continue;
-      Audio_.pas((0.05 + 0.08 * vit) * (1 - loin / 12), phase + r.lane);
-    }
   }
 
   function followCam(dt) {
@@ -7767,7 +7571,7 @@
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
-    majFerveur, sonDesPas,
+    majFerveur,
     theme, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,

@@ -498,8 +498,6 @@ export function updateLogic(dt: number) {
   // Course suspendue : le monde se fige, mais on continue a rendre l'image
   // et a alimenter React, sinon le panneau de sortie ne s'afficherait pas.
   if (G.paused && PAUSABLE.has(G.state)) {
-    // Le monde se fige, le public se tait avec lui.
-    Audio_.ambiance(0, 0);
     gameStore.setState({ paused: true, state: G.state });
     return;
   }
@@ -664,7 +662,6 @@ export function updateLogic(dt: number) {
       if (G.player.transGrade) { Audio_.sfx('win'); G.flash = 0.6; }
     }
     SprinterApp.followCam(dt);
-    SprinterApp.sonDesPas();
     
     const out = G.player.finished && G.player.d >= G.track.total + C.RUNOUT;
     const slow = G.player.finished && G.elapsed >= G.player.finishTime + 3;
@@ -718,7 +715,7 @@ export function updateLogic(dt: number) {
     }
   }
 
-  // Le public : ce qu'il sait de la course, pour ses gradins et sa clameur.
+  // Le public : ce qu'il sait de la course, pour que ses gradins la suivent.
   SprinterApp.majFerveur(dt);
 
   // Update React store
