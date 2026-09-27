@@ -15,7 +15,7 @@ import { useBarreSelection, LigneSelection } from './Selection';
 import { Recruteurs } from './Recruteurs';
 import { Nations } from './Nations';
 import { SERIE_OUVERTE } from '@/game/canal';
-import { useJeu, epreuvesDuJeu, jeuCourant, nomCourt, jeuDe } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe } from '@/game/jeux';
 import { useRetour } from '@/hooks/use-retour';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -108,8 +108,15 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    */
   const [voirRecruteurs, setVoirRecruteurs] = useState(false);
   const [voirNations, setVoirNations] = useState(false);
-  /** Les trois epreuves du jeu courant, dans l'ordre d'un programme. */
-  const RACE_KEYS: readonly string[] = epreuvesDuJeu(useJeu());
+  /**
+   * Les trois epreuves du jeu courant, dans l'ordre d'un programme.
+   *
+   * Jumper n'en a pas : ses concours n'ont pas encore de duels. Ouvert
+   * depuis son accueil, l'ecran montre donc ceux du sprint, les seuls qui
+   * existent, plutot qu'un selecteur vide.
+   */
+  const jeu = useJeu();
+  const RACE_KEYS: readonly string[] = epreuvesDuJeu(jeu).length ? epreuvesDuJeu(jeu) : epreuvesDuJeu('sprinter');
 
   /**
    * L'epreuve du duel a venir.
@@ -122,7 +129,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    */
   const [choix, setChoix] = useState<string[]>(() => {
     const e = (epreuves || []).filter(k => RACE_KEYS.includes(k));
-    return e.length ? e : [epreuvesDuJeu(jeuCourant())[0]];
+    return e.length ? e : [RACE_KEYS[0]];
   });
 
   const defier = async (nom: string) => {
