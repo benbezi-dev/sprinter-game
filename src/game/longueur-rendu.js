@@ -72,6 +72,9 @@ export function postureDe(e, r, ech) {
   const B = 1 - A;
   const J = P.jambes, BR = P.bras;
   P.hanche = 0;
+  // La tete, que le rig sait pencher (positif : en arriere) : droite en
+  // course, un rien renversee dans la suspension, rentree pour le canif.
+  r.tete = 0;
 
   switch (e.phase) {
     case 'attente': {
@@ -155,35 +158,55 @@ export function postureDe(e, r, ech) {
         bb = [1.2 + 1.3 * Math.sin(phi - Math.PI / 2), 1.7 + 1.2 * Math.sin(phi - Math.PI / 2)];
         buste = -0.10;
       } else {
-        // LA SUSPENSION : les deux genoux plies derriere, les bras en haut,
-        // le corps cambre. Elle arrive en un quart de seconde.
-        const k = lisse((t - 0.05) / 0.25);
-        ja = mix3(depart.a, [-0.12, -1.35, -1.15], k);
-        jb = mix3(depart.b, [0.30, -0.95, -0.75], k);
-        ba = mix2(depart.ba, [2.75, 3.05], k);
-        bb = mix2(depart.bb, [2.65, 2.95], k);
-        buste = mix(-0.04, 0.26, k);
+        // LA SUSPENSION, telle qu'on la voit aux grands concours : le corps
+        // s'OUVRE. La jambe libre, lancee genou haut a l'appel, redescend
+        // rejoindre l'autre derriere le bassin, genoux plies ; les bras font le
+        // tour par-dessus la tete et passent DERRIERE elle ; la poitrine
+        // s'ouvre, les hanches passent devant. C'est un arc tendu de la main
+        // au pied, pas un athlete debout les bras en l'air. Le bras qui etait
+        // devant monte le premier, l'autre le rejoint par l'avant : un moulinet,
+        // pas deux bras qui se levent ensemble.
+        const k = lisse((t - 0.04) / 0.30);
+        const k2 = lisse((t - 0.10) / 0.32);
+        ja = mix3(depart.a, [-0.30, -1.55, -1.20], k);
+        jb = mix3(depart.b, [-0.08, -1.40, -1.10], lisse((t - 0.02) / 0.34));
+        ba = mix2(depart.ba, [3.55, 3.85], k);
+        bb = k2 < 0.5
+          ? mix2(depart.bb, [1.55, 1.75], k2 * 2)
+          : mix2([1.55, 1.75], [3.45, 3.72], (k2 - 0.5) * 2);
+        buste = mix(-0.04, 0.24, k);
+        P.hanche = 0.05 * k;
       }
       ja = mix3(depart.a, ja, sortie);
       jb = mix3(depart.b, jb, sortie);
       ba = mix2(depart.ba, ba, sortie);
       bb = mix2(depart.bb, bb, sortie);
-      // LE RAMENE : les deux jambes tendues devant, talons au sol pile au
-      // contact. L'angle se deduit de la hauteur du bassin a la reception.
+      // LE RAMENE — le canif. Les jambes montent tendues devant, le buste se
+      // plie au-dessus d'elles, et les bras, partis de derriere la tete,
+      // balaient vers l'avant puis vers le bas : ils passent devant les genoux
+      // au moment ou les talons cherchent le sable, et finiront derriere les
+      // hanches a l'impact. L'angle des jambes se deduit de la hauteur du
+      // bassin a la reception : les talons touchent pile au contact.
       if (v.tRamene != null) {
-        const k = lisse((t - v.tRamene) / 0.22);
+        const k = lisse((t - v.tRamene) / 0.20);
+        const bal = lisse((t - v.tRamene) / 0.30);
         const hzC = (v.hauteur(T) - 0.08) * ech;
         const th = Math.acos(Math.max(-1, Math.min(1, (hzC - 0.02 - CHEVILLE) / (CUISSE + JAMBE))));
-        const leve = Math.max(th, 1.45 - 0.35 * lisse(t / T));
+        const leve = Math.max(th, 1.50 - 0.35 * lisse(t / T));
         const tendue = [leve, leve + 0.04, leve + 0.55];
         ja = mix3(ja, tendue, k);
-        jb = mix3(jb, [leve - 0.04, leve, leve + 0.50], k);
-        ba = mix2(ba, [mix(1.4, 0.3, lisse((t - v.tRamene) / 0.4)), 1.0], k);
-        bb = mix2(bb, [mix(1.3, 0.2, lisse((t - v.tRamene) / 0.4)), 0.9], k);
-        buste = mix(buste, -0.62, k);
+        jb = mix3(jb, [leve - 0.05, leve, leve + 0.50], k);
+        // les bras : de derriere la tete a devant, puis vers le bas
+        const bras = bal < 0.6 ? mix2([3.3, 3.55], [1.55, 1.65], bal / 0.6) : mix2([1.55, 1.65], [0.75, 0.95], (bal - 0.6) / 0.4);
+        ba = mix2(ba, bras, k);
+        bb = mix2(bb, [bras[0] - 0.08, bras[1] - 0.08], k);
+        buste = mix(buste, -0.66, k);
+        P.hanche = mix(P.hanche || 0, 0, k);
       }
       J[A] = ja; J[B] = jb; BR[A] = ba; BR[B] = bb;
       P.buste = buste;
+      r.tete = v.ciseaux > 0 ? 0.05 : 0.22 * lisse((t - 0.05) / 0.3);
+      if (v.tRamene != null) r.tete = mix(r.tete, -0.38, lisse((t - v.tRamene) / 0.2));
       P.w = 1;
       return P;
     }
@@ -208,9 +231,13 @@ export function postureDe(e, r, ech) {
         buste = mix(-0.60, -1.25, tombe);
         bras = [[1.40, 1.50], [1.45, 1.55]];
       } else {
+        // A l'impact, les bras filent derriere les hanches — c'est ce qui fait
+        // passer le corps par-dessus les talons —, puis reviennent devant a
+        // mesure qu'il se redresse.
         hz = mix(c.hz0, 0.30, tombe);
-        buste = mix(-0.62, -0.95, tombe);
-        bras = [[1.30, 1.60], [1.25, 1.55]];
+        buste = mix(-0.66, -0.95, tombe);
+        const re = lisse((tau - 0.35) / 0.45);
+        bras = [mix2([-0.85, -0.55], [1.10, 1.40], re), mix2([-0.90, -0.60], [1.05, 1.35], re)];
       }
       let ja, jb;
       if (pieds) {
@@ -487,7 +514,7 @@ export function piecesDebout(e, api, out) {
   if (e.phase === 'appel' || (e.phase === 'vol' && e.vol.t < 0.35)) {
     out.push({ profondeur: -1e9, sorte: 'angle' });
   }
-  out.push({ profondeur: api.depthOf(e.ligne + 0.25, Y + 1.7), sorte: 'juge' });
+  out.push({ profondeur: api.depthOf(e.ligne + 0.4, Y - 2.3), sorte: 'juge' });
   return out;
 }
 
@@ -580,13 +607,14 @@ function dessinerAngle(ctx, api, e, A) {
 }
 
 /**
- * LE JUGE DE PLANCHE, assis de l'autre cote de la piste d'elan. Il leve le
+ * LE JUGE DE PLANCHE, de l'autre cote de la piste d'elan — derriere elle, vue
+ * de profil : devant, il cacherait l'appel qu'il est la pour juger. Il leve le
  * drapeau blanc pour un essai valable, le rouge pour un essai mordu : c'est
  * le signal que tout le stade lit avant le tableau.
  */
 function dessinerJuge(ctx, api, e, A) {
   const G = api.G, C = api.C;
-  const X = e.ligne + 0.25, Y = e.pisteY + 1.7;
+  const X = e.ligne + 0.4, Y = e.pisteY - 2.3;
   const g = api.ground(X, Y);
   if (g[0] < -200 || g[0] > G.VW + 200 || g[1] < -260 || g[1] > G.VH + 200) return;
   const m = api.scaleM();
@@ -603,7 +631,9 @@ function dessinerJuge(ctx, api, e, A) {
   ctx.ellipse(g[0], g[1], 15 * m / 30, 6 * m / 30, 0, 0, Math.PI * 2);
   ctx.fill();
   // Il regarde la planche, donc la piste : de trois quarts vers la camera.
-  const caps = A.personCapsules(juge, -Math.PI / 2 - 0.5, 0, false, false, A.niveauDetail(k));
+  // (`api.rot` : le sautoir est tourne dans le monde, le juge avec lui.)
+  // Il regarde la planche, de trois quarts vers la camera.
+  const caps = A.personCapsules(juge, Math.PI / 2 + 0.5 + (api.rot || 0), 0, false, false, A.niveauDetail(k));
   // La derniere capsule est l'arme du starter : on garde sa place — c'est
   // la main — et on la remplace par le drapeau.
   const main = caps.pop();

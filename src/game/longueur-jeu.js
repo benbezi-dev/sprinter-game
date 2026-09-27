@@ -428,7 +428,7 @@ export function inscrire(c, essai) {
   if (c.rang >= ordreDuTour(c).length) {
     c.rang = 0;
     c.tour++;
-    if (c.tour === ESSAIS.premiers + 1) couper(c);
+    if (ESSAIS.derniers > 0 && c.tour === ESSAIS.premiers + 1) couper(c);
     if (c.tour > tours()) c.fini = true;
   }
   return aQui(c);

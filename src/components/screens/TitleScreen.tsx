@@ -254,6 +254,8 @@ export function TitleScreen() {
    */
   const passage = usePassage();
   const efface = !!passage && !passage.surPlace;
+  // Jumper a son accueil, qui se pose a la place de celui-ci (Mondes.tsx).
+  if (jeu === 'jumper') return null;
 
   return (
     <div style={efface

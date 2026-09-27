@@ -17,7 +17,7 @@ import {
   AVANCE_PIED, APPEL_MAXI, jugerPlanche, angleDe, ANGLE_MIN, ANGLE_MAX, ANGLE_PAR_S, TENUE_MAXI,
   perteImpulsion, vol, hauteurA, jugerRamene, RAMENE_VISE, RECEPTION, sauter,
   PLATEAU, CONCURRENTS, essaiAdversaire, nouveauConcours, classement, aQui, inscrire,
-  avancerJusquAuJoueur, joueurEnLice, placeDuJoueur, marquesDe, tours, tirerVent,
+  avancerJusquAuJoueur, joueurEnLice, placeDuJoueur, marquesDe, tours, tirerVent, meilleur,
   HAUTEUR_ENVOL, HAUTEUR_RECEPTION,
 } from '../src/game/longueur-jeu.js';
 
@@ -57,8 +57,8 @@ ok('fosse : entre 2,75 et 3 m de large',
 ok('le sable commence entre 1 et 3 m de la ligne',
    FOSSE.debut >= FOSSE.debutMin && FOSSE.debut <= FOSSE.debutMax);
 ok('le fond de la fosse est a 10 m de la ligne au moins', FOSSE.fond >= FOSSE.fondMin);
-ok('trois essais, trois de plus pour les huit meilleurs',
-   ESSAIS.premiers === 3 && ESSAIS.derniers === 3 && ESSAIS.qualifies === 8 && tours() === 6);
+ok('trois essais pour tout le monde, comme en qualifications',
+   ESSAIS.premiers === 3 && ESSAIS.derniers === 0 && tours() === 3);
 ok('une minute par essai', TEMPS_ESSAI === 60);
 ok('vent homologable jusqu\'a +2,0 m/s',
    VENT.homologation === 2 && homologable(2.0) && !homologable(2.1) && homologable(-1.5));
@@ -212,11 +212,9 @@ titre('le concours');
     inscrire(c, sauter({ vElan: 11, ecart: 0.1, angle: 21, avance: RAMENE_VISE }));
   }
   ok('le concours finit', c.fini);
-  ok('le joueur a saute six fois', tourJoueur === 6, String(tourJoueur));
-  ok('huit athletes seulement ont saute six fois',
-     c.athletes.filter(a => a.essais.length === 6).length === 8);
-  ok('les quatre autres ont saute trois fois',
-     c.athletes.filter(a => a.essais.length === 3).length === 4);
+  ok('le joueur a saute trois fois', tourJoueur === 3, String(tourJoueur));
+  ok('tout le monde a saute trois fois, sans coupe',
+     c.athletes.every(a => a.essais.length === 3) && !c.coupe);
   const cl = classement(c);
   let range = true;
   for (let k = 1; k < cl.length; k++) if (cl[k].meilleur > cl[k - 1].meilleur) range = false;
@@ -224,26 +222,15 @@ titre('le concours');
   ok('le joueur a une place', placeDuJoueur(c) >= 1 && placeDuJoueur(c) <= 12);
 }
 {
-  // L'ORDRE DES TROIS DERNIERS TOURS : le premier saute en dernier.
+  // TROIS MORDUS : le joueur finit sans marque, derriere tout le monde.
   const r = seme(9);
   const c = nouveauConcours({ etape: 3, noms: 'ABCDEFGHIJK'.split(''), alea: r });
-  let apresTrois = null;
-  const vus = [];
   for (let garde = 0; garde < 200 && !c.fini; garde++) {
     const i = aQui(c);
-    if (c.tour === 4) vus.push(i);
     if (c.athletes[i].joueur) inscrire(c, { mordu: true, metres: 0, marque: null });
     else inscrire(c, essaiAdversaire(c.athletes[i].niveau, 3, r));
-    // Le classement a l'instant de la coupe, avant qu'un seul essai du
-    // quatrieme tour ne le bouscule.
-    if (c.tour === 4 && c.rang === 0 && !apresTrois) {
-      apresTrois = classement(c).filter(x => c.coupe.includes(x.index)).map(x => x.index);
-    }
   }
-  ok('au quatrieme tour, huit athletes seulement', vus.length === 8, String(vus.length));
-  ok('le dernier qualifie ouvre', apresTrois && vus[0] === apresTrois[apresTrois.length - 1]);
-  ok('et le premier ferme', apresTrois && vus[vus.length - 1] === apresTrois[0]);
-  ok('trois essais mordus : le joueur est coupe', c.coupe && !c.coupe.includes(0) && !joueurEnLice(c));
+  ok('trois mordus : sans marque, et plus en lice', c.fini && !joueurEnLice(c) && meilleur(c.athletes[0]) === 0);
 }
 {
   // LES EX AEQUO se departagent a la deuxieme marque.

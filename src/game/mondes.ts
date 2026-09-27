@@ -16,7 +16,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { armerPassage } from './passage';
-import { HAIES_OUVERTES, LONGUEUR_OUVERTE, TRIPLE_OUVERT } from './canal';
+import { HAIES_OUVERTES, LONGUEUR_OUVERTE, TRIPLE_OUVERT, HAUTEUR_OUVERTE } from './canal';
 
 export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
 export type Direction = 'bas' | 'droite' | 'gauche';
@@ -97,12 +97,14 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
   },
   jumper: {
     cle: 'jumper', nom: 'JUMPER', sous: 'monde_jumper_sous',
-    fond: '#0d1410', accent: 'rgb(52,211,153)',
+    // Le vert electrique de Jumper (index.css, data-jeu="jumper").
+    fond: '#0a120c', accent: 'rgb(43,255,110)',
     disciplines: [
       // Jouable sur le canal de test (canal.ts, LONGUEUR_OUVERTE), annonce
       // « bientot » ailleurs. Son ecran se charge a la demande : Mondes.tsx.
       { cle: 'longueur', nom: 'disc_longueur', jouable: LONGUEUR_OUVERTE, cotes: true },
-      { cle: 'hauteur', nom: 'disc_hauteur', jouable: false },
+      // Meme regime encore : jouable sur le canal de test (HAUTEUR_OUVERTE).
+      { cle: 'hauteur', nom: 'disc_hauteur', jouable: HAUTEUR_OUVERTE, cotes: true },
       // Meme regime que la longueur : jouable sur le canal de test.
       { cle: 'triple', nom: 'disc_triple', jouable: TRIPLE_OUVERT, cotes: true },
       { cle: 'perche', nom: 'disc_perche', jouable: false },

@@ -12,7 +12,7 @@
 import { PLANCHE_TRIPLE, plancheDe, BONDS, RECORDS } from '../src/game/triple.js';
 import { FOSSE } from '../src/game/longueur.js';
 import {
-  bond, jugerPose, POSE, sauterTriple, ANGLES_VISES, PLATEAU_TRIPLE,
+  bond, jugerPose, POSE, sauterTriple, ANGLES_VISES, PLATEAU_TRIPLE, vitesseTriple,
 } from '../src/game/triple-jeu.js';
 import { RAMENE_VISE } from '../src/game/longueur-jeu.js';
 
@@ -111,6 +111,20 @@ for (let et = 0; et < 6; et++) {
      top > PLATEAU_TRIPLE[5][1] && top < plancheDe(5) + FOSSE.fond - FOSSE.debut, top.toFixed(2));
   ok('sans la transition, il ne se bat pas', optimum(11.6).m < PLATEAU_TRIPLE[5][1], optimum(11.6).m.toFixed(2));
   ok('le championnat du monde reste sous le record', PLATEAU_TRIPLE[3][1] < RECORDS.hommes.m);
+}
+
+titre('le cloche-pied et la foulee se posent sur la piste');
+for (let et = 0; et < 6; et++) {
+  // au plafond du moteur, transition parfaite, les angles qui vont le plus loin
+  const v = vitesseTriple(et) * 1.042;
+  const o = optimum(v);
+  const deux = o.r.bonds[0] + o.r.bonds[1];
+  ok(`etape ${et} : a ${v.toFixed(2)} m/s, cloche-pied + foulee = ${deux.toFixed(2)} m, avant le sable (planche a ${plancheDe(et)} m)`,
+     deux < plancheDe(et) - 0.05);
+}
+{
+  const o = optimum(vitesseTriple(3) * 1.042);
+  ok(`sur Terre, le saut parfait passe encore le record du monde (${o.m.toFixed(2)} m)`, o.m > RECORDS.hommes.m);
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');

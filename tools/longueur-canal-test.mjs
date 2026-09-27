@@ -1,7 +1,10 @@
-// LES SAUTS HORIZONTAUX NE PARTENT PAS EN PRODUCTION — et /test les a bien.
+// LES SAUTS NE PARTENT PAS EN PRODUCTION — et /test les a bien.
 //
-// Le saut en longueur et le triple saut (canal.ts, LONGUEUR_OUVERTE et
-// TRIPLE_OUVERT) partagent un ecran, un moteur et un sable : un seul morceau.
+// Le saut en longueur, le triple saut et le saut en hauteur (canal.ts,
+// LONGUEUR_OUVERTE, TRIPLE_OUVERT, HAUTEUR_OUVERTE) vivent derriere l'accueil
+// de Jumper (Jumper.tsx), charge a la demande derriere SAUTS_OUVERTS : un seul
+// morceau, avec les ecrans, les jeux, les rendus et le sable. La musique des
+// sauts, elle, vit dans le moteur (MUSIQUES_SAUTS) et se replie a vide.
 //
 //   node tools/longueur-canal-test.mjs
 //
@@ -45,25 +48,32 @@ const dossierTest = join(tmpdir(), 'sprinter-longueur-test');
 const prod = batir('production', dossierProd);
 const test = batir('test', dossierTest);
 
-const duSaut = f => /^Longueur-.*\.js$/.test(f) || /^(fosse|empreinte|gerbe)-.*\.webp$/.test(f);
+const MORCEAUX = /^(Jumper|Longueur|Hauteur)-.*\.js$/;
+const duSaut = f => MORCEAUX.test(f) || /^(fosse|empreinte|gerbe)-.*\.webp$/.test(f);
 const texte = (dossier, fichiers) => fichiers.filter(f => f.endsWith('.js'))
   .map(f => readFileSync(join(dossier, 'assets', f), 'utf8')).join('\n');
 
 titre('RIEN DU SAUT DANS LE PAQUET PUBLIC');
 ok('aucun fichier du saut', prod.filter(duSaut).length === 0, prod.filter(duSaut).join(', '));
-ok('pas le morceau de l ecran du concours', !prod.some(f => /^Longueur-/.test(f)));
+ok('pas le morceau de l accueil de Jumper ni des concours', !prod.some(f => MORCEAUX.test(f)));
 ok('pas une image de sable', !prod.some(f => /^(fosse|empreinte|gerbe)-/.test(f)));
 
 // Des mots qui n'existent que dans le jeu du saut : l'epreuve telle que le
 // moteur la lit, la cle de la memoire, les finalistes des grands concours.
 const MOTS = ['la planche et le sable', 'sprinter.longueur.v1', 'Tomas Weit', 'Mike Powell',
                // le triple saut, qui partage l'ecran et le morceau
-               'sprinter.triple.v1', 'Jonathan Edwards'];
+               'sprinter.triple.v1', 'Jonathan Edwards',
+               // le saut en hauteur, son record, ses finalistes
+               'la barre et le tapis', 'sprinter.hauteur.v1', 'Javier Sotomayor', 'Mutaz Salto',
+               // l'accueil de Jumper et les recits de ses etapes
+               'sprinter.jumper.epreuve', 'bac à sable de la maternelle',
+               // la musique des sauts, dans le moteur
+               's_race3'];
 const jsProd = texte(dossierProd, prod), jsTest = texte(dossierTest, test);
 for (const m of MOTS) ok(`« ${m} » absent du paquet public`, !jsProd.includes(m));
 
 titre('ET TOUT EST LA SUR /test');
-ok('le morceau du concours est emis', test.some(f => /^Longueur-.*\.js$/.test(f)), test.filter(duSaut).join(', '));
+ok('le morceau de Jumper est emis', test.some(f => MORCEAUX.test(f)), test.filter(duSaut).join(', '));
 ok('la fosse ratissee est emise', test.some(f => /^fosse-terre-.*\.webp$/.test(f)));
 ok('la gerbe est emise', test.some(f => /^gerbe-terre-.*\.webp$/.test(f)));
 ok('les mots du saut y sont, sinon on ne verifierait rien', MOTS.every(m => jsTest.includes(m)),

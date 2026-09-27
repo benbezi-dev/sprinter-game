@@ -189,6 +189,30 @@ export const LONGUEUR_OUVERTE = EST_TEST;
 export const TRIPLE_OUVERT = EST_TEST;
 
 /**
+ * LE SAUT EN HAUTEUR — la troisieme epreuve de Jumper.
+ *
+ * Meme regime que les sauts horizontaux, et drapeau a part : jouable sur le
+ * canal de test, « bientot » partout ailleurs. Il a son ecran, son jeu et son
+ * rendu (Hauteur.tsx, hauteur-*.js), charges a la demande derriere
+ * `HAUTEUR_OUVERTE && ...` dans Mondes.tsx : ils sortent du build public avec
+ * lui. Il ne reste en production que deux crochets du moteur, `cap` et
+ * `roulis` — un athlete qui ne suit pas son couloir —, qui valent zero tant que
+ * personne ne les pose.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ */
+export const HAUTEUR_OUVERTE = EST_TEST;
+
+/**
+ * JUMPER EST UN JEU — la ou au moins un saut est ouvert.
+ *
+ * Il prend alors l'enveloppe de Sprinter comme Hurdlers : son accueil avec les
+ * memes menus, sa couleur, sa musique (jeux.ts, `jeuDuMonde`). Ailleurs, le
+ * monde Jumper reste l'accueil qui annonce ses concours « bientot ».
+ */
+export const SAUTS_OUVERTS = LONGUEUR_OUVERTE || TRIPLE_OUVERT || HAUTEUR_OUVERTE;
+
+/**
  * LA NUIT DU MOLOSSE — la competition d'Halloween, edition limitee.
  *
  * Treize nuits au cimetiere municipal, un chien demoniaque derriere soi, et un

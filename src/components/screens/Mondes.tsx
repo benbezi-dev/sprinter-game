@@ -11,16 +11,16 @@ import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { HAIES } from '@/game/haies.js';
 import { changerDeJeu, jeuDuMonde } from '@/game/jeux';
 import { Poids } from './Poids';
-import { LONGUEUR_OUVERTE, TRIPLE_OUVERT } from '@/game/canal';
+import { SAUTS_OUVERTS } from '@/game/canal';
 
-/* LE SAUT EN LONGUEUR SE CHARGE A LA DEMANDE — et c'est ce qui le sort du
-   build public tant qu'il n'est ouvert que sur le canal de test. Meme forme
-   que la nuit du molosse (App.tsx) : `lazy` en fait un morceau separe, et
-   `@__PURE__` dit au bundler que l'appel ne fait rien d'autre que rendre une
-   valeur — inutilise derriere `LONGUEUR_OUVERTE && ...`, il s'en va, et avec
-   lui le jeu du saut, son rendu et le sable rendu dans Blender. */
-const Longueur = /* @__PURE__ */ lazy(() => import('./Longueur')
-  .then(m => ({ default: m.Longueur })));
+/* L'ACCUEIL DE JUMPER SE CHARGE A LA DEMANDE — et c'est ce qui sort les sauts
+   du build public tant qu'ils ne sont ouverts que sur le canal de test. Meme
+   forme que la nuit du molosse (App.tsx) : `lazy` en fait un morceau separe,
+   et `@__PURE__` dit au bundler que l'appel ne fait rien d'autre que rendre
+   une valeur — inutilise derriere `SAUTS_OUVERTS && ...`, il s'en va, et avec
+   lui les concours, leur jeu, leur rendu et le sable rendu dans Blender. */
+const Jumper = /* @__PURE__ */ lazy(() => import('./Jumper')
+  .then(m => ({ default: m.Jumper })));
 
 /**
  * Les trois autres jeux, et le passage de l'un a l'autre.
@@ -62,6 +62,7 @@ function cotesDe(cle: string): string {
   // sauteur lit sur le plan d'un stade.
   if (cle === 'longueur') return SprinterApp.N.t('saut_cotes');
   if (cle === 'triple') return SprinterApp.N.t('triple_cotes');
+  if (cle === 'hauteur') return SprinterApp.N.t('haut_cotes');
   const r = (HAIES as any)[cle];
   if (!r) return '';
   const nb = (v: number) => String(v).replace('.', ',');
@@ -79,6 +80,10 @@ export function Mondes() {
   // rend Sprinter : le monde Hurdlers reste son accueil, qui les annonce.
   useEffect(() => { changerDeJeu(jeuDuMonde(monde)); }, [monde]);
   if (monde === 'sprinter' || jeuDuMonde(monde) === 'hurdlers') return null;
+  // JUMPER, la ou ses sauts sont ouverts : l'accueil de Sprinter a ses couleurs.
+  if (SAUTS_OUVERTS && jeuDuMonde(monde) === 'jumper') {
+    return <Suspense fallback={null}><Jumper /></Suspense>;
+  }
   return <AccueilMonde monde={monde} />;
 }
 
@@ -125,14 +130,6 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
   // UN CONCOURS DE SAUT SE JOUE DANS LE STADE, pas sur ce fond : l'accueil
   // s'efface et laisse le concours poser son tableau sur la piste. On en
   // revient ici en le quittant.
-  if ((LONGUEUR_OUVERTE && epreuve === 'longueur') || (TRIPLE_OUVERT && epreuve === 'triple')) {
-    return (
-      <Suspense fallback={null}>
-        <Longueur epreuve={epreuve} onQuitter={() => setEpreuve(null)} />
-      </Suspense>
-    );
-  }
-
   const doux = mouvementReduit();
   const aller = (doux ? DUREE_DOUCE : DUREE_ALLER) / 1000;
   const retour = (doux ? DUREE_DOUCE : DUREE_RETOUR) / 1000;

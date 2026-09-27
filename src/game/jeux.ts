@@ -24,14 +24,17 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
-import { HAIES_OUVERTES } from './canal';
+import { HAIES_OUVERTES, SAUTS_OUVERTS } from './canal';
 
-export type Jeu = 'sprinter' | 'hurdlers';
+export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
 
 /** Les epreuves de chaque jeu, dans l'ordre ou l'accueil les propose. */
 export const EPREUVES_DU_JEU: Record<Jeu, readonly RaceKey[]> = {
   sprinter: ['100', '200', '400'],
   hurdlers: ['100h', '110h', '400h'],
+  // Jumper n'a pas de course : ses epreuves sont des concours, que son accueil
+  // lance lui-meme (screens/Jumper.tsx).
+  jumper: [],
 };
 
 /** Toutes les epreuves individuelles, les deux jeux confondus. */
@@ -118,7 +121,7 @@ const abonnes = new Set<() => void>();
  * La derniere epreuve choisie dans chaque jeu : revenir dans un jeu retrouve
  * la sienne, comme on l'avait laissee.
  */
-const derniere: Record<Jeu, RaceKey> = { sprinter: '100', hurdlers: '110h' };
+const derniere: Partial<Record<Jeu, RaceKey>> = { sprinter: '100', hurdlers: '110h' };
 
 export function jeuCourant(): Jeu { return courant; }
 
@@ -132,6 +135,7 @@ export function epreuvesDuJeu(jeu: Jeu = courant): readonly RaceKey[] {
  * Hurdlers ne l'est que la ou ses haies sont ouvertes (canal.ts).
  */
 export function jeuDuMonde(m: Monde): Jeu {
+  if (m === 'jumper' && SAUTS_OUVERTS) return 'jumper';
   return m === 'hurdlers' && HAIES_OUVERTES ? 'hurdlers' : 'sprinter';
 }
 
@@ -145,17 +149,21 @@ export function jeuDuMonde(m: Monde): Jeu {
  */
 export function changerDeJeu(jeu: Jeu, construire = true) {
   if (jeu === courant) return;
-  if (G.raceKey && jeuDe(G.raceKey) === courant) derniere[courant] = G.raceKey;
+  if (courant !== 'jumper' && G.raceKey && jeuDe(G.raceKey) === courant) derniere[courant] = G.raceKey;
   courant = jeu;
   G.jeu = jeu;
   document.documentElement.dataset.jeu = jeu;
+  // JUMPER NE CONSTRUIT RIEN. Son accueil regarde le stade tel que le passage
+  // l'a amene sur les sautoirs, et chaque concours arme le sien.
+  if (jeu === 'jumper') {
+    /* rien a construire */
   // Appele pendant la construction d'une course (voir apresConstruction),
   // la course est deja la : on ne change que ce qui dit le jeu, et l'on retient
   // son epreuve pour le retour a l'accueil.
-  if (!construire) {
+  } else if (!construire) {
     if (G.raceKey && jeuDe(G.raceKey) === jeu) derniere[jeu] = G.raceKey;
   } else {
-    const cle = derniere[jeu];
+    const cle = derniere[jeu] || EPREUVES_DU_JEU[jeu][0];
     G.raceKey = cle;
     G.race = SprinterCore.RACES[cle];
     SprinterApp.buildLevel(0);

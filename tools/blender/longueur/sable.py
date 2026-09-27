@@ -479,6 +479,13 @@ def centre_jeu(sx, sy):
     return ((-sy / vue.SIN - sx / vue.COS) / 2, (-sy / vue.SIN + sx / vue.COS) / 2, 0.0)
 
 
+# LE SAUTOIR EST VU DE PROFIL (src/game/sauts-vue.js) : dans le monde, la
+# fosse est tournee de 135 degres, sur la diagonale que l'isometrie met a
+# l'horizontale de l'ecran. La gerbe part vers l'avant du saut : on la tourne
+# comme la fosse, et le sable vole vers la droite de l'image.
+ROT_SAUTOIR = 135.0
+
+
 def gerbe(nom_sable, images=16, fps=30.0):
     """Le sable qui part a la reception, image par image, sous la vue du jeu."""
     P = SABLES[nom_sable]
@@ -502,16 +509,20 @@ def gerbe(nom_sable, images=16, fps=30.0):
     frein = np.concatenate([np.full(n_grains + n_mottes, 0.25), np.full(n_poudre, 3.5)])
     g = np.array([0, 0, -9.81])
 
+    cr, sr = math.cos(math.radians(ROT_SAUTOIR)), math.sin(math.radians(ROT_SAUTOIR))
+
     def pos(t):
         k = frein[:, None]
         # vitesse freinee par l'air, v = v0 e^-kt, et la pesanteur par-dessus
         x = p0 + v0 * (1 - np.exp(-k * t)) / k + 0.5 * g * t * t * (1 / (1 + 0.6 * k))
         au_sol = x[:, 2] < 0
         x[au_sol, 2] = 0.0
+        # dans le monde, comme le sautoir
+        x = np.stack([x[:, 0] * cr - x[:, 1] * sr, x[:, 0] * sr + x[:, 1] * cr, x[:, 2]], 1)
         return x, au_sol
 
     ts = [i / fps for i in range(images)]
-    tous = np.concatenate([pos(t)[0] for t in ts] + [p0], 0)
+    tous = np.concatenate([pos(t)[0] for t in ts] + [pos(0)[0]], 0)
     e = ecran(tous)
     # LE CADRE SUIT LA GERBE, PAS SES GRAINS PERDUS. Quelques grains partent
     # tres loin et tres vite ; cadrer sur eux reduisait la gerbe a une
