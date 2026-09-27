@@ -161,7 +161,22 @@ PATTE = 0.94
 # plat, il est arque — et cette arche est ce qui distingue une course d'un
 # trot.
 COLONNE = [
-    (+0.72, 0.660, 0.170),  # l'encolure, epaisse — la marque du molosse
+    # L'ENCOLURE DESCEND A 0,610, ET C'EST CE QUI FAIT DECROCHER LA NUQUE.
+    #
+    # Mesure faite avant de toucher a quoi que ce soit : le bord superieur
+    # allait de 0,895 au garrot a 0,835 au creux, soit SIX CENTIMETRES de
+    # depression sur une bete qui en fait pres de cent. A l'ecran, quinze
+    # pixels — un accident de surface, pas un decrochement. La nuque avait
+    # beau etre posee, elle n'avait rien a depasser.
+    #
+    # A 0,610 avec un rayon de 0,150, le creux tombe a 0,760 : quatorze
+    # centimetres sous le garrot. C'est du meme ordre que le creux du flanc
+    # (dix-huit), et c'est l'echelle a laquelle un relief se lit sur cette
+    # bete-la.
+    #
+    # On ne descend pas plus bas : a 0,55 l'encolure se detacherait du
+    # poitrail, dont la ligne de ventre passe a 0,480.
+    (+0.72, 0.610, 0.150),  # l'encolure, CREUSEE — c'est elle qui fait la nuque
     (+0.54, 0.700, 0.195),  # le garrot, le point haut
     (+0.34, 0.695, 0.200),  # le dos avant
     (+0.14, 0.700, 0.185),  # le dos
@@ -250,12 +265,79 @@ FLANCS = [
 # 0,895 ; crane a 0,760 avec un rayon de 0,205, donc sommet a 0,965. La tete
 # depasse le dos de sept centimetres, ce qui est la posture d'un chien qui
 # poursuit — le regard porte devant, pas au sol.
+# LA TETE REDESCEND, ET C'EST UN RETOUR EN ARRIERE ASSUME.
+#
+# Elle avait ete remontee au niveau du garrot parce qu'un chien qui court
+# porte la tete haute — c'est vrai, et c'est ce qu'il fallait pour faire UN
+# CHIEN. Mais ce qu'on cherche n'est pas un chien : c'est quelque chose qui
+# fait peur, et les deux ne demandent pas la meme ligne.
+#
+# LA LIGNE QUI MENACE EST TETE BASSE, EPAULES HAUTES. C'est la posture du
+# predateur qui charge — le loup qui fonce, le molosse qui va prendre — et
+# elle se reconnait instantanement parce qu'elle dit une chose simple : cette
+# bete ne regarde pas ou elle va, elle regarde CE QU'ELLE VA PRENDRE. Une tete
+# portee haut regarde l'horizon ; une tete basse regarde une proie.
+#
+# Le crane redescend donc a 0,615 sous un garrot a 0,700, et les epaules
+# passent au-dessus. La difference avec la version « loutre » du debut, ou la
+# tete etait aussi basse : la ligne du dos est maintenant HAUTE et le creux du
+# flanc existe, si bien que la tete basse se lit comme une posture et non plus
+# comme un affaissement.
 TETE = [
-    (+0.86, 0.760, 0.205),  # le crane, large, au-dessus du garrot
-    (+0.96, 0.752, 0.180),  # le front, plein
-    (+1.01, 0.722, 0.140),  # LE STOP — la cassure sous le front
-    (+1.09, 0.715, 0.130),  # le chanfrein, court et profond
-    (+1.165, 0.710, 0.105), # la truffe, large
+    (+0.86, 0.615, 0.215),  # le crane, LOURD et porte bas
+    (+0.96, 0.600, 0.185),  # le front
+    (+1.01, 0.565, 0.145),  # LE STOP
+    (+1.09, 0.552, 0.135),  # le chanfrein
+    (+1.175, 0.545, 0.110), # la truffe
+]
+
+# LES CRETES DE L'ECHINE — le poil dresse, et c'est le seul element de toute
+# cette bete qui ne cherche pas a ressembler a quelque chose de reel.
+#
+# Un chien qui menace herisse son echine : c'est un signal que tout le monde
+# lit sans l'avoir appris, y compris chez une espece qu'on ne connait pas. Et
+# surtout, c'est la SEULE facon de donner des angles a une silhouette faite de
+# metaballs. Tout le reste de cette sculpture est rond — et une forme ronde
+# n'a jamais fait peur a personne. Une dent, une epine, une pointe : voila ce
+# qui fait reculer.
+#
+# Chacune est une masse petite a RIGIDITE TRES HAUTE. C'est ce qui les garde
+# separees : a rigidite basse elles auraient fondu en un bourrelet continu le
+# long du dos, ce qui ressemble a une nageoire dorsale. Il faut qu'on compte
+# les pointes.
+#
+# (avancement, hauteur de la pointe, rayon)
+# LES HAUTEURS SONT CELLES DU CENTRE, ET LA PREMIERE VERSION FLOTTAIT.
+#
+# Elles allaient de 0,905 a 0,985 quand le dessus du dos est a 0,895 (garrot a
+# 0,700, rayon 0,195). Chaque crete etait donc posee ENTIEREMENT AU-DESSUS de
+# la peau : sept billes suspendues dans le vide au-dessus de l'echine, ce qui
+# est exactement ce que le rendu a montre. Une pointe doit etre PLANTEE — sa
+# base dans le corps, sa pointe dehors.
+#
+# Les centres redescendent donc sous la ligne du dos, et seule la moitie
+# superieure depasse. La rigidite passe de 6,0 a 3,6 : a 6,0 elles ne se
+# rejoignaient meme pas entre elles, d'ou le chapelet de perles ; a 3,6 leurs
+# bases se soudent en une crete continue dont les pointes restent comptables.
+# CHAQUE CRETE DOIT DEPASSER DE LA PEAU, ET ON LE CALCULE PLUTOT QUE DE
+# L'ESTIMER. Le dessus du dos est a `h + r` de la ligne COLONNE, soit 0,885 a
+# 0,895 selon l'endroit ; une crete ne se voit que si `hauteur + rayon` passe
+# au-dessus. La version precedente en laissait TROIS enterrees sur sept — les
+# trois du milieu du dos, celles qui prolongent la crete vers la croupe — et
+# la bete n'avait de poil dresse que sur la nuque.
+#
+# Les sept depassent maintenant, de deux centimetres a l'arriere jusqu'a dix
+# au garrot. La decroissance compte autant que la hauteur : un poil herisse
+# part haut sur les epaules et se couche vers la queue, et c'est ce profil en
+# vague qui se lit comme du poil plutot que comme des piquants de dinosaure.
+CRETES = [
+    (+0.80, 0.870, 0.090),  # la nuque
+    (+0.70, 0.890, 0.098),
+    (+0.60, 0.895, 0.100),  # le garrot — le point le plus haut
+    (+0.50, 0.888, 0.094),
+    (+0.40, 0.875, 0.086),
+    (+0.30, 0.862, 0.076),
+    (+0.20, 0.848, 0.066),  # et ca se couche vers la croupe
 ]
 
 # Les quatre pattes : (avancement de l'epaule, hauteur de l'epaule, phase).
@@ -427,9 +509,17 @@ def bete(phase):
     # pour cacher la jointure, pas a le remplir. La gorge du tronc est deja a
     # 0,175 au meme endroit, et deux surfaces qui se croisent n'ont pas besoin
     # de se ressembler.
+    # L'AMORCE D'ENCOLURE REMPLISSAIT LE CREUX PAR EN DESSOUS. Elle etait a
+    # 0,690 avec un rayon de 0,150, donc un bord superieur a 0,840 — plus haut
+    # que le creux de la colonne lui-meme. Les deux familles ne fusionnent pas,
+    # mais leur UNION est ce qu'on voit : c'est toujours la plus haute des deux
+    # surfaces qui fait la silhouette, et c'etait celle-ci.
+    #
+    # Elle descend donc avec l'encolure, et ne sert plus qu'a ce pour quoi elle
+    # existe : faire que la tete tienne au corps sans qu'on voie la jointure.
     for t in (0.0, 0.55):
         masse((0.60 + 0.15 * t) * 0.925, 0.0,
-              (0.690 + 0.012 * t) * GARROT + bond * 0.7, 0.150 - 0.012 * t)
+              (0.618 - 0.006 * t) * GARROT + bond * 0.7, 0.132 - 0.010 * t)
 
     # LA NUQUE — sans elle, la tete est une excroissance du cou.
     #
@@ -443,8 +533,14 @@ def bete(phase):
     # elles sont EN ARRIERE du crane et PLUS HAUTES que l'encolure. C'est ce
     # relief-la, trois centimetres, qui fait la difference entre un chien et
     # un phoque.
-    masse(0.79 * 0.925, 0.0, 0.800 * GARROT + bond * 0.7, 0.130)
-    masse(0.73 * 0.925, 0.0, 0.755 * GARROT + bond * 0.7, 0.115)
+    # Et elle remonte : bord superieur a 0,975 contre 0,760 au creux, soit
+    # vingt et un centimetres de relief. C'est la bosse qu'on cherche — celle
+    # qui se voit de loin sur un molosse et qu'aucun levrier n'a.
+    #
+    # La seconde masse, plus basse et en arriere, est la rampe qui ramene vers
+    # l'encolure : sans elle, la nuque serait une boule posee sur un cou.
+    masse(0.795 * 0.925, 0.0, 0.720 * GARROT + bond * 0.7, 0.140)
+    masse(0.740 * 0.925, 0.0, 0.690 * GARROT + bond * 0.7, 0.120)
 
     # Le cou et la tete plongent vers l'avant : la posture de la poursuite.
     # On interpole entre les points donnes pour que la chaine reste dense —
@@ -470,13 +566,36 @@ def bete(phase):
     # chanfrein, plus lourd, et il descend franchement. On pose donc une
     # chaine qui suit le museau par en dessous, epaisse a la naissance et
     # encore large a la pointe — c'est ce qui donne la gueule carree.
-    for t, r in ((0.00, 0.115), (0.45, 0.098), (1.00, 0.072)):
-        masse((0.96 + 0.20 * t) * 0.925, 0.0,
-              (0.670 - 0.020 * t) * GARROT + bond * 0.7, r)
+    # LA GUEULE EST OUVERTE, et c'est le second element qui fait peur apres
+    # les cretes.
+    #
+    # La machoire etait collee sous le museau : la bete arrivait BOUCHE FERMEE,
+    # ce qui est l'expression d'un animal qui trotte. Une bete qui va mordre
+    # ouvre. On descend donc le bas de machoire de sept centimetres et on le
+    # recule legerement : il reste attache au crane a l'arriere — c'est la
+    # charniere — et s'en ecarte vers l'avant. Le vide entre les deux EST la
+    # gueule, et c'est un trou noir dans une silhouette noire : on ne le voit
+    # pas, on le devine, ce qui vaut mieux.
+    #
+    # `pivot` ouvre d'autant plus qu'on avance vers la truffe : une machoire
+    # qui descendrait parallelement au chanfrein s'ouvrirait comme un tiroir.
+    # LE PIVOT ETAIT TROP GRAND ET LA MACHOIRE SE DETACHAIT. A 0,105 en bout,
+    # la derniere masse tombait a 0,375 quand le museau qui doit la retenir est
+    # a 0,545 : dix-sept centimetres de vide, et une bille noire flottant sous
+    # la tete. Une gueule ouverte reste ATTACHEE a sa charniere — c'est meme
+    # tout ce qui la distingue d'une machoire arrachee.
+    #
+    # L'ouverture tombe donc a six centimetres en bout, et une masse de
+    # charniere est posee sous l'arriere du crane pour tenir l'ensemble.
+    masse(0.905 * 0.925, 0.0, 0.468 * GARROT + bond * 0.7, 0.105)
+    for t, r in ((0.00, 0.108), (0.45, 0.090), (1.00, 0.066)):
+        pivot = 0.012 + 0.048 * t
+        masse((0.945 + 0.19 * t) * 0.925, 0.0,
+              (0.500 - 0.020 * t - pivot) * GARROT + bond * 0.7, r)
     # Et les babines, de part et d'autre : deux masses basses et ecartees qui
     # elargissent la gueule vue de trois quarts, l'angle exact du jeu.
     for cote in (-1, 1):
-        masse(1.05 * 0.925, cote * 0.062, 0.680 * GARROT + bond * 0.7, 0.072)
+        masse(1.04 * 0.925, cote * 0.062, 0.438 * GARROT + bond * 0.7, 0.070)
 
     # LES OREILLES — elles se lisaient comme des AILERONS.
     #
@@ -492,8 +611,8 @@ def bete(phase):
     # plus large. C'est la chute qui fait reconnaitre l'oreille — une bosse
     # ronde posee sur la tete ne se lit pas du tout.
     for cote in (-1, 1):
-        masse(0.87 * 0.925, cote * 0.105, 0.830 * GARROT + bond * 0.7, 0.058)
-        masse(0.84 * 0.925, cote * 0.118, 0.760 * GARROT + bond * 0.7, 0.070)
+        masse(0.87 * 0.925, cote * 0.105, 0.690 * GARROT + bond * 0.7, 0.058)
+        masse(0.84 * 0.925, cote * 0.118, 0.620 * GARROT + bond * 0.7, 0.070)
 
     # Les quatre pattes. Chacune est une chaine de masses qui va de l'epaule
     # au pied en passant par le coude, et le coude est pousse vers l'avant
@@ -611,6 +730,22 @@ def bete(phase):
     # Elle passe donc de 0,66 a 0,38 m, et son rayon de naissance double — a
     # 0,125 elle part du corps comme un prolongement de la croupe, ce qui est
     # exactement ce qu'elle est.
+    # LES CRETES, DANS LEUR PROPRE FAMILLE ET A RIGIDITE TRES HAUTE.
+    #
+    # Les deux conditions comptent autant l'une que l'autre. Dans la famille
+    # du tronc, le champ du dos les aurait avalees sans laisser de trace — on
+    # l'a assez paye. Et a rigidite ordinaire, elles auraient fusionne ENTRE
+    # ELLES en un bourrelet continu : une nageoire, pas des epines. A 6,0 le
+    # champ de chaque masse ne porte presque pas au-dela de son rayon, et les
+    # sept pointes restent sept.
+    #
+    # Elles suivent la cambrure du dos, sinon elles flottent au-dessus de lui
+    # a chaque foulee.
+    masse = groupe('cretes')
+    for cx, ch, cr in CRETES:
+        poids = math.sin((0.86 - cx) / 1.36 * math.pi)
+        masse(cx * 0.925, 0.0, ch * GARROT + bond + cambre * poids, cr, 3.6)
+
     masse = groupe('queue')
     bat = math.sin(phase * 2 * math.pi * 1.5) * 0.10
     for j in range(14):
@@ -693,7 +828,7 @@ def yeux(phase):
         # devant le stop : c'est l'emplacement d'une narine, pas d'un oeil.
         # L'oeil d'un chien est EN ARRIERE du stop, sur le cote du crane.
         o.location = (0.925 * 0.925, cote * 0.112,
-                      0.790 * GARROT + bond * 0.7)
+                      0.645 * GARROT + bond * 0.7)
         o.data.materials.append(mat)
         for poly in o.data.polygons:
             poly.use_smooth = True
@@ -848,53 +983,51 @@ if __name__ == '__main__':
 
 
 # ---------------------------------------------------------------------------
-# OU EN EST CETTE BETE — 27 septembre 2026, apres huit rendus.
+# OU EN EST CETTE BETE — et le changement de cap qui a debloque l'affaire.
 # ---------------------------------------------------------------------------
 #
-# CE QUI EST ACQUIS :
+# ON A CESSE DE CHERCHER UN CHIEN. Pendant dix rendus, chaque correction visait
+# l'exactitude anatomique : proportions de molosse, stop du crane, creux du
+# flanc, nuque. Tout cela etait juste, et rien de tout cela ne faisait peur.
 #
-#   - SEPT FAMILLES DE METABALLS au lieu d'une : tronc, tete, queue, et une
-#     par patte. Deux metaballs ne fusionnent que si leurs objets portent le
-#     meme nom de base ; sept noms donnent sept volumes qui se croisent sans
-#     se dissoudre. C'etait la correction de fond, et elle est faite.
-#   - les proportions d'un molosse et non d'un levrier ;
-#   - une matiere qui rend une masse sombre et non une silhouette pale ;
-#   - la queue, qui faisait le rat, ramenee a un tiers de sa longueur ;
-#   - la tete relevee au niveau du garrot, et l'encolure raccourcie de dix
-#     centimetres ;
-#   - les pattes epaissies : l'avant-bras passe de 6,3 a 10,5 cm de rayon.
+# Ce qu'on demande a cette bete n'est pas d'etre reconnaissable, c'est de faire
+# reculer. Les deux ne demandent pas la meme silhouette. Une forme RONDE,
+# LISSE et SYMETRIQUE n'inquiete personne, qu'elle soit zoologiquement
+# correcte ou non. Ce qui inquiete, c'est ce qui pointe et ce qui manque.
 #
-# ET SURTOUT, UN OUTIL : molosse-profil.py. Voir son en-tete — c'est lui qui
-# a trouve en une image ce que cinq rendus sous l'angle du jeu n'avaient pas
-# pu montrer, parce que cet angle-la ecrase precisement ce qu'il faut juger.
+# LES TROIS CHANGEMENTS QUI ONT PAYE, dans l'ordre de ce qui se voit :
 #
-# CE QUI NE VA TOUJOURS PAS, ET IL FAUT L'ECRIRE : LA BETE NE SE LIT PAS
-# ENCORE COMME UN CHIEN. De profil, le tronc reste un TUBE LISSE — pas de
-# creux derriere l'epaule, pas de remontee du flanc vers l'aine, pas de cage
-# thoracique. Et la tete, bien qu'a la bonne hauteur, se raccorde au cou sans
-# aucune articulation visible : on passe du crane au corps sans nuque.
+#   1. LES CRETES DE L'ECHINE. Sept pointes plantees dans le dos, dans leur
+#      propre famille et a rigidite 3,6. C'est le seul element de toute la
+#      sculpture qui ne cherche pas a imiter quelque chose de reel, et c'est
+#      celui qui change tout : des metaballs ne savent faire que du rond, et
+#      une crete est la seule facon d'obtenir des ANGLES. Elles survivent a la
+#      reduction — a 115 pixels de large, la ligne du dos est brisee au lieu
+#      d'etre lisse, et c'est ce qui se lit de loin.
+#   2. LA TETE BASSE. Elle avait ete remontee au niveau du garrot parce qu'un
+#      chien qui court porte la tete haute. C'etait le bon reglage pour faire
+#      un chien. La ligne qui MENACE est l'inverse : tete basse, epaules
+#      hautes — le predateur qui charge. Une tete haute regarde l'horizon, une
+#      tete basse regarde une proie.
+#   3. LA GUEULE OUVERTE. La machoire etait collee au museau : la bete
+#      arrivait bouche fermee, l'expression d'un animal qui trotte. Le vide
+#      entre les deux est un trou noir dans une silhouette noire — on ne le
+#      voit pas, on le devine.
 #
-# CE QUI RESTE A FAIRE, dans l'ordre ou ca se verra :
+# DEUX PIEGES DE NIVEAU, chacun trouve par le calcul plutot qu'a l'oeil, et
+# chacun donnant le meme symptome — un morceau qui flotte :
+#   — une crete ne depasse que si `hauteur + rayon` passe au-dessus du dos
+#     (0,885 a 0,895 selon l'endroit). La premiere version les posait toutes
+#     AU-DESSUS de la peau : sept billes suspendues. La seconde en laissait
+#     trois enterrees.
+#   — une gueule ouverte reste attachee a sa charniere. Un pivot de dix
+#     centimetres en bout detachait la machoire du museau.
 #
-#   1. LE GALBE DU FLANC — FAIT. Voir les trois tables COLONNE / VENTRE /
-#      FLANCS et le commentaire qui les precede : une chaine axiale ne peut
-#      pas donner un dos haut ET un ventre remonte, puisque le rayon fait les
-#      deux bords avec le meme nombre.
-#   2. LA NUQUE — POSEE, mais elle ne se lit pas encore. Les deux masses sont
-#      la, en arriere et au-dessus du crane ; le raccord reste une rampe
-#      continue plutot qu'un decrochement. Il manque probablement un CREUX
-#      entre la nuque et le garrot — l'encolure descend a 0,660 quand le
-#      garrot est a 0,700, ce qui est trop peu pour se voir.
-#   3. L'EPAULE ET LA HANCHE, posees de cote dans leur propre famille : elles
-#      doivent RESSORTIR du flanc. Les deux masses d'attache ajoutees aux
-#      membres sont trop petites pour se voir.
-#   4. LE PIEGE A EVITER, ET IL A DEJA MORDU DEUX FOIS : quand on bouge la
-#      ligne du dos, IL FAUT BOUGER LA TETE AVEC. Elle est repassee sous le
-#      dos la premiere fois parce que la table etait ecrite trop bas, la
-#      seconde parce que COLONNE est montee de 0,62 a 0,70 sans elle. La
-#      regle : le crane est au niveau du garrot ou legerement au-dessus.
+# CE QUI RESTE, ET CE N'EST PLUS L'URGENCE : l'epaule et la hanche ne
+# ressortent toujours pas du flanc ; la queue est molle ; les quatre pattes
+# ont la meme allure, la ou une demarche CASSEE — une patte qui retombe mal,
+# une cadence irreguliere — ferait plus peur que n'importe quelle forme.
 #
-# TANT QUE 1 ET 2 NE SONT PAS FAITS, LE TRACE A LA MAIN DE
-# game/halloween-molosse.js RESTE CE QUI JOUE, et aucune image de ce script
-# n'entre dans le jeu. Il a ses defauts — de pres il se lit comme une table a
-# quatre pieds — mais on y reconnait un chien, et on y voit ses deux yeux.
+# Aucune image de ce script n'entre dans le jeu : le tracé à la main de
+# game/halloween-molosse.js reste ce qui joue, et il faudra comparer les deux
+# a l'ecran avant de trancher.
