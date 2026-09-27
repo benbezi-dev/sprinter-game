@@ -1,0 +1,10 @@
+JumperSaut/Library/
+JumperSaut/Temp/
+JumperSaut/Logs/
+JumperSaut/UserSettings/
+JumperSaut/obj/
+JumperSaut/*.csproj
+JumperSaut/*.sln
+JumperSaut/.vs/
+JumperSaut/Data/
+jumper-saut/index.html
