@@ -1950,6 +1950,20 @@ async function servir(request, env, ctx, porteur) {
         return json(v);
       }
 
+      /* CE TELEPHONE EST-IL RELIE A CE NOM ? (27/09). Le 26/09, des partants
+         ne l'ont appris qu'en chambre d'appel : la salle les mettait en
+         tribune. L'ecran du championnat pose la question des qu'un joueur se
+         voit sur la grille, pour qu'il ait le temps de relier son telephone.
+         Meme regle que la salle (`peutUtiliser`) ; on ne dit rien de plus que
+         ce que cet appareil peut deja savoir de lui-meme. */
+      if (sous === 'pret' && request.method === 'GET') {
+        const device = url.searchParams.get('device') || '';
+        if (!isValidDeviceId(device)) return json({ error: 'device invalide' }, 400);
+        const cle = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+        if (!cle || cle === 'anonyme') return json({ relie: false });
+        return json({ relie: await peutUtiliser(env.DB, cle, device) });
+      }
+
       /* LA BULLE DE PRESENTATION (26/09) : la phrase qu'un partant des demies
          ou de la finale fait afficher au-dessus de sa tete pendant ses trois
          secondes de presentation. Le nom doit etre a cet appareil ; le reste

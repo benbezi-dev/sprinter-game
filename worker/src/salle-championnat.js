@@ -63,6 +63,17 @@ const APPEL_AVANT_MS = 8 * PRESENTATION_PAR_JOUEUR_MS + AVANT_DEPART_MS + AVANT_
  */
 const RETARD_TOLERE_MS = 2 * 60 * 1000;
 /**
+ * UN RESEAU QUI HOQUETTE N'EST PAS UN FORFAIT (27/09).
+ *
+ * Le 26/09, des partants etaient en chambre d'appel et n'ont pas couru : un
+ * ecran qui se met en veille, un passage du wifi a la 4G, et la connexion
+ * tombait quelques secondes — juste a l'appel, ils etaient forfaits. Un
+ * partant vu dans la salle il y a moins de ce delai est donc appele quand
+ * meme : il a toute la presentation pour revenir prendre son couloir. S'il
+ * n'est toujours pas la au pistolet, il reste forfait, comme avant.
+ */
+const GRACE_APPEL_MS = 45 * 1000;
+/**
  * Et quand elle s'eveille ainsi en retard, l'appel attend cinq secondes : le
  * premier arrive n'est pas seul a etre a l'heure, il est seulement le premier
  * a avoir ouvert la porte.
@@ -224,6 +235,7 @@ export class SalleChampionnat {
       this.coureurs.set(g.cle, {
         cle: g.cle, nom: g.nom, couloir: g.couloir, ws: null,
         statut: 'attente', d: 0, c: null, fin: null, motif: null, motif_ms: null,
+        vuA: 0, grace: false,
         fictif: !!g.fictif, cible: g.fictif ? g.ms : null,
         faux_ms: g.fictif ? (g.faux_ms ?? null) : null,
         bulle: g.fictif ? null : (g.bulle || null),
@@ -291,8 +303,12 @@ export class SalleChampionnat {
     }
     for (const c of this.coureurs.values()) {
       if (c.fictif) { c.statut = 'engage'; c.fin = c.cible; continue; }
-      c.statut = c.ws ? 'engage' : 'forfait';
-      if (!c.ws) c.motif = 'forfait';
+      // Absent a l'instant, mais vu il y a moins de GRACE_APPEL_MS : appele
+      // quand meme, le temps de revenir (voir GRACE_APPEL_MS).
+      const recent = !c.ws && c.vuA && maintenant - c.vuA <= GRACE_APPEL_MS;
+      c.statut = c.ws || recent ? 'engage' : 'forfait';
+      c.grace = !!recent;
+      if (!c.ws && !recent) c.motif = 'forfait';
     }
     const presents = this.engages();
     if (!presents.length) {
@@ -355,7 +371,12 @@ export class SalleChampionnat {
     if (n !== this.departN || this.phase === 'terminee') return;
     // Un partant parti entre l'appel et le pistolet n'est pas sur la ligne.
     for (const c of this.engages()) {
-      if (!c.ws && !c.fictif) { c.statut = 'abandon'; c.motif = 'abandon'; }
+      if (!c.ws && !c.fictif) {
+        // Appele par grace et jamais revenu : il n'a pas pris le depart, il
+        // est forfait. Parti apres l'appel : il abandonne.
+        c.statut = c.grace ? 'forfait' : 'abandon';
+        c.motif = c.grace ? 'forfait' : 'abandon';
+      }
     }
     this.phase = 'course';
     // Le verdict n'arrive pas avant que le dernier fictif ait franchi la
@@ -540,7 +561,15 @@ export class SalleChampionnat {
     // pistolet n'est pas parti.
     // Un fictif ne se prend pas : il court seul, a son chrono. Quiconque se
     // presente sous son nom — le nom n'est reserve par personne — regarde.
-    const peutCourir = !!partant && !partant.fictif && !partant.ws &&
+    //
+    // UNE CONNEXION NEUVE REMPLACE L'ANCIENNE (27/09). Un telephone qui a
+    // change de reseau revient avant que la salle ait vu mourir son ancienne
+    // connexion : elle lui refusait alors son couloir et le mettait en
+    // tribune. Le nom est verifie par le worker ; c'est donc le meme joueur,
+    // et c'est sa connexion la plus recente qui compte. L'ancienne est fermee
+    // avec le code 4001 : le telephone qui la tenait sait qu'il ne doit pas se
+    // reconnecter de lui-meme (sinon deux appareils se la renverraient).
+    const peutCourir = !!partant && !partant.fictif &&
       (this.phase === 'ouverte' || (this.phase === 'appel' && partant.statut === 'engage'));
     const id = peutCourir ? cle : 'spec-' + crypto.randomUUID().slice(0, 6);
     // Le nom que portent ses bulles du tchat rapide. Seul le coureur parle
@@ -557,7 +586,19 @@ export class SalleChampionnat {
                     role: peutCourir ? 'coureur' : 'spectateur',
                     nomTchat };
     this.sockets.set(serveur, place);
-    if (peutCourir) partant.ws = serveur;
+    let ancien = null;
+    if (peutCourir) {
+      ancien = partant.ws !== serveur ? partant.ws : null;
+      partant.ws = serveur;
+      partant.vuA = maintenant;
+      partant.grace = false;
+      if (ancien) {
+        // L'ancienne connexion ne represente plus personne : elle ne doit ni
+        // parler ni, en se fermant, faire abandonner le coureur.
+        const s = this.sockets.get(ancien);
+        if (s) { s.role = 'spectateur'; s.cle = null; }
+      }
+    }
 
     serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
     serveur.addEventListener('close', () => this.parti(serveur));
@@ -566,6 +607,13 @@ export class SalleChampionnat {
     try {
       serveur.send(JSON.stringify({ t: 'bienvenue', moi: id, role: place.role, ...this.vue() }));
     } catch (e) { /* deja fermee */ }
+    // L'ancienne connexion se ferme APRES la bienvenue de la nouvelle : sa
+    // fermeture rediffuse l'etat, et la nouvelle doit d'abord savoir qui elle
+    // est.
+    if (ancien) {
+      try { ancien.send(JSON.stringify({ t: 'remplace' })); } catch (e) { }
+      try { ancien.close(4001, 'remplace'); } catch (e) { }
+    }
     this.planifier();
     this.envoyerEtat();
     return new Response(null, { status: 101, webSocket: client });
@@ -579,6 +627,7 @@ export class SalleChampionnat {
     const c = s.cle ? this.coureurs.get(s.cle) : null;
     if (c && c.ws === ws) {
       c.ws = null;
+      c.vuA = Date.now();
       // Parti en pleine course : il n'arrivera pas. Avant l'appel, il n'a
       // encore rien perdu — il peut revenir prendre son couloir.
       if (c.statut === 'engage' && this.phase === 'course') {
@@ -643,6 +692,14 @@ export class SalleChampionnat {
     if (typeof brut === 'string' && brut.length > MESSAGE_MAX) return;
     let m;
     try { m = JSON.parse(brut); } catch { return; }
+    // Tout message d'un coureur dit qu'il est la (voir GRACE_APPEL_MS).
+    if (s.role === 'coureur' && s.cle) {
+      const c = this.coureurs.get(s.cle);
+      if (c && c.ws === ws) c.vuA = Date.now();
+    }
+    // La veille : un battement que le telephone envoie toutes les vingt
+    // secondes pour que la connexion ne s'endorme pas en chambre d'appel.
+    if (m && m.t === 'veille') return;
     if (m && m.t === 'ping') {
       try { ws.send(JSON.stringify({ t: 'pong', a: m.a, serveur: Date.now() })); } catch (e) { }
       return;

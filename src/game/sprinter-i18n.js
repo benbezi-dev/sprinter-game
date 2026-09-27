@@ -615,6 +615,9 @@
     champ_officiel_ko:  ['Résultat non enregistré : {e}', 'Result not recorded: {e}'],
     champ_retour:       ['RETOUR AU CHAMPIONNAT', 'BACK TO THE CHAMPIONSHIP'],
     champ_salle_fermee: ['La salle s’est fermée.', 'The room has closed.'],
+    champ_pret_non: ['Attention : ce téléphone n’est pas relié à « {n} ». Tel quel, tu ne pourras que regarder ta course. Relie-le dans MES COURSES avec ton code de récupération, ou ouvre le jeu sur le téléphone où tu as créé ce nom.', 'Warning: this phone is not linked to “{n}”. As it is, you can only watch your race. Link it in MY RACES with your recovery code, or open the game on the phone where you created this name.'],
+    champ_reconnexion: ['Connexion perdue — reconnexion… garde l’écran allumé', 'Connection lost — reconnecting… keep the screen on'],
+    champ_salle_remplace: ['Ta place est reprise sur un autre appareil (autre onglet ou autre téléphone).', 'Your spot was taken over on another device (another tab or phone).'],
     champ_pas_ouverte:  ['La chambre d’appel ouvre 15 min avant la course.',
                          'The call room opens 15 min before the race.'],
     // LA BULLE DE PRESENTATION (demi-finales et finale) : une phrase au-dessus

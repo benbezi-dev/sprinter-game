@@ -43,7 +43,28 @@ export function ChampDirect() {
       {e.etape === 'echauffement' && <BandeauEchauffement key="echauf" />}
       {e.etape === 'course' && e.role === 'spectateur' && <BandeauSpectateur key="spec" e={e} />}
       {e.etape === 'fin' && e.resultat && <TableauDArrivee key="fin" e={e} />}
+      {e.reconnexion && e.etape !== 'erreur' && <BandeauReconnexion key="reco" />}
     </AnimatePresence>
+  );
+}
+
+/* ------------------------------------------------------------ la reconnexion */
+
+/**
+ * La connexion est tombee avant le pistolet et le telephone la reprend tout
+ * seul (voir `reprendre` dans champ-direct.ts). Un bandeau en haut, par-dessus
+ * tout, qui ne prend aucun appui : le joueur n'a rien a faire, sinon garder
+ * l'ecran allume.
+ */
+function BandeauReconnexion() {
+  const { N } = SprinterApp;
+  return (
+    <motion.div {...VOILE}
+      className="fixed left-1/2 -translate-x-1/2 z-[60] pointer-events-none
+                 top-[max(env(safe-area-inset-top),0.75rem)] px-3 py-1.5 rounded-full
+                 bg-amber-500/95 text-black text-[11px] font-bold shadow-lg whitespace-nowrap">
+      {N.t('champ_reconnexion')}
+    </motion.div>
   );
 }
 
@@ -192,7 +213,8 @@ function ChambreDAppel({ e }: { e: EtatChampDirect }) {
           </div>
           {erreur && (
             <div className="text-center text-[11px] text-destructive">
-              {erreur === 'fermee' || erreur === 'reseau' ? N.t('champ_salle_fermee') : String(erreur)}
+              {erreur === 'fermee' || erreur === 'reseau' ? N.t('champ_salle_fermee')
+                : erreur === 'remplace' ? N.t('champ_salle_remplace') : String(erreur)}
             </div>
           )}
         </div>

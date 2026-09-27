@@ -226,6 +226,8 @@ export class Salle {
   private decalage = 0;
   private pings = 0;
   private timerPing: any = null;
+  /** La veille : un battement toutes les 20 s, pour que la connexion ne s'endorme pas. */
+  private timerVeille: any = null;
   private departPose = false;
   moi = '';
   code: string;
@@ -338,14 +340,31 @@ export class Salle {
       this.meilleur = Infinity;
       this.ping();
       this.timerPing = setInterval(() => this.ping(), 700);
+      // LA VEILLE (27/09). Les pings d'horloge s'arretent apres quatre ; une
+      // chambre d'appel peut ensuite rester des minutes sans un message, et
+      // une connexion muette finit coupee quelque part entre le telephone et
+      // la salle. Un battement toutes les vingt secondes la garde eveillee ;
+      // la salle ne repond pas, elle note seulement que le coureur est la.
+      clearInterval(this.timerVeille);
+      this.timerVeille = setInterval(() => this.envoyer({ t: 'veille' }), 20_000);
     };
     ws.onmessage = ev => this.recu(ev.data);
     ws.onerror = () => this.ec.onFerme?.('reseau');
-    ws.onclose = () => {
+    ws.onclose = (ev: CloseEvent) => {
       clearInterval(this.timerPing);
+      clearInterval(this.timerVeille);
       debrancherRapide(this);
-      this.ec.onFerme?.('fermee');
+      // 4001 : la salle a donne notre couloir a une connexion plus recente du
+      // meme joueur (un autre onglet, un autre telephone). Celle-ci ne doit
+      // pas se reconnecter d'elle-meme, sinon les deux se le renverraient.
+      this.ec.onFerme?.(ev && ev.code === 4001 ? 'remplace' : 'fermee');
     };
+  }
+
+  /** La connexion est-elle ouverte (ou en train de s'ouvrir) ? */
+  enVie(): boolean {
+    const ws = this.ws;
+    return !!ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
   }
 
   private meilleur = Infinity;
@@ -508,6 +527,7 @@ export class Salle {
 
   fermer() {
     clearInterval(this.timerPing);
+    clearInterval(this.timerVeille);
     debrancherRapide(this);
     try { this.ws?.close(); } catch { /* deja fermee */ }
     this.ws = null;

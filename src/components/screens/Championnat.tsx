@@ -15,7 +15,7 @@ import { getSavedName } from '@/game/leaderboard';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import {
-  etatEdition, fluxDirect, prochain, grille, arrivee,
+  etatEdition, fluxDirect, prochain, grille, arrivee, telephoneRelie,
   bossVu, marquerBossVu,
   type Edition, type Annonce, type Partant, type TenantEnTitre,
 } from '@/game/championnats';
@@ -211,6 +211,9 @@ function Grille({ e }: { e: Edition }) {
                 `titre` : « Série 3 », « Demi-finale 1 », « Finale » — au
                 singulier et avec son numero, parce que c'est UNE course de la
                 phase et non la phase entiere. */}
+            {!courue && couloirs.some(p => p.name_key === (getSavedName() || '').trim().toLowerCase()) && (
+              <TelephoneNonRelie />
+            )}
             {!courue && rv && (
               <BoutonDirect e={e} course={course} at={rv.at}
                 partant={couloirs.some(p => p.name_key === (getSavedName() || '').trim().toLowerCase())} />
@@ -250,6 +253,29 @@ const RETARD_DIRECT_MS = 2 * 60 * 1000;
  * editions d'essai sont datees au hasard, et leurs courses se lancent a la
  * main (`/champ/salle/.../lancer`).
  */
+/**
+ * PREVENIR AVANT LA CHAMBRE D'APPEL (27/09). Un partant dont le telephone
+ * n'est pas relie a son nom ne peut que regarder sa course : le 26/09, on ne
+ * le lui disait qu'une fois dans la salle. On le dit ici, des qu'il se voit
+ * sur la grille, avec ce qu'il faut faire.
+ */
+function TelephoneNonRelie() {
+  const nom = getSavedName() || '';
+  const [relie, setRelie] = useState<boolean | null>(null);
+  useEffect(() => {
+    let vivant = true;
+    telephoneRelie(nom).then(v => { if (vivant) setRelie(v); });
+    return () => { vivant = false; };
+  }, [nom]);
+  if (relie !== false) return null;
+  return (
+    <div className="mx-1 rounded-lg border border-destructive/50 bg-destructive/10 px-2.5 py-1.5
+                    text-[10px] leading-snug text-destructive">
+      {SprinterApp.N.t('champ_pret_non', { n: nom })}
+    </div>
+  );
+}
+
 function BoutonDirect({ e, course, at, partant }: {
   e: Edition; course: number; at: number; partant: boolean;
 }) {

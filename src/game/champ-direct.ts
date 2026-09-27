@@ -49,6 +49,11 @@ export type EtatChampDirect = {
   resultat: { classement: Arrivee[]; partants: number } | null;
   enregistre: { ok: boolean; erreur: string | null } | null;
   erreur: string | null;
+  /**
+   * La connexion est tombee et le telephone la reprend tout seul (27/09) :
+   * l'ecran le dit au lieu d'afficher « salle fermee ».
+   */
+  reconnexion: boolean;
   /** Le coureur que la camera suit, en spectateur. */
   suivi: string | null;
   /** Le mot du vainqueur, relaye par la salle. */
@@ -62,7 +67,7 @@ export type EtatChampDirect = {
 
 const VIDE: EtatChampDirect = {
   ouvert: false, etape: 'connexion', role: 'coureur', moi: '', salle: null,
-  rappel: null, sorti: false, resultat: null, enregistre: null, erreur: null,
+  rappel: null, sorti: false, resultat: null, enregistre: null, erreur: null, reconnexion: false,
   suivi: null,
   mot: null, bulle: null, bulleEtat: 'rien', bulleRefus: null,
 };
@@ -94,6 +99,12 @@ let minuteurRappel: ReturnType<typeof setTimeout> | null = null;
 /** Le lien moteur → salle, gardé pour le rebrancher après un échauffement. */
 let lien: Parameters<typeof brancherSalle>[0] = null;
 let veilleEchauffement: ReturnType<typeof setInterval> | null = null;
+/** La course de la salle ouverte, pour s'y reconnecter. */
+let entree: { ed: string; phase: string; course: number } | null = null;
+let essaisReconnexion = 0;
+let minuteurReconnexion: ReturnType<typeof setTimeout> | null = null;
+/** Le verrou d'ecran allume : un telephone en veille coupe sa connexion. */
+let verrouEcran: any = null;
 
 /** Mon couloir dans la grille de la salle, s'il y en a un. */
 function monCouloir(): number | undefined {
@@ -156,7 +167,9 @@ function lancerCourse() {
 function ecouteurs() {
   return {
     onEtat: (e: EtatSalle) => {
+      essaisReconnexion = 0;
       publier({
+        reconnexion: false,
         salle: e, moi: salle?.moi || '', role: salle?.role || 'coureur',
         etape: etat.etape === 'connexion' ? 'attente' : etat.etape,
         // Entre apres le mot, on le lit dans l'etat de la salle.
@@ -174,6 +187,9 @@ function ecouteurs() {
       }
     },
     onPresentation: (p: Presentation) => {
+      // Une reconnexion pendant la presentation la recoit une seconde fois :
+      // celle qui tourne continue, on ne la relance pas.
+      if (presEnCours) return;
       if (etat.etape === 'echauffement') finirEchauffement();
       presEnCours = true;
       publier({ etape: 'presentation' });
@@ -195,6 +211,8 @@ function ecouteurs() {
       });
     },
     onDepart: (dansMs: number, departA: number) => {
+      // Meme pistolet recu apres une reconnexion : deja programme.
+      if (cibleDepart != null && dateDepart === departA) return;
       if (etat.etape === 'echauffement') finirEchauffement();
       cibleDepart = Date.now() + dansMs;
       dateDepart = departA;
@@ -244,7 +262,8 @@ function ecouteurs() {
     onMot: (mot: MotDirect) => publier({ mot }),
     onFerme: (raison: string) => {
       if (etat.etape === 'fin') return;
-      publier({ etape: 'erreur', erreur: raison });
+      if (reprendre(raison)) return;
+      publier({ etape: 'erreur', erreur: raison, reconnexion: false });
     },
   };
 }
@@ -277,6 +296,17 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   // trouvent rien a programmer, et la course garde sa musique ordinaire.
   if (opts.echelon === 'national' && opts.zone === 'FR') entrerDansLeTour(phase);
   else arreterLaMusique();
+  entree = { ed, phase, course };
+  essaisReconnexion = 0;
+  publier({ ...VIDE, ouvert: true });
+  connecter();
+  garderLEcranAllume();
+}
+
+/** Ouvre (ou rouvre) la connexion a la salle de `entree`. */
+function connecter() {
+  if (!entree) return;
+  const { ed, phase, course } = entree;
   const s = new Salle(`${ed}-${phase}-${course}`, ecouteurs());
   salle = s;
   lien = {
@@ -284,9 +314,78 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
     fini: (ms: number) => s.fini(ms),
     fauxDepart: (ms: number) => s.fauxDepart(ms),
   };
-  brancherSalle(lien);
-  publier({ ...VIDE, ouvert: true });
+  // Pendant l'echauffement, le moteur reste debranche de la salle : il sera
+  // rebranche sur la connexion en cours par finirEchauffement.
+  if (etat.etape !== 'echauffement') brancherSalle(lien);
   s.connecterChampionnat(ed, phase, course);
+}
+
+/**
+ * SE RECONNECTER TOUT SEUL (27/09).
+ *
+ * Le 26/09, une connexion tombee en chambre d'appel — ecran en veille,
+ * passage du wifi a la 4G — affichait « salle fermee » et laissait le joueur
+ * revenir a la main, parfois trop tard. Avant le pistolet, le telephone
+ * reprend donc la connexion de lui-meme, de plus en plus lentement (1, 2, 4,
+ * 8 s…), une vingtaine de fois. La salle lui rend son couloir (voir
+ * GRACE_APPEL_MS et la reprise de connexion dans salle-championnat.js).
+ * Pendant et apres la course, on ne reprend pas : le coureur ne peut plus
+ * rentrer dans une course lancee.
+ *
+ * Rend vrai si une reprise est programmee.
+ */
+function reprendre(raison: string): boolean {
+  if (!entree || raison === 'acces' || raison === 'remplace') return false;
+  const avantLaCourse = etat.etape === 'connexion' || etat.etape === 'attente'
+    || etat.etape === 'echauffement' || etat.etape === 'presentation';
+  if (!avantLaCourse) return false;
+  if (minuteurReconnexion) return true;               // deja programmee
+  if (essaisReconnexion >= 20) return false;
+  const attente = Math.min(8000, 1000 * 2 ** essaisReconnexion);
+  essaisReconnexion += 1;
+  publier({ reconnexion: true });
+  minuteurReconnexion = setTimeout(() => {
+    minuteurReconnexion = null;
+    if (!entree) return;
+    const ancienne = salle;
+    if (ancienne) { ancienne.ecouter({}); ancienne.fermer(); }
+    connecter();
+  }, attente);
+  return true;
+}
+
+/**
+ * LE RETOUR AU PREMIER PLAN. Un telephone qu'on rallume, une appli qu'on
+ * rouvre : si la connexion est morte, on la reprend tout de suite plutot que
+ * d'attendre le prochain essai, et on rallume le verrou d'ecran.
+ */
+function auRetour() {
+  if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+  if (!etat.ouvert || !entree) return;
+  garderLEcranAllume();
+  if (salle && salle.enVie()) return;
+  if (minuteurReconnexion) { clearTimeout(minuteurReconnexion); minuteurReconnexion = null; }
+  essaisReconnexion = 0;
+  reprendre('fermee');
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', auRetour);
+
+/**
+ * L'ECRAN RESTE ALLUME en chambre d'appel : un telephone qui se met en veille
+ * coupe sa connexion, et c'etait la premiere cause de joueurs absents a
+ * l'appel. Le navigateur relache le verrou quand la page passe en arriere-
+ * plan ; il se reprend au retour (auRetour). Sans l'API, rien ne change.
+ */
+async function garderLEcranAllume() {
+  try {
+    const wl = (navigator as any).wakeLock;
+    if (!wl || (verrouEcran && !verrouEcran.released)) return;
+    verrouEcran = await wl.request('screen');
+  } catch { /* refuse ou non pris en charge : sans importance */ }
+}
+function relacherLEcran() {
+  try { verrouEcran?.release?.(); } catch { /* deja relache */ }
+  verrouEcran = null;
 }
 
 /* ----------------------------------------------------------- l'echauffement */
@@ -394,6 +493,9 @@ export function versLocal(t: number): number {
 export function quitterDirect(accueil = true) {
   if (minuteurRappel) { clearTimeout(minuteurRappel); minuteurRappel = null; }
   if (veilleEchauffement) { clearInterval(veilleEchauffement); veilleEchauffement = null; }
+  if (minuteurReconnexion) { clearTimeout(minuteurReconnexion); minuteurReconnexion = null; }
+  entree = null;
+  relacherLEcran();
   lien = null;
   if (SprinterApp.G) SprinterApp.G.echauffementChamp = false;
   if (salle) {

@@ -504,3 +504,27 @@ export function arrivee(e: Edition, phase: string, course: number) {
     .map(r => ({ ...r, nom: noms.get(r.name_key) || r.name_key }))
     .sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity));
 }
+
+/**
+ * Ce telephone porte-t-il ce nom aux yeux de la salle ? (27/09)
+ *
+ * La reponse est gardee pour la session : elle ne change que si le joueur
+ * relie son telephone, et l'ecran qui le lui demande se recharge alors.
+ * `null` : on ne sait pas (reseau) — on ne previent de rien.
+ */
+const relies = new Map<string, Promise<boolean | null>>();
+export function telephoneRelie(nom: string): Promise<boolean | null> {
+  const cle = String(nom || '').trim().toLowerCase();
+  if (!cle) return Promise.resolve(null);
+  let p = relies.get(cle);
+  if (!p) {
+    const q = new URLSearchParams({ name: nom, device: getDeviceId() });
+    p = fetch(`${API_BASE}/champ/pret?${q}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => (d && typeof d.relie === 'boolean' ? d.relie : null))
+      .catch(() => null);
+    p.then(v => { if (v == null) relies.delete(cle); });
+    relies.set(cle, p);
+  }
+  return p;
+}
