@@ -46,6 +46,7 @@ import {
 import {
   postureDe, dessinerSol, piecesDebout, dessinerPiece, prechargerSable,
 } from './longueur-rendu.js';
+import { creerVue, PROFIL } from './sauts-vue.js';
 
 /** La ligne d'appel du saut en longueur, en metres le long de la ligne droite. */
 export const LIGNE = 50;
@@ -53,6 +54,16 @@ export const LIGNE = 50;
 export const FOSSE_X = LIGNE + FOSSE.debut;
 /** L'axe de la piste d'elan : dans la pelouse, a 4,40 m de la corde. */
 export const PISTE_Y = -4.4;
+
+/**
+ * LE SAUTOIR DE PROFIL (sauts-vue.js). Les coordonnees ci-dessus sont celles du
+ * sautoir : la piste le long de x, la fosse au bout. Dans le monde, il est
+ * tourne sur la diagonale que l'isometrie met a l'horizontale de l'ecran, la
+ * ligne d'appel posee dans la pelouse, a quatorze metres de la corde : on
+ * court de gauche a droite, les tribunes derriere.
+ */
+const PIVOT_MONDE = [55, -14];
+let vue = null;
 
 /**
  * LA VITESSE D'ELAN LA PLUS HAUTE, en m/s.
@@ -153,27 +164,32 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   };
   prechargerSable(e.theme);
 
+  vue = creerVue({ rot: PROFIL, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: PIVOT_MONDE, laneW: SprinterCore.C.LANE_W });
+  // Tout ce que le moteur demande au saut passe par le repere du sautoir : le
+  // coureur y revient le temps de la reponse, et retourne au monde apres.
+  const local = (fn) => vue.avec(G.player, fn);
   G.sautEnCours = true;
-  G.pasSauteur = pas;
-  G.appuiSaut = appui;
-  G.relacheSaut = relache;
-  G.viseCamera = viseCamera;
-  G.jaugeSaut = jauge;
-  G.consigneSaut = consigne;
+  G.pasSauteur = (j, dt, el) => local(() => pas(j, dt, el));
+  G.appuiSaut = (cote) => local(() => appui(cote));
+  G.relacheSaut = (cote) => local(() => relache(cote));
+  G.viseCamera = () => { const p = local(viseCamera); return vue.monde(p[0], p[1]); };
+  G.jaugeSaut = () => local(jauge);
+  G.consigneSaut = () => local(consigne);
   G.pavesSaut = pavesDuSaut;
   // Le decor ne se pose pas sur la piste d'elan ni dans la fosse.
   const debut = Math.min(LIGNE, lignetriple) - ELAN - 8;
-  G.zoneReservee = { x0: debut, x1: FOSSE_X + (FOSSE.fond - FOSSE.debut) + 3, y0: PISTE_Y - 4.6, y1: 0 };
+  const fond = FOSSE_X + (FOSSE.fond - FOSSE.debut) + 3;
+  G.zoneReservee = vue.zone([[debut, PISTE_Y - 4.6], [fond, PISTE_Y - 4.6], [debut, PISTE_Y + 3], [fond, PISTE_Y + 3]]);
   G.obstacles = {
     saut: true,
     preparer(r, G2, C) {
       if (!e || r !== G2.player) { r.posture = null; return; }
-      r.posture = postureDe(e, r, C.MODEL_H / r.look.h);
+      r.posture = local(() => postureDe(e, r, C.MODEL_H / r.look.h));
     },
     oublier(r) { r.posture = null; },
-    sol(ctx, api) { if (e) dessinerSol(ctx, api, e, e.theme); },
-    pieces(api) { return e ? piecesDebout(e, api, e.pieces) : []; },
-    dessiner(ctx, api, pc) { if (e) dessinerPiece(ctx, api, e, pc, e.theme, SprinterApp); },
+    sol(ctx, api) { if (e) local(() => dessinerSol(ctx, vue.api(api), e, e.theme)); },
+    pieces(api) { return e ? local(() => piecesDebout(e, vue.api(api), e.pieces)) : []; },
+    dessiner(ctx, api, pc) { if (e) local(() => dessinerPiece(ctx, vue.api(api), e, pc, e.theme, SprinterApp)); },
   };
   // Tous les chemins de sortie passent par l'accueil — le bouton de l'ecran,
   // la pause, le retour du telephone. C'est la qu'on range, et la seulement.
@@ -211,6 +227,8 @@ function nouveauSauteur() {
   G.reactShown = true;
   G.transShown = false;
   resetInputRhythm();
+  // Un coureur neuf, pose au monde : l'ancien n'a plus rien a garder.
+  if (vue) { vue.oublier(); vue.poser(j); }
 }
 
 /** Tout ce qu'un essai laisse derriere lui, remis a zero. */
@@ -262,7 +280,12 @@ function nettoyer() {
   G.zoneReservee = null;
   if (G.obstacles && G.obstacles.saut) G.obstacles = null;
   G.zoomMode = 1;
-  if (G.player) { G.player.posture = null; G.player.fallAnim = 0; }
+  if (G.player) {
+    const j = G.player;
+    j.posture = null; j.fallAnim = 0; j.tete = 0; j.cap = 0; j.demi = 0; j.roulis = 0;
+  }
+  if (vue) vue.oublier();
+  vue = null;
   if (sauvegarde) {
     G.race = sauvegarde.race;
     G.raceKey = sauvegarde.raceKey;
@@ -699,35 +722,41 @@ function mesurer() {
 function viseCamera() {
   const G = SprinterApp.G, j = G.player;
   if (!e || !j) return [LIGNE, PISTE_Y];
-  const etroit = G.portrait ? 1 : 0.35;
-  let avance = 1.2, cote = 0.8;
-  if (e.phase === 'repos' || e.phase === 'attente') {
-    avance = 2.5 + 2.5 * etroit; cote = 1.2;
-  } else if (e.phase === 'elan' || e.phase === 'traverse' || e.phase === 'casse') {
+  // DE PROFIL (sauts-vue.js), un metre de piste occupe 1,26 metre d'ecran en
+  // largeur, et un metre de travers 0,63 en hauteur. On pose donc l'athlete a
+  // une part de la largeur de l'ecran, et le sol a une part de sa hauteur —
+  // en metres de piste, pas en metres d'ecran.
+  const m = SprinterApp.scaleM();
+  const demi = G.VW / 2 / (m * 1.26);
+  const haut = G.VH / m;
+  // Le sol un peu sous le milieu : le vol monte, et les paves tiennent le bas.
+  const cote = -(0.10 * haut) / 0.632;
+  let part = 0.45;
+  if (e.phase === 'repos' || e.phase === 'attente') part = 0.40;
+  else if (e.phase === 'elan' || e.phase === 'traverse' || e.phase === 'casse') {
     // plus il approche, plus la planche et le sable entrent dans le cadre
-    const k = lisse((j.d - (e.ligne - 16)) / 12);
-    avance = 2.5 + 2.5 * etroit + k * (1.5 + 1.5 * etroit);
-    cote = 1.2;
-  } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
-    avance = 3.0 + 2.0 * etroit; cote = 1.0;
-  } else if (e.phase === 'reception') {
-    return [Math.max(j.d, e.reception.x) + 0.6 + 0.8 * etroit, PISTE_Y + 0.8];
+    part = 0.40 + 0.15 * lisse((j.d - (e.ligne - 16)) / 12);
+  } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') part = 0.50;
+  else if (e.phase === 'reception') {
+    return [Math.max(j.d, e.reception.x) + 0.15 * demi, PISTE_Y + cote];
   }
-  return [j.d + avance, PISTE_Y + cote];
+  return [j.d + part * demi, PISTE_Y + cote];
 }
 
 function zoomVise() {
   if (!e) return 1;
   const j = SprinterApp.G.player;
-  // Le triple saut s'etend sur vingt metres : on le regarde d'un peu plus loin.
+  // De profil, le cadre est large et bas : on regarde d'un peu plus loin qu'en
+  // trois quarts, et le triple saut, qui s'etend sur vingt metres, plus loin
+  // encore.
   const loin = triple() ? 0.9 : 1;
   switch (e.phase) {
-    case 'repos': case 'attente': return 1.45;
-    case 'elan': return 1.20 + 0.35 * loin * lisse((j.d - (e.ligne - 12)) / 10);
-    case 'appel': case 'pose': return 1.62 * loin;
-    case 'vol': return 1.58 * loin;
-    case 'reception': return e.reception.t < 1.6 ? 1.72 : 1.55;
-    default: return 1.45;
+    case 'repos': case 'attente': return 1.35;
+    case 'elan': return 1.15 + 0.25 * loin * lisse((j.d - (e.ligne - 12)) / 10);
+    case 'appel': case 'pose': return 1.55 * loin;
+    case 'vol': return 1.50 * loin;
+    case 'reception': return e.reception.t < 1.6 ? 1.62 : 1.5;
+    default: return 1.35;
   }
 }
 
@@ -740,7 +769,7 @@ function zoomer(dt) {
 function placerCamera(net) {
   const G = SprinterApp.G;
   if (net) G.zoomMode = zoomVise();
-  const [x, y] = viseCamera();
+  const [x, y] = G.viseCamera ? G.viseCamera() : viseCamera();
   G.camX = x; G.camY = y;
 }
 

@@ -709,6 +709,54 @@
     },
   };
 
+  // LES MORCEAUX DE JUMPER, sur le meme metier que ceux de Hurdlers mais avec
+  // ce que les concours de saut ont en propre : le public qui frappe dans ses
+  // mains, lentement, avant chaque essai. Plus lents que Sprinter — un sauteur
+  // ne court que vingt metres, il attend beaucoup —, sur des septiemes un peu
+  // funk, en mi. Ils montent d'une etape a l'autre comme les autres : tempo,
+  // densite, bourdon, et des mains de plus en plus serrees.
+  //
+  // Le canal de test seulement, comme les sauts (canal.ts) : ecrit ainsi, le
+  // tableau se replie a vide a la compilation publique.
+  const m7 = [0, 3, 7, 10], D7 = [0, 4, 7, 10], M7 = [0, 4, 7, 11], D9 = [0, 4, 10, 14];
+  const MUSIQUES_SAUTS = import.meta.env.VITE_CANAL === 'test' ? {
+    s_menu: {
+      bpm: 92, cle: 7, prog: [[0, m7], [5, D7], [3, M7], [-2, D9]],
+      kick: [0, 2.5], snare: [], claps: [1, 3], clapAmp: 0.9, hats: 8,
+      bassPat: [0, null, 7, null, 10, null, 7, 12], bassAmp: 0.26,
+      padAmp: 0.09, arp: 8, motif: [0, 2, 1, 3, 2, 1, 3, 2], arpOct: 5,
+      arpAmp: 0.07, swing: 0.28, envol: 0.04, drone: 0,
+    },
+    s_race0: {                              // etapes 1 a 3
+      bpm: 100, cle: 7, prog: [[0, m7], [5, D9], [3, M7], [-2, D7]],
+      kick: [0, 1.5, 2.5], snare: [], claps: [0, 1, 2, 3], clapAmp: 1, hats: 8,
+      bassPat: [0, 12, null, 7, 10, null, 7, 5], bassAmp: 0.32,
+      padAmp: 0.08, arp: 8, motif: [0, 1, 2, 3, 1, 2, 3, 2], arpOct: 5,
+      arpAmp: 0.08, swing: 0.30, envol: 0.08, drone: 0,
+    },
+    s_race1: {                              // championnat du monde
+      bpm: 108, cle: 7, prog: [[0, m7], [-4, M7], [5, D9], [7, D7]],
+      kick: [0, 1.5, 2.5, 3], snare: [], claps: [0, 1, 2, 3, 3.5], clapAmp: 1.05, hats: 8,
+      bassPat: [0, 12, 10, 7, 0, 12, 7, 3], bassAmp: 0.36,
+      padAmp: 0.085, arp: 8, motif: [0, 2, 3, 1, 0, 2, 3, 1], arpOct: 5,
+      arpAmp: 0.09, swing: 0.24, envol: 0.10, drone: 0.05,
+    },
+    s_race2: {                              // jeux mondiaux
+      bpm: 116, cle: 7, prog: [[0, m7], [1, M7], [-4, D9], [7, D7]],
+      kick: [0, 1, 1.5, 2.5, 3], snare: [], claps: [0, 1, 1.5, 2, 3, 3.5], clapAmp: 1.1, hats: 16,
+      bassPat: [0, 0, 12, 10, 0, 7, 12, 10], bassAmp: 0.40,
+      padAmp: 0.09, arp: 12, motif: [0, 1, 2, 3, 2, 1], arpOct: 5,
+      arpAmp: 0.10, swing: 0, envol: 0.12, drone: 0.09,
+    },
+    s_race3: {                              // inter galactique
+      bpm: 124, cle: 7, prog: [[0, D9], [-1, D9], [-3, M7], [-5, D7]],
+      kick: [0, 0.75, 1.5, 2.5, 3], snare: [], claps: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], clapAmp: 0.95, hats: 16,
+      bassPat: [0, 0, 6, 0, 12, 0, 10, 11], bassAmp: 0.42,
+      padAmp: 0.095, arp: 16, motif: [0, 1, 2, 3, 3, 2, 1, 0], arpOct: 6,
+      arpAmp: 0.10, swing: 0, envol: 0.15, drone: 0.13,
+    },
+  } : {};
+
   const Audio_ = {
     ok: false, on: true, ctx: null, buf: {}, src: null, cur: null, gain: null,
     // La SORTIE unique, et la prise branchee dessus.
@@ -842,6 +890,8 @@
         // grosse caisse et caisse claire
         cfg.kick.forEach(x => this.drum(d, t + x * beat, 'k'));
         cfg.snare.forEach(x => this.drum(d, t + x * beat, 's'));
+        // les mains du public, celles des concours de saut (MUSIQUES_SAUTS)
+        (cfg.claps || []).forEach(x => this.mains(d, t + x * beat, cfg.clapAmp || 1, b * 16 + x * 4));
         for (let i = 0; i < cfg.hats; i++)
           this.drum(d, t + i * beat * 4 / cfg.hats, 'h');
         // basse
@@ -914,6 +964,34 @@
         if (cfg.drone > 0) this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25);
       });
       return this.norm(d);
+    },
+    /**
+     * DES MAINS QUI FRAPPENT, dans un stade. Un claquement est une rafale de
+     * bruit tres breve, dedoublee a quelques millisecondes — la main qui rebondit
+     * sur l'autre. Un stade en fait des milliers qui ne tombent jamais tout a
+     * fait ensemble : on en superpose une dizaine, decales de moins de vingt
+     * millisecondes et d'intensites inegales. C'est ce flou qui fait la foule.
+     */
+    mains(d, t0, amp, graine) {
+      const sr = d.sampleRate, ch = d.getChannelData(0);
+      let g = (graine * 7919 + 17) | 0;
+      const alea = () => { g = (Math.imul(1103515245, g) + 12345) & 0x7fffffff; return g / 0x7fffffff; };
+      for (let c = 0; c < 10; c++) {
+        const i0 = ((t0 + (alea() - 0.3) * 0.022) * sr) | 0;
+        const a = amp * (0.05 + 0.05 * alea());
+        const n = (0.05 * sr) | 0;
+        let seed = (g ^ (c * 2654435761)) & 0x7fffffff, prev = 0;
+        for (let i = 0; i < n; i++) {
+          const k = i0 + i; if (k < 0 || k >= ch.length) continue;
+          seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+          const nz = seed / 0x3fffffff - 1;
+          // bruit derive : le grave s'en va, reste le claquement
+          const hp = nz - prev; prev = nz;
+          const q = i / sr;
+          const env = Math.exp(-q * 95) + 0.6 * (q > 0.006 ? Math.exp(-(q - 0.006) * 120) : 0);
+          ch[k] += a * env * hp;
+        }
+      }
     },
     /** Un glissando qui monte d'une octave ou deux, en cloche : l'envol. */
     envol(d, t0, dur, f0, f1, amp) {
@@ -1398,6 +1476,13 @@
      * garde dans les deux jeux.
      */
     duJeu(name) {
+      // Jumper joue les siens, sur le meme metier (MUSIQUES_SAUTS).
+      if (G.jeu === 'jumper') {
+        const j = 's_' + name;
+        if (!MUSIQUES_SAUTS[j]) return name;
+        if (!this.buf[j]) this.buf[j] = this.buildHaies(MUSIQUES_SAUTS[j]);
+        return j;
+      }
       const h = 'h_' + name;
       if (G.jeu !== 'hurdlers' || !MUSIQUES_HAIES[h]) return name;
       if (!this.buf[h]) this.buf[h] = this.buildHaies(MUSIQUES_HAIES[h]);
@@ -7365,6 +7450,10 @@
     for (const [r, g2] of vis) {
       if (r.isGhost) continue;          // un fantome ne porte pas d'ombre
       if (r.opacite != null && r.opacite < 0.5) continue;   // il s'efface
+      // Au-dessus d'un tapis de saut, l'ombre tombe sur le tapis, pas sur la
+      // pelouse soixante-dix centimetres plus bas : c'est le jeu du saut qui la
+      // pose, sur son calque (voir hauteur-rendu.js).
+      if (r.sansOmbre) continue;
       if (prem) {
         // Deux ombres — la penombre large et le contact serre — plutot qu'un
         // disque noir a bord net. Voir rendu-premium.js : c'est ce qui pose
@@ -7402,6 +7491,12 @@
         // virage, sans avoir a rejouer la geometrie du tour.
         const q = T.pos(r.d + 0.3, r.lane);
         let dx = q[0] - p[0], dy = q[1] - p[1];
+        // Un coureur qui ne suit pas le couloir — l'elan en J du saut en
+        // hauteur — pousse la poussiere dans SA direction, pas celle de la piste.
+        if (r.cap) {
+          const c = Math.cos(r.cap), s2 = Math.sin(r.cap);
+          const t = dx * c - dy * s2; dy = dx * s2 + dy * c; dx = t;
+        }
         const dl = Math.hypot(dx, dy) || 1;
         prem.appui(th, p[0], p[1], dx / dl, dy / dl, r.v);
       }
@@ -7472,10 +7567,13 @@
       } else if (op < 1) ctx.globalAlpha = op;
       // Au rappel, on revient vers les blocs : tourne vers eux, pas a
       // reculons.
+      // `cap` et `roulis` sont ceux d'un athlete qui ne suit pas le couloir :
+      // le sauteur en hauteur prend sa courbe, puis tourne le dos a la barre.
+      // Sans eux, ils valent zero et rien ne change.
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
-                 T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0),
-                 T.lean(r.d, r.lane, r.v));
+                 T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0),
+                 T.lean(r.d, r.lane, r.v) + (r.roulis || 0));
       ctx.globalAlpha = 1;
     };
     // LES OBSTACLES, RANGES PARMI LES COUREURS.

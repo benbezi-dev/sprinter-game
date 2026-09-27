@@ -62,14 +62,18 @@ export const FOSSE = {
 /**
  * Les essais d'un concours.
  *
- * Trois pour tout le monde. Au-dela de huit concurrents, les huit meilleurs
- * apres trois essais en recoivent trois de plus — les autres sont classes sur
- * leurs trois premiers. A huit ou moins, chacun saute six fois.
+ * Le reglement en donne trois a tout le monde, puis trois de plus aux huit
+ * meilleurs d'une finale. LE JEU S'ARRETE A TROIS, comme les qualifications
+ * des grands championnats : trois essais pour tout le monde, pas de coupe.
+ * Un concours de six essais demandait un quart d'heure au joueur, dont dix
+ * minutes a regarder les autres ; trois tiennent en une course de Sprinter,
+ * et chaque essai y pese deux fois plus.
  *
- * Les trois derniers essais se sautent dans l'ordre INVERSE du classement : le
- * meilleur saute en dernier, et sait ce qu'il doit faire.
+ * `derniers` et `qualifies` restent : a trois derniers et huit qualifies, le
+ * jeu retrouve la finale du reglement — la coupe, et l'ordre inverse du
+ * classement pour les trois derniers essais.
  */
-export const ESSAIS = { premiers: 3, derniers: 3, qualifies: 8 };
+export const ESSAIS = { premiers: 3, derniers: 0, qualifies: 8 };
 
 /**
  * Le temps accorde pour un essai, en secondes, a partir de l'appel du juge.
