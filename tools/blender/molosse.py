@@ -156,12 +156,30 @@ COLONNE = [
 # tous les molosses ont et qu'aucun levrier n'a. C'est trois centimetres de
 # hauteur, et c'est ce qui fait qu'on reconnait la bete de profil a vingt
 # metres.
+# LA TETE ETAIT TROP BASSE ET TROP LOIN, ET C'EST UNE VUE DE PROFIL QUI L'A
+# DIT — apres cinq rendus sous l'angle du jeu qui ne pouvaient pas le montrer.
+#
+# Les hauteurs allaient de 0,475 a 0,425, quand la colonne, elle, va de 0,48 a
+# 0,62. LE CRANE ETAIT DONC SOUS LE NIVEAU DU DOS, museau pointe vers le sol :
+# de profil, la bete reniflait la terre en courant. C'est ce qui donnait la
+# loutre — un corps qui continue tout droit et se termine en pointe vers le
+# bas, sans le decrochement tete/encolure qui fait reconnaitre un chien.
+#
+# Et le crane etait a 0,95 quand le garrot est a 0,54 : QUARANTE ET UN
+# CENTIMETRES D'ENCOLURE sur une bete d'un metre quatre-vingt-cinq. Un molosse
+# a le cou court — c'est meme ce qui le distingue le plus vite d'un levrier,
+# avec le museau.
+#
+# La tete remonte donc au niveau du garrot et recule de dix centimetres. Le
+# museau garde une legere plongee (0,615 a la truffe contre 0,655 au crane) :
+# une tete parfaitement horizontale a l'air empaillee, une tete qui plonge un
+# peu regarde ou elle court.
 TETE = [
-    (+0.95, 0.475, 0.205),  # le crane, large
-    (+1.05, 0.470, 0.180),  # le front, plein
-    (+1.10, 0.440, 0.140),  # LE STOP — la cassure sous le front
-    (+1.18, 0.430, 0.130),  # le chanfrein, court et profond
-    (+1.255, 0.425, 0.105), # la truffe, large
+    (+0.86, 0.655, 0.205),  # le crane, large, au niveau du garrot
+    (+0.96, 0.650, 0.180),  # le front, plein
+    (+1.01, 0.622, 0.140),  # LE STOP — la cassure sous le front
+    (+1.09, 0.618, 0.130),  # le chanfrein, court et profond
+    (+1.165, 0.615, 0.105), # la truffe, large
 ]
 
 # Les quatre pattes : (avancement de l'epaule, hauteur de l'epaule, phase).
@@ -197,22 +215,70 @@ def pied_de(u, amplitude):
 
 
 def bete(phase):
-    """Une metaball par masse, posee pour cette phase du galop."""
-    mb = bpy.data.metaballs.new('molosse')
-    # La resolution decide de la finesse de la peau. 0,012 donne une surface
-    # lisse a cent vingt pixels le metre sans faire exploser le temps de
-    # rendu ; au-dela on compte les facettes sur le museau.
-    mb.resolution = 0.012
-    mb.render_resolution = 0.010
-    obj = bpy.data.objects.new('molosse', mb)
-    bpy.context.collection.objects.link(obj)
+    """La bete, en SEPT OBJETS METABALL et non plus un seul.
 
-    def masse(x, y, z, r, rigide=2.0):
-        e = mb.elements.new()
-        e.co = (x, y, z)
-        e.radius = r
-        e.stiffness = rigide
-        return e
+    C'EST LA CORRECTION DE FOND, ET ELLE VIENT D'UN ECHEC MESURE.
+
+    Pendant cinq rendus, tout etait dans une seule metaball. Le resultat se
+    lisait comme une LOUTRE : un corps lisse et continu porte par quatre fils,
+    sans epaule, sans stop au crane, sans attache d'oreille. Aucun reglage de
+    nombres n'y a rien change, et l'on a fini par comprendre pourquoi.
+
+    Une metaball fusionne par recouvrement de CHAMP, et le champ d'une masse
+    porte bien au-dela de son rayon. Le tronc demande des rayons de trente
+    centimetres : son champ avalait tout ce qu'on posait a cote. Monter sa
+    rigidite resserre bien le champ — mais detache alors les pattes, et l'on
+    passe d'un phoque a un phoque sur echasses. Il n'existe aucun reglage
+    entre les deux qui donne un chien, parce qu'un seul objet ne peut pas
+    porter A LA FOIS une masse continue et des articulations lisibles.
+
+    LA SOLUTION EST DANS BLENDER ET NON DANS LES NOMBRES. Deux metaballs ne
+    fusionnent que si leurs objets appartiennent a la MEME FAMILLE DE NOMS :
+    « molosse », « molosse.001 », « molosse.002 » se melangent ; « tronc » et
+    « tete » s'ignorent et s'interpenetrent simplement. Sept familles donnent
+    donc sept volumes qui se croisent sans se dissoudre :
+
+        tronc   tete   queue   et les quatre pattes, une par membre.
+
+    CE QU'ON GAGNE : la tete garde son stop et sa machoire, puisque plus rien
+    de trente centimetres ne vient les lisser ; l'epaule RESSORT du flanc au
+    lieu d'y fondre ; l'oreille tient sur le crane.
+
+    CE QU'ON PERD, ET C'EST ASSUME : les raccords ne sont plus des fondus mais
+    des INTERSECTIONS. A la jonction patte-flanc, deux surfaces se croisent
+    franchement au lieu de se marier. Sur une bete noire vue a trente pixels
+    le metre, une intersection ne se voit pas — c'est du volume dans du
+    volume. Elle se verrait sur une affiche, et c'est la qu'il faudrait
+    revenir. On recouvre donc genereusement : chaque membre remonte DANS le
+    tronc, pour que le croisement tombe a l'interieur de la masse.
+    """
+    familles = {}
+
+    def groupe(nom):
+        """Une famille de masses, independante des autres.
+
+        Rend la fonction `masse` de cette famille-la. Le nom porte la
+        separation : c'est lui, et lui seul, qui decide de ce qui fusionne.
+        """
+        mb = bpy.data.metaballs.new(nom)
+        # La resolution decide de la finesse de la peau. 0,012 donne une
+        # surface lisse a cent vingt pixels le metre sans faire exploser le
+        # temps de rendu ; au-dela on compte les facettes sur le museau.
+        mb.resolution = 0.012
+        mb.render_resolution = 0.010
+        o = bpy.data.objects.new(nom, mb)
+        bpy.context.collection.objects.link(o)
+        familles[nom] = o
+
+        def masse(x, y, z, r, rigide=2.0):
+            e = mb.elements.new()
+            e.co = (x, y, z)
+            e.radius = r
+            e.stiffness = rigide
+            return e
+        return masse
+
+    masse = groupe('tronc')
 
     # Le corps oscille : le dos se cambre deux fois par foulee, et la bete
     # decolle une fois. C'est la respiration du galop — sans elle, l'animal
@@ -228,17 +294,45 @@ def bete(phase):
             x, h, r = x0 + (x1 - x0) * a, h0 + (h1 - h0) * a, r0 + (r1 - r0) * a
             # La cambrure porte surtout le rein, pas les epaules.
             poids = math.sin((i + a) / (len(COLONNE) - 1) * math.pi)
-            # RIGIDITE HAUTE SUR LE TRONC, et c'est ce qui rend le reste
-            # visible. Une metaball de trente centimetres de rayon a la
-            # rigidite par defaut porte son champ bien au-dela d'elle-meme :
-            # elle absorbait les oreilles, le haut des pattes et le stop du
-            # crane, et la bete sortait en une masse lisse — un phoque. A 3,2
-            # le champ se resserre sur la masse : le galbe du flanc reste (il
-            # vient de la SUITE des masses, pas de leur portee), mais ce qui
-            # est pose a cote cesse d'etre englouti.
-            masse(x * 0.925, 0.0, h * GARROT + bond + cambre * poids, r, 3.2)
+            # LA RIGIDITE REDESCEND A LA VALEUR PAR DEFAUT, maintenant que la
+            # separation en familles fait le travail.
+            #
+            # Elle avait ete montee a 3,2 pour empecher le tronc d'avaler les
+            # oreilles et le haut des pattes. Ca marchait a moitie et ca
+            # coutait cher : un champ resserre rend le tronc lui-meme moins
+            # continu, et l'on voyait les masses de la colonne perler sous la
+            # peau du flanc. Le probleme n'etait pas la portee du champ, c'est
+            # que tout partageait le meme. Ce n'est plus le cas.
+            masse(x * 0.925, 0.0, h * GARROT + bond + cambre * poids, r)
     x, h, r = COLONNE[-1]
     masse(x * 0.925, 0.0, h * GARROT + bond, r)
+
+    # LA TETE DANS SA PROPRE FAMILLE. C'est elle qui gagne le plus a la
+    # separation : le stop, la machoire et les oreilles existaient deja dans
+    # les tables, et le champ du tronc les lissait tous les trois. Ils sont
+    # maintenant seuls a se partager un volume de la taille d'une tete, donc
+    # ils se voient.
+    #
+    # LE COU REMONTE DANS LE TRONC. La premiere masse de TETE est a 0,95, le
+    # garrot a 0,54 : sans recouvrement, on verrait la jointure. On ajoute
+    # donc une amorce d'encolure qui plonge DANS le poitrail, et le croisement
+    # des deux surfaces tombe a l'interieur de l'animal.
+    masse = groupe('tete')
+    # L'AMORCE D'ENCOLURE EST MINCE, ET LA PREMIERE VERSION NE L'ETAIT PAS.
+    #
+    # Elle posait trois masses de 0,255, 0,21 et 0,195 de rayon : dans une
+    # famille qui ne contient par ailleurs qu'une tete — dont la plus grosse
+    # masse fait 0,205 — ces trois-la dominaient tout et refabriquaient le
+    # blob A L'INTERIEUR du groupe qu'on venait de separer. On avait deplace
+    # le probleme d'un objet a l'autre, sans le resoudre.
+    #
+    # Deux masses fines suffisent : elles n'ont qu'a plonger dans le poitrail
+    # pour cacher la jointure, pas a le remplir. La gorge du tronc est deja a
+    # 0,175 au meme endroit, et deux surfaces qui se croisent n'ont pas besoin
+    # de se ressembler.
+    for t in (0.0, 0.55):
+        masse((0.60 + 0.15 * t) * 0.925, 0.0,
+              (0.630 + 0.012 * t) * GARROT + bond * 0.7, 0.150 - 0.012 * t)
 
     # Le cou et la tete plongent vers l'avant : la posture de la poursuite.
     # On interpole entre les points donnes pour que la chaine reste dense —
@@ -265,12 +359,12 @@ def bete(phase):
     # chaine qui suit le museau par en dessous, epaisse a la naissance et
     # encore large a la pointe — c'est ce qui donne la gueule carree.
     for t, r in ((0.00, 0.115), (0.45, 0.098), (1.00, 0.072)):
-        masse((1.05 + 0.20 * t) * 0.925, 0.0,
-              (0.375 - 0.020 * t) * GARROT + bond * 0.7, r)
+        masse((0.96 + 0.20 * t) * 0.925, 0.0,
+              (0.565 - 0.020 * t) * GARROT + bond * 0.7, r)
     # Et les babines, de part et d'autre : deux masses basses et ecartees qui
     # elargissent la gueule vue de trois quarts, l'angle exact du jeu.
     for cote in (-1, 1):
-        masse(1.14 * 0.925, cote * 0.062, 0.385 * GARROT + bond * 0.7, 0.072)
+        masse(1.05 * 0.925, cote * 0.062, 0.575 * GARROT + bond * 0.7, 0.072)
 
     # LES OREILLES — elles se lisaient comme des AILERONS.
     #
@@ -286,8 +380,8 @@ def bete(phase):
     # plus large. C'est la chute qui fait reconnaitre l'oreille — une bosse
     # ronde posee sur la tete ne se lit pas du tout.
     for cote in (-1, 1):
-        masse(0.96 * 0.925, cote * 0.105, 0.545 * GARROT + bond * 0.7, 0.058)
-        masse(0.93 * 0.925, cote * 0.118, 0.475 * GARROT + bond * 0.7, 0.070)
+        masse(0.87 * 0.925, cote * 0.105, 0.725 * GARROT + bond * 0.7, 0.058)
+        masse(0.84 * 0.925, cote * 0.118, 0.655 * GARROT + bond * 0.7, 0.070)
 
     # Les quatre pattes. Chacune est une chaine de masses qui va de l'epaule
     # au pied en passant par le coude, et le coude est pousse vers l'avant
@@ -295,6 +389,11 @@ def bete(phase):
     # quadrupede et non un homme a quatre jambes.
     amp = PATTE * 1.05
     for k, (ex, eh, ph, avant) in enumerate(EPAULES):
+        # UNE FAMILLE PAR MEMBRE, et non une pour les quatre. Deux pattes du
+        # meme cote se croisent a chaque foulee : dans une famille commune
+        # elles auraient fusionne au passage, et l'animal aurait eu par
+        # moments trois pattes soudees en palme.
+        masse = groupe('patte%d' % k)
         cote = -1 if k % 2 == 0 else 1
         u = (phase + ph) % 1.0
         px, pz = pied_de(u, amp)
@@ -326,20 +425,42 @@ def bete(phase):
         #
         # Le muscle ne descend qu'a 35 % de la longueur : plus bas, on
         # obtient une cuisse de grenouille.
+        # LES RAYONS ONT DOUBLE EN BAS, et la vue de profil dit pourquoi.
+        #
+        # L'avant-bras faisait 6,3 cm de rayon au coude et 4,2 au boulet. Sur
+        # une bete qui fait UN METRE TRENTE au garrot, c'est l'epaisseur d'un
+        # manche a balai : de profil, les quatre membres se lisaient comme des
+        # fils tendus sous un corps qui, du coup, paraissait enorme et long.
+        # Ce n'est pas le corps qui etait trop long, c'est les pattes qui
+        # etaient trop fines pour le porter.
+        #
+        # L'echelle se verifie sur un vrai chien : un dogue de 70 cm au garrot
+        # a un avant-bras d'environ 5 cm de rayon, soit 7 % de sa hauteur. A
+        # 1,30 m, cela fait 9 cm. On y est.
         def rayon_de(t):
             if t < 0.35:
                 # De l'attache au bas du muscle : large, et qui enfle un peu
                 # avant de se pincer.
                 a2 = t / 0.35
-                return 0.155 - 0.020 * a2 * a2
+                return 0.175 - 0.020 * a2 * a2
             if t < 0.50:
-                # Le pincement de l'articulation, court et franc.
+                # Le pincement de l'articulation, court et franc — mais un
+                # pincement reste une inflexion, pas un etranglement : il
+                # descendait a moins de la moitie du muscle, ce qui sectionnait
+                # la patte au lieu de l'articuler.
                 a2 = (t - 0.35) / 0.15
-                return 0.135 - 0.072 * a2
-            # L'avant-bras, fin, qui s'affine doucement jusqu'au boulet.
+                return 0.160 - 0.055 * a2
+            # L'avant-bras, qui s'affine doucement jusqu'au boulet.
             a2 = (t - 0.50) / 0.50
-            return 0.063 - 0.021 * a2
+            return 0.105 - 0.028 * a2
 
+        # L'ATTACHE REMONTE DANS LE FLANC. Sans famille commune, une patte qui
+        # commencerait a la surface du tronc laisserait voir sa section : un
+        # tube coupe net contre un flanc. On pose donc deux masses au-DESSUS
+        # de l'epaule, a l'interieur du corps, pour que la jonction se fasse
+        # dans le volume et non sur la peau.
+        for dz, r in ((0.10, 0.150), (0.05, 0.155)):
+            masse(hx, y * 0.72, hz + dz, r, 1.1)
         for j in range(28):
             t = j / 27.0
             r = rayon_de(t)
@@ -362,7 +483,7 @@ def bete(phase):
         # masses posees a plat, ecartees dans le sens de la marche, donnent
         # une surface d'appui — et c'est cette surface qu'on lit comme un
         # pied qui porte le poids de l'animal.
-        for dx, r in ((0.010, 0.050), (0.046, 0.055), (0.080, 0.044)):
+        for dx, r in ((0.010, 0.072), (0.050, 0.080), (0.090, 0.062)):
             masse(fx + dx, y, fz + 0.018, r, 2.2)
 
     # LA QUEUE FAISAIT LE RAT, et c'etait l'element le plus nuisible de toute
@@ -378,6 +499,7 @@ def bete(phase):
     # Elle passe donc de 0,66 a 0,38 m, et son rayon de naissance double — a
     # 0,125 elle part du corps comme un prolongement de la croupe, ce qui est
     # exactement ce qu'elle est.
+    masse = groupe('queue')
     bat = math.sin(phase * 2 * math.pi * 1.5) * 0.10
     for j in range(14):
         t = j / 13.0
@@ -385,7 +507,7 @@ def bete(phase):
               0.60 * GARROT + bond - t * 0.06 + bat * t,
               0.125 - 0.082 * t * t, 1.4)
 
-    return obj
+    return list(familles.values())
 
 
 def matiere_oeil():
@@ -458,8 +580,8 @@ def yeux(phase):
         # ET ILS ETAIENT SUR LE MUSEAU. A 1,085 on est en plein chanfrein,
         # devant le stop : c'est l'emplacement d'une narine, pas d'un oeil.
         # L'oeil d'un chien est EN ARRIERE du stop, sur le cote du crane.
-        o.location = (1.015 * 0.925, cote * 0.112,
-                      0.505 * GARROT + bond * 0.7)
+        o.location = (0.925 * 0.925, cote * 0.112,
+                      0.685 * GARROT + bond * 0.7)
         o.data.materials.append(mat)
         for poly in o.data.polygons:
             poly.use_smooth = True
@@ -561,8 +683,11 @@ def main():
         nettoyer()
         sys.modules['vue'].__dict__  # le module reste charge d'un appel a l'autre
         phase = i / PHASES
-        obj = bete(phase)
-        obj.data.materials.append(matiere_bete())
+        # SEPT OBJETS, UN SEUL MATERIAU. Chacun porte le meme poil : ils ne
+        # fusionnent pas, mais ils doivent etre de la meme bete.
+        mat = matiere_bete()
+        for obj in bete(phase):
+            obj.data.materials.append(mat)
         # LES YEUX NE SONT PAS RENDUS, ET C'EST UNE DECISION, PAS UN OUBLI.
         #
         # `yeux()` existe juste au-dessus et fonctionne. Trois essais ont
@@ -611,57 +736,47 @@ if __name__ == '__main__':
 
 
 # ---------------------------------------------------------------------------
-# OU EN EST CETTE BETE, APRES CINQ RENDUS — ecrit le 27 septembre 2026.
+# OU EN EST CETTE BETE — 27 septembre 2026, apres huit rendus.
 # ---------------------------------------------------------------------------
 #
-# CE QUI A ETE CORRIGE, ET QUI TIENT :
+# CE QUI EST ACQUIS :
 #
-#   - les proportions d'un molosse et non d'un levrier (encolure, poitrail,
-#     museau court avec un stop) ;
-#   - la matiere : une masse sombre avec un fil de lumiere sur l'echine, au
-#     lieu d'une silhouette pale — la rampe s'ouvrait a 0,10 et prenait donc
-#     presque tout l'animal dans la vue isometrique du jeu ;
-#   - la queue, qui faisait le RAT : 66 cm de fouet fin, ramenes a 38 cm
-#     epais. C'etait l'element le plus nuisible de la sculpture, et le seul
-#     dont la correction se voit franchement ;
-#   - les pieds, qui etaient des billes au bout de tubes : trois masses a
-#     plat donnent une surface d'appui ;
-#   - le profil des membres, epais-pince-fin au lieu d'un effilement lineaire.
+#   - SEPT FAMILLES DE METABALLS au lieu d'une : tronc, tete, queue, et une
+#     par patte. Deux metaballs ne fusionnent que si leurs objets portent le
+#     meme nom de base ; sept noms donnent sept volumes qui se croisent sans
+#     se dissoudre. C'etait la correction de fond, et elle est faite.
+#   - les proportions d'un molosse et non d'un levrier ;
+#   - une matiere qui rend une masse sombre et non une silhouette pale ;
+#   - la queue, qui faisait le rat, ramenee a un tiers de sa longueur ;
+#   - la tete relevee au niveau du garrot, et l'encolure raccourcie de dix
+#     centimetres ;
+#   - les pattes epaissies : l'avant-bras passe de 6,3 a 10,5 cm de rayon.
 #
-# CE QUI NE MARCHE TOUJOURS PAS, ET IL FAUT L'ECRIRE SANS TOURNER AUTOUR :
-# CA NE RESSEMBLE PAS A UN CHIEN. Sur la planche de contact, la bete se lit
-# comme une LOUTRE ou un phoque — un corps lisse et continu porte par quatre
-# fils. Cinq rendus successifs n'y ont rien change, et l'echec est instructif.
+# ET SURTOUT, UN OUTIL : molosse-profil.py. Voir son en-tete — c'est lui qui
+# a trouve en une image ce que cinq rendus sous l'angle du jeu n'avaient pas
+# pu montrer, parce que cet angle-la ecrase precisement ce qu'il faut juger.
 #
-# LA CAUSE EST DANS LA METHODE, PAS DANS LES NOMBRES.
+# CE QUI NE VA TOUJOURS PAS, ET IL FAUT L'ECRIRE : LA BETE NE SE LIT PAS
+# ENCORE COMME UN CHIEN. De profil, le tronc reste un TUBE LISSE — pas de
+# creux derriere l'epaule, pas de remontee du flanc vers l'aine, pas de cage
+# thoracique. Et la tete, bien qu'a la bonne hauteur, se raccorde au cou sans
+# aucune articulation visible : on passe du crane au corps sans nuque.
 #
-# Une metaball fusionne par recouvrement de champ. Le tronc demande des
-# rayons de trente centimetres ; leur champ porte alors si loin qu'il avale
-# tout ce qu'on pose a cote — l'attache des membres, la base des oreilles, le
-# stop du crane. Monter la rigidite du tronc (essaye, 2,0 -> 3,2) resserre
-# bien son champ, mais DETACHE les pattes : on passe d'un phoque a un phoque
-# sur echasses. Les deux etats sont mauvais, et il n'y a pas de reglage entre
-# les deux qui donne un chien : le probleme n'est pas le curseur, c'est qu'un
-# seul objet metaball ne peut pas porter a la fois une masse continue et des
-# articulations lisibles.
+# CE QUI RESTE A FAIRE, dans l'ordre ou ca se verra :
 #
-# CE QU'IL FAUDRAIT FAIRE, ET C'EST UN AUTRE CHANTIER :
+#   1. LE CREUX DU FLANC. Une chaine de masses le long de la colonne donne un
+#      tube, quel que soit le profil des rayons : le galbe d'un animal vient
+#      de masses posees DE COTE — cage thoracique large et haute, aine pincee
+#      et remontee — et non d'un axe central. C'est ce qui manque le plus.
+#   2. LA NUQUE. Une masse en arriere du crane, plus haute que l'encolure,
+#      qui fait le decrochement. Sans elle la tete est une excroissance.
+#   3. L'EPAULE ET LA HANCHE, posees de cote elles aussi, dans leur propre
+#      famille : elles doivent RESSORTIR du flanc. Les deux masses d'attache
+#      ajoutees aux membres sont trop petites pour se voir.
+#   4. VERIFIER AU JEU. Une correction jugee de profil doit encore se voir
+#      sous l'angle isometrique, ou la moitie du relief disparait.
 #
-#   1. SEPARER EN PLUSIEURS OBJETS — tronc, tete, quatre membres, queue —
-#      chacun sa metaball, donc chacun son champ. Ils se croisent visuellement
-#      sans fusionner. C'est ainsi que la tete garderait son stop et que
-#      l'epaule ressortirait du flanc.
-#   2. DONNER UN VOLUME AU CRANE. Le stop existe dans la table TETE et ne se
-#      voit pas : il est noye. Separe (point 1), il se verrait.
-#   3. RENONCER AUX YEUX RENDUS. Voir le commentaire dans main() : a l'angle
-#      du jeu, l'oeil d'un vrai chien est cache par son propre crane, et l'on
-#      ne rend que son halo — qui se pose n'importe ou. Le tracé à la main
-#      les POSE, et c'est pour cela qu'ils marchent.
-#
-# TANT QUE LE POINT 1 N'EST PAS FAIT, LE TRACE A LA MAIN DE
-# game/halloween-molosse.js RESTE CE QUI JOUE. Il a ses propres defauts — de
-# pres il se lit comme une table a quatre pieds — mais il est LISIBLE : on
-# reconnait un chien, et on voit ses deux yeux. Un rendu plus detaille qu'on
-# ne reconnait pas est un moins bon rendu.
-#
-# Aucune image produite par ce script n'entre dans le jeu aujourd'hui.
+# TANT QUE 1 ET 2 NE SONT PAS FAITS, LE TRACE A LA MAIN DE
+# game/halloween-molosse.js RESTE CE QUI JOUE, et aucune image de ce script
+# n'entre dans le jeu. Il a ses defauts — de pres il se lit comme une table a
+# quatre pieds — mais on y reconnait un chien, et on y voit ses deux yeux.
