@@ -60,7 +60,7 @@ const FLECHE: Record<Direction, typeof ChevronUp> = {
 function cotesDe(cle: string): string {
   // La planche et la fosse, dans les memes termes que les haies : ce qu'un
   // sauteur lit sur le plan d'un stade.
-  if (cle === 'longueur') return 'élan 40 m · planche 1,22 × 0,20 m · fosse 2,75 m';
+  if (cle === 'longueur') return SprinterApp.N.t('saut_cotes');
   const r = (HAIES as any)[cle];
   if (!r) return '';
   const nb = (v: number) => String(v).replace('.', ',');

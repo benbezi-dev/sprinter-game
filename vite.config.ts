@@ -52,11 +52,20 @@ const canalDuBuild = (mode: string) => {
   return process.env.VITE_CANAL || env.VITE_CANAL || '';
 };
 
+//
+// LE SABLE DU SAUT EN LONGUEUR PASSE PAR LE MEME TROU, et il a fallu le
+// mesurer pour le voir : le concours ne part pas en production (canal.ts,
+// LONGUEUR_OUVERTE), son morceau JS non plus, mais les douze images rendues
+// dans Blender partaient quand meme — `import.meta.glob` les importe en
+// `?url`, donc au moment ou le module est lu. Meme remede : hors du canal de
+// test, ces imports ne sont jamais resolus. Verifie par
+// tools/longueur-canal-test.mjs, qui bati les deux canaux.
+const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/longueur/'];
 const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
   name: 'sprinter-musique-hors-production',
   enforce: 'pre' as const,
   resolveId(source: string) {
-    return source.includes('assets/molosse.mp3') ? '\0musique-absente' : null;
+    return HORS_PRODUCTION.some(f => source.includes(f)) ? '\0musique-absente' : null;
   },
   load(id: string) {
     return id === '\0musique-absente' ? 'export default "";' : null;

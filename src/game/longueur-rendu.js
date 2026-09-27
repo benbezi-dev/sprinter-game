@@ -447,7 +447,9 @@ function dessinerGerbe(ctx, api, e, th) {
   const i = Math.floor(g.t * (mg ? mg.fps : 30));
   if (im && mg) {
     if (i >= mg.images) return;
-    const k = (m / mg.ppm) * g.force;
+    // Un rien plus grande que nature : a la taille ou le jeu montre la fosse,
+    // une gerbe a l'echelle se lisait comme de la poussiere.
+    const k = (m / mg.ppm) * g.force * 1.35;
     ctx.drawImage(im, i * mg.w, 0, mg.w, mg.h,
                   p[0] - mg.ax * k, p[1] - mg.ay * k, mg.w * k, mg.h * k);
     return;

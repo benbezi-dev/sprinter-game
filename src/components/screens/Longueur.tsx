@@ -220,7 +220,7 @@ function Concours({ etape, accent, memoire, onMemoire, onRejouer, onQuitter }: {
     if (tete > 0) lignes.push({ m: tete, couleur: accent, texte: virgule(tete) });
     const moi = meilleur(C.athletes[joueur]);
     if (moi > 0) lignes.push({ m: moi, couleur: 'rgba(255,255,255,0.85)', texte: virgule(moi) });
-    if (etape >= 3) lignes.push({ m: RECORDS.hommes.m, couleur: 'rgb(248,113,113)', texte: 'WR ' + virgule(RECORDS.hommes.m) });
+    if (etape >= 3) lignes.push({ m: RECORDS.hommes.m, couleur: 'rgb(248,113,113)', texte: N.t('saut_rm') + ' ' + virgule(RECORDS.hommes.m) });
     appelerSauteur({ vent: tirerVent(Math.random), lignes: lignes as any });
     setAnnonce(null);
     setTemps('toi');
