@@ -330,6 +330,20 @@ export function padPress(side: 'left' | 'right') {
   }
   if (G.state !== 'race') return;
 
+  // LE SAUT EN LONGUEUR, avant tout le reste. Sur la piste d'elan, un appui
+  // est une foulee ; dans le dernier metre, c'est l'appel ; en l'air, un
+  // ciseau ou le ramene. C'est le jeu du saut qui le dit (longueur-course.js),
+  // et il rend `null` quand l'appui est une foulee ordinaire, que le moteur
+  // traite comme au 100 m.
+  if (G.appuiSaut) {
+    const geste = G.appuiSaut(side);
+    if (geste) {
+      buzz(geste === 'appel' ? 22 : geste === 'ramene' ? 16 : 6);
+      cue(side, 'step');
+      return;
+    }
+  }
+
   // LE PAVE FAIT LA HAIE.
   //
   // Dans la fenetre d'approche, cet appui n'est pas une foulee de plus : c'est
@@ -390,6 +404,11 @@ export function padPress(side: 'left' | 'right') {
  */
 export function padRelease(side: 'left' | 'right') {
   if (G.paused) return;
+  // Le pouce qui quitte la planche : c'est lui qui fixe l'angle d'envol.
+  if (G.relacheSaut) {
+    if (G.relacheSaut(side)) buzz(14);
+    return;
+  }
   if (!G.relacherHaies) return;
   const jc = G.relacherHaies(side);
   if (!jc) return;
@@ -622,6 +641,10 @@ export function updateLogic(dt: number) {
       // Sorti au faux depart : il n'est plus sur la piste, et rien ne le fait
       // avancer. Ceux qu'il regarde avancent par le reseau, plus bas.
       else if (G.spectateur) { /* il regarde */ }
+      // Le sauteur : son elan est une course ordinaire, mais l'appel, le vol
+      // et la reception ne le sont pas. Le jeu du saut prend donc le pas en
+      // entier, et rend la main au moteur pour les foulees de l'elan.
+      else if (G.pasSauteur) G.pasSauteur(G.player, step, G.elapsed);
       else G.player.stepPlayer(step, G.elapsed);
       // Les haies, quand il y en a. Le moteur ne les connait pas : c'est le
       // jeu des haies qui se pose ici a l'armement, et qui se retire en
@@ -704,6 +727,10 @@ export function updateLogic(dt: number) {
         const fin = G.rejeuFin; G.rejeuFin = null;
         if (fin) fin(); else SprinterApp.goHome();
       }
+    } else if (G.sautEnCours) {
+      // UN CONCOURS DE SAUT N'A PAS DE LIGNE D'ARRIVEE. L'essai finit quand
+      // la marque est lue, et c'est le jeu du saut qui le sait : il passe a
+      // l'essai suivant sans jamais ouvrir l'ecran de fin d'une course.
     } else if (G.champDirect) {
       // EN CHAMPIONNAT, C'EST LA SALLE QUI TRANCHE. Le joueur qui a franchi la
       // ligne continue de voir les autres finir, et le tableau d'arrivee

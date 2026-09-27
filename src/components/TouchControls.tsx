@@ -170,8 +170,18 @@ export function TouchControls() {
       const vol = ciseauHaies() as
         { cote: 'left' | 'right' | null; part: number; vise: number; fait: boolean; zone: string } | null;
 
+      // LE SAUT EN LONGUEUR parle la meme langue : sa jauge monte vers la
+      // ligne (on appuie), vers le bon angle (on relache), vers le ramene
+      // (les deux pouces). Il la pose sur le moteur, qui ne la connait pas.
+      const saut = SprinterApp.G.jaugeSaut ? SprinterApp.G.jaugeSaut() as
+        { cote: 'left' | 'right' | null; part: number; zone: string; lesDeux: boolean } | null : null;
+
       let cote: string | null = null, h = 0, zone = '', lesDeux = false;
-      if (app) {
+      if (saut) {
+        cote = saut.cote || 'left'; lesDeux = saut.lesDeux;
+        h = Math.round(Math.min(1, saut.part) * 100);
+        zone = saut.zone;
+      } else if (app) {
         cote = app.cote;
         h = Math.round(Math.min(1, app.avance) * 100);
         zone = app.zone;
@@ -252,6 +262,13 @@ export function TouchControls() {
   // Pas davantage une fois SA ligne passee : il attend les autres, et « alterne
   // les deux touches » sous un coureur qui freine promettait une course finie.
   if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin' || fini)) return null;
+  // Au saut en longueur, entre deux essais ou le temps que la marque tombe :
+  // personne ne court, les paves n'ont rien a proposer.
+  if (SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut && !SprinterApp.G.pavesSaut()) return null;
+
+  const consigne: string | null = SprinterApp.G.sautEnCours
+    ? (SprinterApp.G.consigneSaut ? SprinterApp.G.consigneSaut() : null)
+    : 'alternate';
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //
@@ -342,12 +359,17 @@ export function TouchControls() {
         </div>
       </div>
 
-      {/* La bande d'attaque a disparu : la consigne retrouve sa place. */}
-      <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
-        <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
-          {SprinterApp.N.t('alternate')}
-        </span>
-      </div>
+      {/* La bande d'attaque a disparu : la consigne retrouve sa place. Au
+          saut, elle suit le geste en cours — et quand il n'y a plus rien a
+          faire, en l'air apres le ramene, elle se tait plutot que de redire
+          d'alterner. */}
+      {consigne && (
+        <div className="absolute top-[-20px] md:top-[-30px] w-full text-center pointer-events-none left-0">
+          <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground uppercase bg-black/40 px-3 py-0.5 md:px-4 md:py-1 rounded-full">
+            {SprinterApp.N.t(consigne)}
+          </span>
+        </div>
+      )}
     </div>
     </>
   );

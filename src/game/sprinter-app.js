@@ -3656,7 +3656,12 @@
     const T = G.track, s = vise ? vise.d : 0, lane = 3;
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
-    const p = T.pos(s, lane);
+    //
+    // Sauf quand un jeu la pose lui-meme : le sauteur ne court pas dans le
+    // couloir 4 mais sur sa piste d'elan, dans la pelouse, et la camera doit
+    // aller le chercher la, puis garder la fosse dans le cadre. Voir
+    // longueur-course.js.
+    const p = G.viseCamera ? G.viseCamera() : T.pos(s, lane);
     const tx = p[0], ty = p[1];
     const k = 1 - Math.exp(-6.5 * dt);
     G.camX += (tx - G.camX) * k; G.camY += (ty - G.camY) * k;
@@ -7339,6 +7344,10 @@
         vis.push([r, g2, p]);
     }
     const prem = PREM();
+    // CE QU'UN AUTRE JEU POSE A PLAT SUR LE SOL — la piste d'elan, la planche,
+    // la fosse et ses empreintes. Sous les ombres, et c'est tout l'enjeu : une
+    // ombre d'athlete doit tomber SUR le sable, pas dessous.
+    if (G.obstacles && G.obstacles.sol) G.obstacles.sol(ctx, apiObstacles());
     // LE PASSAGE DE LA LIGNE, VU D'ICI ET NON DU MOTEUR.
     //
     // `finishRace` ne s'execute que trois secondes plus tard, quand tout le
@@ -7377,7 +7386,9 @@
     // nulle part.
     if (prem && (G.state === 'race' || G.state === 'count')) {
       for (const [r, , p] of vis) {
-        if (r.isGhost || r.finished) continue;
+        // Une posture imposee n'est pas une foulee : un sauteur qui pedale en
+        // l'air, ou assis dans le sable, ne souleve pas de poussiere de piste.
+        if (r.isGhost || r.finished || (r.posture && r.posture.w > 0.5)) continue;
         // Un appui par demi-cycle de foulee : les deux jambes sont a pi l'une
         // de l'autre (voir pose()), donc le pas change quand stride/pi change
         // d'entier. C'est l'instant ou un pied touche.
