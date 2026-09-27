@@ -952,3 +952,56 @@ def blocs(P):
 
 
 DEBOUT.update({'blocs': blocs})
+
+
+# -----------------------------------------------------------------------
+# LA PISTE ARC-EN-CIEL — les outils partages
+#
+# Ses pieces vivent dans pieces_arcenciel.py, rendues en eclairage reel ;
+# restent ici les formes qu'elles empruntent.
+# -----------------------------------------------------------------------
+
+def aureole(nom, couleur, x, y, z, rayon, force=0.5):
+    """Le rayonnement autour d'une lampe : une boule dont l'opacite tombe du
+    centre vers le bord, comme `halo`, mais dans l'air et non au sol."""
+    o = halo(nom, couleur, x, y, z, rayon, force=force)
+    # le disque de `halo` est pose a plat : on le dresse face a la camera,
+    # qui regarde le long de (1, 1, -2/sqrt 5) dans le repere du jeu
+    o.rotation_euler = Vector((1, 1, -2 / math.sqrt(5))).to_track_quat('Z', 'Y').to_euler()
+    return o
+
+
+def _etoile_maillage(bm, R, r, epaisseur, bombe):
+    """Une etoile a cinq branches, bombee sur ses deux faces."""
+    avant = bm.verts.new((0, -epaisseur / 2 - bombe, 0))
+    arriere = bm.verts.new((0, epaisseur / 2 + bombe, 0))
+    tour_av, tour_ar = [], []
+    for k in range(10):
+        a = math.pi / 2 + math.pi * k / 5
+        rr = R if k % 2 == 0 else r
+        tour_av.append(bm.verts.new((rr * math.cos(a), -epaisseur / 2, rr * math.sin(a))))
+        tour_ar.append(bm.verts.new((rr * math.cos(a), epaisseur / 2, rr * math.sin(a))))
+    for k in range(10):
+        j = (k + 1) % 10
+        bm.faces.new((avant, tour_av[j], tour_av[k]))
+        bm.faces.new((arriere, tour_ar[k], tour_ar[j]))
+        bm.faces.new((tour_av[k], tour_av[j], tour_ar[j], tour_ar[k]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+
+
+def _eclat(nom, mat, x, y, z, t):
+    """Une etincelle : un octaedre etire."""
+    bm = bmesh.new()
+    v = [bm.verts.new(p) for p in ((0, 0, t * 1.6), (0, 0, -t * 1.6), (t, 0, 0), (-t, 0, 0),
+                                   (0, t, 0), (0, -t, 0))]
+    for a, b in ((2, 4), (4, 3), (3, 5), (5, 2)):
+        bm.faces.new((v[0], v[a], v[b]))
+        bm.faces.new((v[1], v[b], v[a]))
+    bmesh.ops.translate(bm, vec=(x, y, z), verts=bm.verts)
+    return _mesh(nom, mat, bm)
+
+
+
+
+
+

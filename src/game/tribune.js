@@ -67,7 +67,7 @@
   const SIEGES = {
     day: [34, 96, 196], mondiaux: [30, 150, 84], cosmos: [120, 72, 196],
     danube: [84, 52, 128], riviera: [44, 176, 190], nuit: [38, 72, 158],
-    namek: [226, 118, 38], champdemars: [26, 60, 150],
+    namek: [226, 118, 38], champdemars: [26, 60, 150], arcenciel: [236, 96, 196],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
 
@@ -167,6 +167,8 @@
   };
 
   let _themeCourant = null;
+  /** La pose retenue par chaque spectateur, et le geste ou il l'a choisie. */
+  const poses = new Map();
   /** Les caps de spectateurs de ce stade, pour tout le trace. */
   const capsVus = new Set();
   let capsDuTrace = null;
@@ -187,7 +189,9 @@
    */
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
     if (!charger()) return false;
-    if (th !== _themeCourant) { cache.clear(); capsVus.clear(); capsDuTrace = null; _themeCourant = th; }
+    if (th !== _themeCourant) {
+      cache.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null; _themeCourant = th;
+    }
     budget = 48;
     const G = api.G, T = G.track;
     limite = performance.now() + (G.state === 'race' ? BUDGET_COURSE_MS : BUDGET_REPOS_MS);
@@ -233,8 +237,7 @@
       const d = Math.sqrt(d2);
       return d <= 6 ? 1 : d >= 24 ? 0 : 1 - (d - 6) / 18;
     };
-    // Le saut d'un spectateur debout qui s'enflamme, en pixels par metre.
-    const pxm = api.scaleM();
+    if (poses.size > 60000) poses.clear();
 
     // Les echantillons dans le cadre, une fois pour toutes les rangees.
     const vis = new Uint8Array(sm.length);
@@ -289,7 +292,6 @@
         const eLoc = ferveur > 0 ? ferveur * (0.6 + 0.4 * presDe(a[0] + dx * 0.5, a[1] + dy * 0.5)) : 0;
         const pDebout = debout + 0.62 * eLoc;
         const pApplaudit = Math.min(0.96 - pDebout, 0.22 + 0.14 * eLoc);
-        const rythme = 1 + 2.5 * eLoc;
         for (let k = 0; k < n; k++) {
           const u = (k + 0.5) / n;
           const X = a[0] + dx * u, Y = a[1] + dy * u;
@@ -302,21 +304,39 @@
           const g = api.solid(X, Y, z);
           if (g[0] < -margeX || g[0] > G.VW + margeX || g[1] < -margeY || g[1] > G.VH + margeY) continue;
           const h = hache(j + 1, i + 7, k + 13);
-          let pose, saut = 0;
+          let pose;
           if ((h % 1000) / 1000 >= densite) pose = iVide;
           else {
-            // chacun change de geste de temps en temps, jamais tous ensemble
-            // — et d'autant plus souvent que le stade s'enflamme
-            const cycle = Math.floor(t / ((2.2 + (h % 7) * 0.3) / rythme) + (h % 97) / 97 * 5);
-            const v = hache(h, cycle, 3) % 1000 / 1000;
-            pose = v < pDebout ? iDebout : (v < pDebout + pApplaudit ? iApplaudit : iAssis);
-            // Debout et enflamme, on saute sur place : chacun a son rythme.
-            if (pose !== iAssis && eLoc > 0.4) {
-              saut = Math.abs(Math.sin(t * (7 + (h % 5)) + (h % 628) / 100))
-                * (eLoc - 0.4) * 0.22 * pxm;
+            // chacun change de geste de temps en temps, jamais tous ensemble.
+            //
+            // LE RYTHME NE DEPEND PAS DE LA FERVEUR, et c'est voulu. Il en
+            // dependait : la periode du geste raccourcissait quand le stade
+            // s'enflammait. Mais `t` compte depuis l'ouverture de la page —
+            // des centaines de secondes —, et diviser un grand nombre par une
+            // periode qui bouge fait sauter le numero du geste a chaque
+            // image : le public scintillait au lieu de s'animer. La ferveur
+            // joue donc sur CE que chacun fait (debout, applaudir), jamais
+            // sur la frequence a laquelle il change d'avis.
+            //
+            // ET LA POSE NE SE DECIDE QU'AU CHANGEMENT DE GESTE. La ferveur
+            // bouge a chaque image — elle monte avec la course, et la
+            // proximite des coureurs la module a chaque pas. Comparee a
+            // chaque image au tirage de chacun, elle faisait basculer sans
+            // cesse ceux dont le tirage tombait pres du seuil : des gens qui
+            // se levaient et se rasseyaient n'importe quand, au hasard. On
+            // retient donc la pose choisie jusqu'au geste suivant, et la
+            // ferveur n'agit qu'a ce moment-la : le stade se leve peu a peu,
+            // chacun a son tour.
+            const cycle = Math.floor(t / (2.2 + (h % 7) * 0.3) + (h % 97) / 97 * 5);
+            const vu = poses.get(h);
+            if (vu && vu[0] === cycle) pose = vu[1];
+            else {
+              const v = hache(h, cycle, 3) % 1000 / 1000;
+              pose = v < pDebout ? iDebout : (v < pDebout + pApplaudit ? iApplaudit : iAssis);
+              poses.set(h, [cycle, pose]);
             }
           }
-          items.push([api.depthOf(X, Y), g[0], g[1] - saut, pose, capI, h]);
+          items.push([api.depthOf(X, Y), g[0], g[1], pose, capI, h]);
         }
       }
     }

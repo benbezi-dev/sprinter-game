@@ -533,6 +533,31 @@
       names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
               'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
 
+    // LA PISTE ARC-EN-CIEL — un pont de lumiere pose dans l'espace.
+    //
+    // Elle doit son idee aux pistes arc-en-ciel des jeux de course, et rien
+    // d'autre : ni nom, ni personnage, ni objet repris. Un arc-en-ciel, des
+    // etoiles, un satellite et une fusee n'appartiennent a personne. Comme les
+    // Trois Soleils, son nom affiche vit dans les traductions (LEVEL_NAMES),
+    // seul endroit a toucher s'il fallait l'eloigner de ce qui l'inspire.
+    //
+    // FERMEE, comme la Riviera et les Trois Soleils : elle n'existe que sur le
+    // canal de test, et vient donc apres eux (voir l'ordre des stades plus
+    // haut). L'ouvrir, c'est lui donner `ouvert` ET la remonter avec les
+    // ouverts.
+    //
+    // LE PLATEAU EST CELUI D'UN GRAND MEETING : sept coureurs entre 9,45 et
+    // 9,80 au 100 m — au-dessus de la Riviera, sous les Trois Soleils.
+    { cle: 'arcenciel', name: 'Piste Arc-en-ciel', theme: 'arcenciel',
+      pool: 'sprint',
+      horsSerie: true,
+      // Des gradins en orbite, bien garnis : on vient de loin pour la voir.
+      foule: 0.9,
+      plateau: { '100': [9.45, 9.80], '200': [19.00, 19.70],
+                 '400': [42.80, 43.80], '4x100': [37.30, 38.30] },
+      names: ['Nova Prisma', 'Iris Solenne', 'Orion Vega', 'Lumen Arcos',
+              'Stella Rivka', 'Cosmo Delaunay', 'Aurore Lys'] },
+
   ];
 
   // ---------------------------------------------------------------------

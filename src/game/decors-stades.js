@@ -273,6 +273,41 @@
     { p: 'rocs',     l: { arriere: 65, d: 6.5 } },
   ]);
 
+  // La piste arc-en-ciel : des bornes lumineuses tout du long, au ras de la
+  // piste, et entre elles ce qui flotte — arcs-en-ciel, etoiles, satellites,
+  // planetes, fusees. Les pieces hautes sont posees plus loin du bord : sur
+  // la ligne droite, la pelouse passe SOUS la piste a l'image, et `degage`
+  // retirerait une arche de cinq metres posee a moins de douze.
+  PLAN.arcenciel = tous([
+    { p: 'borne',     l: { droite: 6,  d: 5.0 } },
+    { p: 'arche',     l: { droite: 13, d: 14.5 } },
+    { p: 'borne',     l: { droite: 18, d: 5.0 } },
+    { p: 'etoile',    l: { droite: 25, d: 10.0 } },
+    { p: 'borne',     l: { droite: 30, d: 5.0 } },
+    { p: 'planete',   l: { droite: 37, d: 11.0 } },
+    { p: 'borne',     l: { droite: 42, d: 5.0 } },
+    { p: 'satellite', l: { droite: 49, d: 12.0 } },
+    { p: 'borne',     l: { droite: 54, d: 5.0 } },
+    { p: 'fusee',     l: { droite: 61, d: 15.0 } },
+    { p: 'borne',     l: { droite: 66, d: 5.0 } },
+    { p: 'etoile',    l: { droite: 73, d: 10.0 } },
+    { p: 'borne',     l: { droite: 78, d: 5.0 } },
+    { p: 'arche',     l: { droite: 86, d: 14.5 } },
+    { p: 'borne',     l: { droite: 90, d: 5.0 } },
+    { p: 'planete',   l: { droite: 98, d: 11.0 } },
+    { p: 'borne',     l: { droite: 102, d: 5.0 } },
+    { p: 'satellite', l: { virage: 40, d: 9.0 } },
+    { p: 'fusee',     l: { virage: 65, d: 8.0 } },
+    { p: 'arche',     l: { virage: 92, d: 9.0 } },
+    { p: 'etoile',    l: { virage: 115, d: 7.0 } },
+    { p: 'planete',   l: { virage: 138, d: 8.0 } },
+    { p: 'borne',     l: { virage: 20, d: 4.0 } },
+    { p: 'borne',     l: { virage: 160, d: 4.0 } },
+    { p: 'fusee',     l: { arriere: 18, d: 8.0 } },
+    { p: 'arche',     l: { arriere: 45, d: 9.0 } },
+    { p: 'satellite', l: { arriere: 70, d: 9.0 } },
+  ]);
+
   function nomDuTheme(THEMES, th) {
     for (const k in THEMES) if (THEMES[k] === th) return k;
     return null;

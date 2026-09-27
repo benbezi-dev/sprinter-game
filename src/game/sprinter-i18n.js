@@ -1793,7 +1793,10 @@
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
     // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait
     // donc sur ces deux lignes, sans toucher au jeu.
-    ['Stade des Trois Soleils', 'Three Suns Stadium']
+    ['Stade des Trois Soleils', 'Three Suns Stadium'],
+    // La piste de lumiere. Meme regle que les Trois Soleils : son nom ne se
+    // decide qu'ici, et il ne reprend celui d'aucune piste existante.
+    ['Piste Arc-en-ciel', 'Rainbow Track']
   ];
 
   const RACE_SUB = {
