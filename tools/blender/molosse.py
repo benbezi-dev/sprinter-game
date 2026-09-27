@@ -228,7 +228,15 @@ def bete(phase):
             x, h, r = x0 + (x1 - x0) * a, h0 + (h1 - h0) * a, r0 + (r1 - r0) * a
             # La cambrure porte surtout le rein, pas les epaules.
             poids = math.sin((i + a) / (len(COLONNE) - 1) * math.pi)
-            masse(x * 0.925, 0.0, h * GARROT + bond + cambre * poids, r)
+            # RIGIDITE HAUTE SUR LE TRONC, et c'est ce qui rend le reste
+            # visible. Une metaball de trente centimetres de rayon a la
+            # rigidite par defaut porte son champ bien au-dela d'elle-meme :
+            # elle absorbait les oreilles, le haut des pattes et le stop du
+            # crane, et la bete sortait en une masse lisse — un phoque. A 3,2
+            # le champ se resserre sur la masse : le galbe du flanc reste (il
+            # vient de la SUITE des masses, pas de leur portee), mais ce qui
+            # est pose a cote cesse d'etre englouti.
+            masse(x * 0.925, 0.0, h * GARROT + bond + cambre * poids, r, 3.2)
     x, h, r = COLONNE[-1]
     masse(x * 0.925, 0.0, h * GARROT + bond, r)
 
@@ -245,14 +253,41 @@ def bete(phase):
     x, h, r = TETE[-1]
     masse(x * 0.925, 0.0, h * GARROT + bond * 0.7, r)
 
-    # La machoire, une masse sous le museau : sans elle le profil s'affine en
-    # pointe et la bete a un bec.
-    masse(1.16 * 0.925, 0.0, 0.355 * GARROT + bond * 0.7, 0.060)
-
-    # Les oreilles, plaquees en arriere. Deux petites masses suffisent : a
-    # cette echelle une oreille est une bosse, pas une feuille.
+    # LA MACHOIRE — trois masses, et non une.
+    #
+    # Une seule, posee a 0,060 sous le milieu du museau, ne suffisait pas : le
+    # profil s'affinait quand meme en pointe, et le rendu montrait un bec. Or
+    # c'est la gueule que le joueur voit arriver — c'est la partie de l'animal
+    # qui porte la menace, et la seule qui doive se lire a deux metres.
+    #
+    # Un molosse a un bas de machoire qui DEBORDE : plus large que le
+    # chanfrein, plus lourd, et il descend franchement. On pose donc une
+    # chaine qui suit le museau par en dessous, epaisse a la naissance et
+    # encore large a la pointe — c'est ce qui donne la gueule carree.
+    for t, r in ((0.00, 0.115), (0.45, 0.098), (1.00, 0.072)):
+        masse((1.05 + 0.20 * t) * 0.925, 0.0,
+              (0.375 - 0.020 * t) * GARROT + bond * 0.7, r)
+    # Et les babines, de part et d'autre : deux masses basses et ecartees qui
+    # elargissent la gueule vue de trois quarts, l'angle exact du jeu.
     for cote in (-1, 1):
-        masse(0.88 * 0.925, cote * 0.075, 0.60 * GARROT + bond * 0.7, 0.050)
+        masse(1.14 * 0.925, cote * 0.062, 0.385 * GARROT + bond * 0.7, 0.072)
+
+    # LES OREILLES — elles se lisaient comme des AILERONS.
+    #
+    # Deux masses de 0,050, posees a 0,88 — donc SEPT CENTIMETRES DERRIERE le
+    # crane, qui commence a 0,95 — et ecartees de sept centimetres seulement.
+    # A cette position elles ne fusionnaient pas avec le crane mais avec le
+    # COU, et elles en sortaient vers l'arriere : sur la planche de contact,
+    # deux nageoires.
+    #
+    # Une oreille de molosse part du HAUT DU CRANE, sur les cotes, et tombe.
+    # On la pose donc sur le crane meme, plus ecartee, et on la fait DESCENDRE
+    # en deux masses : une attache haute et serree, un pavillon plus bas et
+    # plus large. C'est la chute qui fait reconnaitre l'oreille — une bosse
+    # ronde posee sur la tete ne se lit pas du tout.
+    for cote in (-1, 1):
+        masse(0.96 * 0.925, cote * 0.105, 0.545 * GARROT + bond * 0.7, 0.058)
+        masse(0.93 * 0.925, cote * 0.118, 0.475 * GARROT + bond * 0.7, 0.070)
 
     # Les quatre pattes. Chacune est une chaine de masses qui va de l'epaule
     # au pied en passant par le coude, et le coude est pousse vers l'avant
@@ -277,27 +312,159 @@ def bete(phase):
         # Neuf ne suffisaient pas davantage. A vingt-quatre masses et une
         # rigidite de 1,1, le membre est continu et reste fin, ce qui est tout
         # le probleme d'une patte : mince ET soudee.
-        for j in range(24):
-            t = j / 23.0
-            r = 0.098 - 0.058 * t
+        # LE RAYON NE DECROIT PAS EN LIGNE DROITE, et c'est ce qui faisait
+        # des BATONS. L'ancienne loi — 0,098 a l'epaule, 0,040 au pied, en
+        # interpolation lineaire — donne un tube regulierement effile : ce
+        # qu'on appelle un pied de table.
+        #
+        # Une patte de chien n'a rien de regulier. Le tiers haut est un
+        # MUSCLE — cuisse derriere, bras devant — et c'est la partie la plus
+        # epaisse de l'animal apres le poitrail. Puis ca se PINCE brutalement
+        # au coude ou au grasset. Puis l'avant-bras descend presque droit et
+        # fin. Ce profil-la, epais-pince-fin, est ce qui se lit comme une
+        # patte meme reduite a quarante pixels de haut.
+        #
+        # Le muscle ne descend qu'a 35 % de la longueur : plus bas, on
+        # obtient une cuisse de grenouille.
+        def rayon_de(t):
+            if t < 0.35:
+                # De l'attache au bas du muscle : large, et qui enfle un peu
+                # avant de se pincer.
+                a2 = t / 0.35
+                return 0.155 - 0.020 * a2 * a2
+            if t < 0.50:
+                # Le pincement de l'articulation, court et franc.
+                a2 = (t - 0.35) / 0.15
+                return 0.135 - 0.072 * a2
+            # L'avant-bras, fin, qui s'affine doucement jusqu'au boulet.
+            a2 = (t - 0.50) / 0.50
+            return 0.063 - 0.021 * a2
+
+        for j in range(28):
+            t = j / 27.0
+            r = rayon_de(t)
             if t <= 0.55:
                 a = t / 0.55
                 x, z = hx + (cx - hx) * a, hz + (cz - hz) * a
             else:
                 a = (t - 0.55) / 0.45
                 x, z = cx + (fx - cx) * a, cz + (fz - cz) * a
-            masse(x, y, z, r, 1.1)
-        # Le pied, pose a plat.
-        masse(fx + 0.040, y, fz + 0.020, 0.052, 1.1)
+            # LA RIGIDITE MONTE AVEC LA FINESSE. Le muscle du haut doit fondre
+            # dans le flanc — c'est une continuite anatomique — mais
+            # l'avant-bras doit en RESSORTIR, sinon les quatre membres se
+            # noient dans le tronc et l'on retrouve la masse unique que la
+            # planche de contact montrait. Une rigidite plus haute resserre le
+            # champ de la masse : elle ne fusionne plus qu'avec ses voisines
+            # immediates.
+            masse(x, y, z, r, 1.1 if t < 0.35 else 1.9)
+        # LE PIED EST UN PATTE, PAS UNE BILLE. Une sphere de 0,052 au bout
+        # d'un tube donne exactement la bille au bout du pied de table. Trois
+        # masses posees a plat, ecartees dans le sens de la marche, donnent
+        # une surface d'appui — et c'est cette surface qu'on lit comme un
+        # pied qui porte le poids de l'animal.
+        for dx, r in ((0.010, 0.050), (0.046, 0.055), (0.080, 0.044)):
+            masse(fx + dx, y, fz + 0.018, r, 2.2)
 
-    # La queue, tendue en balancier vers l'arriere.
+    # LA QUEUE FAISAIT LE RAT, et c'etait l'element le plus nuisible de toute
+    # la sculpture.
+    #
+    # Soixante-six centimetres de long, de 0,072 a 0,038 de rayon : un fouet
+    # fin, presque aussi long que le tronc, tendu droit vers l'arriere. Sur la
+    # planche de contact c'etait la premiere chose qu'on voyait, et elle disait
+    # « rongeur » avant que la silhouette ait le temps de dire autre chose.
+    #
+    # Un molosse porte une queue COURTE et EPAISSE, attachee bas, qui s'affine
+    # vite. Elle fait un tiers de la longueur du corps, pas les trois quarts.
+    # Elle passe donc de 0,66 a 0,38 m, et son rayon de naissance double — a
+    # 0,125 elle part du corps comme un prolongement de la croupe, ce qui est
+    # exactement ce qu'elle est.
     bat = math.sin(phase * 2 * math.pi * 1.5) * 0.10
-    for j in range(16):
-        t = j / 15.0
-        masse(-0.50 * 0.925 - t * 0.66, bat * t * 0.5,
-              0.60 * GARROT + bond - t * 0.10 + bat * t, 0.072 - 0.034 * t, 1.0)
+    for j in range(14):
+        t = j / 13.0
+        masse(-0.50 * 0.925 - t * 0.38, bat * t * 0.5,
+              0.60 * GARROT + bond - t * 0.06 + bat * t,
+              0.125 - 0.082 * t * t, 1.4)
 
     return obj
+
+
+def matiere_oeil():
+    """Le rouge des yeux, en emission pure.
+
+    IL NE S'ECLAIRE PAS, IL ECLAIRE. Un materiau diffus rendu dans une scene
+    sans lumiere sortirait noir ; ici la couleur EST l'emission, comme pour le
+    poil (voir matiere_bete) et pour les decors du jeu. La difference est la
+    force : le poil emet a 1,0 — c'est un aplat — l'oeil a 9,0, ce qui le fait
+    deborder de lui-meme au rendu et donne le halo sans qu'on ait a le
+    dessiner.
+    """
+    m = bpy.data.materials.new('oeil')
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    sortie = nt.nodes.new('ShaderNodeOutputMaterial')
+    emis = nt.nodes.new('ShaderNodeEmission')
+    emis.inputs['Color'].default_value = (1.0, 0.12, 0.05, 1)
+    # 9,0 SATURAIT VERS LE BLANC. Le capteur virtuel ecrete comme un vrai :
+    # au-dela d'une certaine force, les trois canaux montent ensemble et le
+    # rouge devient rose puis blanc. A 4,5 l'oeil deborde encore — c'est ce
+    # qu'on veut, le halo sans le dessiner — mais il reste rouge.
+    emis.inputs['Strength'].default_value = 4.5
+    nt.links.new(emis.outputs['Emission'], sortie.inputs['Surface'])
+    return m
+
+
+def yeux(phase):
+    """LES DEUX YEUX — la signature du mode, et ils n'etaient pas dans le rendu.
+
+    Le tracé à la main les pose depuis le premier jour (halloween-molosse.js) :
+    deux points rouges dans le noir, et c'est a eux qu'on reconnait la bete
+    avant d'en distinguer la forme. Le rendu, lui, ne montrait qu'une masse
+    sombre sans regard.
+
+    DES SPHERES A PART, ET NON DES METABALLS. Une metaball rouge posee sur le
+    crane aurait FUSIONNE avec lui : le champ de la tete l'aurait absorbee, et
+    l'on aurait obtenu une bosse de la couleur du poil. Les yeux sont donc deux
+    objets independants, avec leur propre materiau, poses en surface.
+
+    Ils suivent le `bond` du galop comme la tete, sans quoi ils flotteraient
+    devant elle a chaque foulee.
+    """
+    bond = max(0.0, math.sin(phase * 2 * math.pi - 0.6)) * 0.085
+    mat = matiere_oeil()
+    out = []
+    for cote in (-1, 1):
+        # QUATRE CENTIMETRES NE SE VOYAIENT PAS. A l'echelle du jeu l'oeil
+        # sortait a un pixel et demi : un point perdu, la ou le tracé à la
+        # main en fait la signature du mode. A sept, il porte — et l'emission
+        # a 9,0 le fait deborder, ce qui vaut mieux qu'un oeil plus gros
+        # encore, qui aurait donne une bete de dessin animé.
+        # SEPT CENTIMETRES ONT FAIT UN GROIN. Deux spheres de ce rayon,
+        # ecartees de huit, se touchaient presque : au rendu elles ont fusionne
+        # en une seule masse rose posee au bout du museau — un nez de cochon.
+        # Et l'emission a 9,0 les saturait vers le blanc, ce qui achevait de
+        # les faire lire comme de la chair et non comme un regard.
+        #
+        # Un oeil rouge dans le noir n'a pas besoin d'etre gros : il a besoin
+        # d'etre SEPARE de son jumeau et d'etre ROUGE. On revient a 4,5 cm, on
+        # les ecarte a plus du double de leur diametre, et l'on baisse
+        # l'emission pour qu'ils gardent leur teinte.
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.045, segments=16, ring_count=10)
+        o = bpy.context.object
+        o.name = 'oeil'
+        # Sur le haut du chanfrein, juste devant le stop : c'est la que l'oeil
+        # d'un chien se trouve, et c'est la que le regard part vers l'avant.
+        # ET ILS ETAIENT SUR LE MUSEAU. A 1,085 on est en plein chanfrein,
+        # devant le stop : c'est l'emplacement d'une narine, pas d'un oeil.
+        # L'oeil d'un chien est EN ARRIERE du stop, sur le cote du crane.
+        o.location = (1.015 * 0.925, cote * 0.112,
+                      0.505 * GARROT + bond * 0.7)
+        o.data.materials.append(mat)
+        for poly in o.data.polygons:
+            poly.use_smooth = True
+        out.append(o)
+    return out
 
 
 def matiere_bete():
@@ -396,6 +563,30 @@ def main():
         phase = i / PHASES
         obj = bete(phase)
         obj.data.materials.append(matiere_bete())
+        # LES YEUX NE SONT PAS RENDUS, ET C'EST UNE DECISION, PAS UN OUBLI.
+        #
+        # `yeux()` existe juste au-dessus et fonctionne. Trois essais ont
+        # pourtant donne trois fois la meme chose : une tache rose pale au
+        # bout du museau, qui se lit comme un groin et non comme un regard.
+        # Ni la taille (7 cm puis 4,5), ni la position (sur le chanfrein puis
+        # derriere le stop), ni la force d'emission (9,0 puis 4,5) n'y ont
+        # change grand-chose.
+        #
+        # La raison est dans la VUE. Le jeu regarde la bete de trois quarts
+        # arriere, en isometrie : a cet angle, l'oeil d'un vrai chien est
+        # presque entierement cache par son propre crane. Ce qu'on voyait
+        # n'etait pas l'oeil mais son HALO, deborde par-dessus le museau — et
+        # un halo sans source visible se pose la ou il veut.
+        #
+        # Le tracé à la main, lui, ne simule rien : il POSE deux points rouges
+        # la ou le joueur doit les voir, quitte a tricher sur l'anatomie. A
+        # l'ecran ils fonctionnent — c'est la seule chose de la bete qu'on
+        # reconnait a deux metres. Les yeux restent donc au dessin, par-dessus
+        # l'image rendue, et ce script ne s'en occupe pas.
+        #
+        # La fonction reste : le jour ou la bete sera vue de profil — une
+        # affiche, un carton de partage — c'est la qu'il faudra la rappeler.
+        # yeux(phase)
         rendre(phase, i, largeur, hauteur, centre)
         print('  phase %d/%d rendue' % (i + 1, PHASES))
 
@@ -420,46 +611,57 @@ if __name__ == '__main__':
 
 
 # ---------------------------------------------------------------------------
-# CE QUI RESTE A FAIRE SUR CETTE BETE — ecrit apres avoir regarde le rendu.
+# OU EN EST CETTE BETE, APRES CINQ RENDUS — ecrit le 27 septembre 2026.
 # ---------------------------------------------------------------------------
 #
-# L'etat du 27 septembre 2026 : la chaine tourne (voir l'en-tete pour la
-# commande), les proportions sont celles d'un molosse et non plus d'un levrier,
-# la matiere rend une masse sombre au lieu d'une silhouette pale. CE N'EST PAS
-# ENCORE MONTRABLE, et il vaut mieux l'ecrire que de le decouvrir en le
-# posant dans le jeu.
+# CE QUI A ETE CORRIGE, ET QUI TIENT :
 #
-# Ce que la planche de contact montre encore, par ordre de gravite :
+#   - les proportions d'un molosse et non d'un levrier (encolure, poitrail,
+#     museau court avec un stop) ;
+#   - la matiere : une masse sombre avec un fil de lumiere sur l'echine, au
+#     lieu d'une silhouette pale — la rampe s'ouvrait a 0,10 et prenait donc
+#     presque tout l'animal dans la vue isometrique du jeu ;
+#   - la queue, qui faisait le RAT : 66 cm de fouet fin, ramenes a 38 cm
+#     epais. C'etait l'element le plus nuisible de la sculpture, et le seul
+#     dont la correction se voit franchement ;
+#   - les pieds, qui etaient des billes au bout de tubes : trois masses a
+#     plat donnent une surface d'appui ;
+#   - le profil des membres, epais-pince-fin au lieu d'un effilement lineaire.
 #
-#   1. LES PATTES SONT DES BATONS A BOUT ROND. Quatre tubes de rayon constant
-#      termines par une bille. Un molosse a des avant-bras epais qui se pincent
-#      au boulet, et une cuisse qui est le muscle le plus visible de l'animal.
-#      C'est ce qui manque le plus : de loin, une bete dont les pattes n'ont
-#      pas de masse court sans poids.
+# CE QUI NE MARCHE TOUJOURS PAS, ET IL FAUT L'ECRIRE SANS TOURNER AUTOUR :
+# CA NE RESSEMBLE PAS A UN CHIEN. Sur la planche de contact, la bete se lit
+# comme une LOUTRE ou un phoque — un corps lisse et continu porte par quatre
+# fils. Cinq rendus successifs n'y ont rien change, et l'echec est instructif.
 #
-#   2. LA TETE N'A PAS DE MACHOIRE. Le stop se voit maintenant, mais il n'y a
-#      ni babines ni bas de machoire : le museau se termine en cone. Il faut
-#      une masse SOUS le chanfrein, qui deborde legerement — c'est elle qui
-#      fait la gueule, et la gueule est ce que le joueur doit voir arriver.
+# LA CAUSE EST DANS LA METHODE, PAS DANS LES NOMBRES.
 #
-#   3. LES OREILLES SE LISENT COMME DES AILERONS. Elles pointent vers
-#      l'arriere et fusionnent avec le crane. Une oreille de molosse tombe, ou
-#      se plaque : dans les deux cas elle est PLUS BASSE et plus large que ce
-#      qui est pose ici.
+# Une metaball fusionne par recouvrement de champ. Le tronc demande des
+# rayons de trente centimetres ; leur champ porte alors si loin qu'il avale
+# tout ce qu'on pose a cote — l'attache des membres, la base des oreilles, le
+# stop du crane. Monter la rigidite du tronc (essaye, 2,0 -> 3,2) resserre
+# bien son champ, mais DETACHE les pattes : on passe d'un phoque a un phoque
+# sur echasses. Les deux etats sont mauvais, et il n'y a pas de reglage entre
+# les deux qui donne un chien : le probleme n'est pas le curseur, c'est qu'un
+# seul objet metaball ne peut pas porter a la fois une masse continue et des
+# articulations lisibles.
 #
-#   4. LES YEUX N'EXISTENT PAS DANS LE RENDU. Ils sont la signature du mode —
-#      deux points dans le noir, dessines a la main dans
-#      game/halloween-molosse.js — et le rendu ne les porte pas. Soit on les
-#      sculpte et on les fait emettre, soit on continue de les poser par-dessus
-#      l'image au dessin ; la premiere solution est la bonne, parce qu'ils
-#      doivent tourner avec la tete.
+# CE QU'IL FAUDRAIT FAIRE, ET C'EST UN AUTRE CHANTIER :
 #
-#   5. TOUT FUSIONNE. Les metaballs donnent le galbe, et c'est pour ca qu'on
-#      les a choisies — mais a rigidite basse elles fondent aussi ce qui doit
-#      rester separe : l'epaule dans le poitrail, la cuisse dans le flanc. Les
-#      masses des membres demandent une rigidite plus haute que celles du
-#      tronc, ce que le code ne distingue pas aujourd'hui.
+#   1. SEPARER EN PLUSIEURS OBJETS — tronc, tete, quatre membres, queue —
+#      chacun sa metaball, donc chacun son champ. Ils se croisent visuellement
+#      sans fusionner. C'est ainsi que la tete garderait son stop et que
+#      l'epaule ressortirait du flanc.
+#   2. DONNER UN VOLUME AU CRANE. Le stop existe dans la table TETE et ne se
+#      voit pas : il est noye. Separe (point 1), il se verrait.
+#   3. RENONCER AUX YEUX RENDUS. Voir le commentaire dans main() : a l'angle
+#      du jeu, l'oeil d'un vrai chien est cache par son propre crane, et l'on
+#      ne rend que son halo — qui se pose n'importe ou. Le tracé à la main
+#      les POSE, et c'est pour cela qu'ils marchent.
 #
-# TANT QUE CES CINQ POINTS TIENNENT, LE TRACE A LA MAIN DE
-# game/halloween-molosse.js RESTE MEILLEUR A L'ECRAN, et c'est lui qui joue.
-# On ne remplace pas un dessin lisible par un rendu qui ne l'est pas encore.
+# TANT QUE LE POINT 1 N'EST PAS FAIT, LE TRACE A LA MAIN DE
+# game/halloween-molosse.js RESTE CE QUI JOUE. Il a ses propres defauts — de
+# pres il se lit comme une table a quatre pieds — mais il est LISIBLE : on
+# reconnait un chien, et on voit ses deux yeux. Un rendu plus detaille qu'on
+# ne reconnait pas est un moins bon rendu.
+#
+# Aucune image produite par ce script n'entre dans le jeu aujourd'hui.
