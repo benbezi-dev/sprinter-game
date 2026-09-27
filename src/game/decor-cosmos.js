@@ -216,11 +216,48 @@
     return e;
   }
 
-  function planetes(ctx, P) {
+  // -------------------------------------------------------------------
+  // LES ASTRES RENDUS DANS BLENDER
+  // -------------------------------------------------------------------
+  // Un theme peut remplacer les planetes peintes ci-dessus par des images
+  // rendues en eclairage reel (tools/blender/decors/astres.py) : `astres`
+  // en donne la liste, et chaque image porte son astre au centre, d'un rayon
+  // de RAYON_ASTRE pixels. Tant qu'une image n'est pas chargee, son astre
+  // n'est simplement pas dessine.
+  const RAYON_ASTRE = 200;
+  const BASE = (typeof import.meta !== 'undefined' && import.meta.env
+    ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
+  const _images = new Map();
+  function imageAstre(chemin) {
+    let im = _images.get(chemin);
+    if (!im) {
+      im = new Image();
+      im.decoding = 'async';
+      im.src = BASE + '/decors/' + chemin;
+      _images.set(chemin, im);
+    }
+    return im.complete && im.naturalWidth > 0 ? im : null;
+  }
+
+  function planetes(ctx, P, th) {
     const G = P.G, T = G.track;
     if (!T || !T.pos) return;
     const cx = G.VW / 2, cy = G.VH / 2;
     const m = P.scaleM();
+    if (th.astres) {
+      for (const a of th.astres) {
+        const w = T.pos(a.f * T.total, a.couloir);
+        const g = P.ground(w[0], w[1]);
+        const x = cx + (g[0] - cx) * PAR_PLANETES, y = cy + (g[1] - cy) * PAR_PLANETES;
+        const r = a.R * m * PAR_PLANETES;
+        const im = imageAstre(a.img);
+        if (!im) continue;
+        const k = r / RAYON_ASTRE, L = im.naturalWidth * k;
+        if (x + L / 2 < 0 || x - L / 2 > G.VW || y + L / 2 < 0 || y - L / 2 > G.VH) continue;
+        ctx.drawImage(im, x - L / 2, y - L / 2, L, L);
+      }
+      return;
+    }
     for (let i = 0; i < PLANETES.length; i++) {
       const pl = PLANETES[i];
       const w = T.pos(pl.f * T.total, pl.couloir);
@@ -255,7 +292,7 @@
       ctx.fillRect(-ox, -oy, G.VW, G.VH);
       ctx.restore();
     }
-    planetes(ctx, P);
+    planetes(ctx, P, th);
   }
 
   /**

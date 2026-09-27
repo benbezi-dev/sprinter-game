@@ -92,7 +92,8 @@
   let _brumeCle = '', _brumeDeg = null;
 
   function brume(ctx, th, G) {
-    if (niveau < MOYEN) return;
+    // Un theme peut la refuser : `brumeForce: 0` (la piste arc-en-ciel).
+    if (niveau < MOYEN || th.brumeForce === 0) return;
     const c = th.brumeCol || th.lointain || th.skyBot;
     if (!c) return;
     // La brume s'arrete au coureur : devant lui, l'air est transparent.

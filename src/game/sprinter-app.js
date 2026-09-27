@@ -60,10 +60,26 @@
       panels: [[64, 40, 132], [40, 36, 110], [86, 38, 128], [46, 56, 140]],
       crowdLo: [56, 44, 90], crowdHi: [236, 226, 255],
       accent: [255, 206, 64], dust: [236, 226, 255],
-      espace: true, neon: [255, 244, 255], neonExt: [255, 244, 255],
+      // Les bords rayonnent de la couleur de leur couloir, pas de blanc : une
+      // lueur blanche posee sur du rouge le rend rose.
+      espace: true, neon: [255, 40, 64], neonExt: [255, 50, 210],
       nebuleuses: [[236, 72, 170], [52, 170, 236], [140, 80, 236], [255, 170, 60]],
-      arcEnCiel: [[238, 58, 72], [250, 138, 44], [252, 212, 60], [84, 206, 94],
-                  [52, 194, 234], [70, 108, 240], [168, 86, 236], [236, 96, 196]],
+      // Des teintes PURES, de la corde vers l'exterieur. Une piste de lumiere
+      // n'a pas de gris dans ses couleurs.
+      arcEnCiel: [[255, 40, 64], [255, 136, 0], [255, 222, 0], [36, 222, 80],
+                  [0, 208, 255], [30, 96, 255], [140, 56, 255], [255, 50, 210]],
+      // Ni brume ni grain sur cette piste : l'une posait un voile violet sur
+      // le haut de l'image, l'autre du gris dans chaque couleur.
+      brumeForce: 0, sansGrain: true,
+      // Les grandes planetes du fond, rendues dans Blender (astres.py) au lieu
+      // d'etre peintes : ou elles passent (part de la course, couloir du cote
+      // de la pelouse) et leur rayon en metres, avant parallaxe.
+      astres: [
+        { img: 'arcenciel/astre-geante.webp', f: 0.08, couloir: -16, R: 8.5 },
+        { img: 'arcenciel/astre-glace.webp', f: 0.40, couloir: -26, R: 11 },
+        { img: 'arcenciel/astre-lune.webp', f: 0.66, couloir: -11, R: 3.2 },
+        { img: 'arcenciel/astre-emeraude.webp', f: 0.9, couloir: -20, R: 7 },
+      ],
       toiture: false, gradins: 3,
     },
     // Jeux mondiaux : piste bleue, lignes blanches et liseret vert au
@@ -6109,12 +6125,12 @@
     // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
     // changement de couleur tous les huit metres.
     if (cdm) cdm.surface(ctx, apiCdm(), th, sm, rIn, rOut);
-    else if (th.arcEnCiel && ARC()) ARC().surface(ctx, PEINTRE, th, sm, rIn, rOut);
+    else if (th.arcEnCiel && ARC()) ARC().surface(ctx, PEINTRE, th, sm);
     else band(ctx, sm, rIn, rOut, rgb(th.trackA));
 
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
     // ne porte pas le granulat de la resine qu'elle recouvre.
-    if (PREM()) PREM().grain(ctx, PEINTRE, rIn, rOut);
+    if (PREM() && !th.sansGrain) PREM().grain(ctx, PEINTRE, rIn, rOut);
 
     // LES LIGNES DE COULOIR NE SONT PAS OPAQUES, ET C'EST VOULU.
     //

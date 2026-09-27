@@ -64,13 +64,14 @@ STADES = {
                   symetriques=['rocs', 'bulbes', 'aiguille'], contours=True),
 }
 
-# LA PISTE ARC-EN-CIEL. Les sept couleurs du ciel, dans l'ordre, et de quoi
-# habiller ce qui flotte autour : de l'or, de la feuille d'or de satellite,
-# des panneaux solaires. Rendue plus fin que les autres stades (128 pixels par
-# metre, 64 echantillons) : ses pieces brillent, et une arete de lumiere
-# crenelee se voit bien plus qu'une arete de beton. Et SANS OMBRE AU SOL : il
-# n'y a pas de sol sous cette piste, seulement le vide — chaque piece porte sa
-# lueur a la place.
+# LA PISTE ARC-EN-CIEL. Ses pieces (pieces_arcenciel.py) sont les seules du
+# jeu en ECLAIRAGE REEL : Cycles, or, laque, chrome et neons, au lieu de la
+# formule plate du moteur (voir reel.py). Rendues plus fin que les autres
+# stades (128 pixels par metre, 96 echantillons debruites) : elles brillent,
+# et une arete de lumiere crenelee se voit bien plus qu'une arete de beton.
+# Et SANS OMBRE AU SOL : il n'y a pas de sol sous cette piste, seulement le
+# vide — chaque piece porte sa lueur a la place. Leurs couleurs sont dans
+# leur module ; la palette ci-dessous ne sert plus qu'a declarer le stade.
 PALETTES['arcenciel'] = dict(
     BASE, liseret=1.0,
     arc=[(238, 58, 72), (250, 138, 44), (252, 212, 60), (84, 206, 94), (52, 194, 234),
@@ -83,7 +84,7 @@ PALETTES['arcenciel'] = dict(
 STADES['arcenciel'] = dict(debout=['arche', 'etoile', 'satellite', 'fusee', 'planete', 'borne'],
                            sol=[], symetriques=['etoile', 'fusee', 'planete', 'borne'],
                            virage=['arche', 'satellite'],
-                           pxParM=128, echantillons=64, sansOmbre=True)
+                           pxParM=128, echantillons=96, sansOmbre=True, eclairage='reel')
 
 # Les pieces orientees qu'on pose aussi dans un virage : rendues sous seize
 # caps en plus des quatre des lignes droites (voir CAPS_VIRAGE).
