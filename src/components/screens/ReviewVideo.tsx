@@ -77,6 +77,11 @@ export function ReviewVideo({ etat, onPartager, titre }: {
           {sortie === 'echec' && (
             <p className="text-center text-[11px] text-red-300">{N.t('review_failed')}</p>
           )}
+          {/* Un telechargement ne rend plus le film (27/09) : on ne sait pas
+              s'il est arrive. On dit ce qui s'est passe, et le bouton reste. */}
+          {sortie === 'telechargement' && (
+            <p className="text-center text-[11px] text-muted-foreground">{N.t('review_dl_encore')}</p>
+          )}
 
           {/* La barre se vide en meme temps que le temps restant. */}
           <div className="h-1 rounded-full bg-white/10 overflow-hidden">

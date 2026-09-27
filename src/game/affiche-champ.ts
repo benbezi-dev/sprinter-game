@@ -253,17 +253,24 @@ export function dessiner(cv: HTMLCanvasElement, a: AfficheChamp, fr: boolean) {
 
 /** Fabrique l'image et la fait sortir de l'application. */
 export async function partagerLArrivee(a: AfficheChamp, fr: boolean): Promise<Sortie> {
+  const f = await fabriquerLArrivee(a, fr);
+  return f ? sortir(f.blob, f.nom) : 'echec';
+}
+
+/** L'image seule, faite avant le geste — voir `fabriquerPhotoFinish`. */
+export async function fabriquerLArrivee(a: AfficheChamp, fr: boolean):
+    Promise<{ blob: Blob; nom: string } | null> {
   try {
     await policesPretes();
     const cv = document.createElement('canvas');
     if (a.carte) { await policesDeLaCarte(); dessinerCarte(cv, a.carte, fr); }
     else dessiner(cv, a, fr);
     const blob = await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));
-    if (!blob) return 'echec';
+    if (!blob) return null;
     const nom = `sprinter-${a.course}-${a.epreuve}`
       .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return sortir(blob, `${nom}.jpg`);
+    return { blob, nom: `${nom}.jpg` };
   } catch {
-    return 'echec';
+    return null;
   }
 }

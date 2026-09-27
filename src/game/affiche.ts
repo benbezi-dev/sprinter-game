@@ -153,7 +153,14 @@ export async function sortir(blob: Blob, nom: string): Promise<Sortie> {
       // Refermer la feuille de partage n'est pas un echec : c'est un choix, et
       // l'ecran ne doit pas repondre par un message d'erreur a quelqu'un qui a
       // simplement change d'avis.
-      if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return 'annule';
+      //
+      // Seul `AbortError` est ce choix-la. `NotAllowedError` est un REFUS DU
+      // NAVIGATEUR — geste perdu (Safari sur iPhone, quand l'image a mis trop
+      // longtemps a se fabriquer), navigateur integre d'une appli. Le traiter
+      // comme une annulation laissait le bouton afficher « image enregistree »
+      // sans que rien soit sorti (27/09, apres la demie 2). Meme correction que
+      // `Review.sortir` le 26/09 : on donne le fichier.
+      if (e && e.name === 'AbortError') return 'annule';
       // Le partage a echoue pour une autre raison : plutot que de laisser le
       // joueur sans rien, on lui donne le fichier.
     }

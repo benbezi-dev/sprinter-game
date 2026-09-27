@@ -10,7 +10,8 @@ import { ReviewVideo } from './ReviewVideo';
 import { LaisserUnMot } from './MotDuel';
 import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
 import { getSavedName } from '@/game/leaderboard';
-import { arriveeSerree, ecartLePlusSerre, partagerPhotoFinish } from '@/game/photo-finish';
+import { arriveeSerree, ecartLePlusSerre, fabriquerPhotoFinish } from '@/game/photo-finish';
+import { sortir, type Sortie } from '@/game/affiche';
 import type { MotDuVainqueur } from '@/game/champ-rejeu';
 import { RappelEnScene } from './ChampDirect';
 import { FichePresentation } from './FichePresentation';
@@ -21,7 +22,7 @@ import {
   VoilePouls, EclairArrivee, CouloirGeant, Sablier, CLAQUE, favoriDe, sortieVive,
 } from './TensionPresentation';
 import { useFiches, type SourceFiches } from '@/game/fiches-champ';
-import { partagerLArrivee } from '@/game/affiche-champ';
+import { fabriquerLArrivee } from '@/game/affiche-champ';
 import { EPREUVE } from '@/game/trace-affiche';
 import { Drapeau } from '@/components/Insignes';
 
@@ -424,9 +425,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
    * de competition (voir `affiche-champ`).
    */
   const [image, setImage] = useState<'' | 'en cours' | 'faite' | 'ratee'>('');
-  const fabriquerLImage = async () => {
-    setImage('en cours');
-    const r = await partagerLArrivee({
+  const faireLImage = () => fabriquerLArrivee({
       // LA CARTE DES CHAMPIONNATS (26/09) : meme voix que les cartes publiees.
       carte: course ? {
         phase: course.phase, numero: course.numero, quand,
@@ -441,8 +440,6 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
       mot: mot && mot.texte ? { nom: mot.nom, texte: mot.texte } : null,
       etiquetteMot: N.t('mot_du_vainqueur'),
     }, N.getLang() !== 'en');
-    setImage(r === 'echec' ? 'ratee' : 'faite');
-  };
 
   /**
    * LE PHOTO-FINISH, ET POURQUOI IL N'EST PAS TOUJOURS LA.
@@ -461,16 +458,61 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
   const serree = arriveeSerree(lignes);
   const ecartMs = ecartLePlusSerre(lignes);
   const [releve, setReleve] = useState<'' | 'en cours' | 'fait' | 'rate'>('');
-  const fabriquerLeReleve = async () => {
+  const faireLeReleve = () => fabriquerPhotoFinish({
+    competition: competition || sousTitre,
+    nomCourse: titre,
+    epreuve: EPREUVE(epreuve),
+    quand,
+    lignes,
+  }, N.getLang() !== 'en');
+
+  /**
+   * LES DEUX IMAGES SE FONT AVANT LE TOUCHER, PAS APRES (27/09).
+   *
+   * Sur iPhone, Safari n'ouvre la feuille de partage que dans la foulee
+   * immediate d'un toucher. Les fabriquer au clic — polices, trace, encodage
+   * JPEG — laissait passer ce moment : `navigator.share` etait refuse, et les
+   * deux boutons ne sortaient rien apres la demie 2. On les prepare donc des
+   * que le tableau est pose (apres sa cascade, pour ne pas la saccader) ; le
+   * toucher n'a plus qu'a appeler `sortir`, dont le premier geste est le
+   * partage. Si l'image n'est pas encore prete, on la fait au clic comme avant.
+   */
+  const pretes = useRef<{ image?: Promise<{ blob: Blob; nom: string } | null>;
+                         releve?: Promise<{ blob: Blob; nom: string } | null>;
+                         faites: { image?: { blob: Blob; nom: string } | null;
+                                   releve?: { blob: Blob; nom: string } | null } }>({ faites: {} });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const p = pretes.current;
+      p.image = faireLImage();
+      p.image.then(f => { p.faites.image = f; });
+      if (serree) {
+        p.releve = faireLeReleve();
+        p.releve.then(f => { p.faites.releve = f; });
+      }
+    }, lignes.length * CASCADE_MS + 600);
+    return () => clearTimeout(t);
+    // Une fois par tableau : les lignes ne changent pas pendant qu'il est ouvert.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Ce que l'ecran dit apres coup. Une feuille refermee ne dit rien. */
+  const apres = (r: Sortie, ok: 'faite' | 'fait', ko: 'ratee' | 'rate') =>
+    r === 'echec' ? ko : r === 'annule' ? '' : ok;
+
+  const sortirLImage = async () => {
+    const deja = pretes.current.faites.image;
+    if (deja) { setImage(apres(await sortir(deja.blob, deja.nom), 'faite', 'ratee') as any); return; }
+    setImage('en cours');
+    const f = await (pretes.current.image || faireLImage());
+    setImage(f ? apres(await sortir(f.blob, f.nom), 'faite', 'ratee') as any : 'ratee');
+  };
+  const sortirLeReleve = async () => {
+    const deja = pretes.current.faites.releve;
+    if (deja) { setReleve(apres(await sortir(deja.blob, deja.nom), 'fait', 'rate') as any); return; }
     setReleve('en cours');
-    const r = await partagerPhotoFinish({
-      competition: competition || sousTitre,
-      nomCourse: titre,
-      epreuve: EPREUVE(epreuve),
-      quand,
-      lignes,
-    }, N.getLang() !== 'en');
-    setReleve(r === 'echec' ? 'rate' : 'fait');
+    const f = await (pretes.current.releve || faireLeReleve());
+    setReleve(f ? apres(await sortir(f.blob, f.nom), 'fait', 'rate') as any : 'rate');
   };
 
   const moi = (getSavedName() || '').trim().toLowerCase();
@@ -578,7 +620,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
         )}
 
         {serree && (
-          <button onClick={fabriquerLeReleve} disabled={releve === 'en cours'}
+          <button onClick={sortirLeReleve} disabled={releve === 'en cours'}
             className="self-center flex items-center gap-2 px-4 py-2 rounded-full
                        border border-primary/40 bg-primary/10 text-primary
                        text-[10px] font-bold tracking-[0.2em]
@@ -595,7 +637,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
           </button>
         )}
 
-        <button onClick={fabriquerLImage} disabled={image === 'en cours'}
+        <button onClick={sortirLImage} disabled={image === 'en cours'}
           className="self-center flex items-center gap-2 px-4 py-2 rounded-full
                      border border-white/20 bg-white/[0.06] text-[10px] font-bold
                      tracking-[0.2em] active:scale-95 transition disabled:opacity-50">

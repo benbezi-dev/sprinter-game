@@ -911,6 +911,7 @@
     // enregistre le fichier. Ce qui a réellement eu lieu se dit dessous.
     review_share:    ['PARTAGER LA VIDÉO', 'SHARE THE VIDEO'],
     review_saved:    ['vidéo enregistrée', 'video saved'],
+    review_dl_encore: ['téléchargement lancé — la vidéo reste disponible ici', 'download started — the video stays available here'],
     review_failed:   ['partage impossible', 'sharing failed'],
     review_left:     ['effacée dans {t}', 'deleted in {t}'],
     review_gone:     ['la vidéo a été effacée', 'the video has been deleted'],

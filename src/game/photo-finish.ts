@@ -503,15 +503,28 @@ function nomDeFichier(c: CoursePhoto): string {
 
 /** Fabrique l'image et la fait sortir de l'application. */
 export async function partagerPhotoFinish(c: CoursePhoto, fr: boolean): Promise<Sortie> {
+  const f = await fabriquerPhotoFinish(c, fr);
+  return f ? sortir(f.blob, f.nom) : 'echec';
+}
+
+/**
+ * L'image seule, sans la sortir.
+ *
+ * Separee pour etre faite AVANT le geste : sur iPhone, Safari n'ouvre la
+ * feuille de partage que dans la foulee d'un toucher, et attendre les polices
+ * puis l'encodage JPEG entre le toucher et `navigator.share` suffisait a
+ * perdre ce droit. Voir `Arrivee` dans RejeuChampionnat.
+ */
+export async function fabriquerPhotoFinish(c: CoursePhoto, fr: boolean):
+    Promise<{ blob: Blob; nom: string } | null> {
   try {
     await policesPretes();
     await policesDeLaCarte();
     const cv = document.createElement('canvas');
     dessinerPhotoFinish(cv, c, fr);
     const blob = await new Promise<Blob | null>(r => cv.toBlob(b => r(b), 'image/jpeg', 0.92));
-    if (!blob) return 'echec';
-    return await sortir(blob, nomDeFichier(c));
+    return blob ? { blob, nom: nomDeFichier(c) } : null;
   } catch {
-    return 'echec';
+    return null;
   }
 }

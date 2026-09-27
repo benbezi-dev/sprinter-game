@@ -670,7 +670,14 @@ export class Review {
     //
     // `echec` seul fait exception : la, rien n'est sorti, et le joueur doit
     // pouvoir reessayer.
-    if (sortie !== 'echec') this.rendre();
+    //
+    // CORRIGE LE 27/09 : seul un PARTAGE abouti rend la video. Un
+    // « telechargement » n'est qu'un clic sur un lien — dans le navigateur
+    // d'Instagram il ne produit rien, et sur iPhone la video partait avant
+    // qu'on sache si elle etait arrivee. Une feuille refermee non plus : on
+    // peut vouloir reessayer. Dans ces cas la video reste jusqu'a son
+    // expiration, qui la retire de toute facon.
+    if (sortie === 'partage') this.rendre();
     return sortie;
   }
 
