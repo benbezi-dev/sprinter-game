@@ -311,11 +311,17 @@
     const man = nom && MAN().stades[nom];
     if (!plan || !man) return [];
     const T = api.G.track;
+    // UNE ZONE QU'UN JEU S'EST RESERVEE. Le saut en longueur pose sa propre
+    // piste d'elan et sa propre fosse dans la pelouse ; un chariot de haies ou
+    // une tente qui s'y trouvait se dresserait en travers de l'elan, et la
+    // fosse du decor ferait une seconde fosse a cote de la vraie.
+    const Z = api.G.zoneReservee;
     const out = [];
     for (const e of plan) {
       if (!!e.sol !== sol || etape < e.des) continue;
       const L = lieu(T, e.l);
       if (!L) continue;
+      if (Z && L.X >= Z.x0 && L.X <= Z.x1 && L.Y >= Z.y0 && L.Y <= Z.y1) continue;
       if (e.rot) L.yaw += e.rot;
       if (!sol && !degage(api, T, L, e, man)) continue;
       out.push({ e, L, nom, man });

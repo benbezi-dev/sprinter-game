@@ -159,6 +159,23 @@ export const HAIES_OUVERTES = true;
 export const APPEL_JOUEUR = true;
 
 /**
+ * LE SAUT EN LONGUEUR — la premiere epreuve de Jumper.
+ *
+ * Jouable sur le canal de test, annonce « bientot » partout ailleurs. La forme
+ * est celle du reste du fichier : `EST_TEST` se replie a la compilation, et
+ * tout ce qui ne s'atteint que par `LONGUEUR_OUVERTE && ...` sort du build
+ * public — l'ecran du concours, le jeu du saut, son rendu et le sable rendu
+ * dans Blender, qui ne se charge qu'avec lui (voir Mondes.tsx, `lazy`).
+ *
+ * Ce qui reste en production, et qu'on assume : les crochets du moteur — une
+ * posture imposee dans pose(), un pas, un appui et une camera que personne ne
+ * pose. Ce sont des portes, pas le saut ; sans lui elles ne font rien.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ */
+export const LONGUEUR_OUVERTE = EST_TEST;
+
+/**
  * LA NUIT DU MOLOSSE — la competition d'Halloween, edition limitee.
  *
  * Treize nuits au cimetiere municipal, un chien demoniaque derriere soi, et un

@@ -1958,6 +1958,32 @@
       leve = (saut.haut || 0) * 4 * t * (1 - t);
     }
 
+    // UNE POSTURE IMPOSEE, MEMBRE PAR MEMBRE.
+    //
+    // La haie a sa table, parce que son geste est toujours le meme. Le saut en
+    // longueur n'en a pas : l'appel dure ce que le joueur le tient, le ramene
+    // tombe quand il le decide, et la reception depend de ce qu'il a fait des
+    // deux. C'est donc le jeu du saut qui calcule les angles a chaque image
+    // (longueur-rendu.js) et les pose ici, dans la convention du rig : absolus,
+    // 0 vers le bas, positif vers l'avant. `jambes[0]` et `bras[0]` sont ceux
+    // du cote de la phase p, comme `l` et `al`.
+    //
+    // `w` est le poids de la posture : il monte a l'appel et redescend quand
+    // l'athlete se releve, pour que la foulee y entre et en sorte sans a-coup.
+    // `leve` hausse — ou baisse, assis dans le sable — le bassin, en unites du
+    // rig ; `hanche` l'avance ou le recule sur ses pieds.
+    const posture = r.posture;
+    const wPo = posture ? Math.max(0, Math.min(1, posture.w)) : 0;
+    if (wPo > 0) {
+      const v3 = (x, y) => [melange(x[0], y[0], wPo), melange(x[1], y[1], wPo),
+                            melange(x[2], y[2], wPo)];
+      const v2 = (x, y) => [melange(x[0], y[0], wPo), melange(x[1], y[1], wPo)];
+      if (posture.jambes) { l = v3(l, posture.jambes[0]); rr = v3(rr, posture.jambes[1]); }
+      if (posture.bras) { al = v2(al, posture.bras[0]); ar = v2(ar, posture.bras[1]); }
+      if (posture.buste != null) lean = melange(lean, posture.buste, wPo);
+      leve += (posture.leve || 0) * wPo;
+    }
+
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -1976,8 +2002,8 @@
     // sprinter-app.js). Tout ce qui balance en course — rebond, lacet,
     // roulis — s'efface a mesure qu'on est dans les blocs : on n'y bouge pas.
     const wB = Math.max(0, Math.min(1, r.enBloc || 0));
-    const calme = (1 - wB) * (1 - wS);
-    let hipX = 0, hipZ = null;
+    const calme = (1 - wB) * (1 - wS) * (1 - wPo);
+    let hipX = wPo > 0 ? (posture.hanche || 0) * wPo : 0, hipZ = null;
     if (wB > 0) {
       const t = Math.max(0, Math.min(1, r.prets || 0));
       const hx = melange(BLOC.marques.hanche[0], BLOC.prets.hanche[0], t);
@@ -1994,7 +2020,7 @@
       al = [melange(al[0], br[0], wB), melange(al[1], br[1], wB)];
       ar = [melange(ar[0], br[0], wB), melange(ar[1], br[1], wB)];
       lean = melange(lean, bu, wB);
-      hipX = hx * wB;
+      hipX += hx * wB;
       hipZ = hz;
     }
 
@@ -2081,7 +2107,7 @@
     // fait aligne, le bassin montrait deja un filet de piste de face. Le pli
     // ne depasse donc jamais PLI_TAILLE, et il est nul des que le buste
     // plonge vraiment.
-    const wP = Math.min(1, 3 * Math.max(wB, wS));
+    const wP = Math.min(1, 3 * Math.max(wB, wS, wPo));
     const angB = lean - Math.max(-PLI_TAILLE, Math.min(PLI_TAILLE, lean)) * (1 - wP);
     // L'ourlet du short se voit ; sa ceinture disparait sous le maillot.
     //
