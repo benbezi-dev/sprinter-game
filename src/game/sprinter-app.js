@@ -41,6 +41,31 @@
       crowdLo: [56, 44, 78], crowdHi: [214, 188, 244],
       accent: [232, 121, 216], dust: [216, 196, 236]
     },
+    // LA PISTE ARC-EN-CIEL : un pont de lumiere pose dans l'espace. Le vide
+    // sous elle est celui du stade cosmos (`espace`, decor-cosmos.js), mais
+    // plus noir et semé d'autres nebuleuses ; la piste elle-meme ne passe pas
+    // par `trackA` — chaque couloir a sa couleur, des dalles, un reflet qui
+    // court et des guirlandes sur ses bords (voir piste-arc-en-ciel.js).
+    // `trackA` reste pose : c'est la teinte qu'on lit la ou le moteur a
+    // besoin d'UNE couleur de piste.
+    arcenciel: {
+      skyTop: [4, 2, 16], skyBot: [26, 10, 58], stars: 260,
+      grass: [6, 3, 18], grassEdge: [34, 22, 70],
+      trackA: [120, 70, 200], trackB: [100, 56, 180],
+      lane: [255, 255, 255], kerb: [255, 255, 255],
+      tread: [48, 36, 88], riser: [30, 20, 60], roof: [20, 12, 42],
+      barrier: [200, 180, 255],
+      // Les panneaux au pied des gradins restent dans l'ombre : en jaune vif,
+      // une bande de quarante-huit metres disputait la vedette a la piste.
+      panels: [[64, 40, 132], [40, 36, 110], [86, 38, 128], [46, 56, 140]],
+      crowdLo: [56, 44, 90], crowdHi: [236, 226, 255],
+      accent: [255, 206, 64], dust: [236, 226, 255],
+      espace: true, neon: [255, 244, 255], neonExt: [255, 244, 255],
+      nebuleuses: [[236, 72, 170], [52, 170, 236], [140, 80, 236], [255, 170, 60]],
+      arcEnCiel: [[238, 58, 72], [250, 138, 44], [252, 212, 60], [84, 206, 94],
+                  [52, 194, 234], [70, 108, 240], [168, 86, 236], [236, 96, 196]],
+      toiture: false, gradins: 3,
+    },
     // Jeux mondiaux : piste bleue, lignes blanches et liseret vert au
     // couloir interieur, comme la piste d'athletisme de Vallehermoso.
     mondiaux: {
@@ -3808,6 +3833,9 @@
   // Le vide sous la piste intergalactique (decor-cosmos.js) : ne dessine rien
   // pour un theme qui ne porte pas `espace`.
   const COS = () => globalThis.DecorCosmos;
+  // La piste arc-en-ciel (piste-arc-en-ciel.js) : pour le theme qui porte
+  // `arcEnCiel`, et lui seul.
+  const ARC = () => globalThis.PisteArcEnCiel;
   // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
   // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
   const DEC = () => globalThis.DecorsStades;
@@ -6081,6 +6109,7 @@
     // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
     // changement de couleur tous les huit metres.
     if (cdm) cdm.surface(ctx, apiCdm(), th, sm, rIn, rOut);
+    else if (th.arcEnCiel && ARC()) ARC().surface(ctx, PEINTRE, th, sm, rIn, rOut);
     else band(ctx, sm, rIn, rOut, rgb(th.trackA));
 
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
@@ -6105,6 +6134,7 @@
         rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
       }
       rail(ctx, sm, rOut, rgb(th.lane), 2.2);
+      if (th.arcEnCiel && ARC()) ARC().guirlandes(ctx, PEINTRE, th, rIn, rOut);
     }
 
     // L'ombre que les tribunes jettent sur le bord de la piste, et celle du

@@ -10,6 +10,8 @@ import './chiffres-piste.js';
 import './rendu-premium.js';
 // Le vide sous la piste intergalactique : etoiles, nebuleuses, planetes.
 import './decor-cosmos.js';
+// La piste arc-en-ciel : ses couloirs de lumiere, ses reflets, ses guirlandes.
+import './piste-arc-en-ciel.js';
 // Les decors des stades, rendus dans Blender : le manifeste d'abord (ou est le
 // pied de chaque piece dans son image), puis le module qui les pose.
 import decorsManifeste from './decors-manifeste.json';

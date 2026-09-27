@@ -952,3 +952,306 @@ def blocs(P):
 
 
 DEBOUT.update({'blocs': blocs})
+
+
+# -----------------------------------------------------------------------
+# LA PISTE ARC-EN-CIEL — un stade qui flotte dans l'espace
+#
+# Le vide sous la piste est peint par le moteur (decor-cosmos.js) : ici,
+# seulement ce qui s'y tient. Tout ce qui brille est une EMISSION franche
+# (M.aplat) — une lampe ne prend pas la lumiere, elle la donne — et le
+# reste suit la matiere a facettes du jeu, comme partout ailleurs. Aucune
+# ombre au sol n'est rendue pour ce stade (voir `sansOmbre`, palettes.py) :
+# il n'y a pas de sol, seulement une lueur sous chaque piece.
+#
+# Aucune piece ne reprend un objet d'un jeu existant : un arc-en-ciel, une
+# etoile, un satellite, une fusee et une planete appartiennent a tout le
+# monde.
+# -----------------------------------------------------------------------
+
+def aureole(nom, couleur, x, y, z, rayon, force=0.5):
+    """Le rayonnement autour d'une lampe : une boule dont l'opacite tombe du
+    centre vers le bord, comme `halo`, mais dans l'air et non au sol."""
+    o = halo(nom, couleur, x, y, z, rayon, force=force)
+    # le disque de `halo` est pose a plat : on le dresse face a la camera,
+    # qui regarde le long de (1, 1, -2/sqrt 5) dans le repere du jeu
+    o.rotation_euler = Vector((1, 1, -2 / math.sqrt(5))).to_track_quat('Z', 'Y').to_euler()
+    return o
+
+
+def _anneau_demi(nom, mat, r0, r1, prof, a0=0.0, a1=math.pi, cotes=56, z=0.0):
+    """Une bande d'arc : un demi-anneau plein, dans le plan XZ, centre en (0, 0, z)."""
+    bm = bmesh.new()
+    rangs = []
+    for k in range(cotes + 1):
+        a = a0 + (a1 - a0) * k / cotes
+        c, s = math.cos(a), math.sin(a)
+        rangs.append([bm.verts.new((r * c, y, z + r * s))
+                      for r, y in ((r0, -prof / 2), (r1, -prof / 2), (r1, prof / 2), (r0, prof / 2))])
+    for k in range(cotes):
+        A, B = rangs[k], rangs[k + 1]
+        for i in range(4):
+            j = (i + 1) % 4
+            bm.faces.new((A[i], A[j], B[j], B[i]))
+    bm.faces.new(list(reversed(rangs[0])))
+    bm.faces.new(rangs[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    return _mesh(nom, mat, bm)
+
+
+def _nuage(P, nom, x, y, z, echelle, graine):
+    """Un nuage a facettes : quelques boules bosselees, le dessous aplati."""
+    clair = peint(P, nom + '_clair', P['nuage'], liseret=1.4)
+    for k, (dx, dy, dz, r) in enumerate(((0, 0, 0.35, 0.62), (0.62, 0.1, 0.22, 0.46),
+                                         (-0.6, -0.05, 0.2, 0.48), (0.2, 0.35, 0.55, 0.42),
+                                         (-0.25, -0.3, 0.5, 0.4))):
+        caillou('%s%d' % (nom, k), clair, x + dx * echelle, y + dy * echelle, z + dz * echelle,
+                r * echelle, r * echelle * 0.9, r * echelle * 0.8, graine=graine + k * 1.7)
+
+
+def arche(P):
+    """Un arc-en-ciel de sept bandes, pose entre deux nuages, borde d'ampoules."""
+    R0, e, prof = 2.1, 0.30, 0.42
+    for k, col in enumerate(P['arc']):
+        # de l'exterieur (rouge) vers l'interieur (violet), comme dans le ciel
+        # Du NEON, pas de la peinture : a facettes eclairees, la face tournee
+        # vers la camera tombait dans l'ombre du soleil du jeu et les sept
+        # couleurs s'eteignaient. Un arc-en-ciel donne sa lumiere.
+        r1 = R0 + e * (len(P['arc']) - k)
+        _anneau_demi('bande%d' % k, M.aplat('arc%d' % k, col), r1 - e, r1, prof, z=0.55)
+    # Les ampoules du bord exterieur : des perles de lumiere, a pas regulier.
+    Rb = R0 + e * len(P['arc']) + 0.06
+    lampe = M.aplat('ampoule', P['blanc'])
+    for k in range(19):
+        a = math.pi * (k + 0.5) / 19
+        bm = bmesh.new()
+        bmesh.ops.create_icosphere(bm, subdivisions=1, radius=0.09)
+        bmesh.ops.translate(bm, vec=(Rb * math.cos(a), -prof / 2 - 0.02, 0.55 + Rb * math.sin(a)),
+                            verts=bm.verts)
+        _mesh('ampoule%d' % k, lampe, bm)
+    _nuage(P, 'nuage_g', -(R0 + e * 3.5), 0, 0, 1.25, 1.0)
+    _nuage(P, 'nuage_d', (R0 + e * 3.5), 0, 0, 1.25, 4.0)
+    halo('lueur', P['arc'][3], 0, 0, 0.02, 5.4, force=0.30)
+    halo('lueur2', P['arc'][0], -3.0, 0, 0.03, 2.4, force=0.22)
+    halo('lueur3', P['arc'][6], 3.0, 0, 0.03, 2.4, force=0.22)
+
+
+def _etoile_maillage(bm, R, r, epaisseur, bombe):
+    """Une etoile a cinq branches, bombee sur ses deux faces."""
+    avant = bm.verts.new((0, -epaisseur / 2 - bombe, 0))
+    arriere = bm.verts.new((0, epaisseur / 2 + bombe, 0))
+    tour_av, tour_ar = [], []
+    for k in range(10):
+        a = math.pi / 2 + math.pi * k / 5
+        rr = R if k % 2 == 0 else r
+        tour_av.append(bm.verts.new((rr * math.cos(a), -epaisseur / 2, rr * math.sin(a))))
+        tour_ar.append(bm.verts.new((rr * math.cos(a), epaisseur / 2, rr * math.sin(a))))
+    for k in range(10):
+        j = (k + 1) % 10
+        bm.faces.new((avant, tour_av[j], tour_av[k]))
+        bm.faces.new((arriere, tour_ar[k], tour_ar[j]))
+        bm.faces.new((tour_av[k], tour_av[j], tour_ar[j], tour_ar[k]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+
+
+def _eclat(nom, mat, x, y, z, t):
+    """Une etincelle : un octaedre etire."""
+    bm = bmesh.new()
+    v = [bm.verts.new(p) for p in ((0, 0, t * 1.6), (0, 0, -t * 1.6), (t, 0, 0), (-t, 0, 0),
+                                   (0, t, 0), (0, -t, 0))]
+    for a, b in ((2, 4), (4, 3), (3, 5), (5, 2)):
+        bm.faces.new((v[0], v[a], v[b]))
+        bm.faces.new((v[1], v[b], v[a]))
+    bmesh.ops.translate(bm, vec=(x, y, z), verts=bm.verts)
+    return _mesh(nom, mat, bm)
+
+
+def etoile(P):
+    """Une grande etoile d'or qui flotte, entouree d'etincelles."""
+    orM = peint(P, 'or', P['or'], liseret=1.8)
+    bm = bmesh.new()
+    _etoile_maillage(bm, 1.05, 0.45, 0.30, 0.22)
+    rot = Matrix.Rotation(math.radians(-18), 4, 'Z') @ Matrix.Rotation(math.radians(8), 4, 'Y')
+    bmesh.ops.transform(bm, matrix=Matrix.Translation((0, 0, 2.05)) @ rot, verts=bm.verts)
+    _mesh('etoile', orM, bm)
+    eclat = M.aplat('eclat', P['blanc'])
+    eclatOr = M.aplat('eclat_or', P['orClair'])
+    for k, (x, y, z, t) in enumerate(((-1.25, 0.1, 2.9, 0.09), (1.2, -0.2, 1.4, 0.07),
+                                      (0.95, 0.2, 3.05, 0.06), (-1.0, -0.1, 1.2, 0.06),
+                                      (0.2, 0.0, 3.35, 0.05))):
+        _eclat('eclat%d' % k, eclat if k % 2 else eclatOr, x, y, z, t)
+    halo('lueur', P['or'], 0, 0, 0.02, 2.6, force=0.40)
+
+
+def satellite(P):
+    """Un satellite : le corps en feuille d'or, deux ailes de panneaux, une antenne."""
+    foil = peint(P, 'feuille', P['feuille'], liseret=1.6)
+    metal = peint(P, 'metal', P['metal'])
+    panneau = peint(P, 'panneau', P['panneau'], liseret=1.2)
+    trait = M.aplat('cellule', P['panneauTrait'])
+    feu = M.aplat('feu', P['arc'][0])
+    z0 = 2.3
+    boite('corps', foil, -0.5, -0.45, z0 - 0.6, 0.5, 0.45, z0 + 0.6)
+    boite('ceinture', metal, -0.53, -0.48, z0 - 0.08, 0.53, 0.48, z0 + 0.08)
+    for s in (-1, 1):
+        tube('bras%d' % s, metal, (s * 0.5, 0, z0), (s * 0.95, 0, z0), 0.05, 8)
+        x0, x1 = (0.95, 3.35) if s > 0 else (-3.35, -0.95)
+        boite('aile%d' % s, panneau, x0, -0.04, z0 - 0.62, x1, 0.04, z0 + 0.62)
+        # la grille des cellules, sur la face qui regarde la camera
+        for i in range(1, 6):
+            x = x0 + (x1 - x0) * i / 6
+            boite('cel%d_%d' % (s, i), trait, x - 0.012, -0.055, z0 - 0.6, x + 0.012, -0.04, z0 + 0.6)
+        boite('celh%d' % s, trait, x0, -0.055, z0 - 0.012, x1, -0.04, z0 + 0.012)
+    # l'antenne parabolique, sur le dessus
+    tube('mat', metal, (0, 0, z0 + 0.6), (0, 0, z0 + 1.0), 0.04, 8)
+    bm = bmesh.new()
+    n, R = 20, 0.42
+    centre = bm.verts.new((0, 0, 0))
+    bord = [bm.verts.new((R * math.cos(2 * math.pi * k / n), R * math.sin(2 * math.pi * k / n), 0.16))
+            for k in range(n)]
+    for k in range(n):
+        bm.faces.new((centre, bord[k], bord[(k + 1) % n]))
+    bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.03)
+    rot = Matrix.Rotation(math.radians(35), 4, 'X')
+    bmesh.ops.transform(bm, matrix=Matrix.Translation((0, 0, z0 + 1.0)) @ rot, verts=bm.verts)
+    _mesh('parabole', metal, bm)
+    disque('balise', feu, 0.0, 0.0, z0 - 0.72, z0 - 0.6, 0.12, cotes=16)
+    halo('lueur', P['panneauTrait'], 0, 0, 0.02, 3.4, force=0.22)
+
+
+def fusee(P):
+    """Une fusee a l'ancienne sur son pas de tir : blanche, rayee, a hublot."""
+    blanc = peint(P, 'coque', P['blanc'], liseret=1.2)
+    rouge = peint(P, 'rouge', P['rouge'], liseret=1.3)
+    metal = peint(P, 'metal', P['metal'])
+    sombre = peint(P, 'sombre', P['sombre'])
+    hublot = M.aplat('hublot', P['arc'][4])
+    flamme = M.aplat('flamme', P['orClair'])
+    # le pas de tir
+    disque('socle', sombre, 0, 0, 0, 0.18, 1.5, cotes=40)
+    disque('anneau', metal, 0, 0, 0.18, 0.26, 1.2, cotes=40, r_in=0.95)
+    z = 0.7
+    # la tuyere et sa flamme au ralenti
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=20, radius1=0.42, radius2=0.28, depth=0.35)
+    bmesh.ops.translate(bm, vec=(0, 0, z - 0.17), verts=bm.verts)
+    _mesh('tuyere', metal, bm)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=16, radius1=0.05, radius2=0.32, depth=0.42)
+    bmesh.ops.translate(bm, vec=(0, 0, z - 0.52), verts=bm.verts)
+    _mesh('flamme', flamme, bm)
+    # le fut : des anneaux blancs et rouges
+    H, R = 3.0, 0.58
+    tranches = ((0.0, 0.5, rouge), (0.5, 1.9, blanc), (1.9, 2.2, rouge), (2.2, H, blanc))
+    for i, (a, b, m) in enumerate(tranches):
+        disque('fut%d' % i, m, 0, 0, z + a, z + b, R, cotes=32)
+    # le nez
+    bm = bmesh.new()
+    prof = [(R, 0), (R * 0.93, 0.35), (R * 0.75, 0.75), (R * 0.45, 1.1), (R * 0.15, 1.35), (0, 1.45)]
+    n = 32
+    rangs = [[bm.verts.new((r * math.cos(2 * math.pi * k / n), r * math.sin(2 * math.pi * k / n), h))
+              for k in range(n)] if r > 0 else [bm.verts.new((0, 0, h))] for r, h in prof]
+    for i in range(len(rangs) - 1):
+        A, B = rangs[i], rangs[i + 1]
+        for k in range(n):
+            j = (k + 1) % n
+            if len(B) == 1:
+                bm.faces.new((A[k], A[j], B[0]))
+            else:
+                bm.faces.new((A[k], A[j], B[j], B[k]))
+    bmesh.ops.translate(bm, vec=(0, 0, z + H), verts=bm.verts)
+    _mesh('nez', rouge, bm)
+    # le hublot, tourne vers la camera (qui regarde depuis -X -Y)
+    a = math.radians(225)
+    cx, cy = (R + 0.01) * math.cos(a), (R + 0.01) * math.sin(a)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.24, radius2=0.24, depth=0.06)
+    rot = Vector((0, 0, 1)).rotation_difference(Vector((math.cos(a), math.sin(a), 0))).to_matrix().to_4x4()
+    bmesh.ops.transform(bm, matrix=Matrix.Translation((cx, cy, z + 2.6)) @ rot, verts=bm.verts)
+    _mesh('cerclage', metal, bm)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=24, radius1=0.17, radius2=0.17, depth=0.08)
+    bmesh.ops.transform(bm, matrix=Matrix.Translation((cx * 1.02, cy * 1.02, z + 2.6)) @ rot,
+                        verts=bm.verts)
+    _mesh('hublot', hublot, bm)
+    # quatre ailerons
+    for k in range(4):
+        # a 0, 90, 180 et 270 degres : aucun ne pointe vers la camera, qui
+        # l'aurait vu par la tranche, en simple trait
+        a = math.radians(90 * k)
+        c, s = math.cos(a), math.sin(a)
+        bm = bmesh.new()
+        pts = [(R * 0.95, 0.0), (R + 0.75, -0.45), (R + 0.75, 0.2), (R * 0.95, 1.2)]
+        vs = [bm.verts.new((r * c - 0.05 * s, r * s + 0.05 * c, z + h)) for r, h in pts]
+        vs2 = [bm.verts.new((r * c + 0.05 * s, r * s - 0.05 * c, z + h)) for r, h in pts]
+        bm.faces.new(vs)
+        bm.faces.new(list(reversed(vs2)))
+        for i in range(4):
+            j = (i + 1) % 4
+            bm.faces.new((vs[i], vs2[i], vs2[j], vs[j]))
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+        _mesh('aileron%d' % k, rouge, bm)
+    halo('lueur', P['orClair'], 0, 0, 0.02, 2.4, force=0.35)
+
+
+def planete(P):
+    """Une petite planete a anneau, qui flotte au-dessus de sa lueur."""
+    z = 2.0
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=28, v_segments=16, radius=0.95)
+    bmesh.ops.translate(bm, vec=(0, 0, z), verts=bm.verts)
+    me = bpy.data.meshes.new('planete')
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new('planete', me)
+    bpy.context.collection.objects.link(o)
+    # des bandes de latitude, deux teintes qui alternent
+    teintes = [peint(P, 'globe%d' % i, c, liseret=1.5) for i, c in enumerate(P['globe'])]
+    for m in teintes:
+        me.materials.append(m)
+    o.parent = _racine
+    for p in me.polygons:
+        p.use_smooth = False
+        lat = (p.center.z - z) / 0.95
+        p.material_index = int((lat + 1) * 3.5) % len(teintes)
+    # L'anneau : trois bandes fines de teintes voisines, a peine incline. Un
+    # anneau d'une seule largeur et d'une seule couleur se lisait comme une
+    # soucoupe posee derriere le globe.
+    rot = Matrix.Rotation(math.radians(-8), 4, 'X') @ Matrix.Rotation(math.radians(-14), 4, 'Y')
+    n = 64
+    for i, (ri, re, col) in enumerate(((1.22, 1.38, P['arc'][4]), (1.42, 1.62, P['arc'][5]),
+                                       (1.66, 1.74, P['arc'][6]))):
+        bm = bmesh.new()
+        ext = [bm.verts.new((re * math.cos(2 * math.pi * k / n), re * math.sin(2 * math.pi * k / n), 0))
+               for k in range(n)]
+        inn = [bm.verts.new((ri * math.cos(2 * math.pi * k / n), ri * math.sin(2 * math.pi * k / n), 0))
+               for k in range(n)]
+        for k in range(n):
+            j = (k + 1) % n
+            bm.faces.new((ext[k], ext[j], inn[j], inn[k]))
+        bmesh.ops.solidify(bm, geom=bm.faces[:], thickness=0.04)
+        bmesh.ops.transform(bm, matrix=Matrix.Translation((0, 0, z)) @ rot, verts=bm.verts)
+        _mesh('anneau%d' % i, peint(P, 'anneau%d' % i, col, liseret=1.6), bm)
+    halo('lueur', P['globe'][0], 0, 0, 0.02, 2.2, force=0.32)
+
+
+def borne(P):
+    """Une borne lumineuse du bord de piste : un fut fin, trois anneaux, un globe."""
+    metal = peint(P, 'metal', P['metal'])
+    sombre = peint(P, 'sombre', P['sombre'])
+    globe = M.aplat('globe', P['blanc'])
+    disque('pied', sombre, 0, 0, 0, 0.12, 0.26, cotes=20)
+    tube('fut', metal, (0, 0, 0.1), (0, 0, 1.3), 0.06, 12)
+    for k, col in enumerate((P['arc'][0], P['arc'][3], P['arc'][5])):
+        disque('bague%d' % k, M.aplat('bague%d' % k, col), 0, 0, 0.62 + 0.18 * k, 0.70 + 0.18 * k,
+               0.095, cotes=16)
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=2, radius=0.2)
+    bmesh.ops.translate(bm, vec=(0, 0, 1.48), verts=bm.verts)
+    _mesh('globe', globe, bm)
+    aureole('aureole', P['blanc'], 0, 0, 1.48, 0.62, force=0.55)
+    halo('lueur', P['blanc'], 0, 0, 0.02, 1.3, force=0.35)
+
+
+DEBOUT.update({'arche': arche, 'etoile': etoile, 'satellite': satellite, 'fusee': fusee,
+               'planete': planete, 'borne': borne})

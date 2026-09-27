@@ -49,6 +49,10 @@ CAPS = [0.0, 180.0, WROT, 180.0 + WROT]
 # c'est la qu'un tapis se lit contre les lignes de couloir.
 CAPS_VIRAGE = sorted(set(CAPS + [22.5 * k for k in range(16)]))
 CONTOURS = False
+# Echantillons d'anticrenelage du rendu couleur, et ombre au sol ou non :
+# reglages de stade (voir palettes.STADES).
+ECHANTILLONS = 32
+SANS_OMBRE = False
 
 
 def cle_cap(cap):
@@ -180,11 +184,15 @@ def rendre_debout(stade, nom, cap, dossier):
         ls.linestyle.color = (0.04, 0.10, 0.10)
         ls.linestyle.thickness = 2.6
     sc.render.engine = 'BLENDER_EEVEE_NEXT'
-    sc.eevee.taa_render_samples = 32
+    sc.eevee.taa_render_samples = ECHANTILLONS
     f_col = '/tmp/decor-couleur.png'
     sc.render.filepath = f_col
     bpy.ops.render.render(write_still=True)
     ancre = vue.ancre_pixel(cam, (0, 0, 0))
+    if SANS_OMBRE:
+        # Un stade sans sol : la couleur seule, sa lueur tient lieu d'ombre.
+        return recouper_et_ecrire(lire(f_col), ancre,
+                                  os.path.join(dossier, '%s-%s.webp' % (nom, cle_cap(cap))))
 
     # --- l'ombre : Cycles, la piece invisible a la camera mais pas au soleil
     for o in bpy.data.objects:
@@ -278,7 +286,7 @@ def rendre_sol(stade, nom, dossier, px_par_m=48.0):
 
 
 def main():
-    global PX_PAR_M, CONTOURS
+    global PX_PAR_M, CONTOURS, ECHANTILLONS, SANS_OMBRE
     args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     stade = args[args.index('--stade') + 1] if '--stade' in args else 'day'
     seules = args[args.index('--pieces') + 1].split(',') if '--pieces' in args else None
@@ -292,6 +300,8 @@ def main():
     PX_PAR_M = float(cfg.get('pxParM', 96.0))
     SYMETRIQUES = set(cfg.get('symetriques', []))
     CONTOURS = bool(cfg.get('contours'))
+    ECHANTILLONS = int(cfg.get('echantillons', 32))
+    SANS_OMBRE = bool(cfg.get('sansOmbre'))
     for nom in cfg['debout']:
         if seules and nom not in seules:
             continue
@@ -300,6 +310,9 @@ def main():
         else:
             caps = [0.0] if nom in SYMETRIQUES else \
                 (CAPS_VIRAGE if nom in cfg.get('virage', []) else CAPS)
+        # --apercu : un seul cap, pour juger une piece avant sa serie complete.
+        if '--apercu' in args:
+            caps = caps[:1]
         deja = entree['debout'].get(nom, {}) if '--completer' in args else {}
         entree['debout'][nom] = deja
         construire(stade, nom, 0.0)

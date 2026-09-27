@@ -67,7 +67,7 @@
   const SIEGES = {
     day: [34, 96, 196], mondiaux: [30, 150, 84], cosmos: [120, 72, 196],
     danube: [84, 52, 128], riviera: [44, 176, 190], nuit: [38, 72, 158],
-    namek: [226, 118, 38], champdemars: [26, 60, 150],
+    namek: [226, 118, 38], champdemars: [26, 60, 150], arcenciel: [236, 96, 196],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
 
@@ -289,7 +289,6 @@
         const eLoc = ferveur > 0 ? ferveur * (0.6 + 0.4 * presDe(a[0] + dx * 0.5, a[1] + dy * 0.5)) : 0;
         const pDebout = debout + 0.62 * eLoc;
         const pApplaudit = Math.min(0.96 - pDebout, 0.22 + 0.14 * eLoc);
-        const rythme = 1 + 2.5 * eLoc;
         for (let k = 0; k < n; k++) {
           const u = (k + 0.5) / n;
           const X = a[0] + dx * u, Y = a[1] + dy * u;
@@ -305,15 +304,24 @@
           let pose, saut = 0;
           if ((h % 1000) / 1000 >= densite) pose = iVide;
           else {
-            // chacun change de geste de temps en temps, jamais tous ensemble
-            // — et d'autant plus souvent que le stade s'enflamme
-            const cycle = Math.floor(t / ((2.2 + (h % 7) * 0.3) / rythme) + (h % 97) / 97 * 5);
+            // chacun change de geste de temps en temps, jamais tous ensemble.
+            //
+            // LE RYTHME NE DEPEND PAS DE LA FERVEUR, et c'est voulu. Il en
+            // dependait : la periode du geste raccourcissait quand le stade
+            // s'enflammait. Mais `t` compte depuis l'ouverture de la page —
+            // des centaines de secondes —, et diviser un grand nombre par une
+            // periode qui bouge fait sauter le numero du geste a chaque
+            // image : le public scintillait au lieu de s'animer. La ferveur
+            // joue donc sur CE que chacun fait (debout, applaudir), jamais
+            // sur la frequence a laquelle il change d'avis.
+            const cycle = Math.floor(t / (2.2 + (h % 7) * 0.3) + (h % 97) / 97 * 5);
             const v = hache(h, cycle, 3) % 1000 / 1000;
             pose = v < pDebout ? iDebout : (v < pDebout + pApplaudit ? iApplaudit : iAssis);
-            // Debout et enflamme, on saute sur place : chacun a son rythme.
-            if (pose !== iAssis && eLoc > 0.4) {
-              saut = Math.abs(Math.sin(t * (7 + (h % 5)) + (h % 628) / 100))
-                * (eLoc - 0.4) * 0.22 * pxm;
+            // Debout et enflamme, on sautille sur place, chacun a son rythme
+            // — lentement : un peu plus d'un saut par seconde, pas une vibration.
+            if (pose !== iAssis && eLoc > 0.5) {
+              saut = Math.abs(Math.sin(t * (3.2 + (h % 5) * 0.35) + (h % 628) / 100))
+                * (eLoc - 0.5) * 0.16 * pxm;
             }
           }
           items.push([api.depthOf(X, Y), g[0], g[1] - saut, pose, capI, h]);
