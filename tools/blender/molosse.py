@@ -78,7 +78,19 @@ PX_PAR_M = 120.0
 # Combien d'images pour un cycle de galop complet.
 PHASES = 8
 
-SORTIE = os.path.join(ICI, '..', '..', 'public', 'molosse')
+# OU LES IMAGES ATTERRISSENT, ET POURQUOI CE N'EST PLUS EN DUR.
+#
+# Elles allaient dans public/molosse/. C'est precisement ce qui a coute leur
+# retrait : public/ est recopie tel quel dans LES DEUX builds, y compris le
+# public ou le mode n'existe pas, et aucun drapeau ne peut l'en empecher (voir
+# HALLOWEEN_OUVERT dans game/canal.ts). Huit images d'une edition limitee
+# etaient telechargeables un mois avant son ouverture.
+#
+# Le dossier se choisit donc a l'appel, et le defaut est un dossier de travail
+# hors du depot : on regarde ce qu'on a rendu avant de decider ou ca vit.
+#
+#   MOLOSSE_SORTIE=/chemin  python tools/blender/molosse.py
+SORTIE = os.environ.get('MOLOSSE_SORTIE') or os.path.join(ICI, '..', '..', '.rendus', 'molosse')
 
 # --- les mesures de la bete, en metres ---------------------------------
 # Les memes que celles du trace qu'elle remplace, pour que rien ne bouge dans
@@ -99,25 +111,57 @@ PATTE = 0.94
 # hauteurs proches du garrot PLUS des rayons de trente centimetres, et la bete
 # culminait a un metre trente. On pose donc l'axe bas et l'on laisse le rayon
 # faire le dos.
+#
+# CORRIGE APRES AVOIR REGARDE LE RENDU, ET C'EST TOUT L'INTERET DE REGARDER.
+# La premiere table donnait un LEVRIER : encolure fine, taille tres creusee,
+# museau long. Sur la planche de contact, les huit phases montraient une bete
+# mince et pale qui ne ressemblait a rien de ce que le mode raconte — le
+# molosse est un chien LOURD, et sa peur vient de sa masse, pas de sa vitesse.
+#
+# Ce qui a change, et pourquoi chaque nombre :
+#   - L'ENCOLURE PASSE DE 0,18 A 0,25. Un molosse a un cou presque aussi epais
+#     que son crane. C'est le premier signe qu'on lit sur une silhouette : un
+#     cou fin dit « il court vite », un cou epais dit « il va me faire mal ».
+#   - LE POITRAIL PASSE DE 0,25 A 0,32, et descend. C'est la partie qu'on voit
+#     arriver dans le coin de l'ecran.
+#   - LE REIN NE SE PINCE PLUS QU'A 0,225 au lieu de 0,17. La taille creusee
+#     d'un levrier lisait comme de la maigreur ; celle-ci lit comme un flanc.
+#   - LA CROUPE EPAISSIT (0,19 -> 0,235) : c'est elle qui pousse, et on doit
+#     voir d'ou vient la poussee.
 COLONNE = [
-    (+0.86, 0.50, 0.13),   # la gorge
-    (+0.72, 0.58, 0.18),   # l'encolure
-    (+0.54, 0.66, 0.24),   # le garrot
-    (+0.34, 0.66, 0.25),   # le poitrail, le plus profond
-    (+0.14, 0.64, 0.21),   # le dos
-    (-0.08, 0.62, 0.17),   # le rein, pince
-    (-0.30, 0.62, 0.19),   # la croupe
-    (-0.50, 0.60, 0.15),   # la naissance de la queue
+    (+0.86, 0.48, 0.175),  # la gorge, pleine
+    (+0.72, 0.55, 0.250),  # l'encolure, epaisse — la marque du molosse
+    (+0.54, 0.62, 0.300),  # le garrot, haut et large
+    (+0.34, 0.60, 0.320),  # le poitrail, le plus profond, et il descend
+    (+0.14, 0.61, 0.270),  # le dos
+    (-0.08, 0.61, 0.225),  # le rein, a peine pince
+    (-0.30, 0.62, 0.235),  # la croupe, qui pousse
+    (-0.50, 0.60, 0.170),  # la naissance de la queue
 ]
 
-# La tete : (avancement, hauteur, rayon). Le crane large, le museau fin et
-# long — un museau court donne un chien de salon.
+# LA TETE — et le commentaire d'origine disait exactement l'inverse de la
+# verite. Il affirmait qu'« un museau court donne un chien de salon », et la
+# table qui suivait donnait un museau long et fin : quinze centimetres de rayon
+# au crane, cinq a la truffe, sur trente-huit centimetres de longueur. Le rendu
+# l'a tranche — c'etait un museau de LEVRIER, et de loin ca se lisait comme un
+# bec.
+#
+# Un museau court ne donne pas un chien de salon : il donne un molosse. C'est
+# la definition meme de la famille — brachycephale, machoire large et courte,
+# faite pour tenir et non pour attraper. Ce qui donne un chien de salon, c'est
+# la TAILLE, pas les proportions du crane.
+#
+# Le museau raccourcit donc de 1,35 a 1,255, et double d'epaisseur. Et l'on
+# creuse un STOP : la cassure entre le front et le chanfrein, cette marche que
+# tous les molosses ont et qu'aucun levrier n'a. C'est trois centimetres de
+# hauteur, et c'est ce qui fait qu'on reconnait la bete de profil a vingt
+# metres.
 TETE = [
-    (+0.97, 0.47, 0.15),   # le crane
-    (+1.07, 0.44, 0.12),   # le front
-    (+1.18, 0.41, 0.085),  # le chanfrein
-    (+1.28, 0.395, 0.065), # le museau
-    (+1.35, 0.385, 0.050), # la truffe
+    (+0.95, 0.475, 0.205),  # le crane, large
+    (+1.05, 0.470, 0.180),  # le front, plein
+    (+1.10, 0.440, 0.140),  # LE STOP — la cassure sous le front
+    (+1.18, 0.430, 0.130),  # le chanfrein, court et profond
+    (+1.255, 0.425, 0.105), # la truffe, large
 ]
 
 # Les quatre pattes : (avancement de l'epaule, hauteur de l'epaule, phase).
@@ -279,14 +323,28 @@ def matiere_bete():
 
     nt.links.new(geo.outputs['Normal'], sep.inputs['Vector'])
     nt.links.new(sep.outputs['Z'], ramp.inputs['Fac'])
-    ramp.color_ramp.elements[0].position = 0.10
+    # LA RAMPE S'OUVRAIT BEAUCOUP TROP TOT, et c'est ce qui rendait la bete
+    # PALE. Elle part de la normale en Z : a 0,10, toute surface qui monte un
+    # tant soit peu prenait deja de l'eclaircissement — et dans la vue
+    # isometrique du jeu, c'est presque tout l'animal. Le resultat etait une
+    # masse lavande claire sur une nuit sombre, soit l'inverse de ce qu'on
+    # veut : une silhouette se lit sombre sur clair, ou sombre tout court.
+    #
+    # Le fil de lumiere sur l'echine doit rester un FIL. On ne l'ouvre donc
+    # qu'a partir de 0,62 — le haut du dos, et rien d'autre.
+    ramp.color_ramp.elements[0].position = 0.62
     ramp.color_ramp.elements[0].color = (0, 0, 0, 1)
-    ramp.color_ramp.elements[1].position = 0.95
+    ramp.color_ramp.elements[1].position = 1.00
     ramp.color_ramp.elements[1].color = (1, 1, 1, 1)
-    # Les deux teintes du trace qu'on remplace : le noir bleute du poil, et
-    # l'eclaircissement du dos. Un noir pur ferait un trou dans l'image.
-    melange.inputs['Color1'].default_value = (0.055, 0.045, 0.075, 1)
-    melange.inputs['Color2'].default_value = (0.200, 0.170, 0.250, 1)
+    # Les deux teintes : le noir bleute du poil, et l'eclaircissement du dos.
+    # Un noir pur ferait un trou dans l'image.
+    #
+    # LE HAUT BAISSE AUSSI. A 0,200 en lineaire, le fil sortait a pres de la
+    # moitie du blanc une fois converti pour l'ecran — ce n'est plus un reflet
+    # de lune sur du poil, c'est une couleur. A 0,105 il reste un liseret, et
+    # la bete redevient ce qu'elle doit etre : une masse noire qu'on devine.
+    melange.inputs['Color1'].default_value = (0.030, 0.026, 0.048, 1)
+    melange.inputs['Color2'].default_value = (0.105, 0.092, 0.140, 1)
     nt.links.new(ramp.outputs['Color'], melange.inputs['Fac'])
     nt.links.new(melange.outputs['Color'], emis.inputs['Color'])
     emis.inputs['Strength'].default_value = 1.0
@@ -359,3 +417,49 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# ---------------------------------------------------------------------------
+# CE QUI RESTE A FAIRE SUR CETTE BETE — ecrit apres avoir regarde le rendu.
+# ---------------------------------------------------------------------------
+#
+# L'etat du 27 septembre 2026 : la chaine tourne (voir l'en-tete pour la
+# commande), les proportions sont celles d'un molosse et non plus d'un levrier,
+# la matiere rend une masse sombre au lieu d'une silhouette pale. CE N'EST PAS
+# ENCORE MONTRABLE, et il vaut mieux l'ecrire que de le decouvrir en le
+# posant dans le jeu.
+#
+# Ce que la planche de contact montre encore, par ordre de gravite :
+#
+#   1. LES PATTES SONT DES BATONS A BOUT ROND. Quatre tubes de rayon constant
+#      termines par une bille. Un molosse a des avant-bras epais qui se pincent
+#      au boulet, et une cuisse qui est le muscle le plus visible de l'animal.
+#      C'est ce qui manque le plus : de loin, une bete dont les pattes n'ont
+#      pas de masse court sans poids.
+#
+#   2. LA TETE N'A PAS DE MACHOIRE. Le stop se voit maintenant, mais il n'y a
+#      ni babines ni bas de machoire : le museau se termine en cone. Il faut
+#      une masse SOUS le chanfrein, qui deborde legerement — c'est elle qui
+#      fait la gueule, et la gueule est ce que le joueur doit voir arriver.
+#
+#   3. LES OREILLES SE LISENT COMME DES AILERONS. Elles pointent vers
+#      l'arriere et fusionnent avec le crane. Une oreille de molosse tombe, ou
+#      se plaque : dans les deux cas elle est PLUS BASSE et plus large que ce
+#      qui est pose ici.
+#
+#   4. LES YEUX N'EXISTENT PAS DANS LE RENDU. Ils sont la signature du mode —
+#      deux points dans le noir, dessines a la main dans
+#      game/halloween-molosse.js — et le rendu ne les porte pas. Soit on les
+#      sculpte et on les fait emettre, soit on continue de les poser par-dessus
+#      l'image au dessin ; la premiere solution est la bonne, parce qu'ils
+#      doivent tourner avec la tete.
+#
+#   5. TOUT FUSIONNE. Les metaballs donnent le galbe, et c'est pour ca qu'on
+#      les a choisies — mais a rigidite basse elles fondent aussi ce qui doit
+#      rester separe : l'epaule dans le poitrail, la cuisse dans le flanc. Les
+#      masses des membres demandent une rigidite plus haute que celles du
+#      tronc, ce que le code ne distingue pas aujourd'hui.
+#
+# TANT QUE CES CINQ POINTS TIENNENT, LE TRACE A LA MAIN DE
+# game/halloween-molosse.js RESTE MEILLEUR A L'ECRAN, et c'est lui qui joue.
+# On ne remplace pas un dessin lisible par un rendu qui ne l'est pas encore.
