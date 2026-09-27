@@ -479,22 +479,22 @@ def centre_jeu(sx, sy):
     return ((-sy / vue.SIN - sx / vue.COS) / 2, (-sy / vue.SIN + sx / vue.COS) / 2, 0.0)
 
 
-def gerbe(nom_sable, images=14, fps=30.0):
+def gerbe(nom_sable, images=16, fps=30.0):
     """Le sable qui part a la reception, image par image, sous la vue du jeu."""
     P = SABLES[nom_sable]
-    n_grains, n_mottes, n_poudre = 520, 46, 900
+    n_grains, n_mottes, n_poudre = 950, 90, 1500
     N = n_grains + n_mottes + n_poudre
     # d'ou ils partent : sous et devant les talons
-    p0 = np.stack([rng.normal(0.05, 0.07, N), rng.normal(0, 0.09, N),
+    p0 = np.stack([rng.normal(0.06, 0.08, N), rng.normal(0, 0.11, N),
                    np.full(N, 0.01)], 1)
     # vers ou : en avant surtout, en eventail, et vers le haut
     ang = rng.normal(0, 0.55, N)
-    vit = rng.gamma(3.0, 0.9, N) + 0.6
-    elev = np.clip(rng.normal(0.85, 0.30, N), 0.15, 1.35)
+    vit = rng.gamma(2.5, 0.7, N) + 0.5
+    elev = np.clip(rng.normal(0.95, 0.28, N), 0.25, 1.40)
     v0 = np.stack([vit * np.cos(elev) * np.cos(ang), vit * np.cos(elev) * np.sin(ang),
                    vit * np.sin(elev)], 1)
     rayon = np.concatenate([rng.uniform(0.005, 0.011, n_grains),
-                            rng.uniform(0.018, 0.034, n_mottes),
+                            rng.uniform(0.020, 0.045, n_mottes),
                             rng.uniform(0.0025, 0.004, n_poudre)])
     # les mottes sont lourdes : elles partent moins vite et moins haut
     v0[n_grains:n_grains + n_mottes] *= 0.55
@@ -513,9 +513,13 @@ def gerbe(nom_sable, images=14, fps=30.0):
     ts = [i / fps for i in range(images)]
     tous = np.concatenate([pos(t)[0] for t in ts] + [p0], 0)
     e = ecran(tous)
-    marge = 0.08
-    sx0, sy0 = e.min(0) - marge
-    sx1, sy1 = e.max(0) + marge
+    # LE CADRE SUIT LA GERBE, PAS SES GRAINS PERDUS. Quelques grains partent
+    # tres loin et tres vite ; cadrer sur eux reduisait la gerbe a une
+    # poussiere au milieu d'une image vide. Ceux qui sortent du cadre sortent
+    # de l'image, comme ils sortiraient du champ d'une camera.
+    marge = 0.06
+    sx0, sy0 = np.percentile(e, 1.5, axis=0) - marge
+    sx1, sy1 = np.percentile(e, 98.5, axis=0) + marge
     W = int(math.ceil((sx1 - sx0) * PPM_DEBOUT))
     Hh = int(math.ceil((sy1 - sy0) * PPM_DEBOUT))
     W += W % 2

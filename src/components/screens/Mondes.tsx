@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { COURBE } from '@/lib/mouvement';
 import { DUREE_ALLER, DUREE_RETOUR, DUREE_DOUCE, mouvementReduit } from '@/game/passage';
@@ -11,6 +11,16 @@ import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { HAIES } from '@/game/haies.js';
 import { changerDeJeu, jeuDuMonde } from '@/game/jeux';
 import { Poids } from './Poids';
+import { LONGUEUR_OUVERTE } from '@/game/canal';
+
+/* LE SAUT EN LONGUEUR SE CHARGE A LA DEMANDE — et c'est ce qui le sort du
+   build public tant qu'il n'est ouvert que sur le canal de test. Meme forme
+   que la nuit du molosse (App.tsx) : `lazy` en fait un morceau separe, et
+   `@__PURE__` dit au bundler que l'appel ne fait rien d'autre que rendre une
+   valeur — inutilise derriere `LONGUEUR_OUVERTE && ...`, il s'en va, et avec
+   lui le jeu du saut, son rendu et le sable rendu dans Blender. */
+const Longueur = /* @__PURE__ */ lazy(() => import('./Longueur')
+  .then(m => ({ default: m.Longueur })));
 
 /**
  * Les trois autres jeux, et le passage de l'un a l'autre.
@@ -48,6 +58,9 @@ const FLECHE: Record<Direction, typeof ChevronUp> = {
  * reglement des haies partait dans le build public ou rien ne l'affiche.
  */
 function cotesDe(cle: string): string {
+  // La planche et la fosse, dans les memes termes que les haies : ce qu'un
+  // sauteur lit sur le plan d'un stade.
+  if (cle === 'longueur') return 'élan 40 m · planche 1,22 × 0,20 m · fosse 2,75 m';
   const r = (HAIES as any)[cle];
   if (!r) return '';
   const nb = (v: number) => String(v).replace('.', ',');
@@ -108,6 +121,17 @@ function AccueilMonde({ monde }: { monde: Exclude<Monde, 'sprinter'> }) {
   // tard — on avait fait tout ce chemin pour ne rien voir. Au retour il part
   // le premier, sans attendre : il n'a aucune raison de retenir le stade qui
   // revient.
+  // UN CONCOURS DE SAUT SE JOUE DANS LE STADE, pas sur ce fond : l'accueil
+  // s'efface et laisse le concours poser son tableau sur la piste. On en
+  // revient ici en le quittant.
+  if (LONGUEUR_OUVERTE && epreuve === 'longueur') {
+    return (
+      <Suspense fallback={null}>
+        <Longueur onQuitter={() => setEpreuve(null)} />
+      </Suspense>
+    );
+  }
+
   const doux = mouvementReduit();
   const aller = (doux ? DUREE_DOUCE : DUREE_ALLER) / 1000;
   const retour = (doux ? DUREE_DOUCE : DUREE_RETOUR) / 1000;

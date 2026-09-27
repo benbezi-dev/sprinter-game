@@ -312,8 +312,11 @@ function MainGame() {
         {/* Sorti au faux depart d'une serie en direct, on regarde : le HUD
             dirait le chrono et la vitesse d'un coureur qui n'est plus sur la
             piste. Le bandeau du spectateur le remplace (ChampDirect). */}
+        {/* Un concours de saut n'a ni chrono ni ligne : il porte son propre
+            tableau (Longueur.tsx), monte par l'accueil de Jumper. */}
         {(state === 'count' || state === 'race') && !enPresentation
-          && !tutoHaies && !tutoSprint && !SprinterApp.G.spectateur && <RaceHUD />}
+          && !tutoHaies && !tutoSprint && !SprinterApp.G.spectateur
+          && !SprinterApp.G.sautEnCours && <RaceHUD />}
         {/* Une course de championnat qu'on revoit : la presentation des
             athletes avant le pistolet, le tableau apres la ligne. Elle se
             monte a cote du HUD et non dedans — elle survit a la fin de la
