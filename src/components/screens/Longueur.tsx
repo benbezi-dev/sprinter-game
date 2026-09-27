@@ -7,6 +7,7 @@ import { RECORDS, ESSAIS, lireVent, homologable } from '@/game/longueur.js';
 import { RECORDS as RECORDS_TRIPLE } from '@/game/triple.js';
 import { PLATEAU_TRIPLE } from '@/game/triple-jeu.js';
 import { recitDe } from '@/game/sauts-recits.js';
+import { monterScene3D } from '@/game/sauts-3d.js';
 import {
   lireMemoire, ecrireMemoire, apresConcours, CarteEtape, Drapeau, BoutonsFin, prenom,
   type MemoireSaut,
@@ -141,7 +142,9 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
   /* --- l'armement du stade, et son rangement --- */
   useEffect(() => {
     armerConcoursSaut(etape, epreuve);
-    return () => { if (!quitte.current) rangerConcoursSaut(); };
+    // La scene en trois dimensions, par-dessus le stade du moteur (sauts-3d.js).
+    const detruire = monterScene3D();
+    return () => { detruire(); if (!quitte.current) rangerConcoursSaut(); };
   }, [etape, epreuve]);
 
   /* --- faire sauter les autres jusqu'a toi --- */
