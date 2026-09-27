@@ -10,9 +10,12 @@
   const THEMES = {
     day: {
       // Couleurs calees sur le decor du jeu de reference (bmp_field) :
-      // ciel #4451a7, piste #8d0000, pelouse #1e6f00, quasiment plates.
+      // ciel #4451a7, piste #8d0000, quasiment plates. La pelouse s'en est
+      // ecartee d'un cran : le #1e6f00 d'origine, sans une trace de bleu, est
+      // un vert de synthese qui couvrait un tiers de l'image. Un rien de bleu
+      // et de gris, et c'est une pelouse de stade.
       skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
-      grass: [30, 111, 0], grassEdge: [20, 88, 0],
+      grass: [36, 106, 26], grassEdge: [24, 84, 16],
       trackA: [138, 10, 10], trackB: [122, 6, 8],
       lane: [246, 242, 234], kerb: [252, 252, 252],
       tread: [176, 178, 186], riser: [132, 136, 148], roof: [78, 82, 98],
@@ -21,9 +24,15 @@
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
       accent: [240, 158, 46], dust: [226, 190, 160]
     },
+    // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
+    // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
+    // ses deux bords (voir decor-cosmos.js). Le fond est plus noir qu'avant
+    // pour que les etoiles s'y lisent.
     cosmos: {
       skyTop: [11, 7, 26], skyBot: [58, 24, 92], stars: 220,
-      grass: [24, 16, 44], grassEdge: [44, 28, 74],
+      grass: [12, 8, 28], grassEdge: [44, 28, 74],
+      espace: true, neon: [96, 226, 255], neonExt: [236, 110, 226],
+      nebuleuses: [[196, 72, 190], [52, 150, 220], [120, 70, 210]],
       trackA: [98, 40, 134], trackB: [83, 31, 118],
       lane: [228, 204, 255], kerb: [234, 216, 250],
       tread: [58, 38, 88], riser: [40, 24, 64], roof: [26, 15, 44],
@@ -36,7 +45,7 @@
     // couloir interieur, comme la piste d'athletisme de Vallehermoso.
     mondiaux: {
       skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
-      grass: [30, 111, 0], grassEdge: [20, 88, 0],
+      grass: [36, 106, 26], grassEdge: [24, 84, 16],
       trackA: [21, 70, 158], trackB: [16, 56, 132],
       lane: [255, 255, 255], kerb: [56, 196, 92],
       tread: [176, 178, 186], riser: [132, 136, 148], roof: [78, 82, 98],
@@ -1403,6 +1412,7 @@
       s.start(this.ctx.currentTime + (reglages && reglages.delay > 0 ? reglages.delay : 0));
       return s;
     },
+
     toggle() { this.on = !this.on; if (!this.on) this.stop(); return this.on; }
   };
 
@@ -3552,6 +3562,58 @@
     if (f) G.suivi = f;
   }
 
+  /**
+   * LA FERVEUR DU STADE, de 0 a 1.
+   *
+   * Le public etait le meme au coup de pistolet et sur la ligne : chacun
+   * changeait de geste a son heure, sans rien savoir de la course. Ce nombre
+   * est ce que le stade SAIT d'elle. Il se tait avant le depart, monte a
+   * mesure que la tete approche de l'arrivee, gagne un cran sur un coude a
+   * coude du joueur dans le dernier tiers, explose quand le premier franchit
+   * la ligne, puis retombe.
+   *
+   * Les gradins le lisent pour se lever et s'enflammer (voir tribune.js).
+   *
+   * La nuit d'Halloween n'en a pas : ce qui se tient dans ce cimetiere n'est
+   * pas venu pour applaudir (voir son entree dans sprinter-core.js).
+   */
+  function cibleFerveur() {
+    const lvl = LEVELS[G.levelIdx];
+    if (G.pasMolosse || (lvl && lvl.theme === 'halloween')) return 0;
+    const s = G.state;
+    // La presentation des athletes fait parler les gradins ; le decompte
+    // les fait taire. C'est le silence d'avant le coup de pistolet.
+    if (s === 'count') return G.countT <= -90 ? 0.2 : 0.06;
+    if (s === 'cut') return 0.16;
+    if (s !== 'race' || !G.track) return 0;
+    const tot = G.track.total;
+    let tete = 0, premier = null, rival = Infinity;
+    const P = G.player;
+    for (const r of G.runners) {
+      if (r.isGhost) continue;
+      if (r.d > tete) tete = r.d;
+      if (r.finished && r.finishTime != null && (premier === null || r.finishTime < premier))
+        premier = r.finishTime;
+      if (P && r !== P) rival = Math.min(rival, Math.abs(r.d - P.d));
+    }
+    // L'OVATION : un pic a l'arrivee du premier, qui s'eteint en quelques
+    // secondes sans jamais retomber au murmure — la course est finie, pas
+    // oubliee.
+    if (premier !== null) return 0.55 + 0.45 * Math.exp(-(G.elapsed - premier) / 3.2);
+    const q = Math.min(1, tete / tot);
+    let e = 0.24 + 0.52 * q * q;
+    if (P && q > 0.6 && rival < 1.5) e += 0.12;
+    return Math.min(1, e);
+  }
+  function majFerveur(dt) {
+    const cible = cibleFerveur();
+    const cur = G.ferveur || 0;
+    // Le stade s'enflamme vite et se calme lentement.
+    const k = 1 - Math.exp(-(cible > cur ? 3.0 : 0.9) * dt);
+    G.ferveur = cur + (cible - cur) * k;
+    if (G.ferveur < 0.002 && cible === 0) G.ferveur = 0;
+  }
+
   function followCam(dt) {
     // Sorti au faux depart, on regarde : la camera accompagne le coureur
     // choisi, plus le joueur qui n'est plus sur la piste.
@@ -3740,9 +3802,12 @@
   // l'etat du jeu ni s'inserer dans sa geometrie.
   const PEINTRE = {
     G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
-    band, bandBrute, bandPattern,
+    band, bandBrute, bandPattern, rail,
   };
   const PREM = () => globalThis.RenduPremium;
+  // Le vide sous la piste intergalactique (decor-cosmos.js) : ne dessine rien
+  // pour un theme qui ne porte pas `espace`.
+  const COS = () => globalThis.DecorCosmos;
   // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
   // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
   const DEC = () => globalThis.DecorsStades;
@@ -5763,6 +5828,9 @@
     // ce qui remplace les passes de tondeuse depuis qu'elles sont eteintes.
     // Voir herbe() dans rendu-premium.js.
     if (PREM()) PREM().herbe(ctx, th, PEINTRE, rIn, rOut, horizon);
+    // L'espace, pour le stade qui en porte un : etoiles, nebuleuses et
+    // planetes a la place de la pelouse, sous tout ce qui suit.
+    if (th.espace && COS()) COS().fond(ctx, PEINTRE, th);
     if (th.lointain) {
       // La bande de lointain est etroite A DESSEIN, et c'est mesure : la
       // hauteur a l'ecran compte plus de deux fois la distance au sol (voir
@@ -6031,6 +6099,7 @@
     // sont des reperes de course, pas des marques d'usage.
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
                             (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
+      if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
       rail(ctx, sm, rIn, rgb(th.kerb), 3);
       for (let e = 1; e < C.LANE_COUNT; e++) {
         rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
@@ -7502,6 +7571,7 @@
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
+    majFerveur,
     theme, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,

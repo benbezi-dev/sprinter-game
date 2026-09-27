@@ -204,6 +204,38 @@
     // scolaire, un bon dixieme a la finale
     const debout = 0.02 + 0.10 * densite;
 
+    // LE PUBLIC SUIT LA COURSE.
+    //
+    // `G.ferveur` dit ou en est la course (voir majFerveur, sprinter-app.js) :
+    // silence au depart, montee vers l'arrivee, ovation sur la ligne. Elle
+    // pese sur tout le gradin, mais davantage la ou passent les coureurs : on
+    // se leve quand le peloton arrive devant soi, pas quand il est a cent
+    // metres. A zero, rien ne change — c'est le public d'avant, qui vit sa vie.
+    const ferveur = G.ferveur || 0;
+    const foyers = [];
+    if (ferveur > 0 && G.state === 'race' && T.pos) {
+      for (const r of G.runners || []) {
+        if (r.isGhost) continue;
+        const q = T.pos(r.d, r.lane);
+        foyers.push(q[0], q[1]);
+      }
+    }
+    // A quel point ce bout de gradin a les coureurs sous les yeux : 1 a six
+    // metres, plus rien au-dela de vingt-quatre.
+    const presDe = (X, Y) => {
+      let d2 = Infinity;
+      for (let f = 0; f < foyers.length; f += 2) {
+        const dx = foyers[f] - X, dy = foyers[f + 1] - Y;
+        const e = dx * dx + dy * dy;
+        if (e < d2) d2 = e;
+      }
+      if (d2 === Infinity) return 0;
+      const d = Math.sqrt(d2);
+      return d <= 6 ? 1 : d >= 24 ? 0 : 1 - (d - 6) / 18;
+    };
+    // Le saut d'un spectateur debout qui s'enflamme, en pixels par metre.
+    const pxm = api.scaleM();
+
     // Les echantillons dans le cadre, une fois pour toutes les rangees.
     const vis = new Uint8Array(sm.length);
     const rMil = near + rangs * pr * 0.5, zMil = 1.05 + rangs * pz * 0.5;
@@ -253,6 +285,11 @@
         const capI = capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue);
         capsVus.add(capI);
         const n = Math.max(1, Math.floor(L / PAS));
+        // L'emotion de ce bout de rangee, une fois pour tous ses sieges.
+        const eLoc = ferveur > 0 ? ferveur * (0.6 + 0.4 * presDe(a[0] + dx * 0.5, a[1] + dy * 0.5)) : 0;
+        const pDebout = debout + 0.62 * eLoc;
+        const pApplaudit = Math.min(0.96 - pDebout, 0.22 + 0.14 * eLoc);
+        const rythme = 1 + 2.5 * eLoc;
         for (let k = 0; k < n; k++) {
           const u = (k + 0.5) / n;
           const X = a[0] + dx * u, Y = a[1] + dy * u;
@@ -265,15 +302,21 @@
           const g = api.solid(X, Y, z);
           if (g[0] < -margeX || g[0] > G.VW + margeX || g[1] < -margeY || g[1] > G.VH + margeY) continue;
           const h = hache(j + 1, i + 7, k + 13);
-          let pose;
+          let pose, saut = 0;
           if ((h % 1000) / 1000 >= densite) pose = iVide;
           else {
             // chacun change de geste de temps en temps, jamais tous ensemble
-            const cycle = Math.floor(t / (2.2 + (h % 7) * 0.3) + (h % 97) / 97 * 5);
+            // — et d'autant plus souvent que le stade s'enflamme
+            const cycle = Math.floor(t / ((2.2 + (h % 7) * 0.3) / rythme) + (h % 97) / 97 * 5);
             const v = hache(h, cycle, 3) % 1000 / 1000;
-            pose = v < debout ? iDebout : (v < debout + 0.22 ? iApplaudit : iAssis);
+            pose = v < pDebout ? iDebout : (v < pDebout + pApplaudit ? iApplaudit : iAssis);
+            // Debout et enflamme, on saute sur place : chacun a son rythme.
+            if (pose !== iAssis && eLoc > 0.4) {
+              saut = Math.abs(Math.sin(t * (7 + (h % 5)) + (h % 628) / 100))
+                * (eLoc - 0.4) * 0.22 * pxm;
+            }
           }
-          items.push([api.depthOf(X, Y), g[0], g[1], pose, capI, h]);
+          items.push([api.depthOf(X, Y), g[0], g[1] - saut, pose, capI, h]);
         }
       }
     }

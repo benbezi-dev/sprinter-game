@@ -8,6 +8,8 @@ import './chiffres-piste.js';
 // chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
 // demarrerait alors sans finition pendant les premieres images.
 import './rendu-premium.js';
+// Le vide sous la piste intergalactique : etoiles, nebuleuses, planetes.
+import './decor-cosmos.js';
 // Les decors des stades, rendus dans Blender : le manifeste d'abord (ou est le
 // pied de chaque piece dans son image), puis le module qui les pose.
 import decorsManifeste from './decors-manifeste.json';
@@ -712,6 +714,9 @@ export function updateLogic(dt: number) {
       SprinterApp.finishRace();
     }
   }
+
+  // Le public : ce qu'il sait de la course, pour que ses gradins la suivent.
+  SprinterApp.majFerveur(dt);
 
   // Update React store
   gameStore.setState({
