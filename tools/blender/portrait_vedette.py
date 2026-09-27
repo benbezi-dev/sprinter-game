@@ -127,8 +127,13 @@ def lisser(o, facteur, iterations):
 # L'ATHLETE : squelette, pose, masses
 # -----------------------------------------------------------------------
 
-def athlete_manga():
+def athlete_manga(pose='hanches'):
     """Aurel Manga, 1,90 m, 89 kg, les mains sur les hanches.
+
+    `pose='A'` : bras ecartes a 45 degres, mains dans l'axe des avant-bras.
+    C'est la pose de repos d'un personnage qu'on rigge (aurel_unity.py) —
+    Unity sait la redresser en T au moment de configurer l'avatar Humanoid.
+    Seuls les bras changent : le reste du corps est le meme.
 
     La pose est celle de son portrait debout (couloir d'honneur, mains sur
     les hanches, coudes ouverts) : c'est celle ou l'on voit le mieux ce qui
@@ -142,10 +147,15 @@ def athlete_manga():
             epaule=Vector((s * 0.205, 0.010, 1.535)),
             coude=Vector((s * 0.415, 0.080, 1.255)),
             poignet=Vector((s * 0.188, -0.005, 1.040)),
+            main='hanche',
             hanche=Vector((s * 0.088, 0.0, 0.965)),
             genou=Vector((s * 0.118, -0.018, 0.520)),
             cheville=Vector((s * 0.124, 0.018, 0.090)),
         )
+        if pose == 'A':
+            A[s].update(coude=Vector((s * 0.438, 0.028, 1.302)),
+                        poignet=Vector((s * 0.628, 0.004, 1.111)),
+                        main='libre')
     return H, A
 
 
@@ -193,11 +203,18 @@ def bras(s, A):
         ell(mb, e + u * 0.40 - av * 0.030, (0.040, 0.034, 0.085), orientation(u))
         f = w - c
         ell(mb, c + f * 0.22 + Vector((s * 0.012, -0.012, 0.010)), (0.030, 0.030, 0.060), orientation(f))
-        # la main posee sur la hanche, doigts vers l'avant
         w = a['poignet']
-        ell(mb, w + Vector((-s * 0.004, -0.040, -0.022)), (0.026, 0.048, 0.016),
-            orientation((0, -1, -0.35)))
-        ell(mb, w + Vector((s * 0.010, -0.010, -0.002)), (0.030, 0.028, 0.020))
+        if a.get('main') == 'libre':
+            # la main dans l'axe de l'avant-bras, paume vers la cuisse, doigts
+            # serres : la paume, puis les doigts
+            d = f.normalized()
+            ell(mb, w + d * 0.050, (0.020, 0.042, 0.052), orientation(d))
+            ell(mb, w + d * 0.120, (0.016, 0.036, 0.040), orientation(d))
+        else:
+            # la main posee sur la hanche, doigts vers l'avant
+            ell(mb, w + Vector((-s * 0.004, -0.040, -0.022)), (0.026, 0.048, 0.016),
+                orientation((0, -1, -0.35)))
+            ell(mb, w + Vector((s * 0.010, -0.010, -0.002)), (0.030, 0.028, 0.020))
     return remplir
 
 
@@ -270,7 +287,7 @@ def tete(H):
 # LES ANNEAUX : bandeau et poignet, ajustes sur la peau
 # -----------------------------------------------------------------------
 
-def anneau(nom, cible, centre, axe, largeur, marge, n=64):
+def anneau(nom, cible, centre, axe, largeur, marge, n=64, finesse=2):
     """Un anneau pose sur la peau de `cible`, autour de `axe`.
 
     On lance des rayons depuis l'axe, dans le plan perpendiculaire, et on
@@ -310,8 +327,8 @@ def anneau(nom, cible, centre, axe, largeur, marge, n=64):
     sol.thickness = 0.006
     sol.offset = 1
     sub = o.modifiers.new('arrondi', 'SUBSURF')
-    sub.levels = 2
-    sub.render_levels = 2
+    sub.levels = finesse
+    sub.render_levels = finesse
     for p in me.polygons:
         p.use_smooth = True
     return o
@@ -596,8 +613,10 @@ VIOLET_FONCE = (36, 20, 72)
 PEAU = (86, 48, 32)
 
 
-def construire():
-    H, A = athlete_manga()
+def construire(pose='hanches'):
+    """Le modele complet. Rend (H, A, objets) : le centre de la tete, les
+    articulations, et les objets par role."""
+    H, A = athlete_manga(pose)
     # LES BRAS SE FONDENT DANS LE TORSE : meme objet, memes masses. Sculptes
     # a part, le deltoide n'etait qu'une boule posee contre la cage, et
     # l'epaule se lisait comme une articulation de poupee.
@@ -685,7 +704,9 @@ def construire():
     poignet = anneau('POIGNET', membres[0], g['poignet'] - axe.normalized() * 0.050,
                      axe, 0.070, 0.003)
     poignet.data.materials.append(eponge)
-    return H
+    yeux = [bpy.data.objects['OEIL_1'], bpy.data.objects['OEIL_-1']]
+    return H, A, dict(corps=corps, jambes=jambes, tete=crane, yeux=yeux,
+                      bandeau=bandeau, poignet=poignet)
 
 
 def main():
@@ -694,7 +715,7 @@ def main():
     rapide = '--rapide' in args
     os.makedirs(sortie, exist_ok=True)
     vider()
-    H = construire()
+    construire()
     lumieres()
     n = 24 if rapide else 160
     r = 0.5 if rapide else 1.0
@@ -705,4 +726,6 @@ def main():
     rendre(buste, os.path.join(sortie, 'manga-buste' + ext), int(900 * r), int(1000 * r), n)
 
 
-main()
+# Importe par aurel_unity.py pour reutiliser le modele : rien ne se rend alors.
+if __name__ == '__main__':
+    main()
