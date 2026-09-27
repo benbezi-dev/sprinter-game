@@ -18,10 +18,20 @@ on:
       # Ce fichier lui-meme : le corriger doit pouvoir se verifier tout de
       # suite, sans avoir a toucher au worker pour provoquer un passage.
       - '.github/workflows/worker.yml'
+      # Et la marche qui garde les courses, pour la meme raison.
+      - 'tools/fenetre-deploiement.mjs'
   # Et a la demande, depuis l'onglet Actions : un redeploiement sans changement
   # (un secret qu'on vient de poser, un doute a lever) ne doit pas obliger a
   # fabriquer un commit vide.
   workflow_dispatch:
+    inputs:
+      # La sortie de secours de la fenetre des courses (plus bas) : pour la
+      # correction urgente d'une salle, qu'on ne peut pas laisser attendre
+      # la fin de la serie qu'elle est en train de casser.
+      forcer:
+        description: 'Deployer meme pendant une course de championnat'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -59,6 +69,20 @@ jobs:
                  "« Edit Cloudflare Workers » et l'acces D1 — voir worker/README.md."
             exit 1
           fi
+
+      # JAMAIS PENDANT UNE COURSE. Deployer redemarre les objets durables, et
+      # une salle redemarree a perdu sa memoire : une serie de championnat
+      # coupee en chambre d'appel renvoie ses huit partants a l'accueil. Le
+      # script lit le calendrier en production et, si une course est en cours
+      # ou a moins de vingt minutes, attend la fin de sa fenetre avant de
+      # laisser passer — trois heures au plus. Calendrier illisible : il laisse
+      # passer, un worker casse doit pouvoir etre repare. Voir
+      # tools/fenetre-deploiement.mjs.
+      - name: Attendre qu'aucune course de championnat ne soit en cours
+        timeout-minutes: 200
+        env:
+          FORCER: ${{ github.event_name == 'workflow_dispatch' && inputs.forcer }}
+        run: node tools/fenetre-deploiement.mjs --attendre
 
       - name: Installer les dependances du worker
         working-directory: worker

@@ -1,0 +1,715 @@
+/* ---------------------------------------------------------------------------
+   SALLE DE CHAMPIONNAT — une serie courue en direct, avec son faux depart
+   ---------------------------------------------------------------------------
+   Jusqu'ici, une course de championnat ne se courait pas : un harnais posait
+   huit chronos sur `/champ/course`, et le jeu les rejouait. Cette salle est la
+   course elle-meme. Elle parle le protocole de la salle en direct (salle.js)
+   — `bienvenue`, `salle`, `pos`, `fini`, `resultat`, l'horloge par ping — pour
+   que le jeu s'y branche avec ce qu'il sait deja faire, et elle y ajoute ce
+   qu'un championnat a de plus :
+
+   1. UNE GRILLE FIXE. On ne rejoint pas une serie : on y est convoque. Seuls
+      ses partants courent, chacun dans le couloir que le semis lui donne ;
+      tout autre visiteur regarde.
+   2. UNE HEURE IMPOSEE. Le pistolet tombe a l'heure du calendrier, pas quand
+      tout le monde est pret. Qui n'est pas la trente secondes avant est
+      forfait — son couloir reste vide.
+   3. LE FAUX DEPART. Le premier fautif declenche le rappel : tout le monde
+      revient sur la ligne, les fautifs prennent un carton rouge et passent
+      spectateurs, les autres repartent. Les regles vivent dans faux-depart.js.
+   4. L'ECRITURE. A l'arrivee, la salle range elle-meme les resultats — les
+      chronos, et pour les autres la raison de leur absence.
+   5. LES FICTIFS. Une grille completee par des partants fictifs (voir
+      tools/champ-combler.mjs) les fait courir : engages d'office a l'appel,
+      un chrono fixe d'avance (chronoFictif). Dans chaque serie et chaque
+      demie, l'un d'eux vole le premier depart (fauxDepartFictif) : la salle
+      le signale elle-meme avant le coup, et il prend son carton comme un
+      vrai. Les telephones font courir les autres a leur chrono ; la salle
+      attend qu'ils aient franchi la ligne avant de rendre son verdict.
+   6. LA PAROLE (26/09). Dans les demies et la finale, chaque partant peut
+      avoir pose une bulle, lue a l'appel et montree pendant sa presentation.
+      A l'arrivee, le mot du vainqueur, pose par la route `/champ/mot`, est
+      relaye ici et diffuse a ceux qui sont encore la. Tout texte passe par le
+      filtre de mot.js.
+
+   Le canal de test et la production sont deux objets distincts, adresses par
+   des noms distincts (voir index.js), et chacun ecrit dans sa propre base.
+--------------------------------------------------------------------------- */
+
+import { avantDepart } from './depart.js';
+import { contexteCourse, enregistrerCourse, bullesDe } from './championnats.js';
+import { jugerSignalement, jugerPosition, classerLaCourse } from './faux-depart.js';
+import { rapideRecevable, DebitRapide } from './tchat-rapide.js';
+import { PHASES_A_BULLE } from './championnats-config.js';
+
+/** La salle ouvre un quart d'heure avant le pistolet. */
+const OUVERTURE_AVANT_MS = 15 * 60 * 1000;
+/**
+ * L'appel : la grille est arretee trente secondes avant le pistolet.
+ *
+ * C'est ce qu'il faut pour presenter huit athletes a trois secondes chacun,
+ * plus le decompte, plus l'instant de silence qui precede la presentation.
+ * Arrive apres, on regarde.
+ */
+const PRESENTATION_PAR_JOUEUR_MS = 3000;
+const AVANT_PRESENTATION_MS = 1500;
+const AVANT_DEPART_MS = 4000;
+const APPEL_AVANT_MS = 8 * PRESENTATION_PAR_JOUEUR_MS + AVANT_DEPART_MS + AVANT_PRESENTATION_MS;
+/**
+ * Une salle qui s'eveille en retard — personne n'y etait a l'appel, et le
+ * premier arrive se presente apres l'heure — ne declare pas tout le monde
+ * forfait pour quelques secondes : elle repousse le pistolet d'autant. Au-dela
+ * de deux minutes, la course est manquee ; la salle ne la court plus.
+ */
+const RETARD_TOLERE_MS = 2 * 60 * 1000;
+/**
+ * Et quand elle s'eveille ainsi en retard, l'appel attend cinq secondes : le
+ * premier arrive n'est pas seul a etre a l'heure, il est seulement le premier
+ * a avoir ouvert la porte.
+ */
+const APPEL_TARDIF_MS = 5000;
+/**
+ * LE RAPPEL : six secondes et demie de scene, puis le decompte du nouveau
+ * depart.
+ *
+ * Le retour sur la ligne, puis le suspense — on sait qu'il y a eu faute, on
+ * ne sait pas encore qui : une roulette cherche le fautif de couloir en
+ * couloir —, puis le carton et le couloir qui se vide. Trois secondes de
+ * doute, pas davantage : au-dela, l'adrenaline retombe. Le decompte qui suit
+ * est le meme qu'au premier depart. Voir rappelChamp dans le moteur.
+ */
+const RAPPEL_MS = 6500;
+/**
+ * Deux fautifs sur le meme depart sortent tous les deux. Le second signalement
+ * peut arriver une latence apres le premier : le rappel attend donc un
+ * instant avant de partir, et jamais avant le coup de pistolet lui-meme — un
+ * rappel se donne APRES le coup, c'est le double coup de feu.
+ */
+const FENETRE_COMPLICES_MS = 600;
+const RAPPEL_APRES_COUP_MS = 250;
+/** Sans chrono si longtemps apres le pistolet, on n'arrivera plus. */
+const ABANDON_MS = 3 * 60 * 1000;
+const MIN_MS = 1000, MAX_MS = 20 * 60000;
+/**
+ * Le temps de lire le resultat, puis la salle ferme.
+ *
+ * Trois minutes et non plus une et demie (26/09) : le vainqueur se voit
+ * proposer son mot sur l'ecran d'arrivee, et il lui faut le temps de l'ecrire
+ * ou de l'enregistrer pour que la salle l'entende avant de fermer.
+ */
+const APRES_RESULTAT_MS = 180 * 1000;
+/**
+ * Les bulles se relisent a l'appel ; la base a ce temps-la pour repondre.
+ * Au-dela, l'appel part avec les bulles lues au chargement : une bulle qui
+ * manque ne vaut pas un pistolet en retard.
+ */
+const BULLES_ATTENTE_MS = 1500;
+/** Rien de ce que la salle attend ne pese deux mille caracteres. */
+const MESSAGE_MAX = 2000;
+
+export class SalleChampionnat {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.test = false;
+    this.cle = null;            // { edition, phase, course }
+    this.ctx = null;            // contexteCourse, charge une fois
+    this.erreur = null;
+    this.at = null;             // pistolet prevu (calendrier, ou lance a la main)
+    /** @type {Map<WebSocket, {id:string, cle:string|null, nom:string, role:'coureur'|'spectateur'}>} */
+    this.sockets = new Map();
+    /** @type {Map<string, any>} les partants, par cle */
+    this.coureurs = new Map();
+    this.phase = 'ouverte';     // ouverte | appel (jusqu'au pistolet) | course | terminee
+    this.presentationA = null;
+    this.ordre = [];
+    this.departA = null;
+    this.departN = 0;
+    this.fautifs = [];          // signalements du depart en cours
+    this.minuteurs = new Set();
+    this.minuteurRappel = null;
+    this.minuteurAppel = null;
+    this.appelPrevuA = null;
+    this.resultat = null;
+    this.finFictifsA = 0;
+    this.debitRapide = new DebitRapide();  // la cadence du tchat rapide
+    this.appelEnCours = false;  // l'appel attend les bulles
+    this.mot = null;            // le mot du vainqueur, relaye par le worker
+  }
+
+  // --- utilitaires ---------------------------------------------------------
+
+  base() {
+    return this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+  }
+
+  plus_tard(ms, f) {
+    const t = setTimeout(() => { this.minuteurs.delete(t); f(); }, Math.max(0, ms));
+    this.minuteurs.add(t);
+    return t;
+  }
+
+  toutArreter() {
+    for (const t of this.minuteurs) clearTimeout(t);
+    this.minuteurs.clear();
+    clearTimeout(this.minuteurRappel); this.minuteurRappel = null;
+    clearTimeout(this.minuteurAppel); this.minuteurAppel = null;
+    this.appelPrevuA = null;
+  }
+
+  engages() {
+    return [...this.coureurs.values()].filter(c => c.statut === 'engage');
+  }
+
+  vue() {
+    const joueurs = [...this.coureurs.values()]
+      .filter(c => c.statut !== 'forfait' && (c.statut !== 'attente' || c.ws))
+      .map(c => {
+        const j = {
+          id: c.cle, nom: c.nom, cle: c.cle, couloir: c.couloir, pret: true,
+          d: Math.round(c.d * 10) / 10, fin: c.fictif ? null : c.fin, statut: c.statut,
+        };
+        // Le chrono vise d'un fictif : c'est lui que les telephones font courir.
+        if (c.fictif) j.cible_ms = c.cible;
+        return j;
+      });
+    return {
+      joueurs, epreuves: this.ctx ? [this.ctx.epreuve] : null, niveau: 4,
+      max: this.ctx ? this.ctx.grille.length : 0,
+      depart_a: this.departA, horloge: Date.now(),
+      termine: this.phase === 'terminee',
+      presentation: this.presentationA ? {
+        debut_a: this.presentationA, par: PRESENTATION_PAR_JOUEUR_MS,
+        micro: 0, ordre: this.ordre,
+      } : null,
+      champ: this.ctx ? {
+        edition: this.ctx.edition, phase: this.ctx.phase, course: this.ctx.course,
+        titre: this.ctx.titre, phaseNom: this.ctx.phaseNom, lieu: this.ctx.lieu,
+        courses: this.ctx.courses,
+        at: this.at, etat: this.phase, depart_n: this.departN,
+        spectateurs: [...this.sockets.values()].filter(s => s.role === 'spectateur').length,
+        grille: [...this.coureurs.values()].map(c => ({
+          cle: c.cle, nom: c.nom, couloir: c.couloir, present: !!c.ws || c.fictif,
+          statut: c.statut, motif: c.motif, motif_ms: c.motif_ms,
+        })),
+      } : null,
+      resultat: this.resultat,
+      mot: this.mot || null,
+      erreur: this.erreur,
+    };
+  }
+
+  diffuser(msg) {
+    const texte = JSON.stringify(msg);
+    for (const [ws] of this.sockets) {
+      try { ws.send(texte); } catch (e) { /* le close fera le menage */ }
+    }
+  }
+
+  envoyerEtat() { this.diffuser({ t: 'salle', ...this.vue() }); }
+
+  // --- chargement ----------------------------------------------------------
+
+  async charger(url) {
+    if (this.ctx || this.erreur) return;
+    const edition = (url.searchParams.get('edition') || '').toUpperCase();
+    const phase = url.searchParams.get('phase') || '';
+    const course = parseInt(url.searchParams.get('course') || '', 10);
+    this.cle = { edition, phase, course };
+    const c = await contexteCourse(this.base(), edition, phase, course);
+    if (c.erreur) { this.erreur = c.erreur; return; }
+    this.ctx = c;
+    this.at = c.at;
+    for (const g of c.grille) {
+      this.coureurs.set(g.cle, {
+        cle: g.cle, nom: g.nom, couloir: g.couloir, ws: null,
+        statut: 'attente', d: 0, c: null, fin: null, motif: null, motif_ms: null,
+        fictif: !!g.fictif, cible: g.fictif ? g.ms : null,
+        faux_ms: g.fictif ? (g.faux_ms ?? null) : null,
+        bulle: g.fictif ? null : (g.bulle || null),
+      });
+    }
+    if (c.deja) { this.phase = 'terminee'; this.erreur = 'course deja courue'; }
+  }
+
+  /**
+   * Replace les rendez-vous de la salle sur `this.at`.
+   *
+   * Appelee a chaque evenement qui peut les changer : le premier chargement,
+   * une arrivee, un lancement a la main. Elle ne fait rien une fois l'appel
+   * passe — la grille est alors arretee et le pistolet annonce.
+   */
+  planifier() {
+    if (this.phase !== 'ouverte' || !this.at || this.appelEnCours) return;
+    const maintenant = Date.now();
+    if (maintenant > this.at + RETARD_TOLERE_MS) return;       // course manquee
+    let appel = this.at - APPEL_AVANT_MS;
+    if (maintenant >= appel) {
+      // En retard sur l'appel : il faut quelqu'un pour l'ouvrir, et on laisse
+      // aux autres le temps d'arriver. Le pistolet reculera d'autant qu'il le
+      // faut pour presenter tout le monde (voir `appel`).
+      if (!this.sockets.size) return;
+      if (this.minuteurAppel) return;               // deja programme
+      appel = maintenant + APPEL_TARDIF_MS;
+    }
+    if (this.minuteurAppel && this.appelPrevuA === appel) return;
+    clearTimeout(this.minuteurAppel);
+    this.appelPrevuA = appel;
+    this.minuteurAppel = setTimeout(() => {
+      this.minuteurAppel = null; this.appelPrevuA = null;
+      // L'appel attend la base (les bulles) : sa promesse est tenue ici, et
+      // une erreur se note au lieu de se perdre dans le minuteur.
+      this.appel().catch(e => console.log('appel KO', String(e && e.message || e)));
+    }, appel - maintenant);
+  }
+
+  // --- l'appel, la presentation, le pistolet --------------------------------
+
+  async appel() {
+    if (this.phase !== 'ouverte' || this.appelEnCours) return;
+    // L'heure de l'appel est celle ou il tombe, pas celle ou la base a
+    // repondu : lire les bulles ne recule pas le pistolet.
+    const maintenant = Date.now();
+    // LES BULLES, relues ici : la salle a charge sa grille une fois pour
+    // toutes, et une bulle posee depuis doit compter. Seulement dans les
+    // phases qui en ont — une serie part exactement comme avant, sans
+    // attendre la base. Une lecture qui echoue ou qui traine laisse les
+    // bulles du chargement : elle n'empeche jamais l'appel.
+    if (this.ctx && PHASES_A_BULLE.includes(this.ctx.phase)) {
+      this.appelEnCours = true;
+      try {
+        const bulles = await this.lireBulles();
+        if (bulles) {
+          for (const c of this.coureurs.values()) {
+            c.bulle = c.fictif ? null : (bulles.get(c.cle) ?? null);
+          }
+        }
+      } finally {
+        this.appelEnCours = false;
+      }
+      if (this.phase !== 'ouverte') return;
+    }
+    for (const c of this.coureurs.values()) {
+      if (c.fictif) { c.statut = 'engage'; c.fin = c.cible; continue; }
+      c.statut = c.ws ? 'engage' : 'forfait';
+      if (!c.ws) c.motif = 'forfait';
+    }
+    const presents = this.engages();
+    if (!presents.length) {
+      // Personne a l'appel : tous forfaits, et la course est rangee telle.
+      this.terminer();
+      return;
+    }
+    this.phase = 'appel';
+    this.ordre = presents.sort((a, b) => a.couloir - b.couloir)
+      .map(c => ({ id: c.cle, nom: c.nom, couloir: c.couloir, bulle: c.bulle || null }));
+    const seul = this.ordre.length < 2;
+    const presentation = seul ? 0 : this.ordre.length * PRESENTATION_PAR_JOUEUR_MS;
+    const attente = avantDepart(this.test, AVANT_DEPART_MS);
+    // Le pistolet reste a l'heure si on a le temps de tout montrer ; sinon il
+    // recule d'autant, jamais il n'avance.
+    const auPlusTot = maintenant + (seul ? 0 : AVANT_PRESENTATION_MS) + presentation + attente;
+    this.at = Math.max(this.at || 0, auPlusTot);
+    this.presentationA = seul ? null : this.at - attente - presentation;
+    this.poserDepart(this.at);
+    this.envoyerEtat();
+  }
+
+  /** Les bulles de la phase, ou null si la base n'a pas repondu a temps. */
+  async lireBulles() {
+    let minuteur = null;
+    try {
+      return await Promise.race([
+        bullesDe(this.base(), this.ctx.edition, this.ctx.phase),
+        new Promise(ok => { minuteur = setTimeout(() => ok(null), BULLES_ATTENTE_MS); }),
+      ]);
+    } catch (e) {
+      console.log('bulles illisibles a l appel', String(e && e.message || e));
+      return null;
+    } finally {
+      clearTimeout(minuteur);
+    }
+  }
+
+  poserDepart(date) {
+    this.departA = date;
+    this.departN += 1;
+    this.fautifs = [];
+    for (const c of this.engages()) { c.d = 0; c.c = null; if (!c.fictif) c.fin = null; }
+    const n = this.departN;
+    this.plus_tard(date - Date.now(), () => this.coupDePistolet(n));
+    // Le fictif qui vole le depart ne le vole qu'une fois, au premier : la
+    // salle le signale a sa place, a l'instant ou il serait parti.
+    if (n === 1) {
+      for (const c of this.engages()) {
+        if (!c.fictif || c.faux_ms == null) continue;
+        const ms = c.faux_ms;
+        this.plus_tard(Math.max(0, date + ms - Date.now()), () => {
+          if (n === this.departN) this.signaler(c, { faux: true, ms });
+        });
+      }
+    }
+  }
+
+  coupDePistolet(n) {
+    if (n !== this.departN || this.phase === 'terminee') return;
+    // Un partant parti entre l'appel et le pistolet n'est pas sur la ligne.
+    for (const c of this.engages()) {
+      if (!c.ws && !c.fictif) { c.statut = 'abandon'; c.motif = 'abandon'; }
+    }
+    this.phase = 'course';
+    // Le verdict n'arrive pas avant que le dernier fictif ait franchi la
+    // ligne : on le verrait sinon s'afficher par-dessus des coureurs encore
+    // lances. Une demi-seconde de marge, puis on regarde si tout est la.
+    const dernierFictif = Math.max(0, ...this.engages().filter(c => c.fictif).map(c => c.cible || 0));
+    // Sans fictif, aucun delai : le verdict tombe des le dernier chrono.
+    this.finFictifsA = dernierFictif ? Date.now() + dernierFictif + 500 : 0;
+    if (dernierFictif) this.plus_tard(dernierFictif + 500, () => this.peutTrancher());
+    this.plus_tard(ABANDON_MS, () => this.fermerLaCourse(n));
+    this.peutTrancher();
+  }
+
+  // --- le faux depart -------------------------------------------------------
+
+  signaler(c, verdict) {
+    if (!verdict.faux || c.statut !== 'engage') return;
+    if (this.phase !== 'appel' && this.phase !== 'course') return;
+    if (this.fautifs.some(f => f.cle === c.cle)) return;
+    this.fautifs.push({ cle: c.cle, ms: verdict.ms });
+    if (this.minuteurRappel) return;
+    const n = this.departN;
+    const quand = Math.max(Date.now() + FENETRE_COMPLICES_MS,
+                           this.departA + RAPPEL_APRES_COUP_MS);
+    this.minuteurRappel = setTimeout(() => {
+      this.minuteurRappel = null;
+      this.rappel(n);
+    }, quand - Date.now());
+  }
+
+  rappel(n) {
+    if (n !== this.departN || this.phase === 'terminee') return;
+    const fautifs = [];
+    for (const f of this.fautifs) {
+      const c = this.coureurs.get(f.cle);
+      if (!c || c.statut !== 'engage') continue;
+      c.statut = 'dq'; c.motif = 'faux_depart'; c.motif_ms = f.ms;
+      c.fin = null; c.cible = null;
+      for (const s of this.sockets.values()) if (s.cle === c.cle) s.role = 'spectateur';
+      fautifs.push({ id: c.cle, cle: c.cle, nom: c.nom, couloir: c.couloir, ms: f.ms });
+    }
+    // Les minuteurs du depart rappele — le pistolet, la fermeture — ne valent
+    // plus rien : on repart d'une ligne neuve.
+    this.toutArreter();
+    if (!this.engages().length) {
+      this.diffuser({ t: 'rappel', fautifs, depart_a: null, rappel_ms: RAPPEL_MS,
+                      ...this.vue() });
+      this.terminer();
+      return;
+    }
+    this.phase = 'appel';
+    const attente = avantDepart(this.test, AVANT_DEPART_MS);
+    this.poserDepart(Date.now() + RAPPEL_MS + attente);
+    this.diffuser({ t: 'rappel', fautifs, depart_a: this.departA, depart_n: this.departN,
+                    rappel_ms: RAPPEL_MS, ...this.vue() });
+  }
+
+  // --- l'arrivee ------------------------------------------------------------
+
+  peutTrancher() {
+    if (this.phase !== 'course') return;
+    if (this.engages().some(c => c.fin == null)) return;
+    if (this.finFictifsA && Date.now() < this.finFictifsA) return;
+    this.terminer();
+  }
+
+  fermerLaCourse(n) {
+    if (n !== this.departN || this.phase !== 'course') return;
+    for (const c of this.engages()) {
+      if (c.fin == null) { c.statut = 'abandon'; c.motif = 'abandon'; }
+    }
+    this.terminer();
+  }
+
+  async terminer() {
+    if (this.phase === 'terminee') return;
+    this.phase = 'terminee';
+    this.toutArreter();
+    this.departA = null;
+    this.presentationA = null;
+    const tous = [...this.coureurs.values()].map(c => ({
+      cle: c.cle, nom: c.nom, couloir: c.couloir,
+      fin: c.statut === 'engage' || c.statut === 'fini' ? c.fin : null,
+      motif: c.statut === 'engage' || c.statut === 'fini' ? null : (c.motif || 'abandon'),
+      motif_ms: c.motif_ms,
+    }));
+    const classement = classerLaCourse(tous);
+    this.resultat = { classement, partants: tous.length };
+    this.diffuser({ t: 'resultat', classement: classement.map(l => ({
+      ...l, id: l.cle,
+      // Le client du direct attend un nombre et un drapeau d'abandon : une
+      // ligne sans chrono porte donc le nombre sentinelle du direct, et le
+      // motif dit le reste.
+      ms: l.ms == null ? ABANDON_MS : l.ms, abandon: l.ms == null,
+    })), partants: tous.length, champ: true });
+
+    const ecrire = (async () => {
+      try {
+        const r = await enregistrerCourse(this.base(), {
+          edition: this.ctx.edition, phase: this.ctx.phase, course: this.ctx.course,
+          chronos: classement.map(l => ({ cle: l.cle, ms: l.ms, motif: l.motif,
+                                          motif_ms: l.motif_ms })),
+        });
+        this.diffuser({ t: 'enregistre', ok: !r.erreur, erreur: r.erreur || null,
+                        directs: r.directs || [] });
+      } catch (e) {
+        this.diffuser({ t: 'enregistre', ok: false, erreur: String(e && e.message || e) });
+      }
+    })();
+    if (this.state.waitUntil) this.state.waitUntil(ecrire);
+    this.plus_tard(APRES_RESULTAT_MS, () => this.fermer('course terminee'));
+    await ecrire;
+  }
+
+  fermer(raison) {
+    this.diffuser({ t: 'ferme', raison });
+    for (const [ws] of this.sockets) {
+      try { ws.close(1000, raison); } catch (e) { /* deja fermee */ }
+    }
+    this.sockets.clear();
+  }
+
+  // --- cycle de vie --------------------------------------------------------
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.searchParams.get('canal') === 'test') this.test = true;
+    const json = (o, status = 200) => new Response(JSON.stringify(o),
+      { status, headers: { 'Content-Type': 'application/json' } });
+
+    // Le mot du vainqueur, relaye par le worker (voir `/champ/mot`). AVANT le
+    // chargement, et c'est necessaire : cette requete ne porte ni edition ni
+    // phase dans son adresse, et une salle reveillee par elle se chargerait
+    // sur du vide — elle garderait l'erreur et refuserait ensuite les vrais
+    // arrivants. L'aiguillage public ne produit que /etat, /lancer et /ws :
+    // ce chemin-ci n'est atteignable que par le worker.
+    if (url.pathname === '/mot' && request.method === 'POST') {
+      return this.motRecu(request, json);
+    }
+
+    await this.charger(url);
+
+    if (url.pathname.endsWith('/etat')) {
+      this.planifier();
+      return json({ existe: !!this.ctx, ...this.vue() });
+    }
+
+    // Lancer a la main : le canal de test et les harnais n'attendent pas
+    // l'heure du calendrier. Le worker ne laisse passer que l'admin.
+    if (url.pathname.endsWith('/lancer')) {
+      if (!this.ctx) return json({ error: this.erreur || 'course inconnue' }, 400);
+      if (this.phase !== 'ouverte') return json({ error: 'deja appelee', etat: this.phase }, 409);
+      const dans = Math.max(0, parseInt(url.searchParams.get('dans') || '0', 10) || 0);
+      this.at = Date.now() + dans;
+      clearTimeout(this.minuteurAppel); this.minuteurAppel = null; this.appelPrevuA = null;
+      this.planifier();
+      this.envoyerEtat();
+      return json({ ok: true, at: this.at });
+    }
+
+    if (request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('websocket attendu', { status: 426 });
+    }
+    if (!this.ctx) return json({ error: this.erreur || 'course inconnue' }, 404);
+
+    const maintenant = Date.now();
+    if (this.at && maintenant < this.at - OUVERTURE_AVANT_MS && this.phase === 'ouverte') {
+      return json({ error: 'salle pas encore ouverte', ouvre_a: this.at - OUVERTURE_AVANT_MS }, 425);
+    }
+
+    const paire = new WebSocketPair();
+    const [client, serveur] = Object.values(paire);
+    serveur.accept();
+
+    // Le worker a verifie que cet appareil porte bien ce nom (`verifie=1`) :
+    // sans cette preuve, on regarde, on ne court pas.
+    const cle = String(url.searchParams.get('name') || '').trim().toLowerCase();
+    const verifie = url.searchParams.get('verifie') === '1';
+    const partant = verifie ? this.coureurs.get(cle) : null;
+    // Avant l'appel, un partant prend son couloir. Apres, seulement s'il y
+    // etait deja et que le reseau l'a lache : il le reprend, tant que le
+    // pistolet n'est pas parti.
+    // Un fictif ne se prend pas : il court seul, a son chrono. Quiconque se
+    // presente sous son nom — le nom n'est reserve par personne — regarde.
+    const peutCourir = !!partant && !partant.fictif && !partant.ws &&
+      (this.phase === 'ouverte' || (this.phase === 'appel' && partant.statut === 'engage'));
+    const id = peutCourir ? cle : 'spec-' + crypto.randomUUID().slice(0, 6);
+    // Le nom que portent ses bulles du tchat rapide. Seul le coureur parle
+    // sous le nom d'un partant : un second telephone entre sous ce nom —
+    // `verifie` vaut aussi pour un nom que personne n'a reserve — regarde, et
+    // parle en « Tribune ». Un spectateur ne garde son nom que si ce telephone
+    // peut le porter et qu'il n'est celui d'aucun partant de la serie.
+    const nomDonne = String(url.searchParams.get('name') || '').trim()
+      .replace(/[<>]/g, '').slice(0, 20);
+    const nomTchat = peutCourir ? partant.nom
+      : (verifie && !this.coureurs.has(cle) && nomDonne) || null;
+    const place = { id, cle: peutCourir ? cle : null,
+                    nom: partant ? partant.nom : cle || 'Spectateur',
+                    role: peutCourir ? 'coureur' : 'spectateur',
+                    nomTchat };
+    this.sockets.set(serveur, place);
+    if (peutCourir) partant.ws = serveur;
+
+    serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
+    serveur.addEventListener('close', () => this.parti(serveur));
+    serveur.addEventListener('error', () => this.parti(serveur));
+
+    try {
+      serveur.send(JSON.stringify({ t: 'bienvenue', moi: id, role: place.role, ...this.vue() }));
+    } catch (e) { /* deja fermee */ }
+    this.planifier();
+    this.envoyerEtat();
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  parti(ws) {
+    const s = this.sockets.get(ws);
+    if (!s) return;
+    this.sockets.delete(ws);
+    this.debitRapide.oublier(s.id);
+    const c = s.cle ? this.coureurs.get(s.cle) : null;
+    if (c && c.ws === ws) {
+      c.ws = null;
+      // Parti en pleine course : il n'arrivera pas. Avant l'appel, il n'a
+      // encore rien perdu — il peut revenir prendre son couloir.
+      if (c.statut === 'engage' && this.phase === 'course') {
+        c.statut = 'abandon'; c.motif = 'abandon';
+        this.diffuser({ t: 'fini', id: c.cle, nom: c.nom, ms: ABANDON_MS, abandon: true });
+        this.peutTrancher();
+      }
+    }
+    if (this.phase !== 'terminee') this.envoyerEtat();
+  }
+
+  /**
+   * Le mot du vainqueur arrive du worker, deja verifie et filtre.
+   *
+   * Une salle qui n'a pas ete chargee n'a personne a qui le dire : on ne la
+   * charge pas pour autant (voir `fetch`).
+   */
+  async motRecu(request, json) {
+    if (request.headers.get('X-Interne') !== '1') return json({ error: 'refuse' }, 403);
+    let corps;
+    try { corps = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+    const mot = corps && corps.mot;
+    if (!mot || typeof mot !== 'object') return json({ error: 'mot manquant' }, 400);
+    if (!this.ctx) return json({ ok: false, raison: 'salle vide' });
+    if (String(corps.edition) !== this.ctx.edition || String(corps.phase) !== this.ctx.phase
+        || Number(corps.course) !== this.ctx.course) {
+      return json({ error: 'autre course' }, 409);
+    }
+    // Le nom tel que la grille l'ecrit, s'il y est : celui qu'on a tape pour
+    // poser le mot peut differer d'une majuscule.
+    const vainqueur = this.coureurs.get(String(mot.nom || '').trim().toLowerCase());
+    this.mot = {
+      nom: vainqueur ? vainqueur.nom : String(mot.nom || ''),
+      texte: mot.texte == null ? null : String(mot.texte),
+      a_voix: !!mot.a_voix,
+    };
+    this.diffuser({ t: 'mot', mot: this.mot });
+    return json({ ok: true, lecteurs: this.sockets.size });
+  }
+
+  /**
+   * Le tchat rapide : un identifiant de la liste, jamais du texte (voir
+   * tchat-rapide.js). La tribune d'une serie peut etre pleine : la cadence de
+   * la salle entiere est tenue en plus de celle de chacun.
+   *
+   * Une bulle sans nom verifie part sans nom — l'ecran dit « Tribune ».
+   */
+  rapide(ws, s, q) {
+    if (!rapideRecevable(q)) return;
+    const refus = this.debitRapide.juger(s.id);
+    if (refus === 'debit') {
+      try { ws.send(JSON.stringify({ t: 'rapide_refus', raison: refus })); } catch (e) { }
+    }
+    if (refus) return;
+    this.diffuser({ t: 'rapide', id: s.id, nom: s.nomTchat || null, q });
+  }
+
+  recu(ws, brut) {
+    const s = this.sockets.get(ws);
+    if (!s) return;
+    // Un message trop gros est jete avant d'etre lu : le lire couterait deja.
+    if (typeof brut === 'string' && brut.length > MESSAGE_MAX) return;
+    let m;
+    try { m = JSON.parse(brut); } catch { return; }
+    if (m && m.t === 'ping') {
+      try { ws.send(JSON.stringify({ t: 'pong', a: m.a, serveur: Date.now() })); } catch (e) { }
+      return;
+    }
+    // Le tchat rapide, lui, est ouvert a tout le monde, tribune comprise.
+    if (m && m.t === 'rapide') { this.rapide(ws, s, m.q); return; }
+    // Un spectateur ne fait que regarder : rien de ce qu'il envoie ne compte.
+    if (s.role !== 'coureur') return;
+    const c = this.coureurs.get(s.cle);
+    if (!c || c.ws !== ws || c.statut !== 'engage') return;
+    const recuA = Date.now();
+
+    switch (m && m.t) {
+      case 'faux_depart': {
+        // Le depart vise : un signalement du depart d'avant, arrive apres le
+        // rappel, ne doit pas en declencher un second.
+        if (m.n != null && Number(m.n) !== this.departN) return;
+        this.signaler(c, jugerSignalement({ departA: this.departA, recuA, ms: m.ms }));
+        return;
+      }
+
+      case 'pos': {
+        const d = Number(m.d);
+        if (!Number.isFinite(d) || d < 0 || d > 2000) return;
+        // Une position porte le numero du depart ou elle a ete courue. Apres
+        // un rappel, celles du depart annule arrivent encore quelques
+        // instants : elles ne comptent pour rien — ni pour la piste, ni
+        // surtout pour le controle dur, qui y verrait des coureurs partis
+        // avant le NOUVEAU pistolet.
+        if (m.n != null && Number(m.n) !== this.departN) return;
+        // Le controle dur, pendant tout le decompte : avancer avant le coup.
+        if (this.phase === 'appel') {
+          if (m.n != null) this.signaler(c, jugerPosition({ departA: this.departA, recuA, d }));
+          return;
+        }
+        if (this.phase !== 'course') return;
+        const t = Number(m.c);
+        const date = m.c != null && Number.isFinite(t) && t >= 0 && t <= MAX_MS;
+        if (d >= c.d) { c.d = d; c.c = date ? Math.round(t) : null; }
+        const pos = { t: 'pos', id: c.cle, d: Math.round(c.d * 100) / 100 };
+        if (c.c != null) pos.c = c.c;
+        const texte = JSON.stringify(pos);
+        for (const [autre] of this.sockets) {
+          if (autre === ws) continue;
+          try { autre.send(texte); } catch (e) { }
+        }
+        return;
+      }
+
+      case 'fini': {
+        if (this.phase !== 'course' || c.fin != null) return;
+        if (m.n != null && Number(m.n) !== this.departN) return;
+        const ms = Math.round(Number(m.ms));
+        if (!Number.isFinite(ms) || ms < MIN_MS || ms > MAX_MS) return;
+        c.fin = ms;
+        this.diffuser({ t: 'fini', id: c.cle, nom: c.nom, ms });
+        this.peutTrancher();
+        return;
+      }
+
+      case 'abandon': {
+        if (this.phase !== 'course') return;
+        c.statut = 'abandon'; c.motif = 'abandon';
+        this.diffuser({ t: 'fini', id: c.cle, nom: c.nom, ms: ABANDON_MS, abandon: true });
+        this.peutTrancher();
+        return;
+      }
+    }
+  }
+}

@@ -10,6 +10,8 @@
 // encore vu, sans trou ni doublon, meme si deux annonces tombent dans la meme
 // milliseconde et meme si le telephone s'est endormi entre-temps.
 
+import { getDeviceId } from './leaderboard';
+
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 export type Partant = {
@@ -36,9 +38,34 @@ export type Partant = {
 export type Resultat = {
   phase: string; course: number; name_key: string;
   ms: number | null; place: number | null;
+  /**
+   * Pourquoi il n'y a pas de chrono, pour une course courue en direct :
+   * carton rouge, abandon, forfait. Absent des courses remplies au harnais.
+   */
+  motif?: 'faux_depart' | 'abandon' | 'forfait' | null;
+  /** L'instant du faux depart, en millisecondes depuis le coup (negatif). */
+  motif_ms?: number | null;
 };
 
 export type PhaseInfo = { cle: string; nom: string; courses: number };
+
+/**
+ * LE MOT DU VAINQUEUR D'UNE COURSE.
+ *
+ * Un seul par course, celui du premier, et il ne s'efface pas : les sept
+ * autres partants ne l'ouvrent pas tous au meme moment.
+ *
+ * `a_voix` dit qu'un enregistrement existe, jamais l'enregistrement lui-meme :
+ * six secondes encodees pesent jusqu'a deux cents kilooctets, et l'edition se
+ * recharge a chaque ouverture de l'ecran. Qui veut l'entendre le demande.
+ */
+export type MotDeCourse = {
+  phase: string; course: number;
+  name_key: string; nom: string;
+  texte: string | null;
+  a_voix: boolean;
+  au: number;
+};
 
 /**
  * LE CHAMPION EN TITRE de l'edition en cours, et ce que son titre lui donne.
@@ -91,6 +118,11 @@ export type Edition = {
   epreuve: string;
   /** « Championnat de France », deja accorde. */
   titre: string;
+  /**
+   * Le lieu ou l'edition se rejoue, s'il est impose par le serveur : la cle
+   * d'un stade ('champdemars'). `null` ou absent : le stade par defaut.
+   */
+  lieu?: string | null;
   debut: number;
   /**
    * L'heure ou la selection ferme : trois jours avant le depart.
@@ -131,6 +163,14 @@ export type Edition = {
   tenant: TenantEnTitre | null;
   partants: Partant[];
   resultats: Resultat[];
+  /** Les mots deja poses, toutes phases confondues. */
+  mots?: MotDeCourse[];
+  /**
+   * Les bulles de presentation (demi-finales et finale), retirees exclues :
+   * le mot court qu'un partant a pose pour son creneau de trois secondes.
+   * Le rejeu les remet au-dessus des memes tetes (voir champ-rejeu).
+   */
+  bulles?: { phase: string; name_key: string; texte: string }[];
   calendrier: RendezVous[];
 };
 
@@ -238,6 +278,10 @@ export type MaSelection = {
    * n'existe pas — et `null` pour qui n'est pas retenu.
    */
   course: { phase: string; numero: number; at: number | null } | null;
+  /** L'edition ne selectionne que les joueurs engages (confirmes). */
+  engagement?: boolean;
+  /** Ce joueur a confirme sa participation. */
+  engage?: boolean;
   raison?: string;
 };
 
@@ -322,6 +366,25 @@ export const prochainChampionnat = (pays: string) =>
 /** A combien de places de la qualification ce joueur se trouve. */
 export const maSelection = (nom: string) =>
   json<MaSelection>('/champ/selection?name=' + encodeURIComponent(nom));
+
+/**
+ * Confirmer sa participation — ou la retirer — pour l'edition a venir.
+ * Rend la selection relue par le serveur, ou `{ error }`.
+ */
+export async function engager(nom: string, oui: boolean): Promise<MaSelection | { error: string }> {
+  try {
+    const r = await fetch(API_BASE + '/champ/engager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name: nom, engage: oui }),
+    });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j) return { error: (j && j.error) || 'erreur' };
+    return j as MaSelection;
+  } catch {
+    return { error: 'reseau' };
+  }
+}
 
 /**
  * Ce qu'il reste avant une echeance, ou `null` si elle est passee.

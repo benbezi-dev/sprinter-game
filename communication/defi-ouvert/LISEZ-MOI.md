@@ -19,7 +19,15 @@ un jeu, il lui demande **s'il tient le chrono**.
    caractères — `ZEZE42`, `K7PQMR`. L'alphabet exclut le 0, le O, le 1, le I et
    le L : **il se dicte à voix haute sans ambiguïté**, ce qui compte quand on
    le met dans une vidéo.
-3. **Tu fabriques la carte** :
+3. **Tu fabriques la carte.** Deux portes, la même carte — prends celle que
+   tu as sous la main.
+
+   **Sans rien installer**, ouvre `tools/carte-defi-ouvert.html` (double-clic
+   suffit, y compris depuis un téléphone si la page est déposée dans
+   `suivi/`). Tu tapes le code, tu appuies, les trois images se téléchargent.
+   C'est la porte à prendre le soir où l'on poste.
+
+   **Depuis un terminal**, si tu y es déjà :
 
    ```bash
    node tools/carte-defi-ouvert.mjs --code ZEZE42
@@ -28,7 +36,9 @@ un jeu, il lui demande **s'il tient le chrono**.
    Trois images sortent dans `cartes/` : `-feed` (Instagram), `-story` (story,
    Reels, TikTok), `-x` (X). Le chrono, le nom et le **compteur de tentatives**
    sont relus sur le serveur au moment du rendu — rien n'est recopié à la main,
-   donc rien ne peut être périmé.
+   donc rien ne peut être périmé. Les deux portes lisent le même serveur et
+   rendent la même image : `tools/carte-defi-ouvert-html-test.mjs` refuse
+   qu'elles divergent.
 
    **Le style est celui du jeu, et c'est le défaut.** Fond `#060913`, lueur
    dorée, Outfit 900, chrono en Space Mono : exactement ce que le jeu dessine
@@ -104,7 +114,9 @@ perd pour de bon.
 |---|---|
 | `legendes.md` | Les légendes prêtes à coller, par réseau, et les accroches à faire tourner. |
 | `cartes/` | Ce que produit l'outil. Un jeu de trois images par code. |
-| `../../tools/carte-defi-ouvert.mjs` | L'outil. Lit le défi sur l'API, rend les trois formats, dans l'un des deux styles. |
+| `../../tools/carte-defi-ouvert.html` | La même chose dans un navigateur, sans rien installer. Une page autonome : elle s'ouvre par un double-clic, et se dépose telle quelle dans `suivi/` pour servir depuis un téléphone. |
+| `../../tools/carte-defi-ouvert.mjs` | L'outil en ligne de commande. Lit le défi sur l'API, rend les trois formats, dans l'un des deux styles. Demande node et un Chrome installé. |
+| `../../tools/carte-defi-ouvert-html-test.mjs` | Ce qui empêche les deux de diverger : couleurs, mesures, phrases du compteur et adresse du serveur, comparées une par une. |
 | `../../tools/chrome.mjs` | La capture et les polices de la charte. Sans réseau, pose les woff2 dans un dossier et donne-le par `SPRINTER_POLICES`. |
 | `../../tools/carte-og.mjs` | L'aperçu permanent du lien (`public/og-1200x630.png`). |
 | `../riposte-danube/` | L'autre campagne : l'actualité de l'athlétisme, pas le défi. Le style des cartes vient de là. |

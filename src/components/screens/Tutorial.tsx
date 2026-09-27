@@ -2,29 +2,43 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SprinterApp, SprinterCore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT, TRANSITION } from '@/lib/mouvement';
-import { ChevronLeft, ChevronRight, Check, X, RotateCcw } from 'lucide-react';
-import { DEPART_STARTER } from '@/game/canal';
+import { Check, X, RotateCcw } from 'lucide-react';
+import { demarrerSequence, pasDuTuto, rangerLeTuto, figerLaPiste } from '@/game/sprint-tuto.js';
 
 const { C } = SprinterCore;
 
 /**
- * Tutoriel — montre, puis fais.
+ * Tutoriel de Sprinter — SUR LA PISTE, avec le coureur et le starter.
  *
- * Trois choses decident d'une course, et aucune ne se transmet par une phrase :
- * alterner sans se prendre les pieds, partir au signal, installer sa cadence.
- * On les joue donc devant le joueur, sur les pads memes qu'il va utiliser —
- * ils s'allument tout seuls au bon rythme — puis on lui rend la main. Le texte
- * se reduit a un titre de deux mots : ce qu'on peut montrer ne s'ecrit pas.
+ * La premiere version dessinait le geste : deux paves qui s'allument tout
+ * seuls, des barres d'intervalle, un fond noir. Elle enseignait proprement, et
+ * elle enseignait A COTE — le joueur apprenait a suivre des pastilles, puis
+ * decouvrait en course un stade, une camera qui suit, un starter qui parle et
+ * huit couloirs. Rien de ce qu'il venait d'apprendre ne se retrouvait au meme
+ * endroit.
  *
- * La troisieme etape est la seule qui merite d'exister. Le rythme qui paie
- * n'est pas celui qu'on devine : quelques appuis larges, puis une cadence
- * rapide installee d'un coup et tenue. Une descente progressive echoue, un
- * martelage constant aussi. La demo joue exactement le bon profil, et pendant
- * l'essai il reste dessine en fond : le joueur a un modele a superposer plutot
- * qu'une regle a retenir.
+ * Ici le moteur tourne. Le starter dit « a vos marques », le pistolet part, le
+ * coureur sort des blocs, et ce qui note le joueur est ce qui le notera
+ * demain : `reaction`, `pressTimes`, `transGrade`, les faux pas. Cet ecran
+ * n'est qu'une incrustation par-dessus. Voir game/sprint-tuto.js.
  *
- * Le tutoriel ne touche pas au moteur — mais il note avec sa formule exacte,
- * sans quoi il enseignerait autre chose que le jeu.
+ * LE RALENTI NE SERT QU'UNE ETAPE SUR TROIS, et c'est ce qui distingue ce
+ * tutoriel de celui des haies.
+ *
+ *   ALTERNER se voit : au ralenti, le pied qui se prend dans l'autre devient
+ *   lisible. Les trois vitesses y ont tout leur sens.
+ *
+ *   LE DEPART est un reflexe, pas un geste. Ralentir le monde donnerait au
+ *   joueur deux fois plus de temps reel pour repondre au meme pistolet : sa
+ *   reaction s'ameliorerait sans que lui ne change, et on lui apprendrait un
+ *   reflexe qu'il n'a pas.
+ *
+ *   LA CADENCE est une frequence, mesuree en secondes de course. Taper au meme
+ *   rythme reel sous un ralenti donnerait des intervalles simules deux fois
+ *   plus courts, donc une note fausse dans l'autre sens.
+ *
+ * Les deux dernieres se jouent donc a la vitesse de la course, toujours. Seule
+ * la DEMONSTRATION ralentit partout : on regarde, on n'est pas note.
  */
 
 const VU = 'sprinter_tuto_vu';
@@ -36,269 +50,164 @@ export function marquerTutoVu() {
   try { localStorage.setItem(VU, '1'); } catch { /* sans memoire, il reviendra */ }
 }
 
-type Cote = 'left' | 'right';
+/** La vitesse de toutes les demonstrations : on montre au ralenti. */
+const DEMO = 0.45;
 
-/** Le profil a imiter : trois appuis larges, puis la cadence installee. */
-const MODELE = [0.34, 0.30, 0.26, 0.115, 0.115, 0.115, 0.115, 0.115,
-                0.115, 0.115, 0.115, 0.115, 0.115];
-const APPUIS_CIBLE = MODELE.length + 1;      // 14
-const ALT_CIBLE = 6;
+/**
+ * Les trois etapes : ce qu'on apprend, et a quelles vitesses on le joue.
+ *
+ * `vitesses` est aussi le nombre de reussites demandees — une par palier. Les
+ * deux dernieres etapes en demandent deux a la vitesse de la course : une
+ * reaction juste peut etre un coup de chance, deux le sont moins.
+ */
+const ETAPES = [
+  { t: 'tuto_1_t', s: 'tuto_1_s', geste: 'alterner', vitesses: [0.45, 0.7, 1] },
+  { t: 'tuto_2_t', s: 'tuto_2_s', geste: 'depart', vitesses: [1, 1] },
+  { t: 'tuto_3_t', s: 'tuto_3_s', geste: 'cadence', vitesses: [1, 1] },
+] as const;
 
-function mediane(v: number[]): number {
-  if (!v.length) return 0;
-  const t = [...v].sort((a, b) => a - b);
-  const m = t.length >> 1;
-  return t.length % 2 ? t[m] : (t[m - 1] + t[m]) / 2;
+const MOT_VITESSE = (v: number) =>
+  v <= 0.5 ? 'tutoh_ralenti' : v < 1 ? 'tutoh_mi_vitesse' : 'tutoh_vitesse_vraie';
+
+/**
+ * AU-DELA DE QUOI UNE REACTION NE VAUT PLUS RIEN : la fenetre du moteur.
+ * C'est exactement le point ou `reactBonus` tombe a zero — le tutoriel ne pose
+ * pas son propre seuil, il lit celui de la course.
+ */
+const REACTION_LIMITE = C.REACT_WINDOW;
+/** Et en dessous de quoi elle est franchement bonne : la moitie de la fenetre. */
+const REACTION_BELLE = (C.REACT_BEST + C.REACT_WINDOW) / 2;
+
+type Etat = {
+  geste: string; demo: boolean; fini: boolean; abandon: boolean;
+  fautes: number; reaction: number | null; fauxDepart: boolean;
+  transition: number | null;
+} | null;
+
+/** Ce que la sequence vaut, et le mot qui le dit. `null` tant qu'on court. */
+function juger(geste: string, e: Etat): { ok: boolean; mot: string } | null {
+  if (!e) return null;
+  if (e.abandon) return { ok: false, mot: 'tuto_v_slow' };
+
+  if (geste === 'alterner') {
+    return e.fautes > 0
+      ? { ok: false, mot: 'tuto_v_croise' }
+      : { ok: true, mot: 'tuto_v_perfect' };
+  }
+  if (geste === 'depart') {
+    if (e.fauxDepart) return { ok: false, mot: 'tuto_v_early' };
+    if (e.reaction === null) return null;
+    if (e.reaction > REACTION_LIMITE) return { ok: false, mot: 'tuto_v_late' };
+    return { ok: true, mot: e.reaction <= REACTION_BELLE ? 'tuto_v_perfect' : 'tuto_v_good' };
+  }
+  if (e.fauxDepart) return { ok: false, mot: 'tuto_v_early' };
+  if (e.transition === null) return null;
+  // LA NOTE DE TRANSITION EST CELLE DU MOTEUR : 2 la montee parfaite, 1 la
+  // montee reussie, 0 un rythme qui n'a pas monte ou qui n'aboutit pas.
+  if (e.transition >= 2) return { ok: true, mot: 'tuto_v_perfect' };
+  if (e.transition >= 1) return { ok: true, mot: 'tuto_v_good' };
+  return { ok: false, mot: 'tuto_v_flat' };
 }
-
-/** Hauteur d'une barre d'intervalle, bornee pour rester lisible. */
-const hauteur = (g: number) => Math.max(5, Math.min(100, (g / 0.42) * 100));
 
 export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
   const { N } = SprinterApp;
 
-  const [etape, setEtape] = useState(0);          // 0,1,2 puis 3 = fin
-  const [demo, setDemo] = useState(true);         // on montre avant de rendre la main
-
-  // Pad allume par la demo, pour que le rythme se voie sur les pads memes.
-  const [flash, setFlash] = useState<Cote | null>(null);
-  /**
-   * OU EN EST LE DEPART, DANS LES TERMES DE SON CANAL.
-   *
-   * La seconde qui reste : 3, 2, 1, puis 0 quand le signal est tombe — sur les
-   * deux canaux, puisque le depart est toujours cale sur le 3, 2, 1. Sur celui
-   * qui a un starter, sa voix remplace le bip au 3 et au 1. `null` tant que
-   * rien n'a commence, et `compte > 0` signe un depart anticipe.
-   *
-   * Ce qu'on repete ici est le VRAI depart, tirage au sort compris la ou il y
-   * en a un : faire repeter un rythme qu'on ne retrouvera pas en course
-   * apprendrait exactement ce qu'il ne faut pas faire.
-   */
-  const [compte, setCompte] = useState<number | null>(null);
-  const [modeleVus, setModeleVus] = useState(0);  // barres jouees par la demo
-
-  const [alt, setAlt] = useState(0);
-  const [faute, setFaute] = useState(false);
-  const [pistolet, setPistolet] = useState(0);
+  const [etape, setEtape] = useState(0);        // 0,1,2 puis 3 = fin
+  const [reussies, setReussies] = useState(0);
+  const [demo, setDemo] = useState(true);
+  const [verdict, setVerdict] = useState<{ ok: boolean; mot: string } | null>(null);
   const [reaction, setReaction] = useState<number | null>(null);
-  const [tropTot, setTropTot] = useState(false);
-  const [appuis, setAppuis] = useState<number[]>([]);
-  const [note, setNote] = useState<number | null>(null);
-  const [tenue, setTenue] = useState(0);
 
-  const dernier = useRef<Cote | null>(null);
+  const courante = etape < ETAPES.length ? ETAPES[etape] : ETAPES[0];
+  const vitesses = courante.vitesses;
+  const palier = Math.min(reussies, vitesses.length - 1);
+  const tempo = demo ? DEMO : vitesses[palier];
+
   const raf = useRef(0);
+  const traite = useRef(false);
+  const minuteurs = useRef<number[]>([]);
 
-  /**
-   * LE SON DU DEPART, CELUI DE LA COURSE.
-   *
-   * Le tutoriel ne fabrique pas ses propres sons : ce qu'on repete ici doit
-   * s'entendre exactement comme ce qu'on entendra en piste, sans quoi
-   * l'exercice apprend un autre depart que le vrai. Le decompte a son bip a la
-   * seconde et son signal ; le starter, sa voix et son pistolet.
-   */
-  const son = (quoi: 'beep' | 'go') => {
-    try { SprinterApp.Audio_.init(); SprinterApp.Audio_.sfx(quoi); }
-    catch { /* pas de son sur cet appareil : l'ecran suffit */ }
-  };
-  const starter = (quoi: 'marques' | 'pret' | 'feu') => {
-    try { SprinterApp.Audio_.init(); SprinterApp.Audio_.starter(quoi); }
-    catch { /* idem : l'ecran porte la consigne */ }
+  const attendre = (ms: number, f: () => void) => {
+    minuteurs.current.push(window.setTimeout(f, ms));
   };
 
-  const stop = () => { cancelAnimationFrame(raf.current); raf.current = 0; };
-
-  /**
-   * Joue une suite d'evenements dates, sur la boucle d'affichage plutot qu'a
-   * coups de minuteurs : le rythme de l'etape 3 est le message, il doit etre
-   * juste au centieme.
-   */
-  const jouer = useCallback((evts: { t: number; f: () => void }[], fini: () => void) => {
-    stop();
-    const t0 = performance.now();
-    let i = 0;
-    const pas = () => {
-      const dt = (performance.now() - t0) / 1000;
-      while (i < evts.length && dt >= evts[i].t) evts[i++].f();
-      if (i < evts.length) raf.current = requestAnimationFrame(pas);
-      else { raf.current = 0; fini(); }
-    };
-    raf.current = requestAnimationFrame(pas);
+  /** Lancer une sequence, demo ou essai, au palier demande. */
+  const lancer = useCallback((estDemo: boolean, e: number, p: number) => {
+    setVerdict(null); setReaction(null);
+    traite.current = false;
+    const et = ETAPES[Math.min(e, ETAPES.length - 1)];
+    demarrerSequence({
+      geste: et.geste,
+      tempo: estDemo ? DEMO : et.vitesses[Math.min(p, et.vitesses.length - 1)],
+      demo: estDemo,
+    });
+    setDemo(estDemo);
   }, []);
 
-  const reinit = () => {
-    setAlt(0); setFaute(false); setReaction(null); setTropTot(false);
-    setAppuis([]); setNote(null); setTenue(0); setFlash(null);
-    setCompte(null); setModeleVus(0); dernier.current = null;
-  };
-
-  // LE SON D'UNE SECONDE DU DECOMPTE, SELON LE CANAL. Au starter, sa voix dit
-  // le 3 (« a vos marques ») et le 1 (« pret ») ; le 2 garde son bip, comme en
-  // course. Sans starter, le bip marque le passage au 2 et au 1.
-  const annonce = (i: number) => {
-    if (DEPART_STARTER) {
-      if (i === 0) starter('marques');
-      else if (i === 2) starter('pret');
-      else son('beep');
-    } else if (i) son('beep');
-  };
-  const signal = () => { if (DEPART_STARTER) starter('feu'); else son('go'); };
-
-  // --- les trois demonstrations --------------------------------------------
-  const lancerDemo = useCallback((e: number) => {
-    reinit();
-    setDemo(true);
-    const ev: { t: number; f: () => void }[] = [];
-
-    if (e === 0) {
-      // Gauche, droite, gauche… au rythme d'un depart, pour que l'alternance
-      // se lise comme une foulee et non comme une consigne.
-      let t = 0.35;
-      for (let i = 0; i < 6; i++) {
-        const cote: Cote = i % 2 ? 'right' : 'left';
-        ev.push({ t, f: () => setFlash(cote) });
-        ev.push({ t: t + 0.16, f: () => setFlash(null) });
-        t += 0.34;
-      }
-      ev.push({ t: t + 0.25, f: () => {} });
-    } else if (e === 1) {
-      // Le decompte, puis l'appui juste apres le signal. Le bip ne tombe pas
-      // sur le premier chiffre : en course il marque le PASSAGE d'une seconde
-      // a la suivante, et la demonstration compte comme la course compte.
-      // Avec un starter, sa voix dit le 3 et le 1, et son coup donne le signal.
-      [3, 2, 1].forEach((n, i) => ev.push({
-        t: 0.3 + i * 0.7, f: () => { setCompte(n); annonce(i); } }));
-      ev.push({ t: 2.4, f: () => { setCompte(0); signal(); } });
-      ev.push({ t: 2.55, f: () => setFlash('left') });
-      ev.push({ t: 2.75, f: () => setFlash(null) });
-      ev.push({ t: 3.3, f: () => {} });
-    } else {
-      // Le profil, joue a son vrai tempo : trois appuis larges puis la cadence.
-      let t = 0.4, cote: Cote = 'left';
-      ev.push({ t, f: () => { setFlash(cote); setModeleVus(0); } });
-      ev.push({ t: t + 0.1, f: () => setFlash(null) });
-      MODELE.forEach((gap, i) => {
-        t += gap;
-        cote = cote === 'left' ? 'right' : 'left';
-        const c = cote;
-        ev.push({ t, f: () => { setFlash(c); setModeleVus(i + 1); } });
-        ev.push({ t: t + Math.min(0.09, gap * 0.5), f: () => setFlash(null) });
-      });
-      ev.push({ t: t + 0.5, f: () => {} });
-    }
-
-    jouer(ev, () => {
-      setFlash(null); setCompte(null);
-      setDemo(false);
-      if (e === 1) departReel();
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jouer]);
-
-  /**
-   * LE VRAI DEPART DE L'ETAPE 2 — celui du canal ou l'on joue.
-   *
-   * Trois secondes pleines, comme en course, sur les deux canaux.
-   */
-  const departReel = useCallback(() => {
-    setReaction(null); setTropTot(false);
-    const ev: { t: number; f: () => void }[] = [];
-    [3, 2, 1].forEach((n, i) => ev.push({
-      t: i, f: () => { setCompte(n); annonce(i); } }));
-    ev.push({ t: 3, f: () => { setCompte(0); signal(); setPistolet(performance.now()); } });
-    jouer(ev, () => {});
-  }, [jouer]);
-
-  useEffect(() => { if (etape < 3) lancerDemo(etape); return stop; }, [etape, lancerDemo]);
-
-  // --- le geste -------------------------------------------------------------
-  const toucher = useCallback((cote: Cote) => {
-    if (demo || etape > 2) return;
-
-    if (etape === 0) {
-      if (dernier.current === cote) {
-        setFaute(true); setAlt(0);
-        setTimeout(() => setFaute(false), 500);
-        return;
-      }
-      dernier.current = cote;
-      setAlt(n => {
-        const v = n + 1;
-        if (v >= ALT_CIBLE) setTimeout(() => setEtape(1), 420);
-        return v;
-      });
-      return;
-    }
-
-    if (etape === 1) {
-      if (compte === null) return;
-      if (compte > 0) {
-        setTropTot(true); setCompte(null); stop();
-        setTimeout(() => { setTropTot(false); departReel(); }, 850);
-        return;
-      }
-      if (reaction !== null) return;
-      setReaction((performance.now() - pistolet) / 1000);
-      setTimeout(() => setEtape(2), 1500);
-      return;
-    }
-
-    if (note !== null) return;
-    if (dernier.current === cote) {
-      setFaute(true); setTimeout(() => setFaute(false), 400);
-      return;
-    }
-    dernier.current = cote;
-    const t = performance.now() / 1000;
-    setAppuis(prev => {
-      const v = [...prev, t];
-      if (v.length >= APPUIS_CIBLE) noter(v);
-      return v;
-    });
-  }, [demo, etape, compte, reaction, pistolet, note, departReel]);
-
-  /** La formule du moteur, mot pour mot. */
-  const noter = (t: number[]) => {
-    const gaps: number[] = [];
-    for (let i = 1; i < t.length; i++) gaps.push(t[i] - t[i - 1]);
-    const m = Math.floor(gaps.length / 2);
-    const tard = mediane(gaps.slice(m));
-    const r = tard > 0.0001 ? mediane(gaps.slice(0, m)) / tard : 0;
-    setTenue(tard);
-    setNote(tard > C.TRANS_FLOOR ? 0 : r >= C.TRANS_PERFECT ? 2 : r >= C.TRANS_GOOD ? 1 : 0);
-  };
-
+  // A l'entree d'une etape : la demonstration. A la fin des trois, la piste se
+  // fige — la page de felicitations ne doit pas s'afficher au-dessus d'un
+  // coureur qui continue sa course.
   useEffect(() => {
-    const bas = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') { e.preventDefault(); toucher('left'); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); toucher('right'); }
-      else if (e.key === 'Escape') onClose(false);
+    if (etape < ETAPES.length) lancer(true, etape, 0);
+    else figerLaPiste();
+  }, [etape, lancer]);
+
+  // LA BOUCLE : elle fait avancer le tutoriel et regarde s'il vient de juger.
+  useEffect(() => {
+    if (etape >= ETAPES.length) return;
+    const pas = () => {
+      const e = pasDuTuto() as Etat;
+      if (e && e.reaction !== null) setReaction(e.reaction);
+      if (e && e.fini && !traite.current) {
+        traite.current = true;
+        if (e.demo) {
+          attendre(1000, () => lancer(false, etape, palier));
+        } else {
+          const v = juger(ETAPES[etape].geste, e) ?? { ok: false, mot: 'tuto_v_slow' };
+          setVerdict(v);
+          attendre(1300, () => {
+            if (v.ok) setReussies(r => r + 1);
+            else lancer(false, etape, palier);
+          });
+        }
+      }
+      raf.current = requestAnimationFrame(pas);
     };
-    window.addEventListener('keydown', bas);
-    return () => window.removeEventListener('keydown', bas);
-  }, [toucher, onClose]);
+    raf.current = requestAnimationFrame(pas);
+    return () => cancelAnimationFrame(raf.current);
+  }, [etape, palier, lancer]);
 
-  const titres = ['tuto_1_t', 'tuto_2_t', 'tuto_3_t'];
-  const avancement = etape === 0 ? alt / ALT_CIBLE
-    : etape === 1 ? (reaction !== null ? 1 : 0)
-    : etape === 2 ? Math.min(1, appuis.length / APPUIS_CIBLE) : 1;
+  // Une reussite par palier, et l'on passe : on ne fait pas repeter pour
+  // repeter, on fait repeter pour accelerer.
+  useEffect(() => {
+    if (reussies === 0) return;
+    if (reussies >= vitesses.length) { setReussies(0); setEtape(e => e + 1); return; }
+    attendre(500, () => lancer(false, etape, reussies));
+  }, [reussies]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Verdict de l'etape 3, en deux mots plutot qu'en trois lignes.
-  const verdict = note === null ? null
-    : note === 2 ? { mot: 'tuto_v_perfect', ton: 'text-primary' }
-    : note === 1 ? { mot: 'tuto_v_good', ton: 'text-emerald-400' }
-    : tenue > C.TRANS_FLOOR ? { mot: 'tuto_v_slow', ton: 'text-destructive' }
-    : { mot: 'tuto_v_flat', ton: 'text-destructive' };
+  // Le tutoriel rend la piste en partant : sans cela le monde resterait au
+  // ralenti et l'accueil se jouerait au tiers de sa vitesse.
+  useEffect(() => () => {
+    minuteurs.current.forEach(clearTimeout);
+    rangerLeTuto();
+  }, []);
+
+  const fini = etape >= ETAPES.length;
+  const avancement = Math.min(1, reussies / vitesses.length);
 
   return (
-    <div className="fixed inset-0 z-[60] bg-[#060913] flex flex-col pointer-events-auto
+    <div className="fixed inset-0 z-[60] flex flex-col pointer-events-none
                     px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]
                     pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
 
-      <div className="w-full max-w-lg mx-auto flex items-center gap-3 shrink-0">
+      {/* Un voile en haut seulement : la piste doit rester lisible, le texte
+          aussi, et le bas de l'ecran appartient aux touches. */}
+      <div className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/75 to-transparent" />
+
+      <div className="relative w-full max-w-lg mx-auto flex items-center gap-3 shrink-0">
         <div className="flex-1 flex gap-1.5">
-          {[0, 1, 2].map(i => (
-            <div key={i} className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+          {ETAPES.map((_, i) => (
+            <div key={i} className="flex-1 h-1 rounded-full bg-white/15 overflow-hidden">
               <motion.div className="h-full bg-primary" initial={false}
                 animate={{ width: i < etape ? '100%' : i === etape ? `${avancement * 100}%` : '0%' }}
                 transition={TRANSITION.progression} />
@@ -306,201 +215,93 @@ export function Tutorial({ onClose }: { onClose: (lancer: boolean) => void }) {
           ))}
         </div>
         <button onClick={() => onClose(false)}
-                className="shrink-0 p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
+                className="pointer-events-auto shrink-0 p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors">
           <X className="w-4 h-4 opacity-70" />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg mx-auto gap-3 py-3 min-h-0">
-
-        {etape < 3 && (
-          <motion.div key={`t${etape}`} {...MONTEE} className="flex flex-col items-center gap-1">
-            <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
-              ${demo ? 'text-cyan-300' : 'text-primary/70'}`}>
-              {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
+      {!fini && (
+        <motion.div key={`t${etape}`} {...MONTEE}
+                    className="relative flex flex-col items-center gap-1 mt-2 shrink-0">
+          <span className={`text-[9px] md:text-[10px] font-bold tracking-[0.35em]
+            ${demo ? 'text-cyan-300' : 'text-primary/90'}`}>
+            {N.t(demo ? 'tuto_watch' : 'tuto_your_turn')}
+            {/* On dit a quelle vitesse on joue, DEMO COMPRISE : montrer un
+                ralenti sans le dire le fait passer pour le vrai. Aux deux
+                dernieres etapes il n'y a rien a dire pendant l'essai — elles se
+                jouent a la vitesse de la course, et le mot le dit. */}
+            <span className={`ml-2 ${tempo < 1 ? 'text-amber-300/90' : 'text-emerald-300/90'}`}>
+              · {N.t(MOT_VITESSE(tempo))}
             </span>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight uppercase text-primary text-center">
-              {N.t(titres[etape])}
-            </h2>
-          </motion.div>
-        )}
+          </span>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight
+                         uppercase text-primary text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+            {N.t(courante.t)}
+          </h2>
+          <p className="text-[11px] md:text-xs text-white/80 text-center max-w-[32ch] leading-snug
+                        drop-shadow-[0_1px_6px_rgba(0,0,0,0.95)]">
+            {N.t(courante.s)}
+          </p>
+        </motion.div>
+      )}
 
-        {/* --- la scene --- */}
-        <div className="w-full flex-1 min-h-[110px] flex flex-col items-center justify-center gap-2">
-
-          {etape === 0 && (
-            <div className="flex gap-2 h-6 items-center">
-              {Array.from({ length: ALT_CIBLE }).map((_, i) => (
-                <motion.div key={i} initial={false}
-                  animate={{ scale: i < alt ? 1 : 0.65, opacity: i < alt ? 1 : 0.25 }}
-                  className={`w-3.5 h-3.5 md:w-4 md:h-4 rounded-full ${i < alt ? 'bg-primary' : 'bg-white/35'}`} />
-              ))}
-              {faute && (
-                <motion.span initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                             className="ml-2 text-destructive font-black text-xl">✕</motion.span>
-              )}
-            </div>
+      {/* LE VERDICT, AU MEME ENDROIT QUE CELUI DES HAIES — sous le titre, au
+          tiers de l'ecran, la ou le regard revient apres avoir suivi le
+          coureur. Le chiffre de la reaction l'accompagne : une note sans sa
+          mesure n'apprend pas a la corriger. */}
+      {!fini && verdict && (
+        <motion.div {...SURGISSEMENT}
+                    className="absolute inset-x-0 top-[34%] flex flex-col items-center gap-0.5
+                               pointer-events-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]">
+          <span className={`font-black font-display tracking-wider text-2xl sm:text-3xl
+            ${verdict.ok ? 'text-emerald-400' : 'text-destructive'}`}>
+            {N.t(verdict.mot)}
+          </span>
+          {courante.geste === 'depart' && reaction !== null && (
+            <span className="font-mono font-bold text-[10px] sm:text-xs tracking-widest text-white/80">
+              {reaction.toFixed(3)} s
+            </span>
           )}
+        </motion.div>
+      )}
 
-          {etape === 1 && (
-            <div className="h-24 md:h-28 flex items-center justify-center">
-              {tropTot ? (
-                <motion.span initial={{ scale: 1.35, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                             className="text-2xl md:text-3xl font-black font-display tracking-tight text-destructive uppercase">
-                  {N.t('tuto_v_early')}
-                </motion.span>
-              ) : reaction !== null ? (
-                <motion.div {...SURGISSEMENT}
-                            className="flex flex-col items-center gap-0.5">
-                  <span className={`font-mono font-black text-2xl md:text-3xl
-                    ${reaction <= C.REACT_BEST ? 'text-primary'
-                      : reaction < C.REACT_WINDOW ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-                    {reaction.toFixed(3)}<span className="text-sm font-normal"> s</span>
-                  </span>
-                  <span className="font-mono text-xs text-cyan-300">
-                    {reaction < C.REACT_WINDOW
-                      ? `+${(C.REACT_BONUS * Math.min(1, Math.max(0,
-                          (C.REACT_WINDOW - reaction) / (C.REACT_WINDOW - C.REACT_BEST)))).toFixed(2)} m/s`
-                      : N.t('tuto_v_late')}
-                  </span>
-                </motion.div>
-              ) : (
-                /* Le cercle du decompte, tel qu'il s'affiche en course : la
-                   seconde qui reste, et le cercle qui passe a l'or quand le
-                   signal tombe. Le mot ne s'ecrit pas — en course, l'ecran du
-                   depart disparait a cet instant-la, et c'est cette disparition
-                   qui dit de partir. */
-                <div className={`w-20 h-20 md:w-24 md:h-24 rounded-full border-4 flex items-center justify-center transition-colors
-                  ${compte === 0 ? 'border-primary bg-primary/25' : 'border-white/20 bg-card/60'}`}>
-                  <span className="text-3xl md:text-4xl font-black font-display text-white">
-                    {compte || ''}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+      <div className="flex-1" />
 
-          {etape === 2 && (
-            <div className="w-full flex flex-col items-center gap-2">
-              {/* Le modele reste dessine en fond pendant l'essai : on superpose
-                  son rythme au sien, sans avoir a se rappeler une consigne. */}
-              <div className="w-full max-w-xs h-20 md:h-24 flex items-end justify-center gap-[3px]">
-                {MODELE.map((g, i) => {
-                  const mien = appuis[i + 1] != null ? appuis[i + 1] - appuis[i] : null;
-                  const vu = demo ? i < modeleVus : true;
-                  return (
-                    <div key={i} className="flex-1 h-full flex items-end justify-center relative">
-                      <div className="absolute bottom-0 w-full rounded-t-sm bg-cyan-400/25"
-                           style={{ height: vu ? `${hauteur(g)}%` : '0%',
-                                    transition: 'height 90ms linear' }} />
-                      {mien != null && (
-                        <motion.div initial={{ height: 0 }} animate={{ height: `${hauteur(mien)}%` }}
-                          transition={TRANSITION.suivi}
-                          className={`absolute bottom-0 w-[58%] rounded-t-sm
-                            ${mien <= C.TRANS_FLOOR ? 'bg-primary' : 'bg-white/70'}`} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="h-8 flex items-center">
-                {verdict ? (
-                  <motion.div {...MONTEE}
-                              className="flex items-center gap-3">
-                    <span className={`text-base md:text-xl font-black tracking-widest uppercase ${verdict.ton}`}>
-                      {N.t(verdict.mot)}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {(tenue * 1000).toFixed(0)} ms
-                    </span>
-                  </motion.div>
-                ) : !demo && (
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {APPUIS_CIBLE - appuis.length}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {etape === 3 && (
-            <motion.div {...SURGISSEMENT}
-                        className="flex flex-col items-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center">
-                <Check className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-2xl md:text-3xl font-black font-display tracking-tight uppercase text-primary">
-                {N.t('tuto_done_t')}
-              </h2>
-            </motion.div>
-          )}
-        </div>
-      </div>
-
-      {/* --- les pads : ils montrent, puis ils obeissent --- */}
-      {etape < 3 ? (
-        <div className="w-full max-w-lg mx-auto shrink-0 flex flex-col gap-2">
-          <div className="grid grid-cols-2 gap-2 md:gap-3">
-            {(['left', 'right'] as Cote[]).map(cote => {
-              const allume = flash === cote;
-              return (
-                <button
-                  key={cote}
-                  onPointerDown={e => { e.preventDefault(); toucher(cote); }}
-                  className={`h-24 sm:h-28 md:h-32 rounded-2xl border-2 flex items-center justify-center
-                              select-none touch-none transition-[background-color,border-color] duration-75
-                              ${allume ? 'border-cyan-300 bg-cyan-300/30'
-                                : faute && dernier.current === cote ? 'border-destructive bg-destructive/20'
-                                : 'border-white/15 bg-white/[0.06] active:bg-primary/25 active:border-primary/50'}
-                              ${demo ? 'opacity-90' : ''}`}
-                >
-                  {cote === 'left'
-                    ? <ChevronLeft className={`w-9 h-9 md:w-11 md:h-11 ${allume ? 'text-cyan-100' : 'text-foreground/55'}`} />
-                    : <ChevronRight className={`w-9 h-9 md:w-11 md:h-11 ${allume ? 'text-cyan-100' : 'text-foreground/55'}`} />}
-                </button>
-              );
-            })}
+      {fini ? (
+        <div className="relative w-full max-w-lg mx-auto flex flex-col items-center gap-3 shrink-0
+                        pointer-events-auto bg-[#060913]/90 rounded-2xl p-5">
+          <div className="w-16 h-16 rounded-full bg-primary/15 border border-primary/40 flex items-center justify-center">
+            <Check className="w-8 h-8 text-primary" />
           </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <button onClick={() => lancerDemo(etape)}
-                    className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] tracking-widest
-                               text-muted-foreground hover:text-cyan-300 transition-colors">
-              <RotateCcw className="w-3 h-3" />{N.t('tuto_replay_demo')}
-            </button>
-            {note !== null ? (
-              <div className="flex gap-2">
-                <button onClick={() => { setAppuis([]); setNote(null); dernier.current = null; }}
-                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest
-                                   text-foreground bg-white/5 border border-white/15 hover:bg-white/10 transition-colors">
-                  {N.t('tuto_again')}
-                </button>
-                <button onClick={() => setEtape(3)}
-                        className="px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest
-                                   text-background bg-primary hover:bg-primary/90 transition-colors">
-                  {N.t('tuto_next')}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => onClose(false)}
-                      className="px-2 py-1.5 text-[10px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
-                {N.t('tuto_skip')}
-              </button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="w-full max-w-lg mx-auto flex flex-col gap-2 shrink-0">
+          <h2 className="text-2xl md:text-3xl font-black font-display tracking-tight uppercase text-primary">
+            {N.t('tuto_done_t')}
+          </h2>
           <button onClick={() => onClose(true)}
                   className="w-full py-4 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest
                              text-background bg-primary hover:bg-primary/90 transition-all
                              border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1">
             {N.t('tuto_start')}
           </button>
-          <button onClick={() => setEtape(0)}
+          <button onClick={() => { setReussies(0); setEtape(0); }}
                   className="w-full py-2 text-[10px] tracking-widest text-muted-foreground hover:text-foreground transition-colors">
             {N.t('tuto_replay')}
+          </button>
+        </div>
+      ) : (
+        /* La barre du bas ne prend pas toute la largeur : c'est la, en dessous,
+           que le joueur tape, et une barre pleine largeur en pointer-events-auto
+           lui volerait ses appuis au moment ou on lui en demande. */
+        <div className="relative w-full max-w-lg mx-auto flex items-center justify-between gap-2 shrink-0">
+          <button onClick={() => lancer(true, etape, palier)}
+                  className="pointer-events-auto flex items-center gap-1.5 px-3 py-2 rounded-lg
+                             bg-black/55 text-[10px] tracking-widest
+                             text-white/70 hover:text-cyan-300 transition-colors">
+            <RotateCcw className="w-3 h-3" />{N.t('tuto_replay_demo')}
+          </button>
+          <button onClick={() => onClose(false)}
+                  className="pointer-events-auto px-3 py-2 rounded-lg bg-black/55 text-[10px] tracking-widest
+                             text-white/70 hover:text-white transition-colors">
+            {N.t('tuto_skip')}
           </button>
         </div>
       )}

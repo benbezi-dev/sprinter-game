@@ -17,9 +17,11 @@ import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/rev
  * feuille de partage refermee, le film est libere. Les deux fins ne se disent
  * pas pareil — voir l'en-tete de game/review.ts.
  */
-export function ReviewVideo({ etat, onPartager }: {
+export function ReviewVideo({ etat, onPartager, titre }: {
   etat: EtatReview;
   onPartager: () => Promise<Sortie>;
+  /** Le titre, s'il n'est pas « la video de ta course ». */
+  titre?: string;
 }) {
   const { N } = SprinterApp;
   // Ce qui s'est reellement passe au dernier appui. L'etat vit ici plutot que
@@ -41,7 +43,7 @@ export function ReviewVideo({ etat, onPartager }: {
       <div className="flex items-center gap-2 justify-center">
         <Film className="w-4 h-4 text-emerald-400" />
         <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-          {N.t('review_title')}
+          {titre ?? N.t('review_title')}
         </h3>
       </div>
 

@@ -14,6 +14,7 @@ import { pique, boost } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
+import { useRetour } from '@/hooks/use-retour';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
@@ -122,6 +123,17 @@ export function DuelResultPopup() {
       duel.issue === 'challenger' ? 'fanfare' : duel.issue === 'draw' ? 'win' : 'dirge'
     );
   }, [montrable, duel]);
+
+  // Le glissement depuis le bord gauche fait ce que fait « suivant » : le
+  // resultat est lu, on passe au suivant s'il y en a un. Pose avant le
+  // retour a vide, parce qu'un hook ne peut pas venir apres — et inactif
+  // pendant que le classement est ouvert par-dessus, puisque c'est lui,
+  // annonce en dernier, qui doit recevoir le retour.
+  useRetour(() => {
+    if (!duel) return;
+    marquerDuelsVus([duel.id]);
+    setFile(f => f.slice(1));
+  }, montrable && !voirDuels);
 
   if (!montrable || !duel) return null;
 

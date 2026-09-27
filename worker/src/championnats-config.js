@@ -127,6 +127,32 @@ export const MIN_DOFFICE = { continental: 2, mondial: 2 };
  * Elle donne une place sur la grille de depart ; elle ne donne ni la finale ni
  * la cinematique, qui restent etanches.
  */
+/**
+ * LE LIEU D'UNE EDITION.
+ *
+ * Une edition se rejoue sur la piste du jeu, et le jeu a plusieurs lieux.
+ * Par defaut, le client choisit (le stade olympique, voir champ-rejeu.ts) ;
+ * une regle ci-dessous peut en imposer un autre a UNE edition precise.
+ *
+ * Le rang se compte a la date de creation, parmi les editions du meme echelon
+ * et de la meme zone : la premiere est 1. Il ne s'ecrit pas en base — il se
+ * deduit, si bien que l'edition deja ouverte au moment ou la regle arrive en
+ * profite sans migration, et qu'aucune autre ne peut la lui prendre.
+ *
+ * Le Champ-de-Mars est reserve au PREMIER Championnat de France : la course
+ * hors stade, piste tricolore et tour Eiffel au bout de l'allee. Apres lui,
+ * le lieu ne sert plus qu'au canal de test.
+ */
+export const LIEUX = [
+  { echelon: 'national', zone: 'FR', rang: 1, lieu: 'champdemars' },
+];
+
+/** Le lieu impose a la `rang`-ieme edition de cet echelon et de cette zone, ou `null`. */
+export function lieuDeLEdition(echelon, zone, rang) {
+  const r = LIEUX.find(l => l.echelon === echelon && l.zone === zone && l.rang === rang);
+  return r ? r.lieu : null;
+}
+
 export const TENANT = {
   /**
    * Le tenant est en finale, quoi qu'il fasse de son weekend.
@@ -240,6 +266,43 @@ export const REPLI_PAYS_TROP_PETIT = 'attendre';
 export const CLOTURE_JOURS_AVANT = 3;
 
 /**
+ * DES COURSES HORS CALENDRIER, POUR UNE EDITION PRECISE.
+ *
+ * Le 26/09/2026, l'organisateur a ajoute au Championnat de France (HMW36AHQ)
+ * trois courses de repechage avant la revelation de 21:00 — 19:50, 20:10 et
+ * 20:30 (heure de Paris) — pour tous ceux qui n'ont pas fini leur serie :
+ * faux departs et absents, invites compris. Ceux qui ont fini leur serie sont
+ * qualifies ; les places restantes vont aux meilleurs chronos des repechages
+ * (voir cloturerPhase). Huit couloirs par course, d'ou trois courses.
+ * Exceptionnel — les championnats suivants n'en auront pas. `minute` est en
+ * UTC ; `jour` : 1 = samedi, 2 = dimanche.
+ */
+export const COURSES_EXTRA = {
+  HMW36AHQ: [
+    { cle: 'repechage-1950', phase: 'series', course: 6, jour: 1, minute: 17 * 60 + 50 },
+    { cle: 'repechage-2010', phase: 'series', course: 7, jour: 1, minute: 18 * 60 + 10 },
+    { cle: 'repechage',      phase: 'series', course: 5, jour: 1, minute: 18 * 60 + 30 },
+  ],
+};
+
+/**
+ * L'ENGAGEMENT : on ne selectionne que ceux qui ont dit qu'ils viendraient.
+ *
+ * Une grille gelee au classement seul designait des joueurs qui ne savaient
+ * meme pas qu'ils couraient : ils ne venaient pas, leur couloir restait vide
+ * et le suivant de la liste, lui, serait venu. Desormais un joueur confirme sa
+ * participation pendant la selection, et a la cloture la grille prend les
+ * trente-deux premiers ENGAGES du classement. Qui ne s'engage pas laisse sa
+ * place au suivant.
+ *
+ * Vaut pour les editions annoncees apres la mise en ligne de cette regle : une
+ * edition deja annoncee a promis « les 32 meilleurs », et on ne change pas la
+ * regle d'une selection en cours. Les partants fictifs, qui completent une
+ * grille, sont engages d'office.
+ */
+export const ENGAGEMENT_REQUIS = true;
+
+/**
  * Combien de suivants on garde en memoire au moment de la cloture.
  *
  * Les trente-deux retenus sont dans `champ_partants`. Ceux-la sont ceux
@@ -295,6 +358,37 @@ export const CALENDRIER = {
     { cle: 'sacre',        phase: 'finale', ceremonie: true, minute: 19 * 60 + 20 },
   ],
 };
+
+/**
+ * LA BULLE DE PRESENTATION (26/09) : a partir des demi-finales, chaque partant
+ * peut poser une phrase courte, affichee au-dessus de sa tete pendant ses
+ * trois secondes de presentation — en direct et au rejeu.
+ *
+ * Pas dans les series : trente-deux bulles d'inconnus le samedi matin, c'est
+ * trente-deux textes a moderer pour une course que personne ne regarde encore.
+ * Des demies on connait les noms, et la bulle a quelqu'un pour la lire.
+ */
+export const PHASES_A_BULLE = ['demies', 'finale'];
+
+/**
+ * Les phrases pretes, dans l'esprit des piques (src/game/piques.ts) : on se
+ * pose, on ne vise personne. Le jeu propose la meme liste (src/game/mot.ts).
+ * Le serveur n'en fait pas une liste blanche : une phrase prete passe par le
+ * meme filtre qu'un texte libre (`texteRecevable`), et toutes y passent.
+ * Quarante caracteres au plus, comme la bulle.
+ */
+export const BULLES_PRETES = [
+  'Je suis venu gagner.',
+  'Rendez-vous sur la ligne.',
+  'Pour ma ville.',
+  'Personne ne me rattrape.',
+  'Premier départ, dernier mot.',
+  'Regardez bien mon couloir.',
+  'Ce soir, c\u2019est ma course.',
+  'Que le meilleur gagne.',
+  'Le chrono va parler.',
+  'Je viens chercher la finale.',
+];
 
 /**
  * Les moments qui meritent de sortir une notification.

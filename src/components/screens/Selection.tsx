@@ -5,7 +5,8 @@ import { Flag, Trophy, ChevronRight } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Drapeau } from '@/components/Insignes';
 import { getSavedName } from '@/game/leaderboard';
-import { maSelection, restant, type MaSelection } from '@/game/championnats';
+import { maSelection, restant, engager, type MaSelection } from '@/game/championnats';
+import { useRetour } from '@/hooks/use-retour';
 
 /* ---------------------------------------------------------------------------
    LA SÉLECTION, VUE DU JEU
@@ -34,9 +35,21 @@ import { maSelection, restant, type MaSelection } from '@/game/championnats';
    ne se glisse pas dans un bandeau de deux lignes sur un écran d'accueil.
 --------------------------------------------------------------------------- */
 
+/**
+ * Une réponse fraîche du serveur, diffusée à toutes les copies du hook : la
+ * banderole, la scène et la barre du classement tiennent chacune la leur, et
+ * un engagement pris dans la banderole doit se voir partout à la fois.
+ */
+const abonnes = new Set<(s: MaSelection) => void>();
+const diffuser = (s: MaSelection) => abonnes.forEach(f => f(s));
+
 /** Le nombre de places, le rang, l'écart : tout vient du serveur, rien d'ici. */
 function useMaSelection() {
   const [s, setS] = useState<MaSelection | null>(null);
+  useEffect(() => {
+    abonnes.add(setS);
+    return () => { abonnes.delete(setS); };
+  }, []);
   // Le décompte s'affiche à la seconde près à la fin, à la journée près au
   // début. Un état qui n'existe que pour forcer le rendu : la valeur affichée
   // se recalcule depuis `s.cloture`, jamais depuis un compteur qu'on
@@ -63,7 +76,15 @@ function useMaSelection() {
       // jusqu'à cinq minutes de retard, et c'est le moment où l'écran doit
       // basculer sans qu'on recharge le jeu.
       const s0 = s;
-      if (!s0 || s0.gele || s0.cloture == null) return;
+      if (!s0) return;
+      // Apres une course, la revelation deplace les qualifies vers le tour
+      // suivant : on redemande toutes les cinq minutes, pour que la banderole
+      // passe a « DEMI-FINALE 1 » sans qu'on recharge le jeu.
+      if (s0.gele && courue(s0.course)) {
+        if (Date.now() - dernier.current >= 5 * 60_000) demander();
+        return;
+      }
+      if (s0.gele || s0.cloture == null) return;
       if (Date.now() < s0.cloture) return;
       if (Date.now() - dernier.current < 60_000) return;
       demander();
@@ -129,6 +150,52 @@ function dateLocale(at: number | null, avecDate = true): string | null {
 /** L'heure d'une convocation : le jour et l'heure suffisent, la date non. */
 const heureLocale = (at: number | null) => dateLocale(at, false);
 
+/**
+ * La course ou l'on est convoque, par son nom : « SÉRIE 2 », « DEMI-FINALE 1 »,
+ * « FINALE ». Le serveur donne la phase avec le numero ; sans elle, un qualifie
+ * lisait « SÉRIE 1 » le dimanche, pour sa demi-finale comme pour sa finale.
+ */
+function maCourse(c: { phase: string; numero: number }): string {
+  const { N } = SprinterApp;
+  if (c.phase === 'series' && c.numero > 4) return String(N.courseNom('series', c.numero, 4)).toUpperCase();
+  if (c.phase !== 'demies' && c.phase !== 'finale') return N.t('sel_ma_serie', { n: c.numero });
+  const nom = String(N.t('champ_course_' + c.phase)).toUpperCase();
+  return c.phase === 'finale' ? nom : `${nom} ${c.numero}`;
+}
+
+/**
+ * Vrai quand la course de la convocation est passée. Le serveur garde la
+ * derniere course du partant jusqu'a la revelation suivante — et pour toujours
+ * s'il est elimine — si bien que la banderole annoncait encore « SÉRIE 1 ·
+ * samedi 11:00 » a 21 h. Quinze minutes apres le depart : le cron range a ce
+ * moment-la les courses restees vides, la course est donc finie dans tous les
+ * cas.
+ */
+const COURUE_APRES = 15 * 60_000;
+const courue = (c: { at: number | null } | null) =>
+  !!c && c.at != null && Date.now() >= c.at + COURUE_APRES;
+
+/** Même jour du calendrier, dans le fuseau du joueur. */
+const memeJour = (a: number, b: number) =>
+  new Date(a).toDateString() === new Date(b).toDateString();
+
+/**
+ * La phrase sous la convocation d'une serie. « À samedi » etait ecrit en dur :
+ * faux le samedi meme, a une minute du depart. On nomme le jour de la course,
+ * ou l'on dit que c'est aujourd'hui.
+ */
+function aBientot(at: number | null): string {
+  const { N } = SprinterApp;
+  if (at == null) return N.t('sel_gelee');
+  if (memeJour(at, Date.now())) return N.t('sel_aujourdhui');
+  try {
+    const j = new Date(at).toLocaleDateString(N.getLang() === 'en' ? 'en-GB' : 'fr-FR', { weekday: 'long' });
+    return N.t('sel_bonne_chance', { j });
+  } catch {
+    return N.t('sel_gelee');
+  }
+}
+
 /* -------------------------------------------------------------- le décompte */
 
 /**
@@ -191,6 +258,19 @@ function Decompte({ reste, urgent }: { reste: string; urgent: boolean }) {
 export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
   const s = useMaSelection();
   const { N } = SprinterApp;
+  const [envoi, setEnvoi] = useState<'' | 'attente' | 'erreur'>('');
+
+  // S'engager, ou se retirer. La réponse est la sélection relue par le
+  // serveur : elle remplace celle de toutes les copies du hook.
+  const basculer = async (oui: boolean) => {
+    const nom = getSavedName();
+    if (!nom || envoi === 'attente') return;
+    setEnvoi('attente');
+    const r = await engager(nom, oui);
+    if ('error' in r) { setEnvoi('erreur'); return; }
+    setEnvoi('');
+    diffuser(r);
+  };
 
   // Rien à dire : pas de nom, pas de championnat annoncé dans ce pays, ou un
   // pays qui n'en tient pas. On disparaît plutôt que d'annoncer une échéance
@@ -204,17 +284,30 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
   // Trois situations, trois phrases. Elles se lisent de haut en bas dans
   // l'ordre où elles deviennent vraies pour un joueur : pas de pays, pas
   // classé, puis un rang et un écart.
+  // L'engagement. Tant que la sélection est ouverte, qui ne s'est pas engagé
+  // lit d'abord qu'il doit le faire — son rang vient en dessous, c'est celui
+  // qu'il aurait en s'engageant. Après la clôture, qui ne l'a pas fait lit
+  // que sa place est partie.
+  const engagement = !!s.engagement && !!pays;
+  const aEngager = engagement && !s.gele;
+  const pasEngage = engagement && !s.engage;
+  const cede = s.gele && pasEngage;
+
   const ligne = !pays
     ? N.t('sel_pas_de_pays')
-    : s.rang == null
-      ? N.t('sel_pas_classe')
-      : s.retenu
-        ? (s.gele ? N.t('sel_dedans_fige') : N.t('sel_dedans'))
-        : s.manque === 1
-          ? N.t('sel_manque_1')
-          : N.t('sel_manque_n', { n: s.manque ?? 0 });
+    : cede
+      ? N.t('sel_pas_engage')
+      : aEngager && pasEngage
+        ? N.t('sel_engage_toi')
+        : s.rang == null
+          ? N.t('sel_pas_classe')
+          : s.retenu
+            ? (s.gele ? N.t('sel_dedans_fige') : N.t('sel_dedans'))
+            : s.manque === 1
+              ? N.t('sel_manque_1')
+              : N.t('sel_manque_n', { n: s.manque ?? 0 });
 
-  const dedans = !!s.retenu && !!pays && s.rang != null;
+  const dedans = !!s.retenu && !!pays && s.rang != null && !pasEngage;
   const cliquable = dedans && s.gele && !!onVoir;
   const Balise: any = cliquable ? 'button' : 'div';
 
@@ -253,9 +346,13 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
               décider quand jouer, « mercredi 02:00 » ne dit pas si c'est loin.
               Après le gel, c'est sa série. */}
           <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
-            {s.gele
+            {cede
+              ? N.t('sel_place_cedee')
+              : s.gele
               ? (dedans && s.course
-                  ? `${N.t('sel_ma_serie', { n: s.course.numero })} · ${heureLocale(s.course.at) || ''}`
+                  ? (courue(s.course)
+                      ? N.t('sel_courue', { c: maCourse(s.course) })
+                      : `${maCourse(s.course)} · ${heureLocale(s.course.at) || ''}`)
                   : N.t('sel_prochaine'))
               : s.rang == null
                 ? (pays ? N.t('sel_pour_entrer') : N.t('sel_places', { n: s.places }))
@@ -264,6 +361,41 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
                       ? N.t('sel_le', { d: dateLocale(s.cloture) })
                       : N.t('sel_ferme')}`}
           </span>
+
+          {/* LA CONFIRMATION DE PARTICIPATION, tant que la sélection est
+              ouverte. Sans elle, la clôture passe au suivant de la liste. */}
+          {aEngager && (
+            <span className="mt-1.5 flex items-center gap-2 flex-wrap"
+                  onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+              {s.engage ? (
+                <>
+                  <span className="text-[10px] font-bold tracking-widest uppercase text-primary">
+                    ✓ {N.t('sel_engage')}
+                  </span>
+                  <button type="button" onClick={() => basculer(false)} disabled={envoi === 'attente'}
+                          className="text-[10px] text-muted-foreground underline underline-offset-2
+                                     hover:text-foreground transition-colors disabled:opacity-50">
+                    {N.t('sel_retirer')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={() => basculer(true)} disabled={envoi === 'attente'}
+                          className="rounded-full bg-primary text-background px-3 py-1.5
+                                     text-[10px] font-bold tracking-widest uppercase
+                                     hover:bg-primary/90 transition-colors disabled:opacity-50">
+                    {N.t('sel_engager')}
+                  </button>
+                  <span className="text-[9px] text-muted-foreground leading-tight">
+                    {N.t('sel_engage_regle')}
+                  </span>
+                </>
+              )}
+              {envoi === 'erreur' && (
+                <span className="text-[9px] text-red-400">{N.t('sel_engager_err')}</span>
+              )}
+            </span>
+          )}
         </div>
 
         {/* À droite : le décompte tant que la sélection est ouverte, l'accès au
@@ -413,6 +545,9 @@ export function SceneSelection() {
     if (s?.edition) marquerVue(s.edition);
     setOuvert(false);
   };
+  // Le glissement depuis le bord gauche ferme le verdict, comme un clic a
+  // cote : la selection est lue, on n'y revient pas.
+  useRetour(fermer, ouvert);
 
   if (!s) return null;
   const dedans = !!s.retenu;
@@ -475,7 +610,7 @@ export function SceneSelection() {
               <motion.div {...retarde(MONTEE, 0.25)} className="flex flex-col gap-1">
                 {s.course && (
                   <span className="font-black font-display text-2xl md:text-3xl text-foreground">
-                    {N.t('sel_ma_serie', { n: s.course.numero })}
+                    {maCourse(s.course)}
                   </span>
                 )}
                 {s.course && heureLocale(s.course.at) && (
@@ -484,7 +619,11 @@ export function SceneSelection() {
                   </span>
                 )}
                 <span className="text-[11px] text-muted-foreground mt-1">
-                  {N.t('sel_bonne_chance')}
+                  {s.course && courue(s.course)
+                    ? N.t('sel_courue', { c: maCourse(s.course) })
+                    : s.course && s.course.phase !== 'series'
+                      ? N.t('sel_qualifie')
+                      : aBientot(s.course ? s.course.at : null)}
                 </span>
               </motion.div>
             ) : (

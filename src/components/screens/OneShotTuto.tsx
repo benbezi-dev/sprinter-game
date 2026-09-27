@@ -4,6 +4,7 @@ import { epreuvesDuJeu, nomCourt } from '@/game/jeux';
 import { motion } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, COURBE, TRANSITION, retarde } from '@/lib/mouvement';
 import { X, Timer, Ghost, Globe2 } from 'lucide-react';
+import { useRetour } from '@/hooks/use-retour';
 
 const VU = 'sprinter_tuto_oneshot_vu';
 
@@ -37,6 +38,9 @@ export function marquerOneShotTutoVu() {
  * termine dans le mode qu'il vient d'expliquer, pas sur un bouton « fermer ».
  */
 export function OneShotTuto({ onClose }: { onClose: (lancer: boolean) => void }) {
+  // Le glissement depuis le bord gauche ferme le tutoriel sans lancer la
+  // course qu'il explique.
+  useRetour(() => onClose(false));
   const { N } = SprinterApp;
   const [plan, setPlan] = useState(0);
   const timers = useRef<any[]>([]);

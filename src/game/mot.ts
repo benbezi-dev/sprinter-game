@@ -5,7 +5,7 @@
 // les bornes vivent aussi ici, parce qu'une limite qu'on decouvre au refus est
 // une limite mal posee.
 
-import { getSavedName } from './leaderboard';
+import { getSavedName, getDeviceId } from './leaderboard';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -13,7 +13,14 @@ export const MAX_TEXTE = 140;
 /** Six secondes. Au-dela ce n'est plus une pique, c'est un discours. */
 export const MAX_VOIX_MS = 6000;
 
-export type MotPose = { ok?: true; texte?: string | null; voix?: boolean; error?: string };
+export type MotPose = {
+  ok?: true; texte?: string | null; voix?: boolean; error?: string;
+  /**
+   * Pourquoi le filtre du serveur a refuse le texte : 'vide', 'long', 'lien',
+   * 'contact', 'grossier'. Absent pour tout autre refus.
+   */
+  raison?: string;
+};
 
 /** Depose le mot. Seul le vainqueur y est autorise, et une seule fois. */
 export async function poserMot(
@@ -57,6 +64,130 @@ function enBase64(b: Blob): Promise<string> {
     };
     l.readAsDataURL(b);
   });
+}
+
+/**
+ * Depose le mot du vainqueur d'une COURSE DE CHAMPIONNAT.
+ *
+ * Meme geste que pour un duel, et volontairement la meme fonction d'envoi :
+ * seule l'adresse change. Ce qui change vraiment est de l'autre cote — le mot
+ * d'un duel va a une personne, celui d'une course va aux sept autres partants,
+ * et il reste tant que l'edition existe (voir `champ_mots` dans le worker).
+ *
+ * Le serveur relit lui-meme qui a gagne : rien de ce qu'on envoie ici ne le
+ * convainc d'accepter un mot d'un autre que le vainqueur.
+ */
+export async function poserMotDeCourse(
+  c: { edition: string; phase: string; course: number },
+  m: { texte?: string; voix?: Blob | null },
+): Promise<MotPose> {
+  try {
+    // L'appareil voyage avec le nom : le serveur verifie que CE telephone
+    // porte bien le nom du vainqueur. Le nom seul se tape sur n'importe quel
+    // telephone.
+    const corps: any = {
+      edition: c.edition, phase: c.phase, course: c.course,
+      name: getSavedName() || '', device_id: getDeviceId(),
+    };
+    if (m.texte) corps.texte = m.texte.slice(0, MAX_TEXTE);
+    if (m.voix) {
+      corps.voix = await enBase64(m.voix);
+      corps.voix_type = m.voix.type || 'audio/webm';
+    }
+    const r = await fetch(`${API_BASE}/champ/mot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      return { error: (d && d.error) || 'refus du serveur',
+               raison: (d && typeof d.raison === 'string' && d.raison) || undefined };
+    }
+    return d as MotPose;
+  } catch {
+    return { error: 'reseau' };
+  }
+}
+
+/* ------------------------------------------------------------ la bulle
+   A partir des demi-finales, chaque partant peut poser une phrase courte,
+   affichee en bulle au-dessus de sa tete pendant SES trois secondes de
+   presentation — en direct comme au rejeu. Une phrase prete, ou la sienne.
+
+   Les bornes vivent ici comme celles du mot : le serveur les reverifie et
+   filtre tout (worker/src/mot.js, `texteRecevable`), phrases pretes comprises
+   — elles ne sont qu'un raccourci, pas un laissez-passer. */
+
+/** Une bulle se lit en trois secondes : quarante caracteres, pas un de plus. */
+export const BULLE_MAX = 40;
+
+/**
+ * Les phrases pretes, [francais, anglais]. C'est le texte de la langue du
+ * joueur qui part : une phrase anglaise passe le filtre comme un texte libre.
+ * Les francaises sont celles du serveur (`BULLES_PRETES`,
+ * worker/src/championnats-config.js).
+ */
+export const BULLES_PRETES: [string, string][] = [
+  ['Je suis venu gagner.', 'I came here to win.'],
+  ['Rendez-vous sur la ligne.', 'See you at the line.'],
+  ['Pour ma ville.', 'For my city.'],
+  ['Personne ne me rattrape.', 'Nobody catches me.'],
+  ['Premier départ, dernier mot.', 'First to go, last word.'],
+  ['Regardez bien mon couloir.', 'Keep your eyes on my lane.'],
+  ['Ce soir, c’est ma course.', 'Tonight is my race.'],
+  ['Que le meilleur gagne.', 'May the best one win.'],
+  ['Le chrono va parler.', 'The clock will do the talking.'],
+  ['Je viens chercher la finale.', 'I came for the final.'],
+];
+
+export type BullePosee =
+  | { ok: true; texte: string }
+  | { ok: false; raison?: string; erreur?: string };
+
+/**
+ * Pose (ou remplace) la bulle de ce joueur pour la phase en cours.
+ *
+ * Refusee une fois sa course appelee (30 s avant le pistolet) : la salle a
+ * deja fixe l'ordre de presentation. Le serveur le dit par « trop tard », que
+ * l'on rend ici sous la forme d'une raison comme les autres ('trop_tard').
+ */
+export async function poserBulle(
+  c: { edition: string; phase: string }, texte: string,
+): Promise<BullePosee> {
+  try {
+    const r = await fetch(`${API_BASE}/champ/bulle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        edition: c.edition, phase: c.phase,
+        name: getSavedName() || '', device_id: getDeviceId(),
+        texte: String(texte || '').slice(0, BULLE_MAX),
+      }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d && d.ok) return { ok: true, texte: String(d.texte || texte) };
+    const erreur = (d && d.error) ? String(d.error) : 'refus du serveur';
+    const raison = (d && typeof d.raison === 'string' && d.raison)
+      || (/trop tard/i.test(erreur) ? 'trop_tard' : undefined);
+    return { ok: false, raison, erreur };
+  } catch {
+    return { ok: false, erreur: 'reseau' };
+  }
+}
+
+/** La voix d'un mot de course, a la demande — elle ne voyage pas avec l'edition. */
+export async function voixDuMotDeCourse(
+  c: { edition: string; phase: string; course: number },
+): Promise<{ voix: string; voix_type: string } | null> {
+  try {
+    const q = `edition=${encodeURIComponent(c.edition)}&phase=${encodeURIComponent(c.phase)}&course=${c.course}`;
+    const r = await fetch(`${API_BASE}/champ/mot?${q}`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch {
+    return null;
+  }
 }
 
 /** Une URL jouable a partir de ce que le serveur a renvoye. */

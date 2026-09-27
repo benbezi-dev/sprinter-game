@@ -6,6 +6,7 @@ import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { fetchRecruteurs, type TableauRecruteurs } from '@/game/recruteurs';
 import { Drapeau } from '@/components/Insignes';
+import { useRetour } from '@/hooks/use-retour';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -28,6 +29,8 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
  * montre rien ne l'accroche pas.
  */
 export function Recruteurs({ onClose }: { onClose: () => void }) {
+  // Le glissement depuis le bord gauche fait ce que fait la croix.
+  useRetour(onClose);
   const { N } = SprinterApp;
   const moiNom = getSavedName();
   const [tab, setTab] = useState<TableauRecruteurs | null>(null);

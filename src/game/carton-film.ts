@@ -44,6 +44,11 @@ import { SprinterApp } from './engine';
 import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
+import { lireLeBandeau } from './bandeau-rejeu';
+// L'AUTRE VOIX, celle des jours de competition. Prise a sa source, comme la
+// premiere : deux copies d'un orange finissent par diverger, et personne ne
+// s'en apercoit avant de voir la video a cote d'une carte dans le meme fil.
+import { ENCRE as ENCRE_NUIT, peindreLeFond, flammeSur } from './voix-competition';
 // DEUX ORS, ET ON PREND CELUI DE LA PALETTE. `pinceau-film` exporte aussi un
 // `OR` — mais c'est `--primary`, la couleur de l'INTERFACE, qui suit le theme.
 // Celui-ci est le metal des medailles, fixe : un visuel doit sortir pareil
@@ -73,12 +78,21 @@ const SITE = 'sprinter-game.com';
    un chrono d'ailleurs. Voir `tools/carte-defi-ouvert.mjs`, qui porte les deux
    maquettes et l'explique.
 
-   Le carton de fin joue a l'arrivee de CHAQUE course, tous les jours. Il est
-   donc de la voix ordinaire, et il la prend a sa source : `palette-affiche.js`
-   porte les couleurs, les encres, la lueur et les deux regles de mesure, et
-   l'outil des cartes lit le meme fichier depuis node. Les valeurs etaient
-   recopiees ici ; elles ne le sont plus, parce qu'une copie de couleur diverge
-   au premier or qui bouge et qu'on ne le voit que dans le fil, trop tard.
+   Le carton de fin joue a l'arrivee de CHAQUE course, tous les jours : il est
+   donc de la voix ordinaire, et il la prend a sa source (`palette-affiche.js`,
+   que l'outil des cartes lit aussi depuis node).
+
+   SAUF UN JOUR DE COMPETITION. Une course de championnat n'est pas une course
+   de tous les jours : elle a une date annoncee, un titre en jeu, et la video
+   qui en sort tombe dans le meme fil, le meme jour, que les cartes du compte —
+   qui, elles, sont en bleu nuit et degrade orange. Un carton dore au milieu
+   d'elles, ce sont deux voix pour un seul evenement. Le carton prend donc la
+   voix de competition des qu'il ferme une course de championnat, et il la
+   prend a SA source : `voix-competition.js`.
+
+   Les valeurs des deux voix etaient recopiees ici ; elles ne le sont plus,
+   parce qu'une copie de couleur diverge au premier orange qui bouge et qu'on
+   ne le voit que dans le fil, trop tard.
 
    Ce qui RESTE ici, ce sont les proportions — elles tiennent de
    `game/trace-affiche.js`, qui en est la source, et les remonter dans la
@@ -158,12 +172,12 @@ function chronoDuCarton(G: any): number | null {
 
 /* --------------------------------------------------------------- la peinture */
 
-/** Un filet, de marge a marge. */
+/** Un filet, de marge a marge. La teinte suit la voix du carton. */
 function filet(ctx: CanvasRenderingContext2D, x1: number, y: number, x2: number,
-               alpha: number) {
+               alpha: number, teinte: string) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.strokeStyle = encre(ENCRE.filet);
+  ctx.strokeStyle = teinte;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x1, Math.round(y) + 0.5);
@@ -224,10 +238,64 @@ function ecrireLeChrono(ctx: CanvasRenderingContext2D, txt: string, cx: number,
  * format large est trois fois moins haut que large — une taille exprimee en
  * fraction de sa largeur y devient enorme, et le chrono mangerait le cadre.
  */
+/**
+ * Coupe un texte en lignes qui tiennent dans `max`.
+ *
+ * Aux ESPACES, jamais au milieu d'un mot : une pique coupee en « restez chez v
+ * / ous » se lit deux fois. La derniere ligne est tronquee par `tailler`, qui
+ * pose les points de suspension — un mot trop long est ampute, pas efface.
+ */
+function habiller(ctx: CanvasRenderingContext2D, texte: string, max: number,
+                  e: any, maxLignes: number): string[] {
+  const mots = String(texte || '').split(/\s+/).filter(Boolean);
+  if (!mots.length) return [];
+  const lignes: string[] = [];
+  let courante = '';
+  for (const m of mots) {
+    const essai = courante ? courante + ' ' + m : m;
+    if (largeur(ctx, essai, e) <= max || !courante) { courante = essai; continue; }
+    lignes.push(courante);
+    courante = m;
+    if (lignes.length === maxLignes - 1) break;
+  }
+  if (lignes.length < maxLignes) {
+    // Ce qu'il reste va sur la derniere ligne, tronque si besoin.
+    const reste = mots.slice(lignes.join(' ').split(/\s+/).filter(Boolean).length).join(' ');
+    lignes.push(tailler(ctx, reste || courante, max, e));
+  }
+  return lignes.slice(0, maxLignes);
+}
+
+
 export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: number,
                                 avancement: number, defi: DefiDeLaCamera = defiDeLaCamera()) {
   const G: any = SprinterApp.G;
   const N: any = SprinterApp.N;
+
+  /* QUELLE VOIX. Une course de championnat porte un en-tete (`bandeau-rejeu`)
+     et c'est exactement le signal cherche : une date annoncee, un titre en
+     jeu, un evenement dont le compte parle par ailleurs. Tout le reste — la
+     campagne, le one shot, un duel — garde la voix ordinaire. */
+  const jour = G.rejeu ? lireLeBandeau() : null;
+  const V = jour ? {
+    surtitre: ENCRE_NUIT.kicker,
+    nom: ENCRE_NUIT.sous,
+    etiquette: ENCRE_NUIT.etiquette,
+    lien: ENCRE_NUIT.doux,
+    pied: ENCRE_NUIT.doux,
+    piedDroit: ENCRE_NUIT.etiquette,
+    filet: ENCRE_NUIT.filet,
+    code: ENCRE_NUIT.vif,
+  } : {
+    surtitre: encre(ENCRE.surtitre),
+    nom: encre(ENCRE.nom),
+    etiquette: encre(ENCRE.etiquette),
+    lien: encre(ENCRE.lien),
+    pied: encre(ENCRE.pied),
+    piedDroit: encre(ENCRE.piedDroit),
+    filet: encre(ENCRE.filet),
+    code: BLANC,
+  };
 
   const ouvert = Math.max(0, Math.min(1, avancement / OUVERTURE));
   // Une entree qui decelere : le voile arrive vite puis se pose, au lieu de
@@ -241,14 +309,19 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   // reconnaitre le jeu avant meme qu'on ait lu un mot.
   ctx.save();
   ctx.globalAlpha = VOILE * doux;
-  ctx.fillStyle = FOND;
-  ctx.fillRect(0, 0, l, h);
-  const lueur = ctx.createRadialGradient(l * LUEUR.x, h * LUEUR.y, 0,
-                                         l * LUEUR.x, h * LUEUR.y, l * LUEUR.rayon);
-  lueur.addColorStop(0, or(LUEUR.alpha));
-  lueur.addColorStop(1, or(0));
-  ctx.fillStyle = lueur;
-  ctx.fillRect(0, 0, l, h);
+  if (jour) {
+    // Le bleu nuit et son halo en ellipse, les memes que les cartes.
+    peindreLeFond(ctx, l, h);
+  } else {
+    ctx.fillStyle = FOND;
+    ctx.fillRect(0, 0, l, h);
+    const lueur = ctx.createRadialGradient(l * LUEUR.x, h * LUEUR.y, 0,
+                                           l * LUEUR.x, h * LUEUR.y, l * LUEUR.rayon);
+    lueur.addColorStop(0, or(LUEUR.alpha));
+    lueur.addColorStop(1, or(0));
+    ctx.fillStyle = lueur;
+    ctx.fillRect(0, 0, l, h);
+  }
   ctx.restore();
   if (doux <= 0.02) return;
 
@@ -285,7 +358,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   /* LE SURTITRE NE PARTICIPE PAS AU CENTRAGE. Il tient sa place quoi qu'il
      arrive, a 10,5 % de la hauteur — exactement comme dans le jeu. */
   if (epreuve) {
-    const e = { taille: tSur, gras: 700, police: AFFICHE, couleur: encre(ENCRE.surtitre),
+    const e = { taille: tSur, gras: 700, police: AFFICHE, couleur: V.surtitre,
                 espace: tSur * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, tailler(ctx, `SPRINTER · ${epreuve}`, dispo, e), cx, Math.round(h * 0.105), e);
   }
@@ -294,18 +367,38 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   const haut = Math.round(h * 0.105) + Math.round(l * 0.055);
   const basZone = h - M * 2.1;
 
+  /* LE MOT DU VAINQUEUR, quand la course en porte un.
+     Il tient dans le carton et nulle part ailleurs : pendant la course,
+     l'ecran appartient a la course. Deux lignes au plus — au-dela on ne lit
+     plus une pique, on lit un paragraphe, et le carton dure une seconde et
+     demie. */
+  const bandeau = G.rejeu ? lireLeBandeau() : null;
+  const tMot = T(0.030);
+  const tMotQui = T(0.020);
+  const lignesMot = bandeau?.mot
+    ? habiller(ctx, `« ${bandeau.mot.texte} »`, dispo,
+               { taille: tMot, gras: 500, police: AFFICHE }, 2)
+    : [];
+
   const hChrono = chronoMs !== null ? tChrono * 1.05 : 0;
   const hQui    = nom || epreuve ? T(0.045) + tQui * 1.4 : 0;
+  const hMot    = lignesMot.length
+    ? T(0.055) + tMotQui * 1.4 + T(0.012) + lignesMot.length * tMot * 1.35 : 0;
   const hBillet = attendu ? T(0.085) + T(0.055) + tEtiq * 1.4 + T(0.028)
                           + tCode * 1.1 + T(0.030) + tLien * 1.4 : 0;
-  const hPile   = hChrono + hQui + hBillet;
+  const hPile   = hChrono + hQui + hMot + hBillet;
 
   let y = haut + Math.max(0, (basZone - haut - hPile) / 2)
               + (1 - doux) * u * 0.03;
 
   if (chronoMs !== null) {
-    const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur: OR,
-                alpha: A() };
+    // LE CHRONO PORTE LA SIGNATURE DE LA VOIX : l'or plat les jours ordinaires,
+    // la flamme un jour de competition. Le degrade se pose aux coordonnees du
+    // texte — il vit dans l'espace du canvas, pas dans celui de la lettre.
+    const couleur = jour
+      ? flammeSur(ctx, cx - dispo / 2, y, dispo, tChrono)
+      : OR;
+    const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur, alpha: A() };
     ecrireLeChrono(ctx, chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true),
                    cx, y + tChrono / 2, e);
     y += hChrono;
@@ -313,11 +406,30 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
 
   if (nom || epreuve) {
     y += T(0.045);
-    const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: encre(ENCRE.nom),
+    const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: V.nom,
                 alpha: A(), aligne: 'center' as CanvasTextAlign };
     const dit = [nom, epreuve].filter(Boolean).join(' · ');
     ecrire(ctx, tailler(ctx, dit, dispo, e), cx, y + tQui / 2, e);
     y += tQui * 1.4;
+  }
+
+  if (lignesMot.length && bandeau?.mot) {
+    y += T(0.055);
+    const eQui = { taille: tMotQui, gras: 700, police: AFFICHE,
+                   couleur: jour ? flammeSur(ctx, cx - dispo / 2, y, dispo, tMotQui) : OR,
+                   espace: tMotQui * 0.36, alpha: A(0.85),
+                   aligne: 'center' as CanvasTextAlign };
+    const dit = String(N?.t ? N.t('mot_du_vainqueur') : 'LE MOT DU VAINQUEUR');
+    ecrire(ctx, tailler(ctx, `${dit} · ${bandeau.mot.nom.toUpperCase()}`, dispo, eQui),
+           cx, y + tMotQui / 2, eQui);
+    y += tMotQui * 1.4 + T(0.012);
+
+    const e = { taille: tMot, gras: 500, police: AFFICHE, couleur: V.nom,
+                alpha: A(), aligne: 'center' as CanvasTextAlign };
+    for (const ligne of lignesMot) {
+      ecrire(ctx, ligne, cx, y + tMot / 2, e);
+      y += tMot * 1.35;
+    }
   }
 
   /* LE BILLET. L'affiche du jeu garde cette zone pour la trace de la course ;
@@ -326,16 +438,16 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   if (attendu) {
     const P = (v = 1) => v * doux * poseCode;
     y += T(0.085);
-    filet(ctx, M, y, l - M, doux);
+    filet(ctx, M, y, l - M, doux, V.filet);
     y += T(0.055);
 
-    const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: encre(ENCRE.etiquette),
+    const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: V.etiquette,
                  espace: tEtiq * 0.36, alpha: A(), aligne: 'center' as CanvasTextAlign };
     ecrire(ctx, String(N?.t ? N.t('carton_defi') : 'CODE'), cx, y + tEtiq / 2, eE);
     y += tEtiq * 1.4 + T(0.028);
 
     if (code) {
-      const e = { taille: tCode, gras: 700, police: CHIFFRES, couleur: BLANC,
+      const e = { taille: tCode, gras: 700, police: CHIFFRES, couleur: V.code,
                   espace: tCode * 0.12, alpha: P() };
       // CENTRER UN TEXTE LETTRE. `letterSpacing` ajoute son espace APRES chaque
       // caractere, le dernier compris : un `textAlign: center` calerait le code
@@ -368,7 +480,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
        mangerait le code — « sprinter-game.com/d/K7M2… » n'ouvre rien. Le code
        est de toute facon ecrit en grand deux lignes plus haut : l'adresse
        courte perd sa commodite, pas son contenu. */
-    const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: encre(ENCRE.lien),
+    const eL = { taille: tLien, gras: 500, police: AFFICHE, couleur: V.lien,
                  alpha: A(), aligne: 'center' as CanvasTextAlign };
     const porte = code ? `${SITE}/d/${code}` : SITE;
     ecrire(ctx, largeur(ctx, porte, eL) <= dispo ? porte : SITE, cx, y + tLien / 2, eL);
@@ -377,13 +489,48 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   /* LE PIED DU JEU, AU PIXEL : meme filet, meme graisse, meme inter-lettrage.
      A droite, la signature quand le billet porte deja l'adresse — et l'adresse
      elle-meme sinon. Elle ne disparait jamais : c'est la seule chose du carton
-     dont on ne peut pas se passer. */
-  filet(ctx, M, h - M * 1.5, l - M, doux);
+     dont on ne peut pas se passer.
+
+     UN JOUR DE COMPETITION, L'ADRESSE EST UNE PASTILLE. C'est la signature de
+     cette voix-la, et ce n'est pas un ornement : « sur un fond bleu nuit, une
+     url orange se lit comme une signature — on la survole du regard, c'est la
+     derniere chose que l'oeil accroche avant de scroller » (les cartes du
+     compte, qui la posent ainsi depuis le debut). Ecrite en pied comme les
+     autres jours, elle se perdrait dans le bleu. */
+  filet(ctx, M, h - M * 1.5, l - M, doux, V.filet);
   const yPied = h - M * 0.92;
   const eP = { taille: tPied, gras: 700, police: AFFICHE, espace: l * 0.006 };
-  ecrire(ctx, 'SPRINTER', M, yPied, { ...eP, couleur: encre(ENCRE.pied), alpha: A() });
-  ecrire(ctx, attendu ? String(N?.t ? N.t('carton_pied') : 'JEU DE SPRINT') : SITE,
-         l - M, yPied,
-         { ...eP, couleur: attendu ? encre(ENCRE.piedDroit) : OR, alpha: A(attendu ? 1 : 0.9),
-           espace: attendu ? l * 0.006 : l * 0.001, aligne: 'right' });
+  ecrire(ctx, 'SPRINTER', M, yPied, { ...eP, couleur: V.pied, alpha: A() });
+
+  const aDroite = attendu ? String(N?.t ? N.t('carton_pied') : 'JEU DE SPRINT') : SITE;
+  if (jour && !attendu) {
+    const ePast = { ...eP, couleur: ENCRE_NUIT.surPastille, alpha: A(),
+                    espace: l * 0.001, aligne: 'right' as CanvasTextAlign };
+    const lTexte = largeur(ctx, aDroite, ePast);
+    const padX = Math.round(l * 0.030), padY = Math.round(l * 0.018);
+    const hPast = tPied + padY * 2;
+    // La gelule se cale sur la marge DROITE, comme le texte qu'elle remplace :
+    // son bord droit est a `l - M`, et le texte y garde `padX` de chaque cote.
+    const xPast = l - M - lTexte - padX * 2;
+    const lPast = lTexte + padX * 2;
+    ctx.save();
+    ctx.globalAlpha = A();
+    ctx.fillStyle = flammeSur(ctx, xPast, yPied - hPast / 2, lPast, hPast);
+    // Une gelule : le rayon vaut la moitie de la hauteur, comme `999px` en CSS.
+    const r = hPast / 2;
+    ctx.beginPath();
+    ctx.moveTo(xPast + r, yPied - hPast / 2);
+    ctx.arcTo(xPast + lPast, yPied - hPast / 2, xPast + lPast, yPied + hPast / 2, r);
+    ctx.arcTo(xPast + lPast, yPied + hPast / 2, xPast, yPied + hPast / 2, r);
+    ctx.arcTo(xPast, yPied + hPast / 2, xPast, yPied - hPast / 2, r);
+    ctx.arcTo(xPast, yPied - hPast / 2, xPast + lPast, yPied - hPast / 2, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ecrire(ctx, aDroite, l - M - padX, yPied, ePast);
+  } else {
+    ecrire(ctx, aDroite, l - M, yPied,
+           { ...eP, couleur: attendu ? V.piedDroit : OR, alpha: A(attendu ? 1 : 0.9),
+             espace: attendu ? l * 0.006 : l * 0.001, aligne: 'right' });
+  }
 }

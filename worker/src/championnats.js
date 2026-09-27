@@ -14,9 +14,9 @@
 --------------------------------------------------------------------------- */
 
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE,
+  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
-  TENANT,
+  TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
@@ -26,7 +26,13 @@ import { serpentin, qualifier, podium, calendrier, ordonner } from './championna
 // selection doit trier exactement comme le classement affiche, sinon la barre
 // des trente-deux qu'on dessine a l'ecran ne designe pas les trente-deux
 // qu'on selectionne. Une seule definition, deux lecteurs.
-import { ensureDuelTables, ordreClassement } from './duels.js';
+import { ensureDuelTables, ordreClassement, rangDe } from './duels.js';
+// Le mot d'une course suit les memes regles de proprete que celui d'un duel :
+// meme longueur, memes types de voix, meme nettoyage des caracteres invisibles.
+// Les recopier ici serait la garantie qu'un jour les deux ne refusent plus la
+// meme chose. Le filtre (`texteRecevable`) vient du meme endroit, pour la meme
+// raison : la bulle, le tchat et le mot refusent tous les memes textes.
+import { motPropre, voixPropre, texteRecevable, BULLE_MAX, MAX_TEXTE } from './mot.js';
 
 const JOUR = 24 * 3600 * 1000;
 
@@ -214,6 +220,20 @@ export async function ensureChampTables(db) {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS player_pays_par_pays ON player_pays(pays)`),
 
+    // Les demandes de changement de nationalite, faites depuis le jeu et
+    // tranchees par l'administration. Une par joueur : une nouvelle demande
+    // remplace la precedente, on ne fait pas la queue contre soi-meme.
+    db.prepare(`CREATE TABLE IF NOT EXISTS demandes_pays (
+      name_key TEXT PRIMARY KEY,
+      nom TEXT NOT NULL,
+      pays_avant TEXT,
+      pays_demande TEXT NOT NULL,
+      message TEXT,
+      statut TEXT NOT NULL,
+      cree_le INTEGER NOT NULL,
+      traite_le INTEGER
+    )`),
+
     // Une edition : un championnat, un echelon, une zone, une epreuve, un
     // weekend.
     db.prepare(`CREATE TABLE IF NOT EXISTS champ_editions (
@@ -288,6 +308,67 @@ export async function ensureChampTables(db) {
       voie TEXT,
       couru_le INTEGER NOT NULL,
       PRIMARY KEY (edition, phase, course, name_key)
+    )`),
+
+    /* -----------------------------------------------------------------
+       LE MOT DU VAINQUEUR D'UNE COURSE
+       -----------------------------------------------------------------
+       Le meme geste que dans un duel (voir mot.js), avec une difference qui
+       change la regle : un duel oppose deux personnes, une course en oppose
+       huit. Le mot ne va donc pas « a celui qui vient de perdre » mais aux
+       SEPT autres partants de cette course-la, et il tient tant que
+       l'edition existe — on ne peut pas l'effacer a la premiere lecture
+       comme on efface la voix d'un duel, parce qu'il en reste six qui ne
+       l'ont pas encore ouvert.
+
+       LA CLE PRIMAIRE PORTE LA REGLE. (edition, phase, course) sans le nom :
+       il n'y a qu'un mot par course, celui du vainqueur, et une seule fois.
+       Ce n'est pas une messagerie — personne ne repond, et le suivant ne
+       peut pas ecraser le precedent.
+
+       Ce qu'il faut savoir et ne pas se cacher, comme pour le duel : ce sont
+       des mots ecrits par des gens et montres a d'autres gens, sans filtre
+       automatique. Ici le cercle est plus large que deux — sept lecteurs, et
+       le texte part aussi dans la video que le vainqueur partage. Le jour ou
+       une edition reunira des inconnus, il faudra un signalement et de quoi
+       le traiter.
+
+       Depuis le 26/09, le mot est aussi diffuse en direct a ceux qui sont
+       encore dans la salle : le texte passe donc par le filtre de mot.js
+       (`texteRecevable`), et `/champ/moderer` le retire. */
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_mots (
+      edition TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      course INTEGER NOT NULL,
+      name_key TEXT NOT NULL,
+      nom TEXT NOT NULL,
+      texte TEXT,
+      voix TEXT,
+      voix_type TEXT,
+      au INTEGER NOT NULL,
+      PRIMARY KEY (edition, phase, course)
+    )`),
+
+    /* LA BULLE DE PRESENTATION (26/09) : la phrase qu'un partant des demies
+       ou de la finale fait afficher au-dessus de sa tete pendant ses trois
+       secondes de presentation. Une par partant et par phase : la reposer
+       remplace la precedente, jusqu'a l'appel de sa course.
+
+       `retire` et non une suppression : une bulle retiree par l'organisation
+       reste lisible par elle (`/champ/moderation`), pour savoir ce qui a ete
+       retire et pourquoi. Reposer une bulle remet `retire` a zero — le texte
+       neuf repasse par le filtre, comme le premier.
+
+       Une table neuve, sans colonne ajoutee apres coup : elle a donc sa place
+       dans le batch (voir plus bas pourquoi les autres n'y sont pas). */
+    db.prepare(`CREATE TABLE IF NOT EXISTS champ_bulles (
+      edition TEXT NOT NULL,
+      phase TEXT NOT NULL,
+      name_key TEXT NOT NULL,
+      texte TEXT NOT NULL,
+      au INTEGER NOT NULL,
+      retire INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (edition, phase, name_key)
     )`),
 
     // Les titres, avec leur date d'expiration : un champion le reste trois
@@ -382,6 +463,34 @@ export async function ensureChampTables(db) {
     ).run();
   } catch (e) { /* la colonne est deja la */ }
 
+  // LES INVITES DE L'ORGANISATION (26/09) : des joueurs que l'organisateur
+  // fait entrer dans la phase suivante, dans l'ordre. `force` = 1 : il prend
+  // au besoin la place du fictif le moins bon ; 0 : seulement une place libre,
+  // mais avant les fictifs qui completent. Lue par cloturerPhase.
+  await db.prepare(`CREATE TABLE IF NOT EXISTS champ_invites (
+    edition TEXT NOT NULL,
+    phase TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    ordre INTEGER NOT NULL,
+    force INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (edition, phase, name_key)
+  )`).run();
+
+  // L'engagement (voir ENGAGEMENT_REQUIS) : 1 pour une edition qui ne
+  // selectionne que les joueurs engages. 0 par defaut, et c'est voulu : les
+  // editions deja annoncees ont promis « les 32 meilleurs », pas autre chose.
+  try {
+    await db.prepare(
+      `ALTER TABLE champ_editions ADD COLUMN engagement INTEGER NOT NULL DEFAULT 0`
+    ).run();
+  } catch (e) { /* la colonne est deja la */ }
+  await db.prepare(`CREATE TABLE IF NOT EXISTS champ_engagements (
+    edition TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    le INTEGER NOT NULL,
+    PRIMARY KEY (edition, name_key)
+  )`).run();
+
   // La cloture est arrivee apres la table elle aussi, et pour la meme raison
   // elle s'ajoute seule. Elle est nullable a dessein : les editions ouvertes
   // avant qu'elle existe n'ont jamais eu d'heure de cloture annoncee, et leur
@@ -444,6 +553,23 @@ export async function ensureChampTables(db) {
                         ON champ_medailles(pays)`).run();
   } catch (e) { /* la colonne manque encore : l'index attendra le prochain tour */ }
 
+  // POURQUOI UN CHRONO MANQUE. Tant que les courses se remplissaient au
+  // harnais, `ms = null` voulait dire « abandon » et rien d'autre. Courues en
+  // direct, elles connaissent trois absences qui ne se valent pas : le faux
+  // depart (carton rouge), l'abandon (il a couru, pas fini), le forfait (il
+  // n'est pas venu). `motif_ms` porte l'instant du faux depart, compte depuis
+  // le coup de pistolet — c'est ce que le rejeu public montre.
+  //
+  // Nullables, comme les precedentes : une ligne d'avant ne sait pas pourquoi
+  // elle n'a pas de chrono, et lui inventer un motif serait affirmer une chose
+  // qui n'a pas ete observee.
+  try {
+    await db.prepare(`ALTER TABLE champ_resultats ADD COLUMN motif TEXT`).run();
+  } catch (e) { /* la colonne est deja la */ }
+  try {
+    await db.prepare(`ALTER TABLE champ_resultats ADD COLUMN motif_ms INTEGER`).run();
+  } catch (e) { /* la colonne est deja la */ }
+
   pret.add(db);
 }
 
@@ -470,24 +596,25 @@ export async function annoncer(db, { edition, echelon, zone, type, titre, texte,
 }
 
 /**
- * Note le pays d'un joueur vu par Cloudflare.
+ * Donne a un joueur la nationalite du pays d'ou il se connecte, UNE FOIS.
  *
- * On n'ecrase jamais un choix explicite : quelqu'un en deplacement, ou derriere
- * un VPN, ne doit pas changer de nationalite sportive parce qu'il a joue une
- * course depuis un aeroport.
+ * C'est sa nationalite tant qu'il n'en choisit pas une autre : elle compte
+ * pour les championnats comme un choix. Elle ne suit donc plus la connexion —
+ * quelqu'un en deplacement, ou derriere un VPN, ne doit pas changer de
+ * nationalite sportive parce qu'il a joue une course depuis un aeroport. Pour
+ * en changer : son propre choix (une fois), ou une demande a l'administration.
+ *
+ * `XX` est le « pays inconnu » de Cloudflare : ce n'est pas une nationalite.
  */
 export async function noterPays(db, nameKey, pays) {
   const k = String(nameKey || '').trim().toLowerCase();
   const p = String(pays || '').trim().toUpperCase();
-  if (!k || !/^[A-Z]{2}$/.test(p)) return;
+  if (!k || !/^[A-Z]{2}$/.test(p) || p === 'XX') return;
   await ensureChampTables(db);
   await db.prepare(
     `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
      VALUES (?, ?, ?, 'geo', ?)
-     ON CONFLICT(name_key) DO UPDATE SET
-       pays = CASE WHEN player_pays.source = 'choix' THEN player_pays.pays ELSE excluded.pays END,
-       continent = CASE WHEN player_pays.source = 'choix' THEN player_pays.continent ELSE excluded.continent END,
-       vu_le = excluded.vu_le`
+     ON CONFLICT(name_key) DO NOTHING`
   ).bind(k, p, continentDe(p), Date.now()).run();
 }
 
@@ -505,6 +632,128 @@ export async function choisirPays(db, nameKey, pays) {
        source = 'choix', vu_le = excluded.vu_le`
   ).bind(k, p, continentDe(p), Date.now()).run();
   return { ok: true, pays: p, continent: continentDe(p) };
+}
+
+/**
+ * L'administration pose ou corrige une nationalite. Le seul geste qui passe le
+ * verrou.
+ *
+ * Il existe parce que le verrou est total cote joueur : un doigt qui glisse sur
+ * une liste de cinquante pays coute la saison entiere, et sans cette porte la
+ * seule reparation serait d'ouvrir la base a la main. Mieux vaut un geste
+ * nomme, sous cle, qui dit ce qu'il remplace.
+ *
+ * Il pose aussi la nationalite de qui n'en a jamais declare (un joueur qui la
+ * donne de vive voix, une detection 'geo' a confirmer). Ce qu'il exige, c'est
+ * un NOM RESERVE : la faute la plus probable ici n'est pas le mauvais pays,
+ * c'est le mauvais joueur, et ecrire une nationalite sur un nom que personne ne
+ * porte la ferait tomber sur le premier qui le reserverait.
+ *
+ * Il rend l'ANCIEN etat autant que le nouveau (`avant`, `avant_source`) : une
+ * correction sans trace de ce qu'elle a efface ne se verifie pas.
+ */
+export async function imposerPays(db, nameKey, pays) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  const p = String(pays || '').trim().toUpperCase();
+  if (!k) return { erreur: 'nom invalide' };
+  if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
+  await ensureChampTables(db);
+  const inscrit = await db.prepare(
+    `SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(k).first();
+  if (!inscrit) return { erreur: 'joueur inconnu', code: 404 };
+  const avant = await db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  const avantPays = avant ? avant.pays : null;
+  const avantSource = avant ? avant.source : null;
+  if (avantSource === 'choix' && avantPays === p) {
+    return { ok: true, avant: avantPays, avant_source: avantSource, pays: p, inchange: true };
+  }
+  await db.prepare(
+    `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
+     VALUES (?, ?, ?, 'choix', ?)
+     ON CONFLICT(name_key) DO UPDATE SET
+       pays = excluded.pays, continent = excluded.continent,
+       source = 'choix', vu_le = excluded.vu_le`
+  ).bind(k, p, continentDe(p), Date.now()).run();
+  return {
+    ok: true, avant: avantPays, avant_source: avantSource,
+    pays: p, continent: continentDe(p), cree: avantSource !== 'choix',
+  };
+}
+
+/**
+ * Le joueur demande a changer de nationalite. Rien ne change encore : la
+ * demande attend l'administration, qui l'accepte (`imposerPays`) ou la refuse.
+ *
+ * UN SEUL changement par joueur : une demande acceptee ferme la porte. Une
+ * demande refusee, elle, n'a rien change — le joueur peut en refaire une.
+ * L'administration garde sa correction directe, qui ne passe pas par ici.
+ */
+export async function demanderPays(db, nameKey, nom, pays, message) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  const p = String(pays || '').trim().toUpperCase();
+  if (!k) return { erreur: 'nom invalide' };
+  if (!/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
+  await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT statut FROM demandes_pays WHERE name_key = ?`).bind(k).first();
+  if (deja && deja.statut === 'acceptee') {
+    return { erreur: 'changement deja utilise', code: 409 };
+  }
+  const avant = await db.prepare(
+    `SELECT pays FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (avant && avant.pays === p) return { erreur: 'c est deja ta nationalite' };
+  const mot = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 280) || null;
+  await db.prepare(
+    `INSERT INTO demandes_pays (name_key, nom, pays_avant, pays_demande, message, statut, cree_le, traite_le)
+     VALUES (?, ?, ?, ?, ?, 'attente', ?, NULL)
+     ON CONFLICT(name_key) DO UPDATE SET
+       nom = excluded.nom, pays_avant = excluded.pays_avant,
+       pays_demande = excluded.pays_demande, message = excluded.message,
+       statut = 'attente', cree_le = excluded.cree_le, traite_le = NULL`
+  ).bind(k, String(nom || k), avant ? avant.pays : null, p, mot, Date.now()).run();
+  return { ok: true, pays: p, statut: 'attente' };
+}
+
+/** La demande d'un joueur, pour que le jeu lui dise ou elle en est. */
+export async function demandeDe(db, nameKey) {
+  await ensureChampTables(db);
+  const d = await db.prepare(
+    `SELECT pays_demande AS pays, statut, cree_le, traite_le FROM demandes_pays WHERE name_key = ?`
+  ).bind(String(nameKey || '').trim().toLowerCase()).first();
+  return d || null;
+}
+
+/** Les demandes en attente, les plus anciennes d'abord. */
+export async function demandesEnAttente(db) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT d.name_key, d.nom, d.pays_avant, d.pays_demande, d.message, d.cree_le,
+            g.pays AS pays_actuel, g.source AS source_actuelle
+       FROM demandes_pays d LEFT JOIN player_pays g ON g.name_key = d.name_key
+      WHERE d.statut = 'attente'
+      ORDER BY d.cree_le`
+  ).all();
+  return results || [];
+}
+
+/** L'administration tranche. Accepter pose le pays demande, comme une correction. */
+export async function traiterDemande(db, nameKey, accepter) {
+  const k = String(nameKey || '').trim().toLowerCase();
+  await ensureChampTables(db);
+  const d = await db.prepare(
+    `SELECT pays_demande FROM demandes_pays WHERE name_key = ? AND statut = 'attente'`
+  ).bind(k).first();
+  if (!d) return { erreur: 'aucune demande en attente', code: 404 };
+  let r = { ok: true };
+  if (accepter) {
+    r = await imposerPays(db, k, d.pays_demande);
+    if (r.erreur) return r;
+  }
+  await db.prepare(
+    `UPDATE demandes_pays SET statut = ?, traite_le = ? WHERE name_key = ?`
+  ).bind(accepter ? 'acceptee' : 'refusee', Date.now(), k).run();
+  return { ...r, statut: accepter ? 'acceptee' : 'refusee', pays_demande: d.pays_demande };
 }
 
 /**
@@ -599,12 +848,19 @@ function code(n = 8) {
  */
 async function classement(db, {
   pays = null, continent = null, exclure, limite, maintenant = Date.now(),
-  epreuve = EPREUVE_DEFAUT,
+  epreuve = EPREUVE_DEFAUT, engagesDe = null,
 }) {
   await ensureDuelTables(db);
   const depuis = maintenant - ECHELONS.national.fenetreActiviteJours * JOUR;
-  const ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
+  let ou = pays ? 'g.pays = ?' : continent ? 'g.continent = ?' : '1 = 1';
   const args = pays ? [pays] : continent ? [continent] : [];
+  // `engagesDe` : l'edition dont on ne garde que les engages (et les fictifs,
+  // engages d'office). Les autres sont sautes, et le suivant monte d'un cran.
+  if (engagesDe) {
+    ou += ` AND (g.source = 'fictif' OR EXISTS (SELECT 1 FROM champ_engagements ce
+                 WHERE ce.edition = ? AND ce.name_key = d.name_key))`;
+    args.push(engagesDe);
+  }
   const { results } = await db.prepare(
     `SELECT d.name_key AS cle, d.name AS nom, d.mmr AS force,
             d.palier AS palier, d.lp AS lp
@@ -675,7 +931,8 @@ async function championsEnTitre(db, echelon, filtreZone, epreuve = EPREUVE_DEFAU
  * quand meme : c'est le seul moyen de repondre a qui reclame sa place. Sans
  * eux, la selection est une affirmation qu'on ne peut pas relire.
  */
-async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT) {
+async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT,
+                    engagesDe = null) {
   // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
   // suivants qu'on garde pour l'archive de la cloture.
   const large = FORMAT.partants + SUIVANTS_GARDES;
@@ -694,7 +951,11 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // le monde, ce qui est le seul moyen d'empecher un titre de devenir une
   // rente que l'on touche sans rejouer.
   const tenant = await tenantDuTitre(db, echelon, zone, maintenant);
-  const boss = tenant && !tenant.prive ? tenant : null;
+  // Engages seulement : le tenant aussi confirme sa venue. Un champion qui ne
+  // s'engage pas ne court pas, et sa place d'office ne bloque personne.
+  const engages = engagesDe ? await clesEngagees(db, engagesDe) : null;
+  const vient = (cle) => !engages || engages.has(cle);
+  const boss = tenant && !tenant.prive && vient(tenant.cle) ? tenant : null;
   // Sa place lui est gardee sur la grille de depart, sauf si le levier est
   // baisse. Sans elle, la finale d'office se ferait annuler par le calendrier :
   // un champion absent de la grille n'a pas de finale a rejoindre.
@@ -714,7 +975,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
     // la barre garderait NEUF suivants au lieu de huit — une place de plus lue
     // que declaree, dans la table meme qui existe pour repondre a qui reclame.
     const l = await classement(db, {
-      pays: zone, exclure, limite: large - exclure.size, maintenant, epreuve: ep,
+      pays: zone, exclure, limite: large - exclure.size, maintenant, epreuve: ep, engagesDe,
     });
     const place = Math.max(0, FORMAT.partants - (bossDOffice ? 1 : 0));
     const joueurs = [...(bossDOffice ? [bossDOffice] : []), ...l.slice(0, place)];
@@ -738,9 +999,9 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // DESSOUS, et sans elle aucun continental ne peut s'ouvrir (`MIN_DOFFICE`).
   // Elle donne une place sur la grille, jamais la finale ni la cinematique.
   const estContinental = echelon === 'continental';
-  const champions = estContinental
+  const champions = (estContinental
     ? await championsEnTitre(db, 'national', z => continentDe(z) === zone, ep)
-    : await championsEnTitre(db, 'continental', null, ep);
+    : await championsEnTitre(db, 'continental', null, ep)).filter(c => vient(c.cle));
 
   const minimum = MIN_DOFFICE[echelon] || 0;
   if (champions.length < minimum) {
@@ -765,7 +1026,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
 
   const complement = await classement(db, {
     continent: estContinental ? zone : null,
-    exclure: vus, limite: large - dOffice.length, maintenant, epreuve: ep,
+    exclure: vus, limite: large - dOffice.length, maintenant, epreuve: ep, engagesDe,
   });
 
   // La barre tombe apres les trente-deux, champions d'office compris : c'est
@@ -804,7 +1065,9 @@ export const clotureDe = (debutSamedi) => debutSamedi - CLOTURE_JOURS_AVANT * JO
  * heure. Ce n'est plus une consigne mais une condition : voir le refus dans le
  * corps, et pourquoi il vaut mieux qu'un commentaire.
  */
-export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, cloture }) {
+export async function annoncerEchelon(db, {
+  echelon, zone, debutSamedi, epreuve, cloture, engagement = ENGAGEMENT_REQUIS,
+}) {
   await ensureChampTables(db);
   if (!ECHELONS[echelon]) return { erreur: 'echelon inconnu' };
   const z = String(zone || 'MONDE').toUpperCase();
@@ -896,17 +1159,20 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
   const phase0 = FORMAT.phases[0];
   await db.prepare(
     `INSERT INTO champ_editions
-       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?)`
-  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now()).run();
+       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le, engagement)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?, ?)`
+  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now(), engagement ? 1 : 0).run();
 
   const nom = nomZone(z, echelon);
   await annoncer(db, {
     edition: id, echelon, zone: z, type: 'annonce',
     titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
     texte: ep + ' m. Premier départ samedi. Sélection des '
-         + FORMAT.partants + ' meilleurs du classement, à la clôture.',
-    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants },
+         + FORMAT.partants + (engagement
+           ? ' meilleurs engagés du classement, à la clôture. Confirme ta participation avant.'
+           : ' meilleurs du classement, à la clôture.'),
+    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants,
+               engagement: !!engagement },
   });
 
   return {
@@ -934,7 +1200,7 @@ export async function annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve,
 export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
        FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat !== 'annoncee') return { erreur: 'edition deja cloturee', etat: e.etat };
@@ -945,7 +1211,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   const intitule = e.echelon === 'mondial'
     ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
 
-  const p = await pool(db, e.echelon, e.zone, maintenant, ep);
+  const p = await pool(db, e.echelon, e.zone, maintenant, ep, e.engagement ? e.id : null);
   const manque = !p.erreur && p.joueurs.length < FORMAT.partants;
 
   // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
@@ -1116,7 +1382,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
       ? { cle: p.tenantEcarte.cle, nom: p.tenantEcarte.nom, raison: 'inactif depuis le sacre' }
       : null,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
 }
 
@@ -1130,7 +1396,9 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
  * ce que ce decoupage sert a rendre impossible.
  */
 export async function ouvrirEchelon(db, { echelon, zone, debutSamedi, epreuve }) {
-  const a = await annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve });
+  // Sans engagement : annonce et cloture tombent dans la meme milliseconde,
+  // personne n'aurait eu le temps de s'engager.
+  const a = await annoncerEchelon(db, { echelon, zone, debutSamedi, epreuve, engagement: false });
   if (a.erreur) return a;
 
   const r = await cloturerSelection(db, a.edition);
@@ -1263,12 +1531,22 @@ export async function cloturerEcheances(db, maintenant = Date.now()) {
  * permet de parler du championnat a qui n'y est pas — c'est-a-dire a ceux
  * qu'il faut convaincre de jouer.
  */
+/** Le calendrier d'une edition, courses hors calendrier comprises (COURSES_EXTRA). */
+export function calendrierDe(id, debut) {
+  const ex = COURSES_EXTRA[id];
+  if (!ex) return calendrier(debut, CALENDRIER);
+  return calendrier(debut, {
+    jour1: [...CALENDRIER.jour1, ...ex.filter(x => x.jour !== 2)],
+    jour2: [...CALENDRIER.jour2, ...ex.filter(x => x.jour === 2)],
+  });
+}
+
 export async function prochaineEdition(db, zone, echelon = 'national') {
   await ensureChampTables(db);
   const z = String(zone || '').toUpperCase();
   if (!z) return null;
   const e = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, cloture, etat
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
        FROM champ_editions
       WHERE echelon = ? AND zone = ? AND etat IN ('annoncee', 'ouverte')
       ORDER BY debut LIMIT 1`
@@ -1282,9 +1560,49 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
          : ECHELONS[e.echelon].nom + ' ' + nom.avec,
     epreuve: e.epreuve || EPREUVE_DEFAUT,
     debut: e.debut, cloture: e.cloture, etat: e.etat,
+    engagement: !!e.engagement,
     partants: FORMAT.partants,
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
+}
+
+/** Les cles engagees pour une edition. */
+async function clesEngagees(db, edition) {
+  const { results } = await db.prepare(
+    `SELECT name_key FROM champ_engagements WHERE edition = ?`).bind(edition).all();
+  return new Set((results || []).map(r => r.name_key));
+}
+
+/**
+ * S'ENGAGER — ou se retirer — pour l'edition nationale a venir de son pays.
+ *
+ * Seulement pendant la selection : apres la cloture, la grille est gelee et
+ * un engagement ne changerait plus rien. Rend la selection relue, pour que
+ * l'ecran se mette a jour sans second appel.
+ */
+export async function engager(db, nameKey, oui = true, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const k = String(nameKey || '').trim().toLowerCase();
+  if (!k) return { erreur: 'nom invalide', code: 400 };
+  const g = await db.prepare(
+    `SELECT pays FROM player_pays WHERE name_key = ?`).bind(k).first();
+  if (!g || !g.pays) return { erreur: 'pays inconnu', code: 400 };
+  const ed = await prochaineEdition(db, g.pays, 'national');
+  if (!ed) return { erreur: 'aucune edition annoncee', code: 404 };
+  if (!ed.engagement) return { erreur: 'cette edition ne demande pas d engagement', code: 409 };
+  if (ed.etat !== 'annoncee' || (ed.cloture != null && maintenant >= ed.cloture)) {
+    return { erreur: 'selection close', code: 409 };
+  }
+  if (oui) {
+    await db.prepare(
+      `INSERT OR IGNORE INTO champ_engagements (edition, name_key, le) VALUES (?, ?, ?)`
+    ).bind(ed.id, k, maintenant).run();
+  } else {
+    await db.prepare(
+      `DELETE FROM champ_engagements WHERE edition = ? AND name_key = ?`
+    ).bind(ed.id, k).run();
+  }
+  return rangSelection(db, k);
 }
 
 /**
@@ -1302,7 +1620,7 @@ async function courseDe(db, edition, nameKey) {
   if (!r || r.course == null) return null;
   const e = await db.prepare(
     `SELECT debut FROM champ_editions WHERE id = ?`).bind(edition).first();
-  const rv = calendrier(e ? e.debut : 0, CALENDRIER)
+  const rv = calendrierDe(edition, e ? e.debut : 0)
     .find(x => x.phase === r.phase && x.course === r.course);
   return { phase: r.phase, numero: r.course, at: rv ? rv.at : null };
 }
@@ -1345,13 +1663,19 @@ export async function rangSelection(db, nameKey) {
         echelon: ed.echelon, zoneNomEn: ed.zoneNomEn }
     : { titre: null, epreuve: null, zoneNom: null, echelon: null, zoneNomEn: null };
 
+  // L'engagement : l'edition le demande-t-elle, et ce joueur l'a-t-il donne ?
+  const engagement = !!(ed && ed.engagement);
+  const engage = engagement && !!(await db.prepare(
+    `SELECT 1 AS x FROM champ_engagements WHERE edition = ? AND name_key = ?`
+  ).bind(ed.id, k).first());
+
   // Apres la cloture, la verite est dans l'instantane.
   if (ed && ed.etat === 'ouverte') {
     const r = await db.prepare(
       `SELECT rang, retenu FROM champ_selection WHERE edition = ? AND name_key = ?`
     ).bind(ed.id, k).first();
     return {
-      pays: g.pays, ...ou, edition: ed.id, etat: ed.etat, places,
+      pays: g.pays, ...ou, edition: ed.id, etat: ed.etat, places, engagement, engage,
       cloture: ed.cloture, debut: ed.debut,
       // Pas de barre apres le gel : le classement du jour ne selectionne plus
       // rien, et une barre tracee dessus designerait des gens qui ne courent
@@ -1377,8 +1701,8 @@ export async function rangSelection(db, nameKey) {
   // une edition du 400 m. `epreuve` voyage donc avec le rang — l'ecran ne
   // dessine la barre que dans le classement ou elle veut dire quelque chose.
   const epSelection = (ed && ed.epreuve) || EPREUVE_DEFAUT;
-  const { results } = await db.prepare(
-    `SELECT d.name_key AS cle
+  const { results: tous } = await db.prepare(
+    `SELECT d.name_key AS cle, g.source AS source
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
       WHERE g.pays = ? AND d.epreuve = ?
         AND d.wins + d.losses + d.draws > 0 AND d.updated_at >= ?
@@ -1386,7 +1710,16 @@ export async function rangSelection(db, nameKey) {
   ).bind(g.pays, epSelection,
          Date.now() - ECHELONS.national.fenetreActiviteJours * JOUR).all();
 
-  const i = (results || []).findIndex(r => r.cle === k);
+  // Avec l'engagement, ne comptent que les engages (et les fictifs) : les
+  // autres laissent leur place. Le joueur lui-meme est compte meme s'il ne
+  // s'est pas engage — son rang dit ou il serait s'il le faisait. La barre,
+  // elle, ne le compte que s'il est engage.
+  const engages = engagement ? await clesEngagees(db, ed.id) : null;
+  const compte = (r) => !engages || r.source === 'fictif' || engages.has(r.cle);
+  const results = (tous || []).filter(r => compte(r) || r.cle === k);
+  const pourBarre = (tous || []).filter(compte);
+
+  const i = results.findIndex(r => r.cle === k);
   const rang = i < 0 ? null : i + 1;
 
   // Qui occupe la derniere place qualificative, nomme.
@@ -1400,8 +1733,8 @@ export async function rangSelection(db, nameKey) {
   //
   // On rend donc la cle du dernier qualifie plutot qu'un compte. Le jeu trace
   // apres cette ligne-la, ou ne trace rien s'il ne la voit pas.
-  const barre = (results || []).length >= places
-    ? (results[places - 1] || {}).cle || null
+  const barre = pourBarre.length >= places
+    ? (pourBarre[places - 1] || {}).cle || null
     : null;
   return {
     pays: g.pays, ...ou,
@@ -1409,7 +1742,8 @@ export async function rangSelection(db, nameKey) {
     etat: ed ? ed.etat : null,
     cloture: ed ? ed.cloture : null,
     debut: ed ? ed.debut : null,
-    places, classes: (results || []).length,
+    engagement, engage,
+    places, classes: pourBarre.length,
     barre,
     rang,
     // `null` quand le joueur n'est pas classe du tout : il n'a pas un ecart a
@@ -1432,6 +1766,221 @@ export async function rangSelection(db, nameKey) {
  * champions et a fabriquer l'attente, et ce sont exactement les nombres qu'on
  * voudra bouger apres le premier cycle.
  */
+/* ---------------------------------------------------------------------------
+   POSER ET LIRE LE MOT DU VAINQUEUR
+--------------------------------------------------------------------------- */
+
+/** Le nom, normalise — meme regle que le classement (voir relais.js). */
+const cleNom = (nom) => String(nom || '').trim().toLowerCase();
+
+/**
+ * Qui a gagne cette course-la, d'apres les chronos enregistres.
+ *
+ * On lit la PLACE quand elle est posee, et le chrono sinon : les places sont
+ * ecrites apres coup (voir la cloture de course), et un mot depose dans la
+ * seconde qui suit l'arrivee ne doit pas etre refuse parce qu'une colonne
+ * n'est pas encore remplie.
+ */
+export async function vainqueurDeLaCourse(db, edition, phase, course) {
+  const r = await db.prepare(
+    `SELECT name_key FROM champ_resultats
+      WHERE edition = ? AND phase = ? AND course = ? AND ms IS NOT NULL
+      ORDER BY CASE WHEN place IS NULL THEN 1 ELSE 0 END, place, ms
+      LIMIT 1`).bind(edition, phase, course).first();
+  return r ? r.name_key : null;
+}
+
+/**
+ * Depose le mot du vainqueur d'une course.
+ *
+ * Le serveur reverifie TOUT ce que le client a pu decider : que la course
+ * existe, que celui qui parle l'a bien gagnee, que le texte et la voix sont
+ * recevables, et qu'aucun mot n'a deja ete pose. Un client peut mentir sur
+ * chacun de ces points.
+ */
+export async function poserMotDeCourse(db, { edition, phase, course, nom, texte, voix, voix_type }) {
+  const k = cleNom(nom);
+  if (!k) return { error: 'nom manquant' };
+  if (!edition || !phase || !Number.isInteger(course)) return { error: 'course manquante' };
+
+  const gagnant = await vainqueurDeLaCourse(db, edition, phase, course);
+  if (!gagnant) return { error: 'course inconnue ou pas encore courue', code: 404 };
+  if (gagnant !== k) return { error: 'reserve au vainqueur de la course', code: 403 };
+  // Un fictif ne parle pas. Son nom n'est reserve par personne : sans cette
+  // porte, n'importe qui poserait un mot a sa place quand il gagne.
+  if ((await clesFictives(db, [gagnant])).has(gagnant)) {
+    return { error: 'un partant fictif ne laisse pas de mot', code: 403 };
+  }
+
+  // Le texte passe le filtre (le mot est diffuse en direct, voir champ_mots).
+  // Un texte vide n'est pas un refus : le mot peut n'etre qu'une voix.
+  let t = '';
+  if (texte) {
+    const f = texteRecevable(texte, MAX_TEXTE);
+    if (f.ok) t = motPropre(f.texte);
+    else if (f.raison !== 'vide') return { error: 'texte refuse', raison: f.raison, code: 400 };
+  }
+  const v = voix ? voixPropre(voix, voix_type) : null;
+  if (!t && !v) return { error: 'mot vide' };
+
+  // INSERT OR IGNORE plutot qu'un SELECT suivi d'un INSERT : deux envois
+  // partis en meme temps depuis deux onglets passeraient tous les deux le
+  // test, et le second ecraserait le premier. La cle primaire tranche.
+  const r = await db.prepare(
+    `INSERT OR IGNORE INTO champ_mots
+       (edition, phase, course, name_key, nom, texte, voix, voix_type, au)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(edition, phase, course, k, String(nom).trim(),
+         t || null, v ? v.b64 : null, v ? v.type : null, Date.now()).run();
+
+  if (!r.meta || r.meta.changes === 0) {
+    return { error: 'un mot a deja ete pose sur cette course', code: 409 };
+  }
+  return { ok: true, texte: t || null, voix: !!v };
+}
+
+/** La voix d'un mot, a la demande. Le texte, lui, voyage avec l'edition. */
+export async function voixDuMot(db, edition, phase, course) {
+  const r = await db.prepare(
+    `SELECT voix, voix_type FROM champ_mots
+      WHERE edition = ? AND phase = ? AND course = ?`).bind(edition, phase, course).first();
+  if (!r || !r.voix) return null;
+  return { voix: r.voix, voix_type: r.voix_type };
+}
+
+/* ---------------------------------------------------------------------------
+   LA BULLE DE PRESENTATION
+--------------------------------------------------------------------------- */
+
+/**
+ * On ne pose plus sa bulle quand l'appel de sa course est passe : la salle lit
+ * les bulles a l'appel, trente secondes (et une demie) avant le pistolet, et
+ * une bulle posee apres ne serait vue de personne en direct — elle apparaitrait
+ * seulement au rejeu, ce qui ne serait pas la course qu'on a vue.
+ */
+const BULLE_AVANT_PISTOLET_MS = 29500;
+
+/**
+ * Pose (ou remplace) la bulle d'un partant.
+ *
+ * Tout ce que le client a pu decider est reverifie : l'edition, la phase, que
+ * ce nom est bien partant de cette phase, que sa course n'est pas deja
+ * appelee, et le texte. L'appartenance du nom a l'appareil, elle, est verifiee
+ * par la route (`peutUtiliser`), comme partout.
+ */
+export async function poserBulle(db, { edition, phase, nom, texte }, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const k = cleNom(nom);
+  if (!k || k === 'anonyme') return { error: 'nom manquant', code: 400 };
+  const id = String(edition || '').toUpperCase();
+  if (!id) return { error: 'edition manquante', code: 400 };
+  if (!PHASES_A_BULLE.includes(phase)) {
+    return { error: 'pas de bulle dans cette phase', code: 400 };
+  }
+  const e = await db.prepare(
+    `SELECT id, phase, etat, debut FROM champ_editions WHERE id = ?`).bind(id).first();
+  if (!e) return { error: 'edition introuvable', code: 404 };
+  if (e.etat !== 'ouverte') return { error: 'edition fermee', code: 409 };
+  if (e.phase !== phase) return { error: 'ce n est pas la phase en cours', code: 409 };
+
+  const p = await db.prepare(
+    `SELECT course FROM champ_partants
+      WHERE edition = ? AND name_key = ? AND phase = ?
+        AND course IS NOT NULL AND sorti_en IS NULL`).bind(id, k, phase).first();
+  if (!p) return { error: 'pas partant de cette phase', code: 403 };
+  // Meme porte que le mot : le nom d'un fictif n'est reserve par personne.
+  if ((await clesFictives(db, [k])).has(k)) {
+    return { error: 'un partant fictif n a pas de bulle', code: 403 };
+  }
+
+  const rv = calendrierDe(id, e.debut).find(x => x.phase === phase && x.course === p.course);
+  if (!rv) return { error: 'course hors calendrier', code: 409 };
+  if (maintenant >= rv.at - BULLE_AVANT_PISTOLET_MS) {
+    return { error: 'trop tard', code: 409 };
+  }
+
+  const f = texteRecevable(texte, BULLE_MAX);
+  if (!f.ok) return { error: 'texte refuse', raison: f.raison, code: 400 };
+
+  await db.prepare(
+    `INSERT INTO champ_bulles (edition, phase, name_key, texte, au, retire)
+     VALUES (?, ?, ?, ?, ?, 0)
+     ON CONFLICT(edition, phase, name_key) DO UPDATE SET
+       texte = excluded.texte, au = excluded.au, retire = 0`
+  ).bind(id, phase, k, f.texte, maintenant).run();
+  return { ok: true, texte: f.texte };
+}
+
+/**
+ * Les bulles d'une phase, par cle de partant — les retirees exclues.
+ *
+ * C'est ce que la salle relit a l'appel. Elle attrape elle-meme les erreurs :
+ * une base qui ne repond pas ne doit jamais empecher une course de partir.
+ */
+export async function bullesDe(db, edition, phase) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT name_key, texte FROM champ_bulles
+      WHERE edition = ? AND phase = ? AND retire = 0`).bind(edition, phase).all();
+  return new Map((results || []).map(r => [r.name_key, r.texte]));
+}
+
+/* ---------------------------------------------------------------------------
+   LA MODERATION — ce que le filtre a laisse passer
+   ---------------------------------------------------------------------------
+   Le filtre ne comprend pas ce qu'il lit (voir mot.js). L'organisation retire
+   donc a la main : une bulle (marquee retiree, elle ne sort plus nulle part),
+   ou un mot de vainqueur (efface, voix comprise). Le tchat n'est pas ici : il
+   ne vit que dans la salle et disparait avec elle.
+--------------------------------------------------------------------------- */
+
+export async function moderer(db, corps) {
+  await ensureChampTables(db);
+  const { quoi } = corps || {};
+  const edition = String((corps || {}).edition || '').toUpperCase();
+  const phase = String((corps || {}).phase || '');
+  if (!edition || !phase) return { error: 'edition ou phase manquante', code: 400 };
+
+  if (quoi === 'bulle') {
+    const k = cleNom((corps || {}).name);
+    if (!k) return { error: 'nom manquant', code: 400 };
+    const r = await db.prepare(
+      `UPDATE champ_bulles SET retire = 1
+        WHERE edition = ? AND phase = ? AND name_key = ?`).bind(edition, phase, k).run();
+    const n = (r.meta && r.meta.changes) || 0;
+    return n ? { ok: true, quoi, retire: n } : { error: 'bulle introuvable', code: 404 };
+  }
+
+  if (quoi === 'mot') {
+    const course = Number((corps || {}).course);
+    if (!Number.isInteger(course)) return { error: 'course manquante', code: 400 };
+    const r = await db.prepare(
+      `DELETE FROM champ_mots WHERE edition = ? AND phase = ? AND course = ?`
+    ).bind(edition, phase, course).run();
+    const n = (r.meta && r.meta.changes) || 0;
+    return n ? { ok: true, quoi, retire: n } : { error: 'mot introuvable', code: 404 };
+  }
+
+  return { error: 'quoi : bulle ou mot', code: 400 };
+}
+
+/** Tout ce qu'une edition montre d'ecrit par des joueurs, retire compris. */
+export async function moderation(db, edition) {
+  await ensureChampTables(db);
+  const { results: bulles } = await db.prepare(
+    `SELECT phase, name_key, texte, au, retire FROM champ_bulles
+      WHERE edition = ? ORDER BY phase, au`).bind(edition).all();
+  const { results: mots } = await db.prepare(
+    `SELECT phase, course, nom, texte, au,
+            CASE WHEN voix IS NULL THEN 0 ELSE 1 END AS a_voix
+       FROM champ_mots WHERE edition = ? ORDER BY phase, course`).bind(edition).all();
+  return {
+    edition,
+    bulles: (bulles || []).map(b => ({ ...b, retire: !!b.retire })),
+    mots: (mots || []).map(m => ({ ...m, a_voix: !!m.a_voix })),
+  };
+}
+
 export function calendrierCycle(debutSamedi) {
   const SEMAINE = 7 * JOUR;
   const nat = debutSamedi;
@@ -1482,16 +2031,39 @@ export async function etatEdition(db, id) {
     `SELECT name_key, nom, rang_duel, phase, course, sorti_en, tenant
        FROM champ_partants WHERE edition = ? ORDER BY course, rang_duel`).bind(id).all();
   const { results: res } = await db.prepare(
-    `SELECT phase, course, name_key, ms, place FROM champ_resultats
+    `SELECT phase, course, name_key, ms, place, motif, motif_ms FROM champ_resultats
       WHERE edition = ? ORDER BY phase, course, place`).bind(id).all();
+  // LES MOTS DES VAINQUEURS. La voix ne part pas d'ici : elle pese jusqu'a
+  // deux cents kilooctets encodee, et l'edition entiere se recharge a chaque
+  // ouverture de l'ecran. On annonce qu'elle existe ; qui veut l'entendre la
+  // demande a `/champ/mot?...`, une fois, pour la course qui l'interesse.
+  const { results: mots } = await db.prepare(
+    `SELECT phase, course, name_key, nom, texte, au,
+            CASE WHEN voix IS NULL THEN 0 ELSE 1 END AS a_voix
+       FROM champ_mots WHERE edition = ?`).bind(id).all();
+  // LES BULLES DE PRESENTATION, pour le rejeu : il presente les athletes comme
+  // le direct, bulle comprise. Les retirees n'en sortent pas.
+  const { results: bulles } = await db.prepare(
+    `SELECT phase, name_key, texte FROM champ_bulles
+      WHERE edition = ? AND retire = 0`).bind(id).all();
   // Le nom lisible et la forme de la phase viennent d'ici, pas du jeu : le
   // format est une regle de competition, et la dupliquer cote client garantit
   // qu'un jour les deux ne diront plus la meme chose.
   const z = nomZone(e.zone, e.echelon);
   const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
   const cfg = FORMAT.phases[iPhase] || null;
+  // Le rang de l'edition parmi celles de son echelon et de sa zone, a la date
+  // de creation — l'identifiant departage deux creations a la meme milliseconde.
+  const avant = await db.prepare(
+    `SELECT COUNT(*) AS n FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND (cree_le < ? OR (cree_le = ? AND id < ?))`)
+    .bind(e.echelon, e.zone, e.cree_le, e.cree_le, e.id).first();
+  const rang = ((avant && avant.n) || 0) + 1;
   return {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
+    // Le lieu ou l'edition se rejoue, s'il est impose (voir LIEUX), sinon
+    // `null` : le client garde alors le sien.
+    lieu: lieuDeLEdition(e.echelon, e.zone, rang),
     // `null` pour les editions ouvertes avant que la cloture existe, et pour
     // celles qu'on ouvre d'un geste sur le canal de test. C'est exact : elles
     // n'ont pas eu d'heure de cloture annoncee, et l'ecran ne doit pas
@@ -1516,6 +2088,8 @@ export async function etatEdition(db, id) {
     champion: e.champion_nom || null,
     partants: (partants || []).map(p => ({ ...p, tenant: !!p.tenant })),
     resultats: res || [],
+    mots: (mots || []).map(m => ({ ...m, a_voix: !!m.a_voix })),
+    bulles: bulles || [],
 
     // LE TENANT DU TITRE, tel que la cloture l'a gele — et le declencheur de la
     // cinematique avec lui.
@@ -1546,9 +2120,196 @@ export async function etatEdition(db, id) {
       };
     })(),
 
-    calendrier: calendrier(e.debut, CALENDRIER),
+    calendrier: calendrierDe(e.id, e.debut),
   };
 }
+
+/**
+ * Ce qu'une salle de championnat en direct doit savoir de SA course.
+ *
+ * La grille est la liste des partants de cette course, dans l'ordre des
+ * couloirs. Le couloir se derive du rang de semis — le client le fait deja
+ * dans `grille()` (src/game/championnats.ts) pour le tableau et le rejeu, sur
+ * la liste que `etatEdition` rend triee par course puis rang de duel. La salle
+ * fait la meme chose sur la meme liste : les couloirs de la course en direct
+ * sont ceux que le tableau affichera ensuite, et ceux du rejeu.
+ *
+ * `at` est l'heure du coup de pistolet au calendrier. `deja` dit que la course
+ * a des resultats : une salle ne la recourt pas.
+ */
+export async function contexteCourse(db, edition, phase, course) {
+  const e = await etatEdition(db, edition);
+  if (!e) return { erreur: 'edition introuvable' };
+  if (e.etat === 'terminee') return { erreur: 'edition terminee' };
+  if (e.phase !== phase) return { erreur: 'ce n est pas la phase en cours', phase: e.phase };
+  const grille = e.partants
+    .filter(p => p.phase === phase && p.course === course)
+    .sort((x, y) => (x.rang_duel || 99) - (y.rang_duel || 99))
+    .map((p, i) => ({ cle: p.name_key, nom: p.nom, couloir: i + 1, fictif: false }));
+  if (!grille.length) return { erreur: 'course inconnue' };
+  // LES PARTANTS FICTIFS — ceux que `tools/champ-combler.mjs` a poses pour
+  // completer une grille (player_pays.source = 'fictif'). Ils courent un
+  // chrono fixe d'avance, ou volent le depart : voir chronoFictif et
+  // fauxDepartFictif.
+  const fictifs = await clesFictives(db, grille.map(g => g.cle));
+  for (const g of grille) {
+    g.fictif = fictifs.has(g.cle);
+    if (g.fictif) { g.ms = chronoFictif(e.id, phase, g.cle, e.epreuve); g.faux_ms = null; }
+  }
+  const fautif = fauxDepartFictif(e.id, phase, course, grille.filter(g => g.fictif).map(g => g.cle));
+  if (fautif) grille.find(g => g.cle === fautif.cle).faux_ms = fautif.ms;
+  // La bulle de chacun, telle qu'elle est au chargement de la salle. La salle
+  // la relit a l'appel (voir `bullesDe`) : une bulle posee entre les deux doit
+  // compter. Un fictif n'en a pas.
+  const bulles = new Map((e.bulles || []).filter(b => b.phase === phase)
+    .map(b => [b.name_key, b.texte]));
+  for (const g of grille) g.bulle = g.fictif ? null : (bulles.get(g.cle) ?? null);
+  const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
+  const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
+  return {
+    edition: e.id, phase, course, epreuve: e.epreuve, lieu: e.lieu || null,
+    titre: e.titre, phaseNom: e.phaseNom, courses: e.courses,
+    at: rv ? rv.at : null, grille, deja,
+  };
+}
+
+/** Les cles marquees `fictif` dans player_pays, parmi celles demandees. */
+export async function clesFictives(db, cles) {
+  const out = new Set();
+  if (!cles.length) return out;
+  const { results } = await db.prepare(
+    `SELECT name_key FROM player_pays WHERE source = 'fictif' AND name_key IN (${cles.map(() => '?').join(',')})`
+  ).bind(...cles).all();
+  for (const r of results || []) out.add(r.name_key);
+  return out;
+}
+
+/**
+ * LE CHRONO D'UN PARTANT FICTIF.
+ *
+ * Deterministe — la meme edition, la meme phase, le meme partant donnent le
+ * meme temps, que la course se coure en direct devant huit telephones ou soit
+ * rangee par la tache planifiee — entre 9,05 et 9,15 s au 100 m (decide le
+ * 24/09/2026 : les cartes du championnat leur donnent un record entre 8,80 et
+ * 9,00, et un 10,90 en course aurait dementi l'affiche). C'est un chrono de
+ * repechage possible : un vrai joueur qui court en dessous de 9,05 passe
+ * devant, un vrai joueur plus lent ou absent peut rester derriere.
+ */
+const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7 };
+function hacheFictif(texte) {
+  let h = 2166136261;
+  for (const ch of texte) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+export function chronoFictif(edition, phase, cle, epreuve) {
+  const u = (hacheFictif(`${edition}|${phase}|${cle}`) % 10000) / 10000;
+  return Math.round((9050 + u * 100) * (FACTEUR_EPREUVE[String(epreuve)] || 1));
+}
+
+/**
+ * LE FAUX DEPART D'UN PARTANT FICTIF : un par course, en series et en demies
+ * (choix du 24/09/2026), jamais en finale. Le fautif est tire parmi les
+ * fictifs de la course ; il part entre 30 et 150 ms avant le coup, au premier
+ * depart. Null si la course n'a pas de fictif, ou si c'est la finale.
+ *
+ * Deterministe comme le chrono : la salle le joue en direct (carton rouge,
+ * rappel, les autres repartent), la tache planifiee le range tel quel quand
+ * personne n'est venu, et le rejeu le montre — les trois disent la meme chose.
+ */
+// Vide depuis le 26/09 (decision de l'organisateur) : un fictif ne vole plus
+// jamais le depart. Il en coutait un rappel aux vrais coureurs, et un
+// qualifiable de moins pour remplir les demies.
+const PHASES_A_FAUX_DEPART_FICTIF = new Set();
+export function fauxDepartFictif(edition, phase, course, clesFictives) {
+  if (!PHASES_A_FAUX_DEPART_FICTIF.has(phase) || !clesFictives.length) return null;
+  const h = hacheFictif(`${edition}|${phase}|${course}|faux`);
+  const cles = [...clesFictives].sort();
+  return { cle: cles[h % cles.length], ms: -(30 + (Math.floor(h / cles.length) % 121)) };
+}
+
+/**
+ * LES COURSES QUE PERSONNE N'EST VENU COURIR.
+ *
+ * Une salle de championnat ne s'eveille qu'a la premiere connexion : si aucun
+ * vrai partant — et aucun spectateur — n'entre dans le stade, la course n'a
+ * lieu nulle part, et la phase ne peut plus se clore. La tache planifiee la
+ * range donc elle-meme, un quart d'heure apres l'heure : les fictifs avec leur
+ * chrono, les vrais partants absents en forfait. Exactement ce qu'aurait
+ * range une salle ou personne n'etait a l'appel.
+ *
+ * Quinze minutes, parce qu'une salle eveillee en retard peut repousser son
+ * pistolet (voir RETARD_TOLERE_MS dans salle-championnat.js) et courir encore
+ * quelques minutes ; vingt-quatre heures au plus, pour ne pas remplir apres
+ * coup les vieilles editions d'essai de la base de test.
+ */
+export async function courirSansPersonne(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results: eds } = await db.prepare(
+    `SELECT id FROM champ_editions WHERE etat = 'ouverte'`).all();
+  const rangees = [];
+  for (const { id } of eds || []) {
+    const e = await etatEdition(db, id);
+    if (!e) continue;
+    for (const rv of e.calendrier || []) {
+      if (rv.phase !== e.phase || !rv.course) continue;
+      if (!(rv.at + 15 * 60 * 1000 < maintenant && maintenant < rv.at + 24 * 3600 * 1000)) continue;
+      if ((e.resultats || []).some(r => r.phase === e.phase && r.course === rv.course)) continue;
+      const c = await contexteCourse(db, id, e.phase, rv.course);
+      if (c.erreur || c.deja) continue;
+      const chronos = c.grille.map(g => !g.fictif
+        ? { cle: g.cle, ms: null, motif: 'forfait' }
+        : g.faux_ms != null
+          ? { cle: g.cle, ms: null, motif: 'faux_depart', motif_ms: g.faux_ms }
+          : { cle: g.cle, ms: g.ms });
+      const r = await enregistrerCourse(db, { edition: id, phase: e.phase, course: rv.course, chronos });
+      rangees.push({ edition: id, phase: e.phase, course: rv.course, ok: !r.erreur, erreur: r.erreur || null });
+    }
+  }
+  return rangees;
+}
+
+/**
+ * LES PHASES SE CLOSENT A L'HEURE QUE LE CALENDRIER AFFICHE.
+ *
+ * Le calendrier annonce trois moments qui ne sont pas des courses : la
+ * revelation des repeches du samedi soir, celle du dimanche apres-midi, et le
+ * sacre. Chacun est une cloture de phase — `cloturerPhase` produit les deux
+ * revelations et le sacre, rien d'autre ne les produit. Tant que cette
+ * cloture n'etait appelee que par `/champ/cloturer`, a la main et avec la cle,
+ * le jeu affichait « cérémonie 21:20 » et l'heure passait sans que rien
+ * n'arrive : l'edition restait en series pour toujours.
+ *
+ * La tache planifiee tient donc le rendez-vous elle-meme. Le moment est celui
+ * de la phase EN COURS qui porte `reveal` ou `ceremonie` ; une fois la phase
+ * close, l'edition passe a la suivante et ce moment ne la concerne plus, ce qui
+ * rend l'appel sans danger a chaque passage.
+ *
+ * Une phase dont une course manque n'est pas forcee : `cloturerPhase` refuse,
+ * et le passage suivant reessaie. C'est le cas d'une salle qui a repousse son
+ * pistolet et court encore a l'heure du sacre. Vingt-quatre heures au plus,
+ * comme `courirSansPersonne`, pour ne pas clore apres coup les vieilles
+ * editions d'essai de la base de test.
+ */
+export async function cloturerAuxHeures(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results: eds } = await db.prepare(
+    `SELECT id FROM champ_editions WHERE etat = 'ouverte'`).all();
+  const closes = [];
+  for (const { id } of eds || []) {
+    const e = await etatEdition(db, id);
+    if (!e) continue;
+    const rv = (e.calendrier || []).find(r => r.phase === e.phase && (r.reveal || r.ceremonie));
+    if (!rv || !(rv.at <= maintenant && maintenant < rv.at + 24 * 3600 * 1000)) continue;
+    closes.push({ edition: id, phase: e.phase, moment: rv.cle, ...(await cloturerPhase(db, id)) });
+  }
+  return closes;
+}
+
+/**
+ * Les raisons pour lesquelles un partant n'a pas de chrono. Voir la colonne
+ * `motif` de `champ_resultats`.
+ */
+export const MOTIFS = new Set(['faux_depart', 'abandon', 'forfait']);
 
 /**
  * Enregistre les chronos d'une course.
@@ -1578,12 +2339,18 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
     if (!attendus.has(k)) continue;                 // un intrus ne court pas
     const ms = c.ms == null ? null : Math.round(Number(c.ms));
     if (ms != null && (!Number.isFinite(ms) || ms < 1000 || ms > 600000)) continue;
+    // Un motif n'accompagne qu'un chrono absent : un coureur arrive n'a pas
+    // d'excuse a porter. Hors de la liste, il est tu plutot que range tel quel.
+    const motif = ms == null && MOTIFS.has(c.motif) ? c.motif : null;
+    const mm = motif && c.motif_ms != null && Number.isFinite(Number(c.motif_ms))
+      ? Math.round(Number(c.motif_ms)) : null;
     lignes.push(db.prepare(
-      `INSERT INTO champ_resultats (edition, phase, course, name_key, ms, couru_le)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO champ_resultats (edition, phase, course, name_key, ms, motif, motif_ms, couru_le)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(edition, phase, course, name_key) DO UPDATE SET
-         ms = excluded.ms, couru_le = excluded.couru_le`
-    ).bind(edition, phase, course, k, ms, Date.now()));
+         ms = excluded.ms, motif = excluded.motif, motif_ms = excluded.motif_ms,
+         couru_le = excluded.couru_le`
+    ).bind(edition, phase, course, k, ms, motif, mm, Date.now()));
   }
   if (!lignes.length) return { erreur: 'aucun chrono exploitable' };
   await db.batch(lignes);
@@ -1594,14 +2361,16 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   // cloture — c'est tout l'ecart entre ce qui se voit et ce qui se devine.
   const cfgPhase = FORMAT.phases.find(x => x.cle === phase);
   const { results: arrivee } = await db.prepare(
-    `SELECT r.name_key AS cle, r.ms, p.nom, p.rang_duel AS rang
+    `SELECT r.name_key AS cle, r.ms, r.motif, p.nom, p.rang_duel AS rang
        FROM champ_resultats r JOIN champ_partants p
          ON p.edition = r.edition AND p.name_key = r.name_key
       WHERE r.edition = ? AND r.phase = ? AND r.course = ?`
   ).bind(edition, phase, course).all();
 
   const ordre = ordonner(arrivee || []);
-  const directs = ordre.slice(0, (cfgPhase && cfgPhase.directsParCourse) || 0);
+  // Les memes que `qualifier` : un chrono, et une place dans les premiers.
+  const directs = ordre.slice(0, (cfgPhase && cfgPhase.directsParCourse) || 0)
+    .filter(r => r.ms != null);
   const ed = await db.prepare(
     `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
 
@@ -1615,7 +2384,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
         : 'Course terminée.',
       donnees: {
         phase, course,
-        arrivee: ordre.map((r, i) => ({ place: i + 1, nom: r.nom, ms: r.ms })),
+        arrivee: ordre.map((r, i) => ({ place: i + 1, nom: r.nom, ms: r.ms, motif: r.motif || null })),
         directs: directs.map(r => r.nom),
       },
     });
@@ -1660,7 +2429,13 @@ export async function cloturerPhase(db, edition) {
       WHERE r.edition = ? AND r.phase = ?`).bind(edition, e.phase).all();
 
   const courses = Array.from({ length: cfg.courses }, () => []);
-  for (const r of brut || []) courses[r.course - 1].push(r);
+  // Les courses HORS CALENDRIER (COURSES_EXTRA, le repechage du 26/09) ne
+  // passent pas par le moteur : elles se jugent a part, plus bas.
+  const extras = [];
+  for (const r of brut || []) {
+    if (r.course >= 1 && r.course <= cfg.courses) courses[r.course - 1].push(r);
+    else extras.push(r);
+  }
   const manquantes = courses
     .map((c, i) => (c.length ? null : i + 1)).filter(Boolean);
   if (manquantes.length) {
@@ -1696,6 +2471,119 @@ export async function cloturerPhase(db, edition) {
   const q = qualifier(courses, cfg, dOffice);
   const suivante = FORMAT.phases[iPhase + 1];
 
+  // PRIORITE AUX VRAIS JOUEURS, ET UNE PHASE SUIVANTE PLEINE (26/09).
+  //
+  // Le moteur laisse vide une place directe que personne n'a gagnee (forfait,
+  // carton rouge) : avec des vrais partants absents, les demies ne se
+  // remplissaient plus. Trois regles s'ajoutent, dans cet ordre (la 3e plus bas) :
+  //   1. tout vrai joueur qui a un chrono passe — a la place, s'il le faut,
+  //      du fictif qualifie le plus lent ;
+  //   2. les places encore libres vont aux fictifs elimines, du plus rapide
+  //      au plus lent, jusqu'a remplir la phase suivante.
+  // Un vrai joueur sans chrono (forfait, carton rouge) ne passe pas.
+  {
+    const fictives = await clesFictives(db, (brut || []).map(r => r.cle));
+    const places = suivante.courses * suivante.parCourse;
+    const parMs = (a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity);
+    const dehors = [...q.elimines];
+    const sortir = (r) => { const i = dehors.indexOf(r); if (i >= 0) dehors.splice(i, 1); };
+    const nb = () => q.directs.length + q.repeches.length;
+    for (const v of dehors.filter(r => !fictives.has(r.cle) && r.ms != null).sort(parMs)) {
+      if (nb() >= places) {
+        const lent = [...q.directs, ...q.repeches]
+          .filter(r => fictives.has(r.cle) && !r.doffice).sort(parMs).pop();
+        if (!lent) break;
+        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(lent); if (i >= 0) l.splice(i, 1); }
+        dehors.push(lent);
+      }
+      q.repeches.push({ ...v, complement: true, motif: 'priorite' });
+      sortir(v);
+    }
+
+    // Les invites de l'organisation pour la phase qui suit celle-ci.
+    const { results: invites } = await db.prepare(
+      `SELECT i.name_key AS cle, i.force AS force, COALESCE(p.nom, pl.name, i.name_key) AS nom,
+              p.name_key AS partant
+         FROM champ_invites i
+         LEFT JOIN champ_partants p ON p.edition = i.edition AND p.name_key = i.name_key
+         LEFT JOIN players pl ON pl.name_key = i.name_key
+        WHERE i.edition = ? AND i.phase = ? ORDER BY i.ordre`
+    ).bind(edition, suivante.cle).all().catch(() => ({ results: [] }));
+    const nouveaux = [];
+    for (const inv of invites || []) {
+      if ([...q.directs, ...q.repeches].some(r => r.cle === inv.cle)) continue;
+      if (nb() >= places) {
+        if (!inv.force) continue;
+        // Le fictif le moins bon : sans chrono d'abord, puis le plus lent.
+        const lent = [...q.directs, ...q.repeches]
+          .filter(r => fictives.has(r.cle) && !r.doffice)
+          .sort((a, b) => (a.ms == null) - (b.ms == null) || (a.ms ?? 0) - (b.ms ?? 0)).pop();
+        if (!lent) continue;
+        for (const l of [q.directs, q.repeches]) { const i = l.indexOf(lent); if (i >= 0) l.splice(i, 1); }
+        dehors.push(lent);
+      }
+      const deDehors = dehors.find(r => r.cle === inv.cle);
+      if (deDehors) sortir(deDehors);
+      if (!inv.partant) nouveaux.push(inv);
+      q.repeches.push({ ...(deDehors || {}), cle: inv.cle, nom: inv.nom, ms: deDehors ? deDehors.ms : null,
+                        course: deDehors ? deDehors.course : null, place: deDehors ? deDehors.place : null,
+                        complement: true, motif: 'organisation' });
+    }
+    // Un invite qui n'etait pas partant recoit sa ligne, dans la phase qui se
+    // clot : la mise a jour plus bas le fait passer dans la suivante.
+    if (nouveaux.length) {
+      await db.batch(nouveaux.map((inv, i) => db.prepare(
+        `INSERT OR IGNORE INTO champ_partants (edition, name_key, nom, rang_duel, phase, course, tenant)
+         VALUES (?, ?, ?, ?, ?, NULL, 0)`).bind(edition, inv.cle, inv.nom, 800 + i, e.phase)));
+    }
+    for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms != null).sort(parMs)) {
+      if (nb() >= places) break;
+      q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
+      sortir(f);
+    }
+    q.elimines = dehors;
+
+    //   4. LES COURSES DE REPECHAGE (COURSES_EXTRA). Tous ceux qui ont fini
+    //      leur serie sont deja dedans (regles 1 et 2). Les places libres vont
+    //      aux meilleurs chronos des repechages, fictifs compris ; puis un
+    //      coureur de repechage plus rapide prend la place du plus lent des
+    //      qualifies AU CHRONO de sa serie. Les qualifies directs (les deux
+    //      premiers de chaque serie) ne la perdent jamais (decisions de
+    //      l'organisateur, 26/09 18:15 et 18:30). Sans chrono, rien.
+    for (const x of extras.filter(r => r.ms != null).sort(parMs)) {
+      if ([...q.directs, ...q.repeches].some(r => r.cle === x.cle)) continue;
+      if (nb() >= places) {
+        const cible = q.repeches
+          .filter(r => r.ms != null && !r.doffice && r.motif !== 'repechage' && r.motif !== 'organisation')
+          .sort(parMs).pop();
+        if (!cible || x.ms >= cible.ms) break;
+        q.repeches.splice(q.repeches.indexOf(cible), 1);
+        dehors.push(cible);
+      }
+      q.repeches.push({ ...x, complement: true, motif: 'repechage' });
+      // Sa course de serie d'origine (forfait, faux depart) l'avait laisse dehors.
+      for (let i = dehors.length - 1; i >= 0; i--) if (dehors[i].cle === x.cle) dehors.splice(i, 1);
+    }
+
+    //   3. s'il manque encore du monde APRES les repechages, les fictifs de
+    //      l'edition restes dehors SANS chrono passent en dernier. On ne cree
+    //      jamais de fictif une fois le championnat lance : si les coureurs
+    //      manquent, la phase suivante court a moins.
+    for (const f of dehors.filter(r => fictives.has(r.cle) && r.ms == null)) {
+      if (nb() >= places) break;
+      if ([...q.directs, ...q.repeches].some(r => r.cle === f.cle)) continue;
+      q.repeches.push({ ...f, complement: true, motif: 'place_libre' });
+      sortir(f);
+    }
+
+    // Qui a couru un repechage sans y gagner sa place sort ici.
+    for (const x of extras) {
+      const dedans = [...q.directs, ...q.repeches].some(r => r.cle === x.cle);
+      if (!dedans && !dehors.some(r => r.cle === x.cle)) dehors.push(x);
+    }
+    q.elimines = dehors;
+  }
+
   // Les qualifies repartent en serpentin, semes sur leur chrono du jour : le
   // meilleur temps de la phase est tete de serie de la suivante.
   const qualifies = [...q.directs, ...q.repeches]
@@ -1730,8 +2618,10 @@ export async function cloturerPhase(db, edition) {
     edition, echelon: e.echelon, zone: e.zone,
     type: suivante.cle === 'finale' ? 'reveal-finale' : 'reveal-demies',
     titre: 'Les repêchés — ' + suivante.nom,
+    // « au chrono » n'est plus vrai de tous : la raison de chacun est dans
+    // `donnees.repeches[].motif`, et l'ecran la dit.
     texte: q.repeches.length
-      ? q.repeches.map(r => r.nom).join(', ') + ' sont repêchés au chrono.'
+      ? 'Repêchés : ' + q.repeches.map(r => r.nom).join(', ') + '.'
       : 'Aucun repêchage.',
     donnees: {
       directs: q.directs.map(r => ({ nom: r.nom, course: r.course, place: r.place, ms: r.ms })),
@@ -1739,9 +2629,13 @@ export async function cloturerPhase(db, edition) {
       // chrono. L'ecran doit pouvoir le dire : presenter un passe-droit comme
       // un repechage merite serait la seule facon de rendre cette regle
       // detestable.
+      // La raison de chaque repechage, que l'ecran dit en une ligne : au
+      // chrono, d'office (tenant), vrai joueur prioritaire, place laissee par
+      // un forfait. « organisation » est posee a la main (liste d'attente).
       repeches: q.repeches.map(r => ({
         nom: r.nom, course: r.course, place: r.place, ms: r.ms,
         doffice: !!r.doffice,
+        motif: r.doffice ? 'doffice' : (r.motif || 'chrono'),
       })),
       elimines: q.elimines.length,
       grille: grille.map((c, i) => ({ course: i + 1, joueurs: c.map(j => j.nom) })),
@@ -1887,6 +2781,118 @@ export async function titresDe(db, nameKey) {
       ORDER BY sacre_le DESC`
   ).bind(String(nameKey).toLowerCase(), Date.now()).all();
   return results || [];
+}
+
+/**
+ * LES FICHES DE LA PRESENTATION — ce que le speaker dit d'un athlete quand la
+ * camera vient sur lui : son palmares, son niveau au classement des duels, et
+ * son bilan de victoires, de nuls et de defaites.
+ *
+ * Une seule lecture pour les deux presentations, celle du direct et celle de
+ * la retransmission : les deux ecrans montrent le meme athlete de la meme
+ * facon, et une fiche composee a deux endroits finirait par ne plus dire la
+ * meme chose selon qu'on regarde la course en direct ou apres coup.
+ *
+ * LE NIVEAU EST CELUI DE LA DISCIPLINE DE L'EDITION. C'est ce classement-la
+ * qui a selectionne la grille (voir `classement`), et c'est le seul qui dise
+ * quelque chose de ce qu'on va voir : « national » sur 100 m ne dit rien d'un
+ * tour de piste. Le bilan est celui de la meme ligne, pour que les deux
+ * chiffres parlent de la meme chose.
+ *
+ * LE PALMARES NE SE VIDE PAS. Une medaille expiree ne se porte plus dans le
+ * classement, mais elle a ete gagnee — c'est la regle du tableau des nations,
+ * et c'est celle d'un palmares d'athlete. On les regroupe par competition,
+ * distance et couleur : « deux fois or au championnat de France du 100 m »
+ * se lit mieux que deux lignes identiques.
+ *
+ * `avant` borne le palmares dans le temps. La retransmission d'une finale ne
+ * doit pas annoncer, avant le coup de pistolet, la medaille que cette finale
+ * va donner : elle passe l'heure de la course, et seul ce qui a ete gagne
+ * avant compte. Le niveau, lui, est celui d'aujourd'hui — l'historique des
+ * duels pourrait le reconstituer, mais pas pour le prix d'une presentation.
+ *
+ * Seuls les partants de l'edition ont une fiche : la route ne sert pas a
+ * interroger n'importe qui, elle sert une grille de depart.
+ */
+const FICHES_MAX = 16;
+export async function fichesDe(db, edition, cles, avant = null) {
+  await ensureChampTables(db);
+  await ensureDuelTables(db);
+  const e = await db.prepare(
+    `SELECT id, echelon, zone, epreuve FROM champ_editions WHERE id = ?`
+  ).bind(String(edition || '').toUpperCase()).first();
+  if (!e) return null;
+  const epreuve = String(e.epreuve || EPREUVE_DEFAUT);
+  const vide = { edition: e.id, epreuve, fiches: {} };
+
+  const demandees = [...new Set((cles || [])
+    .map(c => String(c || '').trim().toLowerCase()).filter(Boolean))].slice(0, FICHES_MAX);
+  if (!demandees.length) return vide;
+  const { results: partants } = await db.prepare(
+    `SELECT name_key, tenant FROM champ_partants
+      WHERE edition = ? AND name_key IN (${demandees.map(() => '?').join(',')})`
+  ).bind(e.id, ...demandees).all();
+  const liste = (partants || []).map(p => p.name_key);
+  if (!liste.length) return vide;
+
+  const trous = liste.map(() => '?').join(',');
+  const borne = Number.isFinite(avant) && avant > 0 ? avant : Date.now();
+  const [duels, medailles, pays] = await Promise.all([
+    db.prepare(
+      `SELECT name_key, palier, lp, wins, losses, draws
+         FROM duel_players WHERE epreuve = ? AND name_key IN (${trous})`
+    ).bind(epreuve, ...liste).all(),
+    db.prepare(
+      `SELECT m.name_key, m.echelon, m.zone, m.place, m.obtenu_le,
+              COALESCE(ed.epreuve, ?) AS epreuve
+         FROM champ_medailles m LEFT JOIN champ_editions ed ON ed.id = m.edition
+        WHERE m.name_key IN (${trous}) AND m.obtenu_le < ?`
+    ).bind(EPREUVE_DEFAUT, ...liste, borne).all(),
+    paysDe(db, liste),
+  ]);
+
+  const fiches = {};
+  for (const p of partants) {
+    fiches[p.name_key] = {
+      pays: pays.get(p.name_key) || null,
+      tenant: !!p.tenant,
+      // Null pour qui n'a aucune ligne sur cette distance : il n'est pas
+      // « departemental IV », il n'est pas classe — l'ecran le dit.
+      niveau: null,
+      bilan: { v: 0, n: 0, d: 0 },
+      palmares: [],
+    };
+  }
+  for (const d of duels.results || []) {
+    const f = fiches[d.name_key];
+    if (!f) continue;
+    const r = rangDe(d.palier);
+    f.niveau = { etage: r.etage, division: r.division, palier: r.palier, lp: d.lp || 0 };
+    f.bilan = { v: d.wins || 0, n: d.draws || 0, d: d.losses || 0 };
+  }
+
+  // Le palmares, regroupe. La competition prime sur la couleur, comme pour la
+  // medaille du classement (`medaillesDe`) : un bronze mondial passe devant un
+  // or national. A egalite, la couleur, puis la plus recente.
+  const groupes = new Map();
+  for (const m of medailles.results || []) {
+    if (!fiches[m.name_key]) continue;
+    const cle = [m.name_key, m.echelon, m.zone, m.epreuve, m.place].join('|');
+    const g = groupes.get(cle);
+    if (g) { g.n += 1; g.dernier = Math.max(g.dernier, m.obtenu_le); continue; }
+    const z = nomZone(m.zone, m.echelon);
+    groupes.set(cle, {
+      qui: m.name_key, echelon: m.echelon, zone: m.zone,
+      zoneNom: z.nom, zoneNomEn: z.nomEn,
+      epreuve: String(m.epreuve), place: m.place, n: 1, dernier: m.obtenu_le,
+    });
+  }
+  const ordonnes = [...groupes.values()].sort((a, b) =>
+    (PRESTIGE[b.echelon] || 0) - (PRESTIGE[a.echelon] || 0)
+    || a.place - b.place || b.dernier - a.dernier);
+  for (const { qui, ...g } of ordonnes) fiches[qui].palmares.push(g);
+
+  return { edition: e.id, epreuve, fiches };
 }
 
 /**

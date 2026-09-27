@@ -1,4 +1,4 @@
-import { type ReactNode, Suspense, lazy, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, lazy, useEffect, useState, useSyncExternalStore } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,21 +11,31 @@ import {
   Router as WouterRouter,
 } from 'wouter';
 
-import { useGameStore } from '@/game/engine';
+import { SprinterApp, useGameStore } from '@/game/engine';
 import { useBackGuard } from '@/hooks/use-back-guard';
+import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
-import { EST_TEST, RELAIS_OUVERT } from '@/game/canal';
+import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
+import { ChampDirect } from '@/components/screens/ChampDirect';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
+import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
+import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
+import { Tutorial, marquerTutoVu } from '@/components/screens/Tutorial';
+import { tutoOuvert as tutoSprintOuvert, abonnerAuTuto as abonnerAuTutoSprint,
+         fermerLeTuto as fermerLeStoreSprint } from '@/game/sprint-tuto.js';
+import { CeremonieChampionnat } from '@/components/screens/Championnat';
+import { useCeremonieChampionnat } from '@/game/ceremonie-championnat';
 import { TitleScreen } from '@/components/screens/TitleScreen';
 import { CutScreen } from '@/components/screens/CutScreen';
 import { Generique } from '@/components/screens/Generique';
 import { RaceHUD } from '@/components/screens/RaceHUD';
+import { RejeuChampionnat } from '@/components/screens/RejeuChampionnat';
 import { ResultScreen } from '@/components/screens/ResultScreen';
 import { OverScreen } from '@/components/screens/OverScreen';
 import { WinAllScreen } from '@/components/screens/WinAllScreen';
@@ -43,11 +53,14 @@ import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { InviteNotifs } from '@/components/screens/InviteNotifs';
+import { TchatRapide } from '@/components/screens/TchatRapide';
 import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
+import { Regarder } from '@/components/screens/Regarder';
+import { demandeDeLUrl } from '@/game/regarder';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
@@ -152,6 +165,11 @@ function MainGame() {
   }), []);
   useVisualViewportHeight();
   useBackGuard();
+  // Le glissement depuis le bord gauche referme le panneau ouvert. Pose
+  // ici, une fois pour tout le jeu : c'est un geste sur la fenetre, pas sur
+  // un panneau — et la ou le systeme le confisque, c'est useBackGuard
+  // ci-dessus qui recoit le retour a sa place.
+  useGesteRetour();
   // La camera du one shot. Elle se pose ici parce que c'est le seul endroit
   // qui voie passer TOUTE la course : l'ecran de fin, lui, n'existe qu'une
   // fois la derniere ligne franchie. Voir game/film-course.ts.
@@ -222,6 +240,14 @@ function MainGame() {
 
   /** Le decompte suspendu, c'est la presentation des athletes. */
   const enPresentation = state === 'count' && countT <= -90;
+  /**
+   * Le sacre d'un championnat, qui se joue sur la piste.
+   *
+   * Meme raison que la presentation juste au-dessus : l'ecran-titre s'efface,
+   * sans quoi le menu couvrirait la piste que la ceremonie a justement pour
+   * objet de montrer. Il revient tel quel a la fermeture.
+   */
+  const ceremonie = useCeremonieChampionnat();
 
   /**
    * Le generique de fin de carriere, plutot que la cinematique ordinaire.
@@ -233,6 +259,32 @@ function MainGame() {
    */
   const generique = state === 'cut' && !!cut && cut.kind === 'ending';
 
+  // LE TUTORIEL DES HAIES. Son ouverture ne vit pas dans un etat React d'ecran
+  // — l'accueil qui l'ouvre se demonte des que le tutoriel met le jeu en
+  // course — mais dans game/haies-tuto.js, ou elle decrit la meme chose que la
+  // sequence en piste.
+  const tutoHaies = useSyncExternalStore(abonnerAuTuto, tutoOuvert, tutoOuvert);
+  // Le tutoriel de Sprinter, pour la meme raison et par le meme chemin : lui
+  // aussi met le jeu en course — au compte d'abord, le starter fait partie de
+  // ce qu'il enseigne — et l'accueil qui l'ouvre se demonte aussitot.
+  const tutoSprint = useSyncExternalStore(abonnerAuTutoSprint, tutoSprintOuvert, tutoSprintOuvert);
+  const fermerLeTutoSprint = (lancer: boolean) => {
+    marquerTutoVu();
+    fermerLeStoreSprint();
+    // Le demontage rend la piste — il remet le monde a sa vitesse et l'etat a
+    // l'accueil. Lancer la course d'ici la ferait construire, puis defaire.
+    if (lancer) requestAnimationFrame(() => SprinterApp.startRun());
+  };
+  const fermerLeTutoHaies = (lancer: boolean) => {
+    marquerTutoHaiesVu();
+    fermerLeTuto();
+    // LE DEMONTAGE REND LA PISTE, ET IL N'A PAS ENCORE EU LIEU. C'est lui qui
+    // remet le monde a sa vitesse et range les haies (rangerLeTuto). Lancer la
+    // course d'ici la ferait construire, puis defaire. On attend l'image
+    // suivante, ou le tutoriel a fini de ranger derriere lui.
+    if (lancer) requestAnimationFrame(() => SprinterApp.startRun());
+  };
+
   return (
     <div className="relative w-full h-[var(--app-height,100dvh)] bg-[#060913] overflow-hidden font-sans text-foreground select-none touch-none">
       {EST_TEST && <PorteTest onOuvert={setAcces} />}
@@ -241,7 +293,7 @@ function MainGame() {
       
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
-        {state === 'title' && <TitleScreen />}
+        {state === 'title' && !ceremonie && <TitleScreen />}
         {state === 'cut' && !generique && <CutScreen />}
         {generique && <Generique />}
         {/* Le sacre s'eteint par-dessus le generique plutot que de disparaitre
@@ -252,7 +304,24 @@ function MainGame() {
             deja « count ». Le tableau de course n'a rien a y faire : « POUSSÉE
             0.00 », « à battre », « ALTERNE LES DEUX TOUCHES » s'empilaient
             par-dessus la presentation alors que personne ne court encore. */}
-        {(state === 'count' || state === 'race') && !enPresentation && <RaceHUD />}
+        {/* LE TUTORIEL DES HAIES MET LE JEU EN COURSE, et le tableau de
+            course n'y a rien a faire : il annoncerait un chrono, un
+            classement et un record a battre sur une sequence de deux
+            haies. Le tutoriel monte a la place le seul bandeau qui le
+            concerne, celui des haies. */}
+        {/* Sorti au faux depart d'une serie en direct, on regarde : le HUD
+            dirait le chrono et la vitesse d'un coureur qui n'est plus sur la
+            piste. Le bandeau du spectateur le remplace (ChampDirect). */}
+        {(state === 'count' || state === 'race') && !enPresentation
+          && !tutoHaies && !tutoSprint && !SprinterApp.G.spectateur && <RaceHUD />}
+        {/* Une course de championnat qu'on revoit : la presentation des
+            athletes avant le pistolet, le tableau apres la ligne. Elle se
+            monte a cote du HUD et non dedans — elle survit a la fin de la
+            course, ou le HUD n'a plus rien a dire. */}
+        <RejeuChampionnat />
+        {/* Une serie de championnat courue en direct : la chambre d'appel, le
+            rappel apres un faux depart, le spectateur, l'arrivee. */}
+        <ChampDirect />
         {state === 'falseout' && <FalseStartCut />}
         {state === 'result' && <ResultScreen />}
         {state === 'over' && <OverScreen />}
@@ -278,9 +347,19 @@ function MainGame() {
       {/* Invisible overlay for receiving touches during the race */}
       <TouchControls />
 
+      {/* LE TUTORIEL DES HAIES SE JOUE SUR LA PISTE, donc il vit ici et non
+          dans l'accueil : il met le jeu en etat `race`, et l'accueil —
+          monte au seul etat `title` — se serait demonte en emportant le
+          tutoriel avec lui a la premiere sequence. Il passe APRES les
+          touches d'attaque pour que ses deux boutons restent cliquables,
+          et le reste de sa surface laisse passer les appuis. */}
+      {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
+      {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
+
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}
       <RecordPopup />
+      {DUELS_OUVERTS && <CeremonieChampionnat />}
       <QuitRace />
       <InboxPopup />
       <AnnoncePopup />
@@ -307,6 +386,12 @@ function MainGame() {
           survivre au montage de celle-ci — qui fait disparaitre l'ecran-titre
           et le panneau du direct avec lui. */}
       <PresentationDirect />
+      {/* Le tchat rapide des salles de course : des phrases ecrites par le
+          jeu, envoyees par les joueurs. Il vit ici pour la meme raison que la
+          presentation — la salle survit au changement d'ecran, et ses bulles
+          avec elle. La constante en tete du && le sort du build tant qu'il
+          n'est ouvert que sur le canal de test. */}
+      {TCHAT_RAPIDE_OUVERT && <TchatRapide />}
       {/* Les trois autres jeux, atteints par un geste depuis l'accueil. */}
       {MONDES_OUVERTS && <Mondes />}
       <InstallPrompt />
@@ -374,8 +459,17 @@ function App() {
   // le tableau de bord ne doit pas gonfler ses propres chiffres.
   useEffect(() => { if (!stats && !file) pingVisit(); }, [stats, file]);
 
+  // LA PAGE PUBLIQUE D'UN CHAMPIONNAT — `?regarder=<edition>`. Meme convention
+  // que le tableau de bord : un parametre, parce que Pages ne sert que des
+  // fichiers. Elle ne monte pas `MainGame` : un spectateur venu d'un lien n'a
+  // ni nom a donner, ni tutoriel a suivre, ni jeu a installer. Voir
+  // game/regarder.ts. Le canal de test garde sa porte : sans code, la version
+  // de test ne montre rien, pas meme un championnat.
+  const [regarder] = useState(() => !!demandeDeLUrl());
+
   if (file) return <FileRecuperations />;
   if (stats) return <Dashboard />;
+  if (regarder && !EST_TEST) return <Regarder />;
 
   return (
     <QueryClientProvider client={queryClient}>

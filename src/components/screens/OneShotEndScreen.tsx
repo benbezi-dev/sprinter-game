@@ -189,9 +189,15 @@ export function OneShotEndScreen() {
    * reste la sienne pour le TOP 500, la seule que le moteur, seul sur
    * l'appareil, ne peut pas juger.
    */
+  //
+  // PAS DE RECORD SANS CHRONO A BATTRE. `beatsOwn` vaut vrai quand le serveur
+  // ne connait encore aucun chrono de l'appareil (premiere course, ou
+  // fetchMyRank en echec) : c'est juste pour l'envoi, faux pour la fete. Seul
+  // un chrono qui bat un chrono existant fait tomber les confettis.
+  const battus = tops.filter(o => o.ownMs !== null && o.ms < o.ownMs).length;
   useEffect(() => {
-    if (feteDuRecordOuverte() && tops.length > 0) feterRecordPerso(player);
-  }, [tops.length, player]);
+    if (feteDuRecordOuverte() && battus > 0) feterRecordPerso(player);
+  }, [battus, player]);
   const kept = (outcomes || []).filter(o => !o.beatsOwn);
 
   const handleSaveTop = () => {

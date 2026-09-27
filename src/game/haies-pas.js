@@ -41,10 +41,10 @@
 --------------------------------------------------------------------------- */
 
 import { HAIES, positionsDes } from './haies.js';
-import { APPEL, COUT, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
+import { APPEL, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
          GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, FORME_INTERVALLE, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
          GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau,
-         PLAFOND_INTERVALLE } from './haies-jeu.js';
+         PLAFOND_INTERVALLE, RECUP_PLAFOND, plafondPlein } from './haies-jeu.js';
 
 const PI = Math.PI;
 
@@ -93,16 +93,23 @@ const FENETRE_APPEL = 2.0;
  *
  * A la premiere version, percuter ne coutait que de la vitesse (GARDE_PERCUTE)
  * et deux dixiemes d'arret. Sur les courtes, cela suffisait. Sur le tour, non :
- * le vol y est une DUREE d'une seconde pendant laquelle on ne pousse plus
- * (haies-jeu.js, COUT), et dix secondes de non-poussee coutaient plus cher que
- * dix percussions dont le moteur se relevait a chaque fois. Un joueur qui ne
- * touchait jamais les touches d'attaque bouclait le 400 m haies en 41,97 s
- * quand celui qui visait juste mettait 44,23 : LE JEU PAYAIT POUR NE PAS
- * JOUER, ce qui est la pire chose qu'un prototype puisse faire.
+ * le vol y etait alors une DUREE d'une seconde pendant laquelle on ne poussait
+ * plus, et dix secondes de non-poussee coutaient plus cher que dix percussions
+ * dont le moteur se relevait a chaque fois. Un joueur qui ne touchait jamais
+ * les touches d'attaque bouclait le 400 m haies en 41,97 s quand celui qui
+ * visait juste mettait 44,23 : LE JEU PAYAIT POUR NE PAS JOUER, ce qui est la
+ * pire chose qu'un prototype puisse faire.
  *
  * C'est le meme piege que celui deja documente dans COUT — « le moteur
  * reaccelere plus vite qu'une haie ne coute ». Il ressort des que franchir
  * devient facultatif.
+ *
+ * LA SECONDE EST PARTIE DEPUIS (haies-jeu.js, COUT), et le piege avec elle :
+ * le vol du tour dure maintenant un tiers de seconde comme partout, donc bien
+ * moins qu'une percussion. Mesure a onze frappes par seconde — 39,90 s en
+ * jouant, 47,62 en ne touchant jamais les touches d'attaque. Si la regle a
+ * survecu a ce changement-la, c'est parce qu'elle est ecrite en duree de VOL
+ * et non en secondes fixes : elle tient quelle que soit celle du vol.
  *
  * Une percussion coute donc le vol qu'on n'a pas fait, PLUS ce quart de
  * seconde. Elle est ainsi strictement plus chere que le pire franchissement
@@ -218,6 +225,45 @@ export function libererCoureur(joueur) {
 }
 
 /**
+ * LE PLAFOND DE VITESSE DU MOMENT, en m/s, ou `null` quand le coureur est libre.
+ *
+ * Deux plafonds, l'un dans l'autre :
+ *
+ *   celui de l'EPREUVE      (haies-jeu.js, PLAFOND_EPREUVE) on ne court pas le
+ *     tour de haies a la vitesse du tour plat, parce qu'on place sa foulee sur
+ *     trente-cinq metres. Il vaut 1 sur les courtes, ou l'intervalle est trop
+ *     bref pour qu'on y coure autrement qu'a fond.
+ *   celui de l'INTERVALLE   (PLAFOND_INTERVALLE) ce que la reception a laisse.
+ *     Un ciseau net ne l'abaisse pas ; un mauvais si, et il remonte d'ici au
+ *     point d'appel suivant.
+ *
+ * LE COUREUR EST LIBRE AUX DEUX BOUTS : des blocs a la premiere haie, on
+ * sprinte ; apres la dixieme, il n'y a plus rien a placer.
+ *
+ * UNE SEULE ECRITURE DE CE CALCUL. Le pas s'en sert pour brider la vitesse et
+ * la jauge de l'ecran pour la montrer ; les deux ont deja diverge pour avoir
+ * recopie la formule.
+ */
+function plafondCourant(course, j) {
+  if (!course || !j) return null;
+  if (course.enVol || course.reception <= 0) return null;
+  if (course.i >= course.positions.length) return null;
+  const plein = plafondPlein(course.cle);
+  // CELUI DE L'EPREUVE VAUT POUR TOUT LE MONDE, celui de l'intervalle ne se
+  // decide que sous l'appel du joueur : la machine ne ciseaute pas, il n'y a
+  // rien a juger. Sans cette distinction, la machine courait le tour a la
+  // vitesse du tour plat et battait de deux secondes et demie un joueur qui
+  // passait ses dix haies parfaitement.
+  const bas = course.plafondBas > 0 ? course.plafondBas : plein;
+  const point = course.positions[course.i] - APPEL[course.cle].avant + AVANCE_CM;
+  // La remontee est courte — quelques foulees — et non longue comme
+  // l'intervalle. Voir haies-jeu.js, RECUP_PLAFOND.
+  const total = Math.max(0.5, Math.min(point - course.dReception, RECUP_PLAFOND));
+  const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
+  return bas + (plein - bas) * t;
+}
+
+/**
  * Un pas, apres celui du moteur. Rend le jugement de la haie quand il vient
  * d'en franchir une, `null` sinon.
  */
@@ -239,24 +285,16 @@ export function pas(course, j) {
     //
     // La perte se calcule donc une fois, a l'appel, sur la duree du vol et avec
     // le freinage de l'air (haies-jeu.js, DRAG_VOL). Pendant le vol, le coureur
-    // tient la vitesse de son appel — c'est la distance, ou la duree, qui le
-    // pose — et il retrouve `vitesseSol` en touchant la piste.
-    if (course.reception_d !== null) {
-      j.v = course.vitesseVol;
-      const reste = course.reception_d - j.d;
-      if (reste > 0) {
-        j.freeze = reste / course.vitesseVol;
-        j.stride = course.phaseVol;
-        return null;
-      }
-      j.freeze = 0;
-    } else if (j.freeze > 0) {
-      // Sur le tour, le vol est une duree : le moteur la decompte, et l'on tient
-      // la vitesse pendant ce temps-la comme sur les courtes.
-      j.v = course.vitesseVol;
+    // tient la vitesse de son appel — c'est la distance qui le pose — et il
+    // retrouve `vitesseSol` en touchant la piste.
+    j.v = course.vitesseVol;
+    const reste = course.reception_d - j.d;
+    if (reste > 0) {
+      j.freeze = reste / course.vitesseVol;
       j.stride = course.phaseVol;
       return null;
     }
+    j.freeze = 0;
     j.v = course.vitesseSol;
     // LA RECEPTION PAIE LE CISEAU, et c'est le coeur du jeu.
     //
@@ -271,8 +309,9 @@ export function pas(course, j) {
       const jc = jugerCiseau(course.ciseauPart, course.volCiseau);
       j.v *= jc.garde;
       // LE PLAFOND DU PROCHAIN INTERVALLE SE DECIDE ICI. C'est la reception qui
-      // dit a quelle vitesse on peut repartir — pas l'epreuve.
-      course.plafondBas = HAIES[course.cle].maxSpeed * (PLAFOND_INTERVALLE[jc.note] ?? 1);
+      // dit a quelle vitesse on repart — sous celui que l'epreuve autorise, qui
+      // est plein sur les courtes et plus bas sur le tour (PLAFOND_EPREUVE).
+      course.plafondBas = plafondPlein(course.cle) * (PLAFOND_INTERVALLE[jc.note] ?? 1);
       const ms = course.ciseauPart === null ? null
         : Math.round(course.ciseauPart * course.volCiseau * 1000);
       course.ciseaux.push({ note: jc.note, ms });
@@ -301,15 +340,8 @@ export function pas(course, j) {
   // qu'un coureur ralenti fait. Ici la vitesse tombe, le rapport tombe avec, et
   // la foulee se raccourcit d'elle-meme : le compte d'appuis de l'intervalle
   // s'en trouve deplace, ce qui EST la spirale qu'on cherche a produire.
-  if (course.appelJoueur && course.plafondBas > 0 && course.reception > 0) {
-    const plein = HAIES[course.cle].maxSpeed;
-    const point = course.positions[Math.min(course.i, course.positions.length - 1)]
-                  - APPEL[course.cle].avant + AVANCE_CM;
-    const total = Math.max(0.5, point - course.dReception);
-    const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
-    const plafond = course.plafondBas + (plein - course.plafondBas) * t;
-    if (j.v > plafond) j.v = plafond;
-  }
+  const plafond = plafondCourant(course, j);
+  if (plafond !== null && j.v > plafond) j.v = plafond;
 
   // LA FORME DE L'INTERVALLE. Les trois foulees entre deux haies ne sont pas
   // egales — courte, longue, un peu plus courte — et c'est ce qui distingue un
@@ -370,9 +402,9 @@ export function pas(course, j) {
 
   j.v = p.v;
   // LE VOL. Le coureur avance mais ne peut plus pousser : c'est ce que
-  // `freeze` fait deja dans le moteur. Sur les courtes, il tient sa vitesse
-  // jusqu'a la reception (voir plus haut) ; sur le tour, le vol est une duree
-  // et le freinage fait partie de ce qu'elle coute (haies-jeu.js, COUT).
+  // `freeze` fait deja dans le moteur. Il tient sa vitesse jusqu'a la
+  // reception (voir plus haut), sur les trois epreuves — le tour a eu son vol
+  // a lui, une duree, et haies-jeu.js (COUT) dit pourquoi il ne l'a plus.
   j.freeze = volDe(course.cle, j.v);
   j.v = Math.max(VITESSE_VOL_MIN, j.v);
   course.vitesseVol = j.v;
@@ -380,11 +412,9 @@ export function pas(course, j) {
   // l'air. Un vol plus long — appel donne de trop loin — coute donc davantage,
   // sans qu'aucune penalite n'ait eu besoin d'etre inventee. Voir DRAG_VOL.
   course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
-  course.reception_d = COUT[course.cle].vol === 'distance'
-    ? course.positions[course.i] + a.apres
-    : null;
+  course.reception_d = course.positions[course.i] + a.apres;
   course.dAppel = j.d; course.volDuree = j.freeze;
-  course.volCiseau = volDe(course.cle === '400h' ? '110h' : course.cle, j.v);
+  course.volCiseau = volDe(course.cle, j.v);
   course.coteAppel = null; course.ciseauPart = null;
   // ET LA REMISE A ZERO DU DERNIER PIED. press() sort a la premiere ligne quand
   // le coureur est gele, avant de noter la touche : sans cette ligne, le premier
@@ -537,41 +567,27 @@ export function appeler(course, j, cote) {
   if (bonneJambe) j.v = Math.min(j.maxSpeed, j.v * (1 + (POUSSEE_APPEL[p.note] || 0)));
   j.stride = nAppel * PI;
 
-  if (COUT[cle].vol === 'distance') {
-    j.v = Math.max(VITESSE_VOL_MIN, j.v);
-    // Sur le chemin du centre de masse, pas d un pied a l autre — voir AVANCE_CM.
-    j.freeze = Math.max(0.05, avant + a.apres - AVANCE_CM) / j.v;
-    course.vitesseVol = j.v;
-    course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
-    course.reception_d = haie + a.apres;
-  } else {
-    // SUR LE TOUR, LE VOL EST UNE DUREE, ET ELLE NE SE REMBOURSE PAS.
-    //
-    // Cette seconde n'est pas le saut : c'est de courir POUR la haie sur
-    // trente-cinq metres, et haies-jeu.js le dit en toutes lettres. Elle ne
-    // depend donc pas de l'endroit d'ou l'on s'appelle.
-    //
-    // Deux versions se sont cassees dessus avant celle-ci. Une duree fixe
-    // rendait l'appel au plus tot gratuit — mitrailler la touche etait la
-    // meilleure facon de jouer le 400 m haies. La rapporter a la distance
-    // d'appel a retourne le defaut sans le corriger : l'appel le plus tardif
-    // raccourcissait le vol d'un tiers de seconde, et le harnais l'a mesure —
-    // 42,02 s en appelant au ras de la haie contre 44,23 en visant juste.
-    //
-    // Ce qui suit ne va que dans un sens : partir de plus loin AJOUTE le temps
-    // d'air en trop, partir plus pres ne retire rien. Le hache se paie en
-    // vitesse (GARDE), comme sur les courtes, et jamais en temps gagne.
-    j.freeze = COUT[cle].duree + Math.max(0, avant - a.avant) / Math.max(VITESSE_VOL_MIN, j.v);
-    j.v = Math.max(VITESSE_VOL_MIN, j.v);
-    course.vitesseVol = j.v;
-    course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
-    course.reception_d = null;
-  }
+  // LE VOL EST LE MEME SUR LES TROIS EPREUVES : une distance, celle du
+  // reglement, parcourue a la vitesse de l'appel. Le tour a longtemps eu la
+  // sienne — une seconde de gel — et COUT dit pourquoi elle est partie.
+  //
+  // Ce qu'elle laisse derriere elle, en revanche, tient toujours : appeler de
+  // trop loin doit COUTER. Ici c'est automatique et il n'y a rien a inventer —
+  // un appel donne de plus loin allonge le vol, et un vol plus long paie plus
+  // de freinage d'air (DRAG_VOL). Appeler au ras de la haie ne rend rien pour
+  // autant : le hache se paie en vitesse (GARDE), et sur le tour le plafond de
+  // l'epreuve borne de toute facon ce qu'on peut reprendre ensuite.
+  j.v = Math.max(VITESSE_VOL_MIN, j.v);
+  // Sur le chemin du centre de masse, pas d un pied a l autre — voir AVANCE_CM.
+  j.freeze = Math.max(0.05, avant + a.apres - AVANCE_CM) / j.v;
+  course.vitesseVol = j.v;
+  course.vitesseSol = j.v * Math.exp(-DRAG_VOL * j.freeze);
+  course.reception_d = haie + a.apres;
 
   // Le vol est fige ici : on saura a tout instant ou l'on en est, donc quand
   // tombe le relache. Voir `ciseauDe`.
   course.dAppel = j.d; course.volDuree = j.freeze;
-  course.volCiseau = volDe(cle === '400h' ? '110h' : cle, j.v);
+  course.volCiseau = volDe(cle, j.v);
   course.coteAppel = cote; course.ciseauPart = null;
 
   // Meme raison que sur l'appel automatique : press() ne note pas la touche
@@ -673,24 +689,14 @@ export function enVol(course) {
 /**
  * OU EN EST LE VOL, de 0 (on quitte le sol) a 1 (on touche la piste).
  *
- * Sur les courtes le vol est une distance et la vitesse y est tenue : la part
- * parcourue EST la part du temps ecoule. Sur le tour c'est une duree, et le
- * moteur la decompte dans `freeze`. Deux lectures, un seul nombre.
+ * Le vol est une distance et la vitesse y est tenue : la part parcourue EST la
+ * part du temps ecoule. Le tour a eu sa lecture a lui, tant que son vol etait
+ * une duree ; il n'en a plus besoin (haies-jeu.js, COUT).
  */
 function partDuVol(course, j) {
   if (!course.enVol) return null;
-  if (course.reception_d !== null) {
-    const total = course.reception_d - course.dAppel;
-    return total <= 0 ? 1 : Math.min(1, Math.max(0, (j.d - course.dAppel) / total));
-  }
-  // SUR LE TOUR, LE GEL N'EST PAS LE TEMPS EN L'AIR. La seconde de COUT
-  // represente le fait de courir POUR la haie sur trente-cinq metres ; le vrai
-  // vol y dure environ un tiers de seconde comme partout ailleurs. Le ciseau se
-  // rapporte donc au vol reel (`volCiseau`), sans quoi il faudrait le placer a
-  // une demi-seconde du decollage, c'est-a-dire longtemps apres avoir atterri.
-  if (!course.volCiseau) return 1;
-  const ecoule = course.volDuree - Math.max(0, j.freeze);
-  return Math.min(1, Math.max(0, ecoule / course.volCiseau));
+  const total = course.reception_d - course.dAppel;
+  return total <= 0 ? 1 : Math.min(1, Math.max(0, (j.d - course.dAppel) / total));
 }
 
 /**
@@ -735,12 +741,7 @@ export function ciseauDe(course, j) {
  * parait lent sans raison et le joueur ne relie pas l'effet a sa cause.
  */
 export function plafondDe(course, j) {
-  if (!course || !j || !course.appelJoueur || !course.plafondBas) return 1;
-  if (course.enVol || course.reception <= 0) return 1;
-  const plein = HAIES[course.cle].maxSpeed;
-  const point = course.positions[Math.min(course.i, course.positions.length - 1)]
-                - APPEL[course.cle].avant + AVANCE_CM;
-  const total = Math.max(0.5, point - course.dReception);
-  const t = Math.min(1, Math.max(0, (j.d - course.dReception) / total));
-  return Math.min(1, (course.plafondBas + (plein - course.plafondBas) * t) / plein);
+  const plafond = plafondCourant(course, j);
+  if (plafond === null) return 1;
+  return Math.min(1, plafond / plafondPlein(course.cle));
 }

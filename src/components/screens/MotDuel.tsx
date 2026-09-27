@@ -3,7 +3,7 @@ import { Mic, Square, Play, Send, Loader2, Check, Trash2 } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
   Enregistreur, poserMot, urlDeLaVoix, MAX_TEXTE, MAX_VOIX_MS,
-  type EtatVoix,
+  type EtatVoix, type MotPose,
 } from '@/game/mot';
 
 /**
@@ -24,8 +24,20 @@ import {
  * choisir d'avance — le champ est la, le bouton du micro aussi, et le premier
  * des deux qu'on utilise devient le mot.
  */
-export function LaisserUnMot({ duel, adversaire, onPose }: {
+export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme }: {
   duel: string; adversaire: string; onPose?: () => void;
+  /**
+   * Ou envoyer le mot, quand ce n'est pas un duel.
+   *
+   * Une course de championnat le depose ailleurs et pour sept lecteurs (voir
+   * `poserMotDeCourse`). Le geste, lui, est le meme : un champ, un micro, un
+   * bouton — et c'est bien pour cela qu'on ne duplique pas cet ecran.
+   */
+  poser?: (m: { texte?: string; voix?: Blob | null }) => Promise<MotPose>;
+  /** Le libelle du haut, quand « laisse un mot a Untel » ne convient pas. */
+  titre?: string;
+  /** Ce qu'on affiche une fois pose. */
+  confirme?: string;
 }) {
   const { N } = SprinterApp;
   const [texte, setTexte] = useState('');
@@ -48,7 +60,9 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
     const v = enr.current?.blob || null;
     if (!t && !v) return;
     setEnvoi(true); setErreur('');
-    const r = await poserMot(duel, { texte: t || undefined, voix: v });
+    const r = poser
+      ? await poser({ texte: t || undefined, voix: v })
+      : await poserMot(duel, { texte: t || undefined, voix: v });
     setEnvoi(false);
     if (r.error) { setErreur(r.error); return; }
     setPose(true);
@@ -60,7 +74,7 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
       <p className="w-full text-center text-[11px] md:text-xs text-emerald-400
                     flex items-center justify-center gap-1.5">
         <Check className="w-3.5 h-3.5" />
-        {N.t('mot_envoye', { n: adversaire })}
+        {confirme || N.t('mot_envoye', { n: adversaire })}
       </p>
     );
   }
@@ -73,7 +87,7 @@ export function LaisserUnMot({ duel, adversaire, onPose }: {
     <div className="w-full flex flex-col gap-1.5 md:gap-2 court:gap-1.5 rounded-xl border border-white/10
                     bg-black/25 p-2.5 md:p-3 court:p-2">
       <span className="text-[9px] md:text-[10px] tracking-widest text-muted-foreground text-center">
-        {N.t('mot_titre', { n: adversaire })}
+        {titre || N.t('mot_titre', { n: adversaire })}
       </span>
 
       {!prete && (

@@ -218,3 +218,71 @@ export function ciseauHaies() {
   if (!course || !G || !G.player) return null;
   return ciseauDe(course, G.player);
 }
+
+/* ---------------------------------------------------------------------------
+   LE DEPART LANCE — pour le tutoriel, et pour lui seul
+   ---------------------------------------------------------------------------
+   Une course de haies commence aux blocs. Le tutoriel, lui, doit pouvoir
+   remettre le coureur devant UNE haie autant de fois qu'on veut, sans refaire
+   le depart a chaque fois : ce qu'il enseigne se joue sur les quatre metres
+   qui precedent une haie, et rejouer cinquante metres de mise en action entre
+   deux essais est ce qui ferait abandonner.
+
+   POURQUOI C'EST ICI ET PAS DANS LE TUTORIEL. `course` est prive a ce fichier,
+   et doit le rester : c'est ce qui garantit que personne ne bricole l'etat
+   d'une course en marche depuis un ecran. Reposer ce coureur demande de
+   remettre d'aplomb SEPT champs qui se repondent entre eux, et les oublier
+   donne des pannes muettes — un plafond de vitesse herite d'une reception qui
+   n'a pas eu lieu, une fenetre d'appel ouverte sur une haie deja passee. La
+   liste est donc ecrite une fois, ici, a cote de ce qu'elle remet a zero.
+--------------------------------------------------------------------------- */
+
+/**
+ * Reposer le coureur lance, `avant` metres devant la haie numero `n`
+ * (0 pour la premiere), a la vitesse `v`.
+ *
+ * Rend la position posee, ou `null` s'il n'y a pas de course armee.
+ */
+export function lancerDevantLaHaie(n, avant, v) {
+  const G = SprinterApp.G;
+  if (!course || !G || !G.player) return null;
+  const i = Math.max(0, Math.min(n, course.positions.length - 1));
+  const j = G.player;
+
+  j.d = Math.max(0, course.positions[i] - avant);
+  j.v = v;
+  j.freeze = 0;
+  // La phase repart de zero, comme au depart : c'est elle qui compte les
+  // appuis, et un reste de phase decalerait tout l'intervalle.
+  j.stride = 0;
+  j.lastStep = 0;
+  j.foulee = HAIES[course.cle].foulee || 1;
+
+  course.i = i;
+  // RECEPTION A ZERO, ET C'EST CE QUI REND LE COUREUR LIBRE. Deux regles ne
+  // s'appliquent qu'a partir de la premiere reception — le plafond laisse par
+  // le ciseau precedent, et la forme en trois foulees de l'intervalle. A zero,
+  // aucune des deux ne mord : le coureur arrive comme il arriverait des blocs,
+  // ce qui est exactement ce qu'on veut d'un depart lance.
+  course.reception = 0;
+  course.plafondBas = 0;
+  course.dReception = j.d;
+  course.fenetre = null;
+  course.approche = null;
+  course.enVol = false;
+  course.ciseauPart = null;
+  course.coteAppel = null;
+  course.penaliteVol = 1;
+  course.dernier = null;
+  course.dernierCiseau = null;
+  // La jambe d'attaque se rechoisit : une seance de tutoriel n'herite pas de
+  // celle de la seance d'avant.
+  course.jambe = null;
+  touchees.clear();
+  return j.d;
+}
+
+/** Combien de haies le coureur a deja franchies sur cette course. */
+export function haiesFranchies() {
+  return course ? course.i : 0;
+}

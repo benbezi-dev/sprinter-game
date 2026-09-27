@@ -693,7 +693,13 @@ export class Review {
         // Refermer la feuille n'est pas un echec : c'est un choix, et l'ecran
         // ne doit pas repondre par un message d'erreur a quelqu'un qui a
         // simplement change d'avis.
-        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return 'annule';
+        //
+        // Seul `AbortError` est ce choix-la. `NotAllowedError` est un REFUS DU
+        // NAVIGATEUR (fichier trop lourd, navigateur integre d'une appli,
+        // geste perdu) : le traiter comme une annulation jetait la video sans
+        // un mot — « le partage ne fait rien » (26/09). On tente alors de la
+        // donner quand meme, comme pour toute autre erreur.
+        if (e && e.name === 'AbortError') return 'annule';
         // Echec pour une autre raison : plutot que de laisser le joueur sans
         // rien, on tente quand meme de lui donner le fichier.
       }

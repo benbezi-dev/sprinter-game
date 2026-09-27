@@ -13,6 +13,12 @@ import './rendu-premium.js';
 import decorsManifeste from './decors-manifeste.json';
 (globalThis as any).SprinterDecorsManifeste = decorsManifeste;
 import './decors-stades.js';
+// Le Champ-de-Mars : ses pieces rendues dans Blender (tools/blender/decors/
+// champ-de-mars.py), puis le module qui les pose — et qui dessine a la main
+// ce qui n'est pas encore charge.
+import champDeMarsManifeste from './champ-de-mars-manifeste.json';
+(globalThis as any).ChampDeMarsManifeste = champDeMarsManifeste;
+import './decor-champ-de-mars.js';
 // Le public des gradins, rendu dans Blender : son manifeste, puis ses rangees.
 import tribuneManifeste from './tribune-manifeste.json';
 (globalThis as any).SprinterTribuneManifeste = tribuneManifeste;
@@ -291,6 +297,23 @@ export function padPress(side: 'left' | 'right') {
   }
 
   if (G.state === 'count') {
+    // EN CHAMPIONNAT, LE TELEPHONE NE SE JUGE PAS. Il dit a la salle qu'on
+    // est parti avant le coup, et a quel instant ; c'est elle qui decide du
+    // rappel et du carton (voir worker/src/faux-depart.js). Rien ici ne
+    // gele le coureur ni ne l'elimine : si la salle ne retient rien, il part
+    // simplement sans bonus de reaction.
+    //
+    // Pas pendant la presentation ni pendant la scene du rappel (`countT`
+    // suspendu a -99) : aucun depart n'est annonce, on ne peut pas partir
+    // avant lui.
+    if (G.champDirect) {
+      if (!G.player.jumped && !G.spectateur && !G.rappel && G.countT > -90) {
+        G.player.jumped = true;
+        salleLive?.fauxDepart?.((G.countT - 3) * 1000);
+        buzz(40);
+      }
+      return;
+    }
     if (!G.player.jumped) {
       // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
       // En carriere il coute seulement un blocage au coup de pistolet.
@@ -414,7 +437,12 @@ export function resumeRace() {
  * sprinter-app.js. Le relais branche ici des fonctions qui ne prennent que la
  * distance ; le second argument leur est simplement inutile.
  */
-let salleLive: { position(d: number, c?: number): void; fini(ms: number): void } | null = null;
+let salleLive: {
+  position(d: number, c?: number): void;
+  fini(ms: number): void;
+  /** Championnat seulement : signaler un appui avant le coup. */
+  fauxDepart?(ms: number): void;
+} | null = null;
 let prochainEnvoi = 0;
 let finEnvoyee = false;
 
@@ -446,7 +474,8 @@ export function reinitialiserEnvoi() {
 }
 
 function pousserPosition() {
-  if (!salleLive) return;
+  // Un spectateur ne court plus : la salle ignorerait ce qu'il enverrait.
+  if (!salleLive || G.spectateur) return;
   // La ligne d'abord, et a son instant exact : le chrono, pas l'image ou on
   // s'en apercoit, qui arrive jusqu'a un soixantieme plus tard et un peu plus
   // loin. Envoyee apres la position ordinaire de la meme image, elle serait
@@ -479,7 +508,12 @@ export function updateLogic(dt: number) {
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
-  if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
+  // Le championnat en direct joue son propre morceau, cale sur la salle (voir
+  // game/musique-championnat.ts) : la musique de course ferait deux morceaux a
+  // la fois. Tant qu'il n'est pas charge, ce drapeau reste faux et la course
+  // garde la sienne.
+  if (G.musiqueChamp) Audio_.stop();
+  else if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
   else if (G.state === 'cut') {
     // Le generique porte sa propre musique, et c'est la seule cinematique dans
     // ce cas : la boucle du menu par-dessus un morceau ferait deux musiques a
@@ -523,6 +557,13 @@ export function updateLogic(dt: number) {
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
     // ferait partir les deux joueurs a des instants differents.
     if (G.liveOn && G.countT <= -90) {
+      // LE RAPPEL se joue sur le meme decompte suspendu que la presentation :
+      // c'est lui qui fait vivre l'image, le temps que la salle a annonce.
+      if (G.rappel) {
+        SprinterApp.stepRappel(dt);
+        gameStore.setState({ state: G.state, countT: G.countT });
+        return;
+      }
       // Decompte suspendu : c'est le temps de la presentation. La piste est
       // deja montee, tout le monde est dans son couloir — on fait vivre la
       // scene plutot que de la figer, sans quoi le joueur regarderait une
@@ -565,7 +606,19 @@ export function updateLogic(dt: number) {
     const step = 1 / 240;
     while (G.acc >= step) {
       G.acc -= step; G.elapsed += step;
-      G.player.stepPlayer(step, G.elapsed);
+      // EN REJEU, PERSONNE N'APPUIE.
+      //
+      // Une course de championnat qu'on revoit n'a pas de joueur : les huit
+      // couloirs sont pilotes par leur chrono. Le coureur que la camera suit
+      // occupe la place du joueur — c'est ce qui fait que le cadrage, le HUD
+      // et l'ecart affiche continuent de fonctionner — mais il avance comme
+      // les sept autres, par `stepAI`. Sans cette ligne il resterait plante
+      // dans ses blocs pendant que la course se deroule autour de lui.
+      if (G.rejeu) G.player.stepAI(step, G.elapsed);
+      // Sorti au faux depart : il n'est plus sur la piste, et rien ne le fait
+      // avancer. Ceux qu'il regarde avancent par le reseau, plus bas.
+      else if (G.spectateur) { /* il regarde */ }
+      else G.player.stepPlayer(step, G.elapsed);
       // Les haies, quand il y en a. Le moteur ne les connait pas : c'est le
       // jeu des haies qui se pose ici a l'armement, et qui se retire en
       // partant. Sans course de haies, cette ligne est un test qui echoue.
@@ -618,7 +671,42 @@ export function updateLogic(dt: number) {
     // du garde-fou. Le drapeau est pose par game/halloween.ts et retire avec
     // la nuit ; hors de ce mode il n'existe pas.
     const mordu = !!G.molosseMord;
-    if (out || slow || mordu || G.elapsed >= 90) {
+    // UN REJEU SE TERMINE SUR LE DERNIER, PAS SUR LE PREMIER.
+    //
+    // Une course jouee s'arrete peu apres le joueur : ce qui se passe derriere
+    // lui ne l'interesse plus. Une course qu'on REGARDE est l'inverse — on la
+    // coupe au moment ou le huitieme franchit la ligne, sans quoi la moitie
+    // du peloton disparait en pleine piste, et c'est precisement la fin qu'on
+    // voulait revoir.
+    const dernier = G.rejeu
+      ? G.runners.reduce((m: number, r: any) => Math.max(m, r.target || 0), 0)
+      : 0;
+    // Un rejeu n'a aucun resultat a annoncer : la course a deja eu lieu, et
+    // l'ecran de fin du one shot proposerait de defier un ami avec le chrono
+    // de quelqu'un d'autre. Il rend la main a `champ-rejeu`, qui ferme la
+    // prise video et affiche le tableau d'arrivee.
+    //
+    // LE DRAPEAU NE S'ETEINT PAS ICI, et c'est tout le piege : `slow` est vrai
+    // depuis longtemps quand le huitieme franchit la ligne — le coureur suivi,
+    // lui, a fini deux ou trois secondes plus tot. Eteindre `rejeu` a cet
+    // instant ferait retomber l'image suivante dans la branche ordinaire, et
+    // `finishRace` ouvrirait l'ecran du one shot par-dessus le tableau. Le
+    // rejeu reste donc arme jusqu'a ce que le spectateur referme le tableau.
+    if (G.rejeu) {
+      if (!G.rejeuFini && G.elapsed >= dernier + 2.5) {
+        G.rejeuFini = true;
+        for (const r of G.runners)
+          if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+        const fin = G.rejeuFin; G.rejeuFin = null;
+        if (fin) fin(); else SprinterApp.goHome();
+      }
+    } else if (G.champDirect) {
+      // EN CHAMPIONNAT, C'EST LA SALLE QUI TRANCHE. Le joueur qui a franchi la
+      // ligne continue de voir les autres finir, et le tableau d'arrivee
+      // arrive avec le verdict de la salle (voir game/champ-direct.ts) —
+      // jamais l'ecran de fin du one shot, qui proposerait de recommencer une
+      // serie qui ne se recourt pas.
+    } else if (out || slow || mordu || G.elapsed >= 90) {
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;
       SprinterApp.finishRace();

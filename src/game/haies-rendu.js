@@ -144,12 +144,17 @@ export function obstaclesDe(course, touchees) {
   /**
    * LE COUREUR DU JOUEUR NE GLISSE PAS APRES LA RECEPTION.
    *
-   * Sur le tour, le vol est une duree (haies-jeu.js, COUT) : une seconde, dont
-   * le saut dessine n'occupe qu'une moitie. Le pas du hurdleur garde la foulee
-   * figee jusqu'au bout, et c'est ce qui tient le compte juste — mais a
-   * l'ecran, le coureur filait jambes immobiles sur quatre metres.
+   * CE FILET NE SE DECLENCHE PLUS, ET C'EST VOULU. Il est ne du temps ou le
+   * tour payait sa haie par une seconde de gel : le saut dessine n'occupait
+   * qu'un tiers de cette seconde, et le coureur finissait son vol AU SOL,
+   * jambes immobiles, sur pres de six metres. Le gel du tour est maintenant
+   * une distance comme celui des courtes (haies-jeu.js, COUT) et il finit ou
+   * le saut finit — haies-rendu-test.mjs le verifie sur les trois epreuves.
    *
-   * On avance donc l'IMAGE de la foulee, jamais le compte : un demi-cycle
+   * On le garde parce que rien n'interdit a un vol de depasser le saut
+   * dessine : il suffirait d'un appel donne de plus loin que APPEL_MAXI, ou
+   * d'une epreuve future dont le vol se compterait autrement. Quand cela
+   * arrive, on avance l'IMAGE de la foulee, jamais le compte : un demi-cycle
    * plus un nombre entier de cycles, reparti sur ce qui reste de gel, pour
    * que la foulee affichee tombe exactement sur celle que haies-pas.js pose a
    * la fin du vol. Ni saut ni a-coup au raccord.

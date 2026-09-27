@@ -103,6 +103,84 @@
     DRIVE_END: 15.0,          // fin de la phase de poussee, en metres
     TRANS_END: 40.0,          // corps entierement redresse
     DRIVE_PITCH: 0.62,        // inclinaison du corps a la sortie des blocs
+    // LA MECANIQUE DE DEPART, et pourquoi elle ne peut pas venir de la vitesse.
+    //
+    // L'amplitude des membres suit `A`, qui suit la vitesse : 0,34 a l'arret,
+    // 1 a pleine vitesse. C'est juste en course — un coureur qui ralentit leve
+    // moins haut — et c'est FAUX a la sortie des blocs, ou la vitesse est
+    // presque nulle et la mecanique a son maximum. Le jeu jouait donc
+    // exactement l'inverse de ce qu'on voit sur une piste : trois petits pas
+    // timides, la ou un sprinteur projette son genou le plus loin devant de
+    // toute sa course.
+    //
+    // Ces trois nombres RENDENT l'amplitude pendant la sortie, et un peu plus
+    // que la pleine course : cuisse a 1,14 au premier appui contre 1,00 lance,
+    // genou a 1,07, bras a 1,05. Ils s'eteignent sur la meme courbe que
+    // l'inclinaison du buste (pitchAt, jusqu'a TRANS_END) — c'est la meme
+    // phase, et elle doit se lire dans la jambe comme elle se lit dans le dos.
+    DRIVE_THIGH: 0.80,        // amplitude de cuisse rendue a la sortie
+    DRIVE_KNEE: 0.45,         // flexion de genou, idem
+    DRIVE_ARM: 0.35,          // amplitude des bras, idem
+    // LE GENOU DEVANT, ET LUI SEUL.
+    //
+    // Les trois nombres ci-dessus rendent l'amplitude dans LES DEUX SENS :
+    // l'extension arriere autant que le genou avant. Un depart de sprint, lui,
+    // se reconnait a ce que le genou sort DEVANT, tres haut, tres tot.
+    //
+    // Ce gain-ci ne s'applique donc qu'a la moitie avant du cycle, la ou la
+    // cuisse est deja devant. Ajoute partout, il aurait leve la cuisse d'appui
+    // en meme temps que l'autre, et un coureur dont les deux cuisses montent
+    // n'est pas un sprinteur qui pousse : c'est quelqu'un d'assis.
+    //
+    // DRIVE_SHANK vient avec, et n'est pas un ornement : une cuisse projetee
+    // plus haut sans flexion de plus donne une jambe TENDUE devant — un coup
+    // de pied, pas un genou. Le tibia doit rester pendant sous le genou, comme
+    // il l'est sur toutes les photos de sortie de blocs.
+    //
+    // REGLES A L'OEIL, sur le monde fige a trois metres du depart et a la
+    // phase « genou haut » du cycle : a 0,30 la cuisse gagnait douze degres —
+    // reel mais discret — a 0,55 elle en gagne vingt-deux, et c'est la que la
+    // posture devient celle d'une sortie de blocs. Ce sont deux nombres, et
+    // ils se remontent ou se baissent sans rien toucher d'autre.
+    DRIVE_FRONT: 0.55,        // gain de cuisse sur la seule part avant
+    DRIVE_SHANK: 0.50,        // et le repli de tibia qui l'accompagne
+    // LA LIGNE DE POUSSEE : cheville, genou, bassin, epaules sur UNE DROITE.
+    //
+    // C'est la photo de toute sortie de blocs, et le jeu la cassait a la
+    // hanche. Le rig tient le buste vertical et incline TOUT le corps de
+    // `drivePitch` au dessin : une jambe posee dans l'axe du buste y devient
+    // donc, apres rotation, une jambe qui part vers l'arriere-bas dans le
+    // prolongement exact du tronc — la droite cherchee. Or a la phase de
+    // poussee la table met le tibia a 0,66 rad de cet axe (cuisse -0,50,
+    // genou -0,16) : ajoutes aux 0,62 rad du buste, cela faisait une jambe
+    // couchee a 73 degres sous un tronc a 35, c'est-a-dire un angle marque a
+    // la hanche la ou il ne doit y en avoir aucun.
+    //
+    // On ramene donc la jambe ARRIERE vers l'axe du corps, d'autant plus
+    // qu'elle est loin derriere et qu'on sort des blocs. A 1 la ligne serait
+    // parfaitement droite ; on en garde un dixieme de cassure, parce qu'une
+    // articulation qui atteint exactement sa butee ne ressemble a rien de
+    // vivant.
+    DRIVE_LIGNE: 0.90,
+    // L'AGRESSIVITE DE LA TRANSITION, entre la poussee et la pleine vitesse.
+    //
+    // Entre DRIVE_END et TRANS_END le coureur se redresse. Le jeu n'y jouait
+    // rien de particulier : l'amplitude de sortie s'eteignait, celle de la
+    // vitesse montait, et la somme des deux passait sans accident. C'est
+    // pourtant la que se joue le moment le plus violent d'un cent metres —
+    // celui ou l'on arrache la vitesse en attaquant le sol, talon claque sous
+    // la fesse, bras qui tirent.
+    //
+    // Une cloche, donc : nulle a quinze metres, pleine a vingt-sept, nulle a
+    // quarante. Elle ne se superpose pas a la sortie de blocs, elle la releve
+    // — sans quoi les deux additionnees donneraient une foulee de dessin
+    // anime sur les vingt premiers metres.
+    TRANSIT_AMPL: 0.22,       // amplitude de cuisse en plus, au sommet
+    TRANSIT_TALON: 0.55,      // et le talon qui remonte sous la fesse
+    TRANSIT_ARM: 0.30,        // les bras qui tirent avec
+    // La reference qui fait le « loin derriere » : l'extension arriere la plus
+    // marquee des tables de foulee (profil `power`, cuisse a -0,64).
+    DRIVE_ARRIERE: 0.64,
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
     REACT_BEST: 0.12,
@@ -382,6 +460,36 @@
       names: ['Igor Tombal', 'Vlad Crampon', 'Morgue Belfort', 'Cyprien Caveau',
               'Osselet Marchand', 'Lilith Corbeau', 'Nosfera Toussaint'] },
 
+    // LE CHAMP-DE-MARS — la course hors stade du premier championnat de
+    // France. Une piste tricolore posee dans les parterres, la tour au bout.
+    //
+    // RESERVE, ET PAS FERME. Il part dans la version publique — sans quoi le
+    // championnat ne pourrait pas s'y rejouer — mais n'apparait dans aucune
+    // liste qu'un joueur puisse choisir : `reserve` le retire du choix du lieu
+    // en ONE SHOT (ModePanels.tsx) hors canal de test. C'est l'edition qui
+    // l'appelle, par le lieu que le serveur lui donne (LIEUX,
+    // worker/src/championnats-config.js) : le premier Championnat de France,
+    // et lui seul. Sur le canal de test il reste un lieu comme les autres.
+    //
+    // Il vient donc AVEC LES OUVERTS, juste apres le cimetiere et avant les
+    // deux stades du canal de test : l'index d'un lieu doit dire la meme chose
+    // sur les deux canaux (voir le commentaire de la boucle qui remplit
+    // LEVELS, dans sprinter-app.js).
+    //
+    // LE PLATEAU EST CELUI D'UNE FINALE NATIONALE : sept coureurs entre 9,95
+    // et 10,35 au 100 m, sous le championnat du monde.
+    { cle: 'champdemars', name: 'Champ-de-Mars', theme: 'champdemars',
+      pool: 'divers',
+      horsSerie: true,
+      ouvert: true,
+      reserve: true,
+      // Du monde le long des barrieres et une tribune provisoire pleine.
+      foule: 0.9,
+      plateau: { '100': [9.95, 10.35], '200': [20.05, 20.80],
+                 '400': [44.90, 46.20], '4x100': [38.40, 39.40] },
+      names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
+              'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
@@ -424,6 +532,7 @@
       // coutume de ce peuple. Ils sont inventes : aucun ne sort de l'oeuvre.
       names: ['Ocarina Kess', 'Tamtam Solo', 'Gong Mirai', 'Cymba Loro',
               'Fifre Nahon', 'Rebec Tanou', 'Sitara Vale'] },
+
   ];
 
   // ---------------------------------------------------------------------
@@ -497,6 +606,73 @@
   // d'appui (stride) qui arbitre entre foulee longue et haute frequence.
   // 'base' reprend a l'identique la foulee historique : tout athlete sans
   // profil declare court exactement comme avant.
+  /* ---------------------------------------------------------------------
+     LES DEUX FOULEES — VELOCE ET ACADEMIQUE
+     ---------------------------------------------------------------------
+     A ne pas confondre avec `GAITS`, juste en dessous, qui est un AUTRE AXE.
+     `GAITS` donne la biomecanique d'un ATHLETE — celui-ci court en frequence,
+     celui-la en puissance — et deux coureurs d'une meme course peuvent en
+     avoir deux differentes. Ceci donne l'allure d'une EPREUVE, et tout le
+     monde y court la meme : on ne s'engage pas dans un tour comme dans un
+     cent metres, et cela se voit avant meme de regarder le chrono.
+
+     LA FOULEE VELOCE est celle du sprint pur : on arrache la vitesse dans la
+     transition, talon claque sous la fesse, bras qui tirent. Elle coute cher
+     et ne se tient pas longtemps — c'est precisement pourquoi elle appartient
+     aux distances ou l'on n'a pas a la tenir.
+
+     LA FOULEE ACADEMIQUE est la foulee tenue : la meme mecanique de depart —
+     personne ne sort des blocs autrement — mais sans la surenchere du milieu.
+     C'est celle d'un tour de piste, d'une course de haies ou l'on doit rester
+     reglable entre les obstacles, et d'une course d'elan qui prepare un saut
+     plutot qu'un chrono.
+
+     TOUT CE QUI N'EST PAS NOMME EST ACADEMIQUE, et c'est voulu : les sauts
+     n'existent pas encore comme epreuves jouables, et le jour ou leur course
+     d'elan sera dessinee elle prendra l'allure tenue sans qu'on ait rien a
+     ajouter ici.
+  */
+  const FOULEES = {
+    veloce: { transit: 1 },
+    academique: { transit: 0 },
+  };
+
+  /**
+   * Qui court en veloce. Le reste — le tour, les haies, les sauts — est tenu.
+   *
+   * LE RELAIS EN FAIT PARTIE, et c'est la seule entree qui demande un mot
+   * d'explication. Sa cle dit « 4 x 100 » et sa geometrie est celle du tour,
+   * ce qui l'aurait range avec le 400 m ; mais personne n'y court un tour —
+   * quatre relayeurs y courent cent metres chacun, et c'est l'epreuve la plus
+   * rapide de la piste. L'allure suit donc ce que les jambes font, pas ce que
+   * la distance totale affiche.
+   *
+   * La cloche de transition se recale d'elle-meme sur chaque portion : elle
+   * est comptee depuis `legStart`, si bien que les quatre relayeurs recoivent
+   * chacun la sienne la ou il demarre, au lieu que le premier la prenne pour
+   * tout le monde.
+   */
+  const FOULEE_DES_EPREUVES = { '100': 'veloce', '200': 'veloce', '4x100': 'veloce' };
+
+  /**
+   * L'allure de la course en cours.
+   *
+   * Elle vit ici plutot que sur chaque coureur parce qu'elle appartient a
+   * l'epreuve : les huit couloirs la partagent, les fantomes et les coureurs
+   * en direct aussi, et aucun d'eux n'a a se la voir poser a la construction —
+   * ils sont crees a huit endroits differents, et l'un d'eux aurait ete oublie.
+   */
+  let allure = 'academique';
+
+  /** Poser l'allure depuis la cle de l'epreuve. A appeler en construisant. */
+  function poserLAllure(cle) {
+    allure = FOULEE_DES_EPREUVES[cle] || 'academique';
+    return allure;
+  }
+
+  /** L'allure courante, pour qui veut la lire. */
+  function allureCourante() { return allure; }
+
   const GAITS = {
     base: Object.assign({}, GAIT, {
       boost: 1.18, armAmp: 1.00, lean: 1.00, bob: 1.00, stride: 1.00
@@ -1661,6 +1837,26 @@
     const sp = Math.max(0, Math.min(1, r.v / (r.maxSpeed || 12)));
     const P = gaitOf(L);
     const A = 0.34 + 0.66 * sp;
+    // OU L'ON EN EST DE LA SORTIE DES BLOCS : 1 au premier appui hors des
+    // blocs, 0 une fois le corps redresse (TRANS_END). On le lit sur
+    // l'inclinaison que le moteur tient deja plutot que de recalculer une
+    // distance : les deux doivent s'eteindre ensemble, sans quoi le buste se
+    // redresserait avant la jambe, ou l'inverse.
+    //
+    // DANS les blocs, rien : on n'y court pas, et la posture posee
+    // (BLOC, plus bas) doit rester exactement ce qu'elle est.
+    const wBloc = Math.max(0, Math.min(1, r.enBloc || 0));
+    const sortie = Math.max(0, Math.min(1, (r.drivePitch || 0) / C.DRIVE_PITCH)) * (1 - wBloc);
+    // LA CLOCHE DE TRANSITION : nulle a la fin de la poussee, pleine au
+    // milieu du redressement, nulle une fois le corps droit. `legStart` la
+    // recale sur la portion de chaque relayeur.
+    const dTr = (Number.isFinite(r.d) ? r.d : 0) - (r.legStart || 0);
+    const uTr = (dTr - C.DRIVE_END) / Math.max(1, C.TRANS_END - C.DRIVE_END);
+    // ET ELLE NE BAT QU'EN FOULEE VELOCE. La mecanique de DEPART, elle, reste
+    // a tout le monde : personne ne sort des blocs autrement, et c'est la
+    // surenchere du milieu de course qui appartient au sprint pur.
+    const transit = (!(uTr > 0 && uTr < 1) ? 0 : Math.sin(Math.PI * uTr))
+                    * (1 - wBloc) * FOULEES[allure].transit;
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
     let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
@@ -1675,13 +1871,42 @@
     // une impression de mouvement disloque plutot que coordonne.
     const LIMB_BOOST = P.boost;
     function leg(q) {
-      const th = gait(P.thigh, q) * A * LIMB_BOOST;
-      const kn = gait(P.knee, q) * (0.42 + 0.58 * A) * LIMB_BOOST;
+      const gt = gait(P.thigh, q);
+      // La part AVANT du cycle : nulle quand la cuisse est derriere, jusqu'a
+      // son maximum quand le genou est au plus haut devant. C'est elle qui
+      // porte le gain de depart, et c'est ce qui l'empeche de devenir un
+      // coureur assis — voir DRIVE_FRONT.
+      const devant = Math.max(0, gt);
+      let th = (gt * (A + C.DRIVE_THIGH * sortie + C.TRANSIT_AMPL * transit)
+                + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
+      // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
+      // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
+      // se voit et ou il veut dire quelque chose — une jambe qui se replie
+      // vite est une jambe qui repart vite. Amplifier le repli PARTOUT aurait
+      // aussi plie la jambe d'appui, qui doit rester tendue sous le bassin.
+      const gk = gait(P.knee, q);
+      const replie = Math.max(0, -gk) / 2.05;     // 1 au talon-fesse du cycle
+      let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie
+                      + C.TRANSIT_TALON * transit * replie)
+                - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
+      // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
+      // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
+      // redresserait la cuisse en laissant le tibia casse dessous. Le pied
+      // (`an`) n'est pas touche — une cheville qui pousse est en extension,
+      // elle ne s'aligne pas.
+      const derriere = Math.min(1, Math.max(0, -gt) / C.DRIVE_ARRIERE);
+      const ligne = C.DRIVE_LIGNE * sortie * derriere;
+      th *= (1 - ligne);
+      kn *= (1 - ligne);
+      // La cheville ne recoit pas la sortie : au depart le pied reste arme,
+      // il ne fouette pas. L'amplifier donnait un coup de talon de patineur.
       const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(P.arm, q) * (0.55 + 0.45 * A) * LIMB_BOOST * P.armAmp;
+      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortie
+                                   + C.TRANSIT_ARM * transit)
+                 * LIMB_BOOST * P.armAmp;
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
@@ -2240,6 +2465,7 @@
   root.SprinterCore = {
     TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL
   };

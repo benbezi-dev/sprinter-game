@@ -49,7 +49,7 @@
     let im = images.get(cle);
     if (!im) {
       im = new Image();
-      im.decoding = 'async';
+      im.decoding = 'async'; im.onerror = () => setTimeout(() => images.delete(cle), 2000);
       im.src = BASE + '/decors/' + cle;
       images.set(cle, im);
     }

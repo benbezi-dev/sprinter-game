@@ -12,10 +12,13 @@ import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
-import { Tutorial, tutoVu, marquerTutoVu } from './Tutorial';
-import { TutorialHaies, tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
+import { tutoVu, marquerTutoVu } from './Tutorial';
+import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
+import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
+import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
+import { ID_PASTILLES } from '@/hooks/use-pastilles';
 import { BanderoleEdition } from './BanderoleEdition';
 // Charge a la demande, pour la raison expliquee dans App.tsx : un import
 // ordinaire fait voyager tout le mode dans le build public, drapeau ferme ou
@@ -88,7 +91,10 @@ function PiedLiens({ onTour, onTuto, haies }:
   ];
 
   return (
-    <div className="shrink-0 w-full max-w-md mx-auto mt-3 md:mt-4
+    // mt-4 et non mt-3 : le menu au-dessus deborde de 16 px vers le bas
+    // (`-mb-4`, pour le halo de COMMENCER). Avec 12 px d'ecart, ses cartes
+    // passaient sous les liens — vu en 414 x 736 avec la carte du championnat.
+    <div className="relative z-10 shrink-0 w-full max-w-md mx-auto mt-4
                     flex items-center justify-between gap-1">
       {liens.map(({ cle, action }) => (
         <button
@@ -114,8 +120,6 @@ export function TitleScreen() {
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
-  const [tuto, setTuto] = useState(false);
-  const [tutoH, setTutoH] = useState(false);
   // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
   //
   // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
@@ -185,20 +189,8 @@ export function TitleScreen() {
   const repondrePropose = (apprendre: boolean) => {
     setPropose(false);
     if (tutoDesHaies) marquerTutoHaiesVu(); else marquerTutoVu();
-    if (apprendre) { if (tutoDesHaies) setTutoH(true); else setTuto(true); }
+    if (apprendre) { if (tutoDesHaies) ouvrirLeTuto(); else ouvrirLeTutoSprint(); }
     else SprinterApp.startRun();
-  };
-
-  const fermerTuto = (lancer: boolean) => {
-    marquerTutoVu();
-    setTuto(false);
-    if (lancer) SprinterApp.startRun();
-  };
-
-  const fermerTutoH = (lancer: boolean) => {
-    marquerTutoHaiesVu();
-    setTutoH(false);
-    if (lancer) SprinterApp.startRun();
   };
 
   const handleRaceToggle = (key: RaceKey) => {
@@ -294,6 +286,12 @@ export function TitleScreen() {
           </button>
         </div>
 
+        {/* La rangee des pastilles « UN DÉFI » et « UN MESSAGE ». Vide, elle
+            ne prend aucune place ; remplie, elle pousse le titre au lieu de
+            le recouvrir. Voir hooks/use-pastilles.ts. */}
+        <div id={ID_PASTILLES}
+             className="shrink-0 z-20 flex flex-wrap justify-end gap-2 mb-2 empty:hidden" />
+
         <div className="flex-1 min-h-0 flex flex-col landscape:flex-row items-center landscape:items-stretch gap-2 landscape:gap-8 max-w-5xl mx-auto w-full">
 
           {/* LE TITRE, ET LA SCENE DES TROIS COUREURS DU STADE.
@@ -328,7 +326,12 @@ export function TitleScreen() {
 
           {/* LE MENU, SEUL A DEFILER. Sa zone deborde de sa colonne, marge
               interieure comprise : le halo de COMMENCER (trente pixels) s'y
-              dessine en entier au lieu d'etre coupe net au bord. */}
+              dessine en entier au lieu d'etre coupe net au bord.
+              PAS DE `mask-image` ICI, ni de `filter` ou de `transform` : ils
+              enferment dans cette zone les ecrans `fixed` de ses descendants.
+              Un fondu pose ici le 26/09 a decoupe au format du menu la
+              revelation, le boss et les podiums du championnat (Championnat.tsx
+              les ouvre depuis sa carte). */}
           <div ref={rouleau}
                className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
                           w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
@@ -569,7 +572,7 @@ export function TitleScreen() {
       </div>
 
       <PiedLiens onTour={() => setTour(true)} haies={tutoDesHaies}
-                 onTuto={() => (tutoDesHaies ? setTutoH(true) : setTuto(true))} />
+                 onTuto={() => (tutoDesHaies ? ouvrirLeTuto() : ouvrirLeTutoSprint())} />
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
@@ -587,8 +590,6 @@ export function TitleScreen() {
         />
       )}
 
-      {tuto && <Tutorial onClose={fermerTuto} />}
-      {tutoH && <TutorialHaies onClose={fermerTutoH} />}
 
       {DUELS_OUVERTS && showDuels && <DuelRanking onClose={() => setShowDuels(false)} />}
 

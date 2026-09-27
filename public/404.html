@@ -126,10 +126,27 @@ function porteDuDefi(chemin, recherche) {
          (garde.length ? '&' + garde.join('&') : '');
 }
 
+/*
+  LA PORTE DES CHAMPIONNATS — sprinter-game.com/c/HMW36AHQ
+  ---------------------------------------------------------------------------
+  Meme raison que celle des defis : un lien qui se dit et se tape, pour une
+  bio ou une story ou rien n'est cliquable. Elle renvoie sur « ?regarder= »,
+  la page publique du championnat (voir src/game/regarder.ts). « /c/ » seul
+  ouvre le championnat du moment. Ecrite a part de `porteDuDefi` pour ne rien
+  changer a ce que tools/lien-court-test.mjs verifie.
+*/
+function porteDuChampionnat(chemin) {
+  var canal = chemin.indexOf('/test/') === 0 ? '/test/' : '/';
+  var m = /^c(?:\/([A-Za-z0-9]*))?\/?$/.exec(chemin.slice(canal.length));
+  if (!m) return null;
+  return canal + '?regarder' + (m[1] ? '=' + m[1].toUpperCase() : '');
+}
+
 (function () {
   var vers = null;
   try {
-    vers = porteDuDefi(window.location.pathname, window.location.search);
+    vers = porteDuDefi(window.location.pathname, window.location.search)
+        || porteDuChampionnat(window.location.pathname);
   } catch (e) { vers = null; }
 
   if (vers) {

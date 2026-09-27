@@ -61,6 +61,34 @@ let clePlace = '';
 /** De quoi redessiner l'image courante : voir accueilPose. */
 let redessiner: (() => void) | null = null;
 
+/**
+ * LE SALUT DU SACRE.
+ *
+ * Pendant la ceremonie d'un championnat, l'ecran-titre s'efface et il ne reste
+ * que le stade et cette meute. Le coureur du milieu leve alors les bras et
+ * passe au trot : c'est le geste de la cinematique du champion (`celebrate`
+ * a 1, a 18 % de la vitesse), pas un geste de plus a entretenir.
+ *
+ * La foulee s'accumule au lieu de se lire sur l'horloge. Ralentir un coureur
+ * dont la pose vaut `horloge x 10` le ferait sauter d'une pose a l'autre au
+ * moment ou il ralentit ; accumulee, elle ne fait que changer de cadence.
+ * Hors ceremonie elle avance a 10 par seconde depuis la valeur de l'horloge,
+ * soit exactement ce que la formule d'avant donnait.
+ *
+ * Les bras montent et redescendent aux vitesses de la presentation
+ * d'avant-course : le salut ne se coupe pas net quand la ceremonie se ferme.
+ */
+let saluant: number | null = null;
+const salut = [0, 0, 0];
+const foulee: (number | null)[] = [null, null, null];
+let horloge: number | null = null;
+const SALUT_MONTEE = 2.6, SALUT_DESCENTE = 3.4;
+
+/** Le rang, dans la meute, de celui qui salue — `null` : personne. */
+export function saluerALAccueil(qui: number | null): void {
+  saluant = qui;
+}
+
 /** La scene reservee aux coureurs, dans le repere du canvas. */
 function mesurer(cv: HTMLCanvasElement): Boite | null {
   const scene = document.querySelector('[data-accueil-scene]');
@@ -178,13 +206,20 @@ export function dessinerLesCoureursDeLAccueil(ctx: CanvasRenderingContext2D, A: 
   const milieu = T.pos(s, COULOIR);
   const zeze: any[] = Object.values(Core.ZEZE);
   const tick = performance.now() / 1000;
+  const dt = horloge == null ? 0 : Math.min(0.1, Math.max(0, tick - horloge));
+  horloge = tick;
   // Le coureur du dedans devant, celui du dehors derriere : en ligne a
   // l'ecran, et chacun au milieu de son couloir.
   const meute = [-1, 0, 1].map((cote, i) => {
     const Y = T.pos(s, COULOIR + cote * P.pas)[1];
     const [x, y] = A.ground(milieu[0] + recul * (Y - milieu[1]), Y);
-    const man = { look: zeze[i], stride: tick * 10 + i * 2.1, v: 12, maxSpeed: 12,
-                  fallAnim: 0, celebrate: 0 };
+    const cible = saluant === i ? 1 : 0;
+    const vitesse = cible > salut[i] ? SALUT_MONTEE : SALUT_DESCENTE;
+    salut[i] += Math.max(-vitesse * dt, Math.min(vitesse * dt, cible - salut[i]));
+    const f = foulee[i];
+    foulee[i] = f == null ? tick * 10 + i * 2.1 : f + dt * 10 * (1 - 0.7 * salut[i]);
+    const man = { look: zeze[i], stride: foulee[i], v: 12 * (1 - 0.82 * salut[i]), maxSpeed: 12,
+                  fallAnim: 0, celebrate: salut[i] };
     return { man, x, y, k: man.look.h / Core.C.MODEL_H };
   });
   // Les ombres d'abord, toutes : celle d'un coureur ne doit pas passer sur la

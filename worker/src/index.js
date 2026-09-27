@@ -8,19 +8,22 @@ import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
+export { SalleChampionnat } from './salle-championnat.js';
 export { Boite } from './boite.js';
 import { sonner } from './boite.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
-  ensureChampTables, noterPays, choisirPays, paysEligibles, effectifPays,
+  ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
-  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances,
+  annoncerEchelon, annoncerCycle, cloturerSelection, cloturerEcheances, courirSansPersonne, engager,
+  cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
-  medaillesDe, paysDe, listeNations,
+  medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
+  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import {
@@ -96,6 +99,32 @@ const relaisOuvert = () => true;
  * fil, les titres, sa propre edition — reste ouvert a tous.
  */
 const championnatsOuverts = () => true;
+
+/**
+ * Une finale sacre. C'est le moment le plus fort du bareme apres la tete d'un
+ * classement : une date, un nom, un titre.
+ *
+ * Deux chemins y menent — la cloture a la main (`/champ/cloturer`) et celle
+ * que la tache planifiee tient a l'heure du calendrier — et ils doivent dire la
+ * meme chose au dehors. D'ou une seule fonction, que les deux appellent avec
+ * ce que `cloturerPhase` a rendu. Elle ne rend rien pour une phase qui ne
+ * sacre pas, et `noter()` refuse d'elle-meme le canal de test.
+ */
+function signalerSacre(canal, edition, r) {
+  if (!r || r.erreur || !r.finale || !r.podium) return null;
+  const [or, argent] = r.podium;
+  return regarderSacre(canal, {
+    id: edition,
+    echelon: r.echelon || null,
+    pays: r.zone || null,
+    epreuve: r.epreuve || null,
+    champion: or ? or.nom : null,
+    chrono_ms: or ? or.ms : null,
+    deuxieme: argent ? argent.nom : null,
+    deuxieme_ms: argent ? argent.ms : null,
+    partants: Array.isArray(r.classement) ? r.classement.length : null,
+  });
+}
 /**
  * Le mot du vainqueur : ouvert avec les duels, comme annonce.
  *
@@ -178,6 +207,17 @@ function json(data, status = 200) {
 const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  // Le mot d'une course de championnat : meme geste, meme cadence. Un joueur
+  // n'en pose qu'un par course, et il n'y a que treize courses dans une
+  // edition — six par minute laissent passer une reprise apres une coupure et
+  // arretent un script.
+  '/champ/mot': { max: 6, fenetreMs: 60_000 },
+  // La bulle de presentation : une par partant et par phase, reposable
+  // jusqu'a l'appel. Dix par minute laissent corriger une phrase refusee par
+  // le filtre, et arretent qui chercherait a le contourner par essais.
+  '/champ/bulle': { max: 10, fenetreMs: 60_000 },
+  // S'engager ou se retirer : un geste par selection, quelques-uns au plus.
+  '/champ/engager': { max: 10, fenetreMs: 60_000 },
   // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
   // joueur en demande un par partie ; dix par minute et par adresse laissent
   // passer une famille derriere la meme box et arretent net un script.
@@ -626,6 +666,31 @@ async function peutUtiliser(db, nameKey, deviceId) {
   return !!d;
 }
 
+/** Les noms deja pourvus d'un pays, dans cet isolat : une ecriture sur deux
+ *  vient d'un joueur deja note, et une lecture par requete pour le redire
+ *  serait du travail pour rien. */
+const PAYS_DEJA_NOTES = new Set();
+
+async function noterAuPassage(requete, db, pays) {
+  let body;
+  try { body = await requete.json(); } catch { return; }
+  const { device_id, name } = body || {};
+  if (!isValidDeviceId(device_id) || typeof name !== 'string') return;
+  const key = cleanName(name).trim().toLowerCase();
+  if (!key || key === 'anonyme' || PAYS_DEJA_NOTES.has(key)) return;
+  await ensureChampTables(db);
+  const deja = await db.prepare(
+    `SELECT 1 AS ok FROM player_pays WHERE name_key = ?`).bind(key).first();
+  if (!deja) {
+    const inscrit = await db.prepare(
+      `SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(key).first();
+    if (!inscrit) return;                 // nom libre : rien a qui l'attribuer
+    if (!(await peutUtiliser(db, key, device_id))) return;
+    await noterPays(db, key, pays);
+  }
+  PAYS_DEJA_NOTES.add(key);
+}
+
 async function ensureChallengeTables(db) {
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS challenges (
@@ -1013,6 +1078,28 @@ export default {
           .then(b => { if (b.figees) console.log('nations figees', nom, JSON.stringify(b)); })
           .catch(e => console.log('nations KO', nom, String(e && e.message || e)))
       );
+      // Les series que personne n'est venu courir : voir courirSansPersonne.
+      //
+      // PUIS les phases dont l'heure est venue : voir cloturerAuxHeures. A la
+      // suite et non en parallele — une finale que personne n'est venu courir
+      // se range a +15 min, et son sacre tombe a +20 : le lire avant le
+      // rangement ferait attendre le sacre d'un passage pour rien.
+      const canalDuCron = { test: nom === 'test', nom: null, db };
+      ctx.waitUntil(
+        courirSansPersonne(db, quand)
+          .then(r => { if (r.length) console.log('champ courses rangees', nom, JSON.stringify(r)); })
+          .catch(e => console.log('champ rangement KO', nom, String(e && e.message || e)))
+          .then(() => cloturerAuxHeures(db, quand))
+          .then(closes => {
+            if (!closes.length) return;
+            console.log('champ phases closes', nom, JSON.stringify(closes.map(c => ({
+              edition: c.edition, moment: c.moment, erreur: c.erreur || null,
+              champion: c.finale ? c.champion : undefined,
+            }))));
+            return Promise.all(closes.map(c => signalerSacre(canalDuCron, c.edition, c)));
+          })
+          .catch(e => console.log('champ phases KO', nom, String(e && e.message || e)))
+      );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
           .then(b => {
@@ -1180,6 +1267,20 @@ async function servir(request, env, ctx, porteur) {
     }
 
     canal.db = env.DB;
+
+    // ------------------------------------------ la nationalite automatique
+    //
+    // Un joueur qui ne choisit pas de nationalite en recoit une : celle du
+    // pays d'ou il se connecte. Elle etait notee sur `/submit` seulement, et
+    // qui ne jouait qu'en duel n'en avait jamais — donc aucun championnat.
+    // On la note desormais sur TOUTE ecriture qui porte un nom et un appareil,
+    // une seule fois (`noterPays` ne remplace rien), et seulement si le nom
+    // est a cet appareil : sinon n'importe qui, derriere un VPN, poserait le
+    // pays d'un nom qu'il ne porte pas.
+    if (request.method === 'POST' && request.cf && request.cf.country) {
+      ctx.waitUntil(noterAuPassage(request.clone(), env.DB, request.cf.country)
+        .catch(e => console.log('pays auto KO', String(e && e.message || e))));
+    }
 
     // --------------------------------------------------------- anti-abus
     //
@@ -1590,12 +1691,6 @@ async function servir(request, env, ctx, porteur) {
       return json({ race, by, entries });
     }
 
-    // Le pays d'un joueur, vu par Cloudflare sur la requete elle-meme. On le
-    // note au passage plutot que de le demander : personne n'a envie de
-    // remplir un formulaire pour courir un 100 metres. Le joueur peut le
-    // corriger, et son choix ne se fait jamais ecraser.
-    const paysVu = (request.cf && request.cf.country) || null;
-
     if (url.pathname === '/submit' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -1603,7 +1698,6 @@ async function servir(request, env, ctx, porteur) {
       const { device_id, race_key, name, time_ms, best_split_ms, trace } = body || {};
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
-      if (paysVu) await noterPays(env.DB, cleanName(name).trim().toLowerCase(), paysVu);
       // Le cumul sentinelle n'est pas un chrono : il dit « pas de parcours
       // complet derriere », et c'est ce que porte tout record du monde couru
       // hors carriere. Il passe donc quel que soit le plafond des vrais
@@ -1739,6 +1833,181 @@ async function servir(request, env, ctx, porteur) {
       }
       const sous = url.pathname.slice('/champ/'.length);
 
+      /* LA COURSE EN DIRECT D'UNE SERIE : /champ/salle/<edition>/<phase>/<course>
+         suivi de rien (la WebSocket), de /etat ou de /lancer.
+
+         Le worker ne fait qu'aiguiller, comme pour le direct — avec une
+         verification de plus, et c'est la seule qui compte : cet appareil
+         porte-t-il bien ce nom ? Un partant se reconnait a son nom ; sans
+         cette preuve, n'importe qui pourrait prendre son couloir, ou y
+         commettre un faux depart a sa place. Sans elle, on entre quand meme
+         — en spectateur. `verifie` et `canal` sont poses ICI, jamais repris
+         de la requete : la salle les croit sur parole. */
+      if (sous.startsWith('salle/')) {
+        const [edBrut, phase, courseBrut, tail] = sous.slice('salle/'.length).split('/');
+        const edition = String(edBrut || '').toUpperCase();
+        const course = parseInt(courseBrut || '', 10);
+        if (!/^[A-Z0-9]{4,12}$/.test(edition) || !/^[a-z]{3,20}$/.test(phase || '')
+            || !Number.isFinite(course) || course < 1 || course > 16) {
+          return json({ error: 'course invalide' }, 400);
+        }
+        if (!env.SALLES_CHAMP) return json({ error: 'salle indisponible' }, 503);
+        if (tail === 'lancer' && !estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : tail === 'lancer' ? '/lancer' : '/ws';
+        cible.searchParams.delete('verifie');
+        cible.searchParams.delete('canal');
+        cible.searchParams.set('edition', edition);
+        cible.searchParams.set('phase', phase);
+        cible.searchParams.set('course', String(course));
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        if (!tail) {
+          const cle = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+          const appareil = url.searchParams.get('device') || '';
+          const verifie = !!cle && cle !== 'anonyme' && isValidDeviceId(appareil)
+            && await peutUtiliser(env.DB, cle, appareil);
+          if (verifie) cible.searchParams.set('verifie', '1');
+        }
+        const id = env.SALLES_CHAMP.idFromName(
+          (canal.test ? 'CHT-' : 'CH-') + edition + '-' + phase + '-' + course);
+        const rep = await env.SALLES_CHAMP.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      /* LE MOT DU VAINQUEUR D'UNE COURSE.
+         Le serveur ne croit rien de ce que le client annonce : il relit
+         lui-meme qui a gagne (voir `poserMotDeCourse`).
+
+         `ensureChampTables` EN TETE DES DEUX ROUTES, et ce n'est pas une
+         precaution decorative : `champ_mots` est une table neuve, et le bloc
+         `/champ/` ne creait ses tables nulle part — elles existaient parce
+         que `/profil` les creait en passant. La premiere requete sur le mot
+         tombait donc sur « no such table », constate en local. */
+      if (sous === 'mot' && request.method === 'POST') {
+        await ensureChampTables(env.DB);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { edition, phase, course, name, device_id, texte, voix, voix_type } = body || {};
+        // Le nom ne suffit plus (26/09) : le mot est diffuse en direct, et
+        // n'importe qui pouvait jusqu'ici parler sous le nom du vainqueur.
+        // Comme partout ailleurs, l'appareil doit porter ce nom.
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const nom = cleanName(name);
+        const cle = nom.trim().toLowerCase();
+        if (!(await peutUtiliser(env.DB, cle, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/mot', nameKey: cle, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await poserMotDeCourse(env.DB, {
+          edition, phase, course: Number(course), nom,
+          texte, voix, voix_type,
+        });
+        if (r.error) {
+          return json(r.raison ? { error: r.error, raison: r.raison } : { error: r.error },
+                      r.code || 400);
+        }
+        // LE MOT EN DIRECT : ceux qui sont encore dans la salle de la course
+        // le recoivent a l'instant. Par le worker seulement — la salle n'est
+        // joignable que par son nom, et l'aiguillage public ci-dessus ne
+        // produit jamais le chemin `/mot`. Un echec ici ne defait pas le mot :
+        // il est pose, les autres le liront en revenant.
+        if (env.SALLES_CHAMP) {
+          ctx.waitUntil((async () => {
+            try {
+              const n = Number(course);
+              const id = env.SALLES_CHAMP.idFromName(
+                (canal.test ? 'CHT-' : 'CH-') + edition + '-' + phase + '-' + n);
+              await env.SALLES_CHAMP.get(id).fetch(new Request('https://salle/mot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Interne': '1' },
+                body: JSON.stringify({
+                  edition, phase, course: n, canal: canal.test ? 'test' : '',
+                  mot: { nom, texte: r.texte, a_voix: !!r.voix },
+                }),
+              }));
+            } catch (e) {
+              console.log('mot en direct KO', String(e && e.message || e));
+            }
+          })());
+        }
+        return json(r);
+      }
+
+      // La voix d'un mot, a la demande — jamais avec l'edition : elle pese
+      // jusqu'a deux cents kilooctets et l'edition se recharge sans cesse.
+      if (sous === 'mot' && request.method === 'GET') {
+        await ensureChampTables(env.DB);
+        const edition = url.searchParams.get('edition') || '';
+        const phase = url.searchParams.get('phase') || '';
+        const course = Number(url.searchParams.get('course'));
+        if (!edition || !phase || !Number.isInteger(course)) {
+          return json({ error: 'course manquante' }, 400);
+        }
+        const v = await voixDuMot(env.DB, edition, phase, course);
+        if (!v) return json({ error: 'pas de voix' }, 404);
+        return json(v);
+      }
+
+      /* LA BULLE DE PRESENTATION (26/09) : la phrase qu'un partant des demies
+         ou de la finale fait afficher au-dessus de sa tete pendant ses trois
+         secondes de presentation. Le nom doit etre a cet appareil ; le reste
+         — partant, phase, heure, texte — se verifie dans `poserBulle`.
+         `ensureChampTables` en tete, pour la raison dite au-dessus du mot. */
+      if (sous === 'bulle' && request.method === 'POST') {
+        await ensureChampTables(env.DB);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { edition, phase, name, device_id, texte } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const nom = cleanName(name);
+        const cle = nom.trim().toLowerCase();
+        if (!cle || cle === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        if (!(await peutUtiliser(env.DB, cle, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/bulle', nameKey: cle, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await poserBulle(env.DB, { edition, phase, nom, texte });
+        if (r.error) {
+          return json(r.raison ? { error: r.error, raison: r.raison } : { error: r.error },
+                      r.code || 400);
+        }
+        return json(r);
+      }
+
+      /* LA MODERATION : retirer une bulle ou un mot que le filtre a laisse
+         passer, et relire tout ce qu'une edition montre d'ecrit par des
+         joueurs. Sous cle d'administration. */
+      if (sous === 'moderer' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const r = await moderer(env.DB, body || {});
+        return r.error ? json({ error: r.error }, r.code || 400) : json(r);
+      }
+      if (sous === 'moderation' && request.method === 'GET') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        const edition = String(url.searchParams.get('edition') || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,12}$/.test(edition)) return json({ error: 'edition invalide' }, 400);
+        return json(await moderation(env.DB, edition));
+      }
+
+      /* LES FICHES DE LA PRESENTATION : palmares, niveau de duel et bilan de
+         chaque partant, pour la presentation sur la piste — en direct comme
+         en retransmission. `cles` : les partants a presenter, separes par
+         des virgules. `avant` : l'heure de la course, pour qu'un rejeu
+         n'annonce pas la medaille que la course va donner (voir fichesDe). */
+      if (sous === 'fiches' && request.method === 'GET') {
+        const edition = String(url.searchParams.get('edition') || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,12}$/.test(edition)) return json({ error: 'edition invalide' }, 400);
+        const cles = String(url.searchParams.get('cles') || '').split(',');
+        const avant = Number(url.searchParams.get('avant'));
+        const r = await fichesDe(env.DB, edition, cles, avant);
+        if (!r) return json({ error: 'edition introuvable' }, 404);
+        return json(r);
+      }
+
       // Ou en est le monde : quels pays peuvent tenir leur championnat.
       //
       // Sur une epreuve, forcement : un pays de sprinters tient son 100 m sans
@@ -1764,6 +2033,35 @@ async function servir(request, env, ctx, porteur) {
         }
         const r = await choisirPays(env.DB, key, pays);
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+      }
+
+      // Poser ou corriger la nationalite d'un joueur. Le seul geste qui passe
+      // le verrou, et il est sous cle : cote joueur, un choix ne se defait pas.
+      if (sous === 'nationalite' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const key = cleanName((body || {}).name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
+        const r = await imposerPays(env.DB, key, (body || {}).pays);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
+      }
+
+      // Les demandes de changement faites depuis le jeu, et leur traitement.
+      if (sous === 'demandes' && request.method === 'GET') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        return json({ demandes: await demandesEnAttente(env.DB) });
+      }
+      if (sous === 'demande' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const key = String((body || {}).name_key || '').trim().toLowerCase();
+        if (!key) return json({ error: 'nom invalide' }, 400);
+        await ensurePlayerTables(env.DB);
+        const r = await traiterDemande(env.DB, key, (body || {}).accepter === true);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
       }
 
       if (sous === 'titres' && request.method === 'GET') {
@@ -1837,6 +2135,24 @@ async function servir(request, env, ctx, porteur) {
       // manquent qui fait rejouer, et c'est une information que le joueur peut
       // recompter lui-meme dans le classement — ce qui est tout l'interet
       // d'avoir qualifie a l'echelle visible.
+      // S'engager pour l'edition a venir de son pays, ou se retirer. Sous
+      // preuve de nom, comme le choix du pays : sans elle, n'importe qui
+      // pourrait retirer un rival de la selection.
+      if (sous === 'engager' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, name, engage } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const key = cleanName(name).trim().toLowerCase();
+        if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: '/champ/engager', nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const r = await engager(env.DB, key, engage !== false);
+        return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
+      }
+
       if (sous === 'selection' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
         if (!key) return json({ error: 'nom manquant' }, 400);
@@ -1953,6 +2269,18 @@ async function servir(request, env, ctx, porteur) {
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
 
+      // Ranger d'un geste les series que personne n'est venu courir — ce que
+      // la tache planifiee fait toute seule un quart d'heure apres l'heure
+      // (voir courirSansPersonne). `maintenant` ne s'accepte que sur le canal
+      // de test : c'est lui qui permet de rejouer un samedi passe.
+      if (sous === 'ranger' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body = {};
+        try { body = await request.json(); } catch { /* sans corps : maintenant */ }
+        const t = canal.test && Number.isFinite(Number(body.maintenant)) ? Number(body.maintenant) : Date.now();
+        return json({ rangees: await courirSansPersonne(env.DB, t) });
+      }
+
       // La cloture d'une phase : c'est elle qui qualifie et qui seme la suite.
       if (sous === 'cloturer' && request.method === 'POST') {
         if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
@@ -1960,31 +2288,8 @@ async function servir(request, env, ctx, porteur) {
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const edition = String(body.edition || '').toUpperCase();
         const r = await cloturerPhase(env.DB, edition);
-
-        // Une finale sacre. C'est le moment le plus fort du bareme apres la
-        // tete d'un classement : une date, un nom, un titre.
-        //
-        // A ce jour l'appel ne produit rien, et c'est normal : les
-        // championnats sont reserves au canal de test (`championnatsOuverts`
-        // juste au-dessus), et `noter()` refuse le canal de test. Le crochet
-        // est pose pour le jour ou ils s'ouvriront — le brancher ce jour-la,
-        // dans un fichier qu'on aura oublie, coute plus cher que de le poser
-        // maintenant a l'endroit qui sait.
-        if (r && !r.erreur && r.finale && r.podium) {
-          const [or, argent] = r.podium;
-          ctx.waitUntil(regarderSacre(canal, {
-            id: edition,
-            echelon: r.echelon || null,
-            pays: r.zone || null,
-            epreuve: r.epreuve || null,
-            champion: or ? or.nom : null,
-            chrono_ms: or ? or.ms : null,
-            deuxieme: argent ? argent.nom : null,
-            deuxieme_ms: argent ? argent.ms : null,
-            partants: Array.isArray(r.classement) ? r.classement.length : null,
-          }));
-        }
-
+        const signal = signalerSacre(canal, edition, r);
+        if (signal) ctx.waitUntil(signal);
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
       }
 
@@ -2373,7 +2678,15 @@ async function servir(request, env, ctx, porteur) {
        est le moment ou il confirme avoir demande.
 
        `name` ne sert qu'a retrouver SON pays, pour la ligne « moi » — jamais a
-       classer quelqu'un. */
+       classer quelqu'un.
+
+       LA MEME ROUTE PORTE LA LISTE DES PAYS CHOISISSABLES (`nations`). Le
+       selecteur « TON PAYS » (identity.ts) et suivi/championnats.html lisent
+       `/nations` sans parametre et n'en prennent que ce champ ; une seconde
+       route `/nations` plus bas le servait, mais celle-ci la masquait et le
+       selecteur restait vide (constat du 23 septembre 2026). Les applis
+       publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
+       liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
     if (url.pathname === '/nations' && request.method === 'GET') {
       const race = url.searchParams.get('race') || EPREUVE_NATIONS;
       if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
@@ -2387,7 +2700,8 @@ async function servir(request, env, ctx, porteur) {
         sien = m.get(nom) || '';
       }
 
-      return json(await tableauDesNations(env.DB, { epreuve: race, pays: sien || null }));
+      const tableau = await tableauDesNations(env.DB, { epreuve: race, pays: sien || null });
+      return json({ ...tableau, nations: listeNations() });
     }
 
     if (url.pathname === '/duels' && request.method === 'GET') {
@@ -2889,19 +3203,27 @@ async function servir(request, env, ctx, porteur) {
     // declare son pseudo. La seule chose que l'on verifie, c'est que celui qui
     // le declare a bien le droit d'ecrire sous ce nom — sinon n'importe qui
     // pourrait accrocher le compte de quelqu'un d'autre a son propre chrono.
-    /**
-     * Les pays qu'on peut se choisir.
-     *
-     * Le selecteur du jeu lisait cette liste depuis toujours ; elle n'a jamais
-     * existe. Il recevait donc 404, se repliait sur une liste vide, et
-     * proposait un choix entre rien — on ne pouvait pas se donner de
-     * nationalite, sur aucun des deux canaux.
-     *
-     * Pas de porte dessus : nommer les pays n'engage rien, et la liste est la
-     * meme pour tout le monde.
-     */
-    if (url.pathname === '/nations' && request.method === 'GET') {
-      return json({ nations: listeNations() });
+    // (La liste des pays choisissables est servie par `/nations`, plus haut,
+    // avec le classement : une seconde route du meme chemin ne serait jamais
+    // atteinte.)
+
+    // Le joueur demande a changer de nationalite. Sous son nom et son appareil,
+    // comme tout ce qui s'ecrit a son nom ; la demande attend l'administration.
+    if (url.pathname === '/profil/demande-pays' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name, pays, message } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const p = await env.DB.prepare(`SELECT name FROM players WHERE name_key = ?`).bind(key).first();
+      if (!p) return json({ error: 'reserve d abord ton nom' }, 409);
+      if (!(await peutUtiliser(env.DB, key, device_id))) {
+        return json({ error: 'ce nom ne t appartient pas' }, 403);
+      }
+      const r = await demanderPays(env.DB, key, p.name, pays, message);
+      return r.erreur ? json({ error: r.erreur }, r.code || 400) : json(r);
     }
 
     if (url.pathname === '/profil' && request.method === 'POST') {
@@ -2972,10 +3294,11 @@ async function servir(request, env, ctx, porteur) {
       if (!key) return json({ insta: null, pays: null, source: null });
       await ensurePlayerTables(env.DB);
       await ensureChampTables(env.DB);
-      const [p, g] = await Promise.all([
+      const [p, g, dem] = await Promise.all([
         env.DB.prepare(`SELECT insta FROM players WHERE name_key = ?`).bind(key).first(),
         env.DB.prepare(`SELECT pays, source FROM player_pays WHERE name_key = ?`)
           .bind(key).first(),
+        demandeDe(env.DB, key),
       ]);
       // `source` compte autant que le pays : 'choix' veut dire que le joueur
       // l'a dit, 'vu' que Cloudflare a devine d'ou venait la requete. Les
@@ -2985,6 +3308,11 @@ async function servir(request, env, ctx, porteur) {
         insta: (p && p.insta) || null,
         pays: (g && g.pays) || null,
         source: (g && g.source) || null,
+        // Le nom est-il reserve ? L'ecran d'administration en a besoin pour
+        // dire « joueur inconnu » AVANT d'ecrire, pas apres.
+        inscrit: !!p,
+        // La derniere demande de changement, et ce qu'on en a fait.
+        demande: dem ? { pays: dem.pays, statut: dem.statut } : null,
       });
     }
 

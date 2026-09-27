@@ -23,6 +23,12 @@
    deux personnes qui ont choisi de se defier, un seul message, pas de reponse —
    mais il ne les relit pas. Le jour ou le jeu s'ouvrira a des inconnus, il
    faudra un signalement et de quoi le traiter.
+
+   Ce jour est venu pour le championnat (26/09) : la bulle de presentation, le
+   tchat de la chambre d'appel et le mot du vainqueur diffuse en direct sont
+   lus par des inconnus. Ils passent par `texteRecevable`, plus bas — un filtre
+   automatique —, et une route d'administration retire ce qu'il a laisse
+   passer. Le duel, lui, garde son cadre a deux.
 --------------------------------------------------------------------------- */
 
 /** Un mot tient en deux phrases. Au-dela, ce n'est plus une pique. */
@@ -69,11 +75,199 @@ const INVISIBLES = new RegExp(
  * rendu ne l'interprete pas.
  */
 export function motPropre(brut) {
+  return nettoyer(brut).slice(0, MAX_TEXTE);
+}
+
+/** Le nettoyage de `motPropre`, sans la coupe : le filtre doit voir la vraie
+ *  longueur pour pouvoir la refuser au lieu de la tronquer en silence. */
+function nettoyer(brut) {
   return String(brut || '')
     .replace(INVISIBLES, ' ')
     .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_TEXTE);
+    .trim();
+}
+
+/* ---------------------------------------------------------------------------
+   LE FILTRE — ce qui peut etre lu par des inconnus
+   ---------------------------------------------------------------------------
+   Une bulle au-dessus d'une tete, un message dans la chambre d'appel, le mot
+   du vainqueur diffuse a la salle : trois textes ecrits par un joueur et lus
+   par des gens qu'il ne connait pas. Le filtre refuse quatre choses, et dit
+   laquelle — le joueur doit pouvoir corriger, pas deviner :
+
+   - 'long'     : plus long que la place prevue. On refuse plutot que de
+                  couper : une phrase coupee au milieu dit autre chose.
+   - 'lien'     : une adresse. Le jeu n'est pas une vitrine pour autre chose.
+   - 'contact'  : un @pseudo, un numero, un compte ailleurs. Une chambre
+                  d'appel n'est pas l'endroit ou un inconnu recupere le moyen
+                  d'ecrire en prive a un mineur.
+   - 'grossier' : insultes, injures racistes ou homophobes, sexuel explicite,
+                  en francais et en anglais.
+
+   Le texte montre est celui que `nettoyer` rend : la normalisation qui suit ne
+   sert qu'a CHERCHER (casse, accents, chiffres a la place des lettres, lettres
+   repetees, lettres espacees), jamais a reecrire ce que le joueur a ecrit.
+
+   Ce que le filtre ne fait pas, et il ne faut pas le lui demander : il ne
+   comprend pas. Une insulte assez inventive passera, une phrase innocente
+   tombera parfois. C'est pour cela que la route d'administration
+   (`/champ/moderer`) existe a cote de lui.
+--------------------------------------------------------------------------- */
+
+/** La bulle de presentation : deux lignes courtes au-dessus d'une tete. */
+export const BULLE_MAX = 40;
+/** Un message de la chambre d'appel : la longueur du mot du vainqueur. */
+export const TCHAT_MAX = 140;
+
+/**
+ * Les lettres d'autres alphabets qui ressemblent aux notres, et que la
+ * normalisation Unicode ne rapproche pas : un c cyrillique dans « connard »
+ * se lit comme un c latin et passerait sans cela. En echappements, pour la
+ * meme raison que les invisibles : ecrits en clair, on ne les distinguerait
+ * pas des lettres latines en relisant ce fichier.
+ */
+const SOSIES = {
+  // cyrillique : a b e e k m h o p c t y x i j s
+  'а': 'a', 'в': 'b', 'е': 'e', 'ё': 'e', 'к': 'k',
+  'м': 'm', 'н': 'h', 'о': 'o', 'р': 'p', 'с': 'c',
+  'т': 't', 'у': 'y', 'х': 'x', 'і': 'i', 'ј': 'j',
+  'ѕ': 's',
+  // grec : a b e i k v o p t u x
+  'α': 'a', 'β': 'b', 'ε': 'e', 'ι': 'i', 'κ': 'k',
+  'ν': 'v', 'ο': 'o', 'ρ': 'p', 'τ': 't', 'υ': 'u',
+  'χ': 'x',
+};
+/** Le langage des chiffres (« c0nn4rd ») et des symboles (« $alope »). */
+const LEET = { '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't', '@': 'a', '$': 's' };
+
+/**
+ * Les mots refuses quand ils sont ENTIERS. Un mot, pas un morceau de mot :
+ * « con » refuse « t'es con » et laisse passer « second », « conte »,
+ * « concentration ». Le pluriel en -s est accepte par la recherche.
+ *
+ * Choix assumes : « merde » n'y est pas — c'est un juron, pas une insulte, et
+ * « merde, faux depart » ne blesse personne. « putain » y est : dans une bulle
+ * montree en grand a toute une salle, c'est un gros mot.
+ *
+ * Et des absents voulus, parce que ce sont aussi des mots francais ordinaires
+ * une fois les accents retires : « retard » (anglais « retard », mais « desole
+ * du retard »), « rape » (« fromage rape »), « pedale » (« je pedale dans la
+ * semoule »), « debile » (« c'est debile, ce depart »).
+ */
+const MOTS_GROSSIERS = new Set([
+  // francais — insultes et vulgarite
+  'con', 'conne', 'connard', 'conard', 'connasse', 'conasse', 'salope', 'salop',
+  'salaud', 'pute', 'putain', 'ptn', 'pouffiasse', 'poufiasse', 'encule',
+  'enculee', 'enculer', 'enculeur', 'batard', 'batarde', 'fdp', 'ntm', 'nique',
+  'niquer', 'niquez', 'nik', 'niker', 'niquetamere', 'tg', 'ftg', 'bite',
+  'couille', 'branleur', 'branleuse', 'branlette', 'suce', 'sucer', 'suceur',
+  'suceuse', 'trouduc', 'enfoire', 'enfoiree', 'abruti', 'abrutie', 'cretin',
+  'cretine', 'gogol', 'triso', 'foutre', 'porno', 'baise', 'baiseur', 'sodomie',
+  'sodomiser',
+  // francais — injures racistes, antisemites, homophobes
+  'pd', 'pede', 'tapette', 'tarlouze', 'tafiole', 'gouine', 'negre',
+  'negresse', 'bougnoule', 'bougnoul', 'bicot', 'youpin', 'youpine',
+  'chinetoque', 'bamboula', 'nazi', 'hitler',
+  // anglais
+  'fuck', 'fucked', 'fucker', 'fucking', 'fuckin', 'motherfucker', 'bitch',
+  'bitche', 'bastard', 'asshole', 'arsehole', 'dick', 'dickhead', 'cock', 'cunt',
+  'pussy', 'whore', 'slut', 'fag', 'faggot', 'nigger', 'nigga', 'retarded',
+  'twat', 'wanker', 'porn', 'rapist', 'kys', 'stfu', 'gtfo',
+]);
+
+/** Les expressions refusees, mot a mot (les separateurs entre les mots sont
+ *  libres : « tue-toi » et « tue toi » sont la meme phrase). */
+const PHRASES_GROSSIERES = [
+  'ta gueule', 'nique ta mere', 'fils de pute', 'tue toi', 'suicide toi',
+  'va mourir', 'kill yourself', 'kill urself',
+  'sale (?:noir|noire|arabe|juif|juive|renoi|rebeu|negre|chinois|chinoise|gitan|gitane|pede|gouine|race)s?',
+].map(p => new RegExp('(?:^|[^a-z0-9])' + p.replace(/ /g, '[^a-z0-9]+') + '(?=$|[^a-z0-9])'));
+
+/**
+ * Les plus graves, cherches aussi comme MORCEAU du texte colle — tout ce qui
+ * n'est ni lettre ni chiffre retire —, pour attraper « c o n n a r d » ou
+ * « n.i.q.u.e ta mere ».
+ *
+ * La liste est courte a dessein. Chaque mot y a ete relu contre les mots
+ * innocents qui le contiennent une fois les espaces retires : « salope » n'y
+ * est pas a cause de « salopette », « pute » a cause de « dispute », « batard »
+ * a cause de « combat ardent », « negre » a cause de « une grenouille »,
+ * « bitch » a cause de « a bit cheap », « slut » a cause de « is lutte »,
+ * « conard » a cause de « Macon ardent ».
+ */
+const MORCEAUX_GRAVES = [
+  'connard', 'connasse', 'encule', 'fdp', 'filsdepute', 'niquetamere',
+  'tagueule', 'suicidetoi', 'nigger', 'nigga', 'faggot', 'fuck', 'bougnoule',
+  'chinetoque', 'tarlouze', 'pouffiasse', 'hitler',
+];
+
+const LIENS = [
+  /https?:\/\//,
+  /\bwww\./,
+  /\b[a-z0-9-]+\.(?:com|fr|net|org|io|gg|me|ly|co|app|xyz|tv|be|ch|ca)\b/,
+  /discord\.gg/,
+  /\bt\.me\b/,
+  /\bwa\.me\b/,
+];
+
+/** Le nom d'un autre reseau, la ou l'on donne son compte. */
+const RESEAU = '\\b(?:snap(?:chat)?|insta(?:gram)?|whats ?app|telegram|tiktok)';
+const CONTACTS = [
+  // Un @pseudo, ou une adresse de courriel.
+  /@\w{2,}/,
+  // Sept chiffres ou plus, espaces, points ou tirets compris : un numero.
+  /\d(?:[\s.\-]?\d){6,}/,
+  // Un compte sur un autre reseau : « snap : jules », « mon insta c'est
+  // jules », « insta jules_06 ». Le nom seul (« je suis sur insta ») passe.
+  new RegExp(RESEAU + '\\b(?:\\s*[:=@]\\s*|\\s+c[\'\\u2019]?est\\s+)@?[a-z0-9_.]{2,}'),
+  new RegExp(RESEAU + '\\s+@?[a-z0-9.]*[0-9_][a-z0-9_.]*'),
+];
+
+/** Casse, largeurs et ligatures (NFKC), sosies, accents, caracteres de
+ *  format : la forme ou l'on cherche les liens et les contacts. */
+function forme(texte) {
+  return texte.normalize('NFKC').toLowerCase()
+    .replace(/[Ͱ-ϿЀ-ӿ]/g, c => SOSIES[c] || c)
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .replace(/\p{Cf}/gu, '');
+}
+
+/** Les lettres repetees trois fois ou plus n'en font plus qu'une. */
+const reduire = (s) => s.replace(/([a-z])\1{2,}/g, '$1');
+
+/**
+ * Ce texte peut-il etre montre a d'autres ?
+ *
+ * Rend `{ ok: true, texte }` — le texte nettoye, tel qu'il sera affiche — ou
+ * `{ ok: false, raison }` avec raison parmi 'vide', 'long', 'lien', 'contact',
+ * 'grossier'.
+ */
+export function texteRecevable(brut, max) {
+  if (typeof brut !== 'string') return { ok: false, raison: 'vide' };
+  // Un texte qui depasse de tres loin la place n'a pas besoin d'etre lu en
+  // entier pour etre refuse : un envoi d'un megaoctet ne doit rien couter.
+  if (brut.length > Math.max(4000, max * 20)) return { ok: false, raison: 'long' };
+  const texte = nettoyer(brut);
+  if (!texte) return { ok: false, raison: 'vide' };
+  if (texte.length > max) return { ok: false, raison: 'long' };
+
+  const f = forme(texte);
+  if (LIENS.some(r => r.test(f))) return { ok: false, raison: 'lien' };
+  if (CONTACTS.some(r => r.test(f))) return { ok: false, raison: 'contact' };
+
+  // La forme lue : chiffres et symboles rendus a leurs lettres, repetitions
+  // ecrasees. Puis la meme, collee, pour les lettres espacees.
+  const lu = reduire(f.replace(/[013457@$]/g, c => LEET[c]));
+  const mots = lu.split(/[^a-z0-9]+/).filter(Boolean);
+  if (mots.some(m => MOTS_GROSSIERS.has(m) ||
+                     (m.endsWith('s') && MOTS_GROSSIERS.has(m.slice(0, -1))))) {
+    return { ok: false, raison: 'grossier' };
+  }
+  if (PHRASES_GROSSIERES.some(r => r.test(lu))) return { ok: false, raison: 'grossier' };
+  const colle = reduire(lu.replace(/[^a-z0-9]+/g, ''));
+  if (MORCEAUX_GRAVES.some(m => colle.includes(m))) return { ok: false, raison: 'grossier' };
+
+  return { ok: true, texte };
 }
 
 /** Verifie un enregistrement encode. Renvoie null s'il n'est pas recevable. */

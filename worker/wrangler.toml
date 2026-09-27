@@ -42,6 +42,10 @@ new_sqlite_classes = ["SalleConfrontation"]
 tag = "v4"
 new_sqlite_classes = ["Boite"]
 
+[[migrations]]
+tag = "v5"
+new_sqlite_classes = ["SalleChampionnat"]
+
 # Une salle de relais par equipe : quatre joueurs et un temoin partagent le
 # meme objet, comme les deux joueurs d'un duel partagent le leur.
 [[durable_objects.bindings]]
@@ -64,6 +68,12 @@ class_name = "SalleConfrontation"
 [[durable_objects.bindings]]
 name = "BOITES"
 class_name = "Boite"
+
+# La course en direct d'une serie de championnat : une salle par course, avec
+# sa grille, son heure et son faux depart. Voir salle-championnat.js.
+[[durable_objects.bindings]]
+name = "SALLES_CHAMP"
+class_name = "SalleChampionnat"
 
 # L'Objectif du jour part a midi et a dix-neuf heures — a l'heure du joueur,
 # pas a celle du serveur. Un envoi unique a 12:00 UTC tomberait a 4 h du matin

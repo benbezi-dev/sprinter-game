@@ -226,6 +226,18 @@ export const HALLOWEEN_OUVERT = EST_TEST;
 export const HALLOWEEN_2026_OUVERT = EST_TEST;
 
 /**
+ * LE TCHAT RAPIDE dans les salles de course : des phrases ecrites par le jeu,
+ * envoyees par les joueurs (voir game/tchat-rapide.ts).
+ *
+ * Il commence la ou les nouveautes commencent — sur le canal de test — le
+ * temps de voir ce qui ne se voit qu'en jouant : que les bulles ne cachent
+ * rien d'utile, dans le salon, sur la piste et dans la tribune d'une serie.
+ * Le serveur accepte deja les phrases des deux canaux : ouvrir a tout le
+ * monde se reduit a ce `true`, sans redeployer le worker.
+ */
+export const TCHAT_RAPIDE_OUVERT = EST_TEST;
+
+/**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
  * d'artifice pour un record du monde.
  *

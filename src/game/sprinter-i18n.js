@@ -146,14 +146,14 @@
                      'reduced to one: the last few went unopened'],
     // Les quatre conseils. Chacun designe une chose mesurée sur la course
     // qu'on vient de courir, jamais un encouragement general.
-    obj_c_depart:   ['tu perds {n} s au coup de pistolet. Le départ se joue avant, pas après.',
-                     'you lose {n} s at the gun. The start is won before it, not after.'],
+    obj_c_depart:   ['tu perds {n} s au départ. Le départ se joue avant, pas après.',
+                     'you lose {n} s at the start. The start is won before it, not after.'],
     obj_c_trans:    ['ta transition casse le rythme. Accélère la cadence AVANT la sortie de poussée.',
                      'your transition breaks the rhythm. Raise the cadence BEFORE the drive ends.'],
     obj_c_chute:    ['tu répètes la même touche. Alterne franchement : deux fois à gauche coûte plus qu\u2019un temps de retard.',
                      'you repeat the same key. Alternate cleanly: two lefts cost more than a slow beat.'],
-    obj_c_faux:     ['faux départ. Attends le coup de pistolet — la réaction se joue en trois centièmes.',
-                     'false start. Wait for the gun — reaction is decided in three hundredths.'],
+    obj_c_faux:     ['faux départ. Attends le départ — la réaction se joue en trois centièmes.',
+                     'false start. Wait for the start — reaction is decided in three hundredths.'],
     obj_c_proche:   ['il ne manque que {n} s. C\u2019est une foulée mieux tenue, pas une autre course.',
                      'only {n} s to find. That is one better stride, not another race.'],
     six_in:       ['six étapes franchies en ', 'six stages cleared in '],
@@ -247,18 +247,29 @@
     pays_opt:        ['une seule fois', 'once only'],
     pays_aucun:      ['choisis ton pays', 'pick your country'],
     // Ce que la nationalite engage, dit AVANT le geste et non apres.
-    pays_why:        ['il faut l’avoir choisie pour courir un championnat national — et elle ne se change plus ensuite',
-                      'you need one to run a national championship — and it cannot be changed afterwards'],
-    pays_vu:         ['tu sembles te connecter depuis {pays} — à toi de dire',
-                      'you seem to connect from {pays} — up to you'],
+    pays_why:        ['sans choix de ta part, tu cours pour le pays d’où tu te connectes — un choix, lui, ne se change plus',
+                      'if you don’t choose, you run for the country you connect from — a choice cannot be changed'],
+    pays_vu:         ['sans choix de ta part, tu cours pour {pays} (le pays de ta connexion)',
+                      'if you don’t choose, you run for {pays} (where you connect from)'],
     pays_save:       ['CHOISIR', 'CHOOSE'],
     pays_confirm:    ['Courir pour {pays} ?\n\nCe choix est définitif : il décide du championnat national où tu te présentes, et il ne se change plus.',
                       'Run for {pays}?\n\nThis is final: it decides which national championship you enter, and it cannot be changed.'],
     pays_fige:       ['définitif', 'final'],
     pays_on:         ['tu cours pour ce pays — ton drapeau accompagne ton nom au championnat',
                       'you run for this country — your flag follows your name at the championship'],
-    pays_deja:       ['ta nationalité est déjà choisie, elle ne se change plus',
-                      'your nationality is already chosen, it cannot be changed'],
+    pays_deja:       ['ta nationalité est déjà choisie — pour en changer, fais une demande',
+                      'your nationality is already chosen — to change it, send a request'],
+    // La demande de changement : la seule porte apres un choix, tranchee par
+    // l'administration.
+    pays_dem_ouvrir: ['demander un changement', 'request a change'],
+    pays_dem_envoi:  ['ENVOYER', 'SEND'],
+    pays_dem_confirm:['Demander à courir pour {pays} ?\n\nTa nationalité ne change pas tout de suite : la demande sera examinée. Si elle est acceptée, tu ne pourras plus en changer.',
+                      'Ask to run for {pays}?\n\nYour nationality does not change right away: the request will be reviewed. Once accepted, you cannot change again.'],
+    pays_dem_attente:['demande envoyée pour {pays} — en attente de validation',
+                      'request sent for {pays} — waiting for review'],
+    pays_dem_refus:  ['ta demande pour {pays} a été refusée', 'your request for {pays} was declined'],
+    pays_dem_fait:   ['tu as déjà utilisé ton changement de nationalité', 'you have already used your nationality change'],
+    pays_dem_bad:    ['la demande n’est pas partie — réessaie', 'the request did not go through — try again'],
     pays_first:      ['enregistre d’abord ton nom', 'save your name first'],
     pays_bad:        ['pays invalide', 'invalid country'],
     insta_title:     ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
@@ -298,8 +309,8 @@
     bv_nom_s:        ['il apparaît au TOP 500, sur tes défis et dans les duels',
                       'it shows on the TOP 500, on your challenges and in duels'],
     bv_pays_t:       ['TON PAYS', 'YOUR COUNTRY'],
-    bv_pays_s:       ['facultatif, et définitif — il décide du championnat national où tu te présentes',
-                      'optional, and final — it decides which national championship you enter'],
+    bv_pays_s:       ['facultatif — sans choix, c’est le pays de ta connexion ; un choix est définitif',
+                      'optional — if you skip it, it’s where you connect from; a choice is final'],
     bv_insta_t:      ['TON INSTAGRAM', 'YOUR INSTAGRAM'],
     bv_insta_s:      ['facultatif — ton profil devient visitable depuis le TOP 500',
                       'optional — your profile becomes reachable from the TOP 500'],
@@ -317,8 +328,8 @@
     tour_4_s:        ['envoie ta course à un ami — il court contre toi',
                       'send your race to a friend — they run against you'],
     tour_5_t:        ['EN DIRECT', 'LIVE'],
-    tour_5_s:        ['même coup de pistolet, chacun son téléphone',
-                      'same gun, each on your own phone'],
+    tour_5_s:        ['même départ, chacun son téléphone',
+                      'same start, each on your own phone'],
     tour_play:       ['JE JOUE', 'LET ME PLAY'],
     // tutoriel one shot
     os_tuto_open:    ['À QUOI SERT CE MODE', 'WHAT THIS MODE IS FOR'],
@@ -339,6 +350,16 @@
     tuto_1_t:        ['ALTERNE', 'ALTERNATE'],
     tuto_2_t:        ['AU SIGNAL', 'ON THE GUN'],
     tuto_3_t:        ['LARGE, PUIS SERRÉ', 'WIDE, THEN TIGHT'],
+    // UNE LIGNE PAR ÉTAPE, et une seule. Le tutoriel se joue maintenant
+    // sur la piste : ce qui se voit — le pied qui se croise, le coureur
+    // qui part — ne s'écrit pas. Ne reste que ce qu'aucune image ne dit.
+    tuto_1_s:        ['une touche puis l’autre, jamais deux fois la même',
+                      'one pad then the other, never twice the same'],
+    tuto_2_s:        ['ne pars pas avant le coup de feu',
+                      'don’t go before the gun'],
+    tuto_3_s:        ['pars large, resserre à chaque appui, puis tiens',
+                      'start wide, tighten every step, then hold'],
+    tuto_v_croise:   ['TU T’ES PRIS LES PIEDS', 'YOU TRIPPED'],
     tuto_v_early:    ['TROP TÔT', 'TOO EARLY'],
     tuto_v_late:     ['trop tard', 'too late'],
     tuto_v_perfect:  ['PARFAIT', 'PERFECT'],
@@ -380,7 +401,12 @@
     // « Tu haches » et « tu t'etires » plutot que « trop vite » et « trop
     // lent » : le joueur doit savoir ce qui arrive a sa foulee, pas seulement
     // dans quel sens corriger.
+    // Les trois paliers du tutoriel. On nomme aussi le dernier : savoir
+    // qu'on vient de tenir le geste a la vitesse de la course fait partie
+    // de ce que le tutoriel enseigne.
     tutoh_ralenti:   ['AU RALENTI', 'SLOWED DOWN'],
+    tutoh_mi_vitesse: ['À MI-VITESSE', 'HALF SPEED'],
+    tutoh_vitesse_vraie: ['VITESSE RÉELLE', 'FULL SPEED'],
     tutoh_c_juste:   ['CADENCE JUSTE', 'RIGHT CADENCE'],
     tutoh_c_hache:   ['TU HACHES', 'YOU’RE CHOPPING'],
     tutoh_c_etire:   ['TU T’ÉTIRES', 'YOU’RE REACHING'],
@@ -388,8 +414,8 @@
     contact:         ['NOUS CONTACTER', 'CONTACT US'],
     // course en direct
     live_title:      ['COURSE EN DIRECT', 'LIVE RACE'],
-    live_desc:       ['vous partez au même coup de pistolet, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
-                      'you both start on the same gun, each on your own phone — no ghost, nobody knows who wins'],
+    live_desc:       ['vous prenez le même départ, chacun sur son téléphone — pas de fantôme, personne ne sait qui gagne',
+                      'you both take the same start, each on your own phone — no ghost, nobody knows who wins'],
     live_create:     ['OUVRIR UNE PISTE', 'OPEN A TRACK'],
     live_join:       ['REJOINDRE', 'JOIN'],
     live_or:         ['ou', 'or'],
@@ -481,8 +507,8 @@
     relais_fantome:  ['FANTÔME', 'GHOST'],
     // confrontations de 2 a 8 equipes
     conf_titre:      ['AFFRONTER D’AUTRES ÉQUIPES', 'RACE OTHER TEAMS'],
-    conf_desc:       ['un seul coup de pistolet, un classement à l’arrivée. Ouvre un code et partage-le, ou entre celui qu’on t’a donné.',
-                      'one gun, one finish order. Open a code and share it, or enter the one you were given.'],
+    conf_desc:       ['un seul départ, un classement à l’arrivée. Ouvre un code et partage-le, ou entre celui qu’on t’a donné.',
+                      'one start, one finish order. Open a code and share it, or enter the one you were given.'],
     conf_ouvrir:     ['OUVRIR UNE CONFRONTATION', 'OPEN A CONFRONTATION'],
     conf_rejoindre:  ['ENTRER', 'JOIN'],
     conf_code:       ['code', 'code'],
@@ -530,9 +556,127 @@
     champ_phase_series: ['Séries', 'Heats'],
     champ_phase_demies: ['Demi-finales', 'Semi-finals'],
     champ_phase_finale: ['Finale', 'Final'],
+    // LE NOM D'UNE COURSE, AU SINGULIER — et ce n'est pas un detail de style.
+    // Une PHASE s'appelle « Séries » ; une COURSE de cette phase est UNE série,
+    // la troisieme. « Séries 3 » en en-tete d'une video se lit comme un numero
+    // de lot ; « Série 3 » dit ce qu'on regarde. Le pluriel garde sa place la
+    // ou il est juste : le fil des phases, qui parle bien de toutes les series.
+    champ_course_series: ['Série', 'Heat'],
+    champ_course_demies: ['Demi-finale', 'Semi-final'],
+    champ_course_finale: ['Finale', 'Final'],
+    champ_revoir:    ['REVOIR LA COURSE', 'WATCH THE RACE'],
+    // LA SERIE EN DIRECT, ET SON FAUX DEPART. Voir game/champ-direct.ts.
+    champ_entrer:       ['ENTRER DANS LE STADE', 'ENTER THE STADIUM'],
+    champ_regarder_dir: ['REGARDER EN DIRECT', 'WATCH LIVE'],
+    champ_appel:        ['CHAMBRE D’APPEL', 'CALL ROOM'],
+    champ_ton_couloir:  ['Couloir {c}', 'Lane {c}'],
+    champ_pistolet:     ['Départ dans {d}', 'Start in {d}'],
+    champ_pistolet_imm: ['Les athlètes entrent en piste', 'Athletes are taking the track'],
+    champ_present:      ['engagé', 'entered'],
+    champ_attendu:      ['attendu', 'expected'],
+    champ_regle_appel:  ['Qui n’est pas là 30 s avant le départ est forfait.',
+                         'Anyone not here 30 s before the start is a no-show.'],
+    champ_regle_fd:     ['Un faux départ : carton rouge, tu regardes la fin.',
+                         'One false start: red card, you watch the rest.'],
+    // Un partant que la salle fait regarder : on lui dit pourquoi, et quoi faire.
+    champ_pas_reconnu:  ['Tu es sur la grille, mais ce téléphone n’est pas relié à « {n} » : ici tu ne peux que regarder. Ouvre le jeu sur l’appareil où tu as créé ce nom, ou relie celui-ci dans MES COURSES avec ton code de récupération, puis reviens avant l’appel.',
+                         'You are on the grid, but this phone is not linked to “{n}”: here you can only watch. Open the game on the device where you created this name, or link this one in MY RACES with your recovery code, then come back before the call.'],
+    champ_appel_ferme:  ['Tu regardes cette série : l’appel est fermé (30 s avant le départ), ou ce téléphone n’est pas relié à « {n} ».',
+                         'You are watching this heat: the call is closed (30 s before the start), or this phone is not linked to “{n}”.'],
+    champ_spectateur_n: ['Tu regardes : ce téléphone ne court pas cette série.',
+                         'You are watching: this phone is not in this race.'],
+    champ_dir_quitter:  ['QUITTER', 'LEAVE'],
+    // L'echauffement en chambre d'appel : rien n'est chronometre.
+    champ_echauffer:    ['S’ÉCHAUFFER SUR LA PISTE', 'WARM UP ON THE TRACK'],
+    // Le navigateur integre d'Instagram & co. : rien ne s'y telecharge.
+    iab_texte:  ['Ici, dans l’appli, les vidéos et les images ne peuvent pas être enregistrées. Ouvre la page dans ton navigateur pour les récupérer.',
+                 'Inside this app, videos and images cannot be saved. Open the page in your browser to get them.'],
+    iab_bouton: ['OUVRIR DANS LE NAVIGATEUR', 'OPEN IN BROWSER'],
+    iab_menu:   ['ou : menu ⋯ en haut → « Ouvrir dans le navigateur »',
+                 'or: ⋯ menu at the top → “Open in browser”'],
+    champ_echauffement: ['ÉCHAUFFEMENT · retour dans {d}', 'WARM-UP · back in {d}'],
+    champ_echauf_retour: ['RETOUR', 'BACK'],
+    champ_fd:           ['FAUX DÉPART', 'FALSE START'],
+    champ_fd_retour:    ['RETOUR SUR LA LIGNE', 'BACK TO THE LINE'],
+    champ_qui:          ['QUI ?', 'WHO?'],
+    champ_juge:         ['Le juge revoit le départ', 'The starter reviews the start'],
+    champ_deuxieme:     ['ET UN DEUXIÈME !', 'AND A SECOND ONE!'],
+    champ_carton:       ['CARTON ROUGE', 'RED CARD'],
+    champ_fd_moi:       ['Parti trop tôt. Tu regardes la course.',
+                         'Went too early. You watch the race.'],
+    champ_fd_instant:   ['{ms} avant le coup', '{ms} before the gun'],
+    champ_spectateur:   ['CARTON ROUGE · SPECTATEUR', 'RED CARD · SPECTATOR'],
+    champ_regarde:      ['EN DIRECT · SPECTATEUR', 'LIVE · SPECTATOR'],
+    champ_suivre:       ['Suivre', 'Follow'],
+    champ_dq:           ['DQ', 'DQ'],
+    champ_dnf:          ['ABANDON', 'DNF'],
+    champ_dns:          ['FORFAIT', 'DNS'],
+    champ_officiel:     ['Résultat officiel enregistré', 'Official result recorded'],
+    champ_officiel_ko:  ['Résultat non enregistré : {e}', 'Result not recorded: {e}'],
+    champ_retour:       ['RETOUR AU CHAMPIONNAT', 'BACK TO THE CHAMPIONSHIP'],
+    champ_salle_fermee: ['La salle s’est fermée.', 'The room has closed.'],
+    champ_pas_ouverte:  ['La chambre d’appel ouvre 15 min avant la course.',
+                         'The call room opens 15 min before the race.'],
+    // LA BULLE DE PRESENTATION (demi-finales et finale) : une phrase au-dessus
+    // de la tete du partant, pendant ses trois secondes. Voir game/mot.ts.
+    champ_bulle_titre:  ['TA BULLE DE PRÉSENTATION', 'YOUR INTRO BUBBLE'],
+    champ_bulle_aide:   ['Au-dessus de ta tête pendant tes 3 s de présentation, en direct et au rejeu. Une phrase prête, ou la tienne.',
+                         'Above your head during your 3 s introduction, live and in the replay. A ready-made line, or your own.'],
+    champ_bulle_champ:  ['Ta phrase (40 caractères)', 'Your line (40 characters)'],
+    champ_bulle_poser:  ['POSER', 'SET'],
+    champ_bulle_posee:  ['Ta bulle : « {t} »', 'Your bubble: “{t}”'],
+    champ_bulle_refus_vide:     ['Écris quelque chose.', 'Write something.'],
+    champ_bulle_refus_long:     ['40 caractères au plus.', '40 characters at most.'],
+    champ_bulle_refus_lien:     ['Pas de lien dans une bulle.', 'No links in a bubble.'],
+    champ_bulle_refus_contact:  ['Pas de pseudo, de numéro ni de réseau social.', 'No handles, phone numbers or social accounts.'],
+    champ_bulle_refus_grossier: ['Refusée : ce langage n’est pas accepté.', 'Refused: that language is not allowed.'],
+    champ_bulle_refus_trop_tard: ['Trop tard : ta course est appelée.', 'Too late: your race has been called.'],
+    champ_bulle_refus:  ['Bulle refusée : {e}', 'Bubble refused: {e}'],
+    // LE MOT DU VAINQUEUR, EN DIRECT. Pas `mot_envoye_course` : il dit « les
+    // autres le liront en revenant », et ici ils sont encore dans la salle.
+    champ_mot_direct_titre:  ['TU AS GAGNÉ · UN MOT À LA SALLE', 'YOU WON · A WORD TO THE ROOM'],
+    champ_mot_direct_envoye: ['Mot posé : il s’affiche pour ceux encore dans la salle, et reste avec la course.',
+                              'Word posted: it shows for everyone still in the room, and stays with the race.'],
+    champ_mot_direct_refus_vide:     ['Écris quelque chose, ou enregistre ta voix.', 'Write something, or record your voice.'],
+    champ_mot_direct_refus_long:     ['140 caractères au plus.', '140 characters at most.'],
+    champ_mot_direct_refus_lien:     ['Pas de lien dans le mot.', 'No links in your word.'],
+    champ_mot_direct_refus_contact:  ['Pas de pseudo, de numéro ni de réseau social.', 'No handles, phone numbers or social accounts.'],
+    champ_mot_direct_refus_grossier: ['Refusé : ce langage n’est pas accepté.', 'Refused: that language is not allowed.'],
+    // LA PAGE PUBLIQUE « REGARDER » (voir game/regarder.ts). Celui qui la lit
+    // n'a pas le jeu : il suit un lien. Rien ici ne suppose qu'il a un nom.
+    regarder_direct:     ['EN DIRECT DU STADE', 'LIVE FROM THE STADIUM'],
+    regarder_prochaine:  ['PROCHAINE COURSE', 'NEXT RACE'],
+    regarder_dans:       ['dans {d}', 'in {d}'],
+    regarder_bouton:     ['REGARDER', 'WATCH'],
+    regarder_a_venir:    ['À VENIR', 'UPCOMING'],
+    regarder_attente:    ['Grille tirée à la fin du tour précédent.',
+                          'Start list drawn when the previous round ends.'],
+    regarder_nouveau:    ['{c} vient d’être courue', '{c} has just been run'],
+    regarder_partager:   ['PARTAGER LE LIEN', 'SHARE LINK'],
+    regarder_copie:      ['LIEN COPIÉ', 'LINK COPIED'],
+    regarder_jouer:      ['JOUER À SPRINTER', 'PLAY SPRINTER'],
+    regarder_rien:       ['Aucun championnat à regarder pour l’instant.',
+                          'No championship to watch right now.'],
+    regarder_chargement: ['Chargement du stade…', 'Loading the stadium…'],
+    regarder_annulee:    ['Championnat annulé : pas assez de partants.',
+                          'Championship cancelled: not enough runners.'],
+    regarder_champion:   ['CHAMPION', 'CHAMPION'],
+    regarder_rejeu_note: ['Chaque course est rejouée à partir des chronos officiels.',
+                          'Each race is replayed from the official times.'],
+    // LE PHOTO-FINISH. Il ne s'affiche que sur une arrivee serree — voir
+    // `arriveeSerree` dans game/photo-finish.ts — et le bouton le dit : sur
+    // une course gagnee d'une demi-seconde, « photo-finish » serait un mot
+    // creux. `pf_ecart` legende l'image partagee.
+    pf_bouton:       ['PHOTO-FINISH', 'PHOTO FINISH'],
+    pf_titre:        ['PHOTO-FINISH', 'PHOTO FINISH'],
+    pf_ecart:        ['ÉCART LE PLUS SERRÉ', 'CLOSEST GAP'],
+    champ_grille:    ['LISTE DE DÉPART', 'START LIST'],
+    champ_partants:  ['PARTANTS', 'ON THE LINE'],
+    champ_arrivee:   ['ARRIVÉE', 'FINISH'],
+    champ_fermer:    ['FERMER', 'CLOSE'],
     champ_reveal:    ['LES REPÊCHÉS', 'THE FASTEST LOSERS'],
-    champ_reveal_desc: ['ils n’ont gagné aucune course. Ils sortent du chrono de toutes.',
-                        'they won no race. They come from the clock of every race.'],
+    champ_reveal_desc: ['ils n’ont gagné aucune course. Sous chaque nom, pourquoi il passe.',
+                        'they won no race. Under each name, why they go through.'],
     champ_continue:  ['CONTINUER', 'CONTINUE'],
     champ_sacre:     ['{n} est sacré — voir le podium', '{n} is crowned — see the podium'],
     champ_titre_duree: ['titre porté trois mois', 'title held for three months'],
@@ -591,6 +735,14 @@
     // non d'un chrono. Presenter un passe-droit comme un repechage merite
     // serait la seule facon de rendre cette regle detestable.
     champ_repeche_doffice: ['d’office', 'by title'],
+    // Sous chaque repeche, la raison en quelques mots.
+    champ_rep_chrono:       ['repêché au chrono', 'fastest non-qualifier'],
+    champ_rep_doffice:      ['tenant du titre, qualifié d’office', 'title holder, qualified by right'],
+    champ_rep_priorite:     ['a couru : priorité aux joueurs', 'ran the heat: players come first'],
+    champ_rep_place_libre:  ['prend une place laissée par un forfait', 'fills a place left by a no-show'],
+    champ_rep_organisation: ['choix de l’organisation', 'organisers’ decision'],
+    champ_rep_repechage:    ['gagne sa place en course de repêchage', 'won a place in the repechage race'],
+    champ_course_repechage: ['Repêchage', 'Repechage'],
     champ_rv_course: ['PROCHAINE COURSE', 'NEXT RACE'],
     champ_rv_reveal: ['RÉVÉLATION DES REPÊCHÉS', 'FASTEST LOSERS REVEALED'],
     champ_rv_sacre:  ['CÉRÉMONIE', 'CEREMONY'],
@@ -613,7 +765,7 @@
     sel_manque_1:    ['il te manque une place', 'you are one place short'],
     sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
     sel_dedans:      ['tu es qualifié', 'you are in'],
-    sel_dedans_fige: ['TU Y ES', 'YOU ARE IN'],
+    sel_dedans_fige: ['SÉLECTIONNÉ', 'YOU ARE IN'],
     sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
     sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
     sel_pour_entrer: ['un duel gagné et tu entres au classement',
@@ -622,8 +774,28 @@
                       'pick your country to become selectable'],
     sel_ma_serie:    ['SÉRIE {n}', 'HEAT {n}'],
     sel_convoque:    ['départ {n}', 'start {n}'],
-    sel_bonne_chance: ['la grille est gelée. À samedi.',
-                       'the grid is frozen. See you Saturday.'],
+    sel_bonne_chance: ['la grille est gelée. À {j}.',
+                       'the grid is frozen. See you {j}.'],
+    sel_aujourdhui:  ['la grille est gelée. C’est aujourd’hui.',
+                      'the grid is frozen. Race day is today.'],
+    sel_gelee:       ['la grille est gelée.', 'the grid is frozen.'],
+    // Apres la course : la convocation n'est plus a venir.
+    sel_courue:      ['{c} courue', '{c} done'],
+    // L'engagement : on confirme sa participation avant la clôture, sinon la
+    // place va au suivant de la liste.
+    sel_engage_toi:  ['confirme ta participation', 'confirm you will race'],
+    sel_engager:     ['JE M’ENGAGE', 'I’M IN'],
+    sel_engage:      ['ENGAGÉ', 'ENTERED'],
+    sel_retirer:     ['se retirer', 'withdraw'],
+    sel_engage_regle: ['sans confirmation avant la clôture, ta place ira au suivant',
+                       'without confirming before the close, your place goes to the next player'],
+    sel_engager_err: ['échec — réessaie', 'failed — try again'],
+    sel_pas_engage:  ['PAS ENGAGÉ', 'NOT ENTERED'],
+    sel_place_cedee: ['ta place est allée au suivant de la liste',
+                      'your place went to the next player in line'],
+    // Le dimanche, on est convoque en demi-finale ou en finale : « À samedi »
+    // y serait faux.
+    sel_qualifie:    ['tu es qualifié. Bonne course.', 'you made it through. Good luck.'],
     sel_prochaine:   ['le classement continue — la prochaine sélection viendra',
                       'the ranking goes on — the next selection will come'],
     sel_barre:       ['LIGNE DE SÉLECTION', 'SELECTION LINE'],
@@ -665,11 +837,31 @@
     pres_title:      ['PRÉSENTATION DES ATHLÈTES', 'ATHLETE INTRODUCTIONS'],
     pres_lane:       ['COULOIR', 'LANE'],
     pres_you:        ['C’EST TOI', 'THAT IS YOU'],
+    // LA FICHE DE L'ATHLETE, sous son nom pendant la presentation d'une course
+    // de championnat (voir FichePresentation). Ce qu'un speaker dit de lui :
+    // son niveau en duel, son bilan, son palmares. Courts, parce qu'ils se
+    // lisent en trois secondes, pendant qu'il leve les bras.
+    fiche_niveau:     ['NIVEAU EN DUEL', 'DUEL LEVEL'],
+    fiche_non_classe: ['NON CLASSÉ', 'UNRANKED'],
+    fiche_v:          ['VICTOIRE', 'WIN'],
+    fiche_v_pl:       ['VICTOIRES', 'WINS'],
+    fiche_d:          ['DÉFAITE', 'LOSS'],
+    fiche_d_pl:       ['DÉFAITES', 'LOSSES'],
+    fiche_n:          ['MATCH NUL', 'DRAW'],
+    fiche_n_pl:       ['MATCHS NULS', 'DRAWS'],
+    fiche_palmares:   ['PALMARÈS', 'HONOURS'],
+    fiche_monde:      ['MONDE', 'WORLD'],
+    // Le mieux classe en duel de la grille, s'il est seul en tete.
+    fiche_favori:     ['LE FAVORI', 'THE FAVOURITE'],
     pres_mic_on:     ['MICRO OUVERT', 'MIC LIVE'],
     pres_mic_off:    ['micro refusé', 'mic declined'],
     mic_winner:      ['LE MOT DU VAINQUEUR', 'THE WINNER SPEAKS'],
     // video de la course : partageable jusqu'a ce qu'elle sorte, deux heures au plus
     review_title:    ['LA VIDÉO DE TA COURSE', 'YOUR RACE VIDEO'],
+    // Le rejeu d'un championnat se regarde aussi quand on n'y a pas couru :
+    // « ta course » y serait faux, pour un spectateur comme pour un joueur qui
+    // revoit la serie d'un autre.
+    review_title_rejeu: ['LA VIDÉO DE LA COURSE', 'RACE VIDEO'],
     review_making:   ['enregistrement en cours…', 'recording…'],
     // Un seul libellé pour les deux chemins, comme pour l'affiche : sur
     // téléphone le bouton ouvre la feuille de partage, sur ordinateur il
@@ -912,6 +1104,45 @@
     boost_6: ['garde cette course en tête. C’est ton niveau.',
               'remember this race. That’s your level.'],
     boost_7: ['la ligne était à toi.', 'that finish line was yours.'],
+    /* LE TCHAT RAPIDE, dans les salles de course (voir game/tchat-rapide.ts).
+     *
+     * Des phrases ecrites par le jeu, envoyees par les joueurs : c'est
+     * l'identifiant qui voyage, et chaque telephone ecrit la phrase dans SA
+     * langue. Trois familles, dans la voix du reste du jeu :
+     * - les PIQUES chambrent comme celles des duels, sans jamais blesser — on
+     *   les envoie a un inconnu autant qu'a un ami ;
+     * - les ENCOURAGEMENTS parlent comme le starter et les boosts ;
+     * - l'ARCADE parle comme la borne, et ses mots ne se traduisent pas, pour
+     *   la raison que donne COMBO plus bas.
+     * Une cle ajoutee ici doit l'etre aussi dans les deux listes : celle du jeu
+     * et celle du serveur (worker/src/tchat-rapide.js), qui refuse le reste. */
+    rapide_p_echauffement: ['Merci pour l’échauffement.', 'Thanks for the warm-up.'],
+    rapide_p_ralenti:      ['Je te la refais au ralenti ?', 'Want it again in slow motion?'],
+    rapide_p_personne:     ['J’ai regardé derrière. Personne.', 'I looked back. Nobody.'],
+    rapide_p_blocs:        ['Tu dors dans les blocs ?', 'Asleep in the blocks?'],
+    rapide_p_forcer:       ['Même pas forcé.', 'Didn’t even try.'],
+    rapide_p_ligne:        ['La ligne, c’est par là.', 'Finish line’s that way.'],
+    rapide_e_marques:      ['À vos marques.', 'On your marks.'],
+    rapide_e_meilleur:     ['Que le meilleur gagne.', 'May the best one win.'],
+    rapide_e_envoie:       ['Allez, envoie !', 'Come on, send it!'],
+    rapide_e_propre:       ['C’est propre.', 'That was clean.'],
+    rapide_e_bien:         ['Bien couru.', 'Well run.'],
+    rapide_e_revanche:     ['Revanche ?', 'Rematch?'],
+    rapide_a_go:           ['GO GO GO !', 'GO GO GO!'],
+    rapide_a_perfect:      ['PERFECT !', 'PERFECT!'],
+    rapide_a_photo:        ['PHOTO-FINISH !', 'PHOTO FINISH!'],
+    rapide_a_combo:        ['COMBO !', 'COMBO!'],
+    rapide_ouvrir:         ['Tchat rapide', 'Quick chat'],
+    rapide_piques:         ['PIQUES', 'TRASH TALK'],
+    rapide_encouragements: ['ENCOURAGEMENTS', 'CHEERS'],
+    rapide_arcade:         ['ARCADE', 'ARCADE'],
+    // Une bulle de la tribune dont le nom n'est pas verifie : elle part sans
+    // nom plutot que sous celui de quelqu'un d'autre.
+    rapide_tribune:        ['Tribune', 'Stands'],
+    rapide_couper:         ['Couper les bulles', 'Mute bubbles'],
+    rapide_remettre:       ['Remettre les bulles', 'Show bubbles'],
+    rapide_attends:        ['doucement…', 'easy…'],
+    rapide_fermer:         ['Fermer', 'Close'],
     // Le mot du vainqueur
     mot_titre:       ['LAISSE UN MOT À {n}', 'LEAVE {n} A WORD'],
     mot_placeholder: ['chambre-le en deux phrases', 'needle them in two lines'],
@@ -920,6 +1151,19 @@
     mot_refaire:     ['recommencer', 'record again'],
     mot_envoyer:     ['ENVOYER', 'SEND'],
     mot_envoye:      ['{n} le lira en revenant', '{n} will read it when they come back'],
+    // LE MOT D'UNE COURSE s'adresse aux sept autres, pas a un adversaire.
+    // « Laisse un mot a Untel » n'a plus de sens quand ils sont sept ; et
+    // « il le lira » non plus quand c'est « ils le liront ».
+    mot_titre_course:  ['LAISSE UN MOT AUX AUTRES', 'LEAVE THE OTHERS A WORD'],
+    mot_envoye_course: ['les autres le liront en revenant', 'the others will read it when they come back'],
+    mot_du_vainqueur:  ['LE MOT DU VAINQUEUR', 'THE WINNER SPOKE'],
+    mot_ecouter_voix:  ['ÉCOUTER', 'LISTEN'],
+    // L'IMAGE DE L'ARRIVEE, a cote de la video. Le libelle dit lequel des deux
+    // on emporte : « partager » tout seul, sur un ecran qui propose deja une
+    // video, ne dit pas ce qui sortira.
+    champ_image:       ['L\u2019IMAGE DU RÉSULTAT', 'RESULT IMAGE'],
+    champ_image_faite: ['image enregistrée', 'image saved'],
+    champ_image_ratee: ['impossible de fabriquer l\u2019image', 'could not build the image'],
     mot_micro_refuse: ['le micro est refusé — le texte marche aussi',
                        'the mic was refused — text works too'],
     mot_ecouter_sa_voix: ['ÉCOUTER CE QU’IL A DIT', 'HEAR WHAT THEY SAID'],
@@ -1297,22 +1541,6 @@
     // ouvert y figure sur les deux canaux ; les stades fermes n'apparaissent
     // que sur le canal de test.
     pick_venue:      ['STADES', 'VENUES'],
-
-    // ------------------------------------------------------ edition speciale
-    //
-    // La banniere de l'accueil pendant la fenetre d'une edition (voir
-    // game/edition.ts). Elle ne nomme aucune competition reelle, aucun stade
-    // reel et aucun athlete : elle annonce un stade du jeu, qui porte le nom
-    // d'un fleuve. Voir juridique/edition-danube.md.
-    edition_titre:   ['ÉDITION SPÉCIALE', 'SPECIAL EDITION'],
-    edition_ligne:   ['Le Stade du Danube ouvre ses portes',
-                      'The Danube Stadium opens its gates'],
-    edition_sous:    ['piste orange, aire noire, sous les projecteurs',
-                      'orange track, black infield, under the floodlights'],
-    edition_courir:  ['Y COURIR', 'RUN THERE'],
-    edition_reste_n: ['encore {n} jours', '{n} days left'],
-    edition_reste_1: ['encore 1 jour', '1 day left'],
-    edition_reste_0: ['dernier jour', 'last day'],
     pick_none:       ['choisis au moins une épreuve', 'pick at least one event'],
     launch_oneshot:  ['LANCER', 'GO'],
     event_n:         ['ÉPREUVE {n} / {t}', 'EVENT {n} / {t}'],
@@ -1470,6 +1698,10 @@
     // a sa place ici : juste apres le Danube, juste avant les stades du canal
     // de test, comme dans STADES_HORS_SERIE.
     ['Cimetière municipal', 'Municipal Cemetery'],
+    // La course hors stade du premier championnat de France. Reserve mais
+    // present dans la version publique : il vient donc avec les ouverts,
+    // avant les deux stades du canal de test, comme dans STADES_HORS_SERIE.
+    ['Champ-de-Mars', 'Champ-de-Mars'],
     ['Stade de la Riviera', 'Riviera Stadium'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
@@ -2080,6 +2312,28 @@
     return row ? row[index()] : (secours || cle || '');
   }
 
+  /**
+   * Le nom d'UNE course : « Série 3 », « Demi-finale 1 », « Finale ».
+   *
+   * `numero` est celui de la course dans sa phase, `total` le nombre de
+   * courses que la phase compte. Le numero ne s'ecrit que s'il y en a
+   * plusieurs — « Finale 1 » n'existe pas, et « Série 1 » n'a de sens que
+   * s'il y a une serie 2.
+   *
+   * Les demi-finales gardent leur trait d'union et la finale reste la finale :
+   * on ne compose pas le libelle, on le prend dans la table, parce qu'un
+   * singulier ne s'obtient pas en retirant un « s » (« Demi-finales » →
+   * « Demi-finale », mais « Heats » → « Heat » et « Semi-finals » →
+   * « Semi-final » ne suivent pas la meme regle d'une langue a l'autre).
+   */
+  function courseNom(cle, numero, total, secours) {
+    // Une course au-dela des series du format : le repechage du 26/09.
+    if (cle === 'series' && numero > 4) return UI.champ_course_repechage[index()];
+    const row = UI['champ_course_' + String(cle || '')];
+    const nom = row ? row[index()] : (secours || phaseNom(cle, secours) || '');
+    return total > 1 && numero ? nom + ' ' + numero : nom;
+  }
+
   // Un index inconnu rend une chaine vide plutot que de casser l'ecran.
   // Le classement affiche l'index range avec la course, et cet index vient
   // parfois d'une version du jeu qui connaissait un stade de plus.
@@ -2115,6 +2369,6 @@
   root.SprinterI18N = {
     UI, LEVEL_NAMES, RACE_SUB, CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT,
     CUT_ENDING,
-    LANGS, t, titreEdition, phaseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
+    LANGS, t, titreEdition, phaseNom, courseNom, levelName, raceSub, ord, setLang, getLang, toggle, detect, index
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

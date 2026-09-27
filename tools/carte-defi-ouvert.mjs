@@ -63,6 +63,10 @@ import path from 'node:path';
 import { trouverChrome, capturer, enTetePolices } from './chrome.mjs';
 import { FOND, OR, BLANC, ENCRE, LUEUR, encre, or, unite, RETRAIT_VIRGULE }
   from '../src/game/palette-affiche.js';
+// L'ecriture des epreuves, prise a la source et non recopiee : la charte ecrit
+// « 100 m », et « 100 m H » pour les haies. Cette carte composait `${e} m` sans
+// regarder la cle, et sortait donc « 100h m » sur un defi de haies.
+import { EPREUVE } from '../src/game/trace-affiche.js';
 // L'autre voix, celle des jours de competition. Les deux maquettes de ce
 // fichier prennent chacune la sienne a sa source : c'est la seule facon qu'un
 // or qui bouge atteigne toutes les cartes du meme coup.
@@ -165,7 +169,7 @@ const totalMs = args.chrono ? msDepuisTexte(args.chrono) : defi.total_ms;
 const essais = defi ? (defi.attempts || []).length : 0;
 const battus = defi ? (defi.attempts || []).filter(a => a.total_ms < totalMs).length : 0;
 
-const libelleEpreuve = epreuves.map(e => `${e} m`).join(' + ');
+const libelleEpreuve = epreuves.map(EPREUVE).join(' + ');
 
 /**
  * La ligne qui pique, tiree de ce qui s'est passe et de rien d'autre.

@@ -106,13 +106,16 @@ const VOULU = [
 
 // Les autres epreuves se deduisent du 110 m par le rapport des records — une
 // seule echelle de difficulte, pas trois — SAUF ce qui leur a ete donne en
-// propre. Le tour a recu son dernier niveau au pouce : 42,00 a 43,50 s, la ou
+// propre. Le tour a recu son dernier niveau au pouce : 40,10 a 41,00 s, la ou
 // la deduction aurait donne 44,15 a 45,76, c'est-a-dire un cheveu sous le
 // record du monde quand Sprinter place ses ZEZE neuf pour cent dessous.
 //
 // Cette verification doit tomber bruyamment le jour ou une epreuve recoit son
-// propre bareme sans qu'on l'ait ecrit ici.
-const PROPRE = { '400h': { 5: [42.00, 43.50] } };
+// propre bareme sans qu'on l'ait ecrit ici. Elle est tombee deux fois pour de
+// bon : ce nombre est passe par 42,00-43,50 puis 40,80-41,20 sans qu'on le
+// reporte ici, et le harnais a donc ete rouge tout ce temps — pour la raison
+// exacte qu'il annonce.
+const PROPRE = { '400h': { 5: [40.10, 41.00] } };
 for (const c of ['100h', '400h']) {
   const r = RECORDS[c].s / RECORDS['110h'].s;
   const g = PLATEAUX[c], pr = PROPRE[c] || {};
