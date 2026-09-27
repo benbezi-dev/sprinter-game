@@ -68,7 +68,9 @@ const MOTS = ['la planche et le sable', 'sprinter.longueur.v1', 'Tomas Weit', 'M
                // l'accueil de Jumper et les recits de ses etapes
                'sprinter.jumper.epreuve', 'bac à sable de la maternelle',
                // la musique des sauts, dans le moteur
-               's_race3'];
+               's_race3',
+               // leurs mots a l'ecran (sauts-mots.js), hors de la table commune
+               'RAMENÉ PARFAIT', 'un bond posé dans le sable', 'CAMBRURE PARFAITE', 'MEILLEURS SAUTS'];
 const jsProd = texte(dossierProd, prod), jsTest = texte(dossierTest, test);
 for (const m of MOTS) ok(`« ${m} » absent du paquet public`, !jsProd.includes(m));
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp } from '@/game/engine';
+import '@/game/sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { EST_TEST } from '@/game/canal';
 import { RECORDS, ESSAIS, lireVent, homologable } from '@/game/longueur.js';
 import { RECORDS as RECORDS_TRIPLE } from '@/game/triple.js';
