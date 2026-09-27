@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Globe, Lock, ChevronLeft, Swords, Trophy } from 'lucide-react';
+import { DUELS_OUVERTS, fetchDuels, type MonRang } from '@/game/duels';
+import { jeuDe } from '@/game/jeux';
+import { Ecusson } from '@/components/Insignes';
+import { DuelRanking } from './DuelRanking';
 import { SprinterApp, toggleLang, toggleAudio, useGameStore } from '@/game/engine';
 import '@/game/sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { allerAu } from '@/game/mondes';
@@ -77,6 +81,19 @@ export function Jumper() {
   const [onglet, setOnglet] = useState<Onglet>('career');
   const [partie, setPartie] = useState<Partie | null>(null);
   const [aide, setAide] = useState<null | 'jeu' | 'regle'>(null);
+  // Le classement des duels, comme sur l'accueil de Sprinter (TitleScreen).
+  // Les sauts n'ont pas encore de duels : on y montre ceux du sprint, et
+  // l'ecusson du sprint, sans marquer la visite.
+  const [voirDuels, setVoirDuels] = useState(false);
+  const [monRang, setMonRang] = useState<MonRang | null>(null);
+  useEffect(() => {
+    if (!DUELS_OUVERTS) return;
+    let annule = false;
+    fetchDuels(undefined, false).then(b => {
+      if (!annule) setMonRang((b?.mes_epreuves || []).find(r => jeuDe(String(r.epreuve).split('+')[0]) === 'sprinter') || null);
+    });
+    return () => { annule = true; };
+  }, []);
   const [memoire, setMemoire] = useState<MemoireSaut>(() => lireMemoire(CLES[epreuve]));
   const zone = useRef<HTMLDivElement>(null);
   const rouleau = useRef<HTMLDivElement>(null);
@@ -166,6 +183,33 @@ export function Jumper() {
                   </button>
                 ))}
               </div>
+
+              {/* Le classement des duels, sous les onglets comme chez Sprinter. */}
+              {DUELS_OUVERTS && <button
+                onClick={() => setVoirDuels(true)}
+                className="w-full px-4 py-3 rounded-2xl bg-black/70 backdrop-blur-md
+                           border border-primary/50 hover:bg-black/85 transition-colors
+                           shadow-[0_0_25px_rgb(var(--primaire-rgb)/0.2)]
+                           flex items-center justify-between gap-3 text-left"
+              >
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Swords className="w-4 h-4 md:w-5 md:h-5 text-primary shrink-0" />
+                  <span className="flex flex-col min-w-0">
+                    <span className="font-bold tracking-widest text-primary text-[11px] md:text-sm truncate">
+                      {N.t('duel_open')}
+                    </span>
+                    <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
+                      {N.t('duel_sub')}
+                    </span>
+                  </span>
+                </span>
+                {monRang
+                  ? <Ecusson etage={monRang.etage} division={monRang.division}
+                             epreuve={monRang.epreuve}
+                             lp={monRang.etage === 'legende' ? monRang.lp : undefined} />
+                  : <span className="font-mono text-[9px] md:text-[10px] text-primary/60
+                                     shrink-0 tracking-wider">—</span>}
+              </button>}
 
               {/* Le retour vers Sprinter, par ou l'on est venu. */}
               <div className="flex items-center justify-start gap-2 px-1 pt-1 pb-0.5">
@@ -294,6 +338,8 @@ export function Jumper() {
           </button>
         ))}
       </div>
+
+      {DUELS_OUVERTS && voirDuels && <DuelRanking onClose={() => setVoirDuels(false)} />}
 
       {aide && (
         <div className="fixed inset-0 z-[48] flex items-center justify-center bg-black/60 pointer-events-auto" onClick={() => setAide(null)}>
