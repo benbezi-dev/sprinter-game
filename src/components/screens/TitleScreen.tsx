@@ -38,6 +38,7 @@ import { usePassage } from '@/game/passage';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
+import { venuPourLeDefi } from '@/game/defi-demie';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -129,7 +130,9 @@ export function TitleScreen() {
   //
   // Le relais fera exception le jour venu — le passage de temoin est un geste
   // neuf, qui ne se devine pas et qu'il faudra montrer.
-  const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl());
+  // Le lien des cartes du championnat (`?championnat`) tombe lui aussi sur
+  // l'onglet du defi, ou la carte du defi de la demi attend.
+  const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl()) || venuPourLeDefi();
   const [tour, setTour] = useState(() => !tourVu() && !venuPourUnDuel);
   /**
    * Ma MEILLEURE division, affichee a l'entree du classement.

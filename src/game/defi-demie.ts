@@ -1,4 +1,5 @@
-// LE DEFI DE LA DEMI — un jeu pour patienter jusqu'a la demi-finale 2 (27/09).
+// LE DEFI DE LA DEMI — un jeu pour patienter jusqu'a la demi-finale 2 (27/09),
+// puis jusqu'a la finale.
 //
 // Le dimanche, trois heures separent les deux demi-finales (10:30 et 13:30
 // UTC). Les huit de la deuxieme ont leur chambre d'appel et son echauffement ;
@@ -11,6 +12,11 @@
 // fictif du direct (`cible_ms`, voir armLives dans sprinter-app.js), celui que
 // le rejeu utilise deja pour faire recourir une course a partir de ses chronos.
 // La question du jeu est la seule qui compte ce jour-la : ou aurais-tu fini ?
+//
+// Apres la demie 2, on court la demie 2 ; les finalistes reveles, LA FINALE
+// AVANT LA FINALE : les huit finalistes, chacun sur son chrono de demi-finale.
+// Voir les trois fenetres plus bas. Le meme lien les ouvre toutes, celui des
+// cartes qu'on poste : `sprinter-game.com/?championnat`.
 //
 // RIEN NE PART AU SERVEUR, et c'est voulu. Un jour de championnat, le worker
 // ne se deploie pas pendant les courses ; un jeu d'attente ne doit dependre de
@@ -36,43 +42,55 @@ import { getSavedName } from './leaderboard';
 import { SprinterApp } from './engine';
 import { EST_TEST } from './canal';
 
-const PHASE = 'demies';
-/** La demie qu'on court. */
-const COURSE_COURUE = 1;
-/** Celle qu'on attend. */
-const COURSE_ATTENDUE = 2;
 /**
- * Le defi ferme une minute avant le depart de la demie 2 : a cette heure-la,
- * la seule chose a faire est de la regarder. Une course deja partie se finit.
+ * LES TROIS FENETRES DU DIMANCHE, dans l'ordre ou elles s'ouvrent.
+ *
+ *   demie-1  la demie 1 est courue, la 2 pas encore : on court la 1. Les
+ *            partants de la 2 n'y ont pas acces — ils ont la chambre d'appel.
+ *   demie-2  la demie 2 est courue, les finalistes ne sont pas encore reveles :
+ *            on court la 2, ouverte a tous.
+ *   finale   les finalistes sont connus, la finale n'est pas courue : LA FINALE
+ *            AVANT LA FINALE. Les huit finalistes courent chacun le chrono de
+ *            sa demi-finale, dans le couloir que la finale lui donne. Les
+ *            finalistes eux-memes n'y ont pas acces.
+ *
+ * Chacune se ferme une minute avant la course qu'elle fait attendre : a cette
+ * heure-la, la seule chose a faire est de la regarder. Une course du defi deja
+ * partie, elle, se finit.
  */
 const FERMETURE_AVANT_MS = 60_000;
 /** Les couloirs libres, du meilleur au moins bon : le centre d'abord. */
 const COULOIRS_PREFERES = [4, 5, 3, 6, 2, 7, 1, 8];
 
+export type GenreDefi = 'demie' | 'finale';
+
 export type CoureurDefi = {
   cle: string;
   nom: string;
   pays: string | null;
-  /** Son chrono dans la demie, ou `null` (carton rouge, abandon, forfait). */
+  /** Le chrono qu'il court dans le defi, ou `null` (carton rouge, abandon, forfait). */
   ms: number | null;
-  /** Son couloir dans la demie, 1 a 8 ; 0 s'il n'a pas pu etre retrouve. */
+  /** Son couloir, 1 a 8 ; 0 s'il n'a pas pu etre retrouve. */
   couloir: number;
 };
 
 /** Ce qu'il faut pour courir le defi : tout vient de l'edition. */
 export type Defi = {
   edition: string;
+  genre: GenreDefi;
+  /** La course qu'on court : `{ phase: 'demies', numero: 1 }`. */
+  course: { phase: string; numero: number };
   epreuve: string;
   lieu: string | null;
-  /** « Demi-finale 1 » — ce qu'on court. */
+  /** « Demi-finale 1 », « Finale » — ce qu'on court. */
   titre: string;
-  /** « Demi-finale 2 » — ce qu'on attend. */
+  /** « Demi-finale 2 », « Finale » — ce qu'on attend. */
   attendue: string;
-  /** L'heure de la demie 2 au calendrier, ou `null` s'il ne la dit pas. */
+  /** L'heure de la course attendue au calendrier, ou `null` s'il ne la dit pas. */
   departAttendue: number | null;
-  /** Les partants de la demie 1, avec leur chrono. */
+  /** Les partants, avec le chrono que chacun court. */
   coureurs: CoureurDefi[];
-  /** Combien passent directement en finale par demie. */
+  /** Demi-finale : combien passent directement en finale par demie. */
   directs: number;
 };
 
@@ -80,7 +98,7 @@ export type Defi = {
 export type Placement = {
   couloir: number;
   adversaires: CoureurDefi[];
-  /** Le demi-finaliste qui lui cede son couloir, s'il a fallu en pousser un. */
+  /** Le partant qui lui cede son couloir, s'il a fallu en pousser un. */
   remplace: CoureurDefi | null;
   /** Sa propre ligne, s'il a couru cette demie : son vrai chrono est la barre. */
   moi: CoureurDefi | null;
@@ -95,7 +113,7 @@ export type ResultatDefi = {
   place: number | null;
   partants: number;
   classement: LigneDefi[];
-  /** Son meilleur chrono du defi sur cette edition, cette course comprise. */
+  /** Son meilleur chrono sur ce defi-la, cette course comprise. */
   meilleur: number | null;
   meilleurePlace: number | null;
   nouveauMeilleur: boolean;
@@ -112,50 +130,109 @@ export type EtatDefi = {
 
 const cleDuJoueur = () => (getSavedName() || '').trim().toLowerCase();
 
+const valide = (ms: number | null | undefined) => (ms != null && ms > 0 ? ms : null);
+
+/** L'heure d'une course au calendrier : par son numero, puis par sa phase seule. */
+function heureDe(e: Edition, phase: string, numero: number): number | null {
+  const cal = e.calendrier || [];
+  const rv = cal.find(r => r.phase === phase && r.course === numero)
+          || cal.find(r => r.phase === phase && r.course == null && !r.reveal && !r.ceremonie);
+  return rv ? rv.at : null;
+}
+
 /**
- * Le defi de cette edition, s'il est ouvert maintenant a ce joueur-la.
+ * Le defi de cette edition, s'il est ouvert maintenant a ce joueur-la. Voir
+ * les trois fenetres plus haut.
  *
- * Il l'est entre la demie 1 courue et la demie 2 appelee, pour qui ne court
- * pas la demie 2. Sur le canal de test, les editions sont datees au hasard et
- * leurs courses se lancent a la main : l'heure n'y ferme rien, seul le
- * resultat de la demie 2 le fait.
+ * Sur le canal de test, les editions sont datees au hasard et leurs courses se
+ * lancent a la main : l'heure n'y ferme rien, seuls les resultats le font.
  */
 export function defiOuvert(e: Edition | null, maintenant = Date.now(), moi = cleDuJoueur()): Defi | null {
-  if (!e || e.etat !== 'ouverte' || e.phase !== PHASE) return null;
-  const courue = arrivee(e, PHASE, COURSE_COURUE);
-  if (!courue.some(r => r.ms != null && r.ms > 0)) return null;
-  if (arrivee(e, PHASE, COURSE_ATTENDUE).length) return null;
-  const rv = (e.calendrier || []).find(r => r.phase === PHASE && r.course === COURSE_ATTENDUE);
-  const departAttendue = rv ? rv.at : null;
-  if (!EST_TEST && departAttendue != null && maintenant > departAttendue - FERMETURE_AVANT_MS) return null;
-  // Les partants de la demie 2 ont la chambre d'appel, et son echauffement.
-  if (moi && couloirsDe(e, PHASE, COURSE_ATTENDUE).some(p => p.name_key === moi)) return null;
-
-  // Les couloirs, derives comme partout ailleurs : le rang de duel, dans la
-  // liste des partants de la course (voir `Grille` et `couloirsDe`).
-  const couloirDe = new Map(couloirsDe(e, PHASE, COURSE_COURUE).map((p, i) => [p.name_key, i + 1]));
-  const pays = new Map(e.partants.map(p => [p.name_key, p.pays ?? null]));
+  if (!e || e.etat !== 'ouverte') return null;
   const { N } = SprinterApp;
-  const phase = e.phases.find(p => p.cle === PHASE);
-  return {
-    edition: e.id,
-    epreuve: e.epreuve || '100',
-    lieu: e.lieu ?? null,
-    titre: N.courseNom(PHASE, COURSE_COURUE, phase?.courses ?? 2, phase?.nom),
-    attendue: N.courseNom(PHASE, COURSE_ATTENDUE, phase?.courses ?? 2, phase?.nom),
-    departAttendue,
-    coureurs: courue.map(r => ({
-      cle: r.name_key, nom: r.nom, pays: pays.get(r.name_key) ?? null,
-      ms: r.ms != null && r.ms > 0 ? r.ms : null,
-      couloir: couloirDe.get(r.name_key) ?? 0,
-    })),
-    directs: e.directsParCourse || 2,
+  const nomDe = (phase: string, numero: number) => {
+    const ph = e.phases.find(p => p.cle === phase);
+    return N.courseNom(phase, numero, ph?.courses ?? 1, ph?.nom);
   };
+  const pays = new Map(e.partants.map(p => [p.name_key, p.pays ?? null]));
+  const ferme = (at: number | null) =>
+    !EST_TEST && at != null && maintenant > at - FERMETURE_AVANT_MS;
+
+  if (e.phase === 'demies') {
+    const courue2 = arrivee(e, 'demies', 2);
+    const deux = courue2.some(r => valide(r.ms));
+    // La demie 2 courue : on court la 2, en attendant la finale. Sinon la 1,
+    // en attendant la 2 — si elle a deja ete courue.
+    const numero = deux ? 2 : 1;
+    if (!deux && courue2.length) return null;           // la 2 se range
+    const courue = deux ? courue2 : arrivee(e, 'demies', 1);
+    if (!courue.some(r => valide(r.ms))) return null;
+    const attendue = deux ? { phase: 'finale', numero: 1 } : { phase: 'demies', numero: 2 };
+    const departAttendue = heureDe(e, attendue.phase, attendue.numero);
+    if (ferme(departAttendue)) return null;
+    // Les partants de la demie 2 ont la chambre d'appel, et son echauffement.
+    if (!deux && moi && couloirsDe(e, 'demies', 2).some(p => p.name_key === moi)) return null;
+    // Les couloirs, derives comme partout ailleurs : le rang de duel, dans la
+    // liste des partants de la course (voir `Grille` et `couloirsDe`).
+    const couloirDe = new Map(couloirsDe(e, 'demies', numero).map((p, i) => [p.name_key, i + 1]));
+    return {
+      edition: e.id, genre: 'demie', course: { phase: 'demies', numero },
+      epreuve: e.epreuve || '100', lieu: e.lieu ?? null,
+      titre: nomDe('demies', numero), attendue: nomDe(attendue.phase, attendue.numero),
+      departAttendue,
+      coureurs: courue.map(r => ({
+        cle: r.name_key, nom: r.nom, pays: pays.get(r.name_key) ?? null,
+        ms: valide(r.ms), couloir: couloirDe.get(r.name_key) ?? 0,
+      })),
+      directs: e.directsParCourse || 2,
+    };
+  }
+
+  if (e.phase === 'finale') {
+    if (arrivee(e, 'finale', 1).length) return null;
+    const departAttendue = heureDe(e, 'finale', 1);
+    if (ferme(departAttendue)) return null;
+    const finalistes = couloirsDe(e, 'finale', 1);
+    if (!finalistes.length) return null;
+    // Les finalistes attendent leur chambre d'appel : le defi est pour les autres.
+    if (moi && finalistes.some(p => p.name_key === moi)) return null;
+    // LE CHRONO QU'ILS COURENT : celui de leur demi-finale. Un finaliste qui
+    // n'en a pas (qualifie d'office) court son meilleur chrono du weekend.
+    const chronoDe = (cle: string) => {
+      const siens = e.resultats.filter(r => r.name_key === cle && valide(r.ms));
+      const demie = siens.find(r => r.phase === 'demies');
+      if (demie) return demie.ms;
+      return siens.reduce<number | null>((m, r) => (m == null || (r.ms as number) < m ? r.ms : m), null);
+    };
+    const coureurs = finalistes.map((p, i) => ({
+      cle: p.name_key, nom: p.nom, pays: p.pays ?? null, ms: chronoDe(p.name_key), couloir: i + 1,
+    }));
+    if (!coureurs.some(c => c.ms != null)) return null;
+    return {
+      edition: e.id, genre: 'finale', course: { phase: 'finale', numero: 1 },
+      epreuve: e.epreuve || '100', lieu: e.lieu ?? null,
+      titre: nomDe('finale', 1), attendue: nomDe('finale', 1),
+      departAttendue, coureurs, directs: 0,
+    };
+  }
+  return null;
 }
 
 /** Le defi est-il encore ouvert, sans relire l'edition ? */
 export function encoreOuvert(d: Defi, maintenant = Date.now()): boolean {
   return EST_TEST || d.departAttendue == null || maintenant <= d.departAttendue - FERMETURE_AVANT_MS;
+}
+
+/** La cle d'un defi : un meilleur chrono ne vaut que contre les memes chronos. */
+export const cleDuDefi = (d: Defi) => `${d.edition}:${d.course.phase}-${d.course.numero}`;
+
+/**
+ * LE LIEN DES CARTES POSTEES : `sprinter-game.com/?championnat`. Il ouvre
+ * l'accueil sur l'onglet DEFI, la ou la carte du defi attend — un passant
+ * venu d'Instagram n'a pas a chercher. Le meme lien sert aux trois fenetres.
+ */
+export function venuPourLeDefi(): boolean {
+  try { return new URLSearchParams(window.location.search).has('championnat'); } catch { return false; }
 }
 
 /* -------------------------------------------------------------- la piste */
@@ -290,10 +367,12 @@ export function conclureLeDefi(): ResultatDefi | null {
   const classement: LigneDefi[] = [
     ...p.adversaires.map(c => ({ nom: c.nom, ms: c.ms, couloir: c.couloir, moi: false })),
     { nom: SprinterApp.N.t('you'), ms, couloir: p.couloir, moi: true },
-  ].sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity));
-  const place = ms == null ? null : classement.findIndex(l => l.moi) + 1;
+  // A chrono egal, le joueur passe devant a l'affichage — et partage la place :
+  // un ex aequo au millieme n'a pas de photo-finish a trancher ici.
+  ].sort((a, b) => (a.ms ?? Infinity) - (b.ms ?? Infinity) || Number(b.moi) - Number(a.moi));
+  const place = ms == null ? null : 1 + p.adversaires.filter(c => (c.ms as number) < ms).length;
 
-  const m = noterEssai(d.edition, ms, place);
+  const m = noterEssai(cleDuDefi(d), ms, place);
   const resultat: ResultatDefi = {
     ms, fauxDepart, place, partants: classement.length, classement,
     meilleur: m.meilleur, meilleurePlace: m.place, nouveauMeilleur: m.nouveau, essais: m.essais,
@@ -316,11 +395,12 @@ export function quitterLeDefi() {
 /* -------------------------------------------------------- la memoire */
 
 /**
- * Le meilleur chrono de chacun, par edition, sur ce telephone.
+ * Le meilleur chrono de chacun, par defi (edition et course), sur ce
+ * telephone.
  *
- * Par edition, parce qu'un record du defi n'a de sens que contre les memes
- * huit chronos. On ne garde que les dix dernieres : sans plafond, la cle
- * grossirait d'une ligne par championnat et pour toujours.
+ * Par defi, parce qu'un record n'a de sens que contre les memes huit chronos.
+ * On ne garde que les dix derniers : sans plafond, la cle grossirait de trois
+ * lignes par championnat et pour toujours.
  */
 const MEMOIRE = 'sprinter_defi_demie';
 type Souvenir = { meilleur: number | null; place: number | null; essais: number; au: number };
@@ -329,13 +409,13 @@ function lireMemoire(): Record<string, Souvenir> {
   try { return JSON.parse(localStorage.getItem(MEMOIRE) || '{}') || {}; } catch { return {}; }
 }
 
-export function monMeilleur(edition: string): Souvenir | null {
-  return lireMemoire()[edition] || null;
+export function monMeilleur(cle: string): Souvenir | null {
+  return lireMemoire()[cle] || null;
 }
 
-function noterEssai(edition: string, ms: number | null, place: number | null) {
+function noterEssai(cle: string, ms: number | null, place: number | null) {
   const tout = lireMemoire();
-  const avant = tout[edition] || { meilleur: null, place: null, essais: 0, au: 0 };
+  const avant = tout[cle] || { meilleur: null, place: null, essais: 0, au: 0 };
   const nouveau = ms != null && (avant.meilleur == null || ms < avant.meilleur);
   const apres: Souvenir = {
     meilleur: nouveau ? ms : avant.meilleur,
@@ -343,7 +423,7 @@ function noterEssai(edition: string, ms: number | null, place: number | null) {
     essais: avant.essais + 1,
     au: Date.now(),
   };
-  tout[edition] = apres;
+  tout[cle] = apres;
   try {
     const gardees = Object.entries(tout).sort((a, b) => b[1].au - a[1].au).slice(0, 10);
     localStorage.setItem(MEMOIRE, JSON.stringify(Object.fromEntries(gardees)));

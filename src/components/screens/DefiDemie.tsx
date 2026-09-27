@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Gamepad2, Play, RotateCcw, Timer } from 'lucide-react';
 import { MONTEE } from '@/lib/mouvement';
@@ -8,7 +8,8 @@ import { EST_TEST } from '@/game/canal';
 import { etatEdition, recapMondial, type Edition } from '@/game/championnats';
 import {
   defiOuvert, placer, courirLeDefi, conclureLeDefi, recourir, quitterLeDefi,
-  encoreOuvert, monMeilleur, useDefiDemie, type Defi, type ResultatDefi,
+  encoreOuvert, monMeilleur, useDefiDemie, cleDuDefi, venuPourLeDefi,
+  type Defi, type ResultatDefi,
 } from '@/game/defi-demie';
 
 /**
@@ -65,14 +66,28 @@ export function CarteDefiDemie({ e }: { e: Edition }) {
   return <Carte d={d} maintenant={maintenant} />;
 }
 
+/**
+ * Venu par le lien des cartes (`?championnat`), on amene la carte sous les
+ * yeux : une fois par chargement, pas a chaque rendu.
+ */
+let defileFait = false;
+
 function Carte({ d, maintenant }: { d: Defi; maintenant: number }) {
   const { N } = SprinterApp;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (defileFait || !venuPourLeDefi()) return;
+    defileFait = true;
+    const t = setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 600);
+    return () => clearTimeout(t);
+  }, []);
   const p = placer(d);
   if (!p.adversaires.length) return null;
   const moi = p.moi && p.moi.ms != null ? p.moi : null;
-  const m = monMeilleur(d.edition);
+  const m = monMeilleur(cleDuDefi(d));
+  const finale = d.genre === 'finale';
   return (
-    <motion.div {...MONTEE}
+    <motion.div {...MONTEE} ref={ref}
       className="flex flex-col gap-2.5 rounded-xl border px-3 py-3"
       style={{ borderColor: 'rgba(248,205,74,0.45)', backgroundColor: 'rgba(248,205,74,0.07)' }}>
       <div className="flex items-center justify-between gap-2">
@@ -90,11 +105,12 @@ function Carte({ d, maintenant }: { d: Defi; maintenant: number }) {
       </div>
       <div className="flex flex-col gap-1">
         <span className="font-display font-black tracking-wide text-base leading-none" style={{ color: OR }}>
-          {N.t('defi_titre')}
+          {N.t(finale ? 'defi_titre_finale' : 'defi_titre')}
         </span>
         <span className="text-[11px] leading-snug text-foreground/75">
-          {moi ? N.t('defi_texte_moi', { c: d.titre.toLowerCase(), t: chrono(moi.ms) })
-               : N.t('defi_texte', { c: d.titre.toLowerCase() })}
+          {finale ? N.t('defi_texte_finale')
+            : moi ? N.t('defi_texte_moi', { c: d.titre.toLowerCase(), t: chrono(moi.ms) })
+            : N.t('defi_texte', { c: d.titre.toLowerCase() })}
         </span>
       </div>
       {/* Les huit qu'on va affronter, dans leurs couloirs : on sait contre qui
@@ -144,7 +160,8 @@ const CACHE_MS = 60_000;
 async function editionEnDemies(): Promise<Edition | null> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.edition;
   const monde = await recapMondial();
-  const ligne = (monde?.encours || []).find(l => l.phase === 'demies') || null;
+  // Les demies, puis la finale : les trois fenetres du defi (defi-demie.ts).
+  const ligne = (monde?.encours || []).find(l => l.phase === 'demies' || l.phase === 'finale') || null;
   const edition = ligne ? await etatEdition(ligne.edition) : null;
   cache = { at: Date.now(), edition };
   return edition;
@@ -221,8 +238,13 @@ export function FinDuDefi() {
   const vrai = placement.moi && placement.moi.ms != null ? placement.moi.ms : null;
 
   let verdict = '';
-  if (r.fauxDepart) verdict = N.t('defi_fd');
+  if (r.fauxDepart) verdict = N.t(defi.genre === 'finale' ? 'defi_fd_finale' : 'defi_fd');
   else if (r.ms == null) verdict = N.t('defi_sans_chrono');
+  else if (defi.genre === 'finale') {
+    // La finale ne qualifie pour rien : elle donne trois medailles.
+    verdict = N.t(r.place === 1 ? 'defi_or' : r.place === 2 ? 'defi_argent'
+      : r.place === 3 ? 'defi_bronze' : 'defi_hors_podium');
+  }
   else if (r.place != null && r.place <= defi.directs) verdict = N.t('defi_qualifie');
   else verdict = N.t('defi_pas_qualifie', { n: String(defi.directs) });
 
@@ -251,7 +273,7 @@ export function FinDuDefi() {
         <div className="text-center flex flex-col items-center gap-1
                         court:landscape:col-start-1 court:landscape:row-start-1 court:landscape:self-end">
           <div className="text-[9px] font-bold tracking-[0.35em] text-white/45 uppercase">
-            {N.t('defi_titre')} · {defi.titre}
+            {defi.genre === 'finale' ? N.t('defi_titre_finale') : `${N.t('defi_titre')} · ${defi.titre}`}
           </div>
           <div className="font-display font-black text-4xl court:text-3xl tracking-wider leading-none"
                style={{ color: r.fauxDepart ? '#EF4444' : OR }}>
