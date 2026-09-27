@@ -60,6 +60,16 @@
   // tri les departageait au millimetre, et le bandeau passait dessous.
   var COLLE = 16;
 
+  // VISAGE (32) : un trait du visage — oeil, sourcil, nez, levres. Il ne se
+  // range pas a sa profondeur : il se dessine APRES tout le corps quand il
+  // regarde la camera, et pas du tout quand il lui tourne le dos. Laisse au
+  // tri, un oeil de deux centimetres perdait contre le tronc du crane qui le
+  // porte, dont le centre est a huit centimetres derriere lui ; et vu de dos,
+  // il aurait fallu qu'il perde toujours. Le rendu l'ignore aussi en dessous
+  // d'une certaine taille a l'ecran : a trente pixels le metre, un oeil est un
+  // demi-pixel.
+  var VISAGE = 32;
+
   /** Le premier tronc dont le centre atteint cette hauteur locale. */
   function coupe(tr, h) {
     var i = 0;
@@ -232,7 +242,7 @@
     chaine: chaine, avant: avant, rayon: rayon, section: section, bord: bord,
     PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
-    COLLE: COLLE,
+    COLLE: COLLE, VISAGE: VISAGE,
     /**
      * Les profils d'un corps : celui d'un athlete reel s'il en a un
      * (coureur-vedettes.js, lu a l'appel et non au chargement — il se pose

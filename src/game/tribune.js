@@ -68,9 +68,8 @@
     day: [34, 96, 196], mondiaux: [30, 150, 84], cosmos: [120, 72, 196],
     danube: [84, 52, 128], riviera: [44, 176, 190], nuit: [38, 72, 158],
     namek: [226, 118, 38], champdemars: [26, 60, 150], arcenciel: [236, 96, 196],
-    // Provisoire, comme le reste du theme (voir THEMES.montreuil) : a relever
-    // sur une photo de la tribune de Jean-Delbert.
-    montreuil: [150, 150, 146],
+    // Jean-Delbert n'a pas de sieges : des gradins-bancs de beton clair.
+    montreuil: [206, 204, 198],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
 

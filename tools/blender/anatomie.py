@@ -361,29 +361,31 @@ def chaines(fem=False, carrure=1.0):
 ATHLETES = {
     # AUREL MANGA — 110 m haies, equipe de France. 1,90 m pour 89 kg : un
     # hurdleur lourd pour sa taille, et ca se voit d'abord en haut du corps.
-    # De face, bras le long du corps, le dos fait un V franc : deltoides qui
-    # debordent de l'epaule, trapezes hauts qui mangent le cou, taille pincee
-    # sous un grand dorsal. Les bras sont ceux d'un sprinteur de force, biceps
+    # De face, bras le long du corps, le dos fait un V franc : deltoides ronds
+    # qui debordent nettement de l'epaule (c'est LE signe qui le fait
+    # reconnaitre de loin), trapezes hauts qui mangent le cou, taille pincee
+    # sous un grand dorsal. Une premiere passe a +10 % ne se voyait pas a
+    # l'ecran : les epaules sont a +30-38 %, la carrure a +10 %. Les bras sont ceux d'un sprinteur de force, biceps
     # et triceps pleins. En bas, des quadriceps epais et un mollet haut — la
     # jambe d'un hurdleur, longue et seche a la cheville.
     'manga': {
         'fem': False,
-        'carrure': 1.05,
+        'carrure': 1.10,
         'retouches': {
             # bassin : a peine de fessier en plus, la hanche ne s'elargit pas
             'pelvis':   [1.00, 1.00, 1.03, 1.00, 1.00],
             # du bas du maillot au trapeze : taille pincee, cotes et
             # pectoraux larges, trapeze qui monte vers le cou
-            'torso':    [1.00, 1.00, 0.97, 0.99, 1.02, 1.05, 1.07, 1.08, 1.14],
+            'torso':    [1.00, 1.00, 0.95, 0.98, 1.03, 1.08, 1.12, 1.16, 1.30],
             # un cou de sprinteur de force, large a la base
-            'neck':     [1.12, 1.10, 1.06],
+            'neck':     [1.22, 1.14, 1.06],
             # machoire carree, crane inchange
             'head':     [1.06, 1.04, 1.00, 1.00, 1.00],
-            'deltoid':  [1.10, 1.13, 1.10],
+            'deltoid':  [1.30, 1.38, 1.30],
             # biceps et triceps pleins, coude inchange
-            'upperarm': [1.08, 1.11, 1.12, 1.08, 1.03, 1.00],
+            'upperarm': [1.16, 1.18, 1.18, 1.12, 1.04, 1.00],
             # l'avant-bras un peu plus fort, la main ne change pas
-            'forearm':  [1.05, 1.07, 1.04, 1.00, 1.00, 1.00, 1.00],
+            'forearm':  [1.08, 1.10, 1.06, 1.00, 1.00, 1.00, 1.00],
             # la premiere masse est le fessier, a rayon brut : on n'y touche
             # pas (voir plus haut). Quadriceps epais sur toute la cuisse.
             'thigh':    [1.00, 1.05, 1.06, 1.06, 1.05, 1.03, 1.00, 1.00],

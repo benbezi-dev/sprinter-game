@@ -34,8 +34,11 @@ const LE_DEFI: Vedette = VEDETTES.manga;
  * UN COUREUR PEINT DANS SA PROPRE TOILE — le moteur du jeu, a l'echelle d'une
  * carte. `cap` le tourne (Math.PI : de face), `fete` leve ses bras.
  */
-function Portrait({ look, largeur, hauteur, cap = Math.PI * 0.82, fete = 0 }: {
+function Portrait({ look, largeur, hauteur, cap = Math.PI * 1.2, fete = 0, buste = false }: {
   look: any; largeur: number; hauteur: number; cap?: number; fete?: number;
+  /** Cadrer la tete et les epaules plutot que le corps entier : c'est la
+   *  qu'on le reconnait — son visage, son bandeau, sa carrure. */
+  buste?: boolean;
 }) {
   const toile = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -52,7 +55,10 @@ function Portrait({ look, largeur, hauteur, cap = Math.PI * 0.82, fete = 0 }: {
     const perso = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: fete, drivePitch: 0 };
     // La tete tient dans le cadre : le haut du crane est a 1,65 m du sol dans
     // le repere du rig, on en garde un dixieme de marge au-dessus.
-    const k = (hauteur * 0.86) / 1.66;
+    // En buste, on garde du haut du crane (1,66 m) jusqu'au milieu du torse
+    // (1,18 m) : le sol tombe alors bien sous le cadre.
+    const k = buste ? hauteur / 0.52 : (hauteur * 0.86) / 1.66;
+    const sol = buste ? hauteur + 1.16 * k : hauteur * 0.96;
     let vivant = true, t0 = performance.now();
     const peindre = () => {
       if (!vivant) return;
@@ -60,13 +66,16 @@ function Portrait({ look, largeur, hauteur, cap = Math.PI * 0.82, fete = 0 }: {
       perso.stride = t * 1.1;
       ctx.setTransform(r, 0, 0, r, 0, 0);
       ctx.clearRect(0, 0, largeur, hauteur);
-      const caps = A.personCapsules(perso, cap, 0, false, false, A.niveauDetail(k));
-      A.drawFacetFigure(ctx, caps, largeur / 2, hauteur * 0.96, k);
+      // Toujours au niveau le plus fin : un seul coureur, en gros plan. Le
+      // palier sobre du telephone (niveauDetail) vaut pour huit coureurs en
+      // course ; il retirait ici le visage, qui n'existe qu'au plus fin.
+      const caps = A.personCapsules(perso, cap, 0, false, false, 0);
+      A.drawFacetFigure(ctx, caps, largeur / 2, sol, k);
       requestAnimationFrame(peindre);
     };
     requestAnimationFrame(peindre);
     return () => { vivant = false; };
-  }, [look, largeur, hauteur, cap, fete]);
+  }, [look, largeur, hauteur, cap, fete, buste]);
   return <canvas ref={toile} style={{ width: largeur, height: hauteur }} aria-hidden />;
 }
 
@@ -152,7 +161,10 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
                   className="w-full max-w-md rounded-2xl border-2 p-5 flex flex-col gap-3 max-h-[88dvh] overflow-y-auto"
                   style={{ borderColor: `${VIOLET}90`, background: `linear-gradient(170deg, ${VIOLET_FONCE}, #09060F 70%)` }}>
         <div className="flex items-end gap-3">
-          <div className="shrink-0 -ml-2 -mb-1"><Portrait look={look} largeur={120} hauteur={170} /></div>
+          <div className="shrink-0 rounded-xl overflow-hidden border border-white/10"
+               style={{ background: 'radial-gradient(circle at 50% 35%, #3B2470, #120A22)' }}>
+            <Portrait look={look} largeur={132} hauteur={160} cap={Math.PI * 1.1} buste />
+          </div>
           <div className="flex-1 min-w-0 flex flex-col gap-1 pb-2">
             <span className="text-[10px] font-bold tracking-[0.24em] text-white/70">{mot('vd_fiche_sur')}</span>
             <h2 className="font-black font-display text-3xl leading-[0.9] tracking-tight text-white">
@@ -262,7 +274,7 @@ export function FinDuDefiVedette() {
         {verdict.nouveauSkin && (
           <div className="w-full rounded-2xl border-2 p-3 flex items-center gap-3 text-left"
                style={{ borderColor: `${VIOLET}B0`, background: `linear-gradient(100deg, ${VIOLET_FONCE}, #0E0A1A)` }}>
-            <Portrait look={lookDuSkin(v.skin)} largeur={84} hauteur={118} cap={Math.PI * 0.9} fete={1} />
+            <Portrait look={lookDuSkin(v.skin)} largeur={84} hauteur={118} cap={Math.PI * 1.15} fete={1} />
             <div className="flex-1 min-w-0 flex flex-col gap-1">
               <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: '#C4B5FD' }}>{mot('vd_debloque')}</span>
               <span className="font-black font-display text-xl leading-none text-white">{v.prenom} {v.nom}</span>

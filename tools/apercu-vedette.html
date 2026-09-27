@@ -58,7 +58,7 @@
   // on ne garde que la tete. C'est l'echelle de la fiche de presentation et
   // de l'ecran du skin, pas celle de la course.
   const c4 = document.getElementById('c4').getContext('2d');
-  [Math.PI, Math.PI * 0.8, Math.PI * 0.62, Math.PI * 0.5].forEach((cap, i) => {
+  [Math.PI * 1.35, Math.PI * 1.2, Math.PI * 1.05, Math.PI * 0.9].forEach((cap, i) => {
     c4.save();
     c4.beginPath(); c4.rect(10 + i * 292, 10, 280, 400); c4.clip();
     const p = perso(look, { v: 0, stride: 1.2 });

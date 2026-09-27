@@ -64,7 +64,7 @@ const L = K.lookFor('Aurel MANGA', 'divers');
 ok('lookFor rend son look, pas un tirage', L === K.VEDETTES['Aurel MANGA']);
 ok('son profil Blender est charge', PREM.sculpte(L.profil));
 ok('bandeau, poignet gauche, barbe', !!L.bandeau && L.poignet && L.poignet.cote === 1 && !!L.barbe);
-const carrure = 1.05;   // tools/blender/anatomie.py, ATHLETES.manga.carrure
+const carrure = 1.10;   // tools/blender/anatomie.py, ATHLETES.manga.carrure
 ok('le look reprend la carrure de la sculpture', L.morph && L.morph.sh === carrure);
 const parts = K.pose({ look: L, stride: 1.2, v: 11, maxSpeed: 12, fallAnim: 0, celebrate: 0 }, 0);
 ok('il se pose sans erreur', parts.length > 60, `${parts.length} volumes`);

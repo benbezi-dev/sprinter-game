@@ -378,35 +378,34 @@
     },
     // LE STADE JEAN-DELBERT, A MONTREUIL — le defi Aurel Manga.
     //
-    // Un vrai stade, celui du meeting international de Montreuil, et c'est la
-    // qu'on vient defier Aurel. Ce qu'on en sait de sur, et qui fait ce theme :
+    // Un vrai stade, celui du meeting international de Montreuil, releve sur
+    // deux photos du lieu (la tribune depuis la pelouse, et l'affiche du
+    // meeting Premium de juin) :
     //
-    //   - UN STADE MUNICIPAL, pas une enceinte : 1 400 places, une tribune
-    //     principale en beton de 1949 couverte d'un toit de poutres et de
-    //     caissons de beton, une seconde tribune a poutres metalliques des
-    //     annees 1980 (Inventaire general du patrimoine, Ile-de-France). D'ou
-    //     trois rangs seulement, sous un toit gris beton ;
-    //   - une piste synthetique de 400 m, avec la riviere du steeple ;
-    //   - une pelouse de football tondue au milieu ;
-    //   - le meeting se court en juin, en fin de journee : un ciel clair qui
-    //     commence a dorer.
+    //   - LA PISTE EST ROUGE BRIQUE, tirant sur l'orange au soleil, lignes
+    //     blanches, bordee d'une pelouse de football bien verte ;
+    //   - LA TRIBUNE EST DU BETON NU : des gradins-bancs gris tres clairs,
+    //     sans sieges de couleur, sous un grand toit sombre, presque noir, qui
+    //     avance tres loin au-dessus des rangs — c'est lui qu'on reconnait
+    //     d'abord. D'ou des marches claires, des contremarches a peine plus
+    //     sombres, et un toit anthracite ;
+    //   - au pied de la tribune, une barriere blanche et des panneaux blancs
+    //     et bleus (la Region), quelques jaunes ;
+    //   - derriere, des arbres et un ciel d'ete clair.
     //
-    // CE QUI RESTE A RELEVER SUR PHOTO, ET QUI EST PROVISOIRE ICI : la couleur
-    // de la piste (brique, en attendant), celle des sieges, les panneaux, et
-    // ce qu'on voit derriere la tribune. Le jour ou on les a, ce sont ces
-    // lignes-la qu'on change — et la tribune de 1949 passera par Blender
-    // (tools/blender/decors/), comme la tour du Champ-de-Mars.
+    // Ce qui n'est pas encore la : la cabine blanche du chronometrage sur ses
+    // pilotis, au bout de la tribune, et les mats d'eclairage. Ce seront des
+    // pieces Blender (tools/blender/decors/), comme la tour du Champ-de-Mars.
     montreuil: {
-      skyTop: [70, 118, 196], skyBot: [214, 204, 186], stars: 0,
-      grass: [52, 128, 44], grassEdge: [40, 108, 34],
-      trackA: [178, 66, 46], trackB: [158, 54, 38],
+      skyTop: [86, 136, 206], skyBot: [206, 222, 236], stars: 0,
+      grass: [58, 142, 46], grassEdge: [44, 118, 36],
+      trackA: [196, 74, 52], trackB: [178, 62, 44],
       lane: [250, 250, 248], kerb: [248, 248, 246],
-      // Le beton de 1949 : des gradins gris clair, un toit plus sombre.
-      tread: [186, 184, 178], riser: [142, 140, 134], roof: [112, 112, 108],
-      barrier: [236, 236, 232],
-      panels: [[30, 64, 140], [244, 244, 240], [214, 52, 58]],
+      tread: [214, 212, 206], riser: [168, 166, 160], roof: [44, 46, 52],
+      barrier: [244, 244, 242],
+      panels: [[246, 246, 244], [30, 70, 150], [246, 246, 244], [238, 196, 40]],
       crowdLo: [44, 42, 54], crowdHi: [250, 244, 234],
-      accent: [214, 52, 58], dust: [224, 196, 170],
+      accent: [30, 70, 150], dust: [226, 190, 164],
       gradins: 3, tonte: true
     },
   };
@@ -6840,21 +6839,39 @@
     // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
     // cheveux posee dessus, et la chevelure ne restait qu'un anneau.
     const order = [];
+    // Les traits du visage (32, voir coureur-premium.js) : a part, dessines
+    // en dernier quand ils regardent la camera et que la tete est assez
+    // grande a l'ecran pour qu'on les lise.
+    const visage = [];
+    let avant = null;
     for (let i = 0; i < caps.length; i++) {
+      if (caps[i][3] & 32) {
+        if (caps[i][5] && k >= VISAGE_MIN) visage.push(i);
+        continue;
+      }
       const e0 = caps[i][1], e1 = caps[i][2];
       // Une piece COLLEE (16, voir coureur-premium.js) prend la profondeur
       // de celle qui la precede, un rien plus pres : elle se dessine juste
       // apres elle, par-dessus.
-      order.push([(caps[i][3] & 16) && i > 0 ? order[i - 1][0] - 1e-6
-                  : (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
-                    (e0[2] + e1[2]) * VIEW[2], i]);
+      const d = (caps[i][3] & 16) && avant !== null ? avant - 1e-6
+              : (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                (e0[2] + e1[2]) * VIEW[2];
+      order.push([d, i]);
+      avant = d;
     }
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {
       const c = caps[order[n][1]];
       drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
     }
+    for (const i of visage) {
+      const c = caps[i];
+      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
+    }
   }
+  // En dessous de ce nombre de pixels par metre, un visage n'est plus lisible
+  // (un oeil y ferait moins d'un pixel et demi) : on ne dessine pas ses traits.
+  const VISAGE_MIN = 70;
 
   // Combien de volumes vaut la peine de payer, a cette taille-la.
   //
@@ -6952,7 +6969,21 @@
       Wx *= sgn;
       if (headAng) { t = Wx * hc - Wy * hs; Wy = Wx * hs + Wy * hc; Wx = t; }
       if (applyCurve) { t = Wx * WC - Wy * WS; Wy = Wx * WS + Wy * WC; Wx = t; }
-      caps.push([col, ends[0], ends[1], bout, [Wx, Wy, Wz]]);
+      // UN TRAIT DU VISAGE REGARDE-T-IL LA CAMERA ? On promene l'avant de la
+      // tete (+x local) dans les memes rotations que le reste, et on le
+      // compare a l'axe de la vue.
+      let face = false;
+      if (bout & 32) {
+        let Fx = ca, Fy = 0, Fz = sa;
+        if (yaw) { t = Fx * yc - Fy * ys; Fy = Fx * ys + Fy * yc; Fx = t; }
+        if (lean) { t = Fy * rc - Fz * rs; Fz = Fy * rs + Fz * rc; Fy = t; }
+        if (Math.abs(fall) > 0.001) { t = Fx * fc - Fz * fs; Fz = Fx * fs + Fz * fc; Fx = t; }
+        Fx *= sgn;
+        if (headAng) { t = Fx * hc - Fy * hs; Fy = Fx * hs + Fy * hc; Fx = t; }
+        if (applyCurve) { t = Fx * WC - Fy * WS; Fy = Fx * WS + Fy * WC; Fx = t; }
+        face = Fx * VIEW[0] + Fy * VIEW[1] + Fz * VIEW[2] < -0.12;
+      }
+      caps.push([col, ends[0], ends[1], bout, [Wx, Wy, Wz], face]);
     }
     return caps;
   }
