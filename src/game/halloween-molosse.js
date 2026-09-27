@@ -174,6 +174,17 @@ const VOIE = 0.10;
  */
 export const FOULEE = 0.45;
 
+/**
+ * DE COMBIEN LA BETE COURT A COTE DE LA LIGNE DU COUREUR, en metres.
+ *
+ * Soixante-dix centimetres : un peu plus d'une demi-largeur de couloir. Assez
+ * pour que les deux silhouettes ne se recouvrent jamais completement, pas
+ * assez pour qu'elle ait l'air de courir ailleurs. En dessous de cinquante
+ * elle mange encore le coureur au contact ; au-dela d'un metre elle cesse de
+ * le poursuivre et se met a courir a cote de lui, ce qui est une autre scene.
+ */
+export const ECART_LATERAL = 0.70;
+
 /** La course d'un pied au contact, quand rien ne patine. */
 const AMPLITUDE = 0.5 / FOULEE;
 
@@ -261,7 +272,32 @@ export function molosseDe(chasse) {
       if (d < 0.4) return vide;
 
       const T = G.track;
-      const q = T.pos(Math.min(d, T.total + 24), G.player.lane);
+      // LA BETE NE COURT PLUS SUR LA LIGNE DU COUREUR, ET C'EST CE QUI PERMET
+      // DE LA VOIR.
+      //
+      // Elle etait peinte dans le couloir du joueur, exactement sur sa
+      // trajectoire. Ce n'etait pas une erreur d'ordre de profondeur : dans la
+      // vue du jeu, la camera regarde la course de trois quarts arriere, si
+      // bien qu'un poursuivant — qui est DERRIERE sur la piste — se trouve
+      // PLUS PRES DE LA CAMERA que celui qu'il poursuit. Il le recouvre donc
+      // legitimement. A deux metres d'ecart, la bete mangeait tout l'ecran et
+      // le coureur disparaissait dessous : on ne voyait plus ni l'un ni
+      // l'autre, au moment precis ou tout se joue.
+      //
+      // On la decale donc de soixante-dix centimetres sur le cote. Trois
+      // choses en decoulent, et les trois valent mieux que ce qu'on perd :
+      //
+      //   - LE COUREUR RESTE VISIBLE quand la bete arrive au contact ;
+      //   - LA BETE ARRIVE A COTE plutot que dessus, ce qui est le geste d'un
+      //     chien qui va doubler pour couper la route — et c'est plus
+      //     inquietant que de le voir grossir dans l'axe ;
+      //   - ON LA VOIT PLUS TOT. Dans l'axe, elle etait cachee par le dos du
+      //     coureur jusqu'a la derniere seconde.
+      //
+      // Le decalage est du cote exterieur, ou il y a de la place : vers
+      // l'interieur, en virage, elle aurait coupe la corde et serait sortie du
+      // chemin.
+      const q = T.posDemi(Math.min(d, T.total + 24), G.player.lane, ECART_LATERAL);
       const g = ground(q[0], q[1]);
       const m = scaleM();
       const marge = (GARROT + TETE) * m + 60;
@@ -283,7 +319,7 @@ export function molosseDe(chasse) {
       // trajectoire : le signe de l'ecart horizontal dit de quel cote la bete
       // regarde. Quatre metres, parce qu'en virage un pas plus court donne un
       // ecart trop petit pour etre lu de facon stable.
-      const q2 = T.pos(Math.min(d + 4, T.total + 28), G.player.lane);
+      const q2 = T.posDemi(Math.min(d + 4, T.total + 28), G.player.lane, ECART_LATERAL);
       const g2 = ground(q2[0], q2[1]);
 
       piece.profondeur = depthOf(q[0], q[1]);
