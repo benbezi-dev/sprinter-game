@@ -186,17 +186,34 @@ export function sauterTriple({ vElan, ecart, angles, poses = [0, 0], pieds = [tr
 /**
  * LE PLATEAU DE CHAQUE ETAPE, en metres, comme en longueur.
  *
- *     Competition scolaire    9,50 - 12,00
- *     Niveau regional        12,80 - 14,60
- *     Niveau national        15,20 - 16,40
+ *     Competition scolaire   13,60 - 14,60
+ *     Niveau regional        14,50 - 15,60
+ *     Niveau national        15,40 - 16,50
  *     Championnat du monde   16,80 - 17,70   (record du monde : 18,29)
  *     0.Games                17,20 - 18,20
  *     Inter galactique       19,40 - 20,40
  *
- * Chaque etape a sa planche (triple.js) : ce plateau-ci retombe toujours dans
- * la fosse qu'on lui a donnee.
+ * La planche est a 13 m du sable (triple.js) : un saut de douze metres n'y
+ * atteindrait pas la fosse. Les premieres etapes commencent donc au-dela, et
+ * chaque plateau retombe dans le sable.
  */
 export const PLATEAU_TRIPLE = [
-  [9.50, 12.00], [12.80, 14.60], [15.20, 16.40],
+  [13.60, 14.60], [14.50, 15.60], [15.40, 16.50],
   [16.80, 17.70], [17.20, 18.20], [19.40, 20.40],
 ];
+
+/**
+ * LA VITESSE D'ELAN DU TRIPLE SAUT, en m/s : le plafond du moteur.
+ *
+ * Un triple-sauteur court moins vite qu'un sauteur en longueur — il doit
+ * encore enchainer deux appuis sur la piste —, et c'est ce qui garde son
+ * cloche-pied et sa foulee AVANT le sable. A 10,9 m/s, releve de 4 % par une
+ * transition parfaite, les deux premiers bonds couvrent au plus 12,9 m : la
+ * planche est a 13 m. Le saut parfait passe encore le record du monde. La
+ * station intergalactique, qui a recule sa planche a 15 m, laisse courir a
+ * 11,6 m/s, comme en longueur.
+ */
+export const VITESSE_TRIPLE = [10.9, 10.9, 10.9, 10.9, 10.9, 11.6];
+export function vitesseTriple(etape) {
+  return VITESSE_TRIPLE[Math.max(0, Math.min(5, etape | 0))];
+}

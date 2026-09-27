@@ -237,7 +237,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
     if (evt.type === 'marque') {
       const r = evt.resultat as Essai;
       if (r.mordu) {
-        const propre = r.raison === 'pied' || r.raison === 'rompu' || r.raison === 'hors';
+        const propre = r.raison === 'pied' || r.raison === 'rompu' || r.raison === 'hors' || r.raison === 'sable';
         setAnnonce({ sorte: 'marque', texte: N.t('saut_mordu'),
           sous: N.t((propre ? 'triple_nul_' : 'saut_nul_') + (r.raison || 'planche')), couleur: '#f87171' });
       } else {

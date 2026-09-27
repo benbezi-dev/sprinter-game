@@ -41,7 +41,7 @@ import {
 } from './longueur-jeu.js';
 import { plancheDe, BONDS } from './triple.js';
 import {
-  bond as bondDe, hauteurBond, jugerPose, POSE, sauterTriple, ANGLES_VISES, BONDS_JEU,
+  bond as bondDe, hauteurBond, jugerPose, POSE, sauterTriple, ANGLES_VISES, BONDS_JEU, vitesseTriple,
 } from './triple-jeu.js';
 import {
   postureDe, dessinerSol, piecesDebout, dessinerPiece, prechargerSable,
@@ -151,7 +151,7 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   const lignetriple = FOSSE_X - plancheDe(etape);
   const ligne = epreuve === 'triple' ? lignetriple : LIGNE;
   e = {
-    epreuve, ligne, fosseX: FOSSE_X, pisteY: PISTE_Y, depart: ligne - ELAN,
+    epreuve, etape, ligne, fosseX: FOSSE_X, pisteY: PISTE_Y, depart: ligne - ELAN,
     // les deux planches, chacune a sa place : on ne se sert que d'une
     planches: [{ x: LIGNE, actif: epreuve !== 'triple' }, { x: lignetriple, actif: epreuve === 'triple' }],
     phase: 'repos', t: 0, horlogeT: 0, horloge: TEMPS_ESSAI,
@@ -210,8 +210,11 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
 /** Un athlete neuf sur sa marque : la vitesse, la transition, tout repart. */
 function nouveauSauteur() {
   const A = SprinterApp, G = A.G, C = SprinterCore.C;
+  // Le triple-sauteur court moins vite : ses deux premiers bonds doivent
+  // retomber sur la piste, avant le sable (triple-jeu.js, VITESSE_TRIPLE).
+  const plafond = triple() ? vitesseTriple(e.etape) : VITESSE_ELAN_MAX;
   const j = new SprinterCore.Runner('TOI', 0, {
-    isPlayer: true, maxSpeed: VITESSE_ELAN_MAX, best: EPREUVE.best, total: G.track.total,
+    isPlayer: true, maxSpeed: plafond, best: EPREUVE.best, total: G.track.total,
   });
   j.lane = 0;
   j.demi = PISTE_Y - C.LANE_W * 0.5;
@@ -430,6 +433,9 @@ function decoller(h = tenu()) {
       bond: e.bond, pose: true, t: 0, duree: B.duree, x0: j.d, vx: (pose - j.d) / B.duree, B,
       hauteur: (t) => hauteurBond(B, t),
       orteilSuivant: pose + p.pose,
+      // Le cloche-pied et la foulee se posent sur la piste. Un bond qui
+      // retomberait dans le sable ne se reprend pas : l'essai est nul.
+      sable: pose + p.pose >= e.fosseX - 0.05,
       // le pied qui doit toucher : le meme au cloche-pied, l'autre a la foulee
       coteAttendu: BONDS[e.bond].pied === 'meme' ? a.cote : (a.cote === 'left' ? 'right' : 'left'),
       tPose: null, cotePose: null, relachePose: null, ciseaux: 0, phase: 0, phaseVise: 0, dernierCote: a.cote, tRamene: null,
@@ -548,7 +554,8 @@ function pas(j, dt, elapsed) {
       j.v = v.vx;
       v.phase += (v.phaseVise - v.phase) * (1 - Math.exp(-16 * dt));
       if (v.t >= v.duree) {
-        if (!v.pose) contact();
+        if (v.pose && v.sable) dansLeSable();
+        else if (!v.pose) contact();
         else if (v.tPose != null) poser(v.cotePose, v.tPose - v.duree, v.tPoseReel);
         else {
           // Le pied touche et personne n'a appuye : on attend l'appui, un
@@ -654,6 +661,25 @@ function casser() {
   j.fallAnim = 1;
   rendreLeTempo();
   annoncer({ type: 'pose', note: 'rompu', bonPied: true, bond: v.bond });
+}
+
+/**
+ * UN BOND DANS LE SABLE. Le cloche-pied ou la foulee devaient se poser sur la
+ * piste ; ils retombent dans la fosse, ou l'on ne rebondit pas. L'athlete s'y
+ * enfonce et s'arrete. Nul.
+ */
+function dansLeSable() {
+  const j = SprinterApp.G.player;
+  const v = e.vol;
+  e.poses[v.bond] = null;
+  nul('sable');
+  e.empreinte = { x: v.orteilSuivant - 0.25, y: PISTE_Y, variante: 'course', age: 0 };
+  e.gerbe = { x: v.orteilSuivant, y: PISTE_Y, t: 0, force: 0.8 };
+  e.phase = 'casse'; e.t = 0;
+  j.v = v.vx * 0.5;
+  j.fallAnim = 1;
+  rendreLeTempo();
+  annoncer({ type: 'pose', note: 'sable', bonPied: true, bond: v.bond });
 }
 
 /** Les talons touchent le sable : le saut est fait, il reste a le mesurer. */

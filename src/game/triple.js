@@ -15,11 +15,17 @@
  * LA PLANCHE DU TRIPLE SAUT, en metres avant le debut du sable.
  *
  * Aux grandes competitions, 13 m chez les hommes, 11 m chez les femmes ; le
- * fond de la fosse a 21 m de la ligne au moins. Ailleurs, le reglement laisse
- * la planche « appropriee au niveau », et les stades en ont plusieurs : un
- * enfant de douze ans ne franchit pas treize metres avant de toucher le
- * sable. Le jeu en pose une par etape, de la cour d'ecole au championnat du
- * monde, la ou chaque plateau atteint la fosse.
+ * fond de la fosse a 21 m de la ligne au moins.
+ *
+ * LE CLOCHE-PIED ET LA FOULEE SE POSENT SUR LA PISTE, et seul le saut finit
+ * dans le sable. C'est tout le sens de cette distance : elle est choisie pour
+ * que les deux premiers bonds retombent avant la fosse. Le jeu avait une
+ * planche par etape, de 7 m a l'ecole a 13 m au championnat du monde, comme
+ * les stades en posent pour les enfants ; mais le joueur, lui, saute aussi
+ * loin a toutes les etapes, et a sept metres son cloche-pied et sa foulee
+ * finissaient dans le sable. La planche est donc celle des hommes, 13 m,
+ * partout ou l'on saute sur Terre ; la station intergalactique, ou l'on va
+ * bien plus loin, l'a reculee a 15 m. Voir triple-jeu.js, VITESSE_TRIPLE.
  *
  * Elle est sur la MEME piste d'elan que celle du saut en longueur, et vise la
  * MEME fosse — c'est ainsi dans tous les stades, et on voit les deux planches.
@@ -27,7 +33,7 @@
 export const PLANCHE_TRIPLE = {
   hommes: 13, femmes: 11, fondMin: 21,
   // par etape : scolaire, regional, national, monde, 0.Games, intergalactique
-  etapes: [7, 9, 11, 13, 13, 13],
+  etapes: [13, 13, 13, 13, 13, 15],
 };
 
 /** La planche d'une etape, en metres avant le sable. */
