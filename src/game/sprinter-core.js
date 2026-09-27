@@ -2499,6 +2499,16 @@
       add(TEMOIN, M, a, [0.010, 0, -0.300], [0.019, 0.019], [0.019, 0.019],
           0.085, yawTop, true);
     }
+    // LE SQUELETTE, POUR QUI LE DEMANDE. La scene Unity du saut
+    // (sauts-unity.js) ne dessine pas des troncs de cone : elle pose ces
+    // angles-la sur les os d'un corps sculpte. Seul un coureur qui porte un
+    // objet `squelette` le recoit ; les autres ne paient rien.
+    const sq = r.squelette;
+    if (sq) {
+      sq.hip = hip; sq.bassin = angB; sq.buste = lean; sq.tete = tete;
+      sq.lacetBas = yawHip; sq.lacetHaut = yawTop;
+      sq.l = l; sq.r = rr; sq.al = al; sq.ar = ar;
+    }
     return out;
   }
 

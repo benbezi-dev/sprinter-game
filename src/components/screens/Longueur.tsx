@@ -8,6 +8,7 @@ import { RECORDS as RECORDS_TRIPLE } from '@/game/triple.js';
 import { PLATEAU_TRIPLE } from '@/game/triple-jeu.js';
 import { recitDe } from '@/game/sauts-recits.js';
 import { monterScene3D } from '@/game/sauts-3d.js';
+import { monterSceneUnity, renduChoisi, choisirRendu } from '@/game/sauts-unity.js';
 import {
   lireMemoire, ecrireMemoire, apresConcours, CarteEtape, Drapeau, BoutonsFin, prenom,
   type MemoireSaut,
@@ -142,10 +143,14 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
   /* --- l'armement du stade, et son rangement --- */
   useEffect(() => {
     armerConcoursSaut(etape, epreuve);
-    // La scene en trois dimensions, par-dessus le stade du moteur (sauts-3d.js).
-    const detruire = monterScene3D();
-    return () => { detruire(); if (!quitte.current) rangerConcoursSaut(); };
+    return () => { if (!quitte.current) rangerConcoursSaut(); };
   }, [etape, epreuve]);
+
+  /* --- la scene en trois dimensions, par-dessus le stade du moteur ---
+     Unity (sauts-unity.js) ou three.js (sauts-3d.js) : le bouton de l'en-tete
+     passe de l'une a l'autre, pour les comparer sur le meme essai. */
+  const [rendu, setRendu] = useState<'unity' | 'three'>(renduChoisi);
+  useEffect(() => (rendu === 'unity' ? monterSceneUnity() : monterScene3D()), [etape, epreuve, rendu]);
 
   /* --- faire sauter les autres jusqu'a toi --- */
   const avancerRef = useRef<() => void>(() => {});
@@ -341,6 +346,15 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
                   className="pointer-events-auto px-2.5 py-1 rounded-full border border-white/15 bg-black/40
                              text-white/60 text-[9px] tracking-widest hover:text-white">
             {N.t('saut_quitter')}
+          </button>
+          <button onPointerDown={e => {
+                    e.stopPropagation();
+                    const r = rendu === 'unity' ? 'three' : 'unity';
+                    choisirRendu(r); setRendu(r);
+                  }}
+                  className="pointer-events-auto px-2 py-0.5 rounded-full border border-white/15 bg-black/40
+                             text-white/60 text-[8px] tracking-widest font-mono">
+            3D · {rendu === 'unity' ? 'UNITY' : 'THREE'}
           </button>
           <span className="text-[9px] tracking-widest text-white/50 font-mono">
             {N.t('saut_tour', { n: String(tour), t: String(tours()) })}

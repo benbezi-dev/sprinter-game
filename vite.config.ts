@@ -168,12 +168,51 @@ function pagesDApercu(base: string) {
     },
   };
 }
+/* ---------------------------------------------------------------------------
+   LA SCENE UNITY DE JUMPER, SUR LE SEUL CANAL DE TEST
+   ---------------------------------------------------------------------------
+   unity/build/jumper-saut/Build est le build WebGL de unity/JumperSaut
+   (Construire.WebGL, lance a la main : la CI n'a pas Unity). Il pese
+   plusieurs Mo : il ne part QUE dans le build de test, sous unity-jumper/, et
+   le serveur de dev le sert au meme chemin. Le build public n'en recoit rien.
+--------------------------------------------------------------------------- */
+const UNITY_JUMPER = path.resolve(__dirname, 'unity/build/jumper-saut/Build');
+const TYPES_UNITY: Record<string, string> = {
+  '.js': 'application/javascript', '.wasm': 'application/wasm', '.data': 'application/octet-stream',
+};
+const unityJumper = (canal: string) => canal !== 'test' && process.env.UNITY_JUMPER !== '1' ? [] : [{
+  name: 'sprinter-unity-jumper',
+  configureServer(server: any) {
+    server.middlewares.use((req: any, res: any, next: any) => {
+      const m = /\/unity-jumper\/Build\/([\w.-]+)$/.exec((req.url || '').split('?')[0]);
+      if (!m) return next();
+      const f = path.join(UNITY_JUMPER, m[1]);
+      if (!fs.existsSync(f)) return next();
+      const nu = f.replace(/\.(br|gz)$/, '');
+      res.setHeader('Content-Type', TYPES_UNITY[path.extname(nu)] || 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      fs.createReadStream(f).pipe(res);
+    });
+  },
+  writeBundle(options: any) {
+    if (!fs.existsSync(UNITY_JUMPER)) {
+      console.warn('  unity-jumper : aucun build dans unity/build/jumper-saut — la scene three.js restera seule');
+      return;
+    }
+    const dest = path.join(options.dir || 'dist', 'unity-jumper', 'Build');
+    fs.mkdirSync(dest, { recursive: true });
+    for (const f of fs.readdirSync(UNITY_JUMPER)) fs.copyFileSync(path.join(UNITY_JUMPER, f), path.join(dest, f));
+    console.log(`  unity-jumper : ${fs.readdirSync(dest).length} fichiers copies dans ${dest}`);
+  },
+}];
+
 export default defineConfig(({ mode }) => ({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     ...musiqueHorsProduction(canalDuBuild(mode)),
+    ...unityJumper(canalDuBuild(mode)),
     pagesDApercu(basePath),
     ...(apiLocale ? [{
       name: 'sprinter-api-locale',
