@@ -124,6 +124,27 @@ textures 2048², 1,90 m.
 
 ---
 
+## 2 bis. L'atelier de sculpture (la voie « qualité »)
+
+Le modèle 3D produit par code (sphères fondues) plafonne à une figurine :
+il ne deviendra ni crédible ni ressemblant. La voie retenue pour un vrai
+Aurel est la **sculpture à la main** dans Blender, sur une planche de
+référence (vues de profil, face, dos, gros plans).
+
+| Script | Rôle |
+|---|---|
+| `tools/blender/decouper_planche.py` | découpe la planche « Athlète élite » (1334 × 2000) en vues séparées, du crâne aux pieds |
+| `tools/blender/atelier_athlete.py` | scène propre, unités en mètres, Empty Images (face, profil, dos), metarig Rigify « basic human » à la hauteur voulue, matériaux Skin / TankTop (points Voronoi + ColorRamp, halo) / Shorts / GoldChain |
+
+```bash
+python3 tools/blender/decouper_planche.py planche.jpg --sortie ref
+blender -P tools/blender/atelier_athlete.py -- --face ref/face.png \
+        --profil ref/profil_droit.png --dos ref/dos.png --hauteur 1.90
+```
+
+Une fois le personnage sculpté, retopologisé et habillé, il reprend la
+chaîne Unity (rig Rigify → squelette Humanoid → FBX) de la section 2.
+
 ## 3. Points ouverts
 
 - **Vidéos d'Aurel** : YouTube est bloqué par le réseau de l'environnement
