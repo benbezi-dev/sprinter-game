@@ -6839,16 +6839,8 @@
     // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
     // cheveux posee dessus, et la chevelure ne restait qu'un anneau.
     const order = [];
-    // Les traits du visage (32, voir coureur-premium.js) : a part, dessines
-    // en dernier quand ils regardent la camera et que la tete est assez
-    // grande a l'ecran pour qu'on les lise.
-    const visage = [];
     let avant = null;
     for (let i = 0; i < caps.length; i++) {
-      if (caps[i][3] & 32) {
-        if (caps[i][5] && k >= VISAGE_MIN) visage.push(i);
-        continue;
-      }
       const e0 = caps[i][1], e1 = caps[i][2];
       // Une piece COLLEE (16, voir coureur-premium.js) prend la profondeur
       // de celle qui la precede, un rien plus pres : elle se dessine juste
@@ -6864,14 +6856,7 @@
       const c = caps[order[n][1]];
       drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
     }
-    for (const i of visage) {
-      const c = caps[i];
-      drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
-    }
   }
-  // En dessous de ce nombre de pixels par metre, un visage n'est plus lisible
-  // (un oeil y ferait moins d'un pixel et demi) : on ne dessine pas ses traits.
-  const VISAGE_MIN = 70;
 
   // Combien de volumes vaut la peine de payer, a cette taille-la.
   //
@@ -6969,21 +6954,7 @@
       Wx *= sgn;
       if (headAng) { t = Wx * hc - Wy * hs; Wy = Wx * hs + Wy * hc; Wx = t; }
       if (applyCurve) { t = Wx * WC - Wy * WS; Wy = Wx * WS + Wy * WC; Wx = t; }
-      // UN TRAIT DU VISAGE REGARDE-T-IL LA CAMERA ? On promene l'avant de la
-      // tete (+x local) dans les memes rotations que le reste, et on le
-      // compare a l'axe de la vue.
-      let face = false;
-      if (bout & 32) {
-        let Fx = ca, Fy = 0, Fz = sa;
-        if (yaw) { t = Fx * yc - Fy * ys; Fy = Fx * ys + Fy * yc; Fx = t; }
-        if (lean) { t = Fy * rc - Fz * rs; Fz = Fy * rs + Fz * rc; Fy = t; }
-        if (Math.abs(fall) > 0.001) { t = Fx * fc - Fz * fs; Fz = Fx * fs + Fz * fc; Fx = t; }
-        Fx *= sgn;
-        if (headAng) { t = Fx * hc - Fy * hs; Fy = Fx * hs + Fy * hc; Fx = t; }
-        if (applyCurve) { t = Fx * WC - Fy * WS; Fy = Fx * WS + Fy * WC; Fx = t; }
-        face = Fx * VIEW[0] + Fy * VIEW[1] + Fz * VIEW[2] < -0.12;
-      }
-      caps.push([col, ends[0], ends[1], bout, [Wx, Wy, Wz], face]);
+      caps.push([col, ends[0], ends[1], bout, [Wx, Wy, Wz]]);
     }
     return caps;
   }

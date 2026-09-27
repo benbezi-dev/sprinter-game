@@ -35,12 +35,19 @@ export type Vedette = {
   skin: string;
   /** Ce qu'on dit de lui sur la fiche. Rien qui ne soit verifie. */
   palmares: Paire[];
+  /**
+   * Son portrait 3D, rendu dans Blender (tools/blender/portrait_vedette.py) :
+   * en buste et en pied, dans public/. C'est la qu'on le reconnait de pres ;
+   * le coureur du jeu, lui, n'a pas de visage.
+   */
+  portraits: { buste: string; pied: string };
 };
 
 export const VEDETTES: Record<string, Vedette> = {
   manga: {
     cle: 'manga', coureur: 'Aurel MANGA', prenom: 'Aurel', nom: 'MANGA',
     epreuve: '110h', stade: 'defi-manga', skin: 'manga',
+    portraits: { buste: 'vedettes/manga-buste.webp', pied: 'vedettes/manga-pied.webp' },
     // Deux medailles, deux sources concordantes (World Athletics, resultats
     // officiels). Pas de record personnel ici : les sources ne s'accordent
     // pas, et une fiche fausse sur un athlete reel ne se corrige pas avec un

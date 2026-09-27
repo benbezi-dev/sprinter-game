@@ -1008,9 +1008,7 @@
       profil: o.profil || null,
       bandeau: o.bandeau || null,
       poignet: o.poignet || null,
-      barbe: o.barbe || null,
-      // `visage` : les traits d'un athlete reel (voir poserVisage).
-      visage: o.visage || null
+      barbe: o.barbe || null
     };
   }
 
@@ -1074,28 +1072,22 @@
     // rouge que l'ebene du plateau. La tenue est la violette qu'il porte sur
     // les videos d'entrainement, bandeau blanc compris.
     //
+    // SON VISAGE N'EST PAS ICI. A l'echelle de la course, des yeux et un nez
+    // en troncs de cone faisaient un masque plutot qu'un visage : on le
+    // reconnait en course a sa silhouette, et de pres sur son portrait 3D
+    // (tools/blender/portrait_vedette.py, public/vedettes/).
+    //
     // LA FOULEE EST PROVISOIRE. `sharp` est celle d'un coureur de frequence,
     // buste haut — la plus proche d'un hurdleur parmi celles du jeu. Elle
     // sera remplacee par la sienne, relevee sur ses videos.
     'Aurel MANGA': look({ build: 'm', skin: [104, 62, 44], profil: 'manga',
       jersey: [104, 58, 176], shorts: [58, 34, 108], shoe: [246, 246, 250],
       hair: 'ras', h: 1.90, gait: 'sharp',
-      // `sh` DOIT valoir la `carrure` de son profil Blender (1,10) : c'est
+      // `sh` DOIT valoir la `carrure` de son profil Blender (1,06) : c'est
       // l'ecart des epaules du squelette, sur lequel ses bras ont ete mesures.
-      morph: { sh: 1.10 },
+      morph: { sh: 1.06 },
       bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
-      barbe: [50, 34, 28],
-      // SON VISAGE, releve sur ses photos de face (2018 a aujourd'hui) : des
-      // yeux en amande assez ecartes sous des sourcils droits et epais, un
-      // nez large a la base, des levres pleines, la machoire carree (dans sa
-      // sculpture) sous la barbe courte.
-      visage: {
-        yeux: { ecart: 0.032, large: 0.012, haut: 0.0052, z: 0.689 },
-        sourcils: { ecart: 0.032, large: 0.017, haut: 0.0034, z: 0.703, pente: 0.10 },
-        nez: { large: 0.019, bout: 0.009, z: 0.669, saillie: 0.010 },
-        levres: { col: [104, 54, 46], large: 0.022, haut: 0.0062, z: 0.639 },
-        iris: [34, 22, 18], blanc: [236, 228, 218]
-      } })
+      barbe: [50, 34, 28] })
   };
 
   const JERSEYS = [[64, 178, 235], [72, 214, 132], [236, 92, 88],
@@ -1982,49 +1974,6 @@
         MESURE | SOUS_BAS | LIBRE);
   }
 
-  /**
-   * LES TRAITS D'UN VISAGE, poses sur le crane mesure.
-   *
-   * Chaque trait se pose SUR la peau : a sa hauteur, on lit la section du
-   * crane (cambrure, demi-profondeur, demi-largeur), et un point a `y` du
-   * milieu tombe a c + p * racine(1 - (y/l)^2) vers l'avant — le devant de
-   * l'ellipse. Le trait deborde d'un rien, pas davantage : un oeil qui
-   * flotte devant le visage se lit comme des lunettes.
-   *
-   * Tous portent VISAGE (32) : le rendu les dessine par-dessus la tete quand
-   * ils regardent la camera, jamais quand ils lui tournent le dos.
-   */
-  function poserVisage(L, PR, PREM, addCrane) {
-    const V = L.visage, F = PREM.MESURE | PREM.VISAGE;
-    const devant = (z, y) => {
-      const [c, p, l] = PREM.section(PR, 'head', PREM.PRES, z, 1);
-      const q = Math.min(0.95, Math.abs(y) / Math.max(1e-3, l));
-      return c + p * Math.sqrt(1 - q * q);
-    };
-    const peauSombre = L.skin.map(v => Math.round(v * 0.78));
-    const Y = V.yeux;
-    for (const s of [1, -1]) {
-      const x = devant(Y.z, Y.ecart);
-      // le blanc de l'oeil, en amande, puis l'iris, un rien devant
-      addCrane(V.blanc, [x - 0.001, s * Y.ecart, Y.z], [0.002, Y.large],
-               [0.002, Y.large * 0.9], Y.haut, F);
-      addCrane(V.iris, [x + 0.0005, s * (Y.ecart - 0.001), Y.z], [0.002, Y.haut * 1.05],
-               [0.002, Y.haut * 1.05], Y.haut * 0.95, F);
-      // le sourcil, droit et epais, qui descend un peu vers la tempe
-      const S = V.sourcils, xs = devant(S.z, S.ecart);
-      addCrane(L.hairCol, [xs + 0.0005, s * S.ecart, S.z - S.pente * 0.01], [0.003, S.large],
-               [0.003, S.large], S.haut, F);
-    }
-    // le nez : large a la base (les ailes), plus etroit en montant, et en
-    // saillie sur le visage
-    const N = V.nez, xn = devant(N.z, 0);
-    addCrane(peauSombre, [xn + N.saillie * 0.4, 0, N.z, xn + N.saillie * 0.15],
-             [N.saillie * 0.7, N.large], [N.saillie * 0.45, N.bout], 0.010, F | PREM.LIBRE);
-    // les levres, pleines, sous la moustache
-    const B = V.levres, xb = devant(B.z, 0);
-    addCrane(B.col, [xb - 0.001, 0, B.z], [0.004, B.large], [0.004, B.large * 0.96], B.haut, F);
-  }
-
   function pose(r, lod) {
     const L = r.look, fem = L.build === 'f';
     // `decalePas` n'avance que l'image, jamais le compte : voir haies-rendu.js.
@@ -2444,11 +2393,6 @@
       addCrane(L.barbe, [cL + pL - 0.003, 0, 0.653], [0.006, 0.022],
                [0.006, 0.022], 0.004, PREM.MESURE | PREM.LIBRE);
     }
-    // LE VISAGE. Seulement au niveau de detail le plus fin : c'est celui des
-    // gros plans — la fiche, l'ecran du skin, la presentation — et le rendu,
-    // de toute facon, ne dessine ces traits qu'au-dela d'une taille a l'ecran
-    // (VISAGE, coureur-premium.js).
-    if (L.visage && niv === PREM.PRES) poserVisage(L, PR, PREM, addCrane);
     // des lunettes : deux verres minces devant les yeux
     if (L.lunettes) {
       for (const side of [1, -1]) {

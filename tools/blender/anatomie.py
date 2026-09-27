@@ -364,26 +364,28 @@ ATHLETES = {
     # De face, bras le long du corps, le dos fait un V franc : deltoides ronds
     # qui debordent nettement de l'epaule (c'est LE signe qui le fait
     # reconnaitre de loin), trapezes hauts qui mangent le cou, taille pincee
-    # sous un grand dorsal. Une premiere passe a +10 % ne se voyait pas a
-    # l'ecran : les epaules sont a +30-38 %, la carrure a +10 %. Les bras sont ceux d'un sprinteur de force, biceps
+    # sous un grand dorsal. Pousses a +30-38 %, les deltoides devenaient des
+    # boules posees sur le tronc de cone du bras : on s'en tient a +16-20 %,
+    # la carrure a +6 %. Ce qui ne tient pas en troncs de cone — le visage,
+    # le modele des muscles — est dans son portrait (portrait_vedette.py). Les bras sont ceux d'un sprinteur de force, biceps
     # et triceps pleins. En bas, des quadriceps epais et un mollet haut — la
     # jambe d'un hurdleur, longue et seche a la cheville.
     'manga': {
         'fem': False,
-        'carrure': 1.10,
+        'carrure': 1.06,
         'retouches': {
             # bassin : a peine de fessier en plus, la hanche ne s'elargit pas
             'pelvis':   [1.00, 1.00, 1.03, 1.00, 1.00],
             # du bas du maillot au trapeze : taille pincee, cotes et
             # pectoraux larges, trapeze qui monte vers le cou
-            'torso':    [1.00, 1.00, 0.95, 0.98, 1.03, 1.08, 1.12, 1.16, 1.30],
+            'torso':    [1.00, 1.00, 0.96, 0.98, 1.02, 1.06, 1.09, 1.11, 1.18],
             # un cou de sprinteur de force, large a la base
-            'neck':     [1.22, 1.14, 1.06],
+            'neck':     [1.14, 1.10, 1.06],
             # machoire carree, crane inchange
             'head':     [1.06, 1.04, 1.00, 1.00, 1.00],
-            'deltoid':  [1.30, 1.38, 1.30],
+            'deltoid':  [1.16, 1.20, 1.16],
             # biceps et triceps pleins, coude inchange
-            'upperarm': [1.16, 1.18, 1.18, 1.12, 1.04, 1.00],
+            'upperarm': [1.10, 1.13, 1.14, 1.10, 1.04, 1.00],
             # l'avant-bras un peu plus fort, la main ne change pas
             'forearm':  [1.08, 1.10, 1.06, 1.00, 1.00, 1.00, 1.00],
             # la premiere masse est le fessier, a rayon brut : on n'y touche

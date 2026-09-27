@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE, VOILE, PANNEAU } from '@/lib/mouvement';
-import { SprinterApp, SprinterCore, useGameStore } from '@/game/engine';
+import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
   meilleurDuDefi, type Vedette, type Verdict,
 } from '@/game/vedettes';
-import { useVestiaire, porterSkin, lookDuSkin } from '@/game/vestiaire';
+import { useVestiaire, porterSkin } from '@/game/vestiaire';
 import { mot, chrono, ligne } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
@@ -30,53 +30,30 @@ const VIOLET_FONCE = '#2A1650';
 /** Le defi du moment. Un seul pour l'instant ; le suivant s'ajoutera ici. */
 const LE_DEFI: Vedette = VEDETTES.manga;
 
+/** Le chemin d'une image de public/, sous la base du deploiement (/ ou /test/). */
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 /**
- * UN COUREUR PEINT DANS SA PROPRE TOILE — le moteur du jeu, a l'echelle d'une
- * carte. `cap` le tourne (Math.PI : de face), `fete` leve ses bras.
+ * SON PORTRAIT 3D — l'image rendue dans Blender, pas le coureur du jeu.
+ *
+ * Le coureur de la piste est fait de troncs de cone : il se reconnait a sa
+ * silhouette, pas a son visage. De pres, on montre donc l'athlete modele et
+ * eclaire dans Blender (tools/blender/portrait_vedette.py). `cadre` dit quoi
+ * garder de l'image : le visage seul, le buste, ou le corps entier.
  */
-function Portrait({ look, largeur, hauteur, cap = Math.PI * 1.2, fete = 0, buste = false }: {
-  look: any; largeur: number; hauteur: number; cap?: number; fete?: number;
-  /** Cadrer la tete et les epaules plutot que le corps entier : c'est la
-   *  qu'on le reconnait — son visage, son bandeau, sa carrure. */
-  buste?: boolean;
+function Portrait({ v, cadre, largeur, hauteur }: {
+  v: Vedette; cadre: 'visage' | 'buste' | 'pied'; largeur: number; hauteur: number;
 }) {
-  const toile = useRef<HTMLCanvasElement | null>(null);
-  useEffect(() => {
-    const el = toile.current;
-    if (!el || !look) return;
-    const ctx = el.getContext('2d');
-    if (!ctx) return;
-    const r = Math.min(window.devicePixelRatio || 1, 2);
-    el.width = Math.round(largeur * r);
-    el.height = Math.round(hauteur * r);
-    const A = SprinterApp as any;
-    // Un souffle dans la foulee, comme a la presentation des finalistes : un
-    // coureur immobile a l'ecran se lit comme une image, pas comme lui.
-    const perso = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: fete, drivePitch: 0 };
-    // La tete tient dans le cadre : le haut du crane est a 1,65 m du sol dans
-    // le repere du rig, on en garde un dixieme de marge au-dessus.
-    // En buste, on garde du haut du crane (1,66 m) jusqu'au milieu du torse
-    // (1,18 m) : le sol tombe alors bien sous le cadre.
-    const k = buste ? hauteur / 0.52 : (hauteur * 0.86) / 1.66;
-    const sol = buste ? hauteur + 1.16 * k : hauteur * 0.96;
-    let vivant = true, t0 = performance.now();
-    const peindre = () => {
-      if (!vivant) return;
-      const t = (performance.now() - t0) / 1000;
-      perso.stride = t * 1.1;
-      ctx.setTransform(r, 0, 0, r, 0, 0);
-      ctx.clearRect(0, 0, largeur, hauteur);
-      // Toujours au niveau le plus fin : un seul coureur, en gros plan. Le
-      // palier sobre du telephone (niveauDetail) vaut pour huit coureurs en
-      // course ; il retirait ici le visage, qui n'existe qu'au plus fin.
-      const caps = A.personCapsules(perso, cap, 0, false, false, 0);
-      A.drawFacetFigure(ctx, caps, largeur / 2, sol, k);
-      requestAnimationFrame(peindre);
-    };
-    requestAnimationFrame(peindre);
-    return () => { vivant = false; };
-  }, [look, largeur, hauteur, cap, fete, buste]);
-  return <canvas ref={toile} style={{ width: largeur, height: hauteur }} aria-hidden />;
+  const src = `${BASE}/${cadre === 'pied' ? v.portraits.pied : v.portraits.buste}`;
+  // Le visage : le haut du buste, agrandi. Le buste : l'image entiere.
+  const style: React.CSSProperties = cadre === 'visage'
+    ? { width: '100%', height: '100%', objectFit: 'cover', objectPosition: '50% 4%', transform: 'scale(1.9)', transformOrigin: '50% 12%' }
+    : { width: '100%', height: '100%', objectFit: cadre === 'pied' ? 'contain' : 'cover', objectPosition: '50% 0%' };
+  return (
+    <span className="block overflow-hidden" style={{ width: largeur, height: hauteur }}>
+      <img src={src} alt={`${v.prenom} ${v.nom}`} draggable={false} style={style} />
+    </span>
+  );
 }
 
 /* ---------------------------------------------------------------------------
@@ -88,7 +65,6 @@ export function BanderoleVedette({ haies }: { haies: boolean }) {
   const vest = useVestiaire();
   const [fiche, setFiche] = useState(false);
   if (!defiPossible(v)) return null;
-  const look = SprinterCore.VEDETTES[v.coureur];
   const gagne = vest.gagnes.includes(v.skin);
   const porte = vest.porte === v.skin;
   const meilleur = meilleurDuDefi(v);
@@ -100,7 +76,10 @@ export function BanderoleVedette({ haies }: { haies: boolean }) {
            style={{ borderColor: `${VIOLET}B0`, background: `linear-gradient(100deg, ${VIOLET_FONCE}F0, #0E0A1ACC)` }}>
         <button onClick={() => setFiche(true)}
                 className="flex-1 min-w-0 flex items-center gap-2 pl-1 pr-3 py-2 text-left hover:bg-white/5 transition-colors">
-          <span className="shrink-0 -my-2"><Portrait look={look} largeur={58} hauteur={78} /></span>
+          <span className="shrink-0 rounded-xl overflow-hidden border border-white/15"
+                style={{ background: 'radial-gradient(circle at 50% 35%, #3B2470, #120A22)' }}>
+            <Portrait v={v} cadre="visage" largeur={58} hauteur={64} />
+          </span>
           <span className="flex-1 min-w-0 flex flex-col">
             <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-white/90">
               {haies ? mot('vd_sur_haies') : mot('vd_sur')}
@@ -148,7 +127,6 @@ export function BanderoleVedette({ haies }: { haies: boolean }) {
 
 function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
   useRetour(onFermer, true);
-  const look = SprinterCore.VEDETTES[v.coureur];
   const apprendre = !tutoHaiesVu();
   const courir = () => { onFermer(); lancerLeDefi(v); };
   const tuto = () => { onFermer(); marquerTutoHaiesVu(); ouvrirLeTuto(); };
@@ -163,7 +141,7 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
         <div className="flex items-end gap-3">
           <div className="shrink-0 rounded-xl overflow-hidden border border-white/10"
                style={{ background: 'radial-gradient(circle at 50% 35%, #3B2470, #120A22)' }}>
-            <Portrait look={look} largeur={132} hauteur={160} cap={Math.PI * 1.1} buste />
+            <Portrait v={v} cadre="buste" largeur={132} hauteur={160} />
           </div>
           <div className="flex-1 min-w-0 flex flex-col gap-1 pb-2">
             <span className="text-[10px] font-bold tracking-[0.24em] text-white/70">{mot('vd_fiche_sur')}</span>
@@ -274,7 +252,7 @@ export function FinDuDefiVedette() {
         {verdict.nouveauSkin && (
           <div className="w-full rounded-2xl border-2 p-3 flex items-center gap-3 text-left"
                style={{ borderColor: `${VIOLET}B0`, background: `linear-gradient(100deg, ${VIOLET_FONCE}, #0E0A1A)` }}>
-            <Portrait look={lookDuSkin(v.skin)} largeur={84} hauteur={118} cap={Math.PI * 1.15} fete={1} />
+            <Portrait v={v} cadre="pied" largeur={90} hauteur={120} />
             <div className="flex-1 min-w-0 flex flex-col gap-1">
               <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: '#C4B5FD' }}>{mot('vd_debloque')}</span>
               <span className="font-black font-display text-xl leading-none text-white">{v.prenom} {v.nom}</span>
