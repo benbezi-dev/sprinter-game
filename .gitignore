@@ -21,7 +21,11 @@ juridique/
 docs/instagram_charte.md
 
 # Configuration locale de l'outillage : chemins absolus propres a la machine.
-.claude/
+# Sauf le hook de demarrage des sessions Claude Code sur le web et son
+# enregistrement : ils ne portent aucun chemin absolu ($CLAUDE_PROJECT_DIR).
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # Secrets de developpement wrangler.
 worker/.dev.vars
