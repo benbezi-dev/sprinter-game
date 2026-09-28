@@ -3831,7 +3831,13 @@
       if (T.fullLap) {
         for (let i = 0; i <= N; i++)
           out.push([true, Math.PI * (1 - i / N), 1]);
-        for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
+        // La ligne opposee s'arrete a l'arrivee, ou le premier virage — deja
+        // la, en tete de liste — prend le relais : la decelaration se court
+        // dans le virage, comme sur une vraie piste (voir Track.posLap2).
+        // Prolongee tout droit, elle traversait en biais les couloirs et les
+        // gradins du depart.
+        for (let x = st; x < T.straight - st * 0.5; x += st) out.push([false, x, 1]);
+        out.push([false, T.straight, 1]);
       }
     } else {
       // Le terrain continue derriere la ligne de depart. A vingt metres, un
