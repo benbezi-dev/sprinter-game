@@ -59,6 +59,15 @@
     drawWorld(ctx, THEMES[LEVELS[G.levelIdx].theme]);
     if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
     await new Promise(r => setTimeout(r, 1500));
+    // LA FOULE SE COMPOSE AVANT LE PISTOLET, COMME EN JEU. La presentation
+    // et le decompte laissent au public quelques secondes pour composer ses
+    // images (tribune.js) ; la galerie court sans attendre, et un Chrome sans
+    // interface compose lentement : sans ce temps, les premieres vues de
+    // course sortaient avec des sieges vides qu'aucun joueur ne voit.
+    for (let k = 0; k < +(P.get('chauffe') || 40); k++) {
+      drawWorld(ctx, THEMES[LEVELS[G.levelIdx].theme]);
+      await new Promise(r => setTimeout(r, 0));
+    }
     let cote = 0;
     for (let i = 0; i <= FIN; i++) {
       if (G.state === 'race' && i % 2 === 0) padPress((cote++ % 2) ? 'right' : 'left');

@@ -78,6 +78,73 @@
     return out;
   }
 
+  // LES CHEVEUX ET LE BAS, POUR QUE LA FOULE CESSE D'ETRE UNE EQUIPE.
+  //
+  // Noir, brun fonce, chatain, roux, blond, blond clair, gris, blanc — et la
+  // chevelure suit la carnation, comme dans une vraie foule : on tire ses
+  // cheveux dans une table ponderee par peau, pas au hasard dans toutes.
+  const CHEVEUX = [[26, 22, 20], [54, 36, 26], [96, 62, 38], [140, 78, 40],
+                   [188, 146, 86], [222, 196, 140], [148, 144, 140], [210, 208, 200]];
+  const CHEVEUX_PAR_PEAU = [
+    [2, 3, 3, 1, 2, 1, 1, 1],
+    [3, 3, 2, 0.5, 1, 0.3, 1, 0.5],
+    [5, 3, 1, 0, 0, 0, 0.7, 0.3],
+    [7, 2, 0, 0, 0, 0, 0.6, 0.4],
+    [7, 2, 0, 0, 0, 0, 0.6, 0.4],
+  ];
+  // Jean, jean brut, noir, gris, beige, kaki, blanc, marine : ce que porte
+  // une tribune, le jean en tete.
+  const PANTALONS = [[50, 72, 112], [34, 44, 72], [30, 30, 34], [96, 98, 106],
+                     [178, 154, 114], [110, 106, 74], [222, 220, 212], [40, 46, 74]];
+  const POIDS_PANTALONS = [5, 3, 3, 2, 1.5, 1, 0.5, 2];
+  // Cheveux courts, longs, casquette (voir tribune.py).
+  const POIDS_SILHOUETTES = [0.5, 0.32, 0.18];
+  // Assez de personnages pour qu'on ne reconnaisse pas deux fois le meme dans
+  // un cadre, pas davantage : chacun coute une image composee par geste et
+  // par cap (voir `image`), et le cache n'en garde que MAX_IMAGES. Trente-deux,
+  // c'est quatre-vingt-dix-sept images par cap : moins que les cent six de
+  // l'ancien public (cinq carnations par sept hauts), pour bien plus de
+  // visages differents.
+  const N_PERSONNAGES = 32;
+
+  function tirer(poids, u) {
+    let total = 0;
+    for (const p of poids) total += p;
+    let v = u * total;
+    for (let i = 0; i < poids.length; i++) { v -= poids[i]; if (v < 0) return i; }
+    return poids.length - 1;
+  }
+
+  /**
+   * Les personnages d'un stade : une carnation, une coiffure (ou une
+   * casquette), un haut, un bas. Tires une fois, d'une suite fixe — le meme
+   * stade retrouve le meme public d'une course a l'autre —, et chacun des
+   * spectateurs en endosse un selon sa place.
+   */
+  function personnages(th) {
+    const hautsC = hauts(th);
+    // Les casquettes : les couleurs du stade, et le noir, le blanc et le
+    // marine qu'on voit partout.
+    const casquettes = (th.panels || []).concat([[30, 30, 34], [244, 244, 240], [36, 42, 64]]);
+    let g = 0x6d2b79f5 >>> 0;
+    const al = () => { g ^= g << 13; g >>>= 0; g ^= g >>> 17; g ^= g << 5; g >>>= 0; return g / 4294967296; };
+    const out = [];
+    for (let i = 0; i < N_PERSONNAGES; i++) {
+      const peau = i % PEAUX.length;
+      const sil = tirer(POIDS_SILHOUETTES, al());
+      const tete = sil === 2 ? casquettes[Math.floor(al() * casquettes.length)]
+                             : CHEVEUX[tirer(CHEVEUX_PAR_PEAU[peau], al())];
+      out.push({
+        id: i, sil,
+        peau: hexa(PEAUX[peau]),
+        cheveux: hexa(tete),
+        haut: hexa(hautsC[Math.floor(al() * hautsC.length)]),
+        pantalon: hexa(PANTALONS[tirer(POIDS_PANTALONS, al())]),
+      });
+    }
+    return out;
+  }
+
   // -------------------------------------------------------------------
   // LA COMPOSITION D'UNE IMAGE
   // -------------------------------------------------------------------
@@ -122,29 +189,38 @@
     c.drawImage(t, 0, 0);
   }
 
-  function image(pose, capI, peau, haut, siege) {
-    const cle = pose + '|' + capI + '|' + peau + '|' + haut + '|' + siege;
+  /**
+   * L'image d'un spectateur : une ligne de l'atlas (silhouette et geste, ou
+   * le siege vide), un cap, un personnage, la couleur des sieges.
+   */
+  function image(ligne, capI, pers, siege) {
+    const cle = ligne + '|' + capI + '|' + (pers ? pers.id : -1) + '|' + siege;
     let e = cache.get(cle);
     if (e) return e;
     if (budget <= 0 || performance.now() > limite) return null;
     budget--;
     const man = MAN();
-    const [ax, ay] = man.ancres[pose][capI];
-    const [x0, y0, x1, y1] = man.cadres[pose][capI];
+    const [ax, ay] = man.ancres[ligne][capI];
+    const [x0, y0, x1, y1] = man.cadres[ligne][capI];
     const k = PPM_IMAGE / man.ppm;
-    const sw = x1 - x0, sh = y1 - y0;
+    // Le rectangle source tombe sur des pixels entiers de l'atlas : a la meme
+    // densite que l'image composee, la copie est alors exacte, sans le flou
+    // d'un echantillonnage a cheval sur deux pixels.
+    const sx = Math.floor(ax + x0), sy = Math.floor(ay + y0);
+    const sw = Math.ceil(ax + x1) - sx, sh = Math.ceil(ay + y1) - sy;
     const w = Math.max(1, Math.ceil(sw * k)), h = Math.max(1, Math.ceil(sh * k));
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
     const c = cv.getContext('2d');
-    const sx = ax + x0, sy = ay + y0;
     couche(c, atlas.siege, sx, sy, sw, sh, w, h, siege);
-    if (man.poses[pose] !== 'vide') {
+    if (pers) {
       couche(c, atlas.base, sx, sy, sw, sh, w, h, null);
-      couche(c, atlas.peau, sx, sy, sw, sh, w, h, peau);
-      couche(c, atlas.maillot, sx, sy, sw, sh, w, h, haut);
+      couche(c, atlas.pantalon, sx, sy, sw, sh, w, h, pers.pantalon);
+      couche(c, atlas.peau, sx, sy, sw, sh, w, h, pers.peau);
+      couche(c, atlas.maillot, sx, sy, sw, sh, w, h, pers.haut);
+      couche(c, atlas.cheveux, sx, sy, sw, sh, w, h, pers.cheveux);
     }
-    e = { cv, ax: -x0 * k, ay: -y0 * k, w, h };
+    e = { cv, ax: (ax - sx) * k, ay: (ay - sy) * k, w, h };
     cache.set(cle, e);
     if (cache.size > MAX_IMAGES) cache.delete(cache.keys().next().value);
     return e;
@@ -167,6 +243,7 @@
   };
 
   let _themeCourant = null;
+  let _personnages = null;
   /** La pose retenue par chaque spectateur, et le geste ou il l'a choisie. */
   const poses = new Map();
   /** Les caps de spectateurs de ce stade, pour tout le trace. */
@@ -191,6 +268,7 @@
     if (!charger()) return false;
     if (th !== _themeCourant) {
       cache.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null; _themeCourant = th;
+      _personnages = null;
     }
     budget = 48;
     const G = api.G, T = G.track;
@@ -198,10 +276,14 @@
     const vue = T.curved ? api.WROT_DEG : 0;
     const s = api.scaleM() / PPM_IMAGE;
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
-    const peauxC = PEAUX.map(hexa), hautsL = hauts(th).map(hexa);
+    if (!_personnages) _personnages = personnages(th);
+    const pers = _personnages;
     const siegeC = hexa(SIEGES[nom] || th.accent || [80, 90, 120]);
     const man = MAN();
     const iAssis = 0, iApplaudit = 1, iDebout = 2, iVide = 3;
+    // la ligne de l'atlas d'une silhouette et d'un geste (voir tribune.py)
+    const nG = man.gestes.length, ligneVide = man.poses.indexOf('vide');
+    const ligneDe = (sil, geste) => sil * nG + geste;
     const t = performance.now() / 1000;
     const margeX = 140 * s * 1.6, margeY = 260 * s * 1.6;
     // part des spectateurs debout : presque personne a une rencontre
@@ -345,9 +427,8 @@
     for (const it of items) {
       const h = it[5];
       const pose = it[3];
-      const vide = pose === iVide;
-      const im = image(pose, it[4], vide ? 0 : peauxC[(h >>> 4) % peauxC.length],
-                       vide ? 0 : hautsL[(h >>> 9) % hautsL.length], siegeC);
+      const p = pose === iVide ? null : pers[(h >>> 4) % pers.length];
+      const im = image(p ? ligneDe(p.sil, pose) : ligneVide, it[4], p, siegeC);
       if (!im) continue;
       ctx.drawImage(im.cv, it[1] - im.ax * s, it[2] - im.ay * s, im.w * s, im.h * s);
     }
@@ -361,12 +442,10 @@
     // presentation ou le decompte.
     if (G.state !== 'race') {
       for (const capI of capsVus) {
-        if (!image(iVide, capI, 0, 0, siegeC)) return true;
+        if (!image(ligneVide, capI, null, siegeC)) return true;
         for (let pose = 0; pose < 3; pose++) {
-          for (const peau of peauxC) {
-            for (const haut of hautsL) {
-              if (!image(pose, capI, peau, haut, siegeC)) return true;
-            }
+          for (const p of pers) {
+            if (!image(ligneDe(p.sil, pose), capI, p, siegeC)) return true;
           }
         }
       }
