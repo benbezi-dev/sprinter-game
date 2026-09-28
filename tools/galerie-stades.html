@@ -33,11 +33,15 @@
   const cv = document.getElementById('cv');
   // Le format de l'ecran : ?w=390&h=844&portrait=1 pour un telephone tenu
   // debout — le cadre y montre une tout autre bande de pelouse.
-  cv.width = +(P.get('w') || 1280); cv.height = +(P.get('h') || 720);
+  // ?dpr=2 rend comme un telephone : le jeu borne sa densite a 2 (voir
+  // GameCanvas), et un decor juge a 1 cache ses defauts de finesse.
+  const DPR = +(P.get('dpr') || 1);
+  const LW = +(P.get('w') || 1280), LH = +(P.get('h') || 720);
+  cv.width = Math.round(LW * DPR); cv.height = Math.round(LH * DPR);
   const ctx = cv.getContext('2d');
   const etat = document.getElementById('etat');
   const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
-  G.cv = cv; G.dpr = 1; G.VW = cv.width; G.VH = cv.height; G.portrait = P.get('portrait') === '1';
+  G.cv = cv; G.dpr = DPR; G.VW = LW; G.VH = LH; G.portrait = P.get('portrait') === '1';
   SprinterApp.load();
 
   const DT = 1 / 30;
@@ -60,7 +64,8 @@
       if (G.state === 'race' && i % 2 === 0) padPress((cote++ % 2) ? 'right' : 'left');
       updateLogic(DT);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, G.VW, G.VH);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       const th = THEMES[LEVELS[G.levelIdx].theme];
       drawWorld(ctx, th);
       if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
