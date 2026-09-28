@@ -39,7 +39,10 @@
       barrier: [120, 84, 168],
       panels: [[196, 72, 190], [86, 92, 220], [52, 190, 196], [236, 158, 72]],
       crowdLo: [56, 44, 78], crowdHi: [214, 188, 244],
-      accent: [232, 121, 216], dust: [216, 196, 236]
+      accent: [232, 121, 216], dust: [216, 196, 236],
+      // Stade de nuit : les panneaux du sponsor s'y allument comme de vrais
+      // ecrans LED — halo autour du logo, lumiere au sol (voir panneauPub).
+      pubsLed: true
     },
     // LA PISTE ARC-EN-CIEL : un pont de lumiere pose dans l'espace. Le vide
     // sous elle est celui du stade cosmos (`espace`, decor-cosmos.js), mais
@@ -262,7 +265,10 @@
       // La rangee de lampes au-dessus des tribunes. Elle remplace les fanions
       // a damier, qui n'ont rien a faire dans une enceinte de nuit : un
       // fanion ne se voit que le jour, une lampe ne se voit que la nuit.
-      projecteurs: true
+      projecteurs: true,
+      // Et pour la meme raison, les panneaux du sponsor y sont allumes comme
+      // de vrais ecrans LED (voir panneauPub).
+      pubsLed: true
     },
     // LE CIMETIERE MUNICIPAL — la nuit du molosse, edition limitee.
     //
@@ -556,6 +562,29 @@
   }
   const FLAG_IMG = new Image();
   FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
+  // LE SPONSOR DES PANNEAUX PUBLICITAIRES : le logo BENBEZI en relief,
+  // modelise et rendu dans Blender depuis le SVG de la marque (dossier
+  // BENBEZI/logo-3d, construire_logo_3d.py), en argent sur fond transparent.
+  // Deux affiches : le logo seul, et le logo dans son cadre arrondi. Une
+  // seule par course, tiree au sort (voir pubDeLaCourse) ; elle occupe un
+  // panneau sur deux (voir panneauPub). Tant qu'elle n'est pas chargee, les
+  // panneaux gardent leurs couleurs et le stade reste celui d'avant.
+  //   h   : hauteur de l'image sur le panneau, en metres (il en fait 1,03)
+  //   pas : ecart vise entre deux logos, en metres
+  // Chaque affiche a son halo (« -halo ») : la lueur d'un ecran LED, pour les
+  // stades de nuit (voir `pubsLed` dans THEMES, et exporter_pour_le_jeu.py).
+  const PUBS = [
+    { nom: 'benbezi-logo-3d', h: 0.567, pas: 7.2 },
+    { nom: 'benbezi-logo-3d-cadre', h: 0.82, pas: 5.0 },
+  ].map(p => {
+    const charge = f => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = CROWD_BASE + '/pubs/' + f + '.webp';
+      return img;
+    };
+    return { img: charge(p.nom), halo: charge(p.nom + '-halo'), h: p.h, pas: p.pas };
+  });
 
   const GOLD = 'rgb(248,205,74)', CREAM = 'rgb(238,240,248)';
   const MUTED = 'rgb(140,146,182)', CYAN = 'rgb(104,216,236)';
@@ -4146,6 +4175,153 @@
       ctx.fill();
     }
   }
+  // PANNEAU DU SPONSOR : un ecran LED noir (le fond, trace par wall()), et
+  // l'affiche repetee le long du panneau, a la hauteur et au pas qu'elle
+  // demande (voir PUBS) — a pas regulier, calcule sur la longueur du panneau,
+  // pour qu'aucun logo ne soit coupe a son bout.
+  //
+  // La projection est affine : sur un troncon droit, une seule matrice plaque
+  // l'image exactement, et un troncon droit ne garde donc que ses deux bouts.
+  // Dans le virage, le logo est debite en tranches, une par echantillon du
+  // trace, chacune avec sa matrice : il epouse la courbe au lieu de la couper.
+  // Seule la face tournee vers la camera porte le logo ; de l'autre cote du
+  // stade, on voit le dos du panneau.
+  const PUB_FOND = [14, 14, 18];
+  // Reperes au sol : uniquement le depart, la ligne des 100 m et celle des 50
+  // derniers metres (comme les marquages permanents d'une vraie piste). Leur
+  // distance s'ecrit sur l'herbe, a ECART_REPERES du bord exterieur : c'est
+  // derriere les panneaux, et a l'ecran elle se lit donc SUR eux. Un logo ne
+  // se pose pas sous un repere ; le mot s'affiche alors sur le noir du panneau.
+  const ECART_REPERES = 2.4;
+  function reperesDeDistance(T) {
+    const s = new Set([0]);
+    if (T.total - 100 > 0) s.add(T.total - 100);
+    if (T.total - 50 > 0) s.add(T.total - 50);
+    return Array.from(s).sort((a, b) => a - b);
+  }
+  const pubPrete = p => p.img.complete && p.img.naturalWidth > 0;
+  const haloPret = p => p.halo.complete && p.halo.naturalWidth > 0;
+  // LES DEUX AFFICHES NE PARAISSENT JAMAIS ENSEMBLE. L'affiche est tiree au
+  // sort quand la piste change — chaque course en pose une neuve (startLevel)
+  // — et toute la course la garde, scenes comprises. Si l'image tiree n'est
+  // pas encore chargee, les panneaux restent aux couleurs du theme plutot que
+  // de montrer l'autre en attendant.
+  let _pubPiste = null, _pubTirage = 0;
+  function pubDeLaCourse() {
+    if (G.track !== _pubPiste) { _pubPiste = G.track; _pubTirage = Math.random(); }
+    const p = PUBS[Math.floor(_pubTirage * PUBS.length)];
+    return pubPrete(p) ? p : null;
+  }
+  function panneauPub(ctx, seg, r, zLo, zHi, reperes, pub, led) {
+    const img = pub.img;
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const W = pub.h * iw / ih;
+    const droit = q => !q[0];
+    const P = [], S = [];
+    let L = 0;
+    for (let k = 0; k < seg.length; k++) {
+      const q = seg[k];
+      if (k > 0 && k < seg.length - 1 && droit(seg[k - 1]) && droit(q) &&
+          droit(seg[k + 1]) && seg[k - 1][2] === seg[k + 1][2]) continue;
+      const p = ptOf(q, r);
+      if (P.length) L += Math.hypot(p[0] - P[P.length - 1][0], p[1] - P[P.length - 1][1]);
+      P.push(p); S.push(L);
+    }
+    if (L < W) return;
+    const nb = Math.max(1, Math.round(L / pub.pas));
+    const zTop = (zLo + zHi) / 2 + pub.h / 2;
+    // Dans un stade de nuit, l'ecran eclaire : son halo deborde du logo d'une
+    // marge fixe (celle de l'image), et une flaque de lumiere s'etale au sol
+    // devant lui.
+    const halo = led && haloPret(pub) ? pub.halo : null;
+    const marge = halo ? (halo.naturalWidth - iw) / 2 * pub.h / ih : 0;
+    for (let q = 0; q < nb; q++) {
+      const s0 = (q + 0.5) * L / nb - W / 2, s1 = s0 + W;
+      if (reperes && reperes.length) {
+        const sc = (s0 + s1) / 2;
+        let k = 0;
+        while (k + 2 < P.length && S[k + 1] < sc) k++;
+        const t = (sc - S[k]) / (S[k + 1] - S[k]);
+        const cx = P[k][0] + (P[k + 1][0] - P[k][0]) * t;
+        const cy = P[k][1] + (P[k + 1][1] - P[k][1]) * t;
+        if (reperes.some(m => Math.hypot(m[0] - cx, m[1] - cy) < W / 2 + 1)) continue;
+      }
+      if (halo) flaqueDeLumiere(ctx, P, S, (s0 + s1) / 2, W / 2 + 0.6);
+      plaquer(ctx, img, P, S, s0, s1, zTop, pub.h, false);
+      if (halo) plaquer(ctx, halo, P, S, s0 - marge, s1 + marge, zTop + marge,
+                        pub.h + 2 * marge, true);
+    }
+  }
+  // Plaque une image sur le mur du panneau, de s0 a s1 le long du trace (P, S)
+  // et de zTop vers le bas sur hM metres. `ajout` : la lumiere s'ajoute a ce
+  // qui est deja peint (mode 'lighter'), pour un halo.
+  function plaquer(ctx, img, P, S, s0, s1, zTop, hM, ajout) {
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const W = s1 - s0, hPx = hM * scaleM();
+    for (let k = 0; k + 1 < P.length; k++) {
+      const a = Math.max(s0, S[k]), b = Math.min(s1, S[k + 1]);
+      if (b <= a) continue;
+      const dS = S[k + 1] - S[k], ta = (a - S[k]) / dS, tb = (b - S[k]) / dS;
+      const dx = P[k + 1][0] - P[k][0], dy = P[k + 1][1] - P[k][1];
+      const A = solid(P[k][0] + dx * ta, P[k][1] + dy * ta, zTop);
+      const B = solid(P[k][0] + dx * tb, P[k][1] + dy * tb, zTop);
+      // Vue de face, la course file vers la gauche de l'ecran : B, plus loin
+      // sur le trace, est a gauche de A. Sinon, c'est le dos du panneau.
+      if (B[0] >= A[0]) continue;
+      if (A[0] < -40 || B[0] > G.VW + 40 ||
+          Math.max(A[1], B[1]) + hPx < -40 || Math.min(A[1], B[1]) > G.VH + 40) continue;
+      // l'image se lit de gauche a droite : son bord gauche est au bout s1
+      const u0 = (s1 - b) / W * iw, u1 = (s1 - a) / W * iw;
+      if (u1 - u0 < 0.25) continue;
+      // un demi-pixel de recouvrement entre deux tranches : sans lui, un fil
+      // sombre passe entre deux morceaux du logo. Pas pour un halo, dont la
+      // lumiere s'additionne : le recouvrement y tracerait un fil clair.
+      const sw = ajout ? u1 - u0 : Math.min(iw, u1 + 0.5) - u0;
+      ctx.save();
+      if (ajout) ctx.globalCompositeOperation = 'lighter';
+      ctx.imageSmoothingQuality = 'high';
+      ctx.transform((A[0] - B[0]) / (u1 - u0), (A[1] - B[1]) / (u1 - u0),
+                    0, hPx / ih, B[0], B[1]);
+      ctx.drawImage(img, u0, 0, sw, ih, 0, 0, sw, ih);
+      ctx.restore();
+    }
+  }
+  // LA LUMIERE AU SOL DEVANT UN ECRAN ALLUME : une demi-ellipse posee au pied
+  // du panneau, a l'aplomb du logo, qui s'etale vers la piste. Le trace de la
+  // piste, peint apres, la coupe a son bord : elle ne vit que sur la bande
+  // entre la piste et les panneaux. L'image est faite une fois, a la demande.
+  let _flaque = null;
+  function imageFlaque() {
+    if (_flaque) return _flaque;
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(128, 0, 0, 128, 0, 128);
+    g.addColorStop(0, 'rgba(206,216,255,0.34)');
+    g.addColorStop(0.45, 'rgba(206,216,255,0.12)');
+    g.addColorStop(1, 'rgba(206,216,255,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 256, 128);
+    return (_flaque = c);
+  }
+  function flaqueDeLumiere(ctx, P, S, sc, demi) {
+    let k = 0;
+    while (k + 2 < P.length && S[k + 1] < sc) k++;
+    const dS = S[k + 1] - S[k], t = (sc - S[k]) / dS;
+    const tx = (P[k + 1][0] - P[k][0]) / dS, ty = (P[k + 1][1] - P[k][1]) / dS;
+    const cx = P[k][0] + (P[k + 1][0] - P[k][0]) * t, cy = P[k][1] + (P[k + 1][1] - P[k][1]) * t;
+    // la piste est a droite du sens de course, le mur exterieur a sa gauche
+    const nx = ty, ny = -tx, fond = 1.5;
+    const O = ground(cx, cy), E = ground(cx + tx * demi, cy + ty * demi);
+    const N = ground(cx + nx * fond, cy + ny * fond);
+    const ex = [E[0] - O[0], E[1] - O[1]], ey = [N[0] - O[0], N[1] - O[1]];
+    if (ex[0] >= 0) return;                 // le dos du panneau
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.transform(ex[0] / 128, ex[1] / 128, ey[0] / 128, ey[1] / 128, O[0] - ex[0], O[1] - ex[1]);
+    ctx.drawImage(imageFlaque(), 0, 0);
+    ctx.restore();
+  }
   // Meme trace que band(), mais rempli d'un DEGRADE plutot que d'un aplat.
   //
   // Les affiches de Nagai ne sont pas faites que d'aplats, et c'est l'erreur
@@ -6046,9 +6222,22 @@
       band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
       // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
       // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
+      // Un sur deux porte le sponsor (panneauPub), avec l'affiche tiree pour la
+      // course ; les autres gardent les couleurs du theme, toutes, dans leur
+      // ordre.
+      const affiche = pubDeLaCourse(), pub = affiche !== null;
+      const reperes = pub ? reperesDeDistance(T)
+        .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
+        .filter(Boolean) : null;
       for (let i = 0; i + stp < sm.length; i += stp) {
-        wall(ctx, sm.slice(i, i + stp + 1), near, 0.02, 1.05,
-             th.panels[(i / stp) % th.panels.length], stp);
+        const seg = sm.slice(i, i + stp + 1), n = i / stp;
+        if (pub && n % 2 === 1) {
+          wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
+          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed);
+        } else {
+          wall(ctx, seg, near, 0.02, 1.05,
+               th.panels[(pub ? n >> 1 : n) % th.panels.length], stp);
+        }
       }
     }
     // DEUX RANGEES DE SIEGES PAR GRADIN. Un « gradin » du decor fait un
@@ -6269,14 +6458,10 @@
       ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
     };
 
-    // Reperes au sol : uniquement le depart, la ligne des 100 m et celle
-    // des 50 derniers metres (comme les marquages permanents d'une vraie
-    // piste), plus la ligne d'arrivee dessinee plus bas. Pas de grille
-    // tous les 10 m, ca n'existe pas sur une piste reelle.
-    const markerSet = new Set([0]);
-    if (T.total - 100 > 0) markerSet.add(T.total - 100);
-    if (T.total - 50 > 0) markerSet.add(T.total - 50);
-    const markers = Array.from(markerSet).sort((a, b) => a - b);
+    // Reperes au sol (voir reperesDeDistance), plus la ligne d'arrivee
+    // dessinee plus bas. Pas de grille tous les 10 m, ca n'existe pas sur
+    // une piste reelle.
+    const markers = reperesDeDistance(T);
 
     for (const m of markers)
       for (let e = 0; e < C.LANE_COUNT; e++)
@@ -6326,7 +6511,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const m of markers) {
-      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + 2.4);
+      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
