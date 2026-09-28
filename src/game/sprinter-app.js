@@ -24,7 +24,9 @@
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
       accent: [240, 158, 46], dust: [226, 190, 160],
       // tondue dans le sens de la piste : voir tonteEnLong (rendu-premium.js)
-      tonte: 'long'
+      tonte: 'long',
+      // un rideau de platanes derriere les tribunes ouvertes (drawFeuillus)
+      feuillus: true, feuillage: [44, 104, 38]
     },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
@@ -4831,6 +4833,96 @@
     return cv;
   }
 
+  // LE FEUILLU DES STADES MUNICIPAUX.
+  //
+  // Derriere la tribune d'une rencontre scolaire, il n'y avait que de
+  // l'herbe jusqu'au bord du monde : un gradin pose dans un pre. Un stade
+  // municipal est borde d'arbres — platanes, tilleuls, un rideau vert au-dessus
+  // duquel depassent les poteaux d'eclairage. C'est lui qui dit « une ville,
+  // un samedi », la ou l'herbe seule disait « nulle part ».
+  //
+  // Un houppier se lit comme une masse de boules qui se chevauchent, pas
+  // comme un disque : trois valeurs de vert, le clair du cote du soleil (en
+  // haut a droite, comme partout dans le stade — voir LIGHT), le sombre dessous.
+  const FEUILLU_W = 300, FEUILLU_H = 400;
+  const feuilluTiles = new Map();
+  function feuilluTile(th, variante) {
+    let tab = feuilluTiles.get(th);
+    if (!tab) { tab = []; feuilluTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = FEUILLU_W; cv.height = FEUILLU_H;
+    const c = cv.getContext('2d');
+    const al = (k) => {
+      const v = Math.sin((k + 1) * 127.1 + variante * 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const feuille = th.feuillage || [34, 96, 30];
+    const sombre = rgb(feuille, 0.62), moyen = rgb(feuille, 0.86);
+    const clair = rgbEclaire(feuille, 1.12, 14), eclat = rgbEclaire(feuille, 1.25, 30);
+    // le tronc, et deux branches maitresses qui partent dans le houppier
+    const pied = FEUILLU_H - 4, axe = FEUILLU_W / 2;
+    c.strokeStyle = 'rgb(84,70,58)'; c.lineCap = 'round';
+    c.lineWidth = 16;
+    c.beginPath(); c.moveTo(axe, pied); c.lineTo(axe + 4, pied - 150); c.stroke();
+    c.lineWidth = 8;
+    c.beginPath(); c.moveTo(axe + 3, pied - 120); c.lineTo(axe - 42, pied - 205); c.stroke();
+    c.beginPath(); c.moveTo(axe + 4, pied - 140); c.lineTo(axe + 46, pied - 215); c.stroke();
+    // le houppier : des boules, du fond vers le devant, de la masse sombre
+    // aux eclats de lumiere
+    const cy = 150, rx = FEUILLU_W * 0.40, ry = 128;
+    const boules = [];
+    for (let k = 0; k < 26; k++) {
+      const a = al(k) * Math.PI * 2, d = Math.sqrt(al(k + 40));
+      boules.push([axe + Math.cos(a) * rx * d * 0.78, cy + Math.sin(a) * ry * d * 0.72,
+                   34 + al(k + 80) * 30]);
+    }
+    const passes = [[sombre, 1.0, 0, 10], [moyen, 0.86, -6, -4], [clair, 0.62, -14, -14],
+                    [eclat, 0.34, -20, -22]];
+    for (const [col, f, dx, dy] of passes) {
+      c.fillStyle = col;
+      for (const [x, y, r] of boules) {
+        // la lumiere vient d'en haut a droite : les passes claires glissent
+        // de ce cote, et seules les boules du dessus les recoivent
+        if (f < 0.9 && y > cy + ry * 0.3) continue;
+        c.beginPath();
+        c.arc(x - dx * 0.6, y + dy, r * f, 0, TAU);
+        c.fill();
+      }
+    }
+    tab[variante] = cv;
+    return cv;
+  }
+
+  /**
+   * Le rideau d'arbres derriere les tribunes a ciel ouvert. Plantes AVANT
+   * elles, dans la pelouse : le gradin leur passe devant le pied, et seuls
+   * les houppiers depassent. Seulement derriere la tribune d'en face — de
+   * l'autre cote, ils se dresseraient entre la camera et la piste.
+   */
+  function drawFeuillus(ctx, th, sm, rOut, recul) {
+    const m = scaleM();
+    // UN RIDEAU, PAS UNE ALLEE : un arbre tous les cinq metres, sur deux
+    // profondeurs, pour que les houppiers se touchent. Et bas — sept a neuf
+    // metres : sur un telephone tenu debout, le haut du cadre coupait des
+    // arbres de onze metres au ras des branches, et il ne restait que des
+    // troncs plantes derriere la tribune.
+    const rangee = rangeeDeToiture(sm, 5);
+    for (let i = 0; i < rangee.length; i++) {
+      const q = rangee[i];
+      if (!auFond(q, rOut)) continue;
+      const graine = ((i + 31) * 2654435761) >>> 0;
+      const r = rOut + recul + (i % 2) * 2.2 + (graine % 3) * 0.5;
+      const h = (7 + ((graine >>> 5) % 6) * 0.45) * m;
+      const tuile = feuilluTile(th, (graine >>> 11) % 4);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(q, r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
+  }
+
   // LA HAIE FLEURIE.
   //
   // Sur la toile de reference, entre le mur du court et le ciel, court une
@@ -6391,6 +6483,11 @@
     // est le seul rangement dont on dispose. Leur pied disparait donc derriere
     // les gradins, comme il le ferait vraiment, et seule la tete depasse.
     if (th.arbres) drawArbres(ctx, th, sm, rOut);
+    // Le rideau de feuillus des tribunes a ciel ouvert (voir drawFeuillus) :
+    // il se plante derriere le mur d'appui, a une dizaine de metres.
+    if (th.feuillus && !tribuneDe(th).toiture) {
+      drawFeuillus(ctx, th, sm, rOut, 1.6 + tribuneDe(th).gradins * 1.7 + 3.2);
+    }
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
