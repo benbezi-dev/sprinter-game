@@ -11,6 +11,7 @@ import { mot, chrono, ligne } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
+import { chargerLaMusiqueDuDefi } from '@/game/musique-defi-aurel';
 
 /* ---------------------------------------------------------------------------
    LE DEFI DES VEDETTES — la banniere, la fiche, le verdict
@@ -127,8 +128,13 @@ export function BanderoleVedette({ haies }: { haies: boolean }) {
 
 function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
   useRetour(onFermer, true);
+  // LA MUSIQUE DU DEFI SE CHARGE ICI, quelques secondes avant la course. Si
+  // le contexte audio n'etait pas encore ouvert, le geste de « courir » le
+  // trouve ouvert et relance le chargement ; arrivee en retard, elle prend le
+  // relais en pleine course (musique-defi-aurel.ts, relayer).
+  React.useEffect(() => { void chargerLaMusiqueDuDefi(); }, []);
   const apprendre = !tutoHaiesVu();
-  const courir = () => { onFermer(); lancerLeDefi(v); };
+  const courir = () => { void chargerLaMusiqueDuDefi(); onFermer(); lancerLeDefi(v); };
   const tuto = () => { onFermer(); marquerTutoHaiesVu(); ouvrirLeTuto(); };
 
   return (

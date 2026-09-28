@@ -406,7 +406,11 @@
       panels: [[246, 246, 244], [30, 70, 150], [246, 246, 244], [238, 196, 40]],
       crowdLo: [44, 42, 54], crowdHi: [250, 244, 234],
       accent: [30, 70, 150], dust: [226, 190, 164],
-      gradins: 3, tonte: true
+      gradins: 3, tonte: true,
+      // La musique du teaser des haies, en boucle (game/musique-defi-aurel.ts,
+      // tools/musique/defi-aurel.py). Comme pour le cimetiere, `raceTrack` ne
+      // la retient que si le fichier est charge ; sinon, musique ordinaire.
+      musique: 'defi_aurel'
     },
   };
 
