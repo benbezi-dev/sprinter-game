@@ -134,3 +134,4 @@ content/instagram/gameplay/harnais/node_modules
 # src/game/coureur-hd.js font partie du jeu.
 tools/blender/sortie/
 __pycache__/
+tools/blender/.makehuman/

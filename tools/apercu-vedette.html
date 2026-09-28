@@ -1,0 +1,73 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu des athletes reels</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #1b1e29; border-radius: 6px; }
+</style>
+<!--
+  Un athlete reel tel que le jeu le dessine, pour le comparer a ses photos.
+
+    npx vite   puis   http://localhost:5173/tools/apercu-vedette.html?qui=Aurel%20MANGA
+
+  Premiere rangee : au petit trot, tourne de face au dos — c'est la ou se jugent le
+  visage (barbe, bandeau), la carrure et le poignet. Deuxieme : en pleine
+  foulee, a la meme echelle que la presentation. Troisieme : le meme, a cote du
+  coureur du joueur et d'un coureur tire au sort, pour la silhouette.
+-->
+<h2 id="t1">de face au dos, au petit trot</h2><canvas id="c1" width="1180" height="430"></canvas>
+<h2>en foulee</h2><canvas id="c2" width="1180" height="430"></canvas>
+<h2>a cote du joueur et d'un coureur du plateau</h2><canvas id="c3" width="1180" height="460"></canvas>
+<h2>gros plan — le visage, de face, de trois quarts, de profil</h2><canvas id="c4" width="1180" height="420"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+
+  const qui = new URLSearchParams(location.search).get('qui') || 'Aurel MANGA';
+  const look = SprinterCore.lookFor(qui, 'sprint');
+  const perso = (lk, opts = {}) => Object.assign({
+    look: lk, stride: 0, v: 11.4, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+    drivePitch: 0,
+  }, opts);
+
+  // EN SIX CAPS : de face (le coureur regarde la camera) jusqu'au dos. `v: 0`
+  // ne l'arrete pas — la foulee garde un tiers de son amplitude, un petit
+  // trot — mais elle suffit a lire le visage, la carrure et le poignet.
+  const c1 = document.getElementById('c1').getContext('2d');
+  const caps = [Math.PI, Math.PI * 0.75, Math.PI * 0.5, Math.PI * 0.25, 0, -Math.PI * 0.5];
+  caps.forEach((cap, i) => {
+    const p = perso(look, { v: 0, stride: 0 });
+    const k = 380 * (look.h / SprinterCore.C.MODEL_H) / 2;
+    const cp = SprinterApp.personCapsules(p, cap, 0, false, false, SprinterApp.niveauDetail(k));
+    SprinterApp.drawFacetFigure(c1, cp, 110 + i * 192, 405, k);
+  });
+
+  const c2 = document.getElementById('c2').getContext('2d');
+  for (let i = 0; i < 6; i++) {
+    SprinterApp.drawIcon(c2, perso(look, { stride: i * Math.PI / 3 }), 110 + i * 192, 400, 380, false);
+  }
+
+  const c3 = document.getElementById('c3').getContext('2d');
+  const trio = [SprinterCore.PLAYER_LOOK, look, SprinterCore.lookFor('apercu-3', 'sprint')];
+  trio.forEach((lk, i) => {
+    SprinterApp.drawIcon(c3, perso(lk, { stride: 0.9 }), 200 + i * 380, 430, 400, false);
+  });
+  // LE VISAGE EN GROS PLAN : un corps de six metres de haut a l'ecran, dont
+  // on ne garde que la tete. C'est l'echelle de la fiche de presentation et
+  // de l'ecran du skin, pas celle de la course.
+  const c4 = document.getElementById('c4').getContext('2d');
+  [Math.PI * 1.35, Math.PI * 1.2, Math.PI * 1.05, Math.PI * 0.9].forEach((cap, i) => {
+    c4.save();
+    c4.beginPath(); c4.rect(10 + i * 292, 10, 280, 400); c4.clip();
+    const p = perso(look, { v: 0, stride: 1.2 });
+    const k = 1300 * (look.h / SprinterCore.C.MODEL_H) / 2;
+    const cp = SprinterApp.personCapsules(p, cap, 0, false, false, 0);
+    SprinterApp.drawFacetFigure(c4, cp, 150 + i * 292, 1330, k);
+    c4.restore();
+  });
+  document.getElementById('t1').textContent =
+    `${qui} — de face au dos, au petit trot (${SprinterCore.pose(perso(look), 0).length} volumes)`;
+  document.body.dataset.pret = '1';
+</script>

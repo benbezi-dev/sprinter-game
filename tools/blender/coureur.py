@@ -232,15 +232,20 @@ def calibrer(groupes, passes=12, resolution=0.007):
     return rayons, ecarts
 
 
-def mesurer(groupes, rayons, fem, resolution=0.0045):
-    """Relever les profils definitifs, aux trois niveaux de detail."""
+def mesurer(groupes, rayons, fem, resolution=0.0045, carrure=1.0):
+    """Relever les profils definitifs, aux trois niveaux de detail.
+
+    `carrure` place l'axe des bras la ou l'athlete a ses epaules (voir
+    anatomie.ATHLETES) : un rayon lance depuis l'axe du rig commun partirait
+    a cote du bras et relevait une epaisseur fausse.
+    """
     vider()
     objets = {}
     for g, masses in groupes.items():
         objets[g] = sculpter('MG_' + g, masses, rayons[g], resolution)
 
     sortie = []
-    for nom, groupe, (zw0, zw1), zl0, (ax, ay), ns in anatomie.chaines(fem):
+    for nom, groupe, (zw0, zw1), zl0, (ax, ay), ns in anatomie.chaines(fem, carrure):
         obj = objets[groupe]
         h = zw1 - zw0
         niveaux = []
@@ -269,8 +274,56 @@ def mesurer(groupes, rayons, fem, resolution=0.0045):
     return sortie
 
 
+def vedettes(args):
+    """Sculpter et mesurer les athletes reels, et eux seuls.
+
+        blender -b -P tools/blender/coureur.py -- --vedettes
+
+    Ils sortent dans un fichier a part (vedettes-hd.json, puis
+    src/game/coureur-vedettes.js) et ne touchent pas aux deux corps communs.
+    La raison est pratique autant que de principe : les recalculer tous les
+    trois a chaque athlete ajoute ferait bouger, au dixieme de millimetre
+    pres selon la version de Blender, les quarante coureurs du jeu pour en
+    ajouter un seul.
+
+    `--athlete CLE` n'en sculpte qu'un ; les autres gardent les mesures deja
+    ecrites dans le fichier de sortie.
+    """
+    sortie = 'tools/blender/sortie/vedettes-hd.json'
+    if '--sortie' in args:
+        sortie = args[args.index('--sortie') + 1]
+    cles = list(anatomie.ATHLETES)
+    if '--athlete' in args:
+        cles = [args[args.index('--athlete') + 1]]
+
+    data = {}
+    if os.path.exists(sortie):
+        with open(sortie) as f:
+            data = json.load(f)
+    for cle in cles:
+        A = anatomie.ATHLETES[cle]
+        print('== athlete %s ==' % cle)
+        groupes = anatomie.masses_athlete(cle)
+        rayons, ecarts = calibrer(groupes)
+        print('  ecarts finaux : ' + ', '.join(
+            '%s %.1fmm' % (g, e * 1000) for g, e in sorted(ecarts.items())))
+        data[cle] = mesurer(groupes, rayons, A['fem'],
+                            carrure=A.get('carrure', 1.0))
+        data[cle + '_ecarts_mm'] = {g: round(e * 1000, 2) for g, e in ecarts.items()}
+        data[cle + '_rayons'] = {g: [round(v, 5) for v in rs]
+                                 for g, rs in rayons.items()}
+        data[cle + '_fiche'] = {'fem': A['fem'], 'carrure': A.get('carrure', 1.0)}
+
+    os.makedirs(os.path.dirname(sortie) or '.', exist_ok=True)
+    with open(sortie, 'w') as f:
+        json.dump(data, f, indent=1)
+    print('ecrit : %s' % sortie)
+
+
 def main():
     args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    if '--vedettes' in args:
+        return vedettes(args)
     sortie = 'src/game/coureur-hd.json'
     if '--sortie' in args:
         sortie = args[args.index('--sortie') + 1]

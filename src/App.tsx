@@ -62,7 +62,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
 import { Regarder } from '@/components/screens/Regarder';
 import { demandeDeLUrl } from '@/game/regarder';
-import { HALLOWEEN_OUVERT } from '@/game/canal';
+import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
    QU'ELLE SORTE DU BUILD PUBLIC.
@@ -102,6 +102,10 @@ const PanneauMolosse = /* @__PURE__ */ lazy(() => import('@/components/screens/H
   .then(m => ({ default: m.PanneauMolosse })));
 const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.FinDeLaNuit })));
+// Le verdict du defi Aurel Manga, charge de la meme facon et pour la meme
+// raison : l'evenement ferme (DEFI_VEDETTE_OUVERT), il ne part pas en public.
+const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens/DefiVedette')
+  .then(m => ({ default: m.FinDuDefiVedette })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
@@ -109,6 +113,7 @@ import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
 import { nuitEnCours } from '@/game/halloween';
+import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
 
 const queryClient = new QueryClient();
 
@@ -350,9 +355,13 @@ function MainGame() {
             son ecran de fin dit la place qu'on y aurait eue — pas un TOP 500
             ni un defi a envoyer. Le moteur eteint le drapeau a l'accueil et a
             toute course neuve (voir game/defi-demie.ts). */}
+        {/* LE DEFI D'UNE VEDETTE PASSE AVANT LUI AUSSI : un duel contre un
+            seul homme se conclut par un verdict et, peut-etre, un skin — pas
+            par un tableau de huit choses (voir game/vedettes.ts). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
             : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
+            : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
             : defiEnCours ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>

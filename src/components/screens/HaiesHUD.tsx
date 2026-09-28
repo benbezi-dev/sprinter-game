@@ -82,7 +82,15 @@ export function HaiesHUD({ tuto }: { tuto?: number } = {}) {
   const [cis, setCis] = useState<{ c: Ciseau; t: number } | null>(null);
   // Le plafond de l'intervalle, lu a chaque image du store : il change en
   // continu pendant qu'on le rattrape, et il doit se voir remonter.
-  const [plafond, setPlafond] = useState(1);
+  //
+  // IL SE LIT AU RENDU, PAS DANS UN EFFET. Pose par un `setState` dans un
+  // effet, il relancait un second rendu a chaque image pendant tout le
+  // rattrapage apres une haie. Le store du jeu rend en synchrone, et React
+  // compte ces rendus enchaines : passe cinquante images, il levait
+  // « Maximum update depth exceeded » a chaque course de haies. La lecture
+  // est gratuite (plafondHaies n'alloue rien), et `elapsed` fait deja
+  // rerendre ce bandeau a chaque image.
+  const plafond = plafondHaies() as number;
 
   // Le jugement se lit une fois, puis s'efface cote moteur : on le garde ici le
   // temps de l'afficher.
@@ -103,7 +111,6 @@ export function HaiesHUD({ tuto }: { tuto?: number } = {}) {
     else if (cis && elapsed < cis.t) setCis(null);
   }, [elapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setPlafond(plafondHaies() as number); }, [elapsed]);
 
   const posees = haiesPosees();
   if (!posees) return null;

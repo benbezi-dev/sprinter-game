@@ -29,10 +29,16 @@ ANKLE_Z    = 0.078     # pivot de la cheville (genou - 0,380)
 
 # Largeur d'epaule et de bassin du rig : les membres ne sont pas centres,
 # leur axe est decale de ces valeurs. Elles dependent du gabarit.
-def ecarts(fem):
+#
+# `carrure` ecarte les epaules d'un athlete sculpte a part (voir ATHLETES) :
+# c'est le meme facteur que `morph.sh` applique au rig dans pose(), qui pose
+# l'epaule a 0,154 x morph.sh du milieu du corps. Les deux doivent valoir la
+# meme chose, sans quoi le bras mesure ici ne tomberait pas sur l'epaule du
+# jeu — il flotterait a cote, ou rentrerait dans le buste.
+def ecarts(fem, carrure=1.0):
     return {
-        'sh':  0.130 if fem else 0.154,   # demi-ecart des epaules
-        'hip': 0.094 if fem else 0.082,   # demi-ecart des hanches
+        'sh':  (0.130 if fem else 0.154) * carrure,   # demi-ecart des epaules
+        'hip': 0.094 if fem else 0.082,               # demi-ecart des hanches
     }
 
 
@@ -53,7 +59,7 @@ def ecarts(fem):
 # taille pincee, fessier et quadriceps epais, mollet haut et court, cheville
 # fine. C'est ce contraste-la qui se lit de loin, bien plus que le detail.
 
-def masses(fem=False, morph=None):
+def masses(fem=False, morph=None, carrure=1.0, retouches=None):
     """Les masses du sculpteur, par groupe, pour un gabarit donne.
 
     Chaque entree : (x, z, rayon moyen vise, ecart en profondeur, ecart en
@@ -70,7 +76,7 @@ def masses(fem=False, morph=None):
     karm = M.get('arm', 1.0)    # bras
     kleg = M.get('leg', 1.0)    # jambes
 
-    E = ecarts(fem)
+    E = ecarts(fem, carrure)
     sy, hy = E['sh'], E['hip']
 
     # Gabarit feminin : epaules moins larges, bassin plus large, masses
@@ -233,6 +239,21 @@ def masses(fem=False, morph=None):
         (0.004, 0.086, 0.029 * km, 0.000, 0.000),   # cheville
     ]
 
+    # LES RETOUCHES D'UN ATHLETE REEL, masse par masse (voir ATHLETES).
+    #
+    # Elles s'appliquent ICI, avant que les membres soient poses sur leur axe
+    # et avant que fermer() n'ajoute ses masses de bout : l'index d'une
+    # retouche est donc celui de la liste ecrite plus haut, que l'on peut
+    # lire a l'oeil — la sixieme masse du torse est celle des pectoraux.
+    # Le facteur porte sur le rayon ET sur les ecarts : une masse retouchee
+    # garde sa forme, elle grossit ou maigrit d'un bloc.
+    for g, k in (retouches or {}).items():
+        ks = list(k) if isinstance(k, (list, tuple)) else [k] * len(G[g])
+        assert len(ks) == len(G[g]), \
+            '%s : %d retouches pour %d masses' % (g, len(ks), len(G[g]))
+        G[g] = [(x, z, r * f, dx * f, dy * f)
+                for (x, z, r, dx, dy), f in zip(G[g], ks)]
+
     # Les membres ne sont pas au milieu du corps : on les pose sur leur axe.
     for g in ('deltoid', 'upperarm', 'forearm'):
         G[g] = [(x, sy, z, r, dx, dy) for (x, z, r, dx, dy) in G[g]]
@@ -298,8 +319,8 @@ def fermer(G, fem):
 # MEME maillage : un coureur lointain est le meme corps, echantillonne plus
 # grossierement, pas un autre personnage.
 
-def chaines(fem=False):
-    E = ecarts(fem)
+def chaines(fem=False, carrure=1.0):
+    E = ecarts(fem, carrure)
     sy, hy = E['sh'], E['hip']
     return [
         # nom,        groupe,     zw,                 zl,      axe,        n
@@ -313,3 +334,72 @@ def chaines(fem=False):
         ('thigh',    'thigh',    (0.470, 0.850),   -0.380,  (0.0, hy),   (6, 4, 2)),
         ('shank',    'shank',    (0.078, 0.458),   -0.380,  (0.0, hy),   (6, 4, 2)),
     ]
+
+
+# -----------------------------------------------------------------------
+# LES ATHLETES REELS
+# -----------------------------------------------------------------------
+# Un athlete qui existe — et qui a donne son accord pour entrer dans le jeu —
+# ne se reconnait pas a un facteur de gabarit pose sur le corps commun. Ce
+# qui fait une silhouette, c'est OU la masse se trouve : un trapeze qui
+# monte, un deltoide qui deborde, une taille qui se pince sous un grand
+# dos. On sculpte donc son corps a lui, masse par masse, avec les memes
+# outils et sur le meme rig : il court et tourne dans le virage comme
+# n'importe qui, et seules ses epaisseurs sont les siennes.
+#
+# Chaque entree part du corps commun (masses) et ne dit que ce qui change :
+#
+#   fem        le gabarit de depart ;
+#   carrure    l'ecart des epaules, en part de celui du rig. Le MEME nombre
+#              doit se retrouver dans `morph.sh` de son look (sprinter-core.js),
+#              sans quoi le bras mesure ici ne tomberait pas sur l'epaule du jeu ;
+#   retouches  un facteur par masse (ou un seul pour tout le groupe), dans
+#              l'ordre ou masses() les ecrit.
+#
+# Les chiffres se relevent sur des photos de l'athlete, pas sur une
+# moyenne : ils sont commentes avec ce qu'on y voit.
+ATHLETES = {
+    # AUREL MANGA — 110 m haies, equipe de France. 1,90 m pour 89 kg : un
+    # hurdleur lourd pour sa taille, et ca se voit d'abord en haut du corps.
+    # De face, bras le long du corps, le dos fait un V franc : deltoides ronds
+    # qui debordent nettement de l'epaule (c'est LE signe qui le fait
+    # reconnaitre de loin), trapezes hauts qui mangent le cou, taille pincee
+    # sous un grand dorsal. Pousses a +30-38 %, les deltoides devenaient des
+    # boules posees sur le tronc de cone du bras : on s'en tient a +16-20 %,
+    # la carrure a +6 %. Ce qui ne tient pas en troncs de cone — le visage,
+    # le modele des muscles — est dans son portrait (portrait_vedette.py). Les bras sont ceux d'un sprinteur de force, biceps
+    # et triceps pleins. En bas, des quadriceps epais et un mollet haut — la
+    # jambe d'un hurdleur, longue et seche a la cheville.
+    'manga': {
+        'fem': False,
+        'carrure': 1.06,
+        'retouches': {
+            # bassin : a peine de fessier en plus, la hanche ne s'elargit pas
+            'pelvis':   [1.00, 1.00, 1.03, 1.00, 1.00],
+            # du bas du maillot au trapeze : taille pincee, cotes et
+            # pectoraux larges, trapeze qui monte vers le cou
+            'torso':    [1.00, 1.00, 0.96, 0.98, 1.02, 1.06, 1.09, 1.11, 1.18],
+            # un cou de sprinteur de force, large a la base
+            'neck':     [1.14, 1.10, 1.06],
+            # machoire carree, crane inchange
+            'head':     [1.06, 1.04, 1.00, 1.00, 1.00],
+            'deltoid':  [1.16, 1.20, 1.16],
+            # biceps et triceps pleins, coude inchange
+            'upperarm': [1.10, 1.13, 1.14, 1.10, 1.04, 1.00],
+            # l'avant-bras un peu plus fort, la main ne change pas
+            'forearm':  [1.08, 1.10, 1.06, 1.00, 1.00, 1.00, 1.00],
+            # la premiere masse est le fessier, a rayon brut : on n'y touche
+            # pas (voir plus haut). Quadriceps epais sur toute la cuisse.
+            'thigh':    [1.00, 1.05, 1.06, 1.06, 1.05, 1.03, 1.00, 1.00],
+            # mollet haut et plein, cheville inchangee
+            'shank':    [1.00, 1.00, 1.05, 1.05, 1.02, 1.00, 1.00, 1.00],
+        },
+    },
+}
+
+
+def masses_athlete(cle):
+    """Les masses d'un athlete reel : le corps commun, retouche."""
+    A = ATHLETES[cle]
+    return masses(fem=A['fem'], carrure=A.get('carrure', 1.0),
+                  retouches=A.get('retouches'))

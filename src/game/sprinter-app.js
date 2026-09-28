@@ -382,6 +382,42 @@
       tour: [128, 100, 78], pierre: [232, 216, 186], zinc: [110, 126, 150],
       rideau: [62, 130, 46], ifFeuille: [34, 94, 42]
     },
+    // LE STADE JEAN-DELBERT, A MONTREUIL — le defi Aurel Manga.
+    //
+    // Un vrai stade, celui du meeting international de Montreuil, releve sur
+    // deux photos du lieu (la tribune depuis la pelouse, et l'affiche du
+    // meeting Premium de juin) :
+    //
+    //   - LA PISTE EST ROUGE BRIQUE, tirant sur l'orange au soleil, lignes
+    //     blanches, bordee d'une pelouse de football bien verte ;
+    //   - LA TRIBUNE EST DU BETON NU : des gradins-bancs gris tres clairs,
+    //     sans sieges de couleur, sous un grand toit sombre, presque noir, qui
+    //     avance tres loin au-dessus des rangs — c'est lui qu'on reconnait
+    //     d'abord. D'ou des marches claires, des contremarches a peine plus
+    //     sombres, et un toit anthracite ;
+    //   - au pied de la tribune, une barriere blanche et des panneaux blancs
+    //     et bleus (la Region), quelques jaunes ;
+    //   - derriere, des arbres et un ciel d'ete clair.
+    //
+    // Ce qui n'est pas encore la : la cabine blanche du chronometrage sur ses
+    // pilotis, au bout de la tribune, et les mats d'eclairage. Ce seront des
+    // pieces Blender (tools/blender/decors/), comme la tour du Champ-de-Mars.
+    montreuil: {
+      skyTop: [86, 136, 206], skyBot: [206, 222, 236], stars: 0,
+      grass: [58, 142, 46], grassEdge: [44, 118, 36],
+      trackA: [196, 74, 52], trackB: [178, 62, 44],
+      lane: [250, 250, 248], kerb: [248, 248, 246],
+      tread: [214, 212, 206], riser: [168, 166, 160], roof: [44, 46, 52],
+      barrier: [244, 244, 242],
+      panels: [[246, 246, 244], [30, 70, 150], [246, 246, 244], [238, 196, 40]],
+      crowdLo: [44, 42, 54], crowdHi: [250, 244, 234],
+      accent: [30, 70, 150], dust: [226, 190, 164],
+      gradins: 3, tonte: true,
+      // La musique du teaser des haies, en boucle (game/musique-defi-aurel.ts,
+      // tools/musique/defi-aurel.py). Comme pour le cimetiere, `raceTrack` ne
+      // la retient que si le fichier est charge ; sinon, musique ordinaire.
+      musique: 'defi_aurel'
+    },
   };
 
   // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
@@ -2026,7 +2062,9 @@
     // de test, et un defi enregistre la-bas porte son index avec lui. Ouvert
     // dans la version publique, cet index designerait un stade absent — on
     // court alors au stade olympique plutot que sur un ecran noir.
-    if (!LEVELS[idx]) idx = OLYMPIC;
+    // (MONDIAUX est l'etape olympique. Ce repli visait un OLYMPIC qui n'a
+    // jamais ete declare : il aurait leve une erreur au lieu de replier.)
+    if (!LEVELS[idx]) idx = MONDIAUX;
     G.levelIdx = idx;
     // Aucun reste du plan serre d'une presentation interrompue.
     G.zoomPres = 1; G.presPousse = 0; G.presDepuis = 0;
@@ -2045,7 +2083,17 @@
     // Un stade hors serie porte son propre plateau : les `ranges` d'une
     // epreuve sont alignees sur les six etapes du championnat, et il n'en est
     // pas une.
-    const [lo, hi] = lvl.plateau ? lvl.plateau[R.key] : R.ranges[idx];
+    //
+    // UNE EPREUVE ABSENTE DU PLATEAU NE FAIT PAS TOMBER LA COURSE. Les stades
+    // hors serie ont ete ecrits pour le sprint : un 110 m haies choisi au
+    // Danube lisait `plateau['110h']`, qui n'existe pas, et la construction
+    // tombait. On court alors au plateau olympique de l'epreuve, comme un
+    // index hors du tableau court au stade olympique.
+    const [lo, hi] = (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
+    // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
+    // tentative : sans cela, « le battre » dependrait du tirage.
+    const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
     G.runners = [];
     const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
@@ -2057,7 +2105,10 @@
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
       // defis « identiques » incomparables.
-      const t = lo + K.alea() * (hi - lo);
+      // Le tirage se fait meme pour un chrono fixe : le sauter decalerait la
+      // suite, et les autres couloirs d'un defi seme changeraient de temps.
+      const tire = lo + K.alea() * (hi - lo);
+      const t = cibles && cibles[n] ? cibles[n] : tire;
       const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
         total: G.track.total, pool: lvl.pool });
@@ -7121,10 +7172,17 @@
     // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
     // cheveux posee dessus, et la chevelure ne restait qu'un anneau.
     const order = [];
+    let avant = null;
     for (let i = 0; i < caps.length; i++) {
       const e0 = caps[i][1], e1 = caps[i][2];
-      order.push([(e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
-                  (e0[2] + e1[2]) * VIEW[2], i]);
+      // Une piece COLLEE (16, voir coureur-premium.js) prend la profondeur
+      // de celle qui la precede, un rien plus pres : elle se dessine juste
+      // apres elle, par-dessus.
+      const d = (caps[i][3] & 16) && avant !== null ? avant - 1e-6
+              : (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                (e0[2] + e1[2]) * VIEW[2];
+      order.push([d, i]);
+      avant = d;
     }
     order.sort((a, b) => b[0] - a[0]);
     for (let n = 0; n < order.length; n++) {

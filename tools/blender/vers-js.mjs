@@ -8,12 +8,15 @@
    facon de les changer — personne ne retouche coureur-hd.js a la main.
 
      node tools/blender/vers-js.mjs
+     node tools/blender/vers-js.mjs --vedettes   (les athletes reels)
    ----------------------------------------------------------------------- */
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const src = 'tools/blender/sortie/coureur-hd.json';
-const dst = 'src/game/coureur-hd.js';
+const VEDETTES = process.argv.includes('--vedettes');
+const src = VEDETTES ? 'tools/blender/sortie/vedettes-hd.json'
+                     : 'tools/blender/sortie/coureur-hd.json';
+const dst = VEDETTES ? 'src/game/coureur-vedettes.js' : 'src/game/coureur-hd.js';
 const d = JSON.parse(readFileSync(src, 'utf8'));
 
 const NIVEAUX = ['pres', 'moyen', 'loin'];
@@ -26,6 +29,58 @@ function chaine(ch) {
 
 function gabarit(cle) {
   return d[cle].map(chaine).join(',\n');
+}
+
+if (VEDETTES) {
+  ecrireVedettes();
+  process.exit(0);
+}
+
+/**
+ * LES ATHLETES REELS, dans un module a part.
+ *
+ * Meme forme d'entree que coureur-hd.js, et meme chaine de mesure. Le module
+ * se pose sur `SprinterHD.vedettes` : il doit donc etre charge APRES
+ * coureur-hd.js (voir engine.ts), et coureur-premium.js va l'y chercher
+ * quand un look porte un `profil`.
+ */
+function ecrireVedettes() {
+  const cles = Object.keys(d).filter(k => Array.isArray(d[k]));
+  const ecartsDe = cle => Object.entries(d[cle + '_ecarts_mm'])
+    .map(([g, e]) => `${g} ${e}mm`).join(', ');
+  const js = `/* -----------------------------------------------------------------------
+   SPRINTER — les corps des athletes reels, releves dans Blender.
+
+   FICHIER ENGENDRE. Ne pas le modifier a la main : il est reecrit par
+   \`node tools/blender/vers-js.mjs --vedettes\` a partir des mesures de
+   \`tools/blender/coureur.py -- --vedettes\`. Pour changer une silhouette, on
+   change ses retouches (ATHLETES dans tools/blender/anatomie.py) et on relance
+   la chaine.
+
+   Meme forme d'entree que coureur-hd.js : [centre en z, demi-hauteur,
+   cambrure, profondeur bas, largeur bas, profondeur haut, largeur haut], aux
+   trois niveaux de detail. Le rig ne change pas — un athlete reel court et
+   tourne comme n'importe quel coureur du jeu ; seules ses epaisseurs sont
+   les siennes, et l'ecart de ses epaules (\`carrure\`), que son look reprend
+   dans \`morph.sh\`.
+
+   Ecart residuel a l'anatomie visee, apres calibration :
+${cles.map(c => `     ${c} — ${ecartsDe(c)}`).join('\n')}
+   ----------------------------------------------------------------------- */
+(function (root) {
+  'use strict';
+
+  var HD = root.SprinterHD || (root.SprinterHD = {});
+  var V = HD.vedettes || (HD.vedettes = {});
+${cles.map(c => `
+  // ${c} : carrure ${d[c + '_fiche'].carrure}
+  V[${JSON.stringify(c)}] = {
+${gabarit(c)}
+  };`).join('\n')}
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+`;
+  writeFileSync(dst, js);
+  console.log(`ecrit ${dst} : ${cles.join(', ')}`);
 }
 
 const ecarts = cle => Object.entries(d[cle + '_ecarts_mm'])

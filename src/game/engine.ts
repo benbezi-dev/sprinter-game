@@ -1,5 +1,8 @@
 import './sprinter-i18n.js';
 import './coureur-hd.js';
+// Les corps des athletes reels, sculptes a part : ils se posent sur
+// SprinterHD, donc APRES coureur-hd.js, qui le cree.
+import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
