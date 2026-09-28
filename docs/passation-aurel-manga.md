@@ -134,6 +134,7 @@ référence (vues de profil, face, dos, gros plans).
 | Script | Rôle |
 |---|---|
 | `tools/blender/decouper_planche.py` | découpe la planche « Athlète élite » (1334 × 2000) en vues séparées, du crâne aux pieds |
+| `tools/blender/aurel_base.py` | la base de sculpture : corps MakeHuman (CC0) mis aux mesures d'Aurel, vêtements, metarig calé |
 | `tools/blender/atelier_athlete.py` | scène propre, unités en mètres, Empty Images (face, profil, dos), metarig Rigify « basic human » à la hauteur voulue, matériaux Skin / TankTop (points Voronoi + ColorRamp, halo) / Shorts / GoldChain |
 
 ```bash
@@ -141,6 +142,32 @@ python3 tools/blender/decouper_planche.py planche.jpg --sortie ref
 blender -P tools/blender/atelier_athlete.py -- --face ref/face.png \
         --profil ref/profil_droit.png --dos ref/dos.png --hauteur 1.90
 ```
+
+### La base prête à sculpter
+
+`unity/AurelManga/Sculpt/Aurel_Base.blend` part d'un vrai corps humain
+et non plus de sphères : le maillage de base de **MakeHuman** (licence
+CC0, 13 000 quads, UV propres). Ses cibles officielles, CC0 elles aussi, en
+font un homme jeune, musclé et sec, de morphologie africaine, avec la
+carrure d'un hurdleur (dos en V, jambes longues, ventre plat), à 1,90 m. Le
+fichier contient aussi :
+
+- les références, qui pointent vers `ref/` à la racine du dépôt (sorties de
+  `decouper_planche.py`) ;
+- le metarig Rigify **calé sur les articulations du corps** (génération
+  testée : 35 os `DEF-`) ;
+- le débardeur, le cuissard et la chaîne en objets séparés ;
+- un modificateur Multiresolution sur le corps, prêt à subdiviser.
+
+```bash
+blender -b -P tools/blender/aurel_base.py -- --refs ref \
+        --enregistrer unity/AurelManga/Sculpt/Aurel_Base.blend [--apercu /tmp/apercu]
+```
+
+Les fichiers MakeHuman sont téléchargés une fois dans
+`tools/blender/.makehuman/`, un dossier ignoré par git. Le visage reste
+celui, générique, de MakeHuman : **la ressemblance avec Aurel se sculpte à
+la main**.
 
 Une fois le personnage sculpté, retopologisé et habillé, il reprend la
 chaîne Unity (rig Rigify → squelette Humanoid → FBX) de la section 2.

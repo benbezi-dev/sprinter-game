@@ -37,6 +37,10 @@ VUE_PROFIL = ''
 VUE_DOS = ''
 # Opacite des planches dans la vue 3D (0 = invisible, 1 = opaque).
 OPACITE = 0.5
+# Sur la planche « Athlete elite », le dos n'est visible que du crane a la
+# taille : la vue decoupee couvre cette fraction de la hauteur du corps
+# (524 px de dos pour 1230 px de profil en pied). 0 pour une vue en pied.
+DOS_PARTIEL = 524 / 1230
 # ========================================================================
 
 
@@ -82,7 +86,7 @@ def unites():
 # 2. LES PLANCHES DE REFERENCE (Empty de type Image)
 # -----------------------------------------------------------------------
 
-def planche(nom, chemin, rot_z, position):
+def planche(nom, chemin, rot_z, position, moitie=0.0):
     """Une vue de reference, debout, les pieds au sol.
 
     Rotation X 90 degres pour la dresser a la verticale, puis Z pour la
@@ -95,14 +99,26 @@ def planche(nom, chemin, rot_z, position):
     if chemin and os.path.exists(bpy.path.abspath(chemin)):
         e.data = bpy.data.images.load(bpy.path.abspath(chemin), check_existing=True)
     elif chemin:
-        print('reference introuvable, Empty cree sans image :', chemin)
+        # L'image n'est pas la (fichier prepare ailleurs) : on garde son
+        # chemin, Blender la chargera a l'ouverture si elle y est.
+        print('reference absente ici, chemin garde :', chemin)
+        img = bpy.data.images.new(os.path.basename(chemin), 1, 1)
+        img.source = 'FILE'
+        img.filepath = chemin
+        e.data = img
     e.rotation_euler = (math.radians(90), 0, math.radians(rot_z))
     e.location = position
-    # La taille de l'image = sa plus grande dimension. On la cale sur un peu
-    # plus que la hauteur du personnage ; l'ancrage en bas (offset y = 0)
-    # pose le bas de l'image au sol. A ajuster a l'oeil selon la planche.
-    e.empty_display_size = HAUTEUR * 1.08
+    # La taille de l'image = sa plus grande dimension. Les vues decoupees par
+    # decouper_planche.py vont du crane aux pieds : leur hauteur est celle du
+    # personnage, et l'ancrage en bas (offset y = 0) pose les pieds au sol.
+    e.empty_display_size = HAUTEUR
     e.empty_image_offset = (-0.5, 0.0)
+    if moitie:
+        # le dos n'est visible que jusqu'a la taille : on l'accroche par le
+        # haut (le crane a la hauteur du personnage), a l'echelle des profils
+        e.empty_display_size = HAUTEUR * moitie
+        e.empty_image_offset = (-0.5, -1.0)
+        position = (position[0], position[1], HAUTEUR)
     e.use_empty_image_alpha = True
     e.color[3] = OPACITE
     e.empty_image_depth = 'BACK'
@@ -119,7 +135,7 @@ def references():
     recul = 1.2
     vues = [planche('REF_Face', VUE_FACE, 0, (0, recul, 0)),
             planche('REF_Profil', VUE_PROFIL, 90, (-recul, 0, 0)),
-            planche('REF_Dos', VUE_DOS, 180, (0, -recul, 0))]
+            planche('REF_Dos', VUE_DOS, 180, (0, -recul, 0), DOS_PARTIEL)]
     for v in vues:
         for c in v.users_collection:
             c.objects.unlink(v)
@@ -381,4 +397,5 @@ def main():
         print('enregistre :', enregistrer)
 
 
-main()
+if __name__ == '__main__':
+    main()
