@@ -4206,15 +4206,65 @@
   // — et toute la course la garde, scenes comprises. Si l'image tiree n'est
   // pas encore chargee, les panneaux restent aux couleurs du theme plutot que
   // de montrer l'autre en attendant.
-  let _pubPiste = null, _pubTirage = 0;
-  function pubDeLaCourse() {
-    if (G.track !== _pubPiste) { _pubPiste = G.track; _pubTirage = Math.random(); }
+  //
+  // SA COULEUR EST TIREE AVEC ELLE, parmi les teintes qui se detachent du
+  // stade (teintes-pub.js). Le logo garde son relief : son metal est multiplie
+  // par la teinte, puis une part de l'argent d'origine lui rend ses reflets.
+  // Le halo et la lumiere au sol prennent la meme couleur. Les images teintes
+  // se font une fois par course, a la premiere image qui les demande.
+  let _pubPiste = null, _pubTirage = 0, _teinteTirage = 0, _affiche = null;
+  function pubDeLaCourse(th) {
+    if (G.track !== _pubPiste) {
+      _pubPiste = G.track;
+      _pubTirage = Math.random();
+      _teinteTirage = Math.random();
+      _affiche = null;
+    }
     const p = PUBS[Math.floor(_pubTirage * PUBS.length)];
-    return pubPrete(p) ? p : null;
+    if (!pubPrete(p)) return null;
+    if (!_affiche || _affiche.pub !== p || _affiche.th !== th) {
+      const TP = globalThis.TeintesPub;
+      const teinte = TP ? TP.choisir(th, _teinteTirage) : null;
+      // le blanc est le logo tel qu'il sort de Blender : rien a teindre
+      const rgb = teinte && !teinte.origine ? teinte.rgb : null;
+      _affiche = { pub: p, th, rgb, h: p.h, pas: p.pas,
+                   img: rgb ? teinter(p.img, rgb, true) : p.img, halo: null, flaque: null };
+    }
+    return _affiche;
   }
+  // Multiplie une image par la teinte `rgb`. `relief` : l'image est le logo,
+  // sur fond transparent — on lui rend sa forme, puis ses reflets d'argent.
+  // Sinon c'est une lumiere sur fond noir (le halo) : le noir reste noir, et le
+  // blanc prend la teinte.
+  function teinter(src, rgb, relief) {
+    const w = largeurImg(src), h = hauteurImg(src);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    x.drawImage(src, 0, 0);
+    x.globalCompositeOperation = 'multiply';
+    x.fillStyle = 'rgb(' + rgb.join(',') + ')';
+    x.fillRect(0, 0, w, h);
+    if (relief) {
+      x.globalCompositeOperation = 'destination-in';
+      x.drawImage(src, 0, 0);
+      x.globalCompositeOperation = 'lighter';
+      x.globalAlpha = 0.18;
+      x.drawImage(src, 0, 0);
+    }
+    return c;
+  }
+  // Le halo d'une affiche, teint a la premiere demande.
+  function haloDe(a) {
+    if (!a.halo && haloPret(a.pub)) a.halo = a.rgb ? teinter(a.pub.halo, a.rgb, false) : a.pub.halo;
+    return a.halo;
+  }
+  // Une image chargee ou un canevas deja teint : les deux se dessinent pareil.
+  const largeurImg = im => im.naturalWidth || im.width;
+  const hauteurImg = im => im.naturalHeight || im.height;
   function panneauPub(ctx, seg, r, zLo, zHi, reperes, pub, led) {
     const img = pub.img;
-    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const iw = largeurImg(img), ih = hauteurImg(img);
     const W = pub.h * iw / ih;
     const droit = q => !q[0];
     const P = [], S = [];
@@ -4233,8 +4283,8 @@
     // Dans un stade de nuit, l'ecran eclaire : son halo deborde du logo d'une
     // marge fixe (celle de l'image), et une flaque de lumiere s'etale au sol
     // devant lui.
-    const halo = led && haloPret(pub) ? pub.halo : null;
-    const marge = halo ? (halo.naturalWidth - iw) / 2 * pub.h / ih : 0;
+    const halo = led ? haloDe(pub) : null;
+    const marge = halo ? (largeurImg(halo) - iw) / 2 * pub.h / ih : 0;
     for (let q = 0; q < nb; q++) {
       const s0 = (q + 0.5) * L / nb - W / 2, s1 = s0 + W;
       if (reperes && reperes.length) {
@@ -4246,7 +4296,7 @@
         const cy = P[k][1] + (P[k + 1][1] - P[k][1]) * t;
         if (reperes.some(m => Math.hypot(m[0] - cx, m[1] - cy) < W / 2 + 1)) continue;
       }
-      if (halo) flaqueDeLumiere(ctx, P, S, (s0 + s1) / 2, W / 2 + 0.6);
+      if (halo) flaqueDeLumiere(ctx, P, S, (s0 + s1) / 2, W / 2 + 0.6, imageFlaque(pub));
       plaquer(ctx, img, P, S, s0, s1, zTop, pub.h, false);
       if (halo) plaquer(ctx, halo, P, S, s0 - marge, s1 + marge, zTop + marge,
                         pub.h + 2 * marge, true);
@@ -4256,7 +4306,7 @@
   // et de zTop vers le bas sur hM metres. `ajout` : la lumiere s'ajoute a ce
   // qui est deja peint (mode 'lighter'), pour un halo.
   function plaquer(ctx, img, P, S, s0, s1, zTop, hM, ajout) {
-    const iw = img.naturalWidth, ih = img.naturalHeight;
+    const iw = largeurImg(img), ih = hauteurImg(img);
     const W = s1 - s0, hPx = hM * scaleM();
     for (let k = 0; k + 1 < P.length; k++) {
       const a = Math.max(s0, S[k]), b = Math.min(s1, S[k + 1]);
@@ -4289,22 +4339,23 @@
   // LA LUMIERE AU SOL DEVANT UN ECRAN ALLUME : une demi-ellipse posee au pied
   // du panneau, a l'aplomb du logo, qui s'etale vers la piste. Le trace de la
   // piste, peint apres, la coupe a son bord : elle ne vit que sur la bande
-  // entre la piste et les panneaux. L'image est faite une fois, a la demande.
-  let _flaque = null;
-  function imageFlaque() {
-    if (_flaque) return _flaque;
+  // entre la piste et les panneaux. Elle a la teinte de l'affiche, et son
+  // image est faite une fois par course, a la demande.
+  function imageFlaque(a) {
+    if (a.flaque) return a.flaque;
+    const teinte = (a.rgb || [206, 216, 255]).join(',');
     const c = document.createElement('canvas');
     c.width = 256; c.height = 128;
     const x = c.getContext('2d');
     const g = x.createRadialGradient(128, 0, 0, 128, 0, 128);
-    g.addColorStop(0, 'rgba(206,216,255,0.34)');
-    g.addColorStop(0.45, 'rgba(206,216,255,0.12)');
-    g.addColorStop(1, 'rgba(206,216,255,0)');
+    g.addColorStop(0, 'rgba(' + teinte + ',0.34)');
+    g.addColorStop(0.45, 'rgba(' + teinte + ',0.12)');
+    g.addColorStop(1, 'rgba(' + teinte + ',0)');
     x.fillStyle = g;
     x.fillRect(0, 0, 256, 128);
-    return (_flaque = c);
+    return (a.flaque = c);
   }
-  function flaqueDeLumiere(ctx, P, S, sc, demi) {
+  function flaqueDeLumiere(ctx, P, S, sc, demi, image) {
     let k = 0;
     while (k + 2 < P.length && S[k + 1] < sc) k++;
     const dS = S[k + 1] - S[k], t = (sc - S[k]) / dS;
@@ -4319,7 +4370,7 @@
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.transform(ex[0] / 128, ex[1] / 128, ey[0] / 128, ey[1] / 128, O[0] - ex[0], O[1] - ex[1]);
-    ctx.drawImage(imageFlaque(), 0, 0);
+    ctx.drawImage(image, 0, 0);
     ctx.restore();
   }
   // Meme trace que band(), mais rempli d'un DEGRADE plutot que d'un aplat.
@@ -6225,7 +6276,7 @@
       // Un sur deux porte le sponsor (panneauPub), avec l'affiche tiree pour la
       // course ; les autres gardent les couleurs du theme, toutes, dans leur
       // ordre.
-      const affiche = pubDeLaCourse(), pub = affiche !== null;
+      const affiche = pubDeLaCourse(th), pub = affiche !== null;
       const reperes = pub ? reperesDeDistance(T)
         .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
         .filter(Boolean) : null;
