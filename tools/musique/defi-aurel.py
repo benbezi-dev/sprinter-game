@@ -36,7 +36,7 @@ out = np.zeros(N)
 rng = np.random.default_rng(7)
 
 ICI = os.path.dirname(os.path.abspath(__file__))
-SORTIE = os.path.join(ICI, '..', '..', 'src', 'assets', 'defi-aurel.mp3')
+SORTIE = os.path.join(ICI, '..', '..', 'public', 'vedettes', 'defi-aurel.mp3')
 
 
 def add(sig, t, gain=1.0):

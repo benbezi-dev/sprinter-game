@@ -16,6 +16,7 @@
 //    refuse, la course part sur la musique ordinaire des haies.
 
 import { SprinterApp } from './engine';
+import { DEFI_VEDETTE_OUVERT } from './canal';
 
 /** Le nom sous lequel le moteur range le morceau. Voir le theme `montreuil`. */
 export const NOM = 'defi_aurel';
@@ -39,6 +40,8 @@ export function etatDeLaMusiqueDuDefi(): Etat { return etat; }
 export async function chargerLaMusiqueDuDefi(): Promise<boolean> {
   if (etat === 'pret') return true;
   if (etat === 'en-cours' || etat === 'refuse') return false;
+  // Ferme au public : en production, on ne va pas meme le chercher.
+  if (!DEFI_VEDETTE_OUVERT) return false;
 
   const A = moteur();
   // Pas de contexte audio avant le premier geste : ce n'est pas un refus,
@@ -47,8 +50,12 @@ export async function chargerLaMusiqueDuDefi(): Promise<boolean> {
 
   etat = 'en-cours';
   try {
-    const m = await import('@/assets/defi-aurel.mp3?url');
-    const reponse = await fetch(m.default as string);
+    // Le fichier vit dans public/vedettes/, avec les portraits : le deploiement
+    // retire ce dossier de la production (deploy.yml), la version de test le
+    // garde. Aucun import ici — un import ferait copier le mp3 dans le build
+    // public, meme derriere une condition fausse.
+    const url = import.meta.env.BASE_URL.replace(/\/?$/, '/') + 'vedettes/defi-aurel.mp3';
+    const reponse = await fetch(url);
     if (!reponse.ok) throw new Error('reponse ' + reponse.status);
     const octets = await reponse.arrayBuffer();
     const buffer: AudioBuffer = await new Promise((resolu, rejete) => {
