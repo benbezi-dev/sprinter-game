@@ -5868,9 +5868,10 @@
     // sort du cadre. Trois hauteurs avaient ete essayees au-dessus des
     // gradins, et les trois donnaient une rangee qu'on ne voyait jamais en
     // course. Depuis que le toit a une rive (voir drawToiture), les lampes y
-    // sont pendues, exactement ou elles sont sur un vrai stade : c'est aussi
+    // sont fixees, exactement ou elles sont sur un vrai stade : c'est aussi
     // le plus bas qu'elles puissent etre, donc le plus sur d'etre dans le
-    // cadre.
+    // cadre. SUR la rive et non dessous : pendues a une potence, eteintes,
+    // elles flottaient devant le public comme des etiquettes.
     //
     // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
     // d'eclairage de stade, une suite serree de projecteurs et non trois
@@ -5878,11 +5879,9 @@
     // seulement au-dessus de la tribune d'en face : voir tribunesDuFond
     const positions = rangeeDeToiture(sm, 4).filter(q => auFond(q, near));
     const larg = m * 0.62, haut = m * 0.15;
-    // Le boitier se detache de la rive, un ton au-dessus d'elle : de la meme
-    // valeur, la lampe eteinte n'etait plus qu'une etiquette pale qui flottait.
+    // Le boitier se detache de la rive, un ton au-dessus d'elle.
     const boitier = rgb(th.roof, allumees ? 0.7 : 0.95);
     const verre = allumees ? null : rgbEclaire(th.roof, 0.45, 96);
-    const potence = rgb(th.roof, 0.55);
 
     ctx.save();
     for (let i = 0; i < positions.length; i++) {
@@ -5904,10 +5903,7 @@
         ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
       }
 
-      // 2. la potence qui la pend a la rive, puis le boitier, un peu plus
-      // large que la lampe
-      ctx.fillStyle = potence;
-      ctx.fillRect(p[0] - m * 0.03, p[1] - haut * 0.95 - m * 0.16, m * 0.06, m * 0.16);
+      // 2. le boitier, un peu plus large que la lampe
       ctx.fillStyle = boitier;
       ctx.fillRect(p[0] - larg * 0.58, p[1] - haut * 0.95, larg * 1.16, haut * 1.9);
 
@@ -6021,8 +6017,8 @@
     }
     ctx.restore();
 
-    // 5. CE QUI PEND SOUS LA RIVE : la rampe d'eclairage, allumee la nuit.
-    drawProjecteurs(ctx, th, sm, near, rAv - 0.05, zRive - 0.22, !!th.projecteurs);
+    // 5. SUR LA RIVE, la rampe d'eclairage, allumee la nuit.
+    drawProjecteurs(ctx, th, sm, near, rAv - 0.05, zRive + TOIT_RIVE * 0.45, !!th.projecteurs);
   }
 
   /**

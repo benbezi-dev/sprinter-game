@@ -140,9 +140,75 @@
         cheveux: hexa(tete),
         haut: hexa(hautsC[Math.floor(al() * hautsC.length)]),
         pantalon: hexa(PANTALONS[tirer(POIDS_PANTALONS, al())]),
+        // un personnage sur huit vient avec un drapeau (voir dessiner)
+        drapeau: i % 8 === 3,
       });
     }
     return out;
+  }
+
+  // -------------------------------------------------------------------
+  // LES DRAPEAUX DU PUBLIC
+  // -------------------------------------------------------------------
+  // Des tricolores, et rien d'autre : a quinze pixels de large, un drapeau se
+  // reconnait a ses trois bandes, et un embleme ne serait qu'une tache. Les
+  // bandes verticales d'abord, puis les horizontales.
+  const DRAPEAUX = [
+    { v: [[0, 85, 164], [255, 255, 255], [239, 65, 53]] },    // France
+    { v: [[0, 146, 70], [255, 255, 255], [206, 43, 55]] },    // Italie
+    { v: [[22, 155, 98], [255, 255, 255], [255, 136, 62]] },  // Irlande
+    { v: [[30, 30, 30], [253, 218, 36], [239, 51, 64]] },     // Belgique
+    { v: [[247, 127, 0], [255, 255, 255], [0, 158, 96]] },    // Cote d'Ivoire
+    { v: [[20, 181, 58], [252, 209, 22], [206, 17, 38]] },    // Mali
+    { v: [[0, 135, 81], [255, 255, 255], [0, 135, 81]] },     // Nigeria
+    { h: [[30, 30, 30], [221, 0, 0], [255, 206, 0]] },        // Allemagne
+    { h: [[174, 28, 40], [255, 255, 255], [33, 70, 139]] },   // Pays-Bas
+    { h: [[206, 41, 57], [255, 255, 255], [71, 112, 80]] },   // Hongrie
+    { h: [[237, 41, 57], [255, 255, 255], [237, 41, 57]] },   // Autriche
+  ];
+  // Quatre ombrages par bande, prepares une fois : un drapeau qui ondule
+  // fabriquerait sinon ses chaines de couleur a chaque tranche et a chaque
+  // image.
+  const OMBRES_DRAPEAU = [0.8, 0.88, 0.95, 1.0];
+  const TEINTES_DRAPEAU = DRAPEAUX.map(d => (d.v || d.h).map(c =>
+    OMBRES_DRAPEAU.map(f => hexa([c[0] * f, c[1] * f, c[2] * f]))));
+
+  /**
+   * Un drapeau brandi : la hampe part de la main, le drapeau flotte a son
+   * sommet. Une onde court de la hampe vers le bord libre — six tranches,
+   * decalees et ombrees chacune, comme les pavillons du Champ-de-Mars.
+   */
+  function drapeau(ctx, x, y, m, t, phase, k) {
+    const hampe = 0.95 * m, lw = 0.8 * m, lh = 0.52 * m;
+    const top = y - hampe;
+    ctx.strokeStyle = 'rgb(58,54,50)';
+    ctx.lineWidth = Math.max(1, 0.045 * m);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, top); ctx.stroke();
+    const d = DRAPEAUX[k], teintes = TEINTES_DRAPEAU[k], n = 6;
+    for (let i = 0; i < n; i++) {
+      const u0 = i / n, u1 = (i + 1) / n;
+      const o0 = Math.sin(t * 6 + phase - u0 * 5) * lh * 0.14 * u0;
+      const o1 = Math.sin(t * 6 + phase - u1 * 5) * lh * 0.14 * u1;
+      const c = Math.cos(t * 6 + phase - (u0 + u1) * 2.5);
+      const f = c > 0.5 ? 3 : c > 0 ? 2 : c > -0.5 ? 1 : 0;
+      const xa = x + u0 * lw, xb = x + u1 * lw + 0.5;
+      if (d.v) {
+        ctx.fillStyle = teintes[Math.min(2, Math.floor(u0 * 3 + 1e-6))][f];
+        ctx.beginPath();
+        ctx.moveTo(xa, top + o0); ctx.lineTo(xb, top + o1);
+        ctx.lineTo(xb, top + o1 + lh); ctx.lineTo(xa, top + o0 + lh);
+        ctx.closePath(); ctx.fill();
+      } else {
+        for (let b = 0; b < 3; b++) {
+          const ya = b * lh / 3, yb = (b + 1) * lh / 3 + (b < 2 ? 0.5 : 0);
+          ctx.fillStyle = teintes[b][f];
+          ctx.beginPath();
+          ctx.moveTo(xa, top + o0 + ya); ctx.lineTo(xb, top + o1 + ya);
+          ctx.lineTo(xb, top + o1 + yb); ctx.lineTo(xa, top + o0 + yb);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+    }
   }
 
   // -------------------------------------------------------------------
@@ -422,6 +488,16 @@
         }
       }
     }
+    // LES DRAPEAUX NE SORTENT QU'AUX GRANDS RENDEZ-VOUS. Une rencontre
+    // scolaire ne brandit rien ; a partir du national, ceux qui sont venus
+    // avec le leur le levent quand ils se levent — et la tribune se couvre de
+    // couleurs a mesure que la course arrive devant elle (voir la ferveur,
+    // plus haut). Ils passent dans la pile de leur porteur : le rang de
+    // devant cache le bas de la hampe, le drapeau passe devant le rang de
+    // derriere.
+    const R = root.RenduPremium;
+    const avecDrapeaux = densite >= 0.6 && !(R && R.niveau < R.MOYEN);
+    const m = api.scaleM();
     // du plus loin au plus pres
     items.sort((p, q) => q[0] - p[0]);
     for (const it of items) {
@@ -431,6 +507,13 @@
       const im = image(p ? ligneDe(p.sil, pose) : ligneVide, it[4], p, siegeC);
       if (!im) continue;
       ctx.drawImage(im.cv, it[1] - im.ax * s, it[2] - im.ay * s, im.w * s, im.h * s);
+      // la main levee d'un spectateur debout : un peu a droite, a 1,9 m
+      // Le pays se tire a la place et non au personnage : quatre personnages
+      // portent un drapeau, la tribune en montre onze.
+      if (avecDrapeaux && pose === iDebout && p.drapeau) {
+        drapeau(ctx, it[1] + 0.2 * m, it[2] - 1.9 * m, m, t, (h % 628) / 100,
+                (h >>> 11) % DRAPEAUX.length);
+      }
     }
     // TOUT COMPOSER AVANT LE PISTOLET. Hors course, le temps qui reste dans
     // l'image sert a composer d'avance TOUTES les combinaisons des caps du
