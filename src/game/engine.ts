@@ -27,6 +27,8 @@ import './decor-champ-de-mars.js';
 import tribuneManifeste from './tribune-manifeste.json';
 (globalThis as any).SprinterTribuneManifeste = tribuneManifeste;
 import './tribune.js';
+// La couleur du logo des panneaux, choisie pour se detacher de chaque stade.
+import './teintes-pub.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
