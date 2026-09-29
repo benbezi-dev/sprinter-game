@@ -137,6 +137,23 @@ export function ecouterSaut(f) {
 /** L'etat du saut en cours, pour l'ecran. Nul hors d'un concours. */
 export function etatSaut() { return e; }
 
+/**
+ * Le joueur vient de battre son record personnel (l'ecran le sait, lui qui
+ * tient la memoire) : l'athlete leve les bras en sortant du sable, et la
+ * camera vient le chercher de pres.
+ */
+export function celebrer() { if (e) e.celebre = true; }
+
+/** La force de la trainee : nulle au pas, pleine en pleine vitesse et en l'air. */
+function traineeDuSaut() {
+  if (!e) return 0;
+  const j = SprinterApp.G.player;
+  if (e.phase === 'elan') return lisse((j.v - 8.5) / 2.2) * 0.9;
+  if (e.phase === 'appel') return 0.7;
+  if (e.phase === 'vol') return 0.85;
+  return 0;
+}
+
 /** Le triple saut est-il l'epreuve en cours ? */
 const triple = () => !!e && e.epreuve === 'triple';
 
@@ -193,6 +210,9 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   G.jaugeSaut = () => local(jauge);
   G.consigneSaut = () => local(consigne);
   G.pavesSaut = pavesDuSaut;
+  // LA TRAINEE, celle de Sprinter (drawPousseeTrail) : des echos de
+  // l'athlete derriere lui, quand il va vite et quand il vole.
+  G.traineeSaut = () => local(traineeDuSaut);
   // Le decor ne se pose pas sur la piste d'elan ni dans la fosse.
   const debut = Math.min(LIGNE, lignetriple) - ELAN - 8;
   const fond = FOSSE_X + (FOSSE.fond - FOSSE.debut) + 3;
@@ -297,13 +317,14 @@ function nettoyer() {
   G.jaugeSaut = null;
   G.consigneSaut = null;
   G.pavesSaut = null;
+  G.traineeSaut = null;
   G.zoneReservee = null;
   G.ecartTribune = 0;
   if (G.obstacles && G.obstacles.saut) G.obstacles = null;
   G.zoomMode = 1;
   if (G.player) {
     const j = G.player;
-    j.posture = null; j.fallAnim = 0; j.tete = 0; j.cap = 0; j.demi = 0; j.roulis = 0;
+    j.posture = null; j.celebrate = 0; j.fallAnim = 0; j.tete = 0; j.cap = 0; j.demi = 0; j.roulis = 0;
   }
   if (vue) vue.oublier();
   vue = null;
@@ -615,6 +636,8 @@ function pas(j, dt, elapsed) {
     case 'reception': {
       const c = e.reception;
       c.t += dt;
+      // Record personnel : les bras montent quand il se releve.
+      if (e.celebre) j.celebrate = lisse((c.t - 1.5) / 0.45);
       if (c.t > 0.3) rendreLeTempo();
       if (c.t < 1.75) {
         j.d = c.x + GLISSE[c.variante] * lisse(c.t / 0.35);
@@ -809,6 +832,8 @@ function viseLeLong(j) {
   } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
     devant = 2.6;
   } else if (e.phase === 'reception') {
+    // le gros plan du record : on vient sur lui, pas devant lui
+    if (e.celebre && e.reception.t > 1.2) return [j.d + 0.3, PISTE_Y + 0.4];
     return [Math.max(j.d, e.reception.x) + 0.8, PISTE_Y + 1.0];
   }
   return [j.d + devant, PISTE_Y + 1.0];
@@ -822,7 +847,7 @@ function viseLeLong(j) {
 function zoomLeLong() {
   switch (e.phase) {
     case 'repos': case 'attente': return 2.45;
-    case 'reception': return 2.75;
+    case 'reception': return e.celebre && e.reception.t > 1.2 ? 4.2 : 2.75;
     default: return 2.6;
   }
 }

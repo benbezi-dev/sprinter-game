@@ -554,6 +554,12 @@ export function piecesDebout(e, api, out) {
     const x = e.fosseX + dx, y = Y + FOSSE.largeur / 2 + 2.1;
     out.push({ profondeur: api.depthOf(x, y), sorte: 'officiel', x, y, i });
   }
+  // Le cameraman de la television, derriere la piste d'elan, qui filme la
+  // planche : c'est lui qu'on voit dans tous les concours retransmis.
+  {
+    const x = e.ligne - 3.2, y = Y + 2.4;
+    out.push({ profondeur: api.depthOf(x, y), sorte: 'cameraman', x, y });
+  }
   return out;
 }
 
@@ -563,6 +569,66 @@ export function dessinerPiece(ctx, api, e, pc, th, A) {
   else if (pc.sorte === 'juge') dessinerJuge(ctx, api, e, A);
   else if (pc.sorte === 'panneau') dessinerPanneau(ctx, api, pc);
   else if (pc.sorte === 'officiel') dessinerOfficiel(ctx, api, e, pc, A);
+  else if (pc.sorte === 'cameraman') dessinerCameraman(ctx, api, e, pc, A);
+}
+
+/**
+ * Le cameraman : debout derriere son trepied, l'oeil a la camera, tourne vers
+ * la planche. La camera est une boite sombre avec son objectif.
+ */
+const TENUE_CAMERA = { build: 'm', skin: 'olive', jersey: [28, 30, 36], shorts: [44, 46, 54],
+  pantalon: [44, 46, 54], shoe: [24, 24, 28], hair: 'shaved', h: 1.80, civil: true };
+function dessinerCameraman(ctx, api, e, pc, A) {
+  const G = api.G, C = api.C, K = globalThis.SprinterCore;
+  const g = api.ground(pc.x, pc.y);
+  if (g[0] < -200 || g[0] > G.VW + 200 || g[1] < -260 || g[1] > G.VH + 200) return;
+  const m = api.scaleM();
+  const cm = e.cameraman || (e.cameraman = {
+    look: K.look(TENUE_CAMERA), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+  });
+  // les deux mains sur la poignee, a hauteur du visage
+  cm.bras = [1.25, 1.35, 0.9, 0.95];
+  cm.buste = 0.12;
+  const k = m * (cm.look.h / C.MODEL_H);
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(g[0], g[1], 18 * m / 30, 7 * m / 30, 0, 0, Math.PI * 2); ctx.fill();
+  // le trepied, devant lui (vers la planche, +x)
+  const tx = pc.x + 0.55, ty = pc.y - 0.1, h = 1.45;
+  const haut = api.solid(tx, ty, h);
+  ctx.strokeStyle = 'rgb(40,42,48)';
+  ctx.lineWidth = Math.max(1, 0.03 * m);
+  for (const [dx, dy] of [[0.28, 0], [-0.16, 0.24], [-0.16, -0.24]]) {
+    const p0 = api.solid(tx + dx, ty + dy, 0);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(haut[0], haut[1]); ctx.stroke();
+  }
+  // tourne vers la planche : la tete dans l'axe de la piste
+  const caps = A.personCapsules(cm, (api.rot || 0) + 0.15, 0, false, false, A.niveauDetail(k));
+  A.drawFacetFigure(ctx, caps, g[0], g[1], k);
+  // la camera : une boite sombre, et l'objectif pointe vers la planche
+  const boite = (x0, x1, y0, y1, z0, z1, col) => {
+    const P = (x, y, z) => api.solid(x, y, z);
+    const faces = [
+      [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)],
+      [P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)],
+      [P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)],
+    ];
+    const teintes = [1.0, 0.72, 0.85];
+    faces.forEach((f, i) => {
+      ctx.beginPath(); ctx.moveTo(f[0][0], f[0][1]);
+      for (const q of f.slice(1)) ctx.lineTo(q[0], q[1]);
+      ctx.closePath();
+      ctx.fillStyle = `rgb(${col.map(c => Math.round(c * teintes[i])).join(',')})`;
+      ctx.fill();
+    });
+  };
+  boite(tx - 0.28, tx + 0.22, ty - 0.11, ty + 0.11, h, h + 0.26, [52, 54, 62]);
+  boite(tx + 0.22, tx + 0.44, ty - 0.07, ty + 0.07, h + 0.05, h + 0.19, [22, 22, 26]);
+  // le voyant rouge : on tourne
+  const v = api.solid(tx - 0.2, ty - 0.11, h + 0.22);
+  ctx.fillStyle = Math.sin((G.elapsed || 0) * 6) > -0.2 ? 'rgb(255,60,60)' : 'rgb(120,30,30)';
+  ctx.beginPath(); ctx.arc(v[0], v[1], Math.max(1.2, 0.03 * m), 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 /**

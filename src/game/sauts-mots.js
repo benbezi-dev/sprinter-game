@@ -72,6 +72,12 @@ export const MOTS_SAUTS = {
   saut_place:      ['{p} place', '{p} place'],
   saut_nm:         ['SANS MARQUE', 'NO MARK'],
   saut_record_perso: ['RECORD PERSONNEL', 'PERSONAL BEST'],
+  // Le verdict de l'appel, en grand, comme a la television.
+  saut_appel_parfait: ['APPEL PARFAIT', 'PERFECT TAKE-OFF'],
+  saut_appel_bon:     ['BON APPEL', 'GOOD TAKE-OFF'],
+  saut_appel_loin:    ['APPEL LOIN DE LA PLANCHE', 'TOOK OFF EARLY'],
+  // Le record personnel battu : de combien, en metres.
+  saut_pb_gain:       ['{n} m de mieux que ton record', '{n} m over your best'],
   saut_record:     ['record du monde {m} m — {n}, {a}', 'world record {m} m — {n}, {a}'],
   saut_debloque:   ['étape suivante débloquée', 'next stage unlocked'],
   saut_refaire:    ['REFAIRE LE CONCOURS', 'JUMP AGAIN'],
