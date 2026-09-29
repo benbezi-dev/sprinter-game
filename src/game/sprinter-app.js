@@ -6127,7 +6127,14 @@
       band(ctx, run, rAv, translucide, rgb(th.roof, 1.16), zT);
       band(ctx, run, translucide, rAr, rgb(th.roof, 0.96), zT);
       // 3. LA RIVE, a contre-jour, et son arete eclairee.
-      wall(ctx, run, rAv, zRive, zT, th.roof, decorStride());
+      // Troncons de QUATRE echantillons, et non decorStride() : le toit suit
+      // deja le pas du decor (quatre metres en virage), et wall() ne garde
+      // qu'un point sur trois d'un troncon de douze. La face avant tombait a une
+      // corde tous les seize metres sous une rive qui, elle, suivait chaque
+      // point — un ecart de soixante centimetres en plein virage. A quatre,
+      // tous les points, et l'eclairage change tous les seize metres comme
+      // avant.
+      wall(ctx, run, rAv, zRive, zT, th.roof, 4);
       ctx.fillStyle = 'rgba(0,0,12,0.18)';
       faceBrute(ctx, run, rAv, zRive, zRive + TOIT_RIVE * 0.28);
       rail(ctx, run, rAv, rgbEclaire(th.roof, 1.1, 90), Math.max(1, m * 0.05), zT);
