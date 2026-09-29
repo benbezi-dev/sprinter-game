@@ -19,17 +19,21 @@ const src = VEDETTES ? 'tools/blender/sortie/vedettes-hd.json'
 const dst = VEDETTES ? 'src/game/coureur-vedettes.js' : 'src/game/coureur-hd.js';
 const d = JSON.parse(readFileSync(src, 'utf8'));
 
+// L'ultra en dernier : le jeu lit les niveaux par leur rang, et les trois
+// premiers ne bougent pas (voir chaines() dans anatomie.py).
 const NIVEAUX = ['pres', 'moyen', 'loin', 'ultra'];
 
 /**
- * LES NIVEAUX DEJA ECRITS NE BOUGENT PAS.
+ * LES TROIS NIVEAUX DEJA ECRITS NE BOUGENT PAS.
  *
  * Blender ne rend pas deux fois exactement la meme mesure : d'une version a
  * l'autre, les troncs de « pres », « moyen » et « loin » bougeraient d'un
  * dixieme de millimetre, et les quarante coureurs du jeu avec eux. Quand le
- * module existe deja, on reprend donc ses niveaux tels quels, et seul un
- * niveau qu'il n'a pas encore — « ultra » — vient de la nouvelle mesure.
+ * module existe deja, on reprend donc ces trois niveaux tels quels ; l'ultra,
+ * lui, vient toujours de la nouvelle mesure — sinon un changement de son
+ * nombre de troncs dans anatomie.py ne sortirait jamais.
  */
+const FIGES = 3;
 function niveauxEcrits(chemin) {
   if (VEDETTES || !existsSync(chemin)) return null;
   const root = {};
@@ -42,7 +46,9 @@ if (ECRITS) {
     for (const ch of d[cle]) {
       const avant = ECRITS[cle] && ECRITS[cle][ch.nom];
       if (!avant) continue;
-      for (let i = 0; i < avant.length && i < ch.niveaux.length; i++) ch.niveaux[i] = avant[i];
+      for (let i = 0; i < FIGES && i < avant.length && i < ch.niveaux.length; i++) {
+        ch.niveaux[i] = avant[i];
+      }
     }
   }
 }
@@ -85,7 +91,7 @@ function ecrireVedettes() {
 
    Meme forme d'entree que coureur-hd.js : [centre en z, demi-hauteur,
    cambrure, profondeur bas, largeur bas, profondeur haut, largeur haut], aux
-   trois niveaux de detail. Le rig ne change pas — un athlete reel court et
+   quatre niveaux de detail. Le rig ne change pas — un athlete reel court et
    tourne comme n'importe quel coureur du jeu ; seules ses epaisseurs sont
    les siennes, et l'ecart de ses epaules (\`carrure\`), que son look reprend
    dans \`morph.sh\`.
@@ -141,8 +147,10 @@ const js = `/* -----------------------------------------------------------------
    de troncs de cone. Huit coureurs a l'ecran ne peuvent pas tous payer
    soixante volumes ; celui qu'on regarde de pres, si. Un coureur lointain
    n'est pas un autre personnage, c'est le meme, mesure plus grossierement.
-   Le quatrieme, ULTRA, est celui du sauteur de Jumper, seul sur la piste :
-   trois fois plus de troncs que « pres ».
+   Le quatrieme, l'ULTRA, coupe deux fois plus fin que le niveau pres : il
+   sert au palier ULTRA de la couche de finition (rendu-premium.js), sur
+   l'appareil qui tient la cadence, et au sauteur de Jumper, seul sur la
+   piste. Il vient en dernier pour que les trois autres gardent leur rang.
 
    Ecart residuel a l'anatomie visee, apres calibration :
      homme — ${ecarts('m')}
@@ -172,9 +180,7 @@ writeFileSync(dst, js);
 const n = (g) => Object.values(g).reduce((a, ch) => a + ch[0].length, 0);
 console.log(`ecrit ${dst}`);
 for (const cle of ['m', 'f']) {
-  const tot = d[cle].reduce((a, ch) => a + ch.niveaux[0].length, 0);
-  const moy = d[cle].reduce((a, ch) => a + ch.niveaux[1].length, 0);
-  const loin = d[cle].reduce((a, ch) => a + ch.niveaux[2].length, 0);
-  const ultra = d[cle].reduce((a, ch) => a + (ch.niveaux[3] || []).length, 0);
-  console.log(`  ${cle} : ${tot} / ${moy} / ${loin} / ${ultra} troncs par chaine cumulee`);
+  const compte = n => d[cle].reduce((a, ch) => a + (ch.niveaux[n] || []).length, 0);
+  console.log(`  ${cle} : ${NIVEAUX.map((nom, n) => `${compte(n)} ${nom}`).join(' / ')}` +
+              ' troncs par chaine cumulee');
 }

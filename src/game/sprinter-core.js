@@ -1836,8 +1836,9 @@
     const MESURE = PREM.MESURE, LIBRE = PREM.LIBRE;
     const SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
     const cb = sec[0];
-    // ULTRA (le sauteur de Jumper) est plus fin que PRES : il garde la main.
-    if (niv === PREM.MOYEN || niv === PREM.LOIN) {
+    // Meme garde que pour le pied : l'ultra (palier ULTRA, sauteur de Jumper)
+    // porte la main entiere.
+    if (PREM.detaille ? !PREM.detaille(niv) : niv === PREM.MOYEN || niv === PREM.LOIN) {
       // DES QUE LE COUREUR S'ELOIGNE, UN SEUL VOLUME : LE POING.
       //
       // Il coute exactement ce que coutait le tronc de chaine qu'il
@@ -1964,7 +1965,9 @@
     const zTt = P.talon + avance(tT[0], tT[1]), zTp = P.pointe - avance(tP[0], tP[1]);
     const zSt = P.talon + 0.008 + avance(sT[0], sT[1]);
     const zSp = P.pointe - 0.014 - avance(sP[0], sP[1]);
-    if (niv === PREM.MOYEN || niv === PREM.LOIN) {
+    // `detaille` et non `niv > PRES` : l'ultra est range apres LOIN mais porte
+    // le pied entier, comme le niveau pres.
+    if (PREM.detaille ? !PREM.detaille(niv) : niv === PREM.MOYEN || niv === PREM.LOIN) {
       // De loin, une semelle et une tige, d'un seul tenant chacune : le pied
       // garde sa longueur et son profil de coin, il perd le galbe de la
       // plante. C'est le meme nombre de volumes qu'avant.
@@ -2245,7 +2248,9 @@
     // ont ete mesures.
     const PR = PREM.profils(fem, L.profil);
     const sculpte = PREM.sculpte(L.profil);
-    const niv = lod === undefined ? PREM.PRES : lod;
+    // Le niveau que CE corps sait servir : un athlete sculpte avant l'ultra
+    // retombe sur son niveau pres (voir niveauDe dans coureur-premium.js).
+    const niv = PREM.niveauDe ? PREM.niveauDe(PR, lod) : (lod === undefined ? PREM.PRES : lod);
     const kSh = sculpte ? 1 : (MO.sh || 1), kHip = sculpte ? 1 : (MO.hip || 1);
     const kArm = sculpte ? 1 : (MO.arm || 1), kLeg = sculpte ? 1 : (MO.leg || 1);
 
@@ -2549,7 +2554,10 @@
       // Ou il s'arrete depend du niveau de detail, parce que les troncs n'y
       // ont pas la meme longueur : un seul au plus fin (cinq centimetres),
       // un seul au niveau moyen (neuf). Au plus grossier, rien : il ferait la
-      // moitie de l'avant-bras, pour un bras de trois pixels.
+      // moitie de l'avant-bras, pour un bras de trois pixels. L'ultra prend la
+      // hauteur du niveau pres : il coupe aux memes joints (coupeA, dans
+      // coureur-premium.js), donc le bandeau y fait les memes cinq
+      // centimetres, en deux troncs au lieu d'un.
       const bande = L.poignet && L.poignet.cote === side && !L.manches
         ? [-0.14, -0.09, null, -0.14][niv] : null;
       if (bande !== null && bande !== undefined) {

@@ -6984,10 +6984,10 @@
     return [v[0] / n, v[1] / n, v[2] / n];
   })();
 
-  // Seize cotes au plus pour tout le monde (facetCount) ; le sauteur de Jumper,
-  // seul au centre de l'image, en a jusqu'a trente-deux (_ultra).
-  const RING_MAX = 32;
-  let _ultra = false;
+  // Soixante-quatre, pour le palier ULTRA et pour le sauteur de Jumper (voir
+  // facetCount). Les tampons se dimensionnent dessus une fois pour toutes ;
+  // ailleurs on en dessine seize au plus, comme avant.
+  const RING_MAX = 64;
   // tampons reutilises d'une frame a l'autre : ce code tourne des
   // centaines de fois par image, il ne doit rien allouer.
   const _p0x = new Float64Array(RING_MAX), _p0y = new Float64Array(RING_MAX), _p0z = new Float64Array(RING_MAX);
@@ -7016,23 +7016,31 @@
   // lisait le prisme taille au couteau. Les paliers du bas ne bougent pas :
   // une course a huit coute exactement ce qu'elle coutait, et les
   // spectateurs des gradins gardent leurs quatre facettes.
+  //
+  // A L'ULTRA, LA FACETTE SE REGLE SUR SA LARGEUR A L'ECRAN, et non plus sur
+  // des paliers. Un pan plat se voit tant qu'il fait plus de deux ou trois
+  // pixels : c'est lui qui donne au corps son air de prisme taille au
+  // couteau. On en met donc autant qu'il faut pour que chacun tombe sous
+  // deux pixels et demi — une cuisse de course en garde huit, un torse
+  // presente en gros plan en prend soixante-quatre — et le relief se lit
+  // comme une surface, plus comme une suite de pans. Sous deux pixels et demi
+  // de rayon, rien ne change : les doigts et les spectateurs gardent leurs
+  // quatre faces. `_ultra` est pose par drawFacetFigure, une fois par
+  // personnage, plutot que relu ici a chaque segment. Le sauteur de Jumper,
+  // seul au centre de l'image, y a droit a tous les paliers (drawRunner).
+  let _ultra = false;
+  const LARGEUR_FACETTE_PX = 2.5;
   function facetCount(rpx) {
     if (rpx < 2.5) return 4;
+    if (_ultra) {
+      const n = Math.ceil(TAU * rpx / LARGEUR_FACETTE_PX);
+      return n < 6 ? 6 : (n > RING_MAX ? RING_MAX : n);
+    }
     if (rpx < 5) return 6;
     if (rpx < 10) return 8;
     if (rpx < 17) return 10;
     if (rpx < 28) return 13;
     return 16;
-  }
-
-  /**
-   * LES FACETTES DU SAUTEUR. Un concours de saut n'a qu'un athlete sur la
-   * piste, et la camera le suit de pres : il peut payer ce que huit coureurs
-   * ne peuvent pas. Un anneau de douze cotes au moins, et un de plus tous les
-   * pixels de rayon : une cuisse reste ronde jusque dans son contour.
-   */
-  function facettesUltra(rpx) {
-    return Math.max(12, Math.min(RING_MAX, Math.round(10 + rpx * 1.2)));
   }
 
   /**
@@ -7156,7 +7164,7 @@
     const ux = axy * vz - axz * vy, uy = axz * vx - axx * vz, uz = axx * vy - axy * vx;
 
     const rpx = Math.max(hx0, hy0, hx1, hy1) * k;
-    const N = _ultra ? facettesUltra(rpx) : facetCount(rpx);
+    const N = facetCount(rpx);
     _rimK = N >= 8 ? 1 : N / 8;
     const dr = (r1 - r0) / len;
     // pour la normale, l'ellipse moyenne du tronc suffit : l'ombrage ne se
@@ -7285,9 +7293,11 @@
     }
 
     for (let i = 0; i < nf; i++) _fOrder[i] = i;
-    // tri par insertion : nf vaut au plus trente-trois — N faces laterales,
-    // autant pour la calotte, un disque — et reste sous la dizaine dans une
-    // course. Plus rapide qu'un sort() a ces tailles, et sans allocation.
+    // tri par insertion : nf vaut au plus 2 x RING_MAX + 2 — N faces
+    // laterales, autant pour la calotte, un disque — et reste sous la dizaine
+    // dans une course. Plus rapide qu'un sort() a ces tailles, et sans
+    // allocation. A l'ULTRA, sur un gros plan, il monte a une soixantaine de
+    // faces visibles : le cout reste celui du remplissage, pas du tri.
     for (let i = 1; i < nf; i++) {
       const cur = _fOrder[i], d = _fDepth[cur];
       let j = i - 1;
@@ -7346,7 +7356,9 @@
     if (seam) { ctx.lineWidth = 1; ctx.lineJoin = 'miter'; }
   }
 
-  function drawFacetFigure(ctx, caps, ax, ay, k) {
+  function drawFacetFigure(ctx, caps, ax, ay, k, ultra) {
+    const fin = PREM();
+    _ultra = !!ultra || !!(fin && fin.ULTRA !== undefined && fin.niveau >= fin.ULTRA);
     // LA PROFONDEUR SE MESURE DANS L'AXE DE LA VUE, HAUTEUR COMPRISE. La
     // camera regarde d'en haut : un segment plus haut est plus PRES d'elle.
     // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
@@ -7384,9 +7396,20 @@
   // tient plus : les corps suivent alors d'un cran. Sur une course a huit,
   // c'est eux qui coutent — mesure sur ordinateur, 3,4 ms d'image sans les
   // corps mesures, 4,9 ms avec.
+  //
+  // A L'ULTRA, CHAQUE COUREUR MONTE D'UN CRAN, et les gros plans prennent le
+  // quatrieme niveau (3), coupe deux fois plus fin que le niveau pres. Pas
+  // en dessous de soixante pixels le metre : une tranche de l'ultra fait
+  // moins de trois centimetres, soit moins de deux pixels a l'echelle d'une
+  // course. La y mettre doublerait le travail sans changer une image ; c'est
+  // sur la presentation des athletes, le podium, l'accueil et les scenettes
+  // qu'elle se voit.
   function niveauDetail(k) {
-    let n = k >= 40 ? 0 : (k >= 20 ? 1 : 2);   // pres, moyen, loin
     const fin = PREM();
+    if (fin && fin.ULTRA !== undefined && fin.niveau >= fin.ULTRA) {
+      return k >= 60 ? 3 : (k >= 20 ? 0 : (k >= 10 ? 1 : 2));
+    }
+    let n = k >= 40 ? 0 : (k >= 20 ? 1 : 2);   // pres, moyen, loin
     if (fin && fin.niveau === 0 && n < 2) n++;
     return n;
   }
@@ -7483,9 +7506,7 @@
     // facette plus finement : c'est le seul athlete du concours a l'ecran.
     const ultra = !!(G.sautEnCours && r === G.player);
     const caps = personCapsules(r, headAng, lean, false, curved, ultra ? 3 : niveauDetail(k));
-    _ultra = ultra;
-    drawFacetFigure(ctx, caps, ax, ay, k);
-    _ultra = false;
+    drawFacetFigure(ctx, caps, ax, ay, k, ultra);
   }
 
   /* ------------------------------------------------- reperes des coureurs */
