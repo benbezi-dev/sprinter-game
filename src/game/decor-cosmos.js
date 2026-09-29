@@ -37,13 +37,19 @@
   // avec la parallaxe, une meme nebuleuse ne revient pas deux fois dans le
   // cadre.
   const TUILE = 768;
-  let _motif = null, _ctxMotif = null;
+  let _motif = null, _ctxMotif = null, _kMotif = 0;
 
-  function motif(ctx, th) {
-    if (_motif && _ctxMotif === ctx) return _motif;
+  // `k` : pixels de tuile par point. Cuite a un pixel par point, la tuile
+  // s'affichait agrandie trois fois sur une toile ULTRA — des etoiles en
+  // taches floues. A la densite de la toile, le meme ciel, net, et le motif
+  // reduit d'autant pour garder sa periode (setTransform).
+  function motif(ctx, th, k) {
+    if (_motif && _ctxMotif === ctx && _kMotif === k) return _motif;
     const t = document.createElement('canvas');
-    t.width = TUILE; t.height = TUILE;
+    const W = Math.round(TUILE * k);
+    t.width = W; t.height = W;
     const c = t.getContext('2d');
+    c.scale(W / TUILE, W / TUILE);
     // Suite deterministe : le ciel est le meme d'une course a l'autre.
     let s = 0x2545f491 >>> 0;
     const al = () => {
@@ -125,7 +131,11 @@
       });
     }
     _motif = ctx.createPattern(t, 'repeat');
-    _ctxMotif = ctx;
+    if (_motif && W !== TUILE) {
+      const r = TUILE / W;
+      _motif.setTransform(new DOMMatrix([r, 0, 0, r, 0, 0]));
+    }
+    _ctxMotif = ctx; _kMotif = k;
     return _motif;
   }
 
@@ -287,7 +297,10 @@
   function fond(ctx, P, th) {
     if (!th.espace) return;
     const G = P.G;
-    const m = motif(ctx, th);
+    // Meme regle que les tuiles de matiere (finesseMotif, rendu-premium.js).
+    const reductible = typeof DOMMatrix !== 'undefined' && typeof CanvasPattern !== 'undefined'
+      && typeof CanvasPattern.prototype.setTransform === 'function';
+    const m = motif(ctx, th, reductible && G.dpr > 2 ? G.dpr : 1);
     if (m) {
       const a = P.ground(0, 0);
       const ox = (((a[0] * PAR_ETOILES) % TUILE) + TUILE) % TUILE;
