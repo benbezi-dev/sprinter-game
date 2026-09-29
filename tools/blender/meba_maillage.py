@@ -97,13 +97,13 @@ CIBLES = {
 VISAGE = {
     'head-oval': 0.65, 'head-scale-vert-incr': 0.22, 'head-scale-horiz-decr': 0.08,
     'forehead-scale-vert-incr': 0.35, 'forehead-nubian-incr': 0.30,
-    '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.20,
+    '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.55,
     'chin-height-incr': 0.45, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
     # LE BAS DU VISAGE AVANCAIT EN MUSEAU : la base « african » de MakeHuman
     # est prognathe, pas lui — de trois quarts, sa bouche reste dans le plan
     # des pommettes. Et un visage sec, de sprinteur, pas les joues pleines.
     'chin-prognathism-decr': 0.70, 'head-fat-decr': 0.45,
-    '*-eye-height2-decr': 0.45, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
+    '*-eye-height2-decr': 0.25, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
     '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
     # mesure (tools/biomeca/visage.py) : ses sourcils sont hauts sur l'oeil
     'eyebrows-trans-up': 0.35,
@@ -112,13 +112,17 @@ VISAGE = {
     'nose-point-width-incr': 0.45, 'nose-hump-decr': 0.30, 'nose-volume-incr': 0.15,
     # mesure : de l'oeil au bout du nez, 0,255 de la largeur du visage chez
     # lui, 0,324 sur le modele — un nez court, releve
-    'nose-scale-vert-decr': 0.95, 'nose-trans-up': 0.60, 'nose-point-up': 0.45,
-    'mouth-scale-horiz-incr': 0.30,
+    'nose-scale-vert-decr': 0.95, 'nose-trans-up': 0.85, 'nose-point-up': 0.45,
+    # mesure sur ses photos de face (29/09) : la bouche fait 0,32 a 0,35 de la
+    # largeur du visage, le modele 0,40 — plus etroite, pas plus large
+    'mouth-scale-horiz-decr': 0.20,
     # mesure : ses levres sont pleines mais pas projetees — la bouche du
     # modele avancait et s'epaississait (+43 % en haut, +59 % en bas)
     'mouth-scale-depth-decr': 0.85, 'mouth-trans-backward': 0.80,
-    'mouth-lowerlip-volume-decr': 0.45, 'mouth-upperlip-volume-decr': 0.60,
-    'mouth-lowerlip-height-decr': 0.25, 'mouth-upperlip-height-decr': 0.30,
+ 'mouth-upperlip-volume-decr': 0.60,
+    # (29/09, ses photos de face : la levre du bas fait 0,27 a 0,36 de la
+    # bouche, le modele 0,14 — elle n'est ni amincie ni raccourcie)
+    'mouth-lowerlip-height-incr': 0.10, 'mouth-scale-vert-decr': 0.45, 'mouth-upperlip-height-decr': 0.30,
     '*-ear-flap-decr': 0.35,
 }
 
@@ -560,8 +564,11 @@ def visage_photo(h, chemin=None, iterations=25):
         r = p - centre
         dedans = float(np.dot(nrm[i], r / (np.linalg.norm(r) + 1e-9))) < 0.3
         oeil = any(np.hypot(p[1] - e.y, p[2] - e.z) < 0.021 and p[0] > e.x - 0.03 for e in yeux_c)
+        # et les levres : celles de FaceBuilder, bouche fermee au neutre, sont
+        # minces (la levre du bas tombait a 0,13 de la bouche, 0,27 a 0,36 sur
+        # ses photos) ; elles suivent le visage sans changer d'epaisseur
         w[i] = wi
-        if dedans or oeil:
+        if dedans or oeil or levres[i] > 0.25:
             libre[i] = True
             continue
         q = bvh.find_nearest(Vector(p))[0]
@@ -714,7 +721,10 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
         for i, part in parts.items():
             # le coeur a sa couleur pleine, le bord seul se fond : sur un
             # maillage grossier, un fondu lent rendait toute la barbe brune
-            c = a.lerp(b, min(1.0, part * 2.2))
+            # a UN seul rang (la barbe), le bord est presque toute la piece la
+            # ou elle est etroite — sur la joue, deux ou trois faces : il y prend
+            # sa couleur plus tot, sans quoi la barbe entiere sortait chatain
+            c = a.lerp(b, min(1.0, part * (3.6 if fondu == 1 else 2.2)))
             col.data[i].color = (c.x, c.y, c.z, 1.0)
     me.materials.clear()
     mat = materiau(nom, couleur, rugosite, metal)
@@ -1015,8 +1025,12 @@ def habiller(h, rig):
         # le bas du visage, du menton a la moustache
         visage = p(d, 'head') > 0.4 and c.x > 0.045 and 1.405 < c.z < 1.476
         # les joues basses, jusqu'aux favoris, pas sous les yeux
+        # SA LIGNE DE JOUE EST UNE DIAGONALE, du coin de la moustache jusqu'aux
+        # favoris devant l'oreille, ou elle rejoint les cheveux — pas une
+        # marche a mi-joue.
+        haut_joue = min(1.535, max(1.462, 1.462 + 1.70 * (abs(c.y) - 0.030)))
         joues = (p(d, 'head') > 0.4 and c.x > 0.012 and abs(c.y) > 0.040
-                 and 1.408 < c.z < (1.49 if abs(c.y) > 0.056 else 1.47))
+                 and 1.408 < c.z < haut_joue)
         # sous la machoire et sous le menton : c'est de la que sa barbe
         # descend (pas en bavoir sur toute la gorge)
         # Elle chevauche le bas du visage de trois centimetres : separee de
@@ -1044,12 +1058,13 @@ def habiller(h, rig):
             if e.y * c.y <= 0:
                 continue
             dy = (abs(c.y) - abs(e.y))          # vers la tempe, positif
-            if not (-0.017 < dy < 0.029):
+            if not (-0.017 < dy < 0.034):
                 continue
-            # mesure : du coin de l'oeil au sourcil, 0,265 de la largeur du
-            # visage — plus haut qu'on ne le dessinait
-            zc = e.z + 0.0280 - 7.0 * (dy - 0.004) ** 2
-            demi = 0.0058 - 0.070 * max(0.0, dy)
+            # MESURE SUR SES PHOTOS DE FACE (29/09) : du coin de l'oeil au
+            # sourcil, 0,16 a 0,20 de la largeur du visage ; a +0,028 le modele
+            # en faisait 0,24. Longs jusqu'a la tempe, droits, pas en pastille.
+            zc = e.z + 0.0215 - 5.0 * (dy - 0.004) ** 2
+            demi = 0.0050 - 0.055 * max(0.0, dy)
             if abs(c.z - zc) < max(0.0016, demi):
                 return True
         return False
@@ -1083,7 +1098,9 @@ def habiller(h, rig):
         ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
         # un fondu de deux rangs : le visage de MakeHuman est grossier, et sur
         # quatre, le menton n'atteignait jamais sa pleine epaisseur
-        ('Meba_barbe', barbe, epaisseur_barbe, BARBE, 0.95, 0, 2),
+        # un seul rang de fondu : a deux, le bord faisait un liseré brun d'un
+        # centimetre au-dessus de la barbe ; la sienne est taillee net
+        ('Meba_barbe', barbe, epaisseur_barbe, BARBE, 0.95, 0, 1),
     ]
     out = [chaussure(h, rig, 1), chaussure(h, rig, -1)]
     for piece in pieces:
@@ -1158,14 +1175,18 @@ def orbites(h):
 
 def yeux(h, rig):
     objs = []
-    blanc = materiau('Meba_oeil', (212, 200, 184), 0.10)
-    iris = materiau('Meba_iris', (38, 22, 15), 0.15)
+    # SES YEUX SONT SOMBRES : sur ses photos, le blanc se voit peu sous la
+    # paupiere lourde, et l'iris brun fonce prend presque toute la fente. Un
+    # blanc franc lui faisaient des yeux ronds ; un globe mat, lui, etalait le
+    # reflet des lampes en voile gris — le reflet reste net et petit.
+    blanc = materiau('Meba_oeil', (190, 176, 160), 0.10)
+    iris = materiau('Meba_iris', (30, 17, 12), 0.18)
     pupille = materiau('Meba_pupille', (8, 8, 10), 0.05)
     for c, r in orbites(h):
         R = r
         # la cornee affleure les paupieres, un demi-millimetre derriere
         centre = c + Vector((-0.0005 - R, 0, 0))
-        for nom, rr, dx, mat in (('globe', R, 0.0, blanc), ('iris', R * 0.56, R * 0.90, iris),
+        for nom, rr, dx, mat in (('globe', R, 0.0, blanc), ('iris', R * 0.64, R * 0.88, iris),
                                  ('pupille', R * 0.24, R * 0.99, pupille)):
             bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=rr,
                                                  location=centre + Vector((dx, 0, 0)))
