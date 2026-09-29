@@ -6818,7 +6818,10 @@
     return [v[0] / n, v[1] / n, v[2] / n];
   })();
 
-  const RING_MAX = 16;
+  // Seize cotes au plus pour tout le monde (facetCount) ; le sauteur de Jumper,
+  // seul au centre de l'image, en a jusqu'a trente-deux (_ultra).
+  const RING_MAX = 32;
+  let _ultra = false;
   // tampons reutilises d'une frame a l'autre : ce code tourne des
   // centaines de fois par image, il ne doit rien allouer.
   const _p0x = new Float64Array(RING_MAX), _p0y = new Float64Array(RING_MAX), _p0z = new Float64Array(RING_MAX);
@@ -6853,7 +6856,17 @@
     if (rpx < 10) return 8;
     if (rpx < 17) return 10;
     if (rpx < 28) return 13;
-    return RING_MAX;
+    return 16;
+  }
+
+  /**
+   * LES FACETTES DU SAUTEUR. Un concours de saut n'a qu'un athlete sur la
+   * piste, et la camera le suit de pres : il peut payer ce que huit coureurs
+   * ne peuvent pas. Un anneau de douze cotes au moins, et un de plus tous les
+   * pixels de rayon : une cuisse reste ronde jusque dans son contour.
+   */
+  function facettesUltra(rpx) {
+    return Math.max(12, Math.min(RING_MAX, Math.round(10 + rpx * 1.2)));
   }
 
   /**
@@ -6976,7 +6989,8 @@
     vx /= vl; vy /= vl; vz /= vl;
     const ux = axy * vz - axz * vy, uy = axz * vx - axx * vz, uz = axx * vy - axy * vx;
 
-    const N = facetCount(Math.max(hx0, hy0, hx1, hy1) * k);
+    const rpx = Math.max(hx0, hy0, hx1, hy1) * k;
+    const N = _ultra ? facettesUltra(rpx) : facetCount(rpx);
     _rimK = N >= 8 ? 1 : N / 8;
     const dr = (r1 - r0) / len;
     // pour la normale, l'ellipse moyenne du tronc suffit : l'ombrage ne se
@@ -7299,8 +7313,13 @@
     // dessinent le meme coureur un peu plus loin en arriere.
     if (G.obstacles) G.obstacles.preparer(r, G, C);
     const curved = !!(G.track && G.track.curved);
-    const caps = personCapsules(r, headAng, lean, false, curved, niveauDetail(k));
+    // Le sauteur de Jumper est mesure au niveau ULTRA (coureur-hd.js) et
+    // facette plus finement : c'est le seul athlete du concours a l'ecran.
+    const ultra = !!(G.sautEnCours && r === G.player);
+    const caps = personCapsules(r, headAng, lean, false, curved, ultra ? 3 : niveauDetail(k));
+    _ultra = ultra;
     drawFacetFigure(ctx, caps, ax, ay, k);
+    _ultra = false;
   }
 
   /* ------------------------------------------------- reperes des coureurs */

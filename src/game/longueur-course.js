@@ -553,7 +553,12 @@ function pas(j, dt, elapsed) {
       v.t = Math.min(v.duree, v.t + dt);
       j.d = v.x0 + v.vx * v.t;
       j.v = v.vx;
-      v.phase += (v.phaseVise - v.phase) * (1 - Math.exp(-16 * dt));
+      // LE CYCLE DU CISEAU SUIT LES APPUIS PAR UN RESSORT : il accelere puis
+      // ralentit, comme une jambe. Rattrape en un saut exponentiel, chaque
+      // demi-tour partait d'un coup et freinait net — un battement d'aile.
+      const w = 18, ecart = v.phase - v.phaseVise;
+      v.phaseV = (v.phaseV || 0) + (-w * w * ecart - 2 * w * (v.phaseV || 0)) * dt;
+      v.phase += v.phaseV * dt;
       if (v.t >= v.duree) {
         if (v.pose && v.sable) dansLeSable();
         else if (!v.pose) contact();

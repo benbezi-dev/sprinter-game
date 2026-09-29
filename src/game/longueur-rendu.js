@@ -144,19 +144,38 @@ export function postureDe(e, r, ech) {
       };
       let ja, jb, ba, bb, buste;
       if (v.ciseaux > 0) {
-        // LE CISEAU : les jambes continuent de courir. Chaque appui du joueur
-        // avance le cycle d'un demi-tour — ce sont SES foulees en l'air.
+        // LE CISEAU — le « hitch-kick » des sauteurs : ils COURENT en l'air.
+        // Chaque appui du joueur avance le cycle d'un demi-tour ; c'est une
+        // foulee complete, pas un battement. Une jambe part tendue derriere,
+        // revient genou replie, talon sous la fesse, se deplie devant, puis
+        // balaie vers le bas, tendue. L'autre fait la meme chose a l'oppose.
         const phi = v.phase;
         const jambe = (q) => {
-          const th = 0.50 + 0.95 * Math.sin(q);
-          const plie = 0.35 + 0.95 * Math.max(0, Math.cos(q));
-          return [th, th - plie, th - plie + 0.30];
+          const s = Math.sin(q), c = Math.cos(q);
+          // la cuisse : de soixante centimetres derriere a franchement devant
+          const th = 0.30 + 0.90 * s;
+          // le genou se replie quand la jambe revient vers l'avant (c > 0),
+          // et reste tendu quand elle balaie vers l'arriere
+          const plie = 0.18 + 1.45 * Math.pow(Math.max(0, c), 1.4);
+          const sh = th - plie;
+          return [th, sh, sh + 0.30 + 0.25 * Math.max(0, -c)];
         };
         ja = jambe(phi - Math.PI / 2);
         jb = jambe(phi + Math.PI / 2);
-        ba = [1.2 + 1.3 * Math.sin(phi + Math.PI / 2), 1.7 + 1.2 * Math.sin(phi + Math.PI / 2)];
-        bb = [1.2 + 1.3 * Math.sin(phi - Math.PI / 2), 1.7 + 1.2 * Math.sin(phi - Math.PI / 2)];
-        buste = -0.10;
+        // LES BRAS TOURNENT, ILS NE BATTENT PAS. De grands moulinets, un bras
+        // a l'oppose de l'autre, le coude a peine flechi, et DANS LE SENS DES
+        // JAMBES : ils passent par-dessus la tete de l'arriere vers l'avant,
+        // comme le genou qui revient. C'est ce qui retient le sauteur de
+        // basculer en avant — la raison d'etre du ciseau. Battus de haut en
+        // bas, en miroir, ils faisaient un papillon.
+        // L'angle est ramene dans un tour pour que le ramene qui suit ne
+        // les fasse pas tourner plusieurs fois sur eux-memes.
+        const tour = (a) => { const T = Math.PI * 2; return ((a + 1.2) % T + T) % T - 1.2; };
+        const moulinet = (a) => { const x = tour(a); return [x, x + 0.22 + 0.12 * Math.sin(x)]; };
+        ba = moulinet(2.30 - phi);
+        bb = moulinet(2.30 - phi + Math.PI);
+        // le buste reste droit, un rien en arriere, et suit le rythme
+        buste = -0.08 - 0.04 * Math.sin(phi);
       } else {
         // LA SUSPENSION, telle qu'on la voit aux grands concours : le corps
         // s'OUVRE. La jambe libre, lancee genou haut a l'appel, redescend
