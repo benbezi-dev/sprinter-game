@@ -246,9 +246,13 @@ export function postureDe(e, r, ech) {
         buste = mix(-0.40, 0.95, tombe);
         bras = [[-1.05, -0.80], [-1.10, -0.85]];
       } else if (pieds) {
-        hz = mix(c.hz0, 0.36, tombe);
-        buste = mix(-0.60, -1.25, tombe);
-        bras = [[1.40, 1.50], [1.45, 1.55]];
+        // PIEDS SOUS LE BASSIN : les jambes ne sont pas venues devant, les
+        // pieds touchent sous lui. Il encaisse en accroupi profond, le buste
+        // penche mais pas couche, les bras devant pour ne pas partir en
+        // avant — pas un plongeon tete la premiere.
+        hz = mix(c.hz0, 0.44, tombe);
+        buste = mix(-0.40, -0.62, tombe);
+        bras = [[0.95, 1.20], [0.90, 1.15]];
       } else {
         // A l'impact, les bras filent derriere les hanches — c'est ce qui fait
         // passer le corps par-dessus les talons —, puis reviennent devant a
@@ -260,10 +264,10 @@ export function postureDe(e, r, ech) {
       }
       let ja, jb;
       if (pieds) {
-        // A genoux dans le sable : les cuisses a la verticale, les tibias
-        // couches derriere.
-        ja = mix3(jambeVers(0, hz, talon, CHEVILLE, 0.3), [0.25, -1.30, -1.10], tombe);
-        jb = mix3(jambeVers(0, hz, talon, CHEVILLE, 0.3), [0.20, -1.35, -1.15], tombe);
+        // Accroupi, les pieds a plat sous lui : les genoux plient, les talons
+        // restent ou ils sont entres.
+        ja = jambeVers(0, hz, talon + 0.06, CHEVILLE, 0.05);
+        jb = jambeVers(0, hz, talon - 0.02, CHEVILLE, 0.05);
       } else {
         const pied = assis ? 0.55 : mix(0.55, 0.10, tombe);
         ja = jambeVers(0, hz, talon, CHEVILLE, pied);
@@ -534,6 +538,21 @@ export function piecesDebout(e, api, out) {
     out.push({ profondeur: -1e9, sorte: 'angle' });
   }
   out.push({ profondeur: api.depthOf(e.ligne + 0.4, Y - 2.3), sorte: 'juge' });
+  // LES PANNEAUX DE DISTANCE, debout le long du sable cote tribune, un par
+  // metre depuis la planche qui sert : c'est ce que lit le public, et ce que
+  // lit la television pour situer un saut avant la mesure.
+  const pl = (e.planches || []).find(p => p.actif) || { x: e.ligne };
+  const fin = e.fosseX + (FOSSE.fond - FOSSE.debut);
+  const yP = Y + FOSSE.largeur / 2 + 0.55;
+  for (let m = Math.ceil(e.fosseX - pl.x + 0.3); pl.x + m <= fin - 0.2; m++) {
+    out.push({ profondeur: api.depthOf(pl.x + m, yP), sorte: 'panneau', x: pl.x + m, y: yP, m });
+  }
+  // Les officiels assis derriere le sable : celui qui tient le decametre, et
+  // celui qui note. Ils sont la a chaque saut, comme au stade.
+  for (const [i, dx] of [[0, 2.2], [1, 6.4]]) {
+    const x = e.fosseX + dx, y = Y + FOSSE.largeur / 2 + 2.1;
+    out.push({ profondeur: api.depthOf(x, y), sorte: 'officiel', x, y, i });
+  }
   return out;
 }
 
@@ -541,6 +560,93 @@ export function dessinerPiece(ctx, api, e, pc, th, A) {
   if (pc.sorte === 'gerbe') dessinerGerbe(ctx, api, e, th);
   else if (pc.sorte === 'angle') dessinerAngle(ctx, api, e, A);
   else if (pc.sorte === 'juge') dessinerJuge(ctx, api, e, A);
+  else if (pc.sorte === 'panneau') dessinerPanneau(ctx, api, pc);
+  else if (pc.sorte === 'officiel') dessinerOfficiel(ctx, api, e, pc, A);
+}
+
+/** Un panneau de distance : une plaque noire, un chiffre blanc, deux pieds. */
+function dessinerPanneau(ctx, api, pc) {
+  const { x, y, m: metres } = pc;
+  const m = api.scaleM();
+  const o = api.solid(x, y, 0);
+  if (o[0] < -100 || o[0] > api.G.VW + 100 || o[1] < -100 || o[1] > api.G.VH + 150) return;
+  const l = 0.34, z0 = 0.16, z1 = 0.62;
+  const a = api.solid(x - l, y, z0), b = api.solid(x + l, y, z0);
+  const c = api.solid(x + l, y, z1), d = api.solid(x - l, y, z1);
+  ctx.save();
+  // les pieds
+  ctx.strokeStyle = 'rgb(70,72,80)';
+  ctx.lineWidth = Math.max(1, 0.03 * m);
+  for (const dx of [-l * 0.7, l * 0.7]) {
+    const p0 = api.solid(x + dx, y, 0), p1 = api.solid(x + dx, y, z0);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+  }
+  // la plaque, et son liseré
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+  ctx.closePath();
+  ctx.fillStyle = 'rgb(18,20,26)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(1, 0.012 * m);
+  ctx.stroke();
+  // le chiffre, couche dans le plan de la plaque
+  const ux = (b[0] - a[0]) / (2 * l), uy = (b[1] - a[1]) / (2 * l);
+  const vx = (d[0] - a[0]) / (z1 - z0), vy = (d[1] - a[1]) / (z1 - z0);
+  const cx = (a[0] + c[0]) / 2, cy = (a[1] + c[1]) / 2;
+  // Le texte se lit de gauche a droite A L'ECRAN : la piste avance vers le
+  // haut a gauche, il court donc a rebours d'elle, et du haut vers le bas.
+  ctx.setTransform(ctx.getTransform().multiply(new DOMMatrix([-ux, -uy, -vx, -vy, cx, cy])));
+  ctx.fillStyle = 'rgb(248,248,244)';
+  ctx.font = '900 0.34px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(metres), 0, 0.01);
+  ctx.restore();
+}
+
+/** Les officiels assis : blazer, pantalon, une chaise pliante. */
+const TENUES = [
+  { build: 'm', skin: 'ambre', jersey: [38, 70, 138], shorts: [70, 74, 84], pantalon: [70, 74, 84],
+    shoe: [30, 30, 34], hair: 'crop', h: 1.76, civil: true },
+  { build: 'f', skin: 'porcelaine', jersey: [38, 70, 138], shorts: [70, 74, 84], pantalon: [70, 74, 84],
+    shoe: [30, 30, 34], hair: 'bun', h: 1.68, civil: true },
+];
+function dessinerOfficiel(ctx, api, e, pc, A) {
+  const G = api.G, C = api.C, K = globalThis.SprinterCore;
+  const g = api.ground(pc.x, pc.y);
+  if (g[0] < -200 || g[0] > G.VW + 200 || g[1] < -260 || g[1] > G.VH + 200) return;
+  const m = api.scaleM();
+  const offs = e.officiels || (e.officiels = []);
+  const o = offs[pc.i] || (offs[pc.i] = {
+    look: K.look(TENUES[pc.i % TENUES.length]), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+  });
+  // ASSIS : cuisses a l'horizontale, jambes a la verticale, le bassin a la
+  // hauteur d'une chaise ; les mains posees sur les cuisses, sauf quand le
+  // saut retombe — alors celui qui tient le decametre se penche en avant.
+  const penche = e.mesure ? 0.35 : 0;
+  o.posture = { w: 1, jambes: [[1.52, 0.05, 0.30], [1.46, -0.02, 0.26]],
+                bras: [[0.55, 1.35], [0.45, 1.30]], buste: -0.06 - penche, leve: -0.40, hanche: 0.05 };
+  const k = m * (o.look.h / C.MODEL_H);
+  ctx.save();
+  // la chaise
+  const s0 = api.solid(pc.x - 0.24, pc.y - 0.22, 0.46), s1 = api.solid(pc.x + 0.24, pc.y - 0.22, 0.46);
+  const s2 = api.solid(pc.x + 0.24, pc.y + 0.22, 0.46), s3 = api.solid(pc.x - 0.24, pc.y + 0.22, 0.46);
+  ctx.strokeStyle = 'rgb(120,124,132)';
+  ctx.lineWidth = Math.max(1, 0.025 * m);
+  for (const [dx, dy] of [[-0.22, -0.2], [0.22, -0.2], [-0.22, 0.2], [0.22, 0.2]]) {
+    const p0 = api.solid(pc.x + dx, pc.y + dy, 0), p1 = api.solid(pc.x + dx, pc.y + dy, 0.46);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgb(58,62,72)';
+  ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.lineTo(s3[0], s3[1]);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(g[0], g[1], 14 * m / 30, 6 * m / 30, 0, 0, Math.PI * 2); ctx.fill();
+  // tourne vers la piste d'elan, face a la camera
+  const caps = A.personCapsules(o, -Math.PI / 2 + (api.rot || 0) - 0.35, 0, false, false, A.niveauDetail(k));
+  A.drawFacetFigure(ctx, caps, g[0], g[1], k);
+  ctx.restore();
 }
 
 function dessinerGerbe(ctx, api, e, th) {
