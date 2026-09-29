@@ -4,14 +4,15 @@ import { MONTEE, VOILE, PANNEAU } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
-  meilleurDuDefi, type Vedette, type Verdict,
+  meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
 import { mot, chrono, ligne } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
-import { chargerLaMusiqueDuDefi } from '@/game/musique-defi-aurel';
+import { chargerLaMusiqueDuDefi as musiqueAurel } from '@/game/musique-defi-aurel';
+import { chargerLaMusiqueDuDefi as musiqueMeba } from '@/game/musique-defi-meba';
 
 /* ---------------------------------------------------------------------------
    LE DEFI DES VEDETTES — la banniere, la fiche, le verdict
@@ -20,16 +21,28 @@ import { chargerLaMusiqueDuDefi } from '@/game/musique-defi-aurel';
    est ouvert (canal.ts, DEFI_VEDETTE_OUVERT), et App.tsx comme TitleScreen.tsx
    les chargent a la demande. Fermes, ils ne partent pas dans le paquet public.
 
-   LA COULEUR EST CELLE DE SA TENUE. Le violet d'Aurel Manga, avec le blanc de
-   son bandeau : la banniere doit se lire comme la sienne avant meme qu'on lise
-   son nom — et se distinguer du bleu de Hurdlers et de l'or de Sprinter.
+   LA COULEUR EST CELLE DE SA TENUE (`couleurs`, game/vedettes.ts). Le violet
+   d'Aurel Manga, avec le blanc de son bandeau ; le bleu et le blanc de l'equipe
+   de France pour Meba-Mickael Zeze : la banniere doit se lire comme la sienne
+   avant meme qu'on lise son nom — et se distinguer de l'or de Sprinter.
+
+   UNE BANNIERE PAR DEFI, et chacune dans les jeux qui sont les siens (`jeux`) :
+   Aurel sur les deux accueils — il annonce Hurdlers —, Meba-Mickael sur celui
+   de Sprinter.
 --------------------------------------------------------------------------- */
 
-const VIOLET = '#8B5CF6';
-const VIOLET_FONCE = '#2A1650';
+/** Chaque defi charge son morceau quand sa fiche s'ouvre. */
+const MUSIQUES: Record<string, () => Promise<boolean>> = {
+  manga: musiqueAurel,
+  meba: musiqueMeba,
+};
+const chargerLaMusique = (v: Vedette) => { const f = MUSIQUES[v.cle]; if (f) void f(); };
 
-/** Le defi du moment. Un seul pour l'instant ; le suivant s'ajoutera ici. */
-const LE_DEFI: Vedette = VEDETTES.manga;
+/** Le defi se court-il avec des haies ? (le tutoriel de la haie ne sert qu'a lui) */
+const avecHaies = (v: Vedette) => v.epreuves.some(e => /h$/.test(e));
+
+/** Une epreuve comme la fiche l'ecrit : « 100 M », « 110 M HAIES ». */
+const nomEpreuve = (e: string) => `${e.replace(/h$/, '')} M`;
 
 /** Le chemin d'une image de public/, sous la base du deploiement (/ ou /test/). */
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -52,7 +65,8 @@ function Portrait({ v, cadre, largeur, hauteur }: {
     : { width: '100%', height: '100%', objectFit: cadre === 'pied' ? 'contain' : 'cover', objectPosition: '50% 0%' };
   return (
     <span className="block overflow-hidden" style={{ width: largeur, height: hauteur }}>
-      <img src={src} alt={`${v.prenom} ${v.nom}`} draggable={false} style={style} />
+      <img src={src} alt={`${v.prenom} ${v.nom}`} draggable={false} style={style}
+           onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'; }} />
     </span>
   );
 }
@@ -62,34 +76,45 @@ function Portrait({ v, cadre, largeur, hauteur }: {
 --------------------------------------------------------------------------- */
 
 export function BanderoleVedette({ haies }: { haies: boolean }) {
-  const v = LE_DEFI;
+  const jeu = haies ? 'haies' : 'sprint';
+  const defis = Object.values(VEDETTES).filter(v => v.jeux.includes(jeu) && defiPossible(v));
+  if (!defis.length) return null;
+  return <>{defis.map(v => <Banderole key={v.cle} v={v} haies={haies} />)}</>;
+}
+
+function Banderole({ v, haies }: { v: Vedette; haies: boolean }) {
   const vest = useVestiaire();
   const [fiche, setFiche] = useState(false);
-  if (!defiPossible(v)) return null;
   const gagne = vest.gagnes.includes(v.skin);
   const porte = vest.porte === v.skin;
-  const meilleur = meilleurDuDefi(v);
+  // Le meilleur des epreuves du defi : pour Meba-Mickael, celui du 100 m ou
+  // du 200 m, ecrit avec son epreuve.
+  const meilleurs = v.epreuves.map(e => [e, meilleurDuDefi(v, e)] as const).filter(([, t]) => t !== null);
+  const meilleur = meilleurs.length
+    ? meilleurs.map(([e, t]) => (v.epreuves.length > 1 ? `${nomEpreuve(e)} ` : '') + chrono(t)).join(' · ')
+    : null;
   const nom = `${v.prenom} ${v.nom}`;
+  const { vive: VIVE, fonce: FONCE, halo } = v.couleurs;
 
   return (
     <motion.div {...MONTEE}>
       <div className="w-full rounded-2xl border-2 overflow-hidden flex items-stretch"
-           style={{ borderColor: `${VIOLET}B0`, background: `linear-gradient(100deg, ${VIOLET_FONCE}F0, #0E0A1ACC)` }}>
+           style={{ borderColor: `${VIVE}B0`, background: `linear-gradient(100deg, ${FONCE}F0, #0E0A1ACC)` }}>
         <button onClick={() => setFiche(true)}
                 className="flex-1 min-w-0 flex items-center gap-2 pl-1 pr-3 py-2 text-left hover:bg-white/5 transition-colors">
           <span className="shrink-0 rounded-xl overflow-hidden border border-white/15"
-                style={{ background: 'radial-gradient(circle at 50% 35%, #3B2470, #120A22)' }}>
+                style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}>
             <Portrait v={v} cadre="visage" largeur={58} hauteur={64} />
           </span>
           <span className="flex-1 min-w-0 flex flex-col">
             <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-white/90">
-              {haies ? mot('vd_sur_haies') : mot('vd_sur')}
+              {haies ? mot('vd_sur_haies', undefined, v.cle) : mot('vd_sur', undefined, v.cle)}
             </span>
             <span className="font-bold text-sm md:text-base leading-tight text-foreground">
-              {mot('vd_titre', { nom })}
+              {mot('vd_titre', { nom }, v.cle)}
             </span>
             <span className="text-[10px] md:text-xs text-foreground/65 leading-snug">
-              {gagne && meilleur ? mot('vd_meilleur', { s: chrono(meilleur) }) : mot('vd_sous')}
+              {gagne && meilleur ? mot('vd_meilleur', { s: meilleur }) : mot('vd_sous', undefined, v.cle)}
             </span>
           </span>
           {!gagne && (
@@ -105,7 +130,7 @@ export function BanderoleVedette({ haies }: { haies: boolean }) {
                   className="shrink-0 flex flex-col items-center justify-center gap-0.5 px-3 border-l border-white/10 hover:bg-white/5 transition-colors">
             <span className="text-[8px] font-bold tracking-[0.18em] text-white/60">{mot('vd_gagne')}</span>
             <span className="px-2 py-1 rounded-lg text-[10px] font-black tracking-widest"
-                  style={porte ? { background: VIOLET, color: '#fff' } : { background: '#fff', color: '#000' }}>
+                  style={porte ? { background: VIVE, color: '#fff' } : { background: '#fff', color: '#000' }}>
               {porte ? mot('vd_porte') : mot('vd_porter')}
             </span>
           </button>
@@ -132,10 +157,11 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
   // le contexte audio n'etait pas encore ouvert, le geste de « courir » le
   // trouve ouvert et relance le chargement ; arrivee en retard, elle prend le
   // relais en pleine course (musique-defi-aurel.ts, relayer).
-  React.useEffect(() => { void chargerLaMusiqueDuDefi(); }, []);
-  const apprendre = !tutoHaiesVu();
-  const courir = () => { void chargerLaMusiqueDuDefi(); onFermer(); lancerLeDefi(v); };
+  React.useEffect(() => { chargerLaMusique(v); }, [v]);
+  const apprendre = avecHaies(v) && !tutoHaiesVu();
+  const courir = (e: string) => { chargerLaMusique(v); onFermer(); lancerLeDefi(v, e); };
   const tuto = () => { onFermer(); marquerTutoHaiesVu(); ouvrirLeTuto(); };
+  const { vive: VIVE, fonce: FONCE, pale, halo } = v.couleurs;
 
   return (
     <motion.div {...VOILE} onClick={onFermer}
@@ -143,10 +169,10 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
                            px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
       <motion.div {...PANNEAU} onClick={e => e.stopPropagation()}
                   className="w-full max-w-md rounded-2xl border-2 p-5 flex flex-col gap-3 max-h-[88dvh] overflow-y-auto"
-                  style={{ borderColor: `${VIOLET}90`, background: `linear-gradient(170deg, ${VIOLET_FONCE}, #09060F 70%)` }}>
+                  style={{ borderColor: `${VIVE}90`, background: `linear-gradient(170deg, ${FONCE}, #09060F 70%)` }}>
         <div className="flex items-end gap-3">
           <div className="shrink-0 rounded-xl overflow-hidden border border-white/10"
-               style={{ background: 'radial-gradient(circle at 50% 35%, #3B2470, #120A22)' }}>
+               style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}>
             <Portrait v={v} cadre="buste" largeur={132} hauteur={160} />
           </div>
           <div className="flex-1 min-w-0 flex flex-col gap-1 pb-2">
@@ -154,35 +180,62 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
             <h2 className="font-black font-display text-3xl leading-[0.9] tracking-tight text-white">
               {v.prenom}<br />{v.nom}
             </h2>
-            <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: '#C4B5FD' }}>
-              {mot('vd_pays')} · {mot('vd_epreuve')}
+            <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: pale }}>
+              {mot('vd_pays', undefined, v.cle)} · {mot('vd_epreuve', undefined, v.cle)}
             </span>
-            <span className="text-[10px] text-white/55">{mot('vd_lieu')}</span>
+            <span className="text-[10px] text-white/55">{mot('vd_lieu', undefined, v.cle)}</span>
           </div>
         </div>
 
         <ul className="flex flex-col gap-1">
           {v.palmares.map((p, i) => (
             <li key={i} className="text-[12px] text-white/85 flex gap-2">
-              <span style={{ color: VIOLET }}>▸</span>{ligne(p)}
+              <span style={{ color: VIVE }}>▸</span>{ligne(p)}
             </li>
           ))}
         </ul>
 
         <div className="rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col gap-1">
           <span className="text-[10px] font-bold tracking-[0.2em] text-white/60">{mot('vd_regle_titre')}</span>
-          <p className="text-[12px] leading-snug text-white/85">{mot('vd_regle')}</p>
+          <p className="text-[12px] leading-snug text-white/85">{mot('vd_regle', undefined, v.cle)}</p>
         </div>
 
-        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: `${VIOLET}22`, border: `1px solid ${VIOLET}55` }}>
-          <span className="text-[10px] font-bold tracking-[0.2em]" style={{ color: '#C4B5FD' }}>{mot('vd_recompense')}</span>
-          <span className="text-[12px] text-white/85">{mot('vd_recompense_sous')}</span>
+        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: `${VIVE}22`, border: `1px solid ${VIVE}55` }}>
+          <span className="text-[10px] font-bold tracking-[0.2em]" style={{ color: pale }}>{mot('vd_recompense')}</span>
+          <span className="text-[12px] text-white/85">{mot('vd_recompense_sous', undefined, v.cle)}</span>
         </div>
 
-        <button onClick={courir}
-                className="w-full py-3 rounded-xl font-black font-display text-xl tracking-widest text-black bg-white hover:bg-white/90 transition-colors">
-          {mot('vd_partir')}
-        </button>
+        {/* UNE EPREUVE, UN BOUTON. Avec plusieurs, chaque bouton dit son chrono
+            a battre et le meilleur du joueur : c'est le choix qu'on fait ici. */}
+        {v.epreuves.length === 1 ? (
+          <button onClick={() => courir(v.epreuves[0])}
+                  className="w-full py-3 rounded-xl font-black font-display text-xl tracking-widest text-black bg-white hover:bg-white/90 transition-colors">
+            {mot('vd_partir')}
+          </button>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {v.epreuves.map(e => {
+              const cible = chronoDeLaVedette(v, e);
+              const moi = meilleurDuDefi(v, e);
+              return (
+                <button key={e} onClick={() => courir(e)}
+                        className="py-2.5 rounded-xl bg-white hover:bg-white/90 transition-colors text-black flex flex-col items-center gap-0.5">
+                  <span className="font-black font-display text-lg tracking-widest leading-none">
+                    {mot('vd_courir_sur', { e: nomEpreuve(e) })}
+                  </span>
+                  <span className="text-[10px] font-bold tracking-wide tabular-nums opacity-70">
+                    {mot('vd_a_battre', { s: chrono(cible) })}
+                  </span>
+                  {moi !== null && (
+                    <span className="text-[10px] tracking-wide tabular-nums opacity-60">
+                      {mot('vd_meilleur', { s: chrono(moi) })}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
         {/* La premiere course de haies se joue avec un geste qu'on n'a jamais
             fait. On le propose sans l'imposer : le defi reste a un toucher. */}
         {apprendre && (
@@ -213,19 +266,21 @@ export function FinDuDefiVedette() {
   const vest = useVestiaire();
   // LE VERDICT SE RANGE UNE SEULE FOIS, au montage : React ne monte cet ecran
   // qu'une fois par course, et c'est la que le skin se gagne.
-  const [res] = useState<{ v: Vedette; verdict: Verdict } | null>(() => {
+  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict } | null>(() => {
     const v = defiEnCours();
-    return v ? { v, verdict: conclureLeDefi(v) } : null;
+    const epreuve = epreuveDuDefi() || (v ? v.epreuves[0] : '');
+    return v ? { v, epreuve, verdict: conclureLeDefi(v) } : null;
   });
   if (state !== 'winall' || !res) return null;
-  const { v, verdict } = res;
+  const { v, epreuve, verdict } = res;
+  const { vive: VIVE, fonce: FONCE, pale } = v.couleurs;
   const nom = `${v.prenom} ${v.nom}`.toUpperCase();
   const gagne = vest.gagnes.includes(v.skin);
   const porte = vest.porte === v.skin;
   const titre = verdict.moi === null ? mot('vd_faux')
               : verdict.battu ? mot('vd_battu', { nom }) : mot('vd_perdu', { nom });
   const accueil = () => { rangerLeDefi(); (SprinterApp as any).goHome(); };
-  const rejouer = () => lancerLeDefi(v);
+  const rejouer = () => lancerLeDefi(v, epreuve);
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
@@ -241,8 +296,8 @@ export function FinDuDefiVedette() {
             <div className="text-[10px] tracking-widest text-white/55">{mot('vd_toi')}</div>
             <div className="text-xl font-bold text-white">{chrono(verdict.moi)}</div>
           </div>
-          <div className="rounded-xl border py-2" style={{ background: `${VIOLET}22`, borderColor: `${VIOLET}55` }}>
-            <div className="text-[10px] tracking-widest" style={{ color: '#C4B5FD' }}>{nom}</div>
+          <div className="rounded-xl border py-2" style={{ background: `${VIVE}22`, borderColor: `${VIVE}55` }}>
+            <div className="text-[10px] tracking-widest" style={{ color: pale }}>{nom}</div>
             <div className="text-xl font-bold text-white">{chrono(verdict.lui)}</div>
           </div>
         </div>
@@ -257,16 +312,16 @@ export function FinDuDefiVedette() {
             le bouton pour le porter est la, sous le pouce. */}
         {verdict.nouveauSkin && (
           <div className="w-full rounded-2xl border-2 p-3 flex items-center gap-3 text-left"
-               style={{ borderColor: `${VIOLET}B0`, background: `linear-gradient(100deg, ${VIOLET_FONCE}, #0E0A1A)` }}>
+               style={{ borderColor: `${VIVE}B0`, background: `linear-gradient(100deg, ${FONCE}, #0E0A1A)` }}>
             <Portrait v={v} cadre="pied" largeur={90} hauteur={120} />
             <div className="flex-1 min-w-0 flex flex-col gap-1">
-              <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: '#C4B5FD' }}>{mot('vd_debloque')}</span>
+              <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: pale }}>{mot('vd_debloque')}</span>
               <span className="font-black font-display text-xl leading-none text-white">{v.prenom} {v.nom}</span>
-              <span className="text-[11px] text-white/65">{mot('vd_debloque_sous')}</span>
+              <span className="text-[11px] text-white/65">{mot('vd_debloque_sous', undefined, v.cle)}</span>
               {gagne && (
                 <button onClick={() => porterSkin(porte ? null : v.skin)}
                         className="self-start mt-1 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest"
-                        style={porte ? { background: VIOLET, color: '#fff' } : { background: '#fff', color: '#000' }}>
+                        style={porte ? { background: VIVE, color: '#fff' } : { background: '#fff', color: '#000' }}>
                   {porte ? mot('vd_porte') : mot('vd_porter')}
                 </button>
               )}

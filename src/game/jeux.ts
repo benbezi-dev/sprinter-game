@@ -102,9 +102,9 @@ G.apresConstruction = () => {
   const cle = G.race && G.race.key;
   if (estUneCourseDeHaies(cle)) armerHaies(cle);
   else rangerHaies();
-  // LE SKIN GAGNE SE PORTE SUR LES HAIES, et nulle part ailleurs pour
-  // l'instant (game/vestiaire.ts). Ici, parce que c'est le seul passage de
-  // toutes les courses : carriere, one shot, defi, duel, direct.
+  // LE SKIN GAGNE SE PORTE SUR SES COURSES — les haies pour Aurel Manga, le
+  // plat pour Meba-Mickael Zeze (game/vestiaire.ts). Ici, parce que c'est le
+  // seul passage de toutes les courses : carriere, one shot, defi, duel, direct.
   if (DEFI_VEDETTE_OUVERT) habillerLeJoueur(cle);
   if (cle && cle in SprinterCore.RACES && EPREUVES_CONNUES.has(cle)) {
     const jeu = jeuDe(cle);

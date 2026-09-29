@@ -542,6 +542,51 @@
       names: ['Hugo Lestrade', 'Noa Berthier', 'Samuel Kane', 'Aurel MANGA',
               'Liam Ferrand', 'Yohan Serre', 'Idriss Fofana'] },
 
+    // LE DEFI MEBA-MICKAEL ZEZE — l'evenement special du sprint, au 100 m et
+    // au 200 m. Meme mecanique que celui d'Aurel Manga (game/vedettes.ts) :
+    // un chrono FIXE, le couloir 5 juste a droite du joueur, et son skin a la
+    // cle.
+    //
+    // 8,39 s AU 100 m, 17,30 s AU 200 m. Ce sont les chronos demandes, et ils
+    // sont au-dela de la finale ZEZE (8,75 et 17,75). Mesure sur ce moteur,
+    // doigt parfait et sans temps de reaction : 8,39 demande vingt-cinq
+    // appuis par seconde tenus d'un bout a l'autre, 17,30 environ dix-neuf.
+    // C'est un defi de record, pas un palier : on le sait, et c'est voulu.
+    //
+    // IL COURT A L'ALLURE CANON (setPace) : pointe a plus de 14 m/s des
+    // quinze metres, puis une vitesse qui s'erode jusqu'a la ligne. Le chrono,
+    // lui, tombe pile : « le battre » veut dire « passer sous ce temps ».
+    //
+    // A SA PLACE DE FERME, juste apres le defi d'Aurel Manga et avant les
+    // stades du canal de test : les deux defis s'ouvriront sans rien
+    // deplacer (voir le contrat d'ordre dans sprinter-app.js). LEVEL_NAMES,
+    // dans sprinter-i18n.js, suit le meme ordre.
+    //
+    // IL SE COURT AU STADE DE LA RIVIERA — le choix de Benbezi : le bord de
+    // mer, le soleil, la tribune pleine d'un meeting d'ete (theme 'riviera').
+    // Le stade garde son decor, pas sa musique : la city pop de la Riviera
+    // (112 BPM) est faite pour qu'on n'ait pas envie de courir plus vite que
+    // le soleil, et l'evenement veut l'inverse. Il porte donc SON morceau
+    // (`musique`, voir raceTrack et game/musique-defi-meba.ts), au tempo des
+    // ZEZE — 150 BPM —, et tant que ce morceau n'est pas la, la course joue
+    // celui des ZEZE (`musiqueRepli`).
+    { cle: 'defi-meba', name: 'Stade de la Riviera', theme: 'riviera',
+      musique: 'defi_meba', musiqueRepli: 'race3',
+      pool: 'sprint',
+      horsSerie: true,
+      evenement: true,
+      ouvert: false,
+      // Un meeting d'ete au bord de l'eau, un soir d'evenement : plein.
+      foule: 0.95,
+      plateau: { '100': [9.20, 9.60], '200': [18.60, 19.40],
+                 '400': [42.80, 43.80], '4x100': [37.20, 38.00],
+                 '100h': [12.00, 12.60], '110h': [12.95, 13.60],
+                 '400h': [42.50, 44.00] },
+      cibles: { '100': { 'Méba-Mickaël ZÉZÉ': 8.39 },
+                '200': { 'Méba-Mickaël ZÉZÉ': 17.30 } },
+      names: ['Enzo Marchal', 'Kylian Brault', 'Jordan Mensah', 'Méba-Mickaël ZÉZÉ',
+              'Rayan Delorme', 'Tom Guerin', 'Moussa Keita'] },
+
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
@@ -864,6 +909,33 @@
       boost: 1.24, armAmp: 1.10, lean: 1.20, bob: 1.14, stride: 1.04
     },
 
+    // LA FOULEE DE MICKAEL MEBA-ZEZE, relevee sur ses videos d'entrainement
+    // (educatifs de sortie de blocs, lignes droites et « wickets » filmees a
+    // l'entrainement, 200 m de Lievin 2018 et de Villeneuve-d'Ascq 2019).
+    //
+    // Ce qu'on y voit, et que `drive` n'a pas : le bras qui part tres loin
+    // DERRIERE la hanche, coude ouvert, et revient haut devant le visage —
+    // c'est un bras de pousseur, plus ample que la jambe ne le demanderait ;
+    // une extension complete de la jambe d'appui, hanche-genou-cheville
+    // alignes, qui dure ; un genou avant qui monte franc sans aller au-dela de
+    // l'horizontale ; le buste engage, la tete dans l'axe. Une foulee de
+    // departs, pas de fin de course : sa fatigue (Runner.fatigue) la
+    // redresse, voir pose().
+    canon: {
+      thigh: catmull([[0, 0.46], [0.75, -0.04], [1.50, -0.70], [2.20, -0.44],
+                      [3.10, 0.22], [4.10, 0.76], [4.85, 0.88], [5.55, 0.74]]),
+      knee: catmull([[0, -0.22], [0.50, -0.52], [1.10, -0.24], [1.50, -0.10],
+                     [2.10, -1.12], [2.70, -1.88], [3.40, -1.98], [4.20, -1.56],
+                     [5.00, -0.90], [5.60, -0.40]]),
+      ankle: catmull([[0, 0.12], [0.60, -0.02], [1.45, -0.70], [2.10, -0.38],
+                      [3.20, 0.16], [4.60, 0.22], [5.60, 0.12]]),
+      arm: catmull([[0, 0.60], [1.10, 0.18], [2.20, -0.62], [3.14, -1.22],
+                    [4.10, -0.78], [5.10, 0.08], [5.70, 0.42]]),
+      elbow: catmull([[0, 1.46], [1.10, 1.18], [2.20, 0.78], [3.14, 0.56],
+                      [4.10, 0.86], [5.10, 1.30], [5.70, 1.42]]),
+      boost: 1.26, armAmp: 1.16, lean: 1.28, bob: 1.08, stride: 1.02
+    },
+
     // Foulee aerienne : suspension longue, genou qui monte haut et retombe
     // lentement, peu d'appuis. Silhouette longiligne qui semble planer.
     glide: {
@@ -1005,10 +1077,29 @@
       // `bandeau` : la couleur d'un bandeau de front.
       // `poignet` : { col, cote } — un poignet eponge, 1 a gauche, -1 a droite.
       // `barbe`   : la couleur d'une barbe courte et d'une moustache.
+      // `barbePleine` : une barbe qui descend sous le menton (voir pose).
+      // `meches`  : la couleur des vanilles de la coiffure 'twists'.
+      // `chaine`  : la couleur d'une chaine au ras du cou, et son pendentif.
+      // `allure`  : 'canon' — le depart canon et la fin qui s'erode (setPace).
+      // `rituel`  : sa mise en place dans les blocs (BLOC.rituel, phaseBlocs).
+      // `clap`    : son clap au-dessus de la tete, apres la ligne et quand on
+      //             le presente (pose).
+      // `facettes` : le nombre MINIMUM de faces de chacun de ses volumes au
+      //             palier ULTRA (facetCount, sprinter-app.js).
       profil: o.profil || null,
       bandeau: o.bandeau || null,
       poignet: o.poignet || null,
-      barbe: o.barbe || null
+      barbe: o.barbe || null,
+      barbePleine: !!o.barbePleine,
+      meches: o.meches || null,
+      chaine: o.chaine || null,
+      allure: o.allure || null,
+      rituel: !!o.rituel,
+      clap: !!o.clap,
+      facettes: o.facettes || 0,
+      // `lisse` : un corps d'un seul tenant — deltoides qui suivent le bras,
+      //           fessiers ronds, rotules a la taille du membre (voir pose).
+      lisse: !!o.lisse
     };
   }
 
@@ -1087,7 +1178,37 @@
       // l'ecart des epaules du squelette, sur lequel ses bras ont ete mesures.
       morph: { sh: 1.06 },
       bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
-      barbe: [50, 34, 28] })
+      barbe: [50, 34, 28] }),
+
+    // MEBA-MICKAEL ZEZE — sprint, equipe de France. 9"99 au 100 m et 19"97 au
+    // 200 m, le meme apres-midi de juillet 2022 ; premier
+    // relayeur du 4 x 100 m francais, finaliste olympique a Paris (2024),
+    // vice-champion d'Europe du relais a Amsterdam (2016) et a Munich (2022).
+    // 1,77 m pour 74 kg selon la FFA (les autres sources donnent 1,74 a 1,75).
+    //
+    // SON NOM. Le prenom est compose — Meba-Mickael — et le nom est ZEZE. Il
+    // n'a rien a voir avec « Mickeal ZEZE », l'un des sept de la finale
+    // intergalactique : lookFor() cherche les ZEZE par nom EXACT, et l'accent
+    // comme le prenom compose les separent.
+    //
+    // CE QU'ON RECONNAIT, releve sur ses photos et ses videos : les vanilles
+    // decolorees blond miel sur le dessus, les cotes ras ; le bandeau noir
+    // sur le front ; la barbe pleine, carree sous la machoire ; la chaine en
+    // or au ras du cou ; les pointes jaune fluo de ses entrainements. La
+    // carnation est relevee a son cou, a l'ombre du projecteur. La tenue est
+    // le blanc de l'equipe de France, short bleu marine — sans aucun logo.
+    //
+    // SA COURSE, SES GESTES : l'allure canon (setPace), la foulee `canon`
+    // (GAITS), le V renverse dans les blocs (BLOC.rituel), le clap au-dessus
+    // de la tete (pose). Et soixante-quatre facettes au moins par volume a
+    // l'ultra : c'est le skin premium de l'evenement.
+    'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [96, 58, 44], profil: 'meba',
+      jersey: [242, 244, 248], shorts: [30, 44, 110], shoe: [214, 240, 44],
+      hair: 'twists', hairCol: [30, 24, 22], meches: [196, 160, 104],
+      h: 1.77, gait: 'canon', morph: { sh: 1.02 },
+      bandeau: [30, 30, 34], barbe: [36, 26, 24], barbePleine: true,
+      chaine: [226, 184, 72], allure: 'canon', rituel: true, clap: true,
+      facettes: 64, lisse: true })
   };
 
   const JERSEYS = [[64, 178, 235], [72, 214, 132], [236, 92, 88],
@@ -1384,6 +1505,10 @@
      * change, et une course plate ne la voit jamais bouger.
      */
     this.foulee = 1;
+    /** L'horloge des gestes d'apres-course (le clap, voir pose), en secondes. */
+    this.gesteT = 0;
+    /** Combien la foulee s'est alourdie, de 0 a 1 — l'allure canon seule. */
+    this.fatigue = 0;
     if (this.target) this.setPace(this.target);
   }
 
@@ -1392,10 +1517,54 @@
     // Une courbe en S ferait ralentir le coureur jusqu'a l'arret sur la
     // ligne, ce qui donne l'illusion d'etre double au dernier metre.
     this.target = T;
+    this.canon = null;
+    if (this.look && this.look.allure === 'canon') { this.canon = allureCanon(T, this.total); return; }
     this.tau = Math.max(0.35, Math.min(1.10, T * 0.16));
     const den = T - this.tau * (1 - Math.exp(-T / this.tau));
     this.vmax = this.total / Math.max(0.01, den);
   };
+
+  // L'ALLURE CANON — un depart que personne ne suit, une fin que tout le monde
+  // rattrape. C'est celle de Mickael Meba-Zeze (voir VEDETTES), et elle ne
+  // sert qu'a lui.
+  //
+  //   v(t) = A (1 - e^-t/tau) - B t
+  //   d(t) = A (t - tau (1 - e^-t/tau)) - B t^2 / 2
+  //
+  // Une montee en vitesse deux a trois fois plus seche que celle des autres
+  // (tau = 0,30 s contre 1,10), puis une vitesse qui s'erode en ligne droite
+  // jusqu'a l'arrivee. Le chrono reste EXACT : A se deduit de d(T) = total,
+  // comme vmax pour les autres, et le coureur passe la ligne a T pile — c'est
+  // ce qui fait que « faire 8,39 » et « le battre » sont la meme condition.
+  //
+  // `fin` est la vitesse sur la ligne en part de la vitesse de pointe : 0,66
+  // au 100 m, 0,56 au 200 m, ou le virage et la distance usent davantage.
+  // Mesure sur le vrai moteur (tools/vedettes-test.mjs) : il pointe a plus de
+  // 14 m/s vers quinze metres, mene de cinq metres a mi-course un joueur qui
+  // tient vingt-cinq appuis par seconde, et se fait reprendre sur la ligne.
+  // Plus douce, la loi le laissait deborder des les premiers appuis par un
+  // joueur sans temps de reaction ; plus raide, il marchait sur la fin.
+  const CANON_TAU = 0.30;
+  function allureCanon(T, total) {
+    const tau = CANON_TAU;
+    const fin = Math.max(0.50, Math.min(0.80, 0.76 - 0.001 * total));
+    const forme = (b, t) => (1 - Math.exp(-t / tau)) - b * t;
+    // la pointe : v' = 0 en t* = -tau ln(b tau), si elle tombe avant T
+    const rapport = (b) => {
+      const ts = b * tau < 1 ? Math.min(T, -tau * Math.log(b * tau)) : 0;
+      const pic = Math.max(forme(b, ts), 1e-9);
+      return forme(b, T) / pic;
+    };
+    let lo = 0, hi = 1 / T;
+    for (let i = 0; i < 50; i++) {
+      const m = (lo + hi) / 2;
+      if (rapport(m) > fin) lo = m; else hi = m;
+    }
+    const b = (lo + hi) / 2;
+    const A = total / Math.max(0.01, T - tau * (1 - Math.exp(-T / tau)) - b * T * T / 2);
+    const ts = b * tau < 1 ? Math.min(T, -tau * Math.log(b * tau)) : 0;
+    return { tau, A, B: A * b, ts, pic: A * forme(b, ts), vFin: A * forme(b, T) };
+  }
 
   // Distance couverte par UN appui (un pied), pas par le cycle complet :
   // un sprinteur d'elite pose le pied environ tous les 2,2 a 2,5 m a pleine
@@ -1544,6 +1713,8 @@
     if (this.freeze > 0) this.freeze = Math.max(0, this.freeze - dt);
     if (this.boostT > 0) this.boostT = Math.max(0, this.boostT - dt);
     if (this.finished) {
+      // l'horloge des gestes d'apres-course (le clap, voir pose)
+      this.gesteT = (this.gesteT || 0) + dt;
       this.v *= Math.exp(-1.15 * dt);
       this.d += this.v * dt;
       this.stride += this.v * dt * (Math.PI / this.strideLength());
@@ -1588,23 +1759,32 @@
   Runner.prototype.stepAI = function (dt, elapsed) {
     this.drivePitch = this.finished ? 0 : this.pitchAt();
     if (this.finished) {
+      this.gesteT = (this.gesteT || 0) + dt;
       this.v *= Math.exp(-1.05 * dt);
       this.d += this.v * dt;
       this.stride += this.v * dt * (Math.PI / this.strideLength());
       return;
     }
+    const K = this.canon;
     if (elapsed >= this.target) {
       this.d = this.total;
-      this.v = this.vmax * (1 - Math.exp(-this.target / this.tau));
+      this.v = K ? K.vFin : this.vmax * (1 - Math.exp(-this.target / this.tau));
       this.finished = true;
       this.finishTime = this.target;
       return;
     }
     const t = elapsed;
-    let d = this.vmax * (t - this.tau * (1 - Math.exp(-t / this.tau)));
+    let d = K
+      ? K.A * (t - K.tau * (1 - Math.exp(-t / K.tau))) - K.B * t * t / 2
+      : this.vmax * (t - this.tau * (1 - Math.exp(-t / this.tau)));
     d = Math.max(0, Math.min(this.total, d));
     if (dt > 0) this.v = Math.max(0, (d - this.d) / dt);
     this.d = Math.max(this.d, d);
+    // LA FOULEE QUI S'ALOURDIT. 0 jusqu'a la pointe, 1 sur la ligne : pose()
+    // le lit pour redresser le buste, raccourcir le genou et appuyer le
+    // rebond — ce qu'on voit d'un sprinteur qui perd sa vitesse.
+    if (K) this.fatigue = t <= K.ts ? 0
+      : Math.max(0, Math.min(1, (K.pic - this.v) / Math.max(0.01, K.pic - K.vFin)));
     this.stride += this.v * dt * (Math.PI / this.strideLength());
   };
 
@@ -1658,6 +1838,13 @@
   const BLOC = {
     marques: { hanche: [-0.55, 0.45], buste: -1.42 },
     prets:   { hanche: [-0.46, 0.70], buste: -1.96 },
+    // Le V renverse du rituel de Mickael Meba-Zeze (voir pose) : le bassin a
+    // quatre-vingt-six centimetres, la tete sous les hanches, l'epaule a
+    // l'aplomb des mains — le bras y arrive presque tendu, la jambe arriere
+    // aussi. Verifie a la cinematique : l'epaule tombe a 0,513 m des doigts
+    // pour un bras de 0,524, et la cheville arriere a 0,743 m de la hanche
+    // pour une jambe de 0,772.
+    rituel:  { hanche: [-0.50, 0.86], buste: -2.33 },
     // Les chevilles sur les pedales, les bouts des doigts sur la piste. La
     // cible de la main est le bout de l'OS, et la main depasse de l'os : elle
     // vise donc trois centimetres plus haut que la piste, pour que ce soit la
@@ -1758,6 +1945,8 @@
   // Chaque element : [couleur, pivot, angle, decalage, dimensions, lacet]
   // dimensions = [demi-x bas, demi-y bas, demi-x haut, demi-y haut, demi-h]
   const DOSSARD = [242, 242, 238];
+  // Le numero porte sur le dossard plaque d'un corps lisse (voir pose).
+  const NUMERO = [34, 36, 48];
   const SEMELLE = [236, 236, 232];
   const TEMOIN = [250, 206, 62];
 
@@ -1813,7 +2002,7 @@
    * @param k    le gabarit de bras de l'athlete
    * @param yaw  le lacet du buste
    */
-  function mainDe(add, PREM, niv, E, aF, zPo, sec, peau, k, yaw) {
+  function mainDe(add, PREM, niv, E, aF, zPo, sec, peau, k, yaw, roule) {
     const MESURE = PREM.MESURE, LIBRE = PREM.LIBRE;
     const SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
     const cb = sec[0];
@@ -1871,7 +2060,11 @@
     // ils n'ont donc pas de cote, et une seule piece sert aux deux mains.
     // Sans lui la main reste un galet ; avec lui, elle se lit comme une
     // main a la premiere image.
-    const Po = [E[0] - zPo * Math.sin(aF), E[1], E[2] + zPo * Math.cos(aF)];
+    // Son pivot est le poignet, pris sur l'avant-bras : il suit donc le
+    // roulis de l'avant-bras (le clap, voir pose), sans quoi le pouce restait
+    // pendu en l'air a la hauteur du coude pendant que la main montait.
+    const rl = roule || 0, vz = zPo * Math.cos(aF);
+    const Po = [E[0] - zPo * Math.sin(aF), E[1] - vz * Math.sin(rl), E[2] + vz * Math.cos(rl)];
     add(peau, Po, aF + 0.42, [0.015, 0, -0.030], [0.015 * k, 0.014 * k],
         [0.020 * k, 0.018 * k], 0.030, yaw, MESURE | LIBRE | SOUS_HAUT);
   }
@@ -2006,7 +2199,13 @@
                     * (1 - wBloc) * FOULEES[allure].transit;
     // `buste` penche le haut du corps a la demande (positif = en arriere) :
     // un prof qui attend, les reins cales, ne se tient pas comme un coureur.
-    let lean = -(0.05 + 0.16 * sp) * P.lean + (r.buste || 0);
+    // LA FATIGUE (Runner.fatigue, l'allure canon seule) : 0 a la pointe, 1
+    // sur la ligne. Le buste se releve et s'assoit un peu, le genou avant
+    // monte moins, le rebond s'appuie — la foulee s'alourdit sans changer de
+    // rythme, parce que le rythme, lui, suit deja la vitesse qui baisse.
+    const lourd = Math.max(0, Math.min(1, r.fatigue || 0));
+    let lean = -(0.05 + 0.16 * sp) * P.lean * (1 - 0.55 * lourd) + 0.035 * lourd
+               + (r.buste || 0);
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -2025,7 +2224,7 @@
       // coureur assis — voir DRIVE_FRONT.
       const devant = Math.max(0, gt);
       let th = (gt * (A + C.DRIVE_THIGH * sortie + C.TRANSIT_AMPL * transit)
-                + C.DRIVE_FRONT * sortie * devant) * LIMB_BOOST;
+                + C.DRIVE_FRONT * sortie * devant - 0.20 * lourd * devant) * LIMB_BOOST;
       // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
       // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
       // se voit et ou il veut dire quelque chose — une jambe qui se replie
@@ -2069,6 +2268,37 @@
       const ur = 2.55 + 0.22 * Math.sin(p * 0.8 + 1.1);
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
+    }
+    // LE CLAP AU-DESSUS DE LA TETE — le geste de Mickael Meba-Zeze (L.clap).
+    //
+    // Releve sur la finale du 200 m de Lievin (2018) : la course finie, il se
+    // retourne vers la tribune et frappe dans ses mains tres haut, bras en
+    // losange — coudes ouverts sur les cotes, avant-bras qui se rejoignent
+    // au-dessus du crane —, deux frappes et demie par seconde, le sourire en
+    // plus. C'est lui qui fait lever le public ; c'est aussi ce qu'il fait
+    // quand on le presente.
+    //
+    // Les mains ne se rejoignent qu'en sortant du plan de course : chaque bras
+    // porte donc un ROULIS vers l'axe du corps (`rouleBras`, en radians, positif
+    // vers l'axe), que les os et personCapsules appliquent autour de l'epaule
+    // puis du coude. Le bras s'ouvre de 0,55 rad, l'avant-bras revient de 0,6 a
+    // 1,05 : les mains s'ecartent de vingt-cinq centimetres et se touchent.
+    //
+    // Il monte avec la presentation (`celebrate`) et, apres la ligne, a mesure
+    // que le coureur ralentit : on ne frappe pas dans ses mains a douze metres
+    // par seconde.
+    let rouleBras = null;
+    const wCl = L.clap ? Math.max(cel, r.finished
+      ? Math.max(0, Math.min(1, (5.5 - (r.v || 0)) / 2.5)) : 0) : 0;
+    if (wCl > 0) {
+      const tc = r.finished ? (r.gesteT || 0) : p / 1.1;
+      // la frappe est breve, l'ouverture plus longue : une puissance sur le
+      // cosinus tient les mains ecartees les deux tiers du temps
+      const ferme = Math.pow(0.5 - 0.5 * Math.cos(tc * 2.5 * TAU), 2.2);
+      const uA = 2.62, fA = 3.02 + 0.10 * ferme;
+      al = [melange(al[0], uA, wCl), melange(al[1], fA, wCl)];
+      ar = [melange(ar[0], uA, wCl), melange(ar[1], fA, wCl)];
+      rouleBras = [-0.55 * wCl, (0.60 + 0.45 * ferme) * wCl];
     }
     // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
     //
@@ -2153,9 +2383,24 @@
     let hipX = wPo > 0 ? (posture.hanche || 0) * wPo : 0, hipZ = null;
     if (wB > 0) {
       const t = Math.max(0, Math.min(1, r.prets || 0));
-      const hx = melange(BLOC.marques.hanche[0], BLOC.prets.hanche[0], t);
-      const hz = melange(BLOC.marques.hanche[1], BLOC.prets.hanche[1], t);
-      const bu = melange(BLOC.marques.buste, BLOC.prets.buste, t);
+      let hx = melange(BLOC.marques.hanche[0], BLOC.prets.hanche[0], t);
+      let hz = melange(BLOC.marques.hanche[1], BLOC.prets.hanche[1], t);
+      let bu = melange(BLOC.marques.buste, BLOC.prets.buste, t);
+      // LE RITUEL AVANT « A VOS MARQUES » (L.rituel, pose par phaseBlocs).
+      //
+      // Mickael Meba-Zeze ne s'installe pas directement : les pieds deja
+      // cales sur les pedales, il pose les mains a la ligne et monte le bassin
+      // tres haut, jambes presque tendues — le corps en V renverse, comme on
+      // le voit sur ses videos de mise en place —, balance deux fois d'avant
+      // en arriere pour charger les deux pedales, puis descend le genou et
+      // se pose. `rituel` va de 1 (bassin haut) a 0 (a vos marques).
+      const wR = Math.max(0, Math.min(1, r.rituel || 0));
+      if (wR > 0) {
+        const bal = Math.sin((r.rituelT || 0) * TAU * 0.9);
+        hx = melange(hx, BLOC.rituel.hanche[0] + 0.035 * bal, wR);
+        hz = melange(hz, BLOC.rituel.hanche[1] + 0.040 * bal, wR);
+        bu = melange(bu, BLOC.rituel.buste + 0.06 * bal, wR);
+      }
       // les jambes : genou vers l'avant, cheville sur sa pedale
       const jA = deuxSegments(hx, hz - 0.02, BLOC.piedAvant[0], BLOC.piedAvant[1], 0.392, 0.380, true);
       const jR = deuxSegments(hx, hz - 0.02, BLOC.piedArriere[0], BLOC.piedArriere[1], 0.392, 0.380, true);
@@ -2171,7 +2416,7 @@
       hipZ = hz;
     }
 
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * calme;
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * calme;
     const yawHip = -0.16 * A * Math.sin(p) * calme;
     const yawTop = 0.21 * A * Math.sin(p) * calme;
     const sway = 0.016 * A * Math.sin(p) * calme;
@@ -2201,9 +2446,14 @@
     // `true` reste le bout libre d'autrefois. Les corps mesures y ajoutent
     // les bouts ENFOUIS, qui ne recoivent aucun disque : voir
     // coureur-premium.js.
+    //
+    // LE HUITIEME CHAMP EST LE ROULIS DE L'OS autour de l'axe de course, en
+    // radians, applique autour de son pivot (voir `rouleBras`). Nul partout
+    // sauf sur des bras qui sortent du plan de course.
+    let roule = 0;
     const add = (c, pv, a, o, hb, ht, hz, yaw, bout) =>
       out.push([c, pv, a, o, [hb[0], hb[1], ht[0], ht[1], hz], yaw || 0,
-                bout === true ? 1 : (bout | 0)]);
+                bout === true ? 1 : (bout | 0), roule]);
 
     // LE CORPS VIENT DE BLENDER. Chaque os porte une suite de troncs de
     // cone dont l'epaisseur a ete relevee sur un maillage sculpte — un
@@ -2271,7 +2521,7 @@
     // fessier. Droit, il garde son disque, comme avant — une chute, qui
     // pique tout le corps, le montre tel qu'il a toujours ete.
     PREM.chaine(add, PR, 'pelvis', niv, L.shorts, hip, angB, 0, yawHip, kHip,
-                0, angB !== 0 ? LIBRE : 0, SOUS_HAUT);
+                0, angB !== 0 || L.lisse ? LIBRE : 0, SOUS_HAUT);
     // Le maillot descend par-dessus la ceinture du short. Sans ce
     // recouvrement, le buste bascule en course et decouvre le haut du short
     // par l'arriere. Son bas est donc enfoui ; son haut garde un disque nu,
@@ -2328,8 +2578,24 @@
       const [cT, pT, lT] = PREM.section(PR, 'torso', niv, 0.352, kSh);
       const lB = Math.min(lT * 0.60, shY * 0.55);
       const pB = lT > 0 ? lB * lB * pT / (lT * lT) : 0.01;
-      add(DOSSARD, hip, lean, [cT + pT + 0.006 - pB, 0, 0.352],
-          [pB, lB], [pB, lB], 0.066, yawTop, PREM.MESURE);
+      if (L.lisse) {
+        // UN DOSSARD PLAQUE, pour un corps lisse. Six millimetres devant la
+        // peau et ses deux bords en disque, il se lisait en boite collee sur
+        // la poitrine — d'autant plus qu'il est blanc sur un maillot blanc,
+        // et qu'on n'en voyait QUE les tranches. Il ne sort ici que de deux
+        // millimetres, sans rebord (bouts enfouis), et porte un numero sombre :
+        // c'est le numero qui dit « dossard », pas l'epaisseur.
+        add(DOSSARD, hip, lean, [cT + pT + 0.002 - pB, 0, 0.352],
+            [pB, lB], [pB, lB], 0.062, yawTop,
+            PREM.MESURE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
+        const lN = lB * 0.46, pN = lT > 0 ? lN * lN * pT / (lT * lT) : 0.004;
+        add(NUMERO, hip, lean, [cT + pT + 0.003 - pN, 0, 0.350],
+            [pN, lN], [pN, lN], 0.020, yawTop,
+            PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
+      } else {
+        add(DOSSARD, hip, lean, [cT + pT + 0.006 - pB, 0, 0.352],
+            [pB, lB], [pB, lB], 0.066, yawTop, PREM.MESURE);
+      }
       // LES DEUX BANDES VERTICALES NE SONT PLUS LA. Un trait de la couleur des
       // chaussures descendait au milieu du maillot, un autre au milieu du
       // short. A l'echelle de la course, un pixel d'accent ; en gros plan, la
@@ -2341,12 +2607,57 @@
 
     // Le deltoide : c'est lui qui fait la carrure. Son sommet garde un
     // disque nu — une calotte y posait un bouton clair sur l'epaule.
+    //
+    // UN CORPS LISSE (L.lisse) : le deltoide suit le bras. Planté droit sur
+    // le buste pendant que le bras tournait dessous, il se lisait en
+    // epaulette, un bloc pose sur un tube. Il tourne donc autour de l'epaule
+    // d'un peu moins de la moitie de l'angle du bras — c'est ce que fait le
+    // muscle, tire par l'humerus —, prend une part de son roulis, et son
+    // sommet s'arrondit : c'est le galbe de l'epaule, plus un couvercle.
     for (const side of [1, -1]) {
-      PREM.chaine(add, PR, 'deltoid', niv, peauBras, hip, lean, side * shY,
-                  yawTop, kSh, 0, SOUS_BAS, 0);
+      if (L.lisse) {
+        const shL = rot(0, 0.470, lean);
+        const S = [hip[0] + shL[0], side * shY, hip[2] + shL[1]];
+        const aB = side > 0 ? al[0] : ar[0];
+        roule = rouleBras ? side * rouleBras[0] * 0.45 : 0;
+        PREM.chaine(add, PR, 'deltoid', niv, peauBras, S, lean + 0.45 * (aB - lean), 0,
+                    yawTop, kSh, -0.470, SOUS_BAS, LIBRE);
+        roule = 0;
+      } else {
+        PREM.chaine(add, PR, 'deltoid', niv, peauBras, hip, lean, side * shY,
+                    yawTop, kSh, 0, SOUS_BAS, 0);
+      }
+    }
+    // LE TRAPEZE D'UN CORPS LISSE. Le buste s'arrete a l'epaule sur un disque :
+    // de pres, un plateau blanc de trente centimetres dont le cou sortait
+    // comme d'une assiette. Une calotte n'y va pas (elle monterait de huit
+    // centimetres, la collerette). On pose donc la pente qui manquait : un
+    // tronc du haut du maillot jusqu'a la base du cou, qui se resserre de la
+    // largeur des epaules a peine plus que celle du cou — le trapeze, sous la
+    // bretelle. Son disque du haut, a peine plus large que le cou, s'y cache.
+    if (L.lisse) {
+      const trT = PR.torso[niv], hT = trT[trT.length - 1];
+      const zT = hT[0] + hT[1];
+      const [cA, pA, lA] = PREM.section(PR, 'torso', niv, zT - 0.004, kSh);
+      const [cN0, pN0, lN0] = PREM.section(PR, 'neck', niv, 0.531, 1);
+      add(L.jersey, hip, lean, [cA, 0, zT + 0.017, cN0],
+          [pA * 0.99, lA * 0.99], [pN0 * 1.12, lN0 * 1.16], 0.021, yawTop,
+          PREM.MESURE | PREM.ENFOUI_BAS);
     }
     PREM.chaine(add, PR, 'neck', niv, L.skin, hip, lean, 0, yawTop * 0.5, 1,
                 0, SOUS_BAS, SOUS_HAUT);
+    // LA CHAINE EN OR, au ras du cou (L.chaine), et son pendentif sur le
+    // sternum. Collee au cou (PREM.COLLE) : laissee au tri, elle passait
+    // sous la peau qu'elle entoure, a profondeur egale.
+    if (L.chaine) {
+      const [cN, pN, lN] = PREM.section(PR, 'neck', niv, 0.536, 1);
+      add(L.chaine, hip, lean, [cN, 0, 0.536], [pN * 1.13, lN * 1.13],
+          [pN * 1.11, lN * 1.11], 0.004, yawTop * 0.5,
+          PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
+      const [cS, pS] = PREM.section(PR, 'torso', niv, 0.452, kSh);
+      add(L.chaine, hip, lean, [cS + pS + 0.004, 0, 0.452], [0.004, 0.008],
+          [0.004, 0.008], 0.010, yawTop, PREM.MESURE | PREM.LIBRE);
+    }
     // LA TETE SE PENCHE AUTOUR DU COU, PAS DU BASSIN. `tete` l'incline
     // (negatif = vers l'avant, le nez dans un livre) : la tete, les cheveux,
     // les lunettes et les antennes tournent alors autour de la base du cou.
@@ -2390,9 +2701,13 @@
     // plus haut que celui du tronc de la machoire, pour que le tri la dessine
     // apres lui, de face comme de profil.
     if (L.barbe) {
+      // Une barbe PLEINE (`barbePleine`) descend sous le menton et remplit
+      // les joues : la coque est plus large, plus epaisse, un centimetre plus
+      // bas — celle de Mickael Meba-Zeze, taillee carree sous la machoire.
+      const kB = L.barbePleine ? 1.16 : 1, dzB = L.barbePleine ? -0.010 : 0;
       const [cM, pM, lM] = PREM.section(PR, 'head', niv, 0.618, 1);
-      addCrane(L.barbe, [cM + pM * 0.60, 0, 0.620], [pM * 0.44, lM * 0.66],
-               [pM * 0.47, lM * 0.72], 0.015,
+      addCrane(L.barbe, [cM + pM * 0.60, 0, 0.620 + dzB], [pM * 0.44 * kB, lM * 0.66 * kB],
+               [pM * 0.47 * kB, lM * 0.72 * kB], 0.015 * (L.barbePleine ? 1.35 : 1),
                PREM.MESURE | PREM.LIBRE | PREM.ENFOUI_HAUT);
       const [cL, pL] = PREM.section(PR, 'head', niv, 0.652, 1);
       addCrane(L.barbe, [cL + pL - 0.003, 0, 0.653], [0.006, 0.022],
@@ -2447,6 +2762,54 @@
               [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
         }
         break;
+      case 'twists': {
+        // LES VANILLES DECOLOREES — la coiffure de Mickael Meba-Zeze : les
+        // cotes ras sous le bandeau, et sur le dessus une touffe de vanilles
+        // blond miel, courtes, qui partent en gerbe. Chacune est un petit
+        // tube incline vers l'avant ou l'arriere (l'angle de l'os) et
+        // ecarte sur le cote par le roulis de l'os, comme les bras qui
+        // frappent : sans ce roulis, elles se tenaient toutes droites, en
+        // brosse.
+        addH(0, [-0.004, 0, 0.753], [0.072, 0.066], [0.054, 0.050],
+            0.011, hy, true);
+        // Chaque vanille a SON pivot, sa racine sur le crane : le roulis d'un
+        // os tourne autour de son pivot, et celui de la tete est le bassin —
+        // roulee autour de lui, une meche partait de vingt centimetres sur le
+        // cote. La racine est donc posee dans le monde, et le tube part d'elle.
+        // UNE TOUFFE, PAS UN BOUQUET DE CHEVILLES. Sur ses photos, les
+        // vanilles se touchent : on ne voit jamais le crane entre elles, et
+        // elles partent dans tous les sens, les unes couchees, les autres
+        // droites. Il y a donc d'abord une MASSE blonde, un dome pose sur le
+        // haut du crane au-dessus du bandeau — c'est elle qui fait la couleur
+        // de loin —, puis vingt-deux vanilles courtes qui en sortent, fines,
+        // en deux tons : le miel de la decoloration et une meche plus sombre
+        // qui le casse. Chacune a sa racine dans le monde et son propre
+        // roulis, et leur inclinaison n'est pas radiale : un angle tire de
+        // leur rang les couche un peu de travers, comme des cheveux et non
+        // comme des rayons.
+        const mc = L.meches || hc;
+        const mc2 = [0, 1, 2].map(j => Math.round(mc[j] * 0.72 + hc[j] * 0.28));
+        const cT = Math.cos(angT), sT = Math.sin(angT);
+        addT(mc2, 0, [-0.006, 0, 0.768 + dzH], [0.064, 0.058], [0.046, 0.042],
+             0.016, hy, true);
+        const N = 22;
+        for (let j = 0; j < N; j++) {
+          // une spirale de Fermat : des racines serrees, jamais alignees
+          const q = j * 2.39996, rq = 0.058 * Math.sqrt((j + 0.5) / N);
+          const x = rq * Math.cos(q) - 0.006, y = rq * Math.sin(q) * 0.92;
+          const r2 = x * x + y * y;
+          const hzT = 0.020 - 2.4 * r2;
+          const zR = 0.772 + dzH + dzT - 8 * r2;
+          const R = [pvT[0] + x * cT - zR * sT, y, pvT[2] + x * sT + zR * cT];
+          const trav = Math.sin(j * 1.7) * 0.35;
+          roule = -y * 9 + trav;
+          add(j % 3 === 1 ? mc2 : mc, R,
+              angT + x * 8 + Math.cos(j * 2.3) * 0.30 + 0.06 * Math.sin(p + j) * A,
+              [0, 0, hzT], [0.0115, 0.0115], [0.0075, 0.0075], hzT, hy, true);
+        }
+        roule = 0;
+        break;
+      }
       case 'ras':
         // Le cheveu court sous un bandeau : une calotte en dome, large a la
         // base pour couvrir le crane, etroite au sommet. Un tube comme
@@ -2487,6 +2850,9 @@
     let livre = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
+      const rB = rouleBras ? side * rouleBras[0] : 0;
+      const rAv = rouleBras ? side * rouleBras[1] : 0;
+      roule = rB;
       // LE HAUT DU BRAS SE FERME, LUI AUSSI.
       //
       // Il entre dans le deltoide, et c'est le deltoide qui le cachait —
@@ -2498,7 +2864,9 @@
       PREM.chaine(add, PR, 'upperarm', niv, peauBras, S, aArm, 0, yawTop,
                   kArm * (L.manches ? 1.10 : 1), 0, 0, LIBRE);
       const e = rot(0, -0.250, aArm);
-      const E = [S[0] + e[0], S[1], S[2] + e[1]];
+      // le coude suit le roulis du bras ; l'avant-bras et la main prennent le leur
+      const E = [S[0] + e[0], S[1] - e[1] * Math.sin(rB), S[2] + e[1] * Math.cos(rB)];
+      roule = rAv;
       // LES ARTICULATIONS SE VOYAIENT.
       //
       // Deux troncs qui se rencontrent a un angle laissent une marche : le
@@ -2507,8 +2875,10 @@
       // le plus epais des deux rayons MESURES a la jonction, un rien au-dela,
       // pour couvrir sans faire de bosse. Elle s'arrondit : un disque plat en
       // travers d'un coude ou d'un genou plie se lisait comme un coup de scie.
+      // Un corps lisse la tient a la taille du membre : a +6 %, c'etait une
+      // bille entre deux tubes.
       const rCoude = Math.max(PREM.rayon(PR, 'upperarm', niv, 'bas', kArm),
-                              PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * 1.06;
+                              PREM.rayon(PR, 'forearm', niv, 'haut', kArm)) * (L.lisse ? 0.99 : 1.06);
       add(peauBras, E, aFore, [0, 0, -0.012], [rCoude, rCoude], [rCoude, rCoude],
           0.026, yawTop, LIBRE);
       // L'AVANT-BRAS S'ARRETE AU POIGNET, ET LA MAIN PREND LA SUITE.
@@ -2550,10 +2920,11 @@
                     kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET);
       }
       mainDe(add, PREM, niv, E, aFore, zPo,
-             PREM.section(PR, 'forearm', niv, zPo, kAv), L.skin, kArm, yawTop);
+             PREM.section(PR, 'forearm', niv, zPo, kAv), L.skin, kArm, yawTop, rAv);
       if (r.livre === side) livre = [E, aFore];
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
+      roule = 0;
     }
 
     // LES ANTENNES.
@@ -2642,12 +3013,26 @@
       // pose sur la hanche.
       PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yT, kLeg * kPant,
                   0, SOUS_BAS, LIBRE, ourlet);
+      // LES FESSIERS D'UN CORPS LISSE. Le bassin mesure est un tube, et un
+      // tube de short vu de trois quarts arriere se lit comme une boite de
+      // conserve : le galbe qui fait un sprinteur n'y etait pas. Chaque
+      // fessier est un volume a lui, rond aux deux bouts, pose en arriere du
+      // bassin et de son cote, sous le short ; il suit sa cuisse d'un quart
+      // de son angle — il s'etire quand le genou monte, il se ramasse quand
+      // la jambe pousse derriere.
+      if (L.lisse && !fem) {
+        const [cF, pF, lF] = PREM.section(PR, 'pelvis', niv, -0.040, kHip);
+        add(L.shorts, hip, angB + 0.25 * (th - angB),
+            [cF - pF * 0.42, side * lF * 0.46, -0.050],
+            [pF * 0.60, lF * 0.52], [pF * 0.66, lF * 0.56], 0.050, yawHip,
+            PREM.MESURE | LIBRE);
+      }
       PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yT, kLeg * kPant,
                   0, LIBRE, SOUS_HAUT, undefined, ourlet);
       const kv = rot(0, -0.392, th);
       const K = Kp || [H[0] + kv[0], H[1], H[2] + kv[1]];
       const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
-                              PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * 1.04;
+                              PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * (L.lisse ? 0.99 : 1.04);
       add(peauJambes, K, sk, [0, 0, -0.020], [rGenou * kPant, rGenou * kPant],
           [rGenou * kPant, rGenou * kPant], 0.034, yS, LIBRE);
       PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yS,
