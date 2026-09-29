@@ -269,6 +269,7 @@ function essaiNeuf() {
     bond: 0, angles: [], poses: [], pieds: [], planche: null,
     angleEnvol: null, resultat: null, empreinte: null, gerbe: null,
     mesure: null, drapeau: null, traceMordue: null, finAnnoncee: false,
+    anglesOk: [], notesPoses: [], parfait: false,
   };
 }
 
@@ -453,6 +454,9 @@ function decoller(h = tenu()) {
   a.angle = angleDe(h);
   e.angleEnvol = a.angle;
   e.angles[e.bond] = a.angle;
+  // l'angle etait-il dans la zone parfaite de la jauge (jauge(), plus bas) ?
+  const o = angleVise();
+  e.anglesOk[e.bond] = a.angle >= o - 2 && a.angle <= o + 2.5;
   if (triple() && e.bond < 2) {
     // UN DES DEUX PREMIERS BONDS : il finit sur un pied, pas dans le sable.
     const B = bondDe(e.bond, a.vEntree, a.angle);
@@ -496,6 +500,7 @@ function poser(cote, retard, t0) {
   const p = jugerPose(retard);
   const bon = cote === v.coteAttendu;
   e.poses[v.bond] = retard;
+  e.notesPoses[v.bond] = p.note;
   e.pieds[v.bond] = bon;
   const vEntree = v.B.vApres * (p.garde || 0.9);
   e.appel = {
@@ -584,7 +589,9 @@ function pas(j, dt, elapsed) {
       // LE CYCLE DU CISEAU SUIT LES APPUIS PAR UN RESSORT : il accelere puis
       // ralentit, comme une jambe. Rattrape en un saut exponentiel, chaque
       // demi-tour partait d'un coup et freinait net — un battement d'aile.
-      const w = 18, ecart = v.phase - v.phaseVise;
+      // Un ressort souple : la jambe met le temps d'une vraie foulee a passer,
+      // on voit le ciseau se faire au lieu d'un battement.
+      const w = 11, ecart = v.phase - v.phaseVise;
       v.phaseV = (v.phaseV || 0) + (-w * w * ecart - 2 * w * (v.phaseV || 0)) * dt;
       v.phase += v.phaseV * dt;
       if (v.t >= v.duree) {
@@ -759,6 +766,25 @@ function contact() {
   e.phase = 'reception'; e.t = 0;
   SprinterApp.Audio_.sfx && SprinterApp.Audio_.sfx('trip');
   annoncer({ type: 'contact', resultat: r });
+  // LE SAUT PARFAIT, SUR TOUS LES POINTS : transition parfaite a l'elan,
+  // appel dans les vingt derniers centimetres, angle d'envol dans la zone,
+  // ramene parfait — et au triple, des appuis actifs sur le bon pied a chaque
+  // bond. Lui seul fait exploser le sable, trembler l'image et s'ouvrir le
+  // halo de Sprinter sous l'athlete.
+  const bonds = triple() ? 3 : 1;
+  const posesParfaites = !triple() || (e.notesPoses.length === 2
+    && e.notesPoses.every(n => n === 'actif') && e.pieds.every(Boolean));
+  e.parfait = !r.mordu && dansLeSable && j.transGrade === 2
+    && pl.ecart >= 0 && pl.ecart <= 0.20
+    && e.anglesOk.length === bonds && e.anglesOk.every(Boolean)
+    && r.ramene === 'parfait' && posesParfaites;
+  if (e.parfait) {
+    if (e.gerbe) e.gerbe.force = Math.min(2, e.gerbe.force * 1.6);
+    SprinterApp.G.shake = 0.9;
+    const P = globalThis.RenduPremium;
+    if (P && P.poussee) P.poussee(1, false);
+    annoncer({ type: 'parfait', resultat: r });
+  }
 }
 
 /** Le decametre du juge, puis le drapeau blanc. */

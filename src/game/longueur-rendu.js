@@ -207,8 +207,11 @@ export function postureDe(e, r, ech) {
       // hanches a l'impact. L'angle des jambes se deduit de la hauteur du
       // bassin a la reception : les talons touchent pile au contact.
       if (v.tRamene != null) {
-        const k = lisse((t - v.tRamene) / 0.20);
-        const bal = lisse((t - v.tRamene) / 0.30);
+        // Le geste prend tout le temps qui reste avant le sable : les jambes
+        // montent sur trois dixiemes, les bras balaient sur quatre — on le
+        // voit se faire, il ne claque pas.
+        const k = lisse((t - v.tRamene) / 0.30);
+        const bal = lisse((t - v.tRamene) / 0.42);
         const hzC = (v.hauteur(T) - 0.08) * ech;
         const th = Math.acos(Math.max(-1, Math.min(1, (hzC - 0.02 - CHEVILLE) / (CUISSE + JAMBE))));
         const leve = Math.max(th, 1.50 - 0.35 * lisse(t / T));

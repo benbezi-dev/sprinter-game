@@ -74,6 +74,7 @@ export const MOTS_SAUTS = {
   saut_record_perso: ['RECORD PERSONNEL', 'PERSONAL BEST'],
   // Le verdict de l'appel, en grand, comme a la television.
   saut_appel_parfait: ['APPEL PARFAIT', 'PERFECT TAKE-OFF'],
+  saut_parfait:       ['SAUT PARFAIT', 'PERFECT JUMP'],
   saut_appel_bon:     ['BON APPEL', 'GOOD TAKE-OFF'],
   saut_appel_loin:    ['APPEL LOIN', 'EARLY TAKE-OFF'],
   // Le record personnel battu : de combien, en metres.
