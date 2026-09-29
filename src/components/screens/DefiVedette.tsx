@@ -12,7 +12,10 @@ import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { chargerLaMusiqueDuDefi as musiqueAurel } from '@/game/musique-defi-aurel';
-import { chargerLaMusiqueDuDefi as musiqueMeba } from '@/game/musique-defi-meba';
+import { chargerLaMusiqueDuDefi as musiqueMebaSeule, chargerLeCri } from '@/game/musique-defi-meba';
+
+/** Le morceau de Meba-Mickael Zeze, et son cri avant les blocs. */
+const musiqueMeba = () => Promise.all([musiqueMebaSeule(), chargerLeCri()]).then(r => r[0]);
 
 /* ---------------------------------------------------------------------------
    LE DEFI DES VEDETTES — la banniere, la fiche, le verdict

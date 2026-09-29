@@ -926,22 +926,37 @@
     // premiere version sortait des blocs en grandes enjambees : c'est la
     // cadence qui fait sa puissance, pas l'amplitude. Appuis plus courts sur
     // toute la course (`stride`), et encore plus a la sortie des blocs
-    // (`departFrequence`) ; amplitude contenue (`boost`, `armAmp`), et la
-    // moitie seulement de ce que le moteur ajoute a la poussee (`departAmple`).
+    // (`departFrequence`) ; la moitie seulement de ce que le moteur ajoute
+    // devant a la sortie des blocs (`departAmple`), la poussee entiere derriere
+    // (`poussee`). Les tables, elles, sont ses angles mesures (voir plus bas).
     canon: {
-      thigh: catmull([[0, 0.46], [0.75, -0.04], [1.50, -0.70], [2.20, -0.44],
-                      [3.10, 0.22], [4.10, 0.76], [4.85, 0.88], [5.55, 0.74]]),
-      knee: catmull([[0, -0.22], [0.50, -0.52], [1.10, -0.24], [1.50, -0.10],
-                     [2.10, -1.12], [2.70, -1.88], [3.40, -1.98], [4.20, -1.56],
-                     [5.00, -0.90], [5.60, -0.40]]),
-      ankle: catmull([[0, 0.12], [0.60, -0.02], [1.45, -0.70], [2.10, -0.38],
-                      [3.20, 0.16], [4.60, 0.22], [5.60, 0.12]]),
-      arm: catmull([[0, 0.60], [1.10, 0.18], [2.20, -0.62], [3.14, -1.22],
-                    [4.10, -0.78], [5.10, 0.08], [5.70, 0.42]]),
-      elbow: catmull([[0, 1.46], [1.10, 1.18], [2.20, 0.78], [3.14, 0.56],
-                      [4.10, 0.86], [5.10, 1.30], [5.70, 1.42]]),
-      boost: 1.12, armAmp: 1.02, lean: 1.28, bob: 0.92, stride: 0.86,
-      departFrequence: 0.24, departAmple: 0.5, poussee: 1.10, arriere: 1.125
+      // RELEVEE SUR SA VIDEO, PAS DESSINEE (tools/biomeca/). MediaPipe a suivi
+      // ses articulations image par image sur un 60 m d'entrainement filme de
+      // profil (72 images, de la 2e a la 4e seconde, l'acceleration), et les
+      // cycles moyennes donnent ces courbes, dans la convention de pose() — un
+      // angle absolu, 0 vers le bas, positif vers l'avant ; le genou, le pied
+      // et le coude relatifs au segment d'au-dessus. Ce qu'elles disent : la
+      // mecanique d'un sprinteur d'elite, TOUT DEVANT. Le genou monte a
+      // 1,30 rad (75 degres) et la jambe ne traine presque pas derriere
+      // (-0,46 rad) ; le talon remonte sous la fesse (-2,25) ; le bras part tres
+      // loin derriere (-1,21) quand le genou du meme cote est en haut, et le
+      // coude se ferme devant le visage (2,0 rad) pour se deplier derriere
+      // (0,2). Sa premiere foulee, faite a l'oeil, faisait l'inverse — genou bas,
+      // jambe qui balayait derriere — et se lisait en grandes enjambees.
+      thigh: catmull([[0, 0.55], [0.79, -0.21], [1.57, -0.46], [2.36, -0.27],
+                      [3.14, 0.28], [3.93, 1.01], [4.71, 1.30], [5.50, 1.11]]),
+      knee: catmull([[0, -0.69], [0.79, -0.49], [1.57, -0.64], [2.36, -1.44],
+                     [3.14, -2.03], [3.93, -2.17], [4.71, -1.62], [5.50, -0.95]]),
+      ankle: catmull([[0, 0.05], [0.79, -0.03], [1.57, -0.56], [2.36, -0.42],
+                      [3.14, -0.37], [3.93, -0.17], [4.71, -0.04], [5.50, 0.00]]),
+      arm: catmull([[0, -0.38], [0.79, 0.16], [1.57, 0.31], [2.36, -0.29],
+                    [3.14, -0.35], [3.93, -0.68], [4.71, -1.21], [5.50, -0.85]]),
+      elbow: catmull([[0, 0.65], [0.79, 1.27], [1.57, 2.01], [2.36, 1.85],
+                      [3.14, 0.50], [3.93, 0.19], [4.71, 0.18], [5.50, 0.79]]),
+      // Les tables sont ses angles : le moteur ne les amplifie plus (boost et
+      // armAmp a 1). Le buste mesure (-0,27 rad a cette vitesse) donne `lean`.
+      boost: 1.0, armAmp: 1.0, lean: 1.27, bob: 0.92, stride: 0.86,
+      departFrequence: 0.24, departAmple: 0.5, poussee: 1.10
     },
 
     // Foulee aerienne : suspension longue, genou qui monte haut et retombe

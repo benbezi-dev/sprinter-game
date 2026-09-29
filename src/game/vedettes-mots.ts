@@ -82,10 +82,8 @@ const MOTS: Record<string, Paire> = {
                          + 'nobody stays with him over the first fifty metres. Then he loses '
                          + 'speed all the way to the line — that is where you catch him. '
                          + 'Beat his time to beat him.'],
-  'vd_recompense_sous:meba': ['son skin premium — son corps, sa foulée, son rituel dans les blocs '
-                              + 'et son clap —, à porter sur les courses de sprint',
-                              'his premium skin — his body, his stride, his blocks ritual and '
-                              + 'his clap — to wear in sprint races'],
+  'vd_recompense_sous:meba': ['son skin premium, à porter sur les courses de sprint',
+                              'his premium skin, to wear in sprint races'],
   'vd_debloque_sous:meba':   ['Il se porte sur les courses de sprint.', 'It is worn in sprint races.'],
   vd_a_battre:    ['à battre : {s}', 'to beat: {s}'],
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],

@@ -306,6 +306,9 @@ export function padPress(side: 'left' | 'right') {
   }
 
   if (G.state === 'count') {
+    // PENDANT LE CRI D'AVANT LES BLOCS, rien n'est annonce : on ne peut pas
+    // partir avant un depart qui n'a pas commence (voir G.avantDepart).
+    if (G.avantDepart && G.avantDepart.reste > 0) return;
     // EN CHAMPIONNAT, LE TELEPHONE NE SE JUGE PAS. Il dit a la salle qu'on
     // est parti avant le coup, et a quel instant ; c'est elle qui decide du
     // rappel et du carton (voir worker/src/faux-depart.js). Rien ici ne
@@ -549,6 +552,10 @@ export function updateLogic(dt: number) {
     if (G.cut && G.cut.kind === 'ending') Audio_.stop();
     else Audio_.music(G.cut && G.cut.kind === 'intro' ? Audio_.raceTrack(G.levelIdx) : 'menu');
   }
+  // Son cri avant les blocs se lance dans le silence : la musique de course
+  // part avec « a vos marques », a l'heure ou sa fiche FL Studio l'attend
+  // (docs/musique-defi-meba.md).
+  else if (G.state === 'count' && G.avantDepart && G.avantDepart.reste > 0) Audio_.stop();
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
@@ -602,6 +609,27 @@ export function updateLogic(dt: number) {
       // tableau de course par-dessus — « a battre », « alterne les deux
       // touches » — alors que personne ne court encore.
       gameStore.setState({ state: G.state, countT: G.countT });
+      return;
+    }
+    // LE CRI D'AVANT LES BLOCS (G.avantDepart, pose par game/vedettes.ts).
+    //
+    // Meba-Mickael Zeze crie « LET'S GOO ! » debout derriere ses blocs, avant
+    // de s'y installer. Le decompte part sur « a vos marques » des sa
+    // premiere image : il faut donc un temps AVANT lui, ou tout le monde
+    // attend debout — `countT` reste a zero (personne n'est dans les blocs,
+    // voir phaseBlocs), et l'interface le lit comme une presentation (-99) :
+    // ni chiffre, ni « alterne les deux touches ». Les appuis n'y comptent pas
+    // (padPress). Le cri part un quart de seconde apres l'ouverture.
+    const avD = G.avantDepart;
+    if (avD && avD.reste > 0) {
+      avD.t = (avD.t || 0) + dt;
+      avD.reste -= dt;
+      if (!avD.dit && avD.t >= (avD.a ?? 0.25)) {
+        avD.dit = true;
+        if (avD.cri) Audio_.sfx(avD.cri, { gain: avD.gain ?? 0.95 });
+      }
+      SprinterApp.followCam(dt);
+      gameStore.setState({ state: G.state, countT: -99 });
       return;
     }
     // Le pistolet est annonce : la presentation est finie, et les bras leves

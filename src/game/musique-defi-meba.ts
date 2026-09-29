@@ -86,3 +86,34 @@ function relayer(): void {
   A.cur = null;
   A.music(NOM);
 }
+
+// --- SON CRI, « LET'S GOO ! » -------------------------------------------------
+// Pris a l'une de ses videos, decoupe et pose dans public/vedettes/ : il le
+// crie debout derriere ses blocs, avant de s'y installer (G.avantDepart, voir
+// engine.ts et vedettes.ts). Meme contrat que la musique : charge a
+// l'ouverture de la fiche, et son absence ne casse rien — la course part sans.
+
+/** Le nom sous lequel le moteur range le cri (Audio_.sfx). */
+export const CRI = 'meba_letsgo';
+let cri: Etat = 'absent';
+
+export async function chargerLeCri(): Promise<boolean> {
+  if (cri === 'pret') return true;
+  if (cri === 'en-cours' || cri === 'refuse') return false;
+  if (!DEFI_VEDETTE_OUVERT) return false;
+  const A = moteur();
+  if (!A || !A.ok || !A.ctx) return false;
+  cri = 'en-cours';
+  try {
+    const url = import.meta.env.BASE_URL.replace(/\/?$/, '/') + 'vedettes/meba-letsgo.mp3';
+    const reponse = await fetch(url);
+    if (!reponse.ok) throw new Error('reponse ' + reponse.status);
+    const octets = await reponse.arrayBuffer();
+    A.buf[CRI] = await new Promise<AudioBuffer>((ok, ko) => A.ctx.decodeAudioData(octets, ok, ko));
+    cri = 'pret';
+    return true;
+  } catch {
+    cri = 'refuse';
+    return false;
+  }
+}

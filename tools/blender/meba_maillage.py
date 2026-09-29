@@ -72,8 +72,41 @@ CIBLES = {
     'l-lowerleg-muscle-incr': 0.65, 'r-lowerleg-muscle-incr': 0.65,
     'buttocks-volume-incr': 0.60,
     'measure-neck-circ-incr': 0.45,
-    'head-square': 0.40,
+    'measure-neck-height-incr': 0.20,
 }
+
+# SON VISAGE, releve sur l'interview de Lievin (2018, de face, en 1080p) et sa
+# photo de trois quarts. Ce qui le fait reconnaitre : un visage long et ovale,
+# le front haut et bombe, des pommettes larges ; des yeux en amande sous une
+# paupiere lourde, le coin exterieur qui tombe ; un nez large aux ailes
+# ouvertes et au bout rond ; une bouche large, la levre du bas pleine ; un
+# menton que la barbe allonge. Les cibles « l-/r- » sont posees des deux cotes.
+VISAGE = {
+    'head-oval': 0.65, 'head-scale-vert-incr': 0.22, 'head-scale-horiz-decr': 0.08,
+    'forehead-scale-vert-incr': 0.35, 'forehead-nubian-incr': 0.30,
+    '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.20,
+    'chin-height-incr': 0.30, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
+    '*-eye-height2-decr': 0.35, '*-eye-eyefold-down': 0.45, '*-eye-corner2-down': 0.25,
+    '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
+    'eyebrows-trans-down': 0.30,
+    'nose-width1-incr': 0.45, 'nose-width2-incr': 0.55, 'nose-width3-incr': 0.60,
+    'nose-flaring-incr': 0.55, 'nose-nostrils-width-incr': 0.50,
+    'nose-point-width-incr': 0.45, 'nose-hump-decr': 0.30, 'nose-volume-incr': 0.15,
+    'mouth-scale-horiz-incr': 0.30, 'mouth-lowerlip-volume-incr': 0.50,
+    'mouth-upperlip-volume-incr': 0.25, 'mouth-lowerlip-height-incr': 0.25,
+    '*-ear-flap-decr': 0.35,
+}
+
+
+def cibles_du_visage():
+    out = {}
+    for nom, poids in VISAGE.items():
+        if nom.startswith('*-'):
+            for c in ('l-', 'r-'):
+                out[c + nom[2:]] = poids
+        else:
+            out[nom] = poids
+    return out
 
 SCENE = "Meba"
 
@@ -81,7 +114,8 @@ SCENE = "Meba"
 def arguments():
     a = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     val = lambda k: a[a.index(k) + 1] if k in a else None
-    return {'glb': val('--glb'), 'blend': val('--blend'), 'portraits': val('--portraits')}
+    return {'glb': val('--glb'), 'blend': val('--blend'), 'portraits': val('--portraits'),
+            'visage': val('--visage')}
 
 
 def scene_neuve():
@@ -111,7 +145,7 @@ def humain():
     # reelle, les bras dans la poitrine. `refit` le recale sur la forme
     # courante ; ensuite seulement les cibles sont cuites dans le maillage.
     from bl_ext.blender_org.mpfb.services.targetservice import TargetService
-    for nom, poids in CIBLES.items():
+    for nom, poids in list(CIBLES.items()) + list(cibles_du_visage().items()):
         TargetService.load_target(h, TargetService.target_full_path(nom), weight=poids)
     rig = HumanService.add_builtin_rig(h, "game_engine", import_weights=True)
     TargetService.bake_targets(h)
@@ -555,7 +589,7 @@ def ourlet(bm, h, passes=14):
 # Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
 # le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
 # gris clair sous les lampes.
-MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras'}
+MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils'}
 
 
 def materiau(nom, couleur, rugosite=0.6, metal=0.0):
@@ -585,6 +619,8 @@ BARBE = (36, 26, 24)
 CHEVEU = (30, 24, 22)
 MECHES = (196, 160, 104)
 OR = (226, 184, 72)
+SOURCIL = (18, 13, 12)
+LEVRES = (74, 42, 40)
 
 
 def chaussure(h, rig, cote):
@@ -714,7 +750,33 @@ def habiller(h, rig):
         nez = c.z > 1.472 and abs(c.y) < 0.021 and c.x > 0.112
         return (visage or joues or dessous) and not nez
 
+    # LES SOURCILS, que le corps de MakeHuman n'a pas : sans eux le visage se
+    # lisait en mannequin. Un arc au-dessus de chaque oeil, trouve depuis
+    # l'oeil lui-meme : epais pres du nez, fin vers la tempe, a peine arque —
+    # les siens sont sombres, nets, poses bas.
+    yeux_c = orbites(h)
+    def sourcils(c, n, d):
+        if p(d, 'head') < 0.5 or c.x < 0.04:
+            return False
+        for e, _r in yeux_c:
+            if e.y * c.y <= 0:
+                continue
+            dy = (abs(c.y) - abs(e.y))          # vers la tempe, positif
+            if not (-0.017 < dy < 0.029):
+                continue
+            zc = e.z + 0.0185 - 7.0 * (dy - 0.004) ** 2
+            demi = 0.0036 - 0.045 * max(0.0, dy)
+            if abs(c.z - zc) < max(0.0016, demi):
+                return True
+        return False
+
+    # LES LEVRES, de leur couleur : plus sombres que la peau, satinees.
+    def levres(c, n, d):
+        return d.get('lips', 0) > 0.45
+
     pieces = [
+        ('Meba_sourcils', sourcils, 0.0011, SOURCIL, 0.9, 0, 2),
+        ('Meba_levres', levres, 0.0004, LEVRES, 0.42, 0, 2),
         # le maillot passe PAR-DESSUS le short : plus bas et plus epais que
         # lui la ou ils se croisent, sans quoi le short ressortait en
         # languettes a travers l'ourlet
@@ -738,6 +800,19 @@ def habiller(h, rig):
         bsdf.inputs['Subsurface Weight'].default_value = 0.08
         bsdf.inputs['Subsurface Radius'].default_value = (0.9, 0.35, 0.2)
         bsdf.inputs['Subsurface Scale'].default_value = 0.01
+    # LE GRAIN DE LA PEAU, pour les portraits : un bruit fin en relief (des
+    # pores), que Cycles rend et que l'export glTF ignore — le jeu n'en a
+    # pas besoin a sa distance.
+    nt = peau.node_tree
+    if not any(n.type == 'BUMP' for n in nt.nodes):
+        bruit = nt.nodes.new('ShaderNodeTexNoise')
+        bruit.inputs['Scale'].default_value = 900.0
+        bruit.inputs['Detail'].default_value = 3.0
+        relief = nt.nodes.new('ShaderNodeBump')
+        relief.inputs['Strength'].default_value = 0.10
+        relief.inputs['Distance'].default_value = 0.0004
+        nt.links.new(bruit.outputs['Fac'], relief.inputs['Height'])
+        nt.links.new(relief.outputs['Normal'], bsdf.inputs['Normal'])
     h.data.materials.append(peau)
     for poly in h.data.polygons:
         poly.use_smooth = True
@@ -783,15 +858,15 @@ def orbites(h):
 
 def yeux(h, rig):
     objs = []
-    blanc = materiau('Meba_oeil', (236, 232, 226), 0.08)
-    iris = materiau('Meba_iris', (46, 28, 20), 0.15)
+    blanc = materiau('Meba_oeil', (226, 218, 204), 0.10)
+    iris = materiau('Meba_iris', (38, 22, 15), 0.15)
     pupille = materiau('Meba_pupille', (8, 8, 10), 0.05)
     for c, r in orbites(h):
         R = r
         # la cornee affleure les paupieres, un demi-millimetre derriere
         centre = c + Vector((-0.0005 - R, 0, 0))
-        for nom, rr, dx, mat in (('globe', R, 0.0, blanc), ('iris', R * 0.46, R * 0.93, iris),
-                                 ('pupille', R * 0.2, R * 1.0, pupille)):
+        for nom, rr, dx, mat in (('globe', R, 0.0, blanc), ('iris', R * 0.56, R * 0.90, iris),
+                                 ('pupille', R * 0.24, R * 0.99, pupille)):
             bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=rr,
                                                  location=centre + Vector((dx, 0, 0)))
             o = bpy.context.active_object
@@ -1180,6 +1255,24 @@ def camera_portrait(loc, cible, focale):
     return cam
 
 
+def visage_rendu(rig, dossier, echantillons=64):
+    """Le visage seul, de face et de trois quarts : pour le comparer a ses
+    photos, passe apres passe."""
+    sc = bpy.context.scene
+    studio()
+    sc.cycles.samples = echantillons
+    os.makedirs(dossier, exist_ok=True)
+    poser(rig, {'head': (0.0, 0.0, 0.0), 'neck_01': (0.0, 0.0, 0.0),
+                'upperarm_l': (0.1, -0.1, 0.0), 'upperarm_r': (0.1, 0.1, 0.0)})
+    sc.render.resolution_x, sc.render.resolution_y = 640, 720
+    sc.render.image_settings.file_format = 'PNG'
+    for nom, loc in (('face', (0.95, 0.0, 1.535)), ('34', (0.80, -0.52, 1.545))):
+        camera_portrait(loc, (0.03, 0.0, 1.515), 95)
+        sc.render.filepath = os.path.join(dossier, 'visage-' + nom + '.png')
+        bpy.ops.render.render(write_still=True)
+    sc.render.image_settings.file_format = 'WEBP'
+
+
 def portraits(rig, dossier):
     sc = bpy.context.scene
     studio()
@@ -1200,5 +1293,7 @@ def portraits(rig, dossier):
 if __name__ == '__main__' and bpy.app.background:
     A = arguments()
     h, rig = tout(A['glb'], A['blend'])
+    if A['visage']:
+        visage_rendu(rig, A['visage'])
     if A['portraits']:
         portraits(rig, A['portraits'])
