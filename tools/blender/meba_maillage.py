@@ -86,7 +86,11 @@ VISAGE = {
     'forehead-scale-vert-incr': 0.35, 'forehead-nubian-incr': 0.30,
     '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.20,
     'chin-height-incr': 0.45, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
-    '*-eye-height2-decr': 0.60, '*-eye-eyefold-down': 0.55, '*-eye-corner2-down': 0.25,
+    # LE BAS DU VISAGE AVANCAIT EN MUSEAU : la base « african » de MakeHuman
+    # est prognathe, pas lui — de trois quarts, sa bouche reste dans le plan
+    # des pommettes. Et un visage sec, de sprinteur, pas les joues pleines.
+    'chin-prognathism-decr': 0.70, 'head-fat-decr': 0.45,
+    '*-eye-height2-decr': 0.45, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
     '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
     # mesure (tools/biomeca/visage.py) : ses sourcils sont hauts sur l'oeil
     'eyebrows-trans-up': 0.35,
@@ -99,8 +103,8 @@ VISAGE = {
     'mouth-scale-horiz-incr': 0.30,
     # mesure : ses levres sont pleines mais pas projetees — la bouche du
     # modele avancait et s'epaississait (+43 % en haut, +59 % en bas)
-    'mouth-scale-depth-decr': 0.55, 'mouth-trans-backward': 0.45,
-    'mouth-lowerlip-volume-decr': 0.35, 'mouth-upperlip-volume-decr': 0.45,
+    'mouth-scale-depth-decr': 0.85, 'mouth-trans-backward': 0.80,
+    'mouth-lowerlip-volume-decr': 0.45, 'mouth-upperlip-volume-decr': 0.60,
     'mouth-lowerlip-height-decr': 0.25, 'mouth-upperlip-height-decr': 0.30,
     '*-ear-flap-decr': 0.35,
 }
@@ -642,7 +646,9 @@ OR = (226, 184, 72)
 SOURCIL = (18, 13, 12)
 BLEU_FRANCE = (38, 64, 168)
 ROUGE_FRANCE = (214, 40, 52)
-LEVRES = (58, 33, 31)
+# ses levres sont sombres, proches de sa barbe : claires, cernees de noir,
+# elles se lisaient comme une bouche ouverte au fond d'un museau
+LEVRES = (40, 23, 21)
 
 
 def chaussure(h, rig, cote):
@@ -724,10 +730,39 @@ def habiller(h, rig):
     # ou cinq centimetres sous le menton, en pointe. L'epaisseur depend donc de
     # la place : 3,5 cm au menton, pleine sur la machoire, fine sur les joues
     # et la moustache.
+    # PRES DES LEVRES, ELLE EST COURTE. Epaisse partout, elle se soulevait
+    # autour de la bouche et les levres paraissaient enfoncees dans un trou —
+    # un museau. La moustache et le dessous de la levre restent a trois
+    # millimetres ; l'epaisseur ne vient qu'au menton et sur la machoire.
+    # LA DISTANCE A LA LEVRE LA PLUS PROCHE, pas au centre de la bouche : aux
+    # commissures, a 2,5 cm du centre, la barbe reprenait toute son epaisseur
+    # et faisait un bourrelet autour des levres.
+    from mathutils.kdtree import KDTree
+    levres_c = [h.data.vertices[i].co.copy() for i, dd in enumerate(domh) if dd[2].get('lips', 0) > 0.5]
+    arbre = KDTree(max(1, len(levres_c)))
+    for i, q in enumerate(levres_c or [menton + Vector((0.05, 0, 0.05))]):
+        arbre.insert(q, i)
+    arbre.balance()
     def epaisseur_barbe(co):
         dm = (co - menton).length
         machoire = max(0.0, min(1.0, (menton.z + 0.045 - co.z) / 0.045))
-        return 0.005 + 0.011 * machoire + 0.048 * math.exp(-(dm / 0.032) ** 2)
+        # au-dessous du menton, la gorge : l'epaisseur s'y eteint
+        gorge = max(0.0, min(1.0, (co.z - (menton.z - 0.022)) / 0.018))
+        # EN POINTE, PAS EN BLOC : pleine au centre du menton, elle s'affine
+        # vers les cotes de la machoire (une bosse etroite en largeur).
+        d = co - menton
+        cote = max(0.0, 1.0 - abs(co.y) / 0.075)
+        pointe = math.exp(-((d.x / 0.032) ** 2 + (d.y / 0.019) ** 2 + (d.z / 0.030) ** 2))
+        # ELLE DESCEND, ELLE N'AVANCE PAS. Sur ses photos de course, elle pend
+        # de trois centimetres sous le menton, en pointe ; devant, elle reste
+        # courte. Epaisse partout, elle avancait en bloc devant la bouche.
+        haut = 1.0 if d.z < 0.004 else math.exp(-((d.z - 0.004) / 0.012) ** 2)
+        pend = math.exp(-((d.x / 0.030) ** 2 + (d.y / 0.020) ** 2)) * haut
+        e = (0.004 + 0.007 * machoire * cote + 0.010 * pointe + 0.026 * pend) * gorge
+        db = arbre.find(co)[2]
+        pres = max(0.0, min(1.0, (db - 0.003) / 0.020))
+        pres = pres * pres * (3 - 2 * pres)
+        return 0.003 + (e - 0.003) * pres
     bras = ('upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'hand_l', 'hand_r')
     doigts = lambda d: any(k.split('_')[0] in ('thumb', 'index', 'middle', 'ring', 'pinky') and w > 0.2 for k, w in d.items())
 
@@ -795,12 +830,14 @@ def habiller(h, rig):
         # descend (pas en bavoir sur toute la gorge)
         # Elle chevauche le bas du visage de trois centimetres : separee de
         # lui par un rang de faces, elle partait comme un ilot de franges.
-        dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02
-                   and menton.z - 0.035 < c.z < menton.z + 0.030 and abs(c.y) < 0.075)
+        # Seules les faces TOURNEES VERS LE BAS : le devant du cou regarde en
+        # avant, et epaissi, il faisait un col autour de la gorge.
+        dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02 and n.z < -0.25
+                   and menton.z - 0.025 < c.z < menton.z + 0.030 and abs(c.y) < 0.070)
         # la moustache reste ; seul le dessous du nez est epargne
         nez = c.z > zY - 0.030 and abs(c.y) < 0.021 and c.x > 0.112
         # la moustache : entre le nez et la levre, sur toute la largeur de la bouche
-        moustache = p(d, 'head') > 0.4 and c.x > 0.09 and abs(c.y) < 0.03 and zY - 0.060 < c.z < zY - 0.032
+        moustache = p(d, 'head') > 0.4 and c.x > 0.09 and abs(c.y) < 0.026 and zY - 0.052 < c.z < zY - 0.036
         if moustache and d.get('lips', 0) < 0.25:
             return True
         return (visage or joues or dessous) and not nez
@@ -820,8 +857,8 @@ def habiller(h, rig):
                 continue
             # mesure : du coin de l'oeil au sourcil, 0,265 de la largeur du
             # visage — plus haut qu'on ne le dessinait
-            zc = e.z + 0.0245 - 7.0 * (dy - 0.004) ** 2
-            demi = 0.0055 - 0.070 * max(0.0, dy)
+            zc = e.z + 0.0280 - 7.0 * (dy - 0.004) ** 2
+            demi = 0.0058 - 0.070 * max(0.0, dy)
             if abs(c.z - zc) < max(0.0016, demi):
                 return True
         return False
@@ -841,7 +878,9 @@ def habiller(h, rig):
         return MAILLOT
 
     pieces = [
-        ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 1),
+        # sans fondu : sur un arc de un centimetre, un anneau fondu vers la
+        # peau le rendait brun, dessine au crayon
+        ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 0),
         ('Meba_levres', levres, 0.0002, LEVRES, 0.62, 0, 3),
         # le maillot passe PAR-DESSUS le short : plus bas et plus epais que
         # lui la ou ils se croisent, sans quoi le short ressortait en
