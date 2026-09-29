@@ -62,7 +62,10 @@ export const RECORDS = {
 };
 
 /**
- * LE BAREME, DONNE POUR LE 110 M HAIES.
+ * LE BAREME DE LA PRODUCTION, DONNE POUR LE 110 M HAIES.
+ *
+ * C'est celui que la version publique joue encore. Le canal de test joue
+ * celui du 29 septembre 2026, plus bas (PLATEAUX_TEST).
  *
  * Il ne se calcule plus, il se decide — et c'est un renversement volontaire.
  *
@@ -163,11 +166,105 @@ function plateauxDe(cle) {
   return BAREME.map(([a, b], i) => propre[i] ? propre[i].slice() : [c(a), c(b)]);
 }
 
-export const PLATEAUX = {
+const PLATEAUX_PUBLICS = {
   '100h': plateauxDe('100h'),
   '110h': plateauxDe('110h'),
   '400h': plateauxDe('400h'),
 };
+
+/**
+ * LES BAREMES DU CANAL DE TEST, DONNES EPREUVE PAR EPREUVE.
+ *
+ * Ils ne se calculent pas, ils se decident. Les dix-huit fourchettes ci-dessous
+ * viennent du joueur, le 29 septembre 2026 ; on ne les arrondit pas et on ne
+ * les « corrige » pas.
+ *
+ * D'OU ELLES PARTENT. D'une equivalence de cadence avec Sprinter : pour chaque
+ * plateau du 100 m plat (et du 400 m plat pour le tour), la cadence de doigt
+ * qui le joue, puis le chrono que les haies donnent a cette meme cadence, appel
+ * du joueur parfait, moyenne sur douze calages de la premiere frappe. Le 110 m
+ * a ensuite ete retouche au pouce ; le 100 m et le 400 m reprennent la mesure.
+ * Releve ce jour-la (frappes/s -> chrono) :
+ *
+ *            8       9       10      12      16
+ *   110h   14,16   12,97   11,74   11,28   11,14
+ *   100h   12,72   11,60   10,69   10,34   10,13
+ *   400h   42,73   40,99   40,65   39,80   39,09
+ *
+ * POURQUOI PLUS DE RAPPORT DES RECORDS. Jusqu'ici le 100 m et le 400 m se
+ * deduisaient du 110 m par le rapport des records (0,947 pour le 100 m). Mais
+ * le 100 m haies court a la meme vitesse de pointe que le 110 m (HAIES, 11,0) :
+ * c'est un 110 m plus court de dix metres, et a cadence egale il va 0,90 fois
+ * le temps du 110 m, pas 0,947. Deduit, tout son bareme se gagnait trop tot —
+ * ses ZEZE des huit frappes, quand Sprinter en demande seize.
+ *
+ * CE QUI SURPREND ET N'EST PAS UNE COQUILLE :
+ *
+ *   - LE RECORD N'OUVRE PLUS LE MONDIAL PARTOUT. Au 110 m, le mondial part du
+ *     record (12,80). Au 100 m, le record (12,12) tombe dans le national : le
+ *     mondial est a 11,30-11,90, parce que le moteur court ce 100 m-la plus
+ *     vite que le reel. Au 400 m, le record (45,94) tombe dans les Jeux
+ *     mondiaux, juste sous le mondial.
+ *   - DES TROUS ENTRE PLATEAUX, comme dans Sprinter (rien entre 9,00 et 9,58
+ *     au 100 m plat) : au 110 m, rien entre 11,45 et 12,75, ni entre 13,70 et
+ *     14,50, ni entre 15,50 et 16,50.
+ *   - LE DERNIER PLATEAU DU 110 M TIENT EN QUINZE CENTIEMES, les Jeux mondiaux
+ *     aussi. C'est serre. Si l'un se joue un jour comme une loterie, c'est lui
+ *     qu'il faut ouvrir.
+ *   - AU-DESSUS DE DOUZE FRAPPES, LE CHRONO DES HAIES BOUGE A PEINE (11,14 a
+ *     11,44 au 110 m entre douze et dix-huit). Le dernier plateau se gagne donc
+ *     vers douze frappes, pas seize : c'est le moteur, pas le bareme.
+ *
+ * L'index est celui du plateau, de 0 (scolaire) a 5 (ZEZE).
+ */
+export const PLATEAUX_TEST = {
+  '100h': [
+    [16.15, 17.85],   // 1 — scolaire
+    [14.20, 16.15],   // 2 — regional
+    [11.85, 13.25],   // 3 — national
+    [11.30, 11.90],   // 4 — mondial
+    [11.30, 11.85],   // 5 — Jeux mondiaux
+    [10.05, 10.70],   // 6 — ZEZE
+  ],
+  '110h': [
+    [16.50, 17.00],   // 1 — scolaire
+    [14.50, 15.50],   // 2 — regional
+    [13.20, 13.70],   // 3 — national
+    [12.80, 13.00],   // 4 — mondial
+    [12.75, 12.90],   // 5 — Jeux mondiaux
+    [11.30, 11.45],   // 6 — ZEZE
+  ],
+  '400h': [
+    [58.00, 62.15],   // 1 — scolaire
+    [51.55, 58.00],   // 2 — regional
+    [46.50, 47.90],   // 3 — national
+    [46.00, 46.50],   // 4 — mondial
+    [45.80, 46.10],   // 5 — Jeux mondiaux
+    [39.80, 40.30],   // 6 — ZEZE
+  ],
+};
+
+/**
+ * LE BAREME QUE CETTE COPIE DU JEU JOUE.
+ *
+ * Le bareme du 29 septembre 2026 s'eprouve sur le canal de test avant d'aller
+ * a tout le monde, comme le reste (canal.ts). Il n'a rien a cacher — ce sont
+ * des nombres — donc il voyage dans les deux builds et on choisit au
+ * chargement.
+ *
+ * La lecture suit la forme des decors (decor-cosmos.js) : `import.meta.env`
+ * n'existe pas sous node, ou les harnais passent le canal par l'environnement
+ * (`VITE_CANAL=test node tools/haies-test.mjs`).
+ *
+ * POUR L'OUVRIR A TOUT LE MONDE : PLATEAUX = PLATEAUX_TEST, puis retirer le
+ * bareme de la production et plateauxDe.
+ */
+const CANAL_TEST = (typeof import.meta !== 'undefined' && import.meta.env
+  ? import.meta.env.VITE_CANAL
+  : globalThis.process?.env?.VITE_CANAL) === 'test';
+
+export { PLATEAUX_PUBLICS };
+export const PLATEAUX = CANAL_TEST ? PLATEAUX_TEST : PLATEAUX_PUBLICS;
 
 /**
  * Les trois courses, dans la forme que le moteur attend d'une epreuve.
@@ -190,10 +287,12 @@ export const PLATEAUX = {
  * treize a quatorze appuis par seconde : c'est le geste d'un joueur qui
  * s'entraine, et c'est ce qui donne au dernier niveau sa raison d'etre.
  *
- * Les haies gardent donc la base de vitesse de Sprinter, et leurs plateaux
- * suivent ses proportions autour de leurs propres records. Ce qui doit etre
- * respecte n'est pas la vitesse d'un hurdleur reel, c'est le RECORD comme
- * ancre : il ouvre le niveau mondial, et le dernier niveau le depasse.
+ * Les haies gardent donc la base de vitesse de Sprinter. En production, leurs
+ * plateaux suivent ses proportions autour de leurs propres records, le RECORD
+ * servant d'ancre : il ouvre le niveau mondial, et le dernier niveau le
+ * depasse. Sur le canal de test, ils demandent au doigt ce que Sprinter lui
+ * demande, plateau par plateau (PLATEAUX_TEST) ; le record reste l'ancre du
+ * 110 m, et tombe ailleurs ou la cadence le met.
  */
 // `foulee` : la foulee du hurdleur en part de celle du sprinteur (Runner.foulee
 // dans sprinter-core.js). Calee par tools/haies-course-test.mjs pour qu'une
