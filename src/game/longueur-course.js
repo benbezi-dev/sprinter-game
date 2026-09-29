@@ -800,15 +800,18 @@ function viseCamera() {
  * sable, et un peu vers la tribune, pour que le public reste dans le cadre.
  */
 function viseLeLong(j) {
-  let devant = 3;
+  // L'avance reste courte : dans cette vue, devant l'athlete c'est vers le
+  // haut de l'ecran, et plus la camera vise loin, plus il descend sous les
+  // paves — la ou se trouve justement la planche qu'il doit voir.
+  let devant = 2.2;
   if (e.phase === 'elan' || e.phase === 'traverse' || e.phase === 'casse') {
-    devant = 3 + 3.5 * lisse((j.d - (e.ligne - 16)) / 12);
+    devant = 2.2 + 1.8 * lisse((j.d - (e.ligne - 16)) / 12);
   } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
-    devant = 3.2;
+    devant = 2.6;
   } else if (e.phase === 'reception') {
-    return [Math.max(j.d, e.reception.x) + 1.2, PISTE_Y + 1.6];
+    return [Math.max(j.d, e.reception.x) + 0.8, PISTE_Y + 1.0];
   }
-  return [j.d + devant, PISTE_Y + 1.6];
+  return [j.d + devant, PISTE_Y + 1.0];
 }
 
 /**

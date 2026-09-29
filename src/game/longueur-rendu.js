@@ -22,7 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { FOSSE, PISTE_ELAN, PLANCHE, PLASTICINE } from './longueur.js';
-import { RAMENE_VISE, AVANCE_PIED } from './longueur-jeu.js';
+import { RAMENE_VISE, AVANCE_PIED, APPEL_MAXI } from './longueur-jeu.js';
 import MANIFESTE from './longueur-manifeste.json';
 
 /* ------------------------------------------------------------ le rig */
@@ -444,6 +444,7 @@ export function dessinerSol(ctx, api, e, th) {
   // LES PLANCHES, chacune suivie de sa plasticine. Celle du saut en longueur
   // et celle du triple saut sont sur la meme piste, et on voit les deux ; on
   // ne s'appelle que sur celle de l'epreuve.
+  rubanDAppel(ctx, api, e, Y, demi);
   for (const p of planches) {
     const X = p.x;
     dalle(ctx, api, X - PLANCHE.largeur, Y - PLANCHE.longueur / 2, X, Y + PLANCHE.longueur / 2,
@@ -562,6 +563,37 @@ export function dessinerPiece(ctx, api, e, pc, th, A) {
   else if (pc.sorte === 'juge') dessinerJuge(ctx, api, e, A);
   else if (pc.sorte === 'panneau') dessinerPanneau(ctx, api, pc);
   else if (pc.sorte === 'officiel') dessinerOfficiel(ctx, api, e, pc, A);
+}
+
+/**
+ * LE RUBAN D'APPEL. Une bande de couleur au sol, juste avant la planche qui
+ * sert : jaune la ou le pied se poserait trop loin, vert dans la bonne zone,
+ * vert vif dans les vingt derniers centimetres, rouge au-dela de la ligne.
+ * C'est la meme echelle que la jauge des paves (longueur-course.js, jauge),
+ * posee la ou le joueur regarde : devant l'athlete. Elle s'eteint des qu'il
+ * a pris son appel.
+ */
+function rubanDAppel(ctx, api, e, Y, demi) {
+  const vis = e.phase === 'attente' || e.phase === 'elan' ? 1
+    : e.phase === 'appel' ? Math.max(0, 1 - e.t / 0.25) : 0;
+  if (vis <= 0.01) return;
+  const L = e.ligne, d = demi * 0.92;
+  const a = api.solid(L - APPEL_MAXI - 0.6, Y, 0), b = api.solid(L + 0.35, Y, 0);
+  const g = ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+  const t = (x) => (x - (L - APPEL_MAXI - 0.6)) / (APPEL_MAXI + 0.95);
+  g.addColorStop(0, 'rgba(250,214,60,0)');
+  g.addColorStop(t(L - APPEL_MAXI), 'rgba(250,214,60,0.75)');
+  g.addColorStop(t(L - 0.45), 'rgba(96,222,110,0.8)');
+  g.addColorStop(t(L - 0.2), 'rgba(60,240,120,0.95)');
+  g.addColorStop(t(L - 0.001), 'rgba(160,255,170,1)');
+  g.addColorStop(t(L + 0.001), 'rgba(240,60,60,0.9)');
+  g.addColorStop(1, 'rgba(240,60,60,0)');
+  ctx.save();
+  ctx.globalAlpha *= vis;
+  dalle(ctx, api, L - APPEL_MAXI - 0.6, Y - d, L + 0.35, Y + d, g, 0.002);
+  // la ligne de la zone parfaite, un trait clair en travers
+  trait(ctx, api, L - 0.2, Y - d, L - 0.2, Y + d, 'rgba(255,255,255,0.85)', Math.max(1, 0.02 * api.scaleM()), 0.003);
+  ctx.restore();
 }
 
 /** Un panneau de distance : une plaque noire, un chiffre blanc, deux pieds. */
