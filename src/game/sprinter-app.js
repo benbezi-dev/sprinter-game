@@ -7967,14 +7967,6 @@
         if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos, copies);
       }
     }
-    // LA TRAINEE DU SAUTEUR (longueur-course.js) : les memes echos que la
-    // transition parfaite, sur l'elan lance et dans le vol.
-    const trainee = G.traineeSaut ? G.traineeSaut() : 0;
-    if (trainee > 0.02 && G.player) {
-      for (const [r] of vis) {
-        if (r === G.player && !r.isGhost) drawPousseeTrail(ctx, r, m, trainee, 3);
-      }
-    }
     const coureur = ([r, g2, p]) => {
       // le fantome est translucide : on voit qu'il n'est pas vraiment la,
       // tout en suivant precisement l'ecart avec lui

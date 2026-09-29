@@ -77,10 +77,19 @@ export function transitionParfaite(p: any): boolean {
  */
 export function guetteurDePoussee() {
   let vuReaction = false, vuTrans = false;
+  let dernier: any = null;
 
   return function guetter(p: any, enCourse: boolean, reactBonusMax: number): GestePoussee[] {
-    if (!enCourse) { vuReaction = false; vuTrans = false; return []; }
+    if (!enCourse) { vuReaction = false; vuTrans = false; dernier = null; return []; }
     if (!p) return [];
+    // UN CONCOURS DE SAUT RESTE « EN COURSE » D'UN ESSAI A L'AUTRE, mais chaque
+    // essai lance un sauteur neuf (longueur-course.js, `sauteur`). Chacun se
+    // juge : sans cela, seul le premier elan du concours pouvait meriter
+    // l'image remanente. Les autres courses ne changent pas de coureur.
+    if (p !== dernier) {
+      if (p.sauteur) { vuReaction = false; vuTrans = false; }
+      dernier = p;
+    }
 
     const gestes: GestePoussee[] = [];
     // DEUX TESTS SEPARES, ET JAMAIS UN « SINON » ENTRE EUX.

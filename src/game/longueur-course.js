@@ -144,16 +144,6 @@ export function etatSaut() { return e; }
  */
 export function celebrer() { if (e) e.celebre = true; }
 
-/** La force de la trainee : nulle au pas, pleine en pleine vitesse et en l'air. */
-function traineeDuSaut() {
-  if (!e) return 0;
-  const j = SprinterApp.G.player;
-  if (e.phase === 'elan') return lisse((j.v - 8.5) / 2.2) * 0.9;
-  if (e.phase === 'appel') return 0.7;
-  if (e.phase === 'vol') return 0.85;
-  return 0;
-}
-
 /** Le triple saut est-il l'epreuve en cours ? */
 const triple = () => !!e && e.epreuve === 'triple';
 
@@ -210,9 +200,6 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   G.jaugeSaut = () => local(jauge);
   G.consigneSaut = () => local(consigne);
   G.pavesSaut = pavesDuSaut;
-  // LA TRAINEE, celle de Sprinter (drawPousseeTrail) : des echos de
-  // l'athlete derriere lui, quand il va vite et quand il vole.
-  G.traineeSaut = () => local(traineeDuSaut);
   // Le decor ne se pose pas sur la piste d'elan ni dans la fosse.
   const debut = Math.min(LIGNE, lignetriple) - ELAN - 8;
   const fond = FOSSE_X + (FOSSE.fond - FOSSE.debut) + 3;
@@ -262,6 +249,10 @@ function nouveauSauteur() {
   j.drivePitch = 0;
   // Aucun coup de pistolet : pas de temps de reaction a noter, ni a payer.
   j.reaction = 0; j.reactBonus = 0;
+  // Un sauteur neuf a chaque essai : le guetteur des gestes de Sprinter
+  // (poussee-gestes.ts) le reconnait a ce drapeau, et le juge de nouveau —
+  // l'image remanente se merite a chaque elan, par une transition parfaite.
+  j.sauteur = true;
   G.player = j;
   G.runners = [j];
   G.reactShown = true;
@@ -317,7 +308,6 @@ function nettoyer() {
   G.jaugeSaut = null;
   G.consigneSaut = null;
   G.pavesSaut = null;
-  G.traineeSaut = null;
   G.zoneReservee = null;
   G.ecartTribune = 0;
   if (G.obstacles && G.obstacles.saut) G.obstacles = null;
@@ -832,8 +822,9 @@ function viseLeLong(j) {
   } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
     devant = 2.6;
   } else if (e.phase === 'reception') {
-    // le gros plan du record : on vient sur lui, pas devant lui
-    if (e.celebre && e.reception.t > 1.2) return [j.d + 0.3, PISTE_Y + 0.4];
+    // Le gros plan du record : on vient sur lui, et on le pose dans le bas de
+    // l'image — le haut est pris par la marque et la banniere du record.
+    if (e.celebre && e.reception.t > 1.2) return [j.d + 2.3, PISTE_Y + 2.3];
     return [Math.max(j.d, e.reception.x) + 0.8, PISTE_Y + 1.0];
   }
   return [j.d + devant, PISTE_Y + 1.0];
