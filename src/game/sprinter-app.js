@@ -4108,7 +4108,9 @@
    * tondeuse n'a pas besoin de plus. En ligne droite, le pas ordinaire.
    */
   function samplesDecor() {
-    return samples(G.track.curved ? 4 : 0);
+    // A l'ULTRA, le pas de la piste : quatre centimetres d'ecart a l'arc, c'est
+    // cinq pixels a trois pixels par point — la rive du toit en polygone.
+    return samples(G.track.curved && !decorUltra() ? 4 : 0);
   }
   function band(ctx, sm, rIn, rOut, col, z) {
     if (sm.length < 2) return;
@@ -4158,6 +4160,42 @@
     band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
   };
   const PREM = () => globalThis.RenduPremium;
+  // LE DECOR AU PALIER ULTRA (voir rendu-premium.js). Deux questions, et deux
+  // reponses differentes :
+  //
+  //  - la GEOMETRIE — combien de points par courbe, combien de facettes
+  //    d'eclairage le long d'un gradin — se paie a chaque image. Elle suit
+  //    donc le palier, et redescend avec lui des qu'un telephone ne tient
+  //    plus l'ultra ;
+  //  - la DEFINITION des tuiles cuites — arbres, rochers, immeubles — se paie
+  //    une fois, a la cuisson. Elle suit la densite de la toile, qui ne change
+  //    qu'aux menus (voir dpr() et GameCanvas) : a trois pixels par point, une
+  //    tuile cuite pour deux s'affichait agrandie d'une fois et demie, floue.
+  function decorUltra() {
+    const P = PREM();
+    return !!(P && P.ULTRA !== undefined && P.niveau >= P.ULTRA);
+  }
+  function finesseTuile() { return G.dpr > 2 ? 2 : 1; }
+  /** Les tuiles deja cuites d'un theme, a la definition du moment. */
+  function casierTuiles(map, th) {
+    const k = finesseTuile();
+    let parTheme = map.get(th);
+    if (!parTheme) { parTheme = []; map.set(th, parTheme); }
+    return parTheme[k] || (parTheme[k] = []);
+  }
+  /**
+   * La toile d'une tuile de W x H, a la definition du moment. Le contexte est
+   * deja mis a l'echelle : le dessin garde ses coordonnees d'origine, et les
+   * poseurs ne lisent que le rapport largeur / hauteur de la tuile.
+   */
+  function toileTuile(W, H) {
+    const k = finesseTuile();
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(W * k); cv.height = Math.round(H * k);
+    const c = cv.getContext('2d');
+    c.scale(k, k);
+    return [cv, c];
+  }
   // Le vide sous la piste intergalactique (decor-cosmos.js) : ne dessine rien
   // pour un theme qui ne porte pas `espace`.
   const COS = () => globalThis.DecorCosmos;
@@ -4344,7 +4382,10 @@
       // On ne reprend pas tous les echantillons du troncon : quelques
       // points suffisent a epouser la courbe a cette echelle, et cela
       // divise par trois le nombre de projections a calculer.
-      const sub = Math.max(1, step >> 2);
+      // A l'ULTRA, tous les points : une corde de trois metres et demi sur un
+      // gradin de cinquante metres de rayon s'ecarte de l'arc de quatre
+      // pixels a trois pixels par point, et la courbe se voyait en pans.
+      const sub = decorUltra() ? 1 : Math.max(1, step >> 2);
       ctx.beginPath();
       let first = true;
       for (let q = i; q <= j; q += sub) {
@@ -4803,9 +4844,7 @@
   // et c'est ce contraste qui fait une vraie palmeraie.
   function eventailTile(th) {
     const W = 460, H = 512;
-    const cv = document.createElement('canvas');
-    cv.width = W; cv.height = H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(W, H);
     const axe = W / 2, by = H, ty = H * 0.40;
 
     // le stipe : epais, droit, et hirsute — des encoches courtes plutot que
@@ -4869,8 +4908,7 @@
   const PALM_W = 460, PALM_H = 512;
   const palmTiles = new Map();
   function palmTile(th, variante) {
-    let tab = palmTiles.get(th);
-    if (!tab) { tab = []; palmTiles.set(th, tab); }
+    const tab = casierTuiles(palmTiles, th);
     if (tab[variante]) return tab[variante];
     // La troisieme variante n'est pas un cocotier mais un PALMIER EVENTAIL, et
     // c'est celui de la toile de reference : couronne ronde de palmes raides
@@ -4878,9 +4916,7 @@
     // Nagai, et n'avoir que des cocotiers donnait une palmeraie trop molle.
     if (variante === 2) { tab[2] = eventailTile(th); return tab[2]; }
 
-    const cv = document.createElement('canvas');
-    cv.width = PALM_W; cv.height = PALM_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(PALM_W, PALM_H);
     const bx = PALM_W / 2, by = PALM_H;
     const pente = (variante - 1) * 28;
     const tx = bx + pente, ty = PALM_H * 0.34;
@@ -4959,13 +4995,10 @@
   const CYPRES_W = 150, CYPRES_H = 620;
   const cypresTiles = new Map();
   function cypresTile(th, variante) {
-    let tab = cypresTiles.get(th);
-    if (!tab) { tab = []; cypresTiles.set(th, tab); }
+    const tab = casierTuiles(cypresTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = CYPRES_W; cv.height = CYPRES_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(CYPRES_W, CYPRES_H);
     const axe = CYPRES_W / 2, N = 32;
     const torsion = (t) => Math.sin(t * 3.1 + variante * 1.7) * CYPRES_W * 0.14;
     // Le profil fait tout. Pointe en haut, ventre au premier tiers, pied
@@ -5029,13 +5062,10 @@
   const FEUILLU_W = 300, FEUILLU_H = 400;
   const feuilluTiles = new Map();
   function feuilluTile(th, variante) {
-    let tab = feuilluTiles.get(th);
-    if (!tab) { tab = []; feuilluTiles.set(th, tab); }
+    const tab = casierTuiles(feuilluTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = FEUILLU_W; cv.height = FEUILLU_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(FEUILLU_W, FEUILLU_H);
     const al = (k) => {
       const v = Math.sin((k + 1) * 127.1 + variante * 311.7) * 43758.5453;
       return v - Math.floor(v);
@@ -5115,13 +5145,10 @@
   const HAIE_W = 260, HAIE_H = 110;
   const haieTiles = new Map();
   function haieTile(th, variante) {
-    let tab = haieTiles.get(th);
-    if (!tab) { tab = []; haieTiles.set(th, tab); }
+    const tab = casierTuiles(haieTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = HAIE_W; cv.height = HAIE_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(HAIE_W, HAIE_H);
     const sol = HAIE_H;
     // des boules qui se chevauchent, deux tons de vert : la haie n'est jamais
     // une bande, c'est une suite de touffes
@@ -5174,13 +5201,10 @@
   const IMM_W = 340, IMM_H = 260;
   const immTiles = new Map();
   function immeubleTile(th, variante) {
-    let tab = immTiles.get(th);
-    if (!tab) { tab = []; immTiles.set(th, tab); }
+    const tab = casierTuiles(immTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = IMM_W; cv.height = IMM_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(IMM_W, IMM_H);
     const blanc = rgb(th.barrier), ombre = rgb(th.riser, 1.06);
     const sol = IMM_H;
 
@@ -5259,13 +5283,10 @@
   const ROC_W = 380, ROC_H = 320;
   const rocTiles = new Map();
   function rocherTile(th, variante) {
-    let tab = rocTiles.get(th);
-    if (!tab) { tab = []; rocTiles.set(th, tab); }
+    const tab = casierTuiles(rocTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = ROC_W; cv.height = ROC_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(ROC_W, ROC_H);
     const sol = ROC_H, clair = rgb(th.roche), sombre = rgb(th.rocheSombre);
 
     // La moitie droite de chaque rocher est dans l'ombre, et c'est un
@@ -5356,13 +5377,10 @@
   const MOB_W = 190, MOB_H = 200;
   const mobTiles = new Map();
   function mobilierTile(th, variante) {
-    let tab = mobTiles.get(th);
-    if (!tab) { tab = []; mobTiles.set(th, tab); }
+    const tab = casierTuiles(mobTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = MOB_W; cv.height = MOB_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(MOB_W, MOB_H);
     const sol = MOB_H, blanc = rgb(th.barrier);
 
     // le transat : une assise inclinee, deux pieds
@@ -5430,13 +5448,10 @@
   const VILLAGE_W = 300, VILLAGE_H = 200;
   const villageTiles = new Map();
   function villageTile(th, variante) {
-    let tab = villageTiles.get(th);
-    if (!tab) { tab = []; villageTiles.set(th, tab); }
+    const tab = casierTuiles(villageTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = VILLAGE_W; cv.height = VILLAGE_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(VILLAGE_W, VILLAGE_H);
     const sol = VILLAGE_H;
     const sombre = rgb(th.villageSombre || [14, 26, 58]);
     const feu = 'rgba(250,214,110,0.92)';
@@ -5519,13 +5534,10 @@
   const NAMEK_W = 340, NAMEK_H = 480;
   const namekTiles = new Map();
   function namekTile(th, variante) {
-    let tab = namekTiles.get(th);
-    if (!tab) { tab = []; namekTiles.set(th, tab); }
+    const tab = casierTuiles(namekTiles, th);
     if (tab[variante]) return tab[variante];
 
-    const cv = document.createElement('canvas');
-    cv.width = NAMEK_W; cv.height = NAMEK_H;
-    const c = cv.getContext('2d');
+    const [cv, c] = toileTuile(NAMEK_W, NAMEK_H);
     const bx = NAMEK_W / 2, by = NAMEK_H;
     // Trois inclinaisons, comme pour le palmier : tous droits, les arbres
     // d'une rangee se lisent comme une palissade.
@@ -6271,7 +6283,14 @@
       band(ctx, run, rAv, translucide, rgb(th.roof, 1.16), zT);
       band(ctx, run, translucide, rAr, rgb(th.roof, 0.96), zT);
       // 3. LA RIVE, a contre-jour, et son arete eclairee.
-      wall(ctx, run, rAv, zRive, zT, th.roof, decorStride());
+      // Troncons de QUATRE echantillons, et non decorStride() : le toit suit
+      // deja le pas du decor (quatre metres en virage), et wall() ne garde
+      // qu'un point sur trois d'un troncon de douze. La face avant tombait a une
+      // corde tous les seize metres sous une rive qui, elle, suivait chaque
+      // point — un ecart de soixante centimetres en plein virage. A quatre,
+      // tous les points, et l'eclairage change tous les seize metres comme
+      // avant.
+      wall(ctx, run, rAv, zRive, zT, th.roof, 4);
       ctx.fillStyle = 'rgba(0,0,12,0.18)';
       faceBrute(ctx, run, rAv, zRive, zRive + TOIT_RIVE * 0.28);
       rail(ctx, run, rAv, rgbEclaire(th.roof, 1.1, 90), Math.max(1, m * 0.05), zT);
@@ -6316,7 +6335,9 @@
   function drawDosTribune(ctx, th, sm, near, tiers, sr, sz) {
     const rDos = near + tiers * sr, zHaut = 1.05 + tiers * sz, h = 1.1;
     for (const run of tribunesDuFond(sm, near)) {
-      wall(ctx, run, rDos, zHaut, zHaut + h, th.riser, decorStride());
+      // A l'ULTRA, l'eclairage du mur tourne tous les cinq metres et non plus
+      // tous les quatorze : en virage, les pans d'ombre se voyaient.
+      wall(ctx, run, rDos, zHaut, zHaut + h, th.riser, decorUltra() ? 4 : decorStride());
       band(ctx, run, rDos, rDos + 0.28, rgb(th.tread, 1.06), zHaut + h);
       rail(ctx, run, rDos, rgbEclaire(th.tread, 1.0, 26), Math.max(1, scaleM() * 0.035), zHaut + h);
     }
