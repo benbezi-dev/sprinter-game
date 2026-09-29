@@ -2,6 +2,7 @@
 # SPRINTER — Meba-Mickael Zeze en VRAI MAILLAGE, d'un seul tenant.
 #
 #   blender -b -P tools/blender/meba_maillage.py -- [--glb public/vedettes/meba.glb]
+#                                                   [--portraits public/vedettes]
 #                                                   [--blend FICHIER.blend]
 #
 # (ou, dans un Blender ouvert : exec(open(".../meba_maillage.py").read()) ;
@@ -80,7 +81,7 @@ SCENE = "Meba"
 def arguments():
     a = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     val = lambda k: a[a.index(k) + 1] if k in a else None
-    return {'glb': val('--glb'), 'blend': val('--blend')}
+    return {'glb': val('--glb'), 'blend': val('--blend'), 'portraits': val('--portraits')}
 
 
 def scene_neuve():
@@ -411,7 +412,7 @@ def poids_dominant(h):
     return dom
 
 
-def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0):
+def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0, fondu=0):
     """Une coque : les faces du corps que `garder(centre, normale, poids)` retient."""
     import bmesh
     dom = poids_dominant(h)
@@ -451,11 +452,48 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
         for v in dedans:
             v.co += v.normal * perte * 0.8
     bm.normal_update()
+    # UN BORD QUI SE FOND (`fondu` anneaux). Une barbe a bord franc se lit en
+    # masque colle sur le visage ; la vraie s'eclaircit et s'amincit vers ses
+    # limites. L'epaisseur monte donc de zero au bord jusqu'a la pleine
+    # epaisseur `fondu` anneaux plus loin.
+    anneau = {}
+    if fondu:
+        front = [v for v in bm.verts if v.is_boundary]
+        for v in front:
+            anneau[v] = 0
+        k = 0
+        while front and k < fondu:
+            k += 1
+            suite = []
+            for v in front:
+                for e in v.link_edges:
+                    w = e.other_vert(v)
+                    if w not in anneau:
+                        anneau[w] = k; suite.append(w)
+            front = suite
+    parts = {}
     for v in bm.verts:
-        v.co += v.normal * epaisseur
+        part = min(1.0, (anneau.get(v, fondu) + 0.35) / (fondu + 0.35)) if fondu else 1.0
+        parts[v.index] = part
+        v.co += v.normal * epaisseur * part
     bm.to_mesh(me); bm.free()
+    # et la couleur se fond aussi : de la peau au bord a la sienne au coeur
+    if fondu:
+        col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
+        a = Vector([srgb_vers_lin(c / 255) for c in PEAU])
+        b = Vector([srgb_vers_lin(c / 255) for c in couleur])
+        for i, part in parts.items():
+            c = a.lerp(b, part ** 0.7)
+            col.data[i].color = (c.x, c.y, c.z, 1.0)
     me.materials.clear()
-    me.materials.append(materiau(nom, couleur, rugosite, metal))
+    mat = materiau(nom, couleur, rugosite, metal)
+    if fondu:
+        nt = mat.node_tree
+        bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+        ca = next((n for n in nt.nodes if n.type == 'VERTEX_COLOR'), None) or nt.nodes.new('ShaderNodeVertexColor')
+        ca.layer_name = 'Col'
+        nt.links.new(ca.outputs['Color'], bsdf.inputs['Base Color'])
+    me.materials.append(mat)
     for p in me.polygons:
         p.use_smooth = True
     mod = o.modifiers.new("Armature", 'ARMATURE'); mod.object = rig
@@ -514,10 +552,18 @@ def ourlet(bm, h, passes=14):
             v.co = loc if loc is not None else c
 
 
+# Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
+# le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
+# gris clair sous les lampes.
+MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras'}
+
+
 def materiau(nom, couleur, rugosite=0.6, metal=0.0):
     m = bpy.data.materials.get(nom) or bpy.data.materials.new(nom)
     m.use_nodes = True
     bsdf = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    if nom in MATES and 'Specular IOR Level' in bsdf.inputs:
+        bsdf.inputs['Specular IOR Level'].default_value = 0.04
     bsdf.inputs['Base Color'].default_value = (*[srgb_vers_lin(c / 255) for c in couleur], 1.0)
     bsdf.inputs['Roughness'].default_value = rugosite
     bsdf.inputs['Metallic'].default_value = metal
@@ -676,15 +722,23 @@ def habiller(h, rig):
         ('Meba_short', short, 0.0045, SHORT, 0.45),
         ('Meba_bandeau', bandeau, 0.0035, BANDEAU, 0.7),
         ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
-        ('Meba_barbe', barbe, 0.0042, BARBE, 0.95),
+        ('Meba_barbe', barbe, 0.0042, BARBE, 0.95, 0, 4),
     ]
     out = [chaussure(h, rig, 1), chaussure(h, rig, -1)]
     for piece in pieces:
         nom, garder, e, col, r = piece[:5]
-        out.append(coque(h, rig, nom, garder, e, col, r, lisser=piece[5] if len(piece) > 5 else 0))
+        out.append(coque(h, rig, nom, garder, e, col, r,
+                         lisser=piece[5] if len(piece) > 5 else 0,
+                         fondu=piece[6] if len(piece) > 6 else 0))
     # et la peau
     h.data.materials.clear()
-    h.data.materials.append(materiau('Meba_peau', PEAU, 0.42))
+    peau = materiau('Meba_peau', PEAU, 0.58)
+    bsdf = next(n for n in peau.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    if 'Subsurface Weight' in bsdf.inputs:
+        bsdf.inputs['Subsurface Weight'].default_value = 0.08
+        bsdf.inputs['Subsurface Radius'].default_value = (0.9, 0.35, 0.2)
+        bsdf.inputs['Subsurface Scale'].default_value = 0.01
+    h.data.materials.append(peau)
     for poly in h.data.polygons:
         poly.use_smooth = True
     return out
@@ -948,10 +1002,7 @@ def dossard(h, rig, texte="ZÉZÉ"):
     def feuille(c, n, d):
         return c.x > 0.02 and n.x > 0.35 and 1.120 < c.z < 1.250 and abs(c.y) < 0.086
     f = coque(h, rig, 'Meba_dossard', feuille, 0.0083, DOSSARD, 0.8)
-    # le bandeau de tete du dossard, bleu marine, sans marque
-    def tete_dossard(c, n, d):
-        return c.x > 0.02 and n.x > 0.35 and 1.228 < c.z < 1.250 and abs(c.y) < 0.084
-    coque(h, rig, 'Meba_dossard_tete', tete_dossard, 0.0088, SHORT, 0.7)
+
     # les lettres, centrees sur la feuille, collees a elle
     arbre = BVHTree.FromPolygons([v.co.copy() for v in f.data.vertices],
                                  [tuple(p.vertices) for p in f.data.polygons])
@@ -1052,6 +1103,102 @@ def tout(glb=None, blend=None):
     return h, rig
 
 
+
+
+# --- LES PORTRAITS -------------------------------------------------------------
+# Ceux de sa fiche, de sa banniere et de l'ecran du skin (DefiVedette.tsx) :
+# le meme maillage que dans la course, rendu dans Cycles. En buste de trois
+# quarts, et en pied dans son geste — le clap au-dessus de la tete. Fond
+# transparent : l'interface pose ses propres couleurs derriere.
+
+CLAP = {'upperarm_l': (2.62, -0.55, 0.0), 'upperarm_r': (2.62, 0.55, 0.0),
+        'lowerarm_l': (3.12, 1.05, 0.0), 'lowerarm_r': (3.12, -1.05, 0.0),
+        'hand_l': (3.12, 1.05, 0.0), 'hand_r': (3.12, -1.05, 0.0),
+        'thigh_l': (0.05, 0.0, 0.10), 'thigh_r': (-0.02, 0.0, -0.10),
+        'calf_l': (0.0, 0.0, 0.10), 'calf_r': (-0.04, 0.0, -0.10),
+        'foot_l': (0.0, 0.0, 0.25), 'foot_r': (0.0, 0.0, -0.25),
+        'head': (-0.12, 0.0, 0.0), 'neck_01': (-0.05, 0.0, 0.0)}
+DEBOUT = {'upperarm_l': (0.10, -0.12, 0.0), 'upperarm_r': (0.10, 0.12, 0.0),
+          'lowerarm_l': (0.45, -0.08, 0.0), 'lowerarm_r': (0.45, 0.08, 0.0),
+          'hand_l': (0.45, -0.08, 0.0), 'hand_r': (0.45, 0.08, 0.0),
+          'head': (0.04, 0.0, 0.18), 'neck_01': (0.0, 0.0, 0.08)}
+
+
+def studio():
+    sc = bpy.context.scene
+    sc.render.engine = 'CYCLES'
+    sc.cycles.samples = 160
+    sc.cycles.use_denoising = True
+    try:
+        prefs = bpy.context.preferences.addons['cycles'].preferences
+        prefs.compute_device_type = 'METAL'
+        prefs.get_devices()
+        for d in prefs.devices:
+            d.use = True
+        sc.cycles.device = 'GPU'
+    except Exception:
+        pass
+    sc.render.film_transparent = True
+    sc.render.image_settings.file_format = 'WEBP'
+    sc.render.image_settings.color_mode = 'RGBA'
+    sc.render.image_settings.quality = 90
+    # LES COULEURS DU JEU, PAS CELLES D'UN FILM. AgX eclaircit les noirs et
+    # desature les vifs : le bandeau sortait gris, les pointes jaune pale.
+    sc.view_settings.view_transform = 'Standard'
+    sc.view_settings.look = 'None'
+    w = sc.world or bpy.data.worlds.new('Studio')
+    sc.world = w
+    w.use_nodes = True
+    bg = next(n for n in w.node_tree.nodes if n.type == 'BACKGROUND')
+    bg.inputs['Color'].default_value = (0.08, 0.09, 0.12, 1)
+    bg.inputs['Strength'].default_value = 0.6
+    for n in [o for o in sc.objects if o.name.startswith('Studio_')]:
+        bpy.data.objects.remove(n, do_unlink=True)
+    def lampe(nom, loc, energie, taille, couleur=(1, 1, 1)):
+        l = bpy.data.lights.new(nom, 'AREA'); l.energy = energie; l.size = taille; l.color = couleur
+        o = bpy.data.objects.new('Studio_' + nom, l); sc.collection.objects.link(o)
+        o.location = loc
+        d = Vector((0, 0, 1.2)) - Vector(loc)
+        o.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
+    # un eclairage qui garde sa peau BRUN FONCE : plus fort, il la rendait
+    # caramel, et il ne ressemblait plus a ses photos
+    lampe('cle', (2.4, -1.6, 2.4), 270, 1.6, (1.0, 0.96, 0.9))
+    lampe('fill', (2.0, 2.2, 1.4), 85, 2.0, (0.85, 0.9, 1.0))
+    lampe('decoupe', (-2.2, 0.3, 2.2), 300, 1.0, (0.8, 0.88, 1.0))
+
+
+def camera_portrait(loc, cible, focale):
+    sc = bpy.context.scene
+    cam = bpy.data.objects.get('Studio_camera')
+    if cam is None:
+        cam = bpy.data.objects.new('Studio_camera', bpy.data.cameras.new('Studio_camera'))
+        sc.collection.objects.link(cam)
+    cam.data.lens = focale
+    cam.location = loc
+    cam.rotation_euler = (Vector(cible) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
+    sc.camera = cam
+    return cam
+
+
+def portraits(rig, dossier):
+    sc = bpy.context.scene
+    studio()
+    os.makedirs(dossier, exist_ok=True)
+    poser(rig, DEBOUT)
+    sc.render.resolution_x, sc.render.resolution_y = 900, 1000
+    camera_portrait((1.35, -0.75, 1.42), (0.02, 0.0, 1.36), 70)
+    sc.render.filepath = os.path.join(dossier, 'meba-buste.webp')
+    bpy.ops.render.render(write_still=True)
+    poser(rig, CLAP)
+    sc.render.resolution_x, sc.render.resolution_y = 900, 1200
+    camera_portrait((2.55, -1.35, 1.05), (0.0, 0.0, 0.98), 50)
+    sc.render.filepath = os.path.join(dossier, 'meba-pied.webp')
+    bpy.ops.render.render(write_still=True)
+
+
+# Le lancement, en dernier : tout ce qu'il appelle est defini au-dessus.
 if __name__ == '__main__' and bpy.app.background:
     A = arguments()
-    tout(A['glb'], A['blend'])
+    h, rig = tout(A['glb'], A['blend'])
+    if A['portraits']:
+        portraits(rig, A['portraits'])

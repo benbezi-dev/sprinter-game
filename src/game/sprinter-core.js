@@ -921,6 +921,13 @@
     // l'horizontale ; le buste engage, la tete dans l'axe. Une foulee de
     // departs, pas de fin de course : sa fatigue (Runner.fatigue) la
     // redresse, voir pose().
+    //
+    // PLUS FREQUENT QU'AMPLE (retour de Benbezi, 29 septembre 2026). Sa
+    // premiere version sortait des blocs en grandes enjambees : c'est la
+    // cadence qui fait sa puissance, pas l'amplitude. Appuis plus courts sur
+    // toute la course (`stride`), et encore plus a la sortie des blocs
+    // (`departFrequence`) ; amplitude contenue (`boost`, `armAmp`), et la
+    // moitie seulement de ce que le moteur ajoute a la poussee (`departAmple`).
     canon: {
       thigh: catmull([[0, 0.46], [0.75, -0.04], [1.50, -0.70], [2.20, -0.44],
                       [3.10, 0.22], [4.10, 0.76], [4.85, 0.88], [5.55, 0.74]]),
@@ -933,7 +940,8 @@
                     [4.10, -0.78], [5.10, 0.08], [5.70, 0.42]]),
       elbow: catmull([[0, 1.46], [1.10, 1.18], [2.20, 0.78], [3.14, 0.56],
                       [4.10, 0.86], [5.10, 1.30], [5.70, 1.42]]),
-      boost: 1.26, armAmp: 1.16, lean: 1.28, bob: 1.08, stride: 1.02
+      boost: 1.12, armAmp: 1.02, lean: 1.28, bob: 0.92, stride: 0.86,
+      departFrequence: 0.24, departAmple: 0.5, poussee: 1.10, arriere: 1.125
     },
 
     // Foulee aerienne : suspension longue, genou qui monte haut et retombe
@@ -1588,7 +1596,13 @@
     // frequence. La vitesse ne change pas, seul le nombre d'appuis pour la
     // couvrir - c'est la difference entre un finisseur et un frequenciel.
     const P = gaitOf(Lp);
-    return Math.max(0.85, 4 * leg * P.stride * (this.foulee || 1) *
+    // UN DEPART EN FREQUENCE (P.departFrequence). Un frequenciel ne sort pas
+    // des blocs en grandes enjambees : ses premiers appuis sont plus courts,
+    // donc plus nombreux, et s'allongent a mesure qu'il se redresse. Le gain
+    // s'efface sur la transition (TRANS_END), ou il retrouve sa foulee.
+    const qD = Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0)) / C.TRANS_END));
+    const dep = 1 - (P.departFrequence || 0) * (1 - qD) * (1 - qD);
+    return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) *
                     Math.sin(Math.min(1.15, 0.70 * amp)));
   };
 
@@ -2220,6 +2234,16 @@
     // membre (le bout semblait trainer derriere le haut), ce qui donnait
     // une impression de mouvement disloque plutot que coordonne.
     const LIMB_BOOST = P.boost;
+    // La part de sortie de blocs qu'ajoute le moteur a tout le monde — cuisse
+    // lancee, genou haut, bras amples. Un frequenciel en garde moins
+    // (P.departAmple) : sa puissance se lit a la cadence, pas a l'enjambee.
+    //
+    // MAIS LA POUSSEE RESTE ENTIERE (« pousser puissant non attenue, mais
+    // amplitude attenuee »). Ce qui s'attenue, c'est ce qui passe DEVANT : le
+    // genou qui remonte, le talon qui revient, les bras. La cuisse qui pousse
+    // derriere garde toute sa part de depart, et un peu plus (P.poussee).
+    const sortieA = sortie * (P.departAmple == null ? 1 : P.departAmple);
+    const sortieP = sortie * (P.poussee || 1);
     function leg(q) {
       const gt = gait(P.thigh, q);
       // La part AVANT du cycle : nulle quand la cuisse est derriere, jusqu'a
@@ -2227,8 +2251,11 @@
       // porte le gain de depart, et c'est ce qui l'empeche de devenir un
       // coureur assis — voir DRIVE_FRONT.
       const devant = Math.max(0, gt);
-      let th = (gt * (A + C.DRIVE_THIGH * sortie + C.TRANSIT_AMPL * transit)
-                + C.DRIVE_FRONT * sortie * devant - 0.20 * lourd * devant) * LIMB_BOOST;
+      // derriere, la cuisse qui pousse retrouve l'ampleur que `boost` a
+      // contenue pour tout le reste (P.arriere) : c'est elle, la puissance
+      let th = (gt * (A + C.DRIVE_THIGH * (gt > 0 ? sortieA : sortieP) + C.TRANSIT_AMPL * transit)
+                + C.DRIVE_FRONT * sortieA * devant - 0.20 * lourd * devant) * LIMB_BOOST
+               * (gt < 0 ? (P.arriere || 1) : 1);
       // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
       // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
       // se voit et ou il veut dire quelque chose — une jambe qui se replie
@@ -2236,9 +2263,9 @@
       // aussi plie la jambe d'appui, qui doit rester tendue sous le bassin.
       const gk = gait(P.knee, q);
       const replie = Math.max(0, -gk) / 2.05;     // 1 au talon-fesse du cycle
-      let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortie
+      let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortieA
                       + C.TRANSIT_TALON * transit * replie)
-                - C.DRIVE_SHANK * sortie * devant) * LIMB_BOOST;
+                - C.DRIVE_SHANK * sortieA * devant) * LIMB_BOOST;
       // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
       // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
       // redresserait la cuisse en laissant le tibia casse dessous. Le pied
@@ -2254,7 +2281,7 @@
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortie
+      const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortieA
                                    + C.TRANSIT_ARM * transit)
                  * LIMB_BOOST * P.armAmp;
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
