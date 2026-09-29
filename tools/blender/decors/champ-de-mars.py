@@ -42,6 +42,12 @@ import matiere as M
 RACINE_PROJET = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 DOSSIER = os.path.join(RACINE_PROJET, 'public', 'decors', 'champdemars')
 F_MAN = os.path.join(RACINE_PROJET, 'src', 'game', 'champ-de-mars-manifeste.json')
+# --ultra : la serie du palier ULTRA du jeu (voir decor-champ-de-mars.js).
+# Deux fois la densite de chaque piece, un feuillage maille deux fois plus
+# serre et un if a soixante-quatre cotes (la regle de l'ULTRA, voir
+# pieces.FACETTES_MIN), dans son propre dossier et son propre manifeste. Pose
+# par main().
+ULTRA = False
 
 ANGLE = 15.0
 CA, SA = math.cos(math.radians(ANGLE)), math.sin(math.radians(ANGLE))
@@ -306,6 +312,8 @@ Z0_R, Z1_R, PROF_R = 0.5, 1.9, 1.1
 
 def feuillage(bm, x0, x1, y0, y1, z0, z1, graine, amp=0.16, pas=0.22):
     """Une boite de feuillage bosselee : subdivisee, puis poussee par un bruit."""
+    if ULTRA:
+        pas /= 2
     nx = max(2, int((x1 - x0) / pas))
     ny = max(2, int((y1 - y0) / pas))
     nz = max(2, int((z1 - z0) / pas))
@@ -357,8 +365,9 @@ def rideau(racine):
 
 def if_cone(racine):
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=18, radius1=0.42, radius2=0.0, depth=1.25)
-    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=3, use_grid_fill=True)
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=64 if ULTRA else 18,
+                          radius1=0.42, radius2=0.0, depth=1.25)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=6 if ULTRA else 3, use_grid_fill=True)
     for v in bm.verts:
         p = v.co.copy()
         r = Vector((p.x, p.y, 0))
@@ -692,10 +701,19 @@ def moteur(sc, nom):
             continue
 
 
+def _pixels(img, w, h):
+    """Les pixels d'une image, en un seul appel. `img.pixels[:]` passait par une
+    liste Python de w x h x 4 nombres : a la densite de la serie ULTRA, trente
+    millions par passe, et plus de temps que le rendu lui-meme."""
+    a = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(a)
+    return a.reshape(h, w, 4)
+
+
 def lire(f):
     img = bpy.data.images.load(f)
     w, h = img.size
-    a = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    a = _pixels(img, w, h)
     bpy.data.images.remove(img)
     return a[::-1]
 
@@ -703,7 +721,7 @@ def lire(f):
 def ecrire_webp(a, f, qualite=90):
     h, w = a.shape[:2]
     img = bpy.data.images.new('sortie', w, h, alpha=True)
-    img.pixels = a[::-1].ravel().tolist()
+    img.pixels.foreach_set(np.ascontiguousarray(a[::-1], dtype=np.float32).ravel())
     img.filepath_raw = f
     img.file_format = 'WEBP'
     bpy.context.scene.render.image_settings.quality = qualite
@@ -713,6 +731,8 @@ def ecrire_webp(a, f, qualite=90):
 
 def rendre(nom):
     fabrique, ppm, ombre = PIECES[nom]
+    if ULTRA:
+        ppm *= 2
     vider()
     racine = racine_miroir()
     extra = fabrique(racine) or {}
@@ -738,7 +758,7 @@ def rendre(nom):
         sc.eevee.taa_render_samples = 32
     except AttributeError:
         pass
-    f_col = '/tmp/cdm-couleur.png'
+    f_col = '/tmp/cdm-couleur-%d.png' % os.getpid()
     sc.render.filepath = f_col
     bpy.ops.render.render(write_still=True)
     from bpy_extras.object_utils import world_to_camera_view
@@ -762,8 +782,8 @@ def rendre(nom):
         moteur(sc, 'CYCLES')
         sc.cycles.samples = 48
         sc.cycles.use_denoising = True
-        sc.cycles.device = 'CPU'
-        f_omb = '/tmp/cdm-ombre.png'
+        vue.cycles_gpu(sc)
+        f_omb = '/tmp/cdm-ombre-%d.png' % os.getpid()
         sc.render.filepath = f_omb
         bpy.ops.render.render(write_still=True)
         omb = lire(f_omb)
@@ -799,7 +819,12 @@ def rendre(nom):
 
 
 def main():
+    global ULTRA, DOSSIER, F_MAN
     args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    if '--ultra' in args:
+        ULTRA = True
+        DOSSIER = os.path.join(RACINE_PROJET, 'public', 'decors-ultra', 'champdemars')
+        F_MAN = os.path.join(RACINE_PROJET, 'src', 'game', 'champ-de-mars-manifeste-ultra.json')
     seules = args[args.index('--pieces') + 1].split(',') if '--pieces' in args else list(PIECES)
     man = json.load(open(F_MAN)) if os.path.exists(F_MAN) else {}
     man['angle'] = ANGLE

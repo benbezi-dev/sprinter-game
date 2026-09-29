@@ -25,6 +25,31 @@ import matiere as M
 
 _racine = None
 
+# LA FINESSE DES MAILLAGES. 1 pour le rendu ordinaire ; 3 pour le palier
+# ULTRA du jeu (fabriquer.py --ultra), rendu a deux fois la densite : un tube
+# de dix cotes s'y voyait en pans. Et a l'ULTRA, JAMAIS MOINS DE SOIXANTE-
+# QUATRE FACETTES au tour, quelle que soit la piece : c'est la regle, pas une
+# moyenne. Elle ne s'applique qu'aux formes RONDES — tubes, disques, arcs,
+# spheres — et jamais a ce qui est facette par dessin : les prismes (un capot
+# a quatre pans reste un capot) et les cailloux (voir caillou).
+FINESSE = 1
+FACETTES_MIN = 64
+
+
+def fin(n, tour=1.0):
+    """Le nombre de cotes d'une forme ronde qui en demande `n`, sur `tour`
+    tours complets (un demi-cercle : 0,5)."""
+    if FINESSE <= 1:
+        return n
+    return max(int(round(n * FINESSE)), int(math.ceil(FACETTES_MIN * tour)))
+
+
+def fin_subdiv(s):
+    """Une icosphere porte a peu pres 5 x 2^s aretes a l'equateur : quarante
+    a la troisieme subdivision, quatre-vingts a la quatrieme — la premiere qui
+    passe soixante-quatre."""
+    return max(s + 1, 4) if FINESSE > 1 else s
+
 
 def commencer(racine):
     global _racine
@@ -60,7 +85,7 @@ def tube(nom, mat, a, b, r, cotes=10):
     axe = b - a
     me = bpy.data.meshes.new(nom)
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=cotes, radius1=r, radius2=r,
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=fin(cotes), radius1=r, radius2=r,
                           depth=axe.length)
     q = Vector((0, 0, 1)).rotation_difference(axe.normalized())
     bmesh.ops.transform(bm, matrix=Matrix.Translation((a + b) / 2) @ q.to_matrix().to_4x4(),
@@ -73,6 +98,7 @@ def tube(nom, mat, a, b, r, cotes=10):
 
 
 def disque(nom, mat, cx, cy, z0, z1, r, cotes=40, r_in=0.0):
+    cotes = fin(cotes)
     me = bpy.data.meshes.new(nom)
     bm = bmesh.new()
     if r_in <= 0:
@@ -287,6 +313,7 @@ def tente(P):
 
 def arc(nom, mat, r0, r1, a0, a1, z0, z1, cotes=24):
     """Un secteur d'anneau plat, de l'angle a0 a a1 (radians)."""
+    cotes = fin(cotes, abs(a1 - a0) / (2 * math.pi))
     me = bpy.data.meshes.new(nom)
     bm = bmesh.new()
     ext, intr = [], []
@@ -387,6 +414,11 @@ def prisme(nom, mat, x, y, z, rayon, hauteur, pointe, cotes=6, incl=(0, 0), tour
 def caillou(nom, mat, x, y, z, rx, ry, rz, graine=0, subdiv=2):
     """Un rocher a facettes : une icosphere bosselee de facon reproductible."""
     bm = bmesh.new()
+    # PAS DE FINESSE ULTRA ICI : un caillou est facette PAR DESSIN, comme un
+    # prisme. Subdivise pour passer soixante-quatre facettes, il perdait ses
+    # grands pans cernes de noir — chaque petite facette prenait sa propre
+    # teinte, et les rochers des Trois Soleils devenaient un camouflage (vu a
+    # l'ecran le 29/09/2026). Plus fin, il devient une autre pierre.
     bmesh.ops.create_icosphere(bm, subdivisions=subdiv, radius=1.0)
     for v in bm.verts:
         n = v.co.normalized()
@@ -434,7 +466,7 @@ def halo(nom, couleur, x, y, z, rayon, force=0.55):
     nt.links.new(mix.outputs[0], out.inputs['Surface'])
     m.surface_render_method = 'BLENDED'
     bm = bmesh.new()
-    bmesh.ops.create_circle(bm, cap_ends=True, segments=48, radius=1.0)
+    bmesh.ops.create_circle(bm, cap_ends=True, segments=fin(48), radius=1.0)
     bmesh.ops.scale(bm, vec=(rayon, rayon, 1), verts=bm.verts)
     o = _mesh(nom, m, bm)
     o.location = (x, y, z)
@@ -493,7 +525,7 @@ def obelisque(P):
         w = b - (b - t) * z / H + 0.012
         boite('strie', trait, -w, -w, z, w, w, z + 0.07)
     bm = bmesh.new()
-    bmesh.ops.create_circle(bm, segments=40, radius=1.0)
+    bmesh.ops.create_circle(bm, segments=fin(40), radius=1.0)
     ring = bmesh.ops.extrude_edge_only(bm, edges=bm.edges[:])
     for v in [e for e in ring['geom'] if isinstance(e, bmesh.types.BMVert)]:
         v.co *= 1.22
@@ -689,7 +721,7 @@ def vigie(P):
     tube('limon', blanc, (-0.42, -1.4, 0), (-0.42, -0.85, 2.2), 0.04, 6)
     tube('limon', blanc, (0.42, -1.4, 0), (0.42, -0.85, 2.2), 0.04, 6)
     bm = bmesh.new()
-    bmesh.ops.create_cone(bm, cap_ends=True, segments=20, radius1=0.32, radius2=0.32, depth=0.1)
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=fin(20), radius1=0.32, radius2=0.32, depth=0.1)
     bmesh.ops.rotate(bm, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, 'X'), verts=bm.verts)
     bmesh.ops.translate(bm, vec=(0.3, 0.9, 2.65), verts=bm.verts)
     _mesh('bouee', bouee, bm)
@@ -768,7 +800,7 @@ def meule(P):
         _mesh('touche', mat, bm)
     # un dome plein, juste en dessous des touches : rien ne se voit a travers
     bm = bmesh.new()
-    bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=10, radius=1.0)
+    bmesh.ops.create_uvsphere(bm, u_segments=fin(24), v_segments=fin(10, 0.5), radius=1.0)
     for v in bm.verts:
         v.co.z = max(v.co.z, 0.0)
         v.co.x *= R * 0.965; v.co.y *= R * 0.965; v.co.z *= H * 0.955

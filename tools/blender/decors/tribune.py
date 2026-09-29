@@ -64,6 +64,14 @@ for mod in (vue, M):
 
 RACINE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 PPM = 80.0                        # pixels par metre dans l'atlas (= PPM_IMAGE)
+# --ultra : l'atlas du palier ULTRA du jeu (voir tribune.js), pour une toile a
+# trois pixels par point. Une fois et demie la densite — cent vingt pixels par
+# metre, contre cent trente-deux pour un pixel d'atlas par pixel d'ecran : a
+# deux fois, les six passes pesaient plus de trois cents megaoctets decodees
+# sur un telephone —, et des formes rondes a soixante-quatre facettes au
+# moins, la regle de l'ULTRA (voir pieces.FACETTES_MIN). Pose par main().
+ULTRA = False
+FACETTES_MIN = 64
 SILHOUETTES = ['court', 'long', 'casquette']
 GESTES = ['assis', 'applaudit', 'debout']
 # Une ligne de l'atlas par silhouette et par geste, et une pour le siege vide.
@@ -112,6 +120,8 @@ def membre(nom, cat, racine, a, b, r0, r1=None, cotes=8):
     """Un tronc de cone de a a b, bouts arrondis par une petite sphere."""
     a, b = Vector(a), Vector(b)
     r1 = r0 if r1 is None else r1
+    if ULTRA:
+        cotes = max(cotes, FACETTES_MIN)
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, segments=cotes, radius1=r0, radius2=r1,
                           depth=(b - a).length)
@@ -120,7 +130,8 @@ def membre(nom, cat, racine, a, b, r0, r1=None, cotes=8):
                         verts=bm.verts)
     for centre, r in ((a, r0), (b, r1)):
         s = bmesh.new()
-        bmesh.ops.create_uvsphere(s, u_segments=8, v_segments=5, radius=r)
+        u, v = (FACETTES_MIN, FACETTES_MIN // 2) if ULTRA else (8, 5)
+        bmesh.ops.create_uvsphere(s, u_segments=u, v_segments=v, radius=r)
         bmesh.ops.translate(s, vec=centre, verts=s.verts)
         me = bpy.data.meshes.new('tmp')
         s.to_mesh(me); s.free()
@@ -130,6 +141,8 @@ def membre(nom, cat, racine, a, b, r0, r1=None, cotes=8):
 
 
 def boule(nom, cat, racine, c, r, sx=1.0, sy=1.0, sz=1.0, seg=12, demi=False):
+    if ULTRA:
+        seg = max(seg, FACETTES_MIN)
     bm = bmesh.new()
     bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=seg // 2 + 1, radius=r)
     for v in bm.verts:
@@ -350,6 +363,11 @@ def appliquer(passe, mats, blanc, trou):
 
 
 def main():
+    global ULTRA, PPM, LARGEUR
+    args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    ULTRA = '--ultra' in args
+    if ULTRA:
+        PPM, LARGEUR = PPM * 1.5, int(LARGEUR * 1.5)
     racine, cases = construire()
 
     # 1. mesurer chaque figure et ranger les rectangles
@@ -369,7 +387,7 @@ def main():
     sc = bpy.context.scene
     sc.render.film_transparent = True
     sc.view_settings.view_transform = 'Raw'
-    sc.render.engine = 'BLENDER_EEVEE_NEXT'
+    vue.eevee(sc)
     sc.eevee.taa_render_samples = 24
     # Rendu directement en WebP : l'atlas part tel quel dans le jeu.
     sc.render.image_settings.file_format = 'WEBP'
@@ -379,7 +397,7 @@ def main():
     mats, blanc, trou = materiaux()
 
     # 3. les six passes
-    dossier = os.path.join(RACINE, 'public', 'decors', 'tribune')
+    dossier = os.path.join(RACINE, 'public', 'decors-ultra' if ULTRA else 'decors', 'tribune')
     os.makedirs(dossier, exist_ok=True)
     for passe in CATEGORIES:
         appliquer(passe, mats, blanc, trou)
@@ -403,7 +421,9 @@ def main():
     for passe in CATEGORIES:
         im = bpy.data.images.load(os.path.join(dossier, passe + '.webp'))
         w, h = im.size
-        a = np.array(im.pixels[:], dtype=np.float32).reshape(h, w, 4)[::-1, :, 3]
+        a = np.empty(w * h * 4, dtype=np.float32)
+        im.pixels.foreach_get(a)
+        a = a.reshape(h, w, 4)[::-1, :, 3]
         bpy.data.images.remove(im)
         alpha = a if alpha is None else np.maximum(alpha, a)
     cadres = [[None] * n_caps for _ in LIGNES]
@@ -418,7 +438,8 @@ def main():
     man = {'ppm': PPM, 'poses': LIGNES, 'silhouettes': SILHOUETTES, 'gestes': GESTES,
            'caps': CAPS, 'ancres': ancres, 'passes': list(CATEGORIES), 'w': W, 'h': H,
            'cadres': cadres}
-    f_man = os.path.join(RACINE, 'src', 'game', 'tribune-manifeste.json')
+    f_man = os.path.join(RACINE, 'src', 'game',
+                         'tribune-manifeste-ultra.json' if ULTRA else 'tribune-manifeste.json')
     json.dump(man, open(f_man, 'w'), indent=1)
     print('manifeste : ' + f_man)
 

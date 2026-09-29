@@ -13,7 +13,7 @@ import vue
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
-sc.render.engine = 'BLENDER_EEVEE_NEXT'
+vue.eevee(sc)
 sc.render.film_transparent = True
 
 PX = 40.0

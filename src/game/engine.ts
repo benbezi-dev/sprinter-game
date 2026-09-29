@@ -19,16 +19,26 @@ import './piste-arc-en-ciel.js';
 // pied de chaque piece dans son image), puis le module qui les pose.
 import decorsManifeste from './decors-manifeste.json';
 (globalThis as any).SprinterDecorsManifeste = decorsManifeste;
+// La serie ULTRA des memes pieces (fabriquer.py --ultra), pour une toile a
+// trois pixels par point : voir rendu() dans decors-stades.js.
+import decorsManifesteUltra from './decors-manifeste-ultra.json';
+(globalThis as any).SprinterDecorsManifesteUltra = decorsManifesteUltra;
 import './decors-stades.js';
 // Le Champ-de-Mars : ses pieces rendues dans Blender (tools/blender/decors/
 // champ-de-mars.py), puis le module qui les pose — et qui dessine a la main
 // ce qui n'est pas encore charge.
 import champDeMarsManifeste from './champ-de-mars-manifeste.json';
 (globalThis as any).ChampDeMarsManifeste = champDeMarsManifeste;
+import champDeMarsManifesteUltra from './champ-de-mars-manifeste-ultra.json';
+(globalThis as any).ChampDeMarsManifesteUltra = champDeMarsManifesteUltra;
 import './decor-champ-de-mars.js';
 // Le public des gradins, rendu dans Blender : son manifeste, puis ses rangees.
 import tribuneManifeste from './tribune-manifeste.json';
 (globalThis as any).SprinterTribuneManifeste = tribuneManifeste;
+// L'atlas du palier ULTRA (tribune.py --ultra), une fois et demie plus dense :
+// tribune.js n'en charge qu'un, selon la densite de la toile.
+import tribuneManifesteUltra from './tribune-manifeste-ultra.json';
+(globalThis as any).SprinterTribuneManifesteUltra = tribuneManifesteUltra;
 import './tribune.js';
 // La couleur du logo des panneaux, choisie pour se detacher de chaque stade.
 import './teintes-pub.js';

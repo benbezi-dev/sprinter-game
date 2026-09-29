@@ -4999,7 +4999,9 @@
     if (tab[variante]) return tab[variante];
 
     const [cv, c] = toileTuile(CYPRES_W, CYPRES_H);
-    const axe = CYPRES_W / 2, N = 32;
+    // Trente-deux points par bord ; soixante-quatre quand la tuile est cuite
+    // pour l'ULTRA (voir toileTuile).
+    const axe = CYPRES_W / 2, N = finesseTuile() > 1 ? 64 : 32;
     const torsion = (t) => Math.sin(t * 3.1 + variante * 1.7) * CYPRES_W * 0.14;
     // Le profil fait tout. Pointe en haut, ventre au premier tiers, pied
     // etroit : c'est cette silhouette-la qu'on reconnait de loin. Un fuseau
@@ -5736,7 +5738,10 @@
     // Le bassin suit la piste : sur un tour, un rectangle a quatre coins
     // couperait la courbe en biais. On decoupe donc les deux longs cotes.
     const contour = (marge) => {
-      const pts = [], N = 8;
+      // Huit troncons de trois metres : a l'ULTRA, sur un tour, la corde
+      // s'ecartait de la courbe de sept pixels. Soixante-quatre, alors — le
+      // minimum de l'ULTRA pour une forme courbe.
+      const pts = [], N = decorUltra() ? 64 : 8;
       const a0 = PISCINE.m0 - marge, a1 = PISCINE.m1 + marge;
       for (let i = 0; i <= N; i++) {
         const q = at(a0 + (a1 - a0) * i / N, r0 - marge);

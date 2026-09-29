@@ -27,7 +27,19 @@
 (function (root) {
   'use strict';
 
-  const MAN = () => root.SprinterTribuneManifeste;
+  // DEUX ATLAS : l'ordinaire, et celui du palier ULTRA (tribune.py --ultra),
+  // une fois et demie plus dense, pour une toile a trois pixels par point —
+  // a quatre-vingts pixels par metre, le public y etait agrandi, flou. On n'en
+  // charge qu'UN : les deux ensemble passeraient quatre cents megaoctets
+  // decodes. Le choix suit la densite de la toile, qui ne change qu'aux menus
+  // (voir dpr() dans rendu-premium.js). `ppm` : la densite des images
+  // composees, celle de l'atlas — la copie reste exacte, pixel pour pixel.
+  const JEUX = {
+    ordinaire: { man: () => root.SprinterTribuneManifeste, dossier: '/decors/tribune/', ppm: 80 },
+    ultra: { man: () => root.SprinterTribuneManifesteUltra, dossier: '/decors-ultra/tribune/', ppm: 120 },
+  };
+  let jeu = JEUX.ordinaire;
+  const MAN = () => jeu.man();
   const BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
 
@@ -36,9 +48,26 @@
   // -------------------------------------------------------------------
   const atlas = {};
   let pret = false;
+  /**
+   * L'atlas qui convient a la toile du moment. En changer lache les images de
+   * l'autre et vide les images composees : leurs ancres sont en pixels de
+   * l'atlas qui les a faites.
+   */
+  function choisirJeu() {
+    const A = root.SprinterApp, G = A && A.G;
+    const mu = JEUX.ultra.man();
+    const voulu = G && G.dpr > 2 && mu && mu.passes ? JEUX.ultra : JEUX.ordinaire;
+    if (voulu === jeu) return;
+    jeu = voulu;
+    for (const p in atlas) delete atlas[p];
+    pret = false;
+    cache.clear(); chantiers.clear();
+  }
+
   function charger() {
+    choisirJeu();
     const man = MAN();
-    if (!man) return false;
+    if (!man || !man.passes) return false;
     if (pret) return true;
     let tous = true;
     for (const p of man.passes) {
@@ -46,7 +75,7 @@
       if (!im) {
         im = new Image();
         im.decoding = 'async';
-        im.src = BASE + '/decors/tribune/' + p + '.webp';
+        im.src = BASE + jeu.dossier + p + '.webp';
         atlas[p] = im;
       }
       if (!(im.complete && im.naturalWidth > 0)) tous = false;
@@ -246,7 +275,9 @@
   // -------------------------------------------------------------------
   // LA COMPOSITION D'UNE IMAGE
   // -------------------------------------------------------------------
-  const PPM_IMAGE = 80;           // pixels par metre des images composees
+  // Les pixels par metre des images composees : ceux de l'atlas en service
+  // (voir JEUX).
+  const ppmImage = () => jeu.ppm;
   const MAX_IMAGES = 1400;        // au-dela, on oublie les plus anciennes
   const cache = new Map();
   let _tmp = null;
@@ -340,7 +371,7 @@
     const man = MAN();
     const [ax, ay] = man.ancres[ligne][capI];
     const [x0, y0, x1, y1] = man.cadres[ligne][capI];
-    const k = PPM_IMAGE / man.ppm;
+    const k = ppmImage() / man.ppm;
     // Le rectangle source tombe sur des pixels entiers de l'atlas : a la meme
     // densite que l'image composee, la copie est alors exacte, sans le flou
     // d'un echantillonnage a cheval sur deux pixels.
@@ -406,7 +437,7 @@
     const G = api.G, T = G.track;
     limite = performance.now() + (G.state === 'race' ? BUDGET_COURSE_MS : BUDGET_REPOS_MS);
     const vue = T.curved ? api.WROT_DEG : 0;
-    const s = api.scaleM() / PPM_IMAGE;
+    const s = api.scaleM() / ppmImage();
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
     if (!_personnages) _personnages = personnages(th);
     const pers = _personnages;
@@ -417,7 +448,9 @@
     const nG = man.gestes.length, ligneVide = man.poses.indexOf('vide');
     const ligneDe = (sil, geste) => sil * nG + geste;
     const t = performance.now() / 1000;
-    const margeX = 140 * s * 1.6, margeY = 260 * s * 1.6;
+    // en metres : un metre trois quarts et trois metres un quart, quel que soit
+    // l'atlas (cent quarante et deux cent soixante pixels a quatre-vingts)
+    const margeX = 1.75 * api.scaleM() * 1.6, margeY = 3.25 * api.scaleM() * 1.6;
     // part des spectateurs debout : presque personne a une rencontre
     // scolaire, un bon dixieme a la finale
     const debout = 0.02 + 0.10 * densite;

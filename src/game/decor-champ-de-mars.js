@@ -46,19 +46,37 @@
   const BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
   const MAN = () => root.ChampDeMarsManifeste || null;
+  // La serie ULTRA (champ-de-mars.py --ultra) : deux fois la densite, pour une
+  // toile a trois pixels par point. Demandee piece par piece, et l'image
+  // ordinaire reste en place tant que la fine n'est pas arrivee.
+  const MANU = () => root.ChampDeMarsManifesteUltra || null;
+  const aTroisPixels = () => {
+    const A = root.SprinterApp;
+    return !!(A && A.G && A.G.dpr > 2);
+  };
   const images = new Map();
-  function rendu(nom) {
-    const man = MAN(), p = man && man.pieces && man.pieces[nom];
-    if (!p) return null;
-    let im = images.get(nom);
+  function charger(dossier, p) {
+    const cle = dossier + p.f;
+    let im = images.get(cle);
     if (!im) {
       im = new Image();
       im.decoding = 'async';
-      im.onerror = () => setTimeout(() => images.delete(nom), 2000);
-      im.src = BASE + '/decors/champdemars/' + p.f;
-      images.set(nom, im);
+      im.onerror = () => setTimeout(() => images.delete(cle), 2000);
+      im.src = BASE + '/' + cle;
+      images.set(cle, im);
     }
-    return im.complete && im.naturalWidth > 0 ? { im, p } : null;
+    return im.complete && im.naturalWidth > 0 ? im : null;
+  }
+  function rendu(nom) {
+    if (aTroisPixels()) {
+      const mu = MANU(), pu = mu && mu.pieces && mu.pieces[nom];
+      const imu = pu && charger('decors-ultra/champdemars/', pu);
+      if (imu) return { im: imu, p: pu };
+    }
+    const man = MAN(), p = man && man.pieces && man.pieces[nom];
+    if (!p) return null;
+    const im = charger('decors/champdemars/', p);
+    return im ? { im, p } : null;
   }
   // UNE PIECE RENDUE NE VAUT QUE SOUS LA VUE OU ELLE L'A ETE. Quinze degres,
   // et la ligne droite : en virage, le moteur tourne tout le monde de -14°
