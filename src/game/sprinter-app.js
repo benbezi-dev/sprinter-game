@@ -3928,6 +3928,44 @@
     }
     return T.posR(sm[1], r, sm[0]);
   }
+  /**
+   * LA PART DU TRACE QUI SE VOIT.
+   *
+   * En virage, le trace compte pres de deux cent soixante echantillons — un
+   * tous les metre vingt, sur la ligne droite comme dans la courbe —, et
+   * chaque bande du decor les projetait tous, alors que le cadre n'en montre
+   * qu'une trentaine. Mesure le 29/09/2026 sur un 200 m, processeur bride
+   * comme celui d'un telephone : la tonte et le toit y coutaient a eux deux
+   * plus de trois millisecondes par image, presque tout hors champ.
+   *
+   * Renvoie la tranche contigue des echantillons dont le point (rayon r,
+   * hauteur z) tombe dans le cadre elargi de `marge` pixels, et un echantillon
+   * de plus de chaque cote : le segment qui entre dans le cadre part d'un
+   * point qui n'y est pas. `null` si rien n'y tombe. La marge doit couvrir la
+   * demi-largeur de ce qu'on trace et l'ecart entre deux echantillons.
+   */
+  function fenetre(sm, r, z, marge) {
+    let i0 = -1, i1 = -1;
+    const x1 = G.VW + marge, y1 = G.VH + marge;
+    for (let i = 0; i < sm.length; i++) {
+      const p = sommetInto(sm[i], r, z || 0, _solA);
+      if (p[0] >= -marge && p[0] <= x1 && p[1] >= -marge && p[1] <= y1) {
+        if (i0 < 0) i0 = i;
+        i1 = i;
+      }
+    }
+    if (i0 < 0) return null;
+    return sm.slice(Math.max(0, i0 - 1), Math.min(sm.length, i1 + 2));
+  }
+  /**
+   * Les echantillons du DECOR, pas ceux de la piste : un tous les quatre
+   * metres en virage. A cinquante metres de rayon, la corde s'ecarte de l'arc
+   * de quatre centimetres — un pixel a l'ecran —, et un toit ou une passe de
+   * tondeuse n'a pas besoin de plus. En ligne droite, le pas ordinaire.
+   */
+  function samplesDecor() {
+    return samples(G.track.curved ? 4 : 0);
+  }
   function band(ctx, sm, rIn, rOut, col, z) {
     if (sm.length < 2) return;
     ctx.beginPath();
@@ -3973,7 +4011,7 @@
   // l'etat du jeu ni s'inserer dans sa geometrie.
   const PEINTRE = {
     G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
-    band, bandBrute, bandPattern, rail,
+    band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
   };
   const PREM = () => globalThis.RenduPremium;
   // Le vide sous la piste intergalactique (decor-cosmos.js) : ne dessine rien
@@ -6063,7 +6101,12 @@
     const zT = 1.05 + tiers * sz + TOIT_HAUT, zRive = zT - TOIT_RIVE;
     const rAv = near + 0.3, rAr = near + tiers * sr + 1;
     const m = scaleM();
-    const runs = tribunesDuFond(sm, near);
+    // Les bandes et les faces du toit : au pas du decor, et seulement la part
+    // du trace qui entre dans le cadre (voir fenetre). La marge couvre la
+    // profondeur du toit et la hauteur de son ombre.
+    const vus = fenetre(samplesDecor(), (rAv + rAr) / 2, zRive,
+                        m * ((rAr - rAv) / 2 + TOIT_RIVE + 3) + 80);
+    const runs = vus ? tribunesDuFond(vus, near) : [];
 
     // 1. L'OMBRE, suspendue a la rive : des voiles de plus en plus legers vers
     // le bas, sur le public des derniers rangs. Six voiles de quarante-cinq

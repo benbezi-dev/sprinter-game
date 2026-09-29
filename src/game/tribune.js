@@ -101,11 +101,17 @@
   const POIDS_SILHOUETTES = [0.5, 0.32, 0.18];
   // Assez de personnages pour qu'on ne reconnaisse pas deux fois le meme dans
   // un cadre, pas davantage : chacun coute une image composee par geste et
-  // par cap (voir `image`), et le cache n'en garde que MAX_IMAGES. Trente-deux,
-  // c'est quatre-vingt-dix-sept images par cap : moins que les cent six de
-  // l'ancien public (cinq carnations par sept hauts), pour bien plus de
-  // visages differents.
-  const N_PERSONNAGES = 32;
+  // par cap (voir `image`), et le cache n'en garde que MAX_IMAGES.
+  //
+  // VINGT-QUATRE, ET C'EST UNE MESURE. Une image a six couches coute moitie
+  // plus a composer qu'a quatre, et sur un 200 m le public en compose des
+  // centaines en pleine course, a mesure que le virage montre de nouveaux
+  // caps. Avec trente-deux personnages (97 images par cap), le 29/09/2026, un
+  // processeur bride comme celui d'un telephone y passait 2,2 s par course
+  // contre 1,3 s pour l'ancien public : la course ramait. Vingt-quatre, c'est
+  // 73 images par cap, contre 106 pour l'ancien public (cinq carnations par
+  // sept hauts) — et trois silhouettes, cheveux et pantalons en plus.
+  const N_PERSONNAGES = 24;
 
   function tirer(poids, u) {
     let total = 0;
@@ -211,6 +217,30 @@
     }
   }
 
+  // CHAQUE DRAPEAU EST UNE IMAGE, PAS SIX TRANCHES. Trace a chaque image, un
+  // drapeau coutait six remplissages et un trait ; a une finale, quand la
+  // tribune se leve, il y en a des dizaines dans le cadre. On cuit donc une
+  // fois, par pays, douze moments de l'ondulation, et on les colle : l'onde
+  // avance d'une image sur douze, a peu pres une par dixieme de seconde.
+  const NF_DRAPEAU = 12, PPM_DRAPEAU = 64, MAX_DRAPEAUX = 40;
+  const spritesDrapeau = new Map();
+  function spriteDrapeau(k, f) {
+    const cle = k * NF_DRAPEAU + f;
+    let e = spritesDrapeau.get(cle);
+    if (e) return e;
+    const m = PPM_DRAPEAU, marge = 2;
+    const lw = 0.8 * m, lh = 0.52 * m, hampe = 0.95 * m;
+    // le pied de la hampe, la ou la main la tient
+    const x0 = marge + 1, y0 = Math.ceil(marge + lh * 0.14 + 1 + hampe);
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(x0 + lw + 1 + marge);
+    cv.height = y0 + marge;
+    drapeau(cv.getContext('2d'), x0, y0, m, 0, f * Math.PI * 2 / NF_DRAPEAU, k);
+    e = { cv, x0, y0 };
+    spritesDrapeau.set(cle, e);
+    return e;
+  }
+
   // -------------------------------------------------------------------
   // LA COMPOSITION D'UNE IMAGE
   // -------------------------------------------------------------------
@@ -255,16 +285,56 @@
     c.drawImage(t, 0, 0);
   }
 
+  // LA COMPOSITION SE FAIT COUCHE PAR COUCHE, ET S'ARRETE A L'HEURE.
+  //
+  // Une image de spectateur, c'est six couches. Composee d'un bloc, elle
+  // tombait entiere dans une seule image de la course : le budget, verifie
+  // AVANT chaque composition, laissait passer la derniere jusqu'au bout.
+  // Mesure le 29/09/2026 sur un 200 m, processeur bride comme celui d'un
+  // telephone : cinq millisecondes par image composee, et deux fois plus
+  // d'images au-dela de trente-trois millisecondes qu'avec l'ancien public.
+  // On compose donc une couche a la fois et l'on s'arrete des que l'heure est
+  // passee : l'image reprend ou elle en etait a l'appel suivant, et le
+  // spectateur apparait quelques images plus tard — ce que personne ne voit,
+  // alors qu'une course qui accroche se sent.
+  const chantiers = new Map();
+  const MAX_CHANTIERS = 64;
+
   /**
    * L'image d'un spectateur : une ligne de l'atlas (silhouette et geste, ou
-   * le siege vide), un cap, un personnage, la couleur des sieges.
+   * le siege vide), un cap, un personnage, la couleur des sieges. `null` tant
+   * qu'elle n'est pas finie.
    */
   function image(ligne, capI, pers, siege) {
     const cle = ligne + '|' + capI + '|' + (pers ? pers.id : -1) + '|' + siege;
     let e = cache.get(cle);
     if (e) return e;
-    if (budget <= 0 || performance.now() > limite) return null;
-    budget--;
+    if (performance.now() > limite) return null;
+    let ch = chantiers.get(cle);
+    if (!ch) {
+      if (budget <= 0) return null;
+      budget--;
+      ch = commencer(ligne, capI, pers, siege);
+      chantiers.set(cle, ch);
+      if (chantiers.size > MAX_CHANTIERS) chantiers.delete(chantiers.keys().next().value);
+    }
+    while (ch.i < ch.couches.length) {
+      if (performance.now() > limite) return null;
+      const [im, col] = ch.couches[ch.i++];
+      // les chaussures ne se teignent pas : directement sur l'image, sans le
+      // detour par le canevas de passage
+      if (col) couche(ch.c, im, ch.sx, ch.sy, ch.sw, ch.sh, ch.w, ch.h, col);
+      else ch.c.drawImage(im, ch.sx, ch.sy, ch.sw, ch.sh, 0, 0, ch.w, ch.h);
+    }
+    chantiers.delete(cle);
+    e = { cv: ch.cv, ax: ch.ax, ay: ch.ay, w: ch.w, h: ch.h };
+    cache.set(cle, e);
+    if (cache.size > MAX_IMAGES) cache.delete(cache.keys().next().value);
+    return e;
+  }
+
+  /** Le chantier d'une image : son canevas et la liste de ses couches. */
+  function commencer(ligne, capI, pers, siege) {
     const man = MAN();
     const [ax, ay] = man.ancres[ligne][capI];
     const [x0, y0, x1, y1] = man.cadres[ligne][capI];
@@ -277,19 +347,13 @@
     const w = Math.max(1, Math.ceil(sw * k)), h = Math.max(1, Math.ceil(sh * k));
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
-    const c = cv.getContext('2d');
-    couche(c, atlas.siege, sx, sy, sw, sh, w, h, siege);
+    const couches = [[atlas.siege, siege]];
     if (pers) {
-      couche(c, atlas.base, sx, sy, sw, sh, w, h, null);
-      couche(c, atlas.pantalon, sx, sy, sw, sh, w, h, pers.pantalon);
-      couche(c, atlas.peau, sx, sy, sw, sh, w, h, pers.peau);
-      couche(c, atlas.maillot, sx, sy, sw, sh, w, h, pers.haut);
-      couche(c, atlas.cheveux, sx, sy, sw, sh, w, h, pers.cheveux);
+      couches.push([atlas.base, null], [atlas.pantalon, pers.pantalon], [atlas.peau, pers.peau],
+                   [atlas.maillot, pers.haut], [atlas.cheveux, pers.cheveux]);
     }
-    e = { cv, ax: (ax - sx) * k, ay: (ay - sy) * k, w, h };
-    cache.set(cle, e);
-    if (cache.size > MAX_IMAGES) cache.delete(cache.keys().next().value);
-    return e;
+    return { cv, c: cv.getContext('2d'), couches, i: 0, sx, sy, sw, sh, w, h,
+             ax: (ax - sx) * k, ay: (ay - sy) * k };
   }
 
   function capProche(deg) {
@@ -333,8 +397,8 @@
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
     if (!charger()) return false;
     if (th !== _themeCourant) {
-      cache.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null; _themeCourant = th;
-      _personnages = null;
+      cache.clear(); chantiers.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null;
+      _themeCourant = th; _personnages = null;
     }
     budget = 48;
     const G = api.G, T = G.track;
@@ -497,7 +561,8 @@
     // derriere.
     const R = root.RenduPremium;
     const avecDrapeaux = densite >= 0.6 && !(R && R.niveau < R.MOYEN);
-    const m = api.scaleM();
+    const m = api.scaleM(), sd = m / PPM_DRAPEAU, TOUR = Math.PI * 2;
+    let drapeaux = 0;
     // du plus loin au plus pres
     items.sort((p, q) => q[0] - p[0]);
     for (const it of items) {
@@ -510,9 +575,13 @@
       // la main levee d'un spectateur debout : un peu a droite, a 1,9 m
       // Le pays se tire a la place et non au personnage : quatre personnages
       // portent un drapeau, la tribune en montre onze.
-      if (avecDrapeaux && pose === iDebout && p.drapeau) {
-        drapeau(ctx, it[1] + 0.2 * m, it[2] - 1.9 * m, m, t, (h % 628) / 100,
-                (h >>> 11) % DRAPEAUX.length);
+      if (avecDrapeaux && pose === iDebout && p.drapeau && drapeaux < MAX_DRAPEAUX) {
+        drapeaux++;
+        const onde = ((t * 6 + (h % 628) / 100) % TOUR + TOUR) % TOUR;
+        const e = spriteDrapeau((h >>> 11) % DRAPEAUX.length,
+                                Math.floor(onde / TOUR * NF_DRAPEAU) % NF_DRAPEAU);
+        ctx.drawImage(e.cv, it[1] + 0.2 * m - e.x0 * sd, it[2] - 1.9 * m - e.y0 * sd,
+                      e.cv.width * sd, e.cv.height * sd);
       }
     }
     // TOUT COMPOSER AVANT LE PISTOLET. Hors course, le temps qui reste dans

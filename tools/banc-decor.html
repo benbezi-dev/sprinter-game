@@ -1,0 +1,79 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — banc du decor</title>
+<style>body{margin:0;background:#0b0d14;color:#cfd3e0;font:13px ui-monospace,Menlo,monospace}#etat{padding:8px 12px;white-space:pre}</style>
+<div id="etat">...</div>
+<canvas id="cv"></canvas>
+<script type="module">
+  // CE QUE COUTE UNE COURSE, IMAGE PAR IMAGE, AU RYTHME DU NAVIGATEUR.
+  //
+  // La galerie avance a pas fixe et ne dit rien du temps : elle photographie.
+  // Ce banc court une epreuve entiere au rythme de requestAnimationFrame, comme
+  // le jeu, et mesure le dessin de chaque image — le monde et les coureurs —,
+  // caches froids compris : c'est au premier passage devant une tribune que le
+  // public compose ses images (tribune.js), et c'est la qu'une course rame.
+  //
+  //   ?stade=3&epreuve=200&w=390&h=844&dpr=2
+  import { SprinterApp, updateLogic, padPress } from '/src/game/engine.ts';
+
+  const P = new URLSearchParams(location.search);
+  const cv = document.getElementById('cv');
+  const DPR = +(P.get('dpr') || 2);
+  const LW = +(P.get('w') || 390), LH = +(P.get('h') || 844);
+  cv.width = Math.round(LW * DPR); cv.height = Math.round(LH * DPR);
+  cv.style.width = LW + 'px'; cv.style.height = LH + 'px';
+  const ctx = cv.getContext('2d');
+  const etat = document.getElementById('etat');
+  const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
+  // Le banc ne court pour personne : aucune course n'est enregistree.
+  G.onRaceRecorded = () => {};
+  if (P.get('blocs')) G.__banc = {};
+  G.cv = cv; G.dpr = DPR; G.VW = LW; G.VH = LH; G.portrait = LH > LW;
+  SprinterApp.load();
+
+  const idx = +(P.get('stade') || 3);
+  SprinterApp.startOneShot([P.get('epreuve') || '200'], { levelIdx: idx });
+  const th = THEMES[LEVELS[G.levelIdx].theme];
+  const mesures = [], etats = [];
+  let n = 0, fini = false, avant = performance.now();
+
+  function image(maintenant) {
+    const dt = Math.min(0.05, (maintenant - avant) / 1000);
+    avant = maintenant;
+    // Quinze appuis par seconde, en alternance : la cadence d'un bon joueur.
+    if (G.state === 'race' && n % 4 === 0) padPress((n / 4) % 2 ? 'right' : 'left');
+    updateLogic(dt || 1 / 60);
+    const t0 = performance.now();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawWorld(ctx, th);
+    if (G.state === 'race' || G.state === 'count') drawAthletes(ctx);
+    mesures.push(performance.now() - t0);
+    etats.push(G.state);
+    n++;
+    const arrive = G.player && G.player.finished && G.player.d >= G.track.total + 5;
+    if (arrive || n > 60 * 90) { fini = true; conclure(); return; }
+    if (n % 30 === 0) etat.textContent = `image ${n}  ${G.state}  d=${(G.player && G.player.d || 0).toFixed(1)}`;
+    requestAnimationFrame(image);
+  }
+
+  function stats(v) {
+    const s = v.slice().sort((a, b) => a - b);
+    const q = p => s[Math.min(s.length - 1, Math.floor(p * s.length))];
+    const moy = v.reduce((a, b) => a + b, 0) / (v.length || 1);
+    return { n: v.length, moy: +moy.toFixed(2), p50: +q(0.5).toFixed(2), p95: +q(0.95).toFixed(2),
+             max: +s[s.length - 1].toFixed(2), sup16: v.filter(x => x > 16.7).length,
+             sup33: v.filter(x => x > 33).length };
+  }
+
+  function conclure() {
+    const course = mesures.filter((_, i) => etats[i] === 'race');
+    const r = { stade: idx, theme: LEVELS[idx].theme, epreuve: P.get('epreuve') || '200',
+                tout: stats(mesures), course: stats(course) };
+    if (G.__banc) r.blocs = Object.fromEntries(Object.entries(G.__banc).map(([k, v]) => [k, +(v / n).toFixed(3)]));
+    window.RESULTAT = r;
+    etat.textContent = 'fini ' + JSON.stringify(r);
+  }
+  requestAnimationFrame(image);
+</script>
