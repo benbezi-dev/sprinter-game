@@ -80,6 +80,169 @@
     return out;
   }
 
+  // LES CHEVEUX ET LE BAS, POUR QUE LA FOULE CESSE D'ETRE UNE EQUIPE.
+  //
+  // Noir, brun fonce, chatain, roux, blond, blond clair, gris, blanc — et la
+  // chevelure suit la carnation, comme dans une vraie foule : on tire ses
+  // cheveux dans une table ponderee par peau, pas au hasard dans toutes.
+  const CHEVEUX = [[26, 22, 20], [54, 36, 26], [96, 62, 38], [140, 78, 40],
+                   [188, 146, 86], [222, 196, 140], [148, 144, 140], [210, 208, 200]];
+  const CHEVEUX_PAR_PEAU = [
+    [2, 3, 3, 1, 2, 1, 1, 1],
+    [3, 3, 2, 0.5, 1, 0.3, 1, 0.5],
+    [5, 3, 1, 0, 0, 0, 0.7, 0.3],
+    [7, 2, 0, 0, 0, 0, 0.6, 0.4],
+    [7, 2, 0, 0, 0, 0, 0.6, 0.4],
+  ];
+  // Jean, jean brut, noir, gris, beige, kaki, blanc, marine : ce que porte
+  // une tribune, le jean en tete.
+  const PANTALONS = [[50, 72, 112], [34, 44, 72], [30, 30, 34], [96, 98, 106],
+                     [178, 154, 114], [110, 106, 74], [222, 220, 212], [40, 46, 74]];
+  const POIDS_PANTALONS = [5, 3, 3, 2, 1.5, 1, 0.5, 2];
+  // Cheveux courts, longs, casquette (voir tribune.py).
+  const POIDS_SILHOUETTES = [0.5, 0.32, 0.18];
+  // Assez de personnages pour qu'on ne reconnaisse pas deux fois le meme dans
+  // un cadre, pas davantage : chacun coute une image composee par geste et
+  // par cap (voir `image`), et le cache n'en garde que MAX_IMAGES.
+  //
+  // VINGT-QUATRE, ET C'EST UNE MESURE. Une image a six couches coute moitie
+  // plus a composer qu'a quatre, et sur un 200 m le public en compose des
+  // centaines en pleine course, a mesure que le virage montre de nouveaux
+  // caps. Avec trente-deux personnages (97 images par cap), le 29/09/2026, un
+  // processeur bride comme celui d'un telephone y passait 2,2 s par course
+  // contre 1,3 s pour l'ancien public : la course ramait. Vingt-quatre, c'est
+  // 73 images par cap, contre 106 pour l'ancien public (cinq carnations par
+  // sept hauts) — et trois silhouettes, cheveux et pantalons en plus.
+  const N_PERSONNAGES = 24;
+
+  function tirer(poids, u) {
+    let total = 0;
+    for (const p of poids) total += p;
+    let v = u * total;
+    for (let i = 0; i < poids.length; i++) { v -= poids[i]; if (v < 0) return i; }
+    return poids.length - 1;
+  }
+
+  /**
+   * Les personnages d'un stade : une carnation, une coiffure (ou une
+   * casquette), un haut, un bas. Tires une fois, d'une suite fixe — le meme
+   * stade retrouve le meme public d'une course a l'autre —, et chacun des
+   * spectateurs en endosse un selon sa place.
+   */
+  function personnages(th) {
+    const hautsC = hauts(th);
+    // Les casquettes : les couleurs du stade, et le noir, le blanc et le
+    // marine qu'on voit partout.
+    const casquettes = (th.panels || []).concat([[30, 30, 34], [244, 244, 240], [36, 42, 64]]);
+    let g = 0x6d2b79f5 >>> 0;
+    const al = () => { g ^= g << 13; g >>>= 0; g ^= g >>> 17; g ^= g << 5; g >>>= 0; return g / 4294967296; };
+    const out = [];
+    for (let i = 0; i < N_PERSONNAGES; i++) {
+      const peau = i % PEAUX.length;
+      const sil = tirer(POIDS_SILHOUETTES, al());
+      const tete = sil === 2 ? casquettes[Math.floor(al() * casquettes.length)]
+                             : CHEVEUX[tirer(CHEVEUX_PAR_PEAU[peau], al())];
+      out.push({
+        id: i, sil,
+        peau: hexa(PEAUX[peau]),
+        cheveux: hexa(tete),
+        haut: hexa(hautsC[Math.floor(al() * hautsC.length)]),
+        pantalon: hexa(PANTALONS[tirer(POIDS_PANTALONS, al())]),
+        // un personnage sur huit vient avec un drapeau (voir dessiner)
+        drapeau: i % 8 === 3,
+      });
+    }
+    return out;
+  }
+
+  // -------------------------------------------------------------------
+  // LES DRAPEAUX DU PUBLIC
+  // -------------------------------------------------------------------
+  // Des tricolores, et rien d'autre : a quinze pixels de large, un drapeau se
+  // reconnait a ses trois bandes, et un embleme ne serait qu'une tache. Les
+  // bandes verticales d'abord, puis les horizontales.
+  const DRAPEAUX = [
+    { v: [[0, 85, 164], [255, 255, 255], [239, 65, 53]] },    // France
+    { v: [[0, 146, 70], [255, 255, 255], [206, 43, 55]] },    // Italie
+    { v: [[22, 155, 98], [255, 255, 255], [255, 136, 62]] },  // Irlande
+    { v: [[30, 30, 30], [253, 218, 36], [239, 51, 64]] },     // Belgique
+    { v: [[247, 127, 0], [255, 255, 255], [0, 158, 96]] },    // Cote d'Ivoire
+    { v: [[20, 181, 58], [252, 209, 22], [206, 17, 38]] },    // Mali
+    { v: [[0, 135, 81], [255, 255, 255], [0, 135, 81]] },     // Nigeria
+    { h: [[30, 30, 30], [221, 0, 0], [255, 206, 0]] },        // Allemagne
+    { h: [[174, 28, 40], [255, 255, 255], [33, 70, 139]] },   // Pays-Bas
+    { h: [[206, 41, 57], [255, 255, 255], [71, 112, 80]] },   // Hongrie
+    { h: [[237, 41, 57], [255, 255, 255], [237, 41, 57]] },   // Autriche
+  ];
+  // Quatre ombrages par bande, prepares une fois : un drapeau qui ondule
+  // fabriquerait sinon ses chaines de couleur a chaque tranche et a chaque
+  // image.
+  const OMBRES_DRAPEAU = [0.8, 0.88, 0.95, 1.0];
+  const TEINTES_DRAPEAU = DRAPEAUX.map(d => (d.v || d.h).map(c =>
+    OMBRES_DRAPEAU.map(f => hexa([c[0] * f, c[1] * f, c[2] * f]))));
+
+  /**
+   * Un drapeau brandi : la hampe part de la main, le drapeau flotte a son
+   * sommet. Une onde court de la hampe vers le bord libre — six tranches,
+   * decalees et ombrees chacune, comme les pavillons du Champ-de-Mars.
+   */
+  function drapeau(ctx, x, y, m, t, phase, k) {
+    const hampe = 0.95 * m, lw = 0.8 * m, lh = 0.52 * m;
+    const top = y - hampe;
+    ctx.strokeStyle = 'rgb(58,54,50)';
+    ctx.lineWidth = Math.max(1, 0.045 * m);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, top); ctx.stroke();
+    const d = DRAPEAUX[k], teintes = TEINTES_DRAPEAU[k], n = 6;
+    for (let i = 0; i < n; i++) {
+      const u0 = i / n, u1 = (i + 1) / n;
+      const o0 = Math.sin(t * 6 + phase - u0 * 5) * lh * 0.14 * u0;
+      const o1 = Math.sin(t * 6 + phase - u1 * 5) * lh * 0.14 * u1;
+      const c = Math.cos(t * 6 + phase - (u0 + u1) * 2.5);
+      const f = c > 0.5 ? 3 : c > 0 ? 2 : c > -0.5 ? 1 : 0;
+      const xa = x + u0 * lw, xb = x + u1 * lw + 0.5;
+      if (d.v) {
+        ctx.fillStyle = teintes[Math.min(2, Math.floor(u0 * 3 + 1e-6))][f];
+        ctx.beginPath();
+        ctx.moveTo(xa, top + o0); ctx.lineTo(xb, top + o1);
+        ctx.lineTo(xb, top + o1 + lh); ctx.lineTo(xa, top + o0 + lh);
+        ctx.closePath(); ctx.fill();
+      } else {
+        for (let b = 0; b < 3; b++) {
+          const ya = b * lh / 3, yb = (b + 1) * lh / 3 + (b < 2 ? 0.5 : 0);
+          ctx.fillStyle = teintes[b][f];
+          ctx.beginPath();
+          ctx.moveTo(xa, top + o0 + ya); ctx.lineTo(xb, top + o1 + ya);
+          ctx.lineTo(xb, top + o1 + yb); ctx.lineTo(xa, top + o0 + yb);
+          ctx.closePath(); ctx.fill();
+        }
+      }
+    }
+  }
+
+  // CHAQUE DRAPEAU EST UNE IMAGE, PAS SIX TRANCHES. Trace a chaque image, un
+  // drapeau coutait six remplissages et un trait ; a une finale, quand la
+  // tribune se leve, il y en a des dizaines dans le cadre. On cuit donc une
+  // fois, par pays, douze moments de l'ondulation, et on les colle : l'onde
+  // avance d'une image sur douze, a peu pres une par dixieme de seconde.
+  const NF_DRAPEAU = 12, PPM_DRAPEAU = 64, MAX_DRAPEAUX = 40;
+  const spritesDrapeau = new Map();
+  function spriteDrapeau(k, f) {
+    const cle = k * NF_DRAPEAU + f;
+    let e = spritesDrapeau.get(cle);
+    if (e) return e;
+    const m = PPM_DRAPEAU, marge = 2;
+    const lw = 0.8 * m, lh = 0.52 * m, hampe = 0.95 * m;
+    // le pied de la hampe, la ou la main la tient
+    const x0 = marge + 1, y0 = Math.ceil(marge + lh * 0.14 + 1 + hampe);
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(x0 + lw + 1 + marge);
+    cv.height = y0 + marge;
+    drapeau(cv.getContext('2d'), x0, y0, m, 0, f * Math.PI * 2 / NF_DRAPEAU, k);
+    e = { cv, x0, y0 };
+    spritesDrapeau.set(cle, e);
+    return e;
+  }
+
   // -------------------------------------------------------------------
   // LA COMPOSITION D'UNE IMAGE
   // -------------------------------------------------------------------
@@ -124,32 +287,75 @@
     c.drawImage(t, 0, 0);
   }
 
-  function image(pose, capI, peau, haut, siege) {
-    const cle = pose + '|' + capI + '|' + peau + '|' + haut + '|' + siege;
+  // LA COMPOSITION SE FAIT COUCHE PAR COUCHE, ET S'ARRETE A L'HEURE.
+  //
+  // Une image de spectateur, c'est six couches. Composee d'un bloc, elle
+  // tombait entiere dans une seule image de la course : le budget, verifie
+  // AVANT chaque composition, laissait passer la derniere jusqu'au bout.
+  // Mesure le 29/09/2026 sur un 200 m, processeur bride comme celui d'un
+  // telephone : cinq millisecondes par image composee, et deux fois plus
+  // d'images au-dela de trente-trois millisecondes qu'avec l'ancien public.
+  // On compose donc une couche a la fois et l'on s'arrete des que l'heure est
+  // passee : l'image reprend ou elle en etait a l'appel suivant, et le
+  // spectateur apparait quelques images plus tard — ce que personne ne voit,
+  // alors qu'une course qui accroche se sent.
+  const chantiers = new Map();
+  const MAX_CHANTIERS = 64;
+
+  /**
+   * L'image d'un spectateur : une ligne de l'atlas (silhouette et geste, ou
+   * le siege vide), un cap, un personnage, la couleur des sieges. `null` tant
+   * qu'elle n'est pas finie.
+   */
+  function image(ligne, capI, pers, siege) {
+    const cle = ligne + '|' + capI + '|' + (pers ? pers.id : -1) + '|' + siege;
     let e = cache.get(cle);
     if (e) return e;
-    if (budget <= 0 || performance.now() > limite) return null;
-    budget--;
-    const man = MAN();
-    const [ax, ay] = man.ancres[pose][capI];
-    const [x0, y0, x1, y1] = man.cadres[pose][capI];
-    const k = PPM_IMAGE / man.ppm;
-    const sw = x1 - x0, sh = y1 - y0;
-    const w = Math.max(1, Math.ceil(sw * k)), h = Math.max(1, Math.ceil(sh * k));
-    const cv = document.createElement('canvas');
-    cv.width = w; cv.height = h;
-    const c = cv.getContext('2d');
-    const sx = ax + x0, sy = ay + y0;
-    couche(c, atlas.siege, sx, sy, sw, sh, w, h, siege);
-    if (man.poses[pose] !== 'vide') {
-      couche(c, atlas.base, sx, sy, sw, sh, w, h, null);
-      couche(c, atlas.peau, sx, sy, sw, sh, w, h, peau);
-      couche(c, atlas.maillot, sx, sy, sw, sh, w, h, haut);
+    if (performance.now() > limite) return null;
+    let ch = chantiers.get(cle);
+    if (!ch) {
+      if (budget <= 0) return null;
+      budget--;
+      ch = commencer(ligne, capI, pers, siege);
+      chantiers.set(cle, ch);
+      if (chantiers.size > MAX_CHANTIERS) chantiers.delete(chantiers.keys().next().value);
     }
-    e = { cv, ax: -x0 * k, ay: -y0 * k, w, h };
+    while (ch.i < ch.couches.length) {
+      if (performance.now() > limite) return null;
+      const [im, col] = ch.couches[ch.i++];
+      // les chaussures ne se teignent pas : directement sur l'image, sans le
+      // detour par le canevas de passage
+      if (col) couche(ch.c, im, ch.sx, ch.sy, ch.sw, ch.sh, ch.w, ch.h, col);
+      else ch.c.drawImage(im, ch.sx, ch.sy, ch.sw, ch.sh, 0, 0, ch.w, ch.h);
+    }
+    chantiers.delete(cle);
+    e = { cv: ch.cv, ax: ch.ax, ay: ch.ay, w: ch.w, h: ch.h };
     cache.set(cle, e);
     if (cache.size > MAX_IMAGES) cache.delete(cache.keys().next().value);
     return e;
+  }
+
+  /** Le chantier d'une image : son canevas et la liste de ses couches. */
+  function commencer(ligne, capI, pers, siege) {
+    const man = MAN();
+    const [ax, ay] = man.ancres[ligne][capI];
+    const [x0, y0, x1, y1] = man.cadres[ligne][capI];
+    const k = PPM_IMAGE / man.ppm;
+    // Le rectangle source tombe sur des pixels entiers de l'atlas : a la meme
+    // densite que l'image composee, la copie est alors exacte, sans le flou
+    // d'un echantillonnage a cheval sur deux pixels.
+    const sx = Math.floor(ax + x0), sy = Math.floor(ay + y0);
+    const sw = Math.ceil(ax + x1) - sx, sh = Math.ceil(ay + y1) - sy;
+    const w = Math.max(1, Math.ceil(sw * k)), h = Math.max(1, Math.ceil(sh * k));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const couches = [[atlas.siege, siege]];
+    if (pers) {
+      couches.push([atlas.base, null], [atlas.pantalon, pers.pantalon], [atlas.peau, pers.peau],
+                   [atlas.maillot, pers.haut], [atlas.cheveux, pers.cheveux]);
+    }
+    return { cv, c: cv.getContext('2d'), couches, i: 0, sx, sy, sw, sh, w, h,
+             ax: (ax - sx) * k, ay: (ay - sy) * k };
   }
 
   function capProche(deg) {
@@ -169,6 +375,7 @@
   };
 
   let _themeCourant = null;
+  let _personnages = null;
   /** La pose retenue par chaque spectateur, et le geste ou il l'a choisie. */
   const poses = new Map();
   /** Les caps de spectateurs de ce stade, pour tout le trace. */
@@ -192,7 +399,8 @@
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
     if (!charger()) return false;
     if (th !== _themeCourant) {
-      cache.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null; _themeCourant = th;
+      cache.clear(); chantiers.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null;
+      _themeCourant = th; _personnages = null;
     }
     budget = 48;
     const G = api.G, T = G.track;
@@ -200,10 +408,14 @@
     const vue = T.curved ? api.WROT_DEG : 0;
     const s = api.scaleM() / PPM_IMAGE;
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
-    const peauxC = PEAUX.map(hexa), hautsL = hauts(th).map(hexa);
+    if (!_personnages) _personnages = personnages(th);
+    const pers = _personnages;
     const siegeC = hexa(SIEGES[nom] || th.accent || [80, 90, 120]);
     const man = MAN();
     const iAssis = 0, iApplaudit = 1, iDebout = 2, iVide = 3;
+    // la ligne de l'atlas d'une silhouette et d'un geste (voir tribune.py)
+    const nG = man.gestes.length, ligneVide = man.poses.indexOf('vide');
+    const ligneDe = (sil, geste) => sil * nG + geste;
     const t = performance.now() / 1000;
     const margeX = 140 * s * 1.6, margeY = 260 * s * 1.6;
     // part des spectateurs debout : presque personne a une rencontre
@@ -342,16 +554,37 @@
         }
       }
     }
+    // LES DRAPEAUX NE SORTENT QU'AUX GRANDS RENDEZ-VOUS. Une rencontre
+    // scolaire ne brandit rien ; a partir du national, ceux qui sont venus
+    // avec le leur le levent quand ils se levent — et la tribune se couvre de
+    // couleurs a mesure que la course arrive devant elle (voir la ferveur,
+    // plus haut). Ils passent dans la pile de leur porteur : le rang de
+    // devant cache le bas de la hampe, le drapeau passe devant le rang de
+    // derriere.
+    const R = root.RenduPremium;
+    const avecDrapeaux = densite >= 0.6 && !(R && R.niveau < R.MOYEN);
+    const m = api.scaleM(), sd = m / PPM_DRAPEAU, TOUR = Math.PI * 2;
+    let drapeaux = 0;
     // du plus loin au plus pres
     items.sort((p, q) => q[0] - p[0]);
     for (const it of items) {
       const h = it[5];
       const pose = it[3];
-      const vide = pose === iVide;
-      const im = image(pose, it[4], vide ? 0 : peauxC[(h >>> 4) % peauxC.length],
-                       vide ? 0 : hautsL[(h >>> 9) % hautsL.length], siegeC);
+      const p = pose === iVide ? null : pers[(h >>> 4) % pers.length];
+      const im = image(p ? ligneDe(p.sil, pose) : ligneVide, it[4], p, siegeC);
       if (!im) continue;
       ctx.drawImage(im.cv, it[1] - im.ax * s, it[2] - im.ay * s, im.w * s, im.h * s);
+      // la main levee d'un spectateur debout : un peu a droite, a 1,9 m
+      // Le pays se tire a la place et non au personnage : quatre personnages
+      // portent un drapeau, la tribune en montre onze.
+      if (avecDrapeaux && pose === iDebout && p.drapeau && drapeaux < MAX_DRAPEAUX) {
+        drapeaux++;
+        const onde = ((t * 6 + (h % 628) / 100) % TOUR + TOUR) % TOUR;
+        const e = spriteDrapeau((h >>> 11) % DRAPEAUX.length,
+                                Math.floor(onde / TOUR * NF_DRAPEAU) % NF_DRAPEAU);
+        ctx.drawImage(e.cv, it[1] + 0.2 * m - e.x0 * sd, it[2] - 1.9 * m - e.y0 * sd,
+                      e.cv.width * sd, e.cv.height * sd);
+      }
     }
     // TOUT COMPOSER AVANT LE PISTOLET. Hors course, le temps qui reste dans
     // l'image sert a composer d'avance TOUTES les combinaisons des caps du
@@ -363,12 +596,10 @@
     // presentation ou le decompte.
     if (G.state !== 'race') {
       for (const capI of capsVus) {
-        if (!image(iVide, capI, 0, 0, siegeC)) return true;
+        if (!image(ligneVide, capI, null, siegeC)) return true;
         for (let pose = 0; pose < 3; pose++) {
-          for (const peau of peauxC) {
-            for (const haut of hautsL) {
-              if (!image(pose, capI, peau, haut, siegeC)) return true;
-            }
+          for (const p of pers) {
+            if (!image(ligneDe(p.sil, pose), capI, p, siegeC)) return true;
           }
         }
       }

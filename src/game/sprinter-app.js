@@ -22,7 +22,11 @@
       barrier: [232, 234, 238],
       panels: [[214, 74, 62], [44, 108, 186], [240, 196, 70], [60, 152, 118]],
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
-      accent: [240, 158, 46], dust: [226, 190, 160]
+      accent: [240, 158, 46], dust: [226, 190, 160],
+      // tondue dans le sens de la piste : voir tonteEnLong (rendu-premium.js)
+      tonte: 'long',
+      // un rideau de platanes derriere les tribunes ouvertes (drawFeuillus)
+      feuillus: true, feuillage: [44, 104, 38]
     },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
@@ -90,7 +94,8 @@
       barrier: [232, 234, 238],
       panels: [[56, 196, 92], [255, 255, 255], [240, 196, 70], [214, 74, 62]],
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
-      accent: [56, 196, 92], dust: [210, 222, 236]
+      accent: [56, 196, 92], dust: [210, 222, 236],
+      tonte: 'long'
     },
     // Stade de la Riviera : le ciel, la piscine et les palmiers des affiches
     // de Hiroshi Nagai. La palette ne cherche pas le realisme d'un stade, elle
@@ -596,8 +601,6 @@
     if (lvl && lvl.foule != null) return lvl.foule;
     return CROWD_DENSITY[idx] ?? 1;
   }
-  const FLAG_IMG = new Image();
-  FLAG_IMG.src = CROWD_BASE + '/icons/flag-checkered.png';
   // LE SPONSOR DES PANNEAUX PUBLICITAIRES : le logo BENBEZI en relief,
   // modelise et rendu dans Blender depuis le SVG de la marque (dossier
   // BENBEZI/logo-3d, construire_logo_3d.py), en argent sur fond transparent.
@@ -3881,7 +3884,13 @@
       if (T.fullLap) {
         for (let i = 0; i <= N; i++)
           out.push([true, Math.PI * (1 - i / N), 1]);
-        for (let x = st; x <= T.straight + C.RUNOUT; x += st) out.push([false, x, 1]);
+        // La ligne opposee s'arrete a l'arrivee, ou le premier virage — deja
+        // la, en tete de liste — prend le relais : la decelaration se court
+        // dans le virage, comme sur une vraie piste (voir Track.posLap2).
+        // Prolongee tout droit, elle traversait en biais les couloirs et les
+        // gradins du depart.
+        for (let x = st; x < T.straight - st * 0.5; x += st) out.push([false, x, 1]);
+        out.push([false, T.straight, 1]);
       }
     } else {
       // Le terrain continue derriere la ligne de depart. A vingt metres, un
@@ -3970,6 +3979,44 @@
     }
     return T.posR(sm[1], r, sm[0]);
   }
+  /**
+   * LA PART DU TRACE QUI SE VOIT.
+   *
+   * En virage, le trace compte pres de deux cent soixante echantillons — un
+   * tous les metre vingt, sur la ligne droite comme dans la courbe —, et
+   * chaque bande du decor les projetait tous, alors que le cadre n'en montre
+   * qu'une trentaine. Mesure le 29/09/2026 sur un 200 m, processeur bride
+   * comme celui d'un telephone : la tonte et le toit y coutaient a eux deux
+   * plus de trois millisecondes par image, presque tout hors champ.
+   *
+   * Renvoie la tranche contigue des echantillons dont le point (rayon r,
+   * hauteur z) tombe dans le cadre elargi de `marge` pixels, et un echantillon
+   * de plus de chaque cote : le segment qui entre dans le cadre part d'un
+   * point qui n'y est pas. `null` si rien n'y tombe. La marge doit couvrir la
+   * demi-largeur de ce qu'on trace et l'ecart entre deux echantillons.
+   */
+  function fenetre(sm, r, z, marge) {
+    let i0 = -1, i1 = -1;
+    const x1 = G.VW + marge, y1 = G.VH + marge;
+    for (let i = 0; i < sm.length; i++) {
+      const p = sommetInto(sm[i], r, z || 0, _solA);
+      if (p[0] >= -marge && p[0] <= x1 && p[1] >= -marge && p[1] <= y1) {
+        if (i0 < 0) i0 = i;
+        i1 = i;
+      }
+    }
+    if (i0 < 0) return null;
+    return sm.slice(Math.max(0, i0 - 1), Math.min(sm.length, i1 + 2));
+  }
+  /**
+   * Les echantillons du DECOR, pas ceux de la piste : un tous les quatre
+   * metres en virage. A cinquante metres de rayon, la corde s'ecarte de l'arc
+   * de quatre centimetres — un pixel a l'ecran —, et un toit ou une passe de
+   * tondeuse n'a pas besoin de plus. En ligne droite, le pas ordinaire.
+   */
+  function samplesDecor() {
+    return samples(G.track.curved ? 4 : 0);
+  }
   function band(ctx, sm, rIn, rOut, col, z) {
     if (sm.length < 2) return;
     ctx.beginPath();
@@ -4015,7 +4062,7 @@
   // l'etat du jeu ni s'inserer dans sa geometrie.
   const PEINTRE = {
     G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
-    band, bandBrute, bandPattern, rail,
+    band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
   };
   const PREM = () => globalThis.RenduPremium;
   // Le vide sous la piste intergalactique (decor-cosmos.js) : ne dessine rien
@@ -4873,6 +4920,96 @@
 
     tab[variante] = cv;
     return cv;
+  }
+
+  // LE FEUILLU DES STADES MUNICIPAUX.
+  //
+  // Derriere la tribune d'une rencontre scolaire, il n'y avait que de
+  // l'herbe jusqu'au bord du monde : un gradin pose dans un pre. Un stade
+  // municipal est borde d'arbres — platanes, tilleuls, un rideau vert au-dessus
+  // duquel depassent les poteaux d'eclairage. C'est lui qui dit « une ville,
+  // un samedi », la ou l'herbe seule disait « nulle part ».
+  //
+  // Un houppier se lit comme une masse de boules qui se chevauchent, pas
+  // comme un disque : trois valeurs de vert, le clair du cote du soleil (en
+  // haut a droite, comme partout dans le stade — voir LIGHT), le sombre dessous.
+  const FEUILLU_W = 300, FEUILLU_H = 400;
+  const feuilluTiles = new Map();
+  function feuilluTile(th, variante) {
+    let tab = feuilluTiles.get(th);
+    if (!tab) { tab = []; feuilluTiles.set(th, tab); }
+    if (tab[variante]) return tab[variante];
+
+    const cv = document.createElement('canvas');
+    cv.width = FEUILLU_W; cv.height = FEUILLU_H;
+    const c = cv.getContext('2d');
+    const al = (k) => {
+      const v = Math.sin((k + 1) * 127.1 + variante * 311.7) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const feuille = th.feuillage || [34, 96, 30];
+    const sombre = rgb(feuille, 0.62), moyen = rgb(feuille, 0.86);
+    const clair = rgbEclaire(feuille, 1.12, 14), eclat = rgbEclaire(feuille, 1.25, 30);
+    // le tronc, et deux branches maitresses qui partent dans le houppier
+    const pied = FEUILLU_H - 4, axe = FEUILLU_W / 2;
+    c.strokeStyle = 'rgb(84,70,58)'; c.lineCap = 'round';
+    c.lineWidth = 16;
+    c.beginPath(); c.moveTo(axe, pied); c.lineTo(axe + 4, pied - 150); c.stroke();
+    c.lineWidth = 8;
+    c.beginPath(); c.moveTo(axe + 3, pied - 120); c.lineTo(axe - 42, pied - 205); c.stroke();
+    c.beginPath(); c.moveTo(axe + 4, pied - 140); c.lineTo(axe + 46, pied - 215); c.stroke();
+    // le houppier : des boules, du fond vers le devant, de la masse sombre
+    // aux eclats de lumiere
+    const cy = 150, rx = FEUILLU_W * 0.40, ry = 128;
+    const boules = [];
+    for (let k = 0; k < 26; k++) {
+      const a = al(k) * Math.PI * 2, d = Math.sqrt(al(k + 40));
+      boules.push([axe + Math.cos(a) * rx * d * 0.78, cy + Math.sin(a) * ry * d * 0.72,
+                   34 + al(k + 80) * 30]);
+    }
+    const passes = [[sombre, 1.0, 0, 10], [moyen, 0.86, -6, -4], [clair, 0.62, -14, -14],
+                    [eclat, 0.34, -20, -22]];
+    for (const [col, f, dx, dy] of passes) {
+      c.fillStyle = col;
+      for (const [x, y, r] of boules) {
+        // la lumiere vient d'en haut a droite : les passes claires glissent
+        // de ce cote, et seules les boules du dessus les recoivent
+        if (f < 0.9 && y > cy + ry * 0.3) continue;
+        c.beginPath();
+        c.arc(x - dx * 0.6, y + dy, r * f, 0, TAU);
+        c.fill();
+      }
+    }
+    tab[variante] = cv;
+    return cv;
+  }
+
+  /**
+   * Le rideau d'arbres derriere les tribunes a ciel ouvert. Plantes AVANT
+   * elles, dans la pelouse : le gradin leur passe devant le pied, et seuls
+   * les houppiers depassent. Seulement derriere la tribune d'en face — de
+   * l'autre cote, ils se dresseraient entre la camera et la piste.
+   */
+  function drawFeuillus(ctx, th, sm, rOut, recul) {
+    const m = scaleM();
+    // UN RIDEAU, PAS UNE ALLEE : un arbre tous les cinq metres, sur deux
+    // profondeurs, pour que les houppiers se touchent. Et bas — sept a neuf
+    // metres : sur un telephone tenu debout, le haut du cadre coupait des
+    // arbres de onze metres au ras des branches, et il ne restait que des
+    // troncs plantes derriere la tribune.
+    const rangee = rangeeDeToiture(sm, 5);
+    for (let i = 0; i < rangee.length; i++) {
+      const q = rangee[i];
+      if (!auFond(q, rOut)) continue;
+      const graine = ((i + 31) * 2654435761) >>> 0;
+      const r = rOut + recul + (i % 2) * 2.2 + (graine % 3) * 0.5;
+      const h = (7 + ((graine >>> 5) % 6) * 0.45) * m;
+      const tuile = feuilluTile(th, (graine >>> 11) % 4);
+      const w = h * (tuile.width / tuile.height);
+      const p = solid(...ptOf(q, r), 0);
+      if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
+      ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
+    }
   }
 
   // LA HAIE FLEURIE.
@@ -5881,16 +6018,20 @@
   }
 
   /**
-   * La rangee de projecteurs au-dessus des tribunes.
+   * La rangee de projecteurs, accrochee a la rive du toit.
    *
-   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, une rampe, un mat.
+   * TROIS COUCHES, ET L'ORDRE COMPTE : un halo, un boitier, une lampe.
    *
    * Le halo d'abord, tres large et tres transparent — c'est lui qui fait la
    * nuit. Une lampe sans halo est un rectangle blanc colle sur du noir ; ce
    * qu'on reconnait d'un stade eclaire, ce n'est pas la lampe, c'est l'air
-   * autour d'elle. Puis la rampe : une barre blanche, courte, franchement
-   * plus claire que tout le reste de l'image. Le mat enfin, une tige sombre
-   * qui la rattache au toit, sans quoi la rampe flotte.
+   * autour d'elle. Puis le boitier, sombre, qui la tient ; la lampe enfin, une
+   * barre franchement plus claire que tout le reste de l'image.
+   *
+   * LE JOUR, LES MEMES, ETEINTES. Un stade couvert porte sa rampe d'eclairage
+   * en plein midi : ce sont les boitiers alignes sous la rive qui disent
+   * « grand stade », bien avant la foule. Eteints, ils n'ont ni halo ni
+   * eclat — un verre pale dans un boitier gris.
    *
    * ELLES NE CLIGNOTENT PAS. Un scintillement au fil du temps attirerait
    * l'oeil en haut de l'image a chaque frame, pendant que la course se joue
@@ -5898,27 +6039,30 @@
    * lampes voisines n'ont pas exactement la meme intensite, ce qui suffit a
    * ce que la rangee ne paraisse pas imprimee.
    */
-  function drawProjecteurs(ctx, th, sm, near, tiers, sr, sz) {
+  function drawProjecteurs(ctx, th, sm, near, fr, fz, allumees) {
     const m = scaleM();
-    // SOUS LE TOIT, PAS DESSUS. Deux raisons, et elles vont dans le meme sens.
+    // SOUS LE TOIT, PAS DESSUS : dans un stade couvert, les projecteurs sont
+    // accroches au BORD INFERIEUR de la toiture et pointent vers la piste. Un
+    // mat qui depasse au-dessus du toit, c'est un stade des annees
+    // soixante-dix — et la hauteur compte plus de deux fois la distance au
+    // sol a l'ecran (voir solid()) : tout ce qu'on pose au-dessus du toit
+    // sort du cadre. Trois hauteurs avaient ete essayees au-dessus des
+    // gradins, et les trois donnaient une rangee qu'on ne voyait jamais en
+    // course. Depuis que le toit a une rive (voir drawToiture), les lampes y
+    // sont fixees, exactement ou elles sont sur un vrai stade : c'est aussi
+    // le plus bas qu'elles puissent etre, donc le plus sur d'etre dans le
+    // cadre. SUR la rive et non dessous : pendues a une potence, eteintes,
+    // elles flottaient devant le public comme des etiquettes.
     //
-    // La bonne : dans un stade couvert, les projecteurs sont accroches au
-    // BORD INFERIEUR de la toiture et pointent vers la piste. Un mat qui
-    // depasse au-dessus du toit, c'est un stade des annees soixante-dix.
-    //
-    // La contraignante : la hauteur compte plus de deux fois la distance au
-    // sol a l'ecran (voir solid()), et le toit occupe deja le tout dernier
-    // bord de l'image. Tout ce qu'on pose au-dessus sort du cadre. Trois
-    // hauteurs ont ete essayees avant celle-ci — +3,15 puis +2,72 puis
-    // +2,46 — et les trois donnaient une rangee de lampes qu'on ne voyait
-    // jamais en course, sur telephone comme sur grand ecran.
-    const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
     // Une lampe tous les quatre metres : ce qu'est vraiment une rampe
     // d'eclairage de stade, une suite serree de projecteurs et non trois
     // lampadaires. Voir rangeeDeToiture pour ce que cet espacement corrige.
     // seulement au-dessus de la tribune d'en face : voir tribunesDuFond
     const positions = rangeeDeToiture(sm, 4).filter(q => auFond(q, near));
-    const larg = m * 0.62, haut = m * 0.15, mat = m * 0.26;
+    const larg = m * 0.62, haut = m * 0.15;
+    // Le boitier se detache de la rive, un ton au-dessus d'elle.
+    const boitier = rgb(th.roof, allumees ? 0.7 : 0.95);
+    const verre = allumees ? null : rgbEclaire(th.roof, 0.45, 96);
 
     ctx.save();
     for (let i = 0; i < positions.length; i++) {
@@ -5929,26 +6073,167 @@
       // jumelles, et ca ne bouge pas d'une frame a l'autre.
       const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
 
-      // 1. le halo
-      const R = m * 1.35;
-      const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
-      halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
-      halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
-      halo.addColorStop(1, 'rgba(228,214,255,0)');
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
+      // 1. le halo, la nuit seulement
+      if (allumees) {
+        const R = m * 1.35;
+        const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
+        halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
+        halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
+        halo.addColorStop(1, 'rgba(228,214,255,0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
+      }
 
-      // 2. le mat, sous la rampe
-      ctx.fillStyle = rgb(th.roof, 1.5);
-      ctx.fillRect(p[0] - m * 0.022, p[1], m * 0.044, mat);
+      // 2. le boitier, un peu plus large que la lampe
+      ctx.fillStyle = boitier;
+      ctx.fillRect(p[0] - larg * 0.58, p[1] - haut * 0.95, larg * 1.16, haut * 1.9);
 
-      // 3. la rampe
-      ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
-      ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
+      // 3. la lampe
+      if (allumees) {
+        ctx.fillStyle = 'rgba(255,253,246,' + v.toFixed(2) + ')';
+        ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * v).toFixed(2) + ')';
+        ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.34);
+      } else {
+        ctx.fillStyle = verre;
+        ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut);
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillRect(p[0] - larg / 2, p[1] - haut / 2, larg, haut * 0.3);
+      }
     }
     ctx.restore();
+  }
+
+  // LA TOITURE : sa hauteur au-dessus du dernier gradin, et celle de sa rive.
+  const TOIT_HAUT = 2.4, TOIT_RIVE = 0.9;
+
+  /**
+   * Une face verticale le long du trace, remplie de ce que l'appelant a pose
+   * dans fillStyle. C'est wall() sans son eclairage : un voile d'ombre n'a
+   * pas d'orientation a eclairer, il n'a qu'une opacite.
+   */
+  function faceBrute(ctx, sm, r, zLo, zHi) {
+    if (sm.length < 2) return;
+    ctx.beginPath();
+    for (let i = 0; i < sm.length; i++) {
+      const p = sommetInto(sm[i], r, zLo, _solA);
+      i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+    }
+    for (let i = sm.length - 1; i >= 0; i--) {
+      const p = sommetInto(sm[i], r, zHi, _solA);
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  /**
+   * LA TOITURE, CONSTRUITE AU LIEU D'ETRE POSEE.
+   *
+   * C'etait une dalle : une seule bande grise, d'un aplat, posee au-dessus
+   * du public. Elle remplissait le haut de l'image sans rien dire — ni
+   * epaisseur, ni structure, ni l'ombre qu'un toit jette sur ceux qu'il
+   * abrite — et ses fanions, poses sous elle mais dessines apres elle,
+   * flottaient sur sa surface comme des confettis. Sur une photographie de
+   * stade, un toit se lit par trois choses, et aucune ne coute une image :
+   *
+   *   - son OMBRE : les derniers rangs sont a couvert, plus sombres que ceux
+   *     du bas. C'est elle qui met le public SOUS le toit, et non devant ;
+   *   - sa RIVE : le bandeau vertical qui le borde cote piste, a contre-jour
+   *     puisque le soleil vient de derriere la tribune, avec l'arete qui
+   *     accroche la lumiere. C'est ce qui donne au toit une epaisseur ;
+   *   - sa CHARPENTE : des fermes regulieres qui courent de la rive vers le
+   *     fond, et une bande claire le long de la rive — la partie translucide
+   *     des toitures de stade. Elles donnent au toit son echelle.
+   *
+   * La hauteur et l'emprise n'ont pas bouge d'un centimetre : le toit occupe
+   * exactement la place qu'il occupait, il a seulement cesse d'etre plat.
+   */
+  function drawToiture(ctx, th, sm, near, tiers, sr, sz) {
+    const zT = 1.05 + tiers * sz + TOIT_HAUT, zRive = zT - TOIT_RIVE;
+    const rAv = near + 0.3, rAr = near + tiers * sr + 1;
+    const m = scaleM();
+    // Les bandes et les faces du toit : au pas du decor, et seulement la part
+    // du trace qui entre dans le cadre (voir fenetre). La marge couvre la
+    // profondeur du toit et la hauteur de son ombre.
+    const vus = fenetre(samplesDecor(), (rAv + rAr) / 2, zRive,
+                        m * ((rAr - rAv) / 2 + TOIT_RIVE + 3) + 80);
+    const runs = vus ? tribunesDuFond(vus, near) : [];
+
+    // 1. L'OMBRE, suspendue a la rive : des voiles de plus en plus legers vers
+    // le bas, sur le public des derniers rangs. Six voiles de quarante-cinq
+    // centimetres : sous le toit il fait sombre, au bord de la rive deja
+    // moins, et au milieu du gradin la lumiere du ciel reprend tout.
+    ctx.save();
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = 'rgba(8,10,26,' + (0.24 * (1 - k / 6)).toFixed(3) + ')';
+      for (const run of runs) {
+        faceBrute(ctx, run, rAv, zRive - (k + 1) * 0.45, zRive - k * 0.45);
+      }
+    }
+    ctx.restore();
+
+    for (const run of runs) {
+      // 2. LE DESSUS : la bande claire de la rive, puis le reste du toit.
+      const translucide = rAv + (rAr - rAv) * 0.24;
+      band(ctx, run, rAv, translucide, rgb(th.roof, 1.16), zT);
+      band(ctx, run, translucide, rAr, rgb(th.roof, 0.96), zT);
+      // 3. LA RIVE, a contre-jour, et son arete eclairee.
+      // Troncons de QUATRE echantillons, et non decorStride() : le toit suit
+      // deja le pas du decor (quatre metres en virage), et wall() ne garde
+      // qu'un point sur trois d'un troncon de douze. La face avant tombait a une
+      // corde tous les seize metres sous une rive qui, elle, suivait chaque
+      // point — un ecart de soixante centimetres en plein virage. A quatre,
+      // tous les points, et l'eclairage change tous les seize metres comme
+      // avant.
+      wall(ctx, run, rAv, zRive, zT, th.roof, 4);
+      ctx.fillStyle = 'rgba(0,0,12,0.18)';
+      faceBrute(ctx, run, rAv, zRive, zRive + TOIT_RIVE * 0.28);
+      rail(ctx, run, rAv, rgbEclaire(th.roof, 1.1, 90), Math.max(1, m * 0.05), zT);
+    }
+
+    // 4. LA CHARPENTE : une ferme tous les cinq metres, de la rive au fond.
+    // Un trait clair et son ombre, decale le long du toit : c'est ce decalage
+    // qui fait lire une nervure en relief plutot qu'une ligne peinte.
+    const fermes = rangeeDeToiture(sm, 5).filter(q => auFond(q, near));
+    const clair = rgbEclaire(th.roof, 1.05, 34), ombre = rgb(th.roof, 0.72);
+    const lw = Math.max(1, m * 0.06);
+    ctx.save();
+    ctx.lineCap = 'butt';
+    for (const q of fermes) {
+      const a = solid(...ptOf(q, rAv), zT), b = solid(...ptOf(q, rAr), zT);
+      if ((a[0] < -80 && b[0] < -80) || (a[0] > G.VW + 80 && b[0] > G.VW + 80) ||
+          (a[1] < -80 && b[1] < -80) || (a[1] > G.VH + 80 && b[1] > G.VH + 80)) continue;
+      ctx.strokeStyle = ombre; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(a[0] + lw, a[1]); ctx.lineTo(b[0] + lw, b[1]); ctx.stroke();
+      ctx.strokeStyle = clair; ctx.lineWidth = lw * 0.8;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. SUR LA RIVE, la rampe d'eclairage, allumee la nuit.
+    drawProjecteurs(ctx, th, sm, near, rAv - 0.05, zRive + TOIT_RIVE * 0.45, !!th.projecteurs);
+  }
+
+  /**
+   * LE DOS D'UNE TRIBUNE A CIEL OUVERT.
+   *
+   * Sans toit, le dernier rang s'arretait net, et derriere lui commencait la
+   * pelouse : une tribune de rencontre scolaire posee dans un pre, comme un
+   * decor de theatre dont on verrait l'envers. Une tribune est un ouvrage —
+   * son dernier gradin s'adosse a un mur d'appui, a hauteur de coude, coiffe
+   * d'une couvertine. C'est ce mur qui dit que les gradins MONTENT et qu'il y
+   * a du vide derriere eux.
+   *
+   * Trace AVANT le public : le dernier rang s'y adosse, et les tetes des
+   * spectateurs le depassent.
+   */
+  function drawDosTribune(ctx, th, sm, near, tiers, sr, sz) {
+    const rDos = near + tiers * sr, zHaut = 1.05 + tiers * sz, h = 1.1;
+    for (const run of tribunesDuFond(sm, near)) {
+      wall(ctx, run, rDos, zHaut, zHaut + h, th.riser, decorStride());
+      band(ctx, run, rDos, rDos + 0.28, rgb(th.tread, 1.06), zHaut + h);
+      rail(ctx, run, rDos, rgbEclaire(th.tread, 1.0, 26), Math.max(1, scaleM() * 0.035), zHaut + h);
+    }
   }
 
   /**
@@ -6299,6 +6584,11 @@
     // est le seul rangement dont on dispose. Leur pied disparait donc derriere
     // les gradins, comme il le ferait vraiment, et seule la tete depasse.
     if (th.arbres) drawArbres(ctx, th, sm, rOut);
+    // Le rideau de feuillus des tribunes a ciel ouvert (voir drawFeuillus) :
+    // il se plante derriere le mur d'appui, a une dizaine de metres.
+    if (th.feuillus && !tribuneDe(th).toiture) {
+      drawFeuillus(ctx, th, sm, rOut, 1.6 + tribuneDe(th).gradins * 1.7 + 3.2);
+    }
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
@@ -6360,6 +6650,9 @@
       // marche : surface horizontale, pleinement exposee a la lumiere
       band(ctx, smT, r0, r0 + pr, rgb(th.tread, f), z1);
     }
+    // Le mur d'appui des tribunes a ciel ouvert, avant le public qui s'y
+    // adosse (voir drawDosTribune). Le Champ-de-Mars a sa tribune provisoire.
+    if (!tribune.toiture && !cdm) drawDosTribune(ctx, th, smT, near, tiers, sr, sz);
     // LE PUBLIC ASSIS, rangee par rangee, quand ses images sont la (voir
     // tribune.js). Les escaliers passent d'abord, et personne ne s'assied
     // dessus. Sinon, l'ancienne foule en tuile, plus bas.
@@ -6457,46 +6750,10 @@
     // alors ENTRE l'objectif et le public, et une grande bande gris-bleu
     // couvrait tous les spectateurs de la sortie du virage. Une camera placee
     // dans le stade ne voit pas le toit qui est au-dessus d'elle.
-    if (tribune.toiture) {
-      for (const run of tribunesDuFond(smT, near)) {
-        band(ctx, run, near + 0.3, near + tiers * sr + 1, rgb(th.roof),
-             1.05 + tiers * sz + 2.4);
-      }
-    }
-
-    // Au-dessus du toit : des fanions le jour, des projecteurs la nuit.
-    //
-    // Les deux occupent la meme place et repondent au meme besoin — donner
-    // de la definition a une bande qui serait sinon un aplat — mais ils ne
-    // vont pas ensemble. Un fanion a damier ne se lit que sous le soleil ;
-    // dans une enceinte de nuit il devient un confetti gris. Et un stade de
-    // nuit sans lampes n'est pas un stade de nuit, c'est un stade sombre.
-    //
-    // Sans toit, ni l'un ni l'autre n'a ou se poser.
-    if (tribune.toiture) {
-      if (th.projecteurs) {
-        drawProjecteurs(ctx, th, smT, near, tiers, sr, sz);
-      } else if (FLAG_IMG.complete && FLAG_IMG.naturalWidth) {
-        const fh = scaleM() * 0.42, fw = fh * (32 / 27);
-        // MEME CORRECTION QUE POUR LES PROJECTEURS, ET ELLE VIENT DE LOIN.
-        //
-        // Les fanions etaient poses un echantillon sur huit, soit un tous les
-        // QUATRE-VINGT-SEIZE metres en ligne droite : deux pour tout le cent
-        // metres, et le plus souvent aucun dans le cadre. L'asset existait,
-        // il avait meme ete redessine en quatre fois plus fin, et il ne se
-        // voyait pratiquement jamais. Un fanion tous les six metres donne la
-        // guirlande qu'on voulait depuis le debut.
-        //
-        // La hauteur descend aussi sous le toit, pour la meme raison que les
-        // projecteurs : au-dessus, tout sort du cadre.
-        const fz = 1.05 + tiers * sz + 1.6, fr = near + tiers * sr * 0.65;
-        for (const q of rangeeDeToiture(smT, 6).filter(q2 => auFond(q2, near))) {
-          const p = solid(...ptOf(q, fr), fz);
-          if (p[0] < -40 || p[0] > G.VW + 40 || p[1] < -40 || p[1] > G.VH + 40) continue;
-          ctx.drawImage(FLAG_IMG, p[0] - fw / 2, p[1] - fh, fw, fh);
-        }
-      }
-    }
+    // LE TOIT, CONSTRUIT : son ombre sur les derniers rangs, sa rive, sa
+    // charpente, et la rampe de projecteurs pendue a la rive — allumee la
+    // nuit, eteinte le jour (voir drawToiture). Sans toit, ni ombre ni rampe.
+    if (tribune.toiture) drawToiture(ctx, th, smT, near, tiers, sr, sz);
 
     _dansTribune = null;
 

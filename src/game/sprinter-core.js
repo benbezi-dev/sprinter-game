@@ -1193,12 +1193,22 @@
   // Second demi-tour : meme forme que le premier, tournee de 180 degres et
   // translatee pour raccorder au bout de la premiere ligne droite. Ici le
   // virage est toujours un demi-tour complet, quel que soit le rayon.
+  //
+  // PASSE LA LIGNE, LE TOUR CONTINUE. La ligne droite opposee s'arrete a
+  // l'arrivee, et la ou elle s'arrete commence le premier virage : c'est un
+  // ovale. Les vingt-six metres de decelaration filaient pourtant tout droit
+  // dans le prolongement, et le decor avec eux (voir samples) : au depart de
+  // chaque 400 m, une bande de piste et ses gradins traversaient en biais les
+  // couloirs du premier virage, et le coureur du couloir 8 finissait sa course
+  // dans la tribune. Au-dela de la ligne, on suit donc le premier virage.
   Track.prototype.posLap2 = function (s2, r) {
     const B = Math.PI * r, S = this.straight;
     if (s2 < B) {
       const phi = (B - s2) / r;
       return [S + r * Math.sin(phi), -r * Math.cos(phi)];
     }
+    const e = s2 - B - S;
+    if (e > 0) return [-r * Math.sin(e / r), -r * Math.cos(e / r)];
     return [S - (s2 - B), -r];
   };
   // Position a la distance s, pour un rayon donne directement (pas
@@ -1256,6 +1266,9 @@
         const phi = (B - s2) / rRef;
         return [this.straight + r * Math.sin(phi), -r * Math.cos(phi)];
       }
+      // passe la ligne, dans le premier virage (voir posLap2)
+      const e = s2 - B - this.straight;
+      if (e > 0) return [-r * Math.sin(e / rRef), -r * Math.cos(e / rRef)];
       return [this.straight - (s2 - B), -r];
     }
     if (s < A) {
@@ -1276,6 +1289,8 @@
     if (this.fullLap && s >= A + S) {
       const s2 = s - A - S, B = Math.PI * r;
       if (s2 < B) return [true, (B - s2) / r, 1];
+      // passe la ligne, dans le premier virage (voir posLap2)
+      if (s2 - B > S) return [true, Math.PI - (s2 - B - S) / r, 0];
       return [false, s2 - B, 1];
     }
     if (s < A) return [true, (A - s) / r, 0];
@@ -1287,6 +1302,9 @@
     if (this.fullLap && s >= A + this.straight) {
       const s2 = s - A - this.straight, B = Math.PI * r;
       if (s2 < B) return (B - s2) / r - Math.PI;
+      // passe la ligne, le cap tourne avec le premier virage (voir posLap2)
+      const e = s2 - B - this.straight;
+      if (e > 0) return -Math.PI - e / r;
       return -Math.PI;
     }
     if (s >= A) return 0;
