@@ -63,14 +63,27 @@ MACRO = {'gender': 1.0, 'age': 0.5, 'muscle': 1.0, 'weight': 0.48,
 # son poids.
 CIBLES = {
     'torso-muscle-pectoral-incr': 0.75, 'torso-muscle-dorsi-incr': 0.65,
-    'torso-vshape-incr': 0.55, 'measure-waist-circ-decr': 0.45,
+    'torso-vshape-incr': 0.55, 'measure-waist-circ-decr': 0.15,
     'stomach-pregnant-decr': 0.35,
     'l-upperarm-muscle-incr': 0.70, 'r-upperarm-muscle-incr': 0.70,
     'l-upperarm-shoulder-muscle-incr': 0.80, 'r-upperarm-shoulder-muscle-incr': 0.80,
     'l-lowerarm-muscle-incr': 0.50, 'r-lowerarm-muscle-incr': 0.50,
-    'l-upperleg-muscle-incr': 0.85, 'r-upperleg-muscle-incr': 0.85,
-    'l-lowerleg-muscle-incr': 0.65, 'r-lowerleg-muscle-incr': 0.65,
-    'buttocks-volume-incr': 0.60,
+    'l-upperleg-muscle-incr': 1.0, 'r-upperleg-muscle-incr': 1.0,
+    'l-lowerleg-muscle-incr': 0.85, 'r-lowerleg-muscle-incr': 0.85,
+    'buttocks-volume-incr': 0.35,
+    # UN BASSIN D'HOMME. Taille pincee, fesses larges, hanches evasees et
+    # genoux qui se rapprochent : le bas du corps se lisait en femme. Un
+    # sprinteur a le bassin etroit, la cuisse droite du flanc au genou, le
+    # genou et le mollet solides, pas de graisse sur la cuisse.
+    'measure-hips-circ-decr': 0.45, 'hip-scale-horiz-decr': 0.35,
+    'pelvis-tone-incr': 0.50,
+    'l-upperleg-fat-decr': 0.70, 'r-upperleg-fat-decr': 0.70,
+    'l-leg-valgus-decr': 0.45, 'r-leg-valgus-decr': 0.45,
+    'measure-knee-circ-incr': 0.30, 'measure-calf-circ-incr': 0.40,
+    # la masse de la cuisse en PROFONDEUR (quadriceps devant, ischios
+    # derriere), pas en largeur : sans graisse ni hanches, la cuisse maigrissait
+    'measure-thigh-circ-incr': 0.35,
+    'l-upperleg-scale-depth-incr': 0.35, 'r-upperleg-scale-depth-incr': 0.35,
     'measure-neck-circ-incr': 0.45,
     'measure-neck-height-incr': 0.20,
 }
@@ -787,6 +800,21 @@ def habiller(h, rig):
         if ay > 0.118 and c.z > 1.280: return False
         return True
 
+    # UN SHORT D'HOMME. Le corps de MakeHuman n'a rien a l'entrejambe (la
+    # cible « bulge » n'y change rien de visible) : la coque suivait le creux
+    # entre les cuisses et dessinait un V — un bas de corps de femme. Le tissu
+    # se bombe donc devant l'entrejambe, au milieu, sur trois centimetres de
+    # large, et comble le creux au lieu de le suivre.
+    entrejambe = min((h.data.vertices[i].co for i, dd in enumerate(domh)
+                      if abs(h.data.vertices[i].co.y) < 0.004 and 0.70 < h.data.vertices[i].co.z < 1.0
+                      and dd[0] in ('pelvis', 'thigh_l', 'thigh_r')), key=lambda q: q.z)
+    def epaisseur_short(co):
+        d = co - entrejambe
+        devant = max(0.0, min(1.0, (d.x + 0.010) / 0.030))
+        devant = devant * devant * (3 - 2 * devant)
+        g = math.exp(-((co.y / 0.030) ** 2 + ((d.z - 0.040) / 0.032) ** 2))
+        return 0.0045 + 0.016 * g * devant
+
     # LE SHORT : de la taille au tiers haut de la cuisse.
     def short(c, n, d):
         if p(d, *bras) > 0.3 or doigts(d): return False
@@ -886,7 +914,8 @@ def habiller(h, rig):
         # lui la ou ils se croisent, sans quoi le short ressortait en
         # languettes a travers l'ourlet
         ('Meba_maillot', maillot, 0.0068, MAILLOT, 0.55, 0, 0, teinte_france),
-        ('Meba_short', short, 0.0045, SHORT, 0.45),
+        # du lycra mat : brillant, il soulignait chaque courbe de la hanche
+        ('Meba_short', short, epaisseur_short, SHORT, 0.68),
         ('Meba_bandeau', bandeau, 0.0035, BANDEAU, 0.7),
         ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
         # un fondu de deux rangs : le visage de MakeHuman est grossier, et sur
@@ -1306,10 +1335,11 @@ CLAP = {'upperarm_l': (2.62, -0.55, 0.0), 'upperarm_r': (2.62, 0.55, 0.0),
 # Le repos du rig a les bras DANS les hanches (main a y 0,157, flanc a
 # 0,168) : il faut les ecarter un peu (roule positive a gauche = dehors),
 # sinon les mains passent devant le short ou disparaissent derriere.
-# Mesure : main a y 0,200, x 0,036 — au flanc de la cuisse.
-EN_PIED = {'upperarm_l': (0.03, 0.08, 0.0), 'upperarm_r': (0.03, -0.08, 0.0),
-           'lowerarm_l': (0.12, 0.10, 0.0), 'lowerarm_r': (0.12, -0.10, 0.0),
-           'hand_l': (0.12, 0.10, 0.0), 'hand_r': (0.12, -0.10, 0.0),
+# Mesure : main a y 0,243, x 0,043, le flanc a 0,149 — la main detachee de
+# la cuisse de huit centimetres (a quatre, on la voyait collee au short).
+EN_PIED = {'upperarm_l': (0.04, 0.16, 0.0), 'upperarm_r': (0.04, -0.16, 0.0),
+           'lowerarm_l': (0.14, 0.20, 0.0), 'lowerarm_r': (0.14, -0.20, 0.0),
+           'hand_l': (0.14, 0.20, 0.0), 'hand_r': (0.14, -0.20, 0.0),
            'thigh_l': (0.03, 0.0, 0.10), 'thigh_r': (0.0, 0.0, -0.10),
            'calf_l': (0.0, 0.0, 0.10), 'calf_r': (-0.02, 0.0, -0.10),
            'foot_l': (0.0, 0.0, 0.25), 'foot_r': (0.0, 0.0, -0.25),
