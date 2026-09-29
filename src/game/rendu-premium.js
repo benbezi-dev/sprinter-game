@@ -36,16 +36,48 @@
   // le sait, et personne ne devrait avoir a le savoir : c'est au jeu de
   // mesurer ce qu'il tient et de s'y tenir.
   //
-  // Trois paliers, du plus complet au plus sobre. On ne descend qu'apres une
+  // Quatre paliers, du plus complet au plus sobre. On ne descend qu'apres une
   // seconde entiere passee sous le seuil — une image longue arrive a tout le
   // monde (un ramasse-miettes, un onglet qui revient au premier plan) et ne
   // doit rien declencher. On remonte deux fois plus lentement qu'on ne
   // descend, sinon la qualite oscillerait juste au-dessus du seuil, et une
   // image qui change de finition toutes les deux secondes est bien pire
   // qu'une image constamment sobre.
+  //
+  // L'ULTRA, AU-DESSUS DU PLEIN. Ce n'est pas un effet de plus, c'est la
+  // DEFINITION : l'image a la resolution native de l'ecran (trois pixels par
+  // point au lieu de deux, voir `dpr`), des corps coupes deux fois plus fin
+  // (le quatrieme niveau de coureur-hd.js, mesure dans Blender) et des volumes
+  // dont chaque facette tombe sous deux pixels et demi — jusqu'a soixante-
+  // quatre au lieu de seize (facetCount, sprinter-app.js).
+  //
+  // ON PART D'EN HAUT, COMME AVANT. La mesure ne sait voir qu'un appareil qui
+  // RAME : elle lit le temps entre deux images, et sur un ecran a soixante
+  // images par seconde il vaut 16,7 ms que le rendu en prenne trois ou quinze.
+  // Elle ne pourrait donc jamais decider de monter a l'ultra ; elle sait en
+  // descendre. Le telephone qui ne le tient pas le quitte en une
+  // demi-seconde (voir plus bas), et le reste de la partie se joue au plein,
+  // comme aujourd'hui.
+  //
+  // ET UN ULTRA QU'ON A DU QUITTER NE REVIENT PAS. Il coute beaucoup plus que
+  // le palier du dessous — c'est tout son objet —, si bien qu'un ecran rapide
+  // qui y remonterait retomberait aussitot : la resolution changerait toutes
+  // les cinq secondes, ce qui est exactement l'oscillation que ce reglage
+  // existe pour empecher.
+  //
+  // L'ULTRA EXIGE LA CADENCE PLEINE, ET LA PERD VITE. Les autres paliers
+  // tolerent une image lente et ne descendent qu'apres une seconde au-dela de
+  // 26 ms ; l'ultra, lui, se quitte des qu'on passe 20 ms en moyenne pendant
+  // une demi-seconde. C'est une question de centiemes : un telephone qui
+  // arrive a l'ultra sur l'accueil, plus leger qu'une course, et qui ne le
+  // tient pas a huit coureurs, doit le lacher PENDANT le compte a rebours —
+  // trois secondes — et non une seconde apres le coup de pistolet, en plein
+  // depart.
   // -------------------------------------------------------------------
-  const PLEIN = 2, MOYEN = 1, SOBRE = 0;
-  let niveau = PLEIN;
+  const ULTRA = 3, PLEIN = 2, MOYEN = 1, SOBRE = 0;
+  const SEUIL_ULTRA_MS = 20, DUREE_ULTRA_S = 0.5;
+  let niveau = ULTRA;
+  let ultraPerdu = false;
   let budget = 0, lent = 0, rapide = 0;
   // Le pas de temps de l'image en cours. Le rendu du monde ne le recoit pas —
   // il dessine, il ne simule pas — mais la poussiere et les flashs, eux, en
@@ -62,13 +94,34 @@
     if (verrou) return;
     // Moyenne glissante du temps d'image, en millisecondes.
     budget += ((dt * 1000) - budget) * 0.08;
-    if (budget > 26 && niveau > SOBRE) {
+    const plafond = ultraPerdu ? PLEIN : ULTRA;
+    const ultra = niveau === ULTRA;
+    if (budget > (ultra ? SEUIL_ULTRA_MS : 26) && niveau > SOBRE) {
       lent += dt; rapide = 0;
-      if (lent > 1.0) { niveau--; lent = 0; }
-    } else if (budget < 15 && niveau < PLEIN) {
+      if (lent > (ultra ? DUREE_ULTRA_S : 1.0)) {
+        if (ultra) ultraPerdu = true;
+        niveau--; lent = 0;
+      }
+    } else if (budget < 15 && niveau < plafond) {
       rapide += dt; lent = 0;
       if (rapide > 4.0) { niveau++; rapide = 0; }
     } else { lent = 0; rapide = 0; }
+  }
+
+  /**
+   * LA DEFINITION DE L'IMAGE : combien de pixels reels par point d'ecran.
+   *
+   * Le jeu plafonnait a deux partout, et c'etait raisonnable — un telephone a
+   * trois pixels par point en affiche deux fois et quart plus qu'a deux. A
+   * l'ultra on prend la densite native de l'ecran, jusqu'a trois ; ailleurs
+   * on garde deux. La toile du jeu et la scene des sauts la lisent ici plutot
+   * que de recopier la regle : c'est une decision, et elle ne doit se prendre
+   * qu'une fois. Les confettis et les feux d'artifice gardent deux, eux : des
+   * rectangles de six pixels n'y gagneraient rien.
+   */
+  function dpr() {
+    const d = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    return Math.min(d, niveau >= ULTRA ? 3 : 2);
   }
 
   // -------------------------------------------------------------------
@@ -1039,11 +1092,11 @@
 
   globalThis.RenduPremium = {
     get niveau() { return niveau; },
-    set niveau(v) { niveau = clamp(v | 0, SOBRE, PLEIN); verrou = true; },
+    set niveau(v) { niveau = clamp(v | 0, SOBRE, ULTRA); verrou = true; },
     get auto() { return !verrou; },
     set auto(v) { verrou = !v; },
-    PLEIN, MOYEN, SOBRE,
-    mesurer, brume, tonte, herbe, grain, occlusion, nappes, ombre,
+    ULTRA, PLEIN, MOYEN, SOBRE,
+    mesurer, dpr, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
     vignette, poussee, partPoussee, agePoussee, partEchos, echosCopies,

@@ -46,6 +46,20 @@ const COULEURS = {
 
 const lisse = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 
+/**
+ * La couche de finition est-elle a l'ULTRA (voir rendu-premium.js) ?
+ *
+ * Le decor la lit une fois, a la construction de la scene : la definition de
+ * la toile, la carte d'ombre, le ciel et les projecteurs ne se refont pas en
+ * cours de concours. Le corps de l'athlete, lui, la relit a chaque image
+ * (creerCorps) : c'est lui qui coute, et c'est donc lui qui doit pouvoir
+ * redescendre en route.
+ */
+function aLUltra() {
+  const P = globalThis.RenduPremium;
+  return !!(P && P.ULTRA !== undefined && P.niveau >= P.ULTRA);
+}
+
 /** Une texture de bruit, pour que le sable et la pelouse ne soient pas des aplats. */
 function textureBruit(base, ecart, taille = 128, rayures = 0) {
   const c = document.createElement('canvas');
@@ -241,8 +255,9 @@ function mat(x, z) {
   g.add(boite(0.7, 34, 0.7, 0xaeb4bb, 0, 17, 0, false));
   const tete = boite(5, 3, 0.5, 0x374151, 0, 35, 0, false);
   g.add(tete);
+  const cotes = aLUltra() ? 32 : 12;
   for (let i = 0; i < 4; i++) for (let k = 0; k < 3; k++) {
-    const p = new THREE.Mesh(new THREE.CircleGeometry(0.42, 12), new THREE.MeshBasicMaterial({ color: 0xfffbe6 }));
+    const p = new THREE.Mesh(new THREE.CircleGeometry(0.42, cotes), new THREE.MeshBasicMaterial({ color: 0xfffbe6 }));
     p.position.set(-1.8 + i * 1.2, 34 + k * 0.95, 0.27);
     g.add(p);
   }
@@ -253,7 +268,9 @@ function mat(x, z) {
 
 /** Le ciel : un degrade, et quelques nuages peints, tres loin. */
 function ciel(scene) {
-  const geo = new THREE.SphereGeometry(500, 32, 16);
+  // Le degrade se lit sur la position interpolee d'un sommet a l'autre : a
+  // l'ULTRA, deux fois plus de fuseaux, et ses marches disparaissent.
+  const geo = aLUltra() ? new THREE.SphereGeometry(500, 64, 32) : new THREE.SphereGeometry(500, 32, 16);
   const matCiel = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { haut: { value: new THREE.Color(0x3d8fe0) }, bas: { value: new THREE.Color(0xd6ecff) } },
@@ -384,7 +401,10 @@ function construireDecor(scene, e) {
 // z vers le haut, en unites du rig. C'est le calcul de personCapsules
 // (sprinter-app.js), sans la courbe ni le miroir : on est sur une ligne droite.
 function capsulesDe(r) {
-  const parts = SprinterCore.pose(r);
+  // Le corps de l'ultra (le quatrieme niveau mesure dans Blender) tant que la
+  // couche de finition y est ; le niveau pres sinon. Relu a chaque image, pour
+  // la meme raison que le maillage (voir creerCorps).
+  const parts = SprinterCore.pose(r, aLUltra() ? 3 : undefined);
   const fsh = SprinterCore.fallShape(r.fallAnim);
   const sautW = r.saut ? Math.max(0, Math.min(1, r.saut.w)) : 0;
   const fall = (fsh ? fsh.pitch : 0) -
@@ -415,16 +435,27 @@ function capsulesDe(r) {
   return caps;
 }
 
-const SEG = 16;          // sommets par anneau
-const CALOTTE = 4;       // anneaux par calotte
-
 /**
  * Le corps, en un seul maillage refait a chaque image : un tronc de cone a
  * section elliptique par segment, ferme par une calotte la ou le bout n'est
  * pas enfoui dans le segment voisin.
+ *
+ * A L'ULTRA, TRENTE-DEUX SOMMETS PAR ANNEAU ET HUIT ANNEAUX PAR CALOTTE, au
+ * lieu de seize et quatre : une camera de television s'approche assez de
+ * l'athlete pour qu'on compte les facettes d'une cuisse. Et deux fois plus de
+ * segments, parce que le corps de l'ultra en porte deux fois plus (le
+ * quatrieme niveau de coureur-hd.js) : au plafond d'avant, le maillage
+ * s'arretait avant les pieds.
+ *
+ * LE PALIER SE RELIT A CHAQUE IMAGE. Les tampons sont dimensionnes une fois,
+ * pour l'ultra si la scene s'ouvre a l'ultra ; mais si la couche de finition
+ * le lache en plein concours — un telephone qui ne tient pas la cadence —, le
+ * corps redescend a seize sommets des l'image suivante au lieu de garder
+ * jusqu'a la fin un maillage que l'appareil ne sait pas porter.
  */
 function creerCorps() {
-  const MAX = 160 * (SEG * (2 + 2 * CALOTTE) + 2);
+  const depart = aLUltra();
+  const MAX = (depart ? 320 : 160) * ((depart ? 32 : 16) * (2 + 2 * (depart ? 8 : 4)) + 2);
   const pos = new Float32Array(MAX * 3), col = new Float32Array(MAX * 3);
   const idx = new Uint32Array(MAX * 6);
   const geo = new THREE.BufferGeometry();
@@ -442,6 +473,9 @@ function creerCorps() {
 
   let niAvant = 0;
   function maj(caps, k) {
+    const ultra = depart && aLUltra();
+    const SEG = ultra ? 32 : 16;          // sommets par anneau
+    const CALOTTE = ultra ? 8 : 4;        // anneaux par calotte
     let nv = 0, ni = 0;
     const anneau = (cx, cy, cz, rx, ry, dir) => {
       const base = nv;
@@ -571,7 +605,8 @@ function creerGerbe(scene) {
 function creerMarques(scene) {
   const groupe = new THREE.Group();
   scene.add(groupe);
-  const empreinte = new THREE.Mesh(new THREE.CircleGeometry(1, 24),
+  // L'empreinte dans le sable se voit de pres, au ralenti de la mesure.
+  const empreinte = new THREE.Mesh(new THREE.CircleGeometry(1, aLUltra() ? 64 : 24),
     new THREE.MeshStandardMaterial({ color: 0xb89a62, roughness: 1, transparent: true, opacity: 0.85 }));
   empreinte.rotation.x = -Math.PI / 2;
   empreinte.visible = false;
@@ -646,7 +681,12 @@ export function monterScene3D() {
   const toile = renderer.domElement;
   toile.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:block;';
   hote.appendChild(toile);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  // LA DEFINITION DU CONCOURS SE FIXE ICI, une fois : celle de la couche de
+  // finition (trois pixels par point a l'ULTRA, deux ailleurs). Le corps, lui,
+  // suit le palier a chaque image (voir creerCorps).
+  const Prem = globalThis.RenduPremium;
+  const ultra = aLUltra();
+  renderer.setPixelRatio(Prem && Prem.dpr ? Prem.dpr() : Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -667,7 +707,9 @@ export function monterScene3D() {
   scene.add(new THREE.HemisphereLight(0xdff1ff, 0x5a8f3c, 0.7));
   const soleil = new THREE.DirectionalLight(0xfff1dc, 2.6);
   soleil.castShadow = true;
-  soleil.shadow.mapSize.set(2048, 2048);
+  // L'ombre d'un maillage plus fin merite une carte plus fine : a 2048, les
+  // doigts d'un athlete ultra projetaient la meme tache que le poing.
+  soleil.shadow.mapSize.set(ultra ? 4096 : 2048, ultra ? 4096 : 2048);
   const sc = soleil.shadow.camera;
   sc.left = -4; sc.right = 4; sc.top = 4; sc.bottom = -4; sc.near = 1; sc.far = 60;
   soleil.shadow.bias = -0.0004;

@@ -19,7 +19,9 @@ const src = VEDETTES ? 'tools/blender/sortie/vedettes-hd.json'
 const dst = VEDETTES ? 'src/game/coureur-vedettes.js' : 'src/game/coureur-hd.js';
 const d = JSON.parse(readFileSync(src, 'utf8'));
 
-const NIVEAUX = ['pres', 'moyen', 'loin'];
+// L'ultra en dernier : le jeu lit les niveaux par leur rang, et les trois
+// premiers ne bougent pas (voir chaines() dans anatomie.py).
+const NIVEAUX = ['pres', 'moyen', 'loin', 'ultra'];
 
 function chaine(ch) {
   const n = ch.niveaux.map(tr =>
@@ -59,7 +61,7 @@ function ecrireVedettes() {
 
    Meme forme d'entree que coureur-hd.js : [centre en z, demi-hauteur,
    cambrure, profondeur bas, largeur bas, profondeur haut, largeur haut], aux
-   trois niveaux de detail. Le rig ne change pas — un athlete reel court et
+   quatre niveaux de detail. Le rig ne change pas — un athlete reel court et
    tourne comme n'importe quel coureur du jeu ; seules ses epaisseurs sont
    les siennes, et l'ecart de ses epaules (\`carrure\`), que son look reprend
    dans \`morph.sh\`.
@@ -111,10 +113,14 @@ const js = `/* -----------------------------------------------------------------
    coureur premium reste un coureur du jeu, il tourne donc dans le virage
    exactement comme les autres.
 
-   TROIS NIVEAUX DE DETAIL. Le meme corps, echantillonne en plus ou moins
+   QUATRE NIVEAUX DE DETAIL. Le meme corps, echantillonne en plus ou moins
    de troncs de cone. Huit coureurs a l'ecran ne peuvent pas tous payer
    soixante volumes ; celui qu'on regarde de pres, si. Un coureur lointain
    n'est pas un autre personnage, c'est le meme, mesure plus grossierement.
+   Le quatrieme, l'ULTRA, coupe deux fois plus fin que le niveau pres : il
+   ne sert qu'au palier ULTRA de la couche de finition (rendu-premium.js),
+   sur l'appareil qui tient la cadence. Il vient en dernier pour que les
+   trois autres gardent leur rang.
 
    Ecart residuel a l'anatomie visee, apres calibration :
      homme — ${ecarts('m')}
@@ -144,8 +150,7 @@ writeFileSync(dst, js);
 const n = (g) => Object.values(g).reduce((a, ch) => a + ch[0].length, 0);
 console.log(`ecrit ${dst}`);
 for (const cle of ['m', 'f']) {
-  const tot = d[cle].reduce((a, ch) => a + ch.niveaux[0].length, 0);
-  const moy = d[cle].reduce((a, ch) => a + ch.niveaux[1].length, 0);
-  const loin = d[cle].reduce((a, ch) => a + ch.niveaux[2].length, 0);
-  console.log(`  ${cle} : ${tot} / ${moy} / ${loin} troncs par chaine cumulee`);
+  const compte = n => d[cle].reduce((a, ch) => a + (ch.niveaux[n] || []).length, 0);
+  console.log(`  ${cle} : ${NIVEAUX.map((nom, n) => `${compte(n)} ${nom}`).join(' / ')}` +
+              ' troncs par chaine cumulee');
 }

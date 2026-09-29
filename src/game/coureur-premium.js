@@ -24,7 +24,29 @@
   // Trois niveaux, du plus fin au plus grossier. Le choix se fait sur la
   // taille a l'ecran, pas sur la distance de course : un coureur de dos a
   // dix metres occupe plus de pixels qu'un coureur de face a cinquante.
-  var PRES = 0, MOYEN = 1, LOIN = 2;
+  //
+  // Et un quatrieme, l'ULTRA, plus fin que PRES mais range APRES les trois
+  // autres : le rang est l'adresse d'un niveau dans coureur-hd.js, et les
+  // trois premiers ne devaient pas bouger. Il ne sert qu'au palier ULTRA de la
+  // couche de finition (rendu-premium.js). Ne pas en deduire qu'un niveau
+  // plus grand est plus grossier : c'est `detaille` qui le dit.
+  var PRES = 0, MOYEN = 1, LOIN = 2, ULTRA = 3;
+
+  /** Ce niveau porte-t-il le corps en gros plan — mains, pieds, doigts ? */
+  function detaille(niv) {
+    return niv === PRES || niv === ULTRA;
+  }
+
+  /**
+   * Le niveau qu'un corps peut vraiment servir.
+   *
+   * Un athlete sculpte avant l'ultra n'a que trois niveaux : on lui rend son
+   * niveau pres plutot qu'un tableau vide, qui ferait tomber pose().
+   */
+  function niveauDe(pro, lod) {
+    if (lod === undefined || lod === null) return PRES;
+    return pro && pro.torso && pro.torso[lod] ? lod : PRES;
+  }
 
   // CE QUE LE RENDU DOIT FAIRE DES BOUTS D'UN SEGMENT.
   //
@@ -69,6 +91,31 @@
   }
 
   /**
+   * L'ULTRA COUPE LA OU COUPE LE NIVEAU PRES.
+   *
+   * `coupe` tombe au premier joint dont le tronc suivant a son centre au-dessus
+   * de la hauteur demandee. Sur des troncs deux fois plus courts, ce joint-la
+   * n'est plus le meme : le poignet de l'ultra remontait de 2,7 cm, et la main
+   * — qui part du poignet et finit au bout des doigts — s'allongeait d'autant,
+   * justement sur les gros plans ou elle se voit.
+   *
+   * Or l'ultra coupe chaque chaine en deux fois plus de troncs que le niveau
+   * pres, sur le meme intervalle (anatomie.chaines) : chacun des joints du
+   * niveau pres est aussi un joint de l'ultra. On cherche donc le joint du
+   * niveau pres, et l'on coupe l'ultra au meme endroit — le short, le
+   * bandeau du poignet et la main tombent exactement ou ils tombaient.
+   */
+  function coupeA(pro, nom, niv, h) {
+    var tr = pro[nom][niv];
+    var pres = pro[nom][PRES];
+    if (niv !== ULTRA || !pres) return coupe(tr, h);
+    var t = pres[coupe(pres, h)], joint = t[0] - t[1];
+    var i = 0;
+    while (i < tr.length - 1 && tr[i][0] - tr[i][1] < joint - 1e-4) i++;
+    return i;
+  }
+
+  /**
    * Poser une chaine de troncs mesures sur un os.
    *
    * @param add    la fonction d'ajout de pose()
@@ -103,8 +150,8 @@
   function chaine(add, pro, nom, niv, col, pv, ang, oy, yaw, k, dz, bas, haut,
                   depuis, jusqua) {
     var tr = pro[nom][niv], d = dz || 0;
-    var i0 = depuis === undefined ? 0 : coupe(tr, depuis);
-    var i1 = jusqua === undefined ? tr.length - 1 : coupe(tr, jusqua) - 1;
+    var i0 = depuis === undefined ? 0 : coupeA(pro, nom, niv, depuis);
+    var i1 = jusqua === undefined ? tr.length - 1 : coupeA(pro, nom, niv, jusqua) - 1;
     for (var i = i0; i <= i1; i++) {
       var t = tr[i];
       // t = [centre z, demi-hauteur, cambrure, prof. bas, larg. bas,
@@ -176,7 +223,7 @@
    * entre les deux. Elle lit donc le bord au lieu de le supposer.
    */
   function bord(pro, nom, niv, h) {
-    var t = pro[nom][niv][coupe(pro[nom][niv], h)];
+    var t = pro[nom][niv][coupeA(pro, nom, niv, h)];
     return t[0] - t[1];
   }
 
@@ -231,7 +278,8 @@
 
   root.SprinterPremium = {
     chaine: chaine, avant: avant, rayon: rayon, section: section, bord: bord,
-    PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
+    detaille: detaille, niveauDe: niveauDe,
+    PRES: PRES, MOYEN: MOYEN, LOIN: LOIN, ULTRA: ULTRA,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
     COLLE: COLLE,
     /**

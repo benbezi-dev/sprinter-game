@@ -146,7 +146,10 @@ export function GameCanvas() {
       const r = box.getBoundingClientRect();
       const w = Math.round(r.width) || window.innerWidth;
       const h = Math.round(r.height) || window.innerHeight;
-      SprinterApp.G.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // La definition se decide dans la couche de finition : trois pixels par
+      // point a l'ULTRA, deux ailleurs (voir dpr() dans rendu-premium.js).
+      const Prem = (globalThis as any).RenduPremium;
+      SprinterApp.G.dpr = Prem && Prem.dpr ? Prem.dpr() : Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.round(w * SprinterApp.G.dpr);
       canvas.height = Math.round(h * SprinterApp.G.dpr);
       canvas.style.width = w + 'px';
@@ -220,6 +223,15 @@ export function GameCanvas() {
       // lui retirer. Voir game/rendu-premium.js.
       const Prem = (globalThis as any).RenduPremium;
       if (Prem && !redessin) Prem.mesurer(dt);
+
+      // LA DEFINITION NE CHANGE QU'AUX MENUS. Quitter l'ULTRA redimensionne la
+      // toile, et l'enregistreur des revues la filme pendant la course (voir
+      // game/review.ts) : un film dont la taille change en route peut ne pas
+      // s'en remettre. Le changement attend donc l'accueil, ou rien ne filme.
+      if (Prem && Prem.dpr && !redessin) {
+        const st = SprinterApp.G.state;
+        if ((st === 'title' || st === 'open') && Prem.dpr() !== SprinterApp.G.dpr) resize();
+      }
 
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);

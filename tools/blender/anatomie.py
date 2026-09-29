@@ -312,27 +312,34 @@ def fermer(G, fem):
 #   zw      : (bas, haut) en hauteur reelle
 #   zl      : hauteur locale correspondant a zw[0], dans le repere du pivot
 #   axe     : (x, y) de l'axe de mesure — un bras n'est pas au milieu du corps
-#   n       : nombre de troncs aux trois niveaux de detail (pres, moyen, loin)
+#   n       : nombre de troncs aux quatre niveaux de detail (pres, moyen,
+#             loin, ultra)
 #
 # Les niveaux de detail existent parce que huit coureurs a l'ecran ne
 # peuvent pas tous payer soixante troncs de cone. Ils sont mesures sur le
 # MEME maillage : un coureur lointain est le meme corps, echantillonne plus
 # grossierement, pas un autre personnage.
+#
+# L'ULTRA VIENT EN DERNIER, ET NON EN PREMIER. Le jeu lit les niveaux par leur
+# rang — 0 pres, 1 moyen, 2 loin — a une dizaine d'endroits ; le quatrieme
+# s'ajoute derriere sans deplacer les trois autres. Il coupe chaque chaine
+# deux fois plus fin que le niveau pres, et ne sert qu'au palier ULTRA de la
+# couche de finition (rendu-premium.js), la ou l'appareil tient la cadence.
 
 def chaines(fem=False, carrure=1.0):
     E = ecarts(fem, carrure)
     sy, hy = E['sh'], E['hip']
     return [
         # nom,        groupe,     zw,                 zl,      axe,        n
-        ('pelvis',   'pelvis',   (0.772, 0.968),   -0.098,  (0.0, 0.0),  (4, 2, 1)),
-        ('torso',    'torso',    (0.930, 1.350),    0.060,  (0.0, 0.0),  (7, 4, 2)),
-        ('neck',     'neck',     (1.380, 1.464),    0.510,  (0.0, 0.0),  (2, 1, 1)),
-        ('head',     'head',     (1.456, 1.628),    0.586,  (0.0, 0.0),  (3, 2, 1)),
-        ('deltoid',  'deltoid',  (1.282, 1.382),    0.412,  (0.0, sy),   (2, 1, 1)),
-        ('upperarm', 'upperarm', (1.090, 1.340),   -0.250,  (0.0, sy),   (5, 3, 2)),
-        ('forearm',  'forearm',  (0.816, 1.090),   -0.274,  (0.0, sy),   (5, 3, 2)),
-        ('thigh',    'thigh',    (0.470, 0.850),   -0.380,  (0.0, hy),   (6, 4, 2)),
-        ('shank',    'shank',    (0.078, 0.458),   -0.380,  (0.0, hy),   (6, 4, 2)),
+        ('pelvis',   'pelvis',   (0.772, 0.968),   -0.098,  (0.0, 0.0),  (4, 2, 1, 8)),
+        ('torso',    'torso',    (0.930, 1.350),    0.060,  (0.0, 0.0),  (7, 4, 2, 14)),
+        ('neck',     'neck',     (1.380, 1.464),    0.510,  (0.0, 0.0),  (2, 1, 1, 4)),
+        ('head',     'head',     (1.456, 1.628),    0.586,  (0.0, 0.0),  (3, 2, 1, 6)),
+        ('deltoid',  'deltoid',  (1.282, 1.382),    0.412,  (0.0, sy),   (2, 1, 1, 4)),
+        ('upperarm', 'upperarm', (1.090, 1.340),   -0.250,  (0.0, sy),   (5, 3, 2, 10)),
+        ('forearm',  'forearm',  (0.816, 1.090),   -0.274,  (0.0, sy),   (5, 3, 2, 10)),
+        ('thigh',    'thigh',    (0.470, 0.850),   -0.380,  (0.0, hy),   (6, 4, 2, 12)),
+        ('shank',    'shank',    (0.078, 0.458),   -0.380,  (0.0, hy),   (6, 4, 2, 12)),
     ]
 
 
