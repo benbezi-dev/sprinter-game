@@ -125,18 +125,6 @@ export function ecouterSaut(f) {
 /** L'etat du saut en cours, pour l'ecran. Nul hors d'un concours. */
 export function etatSaut() { return e; }
 
-/**
- * Ou est l'athlete, dans les coordonnees du sautoir : `d` le long de la piste
- * d'elan, `y` en travers. C'est ce que lit la scene en trois dimensions
- * (sauts-3d.js), qui ne connait pas la rotation de sauts-vue.js. Nul hors
- * d'un concours.
- */
-export function sauteurLocal() {
-  const j = SprinterApp.G.player;
-  if (!e || !vue || !j) return null;
-  return vue.avec(j, () => ({ d: j.d, y: (j.demi || 0) + SprinterCore.C.LANE_W * 0.5 }));
-}
-
 /** Le triple saut est-il l'epreuve en cours ? */
 const triple = () => !!e && e.epreuve === 'triple';
 
