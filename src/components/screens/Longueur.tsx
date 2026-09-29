@@ -377,7 +377,9 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
       {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. */}
       {/* Decale a droite du bouton de pause, qui tient le coin gauche. */}
       {temps !== 'fin' && (
-        <div className="max-w-lg mx-auto mt-2 pl-10">
+        // il s'efface pendant le gros plan du record, qu'il cacherait
+        <div className={`max-w-lg mx-auto mt-2 pl-10 transition-opacity duration-500
+                         ${temps === 'toi' && annonce?.sorte === 'marque' && record?.ok ? 'opacity-0' : ''}`}>
           <Tableau lignes={cl} accent={accent} court />
         </div>
       )}
