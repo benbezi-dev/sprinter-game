@@ -198,6 +198,7 @@
     // meme rayure que la piste avait en travers. Un stade qui veut ses passes
     // pose maintenant `tonte: true` dans son theme.
     if (niveau < MOYEN || th.pinceau || !th.tonte) return;
+    if (th.tonte === 'long') { tonteEnLong(ctx, th, P, rIn, rOut, horizon); return; }
     // Des tranches DEUX FOIS plus fines que celles du decor. Le pas de rendu
     // ordinaire fait douze metres : a l'echelle ou la camera tient le
     // coureur, une passe de douze metres barre le tiers de l'ecran, et ce
@@ -215,6 +216,58 @@
       P.band(ctx, tranche, courbe ? 0 : rIn - 60, rIn, col);
       // Le dehors : du bord exterieur jusqu'a l'horizon du stade.
       P.band(ctx, tranche, rOut, rOut + horizon, col);
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // LES PASSES EN LONG.
+  //
+  // Les passes en travers ont ete eteintes pour une bonne raison : la
+  // camera suit le coureur, et des bandes perpendiculaires a la course
+  // DEFILENT sous lui — deux verts qui alternent a chaque foulee, la meme
+  // rayure que la piste avait en travers. Le defaut n'etait pas la tonte,
+  // c'etait son sens.
+  //
+  // Tondues dans le sens de la piste, les passes ne defilent plus : elles
+  // glissent sur elles-memes, comme les lignes de couloir, et restent a leur
+  // place dans le cadre pendant toute la course. C'est le sens dans lequel on
+  // tond un terrain d'honneur d'un bout a l'autre, et c'est ce qu'on lit sur
+  // toute photographie de stade prise des tribunes : de longues bandes
+  // claires et sombres, paralleles a la ligne droite.
+  //
+  // Elles suivent le virage — une bande de rayon constant, comme un couloir.
+  // Seule la bande CLAIRE est peinte, par-dessus l'aplat qui fait la sombre :
+  // la moitie de la surface a remplir, et pas un pixel de plus.
+  // -------------------------------------------------------------------
+  const PASSE_LONG = 5.2;   // metres ; un peu plus que la moitie de la piste
+
+  function tonteEnLong(ctx, th, P, rIn, rOut, horizon) {
+    // Au pas du decor, et bande par bande seulement ce qui entre dans le
+    // cadre (voir fenetre, sprinter-app.js) : en virage, tracees sur les deux
+    // cent soixante echantillons de la piste, les passes coutaient deux
+    // millisecondes par image sur un processeur de telephone, hors champ pour
+    // l'essentiel.
+    const T = P.G.track, sm = P.samplesDecor();
+    const clair = P.rgb(th.grass, 1 + (th.tonteForce || 0.10));
+    // LE DEDANS D'UN DEMI-TOUR NE SUIT PAS TOUT LE TRACE. Les quarante metres
+    // de ligne opposee qui precedent le virage (voir samples()) bordent une
+    // pelouse que drawWorld referme en biais par le centre : une bande qui
+    // les suivrait deborderait de l'herbe. On garde le virage et la ligne
+    // d'arrivee, qui bordent la pelouse sur toute leur longueur.
+    const dedans = T.curved && !T.fullLap ? sm.filter(q => q[0] || q[2] === 0) : sm;
+    const fond = T.curved ? 0 : rIn - 60;
+    const marge = P.scaleM() * (PASSE_LONG / 2 + 4.5) + 60;
+    const passe = (liste, r0, r1) => {
+      const vus = P.fenetre(liste, (r0 + r1) / 2, 0, marge);
+      if (vus) P.band(ctx, vus, r0, r1, clair);
+    };
+    // La premiere passe longe la corde, et elle est SOMBRE : contre le
+    // liseret blanc, une bande claire se lirait comme un second liseret.
+    for (let r = rIn - PASSE_LONG; r > fond; r -= 2 * PASSE_LONG) {
+      passe(dedans, Math.max(fond, r - PASSE_LONG), r);
+    }
+    for (let r = rOut + PASSE_LONG; r < rOut + horizon; r += 2 * PASSE_LONG) {
+      passe(sm, r, Math.min(rOut + horizon, r + PASSE_LONG));
     }
   }
 
