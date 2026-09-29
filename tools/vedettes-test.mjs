@@ -192,10 +192,10 @@ const bouts = (p) => [-1, 1].map(sg => {
 });
 // L'ecart des mains : du point le plus a l'interieur de la main gauche a celui
 // de la main droite — la ou elles se touchent. On ne garde que les volumes de
-// l'avant-bras et de la main (roulis de plus d'un demi-radian), dans le tiers
+// l'avant-bras et de la main (roulis de plus de 0,05 rad), dans le tiers
 // haut du geste.
 const ecartMains = (parts) => {
-  const m = parts.filter(p => p[0] === LM.skin && Math.abs(p[7] || 0) > 0.5).flatMap(bouts);
+  const m = parts.filter(p => p[0] === LM.skin && Math.abs(p[7] || 0) > 0.05).flatMap(bouts);
   const zMax = Math.max(...m.map(q => q[2]));
   const haut = m.filter(q => q[2] > zMax - 0.08);
   const g = haut.filter(q => q[1] > 0), d = haut.filter(q => q[1] < 0);
@@ -205,8 +205,43 @@ const ecartMains = (parts) => {
 const ferme = ecartMains(clap(true)), ouvert = ecartMains(clap(false));
 ok('mains ouvertes : ecartees', ouvert && ouvert.ecart > 0.18, ouvert && `${ouvert.ecart.toFixed(3)} m`);
 ok('a la frappe : elles se touchent', ferme && ferme.ecart < 0.07, ferme && `${ferme.ecart.toFixed(3)} m`);
-// le crane culmine vers 1,64 m au-dessus de la piste, sur le rig du jeu
-ok('et au-dessus de la tete', ferme && ferme.haut > 1.64, ferme && `${ferme.haut.toFixed(2)} m`);
+// DEVANT LE VISAGE, PAS AU-DESSUS : le crane culmine vers 1,64 m sur le rig
+// du jeu, les yeux vers 1,52 ; les mains montent a hauteur du visage.
+ok('devant le visage, pas au-dessus de la tete', ferme && ferme.haut > 1.42 && ferme.haut < 1.62,
+   ferme && `${ferme.haut.toFixed(2)} m`);
+
+titre('SON SKIN : LE DEPART ET LE COUDE');
+// Vingt pour cent de marge en plus pour decrocher le depart parfait : le
+// « TOP » du HUD tombe a 82 % du gain de reaction.
+{
+  const race = K.RACES['100'], track = new K.Track(race);
+  const topA = (look, r) => {
+    const p = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
+    if (look) p.look = look;
+    p.press('left', r);
+    return p.reactBonus > K.C.REACT_BONUS * 0.82;
+  };
+  ok('maillot : 0,150 s est un depart parfait', topA(null, 0.150));
+  ok('maillot : 0,180 s ne l est pas', !topA(null, 0.180));
+  ok('sous son skin, 0,180 s l est', topA(LM, 0.180));
+  ok('sous son skin, 0,190 s ne l est plus', !topA(LM, 0.190));
+  // la marge : sous 0,156 s en maillot, sous 0,187 s sous son skin
+  const seuil = (look) => { let r = 0.10; while (topA(look, r + 0.0005)) r += 0.0005; return r; };
+  const a = seuil(null), b = seuil(LM);
+  ok('la marge du depart parfait grandit de vingt pour cent', Math.abs(b / a - 1.2) < 0.01,
+     `${a.toFixed(4)} s -> ${b.toFixed(4)} s`);
+}
+// LE COUDE RESTE PLIE DERRIERE : quand le bras est derriere le corps, l'angle
+// de l'avant-bras au bras ne descend pas sous 0,8 rad (45 degres).
+{
+  const G = K.GAITS.canon;
+  let pire = 9;
+  for (let i = 0; i < 64; i++) {
+    const ph = i / 64 * Math.PI * 2;
+    if (K.gait(G.arm, ph) < -0.5) pire = Math.min(pire, K.gait(G.elbow, ph));
+  }
+  ok('bras derriere, le coude garde son angle', pire > 0.8, `${pire.toFixed(2)} rad`);
+}
 
 console.log(`\n${'─'.repeat(62)}\n   ${e ? e + ' ECHEC(S).' : 'TOUT PASSE.'}`);
 process.exit(e ? 1 : 0);

@@ -8,6 +8,9 @@
                              appuis et l'aura sur son buste.
      - LA TRANSITION PARFAITE : le halo, et les copies du coureur derriere lui.
 
+   SAUF SOUS UN SKIN QUI PART PLUS FORT (look.departParfait, le skin de
+   Meba-Mickael Zeze) : son depart canon porte aussi l'image remanente.
+
    ILS SONT INDEPENDANTS, et c'est la moitie de la regle. Un depart manque
    n'empeche pas la relance de se signer ; une relance manquee ne retire rien
    au depart ; les deux reussis allument les deux, l'un apres l'autre. Rien
@@ -50,6 +53,11 @@ export const SEUIL_CANON = 0.82;
 /** Le depart canon : une reaction qui merite son halo. */
 export function departCanon(p: any, reactBonusMax: number): boolean {
   return !p.jumped && p.reactBonus > reactBonusMax * SEUIL_CANON;
+}
+
+/** Un skin dont le depart canon porte l'image remanente (look.departParfait). */
+export function departRemanent(p: any): boolean {
+  return !!(p && p.look && p.look.departParfait > 1);
 }
 
 /** La transition parfaite : la seule note qui vaille, celle qui ajoute les echos. */
@@ -98,7 +106,7 @@ export function guetteurDePoussee() {
     // ligne « deux notes connues d un coup » dans poussee-canal-test.mjs.
     if (!vuReaction && p.reaction !== null) {
       vuReaction = true;
-      if (departCanon(p, reactBonusMax)) gestes.push({ force: 1, echos: false });
+      if (departCanon(p, reactBonusMax)) gestes.push({ force: 1, echos: departRemanent(p) });
     }
     if (!vuTrans && p.transGrade !== null) {
       vuTrans = true;

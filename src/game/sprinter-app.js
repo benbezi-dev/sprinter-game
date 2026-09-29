@@ -8105,9 +8105,10 @@
       // `cap` et `roulis` sont ceux d'un athlete qui ne suit pas le couloir :
       // le sauteur en hauteur prend sa courbe, puis tourne le dos a la barre.
       // Sans eux, ils valent zero et rien ne change.
+      const cap = T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0);
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
-                 T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0),
+                 cap + capDuClap(r, cap),
                  T.lean(r.d, r.lane, r.v) + (r.roulis || 0));
       ctx.globalAlpha = 1;
     };
@@ -8148,6 +8149,27 @@
     for (const [r, g2] of vis) drawNomRepere(ctx, r, g2[0], g2[1], m);
     // La bulle de presentation, au-dessus de tout — pastilles comprises.
     drawBulle(ctx, vis, m);
+  }
+
+  /**
+   * IL SE RETOURNE POUR APPLAUDIR (look.clap). La course finie, Meba-Mickael
+   * Zeze frappe dans ses mains devant son visage ; vu de dos et d'en haut, par
+   * la camera du jeu, des mains a hauteur des yeux passaient au-dessus du
+   * crane. Il se tourne donc vers l'objectif — de trois quarts, un peu vers
+   * la tribune — a mesure qu'il s'arrete : rien tant qu'il court a plus de
+   * 3,5 m/s, face a nous sous 1 m/s. Le cap vise est pris dans le repere de
+   * l'ecran (la camera regarde vers +x +y), d'ou le virage du stade retire.
+   */
+  const CAP_SALUT = -2.62;   // -150 degres : face a la camera (-135), un rien vers la tribune
+  function capDuClap(r, cap) {
+    if (!r.look || !r.look.clap || !r.finished) return 0;
+    const w = Math.max(0, Math.min(1, (3.5 - (r.v || 0)) / 2.5));
+    if (w <= 0) return 0;
+    const vise = CAP_SALUT - (G.track && G.track.curved ? WROT : 0);
+    let d = (vise - cap) % TAU;
+    if (d > Math.PI) d -= TAU;
+    if (d < -Math.PI) d += TAU;
+    return d * w * w * (3 - 2 * w);
   }
 
   /**

@@ -52,6 +52,9 @@ const Qi = Q.clone().invert();
 const qQ = new THREE.Quaternion().setFromRotationMatrix(Q);
 const qQi = qQ.clone().invert();
 
+/** De combien la peau remonte a l'ecran du jeu (lineaire : 1,9 = x1,33 en sRGB). */
+const ECLAIRCIR_PEAU = 1.9;
+
 const modeles = new Map<string, Modele>();
 const enCours = new Map<string, Promise<Modele | null>>();
 let rendu: THREE.WebGLRenderer | null = null;
@@ -123,7 +126,16 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   const os = new Map<string, THREE.Bone>();
   racineGltf.traverse((o: any) => {
     if (o.isBone) os.set(o.name, o);
-    if (o.isMesh) { o.frustumCulled = false; }
+    if (o.isMesh) {
+      o.frustumCulled = false;
+      // LA PEAU, ECLAIRCIE POUR LE STADE. Sa teinte est celle des portraits
+      // (Cycles, un studio sombre) ; sous le soleil et le ciel de la piste
+      // elle tombait presque au noir, bien plus sombre que sa doublure en
+      // tubes. On la remonte ici, au chargement, sans toucher aux portraits.
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (m && m.name === 'Meba_peau' && m.color) m.color.multiplyScalar(ECLAIRCIR_PEAU);
+      }
+    }
   });
   const prof = (b: THREE.Object3D) => { let n = 0; while (b.parent) { b = b.parent; n++; } return n; };
   const ordre = [...os.values()].sort((a, b) => prof(a) - prof(b));

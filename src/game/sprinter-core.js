@@ -951,8 +951,13 @@
                       [3.14, -0.37], [3.93, -0.17], [4.71, -0.04], [5.50, 0.00]]),
       arm: catmull([[0, -0.38], [0.79, 0.16], [1.57, 0.31], [2.36, -0.29],
                     [3.14, -0.35], [3.93, -0.68], [4.71, -1.21], [5.50, -0.85]]),
-      elbow: catmull([[0, 0.65], [0.79, 1.27], [1.57, 2.01], [2.36, 1.85],
-                      [3.14, 0.50], [3.93, 0.19], [4.71, 0.18], [5.50, 0.79]]),
+      // LE COUDE RESTE PLIE DERRIERE. Releve, il se depliait a 0,18 rad quand
+      // le bras passait derriere le corps — la ou, de profil, MediaPipe perd
+      // l'avant-bras derriere la hanche : le bras filait droit en balancier.
+      // Il garde donc un angle franc (60 a 65 degres) en arriere, et se ferme
+      // toujours devant le visage (2,0 rad).
+      elbow: catmull([[0, 0.85], [0.79, 1.27], [1.57, 2.01], [2.36, 1.85],
+                      [3.14, 0.90], [3.93, 1.05], [4.71, 1.12], [5.50, 1.05]]),
       // Les tables sont ses angles : le moteur ne les amplifie plus (boost et
       // armAmp a 1). Le buste mesure (-0,27 rad a cette vitesse) donne `lean`.
       boost: 1.0, armAmp: 1.0, lean: 1.27, bob: 0.92, stride: 0.86,
@@ -1006,6 +1011,17 @@
   }
 
   const EMPTY_MORPH = {};
+
+  // LE CLAP DE MEBA-MICKAEL ZEZE (L.clap), voir pose : les angles du bras et de
+  // l'avant-bras, absolus comme toute la pose, et le roulis de chacun (positif
+  // vers l'axe du corps pour l'avant-bras). `frappe` et `rouleAvFrappe`
+  // s'ajoutent a mesure que les mains se ferment.
+  // DEVANT LE VISAGE, PAS AU-DESSUS DE LA TETE : bras leves a l'horizontale
+  // devant lui, coudes a peine ouverts, avant-bras dresses qui se rejoignent a
+  // hauteur des yeux, trente centimetres devant le buste (mesure dans
+  // tools/vedettes-test.mjs : 20 cm entre les mains ouvertes, 1 cm a la frappe).
+  const CLAP = { bras: 1.40, avBras: 2.95, frappe: 0.05,
+                 rouleBras: 0.12, rouleAv: 0.22, rouleAvFrappe: 0.45 };
 
   function gaitOf(look) {
     return (look && GAITS[look.gait]) || GAITS.base;
@@ -1104,6 +1120,7 @@
       // `meches`  : la couleur des vanilles de la coiffure 'twists'.
       // `chaine`  : la couleur d'une chaine au ras du cou, et son pendentif.
       // `allure`  : 'canon' — le depart canon et la fin qui s'erode (setPace).
+      // `departParfait` : voir plus bas, a son champ.
       // `rituel`  : sa mise en place dans les blocs (BLOC.rituel, phaseBlocs).
       // `clap`    : son clap au-dessus de la tete, apres la ligne et quand on
       //             le presente (pose).
@@ -1117,6 +1134,11 @@
       meches: o.meches || null,
       chaine: o.chaine || null,
       allure: o.allure || null,
+      // `departParfait` : la marge du depart parfait, multipliee (1,2 = vingt
+      //             pour cent de temps de reaction en plus pour decrocher le
+      //             « TOP ») ; et un depart parfait porte alors l'image
+      //             remanente de la transition parfaite (poussee-gestes.ts).
+      departParfait: o.departParfait || 0,
       rituel: !!o.rituel,
       clap: !!o.clap,
       // `maillage` : le chemin de son vrai maillage (GLB), dessine en WebGL
@@ -1231,10 +1253,14 @@
     // l'ultra : c'est le skin premium de l'evenement.
     'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [96, 58, 44], profil: 'meba',
       jersey: [242, 244, 248], shorts: [30, 44, 110], shoe: [214, 240, 44],
-      hair: 'twists', hairCol: [30, 24, 22], meches: [196, 160, 104],
+      hair: 'twists', hairCol: [30, 24, 22], meches: [230, 192, 118],
       h: 1.77, gait: 'canon', morph: { sh: 1.02 },
       bandeau: [30, 30, 34], barbe: [36, 26, 24], barbePleine: true,
       chaine: [226, 184, 72], allure: 'canon', rituel: true, clap: true,
+      // SON SKIN PART PLUS FORT : vingt pour cent de chances en plus de
+      // decrocher le depart parfait, qui s'allume alors comme une transition
+      // parfaite — le halo ET l'image remanente.
+      departParfait: 1.2,
       facettes: 64, lisse: true, maillage: 'vedettes/meba.glb' })
   };
 
@@ -1711,8 +1737,15 @@
       this.reaction = Math.max(0, elapsed);
       if (!this.jumped) {
         const w = C.REACT_WINDOW - C.REACT_BEST;
+        // UN SKIN QUI ELARGIT LE DEPART PARFAIT (look.departParfait) : la
+        // reaction est jugee comme si elle etait plus courte d'autant. Le
+        // « TOP » tombe a 82 % du gain, soit sous 0,156 s d'ordinaire et
+        // sous 0,187 s avec 1,2 — vingt pour cent de marge en plus. Le temps
+        // affiche reste le vrai.
+        const marge = (this.look && this.look.departParfait) || 1;
+        const jugee = this.reaction / marge;
         this.reactBonus = C.REACT_BONUS *
-          Math.min(1, Math.max(0, (C.REACT_WINDOW - this.reaction) / w));
+          Math.min(1, Math.max(0, (C.REACT_WINDOW - jugee) / w));
         this.v += this.reactBonus;
       }
     }
@@ -2315,20 +2348,20 @@
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
     }
-    // LE CLAP AU-DESSUS DE LA TETE — le geste de Mickael Meba-Zeze (L.clap).
+    // LE CLAP DEVANT LE VISAGE — le geste de Mickael Meba-Zeze (L.clap).
     //
-    // Releve sur la finale du 200 m de Lievin (2018) : la course finie, il se
-    // retourne vers la tribune et frappe dans ses mains tres haut, bras en
-    // losange — coudes ouverts sur les cotes, avant-bras qui se rejoignent
-    // au-dessus du crane —, deux frappes et demie par seconde, le sourire en
-    // plus. C'est lui qui fait lever le public ; c'est aussi ce qu'il fait
-    // quand on le presente.
+    // La course finie, il se retourne vers la tribune et frappe dans ses
+    // mains devant son visage — bras leves devant lui, avant-bras dresses —,
+    // deux frappes et demie par seconde, le sourire en plus. C'est lui qui
+    // fait lever le public ; c'est aussi ce qu'il fait quand on le presente.
+    // (Un premier clap, au-dessus du crane, n'etait pas le sien : corrige a
+    // la demande de l'utilisateur le 29/09/2026. Les angles sont dans CLAP.)
     //
     // Les mains ne se rejoignent qu'en sortant du plan de course : chaque bras
     // porte donc un ROULIS vers l'axe du corps (`rouleBras`, en radians, positif
     // vers l'axe), que les os et personCapsules appliquent autour de l'epaule
-    // puis du coude. Le bras s'ouvre de 0,55 rad, l'avant-bras revient de 0,6 a
-    // 1,05 : les mains s'ecartent de vingt-cinq centimetres et se touchent.
+    // puis du coude : l'avant-bras revient de 0,22 a 0,67 rad, et les mains
+    // passent de vingt centimetres d'ecart a la frappe.
     //
     // Il monte avec la presentation (`celebrate`) et, apres la ligne, a mesure
     // que le coureur ralentit : on ne frappe pas dans ses mains a douze metres
@@ -2341,10 +2374,10 @@
       // la frappe est breve, l'ouverture plus longue : une puissance sur le
       // cosinus tient les mains ecartees les deux tiers du temps
       const ferme = Math.pow(0.5 - 0.5 * Math.cos(tc * 2.5 * TAU), 2.2);
-      const uA = 2.62, fA = 3.02 + 0.10 * ferme;
+      const uA = CLAP.bras, fA = CLAP.avBras + CLAP.frappe * ferme;
       al = [melange(al[0], uA, wCl), melange(al[1], fA, wCl)];
       ar = [melange(ar[0], uA, wCl), melange(ar[1], fA, wCl)];
-      rouleBras = [-0.55 * wCl, (0.60 + 0.45 * ferme) * wCl];
+      rouleBras = [CLAP.rouleBras * wCl, (CLAP.rouleAv + CLAP.rouleAvFrappe * ferme) * wCl];
     }
     // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
     //
@@ -3177,7 +3210,7 @@
 
   root.SprinterCore = {
     TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
-    GAIT, GAITS, gaitOf, gait, catmull, Track, Runner,
+    GAIT, GAITS, gaitOf, gait, catmull, Track, Runner, CLAP,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL,

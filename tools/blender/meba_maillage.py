@@ -654,7 +654,8 @@ SEMELLE = (236, 236, 232)
 BANDEAU = (30, 30, 34)
 BARBE = (20, 15, 14)
 CHEVEU = (30, 24, 22)
-MECHES = (196, 160, 104)
+# un blond decolore, dore : plus sombre, il se perdait a la taille du jeu
+MECHES = (230, 192, 118)
 OR = (226, 184, 72)
 SOURCIL = (18, 13, 12)
 BLEU_FRANCE = (38, 64, 168)
@@ -1074,7 +1075,7 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
         # UNE TOUFFE QUI MONTE ET PART EN ARRIERE, pas un oursin : sur ses
         # photos, les vanilles du sommet se dressent en se couchant vers la
         # nuque, celles du bord retombent sur les cotes du bandeau.
-        L = 0.047 - 0.017 * bord + rnd.uniform(-0.005, 0.005)
+        L = 0.055 - 0.017 * bord + rnd.uniform(-0.005, 0.005)
         if courte:
             L = rnd.uniform(0.012, 0.020)
         d = (nor * (1.0 - 0.30 * bord) + Vector((-0.55, 0, 0.10))
@@ -1097,7 +1098,7 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
             brins.append(pts)
     # des tubes, en un seul maillage
     cu = bpy.data.curves.new('Meba_vanilles', 'CURVE')
-    cu.dimensions = '3D'; cu.bevel_depth = 0.0040; cu.bevel_resolution = 1
+    cu.dimensions = '3D'; cu.bevel_depth = 0.0047; cu.bevel_resolution = 1
     cu.use_fill_caps = True
     for pts in brins:
         sp = cu.splines.new('POLY'); sp.points.add(len(pts) - 1)
@@ -1110,14 +1111,17 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
     bpy.ops.object.convert(target='MESH')
     o = bpy.context.active_object
-    # du brun a la racine au blond a la pointe : une couleur par sommet
+    # LE BRUN NE TIENT QUE LA RACINE. Fondu sur deux centimetres, il couvrait
+    # presque toute la vanille — les courtes restaient brunes d'un bout a
+    # l'autre — et, a soixante pixels de haut, le blond ne se voyait plus :
+    # il vire au blond des six premiers millimetres.
     me = o.data
     col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
     racine = Vector([srgb_vers_lin(c / 255) for c in CHEVEU])
     pointe = Vector([srgb_vers_lin(c / 255) for c in MECHES])
     for v in me.vertices:
         loc, _, _, dist = arbre.find_nearest(v.co)
-        t = max(0.0, min(1.0, (dist - 0.004) / 0.02))
+        t = max(0.0, min(1.0, (dist - 0.002) / 0.006))
         c = racine.lerp(pointe, t * t * (3 - 2 * t))
         col.data[v.index].color = (c.x, c.y, c.z, 1.0)
     mat = bpy.data.materials.new('Meba_vanilles')
@@ -1126,7 +1130,7 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
     bsdf = next(nd for nd in nt.nodes if nd.type == 'BSDF_PRINCIPLED')
     ca = nt.nodes.new('ShaderNodeVertexColor'); ca.layer_name = 'Col'
     nt.links.new(ca.outputs['Color'], bsdf.inputs['Base Color'])
-    bsdf.inputs['Roughness'].default_value = 0.7
+    bsdf.inputs['Roughness'].default_value = 0.55
     me.materials.append(mat)
     for p in me.polygons:
         p.use_smooth = True
