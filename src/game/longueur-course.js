@@ -64,6 +64,18 @@ export const PISTE_Y = -4.4;
  * court de gauche a droite, les tribunes derriere.
  */
 const PIVOT_MONDE = [55, -14];
+
+/**
+ * LE SAUTOIR LE LONG DE LA LIGNE DROITE, comme a la television et dans les
+ * jeux de saut : la piste d'elan longe la piste, entre elle et la grande
+ * tribune, et la camera de Sprinter la voit en trois-quarts, en diagonale a
+ * l'ecran, avec les panneaux et le public juste derriere. La tribune recule
+ * de ECART_TRIBUNE pour lui laisser la place (sprinter-app.js, drawWorld).
+ */
+const LE_LONG = true;
+const ECART_TRIBUNE = 7;
+/** L'axe de la piste d'elan, en metres au-dela du dernier couloir. */
+const AU_DELA = 3.4;
 let vue = null;
 
 /**
@@ -165,7 +177,11 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   };
   prechargerSable(e.theme);
 
-  vue = creerVue({ rot: PROFIL, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: PIVOT_MONDE, laneW: SprinterCore.C.LANE_W });
+  const C = SprinterCore.C;
+  vue = LE_LONG
+    ? creerVue({ rot: 0, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: [LIGNE, C.LANE_W * C.LANE_COUNT + AU_DELA], laneW: C.LANE_W })
+    : creerVue({ rot: PROFIL, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: PIVOT_MONDE, laneW: C.LANE_W });
+  G.ecartTribune = LE_LONG ? ECART_TRIBUNE : 0;
   // Tout ce que le moteur demande au saut passe par le repere du sautoir : le
   // coureur y revient le temps de la reponse, et retourne au monde apres.
   const local = (fn) => vue.avec(G.player, fn);
@@ -282,6 +298,7 @@ function nettoyer() {
   G.consigneSaut = null;
   G.pavesSaut = null;
   G.zoneReservee = null;
+  G.ecartTribune = 0;
   if (G.obstacles && G.obstacles.saut) G.obstacles = null;
   G.zoomMode = 1;
   if (G.player) {
@@ -754,6 +771,7 @@ function mesurer() {
 function viseCamera() {
   const G = SprinterApp.G, j = G.player;
   if (!e || !j) return [LIGNE, PISTE_Y];
+  if (LE_LONG) return viseLeLong(j);
   // DE PROFIL (sauts-vue.js), un metre de piste occupe 1,26 metre d'ecran en
   // largeur, et un metre de travers 0,63 en hauteur. On pose donc l'athlete a
   // une part de la largeur de l'ecran, et le sol a une part de sa hauteur —
@@ -775,8 +793,40 @@ function viseCamera() {
   return [j.d + part * demi, PISTE_Y + cote];
 }
 
+/**
+ * LA CAMERA DU SAUTOIR LE LONG DE LA PISTE. Dans la vue de Sprinter, la piste
+ * d'elan descend en diagonale vers la droite de l'ecran : on vise quelques
+ * metres devant l'athlete, pour qu'il ait devant lui la planche puis le
+ * sable, et un peu vers la tribune, pour que le public reste dans le cadre.
+ */
+function viseLeLong(j) {
+  let devant = 3;
+  if (e.phase === 'elan' || e.phase === 'traverse' || e.phase === 'casse') {
+    devant = 3 + 3.5 * lisse((j.d - (e.ligne - 16)) / 12);
+  } else if (e.phase === 'appel' || e.phase === 'vol' || e.phase === 'pose') {
+    devant = 3.2;
+  } else if (e.phase === 'reception') {
+    return [Math.max(j.d, e.reception.x) + 1.2, PISTE_Y + 1.6];
+  }
+  return [j.d + devant, PISTE_Y + 1.6];
+}
+
+/**
+ * Le sautoir le long de la piste se regarde de pres, et d'une distance qui ne
+ * change presque pas : un zoom qui respire a chaque phase fait bouger tout le
+ * stade derriere l'athlete.
+ */
+function zoomLeLong() {
+  switch (e.phase) {
+    case 'repos': case 'attente': return 2.45;
+    case 'reception': return 2.75;
+    default: return 2.6;
+  }
+}
+
 function zoomVise() {
   if (!e) return 1;
+  if (LE_LONG) return zoomLeLong();
   const j = SprinterApp.G.player;
   // De profil, le cadre est large et bas : on regarde d'un peu plus loin qu'en
   // trois quarts, et le triple saut, qui s'etend sur vingt metres, plus loin
@@ -795,7 +845,7 @@ function zoomVise() {
 function zoomer(dt) {
   const G = SprinterApp.G;
   const z = G.zoomMode || 1;
-  G.zoomMode = z + (zoomVise() - z) * (1 - Math.exp(-2.4 * dt));
+  G.zoomMode = z + (zoomVise() - z) * (1 - Math.exp(-(LE_LONG ? 1.2 : 2.4) * dt));
 }
 
 function placerCamera(net) {

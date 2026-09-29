@@ -95,7 +95,10 @@ export function creerVue({ rot, pivotLocal, pivotMonde, laneW }) {
         x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
         y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);
       }
-      return { x0: x0 - marge, x1: x1 + marge, y0: y0 - marge, y1: Math.min(0, y1 + marge) };
+      // Dans la pelouse, la zone s'arrete au bord de la piste (y = 0). Au-dela
+      // du dernier couloir, le sautoir le long de la ligne droite, elle n'a
+      // pas de piste a epargner.
+      return { x0: x0 - marge, x1: x1 + marge, y0: y0 - marge, y1: y0 < 0 ? Math.min(0, y1 + marge) : y1 + marge };
     },
   };
 }

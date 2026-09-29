@@ -6408,7 +6408,9 @@
     const enTribune = cdm ? cdm.tribuneSur(apiCdm(), sm) : null;
     const smT = enTribune ? enTribune.sm : sm;
     _dansTribune = enTribune ? enTribune.dans : null;
-    const near = rOut + 1.6, tiers = tribune.gradins, sr = 1.7, sz = 0.58;
+    // Un concours de saut pose son sautoir entre la piste et la tribune
+    // (longueur-course.js) : la tribune recule d'autant, panneaux compris.
+    const near = rOut + 1.6 + (G.ecartTribune || 0), tiers = tribune.gradins, sr = 1.7, sz = 0.58;
     const stp = decorStride();
     if (cdm) cdm.badauds(ctx, apiCdm(), th, sm, near, enTribune.dans);
     // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
