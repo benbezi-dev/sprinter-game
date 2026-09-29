@@ -1290,7 +1290,8 @@ def tout(glb=None, blend=None):
 # --- LES PORTRAITS -------------------------------------------------------------
 # Ceux de sa fiche, de sa banniere et de l'ecran du skin (DefiVedette.tsx) :
 # le meme maillage que dans la course, rendu dans Cycles. En buste de trois
-# quarts, et en pied dans son geste — le clap au-dessus de la tete. Fond
+# quarts, et en pied, debout, les bras le long du corps (le clap au-dessus
+# de la tete cachait le visage et ouvrait les emmanchures). Fond
 # transparent : l'interface pose ses propres couleurs derriere.
 
 CLAP = {'upperarm_l': (2.62, -0.55, 0.0), 'upperarm_r': (2.62, 0.55, 0.0),
@@ -1300,6 +1301,19 @@ CLAP = {'upperarm_l': (2.62, -0.55, 0.0), 'upperarm_r': (2.62, 0.55, 0.0),
         'calf_l': (0.0, 0.0, 0.10), 'calf_r': (-0.04, 0.0, -0.10),
         'foot_l': (0.0, 0.0, 0.25), 'foot_r': (0.0, 0.0, -0.25),
         'head': (-0.12, 0.0, 0.0), 'neck_01': (-0.05, 0.0, 0.0)}
+# EN PIED : les bras tombent le long du corps, le coude a peine plie, les
+# pieds un peu ouverts ; la tete droite, tournee vers l'objectif.
+# Le repos du rig a les bras DANS les hanches (main a y 0,157, flanc a
+# 0,168) : il faut les ecarter un peu (roule positive a gauche = dehors),
+# sinon les mains passent devant le short ou disparaissent derriere.
+# Mesure : main a y 0,200, x 0,036 — au flanc de la cuisse.
+EN_PIED = {'upperarm_l': (0.03, 0.08, 0.0), 'upperarm_r': (0.03, -0.08, 0.0),
+           'lowerarm_l': (0.12, 0.10, 0.0), 'lowerarm_r': (0.12, -0.10, 0.0),
+           'hand_l': (0.12, 0.10, 0.0), 'hand_r': (0.12, -0.10, 0.0),
+           'thigh_l': (0.03, 0.0, 0.10), 'thigh_r': (0.0, 0.0, -0.10),
+           'calf_l': (0.0, 0.0, 0.10), 'calf_r': (-0.02, 0.0, -0.10),
+           'foot_l': (0.0, 0.0, 0.25), 'foot_r': (0.0, 0.0, -0.25),
+           'head': (0.02, 0.0, 0.16), 'neck_01': (0.0, 0.0, 0.06)}
 DEBOUT = {'upperarm_l': (0.10, -0.12, 0.0), 'upperarm_r': (0.10, 0.12, 0.0),
           'lowerarm_l': (0.45, -0.08, 0.0), 'lowerarm_r': (0.45, 0.08, 0.0),
           'hand_l': (0.45, -0.08, 0.0), 'hand_r': (0.45, 0.08, 0.0),
@@ -1391,9 +1405,11 @@ def portraits(rig, dossier):
     camera_portrait((1.35, -0.75, 1.42), (0.02, 0.0, 1.36), 70)
     sc.render.filepath = os.path.join(dossier, 'meba-buste.webp')
     bpy.ops.render.render(write_still=True)
-    poser(rig, CLAP)
+    poser(rig, EN_PIED)
     sc.render.resolution_x, sc.render.resolution_y = 900, 1200
-    camera_portrait((2.55, -1.35, 1.05), (0.0, 0.0, 0.98), 50)
+    # cadre sur le corps entier : les bras baisses, le haut de l'image
+    # restait vide et les pieds touchaient le bord
+    camera_portrait((2.55, -1.35, 0.98), (0.0, 0.0, 0.85), 54)
     sc.render.filepath = os.path.join(dossier, 'meba-pied.webp')
     bpy.ops.render.render(write_still=True)
 
