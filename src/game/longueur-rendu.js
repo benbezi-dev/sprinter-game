@@ -257,13 +257,16 @@ export function postureDe(e, r, ech) {
         buste = mix(-0.40, -0.62, tombe);
         bras = [[0.95, 1.20], [0.90, 1.15]];
       } else {
-        // A l'impact, les bras filent derriere les hanches — c'est ce qui fait
-        // passer le corps par-dessus les talons —, puis reviennent devant a
-        // mesure qu'il se redresse.
+        // LA MARQUE LA PLUS PROCHE. Le juge mesure a l'empreinte la plus pres
+        // de la planche, quelle que soit la partie du corps qui l'a laissee :
+        // une main posee derriere les talons coute la distance qui les separe.
+        // Les bras partent donc DEVANT a l'impact, le buste avec eux, genoux
+        // flechis : le bassin passe au-dessus des talons, et l'athlete sort
+        // de la fosse vers l'avant.
         hz = mix(c.hz0, 0.30, tombe);
         buste = mix(-0.66, -0.95, tombe);
         const re = lisse((tau - 0.35) / 0.45);
-        bras = [mix2([-0.85, -0.55], [1.10, 1.40], re), mix2([-0.90, -0.60], [1.05, 1.35], re)];
+        bras = [mix2([0.95, 1.20], [1.30, 1.60], re), mix2([0.90, 1.15], [1.25, 1.55], re)];
       }
       let ja, jb;
       if (pieds) {
