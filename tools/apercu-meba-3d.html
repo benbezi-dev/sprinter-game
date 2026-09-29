@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — Meba-Mickael Zeze : tubes et maillage</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0; font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #8d93a8;
+       font-weight: 600; margin: 14px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #2a3a2a; border-radius: 6px; }
+</style>
+<!--
+  Chaque geste deux fois, avec les MEMES angles et la meme camera : a gauche les
+  troncs du moteur (sa doublure), a droite son vrai maillage (game/vedette-3d.ts).
+  Si le maillage ne tombe pas sur les troncs — pieds, mains, tete —, c'est que le
+  calage de tools/blender/meba_maillage.py ou la pose de vedette-3d.ts ment.
+
+    npx vite --mode test   puis   /tools/apercu-meba-3d.html
+-->
+<h2>en foulee, de trois quarts</h2><canvas id="c1" width="1200" height="520"></canvas>
+<h2>le rituel dans les blocs, puis a vos marques</h2><canvas id="c2" width="1200" height="420"></canvas>
+<h2>le clap</h2><canvas id="c3" width="1200" height="520"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+  import { charger, dessiner } from '/src/game/vedette-3d.ts';
+
+  const NOM = 'Méba-Mickaël ZÉZÉ';
+  const look = SprinterCore.VEDETTES[NOM];
+  const perso = (o) => Object.assign({ look, stride: 0.9, v: 11.4, maxSpeed: 12, fallAnim: 0,
+    celebrate: 0, drivePitch: 0, d: 20 }, o || {});
+  await charger(look.maillage);
+  const paire = (ctx, o, cap, x, y, px) => {
+    const k = px * (look.h / SprinterCore.C.MODEL_H) / 2;
+    const p = perso(o);
+    const caps = SprinterApp.personCapsules(p, cap, 0, false, false, 3);
+    SprinterApp.drawFacetFigure(ctx, caps, x, y, k, 64);
+    const ok = dessiner(ctx, look.maillage, p.squelette, SprinterApp.repereDuCoureur(p, cap, 0, false, false), x + px * 0.55, y, k);
+    return ok;
+  };
+  const c1 = document.getElementById('c1').getContext('2d');
+  let ok = true;
+  [0.3, 1.4, 2.5].forEach((st, i) => { ok = paire(c1, { stride: st }, Math.PI * 0.5 + 0.35, 130 + i * 390, 500, 380) && ok; });
+  const c2 = document.getElementById('c2').getContext('2d');
+  [{ enBloc: 1, rituel: 1, rituelT: 0.1, v: 0 }, { enBloc: 1, rituel: 1, rituelT: 0.35, v: 0 },
+   { enBloc: 1, rituel: 0, prets: 1, v: 0 }].forEach((b, i) => { ok = paire(c2, b, Math.PI * 0.5, 130 + i * 390, 390, 300) && ok; });
+  const c3 = document.getElementById('c3').getContext('2d');
+  [0.0, 0.08, 0.2].forEach((t, i) => { ok = paire(c3, { finished: true, v: 1, gesteT: t, stride: 2 }, Math.PI * 1.1, 130 + i * 390, 500, 380) && ok; });
+  document.body.dataset.pret = ok ? '1' : 'echec';
+</script>

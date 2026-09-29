@@ -1096,6 +1096,10 @@
       allure: o.allure || null,
       rituel: !!o.rituel,
       clap: !!o.clap,
+      // `maillage` : le chemin de son vrai maillage (GLB), dessine en WebGL
+      //             par game/vedette-3d.ts a la place des troncs, qui restent
+      //             sa doublure tant qu'il n'est pas charge.
+      maillage: o.maillage || null,
       facettes: o.facettes || 0,
       // `lisse` : un corps d'un seul tenant — deltoides qui suivent le bras,
       //           fessiers ronds, rotules a la taille du membre (voir pose).
@@ -1208,7 +1212,7 @@
       h: 1.77, gait: 'canon', morph: { sh: 1.02 },
       bandeau: [30, 30, 34], barbe: [36, 26, 24], barbePleine: true,
       chaine: [226, 184, 72], allure: 'canon', rituel: true, clap: true,
-      facettes: 64, lisse: true })
+      facettes: 64, lisse: true, maillage: 'vedettes/meba.glb' })
   };
 
   const JERSEYS = [[64, 178, 235], [72, 214, 132], [236, 92, 88],
@@ -2514,6 +2518,17 @@
     // plonge vraiment.
     const wP = Math.min(1, 3 * Math.max(wB, wS, wPo));
     const angB = lean - Math.max(-PLI_TAILLE, Math.min(PLI_TAILLE, lean)) * (1 - wP);
+    // LE SQUELETTE D'UN ATHLETE EN MAILLAGE (L.maillage, voir game/vedette-3d.ts).
+    // Ses volumes ne sont pas dessines en troncs : ils le sont quand meme ici,
+    // en doublure, mais on releve au passage ce qu'il faut pour poser son
+    // maillage — les memes angles, pris aux memes endroits. Rien n'est calcule
+    // deux fois, et le maillage ne peut pas faire un geste que les tubes ne
+    // font pas.
+    const sq = L.maillage ? (r.squelette = {
+      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: r.tete || 0,
+      jambes: [], bras: [],
+      mains: wCl > 0.5 ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
+    }) : null;
     // L'ourlet du short se voit ; sa ceinture disparait sous le maillot.
     //
     // Couche, le bassin presente son fond a la camera. Un disque l'y
@@ -2924,6 +2939,7 @@
       if (r.livre === side) livre = [E, aFore];
       if (r.pistolet === side) poing = [E, aFore];
       if (r.temoin === side) main = [E, aFore];
+      if (sq) sq.bras.push({ side, a: aArm, f: aFore, rB, rAv });
       roule = 0;
     }
 
@@ -3040,6 +3056,7 @@
       const a = rot(0, -0.380, sk);
       const An = Ap || [K[0] + a[0], K[1], K[2] + a[1]];
       chausser(add, PREM, An, ft, yF, L.shoe, niv);
+      if (sq) sq.jambes.push({ side, th, sk, ft, yT, yS, yF });
     }
 
     // LE LIVRE DU PROF, OUVERT DANS SA MAIN.

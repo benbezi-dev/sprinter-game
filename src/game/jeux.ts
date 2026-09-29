@@ -98,6 +98,16 @@ G.jeu = 'sprinter';
 // l'objectif du jour la lancent aussi, parfois depuis l'accueil de Sprinter.
 // Plutot que d'apprendre le jeu a chacun de ces chemins, on le regle ici, la
 // ou ils passent tous — sans reconstruire la course qu'on vient de poser.
+// LES ATHLETES EN VRAI MAILLAGE (game/vedette-3d.ts) : le moteur le demande
+// a la premiere fois qu'il en dessine un, et three.js n'est telecharge qu'alors.
+// Sur le seul canal ou les defis des vedettes existent : ecrit ainsi, le
+// branchement se replie a la compilation publique et le morceau n'est pas
+// construit.
+if (DEFI_VEDETTE_OUVERT) {
+  (globalThis as any).SprinterDemanderMaillage = (chemin: string) =>
+    import('./vedette-3d').then((m) => m.charger(chemin)).catch(() => null);
+}
+
 G.apresConstruction = () => {
   const cle = G.race && G.race.key;
   if (estUneCourseDeHaies(cle)) armerHaies(cle);

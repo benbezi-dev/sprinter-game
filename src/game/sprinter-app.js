@@ -7273,6 +7273,40 @@
     return n;
   }
 
+  /**
+   * LE REPERE DU COUREUR TOUT ENTIER, tel que personCapsules le tourne.
+   *
+   * Tout ce que personCapsules applique a CHAQUE point apres ses os — le roulis
+   * du virage, la bascule de la sortie des blocs et de la chute, le miroir, le
+   * cap, la courbe de la piste — est une rotation autour de l'origine : une
+   * matrice. Un athlete en maillage (game/vedette-3d.ts) la recoit telle
+   * quelle, pour tourner exactement comme ses troncs l'auraient fait. Rend les
+   * images des trois axes, en colonnes : [ex, ey, ez].
+   */
+  function repereDuCoureur(person, headAng, lean, mirror, applyCurve) {
+    const sgn = mirror ? -1 : 1;
+    const hc = Math.cos(headAng || 0), hs = Math.sin(headAng || 0);
+    const fsh = K.fallShape(person.fallAnim);
+    const roll = (lean || 0) + (fsh ? fsh.roll : 0);
+    const rc = Math.cos(roll), rs = Math.sin(roll);
+    const sautW = person.saut ? Math.max(0, Math.min(1, person.saut.w)) : 0;
+    const fall = (fsh ? fsh.pitch : 0) -
+      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2) *
+      (1 - sautW);
+    const fc = Math.cos(fall), fs = Math.sin(fall);
+    const axe = (x, y, z) => {
+      let wx = x, wy = y, wz = z, t;
+      if (roll) { t = wy * rc - wz * rs; wz = wy * rs + wz * rc; wy = t; }
+      if (Math.abs(fall) > 0.001) { t = wx * fc - wz * fs; wz = wx * fs + wz * fc; wx = t; }
+      wx *= sgn;
+      let rx = wx, ry = wy;
+      if (headAng) { t = wx * hc - wy * hs; ry = wx * hs + wy * hc; rx = t; }
+      if (applyCurve) { t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
+      return [rx, ry, wz];
+    };
+    return [axe(1, 0, 0), axe(0, 1, 0), axe(0, 0, 1)];
+  }
+
   function personCapsules(person, headAng, lean, mirror, applyCurve, lod) {
     const parts = pose(person, lod === undefined ? 0 : lod);
     const sgn = mirror ? -1 : 1;
@@ -7370,7 +7404,29 @@
     if (G.obstacles) G.obstacles.preparer(r, G, C);
     const curved = !!(G.track && G.track.curved);
     const caps = personCapsules(r, headAng, lean, false, curved, niveauDetail(k));
+    if (r.look && r.look.maillage && maillage3D(ctx, r, ax, ay, k, headAng, lean, false, curved)) return;
     drawFacetFigure(ctx, caps, ax, ay, k, r.look && r.look.facettes);
+  }
+
+  /**
+   * UN ATHLETE EN VRAI MAILLAGE (look.maillage, game/vedette-3d.ts).
+   *
+   * Ses troncs viennent d'etre calcules — c'est pose() qui a releve, au passage,
+   * les angles de son squelette (r.squelette) ; on les donne a son maillage,
+   * tourne par le meme repere que ses troncs l'auraient ete. Rend faux tant
+   * que le maillage n'est pas la : l'appelant dessine alors les troncs, sa
+   * doublure. Le premier appel demande le chargement, une fois.
+   */
+  const maillagesDemandes = new Set();
+  function maillage3D(ctx, r, ax, ay, k, headAng, lean, mirror, curved) {
+    const V = globalThis.SprinterVedette3D, chemin = r.look.maillage;
+    if (!V || !V.pret(chemin)) {
+      const demander = globalThis.SprinterDemanderMaillage;
+      if (demander && !maillagesDemandes.has(chemin)) { maillagesDemandes.add(chemin); demander(chemin); }
+      return false;
+    }
+    return V.dessiner(ctx, chemin, r.squelette || null,
+                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k);
   }
 
   /* ------------------------------------------------- reperes des coureurs */
@@ -8192,6 +8248,7 @@
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
     const caps = personCapsules(man, 0, 0, mirror, false, niveauDetail(k));
+    if (man.look && man.look.maillage && maillage3D(ctx, man, cx2, cy2, k, 0, 0, mirror, false)) return;
     drawFacetFigure(ctx, caps, cx2, cy2, k, man.look && man.look.facettes);
   }
 
@@ -8227,7 +8284,7 @@
     // tools/apercu-coureur.html verifie les corps hors course — de face, de
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
     // arreter sur l'image qu'on veut regarder.
-    personCapsules, drawFacetFigure, niveauDetail,
+    personCapsules, drawFacetFigure, niveauDetail, repereDuCoureur,
     // les tenues des starters, pour tools/apercu-starter.html
     LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,

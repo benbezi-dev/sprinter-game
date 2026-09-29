@@ -411,7 +411,7 @@ def poids_dominant(h):
     return dom
 
 
-def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0):
+def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0):
     """Une coque : les faces du corps que `garder(centre, normale, poids)` retient."""
     import bmesh
     dom = poids_dominant(h)
@@ -436,6 +436,20 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0):
     bmesh.ops.delete(bm, geom=tuer, context='FACES')
     ilots(bm)
     ourlet(bm, h)
+    # UNE CHAUSSURE N'A PAS D'ORTEILS. La coque du pied copiait les cinq doigts
+    # de pied, et la pointe se lisait en chaussette : lissee, elle devient un
+    # chausson rond, puis on la regonfle de ce que le lissage lui a pris.
+    if lisser:
+        import bmesh as _bm
+        dedans = [v for v in bm.verts if not v.is_boundary]
+        avant = {v: v.co.copy() for v in dedans}
+        for _ in range(lisser):
+            _bm.ops.smooth_vert(bm, verts=dedans, factor=0.6,
+                                use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        bm.normal_update()
+        perte = sum((avant[v] - v.co).length for v in dedans) / max(1, len(dedans))
+        for v in dedans:
+            v.co += v.normal * perte * 0.8
     bm.normal_update()
     for v in bm.verts:
         v.co += v.normal * epaisseur
@@ -527,6 +541,69 @@ MECHES = (196, 160, 104)
 OR = (226, 184, 72)
 
 
+def chaussure(h, rig, cote):
+    """Une pointe de sprint : l'enveloppe du pied, pas sa copie.
+
+    Une coque decoupee dans le pied en gardait les cinq orteils, et la pointe se
+    lisait en chaussette. On prend l'enveloppe CONVEXE du pied — elle passe
+    par-dessus les creux entre les orteils —, on la remaille en voxels de quatre
+    millimetres et on la lisse : une chaussure fermee, arrondie au bout. Le
+    dessus, dans la cheville, est ouvert ; le dessous est la semelle, blanche.
+    Ses poids viennent du pied le plus proche.
+    """
+    import bmesh
+    V = [v.co.copy() for v in h.data.vertices]
+    dom = poids_dominant(h)
+    pied = [V[i] for i, d in enumerate(dom)
+            if V[i].z < 0.108 and V[i].y * cote > 0 and d[0] in ('foot_l', 'foot_r', 'ball_l', 'ball_r', 'calf_l', 'calf_r')]
+    bm = bmesh.new()
+    for q in pied:
+        bm.verts.new(q)
+    bmesh.ops.convex_hull(bm, input=bm.verts)
+    me = bpy.data.meshes.new('Meba_pointe'); bm.to_mesh(me); bm.free()
+    o = bpy.data.objects.new('Meba_pointe_' + ('g' if cote > 0 else 'd'), me)
+    bpy.context.scene.collection.objects.link(o)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
+    rm = o.modifiers.new('Remaillage', 'REMESH'); rm.mode = 'VOXEL'; rm.voxel_size = 0.004
+    bpy.ops.object.modifier_apply(modifier=rm.name)
+    sm = o.modifiers.new('Lissage', 'SMOOTH'); sm.factor = 0.8; sm.iterations = 6
+    bpy.ops.object.modifier_apply(modifier=sm.name)
+    dc = o.modifiers.new('Allegement', 'DECIMATE'); dc.ratio = 0.3
+    bpy.ops.object.modifier_apply(modifier=dc.name)
+    # un peu de gonflant : la pointe entoure le pied, elle ne le moule pas
+    bm = bmesh.new(); bm.from_mesh(o.data); bm.normal_update()
+    for v in bm.verts:
+        v.co += v.normal * 0.003
+    # le col, dans la cheville, s'ouvre
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().z > 0.100], context='FACES')
+    bm.to_mesh(o.data); bm.free()
+    o.data.materials.append(materiau('Meba_pointes', POINTES, 0.35))
+    o.data.materials.append(materiau('Meba_semelle', SEMELLE, 0.5))
+    for p in o.data.polygons:
+        p.use_smooth = True
+        c = sum((o.data.vertices[i].co for i in p.vertices), Vector()) / len(p.vertices)
+        p.material_index = 1 if (p.normal.z < -0.45 or c.z < 0.012) else 0
+    transferer_poids(o, h, rig)
+    return o
+
+
+def transferer_poids(o, source, rig):
+    """Les poids d'un objet pris sur la surface la plus proche de `source`."""
+    for g in source.vertex_groups:
+        if g.name not in o.vertex_groups:
+            o.vertex_groups.new(name=g.name)
+    mod = o.modifiers.new('Poids', 'DATA_TRANSFER')
+    mod.object = source
+    mod.use_vert_data = True
+    mod.data_types_verts = {'VGROUP_WEIGHTS'}
+    mod.vert_mapping = 'POLYINTERP_NEAREST'
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.datalayout_transfer(modifier=mod.name)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    arm = o.modifiers.new('Armature', 'ARMATURE'); arm.object = rig
+
+
 def habiller(h, rig):
     """Les pieces de la tenue et du visage, chacune a sa coque."""
     p = lambda d, *n: max((d.get(k, 0.0) for k in n), default=0.0)
@@ -538,17 +615,20 @@ def habiller(h, rig):
     # bretelles au ras du cou. Il descend sur le haut du short.
     def maillot(c, n, d):
         if not (0.942 < c.z < 1.405): return False
-        if p(d, *bras) > 0.35 or p(d, 'neck_01', 'head') > 0.3: return False
-        if c.x > 0.0 and c.z > 1.30 and abs(c.y) < 0.075: return False     # encolure
-        if c.x < 0.0 and c.z > 1.355 and abs(c.y) < 0.06: return False     # dos
-        # LES BRETELLES : une bande sur le trapeze, du cou vers l'epaule,
-        # que rien d'autre n'echancre
-        if c.z > 1.285 and 0.058 < abs(c.y) < 0.112 and p(d, *bras) < 0.3:
-            return True
-        # l'emmanchure suit l'epaule : ce que le bras ou la clavicule
-        # entrainent, et le haut du flanc — pas le cote de la poitrine
-        if p(d, *bras) > 0.12 or p(d, 'clavicle_l', 'clavicle_r') > 0.35: return False
-        if abs(c.y) > 0.138 and c.z > 1.23: return False
+        # les poids du bras debordent sur les pectoraux, ceux du cou sur les
+        # trapezes : seuls les franchement pris par eux sont exclus
+        if p(d, *bras) > 0.55 or p(d, 'head') > 0.3: return False
+        ay = abs(c.y)
+        # au-dessus de la poitrine, seulement les bretelles, sur le trapeze
+        if c.z > 1.335:
+            return 0.058 < ay < 0.112 and p(d, 'neck_01') < 0.65
+        if p(d, 'neck_01') > 0.3: return False
+        # l'encolure, arrondie devant, plus haute derriere
+        if c.x > 0.0 and c.z > 1.300 and ay < 0.072: return False
+        if c.x <= 0.0 and c.z > 1.330 and ay < 0.060: return False
+        # les emmanchures d'un debardeur de sprint : profondes, sur le cote
+        if ay > 0.132 and c.z > 1.200: return False
+        if ay > 0.118 and c.z > 1.280: return False
         return True
 
     # LE SHORT : de la taille au tiers haut de la cuisse.
@@ -594,15 +674,14 @@ def habiller(h, rig):
         # languettes a travers l'ourlet
         ('Meba_maillot', maillot, 0.0068, MAILLOT, 0.55),
         ('Meba_short', short, 0.0045, SHORT, 0.45),
-        ('Meba_pointes', pointes, 0.0060, POINTES, 0.35),
-        ('Meba_semelle', semelle, 0.0080, SEMELLE, 0.5),
         ('Meba_bandeau', bandeau, 0.0035, BANDEAU, 0.7),
         ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
         ('Meba_barbe', barbe, 0.0042, BARBE, 0.95),
     ]
-    out = []
-    for nom, garder, e, col, r in pieces:
-        out.append(coque(h, rig, nom, garder, e, col, r))
+    out = [chaussure(h, rig, 1), chaussure(h, rig, -1)]
+    for piece in pieces:
+        nom, garder, e, col, r = piece[:5]
+        out.append(coque(h, rig, nom, garder, e, col, r, lisser=piece[5] if len(piece) > 5 else 0))
     # et la peau
     h.data.materials.clear()
     h.data.materials.append(materiau('Meba_peau', PEAU, 0.42))
@@ -737,7 +816,7 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
         tours, rh = rnd.uniform(2.0, 3.0), 0.0026
         for phase in (0.0, math.pi):
             pts = []
-            N = 18
+            N = 12
             for k in range(N + 1):
                 t = k / N
                 seg = min(3, int(t * 4)); f = t * 4 - seg
@@ -791,15 +870,19 @@ def chaine(h, rig):
     from mathutils.bvhtree import BVHTree
     V = [v.co.copy() for v in h.data.vertices]
     arbre = BVHTree.FromPolygons(V, [tuple(p.vertices) for p in h.data.polygons])
+    # LES RAYONS PARTENT DE L'AXE DU COU, vers l'exterieur : tires de dehors,
+    # ils touchaient d'abord les trapezes, et la chaine passait sur les
+    # epaules. Du dedans, le premier contact est la peau du cou.
+    axe = Vector((0.012, 0.0, 0.0))
     pts = []
     for k in range(48):
         a = 2 * math.pi * k / 48
-        # plus basse devant (a = 0 vers +x), posee sur la peau par un rayon
-        z = 1.372 - 0.028 * max(0.0, math.cos(a)) ** 2
-        orig = Vector((0.0, 0.0, z)); dirn = Vector((math.cos(a), math.sin(a), -0.15 * max(0.0, math.cos(a)))).normalized()
-        hit = arbre.ray_cast(orig + dirn * 0.3, -dirn)
+        devant = max(0.0, math.cos(a)) ** 2
+        z = 1.392 - 0.034 * devant
+        dirn = Vector((math.cos(a), math.sin(a), -0.35 * devant)).normalized()
+        hit = arbre.ray_cast(axe + Vector((0, 0, z)), dirn)
         if hit[0] is not None:
-            pts.append(hit[0] + hit[1] * 0.0035)
+            pts.append(hit[0] + hit[1].normalized() * 0.0030 * (1 if hit[1].dot(dirn) > 0 else -1))
     cu = bpy.data.curves.new('Meba_chaine', 'CURVE')
     cu.dimensions = '3D'; cu.bevel_depth = 0.0017; cu.bevel_resolution = 2
     sp = cu.splines.new('POLY'); sp.points.add(len(pts) - 1); sp.use_cyclic_u = True
@@ -843,3 +926,132 @@ def boucle(h, rig):
     o.data.materials.append(bpy.data.materials.get('Meba_or') or materiau('Meba_or', OR, 0.25, 1.0))
     attacher(o, rig, 'head')
     return o
+
+
+# --- LE DOSSARD ------------------------------------------------------------------
+# Une vraie feuille sur le maillot, pas une boite : un morceau de la poitrine,
+# decolle d'un millimetre et demi du maillot, qui en epouse donc la courbure ;
+# et son nom en lettres, modelees, posees sur la feuille. C'est ce qui manquait
+# au dossard des tubes : il n'avait ni courbure ni inscription, on n'en voyait
+# que la tranche.
+
+# Un papier creme, a peine plus chaud que le maillot : sur un maillot blanc,
+# c'est son nom et son bandeau qui le font lire, pas son epaisseur.
+DOSSARD = (240, 236, 222)
+ENCRE = (26, 30, 58)
+
+
+def dossard(h, rig, texte="ZÉZÉ"):
+    import bmesh
+    from mathutils.bvhtree import BVHTree
+    # la feuille : la poitrine, devant, sous l'encolure
+    def feuille(c, n, d):
+        return c.x > 0.02 and n.x > 0.35 and 1.120 < c.z < 1.250 and abs(c.y) < 0.086
+    f = coque(h, rig, 'Meba_dossard', feuille, 0.0083, DOSSARD, 0.8)
+    # le bandeau de tete du dossard, bleu marine, sans marque
+    def tete_dossard(c, n, d):
+        return c.x > 0.02 and n.x > 0.35 and 1.228 < c.z < 1.250 and abs(c.y) < 0.084
+    coque(h, rig, 'Meba_dossard_tete', tete_dossard, 0.0088, SHORT, 0.7)
+    # les lettres, centrees sur la feuille, collees a elle
+    arbre = BVHTree.FromPolygons([v.co.copy() for v in f.data.vertices],
+                                 [tuple(p.vertices) for p in f.data.polygons])
+    cu = bpy.data.curves.new('Meba_nom', 'FONT')
+    cu.body = texte
+    cu.align_x = 'CENTER'; cu.align_y = 'CENTER'
+    cu.size = 0.040
+    cu.extrude = 0.0006
+    try:
+        cu.font = bpy.data.fonts.load('/System/Library/Fonts/Supplemental/Arial Black.ttf', check_existing=True)
+    except Exception:
+        pass
+    o = bpy.data.objects.new('Meba_nom', cu)
+    bpy.context.scene.collection.objects.link(o)
+    # le texte est ecrit dans le plan xy : on le dresse face a l'avant (+x)
+    o.rotation_euler = (math.radians(90), 0, math.radians(90))
+    o.location = (0.3, 0.0, 1.185)
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
+    bpy.ops.object.convert(target='MESH')
+    o = bpy.context.active_object
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    # chaque sommet revient sur la feuille, un demi-millimetre devant
+    for v in o.data.vertices:
+        hit = arbre.ray_cast(Vector((0.4, v.co.y, v.co.z)), Vector((-1, 0, 0)))
+        if hit[0] is not None:
+            devant = 0.0006 + (v.co.x - 0.3) * 1.0
+            v.co = hit[0] + hit[1].normalized() * max(0.0004, devant + 0.0005)
+    o.data.materials.append(materiau('Meba_encre', ENCRE, 0.6))
+    # les lettres suivent la poitrine comme la feuille : memes os, par transfert
+    for g in f.vertex_groups:
+        o.vertex_groups.new(name=g.name)
+    mod = o.modifiers.new('Poids', 'DATA_TRANSFER')
+    mod.object = f
+    mod.use_vert_data = True
+    mod.data_types_verts = {'VGROUP_WEIGHTS'}
+    mod.vert_mapping = 'NEAREST'
+    bpy.context.view_layer.objects.active = o
+    bpy.ops.object.datalayout_transfer(modifier=mod.name)
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    arm = o.modifiers.new('Armature', 'ARMATURE'); arm.object = rig
+    return f, o
+
+
+# --- L'EXPORT ----------------------------------------------------------------
+def reunir(h, rig):
+    """Toutes les pieces en UN maillage pondere : un seul objet a animer dans le
+    jeu, un appel de dessin par matiere."""
+    pieces = [o for o in bpy.context.scene.objects
+              if o.type == 'MESH' and o.name.startswith('Meba_') and o is not h]
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in pieces + [h]:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = h
+    bpy.ops.object.join()
+    h.name = 'Meba'
+    # les groupes de MakeHuman ne portent aucun os : ils ne partent pas
+    for g in list(h.vertex_groups):
+        if g.name not in rig.data.bones:
+            h.vertex_groups.remove(g)
+    return h
+
+
+def exporter(h, rig, chemin):
+    for pb in rig.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True); rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
+    # le rig est le parent du maillage pondere (la regle du glTF), et seule la
+    # scene « Meba » part : sans `use_active_scene`, le cube de la scene de
+    # demarrage partait avec lui.
+    mw = h.matrix_world.copy(); h.parent = rig; h.matrix_world = mw
+    bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
+                              use_active_scene=True,
+                              export_skins=True, export_animations=False,
+                              export_morph=False, export_yup=True, export_apply=False,
+                              export_attributes=True, export_def_bones=False,
+                              export_meshopt_compression_enable=True)
+    return os.path.getsize(chemin)
+
+
+def tout(glb=None, blend=None):
+    sc, h, rig = corps()
+    habiller(h, rig)
+    dossard(h, rig)
+    yeux(h, rig)
+    vanilles(h, rig)
+    chaine(h, rig)
+    boucle(h, rig)
+    h = reunir(h, rig)
+    if glb:
+        print('GLB :', exporter(h, rig, glb), 'octets')
+    if blend:
+        bpy.ops.wm.save_as_mainfile(filepath=blend, copy=True)
+    return h, rig
+
+
+if __name__ == '__main__' and bpy.app.background:
+    A = arguments()
+    tout(A['glb'], A['blend'])
