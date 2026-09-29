@@ -41,6 +41,12 @@
   const ctx = cv.getContext('2d');
   const etat = document.getElementById('etat');
   const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
+  // LA GALERIE NE COURT POUR PERSONNE. Une course qui franchit la ligne est
+  // envoyee au serveur par ce crochet (voir engine.ts) — au vrai serveur si
+  // l'apercu n'a pas d'API_LOCALE. Un 400 m filme jusqu'au bout y a ainsi
+  // depose un chrono « Anonyme » le 28 septembre 2026. La galerie filme,
+  // elle n'enregistre rien.
+  G.onRaceRecorded = () => {};
   G.cv = cv; G.dpr = DPR; G.VW = LW; G.VH = LH; G.portrait = P.get('portrait') === '1';
   SprinterApp.load();
 
