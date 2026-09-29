@@ -86,53 +86,39 @@ for (const c of CLES) {
 
 titre('LE BAREME EST CELUI QUI A ETE DECIDE');
 
-// LE BAREME NE SE CALCULE PLUS, IL SE DECIDE (haies.js, BAREME), et ce harnais
-// change donc de metier. Il verifiait avant qu'une formule tombait juste ; il
-// verifie maintenant que DOUZE NOMBRES DECIDES PAR LE JOUEUR sont bien ceux
-// qui arrivent dans le jeu. C'est le seul garde-fou possible contre la tentation
-// de les « arranger » : quiconque les retouche doit le faire ici aussi, donc
-// sciemment.
-const VOULU = [
-  [17.50, 19.00], [15.50, 17.50], [13.00, 14.50],
-  [12.75, 13.20], [12.75, 13.00], [12.30, 12.75],
-];
-{
-  const g = PLATEAUX['110h'];
-  const pareil = VOULU.every(([a, b], i) =>
-    Math.abs(g[i][0] - a) < 0.005 && Math.abs(g[i][1] - b) < 0.005);
-  ok('110h : les six plateaux sont exactement ceux demandes', pareil,
-     g.map(x => `${x[0]}-${x[1]}`).join(' '));
-}
-
-// Les autres epreuves se deduisent du 110 m par le rapport des records — une
-// seule echelle de difficulte, pas trois — SAUF ce qui leur a ete donne en
-// propre. Le tour a recu son dernier niveau au pouce : 40,10 a 41,00 s, la ou
-// la deduction aurait donne 44,15 a 45,76, c'est-a-dire un cheveu sous le
-// record du monde quand Sprinter place ses ZEZE neuf pour cent dessous.
+// LE BAREME NE SE CALCULE PLUS, IL SE DECIDE (haies.js, PLATEAUX), et ce
+// harnais verifie donc que les DIX-HUIT FOURCHETTES DECIDEES PAR LE JOUEUR sont
+// bien celles qui arrivent dans le jeu. C'est le seul garde-fou possible contre
+// la tentation de les « arranger » : quiconque les retouche doit le faire ici
+// aussi, donc sciemment.
 //
-// Cette verification doit tomber bruyamment le jour ou une epreuve recoit son
-// propre bareme sans qu'on l'ait ecrit ici. Elle est tombee deux fois pour de
-// bon : ce nombre est passe par 42,00-43,50 puis 40,80-41,20 sans qu'on le
-// reporte ici, et le harnais a donc ete rouge tout ce temps — pour la raison
-// exacte qu'il annonce.
-const PROPRE = { '400h': { 5: [40.10, 41.00] } };
-for (const c of ['100h', '400h']) {
-  const r = RECORDS[c].s / RECORDS['110h'].s;
-  const g = PLATEAUX[c], pr = PROPRE[c] || {};
-  const suit = VOULU.every(([a, b], i) => pr[i]
-    ? Math.abs(g[i][0] - pr[i][0]) < 0.005 && Math.abs(g[i][1] - pr[i][1]) < 0.005
-    : Math.abs(g[i][0] - a * r) < 0.01 && Math.abs(g[i][1] - b * r) < 0.01);
-  ok(`${c} : se deduit du 110 m, sauf ce qui lui est propre`, suit,
+// Jusqu'au 29 septembre 2026, seul le 110 m etait donne et les deux autres s'en
+// deduisaient par le rapport des records, sauf le dernier niveau du tour. Les
+// trois sont maintenant donnes en entier.
+const VOULU = {
+  '100h': [[16.15, 17.85], [14.20, 16.15], [11.85, 13.25], [11.30, 11.90], [11.30, 11.85], [10.05, 10.70]],
+  '110h': [[16.50, 17.00], [14.50, 15.50], [13.20, 13.70], [12.80, 13.00], [12.75, 12.90], [11.30, 11.45]],
+  '400h': [[58.00, 62.15], [51.55, 58.00], [46.50, 47.90], [46.00, 46.50], [45.80, 46.10], [39.80, 40.30]],
+};
+for (const c of CLES) {
+  const g = PLATEAUX[c];
+  const pareil = g.length === 6 && VOULU[c].every(([a, b], i) =>
+    Math.abs(g[i][0] - a) < 0.005 && Math.abs(g[i][1] - b) < 0.005);
+  ok(`${c} : les six plateaux sont exactement ceux demandes`, pareil,
      g.map(x => `${x[0]}-${x[1]}`).join(' '));
 }
 
 titre('LE RECORD DU MONDE TOMBE AU BON ENDROIT');
 
-// CE QUI A CHANGE, et c'est le renversement le plus visible du nouveau bareme.
-// Avant, le mondial SEUL encadrait le record et les deux niveaux au-dessus
-// passaient dessous. Maintenant, le mondial ET les Jeux mondiaux l'encadrent
-// tous deux ; seuls les ZEZE descendent.
-for (const c of CLES) {
+// AU 110 M SEULEMENT, depuis le bareme du 29 septembre 2026. Le mondial ET
+// les Jeux mondiaux y encadrent le record ; seuls les ZEZE descendent.
+//
+// Le 100 m et le 400 m n'ont plus cette ancre : leurs plateaux suivent la
+// cadence que Sprinter demande, et le record tombe ou elle le met — dans le
+// national au 100 m (le moteur court ce 100 m-la plus vite que le reel), dans
+// les Jeux mondiaux au 400 m. C'est une decision du joueur (haies.js,
+// PLATEAUX), pas un oubli.
+for (const c of ['110h']) {
   const R = RECORDS[c].s;
   for (const [n, i] of [['mondial', 3], ['Jeux mondiaux', 4]]) {
     const [a, b] = PLATEAUX[c][i];
@@ -145,9 +131,9 @@ titre('CE QUI SE JOUE AU PHOTO-FINISH');
 
 // L'ancien bareme exigeait une demi-seconde au plateau mondial, « de quoi se
 // detacher » : un plateau trop serre n'est plus une course, tout s'y joue au
-// centieme. Le bareme decide passe sous cette barre — un quart de seconde aux
-// Jeux mondiaux du 110 m — et c'est assume : a ce niveau-la, la course DOIT se
-// jouer au centieme.
+// centieme. Le bareme decide passe sous cette barre — quinze centiemes aux
+// Jeux mondiaux et aux ZEZE du 110 m depuis le 29 septembre 2026 — et c'est
+// assume : a ce niveau-la, la course DOIT se jouer au centieme.
 //
 // On garde donc une borne, beaucoup plus basse, et surtout on AFFICHE le plus
 // serre a chaque passage. Le jour ou le niveau 5 se jouera comme une loterie,
@@ -155,7 +141,7 @@ titre('CE QUI SE JOUE AU PHOTO-FINISH');
 for (const c of CLES) {
   const g = PLATEAUX[c];
   const serre = g.reduce((m, [a, b], i) => (b - a < m.l ? { l: b - a, i } : m), { l: Infinity, i: -1 });
-  ok(`${c} : le plus serre des six tient encore une course`, serre.l >= 0.2,
+  ok(`${c} : le plus serre des six tient encore une course`, serre.l >= 0.15 - 1e-9,
      `niveau ${serre.i + 1}, ${serre.l.toFixed(2)} s entre le premier et le dernier`);
 }
 

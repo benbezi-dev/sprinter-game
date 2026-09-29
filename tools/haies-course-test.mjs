@@ -346,10 +346,15 @@ titre('CHAQUE PLATEAU SE GAGNE A UNE CADENCE DE DOIGT');
 // de 0,36 s — 11,47 s au 100 m haies au lieu de 11,83. La bande des ZEZE
 // (11,65-12,07) etait enjambee, et le harnais annoncait un niveau injouable
 // qui se joue tres bien a huit frappes rondes.
+//
+// Le pas est le CENTIEME depuis le 29 septembre 2026 : au dixieme, le 400 m
+// haies passait de 46,58 s a 7,0 frappes a 45,82 a 7,1 et enjambait le
+// mondial (46,00-46,50), que 7,05 frappes donnent pourtant (46,42). Un doigt
+// ne tape pas au dixieme rond.
 for (const cle of CLES) {
   const atteints = new Set();
-  for (let d = 40; d <= 140; d++) {
-    const cad = d / 10;
+  for (let d = 400; d <= 1400; d++) {
+    const cad = d / 100;
     const t = courir(cle, { cadence: cad }).temps;
     if (t === null) continue;
     PLATEAUX[cle].forEach(([a, b], i) => { if (t >= a && t <= b) atteints.add(i); });

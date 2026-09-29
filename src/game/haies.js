@@ -62,111 +62,75 @@ export const RECORDS = {
 };
 
 /**
- * LE BAREME, DONNE POUR LE 110 M HAIES.
+ * LES BAREMES, DONNES EPREUVE PAR EPREUVE.
  *
- * Il ne se calcule plus, il se decide — et c'est un renversement volontaire.
+ * Ils ne se calculent pas, ils se decident. Les dix-huit fourchettes ci-dessous
+ * viennent du joueur, le 29 septembre 2026 ; on ne les arrondit pas et on ne
+ * les « corrige » pas.
  *
- * Jusqu'ici les six plateaux sortaient d'une formule : trois proportions
- * reprises de Sprinter, puis un ecart autour du record. La formule donnait les
- * trois epreuves d'un coup et les faisait respirer pareil, mais elle decrivait
- * un jeu ou la MACHINE sautait les haies a la place du joueur. Depuis que
- * l'appel lui revient (canal.ts, APPEL_JOUEUR), ce qu'une cadence donne au
- * chrono a change, et un bareme deduit du record ne dit plus rien de ce que la
- * manette demande.
+ * D'OU ELLES PARTENT. D'une equivalence de cadence avec Sprinter : pour chaque
+ * plateau du 100 m plat (et du 400 m plat pour le tour), la cadence de doigt
+ * qui le joue, puis le chrono que les haies donnent a cette meme cadence, appel
+ * du joueur parfait, moyenne sur douze calages de la premiere frappe. Le 110 m
+ * a ensuite ete retouche au pouce ; le 100 m et le 400 m reprennent la mesure.
+ * Releve ce jour-la (frappes/s -> chrono) :
  *
- * Ces douze nombres viennent donc du joueur, apres essais au pouce. On ne les
- * arrondit pas et on ne les « corrige » pas : ce sont des decisions, pas des
- * mesures.
+ *            8       9       10      12      16
+ *   110h   14,16   12,97   11,74   11,28   11,14
+ *   100h   12,72   11,60   10,69   10,34   10,13
+ *   400h   42,73   40,99   40,65   39,80   39,09
  *
- * TROIS CHOSES A SAVOIR EN LES LISANT, parce qu'elles surprennent et qu'elles
- * ne sont pas des coquilles :
+ * POURQUOI PLUS DE RAPPORT DES RECORDS. Jusqu'ici le 100 m et le 400 m se
+ * deduisaient du 110 m par le rapport des records (0,947 pour le 100 m). Mais
+ * le 100 m haies court a la meme vitesse de pointe que le 110 m (HAIES, 11,0) :
+ * c'est un 110 m plus court de dix metres, et a cadence egale il va 0,90 fois
+ * le temps du 110 m, pas 0,947. Deduit, tout son bareme se gagnait trop tot —
+ * ses ZEZE des huit frappes, quand Sprinter en demande seize.
  *
- *   - LE MONDIAL ET LES JEUX MONDIAUX ENCADRENT TOUS DEUX LE RECORD, et les
- *     ZEZE seuls passent dessous. Avant, le mondial l'encadrait et les deux
- *     derniers descendaient. Les Jeux mondiaux partagent d'ailleurs leur borne
- *     basse avec le mondial : on y demande le meme plancher, mais un plafond
- *     plus bas.
- *   - LES JEUX MONDIAUX TIENNENT DANS UN QUART DE SECONDE sur le 110 m. C'est
- *     tres serre — huit athletes a portee de photo-finish a chaque tentative,
- *     ce que l'ancien bareme s'interdisait explicitement. Si le niveau 5 se
- *     joue un jour comme une loterie, c'est ce nombre-la qu'il faut ouvrir.
- *   - ENTRE 14,50 ET 15,50 S, AUCUN PLATEAU. Un chrono peut tomber la sans
- *     appartenir a un niveau. L'ancien bareme avait deja de tels trous.
+ * CE QUI SURPREND ET N'EST PAS UNE COQUILLE :
  *
- * ET UN CHANTIER OUVERT, SU ET ASSUME : LE NIVEAU DES ZEZE. Ces nombres ont
- * ete poses quand le jeu tournait a un plafond de vitesse reduit ; il a repris
- * depuis celui de Sprinter (voir HAIES plus bas), et il va donc plus vite que
- * l'echelle ne le prevoit. Mesure sur le 110 m haies, releve le 20 septembre
- * 2026 : 11,93 s a huit frappes par seconde, 11,13 a dix, 10,88 a douze — le
- * dernier plateau se gagne des huit frappes quand Sprinter en demande treize
- * a quatorze. (Ce paragraphe annoncait 13,80 / 11,70 / 11,25 : le moteur a
- * encore gagne en vitesse depuis, et l'ecart s'est donc creuse.) Les deux
- * derniers niveaux sont a redescendre, et le 400 m haies a recu sa propre
- * reponse au niveau 6 sans que cela suffise. Les harnais le disent, et ils
- * ont raison de le dire.
+ *   - LE RECORD N'OUVRE PLUS LE MONDIAL PARTOUT. Au 110 m, le mondial part du
+ *     record (12,80). Au 100 m, le record (12,12) tombe dans le national : le
+ *     mondial est a 11,30-11,90, parce que le moteur court ce 100 m-la plus
+ *     vite que le reel. Au 400 m, le record (45,94) tombe dans les Jeux
+ *     mondiaux, juste sous le mondial.
+ *   - DES TROUS ENTRE PLATEAUX, comme dans Sprinter (rien entre 9,00 et 9,58
+ *     au 100 m plat) : au 110 m, rien entre 11,45 et 12,75, ni entre 13,70 et
+ *     14,50, ni entre 15,50 et 16,50.
+ *   - LE DERNIER PLATEAU DU 110 M TIENT EN QUINZE CENTIEMES, les Jeux mondiaux
+ *     aussi. C'est serre. Si l'un se joue un jour comme une loterie, c'est lui
+ *     qu'il faut ouvrir.
+ *   - AU-DESSUS DE DOUZE FRAPPES, LE CHRONO DES HAIES BOUGE A PEINE (11,14 a
+ *     11,44 au 110 m entre douze et dix-huit). Le dernier plateau se gagne donc
+ *     vers douze frappes, pas seize : c'est le moteur, pas le bareme.
+ *
+ * L'index est celui du plateau, de 0 (scolaire) a 5 (ZEZE).
  */
-const BAREME = [
-  [17.50, 19.00],   // 1 — scolaire
-  [15.50, 17.50],   // 2 — regional
-  [13.00, 14.50],   // 3 — national
-  [12.75, 13.20],   // 4 — mondial
-  [12.75, 13.00],   // 5 — Jeux mondiaux
-  [12.30, 12.75],   // 6 — ZEZE
-];
-
-/**
- * CE QU'UNE EPREUVE NE DEDUIT PAS DU 110 M HAIES.
- *
- * Le rapport des records sert de defaut, pas de loi. Le tour ne se court pas
- * comme une ligne droite : quinze foulees entre les haies au lieu de trois, une
- * fatigue qui deplace le compte d'appuis, et un jeu qui y va plus vite que
- * l'echelle ne le prevoit. Son dernier niveau est donc DONNE, comme les douze
- * nombres du 110 m l'ont ete : 40,80 a 41,20 s, decides au pouce.
- *
- * Deduit du 110 m, il aurait valu 44,15 a 45,76 — a un cheveu du record du
- * monde (45,94), alors que Sprinter place ses ZEZE neuf pour cent dessous.
- * Un premier passage l'avait pose a 42,00-43,50, puis a 40,80-41,20. Il vaut
- * 40,10 a 41,00 depuis le 20 septembre 2026, decide au pouce comme les
- * douze autres.
- *
- * CE QUE CETTE FOURCHETTE FERME, ET CE QU'ELLE LAISSE OUVERT. Elle rend le
- * niveau ATTEIGNABLE — 8,2 frappes par seconde donnent 40,60 s, qui tombe
- * dedans, la ou 40,80-41,20 etait enjambe par le pas du chrono. Elle ne
- * ferme pas le chantier des deux derniers niveaux : le jeu descend a 40,13 s
- * a huit frappes et a 36,98 a douze, si bien que le dernier plateau se gagne
- * encore a basse cadence. Deux verifications le disent toujours, et elles
- * ont toujours raison de le dire.
- *
- * L'index est celui du plateau, de 0 a 5.
- */
-const BAREME_PROPRE = {
-  '400h': { 5: [40.10, 41.00] },
-};
-
-/**
- * Les six plateaux d'une epreuve.
- *
- * Le bareme est ecrit pour le 110 m haies ; les deux autres s'en deduisent par
- * le RAPPORT DES RECORDS. C'est ce que faisaient deja les proportions, et pour
- * la meme raison : une seule echelle de difficulte, pas trois. Un 400 m haies
- * « niveau national » doit demander au joueur du tour ce que le niveau national
- * demande au joueur du 110 m.
- *
- * Tant que le bareme ne vaut que pour le 110 m — la seule epreuve eprouvee au
- * pouce a ce jour — c'est la facon la plus honnete de servir les deux autres :
- * elles heritent d'une echelle mesuree plutot que d'une echelle inventee.
- */
-function plateauxDe(cle) {
-  const r = RECORDS[cle].s / RECORDS['110h'].s;
-  const c = x => Math.round(x * r * 100) / 100;
-  const propre = BAREME_PROPRE[cle] || {};
-  return BAREME.map(([a, b], i) => propre[i] ? propre[i].slice() : [c(a), c(b)]);
-}
-
 export const PLATEAUX = {
-  '100h': plateauxDe('100h'),
-  '110h': plateauxDe('110h'),
-  '400h': plateauxDe('400h'),
+  '100h': [
+    [16.15, 17.85],   // 1 — scolaire
+    [14.20, 16.15],   // 2 — regional
+    [11.85, 13.25],   // 3 — national
+    [11.30, 11.90],   // 4 — mondial
+    [11.30, 11.85],   // 5 — Jeux mondiaux
+    [10.05, 10.70],   // 6 — ZEZE
+  ],
+  '110h': [
+    [16.50, 17.00],   // 1 — scolaire
+    [14.50, 15.50],   // 2 — regional
+    [13.20, 13.70],   // 3 — national
+    [12.80, 13.00],   // 4 — mondial
+    [12.75, 12.90],   // 5 — Jeux mondiaux
+    [11.30, 11.45],   // 6 — ZEZE
+  ],
+  '400h': [
+    [58.00, 62.15],   // 1 — scolaire
+    [51.55, 58.00],   // 2 — regional
+    [46.50, 47.90],   // 3 — national
+    [46.00, 46.50],   // 4 — mondial
+    [45.80, 46.10],   // 5 — Jeux mondiaux
+    [39.80, 40.30],   // 6 — ZEZE
+  ],
 };
 
 /**
@@ -191,9 +155,9 @@ export const PLATEAUX = {
  * s'entraine, et c'est ce qui donne au dernier niveau sa raison d'etre.
  *
  * Les haies gardent donc la base de vitesse de Sprinter, et leurs plateaux
- * suivent ses proportions autour de leurs propres records. Ce qui doit etre
- * respecte n'est pas la vitesse d'un hurdleur reel, c'est le RECORD comme
- * ancre : il ouvre le niveau mondial, et le dernier niveau le depasse.
+ * demandent au doigt ce que Sprinter lui demande, plateau par plateau (voir
+ * PLATEAUX). Le record reste l'ancre du 110 m ; au 100 m et au 400 m, il
+ * tombe ou la cadence le met.
  */
 // `foulee` : la foulee du hurdleur en part de celle du sprinteur (Runner.foulee
 // dans sprinter-core.js). Calee par tools/haies-course-test.mjs pour qu'une

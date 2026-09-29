@@ -122,7 +122,7 @@ export const DEPART_STARTER = EST_TEST;
  * canal de test, le temps d'eprouver ce qui manquait : le bareme du 110 m,
  * ecrit au pouce plutot que deduit des proportions de Sprinter, et le dernier
  * plateau du 400 m, qui se serait sinon joue a un cheveu du record du monde
- * (voir BAREME et BAREME_PROPRE dans game/haies).
+ * (voir PLATEAUX dans game/haies).
  *
  * Le drapeau reste, et ne vaut plus `EST_TEST` : le remettre a `false` referme
  * le monde sur son accueil « bientot » sans rien deranger d'autre. C'est la

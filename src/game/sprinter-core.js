@@ -517,8 +517,9 @@
     // courent une demi-seconde derriere lui : ils peuplent une finale, ils ne
     // la jouent pas.
     //
-    // 12,45 s AU 110 m HAIES. Sur l'echelle du jeu (BAREME, game/haies.js),
-    // c'est le haut du plateau des ZEZE : il faut environ dix frappes par
+    // 12,45 s AU 110 m HAIES. Sur l'echelle du jeu (PLATEAUX, game/haies.js),
+    // c'est entre les ZEZE (11,30-11,45) et les Jeux mondiaux (12,75-12,90)
+    // depuis le bareme du 29 septembre 2026 : il faut environ dix frappes par
     // seconde ET des haies bien prises. Mesure sur le vrai moteur avec
     // l'appel du joueur, doigt irregulier : 12,65 s a neuf frappes, 12,30 a
     // dix, 11,50 a onze. Un joueur regulier le bat en quelques essais ; un
