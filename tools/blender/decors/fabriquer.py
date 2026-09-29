@@ -1,7 +1,12 @@
 # -----------------------------------------------------------------------
 # SPRINTER — fabriquer les decors des stades.
 #
-#   blender -b -P tools/blender/decors/fabriquer.py -- --stade day
+#   blender -b --factory-startup -P tools/blender/decors/fabriquer.py -- --stade day
+#   ... -- --stade day --ultra          la serie du palier ULTRA
+#
+# --factory-startup : sans lui, Blender charge aussi en arriere-plan les
+# extensions de l'utilisateur (une trentaine installees le 29/09/2026), qui
+# peuvent toucher a la scene. Aucun de ces scripts n'en a besoin.
 #
 # Pour chaque piece : on la construit dans le repere du jeu, on la rend sous
 # la vue du jeu avec la lumiere du jeu, on rend a part l'ombre qu'elle jette
@@ -54,6 +59,16 @@ CAPS = [0.0, 180.0, WROT, 180.0 + WROT]
 # c'est la qu'un tapis se lit contre les lignes de couloir.
 CAPS_VIRAGE = sorted(set(CAPS + [22.5 * k for k in range(16)]))
 CONTOURS = False
+# Les rendus intermediaires, un jeu par processus : deux Blender qui tournaient
+# en meme temps s'echangeaient leur couleur et leur ombre par /tmp, et
+# l'assemblage melait deux pieces (ou plantait, quand leurs tailles
+# differaient).
+TMP = '/tmp/decor-%s-' + str(os.getpid()) + '.png'
+# A l'ULTRA, l'ombre au sol se rend a demi-densite puis s'agrandit : c'est le
+# rendu Cycles, de loin le plus long — deux minutes pour une grande piece a
+# 192 px/m —, et une ombre de soleil a 3,5 degres est floue de toute facon.
+# La piece elle-meme reste a pleine densite. Pose par main().
+OMBRE_DEMI = False
 # Echantillons d'anticrenelage du rendu couleur, et ombre au sol ou non :
 # reglages de stade (voir palettes.STADES).
 ECHANTILLONS = 32
@@ -135,10 +150,21 @@ def centre_jeu(sx, sy):
     return ((-sy / vue.SIN - sx / vue.COS) / 2, (-sy / vue.SIN + sx / vue.COS) / 2, 0.0)
 
 
-def lire(f):
+def _pixels(img, w, h):
+    """Les pixels d'une image, en un seul appel. `img.pixels[:]` passait par une
+    liste Python de w x h x 4 nombres : a la densite de la serie ULTRA, trente
+    millions par passe, et plus de temps que le rendu lui-meme."""
+    a = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(a)
+    return a.reshape(h, w, 4)
+
+
+def lire(f, taille=None):
     img = bpy.data.images.load(f)
+    if taille and tuple(img.size) != tuple(taille):
+        img.scale(*taille)
     w, h = img.size
-    a = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    a = _pixels(img, w, h)
     bpy.data.images.remove(img)
     return a[::-1]          # ligne 0 en haut
 
@@ -146,7 +172,7 @@ def lire(f):
 def ecrire_webp(a, f, qualite=92):
     h, w = a.shape[:2]
     img = bpy.data.images.new('sortie', w, h, alpha=True)
-    img.pixels = a[::-1].ravel().tolist()
+    img.pixels.foreach_set(np.ascontiguousarray(a[::-1], dtype=np.float32).ravel())
     img.filepath_raw = f
     img.file_format = 'WEBP'
     sc = bpy.context.scene
@@ -169,7 +195,7 @@ def rendre_reel(stade, nom, cap, dossier):
     reel.reglages(sc, ECHANTILLONS)
     reel.monde_spatial(sc)
     reel.lumieres(sc)
-    f_col = '/tmp/decor-reel.png'
+    f_col = TMP % 'reel'
     sc.render.filepath = f_col
     bpy.ops.render.render(write_still=True)
     ancre = vue.ancre_pixel(cam, (0, 0, 0))
@@ -218,9 +244,9 @@ def rendre_debout(stade, nom, cap, dossier):
             ls.linestyle = bpy.data.linestyles.new('encre')
         ls.linestyle.color = (0.04, 0.10, 0.10)
         ls.linestyle.thickness = 2.6
-    sc.render.engine = 'BLENDER_EEVEE_NEXT'
+    vue.eevee(sc)
     sc.eevee.taa_render_samples = ECHANTILLONS
-    f_col = '/tmp/decor-couleur.png'
+    f_col = TMP % 'couleur'
     sc.render.filepath = f_col
     bpy.ops.render.render(write_still=True)
     ancre = vue.ancre_pixel(cam, (0, 0, 0))
@@ -240,13 +266,15 @@ def rendre_debout(stade, nom, cap, dossier):
     sc.render.engine = 'CYCLES'
     sc.cycles.samples = 32
     sc.cycles.use_denoising = True
-    sc.cycles.device = 'CPU'
-    f_omb = '/tmp/decor-ombre.png'
+    vue.cycles_gpu(sc)
+    f_omb = TMP % 'ombre'
     sc.render.filepath = f_omb
+    sc.render.resolution_percentage = 50 if OMBRE_DEMI else 100
     bpy.ops.render.render(write_still=True)
+    sc.render.resolution_percentage = 100
 
     col = lire(f_col)
-    omb = lire(f_omb)
+    omb = lire(f_omb, (W, H))
     # l'attrape-ombre rend du noir ou l'ombre tombe, sa densite dans l'alpha
     S = np.clip(omb[..., 3], 0, 1) * 0.34
     Ca = col[..., 3:4]
@@ -290,7 +318,7 @@ def rendre_sol(stade, nom, dossier, px_par_m=48.0):
     sc.render.pixel_aspect_x = sc.render.pixel_aspect_y = 1.0
     sc.render.film_transparent = True
     sc.view_settings.view_transform = 'Raw'
-    sc.render.engine = 'BLENDER_EEVEE_NEXT'
+    vue.eevee(sc)
     sc.eevee.taa_render_samples = 16
     cd = bpy.data.cameras.new('dessus')
     cd.type = 'ORTHO'
@@ -308,7 +336,7 @@ def rendre_sol(stade, nom, dossier, px_par_m=48.0):
     regard = mathutils.Vector((0, 0, -1))
     cam.matrix_world = mathutils.Matrix.Translation(cam.location) @ \
         mathutils.Matrix((droite, haut, -regard)).transposed().to_4x4()
-    f = '/tmp/decor-sol.png'
+    f = TMP % 'sol'
     sc.render.image_settings.file_format = 'PNG'
     sc.render.image_settings.color_mode = 'RGBA'
     sc.render.filepath = f
@@ -321,18 +349,27 @@ def rendre_sol(stade, nom, dossier, px_par_m=48.0):
 
 
 def main():
-    global PX_PAR_M, CONTOURS, ECHANTILLONS, SANS_OMBRE, ECLAIRAGE
+    global PX_PAR_M, CONTOURS, ECHANTILLONS, SANS_OMBRE, ECLAIRAGE, OMBRE_DEMI
     args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     stade = args[args.index('--stade') + 1] if '--stade' in args else 'day'
     seules = args[args.index('--pieces') + 1].split(',') if '--pieces' in args else None
-    dossier = os.path.join(RACINE_PROJET, 'public', 'decors', stade)
+    # --ultra : la serie du palier ULTRA du jeu (voir decors-stades.js). Deux
+    # fois la densite, des formes rondes trois fois plus fines (pieces.FINESSE),
+    # dans son propre dossier et son propre manifeste : le jeu ne la charge
+    # qu'a trois pixels par point, et garde la serie ordinaire en secours.
+    ultra = '--ultra' in args
+    dossier = os.path.join(RACINE_PROJET, 'public', 'decors-ultra' if ultra else 'decors', stade)
     os.makedirs(dossier, exist_ok=True)
-    f_man = os.path.join(RACINE_PROJET, 'src', 'game', 'decors-manifeste.json')
-    man = json.load(open(f_man)) if os.path.exists(f_man) else {'pxParM': 96.0, 'stades': {}}
+    f_man = os.path.join(RACINE_PROJET, 'src', 'game',
+                         'decors-manifeste-ultra.json' if ultra else 'decors-manifeste.json')
+    man = json.load(open(f_man)) if os.path.exists(f_man) else \
+        {'pxParM': 192.0 if ultra else 96.0, 'stades': {}}
     entree = man['stades'].setdefault(stade, {'debout': {}, 'sol': {}})
 
     cfg = palettes.STADES[stade]
-    PX_PAR_M = float(cfg.get('pxParM', 96.0))
+    PX_PAR_M = float(cfg.get('pxParM', 96.0)) * (2 if ultra else 1)
+    pieces.FINESSE = 3 if ultra else 1
+    OMBRE_DEMI = ultra
     SYMETRIQUES = set(cfg.get('symetriques', []))
     CONTOURS = bool(cfg.get('contours'))
     ECHANTILLONS = int(cfg.get('echantillons', 32))
@@ -359,7 +396,7 @@ def main():
                 continue
             r = rendre_debout(stade, nom, cap, dossier)
             r['portee'] = port
-            if PX_PAR_M != man.get('pxParM', 96.0):
+            if ultra or PX_PAR_M != man.get('pxParM', 96.0):
                 r['ppm'] = PX_PAR_M
             entree['debout'][nom][cle] = r
             # ecrit a chaque rendu : une serie longue interrompue ne perd rien

@@ -37,6 +37,12 @@
   // passerait donc avant le manifeste.
   const VIDE = { pxParM: 96, stades: {} };
   const MAN = () => root.SprinterDecorsManifeste || VIDE;
+  // LA SERIE ULTRA (fabriquer.py --ultra) : deux fois la densite, et des
+  // formes rondes trois fois plus fines. Le jeu ne la demande qu'a trois
+  // pixels par point (voir dpr() dans rendu-premium.js), piece par piece, et
+  // garde l'image ordinaire tant que la fine n'est pas arrivee : a cette
+  // densite, une piece rendue pour deux s'affichait agrandie, floue.
+  const MANU = () => root.SprinterDecorsManifesteUltra || VIDE;
   const BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
 
@@ -44,17 +50,37 @@
   // LES IMAGES, CHARGEES A LA DEMANDE ET UNE SEULE FOIS.
   // -------------------------------------------------------------------
   const images = new Map();
-  function image(stade, f) {
-    const cle = stade + '/' + f;
+  function image(stade, f, dossier) {
+    const cle = (dossier || 'decors') + '/' + stade + '/' + f;
     let im = images.get(cle);
     if (!im) {
       im = new Image();
       im.decoding = 'async'; im.onerror = () => setTimeout(() => images.delete(cle), 2000);
-      im.src = BASE + '/decors/' + cle;
+      im.src = BASE + '/' + cle;
       images.set(cle, im);
     }
     return im.complete && im.naturalWidth > 0 ? im : null;
   }
+
+  /**
+   * Le rendu d'une piece et son image : la serie ULTRA si la toile est a
+   * trois pixels par point et que l'image fine est la, l'ordinaire sinon.
+   * `choisir` prend les rendus d'une piece (par cap) et rend celui qui sert.
+   * Rend [rendu, image, manifeste] ou null.
+   */
+  function rendu(api, genre, nom, p, choisir) {
+    if (api.G.dpr > 2) {
+      const mu = MANU().stades[nom];
+      const ru = mu && mu[genre][p] && choisir(mu[genre][p]);
+      const imu = ru && image(nom, ru.f, 'decors-ultra');
+      if (imu) return [ru, imu, MANU()];
+    }
+    const m = MAN().stades[nom];
+    const r = m && m[genre][p] && choisir(m[genre][p]);
+    const im = r && image(nom, r.f);
+    return im ? [r, im, MAN()] : null;
+  }
+  const lui = (x) => x;
 
   // -------------------------------------------------------------------
   // OU POSER LES PIECES.
@@ -366,11 +392,10 @@
 
   /** Les pieces au sol : a appeler avec la pelouse, avant la piste. */
   function sol(ctx, api, th, etape) {
-    for (const { e, L, nom, man } of pieces(api, th, etape, true)) {
-      const m = man.sol[e.p];
-      if (!m) continue;
-      const im = image(nom, m.f);
-      if (!im) continue;
+    for (const { e, L, nom } of pieces(api, th, etape, true)) {
+      const ri = rendu(api, 'sol', nom, e.p, lui);
+      if (!ri) continue;
+      const [m, im] = ri;
       const yaw = L.yaw * RAD, c = Math.cos(yaw), s = Math.sin(yaw);
       const at = (x, y) => api.ground(L.X + x * c - y * s, L.Y + x * s + y * c);
       const o = at(m.x0, m.y0), ex = at(m.x0 + 1, m.y0), ey = at(m.x0, m.y0 + 1);
@@ -392,14 +417,12 @@
     const vue = T.curved ? api.WROT_DEG : 0;
     // du plus loin au plus pres
     liste.sort((a, b) => api.depthOf(b.L.X, b.L.Y) - api.depthOf(a.L.X, a.L.Y));
-    for (const { e, L, nom, man } of liste) {
-      const rendus = man.debout[e.p];
-      if (!rendus) continue;
-      const r = cap(rendus, L.yaw + vue);
-      const im = r && image(nom, r.f);
-      if (!im) continue;
+    for (const { e, L, nom } of liste) {
+      const ri = rendu(api, 'debout', nom, e.p, (rendus) => cap(rendus, L.yaw + vue));
+      if (!ri) continue;
+      const [r, im, M] = ri;
       const p = api.ground(L.X, L.Y);
-      const k = m / (r.ppm || MAN().pxParM);
+      const k = m / (r.ppm || M.pxParM);
       const x = p[0] - r.ax * k, y = p[1] - r.ay * k, w = r.w * k, h = r.h * k;
       if (x > G.VW || y > G.VH || x + w < 0 || y + h < 0) continue;
       ctx.drawImage(im, x, y, w, h);
@@ -415,14 +438,11 @@
    * moteur dessine alors son ancien bloc.
    */
   function bloc(ctx, api, X, Y, angle) {
-    const man = MAN().stades.materiel;
-    const rendus = man && man.debout.blocs;
-    if (!rendus) return false;
-    const r = cap(rendus, angle);
-    const im = r && image('materiel', r.f);
-    if (!im) return false;
+    const ri = rendu(api, 'debout', 'materiel', 'blocs', (rendus) => cap(rendus, angle));
+    if (!ri) return false;
+    const [r, im, M] = ri;
     const p = api.ground(X, Y);
-    const k = api.scaleM() / (r.ppm || MAN().pxParM);
+    const k = api.scaleM() / (r.ppm || M.pxParM);
     ctx.drawImage(im, p[0] - r.ax * k, p[1] - r.ay * k, r.w * k, r.h * k);
     return true;
   }

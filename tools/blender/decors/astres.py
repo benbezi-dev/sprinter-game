@@ -2,7 +2,7 @@
 # SPRINTER — les astres du fond de la piste arc-en-ciel.
 #
 #   python astres.py           (avec le module bpy)
-#   blender -b -P tools/blender/decors/astres.py
+#   blender -b --factory-startup -P tools/blender/decors/astres.py
 #
 # Les grandes planetes qui defilent sous la piste, en parallaxe, etaient des
 # degrades peints par le moteur (decor-cosmos.js) : un disque, une lumiere,

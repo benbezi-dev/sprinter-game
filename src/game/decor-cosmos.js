@@ -37,13 +37,19 @@
   // avec la parallaxe, une meme nebuleuse ne revient pas deux fois dans le
   // cadre.
   const TUILE = 768;
-  let _motif = null, _ctxMotif = null;
+  let _motif = null, _ctxMotif = null, _kMotif = 0;
 
-  function motif(ctx, th) {
-    if (_motif && _ctxMotif === ctx) return _motif;
+  // `k` : pixels de tuile par point. Cuite a un pixel par point, la tuile
+  // s'affichait agrandie trois fois sur une toile ULTRA — des etoiles en
+  // taches floues. A la densite de la toile, le meme ciel, net, et le motif
+  // reduit d'autant pour garder sa periode (setTransform).
+  function motif(ctx, th, k) {
+    if (_motif && _ctxMotif === ctx && _kMotif === k) return _motif;
     const t = document.createElement('canvas');
-    t.width = TUILE; t.height = TUILE;
+    const W = Math.round(TUILE * k);
+    t.width = W; t.height = W;
     const c = t.getContext('2d');
+    c.scale(W / TUILE, W / TUILE);
     // Suite deterministe : le ciel est le meme d'une course a l'autre.
     let s = 0x2545f491 >>> 0;
     const al = () => {
@@ -125,7 +131,11 @@
       });
     }
     _motif = ctx.createPattern(t, 'repeat');
-    _ctxMotif = ctx;
+    if (_motif && W !== TUILE) {
+      const r = TUILE / W;
+      _motif.setTransform(new DOMMatrix([r, 0, 0, r, 0, 0]));
+    }
+    _ctxMotif = ctx; _kMotif = k;
     return _motif;
   }
 
@@ -148,16 +158,22 @@
   const rgb = (col) => 'rgb(' + col[0] + ',' + col[1] + ',' + col[2] + ')';
   const rgba = (col, a) => 'rgba(' + col[0] + ',' + col[1] + ',' + col[2] + ',' + a + ')';
 
-  /** L'image d'une planete, cuite une fois par taille a l'ecran. */
-  function sprite(i, pl, r) {
-    const cle = i + '|' + r;
+  /**
+   * L'image d'une planete, cuite une fois par taille a l'ecran. `k` : pixels
+   * de l'image par point d'ecran. Cuite a un pixel par point, une planete
+   * s'affichait agrandie trois fois sur une toile ULTRA : un disque flou. On
+   * la cuit donc a la densite de la toile des qu'elle depasse deux.
+   */
+  function sprite(i, pl, r, k) {
+    const cle = i + '|' + r + '|' + k;
     let e = _sprites.get(cle);
     if (e) return e;
     const marge = pl.anneau ? 2.4 : 1.9;
     const w = Math.ceil(r * marge * 2) + 4;
     const cv = document.createElement('canvas');
-    cv.width = w; cv.height = w;
+    cv.width = Math.ceil(w * k); cv.height = Math.ceil(w * k);
     const c = cv.getContext('2d');
+    c.scale(k, k);
     const cx = w / 2, cy = w / 2;
     const inc = -0.38;
     const anneau = (devant) => {
@@ -268,8 +284,8 @@
       const r = Math.max(2, Math.round(pl.R * m * PAR_PLANETES));
       const marge = r * 2.6;
       if (x < -marge || x > G.VW + marge || y < -marge || y > G.VH + marge) continue;
-      const sp = sprite(i, pl, r);
-      ctx.drawImage(sp.cv, x - sp.w / 2, y - sp.w / 2);
+      const sp = sprite(i, pl, r, G.dpr > 2 ? G.dpr : 1);
+      ctx.drawImage(sp.cv, x - sp.w / 2, y - sp.w / 2, sp.w, sp.w);
     }
   }
 
@@ -281,7 +297,10 @@
   function fond(ctx, P, th) {
     if (!th.espace) return;
     const G = P.G;
-    const m = motif(ctx, th);
+    // Meme regle que les tuiles de matiere (finesseMotif, rendu-premium.js).
+    const reductible = typeof DOMMatrix !== 'undefined' && typeof CanvasPattern !== 'undefined'
+      && typeof CanvasPattern.prototype.setTransform === 'function';
+    const m = motif(ctx, th, reductible && G.dpr > 2 ? G.dpr : 1);
     if (m) {
       const a = P.ground(0, 0);
       const ox = (((a[0] * PAR_ETOILES) % TUILE) + TUILE) % TUILE;

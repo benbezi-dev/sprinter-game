@@ -28,6 +28,13 @@
   // Le banc ne court pour personne : aucune course n'est enregistree.
   G.onRaceRecorded = () => {};
   if (P.get('blocs')) G.__banc = {};
+  // ?serie=ordinaire : la meme course sans les series ULTRA (pieces, Champ-de-
+  // Mars, public), pour mesurer ce qu'elles coutent a definition egale.
+  if (P.get('serie') === 'ordinaire') {
+    globalThis.SprinterTribuneManifesteUltra = {};
+    globalThis.SprinterDecorsManifesteUltra = { pxParM: 192, stades: {} };
+    globalThis.ChampDeMarsManifesteUltra = { pieces: {} };
+  }
   G.cv = cv; G.dpr = DPR; G.VW = LW; G.VH = LH; G.portrait = LH > LW;
   SprinterApp.load();
 

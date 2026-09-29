@@ -145,7 +145,7 @@ def lumieres(sc):
 
 def reglages(sc, echantillons):
     sc.render.engine = 'CYCLES'
-    sc.cycles.device = 'CPU'
+    vue.cycles_gpu(sc)
     sc.cycles.samples = echantillons
     sc.cycles.use_denoising = True
     sc.cycles.denoiser = 'OPENIMAGEDENOISE'

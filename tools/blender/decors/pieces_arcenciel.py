@@ -35,13 +35,14 @@ def _objet(nom, mat, bm, lisse=True, angle=40.0):
 
 def _sphere(nom, mat, x, y, z, r, subdiv=3, echelle=(1, 1, 1)):
     bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=subdiv, radius=r)
+    bmesh.ops.create_icosphere(bm, subdivisions=PC.fin_subdiv(subdiv), radius=r)
     bmesh.ops.scale(bm, vec=echelle, verts=bm.verts)
     bmesh.ops.translate(bm, vec=(x, y, z), verts=bm.verts)
     return _objet(nom, mat, bm, angle=180)
 
 
 def _cylindre(nom, mat, x, y, z0, z1, r, cotes=48, r_haut=None):
+    cotes = PC.fin(cotes)
     bm = bmesh.new()
     bmesh.ops.create_cone(bm, cap_ends=True, segments=cotes, radius1=r,
                           radius2=r if r_haut is None else r_haut, depth=z1 - z0)
@@ -51,6 +52,7 @@ def _cylindre(nom, mat, x, y, z0, z1, r, cotes=48, r_haut=None):
 
 def _tore_demi(nom, mat, Rg, r, z, cotes=96, tour=18):
     """Un demi-tore dans le plan XZ : un tube de neon courbe en arc."""
+    cotes, tour = PC.fin(cotes, 0.5), PC.fin(tour)
     bm = bmesh.new()
     rangs = []
     for k in range(cotes + 1):

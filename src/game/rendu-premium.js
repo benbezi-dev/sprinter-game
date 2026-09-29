@@ -288,12 +288,36 @@
   // l'affichage et la piste aurait l'air de glisser dessous.
   // -------------------------------------------------------------------
   const TUILE_GRAIN = 192;
-  let _grainMotif = null;
+  let _grainMotif = null, _grainK = 0;
 
-  function motifGrain(ctx) {
-    if (_grainMotif) return _grainMotif;
+  // LE GRAIN A LA DENSITE DE LA TOILE. Cuit a un pixel par point, il
+  // s'affichait agrandi trois fois sur une toile ULTRA : des taches floues de
+  // trois pixels, un grain qui se voyait. On le cuit a la densite de la toile
+  // des qu'elle depasse deux, et le motif est reduit d'autant : il garde sa
+  // periode a l'ecran, et l'ancrage au monde (bandPattern) ne change pas.
+  // Sans CanvasPattern.setTransform, on reste a un pixel par point. (Pas
+  // l'herbe : voir motifHerbe.)
+  const _motifReductible = typeof DOMMatrix !== 'undefined' && typeof CanvasPattern !== 'undefined'
+    && typeof CanvasPattern.prototype.setTransform === 'function';
+  function finesseMotif(P) {
+    const d = (P && P.G && P.G.dpr) || 1;
+    return _motifReductible && d > 2 ? d : 1;
+  }
+  /** Un motif tire d'une tuile de `W` pixels cuite pour `taille` points. */
+  function motifReduit(ctx, t, taille) {
+    const m = ctx.createPattern(t, 'repeat');
+    if (m && t.width !== taille) {
+      const r = taille / t.width;
+      m.setTransform(new DOMMatrix([r, 0, 0, r, 0, 0]));
+    }
+    return m;
+  }
+
+  function motifGrain(ctx, k) {
+    if (_grainMotif && _grainK === k) return _grainMotif;
     const t = document.createElement('canvas');
-    t.width = TUILE_GRAIN; t.height = TUILE_GRAIN;
+    const W = Math.round(TUILE_GRAIN * k);
+    t.width = W; t.height = W;
     const c = t.getContext('2d');
     // Suite deterministe : la piste doit avoir le meme grain d'une partie a
     // l'autre. Un stade qui se reteinte a chaque lancement n'est pas un lieu.
@@ -334,7 +358,9 @@
     // Le grain fin, ecrit directement dans les pixels : quinze mille arcs de
     // cercle donneraient la meme chose en cent fois plus de temps, et la
     // tuile est cuite une seule fois de toute la partie.
-    const img = c.getImageData(0, 0, TUILE_GRAIN, TUILE_GRAIN);
+    // A la densite de la toile, un pixel de tuile par pixel d'ecran : le
+    // grain reste « a l'echelle du pixel », comme il a ete regle.
+    const img = c.getImageData(0, 0, W, W);
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) {
       const n = al();
@@ -355,13 +381,13 @@
       d[i + 3] = na;
     }
     c.putImageData(img, 0, 0);
-    _grainMotif = ctx.createPattern(t, 'repeat');
+    _grainMotif = motifReduit(ctx, t, TUILE_GRAIN); _grainK = k;
     return _grainMotif;
   }
 
   function grain(ctx, P, rIn, rOut) {
     if (niveau < PLEIN) return;
-    const m = motifGrain(ctx);
+    const m = motifGrain(ctx, finesseMotif(P));
     if (!m) return;
     const a = P.ground(0, 0);
     P.bandPattern(ctx, P.samples(), rIn, rOut, m, 0,
@@ -392,6 +418,11 @@
   const TUILE_HERBE = 256;
   let _herbeMotif = null;
 
+  // L'HERBE RESTE A UN PIXEL PAR POINT, MEME A L'ULTRA. Cuits a la densite
+  // de la toile (voir finesseMotif), les brins devenaient des traits nets
+  // qu'on pouvait compter — essaye le 29/09/2026 — et c'est exactement ce
+  // qu'ils ne doivent pas etre (plus bas). A trois pixels par point, c'est
+  // l'agrandissement qui les fond dans la matiere.
   function motifHerbe(ctx) {
     if (_herbeMotif) return _herbeMotif;
     const t = document.createElement('canvas');

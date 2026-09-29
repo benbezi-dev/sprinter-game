@@ -126,3 +126,39 @@ def soleil(force=3.2):
     vers_source = miroir(LUMIERE)
     o.rotation_euler = vers_source.to_track_quat('Z', 'Y').to_euler()
     return o
+
+
+def eevee(sc):
+    """Passe la scene sur EEVEE, quel que soit son nom dans cette version.
+
+    Blender 4.2 l'appelait BLENDER_EEVEE_NEXT, Blender 5 BLENDER_EEVEE : les
+    scripts ecrits pour l'un tombaient sur l'autre avec un TypeError.
+    """
+    for nom in ('BLENDER_EEVEE_NEXT', 'BLENDER_EEVEE'):
+        try:
+            sc.render.engine = nom
+            return
+        except TypeError:
+            pass
+    raise RuntimeError('EEVEE introuvable dans ce Blender')
+
+
+def cycles_gpu(sc):
+    """Cycles sur le GPU du Mac (Metal) s'il y en a un, le CPU sinon.
+
+    L'ombre au sol de la serie ULTRA (fabriquer.py --ultra) se rend a quatre
+    fois plus de pixels : sur le CPU, une minute et demie par vue, six heures
+    pour tous les stades. Le resultat ne depend pas du processeur qui le
+    calcule, seulement du temps qu'il y met.
+    """
+    try:
+        prefs = bpy.context.preferences.addons['cycles'].preferences
+        prefs.compute_device_type = 'METAL'
+        prefs.get_devices()
+        gpus = [d for d in prefs.devices if d.type == 'METAL']
+        for d in prefs.devices:
+            d.use = d.type == 'METAL'
+        sc.cycles.device = 'GPU' if gpus else 'CPU'
+    except Exception:
+        sc.cycles.device = 'CPU'
+    return sc.cycles.device
