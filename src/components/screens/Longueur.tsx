@@ -13,10 +13,10 @@ import {
 } from './sauts-commun';
 import {
   PLATEAU, nouveauConcours, avancerJusquAuJoueur, inscrire, classement, aQui, tirerVent,
-  joueurEnLice, placeDuJoueur, meilleur, tours,
+  joueurEnLice, placeDuJoueur, meilleur, tours, APPEL_MAXI,
 } from '@/game/longueur-jeu.js';
 import {
-  armerConcoursSaut, appelerSauteur, mettreAuRepos, rangerConcoursSaut, ecouterSaut, etatSaut,
+  armerConcoursSaut, appelerSauteur, mettreAuRepos, rangerConcoursSaut, ecouterSaut, etatSaut, celebrer,
 } from '@/game/longueur-course.js';
 
 /**
@@ -126,7 +126,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
   const [, rafraichir] = useState(0);
   const [annonce, setAnnonce] = useState<null | { sorte: string; texte: string; sous?: string; couleur: string }>(null);
   const [live, setLive] = useState<{ phase: string; v: number; angle: number | null; horloge: number } | null>(null);
-  const [record, setRecord] = useState<null | { m: number; vent: number; ok: boolean }>(null);
+  const [record, setRecord] = useState<null | { m: number; vent: number; ok: boolean; gain: number | null }>(null);
   const coupeVue = useRef(false);
   const quitte = useRef(false);
   // Les rappels du concours vivent plus longtemps qu'un rendu : ils lisent la
@@ -210,9 +210,12 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
       // UN APPEL MORDU NE SE DIT PAS TOUT DE SUITE. Le joueur le decouvre comme
       // au stade : au drapeau rouge, une fois dans le sable. L'annoncer sur la
       // planche lui volerait le seul saut qu'il ait fait.
+      // Le verdict, en grand, comme a la television — sur les memes seuils
+      // que la jauge d'elan (longueur-course.js), sans quoi l'un mentirait.
+      const zone = evt.ecart <= 0.2 ? 'parfait' : evt.ecart <= APPEL_MAXI ? 'bon' : 'loin';
       setAnnonce(evt.ecart < 0 ? null
-        : { sorte: 'planche', texte: `${N.t('saut_planche')} · ${Math.round(evt.ecart * 100)} cm`,
-            couleur: evt.ecart <= 0.2 ? 'rgb(74,222,128)' : 'rgb(250,214,60)' });
+        : { sorte: 'planche', texte: `${N.t('saut_appel_' + zone)} · ${Math.round(evt.ecart * 100)} cm`,
+            couleur: zone === 'parfait' ? 'rgb(74,222,128)' : zone === 'bon' ? 'rgb(250,214,60)' : 'rgb(251,146,60)' });
     }
     // LES POSES DU TRIPLE SAUT : ce que valait l'appui, et le pied. Un mauvais
     // pied se dit tout de suite — contrairement au mordu, le joueur peut le
@@ -254,8 +257,9 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         const mem = memoireRef.current;
         if (!mem.pb || r.marque! > mem.pb.m) {
           const ok = homologable(r.vent);
-          setRecord({ m: r.marque!, vent: r.vent, ok });
-          if (ok) onMemoire({ ...mem, pb: { m: r.marque!, vent: r.vent } });
+          setRecord({ m: r.marque!, vent: r.vent, ok, gain: mem.pb ? r.marque! - mem.pb.m : null });
+          // l'athlete leve les bras en sortant du sable, la camera vient le chercher
+          if (ok) { onMemoire({ ...mem, pb: { m: r.marque!, vent: r.vent } }); celebrer(); }
         }
       }
     }
@@ -356,7 +360,9 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
       {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. */}
       {/* Decale a droite du bouton de pause, qui tient le coin gauche. */}
       {temps !== 'fin' && (
-        <div className="max-w-lg mx-auto mt-2 pl-10">
+        // il s'efface pendant le gros plan du record, qu'il cacherait
+        <div className={`max-w-lg mx-auto mt-2 pl-10 transition-opacity duration-500
+                         ${temps === 'toi' && annonce?.sorte === 'marque' && record?.ok ? 'opacity-0' : ''}`}>
           <Tableau lignes={cl} accent={accent} court />
         </div>
       )}
@@ -415,7 +421,10 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         {temps === 'toi' && annonce && (
           <motion.div key={annonce.sorte + annonce.texte} initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-x-0 top-[30%] flex flex-col items-center gap-1">
+            // Record battu : la camera vient sur l'athlete, bras leves ; la
+            // marque descend en bandeau pour ne pas le cacher.
+            className={`absolute inset-x-0 flex flex-col items-center gap-1
+                        ${annonce.sorte === 'marque' && record && record.ok ? 'bottom-[7%]' : 'top-[30%]'}`}>
             <span className={`flex items-center gap-2 font-display font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]
                               ${annonce.sorte === 'marque' ? 'text-5xl' : 'text-xl'}`}
                   style={{ color: annonce.couleur }}>
@@ -433,9 +442,11 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
               </span>
             )}
             {annonce.sorte === 'marque' && record && (
-              <span className="mt-1 text-[10px] font-bold tracking-widest"
+              <span className="mt-1 text-[10px] font-bold tracking-widest bg-black/45 rounded-full px-3 py-0.5"
                     style={{ color: record.ok ? 'rgb(250,214,60)' : 'rgba(255,255,255,0.55)' }}>
                 {N.t('saut_record_perso')}{record.ok ? '' : ` · ${N.t('saut_vent_trop', { v: lireVent(record.vent) })}`}
+                {record.ok && record.gain != null && record.gain > 0
+                  ? ` · ${N.t('saut_pb_gain', { n: virgule(Math.round(record.gain * 100) / 100) })}` : ''}
               </span>
             )}
           </motion.div>
