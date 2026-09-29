@@ -85,15 +85,23 @@ VISAGE = {
     'head-oval': 0.65, 'head-scale-vert-incr': 0.22, 'head-scale-horiz-decr': 0.08,
     'forehead-scale-vert-incr': 0.35, 'forehead-nubian-incr': 0.30,
     '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.20,
-    'chin-height-incr': 0.30, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
-    '*-eye-height2-decr': 0.35, '*-eye-eyefold-down': 0.45, '*-eye-corner2-down': 0.25,
+    'chin-height-incr': 0.45, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
+    '*-eye-height2-decr': 0.60, '*-eye-eyefold-down': 0.55, '*-eye-corner2-down': 0.25,
     '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
-    'eyebrows-trans-down': 0.30,
+    # mesure (tools/biomeca/visage.py) : ses sourcils sont hauts sur l'oeil
+    'eyebrows-trans-up': 0.35,
     'nose-width1-incr': 0.45, 'nose-width2-incr': 0.55, 'nose-width3-incr': 0.60,
     'nose-flaring-incr': 0.55, 'nose-nostrils-width-incr': 0.50,
     'nose-point-width-incr': 0.45, 'nose-hump-decr': 0.30, 'nose-volume-incr': 0.15,
-    'mouth-scale-horiz-incr': 0.30, 'mouth-lowerlip-volume-incr': 0.50,
-    'mouth-upperlip-volume-incr': 0.25, 'mouth-lowerlip-height-incr': 0.25,
+    # mesure : de l'oeil au bout du nez, 0,255 de la largeur du visage chez
+    # lui, 0,324 sur le modele — un nez court, releve
+    'nose-scale-vert-decr': 0.95, 'nose-trans-up': 0.60, 'nose-point-up': 0.45,
+    'mouth-scale-horiz-incr': 0.30,
+    # mesure : ses levres sont pleines mais pas projetees — la bouche du
+    # modele avancait et s'epaississait (+43 % en haut, +59 % en bas)
+    'mouth-scale-depth-decr': 0.55, 'mouth-trans-backward': 0.45,
+    'mouth-lowerlip-volume-decr': 0.35, 'mouth-upperlip-volume-decr': 0.45,
+    'mouth-lowerlip-height-decr': 0.25, 'mouth-upperlip-height-decr': 0.30,
     '*-ear-flap-decr': 0.35,
 }
 
@@ -446,7 +454,8 @@ def poids_dominant(h):
     return dom
 
 
-def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0, fondu=0):
+def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0, fondu=0,
+          teinte=None):
     """Une coque : les faces du corps que `garder(centre, normale, poids)` retient."""
     import bmesh
     dom = poids_dominant(h)
@@ -509,19 +518,28 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
     for v in bm.verts:
         part = min(1.0, (anneau.get(v, fondu) + 0.35) / (fondu + 0.35)) if fondu else 1.0
         parts[v.index] = part
-        v.co += v.normal * epaisseur * part
+        e = epaisseur(v.co) if callable(epaisseur) else epaisseur
+        v.co += v.normal * e * part
     bm.to_mesh(me); bm.free()
+    # une piece a plusieurs couleurs (`teinte(co)` rend une couleur 0-255)
+    if teinte is not None and not fondu:
+        col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
+        for v in me.vertices:
+            c = [srgb_vers_lin(x / 255) for x in teinte(v.co)]
+            col.data[v.index].color = (c[0], c[1], c[2], 1.0)
     # et la couleur se fond aussi : de la peau au bord a la sienne au coeur
     if fondu:
         col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
         a = Vector([srgb_vers_lin(c / 255) for c in PEAU])
         b = Vector([srgb_vers_lin(c / 255) for c in couleur])
         for i, part in parts.items():
-            c = a.lerp(b, part ** 0.7)
+            # le coeur a sa couleur pleine, le bord seul se fond : sur un
+            # maillage grossier, un fondu lent rendait toute la barbe brune
+            c = a.lerp(b, min(1.0, part * 2.2))
             col.data[i].color = (c.x, c.y, c.z, 1.0)
     me.materials.clear()
     mat = materiau(nom, couleur, rugosite, metal)
-    if fondu:
+    if fondu or teinte is not None:
         nt = mat.node_tree
         bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
         ca = next((n for n in nt.nodes if n.type == 'VERTEX_COLOR'), None) or nt.nodes.new('ShaderNodeVertexColor')
@@ -589,7 +607,7 @@ def ourlet(bm, h, passes=14):
 # Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
 # le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
 # gris clair sous les lampes.
-MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils'}
+MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils', 'Meba_levres'}
 
 
 def materiau(nom, couleur, rugosite=0.6, metal=0.0):
@@ -609,18 +627,22 @@ def srgb_vers_lin(c):
 
 
 # Les couleurs sont celles du look du jeu (VEDETTES, sprinter-core.js).
-PEAU = (96, 58, 44)
+# la carnation de ses photos a l'exterieur : un brun fonce, chaud — la
+# premiere (96, 58, 44), eclairee au studio, sortait caramel
+PEAU = (74, 44, 34)
 MAILLOT = (242, 244, 248)
 SHORT = (30, 44, 110)
 POINTES = (214, 240, 44)
 SEMELLE = (236, 236, 232)
 BANDEAU = (30, 30, 34)
-BARBE = (36, 26, 24)
+BARBE = (20, 15, 14)
 CHEVEU = (30, 24, 22)
 MECHES = (196, 160, 104)
 OR = (226, 184, 72)
 SOURCIL = (18, 13, 12)
-LEVRES = (74, 42, 40)
+BLEU_FRANCE = (38, 64, 168)
+ROUGE_FRANCE = (214, 40, 52)
+LEVRES = (58, 33, 31)
 
 
 def chaussure(h, rig, cote):
@@ -689,6 +711,23 @@ def transferer_poids(o, source, rig):
 def habiller(h, rig):
     """Les pieces de la tenue et du visage, chacune a sa coque."""
     p = lambda d, *n: max((d.get(k, 0.0) for k in n), default=0.0)
+    # les yeux d'abord : le bandeau, les sourcils et les cheveux s'y reperent
+    yeux_c = orbites(h)
+    # et le menton : la barbe s'y epaissit
+    domh = poids_dominant(h)
+    menton = min((h.data.vertices[i].co for i, dd in enumerate(domh)
+                  if dd[0] == 'head' and h.data.vertices[i].co.x > 0.05
+                  and abs(h.data.vertices[i].co.y) < 0.015), key=lambda q: q.z)
+
+    # SA BARBE A UN VOLUME. Une coque de quatre millimetres se lisait en ombre
+    # sur la peau ; la sienne, sur ses photos, est epaisse et descend de quatre
+    # ou cinq centimetres sous le menton, en pointe. L'epaisseur depend donc de
+    # la place : 3,5 cm au menton, pleine sur la machoire, fine sur les joues
+    # et la moustache.
+    def epaisseur_barbe(co):
+        dm = (co - menton).length
+        machoire = max(0.0, min(1.0, (menton.z + 0.045 - co.z) / 0.045))
+        return 0.005 + 0.011 * machoire + 0.048 * math.exp(-(dm / 0.032) ** 2)
     bras = ('upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'hand_l', 'hand_r')
     doigts = lambda d: any(k.split('_')[0] in ('thumb', 'index', 'middle', 'ring', 'pinky') and w > 0.2 for k, w in d.items())
 
@@ -725,15 +764,23 @@ def habiller(h, rig):
     def semelle(c, n, d):
         return c.z < 0.03 and n.z <= -0.55
 
-    # LE BANDEAU NOIR, haut sur le front, horizontal.
+    # LE BANDEAU NOIR, HAUT sur le front, au-dessus des sourcils : pose trop
+    # bas, il les cachait et le visage n'avait plus de front. Il se place donc
+    # par rapport aux yeux, pas a une hauteur fixe.
+    zY = sum(e.z for e, _ in yeux_c) / max(1, len(yeux_c)) if yeux_c else 1.5185
+    # ET INCLINE, comme il le porte : haut sur le front, il descend vers la
+    # nuque (deux centimetres et demi plus bas derriere).
+    bas_bandeau = lambda x: zY + 0.050 + 0.20 * (x - 0.09)
     def bandeau(c, n, d):
-        return p(d, 'head') > 0.5 and 1.546 < c.z < 1.579 and d.get('ears', 0) < 0.2
+        b = bas_bandeau(c.x)
+        return p(d, 'head') > 0.5 and b < c.z < b + 0.031 and d.get('ears', 0) < 0.2
 
     # LES CHEVEUX RAS : le cuir chevelu au-dessus du bandeau, et les cotes
     # et la nuque dessous, tres courts.
     def ras(c, n, d):
         if d.get('scalp', 0) < 0.3: return False
-        return c.z >= 1.579 or (c.z < 1.546 and c.x < 0.055)
+        b = bas_bandeau(c.x)
+        return c.z >= b + 0.031 or (c.z < b and c.x < 0.055)
 
     # LA BARBE PLEINE : joues, menton, sous la machoire, moustache — pas les
     # levres.
@@ -744,17 +791,24 @@ def habiller(h, rig):
         # les joues basses, jusqu'aux favoris, pas sous les yeux
         joues = (p(d, 'head') > 0.4 and c.x > 0.012 and abs(c.y) > 0.040
                  and 1.408 < c.z < (1.49 if abs(c.y) > 0.056 else 1.47))
-        # sous la machoire seulement : pas en bavoir sur la gorge
-        dessous = p(d, 'neck_01', 'head') > 0.4 and c.x > 0.05 and 1.392 < c.z < 1.41
+        # sous la machoire et sous le menton : c'est de la que sa barbe
+        # descend (pas en bavoir sur toute la gorge)
+        # Elle chevauche le bas du visage de trois centimetres : separee de
+        # lui par un rang de faces, elle partait comme un ilot de franges.
+        dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02
+                   and menton.z - 0.035 < c.z < menton.z + 0.030 and abs(c.y) < 0.075)
         # la moustache reste ; seul le dessous du nez est epargne
-        nez = c.z > 1.472 and abs(c.y) < 0.021 and c.x > 0.112
+        nez = c.z > zY - 0.030 and abs(c.y) < 0.021 and c.x > 0.112
+        # la moustache : entre le nez et la levre, sur toute la largeur de la bouche
+        moustache = p(d, 'head') > 0.4 and c.x > 0.09 and abs(c.y) < 0.03 and zY - 0.060 < c.z < zY - 0.032
+        if moustache and d.get('lips', 0) < 0.25:
+            return True
         return (visage or joues or dessous) and not nez
 
     # LES SOURCILS, que le corps de MakeHuman n'a pas : sans eux le visage se
     # lisait en mannequin. Un arc au-dessus de chaque oeil, trouve depuis
     # l'oeil lui-meme : epais pres du nez, fin vers la tempe, a peine arque —
     # les siens sont sombres, nets, poses bas.
-    yeux_c = orbites(h)
     def sourcils(c, n, d):
         if p(d, 'head') < 0.5 or c.x < 0.04:
             return False
@@ -764,34 +818,49 @@ def habiller(h, rig):
             dy = (abs(c.y) - abs(e.y))          # vers la tempe, positif
             if not (-0.017 < dy < 0.029):
                 continue
-            zc = e.z + 0.0185 - 7.0 * (dy - 0.004) ** 2
-            demi = 0.0036 - 0.045 * max(0.0, dy)
+            # mesure : du coin de l'oeil au sourcil, 0,265 de la largeur du
+            # visage — plus haut qu'on ne le dessinait
+            zc = e.z + 0.0245 - 7.0 * (dy - 0.004) ** 2
+            demi = 0.0055 - 0.070 * max(0.0, dy)
             if abs(c.z - zc) < max(0.0016, demi):
                 return True
         return False
 
     # LES LEVRES, de leur couleur : plus sombres que la peau, satinees.
     def levres(c, n, d):
-        return d.get('lips', 0) > 0.45
+        return d.get('lips', 0) > 0.62
+
+    # LE MAILLOT DE L'EQUIPE DE FRANCE, sans la marque : blanc, les epaules et
+    # les bretelles bleues, un filet rouge sous le bras.
+    def teinte_france(co):
+        ay = abs(co.y)
+        if co.z > 1.300 and ay > 0.050:
+            return BLEU_FRANCE
+        if 0.118 < ay < 0.136 and 1.205 < co.z < 1.300:
+            return ROUGE_FRANCE
+        return MAILLOT
 
     pieces = [
-        ('Meba_sourcils', sourcils, 0.0011, SOURCIL, 0.9, 0, 2),
-        ('Meba_levres', levres, 0.0004, LEVRES, 0.42, 0, 2),
+        ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 1),
+        ('Meba_levres', levres, 0.0002, LEVRES, 0.62, 0, 3),
         # le maillot passe PAR-DESSUS le short : plus bas et plus epais que
         # lui la ou ils se croisent, sans quoi le short ressortait en
         # languettes a travers l'ourlet
-        ('Meba_maillot', maillot, 0.0068, MAILLOT, 0.55),
+        ('Meba_maillot', maillot, 0.0068, MAILLOT, 0.55, 0, 0, teinte_france),
         ('Meba_short', short, 0.0045, SHORT, 0.45),
         ('Meba_bandeau', bandeau, 0.0035, BANDEAU, 0.7),
         ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
-        ('Meba_barbe', barbe, 0.0042, BARBE, 0.95, 0, 4),
+        # un fondu de deux rangs : le visage de MakeHuman est grossier, et sur
+        # quatre, le menton n'atteignait jamais sa pleine epaisseur
+        ('Meba_barbe', barbe, epaisseur_barbe, BARBE, 0.95, 0, 2),
     ]
     out = [chaussure(h, rig, 1), chaussure(h, rig, -1)]
     for piece in pieces:
         nom, garder, e, col, r = piece[:5]
         out.append(coque(h, rig, nom, garder, e, col, r,
                          lisser=piece[5] if len(piece) > 5 else 0,
-                         fondu=piece[6] if len(piece) > 6 else 0))
+                         fondu=piece[6] if len(piece) > 6 else 0,
+                         teinte=piece[7] if len(piece) > 7 else None))
     # et la peau
     h.data.materials.clear()
     peau = materiau('Meba_peau', PEAU, 0.58)
@@ -858,7 +927,7 @@ def orbites(h):
 
 def yeux(h, rig):
     objs = []
-    blanc = materiau('Meba_oeil', (226, 218, 204), 0.10)
+    blanc = materiau('Meba_oeil', (212, 200, 184), 0.10)
     iris = materiau('Meba_iris', (38, 22, 15), 0.15)
     pupille = materiau('Meba_pupille', (8, 8, 10), 0.05)
     for c, r in orbites(h):
@@ -908,7 +977,11 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
     V = [v.co.copy() for v in h.data.vertices]
     arbre = BVHTree.FromPolygons(V, [tuple(p.vertices) for p in h.data.polygons])
     dom = poids_dominant(h)
-    cuir = [i for i, d in enumerate(dom) if d[2].get('scalp', 0) > 0.4 and V[i].z > 1.586]
+    # les racines au-dessus du bandeau, qu'il porte incline (voir habiller)
+    yc = orbites(h)
+    zY = sum(e.z for e, _ in yc) / max(1, len(yc)) if yc else 1.5185
+    haut_bandeau = lambda x: zY + 0.050 + 0.20 * (x - 0.09) + 0.031
+    cuir = [i for i, d in enumerate(dom) if d[2].get('scalp', 0) > 0.4 and V[i].z > haut_bandeau(V[i].x) + 0.002]
     centre = sum((V[i] for i in cuir), Vector()) / len(cuir)
     def tirer(nb, ecart, deja):
         out, tentatives = [], 0
@@ -936,11 +1009,11 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
         L = 0.047 - 0.017 * bord + rnd.uniform(-0.005, 0.005)
         if courte:
             L = rnd.uniform(0.012, 0.020)
-        d = (nor * (1.0 - 0.30 * bord) + Vector((-0.32, 0, 0.18))
+        d = (nor * (1.0 - 0.30 * bord) + Vector((-0.55, 0, 0.10))
              + rad.normalized() * (0.10 + 0.30 * bord)
              + Vector((rnd.uniform(-.18, .18), rnd.uniform(-.18, .18), rnd.uniform(0, .12)))).normalized()
         # un axe qui s'incurve en retombant, d'autant plus qu'on est au bord
-        axe = [loc + d * (L * t) + Vector((0, 0, -(0.006 + 0.016 * bord) * t * t)) for t in (0, .25, .5, .75, 1)]
+        axe = [loc + d * (L * t) + Vector((-0.004 * t, 0, -(0.010 + 0.022 * bord) * t * t)) for t in (0, .25, .5, .75, 1)]
         u = d.orthogonal().normalized(); w = d.cross(u).normalized()
         tours, rh = rnd.uniform(2.0, 3.0), 0.0026
         for phase in (0.0, math.pi):
@@ -1070,56 +1143,51 @@ DOSSARD = (240, 236, 222)
 ENCRE = (26, 30, 58)
 
 
-def dossard(h, rig, texte="ZÉZÉ"):
-    import bmesh
+def inscription(support, rig, texte, y, z, taille, couleur, nom):
+    """Des lettres modelees, posees sur `support` (une coque), qui en suivent
+    la courbure et les os."""
     from mathutils.bvhtree import BVHTree
-    # la feuille : la poitrine, devant, sous l'encolure
-    def feuille(c, n, d):
-        return c.x > 0.02 and n.x > 0.35 and 1.120 < c.z < 1.250 and abs(c.y) < 0.086
-    f = coque(h, rig, 'Meba_dossard', feuille, 0.0083, DOSSARD, 0.8)
-
-    # les lettres, centrees sur la feuille, collees a elle
-    arbre = BVHTree.FromPolygons([v.co.copy() for v in f.data.vertices],
-                                 [tuple(p.vertices) for p in f.data.polygons])
-    cu = bpy.data.curves.new('Meba_nom', 'FONT')
+    arbre = BVHTree.FromPolygons([v.co.copy() for v in support.data.vertices],
+                                 [tuple(p.vertices) for p in support.data.polygons])
+    cu = bpy.data.curves.new(nom, 'FONT')
     cu.body = texte
     cu.align_x = 'CENTER'; cu.align_y = 'CENTER'
-    cu.size = 0.040
+    cu.size = taille
     cu.extrude = 0.0006
     try:
         cu.font = bpy.data.fonts.load('/System/Library/Fonts/Supplemental/Arial Black.ttf', check_existing=True)
     except Exception:
         pass
-    o = bpy.data.objects.new('Meba_nom', cu)
+    o = bpy.data.objects.new(nom, cu)
     bpy.context.scene.collection.objects.link(o)
     # le texte est ecrit dans le plan xy : on le dresse face a l'avant (+x)
     o.rotation_euler = (math.radians(90), 0, math.radians(90))
-    o.location = (0.3, 0.0, 1.185)
+    o.location = (0.3, y, z)
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
     bpy.ops.object.convert(target='MESH')
     o = bpy.context.active_object
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    # chaque sommet revient sur la feuille, un demi-millimetre devant
     for v in o.data.vertices:
         hit = arbre.ray_cast(Vector((0.4, v.co.y, v.co.z)), Vector((-1, 0, 0)))
         if hit[0] is not None:
-            devant = 0.0006 + (v.co.x - 0.3) * 1.0
+            devant = 0.0006 + (v.co.x - 0.3)
             v.co = hit[0] + hit[1].normalized() * max(0.0004, devant + 0.0005)
-    o.data.materials.append(materiau('Meba_encre', ENCRE, 0.6))
-    # les lettres suivent la poitrine comme la feuille : memes os, par transfert
-    for g in f.vertex_groups:
-        o.vertex_groups.new(name=g.name)
-    mod = o.modifiers.new('Poids', 'DATA_TRANSFER')
-    mod.object = f
-    mod.use_vert_data = True
-    mod.data_types_verts = {'VGROUP_WEIGHTS'}
-    mod.vert_mapping = 'NEAREST'
-    bpy.context.view_layer.objects.active = o
-    bpy.ops.object.datalayout_transfer(modifier=mod.name)
-    bpy.ops.object.modifier_apply(modifier=mod.name)
-    arm = o.modifiers.new('Armature', 'ARMATURE'); arm.object = rig
-    return f, o
+    o.data.materials.append(materiau(nom, couleur, 0.6))
+    transferer_poids(o, support, rig)
+    return o
+
+
+def dossard(h, rig):
+    """Le maillot porte FRANCE sur la poitrine, et le dossard, petit, sur le
+    cote — comme sur ses photos de championnat."""
+    maillot = bpy.data.objects['Meba_maillot']
+    inscription(maillot, rig, "FRANCE", 0.0, 1.150, 0.048, BLEU_FRANCE, 'Meba_france')
+    def feuille(c, n, d):
+        return c.x > 0.02 and n.x > 0.3 and 1.215 < c.z < 1.275 and 0.035 < c.y < 0.105
+    f = coque(h, rig, 'Meba_dossard', feuille, 0.0083, DOSSARD, 0.8)
+    inscription(f, rig, "ZÉZÉ", 0.070, 1.245, 0.014, ENCRE, 'Meba_nom')
+    return f
 
 
 # --- L'EXPORT ----------------------------------------------------------------
@@ -1266,8 +1334,10 @@ def visage_rendu(rig, dossier, echantillons=64):
                 'upperarm_l': (0.1, -0.1, 0.0), 'upperarm_r': (0.1, 0.1, 0.0)})
     sc.render.resolution_x, sc.render.resolution_y = 640, 720
     sc.render.image_settings.file_format = 'PNG'
-    for nom, loc in (('face', (0.95, 0.0, 1.535)), ('34', (0.80, -0.52, 1.545))):
-        camera_portrait(loc, (0.03, 0.0, 1.515), 95)
+    # la camera a hauteur des yeux, comme celle de l'interview : plus haute,
+    # elle regardait le visage de haut et allongeait le nez a l'ecran
+    for nom, loc in (('face', (0.95, 0.0, 1.515)), ('34', (0.80, -0.52, 1.52))):
+        camera_portrait(loc, (0.03, 0.0, 1.505), 95)
         sc.render.filepath = os.path.join(dossier, 'visage-' + nom + '.png')
         bpy.ops.render.render(write_still=True)
     sc.render.image_settings.file_format = 'WEBP'
