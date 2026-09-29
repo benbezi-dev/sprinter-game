@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { nomEnLigne } from '@/game/jeux';
+import { nomEnLigne, nomCourt, jeuDe, estUneCourseDeHaies, type Jeu } from '@/game/jeux';
+import { bilanHaies } from '@/game/haies-course.js';
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
@@ -36,13 +37,28 @@ import {
  */
 
 /** Ce que la course qui vient de finir dit de mieux a corriger. */
-function conseilDe(N: any, cibleMs: number, meilleurMs: number | null): string | null {
+function conseilDe(N: any, cibleMs: number, meilleurMs: number | null,
+                   epreuve: string): string | null {
   const p = SprinterApp.G.player;
   if (!p) return null;
   const C = SprinterApp.C;
 
+  // LES HAIES ONT LEURS FAUTES A ELLES, et le bilan de la course les compte
+  // (haies-course.js). Il vaut encore pour la course qui vient de finir : les
+  // haies ne se rangent qu'a la construction de la suivante. On verifie tout de
+  // meme que c'est bien la sienne.
+  const b = estUneCourseDeHaies(epreuve) ? bilanHaies() : null;
+  const h = b && b.cle === epreuve ? b : null;
+
   // Un faux depart passe avant tout le reste : il coute la course entiere.
   if (p.jumped) return N.t('obj_c_faux');
+
+  // LA HAIE PERCUTEE, juste apres : c'est la seule faute de Hurdlers qui
+  // vienne entierement du joueur, et la plus chere — quatre dixiemes de la
+  // vitesse a chaque fois (GARDE_PERCUTE, haies-jeu.js).
+  if (h && h.percutees > 0) {
+    return N.t(h.percutees > 1 ? 'obj_c_percute_n' : 'obj_c_percute', { n: h.percutees });
+  }
 
   // Le depart. On ne parle que du temps REELLEMENT perdu par rapport a la
   // meilleure reaction possible, pas d'un ideal theorique.
@@ -53,6 +69,12 @@ function conseilDe(N: any, cibleMs: number, meilleurMs: number | null): string |
   // La chute vient d'une touche repetee, et c'est la seule faute que le jeu
   // sanctionne vraiment.
   if (p.stumbledInDrive) return N.t('obj_c_chute');
+
+  // Le rythme entre les haies : le bandeau de course l'a dit haie par haie
+  // (« rythme casse »), l'ecran de revanche le dit une fois, avec le compte.
+  if (h && h.rompus > 0) {
+    return N.t(h.rompus > 1 ? 'obj_c_cadence_n' : 'obj_c_cadence', { n: h.rompus });
+  }
 
   if (p.transGrade === 0) return N.t('obj_c_trans');
 
@@ -104,7 +126,7 @@ export function Revanche() {
   const minutes = minutesRestantes(o);
   const echecs = s.courses - (reussi ? 1 : 0);
   const conseil = !reussi && s.courses >= ECHECS_AVANT_CONSEIL
-    ? conseilDe(N, cible, s.meilleurMs) : null;
+    ? conseilDe(N, cible, s.meilleurMs, o.epreuve) : null;
 
   const relancer = () => { setRes(null); envoye.current = null; relancerObjectif(); };
   const sortir = () => { quitterObjectif(); SprinterApp.goHome(); };
@@ -254,8 +276,16 @@ export function Revanche() {
  * serveur muet, la carte disparait plutot que d'annoncer un defi qui n'existe
  * pas. Le temps restant, lui, est le meme pour les trois — c'est un creneau,
  * pas trois — et se dit donc une seule fois, en tete.
+ *
+ * CHAQUE ACCUEIL SES DEFIS. Le serveur rend ceux des deux jeux d'un coup —
+ * c'est le meme creneau —, et la carte de Sprinter ne pose que le 100, le 200
+ * et le 400 m, celle de Hurdlers que ses trois courses de haies. Un 110 m haies
+ * sur l'accueil de Sprinter serait un defi qu'on court dans un autre jeu que
+ * celui qu'on a sous les yeux.
  */
-export function CarteObjectif({ onLancer, onFin }: {
+export function CarteObjectif({ jeu, onLancer, onFin }: {
+  /** Le jeu dont l'accueil porte la carte. */
+  jeu: Jeu;
   onLancer: (o: Objectif) => void;
   /** Le creneau vient de se fermer : de quoi redemander les defis du suivant. */
   onFin?: () => void;
@@ -263,7 +293,8 @@ export function CarteObjectif({ onLancer, onFin }: {
   const { N } = SprinterApp;
   const s = useObjectif();
   const [choisie, setChoisie] = useState<string | null>(null);
-  const liste = s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []);
+  const liste = (s.objectifs.length ? s.objectifs : (s.objectif ? [s.objectif] : []))
+    .filter(x => jeuDe(x.epreuve) === jeu);
 
   const o = liste.find(x => x.epreuve === choisie)
     ?? liste.find(x => !x.valide)
@@ -365,7 +396,13 @@ export function CarteObjectif({ onLancer, onFin }: {
                     <motion.span layoutId="obj-pastille" transition={RESSORT.rang}
                       className="absolute inset-0 rounded-lg bg-primary" />
                   )}
-                  <span className="relative">{x.epreuve}</span>
+                  {/* La distance, et le H des tableaux d'affichage pour les
+                      haies : « 100 » seul se lirait comme le 100 m plat. */}
+                  <span className="relative">
+                    {estUneCourseDeHaies(x.epreuve)
+                      ? <>{x.epreuve.slice(0, -1)}<span className="text-[9px] ml-px">H</span></>
+                      : x.epreuve}
+                  </span>
                   {x.valide && (
                     <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
                   )}
@@ -375,7 +412,7 @@ export function CarteObjectif({ onLancer, onFin }: {
           </div>
         ) : (
           <span className="shrink-0 font-display font-black text-primary text-sm tabular-nums">
-            {o.epreuve} M
+            {nomCourt(o.epreuve)}
           </span>
         )}
 

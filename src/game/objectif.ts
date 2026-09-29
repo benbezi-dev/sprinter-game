@@ -22,8 +22,21 @@ import { useSyncExternalStore } from 'react';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 import { SprinterApp } from './engine';
 import { rendreLeHasard } from './graine';
+import { HAIES_OUVERTES } from './canal';
+import { jeuDe, type Jeu } from './jeux';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+
+/**
+ * Les jeux dont on demande les defis : Sprinter, et Hurdlers la ou ses haies
+ * se courent.
+ *
+ * LE SERVEUR NE REND LES HAIES QU'A QUI LES DEMANDE. Un jeu d'avant elles —
+ * une application des stores qui n'a pas ete mise a jour — posait tout ce
+ * qu'on lui rendait sur l'accueil de Sprinter ; celui-ci les demande, et
+ * chaque accueil ne montre ensuite que les siens (CarteObjectif).
+ */
+const JEUX_DU_DEFI = HAIES_OUVERTES ? 'sprinter,hurdlers' : 'sprinter';
 
 /**
  * Le plateau du defi. Fixe, et le meme pour tous.
@@ -114,10 +127,22 @@ function langue(): string {
 
 export type Session = {
   /**
-   * Les defis du creneau : un par distance ou le joueur est classe, de un a
-   * trois, dans l'ordre du programme. C'est ce que l'accueil pose en cartes.
+   * Les defis du creneau : un par epreuve ou le joueur est classe, dans
+   * l'ordre du programme — ceux de Sprinter, puis ceux de Hurdlers. Chaque
+   * accueil pose en carte ceux de son jeu.
    */
   objectifs: Objectif[];
+  /**
+   * L'epreuve de tete selon le serveur : celle ou le joueur est le mieux
+   * classe, donc celle dont la notification a parle.
+   */
+  tete: RaceKey | null;
+  /**
+   * L'accueil a montrer, une fois. Pose par la notification quand plusieurs
+   * defis attendent, et repris par l'accueil des qu'il est a l'ecran — voir
+   * ouvrirDepuisNotification.
+   */
+  accueil: Jeu | null;
   /**
    * Celui qu'on court, ou celui qu'on courrait. Distinct de la liste : une
    * fois entre dans un defi, tout ce qui suit — la revanche, l'envoi, l'ecran
@@ -140,8 +165,8 @@ export type Session = {
 };
 
 let session: Session = {
-  objectifs: [], objectif: null, enCours: false, courses: 0,
-  meilleurMs: null, dernier: null, envoi: false,
+  objectifs: [], tete: null, accueil: null, objectif: null, enCours: false,
+  courses: 0, meilleurMs: null, dernier: null, envoi: false,
 };
 const ecouteurs = new Set<() => void>();
 
@@ -183,7 +208,8 @@ export async function lireObjectif(): Promise<Objectif[]> {
   if (!nom) return [];
   try {
     const r = await fetch(
-      `${API_BASE}/objectif?nom=${encodeURIComponent(nom)}&langue=${langue()}`);
+      `${API_BASE}/objectif?nom=${encodeURIComponent(nom)}&langue=${langue()}`
+      + `&jeux=${JEUX_DU_DEFI}`);
     if (!r.ok) return [];
     const d = await r.json();
     // `objectifs` est la forme d'aujourd'hui ; `objectif` seul est celle d'un
@@ -191,9 +217,12 @@ export async function lireObjectif(): Promise<Objectif[]> {
     // reste pas sans defi le temps d'un deploiement.
     const liste = (Array.isArray(d?.objectifs) ? d.objectifs
       : (d?.objectif ? [d.objectif] : [])) as Objectif[];
+    // Un serveur d'avant les haies ne dit pas l'epreuve de tete : on n'en
+    // suppose aucune, et la notification garde son ancien chemin.
+    const tete = typeof d?.tete === 'string' ? d.tete as RaceKey : null;
     poser(session.enCours
-      ? { objectifs: liste }
-      : { objectifs: liste, objectif: liste[0] || null });
+      ? { objectifs: liste, tete }
+      : { objectifs: liste, tete, objectif: liste[0] || null });
     return liste;
   } catch { return []; }
 }
@@ -400,6 +429,15 @@ export function fenetreFinie(o: Objectif | null): boolean {
  * 100 m a quelqu'un qui venait pour le tour de piste serait pire que de le
  * laisser choisir : on rend alors la main a l'accueil, ou les trois cartes
  * sont posees cote a cote et le choix coute un geste.
+ *
+ * MAIS L'ACCUEIL DU BON JEU. Les defis des haies vivent sur l'accueil de
+ * Hurdlers, et le jeu s'ouvre sur celui de Sprinter : une notification qui
+ * annonce le 110 m haies menerait sinon devant trois cartes de sprint, sans le
+ * defi dont elle parlait. L'epreuve de tete — celle de la notification, par la
+ * meme regle — dit donc quel accueil montrer, et c'est l'accueil qui fait le
+ * passage des qu'il est a l'ecran (TitleScreen) : au lancement, la
+ * notification arrive pendant l'ecran d'ouverture, ou il n'y a encore rien a
+ * faire passer.
  */
 export async function ouvrirDepuisNotification(): Promise<boolean> {
   const nom = getSavedName();
@@ -413,14 +451,24 @@ export async function ouvrirDepuisNotification(): Promise<boolean> {
   }
 
   const liste = await lireObjectif();
-  if (liste.length !== 1) return false;
-  const o = liste[0];
+  if (!liste.length) return false;
 
   const etat = SprinterApp.G.state;
   if (etat !== 'title' && etat !== 'open') return false;
 
-  lancerObjectif(o);
-  return true;
+  if (liste.length === 1) {
+    lancerObjectif(liste[0]);
+    return true;
+  }
+
+  const tete = liste.find(o => o.epreuve === session.tete) ?? liste[0];
+  poser({ accueil: jeuDe(tete.epreuve) });
+  return false;
+}
+
+/** L'accueil demande par la notification est a l'ecran : on n'y revient plus. */
+export function accueilMontre(): void {
+  if (session.accueil) poser({ accueil: null });
 }
 
 /* ------------------------------------------------------------- le rythme */

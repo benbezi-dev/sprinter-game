@@ -33,13 +33,17 @@ export const PLUS_HAUT = 'plus_haut';
 // distances de sprint, Hurdlers les trois courses de haies. Les deux jeux
 // partagent les memes tables, le meme classement et les memes duels ; ce qui
 // les separe, c'est la cle.
+//
+// `libelleEn` est le meme nom dans une phrase anglaise. Le sprint n'en a pas
+// besoin — « 100 m » se lit pareil —, les haies si : les notifications de
+// l'objectif du jour les nomment, et « the 110 m haies » n'est pas de l'anglais.
 export const EPREUVES = {
-  '100': { cle: '100', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m' },
-  '200': { cle: '200', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '200 m' },
-  '400': { cle: '400', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m' },
-  '100h': { cle: '100h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m haies' },
-  '110h': { cle: '110h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '110 m haies' },
-  '400h': { cle: '400h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m haies' },
+  '100': { cle: '100', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m', libelleEn: '100 m' },
+  '200': { cle: '200', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '200 m', libelleEn: '200 m' },
+  '400': { cle: '400', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m', libelleEn: '400 m' },
+  '100h': { cle: '100h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m haies', libelleEn: '100 m hurdles' },
+  '110h': { cle: '110h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '110 m haies', libelleEn: '110 m hurdles' },
+  '400h': { cle: '400h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m haies', libelleEn: '400 m hurdles' },
 };
 
 /**

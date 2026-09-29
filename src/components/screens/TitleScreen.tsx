@@ -4,7 +4,7 @@ import { Globe, Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
 import { CarteObjectif } from './Revanche';
-import { lireObjectif, lancerObjectif } from '@/game/objectif';
+import { lireObjectif, lancerObjectif, useObjectif, accueilMontre } from '@/game/objectif';
 import { OneShotPanel, ChallengePanel } from './ModePanels';
 import { DuelRanking } from './DuelRanking';
 import { DUELS_OUVERTS, fetchDuels, type MonRang } from '@/game/duels';
@@ -212,6 +212,16 @@ export function TitleScreen() {
   // reseau ou hors fenetre, il n'y en a pas et la carte ne s'affiche pas.
   React.useEffect(() => { void lireObjectif(); }, []);
 
+  // LA NOTIFICATION A DESIGNE UN JEU. Plusieurs defis attendaient, et celui
+  // dont elle parlait vit peut-etre sur l'autre accueil : on y passe, une fois,
+  // des que cet ecran est la (voir ouvrirDepuisNotification).
+  const { accueil } = useObjectif();
+  useEffect(() => {
+    if (!accueil) return;
+    accueilMontre();
+    if (accueil !== jeu) allerAu(accueil);
+  }, [accueil, jeu]);
+
   // Le geste qui mene aux trois autres jeux. Le doigt se pose n'importe ou sur
   // l'accueil, mais c'est la position du MENU, seul a defiler, qui dit si l'on
   // est au bout — et donc si tirer encore veut dire « montre-moi les haies »
@@ -351,9 +361,9 @@ export function TitleScreen() {
                 semaine, quand le defi revient tous les jours : c'est la
                 seule chose de cet ecran qu'on peut rater. Hors fenetre,
                 elle disparait entierement. */}
-            {/* L'edition et le defi du jour lancent un 100 m : ce sont des
-                rendez-vous de Sprinter, que Hurdlers ne montre pas tant que le
-                serveur ne propose rien avec des haies. */}
+            {/* L'edition lance un 100 m : c'est un rendez-vous de Sprinter, que
+                Hurdlers ne montre pas. Le defi du jour, lui, a les siens dans
+                les deux jeux — voir plus bas. */}
             {/* LA NUIT DU MOLOSSE, au-dessus de l'edition de stade : c'est un
                 mode entier et date, quand l'autre est un lieu de plus. Il
                 s'affiche sous les memes reserves — dans Sprinter, pas dans
@@ -371,11 +381,14 @@ export function TitleScreen() {
             {/* LE DEFI DU JOUR, au-dessus du selecteur de mode.
                 Il n'apparait que s'il y en a un d'ouvert : hors fenetre, hors
                 classement, ou serveur muet, la carte disparait plutot que
-                d'annoncer un defi qui n'existe pas. */}
-            {!haies && <CarteObjectif
+                d'annoncer un defi qui n'existe pas.
+                Dans les DEUX jeux, chacun avec ses epreuves : le 100, le 200
+                et le 400 m ici, les trois courses de haies sur Hurdlers. */}
+            <CarteObjectif
+              jeu={jeu}
               onLancer={(o) => lancerObjectif(o)}
               onFin={() => { void lireObjectif(); }}
-            />}
+            />
 
             {/* LA SÉLECTION DU CHAMPIONNAT, sur les trois onglets.
                 Sous le défi du jour et au-dessus du sélecteur de mode : c'est
