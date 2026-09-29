@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------
 # SPRINTER — les spectateurs et leurs sieges, rendus dans Blender.
 #
-#   blender -b -P tools/blender/decors/tribune.py
+#   blender -b --factory-startup -P tools/blender/decors/tribune.py
 #
 # LE PUBLIC ETAIT A LA MAUVAISE ECHELLE. Les gradins du jeu sont a la taille
 # reelle ; les spectateurs, eux, etaient des figurines de onze pixels semees

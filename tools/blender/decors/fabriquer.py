@@ -1,7 +1,12 @@
 # -----------------------------------------------------------------------
 # SPRINTER — fabriquer les decors des stades.
 #
-#   blender -b -P tools/blender/decors/fabriquer.py -- --stade day
+#   blender -b --factory-startup -P tools/blender/decors/fabriquer.py -- --stade day
+#   ... -- --stade day --ultra          la serie du palier ULTRA
+#
+# --factory-startup : sans lui, Blender charge aussi en arriere-plan les
+# extensions de l'utilisateur (une trentaine installees le 29/09/2026), qui
+# peuvent toucher a la scene. Aucun de ces scripts n'en a besoin.
 #
 # Pour chaque piece : on la construit dans le repere du jeu, on la rend sous
 # la vue du jeu avec la lumiere du jeu, on rend a part l'ombre qu'elle jette

@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------
 # Verifier la vue au pixel, au lieu de la croire juste.
 #
-#   blender -b -P tools/blender/decors/verifier-vue.py
+#   blender -b --factory-startup -P tools/blender/decors/verifier-vue.py
 #
 # Des billes de couleur a des positions connues du jeu. On rend, on relit
 # l'image, on retrouve le centre de chaque bille et on le compare a la

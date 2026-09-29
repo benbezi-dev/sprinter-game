@@ -1,8 +1,8 @@
 # -----------------------------------------------------------------------
 # SPRINTER — les decors du Champ-de-Mars, rendus dans Blender.
 #
-#   /Applications/Blender.app/Contents/MacOS/Blender -b \
-#       -P tools/blender/decors/champ-de-mars.py [-- --pieces tour,rideau]
+#   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
+#       -P tools/blender/decors/champ-de-mars.py [-- --pieces tour,rideau] [--ultra]
 #
 # Meme principe que fabriquer.py — la piece est construite dans le repere du
 # jeu, rendue sous la vue du jeu avec la matiere du jeu (matiere.py), son
