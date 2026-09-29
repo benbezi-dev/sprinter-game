@@ -44,7 +44,7 @@ import {
 } from './journal.js';
 import { mesures } from './mesures.js';
 import {
-  EPREUVE as OBJ_EPREUVE, EPREUVES_DEFI, joueursAServir, creerObjectif, seuilsDe,
+  EPREUVE as OBJ_EPREUVE, EPREUVES_DEFI, epreuvesDefiDe, joueursAServir, creerObjectif, seuilsDe,
   enregistrerTentative, classementObjectifs, texteObjectif, texteResultat,
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
@@ -933,11 +933,11 @@ async function envoyerObjectifs(env, maintenant) {
 
   for (const j of joueurs) {
     try {
-      // UN JOUEUR, JUSQU'A TROIS DEFIS — un par distance ou il est classe. Le
-      // premier de la liste est celui de son epreuve de tete : c'est lui qui
-      // parle dans la notification, les autres y tiennent en une phrase. Une
-      // notification par creneau, comme avant ; trois sonneries pour un meme
-      // midi seraient trois fois la meme interruption.
+      // UN JOUEUR, JUSQU'A SIX DEFIS — un par epreuve ou il est classe, haies
+      // comprises. Le premier de la liste est celui de son epreuve de tete :
+      // c'est lui qui parle dans la notification, les autres y tiennent en une
+      // phrase. Une notification par creneau, comme avant ; trois sonneries
+      // pour un meme midi seraient trois fois la meme interruption.
       const { objectif, objectifs, nouveaux, nouveau, silencieux } =
         await creerObjectif(db, j, maintenant);
       if (!objectif || !nouveau) continue;
@@ -1374,11 +1374,15 @@ async function servir(request, env, ctx, porteur) {
       if (!nom) return json({ error: 'nom requis' }, 400);
       const langue = url.searchParams.get('langue') === 'en' ? 'en' : 'fr';
       const cle = nom.toLowerCase();
+      // LES JEUX QUE LE JEU SAIT COURIR. Un jeu d'avant les haies ne le dit
+      // pas, et ne recoit que Sprinter : il poserait un 110 m haies sur
+      // l'accueil de Sprinter. Voir JEUX_PAR_DEFAUT dans objectif.js.
+      const epreuves = epreuvesDefiDe(url.searchParams.get('jeux'));
 
       await ensureObjectifTables(env.DB);
-      // LES DEFIS DU CRENEAU OUVERT, ET ILS SONT JUSQU'A TROIS.
+      // LES DEFIS DU CRENEAU OUVERT, ET ILS SONT JUSQU'A SIX.
       //
-      // Un par distance ou le joueur est classe. On prend le creneau le plus
+      // Un par epreuve ou le joueur est classe. On prend le creneau le plus
       // recent parmi ceux qui sont ouverts, puis TOUTES ses lignes : trois
       // defis d'un meme midi sont un seul midi, et le jeu les pose cote a cote.
       //
@@ -1389,28 +1393,40 @@ async function servir(request, env, ctx, porteur) {
       // minuit. Les lignes d'avant la fenetre gardent la regle du jour.
       const t = Date.now();
       const jour = heureLocale(new Date(), 'Europe/Paris').jour;
-      const { results: ouverts } = await env.DB.prepare(
+      const { results: lignes } = await env.DB.prepare(
         `SELECT * FROM objectifs
           WHERE name_key = ?
             AND (ouvre_le IS NULL OR ouvre_le <= ?)
             AND ((expire_le IS NULL AND jour >= ?) OR expire_le > ?)
           ORDER BY cree_le DESC`
       ).bind(cle, t, jour, t).all();
-      if (!ouverts || !ouverts.length) return json({ objectif: null, objectifs: [] });
+      // Le tri des jeux AVANT le choix du creneau : le creneau le plus recent
+      // doit etre celui d'un defi que ce jeu sait courir, pas celui d'un
+      // 110 m haies qu'on s'apprete a lui cacher.
+      const ouverts = (lignes || [])
+        .filter(o => epreuves.includes(o.race_key || OBJ_EPREUVE));
+      if (!ouverts.length) return json({ objectif: null, objectifs: [], tete: null });
 
       const recent = ouverts[0];
       const duCreneau = ouverts
         .filter(o => o.jour === recent.jour && o.creneau === recent.creneau)
-        // L'ordre du programme : 100, 200, 400. C'est celui des cartes a
-        // l'ecran, et il ne doit pas dependre de l'ordre d'insertion.
+        // L'ordre du programme : 100, 200, 400, puis les haies. C'est celui
+        // des cartes a l'ecran, et il ne doit pas dependre de l'ordre
+        // d'insertion.
         .sort((a, b) => EPREUVES_DEFI.indexOf(a.race_key)
                       - EPREUVES_DEFI.indexOf(b.race_key));
 
       const vus = [];
+      // L'EPREUVE DE TETE, par la regle de la notification : le meilleur
+      // rang, et l'ordre du programme a rang egal. C'est elle qui a parle sur
+      // l'ecran verrouille ; le jeu qu'on ouvre en la touchant doit montrer
+      // son accueil, et pas celui de l'autre jeu.
+      let tete = null, rangDeTete = Infinity;
       for (const o of duCreneau) {
         // Le rang est celui de SA distance : etre deuxieme au 100 m ne dit
         // rien de ce qu'on vaut sur un tour de piste.
         const rang = await getRank(env.DB, o.race_key || OBJ_EPREUVE, o.pb_ms);
+        if (rang < rangDeTete) { tete = o.race_key || OBJ_EPREUVE; rangDeTete = rang; }
         const texte = texteObjectif(o, rang, langue, true);
         vus.push({
           creneau: o.creneau, jour: o.jour, epreuve: o.race_key,
@@ -1438,7 +1454,7 @@ async function servir(request, env, ctx, porteur) {
       // un jeu d'avant les trois distances ne lit que ce champ-la, et doit
       // continuer a trouver le defi qu'il sait courir.
       const seul = vus.find(v => v.epreuve === OBJ_EPREUVE) || vus[0] || null;
-      return json({ objectif: seul, objectifs: vus });
+      return json({ objectif: seul, objectifs: vus, tete });
     }
 
     /* -----------------------------------------------------------------

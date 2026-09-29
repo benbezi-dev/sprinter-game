@@ -19,12 +19,24 @@
 // Le harnais SEME ET NETTOIE : il ajoute un joueur a lui, sous un nom marque,
 // et le retire a la fin — y compris si une verification echoue. Aucune ligne
 // d'un autre essai n'est touchee.
+//
+// LES HAIES, ET LA ROUTE QUI LES REND. Depuis qu'elles ont leurs defis, la
+// question n'est plus seulement « combien de defis » mais « a quel jeu ». Si
+// le worker local repond, le harnais lui demande les defis qu'il vient de
+// poser, comme le ferait un jeu d'avant les haies puis comme le fait celui
+// d'aujourd'hui, et court un 110 m haies pour voir lequel des deux il valide :
+//
+//   (cd worker && npx wrangler dev --local --port 8788)
+//   BASE=http://127.0.0.1:8788 node tools/objectif-distances-test.mjs
 
 import { DatabaseSync } from 'node:sqlite';
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { joueursAServir, creerObjectif, CRENEAUX } from '../worker/src/objectif.js';
 import { decalageDe } from '../worker/src/journal.js';
+import { PAS_S } from '../worker/src/preuve.js';
+
+const B = process.env.BASE || 'http://127.0.0.1:8788';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -76,14 +88,20 @@ const d1 = {
 
 // Un nom a nous, reconnaissable, et qui ne peut appartenir a personne.
 const NOM = 'tm-distances';
-const RECORDS = { '100': 8500, '200': 17200, '400': 35800 };
-const PAS = { '100': 20, '200': 40, '400': 80 };
+const RECORDS = { '100': 8500, '200': 17200, '400': 35800,
+                  '100h': 12800, '110h': 14200, '400h': 41000 };
+const PAS = { '100': 20, '200': 40, '400': 80,
+              '100h': 30, '110h': 30, '400h': 90 };
 
 function nettoyer() {
   for (const t of ['objectifs', 'races']) {
     base.prepare(`DELETE FROM ${t} WHERE name_key = ?`).run(NOM);
   }
   base.prepare(`DELETE FROM scores WHERE lower(trim(name)) = ?`).run(NOM);
+  // Une tentative validee credite le Classement des Objectifs : la ligne est
+  // a nous aussi. La table n'existe qu'une fois une tentative passee.
+  try { base.prepare(`DELETE FROM objectif_classement WHERE name_key = ?`).run(NOM); }
+  catch { /* pas encore de classement */ }
 }
 
 function semer(epreuves) {
@@ -116,6 +134,93 @@ function instantDuMidi() {
   const ecart = new Date(p.toLocaleString('en-US', { timeZone: 'Europe/Paris' }))
               - new Date(p.toLocaleString('en-US', { timeZone: 'UTC' }));
   return new Date(p.getTime() - ecart + decalageDe(NOM) * 60000);
+}
+
+/* ------------------------------------------------------------- la route */
+
+/**
+ * Une course reguliere, telle que preuve.js l'attend : la distance en
+ * decimetres, un point tous les PAS_S, la ligne franchie a l'instant du chrono.
+ */
+function traceReguliere(metres, ms) {
+  const t = ms / 1000;
+  const n = Math.ceil(t / PAS_S) + 3;
+  return Array.from({ length: n },
+    (_, i) => Math.round(metres * 10 * Math.min(1.05, (i * PAS_S) / t)));
+}
+
+/**
+ * Ce que la route rend des defis qu'on vient de poser, selon le jeu qui les
+ * demande — et ce que valide un 110 m haies couru.
+ */
+async function verifierLaRoute(poses) {
+  const joignable = await fetch(B + '/leaderboard?race=100', { signal: AbortSignal.timeout(5000) })
+    .then(r => r.ok).catch(() => false);
+  if (!joignable) {
+    console.log(`   ⚠ ${B} ne repond pas — la route des haies n est PAS VERIFIEE.`);
+    return;
+  }
+
+  // La fenetre, ouverte de force : celle du midi ne l'est que l'apres-midi, et
+  // le harnais doit passer a toute heure.
+  const t = Date.now();
+  base.prepare(`UPDATE objectifs SET ouvre_le = ?, expire_le = ? WHERE name_key = ?`)
+      .run(t - 60000, t + 3600000, NOM);
+
+  const lire = async (q) =>
+    (await fetch(`${B}/objectif?nom=${NOM}${q}`, { signal: AbortSignal.timeout(8000) })).json();
+  const eps = d => (d.objectifs || []).map(o => o.epreuve).join(',');
+
+  const ancien = await lire('');
+  if (!ancien.objectifs || !ancien.objectifs.length) {
+    console.log('   ⚠ le worker ne voit pas les defis poses ici : ce n est pas la meme base.');
+    console.log('     La route des haies n est PAS VERIFIEE.');
+    return;
+  }
+  // Le jeu d'avant les haies — une application des stores pas encore mise a
+  // jour — poserait un 110 m haies sur l'accueil de Sprinter.
+  ok('un jeu qui ne dit rien ne recoit que Sprinter', eps(ancien) === '100', eps(ancien));
+  ok('...et son epreuve de tete est l une des siennes', ancien.tete === '100',
+     String(ancien.tete));
+
+  const deux = await lire('&jeux=sprinter,hurdlers');
+  ok('un jeu qui demande les deux les recoit, dans l ordre du programme',
+     eps(deux) === '100,110h', eps(deux));
+  ok('...avec une epreuve de tete parmi eux', ['100', '110h'].includes(deux.tete),
+     String(deux.tete));
+
+  const haies = await lire('&jeux=hurdlers');
+  ok('Hurdlers seul ne recoit que ses haies',
+     eps(haies) === '110h' && haies.tete === '110h', `${eps(haies)} / ${haies.tete}`);
+
+  // Un 110 m haies couru : il doit viser le defi de haies, et lui seul.
+  const ms = RECORDS['110h'] + 400;
+  const r = await fetch(B + '/objectif/tentative', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nom: NOM, device_id: 'tm-distances-' + Math.random().toString(36).slice(2, 8),
+      ms, epreuve: '110h', langue: 'fr', trace: traceReguliere(110, ms),
+    }),
+    signal: AbortSignal.timeout(8000),
+  });
+  const res = await r.json().catch(() => ({}));
+  ok('un 110 m haies passe la preuve et vise le defi de haies',
+     r.status === 200 && res.resultat?.epreuve === '110h',
+     `statut ${r.status} ${JSON.stringify(res).slice(0, 120)}`);
+
+  const tentatives = Object.fromEntries(base.prepare(
+    `SELECT race_key, tentatives FROM objectifs WHERE name_key = ?`).all(NOM)
+    .map(l => [l.race_key, l.tentatives]));
+  ok('...et lui seul : le 100 m n a rien recu',
+     tentatives['110h'] === 1 && tentatives['100'] === 0, JSON.stringify(tentatives));
+  ok('...qui le paie au bareme commun', res.resultat?.palier === 'bronze'
+     && res.resultat?.points > 0, JSON.stringify(res.resultat || {}).slice(0, 120));
+  // Les poses rendues par creerObjectif restent la reference : la route ne
+  // doit pas avoir invente une autre cible.
+  const pose = poses.find(o => o.race_key === '110h');
+  ok('...contre la cible posee, pas une autre',
+     !!pose && res.resultat?.cibleMs === pose.cible_ms,
+     `${res.resultat?.cibleMs} / ${pose && pose.cible_ms}`);
 }
 
 /* --------------------------------------------------------- les epreuves */
@@ -176,6 +281,41 @@ try {
   ok('un joueur classe sur une seule distance n a qu un defi',
      !!seul && seul.epreuves.length === 1 && seul.epreuves[0].epreuve === '100',
      seul ? JSON.stringify(seul.epreuves.map(x => x.epreuve)) : 'pas servi');
+
+  /* ------------------------------------------------------------ les haies */
+
+  titre('LES HAIES ONT LEURS DEFIS, SUR LA VRAIE BASE');
+
+  nettoyer();
+  semer(['100', '110h']);
+  const mixte = (await joueursAServir(d1, quand)).find(j => j.nameKey === NOM);
+  ok('classe au 100 m et au 110 m haies, il est servi sur les deux',
+     !!mixte && mixte.epreuves.map(x => x.epreuve).join(',') === '100,110h',
+     mixte ? JSON.stringify(mixte.epreuves.map(x => x.epreuve)) : 'pas servi');
+
+  if (mixte) {
+    // Le piege est le meme qu'entre le 100 et le 400 m, en plus visible : une
+    // cible de haies taillee dans des 100 m plats serait deja battue de cinq
+    // secondes.
+    ok('...et le 110 m haies se calibre sur SES courses de haies',
+       mixte.epreuves.every(x =>
+         x.courses.length === 10
+         && x.courses.every(c => c > RECORDS[x.epreuve] && c < RECORDS[x.epreuve] * 1.2)),
+       JSON.stringify(mixte.epreuves.map(x => [x.epreuve, x.courses.length])));
+
+    const r = await creerObjectif(d1, mixte, quand);
+    const haie = r.objectifs.find(o => o.race_key === '110h');
+    ok('deux defis poses, dont un de haies',
+       r.objectifs.length === 2 && !!haie,
+       r.objectifs.map(o => o.race_key).join(','));
+    ok('...la cible de haies est au-dessus de son record de haies',
+       !!haie && haie.cible_ms > RECORDS['110h'] && haie.cible_ms < RECORDS['110h'] * 1.2,
+       haie ? String(haie.cible_ms) : 'absent');
+    ok('...avec son propre plateau',
+       new Set(r.objectifs.map(o => o.graine)).size === 2);
+
+    await verifierLaRoute(r.objectifs);
+  }
 } finally {
   nettoyer();
   base.close();

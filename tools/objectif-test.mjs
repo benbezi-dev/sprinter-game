@@ -52,6 +52,7 @@ import {
   seuilsDe, palierDe, pointsDe, serieSuivante, serieEnCours, POINTS,
   SEUIL_BRONZE, SEUIL_OR, VIE_TOUS_LES_JOURS,
   MARGE_MIN, MARGE_MAX, MARGE_REPLI, COURSES_MIN, ACTIF_JOURS,
+  EPREUVES_DEFI, JEUX_PAR_DEFAUT, epreuvesDefiDe,
 } from '../worker/src/objectif.js';
 import {
   PLUS_BAS, PLUS_HAUT, directionDe, estMeilleur, meilleurDe, agregatSql,
@@ -493,7 +494,86 @@ titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
      variantes.find(c => /100 m/.test(c)));
   ok('...et celles qui nomment la distance disent la bonne',
      variantes.some(c => /200 m/.test(c)));
+
+  // L'AUTRE JEU SE DIT PAR SON NOM. Classe partout, un joueur a cinq autres
+  // defis : les nommer un a un ferait une liste plus longue que la
+  // notification. Ceux du jeu de tete se nomment, l'autre jeu tient en trois
+  // mots — et dit ou aller chercher les siens.
+  const mixte = texteObjectif(o, 3, 'fr', true, null, ['100', '110h', '400h']);
+  ok('les haies d un sprinteur tiennent en trois mots',
+     mixte.corps.endsWith('Le 100 m attend aussi, et Hurdlers a les siens.'), mixte.corps);
+  const mixteEn = texteObjectif(o, 3, 'en', true, null, ['100', '110h', '400h']);
+  ok('...en anglais aussi',
+     mixteEn.corps.endsWith('The 100 m is waiting too, and Hurdlers has its own.'),
+     mixteEn.corps);
+  const seulesHaies = texteObjectif(o, 3, 'fr', true, null, ['110h']);
+  ok('...meme quand il n y a qu elles',
+     seulesHaies.corps.endsWith('Hurdlers a aussi les siens.'), seulesHaies.corps);
+
+  const haie = { ...o, race_key: '110h', cible_ms: 15300, pb_ms: 14800 };
+  const deHaies = texteObjectif(haie, 3, 'fr', true, null, ['100h', '100', '200']);
+  ok('un defi de haies nomme les haies, et Sprinter par son nom',
+     deHaies.corps.endsWith('Le 100 m haies attend aussi, et Sprinter a les siens.'),
+     deHaies.corps);
+
+  // « in the 110 m haies » n'est pas de l'anglais : le libelle suit la langue.
+  const anglais = [], francais = [];
+  for (let i = 0; i < 40; i++) {
+    const h = { ...haie, name_key: 'joueur' + i };
+    anglais.push(texteObjectif(h, 3, 'en', true, null, ['100h']).corps);
+    francais.push(texteObjectif(h, 3, 'fr', true, null, ['100h']).corps);
+  }
+  ok('aucune phrase anglaise ne dit « haies »',
+     anglais.every(c => !/haies/.test(c)), anglais.find(c => /haies/.test(c)));
+  ok('...et celles qui nomment l epreuve disent « 110 m hurdles »',
+     anglais.some(c => /110 m hurdles/.test(c)));
+  ok('...quand le francais dit « 110 m haies »',
+     francais.some(c => /110 m haies/.test(c)) && francais.every(c => !/hurdles/.test(c)));
 }
+
+titre('LES HAIES ONT LEURS DEFIS, RENDUS A QUI LES DEMANDE');
+
+// Les six epreuves, dans l'ordre du programme : c'est celui des cartes, et
+// celui qui tranche l'epreuve de tete a rang egal.
+ok('six epreuves portent un defi, le sprint puis les haies',
+   EPREUVES_DEFI.join(',') === '100,200,400,100h,110h,400h', EPREUVES_DEFI.join(','));
+
+// UN JEU D'AVANT LES HAIES NE DIT RIEN, et il pose tout ce qu'on lui rend sur
+// l'accueil de Sprinter. Le defaut est donc ce qu'il sait courir.
+ok('un jeu qui ne dit rien ne recoit que Sprinter',
+   epreuvesDefiDe(null).join(',') === '100,200,400'
+   && epreuvesDefiDe('').join(',') === '100,200,400'
+   && JEUX_PAR_DEFAUT.join(',') === 'sprinter');
+ok('un jeu qui demande les deux les recoit tous',
+   epreuvesDefiDe('sprinter,hurdlers').join(',') === '100,200,400,100h,110h,400h');
+ok('...et dans l ordre du programme, quel que soit l ordre demande',
+   epreuvesDefiDe('hurdlers,sprinter').join(',') === '100,200,400,100h,110h,400h');
+ok('Hurdlers seul ne recoit que ses haies',
+   epreuvesDefiDe(' HURDLERS ').join(',') === '100h,110h,400h');
+// Une adresse vient de n'importe qui : une faute de frappe ne doit pas faire
+// disparaitre les defis d'un joueur.
+ok('un jeu inconnu vaut le defaut, pas une liste vide',
+   epreuvesDefiDe('jumper').join(',') === '100,200,400'
+   && epreuvesDefiDe('n-importe-quoi').join(',') === '100,200,400');
+
+// Un joueur classe au 100 m et au 110 m haies : deux defis, chacun sur ses
+// courses, et l'epreuve de tete est celle ou il est le mieux classe — les deux
+// jeux confondus.
+const zoeHaies = {
+  ...joueur, epreuve: '110h', rang: 2,
+  epreuves: [
+    { epreuve: '100', pb: 8500, rang: 40, courses: courses(8600) },
+    { epreuve: '110h', pb: 14800, rang: 2, courses: courses(15000) },
+  ],
+};
+const mixtes = await creerObjectif(fausseBase({}), zoeHaies, new Date());
+ok('un sprinteur hurdleur recoit un defi par jeu',
+   mixtes.objectifs.map(o => o.race_key).sort().join(',') === '100,110h');
+ok('...la cible de haies taillee dans ses haies',
+   mixtes.objectifs.find(o => o.race_key === '110h').cible_ms > 14800,
+   'une cible de 110 m haies tiree des 100 m serait battue de six secondes');
+ok('...et l epreuve de tete vient en premier, meme dans l autre jeu',
+   mixtes.objectif.race_key === '110h');
 
 titre('TROIS PALIERS, ET PERSONNE NE REPART LES MAINS VIDES');
 

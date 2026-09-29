@@ -156,6 +156,17 @@
                      'false start. Wait for the start — reaction is decided in three hundredths.'],
     obj_c_proche:   ['il ne manque que {n} s. C\u2019est une foulée mieux tenue, pas une autre course.',
                      'only {n} s to find. That is one better stride, not another race.'],
+    // Les deux conseils des haies. Les mots sont ceux du tutoriel et du
+    // bandeau de course — la jauge, la cadence juste, le rythme casse — pour
+    // que le joueur reconnaisse ce qu'on lui a deja montre.
+    obj_c_percute:  ['tu as percuté une haie faute d’appel : elle t’a coupé quatre dixièmes de ta vitesse. Appuie quand la jauge est pleine.',
+                     'you hit a hurdle without taking off: it cut four tenths of your speed. Press when the gauge is full.'],
+    obj_c_percute_n:['tu as percuté {n} haies faute d’appel, et chacune t’a coupé quatre dixièmes de ta vitesse. Appuie quand la jauge est pleine.',
+                     'you hit {n} hurdles without taking off, and each one cut four tenths of your speed. Press when the gauge is full.'],
+    obj_c_cadence:  ['ton rythme a cassé entre deux haies. La cadence juste, pas la plus rapide : ni plus vite, ni plus lent.',
+                     'your rhythm broke between two hurdles. The right cadence, not the fastest: no faster, no slower.'],
+    obj_c_cadence_n:['ton rythme a cassé {n} fois entre les haies. La cadence juste, pas la plus rapide : ni plus vite, ni plus lent.',
+                     'your rhythm broke {n} times between hurdles. The right cadence, not the fastest: no faster, no slower.'],
     six_in:       ['six étapes franchies en ', 'six stages cleared in '],
     stage_low:    ['étape ', 'stage '],
 

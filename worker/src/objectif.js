@@ -1,9 +1,9 @@
 // L'Objectif du jour — un chrono a battre, taille pour chaque joueur.
 //
 // Deux fois par jour, midi et dix-neuf heures, chaque joueur classe recoit un
-// temps a passer : UN PAR DISTANCE OU IL EST CLASSE, jusqu'a trois. Ce temps
-// n'est pas le meme pour tout le monde — il est calcule a partir de SES
-// courses a lui, sur CETTE distance-la.
+// temps a passer : UN PAR EPREUVE OU IL EST CLASSE — trois pour Sprinter, trois
+// pour Hurdlers, six au plus. Ce temps n'est pas le meme pour tout le monde —
+// il est calcule a partir de SES courses a lui, sur CETTE epreuve-la.
 //
 // TROIS DEFIS PLUTOT QU'UN, ET C'EST LE CLASSEMENT QUI LE DIT. Le 100 m les a
 // portes seul tant qu'il etait la seule distance a avoir de quoi calibrer. Le
@@ -21,6 +21,15 @@
 // pour le metronome du 200 m, 6,5 % pour un joueur en dents de scie sur le
 // tour de piste. C'est le calibrage qui fait son travail — il ne demandait pas
 // le 100 m, il demandait des courses.
+//
+// LES HAIES ONT SUIVI LE 28 SEPTEMBRE 2026, mesurees de la meme facon
+// (tools/objectif-simulation.mjs --epreuve 110h). Elles ont bien moins de
+// courses — 312 au 110 m haies, 117 au 100 m haies, 52 au 400 m haies, pour
+// dix-sept, neuf et huit coureurs — et la plupart d'entre eux partent donc au
+// repli. Ceux qui ont de quoi calibrer atteignent leur cible une fois
+// sur trois, comme au sprint : trois courses en moyenne au 100 m et au 400 m
+// haies, quatre au 110 m haies. Le reglage n'avait pas a changer, et il n'a
+// pas change.
 //
 // POURQUOI PAS UNE MARGE FIXE. L'idee naturelle est « ton record + 3 % ». Elle
 // ne marche pas, et elle se trompe dans le sens le moins intuitif : plus un
@@ -52,18 +61,51 @@ import { decalageDe } from './journal.js';
 /* ------------------------------------------------------------- reglages */
 
 /**
- * Les epreuves qui portent un defi : les trois du jeu.
+ * Les epreuves qui portent un defi : les six, celles de Sprinter puis celles
+ * de Hurdlers.
  *
- * Un joueur en recoit autant qu'il a de distances ou il est classe, de une a
- * trois, et chacune a sa cible, son plateau et sa fenetre. L'ordre est celui
- * du programme — 100, 200, 400 — et il compte : c'est celui dans lequel le
- * jeu les affiche, et celui qui decide de l'epreuve de tete a rang egal.
+ * Un joueur en recoit autant qu'il a d'epreuves ou il est classe, et chacune a
+ * sa cible, son plateau et sa fenetre. L'ordre est celui du programme — 100,
+ * 200, 400, puis 100 m, 110 m et 400 m haies — et il compte : c'est celui dans
+ * lequel le jeu les affiche, et celui qui decide de l'epreuve de tete a rang
+ * egal.
+ *
+ * LES HAIES N'ONT PAS UN DEFI A PART, ET C'EST VOULU. Meme creneau, meme
+ * fenetre, meme bareme, meme Classement des Objectifs et meme serie : un joueur
+ * qui passe sa cible au 110 m haies a fait sa journee, exactement comme celui
+ * qui passe la sienne au 100 m. Deux classements auraient coupe en deux la
+ * serie de celui qui joue aux deux jeux.
  */
-//
-// Celles de Sprinter seulement. Hurdlers ne montre pas encore le defi du jour :
-// un objectif sur 110 m haies arriverait sur l'accueil de Sprinter, et le
-// relever y lancerait une course de haies.
-export const EPREUVES_DEFI = CLES_DU_JEU.sprinter;
+export const EPREUVES_DEFI = [...CLES_DU_JEU.sprinter, ...CLES_DU_JEU.hurdlers];
+
+/**
+ * Ce qu'un jeu qui ne dit rien sait courir : Sprinter.
+ *
+ * C'est la raison pour laquelle les haies ont longtemps attendu. Un jeu
+ * d'avant elles pose TOUS les defis qu'on lui rend sur l'accueil de Sprinter —
+ * un 110 m haies y serait arrive, et le relever y aurait lance une course de
+ * haies ; les applications des stores, elles, embarquent une copie du jeu qui
+ * ne se met pas a jour avec le site. La route ne rend donc les haies qu'a qui
+ * les demande (`jeux=sprinter,hurdlers`), et ce qui ne demande rien recoit
+ * exactement ce qu'il recevait.
+ */
+export const JEUX_PAR_DEFAUT = ['sprinter'];
+
+/**
+ * Les epreuves de defi des jeux demandes, dans l'ordre du programme.
+ *
+ * `jeux` vient d'une adresse, donc de n'importe qui : un nom inconnu ne compte
+ * pas, et une liste qui n'en contient aucun de connu vaut le defaut plutot
+ * qu'une liste vide — une faute de frappe ne doit pas faire disparaitre les
+ * defis d'un joueur.
+ */
+export function epreuvesDefiDe(jeux) {
+  const voulus = new Set((Array.isArray(jeux) ? jeux : String(jeux || '').split(','))
+    .map(j => String(j).trim().toLowerCase())
+    .filter(j => Object.prototype.hasOwnProperty.call(CLES_DU_JEU, j)));
+  const retenus = voulus.size ? voulus : new Set(JEUX_PAR_DEFAUT);
+  return EPREUVES_DEFI.filter(c => retenus.has((fiche(c) || {}).jeu));
+}
 
 /**
  * Celle qu'on suppose quand personne ne dit laquelle.
@@ -821,11 +863,11 @@ export async function joueursAServir(db, maintenant) {
   // portent, et lui envoyer un objectif viserait trois cents personnes a la
   // fois — ou personne, ce qui revient au meme.
   //
-  // ET LES TROIS DISTANCES DANS LA MEME REQUETE. Le classement est deja par
-  // distance : le rang se calcule donc distance par distance, par ROW_NUMBER
-  // dans la base. C'est le meme nombre qu'avant — le rang parmi les actifs de
-  // CETTE distance — et il n'y a toujours pas une requete par joueur, ni meme
-  // une par epreuve.
+  // ET TOUTES LES EPREUVES DANS LA MEME REQUETE, haies comprises. Le
+  // classement est deja par epreuve : le rang se calcule donc epreuve par
+  // epreuve, par ROW_NUMBER dans la base. C'est le meme nombre qu'avant — le
+  // rang parmi les actifs de CETTE epreuve — et il n'y a toujours pas une
+  // requete par joueur, ni meme une par epreuve.
   const depuis = (maintenant ? maintenant.getTime() : Date.now())
     - ACTIF_JOURS * 86400000;
   const trous = EPREUVES_DEFI.map(() => '?').join(',');
@@ -877,7 +919,7 @@ export async function joueursAServir(db, maintenant) {
   const fuseaux = new Map();
   for (const p of pays || []) fuseaux.set(p.name_key, fuseauDe(p.pays, p.continent));
 
-  // Un joueur, ses distances. Classe sur les trois, il aura trois defis.
+  // Un joueur, ses epreuves. Classe sur les six, il aura six defis.
   const joueurs = new Map();
   for (const c of classes) {
     if (!joueurs.has(c.k)) joueurs.set(c.k, { nom: c.nom, epreuves: [] });
@@ -901,6 +943,9 @@ export async function joueursAServir(db, maintenant) {
     // Une notification ne tient pas trois phrases, et « tu es 3e au 400 m »
     // n'a de force que si c'est vrai la ou le joueur se reconnait. A rang egal,
     // l'ordre du programme tranche — d'ou le `<` strict.
+    //
+    // Les deux jeux confondus : celui qui est 3e au 110 m haies et 200e au
+    // 100 m se reconnait dans les haies, et c'est d'elles qu'on lui parle.
     const tete = j.epreuves.reduce((m, e) => (e.rang < m.rang ? e : m), j.epreuves[0]);
     dus.push({
       nameKey: k, nom: j.nom, fuseau,
@@ -919,10 +964,10 @@ export async function joueursAServir(db, maintenant) {
 /**
  * Cree les objectifs d'un joueur pour un creneau, ou rend ceux qui existent.
  *
- * UN PAR DISTANCE OU IL EST CLASSE, jusqu'a trois, chacun calibre sur les
+ * UN PAR EPREUVE OU IL EST CLASSE, jusqu'a six, chacun calibre sur les
  * courses qu'il a faites LA. Il en manquera pour qui n'a jamais couru un
- * 400 m, et c'est juste : on ne taille pas une cible sur un record qui
- * n'existe pas.
+ * 400 m, ou jamais passe une haie, et c'est juste : on ne taille pas une
+ * cible sur un record qui n'existe pas.
  *
  * L'insertion porte sa propre cle (joueur, jour, creneau, epreuve) : deux
  * passages du cron sur la meme minute ne creent pas deux fois les memes
@@ -1330,6 +1375,16 @@ function indice(clef, n) {
   return hash32(clef) % n;
 }
 
+/** Le nom d'une epreuve, dans la langue de la phrase qui le porte. */
+function libelleDe(cle, l) {
+  const f = fiche(cle);
+  if (!f) return '';
+  return l === 'en' ? (f.libelleEn || f.libelle) : f.libelle;
+}
+
+/** Le nom d'un jeu, tel que son accueil l'ecrit. */
+const NOMS_DES_JEUX = { sprinter: 'Sprinter', hurdlers: 'Hurdlers' };
+
 /**
  * « Le 200 m et le 400 m attendent aussi. »
  *
@@ -1339,20 +1394,51 @@ function indice(clef, n) {
  * deux autres les rendrait pourtant invisibles a qui ne rouvre pas le jeu de
  * lui-meme. Une phrase de plus, a la fin, et il sait qu'il y a autre chose a
  * aller chercher.
+ *
+ * L'AUTRE JEU SE DIT PAR SON NOM, et c'est la seule facon que la phrase tienne.
+ * Classe partout, un joueur a cinq autres defis : les nommer un a un ferait de
+ * la fin de la notification une liste plus longue que la notification. Ceux du
+ * jeu de tete se nomment, parce qu'ils sont sur le meme accueil ; ceux de
+ * l'autre jeu tiennent en trois mots — « et Hurdlers a les siens » — qui disent
+ * ou aller les chercher.
+ *
+ * Sans `tete`, rien ne dit quel est le jeu de tete : tout se nomme, comme
+ * avant que les haies n'aient leurs defis.
  */
-function phraseDesAutres(autres, l) {
-  const noms = (autres || [])
-    .map(c => (fiche(c) || {}).libelle)
-    .filter(Boolean)
-    .map(n => (l === 'en' ? 'the ' : 'le ') + n);
-  if (!noms.length) return '';
-  const dernier = noms.pop();
-  const liste = noms.length
-    ? `${noms.join(', ')} ${l === 'en' ? 'and' : 'et'} ${dernier}` : dernier;
-  const phrase = l === 'en'
-    ? `${liste} ${noms.length ? 'are' : 'is'} waiting too.`
-    : `${liste} ${noms.length ? 'attendent' : 'attend'} aussi.`;
-  return ' ' + phrase.charAt(0).toUpperCase() + phrase.slice(1);
+function phraseDesAutres(autres, l, tete) {
+  const jeuDeTete = (fiche(tete) || {}).jeu;
+  const connues = (autres || []).filter(c => fiche(c));
+  const memes = connues.filter(c => !jeuDeTete || fiche(c).jeu === jeuDeTete);
+  const ailleurs = [...new Set(connues
+    .filter(c => jeuDeTete && fiche(c).jeu !== jeuDeTete)
+    .map(c => NOMS_DES_JEUX[fiche(c).jeu])
+    .filter(Boolean))];
+
+  let phrase = '';
+  const noms = memes.map(c => (l === 'en' ? 'the ' : 'le ') + libelleDe(c, l));
+  if (noms.length) {
+    const dernier = noms.pop();
+    const liste = noms.length
+      ? `${noms.join(', ')} ${l === 'en' ? 'and' : 'et'} ${dernier}` : dernier;
+    phrase = l === 'en'
+      ? `${liste} ${noms.length ? 'are' : 'is'} waiting too`
+      : `${liste} ${noms.length ? 'attendent' : 'attend'} aussi`;
+  }
+  if (ailleurs.length) {
+    const jeux = ailleurs.join(l === 'en' ? ' and ' : ' et ');
+    const plusieurs = ailleurs.length > 1;
+    if (phrase) {
+      phrase += l === 'en'
+        ? `, and ${jeux} ${plusieurs ? 'have their' : 'has its'} own`
+        : `, et ${jeux} ${plusieurs ? 'ont les leurs' : 'a les siens'}`;
+    } else {
+      phrase = l === 'en'
+        ? `${jeux} ${plusieurs ? 'have their' : 'has its'} own too`
+        : `${jeux} ${plusieurs ? 'ont aussi les leurs' : 'a aussi les siens'}`;
+    }
+  }
+  if (!phrase) return '';
+  return ' ' + phrase.charAt(0).toUpperCase() + phrase.slice(1) + '.';
 }
 
 /**
@@ -1367,7 +1453,7 @@ export function texteObjectif(objectif, rang, langue,
                               autres = null) {
   const l = langue === 'en' ? 'en' : 'fr';
   const creneau = objectif.creneau === 'soir' ? 'soir' : 'midi';
-  const encore = phraseDesAutres(autres, l);
+  const encore = phraseDesAutres(autres, l, objectif.race_key || EPREUVE);
   if (!avecChrono) {
     return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l] + encore,
              variante: null, contexte: 'discret' };
@@ -1377,8 +1463,9 @@ export function texteObjectif(objectif, rang, langue,
     // La distance de ce defi. Les tournures la nommaient en dur — « tu es 3e
     // au 100 m » — et il y en a trois maintenant : la dire fausse serait pire
     // que de ne pas la dire, puisque le rang, lui, est bien celui de CETTE
-    // distance.
-    epreuve: (fiche(objectif.race_key || EPREUVE) || {}).libelle || '',
+    // distance. Et dans la langue de la phrase : « in the 110 m haies » n'en
+    // est pas une.
+    epreuve: libelleDe(objectif.race_key || EPREUVE, l),
     pb: s2(objectif.pb_ms),
     cible: s2(objectif.cible_ms),
     ecart: ((objectif.cible_ms - objectif.pb_ms) / 1000).toFixed(2),

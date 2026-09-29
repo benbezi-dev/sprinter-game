@@ -12,6 +12,10 @@
 //
 //   node tools/objectif-simulation.mjs            # la production
 //   node tools/objectif-simulation.mjs --local    # la base locale
+//   node tools/objectif-simulation.mjs --epreuve 110h   # une autre epreuve
+//
+// L'EPREUVE SE CHOISIT, et c'est ainsi qu'on mesure avant d'ouvrir une
+// epreuve de plus au defi : sur ses vraies courses, pas sur celles du 100 m.
 //
 // Ce qu'il ne peut pas dire : ce que feront les joueurs. Un taux calcule sur
 // les courses passees suppose que le joueur continue de courir comme avant.
@@ -22,10 +26,20 @@ import { execFileSync } from 'node:child_process';
 import {
   calibrer, seuilsDe, palierDe, FENETRE, COURSES_MIN, EPREUVE, TOP_N,
 } from '../worker/src/objectif.js';
-import { PLUS_BAS } from '../worker/src/epreuves.js';
+import { PLUS_BAS, epreuve as fiche } from '../worker/src/epreuves.js';
 
 const local = process.argv.includes('--local');
 const s2 = ms => (ms / 1000).toFixed(2);
+
+// Le 100 m par defaut : c'est ce que ce script mesurait avant de savoir en
+// mesurer une autre. Les six epreuves se gagnent au chrono le plus bas, ce que
+// les comptages plus bas supposent.
+const iEp = process.argv.indexOf('--epreuve');
+const EP = iEp > 0 ? String(process.argv[iEp + 1] || '') : EPREUVE;
+if (!fiche(EP) || fiche(EP).direction !== PLUS_BAS) {
+  console.log(`\n  epreuve inconnue : ${EP}\n`);
+  process.exit(1);
+}
 
 function interroger(sql) {
   const args = ['wrangler', 'd1', 'execute', 'sprinter-leaderboard',
@@ -35,7 +49,7 @@ function interroger(sql) {
 }
 
 console.log(`\n  Objectif du jour — simulation sur ${local ? 'la base locale' : 'LA PRODUCTION'}`);
-console.log(`  epreuve ${EPREUVE} m, fenetre de ${FENETRE} courses, seuil de calibrage ${COURSES_MIN}\n`);
+console.log(`  epreuve ${fiche(EP).libelle}, fenetre de ${FENETRE} courses, seuil de calibrage ${COURSES_MIN}\n`);
 
 // Les memes filtres que `joueursAServir` : classe, actif, et pas « Anonyme ».
 const depuis = Date.now() - 30 * 86400000;
@@ -44,7 +58,7 @@ const joueurs = interroger(
      FROM scores s
      LEFT JOIN (SELECT name_key, MAX(created_at) AS vu FROM races GROUP BY name_key) r
             ON r.name_key = lower(trim(s.name))
-    WHERE s.race_key = '${EPREUVE}' AND s.best_split_ms > 0
+    WHERE s.race_key = '${EP}' AND s.best_split_ms > 0
       AND lower(trim(s.name)) <> 'anonyme'
     GROUP BY lower(trim(s.name))
    HAVING COALESCE(r.vu, MAX(s.updated_at)) >= ${depuis}
@@ -55,7 +69,7 @@ const courses = interroger(
      SELECT lower(trim(name)) AS k, time_ms,
             ROW_NUMBER() OVER (PARTITION BY lower(trim(name))
                                ORDER BY created_at DESC) AS rn
-       FROM races WHERE race_key = '${EPREUVE}'
+       FROM races WHERE race_key = '${EP}'
    ) WHERE rn <= ${FENETRE}`);
 
 const parJoueur = new Map();
@@ -69,7 +83,7 @@ for (const c of courses) {
 const lignes = [];
 for (const j of joueurs) {
   const mes = parJoueur.get(j.k) || [];
-  const c = calibrer(j.pb, mes, { direction: PLUS_BAS, pas: 10 });
+  const c = calibrer(j.pb, mes, { direction: PLUS_BAS, pas: fiche(EP).pas });
   const seuils = seuilsDe(j.pb, c.cibleMs, PLUS_BAS);
 
   // Le taux de reussite mesure sur SES courses : combien d'entre elles
