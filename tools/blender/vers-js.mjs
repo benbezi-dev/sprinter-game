@@ -11,7 +11,7 @@
      node tools/blender/vers-js.mjs --vedettes   (les athletes reels)
    ----------------------------------------------------------------------- */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 const VEDETTES = process.argv.includes('--vedettes');
 const src = VEDETTES ? 'tools/blender/sortie/vedettes-hd.json'
@@ -19,7 +19,33 @@ const src = VEDETTES ? 'tools/blender/sortie/vedettes-hd.json'
 const dst = VEDETTES ? 'src/game/coureur-vedettes.js' : 'src/game/coureur-hd.js';
 const d = JSON.parse(readFileSync(src, 'utf8'));
 
-const NIVEAUX = ['pres', 'moyen', 'loin'];
+const NIVEAUX = ['pres', 'moyen', 'loin', 'ultra'];
+
+/**
+ * LES NIVEAUX DEJA ECRITS NE BOUGENT PAS.
+ *
+ * Blender ne rend pas deux fois exactement la meme mesure : d'une version a
+ * l'autre, les troncs de « pres », « moyen » et « loin » bougeraient d'un
+ * dixieme de millimetre, et les quarante coureurs du jeu avec eux. Quand le
+ * module existe deja, on reprend donc ses niveaux tels quels, et seul un
+ * niveau qu'il n'a pas encore — « ultra » — vient de la nouvelle mesure.
+ */
+function niveauxEcrits(chemin) {
+  if (VEDETTES || !existsSync(chemin)) return null;
+  const root = {};
+  new Function('globalThis', readFileSync(chemin, 'utf8'))(root);
+  return root.SprinterHD || null;
+}
+const ECRITS = niveauxEcrits(dst);
+if (ECRITS) {
+  for (const cle of ['m', 'f']) {
+    for (const ch of d[cle]) {
+      const avant = ECRITS[cle] && ECRITS[cle][ch.nom];
+      if (!avant) continue;
+      for (let i = 0; i < avant.length && i < ch.niveaux.length; i++) ch.niveaux[i] = avant[i];
+    }
+  }
+}
 
 function chaine(ch) {
   const n = ch.niveaux.map(tr =>
@@ -111,10 +137,12 @@ const js = `/* -----------------------------------------------------------------
    coureur premium reste un coureur du jeu, il tourne donc dans le virage
    exactement comme les autres.
 
-   TROIS NIVEAUX DE DETAIL. Le meme corps, echantillonne en plus ou moins
+   QUATRE NIVEAUX DE DETAIL. Le meme corps, echantillonne en plus ou moins
    de troncs de cone. Huit coureurs a l'ecran ne peuvent pas tous payer
    soixante volumes ; celui qu'on regarde de pres, si. Un coureur lointain
    n'est pas un autre personnage, c'est le meme, mesure plus grossierement.
+   Le quatrieme, ULTRA, est celui du sauteur de Jumper, seul sur la piste :
+   trois fois plus de troncs que « pres ».
 
    Ecart residuel a l'anatomie visee, apres calibration :
      homme — ${ecarts('m')}
@@ -147,5 +175,6 @@ for (const cle of ['m', 'f']) {
   const tot = d[cle].reduce((a, ch) => a + ch.niveaux[0].length, 0);
   const moy = d[cle].reduce((a, ch) => a + ch.niveaux[1].length, 0);
   const loin = d[cle].reduce((a, ch) => a + ch.niveaux[2].length, 0);
-  console.log(`  ${cle} : ${tot} / ${moy} / ${loin} troncs par chaine cumulee`);
+  const ultra = d[cle].reduce((a, ch) => a + (ch.niveaux[3] || []).length, 0);
+  console.log(`  ${cle} : ${tot} / ${moy} / ${loin} / ${ultra} troncs par chaine cumulee`);
 }

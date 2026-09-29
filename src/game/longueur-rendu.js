@@ -22,7 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { FOSSE, PISTE_ELAN, PLANCHE, PLASTICINE } from './longueur.js';
-import { RAMENE_VISE, AVANCE_PIED } from './longueur-jeu.js';
+import { RAMENE_VISE, AVANCE_PIED, APPEL_MAXI } from './longueur-jeu.js';
 import MANIFESTE from './longueur-manifeste.json';
 
 /* ------------------------------------------------------------ le rig */
@@ -144,19 +144,38 @@ export function postureDe(e, r, ech) {
       };
       let ja, jb, ba, bb, buste;
       if (v.ciseaux > 0) {
-        // LE CISEAU : les jambes continuent de courir. Chaque appui du joueur
-        // avance le cycle d'un demi-tour — ce sont SES foulees en l'air.
+        // LE CISEAU — le « hitch-kick » des sauteurs : ils COURENT en l'air.
+        // Chaque appui du joueur avance le cycle d'un demi-tour ; c'est une
+        // foulee complete, pas un battement. Une jambe part tendue derriere,
+        // revient genou replie, talon sous la fesse, se deplie devant, puis
+        // balaie vers le bas, tendue. L'autre fait la meme chose a l'oppose.
         const phi = v.phase;
         const jambe = (q) => {
-          const th = 0.50 + 0.95 * Math.sin(q);
-          const plie = 0.35 + 0.95 * Math.max(0, Math.cos(q));
-          return [th, th - plie, th - plie + 0.30];
+          const s = Math.sin(q), c = Math.cos(q);
+          // la cuisse : de soixante centimetres derriere a franchement devant
+          const th = 0.30 + 0.90 * s;
+          // le genou se replie quand la jambe revient vers l'avant (c > 0),
+          // et reste tendu quand elle balaie vers l'arriere
+          const plie = 0.18 + 1.45 * Math.pow(Math.max(0, c), 1.4);
+          const sh = th - plie;
+          return [th, sh, sh + 0.30 + 0.25 * Math.max(0, -c)];
         };
         ja = jambe(phi - Math.PI / 2);
         jb = jambe(phi + Math.PI / 2);
-        ba = [1.2 + 1.3 * Math.sin(phi + Math.PI / 2), 1.7 + 1.2 * Math.sin(phi + Math.PI / 2)];
-        bb = [1.2 + 1.3 * Math.sin(phi - Math.PI / 2), 1.7 + 1.2 * Math.sin(phi - Math.PI / 2)];
-        buste = -0.10;
+        // LES BRAS TOURNENT, ILS NE BATTENT PAS. De grands moulinets, un bras
+        // a l'oppose de l'autre, le coude a peine flechi, et DANS LE SENS DES
+        // JAMBES : ils passent par-dessus la tete de l'arriere vers l'avant,
+        // comme le genou qui revient. C'est ce qui retient le sauteur de
+        // basculer en avant — la raison d'etre du ciseau. Battus de haut en
+        // bas, en miroir, ils faisaient un papillon.
+        // L'angle est ramene dans un tour pour que le ramene qui suit ne
+        // les fasse pas tourner plusieurs fois sur eux-memes.
+        const tour = (a) => { const T = Math.PI * 2; return ((a + 1.2) % T + T) % T - 1.2; };
+        const moulinet = (a) => { const x = tour(a); return [x, x + 0.22 + 0.12 * Math.sin(x)]; };
+        ba = moulinet(2.30 - phi);
+        bb = moulinet(2.30 - phi + Math.PI);
+        // le buste reste droit, un rien en arriere, et suit le rythme
+        buste = -0.08 - 0.04 * Math.sin(phi);
       } else {
         // LA SUSPENSION, telle qu'on la voit aux grands concours : le corps
         // s'OUVRE. La jambe libre, lancee genou haut a l'appel, redescend
@@ -227,9 +246,13 @@ export function postureDe(e, r, ech) {
         buste = mix(-0.40, 0.95, tombe);
         bras = [[-1.05, -0.80], [-1.10, -0.85]];
       } else if (pieds) {
-        hz = mix(c.hz0, 0.36, tombe);
-        buste = mix(-0.60, -1.25, tombe);
-        bras = [[1.40, 1.50], [1.45, 1.55]];
+        // PIEDS SOUS LE BASSIN : les jambes ne sont pas venues devant, les
+        // pieds touchent sous lui. Il encaisse en accroupi profond, le buste
+        // penche mais pas couche, les bras devant pour ne pas partir en
+        // avant — pas un plongeon tete la premiere.
+        hz = mix(c.hz0, 0.44, tombe);
+        buste = mix(-0.40, -0.62, tombe);
+        bras = [[0.95, 1.20], [0.90, 1.15]];
       } else {
         // A l'impact, les bras filent derriere les hanches — c'est ce qui fait
         // passer le corps par-dessus les talons —, puis reviennent devant a
@@ -241,10 +264,10 @@ export function postureDe(e, r, ech) {
       }
       let ja, jb;
       if (pieds) {
-        // A genoux dans le sable : les cuisses a la verticale, les tibias
-        // couches derriere.
-        ja = mix3(jambeVers(0, hz, talon, CHEVILLE, 0.3), [0.25, -1.30, -1.10], tombe);
-        jb = mix3(jambeVers(0, hz, talon, CHEVILLE, 0.3), [0.20, -1.35, -1.15], tombe);
+        // Accroupi, les pieds a plat sous lui : les genoux plient, les talons
+        // restent ou ils sont entres.
+        ja = jambeVers(0, hz, talon + 0.06, CHEVILLE, 0.05);
+        jb = jambeVers(0, hz, talon - 0.02, CHEVILLE, 0.05);
       } else {
         const pied = assis ? 0.55 : mix(0.55, 0.10, tombe);
         ja = jambeVers(0, hz, talon, CHEVILLE, pied);
@@ -421,6 +444,7 @@ export function dessinerSol(ctx, api, e, th) {
   // LES PLANCHES, chacune suivie de sa plasticine. Celle du saut en longueur
   // et celle du triple saut sont sur la meme piste, et on voit les deux ; on
   // ne s'appelle que sur celle de l'epreuve.
+  rubanDAppel(ctx, api, e, Y, demi);
   for (const p of planches) {
     const X = p.x;
     dalle(ctx, api, X - PLANCHE.largeur, Y - PLANCHE.longueur / 2, X, Y + PLANCHE.longueur / 2,
@@ -515,6 +539,27 @@ export function piecesDebout(e, api, out) {
     out.push({ profondeur: -1e9, sorte: 'angle' });
   }
   out.push({ profondeur: api.depthOf(e.ligne + 0.4, Y - 2.3), sorte: 'juge' });
+  // LES PANNEAUX DE DISTANCE, debout le long du sable cote tribune, un par
+  // metre depuis la planche qui sert : c'est ce que lit le public, et ce que
+  // lit la television pour situer un saut avant la mesure.
+  const pl = (e.planches || []).find(p => p.actif) || { x: e.ligne };
+  const fin = e.fosseX + (FOSSE.fond - FOSSE.debut);
+  const yP = Y + FOSSE.largeur / 2 + 0.55;
+  for (let m = Math.ceil(e.fosseX - pl.x + 0.3); pl.x + m <= fin - 0.2; m++) {
+    out.push({ profondeur: api.depthOf(pl.x + m, yP), sorte: 'panneau', x: pl.x + m, y: yP, m });
+  }
+  // Les officiels assis derriere le sable : celui qui tient le decametre, et
+  // celui qui note. Ils sont la a chaque saut, comme au stade.
+  for (const [i, dx] of [[0, 2.2], [1, 6.4]]) {
+    const x = e.fosseX + dx, y = Y + FOSSE.largeur / 2 + 2.1;
+    out.push({ profondeur: api.depthOf(x, y), sorte: 'officiel', x, y, i });
+  }
+  // Le cameraman de la television, derriere la piste d'elan, qui filme la
+  // planche : c'est lui qu'on voit dans tous les concours retransmis.
+  {
+    const x = e.ligne - 3.2, y = Y + 2.4;
+    out.push({ profondeur: api.depthOf(x, y), sorte: 'cameraman', x, y });
+  }
   return out;
 }
 
@@ -522,6 +567,184 @@ export function dessinerPiece(ctx, api, e, pc, th, A) {
   if (pc.sorte === 'gerbe') dessinerGerbe(ctx, api, e, th);
   else if (pc.sorte === 'angle') dessinerAngle(ctx, api, e, A);
   else if (pc.sorte === 'juge') dessinerJuge(ctx, api, e, A);
+  else if (pc.sorte === 'panneau') dessinerPanneau(ctx, api, pc);
+  else if (pc.sorte === 'officiel') dessinerOfficiel(ctx, api, e, pc, A);
+  else if (pc.sorte === 'cameraman') dessinerCameraman(ctx, api, e, pc, A);
+}
+
+/**
+ * Le cameraman : debout derriere son trepied, l'oeil a la camera, tourne vers
+ * la planche. La camera est une boite sombre avec son objectif.
+ */
+const TENUE_CAMERA = { build: 'm', skin: 'olive', jersey: [28, 30, 36], shorts: [44, 46, 54],
+  pantalon: [44, 46, 54], shoe: [24, 24, 28], hair: 'shaved', h: 1.80, civil: true };
+function dessinerCameraman(ctx, api, e, pc, A) {
+  const G = api.G, C = api.C, K = globalThis.SprinterCore;
+  const g = api.ground(pc.x, pc.y);
+  if (g[0] < -200 || g[0] > G.VW + 200 || g[1] < -260 || g[1] > G.VH + 200) return;
+  const m = api.scaleM();
+  const cm = e.cameraman || (e.cameraman = {
+    look: K.look(TENUE_CAMERA), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+  });
+  // les deux mains sur la poignee, a hauteur du visage
+  cm.bras = [1.25, 1.35, 0.9, 0.95];
+  cm.buste = 0.12;
+  const k = m * (cm.look.h / C.MODEL_H);
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(g[0], g[1], 18 * m / 30, 7 * m / 30, 0, 0, Math.PI * 2); ctx.fill();
+  // le trepied, devant lui (vers la planche, +x)
+  const tx = pc.x + 0.55, ty = pc.y - 0.1, h = 1.45;
+  const haut = api.solid(tx, ty, h);
+  ctx.strokeStyle = 'rgb(40,42,48)';
+  ctx.lineWidth = Math.max(1, 0.03 * m);
+  for (const [dx, dy] of [[0.28, 0], [-0.16, 0.24], [-0.16, -0.24]]) {
+    const p0 = api.solid(tx + dx, ty + dy, 0);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(haut[0], haut[1]); ctx.stroke();
+  }
+  // tourne vers la planche : la tete dans l'axe de la piste
+  const caps = A.personCapsules(cm, (api.rot || 0) + 0.15, 0, false, false, A.niveauDetail(k));
+  A.drawFacetFigure(ctx, caps, g[0], g[1], k);
+  // la camera : une boite sombre, et l'objectif pointe vers la planche
+  const boite = (x0, x1, y0, y1, z0, z1, col) => {
+    const P = (x, y, z) => api.solid(x, y, z);
+    const faces = [
+      [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)],
+      [P(x0, y0, z0), P(x1, y0, z0), P(x1, y0, z1), P(x0, y0, z1)],
+      [P(x1, y0, z0), P(x1, y1, z0), P(x1, y1, z1), P(x1, y0, z1)],
+    ];
+    const teintes = [1.0, 0.72, 0.85];
+    faces.forEach((f, i) => {
+      ctx.beginPath(); ctx.moveTo(f[0][0], f[0][1]);
+      for (const q of f.slice(1)) ctx.lineTo(q[0], q[1]);
+      ctx.closePath();
+      ctx.fillStyle = `rgb(${col.map(c => Math.round(c * teintes[i])).join(',')})`;
+      ctx.fill();
+    });
+  };
+  boite(tx - 0.28, tx + 0.22, ty - 0.11, ty + 0.11, h, h + 0.26, [52, 54, 62]);
+  boite(tx + 0.22, tx + 0.44, ty - 0.07, ty + 0.07, h + 0.05, h + 0.19, [22, 22, 26]);
+  // le voyant rouge : on tourne
+  const v = api.solid(tx - 0.2, ty - 0.11, h + 0.22);
+  ctx.fillStyle = Math.sin((G.elapsed || 0) * 6) > -0.2 ? 'rgb(255,60,60)' : 'rgb(120,30,30)';
+  ctx.beginPath(); ctx.arc(v[0], v[1], Math.max(1.2, 0.03 * m), 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * LE RUBAN D'APPEL. Une bande de couleur au sol, juste avant la planche qui
+ * sert : jaune la ou le pied se poserait trop loin, vert dans la bonne zone,
+ * vert vif dans les vingt derniers centimetres, rouge au-dela de la ligne.
+ * C'est la meme echelle que la jauge des paves (longueur-course.js, jauge),
+ * posee la ou le joueur regarde : devant l'athlete. Elle s'eteint des qu'il
+ * a pris son appel.
+ */
+function rubanDAppel(ctx, api, e, Y, demi) {
+  const vis = e.phase === 'attente' || e.phase === 'elan' ? 1
+    : e.phase === 'appel' ? Math.max(0, 1 - e.t / 0.25) : 0;
+  if (vis <= 0.01) return;
+  const L = e.ligne, d = demi * 0.92;
+  const a = api.solid(L - APPEL_MAXI - 0.6, Y, 0), b = api.solid(L + 0.35, Y, 0);
+  const g = ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+  const t = (x) => (x - (L - APPEL_MAXI - 0.6)) / (APPEL_MAXI + 0.95);
+  g.addColorStop(0, 'rgba(250,214,60,0)');
+  g.addColorStop(t(L - APPEL_MAXI), 'rgba(250,214,60,0.75)');
+  g.addColorStop(t(L - 0.45), 'rgba(96,222,110,0.8)');
+  g.addColorStop(t(L - 0.2), 'rgba(60,240,120,0.95)');
+  g.addColorStop(t(L - 0.001), 'rgba(160,255,170,1)');
+  g.addColorStop(t(L + 0.001), 'rgba(240,60,60,0.9)');
+  g.addColorStop(1, 'rgba(240,60,60,0)');
+  ctx.save();
+  ctx.globalAlpha *= vis;
+  dalle(ctx, api, L - APPEL_MAXI - 0.6, Y - d, L + 0.35, Y + d, g, 0.002);
+  // la ligne de la zone parfaite, un trait clair en travers
+  trait(ctx, api, L - 0.2, Y - d, L - 0.2, Y + d, 'rgba(255,255,255,0.85)', Math.max(1, 0.02 * api.scaleM()), 0.003);
+  ctx.restore();
+}
+
+/** Un panneau de distance : une plaque noire, un chiffre blanc, deux pieds. */
+function dessinerPanneau(ctx, api, pc) {
+  const { x, y, m: metres } = pc;
+  const m = api.scaleM();
+  const o = api.solid(x, y, 0);
+  if (o[0] < -100 || o[0] > api.G.VW + 100 || o[1] < -100 || o[1] > api.G.VH + 150) return;
+  const l = 0.34, z0 = 0.16, z1 = 0.62;
+  const a = api.solid(x - l, y, z0), b = api.solid(x + l, y, z0);
+  const c = api.solid(x + l, y, z1), d = api.solid(x - l, y, z1);
+  ctx.save();
+  // les pieds
+  ctx.strokeStyle = 'rgb(70,72,80)';
+  ctx.lineWidth = Math.max(1, 0.03 * m);
+  for (const dx of [-l * 0.7, l * 0.7]) {
+    const p0 = api.solid(x + dx, y, 0), p1 = api.solid(x + dx, y, z0);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+  }
+  // la plaque, et son liseré
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+  ctx.closePath();
+  ctx.fillStyle = 'rgb(18,20,26)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(1, 0.012 * m);
+  ctx.stroke();
+  // le chiffre, couche dans le plan de la plaque
+  const ux = (b[0] - a[0]) / (2 * l), uy = (b[1] - a[1]) / (2 * l);
+  const vx = (d[0] - a[0]) / (z1 - z0), vy = (d[1] - a[1]) / (z1 - z0);
+  const cx = (a[0] + c[0]) / 2, cy = (a[1] + c[1]) / 2;
+  // Le texte se lit de gauche a droite A L'ECRAN : la piste avance vers le
+  // haut a gauche, il court donc a rebours d'elle, et du haut vers le bas.
+  ctx.setTransform(ctx.getTransform().multiply(new DOMMatrix([-ux, -uy, -vx, -vy, cx, cy])));
+  ctx.fillStyle = 'rgb(248,248,244)';
+  ctx.font = '900 0.34px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(metres), 0, 0.01);
+  ctx.restore();
+}
+
+/** Les officiels assis : blazer, pantalon, une chaise pliante. */
+const TENUES = [
+  { build: 'm', skin: 'ambre', jersey: [38, 70, 138], shorts: [70, 74, 84], pantalon: [70, 74, 84],
+    shoe: [30, 30, 34], hair: 'crop', h: 1.76, civil: true },
+  { build: 'f', skin: 'porcelaine', jersey: [38, 70, 138], shorts: [70, 74, 84], pantalon: [70, 74, 84],
+    shoe: [30, 30, 34], hair: 'bun', h: 1.68, civil: true },
+];
+function dessinerOfficiel(ctx, api, e, pc, A) {
+  const G = api.G, C = api.C, K = globalThis.SprinterCore;
+  const g = api.ground(pc.x, pc.y);
+  if (g[0] < -200 || g[0] > G.VW + 200 || g[1] < -260 || g[1] > G.VH + 200) return;
+  const m = api.scaleM();
+  const offs = e.officiels || (e.officiels = []);
+  const o = offs[pc.i] || (offs[pc.i] = {
+    look: K.look(TENUES[pc.i % TENUES.length]), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+  });
+  // ASSIS : cuisses a l'horizontale, jambes a la verticale, le bassin a la
+  // hauteur d'une chaise ; les mains posees sur les cuisses, sauf quand le
+  // saut retombe — alors celui qui tient le decametre se penche en avant.
+  const penche = e.mesure ? 0.35 : 0;
+  o.posture = { w: 1, jambes: [[1.52, 0.05, 0.30], [1.46, -0.02, 0.26]],
+                bras: [[0.55, 1.35], [0.45, 1.30]], buste: -0.06 - penche, leve: -0.40, hanche: 0.05 };
+  const k = m * (o.look.h / C.MODEL_H);
+  ctx.save();
+  // la chaise
+  const s0 = api.solid(pc.x - 0.24, pc.y - 0.22, 0.46), s1 = api.solid(pc.x + 0.24, pc.y - 0.22, 0.46);
+  const s2 = api.solid(pc.x + 0.24, pc.y + 0.22, 0.46), s3 = api.solid(pc.x - 0.24, pc.y + 0.22, 0.46);
+  ctx.strokeStyle = 'rgb(120,124,132)';
+  ctx.lineWidth = Math.max(1, 0.025 * m);
+  for (const [dx, dy] of [[-0.22, -0.2], [0.22, -0.2], [-0.22, 0.2], [0.22, 0.2]]) {
+    const p0 = api.solid(pc.x + dx, pc.y + dy, 0), p1 = api.solid(pc.x + dx, pc.y + dy, 0.46);
+    ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+  }
+  ctx.fillStyle = 'rgb(58,62,72)';
+  ctx.beginPath(); ctx.moveTo(s0[0], s0[1]); ctx.lineTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.lineTo(s3[0], s3[1]);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(g[0], g[1], 14 * m / 30, 6 * m / 30, 0, 0, Math.PI * 2); ctx.fill();
+  // tourne vers la piste d'elan, face a la camera
+  const caps = A.personCapsules(o, -Math.PI / 2 + (api.rot || 0) - 0.35, 0, false, false, A.niveauDetail(k));
+  A.drawFacetFigure(ctx, caps, g[0], g[1], k);
+  ctx.restore();
 }
 
 function dessinerGerbe(ctx, api, e, th) {

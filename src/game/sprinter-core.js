@@ -1817,7 +1817,8 @@
     const MESURE = PREM.MESURE, LIBRE = PREM.LIBRE;
     const SOUS_BAS = PREM.ENFOUI_BAS, SOUS_HAUT = PREM.ENFOUI_HAUT;
     const cb = sec[0];
-    if (niv >= PREM.MOYEN) {
+    // ULTRA (le sauteur de Jumper) est plus fin que PRES : il garde la main.
+    if (niv === PREM.MOYEN || niv === PREM.LOIN) {
       // DES QUE LE COUREUR S'ELOIGNE, UN SEUL VOLUME : LE POING.
       //
       // Il coute exactement ce que coutait le tronc de chaine qu'il
@@ -1944,7 +1945,7 @@
     const zTt = P.talon + avance(tT[0], tT[1]), zTp = P.pointe - avance(tP[0], tP[1]);
     const zSt = P.talon + 0.008 + avance(sT[0], sT[1]);
     const zSp = P.pointe - 0.014 - avance(sP[0], sP[1]);
-    if (niv > PREM.PRES) {
+    if (niv === PREM.MOYEN || niv === PREM.LOIN) {
       // De loin, une semelle et une tige, d'un seul tenant chacune : le pied
       // garde sa longueur et son profil de coin, il perd le galbe de la
       // plante. C'est le meme nombre de volumes qu'avant.
@@ -2288,7 +2289,7 @@
     // deux bouts sont enfouis. Il n'apparait qu'a mesure que le bassin se
     // couche, et pas du tout quand le buste recouvre deja le bassin — chez
     // les hommes, c'est toujours le cas.
-    const trP = PR.pelvis[niv], hautP = trP[trP.length - 1];
+    const trP = PR.pelvis[niv] || PR.pelvis[PREM.PRES], hautP = trP[trP.length - 1];
     const zP = hautP[0] + hautP[1];
     const [cP, pP, lP] = PREM.section(PR, 'pelvis', niv, zP, kHip);
     const [cT0, pT0, lT0] = PREM.section(PR, 'torso', niv, zP, kSh);
@@ -2531,7 +2532,7 @@
       // un seul au niveau moyen (neuf). Au plus grossier, rien : il ferait la
       // moitie de l'avant-bras, pour un bras de trois pixels.
       const bande = L.poignet && L.poignet.cote === side && !L.manches
-        ? [-0.14, -0.09, null][niv] : null;
+        ? [-0.14, -0.09, null, -0.14][niv] : null;
       if (bande !== null && bande !== undefined) {
         PREM.chaine(add, PR, 'forearm', niv, L.poignet.col, E, aFore, 0, yawTop,
                     kAv, 0, SOUS_BAS, SOUS_HAUT, POIGNET, bande);

@@ -24,7 +24,7 @@
   // Trois niveaux, du plus fin au plus grossier. Le choix se fait sur la
   // taille a l'ecran, pas sur la distance de course : un coureur de dos a
   // dix metres occupe plus de pixels qu'un coureur de face a cinquante.
-  var PRES = 0, MOYEN = 1, LOIN = 2;
+  var PRES = 0, MOYEN = 1, LOIN = 2, ULTRA = 3;
 
   // CE QUE LE RENDU DOIT FAIRE DES BOUTS D'UN SEGMENT.
   //
@@ -100,9 +100,19 @@
    * departagent au millimetre, et le short ressortait en lanieres noires en
    * travers de la cuisse des que le genou montait.
    */
+  /**
+   * Les troncs d'une chaine a un niveau de detail. Le niveau ULTRA (celui du
+   * sauteur de Jumper) n'existe que pour les corps mesures avec lui : un
+   * athlete reel releve avant lui retombe sur « pres », son niveau le plus fin.
+   */
+  function troncs(pro, nom, niv) {
+    var ch = pro[nom];
+    return ch[niv] || ch[PRES];
+  }
+
   function chaine(add, pro, nom, niv, col, pv, ang, oy, yaw, k, dz, bas, haut,
                   depuis, jusqua) {
-    var tr = pro[nom][niv], d = dz || 0;
+    var tr = troncs(pro, nom, niv), d = dz || 0;
     var i0 = depuis === undefined ? 0 : coupe(tr, depuis);
     var i1 = jusqua === undefined ? tr.length - 1 : coupe(tr, jusqua) - 1;
     for (var i = i0; i <= i1; i++) {
@@ -176,13 +186,13 @@
    * entre les deux. Elle lit donc le bord au lieu de le supposer.
    */
   function bord(pro, nom, niv, h) {
-    var t = pro[nom][niv][coupe(pro[nom][niv], h)];
+    var t = troncs(pro, nom, niv)[coupe(troncs(pro, nom, niv), h)];
     return t[0] - t[1];
   }
 
   /** Le rayon moyen mesure a une extremite de chaine : 'bas' ou 'haut'. */
   function rayon(pro, nom, niv, cote, k) {
-    var tr = pro[nom][niv];
+    var tr = troncs(pro, nom, niv);
     var t = cote === 'bas' ? tr[0] : tr[tr.length - 1];
     var r = cote === 'bas' ? (t[3] + t[4]) : (t[5] + t[6]);
     return r * 0.5 * (k || 1);
@@ -197,7 +207,7 @@
    * mesure.
    */
   function avant(pro, nom, niv, z, k) {
-    var tr = pro[nom][niv], best = null, dmin = 1e9;
+    var tr = troncs(pro, nom, niv), best = null, dmin = 1e9;
     for (var i = 0; i < tr.length; i++) {
       var dd = Math.abs(tr[i][0] - z);
       if (dd < dmin) { dmin = dd; best = tr[i]; }
@@ -213,7 +223,7 @@
    * du corps au lieu de s'y planter — le dossard, voir pose().
    */
   function section(pro, nom, niv, z, k) {
-    var tr = pro[nom][niv], best = null, dmin = 1e9;
+    var tr = troncs(pro, nom, niv), best = null, dmin = 1e9;
     for (var i = 0; i < tr.length; i++) {
       var dd = Math.abs(tr[i][0] - z);
       if (dd < dmin) { dmin = dd; best = tr[i]; }
@@ -231,7 +241,7 @@
 
   root.SprinterPremium = {
     chaine: chaine, avant: avant, rayon: rayon, section: section, bord: bord,
-    PRES: PRES, MOYEN: MOYEN, LOIN: LOIN,
+    PRES: PRES, MOYEN: MOYEN, LOIN: LOIN, ULTRA: ULTRA,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
     COLLE: COLLE,
     /**
