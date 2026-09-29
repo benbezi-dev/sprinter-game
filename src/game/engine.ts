@@ -36,6 +36,7 @@ import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
+import { suivreTunnel, etapeTunnel } from './tunnel';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -68,6 +69,7 @@ const STARTER_MUET = true;
 // charge de l'envoyer.
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
   pushFinishedRace(race, t, mode, level);
+  if (!SprinterApp.G.rejeu) etapeTunnel('arrivee');
   // Le chrono se juge ici et nulle part ailleurs : c'est le seul endroit ou
   // l'on voit passer TOUTES les courses terminees, carriere comme one shot,
   // et ou l'historique de la distance est encore sous la main. L'ecran de fin
@@ -334,6 +336,9 @@ export function padPress(side: 'left' | 'right') {
     return;
   }
   if (G.state !== 'race') return;
+  // Parti des blocs : la marche du tunnel ou l'on sait qu'il a joue, et pas
+  // seulement regarde le decompte. Voir game/tunnel.ts.
+  if (!G.rejeu && !G.spectateur) etapeTunnel('premier_appui');
 
   // LE SAUT EN LONGUEUR, avant tout le reste. Sur la piste d'elan, un appui
   // est une foulee ; dans le dernier metre, c'est l'appel ; en l'air, un
@@ -521,6 +526,8 @@ function pousserPosition() {
 }
 
 export function updateLogic(dt: number) {
+  // Le tunnel des premiers pas lit les changements d'etat, rien d'autre.
+  suivreTunnel(G);
   // Course suspendue : le monde se fige, mais on continue a rendre l'image
   // et a alimenter React, sinon le panneau de sortie ne s'afficherait pas.
   if (G.paused && PAUSABLE.has(G.state)) {

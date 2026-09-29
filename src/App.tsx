@@ -107,6 +107,7 @@ const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Hall
 const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens/DefiVedette')
   .then(m => ({ default: m.FinDuDefiVedette })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
+import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
@@ -488,6 +489,9 @@ function App() {
   // game/regarder.ts. Le canal de test garde sa porte : sans code, la version
   // de test ne montre rien, pas meme un championnat.
   const [regarder] = useState(() => !!demandeDeLUrl());
+  // Le tunnel des premiers pas, meme regle : le jeu, pas ses tableaux.
+  // La page d'un championnat (`?regarder=`) n'est pas le jeu non plus.
+  useEffect(() => { if (!stats && !file && !regarder) demarrerTunnel(); }, [stats, file, regarder]);
 
   if (file) return <FileRecuperations />;
   if (stats) return <Dashboard />;

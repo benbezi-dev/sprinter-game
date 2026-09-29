@@ -70,6 +70,7 @@ import {
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
+import { etapeConnue, noterEtape, lireTunnel } from './tunnel.js';
 
 /**
  * La porte du relais : ouverte.
@@ -3494,6 +3495,19 @@ async function servir(request, env, ctx, porteur) {
       return json({ ok: true });
     }
 
+    // Une etape du tunnel des premiers pas, la premiere fois qu'un appareil la
+    // franchit. Meme geste que /visit : rien de nominatif, et une etape deja
+    // notee est ignoree en silence. Voir tunnel.js.
+    if (url.pathname === '/etape' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, etape } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      if (!etapeConnue(etape)) return json({ error: 'etape inconnue' }, 400);
+      await noterEtape(env.DB, device_id, etape);
+      return json({ ok: true });
+    }
+
     // Tout ce que le tableau de bord affiche, en un seul aller-retour.
     //
     // Le contrat est double. Les trois blocs d'origine — `visites`, `scores`,
@@ -3974,6 +3988,9 @@ async function servir(request, env, ctx, porteur) {
         return { editions: t?.editions || 0, titres: t?.titres || 0 };
       }, null);
 
+      // --- le tunnel des premiers pas (table `tunnel`) --------------
+      const tunnel = await bloc(() => lireTunnel(DB, 30, now), null);
+
       return json({
         // --- contrat d'origine, inchange ---
         visites: {
@@ -3983,7 +4000,7 @@ async function servir(request, env, ctx, porteur) {
         scores: s || {},
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
-        parties, reprises, duels, joueurs, geo, relais, championnats,
+        parties, reprises, duels, joueurs, geo, relais, championnats, tunnel,
         releve_a: now,
       });
     }
