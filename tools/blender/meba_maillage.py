@@ -122,7 +122,8 @@ VISAGE = {
  'mouth-upperlip-volume-decr': 0.60,
     # (29/09, ses photos de face : la levre du bas fait 0,27 a 0,36 de la
     # bouche, le modele 0,14 — elle n'est ni amincie ni raccourcie)
-    'mouth-lowerlip-height-incr': 0.10, 'mouth-scale-vert-decr': 0.45, 'mouth-upperlip-height-decr': 0.30,
+    'mouth-lowerlip-height-incr': 0.45, 'mouth-lowerlip-volume-incr': 0.35,
+    'mouth-scale-vert-decr': 0.25, 'mouth-upperlip-height-decr': 0.50,
     '*-ear-flap-decr': 0.35,
 }
 
@@ -796,7 +797,7 @@ def ourlet(bm, h, passes=14):
 # Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
 # le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
 # gris clair sous les lampes.
-MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils', 'Meba_levres'}
+MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils', 'Meba_levres', 'Meba_levre_bas'}
 
 
 def materiau(nom, couleur, rugosite=0.6, metal=0.0):
@@ -830,11 +831,16 @@ CHEVEU = (30, 24, 22)
 MECHES = (230, 192, 118)
 OR = (226, 184, 72)
 SOURCIL = (18, 13, 12)
+# SA LEVRE DU BAS EST CLAIRE : brun rose, plus claire que sa peau sur les trois
+# photos de face (133,82,72 contre 112,59,47 sur la plus neutre), quand celle
+# du haut, sous la moustache, est sombre (69,42,38). Deux levres de la meme
+# teinte en faisaient un anneau.
+LEVRE_BAS = (96, 56, 52)
 BLEU_FRANCE = (38, 64, 168)
 ROUGE_FRANCE = (214, 40, 52)
 # ses levres sont sombres, proches de sa barbe : claires, cernees de noir,
 # elles se lisaient comme une bouche ouverte au fond d'un museau
-LEVRES = (40, 23, 21)
+LEVRES = (52, 30, 26)
 
 
 def chaussure(h, rig, cote):
@@ -1021,7 +1027,15 @@ def habiller(h, rig):
     # LA BARBE PLEINE : joues, menton, sous la machoire, moustache — pas les
     # levres.
     def barbe(c, n, d):
-        if d.get('lips', 0) > 0.25: return False
+        l = d.get('lips', 0)
+        if l > 0.30:
+            # LA MOUSTACHE DEBORDE SUR LE HAUT DE LA LEVRE, comme sur ses photos :
+            # le liseré de la levre du haut, et son rebord tourne vers le haut.
+            # Ce rebord prenait la lampe principale et sortait en deux taches
+            # claires au milieu du noir de la barbe.
+            if c.z <= fente(c.y) + 0.003 or c.x <= 0.09 or dedans(c, n):
+                return False
+            return l <= 0.65 or (n.z > 0.10 and c.z > fente(c.y) + 0.004)
         # le bas du visage, du menton a la moustache
         visage = p(d, 'head') > 0.4 and c.x > 0.045 and 1.405 < c.z < 1.476
         # les joues basses, jusqu'aux favoris, pas sous les yeux
@@ -1040,10 +1054,16 @@ def habiller(h, rig):
         dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02 and n.z < -0.25
                    and menton.z - 0.025 < c.z < menton.z + 0.030 and abs(c.y) < 0.070)
         # la moustache reste ; seul le dessous du nez est epargne
-        nez = c.z > zY - 0.030 and abs(c.y) < 0.021 and c.x > 0.112
+        # le DESSOUS du nez : des faces tournees vers le bas — a la hauteur
+        # seule, la regle prenait aussi le haut de la levre, tourne vers l'avant
+        nez = c.z > zY - 0.030 and abs(c.y) < 0.021 and c.x > 0.112 and n.z < -0.15
         # la moustache : entre le nez et la levre, sur toute la largeur de la bouche
         moustache = p(d, 'head') > 0.4 and c.x > 0.09 and abs(c.y) < 0.026 and zY - 0.052 < c.z < zY - 0.036
-        if moustache and d.get('lips', 0) < 0.25:
+        if moustache and d.get('lips', 0) <= 0.30:
+            return True
+        # le bord de la levre du haut, sous le nez : ni levre (moins de 0,30)
+        # ni barbe (le dessous du nez est epargne), il restait en peau claire
+        if 0.0 < d.get('lips', 0) <= 0.30 and c.z > fente(c.y) and c.x > 0.09:
             return True
         return (visage or joues or dessous) and not nez
 
@@ -1069,9 +1089,56 @@ def habiller(h, rig):
                 return True
         return False
 
-    # LES LEVRES, de leur couleur : plus sombres que la peau, satinees.
+    # LES LEVRES, en deux : celle du haut sombre et fine, celle du bas pleine
+    # et claire. Elles partagent le seuil de la barbe (0,30) : a 0,62, une
+    # fente de peau restait entre la moustache et la levre du haut.
+    # La ligne qui les separe passe par les commissures et par le creux de la
+    # bouche au centre, la ou la levre rentre le plus.
+    lv = [h.data.vertices[i].co.copy() for i, dd in enumerate(domh) if dd[2].get('lips', 0) > 0.30]
+    if lv:
+        yc = max(abs(q.y) for q in lv)
+        coins = [q for q in lv if abs(q.y) > yc - 0.003]
+        z_coin = sum(q.z for q in coins) / len(coins)
+        # LE CREUX DE LA BOUCHE, LU SUR LA SURFACE VUE DE FACE. Les sommets du
+        # groupe « lips » comprennent l'interieur de la bouche : le plus en
+        # retrait d'entre eux est derriere les levres, et la ligne tombait au
+        # tiers bas — la bouche entiere sortait sombre, un croissant rose en
+        # dessous. On tire donc des rayons de face au milieu de la bouche : le
+        # profil monte sur la levre du bas, marque un creux, remonte sur celle
+        # du haut ; la separation passe par ce creux.
+        from mathutils.bvhtree import BVHTree
+        arbre_l = BVHTree.FromPolygons([v.co.copy() for v in h.data.vertices],
+                                       [tuple(p.vertices) for p in h.data.polygons])
+        centre = [q for q in lv if abs(q.y) < 0.006]
+        z0 = min(q.z for q in centre) if centre else z_coin - 0.01
+        z1 = max(q.z for q in centre) if centre else z_coin + 0.01
+        prof = []
+        z = z0 - 0.002
+        while z <= z1 + 0.006:
+            hit = arbre_l.ray_cast(Vector((0.4, 0.0, z)), Vector((-1.0, 0.0, 0.0)))
+            if hit[0] is not None:
+                prof.append((z, hit[0].x))
+            z += 0.0005
+        creux = [prof[i] for i in range(1, len(prof) - 1)
+                 if prof[i][1] < prof[i - 1][1] and prof[i][1] <= prof[i + 1][1]
+                 and prof[i][0] > z0 + 0.004]
+        z_creux = min(creux, key=lambda t: t[1])[0] if creux else (z0 + z1) / 2
+    else:
+        yc, z_coin, z_creux = 0.025, 1.45, 1.45
+    def fente(y):
+        t = min(1.0, (abs(y) / max(yc, 1e-3)) ** 2)
+        return z_creux + (z_coin - z_creux) * t
+    # PAS LEUR FACE INTERIEURE. Au bord de la levre du haut, la peau est une
+    # lame d'un millimetre et demi : devant, la levre ; derriere, tournee vers
+    # les dents, sa face interieure. Prises ensemble dans la coque, leurs
+    # normales s'annulaient aux sommets communs, la coque s'y decalait vers
+    # l'interieur, et deux taches de peau claire restaient sous la moustache.
+    # La face interieure est dans la bouche : on la laisse.
+    dedans = lambda c, n: n.x < -0.3 and c.x > 0.105
     def levres(c, n, d):
-        return d.get('lips', 0) > 0.62
+        return d.get('lips', 0) > 0.30 and c.z >= fente(c.y) and not dedans(c, n)
+    def levre_bas(c, n, d):
+        return d.get('lips', 0) > 0.30 and c.z < fente(c.y) and not dedans(c, n)
 
     # LE MAILLOT DE L'EQUIPE DE FRANCE, sans la marque : blanc, les epaules et
     # les bretelles bleues, un filet rouge sous le bras.
@@ -1087,7 +1154,10 @@ def habiller(h, rig):
         # sans fondu : sur un arc de un centimetre, un anneau fondu vers la
         # peau le rendait brun, dessine au crayon
         ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 0),
-        ('Meba_levres', levres, 0.0002, LEVRES, 0.62, 0, 3),
+        # sans fondu : entre les deux levres, un fondu vers la peau tracait un
+        # trait clair sur la bouche
+        ('Meba_levres', levres, 0.0002, LEVRES, 0.62),
+        ('Meba_levre_bas', levre_bas, 0.0008, LEVRE_BAS, 0.45),
         # le maillot passe PAR-DESSUS le short : plus bas et plus epais que
         # lui la ou ils se croisent, sans quoi le short ressortait en
         # languettes a travers l'ourlet
@@ -1258,14 +1328,20 @@ def vanilles(h, rig, n=150, graine=7, courtes=110):
         # UNE TOUFFE QUI MONTE ET PART EN ARRIERE, pas un oursin : sur ses
         # photos, les vanilles du sommet se dressent en se couchant vers la
         # nuque, celles du bord retombent sur les cotes du bandeau.
-        L = 0.055 - 0.017 * bord + rnd.uniform(-0.005, 0.005)
+        # COURTES (29/09, a sa demande) : sur ses photos, ses cheveux font trois
+        # centimetres au sommet et moins sur les cotes ; a cinq ou six, la
+        # touffe doublait la hauteur de sa tete.
+        L = 0.030 - 0.012 * bord + rnd.uniform(-0.003, 0.003)
         if courte:
-            L = rnd.uniform(0.012, 0.020)
+            L = rnd.uniform(0.008, 0.014)
         d = (nor * (1.0 - 0.30 * bord) + Vector((-0.55, 0, 0.10))
              + rad.normalized() * (0.10 + 0.30 * bord)
              + Vector((rnd.uniform(-.18, .18), rnd.uniform(-.18, .18), rnd.uniform(0, .12)))).normalized()
         # un axe qui s'incurve en retombant, d'autant plus qu'on est au bord
-        axe = [loc + d * (L * t) + Vector((-0.004 * t, 0, -(0.010 + 0.022 * bord) * t * t)) for t in (0, .25, .5, .75, 1)]
+        # la retombee suit la longueur : fixe, elle couchait les vanilles courtes
+        # a plat sur le crane
+        k = L / 0.050
+        axe = [loc + d * (L * t) + Vector((-0.004 * t * k, 0, -(0.010 + 0.022 * bord) * t * t * k)) for t in (0, .25, .5, .75, 1)]
         u = d.orthogonal().normalized(); w = d.cross(u).normalized()
         tours, rh = rnd.uniform(2.0, 3.0), 0.0026
         for phase in (0.0, math.pi):

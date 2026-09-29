@@ -133,7 +133,12 @@ function preparer(racineGltf: THREE.Object3D): Modele {
       // elle tombait presque au noir, bien plus sombre que sa doublure en
       // tubes. On la remonte ici, au chargement, sans toucher aux portraits.
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
-        if (m && m.name === 'Meba_peau' && m.color) m.color.multiplyScalar(ECLAIRCIR_PEAU);
+        // et les levres avec elle : la levre du bas est plus claire que la
+        // peau, celle du haut plus sombre — eclaircie seule, la peau passait
+        // devant les deux
+        if (m && (m.name === 'Meba_peau' || m.name.startsWith('Meba_levre')) && m.color) {
+          m.color.multiplyScalar(ECLAIRCIR_PEAU);
+        }
       }
     }
   });
