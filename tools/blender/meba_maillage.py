@@ -434,13 +434,175 @@ def poser(rig, angles, hanche=(0.0, 0.0, 0.0)):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
+# --- SON VISAGE, RELEVE SUR SES PHOTOS -----------------------------------------
+# Les cibles de MakeHuman (VISAGE) reglent des proportions — largeur du nez,
+# hauteur du front — pas la forme des volumes : a ±10 % de ses mesures, le
+# visage ne lui ressemblait toujours pas. La forme vient donc de ses photos
+# (29/09/2026 : deux de face, un selfie, un profil gauche, deux en pied),
+# ajustees dans KeenTools FaceBuilder et figees, en expression neutre, dans
+# tools/blender/meba/visage-facebuilder.ply. Les photos ne sont pas dans le
+# depot : seul le maillage l'est.
+#
+# Le transfert : la tete FaceBuilder est calee sur celle de MakeHuman (meme
+# orientation, puis un recalage iteratif rotation-echelle-translation sur la
+# face), puis chaque sommet du visage est tire vers sa surface. Le poids du
+# tirage s'eteint vers les oreilles, sous le menton et vers le crane — la ou
+# les photos ne disent rien et ou la coiffure et le cou prennent le relais.
+
+VISAGE_FB = 'tools/blender/meba/visage-facebuilder.ply'
+FACE_PLEINE, FACE_NULLE = math.radians(62), math.radians(88)   # du nez vers l'oreille
+TIRAGE_MAX = 0.03                                              # m : au-dela, c'est une erreur
+
+
+def _lisse(x, a, b):
+    t = min(1.0, max(0.0, (x - a) / (b - a)))
+    return t * t * (3 - 2 * t)
+
+
+def _similarite(Q, P):
+    """s, R, t minimisant |s R q + t - p| (Umeyama)."""
+    import numpy as np
+    mq, mp = Q.mean(0), P.mean(0)
+    A, B = Q - mq, P - mp
+    U, S, Vt = np.linalg.svd(B.T @ A / len(Q))
+    D = np.diag([1.0, 1.0, np.sign(np.linalg.det(U @ Vt))])
+    R = U @ D @ Vt
+    s = float(np.trace(np.diag(S) @ D) / ((A ** 2).sum() / len(Q)))
+    return s, R, mp - s * R @ mq
+
+
+def visage_photo(h, chemin=None, iterations=25):
+    """Tire le visage de MakeHuman vers celui des photos. Renvoie l'ecart moyen (m).
+
+    MEBA_VISAGE_FB=... remplace le chemin (un chemin absent : visage MakeHuman,
+    pour un rendu « avant »)."""
+    import numpy as np
+    from mathutils.bvhtree import BVHTree
+    chemin = chemin or os.environ.get('MEBA_VISAGE_FB', VISAGE_FB)
+    if not os.path.exists(chemin):
+        print('visage_photo : pas de', chemin, '— visage MakeHuman garde')
+        return None
+    avant = set(bpy.data.objects)
+    bpy.ops.wm.ply_import(filepath=chemin)
+    F = next(o for o in bpy.data.objects if o not in avant)
+    n = len(F.data.vertices)
+    VF = np.empty(n * 3); F.data.vertices.foreach_get('co', VF); VF = VF.reshape(-1, 3)
+    polys = [tuple(p.vertices) for p in F.data.polygons]
+    bpy.data.objects.remove(F, do_unlink=True)
+    # FaceBuilder regarde -y, le coureur +x : un quart de tour autour de z
+    VF = VF @ np.array([[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+
+    me = h.data
+    VM = np.empty(len(me.vertices) * 3); me.vertices.foreach_get('co', VM); VM = VM.reshape(-1, 3)
+    gi = h.vertex_groups['head'].index
+    tete = np.array([any(g.group == gi and g.weight > 0.5 for g in v.groups) for v in me.vertices])
+    T = VM[tete]
+    c = np.array([(T[:, 0].min() + T[:, 0].max()) / 2, T[:, 1].mean(), 0.0])
+    ang = np.abs(np.arctan2(VM[:, 1] - c[1], VM[:, 0] - c[0]))
+    nez_m = VM[np.where(tete & (ang < 0.35))[0][np.argmax(VM[tete & (ang < 0.35), 0])]]
+    haut_m = T[:, 2].max()
+    menton_m = VM[tete & (ang < 0.45), 2].min()
+    gl = h.vertex_groups.get('lips')
+    li = gl.index if gl else -1
+    levres = np.array([max([g.weight for g in v.groups if g.group == li] or [0.0]) for v in me.vertices])
+    bouche = VM[levres > 0.5].mean(0) if (levres > 0.5).any() else nez_m - np.array([0.0, 0.0, 0.035])
+
+    # premier calage : les nez ensemble, la hauteur nez-sommet du crane egale
+    nez_f = VF[np.argmax(VF[:, 0])]
+    s0 = (haut_m - nez_m[2]) / (VF[:, 2].max() - nez_f[2])
+    VF = (VF - nez_f) * s0 + nez_m
+
+    # la face de MakeHuman, du menton au front, qui sert de cible au recalage
+    # (sans la barbe : son contour n'est pas celui de la machoire, voir poids())
+    zone = tete & (ang < FACE_PLEINE) & (VM[:, 2] > bouche[2] - 0.005) & (VM[:, 2] < haut_m - 0.045)
+    P = VM[zone]
+    for _ in range(iterations):
+        bvh = BVHTree.FromPolygons([tuple(v) for v in VF], polys)
+        Q = np.array([bvh.find_nearest(Vector(p))[0] for p in P])
+        d = np.linalg.norm(Q - P, axis=1)
+        garde = d < 3 * np.median(d) + 1e-4
+        s, R, t = _similarite(Q[garde], P[garde])
+        VF = (s * (R @ VF.T)).T + t
+    print(f'visage_photo : recalage, ecart median {np.median(d) * 1000:.1f} mm sur {int(garde.sum())} points')
+    bvh = BVHTree.FromPolygons([tuple(v) for v in VF], polys)
+
+    # LE POIDS DU TIRAGE. Plein sur la face, du front a la bouche ; il s'eteint
+    # vers les oreilles, vers le sommet du crane (bandeau et cheveux), et SOUS
+    # LA BOUCHE : sur ses photos, le contour du bas du visage est celui de sa
+    # barbe, pas celui de sa machoire — le tirer la ferait porter deux fois,
+    # par la peau puis par la coque de la barbe. Les levres, elles, suivent.
+    def poids(i):
+        p = VM[i]
+        wi = (1 - _lisse(ang[i], FACE_PLEINE, FACE_NULLE))
+        wi *= 1 - _lisse(p[2], haut_m - 0.05, haut_m - 0.02)
+        bas = _lisse(p[2], bouche[2] - 0.022, bouche[2] + 0.004)
+        joue = 1 - _lisse(abs(p[1] - c[1]), 0.035, 0.050) * (1 - _lisse(p[2], bouche[2] + 0.005, bouche[2] + 0.030))
+        wi *= min(bas, joue)
+        return max(wi, levres[i] * (1 - _lisse(ang[i], FACE_PLEINE, FACE_NULLE)))
+
+    # LES ZONES QUI NE VONT PAS CHERCHER LA SURFACE : les yeux (la tete de
+    # FaceBuilder est pleine devant le globe — la paupiere s'y collait et l'oeil
+    # disparaissait) et tout ce qui regarde vers l'interieur (bouche, narines :
+    # tires vers la surface la plus proche, ils sortaient en crocs). Elles
+    # suivent le deplacement de leur voisinage, interpole.
+    yeux_c = [e for e, _r in orbites(h)]
+    nrm = np.empty(len(VM) * 3); me.vertices.foreach_get('normal', nrm); nrm = nrm.reshape(-1, 3)
+    centre = np.array([c[0], c[1], nez_m[2]])
+    idx = np.where(tete)[0]
+    dep = np.zeros_like(VM)
+    w = np.zeros(len(VM))
+    libre = np.zeros(len(VM), bool)
+    for i in idx:
+        wi = poids(i)
+        if wi <= 0:
+            continue
+        p = VM[i]
+        r = p - centre
+        dedans = float(np.dot(nrm[i], r / (np.linalg.norm(r) + 1e-9))) < 0.3
+        oeil = any(np.hypot(p[1] - e.y, p[2] - e.z) < 0.021 and p[0] > e.x - 0.03 for e in yeux_c)
+        w[i] = wi
+        if dedans or oeil:
+            libre[i] = True
+            continue
+        q = bvh.find_nearest(Vector(p))[0]
+        v = np.array(q) - p if q is not None else None
+        if v is None or np.linalg.norm(v) > TIRAGE_MAX:
+            libre[i] = True
+            continue
+        dep[i] = v
+    voisins = [[] for _ in range(len(VM))]
+    for e in me.edges:
+        a, b = e.vertices
+        voisins[a].append(b); voisins[b].append(a)
+    # les zones libres, par moyenne de leurs voisins, jusqu'a l'equilibre
+    L = [i for i in idx if libre[i] and voisins[i]]
+    for _ in range(60):
+        for i in L:
+            dep[i] = dep[voisins[i]].mean(0)
+    # trois passes de lissage sur le reste : un sommet ne part pas seul
+    for _ in range(3):
+        nv = dep.copy()
+        for i in idx:
+            if w[i] > 0 and voisins[i]:
+                nv[i] = 0.5 * dep[i] + 0.5 * dep[voisins[i]].mean(0)
+        dep = nv
+    VM2 = VM + dep * w[:, None]
+    me.vertices.foreach_set('co', VM2.ravel())
+    me.update()
+    ecart = float(np.mean(np.linalg.norm(dep[w > 0.5], axis=1))) if (w > 0.5).any() else 0.0
+    print(f'visage_photo : echelle {s0:.4f}, {int((w > 0).sum())} sommets tires, '
+          f'ecart moyen {ecart * 1000:.1f} mm')
+    return ecart
+
+
 def corps():
-    """Toute la chaine du corps : humain, repere, calage, repos fige."""
+    """Toute la chaine du corps : humain, repere, calage, repos fige, visage."""
     sc = scene_neuve()
     h, rig = humain()
     mise_en_repere(h, rig)
     herite = caler(rig, cibles(rig))
     figer(h, rig, {b.name: 'FULL' for b in rig.data.bones})
+    visage_photo(h)
     return sc, h, rig
 
 
