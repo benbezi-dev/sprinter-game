@@ -744,15 +744,34 @@
       padAmp: 0.10, arp: 8, motif: [0, 1, 2, 3, 2, 1, 2, 3], arpOct: 4,
       arpAmp: 0.07, swing: 0.18, envol: 0.05, drone: 0,
     },
-    // LES QUATRE PALIERS DE COURSE JOUENT LA MUSIQUE D'AUREL MANGA — celle
-    // du teaser « les haies sont ouvertes », voulue pour tout Hurdlers
-    // (buildAurel). Chaque palier garde SON tempo : 118, 128, 138, 148. La
-    // montee d'une etape a l'autre passe par le tempo et la densite, jamais
-    // par un autre morceau — on reconnait la meme musique qui s'emballe.
-    h_race0: { style: 'aurel', bpm: 118, niveau: 0 },   // etapes 1 a 3
-    h_race1: { style: 'aurel', bpm: 128, niveau: 1 },   // championnat du monde
-    h_race2: { style: 'aurel', bpm: 138, niveau: 2 },   // jeux mondiaux
-    h_race3: { style: 'aurel', bpm: 148, niveau: 3 },   // inter galactique
+    h_race0: {                              // etapes 1 a 3
+      bpm: 118, cle: 5, prog: [[0, ADD9], [-2, SUS2], [3, MAJ7], [-5, SUS4]],
+      kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
+      bassPat: [0, 12, 0, 7, 0, 12, 5, 7], bassAmp: 0.30,
+      padAmp: 0.08, arp: 8, motif: [0, 1, 2, 1, 0, 1, 2, 3], arpOct: 5,
+      arpAmp: 0.09, swing: 0.22, envol: 0.10, drone: 0,
+    },
+    h_race1: {                              // championnat du monde
+      bpm: 128, cle: 5, prog: [[0, MIN9], [-2, SUS2], [-4, ADD9], [-5, SUS4]],
+      kick: [0, 1, 2], snare: [1, 2.5], hats: 8,
+      bassPat: [0, 12, 0, 7, 0, 12, 3, 7], bassAmp: 0.34,
+      padAmp: 0.085, arp: 8, motif: [0, 2, 1, 3, 0, 2, 1, 3], arpOct: 5,
+      arpAmp: 0.10, swing: 0.16, envol: 0.12, drone: 0.06,
+    },
+    h_race2: {                              // jeux mondiaux
+      bpm: 138, cle: 5, prog: [[0, MIN9], [1, ADD9], [-4, MAJ7], [-5, SUS4]],
+      kick: [0, 0.5, 1, 2], snare: [1, 2.5, 2.75], hats: 16,
+      bassPat: [0, 0, 12, 7, 0, 0, 12, 10], bassAmp: 0.38,
+      padAmp: 0.09, arp: 12, motif: [0, 1, 2, 3, 2, 1], arpOct: 5,
+      arpAmp: 0.11, swing: 0, envol: 0.14, drone: 0.10,
+    },
+    h_race3: {                              // inter galactique
+      bpm: 148, cle: 5, prog: [[0, SUS4], [-1, SUS4], [-2, SUS2], [-3, ADD9]],
+      kick: [0, 0.5, 1, 1.5, 2], snare: [1, 2.5, 2.75], hats: 16,
+      bassPat: [0, 0, 6, 0, 12, 0, 6, 11], bassAmp: 0.42,
+      padAmp: 0.095, arp: 16, motif: [0, 1, 2, 3, 3, 2, 1, 0], arpOct: 5,
+      arpAmp: 0.12, swing: 0, envol: 0.16, drone: 0.14,
+    },
   };
 
   // LES MORCEAUX DE JUMPER, sur le meme metier que ceux de Hurdlers mais avec
@@ -1009,115 +1028,6 @@
         this.envol(d, t + beat * 3, beat * 0.9, F(root + haut, 3), F(root + haut, 5), cfg.envol);
         if (cfg.drone > 0) this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25);
       });
-      return this.norm(d);
-    },
-    // LA MUSIQUE D'AUREL MANGA, synthetisee ici comme toutes les autres.
-    //
-    // C'est le son du teaser des haies (tools/musique/defi-aurel.py), refait
-    // a l'echantillon pres avec les memes recettes : une grosse caisse dont la
-    // hauteur plonge de 205 a 45 Hz, une caisse claire de bruit ou l'on a
-    // retire le grave, un charleston de bruit derive deux fois, une basse de
-    // deux scies desaccordees, filtree puis saturee, et une montee de bruit
-    // qui s'ouvre avant de retomber sur l'impact du premier temps.
-    //
-    // HUIT MESURES, qui bouclent. La, la, do, sol, deux fois ; la derniere
-    // mesure monte (roulement + souffle) et retombe sur l'impact du debut.
-    //
-    // LE TEMPO EST CELUI DU PALIER, et rien d'autre ne le fixe : toutes les
-    // durees partent de `beat`. Le niveau n'ajoute que de la densite —
-    // charleston ouvert, doubles croches, grosse caisse fantome, bourdon.
-    buildAurel(cfg) {
-      const sr = this.ctx.sampleRate, nv = cfg.niveau || 0;
-      const beat = 60 / cfg.bpm, bar = beat * 4, MESURES = 8, tot = bar * MESURES;
-      const d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
-      const ch = d.getChannelData(0), N = ch.length;
-      let graine = 7 + cfg.bpm;
-      const alea = () => { graine = (Math.imul(1103515245, graine) + 12345) & 0x7fffffff; return graine / 0x3fffffff - 1; };
-      // Tout ce qui deborde de la fin revient au debut : la boucle se recolle.
-      const ecrire = (i, v) => { ch[((i % N) + N) % N] += v; };
-
-      const grosse = (t, gain) => {
-        const i0 = (t * sr) | 0, n = (0.45 * sr) | 0; let ph = 0;
-        for (let i = 0; i < n; i++) {
-          const q = i / sr;
-          ph += (45 + 160 * Math.exp(-q / 0.035)) / sr;
-          let v = Math.sin(TAU * ph) * Math.exp(-q / 0.14);
-          if (q < 0.004) v += 0.3 * alea() * Math.exp(-q / 0.0005);
-          ecrire(i0 + i, gain * Math.tanh(v * 2.2));
-        }
-      };
-      const claire = (t, gain) => {
-        const i0 = (t * sr) | 0, n = (0.3 * sr) | 0; let bas = 0;
-        for (let i = 0; i < n; i++) {
-          const q = i / sr, b = alea();
-          bas += (b - bas) * 0.18;                       // on retire le grave
-          const e = Math.exp(-q / 0.09) * Math.min(1, q / 0.001);
-          ecrire(i0 + i, gain * ((b - bas) * e * 0.7 + Math.sin(TAU * 190 * q) * Math.exp(-q / 0.05) * 0.6));
-        }
-      };
-      const charleston = (t, ouvert, gain) => {
-        const i0 = (t * sr) | 0, n = (0.12 * sr) | 0; let p1 = 0, p2 = 0;
-        for (let i = 0; i < n; i++) {
-          const x = alea(), d1 = x - p1; p1 = x; const d2 = d1 - p2; p2 = d1;
-          ecrire(i0 + i, gain * 0.12 * d2 * Math.exp(-(i / sr) / (ouvert ? 0.05 : 0.012)));
-        }
-      };
-      const basse = (t, f, dur, gain) => {
-        const i0 = (t * sr) | 0, n = (dur * sr) | 0; let lp = 0;
-        const k = 1 - Math.exp(-TAU * 1300 / sr);
-        for (let i = 0; i < n; i++) {
-          const q = i / sr;
-          const scie = 2 * ((q * f) % 1) - 1 + 0.5 * (2 * ((q * f * 1.005) % 1) - 1);
-          lp += (scie - lp) * k;
-          const e = Math.min(1, q / 0.005) * Math.exp(-q / 0.25);
-          ecrire(i0 + i, gain * 0.5 * Math.tanh(lp * e * 1.6));
-        }
-      };
-      const montee = (t, dur, gain) => {
-        const i0 = (t * sr) | 0, n = (dur * sr) | 0; let lp = 0, ph = 0;
-        for (let i = 0; i < n; i++) {
-          const u = i / n;
-          lp += (alea() - lp) * (0.02 + 0.5 * u * u);    // le filtre s'ouvre
-          ph += 200 * Math.pow(2, u * 3.5) / sr;
-          ecrire(i0 + i, gain * (lp * 1.4 + 0.25 * Math.sin(TAU * ph)) * u * u);
-        }
-      };
-      const impact = (t, gain) => {
-        const i0 = (t * sr) | 0, n = (1.6 * sr) | 0; let ph = 0, prev = 0;
-        for (let i = 0; i < n; i++) {
-          const q = i / sr;
-          ph += (30 + 90 * Math.exp(-q / 0.08)) / sr;
-          const x = alea(), crash = (x - prev) * 0.35; prev = x;
-          ecrire(i0 + i, gain * Math.tanh((Math.sin(TAU * ph) * Math.exp(-q / 0.6) * 1.4 + crash * Math.exp(-q / 0.5)) * 1.5));
-        }
-      };
-
-      const RACINES = [55, 55, 65.41, 49];              // la, la, do, sol
-      impact(0, 0.5);
-      for (let m = 0; m < MESURES; m++) {
-        const t0 = m * bar, f = RACINES[m % 4], fin = m === MESURES - 1;
-        for (let tp = 0; tp < 4; tp++) {
-          const t = t0 + tp * beat;
-          grosse(t, 1);
-          if (tp % 2) claire(t, 0.75);
-          const sub = nv >= 2 ? 4 : 2;                     // croches, puis doubles
-          for (let h = 0; h < sub; h++) {
-            const ouvert = nv >= 1 && tp === 3 && h === sub / 2;
-            charleston(t + h * beat / sub, ouvert, h % 2 && sub === 4 ? 0.6 : 1);
-          }
-          if (nv >= 2 && tp === 2) grosse(t + beat * 0.75, 0.55);   // grosse caisse fantome
-          const div = nv >= 3 ? 4 : 2;
-          for (let e = 0; e < div; e++) basse(t + e * beat / div, f * (e % 2 ? 2 : 1), beat / div, 0.8);
-        }
-        if (nv >= 1) basse(t0, f / 2, bar * 0.95, 0.12 + 0.04 * nv);  // bourdon sous la basse
-      }
-      // La derniere mesure monte, et le roulement retombe sur le premier temps.
-      const tf = (MESURES - 1) * bar;
-      montee(tf, bar, 0.3 + 0.05 * nv);
-      const coups = nv >= 2 ? 16 : 8;
-      for (let c = 0; c < coups; c++) claire(tf + bar - (coups - c) * beat / 4, 0.25 + 0.5 * c / coups);
-
-      for (let i = 0; i < N; i++) ch[i] = Math.tanh(ch[i] * 0.9);
       return this.norm(d);
     },
     /**
@@ -1640,10 +1550,7 @@
       }
       const h = 'h_' + name;
       if (G.jeu !== 'hurdlers' || !MUSIQUES_HAIES[h]) return name;
-      if (!this.buf[h]) {
-        const cfg = MUSIQUES_HAIES[h];
-        this.buf[h] = cfg.style === 'aurel' ? this.buildAurel(cfg) : this.buildHaies(cfg);
-      }
+      if (!this.buf[h]) this.buf[h] = this.buildHaies(MUSIQUES_HAIES[h]);
       return h;
     },
     music(name) {
