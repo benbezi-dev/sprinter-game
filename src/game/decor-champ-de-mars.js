@@ -34,6 +34,21 @@
     : 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
   const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
   const toile = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  // LES TUILES PEINTES A TROIS PIXELS PAR POINT. La tour, les facades et les
+  // ifs dessines a la main prennent le relais des pieces Blender en virage
+  // (voir vueDesRendus) : cuits pour deux pixels par point, ils s'y
+  // affichaient agrandis, flous. On les cuit deux fois plus fins quand la
+  // toile est a trois — la meme regle que les tuiles de sprinter-app.js
+  // (finesseTuile) —, le dessin gardant ses coordonnees d'origine.
+  const finesse = () => {
+    const A = root.SprinterApp;
+    return A && A.G && A.G.dpr > 2 ? 2 : 1;
+  };
+  const toileFine = (w, h, k) => {
+    const cv = toile(Math.round(w * k), Math.round(h * k)), c = cv.getContext('2d');
+    c.scale(k, k);
+    return [cv, c];
+  };
 
   // -------------------------------------------------------------------
   // LES PIECES RENDUES DANS BLENDER (tools/blender/decors/champ-de-mars.py).
@@ -118,8 +133,9 @@
 
   let _tour = null;
   function tourTile(th) {
-    if (_tour && _tour.th === th) return _tour.cv;
-    const cv = toile(TW, TH), c = cv.getContext('2d');
+    const kf = finesse();
+    if (_tour && _tour.th === th && _tour.k === kf) return _tour.cv;
+    const [cv, c] = toileFine(TW, TH, kf);
     const X = TW / 2;
     const fer = th.tour || [132, 104, 80];
     const clair = mix(fer, [238, 222, 196], 0.30), sombre = mix(fer, [30, 26, 30], 0.35);
@@ -218,7 +234,7 @@
     c.fillStyle = hex(sombre); c.fillRect(X - 4, 6, 8, yDe(0.975) - 6);
     c.fillStyle = hex(ROUGE); c.fillRect(X - 5, 4, 10, 10);
 
-    _tour = { th, cv };
+    _tour = { th, cv, k: kf };
     return cv;
   }
 
@@ -226,10 +242,11 @@
   // LES FACADES DU SEPTIEME : pierre creme, balcons filants, zinc bleu-gris.
   // -------------------------------------------------------------------
   const FW = 640, FH = 300;
-  const facades = [];
+  const facades = {};
   function facadeTile(th, v) {
-    if (facades[v]) return facades[v];
-    const cv = toile(FW, FH), c = cv.getContext('2d');
+    const kf = finesse(), cle = v + '|' + kf;
+    if (facades[cle]) return facades[cle];
+    const [cv, c] = toileFine(FW, FH, kf);
     const pierre = th.pierre || [230, 214, 184], zinc = th.zinc || [112, 128, 150];
     const toitH = 78, corniche = FH - 200;
     // trois immeubles mitoyens de hauteurs voisines
@@ -268,17 +285,18 @@
       c.fillStyle = hex(mix(ton, [120, 100, 80], 0.35)); c.fillRect(x0, top - 4, x1 - x0, 6);
       c.fillStyle = 'rgba(40,30,20,0.18)'; c.fillRect(x1 - 3, top, 3, FH - top);
     }
-    facades[v] = cv;
+    facades[cle] = cv;
     return cv;
   }
 
   // -------------------------------------------------------------------
   // L'IF TAILLE EN CONE — les sentinelles des parterres.
   // -------------------------------------------------------------------
-  const ifs = [];
+  const ifs = {};
   function ifTile(th, v) {
-    if (ifs[v]) return ifs[v];
-    const cv = toile(120, 300), c = cv.getContext('2d');
+    const kf = finesse(), cle = v + '|' + kf;
+    if (ifs[cle]) return ifs[cle];
+    const [cv, c] = toileFine(120, 300, kf);
     const f = th.ifFeuille || [36, 96, 44];
     const w = 44 + v * 6;
     c.fillStyle = hex(mix(f, [0, 0, 0], 0.15));
@@ -287,7 +305,7 @@
     c.fillStyle = hex(mix(f, [150, 200, 90], 0.25));
     c.beginPath(); c.moveTo(60, 8); c.lineTo(60 - w, 286); c.lineTo(58, 286); c.closePath(); c.fill();
     c.fillStyle = hex([96, 70, 48]); c.fillRect(54, 284, 12, 14);
-    ifs[v] = cv;
+    ifs[cle] = cv;
     return cv;
   }
 
@@ -424,7 +442,9 @@
       const part = (i % 4) / 4, sw = FW / 4, hp = hF * m;
       ctx.save();
       ctx.transform((b[0] - a[0]) / sw, (b[1] - a[1]) / sw, 0, hp / FH, a[0], a[1] - hp);
-      ctx.drawImage(tuile, part * FW, 0, sw + 0.8, FH, 0, 0, sw + 0.8, FH);
+      // le rectangle source est en pixels de la tuile, qui peut etre cuite fine
+      const kt = tuile.width / FW;
+      ctx.drawImage(tuile, part * FW * kt, 0, (sw + 0.8) * kt, FH * kt, 0, 0, sw + 0.8, FH);
       ctx.restore();
     }
 

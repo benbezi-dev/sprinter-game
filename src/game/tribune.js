@@ -35,8 +35,9 @@
   // (voir dpr() dans rendu-premium.js). `ppm` : la densite des images
   // composees, celle de l'atlas — la copie reste exacte, pixel pour pixel.
   const JEUX = {
-    ordinaire: { man: () => root.SprinterTribuneManifeste, dossier: '/decors/tribune/', ppm: 80 },
-    ultra: { man: () => root.SprinterTribuneManifesteUltra, dossier: '/decors-ultra/tribune/', ppm: 120 },
+    ordinaire: { man: () => root.SprinterTribuneManifeste, dossier: '/decors/tribune/', ppm: 80, ppmDrapeau: 64 },
+    ultra: { man: () => root.SprinterTribuneManifesteUltra, dossier: '/decors-ultra/tribune/', ppm: 120,
+             ppmDrapeau: 128 },
   };
   let jeu = JEUX.ordinaire;
   const MAN = () => jeu.man();
@@ -253,13 +254,16 @@
   // tribune se leve, il y en a des dizaines dans le cadre. On cuit donc une
   // fois, par pays, douze moments de l'ondulation, et on les colle : l'onde
   // avance d'une image sur douze, a peu pres une par dixieme de seconde.
-  const NF_DRAPEAU = 12, PPM_DRAPEAU = 64, MAX_DRAPEAUX = 40;
+  // Cuit a la densite de l'atlas en service (voir JEUX) : a soixante-quatre
+  // pixels par metre, sur une toile a trois pixels par point, le drapeau
+  // s'affichait agrandi deux fois, flou au milieu d'un public net.
+  const NF_DRAPEAU = 12, MAX_DRAPEAUX = 40;
   const spritesDrapeau = new Map();
   function spriteDrapeau(k, f) {
-    const cle = k * NF_DRAPEAU + f;
+    const m = jeu.ppmDrapeau, marge = 2;
+    const cle = (m * 64 + k) * NF_DRAPEAU + f;
     let e = spritesDrapeau.get(cle);
     if (e) return e;
-    const m = PPM_DRAPEAU, marge = 2;
     const lw = 0.8 * m, lh = 0.52 * m, hampe = 0.95 * m;
     // le pied de la hampe, la ou la main la tient
     const x0 = marge + 1, y0 = Math.ceil(marge + lh * 0.14 + 1 + hampe);
@@ -267,7 +271,7 @@
     cv.width = Math.ceil(x0 + lw + 1 + marge);
     cv.height = y0 + marge;
     drapeau(cv.getContext('2d'), x0, y0, m, 0, f * Math.PI * 2 / NF_DRAPEAU, k);
-    e = { cv, x0, y0 };
+    e = { cv, x0, y0, m };
     spritesDrapeau.set(cle, e);
     return e;
   }
@@ -596,7 +600,7 @@
     // derriere.
     const R = root.RenduPremium;
     const avecDrapeaux = densite >= 0.6 && !(R && R.niveau < R.MOYEN);
-    const m = api.scaleM(), sd = m / PPM_DRAPEAU, TOUR = Math.PI * 2;
+    const m = api.scaleM(), TOUR = Math.PI * 2;
     let drapeaux = 0;
     // du plus loin au plus pres
     items.sort((p, q) => q[0] - p[0]);
@@ -615,6 +619,7 @@
         const onde = ((t * 6 + (h % 628) / 100) % TOUR + TOUR) % TOUR;
         const e = spriteDrapeau((h >>> 11) % DRAPEAUX.length,
                                 Math.floor(onde / TOUR * NF_DRAPEAU) % NF_DRAPEAU);
+        const sd = m / e.m;
         ctx.drawImage(e.cv, it[1] + 0.2 * m - e.x0 * sd, it[2] - 1.9 * m - e.y0 * sd,
                       e.cv.width * sd, e.cv.height * sd);
       }
