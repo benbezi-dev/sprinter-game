@@ -97,12 +97,15 @@ CIBLES = {
 VISAGE = {
     'head-oval': 0.65, 'head-scale-vert-incr': 0.22, 'head-scale-horiz-decr': 0.08,
     'forehead-scale-vert-incr': 0.35, 'forehead-nubian-incr': 0.30,
-    '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.55,
-    'chin-height-incr': 0.45, 'chin-width-decr': 0.18, 'chin-prominent-incr': 0.20,
+    '*-cheek-bones-incr': 0.55, '*-cheek-volume-decr': 0.80,
+    'chin-height-incr': 0.45, 'chin-width-decr': 0.50, 'chin-prominent-incr': 0.20,
+    # SA MACHOIRE S'AFFINE VERS LE MENTON (30/09) : de face, le bas du visage
+    # faisait un trapeze aux angles carres ; le sien est un ovale en V
+    'chin-bones-decr': 0.95, 'chin-triangle': 0.60, 'head-invertedtriangular': 0.50,
     # LE BAS DU VISAGE AVANCAIT EN MUSEAU : la base « african » de MakeHuman
     # est prognathe, pas lui — de trois quarts, sa bouche reste dans le plan
     # des pommettes. Et un visage sec, de sprinteur, pas les joues pleines.
-    'chin-prognathism-decr': 0.70, 'head-fat-decr': 0.45,
+    'chin-prognathism-decr': 0.70, 'head-fat-decr': 0.75,
     '*-eye-height2-decr': 0.25, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
     '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
     # mesure (tools/biomeca/visage.py) : ses sourcils sont hauts sur l'oeil
@@ -1007,7 +1010,9 @@ def habiller(h, rig):
         ay = abs(co.y)
         # la joue : deux millimetres a sa ligne, sept vers la machoire
         descente = lisse(max(0.0, min(1.0, (haut_joue_de(co.y) - co.z) / 0.040)))
-        joue = 0.0022 + 0.0050 * descente
+        # et fine vers l'angle de la machoire : epaisse la, elle l'elargissait
+        vers_angle = lisse(max(0.0, min(1.0, (ay - 0.042) / 0.022)))
+        joue = (0.0022 + 0.0050 * descente) * (1.0 - 0.55 * vers_angle)
         # la machoire : pleine le long de l'os au milieu, pas en plaque sur les
         # cotes (c'est cette plaque qui faisait le fond carre)
         machoire = lisse(max(0.0, min(1.0, (menton.z + 0.040 - co.z) / 0.040)))
@@ -1028,10 +1033,14 @@ def habiller(h, rig):
     # UN DEGRADE DU HAUT AU BAS (a sa demande) : sur la joue, la barbe part
     # claire, fondue dans la peau, et se fonce en descendant vers la machoire.
     # La moustache et le menton restent pleins.
+    # Il part de la peau elle-meme (a 35 %, son haut faisait une ligne), sur
+    # cinq centimetres et demi ; et il gagne la bouche sur trois centimetres
+    # au lieu d'un et demi : la barbe pleine y faisait un bloc sombre, tranche
+    # net contre le degrade.
     def teinte_barbe(co):
-        t = lisse(max(0.0, min(1.0, (haut_joue_de(co.y) - co.z) / 0.045)))
-        joue = lisse(max(0.0, min(1.0, (abs(co.y) - 0.028) / 0.015)))
-        k = 1.0 - joue * (1.0 - (0.35 + 0.65 * t))
+        t = lisse(max(0.0, min(1.0, (haut_joue_de(co.y) - co.z) / 0.055))) ** 1.3
+        joue = lisse(max(0.0, min(1.0, (abs(co.y) - 0.020) / 0.030)))
+        k = 1.0 - joue * (1.0 - t)
         return tuple(a + (b - a) * k for a, b in zip(PEAU, BARBE))
     bras = ('upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'hand_l', 'hand_r')
     doigts = lambda d: any(k.split('_')[0] in ('thumb', 'index', 'middle', 'ring', 'pinky') and w > 0.2 for k, w in d.items())
@@ -1112,8 +1121,12 @@ def habiller(h, rig):
             # Ce rebord prenait la lampe principale et sortait en deux taches
             # claires au milieu du noir de la barbe.
             # et tout ce qui sort du croissant des levres (coins, rebord)
-            if c.x <= 0.09 or dedans(c, n):
+            if c.x <= 0.09:
                 return False
+            # le repli sous la levre du bas, tourne vers l'arriere mais visible
+            # d'en haut : ni levre ni barbe, il restait en point clair
+            if dedans(c, n):
+                return c.z < fente(c.y) - 0.004
             return not (levres(c, n, d) or levre_bas(c, n, d))
         # le bas du visage, du menton a la moustache
         visage = p(d, 'head') > 0.4 and c.x > 0.045 and 1.405 < c.z < 1.476
@@ -1123,17 +1136,20 @@ def habiller(h, rig):
         # marche a mi-joue.
         # (a trois millimetres pres : une ligne tiree au cordeau fait masque)
         haut_joue = haut_joue_de(c.y) + 0.0035 * bruit_barbe.noise(c * 160.0)
-        joues = (p(d, 'head') > 0.4 and c.x > 0.012 and abs(c.y) > 0.040
-                 and 1.408 < c.z < haut_joue)
+        # PAS DANS LES OREILLES : a 1,2 cm devant leur axe, la joue les touchait
+        joues = (p(d, 'head') > 0.4 and c.x > 0.028 and d.get('ears', 0) < 0.05
+                 and abs(c.y) > 0.040 and 1.408 < c.z < haut_joue)
         # sous la machoire et sous le menton : c'est de la que sa barbe
         # descend (pas en bavoir sur toute la gorge)
         # Elle chevauche le bas du visage de trois centimetres : separee de
         # lui par un rang de faces, elle partait comme un ilot de franges.
         # Seules les faces TOURNEES VERS LE BAS : le devant du cou regarde en
         # avant, et epaissi, il faisait un col autour de la gorge.
+        # EN V vers l'arriere : large sous le menton, etroite sous les angles de
+        # la machoire — sur toute la largeur, elle faisait un fond plat
         dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02 and n.z < -0.25
                    and menton.z - 0.025 + 0.004 * bruit_barbe.noise(c * 160.0) < c.z < menton.z + 0.030
-                   and abs(c.y) < 0.070)
+                   and abs(c.y) < 0.030 + 0.35 * (c.x - 0.02))
         # la moustache reste ; seul le dessous du nez est epargne
         # le DESSOUS du nez : des faces tournees vers le bas — a la hauteur
         # seule, la regle prenait aussi le haut de la levre, tourne vers l'avant
@@ -1147,28 +1163,6 @@ def habiller(h, rig):
         if 0.0 < d.get('lips', 0) <= 0.30 and c.z > fente(c.y) and c.x > 0.09:
             return True
         return (visage or joues or dessous) and not nez
-
-    # LES SOURCILS, que le corps de MakeHuman n'a pas : sans eux le visage se
-    # lisait en mannequin. Un arc au-dessus de chaque oeil, trouve depuis
-    # l'oeil lui-meme : epais pres du nez, fin vers la tempe, a peine arque —
-    # les siens sont sombres, nets, poses bas.
-    def sourcils(c, n, d):
-        if p(d, 'head') < 0.5 or c.x < 0.04:
-            return False
-        for e, _r in yeux_c:
-            if e.y * c.y <= 0:
-                continue
-            dy = (abs(c.y) - abs(e.y))          # vers la tempe, positif
-            if not (-0.017 < dy < 0.034):
-                continue
-            # MESURE SUR SES PHOTOS DE FACE (29/09) : du coin de l'oeil au
-            # sourcil, 0,16 a 0,20 de la largeur du visage ; a +0,028 le modele
-            # en faisait 0,24. Longs jusqu'a la tempe, droits, pas en pastille.
-            zc = e.z + 0.0215 - 5.0 * (dy - 0.004) ** 2
-            demi = 0.0050 - 0.055 * max(0.0, dy)
-            if abs(c.z - zc) < max(0.0016, demi):
-                return True
-        return False
 
     # LES LEVRES, en deux : celle du haut sombre et fine, celle du bas pleine
     # et claire. Elles partagent le seuil de la barbe (0,30) : a 0,62, une
@@ -1256,9 +1250,6 @@ def habiller(h, rig):
         return MAILLOT
 
     pieces = [
-        # sans fondu : sur un arc de un centimetre, un anneau fondu vers la
-        # peau le rendait brun, dessine au crayon
-        ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 0),
         # sans fondu : entre les deux levres, un fondu vers la peau tracait un
         # trait clair sur la bouche
         # modelees (teinte), arrondies (un lissage), affinees (une subdivision)
@@ -1319,6 +1310,63 @@ def habiller(h, rig):
     if m is not None:
         grain_poils(m)
     return out
+
+
+# --- LES SOURCILS, DESSINES ----------------------------------------------------
+# Choisis parmi les faces du visage de MakeHuman, trop grandes, ils sortaient
+# en pastilles a bouts ronds, d'une epaisseur egale. Les siens, sur ses photos :
+# une tete epaisse et carree au-dessus du coin de l'oeil, qui monte doucement
+# jusqu'aux deux tiers, puis une queue fine qui redescend vers la tempe. On les
+# dessine donc comme un ruban pose sur la peau, a partir de l'oeil (orbites) :
+# une ligne d'arc, un profil d'epaisseur, et chaque bord reprojete sur la peau.
+
+def sourcils_dessines(h, rig, n=26):
+    import bmesh
+    from mathutils.bvhtree import BVHTree
+    arbre = BVHTree.FromPolygons([v.co.copy() for v in h.data.vertices],
+                                 [tuple(p.vertices) for p in h.data.polygons])
+    me = bpy.data.meshes.new('Meba_sourcils')
+    o = bpy.data.objects.new('Meba_sourcils', me)
+    bpy.context.scene.collection.objects.link(o)
+    bm = bmesh.new()
+    for e, _r in orbites(h):
+        cote = 1.0 if e.y > 0 else -1.0
+        rangs = []
+        for i in range(n + 1):
+            t = i / n
+            dy = -0.015 + 0.047 * t                  # du coin interieur a la tempe
+            # l'arc : monte jusqu'aux deux tiers, puis la queue descend
+            if t < 0.62:
+                dz = 0.0195 + 0.0035 * (t / 0.62)
+            else:
+                dz = 0.0230 - 0.0080 * ((t - 0.62) / 0.38) ** 1.3
+            demi = 0.0008 + 0.0028 * (1.0 - t) ** 0.8   # tete epaisse, queue fine
+            y, zc = cote * (abs(e.y) + dy), e.z + dz
+            bords = []
+            for dz_b in (demi, -demi):
+                hit = arbre.ray_cast(Vector((0.4, y, zc + dz_b)), Vector((-1.0, 0.0, 0.0)))
+                if hit[0] is None:
+                    bords = None
+                    break
+                bords.append(bm.verts.new(hit[0] + hit[1] * 0.0009))
+            if bords:
+                rangs.append(bords)
+        for a, b in zip(rangs, rangs[1:]):
+            bm.faces.new([a[0], b[0], b[1], a[1]])
+    bm.normal_update()
+    for f in bm.faces:
+        if f.normal.x < 0:
+            f.normal_flip()
+    bm.to_mesh(me); bm.free()
+    g = o.vertex_groups.new(name='head')
+    g.add(list(range(len(me.vertices))), 1.0, 'REPLACE')
+    mat = materiau('Meba_sourcils', SOURCIL, 0.9)
+    grain_poils(mat, echelle=1400.0, force=0.6, distance=0.0006)
+    me.materials.append(mat)
+    for pl in me.polygons:
+        pl.use_smooth = True
+    arm = o.modifiers.new('Armature', 'ARMATURE'); arm.object = rig
+    return o
 
 
 # --- LES YEUX ----------------------------------------------------------------
@@ -1680,6 +1728,7 @@ def tout(glb=None, blend=None):
     sc, h, rig = corps()
     habiller(h, rig)
     dossard(h, rig)
+    sourcils_dessines(h, rig)
     yeux(h, rig)
     vanilles(h, rig)
     chaine(h, rig)
