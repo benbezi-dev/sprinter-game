@@ -34,6 +34,7 @@
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
 import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
+import { stadeDuSaut, ambianceDuSaut } from './sauts-stades.js';
 import { ELAN, FOSSE, TEMPS_ESSAI } from './longueur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -167,7 +168,9 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   if (e) nettoyer();
   sauvegarde = { race: G.race, raceKey: G.raceKey, surRetour: G.surRetourAccueil };
   G.race = EPREUVE;
-  A.buildLevel(etape);
+  // Chaque etape a son stade (sauts-stades.js) ; le 100 m garde les siens.
+  A.buildLevel(stadeDuSaut(etape));
+  G.ambianceSaut = ambianceDuSaut(etape);
   const lignetriple = FOSSE_X - plancheDe(etape);
   const ligne = epreuve === 'triple' ? lignetriple : LIGNE;
   e = {
@@ -301,6 +304,7 @@ function nettoyer() {
   rendreLeTempo();
   if (!sauvegarde && !e) return;
   G.sautEnCours = false;
+  G.ambianceSaut = null;
   G.pasSauteur = null;
   G.appuiSaut = null;
   G.relacheSaut = null;
@@ -630,7 +634,13 @@ function pas(j, dt, elapsed) {
       if (e.celebre) j.celebrate = lisse((c.t - 1.5) / 0.45);
       if (c.t > 0.3) rendreLeTempo();
       if (c.t < 1.75) {
-        j.d = c.x + GLISSE[c.variante] * lisse(c.t / 0.35);
+        // LES FESSES DANS LE TROU. A une bonne reception, le bassin ne glisse
+        // pas de quarante centimetres puis s'arrete a mi-chemin : les genoux
+        // plient et il vient se poser dans la trace des talons, douze
+        // centimetres derriere eux. Voir postureDe (longueur-rendu.js).
+        const glisse = c.variante === 'avant'
+          ? Math.max(GLISSE.avant, c.talonX - c.x - 0.12) : GLISSE[c.variante];
+        j.d = c.x + glisse * lisse(c.t / 0.40);
         j.v = 0;
       } else {
         // Il sort de la fosse en marchant, droit devant — revenir en arriere
@@ -638,6 +648,13 @@ function pas(j, dt, elapsed) {
         j.v = 1.25;
         j.d += j.v * dt;
         j.stride += j.v * dt * (Math.PI / j.strideLength());
+      }
+      // PUIS LES JAMBES CHASSENT LE SABLE DEVANT ELLES — c'est ce qui fait
+      // passer le corps par-dessus les pieds au lieu de le laisser retomber
+      // en arriere : une seconde gerbe, partie de devant les talons.
+      if (!c.chasse && c.t >= 0.42 && e.empreinte && (c.variante === 'avant' || c.variante === 'assis')) {
+        c.chasse = true;
+        e.gerbe = { x: c.talonX + 0.25, y: e.empreinte.y, t: 0, force: 0.85 };
       }
       if (!c.mordu && c.t >= 1.05 && !e.mesure) mesurer();
       if (c.mordu && c.t >= 0.55 && !e.drapeau) {

@@ -30,6 +30,7 @@
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
 import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
+import { stadeDuSaut, ambianceDuSaut } from './sauts-stades.js';
 import { TAPIS, MONTANTS, BARRE } from './hauteur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, APPEL_MINI, BIAIS, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -143,7 +144,9 @@ export function armerConcoursHauteur(etape) {
   if (e) nettoyer();
   sauvegarde = { race: G.race, raceKey: G.raceKey, surRetour: G.surRetourAccueil };
   G.race = EPREUVE;
-  A.buildLevel(etape);
+  // Chaque etape a son stade (sauts-stades.js) ; le 100 m garde les siens.
+  A.buildLevel(stadeDuSaut(etape));
+  G.ambianceSaut = ambianceDuSaut(etape);
   e = {
     epreuve: 'hauteur', etape, g: pesanteurDe(etape),
     phase: 'repos', t: 0, horlogeT: 0, horloge: 60,
@@ -264,6 +267,7 @@ function nettoyer() {
   rendreLeTempo();
   if (!sauvegarde && !e) return;
   G.sautEnCours = false;
+  G.ambianceSaut = null;
   G.pasSauteur = null;
   G.appuiSaut = null;
   G.relacheSaut = null;

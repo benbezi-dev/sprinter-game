@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Jumper — apercu des postures du saut</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0; font: 12px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #8d93a8;
+       font-weight: 600; margin: 10px 0 4px 12px; }
+  canvas { display: block; margin: 0 12px; background: #1b1e29; border-radius: 6px; }
+</style>
+<!--
+  Les postures du saut en longueur (longueur-rendu.js, postureDe), dessinees
+  par le moteur du jeu (drawIcon), image par image : le ciseau sur un cycle,
+  la suspension, le ramene, et les trois receptions. De profil, sans la
+  camera du jeu : c'est la posture elle-meme qu'on juge ici.
+
+  npm run dev, puis /tools/apercu-saut.html
+-->
+<h2>ciseau — un cycle de jambes, huit images</h2><canvas id="ciseau" width="1180" height="300"></canvas>
+<h2>suspension, puis ramene</h2><canvas id="vol" width="1180" height="230"></canvas>
+<h2>reception — les talons devant</h2><canvas id="normale" width="1180" height="260"></canvas>
+<h2>reception — assis en arriere</h2><canvas id="assis" width="1180" height="260"></canvas>
+<h2>reception — pieds sous le bassin</h2><canvas id="pieds" width="1180" height="200"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+  import { postureDe } from '/src/game/longueur-rendu.js';
+
+  const C = SprinterCore.C;
+  const perso = () => ({
+    look: SprinterCore.lookFor('apercu-h', 'divers'),
+    stride: 0, v: 9.5, maxSpeed: 11, fallAnim: 0, celebrate: 0, drivePitch: 0, d: 0, tete: 0,
+  });
+  const T = 0.9;
+  // Le centre de masse : 1,10 m au decollage, 1,65 au sommet, 0,62 a l'arrivee.
+  const hauteur = (t) => { const u = t / T; return 1.10 + 2.2 * u * (1 - u) - 0.48 * u; };
+
+  function dessine(id, etats, px = 190) {
+    const cv = document.getElementById(id), ctx = cv.getContext('2d');
+    etats.forEach((e, i) => {
+      const man = perso();
+      if (e.d != null) man.d = e.d;
+      const ech = C.MODEL_H / man.look.h;
+      man.posture = postureDe(e, man, ech);
+      const x = 80 + i * ((cv.width - 120) / Math.max(1, etats.length - 1));
+      // un trait de sol a hauteur du sable
+      ctx.fillStyle = '#3a3f52';
+      ctx.fillRect(x - 60, cv.height - 22, 120, 2);
+      SprinterApp.drawIcon(ctx, man, x, cv.height - 22, px, false);
+      ctx.fillStyle = '#8d93a8';
+      ctx.fillText(e.legende || '', x - 40, 14);
+    });
+  }
+
+  const vol = (t, o = {}) => ({
+    phase: 'vol', jambeAppel: 0, horlogeT: 0, legende: o.legende,
+    vol: { t, duree: T, pose: false, hauteur, ciseaux: o.ciseaux || 0, phase: o.phi || 0,
+           tRamene: o.tRamene == null ? null : o.tRamene },
+  });
+  // Le bassin, en vol, est tres haut : on redescend le dessin pour qu'il tienne.
+  dessine('ciseau', Array.from({ length: 8 }, (_, i) =>
+    vol(0.4, { ciseaux: 2, phi: i * Math.PI / 4, legende: `phi ${(i * 45)}°` })), 210);
+  dessine('vol', [0.05, 0.15, 0.3, 0.45, 0.55, 0.65, 0.75, 0.88].map((t, i) =>
+    vol(t, { tRamene: i >= 4 ? 0.55 : null, legende: `t ${t.toFixed(2)}${i >= 4 ? ' ramene' : ''}` })), 150);
+
+  // Comme au jeu (longueur-course.js) : au contact, les talons sont 0,85 m
+  // devant le bassin ; a une bonne reception le bassin glisse jusqu'a leur
+  // trace, assis il ne bouge pas, pieds sous lui il avance de 0,36 m.
+  const lisse = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const GLISSE = { normale: 0.85 - 0.12, assis: -0.04, pieds: 0.36 };
+  const reception = (variante, tau) => ({
+    phase: 'reception', jambeAppel: 0, horlogeT: 0, legende: `${variante} ${tau.toFixed(2)} s`,
+    d: GLISSE[variante] * lisse(tau / 0.40),
+    reception: { t: tau, talonX: 0.85, variante, hz0: (0.62 - 0.08) * (C.MODEL_H / perso().look.h) },
+  });
+  const temps = [0, 0.1, 0.25, 0.4, 0.55, 0.75, 1.1, 1.6];
+  dessine('normale', temps.map(t => reception('normale', t)), 260);
+  dessine('assis', temps.map(t => reception('assis', t)), 260);
+  dessine('pieds', temps.map(t => reception('pieds', t)));
+</script>
