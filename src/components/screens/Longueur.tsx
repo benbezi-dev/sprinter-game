@@ -242,6 +242,11 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         sous: (a && a.sous) || undefined, couleur: r.ramene === 'parfait' ? 'rgb(74,222,128)'
           : r.ramene === 'assis' ? '#f87171' : 'rgb(250,214,60)' }));
     }
+    // Tous les points parfaits : on le dit en grand, a la place du ramene.
+    if (evt.type === 'parfait') {
+      setAnnonce(a => ({ sorte: 'parfait', texte: N.t('saut_parfait'),
+        sous: (a && a.sous) || undefined, couleur: 'rgb(var(--primaire-rgb))' }));
+    }
     if (evt.type === 'marque') {
       const r = evt.resultat as Essai;
       if (r.mordu) {
@@ -254,7 +259,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         const bonds = r.bonds && r.bonds.length === 3 ? r.bonds.map(virgule).join(' · ') + ' — ' : '';
         setAnnonce(a => ({ sorte: 'marque', texte: `${virgule(r.marque!)} m`,
           sous: bonds + (homologable(r.vent) ? N.t('saut_vent', { v: vent }) : N.t('saut_vent_trop', { v: vent }))
-            + (a && a.sorte === 'ramene' ? ' · ' + a.texte : ''),
+            + (a && (a.sorte === 'ramene' || a.sorte === 'parfait') ? ' · ' + a.texte : ''),
           couleur: accent }));
         // LE RECORD PERSONNEL : seul un vent de moins de deux metres le fait
         // entrer au palmares. Au-dela, on le dit, sans le retenir.
@@ -440,7 +445,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
             animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
             className={`absolute inset-x-0 ${annonce.sorte === 'marque' ? 'top-[13%]' : 'top-[30%]'} flex flex-col items-center gap-1`}>
             <span className={`flex items-center gap-2 font-display font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]
-                              ${annonce.sorte === 'marque' ? 'text-5xl' : annonce.sorte === 'appel' ? 'text-3xl sm:text-4xl' : 'text-xl'}`}
+                              ${annonce.sorte === 'marque' ? 'text-5xl' : annonce.sorte === 'appel' || annonce.sorte === 'parfait' ? 'text-3xl sm:text-4xl' : 'text-xl'}`}
                   style={{ color: annonce.couleur }}>
               {/* Le drapeau du juge de planche : blanc valable, rouge mordu.
                   Il est leve la-bas, au bord de la piste ; on le rappelle ici,
