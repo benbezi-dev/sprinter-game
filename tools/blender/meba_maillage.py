@@ -106,8 +106,11 @@ VISAGE = {
     # est prognathe, pas lui — de trois quarts, sa bouche reste dans le plan
     # des pommettes. Et un visage sec, de sprinteur, pas les joues pleines.
     'chin-prognathism-decr': 0.70, 'head-fat-decr': 0.75,
-    '*-eye-height2-decr': 0.25, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
-    '*-eye-scale-decr': 0.10, '*-eye-bag-incr': 0.15,
+    # SES YEUX, SUR SES PHOTOS NEUTRES DU 30/09 : plus grands (0,216 de la
+    # largeur du visage, le modele 0,193), plus ouverts (0,34 contre 0,25) et
+    # plus ecartes (0,49 contre 0,44)
+    '*-eye-height2-incr': 0.20, '*-eye-eyefold-down': 0.40, '*-eye-corner2-down': 0.25,
+    '*-eye-scale-incr': 0.30, '*-eye-trans-out': 0.20, '*-eye-bag-incr': 0.15,
     # mesure (tools/biomeca/visage.py) : ses sourcils sont hauts sur l'oeil
     'eyebrows-trans-up': 0.35,
     'nose-width1-incr': 0.45, 'nose-width2-incr': 0.55, 'nose-width3-incr': 0.60,
@@ -122,11 +125,13 @@ VISAGE = {
     # mesure : ses levres sont pleines mais pas projetees — la bouche du
     # modele avancait et s'epaississait (+43 % en haut, +59 % en bas)
     'mouth-scale-depth-decr': 0.85, 'mouth-trans-backward': 0.80,
- 'mouth-upperlip-volume-decr': 0.60,
+ 'mouth-upperlip-volume-decr': 0.25,
     # (29/09, ses photos de face : la levre du bas fait 0,27 a 0,36 de la
     # bouche, le modele 0,14 — elle n'est ni amincie ni raccourcie)
-    'mouth-lowerlip-height-incr': 0.45, 'mouth-lowerlip-volume-incr': 0.35,
-    'mouth-scale-vert-decr': 0.25, 'mouth-upperlip-height-decr': 0.50,
+    # et sur les memes photos, la levre du haut fait 0,19 de la largeur de la
+    # bouche (le modele 0,12), celle du bas 0,28 a 0,33 (0,16) ; un arc net
+    'mouth-lowerlip-height-incr': 0.55, 'mouth-lowerlip-volume-incr': 0.45,
+    'mouth-upperlip-height-incr': 0.15, 'mouth-cupidsbow-incr': 0.40,
     '*-ear-flap-decr': 0.35,
 }
 
@@ -898,8 +903,9 @@ BLEU_FRANCE = (38, 64, 168)
 ROUGE_FRANCE = (214, 40, 52)
 # ses levres sont sombres, proches de sa barbe : claires, cernees de noir,
 # elles se lisaient comme une bouche ouverte au fond d'un museau
-LEVRES = (60, 35, 31)
-LEVRES_OMBRE = (36, 21, 18)
+# celle du haut, brun rose sur ses photos neutres, plus sombre que celle du bas
+LEVRES = (86, 50, 46)
+LEVRES_OMBRE = (54, 31, 28)
 
 
 def chaussure(h, rig, cote):
@@ -1022,8 +1028,9 @@ def habiller(h, rig):
         haut = 1.0 if d.z < 0.004 else math.exp(-((d.z - 0.004) / 0.012) ** 2)
         pend = math.exp(-((d.x / 0.028) ** 2 + (d.y / 0.017) ** 2)) * haut
         # au-dessous du menton, la gorge : l'epaisseur s'y eteint
-        gorge = lisse(max(0.0, min(1.0, (co.z - (menton.z - 0.024)) / 0.020)))
-        e = (joue + 0.006 * machoire * cote + 0.010 * pointe + 0.024 * pend) * gorge
+        gorge = lisse(max(0.0, min(1.0, (co.z - (menton.z - 0.034)) / 0.022)))
+        # (30/09, son profil : elle descend de quatre a cinq centimetres sous le menton)
+        e = (joue + 0.006 * machoire * cote + 0.010 * pointe + 0.034 * pend) * gorge
         # des touffes, pas une dalle : l'epaisseur varie d'un centimetre a l'autre
         e *= 1.0 + 0.22 * bruit_barbe.noise(co * 110.0)
         # PRES DES LEVRES, ELLE EST COURTE (distance a la levre la plus proche)
@@ -1148,7 +1155,7 @@ def habiller(h, rig):
         # EN V vers l'arriere : large sous le menton, etroite sous les angles de
         # la machoire — sur toute la largeur, elle faisait un fond plat
         dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02 and n.z < -0.25
-                   and menton.z - 0.025 + 0.004 * bruit_barbe.noise(c * 160.0) < c.z < menton.z + 0.030
+                   and menton.z - 0.034 + 0.004 * bruit_barbe.noise(c * 160.0) < c.z < menton.z + 0.030
                    and abs(c.y) < 0.030 + 0.35 * (c.x - 0.02))
         # la moustache reste ; seul le dessous du nez est epargne
         # le DESSOUS du nez : des faces tournees vers le bas — a la hauteur
@@ -1234,10 +1241,10 @@ def habiller(h, rig):
         return hauteur * (1.0 - u * u) ** puissance + 0.0015
     def levres(c, n, d):
         return (d.get('lips', 0) > 0.30 and c.z >= fente(c.y) and not dedans(c, n)
-                and c.z - fente(c.y) < croissant(c, 0.0065, 0.4))
+                and c.z - fente(c.y) < croissant(c, 0.0095, 0.4))
     def levre_bas(c, n, d):
         return (d.get('lips', 0) > 0.30 and c.z < fente(c.y) and not dedans(c, n)
-                and fente(c.y) - c.z < croissant(c, 0.0120, 0.5))
+                and fente(c.y) - c.z < croissant(c, 0.0140, 0.5))
 
     # LE MAILLOT DE L'EQUIPE DE FRANCE, sans la marque : blanc, les epaules et
     # les bretelles bleues, un filet rouge sous le bras.
@@ -1402,7 +1409,8 @@ def orbites(h):
         if not fente:
             continue
         c = sum(fente, Vector()) / len(fente)
-        out.append((Vector((paupieres, c.y, c.z)), 0.0112))
+        # (un globe un peu plus gros : ses yeux sont plus grands, voir VISAGE)
+        out.append((Vector((paupieres, c.y, c.z)), 0.0122))
     return out
 
 
@@ -1846,7 +1854,9 @@ def visage_rendu(rig, dossier, echantillons=64):
     sc.render.image_settings.file_format = 'PNG'
     # la camera a hauteur des yeux, comme celle de l'interview : plus haute,
     # elle regardait le visage de haut et allongeait le nez a l'ecran
-    for nom, loc in (('face', (0.95, 0.0, 1.515)), ('34', (0.80, -0.52, 1.52))):
+    # et de profil gauche, comme sa photo de profil (le visage vers la gauche)
+    for nom, loc in (('face', (0.95, 0.0, 1.515)), ('34', (0.80, -0.52, 1.52)),
+                     ('profil', (0.03, 0.95, 1.515))):
         camera_portrait(loc, (0.03, 0.0, 1.505), 95)
         sc.render.filepath = os.path.join(dossier, 'visage-' + nom + '.png')
         bpy.ops.render.render(write_still=True)
