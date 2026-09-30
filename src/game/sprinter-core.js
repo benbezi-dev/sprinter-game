@@ -1251,7 +1251,8 @@
     // (GAITS), le V renverse dans les blocs (BLOC.rituel), le clap au-dessus
     // de la tete (pose). Et soixante-quatre facettes au moins par volume a
     // l'ultra : c'est le skin premium de l'evenement.
-    'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [96, 58, 44], profil: 'meba',
+    // (peau eclaircie le 30/09, comme celle du maillage : qu'on le distingue)
+    'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [112, 69, 53], profil: 'meba',
       jersey: [242, 244, 248], shorts: [30, 44, 110], shoe: [214, 240, 44],
       hair: 'twists', hairCol: [30, 24, 22], meches: [230, 192, 118],
       h: 1.77, gait: 'canon', morph: { sh: 1.02 },

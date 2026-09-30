@@ -115,7 +115,7 @@ VISAGE = {
     'nose-scale-vert-decr': 0.95, 'nose-trans-up': 0.85, 'nose-point-up': 0.45,
     # mesure sur ses photos de face (29/09) : la bouche fait 0,32 a 0,35 de la
     # largeur du visage, le modele 0,40 — plus etroite, pas plus large
-    'mouth-scale-horiz-decr': 0.20,
+    'mouth-scale-horiz-decr': 0.10,
     # mesure : ses levres sont pleines mais pas projetees — la bouche du
     # modele avancait et s'epaississait (+43 % en haut, +59 % en bas)
     'mouth-scale-depth-decr': 0.85, 'mouth-trans-backward': 0.80,
@@ -532,7 +532,7 @@ def visage_photo(h, chemin=None, iterations=25):
     bvh = BVHTree.FromPolygons([tuple(v) for v in VF], polys)
 
     # LE POIDS DU TIRAGE. Plein sur la face, du front a la bouche ; il s'eteint
-    # vers les oreilles, vers le sommet du crane (bandeau et cheveux), et SOUS
+    # vers les oreilles, vers le sommet du crane (sous les cheveux), et SOUS
     # LA BOUCHE : sur ses photos, le contour du bas du visage est celui de sa
     # barbe, pas celui de sa machoire — le tirer la ferait porter deux fois,
     # par la peau puis par la coque de la barbe. Les levres, elles, suivent.
@@ -642,7 +642,7 @@ def poids_dominant(h):
 
 
 def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0, fondu=0,
-          teinte=None):
+          teinte=None, affiner=0, teinte_bord=None):
     """Une coque : les faces du corps que `garder(centre, normale, poids)` retient."""
     import bmesh
     dom = poids_dominant(h)
@@ -701,21 +701,28 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
                     if w not in anneau:
                         anneau[w] = k; suite.append(w)
             front = suite
-    parts = {}
+    parts, rangs = {}, {}
     for v in bm.verts:
         part = min(1.0, (anneau.get(v, fondu) + 0.35) / (fondu + 0.35)) if fondu else 1.0
         parts[v.index] = part
+        rangs[v.index] = anneau.get(v, fondu) if fondu else fondu
         e = epaisseur(v.co) if callable(epaisseur) else epaisseur
         v.co += v.normal * e * part
+    # AFFINER : une subdivision arrondie. Sur le visage grossier de MakeHuman,
+    # une petite piece — les levres — gardait les crans de ses faces au bord.
+    if affiner:
+        import bmesh as _bm
+        _bm.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=affiner, use_grid_fill=True, smooth=1.0)
     bm.to_mesh(me); bm.free()
     # une piece a plusieurs couleurs (`teinte(co)` rend une couleur 0-255)
-    if teinte is not None and not fondu:
+    if teinte is not None:
         col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
         for v in me.vertices:
             c = [srgb_vers_lin(x / 255) for x in teinte(v.co)]
             col.data[v.index].color = (c[0], c[1], c[2], 1.0)
     # et la couleur se fond aussi : de la peau au bord a la sienne au coeur
-    if fondu:
+    # (sauf si la piece a sa propre teinte, qui dit deja ou elle s'eclaircit)
+    if fondu and teinte is None:
         col = me.color_attributes.new('Col', 'FLOAT_COLOR', 'POINT')
         a = Vector([srgb_vers_lin(c / 255) for c in PEAU])
         b = Vector([srgb_vers_lin(c / 255) for c in couleur])
@@ -725,7 +732,13 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
             # a UN seul rang (la barbe), le bord est presque toute la piece la
             # ou elle est etroite — sur la joue, deux ou trois faces : il y prend
             # sa couleur plus tot, sans quoi la barbe entiere sortait chatain
-            c = a.lerp(b, min(1.0, part * (3.6 if fondu == 1 else 2.2)))
+            if teinte_bord is not None:
+                # l'epaisseur s'amincit sur plusieurs rangs, la couleur non : seul
+                # le rang du bord se fond, de `teinte_bord`
+                t = teinte_bord if rangs[i] == 0 else 1.0
+            else:
+                t = min(1.0, part * (3.6 if fondu == 1 else 2.2))
+            c = a.lerp(b, t)
             col.data[i].color = (c.x, c.y, c.z, 1.0)
     me.materials.clear()
     mat = materiau(nom, couleur, rugosite, metal)
@@ -794,10 +807,48 @@ def ourlet(bm, h, passes=14):
             v.co = loc if loc is not None else c
 
 
+def grain_poils(m, echelle=520.0, force=0.9, distance=0.0016):
+    """Un relief de poils frises et une teinte qui varie d'une meche a l'autre."""
+    nt = m.node_tree
+    if any(n.type == 'BUMP' for n in nt.nodes):
+        return
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    bruit = nt.nodes.new('ShaderNodeTexNoise')
+    bruit.inputs['Scale'].default_value = echelle
+    bruit.inputs['Detail'].default_value = 8.0
+    bruit.inputs['Roughness'].default_value = 0.75
+    if 'Distortion' in bruit.inputs:
+        bruit.inputs['Distortion'].default_value = 0.6
+    relief = nt.nodes.new('ShaderNodeBump')
+    relief.inputs['Strength'].default_value = force
+    relief.inputs['Distance'].default_value = distance
+    nt.links.new(bruit.outputs['Fac'], relief.inputs['Height'])
+    nt.links.new(relief.outputs['Normal'], bsdf.inputs['Normal'])
+    # la teinte : un voile un peu plus clair sur les pointes, sans toucher a
+    # la couleur de base (ni a l'attribut 'Col' du fondu quand il y en a un)
+    base = bsdf.inputs['Base Color']
+    src = base.links[0].from_socket if base.is_linked else None
+    mix = nt.nodes.new('ShaderNodeMix'); mix.data_type = 'RGBA'
+    rampe = nt.nodes.new('ShaderNodeMapRange')
+    rampe.inputs['From Min'].default_value = 0.45
+    rampe.inputs['From Max'].default_value = 0.75
+    rampe.inputs['To Max'].default_value = 0.35
+    nt.links.new(bruit.outputs['Fac'], rampe.inputs['Value'])
+    nt.links.new(rampe.outputs['Result'], mix.inputs['Factor'])
+    if src is not None:
+        nt.links.new(src, mix.inputs['A'])
+    else:
+        mix.inputs['A'].default_value = base.default_value
+    mix.inputs['B'].default_value = (0.045, 0.035, 0.032, 1.0)
+    nt.links.new(mix.outputs['Result'], base)
+
+
 # Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
 # le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
 # gris clair sous les lampes.
-MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils', 'Meba_levres', 'Meba_levre_bas'}
+MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils'}
+# les levres, elles, ont un peu de brillant : mates, elles se lisaient en feutre
+SATINES = {'Meba_levres': 0.06, 'Meba_levre_bas': 0.20}
 
 
 def materiau(nom, couleur, rugosite=0.6, metal=0.0):
@@ -806,6 +857,8 @@ def materiau(nom, couleur, rugosite=0.6, metal=0.0):
     bsdf = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
     if nom in MATES and 'Specular IOR Level' in bsdf.inputs:
         bsdf.inputs['Specular IOR Level'].default_value = 0.04
+    if nom in SATINES and 'Specular IOR Level' in bsdf.inputs:
+        bsdf.inputs['Specular IOR Level'].default_value = SATINES[nom]
     bsdf.inputs['Base Color'].default_value = (*[srgb_vers_lin(c / 255) for c in couleur], 1.0)
     bsdf.inputs['Roughness'].default_value = rugosite
     bsdf.inputs['Metallic'].default_value = metal
@@ -819,7 +872,8 @@ def srgb_vers_lin(c):
 # Les couleurs sont celles du look du jeu (VEDETTES, sprinter-core.js).
 # la carnation de ses photos a l'exterieur : un brun fonce, chaud — la
 # premiere (96, 58, 44), eclairee au studio, sortait caramel
-PEAU = (74, 44, 34)
+# plus claire (30/09, a sa demande : qu'on le distingue de sa barbe)
+PEAU = (88, 54, 42)
 MAILLOT = (242, 244, 248)
 SHORT = (30, 44, 110)
 POINTES = (214, 240, 44)
@@ -835,12 +889,14 @@ SOURCIL = (18, 13, 12)
 # photos de face (133,82,72 contre 112,59,47 sur la plus neutre), quand celle
 # du haut, sous la moustache, est sombre (69,42,38). Deux levres de la meme
 # teinte en faisaient un anneau.
-LEVRE_BAS = (96, 56, 52)
+LEVRE_BAS = (112, 66, 61)
+LEVRE_BAS_OMBRE = (64, 37, 34)
 BLEU_FRANCE = (38, 64, 168)
 ROUGE_FRANCE = (214, 40, 52)
 # ses levres sont sombres, proches de sa barbe : claires, cernees de noir,
 # elles se lisaient comme une bouche ouverte au fond d'un museau
-LEVRES = (52, 30, 26)
+LEVRES = (60, 35, 31)
+LEVRES_OMBRE = (36, 21, 18)
 
 
 def chaussure(h, rig, cote):
@@ -909,7 +965,7 @@ def transferer_poids(o, source, rig):
 def habiller(h, rig):
     """Les pieces de la tenue et du visage, chacune a sa coque."""
     p = lambda d, *n: max((d.get(k, 0.0) for k in n), default=0.0)
-    # les yeux d'abord : le bandeau, les sourcils et les cheveux s'y reperent
+    # les yeux d'abord : les sourcils, la moustache et les cheveux s'y reperent
     yeux_c = orbites(h)
     # et le menton : la barbe s'y epaissit
     domh = poids_dominant(h)
@@ -935,26 +991,48 @@ def habiller(h, rig):
     for i, q in enumerate(levres_c or [menton + Vector((0.05, 0, 0.05))]):
         arbre.insert(q, i)
     arbre.balance()
+    # PAS UN BLOC. Une coque d'epaisseur presque egale, coupee net, se lisait
+    # en masque pose sur le visage — une dalle, un fond carre sous la
+    # machoire. Sur son profil, elle est courte au ras de la ligne de joue,
+    # s'epaissit en descendant vers la machoire, et sa masse finit en pointe
+    # arrondie sous le menton ; ses bords ne sont pas tires au cordeau.
+    from mathutils import noise as bruit_barbe
+    lisse = lambda t: t * t * (3 - 2 * t)
+    # PLUS BASSE (30/09, a sa demande) : trois centimetres sous l'ancienne
+    # ligne aux favoris, un pres de la bouche.
+    def haut_joue_de(y):
+        return min(1.505, max(1.452, 1.452 + 1.40 * (abs(y) - 0.030)))
     def epaisseur_barbe(co):
-        dm = (co - menton).length
-        machoire = max(0.0, min(1.0, (menton.z + 0.045 - co.z) / 0.045))
-        # au-dessous du menton, la gorge : l'epaisseur s'y eteint
-        gorge = max(0.0, min(1.0, (co.z - (menton.z - 0.022)) / 0.018))
-        # EN POINTE, PAS EN BLOC : pleine au centre du menton, elle s'affine
-        # vers les cotes de la machoire (une bosse etroite en largeur).
         d = co - menton
-        cote = max(0.0, 1.0 - abs(co.y) / 0.075)
-        pointe = math.exp(-((d.x / 0.032) ** 2 + (d.y / 0.019) ** 2 + (d.z / 0.030) ** 2))
-        # ELLE DESCEND, ELLE N'AVANCE PAS. Sur ses photos de course, elle pend
-        # de trois centimetres sous le menton, en pointe ; devant, elle reste
-        # courte. Epaisse partout, elle avancait en bloc devant la bouche.
+        ay = abs(co.y)
+        # la joue : deux millimetres a sa ligne, sept vers la machoire
+        descente = lisse(max(0.0, min(1.0, (haut_joue_de(co.y) - co.z) / 0.040)))
+        joue = 0.0022 + 0.0050 * descente
+        # la machoire : pleine le long de l'os au milieu, pas en plaque sur les
+        # cotes (c'est cette plaque qui faisait le fond carre)
+        machoire = lisse(max(0.0, min(1.0, (menton.z + 0.040 - co.z) / 0.040)))
+        cote = lisse(max(0.0, 1.0 - ay / 0.060))
+        # le menton : la masse descend sous lui, en pointe arrondie
+        pointe = math.exp(-((d.x / 0.030) ** 2 + (d.y / 0.018) ** 2 + (d.z / 0.028) ** 2))
         haut = 1.0 if d.z < 0.004 else math.exp(-((d.z - 0.004) / 0.012) ** 2)
-        pend = math.exp(-((d.x / 0.030) ** 2 + (d.y / 0.020) ** 2)) * haut
-        e = (0.004 + 0.007 * machoire * cote + 0.010 * pointe + 0.026 * pend) * gorge
+        pend = math.exp(-((d.x / 0.028) ** 2 + (d.y / 0.017) ** 2)) * haut
+        # au-dessous du menton, la gorge : l'epaisseur s'y eteint
+        gorge = lisse(max(0.0, min(1.0, (co.z - (menton.z - 0.024)) / 0.020)))
+        e = (joue + 0.006 * machoire * cote + 0.010 * pointe + 0.024 * pend) * gorge
+        # des touffes, pas une dalle : l'epaisseur varie d'un centimetre a l'autre
+        e *= 1.0 + 0.22 * bruit_barbe.noise(co * 110.0)
+        # PRES DES LEVRES, ELLE EST COURTE (distance a la levre la plus proche)
         db = arbre.find(co)[2]
-        pres = max(0.0, min(1.0, (db - 0.003) / 0.020))
-        pres = pres * pres * (3 - 2 * pres)
+        pres = lisse(max(0.0, min(1.0, (db - 0.003) / 0.020)))
         return 0.003 + (e - 0.003) * pres
+    # UN DEGRADE DU HAUT AU BAS (a sa demande) : sur la joue, la barbe part
+    # claire, fondue dans la peau, et se fonce en descendant vers la machoire.
+    # La moustache et le menton restent pleins.
+    def teinte_barbe(co):
+        t = lisse(max(0.0, min(1.0, (haut_joue_de(co.y) - co.z) / 0.045)))
+        joue = lisse(max(0.0, min(1.0, (abs(co.y) - 0.028) / 0.015)))
+        k = 1.0 - joue * (1.0 - (0.35 + 0.65 * t))
+        return tuple(a + (b - a) * k for a, b in zip(PEAU, BARBE))
     bras = ('upperarm_l', 'upperarm_r', 'lowerarm_l', 'lowerarm_r', 'hand_l', 'hand_r')
     doigts = lambda d: any(k.split('_')[0] in ('thumb', 'index', 'middle', 'ring', 'pinky') and w > 0.2 for k, w in d.items())
 
@@ -1033,16 +1111,18 @@ def habiller(h, rig):
             # le liseré de la levre du haut, et son rebord tourne vers le haut.
             # Ce rebord prenait la lampe principale et sortait en deux taches
             # claires au milieu du noir de la barbe.
-            if c.z <= fente(c.y) + 0.003 or c.x <= 0.09 or dedans(c, n):
+            # et tout ce qui sort du croissant des levres (coins, rebord)
+            if c.x <= 0.09 or dedans(c, n):
                 return False
-            return l <= 0.65 or (n.z > 0.10 and c.z > fente(c.y) + 0.004)
+            return not (levres(c, n, d) or levre_bas(c, n, d))
         # le bas du visage, du menton a la moustache
         visage = p(d, 'head') > 0.4 and c.x > 0.045 and 1.405 < c.z < 1.476
         # les joues basses, jusqu'aux favoris, pas sous les yeux
         # SA LIGNE DE JOUE EST UNE DIAGONALE, du coin de la moustache jusqu'aux
         # favoris devant l'oreille, ou elle rejoint les cheveux — pas une
         # marche a mi-joue.
-        haut_joue = min(1.535, max(1.462, 1.462 + 1.70 * (abs(c.y) - 0.030)))
+        # (a trois millimetres pres : une ligne tiree au cordeau fait masque)
+        haut_joue = haut_joue_de(c.y) + 0.0035 * bruit_barbe.noise(c * 160.0)
         joues = (p(d, 'head') > 0.4 and c.x > 0.012 and abs(c.y) > 0.040
                  and 1.408 < c.z < haut_joue)
         # sous la machoire et sous le menton : c'est de la que sa barbe
@@ -1052,7 +1132,8 @@ def habiller(h, rig):
         # Seules les faces TOURNEES VERS LE BAS : le devant du cou regarde en
         # avant, et epaissi, il faisait un col autour de la gorge.
         dessous = (p(d, 'neck_01', 'head') > 0.4 and c.x > 0.02 and n.z < -0.25
-                   and menton.z - 0.025 < c.z < menton.z + 0.030 and abs(c.y) < 0.070)
+                   and menton.z - 0.025 + 0.004 * bruit_barbe.noise(c * 160.0) < c.z < menton.z + 0.030
+                   and abs(c.y) < 0.070)
         # la moustache reste ; seul le dessous du nez est epargne
         # le DESSOUS du nez : des faces tournees vers le bas — a la hauteur
         # seule, la regle prenait aussi le haut de la levre, tourne vers l'avant
@@ -1135,10 +1216,34 @@ def habiller(h, rig):
     # l'interieur, et deux taches de peau claire restaient sous la moustache.
     # La face interieure est dans la bouche : on la laisse.
     dedans = lambda c, n: n.x < -0.3 and c.x > 0.105
+    # LE MODELE DES LEVRES, EN TEINTE. D'une seule couleur, elles se lisaient en
+    # decoupe collee. Sur ses photos, la levre du bas est claire en son plein
+    # et s'assombrit dans la ligne de la bouche et vers les commissures ; celle
+    # du haut est sombre, un peu moins au milieu.
+    def teinte_levre_bas(co):
+        u = min(1.0, abs(co.y) / max(yc, 1e-3))
+        dz = fente(co.y) - co.z
+        plein = max(0.0, 1.0 - abs(dz - 0.0055) / 0.0060)
+        k = plein * (1.0 - u ** 3)
+        return tuple(a + (b - a) * k for a, b in zip(LEVRE_BAS_OMBRE, LEVRE_BAS))
+    def teinte_levre_haut(co):
+        u = min(1.0, abs(co.y) / max(yc, 1e-3))
+        dz = co.z - fente(co.y)
+        k = max(0.0, 1.0 - abs(dz - 0.004) / 0.004) * (1.0 - u ** 2)
+        return tuple(a + (b - a) * k for a, b in zip(LEVRES_OMBRE, LEVRES))
+    # EN CROISSANT : pleines au milieu, effilees aux commissures. Le groupe
+    # « lips » de MakeHuman a des coins ronds et bombes ; ce qui depasse du
+    # croissant revient a la barbe (voir barbe()), comme chez lui ou la
+    # moustache et la barbe mangent les coins de la bouche.
+    def croissant(c, hauteur, puissance):
+        u = min(1.0, abs(c.y) / max(yc, 1e-3))
+        return hauteur * (1.0 - u * u) ** puissance + 0.0015
     def levres(c, n, d):
-        return d.get('lips', 0) > 0.30 and c.z >= fente(c.y) and not dedans(c, n)
+        return (d.get('lips', 0) > 0.30 and c.z >= fente(c.y) and not dedans(c, n)
+                and c.z - fente(c.y) < croissant(c, 0.0065, 0.4))
     def levre_bas(c, n, d):
-        return d.get('lips', 0) > 0.30 and c.z < fente(c.y) and not dedans(c, n)
+        return (d.get('lips', 0) > 0.30 and c.z < fente(c.y) and not dedans(c, n)
+                and fente(c.y) - c.z < croissant(c, 0.0120, 0.5))
 
     # LE MAILLOT DE L'EQUIPE DE FRANCE, sans la marque : blanc, les epaules et
     # les bretelles bleues, un filet rouge sous le bras.
@@ -1156,8 +1261,9 @@ def habiller(h, rig):
         ('Meba_sourcils', sourcils, 0.0016, SOURCIL, 0.9, 0, 0),
         # sans fondu : entre les deux levres, un fondu vers la peau tracait un
         # trait clair sur la bouche
-        ('Meba_levres', levres, 0.0002, LEVRES, 0.62),
-        ('Meba_levre_bas', levre_bas, 0.0008, LEVRE_BAS, 0.45),
+        # modelees (teinte), arrondies (un lissage), affinees (une subdivision)
+        ('Meba_levres', levres, 0.0002, LEVRES, 0.50, 1, 0, teinte_levre_haut, 1),
+        ('Meba_levre_bas', levre_bas, 0.0009, LEVRE_BAS, 0.44, 1, 0, teinte_levre_bas, 1),
         # le maillot passe PAR-DESSUS le short : plus bas et plus epais que
         # lui la ou ils se croisent, sans quoi le short ressortait en
         # languettes a travers l'ourlet
@@ -1170,7 +1276,8 @@ def habiller(h, rig):
         # quatre, le menton n'atteignait jamais sa pleine epaisseur
         # un seul rang de fondu : a deux, le bord faisait un liseré brun d'un
         # centimetre au-dessus de la barbe ; la sienne est taillee net
-        ('Meba_barbe', barbe, epaisseur_barbe, BARBE, 0.95, 0, 1),
+        # deux rangs pour s'amincir au bord ; la couleur suit teinte_barbe
+        ('Meba_barbe', barbe, epaisseur_barbe, BARBE, 0.95, 0, 2, teinte_barbe),
     ]
     out = [chaussure(h, rig, 1), chaussure(h, rig, -1)]
     for piece in pieces:
@@ -1178,7 +1285,9 @@ def habiller(h, rig):
         out.append(coque(h, rig, nom, garder, e, col, r,
                          lisser=piece[5] if len(piece) > 5 else 0,
                          fondu=piece[6] if len(piece) > 6 else 0,
-                         teinte=piece[7] if len(piece) > 7 else None))
+                         teinte=piece[7] if len(piece) > 7 else None,
+                         affiner=piece[8] if len(piece) > 8 else 0,
+                         teinte_bord=piece[9] if len(piece) > 9 else None))
     # et la peau
     h.data.materials.clear()
     peau = materiau('Meba_peau', PEAU, 0.58)
@@ -1203,6 +1312,12 @@ def habiller(h, rig):
     h.data.materials.append(peau)
     for poly in h.data.polygons:
         poly.use_smooth = True
+    # LE GRAIN DES POILS : la barbe frisee, en relief et en teinte.
+    # Lisses, ils se lisaient en casque de plastique. Cycles le rend (portraits),
+    # l'export glTF l'ignore — a la taille du jeu, c'est la silhouette qui compte.
+    m = bpy.data.materials.get('Meba_barbe')
+    if m is not None:
+        grain_poils(m)
     return out
 
 
