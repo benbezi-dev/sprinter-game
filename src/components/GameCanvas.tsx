@@ -9,6 +9,7 @@ import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
+import { appliquerAmbiance } from '@/game/sauts-stades.js';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -390,6 +391,11 @@ export function GameCanvas() {
         dessinerMateriel(ctx, cam, G.VW, G.VH);
         ctx.restore();
       }
+
+      // LA LUMIERE DE L'HEURE, aux sauts seulement : chaque etape a son stade
+      // et son heure (voir game/sauts-stades.js). Avant la vignette, qui ferme
+      // les bords de l'image deja etalonnee.
+      if (G.sautEnCours && G.ambianceSaut) appliquerAmbiance(ctx, G.VW, G.VH, G.ambianceSaut);
 
       if (Prem) {
         const enCourse = G.state === 'race';
