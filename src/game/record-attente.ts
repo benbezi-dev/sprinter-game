@@ -44,6 +44,11 @@ export type RecordEnAttente = {
   raison: RaisonRefus;
   /** Quand la course a eu lieu. */
   le: number;
+  /**
+   * La trace de la course, preuve du chrono (voir `submitScore`). Absente
+   * des records gardes avant qu'on les envoie avec : ils partent sans.
+   */
+  trace?: number[];
 };
 
 function lire(): RecordEnAttente[] {
@@ -51,10 +56,16 @@ function lire(): RecordEnAttente[] {
     const brut = JSON.parse(localStorage.getItem(CLE) || '[]');
     if (!Array.isArray(brut)) return [];
     return brut.filter((r): r is RecordEnAttente =>
-      !!r && typeof r.race === 'string' && Number.isFinite(r.ms) && r.ms > 0);
+      !!r && typeof r.race === 'string' && Number.isFinite(r.ms) && r.ms > 0)
+      // Une trace abimee ne rend pas le record invalide : il part sans elle.
+      .map(r => (traceLisible(r.trace) ? r : { ...r, trace: undefined }));
   } catch {
     return [];                      // stockage refuse ou contenu abime
   }
+}
+
+function traceLisible(t: unknown): t is number[] {
+  return Array.isArray(t) && t.length > 0 && t.every(n => Number.isFinite(n));
 }
 
 function ecrire(liste: RecordEnAttente[]) {
@@ -76,6 +87,7 @@ export function enAttente(race?: RaceKey): RecordEnAttente[] {
  */
 export function garder(
   race: RaceKey, ms: number, nom: string, raison: RaisonRefus,
+  trace?: readonly number[] | null,
 ): RecordEnAttente | null {
   if (!Number.isFinite(ms) || ms <= 0) return null;
   const liste = lire();
@@ -88,7 +100,10 @@ export function garder(
     ecrire([...autres, { ...deja, raison }]);
     return null;
   }
-  const garde: RecordEnAttente = { race, ms: Math.round(ms), nom, raison, le: Date.now() };
+  const garde: RecordEnAttente = {
+    race, ms: Math.round(ms), nom, raison, le: Date.now(),
+    ...(traceLisible(trace) ? { trace: trace.slice() } : {}),
+  };
   ecrire([...autres, garde]);
   return garde;
 }
@@ -122,13 +137,13 @@ export async function rejouerLesAttentes(): Promise<number> {
   let passes = 0;
   for (const r of liste) {
     try {
-      await submitRaceRecord(r.race, nom, r.ms);
+      await submitRaceRecord(r.race, nom, r.ms, r.trace);
       oublier(r.race);
       passes++;
     } catch (e) {
       // Toujours refuse : on garde, en notant pourquoi. La prochaine occasion
       // viendra du prochain lancement, ou du prochain changement de nom.
-      garder(r.race, r.ms, nom, raisonDe(e));
+      garder(r.race, r.ms, nom, raisonDe(e), r.trace);
     }
   }
   return passes;

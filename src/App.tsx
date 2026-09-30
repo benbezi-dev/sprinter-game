@@ -43,7 +43,7 @@ import { WinAllScreen } from '@/components/screens/WinAllScreen';
 import { FalseStartCut } from '@/components/screens/FalseStartCut';
 import { OneShotEndScreen } from '@/components/screens/OneShotEndScreen';
 import { Revanche } from '@/components/screens/Revanche';
-import { useObjectif, ouvrirDepuisNotification } from '@/game/objectif';
+import { useObjectif, ouvrirDepuisNotification, programmeDuDefi } from '@/game/objectif';
 import { surCourrier } from '@/game/boite';
 import { RecordPopup } from '@/components/screens/RecordPopup';
 import { QuitRace } from '@/components/screens/QuitRace';
@@ -363,7 +363,7 @@ function MainGame() {
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
             : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
             : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
-            : defiEnCours ? <Revanche />
+            : defiEnCours && programmeDuDefi() ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       

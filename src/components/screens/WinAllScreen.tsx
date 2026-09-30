@@ -29,6 +29,17 @@ export function WinAllScreen() {
   // Meilleur chrono realise sur une seule course du parcours : c'est lui qui
   // est classe, pas le cumul.
   const bestSplitMs = runSplits.length ? Math.min(...runSplits) * 1000 : runTime * 1000;
+  // La trace de ce meilleur chrono : la preuve qui part avec lui au classement.
+  // Relevee une fois au montage, avant qu'une course neuve ne vide la liste.
+  // Si les deux listes ne vont pas ensemble (un parcours repris d'une version
+  // qui ne rangeait pas les traces), on n'envoie rien plutot qu'une trace
+  // d'une autre course, qui ferait signaler un chrono honnete.
+  const [traceDuMeilleur] = useState<number[] | null>(() => {
+    const traces = SprinterApp.G.runTraces;
+    if (!runSplits.length || !Array.isArray(traces) || traces.length !== runSplits.length) return null;
+    const t = traces[runSplits.indexOf(Math.min(...runSplits))];
+    return Array.isArray(t) && t.length ? t.slice() : null;
+  });
 
   // Un seul envoi par parcours termine, meme si le composant se re-rend.
   useEffect(() => {
@@ -56,7 +67,7 @@ export function WinAllScreen() {
     setStatus('sending');
     try {
       const bestSplit = bestSplitMs;
-      const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit);
+      const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit, traceDuMeilleur);
       // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
       // depuis la liste renvoyee plutot que de dependre du champ du serveur.
       const mine = res.best_split_ms ?? bestSplit;

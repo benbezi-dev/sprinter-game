@@ -132,6 +132,10 @@ export function OneShotEndScreen() {
   const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
   const [topName, setTopName] = useState(getSavedName());
   const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
+  // Les traces du programme, relevees au montage : chacune est la preuve du
+  // chrono de meme rang dans runSplits, et part avec lui au classement.
+  const [traces] = useState<number[][]>(() =>
+    (SprinterApp.G.shotTraces || []).map((t: unknown) => (Array.isArray(t) ? t.slice() : [])));
 
   useEffect(() => {
     let cancelled = false;
@@ -164,10 +168,10 @@ export function OneShotEndScreen() {
     let refuse = false;
     for (const t of liste) {
       try {
-        await submitRaceRecord(t.race, nom, t.ms);
+        await submitRaceRecord(t.race, nom, t.ms, traces[t.index]);
         oublier(t.race);
       } catch (e) {
-        garder(t.race, t.ms, nom, raisonDe(e));
+        garder(t.race, t.ms, nom, raisonDe(e), traces[t.index]);
         refuse = true;
       }
     }

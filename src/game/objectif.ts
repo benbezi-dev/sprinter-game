@@ -20,7 +20,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
-import { SprinterApp } from './engine';
+import { SprinterApp, gameStore } from './engine';
 import { rendreLeHasard } from './graine';
 import { HAIES_OUVERTES } from './canal';
 import { jeuDe, type Jeu } from './jeux';
@@ -287,6 +287,52 @@ export function quitterObjectif(): void {
   poser({ enCours: false, courses: 0, meilleurMs: null, dernier: null });
 }
 
+/**
+ * LE DEFI SE QUITTE PAR TOUTES LES PORTES.
+ *
+ * `quitterObjectif` n'etait appele que par le bouton « Sortir » de la
+ * revanche. Rentrer a l'accueil autrement — la pause, le retour du telephone —
+ * laissait `enCours` vrai : le programme suivant, quel qu'il soit, finissait
+ * sur l'ecran de revanche, et son cumul partait comme une tentative du defi.
+ * Le 29 septembre 2026, un one shot 100 m haies + 110 m haies de 22,51 s est
+ * ainsi arrive au serveur avec la trace de sa seule premiere course, et y a
+ * ete signale comme une course invalide.
+ *
+ * L'accueil marque donc la fin du defi, quel que soit le chemin qui y mene.
+ * On guette l'ARRIVEE a l'accueil, pas le fait d'y etre : c'est de l'accueil
+ * qu'on lance le defi, et `enCours` y passe a vrai avant que la course ne
+ * parte. Seul `goHome` pose l'etat 'title'.
+ */
+let etatPrecedent: string | null = null;
+gameStore.subscribe(() => {
+  let etat: string | null = null;
+  try { etat = SprinterApp.G.state; } catch { return; }
+  if (etat === 'title' && etatPrecedent !== null && etatPrecedent !== 'title'
+      && session.enCours) {
+    quitterObjectif();
+  }
+  etatPrecedent = etat;
+});
+
+/**
+ * Le programme qui vient de finir est-il bien celui du defi ?
+ *
+ * Le defi se court seul : un one shot d'une course, sur son epreuve. Tout
+ * autre programme n'a rien a lui dire, meme si `enCours` est reste vrai par
+ * une porte qu'on n'aurait pas prevue — c'est le filet sous la regle
+ * ci-dessus, et il protege les deux choses qui en dependent : l'ecran de fin,
+ * et l'envoi de la tentative.
+ */
+export function programmeDuDefi(): boolean {
+  const o = session.objectif;
+  if (!session.enCours || !o) return false;
+  try {
+    const G = SprinterApp.G;
+    return G.mode === 'oneshot' && Array.isArray(G.shotRaces)
+      && G.shotRaces.length === 1 && G.shotRaces[0] === o.epreuve;
+  } catch { return false; }
+}
+
 /** Court-on un defi en ce moment ? */
 export function dansUnObjectif(): boolean {
   try { return !!SprinterApp.G.objectifEnCours; } catch { return false; }
@@ -307,6 +353,9 @@ export async function soumettreCourse(tempsMs: number): Promise<Resultat | null>
   const nom = getSavedName();
   const ms = Math.round(tempsMs);
   if (!Number.isFinite(ms) || ms <= 0) return null;
+  // Un autre programme que celui du defi n'est pas une tentative : son cumul
+  // et la trace de sa premiere course ne vont pas ensemble.
+  if (!programmeDuDefi()) return null;
 
   poser({
     courses: session.courses + 1,

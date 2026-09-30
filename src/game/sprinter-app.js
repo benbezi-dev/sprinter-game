@@ -1632,6 +1632,10 @@
     champion: null, championTime: 0,
     ranking: [], won: false, badge: null, entryRank: null,
     runTime: 0, runSplits: [], runRank: null,
+    // En carriere, la trace de chaque chrono de runSplits, dans le meme ordre :
+    // c'est la preuve qui part avec le meilleur au classement. Le one-shot a
+    // la sienne, shotTraces, qui sert aussi aux defis.
+    runTraces: [],
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
@@ -2150,7 +2154,7 @@
 
   function startRun() {
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
-    G.runTime = 0; G.runSplits = []; G.runRank = null;
+    G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
     startLevel(0);
   }
   function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
@@ -3296,6 +3300,7 @@
     }
     if (G.won) {
       G.runSplits.push(G.player.finishTime);
+      G.runTraces.push(G.recTrace || []);
       G.runTime += G.player.finishTime;
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {

@@ -261,8 +261,15 @@ export function raisonDe(e: unknown): RaisonRefus {
  *
  * Leve `EnvoiRefuse` et rien d'autre : l'appelant lit `raison` plutot que de
  * deviner.
+ *
+ * `trace` est celle de la course qui a donne `bestSplitMs` — la distance tous
+ * les REC_STEP, en decimetres. C'est la preuve du chrono : le serveur la
+ * confronte a la physique du jeu, et la garde pour le fantome du tableau.
+ * Une trace d'une autre course ferait signaler un record honnete ; en cas de
+ * doute, n'en envoyer aucune.
  */
-export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number): Promise<{
+export async function submitScore(race: RaceKey, name: string, timeMs: number, bestSplitMs: number,
+                                  trace?: readonly number[] | null): Promise<{
   rank: number;
   best_time_ms: number;
   best_split_ms: number;
@@ -279,6 +286,7 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
         name,
         time_ms: Math.round(timeMs),
         best_split_ms: Math.round(bestSplitMs),
+        ...(trace && trace.length ? { trace } : {}),
       }),
     });
   } catch {
@@ -294,8 +302,9 @@ export async function submitScore(race: RaceKey, name: string, timeMs: number, b
  * Enregistre un record realise sur une seule course, sans toucher au
  * classement des parcours complets.
  */
-export async function submitRaceRecord(race: RaceKey, name: string, splitMs: number) {
-  return submitScore(race, name, NO_RUN_MS, splitMs);
+export async function submitRaceRecord(race: RaceKey, name: string, splitMs: number,
+                                       trace?: readonly number[] | null) {
+  return submitScore(race, name, NO_RUN_MS, splitMs, trace);
 }
 
 /**
@@ -313,6 +322,8 @@ export type RaceOutcome = {
   ownRank: number | null;
   /** Le nouveau chrono ameliore-t-il son propre record ? */
   beatsOwn: boolean;
+  /** Sa place dans le programme : c'est elle qui retrouve la trace de la course. */
+  index: number;
 };
 
 export async function qualifyingRaces(
@@ -339,7 +350,7 @@ export async function qualifyingRaces(
       // qu'on n'occupera pas.
       const ownMs = mine.found && mine.best_split_ms ? mine.best_split_ms : null;
       const ownRank = mine.found && mine.rank ? mine.rank : null;
-      out.push({ race: races[i], ms, rank, ownMs, ownRank, beatsOwn: ownMs === null || ms < ownMs });
+      out.push({ race: races[i], ms, rank, ownMs, ownRank, beatsOwn: ownMs === null || ms < ownMs, index: i });
     } catch {
       // classement injoignable : on n'annonce pas une place qu'on ignore
     }

@@ -54,6 +54,10 @@ export function RecordPopup() {
   // Un coureur neuf est cree a chaque course : son identite sert de jeton
   // pour ne verifier qu'une fois par course, sans compteur a maintenir.
   const checked = useRef<unknown>(null);
+  // La trace de cette course, relevee a l'arrivee : la preuve du record. Le
+  // classement repond apres un aller-retour, et une course relancee entre-temps
+  // aurait deja vide celle du moteur.
+  const trace = useRef<number[] | null>(null);
 
   useEffect(() => {
     if (!AFTER_RACE.has(state)) return;
@@ -64,6 +68,8 @@ export function RecordPopup() {
     if (t == null) return;               // abandon : pas de chrono a comparer
     const key = raceKey as RaceKey;
     let cancelled = false;
+    const t0 = SprinterApp.G.recTrace;
+    trace.current = Array.isArray(t0) && t0.length ? t0.slice() : null;
 
     fetchRaceBest(key)
       .then(best => {
@@ -97,7 +103,7 @@ export function RecordPopup() {
     setStatus('sending');
     const ms = chrono * 1000;
     try {
-      await submitRaceRecord(key, finalName, ms);
+      await submitRaceRecord(key, finalName, ms, trace.current);
       oublier(key);                  // s'il attendait depuis une course d'avant
       // On relit le tableau pour annoncer une place reellement constatee.
       const list = rankByRaceTime(await fetchLeaderboardRaw(key));
@@ -109,7 +115,7 @@ export function RecordPopup() {
       // ne reviendra pas pour cette course, et le renvoi ne depend plus de lui
       // — voir `record-attente.ts`.
       const raison = raisonDe(e);
-      garder(key, ms, finalName, raison);
+      garder(key, ms, finalName, raison, trace.current);
       setRefus(raison);
       setStatus('error');
     }

@@ -157,6 +157,9 @@ const MAX_TIME_MS = 20 * 60000; // 20 minutes, plafond large
 const MAX_RACES = 6;
 const MAX_TRACE_PTS = 1200;
 const TOP_N = 500;
+// Jusqu'a quel rang un record arrive sans trace merite d'etre signale. Voir
+// « la preuve du record » dans la route /submit.
+const RANG_SANS_TRACE_SIGNALE = 10;
 // Cumul sentinelle : marque une ligne nee d'un one shot ou d'un defi, sans
 // parcours complet derriere. Doit rester identique cote jeu (NO_RUN_MS).
 // La valeur vit dans records.js, qui en a besoin pour creer une ligne ne
@@ -1747,6 +1750,19 @@ async function servir(request, env, ctx, porteur) {
       // qui l'a produit : on ne le remplace jamais par une valeur pire.
       const bestSplit = existing ? Math.min(split, existing.best_split_ms || split) : split;
 
+      // Ce chrono ameliore-t-il celui de l'appareil ? C'est le seul cas ou il y
+      // a quelque chose a prouver : un chrono moins bon n'entre nulle part.
+      const nouveauMeilleur = !existing || !(existing.best_split_ms > 0)
+        || split < existing.best_split_ms;
+      // Et le record du JOUEUR avant cette course, tous appareils confondus :
+      // c'est a lui que se mesure un bond. Lu avant l'ecriture, qui le
+      // remplacerait par le chrono qu'on veut juger.
+      const nameKey = cleanedName.trim().toLowerCase();
+      const recordAvant = nouveauMeilleur ? await env.DB.prepare(
+        `SELECT MIN(best_split_ms) AS m FROM scores
+          WHERE race_key = ? AND lower(trim(name)) = ? AND best_split_ms > 0`
+      ).bind(race_key, nameKey).first() : null;
+
       if (!existing || t < existing.time_ms) {
         await env.DB.prepare(
           `INSERT INTO scores (device_id, race_key, name, time_ms, best_split_ms, updated_at)
@@ -1763,19 +1779,56 @@ async function servir(request, env, ctx, porteur) {
 
       // La trace n'accompagne que le meilleur chrono par course : c'est elle
       // qu'un adversaire affrontera en fantome depuis le tableau.
-      if (split === bestSplit) {
-        const tr = cleanTrace(trace);
-        if (tr.length) {
-          await env.DB.prepare(
-            `UPDATE scores SET trace = ?, trace_ms = ? WHERE device_id = ? AND race_key = ?`
-          ).bind(JSON.stringify(tr), bestSplit, device_id, race_key).run();
-        }
+      const tr = cleanTrace(trace);
+      if (split === bestSplit && tr.length) {
+        await env.DB.prepare(
+          `UPDATE scores SET trace = ?, trace_ms = ? WHERE device_id = ? AND race_key = ?`
+        ).bind(JSON.stringify(tr), bestSplit, device_id, race_key).run();
       }
 
       const bestTime = existing && existing.time_ms < t ? existing.time_ms : t;
       // le rang se joue sur le meilleur chrono d'une course, pas sur le cumul
       const rank = await getRank(env.DB, race_key, bestSplit);
       const entries = await getLeaderboard(env.DB, race_key);
+
+      // LA PREUVE DU RECORD, et elle ne refuse rien.
+      //
+      // Jusqu'ici le classement etait la seule porte du jeu qui ne demandait
+      // aucune preuve : `/objectif/tentative` verifie la trace, `/submit` la
+      // rangeait sans la lire — et le jeu ne l'envoyait meme pas. Le 29
+      // septembre 2026, les 456 lignes de `scores` etaient toutes sans trace,
+      // record du monde compris : impossible de dire s'il avait ete couru.
+      //
+      // On juge donc ici chaque chrono qui ameliore celui de l'appareil, avec les
+      // regles de preuve.js, et l'on NOTE ce qui cloche sans rien refuser : un
+      // record retire sur un soupcon, c'est le pire tort qu'on puisse faire au
+      // bon joueur. La table `courses_suspectes` se lit ensuite a tete reposee.
+      //
+      // Une trace absente ne se signale qu'au sommet du classement. Les
+      // applications d'avant cette version n'en envoient pas, et elles
+      // rempliraient la table de chronos ordinaires ; en tete, en revanche, un
+      // chrono sans preuve est precisement ce qu'on veut savoir.
+      if (nouveauMeilleur) {
+        ctx.waitUntil((async () => {
+          const griefs = tr.length ? verifierTrace(tr, split, race_key)
+            : (rank <= RANG_SANS_TRACE_SIGNALE ? ['trace absente'] : []);
+          if (griefs.length) {
+            await signaler(env.DB, {
+              nameKey, deviceId: device_id, quoi: 'trace',
+              detail: griefs.join(' ; '), tempsMs: split,
+            });
+          }
+          const pb = recordAvant && recordAvant.m;
+          const v = vraisemblance(split, pb, await nombreDeCourses(env.DB, nameKey));
+          if (v.suspect) {
+            await signaler(env.DB, {
+              nameKey, deviceId: device_id, quoi: 'bond',
+              detail: `${(v.bond * 100).toFixed(1)} % d'un coup`,
+              tempsMs: split, pbMs: pb,
+            });
+          }
+        })());
+      }
 
       // Ce chrono vient-il de produire un moment qui se raconte ? La question
       // se pose ici parce que c'est ici qu'on a tout : le classement relu, le
