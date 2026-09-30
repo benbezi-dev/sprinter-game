@@ -13,6 +13,7 @@ import {
   lireMemoire, ecrireMemoire, apresConcours, CarteEtape, Drapeau, BoutonsFin, prenom,
   type MemoireSaut,
 } from './sauts-commun';
+import { Cartouche, Insigne, VITRE } from './sauts-habillage';
 import {
   PLATEAU, nouveauConcours, avancerJusquAuJoueur, inscrire, classement, aQui, tirerVent,
   joueurEnLice, placeDuJoueur, meilleur, tours,
@@ -126,7 +127,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
   const [file, setFile] = useState<Fait[]>([]);
   const [vus, setVus] = useState(0);
   const [, rafraichir] = useState(0);
-  const [annonce, setAnnonce] = useState<null | { sorte: string; texte: string; sous?: string; couleur: string }>(null);
+  const [annonce, setAnnonce] = useState<null | { sorte: string; texte: string; sous?: string; couleur: string; m?: number }>(null);
   const [live, setLive] = useState<{ phase: string; v: number; angle: number | null; horloge: number } | null>(null);
   const [record, setRecord] = useState<null | { m: number; vent: number; ok: boolean; avant: number | null }>(null);
   const coupeVue = useRef(false);
@@ -252,7 +253,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         const vent = lireVent(r.vent);
         // Au triple saut, les trois bonds, comme sur l'ecran de la television.
         const bonds = r.bonds && r.bonds.length === 3 ? r.bonds.map(virgule).join(' · ') + ' — ' : '';
-        setAnnonce(a => ({ sorte: 'marque', texte: `${virgule(r.marque!)} m`,
+        setAnnonce(a => ({ sorte: 'marque', texte: `${virgule(r.marque!)} m`, m: r.marque!,
           sous: bonds + (homologable(r.vent) ? N.t('saut_vent', { v: vent }) : N.t('saut_vent_trop', { v: vent }))
             + (a && a.sorte === 'ramene' ? ' · ' + a.texte : ''),
           couleur: accent }));
@@ -328,11 +329,11 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
       {/* L'EN-TETE : l'epreuve, l'etape, l'essai, et les six cases du joueur. */}
       <div className="max-w-lg mx-auto flex items-start gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display font-black tracking-tight text-base leading-none" style={{ color: accent }}>
+          <div className={`inline-flex max-w-full items-baseline gap-2 rounded-lg px-2.5 pt-1 pb-1.5 ${VITRE}`}>
+            <span className="font-display font-black tracking-tight text-[15px] leading-none" style={{ color: accent }}>
               {N.t(cfg.titre)}
             </span>
-            <span className="text-[9px] tracking-widest uppercase text-white/50 truncate">{N.levelName(etape)}</span>
+            <span className="text-[11px] font-bold tracking-widest uppercase text-white/75 truncate">{N.levelName(etape)}</span>
           </div>
           <div className="mt-1.5 flex gap-1">
             {Array.from({ length: tours() }, (_, i) => {
@@ -341,10 +342,10 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
               const coupe = C.coupe && !C.coupe.includes(joueur) && i >= ESSAIS.premiers;
               return (
                 <div key={i}
-                  className={`w-11 h-6 rounded-md border flex items-center justify-center font-mono text-[9px] tabular-nums
-                    ${encours ? 'border-white/60' : 'border-white/10'}`}
+                  className={`w-12 h-6 rounded-md border flex items-center justify-center font-mono font-bold text-[11px] tabular-nums
+                    ${encours ? 'border-white/80 border-[1.5px]' : 'border-white/12'}`}
                   style={{
-                    background: e && !e.mordu ? 'rgb(var(--primaire-rgb) / 0.15)' : 'rgba(0,0,0,0.35)',
+                    background: e && !e.mordu ? 'rgb(var(--primaire-rgb) / 0.16)' : 'rgba(6,9,19,0.78)',
                     color: !e ? 'rgba(255,255,255,0.3)' : e.mordu ? 'rgba(248,113,113,0.95)' : '#fff',
                     opacity: coupe ? 0.3 : 1,
                   }}>
@@ -356,33 +357,33 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <button onPointerDown={e => { e.stopPropagation(); quitter(); }}
-                  className="pointer-events-auto px-2.5 py-1 rounded-full border border-white/15 bg-black/40
-                             text-white/60 text-[9px] tracking-widest hover:text-white">
+                  className={`pointer-events-auto px-3 py-1 rounded-full ${VITRE}
+                             text-white/80 text-[11px] font-bold tracking-widest hover:text-white`}>
             {N.t('saut_quitter')}
           </button>
-          <span className="text-[9px] tracking-widest text-white/50 font-mono">
+          <span className={`px-3 py-1 rounded-full ${VITRE} text-[11px] font-bold tracking-widest text-white/80`}>
             {N.t('saut_tour', { n: String(tour), t: String(tours()) })}
           </span>
           {/* LA MINUTE. Jaune aux quinze dernieres secondes, comme le drapeau
               que leve l'officiel du chronometre. */}
           {temps === 'toi' && live && live.phase === 'attente' && (
-            <span className="font-mono text-sm font-bold tabular-nums"
-                  style={{ color: live.horloge <= 15 ? 'rgb(250,214,60)' : 'rgba(255,255,255,0.8)' }}>
+            <span className={`px-2.5 py-0.5 rounded-lg ${VITRE} font-mono text-[15px] font-bold tabular-nums`}
+                  style={{ color: live.horloge <= 15 ? 'rgb(250,214,60)' : 'rgba(255,255,255,0.9)' }}>
               {Math.max(0, Math.ceil(live.horloge))} s
             </span>
           )}
+          {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. En
+              haut a droite, sous l'essai, sur un verre transparent a 80 % :
+              a gauche, il couvrait le bac a sable — la ou le saut retombe. */}
+          {temps !== 'fin' && (
+            // il s'efface pendant le gros plan du record, qu'il cacherait
+            <div className={`mt-1 transition-opacity duration-500
+                             ${temps === 'toi' && annonce?.sorte === 'marque' && record?.ok ? 'opacity-0' : ''}`}>
+              <Tableau lignes={cl} accent={accent} court />
+            </div>
+          )}
         </div>
       </div>
-
-      {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. */}
-      {/* Decale a droite du bouton de pause, qui tient le coin gauche. */}
-      {temps !== 'fin' && (
-        // il s'efface pendant le gros plan du record, qu'il cacherait
-        <div className={`max-w-lg mx-auto mt-2 pl-10 transition-opacity duration-500
-                         ${temps === 'toi' && annonce?.sorte === 'marque' && record?.ok ? 'opacity-0' : ''}`}>
-          <Tableau lignes={cl} accent={accent} court />
-        </div>
-      )}
 
       {/* CE QUE FONT LES AUTRES, un par un, pendant que tu attends. */}
       <AnimatePresence>
@@ -428,8 +429,13 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
       )}
       {temps === 'toi' && live && live.phase === 'elan' && (
         <div className="absolute inset-x-0 bottom-[calc(22vh+2.2rem)] flex justify-center">
-          <span className="font-mono text-sm tabular-nums text-white/85 bg-black/40 rounded-full px-3 py-0.5">
-            {N.t('saut_elan')} {live.v.toFixed(1)} m/s
+          <span className={`flex items-center gap-2 rounded-xl px-3 py-1 ${VITRE}`}>
+            <span className="text-[10px] font-extrabold tracking-widest text-white/60">{N.t('saut_elan')}</span>
+            <span className="w-[70px] h-1.5 rounded-full bg-white/12 overflow-hidden">
+              <span className="block h-full rounded-full bg-primary shadow-[0_0_8px_rgb(var(--primaire-rgb))]"
+                    style={{ width: `${Math.min(100, (live.v / 12) * 100)}%` }} />
+            </span>
+            <span className="font-mono text-xs font-bold tabular-nums text-white">{live.v.toFixed(1)} m/s</span>
           </span>
         </div>
       )}
@@ -439,19 +445,31 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
           <motion.div key={annonce.sorte + annonce.texte} initial={{ opacity: 0, scale: 0.94 }}
             animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
             className={`absolute inset-x-0 ${annonce.sorte === 'marque' ? 'top-[13%]' : 'top-[30%]'} flex flex-col items-center gap-1`}>
-            <span className={`flex items-center gap-2 font-display font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]
-                              ${annonce.sorte === 'marque' ? 'text-5xl' : annonce.sorte === 'appel' ? 'text-3xl sm:text-4xl' : 'text-xl'}`}
-                  style={{ color: annonce.couleur }}>
-              {/* Le drapeau du juge de planche : blanc valable, rouge mordu.
-                  Il est leve la-bas, au bord de la piste ; on le rappelle ici,
-                  ou l'on regarde. */}
-              {annonce.sorte === 'marque' && (
+            {annonce.sorte === 'marque' ? (
+              // LA MARQUE : le drapeau du juge — blanc valable, rouge mordu,
+              // leve la-bas au bord de la piste, rappele ici ou l'on regarde —
+              // les metres, et les insignes de ce que le saut vient de battre.
+              <div className={`flex items-center gap-3 rounded-2xl px-4 pt-1.5 pb-2 shadow-[0_10px_30px_rgba(0,0,0,0.45)] ${VITRE}`}>
                 <Drapeau blanc={annonce.couleur !== '#f87171'} />
-              )}
-              {annonce.texte}
-            </span>
+                <span className="font-display font-black tracking-tight text-5xl leading-none"
+                      style={{ color: annonce.couleur === '#f87171' ? annonce.couleur : '#fff' }}>
+                  {annonce.texte}
+                </span>
+                {annonce.m != null && (
+                  (record && record.ok && record.avant !== null) || annonce.m > cfg.record.m
+                ) && (
+                  <span className="flex flex-col gap-1">
+                    {record && record.ok && record.avant !== null && <Insigne sorte="rp" texte={N.t('saut_rp')} />}
+                    {annonce.m > cfg.record.m && <Insigne sorte="rm" texte={N.t('saut_rm')} />}
+                  </span>
+                )}
+              </div>
+            ) : annonce.texte ? (
+              <Cartouche texte={annonce.texte} couleur={annonce.couleur}
+                         grand={annonce.sorte === 'appel' || annonce.sorte === 'transition' || annonce.sorte === 'ramene'} />
+            ) : null}
             {annonce.sous && (
-              <span className="text-[10px] tracking-wider text-white/85 bg-black/45 rounded-full px-3 py-0.5">
+              <span className={`mt-1 text-[11px] font-bold tracking-wide text-white/90 rounded-full px-3 py-0.5 ${VITRE}`}>
                 {annonce.sous}
               </span>
             )}
@@ -536,11 +554,16 @@ function Tableau({ lignes, accent, court = false }: { lignes: any[]; accent: str
     if (moi && !vues.includes(moi)) vues = [...vues, moi];
   }
   return (
-    <div className={`rounded-xl ${court ? 'bg-black/45 w-[min(62vw,15rem)]' : ''} px-2 py-1.5 flex flex-col gap-0.5`}>
-      {!court && <div className="text-[9px] tracking-widest uppercase text-white/40 mb-1">{N.t('saut_classement')}</div>}
+    <div className={`rounded-xl ${court
+      ? 'bg-[rgba(6,9,19,0.2)] border border-white/10 backdrop-blur-[2px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] w-[min(46vw,13.5rem)] px-2.5 pt-1.5 pb-2 text-left'
+      : 'px-2 py-1.5'} flex flex-col gap-0.5`}>
+      <div className={`${court ? 'text-[10px] font-extrabold tracking-[0.16em] text-white/55' : 'text-[9px] tracking-widest text-white/40'} uppercase mb-1`}>
+        {N.t('saut_classement')}
+      </div>
       {vues.map(l => (
-        <div key={l.index} className={`flex items-center gap-2 text-[10px] ${l.qualifie ? '' : 'opacity-40'}`}>
-          <span className="w-5 font-mono text-white/45 tabular-nums">{l.meilleur > 0 ? l.place : '–'}</span>
+        <div key={l.index} className={`flex items-center gap-2 ${court ? 'text-xs' : 'text-[10px]'} ${l.qualifie ? '' : 'opacity-40'}
+                                        ${court && l.joueur && vues[0] !== l ? 'mt-0.5 pt-1 border-t border-white/10' : ''}`}>
+          <span className="w-5 font-mono text-white/50 tabular-nums">{l.meilleur > 0 ? l.place : '–'}</span>
           <span className={`flex-1 truncate ${l.joueur ? 'font-black' : 'font-semibold'}`}
                 style={{ color: l.joueur ? accent : 'rgba(255,255,255,0.85)' }}>{l.nom}</span>
           <span className="font-mono tabular-nums text-white/85">

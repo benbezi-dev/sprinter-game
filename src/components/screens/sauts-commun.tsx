@@ -70,6 +70,13 @@ export function apresConcours(m: MemoireSaut, { marque, etape, podium, carriere 
  *
  * Le stade reste net derriere : le sautoir est deja arme, et c'est lui qu'on
  * regarde en lisant.
+ *
+ * ET LE FAVORI EST LA, EN PERSONNE. Sprinter fait entrer son champion en
+ * courant, en grand, a gauche de la carte (GameCanvas, dessinerCinematique) ;
+ * la carte des sauts ne montrait qu'un nom. Il entre maintenant de la meme
+ * facon, avec le meme dessin (drawIcon) et sa propre allure — celle que le
+ * moteur lui donne a partir de son nom (lookFor), ou la sienne s'il est un
+ * ZEZE — et son ombre de course.
  */
 export function CarteEtape({ etape, rival, annonce, lignes, onFin }: {
   etape: number; rival: string; annonce: string; lignes: string[]; onFin: () => void;
@@ -80,14 +87,27 @@ export function CarteEtape({ etape, rival, annonce, lignes, onFin }: {
   const fini = useRef(false);
   const finir = () => { if (!fini.current) { fini.current = true; onFin(); } };
   const duree = 1.3 + lignes.length * 2.6 + 2.2;
+  const toile = useRef<HTMLCanvasElement>(null);
+  const favori = useRef<any>(null);
+  if (!favori.current && rival) {
+    const K = (globalThis as any).SprinterCore;
+    const L = SprinterApp.LEVELS[etape];
+    favori.current = {
+      name: rival, look: (K.ZEZE && K.ZEZE[rival]) || K.lookFor(rival, L && L.pool),
+      stride: 0, v: 10.5, maxSpeed: 11, fallAnim: 0, celebrate: 0,
+    };
+  }
 
   useEffect(() => {
     let id = 0;
     const t0 = performance.now();
+    let avant = t0;
     const boucle = (now: number) => {
       const s = (now - t0) / 1000;
       setT(s);
       if (s >= duree) { finir(); return; }
+      dessinerFavori(toile.current, favori.current, s, (now - avant) / 1000);
+      avant = now;
       id = requestAnimationFrame(boucle);
     };
     id = requestAnimationFrame(boucle);
@@ -108,6 +128,7 @@ export function CarteEtape({ etape, rival, annonce, lignes, onFin }: {
   return (
     <div className="fixed inset-0 z-[47] pointer-events-auto select-none"
          onClick={() => { if (arme) finir(); else setArme(true); }}>
+      <canvas ref={toile} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden />
       {carte > 0 && (
         <div
           className="absolute z-10 overflow-hidden rounded-2xl border border-white/10 bg-[rgba(9,12,24,0.82)]
@@ -119,7 +140,7 @@ export function CarteEtape({ etape, rival, annonce, lignes, onFin }: {
         >
           <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5" style={{ backgroundColor: accent }} />
           <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest uppercase mb-1 md:mb-2" style={{ color: accent }}>
-            {N.t('rival')}
+            {N.t('saut_rival')}
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black font-display tracking-tight uppercase leading-[0.95] text-foreground">
             {rival}
@@ -160,6 +181,38 @@ export function CarteEtape({ etape, rival, annonce, lignes, onFin }: {
       </div>
     </div>
   );
+}
+
+/**
+ * Le favori qui entre en courant, a la place et a la taille ou Sprinter fait
+ * entrer le sien (GameCanvas, pointDuPersonnage et dessinerCinematique) : au
+ * quart gauche en paysage, au-dessus de la carte en portrait, les pieds aux
+ * trois quarts de la hauteur. Il glisse depuis la gauche pendant une
+ * demi-seconde, puis court sur place.
+ */
+function dessinerFavori(cv: HTMLCanvasElement | null, homme: any, s: number, dt: number) {
+  if (!cv || !homme) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  }
+  const ctx = cv.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  homme.stride += Math.min(dt, 0.1) * 11;
+  const portrait = h > w;
+  const gx = (portrait ? 0.5 : 0.24) * w * dpr;
+  const gy = (portrait ? 0.46 : 0.8) * h * dpr;
+  // la taille est celle d'un deux-metres en pixels : le personnage en fait ~90 %
+  const taille = (portrait ? 0.42 : 0.72) * h * dpr;
+  const app = Math.max(0, Math.min(1, s / 0.55));
+  const x = gx - taille * 0.85 * (1 - (1 - Math.pow(1 - app, 3)));
+  const Prem = (globalThis as any).RenduPremium;
+  const K = (globalThis as any).SprinterCore;
+  if (Prem && K) Prem.ombre(ctx, x, gy, taille / 2, homme.look.h / K.C.MODEL_H, homme.stride, false);
+  SprinterApp.drawIcon(ctx, homme, x, gy, taille, false);
 }
 
 /* ------------------------------------------------------------ le drapeau */

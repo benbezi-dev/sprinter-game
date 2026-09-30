@@ -120,6 +120,8 @@ export const MOTS_SAUTS = {
   saut_rp:         ['RP', 'PB'],
   saut_aucun:      ['Aucun concours', 'No competition yet'],
   saut_annonce:    ['annoncé à {m}', 'announced at {m}'],
+  // La carte d'etape : Sprinter presente « le coureur a battre ».
+  saut_rival:      ['LE SAUTEUR À BATTRE', 'THE JUMPER TO BEAT'],
   saut_accueil:    ['ACCUEIL', 'HOME'],
   saut_carriere_refaire: ['RECOMMENCER LA CARRIÈRE', 'RESTART THE CAREER'],
   saut_qualifie_etape:   ['PODIUM : L’ÉTAPE SUIVANTE T’ATTEND', 'PODIUM: THE NEXT STAGE AWAITS'],
