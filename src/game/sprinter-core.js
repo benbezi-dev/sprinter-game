@@ -2390,6 +2390,86 @@
     const dzCrane = -bob * 0.55;
     const addCrane = (c, o, hb, ht, hz, bout) =>
       addT(c, 0, [o[0], o[1], o[2] + dzCrane], hb, ht, hz, yawTop * 0.2, bout);
+    const hy = yawTop * 0.2, hc = L.hairCol;
+    // Sous un bandeau, les cheveux tiennent au crane comme lui : sans quoi le
+    // bandeau, qui suit le crane, glisserait sur la calotte a chaque foulee.
+    const dzH = L.bandeau ? dzCrane : 0;
+    // LES CHEVEUX COIFFENT LE CRANE MESURE. Leurs rayons avaient ete regles
+    // sur l'ancienne tete, plus etroite : sur le crane releve dans Blender,
+    // la calotte ne le couvrait plus et la peau ressortait entre deux
+    // bandes de cheveux. Dix pour cent de plus, et elle le coiffe.
+    const addH = (da, o, hb, ht, hz, yaw, bout) =>
+      addT(hc, da, [o[0], o[1], o[2] + dzH], [hb[0] * 1.10, hb[1] * 1.10],
+           [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
+    // LA CALOTTE — la premiere piece de chaque coiffure — se dessine APRES le
+    // haut du crane, au pire juste derriere lui (PREM.APRES, voir
+    // coureur-premium.js) : au niveau ULTRA, le tri de profondeur la faisait
+    // passer dessous.
+    const CALOTTE = PREM.LIBRE | (PREM.APRES || 0);
+    switch (L.hair) {
+      case 'shaved':
+        addH(0, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
+            0.016, hy, CALOTTE); break;
+      case 'flattop':
+        addH(0, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
+            0.048, hy, CALOTTE); break;
+      case 'fade':
+        addH(0, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
+            0.030, hy, CALOTTE);
+        addH(0, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
+            0.046, hy, true); break;
+      case 'bun':
+        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
+            0.034, hy, CALOTTE);
+        addH(0, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
+            0.044, hy, true); break;
+      case 'ponytail':
+        addH(0, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
+            0.032, hy, CALOTTE);
+        addH(0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
+            [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
+      case 'braids':
+        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
+            0.034, hy, CALOTTE);
+        for (const dy of [-0.044, 0, 0.044]) {
+          addH(0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
+              [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
+        }
+        break;
+      case 'ras':
+        // Le cheveu court sous un bandeau : une calotte en dome, large a la
+        // base pour couvrir le crane, etroite au sommet. Un tube comme
+        // `shaved`, depassant d'un bandeau, se lisait en haut-de-forme.
+        addH(0, [-0.004, 0, 0.753], [0.072, 0.066], [0.054, 0.050],
+            0.011, hy, CALOTTE); break;
+      default:
+        addH(0, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
+            0.026, hy, CALOTTE);
+    }
+    // LE BANDEAU, haut sur le front, a la lisiere des cheveux.
+    //
+    // Il se pose JUSTE APRES les cheveux, et COLLE a eux (PREM.COLLE) : il
+    // se dessine immediatement apres la calotte, par-dessus elle et par-
+    // dessus le crane. Laisse au tri de profondeur, il perdait contre le
+    // haut du crane, dont le centre est un rien plus haut que le sien — et
+    // un bandeau peint sous la tete ne se voit que par son liseré.
+    // Il epouse la section MESUREE du crane, un rien plus large : le front
+    // devant, la nuque derriere, sans flotter.
+    if (L.bandeau) {
+      const [cB, pB, lB] = PREM.section(PR, 'head', niv, 0.721, 1);
+      const [cH, pH, lH] = PREM.section(PR, 'head', niv, 0.747, 1);
+      // UN ANNEAU, OUVERT AUX DEUX BOUTS. Ferme, son disque du haut — qui
+      // fait face a une camera placee au-dessus — coiffait tout le crane
+      // d'une calotte blanche, cheveux compris. Ouvert, on voit par le haut
+      // ce qui est dessine dessous : les cheveux.
+      addCrane(L.bandeau, [cB, 0, 0.734, cH], [pB * 1.07, lB * 1.08],
+               [pH * 1.09, lH * 1.10], 0.0135,
+               PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
+    }
+    // LA BARBE ET LES LUNETTES VIENNENT APRES LES CHEVEUX dans la liste : la
+    // calotte (PREM.APRES, plus bas) se range par rapport a la piece qui la
+    // precede, et ce doit etre le haut du crane. Elles gardent chacune leur
+    // propre profondeur ; leur rang ne change rien a leur dessin.
     // LA BARBE : une coque sur la machoire, poussee vers l'avant. Son centre
     // est devant celui de la tete, si bien que le tri de profondeur la
     // dessine APRES la machoire vue de face, et AVANT vue de dos — ou elle
@@ -2424,78 +2504,6 @@
         addT(L.lunettes, 0, [0.090, side * 0.036, 0.690], [0.005, 0.020],
              [0.005, 0.020], 0.016, yawTop * 0.2, PREM.MESURE);
       }
-    }
-
-    const hy = yawTop * 0.2, hc = L.hairCol;
-    // Sous un bandeau, les cheveux tiennent au crane comme lui : sans quoi le
-    // bandeau, qui suit le crane, glisserait sur la calotte a chaque foulee.
-    const dzH = L.bandeau ? dzCrane : 0;
-    // LES CHEVEUX COIFFENT LE CRANE MESURE. Leurs rayons avaient ete regles
-    // sur l'ancienne tete, plus etroite : sur le crane releve dans Blender,
-    // la calotte ne le couvrait plus et la peau ressortait entre deux
-    // bandes de cheveux. Dix pour cent de plus, et elle le coiffe.
-    const addH = (da, o, hb, ht, hz, yaw, bout) =>
-      addT(hc, da, [o[0], o[1], o[2] + dzH], [hb[0] * 1.10, hb[1] * 1.10],
-           [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
-    switch (L.hair) {
-      case 'shaved':
-        addH(0, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
-            0.016, hy, true); break;
-      case 'flattop':
-        addH(0, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
-            0.048, hy, true); break;
-      case 'fade':
-        addH(0, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
-            0.030, hy, true);
-        addH(0, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
-            0.046, hy, true); break;
-      case 'bun':
-        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
-        addH(0, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
-            0.044, hy, true); break;
-      case 'ponytail':
-        addH(0, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
-            0.032, hy, true);
-        addH(0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
-            [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
-      case 'braids':
-        addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
-        for (const dy of [-0.044, 0, 0.044]) {
-          addH(0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
-              [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
-        }
-        break;
-      case 'ras':
-        // Le cheveu court sous un bandeau : une calotte en dome, large a la
-        // base pour couvrir le crane, etroite au sommet. Un tube comme
-        // `shaved`, depassant d'un bandeau, se lisait en haut-de-forme.
-        addH(0, [-0.004, 0, 0.753], [0.072, 0.066], [0.054, 0.050],
-            0.011, hy, true); break;
-      default:
-        addH(0, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
-            0.026, hy, true);
-    }
-    // LE BANDEAU, haut sur le front, a la lisiere des cheveux.
-    //
-    // Il se pose JUSTE APRES les cheveux, et COLLE a eux (PREM.COLLE) : il
-    // se dessine immediatement apres la calotte, par-dessus elle et par-
-    // dessus le crane. Laisse au tri de profondeur, il perdait contre le
-    // haut du crane, dont le centre est un rien plus haut que le sien — et
-    // un bandeau peint sous la tete ne se voit que par son liseré.
-    // Il epouse la section MESUREE du crane, un rien plus large : le front
-    // devant, la nuque derriere, sans flotter.
-    if (L.bandeau) {
-      const [cB, pB, lB] = PREM.section(PR, 'head', niv, 0.721, 1);
-      const [cH, pH, lH] = PREM.section(PR, 'head', niv, 0.747, 1);
-      // UN ANNEAU, OUVERT AUX DEUX BOUTS. Ferme, son disque du haut — qui
-      // fait face a une camera placee au-dessus — coiffait tout le crane
-      // d'une calotte blanche, cheveux compris. Ouvert, on voit par le haut
-      // ce qui est dessine dessous : les cheveux.
-      addCrane(L.bandeau, [cB, 0, 0.734, cH], [pB * 1.07, lB * 1.08],
-               [pH * 1.09, lH * 1.10], 0.0135,
-               PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
     }
 
     const sh = rot(0, 0.470, lean);

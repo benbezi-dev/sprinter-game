@@ -7419,9 +7419,14 @@
       // Une piece COLLEE (16, voir coureur-premium.js) prend la profondeur
       // de celle qui la precede, un rien plus pres : elle se dessine juste
       // apres elle, par-dessus.
-      const d = (caps[i][3] & 16) && avant !== null ? avant - 1e-6
-              : (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
-                (e0[2] + e1[2]) * VIEW[2];
+      // Une piece APRES (32) garde sa profondeur si elle passe deja apres la
+      // precedente, et s'y colle sinon.
+      const f = caps[i][3];
+      const propre = (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                     (e0[2] + e1[2]) * VIEW[2];
+      const d = (f & 16) && avant !== null ? avant - 1e-6
+              : (f & 32) && avant !== null ? Math.min(propre, avant - 1e-6)
+              : propre;
       order.push([d, i]);
       avant = d;
     }
