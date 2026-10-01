@@ -85,7 +85,11 @@
         votre connexion réseau (via l'infrastructure Cloudflare) pour afficher
         un drapeau à côté de votre nom. Aucune adresse IP n'est conservée dans
         la base de données — seul le pays qui en a été déduit l'est. Vous
-        pouvez le corriger vous-même dans le jeu.</li>
+        pouvez le corriger vous-même dans le jeu. Pour freiner les abus, le
+        serveur compte aussi, pendant une minute, les envois venus d'une même
+        connexion : il n'en garde qu'une empreinte signée par une clé secrète,
+        d'où l'on ne peut pas relire l'adresse, et l'efface quelques minutes
+        plus tard.</li>
         <li><strong>Un pseudo Instagram</strong>, uniquement si vous choisissez
         de l'ajouter, affiché à côté de votre nom au classement.</li>
         <li><strong>Vos temps de course et le tracé de votre déplacement</strong>
@@ -193,7 +197,10 @@
         from your network connection (via Cloudflare's infrastructure) to
         show a flag next to your name. No IP address is stored in the
         database — only the country inferred from it. You can correct it
-        yourself in the game.</li>
+        yourself in the game. To curb abuse, the server also counts, for one
+        minute, the requests coming from the same connection: it keeps only a
+        fingerprint signed with a secret key, from which the address cannot be
+        read back, and erases it a few minutes later.</li>
         <li><strong>An Instagram handle</strong>, only if you choose to add
         one, shown next to your name on the leaderboard.</li>
         <li><strong>Your race times and movement trace</strong> (position

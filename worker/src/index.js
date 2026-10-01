@@ -70,6 +70,7 @@ import {
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
+import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
 import { etapeConnue, noterEtape, lireTunnel } from './tunnel.js';
 import {
   signaler as signalerMot, bloquer, debloquer, listeBloques, estBanni,
@@ -232,70 +233,6 @@ function json(data, status = 200) {
     status,
     headers: { 'Content-Type': 'application/json' },
   }));
-}
-
-// Regles par route : le nombre d'appels qu'une meme IP peut faire dans la
-// fenetre, avant d'etre mise en attente. `/test/entrer` est la plus stricte
-// des trois : c'est la seule qui ressemble a une authentification, et donc
-// la seule qu'une force brute chercherait a marteler.
-const RATE_LIMITS = {
-  '/test/entrer': { max: 8, fenetreMs: 60_000 },
-  '/duel/mot': { max: 6, fenetreMs: 60_000 },
-  // Le mot d'une course de championnat : meme geste, meme cadence. Un joueur
-  // n'en pose qu'un par course, et il n'y a que treize courses dans une
-  // edition — six par minute laissent passer une reprise apres une coupure et
-  // arretent un script.
-  '/champ/mot': { max: 6, fenetreMs: 60_000 },
-  // La bulle de presentation : une par partant et par phase, reposable
-  // jusqu'a l'appel. Dix par minute laissent corriger une phrase refusee par
-  // le filtre, et arretent qui chercherait a le contourner par essais.
-  '/champ/bulle': { max: 10, fenetreMs: 60_000 },
-  // S'engager ou se retirer : un geste par selection, quelques-uns au plus.
-  '/champ/engager': { max: 10, fenetreMs: 60_000 },
-  // Un identifiant TURN vaut une heure de relais facture au gigaoctet. Un
-  // joueur en demande un par partie ; dix par minute et par adresse laissent
-  // passer une famille derriere la meme box et arretent net un script.
-  '/direct/turn': { max: 10, fenetreMs: 60_000 },
-  default: { max: 30, fenetreMs: 60_000 },
-};
-
-const limitesReady = new WeakSet();
-async function ensureRateLimitTable(db) {
-  if (limitesReady.has(db)) return;
-  await db.prepare(`CREATE TABLE IF NOT EXISTS rate_limits (
-    cle TEXT PRIMARY KEY,
-    fenetre_debut INTEGER NOT NULL,
-    compte INTEGER NOT NULL
-  )`).run();
-  limitesReady.add(db);
-}
-
-/**
- * Cette IP a-t-elle encore droit a un appel sur cette route, maintenant ?
- *
- * Fenetre fixe plutot que glissante : moins precis pres des bords, mais une
- * seule ligne par cle et une seule ecriture par appel — ce que la fenetre
- * glissante ne tient pas sans une table d'evenements qui grossit sans fin.
- */
-async function sousLimite(db, ip, route) {
-  await ensureRateLimitTable(db);
-  const regle = RATE_LIMITS[route] || RATE_LIMITS.default;
-  const cle = `${route}:${ip}`;
-  const now = Date.now();
-  const row = await db.prepare(
-    `SELECT fenetre_debut, compte FROM rate_limits WHERE cle = ?`
-  ).bind(cle).first();
-
-  if (!row || now - row.fenetre_debut >= regle.fenetreMs) {
-    await db.prepare(
-      `INSERT INTO rate_limits (cle, fenetre_debut, compte) VALUES (?, ?, 1)
-       ON CONFLICT(cle) DO UPDATE SET fenetre_debut = excluded.fenetre_debut, compte = 1`
-    ).bind(cle, now).run();
-    return true;
-  }
-  if (row.compte >= regle.max) return false;
-  await db.prepare(`UPDATE rate_limits SET compte = compte + 1 WHERE cle = ?`).bind(cle).run();
-  return true;
 }
 
 function cleanName(raw) {
@@ -1096,6 +1033,13 @@ export default {
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
 
+    // Les compteurs anti-abus dont la fenetre est passee : voir limites.js.
+    // Sur la base de production seule — le canal de test n'est pas compte.
+    ctx.waitUntil(
+      purgerLimites(env.DB, quand)
+        .catch(e => console.log('limites KO', String(e && e.message || e)))
+    );
+
     /* LA SEMAINE DES NATIONS, FIGEE UNE FOIS. Le tableau du lundi ne vaut que
        s'il peut se comparer a celui d'avant : « la France passe 7e » est un
        post, « la France est 7e » n'en est pas un. `figerLaSemaine` ecrit a la
@@ -1337,7 +1281,8 @@ async function servir(request, env, ctx, porteur) {
     // quelques secondes.
     if (request.method === 'POST' && !canal.test) {
       const ip = request.headers.get('CF-Connecting-IP') || 'inconnue';
-      if (!(await sousLimite(env.DB, ip, url.pathname))) {
+      const empreinte = await empreinteIp(ip, env.ADMIN_CLE);
+      if (!(await sousLimite(env.DB, empreinte, url.pathname))) {
         return json({ error: 'trop de tentatives, reessayez dans une minute' }, 429);
       }
     }
