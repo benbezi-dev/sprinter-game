@@ -7,7 +7,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "tableau": "node suivi/servir.mjs"
+    "tableau": "node suivi/servir.mjs",
+    "build:app": "VITE_ENVELOPPE=native vite build --outDir dist-app",
+    "android:sync": "npm run build:app && SPRINTER_WEBDIR=dist-app npx cap sync android",
+    "android:ouvrir": "npm run android:sync && npx cap open android",
+    "android:aab": "npm run android:sync && cd android && ./gradlew bundleRelease",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -78,6 +83,7 @@
     "@capacitor/app": "^8.1.1",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.3",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.0",
     "@capacitor/keyboard": "^8.0.5",

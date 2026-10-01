@@ -602,6 +602,27 @@ export function TitleScreen() {
       <PiedLiens onTour={() => setTour(true)} haies={tutoDesHaies}
                  onTuto={() => (tutoDesHaies ? ouvrirLeTuto() : ouvrirLeTutoSprint())} />
 
+      {/* Les pages legales. Sur le site l'adresse suffit a les atteindre ;
+          dans l'application il n'y a pas de barre d'adresse, et Play demande
+          qu'un jeu ou l'on s'ecrit rende ses conditions accessibles. Elles
+          s'ouvrent dans le navigateur : une page de texte posee sur une
+          partie n'aurait pas de retour. */}
+      <div className="relative z-10 shrink-0 w-full max-w-md mx-auto
+                      flex items-center justify-center gap-2
+                      text-[9px] tracking-widest text-white/30">
+        <a href="https://sprinter-game.com/conditions.html"
+           target="_blank" rel="noopener noreferrer"
+           className="py-1 hover:text-white/70 transition-colors">
+          {N.t('legal_conditions')}
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href="https://sprinter-game.com/confidentialite.html"
+           target="_blank" rel="noopener noreferrer"
+           className="py-1 hover:text-white/70 transition-colors">
+          {N.t('legal_vie_privee')}
+        </a>
+      </div>
+
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :
           un joueur qui n'a vu que l'accueil ignore qu'il existe un classement
           mondial et des defis. Le tutoriel du geste, lui, reste au moment de

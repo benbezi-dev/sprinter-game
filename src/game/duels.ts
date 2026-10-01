@@ -19,6 +19,11 @@ import { EST_TEST } from './canal';
  */
 // Ouvert partout. Le drapeau reste : refermer doit tenir en un mot, et le
 // canal de test garde son interet — il ecrit dans une autre base.
+//
+// Cette constante ne commande pas que les duels : le direct (LivePanel) et le
+// championnat (ChampPanel) sont ouverts par elle, parce qu'ils alimentent le
+// meme classement. Les modes qui n'ont pas de serveur — le relais, les trois
+// autres mondes — restent derriere EST_TEST et ne sont pas de la fete.
 const OUVERT_EN_PRODUCTION = true;
 export const DUELS_OUVERTS = EST_TEST || OUVERT_EN_PRODUCTION;
 
