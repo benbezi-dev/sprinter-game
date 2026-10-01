@@ -60,7 +60,7 @@
   <body>
     <main>
       <h1>Confidentialité — Sprinter</h1>
-      <p class="maj">Dernière mise à jour : 1er septembre 2026</p>
+      <p class="maj">Dernière mise à jour : 1er octobre 2026</p>
 
       <p>Sprinter est un jeu d'athlétisme arcade. Ce document explique ce que
       le jeu enregistre sur un serveur distant pour faire fonctionner le
@@ -92,8 +92,15 @@
         (position dans le temps, pas de vidéo ni d'image), pour construire le
         classement et permettre à un adversaire de vous affronter en
         « fantôme ».</li>
-        <li><strong>Dans le mode duel</strong> (actuellement réservé à un
-        cercle restreint de testeurs) : un court message texte ou un
+        <li><strong>Les étapes de vos premières parties</strong> : la
+        première fois que l'appareil ouvre le jeu, lance une course, la
+        termine, atteint chaque étape de la carrière — une ligne par étape,
+        une seule fois, rattachée à l'identifiant d'appareil ci-dessus. Cela
+        sert à savoir où un nouveau joueur s'arrête, et à mesurer combien
+        reviennent jouer les jours suivants. Ces mesures sont faites par le
+        jeu lui-même et restent sur son serveur : elles ne passent par aucun
+        service tiers.</li>
+        <li><strong>Dans le mode duel</strong> : un court message texte ou un
         enregistrement vocal de quelques secondes, que seul le joueur battu
         peut lire ou écouter. L'enregistrement vocal est supprimé du serveur
         dès qu'il a été écouté. Une seule exception, décrite plus bas : s'il
@@ -105,17 +112,17 @@
         <li>Pas d'e-mail, pas de numéro de téléphone, pas de mot de passe.</li>
         <li>Pas d'identifiant publicitaire, pas de traceur publicitaire, pas
         de revente de données à un tiers.</li>
-        <li>Aucun outil d'analyse d'audience (Google Analytics ou
-        équivalent) n'est intégré au jeu.</li>
+        <li>Aucun outil d'analyse d'audience tiers (Google Analytics ou
+        équivalent) n'est intégré au jeu : les seules mesures sont celles
+        décrites plus haut, faites par le jeu sur son propre serveur.</li>
       </ul>
 
       <h2>Prestataires techniques</h2>
       <p>Le jeu et sa base de données sont hébergés sur l'infrastructure de
-      <strong>Cloudflare</strong> (Workers, D1). La page charge aussi la
-      police d'écriture <strong>Google Fonts</strong> depuis les serveurs de
-      Google. Ni l'un ni l'autre ne reçoit de données personnelles au-delà de
-      ce qui est nécessaire à leur fonctionnement technique (adressage
-      réseau).</p>
+      <strong>Cloudflare</strong> (Workers, D1). Les polices d'écriture sont
+      livrées avec le jeu : aucune n'est téléchargée depuis un service tiers.
+      Cloudflare ne reçoit pas de données personnelles au-delà de ce qui est
+      nécessaire à son fonctionnement technique (adressage réseau).</p>
       <p>Dans l'application installée depuis l'App Store ou le Play Store, les
       notifications passent par <strong>Firebase Cloud Messaging</strong>
       (Google). Ce service reçoit un identifiant technique propre à
@@ -160,7 +167,7 @@
       <hr />
 
       <h1 lang="en">Privacy — Sprinter</h1>
-      <p class="maj">Last updated: September 1, 2026</p>
+      <p class="maj">Last updated: October 1, 2026</p>
 
       <p>Sprinter is an arcade athletics game. This page explains what the
       game sends to a remote server to run the world leaderboard, challenges
@@ -190,8 +197,14 @@
         <li><strong>Your race times and movement trace</strong> (position
         over time, no video or image) to build the leaderboard and let
         another player challenge you as a "ghost".</li>
-        <li><strong>In duel mode</strong> (currently limited to a small
-        circle of testers): a short text message or a few-second voice
+        <li><strong>The milestones of your first games</strong>: the first
+        time the device opens the game, starts a race, finishes it, reaches
+        each stage of the career — one line per milestone, once only, tied to
+        the device identifier above. This shows where new players stop, and
+        how many come back to play on the following days. These measurements
+        are made by the game itself and stay on its own server: they go
+        through no third-party service.</li>
+        <li><strong>In duel mode</strong>: a short text message or a few-second voice
         recording, readable only by the player who lost. The voice recording
         is deleted from the server as soon as it has been listened to. There
         is one exception, described below: if it is reported as abusive, it
@@ -203,16 +216,17 @@
         <li>No e-mail, no phone number, no password.</li>
         <li>No advertising identifier, no advertising tracker, no data sold
         to a third party.</li>
-        <li>No audience-analytics tool (Google Analytics or equivalent) is
-        built into the game.</li>
+        <li>No third-party audience-analytics tool (Google Analytics or
+        equivalent) is built into the game: the only measurements are those
+        described above, made by the game on its own server.</li>
       </ul>
 
       <h2 lang="en">Technical providers</h2>
       <p>The game and its database are hosted on <strong>Cloudflare</strong>'s
-      infrastructure (Workers, D1). The page also loads the
-      <strong>Google Fonts</strong> typeface from Google's servers. Neither
-      receives personal data beyond what their technical operation requires
-      (network addressing).</p>
+      infrastructure (Workers, D1). The typefaces ship with the game: none is
+      downloaded from a third-party service. Cloudflare receives no personal
+      data beyond what its technical operation requires (network
+      addressing).</p>
       <p>In the app installed from the App Store or the Play Store,
       notifications go through <strong>Firebase Cloud Messaging</strong>
       (Google). That service receives a technical identifier specific to the

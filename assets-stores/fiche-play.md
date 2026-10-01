@@ -109,11 +109,16 @@ fois, à une seule personne, sans réponse possible. Il n'y a pas de chat libre.
 | Temps et tracés de course | Oui | Non | Classement, fantômes |
 | Messages entre joueurs | Oui | Non | Le mot du vainqueur |
 | Enregistrements vocaux | Oui | Non | Le mot du vainqueur |
+| Interactions dans l'appli (étapes des premières parties) | Oui | Non | Analyse : où un nouveau joueur s'arrête, qui revient |
 
 - Aucune donnée n'est vendue ni partagée avec un tiers.
 - Le transit est chiffré (HTTPS).
 - Suppression sur demande à `contact@sprinter-game.com`.
-- **Pas** d'identifiant publicitaire, **pas** d'analyse d'audience.
+- **Pas** d'identifiant publicitaire, **pas** d'outil d'analyse tiers.
+- ⚠️ Corrigé le 1er octobre 2026 : depuis le tunnel des premiers pas (29/09)
+  le jeu MESURE lui-même ses nouveaux joueurs. Dans la console : Activité
+  dans l'appli → Interactions dans l'appli → collectée, non partagée,
+  finalité « Analyse ». À changer de nouveau le jour où AdMob arrive.
 
 ✅ **Fait le 1er septembre 2026.** La politique de confidentialité porte
 désormais une section « Signalement et modération », en français et en
