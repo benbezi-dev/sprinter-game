@@ -111,6 +111,7 @@ async function jeuDe(canal) {
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
       'import.meta.env.BASE_URL': '"/"',
+      'import.meta.env.VITE_ENVELOPPE': 'undefined',
     },
   });
   return import(sortie);

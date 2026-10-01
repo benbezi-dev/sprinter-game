@@ -51,6 +51,7 @@ async function canalDe(canal) {
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
       'import.meta.env.BASE_URL': '"/"',
+      'import.meta.env.VITE_ENVELOPPE': 'undefined',
     },
   });
   return { M: await import(sortie), texte: readFileSync(sortie, 'utf8') };
