@@ -334,8 +334,13 @@
     { p: 'satellite', l: { arriere: 70, d: 9.0 } },
   ]);
 
+  // Rendues au soleil de Blender : la nuit, une copie teinte (heure-du-jour.js).
+  const nuit = (im, part) => (root.SprinterHeure ? root.SprinterHeure.image(im, part) : im);
+
   function nomDuTheme(THEMES, th) {
-    for (const k in THEMES) if (THEMES[k] === th) return k;
+    // Un stade a une autre heure garde les pieces du sien (heure-du-jour.js).
+    const b = (th && th.base) || th;
+    for (const k in THEMES) if (THEMES[k] === b) return k;
     return null;
   }
 
@@ -404,7 +409,7 @@
       ctx.save();
       ctx.transform((ex[0] - o[0]) / k, (ex[1] - o[1]) / k,
                     (ey[0] - o[0]) / k, (ey[1] - o[1]) / k, o[0], o[1]);
-      ctx.drawImage(im, 0, 0);
+      ctx.drawImage(nuit(im, 'proche'), 0, 0);
       ctx.restore();
     }
   }
@@ -425,7 +430,7 @@
       const k = m / (r.ppm || M.pxParM);
       const x = p[0] - r.ax * k, y = p[1] - r.ay * k, w = r.w * k, h = r.h * k;
       if (x > G.VW || y > G.VH || x + w < 0 || y + h < 0) continue;
-      ctx.drawImage(im, x, y, w, h);
+      ctx.drawImage(nuit(im, 'proche'), x, y, w, h);
     }
   }
 
@@ -443,7 +448,7 @@
     const [r, im, M] = ri;
     const p = api.ground(X, Y);
     const k = api.scaleM() / (r.ppm || M.pxParM);
-    ctx.drawImage(im, p[0] - r.ax * k, p[1] - r.ay * k, r.w * k, r.h * k);
+    ctx.drawImage(nuit(im, 'piste'), p[0] - r.ax * k, p[1] - r.ay * k, r.w * k, r.h * k);
     return true;
   }
 

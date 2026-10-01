@@ -33,6 +33,12 @@
     ? 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')'
     : 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
   const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  // Le public et ses drapeaux sont peints en couleurs fixes : la nuit, ils
+  // prennent la lumiere des gradins (heure-du-jour.js).
+  const vu = (c) => (root.SprinterHeure ? root.SprinterHeure.couleur(c, 'gradins') : c);
+  // Et la piste-drapeau, celle des rampes : sans elle, les nappes des
+  // projecteurs passaient le blanc du milieu au blanc brule.
+  const sousLesRampes = (c) => (root.SprinterHeure ? root.SprinterHeure.couleur(c, 'piste') : c);
   const toile = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
   // LES TUILES PEINTES A TROIS PIXELS PAR POINT. La tour, les facades et les
   // ifs dessines a la main prennent le relais des pieces Blender en virage
@@ -82,16 +88,22 @@
     }
     return im.complete && im.naturalWidth > 0 ? im : null;
   }
+  // LA NUIT, CHAQUE PIECE PREND LA LUMIERE DE SA PLACE (heure-du-jour.js) :
+  // le portique, au-dessus de la piste, celle des rampes ; les barrieres a
+  // demi ; les facades et les arbres du parc, le noir ; la tour s'allume.
+  const PART = { tour: 'tour', ilot: 'loin', rideau: 'loin', if: 'loin',
+                 portique: 'piste', portique_dessus: 'piste' };
+  const nuit = (im, nom) => (root.SprinterHeure ? root.SprinterHeure.image(im, PART[nom] || 'proche') : im);
   function rendu(nom) {
     if (aTroisPixels()) {
       const mu = MANU(), pu = mu && mu.pieces && mu.pieces[nom];
       const imu = pu && charger('decors-ultra/champdemars/', pu);
-      if (imu) return { im: imu, p: pu };
+      if (imu) return { im: nuit(imu, nom), p: pu };
     }
     const man = MAN(), p = man && man.pieces && man.pieces[nom];
     if (!p) return null;
     const im = charger('decors/champdemars/', p);
-    return im ? { im, p } : null;
+    return im ? { im: nuit(im, nom), p } : null;
   }
   // UNE PIECE RENDUE NE VAUT QUE SOUS LA VUE OU ELLE L'A ETE. Quinze degres,
   // et la ligne droite : en virage, le moteur tourne tout le monde de -14°
@@ -575,10 +587,10 @@
       if (t <= t1) {
         const u = (t - t0) / Math.max(1e-6, t1 - t0);
         const e = u * u * (3 - 2 * u);
-        return mix(pal[c0], pal[c1], e);
+        return sousLesRampes(mix(pal[c0], pal[c1], e));
       }
     }
-    return pal[2];
+    return sousLesRampes(pal[2]);
   }
   // Ou commence et ou finit la course, a l'ecran, pour une ligne droite.
   function axe(api, r) {
@@ -695,7 +707,7 @@
       const o1 = Math.sin(t * 6 + phase - u1 * 5) * lh * 0.16 * u1;
       const ombre = 0.86 + 0.14 * Math.cos(t * 6 + phase - (u0 + u1) * 2.5);
       const c = cols[Math.min(2, Math.floor(u0 * 3 + 1e-6))];
-      ctx.fillStyle = hex([c[0] * ombre, c[1] * ombre, c[2] * ombre]);
+      ctx.fillStyle = hex(vu([c[0] * ombre, c[1] * ombre, c[2] * ombre]));
       ctx.beginPath();
       ctx.moveTo(x + u0 * lw, y + o0); ctx.lineTo(x + u1 * lw + 0.5, y + o1);
       ctx.lineTo(x + u1 * lw + 0.5, y + o1 + lh); ctx.lineTo(x + u0 * lw, y + o0 + lh);
@@ -799,11 +811,11 @@
         const haut = HAUTS[(g >>> 12) % HAUTS.length], peau = PEAUX[(g >>> 16) % PEAUX.length];
         // le torse, du genou aux epaules : le bas est derriere la barriere
         const genou = api.solid(base[0], base[1], 0.55);
-        ctx.fillStyle = hex([34, 38, 56]);
+        ctx.fillStyle = hex(vu([34, 38, 56]));
         ctx.fillRect(genou[0] - l * 0.8, genou[1] - (genou[1] - epaules[1]) * 0.45, l * 1.6, (genou[1] - epaules[1]) * 0.45);
-        ctx.fillStyle = hex(haut);
+        ctx.fillStyle = hex(vu(haut));
         ctx.fillRect(epaules[0] - l, epaules[1], l * 2, (genou[1] - epaules[1]) * 0.58);
-        ctx.fillStyle = hex(peau);
+        ctx.fillStyle = hex(vu(peau));
         ctx.beginPath(); ctx.arc(tete[0], tete[1], 0.13 * m, 0, TAU); ctx.fill();
         // un sur six brandit un drapeau, bras leve
         if ((g >>> 20) % 6 === 0) {
@@ -814,7 +826,7 @@
         } else if ((g >>> 20) % 6 === 1) {
           // bras leves, qui applaudissent
           const lev = Math.sin(t * 9 + g) * 0.08 * m;
-          ctx.strokeStyle = hex(peau); ctx.lineWidth = Math.max(1, 0.07 * m);
+          ctx.strokeStyle = hex(vu(peau)); ctx.lineWidth = Math.max(1, 0.07 * m);
           ctx.beginPath();
           ctx.moveTo(epaules[0] - l * 0.8, epaules[1]); ctx.lineTo(tete[0] - l * 0.6, tete[1] - 0.35 * m + lev);
           ctx.moveTo(epaules[0] + l * 0.8, epaules[1]); ctx.lineTo(tete[0] + l * 0.6, tete[1] - 0.35 * m - lev);

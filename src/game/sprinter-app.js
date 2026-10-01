@@ -26,7 +26,9 @@
       // tondue dans le sens de la piste : voir tonteEnLong (rendu-premium.js)
       tonte: 'long',
       // un rideau de platanes derriere les tribunes ouvertes (drawFeuillus)
-      feuillus: true, feuillage: [44, 104, 38]
+      feuillus: true, feuillage: [44, 104, 38],
+      // se court a l'heure ou l'on joue, de jour comme de nuit (heure-du-jour.js)
+      heure: true
     },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
@@ -95,7 +97,7 @@
       panels: [[56, 196, 92], [255, 255, 255], [240, 196, 70], [214, 74, 62]],
       crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
       accent: [56, 196, 92], dust: [210, 222, 236],
-      tonte: 'long'
+      tonte: 'long', heure: true
     },
     // Stade de la Riviera : le ciel, la piscine et les palmiers des affiches
     // de Hiroshi Nagai. La palette ne cherche pas le realisme d'un stade, elle
@@ -143,7 +145,8 @@
       vagues: true, toiture: false, gradins: 2, immeubles: true, transats: true,
       haie: true, haieSombre: [24, 104, 76], musique: 'riviera',
       eau: [96, 214, 226], eauFond: [22, 146, 190],
-      palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100]
+      palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100],
+      heure: true
     },
     // Stade de la Nuit etoilee : Van Gogh, et non une nuit de jeu video. La
     // difference tient en un mot, le MOUVEMENT. Chez lui le ciel n'est pas un
@@ -385,7 +388,8 @@
       angle: 15,
       champDeMars: true, arbres: 'if',
       tour: [128, 100, 78], pierre: [232, 216, 186], zinc: [110, 126, 150],
-      rideau: [62, 130, 46], ifFeuille: [34, 94, 42]
+      rideau: [62, 130, 46], ifFeuille: [34, 94, 42],
+      heure: true
     },
     // LE STADE JEAN-DELBERT, A MONTREUIL — le defi Aurel Manga.
     //
@@ -417,7 +421,7 @@
       panels: [[246, 246, 244], [30, 70, 150], [246, 246, 244], [238, 196, 40]],
       crowdLo: [44, 42, 54], crowdHi: [250, 244, 234],
       accent: [30, 70, 150], dust: [226, 190, 164],
-      gradins: 3, tonte: true,
+      gradins: 3, tonte: true, heure: true,
       // La musique du teaser des haies, en boucle (game/musique-defi-aurel.ts,
       // tools/musique/defi-aurel.py). Comme pour le cimetiere, `raceTrack` ne
       // la retient que si le fichier est charge ; sinon, musique ordinaire.
@@ -589,7 +593,8 @@
     { gradins: 5, toiture: true },    // championnat du monde
   ];
   function tribuneDe(th) {
-    const etape = th === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
+    // `base` : le meme stade, a une autre heure (heure-du-jour.js)
+    const etape = (th.base || th) === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
     return {
       gradins: etape ? etape.gradins : (th.gradins || 4),
       toiture: etape ? etape.toiture : th.toiture !== false,
@@ -4087,6 +4092,7 @@
     band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
   };
   const PREM = () => globalThis.RenduPremium;
+  const HEURE = () => globalThis.SprinterHeure;
   // LE DECOR AU PALIER ULTRA (voir rendu-premium.js). Deux questions, et deux
   // reponses differentes :
   //
@@ -6478,6 +6484,10 @@
   }
 
   function drawWorld(ctx, th) {
+    // Chaque appelant passe le theme du niveau tel qu'il est range dans
+    // THEMES : c'est ici qu'il prend l'heure, une fois pour tous.
+    th = eclaire(th);
+    if (HEURE()) HEURE().poser(th);
     angleDuLieu(th);
     const T = G.track;
     // ciel
@@ -6529,7 +6539,8 @@
     // pour que les rideaux d'arbres lui passent devant le pied.
     const cdm = th.champDeMars && CDM();
     if (cdm) {
-      cdm.patrouille(ctx, apiCdm());
+      // la Patrouille de France ne vole pas de nuit
+      if (th.moment !== 'nuit') cdm.patrouille(ctx, apiCdm());
       cdm.tour(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));
     }
 
@@ -8103,8 +8114,25 @@
    * d'entree dans LEVELS) ne peut plus faire tomber l'un des trois.
    */
   function theme() {
+    return eclaire(themeBrut());
+  }
+
+  /**
+   * Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. Les
+   * sauts le prennent : chaque etape y a deja son heure (sauts-stades.js).
+   */
+  function themeBrut() {
     const lvl = LEVELS[G.levelIdx];
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
+  }
+
+  /**
+   * `th` a l'heure ou l'on joue (heure-du-jour.js), sauf pendant un saut.
+   * Rend `th` tel quel tant que le module n'est pas charge.
+   */
+  function eclaire(th) {
+    const H = HEURE();
+    return H && !G.sautEnCours ? H.eclairer(th, G) : th;
   }
 
   /**
@@ -8504,7 +8532,7 @@
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     majFerveur,
-    theme, PEINTRE,
+    theme, themeBrut, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
     armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,

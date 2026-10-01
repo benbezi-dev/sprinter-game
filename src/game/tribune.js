@@ -102,6 +102,8 @@
     montreuil: [206, 204, 198],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
+  // La couleur `c` dans la lumiere des gradins de `th` — la meme, le jour.
+  const teinteNuit = (th, c) => (root.SprinterHeure ? root.SprinterHeure.teinte(th, c, 'gradins') : c);
 
   function hauts(th) {
     const out = [];
@@ -160,10 +162,15 @@
    * spectateurs en endosse un selon sa place.
    */
   function personnages(th) {
-    const hautsC = hauts(th);
+    // LA NUIT, LA FOULE EST DANS LA LUMIERE DES GRADINS (heure-du-jour.js).
+    // Ses couleurs se tirent du stade tel qu'il est de jour — ses panneaux
+    // de nuit sont des ecrans, pas des maillots —, puis baissent avec lui.
+    const jour = th.base || th;
+    const nuit = (c) => teinteNuit(th, c);
+    const hautsC = hauts(jour);
     // Les casquettes : les couleurs du stade, et le noir, le blanc et le
     // marine qu'on voit partout.
-    const casquettes = (th.panels || []).concat([[30, 30, 34], [244, 244, 240], [36, 42, 64]]);
+    const casquettes = (jour.panels || []).concat([[30, 30, 34], [244, 244, 240], [36, 42, 64]]);
     let g = 0x6d2b79f5 >>> 0;
     const al = () => { g ^= g << 13; g >>>= 0; g ^= g >>> 17; g ^= g << 5; g >>>= 0; return g / 4294967296; };
     const out = [];
@@ -174,10 +181,10 @@
                              : CHEVEUX[tirer(CHEVEUX_PAR_PEAU[peau], al())];
       out.push({
         id: i, sil,
-        peau: hexa(PEAUX[peau]),
-        cheveux: hexa(tete),
-        haut: hexa(hautsC[Math.floor(al() * hautsC.length)]),
-        pantalon: hexa(PANTALONS[tirer(POIDS_PANTALONS, al())]),
+        peau: hexa(nuit(PEAUX[peau])),
+        cheveux: hexa(nuit(tete)),
+        haut: hexa(nuit(hautsC[Math.floor(al() * hautsC.length)])),
+        pantalon: hexa(nuit(PANTALONS[tirer(POIDS_PANTALONS, al())])),
         // un personnage sur huit vient avec un drapeau (voir dessiner)
         drapeau: i % 8 === 3,
       });
@@ -445,7 +452,7 @@
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
     if (!_personnages) _personnages = personnages(th);
     const pers = _personnages;
-    const siegeC = hexa(SIEGES[nom] || th.accent || [80, 90, 120]);
+    const siegeC = hexa(teinteNuit(th, SIEGES[nom] || (th.base || th).accent || [80, 90, 120]));
     const man = MAN();
     const iAssis = 0, iApplaudit = 1, iDebout = 2, iVide = 3;
     // la ligne de l'atlas d'une silhouette et d'un geste (voir tribune.py)
@@ -620,7 +627,9 @@
         const e = spriteDrapeau((h >>> 11) % DRAPEAUX.length,
                                 Math.floor(onde / TOUR * NF_DRAPEAU) % NF_DRAPEAU);
         const sd = m / e.m;
-        ctx.drawImage(e.cv, it[1] + 0.2 * m - e.x0 * sd, it[2] - 1.9 * m - e.y0 * sd,
+        // la nuit, une copie teinte du drapeau (heure-du-jour.js)
+        const cvD = root.SprinterHeure ? root.SprinterHeure.image(e.cv, 'gradins') : e.cv;
+        ctx.drawImage(cvD, it[1] + 0.2 * m - e.x0 * sd, it[2] - 1.9 * m - e.y0 * sd,
                       e.cv.width * sd, e.cv.height * sd);
       }
     }

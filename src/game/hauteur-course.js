@@ -153,7 +153,7 @@ export function armerConcoursHauteur(etape) {
     s: 0, vHist: [], appel: null, vol: null, reception: null,
     hauteur: 1.5, barre: { chute: null, tremble: null }, impact: null,
     resultat: null, drapeau: null, posture: null, juge: null, pieces: [],
-    roulis: 0, theme: A.theme(),
+    roulis: 0, theme: A.themeBrut(),  // l'heure du concours, pas celle de la pendule
     // Ce que le rendu doit savoir du sautoir, sans revenir chercher ce module.
     sautoir: {
       x: BARRE_X, y: BARRE_Y, dir: DIR, cap: CAP_FINAL, marque: MARQUE, courbe: DEBUT_COURBE,

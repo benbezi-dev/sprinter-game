@@ -183,7 +183,7 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
     angleEnvol: null, angleVise: [19, 24], resultat: null,
     empreinte: null, gerbe: null, mesure: null, drapeau: null, traceMordue: null,
     lignes: [], vent: 0, posture: null, juge: null, pieces: [],
-    theme: A.theme(),
+    theme: A.themeBrut(),  // l'heure du concours, pas celle de la pendule
   };
   prechargerSable(e.theme);
 

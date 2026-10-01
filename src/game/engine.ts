@@ -42,6 +42,9 @@ import tribuneManifesteUltra from './tribune-manifeste-ultra.json';
 import './tribune.js';
 // La couleur du logo des panneaux, choisie pour se detacher de chaque stade.
 import './teintes-pub.js';
+// La lumiere de l'heure : les stades a ciel de jour se courent a l'heure ou
+// l'on joue. Lue a l'usage par sprinter-app.js (HEURE()), comme la finition.
+import './heure-du-jour.js';
 import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
