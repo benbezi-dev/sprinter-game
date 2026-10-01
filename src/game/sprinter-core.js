@@ -554,9 +554,10 @@
     // appuis par seconde tenus d'un bout a l'autre, 17,30 environ dix-neuf.
     // C'est un defi de record, pas un palier : on le sait, et c'est voulu.
     //
-    // IL COURT A L'ALLURE CANON (setPace) : pointe a plus de 14 m/s des
-    // quinze metres, puis une vitesse qui s'erode jusqu'a la ligne. Le chrono,
-    // lui, tombe pile : « le battre » veut dire « passer sous ce temps ».
+    // IL COURT L'UNE DE SES TROIS COURSES (STYLES_CANON) : le canon qui
+    // s'erode, le finisseur qui relance a mi-course, ou le regulier — tiree a
+    // chaque tentative, et la fiche ne le dit pas. Le chrono, lui, tombe pile
+    // dans les trois : « le battre » veut dire « passer sous ce temps ».
     //
     // A SA PLACE DE FERME, juste apres le defi d'Aurel Manga et avant les
     // stades du canal de test : les deux defis s'ouvriront sans rien
@@ -1120,7 +1121,7 @@
       // `barbePleine` : une barbe qui descend sous le menton (voir pose).
       // `meches`  : la couleur des vanilles de la coiffure 'twists'.
       // `chaine`  : la couleur d'une chaine au ras du cou, et son pendentif.
-      // `allure`  : 'canon' — le depart canon et la fin qui s'erode (setPace).
+      // `allure`  : 'canon' — trois courses au meme chrono (STYLES_CANON).
       // `departParfait` : voir plus bas, a son champ.
       // `rituel`  : sa mise en place dans les blocs (BLOC.rituel, phaseBlocs).
       // `clap`    : son clap au-dessus de la tete, apres la ligne et quand on
@@ -1248,7 +1249,8 @@
     // carnation est relevee a son cou, a l'ombre du projecteur. La tenue est
     // le blanc de l'equipe de France, short bleu marine — sans aucun logo.
     //
-    // SA COURSE, SES GESTES : l'allure canon (setPace), la foulee `canon`
+    // SA COURSE, SES GESTES : l'allure canon et ses trois courses (setPace,
+    // STYLES_CANON), la foulee `canon`
     // (GAITS), le V renverse dans les blocs (BLOC.rituel), le clap au-dessus
     // de la tete (pose). Et soixante-quatre facettes au moins par volume a
     // l'ultra : c'est le skin premium de l'evenement.
@@ -1582,6 +1584,14 @@
     this.gesteT = 0;
     /** Combien la foulee s'est alourdie, de 0 a 1 — l'allure canon seule. */
     this.fatigue = 0;
+    /**
+     * SA COURSE DU JOUR, pour qui court a l'allure canon : 'canon',
+     * 'finisseur' ou 'regulier' (STYLES_CANON). Tiree une fois, ici, pour
+     * toute la course ; `opts.style` l'impose (les tests).
+     */
+    this.styleCourse = this.look && this.look.allure === 'canon'
+      ? (Object.prototype.hasOwnProperty.call(STYLES_CANON, opts.style) ? opts.style : tirerStyleCanon())
+      : null;
     if (this.target) this.setPace(this.target);
   }
 
@@ -1591,7 +1601,9 @@
     // ligne, ce qui donne l'illusion d'etre double au dernier metre.
     this.target = T;
     this.canon = null;
-    if (this.look && this.look.allure === 'canon') { this.canon = allureCanon(T, this.total); return; }
+    if (this.look && this.look.allure === 'canon') {
+      this.canon = allureVedette(T, this.total, this.styleCourse || 'canon'); return;
+    }
     this.tau = Math.max(0.35, Math.min(1.10, T * 0.16));
     const den = T - this.tau * (1 - Math.exp(-T / this.tau));
     this.vmax = this.total / Math.max(0.01, den);
@@ -1636,7 +1648,73 @@
     const b = (lo + hi) / 2;
     const A = total / Math.max(0.01, T - tau * (1 - Math.exp(-T / tau)) - b * T * T / 2);
     const ts = b * tau < 1 ? Math.min(T, -tau * Math.log(b * tau)) : 0;
-    return { tau, A, B: A * b, ts, pic: A * forme(b, ts), vFin: A * forme(b, T) };
+    const pic = A * forme(b, ts), vFin = A * forme(b, T);
+    return { style: 'canon', tau, A, B: A * b, ts, pic, vFin, chute: pic - vFin,
+             d: (t) => A * (t - tau * (1 - Math.exp(-t / tau))) - A * b * t * t / 2 };
+  }
+
+  // TROIS COURSES POUR LE MEME CHRONO. Meba-Mickael ne court pas toujours
+  // pareil, et la fiche du defi ne le dit pas : c'est au joueur de le voir.
+  // Chaque tentative tire l'une des trois, jamais deux fois la meme de suite.
+  //
+  //   canon     — un depart que personne ne suit, puis une vitesse qui
+  //               s'erode jusqu'a la ligne (allureCanon, ci-dessus) ;
+  //   finisseur — le plus lent des blocs, a la traine jusqu'a mi-course, puis
+  //               une relance a pres de 14,5 m/s qu'il tient jusqu'a la ligne ;
+  //   regulier  — une montee sans eclat et une vitesse presque egale du
+  //               premier au dernier metre.
+  //
+  // Les deux derniers sont une FORME de vitesse, v(t) a un facteur pres :
+  // integree en table, elle est mise a l'echelle pour que d(T) = total — le
+  // chrono reste exact, comme pour le canon. Leur pas est en part de T, pour
+  // que le 200 m soit le meme dessin, etire.
+  //
+  // Mesure contre un doigt parfait a vingt-cinq appuis par seconde, qui fait
+  // lui-meme 8,39 (son avance quand le joueur passe 10, 30, 50, 70, 90 m) :
+  //   canon      +1,0  +4,0  +5,2  +4,6  +2,0
+  //   finisseur  -4,7  -7,8  -8,2  -5,3  -1,8
+  //   regulier   -1,9  -1,4  -0,6  -0,1   0,0
+  // et ses dix premiers metres : 0,95 s, 1,52 s, 1,18 s.
+  const sigmoide = (x) => 1 / (1 + Math.exp(-x));
+  const STYLES_CANON = {
+    canon: null,
+    // une montee molle (tau 0,75 s), une croisiere a 80 % de sa fin, et la
+    // relance centree a mi-course, sur un vingtieme de la course
+    finisseur: (T) => (t) => (1 - Math.exp(-t / 0.75)) * (0.80 + 0.20 * sigmoide((t / T - 0.50) / 0.05)),
+    // tau 0,45 s, et a peine 5 % de vitesse perdue de la pointe a la ligne
+    regulier: (T) => (t) => (1 - Math.exp(-t / 0.45)) - 0.08 * t / T,
+  };
+  let dernierStyleCanon = null;
+  function tirerStyleCanon() {
+    // Math.random, pas alea() : un tirage de plus sur une suite semee
+    // decalerait le temps de tous les autres couloirs
+    const choix = Object.keys(STYLES_CANON).filter(s => s !== dernierStyleCanon);
+    dernierStyleCanon = choix[Math.floor(Math.random() * choix.length) % choix.length];
+    return dernierStyleCanon;
+  }
+
+  function allureVedette(T, total, style) {
+    const forme = STYLES_CANON[style] && STYLES_CANON[style](T);
+    if (!forme) return allureCanon(T, total);
+    const N = 2048, D = new Float64Array(N + 1);
+    let prec = forme(0), pic = 0, ts = 0;
+    for (let i = 1; i <= N; i++) {
+      const t = T * i / N, v = forme(t);
+      D[i] = D[i - 1] + (prec + v) / 2 * (T / N);
+      if (v > pic) { pic = v; ts = t; }
+      prec = v;
+    }
+    const A = total / D[N];
+    // LA FATIGUE se mesure a la chute du canon : celui qui ne perd presque
+    // rien ne se met pas a courir lourd sur la ligne
+    const finCanon = Math.max(0.50, Math.min(0.80, 0.76 - 0.001 * total));
+    return {
+      style, A, ts, pic: A * pic, vFin: A * forme(T), chute: A * pic * (1 - finCanon),
+      d: (t) => {
+        const x = Math.max(0, Math.min(N, t / T * N)), i = Math.min(N - 1, Math.floor(x));
+        return A * (D[i] + (D[i + 1] - D[i]) * (x - i));
+      },
+    };
   }
 
   // Distance couverte par UN appui (un pied), pas par le cycle complet :
@@ -1860,9 +1938,7 @@
       return;
     }
     const t = elapsed;
-    let d = K
-      ? K.A * (t - K.tau * (1 - Math.exp(-t / K.tau))) - K.B * t * t / 2
-      : this.vmax * (t - this.tau * (1 - Math.exp(-t / this.tau)));
+    let d = K ? K.d(t) : this.vmax * (t - this.tau * (1 - Math.exp(-t / this.tau)));
     d = Math.max(0, Math.min(this.total, d));
     if (dt > 0) this.v = Math.max(0, (d - this.d) / dt);
     this.d = Math.max(this.d, d);
@@ -1870,7 +1946,7 @@
     // le lit pour redresser le buste, raccourcir le genou et appuyer le
     // rebond — ce qu'on voit d'un sprinteur qui perd sa vitesse.
     if (K) this.fatigue = t <= K.ts ? 0
-      : Math.max(0, Math.min(1, (K.pic - this.v) / Math.max(0.01, K.pic - K.vFin)));
+      : Math.max(0, Math.min(1, (K.pic - this.v) / Math.max(0.01, K.chute)));
     this.stride += this.v * dt * (Math.PI / this.strideLength());
   };
 

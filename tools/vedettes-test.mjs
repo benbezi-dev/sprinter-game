@@ -126,8 +126,8 @@ ok('chaque volume a ses huit champs', PMULTRA.every(p => p.length === 8));
 titre('MEBA-MICKAEL ZEZE : L ALLURE CANON');
 for (const [cle, T] of [['100', 8.39], ['200', 17.30]]) {
   const race = K.RACES[cle], track = new K.Track(race);
-  const r = new K.Runner(NOM, 4, { target: T, maxSpeed: race.maxSpeed, total: track.total, pool: 'sprint' });
-  ok(`${cle} m : il court a l allure canon`, !!r.canon);
+  const r = new K.Runner(NOM, 4, { target: T, maxSpeed: race.maxSpeed, total: track.total, pool: 'sprint', style: 'canon' });
+  ok(`${cle} m : il court a l allure canon`, !!r.canon && r.canon.style === 'canon');
   const dt = 1 / 240; let t = 0, vMax = 0, tMax = 0, d50 = null, fatigue = 0;
   while (!r.finished && t < 40) {
     t += dt; r.stepAI(dt, t);
@@ -144,7 +144,7 @@ for (const [cle, T] of [['100', 8.39], ['200', 17.30]]) {
   // un doigt parfait, sans temps de reaction : ou en est-il a mi-course ?
   const joueur = (cad) => {
     const p = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
-    const lui = new K.Runner(NOM, 4, { target: T, maxSpeed: race.maxSpeed, total: track.total, pool: 'sprint' });
+    const lui = new K.Runner(NOM, 4, { target: T, maxSpeed: race.maxSpeed, total: track.total, pool: 'sprint', style: 'canon' });
     let tt = 0, pr = 0, c = 0, avance = null;
     while (!p.finished && tt < 40) {
       if (tt >= pr) { p.press(c ? 'left' : 'right', tt); c ^= 1; pr += 1 / cad; }
@@ -160,6 +160,61 @@ for (const [cle, T] of [['100', 8.39], ['200', 17.30]]) {
 {
   const r = new K.Runner('Hugo Lestrade', 2, { target: 9.4, maxSpeed: 12.435, total: 100, pool: 'sprint' });
   ok('les autres coureurs gardent leur allure', r.canon === null && r.vmax > 0);
+}
+
+titre('MEBA-MICKAEL ZEZE : TROIS COURSES POUR LE MEME CHRONO');
+for (const [cle, T] of [['100', 8.39], ['200', 17.30]]) {
+  const race = K.RACES[cle], track = new K.Track(race), total = track.total;
+  // chaque style, contre un doigt parfait a vingt-cinq appuis par seconde :
+  // son temps aux dix metres, son avance quand le joueur passe chaque
+  // cinquieme de la course, ses vitesses
+  const courir = (style) => {
+    const lui = new K.Runner(NOM, 4, { target: T, maxSpeed: race.maxSpeed, total, pool: 'sprint', style });
+    const p = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total });
+    const dt = 1 / 240, marques = [0.1, 0.3, 0.5, 0.7, 0.9].map(x => x * total);
+    let tt = 0, pr = 0, c = 0, k = 0, t10 = null, vMin = 1e9, vMax = 0, fatigue = 0;
+    const avance = [];
+    while (!lui.finished && tt < 40) {
+      if (!p.finished && tt >= pr) { p.press(c ? 'left' : 'right', tt); c ^= 1; pr += 1 / 25; }
+      tt += dt; p.stepPlayer(dt, tt); lui.stepAI(dt, tt);
+      if (t10 === null && lui.d >= 10) t10 = tt;
+      while (k < marques.length && p.d >= marques[k]) { avance.push(lui.d - p.d); k++; }
+      if (lui.d > 0.3 * total && !lui.finished) { vMin = Math.min(vMin, lui.v); vMax = Math.max(vMax, lui.v); }
+      fatigue = Math.max(fatigue, lui.fatigue);
+    }
+    return { lui, t10, avance, vMin, vMax, fatigue };
+  };
+  const S = { canon: courir('canon'), finisseur: courir('finisseur'), regulier: courir('regulier') };
+  for (const [nom, x] of Object.entries(S)) {
+    ok(`${cle} m, ${nom} : il passe la ligne a ${T} pile`, x.lui.finishTime === T && x.lui.canon.style === nom,
+       `${x.lui.finishTime}`);
+  }
+  const f = (a) => a.map(v => v.toFixed(1)).join(' ');
+  ok(`${cle} m : le canon sort le premier des blocs, le finisseur le dernier`,
+     S.canon.t10 < S.regulier.t10 - 0.1 && S.regulier.t10 < S.finisseur.t10 - 0.1,
+     `${S.canon.t10.toFixed(2)} / ${S.regulier.t10.toFixed(2)} / ${S.finisseur.t10.toFixed(2)} s`);
+  ok(`${cle} m : le canon mene a mi-course, le finisseur y est loin derriere`,
+     S.canon.avance[2] > 3 && S.finisseur.avance[2] < -5,
+     `canon ${f(S.canon.avance)} | finisseur ${f(S.finisseur.avance)}`);
+  ok(`${cle} m : le finisseur relance de plus de 2 m/s, et finit le plus vite des trois`,
+     S.finisseur.lui.canon.vFin - S.finisseur.vMin > 2
+     && S.finisseur.lui.canon.vFin > S.regulier.lui.canon.vFin && S.regulier.lui.canon.vFin > S.canon.lui.canon.vFin,
+     `${S.finisseur.vMin.toFixed(1)} -> ${S.finisseur.lui.canon.vFin.toFixed(1)} m/s`);
+  ok(`${cle} m : le finisseur ne s alourdit pas`, S.finisseur.fatigue === 0, `${S.finisseur.fatigue}`);
+  ok(`${cle} m : le regulier reste a moins de 2,5 m du joueur`,
+     S.regulier.avance.every(a => Math.abs(a) < 2.5), f(S.regulier.avance));
+  ok(`${cle} m : le regulier tient sa vitesse a 10 % pres`, S.regulier.vMin > 0.9 * S.regulier.vMax,
+     `${S.regulier.vMin.toFixed(1)} - ${S.regulier.vMax.toFixed(1)} m/s`);
+  ok(`${cle} m : sa foulee ne s alourdit qu a peine`, S.regulier.fatigue < 0.35, `${S.regulier.fatigue.toFixed(2)}`);
+}
+{
+  // le tirage : jamais deux fois le meme de suite, et les trois sortent
+  const tires = [];
+  for (let n = 0; n < 60; n++) tires.push(new K.Runner(NOM, 4, { target: 8.39, maxSpeed: 12, total: 100, pool: 'sprint' }).canon.style);
+  ok('chaque tentative tire sa course, jamais deux fois la meme de suite',
+     tires.every((s, n) => n === 0 || s !== tires[n - 1]), tires.slice(0, 12).join(' '));
+  ok('les trois sortent', ['canon', 'finisseur', 'regulier'].every(s => tires.includes(s)));
+  ok('un autre athlete n en tire pas', new K.Runner('Hugo Lestrade', 2, { target: 9.4, maxSpeed: 12.435, total: 100 }).styleCourse === null);
 }
 
 titre('MEBA-MICKAEL ZEZE : LE RITUEL ET LE CLAP');

@@ -74,13 +74,11 @@ const MOTS: Record<string, Paire> = {
                          'Beat his time and win his premium skin'],
   'vd_epreuve:meba':    ['100 m · 200 m', '100 m · 200 m'],
   'vd_lieu:meba':       ['Stade de la Riviera', 'Riviera Stadium'],
-  'vd_regle:meba':      ['Il court au couloir 5, juste à ta droite. Son départ est un canon : '
-                         + 'personne ne le suit sur les cinquante premiers mètres. Puis il perd de '
-                         + 'la vitesse jusqu’à la ligne — c’est là qu’on le reprend. '
+  // Rien sur sa facon de courir : il en a trois (STYLES_CANON, sprinter-core.js),
+  // et c'est au joueur de les trouver.
+  'vd_regle:meba':      ['Il court au couloir 5, juste à ta droite. '
                          + 'Passe sous son chrono pour le battre.',
-                         'He runs in lane 5, right next to you. His start is a cannon shot: '
-                         + 'nobody stays with him over the first fifty metres. Then he loses '
-                         + 'speed all the way to the line — that is where you catch him. '
+                         'He runs in lane 5, right next to you. '
                          + 'Beat his time to beat him.'],
   'vd_recompense_sous:meba': ['son skin premium, à porter sur les courses de sprint',
                               'his premium skin, to wear in sprint races'],
