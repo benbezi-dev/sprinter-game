@@ -606,7 +606,9 @@ export function TitleScreen() {
           dans l'application il n'y a pas de barre d'adresse, et Play demande
           qu'un jeu ou l'on s'ecrit rende ses conditions accessibles. Elles
           s'ouvrent dans le navigateur : une page de texte posee sur une
-          partie n'aurait pas de retour. */}
+          partie n'aurait pas de retour. La troisieme, la suppression, Play
+          l'exige depuis l'app des qu'un compte existe — et un pseudo reserve
+          avec son code de recuperation en est un. */}
       <div className="relative z-10 shrink-0 w-full max-w-md mx-auto
                       flex items-center justify-center gap-2
                       text-[9px] tracking-widest text-white/30">
@@ -620,6 +622,12 @@ export function TitleScreen() {
            target="_blank" rel="noopener noreferrer"
            className="py-1 hover:text-white/70 transition-colors">
           {N.t('legal_vie_privee')}
+        </a>
+        <span aria-hidden="true">·</span>
+        <a href="https://sprinter-game.com/suppression.html"
+           target="_blank" rel="noopener noreferrer"
+           className="py-1 hover:text-white/70 transition-colors">
+          {N.t('legal_suppression')}
         </a>
       </div>
 

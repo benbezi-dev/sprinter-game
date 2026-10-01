@@ -1253,6 +1253,7 @@
     mod_annuler:     ['annuler', 'cancel'],
     legal_conditions: ['conditions', 'terms'],
     legal_vie_privee: ['confidentialité', 'privacy'],
+    legal_suppression: ['supprimer mes données', 'delete my data'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],
