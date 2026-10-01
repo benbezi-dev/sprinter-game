@@ -4427,7 +4427,17 @@
   // Une image chargee ou un canevas deja teint : les deux se dessinent pareil.
   const largeurImg = im => im.naturalWidth || im.width;
   const hauteurImg = im => im.naturalHeight || im.height;
-  function panneauPub(ctx, seg, r, zLo, zHi, reperes, pub, led) {
+  // LES NEONS PASSENT DEVANT LA LUMIERE DU JOUR. L'ecran ne s'allumait que
+  // dans un stade de nuit : le jour, le logo n'etait qu'un metal teint, a la
+  // valeur de la piste et des gradins, et l'etalonnage de l'apres-midi et du
+  // soir, qui multiplie toute l'image, le ternissait avec le reste. Un ecran
+  // LED brille en plein soleil : son halo est donc la a toute heure, et le
+  // logo recoit sa propre lumiere, un second passage ajoute ('lighter'), plus
+  // fort aux heures ou l'etalonnage va l'eteindre. La flaque au sol, elle, ne
+  // se voit que dans un stade sombre : elle reste aux ecrans de nuit (`led`).
+  const ECLAT_PUBS = { jour: 0.6, 'apres-midi': 0.8, soir: 0.8, nuit: 0.6 };
+  const eclatPubs = th => ECLAT_PUBS[(th && th.moment) || 'jour'];
+  function panneauPub(ctx, seg, r, zLo, zHi, reperes, pub, led, eclat) {
     const img = pub.img;
     const iw = largeurImg(img), ih = hauteurImg(img);
     const W = pub.h * iw / ih;
@@ -4445,10 +4455,10 @@
     if (L < W) return;
     const nb = Math.max(1, Math.round(L / pub.pas));
     const zTop = (zLo + zHi) / 2 + pub.h / 2;
-    // Dans un stade de nuit, l'ecran eclaire : son halo deborde du logo d'une
-    // marge fixe (celle de l'image), et une flaque de lumiere s'etale au sol
+    // L'ecran eclaire : son halo deborde du logo d'une marge fixe (celle de
+    // l'image), et dans un stade de nuit une flaque de lumiere s'etale au sol
     // devant lui.
-    const halo = led ? haloDe(pub) : null;
+    const halo = haloDe(pub);
     const marge = halo ? (largeurImg(halo) - iw) / 2 * pub.h / ih : 0;
     for (let q = 0; q < nb; q++) {
       const s0 = (q + 0.5) * L / nb - W / 2, s1 = s0 + W;
@@ -4461,8 +4471,14 @@
         const cy = P[k][1] + (P[k + 1][1] - P[k][1]) * t;
         if (reperes.some(m => Math.hypot(m[0] - cx, m[1] - cy) < W / 2 + 1)) continue;
       }
-      if (halo) flaqueDeLumiere(ctx, P, S, (s0 + s1) / 2, W / 2 + 0.6, imageFlaque(pub));
+      if (led && halo) flaqueDeLumiere(ctx, P, S, (s0 + s1) / 2, W / 2 + 0.6, imageFlaque(pub));
       plaquer(ctx, img, P, S, s0, s1, zTop, pub.h, false);
+      if (eclat > 0) {
+        ctx.save();
+        ctx.globalAlpha = eclat;
+        plaquer(ctx, img, P, S, s0, s1, zTop, pub.h, true);
+        ctx.restore();
+      }
       if (halo) plaquer(ctx, halo, P, S, s0 - marge, s1 + marge, zTop + marge,
                         pub.h + 2 * marge, true);
     }
@@ -6702,7 +6718,7 @@
         const seg = sm.slice(i, i + stp + 1), n = i / stp;
         if (pub && n % 2 === 1) {
           wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
-          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed);
+          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed, eclatPubs(th));
         } else {
           wall(ctx, seg, near, 0.02, 1.05,
                th.panels[(pub ? n >> 1 : n) % th.panels.length], stp);
