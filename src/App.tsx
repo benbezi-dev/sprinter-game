@@ -430,8 +430,8 @@ function MainGame() {
       <LiaisonEntrante />
       {/* Les confettis d'un record personnel et les feux d'artifice d'un
           record du monde. Montes ici, au-dessus de tous les ecrans de fin :
-          une course de carriere, une epreuve one shot ou meme une defaite ou
-          le chrono est tombe quand meme ont droit a la meme fete. */}
+          une course de carriere comme une epreuve one shot ont droit a la
+          meme fete — mais pas une defaite (voir FeteRecords.tsx). */}
       <FeteRecords />
       {/* Le tableau des treize nuits. Pose ici plutot que dans l'ecran-titre
           pour la meme raison que Bienvenue : il doit passer AU-DESSUS de

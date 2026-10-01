@@ -403,6 +403,38 @@ ATHLETES = {
             'shank':    [1.00, 1.00, 1.05, 1.05, 1.02, 1.00, 1.00, 1.00],
         },
     },
+
+    # MEBA-MICKAEL ZEZE — sprint, equipe de France. 1,77 m pour 74 kg (FFA) :
+    # plus petit et plus leger qu'Aurel Manga, et sa silhouette ne se lit pas
+    # au meme endroit. Releve sur ses videos d'entrainement torse nu (mise en
+    # place dans les blocs, lignes droites, « wickets ») : un sprinteur
+    # compact et tres sec, dont la masse est EN BAS — fessiers et ischios qui
+    # debordent nettement de la cuisse, quadriceps pleins jusqu'au genou,
+    # mollet haut et rond — et en haut une poitrine large et des epaules
+    # rondes sans le trapeze monte d'Aurel. La taille est tres pincee sous
+    # des obliques dessines. Les bras sont ceux d'un premier relayeur : un
+    # biceps rond, l'avant-bras sec. La carrure ne s'ecarte que de +2 %.
+    'meba': {
+        'fem': False,
+        'carrure': 1.02,
+        'retouches': {
+            # bassin : le fessier deborde, la hanche ne s'elargit pas
+            'pelvis':   [1.00, 1.02, 1.06, 1.02, 1.00],
+            # taille tres pincee, poitrine large, trapeze a peine plus fort
+            'torso':    [1.00, 0.98, 0.93, 0.95, 1.00, 1.06, 1.08, 1.06, 1.06],
+            'neck':     [1.06, 1.04, 1.02],
+            # la machoire carree porte la barbe ; le crane ne change pas
+            'head':     [1.04, 1.02, 1.00, 1.00, 1.00],
+            'deltoid':  [1.10, 1.12, 1.08],
+            'upperarm': [1.06, 1.10, 1.10, 1.06, 1.02, 1.00],
+            'forearm':  [1.04, 1.04, 1.02, 1.00, 1.00, 1.00, 1.00],
+            # la premiere masse (le fessier, a rayon brut) ne se touche pas ;
+            # l'arriere de la cuisse et le quadriceps, si, jusqu'au genou
+            'thigh':    [1.00, 1.08, 1.09, 1.08, 1.06, 1.04, 1.02, 1.00],
+            # mollet haut et rond, cheville fine
+            'shank':    [1.00, 1.00, 1.07, 1.07, 1.03, 1.00, 1.00, 1.00],
+        },
+    },
 }
 
 

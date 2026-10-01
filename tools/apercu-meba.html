@@ -1,0 +1,84 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu de Meba-Mickael Zeze</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #1b1e29; border-radius: 6px; }
+</style>
+<!--
+  Le skin premium de Meba-Mickael Zeze tel que le jeu le dessine, geste par geste.
+
+    npx vite --mode test   puis   http://localhost:5173/tools/apercu-meba.html
+
+  Toujours au palier ULTRA, avec ses soixante-quatre facettes par volume :
+    1. de face au dos, au petit trot — les vanilles, le bandeau, la barbe, la chaine ;
+    2. la foulee canon fraiche (a gauche) puis alourdie par la fatigue (a droite) ;
+    3. sa mise en place : debout, le V renverse du rituel (deux balancements),
+       a vos marques, prets ;
+    4. le clap au-dessus de la tete, sur une frappe ;
+    5. le visage en gros plan.
+-->
+<h2 id="t1">de face au dos</h2><canvas id="c1" width="1180" height="430"></canvas>
+<h2>la foulee : fraiche, puis alourdie</h2><canvas id="c2" width="1180" height="430"></canvas>
+<h2>la mise en place dans les blocs</h2><canvas id="c3" width="1180" height="360"></canvas>
+<h2>le clap</h2><canvas id="c4" width="1180" height="460"></canvas>
+<h2>gros plan</h2><canvas id="c5" width="1180" height="420"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+
+  const NOM = 'Méba-Mickaël ZÉZÉ';
+  const look = SprinterCore.VEDETTES[NOM];
+  const F = look.facettes;
+  const perso = (o = {}) => Object.assign({
+    look, stride: 0, v: 11.4, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, d: 0,
+  }, o);
+  const dessiner = (ctx, p, cap, x, y, px, lod) => {
+    const k = px * (look.h / SprinterCore.C.MODEL_H) / 2;
+    const cp = SprinterApp.personCapsules(p, cap, 0, false, false,
+      lod === undefined ? SprinterApp.niveauDetail(k) : lod);
+    SprinterApp.drawFacetFigure(ctx, cp, x, y, k, false, F);
+  };
+
+  const c1 = document.getElementById('c1').getContext('2d');
+  [Math.PI, Math.PI * 0.75, Math.PI * 0.5, Math.PI * 0.25, 0, -Math.PI * 0.5].forEach((cap, i) =>
+    dessiner(c1, perso({ v: 0 }), cap, 110 + i * 192, 405, 380));
+
+  const c2 = document.getElementById('c2').getContext('2d');
+  for (let i = 0; i < 6; i++) {
+    const fatigue = i < 3 ? 0 : 1;
+    dessiner(c2, perso({ stride: (i % 3) * Math.PI / 1.5, fatigue, v: fatigue ? 9.5 : 12.4 }),
+             Math.PI * 0.5, 110 + i * 192, 400, 380);
+  }
+
+  const c3 = document.getElementById('c3').getContext('2d');
+  const blocs = [
+    { enBloc: 0, v: 0 },
+    { enBloc: 1, rituel: 1, rituelT: 0.0 },
+    { enBloc: 1, rituel: 1, rituelT: 0.28 },
+    { enBloc: 1, rituel: 0.5, rituelT: 1.2 },
+    { enBloc: 1, rituel: 0, prets: 0 },
+    { enBloc: 1, rituel: 0, prets: 1 },
+  ];
+  blocs.forEach((b, i) => dessiner(c3, perso(Object.assign({ v: 0 }, b)), Math.PI * 0.5,
+                                   110 + i * 192, 330, 300));
+
+  const c4 = document.getElementById('c4').getContext('2d');
+  for (let i = 0; i < 6; i++) {
+    dessiner(c4, perso({ finished: true, v: 1, gesteT: i * 0.08, stride: 2 }),
+             Math.PI * (i < 3 ? 1 : 0.75), 110 + i * 192, 440, 380);
+  }
+
+  const c5 = document.getElementById('c5').getContext('2d');
+  [Math.PI * 1.35, Math.PI * 1.2, Math.PI * 1.05, Math.PI * 0.9].forEach((cap, i) => {
+    c5.save();
+    c5.beginPath(); c5.rect(10 + i * 292, 10, 280, 400); c5.clip();
+    dessiner(c5, perso({ v: 0, stride: 1.2 }), cap, 150 + i * 292, 1330, 1300, 3);
+    c5.restore();
+  });
+  document.getElementById('t1').textContent =
+    `${NOM} — de face au dos (${SprinterCore.pose(perso(), 3).length} volumes a l'ultra, ${F} facettes au moins)`;
+  document.body.dataset.pret = '1';
+</script>

@@ -826,7 +826,7 @@
   } : {};
 
   const Audio_ = {
-    ok: false, on: true, ctx: null, buf: {}, src: null, cur: null, gain: null,
+    ok: false, on: true, ctx: null, buf: {}, boucles: {}, src: null, cur: null, gain: null,
     // La SORTIE unique, et la prise branchee dessus.
     //
     // Tout passait auparavant directement sur `ctx.destination` : la musique
@@ -1532,6 +1532,14 @@
      */
     raceTrack(level) {
       const lvl = LEVELS[level];
+      // UN STADE-EVENEMENT PEUT PORTER SON MORCEAU, par-dessus celui de son
+      // theme : le defi Meba-Mickael Zeze se court dans le decor de la Riviera
+      // mais pas sur sa musique. Tant que le morceau n'est pas charge, il
+      // joue son repli — jamais la musique du theme qu'il a ecartee.
+      if (lvl && lvl.musique) {
+        if (this.buf[lvl.musique]) return lvl.musique;
+        if (lvl.musiqueRepli && this.buf[lvl.musiqueRepli]) return lvl.musiqueRepli;
+      }
       const th = lvl && THEMES[lvl.theme];
       if (th && th.musique && this.buf[th.musique]) return th.musique;
       return 'race' + (level <= 2 ? 0 : Math.min(3, level - 2));
@@ -1563,7 +1571,14 @@
       if (this.src) { try { this.src.stop(); } catch (e) { } }
       const b = this.buf[name]; if (!b) return;
       const s = this.ctx.createBufferSource();
-      s.buffer = b; s.loop = true; s.connect(this.gain); s.start();
+      s.buffer = b; s.loop = true;
+      // UNE INTRO QUI NE REVIENT PAS. Un morceau peut boucler sur une partie
+      // de lui-meme seulement (`boucles`, en secondes) : celui du defi
+      // Meba-Mickael Zeze ouvre sur trois secondes de decompte qui retombent
+      // sur le coup de pistolet, et ne doivent pas se rejouer en pleine course.
+      const bo = this.boucles && this.boucles[name];
+      if (bo && bo[1] > bo[0] && bo[1] <= b.duration + 0.001) { s.loopStart = bo[0]; s.loopEnd = bo[1]; }
+      s.connect(this.gain); s.start();
       this.src = s; this.cur = name;
     },
     stop() {
@@ -7053,8 +7068,18 @@
   // personnage, plutot que relu ici a chaque segment. Le sauteur de Jumper,
   // seul au centre de l'image, y a droit a tous les paliers (drawRunner).
   let _ultra = false;
+  // UN PLANCHER DE FACETTES, pour qui en demande un (`facettes` du look : le
+  // skin premium de Mickael Meba-Zeze en veut soixante-quatre). Il ne joue
+  // qu'a l'ultra, et sur tous ses volumes, doigts compris : un telephone
+  // descendu au plein ou plus bas garde les paliers de tout le monde. Pose par
+  // drawFacetFigure le temps d'une figure, remis a zero juste apres.
+  let _facettesMin = 0;
   const LARGEUR_FACETTE_PX = 2.5;
   function facetCount(rpx) {
+    if (_ultra && _facettesMin) {
+      const n = Math.ceil(TAU * rpx / LARGEUR_FACETTE_PX);
+      return Math.min(RING_MAX, Math.max(_facettesMin, n));
+    }
     if (rpx < 2.5) return 4;
     if (_ultra) {
       const n = Math.ceil(TAU * rpx / LARGEUR_FACETTE_PX);
@@ -7380,9 +7405,10 @@
     if (seam) { ctx.lineWidth = 1; ctx.lineJoin = 'miter'; }
   }
 
-  function drawFacetFigure(ctx, caps, ax, ay, k, ultra) {
+  function drawFacetFigure(ctx, caps, ax, ay, k, ultra, facettesMin) {
     const fin = PREM();
     _ultra = !!ultra || !!(fin && fin.ULTRA !== undefined && fin.niveau >= fin.ULTRA);
+    _facettesMin = facettesMin || 0;
     // LA PROFONDEUR SE MESURE DANS L'AXE DE LA VUE, HAUTEUR COMPRISE. La
     // camera regarde d'en haut : un segment plus haut est plus PRES d'elle.
     // Trie sur le seul plan du sol, le crane passait par-dessus la calotte de
@@ -7405,6 +7431,7 @@
       const c = caps[order[n][1]];
       drawSegmentFacets(ctx, c[0], c[1], c[2], ax, ay, k, c[3], c[4]);
     }
+    _facettesMin = 0;
   }
 
   // Combien de volumes vaut la peine de payer, a cette taille-la.
@@ -7438,6 +7465,40 @@
     return n;
   }
 
+  /**
+   * LE REPERE DU COUREUR TOUT ENTIER, tel que personCapsules le tourne.
+   *
+   * Tout ce que personCapsules applique a CHAQUE point apres ses os — le roulis
+   * du virage, la bascule de la sortie des blocs et de la chute, le miroir, le
+   * cap, la courbe de la piste — est une rotation autour de l'origine : une
+   * matrice. Un athlete en maillage (game/vedette-3d.ts) la recoit telle
+   * quelle, pour tourner exactement comme ses troncs l'auraient fait. Rend les
+   * images des trois axes, en colonnes : [ex, ey, ez].
+   */
+  function repereDuCoureur(person, headAng, lean, mirror, applyCurve) {
+    const sgn = mirror ? -1 : 1;
+    const hc = Math.cos(headAng || 0), hs = Math.sin(headAng || 0);
+    const fsh = K.fallShape(person.fallAnim);
+    const roll = (lean || 0) + (fsh ? fsh.roll : 0);
+    const rc = Math.cos(roll), rs = Math.sin(roll);
+    const sautW = person.saut ? Math.max(0, Math.min(1, person.saut.w)) : 0;
+    const fall = (fsh ? fsh.pitch : 0) -
+      (person.drivePitch || 0) * Math.pow(1 - Math.max(0, Math.min(1, person.enBloc || 0)), 2) *
+      (1 - sautW);
+    const fc = Math.cos(fall), fs = Math.sin(fall);
+    const axe = (x, y, z) => {
+      let wx = x, wy = y, wz = z, t;
+      if (roll) { t = wy * rc - wz * rs; wz = wy * rs + wz * rc; wy = t; }
+      if (Math.abs(fall) > 0.001) { t = wx * fc - wz * fs; wz = wx * fs + wz * fc; wx = t; }
+      wx *= sgn;
+      let rx = wx, ry = wy;
+      if (headAng) { t = wx * hc - wy * hs; ry = wx * hs + wy * hc; rx = t; }
+      if (applyCurve) { t = rx * WC - ry * WS; ry = rx * WS + ry * WC; rx = t; }
+      return [rx, ry, wz];
+    };
+    return [axe(1, 0, 0), axe(0, 1, 0), axe(0, 0, 1)];
+  }
+
   function personCapsules(person, headAng, lean, mirror, applyCurve, lod) {
     const parts = pose(person, lod === undefined ? 0 : lod);
     const sgn = mirror ? -1 : 1;
@@ -7461,9 +7522,12 @@
       (1 - sautW);
     const fc = Math.cos(fall), fs = Math.sin(fall);
     const caps = [];
-    for (const [col, pv, ang, off, hf, yaw, bout] of parts) {
+    for (const [col, pv, ang, off, hf, yaw, bout, roule] of parts) {
       const ca = Math.cos(ang), sa = Math.sin(ang);
       const yc = Math.cos(yaw), ys = Math.sin(yaw);
+      // LE ROULIS D'UN OS (pose(), huitieme champ) : il tourne autour de l'axe
+      // de course, sur le pivot de l'os, avant le lacet. Nul presque partout.
+      const rlc = roule ? Math.cos(roule) : 1, rls = roule ? Math.sin(roule) : 0;
       const ends = [];
       for (const zSign of [-1, 1]) {
         const hx = zSign < 0 ? hf[0] : hf[2], hy = zSign < 0 ? hf[1] : hf[3];
@@ -7490,6 +7554,11 @@
         let wx = pv[0] + lx * ca - lz * sa;
         let wz = pv[2] + lx * sa + lz * ca;
         let wy = pv[1] + off[1];
+        if (roule) {
+          const dy = wy - pv[1], dz = wz - pv[2];
+          wy = pv[1] + dy * rlc - dz * rls;
+          wz = pv[2] + dy * rls + dz * rlc;
+        }
         if (yaw) { const t = wx * yc - wy * ys; wy = wx * ys + wy * yc; wx = t; }
         if (lean) { const t = wy * rc - wz * rs; wz = wy * rs + wz * rc; wy = t; }
         if (Math.abs(fall) > 0.001) { const t = wx * fc - wz * fs; wz = wx * fs + wz * fc; wx = t; }
@@ -7508,7 +7577,7 @@
       // le vecteur lateral dans exactement les memes rotations que les
       // points. L'angle de l'os et le pique du buste tournent autour de cet
       // axe-la et le laissent intact, d'ou leur absence.
-      let Wx = -ys, Wy = yc, Wz = 0, t;
+      let Wx = -ys * rlc, Wy = yc * rlc, Wz = rls, t;
       if (lean) { t = Wy * rc - Wz * rs; Wz = Wy * rs + Wz * rc; Wy = t; }
       if (Math.abs(fall) > 0.001) { t = Wx * fc - Wz * fs; Wz = Wx * fs + Wz * fc; Wx = t; }
       Wx *= sgn;
@@ -7530,7 +7599,29 @@
     // facette plus finement : c'est le seul athlete du concours a l'ecran.
     const ultra = !!(G.sautEnCours && r === G.player);
     const caps = personCapsules(r, headAng, lean, false, curved, ultra ? 3 : niveauDetail(k));
-    drawFacetFigure(ctx, caps, ax, ay, k, ultra);
+    if (r.look && r.look.maillage && maillage3D(ctx, r, ax, ay, k, headAng, lean, false, curved)) return;
+    drawFacetFigure(ctx, caps, ax, ay, k, ultra, r.look && r.look.facettes);
+  }
+
+  /**
+   * UN ATHLETE EN VRAI MAILLAGE (look.maillage, game/vedette-3d.ts).
+   *
+   * Ses troncs viennent d'etre calcules — c'est pose() qui a releve, au passage,
+   * les angles de son squelette (r.squelette) ; on les donne a son maillage,
+   * tourne par le meme repere que ses troncs l'auraient ete. Rend faux tant
+   * que le maillage n'est pas la : l'appelant dessine alors les troncs, sa
+   * doublure. Le premier appel demande le chargement, une fois.
+   */
+  const maillagesDemandes = new Set();
+  function maillage3D(ctx, r, ax, ay, k, headAng, lean, mirror, curved) {
+    const V = globalThis.SprinterVedette3D, chemin = r.look.maillage;
+    if (!V || !V.pret(chemin)) {
+      const demander = globalThis.SprinterDemanderMaillage;
+      if (demander && !maillagesDemandes.has(chemin)) { maillagesDemandes.add(chemin); demander(chemin); }
+      return false;
+    }
+    return V.dessiner(ctx, chemin, r.squelette || null,
+                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k);
   }
 
   /* ------------------------------------------------- reperes des coureurs */
@@ -8011,17 +8102,31 @@
     // Elimine au faux depart : la piste est figee, et chacun reste la ou le
     // decompte l'a laisse — dans ses blocs, pas debout d'un coup derriere eux.
     if (G.state === 'falseout') return;
+    r.rituel = 0;
     if (G.state === 'count') {
       const d = G.depart;
       let marques, prets;
+      // l'instant de « a vos marques », et celui de « prets »
+      const t0 = STARTER && d ? 3 - d.duree : 0;
+      const tP = STARTER && d ? 3 - d.tenue : DECOMPTE - 1;
       if (STARTER && d) {
-        marques = doux((G.countT - (3 - d.duree)) / 0.7);
-        prets = doux((G.countT - (3 - d.tenue)) / 0.45);
+        marques = doux((G.countT - t0) / 0.7);
+        prets = doux((G.countT - tP) / 0.45);
         // avant « a vos marques », debout derriere les blocs
         r.enBloc = marques;
       } else {
         r.enBloc = doux(G.countT / 0.6);
-        prets = doux((G.countT - (DECOMPTE - 1)) / 0.45);
+        prets = doux((G.countT - tP) / 0.45);
+      }
+      // SON RITUEL, pour qui en a un (Mickael Meba-Zeze : voir BLOC.rituel et
+      // pose). Il entre dans les blocs a la meme commande que les autres, mais
+      // bassin haut ; il y balance, puis descend se poser, et il est a vos
+      // marques bien avant « prets ». Sur un decompte trop court pour lui, le
+      // rituel se resserre plutot que de deborder sur la commande.
+      if (r.look && r.look.rituel) {
+        const u = G.countT - t0, place = Math.max(0.4, Math.min(1, (tP - t0 - 0.3) / 1.7));
+        r.rituel = u < 0 ? 0 : 1 - doux((u - 1.1 * place) / (0.6 * place));
+        r.rituelT = u;
       }
       r.prets = prets;
       return;
@@ -8195,9 +8300,10 @@
       // `cap` et `roulis` sont ceux d'un athlete qui ne suit pas le couloir :
       // le sauteur en hauteur prend sa courbe, puis tourne le dos a la barre.
       // Sans eux, ils valent zero et rien ne change.
+      const cap = T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0);
       drawRunner(ctx, r, g2[0], g2[1], depthOf(p[0], p[1]),
                  m * (r.look.h / C.MODEL_H),
-                 T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0),
+                 cap + capDuClap(r, cap),
                  T.lean(r.d, r.lane, r.v) + (r.roulis || 0));
       ctx.globalAlpha = 1;
     };
@@ -8238,6 +8344,27 @@
     for (const [r, g2] of vis) drawNomRepere(ctx, r, g2[0], g2[1], m);
     // La bulle de presentation, au-dessus de tout — pastilles comprises.
     drawBulle(ctx, vis, m);
+  }
+
+  /**
+   * IL SE RETOURNE POUR APPLAUDIR (look.clap). La course finie, Meba-Mickael
+   * Zeze frappe dans ses mains devant son visage ; vu de dos et d'en haut, par
+   * la camera du jeu, des mains a hauteur des yeux passaient au-dessus du
+   * crane. Il se tourne donc vers l'objectif — de trois quarts, un peu vers
+   * la tribune — a mesure qu'il s'arrete : rien tant qu'il court a plus de
+   * 3,5 m/s, face a nous sous 1 m/s. Le cap vise est pris dans le repere de
+   * l'ecran (la camera regarde vers +x +y), d'ou le virage du stade retire.
+   */
+  const CAP_SALUT = -2.62;   // -150 degres : face a la camera (-135), un rien vers la tribune
+  function capDuClap(r, cap) {
+    if (!r.look || !r.look.clap || !r.finished) return 0;
+    const w = Math.max(0, Math.min(1, (3.5 - (r.v || 0)) / 2.5));
+    if (w <= 0) return 0;
+    const vise = CAP_SALUT - (G.track && G.track.curved ? WROT : 0);
+    let d = (vise - cap) % TAU;
+    if (d > Math.PI) d -= TAU;
+    if (d < -Math.PI) d += TAU;
+    return d * w * w * (3 - 2 * w);
   }
 
   /**
@@ -8338,7 +8465,8 @@
   function drawIcon(ctx, man, cx2, cy2, pxFor2m, mirror) {
     const k = pxFor2m * (man.look.h / C.MODEL_H) / 2;
     const caps = personCapsules(man, 0, 0, mirror, false, niveauDetail(k));
-    drawFacetFigure(ctx, caps, cx2, cy2, k);
+    if (man.look && man.look.maillage && maillage3D(ctx, man, cx2, cy2, k, 0, 0, mirror, false)) return;
+    drawFacetFigure(ctx, caps, cx2, cy2, k, false, man.look && man.look.facettes);
   }
 
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
@@ -8373,7 +8501,7 @@
     // tools/apercu-coureur.html verifie les corps hors course — de face, de
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
     // arreter sur l'image qu'on veut regarder.
-    personCapsules, drawFacetFigure, niveauDetail,
+    personCapsules, drawFacetFigure, niveauDetail, repereDuCoureur,
     // les tenues des starters, pour tools/apercu-starter.html
     LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,

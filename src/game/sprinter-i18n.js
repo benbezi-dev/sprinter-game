@@ -1770,6 +1770,9 @@
     // du canal de test, juste apres les ouverts, comme dans STADES_HORS_SERIE.
     // Un vrai lieu, et un vrai nom : c'est la que le defi se court.
     ['Stade Jean-Delbert', 'Stade Jean-Delbert'],
+    // Le defi Meba-Mickael Zeze, juste derriere, comme dans STADES_HORS_SERIE.
+    // Il se court a la Riviera : il en porte le nom.
+    ['Stade de la Riviera', 'Riviera Stadium'],
     ['Stade de la Riviera', 'Riviera Stadium'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa

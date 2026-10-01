@@ -193,14 +193,14 @@ async function scene(A, prem, niveau, echos) {
  * l'arrivee. Un guetteur qui ne retiendrait pas ce qu'il a deja vu rendrait
  * donc son geste a chaque image, et ces repetitions le prouvent.
  */
-function courseDeGestes(M, RB, { reaction, bonus, grade, faux = false }) {
+function courseDeGestes(M, RB, { reaction, bonus, grade, faux = false, look = null }) {
   const guetter = M.guetteurDePoussee();
   const vus = [];
   const image = (p, enCourse) => {
     for (const g of guetter(p, enCourse, RB)) vus.push(g.echos ? 'halo + remanence' : 'halo');
   };
   image(null, false);                                  // l'ecran d'avant : remise a zero
-  const p = { reaction: null, reactBonus: 0, transGrade: null, jumped: false };
+  const p = { reaction: null, reactBonus: 0, transGrade: null, jumped: false, look };
   image(p, true); image(p, true);                      // sur la ligne : rien n'est juge
   p.reaction = reaction; p.reactBonus = bonus; p.jumped = faux;
   image(p, true); image(p, true); image(p, true);      // le pistolet, et deux images de plus
@@ -316,6 +316,12 @@ for (const canal of ['test', 'production']) {
   cas('transition parfaite seule', 'halo + remanence', { reaction: 0.50, bonus: 0, grade: 2 });
   cas('les deux parfaits', 'halo puis halo + remanence', { reaction: 0.11, bonus: RB, grade: 2 });
   cas('ni l un ni l autre', '(rien)', { reaction: 0.50, bonus: 0, grade: 0 });
+  // LE SKIN DE MEBA-MICKAEL ZEZE PART PLUS FORT : son depart canon porte
+  // l'image remanente de la transition parfaite (look.departParfait).
+  cas('sous son skin, le depart parfait porte aussi la remanence', 'halo + remanence',
+      { reaction: 0.11, bonus: RB, grade: 0, look: { departParfait: 1.2 } });
+  cas('et un depart manque sous son skin ne porte rien', '(rien)',
+      { reaction: 0.50, bonus: 0, grade: 0, look: { departParfait: 1.2 } });
 
   // Un faux depart n'est pas un depart canon, si vif soit-il — mais il ne
   // prend rien a la relance. Et une transition seulement bonne (note 1) n'est

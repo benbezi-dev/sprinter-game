@@ -1,7 +1,12 @@
 // LE DEFI DES VEDETTES — les mots de l'evenement.
 //
-// Tout ce que le defi Aurel Manga ecrit a l'ecran : la banniere de l'accueil,
-// la fiche avant la course, le verdict, le skin gagne.
+// Tout ce que les defis des vedettes ecrivent a l'ecran : la banniere de
+// l'accueil, la fiche avant la course, le verdict, le skin gagne.
+//
+// UN MOT COMMUN, ET SA VERSION PAR ATHLETE. `mot('vd_regle', vars, 'meba')`
+// cherche d'abord « vd_regle:meba », puis « vd_regle » : le defi d'Aurel
+// Manga garde les siens tels quels, celui de Meba-Mickael Zeze ne redit que
+// ce qui change.
 //
 // POURQUOI ILS NE SONT PAS DANS sprinter-i18n.js, avec les autres. Pour la
 // raison des mots d'Halloween (halloween-mots.ts) : l'evenement doit sortir du
@@ -61,11 +66,32 @@ const MOTS: Record<string, Paire> = {
   vd_rejouer:     ['REJOUER', 'RUN AGAIN'],
   vd_revanche:    ['REVANCHE', 'REMATCH'],
   vd_accueil:     ['ACCUEIL', 'HOME'],
+
+  // --- MEBA-MICKAEL ZEZE : l'evenement special du sprint
+  'vd_sur:meba':        ['ÉVÉNEMENT SPÉCIAL · SPRINT', 'SPECIAL EVENT · SPRINT'],
+  'vd_titre:meba':      ['Défie {nom} au 100 m et au 200 m', 'Take on {nom} over 100 m and 200 m'],
+  'vd_sous:meba':       ['Passe sous son chrono et gagne son skin premium',
+                         'Beat his time and win his premium skin'],
+  'vd_epreuve:meba':    ['100 m · 200 m', '100 m · 200 m'],
+  'vd_lieu:meba':       ['Stade de la Riviera', 'Riviera Stadium'],
+  'vd_regle:meba':      ['Il court au couloir 5, juste à ta droite. Son départ est un canon : '
+                         + 'personne ne le suit sur les cinquante premiers mètres. Puis il perd de '
+                         + 'la vitesse jusqu’à la ligne — c’est là qu’on le reprend. '
+                         + 'Passe sous son chrono pour le battre.',
+                         'He runs in lane 5, right next to you. His start is a cannon shot: '
+                         + 'nobody stays with him over the first fifty metres. Then he loses '
+                         + 'speed all the way to the line — that is where you catch him. '
+                         + 'Beat his time to beat him.'],
+  'vd_recompense_sous:meba': ['son skin premium, à porter sur les courses de sprint',
+                              'his premium skin, to wear in sprint races'],
+  'vd_debloque_sous:meba':   ['Il se porte sur les courses de sprint.', 'It is worn in sprint races.'],
+  vd_a_battre:    ['à battre : {s}', 'to beat: {s}'],
+  vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };
 
 /** Un mot de l'evenement, dans la langue courante, avec ses variables. */
-export function mot(cle: string, vars?: Record<string, string>): string {
-  const paire = MOTS[cle];
+export function mot(cle: string, vars?: Record<string, string>, qui?: string): string {
+  const paire = (qui && MOTS[`${cle}:${qui}`]) || MOTS[cle];
   let s = paire ? paire[SprinterI18N.index()] : cle;
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;

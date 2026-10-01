@@ -4,11 +4,12 @@
 // (game/vedettes.ts), et son corps, sa tenue et ses signes — bandeau, poignet,
 // barbe — deviennent ceux du coureur du joueur.
 //
-// IL NE SE PORTE QUE SUR LES HAIES, POUR L'INSTANT. C'est une demande, pas une
-// limite du moteur : le skin d'un hurdleur se gagne a Hurdlers et se court a
-// Hurdlers. Sur le sprint, le joueur garde son maillot or. La regle tient en un
+// CHAQUE SKIN SE PORTE LA OU IL S'EST GAGNE. C'est une demande, pas une limite
+// du moteur : le skin d'un hurdleur se gagne a Hurdlers et se court a
+// Hurdlers ; celui d'un sprinteur se gagne au sprint et se court sur le plat
+// (`surHaies`). Ailleurs, le joueur garde son maillot or. La regle tient en un
 // seul endroit — `habillerLeJoueur`, appele par game/jeux.ts a chaque course
-// construite — et c'est la qu'on l'elargira le jour venu.
+// construite.
 //
 // IL NE CHANGE QUE LE DESSIN. La foulee du joueur reste mesuree sur son gabarit
 // (Runner.strideLength, sprinter-core.js) : un skin plus grand ne court pas
@@ -27,9 +28,15 @@ import { HAIES } from './haies.js';
 const avecHaies = (cle: unknown) =>
   typeof cle === 'string' && Object.prototype.hasOwnProperty.call(HAIES, cle);
 
-/** Les skins qu'on peut gagner : clef -> nom du coureur dans VEDETTES (sprinter-core.js). */
-export const SKINS: Record<string, { coureur: string }> = {
-  manga: { coureur: 'Aurel MANGA' },
+/**
+ * Les skins qu'on peut gagner : clef -> nom du coureur dans VEDETTES
+ * (sprinter-core.js), et ou il se porte — sur les haies, ou sur le plat.
+ */
+export const SKINS: Record<string, { coureur: string; surHaies: boolean }> = {
+  manga: { coureur: 'Aurel MANGA', surHaies: true },
+  // Le skin premium de l'evenement special du sprint : son corps, sa foulee,
+  // son rituel dans les blocs et son clap (VEDETTES, sprinter-core.js).
+  meba: { coureur: 'Méba-Mickaël ZÉZÉ', surHaies: false },
 };
 
 type Etat = {
@@ -103,7 +110,8 @@ export function lookDuSkin(cle: string): any | null {
 /**
  * Habiller le coureur du joueur pour la course qu'on vient de construire.
  *
- * Le skin porte sur une course de haies, le maillot partout ailleurs. Et pas
+ * Le skin porte sur les courses qui sont les siennes — les haies pour un
+ * hurdleur, le plat pour un sprinteur —, le maillot partout ailleurs. Et pas
  * sur le stade d'un defi : on ne court pas contre Aurel Manga dans la peau
  * d'Aurel Manga — il y aurait deux fois le meme homme dans deux couloirs
  * voisins, et le joueur ne saurait plus lequel il est.
@@ -113,7 +121,9 @@ export function habillerLeJoueur(epreuve: unknown) {
   if (!G || !G.player) return;
   const lvl = SprinterApp.LEVELS && SprinterApp.LEVELS[G.levelIdx];
   const porte = etatCourant().porte;
-  const look = avecHaies(epreuve) && porte && !(lvl && lvl.evenement) ? lookDuSkin(porte) : null;
+  const s = porte ? SKINS[porte] : null;
+  const chezLui = !!s && typeof epreuve === 'string' && avecHaies(epreuve) === s.surHaies;
+  const look = chezLui && !(lvl && lvl.evenement) ? lookDuSkin(porte as string) : null;
   G.player.look = look || SprinterCore.PLAYER_LOOK;
 }
 
