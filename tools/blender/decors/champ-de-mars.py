@@ -622,11 +622,13 @@ def portique(racine, dessus=False):
 # blanche, le corps bleu ou court le logo BENBEZI, la jupe rouge — le
 # tricolore du lieu, du haut vers le bas.
 #
-# EN HAUTE DEFINITION, ET C'EST UNE CONSIGNE. Cent vingt-huit fuseaux et
-# quatre-vingt-seize paralleles, lisses : au-dessous de soixante-quatre
-# facettes (pieces.FACETTES_MIN), une enveloppe gonflee se lit comme une
-# boule a facettes. Les fuseaux alternent deux bleus, huit cotes chacun :
-# c'est la couture qu'on voit sur un vrai ballon, pas la maille.
+# EN ULTRA POLY, ET C'EST UNE CONSIGNE. Cinq cent douze cotes et trois cent
+# quatre-vingt-quatre paralleles, lisses — pres de deux cent mille faces pour
+# l'enveloppe seule ; rien, dans ce ballon, n'a moins de soixante-quatre
+# cotes (pieces.FACETTES_MIN) : suspentes, bruleur et anneau de charge sont
+# des tubes. Les seize fuseaux alternent deux bleus, et la toile BOMBE entre
+# deux rubans de charge, comme sur un vrai ballon gonfle : la silhouette
+# ondule a peine, et l'ombre se creuse a chaque couture.
 #
 # LE LOGO EST L'AFFICHE DES PANNEAUX (public/pubs), posee en texture sur le
 # devant. La camera regarde le long de (1, 1) : le devant du ballon est
@@ -638,7 +640,10 @@ def portique(racine, dessus=False):
 # le ballon sur la place qui lui reste dans le ciel.
 
 R_BALLON = 9.0
-FUSEAUX, PARALLELES = 128, 96
+FUSEAUX, PARALLELES = 512, 384
+NB_FUSEAUX = 16                      # les panneaux de toile, entre deux rubans
+BOMBE = 0.014                        # le gonflement de la toile entre deux rubans
+COTES = 64                           # le minimum de tout ce qui est rond
 F_LOGO = os.path.join(RACINE_PROJET, 'public', 'pubs', 'benbezi-logo-3d.webp')
 LOGO_ARC = math.radians(65)          # demi-ouverture du logo de part et d'autre du devant
 
@@ -689,6 +694,51 @@ def peinture_logo(nom, couleur, image, eclat_logo):
     return m
 
 
+def tube(bm, a, b, r):
+    """Un cylindre de COTES cotes, de a a b, ferme aux deux bouts."""
+    d = b - a
+    q = d.normalized().to_track_quat('Z', 'Y')
+    m = Matrix.Translation((a + b) / 2) @ q.to_matrix().to_4x4()
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=COTES, radius1=r, radius2=r,
+                          depth=d.length, matrix=m)
+
+
+def tore(bm, R, z, r, n=COTES):
+    """L'anneau de charge : un tore de COTES x n/4 cotes, a plat a la hauteur z."""
+    m = max(16, n // 4)
+    v = [[bm.verts.new((math.cos(i / n * math.tau) * (R + r * math.cos(j / m * math.tau)),
+                        math.sin(i / n * math.tau) * (R + r * math.cos(j / m * math.tau)),
+                        z + r * math.sin(j / m * math.tau))) for j in range(m)] for i in range(n)]
+    for i in range(n):
+        for j in range(m):
+            bm.faces.new([v[i][j], v[(i + 1) % n][j], v[(i + 1) % n][(j + 1) % m], v[i][(j + 1) % m]])
+
+
+def lisse(nom, bm, mat, racine):
+    """Un maillage lisse, range sous le repere du jeu."""
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    me = bpy.data.meshes.new(nom)
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new(nom, me)
+    bpy.context.collection.objects.link(o)
+    o.data.materials.append(mat)
+    for p in o.data.polygons:
+        p.use_smooth = True
+    o.parent = racine
+    return o
+
+
+def caisson(nom, mat, racine, centre, taille, arrondi):
+    """Une boite aux aretes arrondies, de huit segments par arete."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0, matrix=Matrix.Translation(centre) @
+                          Matrix.Diagonal((*taille, 1.0)))
+    bmesh.ops.bevel(bm, geom=bm.edges[:] + bm.verts[:], offset=arrondi, segments=8,
+                    affect='EDGES', profile=0.5)
+    return lisse(nom, bm, mat, racine)
+
+
 def montgolfiere(racine):
     R = R_BALLON
     front = Vector((-1, -1, 0)).normalized()
@@ -714,7 +764,9 @@ def montgolfiere(racine):
         anneau = []
         for i in range(FUSEAUX):
             a = i / FUSEAUX * math.tau
-            p = (front * math.cos(a) + droite * math.sin(a)) * rho
+            frac = (i * NB_FUSEAUX / FUSEAUX) % 1.0
+            gonfle = 1 + BOMBE * math.sin(math.pi * frac) ** 0.7
+            p = (front * math.cos(a) + droite * math.sin(a)) * (rho * gonfle)
             anneau.append(bm.verts.new((p.x, p.y, z_eq + z)))
         anneaux.append(anneau)
     # le logo : haut comme le veut son image, sur l'arc LOGO_ARC
@@ -735,7 +787,7 @@ def montgolfiere(racine):
             i2 = (i + 1) % FUSEAUX
             vs = [haut[0], bas[i2], bas[i]] if j == 0 else [haut[i], haut[i2], bas[i2], bas[i]]
             f = bm.faces.new(vs)
-            fuseau = (i // 8) % 2
+            fuseau = (i * NB_FUSEAUX // FUSEAUX) % 2
             am = math.atan2(math.sin((i + 0.5) / FUSEAUX * math.tau), math.cos((i + 0.5) / FUSEAUX * math.tau))
             zm = sum(v.co.z for v in vs) / len(vs)
             if tm < 0.16:
@@ -761,22 +813,32 @@ def montgolfiere(racine):
         p.use_smooth = True
     o.parent = racine
 
-    # la nacelle d'osier, sa bordure de cuir, les suspentes et le bruleur
+    # la nacelle d'osier et sa bordure de cuir, aux aretes arrondies ; les
+    # suspentes, le bruleur et l'anneau de charge, en tubes
     osier, cuir = peinture('osier', 'osier'), peinture('cuir', 'cuir', 0.6)
-    Ln, Lb, Ls = Lot(), Lot(), Lot()
+    acier = peinture('suspente', 'metalSombre', 0.4)
     c = 0.65
-    Ln.boite(-c, -c, 0.0, c, c, 1.1)
-    Lb.boite(-c - 0.06, -c - 0.06, 1.0, c + 0.06, c + 0.06, 1.16)
+    caisson('nacelle', osier, racine, (0, 0, 0.55), (2 * c, 2 * c, 1.1), 0.07)
+    caisson('nacelle_bord', cuir, racine, (0, 0, 1.08), (2 * c + 0.12, 2 * c + 0.12, 0.16), 0.06)
     rb = profil_ballon(1.0)[0]
+    bm = bmesh.new()
     for k in range(8):
         a = k / 8 * math.tau + math.pi / 8
         haut = Vector((math.cos(a) * rb, math.sin(a) * rb, z_bouche))
         coin = Vector((math.cos(a) * c * 1.2, math.sin(a) * c * 1.2, 1.16))
-        Ls.poutre(coin, haut, 0.05)
-    Ls.boite(-0.35, -0.35, 2.0, 0.35, 0.35, 2.5)
-    Ln.objet('nacelle', osier, racine)
-    Lb.objet('nacelle_bord', cuir, racine)
-    Ls.objet('suspentes', peinture('suspente', 'metalSombre', 0.4), racine)
+        tube(bm, coin, haut, 0.025)
+    tube(bm, Vector((0, 0, 2.0)), Vector((0, 0, 2.5)), 0.32)
+    tube(bm, Vector((0, 0, 2.5)), Vector((0, 0, 2.62)), 0.22)
+    # le bruleur pend aux suspentes par quatre bras
+    zb = 2.25
+    tb = (zb - 1.16) / (z_bouche - 1.16)
+    for k in range(0, 8, 2):
+        a = k / 8 * math.tau + math.pi / 8
+        rs = c * 1.2 + (rb - c * 1.2) * tb
+        tube(bm, Vector((math.cos(a) * 0.3, math.sin(a) * 0.3, zb)),
+             Vector((math.cos(a) * rs, math.sin(a) * rs, zb)), 0.02)
+    tore(bm, rb, z_bouche, 0.06)
+    lisse('suspentes', bm, acier, racine)
     return {'ballon': {'z_eq': round(z_eq, 3), 'r': R}}
 
 
