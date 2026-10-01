@@ -392,17 +392,26 @@
   // ballon (une version peinte a la main serait la boule a facettes qu'on a
   // justement ecartee). Comme la tour, elle tient a une position d'ECRAN.
   //
-  // A DROITE DE LA TOUR, DEVANT LES FACADES. L'horizon descend vers la
-  // droite : a gauche, les facades montent presque jusqu'au bandeau, et un
-  // ballon pose dans le ciel au-dessus d'elles s'enfoncait derriere les toits
-  // des le cinquantieme metre, logo compris. Il n'y a de place qu'a droite de
-  // la tour, et meme la, le ciel libre au-dessus des toits ne tient pas un
-  // ballon lisible. Il vole donc dans le parc : trace apres les facades et
-  // avant les tribunes, il passe devant les unes et derriere les autres.
-  // Il derive trois fois moins que la tour, qui s'ecarte de lui vers la
-  // gauche en cours de route, et se tient sous ce que le bandeau pose en
-  // haut a droite (l'ecart au premier en portrait, la poussee en paysage).
+  // A DROITE DE LA TOUR, DERRIERE LES FACADES, ASSEZ HAUT POUR ETRE VU.
+  // L'horizon descend vers la droite : a gauche, les facades montent presque
+  // jusqu'au bandeau, et un ballon pose la, derivant avec la course,
+  // s'enfoncait derriere les toits des le cinquantieme metre, logo compris.
+  // A droite de la tour, il derive trois fois moins qu'elle, qui s'ecarte de
+  // lui vers la gauche en cours de route.
+  //
+  // Il est trace avant les facades, et LA LIGNE DES TOITS LE COUPE A LA
+  // JUPE : nacelle et bas de l'enveloppe derriere les immeubles, le corps et
+  // le logo au-dessus. Cette ligne ne bouge pas a l'ecran — les immeubles
+  // defilent le long d'elle — et elle se calcule : le pied des facades
+  // (lointain, rF), moins TOITS, mesure dans le jeu cheminees comprises. Le
+  // haut du ballon reste sous le bandeau ; s'il manque de place, le ballon
+  // rapetisse plutot que de passer dessous. En paysage il reste aussi sous
+  // la poussee. En portrait, rester sous l'ecart au premier le reduisait a
+  // quarante pixels, logo illisible : il monte jusqu'au bandeau, et l'ecart
+  // au premier frole sa calotte.
   // Il flotte : une lente oscillation, ni balancier ni ressort.
+  const TOITS = 3.8;            // metres, du pied des facades au haut des cheminees
+  const JUPE = 0.80;            // la jupe, en diametres d'enveloppe sous le haut du ballon
   function montgolfiere(ctx, api, th, sm, rOut, horizon) {
     const { G } = api;
     const R = rendu('montgolfiere');
@@ -410,19 +419,18 @@
     if (!B) return;
     const u = api.ui();
     const cible = G.VW * (G.portrait ? 0.82 : 0.84) - (G.camX - 50) * 0.5 * u;
-    const pied = horizonEn(api, sm, rOut + horizon + 4.0, cible);
+    const pied = horizonEn(api, sm, rOut + horizon + 3.2, cible);
     if (!pied) return;
-    const haut = G.VH * (G.portrait ? 0.17 : 0.09);
-    const place = pied[1] - haut;
-    // le diametre de l'enveloppe a l'ecran ; le ballon entier en fait 1,11
-    const rx = Math.SQRT2 * Math.cos(15 * Math.PI / 180) * B.r * R.p.ppm;
-    const elance = R.p.h / (2 * rx);
-    const D = Math.min(G.VW * (G.portrait ? 0.18 : 0.11), place * 0.92 / elance);
+    const toits = pied[1] - TOITS * api.scaleM();
+    const haut = G.VH * (G.portrait ? 0.10 : 0.08);
+    // le diametre de l'enveloppe a l'ecran, et ce qu'il vaut en pixels de l'image
+    const D = Math.min(G.VW * (G.portrait ? 0.18 : 0.11), (toits - haut) / JUPE);
     if (D < 24 * u) return;
+    const rx = Math.SQRT2 * Math.cos(15 * Math.PI / 180) * B.r * R.p.ppm;
     const k = D / (2 * rx);
     const t = performance.now() / 1000;
     const x = cible + Math.sin(t * 0.37) * D * 0.03;
-    const y = haut + (place - D * elance) * 0.3 + Math.sin(t * 0.61) * D * 0.025;
+    const y = toits - JUPE * D + Math.sin(t * 0.61) * D * 0.025;
     ctx.drawImage(R.im, x - R.p.ax * k, y, R.p.w * k, R.p.h * k);
   }
   /** Le point de l'horizon (rayon rH) a l'abscisse d'ecran x, le plus haut. */

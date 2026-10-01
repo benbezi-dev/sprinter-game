@@ -6558,6 +6558,8 @@
       // la Patrouille de France ne vole pas de nuit
       if (th.moment !== 'nuit') cdm.patrouille(ctx, apiCdm());
       cdm.tour(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));
+      // le ballon de la marque, plus pres que la tour, derriere les facades
+      cdm.montgolfiere(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));
     }
 
     // pelouse interieure
@@ -6638,12 +6640,7 @@
       if (th.rochers) drawRochers(ctx, th, sm, rOut, horizon);
       if (th.haie) drawHaie(ctx, th, sm, rOut, horizon);
       if (th.village) drawVillage(ctx, th, sm, rOut, horizon);
-      if (cdm) {
-        cdm.lointain(ctx, apiCdm(), th, sm, rOut, horizon);
-        // le ballon de la marque vole dans le parc : devant les facades,
-        // derriere les tribunes
-        cdm.montgolfiere(ctx, apiCdm(), th, sm, rOut, horizon);
-      }
+      if (cdm) cdm.lointain(ctx, apiCdm(), th, sm, rOut, horizon);
     }
 
     // Grain sur la pelouse exterieure : quelques touches plus claires/sombres
