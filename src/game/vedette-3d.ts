@@ -118,6 +118,35 @@ export function charger(chemin: string): Promise<Modele | null> {
   return p;
 }
 
+/**
+ * Le degrade de la barbe (teinte_barbe, meba_maillage.py) va de la peau, en
+ * haut de la joue, a sa couleur pleine. Chaque sommet est donc sur la droite
+ * barbe -> peau : on y lit sa part de peau, et cette part s'eclaircit comme la
+ * peau. Les deux bouts sont ceux du degrade lui-meme, son sommet le plus
+ * sombre et le plus clair.
+ */
+function fondreDansLaPeau(g: THREE.BufferGeometry) {
+  const c = g.getAttribute('color') as THREE.BufferAttribute | undefined;
+  if (!c || c.count < 2) return;
+  const lum = (i: number) => c.getX(i) * 0.2126 + c.getY(i) * 0.7152 + c.getZ(i) * 0.0722;
+  let iB = 0, iP = 0;
+  for (let i = 1; i < c.count; i++) {
+    if (lum(i) < lum(iB)) iB = i;
+    if (lum(i) > lum(iP)) iP = i;
+  }
+  const b = [c.getX(iB), c.getY(iB), c.getZ(iB)], p = [c.getX(iP), c.getY(iP), c.getZ(iP)];
+  const d = [p[0] - b[0], p[1] - b[1], p[2] - b[2]];
+  const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  if (dd < 1e-8) return;
+  for (let i = 0; i < c.count; i++) {
+    const v = [c.getX(i), c.getY(i), c.getZ(i)];
+    const t = Math.max(0, Math.min(1, ((v[0] - b[0]) * d[0] + (v[1] - b[1]) * d[1] + (v[2] - b[2]) * d[2]) / dd));
+    const k = t * (ECLAIRCIR_PEAU - 1);
+    c.setXYZ(i, v[0] + p[0] * k, v[1] + p[1] * k, v[2] + p[2] * k);
+  }
+  c.needsUpdate = true;
+}
+
 function preparer(racineGltf: THREE.Object3D): Modele {
   const racine = new THREE.Group();
   racine.matrixAutoUpdate = false;
@@ -139,6 +168,10 @@ function preparer(racineGltf: THREE.Object3D): Modele {
         if (m && (m.name === 'Meba_peau' || m.name.startsWith('Meba_levre')) && m.color) {
           m.color.multiplyScalar(ECLAIRCIR_PEAU);
         }
+        // et la barbe la ou elle se fond dans la joue : son degrade part de la
+        // peau des portraits, plus sombre que celle-ci — un aplat brun barrait
+        // la joue entre l'oeil et la barbe
+        if (m && m.name === 'Meba_barbe') fondreDansLaPeau(o.geometry);
       }
     }
   });
