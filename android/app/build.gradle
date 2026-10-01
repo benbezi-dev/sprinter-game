@@ -70,7 +70,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // 2 et non 1 : des paquets en versionCode 1 ont ete construits les 2 et
         // 8 septembre, et la Play Console refuse un numero deja televerse.
-        versionCode 2
+        // 3 le 1er octobre au soir : le 2 de l'apres-midi n'avait pas le lien
+        // « supprimer mes donnees ».
+        versionCode 3
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
