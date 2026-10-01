@@ -91,7 +91,8 @@
   // LA NUIT, CHAQUE PIECE PREND LA LUMIERE DE SA PLACE (heure-du-jour.js) :
   // le portique, au-dessus de la piste, celle des rampes ; les barrieres a
   // demi ; les facades et les arbres du parc, le noir ; la tour s'allume.
-  const PART = { tour: 'tour', ilot: 'loin', rideau: 'loin', if: 'loin',
+  // La montgolfiere est un ballon captif eclaire, comme la tour.
+  const PART = { tour: 'tour', montgolfiere: 'tour', ilot: 'loin', rideau: 'loin', if: 'loin',
                  portique: 'piste', portique_dessus: 'piste' };
   const nuit = (im, nom) => (root.SprinterHeure ? root.SprinterHeure.image(im, PART[nom] || 'proche') : im);
   function rendu(nom) {
@@ -381,6 +382,59 @@
     }
     const im = tourTile(th), w = h * TW / TH;
     ctx.drawImage(im, pied[0] - w / 2, pied[1] - h * (SOL / TH), w, h);
+  }
+
+  // -------------------------------------------------------------------
+  // LA MONTGOLFIERE — le ballon captif de la marque, au-dessus du parc.
+  // -------------------------------------------------------------------
+  //
+  // Une piece de Blender et rien d'autre : sans son image, il n'y a pas de
+  // ballon (une version peinte a la main serait la boule a facettes qu'on a
+  // justement ecartee). Comme la tour, elle tient a une position d'ECRAN.
+  //
+  // A DROITE DE LA TOUR, DEVANT LES FACADES. L'horizon descend vers la
+  // droite : a gauche, les facades montent presque jusqu'au bandeau, et un
+  // ballon pose dans le ciel au-dessus d'elles s'enfoncait derriere les toits
+  // des le cinquantieme metre, logo compris. Il n'y a de place qu'a droite de
+  // la tour, et meme la, le ciel libre au-dessus des toits ne tient pas un
+  // ballon lisible. Il vole donc dans le parc : trace apres les facades et
+  // avant les tribunes, il passe devant les unes et derriere les autres.
+  // Il derive trois fois moins que la tour, qui s'ecarte de lui vers la
+  // gauche en cours de route, et se tient sous ce que le bandeau pose en
+  // haut a droite (l'ecart au premier en portrait, la poussee en paysage).
+  // Il flotte : une lente oscillation, ni balancier ni ressort.
+  function montgolfiere(ctx, api, th, sm, rOut, horizon) {
+    const { G } = api;
+    const R = rendu('montgolfiere');
+    const B = R && R.p.ballon;
+    if (!B) return;
+    const u = api.ui();
+    const cible = G.VW * (G.portrait ? 0.82 : 0.84) - (G.camX - 50) * 0.5 * u;
+    const pied = horizonEn(api, sm, rOut + horizon + 4.0, cible);
+    if (!pied) return;
+    const haut = G.VH * (G.portrait ? 0.17 : 0.09);
+    const place = pied[1] - haut;
+    // le diametre de l'enveloppe a l'ecran ; le ballon entier en fait 1,11
+    const rx = Math.SQRT2 * Math.cos(15 * Math.PI / 180) * B.r * R.p.ppm;
+    const elance = R.p.h / (2 * rx);
+    const D = Math.min(G.VW * (G.portrait ? 0.18 : 0.11), place * 0.92 / elance);
+    if (D < 24 * u) return;
+    const k = D / (2 * rx);
+    const t = performance.now() / 1000;
+    const x = cible + Math.sin(t * 0.37) * D * 0.03;
+    const y = haut + (place - D * elance) * 0.3 + Math.sin(t * 0.61) * D * 0.025;
+    ctx.drawImage(R.im, x - R.p.ax * k, y, R.p.w * k, R.p.h * k);
+  }
+  /** Le point de l'horizon (rayon rH) a l'abscisse d'ecran x, le plus haut. */
+  function horizonEn(api, sm, rH, x) {
+    let best = null;
+    for (let i = 0; i + 1 < sm.length; i++) {
+      const a = api.ground(...api.ptOf(sm[i], rH)), b = api.ground(...api.ptOf(sm[i + 1], rH));
+      if ((a[0] - x) * (b[0] - x) > 0 || a[0] === b[0]) continue;
+      const y = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]);
+      if (!best || y < best[1]) best = [x, y];
+    }
+    return best;
   }
 
   // -------------------------------------------------------------------
@@ -898,5 +952,5 @@
     ctx.restore();
   }
 
-  root.ChampDeMars = { portique, portiqueDevant, barrieres, tribuneSur, badauds, tour, patrouille, lointain, surface, lignes, pelouse, tribune, ifTile };
+  root.ChampDeMars = { portique, portiqueDevant, barrieres, tribuneSur, badauds, tour, montgolfiere, patrouille, lointain, surface, lignes, pelouse, tribune, ifTile };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

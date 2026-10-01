@@ -22,6 +22,18 @@
    "ppm": 64.0,
    "w": 1738
   },
+  "montgolfiere": {
+   "ax": 396.0,
+   "ay": 862.42,
+   "ballon": {
+    "r": 9.0,
+    "z_eq": 17.28
+   },
+   "f": "montgolfiere.webp",
+   "h": 876,
+   "ppm": 32.0,
+   "w": 792
+  },
   "portique": {
    "ax": 362.7,
    "ay": 488.38,

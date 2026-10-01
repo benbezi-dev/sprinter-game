@@ -75,6 +75,7 @@ COUL = {
     'metal': (186, 192, 200), 'metalSombre': (120, 126, 136),
     'alu': (222, 226, 232), 'bleu': (8, 64, 170), 'blanc': (250, 250, 248), 'rouge': (226, 30, 44),
     'horloge': (18, 18, 24),
+    'osier': (176, 128, 72), 'cuir': (96, 62, 40),
 }
 
 
@@ -613,9 +614,176 @@ def portique(racine, dessus=False):
                         'z0': round(zb1 + 0.16, 3), 'z1': round(zb1 + 0.76, 3)}}
 
 
+# -----------------------------------------------------------------------
+# LA MONTGOLFIERE
+# -----------------------------------------------------------------------
+#
+# Un ballon captif aux couleurs de la marque, au-dessus du parc : la calotte
+# blanche, le corps bleu ou court le logo BENBEZI, la jupe rouge — le
+# tricolore du lieu, du haut vers le bas.
+#
+# EN HAUTE DEFINITION, ET C'EST UNE CONSIGNE. Cent vingt-huit fuseaux et
+# quatre-vingt-seize paralleles, lisses : au-dessous de soixante-quatre
+# facettes (pieces.FACETTES_MIN), une enveloppe gonflee se lit comme une
+# boule a facettes. Les fuseaux alternent deux bleus, huit cotes chacun :
+# c'est la couture qu'on voit sur un vrai ballon, pas la maille.
+#
+# LE LOGO EST L'AFFICHE DES PANNEAUX (public/pubs), posee en texture sur le
+# devant. La camera regarde le long de (1, 1) : le devant du ballon est
+# tourne vers (-1, -1), et la droite de l'ecran est (-1, 1). Le logo
+# s'enroule sur cent trente degres, a l'equateur.
+#
+# Le pied de la piece est le fond de la nacelle ; le manifeste garde la
+# hauteur de l'equateur et son rayon, en metres, pour que le jeu dimensionne
+# le ballon sur la place qui lui reste dans le ciel.
+
+R_BALLON = 9.0
+FUSEAUX, PARALLELES = 128, 96
+F_LOGO = os.path.join(RACINE_PROJET, 'public', 'pubs', 'benbezi-logo-3d.webp')
+LOGO_ARC = math.radians(65)          # demi-ouverture du logo de part et d'autre du devant
+
+
+def profil_ballon(t):
+    """(rayon, hauteur sous l'equateur), de t = 0 (sommet) a t = 1 (bouche).
+
+    Le haut est une sphere jusqu'a cent degres ; le bas, une courbe d'Hermite
+    qui part tangente a la sphere et rentre vers la bouche."""
+    R, phi1, t1 = R_BALLON, math.radians(100), 0.54
+    if t <= t1:
+        phi = t / t1 * phi1
+        return R * math.sin(phi), R * math.cos(phi)
+    s = (t - t1) / (1 - t1)
+    p0 = (R * math.sin(phi1), R * math.cos(phi1))
+    p1 = (0.2 * R, -1.42 * R)
+    m = 1.47 * R
+    d0 = (math.cos(phi1) * m, -math.sin(phi1) * m)
+    d1 = (-0.35 * m, -0.94 * m)
+    h00, h10 = 2 * s ** 3 - 3 * s ** 2 + 1, s ** 3 - 2 * s ** 2 + s
+    h01, h11 = -2 * s ** 3 + 3 * s ** 2, s ** 3 - s ** 2
+    return (h00 * p0[0] + h10 * d0[0] + h01 * p1[0] + h11 * d1[0],
+            h00 * p0[1] + h10 * d0[1] + h01 * p1[1] + h11 * d1[1])
+
+
+def peinture_logo(nom, couleur, image, eclat_logo):
+    """La matiere du jeu, dont la couleur passe au logo la ou il est opaque."""
+    m = M.peinture(nom, couleur)
+    nt = m.node_tree
+    col = next(n for n in nt.nodes if n.type == 'RGB')
+    mul = next(n for n in nt.nodes if n.type == 'VECT_MATH' and n.operation == 'SCALE')
+    tc = nt.nodes.new('ShaderNodeTexCoord')
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = image
+    tex.extension = 'CLIP'
+    tex.interpolation = 'Cubic'
+    nt.links.new(tc.outputs['UV'], tex.inputs['Vector'])
+    fort = nt.nodes.new('ShaderNodeVectorMath')
+    fort.operation = 'SCALE'
+    fort.inputs['Scale'].default_value = eclat_logo
+    nt.links.new(tex.outputs['Color'], fort.inputs[0])
+    mix = nt.nodes.new('ShaderNodeMix')
+    mix.data_type = 'RGBA'
+    nt.links.new(tex.outputs['Alpha'], mix.inputs['Factor'])
+    nt.links.new(col.outputs[0], mix.inputs['A'])
+    nt.links.new(fort.outputs[0], mix.inputs['B'])
+    nt.links.new(mix.outputs['Result'], mul.inputs[0])
+    return m
+
+
+def montgolfiere(racine):
+    R = R_BALLON
+    front = Vector((-1, -1, 0)).normalized()
+    droite = Vector((-1, 1, 0)).normalized()
+    # la nacelle au sol de la piece, les suspentes, puis la bouche
+    z_bouche = 1.1 + 3.4
+    z_eq = z_bouche + 1.42 * R
+
+    blanc = M.peinture('ballon_blanc', tuple(v * 0.92 for v in (250, 250, 248)))
+    bleu = M.peinture('ballon_bleu', tuple(v * 1.4 for v in (10, 70, 185)))
+    bleu2 = M.peinture('ballon_bleu2', tuple(v * 1.4 for v in (24, 96, 214)))
+    rouge = M.peinture('ballon_rouge', tuple(v * 1.35 for v in (226, 30, 44)))
+    img = bpy.data.images.load(F_LOGO)
+    img.colorspace_settings.name = 'Non-Color'
+    logo = peinture_logo('ballon_logo', tuple(v * 1.4 for v in (10, 70, 185)), img, 1.9)
+    logo2 = peinture_logo('ballon_logo2', tuple(v * 1.4 for v in (24, 96, 214)), img, 1.9)
+
+    bm = bmesh.new()
+    uvl = bm.loops.layers.uv.new('UVMap')
+    anneaux = [[bm.verts.new((0, 0, z_eq + R))]]
+    for j in range(1, PARALLELES + 1):
+        rho, z = profil_ballon(j / PARALLELES)
+        anneau = []
+        for i in range(FUSEAUX):
+            a = i / FUSEAUX * math.tau
+            p = (front * math.cos(a) + droite * math.sin(a)) * rho
+            anneau.append(bm.verts.new((p.x, p.y, z_eq + z)))
+        anneaux.append(anneau)
+    # le logo : haut comme le veut son image, sur l'arc LOGO_ARC
+    iw, ih = img.size
+    larg = 2 * LOGO_ARC * R
+    h_logo = larg * ih / iw
+    z_lo, z_hi = z_eq - h_logo / 2 + 0.25, z_eq + h_logo / 2 + 0.25
+    corps = (bleu, bleu2)
+
+    def angle(v):
+        return math.atan2(Vector(v.co).dot(droite), Vector(v.co).dot(front))
+
+    mats = [blanc, bleu, bleu2, rouge, logo, logo2]
+    for j in range(PARALLELES):
+        haut, bas = anneaux[j], anneaux[j + 1]
+        tm = (j + 0.5) / PARALLELES
+        for i in range(FUSEAUX):
+            i2 = (i + 1) % FUSEAUX
+            vs = [haut[0], bas[i2], bas[i]] if j == 0 else [haut[i], haut[i2], bas[i2], bas[i]]
+            f = bm.faces.new(vs)
+            fuseau = (i // 8) % 2
+            am = math.atan2(math.sin((i + 0.5) / FUSEAUX * math.tau), math.cos((i + 0.5) / FUSEAUX * math.tau))
+            zm = sum(v.co.z for v in vs) / len(vs)
+            if tm < 0.16:
+                f.material_index = 0
+            elif tm > 0.86:
+                f.material_index = 3
+            elif abs(am) < LOGO_ARC + 0.1 and z_lo - 0.6 < zm < z_hi + 0.6:
+                f.material_index = 4 + fuseau
+            else:
+                f.material_index = 1 + fuseau
+            for lp in f.loops:
+                a = angle(lp.vert)
+                lp[uvl].uv = (0.5 + a / (2 * LOGO_ARC), (lp.vert.co.z - z_lo) / (z_hi - z_lo))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    me = bpy.data.meshes.new('montgolfiere')
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new('montgolfiere', me)
+    bpy.context.collection.objects.link(o)
+    for m in mats:
+        o.data.materials.append(m)
+    for p in o.data.polygons:
+        p.use_smooth = True
+    o.parent = racine
+
+    # la nacelle d'osier, sa bordure de cuir, les suspentes et le bruleur
+    osier, cuir = peinture('osier', 'osier'), peinture('cuir', 'cuir', 0.6)
+    Ln, Lb, Ls = Lot(), Lot(), Lot()
+    c = 0.65
+    Ln.boite(-c, -c, 0.0, c, c, 1.1)
+    Lb.boite(-c - 0.06, -c - 0.06, 1.0, c + 0.06, c + 0.06, 1.16)
+    rb = profil_ballon(1.0)[0]
+    for k in range(8):
+        a = k / 8 * math.tau + math.pi / 8
+        haut = Vector((math.cos(a) * rb, math.sin(a) * rb, z_bouche))
+        coin = Vector((math.cos(a) * c * 1.2, math.sin(a) * c * 1.2, 1.16))
+        Ls.poutre(coin, haut, 0.05)
+    Ls.boite(-0.35, -0.35, 2.0, 0.35, 0.35, 2.5)
+    Ln.objet('nacelle', osier, racine)
+    Lb.objet('nacelle_bord', cuir, racine)
+    Ls.objet('suspentes', peinture('suspente', 'metalSombre', 0.4), racine)
+    return {'ballon': {'z_eq': round(z_eq, 3), 'r': R}}
+
+
 PIECES = {
     # nom : (constructeur, pixels par metre, ombre au sol)
     'tour': (tour, 48.0, False),
+    'montgolfiere': (montgolfiere, 32.0, False),
     'rideau': (rideau, 64.0, True),
     'if': (if_cone, 96.0, True),
     'ilot': (ilot, 64.0, False),
