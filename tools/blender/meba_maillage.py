@@ -1723,13 +1723,50 @@ def exporter(h, rig, chemin):
     # scene « Meba » part : sans `use_active_scene`, le cube de la scene de
     # demarrage partait avec lui.
     mw = h.matrix_world.copy(); h.parent = rig; h.matrix_world = mw
-    bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
-                              use_active_scene=True,
-                              export_skins=True, export_animations=False,
-                              export_morph=False, export_yup=True, export_apply=False,
-                              export_attributes=True, export_def_bones=False,
-                              export_meshopt_compression_enable=True)
+    remis = sans_grain(h.data.materials)
+    try:
+        bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
+                                  use_active_scene=True,
+                                  export_skins=True, export_animations=False,
+                                  export_morph=False, export_yup=True, export_apply=False,
+                                  export_attributes=True, export_def_bones=False,
+                                  export_meshopt_compression_enable=True)
+    finally:
+        for nt, src, base in remis:
+            nt.links.new(src, base)
     return os.path.getsize(chemin)
+
+
+def sans_grain(mats):
+    """LE GRAIN DES POILS NE PASSE PAS LE glTF — et il emportait la couleur.
+
+    grain_poils() fait passer la couleur de base par un melange avec du bruit.
+    L'exportateur ne remonte pas un melange : il ecrivait la barbe et les
+    sourcils sans couleur (blanc), et leur attribut 'Col' en blanc aussi — dans
+    le jeu, un masque blanc sur le bas du visage (vu le 01/10/2026). Le temps
+    de l'export, la couleur de base est rebranchee sur ce qui entrait dans le
+    melange (l'attribut 'Col', ou la couleur unie) ; on rend la liste des
+    liens a remettre, pour les portraits qui suivent."""
+    remis = []
+    for m in mats:
+        if m is None or not m.use_nodes:
+            continue
+        nt = m.node_tree
+        bsdf = next((n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED'), None)
+        if bsdf is None:
+            continue
+        base = bsdf.inputs['Base Color']
+        if not base.is_linked or base.links[0].from_node.type != 'MIX':
+            continue
+        lien = base.links[0]
+        a = next(s for s in lien.from_node.inputs if s.name == 'A' and s.type == 'RGBA')
+        remis.append((nt, lien.from_socket, base))
+        if a.is_linked:
+            nt.links.new(a.links[0].from_socket, base)
+        else:
+            nt.links.remove(lien)
+            base.default_value = a.default_value
+    return remis
 
 
 def tout(glb=None, blend=None):
