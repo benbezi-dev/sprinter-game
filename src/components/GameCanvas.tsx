@@ -65,7 +65,6 @@ function dessinerCinematique(ctx: CanvasRenderingContext2D, cut: any, theme: any
   const ct = cut.t;
   const intro = cut.kind === 'intro';
   const champ = cut.kind === 'champion';
-  void theme;
 
   const [gx, gy] = pointDuPersonnage(G);
   const app = SprinterApp.clamp(ct / 0.55, 0, 1);
@@ -80,7 +79,7 @@ function dessinerCinematique(ctx: CanvasRenderingContext2D, cut: any, theme: any
   const { SprinterCore } = (globalThis as any);
   if (Prem && SprinterCore) {
     Prem.ombre(ctx, x, gy, taille / 2, cut.man.look.h / SprinterCore.C.MODEL_H,
-               cut.man.stride, false);
+               cut.man.stride, false, theme);
   }
   drawIcon(ctx, cut.man, x, gy, taille, !intro && !champ);
 
@@ -432,7 +431,8 @@ export function GameCanvas() {
         }
         // La vignette se resserre avec le coup de poussee, et avec lui seul.
         const pouss = POUSSEE_OUVERTE && Prem.partPoussee ? Prem.partPoussee() : 0;
-        Prem.vignette(ctx, G, G.state === 'open' || accueilSansScene ? 0.5 : 0.85 + pouss * 0.15);
+        Prem.vignette(ctx, G, G.state === 'open' || accueilSansScene ? 0.5 : 0.85 + pouss * 0.15,
+                      SprinterApp.theme());
       }
 
       if (!redessin) rafRef.current = requestAnimationFrame(frame);

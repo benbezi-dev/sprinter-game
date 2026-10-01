@@ -221,7 +221,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
                       celebrate: 0.55 + 0.45 * Math.sin(ct * 2.2 + i * 0.9) };
       figures.push({
         y: g[1],
-        ombre: () => Prem && Prem.ombre(ctx, g[0], g[1], m, look.h / Core.C.MODEL_H, null, true),
+        ombre: () => Prem && Prem.ombre(ctx, g[0], g[1], m, look.h / Core.C.MODEL_H, null, true, A.theme()),
         dessin: () => A.drawFacetFigure(ctx,
           A.personCapsules(bravo, faceCamera, 0, true, !!T.curved, A.niveauDetail(k)),
           g[0], g[1], k),
@@ -236,7 +236,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
     figures.push({
       y: pieds[1],
       ombre: () => Prem
-        ? Prem.ombre(ctx, pieds[0], pieds[1], m, man.look.h / Core.C.MODEL_H, man.stride, true)
+        ? Prem.ombre(ctx, pieds[0], pieds[1], m, man.look.h / Core.C.MODEL_H, man.stride, true, A.theme())
         : undefined,
       dessin: () => A.drawFacetFigure(ctx,
         A.personCapsules(lui, T.heading(d, COULOIR), 0, true, !!T.curved, A.niveauDetail(kJ)),

@@ -631,39 +631,81 @@
   // drawImage, et le resultat est le meme au pixel pres.
   // -------------------------------------------------------------------
   const TACHE = 96;
-  let _tache = null;
+  const NOIR = [0, 0, 0];
+  const _taches = {};
 
-  function tache() {
-    if (_tache) return _tache;
+  // -------------------------------------------------------------------
+  // LA COULEUR DE L'OMBRE, ET CELLE DES BORDS DE L'IMAGE.
+  //
+  // Une ombre n'est pas noire. La ou le soleil ne tombe plus, le sol n'est
+  // eclaire que par le ciel, et il en prend la couleur : bleue sous un ciel
+  // d'ete, violette sous un ciel de nuit, verte sous les trois soleils. Les
+  // ombres de jeu video sont noires parce que personne ne s'est pose la
+  // question, et c'est ce qui les fait paraitre decoupees dans le papier.
+  //
+  // La teinte vient donc du bas du ciel — la couleur de l'air, celle que la
+  // brume prend deja — ramenee a une LUMINANCE fixe et tres basse. Pas a un
+  // canal le plus fort fixe : essaye, un ciel presque blanc (Montreuil) y
+  // donnait un gris a 46 qui ne teintait rien et eclaircissait l'ombre de
+  // trente niveaux. A luminance egale, un ciel pale donne une teinte presque
+  // noire, un ciel franc une teinte franche, et aucune ne pale l'ombre de
+  // plus de quelques niveaux : une ombre plus claire ne poserait plus le pied.
+  //
+  // Le vignettage prend la meme : ce que l'oeil perd sur les bords de l'image,
+  // c'est de la lumiere, et ce qui reste est la lumiere du lieu. Un theme peut
+  // fixer l'une ou l'autre (`ombreCol`, `vignetteCol`) ; `[0, 0, 0]` rend le
+  // rendu d'avant, au pixel pres.
+  // -------------------------------------------------------------------
+  const TEINTE_LUMA = 18;
+  const _teintes = new WeakMap();
+
+  function teinte(th) {
+    if (!th) return NOIR;
+    let t = _teintes.get(th);
+    if (t) return t;
+    const c = th.skyBot;
+    const l = c ? 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] : 0;
+    t = l > 0 ? c.map(v => Math.min(255, Math.round(v * TEINTE_LUMA / l))) : NOIR;
+    _teintes.set(th, t);
+    return t;
+  }
+  const teinteOmbre = (th) => (th && th.ombreCol) || teinte(th);
+  const teinteVignette = (th) => (th && th.vignetteCol) || teinte(th);
+
+  function tache(col) {
+    const cle = col.join();
+    if (_taches[cle]) return _taches[cle];
     const t = document.createElement('canvas');
     t.width = TACHE; t.height = TACHE;
     const c = t.getContext('2d');
     const g = c.createRadialGradient(TACHE / 2, TACHE / 2, 0, TACHE / 2, TACHE / 2, TACHE / 2);
+    const rgba = (a) => 'rgba(' + (col[0] | 0) + ',' + (col[1] | 0) + ',' + (col[2] | 0) + ',' + a + ')';
     // La courbe compte plus que les valeurs : une ombre s'eteint vite pres du
     // centre puis tres lentement sur ses bords. Un degrade lineaire donnerait
     // un halo de brouillard, pas une ombre.
-    g.addColorStop(0, 'rgba(0,0,0,1)');
-    g.addColorStop(0.28, 'rgba(0,0,0,0.74)');
-    g.addColorStop(0.58, 'rgba(0,0,0,0.34)');
-    g.addColorStop(0.82, 'rgba(0,0,0,0.09)');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
+    g.addColorStop(0, rgba(1));
+    g.addColorStop(0.28, rgba(0.74));
+    g.addColorStop(0.58, rgba(0.34));
+    g.addColorStop(0.82, rgba(0.09));
+    g.addColorStop(1, rgba(0));
     c.fillStyle = g; c.fillRect(0, 0, TACHE, TACHE);
-    _tache = t;
-    return _tache;
+    _taches[cle] = t;
+    return t;
   }
 
   /**
    * @param m  echelle du monde en pixels par metre (scaleM)
    * @param k  1 pour un coureur, plus petit pour une silhouette lointaine
    * @param phase  la foulee, pour que l'ombre respire avec les appuis
+   * @param th  le theme du stade, pour la couleur de l'ombre ; sans lui, noire
    */
   // L'eventail d'une rampe de projecteurs : les deux lobes lateraux, en
   // fractions de la largeur du contact, et leur part de densite. Le lobe
   // central, lui, reste l'ombre ordinaire — voir `ombre`.
   const FAN = [[-0.78, -0.18, 0.42], [0.86, -0.12, 0.42]];
 
-  function ombre(ctx, x, y, m, k, phase, lampes) {
-    const t = tache();
+  function ombre(ctx, x, y, m, k, phase, lampes, th) {
+    const t = tache(teinteOmbre(th));
     // A l'appui l'ombre se resserre et fonce, en suspension elle s'etale et
     // palit. Deux appuis par cycle de foulee, donc le double de la phase.
     const appui = phase == null ? 0.5 : 0.5 + 0.5 * Math.cos(phase * 2);
@@ -976,7 +1018,7 @@
   const VIG_L = 320;
   let _vigCle = '', _vigImg = null;
 
-  function vignette(ctx, G, force) {
+  function vignette(ctx, G, force, th) {
     const W = G.VW, H = G.VH;
     // UNE TOILE PAS ENCORE MESUREE. Au premier dessin, avant que le
     // ResizeObserver n'ait donne la taille, VW et VH valent 0 : le rapport est
@@ -984,7 +1026,10 @@
     // d'images, qui s'arrete alors avant d'avoir redemande la suivante. Il n'y
     // a rien a assombrir sur une toile vide.
     if (!(W > 0 && H > 0)) return;
-    const cle = (W / H).toFixed(3);
+    // La teinte entre dans la cle : changer de stade recuit la vignette, une
+    // fois, et pas a chaque image (voir `teinte`).
+    const col = teinteVignette(th);
+    const cle = (W / H).toFixed(3) + '|' + col.join();
     if (cle !== _vigCle) {
       const h = Math.max(8, Math.round(VIG_L * H / W));
       const t = _vigImg || (_vigImg = document.createElement('canvas'));
@@ -993,9 +1038,10 @@
       c.clearRect(0, 0, VIG_L, h);
       const r = Math.hypot(VIG_L, h) * 0.5;
       const g = c.createRadialGradient(VIG_L / 2, h / 2, r * 0.36, VIG_L / 2, h / 2, r);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(0.62, 'rgba(0,0,0,0.05)');
-      g.addColorStop(1, 'rgba(0,0,0,0.26)');
+      const rgba = (a) => 'rgba(' + (col[0] | 0) + ',' + (col[1] | 0) + ',' + (col[2] | 0) + ',' + a + ')';
+      g.addColorStop(0, rgba(0));
+      g.addColorStop(0.62, rgba(0.05));
+      g.addColorStop(1, rgba(0.26));
       c.fillStyle = g; c.fillRect(0, 0, VIG_L, h);
       _vigCle = cle;
     }

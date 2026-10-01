@@ -6451,7 +6451,7 @@
       for (const rr of [rIn - 0.80, rOut + 1.00]) {
         const q = at(D, rr), p = ground(q[0], q[1]);
         if (p[0] < -60 || p[0] > G.VW + 60) continue;
-        PREM().ombre(ctx, p[0], p[1], m * 0.42, 1, 0, th.projecteurs);
+        PREM().ombre(ctx, p[0], p[1], m * 0.42, 1, 0, th.projecteurs, th);
       }
     }
   }
@@ -8219,7 +8219,7 @@
         // disque noir a bord net. Voir rendu-premium.js : c'est ce qui pose
         // reellement les athletes au sol.
         prem.ombre(ctx, g2[0], g2[1], m, r.look.h / C.MODEL_H, r.stride,
-                   th.projecteurs);
+                   th.projecteurs, th);
       } else {
         ctx.fillStyle = 'rgba(0,0,0,0.42)';
         ctx.beginPath();

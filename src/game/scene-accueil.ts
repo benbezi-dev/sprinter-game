@@ -227,7 +227,7 @@ export function dessinerLesCoureursDeLAccueil(ctx: CanvasRenderingContext2D, A: 
   // serre — a l'echelle de la silhouette (taille / 2 pixels par metre).
   if (Prem) {
     for (const c of meute) {
-      Prem.ombre(ctx, c.x, c.y, P.taille / 2, c.k, c.man.stride, theme.projecteurs);
+      Prem.ombre(ctx, c.x, c.y, P.taille / 2, c.k, c.man.stride, theme.projecteurs, theme);
     }
   }
   for (const c of meute) {
