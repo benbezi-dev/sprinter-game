@@ -91,6 +91,57 @@ export async function fabriquer(course: Course): Promise<Blob | null> {
 }
 
 /**
+ * LE PARTAGE NATIF, PARCE QUE LA WEBVIEW N'A PAS CELUI DU WEB.
+ *
+ * `navigator.share` n'existe pas dans une WebView Android. Le jeu tournait
+ * donc sur ses deux chemins de repli — et le second non plus : un `<a download>`
+ * ne declenche rien dans une WebView sans DownloadListener. Le bouton
+ * « partager ma course » ne faisait donc strictement rien, sans le dire.
+ *
+ * On passe par le greffon Capacitor, qui parle a la vraie feuille de partage
+ * du systeme. Il veut une URI de fichier et pas un blob : on ecrit d'abord
+ * l'image dans le cache, que le systeme videra tout seul.
+ *
+ * On interroge le global plutot que d'importer, comme partout ailleurs : le
+ * build web n'a que faire d'une bibliotheque native.
+ */
+function greffons(): any {
+  try { return (window as any).Capacitor?.Plugins ?? null; } catch { return null; }
+}
+
+function blobEnBase64(blob: Blob): Promise<string> {
+  return new Promise((resoudre, rejeter) => {
+    const l = new FileReader();
+    l.onerror = () => rejeter(l.error);
+    // readAsDataURL rend « data:image/jpeg;base64,XXXX » : le greffon ne veut
+    // que ce qui suit la virgule.
+    l.onload = () => resoudre(String(l.result).split(',')[1] ?? '');
+    l.readAsDataURL(blob);
+  });
+}
+
+async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> {
+  const P = greffons();
+  if (!P?.Share || !P?.Filesystem) return null;
+  try {
+    const ecrit = await P.Filesystem.writeFile({
+      path: nom,
+      data: await blobEnBase64(blob),
+      directory: 'CACHE',
+    });
+    await P.Share.share({ files: [ecrit.uri] });
+    return 'partage';
+  } catch (e: any) {
+    // Refermer la feuille n'est pas un echec, ici non plus. Le greffon Android
+    // rend « Share canceled » quand on ressort sans choisir.
+    const m = String(e?.message ?? e);
+    if (/cancel/i.test(m) || e?.name === 'AbortError') return 'annule';
+    // Autre chose a casse : on rend la main aux chemins suivants.
+    return null;
+  }
+}
+
+/**
  * Le telephone sait-il partager un fichier ?
  *
  * `canShare({files})` et pas seulement `share` : le niveau 1 de l'API partage
@@ -99,6 +150,10 @@ export async function fabriquer(course: Course): Promise<Blob | null> {
  * d'ailleurs ce que la specification recommande.
  */
 export function peutPartagerImage(): boolean {
+  // En natif la question ne se pose pas : la feuille de partage du systeme
+  // existe toujours, c'est l'API web qui manque.
+  const P = greffons();
+  if (P?.Share && P?.Filesystem) return true;
   try {
     const n: any = navigator;
     if (typeof n?.share !== 'function' || typeof n?.canShare !== 'function') return false;
@@ -139,6 +194,11 @@ export async function partager(course: Course): Promise<Sortie> {
  * la meme facon de ne pas mentir sur celle qui a servi.
  */
 export async function sortir(blob: Blob, nom: string): Promise<Sortie> {
+  // Le natif d'abord : c'est le seul chemin qui fonctionne dans l'application,
+  // et il ne coute rien sur le web ou les greffons sont absents.
+  const parNatif = await partagerEnNatif(blob, nom);
+  if (parNatif) return parNatif;
+
   if (peutPartagerImage()) {
     try {
       const fichier = new File([blob], nom, { type: 'image/jpeg' });
