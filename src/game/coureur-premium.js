@@ -83,6 +83,16 @@
   // tri les departageait au millimetre, et le bandeau passait dessous.
   var COLLE = 16;
 
+  // APRES (32) dit au rendu de dessiner la piece AU PLUS TOT juste apres
+  // celle qui la precede dans la liste de pose() : elle garde sa propre
+  // profondeur si elle passe deja apres, sinon elle se colle derriere. C'est
+  // la calotte de cheveux sur le haut du crane. Au niveau ULTRA, le crane est
+  // coupe en troncs plus courts, le centre du dernier remonte a six
+  // millimetres de celui de la calotte, et le moindre decalage de la
+  // chevelure vers la nuque suffisait a inverser le tri : un crane nu par-
+  // dessus des cheveux qu'on ne voyait plus qu'en bande (vu le 30/09/2026).
+  var APRES = 32;
+
 
   /** Le premier tronc dont le centre atteint cette hauteur locale. */
   function coupe(tr, h) {
@@ -292,7 +302,7 @@
     detaille: detaille, niveauDe: niveauDe,
     PRES: PRES, MOYEN: MOYEN, LOIN: LOIN, ULTRA: ULTRA,
     LIBRE: LIBRE, ENFOUI_BAS: ENFOUI_BAS, ENFOUI_HAUT: ENFOUI_HAUT, MESURE: MESURE,
-    COLLE: COLLE,
+    COLLE: COLLE, APRES: APRES,
     /**
      * Les profils d'un corps : celui d'un athlete reel s'il en a un
      * (coureur-vedettes.js, lu a l'appel et non au chargement — il se pose

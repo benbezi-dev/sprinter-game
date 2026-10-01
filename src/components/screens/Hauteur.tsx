@@ -289,15 +289,16 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
               {Math.max(0, Math.ceil(live.horloge))} s
             </span>
           )}
+          {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. En
+              haut a droite, sous l'en-tete, sur un verre transparent a 80 %,
+              comme a la longueur : a gauche, il couvrait le sautoir. */}
+          {temps !== 'fin' && (
+            <div className="mt-1">
+              <Tableau lignes={cl} accent={accent} h={C.h} court />
+            </div>
+          )}
         </div>
       </div>
-
-      {/* LE TABLEAU : les trois premiers, et toi si tu n'y es pas. */}
-      {temps !== 'fin' && (
-        <div className="max-w-lg mx-auto mt-2 pl-10">
-          <Tableau lignes={cl} accent={accent} h={C.h} court />
-        </div>
-      )}
 
       {/* CE QUE FONT LES AUTRES, un par un. */}
       <AnimatePresence>
@@ -497,7 +498,9 @@ function Tableau({ lignes, accent, h, court = false }: { lignes: any[]; accent: 
     if (moi && !vues.includes(moi)) vues = [...vues, moi];
   }
   return (
-    <div className={`rounded-xl ${court ? 'bg-black/45 w-[min(66vw,16rem)]' : ''} px-2 py-1.5 flex flex-col gap-0.5`}>
+    <div className={`rounded-xl ${court
+      ? 'bg-[rgba(6,9,19,0.2)] border border-white/10 backdrop-blur-[2px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] w-[min(46vw,15rem)] text-left'
+      : ''} px-2 py-1.5 flex flex-col gap-0.5`}>
       {!court && <div className="text-[9px] tracking-widest uppercase text-white/40 mb-1">{N.t('saut_classement')}</div>}
       {vues.map(l => {
         const ici = l.feuille[cm(h)] || '';

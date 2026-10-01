@@ -5566,6 +5566,13 @@
                dehors: [2.0, 0.15], dedans: [1.8, 0.12], pas: 1 }
   };
 
+  // LA ZONE QU'UN JEU S'EST RESERVEE (le sautoir, voir decors-stades.js) :
+  // aucun arbre n'y pousse, ni sa couronne — d'ou la marge, en metres.
+  function dansLaZoneReservee(X, Y, marge) {
+    const Z = G.zoneReservee;
+    return !!Z && X >= Z.x0 - marge && X <= Z.x1 + marge && Y >= Z.y0 - marge && Y <= Z.y1 + marge;
+  }
+
   function drawArbres(ctx, th, sm, rOut) {
     const A = ARBRE[th.arbres];
     if (!A) return;
@@ -5584,7 +5591,9 @@
       const h = (A.dehors[0] + ((graine >>> 5) % 5) * A.dehors[1]) * scaleM();
       const tuile = A.tuile(th, (graine >>> 11) % 3);
       const w = h * (tuile.width / tuile.height);
-      const p = solid(...ptOf(sm[i], r), 0);
+      const q = ptOf(sm[i], r);
+      if (dansLaZoneReservee(q[0], q[1], 3)) continue;
+      const p = solid(...q, 0);
       if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
       ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
     }
@@ -5637,7 +5646,9 @@
       const h = (A.dedans[0] + ((graine >>> 5) % 4) * A.dedans[1]) * scaleM();
       const tuile = A.tuile(th, (graine >>> 11) % 3);
       const w = h * (tuile.width / tuile.height);
-      const p = solid(...ptOf(sm[i], r), 0);
+      const q = ptOf(sm[i], r);
+      if (dansLaZoneReservee(q[0], q[1], 3)) continue;
+      const p = solid(...q, 0);
       if (p[0] < -w || p[0] > G.VW + w || p[1] < -h || p[1] > G.VH + h) continue;
       ombreArbre(ctx, p[0], p[1], h);
       ctx.drawImage(tuile, p[0] - w / 2, p[1] - h, w, h);
@@ -6519,7 +6530,7 @@
     const cdm = th.champDeMars && CDM();
     if (cdm) {
       cdm.patrouille(ctx, apiCdm());
-      cdm.tour(ctx, apiCdm(), th, sm, rOut, th.horizon || 46);
+      cdm.tour(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));
     }
 
     // pelouse interieure
@@ -6556,7 +6567,18 @@
     // alors juste derriere les tribunes, une bande de lointain prend le
     // relais — la mer d'un cote, les collines de l'autre — et le ciel occupe
     // enfin le haut de l'image pendant toute la course.
-    const horizon = th.horizon || 46;
+    //
+    // ET QUAND UN SAUT RECULE LA TRIBUNE, TOUT LE PAYSAGE RECULE AVEC ELLE.
+    // Le saut en longueur pose sa piste d'elan et sa fosse entre la piste et
+    // le public, et ecarte la tribune d'autant (G.ecartTribune, voir
+    // longueur-course.js). Le reste du dehors restait cale sur l'ancien bord :
+    // les palmiers de la Riviera poussaient sur la piste d'elan, sa haie
+    // sortait des panneaux LED, la mer et les immeubles venaient buter contre
+    // les gradins. La pelouse s'allonge donc de l'ecart, et tout ce qui se
+    // pose au-dela — lointain, mer, immeubles, rochers, haie, village, tour,
+    // arbres du dehors — recule du meme pas : piste, sautoir, tribune, puis
+    // le paysage, dans cet ordre, comme au 100 m.
+    const horizon = (th.horizon || 46) + (G.ecartTribune || 0);
     band(ctx, sm, rOut, rOut + horizon, rgb(th.grass));
     // Les passes de tondeuse, sur les deux pelouses a la fois. Elles viennent
     // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
@@ -6622,11 +6644,14 @@
     // ce qui les met derriere : sans tampon de profondeur, l'ordre du trace
     // est le seul rangement dont on dispose. Leur pied disparait donc derriere
     // les gradins, comme il le ferait vraiment, et seule la tete depasse.
-    if (th.arbres) drawArbres(ctx, th, sm, rOut);
+    // Au saut, la tribune recule pour loger le sautoir (G.ecartTribune) : ce
+    // qui pousse derriere elle recule avec elle.
+    const ecartDehors = G.ecartTribune || 0;
+    if (th.arbres) drawArbres(ctx, th, sm, rOut + ecartDehors);
     // Le rideau de feuillus des tribunes a ciel ouvert (voir drawFeuillus) :
     // il se plante derriere le mur d'appui, a une dizaine de metres.
     if (th.feuillus && !tribuneDe(th).toiture) {
-      drawFeuillus(ctx, th, sm, rOut, 1.6 + tribuneDe(th).gradins * 1.7 + 3.2);
+      drawFeuillus(ctx, th, sm, rOut + ecartDehors, 1.6 + tribuneDe(th).gradins * 1.7 + 3.2);
     }
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
@@ -7420,9 +7445,14 @@
       // Une piece COLLEE (16, voir coureur-premium.js) prend la profondeur
       // de celle qui la precede, un rien plus pres : elle se dessine juste
       // apres elle, par-dessus.
-      const d = (caps[i][3] & 16) && avant !== null ? avant - 1e-6
-              : (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
-                (e0[2] + e1[2]) * VIEW[2];
+      // Une piece APRES (32) garde sa profondeur si elle passe deja apres la
+      // precedente, et s'y colle sinon.
+      const f = caps[i][3];
+      const propre = (e0[0] + e1[0]) * VIEW[0] + (e0[1] + e1[1]) * VIEW[1] +
+                     (e0[2] + e1[2]) * VIEW[2];
+      const d = (f & 16) && avant !== null ? avant - 1e-6
+              : (f & 32) && avant !== null ? Math.min(propre, avant - 1e-6)
+              : propre;
       order.push([d, i]);
       avant = d;
     }

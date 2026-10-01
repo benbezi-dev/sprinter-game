@@ -2792,46 +2792,6 @@
     const dzCrane = -bob * 0.55;
     const addCrane = (c, o, hb, ht, hz, bout) =>
       addT(c, 0, [o[0], o[1], o[2] + dzCrane], hb, ht, hz, yawTop * 0.2, bout);
-    // LA BARBE : une coque sur la machoire, poussee vers l'avant. Son centre
-    // est devant celui de la tete, si bien que le tri de profondeur la
-    // dessine APRES la machoire vue de face, et AVANT vue de dos — ou elle
-    // disparait derriere la nuque au lieu de s'y peindre. Elle couvre le
-    // menton et les joues jusqu'aux oreilles, pas la bouche : la moustache
-    // est une piece a part, un trait au-dessus de la levre.
-    //
-    // SON HAUT EST ENFOUI : c'est la joue, pas un rebord. Avec un disque, la
-    // camera — qui regarde d'en haut — voyait le dessus de la coque, et une
-    // ellipse sombre barrait le visage a hauteur de bouche, en masque. Le bas,
-    // lui, s'arrondit sous le menton.
-    //
-    // ET ELLE NE FAIT PAS LE TOUR. Une coque autour de toute la machoire
-    // se lisait de face comme une sangle noire d'une oreille a l'autre ; une
-    // barbe courte tient au menton et au devant des joues. La coque est donc
-    // avancee de la moitie de la profondeur du crane : son dos reste dans la
-    // tete, et vue de dos elle passe derriere la nuque. Son centre est un rien
-    // plus haut que celui du tronc de la machoire, pour que le tri la dessine
-    // apres lui, de face comme de profil.
-    if (L.barbe) {
-      // Une barbe PLEINE (`barbePleine`) descend sous le menton et remplit
-      // les joues : la coque est plus large, plus epaisse, un centimetre plus
-      // bas — celle de Mickael Meba-Zeze, taillee carree sous la machoire.
-      const kB = L.barbePleine ? 1.16 : 1, dzB = L.barbePleine ? -0.010 : 0;
-      const [cM, pM, lM] = PREM.section(PR, 'head', niv, 0.618, 1);
-      addCrane(L.barbe, [cM + pM * 0.60, 0, 0.620 + dzB], [pM * 0.44 * kB, lM * 0.66 * kB],
-               [pM * 0.47 * kB, lM * 0.72 * kB], 0.015 * (L.barbePleine ? 1.35 : 1),
-               PREM.MESURE | PREM.LIBRE | PREM.ENFOUI_HAUT);
-      const [cL, pL] = PREM.section(PR, 'head', niv, 0.652, 1);
-      addCrane(L.barbe, [cL + pL - 0.003, 0, 0.653], [0.006, 0.022],
-               [0.006, 0.022], 0.004, PREM.MESURE | PREM.LIBRE);
-    }
-    // des lunettes : deux verres minces devant les yeux
-    if (L.lunettes) {
-      for (const side of [1, -1]) {
-        addT(L.lunettes, 0, [0.090, side * 0.036, 0.690], [0.005, 0.020],
-             [0.005, 0.020], 0.016, yawTop * 0.2, PREM.MESURE);
-      }
-    }
-
     const hy = yawTop * 0.2, hc = L.hairCol;
     // Sous un bandeau, les cheveux tiennent au crane comme lui : sans quoi le
     // bandeau, qui suit le crane, glisserait sur la calotte a chaque foulee.
@@ -2843,31 +2803,36 @@
     const addH = (da, o, hb, ht, hz, yaw, bout) =>
       addT(hc, da, [o[0], o[1], o[2] + dzH], [hb[0] * 1.10, hb[1] * 1.10],
            [ht[0] * 1.10, ht[1] * 1.10], hz, yaw, bout);
+    // LA CALOTTE — la premiere piece de chaque coiffure — se dessine APRES le
+    // haut du crane, au pire juste derriere lui (PREM.APRES, voir
+    // coureur-premium.js) : au niveau ULTRA, le tri de profondeur la faisait
+    // passer dessous.
+    const CALOTTE = PREM.LIBRE | (PREM.APRES || 0);
     switch (L.hair) {
       case 'shaved':
         addH(0, [-0.004, 0, 0.744], [0.076, 0.075], [0.070, 0.069],
-            0.016, hy, true); break;
+            0.016, hy, CALOTTE); break;
       case 'flattop':
         addH(0, [-0.004, 0, 0.772], [0.074, 0.074], [0.072, 0.072],
-            0.048, hy, true); break;
+            0.048, hy, CALOTTE); break;
       case 'fade':
         addH(0, [-0.006, 0, 0.752], [0.077, 0.077], [0.070, 0.070],
-            0.030, hy, true);
+            0.030, hy, CALOTTE);
         addH(0, [-0.058, 0, 0.690], [0.020, 0.070], [0.022, 0.072],
             0.046, hy, true); break;
       case 'bun':
         addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
+            0.034, hy, CALOTTE);
         addH(0, [-0.084, 0, 0.742], [0.040, 0.044], [0.044, 0.048],
             0.044, hy, true); break;
       case 'ponytail':
         addH(0, [-0.006, 0, 0.754], [0.078, 0.078], [0.072, 0.072],
-            0.032, hy, true);
+            0.032, hy, CALOTTE);
         addH(0.22 * Math.sin(p) * A, [-0.104, 0, 0.674],
             [0.058, 0.032], [0.036, 0.022], 0.028, hy, true); break;
       case 'braids':
         addH(0, [-0.006, 0, 0.756], [0.078, 0.078], [0.072, 0.072],
-            0.034, hy, true);
+            0.034, hy, CALOTTE);
         for (const dy of [-0.044, 0, 0.044]) {
           addH(0.18 * Math.sin(p) * A, [-0.092, dy, 0.662],
               [0.046, 0.015], [0.030, 0.012], 0.018, hy, true);
@@ -2882,7 +2847,7 @@
         // frappent : sans ce roulis, elles se tenaient toutes droites, en
         // brosse.
         addH(0, [-0.004, 0, 0.753], [0.072, 0.066], [0.054, 0.050],
-            0.011, hy, true);
+            0.011, hy, CALOTTE);
         // Chaque vanille a SON pivot, sa racine sur le crane : le roulis d'un
         // os tourne autour de son pivot, et celui de la tete est le bassin —
         // roulee autour de lui, une meche partait de vingt centimetres sur le
@@ -2926,10 +2891,10 @@
         // base pour couvrir le crane, etroite au sommet. Un tube comme
         // `shaved`, depassant d'un bandeau, se lisait en haut-de-forme.
         addH(0, [-0.004, 0, 0.753], [0.072, 0.066], [0.054, 0.050],
-            0.011, hy, true); break;
+            0.011, hy, CALOTTE); break;
       default:
         addH(0, [-0.004, 0, 0.750], [0.077, 0.076], [0.072, 0.071],
-            0.026, hy, true);
+            0.026, hy, CALOTTE);
     }
     // LE BANDEAU, haut sur le front, a la lisiere des cheveux.
     //
@@ -2950,6 +2915,49 @@
       addCrane(L.bandeau, [cB, 0, 0.734, cH], [pB * 1.07, lB * 1.08],
                [pH * 1.09, lH * 1.10], 0.0135,
                PREM.MESURE | PREM.COLLE | PREM.ENFOUI_BAS | PREM.ENFOUI_HAUT);
+    }
+    // LA BARBE ET LES LUNETTES VIENNENT APRES LES CHEVEUX dans la liste : la
+    // calotte (PREM.APRES, plus bas) se range par rapport a la piece qui la
+    // precede, et ce doit etre le haut du crane. Elles gardent chacune leur
+    // propre profondeur ; leur rang ne change rien a leur dessin.
+    // LA BARBE : une coque sur la machoire, poussee vers l'avant. Son centre
+    // est devant celui de la tete, si bien que le tri de profondeur la
+    // dessine APRES la machoire vue de face, et AVANT vue de dos — ou elle
+    // disparait derriere la nuque au lieu de s'y peindre. Elle couvre le
+    // menton et les joues jusqu'aux oreilles, pas la bouche : la moustache
+    // est une piece a part, un trait au-dessus de la levre.
+    //
+    // SON HAUT EST ENFOUI : c'est la joue, pas un rebord. Avec un disque, la
+    // camera — qui regarde d'en haut — voyait le dessus de la coque, et une
+    // ellipse sombre barrait le visage a hauteur de bouche, en masque. Le bas,
+    // lui, s'arrondit sous le menton.
+    //
+    // ET ELLE NE FAIT PAS LE TOUR. Une coque autour de toute la machoire
+    // se lisait de face comme une sangle noire d'une oreille a l'autre ; une
+    // barbe courte tient au menton et au devant des joues. La coque est donc
+    // avancee de la moitie de la profondeur du crane : son dos reste dans la
+    // tete, et vue de dos elle passe derriere la nuque. Son centre est un rien
+    // plus haut que celui du tronc de la machoire, pour que le tri la dessine
+    // apres lui, de face comme de profil.
+    if (L.barbe) {
+      // Une barbe PLEINE (`barbePleine`) descend sous le menton et remplit
+      // les joues : la coque est plus large, plus epaisse, un centimetre plus
+      // bas — celle de Mickael Meba-Zeze, taillee carree sous la machoire.
+      const kB = L.barbePleine ? 1.16 : 1, dzB = L.barbePleine ? -0.010 : 0;
+      const [cM, pM, lM] = PREM.section(PR, 'head', niv, 0.618, 1);
+      addCrane(L.barbe, [cM + pM * 0.60, 0, 0.620 + dzB], [pM * 0.44 * kB, lM * 0.66 * kB],
+               [pM * 0.47 * kB, lM * 0.72 * kB], 0.015 * (L.barbePleine ? 1.35 : 1),
+               PREM.MESURE | PREM.LIBRE | PREM.ENFOUI_HAUT);
+      const [cL, pL] = PREM.section(PR, 'head', niv, 0.652, 1);
+      addCrane(L.barbe, [cL + pL - 0.003, 0, 0.653], [0.006, 0.022],
+               [0.006, 0.022], 0.004, PREM.MESURE | PREM.LIBRE);
+    }
+    // des lunettes : deux verres minces devant les yeux
+    if (L.lunettes) {
+      for (const side of [1, -1]) {
+        addT(L.lunettes, 0, [0.090, side * 0.036, 0.690], [0.005, 0.020],
+             [0.005, 0.020], 0.016, yawTop * 0.2, PREM.MESURE);
+      }
     }
 
     const sh = rot(0, 0.470, lean);

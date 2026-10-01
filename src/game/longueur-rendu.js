@@ -154,9 +154,15 @@ export function postureDe(e, r, ech) {
           const s = Math.sin(q), c = Math.cos(q);
           // la cuisse : de soixante centimetres derriere a franchement devant
           const th = 0.30 + 0.90 * s;
-          // le genou se replie quand la jambe revient vers l'avant (c > 0),
-          // et reste tendu quand elle balaie vers l'arriere
-          const plie = 0.18 + 1.45 * Math.pow(Math.max(0, c), 1.4);
+          // LE GENOU PLIE DERRIERE ET AU RETOUR, il ne se tend que devant et
+          // pendant le balayage — comme en courant. Le pli culmine quand la
+          // cuisse remonte de l'arriere (q vers -0,64 rad) : talon sous la
+          // fesse, a pres de soixante degres. Il ne pliait qu'au passage vers
+          // l'avant, et d'un quart de tour au plus : aux deux extremites du
+          // cycle, les deux jambes etaient tendues, l'une devant, l'autre
+          // derriere — un grand ecart de pantin, sans un angle au genou.
+          // Voir la reference (Tajay Gayle, 8:55) dans la memoire du projet.
+          const plie = 0.25 + 1.5 * Math.pow(Math.max(0, Math.cos(q + 0.64)), 1.3);
           const sh = th - plie;
           return [th, sh, sh + 0.30 + 0.25 * Math.max(0, -c)];
         };
@@ -237,14 +243,23 @@ export function postureDe(e, r, ech) {
       const talon = (c.talonX - r.d) * ech;
       const assis = c.variante === 'assis';
       const pieds = c.variante === 'pieds';
-      // Trois temps : on tombe (0 - 0,35 s), on se tient (0,35 - 0,9 s), on se
-      // releve (0,9 - 1,7 s).
+      // Quatre temps : les talons entrent (0 - 0,1 s), les genoux plient et
+      // le bassin se pose (jusqu'a 0,4 s), les jambes chassent le sable devant
+      // (0,4 - 0,75 s), puis il se releve (0,9 - 1,7 s).
       const tombe = lisse(tau / 0.35), releve = lisse((tau - 0.9) / 0.8);
+      const pousse = lisse((tau - 0.40) / 0.35);
       let hz, buste, bras;
       if (assis) {
-        hz = mix(c.hz0, 0.20, tombe);
-        buste = mix(-0.40, 0.95, tombe);
-        bras = [[-1.05, -0.80], [-1.10, -0.85]];
+        // ASSIS : le bassin touche le sable derriere les talons — c'est ce
+        // qui coute la marque —, puis les jambes chassent le sable devant et
+        // le corps REPART VERS L'AVANT, par-dessus les genoux, bras devant. Il
+        // ne se couche jamais sur le dos : couche a cinquante-cinq degres,
+        // bras a angles fixes, il avait l'air demembre, et un sauteur qui
+        // tombe se jette de l'autre cote, vers ses pieds.
+        const avant = lisse((tau - 0.30) / 0.45);
+        hz = mix(mix(c.hz0, 0.17, tombe), 0.30, avant);
+        buste = mix(mix(-0.40, 0.08, tombe), -0.85, avant);
+        bras = [mix2([-0.60, -0.30], [0.95, 1.25], tombe), mix2([-0.65, -0.35], [0.90, 1.20], tombe)];
       } else if (pieds) {
         // PIEDS SOUS LE BASSIN : les jambes ne sont pas venues devant, les
         // pieds touchent sous lui. Il encaisse en accroupi profond, le buste
@@ -254,11 +269,15 @@ export function postureDe(e, r, ech) {
         buste = mix(-0.40, -0.62, tombe);
         bras = [[0.95, 1.20], [0.90, 1.15]];
       } else {
-        // A l'impact, les bras filent derriere les hanches — c'est ce qui fait
-        // passer le corps par-dessus les talons —, puis reviennent devant a
-        // mesure qu'il se redresse.
-        hz = mix(c.hz0, 0.30, tombe);
-        buste = mix(-0.66, -0.95, tombe);
+        // LES FESSES DANS LE TROU (la reference, 9:31) : les talons entrent,
+        // les genoux plient, et le bassin — que le moteur fait glisser jusqu'a
+        // la trace — vient s'y poser, juste derriere les talons. Puis les
+        // jambes chassent le sable devant elles et le buste passe par-dessus
+        // les genoux. A l'impact, les bras filent derriere les hanches, puis
+        // reviennent devant a mesure qu'il passe.
+        const plie = lisse((tau - 0.06) / 0.34);
+        hz = mix(c.hz0, 0.15, plie) + 0.07 * pousse;
+        buste = mix(-0.66, -0.80, plie) - 0.14 * pousse;
         const re = lisse((tau - 0.35) / 0.45);
         bras = [mix2([-0.85, -0.55], [1.10, 1.40], re), mix2([-0.90, -0.60], [1.05, 1.35], re)];
       }
@@ -269,9 +288,11 @@ export function postureDe(e, r, ech) {
         ja = jambeVers(0, hz, talon + 0.06, CHEVILLE, 0.05);
         jb = jambeVers(0, hz, talon - 0.02, CHEVILLE, 0.05);
       } else {
-        const pied = assis ? 0.55 : mix(0.55, 0.10, tombe);
-        ja = jambeVers(0, hz, talon, CHEVILLE, pied);
-        jb = jambeVers(0, hz, talon - 0.03, CHEVILLE, pied);
+        // Les pieds partent devant en raclant le sable : trente centimetres.
+        const avance = 0.30 * ech * pousse;
+        const pied = assis ? mix(0.55, 0.30, pousse) : mix(0.55, 0.20, tombe);
+        ja = jambeVers(0, hz, talon + avance, CHEVILLE, pied);
+        jb = jambeVers(0, hz, talon - 0.03 + avance, CHEVILLE, pied);
       }
       // Se relever : debout, les bras le long du corps.
       if (releve > 0) {

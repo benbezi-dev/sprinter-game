@@ -1,0 +1,258 @@
+<!doctype html>
+<!--
+  SPRINTER / JUMPER — la planche d'interface, posee sur la planche de style.
+
+  Ce n'est pas l'ecran du jeu : c'est l'image de ce que Longueur.tsx doit
+  devenir. Tout ce qui s'y lit existe deja dans le jeu — les polices
+  (Outfit, Space Mono), le vert de Jumper (#2BFF6E, index.css), les mots
+  (sauts-mots.js, sprinter-i18n.js), les cases d'essais, le tableau, le
+  drapeau du juge, les deux paves des pouces. Ce qui change :
+    - chaque texte a un fond : rien ne se lit plus a meme la piste ;
+    - plus rien sous 11 points ;
+    - les verdicts sur un cartouche penche, raye comme les bannieres du stade ;
+    - les records ont leurs insignes : RP, MPS, RN, RM.
+
+  ?plan=base | proche | composants. Mise en page a 780 x 360 points (un
+  telephone en paysage), agrandie trois fois : la capture fait 2340 x 1080,
+  la taille des rendus Blender.
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planche d'interface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --vert: #2BFF6E;          /* Jumper (index.css, data-jeu="jumper") */
+    --or: #FFD426;            /* Sprinter */
+    --rose: #EC2E96;          /* le panneau LED BENBEZI */
+    --rouge: #F87171;         /* mordu */
+    --nuit: #060913;          /* le fond du jeu */
+    --verre: rgba(6, 9, 19, 0.78);
+    --bord: rgba(255, 255, 255, 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 2340px; height: 1080px; overflow: hidden; background: var(--nuit); }
+  .ecran {
+    position: absolute; left: 0; top: 0; width: 780px; height: 360px;
+    transform: scale(3); transform-origin: 0 0; overflow: hidden;
+    font-family: 'Plus Jakarta Sans', sans-serif; color: #fff;
+    background-size: cover; background-position: center;
+  }
+  .mono { font-family: 'Space Mono', monospace; font-variant-numeric: tabular-nums; }
+  .display { font-family: 'Outfit', sans-serif; font-weight: 900; letter-spacing: -0.01em; }
+
+  /* L'EN-TETE : l'epreuve, l'etape, les cases d'essais. */
+  .entete { position: absolute; left: 50px; top: 12px; display: flex; flex-direction: column; gap: 5px; }
+  .titre { display: flex; align-items: baseline; gap: 8px; padding: 4px 10px 5px; border-radius: 8px;
+           background: var(--verre); border: 1px solid var(--bord); backdrop-filter: blur(6px); }
+  .titre b { font-family: 'Outfit'; font-weight: 900; font-size: 15px; color: var(--vert); letter-spacing: -0.01em; }
+  .titre span { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: rgba(255,255,255,0.78); text-transform: uppercase; }
+  .essais { display: flex; gap: 4px; }
+  .case { width: 50px; height: 24px; border-radius: 6px; display: grid; place-items: center;
+          font-family: 'Space Mono'; font-weight: 700; font-size: 12px;
+          background: var(--verre); border: 1px solid var(--bord); color: rgba(255,255,255,0.45); }
+  .case.fait { background: rgba(43,255,110,0.16); color: #fff; border-color: rgba(43,255,110,0.35); }
+  .case.nul { color: var(--rouge); border-color: rgba(248,113,113,0.4); }
+  .case.encours { border: 1.5px solid #fff; color: #fff; }
+
+  .pause { position: absolute; left: 12px; top: 14px; width: 30px; height: 30px; border-radius: 50%;
+           background: var(--verre); border: 1px solid var(--bord); display: grid; place-items: center; }
+  .pause i { display: block; width: 12px; height: 2px; background: rgba(255,255,255,0.85); box-shadow: 0 -4px 0 rgba(255,255,255,0.85), 0 4px 0 rgba(255,255,255,0.85); }
+
+  .coin { position: absolute; right: 14px; top: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .pilule { padding: 4px 10px; border-radius: 999px; background: var(--verre); border: 1px solid var(--bord);
+            font-size: 11px; font-weight: 700; letter-spacing: 0.12em; color: rgba(255,255,255,0.8); }
+  .minute { font-family: 'Space Mono'; font-weight: 700; font-size: 15px; padding: 2px 10px; border-radius: 8px; background: var(--verre); border: 1px solid var(--bord); }
+
+  /* LE TABLEAU : trois premiers, et toi. */
+  .tableau { position: absolute; left: 50px; top: 76px; width: 196px; padding: 7px 9px 8px; border-radius: 12px;
+             background: var(--verre); border: 1px solid var(--bord); backdrop-filter: blur(6px); }
+  .tableau h4 { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: rgba(255,255,255,0.55); margin-bottom: 4px; }
+  .ligne { display: flex; align-items: center; gap: 7px; height: 19px; font-size: 12px; }
+  .ligne .p { width: 12px; font-family: 'Space Mono'; font-size: 11px; color: rgba(255,255,255,0.5); }
+  .ligne .n { flex: 1; font-weight: 700; color: rgba(255,255,255,0.92); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ligne .m { font-family: 'Space Mono'; font-weight: 700; font-size: 12px; }
+  .ligne.toi { margin-top: 2px; padding-top: 3px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .ligne.toi .n, .ligne.toi .m { color: var(--vert); font-weight: 800; }
+  .ligne .battre { font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: var(--or); margin-left: 4px; }
+
+  /* LE CARTOUCHE DES VERDICTS : penche comme la vitesse, raye comme les
+     bannieres du stade, un liseré du vert du jeu. Le texte reste droit. */
+  .cartouche { position: relative; display: inline-flex; align-items: center; gap: 10px;
+               padding: 5px 20px 6px 18px; transform: skewX(-12deg);
+               background:
+                 repeating-linear-gradient(135deg, rgba(255,255,255,0.045) 0 9px, transparent 9px 18px),
+                 linear-gradient(180deg, rgba(14,22,40,0.95), rgba(6,9,19,0.95));
+               border-left: 5px solid var(--vert); border-radius: 3px;
+               box-shadow: 0 8px 22px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08); }
+  .cartouche > * { transform: skewX(12deg); }
+  .cartouche .v { font-family: 'Outfit'; font-weight: 900; font-size: 26px; letter-spacing: -0.005em; color: var(--vert); text-transform: uppercase; white-space: nowrap; }
+  .cartouche .v small { font-size: 26px; color: #fff; font-weight: 800; }
+  .cartouche.rouge { border-left-color: var(--rouge); } .cartouche.rouge .v { color: var(--rouge); }
+  .cartouche.or { border-left-color: var(--or); } .cartouche.or .v { color: var(--or); }
+  .sous { display: inline-block; margin-top: 6px; padding: 3px 12px; border-radius: 999px; background: var(--verre);
+          border: 1px solid var(--bord); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; color: rgba(255,255,255,0.9); }
+
+  /* LA MARQUE : le drapeau du juge, les metres, les insignes. */
+  .marque { display: inline-flex; align-items: center; gap: 12px; padding: 6px 18px 8px 14px; border-radius: 16px;
+            background: rgba(6,9,19,0.82); border: 1px solid var(--bord); box-shadow: 0 10px 30px rgba(0,0,0,0.45); }
+  .marque .chiffre { font-family: 'Outfit'; font-weight: 900; font-size: 56px; line-height: 1; letter-spacing: -0.02em; }
+  .marque .chiffre small { font-size: 26px; font-weight: 800; margin-left: 3px; color: rgba(255,255,255,0.85); }
+  .marque .cote { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+
+  /* LES INSIGNES DE RECORD. Des etiquettes penchees, en Space Mono, chacune
+     sa couleur : le vert du jeu pour le record personnel, l'or de Sprinter
+     pour la saison, le tricolore pour le record de France, le rose de la
+     marque pour le record du monde. */
+  .insignes { display: flex; gap: 5px; }
+  .insigne { display: inline-grid; place-items: center; min-width: 38px; height: 20px; padding: 0 7px;
+             transform: skewX(-12deg); border-radius: 3px; font-family: 'Space Mono'; font-weight: 700; font-size: 12px; }
+  .insigne > span { transform: skewX(12deg); }
+  .insigne.rp  { background: var(--vert); color: var(--nuit); }
+  .insigne.mps { background: var(--or); color: var(--nuit); }
+  .insigne.rn  { background: linear-gradient(90deg, #1f4fbf 0 33%, #fff 33% 67%, #e5383b 67%); color: var(--nuit); }
+  .insigne.rn > span { background: #fff; padding: 0 4px; border-radius: 2px; }
+  .insigne.rm  { background: var(--rose); color: #fff; box-shadow: 0 0 12px rgba(236,46,150,0.6); }
+  .gain { font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.88); }
+  .gain b { color: var(--vert); font-family: 'Outfit'; font-weight: 900; }
+
+  /* LES DEUX PAVES DES POUCES, et la consigne entre eux. */
+  .paves { position: absolute; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; }
+  .pave { flex: 1; height: 58px; border-radius: 14px; display: grid; place-items: center;
+          border: 1px solid rgba(255,255,255,0.14); backdrop-filter: blur(4px);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); }
+  .pave.g { background: linear-gradient(180deg, rgba(150,24,24,0.42), rgba(90,10,10,0.5)); }
+  .pave.d { background: linear-gradient(180deg, rgba(24,150,64,0.42), rgba(10,90,36,0.5)); }
+  .pave svg { width: 34px; height: 34px; opacity: 0.8; }
+  .consigne { position: absolute; left: 0; right: 0; bottom: 76px; display: flex; justify-content: center; }
+  .consigne span { padding: 4px 14px; border-radius: 999px; background: rgba(6,9,19,0.82); border: 1px solid var(--bord);
+                   font-size: 12px; font-weight: 800; letter-spacing: 0.1em; }
+  .elan { position: absolute; right: 16px; bottom: 76px; display: flex; align-items: center; gap: 8px; padding: 4px 10px;
+          border-radius: 10px; background: var(--verre); border: 1px solid var(--bord); }
+  .elan .jauge { width: 70px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  .elan .jauge i { display: block; height: 100%; width: 91%; background: linear-gradient(90deg, #2bd46a, var(--vert)); box-shadow: 0 0 8px var(--vert); }
+  .elan .mono { font-size: 12px; font-weight: 700; }
+  .elan small { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; color: rgba(255,255,255,0.6); }
+
+  .colonne { position: absolute; right: 16px; top: 70px; width: 300px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .marque.carte { flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 14px 10px; width: 100%; }
+  .marque.carte .rangee { display: flex; align-items: center; gap: 10px; }
+  .marque.carte .chiffre { font-size: 50px; }
+  .gain b.display { font-family: 'Outfit'; font-weight: 900; font-size: 13px; }
+  .centre { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
+
+  /* LA PLANCHE DES COMPOSANTS */
+  .fond-planche { background: radial-gradient(120% 90% at 30% 20%, #10213a 0%, var(--nuit) 70%); }
+  .grille { position: absolute; inset: 18px 22px; display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px 26px; }
+  .bloc h5 { font-size: 10px; font-weight: 800; letter-spacing: 0.18em; color: rgba(255,255,255,0.45); margin-bottom: 8px; text-transform: uppercase; }
+  .pile { display: flex; flex-direction: column; gap: 9px; align-items: flex-start; }
+  .rangee { display: flex; align-items: center; gap: 10px; }
+  .legende { font-size: 11px; color: rgba(255,255,255,0.72); }
+  .legende b { color: #fff; }
+</style>
+</head>
+<body>
+<div class="ecran" id="ecran"></div>
+
+<script>
+const plan = new URLSearchParams(location.search).get('plan') || 'base';
+const ecran = document.getElementById('ecran');
+
+const DRAPEAU = couleur => `<svg viewBox="0 0 24 24" width="34" height="34" aria-hidden="true">
+  <rect x="3" y="2" width="2.2" height="20" rx="1" fill="#cfd3dc"/>
+  <path d="M5.2 3h14l-3 4.5 3 4.5h-14z" fill="${couleur}" stroke="rgba(0,0,0,0.35)" stroke-width="0.6"/></svg>`;
+const CHEVRONS = sens => `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+  ${sens < 0 ? '<path d="M13 6l-6 6 6 6"/><path d="M19 6l-6 6 6 6"/>' : '<path d="M5 6l6 6-6 6"/><path d="M11 6l6 6-6 6"/>'}</svg>`;
+
+const entete = (essais, tour, minute) => `
+  <div class="pause"><i></i></div>
+  <div class="entete">
+    <div class="titre"><b>SAUT EN LONGUEUR</b><span>Compétition scolaire</span></div>
+    <div class="essais">${essais}</div>
+  </div>
+  <div class="coin">
+    <div class="pilule">QUITTER</div>
+    <div class="pilule">ESSAI ${tour}/3</div>
+    ${minute ? `<div class="minute">${minute}</div>` : ''}
+  </div>`;
+
+const tableau = (lignes, toi) => `
+  <div class="tableau">
+    <h4>CLASSEMENT</h4>
+    ${lignes.map(([p, n, m, battre]) => `<div class="ligne"><span class="p">${p}</span><span class="n">${n}${battre ? '<span class="battre">À BATTRE</span>' : ''}</span><span class="m">${m}</span></div>`).join('')}
+    ${toi ? `<div class="ligne toi"><span class="p">${toi[0]}</span><span class="n">TOI</span><span class="m">${toi[1]}</span></div>` : ''}
+  </div>`;
+
+const paves = () => `
+  <div class="paves"><div class="pave g">${CHEVRONS(-1)}</div><div class="pave d">${CHEVRONS(1)}</div></div>`;
+
+if (plan === 'base') {
+  // L'ELAN, juste apres une transition parfaite : l'image remanente est la.
+  ecran.style.backgroundImage = 'url(../rendus/base.png)';
+  ecran.innerHTML = entete(
+      '<div class="case nul">X</div><div class="case fait">7,41</div><div class="case encours">3</div>', 3, '41 s')
+    + tableau([['1', 'Paul Martin', '7,73', true], ['2', 'Rayan Girard', '7,49'], ['3', 'Lina Fontaine', '7,36']], ['4', '7,41'])
+    // a droite du tableau, au-dessus du coureur : rien de ce qui compte n'est cache
+    + `<div style="position:absolute; left: 300px; top: 96px">
+         <div class="cartouche"><span class="v">TRANSITION PARFAITE</span></div>
+       </div>`
+    + `<div class="consigne"><span>APPUIE SUR LA PLANCHE</span></div>`
+    + `<div class="elan"><small>ÉLAN</small><div class="jauge"><i></i></div><span class="mono">10,9 m/s</span></div>`
+    + paves();
+} else if (plan === 'proche') {
+  // LA RECEPTION : le verdict du ramene, puis la marque et le record.
+  ecran.style.backgroundImage = 'url(../rendus/proche.png)';
+  ecran.innerHTML = entete(
+      '<div class="case nul">X</div><div class="case fait">7,41</div><div class="case fait">8,08</div>', 3, '')
+    // LA COLONNE DE DROITE : l'athlete est cadre dans les deux tiers gauches,
+    // l'habillage tient le tiers qu'il laisse derriere lui.
+    + `<div class="colonne">
+         <div class="cartouche"><span class="v" style="font-size:20px">RAMENÉ PARFAIT <small style="font-size:20px">·</small> CISEAU</span></div>
+         <div class="marque carte">
+           <div class="rangee">${DRAPEAU('#ffffff')}<div class="chiffre">8,08<small>m</small></div></div>
+           <div class="rangee"><div class="insignes"><span class="insigne rp"><span>RP</span></span><span class="insigne mps"><span>MPS</span></span></div>
+             <div class="gain"><b class="display">0,67 m</b> de mieux que ton record</div></div>
+           <div class="gain">vent +1,3 m/s · <b style="color:var(--or)">EN TÊTE</b></div>
+         </div>
+       </div>`;
+} else {
+  // LES COMPOSANTS, a plat : ce que Longueur.tsx aura a dessiner.
+  ecran.classList.add('fond-planche');
+  ecran.innerHTML = `<div class="grille">
+    <div class="bloc">
+      <h5>Verdicts — le cartouche</h5>
+      <div class="pile">
+        <div class="cartouche"><span class="v">APPEL PARFAIT</span></div>
+        <div class="cartouche"><span class="v">TRANSITION PARFAITE</span></div>
+        <div class="cartouche or"><span class="v">RAMENÉ TÔT</span></div>
+        <div class="cartouche rouge"><span class="v">MORDU</span></div>
+      </div>
+      <div class="legende" style="margin-top:8px">Vert : parfait · <b style="color:var(--or)">or</b> : à reprendre · <b style="color:var(--rouge)">rouge</b> : essai nul</div>
+    </div>
+    <div class="bloc">
+      <h5>Insignes de record</h5>
+      <div class="pile">
+        <div class="rangee"><span class="insigne rp"><span>RP</span></span><span class="legende"><b>Record personnel</b> — ton meilleur saut</span></div>
+        <div class="rangee"><span class="insigne mps"><span>MPS</span></span><span class="legende"><b>Meilleure perf. de la saison</b></span></div>
+        <div class="rangee"><span class="insigne rn"><span>RN</span></span><span class="legende"><b>Record national</b> (de ton pays)</span></div>
+        <div class="rangee"><span class="insigne rm"><span>RM</span></span><span class="legende"><b>Record du monde</b></span></div>
+      </div>
+      <h5 style="margin-top:14px">Marque</h5>
+      <div class="marque" style="padding:4px 14px 6px 10px">
+        ${DRAPEAU('#ffffff')}<div class="chiffre" style="font-size:40px">8,08<small>m</small></div>
+        <div class="cote"><div class="insignes"><span class="insigne rp"><span>RP</span></span></div><div class="gain">vent +1,3 m/s</div></div>
+      </div>
+      <div class="marque" style="padding:4px 14px 6px 10px; margin-top:6px">
+        ${DRAPEAU('#e5383b')}<div class="chiffre" style="font-size:40px; color:var(--rouge)">MORDU</div>
+        <div class="cote"><div class="gain">le pied a franchi la ligne</div></div>
+      </div>
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>
