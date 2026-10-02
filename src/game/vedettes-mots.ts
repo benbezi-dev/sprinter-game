@@ -87,6 +87,15 @@ const MOTS: Record<string, Paire> = {
   'vs_bonus:meba':      ['+20 % de marge au départ canon et à la transition parfaite',
                          '+20% margin on the cannon start and the perfect transition'],
 
+  // le stade que sa double victoire debloque (le Stade de la Riviera)
+  'vd_stade:meba':      ['Bats-le au 100 m ET au 200 m : le Stade de la Riviera se débloque en one shot.',
+                         'Beat him over 100 m AND 200 m to unlock the Riviera Stadium in one shot.'],
+  vd_stade_debloque:    ['STADE DÉBLOQUÉ', 'STADIUM UNLOCKED'],
+  vd_stade_debloque_sous: ['Il se choisit en one shot, parmi les lieux.',
+                           'Pick it in one shot, among the venues.'],
+  vd_stade_verrou:      ['{nom} · bats {qui} au 100 m et au 200 m',
+                         '{nom} · beat {qui} over 100 m and 200 m'],
+
   // --- LE VESTIAIRE : l'espace ou l'on choisit ce que son coureur porte
   vs_entree:      ['VESTIAIRE · SKINS', 'LOCKER ROOM · SKINS'],
   vs_porte:       ['porté : {nom}', 'wearing: {nom}'],

@@ -13,6 +13,8 @@ import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto'
 import { GraduationCap, Swords } from 'lucide-react';
 import { Repliable } from './Repliable';
 import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne } from '@/game/jeux';
+import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
+import { mot } from '@/game/vedettes-mots';
 
 /* ------------------------------------------------------------------ one shot
    Une ou plusieurs epreuves choisies, courues une seule fois. Pas de
@@ -119,12 +121,24 @@ export function OneShotPanel() {
                     il se choisit comme les autres. Un stade d'`evenement`
                     (le defi Aurel Manga) ne se choisit nulle part : on n'y
                     entre que par sa banniere, pour l'epreuve qu'il met en jeu. */}
-                {LEVELS.map((l: any, i: number) => (l.horsSerie && !l.evenement
-                  && (!l.reserve || import.meta.env.VITE_CANAL === 'test') ? (
-                  <option key={i} value={i} className="bg-neutral-900">
-                    {N.levelName(i)}
-                  </option>
-                ) : null))}
+                {/* Un lieu qui SE GAGNE (`debloque` : le Stade de la Riviera,
+                    contre Meba-Mickael Zeze battu au 100 m et au 200 m) ne se
+                    choisit qu'une fois gagne. Avant, il se montre grise, avec
+                    ce qu'il faut faire — tant que son defi est ouvert. */}
+                {LEVELS.map((l: any, i: number) => {
+                  if (!l.horsSerie || l.evenement || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
+                  if (stadeDebloque(l)) return (
+                    <option key={i} value={i} className="bg-neutral-900">
+                      {N.levelName(i)}
+                    </option>
+                  );
+                  const v = VEDETTES[l.debloque];
+                  return v && defiPossible(v) ? (
+                    <option key={i} value={i} disabled className="bg-neutral-900">
+                      🔒 {mot('vd_stade_verrou', { nom: N.levelName(i), qui: `${v.prenom} ${v.nom}` })}
+                    </option>
+                  ) : null;
+                })}
               </optgroup>
             )}
           </select>

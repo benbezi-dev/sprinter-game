@@ -601,6 +601,14 @@
       pool: 'divers',
       // Ce que les ecrans lisent pour ne pas le numeroter comme une etape.
       horsSerie: true,
+      // IL SE GAGNE (02/10, a la demande de l'auteur : « il faut le battre sur
+      // les deux disciplines pour debloquer le stade Riviera ») : il ne se
+      // choisit qu'une fois Meba-Mickael Zeze battu au 100 m ET au 200 m
+      // (game/vedettes.ts, stadeDebloque ; ModePanels.tsx). Il entre dans
+      // LEVELS au lancement des defis, juste apres eux : son index est celui
+      // du canal de test.
+      auLancement: true,
+      debloque: 'meba',
       // Un meeting d'ete au bord de l'eau : gradins bien garnis, sans
       // l'affluence d'une finale mondiale.
       foule: 0.72,

@@ -5,7 +5,7 @@ import { MONTEE, VOILE, PANNEAU } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
-  meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, type Vedette, type Verdict,
+  meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
 import { mot, chrono, ligne, aLeMot } from '@/game/vedettes-mots';
@@ -212,6 +212,16 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
               <span style={{ color: pale }}>{mot('vs_bonus_titre')} · </span>{mot('vs_bonus', undefined, v.cle)}
             </span>
           )}
+          {/* LE STADE QUE SA DOUBLE VICTOIRE DEBLOQUE, et ou l'on en est :
+              une coche par epreuve deja gagnee. */}
+          {stadeDonne(v) && aLeMot('vd_stade', v.cle) && (
+            <span className="mt-1 text-[11px] text-white/85 leading-snug">
+              {mot('vd_stade', undefined, v.cle)}
+              <span className="ml-1 font-bold tabular-nums">
+                {v.epreuves.map(e => `${nomEpreuve(e)} ${battuSur(v, e) ? '✓' : '·'}`).join('  ')}
+              </span>
+            </span>
+          )}
         </div>
 
         {/* UNE EPREUVE, UN BOUTON. Avec plusieurs, chaque bouton dit son chrono
@@ -335,6 +345,16 @@ export function FinDuDefiVedette() {
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* LE STADE, quand cette course vient de le debloquer. */}
+        {verdict.nouveauStade && (
+          <div className="w-full rounded-2xl border-2 p-3 flex flex-col gap-0.5 text-left"
+               style={{ borderColor: `${VIVE}B0`, background: `linear-gradient(100deg, ${FONCE}, #0E0A1A)` }}>
+            <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: pale }}>{mot('vd_stade_debloque')}</span>
+            <span className="font-black font-display text-xl leading-none text-white">{verdict.nouveauStade}</span>
+            <span className="text-[11px] text-white/65">{mot('vd_stade_debloque_sous')}</span>
           </div>
         )}
 

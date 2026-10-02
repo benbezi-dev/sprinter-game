@@ -211,6 +211,8 @@ export type Verdict = {
   ecart: number | null;
   /** Le skin vient-il d'etre gagne sur cette course ? */
   nouveauSkin: boolean;
+  /** Le nom du stade que cette course vient de debloquer, ou null. */
+  nouveauStade: string | null;
 };
 
 /**
@@ -227,8 +229,64 @@ export function conclureLeDefi(v: Vedette): Verdict {
   const tLui = lui && lui.finishTime != null ? lui.finishTime : null;
   const battu = moi !== null && (tLui === null || moi < tLui);
   const nouveauSkin = battu ? gagnerSkin(v.skin) : false;
-  if (moi !== null) retenirMeilleur(v, epreuveEnCours || v.epreuves[0], moi);
-  return { battu, moi, lui: tLui, ecart: moi !== null && tLui !== null ? tLui - moi : null, nouveauSkin };
+  const avant = battuPartout(v);
+  const epreuve = epreuveEnCours || v.epreuves[0];
+  if (moi !== null) retenirMeilleur(v, epreuve, moi);
+  if (battu) retenirBattu(v, epreuve);
+  const stade = stadeDonne(v);
+  const nouveauStade = stade && !avant && battuPartout(v) ? stade.name : null;
+  return { battu, moi, lui: tLui, ecart: moi !== null && tLui !== null ? tLui - moi : null, nouveauSkin, nouveauStade };
+}
+
+// --- battu sur chaque epreuve, et le stade que cela debloque ----------------
+//
+// LE STADE DE LA RIVIERA SE GAGNE (02/10) : il faut battre Meba-Mickael Zeze
+// au 100 m ET au 200 m. Chaque victoire est retenue a part, par epreuve — le
+// meilleur chrono ne suffirait pas a le dire : il est arrondi au millieme, et
+// 8,3895 s, qui le bat, s'y ecrit 8,390. Les victoires d'avant cette regle se
+// relisent dans les meilleurs chronos.
+
+const CLE_BATTUS = 'sprinter_defis_vedettes_battus';
+
+function battus(): Record<string, boolean> {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLE_BATTUS) || '{}');
+    return m && typeof m === 'object' ? m : {};
+  } catch { return {}; }
+}
+
+function retenirBattu(v: Vedette, epreuve: string) {
+  const m = battus();
+  m[`${v.cle}:${epreuve}`] = true;
+  try { localStorage.setItem(CLE_BATTUS, JSON.stringify(m)); } catch { /* stockage ferme */ }
+}
+
+/** L'a-t-il deja battu sur cette epreuve ? */
+export function battuSur(v: Vedette, epreuve: string): boolean {
+  if (battus()[`${v.cle}:${epreuve}`]) return true;
+  const m = meilleurDuDefi(v, epreuve), c = chronoDeLaVedette(v, epreuve);
+  return m !== null && c !== null && m < c;
+}
+
+/** L'a-t-il battu sur chacune de ses epreuves ? */
+export function battuPartout(v: Vedette): boolean {
+  return v.epreuves.every(e => battuSur(v, e));
+}
+
+/** Le stade que cette vedette debloque (`debloque` dans STADES_HORS_SERIE), s'il y en a un. */
+export function stadeDonne(v: Vedette): any | null {
+  const stades = ((SprinterCore as any).STADES_HORS_SERIE as any[]) || [];
+  return stades.find(l => l && l.debloque === v.cle) || null;
+}
+
+/**
+ * Un lieu se choisit-il ? Oui, sauf s'il se gagne (`debloque`) et qu'il n'est
+ * pas encore gagne — sur les deux canaux : sur celui de test aussi, sans quoi
+ * la regle ne s'y verifierait pas.
+ */
+export function stadeDebloque(l: any): boolean {
+  const v = l && l.debloque ? VEDETTES[l.debloque] : null;
+  return !v || battuPartout(v);
 }
 
 // --- le meilleur chrono de chaque defi, sur cet appareil ----------------------
