@@ -11,6 +11,42 @@ import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
 import { Recuperation } from './Recuperation';
 import { useRetour } from '@/hooks/use-retour';
+import { nomReconnu } from '@/game/presence';
+
+/**
+ * Apres combien de courses terminees on renvoie vers le nom.
+ *
+ * Pas avant : a la premiere, le joueur decouvre le jeu, et le retenir a
+ * l'entree le ferait partir. A la deuxieme, il est revenu — c'est le moment
+ * ou un nom vaut la peine d'etre garde.
+ */
+const COURSES_AVANT_LE_NOM = 2;
+
+/** Une fois par lancement : le renvoi est un rappel, pas un mur. */
+let nomDejaPropose = false;
+
+/** Les courses terminees sur cet appareil, lues dans l'historique du moteur. */
+function coursesTerminees(): number {
+  try {
+    const h = JSON.parse(localStorage.getItem('sprinter_history') || '[]');
+    return Array.isArray(h) ? h.length : 0;
+  } catch { return 0; }
+}
+
+/**
+ * Ce joueur doit-il encore valider son nom ?
+ *
+ * Sans nom : oui. Avec un nom, seulement si le serveur a dit NON pour ce
+ * nom-la — il n'est pas reserve, ou il l'est par quelqu'un d'autre. C'est le
+ * meme verdict que celui qui decide du point vert au classement : un joueur
+ * qu'on renvoie ici est exactement un joueur que personne ne voit en ligne.
+ * Quand on n'en sait rien (hors ligne, liaison pas encore ouverte), on ne
+ * derange personne.
+ */
+function nomAValider(): boolean {
+  if (!(getSavedName() || '').trim()) return true;
+  return nomReconnu() === false;
+}
 
 /**
  * Le nom du joueur, la ou tout le monde passe.
@@ -66,6 +102,24 @@ export function NameChip() {
       window.removeEventListener(NOM_CHANGE, relire);
     };
   }, [etatJeu]);
+
+  /* LE NOM QU'ON N'A PAS ENCORE FAIT SIEN.
+
+     Au retour a l'accueil, apres deux courses terminees, un joueur sans nom
+     reserve est renvoye vers ce panneau — une fois par lancement. Un nom non
+     reserve n'a ni code de recuperation, ni point vert, ni invitation en
+     direct possible : il court sans exister pour les autres. Le delai laisse
+     l'accueil s'afficher et la presence rendre son verdict. */
+  useEffect(() => {
+    if (etatJeu !== 'title' || ouvert || nomDejaPropose) return;
+    if (coursesTerminees() < COURSES_AVANT_LE_NOM) return;
+    const t = setTimeout(() => {
+      if (nomDejaPropose || !nomAValider()) return;
+      nomDejaPropose = true;
+      setOuvert(true);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [etatJeu, ouvert]);
 
   const vide = !nom;
   // Le mur ne concerne que le nom porte maintenant : un avertissement laisse

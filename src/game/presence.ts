@@ -15,7 +15,7 @@
 // Le battement, lui, est repondu sans reveiller le serveur.
 
 import { useEffect, useState } from 'react';
-import { getDeviceId, getSavedName } from './leaderboard';
+import { getDeviceId, getSavedName, NOM_CHANGE } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
 import { SprinterApp } from './engine';
 import { salonCourant } from './salon-direct';
@@ -50,6 +50,11 @@ let nomOuvert = '';
 /** Combien de fois on a retente de faire reconnaitre un nom refuse. */
 let essaisNom = 0;
 let derniere: Activite = 'menu';
+/**
+ * Le verdict du serveur sur le nom de la liaison ouverte : reserve ET relie a
+ * cet appareil, ou pas. `null` tant qu'il n'a rien dit.
+ */
+let reconnu: boolean | null = null;
 
 /**
  * Ce que fait le joueur, lu dans le moteur.
@@ -113,6 +118,7 @@ function brancher() {
   catch { echecs++; replanifier(); return; }
   ws = s;
   nomOuvert = nom;
+  reconnu = null;
 
   s.onopen = () => {
     echecs = 0;
@@ -127,6 +133,7 @@ function brancher() {
   s.onmessage = ev => {
     let m: any;
     try { m = JSON.parse(String(ev.data)); } catch { return; }
+    if (m && m.t === 'ouverte' && ws === s) reconnu = !!m.nomme;
     // LE NOM N'A PAS ETE RECONNU alors qu'on en a un. Le cas courant : il vient
     // d'etre tape, et sa reservation n'etait pas encore faite quand la liaison
     // s'est ouverte. On retente un peu plus tard, trois fois au plus — un nom
@@ -188,9 +195,35 @@ export function ouvrirPresence() {
     brancher();
   };
   document.addEventListener('visibilitychange', suivreVisibilite);
+  // UN NOM ENREGISTRE, MEME INCHANGE. Valider le meme nom le reserve, relier
+  // l'appareil le rend sien : dans les deux cas le serveur dirait maintenant
+  // oui, et la sonde ne le verrait pas puisque le texte n'a pas bouge. On se
+  // represente donc apres chaque enregistrement, le temps que la reservation
+  // aboutisse — sinon le point vert attendrait la tentative suivante.
+  window.addEventListener(NOM_CHANGE, () => {
+    essaisNom = 0;
+    nomOuvert = (getSavedName() || '').trim();
+    reconnu = null;
+    clearTimeout(renommer);
+    renommer = setTimeout(() => { fermer(); brancher(); }, 3000);
+  });
   window.addEventListener('pagehide', () => fermer());
   window.addEventListener('online', () => { echecs = 0; brancher(); });
   window.addEventListener('focus', () => { if (!ws) { echecs = 0; brancher(); } });
+}
+
+/**
+ * Le nom porte ici est-il reconnu par le serveur — reserve, et relie a cet
+ * appareil ?
+ *
+ * `false` est une certitude : c'est le serveur qui l'a dit, pour CE nom.
+ * `null` veut dire qu'on n'en sait rien — pas de nom, pas de liaison, ou un nom
+ * change depuis — et ne doit jamais etre lu comme un non.
+ */
+export function nomReconnu(): boolean | null {
+  const nom = (getSavedName() || '').trim();
+  if (!nom || nom !== nomOuvert) return null;
+  return reconnu;
 }
 
 /** Referme tout. Sert aux essais ; le jeu, lui, reste present. */

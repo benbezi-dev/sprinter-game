@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
@@ -773,7 +774,13 @@ export function LivePanel() {
       {/* Le classement, par-dessus le salon. On garde la salle ouverte
           derriere : choisir un adversaire ne doit pas faire perdre le code
           ni les joueurs deja arrives. */}
-      {choisirAdversaires && (
+      {/* PAR UN PORTAIL, A LA RACINE DU DOCUMENT. Le cadre du panneau a un
+          flou d'arriere-plan (`backdrop-blur-xl`), et un `backdrop-filter`
+          fait de son element le repere de tout descendant en `position:
+          fixed` : le classement, qui couvre l'ecran partout ailleurs, restait
+          ici enferme dans le cadre, a defiler dans une boite de trois cents
+          pixels. Le portail le sort du cadre sans rien changer d'autre. */}
+      {choisirAdversaires && createPortal(
         <DuelRanking
           onClose={() => setChoisirAdversaires(false)}
           surInviter={async (nom: string) => {
@@ -795,7 +802,8 @@ export function LivePanel() {
             setConviesInfo(c => ({ ...c, injoignable: nom }));
             return false;
           }}
-        />
+        />,
+        document.body,
       )}
 
       <div className="flex flex-col gap-1.5">
