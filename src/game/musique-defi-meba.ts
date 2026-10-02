@@ -1,9 +1,10 @@
 // LE DEFI MEBA-MICKAEL ZEZE — sa musique, et comment elle entre dans le jeu.
 //
-// Un morceau fait a part, dans FL Studio, au tempo des ZEZE (150 BPM) : la
-// fiche de production est dans docs/musique-defi-meba.md. Comme celui d'Aurel
-// Manga (musique-defi-aurel.ts), c'est un fichier et non une synthese : il
-// doit sonner comme on l'a produit.
+// Un morceau calcule a part, au tempo des ZEZE (150 BPM) :
+// tools/musique/defi-meba.mjs l'ecrit dans public/vedettes/defi-meba.mp3,
+// sur le scenario de la fiche de production (docs/musique-defi-meba.md).
+// Comme celui d'Aurel Manga (musique-defi-aurel.ts), c'est un fichier et non
+// une synthese au chargement : il doit sonner comme on l'a produit.
 //
 // SA FORME EST UN CONTRAT AVEC LE DECOMPTE. La musique de course part au
 // premier chiffre du 3-2-1 (engine.ts), et le pistolet tombe trois secondes
@@ -94,66 +95,123 @@ function relayer(): void {
 // l'ouverture de la fiche, et son absence ne casse rien — la course part sans.
 
 /**
- * LE CLAQUEMENT DE DEUX MAINS, ET D'UN SEUL HOMME (02/10, « les claps ne font
- * pas assez humain »). Celui du moteur (Audio_.mains) est celui d'une
- * TRIBUNE : dix rafales de bruit superposees sur vingt millisecondes. Pour un
- * seul homme, il sonnait comme une boite a rythmes.
+ * SES MAINS SONT CELLES DE SON MORCEAU (02/10, a sa demande : « recupere les
+ * claps pour les claps de boost sur la presentation »). Les trois frappes
+ * d'avant les blocs sont les claps de la batterie de sa musique
+ * (tools/musique/defi-meba.mjs, `mains`) : meme calcul, memes graines, et la
+ * meme salle — ses frappes et le morceau qui demarre au decompte se repondent.
  *
- * Un vrai claquement : un choc tres sec (la paume qui frappe, une milliseconde),
- * un second plus faible deux ou trois millisecondes apres (les doigts), et le
- * creux des mains qui resonne — un bruit filtre autour de 0,85 a 1,35 kHz,
- * eteint en vingt a vingt-cinq, des mains creusees qui frappent fort, pas
- * des mains timides. Et, dehors, le renvoi des tribunes un dixieme de
- * seconde plus tard. Chaque graine change la resonance, la secheresse et le
- * second choc : deux claquements ne sont jamais identiques.
+ * Un claquement, c'est trois chocs serres (la paume, puis les doigts) et le
+ * creux des mains qui resonne, autour de 1 a 1,9 kHz ; celui-ci en reunit cinq,
+ * un peu decales — des mains qui frappent fort, a plusieurs, comme sur un
+ * temps de la batterie. Puis la reverberation du stade, celle du morceau
+ * (Freeverb, piece 0,9) : le retour des tribunes.
  */
-function clapHumain(ctx: AudioContext, graine: number): AudioBuffer {
-  const sr = ctx.sampleRate;
-  const n = Math.ceil(0.32 * sr);
-  const buf = ctx.createBuffer(1, n, sr);
-  const out = buf.getChannelData(0);
-  let g = (graine * 2654435761) >>> 0;
-  const alea = () => { g = (Math.imul(1664525, g) + 1013904223) >>> 0; return g / 4294967296; };
-  const bruit = () => alea() * 2 - 1;
-  // le creux des mains : un passe-bande (RBJ), sa frequence et sa largeur
-  // (02/10, « 3 claps de mains forts et pas timides ») : des mains bien
-  // creusees, qui frappent fort — la resonance plus grave, plus large
-  const fc = 850 + 500 * alea(), Q = 1.2 + 1.0 * alea();
-  const w0 = 2 * Math.PI * fc / sr, al = Math.sin(w0) / (2 * Q), a0 = 1 + al;
-  const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w0) / a0, a2 = (1 - al) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  const tau = 0.016 + 0.010 * alea();              // l'extinction du creux
-  const t2 = 0.0015 + 0.002 * alea(), a2c = 0.35 + 0.3 * alea();  // les doigts
-  let prev = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const choc = (u: number) => (u < 0 ? 0 : (u < 0.0004 ? u / 0.0004 : Math.exp(-(u - 0.0004) / 0.0011)));
-    const exc = bruit() * (choc(t) + a2c * choc(t - t2));
-    const corps = bruit() * Math.exp(-t / tau) * (t < 0.0003 ? t / 0.0003 : 1);
-    const x = corps;
-    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
-    x2 = x1; x1 = x; y2 = y1; y1 = y;
-    // le choc garde ses aigus (un derive : le grave s'en va), le creux sonne
-    const hp = exc - prev; prev = exc;
-    out[i] = 0.7 * hp + 3.0 * y;
+
+/** Le hasard a graines du morceau : les memes claps qu'au calcul de la musique. */
+function hasard(s: number): () => number {
+  return () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Le filtre a variables d'etat du morceau (Simper) : bande et haut. */
+class Filtre {
+  s1 = 0; s2 = 0; bande = 0; haut = 0;
+  pas(x: number, fc: number, q: number, sr: number): void {
+    const g = Math.tan(Math.PI * Math.min(fc, sr * 0.45) / sr), k = 1 / q;
+    const a1 = 1 / (1 + g * (g + k)), a2 = g * a1, a3 = g * a2;
+    const v3 = x - this.s2, v1 = a1 * this.s1 + a2 * v3, v2 = this.s2 + a2 * this.s1 + a3 * v3;
+    this.s1 = 2 * v1 - this.s1; this.s2 = 2 * v2 - this.s2;
+    this.bande = v1; this.haut = x - k * v1 - v2;
   }
-  // le renvoi des tribunes : la meme chose, plus bas, plus sourde, plus tard
-  const d = Math.floor((0.08 + 0.04 * alea()) * sr);
-  const sourd = new Float32Array(n);
-  let lp = 0;
-  for (let i = 0; i < n; i++) { lp += 0.18 * (out[i] - lp); sourd[i] = lp; }
-  for (let i = n - 1; i >= d; i--) out[i] += 0.5 * sourd[i - d];
-  // FORT SANS SATURER LA SORTIE : la sortie du jeu n'a pas de limiteur
-  // (Audio_.sortie), et le premier clap tombe sur le « GO ». Une saturation
-  // douce resserre le claquement — plus de corps pour la meme crete —, puis
-  // la crete est ramenee a 0,78 : avec le gain d'applaudir (1 a 1,15) et la
-  // voix dessous, la somme reste sous 1.
+}
+
+/** Un claquement de mains : trois chocs serres, puis le creux des paumes. */
+function mainsSeules(r: () => number, sr: number): Float32Array {
+  const o = new Float32Array(Math.round(0.24 * sr)), f = new Filtre();
+  const fc = 950 + 950 * r(), q = 1.3 + 1.4 * r();
+  const chocs = [0, 0.0055 + 0.004 * r(), 0.012 + 0.005 * r()];
+  const corps = 0.026 + 0.022 * r();
+  for (let i = 0; i < o.length; i++) {
+    const t = i / sr;
+    let e = 0;
+    for (let c = 0; c < 3; c++) if (t >= chocs[c]) e += Math.exp(-(t - chocs[c]) / 0.0021) * (c ? 0.72 : 1);
+    if (t >= chocs[2]) e += 0.5 * Math.exp(-(t - chocs[2]) / corps);
+    f.pas((r() * 2 - 1) * e, fc, q, sr);
+    o[i] = f.bande * 2.4 + 0.3 * f.haut;
+  }
+  return o;
+}
+
+/** La reverberation du morceau (Freeverb : huit peignes, quatre passe-tout). */
+function salle(entree: Float32Array[], sr: number): Float32Array[] {
+  const k = sr / 44100, PEIGNES = [1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617], PT = [556, 441, 341, 225];
+  const fb = 0.9 * 0.28 + 0.7, dmp = 0.32 * 0.4, pre = Math.round(0.028 * sr), n = entree[0].length;
+  return entree.map((x, c) => {
+    const y = new Float32Array(n);
+    const peignes = PEIGNES.map((l) => ({ b: new Float32Array(Math.round((l + c * 23) * k)), i: 0, f: 0 }));
+    const pts = PT.map((l) => ({ b: new Float32Array(Math.round((l + c * 23) * k)), i: 0 }));
+    let hp = 0, hpx = 0;
+    for (let j = 0; j < n; j++) {
+      const brut = j >= pre ? x[j - pre] : 0;
+      hp = 0.985 * (hp + brut - hpx); hpx = brut;
+      const e = hp * 0.015;
+      let s = 0;
+      for (const p of peignes) {
+        const o = p.b[p.i];
+        p.f = o * (1 - dmp) + p.f * dmp;
+        p.b[p.i] = e + p.f * fb;
+        if (++p.i >= p.b.length) p.i = 0;
+        s += o;
+      }
+      for (const p of pts) {
+        const o = p.b[p.i];
+        p.b[p.i] = s + o * 0.5;
+        if (++p.i >= p.b.length) p.i = 0;
+        s = o - s;
+      }
+      y[j] = s;
+    }
+    return y;
+  });
+}
+
+/** Le clap n° k de la batterie du morceau (graine 100 + k), et sa salle. */
+function clapDuMorceau(ctx: AudioContext, k: number): AudioBuffer {
+  const sr = ctx.sampleRate, r = hasard(100 + k);
+  const n = Math.round(1.5 * sr);
+  const sec = [new Float32Array(n), new Float32Array(n)];
+  // cinq mains, a quelques millisecondes les unes des autres, chacune a sa place
+  for (let v = 0; v < 5; v++) {
+    const s = mainsSeules(r, sr);
+    const dec = Math.round(Math.abs((r() + r() + r() - 1.5) * 0.004) * sr);
+    const a = ((r() * 2 - 1) * 0.92 + 1) * Math.PI / 4, g = 0.55 + 0.45 * r();
+    for (let i = 0; i < s.length && i + dec < n; i++) {
+      sec[0][i + dec] += s[i] * Math.cos(a) * g;
+      sec[1][i + dec] += s[i] * Math.sin(a) * g;
+    }
+  }
   let pic = 0;
-  for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(out[i]));
-  if (pic > 0) for (let i = 0; i < n; i++) out[i] = Math.tanh(2.2 * out[i] / pic) / Math.tanh(2.2);
+  for (const x of sec) for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(x[i]));
+  if (pic > 0) for (const x of sec) for (let i = 0; i < n; i++) x[i] /= pic;
+  // le stade, au dosage du morceau (envoi 0,18, retour 1,25, pour une batterie a 0,95)
+  const queue = salle(sec, sr);
+  const buf = ctx.createBuffer(2, n, sr);
+  // FORT SANS SATURER LA SORTIE : la sortie du jeu n'a pas de limiteur
+  // (Audio_.sortie), et le premier clap tombe sur le « GO ». La crete est
+  // ramenee a 0,78 : avec le gain d'applaudir (1 a 1,15) et la voix dessous,
+  // la somme reste sous 1.
+  const out = [buf.getChannelData(0), buf.getChannelData(1)];
   pic = 0;
-  for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(out[i]));
-  if (pic > 0) for (let i = 0; i < n; i++) out[i] *= 0.78 / pic;
+  for (let c = 0; c < 2; c++) for (let i = 0; i < n; i++) {
+    out[c][i] = sec[c][i] + 0.24 * queue[c][i];
+    pic = Math.max(pic, Math.abs(out[c][i]));
+  }
+  if (pic > 0) for (let c = 0; c < 2; c++) for (let i = 0; i < n; i++) out[c][i] *= 0.78 / pic;
   return buf;
 }
 
@@ -176,9 +234,9 @@ export async function chargerLeCri(): Promise<boolean> {
     if (!reponse.ok) throw new Error('reponse ' + reponse.status);
     const octets = await reponse.arrayBuffer();
     A.buf[CRI] = await new Promise<AudioBuffer>((ok, ko) => A.ctx.decodeAudioData(octets, ok, ko));
-    // ET SES MAINS : quatre claquements d'homme, un peu differents
-    // (clapHumain) ; engine.ts, applaudir, en tire un a chaque frappe
-    for (let i = 0; i < 4; i++) A.buf[`${CLAP}_${i}`] = clapHumain(A.ctx, 11 + 7 * i);
+    // ET SES MAINS : les quatre claps de la batterie de son morceau
+    // (clapDuMorceau) ; engine.ts, applaudir, en tire un a chaque frappe
+    for (let i = 0; i < 4; i++) A.buf[`${CLAP}_${i}`] = clapDuMorceau(A.ctx, i);
     A.buf[CLAP] = A.buf[`${CLAP}_0`];
     cri = 'pret';
     return true;

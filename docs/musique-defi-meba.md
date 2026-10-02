@@ -5,6 +5,11 @@ défi seulement, la city pop du Stade de la Riviera (112 BPM, trop posée).
 Tant qu'il n'est pas livré, la course joue la musique de la finale des ZEZE
 (`race3`, 150 BPM).
 
+**Livré le 02/10/2026, calculé** : `node tools/musique/defi-meba.mjs` écrit
+`public/vedettes/defi-meba.mp3` sur ce scénario (tout est synthétisé, rien
+n'est échantillonné). Une version produite dans FL Studio, sur ce même
+calage, pourra le remplacer : poser le WAV, encoder par-dessus.
+
 ## Ce que le jeu impose
 
 | | |
