@@ -63,28 +63,50 @@ MACRO = {'gender': 1.0, 'age': 0.5, 'muscle': 1.0, 'weight': 0.48,
 # son poids.
 CIBLES = {
     'torso-muscle-pectoral-incr': 0.75, 'torso-muscle-dorsi-incr': 0.65,
-    'torso-vshape-incr': 0.55, 'measure-waist-circ-decr': 0.15,
+    # LA TAILLE D'UN HOMME DE 74 KG (01/10). Pincee (0,15 de moins), elle
+    # mesurait 67 cm de tour : une taille de guepe, qui sous des cuisses
+    # pleines faisait une poire. La sienne, sur la photo de plage, est fine
+    # mais pleine d'abdominaux ; le V vient des dorsaux et des epaules.
+    'torso-vshape-incr': 0.55, 'measure-waist-circ-incr': 0.45,
     'stomach-pregnant-decr': 0.35,
-    'l-upperarm-muscle-incr': 0.70, 'r-upperarm-muscle-incr': 0.70,
-    'l-upperarm-shoulder-muscle-incr': 0.80, 'r-upperarm-shoulder-muscle-incr': 0.80,
-    'l-lowerarm-muscle-incr': 0.50, 'r-lowerarm-muscle-incr': 0.50,
-    'l-upperleg-muscle-incr': 1.0, 'r-upperleg-muscle-incr': 1.0,
-    'l-lowerleg-muscle-incr': 0.85, 'r-lowerleg-muscle-incr': 0.85,
-    'buttocks-volume-incr': 0.35,
+    # (01/10) des epaules rondes et des bras dessines, comme sur sa photo de
+    # plage : a 0,7 et 0,8, le bras se lisait en tube lisse
+    'l-upperarm-muscle-incr': 0.85, 'r-upperarm-muscle-incr': 0.85,
+    'l-upperarm-shoulder-muscle-incr': 1.0, 'r-upperarm-shoulder-muscle-incr': 1.0,
+    # SES AVANT-BRAS SONT EPAIS, ses poignets solides (photo accroupi) : a
+    # 25 cm de tour, et 14 au poignet, le bras finissait en baguette
+    'l-lowerarm-muscle-incr': 0.95, 'r-lowerarm-muscle-incr': 0.95,
+    'l-lowerarm-scale-depth-incr': 0.25, 'r-lowerarm-scale-depth-incr': 0.25,
+    'measure-wrist-circ-incr': 0.60,
+    'l-upperleg-muscle-incr': 0.85, 'r-upperleg-muscle-incr': 0.85,
+    # LE MOLLET HAUT ET COMPACT, LA CHEVILLE SOLIDE. A 45 cm de tour sur une
+    # cheville de 15, la jambe se lisait en quille de bowling.
+    'l-lowerleg-muscle-incr': 0.55, 'r-lowerleg-muscle-incr': 0.55,
+    'measure-ankle-circ-incr': 0.70,
+    'buttocks-volume-incr': 0.50,
     # UN BASSIN D'HOMME. Taille pincee, fesses larges, hanches evasees et
     # genoux qui se rapprochent : le bas du corps se lisait en femme. Un
     # sprinteur a le bassin etroit, la cuisse droite du flanc au genou, le
     # genou et le mollet solides, pas de graisse sur la cuisse.
-    'measure-hips-circ-decr': 0.45, 'hip-scale-horiz-decr': 0.35,
+    # (01/10) MAIS PAS UNE CUISSE A L'ENVERS. Bassin serre a 83 cm de tour et
+    # haut de cuisse vide (51 cm, quand la mi-cuisse en faisait 56), la cuisse
+    # s'evasait vers le genou et le short avec elle, en culotte de cheval. Chez
+    # un sprinteur, le plus gros de la cuisse est en haut (fessiers, ischios,
+    # adducteurs) et elle s'affine jusqu'au genou.
+    'hip-scale-horiz-incr': 0.25,
     'pelvis-tone-incr': 0.50,
-    'l-upperleg-fat-decr': 0.70, 'r-upperleg-fat-decr': 0.70,
+    'l-upperleg-fat-decr': 0.25, 'r-upperleg-fat-decr': 0.25,
     'l-leg-valgus-decr': 0.45, 'r-leg-valgus-decr': 0.45,
-    'measure-knee-circ-incr': 0.30, 'measure-calf-circ-incr': 0.40,
+    'measure-knee-circ-incr': 0.30,
     # la masse de la cuisse en PROFONDEUR (quadriceps devant, ischios
     # derriere), pas en largeur : sans graisse ni hanches, la cuisse maigrissait
     'measure-thigh-circ-incr': 0.35,
     'l-upperleg-scale-depth-incr': 0.35, 'r-upperleg-scale-depth-incr': 0.35,
-    'measure-neck-circ-incr': 0.45,
+    # et moins en largeur : de face, les deux cuisses debordaient du bassin
+    'l-upperleg-scale-horiz-decr': 0.30, 'r-upperleg-scale-horiz-decr': 0.30,
+    # SON COU EST EPAIS (photos de profil et de plage) : a 29 cm de tour, la
+    # tete tenait sur une tige
+    'measure-neck-circ-incr': 1.0,
     'measure-neck-height-incr': 0.20,
 }
 
@@ -650,7 +672,7 @@ def poids_dominant(h):
 
 
 def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, lisser=0, fondu=0,
-          teinte=None, affiner=0, teinte_bord=None):
+          teinte=None, affiner=0, teinte_bord=None, combler=None):
     """Une coque : les faces du corps que `garder(centre, normale, poids)` retient."""
     import bmesh
     dom = poids_dominant(h)
@@ -690,6 +712,25 @@ def coque(h, rig, nom, garder, epaisseur, couleur, rugosite=0.6, metal=0.0, liss
         for v in dedans:
             v.co += v.normal * perte * 0.8
     bm.normal_update()
+    # COMBLER (`combler` = (passes, z min, z max)) : un tissu tendu passe
+    # par-dessus les creux du corps sans suivre ses bosses en retrait. Chaque
+    # sommet glisse vers le milieu de ses voisins, mais seulement s'il sort
+    # ainsi de la peau : les plis se remplissent, les volumes restent. (Un
+    # lissage simple, regonfle de sa perte moyenne, creusait les quadriceps et
+    # la peau perçait le short.)
+    if combler:
+        passes, zmin, zmax = combler
+        dedans = [v for v in bm.verts if not v.is_boundary and zmin < v.co.z < zmax]
+        for _ in range(passes):
+            nouv = {}
+            for v in dedans:
+                vs = [e.other_vert(v).co for e in v.link_edges]
+                d = sum(vs, Vector()) / len(vs) - v.co
+                if d.dot(v.normal) > 0:
+                    nouv[v] = v.co + d * 0.7
+            for v, c in nouv.items():
+                v.co = c
+            bm.normal_update()
     # UN BORD QUI SE FOND (`fondu` anneaux). Une barbe a bord franc se lit en
     # masque colle sur le visage ; la vraie s'eclaircit et s'amincit vers ses
     # limites. L'epaisseur monte donc de zero au bord jusqu'a la pleine
@@ -854,7 +895,7 @@ def grain_poils(m, echelle=520.0, force=0.9, distance=0.0016):
 # Les matieres MATES — poils, tissu eponge — ne renvoient presque rien : avec
 # le reflet d'un Principled par defaut, la barbe et le bandeau noirs sortaient
 # gris clair sous les lampes.
-MATES = {'Meba_barbe', 'Meba_bandeau', 'Meba_ras', 'Meba_sourcils'}
+MATES = {'Meba_barbe', 'Meba_cheveux', 'Meba_sourcils'}
 # les levres, elles, ont un peu de brillant : mates, elles se lisaient en feutre
 SATINES = {'Meba_levres': 0.06, 'Meba_levre_bas': 0.20}
 
@@ -886,6 +927,8 @@ MAILLOT = (242, 244, 248)
 SHORT = (30, 44, 110)
 POINTES = (214, 240, 44)
 SEMELLE = (236, 236, 232)
+# la plaque a pointes, sous l'avant-pied
+PLAQUE = (34, 34, 38)
 BANDEAU = (30, 30, 34)
 BARBE = (20, 15, 14)
 CHEVEU = (30, 24, 22)
@@ -908,51 +951,158 @@ LEVRES = (86, 50, 46)
 LEVRES_OMBRE = (54, 31, 28)
 
 
-def chaussure(h, rig, cote):
-    """Une pointe de sprint : l'enveloppe du pied, pas sa copie.
+def courbe(pts):
+    """Une courbe lisse (Catmull-Rom) par des points (s, valeur), s croissant."""
+    S = [a for a, _ in pts]; Y = [b for _, b in pts]
+    n = len(pts)
+    def pente(i):
+        a, b = max(0, i - 1), min(n - 1, i + 1)
+        return (Y[b] - Y[a]) / (S[b] - S[a])
+    def f(s):
+        if s <= S[0]: return Y[0]
+        if s >= S[-1]: return Y[-1]
+        i = max(k for k in range(n - 1) if S[k] <= s)
+        d = S[i + 1] - S[i]; t = (s - S[i]) / d
+        h00, h10 = 2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t
+        h01, h11 = -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2
+        return h00 * Y[i] + h10 * d * pente(i) + h01 * Y[i + 1] + h11 * d * pente(i + 1)
+    return f
 
-    Une coque decoupee dans le pied en gardait les cinq orteils, et la pointe se
-    lisait en chaussette. On prend l'enveloppe CONVEXE du pied — elle passe
-    par-dessus les creux entre les orteils —, on la remaille en voxels de quatre
-    millimetres et on la lisse : une chaussure fermee, arrondie au bout. Le
-    dessus, dans la cheville, est ouvert ; le dessous est la semelle, blanche.
-    Ses poids viennent du pied le plus proche.
+
+# LES FORMES DES DEUX POINTES, gardees pour retirer le pied qu'elles cachent
+FORMES = {}
+
+
+def chaussure(h, rig, cote):
+    """Une pointe de sprint, dessinee sur la forme du pied.
+
+    L'enveloppe convexe du pied (jusqu'au 01/10) faisait un chausson : elle
+    tirait un plan droit de la cheville au bout des orteils — un coin —, et les
+    orteils ecartes de MakeHuman lui donnaient un bout carre et haut ; suivre
+    le pied tranche par tranche la rendait bosselee. Une pointe est basse,
+    fine, effilee : elle serre le pied, elle ne le moule pas. On la DESSINE
+    donc, en courbes lisses, sur quelques mesures du pied — sa longueur, la
+    largeur du talon et de l'avant-pied, la hauteur du coup-de-pied et des
+    metatarses —, section par section : une demi-ellipse aplatie (le dessous
+    plat, le dessus arrondi). Le bout est bas et penche vers le gros orteil, la
+    semelle se releve un peu devant ; le talon est rond et droit. Les orteils
+    qu'elle serre ne se voient jamais : le pied sous le col est retire
+    (pieds_caches). Une subdivision en fait une seule peau lisse. Le col
+    s'ouvre sous la malleole, plus bas derriere qu'au coup-de-pied ; la semelle
+    est blanche, la plaque a pointes de l'avant-pied sombre. Ses poids viennent
+    du pied le plus proche.
     """
     import bmesh
-    V = [v.co.copy() for v in h.data.vertices]
-    dom = poids_dominant(h)
-    pied = [V[i] for i, d in enumerate(dom)
-            if V[i].z < 0.108 and V[i].y * cote > 0 and d[0] in ('foot_l', 'foot_r', 'ball_l', 'ball_r', 'calf_l', 'calf_r')]
+    lisse = lambda t: (lambda u: u * u * (3 - 2 * u))(max(0.0, min(1.0, t)))
+    pied = [v.co.copy() for v in h.data.vertices if v.co.z < 0.105 and v.co.y * cote > 0.02]
+    x0, x1 = min(q.x for q in pied), max(q.x for q in pied)
+    xa, xb = x0 - 0.004, x1 + 0.006          # le talon et le bout de la pointe
+    L = xb - xa
+    sde = lambda x: (x - xa) / L
+    def col(x):
+        # 6,4 cm au talon, sous la malleole (cheville du jeu a 7,8) ; 9 cm sur
+        # le coup-de-pied, ou la languette couvre l'avant de la cheville
+        return 0.064 + 0.026 * lisse((sde(x) - 0.12) / 0.26)
+    def zone(a, b, zmax=None):
+        t = [q for q in pied if a <= sde(q.x) <= b and (zmax is None or q.z < zmax)]
+        return t or pied
+    def demi(t):
+        return (max(q.y for q in t) - min(q.y for q in t)) / 2, (max(q.y for q in t) + min(q.y for q in t)) / 2
+    w_talon, yc_talon = demi(zone(0.04, 0.38, 0.062))
+    w_avant, yc_avant = demi(zone(0.62, 0.80))
+    h_milieu = max(q.z for q in zone(0.46, 0.56, 0.095))
+    h_avant = max(q.z for q in zone(0.64, 0.78))
+    bout = max(pied, key=lambda q: q.x)
+    MARGE = 0.0045
+    # la largeur : talon rond, voute un peu plus etroite, avant-pied, bout effile
+    # (l'avant-pied serre : 85 % du pied nu de MakeHuman, aux orteils ecartes)
+    W = courbe([(0.0, 0.30 * w_talon), (0.05, 0.86 * w_talon), (0.16, w_talon),
+                (0.45, 0.80 * w_avant), (0.70, 0.85 * w_avant), (0.86, 0.76 * w_avant),
+                (0.95, 0.48 * w_avant), (1.0, 0.14 * w_avant)])
+    # le dessus : le talon au col, le coup-de-pied, les metatarses, le bout bas
+    H = courbe([(0.0, col(xa)), (0.30, col(xa + 0.30 * L) + 0.003), (0.42, 0.090),
+                (0.56, h_milieu + MARGE + 0.002), (0.72, 0.84 * (h_avant + MARGE)),
+                (0.88, 0.62 * (h_avant + MARGE)), (0.97, 0.020), (1.0, 0.012)])
+    Yc = courbe([(0.0, yc_talon), (0.20, yc_talon), (0.70, yc_avant),
+                 (1.0, 0.45 * yc_avant + 0.55 * bout.y)])
+    # la semelle se releve devant (2 mm sous les metatarses, 8 au bout)
+    B = lambda s: 0.008 * lisse((s - 0.80) / 0.20)
+    FORMES[cote] = (sde, W, Yc, col)
+    N, M = 30, 20
+    ss_ = [0.5 - 0.5 * math.cos(math.pi * i / (N - 1)) for i in range(N)]   # serre aux deux bouts
     bm = bmesh.new()
-    for q in pied:
-        bm.verts.new(q)
-    bmesh.ops.convex_hull(bm, input=bm.verts)
+    anneaux, ouvert = [], []
+    for s in ss_:
+        x = xa + s * L
+        w = W(s) + (MARGE if 0.0 < s < 1.0 else 0.0)
+        yc = Yc(s)
+        z0 = B(s)
+        z1 = max(z0 + 0.008, H(s))
+        # le col est ouvert la ou la cheville monte au-dessus de lui
+        ouvert.append(s < 0.40)
+        anneau = []
+        for k in range(M):
+            a = 2 * math.pi * k / M
+            c, s_ = math.cos(a), math.sin(a)
+            n = 2.3 if s_ > 0 else 5.0
+            y = yc + w * math.copysign(abs(c) ** (2 / n), c)
+            z = (z0 + z1) / 2 + (z1 - z0) / 2 * math.copysign(abs(s_) ** (2 / n), s_)
+            anneau.append(bm.verts.new((x, y, z)))
+        anneaux.append(anneau)
+    haut_k = {k for k in range(M) if math.sin(2 * math.pi * (k + 0.5) / M) > 0.62}
+    for i, (a, b) in enumerate(zip(anneaux, anneaux[1:])):
+        for k in range(M):
+            if 0 < i and ouvert[i + 1] and k in haut_k:
+                continue
+            bm.faces.new((a[k], a[(k + 1) % M], b[(k + 1) % M], b[k]))
+    bm.faces.new(list(reversed(anneaux[0])))
+    bm.faces.new(anneaux[-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
     me = bpy.data.meshes.new('Meba_pointe'); bm.to_mesh(me); bm.free()
     o = bpy.data.objects.new('Meba_pointe_' + ('g' if cote > 0 else 'd'), me)
     bpy.context.scene.collection.objects.link(o)
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.select_all(action='DESELECT'); o.select_set(True)
-    rm = o.modifiers.new('Remaillage', 'REMESH'); rm.mode = 'VOXEL'; rm.voxel_size = 0.004
-    bpy.ops.object.modifier_apply(modifier=rm.name)
-    sm = o.modifiers.new('Lissage', 'SMOOTH'); sm.factor = 0.8; sm.iterations = 6
-    bpy.ops.object.modifier_apply(modifier=sm.name)
-    dc = o.modifiers.new('Allegement', 'DECIMATE'); dc.ratio = 0.3
-    bpy.ops.object.modifier_apply(modifier=dc.name)
-    # un peu de gonflant : la pointe entoure le pied, elle ne le moule pas
-    bm = bmesh.new(); bm.from_mesh(o.data); bm.normal_update()
-    for v in bm.verts:
-        v.co += v.normal * 0.003
-    # le col, dans la cheville, s'ouvre
-    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_center_median().z > 0.100], context='FACES')
-    bm.to_mesh(o.data); bm.free()
+    sd = o.modifiers.new('Subdivision', 'SUBSURF'); sd.levels = 1; sd.render_levels = 1
+    bpy.ops.object.modifier_apply(modifier=sd.name)
     o.data.materials.append(materiau('Meba_pointes', POINTES, 0.35))
     o.data.materials.append(materiau('Meba_semelle', SEMELLE, 0.5))
+    o.data.materials.append(materiau('Meba_plaque', PLAQUE, 0.45))
+    # LE LACAGE, sombre sur le coup-de-pied : c'est lui qui fait lire une
+    # chaussure, et pas un chausson
     for p in o.data.polygons:
         p.use_smooth = True
-        c = sum((o.data.vertices[i].co for i in p.vertices), Vector()) / len(p.vertices)
-        p.material_index = 1 if (p.normal.z < -0.45 or c.z < 0.012) else 0
+        c = p.center
+        s = sde(c.x)
+        if p.normal.z < -0.6 and s > 0.55:
+            p.material_index = 2
+        elif p.normal.z < -0.45 or c.z < B(s) + 0.012:
+            p.material_index = 1
+        elif 0.40 < s < 0.76 and p.normal.z > 0.45 and abs(c.y - Yc(s)) < 0.38 * W(s):
+            p.material_index = 2
+        else:
+            p.material_index = 0
     transferer_poids(o, h, rig)
     return o
+
+
+def pieds_caches(h):
+    """Le pied sous le col de la pointe ne se voit jamais : il est retire. La
+    pointe serre les orteils plus que le pied nu de MakeHuman ne le permet, et
+    ils la percaient ; ce sont aussi des faces de moins a dessiner."""
+    import bmesh
+    bm = bmesh.new(); bm.from_mesh(h.data)
+    tuer = []
+    for f in bm.faces:
+        c = f.calc_center_median()
+        for cote, (sde, W, Yc, col) in FORMES.items():
+            s = sde(c.x)
+            if c.y * cote > 0 and -0.02 < s < 1.02 and c.z < col(c.x) - 0.012:
+                tuer.append(f); break
+    bmesh.ops.delete(bm, geom=tuer, context='FACES')
+    bm.to_mesh(h.data); bm.free()
+    h.data.update()
+    return len(tuer)
 
 
 def transferer_poids(o, source, rig):
@@ -969,6 +1119,31 @@ def transferer_poids(o, source, rig):
     bpy.ops.object.datalayout_transfer(modifier=mod.name)
     bpy.ops.object.modifier_apply(modifier=mod.name)
     arm = o.modifiers.new('Armature', 'ARMATURE'); arm.object = rig
+
+
+def tasser_le_crane(h, haut=0.046):
+    """Le haut du crane, rabaisse sans pli.
+
+    Sous les vanilles et le bandeau, la hauteur du crane ne se voyait pas.
+    Sous des cheveux courts, si : rapporte a la largeur du visage, le sommet de
+    ses cheveux tombe, sur sa photo de face, la ou le crane NU de MakeHuman
+    s'arrete (1,658) — la tete montait de deux centimetres et demi en bonnet.
+    Au-dessus du front (yeux + 7 cm), la hauteur d se tasse en
+    d - a.d^2 : pente 1 a la base, donc aucun pli, et le sommet descend de
+    7 a `haut` (4,6 cm). Le visage, sous cette ligne, ne bouge pas."""
+    yc = orbites(h)
+    zY = sum(e.z for e, _ in yc) / max(1, len(yc)) if yc else 1.5185
+    z0 = zY + 0.070
+    D = max(v.co.z for v in h.data.vertices) - z0
+    if D <= haut:
+        return 0.0
+    a = (D - haut) / (D * D)
+    for v in h.data.vertices:
+        d = v.co.z - z0
+        if d > 0:
+            v.co.z = z0 + d - a * d * d
+    h.data.update()
+    return D - haut
 
 
 def habiller(h, rig):
@@ -1081,12 +1256,16 @@ def habiller(h, rig):
     entrejambe = min((h.data.vertices[i].co for i, dd in enumerate(domh)
                       if abs(h.data.vertices[i].co.y) < 0.004 and 0.70 < h.data.vertices[i].co.z < 1.0
                       and dd[0] in ('pelvis', 'thigh_l', 'thigh_r')), key=lambda q: q.z)
+    # (01/10) PLUS LARGE ET PLUS HAUT : a trois centimetres, les plis de l'aine
+    # dessinaient encore un V de chaque cote. Et le lycra serre la cuisse a
+    # l'ourlet (3 mm au lieu de 4,5) : il ne s'en ecarte pas en jupe.
     def epaisseur_short(co):
         d = co - entrejambe
         devant = max(0.0, min(1.0, (d.x + 0.010) / 0.030))
         devant = devant * devant * (3 - 2 * devant)
-        g = math.exp(-((co.y / 0.030) ** 2 + ((d.z - 0.040) / 0.032) ** 2))
-        return 0.0045 + 0.016 * g * devant
+        g = math.exp(-((co.y / 0.042) ** 2 + ((d.z - 0.045) / 0.040) ** 2))
+        serre = max(0.0, min(1.0, (co.z - 0.645) / 0.060))
+        return 0.0030 + 0.0015 * serre + 0.017 * g * devant
 
     # LE SHORT : de la taille au tiers haut de la cuisse.
     def short(c, n, d):
@@ -1100,23 +1279,57 @@ def habiller(h, rig):
     def semelle(c, n, d):
         return c.z < 0.03 and n.z <= -0.55
 
-    # LE BANDEAU NOIR, HAUT sur le front, au-dessus des sourcils : pose trop
-    # bas, il les cachait et le visage n'avait plus de front. Il se place donc
-    # par rapport aux yeux, pas a une hauteur fixe.
+    # La hauteur des yeux : moustache, nez et cheveux s'y reperent.
     zY = sum(e.z for e, _ in yeux_c) / max(1, len(yeux_c)) if yeux_c else 1.5185
-    # ET INCLINE, comme il le porte : haut sur le front, il descend vers la
-    # nuque (deux centimetres et demi plus bas derriere).
-    bas_bandeau = lambda x: zY + 0.050 + 0.20 * (x - 0.09)
-    def bandeau(c, n, d):
-        b = bas_bandeau(c.x)
-        return p(d, 'head') > 0.5 and b < c.z < b + 0.031 and d.get('ears', 0) < 0.2
 
-    # LES CHEVEUX RAS : le cuir chevelu au-dessus du bandeau, et les cotes
-    # et la nuque dessous, tres courts.
-    def ras(c, n, d):
-        if d.get('scalp', 0) < 0.3: return False
-        b = bas_bandeau(c.x)
-        return c.z >= b + 0.031 or (c.z < b and c.x < 0.055)
+    # SES CHEVEUX, SUR SES PHOTOS (01/10, a sa demande : « cheveux noirs courts
+    # comme sur les photos ») : noirs, courts, frises serre, sans bandeau. Du
+    # volume sur le dessus — deux a trois centimetres au-dessus du crane —,
+    # degrades sur les cotes jusqu'au ras au-dessus de l'oreille, et la nuque
+    # courte. La lisiere du front est nette. Ils remplacent les vanilles
+    # blondes et le bandeau du 30/09.
+    # Une coque sur le cuir chevelu, comme la barbe : l'epaisseur dit la
+    # coupe, la teinte dit le degrade (la peau se devine sous le ras).
+    # LA LISIERE DU FRONT, MESUREE (01/10, sa photo de face) : a 0,63 largeur
+    # de visage au-dessus des yeux au milieu — le cuir chevelu de MakeHuman la
+    # mettait a 0,48, et le front se perdait sous les cheveux —, un peu plus
+    # bas aux tempes, ou sa ligne fait un coin net.
+    def lisiere(c):
+        return zY + 0.086 - 0.016 * lisse(min(1.0, abs(c.y) / 0.050))
+    # LES FAVORIS : devant l'oreille, ses cheveux descendent rejoindre la
+    # barbe. Sans eux, une bande de peau separait la coupe de la barbe. Ils
+    # montent jusqu'au cuir chevelu : detaches de lui, ils sortaient en ilots
+    # et ilots() les retirait.
+    def favoris(c):
+        return (abs(c.y) > 0.055 and -0.012 < c.x < 0.036
+                and haut_joue_de(c.y) - 0.012 < c.z < zY + 0.070)
+    # (le groupe « ears » de MakeHuman deborde devant l'oreille : 590 des 702
+    # faces des favoris le portent. Seule l'oreille elle-meme, ou il pese
+    # franchement, en est exclue.)
+    def cheveux(c, n, d):
+        if favoris(c) and p(d, 'head') > 0.4 and d.get('ears', 0) < 0.6:
+            return True
+        if d.get('scalp', 0) < 0.3 or d.get('ears', 0) > 0.2:
+            return False
+        return c.x < 0.030 or c.z > lisiere(c)
+    def epaisseur_cheveux(co):
+        # du ras des tempes (yeux + 2 cm) au plein du dessus (yeux + 9 cm) :
+        # 1,8 cm de cheveux au sommet. A 2,4 cm, sur le crane de MakeHuman,
+        # la tete montait en bonnet (voir tasser_le_crane).
+        dessus = lisse(max(0.0, min(1.0, (co.z - (zY + 0.020)) / 0.060)))
+        # SUR SON PROFIL, LE PLEIN EST AU SOMMET ET VERS L'ARRIERE du crane ;
+        # la nuque, elle, est rasee en degrade sous la ligne de l'oreille
+        arriere = lisse(max(0.0, min(1.0, -co.x / 0.060)))
+        e = 0.0020 + (0.0170 + 0.0110 * arriere) * dessus ** 1.2
+        # frise serre : des touffes, pas une calotte lisse
+        return e * (1.0 + 0.16 * bruit_barbe.noise(co * 90.0))
+    def teinte_cheveux(co):
+        # sous le ras des cotes et de la nuque, la peau se devine
+        k = 0.50 + 0.50 * lisse(max(0.0, min(1.0, (co.z - (zY - 0.010)) / 0.045)))
+        # les favoris, eux, sont pleins : ils prolongent la barbe
+        if favoris(co):
+            k = max(k, 0.85)
+        return tuple(a + (b - a) * k for a, b in zip(PEAU, CHEVEU))
 
     # LA BARBE PLEINE : joues, menton, sous la machoire, moustache — pas les
     # levres.
@@ -1267,9 +1480,14 @@ def habiller(h, rig):
         # languettes a travers l'ourlet
         ('Meba_maillot', maillot, 0.0068, MAILLOT, 0.55, 0, 0, teinte_france),
         # du lycra mat : brillant, il soulignait chaque courbe de la hanche
-        ('Meba_short', short, epaisseur_short, SHORT, 0.68),
-        ('Meba_bandeau', bandeau, 0.0035, BANDEAU, 0.7),
-        ('Meba_ras', ras, 0.0015, CHEVEU, 0.9),
+        # COMBLE (01/10) : un lycra tendu passe PAR-DESSUS les creux — le pli
+        # de l'aine dessinait un V sur le devant, et le sillon des fessiers une
+        # couche-culotte derriere. Pas la ceinture (au-dessus de 0,93) : elle
+        # passe sous le maillot ; pas le bas des cuisses (sous 0,74) : comble,
+        # l'ourlet s'evasait en jupe.
+        ('Meba_short', short, epaisseur_short, SHORT, 0.68, 0, 0, None, 0, None, (40, 0.74, 0.93)),
+        # deux rangs de fondu : la coupe s'amincit a sa lisiere
+        ('Meba_cheveux', cheveux, epaisseur_cheveux, CHEVEU, 0.92, 0, 2, teinte_cheveux),
         # un fondu de deux rangs : le visage de MakeHuman est grossier, et sur
         # quatre, le menton n'atteignait jamais sa pleine epaisseur
         # un seul rang de fondu : a deux, le bord faisait un liseré brun d'un
@@ -1285,7 +1503,9 @@ def habiller(h, rig):
                          fondu=piece[6] if len(piece) > 6 else 0,
                          teinte=piece[7] if len(piece) > 7 else None,
                          affiner=piece[8] if len(piece) > 8 else 0,
-                         teinte_bord=piece[9] if len(piece) > 9 else None))
+                         teinte_bord=piece[9] if len(piece) > 9 else None,
+                         combler=piece[10] if len(piece) > 10 else None))
+    print('pieds caches :', pieds_caches(h), 'faces')
     # et la peau
     h.data.materials.clear()
     peau = materiau('Meba_peau', PEAU, 0.58)
@@ -1313,9 +1533,10 @@ def habiller(h, rig):
     # LE GRAIN DES POILS : la barbe frisee, en relief et en teinte.
     # Lisses, ils se lisaient en casque de plastique. Cycles le rend (portraits),
     # l'export glTF l'ignore — a la taille du jeu, c'est la silhouette qui compte.
-    m = bpy.data.materials.get('Meba_barbe')
-    if m is not None:
-        grain_poils(m)
+    for nom in ('Meba_barbe', 'Meba_cheveux'):
+        m = bpy.data.materials.get(nom)
+        if m is not None:
+            grain_poils(m)
     return out
 
 
@@ -1771,11 +1992,13 @@ def sans_grain(mats):
 
 def tout(glb=None, blend=None):
     sc, h, rig = corps()
+    print('crane tasse de %.1f mm' % (1000 * tasser_le_crane(h)))
     habiller(h, rig)
     dossard(h, rig)
     sourcils_dessines(h, rig)
     yeux(h, rig)
-    vanilles(h, rig)
+    # (les vanilles blondes ne sont plus posees depuis le 01/10 : voir
+    # `cheveux` dans habiller)
     chaine(h, rig)
     boucle(h, rig)
     h = reunir(h, rig)
@@ -1900,16 +2123,38 @@ def visage_rendu(rig, dossier, echantillons=64):
     sc.render.image_settings.file_format = 'WEBP'
 
 
+# LES MAINS AU REPOS, pour les portraits : doigts a peine plies, comme une main
+# qui pend. Tendus et ecartes (le repos de MakeHuman), ils faisaient une main de
+# mannequin. Le meme geste que les mains « sol » du jeu (vedette-3d.ts : une
+# rotation autour de l'axe x local de chaque phalange), un peu plus ferme.
+MAINS_REPOS = {'doigt': (0.45, 0.55, 0.35), 'pouce': (0.20, 0.30, 0.20)}
+
+
+def plier_les_doigts(rig, courbes=MAINS_REPOS):
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='POSE')
+    for pb in rig.pose.bones:
+        n = pb.name.split('_')
+        if n[0] in ('index', 'middle', 'ring', 'pinky', 'thumb'):
+            k = max(0, min(2, (int(n[1]) if len(n) > 1 and n[1].isdigit() else 1) - 1))
+            a = courbes['pouce' if n[0] == 'thumb' else 'doigt'][k]
+            pb.matrix_basis = pb.matrix_basis @ Matrix.Rotation(a, 4, 'X')
+    bpy.context.view_layer.update()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
 def portraits(rig, dossier):
     sc = bpy.context.scene
     studio()
     os.makedirs(dossier, exist_ok=True)
     poser(rig, DEBOUT)
+    plier_les_doigts(rig)
     sc.render.resolution_x, sc.render.resolution_y = 900, 1000
     camera_portrait((1.35, -0.75, 1.42), (0.02, 0.0, 1.36), 70)
     sc.render.filepath = os.path.join(dossier, 'meba-buste.webp')
     bpy.ops.render.render(write_still=True)
     poser(rig, EN_PIED)
+    plier_les_doigts(rig)
     sc.render.resolution_x, sc.render.resolution_y = 900, 1200
     # cadre sur le corps entier : les bras baisses, le haut de l'image
     # restait vide et les pieds touchaient le bord

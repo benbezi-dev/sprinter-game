@@ -547,6 +547,37 @@ function pousserPosition() {
   }
 }
 
+/**
+ * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
+ *
+ * Debout derriere ses blocs, il crie « LET'S GOO ! » et frappe dans ses mains
+ * devant son visage : le clap de son look (L.clap, pose() dans
+ * sprinter-core.js), qui monte avec `celebrate` comme quand on le presente. Sa
+ * cadence vient de la phase de foulee (`stride`, 1,1 par seconde : celle de la
+ * presentation, voir presenterCoureur) ; on la cale pour que chaque frappe
+ * tombe a l'instant demande, et le claquement part avec (`meba_clap`, fabrique
+ * au chargement du cri). Les bras redescendent ensuite d'eux-memes : le
+ * decompte appelle finirLesSaluts.
+ */
+function applaudir(avD: any, dt: number) {
+  const claps: number[] = avD.claps;
+  const r = (G.runners || []).find((x: any) => x.look && x.look.clap && !x.isPlayer);
+  if (!r) return;
+  const t = avD.t, debut = claps[0] - 0.25, fin = claps[claps.length - 1] + 0.25;
+  const doux = (x: number) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  r.celebrate = doux((t - debut) / 0.2) * (1 - doux((t - fin) / 0.3));
+  // debout, droit, face a la ligne, des l'ouverture (pose : `debout`)
+  r.debout = doux(t / 0.25);
+  // pose() frappe quand stride / 1,1 vaut (k + 1/2) / 2,5 : la premiere
+  // frappe, a claps[0], tombe donc 0,2 s apres l'origine de la phase
+  r.stride = 1.1 * Math.max(0, t - (claps[0] - 0.2)) - (r.decalePas || 0);
+  while (avD.frappes < claps.length && t >= claps[avD.frappes] - 0.02) {
+    avD.frappes++;
+    Audio_.sfx('meba_clap', { gain: 0.85, rate: 0.96 + 0.08 * Math.random() });
+  }
+  void dt;
+}
+
 export function updateLogic(dt: number) {
   // Le tunnel des premiers pas lit les changements d'etat, rien d'autre.
   suivreTunnel(G);
@@ -655,6 +686,7 @@ export function updateLogic(dt: number) {
         avD.dit = true;
         if (avD.cri) Audio_.sfx(avD.cri, { gain: avD.gain ?? 0.95 });
       }
+      if (avD.claps && avD.claps.length) applaudir(avD, dt);
       SprinterApp.followCam(dt);
       gameStore.setState({ state: G.state, countT: -99 });
       return;

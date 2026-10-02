@@ -171,7 +171,9 @@ function preparer(racineGltf: THREE.Object3D): Modele {
         // et la barbe la ou elle se fond dans la joue : son degrade part de la
         // peau des portraits, plus sombre que celle-ci — un aplat brun barrait
         // la joue entre l'oeil et la barbe
-        if (m && m.name === 'Meba_barbe') fondreDansLaPeau(o.geometry);
+        // (et les cheveux : leur degrade des cotes et de la nuque part lui
+        // aussi de la peau)
+        if (m && (m.name === 'Meba_barbe' || m.name === 'Meba_cheveux')) fondreDansLaPeau(o.geometry);
       }
     }
   });

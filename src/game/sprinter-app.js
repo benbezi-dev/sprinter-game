@@ -3533,6 +3533,9 @@
     }
     if (!G.runners) return;
     for (const r of G.runners) {
+      // et celui qui attendait debout derriere ses blocs (le cri, engine.ts)
+      // se laisse aller a la commande : phaseBlocs le pose dans les blocs
+      if (r.debout) r.debout = Math.max(0, r.debout - 2.5 * dt);
       if (!r.celebrate) continue;
       r.celebrate = Math.max(0, r.celebrate - CELEBRE_DESCENTE * dt);
     }
@@ -8211,6 +8214,7 @@
       return;
     }
     if (G.state === 'race') {
+      r.debout = 0;
       r.enBloc = 1 - doux(r.d / SORTIE_BLOCS);
       r.prets = 1;
       return;

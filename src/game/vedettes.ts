@@ -55,8 +55,10 @@ export type Vedette = {
   /**
    * Un cri avant de s'installer dans les blocs : le son (Audio_.buf), quand il
    * part apres l'ouverture, et combien de temps tout le monde attend debout.
+   * `claps` : les instants (depuis l'ouverture) ou il frappe dans ses mains,
+   * devant son visage — le geste de son look (L.clap), et le claquement avec.
    */
-  cri?: { son: string; a: number; duree: number };
+  cri?: { son: string; a: number; duree: number; claps?: number[] };
 };
 
 export const VEDETTES: Record<string, Vedette> = {
@@ -83,8 +85,12 @@ export const VEDETTES: Record<string, Vedette> = {
     portraits: { buste: 'vedettes/meba-buste.webp', pied: 'vedettes/meba-pied.webp' },
     // Le blanc et le bleu de l'equipe de France, le rouge en filet.
     couleurs: { vive: '#2F5BE0', fonce: '#0B1638', pale: '#A9C1FF', halo: '#1C3070' },
-    // « LET'S GOO ! », debout derriere ses blocs (musique-defi-meba.ts)
-    cri: { son: 'meba_letsgo', a: 0.25, duree: 1.6 },
+    // « LET'S GOO ! », debout derriere ses blocs, et il frappe dans ses mains
+    // pour se motiver (02/10, son enregistrement : public/vedettes/meba-letsgo.mp3,
+    // « LET'S » a 0,2 s du fichier, « GOOO » de 0,7 a 1,5 s). Trois frappes,
+    // la premiere sur le « GO », au rythme de son clap ; le decompte attend
+    // qu'il ait baisse les bras.
+    cri: { son: 'meba_letsgo', a: 0.25, duree: 2.6, claps: [0.95, 1.35, 1.75] },
     // Chaque ligne est tenue par la FFA ou World Athletics ET une seconde
     // source (Wikipedia, resultats de la competition). Rien de ce que les
     // sources discutent : ni sa taille, ni le titre national du 100 m 2022.
@@ -156,7 +162,8 @@ export function lancerLeDefi(v: Vedette, epreuve: string = v.epreuves[0]) {
   (SprinterApp as any).startOneShot([epreuve], { levelIdx: idx });
   // SON CRI AVANT LES BLOCS, pour qui en a un (`cri`) : le decompte attend
   // qu'il l'ait lance. Voir G.avantDepart dans engine.ts.
-  G.avantDepart = v.cri ? { reste: v.cri.duree, t: 0, dit: false, cri: v.cri.son, a: v.cri.a } : null;
+  G.avantDepart = v.cri ? { reste: v.cri.duree, t: 0, dit: false, cri: v.cri.son, a: v.cri.a,
+                            claps: v.cri.claps || null, frappes: 0 } : null;
 }
 
 /**

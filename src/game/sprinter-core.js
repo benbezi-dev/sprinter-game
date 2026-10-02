@@ -1242,24 +1242,39 @@
     // intergalactique : lookFor() cherche les ZEZE par nom EXACT, et l'accent
     // comme le prenom compose les separent.
     //
-    // CE QU'ON RECONNAIT, releve sur ses photos et ses videos : les vanilles
-    // decolorees blond miel sur le dessus, les cotes ras ; le bandeau noir
-    // sur le front ; la barbe pleine, carree sous la machoire ; la chaine en
+    // CE QU'ON RECONNAIT, releve sur ses photos et ses videos : les cheveux
+    // noirs courts, du volume sur le dessus, degrades sur les cotes (ses
+    // photos de face et de profil ; les vanilles blond miel et le bandeau noir
+    // de ses videos de course, portes jusqu'au 01/10, ont ete retires a la
+    // demande de l'utilisateur) ; la barbe pleine, carree sous la machoire ; la chaine en
     // or au ras du cou ; les pointes jaune fluo de ses entrainements. La
     // carnation est relevee a son cou, a l'ombre du projecteur. La tenue est
     // le blanc de l'equipe de France, short bleu marine — sans aucun logo.
     //
     // SA COURSE, SES GESTES : l'allure canon et ses trois courses (setPace,
-    // STYLES_CANON), la foulee `canon`
-    // (GAITS), le V renverse dans les blocs (BLOC.rituel), le clap au-dessus
+    // STYLES_CANON), la foulee de base des autres coureurs (depuis le 02/10),
+    // le V renverse dans les blocs (BLOC.rituel), le clap au-dessus
     // de la tete (pose). Et soixante-quatre facettes au moins par volume a
     // l'ultra : c'est le skin premium de l'evenement.
     // (peau eclaircie le 30/09, comme celle du maillage : qu'on le distingue)
     'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [112, 69, 53], profil: 'meba',
       jersey: [242, 244, 248], shorts: [30, 44, 110], shoe: [214, 240, 44],
-      hair: 'twists', hairCol: [30, 24, 22], meches: [230, 192, 118],
-      h: 1.77, gait: 'canon', morph: { sh: 1.02 },
-      bandeau: [30, 30, 34], barbe: [36, 26, 24], barbePleine: true,
+      // SES CHEVEUX, SUR SES PHOTOS (01/10, a sa demande) : noirs, courts,
+      // du volume sur le dessus, degrades sur les cotes, sans bandeau — les
+      // vanilles blondes et le bandeau du 30/09 ne lui ressemblaient pas.
+      hair: 'fade', hairCol: [22, 18, 17],
+      // SES EPAULES ET SON BASSIN SONT CEUX DE SON MAILLAGE (02/10) : le corps
+      // cartoon de Quaternius (tools/blender/meba_cartoon.py) a ses jointures
+      // a 0,185 et 0,100 ; remis a 0,154 et 0,082, ses bras rentraient dans
+      // le buste. Le rig du jeu s'y aligne, pour que mains et pieds tombent
+      // juste (le clap, les blocs).
+      // SA TECHNIQUE DE COURSE EST CELLE DES AUTRES (02/10, a sa demande :
+      // « recupere celle des assets classiques ») : la foulee de base, pas
+      // GAITS.canon. Son allure (`allure`, ses trois courses) reste la sienne.
+      // Les bras plus fins (02/10, a sa demande) : `arm` affine ceux de sa
+      // doublure en tubes comme meba_cartoon.py (BRAS) ceux du maillage.
+      h: 1.77, morph: { sh: 1.20, hip: 1.22, arm: 0.80 },
+      barbe: [36, 26, 24], barbePleine: true,
       chaine: [226, 184, 72], allure: 'canon', rituel: true, clap: true,
       // SON SKIN PART PLUS FORT : vingt pour cent de chances en plus de
       // decrocher le depart parfait, qui s'allume alors comme une transition
@@ -2476,6 +2491,18 @@
       ar = [melange(ar[0], uA, wCl), melange(ar[1], fA, wCl)];
       rouleBras = [CLAP.rouleBras * wCl, (CLAP.rouleAv + CLAP.rouleAvFrappe * ferme) * wCl];
     }
+    // DEBOUT DERRIERE SES BLOCS, LE BUSTE DROIT (`debout`, 0 a 1 ; pose par
+    // le cri d'avant les blocs, engine.ts applaudir). Il crie « LET'S GOO ! »
+    // et frappe dans ses mains face a la ligne d'arrivee : les jambes tendues
+    // sous le bassin, un pied a peine devant l'autre, le buste redresse, la
+    // poitrine en avant. Sans cela il restait fige dans une foulee, penche en
+    // diagonale, le regard au sol (vu le 02/10).
+    const wD = Math.max(0, Math.min(1, r.debout || 0));
+    if (wD > 0) {
+      l = [melange(l[0], 0.07, wD), melange(l[1], 0.05, wD), melange(l[2], 0.0, wD)];
+      rr = [melange(rr[0], -0.07, wD), melange(rr[1], -0.05, wD), melange(rr[2], 0.0, wD)];
+      lean = melange(lean, 0.04, wD);
+    }
     // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
     //
     // Le starter n'est pas un athlete : il se tient debout, le pistolet le
@@ -2555,7 +2582,7 @@
     // sprinter-app.js). Tout ce qui balance en course — rebond, lacet,
     // roulis — s'efface a mesure qu'on est dans les blocs : on n'y bouge pas.
     const wB = Math.max(0, Math.min(1, r.enBloc || 0));
-    const calme = (1 - wB) * (1 - wS) * (1 - wPo);
+    const calme = (1 - wB) * (1 - wS) * (1 - wPo) * (1 - wD);
     let hipX = wPo > 0 ? (posture.hanche || 0) * wPo : 0, hipZ = null;
     if (wB > 0) {
       const t = Math.max(0, Math.min(1, r.prets || 0));
@@ -2915,7 +2942,8 @@
         }
         break;
       case 'twists': {
-        // LES VANILLES DECOLOREES — la coiffure de Mickael Meba-Zeze : les
+        // LES VANILLES DECOLOREES — la coiffure qu'avait Mickael Meba-Zeze
+        // jusqu'au 01/10 (il porte desormais 'fade', ses cheveux des photos) : les
         // cotes ras sous le bandeau, et sur le dessus une touffe de vanilles
         // blond miel, courtes, qui partent en gerbe. Chacune est un petit
         // tube incline vers l'avant ou l'arriere (l'angle de l'os) et

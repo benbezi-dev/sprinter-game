@@ -95,6 +95,8 @@ function relayer(): void {
 
 /** Le nom sous lequel le moteur range le cri (Audio_.sfx). */
 export const CRI = 'meba_letsgo';
+/** Et le claquement de ses mains, qui l'accompagne (engine.ts, applaudir). */
+export const CLAP = 'meba_clap';
 let cri: Etat = 'absent';
 
 export async function chargerLeCri(): Promise<boolean> {
@@ -110,6 +112,12 @@ export async function chargerLeCri(): Promise<boolean> {
     if (!reponse.ok) throw new Error('reponse ' + reponse.status);
     const octets = await reponse.arrayBuffer();
     A.buf[CRI] = await new Promise<AudioBuffer>((ok, ko) => A.ctx.decodeAudioData(octets, ok, ko));
+    // ET SES MAINS : le claquement du moteur (Audio_.mains, celui des
+    // claps de la musique), rendu une fois dans un tampon court
+    const sr = A.ctx.sampleRate;
+    const clap: AudioBuffer = A.ctx.createBuffer(1, Math.ceil(0.25 * sr), sr);
+    A.mains(clap, 0.012, 1.9, 41);
+    A.buf[CLAP] = clap;
     cri = 'pret';
     return true;
   } catch {

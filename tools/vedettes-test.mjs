@@ -114,10 +114,11 @@ ok('il ne se confond pas avec Mickeal ZEZE de la finale',
 titre('MEBA-MICKAEL ZEZE : SON CORPS ET SON LOOK');
 const LM = K.VEDETTES[NOM];
 ok('son profil Blender est charge', PREM.sculpte(LM.profil) && LM.profil === 'meba');
-ok('la carrure du look est celle de la sculpture (1,02)', LM.morph && LM.morph.sh === 1.02);
+ok('epaules et bassin du look = ceux du maillage cartoon (1,20 / 1,22)',
+   LM.morph && LM.morph.sh === 1.20 && LM.morph.hip === 1.22);
 ok('1,77 m', LM.h === 1.77);
-ok('vanilles blondes, bandeau, barbe pleine, chaine',
-   LM.hair === 'twists' && !!LM.meches && !!LM.bandeau && LM.barbePleine && !!LM.chaine);
+ok('cheveux noirs courts sans bandeau (ses photos), barbe pleine, chaine',
+   LM.hair === 'fade' && !LM.bandeau && LM.barbePleine && !!LM.chaine);
 ok('soixante-quatre facettes au moins', LM.facettes === 64);
 const PMULTRA = K.pose({ look: LM, stride: 1.2, v: 11, maxSpeed: 12, fallAnim: 0, celebrate: 0 }, 3);
 ok('il se pose a l ultra sans erreur', PMULTRA.length > 80, `${PMULTRA.length} volumes`);
