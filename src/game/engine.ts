@@ -586,10 +586,10 @@ function applaudir(avD: any, dt: number) {
   while (avD.frappes < claps.length && t >= claps[avD.frappes] - 0.02) {
     avD.frappes++;
     // un claquement de mains d'homme, jamais tout a fait le meme : l'une des
-    // quatre variantes (musique-defi-meba.ts), plus ou moins fort, plus ou
-    // moins sec
+    // quatre variantes (musique-defi-meba.ts). FORT, ET PAS TIMIDE (02/10) :
+    // jamais moins fort que son cri (0,95), un peu plus a l'occasion
     const v = Math.floor(Math.random() * 4);
-    Audio_.sfx(`meba_clap_${v}`, { gain: 0.7 + 0.25 * Math.random(), rate: 0.94 + 0.12 * Math.random() });
+    Audio_.sfx(`meba_clap_${v}`, { gain: 1.0 + 0.15 * Math.random(), rate: 0.96 + 0.08 * Math.random() });
   }
   void dt;
 }

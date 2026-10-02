@@ -95,10 +95,9 @@ export const VEDETTES: Record<string, Vedette> = {
     // Le blanc et le bleu de l'equipe de France, le rouge en filet.
     couleurs: { vive: '#2F5BE0', fonce: '#0B1638', pale: '#A9C1FF', halo: '#1C3070' },
     // « LET'S GOO ! », debout derriere ses blocs, et il frappe dans ses mains
-    // pour se motiver (02/10, son enregistrement AVEC ECHO, choisi par
-    // l'auteur : public/vedettes/meba-letsgo.mp3, « LET'S » a 0,25 s du
-    // fichier, « GOOO » de 0,8 a 1,5 s, puis l'echo qui s'eteint vers 4,7 s
-    // — sous le decompte, a -27 dB quand il commence). Trois frappes, la
+    // pour se motiver (02/10, son enregistrement : public/vedettes/meba-letsgo.mp3,
+    // « LET'S » a 0,2 s du fichier, « GOOO » de 0,7 a 1,5 s ; une version avec
+    // echo a ete essayee, puis ecartee par l'auteur). Trois frappes, fortes, la
     // premiere sur le « GO », d'un rythme qui change a chaque tentative
     // (humaniser) ; le decompte attend qu'il ait baisse les bras.
     cri: { son: 'meba_letsgo', a: 0.25, duree: 2.6, claps: [0.95, 1.35, 1.75] },

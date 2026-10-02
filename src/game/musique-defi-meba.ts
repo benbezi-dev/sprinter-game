@@ -101,9 +101,9 @@ function relayer(): void {
  *
  * Un vrai claquement : un choc tres sec (la paume qui frappe, une milliseconde),
  * un second plus faible deux ou trois millisecondes apres (les doigts), et le
- * creux des mains qui resonne — un bruit filtre autour de 1 a 1,8 kHz selon
- * qu'elles sont plus ou moins creusees, eteint en une quinzaine de
- * millisecondes. Et, dehors, le renvoi faible des tribunes un dixieme de
+ * creux des mains qui resonne — un bruit filtre autour de 0,85 a 1,35 kHz,
+ * eteint en vingt a vingt-cinq, des mains creusees qui frappent fort, pas
+ * des mains timides. Et, dehors, le renvoi des tribunes un dixieme de
  * seconde plus tard. Chaque graine change la resonance, la secheresse et le
  * second choc : deux claquements ne sont jamais identiques.
  */
@@ -116,11 +116,13 @@ function clapHumain(ctx: AudioContext, graine: number): AudioBuffer {
   const alea = () => { g = (Math.imul(1664525, g) + 1013904223) >>> 0; return g / 4294967296; };
   const bruit = () => alea() * 2 - 1;
   // le creux des mains : un passe-bande (RBJ), sa frequence et sa largeur
-  const fc = 1000 + 800 * alea(), Q = 1.4 + 1.6 * alea();
+  // (02/10, « 3 claps de mains forts et pas timides ») : des mains bien
+  // creusees, qui frappent fort — la resonance plus grave, plus large
+  const fc = 850 + 500 * alea(), Q = 1.2 + 1.0 * alea();
   const w0 = 2 * Math.PI * fc / sr, al = Math.sin(w0) / (2 * Q), a0 = 1 + al;
   const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w0) / a0, a2 = (1 - al) / a0;
   let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  const tau = 0.009 + 0.008 * alea();              // l'extinction du creux
+  const tau = 0.016 + 0.010 * alea();              // l'extinction du creux
   const t2 = 0.0015 + 0.002 * alea(), a2c = 0.35 + 0.3 * alea();  // les doigts
   let prev = 0;
   for (let i = 0; i < n; i++) {
@@ -133,17 +135,25 @@ function clapHumain(ctx: AudioContext, graine: number): AudioBuffer {
     x2 = x1; x1 = x; y2 = y1; y1 = y;
     // le choc garde ses aigus (un derive : le grave s'en va), le creux sonne
     const hp = exc - prev; prev = exc;
-    out[i] = 0.55 * hp + 2.2 * y;
+    out[i] = 0.7 * hp + 3.0 * y;
   }
   // le renvoi des tribunes : la meme chose, plus bas, plus sourde, plus tard
   const d = Math.floor((0.08 + 0.04 * alea()) * sr);
   const sourd = new Float32Array(n);
   let lp = 0;
   for (let i = 0; i < n; i++) { lp += 0.18 * (out[i] - lp); sourd[i] = lp; }
-  for (let i = n - 1; i >= d; i--) out[i] += 0.35 * sourd[i - d];
+  for (let i = n - 1; i >= d; i--) out[i] += 0.5 * sourd[i - d];
+  // FORT SANS SATURER LA SORTIE : la sortie du jeu n'a pas de limiteur
+  // (Audio_.sortie), et le premier clap tombe sur le « GO ». Une saturation
+  // douce resserre le claquement — plus de corps pour la meme crete —, puis
+  // la crete est ramenee a 0,78 : avec le gain d'applaudir (1 a 1,15) et la
+  // voix dessous, la somme reste sous 1.
   let pic = 0;
   for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(out[i]));
-  if (pic > 0) for (let i = 0; i < n; i++) out[i] *= 0.9 / pic;
+  if (pic > 0) for (let i = 0; i < n; i++) out[i] = Math.tanh(2.2 * out[i] / pic) / Math.tanh(2.2);
+  pic = 0;
+  for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(out[i]));
+  if (pic > 0) for (let i = 0; i < n; i++) out[i] *= 0.78 / pic;
   return buf;
 }
 
