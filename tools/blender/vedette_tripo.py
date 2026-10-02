@@ -1,0 +1,659 @@
+# -----------------------------------------------------------------------
+# SPRINTER — une vedette faite dans Tripo, rendue animable par le jeu.
+#
+#   blender -b --factory-startup -P tools/blender/vedette_tripo.py -- \
+#       --source <tripo.glb> --nom meba|manga --taille 1.78 [--sh 1.20 --hip 1.22] \
+#       [--glb public/vedettes/meba.glb] [--portraits public/vedettes] [--blend F.blend]
+#
+#   Meba : --source meba-tripo-lowpoly.glb --nom meba --taille 1.78 --sh 1.20 --hip 1.22
+#   Aurel : --source aurel-tripo-lowpoly.glb --nom manga --taille 1.90 --sh 1.06 --hip 1.0
+#           --glb public/vedettes/manga-corps.glb (manga-* : hors de la production)
+#
+# POURQUOI (02/10, a la demande de l'utilisateur : « pour Aurel Manga il faut
+# repartir de zero, pareil pour Mickael Zeze », « on ne garde pas ceux qui sont
+# dans le jeu », « retire les marques »). Les deux corps sont generes dans
+# Tripo Studio : une image en pose en T faite a partir de leurs photos, sans
+# aucune marque, puis « Smart Mesh » (environ 5 000 quads) et sa texture. Les
+# sources sont hors du depot : assets-sources/tripo-vedettes/.
+#
+# CE QUE TRIPO NE DONNE PAS : un squelette aux noms du jeu, et le repos du jeu
+# (les membres droits, les bras le long du corps). Ce script les pose :
+#   - chaque articulation est lue sur le corps, par des coupes exactes du
+#     maillage (voir Coupes) : la hanche sous le point le plus en arriere du
+#     fessier, le genou entre le plus etroit de la jambe et le creux du jarret,
+#     l'epaule au-dessus de l'aisselle, le coude au plus mince du bras, le
+#     poignet la ou le pouce s'en ecarte, la base du cou sur le trapeze ;
+#   - chaque doigt a ses trois phalanges, le pouce aussi : le poing de la
+#     course (vedette-3d.ts, COURBE) et les mains des portraits les plient ;
+#   - les poids sont ceux de Blender (diffusion de chaleur), en pose en T ;
+#   - puis tout le reste est celui de Meba (meba_maillage.py, meba_cartoon.py) :
+#     la mise en repere, le calage de chaque os sur le rig du jeu, le lissage
+#     des epaules quand les bras se rabattent, les portraits.
+#
+# LE MIROIR. La projection du jeu est le miroir d'une vraie vue (vedette-3d.ts,
+# la matrice P) : FRANCE, peint dans la texture, s'y lirait a l'envers. Le
+# temps de l'export, le maillage entier est donc mis en miroir (y -> -y) et ses
+# groupes _l / _r echanges : les os ne bougent pas, et l'image du jeu redevient
+# une vue vraie — FRANCE a l'endroit, le poignet d'Aurel a son bras gauche.
+# -----------------------------------------------------------------------
+
+import bpy
+import bmesh
+import os
+import runpy
+import shutil
+import sys
+from mathutils import Vector, Matrix
+
+ICI = os.path.dirname(os.path.abspath(__file__))
+CARTOON = runpy.run_path(os.path.join(ICI, 'meba_cartoon.py'), run_name='meba_cartoon')
+M = CARTOON['M']
+G = CARTOON['G']
+
+# SA PEAU (02/10 : « la peau est plus claire que celle des vrais athletes »).
+# Tripo la peint d'un brun moyen, presque le meme sur les deux (115, 65, 48 en
+# sRGB). Elle est ramenee, dans la texture et la seulement ou la teinte est
+# celle d'une peau (masque_peau), aux couleurs deja choisies pour Meba : celle
+# de ses portraits (60, 37, 29, le brun de ses photos), et pour le jeu la meme
+# eclaircie de 1,9 en lineaire — l'ecart que vedette-3d.ts comblait jusqu'ici
+# pour le soleil de la piste (ECLAIRCIR_PEAU), cuit ici dans la texture.
+# Aurel est un peu plus fonce et plus rouge, dans le rapport de leurs
+# doublures en tubes (104, 62, 44 contre 112, 69, 53).
+PEAU = {'meba': (60, 37, 29), 'manga': (55, 33, 24)}
+ECLAIRCIR_JEU = 1.9
+
+
+def arguments():
+    a = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    val = lambda k, d=None: a[a.index(k) + 1] if k in a else d
+    return {'source': val('--source'), 'nom': val('--nom', 'meba'), 'taille': float(val('--taille', '1.78')),
+            'sh': val('--sh'), 'hip': val('--hip'),
+            'glb': val('--glb'), 'portraits': val('--portraits'), 'blend': val('--blend')}
+
+
+# --- LE CORPS, A SA TAILLE ---------------------------------------------------
+
+def importer(source, taille, nom):
+    """Le glb de Tripo, sommets soudes, pieds a z = 0, a la taille de l'athlete.
+    Tripo le pose regardant -y, sa gauche en +x, les bras en croix le long de x,
+    paumes en bas."""
+    avant = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=source, merge_vertices=True)
+    neufs = [o for o in bpy.data.objects if o not in avant]
+    h = next(o for o in neufs if o.type == 'MESH')
+    for o in neufs:
+        if o is not h:
+            bpy.data.objects.remove(o, do_unlink=True)
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True); bpy.context.view_layer.objects.active = h
+    h.parent = None
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    co = [v.co for v in h.data.vertices]
+    mn = Vector([min(c[i] for c in co) for i in range(3)])
+    mx = Vector([max(c[i] for c in co) for i in range(3)])
+    k = taille / (mx.z - mn.z)
+    for v in h.data.vertices:
+        v.co = Vector(((v.co.x - (mn.x + mx.x) / 2) * k, (v.co.y - (mn.y + mx.y) / 2) * k, (v.co.z - mn.z) * k))
+    # (l'export glTF se plaignait d'un maillage « invalide » : aretes en double)
+    h.data.validate(clean_customdata=False)
+    h.data.update()
+    # des normales recalculees : les normales propres du glb ne suivraient ni
+    # la soudure ni le miroir de l'export
+    if h.data.has_custom_normals:
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+    for p in h.data.polygons:
+        p.use_smooth = True
+    h.name = nom.capitalize()
+    for m in h.data.materials:
+        if m:
+            m.name = nom.capitalize() + '_tripo'
+            b = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+            # une peau et un tissu mats : Tripo laisse le reflet par defaut
+            b.inputs['Metallic'].default_value = 0.0
+            b.inputs['Roughness'].default_value = 0.62
+            if 'Specular IOR Level' in b.inputs:
+                b.inputs['Specular IOR Level'].default_value = 0.30
+    return h
+
+
+# --- SES ARTICULATIONS, LUES SUR LUI ------------------------------------------
+
+class Coupes:
+    """Les coupes exactes d'un maillage par un plan : chaque face coupee donne
+    un segment, et les segments relies par leurs aretes forment des boucles —
+    une par membre traverse. Un maillage de cinq mille faces n'a que sept ou
+    huit sommets par tranche de jambe : des tranches de sommets mentaient de
+    deux centimetres, pas les coupes."""
+
+    def __init__(self, h):
+        me = h.data
+        self.V = [v.co.copy() for v in me.vertices]
+        self.A = [tuple(e.vertices) for e in me.edges]
+        ek = {tuple(sorted(e.vertices)): i for i, e in enumerate(me.edges)}
+        self.F = [[ek[tuple(sorted(k))] for k in p.edge_keys] for p in me.polygons]
+        self.memo = {}
+
+    def boucles(self, axe, val):
+        cle = (axe, round(val, 5))
+        if cle in self.memo:
+            return self.memo[cle]
+        P = {}
+
+        def pt(e):
+            if e not in P:
+                i, j = self.A[e]
+                a, b = self.V[i][axe], self.V[j][axe]
+                P[e] = self.V[i].lerp(self.V[j], (val - a) / (b - a)) if (a - val) * (b - val) < 0 else None
+            return P[e]
+        voisins = {}
+        for f in self.F:
+            c = [e for e in f if pt(e) is not None]
+            for e in c:
+                voisins.setdefault(e, set()).update(x for x in c if x != e)
+        vus, res = set(), []
+        for e in voisins:
+            if e in vus:
+                continue
+            pile, b = [e], []
+            vus.add(e)
+            while pile:
+                x = pile.pop()
+                b.append(P[x])
+                for y in voisins[x]:
+                    if y not in vus:
+                        vus.add(y); pile.append(y)
+            if len(b) > 4:
+                res.append(b)
+        self.memo[cle] = res
+        return res
+
+
+def bornes(b, i):
+    return min(p[i] for p in b), max(p[i] for p in b)
+
+
+def milieu(b):
+    return Vector([(min(p[i] for p in b) + max(p[i] for p in b)) / 2 for i in range(3)])
+
+
+def bande(a, b, pas):
+    return [a + pas * k for k in range(int((b - a) / pas) + 1)]
+
+
+def articulations(h, H):
+    C = Coupes(h)
+    J = {}
+    pas = 0.005
+
+    def jambe(z):
+        """La jambe gauche a la hauteur z : None au-dessus de l'entrejambe."""
+        bs = [b for b in C.boucles(2, z) if bornes(b, 0)[0] > 0]
+        return max(bs, key=len) if bs else None
+
+    def tronc(z):
+        """La plus grande boucle qui traverse le plan median (en surface : sous le
+        menton, la barbe fait une boucle a part, plus riche en points que le cou)."""
+        bs = [b for b in C.boucles(2, z) if bornes(b, 0)[0] < 0 < bornes(b, 0)[1]]
+        aire = lambda b: (bornes(b, 0)[1] - bornes(b, 0)[0]) * (bornes(b, 1)[1] - bornes(b, 1)[0])
+        return max(bs, key=aire) if bs else None
+
+    # L'ENTREJAMBE : la plus haute coupe ou la jambe gauche est encore seule
+    z = 0.30 * H
+    while z < 0.65 * H and jambe(z + pas) is not None:
+        z += pas
+    entrejambe = z
+    # LA HANCHE, sous le point le plus en arriere du fessier : la tete du femur
+    # et le grand trochanter sont a sa hauteur, ou a peine dessous. Pas aux
+    # proportions de Drillis (0,530 H) : sur Meba, dessine avec une tete grande
+    # (5,6 tetes de haut), elle tombait sept centimetres trop haut, a la
+    # ceinture du short.
+    fesses = [(bornes(tronc(z_), 1)[1], z_) for z_ in bande(entrejambe + pas, entrejambe + 0.12 * H, pas)
+              if tronc(z_)]
+    fesse = max(fesses)[1]
+    hanche_z = max(fesse - 0.01, entrejambe + 0.035 * H)
+    c = milieu(jambe(entrejambe - 0.02 * H))
+    J['hanche'] = Vector((c.x, c.y, hanche_z))
+    # LE GENOU : le milieu de trois lectures — le plus etroit de la jambe vue
+    # de face, le bas du creux du jarret vu de profil (le premier point a trois
+    # millimetres de son fond : derriere la cuisse d'Aurel, le profil est plat
+    # sur dix centimetres) et les proportions de Drillis (0,285 H). Aucune ne
+    # tient seule sur les deux corps ; deux sur trois s'accordent toujours.
+    larg = min((bornes(jambe(z_), 0)[1] - bornes(jambe(z_), 0)[0], z_) for z_ in bande(0.20 * H, 0.34 * H, pas))[1]
+    dos = [(bornes(jambe(z_), 1)[1], z_) for z_ in bande(0.24 * H, 0.36 * H, pas)]
+    fond = min(dos)[0]
+    creux = next(z_ for d_, z_ in dos if d_ < fond + 0.003)
+    genou_z = sorted((larg, creux, 0.285 * H))[1]
+    c = milieu(jambe(genou_z))
+    J['genou'] = Vector((c.x, c.y, genou_z))
+    # LA CHEVILLE, a 4,8 % de la taille (malleoles, semelle comprise), au
+    # milieu de la jambe juste au-dessus de la chaussure
+    c = milieu(jambe(0.085 * H))
+    J['cheville'] = Vector((c.x, c.y, 0.048 * H))
+    # LE PIED, jusqu'a la tete des metatarsiens : 72 % du talon a la pointe
+    pied = jambe(0.017 * H)
+    pointe, talon = bornes(pied, 1)
+    J['orteil'] = Vector((milieu(pied).x, talon + 0.72 * (pointe - talon), 0.015 * H))
+
+    # LE COU : son plus etroit, entre 0,78 et 0,93 H ; sa base la ou, en
+    # descendant, la coupe s'elargit d'une fois et demie — le trapeze. La tete
+    # pivote juste au-dessus du plus etroit, sous le crane.
+    def demi(z_):
+        t = tronc(z_)
+        return max(-bornes(t, 0)[0], bornes(t, 0)[1]) if t else 1.0
+    w = [(demi(z_), z_) for z_ in bande(0.78 * H, 0.93 * H, pas)]
+    wmin = min(w)[0]
+    col = [z_ for (l, z_) in w if l < wmin + 0.005]
+    cou_mince = sum(col) / len(col)
+    z_ = cou_mince
+    while z_ > 0.70 * H and demi(z_) < 1.5 * wmin:
+        z_ -= pas / 2
+    cou = z_ + pas / 4
+    crane = cou_mince + 0.017 * H
+    for nom, zz in (('bassin', hanche_z), ('dos1', hanche_z + 0.07 * H), ('dos2', hanche_z + 0.15 * H),
+                    ('dos3', hanche_z + 0.23 * H), ('cou', cou), ('crane', crane)):
+        t = tronc(zz)
+        J[nom] = Vector((0.0, milieu(t).y if t else 0.0, zz))
+    J['sommet'] = Vector((0.0, J['crane'].y, H))
+
+    # LES BRAS, EN CROIX : coupes en x, la boucle la plus haute est le bras
+    # (on part au-dela de la tete, qui serait plus haute que lui)
+    def bras(x_):
+        bs = [b for b in C.boucles(0, x_) if bornes(b, 2)[1] > 0.66 * H]
+        return max(bs, key=lambda b: bornes(b, 2)[1]) if bs else None
+    bout = max(v.co.x for v in h.data.vertices)
+    # L'EPAULE, au-dessus de l'aisselle : la ou le dessous du bras cesse de
+    # descendre le long du buste
+    dessous = [(x_, bornes(bras(x_), 2)[0]) for x_ in bande(0.07 * H, 0.26 * H, pas) if bras(x_)]
+    stable = sorted(z_ for x_, z_ in dessous if 0.16 * H < x_ < 0.24 * H)
+    u = stable[len(stable) // 2]
+    aisselle = next(x_ for x_, z_ in dessous if z_ >= u - 0.012)
+    ex = aisselle - 0.012
+    # LE POIGNET : la ou le pouce s'ecarte de l'avant-bras (le bord avant de
+    # la coupe, en -y, saute de plus d'un centimetre sur deux)
+    av = [(x_, bornes(bras(x_), 1)[0]) for x_ in bande(ex + 0.20 * H, bout, pas)]
+    poignet = next(x_ for (x_, y_), (xp, yp) in zip(av[4:], av) if y_ < yp - 0.012) - 0.02
+    # LE COUDE, au plus mince du bras vu de face (son epaisseur en z) dans le
+    # tiers du milieu, un centimetre au-dela : l'interligne passe sous les
+    # epicondyles, que la peau ne marque pas
+    L = poignet - ex
+    coude = min((bornes(bras(x_), 2)[1] - bornes(bras(x_), 2)[0], x_)
+                for x_ in bande(ex + 0.35 * L, ex + 0.65 * L, pas))[1] + 0.01
+    # l'axe du bras : la droite des milieux de ses coupes, du coude au poignet,
+    # prolongee jusqu'a l'epaule (le deltoide, au-dessus, ne compte pas)
+    pts = [milieu(bras(x_)) for x_ in bande(coude - 0.06, poignet - 0.02, pas)]
+
+    def ajuste(i):
+        n = len(pts)
+        mx_ = sum(p.x for p in pts) / n
+        my = sum(p[i] for p in pts) / n
+        sxx = sum((p.x - mx_) ** 2 for p in pts) or 1e-9
+        pente = sum((p.x - mx_) * (p[i] - my) for p in pts) / sxx
+        return lambda x_: my + pente * (x_ - mx_)
+    fy, fz = ajuste(1), ajuste(2)
+    axe = lambda x_: Vector((x_, fy(x_), fz(x_)))
+    J['epaule'] = axe(ex)
+    J['coude'] = axe(coude)
+    J['poignet'] = axe(poignet)
+    J['doigts'] = axe(bout)
+    J['avant_poignet'] = bornes(bras(poignet - 0.01), 1)[0]
+    J['sternum'] = Vector((0.02 * H, J['dos3'].y, J['epaule'].z - 0.01 * H))
+    print('ARTICULATIONS H %.3f | entrejambe %.3f fesse %.3f hanche %.3f genou %.3f (face %.3f, jarret %.3f)'
+          ' | cou %.3f crane %.3f | aisselle %.3f epaule %.3f coude %.3f poignet %.3f bout %.3f' % (
+              H, entrejambe, fesse, hanche_z, genou_z, larg, creux, cou, crane, aisselle, ex, coude, poignet, bout))
+    return J
+
+
+def doigts(h, J, H):
+    """Les quatre doigts et le pouce de la main gauche, en pose en T (paume en
+    bas, pouce vers l'avant) : {nom: [base, jointure, jointure, bout]}."""
+    me = h.data
+    V = [v.co.copy() for v in me.vertices]
+    voisins = [[] for _ in V]
+    for e in me.edges:
+        a, b = e.vertices
+        voisins[a].append(b); voisins[b].append(a)
+
+    def composantes(idx):
+        reste, res = set(idx), []
+        while reste:
+            i = reste.pop()
+            c, pile = [i], [i]
+            while pile:
+                x = pile.pop()
+                for y in voisins[x]:
+                    if y in reste:
+                        reste.remove(y); c.append(y); pile.append(y)
+            res.append(c)
+        return res
+
+    P = J['poignet']
+    main = [i for i, v in enumerate(V) if v.x > P.x and v.z > 0.6 * H]
+    # LE BOUT DU POUCE : le point le plus en avant de la main (la main deborde
+    # en avant du poignet : le bord de l'avant-bras ne separe pas le pouce de
+    # l'index)
+    tp = min(main, key=lambda i: V[i].y)
+    # LA FENTE DES DOIGTS : le premier plan au-dela duquel la main se separe
+    # en quatre morceaux, le pouce mis a part
+    x, fente, quatre = P.x + 0.06, None, None
+    while x < J['doigts'].x:
+        cs = [c for c in composantes([i for i in main if V[i].x > x]) if len(c) >= 6 and tp not in c]
+        if len(cs) >= 4:
+            fente, quatre = x, sorted(cs, key=len, reverse=True)[:4]
+            break
+        x += 0.002
+    if fente is None:
+        raise RuntimeError('les doigts ne se separent pas')
+    # de l'avant (-y) vers l'arriere : index, majeur, annulaire, auriculaire
+    quatre.sort(key=lambda c: sum(V[i].y for i in c) / len(c))
+    D = {}
+    for nom, c in zip(('index', 'middle', 'ring', 'pinky'), quatre):
+        # sa racine : le premier anneau de sommets au-dela de la fente
+        x0 = min(V[i].x for i in c)
+        racine = [V[i] for i in c if V[i].x < x0 + 0.010]
+        R = sum(racine, Vector()) / len(racine)
+        T = max((V[i] for i in c), key=lambda v: v.x)
+        d = (T - R).normalized()
+        base, bout = R - d * 0.012, T - d * 0.004       # l'articulation est sous la jointure
+        L = (bout - base).length
+        D[nom] = [base, base + d * 0.44 * L, base + d * 0.74 * L, bout]
+    # LE POUCE, de sa base (au bord avant du poignet, cote paume) a son bout
+    T = V[tp]
+    B = Vector((P.x + 0.015, J['avant_poignet'] + 0.015, P.z - 0.01))
+    d = (T - B).normalized()
+    bout = T - d * 0.004
+    D['thumb'] = [B, B + (bout - B) * 0.45, B + (bout - B) * 0.75, bout]
+    print('DOIGTS fente %.3f, bouts (x/y) %s' % (
+        fente, ' '.join('%s %.3f/%.3f' % (n, D[n][3].x, D[n][3].y) for n in D)))
+    return D
+
+
+DOIGTS = ('index', 'middle', 'ring', 'pinky', 'thumb')
+
+
+def squelette(J, D, nom):
+    """Les os aux noms du jeu (ceux du mannequin d'Unreal, comme le Quaternius).
+
+    LES PHALANGES SE PLIENT VERS LA PAUME. vedette-3d.ts ferme le poing en
+    tournant chaque phalange autour de son axe x local, d'un angle positif : un
+    tel tour porte le bout de l'os vers son axe z. L'axe z de chaque phalange
+    est donc tourne vers la paume (en bas en pose en T) — vers la paume et le
+    petit doigt pour le pouce, qui se replie en travers."""
+    arm = bpy.data.armatures.new(nom + '_rig')
+    rig = bpy.data.objects.new(nom + '_rig', arm)
+    bpy.context.scene.collection.objects.link(rig)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = arm.edit_bones
+
+    def os_(n, t, q, parent=None):
+        b = eb.new(n); b.head = t; b.tail = q
+        if parent:
+            b.parent = eb[parent]; b.use_connect = False
+        return b
+    os_('root', Vector((0, 0, 0)), Vector((0, 0.1, 0)))
+    os_('pelvis', J['bassin'], J['dos1'], 'root')
+    os_('spine_01', J['dos1'], J['dos2'], 'pelvis')
+    os_('spine_02', J['dos2'], J['dos3'], 'spine_01')
+    os_('spine_03', J['dos3'], J['cou'], 'spine_02')
+    os_('neck_01', J['cou'], J['crane'], 'spine_03')
+    os_('head', J['crane'], J['sommet'], 'neck_01')
+    for s, c in ((1, 'l'), (-1, 'r')):
+        m = lambda v: Vector((v.x * s, v.y, v.z))
+        os_('clavicle_' + c, m(J['sternum']), m(J['epaule']), 'spine_03')
+        os_('upperarm_' + c, m(J['epaule']), m(J['coude']), 'clavicle_' + c)
+        os_('lowerarm_' + c, m(J['coude']), m(J['poignet']), 'upperarm_' + c)
+        # la paume, du poignet a la jointure du majeur : les doigts en partent
+        os_('hand_' + c, m(J['poignet']), m(D['middle'][0]), 'lowerarm_' + c)
+        for doigt in DOIGTS:
+            parent = 'hand_' + c
+            for k in range(3):
+                n = '%s_%02d_%s' % (doigt, k + 1, c)
+                b = os_(n, m(D[doigt][k]), m(D[doigt][k + 1]), parent)
+                b.align_roll(Vector((0, 0.6, -1)) if doigt == 'thumb' else Vector((0, 0, -1)))
+                parent = n
+        os_('thigh_' + c, m(J['hanche']), m(J['genou']), 'pelvis')
+        os_('calf_' + c, m(J['genou']), m(J['cheville']), 'thigh_' + c)
+        os_('foot_' + c, m(J['cheville']), m(J['orteil']), 'calf_' + c)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    arm.bones['root'].use_deform = False
+    return rig
+
+
+def ponderer(h, rig):
+    """Les poids automatiques de Blender ; un sommet qu'ils laissent sans os
+    prend celui de son voisin pondere le plus proche."""
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True); rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+    noms = {g.index: g.name for g in h.vertex_groups}
+    os_ok = {b.name for b in rig.data.bones if b.use_deform}
+    pese = lambda v: sum(g.weight for g in v.groups if noms.get(g.group) in os_ok)
+    seuls = [v for v in h.data.vertices if pese(v) < 1e-4]
+    if seuls:
+        from mathutils.kdtree import KDTree
+        bons = [v for v in h.data.vertices if pese(v) >= 1e-4]
+        kd = KDTree(len(bons))
+        for i, v in enumerate(bons):
+            kd.insert(v.co, i)
+        kd.balance()
+        for v in seuls:
+            _, i, _ = kd.find(v.co)
+            for g in bons[i].groups:
+                h.vertex_groups[g.group].add([v.index], g.weight, 'REPLACE')
+    # chaque doigt doit porter les siens, sinon le poing ne se ferme pas
+    portes = {}
+    for v in h.data.vertices:
+        for g in v.groups:
+            n = noms.get(g.group, '')
+            if n.split('_')[0] in DOIGTS and g.weight > 0.5:
+                portes[n] = portes.get(n, 0) + 1
+    print('POIDS : %d sommets sans os, repris du voisin ; phalanges (sommets a plus de 0,5) : %s' % (
+        len(seuls), ' '.join('%s %d' % (n, portes.get(n, 0)) for n in sorted(
+            '%s_%02d_%s' % (d, k, c) for d in DOIGTS for k in (1, 2, 3) for c in 'lr'))))
+
+
+# --- SA PEAU ---------------------------------------------------------------------
+
+def srgb_lin(x):
+    import numpy as np
+    return np.where(x <= 0.04045, x / 12.92, ((x + 0.055) / 1.055) ** 2.4)
+
+
+def lin_srgb(x):
+    import numpy as np
+    x = np.clip(x, 0.0, 1.0)
+    return np.where(x <= 0.0031308, x * 12.92, 1.055 * x ** (1 / 2.4) - 0.055)
+
+
+def masque_peau(px):
+    """La part de peau de chaque pixel (0 a 1), lue sur sa couleur : une teinte
+    orangee, assez saturee, ni noire (cheveux, barbe) ni vive — les pointes
+    orange d'Aurel ont la teinte de sa peau, mais deux fois sa clarte.
+    (Saturee jusqu'a 0,86 : au bord du col d'Aurel, Tripo peint une peau plus
+    orange, a 0,83 ; laissee claire, elle faisait une tache sur la combinaison.)"""
+    import numpy as np
+    mx, mn = px.max(1), px.min(1)
+    d = np.maximum(mx - mn, 1e-6)
+    r, g, b = px[:, 0], px[:, 1], px[:, 2]
+    t = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
+    t = np.where(t > 300, t - 360, t)
+    s = np.where(mx > 1e-4, d / np.maximum(mx, 1e-4), 0)
+
+    def fenetre(x, a, b_, c, d_):
+        return np.clip(np.minimum((x - a) / (b_ - a), (d_ - x) / (d_ - c)), 0, 1)
+    return fenetre(t, -8, 0, 28, 38) * fenetre(s, 0.20, 0.32, 0.86, 0.94) * fenetre(mx, 0.08, 0.16, 0.62, 0.72)
+
+
+def teinter_peau(img, cible, k=1.0, cote=None):
+    """Une copie de `img` ou la peau a pour moyenne `cible` (sRGB 0-255),
+    multipliee par k en lineaire. Les ombres et les reliefs peints restent :
+    seule la moyenne se deplace, canal par canal."""
+    import numpy as np
+    im = img.copy()
+    if cote and im.size[0] > cote:
+        im.scale(cote, cote)
+    px = np.array(im.pixels[:], dtype=np.float32).reshape(-1, 4)
+    m = masque_peau(px[:, :3])
+    lin = srgb_lin(px[:, :3])
+    moy = (lin * m[:, None]).sum(0) / max(float(m.sum()), 1.0)
+    voulu = srgb_lin(np.array(cible, dtype=np.float32) / 255) * k
+    f = voulu / np.maximum(moy, 1e-5)
+    px[:, :3] = lin_srgb(lin * (1 + m[:, None] * (f - 1)))
+    im.pixels[:] = px.ravel()
+    im.pack()
+    print('PEAU : moyenne %s -> %s x %.2f, %.0f %% de la texture' % (
+        tuple(int(round(c)) for c in lin_srgb(moy) * 255), cible, k, 100 * float(m.mean())))
+    return im
+
+
+def dilater(h, img, cote, marge=24):
+    """Une copie de `img`, a `cote` pixels, dont chaque ilot d'UV deborde de sa
+    propre couleur sur `marge` pixels.
+
+    L'ATLAS DE TRIPO EST EN MIETTES : des centaines d'ilots, separes de noir.
+    De loin, le jeu lit la texture dans ses mipmaps, qui melangent chaque ilot
+    a ce qui l'entoure — le noir des vides d'abord : le maillot blanc sortait
+    gris et tache, la peau mouchetee. Recuite par Cycles avec une marge, chaque
+    ilot borde ses vides de sa propre couleur."""
+    sc = bpy.context.scene
+    moteur = sc.render.engine
+    sc.render.engine = 'CYCLES'
+    sc.cycles.samples = 1
+    sc.cycles.device = 'CPU'
+    neuve = bpy.data.images.new(img.name + '_dilatee', cote, cote, alpha=False)
+    m = h.data.materials[0]
+    nt = m.node_tree
+    sortie = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
+    tex = texture(h)
+    avant, tex.image = tex.image, img
+    surface = sortie.inputs['Surface'].links[0].from_socket
+    em = nt.nodes.new('ShaderNodeEmission')
+    nt.links.new(tex.outputs['Color'], em.inputs['Color'])
+    nt.links.new(em.outputs['Emission'], sortie.inputs['Surface'])
+    cible = nt.nodes.new('ShaderNodeTexImage')
+    cible.image = neuve
+    nt.nodes.active = cible
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True); bpy.context.view_layer.objects.active = h
+    sc.render.bake.margin_type = 'EXTEND'
+    try:
+        bpy.ops.object.bake(type='EMIT', margin=marge, use_clear=True)
+    finally:
+        nt.links.new(surface, sortie.inputs['Surface'])
+        nt.nodes.remove(em); nt.nodes.remove(cible)
+        tex.image = avant
+        sc.render.engine = moteur
+    neuve.pack()
+    return neuve
+
+
+def texture(h):
+    """Le noeud image branche a la couleur de base."""
+    m = h.data.materials[0]
+    b = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    return b.inputs['Base Color'].links[0].from_node
+
+
+# --- L'EXPORT, EN MIROIR -------------------------------------------------------
+
+def miroir(h):
+    bm = bmesh.new(); bm.from_mesh(h.data)
+    for v in bm.verts:
+        v.co.y = -v.co.y
+    bmesh.ops.reverse_faces(bm, faces=bm.faces)
+    bm.to_mesh(h.data); bm.free()
+    for g in h.vertex_groups:
+        if g.name.endswith('_l'):
+            g.name = g.name[:-2] + '_@'
+    for g in h.vertex_groups:
+        if g.name.endswith('_r'):
+            g.name = g.name[:-2] + '_l'
+    for g in h.vertex_groups:
+        if g.name.endswith('_@'):
+            g.name = g.name[:-2] + '_r'
+    h.data.update()
+
+
+def exporter(h, rig, chemin, peau_jeu):
+    for pb in rig.pose.bones:
+        pb.matrix_basis = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True)
+    bpy.context.view_layer.objects.active = h
+    # quatre os au plus par sommet, comme le glTF les lit
+    bpy.ops.object.vertex_group_limit_total(group_select_mode='ALL', limit=4)
+    bpy.ops.object.vertex_group_normalize_all(group_select_mode='ALL', lock_active=False)
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    os.makedirs(os.path.dirname(os.path.abspath(chemin)), exist_ok=True)
+    mw = h.matrix_world.copy(); h.parent = rig; h.matrix_world = mw
+    tex = texture(h)
+    peau_portrait, tex.image = tex.image, peau_jeu
+    miroir(h)
+    try:
+        bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
+                                  use_active_scene=True, export_skins=True, export_animations=False,
+                                  export_morph=False, export_yup=True, export_apply=False,
+                                  export_attributes=False, export_def_bones=False,
+                                  export_image_format='JPEG', export_jpeg_quality=85,
+                                  export_meshopt_compression_enable=True)
+    finally:
+        miroir(h)
+        tex.image = peau_portrait
+    return os.path.getsize(chemin)
+
+
+def portraits(rig, dossier, nom):
+    """Ceux de meba_maillage (studio, poses, cadrages), aux noms de la vedette.
+    Rendus a part puis deplaces : rendus sur place, ceux d'Aurel passaient par
+    les noms de Meba et emportaient ses portraits."""
+    tmp = os.path.join(dossier, '_rendu_' + nom)
+    M['portraits'](rig, tmp)
+    for k in ('buste', 'pied'):
+        os.replace(os.path.join(tmp, 'meba-%s.webp' % k), os.path.join(dossier, '%s-%s.webp' % (nom, k)))
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
+def tout(A):
+    M['scene_neuve']()
+    nom = A['nom'].capitalize()
+    h = importer(A['source'], A['taille'], A['nom'])
+    J = articulations(h, A['taille'])
+    D = doigts(h, J, A['taille'])
+    rig = squelette(J, D, nom)
+    ponderer(h, rig)
+    M['mise_en_repere'](h, rig)
+    b = rig.data.bones
+    # L'ECART DES EPAULES ET DES HANCHES. Le jeu pose ses mains et ses pieds
+    # avec celui de son look (morph sh et hip) : le maillage doit avoir le meme.
+    # Lus sur les deux corps, ils tombent a un ou deux millimetres de ceux que
+    # les looks portaient deja (Meba 1,19 / 1,18 pour 1,20 / 1,22 ; Aurel 1,05 /
+    # 1,06 pour 1,06 / 1,00) : --sh et --hip gardent ceux du look, et les
+    # doublures en tubes n'ont pas a changer. Sans eux, le maillage garde les
+    # siens, et c'est au look de les reprendre.
+    sh_y, hip_y = b['upperarm_l'].head_local.y, b['thigh_l'].head_local.y
+    print('MORPH %s : sh %.2f hip %.2f lus (epaule %.3f, hanche %.3f), taille au repere du jeu %.3f' % (
+        nom, sh_y / 0.154, hip_y / 0.082, sh_y, hip_y, max(v.co.z for v in h.data.vertices)))
+    G['SH_Y'] = 0.154 * float(A['sh']) if A['sh'] else sh_y
+    G['HIP_Y'] = 0.082 * float(A['hip']) if A['hip'] else hip_y
+    CARTOON['adoucir_epaules'](h)
+    herite = M['caler'](rig, CARTOON['cibles'](rig, cou=1.0))
+    CARTOON['figer'](h, rig, herite)
+    tex = texture(h)
+    source = tex.image
+    peau = PEAU[A['nom']]
+    tex.image = teinter_peau(source, peau, cote=None)
+    if A['glb']:
+        jeu = dilater(h, teinter_peau(source, peau, k=ECLAIRCIR_JEU), 1024)
+        print('GLB :', exporter(h, rig, A['glb'], jeu), 'octets')
+    if A['blend']:
+        bpy.ops.wm.save_as_mainfile(filepath=A['blend'], copy=True)
+    if A['portraits']:
+        portraits(rig, A['portraits'], A['nom'])
+    return h, rig
+
+
+if __name__ == '__main__' and bpy.app.background:
+    tout(arguments())

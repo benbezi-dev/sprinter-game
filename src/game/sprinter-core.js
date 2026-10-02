@@ -1295,25 +1295,34 @@
     // photos de 2018 a aujourd'hui —, la barbe courte et la moustache, le
     // cheveu ras au-dessus du bandeau. La carnation est relevee sur ses
     // joues et ses bras, sous la lumiere des salles : un brun chaud, plus
-    // rouge que l'ebene du plateau. La tenue est la violette qu'il porte sur
-    // les videos d'entrainement, bandeau blanc compris.
+    // rouge que l'ebene du plateau.
     //
-    // SON VISAGE N'EST PAS ICI. A l'echelle de la course, des yeux et un nez
-    // en troncs de cone faisaient un masque plutot qu'un visage : on le
-    // reconnait en course a sa silhouette, et de pres sur son portrait 3D
-    // (tools/blender/portrait_vedette.py, public/vedettes/).
+    // SON CORPS EST UN VRAI MAILLAGE (02/10, refait de zero dans Tripo a la
+    // demande de l'utilisateur : tools/blender/vedette_tripo.py), dessine
+    // par game/vedette-3d.ts ; ces troncs sont sa doublure, le temps qu'il se
+    // charge. Ils en portent donc la tenue — la combinaison marine de
+    // l'equipe de France, FRANCE en blanc, les pointes orange, relevees sur
+    // sa texture — et non plus la violette de ses videos d'entrainement.
+    // Le fichier s'appelle manga-* : le deploiement retire ces fichiers de la
+    // production tant que son defi n'y est pas ouvert.
+    //
+    // SON VISAGE N'EST PAS DANS LES TRONCS. A l'echelle de la course, des yeux
+    // et un nez en troncs de cone faisaient un masque plutot qu'un visage : on
+    // le reconnait a son maillage, et de pres sur son portrait (public/vedettes/).
     //
     // LA FOULEE EST PROVISOIRE. `sharp` est celle d'un coureur de frequence,
     // buste haut — la plus proche d'un hurdleur parmi celles du jeu. Elle
     // sera remplacee par la sienne, relevee sur ses videos.
     'Aurel MANGA': look({ build: 'm', skin: [104, 62, 44], profil: 'manga',
-      jersey: [104, 58, 176], shorts: [58, 34, 108], shoe: [246, 246, 250],
+      jersey: [29, 33, 78], shorts: [29, 33, 78], shoe: [214, 81, 33],
       hair: 'ras', h: 1.90, gait: 'sharp',
       // `sh` DOIT valoir la `carrure` de son profil Blender (1,06) : c'est
       // l'ecart des epaules du squelette, sur lequel ses bras ont ete mesures.
+      // Son maillage y est cale (vedette_tripo.py --sh 1.06 --hip 1.0) : lues
+      // sur le corps, ses epaules tombaient a 1,05.
       morph: { sh: 1.06 },
       bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
-      barbe: [50, 34, 28] }),
+      barbe: [50, 34, 28], maillage: 'vedettes/manga-corps.glb' }),
 
     // MEBA-MICKAEL ZEZE — sprint, equipe de France. 9"99 au 100 m et 19"97 au
     // 200 m, le meme apres-midi de juillet 2022 ; premier
@@ -1348,15 +1357,17 @@
       // vanilles blondes et le bandeau du 30/09 ne lui ressemblaient pas.
       hair: 'fade', hairCol: [22, 18, 17],
       // SES EPAULES ET SON BASSIN SONT CEUX DE SON MAILLAGE (02/10) : le corps
-      // cartoon de Quaternius (tools/blender/meba_cartoon.py) a ses jointures
-      // a 0,185 et 0,100 ; remis a 0,154 et 0,082, ses bras rentraient dans
-      // le buste. Le rig du jeu s'y aligne, pour que mains et pieds tombent
-      // juste (le clap, les blocs).
+      // cartoon de Quaternius avait ses jointures a 0,185 et 0,100 ; remis a
+      // 0,154 et 0,082, ses bras rentraient dans le buste. Le rig du jeu s'y
+      // aligne, pour que mains et pieds tombent juste (le clap, les blocs).
+      // Son corps refait dans Tripo (02/10, tools/blender/vedette_tripo.py) les
+      // a lus a 0,184 et 0,097, et y est cale (--sh 1.20 --hip 1.22).
       // SA TECHNIQUE DE COURSE EST CELLE DES AUTRES (02/10, a sa demande :
       // « recupere celle des assets classiques ») : la foulee de base, pas
       // GAITS.canon. Son allure (`allure`, ses trois courses) reste la sienne.
       // Les bras plus fins (02/10, a sa demande) : `arm` affine ceux de sa
-      // doublure en tubes comme meba_cartoon.py (BRAS) ceux du maillage.
+      // doublure en tubes, comme meba_cartoon.py (BRAS) ceux du maillage
+      // cartoon. Le corps Tripo garde les bras de son dessin.
       h: 1.77, morph: { sh: 1.20, hip: 1.22, arm: 0.80 },
       barbe: [36, 26, 24], barbePleine: true,
       chaine: [226, 184, 72], allure: 'canon', rituel: true, clap: true,

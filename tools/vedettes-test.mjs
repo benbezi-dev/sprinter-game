@@ -74,6 +74,11 @@ ok('son profil Blender est charge', PREM.sculpte(L.profil));
 ok('bandeau, poignet gauche, barbe', !!L.bandeau && L.poignet && L.poignet.cote === 1 && !!L.barbe);
 const carrure = 1.06;   // tools/blender/anatomie.py, ATHLETES.manga.carrure
 ok('le look reprend la carrure de la sculpture', L.morph && L.morph.sh === carrure);
+// son maillage (tools/blender/vedette_tripo.py) : un fichier manga-*, que le
+// deploiement retire de la production tant que son defi n'y est pas ouvert
+// (.github/workflows/deploy.yml, « rm -f dist/vedettes/manga-* »)
+ok('son maillage est un fichier manga-*, hors de la production',
+   /^vedettes\/manga-[^/]+\.glb$/.test(L.maillage || ''), L.maillage);
 const parts = K.pose({ look: L, stride: 1.2, v: 11, maxSpeed: 12, fallAnim: 0, celebrate: 0 }, 0);
 ok('il se pose sans erreur', parts.length > 60, `${parts.length} volumes`);
 ok('le bandeau est colle aux cheveux (COLLE)',
@@ -114,7 +119,7 @@ ok('il ne se confond pas avec Mickeal ZEZE de la finale',
 titre('MEBA-MICKAEL ZEZE : SON CORPS ET SON LOOK');
 const LM = K.VEDETTES[NOM];
 ok('son profil Blender est charge', PREM.sculpte(LM.profil) && LM.profil === 'meba');
-ok('epaules et bassin du look = ceux du maillage cartoon (1,20 / 1,22)',
+ok('epaules et bassin du look = ceux de son maillage (1,20 / 1,22)',
    LM.morph && LM.morph.sh === 1.20 && LM.morph.hip === 1.22);
 ok('1,77 m', LM.h === 1.77);
 ok('cheveux noirs courts sans bandeau (ses photos), barbe pleine, chaine',

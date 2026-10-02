@@ -14,7 +14,9 @@
   calage de tools/blender/meba_maillage.py ou la pose de vedette-3d.ts ment.
 
     npx vite --mode test   puis   /tools/apercu-meba-3d.html
+                           ou     /tools/apercu-meba-3d.html?nom=Aurel%20MANGA
 -->
+<h2 id="nom"></h2>
 <h2>en foulee, de trois quarts</h2><canvas id="c1" width="1200" height="520"></canvas>
 <h2>le rituel dans les blocs, puis a vos marques</h2><canvas id="c2" width="1200" height="420"></canvas>
 <h2>le clap</h2><canvas id="c3" width="1200" height="520"></canvas>
@@ -22,7 +24,11 @@
   import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
   import { charger, dessiner } from '/src/game/vedette-3d.ts';
 
-  const NOM = 'Méba-Mickaël ZÉZÉ';
+  // (n'importe quelle vedette qui a un maillage : ?nom=Aurel%20MANGA)
+  const NOM = new URLSearchParams(location.search).get('nom') || 'Méba-Mickaël ZÉZÉ';
+  // le nom de celui qu'on regarde, en titre : Aurel porte un bandeau, pas Meba
+  document.title = 'Sprinter — ' + NOM + ' : tubes et maillage';
+  document.getElementById('nom').textContent = NOM;
   const look = SprinterCore.VEDETTES[NOM];
   const perso = (o) => Object.assign({ look, stride: 0.9, v: 11.4, maxSpeed: 12, fallAnim: 0,
     celebrate: 0, drivePitch: 0, d: 20 }, o || {});

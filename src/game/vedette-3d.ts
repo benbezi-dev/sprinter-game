@@ -2,9 +2,10 @@
 //
 // Le moteur dessine ses coureurs en troncs, un par morceau de membre : c'est ce
 // qui en fait courir huit dans un virage, et c'est aussi pourquoi, de pres, un
-// corps s'y lit comme un assemblage. Le skin premium de Meba-Mickael Zeze est
-// un corps d'un seul tenant (tools/blender/meba_maillage.py) : ce module le
-// pose et le rend, et drawRunner (sprinter-app.js) colle l'image a sa place.
+// corps s'y lit comme un assemblage. Les vedettes — Meba-Mickael Zeze, Aurel
+// Manga — ont un corps d'un seul tenant (fait dans Tripo, rigge par
+// tools/blender/vedette_tripo.py) : ce module le pose et le rend, et
+// drawRunner (sprinter-app.js) colle l'image a sa place.
 //
 // RIEN N'EST ANIME ICI. Les gestes sont ceux de pose() : la foulee canon, la
 // fatigue, le rituel dans les blocs, le clap. pose() releve au passage les
@@ -161,6 +162,9 @@ function preparer(racineGltf: THREE.Object3D): Modele {
       // (Cycles, un studio sombre) ; sous le soleil et le ciel de la piste
       // elle tombait presque au noir, bien plus sombre que sa doublure en
       // tubes. On la remonte ici, au chargement, sans toucher aux portraits.
+      // (Les corps Tripo portent tout dans une seule texture : la meme
+      // eclaircie y est cuite par vedette_tripo.py, et aucune de leurs
+      // matieres ne porte ces noms.)
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
         // et les levres avec elle : la levre du bas est plus claire que la
         // peau, celle du haut plus sombre — eclaircie seule, la peau passait
@@ -281,7 +285,15 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
   try {
     const S = Math.max(48, Math.min(1600, Math.ceil(k * 2.5)));
     const oy = S * 0.80;
-    if (R.domElement.width !== S || R.domElement.height !== S) R.setSize(S, S, false);
+    // L'IMAGE A LA DENSITE DE LA TOILE. Rendue a un pixel par point, puis
+    // posee dans une toile qui en compte deux (G.dpr), elle s'agrandissait du
+    // double : a cote des troncs, nets, l'athlete sortait flou. Elle est donc
+    // rendue a la densite que porte `ctx` — sa transformation, qui suit celle
+    // que le jeu s'accorde —, puis posee a sa taille.
+    const tr = ctx.getTransform ? ctx.getTransform() : null;
+    const dens = tr ? Math.max(1, Math.min(3, Math.hypot(tr.a, tr.b))) : 1;
+    const Sd = Math.min(2048, Math.ceil(S * dens));
+    if (R.domElement.width !== Sd || R.domElement.height !== Sd) R.setSize(Sd, Sd, false);
     poser(m, sq);
     // le repere du coureur (tourne, bascule, miroir), puis le passage glTF -> jeu
     const [ex, ey, ez] = repere;
@@ -310,7 +322,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     for (const o of modeles.values()) o.racine.visible = o === m;
     R.render(scene, camera);
     m.racine.visible = false;
-    ctx.drawImage(R.domElement, ax - S / 2, ay - oy);
+    ctx.drawImage(R.domElement, ax - S / 2, ay - oy, S, S);
     return true;
   } catch {
     return false;
