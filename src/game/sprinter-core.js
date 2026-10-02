@@ -1044,6 +1044,66 @@
   const CLAP = { bras: 1.40, avBras: 2.95, frappe: 0.05,
                  rouleBras: 0.12, rouleAv: 0.12, rouleAvFrappe: 0.55 };
 
+  // LES ATTITUDES D'AVANT LE DEPART (voir pose) : pour chaque attitude et
+  // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
+  // bras [bras, avant-bras] (0 vers le bas, positif vers l'avant), le buste,
+  // la hauteur du bassin (`leve`, en metres) et la tete (negative : il baisse
+  // les yeux). Debout, les jambes sont celles de `debout`.
+  const ATTITUDES = ['sautille', 'secoue', 'moulinets', 'cuisses', 'genou', 'fixe'];
+  function attitude(k, t) {
+    const S = Math.sin, TA = TAU;
+    const doux = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+    const debG = [0.07, 0.05, 0.0], debD = [-0.07, -0.05, 0.0];
+    const pend = [0.06, 0.28];
+    switch (ATTITUDES[k % ATTITUDES.length]) {
+      case 'sautille': {
+        // sur la pointe des pieds, 2,4 rebonds par seconde, les bras ballants
+        const ph = t * 2.4 * TA, h = Math.max(0, S(ph)), fl = 0.24 * (1 - h);
+        return { l: [0.07 + fl, 0.05 - fl, -0.25 * h], rr: [-0.02 + fl, -0.02 - fl, -0.25 * h],
+                 al: [0.06 + 0.16 * S(ph), 0.32 + 0.18 * S(ph)], ar: [0.06 + 0.16 * S(ph + 0.4), 0.32 + 0.18 * S(ph + 0.4)],
+                 lean: 0.07, leve: 0.045 * h - 0.025 * (1 - h), tete: 0.0 };
+      }
+      case 'secoue': {
+        // une jambe levee qu'on secoue sous le genou, puis l'autre
+        const cote = Math.floor(t / 0.8) % 2, lev = Math.pow(S(Math.PI * ((t / 0.8) % 1)), 0.7);
+        const sec = 0.22 * S(t * 7 * TA);
+        const leg = [0.32 * lev, 0.32 * lev - (0.5 + sec) * lev, 0.32 * lev - (0.7 + sec) * lev];
+        const appui = [0.0, 0.0, 0.0];
+        return { l: cote ? leg : appui, rr: cote ? appui : leg,
+                 al: [0.08, 0.3 + 0.1 * S(t * 7 * TA + 1)], ar: [0.08, 0.3 + 0.1 * S(t * 7 * TA + 2)],
+                 lean: 0.03, leve: 0, tete: -0.1 };
+      }
+      case 'moulinets': {
+        // les bras balances grand, l'un devant l'autre derriere, les genoux souples
+        const ph = t * 1.4 * TA, sw = 0.95 * S(ph), fl = 0.05 * (1 + S(2 * ph));
+        return { l: [0.07 + fl, 0.05 - fl, 0.0], rr: [-0.07 + fl, -0.05 - fl, 0.0],
+                 al: [sw, sw + 0.4], ar: [-sw, -sw + 0.4], lean: 0.05, leve: -0.01 * (1 + S(2 * ph)), tete: 0.05 };
+      }
+      case 'cuisses': {
+        // penche, il se tape les cuisses, a gauche puis a droite, trois fois par seconde
+        const ph = t * 3 * TA, g = Math.max(0, S(ph)), d = Math.max(0, -S(ph));
+        return { l: [0.2, -0.05, 0.0], rr: [0.05, -0.2, 0.0],
+                 al: [0.22, 0.28 + 0.85 * (1 - g)], ar: [0.22, 0.28 + 0.85 * (1 - d)],
+                 lean: 0.22, leve: -0.03, tete: -0.25 };
+      }
+      case 'genou': {
+        // un genou monte a la poitrine, tire des deux mains, puis l'autre
+        const cote = Math.floor(t / 1.0) % 2, lev = doux(Math.min(1, ((t / 1.0) % 1) / 0.35)) * doux(Math.min(1, (1 - (t / 1.0) % 1) / 0.25));
+        const leg = [1.35 * lev, 1.35 * lev - 1.9 * lev, 1.35 * lev - 1.6 * lev];
+        const appui = [-0.02, -0.02, 0.0];
+        return { l: cote ? leg : appui, rr: cote ? appui : leg,
+                 al: [0.06 + 0.85 * lev, 0.28 + 1.25 * lev], ar: [0.06 + 0.85 * lev, 0.28 + 1.25 * lev],
+                 lean: -0.03 * lev, leve: 0.01 * lev, tete: 0.0 };
+      }
+      default: {
+        // il fixe la ligne : les yeux qui descendent puis remontent, une grande respiration
+        const res = S(t * 0.45 * TA);
+        return { l: debG, rr: debD, al: [pend[0] + 0.04 * res, pend[1]], ar: [pend[0] + 0.04 * res, pend[1]],
+                 lean: 0.02 + 0.03 * res, leve: 0.006 * res, tete: -0.32 + 0.42 * doux(((t / 2.6) % 1) * 1.6) };
+      }
+    }
+  }
+
   function gaitOf(look) {
     return (look && GAITS[look.gait]) || GAITS.base;
   }
@@ -2610,6 +2670,42 @@
       leve += (posture.leve || 0) * wPo;
     }
 
+    // LES ATTITUDES D'AVANT LE DEPART (02/10, a la demande de l'auteur :
+    // « ajoute les attitudes de sprinter avant les departs, c'est trop sec »).
+    //
+    // Debout derriere ses blocs, avant « a vos marques », chacun fait ce que
+    // font les sprinteurs : il sautille, secoue une jambe puis l'autre, fait
+    // tourner les bras, se tape les cuisses, monte un genou a la poitrine, ou
+    // fixe la ligne en respirant. Deux attitudes par coureur, tirees a la
+    // construction de la course (`attitudes`, sprinter-app.js), qui se relaient
+    // toutes les 1,3 s ; `attitudeW` (pose par phaseBlocs) s'eteint a mesure
+    // qu'il entre dans les blocs, `attitudeT` est l'horloge de l'attente et
+    // `attDecal` decale chacun pour qu'aucun ne bouge en meme temps qu'un autre.
+    const wAt = Math.max(0, Math.min(1, r.attitudeW || 0));
+    let teteAt = 0;
+    if (wAt > 0 && r.attitudes) {
+      const tt = Math.max(0, r.attitudeT || 0), ph0 = r.attDecal || 0;
+      const SEG = 1.3, seg = Math.floor(tt / SEG), fr = (tt - seg * SEG) / SEG;
+      const kA = r.attitudes[seg % 2], kB = r.attitudes[(seg + 1) % 2];
+      const wB2 = fr < 0.8 ? 0 : (u => u * u * (3 - 2 * u))((fr - 0.8) / 0.2);
+      const a = attitude(kA, tt + ph0), b = attitude(kB, tt + ph0);
+      const m = (x, y) => melange(x, y, wB2);
+      const cible = {
+        l: [m(a.l[0], b.l[0]), m(a.l[1], b.l[1]), m(a.l[2], b.l[2])],
+        rr: [m(a.rr[0], b.rr[0]), m(a.rr[1], b.rr[1]), m(a.rr[2], b.rr[2])],
+        al: [m(a.al[0], b.al[0]), m(a.al[1], b.al[1])],
+        ar: [m(a.ar[0], b.ar[0]), m(a.ar[1], b.ar[1])],
+        lean: m(a.lean, b.lean), leve: m(a.leve, b.leve), tete: m(a.tete, b.tete),
+      };
+      l = [melange(l[0], cible.l[0], wAt), melange(l[1], cible.l[1], wAt), melange(l[2], cible.l[2], wAt)];
+      rr = [melange(rr[0], cible.rr[0], wAt), melange(rr[1], cible.rr[1], wAt), melange(rr[2], cible.rr[2], wAt)];
+      al = [melange(al[0], cible.al[0], wAt), melange(al[1], cible.al[1], wAt)];
+      ar = [melange(ar[0], cible.ar[0], wAt), melange(ar[1], cible.ar[1], wAt)];
+      lean = melange(lean, cible.lean, wAt);
+      leve += cible.leve * wAt;
+      teteAt = cible.tete * wAt;
+    }
+
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -2628,7 +2724,7 @@
     // sprinter-app.js). Tout ce qui balance en course — rebond, lacet,
     // roulis — s'efface a mesure qu'on est dans les blocs : on n'y bouge pas.
     const wB = Math.max(0, Math.min(1, r.enBloc || 0));
-    const calme = (1 - wB) * (1 - wS) * (1 - wPo) * (1 - wD);
+    const calme = (1 - wB) * (1 - wS) * (1 - wPo) * (1 - wD) * (1 - wAt);
     let hipX = wPo > 0 ? (posture.hanche || 0) * wPo : 0, hipZ = null;
     if (wB > 0) {
       const t = Math.max(0, Math.min(1, r.prets || 0));
@@ -2775,7 +2871,7 @@
     // deux fois, et le maillage ne peut pas faire un geste que les tubes ne
     // font pas.
     const sq = L.maillage ? (r.squelette = {
-      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: r.tete || 0,
+      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
       jambes: [], bras: [],
       mains: wCl > 0.5 ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
     }) : null;
@@ -2928,7 +3024,7 @@
     // les lunettes et les antennes tournent alors autour de la base du cou.
     // Sans ce pivot, incliner la tete revenait a pencher tout le haut du
     // corps depuis les hanches.
-    const tete = r.tete || 0;
+    const tete = (r.tete || 0) + teteAt;
     const cou = rot(0, 0.52, lean);
     const pvT = tete ? [hip[0] + cou[0], hip[1], hip[2] + cou[1]] : hip;
     const angT = lean + tete, dzT = tete ? -0.52 : 0;

@@ -334,5 +334,32 @@ titre('SON SKIN : LE DEPART, LA TRANSITION ET LE COUDE');
   ok('bras derriere, le coude garde son angle', pire > 0.8, `${pire.toFixed(2)} rad`);
 }
 
+titre('LES ATTITUDES D AVANT LE DEPART');
+// Six attitudes, chacune posee a douze instants, sur le look du joueur : la
+// pose ne tombe pas, et le pied le plus bas reste pres du sol — ni enfonce
+// (plus de 5 cm), ni en l'air (plus de 12 cm, un rebond de sautille compris).
+{
+  const bas = (parts) => {
+    let z = Infinity;
+    for (const p of parts) for (const q of bouts(p)) z = Math.min(z, q[2]);
+    return z;
+  };
+  const LJ = K.PLAYER_LOOK;
+  const neutre = bas(K.pose({ look: LJ, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, d: 0, debout: 1 }, 0));
+  for (let k = 0; k < 6; k++) {
+    let mini = Infinity, maxi = -Infinity, erreur = null;
+    for (let i = 0; i < 12; i++) {
+      try {
+        const parts = K.pose({ look: LJ, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, d: 0,
+                               attitudeW: 1, attitudes: [k, k], attitudeT: i * 0.21, attDecal: 0 }, 0);
+        const z = bas(parts) - neutre;
+        mini = Math.min(mini, z); maxi = Math.max(maxi, z);
+      } catch (x) { erreur = x.message; break; }
+    }
+    ok(`attitude ${k} : posee sans erreur, les pieds pres du sol`, !erreur && mini > -0.05 && mini < 0.12,
+       erreur || `pied le plus bas de ${(mini * 100).toFixed(1)} a ${(maxi * 100).toFixed(1)} cm`);
+  }
+}
+
 console.log(`\n${'─'.repeat(62)}\n   ${e ? e + ' ECHEC(S).' : 'TOUT PASSE.'}`);
 process.exit(e ? 1 : 0);

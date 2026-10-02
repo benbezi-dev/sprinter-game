@@ -547,6 +547,9 @@ function pousserPosition() {
   }
 }
 
+/** Le temps debout avant « a vos marques », en solo : celui du cri de Meba-Mickael. */
+const ATTITUDES_S = 2.6;
+
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
  *
@@ -628,7 +631,9 @@ export function updateLogic(dt: number) {
   // Son cri avant les blocs se lance dans le silence : la musique de course
   // part avec « a vos marques », a l'heure ou sa fiche FL Studio l'attend
   // (docs/musique-defi-meba.md).
-  else if (G.state === 'count' && G.avantDepart && G.avantDepart.reste > 0) Audio_.stop();
+  // (les attitudes d'avant le depart, elles, se font sur la musique : seul le
+  // cri demande le silence)
+  else if (G.state === 'count' && G.avantDepart && G.avantDepart.reste > 0 && G.avantDepart.cri) Audio_.stop();
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
@@ -662,6 +667,8 @@ export function updateLogic(dt: number) {
       : SprinterApp.CUT_DUREE;
     if (G.cut.kind !== 'ending' && G.cut.t > finDuCut) SprinterApp.nextCut();
   } else if (G.state === 'count') {
+    // l'horloge des attitudes d'avant le depart (pose, phaseBlocs)
+    G.attT = (G.attT || 0) + dt;
     // En direct, le decompte reste suspendu tant que la salle n'a pas annonce
     // l'heure du coup de pistolet : partir « dans trois secondes » chez soi
     // ferait partir les deux joueurs a des instants differents.
@@ -694,6 +701,20 @@ export function updateLogic(dt: number) {
     // voir phaseBlocs), et l'interface le lit comme une presentation (-99) :
     // ni chiffre, ni « alterne les deux touches ». Les appuis n'y comptent pas
     // (padPress). Le cri part un quart de seconde apres l'ouverture.
+    // LES ATTITUDES D'AVANT LE DEPART (02/10, a la demande de l'auteur :
+    // « ajoute les attitudes de sprinter avant les departs, c'est trop sec »).
+    // En solo, le decompte partait des la premiere image et chacun glissait
+    // dans ses blocs en 0,6 s. Il y a maintenant le meme temps debout que pour
+    // le cri de Meba-Mickael — qui a deja le sien —, ou chacun fait ses
+    // gestes (pose, phaseBlocs), sur la musique, les appuis ignores.
+    // Pas en direct, en relais ni en rejeu : leur pistolet est a l'heure de la
+    // salle ; pas au tutoriel, qui n'a qu'un coureur et mesure sa reaction.
+    if (!G.attitudesFaites) {
+      G.attitudesFaites = true;
+      if (!G.avantDepart && !G.liveOn && !G.rejeu && !G.spectateur && (G.runners || []).length > 1) {
+        G.avantDepart = { reste: ATTITUDES_S, t: 0, dit: true, attitudes: true };
+      }
+    }
     const avD = G.avantDepart;
     if (avD && avD.reste > 0) {
       avD.t = (avD.t || 0) + dt;
