@@ -159,35 +159,49 @@
   const fois = (c, L) => c.map((v, i) => Math.min(255, Math.round(v * L[i])));
   const estCouleur = (v) => Array.isArray(v) && v.length === 3 && v.every(n => typeof n === 'number');
 
-  // LA NUIT, PAR CE QUE LES RAMPES ECLAIRENT. La piste reste presque telle
-  // qu'au jour : c'est elle qu'on eclaire, et c'est la que se joue la
-  // course. La pelouse et ce qui borde la piste en recoivent la moitie, les
-  // gradins un tiers, le lointain ce que lui renvoie la ville. Le bleu
-  // baisse moins que le rouge : c'est la couleur de la nuit, et c'est ce qui
-  // distingue un stade de nuit d'une photo sous-exposee.
+  // PLUS IL FAIT SOMBRE, PLUS LE STADE S'ECLAIRE.
   //
-  // ET LA NUIT RETIRE LES COULEURS AVANT LA LUMIERE. Dans le noir, l'oeil
-  // voit en gris : une pelouse simplement assombrie restait verte, et le
-  // stade avait l'air d'un jour sous-expose. Chaque part perd donc une part
-  // de sa saturation (`gris`) avant d'etre eclairee — la piste aucune, le
-  // lointain plus de la moitie.
-  const NUIT = {
-    piste: [0.80, 0.80, 0.88],
-    proche: [0.40, 0.44, 0.58],
-    gradins: [0.30, 0.33, 0.48],
-    loin: [0.19, 0.22, 0.36],
-    // La tour s'allume la nuit : doree, et non noire comme ce qui l'entoure.
-    tour: [0.92, 0.74, 0.46],
-    gris: { piste: 0, proche: 0.45, gradins: 0.45, loin: 0.6, tour: 0 },
-  };
-
-  // LE SOIR, TOUT LE STADE EST DANS LA MEME LUMIERE, BASSE ET ROUGE. Le seul
-  // etalonnage (le `couchant` des sauts) le distinguait a peine de
-  // l'apres-midi : la palette baisse donc aussi, et vire au rose, partout
-  // pareil — un soleil couchant n'eclaire pas la piste plus que les gradins.
+  // La palette baissait avec le soleil, partout, et la nuit retombait d'un
+  // bloc : la piste sous ses rampes a 80 %, les gradins et leur public a un
+  // tiers, le decor dans le noir. Un vrai stade fait l'inverse : quand le jour
+  // s'en va, ses projecteurs prennent le relais, et c'est la piste, les
+  // coureurs, les gradins et le public qu'ils eclairent — le ciel, lui, reste
+  // noir. La lumiere de chaque part est donc DEUX lumieres : celle du ciel
+  // (`ambiant`), qui baisse, et celle des rampes, qui monte avec ECLAIRAGE et
+  // porte moins loin a mesure qu'on s'eloigne de la piste (PORTEE). Elles
+  // s'additionnent comme deux lampes sur un meme objet : 1 - (1 - a)(1 - l).
+  //
+  // ET L'OBSCURITE RETIRE LES COULEURS, sauf la ou l'on eclaire. Dans le noir
+  // l'oeil voit en gris : une pelouse simplement assombrie restait verte, et
+  // le stade avait l'air d'un jour sous-expose. Chaque part perd une part de
+  // sa saturation (`gris`) — et la lumiere des rampes la lui rend.
+  const ECLAIRAGE = { jour: 0, 'apres-midi': 0.15, soir: 0.55, nuit: 1 };
+  const PORTEE = { piste: 1, proche: 0.8, gradins: 0.7, loin: 0.35 };
+  // un blanc de projecteur, a peine froid
+  const LAMPE = [0.98, 0.99, 1];
+  function eclaire(ambiant, gris, E, tour) {
+    const lum = { gris: {} };
+    for (const part in PORTEE) {
+      const l = E * PORTEE[part];
+      lum[part] = ambiant.map((a, i) => +(1 - (1 - a) * (1 - l * LAMPE[i])).toFixed(3));
+      lum.gris[part] = +(gris[part] * (1 - l)).toFixed(3);
+    }
+    lum.tour = tour; lum.gris.tour = 0;
+    return lum;
+  }
+  // La nuit, le ciel ne donne plus que la lune : un bleu sombre. Le bleu
+  // baisse moins que le rouge, et c'est ce qui distingue un stade de nuit
+  // d'une photo sous-exposee. La tour s'allume : doree, et non noire comme ce
+  // qui l'entoure.
+  const NUIT = eclaire([0.17, 0.20, 0.34], { piste: 0, proche: 0.45, gradins: 0.45, loin: 0.6 },
+                       ECLAIRAGE.nuit, [0.92, 0.74, 0.46]);
+  // Le soir, le soleil couchant met tout le stade dans la meme lumiere, basse
+  // et rouge — et les rampes, deja allumees, eclaircissent la piste et les
+  // gradins.
   const SOIR_L = [0.94, 0.80, 0.76];
-  const SOIR = { piste: SOIR_L, proche: SOIR_L, gradins: SOIR_L, loin: SOIR_L, tour: SOIR_L,
-                 gris: { piste: 0.08, proche: 0.08, gradins: 0.08, loin: 0.08, tour: 0.08 } };
+  const SOIR = eclaire(SOIR_L, { piste: 0.08, proche: 0.08, gradins: 0.08, loin: 0.08 },
+                       ECLAIRAGE.soir, SOIR_L);
+  SOIR.gris.tour = 0.08;
 
   const grisDe = (c, g) => {
     if (!g) return c;
@@ -206,24 +220,34 @@
   for (const p in PARTS) for (const k of PARTS[p]) partDe[k] = p;
   const CIEL = { skyTop: 1, skyBot: 1 };
 
+  // L'ETALONNAGE BAISSE QUAND LES RAMPES MONTENT. Il teint toute l'image,
+  // coureurs compris : le soir, il les assombrissait autant que le decor,
+  // alors que les projecteurs sont justement la pour eux. Il garde sa teinte
+  // et perd de sa force a mesure que l'eclairage monte.
+  const forceDeLAmbiance = (m) => +(1 - 0.6 * ECLAIRAGE[m]).toFixed(3);
+
   function deriver(th, m) {
     const d = Object.assign({}, th, { base: th, moment: m });
     if (m === 'apres-midi') {
       // Le bas du ciel se dore ; l'etalonnage fait le reste.
       d.skyBot = melange(th.skyBot, [255, 222, 168], 0.32);
       d.ambiance = 'doree';
+      d.ambianceForce = forceDeLAmbiance(m);
     } else if (m === 'soir') {
       // Le haut du ciel fonce vers le violet, le bas s'embrase. Les ecrans du
-      // stade sont deja allumes.
+      // stade et ses rampes sont deja allumes.
       for (const k in th) {
         if (CIEL[k]) continue;
         const v = th[k];
-        if (estCouleur(v)) d[k] = sous(v, SOIR, 'loin');
-        else if (Array.isArray(v) && v.length && v.every(estCouleur)) d[k] = v.map(c => sous(c, SOIR, 'loin'));
+        const part = partDe[k] || 'loin';
+        if (estCouleur(v)) d[k] = sous(v, SOIR, part);
+        else if (Array.isArray(v) && v.length && v.every(estCouleur)) d[k] = v.map(c => sous(c, SOIR, part));
       }
       d.skyTop = melange(th.skyTop, [70, 64, 150], 0.55);
       d.skyBot = melange(th.skyBot, [255, 156, 104], 0.72);
       d.ambiance = 'couchant';
+      d.ambianceForce = forceDeLAmbiance(m);
+      d.eclairage = ECLAIRAGE.soir;
       d.pubsLed = true;
       d.lumiere = SOIR;
     } else if (m === 'nuit') {
@@ -239,6 +263,7 @@
       d.skyBot = [34, 42, 86];
       d.stars = 160;
       d.projecteurs = true;
+      d.eclairage = ECLAIRAGE.nuit;
       d.pubsLed = true;
       // Ni nuages blancs ni avion dans un ciel noir.
       d.clouds = false;
@@ -334,5 +359,5 @@
     return _lum && estCouleur(c) ? sous(c, _lum, part || 'loin') : c;
   }
 
-  root.SprinterHeure = { MOMENTS, soleil, momentDe, moment, forcer, eclairer, teinte, poser, image, couleur };
+  root.SprinterHeure = { MOMENTS, ECLAIRAGE, soleil, momentDe, moment, forcer, eclairer, teinte, poser, image, couleur };
 })(globalThis);

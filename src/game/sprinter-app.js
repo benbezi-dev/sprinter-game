@@ -6143,12 +6143,13 @@
       // jumelles, et ca ne bouge pas d'une frame a l'autre.
       const v = 0.86 + ((i * 2654435761 >>> 0) % 100) / 100 * 0.14;
 
-      // 1. le halo, la nuit seulement
+      // 1. le halo, quand elles sont allumees, a la mesure de leur puissance
+      // (`allumees`, de 0 a 1 : le soir a moitie, la nuit en plein)
       if (allumees) {
         const R = m * 1.35;
         const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], R);
-        halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v).toFixed(3) + ')');
-        halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v).toFixed(3) + ')');
+        halo.addColorStop(0, 'rgba(255,252,240,' + (0.34 * v * allumees).toFixed(3) + ')');
+        halo.addColorStop(0.45, 'rgba(246,236,255,' + (0.10 * v * allumees).toFixed(3) + ')');
         halo.addColorStop(1, 'rgba(228,214,255,0)');
         ctx.fillStyle = halo;
         ctx.beginPath(); ctx.arc(p[0], p[1], R, 0, TAU); ctx.fill();
@@ -6281,7 +6282,9 @@
     ctx.restore();
 
     // 5. SUR LA RIVE, la rampe d'eclairage, allumee la nuit.
-    drawProjecteurs(ctx, th, sm, near, rAv - 0.05, zRive + TOIT_RIVE * 0.45, !!th.projecteurs);
+    // allumees selon la puissance des rampes : le soir a moitie, la nuit en plein
+    drawProjecteurs(ctx, th, sm, near, rAv - 0.05, zRive + TOIT_RIVE * 0.45,
+                    th.eclairage != null ? th.eclairage : th.projecteurs ? 1 : 0);
   }
 
   /**

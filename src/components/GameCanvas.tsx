@@ -10,6 +10,7 @@ import { POUSSEE_OUVERTE } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
+import { chargementFini, partChargee } from '@/game/chargement';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -190,6 +191,7 @@ export function GameCanvas() {
     
     // Frame loop
     let lastTime = performance.now();
+    const PAS_MAX_S = 1 / 15;
     
     // QUEL GESTE ALLUME QUOI : la regle est sortie d'ici, dans
     // game/poussee-gestes.ts, pour qu'un harnais puisse la jouer. Elle n'a
@@ -210,8 +212,14 @@ export function GameCanvas() {
       // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
       // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit
       // pas pouvoir le rouvrir. Voir game/tempo.ts.
+      //
+      // LE PLAFOND EST A UN QUINZIEME DE SECONDE. Il etait a un vingtieme : un
+      // telephone qui tombait sous vingt images par seconde voyait le temps du
+      // jeu ralentir avec lui, et son 200 m durait vingt-trois secondes a
+      // l'ecran pour dix-huit au chrono. Jusqu'a quinze images, la course
+      // garde sa vraie duree ; en dessous, c'est l'onglet en veille.
       const dt = redessin ? 0
-        : Math.min(0.05, (now - lastTime) / 1000 || 0.016) * tempoDuMonde();
+        : Math.min(PAS_MAX_S, (now - lastTime) / 1000 || 0.016) * tempoDuMonde();
       if (!redessin) {
         lastTime = now;
         updateLogic(dt);
@@ -290,6 +298,32 @@ export function GameCanvas() {
             const px = G.VW + 120 - (G.VW + 320) * SprinterApp.clamp(st / 2.6, 0, 1);
             SprinterApp.drawIcon(ctx, man, px, G.VH * 0.70 + i * SprinterApp.ui() * 24, SprinterApp.ui() * (150 - i * 18));
           }
+        }
+
+        // L'ATTENTE DU CHARGEMENT SE COURT. Un couloir de piste au-dessus du
+        // pourcentage (OpenScreen.tsx), sa ligne d'arrivee a gauche, et un
+        // coureur du jeu qui le parcourt a mesure que les images arrivent
+        // (game/chargement.ts) — vers la gauche, comme en course. La partie
+        // deja courue est la piste eclairee, le reste attend dans l'ombre.
+        if (tm > 2.2 && !chargementFini()) {
+          const part = partChargee();
+          const L = Math.min(G.VW * 0.62, 340), x0 = (G.VW - L) / 2, xA = x0;
+          const y = G.VH - 86, h = 9;
+          const xc = x0 + L * (1 - part);
+          ctx.fillStyle = 'rgba(150,40,34,0.35)';
+          ctx.fillRect(x0, y - h / 2, L, h);
+          ctx.fillStyle = 'rgb(186,52,40)';
+          ctx.fillRect(xc, y - h / 2, x0 + L - xc, h);
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
+          ctx.fillRect(x0, y - h / 2 - 1, L, 1.2);
+          ctx.fillRect(x0, y + h / 2, L, 1.2);
+          // la ligne d'arrivee, en damier
+          for (let k = 0; k < 3; k++) {
+            ctx.fillStyle = k % 2 ? '#111' : '#f4f4f4';
+            ctx.fillRect(xA - 2, y - h / 2 + k * (h / 3), 3, h / 3);
+          }
+          const man = { look: zeze[0], stride: tm * 11, v: 12, maxSpeed: 12, fallAnim: 0, celebrate: 0 };
+          SprinterApp.drawIcon(ctx, man, xc, y + h / 2 - 1, 46);
         }
       } else {
         // Le theme a l'heure ou l'on joue (game/heure-du-jour.js) : les
@@ -402,7 +436,8 @@ export function GameCanvas() {
       const ambiance = G.sautEnCours ? G.ambianceSaut
         : (G.state === 'open' || accueilSansScene || (G.state === 'cut' && G.cut && G.cut.kind === 'ending'))
           ? null : SprinterApp.theme().ambiance;
-      if (ambiance) appliquerAmbiance(ctx, ctx.canvas.width, ctx.canvas.height, ambiance);
+      if (ambiance) appliquerAmbiance(ctx, ctx.canvas.width, ctx.canvas.height, ambiance,
+        G.sautEnCours ? 1 : (SprinterApp.theme().ambianceForce ?? 1));
 
       if (Prem) {
         const enCourse = G.state === 'race';

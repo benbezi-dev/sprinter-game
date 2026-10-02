@@ -57,17 +57,23 @@ export function ambianceDuSaut(etape) {
 }
 
 /** Etalonne l'image entiere (W x H, en pixels de la toile). */
-export function appliquerAmbiance(ctx, W, H, sorte) {
-  if (!sorte || !(W > 0 && H > 0)) return;
+// `force`, de 0 a 1 : la part de l'etalonnage qu'on applique. Les sauts le
+// posent entier ; les stades a l'heure du jour l'allegent a mesure que leurs
+// rampes s'allument (heure-du-jour.js), pour ne pas assombrir des coureurs que
+// les projecteurs eclairent.
+export function appliquerAmbiance(ctx, W, H, sorte, force = 1) {
+  if (!sorte || !(W > 0 && H > 0) || !(force > 0)) return;
+  // une couleur de multiplication, tiree vers le blanc quand la force baisse
+  const mul = (r, g, b) => 'rgb(' + [r, g, b].map(v => Math.round(255 - (255 - v) * force)).join(',') + ')';
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (sorte === 'doree') {
     // Le meeting d'ete, en fin d'apres-midi : chaud, bas, venu du haut a gauche.
     ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = 'rgb(255,236,210)';
+    ctx.fillStyle = mul(255, 236, 210);
     ctx.fillRect(0, 0, W, H);
     const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.hypot(W, H));
-    g.addColorStop(0, 'rgba(255,196,110,0.55)');
+    g.addColorStop(0, 'rgba(255,196,110,' + (0.55 * force).toFixed(3) + ')');
     g.addColorStop(1, 'rgba(255,196,110,0)');
     ctx.globalCompositeOperation = 'soft-light';
     ctx.fillStyle = g;
@@ -77,12 +83,12 @@ export function appliquerAmbiance(ctx, W, H, sorte) {
     // qui bleuissent en bas.
     ctx.globalCompositeOperation = 'multiply';
     const m = ctx.createLinearGradient(0, 0, 0, H);
-    m.addColorStop(0, 'rgb(238,200,196)');
-    m.addColorStop(1, 'rgb(206,198,228)');
+    m.addColorStop(0, mul(238, 200, 196));
+    m.addColorStop(1, mul(206, 198, 228));
     ctx.fillStyle = m;
     ctx.fillRect(0, 0, W, H);
     const g = ctx.createLinearGradient(0, 0, W * 0.6, H);
-    g.addColorStop(0, 'rgba(255,128,70,0.55)');
+    g.addColorStop(0, 'rgba(255,128,70,' + (0.55 * force).toFixed(3) + ')');
     g.addColorStop(1, 'rgba(255,128,70,0)');
     ctx.globalCompositeOperation = 'soft-light';
     ctx.fillStyle = g;

@@ -66,14 +66,11 @@ export function OpenScreen() {
         </div>
       )}
 
+      {/* Le couloir et son coureur sont dessines dans la toile, juste
+          au-dessus (GameCanvas.tsx) : ici, seulement le pourcentage. */}
       {openT > 2.2 && !pret && (
-        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] flex flex-col items-center gap-2 z-10">
-          <div className="text-[10px] sm:text-xs font-bold text-foreground/70 tracking-widest uppercase tabular-nums">
-            Chargement {Math.floor(charge * 100)} %
-          </div>
-          <div className="w-40 sm:w-56 h-1 rounded-full bg-foreground/15 overflow-hidden">
-            <div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(charge * 100)}%` }} />
-          </div>
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] text-[10px] sm:text-xs font-bold text-foreground/70 tracking-widest uppercase tabular-nums z-10">
+          Chargement {Math.floor(charge * 100)} %
         </div>
       )}
     </div>

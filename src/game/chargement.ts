@@ -38,6 +38,11 @@ let lance = false;
 let fini = false;
 let part = 0;
 let t0 = 0;
+// Ou en est le chargement, lisible depuis la console d'un telephone branche
+// (globalThis.SprinterChargement) : on ne voit pas autrement si les images de
+// l'ultra sont arrivees.
+const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 0, ultraApporte: false };
+(globalThis as any).SprinterChargement = etat;
 
 /** Telecharge `urls`, `EN_VOL` a la fois, et appelle `apres` a chacune. */
 async function telecharger(urls: string[], apres: () => void) {
@@ -79,16 +84,22 @@ export function lancerChargement() {
     const urls = liste.ordinaire;
     // le decodage du public compte pour un dixieme de la barre
     const total = urls.length / 0.9;
-    let faits = 0;
-    await telecharger(urls, () => { faits++; part = Math.min(0.9, faits / total); });
+    etat.phase = 'ordinaire'; etat.total = urls.length;
+    await telecharger(urls, () => { etat.faits++; part = Math.min(0.9, etat.faits / total); });
+    etat.phase = 'public';
     await decoderLePublic();
     part = 1;
     fini = true;
+    etat.phase = 'fini';
 
     const P = (globalThis as any).RenduPremium;
-    if (P && P.DENSE && liste.ultra.length) {
-      await telecharger(liste.ultra, () => {});
+    // un appareil qui a deja perdu l'ultra n'en telecharge plus les images
+    if (P && P.DENSE && P.ultraAttendu && liste.ultra.length) {
+      etat.phase = 'ultra'; etat.ultraTotal = liste.ultra.length;
+      await telecharger(liste.ultra, () => { etat.ultraFaits++; });
       P.apporterUltra();
+      etat.ultraApporte = true;
+      etat.phase = 'fini';
     }
   })();
 }

@@ -90,9 +90,10 @@ ok('un theme deja derive n\'est pas derive deux fois', H.eclairer(nuit, G) === n
 ok('projecteurs, ecrans LED et etoiles allumes', nuit.projecteurs && nuit.pubsLed && nuit.stars > 0);
 ok('ni nuages ni avion', nuit.clouds === false && nuit.avion === false);
 const lum = c => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-ok('la piste reste la plus claire', lum(nuit.trackA) / lum(jour.trackA) > 0.75,
+ok('sous les rampes, la piste garde sa lumiere du jour', lum(nuit.trackA) / lum(jour.trackA) > 0.95,
    (lum(nuit.trackA) / lum(jour.trackA)).toFixed(2));
-ok('la pelouse a moins de la moitie de sa lumiere', lum(nuit.grass) / lum(jour.grass) < 0.5,
+ok('la pelouse est eclairee, moins que la piste',
+   lum(nuit.grass) / lum(jour.grass) > 0.6 && lum(nuit.grass) / lum(jour.grass) < lum(nuit.trackA) / lum(jour.trackA),
    (lum(nuit.grass) / lum(jour.grass)).toFixed(2));
 ok('les gradins plus sombres que la pelouse',
    lum(nuit.tread) / lum(jour.tread) < lum(nuit.grass) / lum(jour.grass));
@@ -104,6 +105,12 @@ const soir = H.eclairer(jour, G);
 ok('le soir porte l\'etalonnage du couchant', soir.ambiance === 'couchant' && soir.base === jour);
 ok('le bas du ciel s\'embrase', soir.skyBot[0] > jour.skyBot[0] + 80 && soir.skyBot[2] < jour.skyBot[2]);
 ok('la nuit et le soir ne partagent pas leur objet', soir !== nuit);
+ok('plus il fait sombre, plus les rampes eclairent',
+   H.ECLAIRAGE.jour < H.ECLAIRAGE['apres-midi'] && H.ECLAIRAGE['apres-midi'] < H.ECLAIRAGE.soir
+   && H.ECLAIRAGE.soir < H.ECLAIRAGE.nuit && soir.eclairage < nuit.eclairage);
+ok('la nuit, la piste est plus claire que le soir', lum(nuit.trackA) > lum(soir.trackA),
+   lum(nuit.trackA).toFixed(0) + ' / ' + lum(soir.trackA).toFixed(0));
+ok('l\'etalonnage du couchant faiblit sous les rampes', soir.ambianceForce > 0 && soir.ambianceForce < 1);
 
 H.forcer('apres-midi');
 ok('l\'apres-midi porte la lumiere doree', H.eclairer(jour, G).ambiance === 'doree');
@@ -113,7 +120,8 @@ H.poser(null);
 ok('le jour, une couleur fixe reste la meme', H.couleur([200, 100, 50], 'gradins').join() === '200,100,50');
 H.poser(nuit);
 const c = H.couleur([200, 100, 50], 'gradins');
-ok('la nuit, elle baisse', lum(c) < lum([200, 100, 50]) * 0.45, c.join());
+ok('la nuit, elle baisse — moins sous les rampes que dans le lointain',
+   lum(c) < lum([200, 100, 50]) && lum(H.couleur([200, 100, 50], 'loin')) < lum(c) * 0.75, c.join());
 ok('une image sans pixels est rendue telle quelle', H.image({ width: 0, height: 0 }, 'proche').width === 0);
 
 titre('forcer le moment');

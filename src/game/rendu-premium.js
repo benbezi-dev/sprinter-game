@@ -90,11 +90,21 @@
   const ULTRA = 3, PLEIN = 2, MOYEN = 1, SOBRE = 0;
   const SEUIL_ULTRA_MS = 20, DUREE_ULTRA_S = 0.5;
   const DENSE = typeof window !== 'undefined' && (window.devicePixelRatio || 1) > 2;
-  let niveau = DENSE ? PLEIN : ULTRA;
-  let ultraPerdu = false;
+  // L'APPAREIL SE SOUVIENT D'UN ULTRA PERDU. Un telephone ne devient pas plus
+  // rapide d'une partie a l'autre : celui qui l'a quitte une fois le
+  // retentait a chaque ouverture, pour trois secondes d'images saccadees a
+  // l'accueil et vingt et un megaoctets d'images telechargees pour rien
+  // (mesure sur un Galaxy Z Flip6 le 2/10/2026 : 17 images par seconde a
+  // l'accueil en ultra, 60 au plein). La cle porte une version : un rendu
+  // allege demain la changera, et chacun retentera sa chance.
+  const CLE_ULTRA = 'sprinter-ultra-perdu-v1';
+  const lireUltraPerdu = () => { try { return localStorage.getItem(CLE_ULTRA) === '1'; } catch { return false; } };
+  const noterUltraPerdu = () => { try { localStorage.setItem(CLE_ULTRA, '1'); } catch { /* sans stockage, on retentera */ } };
+  let ultraPerdu = DENSE && lireUltraPerdu();
+  let niveau = DENSE || ultraPerdu ? PLEIN : ULTRA;
   // Tant que les images de l'ultra ne sont pas arrivees, on n'y monte pas ;
   // quand elles le sont, on attend l'accueil pour y monter.
-  let ultraAttendu = DENSE, ultraPret = false;
+  let ultraAttendu = DENSE && !ultraPerdu, ultraPret = false;
   const aLAccueil = () => {
     const G = globalThis.SprinterApp && globalThis.SprinterApp.G;
     return !!G && G.state === 'title';
@@ -117,21 +127,47 @@
     ultraPret = true;
   }
 
+  // LE DEPART NE SE JUGE PAS. Le decompte compose le public (douze
+  // millisecondes par image, voulues : rien ne court, voir tribune.js), et la
+  // premiere seconde de course ouvre les decors qui entrent dans le cadre et
+  // en teint les images pour l'heure du jour. Ce travail-la ne revient pas.
+  // Mesure sur un Galaxy Z Flip6 le 2/10/2026 : au plein, des images de 42 a
+  // 58 ms pendant le decompte et le depart, 16,7 ms ensuite ; la regle les
+  // prenait pour de la lenteur, descendait de deux paliers avant la fin de la
+  // premiere seconde de course, et sur un ecran a soixante images ne
+  // remontait jamais. On ne juge donc ni le decompte ni les DEPART_S
+  // premieres secondes de course : ce qui se mesure ensuite est la course.
+  const DEPART_S = 2;
+  const GRACE_ULTRA_MS = 3000;
+  let graceJusqua = 0;
+  const auDepart = () => {
+    const G = globalThis.SprinterApp && globalThis.SprinterApp.G;
+    return !!G && (G.state === 'count' || (G.state === 'race' && G.elapsed < DEPART_S));
+  };
+
   function mesurer(dt) {
     _dt = dt;
     if (verrou) return;
+    if (auDepart()) { lent = 0; rapide = 0; return; }
     // Moyenne glissante du temps d'image, en millisecondes.
     budget += ((dt * 1000) - budget) * 0.08;
     if (ultraPret && aLAccueil()) {
       ultraPret = false;
-      if (!ultraPerdu && niveau === PLEIN) { niveau = ULTRA; lent = 0; rapide = 0; }
+      if (!ultraPerdu && niveau === PLEIN) {
+        niveau = ULTRA; lent = 0; rapide = 0;
+        // La montee elle-meme coute : la toile change de definition et le
+        // public de l'ultra se decode. Jugee sur ces images-la, elle etait
+        // perdue en une demi-seconde, et pour de bon.
+        graceJusqua = performance.now() + GRACE_ULTRA_MS;
+      }
     }
+    if (performance.now() < graceJusqua) { lent = 0; rapide = 0; return; }
     const plafond = ultraPerdu || ultraAttendu ? PLEIN : ULTRA;
     const ultra = niveau === ULTRA;
     if (budget > (ultra ? SEUIL_ULTRA_MS : 26) && niveau > SOBRE) {
       lent += dt; rapide = 0;
       if (lent > (ultra ? DUREE_ULTRA_S : 1.0)) {
-        if (ultra) ultraPerdu = true;
+        if (ultra) { ultraPerdu = true; if (DENSE) noterUltraPerdu(); }
         niveau--; lent = 0;
       }
     } else if (budget < 15 && niveau < plafond) {
@@ -589,7 +625,11 @@
   const NAPPE_PAS = 16;          // une nappe tous les seize metres
 
   function nappes(ctx, P, th, rIn, rOut) {
-    if (niveau < MOYEN || !th.projecteurs) return;
+    // `eclairage` (heure-du-jour.js) : la puissance des rampes, de 0 a 1. Le
+    // soir elles sont deja allumees, a moitie ; les stades de nuit n'en
+    // posent pas, ils sont a pleine puissance.
+    const E = th.eclairage != null ? th.eclairage : th.projecteurs ? 1 : 0;
+    if (niveau < MOYEN || !(E > 0)) return;
     const sm = P.samples(NAPPE_PAS);
     if (sm.length < 2) return;
     const G = P.G;
@@ -635,8 +675,8 @@
       // fait deja la meme chose sur les lampes elles-memes.
       const v = 0.82 + ((Math.imul(i + 1, 2654435761) >>> 0) % 100) / 100 * 0.18;
       const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-      g.addColorStop(0, 'rgba(255,248,228,' + (0.145 * v).toFixed(4) + ')');
-      g.addColorStop(0.55, 'rgba(255,244,216,' + (0.062 * v).toFixed(4) + ')');
+      g.addColorStop(0, 'rgba(255,248,228,' + (0.145 * v * E).toFixed(4) + ')');
+      g.addColorStop(0.55, 'rgba(255,244,216,' + (0.062 * v * E).toFixed(4) + ')');
       g.addColorStop(1, 'rgba(255,240,208,0)');
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
@@ -1256,6 +1296,9 @@
     get niveau() { return niveau; },
     set niveau(v) { niveau = clamp(v | 0, SOBRE, ULTRA); verrou = true; },
     get auto() { return !verrou; },
+    get ultraPerdu() { return ultraPerdu; },
+    /** Faut-il encore telecharger les images de l'ultra ? (chargement.ts) */
+    get ultraAttendu() { return ultraAttendu; },
     set auto(v) { verrou = !v; },
     ULTRA, PLEIN, MOYEN, SOBRE, DENSE,
     mesurer, apporterUltra, dpr, brume, tonte, herbe, grain, occlusion, nappes, ombre,
