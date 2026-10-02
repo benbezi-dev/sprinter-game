@@ -72,7 +72,9 @@ android {
         // 8 septembre, et la Play Console refuse un numero deja televerse.
         // 3 le 1er octobre au soir : le 2 de l'apres-midi n'avait pas le lien
         // « supprimer mes donnees ».
-        versionCode 3
+        // 4 le 2 octobre : la presence (qui est en ligne) et le renvoi vers la
+        // validation du pseudo apres deux courses.
+        versionCode 4
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
