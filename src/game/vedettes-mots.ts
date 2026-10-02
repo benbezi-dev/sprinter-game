@@ -103,12 +103,9 @@ const MOTS: Record<string, Paire> = {
                          '{nom} · beat {qui} over 100 m and 200 m'],
 
   // --- LE VESTIAIRE : l'espace ou l'on choisit ce que son coureur porte
-  vs_entree:      ['VESTIAIRE · SKINS', 'LOCKER ROOM · SKINS'],
-  vs_porte:       ['porté : {nom}', 'wearing: {nom}'],
   vs_maillot_porte: ['ton maillot', 'your jersey'],
   vs_a_gagner_n:  ['{n} à gagner', '{n} to win'],
-  vs_choisir:     ['CHOISIR', 'CHOOSE'],
-  vs_titre:       ['VESTIAIRE', 'LOCKER ROOM'],
+  vs_titre:       ['SKINS', 'SKINS'],
   vs_sous:        ['Choisis ce que ton coureur porte en course.',
                    'Choose what your runner wears in races.'],
   vs_maillot:     ['TON MAILLOT', 'YOUR JERSEY'],
@@ -121,7 +118,7 @@ const MOTS: Record<string, Paire> = {
                       'Beat him over 100 m AND 200 m to win it.'],
   vs_ou:          ['Pas sur le stade de son défi : on ne court pas contre lui dans sa peau.',
                    'Not at his own challenge: you don’t race him in his skin.'],
-  vs_fermer:      ['FERMER', 'CLOSE'],
+
   vd_a_battre:    ['à battre : {s}', 'to beat: {s}'],
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };

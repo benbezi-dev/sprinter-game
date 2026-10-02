@@ -93,6 +93,60 @@ function relayer(): void {
 // engine.ts et vedettes.ts). Meme contrat que la musique : charge a
 // l'ouverture de la fiche, et son absence ne casse rien — la course part sans.
 
+/**
+ * LE CLAQUEMENT DE DEUX MAINS, ET D'UN SEUL HOMME (02/10, « les claps ne font
+ * pas assez humain »). Celui du moteur (Audio_.mains) est celui d'une
+ * TRIBUNE : dix rafales de bruit superposees sur vingt millisecondes. Pour un
+ * seul homme, il sonnait comme une boite a rythmes.
+ *
+ * Un vrai claquement : un choc tres sec (la paume qui frappe, une milliseconde),
+ * un second plus faible deux ou trois millisecondes apres (les doigts), et le
+ * creux des mains qui resonne — un bruit filtre autour de 1 a 1,8 kHz selon
+ * qu'elles sont plus ou moins creusees, eteint en une quinzaine de
+ * millisecondes. Et, dehors, le renvoi faible des tribunes un dixieme de
+ * seconde plus tard. Chaque graine change la resonance, la secheresse et le
+ * second choc : deux claquements ne sont jamais identiques.
+ */
+function clapHumain(ctx: AudioContext, graine: number): AudioBuffer {
+  const sr = ctx.sampleRate;
+  const n = Math.ceil(0.32 * sr);
+  const buf = ctx.createBuffer(1, n, sr);
+  const out = buf.getChannelData(0);
+  let g = (graine * 2654435761) >>> 0;
+  const alea = () => { g = (Math.imul(1664525, g) + 1013904223) >>> 0; return g / 4294967296; };
+  const bruit = () => alea() * 2 - 1;
+  // le creux des mains : un passe-bande (RBJ), sa frequence et sa largeur
+  const fc = 1000 + 800 * alea(), Q = 1.4 + 1.6 * alea();
+  const w0 = 2 * Math.PI * fc / sr, al = Math.sin(w0) / (2 * Q), a0 = 1 + al;
+  const b0 = al / a0, b2 = -al / a0, a1 = -2 * Math.cos(w0) / a0, a2 = (1 - al) / a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  const tau = 0.009 + 0.008 * alea();              // l'extinction du creux
+  const t2 = 0.0015 + 0.002 * alea(), a2c = 0.35 + 0.3 * alea();  // les doigts
+  let prev = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr;
+    const choc = (u: number) => (u < 0 ? 0 : (u < 0.0004 ? u / 0.0004 : Math.exp(-(u - 0.0004) / 0.0011)));
+    const exc = bruit() * (choc(t) + a2c * choc(t - t2));
+    const corps = bruit() * Math.exp(-t / tau) * (t < 0.0003 ? t / 0.0003 : 1);
+    const x = corps;
+    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y;
+    // le choc garde ses aigus (un derive : le grave s'en va), le creux sonne
+    const hp = exc - prev; prev = exc;
+    out[i] = 0.55 * hp + 2.2 * y;
+  }
+  // le renvoi des tribunes : la meme chose, plus bas, plus sourde, plus tard
+  const d = Math.floor((0.08 + 0.04 * alea()) * sr);
+  const sourd = new Float32Array(n);
+  let lp = 0;
+  for (let i = 0; i < n; i++) { lp += 0.18 * (out[i] - lp); sourd[i] = lp; }
+  for (let i = n - 1; i >= d; i--) out[i] += 0.35 * sourd[i - d];
+  let pic = 0;
+  for (let i = 0; i < n; i++) pic = Math.max(pic, Math.abs(out[i]));
+  if (pic > 0) for (let i = 0; i < n; i++) out[i] *= 0.9 / pic;
+  return buf;
+}
+
 /** Le nom sous lequel le moteur range le cri (Audio_.sfx). */
 export const CRI = 'meba_letsgo';
 /** Et le claquement de ses mains, qui l'accompagne (engine.ts, applaudir). */
@@ -112,12 +166,10 @@ export async function chargerLeCri(): Promise<boolean> {
     if (!reponse.ok) throw new Error('reponse ' + reponse.status);
     const octets = await reponse.arrayBuffer();
     A.buf[CRI] = await new Promise<AudioBuffer>((ok, ko) => A.ctx.decodeAudioData(octets, ok, ko));
-    // ET SES MAINS : le claquement du moteur (Audio_.mains, celui des
-    // claps de la musique), rendu une fois dans un tampon court
-    const sr = A.ctx.sampleRate;
-    const clap: AudioBuffer = A.ctx.createBuffer(1, Math.ceil(0.25 * sr), sr);
-    A.mains(clap, 0.012, 1.9, 41);
-    A.buf[CLAP] = clap;
+    // ET SES MAINS : quatre claquements d'homme, un peu differents
+    // (clapHumain) ; engine.ts, applaudir, en tire un a chaque frappe
+    for (let i = 0; i < 4; i++) A.buf[`${CLAP}_${i}`] = clapHumain(A.ctx, 11 + 7 * i);
+    A.buf[CLAP] = A.buf[`${CLAP}_0`];
     cri = 'pret';
     return true;
   } catch {

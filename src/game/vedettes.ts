@@ -93,10 +93,12 @@ export const VEDETTES: Record<string, Vedette> = {
     // Le blanc et le bleu de l'equipe de France, le rouge en filet.
     couleurs: { vive: '#2F5BE0', fonce: '#0B1638', pale: '#A9C1FF', halo: '#1C3070' },
     // « LET'S GOO ! », debout derriere ses blocs, et il frappe dans ses mains
-    // pour se motiver (02/10, son enregistrement : public/vedettes/meba-letsgo.mp3,
-    // « LET'S » a 0,2 s du fichier, « GOOO » de 0,7 a 1,5 s). Trois frappes,
-    // la premiere sur le « GO », au rythme de son clap ; le decompte attend
-    // qu'il ait baisse les bras.
+    // pour se motiver (02/10, son enregistrement AVEC ECHO, choisi par
+    // l'auteur : public/vedettes/meba-letsgo.mp3, « LET'S » a 0,25 s du
+    // fichier, « GOOO » de 0,8 a 1,5 s, puis l'echo qui s'eteint vers 4,7 s
+    // — sous le decompte, a -27 dB quand il commence). Trois frappes, la
+    // premiere sur le « GO », d'un rythme qui change a chaque tentative
+    // (humaniser) ; le decompte attend qu'il ait baisse les bras.
     cri: { son: 'meba_letsgo', a: 0.25, duree: 2.6, claps: [0.95, 1.35, 1.75] },
     // samedi 3 octobre 2026, 21 h 30 a Paris (vite.config.ts)
     lancement: LANCEMENT_DEFI_MEBA,
@@ -177,7 +179,22 @@ export function lancerLeDefi(v: Vedette, epreuve: string = v.epreuves[0]) {
   // SON CRI AVANT LES BLOCS, pour qui en a un (`cri`) : le decompte attend
   // qu'il l'ait lance. Voir G.avantDepart dans engine.ts.
   G.avantDepart = v.cri ? { reste: v.cri.duree, t: 0, dit: false, cri: v.cri.son, a: v.cri.a,
-                            claps: v.cri.claps || null, frappes: 0 } : null;
+                            claps: v.cri.claps ? humaniser(v.cri.claps) : null, frappes: 0 } : null;
+}
+
+/**
+ * DES FRAPPES D'HOMME, PAS DE METRONOME (02/10, « les claps de motivation ne
+ * font pas assez humain »). A chaque tentative : la premiere frappe un peu
+ * avant ou apres le « GO » (trois centiemes au plus), et chacune presse un peu
+ * la suivante — l'excitation monte —, a quelques centiemes pres.
+ */
+function humaniser(claps: number[]): number[] {
+  const ecart = () => (Math.random() - 0.5) * 0.06;
+  const out = [claps[0] + ecart()];
+  for (let i = 1; i < claps.length; i++) {
+    out.push(out[i - 1] + (claps[i] - claps[i - 1]) * (1 - 0.06 * i) + ecart());
+  }
+  return out;
 }
 
 /**

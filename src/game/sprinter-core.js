@@ -2510,6 +2510,8 @@
     // que le coureur ralentit : on ne frappe pas dans ses mains a douze metres
     // par seconde.
     let rouleBras = null;
+    // la frappe en cours (0 a 1) et son numero : le corps les suit, plus bas
+    let fermeClap = 0, kClap = 0;
     const wCl = L.clap ? Math.max(cel, r.finished
       ? Math.max(0, Math.min(1, (5.5 - (r.v || 0)) / 2.5)) : 0) : 0;
     if (wCl > 0) {
@@ -2517,7 +2519,13 @@
       // la frappe est breve, l'ouverture plus longue : une puissance sur le
       // cosinus tient les mains ecartees les deux tiers du temps
       const ferme = Math.pow(0.5 - 0.5 * Math.cos(tc * 2.5 * TAU), 2.2);
-      const uA = CLAP.bras, fA = CLAP.avBras + CLAP.frappe * ferme;
+      fermeClap = ferme * wCl;
+      kClap = Math.floor(tc * 2.5 + 0.5);
+      // UN ARC, PAS UN COMPAS (02/10, « pas assez humain ») : les bras
+      // redescendent un peu en s'ouvrant et remontent dans la frappe — les
+      // mains decrivent une courbe, au lieu de pivoter sur une meme hauteur.
+      // A la frappe, rien ne change (CLAP, mesure dans vedettes-test).
+      const uA = CLAP.bras - 0.12 * (1 - ferme), fA = CLAP.avBras + CLAP.frappe * ferme;
       al = [melange(al[0], uA, wCl), melange(al[1], fA, wCl)];
       ar = [melange(ar[0], uA, wCl), melange(ar[1], fA, wCl)];
       rouleBras = [CLAP.rouleBras * wCl, (CLAP.rouleAv + CLAP.rouleAvFrappe * ferme) * wCl];
@@ -2532,7 +2540,9 @@
     if (wD > 0) {
       l = [melange(l[0], 0.07, wD), melange(l[1], 0.05, wD), melange(l[2], 0.0, wD)];
       rr = [melange(rr[0], -0.07, wD), melange(rr[1], -0.05, wD), melange(rr[2], 0.0, wD)];
-      lean = melange(lean, 0.04, wD);
+      // ET LE CORPS FRAPPE AVEC LES MAINS (02/10) : le buste s'incline un peu
+      // dans chaque frappe (voir aussi `bob` et `yawTop`, plus bas)
+      lean = melange(lean, 0.04 + 0.07 * fermeClap, wD);
     }
     // DES BRAS QU'ON TIENT, PLUTOT QUE DES BRAS QUI COURENT.
     //
@@ -2650,9 +2660,14 @@
       hipZ = hz;
     }
 
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * calme;
+    // debout derriere ses blocs, les genoux plient d'un centimetre et demi a
+    // chaque frappe, et les epaules tournent un peu, une fois a gauche, une
+    // fois a droite : un homme qui se motive, pas un metronome
+    const wDc = Math.max(0, Math.min(1, r.debout || 0)) * fermeClap;
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * calme
+      - 0.015 * wDc;
     const yawHip = -0.16 * A * Math.sin(p) * calme;
-    const yawTop = 0.21 * A * Math.sin(p) * calme;
+    const yawTop = 0.21 * A * Math.sin(p) * calme + 0.06 * wDc * (kClap % 2 ? 1 : -1);
     const sway = 0.016 * A * Math.sin(p) * calme;
 
     // Gabarit plus athletique qu'un mannequin filiforme : torse et epaules

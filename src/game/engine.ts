@@ -568,12 +568,28 @@ function applaudir(avD: any, dt: number) {
   r.celebrate = doux((t - debut) / 0.2) * (1 - doux((t - fin) / 0.3));
   // debout, droit, face a la ligne, des l'ouverture (pose : `debout`)
   r.debout = doux(t / 0.25);
-  // pose() frappe quand stride / 1,1 vaut (k + 1/2) / 2,5 : la premiere
-  // frappe, a claps[0], tombe donc 0,2 s apres l'origine de la phase
-  r.stride = 1.1 * Math.max(0, t - (claps[0] - 0.2)) - (r.decalePas || 0);
+  // pose() frappe quand stride / 1,1 vaut (k + 1/2) / 2,5. DES FRAPPES
+  // IRREGULIERES (02/10, « pas assez humain » ; vedettes.ts, humaniser) : entre
+  // deux frappes, la phase avance d'une frappe exactement, a la vitesse qu'il
+  // faut pour tomber sur la suivante ; avant la premiere et apres la derniere,
+  // au rythme de la presentation.
+  const P = 1 / 2.5, n = claps.length;
+  let tc: number;
+  if (t <= claps[0]) tc = 0.5 * P - (claps[0] - t);
+  else if (t >= claps[n - 1]) tc = (n - 0.5) * P + (t - claps[n - 1]);
+  else {
+    let k = 0;
+    while (t > claps[k + 1]) k++;
+    tc = (k + 0.5 + (t - claps[k]) / (claps[k + 1] - claps[k])) * P;
+  }
+  r.stride = 1.1 * Math.max(0, tc) - (r.decalePas || 0);
   while (avD.frappes < claps.length && t >= claps[avD.frappes] - 0.02) {
     avD.frappes++;
-    Audio_.sfx('meba_clap', { gain: 0.85, rate: 0.96 + 0.08 * Math.random() });
+    // un claquement de mains d'homme, jamais tout a fait le meme : l'une des
+    // quatre variantes (musique-defi-meba.ts), plus ou moins fort, plus ou
+    // moins sec
+    const v = Math.floor(Math.random() * 4);
+    Audio_.sfx(`meba_clap_${v}`, { gain: 0.7 + 0.25 * Math.random(), rate: 0.94 + 0.12 * Math.random() });
   }
   void dt;
 }
