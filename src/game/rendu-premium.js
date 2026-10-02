@@ -73,11 +73,32 @@
   // tient pas a huit coureurs, doit le lacher PENDANT le compte a rebours —
   // trois secondes — et non une seconde apres le coup de pistolet, en plein
   // depart.
+  //
+  // SUR UN ECRAN A TROIS PIXELS PAR POINT, L'ULTRA ARRIVE APRES LE CHARGEMENT.
+  // C'est la que l'ultra change d'images : un public de cent soixante-quinze
+  // megaoctets une fois decode au lieu de quatre-vingt-cinq, des decors deux
+  // fois plus denses. Parti d'en haut, un telephone chargeait d'abord tout
+  // cela, puis, s'il ne tenait pas, le jetait pendant le compte a rebours pour
+  // recharger le palier du dessous — et recomposait son public spectateur par
+  // spectateur, en pleine course. Il part donc du plein, celui que l'ecran
+  // d'ouverture charge (chargement.ts) ; les images de l'ultra se telechargent
+  // ensuite, et `apporterUltra` le pose a l'accueil, jamais en course. La
+  // regle d'en haut reste : s'il ne le tient pas, il le quitte.
+  // Ailleurs (deux pixels par point et moins), l'ultra n'a pas d'images a
+  // lui : on part d'en haut, comme avant.
   // -------------------------------------------------------------------
   const ULTRA = 3, PLEIN = 2, MOYEN = 1, SOBRE = 0;
   const SEUIL_ULTRA_MS = 20, DUREE_ULTRA_S = 0.5;
-  let niveau = ULTRA;
+  const DENSE = typeof window !== 'undefined' && (window.devicePixelRatio || 1) > 2;
+  let niveau = DENSE ? PLEIN : ULTRA;
   let ultraPerdu = false;
+  // Tant que les images de l'ultra ne sont pas arrivees, on n'y monte pas ;
+  // quand elles le sont, on attend l'accueil pour y monter.
+  let ultraAttendu = DENSE, ultraPret = false;
+  const aLAccueil = () => {
+    const G = globalThis.SprinterApp && globalThis.SprinterApp.G;
+    return !!G && G.state === 'title';
+  };
   let budget = 0, lent = 0, rapide = 0;
   // Le pas de temps de l'image en cours. Le rendu du monde ne le recoit pas —
   // il dessine, il ne simule pas — mais la poussiere et les flashs, eux, en
@@ -89,12 +110,23 @@
   // glissante, c'est le joueur qui gagne.
   let verrou = false;
 
+  /** Les images de l'ultra sont la : on y montera au prochain passage a l'accueil. */
+  function apporterUltra() {
+    if (!ultraAttendu) return;
+    ultraAttendu = false;
+    ultraPret = true;
+  }
+
   function mesurer(dt) {
     _dt = dt;
     if (verrou) return;
     // Moyenne glissante du temps d'image, en millisecondes.
     budget += ((dt * 1000) - budget) * 0.08;
-    const plafond = ultraPerdu ? PLEIN : ULTRA;
+    if (ultraPret && aLAccueil()) {
+      ultraPret = false;
+      if (!ultraPerdu && niveau === PLEIN) { niveau = ULTRA; lent = 0; rapide = 0; }
+    }
+    const plafond = ultraPerdu || ultraAttendu ? PLEIN : ULTRA;
     const ultra = niveau === ULTRA;
     if (budget > (ultra ? SEUIL_ULTRA_MS : 26) && niveau > SOBRE) {
       lent += dt; rapide = 0;
@@ -1225,8 +1257,8 @@
     set niveau(v) { niveau = clamp(v | 0, SOBRE, ULTRA); verrou = true; },
     get auto() { return !verrou; },
     set auto(v) { verrou = !v; },
-    ULTRA, PLEIN, MOYEN, SOBRE,
-    mesurer, dpr, brume, tonte, herbe, grain, occlusion, nappes, ombre,
+    ULTRA, PLEIN, MOYEN, SOBRE, DENSE,
+    mesurer, apporterUltra, dpr, brume, tonte, herbe, grain, occlusion, nappes, ombre,
     appui, depart, avancerPoussiere, dessinerPoussiere, viderPoussiere,
     avancerFlashs, dessinerFlashs, viderFlashs, rafale,
     vignette, poussee, partPoussee, agePoussee, partEchos, echosCopies,

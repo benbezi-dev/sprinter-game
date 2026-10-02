@@ -654,5 +654,7 @@
     return true;
   }
 
-  root.Tribune = { dessiner, pret: () => charger() };
+  // `images` : l'atlas du palier courant, pour que l'ecran d'ouverture le
+  // decode avant la premiere course (chargement.ts).
+  root.Tribune = { dessiner, pret: () => charger(), images: () => Object.values(atlas) };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

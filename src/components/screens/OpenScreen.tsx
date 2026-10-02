@@ -5,6 +5,10 @@ import { useGameStore } from '@/game/engine';
 
 export function OpenScreen() {
   const openT = useGameStore(s => s.openT);
+  // La part des images deja chargee (game/chargement.ts) : l'ouverture ne
+  // cede la place a l'accueil qu'une fois tout la.
+  const charge = useGameStore(s => s.chargement ?? 0);
+  const pret = charge >= 1;
   const word = "SPRINTER".split("");
 
   return (
@@ -56,9 +60,20 @@ export function OpenScreen() {
         )}
       </div>
 
-      {openT > 4.6 && (
+      {openT > 4.6 && pret && (
         <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] text-xs sm:text-sm md:text-base font-bold text-foreground/80 tracking-widest uppercase animate-pulse z-10">
           Tap to start
+        </div>
+      )}
+
+      {openT > 2.2 && !pret && (
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] flex flex-col items-center gap-2 z-10">
+          <div className="text-[10px] sm:text-xs font-bold text-foreground/70 tracking-widest uppercase tabular-nums">
+            Chargement {Math.floor(charge * 100)} %
+          </div>
+          <div className="w-40 sm:w-56 h-1 rounded-full bg-foreground/15 overflow-hidden">
+            <div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${Math.round(charge * 100)}%` }} />
+          </div>
         </div>
       )}
     </div>

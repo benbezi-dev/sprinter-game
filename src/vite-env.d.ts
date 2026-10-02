@@ -11,3 +11,10 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Les images que l'ecran d'ouverture charge avant que le jeu ne parte, listees
+// au build depuis public/ (voir listeDuChargement dans vite.config.ts).
+declare module 'virtual:precharge' {
+  const liste: { ordinaire: string[]; ultra: string[] };
+  export default liste;
+}

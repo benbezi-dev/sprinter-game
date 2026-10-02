@@ -98,6 +98,44 @@ const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
    un lien a cliquer qu'une page blanche.
 --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   LA LISTE DU CHARGEMENT (src/game/chargement.ts).
+
+   L'ecran d'ouverture charge les images des decors avant que le jeu ne parte.
+   Leur liste se lit ici, dans `public/`, au moment du build — et non dans les
+   manifestes, qui ont chacun leur forme : une piece ajoutee dans Blender y
+   entre toute seule, et rien n'est jamais a recopier a la main.
+--------------------------------------------------------------------------- */
+function listeDuChargement() {
+  const ID = 'virtual:precharge', RID = '\0' + ID;
+  const pub = path.resolve(import.meta.dirname, 'public');
+  const lister = (dossier: string): string[] => {
+    const racine = path.join(pub, dossier);
+    if (!fs.existsSync(racine)) return [];
+    const out: string[] = [];
+    const parcourir = (d: string) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) parcourir(p);
+        else if (e.name.endsWith('.webp')) out.push('/' + path.relative(pub, p).split(path.sep).join('/'));
+      }
+    };
+    parcourir(racine);
+    return out.sort();
+  };
+  return {
+    name: 'sprinter-precharge',
+    resolveId(id: string) { return id === ID ? RID : null; },
+    load(id: string) {
+      if (id !== RID) return null;
+      return 'export default ' + JSON.stringify({
+        ordinaire: [...lister('decors'), ...lister('pubs')],
+        ultra: lister('decors-ultra'),
+      });
+    },
+  };
+}
+
 function pagesDApercu(base: string) {
   /* OU ECRIRE : LE DOSSIER DE SORTIE, JAMAIS « dist » EN DUR.
      Le deploiement construit DEUX fois — la racine dans `dist`, puis la version
@@ -173,6 +211,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
+    listeDuChargement(),
     ...musiqueHorsProduction(canalDuBuild(mode)),
     pagesDApercu(basePath),
     ...(apiLocale ? [{

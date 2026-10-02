@@ -50,6 +50,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
+import { lancerChargement, chargementFini, partChargee } from './chargement';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -95,6 +96,8 @@ export type GameState = {
   elapsed: number;
   countT: number;
   openT: number;
+  /** La part des images chargee par l'ecran d'ouverture, de 0 a 1. */
+  chargement: number;
   /**
    * Ce que le starter a deja dit : 0 rien, 1 « a vos marques », 2 « pret »,
    * 3 le coup est parti. C'est ce que le tableau de course affiche a la place
@@ -193,6 +196,9 @@ export function useGameStore<T>(selector?: (state: GameState) => T) {
 
 // We'll write the update loop here
 const { G, Audio_, clamp, THEMES, LEVELS, RACES } = SprinterApp;
+
+// Les images des decors et du public, pendant l'ecran d'ouverture.
+lancerChargement();
 const { C } = SprinterCore;
 const { N } = SprinterI18N;
 
@@ -581,7 +587,8 @@ export function updateLogic(dt: number) {
 
   if (G.state === 'open') {
     G.openT += dt;
-    if (G.openT > 6.4) G.state = 'title';
+    // L'ouverture attend que les images soient la (chargement.ts).
+    if (G.openT > 6.4 && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
@@ -807,6 +814,7 @@ export function updateLogic(dt: number) {
     countT: G.countT,
     starter: G.depart ? G.depart.dit : 0,
     openT: G.openT,
+    chargement: partChargee(),
     shake: G.shake,
     flash: G.flash,
     stumbleFlash: G.stumbleFlash,
