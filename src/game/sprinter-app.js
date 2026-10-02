@@ -8238,6 +8238,15 @@
       // presentation (`celebrate`) et au cri de Meba-Mickael (`debout`).
       r.attitudeW = (1 - r.enBloc) * (1 - Math.min(1, r.celebrate || 0)) * (1 - Math.min(1, r.debout || 0));
       r.attitudeT = G.attT || 0;
+      // DEBOUT, DROIT (02/10, « ils sont toujours penches par rapport a la
+      // ligne de depart, lorsqu'ils sont debout ») : repereDuCoureur couche le
+      // corps entier de `drivePitch`, la poussee de sortie, des qu'il n'est pas
+      // dans ses blocs — et le constructeur la pose d'emblee a C.DRIVE_PITCH.
+      // Debout derriere les blocs, chacun penchait donc de 25 degres vers
+      // l'avant, comme deja pendant le cri de Meba-Mickael. Personne ne pousse
+      // avant le pistolet : la course la recalcule a chaque pas (pitchAt), et
+      // dans les blocs elle ne compte pas.
+      r.drivePitch = 0;
       return;
     }
     if (G.state === 'race') {

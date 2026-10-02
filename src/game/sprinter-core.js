@@ -1048,7 +1048,8 @@
   // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
   // bras [bras, avant-bras] (0 vers le bas, positif vers l'avant), le buste,
   // la hauteur du bassin (`leve`, en metres) et la tete (negative : il baisse
-  // les yeux). Debout, les jambes sont celles de `debout`.
+  // les yeux). Le buste comme `lean` : NEGATIF VERS L'AVANT (celui de la
+  // course l'est). Debout, les jambes sont celles de `debout`.
   const ATTITUDES = ['sautille', 'secoue', 'moulinets', 'cuisses', 'genou', 'fixe'];
   function attitude(k, t) {
     const S = Math.sin, TA = TAU;
@@ -1061,7 +1062,7 @@
         const ph = t * 2.4 * TA, h = Math.max(0, S(ph)), fl = 0.24 * (1 - h);
         return { l: [0.07 + fl, 0.05 - fl, -0.25 * h], rr: [-0.02 + fl, -0.02 - fl, -0.25 * h],
                  al: [0.06 + 0.16 * S(ph), 0.32 + 0.18 * S(ph)], ar: [0.06 + 0.16 * S(ph + 0.4), 0.32 + 0.18 * S(ph + 0.4)],
-                 lean: 0.07, leve: 0.045 * h - 0.025 * (1 - h), tete: 0.0 };
+                 lean: -0.06, leve: 0.045 * h - 0.025 * (1 - h), tete: 0.0 };
       }
       case 'secoue': {
         // une jambe levee qu'on secoue sous le genou, puis l'autre
@@ -1071,20 +1072,20 @@
         const appui = [0.0, 0.0, 0.0];
         return { l: cote ? leg : appui, rr: cote ? appui : leg,
                  al: [0.08, 0.3 + 0.1 * S(t * 7 * TA + 1)], ar: [0.08, 0.3 + 0.1 * S(t * 7 * TA + 2)],
-                 lean: 0.03, leve: 0, tete: -0.1 };
+                 lean: -0.03, leve: 0, tete: -0.1 };
       }
       case 'moulinets': {
         // les bras balances grand, l'un devant l'autre derriere, les genoux souples
         const ph = t * 1.4 * TA, sw = 0.95 * S(ph), fl = 0.05 * (1 + S(2 * ph));
         return { l: [0.07 + fl, 0.05 - fl, 0.0], rr: [-0.07 + fl, -0.05 - fl, 0.0],
-                 al: [sw, sw + 0.4], ar: [-sw, -sw + 0.4], lean: 0.05, leve: -0.01 * (1 + S(2 * ph)), tete: 0.05 };
+                 al: [sw, sw + 0.4], ar: [-sw, -sw + 0.4], lean: -0.04, leve: -0.01 * (1 + S(2 * ph)), tete: 0.05 };
       }
       case 'cuisses': {
         // penche, il se tape les cuisses, a gauche puis a droite, trois fois par seconde
         const ph = t * 3 * TA, g = Math.max(0, S(ph)), d = Math.max(0, -S(ph));
         return { l: [0.2, -0.05, 0.0], rr: [0.05, -0.2, 0.0],
                  al: [0.22, 0.28 + 0.85 * (1 - g)], ar: [0.22, 0.28 + 0.85 * (1 - d)],
-                 lean: 0.22, leve: -0.03, tete: -0.25 };
+                 lean: -0.22, leve: -0.03, tete: -0.25 };
       }
       case 'genou': {
         // un genou monte a la poitrine, tire des deux mains, puis l'autre
@@ -1093,13 +1094,13 @@
         const appui = [-0.02, -0.02, 0.0];
         return { l: cote ? leg : appui, rr: cote ? appui : leg,
                  al: [0.06 + 0.85 * lev, 0.28 + 1.25 * lev], ar: [0.06 + 0.85 * lev, 0.28 + 1.25 * lev],
-                 lean: -0.03 * lev, leve: 0.01 * lev, tete: 0.0 };
+                 lean: 0.03 * lev, leve: 0.01 * lev, tete: 0.0 };
       }
       default: {
         // il fixe la ligne : les yeux qui descendent puis remontent, une grande respiration
         const res = S(t * 0.45 * TA);
         return { l: debG, rr: debD, al: [pend[0] + 0.04 * res, pend[1]], ar: [pend[0] + 0.04 * res, pend[1]],
-                 lean: 0.02 + 0.03 * res, leve: 0.006 * res, tete: -0.32 + 0.42 * doux(((t / 2.6) % 1) * 1.6) };
+                 lean: -0.02 - 0.03 * res, leve: 0.006 * res, tete: -0.32 + 0.42 * doux(((t / 2.6) % 1) * 1.6) };
       }
     }
   }
