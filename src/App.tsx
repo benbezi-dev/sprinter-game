@@ -109,6 +109,7 @@ const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
+import { ouvrirPresence } from '@/game/presence';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
@@ -206,6 +207,9 @@ function MainGame() {
   useEffect(() => {
     if (!acces || !DUELS_OUVERTS) return;
     ouvrirBoite();
+    // La presence suit la meme porte : elle sert le classement des duels et
+    // le direct, et n'a rien a dire tant qu'ils sont fermes.
+    ouvrirPresence();
   }, [acces]);
 
   // Au lancement : redire au serveur où joindre ce téléphone.

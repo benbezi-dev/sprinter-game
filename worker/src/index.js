@@ -10,6 +10,7 @@ export { SalleRelais } from './salle-relais.js';
 export { SalleConfrontation } from './salle-confrontation.js';
 export { SalleChampionnat } from './salle-championnat.js';
 export { Boite } from './boite.js';
+export { Presence } from './presence.js';
 import { sonner } from './boite.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
@@ -2511,6 +2512,65 @@ async function servir(request, env, ctx, porteur) {
       // joueur de production ne sont pas le meme objet.
       const id = env.BOITES.idFromName(canal.test ? 'T-' + appareil : appareil);
       const reponse = await env.BOITES.get(id).fetch(new Request(url, request));
+      if (reponse.status === 101) return reponse;
+      return cors(new Response(reponse.body, {
+        status: reponse.status,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    }
+
+    // ------------------------------------------------------- qui est la
+    // Un seul objet pour tout le canal : la liste des presents est celle des
+    // liaisons ouvertes. Voir presence.js.
+    if (url.pathname === '/presence' && request.method === 'GET') {
+      if (!env.PRESENCES) return json({ n: 0, joueurs: [], le: Date.now() });
+      const id = env.PRESENCES.idFromName(canal.test ? 'presence-test' : 'presence');
+      try {
+        const r = await env.PRESENCES.get(id).fetch('https://presence/liste');
+        const corps = await r.json();
+        // Une photo de l'instant : la garder en cache montrerait des absents.
+        const reponse = json(corps);
+        reponse.headers.set('Cache-Control', 'no-store');
+        return reponse;
+      } catch (e) {
+        return json({ n: 0, joueurs: [], le: Date.now() });
+      }
+    }
+
+    if (url.pathname.startsWith('/presence/')) {
+      const appareil = url.pathname.slice('/presence/'.length);
+      if (!isValidDeviceId(appareil)) return json({ error: 'appareil invalide' }, 400);
+      if (!env.PRESENCES) return json({ error: 'presence indisponible' }, 503);
+      if (request.headers.get('Upgrade') !== 'websocket') {
+        return json({ error: 'websocket attendu' }, 426);
+      }
+      // LE NOM SE PROUVE. On ne le montre que s'il est reserve ET relie a cet
+      // appareil — sans quoi n'importe qui ferait apparaitre « en ligne » le
+      // nom d'un autre. Le nom affiche est celui de la reservation, avec sa
+      // casse, pas celui qu'a tape le client.
+      const demande = String(url.searchParams.get('nom') || '').trim();
+      let nom = '';
+      if (demande) {
+        try {
+          await ensurePlayerTables(env.DB);
+          const p = await env.DB.prepare(
+            `SELECT p.name AS name FROM players p
+               JOIN player_devices d ON d.name_key = p.name_key
+              WHERE p.name_key = ? AND d.device_id = ?`
+          ).bind(cleanName(demande).trim().toLowerCase(), appareil).first();
+          if (p && p.name) nom = String(p.name);
+        } catch (e) { nom = ''; }
+      }
+      const entetes = new Headers(request.headers);
+      // `set` et pas `append` : ce que le client aurait pu glisser dans ces
+      // en-tetes est ecrase ici, avant d'atteindre l'objet.
+      entetes.set('X-Presence-Appareil', appareil);
+      // Encode : un en-tete n'admet que du Latin-1, et un pseudo peut porter
+      // un emoji ou de l'arabe.
+      entetes.set('X-Presence-Nom', encodeURIComponent(nom));
+      const id = env.PRESENCES.idFromName(canal.test ? 'presence-test' : 'presence');
+      const reponse = await env.PRESENCES.get(id).fetch(
+        new Request(url, { method: 'GET', headers: entetes }));
       if (reponse.status === 101) return reponse;
       return cors(new Response(reponse.body, {
         status: reponse.status,

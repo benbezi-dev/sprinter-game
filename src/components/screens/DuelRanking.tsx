@@ -17,6 +17,7 @@ import { Nations } from './Nations';
 import { SERIE_OUVERTE } from '@/game/canal';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe } from '@/game/jeux';
 import { useRetour } from '@/hooks/use-retour';
+import { usePresences, parNom, type Present } from '@/game/presence';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -46,6 +47,27 @@ function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
         {N.t(monte ? 'duel_monte_a11y' : 'duel_descend_a11y', { n: String(Math.abs(move)) })}
       </span>
     </motion.span>
+  );
+}
+
+/**
+ * Le point de presence, a cote du nom.
+ *
+ * Vert : au menu, disponible tout de suite. Ambre : la, mais occupe — en
+ * course, en duel, en direct. Rien quand le joueur n'a pas le jeu ouvert : un
+ * point gris sur cinq cents lignes serait cinq cents points qui ne disent rien,
+ * et l'absence se lit d'elle-meme a cote de ceux qui brillent.
+ */
+function PointPresence({ p }: { p: Present | undefined }) {
+  const { N } = SprinterApp;
+  if (!p) return null;
+  const dispo = p.quoi === 'menu';
+  return (
+    <span className="relative inline-flex w-2 h-2 shrink-0" title={N.t('pres_' + p.quoi)}>
+      {dispo && <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-60 animate-ping motion-reduce:hidden" />}
+      <span className={`relative inline-flex w-2 h-2 rounded-full ${dispo ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+      <span className="sr-only">{N.t('pres_a11y')} — {N.t('pres_' + p.quoi)}</span>
+    </span>
   );
 }
 
@@ -175,6 +197,25 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
 
   const rows = board?.classement || [];
   const bareme = board?.bareme;
+  /**
+   * QUI EST LA. Croise avec le classement par le nom : la presence ne connait
+   * que des noms reserves et relies a leur appareil, c'est-a-dire exactement
+   * ceux qu'une invitation peut joindre.
+   */
+  const presences = usePresences();
+  const presents = parNom(presences);
+  const presentDe = (nom: string) => presents.get(nom.trim().toLowerCase());
+  /**
+   * Ne montrer que ceux qui sont la. Allume d'office quand on choisit des
+   * adversaires pour un direct : c'est la seule question qu'on se pose alors —
+   * qui peut venir courir maintenant.
+   */
+  const [seulEnLigne, setSeulEnLigne] = useState(!!surInviter);
+  const autresEnLigne = rows.filter(r =>
+    r.name.trim().toLowerCase() !== moiKey && presentDe(r.name)).length;
+  const lignes = seulEnLigne
+    ? rows.filter(r => r.name.trim().toLowerCase() === moiKey || presentDe(r.name))
+    : rows;
   const reduit = useAnimationsReduites();
   // Où tombe la barre des sélectionnés, si elle tombe quelque part. Le hook
   // rend `null` dès qu'elle ne serait pas exacte — voir useBarreSelection.
@@ -401,19 +442,47 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
           )}
           {!chargement && rows.length > 0 && (
             <>
-              <div className="flex items-baseline justify-between px-1 pb-2 mb-1 border-b border-white/10">
-                <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground">
+              <div className="flex items-center justify-between gap-2 px-1 pb-2 mb-1 border-b border-white/10">
+                <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground shrink-0">
                   {rows.length} {rows.length > 1 ? 'joueurs' : 'joueur'}
                 </span>
-                <span className="text-[9px] md:text-[10px] text-muted-foreground/70">
+                {/* Le filtre, et combien il en garde. Le chiffre compte les
+                    AUTRES : se compter soi-meme ferait croire qu'il y a
+                    quelqu'un a inviter quand on est seul. */}
+                <button
+                  onClick={() => setSeulEnLigne(v => !v)}
+                  aria-pressed={seulEnLigne}
+                  aria-label={N.t('pres_filtre_a11y')}
+                  className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg border
+                              text-[9px] md:text-[10px] font-bold tracking-widest transition-colors
+                    ${seulEnLigne
+                      ? 'bg-emerald-400/15 border-emerald-400/60 text-emerald-300'
+                      : 'bg-black/20 border-white/10 text-muted-foreground hover:bg-white/10'}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${autresEnLigne ? 'bg-emerald-400' : 'bg-white/25'}`} />
+                  {N.t('pres_filtre')}
+                  <span className="tabular-nums">{autresEnLigne}</span>
+                </button>
+                <span className="text-[9px] md:text-[10px] text-muted-foreground/70 truncate min-w-0 text-right">
                   {N.t('duel_since')}
                 </span>
               </div>
+              {seulEnLigne && autresEnLigne === 0 && (
+                <div className="py-6 flex flex-col items-center gap-3">
+                  <p className="text-xs text-muted-foreground text-center">{N.t('pres_personne')}</p>
+                  <button onClick={() => setSeulEnLigne(false)}
+                          className="px-3 py-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10
+                                     text-[10px] font-bold tracking-widest text-muted-foreground transition-colors">
+                    {N.t('pres_tout')}
+                  </button>
+                </div>
+              )}
               {/* layout anime : une ligne qui change de rang glisse a sa place */}
               <div className="flex flex-col gap-1.5 max-h-[calc(100dvh-24rem)] min-h-[36vh] overflow-y-auto overscroll-contain pr-1">
                 <AnimatePresence initial={false}>
-                  {rows.map((r: DuelRow) => {
+                  {(seulEnLigne && autresEnLigne === 0 ? [] : lignes).map((r: DuelRow) => {
                     const moi = r.name.trim().toLowerCase() === moiKey;
+                    const present = moi ? undefined : presentDe(r.name);
                     return (
                       <React.Fragment key={r.name.toLowerCase()}>
                       <motion.div
@@ -439,6 +508,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                               ${moi ? 'text-primary' : 'text-foreground'}`}>
                               {r.name}
                             </span>
+                            <PointPresence p={present} />
                             {/* Le combo reste sur la ligne du pseudo, la ou la
                                 medaille n'a pas pu rester : une serie se lit A
                                 COTE DU NOM, sinon c'est une statistique de
@@ -451,6 +521,14 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                           <span className="flex items-center gap-1.5 min-w-0">
                             <Medaille m={r.medaille} />
                             <Ecusson etage={r.etage} division={r.division} lp={r.lp} compact />
+                            {/* Ce qu'il fait, avant le bilan : c'est ce qui
+                                decide si on l'invite maintenant. */}
+                            {present && (
+                              <span className={`text-[9px] md:text-[10px] font-bold shrink-0
+                                ${present.quoi === 'menu' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {N.t('pres_' + present.quoi)}
+                              </span>
+                            )}
                             <span className="text-[9px] md:text-[10px] text-muted-foreground truncate">
                               {N.t('duel_record', { v: r.wins, d: r.losses, n: r.draws })}
                             </span>

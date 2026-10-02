@@ -46,6 +46,10 @@ new_sqlite_classes = ["Boite"]
 tag = "v5"
 new_sqlite_classes = ["SalleChampionnat"]
 
+[[migrations]]
+tag = "v6"
+new_sqlite_classes = ["Presence"]
+
 # Une salle de relais par equipe : quatre joueurs et un temoin partagent le
 # meme objet, comme les deux joueurs d'un duel partagent le leur.
 [[durable_objects.bindings]]
@@ -74,6 +78,13 @@ class_name = "Boite"
 [[durable_objects.bindings]]
 name = "SALLES_CHAMP"
 class_name = "SalleChampionnat"
+
+# Qui est la : un seul objet pour tous les joueurs, une WebSocket par joueur
+# qui a le jeu au premier plan. Etre connecte, c'est etre present — il n'y a
+# rien d'autre a tenir a jour. Voir presence.js.
+[[durable_objects.bindings]]
+name = "PRESENCES"
+class_name = "Presence"
 
 # L'Objectif du jour part a midi et a dix-neuf heures — a l'heure du joueur,
 # pas a celle du serveur. Un envoi unique a 12:00 UTC tomberait a 4 h du matin

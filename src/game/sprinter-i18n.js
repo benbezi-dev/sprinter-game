@@ -1328,6 +1328,21 @@
                        'combo ends in {n} days without a duel'],
     duel_you:        ['TOI', 'YOU'],
     duel_since:      ['depuis ta dernière visite', 'since your last visit'],
+    /* QUI EST LA. Le point vert dit « dispo tout de suite », l'ambre « la,
+       mais occupe » ; le mot a cote dit a quoi. Voir game/presence.ts. */
+    pres_n:          ['{n} en ligne', '{n} online'],
+    pres_filtre:     ['EN LIGNE', 'ONLINE'],
+    pres_filtre_a11y: ['ne montrer que les joueurs en ligne', 'show online players only'],
+    pres_personne:   ['personne d’autre n’est en ligne sur ce classement',
+                      'nobody else on this ladder is online'],
+    pres_tout:       ['VOIR TOUT LE CLASSEMENT', 'SHOW THE WHOLE LADDER'],
+    pres_menu:       ['dispo', 'available'],
+    pres_course:     ['en course', 'racing'],
+    pres_duel:       ['en duel', 'in a duel'],
+    pres_direct:     ['en direct', 'in a live race'],
+    pres_championnat: ['en championnat', 'in the championship'],
+    pres_relais:     ['en relais', 'in a relay'],
+    pres_a11y:       ['en ligne', 'online'],
     duel_unranked:   ['tu n’es pas encore classé — joue un duel', 'not ranked yet — play a duel'],
     // Deux phrases, parce que ce sont deux situations : n'avoir jamais joué de
     // duel, et en avoir joué ailleurs. Dire « tu n'es pas classé » à quelqu'un

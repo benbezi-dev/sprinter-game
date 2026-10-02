@@ -43,6 +43,7 @@ import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
 import { venuPourLeDefi } from '@/game/defi-demie';
+import { usePresences } from '@/game/presence';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -125,6 +126,8 @@ export function TitleScreen() {
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
   const [showDuels, setShowDuels] = useState(false);
+  // Combien sont la, sur le bouton qui mene a eux. Voir game/presence.ts.
+  const presences = usePresences();
   // La visite du jeu ne s'impose pas a quelqu'un qui arrive pour un duel.
   //
   // Un lien ?defi= ou ?direct= veut dire qu'on vient courir contre quelqu'un
@@ -442,6 +445,15 @@ export function TitleScreen() {
                   <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
                     {N.t('duel_sub')}
                   </span>
+                  {/* QUI EST LA, en un chiffre. Seulement s'il y a quelqu'un :
+                      « 0 en ligne » sur l'accueil ferait fuir celui qui vient
+                      d'arriver — et il serait faux, puisqu'il est la, lui. */}
+                  {presences && presences.n > 0 && (
+                    <span className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-emerald-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      {N.t('pres_n', { n: String(presences.n) })}
+                    </span>
+                  )}
                 </span>
               </span>
               {/* Le rang, et rien d'autre.
