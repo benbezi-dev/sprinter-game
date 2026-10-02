@@ -348,6 +348,21 @@ export function FinDuDefiVedette() {
           </div>
         )}
 
+        {/* PLUS QU'UNE EPREUVE : battu ici, il reste a le battre ailleurs
+            avant que le skin (et le stade) ne tombe. */}
+        {verdict.battu && !verdict.nouveauSkin && !gagne && (() => {
+          const reste = v.epreuves.filter(e => !battuSur(v, e));
+          return reste.length ? (
+            <div className="w-full rounded-2xl border p-3 flex flex-col gap-0.5 text-left"
+                 style={{ borderColor: `${VIVE}66`, background: `${VIVE}18` }}>
+              <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: pale }}>{mot('vd_encore_titre')}</span>
+              <span className="text-[12px] text-white/85">
+                {mot('vd_encore', { e: reste.map(nomEpreuve).join(' · ') }, v.cle)}
+              </span>
+            </div>
+          ) : null;
+        })()}
+
         {/* LE STADE, quand cette course vient de le debloquer. */}
         {verdict.nouveauStade && (
           <div className="w-full rounded-2xl border-2 p-3 flex flex-col gap-0.5 text-left"

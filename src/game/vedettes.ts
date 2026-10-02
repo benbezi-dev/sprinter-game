@@ -7,8 +7,9 @@
 // sculpte dans tools/blender/anatomie.py, et ses mots (vedettes-mots.ts).
 //
 // UN DEFI PEUT AVOIR PLUSIEURS EPREUVES. Celui de Meba-Mickael Zeze se court
-// au 100 m ou au 200 m, contre deux chronos fixes : battre l'un OU l'autre
-// donne le skin, et chaque epreuve garde son meilleur temps.
+// au 100 m ou au 200 m, contre deux chronos fixes : il faut battre l'un ET
+// l'autre pour gagner le skin (02/10), et chaque epreuve garde son meilleur
+// temps et sa victoire.
 //
 // CE QUI EST UN DEFI, ET CE QUI N'EN EST PAS. Un defi est un ONE SHOT : il a
 // le faux depart, la pause, la trace, le RECOMMENCER du moteur. Ce qu'il ajoute
@@ -228,20 +229,25 @@ export function conclureLeDefi(v: Vedette): Verdict {
   const moi = G.player && G.player.finishTime != null ? G.player.finishTime : null;
   const tLui = lui && lui.finishTime != null ? lui.finishTime : null;
   const battu = moi !== null && (tLui === null || moi < tLui);
-  const nouveauSkin = battu ? gagnerSkin(v.skin) : false;
   const avant = battuPartout(v);
   const epreuve = epreuveEnCours || v.epreuves[0];
   if (moi !== null) retenirMeilleur(v, epreuve, moi);
   if (battu) retenirBattu(v, epreuve);
+  // LE SKIN SE GAGNE SUR TOUTES SES EPREUVES (02/10, a la demande de
+  // l'auteur : « il se gagne apres la victoire sur 100 m et 200 m ») : pour
+  // Meba-Mickael Zeze, le 100 m ET le 200 m ; pour Aurel Manga, son seul
+  // 110 m haies, comme avant. Un skin deja gagne le reste.
+  const partout = battuPartout(v);
+  const nouveauSkin = battu && partout ? gagnerSkin(v.skin) : false;
   const stade = stadeDonne(v);
-  const nouveauStade = stade && !avant && battuPartout(v) ? stade.name : null;
+  const nouveauStade = stade && !avant && partout ? stade.name : null;
   return { battu, moi, lui: tLui, ecart: moi !== null && tLui !== null ? tLui - moi : null, nouveauSkin, nouveauStade };
 }
 
 // --- battu sur chaque epreuve, et le stade que cela debloque ----------------
 //
-// LE STADE DE LA RIVIERA SE GAGNE (02/10) : il faut battre Meba-Mickael Zeze
-// au 100 m ET au 200 m. Chaque victoire est retenue a part, par epreuve — le
+// LE STADE DE LA RIVIERA ET LE SKIN SE GAGNENT ENSEMBLE (02/10) : il faut
+// battre Meba-Mickael Zeze au 100 m ET au 200 m. Chaque victoire est retenue a part, par epreuve — le
 // meilleur chrono ne suffirait pas a le dire : il est arrondi au millieme, et
 // 8,3895 s, qui le bat, s'y ecrit 8,390. Les victoires d'avant cette regle se
 // relisent dans les meilleurs chronos.

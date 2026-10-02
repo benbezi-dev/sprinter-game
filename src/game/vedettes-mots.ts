@@ -70,8 +70,8 @@ const MOTS: Record<string, Paire> = {
   // --- MEBA-MICKAEL ZEZE : l'evenement special du sprint
   'vd_sur:meba':        ['ÉVÉNEMENT SPÉCIAL · SPRINT', 'SPECIAL EVENT · SPRINT'],
   'vd_titre:meba':      ['Défie {nom} au 100 m et au 200 m', 'Take on {nom} over 100 m and 200 m'],
-  'vd_sous:meba':       ['Passe sous son chrono et gagne son skin premium',
-                         'Beat his time and win his premium skin'],
+  'vd_sous:meba':       ['Bats-le au 100 m et au 200 m et gagne son skin premium',
+                         'Beat him over 100 m and 200 m and win his premium skin'],
   'vd_epreuve:meba':    ['100 m · 200 m', '100 m · 200 m'],
   'vd_lieu:meba':       ['Stade de la Riviera', 'Riviera Stadium'],
   // Rien sur sa facon de courir : il en a trois (STYLES_CANON, sprinter-core.js),
@@ -88,8 +88,14 @@ const MOTS: Record<string, Paire> = {
                          '+20% margin on the cannon start and the perfect transition'],
 
   // le stade que sa double victoire debloque (le Stade de la Riviera)
-  'vd_stade:meba':      ['Bats-le au 100 m ET au 200 m : le Stade de la Riviera se débloque en one shot.',
-                         'Beat him over 100 m AND 200 m to unlock the Riviera Stadium in one shot.'],
+  'vd_stade:meba':      ['Bats-le au 100 m ET au 200 m : son skin et le Stade de la Riviera (en one shot) se débloquent ensemble.',
+                         'Beat him over 100 m AND 200 m: his skin and the Riviera Stadium (in one shot) unlock together.'],
+  // apres une premiere victoire : ce qui reste a courir
+  vd_encore_titre:      ['PLUS QU’UNE ÉPREUVE', 'ONE RACE TO GO'],
+  vd_encore:            ['Bats-le aussi au {e} pour gagner son skin.',
+                         'Beat him over {e} too to win his skin.'],
+  'vd_encore:meba':     ['Bats-le aussi au {e} : son skin et le Stade de la Riviera sont au bout.',
+                         'Beat him over {e} too: his skin and the Riviera Stadium await.'],
   vd_stade_debloque:    ['STADE DÉBLOQUÉ', 'STADIUM UNLOCKED'],
   vd_stade_debloque_sous: ['Il se choisit en one shot, parmi les lieux.',
                            'Pick it in one shot, among the venues.'],
@@ -111,8 +117,8 @@ const MOTS: Record<string, Paire> = {
   vs_a_gagner:    ['À GAGNER', 'TO WIN'],
   vs_comment:     ['Bats-le au 110 m haies pour le gagner.',
                    'Beat him over 110 m hurdles to win it.'],
-  'vs_comment:meba': ['Passe sous son chrono au 100 m ou au 200 m pour le gagner.',
-                      'Beat his time over 100 m or 200 m to win it.'],
+  'vs_comment:meba': ['Bats-le au 100 m ET au 200 m pour le gagner.',
+                      'Beat him over 100 m AND 200 m to win it.'],
   vs_ou:          ['Pas sur le stade de son défi : on ne court pas contre lui dans sa peau.',
                    'Not at his own challenge: you don’t race him in his skin.'],
   vs_fermer:      ['FERMER', 'CLOSE'],
