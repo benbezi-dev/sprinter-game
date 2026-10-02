@@ -56,6 +56,46 @@ const qQi = qQ.clone().invert();
 /** De combien la peau remonte a l'ecran du jeu (lineaire : 1,9 = x1,33 en sRGB). */
 const ECLAIRCIR_PEAU = 1.9;
 
+/**
+ * LE LISERET DES TRONCS (eclairer, sprinter-app.js) : les faces rasantes de la
+ * silhouette s'allument, un peu plus quand elles regardent le ciel. Les troncs
+ * l'ont, le maillage ne l'avait pas : a cote d'eux, l'athlete se fondait dans
+ * la piste — un short marine sur une piste bleue. Meme forme que le leur :
+ * le carre du bord, de 0,26 (vers le sol) a 1 (vers le ciel).
+ */
+const LISERET = 0.12;
+
+/**
+ * LES FACETTES DES TRONCS : une face, une teinte. Le jeu dessine ses coureurs
+ * en facettes ; lisse, l'athlete detonnait a cote d'eux, plus mou et plus
+ * sombre. Chaque triangle recoit sa normale (la geometrie est desindexee) :
+ * elle suit les os comme les autres, sans dependre de la projection.
+ */
+const FACETTES = true;
+
+/** Le haut du monde, dans le repere de la vue : pose a chaque dessin (dessiner). */
+const HAUT = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Le liseret, greffe dans le shader standard, juste avant la couleur finale.
+ * LE BORD SE LIT SUR |N.z|, PAS SUR LA DIRECTION DU REGARD : la vue du jeu est
+ * ecrite a la main (dessiner), et son axe z part a l'oppose de l'oeil — le
+ * produit avec `geometryViewDir` changeait de signe, et tout le corps passait
+ * pour un bord (un athlete gris). Le ciel se lit sur le haut du monde (HAUT).
+ */
+function liseret(m: any) {
+  m.onBeforeCompile = (sh: any) => {
+    sh.uniforms.uLiseret = { value: LISERET };
+    sh.uniforms.uHaut = { value: HAUT };
+    sh.fragmentShader = 'uniform float uLiseret;\nuniform vec3 uHaut;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', [
+      'float bord = 1.0 - abs( geometryNormal.z );',
+      'float ciel = 0.5 + 0.5 * dot( geometryNormal, uHaut );',
+      'outgoingLight += uLiseret * bord * bord * ( 0.26 + 0.74 * ciel ) * vec3( 0.86, 0.92, 1.0 );',
+      '#include <opaque_fragment>'].join('\n'));
+  };
+  m.needsUpdate = true;
+}
+
 const modeles = new Map<string, Modele>();
 const enCours = new Map<string, Promise<Modele | null>>();
 let rendu: THREE.WebGLRenderer | null = null;
@@ -158,6 +198,11 @@ function preparer(racineGltf: THREE.Object3D): Modele {
     if (o.isBone) os.set(o.name, o);
     if (o.isMesh) {
       o.frustumCulled = false;
+      if (FACETTES && o.geometry.index) {
+        o.geometry = o.geometry.toNonIndexed();
+        o.geometry.computeVertexNormals();
+      }
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m) liseret(m);
       // LA PEAU, ECLAIRCIE POUR LE STADE. Sa teinte est celle des portraits
       // (Cycles, un studio sombre) ; sous le soleil et le ciel de la piste
       // elle tombait presque au noir, bien plus sombre que sa doublure en
@@ -315,6 +360,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     const xc = new THREE.Vector3(-1, 1, 0).addScaledVector(zc, -new THREE.Vector3(-1, 1, 0).dot(zc)).normalize();
     const yc = new THREE.Vector3().crossVectors(zc, xc);
     const V = new THREE.Matrix4().makeBasis(xc, yc, zc).invert();
+    HAUT.set(0, 0, 1).transformDirection(V);
     camera.matrixWorld.copy(V).invert();
     camera.matrixWorldInverse.copy(V);
     camera.projectionMatrix.multiplyMatrices(P, new THREE.Matrix4().copy(V).invert());
