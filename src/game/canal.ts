@@ -165,19 +165,34 @@ export const DEPART_STARTER = EST_TEST;
 export const HAIES_OUVERTES = true;
 
 /**
- * LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers, et le skin qu'il
- * fait gagner (game/vedettes.ts, game/vestiaire.ts).
+ * LES DEFIS DES VEDETTES — Aurel Manga au 110 m haies, Meba-Mickael Zeze au
+ * 100 et au 200 m —, et les skins qu'ils font gagner (game/vedettes.ts,
+ * game/vestiaire.ts).
  *
  * Sur le canal de test d'abord, comme tout ce qui arrive : le temps de voir le
- * duel se jouer, et le skin courir. La forme compte, comme partout dans ce
- * fichier — `EST_TEST` se replie a la compilation, et la banniere, l'ecran de
- * fin et le vestiaire sortent entierement du build public.
+ * duel se jouer, et le skin courir.
  *
- * L'OUVRIR A TOUT LE MONDE, c'est passer ce drapeau a `true` ET `ouvert` a
- * true sur l'entree 'defi-manga' de STADES_HORS_SERIE (sprinter-core.js). Le
- * stade est deja a sa place d'ouvert : rien d'autre ne bouge.
+ * ET A TOUT LE MONDE A L'HEURE DU LANCEMENT (02/10) : le samedi 3 octobre
+ * 2026, 21 h 30 a Paris, sans deploiement — l'heure de l'appareil, lue au
+ * chargement (la valeur vit dans vite.config.ts). Un jeu deja ouvert a cette
+ * minute le verra au rechargement suivant.
+ *
+ * CE N'EST DONC PLUS UN DRAPEAU QUI SE REPLIE A LA COMPILATION. Le code de
+ * l'evenement — la banniere, la fiche, le vestiaire, l'ecran de fin, le
+ * maillage en three.js — part dans le build public, en morceaux charges a la
+ * demande : ils ne se telechargent qu'une fois l'evenement ouvert.
+ *
+ * CHAQUE DEFI A SA DATE (`lancement`, game/vedettes.ts) : celui de
+ * Meba-Mickael Zeze a celle-ci ; celui d'Aurel Manga n'en a pas, et reste sur
+ * le canal de test. Leurs deux stades entrent pourtant ensemble dans LEVELS
+ * (sprinter-app.js) : l'index d'un stade voyage avec les courses, et celui de
+ * Meba-Mickael doit etre le meme sur les deux canaux.
  */
-export const DEFI_VEDETTE_OUVERT = EST_TEST;
+declare const __LANCEMENT_DEFI_MEBA__: number;
+// (hors de Vite, dans un harnais de tools/, la valeur n'existe pas : ferme)
+export const LANCEMENT_DEFI_MEBA: number =
+  typeof __LANCEMENT_DEFI_MEBA__ === 'number' ? __LANCEMENT_DEFI_MEBA__ : Infinity;
+export const DEFI_VEDETTE_OUVERT = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.

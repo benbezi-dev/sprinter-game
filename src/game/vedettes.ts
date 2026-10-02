@@ -22,6 +22,7 @@
 
 import { SprinterApp, SprinterCore } from './engine';
 import { gagnerSkin } from './vestiaire';
+import { EST_TEST, LANCEMENT_DEFI_MEBA } from './canal';
 
 type Paire = [string, string];
 
@@ -59,6 +60,11 @@ export type Vedette = {
    * devant son visage — le geste de son look (L.clap), et le claquement avec.
    */
   cri?: { son: string; a: number; duree: number; claps?: number[] };
+  /**
+   * L'heure (ms depuis 1970, UTC) ou son defi s'ouvre a tout le monde. Sans
+   * elle, il ne vit que sur le canal de test (voir canal.ts).
+   */
+  lancement?: number;
 };
 
 export const VEDETTES: Record<string, Vedette> = {
@@ -91,6 +97,8 @@ export const VEDETTES: Record<string, Vedette> = {
     // la premiere sur le « GO », au rythme de son clap ; le decompte attend
     // qu'il ait baisse les bras.
     cri: { son: 'meba_letsgo', a: 0.25, duree: 2.6, claps: [0.95, 1.35, 1.75] },
+    // samedi 3 octobre 2026, 21 h 30 a Paris (vite.config.ts)
+    lancement: LANCEMENT_DEFI_MEBA,
     // Chaque ligne est tenue par la FFA ou World Athletics ET une seconde
     // source (Wikipedia, resultats de la competition). Rien de ce que les
     // sources discutent : ni sa taille, ni le titre national du 100 m 2022.
@@ -113,9 +121,14 @@ export function indexDuStade(v: Vedette): number {
   return Array.isArray(niveaux) ? niveaux.findIndex(l => l && l.cle === v.stade) : -1;
 }
 
+/** Son defi est-il ouvert : partout sur le canal de test, ailleurs a son heure. */
+export function defiLance(v: Vedette): boolean {
+  return EST_TEST || (v.lancement !== undefined && Date.now() >= v.lancement);
+}
+
 /** Le defi peut-il se courir ici ? */
 export function defiPossible(v: Vedette): boolean {
-  return indexDuStade(v) >= 0;
+  return defiLance(v) && indexDuStade(v) >= 0;
 }
 
 let enCours: Vedette | null = null;

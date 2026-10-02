@@ -83,9 +83,38 @@ const MOTS: Record<string, Paire> = {
   'vd_recompense_sous:meba': ['son skin premium, à porter sur les courses de sprint',
                               'his premium skin, to wear in sprint races'],
   'vd_debloque_sous:meba':   ['Il se porte sur les courses de sprint.', 'It is worn in sprint races.'],
+  // son bonus (look.departParfait et look.transParfaite, sprinter-core.js)
+  'vs_bonus:meba':      ['+20 % de marge au départ canon et à la transition parfaite',
+                         '+20% margin on the cannon start and the perfect transition'],
+
+  // --- LE VESTIAIRE : l'espace ou l'on choisit ce que son coureur porte
+  vs_entree:      ['VESTIAIRE · SKINS', 'LOCKER ROOM · SKINS'],
+  vs_porte:       ['porté : {nom}', 'wearing: {nom}'],
+  vs_maillot_porte: ['ton maillot', 'your jersey'],
+  vs_a_gagner_n:  ['{n} à gagner', '{n} to win'],
+  vs_choisir:     ['CHOISIR', 'CHOOSE'],
+  vs_titre:       ['VESTIAIRE', 'LOCKER ROOM'],
+  vs_sous:        ['Choisis ce que ton coureur porte en course.',
+                   'Choose what your runner wears in races.'],
+  vs_maillot:     ['TON MAILLOT', 'YOUR JERSEY'],
+  vs_maillot_sous: ['Sur toutes les courses.', 'In every race.'],
+  vs_bonus_titre: ['BONUS', 'BONUS'],
+  vs_a_gagner:    ['À GAGNER', 'TO WIN'],
+  vs_comment:     ['Bats-le au 110 m haies pour le gagner.',
+                   'Beat him over 110 m hurdles to win it.'],
+  'vs_comment:meba': ['Passe sous son chrono au 100 m ou au 200 m pour le gagner.',
+                      'Beat his time over 100 m or 200 m to win it.'],
+  vs_ou:          ['Pas sur le stade de son défi : on ne court pas contre lui dans sa peau.',
+                   'Not at his own challenge: you don’t race him in his skin.'],
+  vs_fermer:      ['FERMER', 'CLOSE'],
   vd_a_battre:    ['à battre : {s}', 'to beat: {s}'],
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };
+
+/** Ce mot existe-t-il pour cet athlete (sa version, ou la commune) ? */
+export function aLeMot(cle: string, qui?: string): boolean {
+  return !!((qui && MOTS[`${cle}:${qui}`]) || MOTS[cle]);
+}
 
 /** Un mot de l'evenement, dans la langue courante, avec ses variables. */
 export function mot(cle: string, vars?: Record<string, string>, qui?: string): string {

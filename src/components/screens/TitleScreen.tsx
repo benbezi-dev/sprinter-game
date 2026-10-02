@@ -31,6 +31,9 @@ const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
 // paquet public tant que DEFI_VEDETTE_OUVERT est ferme (canal.ts).
 const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
   .then(m => ({ default: m.BanderoleVedette })));
+// Le vestiaire, ou l'on choisit son skin : du meme morceau que les defis.
+const BoutonVestiaire = /* @__PURE__ */ lazy(() => import('./DefiVedette')
+  .then(m => ({ default: m.BoutonVestiaire })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -376,6 +379,10 @@ export function TitleScreen() {
                 dit que les haies sont la, sur celui de Hurdlers il dit contre
                 qui les courir. */}
             {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
+            {/* LE VESTIAIRE, sous les defis qui donnent ses skins : un seul
+                endroit pour choisir ce que son coureur porte, dans les deux
+                jeux. Rien tant qu'aucun skin n'est a gagner ni gagne. */}
+            {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BoutonVestiaire /></Suspense>}
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}
 

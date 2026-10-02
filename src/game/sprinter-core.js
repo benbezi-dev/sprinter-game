@@ -532,6 +532,11 @@
       horsSerie: true,
       evenement: true,
       ouvert: false,
+      // ENTRE DANS LEVELS AU LANCEMENT DES DEFIS (02/10, sprinter-app.js), en
+      // meme temps que celui de Meba-Mickael Zeze, juste apres : sans lui,
+      // l'index de l'autre ne serait plus le meme que sur le canal de test.
+      // Sa banniere, elle, reste fermee (game/vedettes.ts, `lancement`).
+      auLancement: true,
       // Un meeting sur une tribune de 1 400 places : bien garnie, pas une
       // enceinte de finale mondiale.
       foule: 0.8,
@@ -578,6 +583,9 @@
       horsSerie: true,
       evenement: true,
       ouvert: false,
+      // OUVERT A TOUT LE MONDE LE SAMEDI 3 OCTOBRE 2026 A 21 H 30 (02/10) :
+      // il entre dans LEVELS des cette heure-la (sprinter-app.js).
+      auLancement: true,
       // Un meeting d'ete au bord de l'eau, un soir d'evenement : plein.
       foule: 0.95,
       plateau: { '100': [9.20, 9.60], '200': [18.60, 19.40],

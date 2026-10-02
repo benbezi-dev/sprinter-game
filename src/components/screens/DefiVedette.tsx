@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Lock } from 'lucide-react';
 import { MONTEE, VOILE, PANNEAU } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
@@ -7,7 +8,7 @@ import {
   meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
-import { mot, chrono, ligne } from '@/game/vedettes-mots';
+import { mot, chrono, ligne, aLeMot } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
@@ -206,6 +207,11 @@ function FicheVedette({ v, onFermer }: { v: Vedette; onFermer: () => void }) {
         <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: `${VIVE}22`, border: `1px solid ${VIVE}55` }}>
           <span className="text-[10px] font-bold tracking-[0.2em]" style={{ color: pale }}>{mot('vd_recompense')}</span>
           <span className="text-[12px] text-white/85">{mot('vd_recompense_sous', undefined, v.cle)}</span>
+          {aLeMot('vs_bonus', v.cle) && (
+            <span className="text-[11px] font-bold text-white/90">
+              <span style={{ color: pale }}>{mot('vs_bonus_titre')} · </span>{mot('vs_bonus', undefined, v.cle)}
+            </span>
+          )}
         </div>
 
         {/* UNE EPREUVE, UN BOUTON. Avec plusieurs, chaque bouton dit son chrono
@@ -343,6 +349,183 @@ export function FinDuDefiVedette() {
           </button>
         </div>
       </motion.div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   LE VESTIAIRE
+   ---------------------------------------------------------------------------
+   L'ESPACE DEDIE AU CHOIX DES SKINS (02/10, a la demande de l'auteur). Jusque
+   la, un skin gagne ne se portait que depuis la banniere de son defi, ou sur
+   l'ecran du verdict : le joueur devait se souvenir de quel defi le donnait.
+   Ici, tout ce qu'il peut porter est au meme endroit, sous un seul bouton de
+   l'accueil, dans les deux jeux.
+
+   CE QU'ON Y VOIT : son maillot, toujours ; et chaque skin dont le defi est
+   ouvert ou qu'il a deja gagne. Un skin gagne se porte ou se retire d'un
+   toucher ; un skin a gagner dit comment, et ouvre la fiche de son defi.
+   Rien d'un defi encore ferme : le vestiaire n'annonce pas d'evenement.
+--------------------------------------------------------------------------- */
+
+/** Les skins que montre le vestiaire : defi ouvert, ou deja gagne. */
+function skinsMontres(gagnes: string[]): Vedette[] {
+  return Object.values(VEDETTES).filter(v => defiPossible(v) || gagnes.includes(v.skin));
+}
+
+/** Les couleurs du maillot du joueur (PLAYER_LOOK, sprinter-core.js). */
+const MAILLOT = 'rgb(248, 205, 74)';
+const SHORT = 'rgb(38, 40, 68)';
+
+/** Le maillot du joueur, en vignette : le haut or, le short bleu nuit. */
+function VignetteMaillot({ largeur, hauteur }: { largeur: number; hauteur: number }) {
+  return (
+    <span className="block relative" style={{ width: largeur, height: hauteur }}>
+      <span className="absolute left-[22%] right-[22%] top-[10%] h-[50%] rounded-t-[40%] rounded-b-md"
+            style={{ background: MAILLOT }} />
+      <span className="absolute left-[26%] right-[26%] top-[58%] h-[24%] rounded-b-lg"
+            style={{ background: SHORT }} />
+    </span>
+  );
+}
+
+/** Le bouton de l'accueil : ce qu'on porte, et combien de skins restent a gagner. */
+export function BoutonVestiaire() {
+  const vest = useVestiaire();
+  const [ouvert, setOuvert] = useState(false);
+  const [fiche, setFiche] = useState<Vedette | null>(null);
+  const montres = skinsMontres(vest.gagnes);
+  if (!montres.length) return null;
+  const porte = montres.find(v => v.skin === vest.porte) || null;
+  const aGagner = montres.filter(v => !vest.gagnes.includes(v.skin)).length;
+  const sous = (porte ? mot('vs_porte', { nom: `${porte.prenom} ${porte.nom}` }) : mot('vs_maillot_porte'))
+    + (aGagner ? ` · ${mot('vs_a_gagner_n', { n: String(aGagner) })}` : '');
+
+  return (
+    <motion.div {...MONTEE}>
+      <button onClick={() => setOuvert(true)}
+              className="w-full px-3 py-2 rounded-2xl bg-black/70 backdrop-blur-md border border-white/20
+                         hover:bg-black/85 transition-colors flex items-center gap-3 text-left">
+        <span className="shrink-0 rounded-xl overflow-hidden border border-white/15"
+              style={{ background: porte ? `radial-gradient(circle at 50% 35%, ${porte.couleurs.halo}, #0A0C18)`
+                                         : 'radial-gradient(circle at 50% 35%, #3A3320, #0A0C18)' }}>
+          {porte ? <Portrait v={porte} cadre="visage" largeur={40} hauteur={44} />
+                 : <VignetteMaillot largeur={40} hauteur={44} />}
+        </span>
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="font-bold tracking-widest text-white text-[11px] md:text-sm truncate">{mot('vs_entree')}</span>
+          <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">{sous}</span>
+        </span>
+        <span className="shrink-0 px-2 py-1 rounded-lg text-black text-[10px] font-black tracking-widest bg-white">
+          {mot('vs_choisir')}
+        </span>
+      </button>
+      <AnimatePresence>
+        {ouvert && <Vestiaire key="vestiaire" onFermer={() => setOuvert(false)}
+                              onDefi={(v) => { setOuvert(false); setFiche(v); }} />}
+        {fiche && <FicheVedette key="fiche" v={fiche} onFermer={() => setFiche(null)} />}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+function Vestiaire({ onFermer, onDefi }: { onFermer: () => void; onDefi: (v: Vedette) => void }) {
+  useRetour(onFermer, true);
+  const vest = useVestiaire();
+  const montres = skinsMontres(vest.gagnes);
+  const maillotPorte = !montres.some(v => v.skin === vest.porte);
+
+  return (
+    <motion.div {...VOILE} onClick={onFermer}
+                className="fixed inset-0 z-[59] flex items-center justify-center bg-black/85 pointer-events-auto
+                           px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+      <motion.div {...PANNEAU} onClick={e => e.stopPropagation()}
+                  className="w-full max-w-md rounded-2xl border-2 border-white/15 p-5 flex flex-col gap-3 max-h-[88dvh] overflow-y-auto"
+                  style={{ background: 'linear-gradient(170deg, #17132A, #09060F 70%)' }}>
+        <div className="flex flex-col gap-1">
+          <h2 className="font-black font-display text-3xl leading-none tracking-tight text-white">{mot('vs_titre')}</h2>
+          <p className="text-[12px] text-white/65">{mot('vs_sous')}</p>
+        </div>
+
+        {/* SON MAILLOT, TOUJOURS EN PREMIER : c'est ce qu'il porte sans rien
+            avoir gagne, et ce qu'il reprend en retirant un skin. */}
+        <div className="rounded-2xl border-2 p-3 flex items-center gap-3"
+             style={{ borderColor: maillotPorte ? MAILLOT : 'rgba(255,255,255,0.15)',
+                      background: 'linear-gradient(100deg, #2A2412, #0E0A1A)' }}>
+          <span className="shrink-0 rounded-xl overflow-hidden border border-white/10"
+                style={{ background: 'radial-gradient(circle at 50% 35%, #3A3320, #0A0C18)' }}>
+            <VignetteMaillot largeur={64} hauteur={72} />
+          </span>
+          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <span className="font-black font-display text-xl leading-none text-white">{mot('vs_maillot')}</span>
+            <span className="text-[11px] text-white/65">{mot('vs_maillot_sous')}</span>
+          </div>
+          <button onClick={() => porterSkin(null)} disabled={maillotPorte}
+                  className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest"
+                  style={maillotPorte ? { background: MAILLOT, color: '#000' } : { background: '#fff', color: '#000' }}>
+            {maillotPorte ? mot('vd_porte') : mot('vd_porter')}
+          </button>
+        </div>
+
+        {montres.map(v => (
+          <CarteSkin key={v.cle} v={v} gagne={vest.gagnes.includes(v.skin)} porte={vest.porte === v.skin}
+                     onDefi={() => onDefi(v)} />
+        ))}
+
+        <p className="text-[10px] leading-snug text-white/45">{mot('vs_ou')}</p>
+        <button onClick={onFermer} className="text-[11px] tracking-widest text-white/45 hover:text-white/80">
+          {mot('vs_fermer')}
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function CarteSkin({ v, gagne, porte, onDefi }: {
+  v: Vedette; gagne: boolean; porte: boolean; onDefi: () => void;
+}) {
+  const { vive: VIVE, fonce: FONCE, pale, halo } = v.couleurs;
+  return (
+    <div className="rounded-2xl border-2 p-3 flex items-stretch gap-3"
+         style={{ borderColor: porte ? VIVE : `${VIVE}66`, background: `linear-gradient(100deg, ${FONCE}, #0E0A1A)` }}>
+      <span className="shrink-0 relative rounded-xl overflow-hidden border border-white/10"
+            style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}>
+        <Portrait v={v} cadre="pied" largeur={84} hauteur={112} />
+        {!gagne && (
+          <span className="absolute inset-0 bg-black/45 flex items-center justify-center">
+            <Lock className="w-6 h-6 text-white/85" />
+          </span>
+        )}
+      </span>
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: pale }}>
+          {gagne ? mot('vd_gagne') : mot('vs_a_gagner')}
+        </span>
+        <span className="font-black font-display text-xl leading-[0.95] text-white">{v.prenom}<br />{v.nom}</span>
+        <span className="text-[11px] text-white/65">{mot('vd_debloque_sous', undefined, v.cle)}</span>
+        {aLeMot('vs_bonus', v.cle) && (
+          <span className="text-[11px] font-bold leading-snug text-white/90">
+            <span style={{ color: pale }}>{mot('vs_bonus_titre')} · </span>{mot('vs_bonus', undefined, v.cle)}
+          </span>
+        )}
+        {gagne ? (
+          <button onClick={() => porterSkin(porte ? null : v.skin)}
+                  className="self-start mt-auto px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest"
+                  style={porte ? { background: VIVE, color: '#fff' } : { background: '#fff', color: '#000' }}>
+            {porte ? mot('vd_porte') : mot('vd_porter')}
+          </button>
+        ) : (
+          <>
+            <span className="text-[11px] text-white/80 leading-snug">{mot('vs_comment', undefined, v.cle)}</span>
+            {defiPossible(v) && (
+              <button onClick={onDefi}
+                      className="self-start mt-auto px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest text-black bg-white">
+                {mot('vd_courir')}
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

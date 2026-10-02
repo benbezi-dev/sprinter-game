@@ -527,8 +527,17 @@
   // et le classement public se mettrait a annoncer un stade que personne
   // n'a couru. Ouverts d'abord, fermes ensuite : l'index veut alors dire la
   // meme chose sur les deux canaux.
+  //
+  // ET LES STADES-EVENEMENTS ENTRENT A L'HEURE DU LANCEMENT (02/10) : ceux qui
+  // portent `auLancement` — les deux defis des vedettes, a la suite —, des
+  // que l'heure de l'appareil a passe celle de vite.config.ts. Ils gardent
+  // ainsi l'index qu'ils ont sur le canal de test.
+  // (hors de Vite — un harnais de tools/ qui charge ce fichier —, la valeur
+  // n'existe pas : les evenements restent fermes)
+  const LANCES = typeof __LANCEMENT_DEFI_MEBA__ === 'number' && Date.now() >= __LANCEMENT_DEFI_MEBA__;
   for (const stade of K.STADES_HORS_SERIE) {
-    if (stade.ouvert || import.meta.env.VITE_CANAL === 'test') LEVELS.push(stade);
+    if (stade.ouvert || import.meta.env.VITE_CANAL === 'test'
+        || (stade.auLancement && LANCES)) LEVELS.push(stade);
   }
   if (import.meta.env.VITE_CANAL === 'test') {
     LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';

@@ -206,8 +206,31 @@ function pagesDApercu(base: string) {
     },
   };
 }
+/* ---------------------------------------------------------------------------
+   LE LANCEMENT DU DEFI MEBA-MICKAEL ZEZE (02/10, decide par l'auteur) :
+   samedi 3 octobre 2026, 21 h 30 a Paris (UTC+2, heure d'ete).
+
+   Avant, le defi ne vit que sur le canal de test ; des cette minute il s'ouvre
+   en production TOUT SEUL, sans deploiement : l'heure se lit sur l'appareil,
+   au chargement du jeu (canal.ts, DEFI_VEDETTE_OUVERT ; sprinter-app.js, les
+   stades-evenements de LEVELS). Une seule valeur, ici, pour les deux — l'un
+   est un module TypeScript, l'autre une IIFE qui n'importe rien.
+
+   LANCEMENT_DEFI_MEBA (en millisecondes, ou une date ISO) la remplace le temps
+   d'une verification locale : `LANCEMENT_DEFI_MEBA=0 npx vite build` bati la
+   production telle qu'elle sera apres le lancement.
+--------------------------------------------------------------------------- */
+const LANCEMENT_DEFI_MEBA = (() => {
+  const v = process.env.LANCEMENT_DEFI_MEBA;
+  if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
+  return Date.UTC(2026, 9, 3, 19, 30, 0);
+})();
+
 export default defineConfig(({ mode }) => ({
   base: basePath,
+  define: {
+    __LANCEMENT_DEFI_MEBA__: JSON.stringify(LANCEMENT_DEFI_MEBA),
+  },
   plugins: [
     react(),
     tailwindcss(),
