@@ -31,9 +31,10 @@ const musiqueMeba = () => Promise.all([musiqueMebaSeule(), chargerLeCri()]).then
    de France pour Meba-Mickael Zeze : la banniere doit se lire comme la sienne
    avant meme qu'on lise son nom — et se distinguer de l'or de Sprinter.
 
-   UNE BANNIERE PAR DEFI, et chacune dans les jeux qui sont les siens (`jeux`) :
-   Aurel sur les deux accueils — il annonce Hurdlers —, Meba-Mickael sur celui
-   de Sprinter.
+   UNE BANNIERE PAR DEFI, et chacune dans le jeu qui est le sien (`jeux`) :
+   Aurel sur l'accueil de Hurdlers, Meba-Mickael sur celui de Sprinter (02/10,
+   a la demande de l'auteur ; Aurel etait d'abord sur les deux, pour annoncer
+   Hurdlers).
 --------------------------------------------------------------------------- */
 
 /** Chaque defi charge son morceau quand sa fiche s'ouvre. */

@@ -371,10 +371,9 @@ export function TitleScreen() {
                 mode entier et date, quand l'autre est un lieu de plus. Il
                 s'affiche sous les memes reserves — dans Sprinter, pas dans
                 Hurdlers, qui ne court pas apres les chiens. */}
-            {/* LE DEFI AUREL MANGA, tout en haut, dans les DEUX jeux. C'est
-                l'evenement qui annonce Hurdlers : sur l'accueil de Sprinter il
-                dit que les haies sont la, sur celui de Hurdlers il dit contre
-                qui les courir. */}
+            {/* LES DEFIS DES VEDETTES, tout en haut, chacun dans son jeu :
+                Meba-Mickael Zeze sur l'accueil de Sprinter, Aurel Manga sur
+                celui de Hurdlers (`jeux`, game/vedettes.ts). */}
             {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}

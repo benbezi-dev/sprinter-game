@@ -71,7 +71,9 @@ export type Vedette = {
 export const VEDETTES: Record<string, Vedette> = {
   manga: {
     cle: 'manga', coureur: 'Aurel MANGA', prenom: 'Aurel', nom: 'MANGA',
-    epreuves: ['110h'], jeux: ['haies', 'sprint'], stade: 'defi-manga', skin: 'manga',
+    // sur l'accueil de Hurdlers SEULEMENT (02/10, a la demande de l'auteur :
+    // celui de Meba-Mickael sur Sprinter, celui d'Aurel sur Hurdlers)
+    epreuves: ['110h'], jeux: ['haies'], stade: 'defi-manga', skin: 'manga',
     portraits: { buste: 'vedettes/manga-buste.webp', pied: 'vedettes/manga-pied.webp' },
     couleurs: { vive: '#8B5CF6', fonce: '#2A1650', pale: '#C4B5FD', halo: '#3B2470' },
     // Deux medailles, deux sources concordantes (World Athletics, resultats
