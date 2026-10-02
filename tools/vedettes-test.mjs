@@ -266,7 +266,7 @@ ok('a la frappe : elles se touchent', ferme && ferme.ecart < 0.07, ferme && `${f
 ok('devant le visage, pas au-dessus de la tete', ferme && ferme.haut > 1.42 && ferme.haut < 1.62,
    ferme && `${ferme.haut.toFixed(2)} m`);
 
-titre('SON SKIN : LE DEPART ET LE COUDE');
+titre('SON SKIN : LE DEPART, LA TRANSITION ET LE COUDE');
 // Vingt pour cent de marge en plus pour decrocher le depart parfait : le
 // « TOP » du HUD tombe a 82 % du gain de reaction.
 {
@@ -286,6 +286,41 @@ titre('SON SKIN : LE DEPART ET LE COUDE');
   const a = seuil(null), b = seuil(LM);
   ok('la marge du depart parfait grandit de vingt pour cent', Math.abs(b / a - 1.2) < 0.01,
      `${a.toFixed(4)} s -> ${b.toFixed(4)} s`);
+}
+// ET LA TRANSITION PARFAITE (02/10) : vingt pour cent de marge aussi. La note
+// juge le rapport des intervalles d'appui (debut de la poussee / fin) ; sous
+// son skin, ce qui depasse 1 compte 1,2 fois. Huit appuis au moins, une fin de
+// poussee a 0,118 s (sous le plancher de 0,125 s).
+{
+  const race = K.RACES['100'], track = new K.Track(race);
+  const note = (look, ratio) => {
+    const p = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
+    if (look) p.look = look;
+    const t = [0];
+    for (let k = 0; k < 12; k++) t.push(t[t.length - 1] + (k < 6 ? 0.118 * ratio : 0.118));
+    p.pressTimes = t;
+    p.gradeTransition();
+    return p.transGrade;
+  };
+  ok('son look porte les deux marges (1,2 et 1,2)', LM.departParfait === 1.2 && LM.transParfaite === 1.2);
+  ok('maillot : un rapport de 1,21 est une transition parfaite', note(null, 1.21) === 2);
+  ok('maillot : 1,18 n est qu une bonne', note(null, 1.18) === 1);
+  ok('sous son skin, 1,18 est parfaite', note(LM, 1.18) === 2);
+  ok('sous son skin, 1,16 ne l est plus', note(LM, 1.16) === 1);
+  ok('maillot : 1,08 ne vaut rien ; sous son skin, c est une bonne', note(null, 1.08) === 0 && note(LM, 1.08) === 1);
+  // la marge : ce qui depasse 1 dans le rapport exige, divise par 1,2
+  const seuil = (look) => { let r = 1.30; while (note(look, r - 0.0005) === 2) r -= 0.0005; return r; };
+  const a = seuil(null), b = seuil(LM);
+  ok('la marge de la transition parfaite grandit de vingt pour cent', Math.abs((a - 1) / (b - 1) - 1.2) < 0.02,
+     `parfaite des ${a.toFixed(4)} -> ${b.toFixed(4)}`);
+  ok('le rapport garde reste le vrai', (() => {
+    const p = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
+    p.look = LM;
+    const t = [0];
+    for (let k = 0; k < 12; k++) t.push(t[t.length - 1] + (k < 6 ? 0.118 * 1.18 : 0.118));
+    p.pressTimes = t; p.gradeTransition();
+    return Math.abs(p.transRatio - 1.18) < 0.001;
+  })());
 }
 // LE COUDE RESTE PLIE DERRIERE : quand le bras est derriere le corps, l'angle
 // de l'avant-bras au bras ne descend pas sous 0,8 rad (45 degres).

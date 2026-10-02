@@ -1141,6 +1141,10 @@
       //             « TOP ») ; et un depart parfait porte alors l'image
       //             remanente de la transition parfaite (poussee-gestes.ts).
       departParfait: o.departParfait || 0,
+      // `transParfaite` : la marge de la transition parfaite, multipliee
+      //             (1,2 = la montee de cadence comptee vingt pour cent plus
+      //             franche qu'elle n'est ; voir gradeTransition).
+      transParfaite: o.transParfaite || 0,
       rituel: !!o.rituel,
       clap: !!o.clap,
       // `maillage` : le chemin de son vrai maillage (GLB), dessine en WebGL
@@ -1279,7 +1283,10 @@
       // SON SKIN PART PLUS FORT : vingt pour cent de chances en plus de
       // decrocher le depart parfait, qui s'allume alors comme une transition
       // parfaite — le halo ET l'image remanente.
-      departParfait: 1.2,
+      // ET IL RELANCE MIEUX (02/10, a la demande de l'auteur : « le skin
+      // apporte 20 % de reussite sur les departs canon et transition
+      // parfaite ») : vingt pour cent de marge aussi sur la transition.
+      departParfait: 1.2, transParfaite: 1.2,
       facettes: 64, lisse: true, maillage: 'vedettes/meba.glb' })
   };
 
@@ -1831,11 +1838,19 @@
     const late = mediane(gap.slice(moitie));
     const ratio = late > 0.0001 ? mediane(gap.slice(0, moitie)) / late : 0;
     this.transRatio = ratio;
+    // UN SKIN QUI ELARGIT LA TRANSITION PARFAITE (look.transParfaite) : la
+    // montee de cadence est jugee plus franche d'autant — ce qui depasse 1
+    // dans le rapport, multiplie par la marge. La parfaite tombe alors des
+    // 1,167 au lieu de 1,20 avec 1,2, la bonne des 1,075 au lieu de 1,09 :
+    // vingt pour cent de marge, comme le depart (press). Le rapport garde,
+    // lui, reste le vrai ; la cadence d'arrivee (TRANS_FLOOR) ne change pas.
+    const marge = (this.look && this.look.transParfaite) || 1;
+    const jugee = 1 + (ratio - 1) * marge;
     // Une montee qui n'aboutit pas a une vraie cadence ne vaut rien : c'est
     // ce qui distingue un demarrage maitrise d'un depart simplement lent.
     const abouti = late <= C.TRANS_FLOOR;
     this.transGrade = !abouti ? 0
-      : (ratio >= C.TRANS_PERFECT ? 2 : (ratio >= C.TRANS_GOOD ? 1 : 0));
+      : (jugee >= C.TRANS_PERFECT ? 2 : (jugee >= C.TRANS_GOOD ? 1 : 0));
     const g = this.transGrade;
     this.maxSpeed *= C.TRANS_VMAX[g];
     this.v = Math.min(this.maxSpeed, this.v + C.TRANS_BOOST[g]);
