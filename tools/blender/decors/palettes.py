@@ -100,3 +100,11 @@ for _st, _pieces in (('day', ['hauteur', 'perche', 'tente']),
 # chacun a son propre angle.
 PALETTES['materiel'] = dict(BASE)
 STADES['materiel'] = dict(debout=['blocs'], sol=[], symetriques=[], caps=32, pxParM=160)
+
+# LE STADE JEAN-DELBERT, A MONTREUIL (defi Aurel Manga). Ses deux pieces
+# viennent de Tripo (pieces_tripo.py) : la cabine du chronometrage sur ses
+# pilotis et un mat d'eclairage, d'apres les photos du lieu. Leur couleur est
+# celle de leur texture : la palette ne sert qu'a declarer le stade. Le mat
+# se regarde pareil de partout ; la cabine a une face, tournee vers la piste.
+PALETTES['montreuil'] = dict(BASE)
+STADES['montreuil'] = dict(debout=['cabine', 'mat'], sol=[], symetriques=['mat'])

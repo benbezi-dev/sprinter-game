@@ -42,6 +42,10 @@ for mod in (vue, matiere, palettes, pieces, reel):
 # rechargement de `pieces`, sans quoi elles en seraient effacees.
 import pieces_arcenciel
 importlib.reload(pieces_arcenciel)
+# Et les pieces sorties de Tripo (stade Jean-Delbert) : modeles importes,
+# mis a l'echelle et eclaires par la formule du jeu (pieces_tripo.py).
+import pieces_tripo
+importlib.reload(pieces_tripo)
 
 RACINE_PROJET = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 PX_PAR_M = 96.0

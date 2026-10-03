@@ -2103,6 +2103,31 @@
     }
    }
   },
+  "montreuil": {
+   "debout": {
+    "cabine": {
+     "0": {
+      "ax": 727.5,
+      "ay": 751.51,
+      "f": "cabine-0.webp",
+      "h": 927,
+      "portee": 14.45,
+      "w": 1158
+     }
+    },
+    "mat": {
+     "0": {
+      "ax": 1984.47,
+      "ay": 2524.58,
+      "f": "mat-0.webp",
+      "h": 2628,
+      "portee": 57.54,
+      "w": 2240
+     }
+    }
+   },
+   "sol": {}
+  },
   "namek": {
    "debout": {
     "aiguille": {

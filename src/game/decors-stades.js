@@ -326,6 +326,40 @@
     { p: 'satellite', l: { arriere: 70, d: 9.0 } },
   ]);
 
+  // LE STADE JEAN-DELBERT, A MONTREUIL — le defi Aurel Manga, un 110 m haies.
+  //
+  // Deux pieces sorties de Tripo d'apres les photos du lieu (voir
+  // pieces_tripo.py) : la cabine du chronometrage sur ses pilotis, et un mat
+  // d'eclairage. Au vrai stade, elles sont de l'autre cote, au bout de la
+  // tribune et dans les virages — hors du cadre pendant toute la course, que
+  // la camera filme a hauteur des premiers rangs. On les pose donc cote
+  // pelouse (decision du 03/10/2026).
+  //
+  // OU, C'EST UNE MESURE (03/10, 110 m haies, ecran de 412 x 915 points).
+  // Au-dessus des deux touches, la pelouse visible fait moins de cinq metres :
+  // le pied d'une piece n'y entre jamais, seul son haut se voit. Et l'endroit
+  // le plus longtemps filme est le DEPART — tout le decompte et les attitudes
+  // s'y passent. Les deux pieces y sont donc, et nulle part ailleurs : un mat
+  // pose apres l'arrivee n'etait jamais vu, la course passe au resultat sur
+  // la ligne.
+  //
+  // `libre` : chacune a ete placee pour ne jamais passer devant un coureur a
+  // l'image, ce que la regle de `degage` — prudente, elle compte deux fois la
+  // hauteur — aurait refuse. A l'ecran, un point de hauteur Z pose a d metres
+  // de la corde atteint le premier couloir des que Z depasse 0,894 d.
+  //   - LA CABINE (5,7 m, son dos a 1,75 m de son centre) : a 9 m, le haut de
+  //     son dos reste a 0,894 x 7,25 = 6,5 m, sous la corde. Vue 6,6 s.
+  //   - LE MAT (25 m) passe forcement devant la piste a l'image ; a vingt
+  //     metres derriere la ligne et 8,5 m dans la pelouse, il ne la croise
+  //     qu'entre -11,5 et -1,7 m : derriere les blocs, ou personne ne se
+  //     tient. Sa tete se voit 5 s, pendant le decompte.
+  // Sur un tour de piste (200, 400 m), `droite` negatif n'existe pas : le
+  // stade y reste sans ces pieces (voir lieu).
+  PLAN.montreuil = tous([
+    { p: 'cabine', l: { droite: -2, d: 9 }, libre: true },
+    { p: 'mat', l: { droite: -20, d: 8.5 }, libre: true },
+  ]);
+
   // Rendues au soleil de Blender : la nuit, une copie teinte (heure-du-jour.js).
   const nuit = (im, part) => (root.SprinterHeure ? root.SprinterHeure.image(im, part) : im);
 
@@ -381,7 +415,8 @@
       if (!L) continue;
       if (Z && L.X >= Z.x0 && L.X <= Z.x1 && L.Y >= Z.y0 && L.Y <= Z.y1) continue;
       if (e.rot) L.yaw += e.rot;
-      if (!sol && !degage(api, T, L, e, man)) continue;
+      // `libre` : posee hors de la zone de course (voir PLAN.montreuil)
+      if (!sol && !e.libre && !degage(api, T, L, e, man)) continue;
       out.push({ e, L, nom, man });
     }
     return out;
