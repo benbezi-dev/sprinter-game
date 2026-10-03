@@ -135,6 +135,151 @@ const MOTS: Record<string, Paire> = {
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };
 
+// --- APRES UNE DEFAITE : ce qu'il te dit (03/10, a la demande de l'auteur).
+//
+// TROIS SITUATIONS, parce qu'on ne chambre pas de la meme facon un coureur
+// parti avant le pistolet, un coureur battu de loin et un coureur battu d'un
+// souffle (SERRE_S, DefiVedette.tsx). Plusieurs phrases pour chacune, tirees
+// au hasard, sans jamais redire celle de la course d'avant : REVANCHE relance
+// tout de suite, et la meme phrase deux fois de suite s'use.
+//
+// LE TON est celui du jeu entre potes (03/10, a la demande de l'auteur :
+// « t'es tout tout propre, tu t'es fait laver ! », « il t'a fumé… c'est pas
+// grave, ça reste entre nous ») : familier, ca chambre, ca ne rabaisse pas, et
+// chaque phrase donne envie de la revanche. Ce sont de vrais athletes qui
+// parlent : rien qu'ils ne puissent signer.
+//
+// DEUX VOIX. Une phrase est la sienne (« t'es tout tout propre… ») : elle
+// s'affiche entre guillemets, signee de son nom. Ou c'est le jeu qui te parle
+// de lui (`'jeu'`, « il t'a fumé… ») : ni guillemets ni signature, sans quoi
+// on lirait Aurel parler de lui a la troisieme personne.
+//
+// LES PHRASES COMMUNES (`commun`) valent pour toutes les vedettes, et
+// s'ajoutent aux siennes. Les guillemets ne sont pas dans les phrases :
+// `phraseDeDefaite` les pose, a la francaise ou a l'anglaise.
+
+export type CasDeDefaite = 'perdu' | 'serre' | 'faux';
+
+/** Une phrase [francais, anglais], et `'jeu'` quand ce n'est pas lui qui parle. */
+type Phrase = Paire | [string, string, 'jeu'];
+
+const DEFAITES: Record<string, Partial<Record<CasDeDefaite, Phrase[]>>> = {
+  commun: {
+    perdu: [
+      ['T’es tout tout propre, tu t’es fait laver !',
+       'You’re all squeaky clean, you just got washed!'],
+      ['Il t’a fumé… c’est pas grave, ça reste entre nous.',
+       'He smoked you… no big deal, it stays between us.', 'jeu'],
+      ['Tu m’as vu de dos tout le long. Profite, c’est mon meilleur profil.',
+       'You saw my back the whole way. Enjoy, it’s my best side.'],
+      ['J’ai fini, j’ai bu, j’ai signé deux autographes. T’arrives ?',
+       'I finished, had a drink, signed two autographs. You coming?'],
+      ['Il t’a mis dans le vent… on dira que c’était le vent de face.',
+       'He left you in the wind… let’s call it a headwind.', 'jeu'],
+      ['Respire, ça va aller. Moi, ça va très bien, merci.',
+       'Breathe, you’ll be fine. Me, I’m doing great, thanks.'],
+    ],
+    serre: [
+      ['Ouh, ça a chauffé ! Mais c’est moi qui suis passé.',
+       'Ooh, that got hot! But I’m the one who got through.'],
+      ['Il a eu chaud. Il dira le contraire, mais il a eu chaud.',
+       'He was sweating. He’ll say otherwise, but he was sweating.', 'jeu'],
+      ['T’étais là, hein. Pas devant, mais là.',
+       'You were there, huh. Not in front, but there.'],
+    ],
+    faux: [
+      ['T’étais pressé de perdre ?',
+       'In a hurry to lose?'],
+      ['Doucement ! Le pistolet, c’est pas une suggestion.',
+       'Easy! The gun isn’t a suggestion.'],
+      ['Parti avant tout le monde, arrivé nulle part.',
+       'First off the line, finished nowhere.', 'jeu'],
+    ],
+  },
+  manga: {
+    perdu: [
+      // son entree : il pointe la ligne d'arrivee avant de s'installer
+      ['Je t’ai montré l’arrivée avant le départ. T’as pas regardé ou quoi ?',
+       'I showed you the finish before the start. Weren’t you looking or what?'],
+      ['Dix haies, et je t’ai vu à aucune. T’étais où ?',
+       'Ten hurdles, and I didn’t see you at a single one. Where were you?'],
+      ['Touche mon bandeau : même pas mouillé.',
+       'Feel my headband: not even damp.'],
+      ['Les haies, moi je suis passé dessus. Toi, c’est elles qui te sont passées dessus.',
+       'I went over the hurdles. You, they went over you.'],
+    ],
+    serre: [
+      ['À la dixième, je t’entendais souffler. À la ligne, plus rien.',
+       'At the tenth I could hear you panting. At the line, nothing.'],
+      ['Encore un effort, et je vais devoir courir pour de vrai.',
+       'One more push and I’ll have to actually run.'],
+      ['Pas mal. Le répète à personne.',
+       'Not bad. Don’t tell anyone I said that.'],
+    ],
+    faux: [
+      ['Le pistolet, c’est pour tout le monde. Même pour toi.',
+       'The gun is for everyone. Even you.'],
+      ['Tu voulais tellement me battre que tu es parti sans moi.',
+       'You wanted to beat me so badly you left without me.'],
+      ['J’étais encore en train de régler mes blocs.',
+       'I was still setting my blocks.'],
+    ],
+  },
+  meba: {
+    perdu: [
+      // son cri derriere les blocs, et ses trois claps
+      ['J’ai crié LET’S GO. Ça valait pour toi aussi.',
+       'I shouted LET’S GO. That was for you too.'],
+      ['J’ai eu le temps de me retourner pour te chercher.',
+       'I had time to turn around and look for you.'],
+      ['Tu peux applaudir, maintenant. Fort, comme moi.',
+       'You can clap now. Loud, like me.'],
+      ['Le couloir 5, c’est le mien. L’arrivée aussi.',
+       'Lane 5 is mine. So is the finish line.'],
+    ],
+    serre: [
+      ['Tu m’as fait peur. Pas longtemps, mais tu m’as fait peur.',
+       'You scared me. Not for long, but you scared me.'],
+      ['Encore un peu, et c’est toi qui criais LET’S GO.',
+       'A little more and you’d be the one shouting LET’S GO.'],
+      ['Sur la ligne, j’ai vu ton épaule. Juste derrière la mienne.',
+       'At the line I saw your shoulder. Right behind mine.'],
+    ],
+    faux: [
+      ['Mes claps, c’était pour moi. Pas un signal pour toi.',
+       'My claps were for me. Not a signal for you.'],
+      ['On attend le pistolet. Même quand on est pressé de me battre.',
+       'You wait for the gun. Even when you’re in a hurry to beat me.'],
+      ['Trop pressé. Ici, ça se paie cash.',
+       'Too eager. Around here, that costs you.'],
+    ],
+  },
+};
+
+/** La phrase tiree la fois d'avant, par athlete et par situation. */
+const dejaDite: Record<string, number> = {};
+
+/** Ce qui s'affiche sous le verdict : le texte, et qui le dit. */
+export type PhraseDeDefaite = { texte: string; voix: 'lui' | 'jeu' };
+
+/**
+ * Ce qu'on te dit apres une defaite contre cet athlete, dans la langue
+ * courante — ses phrases et les communes — ou null s'il n'y a rien a dire.
+ * Les siennes viennent entre guillemets ; celles du jeu, sans.
+ */
+export function phraseDeDefaite(qui: string, cas: CasDeDefaite): PhraseDeDefaite | null {
+  const lot = [...(DEFAITES.commun[cas] || []), ...(DEFAITES[qui]?.[cas] || [])];
+  if (!lot.length) return null;
+  const k = `${qui}:${cas}`;
+  let i = Math.floor(Math.random() * lot.length);
+  if (lot.length > 1 && i === dejaDite[k]) i = (i + 1 + Math.floor(Math.random() * (lot.length - 1))) % lot.length;
+  dejaDite[k] = i;
+  const p = lot[i];
+  const s = p[SprinterI18N.index()];
+  if (p.length === 3) return { texte: s, voix: 'jeu' };
+  return { texte: SprinterI18N.index() === 0 ? `«\u202F${s}\u202F»` : `“${s}”`, voix: 'lui' };
+}
+
 /** Ce mot existe-t-il pour cet athlete (sa version, ou la commune) ? */
 export function aLeMot(cle: string, qui?: string): boolean {
   return !!((qui && MOTS[`${cle}:${qui}`]) || MOTS[cle]);

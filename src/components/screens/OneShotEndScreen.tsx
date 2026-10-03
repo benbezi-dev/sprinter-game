@@ -33,6 +33,8 @@ import { compteARebours, type Sortie as SortieVideo } from '@/game/review';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
 import { mesPointsDe, type PointsDuel } from '@/game/live';
+import { RevancheDirecte } from './RevancheDirecte';
+import { voterRevanche } from '@/game/salon-direct';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -949,6 +951,10 @@ export function OneShotEndScreen() {
             </p>
           )}
 
+          {/* La revanche, dans la meme salle et sous le meme code — si tout
+              le monde dit oui. Voir RevancheDirecte. */}
+          {live && !seul && <RevancheDirecte />}
+
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
@@ -1497,7 +1503,13 @@ export function OneShotEndScreen() {
             )}
             <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
             {RECOMMENCER_OUVERT && <button
-              onClick={() => { pushReprise(); SprinterApp.recommencer(); }}
+              onClick={() => {
+                // Recourir seul, c'est renoncer a la revanche qu'on avait
+                // demandee : sans quoi les autres, en l'acceptant, feraient
+                // partir une presentation par-dessus notre course.
+                if (live) voterRevanche(false);
+                pushReprise(); SprinterApp.recommencer();
+              }}
               className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
                          border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1

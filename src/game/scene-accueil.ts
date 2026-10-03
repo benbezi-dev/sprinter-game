@@ -220,7 +220,7 @@ export function dessinerLesCoureursDeLAccueil(ctx: CanvasRenderingContext2D, A: 
     foulee[i] = f == null ? tick * 10 + i * 2.1 : f + dt * 10 * (1 - 0.7 * salut[i]);
     const man = { look: zeze[i], stride: foulee[i], v: 12 * (1 - 0.82 * salut[i]), maxSpeed: 12,
                   fallAnim: 0, celebrate: salut[i] };
-    return { man, x, y, k: man.look.h / Core.C.MODEL_H };
+    return { man, x, y, k: man.look.h / Core.C.MODEL_H, X: milieu[0] + recul * (Y - milieu[1]), Y };
   });
   // Les ombres d'abord, toutes : celle d'un coureur ne doit pas passer sur la
   // jambe de son voisin. Ce sont celles de la course — penombre large, contact
@@ -230,7 +230,18 @@ export function dessinerLesCoureursDeLAccueil(ctx: CanvasRenderingContext2D, A: 
       Prem.ombre(ctx, c.x, c.y, P.taille / 2, c.k, c.man.stride, theme.projecteurs, theme);
     }
   }
-  for (const c of meute) {
+  // DU PLUS LOIN AU PLUS PRES (03/10, « les personnages se superposent »). Les
+  // trois se tiennent a la meme profondeur : ce qui se recouvre, ce sont les
+  // membres — l'arriere de celui qui est devant et l'avant de celui qui le
+  // suit. Quand la course s'eloigne de la camera, l'arriere est le plus pres :
+  // celui qui suit se peint d'abord. Peints du dedans au dehors, le bras et la
+  // jambe arriere du coureur de gauche passaient sous le genou de son voisin,
+  // plus loin que lui — et sur un telephone en portrait, ou les couloirs se
+  // resserrent, ils se recouvrent de moitie.
+  const a0 = T.pos(s, COULOIR), a1 = T.pos(s + 1, COULOIR);
+  const sens = Math.sign(A.depthOf(a1[0], a1[1]) - A.depthOf(a0[0], a0[1]));
+  const avance = (c: any) => ((c.X - milieu[0]) * (a1[0] - a0[0]) + (c.Y - milieu[1]) * (a1[1] - a0[1])) * sens;
+  for (const c of meute.slice().sort((a, b) => avance(a) - avance(b))) {
     // Comme en course, la silhouette tourne avec le stade quand la piste a un
     // virage ; drawIcon, lui, ne la tourne jamais.
     const k = P.taille * c.k / 2;

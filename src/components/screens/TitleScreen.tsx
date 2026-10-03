@@ -12,6 +12,7 @@ import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
+import { salonCourant } from '@/game/salon-direct';
 import { tutoVu, marquerTutoVu } from './Tutorial';
 import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
@@ -42,7 +43,6 @@ import { usePassage } from '@/game/passage';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
-import { salonCourant } from '@/game/salon-direct';
 import { venuPourLeDefi } from '@/game/defi-demie';
 import { usePresences } from '@/game/presence';
 
@@ -173,13 +173,12 @@ export function TitleScreen() {
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
   //
-  // Le retour d'une course en direct aussi. L'accueil se remonte a neuf apres
-  // chaque course et repartait sur la carriere : le salon — la revanche, et la
-  // video de la course a partager — restait cache sous un onglet qu'il
-  // fallait penser a rouvrir. Tant qu'une salle est ouverte, c'est la qu'on
-  // revient.
+  // Et le retour d'une course en direct aussi, tant que la piste est ouverte :
+  // c'est la que le salon attend, avec la revanche. L'accueil s'ouvrait sur la
+  // carriere, et il fallait savoir que la salle vivait encore un onglet plus
+  // loin.
   const [tab, setTab] = useState<Tab>(() =>
-    (venuPourUnDuel || !!salonCourant() ? 'versus' : 'career'));
+    (venuPourUnDuel || (DUELS_OUVERTS && !!salonCourant()) ? 'versus' : 'career'));
 
   // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel

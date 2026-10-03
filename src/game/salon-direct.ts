@@ -21,9 +21,51 @@
 // l'instant ou l'on entre sur la piste a celui ou l'on en sort. Que React
 // monte ou demonte l'ecran entre les deux est un detail d'affichage.
 
+import { useSyncExternalStore } from 'react';
 import type { Salle } from './live';
 
 let courant: Salle | null = null;
+
+/* ---------------------------------------------------------------------------
+   QUI REGARDE LA SALLE
+   ---------------------------------------------------------------------------
+   Le panneau du direct la pilote ; l'ecran de fin de course, lui, n'a qu'a la
+   lire — qui est encore la, qui veut la revanche, si la piste est encore
+   ouverte. Il s'abonne ici plutot qu'a la salle elle-meme : la salle change
+   quand on la quitte ou qu'on en rejoint une autre, et l'abonnement doit
+   suivre sans que l'ecran ait a s'en occuper.
+--------------------------------------------------------------------------- */
+
+let version = 0;
+const abonnes = new Set<() => void>();
+let lacher: (() => void) | null = null;
+
+function prevenir() {
+  version++;
+  for (const f of abonnes) {
+    try { f(); } catch { /* un ecran casse n'empeche pas les autres */ }
+  }
+}
+
+function suivre(s: Salle | null) {
+  lacher?.();
+  lacher = s ? s.observer(prevenir) : null;
+  prevenir();
+}
+
+/**
+ * La salle du direct, et un nouveau rendu a chacun de ses changements.
+ *
+ * Rend la salle elle-meme : c'est elle qui sait ou elle en est (dernierEtat,
+ * enVie, coupee, pretMoi). Nulle quand on n'est sur aucune piste.
+ */
+export function useSalonDirect(): Salle | null {
+  useSyncExternalStore(
+    f => { abonnes.add(f); return () => { abonnes.delete(f); }; },
+    () => version,
+  );
+  return courant;
+}
 
 /**
  * Prend une salle en charge. Celle qui etait la, s'il y en avait une, est
@@ -34,6 +76,7 @@ export function poserSalon(s: Salle | null) {
     try { courant.fermer(); } catch { /* deja fermee */ }
   }
   courant = s;
+  suivre(s);
 }
 
 export function salonCourant(): Salle | null { return courant; }
@@ -46,6 +89,25 @@ export function quitterSalon() {
   if (!courant) return;
   try { courant.fermer(); } catch { /* deja fermee */ }
   courant = null;
+  suivre(null);
+}
+
+/**
+ * LA REVANCHE : DIRE OUI, OU REVENIR SUR SON OUI.
+ *
+ * Dans la salle, c'est « pret », et rien d'autre : la salle repart quand tous
+ * ses couloirs sont pris et que chacun l'a dit — elle remet tout le monde a
+ * « pas pret » a chaque verdict, si bien qu'aucun oui de la course d'avant ne
+ * compte pour la suivante.
+ *
+ * Une salle qui s'est fermee entre-temps se rouvre sous le meme code, et l'on
+ * y revient deja pret : demander la revanche, c'est accepter de courir.
+ */
+export function voterRevanche(oui: boolean) {
+  const s = courant;
+  if (!s) return;
+  if (s.enVie()) s.pret(oui);
+  else if (oui) s.rouvrir(true);
 }
 
 /* ---------------------------------------------------------------------------

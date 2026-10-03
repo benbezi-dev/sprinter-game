@@ -3647,7 +3647,7 @@
     //
     // ELLE EST AJOUTEE EN DERNIER, ET C'EST UN CONTRAT : le rendu prend la
     // derniere capsule pour savoir ou allumer l'eclair du coup de feu — voir
-    // `drawStarter` dans sprinter-app.js.
+    // `dessinerLeStarter` dans sprinter-app.js.
     if (poing) {
       const [M, a] = poing;
       // Une crosse sombre et un canon d'acier : sur un short bleu nuit, une

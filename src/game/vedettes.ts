@@ -64,7 +64,8 @@ export type Vedette = {
   /**
    * Une entree avant les blocs : il arrive de derriere la ligne, en marchant,
    * depuis `depuis` metres (negatif : en arriere du depart, hors du cadre),
-   * jusqu'a ses blocs, et pointe la ligne d'arrivee (entrerEnBoss, engine.ts).
+   * en longeant ses blocs jusqu'a la ligne, et pointe la ligne d'arrivee
+   * (entrerEnBoss, engine.ts).
    */
   entree?: { depuis: number };
   /**
@@ -83,8 +84,8 @@ export const VEDETTES: Record<string, Vedette> = {
     epreuves: ['110h'], jeux: ['haies'], stade: 'defi-manga', skin: 'manga',
     // SON ENTREE (03/10, a la demande de l'auteur) : il arrive par le bord
     // droit de l'ecran, de derriere les blocs, d'une demarche de patron,
-    // marche jusqu'a ses blocs et pointe la ligne d'arrivee avant de s'y
-    // installer (entrerEnBoss, engine.ts).
+    // longe ses blocs jusqu'a la ligne et y pointe l'arrivee avant de
+    // s'installer (entrerEnBoss, engine.ts).
     entree: { depuis: -6.2 },
     // ouvert avec celui de Meba-Mickael, le samedi 3 octobre 2026 a 21 h 30
     // (03/10, decide par l'auteur), et referme avec lui une semaine apres
@@ -191,6 +192,8 @@ export function lancerLeDefi(v: Vedette, epreuve: string = v.epreuves[0]) {
   // bouton de fin, l'abandon, le retour arriere du telephone. La place n'est
   // prise que si elle est libre : la nuit du molosse s'y pose aussi.
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLeDefi;
+  // Le son de l'arrivee : c'est lui qui sait si on l'a battu (sonDuDefi).
+  if (!G.sonDArrivee) G.sonDArrivee = sonDuDefi;
   (SprinterApp as any).startOneShot([epreuve], { levelIdx: idx });
   // SON CRI AVANT LES BLOCS, pour qui en a un (`cri`) : le decompte attend
   // qu'il l'ait lance. Voir G.avantDepart dans engine.ts.
@@ -236,12 +239,28 @@ export function defiPerdu(): boolean {
   return !(moi !== null && (tLui === null || moi < tLui));
 }
 
+/**
+ * Le son de l'arrivee d'un defi, que le moteur demande a la fin de la course
+ * (G.sonDArrivee, sprinter-app.js) : la phrase de defaite quand il t'a battu,
+ * la fanfare quand tu l'as battu — ce que jouent les duels. Sans lui, le
+ * moteur jouait la victoire des qu'on passait la ligne, meme derriere lui.
+ * Hors defi, null : le moteur garde son son ordinaire.
+ *
+ * Le faux depart ne passe pas par ici : sa cinematique joue deja la phrase
+ * de defaite (falseStartOut).
+ */
+function sonDuDefi(): string | null {
+  if (!defiEnCours()) return null;
+  return defiPerdu() ? 'dirge' : 'fanfare';
+}
+
 export function rangerLeDefi() {
   enCours = null;
   epreuveEnCours = null;
   if (SprinterApp.G) SprinterApp.G.avantDepart = null;
   const G = SprinterApp.G;
   if (G && G.surRetourAccueil === rangerLeDefi) G.surRetourAccueil = null;
+  if (G && G.sonDArrivee === sonDuDefi) G.sonDArrivee = null;
 }
 
 export type Verdict = {

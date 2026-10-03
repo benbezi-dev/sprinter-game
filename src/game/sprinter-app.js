@@ -3347,7 +3347,13 @@
       G.runTime += tt || 0;
       G.shotTraces.push(G.recTrace || []);
       save(); G.flash = 1;
-      Audio_.sfx(tt !== null ? 'win' : 'lose');
+      // UN MODE QUI A UN ADVERSAIRE A BATTRE DIT LUI-MEME QUI A GAGNE. Seul,
+      // le moteur ne sait que « tu as passe la ligne » : il jouait la victoire
+      // a qui finissait derriere Aurel Manga. Le crochet (G.sonDArrivee, pose
+      // par le defi des vedettes) rend le nom d'une phrase de fin, ou null
+      // pour garder le son ordinaire.
+      const son = G.sonDArrivee ? G.sonDArrivee() : null;
+      if (son) Audio_.cue(son); else Audio_.sfx(tt !== null ? 'win' : 'lose');
       if (G.shotIdx + 1 < G.shotRaces.length) { G.state = 'result'; return; }
       G.state = 'winall'; return;
     }
@@ -4312,6 +4318,12 @@
     // fois dans la tuile puis repete par le moteur canvas, le public gagne
     // du volume sans rien couter par frame — ce qui serait impossible en
     // dessinant les dizaines de milliers de spectateurs un par un.
+    //
+    // Peints du plus haut au plus bas de la tuile (03/10, « les personnages se
+    // superposent ») : plus haut, c'est plus loin dans le gradin. Dans
+    // l'ordre de leur tirage, un supporter du rang de derriere passait sur
+    // celui de devant. On les tire d'abord, on les peint ensuite.
+    const aPeindre = [];
     for (let n = 0; n < count; n++) {
       const seed = ((n + 1) * 2654435761) >>> 0;
       const fan = {
@@ -4331,10 +4343,12 @@
       for (const dx of [0, -CROWD_TILE]) {
         for (const dy of [0, -CROWD_TILE]) {
           if ((dx || dy) && x + dx < -40 && y + dy < -40) continue;
-          drawFacetFigure(tctx, caps, x + dx, y + dy, k);
+          aPeindre.push([y + dy, caps, x + dx, k]);
         }
       }
     }
+    aPeindre.sort((a, b) => a[0] - b[0]);
+    for (const [y, caps, x, k] of aPeindre) drawFacetFigure(tctx, caps, x, y, k);
     crowdPatternCache[levelIdx] = ctx.createPattern(tile, 'repeat');
     return crowdPatternCache[levelIdx];
   }
@@ -8102,27 +8116,52 @@
     ctx.restore();
   }
 
-  function drawStarter(ctx) {
+  /**
+   * Le starter, s'il est a l'image : sa profondeur, son ombre, et lui.
+   *
+   * drawAthletes les range a part (03/10, « les personnages se superposent ») :
+   * l'ombre au sol avec celles des coureurs, lui dans la pile triee par
+   * profondeur. Peint avant tout le monde, comme s'il se tenait derriere eux,
+   * il passait en ligne droite sous les couloirs 1 et 2 : il se tient devant
+   * les blocs, en bas a gauche, et les coureurs de ces couloirs, plus loin que
+   * lui des deux ou trois metres apres le coup, lui passaient sur le buste
+   * avec leur ombre et leur cerceau. En virage, il est plus loin qu'eux tous :
+   * la pile le peint alors d'abord, comme avant.
+   */
+  function leStarter() {
     // Personne sur la pelouse quand c'est un decompte qui donne le depart :
     // le jeu publie n'a pas de starter, et un officiel plante la sans rien
     // faire serait plus etrange que son absence.
-    if (!STARTER) return;
+    if (!STARTER) return null;
     const T = G.track, d = G.depart;
-    if (!T || !d) return;
+    if (!T || !d) return null;
     // Le coup est parti quand la course a commence : `elapsed` compte alors
     // exactement le temps ecoule depuis, ce qui donne le recul, l'eclair et
     // la fumee sans qu'on ait a tenir un chronometre de plus.
     const tir = G.state === 'race' ? G.elapsed : -1;
-    if (G.state !== 'count' && G.state !== 'falseout' && !(tir >= 0 && tir < 2.6)) return;
+    if (G.state !== 'count' && G.state !== 'falseout' && !(tir >= 0 && tir < 2.6)) return null;
     // Pendant la presentation des athletes, il attend comme les autres.
     const p = T.pos(STARTER_D, STARTER_COULOIR);
     const g2 = ground(p[0], p[1]);
-    if (g2[0] < -240 || g2[0] > G.VW + 240 || g2[1] < -280 || g2[1] > G.VH + 260) return;
+    if (g2[0] < -240 || g2[0] > G.VW + 240 || g2[1] < -280 || g2[1] > G.VH + 260) return null;
+    const m = scaleM();
+    return {
+      profondeur: depthOf(p[0], p[1]),
+      ombre(ctx) {
+        ctx.fillStyle = 'rgba(0,0,0,0.42)';
+        ctx.beginPath();
+        ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
+        ctx.fill();
+      },
+      dessiner(ctx) { dessinerLeStarter(ctx, T, d, tir, g2, m); },
+    };
+  }
 
+  function dessinerLeStarter(ctx, T, d, tir, g2, m) {
     const alien = G.levelIdx === ETAPE_ZEZE;
     const prof = G.levelIdx === 0;
     const look = alien ? LOOK_ALIEN : (prof ? LOOK_PROF : LOOK_STARTER);
-    const m = scaleM(), k = m * (look.h / C.MODEL_H);
+    const k = m * (look.h / C.MODEL_H);
 
     // Le bras monte au « pret », en une demi-seconde — un starter ne leve pas
     // son arme d'un coup sec — et redescend une fois la course partie. Le prof
@@ -8164,10 +8203,6 @@
     // arme, et surtout ne regarderait personne.
     const caps = personCapsules(person, T.heading(STARTER_D, 0) + Math.PI,
                                 0, false, !!T.curved, niveauDetail(k));
-    ctx.fillStyle = 'rgba(0,0,0,0.42)';
-    ctx.beginPath();
-    ctx.ellipse(g2[0], g2[1], 15 * m / 30, 6 * m / 30, 0, 0, TAU);
-    ctx.fill();
     drawFacetFigure(ctx, caps, g2[0], g2[1], k);
 
     // Le bout du canon, pour y poser l'eclair : c'est la derniere capsule que
@@ -8296,9 +8331,10 @@
     const T = G.track, m = scaleM(), th = theme();
     for (const r of G.runners) phaseBlocs(r);
     if (G.ghost && G.ghost.runner) phaseBlocs(G.ghost.runner);
-    // Le starter passe avant tout le monde : il se tient derriere la ligne,
-    // donc derriere les coureurs.
-    drawStarter(ctx);
+    // Le starter : son ombre ici, avec celles des coureurs ; lui dans la pile,
+    // a sa profondeur (voir leStarter).
+    const starter = leStarter();
+    if (starter) starter.ombre(ctx);
     const vis = [];
     // A plusieurs, les adversaires en direct sont deja dans G.runners : le
     // fantome designe ne doit pas etre dessine une seconde fois par-dessus
@@ -8411,6 +8447,11 @@
     // la, `partPoussee()` rend zero et rien ne se dessine — une image de
     // course ordinaire ne paie donc que ce test.
     const pouss = PREM() && PREM().partPoussee ? PREM().partPoussee() : 0;
+    // Les echos se peignent dans la pile des coureurs, juste avant le joueur
+    // (voir plus bas) : sous lui, mais par-dessus les coureurs plus loin que
+    // lui. Peints ici, avant tout le monde, le voisin du couloir exterieur leur
+    // passait dessus alors qu'ils sont derriere le joueur, donc plus pres.
+    let echosDuJoueur = null;
     if (pouss > 0.02 && G.player) {
       const age = PREM().agePoussee ? PREM().agePoussee() : -1;
       // LES ECHOS SE DEMANDENT A PART, et pour deux raisons qui se lisent au
@@ -8428,10 +8469,11 @@
       // machine tient. On la pose plutot que d'y repondre — le prix d'un
       // dessin est la decision de la couche de finition, pas d'ici.
       const copies = PREM().echosCopies ? PREM().echosCopies() : 3;
-      for (const [r, g2] of vis) {
+      for (const [r, g2, p] of vis) {
         if (r !== G.player || r.isGhost) continue;
         drawOndePoussee(ctx, g2, m, pouss, age);
-        if (echos > 0.02) drawPousseeTrail(ctx, r, m, echos, copies);
+        if (echos > 0.02) echosDuJoueur = { profondeur: depthOf(p[0], p[1]) + 1e-6,
+                                            dessiner: () => drawPousseeTrail(ctx, r, m, echos, copies) };
       }
     }
     const coureur = ([r, g2, p]) => {
@@ -8474,16 +8516,16 @@
     // Une haie se franchit : le coureur passe devant elle tant qu'il ne l'a
     // pas atteinte, derriere des qu'il l'a depassee. Rien de fixe ne peut
     // donc la dessiner ni avant ni apres les athletes ; elle prend sa place
-    // dans la meme pile.
+    // dans la meme pile. Le starter aussi (voir leStarter), et les echos de
+    // poussee, a la place du joueur et juste avant lui.
     const pieces = G.obstacles ? G.obstacles.pieces(apiObstacles()) : null;
     const pile = [];
-    for (const it of vis) pile.push([depthOf(it[2][0], it[2][1]), it, null]);
-    if (pieces) for (const pc of pieces) pile.push([pc.profondeur, null, pc]);
+    for (const it of vis) pile.push([depthOf(it[2][0], it[2][1]), () => coureur(it)]);
+    if (pieces) for (const pc of pieces) pile.push([pc.profondeur, () => G.obstacles.dessiner(ctx, apiObstacles(), pc)]);
+    if (starter) pile.push([starter.profondeur, () => starter.dessiner(ctx)]);
+    if (echosDuJoueur) pile.push([echosDuJoueur.profondeur, echosDuJoueur.dessiner]);
     pile.sort((a, b) => b[0] - a[0]);
-    for (const [, it, pc] of pile) {
-      if (it) coureur(it);
-      else G.obstacles.dessiner(ctx, apiObstacles(), pc);
-    }
+    for (const [, dessiner] of pile) dessiner();
     // LES DECORS DEBOUT, APRES LES COUREURS ET AVANT LEURS NOMS.
     //
     // Tout ce qui se tient dans la pelouse interieure est plus pres de la

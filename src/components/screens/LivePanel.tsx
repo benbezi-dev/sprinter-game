@@ -3,14 +3,16 @@ import { createPortal } from 'react-dom';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered } from 'lucide-react';
+import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered, RotateCcw } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   COULOIRS, mesPointsDe,
   type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
   type ResultatDirect, type PointsDuel,
 } from '@/game/live';
-import { poserSalon, salonCourant, quitterSalon, surDemandeRejoindre } from '@/game/salon-direct';
+import {
+  poserSalon, salonCourant, quitterSalon, surDemandeRejoindre, useSalonDirect,
+} from '@/game/salon-direct';
 import {
   poserVoix, voixCourante, couperVoix, programmerFinVoix, annulerFinVoix,
 } from '@/game/voix-directe';
@@ -149,7 +151,6 @@ export function LivePanel() {
   const RACE_KEYS = epreuvesDuJeu(jeu);
   const [epreuve, setEpreuve] = useState<RaceKey>(() => RACE_KEYS[0]);
   const [salon, setSalon] = useState<EtatSalle | null>(null);
-  const [pret, setPret] = useState(false);
   const [erreur, setErreur] = useState('');
   const [occupe, setOccupe] = useState(false);
   const [copie, setCopie] = useState(false);
@@ -194,6 +195,12 @@ export function LivePanel() {
   const film = useFilmDeLaCourse();
 
   const salle = useRef<Salle | null>(null);
+  /**
+   * Un rendu a chaque changement de la salle, y compris ceux qu'aucun
+   * ecouteur ne porte : la liaison que la salle coupe apres la course, celle
+   * qu'on rouvre sous le meme code.
+   */
+  useSalonDirect();
   const auto = useRef(false);
   /** Instant absolu du coup de pistolet, garde le temps de la presentation. */
   const cibleDepart = useRef<number | null>(null);
@@ -294,7 +301,7 @@ export function LivePanel() {
    */
   const monterLaPiste = () => {
     if (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race') return;
-    SprinterApp.startLive([epreuve], {
+    SprinterApp.startLive([epreuveDeLaSalle()], {
       levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
       autres: lesAutres(), sansOrdinateur: true, photoFinish: true,
     });
@@ -319,6 +326,28 @@ export function LivePanel() {
   };
 
   /**
+   * LA DISTANCE, LUE DANS LA SALLE ET NON DANS LE SELECTEUR.
+   *
+   * C'est celui qui ouvre la piste qui la choisit, et tous ceux qui entrent
+   * avec son code la courent. Le salon le disait bien — `rejoindre` recalait
+   * le selecteur sur la salle — mais la course partait d'ailleurs : les
+   * ecouteurs sont crees a la connexion, avec l'etat React de cet instant-la,
+   * soit AVANT que le recalage ait pris effet. Celui qui rejoignait courait
+   * donc la distance de son propre selecteur — le 100 m par defaut, ou celle
+   * qu'il avait touchee avant de taper le code — pendant que l'hote courait
+   * son 400 m. Meme defaut au retour d'une course : le panneau remonte avec
+   * son selecteur remis a zero, et une revanche partie de la serait partie
+   * sur 100 m.
+   *
+   * Meme remede que pour les adversaires : la salle garde son dernier etat a
+   * jour, c'est la source.
+   */
+  const epreuveDeLaSalle = (): RaceKey => {
+    const s = salle.current;
+    return ((s?.dernierEtat?.epreuves?.[0] || s?.epreuves?.[0] || epreuve) as RaceKey);
+  };
+
+  /**
    * Le pistolet. Appele soit a la fin de la presentation, soit tout de suite
    * si la salle n'en a pas annonce — le mode reste jouable contre un serveur
    * qui ne connaitrait pas encore la sequence.
@@ -339,7 +368,7 @@ export function LivePanel() {
     // les deux clients doivent placer les memes gens aux memes endroits.
     const autres = lesAutres();
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
-      SprinterApp.startLive([epreuve], {
+      SprinterApp.startLive([epreuveDeLaSalle()], {
         levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
         photoFinish: true,
       });
@@ -376,6 +405,9 @@ export function LivePanel() {
   const ecouteurs = (monCode: string) => ({
     onEtat: (e: EtatSalle) => {
       setSalon(e);
+      // Le selecteur suit la salle : c'est sa distance qui s'affiche, et
+      // celle qu'on retrouvera en quittant la piste.
+      if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
       setEtape(p => (p === 'presentation' || p === 'partie' || p === 'review') ? p : 'salon');
       // La piste est montee des le debut de la presentation, et la salle
       // continue de vivre jusqu'au pistolet : quelqu'un ferme l'application,
@@ -524,7 +556,12 @@ export function LivePanel() {
     onFerme: () => { if (etape === 'salon') setErreur(N.t('live_closed')); },
   });
 
-  const brancher = (c: string) => {
+  /**
+   * @param eps la distance de la piste quand on la connait deja — celle que la
+   *   salle a annoncee a qui la rejoint. Sans elle, c'est le selecteur : on
+   *   ouvre la piste, c'est donc nous qui la choisissons.
+   */
+  const brancher = (c: string, eps?: string[] | null) => {
     const s = new Salle(c, ecouteurs(c));
     salle.current = s;
     poserSalon(s);
@@ -541,7 +578,7 @@ export function LivePanel() {
       abandon: () => s.abandon(),
     });
     // La salle annonce le terrain de la course : le meme qu'on monte ici.
-    s.connecter([epreuve], NIVEAU_DIRECT, places);
+    s.connecter(eps && eps.length ? eps : [epreuve], NIVEAU_DIRECT, places);
   };
 
   /**
@@ -605,13 +642,28 @@ export function LivePanel() {
       if (!e || !e.existe) { setErreur(N.t('live_none')); return; }
       if (e.complete) { setErreur(N.t('live_full')); return; }
       if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
-      setCode(c); brancher(c);
+      setCode(c); brancher(c, e.epreuves);
     });
   };
 
-  const basculerPret = () => {
-    const v = !pret; setPret(v); salle.current?.pret(v);
-  };
+  /**
+   * Pret ou pas, c'est la SALLE qui le dit.
+   *
+   * Le panneau tenait son propre booleen, et il mentait des qu'il n'etait pas
+   * la pour suivre : remonte apres la course, il repartait de « pas pret »
+   * alors que la salle, elle, gardait le oui de la course d'avant. Elle remet
+   * maintenant tout le monde a zero a chaque verdict, et ce qu'on montre est
+   * ce qu'elle a.
+   */
+  const pret = !!salle.current?.pretMoi;
+  const basculerPret = () => { salle.current?.pret(!pret); };
+  /**
+   * La salle a coupe la liaison — apres la course, faute de revanche, ou
+   * apres quelques minutes sans rien. Le code reste bon : on rouvre la meme
+   * piste, et les autres la rejoignent en revenant.
+   */
+  const coupee = !!salle.current?.coupee && !salle.current?.enVie();
+  const rouvrir = () => { setErreur(''); salle.current?.rouvrir(); };
 
   const quitter = () => {
     quitterSalon(); salle.current = null;
@@ -637,7 +689,7 @@ export function LivePanel() {
     presEnCours.current = false; cibleDepart.current = null;
     dateDepart.current = null;
     setPresentation(null);
-    setEtape('repos'); setCode(''); setSalon(null); setPret(false); setErreur('');
+    setEtape('repos'); setCode(''); setSalon(null); setErreur('');
   };
 
   /** Tout le monde est passe : on enchaine sur le pistolet. */
@@ -656,7 +708,12 @@ export function LivePanel() {
   };
 
   const msg = code ? N.t('live_invite', { c: code, l: lienSalle(code) }) : '';
-  const joueurs: JoueurSalle[] = salon?.joueurs || [];
+  // La salle d'abord : c'est elle qui sait ou elle en est, et elle le sait
+  // encore quand ce panneau vient d'etre remonte.
+  const vu = salle.current?.dernierEtat ?? salon;
+  // Une piste refermee n'a plus personne dessus : la liste d'avant decrirait
+  // des gens qui n'y sont plus.
+  const joueurs: JoueurSalle[] = coupee ? [] : (vu?.joueurs || []);
   /**
    * La taille de la piste vient de la SALLE, pas du selecteur.
    *
@@ -664,7 +721,16 @@ export function LivePanel() {
    * arrive, et son propre selecteur est reste sur deux. C'est `max` qui fait
    * foi de part et d'autre, et le selecteur ne sert que le temps d'ouvrir.
    */
-  const taille = salon?.max || places;
+  const taille = vu?.max || places;
+  /**
+   * Une course vient de se jouer ici : se redeclarer pret, c'est demander la
+   * revanche. La salle a remis tout le monde a « pas pret » au verdict, et
+   * repart quand chacun a redit oui.
+   */
+  // Seul sur la piste, ce n'est pas une revanche : c'est un tour de plus.
+  const apresCourse = !coupee && !!vu?.termine && taille > 1;
+  const moiId = salle.current?.moi || '';
+  const autresPrets = joueurs.filter(j => j.id !== moiId && j.pret).length;
   /**
    * Pleine, donc prete a partir.
    *
@@ -828,7 +894,7 @@ export function LivePanel() {
       <div className="flex items-center gap-2 justify-center">
         <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
         <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-          {N.t('live_room')} · {RACES[epreuve].label}
+          {N.t('live_room')} · {(RACES[epreuveDeLaSalle()] || RACES[epreuve]).label}
         </h3>
       </div>
 
@@ -836,8 +902,29 @@ export function LivePanel() {
         {code}
       </div>
 
+      {/* LA PISTE S'EST REFERMEE. On le dit, et on la rouvre d'un geste :
+          meme code, memes couloirs, meme distance. Avant, le salon restait
+          affiche tel quel — le code, les noms, un bouton PRET qui ne partait
+          nulle part — et il fallait quitter pour en ouvrir une autre. */}
+      {coupee && (
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-[10px] md:text-xs text-muted-foreground text-center leading-snug">
+            {N.t('live_coupee')}
+          </p>
+          <button
+            onClick={rouvrir}
+            className="w-full py-3 rounded-xl font-black font-display tracking-widest text-background
+                       bg-emerald-400 hover:bg-emerald-400/90 transition-colors
+                       flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="w-4 h-4" />
+            {N.t('live_rouvrir')}
+          </button>
+        </div>
+      )}
+
       {/* Tant qu'on est seul, tout l'ecran sert a faire venir l'autre. */}
-      {!complet && (
+      {!complet && !coupee && (
         <>
           <p className="text-[10px] md:text-xs text-muted-foreground text-center">
             {N.t('live_waiting', { n: taille })}
@@ -927,6 +1014,7 @@ export function LivePanel() {
         document.body,
       )}
 
+      {!coupee && (<>
       <div className="flex flex-col gap-1.5">
         {joueurs.map((j, i) => (
           <div key={j.id}
@@ -966,6 +1054,9 @@ export function LivePanel() {
         ))}
       </div>
 
+      {/* Apres une course, le meme bouton demande la revanche : la salle a
+          remis tout le monde a « pas pret », et repart quand chacun a redit
+          oui. Quand quelqu'un l'a deja demandee, on l'accepte. */}
       <button
         onClick={basculerPret}
         disabled={!complet}
@@ -974,8 +1065,11 @@ export function LivePanel() {
           ${pret ? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/40'
                  : 'bg-emerald-400 text-background hover:bg-emerald-400/90'}`}
       >
-        {N.t(pret ? 'live_unready' : 'live_go')}
+        {N.t(pret ? 'live_unready'
+           : apresCourse ? (autresPrets > 0 ? 'live_rev_accepter' : 'live_revanche')
+           : 'live_go')}
       </button>
+      </>)}
 
       {/* Le tchat rapide (TchatRapide.tsx) : ici plutot qu'en bouton
           flottant, qui aurait mordu sur JE SUIS PRET. */}
