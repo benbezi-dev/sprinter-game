@@ -74,7 +74,10 @@ android {
         // « supprimer mes donnees ».
         // 4 le 2 octobre : la presence (qui est en ligne) et le renvoi vers la
         // validation du pseudo apres deux courses.
-        versionCode 4
+        // 5 le 4 octobre : les defis des vedettes (Meba-Mickael Zeze, Aurel
+        // Manga) tels qu'ouverts le 3 au soir, avec leurs phrases de defaite et
+        // le son de l'arrivee, et la revanche du direct dans la meme salle.
+        versionCode 5
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
