@@ -436,6 +436,23 @@ titre('MEBA-MICKAEL ZEZE : SON CRI');
        dz < -descente && Math.abs(pied) < 0.025,
        `bassin ${(dz * 100).toFixed(1)} cm, pied le plus bas ${(pied * 100).toFixed(1)} cm`);
   }
+  // SUR « LET'S », IL JAILLIT (CRI_HAUT) : sur la pointe des pieds, qui
+  // restent au sol, les poings bien au-dessus de la tete ; au sommet du bond
+  // (`criBond`), les pieds quittent la piste de huit centimetres.
+  const haut = (parts) => {
+    let z = -Infinity;
+    for (const p of parts) for (const q of bouts(p)) z = Math.max(z, q[2]);
+    return z;
+  };
+  const jaillit = (criBond) => K.pose({ look: LM, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+                                        d: 0, debout: 1, criHaut: 1, criBond }, 0);
+  const auSol = jaillit(0), enLAir = jaillit(1);
+  const dPied = bas(auSol) - pied0, dHaut = haut(auSol) - haut(debout), bond = bas(enLAir) - pied0;
+  ok('sur « LET\'S », la pointe des pieds au sol, les poings 20 cm au-dessus de sa tete',
+     Math.abs(dPied) < 0.025 && dHaut > 0.20,
+     `pied ${(dPied * 100).toFixed(1)} cm, sommet +${(dHaut * 100).toFixed(1)} cm`);
+  ok('au sommet du bond, les pieds a huit centimetres de la piste', Math.abs(bond - 0.08) < 0.025,
+     `${(bond * 100).toFixed(1)} cm`);
 }
 
 console.log(`\n${'─'.repeat(62)}\n   ${e ? e + ' ECHEC(S).' : 'TOUT PASSE.'}`);

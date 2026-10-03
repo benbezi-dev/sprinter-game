@@ -1057,6 +1057,12 @@
                 leve: -0.063, leveCoup: -0.053, buste: -0.32, busteCoup: -0.14,
                 tete: 0.38, teteCoup: 0.14, bras: -0.30, brasCoup: -0.30,
                 avBras: 1.20, avBrasCoup: -0.55, rouleBras: -0.55, rouleAv: 0.40 };
+  // ... ET IL JAILLIT SUR « LET'S » : sur la pointe des pieds (le bassin monte
+  // d'autant), un bond de huit centimetres (`criBond`), la poitrine en avant,
+  // la tete renversee, les deux poings au ciel, bras en V (roulis loin de
+  // l'axe). C'est ce qui se voit a l'echelle de la course.
+  const CRI_HAUT = { pied: -0.25, leve: 0.045, bond: 0.08, buste: 0.12, tete: 0.25,
+                     bras: 2.75, avBras: 3.05, rouleBras: -0.35, rouleAv: -0.10 };
 
   // LES ATTITUDES D'AVANT LE DEPART (voir pose) : pour chaque attitude et
   // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
@@ -2768,6 +2774,19 @@
       leve += (CRI.leve + CRI.leveCoup * k) * wCr;
       teteAt += (CRI.tete + CRI.teteCoup * k) * wCr;
     }
+    const wCh = Math.max(0, Math.min(1, r.criHaut || 0));
+    if (wCh > 0) {
+      const H = CRI_HAUT;
+      l = [melange(l[0], 0.07, wCh), melange(l[1], 0.05, wCh), melange(l[2], H.pied, wCh)];
+      rr = [melange(rr[0], -0.07, wCh), melange(rr[1], -0.05, wCh), melange(rr[2], H.pied, wCh)];
+      al = [melange(al[0], H.bras, wCh), melange(al[1], H.avBras, wCh)];
+      ar = [melange(ar[0], H.bras, wCh), melange(ar[1], H.avBras, wCh)];
+      rouleBras = [melange(rouleBras ? rouleBras[0] : 0, H.rouleBras, wCh),
+                   melange(rouleBras ? rouleBras[1] : 0, H.rouleAv, wCh)];
+      lean = melange(lean, H.buste, wCh);
+      leve = melange(leve, H.leve, wCh) + H.bond * Math.max(0, r.criBond || 0);
+      teteAt = melange(teteAt, H.tete, wCh);
+    }
 
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
@@ -2937,7 +2956,7 @@
       hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
       jambes: [], bras: [],
       // (les poings du cri restent fermes, meme quand il sort des claps)
-      mains: wCl > 0.5 && wCl > wCr ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
+      mains: wCl > 0.5 && wCl > Math.max(wCr, wCh) ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
     }) : null;
     // L'ourlet du short se voit ; sa ceinture disparait sous le maillot.
     //

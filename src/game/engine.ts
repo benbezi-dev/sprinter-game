@@ -578,17 +578,40 @@ function applaudir(avD: any, dt: number) {
   // au rythme de la presentation.
   const P = 1 / 2.5, n = claps.length;
   // SON CRI (03/10, a la demande de l'auteur : « donne plus d'attitude a
-  // Mickael lorsqu'il crie let's go ») : il s'arme une seconde avant le mot,
-  // les poings partent vers le bas sur « LET'S » (0,2 s apres le debut de son
-  // enregistrement), la posture s'efface dans les claps du « GOOO ». Apres le
-  // dernier clap, un dernier coup de poings, fini avant les blocs. `cri` est
-  // le poids de la posture, `criCoup` l'accent (pose, CRI).
+  // Mickael lorsqu'il crie let's go »). Il s'arme, accroupi, les poings
+  // serres (`cri`) ; sur « LET'S » (0,2 s apres le debut de son
+  // enregistrement), il jaillit — un bond, les deux poings au ciel, la tete
+  // renversee (`criHaut`, `criBond`) — et ses bras passent aux claps du
+  // « GOOO ». Apres le dernier clap, un dernier coup de poings vers le bas
+  // (`cri` et `criCoup`), fini avant les blocs. Les angles : CRI et CRI_HAUT
+  // (pose, sprinter-core.js).
+  // (une premiere version plongeait vers le bas sur « LET'S » : douze
+  // centimetres, soit deux points sur un telephone a l'echelle de la course —
+  // « pas de modification visible ». Les poings au ciel se voient.)
   const lets = (avD.a ?? 0.25) + 0.20, dernier = claps[n - 1];
   const coup = (x: number) => x <= 0 ? 0 : Math.min(1, 2.2 * (1 - Math.exp(-x / 0.03)) * Math.exp(-x / 0.18));
   r.cri = Math.max(
-    doux((t - (lets - 0.32)) / 0.2) * (1 - doux((t - debut) / 0.22)),
+    doux((t - (lets - 0.32)) / 0.2) * (1 - doux((t - (lets - 0.06)) / 0.1)),
     0.85 * doux((t - (dernier + 0.12)) / 0.15) * (1 - doux((t - (dernier + 0.62)) / 0.2)));
-  r.criCoup = Math.max(coup(t - lets), 0.8 * coup(t - (dernier + 0.27)));
+  r.criCoup = 0.8 * coup(t - (dernier + 0.27));
+  r.criHaut = doux((t - (lets - 0.06)) / 0.1) * (1 - doux((t - debut) / 0.22));
+  const xb = t - (lets - 0.04);
+  r.criBond = xb > 0 && xb < 0.3 ? Math.sin(Math.PI * xb / 0.3) : 0;
+  // LE PLAN SUR LUI (03/10, « pas de modification visible dans le mode
+  // test »). A l'echelle de la course il mesure une cinquantaine de points sur
+  // un telephone : son cri ne s'y lisait pas. La camera va le chercher et se
+  // resserre pendant qu'il crie — le plan serre de la presentation du direct
+  // (zoomPres, que le decompte desserre dans finirLesSaluts, ou la camera est
+  // aussi rendue au joueur). Rien de tout cela sous « reduire les animations ».
+  if (!animationsReduites()) {
+    if (!G.viseCamera) {
+      const lui = () => G.track.pos(r.d, r.lane);
+      (lui as any).cri = true;
+      G.viseCamera = lui;
+    }
+    const z = G.zoomPres || 1;
+    G.zoomPres = z + (PLAN_DU_CRI - z) * (1 - Math.exp(-5 * dt));
+  }
   let tc: number;
   if (t <= claps[0]) tc = 0.5 * P - (claps[0] - t);
   else if (t >= claps[n - 1]) tc = (n - 0.5) * P + (t - claps[n - 1]);
@@ -606,7 +629,16 @@ function applaudir(avD: any, dt: number) {
     const v = Math.floor(Math.random() * 4);
     Audio_.sfx(`meba_clap_${v}`, { gain: 1.0 + 0.15 * Math.random(), rate: 0.96 + 0.08 * Math.random() });
   }
-  void dt;
+}
+
+/** Le plan serre sur Meba-Mickael pendant son cri (voir applaudir) : a 1,9 il
+ *  ne prenait qu'un neuvieme de la hauteur de l'ecran, a 3 un cinquieme — ses
+ *  poings au ciel s'y lisent. Le sprint n'a pas d'autre zoom (zoomDuMode = 1). */
+const PLAN_DU_CRI = 3.0;
+
+/** Le reglage « reduire les animations » du systeme : ni zoom ni travelling. */
+function animationsReduites(): boolean {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 }
 
 export function updateLogic(dt: number) {

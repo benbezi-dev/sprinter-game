@@ -2009,8 +2009,10 @@
     // jamais ete declare : il aurait leve une erreur au lieu de replier.)
     if (!LEVELS[idx]) idx = MONDIAUX;
     G.levelIdx = idx;
-    // Aucun reste du plan serre d'une presentation interrompue.
+    // Aucun reste du plan serre d'une presentation interrompue — ni de celui
+    // d'un cri de Meba-Mickael (engine.ts, applaudir).
     G.zoomPres = 1; G.presPousse = 0; G.presDepuis = 0;
+    if (G.viseCamera && G.viseCamera.cri) G.viseCamera = null;
     const lvl = LEVELS[idx], R = G.race;
     // L'ALLURE DE L'EPREUVE, posee ici et nulle part ailleurs : c'est le seul
     // passage par lequel toutes les courses entrent — carriere, one-shot,
@@ -2208,6 +2210,7 @@
     // de celui a qui renvoyer le code n'a plus rien a designer.
     G.revanche = null; G.revancheId = null; G.revancheMs = 0;
     G.presente = null; G.zoomPres = 1; G.presPousse = 0; G.presBulle = null;
+    if (G.viseCamera && G.viseCamera.cri) G.viseCamera = null;
     G.paused = false;
     G.echauffementChamp = false;
     G.defiDemie = null;
@@ -3544,6 +3547,9 @@
    */
   function finirLesSaluts(dt) {
     G.presente = null;
+    // la camera, allee chercher Meba-Mickael pendant son cri (engine.ts,
+    // applaudir), revient au joueur
+    if (G.viseCamera && G.viseCamera.cri) G.viseCamera = null;
     // La bulle part avec le creneau : elle ne se lit pas pendant le decompte.
     G.presBulle = null;
     // Le plan se desserre avec les bras : le decompte se regarde au cadre de
@@ -3560,7 +3566,8 @@
       if (r.debout) r.debout = Math.max(0, r.debout - 2.5 * dt);
       // et son cri, s'il n'etait pas tout a fait retombe
       if (r.cri) r.cri = Math.max(0, r.cri - 4 * dt);
-      r.criCoup = 0;
+      if (r.criHaut) r.criHaut = Math.max(0, r.criHaut - 4 * dt);
+      r.criCoup = 0; r.criBond = 0;
       if (!r.celebrate) continue;
       r.celebrate = Math.max(0, r.celebrate - CELEBRE_DESCENTE * dt);
     }
@@ -8254,7 +8261,7 @@
     }
     if (G.state === 'race') {
       r.debout = 0;
-      r.cri = 0;
+      r.cri = 0; r.criHaut = 0; r.criBond = 0;
       r.attitudeW = 0;
       r.enBloc = 1 - doux(r.d / SORTIE_BLOCS);
       r.prets = 1;
