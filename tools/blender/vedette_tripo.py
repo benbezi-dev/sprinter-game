@@ -6,7 +6,7 @@
 #       [--glb public/vedettes/meba.glb] [--portraits public/vedettes] [--blend F.blend]
 #
 #   Meba : --source meba-tripo-lowpoly.glb --nom meba --taille 1.78 --sh 1.20 --hip 1.22
-#   Aurel : --source aurel-tripo-lowpoly.glb --nom manga --taille 1.90 --sh 1.06 --hip 1.0
+#   Aurel : --source aurel-tripo-lowpoly.glb --nom manga --taille 1.90 --sh 1.14 --hip 1.0
 #           --glb public/vedettes/manga-corps.glb (manga-* : hors de la production)
 #
 # POURQUOI (02/10, a la demande de l'utilisateur : « pour Aurel Manga il faut
@@ -365,6 +365,65 @@ def doigts(h, J, H):
     print('DOIGTS fente %.3f, bouts (x/y) %s' % (
         fente, ' '.join('%s %.3f/%.3f' % (n, D[n][3].x, D[n][3].y) for n in D)))
     return D
+
+
+# SA CARRURE (03/10, pour Aurel : « remonte ses epaules, donne-lui un physique
+# plus imposant »). 1,90 m pour 89 kg : un hurdleur lourd, large du haut, aux
+# deltoides qui debordent de l'epaule (anatomie.py, ATHLETES). Le corps de
+# Tripo l'avait fin ; le jeu le ramene a la taille du rig commun, et il y
+# paraissait plus etroit que Meba (epaules a 1,05 contre 1,20). Elargi, son
+# corps les a a 1,14 : son look les reprend (--sh 1.14, morph.sh).
+CARRURE = {'manga': {'large': 1.10, 'bras': 1.14, 'avant_bras': 1.07}}
+
+
+def carrure(h, J, large, bras, avant_bras):
+    """Le haut du corps elargi, en pose en T, avant le squelette (qui est lu
+    ensuite sur le corps elargi) :
+      - le buste s'ecarte de `large` en x, de la taille (dos1) jusqu'au haut
+        de la poitrine (dos3), et le garde jusqu'a la base du cou ; la tete
+        n'y est pas ;
+      - les bras s'en ecartent d'autant, sans s'allonger ;
+      - autour de leur axe, ils s'epaississent : `bras` du deltoide au biceps,
+        quatre pour cent au coude, `avant_bras` au milieu de l'avant-bras, rien
+        au poignet ni a la main."""
+    import numpy as np
+    me = h.data
+    co = np.array([v.co[:] for v in me.vertices])
+    x, y, z = co[:, 0], co[:, 1], co[:, 2]
+    ax, sg = np.abs(x), np.sign(x)
+
+    def lisse(a, b, t):
+        u = np.clip((t - a) / (b - a), 0.0, 1.0)
+        return u * u * (3 - 2 * u)
+    S, E, P = J['epaule'], J['coude'], J['poignet']
+    ex, cou = S.x, J['cou'].z
+    r = lisse(J['dos1'].z, J['dos3'].z, z)
+    r = r * (1 - lisse(cou, cou + 0.02, z) * (1 - lisse(0.09, 0.12, ax)))
+    # au-dela de l'epaule, les bras glissent du meme ecart ; pas le haut des
+    # cuisses, qui deborde lui aussi de 19 cm (r y est nul)
+    buste = ax <= ex
+    nx = np.where(buste, x * (1 + (large - 1) * r), x + sg * (large - 1) * ex * r)
+    # l'epaisseur des bras, le long de leur axe (u : distance a l'epaule), et
+    # seulement pres de cet axe (d : distance a l'axe ; les cuisses sont a 50 cm)
+    u = ax - ex
+    L1, L2 = E.x - S.x, P.x - E.x
+    k = 1 + (bras - 1) * lisse(0.0, 0.05, u)
+    k = k + (1.04 - bras) * lisse(0.65 * L1, L1, u)
+    k = k + (avant_bras - 1.04) * lisse(L1, L1 + 0.15 * L2, u)
+    k = k + (1.0 - avant_bras) * lisse(L1 + 0.5 * L2, L1 + 0.9 * L2, u)
+    t = (ax - S.x) / (P.x - S.x)
+    Ay, Az = S.y + t * (P.y - S.y), S.z + t * (P.z - S.z)
+    d = np.hypot(y - Ay, z - Az)
+    k = np.where(buste, 1.0, 1 + (k - 1) * (1 - lisse(0.08, 0.12, d)))
+    ny = Ay + k * (y - Ay)
+    nz = Az + k * (z - Az)
+    for v, a, b, c in zip(me.vertices, nx, ny, nz):
+        v.co = (float(a), float(b), float(c))
+    me.update()
+    bouge = np.sqrt((nx - x) ** 2 + (ny - y) ** 2 + (nz - z) ** 2)
+    print('CARRURE : buste x %.2f, epaule %.3f -> %.3f, bras x %.2f, avant-bras x %.2f ;'
+          ' sous la taille, %.4f m au plus' % (large, ex, ex * large, bras, avant_bras,
+                                              bouge[z < J['dos1'].z].max()))
 
 
 DOIGTS = ('index', 'middle', 'ring', 'pinky', 'thumb')
@@ -773,6 +832,9 @@ def exporter(h, rig, chemin, peau_jeu):
     return os.path.getsize(chemin)
 
 
+DESCENTE_EPAULES = {'meba': 0.40, 'manga': 0.15}
+
+
 def portraits(rig, dossier, nom):
     """Ceux de meba_maillage (studio, poses, cadrages), aux noms de la vedette.
     Rendus a part puis deplaces : rendus sur place, ceux d'Aurel passaient par
@@ -784,9 +846,13 @@ def portraits(rig, dossier, nom):
     tasse sous le cou, et les epaules remontaient vers les oreilles. Pour les
     portraits seulement — la course pose ses mains depuis l'epaule du jeu —, les
     clavicules descendent de 0,4 radian : six centimetres (a 0,25, quatre
-    centimetres ne se voyaient presque pas sur le portrait en pied)."""
+    centimetres ne se voyaient presque pas sur le portrait en pied).
+    Celles d'Aurel ne descendent que de 0,15 (03/10 : « remonte les epaules
+    de Aurel ») : ses trapezes hauts sont son signe (anatomie.py) ; a zero,
+    elles montaient jusqu'aux oreilles."""
+    d = DESCENTE_EPAULES.get(nom, 0.40)
     for cle in ('DEBOUT', 'EN_PIED'):
-        G[cle] = dict(G[cle], clavicle_l=(0.0, -0.40, 0.0), clavicle_r=(0.0, 0.40, 0.0))
+        G[cle] = dict(G[cle], clavicle_l=(0.0, -d, 0.0), clavicle_r=(0.0, d, 0.0))
     tmp = os.path.join(dossier, '_rendu_' + nom)
     M['portraits'](rig, tmp)
     for k in ('buste', 'pied'):
@@ -799,6 +865,9 @@ def tout(A):
     nom = A['nom'].capitalize()
     h = importer(A['source'], A['taille'], A['nom'])
     J = articulations(h, A['taille'])
+    if A['nom'] in CARRURE:
+        carrure(h, J, **CARRURE[A['nom']])
+        J = articulations(h, A['taille'])
     D = doigts(h, J, A['taille'])
     rig = squelette(J, D, nom)
     ponderer(h, rig)

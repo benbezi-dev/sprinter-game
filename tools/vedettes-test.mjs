@@ -8,8 +8,8 @@
 //      au meme rang : l'ouvrir ne devra rien deplacer ;
 //   2. Aurel court au couloir 5, a cote du joueur, et son plateau porte toutes
 //      les epreuves (une clef manquante fait tomber la construction) ;
-//   3. son corps sculpte est bien charge, et son look reprend la carrure de
-//      sa sculpture ;
+//   3. son corps sculpte est bien charge, et son look reprend l'ecart des
+//      epaules de son maillage ;
 //   4. UN SKIN NE CHANGE PAS LA FOULEE : le coureur du joueur habille en Aurel
 //      Manga pose exactement ses appuis au meme endroit qu'en maillot or ;
 //   5. MEBA-MICKAEL ZEZE : son stade derriere celui d'Aurel, ses deux chronos,
@@ -72,8 +72,8 @@ const L = K.lookFor('Aurel MANGA', 'divers');
 ok('lookFor rend son look, pas un tirage', L === K.VEDETTES['Aurel MANGA']);
 ok('son profil Blender est charge', PREM.sculpte(L.profil));
 ok('bandeau, poignet gauche, barbe', !!L.bandeau && L.poignet && L.poignet.cote === 1 && !!L.barbe);
-const carrure = 1.06;   // tools/blender/anatomie.py, ATHLETES.manga.carrure
-ok('le look reprend la carrure de la sculpture', L.morph && L.morph.sh === carrure);
+// (03/10) elargi, son maillage a ses epaules a 1,14 (vedette_tripo.py --sh 1.14)
+ok('epaules du look = celles de son maillage (1,14)', L.morph && L.morph.sh === 1.14);
 // son maillage (tools/blender/vedette_tripo.py) : un fichier manga-*, que le
 // deploiement retire de la production tant que son defi n'y est pas ouvert
 // (.github/workflows/deploy.yml, « rm -f dist/vedettes/manga-* »)

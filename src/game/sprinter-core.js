@@ -1316,11 +1316,14 @@
     'Aurel MANGA': look({ build: 'm', skin: [104, 62, 44], profil: 'manga',
       jersey: [29, 33, 78], shorts: [29, 33, 78], shoe: [214, 81, 33],
       hair: 'ras', h: 1.90, gait: 'sharp',
-      // `sh` DOIT valoir la `carrure` de son profil Blender (1,06) : c'est
-      // l'ecart des epaules du squelette, sur lequel ses bras ont ete mesures.
-      // Son maillage y est cale (vedette_tripo.py --sh 1.06 --hip 1.0) : lues
-      // sur le corps, ses epaules tombaient a 1,05.
-      morph: { sh: 1.06 },
+      // `sh` : l'ecart des epaules du squelette, ou le jeu pose ses bras. Il
+      // est celui de son MAILLAGE, comme pour Meba (03/10, a la demande de
+      // l'utilisateur, « donne-lui un physique plus imposant ») : son corps
+      // Tripo, elargi de dix pour cent du buste aux bras (vedette_tripo.py,
+      // CARRURE), a ses epaules a 1,14, et y est cale (--sh 1.14 --hip 1.0).
+      // Ses troncs de doublure gardent les epaisseurs de leur sculpture
+      // (carrure 1,06) : leurs bras s'ecartent d'un centimetre, sous le deltoide.
+      morph: { sh: 1.14 },
       bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
       barbe: [50, 34, 28], maillage: 'vedettes/manga-corps.glb' }),
 
