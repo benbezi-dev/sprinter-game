@@ -13,6 +13,16 @@ Quatre écrans 1080 × 1920, à poster dans l'ordre. Fabriqués par
 
 Instagram mange 250 px en haut et en bas : rien n'y est écrit.
 
+## L'écran 1 est en photo
+
+Photo du 3 octobre (`20261003_181004`, dossier Drive « Aurel Mickeal »),
+convertie de HEIC en JPEG, puis :
+
+    node tools/carte-defis-vedettes.mjs --photo-duo 20261003_181004.jpg --cadre-duo 0.52,0.40,1240,760
+
+La photo source n'est pas dans le dépôt : elle reste sur le Drive. Les
+écrans 2 et 3 gardent les portraits 3D du jeu.
+
 ## Avec les vraies photos
 
 Les portraits 3D du jeu sont en place. Pour mettre de vraies photos
