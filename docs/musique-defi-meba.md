@@ -5,10 +5,25 @@ défi seulement, la city pop du Stade de la Riviera (112 BPM, trop posée).
 Tant qu'il n'est pas livré, la course joue la musique de la finale des ZEZE
 (`race3`, 150 BPM).
 
-**Livré le 02/10/2026, calculé** : `node tools/musique/defi-meba.mjs` écrit
-`public/vedettes/defi-meba.mp3` sur ce scénario (tout est synthétisé, rien
-n'est échantillonné). Une version produite dans FL Studio, sur ce même
-calage, pourra le remplacer : poser le WAV, encoder par-dessus.
+**Remplacé le 03/10/2026 par « ZEZE », le trap de stade** (choisi par l'auteur
+parmi trois morceaux de l'événement). `public/vedettes/defi-meba.mp3` vient
+maintenant de l'atelier musical, hors du dépôt :
+`~/Downloads/le-stade-atelier/zeze/` (`node zeze/produire-zeze.mjs trap <sortie>`,
+qui écrit `zeze-trap/defi/defi-meba-zeze-trap-44k1.wav` au calage ci-dessous),
+puis : levée retirée et encodage comme avant —
+`ffmpeg -i defi-meba-zeze-trap-44k1.wav -af atrim=start_sample=8820 -c:a libmp3lame -b:a 192k public/vedettes/defi-meba.mp3`.
+Sol mineur, kit Trap Heat et 808 de Logic, cuivres et chœurs de FL ; une
+pulsation sur chaque noire et des claps de stade sur chaque temps ; le thème
+de l'événement chanté par la tribune ; « MICHAEL! MEBA! ZEZE! » sur les trois
+bips. Un silence de 0,15 s précède le drop en fin de boucle, comme avant le
+pistolet : les deux raccords tombent dans un silence, même sur un décodeur qui
+garde le silence de tête du mp3 (Safari). 28,6 s, −12,4 LUFS, crête vraie
+−1,1 dBTP.
+
+**Ne pas relancer `tools/musique/defi-meba.mjs` sans le vouloir** : il écrit
+le même fichier et remettrait le morceau calculé du 02/10 (la première
+livraison). Les trois claps de Méba avant les blocs (`clapDuMorceau` dans
+`src/game/musique-defi-meba.ts`) restent ceux de ce premier morceau.
 
 ## Ce que le jeu impose
 

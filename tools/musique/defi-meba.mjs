@@ -6,6 +6,10 @@
 // Ecrit public/vedettes/defi-meba.mp3 ; avec un dossier, y pose aussi le WAV
 // 24 bits et le mp3, pour l'ecouter ou le reprendre dans une station.
 //
+// ATTENTION (03/10) : le fichier du jeu n'est plus celui-ci. Il a ete remplace
+// par « ZEZE », le trap de stade de l'atelier (docs/musique-defi-meba.md). Lancer
+// ce script l'ecraserait et remettrait la premiere livraison.
+//
 // LE CONTRAT AVEC LE JEU (src/game/musique-defi-meba.ts, docs : la fiche
 // ~/Desktop/musique-defi-meba/FICHE-FL-STUDIO.md) :
 //   - 150 BPM, le tempo des ZEZE (race3) ; la mineur, la tonique de race3 ;
