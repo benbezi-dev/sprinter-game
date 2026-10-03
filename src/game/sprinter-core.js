@@ -1104,20 +1104,15 @@
   // l'axe), le bassin qui monte sur chaque appui.
   const MARCHE = { cuisse: 0.30, genou: 0.62, pied: -0.18, bras: 0.34, coude: 0.30,
                    rouleBras: -0.16, buste: 0.07, tete: 0.14, rebond: 0.018 };
-  // LA POSE (`boss`, 0 a 1) : arrete derriere ses blocs, LES POINGS SUR LES
-  // HANCHES — les bras ecartes du corps a l'epaule (roulis loin de l'axe), les
-  // coudes en dehors, les avant-bras qui reviennent poser les poings sur le
-  // bassin —, la poitrine en avant, le menton haut, un pied a peine devant
-  // l'autre. LA CAMERA LE VOIT DE DOS (il regarde l'arrivee) : des bras
-  // croises sur la poitrine, essayes d'abord, ne s'y voyaient pas — il ne
-  // restait qu'un avant-bras qui depassait. Des coudes ecartes, si.
-  // (Le roulis d'un bras qui PEND ecarte le coude du corps quand il est
-  // positif — c'est l'inverse pour un bras leve, d'ou « positif vers l'axe »
-  // plus haut : voir le calcul du coude, `E`, dans les os du bras. D'ou
-  // +0,60 a l'epaule, coude dehors, et -0,75 au coude, poing ramene sur la
-  // hanche, a vingt-cinq centimetres sous le coude.)
-  const BOSS = { cuisse: 0.09, tibia: 0.07, bras: -0.20, avBras: 0.15, decale: 0,
-                 rouleBras: 0.60, rouleAv: -0.75, buste: 0.12, tete: 0.20 };
+  // LE GESTE (`pointe`, 0 a 1 ; 03/10, a la demande de l'auteur : « il marche
+  // jusque devant les starts, pointe la ligne d'arrivee ») : arrete derriere
+  // ses blocs, il tend le bras droit — celui que la camera voit, elle le
+  // regarde du cote de la pelouse — droit vers l'arrivee, dans l'axe de la
+  // piste et un rien au-dessus de l'horizontale ; l'autre bras pend, le
+  // buste se tient droit, le menton leve. (Avant : les poings sur les
+  // hanches, puis les bras croises — refuses.)
+  const POINTE = { cuisse: 0.09, tibia: 0.07, bras: 1.66, avBras: 1.70,
+                   repos: -0.04, reposAv: 0.14, buste: 0.04, tete: 0.14 };
 
   // LES ATTITUDES D'AVANT LE DEPART (voir pose) : pour chaque attitude et
   // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
@@ -1304,6 +1299,12 @@
       //             coureur du joueur (0,8 = vingt pour cent de moins ; voir
       //             adoucir, haies-jeu.js). Rien sur une haie bien passee.
       freinHaie: o.freinHaie || 0,
+      // `ouverture` : l'ecart des jambes, en radians — chaque cuisse et chaque
+      //             jambe s'ouvrent d'autant vers l'exterieur, a la hanche,
+      //             les pieds restant a plat (voir les os des jambes, dans
+      //             pose). Il s'efface dans les blocs et au-dessus d'une
+      //             haie.
+      ouverture: o.ouverture || 0,
       rituel: !!o.rituel,
       clap: !!o.clap,
       // `maillage` : le chemin de son vrai maillage (GLB), dessine en WebGL
@@ -1414,6 +1415,11 @@
       // SES TROIS COURSES (03/10) : celles de Meba-Mickael, tirees a chaque
       // tentative (STYLES_CANON). Voir le stade du defi, plus haut.
       allure: 'canon',
+      // LES JAMBES UN PEU OUVERTES (03/10, a la demande de l'auteur : « ecarte
+      // un peu plus les jambes des deux skins, ils marchent comme des
+      // poupees ») : droites sous la hanche, ses cuisses se touchaient et ses
+      // pieds tombaient sur une seule ligne. Voir `ouverture`.
+      ouverture: 0.08,
       barbe: [50, 34, 28], maillage: 'vedettes/manga-corps.glb' }),
 
     // MEBA-MICKAEL ZEZE — sprint, equipe de France. 9"99 au 100 m et 19"97 au
@@ -1470,6 +1476,8 @@
       // apporte 20 % de reussite sur les departs canon et transition
       // parfaite ») : vingt pour cent de marge aussi sur la transition.
       departParfait: 1.2, transParfaite: 1.2,
+      // les jambes un peu ouvertes, comme Aurel (03/10 ; voir `ouverture`)
+      ouverture: 0.08,
       facettes: 64, lisse: true, maillage: 'vedettes/meba.glb' })
   };
 
@@ -2846,8 +2854,8 @@
       teteAt = melange(teteAt, H.tete, wCh);
     }
 
-    // SA DEMARCHE DE PATRON, puis SA POSE (l'entree d'Aurel Manga, voir MARCHE
-    // et BOSS ; poses par engine.ts, entrerEnBoss).
+    // SA DEMARCHE DE PATRON, puis SON GESTE (l'entree d'Aurel Manga, voir
+    // MARCHE et POINTE ; poses par engine.ts, entrerEnBoss).
     const wMa = Math.max(0, Math.min(1, r.marche || 0));
     if (wMa > 0) {
       const M = MARCHE, ph = r.marcheT || 0;
@@ -2871,18 +2879,18 @@
       leve = melange(leve, M.rebond * Math.abs(Math.cos(ph)), wMa);
       teteAt = melange(teteAt, M.tete, wMa);
     }
-    const wBo = Math.max(0, Math.min(1, r.boss || 0));
-    if (wBo > 0) {
-      const B = BOSS;
-      l = [melange(l[0], B.cuisse, wBo), melange(l[1], B.tibia, wBo), melange(l[2], 0, wBo)];
-      rr = [melange(rr[0], -B.cuisse, wBo), melange(rr[1], -B.tibia, wBo), melange(rr[2], 0, wBo)];
-      al = [melange(al[0], B.bras, wBo), melange(al[1], B.avBras, wBo)];
-      ar = [melange(ar[0], B.bras, wBo), melange(ar[1], B.avBras + B.decale, wBo)];
-      rouleBras = [melange(rouleBras ? rouleBras[0] : 0, B.rouleBras, wBo),
-                   melange(rouleBras ? rouleBras[1] : 0, B.rouleAv, wBo)];
-      lean = melange(lean, B.buste, wBo);
-      leve = melange(leve, 0, wBo);
-      teteAt = melange(teteAt, B.tete, wBo);
+    const wGe = Math.max(0, Math.min(1, r.pointe || 0));
+    if (wGe > 0) {
+      const B = POINTE;
+      l = [melange(l[0], B.cuisse, wGe), melange(l[1], B.tibia, wGe), melange(l[2], 0, wGe)];
+      rr = [melange(rr[0], -B.cuisse, wGe), melange(rr[1], -B.tibia, wGe), melange(rr[2], 0, wGe)];
+      // `al` est le bras gauche (+Y), `ar` le droit, du cote de la camera
+      al = [melange(al[0], B.repos, wGe), melange(al[1], B.reposAv, wGe)];
+      ar = [melange(ar[0], B.bras, wGe), melange(ar[1], B.avBras, wGe)];
+      rouleBras = rouleBras ? [melange(rouleBras[0], 0, wGe), melange(rouleBras[1], 0, wGe)] : null;
+      lean = melange(lean, B.buste, wGe);
+      leve = melange(leve, 0, wGe);
+      teteAt = melange(teteAt, B.tete, wGe);
     }
 
     // Moulinets de bras pendant la chute : les deux bras tournent en
@@ -3503,6 +3511,15 @@
       // le genou et la cheville la ou le lacet de la cuisse et de la jambe
       // les mettent. Sans ouverture, cette branche ne sert pas, et la jambe
       // est construite comme elle l'a toujours ete.
+      //
+      // L'ECART DES JAMBES (`ouverture`) : un roulis de la cuisse et de la
+      // jambe, autour de l'axe de course, loin de l'axe du corps — positif
+      // ouvre une jambe qui pend, comme le roulis d'un bras (voir le coude,
+      // `E`). Le genou et la cheville suivent ; le pied reste a plat. Il
+      // s'efface dans les blocs, ou les pieds sont sur les cales, et le temps
+      // d'une haie, que la jambe d'esquive franchit deja ouverte.
+      const ouv = L.ouverture ? side * L.ouverture * (1 - wB) * (1 - wS) : 0;
+      const ouvrir = (v) => [v[0], -v[1] * Math.sin(ouv), v[1] * Math.cos(ouv)];
       let yT = yawHip, yS = yawHip, yF = yawHip, Kp = null, Ap = null;
       if (lacets && lacets.cote === side) {
         yT = yawHip + lacets.cuisse;
@@ -3510,9 +3527,9 @@
         yF = yawHip + lacets.pied;
         const Hw = lacer(H, yawHip);
         const kv0 = rot(0, -0.392, th), a0 = rot(0, -0.380, sk);
-        const dk = lacer([kv0[0], 0, kv0[1]], yT);
+        const dk = lacer(ouvrir(kv0), yT);
         const Kw = [Hw[0] + dk[0], Hw[1] + dk[1], Hw[2] + dk[2]];
-        const da = lacer([a0[0], 0, a0[1]], yS);
+        const da = lacer(ouvrir(a0), yS);
         const Aw = [Kw[0] + da[0], Kw[1] + da[1], Kw[2] + da[2]];
         H = lacer(Hw, -yT);
         Kp = lacer(Kw, -yS);
@@ -3562,8 +3579,10 @@
       // simple disque suffisait a boucher, mais un disque est plat : il
       // prenait la lumiere d'un seul coup et se lisait comme un couvercle
       // pose sur la hanche.
+      roule = ouv;
       PREM.chaine(add, PR, 'thigh', niv, L.shorts, H, th, 0, yT, kLeg * kPant,
                   0, SOUS_BAS, LIBRE, ourlet);
+      roule = 0;
       // LES FESSIERS D'UN CORPS LISSE. Le bassin mesure est un tube, et un
       // tube de short vu de trois quarts arriere se lit comme une boite de
       // conserve : le galbe qui fait un sprinteur n'y etait pas. Chaque
@@ -3578,10 +3597,12 @@
             [pF * 0.60, lF * 0.52], [pF * 0.66, lF * 0.56], 0.050, yawHip,
             PREM.MESURE | LIBRE);
       }
+      roule = ouv;
       PREM.chaine(add, PR, 'thigh', niv, peauJambes, H, th, 0, yT, kLeg * kPant,
                   0, LIBRE, SOUS_HAUT, undefined, ourlet);
       const kv = rot(0, -0.392, th);
-      const K = Kp || [H[0] + kv[0], H[1], H[2] + kv[1]];
+      const dK = ouvrir(kv);
+      const K = Kp || [H[0] + dK[0], H[1] + dK[1], H[2] + dK[2]];
       const rGenou = Math.max(PREM.rayon(PR, 'thigh', niv, 'bas', kLeg),
                               PREM.rayon(PR, 'shank', niv, 'haut', kLeg)) * (L.lisse ? 0.99 : 1.04);
       add(peauJambes, K, sk, [0, 0, -0.020], [rGenou * kPant, rGenou * kPant],
@@ -3589,9 +3610,11 @@
       PREM.chaine(add, PR, 'shank', niv, peauJambes, K, sk, 0, yS,
                   kLeg * (L.pantalon ? 1.18 : 1), 0, 0, SOUS_HAUT);
       const a = rot(0, -0.380, sk);
-      const An = Ap || [K[0] + a[0], K[1], K[2] + a[1]];
+      const dA = ouvrir(a);
+      const An = Ap || [K[0] + dA[0], K[1] + dA[1], K[2] + dA[2]];
+      roule = 0;
       chausser(add, PREM, An, ft, yF, L.shoe, niv);
-      if (sq) sq.jambes.push({ side, th, sk, ft, yT, yS, yF });
+      if (sq) sq.jambes.push({ side, th, sk, ft, yT, yS, yF, ouv });
     }
 
     // LE LIVRE DU PROF, OUVERT DANS SA MAIN.

@@ -648,20 +648,20 @@ function applaudir(avD: any, dt: number) {
  * Avant ses blocs, il ARRIVE : la camera va chercher son couloir derriere la
  * ligne et se resserre d'un coup, et il entre par le bord droit de l'ecran —
  * de derriere les blocs —, en marchant comme un patron (MARCHE, pose() dans
- * sprinter-core.js). Il ralentit, s'arrete deux metres derriere son bloc,
- * croise les bras (BOSS) et laisse passer un temps. Puis il decroise, marche
- * jusqu'a son bloc, et le decompte part : il s'y installe avec les autres. Pendant
- * ce temps les autres font leurs gestes d'avant le depart, et les appuis du
+ * sprinter-core.js). Il marche jusqu'a ses blocs, s'y arrete, et POINTE LA
+ * LIGNE D'ARRIVEE (POINTE) ; puis il baisse le bras, fait le pas qui le met a
+ * son bloc, et le decompte part : il s'y installe avec les autres. Pendant ce
+ * temps les autres font leurs gestes d'avant le depart, et les appuis du
  * joueur ne comptent pas (padPress). C'est cette fonction qui tient la duree
- * de l'attente (`reste`) : elle finit quand la pose est finie.
+ * de l'attente (`reste`) : elle finit quand il est a son bloc.
  */
 // Mesure sur un ecran de 412 x 915 points (03/10) : parti a 6,2 m de la
 // ligne, il entre par le bord droit une fraction de seconde apres le debut ;
-// l'entree tient environ cinq secondes et demie avant le decompte (le cri de
-// Meba-Mickael en tient 2,6). A 7,5 m et a 1,6 m/s, elle en prenait 7,6 :
-// trop pour un defi qu'on recommence.
-const ENTREE = { vitesse: 1.85, pasParS: 1.95, freinage: 1.4, arret: -2.0,
-                 pose: 1.25, sortie: 0.3, versBloc: 2.1, plan: 2.2, visee: -2.2 };
+// l'entree tient un peu plus de cinq secondes avant le decompte (le cri de
+// Meba-Mickael en tient 2,6). `arret` : juste derriere le rail de son bloc,
+// qui va de -1,12 a -0,18 m.
+const ENTREE = { vitesse: 1.85, pasParS: 1.95, freinage: 1.4, arret: -1.35,
+                 geste: 1.3, sortie: 0.3, versBloc: 1.6, plan: 2.2, visee: -1.8 };
 /** Un pas de sa demarche, de `E.d` vers `but`, freine sur le dernier metre. */
 function marcherVers(r: any, E: any, but: number, vitesse: number, dt: number): boolean {
   const reste = but - E.d;
@@ -678,21 +678,20 @@ function entrerEnBoss(avD: any, dt: number) {
   if (E.d == null) E.d = E.depuis;
   avD.reste = 99;
   if (E.arrive == null) {
-    // 1. IL ARRIVE, et s'arrete a deux metres de son bloc : a l'arret plus
-    // pres, il passait derriere le coureur du couloir voisin, et la pose ne se
-    // lisait plus
+    // 1. IL ARRIVE, jusqu'a ses blocs
     r.marche = 1;
     if (marcherVers(r, E, ENTREE.arret, ENTREE.vitesse, dt)) E.arrive = avD.t;
-  } else if (E.pose == null) {
-    // 2. IL POSE : les pieds se rejoignent, les bras se croisent, un temps
+  } else if (E.pointe == null) {
+    // 2. IL POINTE LA LIGNE D'ARRIVEE : les pieds se rejoignent, le bras
+    // droit se leve vers elle, un temps, et redescend
     const u = avD.t - E.arrive;
     r.marche = 1 - doux(u / 0.25);
-    r.boss = doux((u - 0.1) / 0.35) * (1 - doux((u - ENTREE.pose) / ENTREE.sortie));
+    r.pointe = doux((u - 0.1) / 0.3) * (1 - doux((u - ENTREE.geste) / ENTREE.sortie));
     r.debout = 1;
-    if (u >= ENTREE.pose + ENTREE.sortie) E.pose = avD.t;
+    if (u >= ENTREE.geste + ENTREE.sortie) E.pointe = avD.t;
   } else {
-    // 3. ET IL VA A SON BLOC, du meme pas ; le decompte part quand il y est
-    r.boss = 0;
+    // 3. ET IL FAIT LE PAS QUI LE MET A SON BLOC ; le decompte part quand il y est
+    r.pointe = 0;
     r.marche = 1;
     if (marcherVers(r, E, 0, ENTREE.versBloc, dt)) { r.marche = 0; avD.reste = 0; }
   }

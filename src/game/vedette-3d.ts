@@ -30,7 +30,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 
 type Squelette = {
   hip: number[]; angB: number; lean: number; yawHip: number; yawTop: number; tete: number;
-  jambes: { side: number; th: number; sk: number; ft: number; yT: number; yS: number; yF: number }[];
+  /** `ouv` : le roulis de la cuisse et de la jambe, qui les ecarte (look.ouverture). */
+  jambes: { side: number; th: number; sk: number; ft: number; yT: number; yS: number; yF: number; ouv?: number }[];
   bras: { side: number; a: number; f: number; rB: number; rAv: number }[];
   mains: 'poing' | 'plat' | 'sol';
 };
@@ -273,8 +274,9 @@ function poser(m: Modele, sq: Squelette) {
   cibles.set('head', [sq.lean + sq.tete, 0, sq.yawTop * 0.2]);
   for (const j of sq.jambes) {
     const c = j.side > 0 ? '_l' : '_r';
-    cibles.set('thigh' + c, [j.th, 0, j.yT]);
-    cibles.set('calf' + c, [j.sk, 0, j.yS]);
+    // la cuisse et la jambe s'ecartent vers l'exterieur ; le pied reste a plat
+    cibles.set('thigh' + c, [j.th, j.ouv || 0, j.yT]);
+    cibles.set('calf' + c, [j.sk, j.ouv || 0, j.yS]);
     cibles.set('foot' + c, [j.ft, 0, j.yF]);
   }
   for (const b of sq.bras) {
