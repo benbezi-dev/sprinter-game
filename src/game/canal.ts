@@ -182,17 +182,30 @@ export const HAIES_OUVERTES = true;
  * maillage en three.js — part dans le build public, en morceaux charges a la
  * demande : ils ne se telechargent qu'une fois l'evenement ouvert.
  *
- * CHAQUE DEFI A SA DATE (`lancement`, game/vedettes.ts) : celui de
- * Meba-Mickael Zeze a celle-ci ; celui d'Aurel Manga n'en a pas, et reste sur
- * le canal de test. Leurs deux stades entrent pourtant ensemble dans LEVELS
- * (sprinter-app.js) : l'index d'un stade voyage avec les courses, et celui de
- * Meba-Mickael doit etre le meme sur les deux canaux.
+ * CHAQUE DEFI A SA DATE (`lancement`, game/vedettes.ts) : depuis le 03/10,
+ * Meba-Mickael Zeze ET Aurel Manga ont celle-ci. Leurs deux stades entrent
+ * ensemble dans LEVELS (sprinter-app.js) : l'index d'un stade voyage avec les
+ * courses, et il doit etre le meme sur les deux canaux.
+ *
+ * ET UNE FIN, SEPT JOURS APRES (03/10) : `DUREE_EVENEMENT_MS`, posee dans
+ * vite.config.ts. Passe cette heure, l'evenement disparait pour le public —
+ * banniere, fiche, stades, skins — et ne vit plus que sur le canal de test.
+ * Comme l'ouverture : l'heure de l'appareil, lue au chargement.
  */
 declare const __LANCEMENT_DEFI_MEBA__: number;
 // (hors de Vite, dans un harnais de tools/, la valeur n'existe pas : ferme)
 export const LANCEMENT_DEFI_MEBA: number =
   typeof __LANCEMENT_DEFI_MEBA__ === 'number' ? __LANCEMENT_DEFI_MEBA__ : Infinity;
-export const DEFI_VEDETTE_OUVERT = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
+declare const __DUREE_EVENEMENT_MS__: number;
+// (hors de Vite, une duree nulle : aucun evenement n'est jamais en cours)
+export const DUREE_EVENEMENT_MS: number =
+  typeof __DUREE_EVENEMENT_MS__ === 'number' ? __DUREE_EVENEMENT_MS__ : 0;
+/** Un evenement ouvert a `lancement` est-il en cours : ouvert, et pas encore fini. */
+export function evenementEnCours(lancement: number | undefined, maintenant = Date.now()): boolean {
+  return lancement !== undefined && maintenant >= lancement
+    && maintenant < lancement + DUREE_EVENEMENT_MS;
+}
+export const DEFI_VEDETTE_OUVERT = EST_TEST || evenementEnCours(LANCEMENT_DEFI_MEBA);
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.

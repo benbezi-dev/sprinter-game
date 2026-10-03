@@ -217,19 +217,29 @@ function pagesDApercu(base: string) {
    est un module TypeScript, l'autre une IIFE qui n'importe rien.
 
    LANCEMENT_DEFI_MEBA (en millisecondes, ou une date ISO) la remplace le temps
-   d'une verification locale : `LANCEMENT_DEFI_MEBA=0 npx vite build` bati la
-   production telle qu'elle sera apres le lancement.
+   d'une verification locale. Depuis que l'evenement a une fin (ci-dessous),
+   `LANCEMENT_DEFI_MEBA=0` bati la production APRES la fin — tout referme ;
+   pour la voir pendant l'evenement, donner une heure de la semaine ecoulee :
+   `LANCEMENT_DEFI_MEBA=$(( ($(date +%s) - 3600) * 1000 )) npx vite build`.
+
+   ET UNE SEMAINE APRES, TOUT SE REFERME (03/10, decide par l'auteur) : un
+   evenement dure sept jours, puis disparait pour le public et ne vit plus que
+   sur le canal de test — sans deploiement non plus, a l'heure de l'appareil.
+   Les deux defis (Meba-Mickael Zeze et Aurel Manga) s'ouvrent ensemble ce
+   samedi 3 octobre a 21 h 30 et se referment le samedi 10 a 21 h 30.
 --------------------------------------------------------------------------- */
 const LANCEMENT_DEFI_MEBA = (() => {
   const v = process.env.LANCEMENT_DEFI_MEBA;
   if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
   return Date.UTC(2026, 9, 3, 19, 30, 0);
 })();
+const DUREE_EVENEMENT_MS = 7 * 24 * 3600 * 1000;
 
 export default defineConfig(({ mode }) => ({
   base: basePath,
   define: {
     __LANCEMENT_DEFI_MEBA__: JSON.stringify(LANCEMENT_DEFI_MEBA),
+    __DUREE_EVENEMENT_MS__: JSON.stringify(DUREE_EVENEMENT_MS),
   },
   plugins: [
     react(),

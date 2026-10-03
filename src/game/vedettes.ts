@@ -23,7 +23,7 @@
 
 import { SprinterApp, SprinterCore } from './engine';
 import { gagnerSkin } from './vestiaire';
-import { EST_TEST, LANCEMENT_DEFI_MEBA } from './canal';
+import { EST_TEST, LANCEMENT_DEFI_MEBA, evenementEnCours } from './canal';
 
 type Paire = [string, string];
 
@@ -62,8 +62,9 @@ export type Vedette = {
    */
   cri?: { son: string; a: number; duree: number; claps?: number[] };
   /**
-   * L'heure (ms depuis 1970, UTC) ou son defi s'ouvre a tout le monde. Sans
-   * elle, il ne vit que sur le canal de test (voir canal.ts).
+   * L'heure (ms depuis 1970, UTC) ou son defi s'ouvre a tout le monde, pour
+   * une semaine (DUREE_EVENEMENT_MS). Sans elle, ou passee la semaine, il ne
+   * vit que sur le canal de test (voir canal.ts).
    */
   lancement?: number;
 };
@@ -74,6 +75,9 @@ export const VEDETTES: Record<string, Vedette> = {
     // sur l'accueil de Hurdlers SEULEMENT (02/10, a la demande de l'auteur :
     // celui de Meba-Mickael sur Sprinter, celui d'Aurel sur Hurdlers)
     epreuves: ['110h'], jeux: ['haies'], stade: 'defi-manga', skin: 'manga',
+    // ouvert avec celui de Meba-Mickael, le samedi 3 octobre 2026 a 21 h 30
+    // (03/10, decide par l'auteur), et referme avec lui une semaine apres
+    lancement: LANCEMENT_DEFI_MEBA,
     portraits: { buste: 'vedettes/manga-buste.webp', pied: 'vedettes/manga-pied.webp' },
     couleurs: { vive: '#8B5CF6', fonce: '#2A1650', pale: '#C4B5FD', halo: '#3B2470' },
     // Deux medailles, deux sources concordantes (World Athletics, resultats
@@ -125,9 +129,9 @@ export function indexDuStade(v: Vedette): number {
   return Array.isArray(niveaux) ? niveaux.findIndex(l => l && l.cle === v.stade) : -1;
 }
 
-/** Son defi est-il ouvert : partout sur le canal de test, ailleurs a son heure. */
+/** Son defi est-il ouvert : partout sur le canal de test, ailleurs pendant sa semaine. */
 export function defiLance(v: Vedette): boolean {
-  return EST_TEST || (v.lancement !== undefined && Date.now() >= v.lancement);
+  return EST_TEST || evenementEnCours(v.lancement);
 }
 
 /** Le defi peut-il se courir ici ? */

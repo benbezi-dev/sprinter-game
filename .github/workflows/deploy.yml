@@ -37,11 +37,11 @@ jobs:
       # ouverts seraient servis a la racine du site, lisibles par quiconque
       # devine l'adresse. On les retire de la production ; la version de test,
       # construite a part, les garde sous /test/vedettes/.
-      # Le defi Meba-Mickael Zeze s'ouvre tout seul le samedi 3 octobre 2026 a
-      # 21 h 30 (canal.ts, vite.config.ts) : ses fichiers (meba-*) doivent
-      # donc deja etre en ligne. Seul celui d'Aurel Manga reste ferme.
-      - name: Retirer de la production les evenements fermes
-        run: rm -f dist/vedettes/manga-* dist/vedettes/defi-aurel.mp3
+      # Les defis de Meba-Mickael Zeze et d'Aurel Manga s'ouvrent tout seuls
+      # le samedi 3 octobre 2026 a 21 h 30 (canal.ts, vite.config.ts) : leurs
+      # fichiers (meba-*, manga-*, defi-aurel.mp3) doivent donc deja etre en
+      # ligne. Aucun evenement n'est retire aujourd'hui ; un prochain qui
+      # attendrait sa date se retirerait ici, comme Aurel jusqu'au 03/10.
 
       # La version de test, dans un sous-dossier du meme site. Un seul
       # deploiement sert les deux : pas de second depot a tenir a jour, et la

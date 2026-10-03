@@ -534,7 +534,13 @@
   // ainsi l'index qu'ils ont sur le canal de test.
   // (hors de Vite — un harnais de tools/ qui charge ce fichier —, la valeur
   // n'existe pas : les evenements restent fermes)
-  const LANCES = typeof __LANCEMENT_DEFI_MEBA__ === 'number' && Date.now() >= __LANCEMENT_DEFI_MEBA__;
+  // ET ILS EN RESSORTENT UNE SEMAINE APRES (03/10, `__DUREE_EVENEMENT_MS__`,
+  // vite.config.ts) : derniers de la liste, leur depart ne deplace l'index
+  // d'aucun autre stade.
+  const LANCES = typeof __LANCEMENT_DEFI_MEBA__ === 'number'
+    && typeof __DUREE_EVENEMENT_MS__ === 'number'
+    && Date.now() >= __LANCEMENT_DEFI_MEBA__
+    && Date.now() < __LANCEMENT_DEFI_MEBA__ + __DUREE_EVENEMENT_MS__;
   for (const stade of K.STADES_HORS_SERIE) {
     if (stade.ouvert || import.meta.env.VITE_CANAL === 'test'
         || (stade.auLancement && LANCES)) LEVELS.push(stade);

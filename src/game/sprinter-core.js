@@ -535,7 +535,8 @@
       // ENTRE DANS LEVELS AU LANCEMENT DES DEFIS (02/10, sprinter-app.js), en
       // meme temps que celui de Meba-Mickael Zeze, juste apres : sans lui,
       // l'index de l'autre ne serait plus le meme que sur le canal de test.
-      // Sa banniere, elle, reste fermee (game/vedettes.ts, `lancement`).
+      // Sa banniere s'ouvre avec (03/10 : game/vedettes.ts, `lancement`), et
+      // tout se referme une semaine apres.
       auLancement: true,
       // Un meeting sur une tribune de 1 400 places : bien garnie, pas une
       // enceinte de finale mondiale.
