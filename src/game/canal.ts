@@ -354,12 +354,11 @@ export const TCHAT_RAPIDE_OUVERT = EST_TEST;
  * LA REPONSE DU PERDANT au mot du vainqueur : une phrase choisie dans une
  * liste ecrite par le jeu (voir game/mot.ts, REPONSES).
  *
- * Sur le canal de test d'abord, comme toute nouveaute : le temps de voir
- * l'echange des deux cotes, et que les six boutons tiennent dans l'annonce
- * d'un telephone couche. Le serveur accepte deja les deux canaux : ouvrir a
- * tout le monde se reduit a ce `true`, sans redeployer le worker.
+ * Ouverte a tout le monde le 3 octobre 2026, le worker deja en ligne : rien
+ * de libre ne circule, seulement l'identifiant d'une phrase du jeu. La
+ * refermer se reduit a remettre `EST_TEST`, sans redeployer le worker.
  */
-export const REPONSE_PERDANT_OUVERTE = EST_TEST;
+export const REPONSE_PERDANT_OUVERTE = true;
 
 /**
  * LA FETE DES RECORDS — des confettis pour un record personnel, des feux
