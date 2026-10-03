@@ -3347,7 +3347,13 @@
       G.runTime += tt || 0;
       G.shotTraces.push(G.recTrace || []);
       save(); G.flash = 1;
-      Audio_.sfx(tt !== null ? 'win' : 'lose');
+      // UN MODE QUI A UN ADVERSAIRE A BATTRE DIT LUI-MEME QUI A GAGNE. Seul,
+      // le moteur ne sait que « tu as passe la ligne » : il jouait la victoire
+      // a qui finissait derriere Aurel Manga. Le crochet (G.sonDArrivee, pose
+      // par le defi des vedettes) rend le nom d'une phrase de fin, ou null
+      // pour garder le son ordinaire.
+      const son = G.sonDArrivee ? G.sonDArrivee() : null;
+      if (son) Audio_.cue(son); else Audio_.sfx(tt !== null ? 'win' : 'lose');
       if (G.shotIdx + 1 < G.shotRaces.length) { G.state = 'result'; return; }
       G.state = 'winall'; return;
     }
