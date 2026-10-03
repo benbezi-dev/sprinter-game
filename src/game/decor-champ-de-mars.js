@@ -846,7 +846,12 @@
     const m = api.scaleM(), t = performance.now() / 1000;
     const pas = api.G.track.curved ? 0.6 : 0.55;
     const fin = api.samples(pas);
-    // du plus loin au plus pres : les rangs de devant cachent ceux de derriere
+    // DU PLUS LOIN AU PLUS PRES, les rangs de devant cachent ceux de derriere ;
+    // et dans un rang aussi (03/10, « les personnages se superposent ») : dans
+    // l'ordre du trace, le voisin plus loin passait apres, et son drapeau sur
+    // la tete de l'autre. On les place d'abord, on les peint ensuite, ranges
+    // sur la hauteur de leurs pieds a l'ecran — au sol, c'est la profondeur.
+    const places = [];
     for (let j = 2; j >= 0; j--) {
       const r = near + 0.55 + j * 0.5;
       for (let i = 0; i < fin.length; i++) {
@@ -858,33 +863,37 @@
         const base = api.ptOf(q, r + dx * 0.2);
         const p0 = api.solid(base[0], base[1], 0);
         if (p0[0] < -30 || p0[0] > G.VW + 30 || p0[1] < -60 || p0[1] > G.VH + 60) continue;
-        const h = 1.55 + ((g >>> 4) % 30) / 100;
-        const epaules = api.solid(base[0], base[1], h - 0.28), tete = api.solid(base[0], base[1], h - 0.1);
-        const l = 0.24 * m;
-        const haut = HAUTS[(g >>> 12) % HAUTS.length], peau = PEAUX[(g >>> 16) % PEAUX.length];
-        // le torse, du genou aux epaules : le bas est derriere la barriere
-        const genou = api.solid(base[0], base[1], 0.55);
-        ctx.fillStyle = hex(vu([34, 38, 56]));
-        ctx.fillRect(genou[0] - l * 0.8, genou[1] - (genou[1] - epaules[1]) * 0.45, l * 1.6, (genou[1] - epaules[1]) * 0.45);
-        ctx.fillStyle = hex(vu(haut));
-        ctx.fillRect(epaules[0] - l, epaules[1], l * 2, (genou[1] - epaules[1]) * 0.58);
-        ctx.fillStyle = hex(vu(peau));
-        ctx.beginPath(); ctx.arc(tete[0], tete[1], 0.13 * m, 0, TAU); ctx.fill();
-        // un sur six brandit un drapeau, bras leve
-        if ((g >>> 20) % 6 === 0) {
-          const main = api.solid(base[0], base[1], h + 0.45);
-          ctx.strokeStyle = 'rgb(60,56,52)'; ctx.lineWidth = Math.max(1, 0.05 * m);
-          ctx.beginPath(); ctx.moveTo(epaules[0] + l, epaules[1]); ctx.lineTo(main[0] + l, main[1]); ctx.stroke();
-          flotte(ctx, main[0] + l, main[1] - 0.4 * m, 0.7 * m, 0.46 * m, t, g % 7);
-        } else if ((g >>> 20) % 6 === 1) {
-          // bras leves, qui applaudissent
-          const lev = Math.sin(t * 9 + g) * 0.08 * m;
-          ctx.strokeStyle = hex(vu(peau)); ctx.lineWidth = Math.max(1, 0.07 * m);
-          ctx.beginPath();
-          ctx.moveTo(epaules[0] - l * 0.8, epaules[1]); ctx.lineTo(tete[0] - l * 0.6, tete[1] - 0.35 * m + lev);
-          ctx.moveTo(epaules[0] + l * 0.8, epaules[1]); ctx.lineTo(tete[0] + l * 0.6, tete[1] - 0.35 * m - lev);
-          ctx.stroke();
-        }
+        places.push([p0[1], base, g]);
+      }
+    }
+    places.sort((a, b) => a[0] - b[0]);
+    for (const [, base, g] of places) {
+      const h = 1.55 + ((g >>> 4) % 30) / 100;
+      const epaules = api.solid(base[0], base[1], h - 0.28), tete = api.solid(base[0], base[1], h - 0.1);
+      const l = 0.24 * m;
+      const haut = HAUTS[(g >>> 12) % HAUTS.length], peau = PEAUX[(g >>> 16) % PEAUX.length];
+      // le torse, du genou aux epaules : le bas est derriere la barriere
+      const genou = api.solid(base[0], base[1], 0.55);
+      ctx.fillStyle = hex(vu([34, 38, 56]));
+      ctx.fillRect(genou[0] - l * 0.8, genou[1] - (genou[1] - epaules[1]) * 0.45, l * 1.6, (genou[1] - epaules[1]) * 0.45);
+      ctx.fillStyle = hex(vu(haut));
+      ctx.fillRect(epaules[0] - l, epaules[1], l * 2, (genou[1] - epaules[1]) * 0.58);
+      ctx.fillStyle = hex(vu(peau));
+      ctx.beginPath(); ctx.arc(tete[0], tete[1], 0.13 * m, 0, TAU); ctx.fill();
+      // un sur six brandit un drapeau, bras leve
+      if ((g >>> 20) % 6 === 0) {
+        const main = api.solid(base[0], base[1], h + 0.45);
+        ctx.strokeStyle = 'rgb(60,56,52)'; ctx.lineWidth = Math.max(1, 0.05 * m);
+        ctx.beginPath(); ctx.moveTo(epaules[0] + l, epaules[1]); ctx.lineTo(main[0] + l, main[1]); ctx.stroke();
+        flotte(ctx, main[0] + l, main[1] - 0.4 * m, 0.7 * m, 0.46 * m, t, g % 7);
+      } else if ((g >>> 20) % 6 === 1) {
+        // bras leves, qui applaudissent
+        const lev = Math.sin(t * 9 + g) * 0.08 * m;
+        ctx.strokeStyle = hex(vu(peau)); ctx.lineWidth = Math.max(1, 0.07 * m);
+        ctx.beginPath();
+        ctx.moveTo(epaules[0] - l * 0.8, epaules[1]); ctx.lineTo(tete[0] - l * 0.6, tete[1] - 0.35 * m + lev);
+        ctx.moveTo(epaules[0] + l * 0.8, epaules[1]); ctx.lineTo(tete[0] + l * 0.6, tete[1] - 0.35 * m - lev);
+        ctx.stroke();
       }
     }
   }

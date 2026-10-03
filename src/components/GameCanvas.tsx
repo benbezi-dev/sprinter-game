@@ -291,7 +291,11 @@ export function GameCanvas() {
         }
         
         const zeze = Object.values(SprinterCore.ZEZE);
-        for (let i = 0; i < 3; i++) {
+        // Du plus petit au plus grand (03/10, « les personnages se
+        // superposent ») : sur ce fond nu, c'est la taille qui dit la
+        // distance, et le plus petit se lit le plus loin. Peints dans l'autre
+        // sens, la main du suivant passait sur la jambe du premier.
+        for (let i = 2; i >= 0; i--) {
           const st = tm - 0.25 * i;
           if (st > 0 && st < 3.4) {
             const man = { look: zeze[i * 2], stride: st * 11, v: 12, maxSpeed: 12, fallAnim: 0, celebrate: 0 };
