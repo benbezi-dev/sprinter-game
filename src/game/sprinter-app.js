@@ -8460,25 +8460,29 @@
                  T.lean(r.d, r.lane, r.v) + (r.roulis || 0));
       ctx.globalAlpha = 1;
     };
-    // LES OBSTACLES, RANGES PARMI LES COUREURS.
+    // LES COUREURS, LE PLUS LOIN D'ABORD — ET LES OBSTACLES PARMI EUX.
+    //
+    // Toujours dans l'ordre de profondeur, obstacle ou pas (03/10, « les
+    // personnages se superposent »). Peints dans l'ordre de G.runners — le
+    // joueur, puis les couloirs un a huit —, le couloir exterieur passait
+    // par-dessus le couloir interieur des qu'ils ne se tenaient plus cote a
+    // cote : Aurel Manga, arrete a deux metres derriere son bloc
+    // (entrerEnBoss), avait les pieds du couloir 6 sur les epaules. A
+    // profondeur egale, deux coureurs sont l'un a cote de l'autre a l'ecran :
+    // leur ordre ne se voit pas.
     //
     // Une haie se franchit : le coureur passe devant elle tant qu'il ne l'a
     // pas atteinte, derriere des qu'il l'a depassee. Rien de fixe ne peut
     // donc la dessiner ni avant ni apres les athletes ; elle prend sa place
-    // dans l'ordre de profondeur, le plus loin d'abord. Sans obstacle, rien
-    // ne change : les coureurs gardent l'ordre ou ils ont toujours ete peints.
+    // dans la meme pile.
     const pieces = G.obstacles ? G.obstacles.pieces(apiObstacles()) : null;
-    if (pieces && pieces.length) {
-      const pile = [];
-      for (const it of vis) pile.push([depthOf(it[2][0], it[2][1]), it, null]);
-      for (const pc of pieces) pile.push([pc.profondeur, null, pc]);
-      pile.sort((a, b) => b[0] - a[0]);
-      for (const [, it, pc] of pile) {
-        if (it) coureur(it);
-        else G.obstacles.dessiner(ctx, apiObstacles(), pc);
-      }
-    } else {
-      for (const it of vis) coureur(it);
+    const pile = [];
+    for (const it of vis) pile.push([depthOf(it[2][0], it[2][1]), it, null]);
+    if (pieces) for (const pc of pieces) pile.push([pc.profondeur, null, pc]);
+    pile.sort((a, b) => b[0] - a[0]);
+    for (const [, it, pc] of pile) {
+      if (it) coureur(it);
+      else G.obstacles.dessiner(ctx, apiObstacles(), pc);
     }
     // LES DECORS DEBOUT, APRES LES COUREURS ET AVANT LEURS NOMS.
     //
