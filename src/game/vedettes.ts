@@ -64,7 +64,8 @@ export type Vedette = {
   /**
    * Une entree avant les blocs : il arrive de derriere la ligne, en marchant,
    * depuis `depuis` metres (negatif : en arriere du depart, hors du cadre),
-   * jusqu'a ses blocs, et pointe la ligne d'arrivee (entrerEnBoss, engine.ts).
+   * en longeant ses blocs jusqu'a la ligne, et pointe la ligne d'arrivee
+   * (entrerEnBoss, engine.ts).
    */
   entree?: { depuis: number };
   /**
@@ -83,8 +84,8 @@ export const VEDETTES: Record<string, Vedette> = {
     epreuves: ['110h'], jeux: ['haies'], stade: 'defi-manga', skin: 'manga',
     // SON ENTREE (03/10, a la demande de l'auteur) : il arrive par le bord
     // droit de l'ecran, de derriere les blocs, d'une demarche de patron,
-    // marche jusqu'a ses blocs et pointe la ligne d'arrivee avant de s'y
-    // installer (entrerEnBoss, engine.ts).
+    // longe ses blocs jusqu'a la ligne et y pointe l'arrivee avant de
+    // s'installer (entrerEnBoss, engine.ts).
     entree: { depuis: -6.2 },
     // ouvert avec celui de Meba-Mickael, le samedi 3 octobre 2026 a 21 h 30
     // (03/10, decide par l'auteur), et referme avec lui une semaine apres

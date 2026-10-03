@@ -648,25 +648,58 @@ function applaudir(avD: any, dt: number) {
  * Avant ses blocs, il ARRIVE : la camera va chercher son couloir derriere la
  * ligne et se resserre d'un coup, et il entre par le bord droit de l'ecran —
  * de derriere les blocs —, en marchant comme un patron (MARCHE, pose() dans
- * sprinter-core.js). Il marche jusqu'a ses blocs, s'y arrete, et POINTE LA
- * LIGNE D'ARRIVEE (POINTE) ; puis il baisse le bras, fait le pas qui le met a
- * son bloc, et le decompte part : il s'y installe avec les autres. Pendant ce
- * temps les autres font leurs gestes d'avant le depart, et les appuis du
- * joueur ne comptent pas (padPress). C'est cette fonction qui tient la duree
- * de l'attente (`reste`) : elle finit quand il est a son bloc.
+ * sprinter-core.js). Il longe ses blocs par l'interieur jusqu'a la ligne, ou
+ * se tiennent les autres, s'y arrete devant ses blocs et POINTE LA LIGNE
+ * D'ARRIVEE (POINTE) ; puis il baisse le bras, et le decompte part : il
+ * s'installe dans ses blocs avec les autres. Pendant ce temps les autres font
+ * leurs gestes d'avant le depart, et les appuis du joueur ne comptent pas
+ * (padPress). C'est cette fonction qui tient la duree de l'attente (`reste`) :
+ * elle finit avec son geste.
+ *
+ * SON CHEMIN NE PASSE PAS SOUS LE COUREUR DU COULOIR 6 (03/10, « les
+ * personnages se superposent »). La camera regarde d'en haut et de biais : un
+ * coureur un couloir plus a l'exterieur et 1,2 m plus en avant se tient, a
+ * l'ecran, juste au-dessus de lui, les pieds a hauteur de sa poitrine. Arrete
+ * a 1,35 m de la ligne pour pointer, Aurel avait la tete dans les jambes du
+ * couloir 6 pendant tout son geste ; marchant tout droit dans son couloir, il
+ * y passait de toute facon. Il pointe donc depuis la ligne, a cote des autres,
+ * et il y vient en longeant ses blocs par l'interieur (`ecart`, vers le
+ * couloir 4), puis en coupant vers sa place. Le joueur, au couloir 4, se tient
+ * plus en avant et plus a gauche : il ne gene pas ce chemin-la.
+ *
+ * Mesure en pixels sur la vraie entree (son corps et celui de chaque autre
+ * coureur dessines a part, image par image) : tout droit, 35 % de son corps
+ * dans les jambes du couloir 6 ; ecarte de 0,85 m, encore 1 % ; de 1,0 m mais
+ * revenu des 1,85 m de la ligne, plus de contact, mais a un ou deux points
+ * pendant un demi-metre ; de 1,15 m et revenu a 1,5 m, sept a neuf points au
+ * plus pres, et quinze pendant son geste.
  */
 // Mesure sur un ecran de 412 x 915 points (03/10) : parti a 6,2 m de la
 // ligne, il entre par le bord droit une fraction de seconde apres le debut ;
-// l'entree tient un peu plus de cinq secondes avant le decompte (le cri de
-// Meba-Mickael en tient 2,6). `arret` : juste derriere le rail de son bloc,
-// qui va de -1,12 a -0,18 m.
-const ENTREE = { vitesse: 1.85, pasParS: 1.95, freinage: 1.4, arret: -1.35,
-                 geste: 1.3, sortie: 0.3, versBloc: 1.6, plan: 2.2, visee: -1.8 };
-/** Un pas de sa demarche, de `E.d` vers `but`, freine sur le dernier metre. */
-function marcherVers(r: any, E: any, but: number, vitesse: number, dt: number): boolean {
+// l'entree tient environ cinq secondes avant le decompte (le cri de
+// Meba-Mickael en tient 2,6). `arret` : sur la ligne, devant ses blocs (leur
+// rail va de -1,12 a -0,18 m). `ecart` : son chemin s'ecarte de l'axe du
+// couloir vers l'interieur entre son depart et `longe`, et y revient a partir
+// de `rejoint`. Revenir plus tot le ramene sous les pieds du couloir 6 : il
+// faut garder `rejoint` + 1,22 (la largeur d'un couloir) + `ecart` au-dessus
+// de 0,85 environ.
+const ENTREE = { vitesse: 1.85, pasParS: 1.95, freinage: 1.4, arret: 0,
+                 ecart: 1.15, longe: -3.2, rejoint: -1.5,
+                 geste: 1.3, sortie: 0.3, plan: 2.2, visee: -1.8 };
+/** L'ecart lateral de son chemin a la distance `d` (r.demi : negatif vers l'interieur). */
+function ecartDuChemin(E: any, d: number): number {
+  const doux = (x: number) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  const ecarte = doux((d - E.depuis) / (ENTREE.longe - E.depuis));
+  const revient = doux((d - ENTREE.rejoint) / (ENTREE.arret - ENTREE.rejoint));
+  return -ENTREE.ecart * ecarte * (1 - revient);
+}
+/** Un pas de sa demarche, de `E.d` vers `but`, freine sur le dernier metre.
+ *  `pente` : son chemin s'ecarte de `pente` metres par metre d'avancee ; la
+ *  vitesse reste celle du pas, et il avance d'autant moins dans le couloir. */
+function marcherVers(r: any, E: any, but: number, vitesse: number, dt: number, pente = 0): boolean {
   const reste = but - E.d;
   const v = Math.min(vitesse, 0.25 + Math.sqrt(2 * ENTREE.freinage * Math.max(0, reste)));
-  E.d = Math.min(but, E.d + v * dt);
+  E.d = Math.min(but, E.d + v * dt / Math.sqrt(1 + pente * pente));
   r.marcheT = (r.marcheT || 0) + dt * Math.PI * ENTREE.pasParS * (v / ENTREE.vitesse);
   return E.d >= but - 1e-4;
 }
@@ -678,22 +711,27 @@ function entrerEnBoss(avD: any, dt: number) {
   if (E.d == null) E.d = E.depuis;
   avD.reste = 99;
   if (E.arrive == null) {
-    // 1. IL ARRIVE, jusqu'a ses blocs
+    // 1. IL ARRIVE, en longeant ses blocs, jusqu'a la ligne ; le corps tourne
+    // avec son chemin (`cap`, positif de +x vers +y, comme r.demi)
+    const pente = (d: number) => (ecartDuChemin(E, d + 0.05) - ecartDuChemin(E, d - 0.05)) / 0.1;
     r.marche = 1;
-    if (marcherVers(r, E, ENTREE.arret, ENTREE.vitesse, dt)) E.arrive = avD.t;
+    if (marcherVers(r, E, ENTREE.arret, ENTREE.vitesse, dt, pente(E.d))) E.arrive = avD.t;
+    r.demi = ecartDuChemin(E, E.d);
+    r.cap = Math.atan(pente(E.d));
   } else if (E.pointe == null) {
     // 2. IL POINTE LA LIGNE D'ARRIVEE : les pieds se rejoignent, le bras
     // droit se leve vers elle, un temps, et redescend
     const u = avD.t - E.arrive;
+    r.demi = 0; r.cap = 0;
     r.marche = 1 - doux(u / 0.25);
     r.pointe = doux((u - 0.1) / 0.3) * (1 - doux((u - ENTREE.geste) / ENTREE.sortie));
     r.debout = 1;
     if (u >= ENTREE.geste + ENTREE.sortie) E.pointe = avD.t;
   } else {
-    // 3. ET IL FAIT LE PAS QUI LE MET A SON BLOC ; le decompte part quand il y est
+    // 3. ET LE DECOMPTE PART : il s'installe dans ses blocs avec les autres
     r.pointe = 0;
-    r.marche = 1;
-    if (marcherVers(r, E, 0, ENTREE.versBloc, dt)) { r.marche = 0; avD.reste = 0; }
+    r.marche = 0;
+    avD.reste = 0;
   }
   r.d = E.d; r.v = 0;
   if (!animationsReduites()) {
