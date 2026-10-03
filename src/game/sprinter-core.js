@@ -1044,6 +1044,20 @@
   const CLAP = { bras: 1.40, avBras: 2.95, frappe: 0.05,
                  rouleBras: 0.12, rouleAv: 0.12, rouleAvFrappe: 0.55 };
 
+  // SON CRI, « LET'S GOO ! » (voir pose) : arme sur ses jambes, le buste
+  // penche vers la ligne, le menton leve ; les coudes tires en arriere et
+  // ecartes (roulis negatif : loin de l'axe), les poings serres devant le
+  // bassin. Les `...Coup` s'ajoutent sur le mot : les poings partent vers le
+  // bas, le corps descend. Les jambes plient autour de leur corde verticale
+  // — chaque pied reste sous la hanche, l'un a sept centiemes devant l'autre —
+  // et `leve` descend le bassin d'autant, pour que les pieds restent au sol.
+  // (genou plie de 0,80 rad, 1,10 sur le mot : six centimetres de moins, puis
+  // douze — vu de la tribune, un cri de 3 cm ne se voyait pas)
+  const CRI = { cuisse: 0.395, tibia: -0.405, cuisseCoup: 0.146, tibiaCoup: -0.154, ecart: 0.07,
+                leve: -0.063, leveCoup: -0.053, buste: -0.32, busteCoup: -0.14,
+                tete: 0.38, teteCoup: 0.14, bras: -0.30, brasCoup: -0.30,
+                avBras: 1.20, avBrasCoup: -0.55, rouleBras: -0.55, rouleAv: 0.40 };
+
   // LES ATTITUDES D'AVANT LE DEPART (voir pose) : pour chaque attitude et
   // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
   // bras [bras, avant-bras] (0 vers le bas, positif vers l'avant), le buste,
@@ -2732,6 +2746,29 @@
       teteAt = cible.tete * wAt;
     }
 
+    // SON CRI, « LET'S GOO ! » (03/10, a la demande de l'auteur : « donne plus
+    // d'attitude a Mickael lorsqu'il crie let's go »). Il restait droit, les
+    // bras figes a mi-foulee, jusqu'au premier clap. Il s'arme avant le mot,
+    // les poings partent vers le bas sur « LET'S », et les bras passent aux
+    // claps sur « GOOO » ; apres le dernier, un dernier coup de poings.
+    // `cri` (0 a 1) et `criCoup` (l'accent sur le mot) sont poses par
+    // engine.ts (applaudir) ; les angles sont dans CRI.
+    const wCr = Math.max(0, Math.min(1, r.cri || 0));
+    if (wCr > 0) {
+      const k = Math.max(0, Math.min(1, r.criCoup || 0));
+      const cu = CRI.cuisse + CRI.cuisseCoup * k, ti = CRI.tibia + CRI.tibiaCoup * k;
+      l = [melange(l[0], cu + CRI.ecart, wCr), melange(l[1], ti + CRI.ecart, wCr), melange(l[2], 0, wCr)];
+      rr = [melange(rr[0], cu - CRI.ecart, wCr), melange(rr[1], ti - CRI.ecart, wCr), melange(rr[2], 0, wCr)];
+      const uA = CRI.bras + CRI.brasCoup * k, fA = CRI.avBras + CRI.avBrasCoup * k;
+      al = [melange(al[0], uA, wCr), melange(al[1], fA, wCr)];
+      ar = [melange(ar[0], uA, wCr), melange(ar[1], fA, wCr)];
+      rouleBras = [melange(rouleBras ? rouleBras[0] : 0, CRI.rouleBras, wCr),
+                   melange(rouleBras ? rouleBras[1] : 0, CRI.rouleAv, wCr)];
+      lean = melange(lean, CRI.buste + CRI.busteCoup * k, wCr);
+      leve += (CRI.leve + CRI.leveCoup * k) * wCr;
+      teteAt += (CRI.tete + CRI.teteCoup * k) * wCr;
+    }
+
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
     // de rattraper son equilibre.
@@ -2899,7 +2936,8 @@
     const sq = L.maillage ? (r.squelette = {
       hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
       jambes: [], bras: [],
-      mains: wCl > 0.5 ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
+      // (les poings du cri restent fermes, meme quand il sort des claps)
+      mains: wCl > 0.5 && wCl > wCr ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
     }) : null;
     // L'ourlet du short se voit ; sa ceinture disparait sous le maillot.
     //

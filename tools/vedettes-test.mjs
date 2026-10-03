@@ -415,5 +415,28 @@ titre('LES ATTITUDES D AVANT LE DEPART');
   }
 }
 
+titre('MEBA-MICKAEL ZEZE : SON CRI');
+// 03/10, a la demande de l'auteur : « donne plus d'attitude a Mickael
+// lorsqu'il crie let's go ». Arme (`cri`), il descend de six centimetres ; sur
+// le mot (`criCoup`), de douze — et ses pieds restent au sol : la flexion des
+// genoux et la descente du bassin (CRI, sprinter-core.js) doivent s'accorder.
+{
+  const bas = (parts) => {
+    let z = Infinity;
+    for (const p of parts) for (const q of bouts(p)) z = Math.min(z, q[2]);
+    return z;
+  };
+  const crie = (cri, criCoup) => K.pose({ look: LM, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0,
+                                          d: 0, debout: 1, cri, criCoup }, 0);
+  const debout = crie(0, 0), pied0 = bas(debout), bassin0 = bassin(debout);
+  for (const [cri, coup, descente] of [[1, 0, 0.05], [1, 0.5, 0.08], [1, 1, 0.10]]) {
+    const parts = crie(cri, coup);
+    const dz = bassin(parts) - bassin0, pied = bas(parts) - pied0;
+    ok(`cri ${cri}, coup ${coup} : il descend de plus de ${descente * 100} cm, les pieds au sol`,
+       dz < -descente && Math.abs(pied) < 0.025,
+       `bassin ${(dz * 100).toFixed(1)} cm, pied le plus bas ${(pied * 100).toFixed(1)} cm`);
+  }
+}
+
 console.log(`\n${'─'.repeat(62)}\n   ${e ? e + ' ECHEC(S).' : 'TOUT PASSE.'}`);
 process.exit(e ? 1 : 0);

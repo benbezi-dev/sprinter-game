@@ -577,6 +577,18 @@ function applaudir(avD: any, dt: number) {
   // faut pour tomber sur la suivante ; avant la premiere et apres la derniere,
   // au rythme de la presentation.
   const P = 1 / 2.5, n = claps.length;
+  // SON CRI (03/10, a la demande de l'auteur : « donne plus d'attitude a
+  // Mickael lorsqu'il crie let's go ») : il s'arme une seconde avant le mot,
+  // les poings partent vers le bas sur « LET'S » (0,2 s apres le debut de son
+  // enregistrement), la posture s'efface dans les claps du « GOOO ». Apres le
+  // dernier clap, un dernier coup de poings, fini avant les blocs. `cri` est
+  // le poids de la posture, `criCoup` l'accent (pose, CRI).
+  const lets = (avD.a ?? 0.25) + 0.20, dernier = claps[n - 1];
+  const coup = (x: number) => x <= 0 ? 0 : Math.min(1, 2.2 * (1 - Math.exp(-x / 0.03)) * Math.exp(-x / 0.18));
+  r.cri = Math.max(
+    doux((t - (lets - 0.32)) / 0.2) * (1 - doux((t - debut) / 0.22)),
+    0.85 * doux((t - (dernier + 0.12)) / 0.15) * (1 - doux((t - (dernier + 0.62)) / 0.2)));
+  r.criCoup = Math.max(coup(t - lets), 0.8 * coup(t - (dernier + 0.27)));
   let tc: number;
   if (t <= claps[0]) tc = 0.5 * P - (claps[0] - t);
   else if (t >= claps[n - 1]) tc = (n - 0.5) * P + (t - claps[n - 1]);
