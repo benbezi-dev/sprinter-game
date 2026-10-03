@@ -252,6 +252,25 @@ export class Salle {
   dernierEtat: EtatSalle | null = null;
   /** Les epreuves et le niveau de cette piste, pour un ecran qui revient. */
   epreuves: string[] = [];
+  /** De quoi refaire la meme piste sous le meme code : voir rouvrir(). */
+  private niveau = 5;
+  private places = 2;
+  /**
+   * La salle a coupe la liaison d'elle-meme — fin de course, inactivite,
+   * reseau. Pas quand on la quitte : fermer() la coupe aussi, mais il n'y a
+   * plus personne pour s'en soucier.
+   */
+  coupee = false;
+  /** Se redeclarer pret des que la salle rouverte nous a reconnus. */
+  private pretAuRetour = false;
+  /**
+   * Ceux qui regardent la salle sans la piloter.
+   *
+   * `ec` n'en tient qu'un, et c'est voulu : c'est le panneau qui decide de ce
+   * que la salle fait faire au jeu. Mais l'ecran de fin de course doit aussi
+   * savoir qui veut la revanche, et il n'a rien a piloter — il regarde.
+   */
+  private observateurs = new Set<() => void>();
 
   constructor(code: string, ec: Ecouteurs) {
     this.code = code.toUpperCase();
@@ -266,8 +285,69 @@ export class Salle {
    */
   ecouter(ec: Ecouteurs) { this.ec = ec; }
 
+  /** Etre prevenu de tout changement de la salle. Rend de quoi se desabonner. */
+  observer(f: () => void): () => void {
+    this.observateurs.add(f);
+    return () => { this.observateurs.delete(f); };
+  }
+
+  private notifier() {
+    for (const f of this.observateurs) {
+      try { f(); } catch { /* un ecran casse n'empeche pas les autres */ }
+    }
+  }
+
+  /** Suis-je pret, d'apres la salle ? C'est elle qui fait foi, pas l'ecran. */
+  get pretMoi(): boolean {
+    return !!this.dernierEtat?.joueurs?.some(j => j.id === this.moi && j.pret);
+  }
+
+  /**
+   * ROUVRIR LA MEME PISTE, SOUS LE MEME CODE.
+   *
+   * Une salle se ferme d'elle-meme apres le verdict quand personne ne se
+   * redeclare pret, et apres quelques minutes sans rien. Elle n'existait alors
+   * plus que dans la memoire du telephone : un code affiche, une liste de
+   * joueurs figee, et un bouton PRET qui ne partait nulle part. Il fallait
+   * quitter, ouvrir une autre piste, renvoyer un autre code — pour courir
+   * contre les memes personnes.
+   *
+   * Le code, lui, n'a pas expire : le serveur adresse la salle par son nom. On
+   * s'y reconnecte donc avec la piste d'avant — memes epreuves, meme niveau,
+   * meme nombre de couloirs. Le premier qui revient la refonde, les autres la
+   * rejoignent en revenant a leur tour.
+   *
+   * @param pret se redeclarer pret aussitot reconnu : c'est ce que veut dire
+   *   « revanche » quand on le demande a une salle fermee.
+   */
+  rouvrir(pret = false) {
+    if (this.enVie()) { if (pret) this.pret(true); return; }
+    this.pretAuRetour = pret;
+    // La piste est celle que la SALLE courait, pas celle des selecteurs de
+    // cet ecran : qui l'a rejointe n'a rien choisi — ni la distance, ni le
+    // nombre de couloirs — et ses selecteurs sont restes sur leurs valeurs.
+    // S'il revient le premier, c'est pourtant lui qui la refonde.
+    const avant = this.dernierEtat;
+    const epreuves = avant?.epreuves?.length ? avant.epreuves : this.epreuves;
+    const niveau = avant ? avant.niveau : this.niveau;
+    const places = avant?.max || this.places;
+    // Ce que le dernier etat dit des autres — presents, prets — decrit une
+    // salle qui n'existe plus, et l'ecran l'afficherait comme vrai.
+    this.dernierEtat = avant
+      ? { ...avant, joueurs: [], depart_a: null, presentation: null }
+      : null;
+    // Une nouvelle liaison, une nouvelle identite : la salle nous en donnera
+    // une a l'arrivee. Garder l'ancienne ferait croire qu'on y est deja.
+    this.moi = '';
+    this.suisHote = false;
+    this.connecter(epreuves, niveau, places);
+  }
+
   connecter(epreuves: string[], niveau: number, places = 2) {
     this.epreuves = epreuves.slice();
+    this.niveau = niveau;
+    this.places = places;
+    this.coupee = false;
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
       races: epreuves.join(','),
@@ -288,12 +368,15 @@ export class Salle {
     // ou l'on attendrait tout seul un adversaire qui court ailleurs. Mieux
     // vaut ne pas partir et le dire.
     if (EST_TEST && !codeAcces()) {
+      this.coupee = true;
       this.ec.onFerme?.('acces');
+      this.notifier();
       return;
     }
     const ws = new WebSocket(avecAcces(`${WS_BASE}/live/${this.code}?${q}`));
     this.ws = ws;
     brancherRapide(this);
+    this.notifier();
 
     ws.onopen = () => {
       // Trois mesures d'horloge d'affilee : on garde la meilleure, celle dont
@@ -301,6 +384,7 @@ export class Salle {
       // un hoquet du reseau et decaler le depart de tout le monde.
       this.pings = 0;
       this.meilleur = Infinity;
+      clearInterval(this.timerPing);
       this.ping();
       this.timerPing = setInterval(() => this.ping(), 700);
     };
@@ -308,9 +392,16 @@ export class Salle {
     ws.onmessage = ev => this.recu(ev.data);
     ws.onerror = () => this.ec.onFerme?.('reseau');
     ws.onclose = () => {
+      // Une liaison remplacee par rouvrir() n'a plus rien a dire : c'est la
+      // nouvelle qui parle pour la salle.
+      if (this.ws && this.ws !== ws) return;
       clearInterval(this.timerPing);
       debrancherRapide(this);
+      // fermer() a deja vide `ws` : on est parti, ce n'est pas la salle qui
+      // nous a laisses.
+      if (this.ws === ws) this.coupee = true;
       this.ec.onFerme?.('fermee');
+      this.notifier();
     };
   }
 
@@ -392,6 +483,8 @@ export class Salle {
         if (m.role === 'spectateur' || m.role === 'coureur') this.role = m.role;
         this.suisHote = (m.joueurs || []).some((j: JoueurSalle) => j.id === m.moi && j.hote);
         this.majEtat(m);
+        // Une revanche demandee a une salle fermee : on y revient pour courir.
+        if (this.pretAuRetour) { this.pretAuRetour = false; this.pret(true); }
         return;
       case 'salle':
         this.majEtat(m);
@@ -410,6 +503,7 @@ export class Salle {
         this.departPose = false;
         this.presentationPose = false;
         this.ec.onResultat?.(m as ResultatDirect);
+        this.notifier();
         return;
       // Les points arrivent APRES le verdict, et parfois pas du tout : la
       // salle ecrit au classement hors du chemin de l'annonce, pour qu'une
@@ -461,6 +555,10 @@ export class Salle {
     }
     const autre = (m.joueurs || []).find((j: JoueurSalle) => j.id !== this.moi);
     this.adversaire = autre ? autre.nom : '';
+    // La distance est celle de la SALLE, fixee par celui qui l'a ouverte. Ce
+    // qu'on avait demande en se connectant ne compte que si l'on etait le
+    // premier ; pour tous les autres, le serveur l'a ignore.
+    if (Array.isArray(m.epreuves) && m.epreuves.length) this.epreuves = m.epreuves.slice();
     this.dernierEtat = m as EtatSalle;
     this.ec.onEtat?.(m as EtatSalle);
 
@@ -483,6 +581,7 @@ export class Salle {
       this.ec.onDepart?.(m.depart_a - (Date.now() + this.decalage), m.depart_a);
     }
     if (!m.depart_a) this.departPose = false;
+    this.notifier();
   }
 
   private envoyer(o: any) {

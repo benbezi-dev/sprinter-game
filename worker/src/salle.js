@@ -47,10 +47,18 @@ const VIE_SALLE_MS = 20 * 60 * 1000;
 // ouverte l'y maintient. Une salle qui a rendu son verdict ne sert plus a rien
 // mais coute autant qu'une salle en pleine course : on la ferme.
 //
-// Pas immediatement — les deux joueurs regardent leur resultat et peuvent
-// vouloir remettre ca. On leur laisse le temps de se decider, et le moindre
-// « pret » annule la fermeture.
-const APRES_RESULTAT_MS = 45 * 1000;
+// Pas immediatement — les joueurs regardent leur resultat et peuvent vouloir
+// remettre ca. On leur laisse le temps de se decider, et le moindre « pret »
+// annule la fermeture.
+//
+// Quatre-vingt-dix secondes, et non plus quarante-cinq : la revanche se propose
+// maintenant depuis l'ecran de fin, ou l'on commence par lire son chrono, son
+// ecart, ses points, et parfois par revoir l'arrivee. Quarante-cinq secondes
+// fermaient la piste sous les yeux de qui s'appretait a appuyer. Une salle
+// fermee se rouvre sous le meme code (voir Salle.rouvrir dans src/game/live.ts),
+// mais celui qui la rouvre ne voit plus qui l'attend ; mieux vaut qu'elle soit
+// encore la.
+const APRES_RESULTAT_MS = 90 * 1000;
 // Et une salle ou il ne se passe rien finit aussi par fermer, sans quoi deux
 // joueurs qui l'ouvrent et s'en vont la laisseraient eveillee vingt minutes.
 const INACTIVITE_MS = 4 * 60 * 1000;
@@ -205,7 +213,26 @@ export class SalleDirecte {
         try { ws.close(1000, raison); } catch (e) { /* deja fermee */ }
       }
       this.joueurs.clear();
+      this.viderPiste();
     }, delai);
+  }
+
+  /**
+   * Plus personne sur la piste : ce qu'elle courait ne la concerne plus.
+   *
+   * Une salle fermee se rouvre sous le meme code, et c'est ce qui permet une
+   * revanche sans en creer une autre. Le premier qui revient fixe a nouveau
+   * l'hote, les epreuves et la taille ; mais un depart reste pose — une salle
+   * fermee pour inactivite en pleine course — annoncait a celui qui revenait un
+   * pistolet tire depuis longtemps, et le faisait partir seul, sur-le-champ.
+   * Un `termine` reste vrai disait aussi au nouvel arrivant qu'une course venait
+   * de finir, alors qu'il n'en avait couru aucune.
+   */
+  viderPiste() {
+    this.departA = null;
+    this.presentationA = null;
+    this.ordre = [];
+    this.termine = false;
   }
 
   /** Il se passe quelque chose : la salle ne ferme pas maintenant. */
@@ -308,10 +335,12 @@ export class SalleDirecte {
     // Un depart en pleine course laisse l'autre seul : on le lui dit plutot
     // que de le laisser courir contre un couloir vide.
     this.diffuser({ t: 'sorti', id: j.id, nom: j.nom, ...this.vue() });
-    if (this.joueurs.size === 0) this.termine = false;
     // Plus personne : on eteint le minuteur. Un setTimeout en attente suffit a
     // maintenir l'objet eveille, et donc facture, pour rien.
-    if (this.joueurs.size === 0) { clearTimeout(this.minuteur); this.minuteur = null; }
+    if (this.joueurs.size === 0) {
+      this.viderPiste();
+      clearTimeout(this.minuteur); this.minuteur = null;
+    }
   }
 
   recu(ws, brut) {
@@ -464,6 +493,15 @@ export class SalleDirecte {
     // revanche en refera une neuve, avec l'ordre du moment.
     this.presentationA = null;
     this.ordre = [];
+    // LA REVANCHE SE DEMANDE A TOUT LE MONDE, ET DE NOUVEAU.
+    //
+    // « Pret » valait pour la course qui vient de finir, et il restait pose
+    // apres elle. Le premier qui se declarait pret pour la suivante trouvait
+    // donc tous les autres deja prets — de la course d'avant — et relancait la
+    // salle a lui seul : ses adversaires, encore sur leur ecran de resultat, se
+    // retrouvaient tires vers une presentation qu'ils n'avaient pas demandee.
+    // Chacun redit maintenant oui ; la salle repart quand le dernier l'a dit.
+    for (const x of tous) x.pret = false;
 
     // Le verdict est rendu : la salle n'a plus de raison d'etre eveillee. On
     // laisse le temps de le lire et de relancer, puis on ferme.
@@ -497,6 +535,10 @@ export class SalleDirecte {
       message.hote = { id: hote.id, nom: hote.nom, ms: hote.fin };
       message.invite = { id: invite.id, nom: invite.nom, ms: invite.fin };
       this.diffuser(message);
+      // Puis l'etat : personne n'est plus pret, et c'est de la que part la
+      // revanche. Apres le verdict, pour que l'ecran de fin soit deja la
+      // quand il arrive.
+      this.envoyerEtat();
 
       // Les points passent par le meme chemin que ceux d'un defi differe : une
       // course en direct et un defi rejoue en fantome doivent compter pareil.
@@ -515,6 +557,7 @@ export class SalleDirecte {
     // sans rien mesurer de juste. Les series de championnat, elles, ont leur
     // propre chemin d'enregistrement.
     this.diffuser(message);
+    this.envoyerEtat();
   }
 
   async ecrire(hote, invite, course) {
