@@ -58,6 +58,10 @@ const MESSAGES = {
     fr: ['Un mot pour toi', 'Le vainqueur t\u2019a laissé quelque chose.'],
     en: ['A word for you', 'The winner left you something.'],
   },
+  reponse: {
+    fr: ['On te répond', 'Ton adversaire a répondu à ton mot.'],
+    en: ['They answered', 'The runner you beat answered your word.'],
+  },
   // L'objectif du jour fabrique son texte a l'envoi — il porte le chrono du
   // joueur, qui n'existe pas dans une table statique. Cette entree est ce
   // qu'on dit quand ce calcul n'a pas abouti : une sonnerie generique vaut

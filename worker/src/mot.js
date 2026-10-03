@@ -324,3 +324,87 @@ export async function poserMot(db, { id, cle, texte, voix, voixType }) {
 
   return { ok: true, texte: t || null, voix: !!v };
 }
+
+/* ---------------------------------------------------------------------------
+   LA REPONSE DU PERDANT
+   ---------------------------------------------------------------------------
+   La regle n° 1 tenait le perdant muet : seul le vainqueur parle. Elle reste
+   vraie pour le texte et la voix. Ce qui s'ouvre au perdant est plus etroit :
+   UNE phrase, choisie dans une liste ecrite par le jeu, en reponse a un mot
+   qu'il a vraiment recu.
+
+   Pourquoi pas un champ libre : le perdant est le cote frustre de la
+   rencontre. Lui ouvrir du texte, c'est l'ouvrir a celui qui a le plus de
+   raisons d'en abuser, et transformer un mot en conversation que personne
+   n'aurait moderee.
+
+   CE QUI VOYAGE EST UN IDENTIFIANT, comme pour le tchat rapide : chaque
+   telephone ecrit la phrase dans sa langue (sprinter-i18n.js, cles
+   `reponse_r_*`). Rien a filtrer, rien a signaler, et on ne glisse pas un
+   numero de telephone dans « r_vent ».
+
+   La liste est la meme cote jeu (src/game/mot.ts, REPONSES) : les deux se
+   modifient ensemble.
+
+   Trois bornes, et elles ferment l'echange :
+   - seul le perdant repond, et seulement s'il y avait un mot du vainqueur.
+     Une pique ecrite par le jeu n'appelle pas de reponse : le vainqueur
+     recevrait une replique a une phrase qu'il n'a jamais dite ;
+   - une seule fois, et sans retour possible ;
+   - le vainqueur ne repond pas a la reponse. L'echange s'arrete la.
+--------------------------------------------------------------------------- */
+
+/** Les identifiants recevables. Voir src/game/mot.ts. */
+export const REPONSES = [
+  'r_bien', 'r_note', 'r_prochaine', 'r_echauffement', 'r_vent', 'r_blocs',
+];
+
+export function reponseRecevable(q) {
+  return typeof q === 'string' && REPONSES.includes(q);
+}
+
+/**
+ * Pose la reponse du perdant sur une rencontre.
+ *
+ * Le perdant se reconnait comme le destinataire d'un signalement : par son nom,
+ * ou — cote lanceur seulement — par l'appareil qui a cree le defi. Renvoie
+ * `{ gagnant }` pour que la route sache a qui sonner.
+ */
+export async function poserReponse(db, { id, cle, deviceId, reponse }) {
+  if (!reponseRecevable(reponse)) return { erreur: 'reponse inconnue' };
+  const r = await db.prepare(
+    `SELECT r.challenge_id, r.opponent_key, r.challenger_key, r.outcome,
+            r.mot, r.voix, r.mot_vu, r.reponse, c.owner_device
+       FROM duel_results r
+       JOIN challenges c ON c.id = r.challenge_id
+      WHERE r.challenge_id = ?`).bind(id).first();
+  if (!r) return { erreur: 'duel introuvable' };
+
+  const vainqueur = cleDuVainqueur(r);
+  if (!vainqueur) return { erreur: 'un nul ne se chambre pas' };
+  const perdantRole = r.outcome === 'opponent' ? 'challenger' : 'opponent';
+  const perdantCle = perdantRole === 'challenger' ? r.challenger_key : r.opponent_key;
+
+  const moi = String(cle || '').trim().toLowerCase();
+  const parNom = !!moi && moi === String(perdantCle || '').trim().toLowerCase();
+  const parAppareil = perdantRole === 'challenger' && !!deviceId &&
+    !!r.owner_device && String(deviceId) === String(r.owner_device);
+  if (!parNom && !parAppareil) return { erreur: 'seul le perdant repond' };
+
+  // Un mot a existe : il est encore la, ou il a ete lu — la voix s'efface a la
+  // lecture, et `mot_vu` ne passe a 1 que s'il y avait quelque chose a lire.
+  if (!r.mot && !r.voix && !r.mot_vu) return { erreur: 'rien a quoi repondre' };
+  if (r.reponse) return { erreur: 'deja repondu', deja: true };
+
+  // La condition `reponse IS NULL` est reprise dans l'ecriture : deux appuis
+  // simultanes ne posent pas deux reponses.
+  const ecrit = await db.prepare(
+    `UPDATE duel_results SET reponse = ?
+      WHERE challenge_id = ? AND reponse IS NULL`).bind(reponse, id).run();
+  if (!(ecrit && ecrit.meta && ecrit.meta.changes)) return { erreur: 'deja repondu', deja: true };
+
+  return {
+    ok: true, reponse,
+    gagnant: { role: r.outcome, cle: vainqueur, perdant: String(perdantCle || '') },
+  };
+}

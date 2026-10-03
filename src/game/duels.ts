@@ -292,6 +292,11 @@ export type MonDuel = {
   /** Sa voix, encodee. Effacee du serveur des que cette fenetre se ferme. */
   voix?: string | null;
   voix_type?: string | null;
+  /**
+   * Ce que le perdant a repondu a mon mot : un identifiant de la liste fermee
+   * (voir game/mot.ts, REPONSES). Nul pour le perdant lui-meme.
+   */
+  reponse?: string | null;
   races: string[];
   at: number;
 };

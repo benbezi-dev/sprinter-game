@@ -29,6 +29,9 @@
 export const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
+  // La reponse du perdant : une par rencontre, prise dans une liste. Meme
+  // cadence que le mot auquel elle repond.
+  '/duel/reponse': { max: 6, fenetreMs: 60_000 },
   // Le mot d'une course de championnat : meme geste, meme cadence. Un joueur
   // n'en pose qu'un par course, et il n'y a que treize courses dans une
   // edition — six par minute laissent passer une reprise apres une coupure et

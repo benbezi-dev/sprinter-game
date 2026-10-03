@@ -224,6 +224,11 @@ export async function ensureDuelTables(db) {
     // aille la chercher dans le defi plutot que de la ranger au 100 m sans
     // regarder.
     `ALTER TABLE duel_results ADD COLUMN epreuve TEXT`,
+    // La reponse du perdant au mot du vainqueur : un identifiant pris dans une
+    // liste fermee (voir mot.js), jamais du texte. Et son pendant de `mot_vu`,
+    // cote vainqueur : la reponse arrive apres coup, et s'annonce une fois.
+    `ALTER TABLE duel_results ADD COLUMN reponse TEXT`,
+    `ALTER TABLE duel_results ADD COLUMN reponse_vue INTEGER NOT NULL DEFAULT 0`,
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }

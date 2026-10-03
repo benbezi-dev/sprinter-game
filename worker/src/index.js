@@ -3,7 +3,7 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
   mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
-import { poserMot, MAX_TEXTE } from './mot.js';
+import { poserMot, poserReponse, MAX_TEXTE } from './mot.js';
 import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
@@ -2933,6 +2933,49 @@ async function servir(request, env, ctx, porteur) {
       return r.erreur ? json({ error: r.erreur, ...r }, r.deja ? 409 : 403) : json(r);
     }
 
+    // La reponse du perdant au mot du vainqueur.
+    //
+    // Une phrase prise dans une liste fermee, une fois, et seulement apres un
+    // vrai mot. Les regles vivent dans mot.js, a cote de celles du mot.
+    if (url.pathname === '/duel/reponse' && request.method === 'POST') {
+      if (!motOuvert(canal)) return json({ error: 'reserve au canal de test' }, 403);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { id, name, device_id, reponse } = body || {};
+      const code = String(id || '').toUpperCase();
+      if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+      await ensureDuelTables(env.DB);
+      await ensureChallengeTables(env.DB);
+      const r = await poserReponse(env.DB, {
+        id: code, cle: name,
+        deviceId: isValidDeviceId(device_id) ? device_id : '',
+        reponse,
+      });
+      if (r.erreur) return json({ error: r.erreur, deja: !!r.deja }, r.deja ? 409 : 403);
+
+      // La sonnette chez le vainqueur — sauf s'il a bloque le perdant. La
+      // reponse reste posee (debloquer doit pouvoir la rendre, comme pour le
+      // mot), mais elle ne derange personne.
+      ctx.waitUntil((async () => {
+        try {
+          const g = r.gagnant;
+          if ((await listeBloques(env.DB, g.cle)).includes(cleDe(g.perdant))) return;
+          if (g.role === 'challenger') {
+            // Celui qui a lance l'emporte : il est inscrit sur le defi.
+            const d = await env.DB.prepare(
+              `SELECT owner_device FROM challenges WHERE id = ?`).bind(code).first();
+            if (d && d.owner_device) await sonnerEtPush(env, d.owner_device, 'reponse', canal.test);
+            return;
+          }
+          const rep = await env.DB.prepare(
+            `SELECT device_id FROM challenge_attempts
+              WHERE id = ? ORDER BY total_ms ASC LIMIT 1`).bind(code).first();
+          if (rep) await sonnerEtPush(env, rep.device_id, 'reponse', canal.test);
+        } catch (e) { /* le sondage reste derriere */ }
+      })());
+      return json({ ok: true, reponse: r.reponse });
+    }
+
     // Qui a perdu une rencontre, exprime dans les memes mots que le role.
     // Le mot du vainqueur ne part qu'a lui : c'est la seule verification qui
     // empeche un vainqueur de relire ce qu'il a ecrit, et surtout un tiers de
@@ -2986,13 +3029,16 @@ async function servir(request, env, ctx, porteur) {
       // personne ne la reclame. On lit donc `mot_vu` la ou on lisait « vu »
       // tout court : le resultat s'annonce une fois, le mot aussi, et les deux
       // n'ont pas a arriver ensemble.
+      //
+      // Les deux dernieres branches font le chemin inverse : la reponse du
+      // perdant, qui revient au vainqueur apres coup, sur `reponse_vue`.
       const { results } = await env.DB.prepare(
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse,
                 c.races, c.owner_name,
-                'challenger' AS role
+                'challenger' AS role, 'resultat' AS pourquoi
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
           WHERE r.seen_by_challenger = 0
@@ -3001,9 +3047,9 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse,
                 c.races, c.owner_name,
-                'challenger' AS role
+                'challenger' AS role, 'mot' AS pourquoi
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
           WHERE r.seen_by_challenger = 1
@@ -3016,9 +3062,9 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse,
                 c.races, c.owner_name,
-                'opponent' AS role
+                'opponent' AS role, 'mot' AS pourquoi
            FROM duel_results r
            JOIN challenges c ON c.id = r.challenge_id
           WHERE r.mot_vu = 0
@@ -3026,8 +3072,39 @@ async function servir(request, env, ctx, porteur) {
             AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
             AND ? = 1
             AND (? <> '' AND r.opponent_key = ?)
+         UNION ALL
+        SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
+                r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                c.races, c.owner_name,
+                'challenger' AS role, 'reponse' AS pourquoi
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.seen_by_challenger = 1
+            AND r.reponse_vue = 0
+            AND r.outcome = 'challenger'
+            AND r.reponse IS NOT NULL
+            AND ? = 1
+            AND (c.owner_device = ? OR (? <> '' AND r.challenger_key = ?))
+         UNION ALL
+        SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
+                r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                c.races, c.owner_name,
+                'opponent' AS role, 'reponse' AS pourquoi
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.reponse_vue = 0
+            AND r.outcome = 'opponent'
+            AND r.reponse IS NOT NULL
+            AND ? = 1
+            AND (? <> '' AND r.opponent_key = ?)
           ORDER BY created_at ASC LIMIT 20`
       ).bind(device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, device_id, nom, nom,
+             motOuvert(canal) ? 1 : 0, nom, nom,
              motOuvert(canal) ? 1 : 0, device_id, nom, nom,
              motOuvert(canal) ? 1 : 0, nom, nom).all();
 
@@ -3040,8 +3117,16 @@ async function servir(request, env, ctx, porteur) {
       // blocage n'est pas un verdict.
       const bloques = new Set(await listeBloques(env.DB, nom));
 
+      // La reponse du perdant ne part qu'au vainqueur, et pas s'il a bloque le
+      // perdant. Une ligne qui ne remontait QUE pour elle n'a alors plus rien
+      // a dire : on la retire, plutot que de rejouer une victoire muette.
+      const reponseLisible = r =>
+        r.outcome === r.role && !!r.reponse && !bloques.has(auteurDuMot(r));
+      const servies = (results || [])
+        .filter(r => r.pourquoi !== 'reponse' || reponseLisible(r));
+
       return json({
-        results: (results || []).map(r => ({
+        results: servies.map(r => ({
           id: r.challenge_id,
           // Qui je suis dans cette rencontre. Le meme ecran sert les deux
           // roles, et sans cela il ne saurait pas de quel cote lire l'issue.
@@ -3072,6 +3157,9 @@ async function servir(request, env, ctx, porteur) {
           mot: motLisible(r, bloques) ? (r.mot || null) : null,
           voix: motLisible(r, bloques) ? (r.voix || null) : null,
           voix_type: motLisible(r, bloques) ? (r.voix_type || null) : null,
+          // Ce que le perdant a repondu a mon mot : un identifiant de la liste
+          // fermee, que le jeu ecrit dans sa langue. Nul pour le perdant.
+          reponse: reponseLisible(r) ? r.reponse : null,
           races: JSON.parse(r.races || '[]'),
           at: r.created_at,
         })),
@@ -3138,6 +3226,29 @@ async function servir(request, env, ctx, porteur) {
             WHERE challenge_id IN (${trous}) AND mot_vu = 0
               AND outcome = 'challenger'
               AND (mot IS NOT NULL OR voix IS NOT NULL)
+              AND opponent_key = ?`
+        ).bind(...propres, nom).run();
+      }
+
+      // LA REPONSE EST LUE, cote vainqueur. Memes deux conditions que le mot,
+      // retournees : on ne marque que le vainqueur, et seulement s'il y avait
+      // une reponse — sinon refermer sa victoire avant que l'autre reponde la
+      // solderait par avance.
+      await env.DB.prepare(
+        `UPDATE duel_results SET reponse_vue = 1
+          WHERE challenge_id IN (${trous}) AND reponse_vue = 0
+            AND outcome = 'challenger'
+            AND reponse IS NOT NULL
+            AND challenge_id IN (
+              SELECT c.id FROM challenges c
+               WHERE c.owner_device = ? OR (? <> '' AND lower(trim(c.owner_name)) = ?))`
+      ).bind(...propres, String(device_id || ''), nom, nom).run();
+      if (nom) {
+        await env.DB.prepare(
+          `UPDATE duel_results SET reponse_vue = 1
+            WHERE challenge_id IN (${trous}) AND reponse_vue = 0
+              AND outcome = 'opponent'
+              AND reponse IS NOT NULL
               AND opponent_key = ?`
         ).bind(...propres, nom).run();
       }

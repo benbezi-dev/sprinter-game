@@ -1234,6 +1234,22 @@
                       'this recording vanishes when you close this window'],
     mot_illisible:   ['ce message ne se lit pas sur cet appareil',
                       'this message will not play on this device'],
+    // La reponse du perdant au mot du vainqueur. Une liste fermee, et seul
+    // l'identifiant voyage — voir game/mot.ts (REPONSES) et worker/src/mot.js,
+    // qui doivent garder les memes cles. La voix du coureur battu : beau
+    // joueur, ou de mauvaise foi assumee (le vent, l'echauffement, les
+    // blocs). Jamais une pique retournee : on ne chambre pas celui qui vient
+    // de gagner, on lui repond. Et rien d'accorde au genre de qui parle.
+    reponse_r_bien:         ['Bien couru. Rien à dire.', 'Well run. Nothing to say.'],
+    reponse_r_note:         ['Chrono noté. Je viens le chercher.', 'Time noted. I’m coming for it.'],
+    reponse_r_prochaine:    ['La prochaine est pour moi.', 'Next one’s mine.'],
+    reponse_r_echauffement: ['J’étais encore à l’échauffement.', 'I was still warming up.'],
+    reponse_r_vent:         ['Vent de face. Je dis ça, je dis rien.', 'Headwind. Just saying.'],
+    reponse_r_blocs:        ['J’ai dormi dans les blocs.', 'I napped in the blocks.'],
+    reponse_titre:   ['RÉPONDS À {n}', 'ANSWER {n}'],
+    reponse_envoyee: ['{n} la lira en revenant', '{n} will read it when they come back'],
+    reponse_recue:   ['{n} TE RÉPOND', '{n} ANSWERS'],
+    reponse_ratee:   ['pas parti — réessaie', 'not sent — try again'],
 
     /* Signaler et bloquer. Deux gestes qui ne se confondent pas : signaler
        s'adresse a un humain qui lira plus tard, bloquer agit tout de suite. */

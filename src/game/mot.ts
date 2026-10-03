@@ -46,6 +46,74 @@ export async function poserMot(
   }
 }
 
+/* ------------------------------------------------- la reponse du perdant
+   Le perdant ne repond pas par du texte : il choisit une phrase dans une
+   liste ecrite par le jeu, et seul son identifiant voyage. Le serveur tient la
+   meme liste (worker/src/mot.js, REPONSES) et refuse le reste — les deux se
+   modifient ensemble. Les textes vivent dans sprinter-i18n.js, `reponse_r_*`.
+
+   La voix est celle du coureur battu : beau joueur, ou mauvaise foi assumee
+   — le vent, l'echauffement, les blocs. Jamais blessant, et jamais une pique
+   retournee : on ne chambre pas celui qui vient de gagner, on lui repond. */
+
+/** Les phrases, dans l'ordre ou le choix les presente. */
+export const REPONSES = [
+  'r_bien', 'r_note', 'r_prochaine', 'r_echauffement', 'r_vent', 'r_blocs',
+] as const;
+export type Reponse = typeof REPONSES[number];
+
+export function estReponse(q: unknown): q is Reponse {
+  return typeof q === 'string' && (REPONSES as readonly string[]).includes(q);
+}
+
+const CLE_REPONSES = 'sprinter_reponses';
+
+/**
+ * Ce que j'ai deja repondu sur ce duel, depuis cet appareil.
+ *
+ * Le serveur refuse une seconde reponse ; ce souvenir local sert a ne pas
+ * reproposer le choix quand la meme annonce revient — le mot reste a l'ecran
+ * tant que la fenetre n'est pas refermee, et parfois au-dela.
+ */
+export function maReponse(duel: string): Reponse | null {
+  try {
+    const q = JSON.parse(localStorage.getItem(CLE_REPONSES) || '{}')[duel];
+    return estReponse(q) ? q : null;
+  } catch { return null; }
+}
+
+function retenir(duel: string, q: Reponse) {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLE_REPONSES) || '{}');
+    m[duel] = q;
+    // Les cinquante dernieres suffisent : une annonce ne revient pas des mois
+    // apres.
+    const garde = Object.fromEntries(Object.entries(m).slice(-50));
+    localStorage.setItem(CLE_REPONSES, JSON.stringify(garde));
+  } catch { /* stockage refuse : le serveur garde la seule verite */ }
+}
+
+/**
+ * Envoie la reponse du perdant. Une seule fois : un « deja repondu » du
+ * serveur compte comme un succes, l'autre l'a deja recue.
+ */
+export async function repondreAuMot(duel: string, q: Reponse): Promise<boolean> {
+  try {
+    const r = await fetch(`${API_BASE}/duel/reponse`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: duel, reponse: q,
+        name: getSavedName() || '', device_id: getDeviceId(),
+      }),
+    });
+    if (r.ok || r.status === 409) { retenir(duel, q); return true; }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Le blob en base64, sans son prefixe.
  *

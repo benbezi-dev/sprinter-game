@@ -3,8 +3,10 @@ import { Mic, Square, Play, Send, Loader2, Check, Trash2, Flag, Ban } from 'luci
 import { SprinterApp } from '@/game/engine';
 import {
   Enregistreur, poserMot, urlDeLaVoix, MAX_TEXTE, MAX_VOIX_MS,
-  type EtatVoix, type MotPose,
+  REPONSES, repondreAuMot, maReponse, estReponse,
+  type EtatVoix, type MotPose, type Reponse,
 } from '@/game/mot';
+import { REPONSE_PERDANT_OUVERTE } from '@/game/canal';
 import {
   signaler, bloquer, dejaSignale, estBloque, MOTIFS, type Motif,
 } from '@/game/moderation';
@@ -245,6 +247,13 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
         </span>
       )}
 
+      {/* LA REPONSE, avant le recours : c'est le geste ordinaire, signaler
+          est l'exception. Elle disparait si le mot est signale ou son auteur
+          bloque — on ne repond pas poliment a ce qu'on vient de refuser. */}
+      {REPONSE_PERDANT_OUVERTE && duel && recours === 'repos' && (
+        <RepondreAuMot duel={duel} auteur={auteur} />
+      )}
+
       {/* SIGNALER ET BLOQUER.
           Ici, et pas ailleurs : la voix est effacee du serveur des que cette
           fenetre se ferme, et le signalement en copie le contenu au moment ou
@@ -317,6 +326,100 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------- la reponse du perdant */
+
+/**
+ * Le perdant repond au mot : une phrase, choisie dans la liste du jeu.
+ *
+ * Pas de champ : le cote frustre d'une rencontre est le dernier a qui ouvrir
+ * du texte libre. Les phrases sont celles d'un coureur battu — beau joueur, ou
+ * de mauvaise foi assumee. Une seule reponse, et l'echange s'arrete la : le
+ * vainqueur la lit, il n'y repond pas. Voir game/mot.ts.
+ */
+function RepondreAuMot({ duel, auteur }: { duel: string; auteur: string }) {
+  const { N } = SprinterApp;
+  const [choisie, setChoisie] = useState<Reponse | null>(() => maReponse(duel));
+  const [envoi, setEnvoi] = useState<Reponse | null>(null);
+  const [rate, setRate] = useState(false);
+
+  const choisir = async (q: Reponse) => {
+    if (envoi) return;
+    setEnvoi(q); setRate(false);
+    const ok = await repondreAuMot(duel, q);
+    setEnvoi(null);
+    if (ok) setChoisie(q); else setRate(true);
+  };
+
+  if (choisie) {
+    return (
+      <div className="w-full pt-2 mt-1 border-t border-white/10 flex flex-col items-center gap-1">
+        <span className="flex items-center gap-1.5 text-[11px] md:text-xs text-emerald-400 text-center leading-snug">
+          <Check className="w-3.5 h-3.5 shrink-0" />
+          « {N.t('reponse_' + choisie)} »
+        </span>
+        <span className="text-[9px] text-muted-foreground text-center leading-snug">
+          {N.t('reponse_envoyee', { n: auteur })}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full pt-2 mt-1 border-t border-white/10 flex flex-col items-center gap-1.5">
+      <span className="text-[9px] md:text-[10px] tracking-widest text-muted-foreground text-center">
+        {N.t('reponse_titre', { n: auteur })}
+      </span>
+      {/* Deux colonnes : une phrase par ligne faisait six lignes, et
+          l'annonce ne tenait plus dans un telephone couche. */}
+      <div className="w-full grid grid-cols-2 gap-1.5">
+        {REPONSES.map(q => (
+          <button
+            key={q}
+            onClick={() => { void choisir(q); }}
+            disabled={!!envoi}
+            className="px-2 py-1 court:py-0.5 rounded-lg border border-white/10 bg-white/[0.06]
+                       hover:bg-white/15 hover:border-primary/40 text-[10px] md:text-[11px]
+                       leading-tight text-foreground transition-colors disabled:opacity-50
+                       flex items-center justify-center gap-1 text-center"
+          >
+            {envoi === q && <Loader2 className="w-3 h-3 animate-spin" />}
+            {N.t('reponse_' + q)}
+          </button>
+        ))}
+      </div>
+      {rate && (
+        <span className="text-[10px] text-destructive text-center leading-snug">
+          {N.t('reponse_ratee')}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Ce que le perdant a repondu, montre au vainqueur.
+ *
+ * A la place du champ du mot : il a deja parle, c'est l'autre qui a eu le
+ * dernier mot, et il n'y a rien a ajouter. Un identifiant inconnu — une
+ * phrase retiree de la liste depuis — ne s'affiche pas plutot que d'ecrire
+ * sa cle en toutes lettres.
+ */
+export function ReponseRecue({ reponse, auteur }: { reponse: string; auteur: string }) {
+  const { N } = SprinterApp;
+  if (!estReponse(reponse)) return null;
+  return (
+    <div className="w-full rounded-xl border border-cyan-300/30 bg-cyan-300/[0.06]
+                    px-4 py-3 court:py-2 flex flex-col items-center gap-1.5">
+      <span className="text-[9px] md:text-[10px] tracking-widest text-muted-foreground text-center">
+        {N.t('reponse_recue', { n: auteur })}
+      </span>
+      <p className="text-sm md:text-base court:text-xs text-foreground text-center leading-snug">
+        « {N.t('reponse_' + reponse)} »
+      </p>
     </div>
   );
 }

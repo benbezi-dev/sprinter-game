@@ -11,7 +11,7 @@ import {
 import { noterDefi } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
 import { pique, boost } from '@/game/piques';
-import { LaisserUnMot, LireLeMot } from './MotDuel';
+import { LaisserUnMot, LireLeMot, ReponseRecue } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 import { useRetour } from '@/hooks/use-retour';
@@ -106,7 +106,7 @@ export function DuelResultPopup() {
   // La boite sonne : le resultat d'un duel, ou le mot du vainqueur qui arrive
   // apres coup. On va le chercher tout de suite plutot qu'au prochain palier.
   useEffect(() => surCourrier(quoi => {
-    if (quoi === 'duel' || quoi === 'mot') relever.current(true);
+    if (quoi === 'duel' || quoi === 'mot' || quoi === 'reponse') relever.current(true);
   }), []);
   // Le changement d'etat reste un reveil a lui seul : on sort d'une course,
   // et le resultat peut attendre depuis qu'on y est entre.
@@ -351,7 +351,11 @@ export function DuelResultPopup() {
 
             {/* Le vainqueur qui apprend sa victoire ici n'etait pas la quand
                 l'autre a couru : c'est son seul moment pour lui repondre. */}
-            {gagne && <LaisserUnMot duel={duel.id} adversaire={duel.adversaire} />}
+            {/* Si le perdant a deja repondu, le vainqueur a parle : on lui
+                montre la reponse a la place du champ, qui serait refuse. */}
+            {gagne && (duel.reponse
+              ? <ReponseRecue reponse={duel.reponse} auteur={duel.adversaire} />
+              : <LaisserUnMot duel={duel.id} adversaire={duel.adversaire} />)}
             </div>
 
             <div className="w-full court:col-span-2 flex flex-col gap-2 mt-1 court:mt-0">
