@@ -24,7 +24,7 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
-import { HAIES_OUVERTES, SAUTS_OUVERTS, DEFI_VEDETTE_OUVERT } from './canal';
+import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES } from './canal';
 import { habillerLeJoueur } from './vestiaire';
 
 export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
@@ -100,10 +100,9 @@ G.jeu = 'sprinter';
 // ou ils passent tous — sans reconstruire la course qu'on vient de poser.
 // LES ATHLETES EN VRAI MAILLAGE (game/vedette-3d.ts) : le moteur le demande
 // a la premiere fois qu'il en dessine un, et three.js n'est telecharge qu'alors.
-// Sur le seul canal ou les defis des vedettes existent : ecrit ainsi, le
-// branchement se replie a la compilation publique et le morceau n'est pas
-// construit.
-if (DEFI_VEDETTE_OUVERT) {
+// Branche des l'ouverture des defis, et pour toujours : les skins gagnes se
+// dessinent avec ce maillage (canal.ts, VEDETTES_LANCEES).
+if (VEDETTES_LANCEES) {
   (globalThis as any).SprinterDemanderMaillage = (chemin: string) =>
     import('./vedette-3d').then((m) => m.charger(chemin)).catch(() => null);
 }
@@ -115,7 +114,8 @@ G.apresConstruction = () => {
   // LE SKIN GAGNE SE PORTE SUR SES COURSES — les haies pour Aurel Manga, le
   // plat pour Meba-Mickael Zeze (game/vestiaire.ts). Ici, parce que c'est le
   // seul passage de toutes les courses : carriere, one shot, defi, duel, direct.
-  if (DEFI_VEDETTE_OUVERT) habillerLeJoueur(cle);
+  // A vie, et pas seulement pendant la semaine du defi (canal.ts).
+  if (VEDETTES_LANCEES) habillerLeJoueur(cle);
   if (cle && cle in SprinterCore.RACES && EPREUVES_CONNUES.has(cle)) {
     const jeu = jeuDe(cle);
     if (jeu !== courant) {

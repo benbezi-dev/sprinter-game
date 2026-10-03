@@ -189,8 +189,15 @@ export const HAIES_OUVERTES = true;
  *
  * ET UNE FIN, SEPT JOURS APRES (03/10) : `DUREE_EVENEMENT_MS`, posee dans
  * vite.config.ts. Passe cette heure, l'evenement disparait pour le public —
- * banniere, fiche, stades, skins — et ne vit plus que sur le canal de test.
+ * banniere, fiche, stades — et ne vit plus que sur le canal de test.
  * Comme l'ouverture : l'heure de l'appareil, lue au chargement.
+ *
+ * SAUF LES SKINS GAGNES, QUI SE GARDENT A VIE (03/10, decide par l'auteur) :
+ * `VEDETTES_LANCEES` reste vrai apres la fin. Il garde le dessin des vedettes,
+ * l'habillage du coureur et le panneau SKINS, qui ne montre plus que ceux
+ * qu'on a gagnes. Le skin n'est qu'une clef (game/vestiaire.ts) : son
+ * apparence se relit dans le code a chaque course, et ses retouches a venir
+ * arrivent donc chez ceux qui l'ont deja.
  */
 declare const __LANCEMENT_DEFI_MEBA__: number;
 // (hors de Vite, dans un harnais de tools/, la valeur n'existe pas : ferme)
@@ -206,6 +213,7 @@ export function evenementEnCours(lancement: number | undefined, maintenant = Dat
     && maintenant < lancement + DUREE_EVENEMENT_MS;
 }
 export const DEFI_VEDETTE_OUVERT = EST_TEST || evenementEnCours(LANCEMENT_DEFI_MEBA);
+export const VEDETTES_LANCEES = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
