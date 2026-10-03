@@ -453,6 +453,100 @@ def ponderer(h, rig):
             '%s_%02d_%s' % (d, k, c) for d in DOIGTS for k in (1, 2, 3) for c in 'lr'))))
 
 
+def deplier(h, centres, rayon, passes, poids=True):
+    """Deplier la peau autour de `centres` : chaque sommet a moins de `rayon`
+    va vers la moyenne de ses voisins, d'autant plus qu'il est pres d'un
+    centre — et ses poids d'os aussi, pour que la course ne refasse pas le pli.
+    Rend le nombre de sommets touches."""
+    import numpy as np
+    me = h.data
+    co = np.array([v.co[:] for v in me.vertices])
+    n = len(co)
+    ar = np.array([e.vertices[:] for e in me.edges])
+    deg = np.maximum(np.bincount(ar.ravel(), minlength=n).astype(float), 1)
+    w = np.zeros(n)
+    for P in centres:
+        w = np.maximum(w, np.clip(1 - np.linalg.norm(co - np.array(P), axis=1) / rayon, 0, 1) ** 2)
+    zone = w > 0
+
+    def lisser(x):
+        s_ = np.zeros_like(x)
+        np.add.at(s_, ar[:, 0], x[ar[:, 1]]); np.add.at(s_, ar[:, 1], x[ar[:, 0]])
+        return s_ / (deg[:, None] if x.ndim == 2 else deg)
+    for _ in range(passes):
+        co = np.where(zone[:, None], co + 0.5 * w[:, None] * (lisser(co) - co), co)
+    for i in np.nonzero(zone)[0]:
+        me.vertices[int(i)].co = co[i]
+    if poids:
+        groupes = [g for g in h.vertex_groups if g.name.split('_')[0] in ('upperarm', 'clavicle', 'spine', 'neck')]
+        pd = np.zeros((len(groupes), n))
+        idx = {g.index: k for k, g in enumerate(groupes)}
+        for v in me.vertices:
+            for g in v.groups:
+                if g.group in idx:
+                    pd[idx[g.group], v.index] = g.weight
+        total = pd.sum(0)
+        for _ in range(passes // 2):
+            for k in range(len(groupes)):
+                pd[k] = np.where(zone, pd[k] + 0.5 * w * (lisser(pd[k]) - pd[k]), pd[k])
+        norme = np.where(pd.sum(0) > 1e-6, total / np.maximum(pd.sum(0), 1e-6), 0)
+        for k, g in enumerate(groupes):
+            for i in np.nonzero(zone)[0]:
+                p = float(pd[k, i] * norme[i])
+                if p > 1e-4:
+                    g.add([int(i)], p, 'REPLACE')
+                else:
+                    g.remove([int(i)])
+    me.update()
+    return int(zone.sum())
+
+
+def deplier_aisselles(h, rig, rayon=0.10, passes=80):
+    """L'AISSELLE DEPLIEE (03/10 : « le bras gauche fait des formes bizarres au
+    niveau des pectoraux »). Rabattre les bras de la pose en T ecrase la peau
+    du creux de l'aisselle entre le bras et le buste : des faces repliees l'une
+    sur l'autre (175 degres, quatre centimetres sous l'epaule), qui faisaient
+    une marche dans le pectoral et pincaient l'emmanchure du maillot. On les
+    deplie (voir deplier) ; un rayon de dix centimetres et quatre-vingts passes
+    font du raccord bras-pectoral une courbe (a 8,5 cm et 40 passes, le coin
+    d'ombre restait)."""
+    centres = []
+    for cote in ('l', 'r'):
+        S = rig.matrix_world @ rig.data.bones['upperarm_' + cote].head_local
+        centres.append((S.x + 0.005, S.y * 0.94, S.z - 0.04))
+    print('AISSELLES : %d sommets deplies' % deplier(h, centres, rayon, passes))
+
+
+def sternum_au_buste(h, rig, large=0.045, net=0.025):
+    """LE STERNUM SUIT LE BUSTE, PAS LES CLAVICULES. Les deux clavicules partent
+    du milieu de la poitrine : les sommets du sternum, tires par l'une et par
+    l'autre, se repliaient au creux du col quand les portraits les descendent
+    (une arete blanche et un triangle noir dans le V d'Aurel). Pres du plan
+    median, leur part de clavicule passe a spine_03 — entierement a moins de
+    `net`, plus du tout au-dela de `large`."""
+    S = rig.matrix_world @ rig.data.bones['upperarm_l'].head_local
+    gs = {n: h.vertex_groups.get(n) for n in ('clavicle_l', 'clavicle_r', 'spine_03')}
+    if not all(gs.values()):
+        return
+    idx = {gs['clavicle_l'].index: 'clavicle_l', gs['clavicle_r'].index: 'clavicle_r'}
+    n = 0
+    for v in h.data.vertices:
+        if not (S.z - 0.16 < v.co.z < S.z + 0.08) or abs(v.co.y) >= large:
+            continue
+        part = min(1.0, (large - abs(v.co.y)) / (large - net))
+        donne = 0.0
+        for g in v.groups:
+            if g.group in idx and g.weight > 0:
+                ote = g.weight * part
+                gs[idx[g.group]].add([v.index], g.weight - ote, 'REPLACE')
+                donne += ote
+        if donne > 0:
+            ancien = next((g.weight for g in v.groups if g.group == gs['spine_03'].index), 0.0)
+            gs['spine_03'].add([v.index], ancien + donne, 'REPLACE')
+            n += 1
+    print('STERNUM : %d sommets rendus au buste' % n)
+
+
 # --- SA PEAU ---------------------------------------------------------------------
 
 def srgb_lin(x):
@@ -510,7 +604,7 @@ def teinter_peau(img, cible, k=1.0, cote=None):
 def masque_vetements(px):
     """La part de tissu de chaque pixel (0 a 1) : le blanc du maillot, du
     bandeau et du poignet (sans teinte, clair), et le bleu du short et de la
-    combinaison (marine). Rend (blanc, tissu)."""
+    combinaison (marine). Rend (blanc, bleu)."""
     import numpy as np
     mx, mn = px.max(1), px.min(1)
     d = np.maximum(mx - mn, 1e-6)
@@ -522,7 +616,7 @@ def masque_vetements(px):
         return np.clip(np.minimum((x - a) / (b_ - a), (d_ - x) / (d_ - c)), 0, 1)
     blanc = fenetre(s, -1, 0, 0.12, 0.2) * fenetre(mx, 0.55, 0.68, 2, 3)
     bleu = fenetre(t, 195, 210, 250, 262) * fenetre(s, 0.25, 0.35, 2, 3) * fenetre(mx, 0.08, 0.14, 0.85, 0.95)
-    return blanc, np.maximum(blanc, bleu)
+    return blanc, bleu
 
 
 def modeler_blanc(img, plafond=0.70):
@@ -550,15 +644,20 @@ def modeler_blanc(img, plafond=0.70):
 def tissu(h, img):
     """LE TISSU SOUS LA LUMIERE DES PORTRAITS. Sur le maillot et le short
     seulement (masque_vetements, rendu en image) : un lustre de tissu (sheen),
-    qui allume les bords tournes vers la lumiere, et le grain d'une maille, a
-    peine en relief, que la cle accroche. La peau et les cheveux n'en ont pas."""
+    doux, qui allume les bords tournes vers la lumiere — 0,5 sur le blanc, 0,25
+    sur le bleu. La peau et les cheveux n'en ont pas. (Un grain de maille en
+    relief a ete essaye : sa normale basculait sur les faces tres inclinees du
+    col en V d'Aurel — un rabat que Tripo modele replie —, un triangle noir que
+    le lustre bordait de blanc. Plus fort sur le bleu, le lustre seul y
+    laissait encore la trace ; deplier ce col deformait le mot FRANCE.)"""
     import numpy as np
     m = h.data.materials[0]
     nt = m.node_tree
     bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
     w, hh = img.size
     px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
-    _, masque = masque_vetements(px[:, :3])
+    blanc, bleu = masque_vetements(px[:, :3])
+    masque = np.maximum(blanc, 0.5 * bleu)
     im = bpy.data.images.new('vetements', w, hh, alpha=False)
     im.colorspace_settings.name = 'Non-Color'
     mp = np.ones((masque.size, 4), dtype=np.float32)
@@ -566,23 +665,14 @@ def tissu(h, img):
     im.pixels[:] = mp.ravel()
     im.pack()
     nm = nt.nodes.new('ShaderNodeTexImage'); nm.image = im
-    lustre = nt.nodes.new('ShaderNodeMath'); lustre.operation = 'MULTIPLY'; lustre.inputs[1].default_value = 0.85
+    lustre = nt.nodes.new('ShaderNodeMath'); lustre.operation = 'MULTIPLY'; lustre.inputs[1].default_value = 0.5
     nt.links.new(nm.outputs['Color'], lustre.inputs[0])
     nt.links.new(lustre.outputs[0], bsdf.inputs['Sheen Weight'])
-    bsdf.inputs['Sheen Roughness'].default_value = 0.35
+    bsdf.inputs['Sheen Roughness'].default_value = 0.5
     rug = nt.nodes.new('ShaderNodeMath'); rug.operation = 'MULTIPLY_ADD'
     rug.inputs[1].default_value = 0.2; rug.inputs[2].default_value = 0.62
     nt.links.new(nm.outputs['Color'], rug.inputs[0])
     nt.links.new(rug.outputs[0], bsdf.inputs['Roughness'])
-    grain = nt.nodes.new('ShaderNodeTexNoise')
-    grain.inputs['Scale'].default_value = 420.0
-    grain.inputs['Detail'].default_value = 3.0
-    relief = nt.nodes.new('ShaderNodeBump'); relief.inputs['Distance'].default_value = 0.0015
-    force = nt.nodes.new('ShaderNodeMath'); force.operation = 'MULTIPLY'; force.inputs[1].default_value = 0.12
-    nt.links.new(nm.outputs['Color'], force.inputs[0])
-    nt.links.new(force.outputs[0], relief.inputs['Strength'])
-    nt.links.new(grain.outputs['Fac'], relief.inputs['Height'])
-    nt.links.new(relief.outputs['Normal'], bsdf.inputs['Normal'])
 
 
 def dilater(h, img, cote, marge=24):
@@ -729,6 +819,8 @@ def tout(A):
     CARTOON['adoucir_epaules'](h)
     herite = M['caler'](rig, CARTOON['cibles'](rig, cou=1.0))
     CARTOON['figer'](h, rig, herite)
+    deplier_aisselles(h, rig)
+    sternum_au_buste(h, rig)
     tex = texture(h)
     source = tex.image
     peau = PEAU[A['nom']]
