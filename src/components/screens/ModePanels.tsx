@@ -135,7 +135,7 @@ export function OneShotPanel() {
                   const v = VEDETTES[l.debloque];
                   return v && defiPossible(v) ? (
                     <option key={i} value={i} disabled className="bg-neutral-900">
-                      🔒 {mot('vd_stade_verrou', { nom: N.levelName(i), qui: `${v.prenom} ${v.nom}` })}
+                      🔒 {mot('vd_stade_verrou', { nom: N.levelName(i), qui: `${v.prenom} ${v.nom}` }, v.cle)}
                     </option>
                   ) : null;
                 })}

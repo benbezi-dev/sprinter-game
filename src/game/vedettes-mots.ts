@@ -25,8 +25,8 @@ const MOTS: Record<string, Paire> = {
   vd_sur:         ['NOUVEAU · HURDLERS', 'NEW · HURDLERS'],
   vd_sur_haies:   ['ÉVÉNEMENT', 'EVENT'],
   vd_titre:       ['Défie {nom} au 110 m haies', 'Take on {nom} over 110 m hurdles'],
-  vd_sous:        ['Bats-le au Stade Jean-Delbert et gagne son skin',
-                   'Beat him at Stade Jean-Delbert and win his skin'],
+  vd_sous:        ['Bats-le au Stade Jean-Delbert : son skin et le stade sont à gagner',
+                   'Beat him at Stade Jean-Delbert: his skin and the stadium are yours to win'],
   vd_courir:      ['RELEVER LE DÉFI', 'TAKE IT ON'],
   vd_gagne:       ['SKIN GAGNÉ', 'SKIN WON'],
   vd_meilleur:    ['ton meilleur : {s}', 'your best: {s}'],
@@ -37,10 +37,12 @@ const MOTS: Record<string, Paire> = {
   vd_epreuve:     ['110 m haies', '110 m hurdles'],
   vd_lieu:        ['Stade Jean-Delbert · Montreuil', 'Stade Jean-Delbert · Montreuil'],
   vd_regle_titre: ['LA RÈGLE', 'THE RULE'],
-  vd_regle:       ['Il court au couloir 5, juste à ta droite, et il ne ralentit pas. '
+  // Rien sur sa facon de courir : comme Meba-Mickael, il en a trois
+  // (STYLES_CANON, sprinter-core.js, depuis le 03/10), a decouvrir.
+  vd_regle:       ['Il court au couloir 5, juste à ta droite. '
                    + 'Passe la ligne avant lui. Dix haies : prends-les bien, '
                    + 'chacune mal passée lui rend du terrain.',
-                   'He runs in lane 5, right next to you, and he does not slow down. '
+                   'He runs in lane 5, right next to you. '
                    + 'Cross the line before him. Ten hurdles: clear them well, '
                    + 'every bad one hands him ground back.'],
   vd_recompense:  ['À GAGNER', 'TO WIN'],
@@ -101,6 +103,12 @@ const MOTS: Record<string, Paire> = {
                            'Pick it in one shot, among the venues.'],
   vd_stade_verrou:      ['{nom} · bats {qui} au 100 m et au 200 m',
                          '{nom} · beat {qui} over 100 m and 200 m'],
+
+  // --- AUREL MANGA : le stade que sa victoire debloque (03/10)
+  'vd_stade:manga':     ['Bats-le au 110 m haies : son skin et le Stade Jean-Delbert (en one shot) se débloquent ensemble.',
+                         'Beat him over 110 m hurdles: his skin and Stade Jean-Delbert (in one shot) unlock together.'],
+  'vd_stade_verrou:manga': ['{nom} · bats {qui} au 110 m haies',
+                            '{nom} · beat {qui} over 110 m hurdles'],
 
   // --- LE VESTIAIRE : l'espace ou l'on choisit ce que son coureur porte
   vs_maillot_porte: ['ton maillot', 'your jersey'],

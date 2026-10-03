@@ -1827,6 +1827,9 @@
     // Il se court a la Riviera : il en porte le nom.
     ['Stade de la Riviera', 'Riviera Stadium'],
     ['Stade de la Riviera', 'Riviera Stadium'],
+    // Le Stade Jean-Delbert a gagner contre Aurel Manga (03/10), juste apres
+    // la Riviera, comme dans STADES_HORS_SERIE.
+    ['Stade Jean-Delbert', 'Stade Jean-Delbert'],
     // Le stade de la planete verte. C'est ICI, et nulle part ailleurs, que se
     // decide comment il s'appelle a l'ecran : le moteur ne connait que sa
     // clef ('namek'). Un nom pris a l'oeuvre qui l'inspire se remplacerait

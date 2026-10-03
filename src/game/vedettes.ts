@@ -62,6 +62,12 @@ export type Vedette = {
    */
   cri?: { son: string; a: number; duree: number; claps?: number[] };
   /**
+   * Une entree avant les blocs : il arrive de derriere la ligne, en marchant,
+   * depuis `depuis` metres (negatif : en arriere du depart, hors du cadre), et
+   * pose bras croises (entrerEnBoss, engine.ts).
+   */
+  entree?: { depuis: number };
+  /**
    * L'heure (ms depuis 1970, UTC) ou son defi s'ouvre a tout le monde, pour
    * une semaine (DUREE_EVENEMENT_MS). Sans elle, ou passee la semaine, il ne
    * vit que sur le canal de test (voir canal.ts).
@@ -75,6 +81,10 @@ export const VEDETTES: Record<string, Vedette> = {
     // sur l'accueil de Hurdlers SEULEMENT (02/10, a la demande de l'auteur :
     // celui de Meba-Mickael sur Sprinter, celui d'Aurel sur Hurdlers)
     epreuves: ['110h'], jeux: ['haies'], stade: 'defi-manga', skin: 'manga',
+    // SON ENTREE (03/10, a la demande de l'auteur) : il arrive par le bord
+    // droit de l'ecran, de derriere les blocs, d'une demarche de patron, et
+    // pose bras croises avant de s'installer (entrerEnBoss, engine.ts).
+    entree: { depuis: -6.2 },
     // ouvert avec celui de Meba-Mickael, le samedi 3 octobre 2026 a 21 h 30
     // (03/10, decide par l'auteur), et referme avec lui une semaine apres
     lancement: LANCEMENT_DEFI_MEBA,
@@ -184,7 +194,15 @@ export function lancerLeDefi(v: Vedette, epreuve: string = v.epreuves[0]) {
   // SON CRI AVANT LES BLOCS, pour qui en a un (`cri`) : le decompte attend
   // qu'il l'ait lance. Voir G.avantDepart dans engine.ts.
   G.avantDepart = v.cri ? { reste: v.cri.duree, t: 0, dit: false, cri: v.cri.son, a: v.cri.a,
-                            claps: v.cri.claps ? humaniser(v.cri.claps) : null, frappes: 0 } : null;
+                            claps: v.cri.claps ? humaniser(v.cri.claps) : null, frappes: 0 }
+    : v.entree ? { reste: 99, t: 0, dit: true, entree: { depuis: v.entree.depuis, coureur: v.coureur } }
+    : null;
+  // Celui qui entre est hors du cadre des la mise en place : pendant que le
+  // stade se prepare (engine.ts), on ne doit pas le voir deja a son bloc.
+  if (v.entree) {
+    const lui = (G.runners || []).find((r: any) => r.name === v.coureur);
+    if (lui) lui.d = -40;
+  }
 }
 
 /**

@@ -642,6 +642,73 @@ function applaudir(avD: any, dt: number) {
   }
 }
 
+/**
+ * L'ENTREE D'AUREL MANGA (G.avantDepart.entree, pose par game/vedettes.ts).
+ *
+ * Avant ses blocs, il ARRIVE : la camera va chercher son couloir derriere la
+ * ligne et se resserre d'un coup, et il entre par le bord droit de l'ecran —
+ * de derriere les blocs —, en marchant comme un patron (MARCHE, pose() dans
+ * sprinter-core.js). Il ralentit, s'arrete deux metres derriere son bloc,
+ * croise les bras (BOSS) et laisse passer un temps. Puis il decroise, marche
+ * jusqu'a son bloc, et le decompte part : il s'y installe avec les autres. Pendant
+ * ce temps les autres font leurs gestes d'avant le depart, et les appuis du
+ * joueur ne comptent pas (padPress). C'est cette fonction qui tient la duree
+ * de l'attente (`reste`) : elle finit quand la pose est finie.
+ */
+// Mesure sur un ecran de 412 x 915 points (03/10) : parti a 6,2 m de la
+// ligne, il entre par le bord droit une fraction de seconde apres le debut ;
+// l'entree tient environ cinq secondes et demie avant le decompte (le cri de
+// Meba-Mickael en tient 2,6). A 7,5 m et a 1,6 m/s, elle en prenait 7,6 :
+// trop pour un defi qu'on recommence.
+const ENTREE = { vitesse: 1.85, pasParS: 1.95, freinage: 1.4, arret: -2.0,
+                 pose: 1.25, sortie: 0.3, versBloc: 2.1, plan: 2.2, visee: -2.2 };
+/** Un pas de sa demarche, de `E.d` vers `but`, freine sur le dernier metre. */
+function marcherVers(r: any, E: any, but: number, vitesse: number, dt: number): boolean {
+  const reste = but - E.d;
+  const v = Math.min(vitesse, 0.25 + Math.sqrt(2 * ENTREE.freinage * Math.max(0, reste)));
+  E.d = Math.min(but, E.d + v * dt);
+  r.marcheT = (r.marcheT || 0) + dt * Math.PI * ENTREE.pasParS * (v / ENTREE.vitesse);
+  return E.d >= but - 1e-4;
+}
+function entrerEnBoss(avD: any, dt: number) {
+  const E = avD.entree;
+  const r = (G.runners || []).find((x: any) => x.name === E.coureur);
+  if (!r) { avD.reste = 0; return; }
+  const doux = (x: number) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  if (E.d == null) E.d = E.depuis;
+  avD.reste = 99;
+  if (E.arrive == null) {
+    // 1. IL ARRIVE, et s'arrete a deux metres de son bloc : a l'arret plus
+    // pres, il passait derriere le coureur du couloir voisin, et la pose ne se
+    // lisait plus
+    r.marche = 1;
+    if (marcherVers(r, E, ENTREE.arret, ENTREE.vitesse, dt)) E.arrive = avD.t;
+  } else if (E.pose == null) {
+    // 2. IL POSE : les pieds se rejoignent, les bras se croisent, un temps
+    const u = avD.t - E.arrive;
+    r.marche = 1 - doux(u / 0.25);
+    r.boss = doux((u - 0.1) / 0.35) * (1 - doux((u - ENTREE.pose) / ENTREE.sortie));
+    r.debout = 1;
+    if (u >= ENTREE.pose + ENTREE.sortie) E.pose = avD.t;
+  } else {
+    // 3. ET IL VA A SON BLOC, du meme pas ; le decompte part quand il y est
+    r.boss = 0;
+    r.marche = 1;
+    if (marcherVers(r, E, 0, ENTREE.versBloc, dt)) { r.marche = 0; avD.reste = 0; }
+  }
+  r.d = E.d; r.v = 0;
+  if (!animationsReduites()) {
+    if (!G.viseCamera) {
+      const vise = () => G.track.pos(ENTREE.visee, r.lane);
+      (vise as any).cri = true;
+      G.viseCamera = vise;
+      // un plan, pas un travelling : il doit entrer dans le cadre, pas l'y
+      // trouver deja
+      G.zoomPres = ENTREE.plan;
+    }
+  }
+}
+
 /** Le plan serre sur Meba-Mickael pendant son cri (voir applaudir) : a 1,9 il
  *  ne prenait qu'un neuvieme de la hauteur de l'ecran, a 3 un cinquieme — ses
  *  poings au ciel s'y lisent. Le sprint n'a pas d'autre zoom (zoomDuMode = 1). */
@@ -814,6 +881,7 @@ export function updateLogic(dt: number) {
         if (avD.cri) Audio_.sfx(avD.cri, { gain: avD.gain ?? 0.95 });
       }
       if (avD.claps && avD.claps.length) applaudir(avD, dt);
+      if (avD.entree) entrerEnBoss(avD, dt);
       SprinterApp.followCam(dt);
       gameStore.setState({ state: G.state, countT: -99 });
       return;

@@ -3576,6 +3576,9 @@
       if (r.cri) r.cri = Math.max(0, r.cri - 4 * dt);
       if (r.criHaut) r.criHaut = Math.max(0, r.criHaut - 4 * dt);
       r.criCoup = 0; r.criBond = 0;
+      // et l'entree d'Aurel Manga : il decroise les bras, il ne marche plus
+      if (r.boss) r.boss = Math.max(0, r.boss - 4 * dt);
+      if (r.marche) r.marche = Math.max(0, r.marche - 4 * dt);
       if (!r.celebrate) continue;
       r.celebrate = Math.max(0, r.celebrate - CELEBRE_DESCENTE * dt);
     }
@@ -8262,7 +8265,9 @@
       // SES ATTITUDES, debout derriere les blocs (voir pose) : elles s'eteignent
       // a mesure qu'il y entre, et laissent la place au salut de la
       // presentation (`celebrate`) et au cri de Meba-Mickael (`debout`).
-      r.attitudeW = (1 - r.enBloc) * (1 - Math.min(1, r.celebrate || 0)) * (1 - Math.min(1, r.debout || 0));
+      r.attitudeW = (1 - r.enBloc) * (1 - Math.min(1, r.celebrate || 0)) * (1 - Math.min(1, r.debout || 0))
+        // ni pendant l'entree d'Aurel Manga : il marche, puis il pose (MARCHE, BOSS)
+        * (1 - Math.min(1, (r.marche || 0) + (r.boss || 0)));
       r.attitudeT = G.attT || 0;
       // DEBOUT, DROIT (02/10, « ils sont toujours penches par rapport a la
       // ligne de depart, lorsqu'ils sont debout ») : repereDuCoureur couche le

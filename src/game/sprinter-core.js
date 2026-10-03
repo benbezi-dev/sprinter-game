@@ -517,13 +517,18 @@
     // courent une demi-seconde derriere lui : ils peuplent une finale, ils ne
     // la jouent pas.
     //
-    // 12,45 s AU 110 m HAIES. Sur l'echelle du jeu (PLATEAUX, game/haies.js),
-    // c'est entre les ZEZE (11,30-11,45) et les Jeux mondiaux (12,75-12,90)
-    // depuis le bareme du 29 septembre 2026 : il faut environ dix frappes par
-    // seconde ET des haies bien prises. Mesure sur le vrai moteur avec
-    // l'appel du joueur, doigt irregulier : 12,65 s a neuf frappes, 12,30 a
-    // dix, 11,50 a onze. Un joueur regulier le bat en quelques essais ; un
-    // joueur qui tape vite sans regarder ses haies, non.
+    // 11,80 s AU 110 m HAIES (03/10, a la demande de l'auteur ; c'etait
+    // 12,45, puis 12,20 le meme jour). Sur l'echelle du jeu (PLATEAUX,
+    // game/haies.js), c'est entre les ZEZE (11,30-11,45) et les Jeux mondiaux
+    // (12,75-12,90) depuis le bareme du 29 septembre 2026. Mesure sur le vrai
+    // moteur avec l'appel du joueur, doigt irregulier : 12,65 s a neuf
+    // frappes, 12,30 a dix, 11,50 a onze — il faut donc pres de onze frappes
+    // par seconde ET des haies bien prises.
+    //
+    // IL COURT L'UNE DE SES TROIS COURSES, comme Meba-Mickael (03/10, « mets
+    // les 3 types de courses comme Mickael ») : `allure: 'canon'` sur son
+    // look, et STYLES_CANON tire le canon, le finisseur ou le regulier a
+    // chaque tentative. Le chrono tombe pile dans les trois.
     //
     // IL SE COURT AU STADE JEAN-DELBERT, A MONTREUIL — celui du meeting
     // international de Montreuil (theme 'montreuil', sprinter-app.js).
@@ -545,7 +550,7 @@
                  '400': [44.20, 45.40], '4x100': [38.00, 39.00],
                  '100h': [12.00, 12.60], '110h': [12.95, 13.60],
                  '400h': [42.50, 44.00] },
-      cibles: { '110h': { 'Aurel MANGA': 12.45 } },
+      cibles: { '110h': { 'Aurel MANGA': 11.80 } },
       names: ['Hugo Lestrade', 'Noa Berthier', 'Samuel Kane', 'Aurel MANGA',
               'Liam Ferrand', 'Yohan Serre', 'Idriss Fofana'] },
 
@@ -617,6 +622,26 @@
                  '400': [43.30, 44.00], '4x100': [37.60, 38.60] },
       names: ['Rick Palma', 'Sunny Marino', 'Kenji Aoyama', 'Milo Cabana',
               'Vince Corsair', 'Lisa Miramar', 'Nina Solaris'] },
+
+    // LE STADE JEAN-DELBERT, A GAGNER (03/10, a la demande de l'auteur :
+    // « pour battre Aurel debloque le stade et le skin »). Meme regle que
+    // la Riviera pour Meba-Mickael : il ne se choisit en one shot qu'une fois
+    // Aurel Manga battu au 110 m haies (game/vedettes.ts, stadeDebloque), et
+    // il entre dans LEVELS au lancement des defis, juste apres la Riviera —
+    // derniere des entrees `auLancement`, donc rien d'ouvert ne bouge. Le meme
+    // stade que celui du defi, sans Aurel au couloir 5 : un lieu ou courir.
+    { cle: 'montreuil', name: 'Stade Jean-Delbert', theme: 'montreuil',
+      pool: 'sprint',
+      horsSerie: true,
+      auLancement: true,
+      debloque: 'manga',
+      foule: 0.8,
+      plateau: { '100': [9.80, 10.20], '200': [19.80, 20.60],
+                 '400': [44.20, 45.40], '4x100': [38.00, 39.00],
+                 '100h': [12.00, 12.60], '110h': [12.95, 13.60],
+                 '400h': [42.50, 44.00] },
+      names: ['Bastien Royer', 'Malik Sissoko', 'Thibault Carel', 'Noah Vidal',
+              'Ilyes Benali', 'Quentin Morel', 'Axel Durand'] },
 
     // LE STADE DES TROIS SOLEILS — la planete verte des mangas de combat.
     //
@@ -1065,6 +1090,35 @@
   const CRI_HAUT = { pied: -0.25, leve: 0.045, bond: 0.08, buste: 0.12, tete: 0.25,
                      bras: 2.75, avBras: 3.05, rouleBras: -0.35, rouleAv: -0.10 };
 
+  // L'ENTREE D'AUREL MANGA (03/10, a la demande de l'auteur : « fais-le
+  // arriver de derriere l'ecran, derriere les starts, et poser avec une
+  // attitude de boss avant de s'installer dans les blocs » ; « il arrive
+  // depuis le bout du cote droit de l'ecran, avec une attitude de boss dans
+  // la demarche aussi »). Deux postures, posees par engine.ts (entrerEnBoss) :
+  //
+  // LA DEMARCHE (`marche`, 0 a 1, et sa phase `marcheT`, en radians). Le jeu
+  // ne savait que courir : a petite vitesse, sa foulee devient un trottinement.
+  // Celle-ci marche — la jambe d'appui tendue sous lui, le genou ne plie que
+  // pour revenir —, et elle le fait en patron : le buste en arriere, le menton
+  // leve, un grand balancier des bras coudes un peu ouverts (roulis loin de
+  // l'axe), le bassin qui monte sur chaque appui.
+  const MARCHE = { cuisse: 0.30, genou: 0.62, pied: -0.18, bras: 0.34, coude: 0.30,
+                   rouleBras: -0.16, buste: 0.07, tete: 0.14, rebond: 0.018 };
+  // LA POSE (`boss`, 0 a 1) : arrete derriere ses blocs, LES POINGS SUR LES
+  // HANCHES — les bras ecartes du corps a l'epaule (roulis loin de l'axe), les
+  // coudes en dehors, les avant-bras qui reviennent poser les poings sur le
+  // bassin —, la poitrine en avant, le menton haut, un pied a peine devant
+  // l'autre. LA CAMERA LE VOIT DE DOS (il regarde l'arrivee) : des bras
+  // croises sur la poitrine, essayes d'abord, ne s'y voyaient pas — il ne
+  // restait qu'un avant-bras qui depassait. Des coudes ecartes, si.
+  // (Le roulis d'un bras qui PEND ecarte le coude du corps quand il est
+  // positif — c'est l'inverse pour un bras leve, d'ou « positif vers l'axe »
+  // plus haut : voir le calcul du coude, `E`, dans les os du bras. D'ou
+  // +0,60 a l'epaule, coude dehors, et -0,75 au coude, poing ramene sur la
+  // hanche, a vingt-cinq centimetres sous le coude.)
+  const BOSS = { cuisse: 0.09, tibia: 0.07, bras: -0.20, avBras: 0.15, decale: 0,
+                 rouleBras: 0.60, rouleAv: -0.75, buste: 0.12, tete: 0.20 };
+
   // LES ATTITUDES D'AVANT LE DEPART (voir pose) : pour chaque attitude et
   // chaque instant, les angles absolus des jambes [cuisse, tibia, pied] et des
   // bras [bras, avant-bras] (0 vers le bas, positif vers l'avant), le buste,
@@ -1357,6 +1411,9 @@
       // cinquieme plus petite (haies-jeu.js, adoucir). Seul le coureur du
       // joueur passe par haies-pas.js : Aurel adversaire n'y gagne rien.
       freinHaie: 0.8,
+      // SES TROIS COURSES (03/10) : celles de Meba-Mickael, tirees a chaque
+      // tentative (STYLES_CANON). Voir le stade du defi, plus haut.
+      allure: 'canon',
       barbe: [50, 34, 28], maillage: 'vedettes/manga-corps.glb' }),
 
     // MEBA-MICKAEL ZEZE — sprint, equipe de France. 9"99 au 100 m et 19"97 au
@@ -2787,6 +2844,45 @@
       lean = melange(lean, H.buste, wCh);
       leve = melange(leve, H.leve, wCh) + H.bond * Math.max(0, r.criBond || 0);
       teteAt = melange(teteAt, H.tete, wCh);
+    }
+
+    // SA DEMARCHE DE PATRON, puis SA POSE (l'entree d'Aurel Manga, voir MARCHE
+    // et BOSS ; poses par engine.ts, entrerEnBoss).
+    const wMa = Math.max(0, Math.min(1, r.marche || 0));
+    if (wMa > 0) {
+      const M = MARCHE, ph = r.marcheT || 0;
+      const jambe = (q) => {
+        const c = M.cuisse * Math.sin(q);
+        // le genou ne plie qu'au retour de la jambe, jamais en appui
+        const flex = M.genou * Math.pow(Math.max(0, Math.cos(q + 0.45)), 1.6);
+        return [c, c - flex, M.pied * flex];
+      };
+      const jg = jambe(ph), jd = jambe(ph + Math.PI);
+      l = [melange(l[0], jg[0], wMa), melange(l[1], jg[1], wMa), melange(l[2], jg[2], wMa)];
+      rr = [melange(rr[0], jd[0], wMa), melange(rr[1], jd[1], wMa), melange(rr[2], jd[2], wMa)];
+      // les bras a l'oppose des jambes, et le coude qui s'ouvre en arriere
+      const bg = -M.bras * Math.sin(ph), bd = -M.bras * Math.sin(ph + Math.PI);
+      al = [melange(al[0], bg, wMa), melange(al[1], bg + M.coude, wMa)];
+      ar = [melange(ar[0], bd, wMa), melange(ar[1], bd + M.coude, wMa)];
+      rouleBras = [melange(rouleBras ? rouleBras[0] : 0, M.rouleBras, wMa),
+                   melange(rouleBras ? rouleBras[1] : 0, 0, wMa)];
+      lean = melange(lean, M.buste, wMa);
+      // le bassin monte sur chaque jambe tendue
+      leve = melange(leve, M.rebond * Math.abs(Math.cos(ph)), wMa);
+      teteAt = melange(teteAt, M.tete, wMa);
+    }
+    const wBo = Math.max(0, Math.min(1, r.boss || 0));
+    if (wBo > 0) {
+      const B = BOSS;
+      l = [melange(l[0], B.cuisse, wBo), melange(l[1], B.tibia, wBo), melange(l[2], 0, wBo)];
+      rr = [melange(rr[0], -B.cuisse, wBo), melange(rr[1], -B.tibia, wBo), melange(rr[2], 0, wBo)];
+      al = [melange(al[0], B.bras, wBo), melange(al[1], B.avBras, wBo)];
+      ar = [melange(ar[0], B.bras, wBo), melange(ar[1], B.avBras + B.decale, wBo)];
+      rouleBras = [melange(rouleBras ? rouleBras[0] : 0, B.rouleBras, wBo),
+                   melange(rouleBras ? rouleBras[1] : 0, B.rouleAv, wBo)];
+      lean = melange(lean, B.buste, wBo);
+      leve = melange(leve, 0, wBo);
+      teteAt = melange(teteAt, B.tete, wBo);
     }
 
     // Moulinets de bras pendant la chute : les deux bras tournent en
