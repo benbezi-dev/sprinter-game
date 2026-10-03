@@ -47,19 +47,11 @@
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
 
   // -------------------------------------------------------------------
-  // LES IMAGES, CHARGEES A LA DEMANDE ET UNE SEULE FOIS.
+  // LES IMAGES, CHARGEES A LA DEMANDE ET UNE SEULE FOIS, ET RENDUES
+  // DECODEES (images-pretes.js).
   // -------------------------------------------------------------------
-  const images = new Map();
   function image(stade, f, dossier) {
-    const cle = (dossier || 'decors') + '/' + stade + '/' + f;
-    let im = images.get(cle);
-    if (!im) {
-      im = new Image();
-      im.decoding = 'async'; im.onerror = () => setTimeout(() => images.delete(cle), 2000);
-      im.src = BASE + '/' + cle;
-      images.set(cle, im);
-    }
-    return im.complete && im.naturalWidth > 0 ? im : null;
+    return root.SprinterImages.image(BASE + '/' + (dossier || 'decors') + '/' + stade + '/' + f);
   }
 
   /**
@@ -429,6 +421,9 @@
       const p = api.ground(L.X, L.Y);
       const k = m / (r.ppm || M.pxParM);
       const x = p[0] - r.ax * k, y = p[1] - r.ay * k, w = r.w * k, h = r.h * k;
+      // La copie de nuit de chaque piece se fait AVANT le pistolet, meme hors
+      // du cadre : faite a son entree dans le champ, elle tombait en course.
+      if (G.state !== 'race') nuit(im, 'proche');
       if (x > G.VW || y > G.VH || x + w < 0 || y + h < 0) continue;
       ctx.drawImage(nuit(im, 'proche'), x, y, w, h);
     }
@@ -443,7 +438,7 @@
    * moteur dessine alors son ancien bloc.
    */
   function bloc(ctx, api, X, Y, angle) {
-    const ri = rendu(api, 'debout', 'materiel', 'blocs', (rendus) => cap(rendus, angle));
+    const ri = demanderBloc(api, angle);
     if (!ri) return false;
     const [r, im, M] = ri;
     const p = api.ground(X, Y);
@@ -452,5 +447,16 @@
     return true;
   }
 
-  root.DecorsStades = { sol, debout, bloc, PLAN };
+  /**
+   * Le bloc d'un couloir, sans le dessiner : son image et sa copie de nuit.
+   * Le moteur le demande avant le pistolet pour les couloirs hors du cadre —
+   * au 400 m, les blocs decales entrent dans le champ pendant la course.
+   */
+  function demanderBloc(api, angle) {
+    const ri = rendu(api, 'debout', 'materiel', 'blocs', (rendus) => cap(rendus, angle));
+    if (ri) nuit(ri[1], 'piste');
+    return ri;
+  }
+
+  root.DecorsStades = { sol, debout, bloc, demanderBloc, PLAN };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

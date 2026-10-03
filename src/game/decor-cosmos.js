@@ -243,16 +243,9 @@
   const RAYON_ASTRE = 200;
   const BASE = (typeof import.meta !== 'undefined' && import.meta.env
     ? import.meta.env.BASE_URL : '/').replace(/\/$/, '');
-  const _images = new Map();
+  // Telechargees et decodees avant d'etre rendues (images-pretes.js).
   function imageAstre(chemin) {
-    let im = _images.get(chemin);
-    if (!im) {
-      im = new Image();
-      im.decoding = 'async';
-      im.src = BASE + '/decors/' + chemin;
-      _images.set(chemin, im);
-    }
-    return im.complete && im.naturalWidth > 0 ? im : null;
+    return root.SprinterImages.image(BASE + '/decors/' + chemin);
   }
 
   function planetes(ctx, P, th) {

@@ -25,6 +25,29 @@
    L'ouverture n'attend jamais plus d'ATTENTE_MAX_MS : un reseau qui traine ne
    doit pas enfermer le joueur devant une barre de progression. Le reste se
    charge alors comme avant, au fil des courses.
+
+   3. CE QUI SE PREPARE AVANT CHAQUE COURSE (stadeEnPreparation). Tout
+      decoder ici est impossible : les decors decodes pesent six cent
+      quarante megaoctets au palier ordinaire, deux gigaoctets et demi a
+      l'ultra, et le public se compose stade par stade — ses couleurs sont
+      celles du stade. Ce qui se voit dans UNE course, en revanche, tient :
+      les pieces de son stade, ses blocs, son public sous tous les caps du
+      trace. Le decompte ne part donc qu'une fois tout cela pret (engine.ts).
+      Mesure le 3/10/2026 sur un 400 m des Jeux mondiaux, ecran a trois
+      pixels par point, processeur bride quatre fois : cinq cent trente
+      images fabriquees et dix images de decor arrivees PENDANT la course —
+      le public qui se completait spectateur par spectateur sous les yeux du
+      joueur. La premiere course dans un stade attend son public ; les
+      suivantes le retrouvent compose.
+
+   4. CE QUI S'AVANCE A L'OUVERTURE ET A L'ACCUEIL (avancerLePublic). Ce
+      public-la est le plus long a faire : sur un 400 m, toute la tribune
+      sous ses vingt-six caps, mille huit cent quatre-vingt-dix-huit images,
+      dix secondes d'attente au premier depart dans les memes conditions de
+      mesure. On le compose donc d'avance : celui des Jeux mondiaux, ou
+      partent par defaut le one-shot, les defis, les duels et le classement,
+      PENDANT l'ecran d'ouverture — qui l'attend, comme il attend les images —,
+      puis, a l'accueil, celui du stade de la derniere course.
 --------------------------------------------------------------------------- */
 import liste from 'virtual:precharge';
 
@@ -36,12 +59,16 @@ const EN_VOL = 6;
 
 let lance = false;
 let fini = false;
+// l'atlas du public est decode : sa composition peut commencer
+let atlasPret = false;
 let part = 0;
 let t0 = 0;
 // Ou en est le chargement, lisible depuis la console d'un telephone branche
 // (globalThis.SprinterChargement) : on ne voit pas autrement si les images de
 // l'ultra sont arrivees.
-const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 0, ultraApporte: false };
+const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 0, ultraApporte: false,
+                // le stade dont le public est compose d'avance, ou null
+                publicAvance: null as string | null };
 (globalThis as any).SprinterChargement = etat;
 
 /** Telecharge `urls`, `EN_VOL` a la fois, et appelle `apres` a chacune. */
@@ -81,13 +108,22 @@ export function lancerChargement() {
   lance = true;
   t0 = performance.now();
   (async () => {
-    const urls = liste.ordinaire;
+    // L'ATLAS DU PUBLIC D'ABORD : une fois decode, le public de la premiere
+    // course se compose (avancerLePublic) pendant que le reste se telecharge.
+    // Le dernier, il ajoutait cinq secondes et demie a l'ouverture (mesure le
+    // 3/10/2026 sur le serveur de dev).
+    const dAbord = liste.ordinaire.filter(u => u.startsWith('/decors/tribune/'));
+    const urls = liste.ordinaire.filter(u => !u.startsWith('/decors/tribune/'));
     // le decodage du public compte pour un dixieme de la barre
-    const total = urls.length / 0.9;
-    etat.phase = 'ordinaire'; etat.total = urls.length;
-    await telecharger(urls, () => { etat.faits++; part = Math.min(0.9, etat.faits / total); });
+    const total = liste.ordinaire.length / 0.9;
+    etat.phase = 'ordinaire'; etat.total = liste.ordinaire.length;
+    const compter = () => { etat.faits++; part = Math.min(0.9, etat.faits / total); };
+    await telecharger(dAbord, compter);
     etat.phase = 'public';
     await decoderLePublic();
+    atlasPret = true;
+    etat.phase = 'ordinaire';
+    await telecharger(urls, compter);
     part = 1;
     fini = true;
     etat.phase = 'fini';
@@ -104,12 +140,79 @@ export function lancerChargement() {
   })();
 }
 
-/** L'ouverture peut-elle ceder la place a l'accueil ? */
+/**
+ * L'ouverture peut-elle ceder la place a l'accueil ? Quand les images sont la
+ * ET le public de la premiere course compose (avancerLePublic).
+ */
 export function chargementFini() {
-  return fini || (lance && performance.now() - t0 > ATTENTE_MAX_MS);
+  return (fini && publicFait) || (lance && performance.now() - t0 > ATTENTE_MAX_MS);
+}
+
+// Le niveau des Jeux mondiaux, ou partent par defaut le one-shot
+// (ModePanels), les defis (objectif.ts), les duels (duels.ts) et le classement.
+const NIVEAU_PAR_DEFAUT = 4;
+let dernierNiveau: number | null = null;
+// La part du public d'avance deja composee, et s'il l'a ete une fois en
+// entier : l'ouverture l'attend (chargementFini), une seule fois.
+let partPublic = 0, publicFait = false;
+// une fois tout compose, on ne revient verifier qu'a cette heure-la
+let revoirA = 0;
+
+/** Le pistolet vient de partir : son stade est la cible de la suite. */
+export function courseLancee(niveau: number) {
+  dernierNiveau = niveau;
+}
+
+/**
+ * COMPOSE D'AVANCE LE PUBLIC DE LA PROCHAINE COURSE PROBABLE, `ms`
+ * millisecondes au plus. Appele a chaque image par engine.ts, a l'ouverture et
+ * a l'accueil seulement — jamais en course ni en cinematique. La cible est le
+ * stade de la derniere course, et avant toute course celui des Jeux mondiaux.
+ * Une fois compose, l'appel ne coute qu'une lecture de table ; il reprend de
+ * lui-meme si l'heure du jour change le stade ou si la montee en ultra change
+ * l'atlas.
+ *
+ * Le temps libre du navigateur (requestIdleCallback) ne suffisait pas : le
+ * jeu redessine son monde a chaque image, meme a l'accueil, et le processeur
+ * n'est jamais au repos — sept images composees par seconde, mesure le
+ * 3/10/2026. D'ou un budget par image, et la regle de qualite qui ne juge pas
+ * ces images-la (voir composeDAvance dans rendu-premium.js).
+ */
+export function avancerLePublic(G: any, ms: number) {
+  if (!atlasPret) return;
+  const g = globalThis as any;
+  const A = g.SprinterApp, T = g.Tribune, H = g.SprinterHeure;
+  if (!A || !T || !T.composerDAvance || (partPublic >= 1 && performance.now() < revoirA)) return;
+  const lvl = A.LEVELS && A.LEVELS[dernierNiveau ?? NIVEAU_PAR_DEFAUT];
+  const brut = lvl && A.THEMES && A.THEMES[lvl.theme];
+  if (!brut) { publicFait = true; return; }
+  // le stade tel que la course le dessinera : a l'heure (SprinterApp.theme)
+  const th = H && H.eclairer ? H.eclairer(brut, G) : brut;
+  const debut = performance.now();
+  partPublic = T.composerDAvance(th, lvl.theme, debut + ms);
+  if (partPublic >= 1) {
+    publicFait = true;
+    etat.publicAvance = lvl.theme;
+    revoirA = debut + 2000;
+  } else {
+    etat.publicAvance = null;
+    // cette image a compose : elle ne compte pas pour la regle de qualite
+    g.RenduPremium && (g.RenduPremium.composeDAvance = performance.now() + 250);
+  }
+}
+
+/**
+ * La course qui va partir attend-elle encore quelque chose ? Des images de
+ * decor demandees et pas encore decodees (images-pretes.js), ou un public
+ * dessine depuis `depuis` (performance.now()) qui n'a pas fini de se composer
+ * (tribune.js).
+ */
+export function stadeEnPreparation(depuis: number) {
+  const I = (globalThis as any).SprinterImages, T = (globalThis as any).Tribune;
+  return !!((I && I.enAttente() > 0) || (T && T.enAttente && T.enAttente(depuis)));
 }
 
 /** La part chargee, de 0 a 1, pour la barre de l'ecran d'ouverture. */
 export function partChargee() {
-  return chargementFini() ? 1 : part;
+  return chargementFini() ? 1 : fini ? 0.9 + 0.1 * partPublic : part * 0.9;
 }

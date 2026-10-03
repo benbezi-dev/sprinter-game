@@ -63,6 +63,8 @@
     for (const p in atlas) delete atlas[p];
     pret = false;
     cache.clear(); chantiers.clear();
+    // le public en reserve a ete compose sur l'autre atlas
+    reserve.clear();
   }
 
   function charger() {
@@ -290,7 +292,13 @@
   // (voir JEUX).
   const ppmImage = () => jeu.ppm;
   const MAX_IMAGES = 1400;        // au-dela, on oublie les plus anciennes
-  const cache = new Map();
+  // LE CACHE TIENT TOUT LE PUBLIC DU TRACE. Un tour de piste montre ses
+  // spectateurs sous presque tous les caps de l'atlas — soixante-treize images
+  // par cap —, et a mille quatre cents on oubliait, en composant les derniers,
+  // ceux du depart : la composition d'avance ne finissait jamais, et le public
+  // oublie se recomposait en course, sous les yeux du joueur.
+  const plafondImages = () => Math.max(MAX_IMAGES, capsVus.size * (1 + 3 * N_PERSONNAGES) + 64);
+  let cache = new Map();
   let _tmp = null;
   let budget = 0;
   // L'heure au-dela de laquelle on ne compose plus rien dans cette image.
@@ -309,6 +317,20 @@
    * decompte, accueil —, douze : rien ne court, on peut avancer le travail.
    */
   const BUDGET_COURSE_MS = 3, BUDGET_REPOS_MS = 12;
+  // PENDANT QUE LE DECOMPTE ATTEND LE STADE (G.enPreparation, engine.ts), on
+  // compose a pleine cadence : rien ne court, les coureurs font leurs gestes
+  // derriere les blocs, et chaque milliseconde gagnee ici est une seconde
+  // d'attente en moins. Soixante, et c'est une mesure : a trente, sur un
+  // processeur bride quatre fois a l'ultra, le dessin de l'image en prenait
+  // deux fois plus que la composition, et le premier 400 m attendait douze
+  // secondes son public (3/10/2026).
+  const BUDGET_PREPARATION_MS = 60;
+
+  // OU EN EST LE PUBLIC DE LA COURSE QUI VA PARTIR. `inacheve` : la derniere
+  // image hors course n'a pas fini de tout composer (ou l'atlas n'est pas la) ;
+  // `vuA` : quand le public a ete dessine pour la derniere fois. Un stade qui
+  // ne dessine pas de public n'a rien a attendre (voir enAttente).
+  let inacheve = false, vuA = -1e9;
 
   function couche(c, im, sx, sy, sw, sh, w, h, couleur) {
     const t = _tmp || (_tmp = document.createElement('canvas'));
@@ -341,7 +363,7 @@
   // passee : l'image reprend ou elle en etait a l'appel suivant, et le
   // spectateur apparait quelques images plus tard — ce que personne ne voit,
   // alors qu'une course qui accroche se sent.
-  const chantiers = new Map();
+  let chantiers = new Map();
   const MAX_CHANTIERS = 64;
 
   /**
@@ -373,7 +395,9 @@
     chantiers.delete(cle);
     e = { cv: ch.cv, ax: ch.ax, ay: ch.ay, w: ch.w, h: ch.h };
     cache.set(cle, e);
-    if (cache.size > MAX_IMAGES) cache.delete(cache.keys().next().value);
+    if (cache.size > plafondImages()) cache.delete(cache.keys().next().value);
+    // le stade courant grandit : la reserve cede la place (voir changerDeStade)
+    for (const [k, r] of reserve) if (r.cache.size + cache.size > MAX_IMAGES_EN_TOUT) reserve.delete(k);
     return e;
   }
 
@@ -419,10 +443,92 @@
   let _themeCourant = null;
   let _personnages = null;
   /** La pose retenue par chaque spectateur, et le geste ou il l'a choisie. */
-  const poses = new Map();
+  let poses = new Map();
   /** Les caps de spectateurs de ce stade, pour tout le trace. */
-  const capsVus = new Set();
+  let capsVus = new Set();
   let capsDuTrace = null;
+
+  // UN STADE EN RESERVE. Le public se compose stade par stade — ses couleurs
+  // sont celles du stade —, et changer de stade vidait tout. Or l'accueil
+  // dessine son propre stade pendant que le jeu compose d'avance celui de la
+  // prochaine course (composerDAvance, appele par chargement.ts) : les deux
+  // se seraient vides l'un l'autre a chaque image. Le stade qu'on quitte
+  // passe donc en reserve, et revient intact. Un seul, et pas s'il ferait
+  // deborder le total : un 400 m compose pese deja de quatre-vingts (atlas
+  // ordinaire) a cent quatre-vingts megaoctets (ultra).
+  const reserve = new Map();
+  const MAX_IMAGES_EN_TOUT = 2400;
+  function changerDeStade(th) {
+    if (_themeCourant) {
+      reserve.set(_themeCourant, { cache, chantiers, poses, capsVus, capsDuTrace, pers: _personnages });
+    }
+    const b = reserve.get(th);
+    reserve.delete(th);
+    if (b) {
+      ({ cache, chantiers, poses, capsVus, capsDuTrace } = b);
+      _personnages = b.pers;
+    } else {
+      cache = new Map(); chantiers = new Map(); poses = new Map(); capsVus = new Set();
+      capsDuTrace = null; _personnages = null;
+    }
+    _themeCourant = th;
+    while (reserve.size > 1) reserve.delete(reserve.keys().next().value);
+    for (const [cle, r] of reserve) {
+      if (r.cache.size + cache.size > MAX_IMAGES_EN_TOUT) reserve.delete(cle);
+    }
+  }
+
+  /** La couleur des sieges d'un stade, a l'heure de `th`. */
+  const siegeDe = (th, nom) => hexa(teinteNuit(th, SIEGES[nom] || (th.base || th).accent || [80, 90, 120]));
+
+  /**
+   * Compose toutes les images des caps vus, puis les drapeaux, jusqu'a
+   * l'heure `limite`. Rend vrai quand il ne reste plus rien a faire.
+   * `teindre` : faire aussi la copie de nuit des drapeaux — seulement dans le
+   * dessin, ou la lumiere posee est celle de ce stade.
+   */
+  function toutComposer(siegeC, pers, avecDrapeaux, teindre) {
+    const man = MAN();
+    const nG = man.gestes.length, ligneVide = man.poses.indexOf('vide');
+    for (const capI of capsVus) {
+      if (!image(ligneVide, capI, null, siegeC)) return false;
+      for (let pose = 0; pose < 3; pose++) {
+        for (const p of pers) {
+          if (!image(p.sil * nG + pose, capI, p, siegeC)) return false;
+        }
+      }
+    }
+    if (avecDrapeaux) {
+      for (let k = 0; k < DRAPEAUX.length; k++) {
+        for (let f = 0; f < NF_DRAPEAU; f++) {
+          if (performance.now() > limite) return false;
+          const e = spriteDrapeau(k, f);
+          if (teindre && root.SprinterHeure) root.SprinterHeure.image(e.cv, 'gradins');
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * LE PUBLIC D'UN STADE, COMPOSE AVANT QU'ON Y COURE : sous tous les caps de
+   * l'atlas, donc pour toutes les distances, sans rien dessiner. Travaille
+   * jusqu'a l'heure `jusqua` (performance.now()) et rend la part faite, de 0
+   * a 1 — 1 quand tout est compose. `th` doit etre le theme tel que la course
+   * le dessinera — a l'heure du jour (heure-du-jour.js) —, sinon c'est un
+   * autre public.
+   */
+  function composerDAvance(th, nom, jusqua) {
+    if (!charger()) return 0;
+    if (th !== _themeCourant) changerDeStade(th);
+    const man = MAN();
+    for (let c = 0; c < man.caps.length; c++) capsVus.add(c);
+    if (!_personnages) _personnages = personnages(th);
+    budget = Infinity;
+    limite = jusqua;
+    if (toutComposer(siegeDe(th, nom), _personnages, true, false)) return 1;
+    return Math.min(0.99, cache.size / (man.caps.length * (1 + 3 * N_PERSONNAGES)));
+  }
 
   /**
    * Le public d'un gradin.
@@ -439,20 +545,20 @@
    *         ancien public.
    */
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
-    if (!charger()) return false;
-    if (th !== _themeCourant) {
-      cache.clear(); chantiers.clear(); capsVus.clear(); poses.clear(); capsDuTrace = null;
-      _themeCourant = th; _personnages = null;
-    }
-    budget = 48;
+    vuA = performance.now();
+    if (!charger()) { inacheve = true; return false; }
+    if (th !== _themeCourant) changerDeStade(th);
     const G = api.G, T = G.track;
-    limite = performance.now() + (G.state === 'race' ? BUDGET_COURSE_MS : BUDGET_REPOS_MS);
+    const prepa = G.enPreparation && G.state === 'count';
+    budget = prepa ? Infinity : 48;
+    limite = performance.now() + (G.state === 'race' ? BUDGET_COURSE_MS
+      : prepa ? BUDGET_PREPARATION_MS : BUDGET_REPOS_MS);
     const vue = T.curved ? api.WROT_DEG : 0;
     const s = api.scaleM() / ppmImage();
     const PAS = 0.56;                       // un siege de stade, d'axe en axe
     if (!_personnages) _personnages = personnages(th);
     const pers = _personnages;
-    const siegeC = hexa(teinteNuit(th, SIEGES[nom] || (th.base || th).accent || [80, 90, 120]));
+    const siegeC = siegeDe(th, nom);
     const man = MAN();
     const iAssis = 0, iApplaudit = 1, iDebout = 2, iVide = 3;
     // la ligne de l'atlas d'une silhouette et d'un geste (voir tribune.py)
@@ -641,20 +747,37 @@
     // (4 862 × 1 188 chacune, decodees au premier dessin) — coutait 62 ms en
     // pleine course ; les suivantes, 0,4 ms. Faite ici, elle tombe pendant la
     // presentation ou le decompte.
-    if (G.state !== 'race') {
-      for (const capI of capsVus) {
-        if (!image(ligneVide, capI, null, siegeC)) return true;
-        for (let pose = 0; pose < 3; pose++) {
-          for (const p of pers) {
-            if (!image(ligneDe(p.sil, pose), capI, p, siegeC)) return true;
-          }
-        }
-      }
-    }
+    //
+    // Les drapeaux aussi : douze moments par pays, et leur copie de nuit.
+    // Cuits a la premiere levee, ils tombaient en course — c'est quand le
+    // peloton arrive devant la tribune qu'elle se leve.
+    if (G.state !== 'race') inacheve = !toutComposer(siegeC, pers, avecDrapeaux, true);
     return true;
+  }
+
+  /**
+   * Le public de la course qui va partir est-il encore en train de se
+   * composer ? Seul compte un public dessine depuis `depuis` — le debut de
+   * l'attente : un stade qui n'en dessine pas n'a rien a attendre.
+   *
+   * Ce fut d'abord « dessine dans la demi-seconde », et le pistolet partait
+   * sur un public aux deux tiers : processeur bride quatre fois, une image de
+   * l'attente depasse cinq cents millisecondes (le premier passage decode
+   * l'atlas), et la fenetre se refermait entre deux images. Mesure le
+   * 3/10/2026 : 1 116 images sur 1 898, 379 composees en course.
+   */
+  function enAttente(depuis) {
+    return inacheve && vuA >= (depuis || 0);
   }
 
   // `images` : l'atlas du palier courant, pour que l'ecran d'ouverture le
   // decode avant la premiere course (chargement.ts).
-  root.Tribune = { dessiner, pret: () => charger(), images: () => Object.values(atlas) };
+  // `enAttente` : ce que le decompte attend avant de partir (chargement.ts) ;
+  // `etat` : pour la console d'un telephone branche.
+  root.Tribune = {
+    dessiner, pret: () => charger(), images: () => Object.values(atlas), enAttente, composerDAvance,
+    etat: () => ({ atlas: jeu === JEUX.ultra ? 'ultra' : 'ordinaire', caps: capsVus.size,
+                   composees: cache.size, plafond: plafondImages(), inacheve,
+                   reserve: [...reserve.values()].map(r => r.cache.size) }),
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -2084,6 +2084,8 @@
     // reposee par le moteur (`attitudesFaites`), et le cri d'une course
     // precedente ne doit pas la couvrir.
     G.attitudesFaites = false; G.attT = 0; G.avantDepart = null;
+    // L'attente du stade repart de zero (voir stadeEnPreparation, engine.ts).
+    G.attenteStade = 0; G.attenteImages = 0; G.enPreparation = false;
     for (const r of G.runners) {
       const k1 = Math.floor(Math.random() * 6);
       r.attitudes = [k1, (k1 + 1 + Math.floor(Math.random() * 5)) % 6];
@@ -6425,7 +6427,13 @@
       if (DEC()) {
         const q = T.pos(0, e);
         const g2 = ground(q[0], q[1]);
-        if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) continue;
+        if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) {
+          // Hors du cadre, il ne se dessine pas, mais son image se demande
+          // avant le pistolet : au 400 m, la camera rattrape les blocs decales
+          // en pleine course (voir images-pretes.js).
+          if (G.state !== 'race') DEC().demanderBloc(apiDecor(), capALEcran(q, T.heading(0, e), vue));
+          continue;
+        }
         DEC().bloc(ctx, apiDecor(), q[0], q[1], capALEcran(q, T.heading(0, e), vue)); continue;
       }
       // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
@@ -6599,6 +6607,8 @@
     // pour que les rideaux d'arbres lui passent devant le pied.
     const cdm = th.champDeMars && CDM();
     if (cdm) {
+      // toutes ses pieces demandees avant le pistolet (voir preparer)
+      if (G.state !== 'race') cdm.preparer();
       // la Patrouille de France ne vole pas de nuit
       if (th.moment !== 'nuit') cdm.patrouille(ctx, apiCdm());
       cdm.tour(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));

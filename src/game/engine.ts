@@ -6,6 +6,9 @@ import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
 import './chiffres-piste.js';
+// Le registre des images de decor : les modules qui suivent y prennent les
+// leurs, decodees, et le decompte attend celles qui manquent (chargement.ts).
+import './images-pretes.js';
 // La couche de finition s'installe sur globalThis AVANT le rendu qui l'appelle.
 // L'ordre compte : `sprinter-app.js` la cherche a chaque image plutot qu'au
 // chargement (voir PREM()), donc le jeu demarrerait meme sans — mais il
@@ -50,7 +53,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
-import { lancerChargement, chargementFini, partChargee } from './chargement';
+import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, courseLancee } from './chargement';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -328,7 +331,9 @@ export function padPress(side: 'left' | 'right') {
 
   if (G.state === 'count') {
     // PENDANT LE CRI D'AVANT LES BLOCS, rien n'est annonce : on ne peut pas
-    // partir avant un depart qui n'a pas commence (voir G.avantDepart).
+    // partir avant un depart qui n'a pas commence (voir G.avantDepart). Ni
+    // pendant que le stade se prepare, qui vient avant.
+    if (G.enPreparation) return;
     if (G.avantDepart && G.avantDepart.reste > 0) return;
     // EN CHAMPIONNAT, LE TELEPHONE NE SE JUGE PAS. Il dit a la salle qu'on
     // est parti avant le coup, et a quel instant ; c'est elle qui decide du
@@ -549,6 +554,12 @@ function pousserPosition() {
 
 /** Le temps debout avant « a vos marques », en solo : celui du cri de Meba-Mickael. */
 const ATTITUDES_S = 2.6;
+// L'attente du stade (voir stadeEnPreparation) : un quart de seconde au moins,
+// le temps que les premieres images de la course aient tout demande ; douze
+// au plus. Et les attitudes qui suivent ne descendent pas sous ATTITUDES_MIN_S.
+const ATTENTE_STADE_MIN_S = 0.25, ATTENTE_STADE_MAX_S = 12, ATTITUDES_MIN_S = 0.8;
+// Le public compose d'avance, par image : a l'ouverture, et a l'accueil.
+const OUVERTURE_PUBLIC_MS = 20, ACCUEIL_PUBLIC_MS = 4;
 
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
@@ -681,9 +692,16 @@ export function updateLogic(dt: number) {
   else if (G.state === 'race' || G.state === 'count')
     Audio_.music(Audio_.raceTrack(G.levelIdx));
 
+  // LE PUBLIC DE LA PROCHAINE COURSE SE COMPOSE D'AVANCE (chargement.ts) :
+  // largement a l'ouverture, qui est un ecran d'attente, et a petits pas a
+  // l'accueil, qui doit rester fluide.
+  if (G.state === 'open') avancerLePublic(G, OUVERTURE_PUBLIC_MS);
+  else if (G.state === 'title') avancerLePublic(G, ACCUEIL_PUBLIC_MS);
+
   if (G.state === 'open') {
     G.openT += dt;
-    // L'ouverture attend que les images soient la (chargement.ts).
+    // L'ouverture attend que les images soient la et le public de la
+    // premiere course compose (chargement.ts).
     if (G.openT > 6.4 && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
@@ -753,10 +771,38 @@ export function updateLogic(dt: number) {
     // gestes (pose, phaseBlocs), sur la musique, les appuis ignores.
     // Pas en direct, en relais ni en rejeu : leur pistolet est a l'heure de la
     // salle ; pas au tutoriel, qui n'a qu'un coureur et mesure sa reaction.
+    //
+    // LE STADE D'ABORD, LE DECOMPTE ENSUITE (03/10, a la demande de l'auteur :
+    // « charge bien tout le jeu pour eviter que le public ou les elements de
+    // decor apparaissent pendant le jeu »). Avant les attitudes et le cri, on
+    // attend que les images de la course soient decodees et son public
+    // compose (stadeEnPreparation, chargement.ts). Les coureurs font deja
+    // leurs gestes derriere les blocs — `attT` tourne —, et ce temps-la est
+    // retire des attitudes : au total, le depart ne dure pas plus qu'avant,
+    // sauf la premiere fois qu'un telephone lent decouvre un stade. Jamais
+    // plus d'ATTENTE_STADE_MAX_S : mieux vaut un spectateur en retard qu'un
+    // joueur bloque. Pas en direct, en relais ni en rejeu : leur pistolet est
+    // a l'heure de la salle — ils composent pendant leur presentation.
+    if (!G.attitudesFaites && !G.liveOn && !G.rejeu && !G.spectateur) {
+      if (!G.attenteImages) G.debutAttente = performance.now();
+      G.attenteStade = (G.attenteStade || 0) + dt;
+      G.attenteImages = (G.attenteImages || 0) + 1;
+      // trois images au moins : la premiere a tout demande, les suivantes ont
+      // dessine ce qu'elle a demande
+      G.enPreparation = G.attenteStade < ATTENTE_STADE_MAX_S
+        && (G.attenteStade < ATTENTE_STADE_MIN_S || G.attenteImages < 3
+            || stadeEnPreparation(G.debutAttente));
+      if (G.enPreparation) {
+        SprinterApp.followCam(dt);
+        gameStore.setState({ state: G.state, countT: -99 });
+        return;
+      }
+    }
     if (!G.attitudesFaites) {
       G.attitudesFaites = true;
       if (!G.avantDepart && !G.liveOn && !G.rejeu && !G.spectateur && (G.runners || []).length > 1) {
-        G.avantDepart = { reste: ATTITUDES_S, t: 0, dit: true, attitudes: true };
+        const deja = G.attenteStade || 0;
+        G.avantDepart = { reste: Math.max(ATTITUDES_MIN_S, ATTITUDES_S - deja), t: 0, dit: true, attitudes: true };
       }
     }
     const avD = G.avantDepart;
@@ -790,6 +836,7 @@ export function updateLogic(dt: number) {
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
       SprinterApp.coupDePistolet();
+      courseLancee(G.levelIdx);
       G.state = 'race'; G.elapsed = 0;
       // Le chronometre de la course repart de zero : ce qui se compte sur lui
       // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans

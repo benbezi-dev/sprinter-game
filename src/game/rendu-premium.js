@@ -145,10 +145,18 @@
     return !!G && (G.state === 'count' || (G.state === 'race' && G.elapsed < DEPART_S));
   };
 
+  // LES IMAGES QUI COMPOSENT LE PUBLIC D'AVANCE NE SE JUGENT PAS NON PLUS.
+  // A l'ouverture et a l'accueil, le jeu compose le public de la prochaine
+  // course quelques millisecondes par image (avancerLePublic, chargement.ts) :
+  // c'est un travail qui finit, pas la mesure de ce que l'appareil tient. Le
+  // juger aurait fait perdre l'ultra, pour de bon, a un telephone qui le tient
+  // en course. `composeDAvance` : l'heure jusqu'a laquelle on ne juge pas.
+  let composeDAvance = 0;
+
   function mesurer(dt) {
     _dt = dt;
     if (verrou) return;
-    if (auDepart()) { lent = 0; rapide = 0; return; }
+    if (auDepart() || performance.now() < composeDAvance) { lent = 0; rapide = 0; return; }
     // Moyenne glissante du temps d'image, en millisecondes.
     budget += ((dt * 1000) - budget) * 0.08;
     if (ultraPret && aLAccueil()) {
@@ -1299,6 +1307,8 @@
     get ultraPerdu() { return ultraPerdu; },
     /** Faut-il encore telecharger les images de l'ultra ? (chargement.ts) */
     get ultraAttendu() { return ultraAttendu; },
+    get composeDAvance() { return composeDAvance; },
+    set composeDAvance(t) { composeDAvance = +t || 0; },
     set auto(v) { verrou = !v; },
     ULTRA, PLEIN, MOYEN, SOBRE, DENSE,
     mesurer, apporterUltra, dpr, brume, tonte, herbe, grain, occlusion, nappes, ombre,

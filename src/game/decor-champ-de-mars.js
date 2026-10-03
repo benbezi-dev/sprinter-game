@@ -75,18 +75,9 @@
     const A = root.SprinterApp;
     return !!(A && A.G && A.G.dpr > 2);
   };
-  const images = new Map();
+  // Telechargees et decodees avant d'etre rendues (images-pretes.js).
   function charger(dossier, p) {
-    const cle = dossier + p.f;
-    let im = images.get(cle);
-    if (!im) {
-      im = new Image();
-      im.decoding = 'async';
-      im.onerror = () => setTimeout(() => images.delete(cle), 2000);
-      im.src = BASE + '/' + cle;
-      images.set(cle, im);
-    }
-    return im.complete && im.naturalWidth > 0 ? im : null;
+    return root.SprinterImages.image(BASE + '/' + dossier + p.f);
   }
   // LA NUIT, CHAQUE PIECE PREND LA LUMIERE DE SA PLACE (heure-du-jour.js) :
   // le portique, au-dessus de la piste, celle des rampes ; les barrieres a
@@ -960,5 +951,19 @@
     ctx.restore();
   }
 
-  root.ChampDeMars = { portique, portiqueDevant, barrieres, tribuneSur, badauds, tour, montgolfiere, patrouille, lointain, surface, lignes, pelouse, tribune, ifTile };
+  /**
+   * TOUTES LES PIECES, AVANT LE PISTOLET. Chaque piece n'etait demandee qu'au
+   * moment ou sa fonction la dessinait, et sa copie de nuit faite a son
+   * entree dans le champ : la tribune provisoire, les facades, le portique
+   * arrivaient en course. Le moteur appelle ceci a chaque image hors course :
+   * les images se demandent, et leur copie de nuit se fait des qu'elles sont
+   * la. Une fois tout pret, ce n'est plus qu'une lecture de table.
+   */
+  function preparer() {
+    const man = MAN();
+    if (!man || !man.pieces) return;
+    for (const nom in man.pieces) rendu(nom);
+  }
+
+  root.ChampDeMars = { preparer, portique, portiqueDevant, barrieres, tribuneSur, badauds, tour, montgolfiere, patrouille, lointain, surface, lignes, pelouse, tribune, ifTile };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
