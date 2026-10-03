@@ -211,11 +211,72 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
    * qui peut venir courir maintenant.
    */
   const [seulEnLigne, setSeulEnLigne] = useState(!!surInviter);
+  /**
+   * EN LIGNE, MAIS PAS DANS CE CLASSEMENT (03/10). Une epreuve ne classe que
+   * ceux qui s'y sont deja battus — le 03/10, deux joueurs au 110 m haies,
+   * aucun au 100 m haies —, si bien que dans Hurdlers les joueurs en ligne
+   * n'apparaissaient nulle part. Ils viennent sous le classement, sans rang :
+   * ce sont justement ceux qu'on peut defier ou inviter maintenant.
+   */
+  const classes = new Set(rows.map(r => r.name.trim().toLowerCase()));
+  const horsClassement = [...presents.values()].filter(p => {
+    const k = String(p.nom).trim().toLowerCase();
+    return k !== '' && k !== moiKey && !classes.has(k);
+  });
   const autresEnLigne = rows.filter(r =>
-    r.name.trim().toLowerCase() !== moiKey && presentDe(r.name)).length;
+    r.name.trim().toLowerCase() !== moiKey && presentDe(r.name)).length + horsClassement.length;
   const lignes = seulEnLigne
     ? rows.filter(r => r.name.trim().toLowerCase() === moiKey || presentDe(r.name))
     : rows;
+  /** Defier, ou convier en direct : les memes boutons pour toute ligne. */
+  const boutons = (nom: string) => (
+    <>
+      {/* Prendre cette personne en duel, sur l'epreuve
+          choisie au-dessus. Sur toutes les lignes sauf la
+          sienne, et depuis n'importe ou — l'accueil compris,
+          ou le classement n'ouvrait sur rien. */}
+      {!surInviter && (
+        <button
+          onClick={() => defier(nom)}
+          disabled={!!defiEnCours}
+          title={`${N.t('challenge_them')} — ${nom}`}
+          aria-label={`${N.t('challenge_them')} ${nom}`}
+          className="shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
+                     text-primary/70 border border-primary/30 hover:bg-primary/15
+                     hover:text-primary disabled:opacity-30 transition-colors"
+        >
+          {defiEnCours === nom
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+        </button>
+      )}
+      {/* Le meme geste, mais pour une course en direct : on
+          convie au lieu de defier. Une ligne deja conviee
+          reste allumee et ne se reclique pas — sans quoi on
+          enverrait trois invitations a la meme personne sans
+          s'en apercevoir. */}
+      {surInviter && (
+        <button
+          onClick={() => inviter(nom)}
+          disabled={!!invitEnCours || convies.includes(nom)}
+          title={`${N.t('live_inviter')} — ${nom}`}
+          aria-label={`${N.t('live_inviter')} ${nom}`}
+          className={`shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
+                     border transition-colors ${
+            convies.includes(nom)
+              ? 'text-background bg-emerald-400 border-emerald-400'
+              : 'text-primary/70 border-primary/30 hover:bg-primary/15 hover:text-primary'
+          } disabled:opacity-100`}
+        >
+          {invitEnCours === nom
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : convies.includes(nom)
+              ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              : <Radio className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+        </button>
+      )}
+    </>
+  );
   const reduit = useAnimationsReduites();
   // Où tombe la barre des sélectionnés, si elle tombe quelque part. Le hook
   // rend `null` dès qu'elle ne serait pas exacte — voir useBarreSelection.
@@ -534,50 +595,7 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                             </span>
                           </span>
                         </div>
-                        {/* Prendre cette personne en duel, sur l'epreuve
-                            choisie au-dessus. Sur toutes les lignes sauf la
-                            sienne, et depuis n'importe ou — l'accueil compris,
-                            ou le classement n'ouvrait sur rien. */}
-                        {!moi && !surInviter && (
-                          <button
-                            onClick={() => defier(r.name)}
-                            disabled={!!defiEnCours}
-                            title={`${N.t('challenge_them')} — ${r.name}`}
-                            aria-label={`${N.t('challenge_them')} ${r.name}`}
-                            className="shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
-                                       text-primary/70 border border-primary/30 hover:bg-primary/15
-                                       hover:text-primary disabled:opacity-30 transition-colors"
-                          >
-                            {defiEnCours === r.name
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : <Swords className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                          </button>
-                        )}
-                        {/* Le meme geste, mais pour une course en direct : on
-                            convie au lieu de defier. Une ligne deja conviee
-                            reste allumee et ne se reclique pas — sans quoi on
-                            enverrait trois invitations a la meme personne sans
-                            s'en apercevoir. */}
-                        {!moi && surInviter && (
-                          <button
-                            onClick={() => inviter(r.name)}
-                            disabled={!!invitEnCours || convies.includes(r.name)}
-                            title={`${N.t('live_inviter')} — ${r.name}`}
-                            aria-label={`${N.t('live_inviter')} ${r.name}`}
-                            className={`shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center
-                                       border transition-colors ${
-                              convies.includes(r.name)
-                                ? 'text-background bg-emerald-400 border-emerald-400'
-                                : 'text-primary/70 border-primary/30 hover:bg-primary/15 hover:text-primary'
-                            } disabled:opacity-100`}
-                          >
-                            {invitEnCours === r.name
-                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              : convies.includes(r.name)
-                                ? <Check className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                                : <Radio className="w-3.5 h-3.5 md:w-4 md:h-4" />}
-                          </button>
-                        )}
+                        {!moi && boutons(r.name)}
                       </motion.div>
                       {/* LA LIGNE DE SÉLECTION, tracée juste sous le dernier
                           qualifié du pays de ce joueur.
@@ -594,6 +612,32 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                 </AnimatePresence>
               </div>
             </>
+          )}
+          {!chargement && horsClassement.length > 0 && (
+            <div className={`flex flex-col gap-1.5 ${rows.length > 0 ? 'mt-3 pt-3 border-t border-white/10' : ''}`}>
+              <span className="px-1 text-[9px] md:text-[10px] font-bold tracking-widest text-emerald-300/90">
+                {N.t('pres_hors_classement')}
+              </span>
+              {horsClassement.map(p => (
+                <div key={'enligne-' + p.nom.toLowerCase()}
+                     className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/5 bg-black/20">
+                  <span className="font-bold w-6 md:w-8 shrink-0 text-xs md:text-sm text-muted-foreground/50">–</span>
+                  <div className="flex flex-col min-w-0 flex-1 gap-0.5">
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-bold tracking-wide truncate text-xs md:text-sm text-foreground">
+                        {p.nom}
+                      </span>
+                      <PointPresence p={p} />
+                    </span>
+                    <span className={`text-[9px] md:text-[10px] font-bold
+                      ${p.quoi === 'menu' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {N.t('pres_' + p.quoi)}
+                    </span>
+                  </div>
+                  {boutons(p.nom)}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>

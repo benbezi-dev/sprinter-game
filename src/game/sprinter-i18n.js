@@ -1352,6 +1352,8 @@
     pres_personne:   ['personne d’autre n’est en ligne sur ce classement',
                       'nobody else on this ladder is online'],
     pres_tout:       ['VOIR TOUT LE CLASSEMENT', 'SHOW THE WHOLE LADDER'],
+    pres_hors_classement: ['EN LIGNE · PAS ENCORE CLASSÉS SUR CETTE ÉPREUVE',
+                           'ONLINE · NOT YET RANKED IN THIS EVENT'],
     pres_menu:       ['dispo', 'available'],
     pres_course:     ['en course', 'racing'],
     pres_duel:       ['en duel', 'in a duel'],
