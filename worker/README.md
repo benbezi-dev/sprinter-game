@@ -86,6 +86,7 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/push/natif/desabonner` | Oublie les jetons d'un appareil |
 | POST    | `/push/diffuser`      | Annonce écrite à la main : notification aux appareils abonnés, pastille dans le jeu (clé d'administration) |
 | GET     | `/annonce?langue=`    | La dernière annonce de moins d'un mois, que le jeu affiche (`AnnoncePopup`) |
+| GET     | `/cadeaux?name=&device_id=` | Ce que l'auteur offre à ce nom — skins, stades (`cadeaux.js`) ; vide si l'appareil n'est pas relié au nom réservé |
 | POST    | `/direct/turn`        | Identifiants du relais de la voix, valables une heure |
 
 ## Un classement de duels par discipline

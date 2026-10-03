@@ -113,6 +113,7 @@ import { ouvrirPresence } from '@/game/presence';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
+import { brancherLesCadeaux } from '@/game/cadeaux';
 import { useFilmerLeOneShot } from '@/game/film-course';
 import { nuitEnCours } from '@/game/halloween';
 import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
@@ -235,6 +236,14 @@ function MainGame() {
   useEffect(() => {
     if (!acces) return;
     brancherRattrapage();
+  }, [acces]);
+
+  // Ce que l'auteur offre a ce joueur — un skin, un stade (game/cadeaux.ts).
+  // Memes deux moments que le rattrapage, et pour la meme raison : le cadeau
+  // va a un nom reserve, et n'arrive qu'une fois l'appareil relie a ce nom.
+  useEffect(() => {
+    if (!acces) return;
+    brancherLesCadeaux();
   }, [acces]);
 
   // La permission push se demande depuis un bouton, et depuis rien d'autre.

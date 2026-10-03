@@ -23,6 +23,7 @@
 
 import { SprinterApp, SprinterCore } from './engine';
 import { gagnerSkin } from './vestiaire';
+import { stadeOffert } from './cadeaux';
 import { EST_TEST, LANCEMENT_DEFI_MEBA, evenementEnCours } from './canal';
 
 type Paire = [string, string];
@@ -270,7 +271,10 @@ export function conclureLeDefi(v: Vedette): Verdict {
   const moi = G.player && G.player.finishTime != null ? G.player.finishTime : null;
   const tLui = lui && lui.finishTime != null ? lui.finishTime : null;
   const battu = moi !== null && (tLui === null || moi < tLui);
-  const avant = battuPartout(v);
+  const stade = stadeDonne(v);
+  // Ouvert avant cette course — gagne, ou offert (game/cadeaux.ts) : il
+  // n'y a alors rien a annoncer.
+  const avant = stade ? stadeDebloque(stade) : true;
   const epreuve = epreuveEnCours || v.epreuves[0];
   if (moi !== null) retenirMeilleur(v, epreuve, moi);
   if (battu) retenirBattu(v, epreuve);
@@ -280,7 +284,6 @@ export function conclureLeDefi(v: Vedette): Verdict {
   // 110 m haies, comme avant. Un skin deja gagne le reste.
   const partout = battuPartout(v);
   const nouveauSkin = battu && partout ? gagnerSkin(v.skin) : false;
-  const stade = stadeDonne(v);
   const nouveauStade = stade && !avant && partout ? stade.name : null;
   return { battu, moi, lui: tLui, ecart: moi !== null && tLui !== null ? tLui - moi : null, nouveauSkin, nouveauStade };
 }
@@ -329,11 +332,12 @@ export function stadeDonne(v: Vedette): any | null {
 /**
  * Un lieu se choisit-il ? Oui, sauf s'il se gagne (`debloque`) et qu'il n'est
  * pas encore gagne — sur les deux canaux : sur celui de test aussi, sans quoi
- * la regle ne s'y verifierait pas.
+ * la regle ne s'y verifierait pas. Un stade offert par l'auteur
+ * (game/cadeaux.ts) se choisit comme un stade gagne.
  */
 export function stadeDebloque(l: any): boolean {
   const v = l && l.debloque ? VEDETTES[l.debloque] : null;
-  return !v || battuPartout(v);
+  return !v || battuPartout(v) || stadeOffert(l.cle);
 }
 
 // --- le meilleur chrono de chaque defi, sur cet appareil ----------------------

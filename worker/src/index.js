@@ -71,6 +71,7 @@ import {
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
+import { cadeauxDe, aDesCadeaux } from './cadeaux.js';
 import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
 import { etapeConnue, noterEtape, lireTunnel } from './tunnel.js';
 import {
@@ -3604,6 +3605,23 @@ async function servir(request, env, ctx, porteur) {
         insta: veutInsta ? (propre || null) : undefined,
         pays: paysPose,
       });
+    }
+
+    // Ce que l'auteur offre a ce nom (cadeaux.js). LE NOM SE PROUVE : la liste
+    // ne part que vers un appareil relie au nom reserve — sans quoi le cadeau
+    // irait a quiconque tape ce nom dans la puce. A tous les autres, et aux
+    // appareils non relies, on rend une liste vide, sans dire pourquoi.
+    if (url.pathname === '/cadeaux' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      const key = cleanName(url.searchParams.get('name')).trim().toLowerCase();
+      if (!isValidDeviceId(deviceId) || !aDesCadeaux(key)) return json(cadeauxDe(''));
+      await ensurePlayerTables(env.DB);
+      const relie = await env.DB.prepare(
+        `SELECT 1 AS ok FROM players p
+           JOIN player_devices d ON d.name_key = p.name_key
+          WHERE p.name_key = ? AND d.device_id = ?`
+      ).bind(key, deviceId).first();
+      return json(relie ? cadeauxDe(key) : cadeauxDe(''));
     }
 
     if (url.pathname === '/profil' && request.method === 'GET') {
