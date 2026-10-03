@@ -131,7 +131,7 @@ if (r3) {
      JSON.stringify(r3.classement.map(x => x.ms)) === JSON.stringify([9900, 10100, 10400]));
   ok('les places vont de 1 a 3',
      JSON.stringify(r3.classement.map(x => x.place)) === JSON.stringify([1, 2, 3]));
-  ok('a trois, aucun champ de duel n est produit',
+  ok('a trois, pas de champs historiques du duel a deux',
      r3.issue === undefined && r3.hote === undefined);
   for (const x of r3.classement) {
     console.log(`     ${x.place}. ${x.nom.padEnd(9)} ${(x.ms / 1000).toFixed(3)} s`);
@@ -195,12 +195,15 @@ await haut.ouvert; await attendre(250);
 ok('quatre-vingt-dix-neuf couloirs deviennent huit', haut.max === 8, String(haut.max));
 haut.ws.close();
 
-// Le classement des duels ne bouge pas : ni une course a trois, ni un tour de
-// piste seul ne sont des duels, et le bareme est fait pour une paire.
+// Une course a trois, ce sont trois duels : les trois partants entrent au
+// classement. Un tour de piste seul n'oppose personne, et n'y entre pas.
+await attendre(1500);
 const duels = await (await fetch(B + '/duels')).json();
-const tous = [...NOMS3, 'Solo' + marque];
-ok('aucun de ces coureurs n entre au classement des duels',
-   !(duels.classement || []).some(x => tous.includes(x.name)));
+const classes = duels.classement || [];
+ok('les trois partants entrent au classement des duels',
+   NOMS3.every(n => classes.some(x => x.name === n)));
+ok('le tour de piste seul n y entre pas',
+   !classes.some(x => x.name === 'Solo' + marque));
 
 console.log('\n' + '─'.repeat(62));
 console.log(echecs === 0 ? '   TOUT PASSE.' : `   ${echecs} VERIFICATION(S) EN ECHEC.`);

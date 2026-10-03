@@ -136,19 +136,36 @@ export type ResultatDirect = {
   /** L'ordre d'arrivee, quel que soit le nombre de partants. */
   classement: Arrivee[];
   partants: number;
-  /** Present seulement a deux : c'est alors un duel, et il se score. */
+  /**
+   * L'instant du pistolet, en temps serveur : il distingue une revanche de la
+   * course d'avant dans la meme salle. Absent d'une salle deployee avant lui.
+   */
+  course?: number;
+  /** Present seulement a deux : les champs historiques du duel a deux. */
   issue?: 'challenger' | 'opponent' | 'draw';
   hote?: { id: string; nom: string; ms: number };
   invite?: { id: string; nom: string; ms: number };
 };
 
+/** Un des duels d'une course en direct, vu d'un partant. */
+export type DuelDeCourse = {
+  /** L'identifiant de l'adversaire dans la salle. */
+  id: string;
+  nom: string;
+  issue: 'gagne' | 'perdu' | 'nul';
+  /** Ce que ce duel-la a rapporte. */
+  lp: number;
+};
+
 /**
- * Ce qu'un duel du direct a rapporte, d'un cote.
+ * Ce qu'une course en direct a rapporte, a un partant.
  *
- * La salle nomme les deux joueurs par leur identifiant : le jeu prend le sien
- * et ignore l'autre. Rien n'arrive quand il n'y a pas de points — une course a
- * trois ou plus n'est pas un duel, et un duel deja tranche ne redistribue
- * rien.
+ * De deux a huit couloirs, chaque paire de partants est un duel (voir
+ * rencontresDeLaCourse, worker/src/salle.js) : on lit ici le total de la
+ * course, la division d'apres, la serie, et le detail duel par duel. La salle
+ * nomme chacun par son identifiant : le jeu prend le sien et ignore les
+ * autres. Rien n'arrive quand il n'y a pas de points — seul sur la piste, un
+ * partant sans nom, ou une course deja tranchee.
  */
 export type PointsDuel = {
   id: string;
@@ -157,9 +174,28 @@ export type PointsDuel = {
   rang?: { palier: number; etage: Etage; division: number };
   monte?: boolean;
   descend?: boolean;
+  /** La serie apres la course, et celle d'avant le pistolet. Absentes d'une
+   *  salle deployee avant elles. */
+  serie?: number;
+  serie_avant?: number;
+  duels?: DuelDeCourse[];
 };
 
-export type DuelDirect = { hote: PointsDuel; invite: PointsDuel };
+export type DuelDirect = {
+  /** Chaque partant classe, quel que soit le nombre de couloirs. */
+  joueurs?: PointsDuel[];
+  course?: number;
+  /** Les champs historiques, a deux seulement. */
+  hote?: PointsDuel;
+  invite?: PointsDuel;
+};
+
+/** Ce que la course m'a rapporte, a moi, quelle que soit la forme du message. */
+export function mesPointsDe(d: DuelDirect | null | undefined, moi: string): PointsDuel | null {
+  if (!d || !moi) return null;
+  const tous = [...(d.joueurs || []), d.hote, d.invite];
+  return tous.find((x): x is PointsDuel => !!x && x.id === moi) || null;
+}
 
 type Ecouteurs = {
   onEtat?: (e: EtatSalle) => void;
@@ -180,7 +216,7 @@ type Ecouteurs = {
    *  de poser CE coureur sur la ligne a son vrai temps. Voir liveFiniDe. */
   onFini?: (nom: string, ms: number, abandon: boolean, id?: string) => void;
   onResultat?: (r: ResultatDirect) => void;
-  /** Les points du duel, juste apres le resultat. Absent s'il n'y en a pas. */
+  /** Les points de la course, juste apres le resultat. Absent s'il n'y en a pas. */
   onDuel?: (d: DuelDirect) => void;
   onSorti?: (nom: string) => void;
   onFerme?: (raison: string) => void;

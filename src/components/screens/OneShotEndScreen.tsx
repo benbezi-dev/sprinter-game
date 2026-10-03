@@ -32,6 +32,7 @@ import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 import { compteARebours, type Sortie as SortieVideo } from '@/game/review';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
+import { mesPointsDe, type PointsDuel } from '@/game/live';
 import { RevancheDirecte } from './RevancheDirecte';
 import { voterRevanche } from '@/game/salon-direct';
 
@@ -477,14 +478,13 @@ export function OneShotEndScreen() {
   const live = !!liveOn && !!liveResultat;
 
   /**
-   * A DEUX, ET SEULEMENT A DEUX, la salle annonce un duel.
-   *
-   * Au-dela, elle envoie un ordre d'arrivee et rien d'autre : le bareme des
-   * duels est fait pour une paire, et une course a huit n'en est pas une. Cet
-   * ecran lisait pourtant `liveResultat.hote.id` sans condition — sur une
-   * piste a quatre, six ou huit couloirs, la lecture echouait et emportait
-   * TOUT l'ecran de fin. On ne voyait donc aucun resultat apres la course :
-   * pas une omission d'affichage, une page qui tombait.
+   * A DEUX, la salle annonce le duel avec ses champs historiques : l'issue,
+   * l'hote, l'invite. Au-dela, elle envoie un ordre d'arrivee — ce sont des
+   * duels contre chacun, et c'est la place qui les raconte. Cet ecran lisait
+   * pourtant `liveResultat.hote.id` sans condition — sur une piste a quatre,
+   * six ou huit couloirs, la lecture echouait et emportait TOUT l'ecran de
+   * fin. On ne voyait donc aucun resultat apres la course : pas une omission
+   * d'affichage, une page qui tombait.
    */
   const duo = live && !!liveResultat.hote && !!liveResultat.invite;
   const monRole = duo && liveResultat.hote.id === liveResultat.moi ? 'hote' : 'invite';
@@ -520,19 +520,16 @@ export function OneShotEndScreen() {
   /**
    * Les points que CETTE course a rapportes, de mon cote.
    *
-   * La salle annonce les deux joueurs par leur identifiant : on prend le sien,
-   * sans avoir a traduire « hote » en « lanceur ». Nul tant que la salle n'a
-   * rien annonce — l'ecriture au classement suit le verdict de peu, mais elle
-   * le suit, et cet ecran est deja la quand elle arrive. Nul aussi quand il
-   * n'y a rien a annoncer : plus de deux couloirs, ou une revanche que le
-   * classement a deja tranchee.
+   * La salle annonce chaque partant par son identifiant : on prend le sien,
+   * sans avoir a traduire « hote » en « lanceur ». De deux a huit couloirs :
+   * chaque paire de partants est un duel, et la salle en rend le total. Nul
+   * tant qu'elle n'a rien annonce — l'ecriture au classement suit le verdict
+   * de peu, mais elle le suit, et cet ecran est deja la quand elle arrive. Nul
+   * aussi quand il n'y a rien a annoncer : seul sur la piste, pas de nom, ou
+   * une revanche que le classement a deja tranchee.
    */
-  const mesPoints: { lp: number; rang?: { etage: any; division: number };
-                     monte?: boolean; descend?: boolean } | null =
-    duo && liveDuel
-      ? ([liveDuel.hote, liveDuel.invite]
-          .find((x: any) => x && x.id === liveResultat.moi) || null)
-      : null;
+  const mesPoints: PointsDuel | null =
+    live && liveDuel ? mesPointsDe(liveDuel, liveResultat.moi) : null;
 
   /** L'ordre d'arrivee, quand il y a plus de deux couloirs sur la piste. */
   const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
@@ -670,6 +667,78 @@ export function OneShotEndScreen() {
 
   const dnf = N.t('dnf_short');
 
+  /**
+   * L'IMAGE ET LE REPLAY, CHACUN A SES CONDITIONS.
+   *
+   * L'image annonce un chrono : sans course terminee, elle n'a rien a montrer.
+   * Le replay, lui, n'a besoin que d'un film. Une course en direct en a
+   * toujours un — celui de TOUTE la course, la ou les autres ont couru — y
+   * compris apres un faux depart ou un abandon : il s'y est passe une course,
+   * et elle se partage. Le film doit etre celui du direct, pas celui d'une
+   * course d'avant.
+   */
+  const aUnFilm = film.phase === 'enregistre' || film.phase === 'prete' ||
+                  film.phase === 'rendue' || film.phase === 'expiree';
+  const imageDispo = complete && !falseOut && runTime > 0;
+  const replayDispo = aUnFilm && (liveOn ? film.genre === 'direct' : imageDispo);
+
+  /**
+   * LES POINTS D'UNE COURSE EN DIRECT, de deux a huit couloirs.
+   *
+   * La meme presentation que le bloc du defi, plus bas, parce que c'est le
+   * meme classement et le meme bareme : le total des points, le changement de
+   * division quand il y en a un, et la serie — qui s'allume, monte d'un cran,
+   * ou casse. A plus de deux, une ligne de plus dit combien de partants on a
+   * devances et combien nous ont devances : ce sont autant de duels.
+   */
+  const pointsDuDirect = (p: PointsDuel) => {
+    const duels = p.duels || [];
+    const gagnes = duels.filter(d => d.issue === 'gagne').length;
+    const perdus = duels.filter(d => d.issue === 'perdu').length;
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
+                         tabular-nums text-foreground">
+          {p.lp > 0 ? '+' : ''}{p.lp}
+          <span className="text-xs font-normal ml-1 text-muted-foreground">
+            {N.t('duel_lp')}
+          </span>
+        </span>
+        {!duo && duels.length > 0 && (
+          <span className="text-[10px] md:text-xs text-muted-foreground">
+            {N.t('live_bilan', { v: gagnes, d: perdus })}
+          </span>
+        )}
+        {/* Un changement de division est le seul moment ou le classement se
+            raconte tout seul. */}
+        {p.rang && (p.monte || p.descend) && (
+          <span className={`text-[10px] md:text-xs font-bold tracking-widest
+            ${p.monte ? 'text-emerald-400' : 'text-destructive'}`}>
+            {N.t(p.monte ? 'duel_promu' : 'duel_relegue', {
+              r: nomDuRang(p.rang.etage, p.rang.division),
+              e: disciplineCourue,
+            })}
+          </span>
+        )}
+        {/* LA SERIE, comme apres un defi. Une course en direct est une suite
+            de duels : la gagner allonge la flamme d'autant de partants
+            battus, finir derriere quelqu'un l'eteint. Les deux nombres
+            viennent de la salle, sans quoi une serie a zero apres zero se
+            lirait comme une casse. */}
+        {SERIE_OUVERTE && (
+          (p.serie ?? 0) >= 1 ? (
+            <span className="flex items-center gap-2">
+              <Flamme serie={p.serie} taille="grand" />
+              <Approche serie={p.serie} />
+            </span>
+          ) : (
+            <ComboBreak serie={p.serie_avant} />
+          )
+        )}
+      </div>
+    );
+  };
+
   return (
     <div ref={cadre} className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto overflow-x-hidden px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       {/* CENTRE QUAND IL Y A DE LA PLACE, ENTIER QUAND IL N'Y EN A PAS.
@@ -803,38 +872,14 @@ export function OneShotEndScreen() {
 
               {/* Les points, comme apres un defi releve.
                   Une course en direct comptait au classement sans le dire :
-                  il fallait ouvrir le tableau et deviner ce qui avait bouge.
-                  C'est la meme presentation que le bloc du defi, plus bas,
-                  parce que c'est le meme classement et le meme bareme. */}
-              {mesPoints && typeof mesPoints.lp === 'number' && (
-                <div className="flex flex-col items-center gap-1">
-                  <span className="font-mono font-black text-2xl md:text-3xl court:text-xl
-                                   tabular-nums text-foreground">
-                    {mesPoints.lp > 0 ? '+' : ''}{mesPoints.lp}
-                    <span className="text-xs font-normal ml-1 text-muted-foreground">
-                      {N.t('duel_lp')}
-                    </span>
-                  </span>
-                  {/* Un changement de division est le seul moment ou le
-                      classement se raconte tout seul. */}
-                  {mesPoints.rang && (mesPoints.monte || mesPoints.descend) && (
-                    <span className={`text-[10px] md:text-xs font-bold tracking-widest
-                      ${mesPoints.monte ? 'text-emerald-400' : 'text-destructive'}`}>
-                      {N.t(mesPoints.monte ? 'duel_promu' : 'duel_relegue', {
-                        r: nomDuRang(mesPoints.rang.etage, mesPoints.rang.division),
-                        e: disciplineCourue,
-                      })}
-                    </span>
-                  )}
-                </div>
-              )}
+                  il fallait ouvrir le tableau et deviner ce qui avait bouge. */}
+              {mesPoints && typeof mesPoints.lp === 'number' && pointsDuDirect(mesPoints)}
             </motion.div>
           )}
 
-          {/* Plus de deux couloirs : c'est une course, et le resultat d'une
-              course est son ordre d'arrivee. Rien au classement des duels —
-              le bareme est fait pour une paire — mais il fallait bien montrer
-              qui a gagne, ce qui ne se faisait nulle part. */}
+          {/* Plus de deux couloirs : un duel contre chacun des autres, et
+              c'est l'ordre d'arrivee qui les raconte. Les points de tous ces
+              duels se lisent dessous, en un seul total. */}
           {live && !duo && !seul && classement.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -873,6 +918,7 @@ export function OneShotEndScreen() {
                   );
                 })}
               </div>
+              {mesPoints && typeof mesPoints.lp === 'number' && pointsDuDirect(mesPoints)}
             </motion.div>
           )}
 
@@ -1379,7 +1425,7 @@ export function OneShotEndScreen() {
                 n'ont pas de chrono a montrer, et le bouton disparait plutot
                 que de produire une image qui annoncerait un temps qui
                 n'existe pas. */}
-            {complete && !falseOut && runTime > 0 && (
+            {(imageDispo || replayDispo) && (
               /* DEUX BOUTONS, UN SEUL RANG.
                  L'ecran d'apres victoire dit deja huit choses et se reduit tout
                  seul pour tenir sur un telephone (voir useTenirDansLEcran) : une
@@ -1388,7 +1434,7 @@ export function OneShotEndScreen() {
                  deja — ils repondent a la meme envie, ils se lisent bien cote a
                  cote, et le rang des boutons ne bouge pas. */
               <div className="paire-partage flex flex-row items-stretch gap-2 court:gap-1.5 w-full court:flex-1 court:min-w-0">
-              <button
+              {imageDispo && <button
                 onClick={partagerMaCourse}
                 disabled={affiche === 'fabrique'}
                 className="flex-1 min-w-0 py-2.5 md:py-3 court:py-2 rounded-xl font-black font-display tracking-widest
@@ -1410,7 +1456,7 @@ export function OneShotEndScreen() {
                     : affiche === 'echec' ? N.t('affiche_failed')
                     : N.t('affiche_hint')}
                 </span>
-              </button>
+              </button>}
 
               {/* LE REPLAY, A COTE DE L'IMAGE.
                   Il ne s'annonce que s'il existe : un appareil qui ne sait pas
@@ -1424,8 +1470,7 @@ export function OneShotEndScreen() {
                   compte a rebours tourne. « Rendue » : le replay est sorti, par
                   la feuille de partage, et le jeu ne l'a plus. « Expiree » : il
                   a vecu ses deux heures sans que personne y touche. */}
-              {(film.phase === 'enregistre' || film.phase === 'prete' ||
-                film.phase === 'rendue' || film.phase === 'expiree') && (
+              {replayDispo && (
                 <button
                   onClick={partagerLaVideo}
                   disabled={film.phase !== 'prete'}

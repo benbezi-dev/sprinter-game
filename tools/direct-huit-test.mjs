@@ -17,7 +17,7 @@ const ok = (nom, cond, detail) => {
 
 function client(code, nom, places) {
   const c = { nom, moi: null, joueurs: [], presentation: null, depart: null,
-              resultat: null, positionsRecues: new Map(), max: null };
+              resultat: null, points: null, positionsRecues: new Map(), max: null };
   const q = `name=${encodeURIComponent(nom)}&races=100&level=4&max=${places}`;
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   c.ouvert = new Promise(res => c.ws.addEventListener('open', res));
@@ -29,6 +29,7 @@ function client(code, nom, places) {
     if (m.depart_a) c.depart = m.depart_a;
     if (m.t === 'pos') c.positionsRecues.set(m.id, m.d);
     if (m.t === 'resultat') c.resultat = m;
+    if (m.t === 'duel') c.points = m;
   });
   c.envoyer = o => c.ws.send(JSON.stringify(o));
   return c;
@@ -125,7 +126,7 @@ if (r) {
      JSON.stringify(r.classement.map(x => x.ms)) === JSON.stringify(trie));
   ok('les places vont de 1 a 8',
      JSON.stringify(r.classement.map(x => x.place)) === JSON.stringify([1,2,3,4,5,6,7,8]));
-  ok('a huit, aucun champ de duel n est produit',
+  ok('a huit, pas de champs historiques du duel a deux',
      r.issue === undefined && r.hote === undefined);
   console.log('');
   for (const x of r.classement) {
@@ -135,11 +136,32 @@ if (r) {
      cl.every(c => JSON.stringify(c.resultat?.classement) === JSON.stringify(r.classement)));
 }
 
-// Le classement des duels ne doit pas avoir bouge : une course a huit n'est
-// pas un duel, et le bareme n'a pas de generalisation honnete a huit.
+// --------------------------------------------------------------- les duels
+// A huit, ce sont vingt-huit duels : chacun contre chacun des sept autres.
+console.log('\n── VINGT-HUIT DUELS, SEPT PAR PARTANT ──────────────────────');
+for (let i = 0; i < 150 && cl.some(c => !c.points); i++) await attendre(100);
+ok('chacun recoit ses points', cl.every(c => !!c.points),
+   cl.map(c => (c.points ? 1 : 0)).join(''));
+const sien = c => (c.points?.joueurs || []).find(x => x.id === c.moi) || null;
+ok('chacun a couru sept duels', cl.every(c => sien(c)?.duels?.length === 7),
+   cl.map(c => sien(c)?.duels?.length).join(','));
+const parPlace = [...cl].sort((x, y) => chronos[cl.indexOf(x)] - chronos[cl.indexOf(y)]);
+ok('le n-ieme gagne 8-n duels',
+   parPlace.every((c, i) => sien(c)?.duels.filter(d => d.issue === 'gagne').length === 7 - i),
+   parPlace.map(c => sien(c)?.duels.filter(d => d.issue === 'gagne').length).join(','));
+ok('le vainqueur allume une serie de sept, les autres finissent eteints',
+   sien(parPlace[0])?.serie === 7 && parPlace.slice(1).every(c => sien(c)?.serie === 0),
+   parPlace.map(c => sien(c)?.serie).join(','));
+ok('le vainqueur monte, le dernier descend',
+   (sien(parPlace[0])?.lp ?? 0) > 0 && (sien(parPlace[7])?.lp ?? 0) < 0,
+   `${sien(parPlace[0])?.lp} / ${sien(parPlace[7])?.lp}`);
+
 const duels = await (await fetch(B + '/duels')).json();
-const dedans = (duels.classement || []).some(x => NOMS.includes(x.name));
-ok('aucun coureur de la course n entre au classement des duels', !dedans);
+const lignes = NOMS.map(n => (duels.classement || []).find(x => x.name === n));
+ok('les huit entrent au classement des duels', lignes.every(Boolean),
+   lignes.map(Boolean).join(','));
+ok('avec sept duels chacun', lignes.every(l => l && l.wins + l.losses + l.draws === 7),
+   lignes.map(l => l && l.wins + l.losses + l.draws).join(','));
 
 for (const c of cl) c.ws.close();
 

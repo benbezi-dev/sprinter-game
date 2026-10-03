@@ -902,13 +902,21 @@
                       'a lap on your own: the stadium, the clock, and nobody to wait for'],
     live_lanes_duel: ['un duel : le vainqueur prend des points, le perdant en rend',
                       'a duel: the winner takes points, the loser gives some back'],
-    live_lanes_course: ['une course à {n} : un classement à l’arrivée, sans points au classement des duels',
-                        'a {n}-runner race: a finishing order, no points on the duel ranking'],
+    live_lanes_course: ['une course à {n} : un duel contre chacun, tous comptent au classement des duels',
+                        'a {n}-runner race: a duel against each runner, all count on the duel ranking'],
+    // Le nom, avant d'ouvrir ou de rejoindre une salle : une course en direct
+    // compte au classement des duels, sous le nom de celui qui court.
+    live_nom_motif:  ['Valide ton nom pour courir en direct : c’est sous ce nom que tes duels comptent au classement.',
+                      'Confirm your name to race live: your duels count on the ranking under this name.'],
+    live_nom_requis: ['valide ton nom pour courir en direct', 'confirm your name to race live'],
     live_won:        ['COURSE GAGNÉE', 'RACE WON'],
-    // Au-dela de deux couloirs, une course en direct n'est plus un duel : on
-    // annonce une place et un ordre d'arrivee, pas un vainqueur et un perdant.
+    // Au-dela de deux couloirs, on annonce une place et un ordre d'arrivee :
+    // ce sont des duels contre chacun, et le titre dit ou l'on a fini.
     live_sur:        ['SUR {n} PARTANTS', 'OF {n} STARTERS'],
     live_ordre:      ['ORDRE D’ARRIVÉE', 'FINISHING ORDER'],
+    // Le bilan de ces duels, sous le total des points : combien de partants
+    // on a devances, combien nous ont devances.
+    live_bilan:      ['{v} duel(s) gagné(s) · {d} perdu(s)', '{v} duel(s) won · {d} lost'],
     live_lost:       ['COURSE PERDUE', 'RACE LOST'],
     // presentation des participants, avant le depart
     pres_title:      ['PRÉSENTATION DES ATHLÈTES', 'ATHLETE INTRODUCTIONS'],
@@ -1648,6 +1656,7 @@
     jd_l_lance:      ['tu as défié {n}', 'you challenged {n}'],
     jd_l_recu_live:  ['{n} t’a invité en direct', '{n} invited you live'],
     jd_l_lance_live: ['tu as invité {n} en direct', 'you invited {n} live'],
+    jd_l_direct:     ['en direct contre {n}', 'live against {n}'],
     jd_l_anonyme:    ['défi lancé, sans destinataire', 'challenge sent, no recipient'],
     // Son etat, en un mot.
     jd_e_attente:    ['en attente', 'waiting'],
