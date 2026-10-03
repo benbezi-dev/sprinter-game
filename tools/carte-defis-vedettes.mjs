@@ -13,12 +13,22 @@
 
      node tools/carte-defis-vedettes.mjs
      node tools/carte-defis-vedettes.mjs --photo-meba ~/meba.jpg --photo-manga ~/aurel.jpg
+     node tools/carte-defis-vedettes.mjs --photo-duo ~/eux-deux.jpg --cadre-duo 0.52,0.40,1240,760
 
    LES IMAGES. Sans rien, ce sont leurs portraits 3D (public/vedettes/), les
    memes que la banniere et la fiche du jeu : detoures, poses tels quels. Avec
    --photo-meba / --photo-manga, une vraie photo prend leur place, recadree
    pour remplir le haut de l'ecran et fondue dans le fond par le bas — il
    n'est pas besoin qu'elle soit detouree.
+
+   UNE PHOTO D'EUX DEUX (--photo-duo) passe l'ecran d'ouverture en plein
+   cadre : la photo derriere, le texte sur un degrade sombre en bas. Son
+   cadrage, --cadre-duo fx,fy,largeur,y : le point (fx, fy) de la photo — en
+   fractions de sa largeur et de sa hauteur, a prendre entre leurs deux
+   visages — tombe a la hauteur y de l'ecran, la photo affichee sur `largeur`
+   pixels. Une photo de telephone en portrait est bien plus haute que la
+   story : c'est ce point, pas un recadrage centre, qui garde les tetes hors
+   de la bande que mange Instagram.
 
    LES CHRONOS NE SONT PAS RECOPIES. Ils sont lus dans les `cibles` de leurs
    stades (src/game/sprinter-core.js) : quand l'un change — celui d'Aurel est
@@ -40,12 +50,21 @@ const SORTIE = path.join(RACINE, 'communication/defis-vedettes');
 const L = 1080, H = 1920;
 
 function lireArgs(argv) {
-  const a = { meba: null, manga: null };
+  const a = { meba: null, manga: null, duo: null, cadreDuo: [0.5, 0.4, 1240, 760] };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--photo-meba') a.meba = path.resolve(String(argv[++i] || ''));
     else if (argv[i] === '--photo-manga') a.manga = path.resolve(String(argv[++i] || ''));
+    else if (argv[i] === '--photo-duo') a.duo = path.resolve(String(argv[++i] || ''));
+    else if (argv[i] === '--cadre-duo') {
+      const v = String(argv[++i] || '').split(',').map(Number);
+      if (v.length !== 4 || v.some(n => !Number.isFinite(n))) {
+        console.error('--cadre-duo attend fx,fy,largeur,y — par exemple 0.52,0.40,1240,760');
+        process.exit(1);
+      }
+      a.cadreDuo = v;
+    }
   }
-  for (const f of [a.meba, a.manga]) {
+  for (const f of [a.meba, a.manga, a.duo]) {
     if (f && !fs.existsSync(f)) { console.error(`Photo introuvable : ${f}`); process.exit(1); }
   }
   return a;
@@ -106,7 +125,7 @@ body { position: relative; background: #060913; color: #fff;
 .kicker { position: absolute; top: 262px; left: 0; right: 0; text-align: center;
   font-weight: 800; font-size: 30px; letter-spacing: 7px; color: ${OR}; }
 .bloc { position: absolute; left: 80px; right: 80px; text-align: center; }
-.titre { font-weight: 900; line-height: 0.94; letter-spacing: -1px; }
+.titre { font-weight: 900; line-height: 0.94; letter-spacing: -1px; text-shadow: 0 4px 28px rgba(0,0,0,0.35); }
 .sous { font-weight: 600; font-size: 38px; line-height: 1.32; color: rgba(255,255,255,0.78); }
 .sous b { color: #fff; font-weight: 800; }
 .doux { font-weight: 500; font-size: 28px; line-height: 1.4; color: rgba(255,255,255,0.46); }
@@ -131,6 +150,16 @@ const halo = (x, y, d, couleur, op = 0.75) =>
   `background:radial-gradient(circle, ${couleur} 0%, transparent 68%);opacity:${op}"></div>`;
 const figure = (img, { x, y, w, h }) =>
   `<img class="fig${img.photo ? ' photo' : ''}" src="${img.src}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px">`;
+/* Une photo en plein cadre, et les deux voiles qui rendent le texte lisible :
+   en haut pour le surtitre, en bas — plus long et plus dense — pour le titre
+   et la liste. */
+const pleinCadre = (fichier, [fx, fy, largeur, y]) =>
+  `<img src="file://${fichier}" style="position:absolute;left:${L / 2}px;top:${y}px;width:${largeur}px;` +
+  `transform:translate(${-fx * 100}%, ${-fy * 100}%)">` +
+  `<div style="position:absolute;left:0;right:0;top:0;height:460px;` +
+  `background:linear-gradient(180deg, rgba(6,9,19,0.82), rgba(6,9,19,0))"></div>` +
+  `<div style="position:absolute;left:0;right:0;top:820px;bottom:0;` +
+  `background:linear-gradient(180deg, rgba(6,9,19,0) 0px, rgba(6,9,19,0.78) 260px, #060913 470px)"></div>`;
 const page = corps => `<!doctype html><html><head><meta charset="utf-8"><style>${STYLE}</style></head>` +
   `<body>${decor()}${corps}</body></html>`;
 
@@ -165,8 +194,8 @@ const deuxFigures = (y, h) => IMG_MEBA.photo || IMG_MANGA.photo
 
 const ECRANS = [
   { cle: '1-ce-soir', html: page(`
+    ${args.duo ? pleinCadre(args.duo, args.cadreDuo) : deuxFigures(318, 760)}
     <div class="kicker">CE SOIR · 21 H 30</div>
-    ${deuxFigures(318, 760)}
     <div class="bloc" style="top:1010px">
       <div class="titre" style="font-size:112px">ILS ENTRENT<br>DANS LE JEU</div>
       <div class="sous" style="margin-top:22px">Bats-les : <b>leurs skins sont à toi.</b></div>
@@ -249,5 +278,5 @@ for (const e of ECRANS) {
   console.log(`  ${path.relative(RACINE, sortie)}`);
 }
 console.log(`\n  ${ECRANS.length} écrans de story (1080 x 1920)` +
-  `${args.meba || args.manga ? ', avec photos' : ', portraits 3D'} · ` +
+  `${args.meba || args.manga || args.duo ? ', avec photos' : ', portraits 3D'} · ` +
   `chronos : ${virgule(C.meba100)} / ${virgule(C.meba200)} / ${virgule(C.manga110h)}\n`);
