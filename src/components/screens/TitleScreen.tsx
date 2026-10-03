@@ -12,6 +12,7 @@ import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
+import { salonCourant } from '@/game/salon-direct';
 import { tutoVu, marquerTutoVu } from './Tutorial';
 import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
@@ -171,7 +172,13 @@ export function TitleScreen() {
   const monRang = mesRangs.find(r => jeuDe(String(r.epreuve).split('+')[0]) === jeu) || null;
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
-  const [tab, setTab] = useState<Tab>(() => (venuPourUnDuel ? 'versus' : 'career'));
+  //
+  // Et le retour d'une course en direct aussi, tant que la piste est ouverte :
+  // c'est la que le salon attend, avec la revanche. L'accueil s'ouvrait sur la
+  // carriere, et il fallait savoir que la salle vivait encore un onglet plus
+  // loin.
+  const [tab, setTab] = useState<Tab>(() =>
+    (venuPourUnDuel || (DUELS_OUVERTS && !!salonCourant()) ? 'versus' : 'career'));
 
   // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel
