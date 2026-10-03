@@ -594,6 +594,11 @@ async function noterDuel(db, luiKey, moiKey, issue, epreuve, id = null) {
     monte: apres.releveur.monte > 0, descend: apres.releveur.descend > 0,
     monte_adverse: apres.lanceur.monte > 0,
     descend_adverse: apres.lanceur.descend > 0,
+    // Le palier de chacun AVANT ce duel. Un duel seul n'en a pas besoin — ses
+    // drapeaux `monte` et `descend` disent deja tout. Une course en direct a
+    // huit en enchaine sept par coureur : la seule question qui vaille a
+    // l'arrivee est ou l'on etait avant le pistolet, et ou l'on est apres.
+    palier_avant: releveur.palier, palier_avant_adverse: lanceur.palier,
     // La serie de chacun APRES le duel, et celle qu'il avait avant. L'ecran
     // d'arrivee a besoin des deux : allumer une flamme et la voir s'eteindre
     // sont deux nouvelles differentes, et aucune ne se deduit du seul nombre

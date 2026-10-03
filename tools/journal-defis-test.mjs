@@ -183,6 +183,53 @@ const noms = M.aRedefier(T0).map(x => x.nom).sort().join(',');
 ok('ceux qui ont tendu la main sans reponse, et eux seuls', noms === 'Jo,Kim', noms);
 ok('le compteur du panneau dit la meme chose', M.combienARelever(T0) === 2);
 
+/* ---------------------------------------------- les courses en direct */
+
+titre('LES COURSES EN DIRECT FINISSENT AU JOURNAL');
+
+RAZ();
+// L'invitation qu'on a acceptee : sa cle ne porte pas le code, `salle` si.
+M.noterDefi({ cle: 'direct:77', genre: 'direct', sens: 'recu', etat: 'releve',
+              nom: 'Omar', salle: 'QWER', at: T0 }, T0);
+M.noterCourseDirecte({ salle: 'qwer', course: T0 + 5000, nom: 'Omar', sens: 'recu',
+                       etat: 'gagne', epreuves: ['100'] }, T0 + 6000);
+let j = M.lireJournal(T0 + 6000);
+ok("l'invitation acceptee devient la course gagnee, sans se dedoubler",
+   j.length === 1 && j[0].cle === 'direct:77' && j[0].etat === 'gagne', JSON.stringify(j));
+M.noterCourseDirecte({ salle: 'QWER', course: T0 + 5000, nom: 'omar', sens: 'recu',
+                       etat: 'gagne', lp: 23 }, T0 + 7000);
+j = M.lireJournal(T0 + 7000);
+ok('les points arrivent ensuite sur la meme ligne',
+   j.length === 1 && j[0].lp === 23, JSON.stringify(j));
+
+M.noterCourseDirecte({ salle: 'QWER', course: T0 + 60000, nom: 'Omar', sens: 'recu',
+                       etat: 'perdu', lp: -18 }, T0 + 61000);
+j = M.lireJournal(T0 + 61000);
+ok('la revanche dans la meme salle a sa propre ligne',
+   j.length === 2 && j.filter(x => x.etat === 'perdu').length === 1, JSON.stringify(j));
+ok("et la premiere garde son issue",
+   j.find(x => x.cle === 'direct:77')?.etat === 'gagne');
+
+RAZ();
+// L'invitation qu'on a envoyee : le code est dans sa cle depuis toujours.
+M.noterDefi({ cle: 'direct:ZXCV:pia', genre: 'direct', sens: 'lance', etat: 'attente',
+              nom: 'Pia', at: T0 }, T0);
+M.noterCourseDirecte({ salle: 'ZXCV', course: T0 + 9000, nom: 'Pia', sens: 'lance',
+                       etat: 'nul' }, T0 + 9500);
+j = M.lireJournal(T0 + 9500);
+ok("l'invitation envoyee, meme d'avant le champ `salle`, prend l'issue",
+   j.length === 1 && j[0].etat === 'nul', JSON.stringify(j));
+
+RAZ();
+// A huit, une ligne par adversaire.
+for (const [n, etat] of [['Ana', 'gagne'], ['Bo', 'gagne'], ['Cy', 'perdu']]) {
+  M.noterCourseDirecte({ salle: 'HUIT', course: T0, nom: n, sens: 'recu', etat }, T0 + 1000);
+}
+j = M.lireJournal(T0 + 1000);
+ok('une course a plusieurs inscrit chaque adversaire',
+   j.length === 3 && j.filter(x => x.etat === 'gagne').length === 2, JSON.stringify(j));
+ok('une course tranchee ne se propose pas a relever', M.combienARelever(T0 + 1000) === 0);
+
 /* ------------------------------------------------------ un journal casse */
 
 titre('UN JOURNAL ILLISIBLE NE CASSE RIEN');

@@ -79,6 +79,11 @@ export function HistoriqueDefis({ race, onDefier }: {
     const n = e.nom.trim();
     if (!n) return e.sens === 'lance' ? N.t('jd_l_anonyme') : N.t('jd_sans_nom');
     if (e.genre === 'direct') {
+      // Une course tranchee ne dit plus qui a invite qui : a huit, la plupart
+      // des adversaires n'ont invite personne. Elle dit contre qui on a couru.
+      if (e.etat === 'gagne' || e.etat === 'perdu' || e.etat === 'nul') {
+        return N.t('jd_l_direct', { n });
+      }
       return N.t(e.sens === 'recu' ? 'jd_l_recu_live' : 'jd_l_lance_live', { n });
     }
     return N.t(e.sens === 'recu' ? 'jd_l_recu' : 'jd_l_lance', { n });

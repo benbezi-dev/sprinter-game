@@ -6,8 +6,9 @@ import { MONTEE } from '@/lib/mouvement';
 import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
-  COULOIRS,
+  COULOIRS, mesPointsDe,
   type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
+  type ResultatDirect, type PointsDuel,
 } from '@/game/live';
 import { poserSalon, salonCourant, quitterSalon, surDemandeRejoindre } from '@/game/salon-direct';
 import {
@@ -15,8 +16,10 @@ import {
 } from '@/game/voix-directe';
 import { whatsappUrl, smsUrl, canNativeShare, nativeShare } from '@/game/challenge';
 import { inviterEnDirect } from '@/game/invitations-directes';
-import { noterDefi } from '@/game/journal-defis';
+import { noterDefi, noterCourseDirecte } from '@/game/journal-defis';
 import { DuelRanking } from './DuelRanking';
+import { PanneauIdentite } from './NameChip';
+import { nomPourLeDirect } from '@/game/identity';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 import { Repliable } from './Repliable';
@@ -71,6 +74,48 @@ const NIVEAU_DIRECT = 5;
 
 type Etape = 'repos' | 'ouverture' | 'salon' | 'presentation' | 'partie' | 'review';
 
+/** Un partant que la salle a range sans nom : il court, il ne se redefie pas. */
+const sansNom = (nom: string) => {
+  const n = String(nom || '').trim().toLowerCase();
+  return !n || n === 'anonyme';
+};
+
+/**
+ * LA COURSE QUI VIENT DE SE TRANCHER, AU JOURNAL DES DEFIS.
+ *
+ * Une ligne par adversaire : a deux c'est le duel, a huit ce sont les sept
+ * duels de la course, et chacun se redefie a part. L'issue s'ecrit des le
+ * verdict — une base indisponible ne doit pas laisser la course sans trace —
+ * et les points la completent quand la salle les annonce (`points`).
+ *
+ * L'issue vient de la salle quand elle l'a dite, duel par duel ; sinon des
+ * chronos du classement, qui disent la meme chose.
+ */
+function inscrireAuJournal(
+  r: ResultatDirect, moi: string, salle: string, course: number | null,
+  suisHote: boolean, epreuves: string[], points?: PointsDuel | null,
+) {
+  const classement = Array.isArray(r?.classement) ? r.classement : [];
+  const mien = classement.find(l => l.id === moi);
+  if (!mien || classement.length < 2 || !salle || !course) return;
+  // Le journal ne doit jamais couter l'ecran de fin : il est appele dans le
+  // meme geste que l'annonce du verdict.
+  try { for (const l of classement) {
+    if (l.id === moi || sansNom(l.nom)) continue;
+    const duel = points?.duels?.find(x => x.id === l.id);
+    noterCourseDirecte({
+      salle, course, nom: l.nom,
+      sens: suisHote ? 'lance' : 'recu',
+      etat: duel ? duel.issue
+          : mien.ms < l.ms ? 'gagne' : mien.ms > l.ms ? 'perdu' : 'nul',
+      epreuves,
+      lp: duel?.lp,
+      mon_ms: mien.abandon ? undefined : mien.ms,
+      son_ms: l.abandon ? undefined : l.ms,
+    });
+  } } catch { /* une ligne de journal en moins, rien de plus */ }
+}
+
 /**
  * Course en direct.
  *
@@ -114,8 +159,8 @@ export function LivePanel() {
    *
    * Un, c'est un tour de piste seul : le stade, la video, et personne a
    * attendre. Deux, c'est un duel : un vainqueur, un perdant, des points qui
-   * changent de main. Trois ou plus, c'est une course : un classement, et rien
-   * au classement des duels — le bareme est fait pour une paire.
+   * changent de main. Trois ou plus, ce sont des duels contre chacun des
+   * autres : un ordre d'arrivee, et des points pour chaque paire.
    *
    * Huit est le nombre de couloirs d'une piste, et donc le format d'une serie
    * de championnat.
@@ -323,6 +368,11 @@ export function LivePanel() {
     programmerLeFilm('direct', dans, () => [voixCourante()?.pisteDistante()]);
   };
 
+  /** Ce que la salle court, tel qu'elle l'annonce : celui qui rejoint n'a
+   *  rien choisi, et son propre selecteur peut dire autre chose. */
+  const epreuvesDeLaSalle = () =>
+    salle.current?.dernierEtat?.epreuves || salle.current?.epreuves || [epreuve];
+
   const ecouteurs = (monCode: string) => ({
     onEtat: (e: EtatSalle) => {
       setSalon(e);
@@ -405,6 +455,10 @@ export function LivePanel() {
     },
     onResultat: (r: any) => {
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
+      // Au journal, tout de suite : l'issue est connue, les points suivront.
+      inscrireAuJournal(r, salle.current?.moi || '', monCode,
+                        r.course ?? dateDepart.current, !!salle.current?.suisHote,
+                        epreuvesDeLaSalle());
       SprinterApp.G.liveOn = true;
       presEnCours.current = false;
       setPresentation(null);
@@ -449,7 +503,18 @@ export function LivePanel() {
     },
     // Les points du duel, quand la salle a fini d'ecrire. L'ecran de fin est
     // deja monte a cet instant : il les lit dans le moteur, comme le resultat.
-    onDuel: (d: DuelDirect) => { SprinterApp.G.liveDuel = d; },
+    //
+    // Et au journal, ou ils completent les lignes que le verdict a posees.
+    onDuel: (d: DuelDirect) => {
+      SprinterApp.G.liveDuel = d;
+      const r = SprinterApp.G.liveResultat as (ResultatDirect & { moi: string }) | null;
+      const moi = salle.current?.moi || '';
+      if (r) {
+        inscrireAuJournal(r, moi, monCode, d.course ?? r.course ?? dateDepart.current,
+                          !!salle.current?.suisHote, epreuvesDeLaSalle(),
+                          mesPointsDe(d, moi));
+      }
+    },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.
       if (!voixCourante()) ouvrirVoix();
@@ -471,32 +536,77 @@ export function LivePanel() {
     brancherSalle({
       position: (d: number, c?: number) => s.position(d, c),
       fini: (ms: number) => s.fini(ms),
+      // Un faux depart elimine : la salle doit le savoir pour trancher
+      // la course des autres (voir signalerFauxDepartDirect).
+      abandon: () => s.abandon(),
     });
     // La salle annonce le terrain de la course : le meme qu'on monte ici.
     s.connecter([epreuve], NIVEAU_DIRECT, places);
   };
 
-  const creer = async () => {
-    const n = nom.trim(); if (n) saveName(n);
+  /**
+   * LE NOM D'ABORD, LA SALLE ENSUITE.
+   *
+   * Une course en direct compte au classement des duels, de deux a huit
+   * couloirs, et elle y compte sous le nom de celui qui court. On ne part donc
+   * pas sans un nom valide — reserve, et relie a cet appareil. Celui qu'on a
+   * tape ici est enregistre et reserve dans le meme geste que le panneau
+   * d'identite ; s'il manque, ou s'il appartient a quelqu'un d'autre, c'est ce
+   * panneau qui s'ouvre, et la salle attend qu'il se referme sur un nom valide.
+   *
+   * Le nom tape est lu dans une reference, pas dans l'etat : un lien
+   * `?direct=` et une invitation acceptee passent par une fonction capturee a
+   * l'ouverture, et elle aurait enregistre le nom d'alors.
+   */
+  const [identite, setIdentite] = useState(false);
+  const apresIdentite = useRef<(() => void) | null>(null);
+  const nomTape = useRef(nom);
+  nomTape.current = nom;
+
+  const avecUnNom = async (suite: () => void) => {
+    const n = nomTape.current.trim(); if (n) saveName(n);
+    setOccupe(true); setErreur('');
+    const verdict = await nomPourLeDirect();
+    setOccupe(false);
+    if (verdict === 'ok') { suite(); return; }
+    apresIdentite.current = suite;
+    setIdentite(true);
+  };
+
+  const fermerIdentite = async () => {
+    setIdentite(false);
+    setNom(getSavedName());
+    const suite = apresIdentite.current;
+    apresIdentite.current = null;
+    if (!suite) return;
+    setOccupe(true);
+    const verdict = await nomPourLeDirect();
+    setOccupe(false);
+    if (verdict === 'ok') suite();
+    else setErreur(N.t('live_nom_requis'));
+  };
+
+  const creer = () => avecUnNom(async () => {
     setOccupe(true); setErreur('');
     const c = await ouvrirSalle();
     setOccupe(false);
     if (!c) { setErreur(N.t('challenge_net')); return; }
     setCode(c); setEtape('ouverture');
     brancher(c);
-  };
+  });
 
-  const rejoindre = async (brut?: string) => {
+  const rejoindre = (brut?: string) => {
     const c = (brut || saisie).toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (c.length < 4) return;
-    const n = nom.trim(); if (n) saveName(n);
-    setOccupe(true); setErreur('');
-    const e = await etatSalle(c);
-    setOccupe(false);
-    if (!e || !e.existe) { setErreur(N.t('live_none')); return; }
-    if (e.complete) { setErreur(N.t('live_full')); return; }
-    if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
-    setCode(c); brancher(c);
+    return avecUnNom(async () => {
+      setOccupe(true); setErreur('');
+      const e = await etatSalle(c);
+      setOccupe(false);
+      if (!e || !e.existe) { setErreur(N.t('live_none')); return; }
+      if (e.complete) { setErreur(N.t('live_full')); return; }
+      if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
+      setCode(c); brancher(c);
+    });
   };
 
   const basculerPret = () => {
@@ -570,6 +680,7 @@ export function LivePanel() {
   // --- au repos : creer ou rejoindre ---------------------------------------
   if (etape === 'repos') {
     return (
+      <>
       <Repliable
         titre={N.t('live_title')}
         sous={N.t('live_desc')}
@@ -670,6 +781,16 @@ export function LivePanel() {
         </div>
         {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
       </Repliable>
+
+      {/* Le panneau d'identite, par-dessus tout. Hors du volet : un lien
+          `?direct=` arrive volet ferme, et un volet ferme ne rend rien. Par un
+          portail : il est en `fixed`, et un cadre flou en ferait sinon son
+          repere (voir le classement, plus bas, pour la meme raison). */}
+      {identite && createPortal(
+        <PanneauIdentite motif={N.t('live_nom_motif')} onFermer={() => { void fermerIdentite(); }} />,
+        document.body,
+      )}
+      </>
     );
   }
 
@@ -792,7 +913,7 @@ export function LivePanel() {
               // n'a rien recu, et l'inscrire laisserait croire le contraire.
               noterDefi({
                 cle: `direct:${code}:${nom.trim().toLowerCase()}`,
-                genre: 'direct', sens: 'lance', etat: 'attente', nom,
+                genre: 'direct', sens: 'lance', etat: 'attente', nom, salle: code,
               });
               return true;
             }

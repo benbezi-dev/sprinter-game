@@ -189,8 +189,14 @@ export function NameChip() {
  * choisir au hasard.
  */
 export function PanneauIdentite({
-  onFermer, bienvenue = false,
+  onFermer, bienvenue = false, motif,
 }: {
+  /**
+   * Pourquoi la fenetre s'ouvre, quand ce n'est pas le joueur qui l'a
+   * demandee — une course en direct qui attend un nom valide. Remplace la
+   * phrase d'usage sous le titre : c'est la seule chose a lire avant d'agir.
+   */
+  motif?: string;
   /**
    * Referme la fenetre. `alBout` vaut vrai quand les trois questions ont ete
    * posees jusqu'a la derniere — repondues ou passees, peu importe : ce qui
@@ -477,7 +483,7 @@ export function PanneauIdentite({
 
         {!bienvenue && (
           <p className="text-[10px] md:text-xs text-muted-foreground leading-snug">
-            {N.t('name_why')}
+            {motif || N.t('name_why')}
           </p>
         )}
 

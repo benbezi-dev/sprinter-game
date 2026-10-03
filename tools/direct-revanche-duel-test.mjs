@@ -13,8 +13,8 @@
 //
 // Et puisque les points existent, ils doivent se dire. Le second volet suit
 // donc l'annonce que la salle envoie apres le verdict : chacun recoit les
-// siens, personne ne recoit ceux de l'autre, et une course a trois — qui n'est
-// pas un duel — n'en recoit aucun.
+// siens, personne ne recoit ceux de l'autre. Une course a trois, elle, est
+// trois duels — chacun contre chacun — et un partant sans nom ne compte pas.
 
 const B = process.env.BASE || 'http://127.0.0.1:8788';
 const WS = B.replace(/^http/, 'ws');
@@ -50,8 +50,11 @@ function client(code, nom, places = 2) {
 function aMoi(c) {
   const d = c.points[c.points.length - 1];
   if (!d) return null;
-  return [d.hote, d.invite].find(x => x && x.id === c.moi) || null;
+  return [...(d.joueurs || []), d.hote, d.invite].find(x => x && x.id === c.moi) || null;
 }
+
+/** Le classement des duels du 100 m, pour n'importe quel nom. */
+const duelsDe = nom => fetch(`${B}/duels?name=${encodeURIComponent(nom)}`).then(r => r.json());
 
 const ligne = (board, nom) =>
   (board.classement || []).find(x => x.name.toLowerCase() === nom.toLowerCase()) || null;
@@ -103,6 +106,14 @@ ok('chacun recoit son rang', !!gagne1?.rang && !!perdu1?.rang,
    JSON.stringify([gagne1?.rang, perdu1?.rang]));
 ok('personne ne recoit les points de l autre',
    gagne1?.id === a.moi && perdu1?.id === b.moi);
+ok('a deux, les champs historiques restent la',
+   !!a.points[0]?.hote && !!a.points[0]?.invite);
+ok('la serie est annoncee : allumee chez le vainqueur, nulle en face',
+   gagne1?.serie === 1 && perdu1?.serie === 0,
+   `${gagne1?.serie} / ${perdu1?.serie}`);
+ok('et le detail du duel, pour le journal',
+   gagne1?.duels?.length === 1 && gagne1.duels[0].issue === 'gagne'
+   && gagne1.duels[0].nom === LENT, JSON.stringify(gagne1?.duels));
 const apres1 = await duels();
 const l1 = ligne(apres1, RAPIDE), p1 = ligne(apres1, LENT);
 ok('le vainqueur est au classement', !!l1, 'absent du tableau');
@@ -123,22 +134,56 @@ ok('les points ont bouge une seconde fois',
    (l2?.palier ?? 0) > palier1 || (l2?.lp ?? 0) > lp1,
    `palier ${palier1}→${l2?.palier}, lp ${lp1}→${l2?.lp}`);
 
-titre('a trois, ce n est plus un duel');
+titre('a trois, un duel contre chacun');
 const code3 = (await fetch(`${B}/live/nouveau`, { method: 'POST' }).then(r => r.json())).id;
-const t = [client(code3, `${RAPIDE}3A`, 3), client(code3, `${RAPIDE}3B`, 3),
-           client(code3, `${RAPIDE}3C`, 3)];
+const N3 = [`${RAPIDE}3A`, `${RAPIDE}3B`, `${RAPIDE}3C`];
+const t = N3.map(n => client(code3, n, 3));
 await Promise.all(t.map(x => x.ouvert));
 await attendre(400);
 for (const x of t) x.envoyer({ t: 'pret', pret: true });
 for (let i = 0; i < 60 && !t[0].depart; i++) await attendre(100);
 t.forEach((x, i) => x.envoyer({ t: 'fini', ms: 10500 + i * 200 }));
 for (let i = 0; i < 60 && !t[0].resultats.length; i++) await attendre(100);
-await attendre(1500);
+for (let i = 0; i < 60 && t.some(x => !x.points.length); i++) await attendre(100);
 ok('un classement est rendu', t[0].resultats.length === 1);
-ok('mais aucun point de duel n est annonce',
-   t.every(x => x.points.length === 0),
-   t.map(x => x.points.length).join('/'));
+ok('le verdict porte l instant du pistolet', !!t[0].resultats[0]?.course);
+ok('chacun recoit ses points',
+   t.every(x => x.points.length === 1), t.map(x => x.points.length).join('/'));
+const p3 = t.map(aMoi);
+ok('chacun a couru deux duels', p3.every(x => x?.duels?.length === 2),
+   p3.map(x => x?.duels?.length).join('/'));
+ok('le premier gagne ses deux duels, le dernier perd les siens',
+   p3[0]?.duels.every(d => d.issue === 'gagne') && p3[2]?.duels.every(d => d.issue === 'perdu'));
+ok('le deuxieme en gagne un et en perd un',
+   p3[1]?.duels.filter(d => d.issue === 'gagne').length === 1 &&
+   p3[1]?.duels.filter(d => d.issue === 'perdu').length === 1);
+ok('le premier monte, le dernier descend', (p3[0]?.lp ?? 0) > 0 && (p3[2]?.lp ?? 0) < 0,
+   p3.map(x => x?.lp).join(' / '));
+ok('la serie : deux d un coup pour le vainqueur, eteinte chez les autres',
+   p3[0]?.serie === 2 && p3[1]?.serie === 0 && p3[2]?.serie === 0,
+   p3.map(x => x?.serie).join(' / '));
+ok('a trois, pas de champs historiques', t[0].points[0]?.hote === undefined);
+const b3 = await duelsDe(N3[0]);
+const lignes3 = N3.map(n => ligne(b3, n));
+ok('les trois entrent au classement des duels', lignes3.every(Boolean),
+   lignes3.map(Boolean).join(','));
+ok('avec leur bilan : 2-0, 1-1, 0-2',
+   lignes3.map(l => `${l?.wins}-${l?.losses}`).join(',') === '2-0,1-1,0-2',
+   lignes3.map(l => `${l?.wins}-${l?.losses}`).join(','));
 for (const x of t) x.ws.close();
+
+titre('un partant sans nom ne compte pas');
+const codeA = (await fetch(`${B}/live/nouveau`, { method: 'POST' }).then(r => r.json())).id;
+const nomme = client(codeA, `${RAPIDE}N`), anonyme = client(codeA, 'Anonyme');
+await Promise.all([nomme.ouvert, anonyme.ouvert]);
+await attendre(400);
+await courir(nomme, anonyme, 10100, 10900, 'anonyme');
+ok('la course se tranche quand meme', nomme.resultats.length === 1);
+ok('mais aucun point n est annonce', nomme.points.length === 0 && anonyme.points.length === 0,
+   `${nomme.points.length} / ${anonyme.points.length}`);
+const bA = await duelsDe(`${RAPIDE}N`);
+ok('et personne n entre au classement', !ligne(bA, `${RAPIDE}N`) && !ligne(bA, 'Anonyme'));
+nomme.ws.close(); anonyme.ws.close();
 
 a.ws.close(); b.ws.close();
 console.log(`\n${echecs === 0 ? '✓ tout passe' : '✗ ' + echecs + ' echec(s)'}\n`);

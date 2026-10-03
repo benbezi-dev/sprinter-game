@@ -76,6 +76,12 @@ export type EntreeDefi = {
   lp?: number;
   mon_ms?: number;
   son_ms?: number;
+  /** En direct : le code de la salle. C'est lui qui relie une invitation a la
+   *  course qu'elle a fait courir. */
+  salle?: string;
+  /** En direct : l'instant du pistolet de la course tranchee, en temps
+   *  serveur. Une revanche dans la meme salle en a un autre. */
+  course?: number;
 };
 
 /** Ce que le journal accepte qu'on lui donne : le reste, il le complete. */
@@ -91,6 +97,8 @@ export type Depot = {
   lp?: number;
   mon_ms?: number;
   son_ms?: number;
+  salle?: string;
+  course?: number;
 };
 
 const ecouteurs = new Set<() => void>();
@@ -124,6 +132,8 @@ function valide(x: any): EntreeDefi | null {
     lp: x.lp == null ? undefined : Number(x.lp),
     mon_ms: x.mon_ms == null ? undefined : Number(x.mon_ms),
     son_ms: x.son_ms == null ? undefined : Number(x.son_ms),
+    salle: x.salle ? String(x.salle) : undefined,
+    course: Number(x.course) || undefined,
   };
 }
 
@@ -235,6 +245,8 @@ export function noterDefi(d: Depot, maintenant = Date.now()): void {
     lp: d.lp ?? ancien?.lp,
     mon_ms: d.mon_ms ?? ancien?.mon_ms,
     son_ms: d.son_ms ?? ancien?.son_ms,
+    salle: d.salle ?? ancien?.salle,
+    course: d.course ?? ancien?.course,
   };
   if (i >= 0) liste[i] = entree; else liste.unshift(entree);
   ecrire(menage(liste, maintenant));
@@ -242,6 +254,68 @@ export function noterDefi(d: Depot, maintenant = Date.now()): void {
   // l'ecran a chaque passage le ferait se redessiner pour rien ; on ne
   // previent que quand quelque chose a vraiment change de visage.
   if (!ancien || !memeLigne(ancien, entree)) prevenir();
+}
+
+/** Ce qui est tranche en direct, vu de chez soi. */
+export type IssueDirecte = 'gagne' | 'perdu' | 'nul';
+
+/**
+ * UNE COURSE EN DIRECT TRANCHEE, CONTRE UN ADVERSAIRE.
+ *
+ * Une course en direct est un duel — a huit, c'en est sept, un par partant —
+ * et elle doit finir au journal comme un defi : gagnee, perdue ou nulle, avec
+ * ses points. Elle n'y laissait que l'invitation, « relevee » pour l'invite et
+ * « en attente » pour l'hote, a jamais : rien ne disait comment ca avait fini.
+ *
+ * QUELLE LIGNE. La premiere course d'une salle reprend l'invitation qui l'a
+ * fait courir — celle qu'on a envoyee, ou celle qu'on a acceptee — plutot que
+ * de s'ajouter a cote : « X t'a invite » devient « gagne contre X ». Les
+ * revanches dans la meme salle ont chacune leur ligne, sous la cle
+ * `direct:<salle>:<pistolet>:<nom>`, et une course deja inscrite se complete
+ * au lieu de se dedoubler : l'issue arrive avec le verdict, les points un
+ * instant apres.
+ */
+export function noterCourseDirecte(d: {
+  salle: string;
+  course: number;
+  nom: string;
+  sens: SensDefi;
+  etat: IssueDirecte;
+  epreuves?: string[];
+  lp?: number;
+  mon_ms?: number;
+  son_ms?: number;
+}, maintenant = Date.now()): void {
+  const salle = String(d.salle || '').toUpperCase();
+  const qui = String(d.nom || '').trim().toLowerCase();
+  if (!salle || !qui || !d.course) return;
+  const memeNom = (e: EntreeDefi) => e.nom.trim().toLowerCase() === qui;
+  const liste = menage(brut(), maintenant);
+
+  // Cette course-ci, deja inscrite : on la complete.
+  const deja = liste.find(e =>
+    e.genre === 'direct' && e.salle === salle && e.course === d.course && memeNom(e));
+  // Sinon l'invitation qui l'a fait courir, si elle attend encore son issue.
+  // Celle qu'on a envoyee porte le code dans sa cle depuis toujours ; celle
+  // qu'on a recue ne le porte que dans `salle`.
+  const invitation = deja ? null : liste.find(e =>
+    e.genre === 'direct' && e.course == null && memeNom(e) &&
+    (e.etat === 'attente' || e.etat === 'releve') &&
+    (e.salle === salle || e.cle === `direct:${salle}:${qui}`));
+
+  noterDefi({
+    cle: (deja || invitation)?.cle || `direct:${salle}:${d.course}:${qui}`,
+    genre: 'direct',
+    sens: d.sens,
+    etat: d.etat,
+    nom: d.nom.trim(),
+    epreuves: d.epreuves,
+    salle,
+    course: d.course,
+    lp: d.lp,
+    mon_ms: d.mon_ms,
+    son_ms: d.son_ms,
+  }, maintenant);
 }
 
 /**

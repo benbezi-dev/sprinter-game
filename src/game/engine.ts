@@ -502,14 +502,39 @@ let salleLive: {
   fini(ms: number): void;
   /** Championnat seulement : signaler un appui avant le coup. */
   fauxDepart?(ms: number): void;
+  /** Direct : on ne finira pas cette course — faux depart eliminatoire. */
+  abandon?(): void;
 } | null = null;
 let prochainEnvoi = 0;
 let finEnvoyee = false;
+let abandonEnvoye = false;
 
 export function brancherSalle(s: typeof salleLive) {
   salleLive = s;
   prochainEnvoi = 0;
   finEnvoyee = false;
+  abandonEnvoye = false;
+}
+
+/**
+ * LE FAUX DEPART EN DIRECT SE DIT A LA SALLE.
+ *
+ * En direct comme en defi, partir avant le coup elimine : le moteur arrete la
+ * course du joueur, et l'ecran de fin le dit. Mais la salle n'en savait rien.
+ * Elle attend l'arrivee de chacun pour trancher, et celle-la ne viendrait
+ * jamais : les autres finissaient leur course devant un verdict qui n'arrivait
+ * pas, sans points, sans fin de film — leur victoire ne comptait nulle part.
+ *
+ * On le lui dit donc, une fois par course : un abandon, que la salle range
+ * dernier. C'est une defaite contre chacun des autres, exactement comme le
+ * faux depart d'un defi releve. Lu a chaque image plutot qu'a l'endroit ou il
+ * se produit, parce que deux chemins y menent — le doigt et le clavier.
+ */
+function signalerFauxDepartDirect() {
+  if (!G.falseOut) { abandonEnvoye = false; return; }
+  if (!G.liveOn || abandonEnvoye || !salleLive?.abandon) return;
+  abandonEnvoye = true;
+  salleLive.abandon();
 }
 
 /**
@@ -721,6 +746,7 @@ function animationsReduites(): boolean {
 export function updateLogic(dt: number) {
   // Le tunnel des premiers pas lit les changements d'etat, rien d'autre.
   suivreTunnel(G);
+  signalerFauxDepartDirect();
   // Course suspendue : le monde se fige, mais on continue a rendre l'image
   // et a alimenter React, sinon le panneau de sortie ne s'afficherait pas.
   if (G.paused && PAUSABLE.has(G.state)) {

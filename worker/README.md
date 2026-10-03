@@ -103,6 +103,17 @@ un défi différé, celles de la salle pour une course en direct. Les championna
 lisent l'échelle de leur propre distance — une édition du 400 m se remplit avec
 les meilleurs du 400 m.
 
+Une course en direct compte de deux à huit couloirs : chaque paire de partants
+est un duel (`rencontresDeLaCourse`, `src/salle.js`). L'hôte lance contre
+chacun ; entre deux invités, le premier arrivé dans la salle lance. Huit
+partants, ce sont vingt-huit duels, sept par coureur, écrits dans un ordre qui
+fait passer les victoires de chacun avant ses défaites — la série du quatrième
+s'éteint, celle du vainqueur prend sept crans. À deux, l'identifiant reste
+`LIVE-<salle>-<pistolet>` ; au-delà, l'identifiant du lanceur s'y ajoute. Un
+partant sans nom (« Anonyme ») court sans compter, et un faux départ est un
+abandon : une défaite contre chacun. La salle annonce ensuite à chacun ses
+points, sa division, sa série avant et après, et le détail duel par duel.
+
 **Au premier appel après le déploiement, la table `duel_players` est refaite** :
 sa clé passe de `name_key` à `(name_key, epreuve)`, ce que SQLite ne sait pas
 retoucher en place. L'ancienne table est conservée telle quelle sous le nom

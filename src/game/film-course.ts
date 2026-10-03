@@ -53,6 +53,13 @@ let genre: GenreFilm | null = null;
 let vue: VueFilm = { ...REPOS, genre: null };
 /** Le demarrage programme, garde pour pouvoir l'annuler. Voir `programmerLeFilm`. */
 let depart: ReturnType<typeof setTimeout> | null = null;
+/**
+ * L'arret en cours, le temps que le carton se peigne. Le film est encore
+ * « en enregistrement » pendant cette seconde et demie : sans cette trace, un
+ * retour au salon dans l'intervalle le prenait pour une course abandonnee et
+ * le jetait — la video d'une course finie, perdue sur un appui trop rapide.
+ */
+let arret: Promise<void> | null = null;
 const abonnes = new Set<() => void>();
 
 function prevenir() {
@@ -205,13 +212,21 @@ export function programmerLeFilm(
 export function arreterLeFilm(g: GenreFilm): Promise<void> {
   if (genre !== g) return Promise.resolve();
   annulerLeDepart();
+  // Deux demandes pour une seule prise — le direct s'arrete au retour au
+  // salon, puis au verdict de la salle — ne font qu'un arret, et un seul
+  // defi de camera. Et rien ne tourne, rien ne s'arrete.
+  if (arret) return arret;
+  if (!filmDeLaCourse().filme()) return Promise.resolve();
   // LA CAMERA POSE SON DEFI AVANT DE S'ARRETER, et d'un cheveu : le carton met
   // une seconde et demie a se peindre, c'est tout ce dont le serveur dispose
   // pour rendre un code. On n'attend pas sa reponse — voir
   // `poserLeDefiDeLaCamera` — le carton lui garde sa place et sort sans lui
   // s'il tarde.
   poserLeDefiDeLaCamera(g);
-  return filmDeLaCourse().arreter(peindreLeCarton);
+  const ceLui = filmDeLaCourse().arreter(peindreLeCarton)
+    .finally(() => { if (arret === ceLui) arret = null; });
+  arret = ceLui;
+  return ceLui;
 }
 
 /** Libere le film de cette course-la, et rien d'autre. */
@@ -271,7 +286,17 @@ export function useFilmerLeOneShot() {
     // ailleurs : sans cette ligne, l'enregistreur d'un direct ou d'un relais
     // quitte en cours de route continuerait de filmer l'ecran-titre, jusqu'a
     // ce que quelqu'un pense a l'arreter — c'est-a-dire jamais.
+    //
+    // MAIS UNE COURSE FINIE N'EST PAS ABANDONNEE. Deux cas gardent leur film :
+    //   - celui qui s'arrete deja, le temps de peindre son carton ;
+    //   - le direct dont on a passe la ligne — on revient de l'ecran de fin,
+    //     pas de la piste. Les autres courent peut-etre encore, mais l'ecran-
+    //     titre n'a rien a faire dans le film : on l'arrete ici, et la video
+    //     attend dans le salon, ou elle se partage.
     if (state === 'title' && etatDuFilm().phase === 'enregistre') {
+      if (arret) return;
+      const enCourse = veille === 'count' || veille === 'race' || veille === 'result';
+      if (genreDuFilm() === 'direct' && !enCourse) { void arreterLeFilm('direct'); return; }
       jeterLeFilm(genreDuFilm());
       return;
     }

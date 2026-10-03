@@ -42,6 +42,7 @@ import { usePassage } from '@/game/passage';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
+import { salonCourant } from '@/game/salon-direct';
 import { venuPourLeDefi } from '@/game/defi-demie';
 import { usePresences } from '@/game/presence';
 
@@ -171,7 +172,14 @@ export function TitleScreen() {
   const monRang = mesRangs.find(r => jeuDe(String(r.epreuve).split('+')[0]) === jeu) || null;
   const [propose, setPropose] = useState(false);
   // Un lien ?defi=CODE ou ?direct=CODE doit tomber sur l'onglet du defi.
-  const [tab, setTab] = useState<Tab>(() => (venuPourUnDuel ? 'versus' : 'career'));
+  //
+  // Le retour d'une course en direct aussi. L'accueil se remonte a neuf apres
+  // chaque course et repartait sur la carriere : le salon — la revanche, et la
+  // video de la course a partager — restait cache sous un onglet qu'il
+  // fallait penser a rouvrir. Tant qu'une salle est ouverte, c'est la qu'on
+  // revient.
+  const [tab, setTab] = useState<Tab>(() =>
+    (venuPourUnDuel || !!salonCourant() ? 'versus' : 'career'));
 
   // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel

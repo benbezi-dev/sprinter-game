@@ -5,7 +5,7 @@
 // appareils et empecher qu'on prenne son nom, sans tiers, sans e-mail et sans
 // ecran de consentement.
 
-import { getDeviceId, getSavedName } from './leaderboard';
+import { getDeviceId, getSavedName, NOM_CHANGE } from './leaderboard';
 import { nettoyerInsta } from './insta';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -99,6 +99,39 @@ export async function claimName(name: string): Promise<ClaimResult> {
 }
 
 export type LinkResult = 'lie' | 'mauvais_code' | 'inconnu' | 'reseau';
+
+/**
+ * LE NOM, AVANT UNE COURSE EN DIRECT.
+ *
+ * Une course en direct compte au classement des duels, de deux a huit
+ * couloirs : chaque point y part sous le nom de celui qui court. Sans nom
+ * valide, ces points iraient a une ligne « Anonyme » partagee par tous ceux
+ * qui n'en ont pas — ou nulle part. Le jeu demande donc un nom valide avant
+ * d'ouvrir ou de rejoindre une salle.
+ *
+ * Valide veut dire reserve, et relie a cet appareil. La reservation est celle
+ * du panneau d'identite, au geste pres : enregistrer puis reserver. Elle rend
+ * « deja a toi » sans rien changer quand c'est le cas, reserve le nom quand il
+ * est libre, et dit « pris » quand il appartient a quelqu'un d'autre — c'est
+ * alors au panneau de proposer le code, ou un autre nom.
+ *
+ * Le reseau muet ne bloque pas : la salle ne s'ouvrirait pas davantage, et
+ * c'est elle qui le dira.
+ */
+export async function nomPourLeDirect(): Promise<'ok' | 'a_valider'> {
+  const n = (getSavedName() || '').trim();
+  if (n.length < 2 || n.toLowerCase() === 'anonyme') return 'a_valider';
+  const r = await claimName(n);
+  if (r.etat === 'reserve') {
+    // Un nom tout juste reserve : la presence se represente, pour que le
+    // point vert et l'invitation en direct suivent sans attendre.
+    if (!r.deja) {
+      try { window.dispatchEvent(new Event(NOM_CHANGE)); } catch { /* hors navigateur */ }
+    }
+    return 'ok';
+  }
+  return r.etat === 'reseau' ? 'ok' : 'a_valider';
+}
 
 /** Relie cet appareil a un nom deja reserve, code a l'appui. */
 export async function linkDevice(name: string, code: string): Promise<LinkResult> {

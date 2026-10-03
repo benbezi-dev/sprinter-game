@@ -38,6 +38,109 @@ export function epreuvesDeSalle(demande) {
   const eps = connues.filter(r => EPREUVES[r].jeu === jeu).slice(0, 3);
   return eps.length ? eps : ['100'];
 }
+
+/**
+ * Un partant sans nom ne se classe pas.
+ *
+ * Le jeu envoie « Anonyme » a la place d'un nom vide, et la salle fait de meme
+ * quand il n'envoie rien. Compter ces courses-la ferait une seule ligne de
+ * classement pour tous ceux qui n'ont pas de nom — des inconnus qui se
+ * partagent des points — et deux anonymes ne se rencontreraient meme pas : ils
+ * portent la meme cle. Le jeu demande donc un nom valide avant d'ouvrir ou de
+ * rejoindre une salle ; la salle, elle, ne range rien sous un nom qui n'en est
+ * pas un, pour les versions du jeu qui ne le demandaient pas encore.
+ */
+export function estAnonyme(nom) {
+  const n = String(nom || '').trim().toLowerCase();
+  return !n || n === 'anonyme';
+}
+
+/**
+ * LES DUELS D'UNE COURSE EN DIRECT, DE DEUX A HUIT COULOIRS.
+ *
+ * Une course en direct reste un duel, a deux comme a huit : chaque partant a
+ * couru contre chacun des autres, au meme coup de pistolet, et le classement
+ * des duels compte chacune de ces rencontres. Huit partants, c'est donc sept
+ * duels pour chacun — gagnes contre ceux qu'on devance, perdus contre ceux qui
+ * nous devancent, nuls a la milliseconde pres. C'est ce qu'on a vecu sur la
+ * piste, et c'est la seule lecture qui n'invente rien : le bareme reste celui
+ * d'une paire, il s'applique simplement a toutes les paires de la course.
+ *
+ * QUI LANCE, DANS CHAQUE PAIRE. Le bareme distingue celui qui lance de celui
+ * qui releve. A deux, l'hote a toujours ete l'initiateur — il a ouvert la
+ * salle — et cela ne change pas. Entre deux invites, c'est le premier arrive
+ * dans la salle : un ordre arbitraire mais stable, le meme que celui des
+ * couloirs.
+ *
+ * DANS QUEL ORDRE. Les duels s'appliquent les uns apres les autres, et la
+ * serie de victoires depend de l'ordre : le quatrieme sur huit a battu quatre
+ * coureurs et en a perdu trois, et sa serie doit finir eteinte — il a ete
+ * battu dans cette course. On applique donc, pour chaque coureur, ses
+ * victoires AVANT ses defaites : les paires sont rangees de celle dont le
+ * meilleur des deux est le moins bien place a celle dont il est le premier.
+ * Le vainqueur, lui, aligne ses sept victoires d'affilee.
+ *
+ * L'IDENTIFIANT DE CHAQUE RENCONTRE. A deux, c'est celui de toujours —
+ * `LIVE-<salle>-<pistolet>` — pour que l'historique deja en base se relise
+ * comme avant. Au-dela, le lanceur s'y ajoute : la cle de duel_results est le
+ * couple (rencontre, releveur), et un meme coureur releve plusieurs fois dans
+ * la meme course.
+ *
+ * Les anonymes courent, et ne comptent pas (voir estAnonyme). Rendu dans
+ * l'ordre ou il faut ecrire ; vide quand il reste moins de deux partants
+ * nommes.
+ */
+export function rencontresDeLaCourse(partants, { code, course, hote = null }) {
+  const nommes = (partants || []).filter(x => x && !estAnonyme(x.nom));
+  // L'hote d'abord, les autres dans l'ordre ou ils sont arrives.
+  const roles = [
+    ...nommes.filter(x => x.id === hote),
+    ...nommes.filter(x => x.id !== hote),
+  ];
+  if (roles.length < 2) return [];
+  // La place de chacun dans TOUTE la course, anonymes compris : finir
+  // troisieme derriere un anonyme reste finir troisieme.
+  const place = x => 1 + (partants || []).filter(y => y && y.fin < x.fin).length;
+  const deux = roles.length === 2 && (partants || []).length === 2;
+  const paires = [];
+  for (let i = 0; i < roles.length; i++) {
+    for (let j = i + 1; j < roles.length; j++) {
+      const lanceur = roles[i], releveur = roles[j];
+      paires.push({
+        id: `LIVE-${code}-${course}` + (deux ? '' : `-${lanceur.id}`),
+        lanceur, releveur,
+        meilleure: Math.min(place(lanceur), place(releveur)),
+        rang: paires.length,
+      });
+    }
+  }
+  paires.sort((a, b) => (b.meilleure - a.meilleure) || (a.rang - b.rang));
+  return paires.map(({ id, lanceur, releveur }) => ({ id, lanceur, releveur }));
+}
+
+/**
+ * Ajoute un duel au bilan de course d'un partant.
+ *
+ * Le bilan dit ce qu'on lit a l'arrivee : les points de toute la course, la
+ * division ou l'on finit, celle d'ou l'on partait, la serie avant le premier
+ * duel et apres le dernier — et chaque duel, pour le journal.
+ */
+function noterBilan(bilans, moi, lui, gagne, nul, p) {
+  let b = bilans.get(moi.id);
+  if (!b) {
+    b = { lp: 0, rang: null, palier_avant: p.palier_avant ?? 0,
+          serie: 0, serie_avant: p.serie_avant ?? 0, duels: [] };
+    bilans.set(moi.id, b);
+  }
+  b.lp += Number(p.lp) || 0;
+  b.rang = p.rang || b.rang;
+  b.serie = p.serie ?? b.serie;
+  b.duels.push({
+    id: lui.id, nom: lui.nom,
+    issue: nul ? 'nul' : gagne ? 'gagne' : 'perdu',
+    lp: Number(p.lp) || 0,
+  });
+}
 import { avantDepart } from './depart.js';
 import { rapideRecevable, DebitRapide } from './tchat-rapide.js';
 
@@ -122,11 +225,10 @@ const ABANDON_MS = 3 * 60000;
  * trois bien plus souvent qu'on est quatre.
  *
  * Ce que la taille change vraiment n'est pas l'affichage mais le sens de la
- * course. A un, c'est un tour de piste seul. A deux, c'est un duel : il y a un
- * vainqueur, un perdant, et des points qui changent de main. A trois ou plus,
- * c'est une course : il y a un classement, et rien ne bouge au classement des
- * duels — un bareme concu pour une paire n'a pas de generalisation honnete a
- * huit.
+ * course. A un, c'est un tour de piste seul. De deux a huit, ce sont des
+ * duels : chacun contre chacun des autres, avec des points qui changent de
+ * main a chaque paire (voir rencontresDeLaCourse). A deux, il y en a un ; a
+ * huit, sept par partant, et un ordre d'arrivee pour les raconter.
  */
 const PLAFOND_JOUEURS = 8;
 /**
@@ -483,12 +585,15 @@ export class SalleDirecte {
       abandon: x.fin >= ABANDON_MS,
     }));
 
-    const message = { t: 'resultat', classement, partants: tous.length };
+    // `course` voyage avec le verdict : c'est l'instant du pistolet, le seul
+    // nombre qui distingue une revanche de la course d'avant dans la meme
+    // salle. Le jeu s'en sert pour tenir une ligne de journal par course.
+    const message = { t: 'resultat', classement, partants: tous.length, course };
 
-    // A deux, c'est un duel : on garde les champs historiques pour que
-    // l'annonce du resultat et le classement des duels continuent de
-    // fonctionner tels quels.
-    if (this.max === 2) {
+    // A deux, on garde les champs historiques — l'issue, l'hote, l'invite —
+    // pour que les versions du jeu qui ne lisent qu'eux continuent d'afficher
+    // le duel tel quel.
+    if (this.max === 2 && tous.length === 2) {
       const hote = tous.find(x => x.id === this.hote) || tous[0];
       const invite = tous.find(x => x !== hote);
       // L'hote a lance la partie : c'est lui l'initiateur, au sens du bareme.
@@ -496,28 +601,25 @@ export class SalleDirecte {
                     : hote.fin > invite.fin ? 'opponent' : 'draw';
       message.hote = { id: hote.id, nom: hote.nom, ms: hote.fin };
       message.invite = { id: invite.id, nom: invite.nom, ms: invite.fin };
-      this.diffuser(message);
-
-      // Les points passent par le meme chemin que ceux d'un defi differe : une
-      // course en direct et un defi rejoue en fantome doivent compter pareil.
-      // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
-      // indisponible, la course reste jouee et affichee, seuls les points
-      // manquent, ce qui vaut mieux que deux joueurs bloques sur une attente.
-      const ecrire = this.ecrire(hote, invite, course);
-      if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
-      return;
     }
-
-    // A trois ou plus, c'est une course : un classement, et rien au classement
-    // des duels. Le bareme est fait pour une paire — l'etendre a huit
-    // supposerait d'inventer une regle qu'on n'a pas, et le premier reflexe
-    // (vingt-huit duels croises pour huit partants) gonflerait le classement
-    // sans rien mesurer de juste. Les series de championnat, elles, ont leur
-    // propre chemin d'enregistrement.
     this.diffuser(message);
+
+    // De deux a huit, chaque paire de partants est un duel (voir
+    // rencontresDeLaCourse). Seul sur la piste, il n'y a personne a battre.
+    //
+    // Les points passent par le meme chemin que ceux d'un defi differe : une
+    // course en direct et un defi rejoue en fantome doivent compter pareil.
+    // On n'attend pas l'ecriture pour annoncer le resultat — si la base est
+    // indisponible, la course reste jouee et affichee, seuls les points
+    // manquent, ce qui vaut mieux que des joueurs bloques sur une attente.
+    // Les series de championnat, elles, ont leur propre salle et leur propre
+    // chemin d'enregistrement.
+    if (tous.length < 2) return;
+    const ecrire = this.ecrire(tous, course);
+    if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
   }
 
-  async ecrire(hote, invite, course) {
+  async ecrire(tous, course) {
     try {
       const base = this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
       if (!base || !this.code) return;
@@ -531,27 +633,54 @@ export class SalleDirecte {
       // ne rapportait rien. Une salle vit quarante-cinq secondes apres le
       // verdict justement pour qu'on la relance ; chaque depart est donc un
       // duel a lui.
-      const points = await appliquerDuel(base, {
-        id: 'LIVE-' + this.code + '-' + course,
-        challengerName: hote.nom,
-        opponentName: invite.nom,
-        challengerMs: hote.fin,
-        opponentMs: invite.fin,
-        // La distance decide du classement touche : depuis que les niveaux ne
-        // sont plus partages, une course en direct sur 400 m ne doit rien
-        // deplacer au classement du 100 m. La salle les tient depuis le
-        // premier arrive, et c'est le meme programme pour tout le monde.
-        epreuves: this.epreuves,
+      const rencontres = rencontresDeLaCourse(tous, {
+        code: this.code, course, hote: this.hote,
       });
-      this.annoncerPoints(hote, invite, points);
-    } catch (e) { /* le classement se passera de ce duel */ }
+      const bilans = new Map();
+      // Les duels s'ecrivent UN PAR UN, dans l'ordre rendu : chacun lit le
+      // classement que le precedent vient d'ecrire, comme le recalcul qui
+      // rejouera l'historique dans ce meme ordre.
+      for (const r of rencontres) {
+        let points = null;
+        try {
+          points = await appliquerDuel(base, {
+            id: r.id,
+            challengerName: r.lanceur.nom,
+            opponentName: r.releveur.nom,
+            challengerMs: r.lanceur.fin,
+            opponentMs: r.releveur.fin,
+            // La distance decide du classement touche : une course en direct
+            // sur 400 m ne doit rien deplacer au classement du 100 m. La salle
+            // les tient depuis le premier arrive, et c'est le meme programme
+            // pour tout le monde.
+            epreuves: this.epreuves,
+          });
+        } catch (e) { continue; /* les autres paires comptent quand meme */ }
+        // Un duel deja tranche ne redistribue rien : il n'y a pas de points a
+        // annoncer, et un « 0 LP » se lirait comme un match nul.
+        if (!points || points.deja || typeof points.lp !== 'number') continue;
+        noterBilan(bilans, r.lanceur, r.releveur, points.issue === 'challenger',
+                   points.issue === 'draw', {
+          lp: points.lp_adverse, rang: points.rang_adverse,
+          palier_avant: points.palier_avant_adverse,
+          serie: points.serie_adverse, serie_avant: points.serie_avant_adverse,
+        });
+        noterBilan(bilans, r.releveur, r.lanceur, points.issue === 'opponent',
+                   points.issue === 'draw', {
+          lp: points.lp, rang: points.rang,
+          palier_avant: points.palier_avant,
+          serie: points.serie, serie_avant: points.serie_avant,
+        });
+      }
+      this.annoncerPoints(tous, bilans, course);
+    } catch (e) { /* le classement se passera de cette course */ }
   }
 
   /**
-   * Ce que le duel a rapporte, dit aux deux joueurs.
+   * Ce que la course a rapporte, dit a chacun.
    *
    * Sans cela, une course en direct comptait en silence : les points partaient
-   * au classement, l'ecran de fin montrait deux chronos, et il fallait aller
+   * au classement, l'ecran de fin montrait les chronos, et il fallait aller
    * ouvrir le tableau pour deviner ce qui avait bouge. Un defi releve, lui,
    * annonce ses points a l'arrivee depuis toujours — c'est la reponse de la
    * route qui les porte. Le direct n'a pas de reponse a porter : la course est
@@ -559,27 +688,42 @@ export class SalleDirecte {
    *
    * D'ou un message de suite, et non un champ de plus dans `resultat` :
    * l'ecriture est volontairement hors du chemin de l'annonce, pour qu'une
-   * base indisponible ne laisse pas deux joueurs devant un ecran vide. Le
+   * base indisponible ne laisse pas les joueurs devant un ecran vide. Le
    * verdict part donc toujours le premier, les points quand ils existent.
    *
    * Chacun est nomme par son identifiant plutot que par son role : le jeu
-   * prend le sien sans avoir a savoir ce que « lanceur » veut dire ici.
+   * prend le sien sans avoir a savoir ce que « lanceur » veut dire ici. Pour
+   * chacun : le total de la course, sa division apres, s'il a change de
+   * division, sa serie avant et apres, et le detail duel par duel — c'est ce
+   * detail que le journal des defis inscrit.
+   *
+   * A deux, `hote` et `invite` restent : ce sont les seuls champs que lisent
+   * les versions du jeu d'avant les courses a plusieurs.
    */
-  annoncerPoints(hote, invite, points) {
-    // Un duel deja tranche ne redistribue rien : il n'y a pas de points a
-    // annoncer, et un « 0 PL » se lirait comme un match nul.
-    if (!points || points.deja || typeof points.lp !== 'number') return;
-    this.diffuser({
-      t: 'duel',
-      hote: {
-        id: hote.id, lp: points.lp_adverse, rang: points.rang_adverse,
-        monte: !!points.monte_adverse, descend: !!points.descend_adverse,
-      },
-      invite: {
-        id: invite.id, lp: points.lp, rang: points.rang,
-        monte: !!points.monte, descend: !!points.descend,
-      },
-    });
+  annoncerPoints(tous, bilans, course) {
+    if (!bilans.size) return;
+    const vu = j => {
+      const b = bilans.get(j.id);
+      if (!b) return null;
+      const palier = b.rang ? b.rang.palier : b.palier_avant;
+      return {
+        id: j.id, lp: b.lp, rang: b.rang,
+        monte: palier > b.palier_avant, descend: palier < b.palier_avant,
+        serie: b.serie, serie_avant: b.serie_avant,
+        duels: b.duels,
+      };
+    };
+    const message = {
+      t: 'duel', course,
+      joueurs: tous.map(vu).filter(Boolean),
+    };
+    if (this.max === 2 && tous.length === 2) {
+      const hote = tous.find(x => x.id === this.hote) || tous[0];
+      const invite = tous.find(x => x !== hote);
+      const h = vu(hote), i = vu(invite);
+      if (h && i) { message.hote = h; message.invite = i; }
+    }
+    this.diffuser(message);
   }
 
   // Purge : une salle qui n'a plus servi depuis longtemps ne garde rien.

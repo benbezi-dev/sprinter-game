@@ -49,7 +49,7 @@ export function InvitationDirecte() {
       for (const i of l) {
         noterDefi({
           cle: `direct:${i.id}`, genre: 'direct', sens: 'recu', etat: 'attente',
-          nom: i.de, epreuves: i.epreuve ? [String(i.epreuve)] : [],
+          nom: i.de, epreuves: i.epreuve ? [String(i.epreuve)] : [], salle: i.code,
           expire: Date.now() + Math.max(0, i.reste_ms),
         });
       }
@@ -93,7 +93,7 @@ export function InvitationDirecte() {
     trancher(inv.id);
     noterDefi({
       cle: `direct:${inv.id}`, genre: 'direct', sens: 'recu', etat: 'releve',
-      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [],
+      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [], salle: inv.code,
     });
     setInvitations(l => l.filter(x => x.id !== inv.id));
     // Le panneau du direct sait rejoindre ; nous, non. On depose la demande,
@@ -108,7 +108,7 @@ export function InvitationDirecte() {
     // redefier — c'est tout l'interet de la noter.
     noterDefi({
       cle: `direct:${inv.id}`, genre: 'direct', sens: 'recu', etat: 'manque',
-      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [],
+      nom: inv.de, epreuves: inv.epreuve ? [String(inv.epreuve)] : [], salle: inv.code,
     });
     setInvitations(l => l.filter(x => x.id !== inv.id));
   };
