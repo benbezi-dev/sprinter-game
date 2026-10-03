@@ -237,11 +237,19 @@ export function fermerPresence() {
 
 /* ------------------------------------------------------------- la liste */
 
-/** Une photo de l'instant : qui est la, et ce qu'il fait. `null` si injoignable. */
+/**
+ * Une photo de l'instant : qui est la, et ce qu'il fait. `null` si injoignable.
+ *
+ * LES AUTRES, PAS SOI. L'appareil se nomme, et le serveur le retire de la
+ * liste comme du compte : seul en ligne, on lit 0 — et l'accueil n'affiche
+ * rien plutot qu'un point vert qui ne montrerait que soi.
+ */
 export async function lirePresences(): Promise<Presences | null> {
   if (EST_TEST && !codeAcces()) return null;
+  const appareil = getDeviceId();
+  const moi = appareil ? `?moi=${encodeURIComponent(appareil)}` : '';
   try {
-    const r = await fetch(`${API_BASE}/presence`, { cache: 'no-store' });
+    const r = await fetch(`${API_BASE}/presence${moi}`, { cache: 'no-store' });
     if (!r.ok) return null;
     const d = await r.json();
     if (!d || !Array.isArray(d.joueurs)) return null;

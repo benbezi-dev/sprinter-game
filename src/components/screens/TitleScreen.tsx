@@ -444,9 +444,10 @@ export function TitleScreen() {
                   <span className="text-[9px] md:text-[10px] text-foreground/60 truncate">
                     {N.t('duel_sub')}
                   </span>
-                  {/* QUI EST LA, en un chiffre. Seulement s'il y a quelqu'un :
-                      « 0 en ligne » sur l'accueil ferait fuir celui qui vient
-                      d'arriver — et il serait faux, puisqu'il est la, lui. */}
+                  {/* QUI EST LA, en un chiffre : les AUTRES joueurs, le
+                      serveur ne compte pas celui qui regarde. Rien s'il n'y a
+                      que lui — un point vert qui ne montre que soi ne sert a
+                      rien, et « 0 en ligne » ferait fuir celui qui arrive. */}
                   {presences && presences.n > 0 && (
                     <span className="flex items-center gap-1.5 text-[9px] md:text-[10px] font-bold text-emerald-300">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />

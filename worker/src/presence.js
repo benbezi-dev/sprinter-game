@@ -69,7 +69,7 @@ export class Presence {
 
     // --- la liste, demandee par le worker et par personne d'autre
     if (request.method === 'GET' && url.pathname.endsWith('/liste')) {
-      return new Response(JSON.stringify(this.liste()),
+      return new Response(JSON.stringify(this.liste(url.searchParams.get('moi') || '')),
                           { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -143,8 +143,14 @@ export class Presence {
    * encore tombee, la nouvelle deja ouverte apres une coupure : la plus
    * recente fait foi. Un joueur peut avoir deux appareils : une seule ligne,
    * celle dont l'activite a change le plus recemment.
+   *
+   * SANS CELUI QUI REGARDE. `moi` est l'appareil qui demande la liste : se
+   * voir soi-meme « en ligne » ne dit rien — ce que le joueur cherche, ce sont
+   * les autres. On le retire, lui et son nom s'il a le jeu ouvert sur un
+   * second appareil : un nom ne figure ici que s'il est relie a l'appareil,
+   * meme nom veut donc dire meme joueur. Seul dans le stade, il lit 0.
    */
-  liste() {
+  liste(moi = '') {
     const maintenant = Date.now();
     const parAppareil = new Map();
     for (const ws of this.state.getWebSockets()) {
@@ -166,11 +172,16 @@ export class Presence {
       if (!prec || fiche.o > prec.o) parAppareil.set(fiche.a, fiche);
     }
 
+    const lui = moi ? parAppareil.get(moi) : null;
+    const sonNom = lui && lui.n ? lui.n.trim().toLowerCase() : '';
+    if (moi) parAppareil.delete(moi);
+
     const parNom = new Map();
     let anonymes = 0;
     for (const f of parAppareil.values()) {
       if (!f.n) { anonymes++; continue; }
       const k = f.n.trim().toLowerCase();
+      if (sonNom && k === sonNom) continue;
       const prec = parNom.get(k);
       if (!prec || f.d > prec.d) parNom.set(k, f);
     }

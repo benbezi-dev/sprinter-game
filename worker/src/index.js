@@ -2526,7 +2526,10 @@ async function servir(request, env, ctx, porteur) {
       if (!env.PRESENCES) return json({ n: 0, joueurs: [], le: Date.now() });
       const id = env.PRESENCES.idFromName(canal.test ? 'presence-test' : 'presence');
       try {
-        const r = await env.PRESENCES.get(id).fetch('https://presence/liste');
+        // Celui qui demande ne se compte pas : voir presence.js, `liste`.
+        const moi = url.searchParams.get('moi') || '';
+        const r = await env.PRESENCES.get(id).fetch('https://presence/liste'
+          + (isValidDeviceId(moi) ? `?moi=${encodeURIComponent(moi)}` : ''));
         const corps = await r.json();
         // Une photo de l'instant : la garder en cache montrerait des absents.
         const reponse = json(corps);
