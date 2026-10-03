@@ -9,7 +9,7 @@ import {
   meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
-import { mot, chrono, ligne, aLeMot, phraseDeDefaite, type CasDeDefaite } from '@/game/vedettes-mots';
+import { mot, chrono, ligne, aLeMot, phraseDeDefaite, type CasDeDefaite, type PhraseDeDefaite } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
@@ -307,7 +307,7 @@ export function FinDuDefiVedette() {
   // LE VERDICT SE RANGE UNE SEULE FOIS, au montage : React ne monte cet ecran
   // qu'une fois par course, et c'est la que le skin se gagne. La phrase de
   // defaite se tire au meme moment : un nouveau rendu ne doit pas en changer.
-  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict; phrase: string | null } | null>(() => {
+  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict; phrase: PhraseDeDefaite | null } | null>(() => {
     const v = defiEnCours();
     if (!v) return null;
     const epreuve = epreuveDuDefi() || v.epreuves[0];
@@ -352,8 +352,10 @@ export function FinDuDefiVedette() {
           </span>
         )}
 
-        {/* CE QU'IL TE DIT, quand il t'a battu : son visage et sa phrase. Elle
-            arrive juste apres le verdict, pour qu'on lise d'abord le chrono. */}
+        {/* CE QU'ON TE DIT, quand il t'a battu : son visage et une phrase. Elle
+            arrive juste apres le verdict, pour qu'on lise d'abord le chrono.
+            La sienne est signee de son nom ; celle du jeu (« il t'a fumé… »)
+            ne l'est pas. */}
         {phrase && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.35, duration: DUREE.base, ease: COURBE.sortie }}
@@ -364,10 +366,14 @@ export function FinDuDefiVedette() {
               <Portrait v={v} cadre="visage" largeur={52} hauteur={58} />
             </span>
             <span className="flex-1 min-w-0 flex flex-col gap-1">
-              <span className="text-[13px] sm:text-sm italic leading-snug text-white">{phrase}</span>
-              <span className="text-[10px] font-bold tracking-[0.22em] uppercase" style={{ color: pale }}>
-                {v.prenom} {v.nom}
+              <span className={`text-[13px] sm:text-sm leading-snug text-white ${phrase.voix === 'lui' ? 'italic' : 'font-semibold'}`}>
+                {phrase.texte}
               </span>
+              {phrase.voix === 'lui' && (
+                <span className="text-[10px] font-bold tracking-[0.22em] uppercase" style={{ color: pale }}>
+                  {v.prenom} {v.nom}
+                </span>
+              )}
             </span>
           </motion.div>
         )}

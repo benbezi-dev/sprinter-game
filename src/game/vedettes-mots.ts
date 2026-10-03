@@ -143,17 +143,59 @@ const MOTS: Record<string, Paire> = {
 // au hasard, sans jamais redire celle de la course d'avant : REVANCHE relance
 // tout de suite, et la meme phrase deux fois de suite s'use.
 //
-// LE TON est celui d'un champion beau joueur qui s'amuse : il pique, il ne
-// rabaisse pas, et chaque phrase donne envie de la revanche. Ce sont de vrais
-// athletes qui parlent : rien qu'ils ne puissent signer. Premier jet, a leur
-// faire relire avant l'ouverture.
+// LE TON est celui du jeu entre potes (03/10, a la demande de l'auteur :
+// « t'es tout tout propre, tu t'es fait laver ! », « il t'a fumé… c'est pas
+// grave, ça reste entre nous ») : familier, ca chambre, ca ne rabaisse pas, et
+// chaque phrase donne envie de la revanche. Ce sont de vrais athletes qui
+// parlent : rien qu'ils ne puissent signer.
 //
-// Les guillemets ne sont pas dans les phrases : `phraseDeDefaite` les pose,
-// a la francaise ou a l'anglaise selon la langue.
+// DEUX VOIX. Une phrase est la sienne (« t'es tout tout propre… ») : elle
+// s'affiche entre guillemets, signee de son nom. Ou c'est le jeu qui te parle
+// de lui (`'jeu'`, « il t'a fumé… ») : ni guillemets ni signature, sans quoi
+// on lirait Aurel parler de lui a la troisieme personne.
+//
+// LES PHRASES COMMUNES (`commun`) valent pour toutes les vedettes, et
+// s'ajoutent aux siennes. Les guillemets ne sont pas dans les phrases :
+// `phraseDeDefaite` les pose, a la francaise ou a l'anglaise.
 
 export type CasDeDefaite = 'perdu' | 'serre' | 'faux';
 
-const DEFAITES: Record<string, Record<CasDeDefaite, Paire[]>> = {
+/** Une phrase [francais, anglais], et `'jeu'` quand ce n'est pas lui qui parle. */
+type Phrase = Paire | [string, string, 'jeu'];
+
+const DEFAITES: Record<string, Partial<Record<CasDeDefaite, Phrase[]>>> = {
+  commun: {
+    perdu: [
+      ['T’es tout tout propre, tu t’es fait laver !',
+       'You’re all squeaky clean, you just got washed!'],
+      ['Il t’a fumé… c’est pas grave, ça reste entre nous.',
+       'He smoked you… no big deal, it stays between us.', 'jeu'],
+      ['Tu m’as vu de dos tout le long. Profite, c’est mon meilleur profil.',
+       'You saw my back the whole way. Enjoy, it’s my best side.'],
+      ['J’ai fini, j’ai bu, j’ai signé deux autographes. T’arrives ?',
+       'I finished, had a drink, signed two autographs. You coming?'],
+      ['Il t’a mis dans le vent… on dira que c’était le vent de face.',
+       'He left you in the wind… let’s call it a headwind.', 'jeu'],
+      ['Respire, ça va aller. Moi, ça va très bien, merci.',
+       'Breathe, you’ll be fine. Me, I’m doing great, thanks.'],
+    ],
+    serre: [
+      ['Ouh, ça a chauffé ! Mais c’est moi qui suis passé.',
+       'Ooh, that got hot! But I’m the one who got through.'],
+      ['Il a eu chaud. Il dira le contraire, mais il a eu chaud.',
+       'He was sweating. He’ll say otherwise, but he was sweating.', 'jeu'],
+      ['T’étais là, hein. Pas devant, mais là.',
+       'You were there, huh. Not in front, but there.'],
+    ],
+    faux: [
+      ['T’étais pressé de perdre ?',
+       'In a hurry to lose?'],
+      ['Doucement ! Le pistolet, c’est pas une suggestion.',
+       'Easy! The gun isn’t a suggestion.'],
+      ['Parti avant tout le monde, arrivé nulle part.',
+       'First off the line, finished nowhere.', 'jeu'],
+    ],
+  },
   manga: {
     perdu: [
       // son entree : il pointe la ligne d'arrivee avant de s'installer
@@ -167,6 +209,8 @@ const DEFAITES: Record<string, Record<CasDeDefaite, Paire[]>> = {
        'My headband stayed dry.'],
       ['Les haies ne bougent pas. C’est toi qui dois aller plus vite.',
        'The hurdles don’t move. You’re the one who has to go faster.'],
+      ['Les haies, moi je suis passé dessus. Toi, c’est elles qui te sont passées dessus.',
+       'I went over the hurdles. You, they went over you.'],
     ],
     serre: [
       ['À la dixième haie, je t’entendais. À la ligne, plus du tout.',
@@ -219,19 +263,25 @@ const DEFAITES: Record<string, Record<CasDeDefaite, Paire[]>> = {
 /** La phrase tiree la fois d'avant, par athlete et par situation. */
 const dejaDite: Record<string, number> = {};
 
+/** Ce qui s'affiche sous le verdict : le texte, et qui le dit. */
+export type PhraseDeDefaite = { texte: string; voix: 'lui' | 'jeu' };
+
 /**
- * Ce que l'athlete te dit apres t'avoir battu, entre guillemets, dans la
- * langue courante — ou null s'il n'a rien a dire dans cette situation.
+ * Ce qu'on te dit apres une defaite contre cet athlete, dans la langue
+ * courante — ses phrases et les communes — ou null s'il n'y a rien a dire.
+ * Les siennes viennent entre guillemets ; celles du jeu, sans.
  */
-export function phraseDeDefaite(qui: string, cas: CasDeDefaite): string | null {
-  const lot = DEFAITES[qui]?.[cas];
-  if (!lot || !lot.length) return null;
+export function phraseDeDefaite(qui: string, cas: CasDeDefaite): PhraseDeDefaite | null {
+  const lot = [...(DEFAITES.commun[cas] || []), ...(DEFAITES[qui]?.[cas] || [])];
+  if (!lot.length) return null;
   const k = `${qui}:${cas}`;
   let i = Math.floor(Math.random() * lot.length);
   if (lot.length > 1 && i === dejaDite[k]) i = (i + 1 + Math.floor(Math.random() * (lot.length - 1))) % lot.length;
   dejaDite[k] = i;
-  const s = lot[i][SprinterI18N.index()];
-  return SprinterI18N.index() === 0 ? `« ${s} »` : `“${s}”`;
+  const p = lot[i];
+  const s = p[SprinterI18N.index()];
+  if (p.length === 3) return { texte: s, voix: 'jeu' };
+  return { texte: SprinterI18N.index() === 0 ? `«\u202F${s}\u202F»` : `“${s}”`, voix: 'lui' };
 }
 
 /** Ce mot existe-t-il pour cet athlete (sa version, ou la commune) ? */
