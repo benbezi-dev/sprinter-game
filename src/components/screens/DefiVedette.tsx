@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lock, Shirt } from 'lucide-react';
 import { Repliable } from './Repliable';
-import { MONTEE, VOILE, PANNEAU } from '@/lib/mouvement';
+import { MONTEE, VOILE, PANNEAU, DUREE, COURBE } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
   meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
-import { mot, chrono, ligne, aLeMot } from '@/game/vedettes-mots';
+import { mot, chrono, ligne, aLeMot, phraseDeDefaite, type CasDeDefaite } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
@@ -286,19 +286,38 @@ function FicheVedette({ v, onFermer, onPartir }: {
 
 export function defiVedetteEnCours(): boolean { return defiEnCours() !== null; }
 
+/**
+ * En dessous de cet ecart, la defaite est serree : il ne chambre plus de la
+ * meme facon. Un dixieme, c'est une poitrine sur la ligne, au 100 m comme au
+ * 110 m haies.
+ */
+const SERRE_S = 0.10;
+
+/** La situation d'une defaite, pour la phrase qu'il te dit ; null si tu l'as battu. */
+function casDeDefaite(verdict: Verdict): CasDeDefaite | null {
+  if (verdict.battu) return null;
+  // Pas de chrono : le faux depart (c'est aussi ce que dit le titre).
+  if (verdict.moi === null) return 'faux';
+  return verdict.ecart !== null && -verdict.ecart < SERRE_S ? 'serre' : 'perdu';
+}
+
 export function FinDuDefiVedette() {
   const state = useGameStore(s => s.state);
   const vest = useVestiaire();
   // LE VERDICT SE RANGE UNE SEULE FOIS, au montage : React ne monte cet ecran
-  // qu'une fois par course, et c'est la que le skin se gagne.
-  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict } | null>(() => {
+  // qu'une fois par course, et c'est la que le skin se gagne. La phrase de
+  // defaite se tire au meme moment : un nouveau rendu ne doit pas en changer.
+  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict; phrase: string | null } | null>(() => {
     const v = defiEnCours();
-    const epreuve = epreuveDuDefi() || (v ? v.epreuves[0] : '');
-    return v ? { v, epreuve, verdict: conclureLeDefi(v) } : null;
+    if (!v) return null;
+    const epreuve = epreuveDuDefi() || v.epreuves[0];
+    const verdict = conclureLeDefi(v);
+    const cas = casDeDefaite(verdict);
+    return { v, epreuve, verdict, phrase: cas ? phraseDeDefaite(v.cle, cas) : null };
   });
   if (state !== 'winall' || !res) return null;
-  const { v, epreuve, verdict } = res;
-  const { vive: VIVE, fonce: FONCE, pale } = v.couleurs;
+  const { v, epreuve, verdict, phrase } = res;
+  const { vive: VIVE, fonce: FONCE, pale, halo } = v.couleurs;
   const nom = `${v.prenom} ${v.nom}`.toUpperCase();
   const gagne = vest.gagnes.includes(v.skin);
   const porte = vest.porte === v.skin;
@@ -331,6 +350,26 @@ export function FinDuDefiVedette() {
             {verdict.battu ? mot('vd_avance', { s: chrono(verdict.ecart) })
                            : mot('vd_retard', { s: chrono(-verdict.ecart) })}
           </span>
+        )}
+
+        {/* CE QU'IL TE DIT, quand il t'a battu : son visage et sa phrase. Elle
+            arrive juste apres le verdict, pour qu'on lise d'abord le chrono. */}
+        {phrase && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.35, duration: DUREE.base, ease: COURBE.sortie }}
+                      className="w-full rounded-2xl border p-2 pr-3 flex items-center gap-3 text-left"
+                      style={{ borderColor: `${VIVE}66`, background: `linear-gradient(100deg, ${FONCE}, #0E0A1A)` }}>
+            <span className="shrink-0 rounded-xl overflow-hidden border border-white/15"
+                  style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}>
+              <Portrait v={v} cadre="visage" largeur={52} hauteur={58} />
+            </span>
+            <span className="flex-1 min-w-0 flex flex-col gap-1">
+              <span className="text-[13px] sm:text-sm italic leading-snug text-white">{phrase}</span>
+              <span className="text-[10px] font-bold tracking-[0.22em] uppercase" style={{ color: pale }}>
+                {v.prenom} {v.nom}
+              </span>
+            </span>
+          </motion.div>
         )}
 
         {/* LE SKIN, quand il vient d'etre gagne : le coureur leve les bras, et

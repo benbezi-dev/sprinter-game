@@ -135,6 +135,105 @@ const MOTS: Record<string, Paire> = {
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };
 
+// --- APRES UNE DEFAITE : ce qu'il te dit (03/10, a la demande de l'auteur).
+//
+// TROIS SITUATIONS, parce qu'on ne chambre pas de la meme facon un coureur
+// parti avant le pistolet, un coureur battu de loin et un coureur battu d'un
+// souffle (SERRE_S, DefiVedette.tsx). Plusieurs phrases pour chacune, tirees
+// au hasard, sans jamais redire celle de la course d'avant : REVANCHE relance
+// tout de suite, et la meme phrase deux fois de suite s'use.
+//
+// LE TON est celui d'un champion beau joueur qui s'amuse : il pique, il ne
+// rabaisse pas, et chaque phrase donne envie de la revanche. Ce sont de vrais
+// athletes qui parlent : rien qu'ils ne puissent signer. Premier jet, a leur
+// faire relire avant l'ouverture.
+//
+// Les guillemets ne sont pas dans les phrases : `phraseDeDefaite` les pose,
+// a la francaise ou a l'anglaise selon la langue.
+
+export type CasDeDefaite = 'perdu' | 'serre' | 'faux';
+
+const DEFAITES: Record<string, Record<CasDeDefaite, Paire[]>> = {
+  manga: {
+    perdu: [
+      // son entree : il pointe la ligne d'arrivee avant de s'installer
+      ['Je t’avais montré l’arrivée avant le départ. Tu n’as pas regardé ?',
+       'I pointed at the finish before the start. Weren’t you watching?'],
+      ['Dix haies, et je ne t’ai vu à aucune.',
+       'Ten hurdles, and I didn’t see you at a single one.'],
+      ['Une haie, ça ne se saute pas, ça se court. Reviens quand tu l’auras compris.',
+       'You don’t jump a hurdle, you run it. Come back when you’ve got that.'],
+      ['Mon bandeau est resté sec.',
+       'My headband stayed dry.'],
+      ['Les haies ne bougent pas. C’est toi qui dois aller plus vite.',
+       'The hurdles don’t move. You’re the one who has to go faster.'],
+    ],
+    serre: [
+      ['À la dixième haie, je t’entendais. À la ligne, plus du tout.',
+       'At the tenth hurdle I could hear you. At the line, not anymore.'],
+      ['Encore un effort, et je vais devoir courir pour de vrai.',
+       'One more push and I’ll have to actually run.'],
+      ['Pas mal. Ne le répète à personne.',
+       'Not bad. Don’t tell anyone I said that.'],
+    ],
+    faux: [
+      ['Le pistolet, c’est pour tout le monde. Même pour toi.',
+       'The gun is for everyone. Even you.'],
+      ['Tu voulais tellement me battre que tu es parti sans moi.',
+       'You wanted to beat me so badly you left without me.'],
+      ['J’étais encore en train de régler mes blocs.',
+       'I was still setting my blocks.'],
+    ],
+  },
+  meba: {
+    perdu: [
+      // son cri derriere les blocs, et ses trois claps
+      ['J’ai crié LET’S GO. Ça valait pour toi aussi.',
+       'I shouted LET’S GO. That was for you too.'],
+      ['J’ai eu le temps de me retourner pour te chercher.',
+       'I had time to turn around and look for you.'],
+      ['Tu peux applaudir, maintenant. Fort, comme moi.',
+       'You can clap now. Loud, like me.'],
+      ['Le couloir 5, c’est le mien. L’arrivée aussi.',
+       'Lane 5 is mine. So is the finish line.'],
+    ],
+    serre: [
+      ['Tu m’as fait peur. Pas longtemps, mais tu m’as fait peur.',
+       'You scared me. Not for long, but you scared me.'],
+      ['Encore un peu, et c’est toi qui criais LET’S GO.',
+       'A little more and you’d be the one shouting LET’S GO.'],
+      ['Sur la ligne, j’ai vu ton épaule. Juste derrière la mienne.',
+       'At the line I saw your shoulder. Right behind mine.'],
+    ],
+    faux: [
+      ['Mes claps, c’était pour moi. Pas un signal pour toi.',
+       'My claps were for me. Not a signal for you.'],
+      ['On attend le pistolet. Même quand on est pressé de me battre.',
+       'You wait for the gun. Even when you’re in a hurry to beat me.'],
+      ['Trop pressé. Ici, ça se paie cash.',
+       'Too eager. Around here, that costs you.'],
+    ],
+  },
+};
+
+/** La phrase tiree la fois d'avant, par athlete et par situation. */
+const dejaDite: Record<string, number> = {};
+
+/**
+ * Ce que l'athlete te dit apres t'avoir battu, entre guillemets, dans la
+ * langue courante — ou null s'il n'a rien a dire dans cette situation.
+ */
+export function phraseDeDefaite(qui: string, cas: CasDeDefaite): string | null {
+  const lot = DEFAITES[qui]?.[cas];
+  if (!lot || !lot.length) return null;
+  const k = `${qui}:${cas}`;
+  let i = Math.floor(Math.random() * lot.length);
+  if (lot.length > 1 && i === dejaDite[k]) i = (i + 1 + Math.floor(Math.random() * (lot.length - 1))) % lot.length;
+  dejaDite[k] = i;
+  const s = lot[i][SprinterI18N.index()];
+  return SprinterI18N.index() === 0 ? `« ${s} »` : `“${s}”`;
+}
+
 /** Ce mot existe-t-il pour cet athlete (sa version, ou la commune) ? */
 export function aLeMot(cle: string, qui?: string): boolean {
   return !!((qui && MOTS[`${cle}:${qui}`]) || MOTS[cle]);
