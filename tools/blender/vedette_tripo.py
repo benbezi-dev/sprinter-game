@@ -507,6 +507,84 @@ def teinter_peau(img, cible, k=1.0, cote=None):
     return im
 
 
+def masque_vetements(px):
+    """La part de tissu de chaque pixel (0 a 1) : le blanc du maillot, du
+    bandeau et du poignet (sans teinte, clair), et le bleu du short et de la
+    combinaison (marine). Rend (blanc, tissu)."""
+    import numpy as np
+    mx, mn = px.max(1), px.min(1)
+    d = np.maximum(mx - mn, 1e-6)
+    r, g, b = px[:, 0], px[:, 1], px[:, 2]
+    t = np.where(mx == r, ((g - b) / d) % 6, np.where(mx == g, (b - r) / d + 2, (r - g) / d + 4)) * 60
+    s = np.where(mx > 1e-4, d / np.maximum(mx, 1e-4), 0)
+
+    def fenetre(x, a, b_, c, d_):
+        return np.clip(np.minimum((x - a) / (b_ - a), (d_ - x) / (d_ - c)), 0, 1)
+    blanc = fenetre(s, -1, 0, 0.12, 0.2) * fenetre(mx, 0.55, 0.68, 2, 3)
+    bleu = fenetre(t, 195, 210, 250, 262) * fenetre(s, 0.25, 0.35, 2, 3) * fenetre(mx, 0.08, 0.14, 0.85, 0.95)
+    return blanc, np.maximum(blanc, bleu)
+
+
+def modeler_blanc(img, plafond=0.70):
+    """LE BLANC QUI LAISSE VOIR L'OMBRE (03/10 : « les vetements manquent de
+    forme de lumiere »). Tripo peint le maillot presque blanc pur (236) : sous
+    le soleil de la piste comme sous la cle du studio, il saturait, et le
+    maillot devenait un aplat sans pli ni volume. Les blancs sont ramenes a
+    `plafond` en lineaire (218 en sRGB) : la lumiere y dessine de nouveau la
+    forme du torse. Le bleu de FRANCE, dessus, ne bouge pas."""
+    import numpy as np
+    im = img.copy()
+    px = np.array(im.pixels[:], dtype=np.float32).reshape(-1, 4)
+    blanc, _ = masque_vetements(px[:, :3])
+    lin = srgb_lin(px[:, :3])
+    sel = blanc > 0.9
+    haut = float(np.percentile(lin[sel].max(1), 97)) if sel.any() else 1.0
+    f = min(1.0, plafond / max(haut, 1e-4))
+    px[:, :3] = lin_srgb(lin * (1 + blanc[:, None] * (f - 1)))
+    im.pixels[:] = px.ravel()
+    im.pack()
+    print('BLANC : %.0f %% de la texture, de %.2f a %.2f en lineaire' % (100 * float(sel.mean()), haut, haut * f))
+    return im
+
+
+def tissu(h, img):
+    """LE TISSU SOUS LA LUMIERE DES PORTRAITS. Sur le maillot et le short
+    seulement (masque_vetements, rendu en image) : un lustre de tissu (sheen),
+    qui allume les bords tournes vers la lumiere, et le grain d'une maille, a
+    peine en relief, que la cle accroche. La peau et les cheveux n'en ont pas."""
+    import numpy as np
+    m = h.data.materials[0]
+    nt = m.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    w, hh = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(-1, 4)
+    _, masque = masque_vetements(px[:, :3])
+    im = bpy.data.images.new('vetements', w, hh, alpha=False)
+    im.colorspace_settings.name = 'Non-Color'
+    mp = np.ones((masque.size, 4), dtype=np.float32)
+    mp[:, 0] = mp[:, 1] = mp[:, 2] = masque
+    im.pixels[:] = mp.ravel()
+    im.pack()
+    nm = nt.nodes.new('ShaderNodeTexImage'); nm.image = im
+    lustre = nt.nodes.new('ShaderNodeMath'); lustre.operation = 'MULTIPLY'; lustre.inputs[1].default_value = 0.85
+    nt.links.new(nm.outputs['Color'], lustre.inputs[0])
+    nt.links.new(lustre.outputs[0], bsdf.inputs['Sheen Weight'])
+    bsdf.inputs['Sheen Roughness'].default_value = 0.35
+    rug = nt.nodes.new('ShaderNodeMath'); rug.operation = 'MULTIPLY_ADD'
+    rug.inputs[1].default_value = 0.2; rug.inputs[2].default_value = 0.62
+    nt.links.new(nm.outputs['Color'], rug.inputs[0])
+    nt.links.new(rug.outputs[0], bsdf.inputs['Roughness'])
+    grain = nt.nodes.new('ShaderNodeTexNoise')
+    grain.inputs['Scale'].default_value = 420.0
+    grain.inputs['Detail'].default_value = 3.0
+    relief = nt.nodes.new('ShaderNodeBump'); relief.inputs['Distance'].default_value = 0.0015
+    force = nt.nodes.new('ShaderNodeMath'); force.operation = 'MULTIPLY'; force.inputs[1].default_value = 0.12
+    nt.links.new(nm.outputs['Color'], force.inputs[0])
+    nt.links.new(force.outputs[0], relief.inputs['Strength'])
+    nt.links.new(grain.outputs['Fac'], relief.inputs['Height'])
+    nt.links.new(relief.outputs['Normal'], bsdf.inputs['Normal'])
+
+
 def dilater(h, img, cote, marge=24):
     """Une copie de `img`, a `cote` pixels, dont chaque ilot d'UV deborde de sa
     propre couleur sur `marge` pixels.
@@ -608,7 +686,17 @@ def exporter(h, rig, chemin, peau_jeu):
 def portraits(rig, dossier, nom):
     """Ceux de meba_maillage (studio, poses, cadrages), aux noms de la vedette.
     Rendus a part puis deplaces : rendus sur place, ceux d'Aurel passaient par
-    les noms de Meba et emportaient ses portraits."""
+    les noms de Meba et emportaient ses portraits.
+
+    LES EPAULES DESCENDUES (03/10 : « les epaules sont trop haut dans la fiche
+    du defi »). Le rig du jeu met la base du cou cinq centimetres au-dessus de
+    l'epaule ; le corps de Tripo en avait dix. Cale sur le jeu, le buste s'est
+    tasse sous le cou, et les epaules remontaient vers les oreilles. Pour les
+    portraits seulement — la course pose ses mains depuis l'epaule du jeu —, les
+    clavicules descendent de 0,4 radian : six centimetres (a 0,25, quatre
+    centimetres ne se voyaient presque pas sur le portrait en pied)."""
+    for cle in ('DEBOUT', 'EN_PIED'):
+        G[cle] = dict(G[cle], clavicle_l=(0.0, -0.40, 0.0), clavicle_r=(0.0, 0.40, 0.0))
     tmp = os.path.join(dossier, '_rendu_' + nom)
     M['portraits'](rig, tmp)
     for k in ('buste', 'pied'):
@@ -644,13 +732,14 @@ def tout(A):
     tex = texture(h)
     source = tex.image
     peau = PEAU[A['nom']]
-    tex.image = teinter_peau(source, peau, cote=None)
+    tex.image = modeler_blanc(teinter_peau(source, peau, cote=None))
     if A['glb']:
-        jeu = dilater(h, teinter_peau(source, peau, k=ECLAIRCIR_JEU), 1024)
+        jeu = dilater(h, modeler_blanc(teinter_peau(source, peau, k=ECLAIRCIR_JEU)), 1024)
         print('GLB :', exporter(h, rig, A['glb'], jeu), 'octets')
     if A['blend']:
         bpy.ops.wm.save_as_mainfile(filepath=A['blend'], copy=True)
     if A['portraits']:
+        tissu(h, tex.image)
         portraits(rig, A['portraits'], A['nom'])
     return h, rig
 
