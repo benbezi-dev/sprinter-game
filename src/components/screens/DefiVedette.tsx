@@ -9,7 +9,7 @@ import {
   meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
-import { mot, chrono, ligne, aLeMot } from '@/game/vedettes-mots';
+import { mot, chrono, ligne, aLeMot, tirerUneDefaite, motDeDefaite } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
@@ -290,20 +290,24 @@ export function FinDuDefiVedette() {
   const state = useGameStore(s => s.state);
   const vest = useVestiaire();
   // LE VERDICT SE RANGE UNE SEULE FOIS, au montage : React ne monte cet ecran
-  // qu'une fois par course, et c'est la que le skin se gagne.
-  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict } | null>(() => {
+  // qu'une fois par course, et c'est la que le skin se gagne. Le titre d'une
+  // defaite se tire la aussi : porter un skin ne le change pas sous les yeux.
+  const [res] = useState<{ v: Vedette; epreuve: string; verdict: Verdict; defaite: number } | null>(() => {
     const v = defiEnCours();
-    const epreuve = epreuveDuDefi() || (v ? v.epreuves[0] : '');
-    return v ? { v, epreuve, verdict: conclureLeDefi(v) } : null;
+    if (!v) return null;
+    const epreuve = epreuveDuDefi() || v.epreuves[0];
+    const verdict = conclureLeDefi(v);
+    const perdu = verdict.moi !== null && !verdict.battu;
+    return { v, epreuve, verdict, defaite: perdu ? tirerUneDefaite() : -1 };
   });
   if (state !== 'winall' || !res) return null;
-  const { v, epreuve, verdict } = res;
+  const { v, epreuve, verdict, defaite } = res;
   const { vive: VIVE, fonce: FONCE, pale } = v.couleurs;
   const nom = `${v.prenom} ${v.nom}`.toUpperCase();
   const gagne = vest.gagnes.includes(v.skin);
   const porte = vest.porte === v.skin;
   const titre = verdict.moi === null ? mot('vd_faux')
-              : verdict.battu ? mot('vd_battu', { nom }) : mot('vd_perdu', { nom });
+              : verdict.battu ? mot('vd_battu', { nom }) : motDeDefaite(defaite, { nom });
   const accueil = () => { rangerLeDefi(); (SprinterApp as any).goHome(); };
   const rejouer = () => lancerLeDefi(v, epreuve);
 

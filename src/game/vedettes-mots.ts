@@ -54,7 +54,7 @@ const MOTS: Record<string, Paire> = {
 
   // --- le verdict
   vd_battu:       ['TU AS BATTU {nom}', 'YOU BEAT {nom}'],
-  vd_perdu:       ['{nom} T’A BATTU', '{nom} BEAT YOU'],
+  // la defaite : son titre tourne (DEFAITES, plus bas)
   vd_faux:        ['FAUX DÉPART', 'FALSE START'],
   vd_toi:         ['TOI', 'YOU'],
   vd_avance:      ['{s} d’avance', '{s} ahead'],
@@ -135,6 +135,29 @@ const MOTS: Record<string, Paire> = {
   vd_courir_sur:  ['COURIR LE {e}', 'RUN THE {e}'],
 };
 
+// LE TITRE D'UNE DEFAITE TOURNE (03/10, a la demande de l'auteur). C'est le
+// verdict qu'on revoit le plus, revanche apres revanche : il change a chaque
+// fois, jamais deux fois le meme de suite. « {nom} T’A BATTU » reste du lot.
+// L'espace avant le « ? » est insecable : il ne part pas seul a la ligne.
+const DEFAITES: Paire[] = [
+  ['{nom} T’A BATTU',                     '{nom} BEAT YOU'],
+  ['T’ES TOUT PROPRE, TU T’ES FAIT LAVER', 'SQUEAKY CLEAN: YOU GOT WASHED'],
+  ['TU T’ES FAIT FUMER',                  'YOU GOT SMOKED'],
+  ['TU T’ES FAIT DÉPOSER',                'YOU GOT DROPPED'],
+  ['T’AS VU QUE SON DOS',                 'ALL YOU SAW WAS HIS BACK'],
+  ['{nom} T’A ENRHUMÉ',                   '{nom} LEFT YOU STANDING'],
+  ['IL EST DÉJÀ À LA DOUCHE',             'HE’S ALREADY IN THE SHOWER'],
+  ['T’AS COURU EN TONGS ?',          'DID YOU RUN IN FLIP-FLOPS?'],
+  ['TU AS MANGÉ SA POUSSIÈRE',            'YOU ATE HIS DUST'],
+  ['{nom} T’A MIS LA MISÈRE',             '{nom} SCHOOLED YOU'],
+];
+let derniereDefaite = -1;
+
+function remplir(s: string, vars?: Record<string, string>): string {
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+}
+
 /** Ce mot existe-t-il pour cet athlete (sa version, ou la commune) ? */
 export function aLeMot(cle: string, qui?: string): boolean {
   return !!((qui && MOTS[`${cle}:${qui}`]) || MOTS[cle]);
@@ -143,9 +166,20 @@ export function aLeMot(cle: string, qui?: string): boolean {
 /** Un mot de l'evenement, dans la langue courante, avec ses variables. */
 export function mot(cle: string, vars?: Record<string, string>, qui?: string): string {
   const paire = (qui && MOTS[`${cle}:${qui}`]) || MOTS[cle];
-  let s = paire ? paire[SprinterI18N.index()] : cle;
-  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
-  return s;
+  return remplir(paire ? paire[SprinterI18N.index()] : cle, vars);
+}
+
+/** Tire le titre d'une defaite : n'importe lequel, sauf celui de la derniere. */
+export function tirerUneDefaite(): number {
+  const n = derniereDefaite < 0 ? DEFAITES.length : DEFAITES.length - 1;
+  let i = Math.floor(Math.random() * n);
+  if (derniereDefaite >= 0 && i >= derniereDefaite) i++;
+  return (derniereDefaite = i);
+}
+
+/** Le titre de la defaite tiree, dans la langue courante, avec ses variables. */
+export function motDeDefaite(i: number, vars?: Record<string, string>): string {
+  return remplir(DEFAITES[i][SprinterI18N.index()], vars);
 }
 
 /** Un chrono comme le jeu l'ecrit : au point, deux decimales, « s ». */
