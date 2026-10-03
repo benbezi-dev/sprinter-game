@@ -663,6 +663,27 @@ export const GARDE_MAUVAISE_JAMBE = 0.93;
 export const GARDE_PERCUTE = 0.60;
 
 /**
+ * CE QU'UN SKIN RETIRE AU FREINAGE D'UNE HAIE MAL PASSEE (look.freinHaie,
+ * sprinter-core.js : 0,8 pour Aurel Manga, « reduit de 20 % le freinage suite
+ * a un mauvais passage de haie », demande de l'auteur le 03/10).
+ *
+ * IL PORTE SUR LA PERTE, JAMAIS SUR LA VITESSE. Une haie percutee qui gardait
+ * 0,60 de la vitesse en garde 0,68 ; un plafond d'intervalle a 0,60 remonte a
+ * 0,68. Une haie bien passee ne coute rien, et n'en rapporte donc pas plus :
+ * une garde de 1 — ou au-dela, un gain — reste ce qu'elle est.
+ *
+ * Le freinage de l'air (DRAG_VOL) n'y est pas : il est de la physique, et le
+ * ciseau parfait le paie aussi. Ni le temps sans pousser d'une haie percutee
+ * (ACCROC_PERCUTE, haies-pas.js) : c'est une duree, pas une perte.
+ *
+ * `frein` absent, ou 1 : la garde revient telle quelle, au bit pres — les
+ * chronos des coureurs sans skin ne bougent pas d'un millieme.
+ */
+export function adoucir(garde, frein) {
+  return garde < 1 && frein > 0 && frein !== 1 ? 1 - (1 - garde) * frein : garde;
+}
+
+/**
  * Ce que coute CHAQUE frappe donnee pendant le vol.
  *
  * Aujourd'hui elles ne coutent rien : press() sort a la premiere ligne quand
@@ -785,9 +806,10 @@ export function franchir(cle, v, avant, rythmeTenu, opt = {}) {
   // appelants d'origine (viser(), simuler()) exactement ou ils etaient.
   const bonneJambe = opt.jambe !== false;
   const j = jugerAppel(cle, avant, opt.v);
-  const garde = j.garde
+  // `frein` : la part de la perte qu'un skin laisse (voir adoucir).
+  const garde = adoucir(j.garde
     * (rythmeTenu ? 1 : GARDE_RYTHME_ROMPU)
-    * (bonneJambe ? 1 : GARDE_MAUVAISE_JAMBE);
+    * (bonneJambe ? 1 : GARDE_MAUVAISE_JAMBE), opt.frein);
   return { ...j, rythmeTenu, bonneJambe, v: Math.max(v * 0.55, v * garde) };
 }
 

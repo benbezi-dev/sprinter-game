@@ -12,6 +12,8 @@
 //      epaules de son maillage ;
 //   4. UN SKIN NE CHANGE PAS LA FOULEE : le coureur du joueur habille en Aurel
 //      Manga pose exactement ses appuis au meme endroit qu'en maillot or ;
+//      mais il se releve mieux d'une haie mal passee (look.freinHaie) — et
+//      d'une bien passee, il ne tire rien de plus ;
 //   5. MEBA-MICKAEL ZEZE : son stade derriere celui d'Aurel, ses deux chronos,
 //      l'allure canon qui passe la ligne a l'heure pile, une pointe que rien
 //      ne suit et une fin qu'on rattrape, son rituel dans les blocs et son
@@ -25,6 +27,8 @@ import '../src/game/coureur-vedettes.js';
 import '../src/game/coureur-premium.js';
 import '../src/game/sprinter-core.js';
 import { HAIES } from '../src/game/haies.js';
+import { adoucir, CISEAU_VISE, GARDE_PERCUTE } from '../src/game/haies-jeu.js';
+import { nouvelleCourse, preparerCoureur, pas, appeler, relacher, ciseauDe, enVol } from '../src/game/haies-pas.js';
 
 const K = globalThis.SprinterCore;
 const I = globalThis.SprinterI18N;
@@ -100,6 +104,51 @@ const courir = (look) => {
 };
 ok('memes longueurs d appui en maillot or et en Aurel Manga',
    courir(K.PLAYER_LOOK) === courir(L));
+
+titre('SON SKIN SE RELEVE MIEUX D UNE HAIE MAL PASSEE');
+// 03/10, a la demande de l'auteur : « reduit de 20 % le freinage suite a un
+// mauvais passage de haie » (look.freinHaie ; haies-jeu.js, adoucir)
+ok('Aurel garde 80 % du freinage, le maillot et Meba tout',
+   L.freinHaie === 0.8 && !K.PLAYER_LOOK.freinHaie && !K.VEDETTES['Méba-Mickaël ZÉZÉ'].freinHaie);
+ok('une haie percutee garde 0,68 de la vitesse au lieu de 0,60',
+   Math.abs(adoucir(GARDE_PERCUTE, 0.8) - 0.68) < 1e-12);
+ok('une haie bien passee ne rapporte rien de plus, un gain reste un gain',
+   adoucir(1, 0.8) === 1 && adoucir(1.033, 0.8) === 1.033);
+ok('sans skin, la garde revient au bit pres', [0.6, 0.76, 0.945, 0.97, 0.985].every(g => adoucir(g) === g && adoucir(g, 1) === g));
+// Sur le vrai moteur et LA logique du jeu (haies-pas.js), au 110 m haies, a
+// dix frappes par seconde : le joueur qui percute ses dix haies, et celui
+// qui appelle sans jamais ciseauter.
+const haies = (look, { appelle = true, ciseau = true } = {}) => {
+  const race = HAIES['110h'];
+  const track = new K.Track(race);
+  const r = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
+  r.look = look; r.reaction = 0.15;
+  const course = nouvelleCourse('110h', { appelJoueur: true });
+  preparerCoureur(course, r);
+  let t = 0, fin = null, prochain = 0, gauche = true;
+  while (t < 60 && fin === null) {
+    if (ciseau) {
+      const vol = ciseauDe(course, r);
+      if (vol && !vol.fait && vol.part >= CISEAU_VISE) relacher(course, r, vol.cote);
+    }
+    while (prochain <= t) {
+      const cote = gauche ? 'left' : 'right';
+      const juge = appelle && !enVol(course) ? appeler(course, r, cote) : null;
+      if (!juge && !enVol(course)) r.press(cote, t);
+      gauche = !gauche; prochain += 1 / 10;
+    }
+    r.stepPlayer(1 / 60, t); t += 1 / 60;
+    pas(course, r);
+    if (r.d >= track.total) fin = t;
+  }
+  return fin;
+};
+const percuteOr = haies(K.PLAYER_LOOK, { appelle: false }), percuteAurel = haies(L, { appelle: false });
+ok('dix haies percutees : plus d une seconde de rendue',
+   percuteAurel < percuteOr - 1, `${percuteOr.toFixed(2)} s en maillot, ${percuteAurel.toFixed(2)} s en Aurel`);
+const sansCiseauOr = haies(K.PLAYER_LOOK, { ciseau: false }), sansCiseauAurel = haies(L, { ciseau: false });
+ok('jamais de ciseau : plus d un demi-seconde de rendue',
+   sansCiseauAurel < sansCiseauOr - 0.5, `${sansCiseauOr.toFixed(2)} s en maillot, ${sansCiseauAurel.toFixed(2)} s en Aurel`);
 
 // ---------------------------------------------------------------------------
 titre('MEBA-MICKAEL ZEZE : LE STADE');

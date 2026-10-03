@@ -1225,6 +1225,10 @@
       //             (1,2 = la montee de cadence comptee vingt pour cent plus
       //             franche qu'elle n'est ; voir gradeTransition).
       transParfaite: o.transParfaite || 0,
+      // `freinHaie` : la part du freinage d'une haie mal passee que garde le
+      //             coureur du joueur (0,8 = vingt pour cent de moins ; voir
+      //             adoucir, haies-jeu.js). Rien sur une haie bien passee.
+      freinHaie: o.freinHaie || 0,
       rituel: !!o.rituel,
       clap: !!o.clap,
       // `maillage` : le chemin de son vrai maillage (GLB), dessine en WebGL
@@ -1325,6 +1329,13 @@
       // (carrure 1,06) : leurs bras s'ecartent d'un centimetre, sous le deltoide.
       morph: { sh: 1.14 },
       bandeau: [244, 244, 246], poignet: { col: [244, 244, 246], cote: 1 },
+      // SON SKIN SE RELEVE MIEUX D'UNE HAIE MAL PASSEE (03/10, a la demande de
+      // l'auteur : « reduit de 20 % le freinage suite a un mauvais passage de
+      // haie ») : chaque perte d'une faute — appel, rythme, jambe, ciseau,
+      // plafond de l'intervalle, frappes en vol, haie percutee — est un
+      // cinquieme plus petite (haies-jeu.js, adoucir). Seul le coureur du
+      // joueur passe par haies-pas.js : Aurel adversaire n'y gagne rien.
+      freinHaie: 0.8,
       barbe: [50, 34, 28], maillage: 'vedettes/manga-corps.glb' }),
 
     // MEBA-MICKAEL ZEZE — sprint, equipe de France. 9"99 au 100 m et 19"97 au

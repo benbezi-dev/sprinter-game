@@ -111,6 +111,10 @@ const MOTS: Record<string, Paire> = {
   vs_maillot:     ['TON MAILLOT', 'YOUR JERSEY'],
   vs_maillot_sous: ['Sur toutes les courses.', 'In every race.'],
   vs_bonus_titre: ['BONUS', 'BONUS'],
+  // celui du skin d'Aurel (look.freinHaie, sprinter-core.js) ; celui de Meba
+  // est plus haut, avec ses mots
+  'vs_bonus:manga': ['−20 % de freinage après une haie mal passée',
+                     '−20% slowdown after a badly cleared hurdle'],
   vs_a_gagner:    ['À GAGNER', 'TO WIN'],
   vs_comment:     ['Bats-le au 110 m haies pour le gagner.',
                    'Beat him over 110 m hurdles to win it.'],

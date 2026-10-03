@@ -44,9 +44,18 @@ import { HAIES, positionsDes } from './haies.js';
 import { APPEL, VITESSE_VOL_MIN, volDe, franchir, rythmeDe, jugerAppel,
          GARDE_RYTHME_ROMPU, APPEL_MINI, APPEL_MAXI, FORME_INTERVALLE, GARDE_PERCUTE, GARDE_FRAPPE_VOL,
          GARDE_VOL_MINI, POUSSEE_APPEL, DRAG_VOL, AVANCE_CM, CISEAU_VISE, jugerCiseau,
-         PLAFOND_INTERVALLE, RECUP_PLAFOND, plafondPlein } from './haies-jeu.js';
+         PLAFOND_INTERVALLE, RECUP_PLAFOND, plafondPlein, adoucir } from './haies-jeu.js';
 
 const PI = Math.PI;
+
+/**
+ * La part du freinage d'une haie mal passee que ce coureur garde : celle de son
+ * skin (look.freinHaie, 0,8 sous celui d'Aurel Manga), 1 sans skin. Elle passe
+ * par toutes les pertes d'une faute — l'appel, le rythme, la jambe, le ciseau,
+ * le plafond de l'intervalle, les frappes en vol, la haie percutee — et par
+ * aucune autre. Voir haies-jeu.js, adoucir.
+ */
+const freinDe = j => (j && j.look && j.look.freinHaie) || 1;
 
 /**
  * A combien de foulees du point d'appel on commence a regler.
@@ -307,11 +316,11 @@ export function pas(course, j) {
     // relache rien — et le franchissement ne coute alors que l'air.
     if (course.appelJoueur) {
       const jc = jugerCiseau(course.ciseauPart, course.volCiseau);
-      j.v *= jc.garde;
+      j.v *= adoucir(jc.garde, freinDe(j));
       // LE PLAFOND DU PROCHAIN INTERVALLE SE DECIDE ICI. C'est la reception qui
       // dit a quelle vitesse on repart — sous celui que l'epreuve autorise, qui
       // est plein sur les courtes et plus bas sur le tour (PLAFOND_EPREUVE).
-      course.plafondBas = plafondPlein(course.cle) * (PLAFOND_INTERVALLE[jc.note] ?? 1);
+      course.plafondBas = plafondPlein(course.cle) * adoucir(PLAFOND_INTERVALLE[jc.note] ?? 1, freinDe(j));
       const ms = course.ciseauPart === null ? null
         : Math.round(course.ciseauPart * course.volCiseau * 1000);
       course.ciseaux.push({ note: jc.note, ms });
@@ -322,7 +331,7 @@ export function pas(course, j) {
       course.dernierCiseau = { haie: course.i, note: jc.note, ms };
     }
     // Et ce que les frappes donnees en l'air ont coute.
-    j.v *= course.penaliteVol;
+    j.v *= adoucir(course.penaliteVol, freinDe(j));
     course.penaliteVol = 1;
     course.ciseauPart = null;
     course.enVol = false;
@@ -398,7 +407,7 @@ export function pas(course, j) {
   // on est parti de plus loin. APRES (ecart < 0) : il a fallu hacher.
   const avant = a.avant + f.ecart * f.s;
   const r = rythmeDe(course.cle, appuis, premiere ? 'premiere' : 'intervalle');
-  const p = franchir(course.cle, j.v, avant, r.tenu);
+  const p = franchir(course.cle, j.v, avant, r.tenu, { frein: freinDe(j) });
 
   j.v = p.v;
   // LE VOL. Le coureur avance mais ne peut plus pousser : c'est ce que
@@ -558,7 +567,7 @@ export function appeler(course, j, cote) {
   const bonneJambe = course.jambe === null || cote === course.jambe;
   if (course.jambe === null) course.jambe = cote;
   const r = rythmeDe(cle, appuis, premiere ? 'premiere' : 'intervalle');
-  const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v });
+  const p = franchir(cle, j.v, avant, r.tenu, { jambe: bonneJambe, v: j.v, frein: freinDe(j) });
 
   j.v = p.v;
   // L'APPEL EST UNE POUSSEE, et elle se compte en PART de la vitesse : Jackson
@@ -634,7 +643,7 @@ function percuter(course, j) {
   const r = rythmeDe(cle, appuis, premiere ? 'premiere' : 'intervalle');
 
   j.v = Math.max(VITESSE_VOL_MIN,
-                 j.v * GARDE_PERCUTE * (r.tenu ? 1 : GARDE_RYTHME_ROMPU));
+                 j.v * adoucir(GARDE_PERCUTE * (r.tenu ? 1 : GARDE_RYTHME_ROMPU), freinDe(j)));
   // Le vol qu'on n'a pas fait, plus l'arret. Voir ACCROC_PERCUTE.
   j.freeze = volDe(cle, j.v) + ACCROC_PERCUTE;
   j.lastKey = null;
