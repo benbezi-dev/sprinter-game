@@ -32,9 +32,11 @@ import { partager as partagerAffiche, type Sortie } from '@/game/affiche';
 import { compteARebours, type Sortie as SortieVideo } from '@/game/review';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
-import { mesPointsDe, type PointsDuel } from '@/game/live';
+import { mesPointsDe, tournoiLance, type PointsDuel, type ResultatTournoi } from '@/game/live';
 import { RevancheDirecte } from './RevancheDirecte';
-import { voterRevanche } from '@/game/salon-direct';
+import { BlocTournoi } from './TournoiDirect';
+import { voterRevanche, useSalonDirect } from '@/game/salon-direct';
+import { nomDeManche, maPlace } from '@/game/tournoi-direct';
 
 /**
  * Chrono envoye au serveur apres une elimination au faux depart. Le duel se
@@ -532,7 +534,8 @@ export function OneShotEndScreen() {
     live && liveDuel ? mesPointsDe(liveDuel, liveResultat.moi) : null;
 
   /** L'ordre d'arrivee, quand il y a plus de deux couloirs sur la piste. */
-  const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean }> =
+  const classement: Array<{ place: number; id: string; nom: string; ms: number; abandon?: boolean;
+                            elimine?: boolean }> =
     (live && !duo && Array.isArray(liveResultat.classement)) ? liveResultat.classement : [];
   const maLigne = classement.find(x => x.id === liveResultat?.moi) || null;
   /**
@@ -617,6 +620,26 @@ export function OneShotEndScreen() {
     ? ((monRole === 'hote' && liveResultat.issue === 'challenger') ||
        (monRole === 'invite' && liveResultat.issue === 'opponent'))
     : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
+
+  /**
+   * UNE MANCHE DE TOURNOI A ELIMINATION.
+   *
+   * Le verdict est celui d'une course a plusieurs, et l'ecran le lit comme tel
+   * — l'ordre d'arrivee, les points. Mais ce qui compte n'est plus d'avoir
+   * gagne : c'est de ne pas etre le dernier. Finir quatrieme sur six et passer
+   * n'est pas une defaite, et le titre ne doit pas le dire en rouge. Trois
+   * issues, donc : QUALIFIE, ELIMINE, et CHAMPION au bout de la finale.
+   */
+  const salon = useSalonDirect();
+  const resTournoi: ResultatTournoi | null = live && liveResultat.tournoi ? liveResultat.tournoi : null;
+  const sortiIci = !!resTournoi && resTournoi.elimines.includes(liveResultat.moi);
+  const sacre = !!resTournoi && resTournoi.fini && resTournoi.champion?.id === liveResultat.moi;
+  /** Ma place finale dans le tournoi, une fois sorti ou sacre. */
+  const placeTournoi = resTournoi ? (sacre ? 1 : maPlace(salon?.dernierEtat?.tournoi, liveResultat.moi)) : null;
+  /** Battu en finale : deuxieme, pas « elimine » comme les autres. */
+  const finaliste = sortiIci && !!resTournoi?.fini && placeTournoi === 2;
+  /** Le tournoi se court encore : on ne recourt pas seul au milieu. */
+  const tournoiEnCours = tournoiLance(salon?.dernierEtat?.tournoi);
 
   // D'ou sort-on : d'une victoire, d'une defaite, ou de nulle part ?
   //
@@ -806,9 +829,15 @@ export function OneShotEndScreen() {
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
             <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.35)]
-              ${falseOut || (challenge && !beaten) || (live && !seul && !liveGagne && !liveNul)
+              ${resTournoi
+                ? (sacre ? 'text-primary' : finaliste ? 'text-slate-200'
+                   : sortiIci ? 'text-destructive' : 'text-emerald-400')
+                : falseOut || (challenge && !beaten) || (live && !seul && !liveGagne && !liveNul)
                 ? 'text-destructive' : live && !seul && liveGagne ? 'text-emerald-400' : 'text-primary'}`}>
-              {falseOut ? N.t('false_out')
+              {resTournoi
+                ? N.t(sacre ? 'tournoi_champion' : finaliste ? 'tournoi_finaliste'
+                      : sortiIci ? 'tournoi_elimine' : 'tournoi_qualifie')
+                : falseOut ? N.t('false_out')
                 : live && !duo && !seul && maLigne
                   ? `${N.ord(maLigne.place)} ${N.t('live_sur', { n: classement.length })}`
                 : live && !seul ? N.t(liveGagne ? 'live_won' : liveNul ? 'live_tie' : 'live_lost')
@@ -817,7 +846,9 @@ export function OneShotEndScreen() {
             </h1>
             {falseOut ? (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-bold text-destructive tracking-widest uppercase">
-                {N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
+                {/* En tournoi, le titre dit deja ELIMINE : on dit pourquoi. */}
+                {resTournoi ? N.t('false_out')
+                  : N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
@@ -827,6 +858,19 @@ export function OneShotEndScreen() {
             {aFantome && !falseOut && (
               <div className="text-[10px] sm:text-xs md:text-sm court:text-[10px] font-bold tracking-widest text-cyan-300 uppercase">
                 {N.t('challenge_gap', { s: (Math.abs(runTime - ghostTime)).toFixed(2) })}
+              </div>
+            )}
+            {/* La manche, et ce qu'elle a fait de nous : la place dans la
+                manche quand on passe, la place dans le tournoi quand on sort
+                ou qu'on le gagne. */}
+            {resTournoi && (
+              <div className={`text-[10px] sm:text-xs md:text-sm court:text-[10px] font-bold tracking-widest uppercase
+                ${sacre ? 'text-primary' : finaliste ? 'text-slate-300'
+                  : sortiIci ? 'text-destructive' : 'text-emerald-300'}`}>
+                {nomDeManche(N, resTournoi.manche, resTournoi.manches, classement.length)}
+                {placeTournoi != null
+                  ? ` · ${N.t('tournoi_place', { p: N.ord(placeTournoi) })}`
+                  : maLigne ? ` · ${N.ord(maLigne.place)} ${N.t('live_sur', { n: classement.length })}` : ''}
               </div>
             )}
           </div>
@@ -909,6 +953,14 @@ export function OneShotEndScreen() {
                           ${moi ? 'text-primary' : 'text-foreground'}`}>
                           {moi ? N.t('duel_you') : l.nom}
                         </span>
+                        {/* Tournoi : qui sort a l'issue de cette manche. Pas
+                            en finale : le battu y est finaliste. */}
+                        {l.elimine && !resTournoi?.fini && (
+                          <span className="shrink-0 px-1.5 py-px rounded text-[8px] md:text-[9px] font-black tracking-widest
+                                           text-destructive border border-destructive/50 bg-destructive/10">
+                            {N.t('tournoi_out')}
+                          </span>
+                        )}
                       </span>
                       <span className={`font-mono font-bold shrink-0 text-sm md:text-base
                         ${l.abandon ? 'text-destructive' : 'text-foreground'}`}>
@@ -926,7 +978,9 @@ export function OneShotEndScreen() {
               Elle existait pour le defi differe et manquait ici, alors que
               c'est le moment ou elle porte le plus : l'autre vient de nous
               battre en meme temps que nous, et il est encore la. */}
-          {live && !seul && !liveGagne && !liveNul && (
+          {/* En tournoi, seulement pour celui qui sort : passer quatrieme
+              n'appelle pas de pique. */}
+          {live && !seul && !liveGagne && !liveNul && (!resTournoi || sortiIci) && (
             <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
                             px-4 py-3 flex flex-col items-center gap-1.5">
               <p className="text-sm md:text-base text-foreground text-center leading-snug">
@@ -953,7 +1007,10 @@ export function OneShotEndScreen() {
 
           {/* La revanche, dans la meme salle et sous le meme code — si tout
               le monde dit oui. Voir RevancheDirecte. */}
-          {live && !seul && <RevancheDirecte />}
+          {/* En tournoi, la suite n'est pas une revanche : c'est la manche
+              suivante, et elle part sans qu'on la demande. Voir TournoiDirect. */}
+          {live && !seul && (resTournoi || salon?.dernierEtat?.tournoi
+            ? <BlocTournoi /> : <RevancheDirecte />)}
 
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
@@ -1502,7 +1559,9 @@ export function OneShotEndScreen() {
               </div>
             )}
             <div className="flex flex-col gap-2 md:gap-4 court:gap-1 court:flex-1 court:min-w-0">
-            {RECOMMENCER_OUVERT && <button
+            {/* Pas au milieu d'un tournoi : la manche suivante partirait par-
+                dessus la course qu'on recourrait seul. */}
+            {RECOMMENCER_OUVERT && !(liveOn && tournoiEnCours) && <button
               onClick={() => {
                 // Recourir seul, c'est renoncer a la revanche qu'on avait
                 // demandee : sans quoi les autres, en l'acceptant, feraient

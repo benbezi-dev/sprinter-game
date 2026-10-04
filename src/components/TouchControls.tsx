@@ -262,6 +262,9 @@ export function TouchControls() {
   // Pas davantage une fois SA ligne passee : il attend les autres, et « alterne
   // les deux touches » sous un coureur qui freine promettait une course finie.
   if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin' || fini)) return null;
+  // Un elimine du tournoi en direct regarde depuis les tribunes : pas de
+  // coureur, pas de paves.
+  if (SprinterApp.G.spectateur && SprinterApp.G.liveOn) return null;
   // Au saut en longueur, entre deux essais ou le temps que la marque tombe :
   // personne ne court, les paves n'ont rien a proposer.
   if (SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut && !SprinterApp.G.pavesSaut()) return null;

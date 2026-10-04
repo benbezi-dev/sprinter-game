@@ -316,6 +316,10 @@ export function setTouchInput(on: boolean) {
 
 export function padPress(side: 'left' | 'right') {
   if (G.paused) return;               // course suspendue : les pads sont muets
+  // Un elimine du tournoi en direct regarde depuis les tribunes : ses appuis
+  // ne font courir personne, et un appui pendant le decompte le sortirait
+  // pour un faux depart dans une manche qu'il ne court pas.
+  if (G.spectateur && G.liveOn && !G.champDirect) return;
   const now = performance.now();
   const gap = lastAt ? now - lastAt : 0;
   const repeat = side === lastSide;
@@ -1092,6 +1096,14 @@ export function updateLogic(dt: number) {
       // arrive avec le verdict de la salle (voir game/champ-direct.ts) —
       // jamais l'ecran de fin du one shot, qui proposerait de recommencer une
       // serie qui ne se recourt pas.
+    } else if (G.spectateur && G.liveOn) {
+      // UN ELIMINE DU TOURNOI REGARDE UNE MANCHE QU'IL NE COURT PAS. Il n'a
+      // ni chrono ni ligne a franchir : l'ecran de fin du one shot lui
+      // annoncerait une course qu'il n'a pas faite. Le verdict de la salle le
+      // ramene au salon (voir onResultat, LivePanel) ; le garde-fou ne sert
+      // que si la salle se tait — cinq minutes, plus que la manche la plus
+      // longue et sa limite de retardataires.
+      if (G.elapsed >= 300) SprinterApp.goHome();
     } else if (out || slow || mordu || G.elapsed >= 90) {
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;

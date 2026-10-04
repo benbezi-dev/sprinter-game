@@ -3,13 +3,18 @@ import { createPortal } from 'react-dom';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered, RotateCcw } from 'lucide-react';
+import { Radio, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, ListOrdered, RotateCcw, Trophy } from 'lucide-react';
 import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
-  COULOIRS, mesPointsDe,
+  COULOIRS, mesPointsDe, TOURNOI_MIN, tournoiLance,
   type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
   type ResultatDirect, type PointsDuel,
 } from '@/game/live';
+import {
+  regarderLaManche, recalerLeRegard, mancheRegardee, oublierLeRegard,
+  remettreLeRegard, veutRegarder, regardSur, nomDeManche,
+} from '@/game/tournoi-direct';
+import { TableauTournoi, PretTournoi } from './TournoiDirect';
 import {
   poserSalon, salonCourant, quitterSalon, surDemandeRejoindre, useSalonDirect,
 } from '@/game/salon-direct';
@@ -59,6 +64,13 @@ const MICRO_VAINQUEUR_MS = 5000;
  * mot du dernier athlete.
  */
 const MARGE_MICRO_MS = 1500;
+
+/**
+ * Combien de temps un elimine reste dans les tribunes apres le verdict d'une
+ * manche qu'il regardait : le temps de lire qui sort, puis retour au salon,
+ * ou le tableau du tournoi l'attend. Un bouton l'y ramene plus tot.
+ */
+const RETOUR_TRIBUNE_MS = 6000;
 
 /**
  * Le terrain du direct : le stade intergalactique, dernier de la campagne.
@@ -173,6 +185,13 @@ export function LivePanel() {
    * les couloirs sont pris, donc cette course-la ne partait jamais.
    */
   const [places, setPlaces] = useState(2);
+  /**
+   * Le tournoi a elimination : des manches, le dernier de chacune sort,
+   * jusqu'a la finale a deux. De trois a huit couloirs seulement — a deux,
+   * c'est deja une finale (voir TOURNOI_MIN).
+   */
+  const [tournoi, setTournoi] = useState(false);
+  const tournoiPossible = places >= TOURNOI_MIN;
 
   const [presentation, setPresentation] = useState<Presentation | null>(null);
   const [voixEtat, setVoixEtat] = useState<EtatVoix>({
@@ -305,7 +324,15 @@ export function LivePanel() {
       levelIdx: NIVEAU_DIRECT, adversaire: salle.current?.adversaire || '',
       autres: lesAutres(), sansOrdinateur: true, photoFinish: true,
     });
+    // Sorti du tournoi : on regarde la manche depuis les tribunes.
+    if (salle.current?.elimineMoi) regarderLaManche();
   };
+
+  /**
+   * Un elimine qui a dit qu'il ne voulait pas regarder : la manche part sans
+   * lui, et son ecran reste ou il est.
+   */
+  const resteALEcart = () => !!salle.current?.elimineMoi && !veutRegarder();
 
   /**
    * Les adversaires, lus dans la SALLE et non dans l'etat React.
@@ -320,8 +347,10 @@ export function LivePanel() {
   const lesAutres = () => {
     const s = salle.current;
     const moi = s?.moi || '';
+    // En tournoi, seuls ceux qui courent encore sont sur la piste : un elimine
+    // y resterait plante dans ses blocs pendant toute la manche.
     return (s?.dernierEtat?.joueurs || [])
-      .filter(j => j.id !== moi)
+      .filter(j => j.id !== moi && j.en_lice !== false)
       .map(j => ({ id: j.id, nom: j.nom, couloir: j.couloir || 0 }));
   };
 
@@ -367,11 +396,13 @@ export function LivePanel() {
     // Tout le monde sauf soi, avec son couloir tel que la salle l'a attribue :
     // les deux clients doivent placer les memes gens aux memes endroits.
     const autres = lesAutres();
+    const tribune = !!salle.current?.elimineMoi;
     if (SprinterApp.G.state !== 'count' && SprinterApp.G.state !== 'race') {
       SprinterApp.startLive([epreuveDeLaSalle()], {
         levelIdx: NIVEAU_DIRECT, adversaire: adverse, autres, sansOrdinateur: true,
         photoFinish: true,
       });
+      if (tribune) regarderLaManche();
     } else {
       // La piste est deja montee — c'est le cas normal, elle l'a ete pour la
       // presentation. On ne la remonte pas, mais on part avec la salle telle
@@ -394,7 +425,10 @@ export function LivePanel() {
     //
     // La piste distante est relue au moment du depart et non ici : a la
     // seconde ou l'on programme, la connexion peut n'avoir rien recu encore.
-    programmerLeFilm('direct', dans, () => [voixCourante()?.pisteDistante()]);
+    //
+    // Pas depuis les tribunes : le film du direct est celui de SA course, et
+    // l'elimine garde ainsi celui de la manche ou il est sorti.
+    if (!tribune) programmerLeFilm('direct', dans, () => [voixCourante()?.pisteDistante()]);
   };
 
   /** Ce que la salle court, tel qu'elle l'annonce : celui qui rejoint n'a
@@ -418,9 +452,12 @@ export function LivePanel() {
       const etat = SprinterApp.G.state;
       if (SprinterApp.G.liveOn && (etat === 'count' || etat === 'race')) {
         SprinterApp.majLives(lesAutres());
+        // Un forfait pendant qu'on regardait : la camera change de couloir.
+        recalerLeRegard();
       }
     },
     onPresentation: (p: Presentation) => {
+      if (resteALEcart()) return;
       setPresentation(p);
       presEnCours.current = true;
       // Une revanche dans la meme salle : la coupure programmee a la fin du
@@ -439,9 +476,13 @@ export function LivePanel() {
       // c'est en perdre la moitie — et parfois la totalite, quand le systeme
       // repond apres la fermeture. On la prend donc avant l'annonce, gardee
       // muette jusqu'au tour de chacun, et rendue a la fin de la sequence.
-      voixCourante()?.prechauffer(
-        Math.max(0, p.dansMs) + p.par * Math.max(1, p.ordre.length) + MARGE_MICRO_MS,
-      );
+      // Un elimine n'a pas de creneau dans la sequence : son micro reste au
+      // systeme.
+      if (!salle.current?.elimineMoi) {
+        voixCourante()?.prechauffer(
+          Math.max(0, p.dansMs) + p.par * Math.max(1, p.ordre.length) + MARGE_MICRO_MS,
+        );
+      }
 
       // La piste se monte MAINTENANT, et non au coup de pistolet.
       //
@@ -469,6 +510,7 @@ export function LivePanel() {
       });
     },
     onDepart: (dansMs: number, departA: number) => {
+      if (resteALEcart()) return;
       cibleDepart.current = Date.now() + dansMs;
       dateDepart.current = departA;
       if (!presEnCours.current) lancerCourse();
@@ -486,6 +528,35 @@ export function LivePanel() {
       if (id) SprinterApp.liveFiniDe(id, ms, abandon);
     },
     onResultat: (r: any) => {
+      // UNE MANCHE DE TOURNOI QU'ON N'A PAS COURUE. Un elimine recoit le
+      // verdict des manches suivantes comme tout le monde, mais il n'est pas
+      // a lui : il ne doit ni remplacer celui de sa propre manche — que son
+      // ecran de fin affiche peut-etre encore — ni entrer au journal, ni lui
+      // donner le micro du vainqueur. S'il regardait depuis les tribunes, le
+      // bandeau le montre, puis on le ramene au salon.
+      const moiId = salle.current?.moi || '';
+      const couru = !Array.isArray(r?.classement) || r.classement.some((l: any) => l.id === moiId);
+      if (!couru) {
+        presEnCours.current = false;
+        setPresentation(null);
+        lancerPresentation(null);
+        voixCourante()?.reveil();
+        voixCourante()?.fermerMicro();
+        const G = SprinterApp.G;
+        if (G.spectateur && G.liveOn) {
+          mancheRegardee(r);
+          setTimeout(() => {
+            const G2 = SprinterApp.G;
+            // Toujours dans les tribunes de CETTE manche : la suivante a pu
+            // partir entre-temps, et l'on ne sort pas quelqu'un qui regarde.
+            if (G2.spectateur && G2.liveOn && regardSur(r)) {
+              oublierLeRegard();
+              SprinterApp.goHome();
+            }
+          }, RETOUR_TRIBUNE_MS);
+        }
+        return;
+      }
       SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
       // Au journal, tout de suite : l'issue est connue, les points suivront.
       inscrireAuJournal(r, salle.current?.moi || '', monCode,
@@ -538,9 +609,14 @@ export function LivePanel() {
     //
     // Et au journal, ou ils completent les lignes que le verdict a posees.
     onDuel: (d: DuelDirect) => {
+      const moi = salle.current?.moi || '';
+      // Les points d'une manche de tournoi qu'on n'a pas courue ne sont pas
+      // les notres : ils effaceraient ceux de notre propre manche, que
+      // l'ecran de fin montre encore. Hors tournoi, une course sans points
+      // pour nous (pas de nom) n'avait rien a afficher de toute facon.
+      if (!mesPointsDe(d, moi)) return;
       SprinterApp.G.liveDuel = d;
       const r = SprinterApp.G.liveResultat as (ResultatDirect & { moi: string }) | null;
-      const moi = salle.current?.moi || '';
       if (r) {
         inscrireAuJournal(r, moi, monCode, d.course ?? r.course ?? dateDepart.current,
                           !!salle.current?.suisHote, epreuvesDeLaSalle(),
@@ -561,7 +637,7 @@ export function LivePanel() {
    *   salle a annoncee a qui la rejoint. Sans elle, c'est le selecteur : on
    *   ouvre la piste, c'est donc nous qui la choisissons.
    */
-  const brancher = (c: string, eps?: string[] | null) => {
+  const brancher = (c: string, eps?: string[] | null, enTournoi = false) => {
     const s = new Salle(c, ecouteurs(c));
     salle.current = s;
     poserSalon(s);
@@ -578,7 +654,7 @@ export function LivePanel() {
       abandon: () => s.abandon(),
     });
     // La salle annonce le terrain de la course : le meme qu'on monte ici.
-    s.connecter(eps && eps.length ? eps : [epreuve], NIVEAU_DIRECT, places);
+    s.connecter(eps && eps.length ? eps : [epreuve], NIVEAU_DIRECT, places, enTournoi);
   };
 
   /**
@@ -629,7 +705,7 @@ export function LivePanel() {
     setOccupe(false);
     if (!c) { setErreur(N.t('challenge_net')); return; }
     setCode(c); setEtape('ouverture');
-    brancher(c);
+    brancher(c, null, tournoi && tournoiPossible);
   });
 
   const rejoindre = (brut?: string) => {
@@ -640,6 +716,7 @@ export function LivePanel() {
       const e = await etatSalle(c);
       setOccupe(false);
       if (!e || !e.existe) { setErreur(N.t('live_none')); return; }
+      if (e.en_cours) { setErreur(N.t('tournoi_en_cours')); return; }
       if (e.complete) { setErreur(N.t('live_full')); return; }
       if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
       setCode(c); brancher(c, e.epreuves);
@@ -686,6 +763,12 @@ export function LivePanel() {
     // Le micro se rend tout de suite : le voyant de l'appareil doit s'eteindre
     // au moment ou l'on quitte, pas quand le composant voudra bien mourir.
     couperVoix();
+    // Depuis les tribunes d'un tournoi, on en descend aussi.
+    if (SprinterApp.G.spectateur && SprinterApp.G.liveOn &&
+        (SprinterApp.G.state === 'count' || SprinterApp.G.state === 'race')) {
+      SprinterApp.goHome();
+    }
+    remettreLeRegard();
     presEnCours.current = false; cibleDepart.current = null;
     dateDepart.current = null;
     setPresentation(null);
@@ -722,6 +805,13 @@ export function LivePanel() {
    * foi de part et d'autre, et le selecteur ne sert que le temps d'ouvrir.
    */
   const taille = vu?.max || places;
+  /**
+   * Le tournoi de cette piste, s'il y en a un. Lance — en manche ou entre
+   * deux — il prend la place de la liste des couloirs et du bouton PRET : on
+   * n'attend plus personne, on attend la manche suivante.
+   */
+  const leTournoi = coupee ? null : (vu?.tournoi || null);
+  const tournoiEnCours = tournoiLance(leTournoi);
   /**
    * Une course vient de se jouer ici : se redeclarer pret, c'est demander la
    * revanche. La salle a remis tout le monde a « pas pret » au verdict, et
@@ -797,10 +887,45 @@ export function LivePanel() {
           </div>
         </div>
         <p className="text-[9px] text-muted-foreground/70 text-center leading-snug -mt-1">
-          {N.t(places === 1 ? 'live_lanes_seul'
-             : places === 2 ? 'live_lanes_duel'
-             : 'live_lanes_course', { n: places })}
+          {tournoi && tournoiPossible
+            ? N.t('tournoi_regle', { n: places, m: places - 1 })
+            : N.t(places === 1 ? 'live_lanes_seul'
+                : places === 2 ? 'live_lanes_duel'
+                : 'live_lanes_course', { n: places })}
         </p>
+
+        {/* LE TOURNOI A ELIMINATION. Un interrupteur plutot qu'un mode de
+            plus : c'est la meme piste, le meme code, les memes couloirs —
+            seulement, au lieu d'une course, une suite de manches ou le
+            dernier sort. Il n'existe qu'a partir de trois : a deux, c'est
+            deja la finale. */}
+        <button
+          onClick={() => setTournoi(v => !v)}
+          disabled={!tournoiPossible}
+          aria-pressed={tournoi && tournoiPossible}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-left transition-colors
+            disabled:opacity-40 disabled:pointer-events-none
+            ${tournoi && tournoiPossible
+              ? 'bg-primary/10 border-primary/50'
+              : 'bg-black/30 border-white/10 hover:bg-white/5'}`}
+        >
+          <Trophy className={`w-4 h-4 shrink-0 ${tournoi && tournoiPossible ? 'text-primary' : 'text-muted-foreground'}`} />
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className={`text-[10px] font-bold tracking-widest
+              ${tournoi && tournoiPossible ? 'text-primary' : 'text-foreground'}`}>
+              {N.t('tournoi_titre')}
+            </span>
+            <span className="text-[9px] text-muted-foreground leading-snug">
+              {N.t(tournoiPossible ? 'tournoi_option' : 'tournoi_min')}
+            </span>
+          </span>
+          {/* L'interrupteur lui-meme : il dit l'etat sans qu'on ait a lire. */}
+          <span className={`relative shrink-0 w-8 h-[18px] rounded-full transition-colors
+            ${tournoi && tournoiPossible ? 'bg-primary' : 'bg-white/15'}`}>
+            <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-all
+              ${tournoi && tournoiPossible ? 'left-[16px]' : 'left-[2px]'}`} />
+          </span>
+        </button>
 
         <input
           value={nom}
@@ -902,6 +1027,26 @@ export function LivePanel() {
         {code}
       </div>
 
+      {/* Une piste ouverte en tournoi le dit des l'entree : qui la rejoint
+          doit savoir qu'il ne court pas une course, mais une elimination. */}
+      {leTournoi && (
+        <div className="flex flex-col items-center gap-1 -mt-1">
+          <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/40
+                           text-[10px] font-black tracking-[0.2em] text-primary">
+            <Trophy className="w-3.5 h-3.5" />
+            {N.t('tournoi_titre')}
+            {tournoiEnCours && ` · ${nomDeManche(N,
+              leTournoi.etat === 'manche' ? leTournoi.manche : leTournoi.manche + 1,
+              leTournoi.manches, leTournoi.en_lice.length)}`}
+          </span>
+          {leTournoi.etat === 'inscription' && (
+            <p className="text-[9px] md:text-[10px] text-muted-foreground text-center leading-snug">
+              {N.t('tournoi_regle', { n: taille, m: taille - 1 })}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* LA PISTE S'EST REFERMEE. On le dit, et on la rouvre d'un geste :
           meme code, memes couloirs, meme distance. Avant, le salon restait
           affiche tel quel — le code, les noms, un bouton PRET qui ne partait
@@ -923,8 +1068,10 @@ export function LivePanel() {
         </div>
       )}
 
-      {/* Tant qu'on est seul, tout l'ecran sert a faire venir l'autre. */}
-      {!complet && !coupee && (
+      {/* Tant qu'on est seul, tout l'ecran sert a faire venir l'autre. Pas
+          pendant un tournoi : un couloir libere par un elimine ne se reprend
+          pas, la salle refuse les nouveaux venus. */}
+      {!complet && !coupee && !tournoiEnCours && (
         <>
           <p className="text-[10px] md:text-xs text-muted-foreground text-center">
             {N.t('live_waiting', { n: taille })}
@@ -1014,7 +1161,16 @@ export function LivePanel() {
         document.body,
       )}
 
-      {!coupee && (<>
+      {/* LE TOURNOI SE COURT : son tableau prend la place des couloirs, et la
+          manche suivante celle du bouton PRET. Fini, son tableau reste au-
+          dessus de la piste, le temps de redemander un tournoi a tout le
+          monde. */}
+      {leTournoi && (tournoiEnCours || leTournoi.etat === 'fini') && (
+        <TableauTournoi t={leTournoi} joueurs={joueurs} moi={moiId} />
+      )}
+      {tournoiEnCours && <PretTournoi />}
+
+      {!coupee && !tournoiEnCours && (<>
       <div className="flex flex-col gap-1.5">
         {joueurs.map((j, i) => (
           <div key={j.id}
@@ -1066,6 +1222,7 @@ export function LivePanel() {
                  : 'bg-emerald-400 text-background hover:bg-emerald-400/90'}`}
       >
         {N.t(pret ? 'live_unready'
+           : apresCourse && leTournoi ? 'tournoi_rejouer'
            : apresCourse ? (autresPrets > 0 ? 'live_rev_accepter' : 'live_revanche')
            : 'live_go')}
       </button>
