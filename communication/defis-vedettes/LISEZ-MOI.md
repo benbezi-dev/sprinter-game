@@ -62,6 +62,45 @@ dans l'ordre. Plus de « ce soir » : c'est ouvert jusqu'au samedi 10 octobre
 Aucun chrono dans la légende : les images en portent déjà trois, et un
 chiffre en légende suffit (voir `../defi-ouvert/legendes.md`).
 
+# TikTok — le même carrousel, en anglais
+
+Quatre photos 1080 × 1920, à poster dans l'ordre comme publication photo.
+Les mots sont ceux du jeu en anglais (`src/game/vedettes-mots.ts`), les
+chronos s'écrivent avec un point (8.39), et les heures disent qu'elles sont
+celles de Paris.
+
+| Photo | Ce qu'elle montre |
+|---|---|
+| `1-open-tiktok.png` | La couverture : la même photo d'eux deux, « THEY'RE IN THE GAME » |
+| `2-meba-tiktok.png` | Sa fiche : 8.39 au 100 m, 17.30 au 200 m |
+| `3-aurel-tiktok.png` | La sienne : 11.80 au 110 m haies |
+| `4-seven-days-tiktok.png` | « 7 DAYS », l'ouverture et la fermeture (heure de Paris), « link in bio » — sans photo |
+
+    node tools/carte-defis-vedettes.mjs --tiktok --photo-duo 20261003_181004.jpg
+
+TikTok recouvre le haut (ses onglets), la droite (sa colonne de boutons) et
+le bas (la légende) : tout est écrit entre 150 et 1476 px de haut, à 150 px
+des bords.
+
+**Avant de publier :**
+- Mentionne-les tous les deux dans la légende, avec leurs comptes TikTok.
+- Ajoute un son au moment de publier.
+- Un lien dans la bio TikTok demande un compte professionnel ou 1 000
+  abonnés : vérifie que celui de @sprinter_game est en place.
+
+**Légende**
+
+> They're in the game. You have until Saturday to beat them.
+>
+> 🔵 Méba-Mickaël Zézé: 100 m and 200 m, in Sprinter
+> 🟣 Aurel Manga: 110 m hurdles, in Hurdlers
+>
+> Beat them and their skin is yours for life. They leave on Saturday, October 10, at 9:30 PM Paris time.
+>
+> 🔗 sprinter-game.com · link in bio
+>
+> #sprint #trackandfield #athletics #100m #hurdles #SprinterGame
+
 ## Avec les vraies photos
 
 Les portraits 3D du jeu sont en place sur les fiches (story et fil). Pour

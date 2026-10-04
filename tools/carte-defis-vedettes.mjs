@@ -54,6 +54,15 @@
    Le fil n'a pas de bande mangee, mais la grille du profil montre la
    couverture en 3:4 : 34 px tombent de chaque cote, et rien n'est ecrit a
    moins de 80 px du bord.
+
+   TIKTOK (--tiktok, 04/10). Le meme carrousel, en anglais, en photos
+   1080 x 1920 : 1-open, 2-meba, 3-aurel, 4-seven-days. Les mots sont ceux du
+   jeu en anglais (vedettes-mots.ts). TikTok pose ses onglets en haut, sa
+   colonne de boutons a droite et sa legende en bas : le carrousel du fil est
+   descendu de 150 px, ses blocs gardent 150 px de chaque cote, et rien ne
+   s'ecrit sous 1476 px. L'heure de fermeture dit qu'elle est celle de Paris.
+
+     node tools/carte-defis-vedettes.mjs --tiktok --photo-duo ~/eux-deux.jpg --cadre-duo 0.52,0.40,1120,650
    =========================================================================== */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,9 +74,10 @@ const SORTIE = path.join(RACINE, 'communication/defis-vedettes');
 const L = 1080;
 
 function lireArgs(argv) {
-  const a = { fil: false, meba: null, manga: null, duo: null, cadreDuo: null };
+  const a = { fil: false, tiktok: false, meba: null, manga: null, duo: null, cadreDuo: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--fil') a.fil = true;
+    else if (argv[i] === '--tiktok') a.tiktok = true;
     else if (argv[i] === '--photo-meba') a.meba = path.resolve(String(argv[++i] || ''));
     else if (argv[i] === '--photo-manga') a.manga = path.resolve(String(argv[++i] || ''));
     else if (argv[i] === '--photo-duo') a.duo = path.resolve(String(argv[++i] || ''));
@@ -83,14 +93,21 @@ function lireArgs(argv) {
   for (const f of [a.meba, a.manga, a.duo]) {
     if (f && !fs.existsSync(f)) { console.error(`Photo introuvable : ${f}`); process.exit(1); }
   }
-  a.cadreDuo ??= a.fil ? [0.52, 0.40, 1120, 500] : [0.5, 0.4, 1240, 760];
+  a.cadreDuo ??= a.tiktok ? [0.52, 0.40, 1120, 650]
+    : a.fil ? [0.52, 0.40, 1120, 500] : [0.5, 0.4, 1240, 760];
   return a;
 }
 const args = lireArgs(process.argv.slice(2));
+const FORMAT = args.tiktok ? 'tiktok' : args.fil ? 'feed' : 'story';
 /* La hauteur, et celle du pied : dans la story, au-dessus des 250 px que mange
-   Instagram ; dans le fil, rien n'est mange, il descend presque au bord. */
-const H = args.fil ? 1350 : 1920;
-const PIED = args.fil ? 1262 : 1536;
+   Instagram ; dans le fil, rien n'est mange, il descend presque au bord ; sur
+   TikTok, au-dessus de sa legende. */
+const H = FORMAT === 'feed' ? 1350 : 1920;
+const PIED = { story: 1536, feed: 1262, tiktok: 1412 }[FORMAT];
+/* Sur TikTok, le carrousel descend sous les onglets, et ses blocs s'ecartent
+   de la colonne de boutons — des deux cotes, pour rester centres. */
+const DY = FORMAT === 'tiktok' ? 150 : 0;
+const MARGE = FORMAT === 'tiktok' ? 150 : 80;
 
 /* Les chronos fixes, lus dans les `cibles` du moteur plutot que recopies. Un
    chrono introuvable arrete tout : une carte sans son chiffre ne se poste pas. */
@@ -145,7 +162,7 @@ body { position: relative; background: #060913; color: #fff;
   -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 97%); }
 .kicker { position: absolute; top: 262px; left: 0; right: 0; text-align: center;
   font-weight: 800; font-size: 30px; letter-spacing: 7px; color: ${OR}; }
-.bloc { position: absolute; left: 80px; right: 80px; text-align: center; }
+.bloc { position: absolute; left: ${MARGE}px; right: ${MARGE}px; text-align: center; }
 .titre { font-weight: 900; line-height: 0.94; letter-spacing: -1px; text-shadow: 0 4px 28px rgba(0,0,0,0.35); }
 .sous { font-weight: 600; font-size: 38px; line-height: 1.32; color: rgba(255,255,255,0.78); }
 .sous b { color: #fff; font-weight: 800; }
@@ -154,15 +171,17 @@ body { position: relative; background: #060913; color: #fff;
 .filet { height: 1px; background: rgba(255,255,255,0.12); }
 .compte { position: absolute; top: ${PIED - 38}px; left: 0; right: 0; text-align: center;
   font-weight: 600; font-size: 28px; letter-spacing: 4px; color: rgba(255,255,255,0.30); }
-.pied { position: absolute; top: ${PIED}px; left: 80px; right: 80px; height: 64px;
+.pied { position: absolute; top: ${PIED}px; left: ${MARGE}px; right: ${MARGE}px; height: 64px;
   border-top: 1px solid rgba(255,255,255,0.10); display: flex; justify-content: space-between;
   align-items: center; font-weight: 700; font-size: 22px; letter-spacing: 6.5px; }
 .pied span:first-child { color: rgba(255,255,255,0.46); }
 .pied span:last-child { color: rgba(255,255,255,0.30); }
 `;
 
+// Sur TikTok, les traits suivent le carrousel du fil, descendu de DY.
+const H_TRAITS = FORMAT === 'tiktok' ? 1350 : H;
 const decor = () => `<div class="fond"></div>` +
-  [0.62, 0.73, 0.84].map(f => `<div class="trait" style="top:${Math.round(H * f)}px"></div>`).join('');
+  [0.62, 0.73, 0.84].map(f => `<div class="trait" style="top:${DY + Math.round(H_TRAITS * f)}px"></div>`).join('');
 const signature = (compte = true, droite = 'JEU DE SPRINT') =>
   (compte ? `<div class="compte">@sprintergame</div>` : '') +
   `<div class="pied"><span>SPRINTER</span><span>${droite}</span></div>`;
@@ -196,10 +215,10 @@ const ligneVedette = (couleur, nom, epreuve, jeu) => `
   </div>`;
 
 /* Un chrono du jeu, en colonne : l'epreuve au-dessus, le temps en Space Mono. */
-const colonneChrono = (epreuve, t, couleur, taille = 120) => `
+const colonneChrono = (epreuve, t, couleur, taille = 120, ecrire = virgule) => `
   <div style="flex:1;text-align:center">
     <div style="font-weight:800;font-size:28px;letter-spacing:6px;color:${couleur}">${epreuve}</div>
-    <div class="chrono" style="font-size:${taille}px;line-height:1.05">${virgule(t)}<span style="font-size:${Math.round(taille * 0.4)}px;letter-spacing:0;margin-left:8px;color:rgba(255,255,255,0.5)">s</span></div>
+    <div class="chrono" style="font-size:${taille}px;line-height:1.05">${ecrire(t)}<span style="font-size:${Math.round(taille * 0.4)}px;letter-spacing:0;margin-left:8px;color:rgba(255,255,255,0.5)">s</span></div>
   </div>`;
 
 /* --------------------------------------------------------------- les ecrans */
@@ -290,82 +309,124 @@ const STORY = [
     ${signature()}`) },
 ];
 
-/* La fiche d'un athlete dans le fil : la meme que dans la story, remontee de
-   400 px et un peu resserree pour tenir dans 1350. */
-const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain }) => page(`
-    <div class="kicker" style="top:64px;color:${couleurs.pale}">${kicker}</div>
-    ${img.photo ? figure(img, { x: 0, y: 110, w: L, h: 560 })
-      : halo(540, 400, 760, couleurs.vive, 0.6) + figure(img, { x: 200, y: 110, w: 680, h: 560 })}
-    <div class="bloc" style="top:630px">
+/* Les mots du carrousel : en francais pour le fil, en anglais pour TikTok.
+   L'anglais est celui du jeu (vedettes-mots.ts) ; il dit l'heure de Paris,
+   que le francais laisse aller de soi. */
+const MOTS = {
+  fr: {
+    cles: ['1-ouvert', '2-meba', '3-aurel', '4-sept-jours'],
+    ouvert: 'C\'EST OUVERT · JUSQU\'AU 10 OCTOBRE',
+    titre: 'ILS ENTRENT<br>DANS LE JEU',
+    battre: 'Bats-les : <b>leurs skins sont à toi.</b>',
+    haies: '110 m haies', glisse: 'GLISSE →', jeu: 'JEU DE SPRINT',
+    surMeba: 'ÉVÉNEMENT SPÉCIAL · SPRINT', surManga: 'NOUVEAU · HURDLERS',
+    sonChrono: 'SON CHRONO DANS LE JEU', haiesChrono: '110 M HAIES',
+    gainMeba: 'Bats-le sur les deux : <b>son skin premium<br>et le Stade de la Riviera</b>',
+    gainManga: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>',
+    defis: 'DÉFIS DES VEDETTES', jours: '7 JOURS', pasPlus: 'PAS UN DE PLUS',
+    ouverture: ['Ouverture', 'sam. 3 oct. · 21 h 30'],
+    fermeture: ['Fermeture', 'sam. 10 oct. · 21 h 30'],
+    heure: null,
+    apres: 'Après, ils repartent.<br><b>Qui les a battus garde son skin à vie.</b>',
+    bio: 'LIEN EN BIO',
+    chiffre: virgule,
+  },
+  en: {
+    cles: ['1-open', '2-meba', '3-aurel', '4-seven-days'],
+    ouvert: 'NOW OPEN · UNTIL OCTOBER 10',
+    titre: 'THEY\'RE IN<br>THE GAME',
+    battre: 'Beat them: <b>their skins are yours.</b>',
+    haies: '110 m hurdles', glisse: 'SWIPE →', jeu: 'SPRINT GAME',
+    surMeba: 'SPECIAL EVENT · SPRINT', surManga: 'NEW · HURDLERS',
+    sonChrono: 'HIS TIME IN THE GAME', haiesChrono: '110 M HURDLES',
+    gainMeba: 'Beat him over both: <b>his premium skin<br>and the Riviera Stadium</b>',
+    gainManga: 'Beat him: <b>his skin<br>and Stade Jean-Delbert</b>',
+    defis: 'STAR CHALLENGES', jours: '7 DAYS', pasPlus: 'NOT ONE MORE',
+    ouverture: ['Opened', 'Sat, Oct 3 · 9:30 PM'],
+    fermeture: ['Closes', 'Sat, Oct 10 · 9:30 PM'],
+    heure: 'PARIS TIME (UTC+2)',
+    apres: 'Then they\'re gone.<br><b>Beat them and keep their skin for life.</b>',
+    bio: 'LINK IN BIO',
+    chiffre: t => t.toFixed(2),
+  },
+};
+
+/* La fiche d'un athlete dans le carrousel : la meme que dans la story,
+   remontee de 400 px et un peu resserree pour tenir dans 1350. */
+const fiche = (m, { img, couleurs, kicker, prenom, nom, chronos, gain }) => page(`
+    <div class="kicker" style="top:${64 + DY}px;color:${couleurs.pale}">${kicker}</div>
+    ${img.photo ? figure(img, { x: 0, y: 110 + DY, w: L, h: 560 })
+      : halo(540, 400 + DY, 760, couleurs.vive, 0.6) + figure(img, { x: 200, y: 110 + DY, w: 680, h: 560 })}
+    <div class="bloc" style="top:${630 + DY}px">
       <div style="font-weight:800;font-size:42px;letter-spacing:3px;color:${couleurs.pale}">${prenom}</div>
       <div class="titre" style="font-size:140px">${nom}</div>
     </div>
-    <div class="bloc" style="top:862px">
-      <div class="doux" style="font-size:24px;letter-spacing:5px;font-weight:700">SON CHRONO DANS LE JEU</div>
+    <div class="bloc" style="top:${862 + DY}px">
+      <div class="doux" style="font-size:24px;letter-spacing:5px;font-weight:700">${m.sonChrono}</div>
       <div style="display:flex;margin-top:8px">
-        ${chronos.map(([e, t]) => colonneChrono(e, t, couleurs.pale, 110))
+        ${chronos.map(([e, t]) => colonneChrono(e, t, couleurs.pale, 110, m.chiffre))
           .join('<div style="width:1px;background:rgba(255,255,255,0.12)"></div>')}
       </div>
       <div class="sous" style="font-size:32px;margin-top:16px">${gain}</div>
     </div>
-    ${signature(false)}`);
+    ${signature(false, m.jeu)}`);
 
 /* Une ligne du calendrier : ce qui se passe, et quand. */
-const ligneDate = (quoi, quand) => `
+const ligneDate = ([quoi, quand]) => `
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:24px 0">
         <span style="font-weight:700;font-size:34px;color:rgba(255,255,255,0.6)">${quoi}</span>
         <span style="font-weight:800;font-size:40px">${quand}</span>
       </div>
       <div class="filet"></div>`;
 
-const FIL = [
-  { cle: '1-ouvert', html: page(`
-    ${args.duo ? pleinCadre(args.duo, args.cadreDuo, { haut: 300, bas: 500 }) : deuxFigures(110, 620)}
-    <div class="kicker" style="top:64px">C'EST OUVERT · JUSQU'AU 10 OCTOBRE</div>
-    <div class="bloc" style="top:744px">
-      <div class="titre" style="font-size:104px">ILS ENTRENT<br>DANS LE JEU</div>
-      <div class="sous" style="font-size:36px;margin-top:18px">Bats-les : <b>leurs skins sont à toi.</b></div>
+const carrousel = m => [
+  { cle: m.cles[0], html: page(`
+    ${args.duo ? pleinCadre(args.duo, args.cadreDuo, { haut: 300 + DY, bas: 500 + DY }) : deuxFigures(110 + DY, 620)}
+    <div class="kicker" style="top:${64 + DY}px">${m.ouvert}</div>
+    <div class="bloc" style="top:${744 + DY}px">
+      <div class="titre" style="font-size:104px">${m.titre}</div>
+      <div class="sous" style="font-size:36px;margin-top:18px">${m.battre}</div>
     </div>
-    <div class="bloc" style="top:1036px">
+    <div class="bloc" style="top:${1036 + DY}px">
       <div class="filet"></div>
       ${ligneVedette(MEBA.vive, 'Méba-Mickaël Zézé', '100 m · 200 m', 'SPRINTER')}
-      ${ligneVedette(MANGA.vive, 'Aurel Manga', '110 m haies', 'HURDLERS')}
+      ${ligneVedette(MANGA.vive, 'Aurel Manga', m.haies, 'HURDLERS')}
     </div>
-    ${signature(false, 'GLISSE →')}`) },
+    ${signature(false, m.glisse)}`) },
 
-  { cle: '2-meba', html: ficheFil({
-    img: IMG_MEBA, couleurs: MEBA, kicker: 'ÉVÉNEMENT SPÉCIAL · SPRINT',
+  { cle: m.cles[1], html: fiche(m, {
+    img: IMG_MEBA, couleurs: MEBA, kicker: m.surMeba,
     prenom: 'MÉBA-MICKAËL', nom: 'ZÉZÉ',
     chronos: [['100 M', C.meba100], ['200 M', C.meba200]],
-    gain: 'Bats-le sur les deux : <b>son skin premium<br>et le Stade de la Riviera</b>' }) },
+    gain: m.gainMeba }) },
 
-  { cle: '3-aurel', html: ficheFil({
-    img: IMG_MANGA, couleurs: MANGA, kicker: 'NOUVEAU · HURDLERS',
+  { cle: m.cles[2], html: fiche(m, {
+    img: IMG_MANGA, couleurs: MANGA, kicker: m.surManga,
     prenom: 'AUREL', nom: 'MANGA',
-    chronos: [['110 M HAIES', C.manga110h]],
-    gain: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>' }) },
+    chronos: [[m.haiesChrono, C.manga110h]],
+    gain: m.gainManga }) },
 
-  { cle: '4-sept-jours', html: page(`
-    <div class="kicker" style="top:180px">DÉFIS DES VEDETTES</div>
-    <div class="bloc" style="top:268px">
-      <div class="titre" style="font-size:200px;color:${OR}">7 JOURS</div>
-      <div class="titre" style="font-size:80px;margin-top:6px">PAS UN DE PLUS</div>
+  { cle: m.cles[3], html: page(`
+    <div class="kicker" style="top:${180 + DY}px">${m.defis}</div>
+    <div class="bloc" style="top:${268 + DY}px">
+      <div class="titre" style="font-size:200px;color:${OR}">${m.jours}</div>
+      <div class="titre" style="font-size:80px;margin-top:6px">${m.pasPlus}</div>
     </div>
-    <div class="bloc" style="top:610px">
+    <div class="bloc" style="top:${610 + DY}px">
       <div class="filet"></div>
-      ${ligneDate('Ouverture', 'sam. 3 oct. · 21 h 30')}
-      ${ligneDate('Fermeture', 'sam. 10 oct. · 21 h 30')}
-      <div class="sous" style="margin-top:40px">Après, ils repartent.<br><b>Qui les a battus garde son skin à vie.</b></div>
+      ${ligneDate(m.ouverture)}
+      ${ligneDate(m.fermeture)}
+      ${m.heure ? `<div class="doux" style="font-size:22px;letter-spacing:4px;font-weight:700;margin-top:14px">${m.heure}</div>` : ''}
+      <div class="sous" style="margin-top:${m.heure ? 26 : 40}px">${m.apres}</div>
     </div>
-    <div class="bloc" style="top:1060px">
+    <div class="bloc" style="top:${1060 + DY}px">
       <div class="chrono" style="font-size:52px;letter-spacing:0;color:#fff">sprinter-game.com</div>
     </div>
-    ${signature(false, 'LIEN EN BIO')}`) },
+    ${signature(false, m.bio)}`) },
 ];
 
 /* ----------------------------------------------------------------- le rendu */
-const ECRANS = args.fil ? FIL : STORY;
-const FORMAT = args.fil ? 'feed' : 'story';
+const ECRANS = { story: STORY, feed: carrousel(MOTS.fr), tiktok: carrousel(MOTS.en) }[FORMAT];
 const chrome = trouverChrome();
 fs.mkdirSync(SORTIE, { recursive: true });
 for (const e of ECRANS) {
@@ -373,6 +434,7 @@ for (const e of ECRANS) {
   await capturer({ html: e.html, w: L, h: H, sortie, chrome, attente: 300 });
   console.log(`  ${path.relative(RACINE, sortie)}`);
 }
-console.log(`\n  ${ECRANS.length} ${args.fil ? 'images du fil' : 'écrans de story'} (${L} x ${H})` +
+const QUOI = { story: 'écrans de story', feed: 'images du fil', tiktok: 'photos TikTok, en anglais' };
+console.log(`\n  ${ECRANS.length} ${QUOI[FORMAT]} (${L} x ${H})` +
   `${args.meba || args.manga || args.duo ? ', avec photos' : ', portraits 3D'} · ` +
   `chronos : ${virgule(C.meba100)} / ${virgule(C.meba200)} / ${virgule(C.manga110h)}\n`);
