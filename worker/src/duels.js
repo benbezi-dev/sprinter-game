@@ -229,6 +229,11 @@ export async function ensureDuelTables(db) {
     // cote vainqueur : la reponse arrive apres coup, et s'annonce une fois.
     `ALTER TABLE duel_results ADD COLUMN reponse TEXT`,
     `ALTER TABLE duel_results ADD COLUMN reponse_vue INTEGER NOT NULL DEFAULT 0`,
+    // LE DUEL GAGNE PAR FORFAIT : celui qui etait vise n'a pas repondu dans
+    // la semaine. Le duel compte comme les autres — c'est toute la regle —
+    // mais il n'a pas de chrono en face, et l'ecran doit le savoir pour ne
+    // pas annoncer un « 0,00 s ». Voir forfaits.js.
+    `ALTER TABLE duel_results ADD COLUMN forfait INTEGER NOT NULL DEFAULT 0`,
   ]) {
     try { await db.prepare(sql).run(); } catch (e) { /* colonne deja presente */ }
   }
@@ -407,6 +412,49 @@ export async function appliquerDuel(db, r) {
 
   const bouge = await noterDuel(db, luiKey, moiKey, issue, ep, r.id);
   return { issue, epreuve: ep, ...bouge };
+}
+
+/**
+ * Un defi adresse reste sans reponse : celui qui l'a lance l'emporte.
+ *
+ * Le duel passe par le meme chemin que les autres — `noterDuel`, donc le meme
+ * bareme, la meme serie, le meme MMR — et il est range dans `duel_results`
+ * comme les autres. C'est ce qui le rend rejouable : le recalcul ne connait
+ * que des issues, et celle-ci en est une, 'challenger'. Une regle a part pour
+ * le forfait aurait ete une regle que le recalcul oublie.
+ *
+ * Pas de chrono en face : `opponent_ms` vaut zero, et `forfait` dit pourquoi.
+ * Zero n'est jamais lu comme un temps — l'issue est posee ici, pas deduite
+ * d'une comparaison qui ferait gagner l'absent.
+ *
+ * `quand` date la rencontre : c'est l'heure du passage du cron, celle que
+ * forfaits.js compare pour n'accorder qu'un forfait par semaine.
+ *
+ * L'insertion ne fait rien si la rencontre existe deja : la personne visee a
+ * pu relever le defi a la derniere minute, pendant que le cron passait. Sa
+ * course fait alors foi, et le forfait s'efface devant elle.
+ */
+export async function appliquerForfait(db, r) {
+  await ensureDuelTables(db);
+  const luiKey = String(r.challengerName || '').trim().toLowerCase();
+  const moiKey = String(r.opponentName || '').trim().toLowerCase();
+  if (!luiKey || !moiKey || luiKey === moiKey) return null;
+  const ep = disciplineDe(r);
+
+  const ecrit = await db.prepare(
+    `INSERT INTO duel_results (challenge_id, opponent_key, opponent_name,
+       challenger_key, challenger_ms, opponent_ms, outcome, epreuve, forfait, created_at)
+     VALUES (?, ?, ?, ?, ?, 0, 'challenger', ?, 1, ?)
+     ON CONFLICT(challenge_id, opponent_key) DO NOTHING`
+  ).bind(r.id, moiKey, r.opponentName, luiKey, r.challengerMs, ep,
+         Number(r.quand) || Date.now()).run();
+  if (!ecrit?.meta?.changes) return { deja: true };
+
+  await touchDuelPlayer(db, luiKey, r.challengerName, ep);
+  await touchDuelPlayer(db, moiKey, r.opponentName, ep);
+
+  const bouge = await noterDuel(db, luiKey, moiKey, 'challenger', ep, r.id);
+  return { issue: 'challenger', epreuve: ep, forfait: true, ...bouge };
 }
 
 /** L'etat de classement d'un joueur SUR UNE DISCIPLINE, tel que le module de

@@ -11,6 +11,22 @@ import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 import { useRetour } from '@/hooks/use-retour';
 
+const HEURE_MS = 60 * 60 * 1000;
+const JOUR_MS = 24 * HEURE_MS;
+
+/**
+ * Le temps qui reste avant la defaite par forfait, en jours entiers tant qu'il
+ * en reste un, en heures ensuite. Arrondi vers le bas pour les jours — mieux
+ * vaut annoncer six jours quand il en reste six et demi que l'inverse — et
+ * vers le haut pour les heures, pour ne jamais afficher « 0 h ».
+ */
+function resteAvantForfait(echeance: number): string {
+  const { N } = SprinterApp;
+  const reste = Math.max(0, echeance - Date.now());
+  if (reste >= JOUR_MS) return N.t('inbox_reste_j', { n: Math.floor(reste / JOUR_MS) });
+  return N.t('inbox_reste_h', { n: Math.max(1, Math.ceil(reste / HEURE_MS)) });
+}
+
 /**
  * Defi recu.
  *
@@ -150,6 +166,14 @@ export function InboxPopup() {
                   <p className="text-xs md:text-sm text-foreground text-center">
                     {N.t('inbox_from', { n: d.owner_name, d: d.races.join(' + ') })}
                   </p>
+                  {/* L'echeance : un defi adresse laisse une semaine sans
+                      reponse est perdu par forfait. On ne perd pas un duel
+                      sans avoir su qu'il avait une date limite. */}
+                  {!!d.echeance && (
+                    <p className="text-[10px] md:text-xs text-amber-300/90 text-center leading-snug">
+                      {resteAvantForfait(d.echeance)}
+                    </p>
+                  )}
                   <button
                     onClick={() => relever(d)}
                     disabled={chargement === d.id}

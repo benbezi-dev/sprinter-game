@@ -25,8 +25,11 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // attend, et se releve sur l'ecran des equipes.
 // 'annonce_dispo' : la boite dit qu'un message a tous les joueurs vient de
 // partir. 'annonce' : on a touche sa notification. Voir AnnoncePopup.tsx.
+// 'forfait' : un defi adresse est reste une semaine sans reponse, et le duel
+// vient d'etre tranche sans course — gagne pour qui l'a lance, perdu pour qui
+// etait vise. Les deux le lisent comme un resultat de duel.
 export type Courrier = 'defi' | 'duel' | 'mot' | 'reponse' | 'ouverte' | 'direct' | 'relais'
-                     | 'objectif' | 'annonce' | 'annonce_dispo';
+                     | 'objectif' | 'annonce' | 'annonce_dispo' | 'forfait';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;

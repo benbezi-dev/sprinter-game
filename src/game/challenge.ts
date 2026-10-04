@@ -43,6 +43,12 @@ export type InboxChallenge = {
   total_ms: number;
   splits: number[];
   created_at: number;
+  /**
+   * L'heure a laquelle ce defi sera perdu par forfait s'il n'est pas releve :
+   * une semaine apres son envoi. Nulle pour les defis d'avant la regle, et
+   * absente des serveurs qui ne la connaissent pas.
+   */
+  echeance?: number | null;
 };
 
 /**

@@ -1402,6 +1402,17 @@
     duel_won:        ['DUEL GAGNÉ', 'DUEL WON'],
     duel_lost:       ['DUEL PERDU', 'DUEL LOST'],
     duel_tie:        ['MATCH NUL', 'DRAW'],
+    // Le defi adresse reste sept jours sans reponse : il est gagne par celui
+    // qui l'a lance (voir worker/src/forfaits.js). Personne n'a couru en face,
+    // et l'annonce le dit plutot que d'afficher un chrono de zero.
+    duel_forfait_titre:  ['SANS RÉPONSE EN 7 JOURS', 'NO ANSWER IN 7 DAYS'],
+    duel_forfait_gagne:  ['GAGNÉ PAR FORFAIT', 'WON BY FORFEIT'],
+    duel_forfait_perdu:  ['PERDU PAR FORFAIT', 'LOST BY FORFEIT'],
+    duel_forfait_absent: ['FORFAIT', 'NO-SHOW'],
+    duel_forfait_lui:    ['{n} n’a pas relevé ton défi dans la semaine.',
+                          '{n} didn’t take your challenge within the week.'],
+    duel_forfait_moi:    ['Tu n’as pas relevé le défi de {n} dans la semaine.',
+                          'You didn’t take {n}’s challenge within the week.'],
     duel_final:      ['résultat définitif — un défi ne se rejoue pas',
                       'final result — a challenge cannot be replayed'],
     duel_delta:      ['{p} point', '{p} point'],
@@ -1621,7 +1632,10 @@
     challenge_them:  ['DÉFIER', 'CHALLENGE'],
     target_run:      ['cours ton {d} m : le défi partira à {n}',
                       'run your {d} m: the challenge goes to {n}'],
-    target_sent:     ['défi envoyé à {n}', 'challenge sent to {n}'],
+    // La regle du forfait se dit au moment ou elle commence a courir : sans
+    // reponse sous sept jours, le defi est gagne.
+    target_sent:     ['défi envoyé à {n} — sans réponse sous 7 jours, il est gagné',
+                      'challenge sent to {n} — no answer within 7 days and it’s yours'],
     inbox_one:       ['DÉFI REÇU', 'CHALLENGE RECEIVED'],
     inbox_many:      ['{n} DÉFIS REÇUS', '{n} CHALLENGES RECEIVED'],
     // Le chrono de celui qui defie ne s'annonce pas : le connaitre d'avance
@@ -1631,6 +1645,12 @@
                       '{n} challenges you on {d} m'],
     inbox_accept:    ['RELEVER', 'ACCEPT'],
     inbox_later:     ['plus tard', 'later'],
+    // Le temps qui reste avant la defaite par forfait. Les jours entiers tant
+    // qu'il en reste un, les heures ensuite : « 0 j » ne dirait rien.
+    inbox_reste_j:   ['encore {n} j pour répondre, sinon défaite par forfait',
+                      '{n} d left to answer, or you lose by forfeit'],
+    inbox_reste_h:   ['encore {n} h pour répondre, sinon défaite par forfait',
+                      '{n} h left to answer, or you lose by forfeit'],
 
     // Une annonce ecrite a la main a tous les joueurs (AnnoncePopup)
     annonce_pastille: ['UN MESSAGE', 'A MESSAGE'],

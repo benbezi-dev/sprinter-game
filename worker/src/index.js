@@ -3,6 +3,9 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
   mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
+import {
+  trancherForfaits, ensureForfaitColonnes, echeanceForfait, FORFAIT_DEPUIS, FORFAIT_DELAI_MS,
+} from './forfaits.js';
 import { poserMot, poserReponse, MAX_TEXTE } from './mot.js';
 import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
@@ -313,13 +316,14 @@ function courseDuDefi(body) {
 }
 
 /** Ecrit la ligne, et rend son code. `lance` dit lequel des deux gestes l'a fait. */
-async function ecrireLeDefi(db, c, { target = null, lance = 1 } = {}) {
+async function ecrireLeDefi(db, c, { target = null, targetName = '', lance = 1 } = {}) {
   const id = makeCode();
   await db.prepare(
-    `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device, lance)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO challenges (id, created_at, owner_device, owner_name, races, level_idx, total_ms, splits, traces, target_device, target_name, lance)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(id, Date.now(), c.deviceId, c.nom, JSON.stringify(c.races),
-         c.lvl, c.t, JSON.stringify(c.splits), JSON.stringify(c.traces), target, lance).run();
+         c.lvl, c.t, JSON.stringify(c.splits), JSON.stringify(c.traces), target,
+         target ? (targetName || null) : null, lance).run();
   return id;
 }
 
@@ -464,6 +468,14 @@ async function ensureChallengeTarget(db) {
   if (targetReady.has(db)) return;
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
+  // Le NOM de la personne visee, tel qu'on l'a trouvee au moment de viser.
+  // L'appareil suffisait a lui poser le defi dans sa boite ; il ne suffit pas a
+  // la classer. Un defi laisse sans reponse est perdu par forfait (voir
+  // forfaits.js), et une defaite s'inscrit sur un nom : le retrouver une
+  // semaine plus tard a partir du seul appareil, c'est risquer de le trouver
+  // change entre-temps.
+  try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_name TEXT`).run(); }
+  catch (e) { /* colonne deja presente */ }
   targetReady.add(db);
 }
 
@@ -532,9 +544,10 @@ async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
   const ref = String(duelRef || '').toUpperCase();
   if (!/^[A-Z0-9]{4,10}$/.test(ref)) return null;
   await ensureDuelTables(db);
+  await ensureChallengeTarget(db);
   const d = await db.prepare(
     `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
-            c.owner_device, c.owner_name
+            r.forfait, c.owner_device, c.owner_name, c.target_device
        FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
       WHERE r.challenge_id = ?`
   ).bind(ref).first();
@@ -551,7 +564,8 @@ async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
   const suisLanceur = d.owner_device === deviceId ||
     (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
   const suisReleveur = (!!rep && rep.device_id === deviceId) ||
-    (!!moiCle && String(d.opponent_key || '') === moiCle);
+    (!!moiCle && String(d.opponent_key || '') === moiCle) ||
+    estCibleForfaite(d, deviceId);
   const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
   const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
   // Le chrono du vainqueur, celui qu'il fallait battre.
@@ -564,6 +578,57 @@ async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
     : (d.owner_name || '');
   if (!cible || cible === deviceId) return null;
   return { device: cible, nom: cibleNom };
+}
+
+/**
+ * Les defis adresses restes une semaine sans reponse, tranches par forfait —
+ * voir forfaits.js — et les deux joueurs prevenus.
+ *
+ * Celui qui a lance recoit la nouvelle comme un duel qu'on lui aurait releve :
+ * sonnerie et notification, c'est une victoire qu'il n'a pas vue venir. Celui
+ * qui a perdu n'a droit qu'a la sonnerie de sa boite : s'il a le jeu ouvert,
+ * l'annonce arrive tout de suite ; sinon il la trouvera en revenant. On ne
+ * fait pas vibrer un telephone pour dire a quelqu'un qu'il a perdu sans
+ * courir.
+ */
+async function balayerForfaits(env, db, test, quand) {
+  await ensureChallengeTables(db);
+  await ensureChallengeTarget(db);
+  await ensureChallengeLance(db);
+  const tranches = await trancherForfaits(db, quand);
+  for (const t of tranches) {
+    if (t.issue !== 'forfait') continue;
+    if (t.owner_device) await sonnerEtPush(env, t.owner_device, 'forfait', test);
+    if (t.target_device) await sonner(env, t.target_device, 'forfait', test);
+  }
+  return tranches;
+}
+
+/**
+ * LE PERDANT D'UN FORFAIT SE RECONNAIT A SON APPAREIL.
+ *
+ * Celui qui releve un defi se reconnait a sa tentative, qui garde son
+ * appareil. Celui qui a perdu par forfait n'en a pas — c'est meme ce qui l'a
+ * fait perdre. Il reste l'appareil que le defi visait, et c'est lui qu'on
+ * regarde, en plus du nom : sa revanche, son fantome, l'annonce de sa defaite
+ * doivent le trouver meme s'il n'a jamais enregistre de nom.
+ */
+function estCibleForfaite(d, deviceId) {
+  return !!d && Number(d.forfait) === 1 && !!deviceId && d.target_device === deviceId;
+}
+
+/** Ce defi visait-il cet appareil, et a-t-il deja ete perdu par forfait ? */
+async function forfaitDeLaCible(db, id, deviceId) {
+  try {
+    const r = await db.prepare(
+      `SELECT 1 AS n FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
+        WHERE r.challenge_id = ? AND r.forfait = 1 AND c.target_device = ?
+        LIMIT 1`
+    ).bind(id, deviceId).first();
+    return !!r;
+  } catch {
+    return false;          // base d'avant les forfaits : il n'y en a aucun
+  }
 }
 
 // Historique des courses. Indexe sur le nom autant que sur l'appareil : c'est
@@ -1078,6 +1143,20 @@ export default {
             return Promise.all(closes.map(c => signalerSacre(canalDuCron, c.edition, c)));
           })
           .catch(e => console.log('champ phases KO', nom, String(e && e.message || e)))
+      );
+      // Les defis adresses restes une semaine sans reponse : gagnes par celui
+      // qui les a lances. Voir forfaits.js. Sur les deux bases : c'est en test
+      // qu'on repete la regle avant de la voir tomber pour de vrai.
+      ctx.waitUntil(
+        balayerForfaits(env, db, nom === 'test', quand)
+          .then(t => {
+            // Comme les clotures : on ne journalise que les passages qui ont
+            // trouve quelque chose.
+            if (t.length) console.log('forfaits', nom, JSON.stringify(t.map(x => ({
+              id: x.id, issue: x.issue, erreur: x.erreur,
+            }))));
+          })
+          .catch(e => console.log('forfaits KO', nom, String(e && e.message || e)))
       );
       ctx.waitUntil(
         cloturerEcheances(db, quand)
@@ -2709,6 +2788,19 @@ async function servir(request, env, ctx, porteur) {
       return json(await recalculerClassement(env.DB));
     }
 
+    // Le balayage des forfaits, appelable a la main pour le verifier — et pour
+    // le rattraper si le cron a dormi. Sur le canal de test seulement, on peut
+    // lui donner l'heure qu'il est : c'est la seule facon de repeter une
+    // semaine d'attente sans l'attendre. En production, l'heure est celle du
+    // serveur, et personne ne la deplace.
+    if (url.pathname === '/duels/forfaits' && request.method === 'POST') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const voulu = Number(body && body.maintenant);
+      const quand = canal.test && Number.isFinite(voulu) && voulu > 0 ? voulu : Date.now();
+      return json({ maintenant: quand, tranches: await balayerForfaits(env, env.DB, canal.test, quand) });
+    }
+
     /* ------------------------------------------------- LE CLASSEMENT DES RECRUTEURS
 
        Non pas qui court le plus vite, mais CONTRE QUI ON COURT LE PLUS.
@@ -3030,13 +3122,22 @@ async function servir(request, env, ctx, porteur) {
       // tout court : le resultat s'annonce une fois, le mot aussi, et les deux
       // n'ont pas a arriver ensemble.
       //
-      // Les deux dernieres branches font le chemin inverse : la reponse du
+      // Les deux branches suivantes font le chemin inverse : la reponse du
       // perdant, qui revient au vainqueur apres coup, sur `reponse_vue`.
+      //
+      // Une derniere lecture, juste apres, annonce sa defaite a celui qui a
+      // perdu PAR FORFAIT. Lui n'a jamais couru, il n'a donc vu aucune ligne
+      // d'arrivee : sans elle, il ne verrait que ses points fondre au
+      // classement, sans savoir pourquoi. Elle porte aussi le mot du vainqueur
+      // s'il en a laisse un — la troisieme branche s'efface devant elle tant
+      // qu'elle n'a pas ete vue, pour ne pas annoncer deux fois la meme
+      // rencontre.
+      await ensureChallengeTarget(env.DB);
       const { results } = await env.DB.prepare(
         `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
                 c.races, c.owner_name,
                 'challenger' AS role, 'resultat' AS pourquoi
            FROM duel_results r
@@ -3047,7 +3148,7 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
                 c.races, c.owner_name,
                 'challenger' AS role, 'mot' AS pourquoi
            FROM duel_results r
@@ -3062,7 +3163,7 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
                 c.races, c.owner_name,
                 'opponent' AS role, 'mot' AS pourquoi
            FROM duel_results r
@@ -3070,13 +3171,14 @@ async function servir(request, env, ctx, porteur) {
           WHERE r.mot_vu = 0
             AND r.outcome = 'challenger'
             AND (r.mot IS NOT NULL OR r.voix IS NOT NULL)
+            AND (r.forfait = 0 OR r.seen_by_opponent = 1)
             AND ? = 1
             AND (? <> '' AND r.opponent_key = ?)
          UNION ALL
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
                 c.races, c.owner_name,
                 'challenger' AS role, 'reponse' AS pourquoi
            FROM duel_results r
@@ -3091,7 +3193,7 @@ async function servir(request, env, ctx, porteur) {
         SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
                 r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
                 r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
-                r.serie_challenger, r.serie_avant_challenger, r.reponse,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
                 c.races, c.owner_name,
                 'opponent' AS role, 'reponse' AS pourquoi
            FROM duel_results r
@@ -3108,6 +3210,27 @@ async function servir(request, env, ctx, porteur) {
              motOuvert(canal) ? 1 : 0, device_id, nom, nom,
              motOuvert(canal) ? 1 : 0, nom, nom).all();
 
+      // La defaite par forfait, A PART : D1 refuse plus de cinq branches dans
+      // une meme union, et la requete du dessus les a deja. Les deux listes se
+      // rejoignent ensuite dans le meme ordre, sous la meme limite.
+      const { results: forfaits } = await env.DB.prepare(
+        `SELECT r.challenge_id, r.opponent_name, r.opponent_key, r.outcome,
+                r.challenger_ms, r.opponent_ms, r.created_at AS created_at,
+                r.lp_challenger, r.lp_opponent, r.mot, r.voix, r.voix_type,
+                r.serie_challenger, r.serie_avant_challenger, r.reponse, r.forfait,
+                c.races, c.owner_name,
+                'opponent' AS role, 'forfait' AS pourquoi
+           FROM duel_results r
+           JOIN challenges c ON c.id = r.challenge_id
+          WHERE r.forfait = 1
+            AND r.seen_by_opponent = 0
+            AND (c.target_device = ? OR (? <> '' AND r.opponent_key = ?))
+          ORDER BY created_at ASC LIMIT 20`
+      ).bind(device_id, nom, nom).all();
+      const annonces = (results || []).concat(forfaits || [])
+        .sort((a, b) => a.created_at - b.created_at)
+        .slice(0, 20);
+
       // CE QU'ON A BLOQUE N'ARRIVE PAS.
       //
       // Le filtrage se fait ici plutot que dans la requete au-dessus : celle-ci
@@ -3122,7 +3245,7 @@ async function servir(request, env, ctx, porteur) {
       // a dire : on la retire, plutot que de rejouer une victoire muette.
       const reponseLisible = r =>
         r.outcome === r.role && !!r.reponse && !bloques.has(auteurDuMot(r));
-      const servies = (results || [])
+      const servies = annonces
         .filter(r => r.pourquoi !== 'reponse' || reponseLisible(r));
 
       return json({
@@ -3160,6 +3283,10 @@ async function servir(request, env, ctx, porteur) {
           // Ce que le perdant a repondu a mon mot : un identifiant de la liste
           // fermee, que le jeu ecrit dans sa langue. Nul pour le perdant.
           reponse: reponseLisible(r) ? r.reponse : null,
+          // Gagne ou perdu sans que personne ne coure en face : la personne
+          // visee n'a pas repondu dans la semaine. Le chrono de l'absent vaut
+          // zero en base, et l'ecran ne doit pas l'annoncer comme un temps.
+          forfait: !!r.forfait,
           races: JSON.parse(r.races || '[]'),
           at: r.created_at,
         })),
@@ -3199,6 +3326,22 @@ async function servir(request, env, ctx, porteur) {
           WHERE challenge_id IN (${trous})
             AND seen_by_opponent = 0 AND opponent_key = ?`
       ).bind(...propres, nom).run() : null;
+
+      // Le perdant d'un forfait se reconnait aussi a l'appareil que le defi
+      // visait (voir `estCibleForfaite`) : sans nom enregistre, son annonce
+      // reviendrait a chaque passage. Le mot qu'elle portait est lu du meme
+      // geste — c'est cette fenetre-la qui l'a montre.
+      if (isValidDeviceId(device_id)) {
+        await ensureChallengeTarget(env.DB);
+        await env.DB.prepare(
+          `UPDATE duel_results
+              SET mot_vu = CASE WHEN mot IS NOT NULL OR voix IS NOT NULL THEN 1 ELSE mot_vu END,
+                  seen_by_opponent = 1
+            WHERE challenge_id IN (${trous})
+              AND forfait = 1 AND seen_by_opponent = 0
+              AND challenge_id IN (SELECT c.id FROM challenges c WHERE c.target_device = ?)`
+        ).bind(...propres, device_id).run();
+      }
 
       // LE MOT EST LU, et c'est autre chose qu'avoir vu le resultat.
       //
@@ -4500,7 +4643,7 @@ async function servir(request, env, ctx, porteur) {
         if (v) { target = v.device; targetName = v.nom; }
       }
 
-      const id = await ecrireLeDefi(env.DB, c, { target, lance: 1 });
+      const id = await ecrireLeDefi(env.DB, c, { target, targetName, lance: 1 });
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = c.nom.trim().toLowerCase();
@@ -4630,8 +4773,9 @@ async function servir(request, env, ctx, porteur) {
       const nomFinal = joue ? d.owner_name : (cleanName(name) || d.owner_name);
 
       await env.DB.prepare(
-        `UPDATE challenges SET lance = 1, target_device = ?, owner_name = ? WHERE id = ?`
-      ).bind(target, nomFinal, id).run();
+        `UPDATE challenges SET lance = 1, target_device = ?, target_name = ?, owner_name = ?
+          WHERE id = ?`
+      ).bind(target, target ? (targetName || null) : null, nomFinal, id).run();
 
       const lanceurKey = String(nomFinal || '').trim().toLowerCase();
       let races = [];
@@ -4672,19 +4816,33 @@ async function servir(request, env, ctx, porteur) {
       if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
       await ensureChallengeTables(env.DB);
       await ensureChallengeTarget(env.DB);
+      // Une semaine pour repondre, et la boite le dit : `echeance` est l'heure
+      // a laquelle le defi sera perdu par forfait (voir forfaits.js). Passee
+      // cette heure, il n'est plus propose — il est perdu, le relever ne
+      // changerait plus rien. Les defis d'avant la regle n'ont pas d'echeance
+      // et restent la comme avant.
+      //
+      // Deux conditions plutot qu'une : l'heure, et le passage du cron. Elles
+      // disent la meme chose en temps normal ; la seconde tient seule quand
+      // le balayage a ete force a la main, avant l'heure (voir /duels/forfaits).
+      const maintenant = Date.now();
+      await ensureForfaitColonnes(env.DB);
       const { results } = await env.DB.prepare(
         `SELECT c.id, c.owner_name, c.races, c.level_idx, c.total_ms, c.splits, c.created_at
            FROM challenges c
           WHERE c.target_device = ?
             AND NOT EXISTS (SELECT 1 FROM challenge_attempts a
                              WHERE a.id = c.id AND a.device_id = ?)
+            AND NOT (c.created_at >= ? AND c.created_at <= ?)
+            AND c.forfait_le IS NULL
           ORDER BY c.created_at DESC LIMIT 20`
-      ).bind(deviceId, deviceId).all();
+      ).bind(deviceId, deviceId, FORFAIT_DEPUIS, maintenant - FORFAIT_DELAI_MS).all();
       return json({
         defis: (results || []).map(r => ({
           id: r.id, owner_name: r.owner_name, races: JSON.parse(r.races),
           level_idx: r.level_idx, total_ms: r.total_ms,
           splits: JSON.parse(r.splits || '[]'), created_at: r.created_at,
+          echeance: echeanceForfait(r.created_at),
         })),
       });
     }
@@ -4711,10 +4869,12 @@ async function servir(request, env, ctx, porteur) {
       if (!/^[A-Z0-9]{4,10}$/.test(id)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(deviceId) && !nom) return json({ found: false });
       await ensureChallengeTables(env.DB);
+      await ensureChallengeTarget(env.DB);
       await ensureDuelTables(env.DB);
 
       const d = await env.DB.prepare(
         `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
+                r.forfait, c.target_device,
                 c.owner_device, c.owner_name, c.races, c.level_idx, c.splits, c.traces
            FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
           WHERE r.challenge_id = ?`
@@ -4731,7 +4891,8 @@ async function servir(request, env, ctx, porteur) {
       const suisLanceur = (!!deviceId && d.owner_device === deviceId) ||
         (!!nom && String(d.owner_name || '').trim().toLowerCase() === nom);
       const suisReleveur = (!!rep && !!deviceId && rep.device_id === deviceId) ||
-        (!!nom && String(d.opponent_key || '') === nom);
+        (!!nom && String(d.opponent_key || '') === nom) ||
+        estCibleForfaite(d, deviceId);
       const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
       const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
       if (!monRole || monRole !== perdant) return json({ found: false });
@@ -4808,7 +4969,15 @@ async function servir(request, env, ctx, porteur) {
       // Le premier resultat fait foi : un defi ne se rejoue pas, et une
       // seconde tentative ne redistribue donc aucun point. Le bareme vit dans
       // duels.js, partage avec la course en direct.
-      const duel = await appliquerDuel(env.DB, {
+      //
+      // Le forfait en est un, de resultat. La personne visee qui court apres
+      // coup — par le code, la boite ne le lui propose plus — retrouve son duel
+      // deja tranche, quel que soit le nom sous lequel elle court cette fois :
+      // c'est son APPAREIL qui etait vise, et changer de pseudonyme ne doit pas
+      // ouvrir un second duel a cote du forfait.
+      const forfait = await forfaitDeLaCible(env.DB, code, device_id);
+      const duel = forfait ? { issue: 'challenger', deja: true, forfait: true }
+                           : await appliquerDuel(env.DB, {
         id: code,
         challengerName: ch.owner_name,
         opponentName: cleanName(name),
