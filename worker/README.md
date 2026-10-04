@@ -111,7 +111,10 @@ fait passer les victoires de chacun avant ses défaites — la série du quatri�
 s'éteint, celle du vainqueur prend sept crans. À deux, l'identifiant reste
 `LIVE-<salle>-<pistolet>` ; au-delà, l'identifiant du lanceur s'y ajoute. Un
 partant sans nom (« Anonyme ») court sans compter, et un faux départ est un
-abandon : une défaite contre chacun. La salle annonce ensuite à chacun ses
+abandon : une défaite contre chacun. Le jeu l'annonce à la salle ; les
+versions qui ne l'annoncent pas encore se reconnaissent à leur silence — un
+partant qui n'a envoyé aucune position huit secondes après le pistolet est
+rangé en abandon (`guetterLesMuets`). La salle annonce ensuite à chacun ses
 points, sa division, sa série avant et après, et le détail duel par duel.
 
 **Au premier appel après le déploiement, la table `duel_players` est refaite** :
