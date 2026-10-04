@@ -118,16 +118,18 @@ export class SalleConfrontation {
   }
 
   /**
-   * @param max      combien d'equipes au plus — le premier arrive le fixe.
+   * @param max      combien d'equipes au plus, quand on a ouvert le code. La
+   *                 salle l'a deja recu a l'ouverture ; il ne sert plus que de
+   *                 repli, si elle ne l'a pas garde. Absent pour qui rejoint.
    * @param fantomes les courses enregistrees a affronter, par identifiant.
    */
-  connecter(max = MAX_EQUIPES, fantomes: number[] = []) {
+  connecter(max?: number, fantomes: number[] = []) {
     if (EST_TEST && !codeAcces()) { this.ec.onFerme?.('acces'); return; }
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
       team: this.equipe,
-      max: String(Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, max))),
     });
+    if (max != null) q.set('max', String(Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, max))));
     if (fantomes.length) q.set('fantomes', fantomes.slice(0, 7).join(','));
     this.lien = new Liaison(avecAcces(`${WS_BASE}/relay/conf/${this.code}?${q}`), {
       onMessage: m => this.recu(m),

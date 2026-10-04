@@ -131,9 +131,14 @@ export const fantomesRelais = (race = '4x100') =>
   lire<{ race: string; fantomes: FantomeRelais[] }>(
     '/relay/ghosts?race=' + encodeURIComponent(race));
 
-/** Ouvre une confrontation et renvoie son code, a partager comme un salon. */
-export const ouvrirConfrontation = () =>
-  poster<{ id: string }>('/relay/confrontation', {});
+/**
+ * Ouvre une confrontation et renvoie son code, a partager comme un salon.
+ *
+ * `max` est le nombre d'equipes : le serveur le pose dans la salle des
+ * l'ouverture, et ceux qui entrent ensuite le code n'ont plus a le connaitre.
+ */
+export const ouvrirConfrontation = (max: number) =>
+  poster<{ id: string }>('/relay/confrontation', { max });
 
 /** Les membres qui ont accepte, dans l'ordre des relais quand il est fixe. */
 export const titulaires = (e: EquipeRelais) =>

@@ -2460,9 +2460,27 @@ async function servir(request, env, ctx, porteur) {
           headers: { 'Content-Type': 'application/json' } }));
       }
 
-      // Ouvrir une confrontation : un code, comme une piste de duel.
+      // Ouvrir une confrontation : un code, comme une piste de duel. Le nombre
+      // d'equipes choisi par celui qui l'ouvre est pose dans la salle tout de
+      // suite, avant que quiconque y entre — sans quoi le premier ami a taper
+      // le code imposait le sien. Voir lireTaille dans salle-confrontation.js.
       if (sous === 'confrontation' && request.method === 'POST') {
-        return json({ id: makeCode() });
+        const id = makeCode();
+        let corps; try { corps = await request.json(); } catch { corps = {}; }
+        if (env.CONFRONTATIONS && corps && corps.max != null) {
+          const cible = new URL(request.url);
+          cible.pathname = '/ouvrir';
+          cible.search = '';
+          cible.searchParams.set('conf', id);
+          cible.searchParams.set('max', String(corps.max));
+          if (canal.test) cible.searchParams.set('canal', 'test');
+          const o = env.CONFRONTATIONS.idFromName((canal.test ? 'CT-' : 'C-') + id);
+          // Un echec ici ne bloque pas l'ouverture : l'hote annonce encore sa
+          // taille en se connectant, comme avant.
+          try { await env.CONFRONTATIONS.get(o).fetch(new Request(cible, { method: 'POST' })); }
+          catch (e) { /* la premiere connexion decidera */ }
+        }
+        return json({ id });
       }
 
       // La salle d'une confrontation. Le code de l'equipe voyage avec le

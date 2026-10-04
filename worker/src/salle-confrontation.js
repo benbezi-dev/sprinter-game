@@ -38,6 +38,16 @@ const AVANT_DEPART_MS = 6000;
 const VIE_MS = 30 * 60 * 1000;
 const APRES_COURSE_MS = 90 * 1000;
 const INACTIVITE_MS = 8 * 60 * 1000;
+// La taille posee a l'ouverture se garde un jour : le temps de partager le
+// code et de reunir tout le monde, meme le lendemain matin. Au-dela, le
+// stockage s'efface de lui-meme — voir alarm().
+const GARDE_TAILLE_MS = 24 * 60 * 60 * 1000;
+
+/** Un nombre d'equipes demande, ramene entre deux et huit ; null s'il n'en est pas un. */
+function taille(brut) {
+  const m = parseInt(brut, 10);
+  return Number.isFinite(m) ? Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, m)) : null;
+}
 
 function net(nom) {
   const s = String(nom || '').trim().slice(0, 20).replace(/[<>]/g, '');
@@ -52,6 +62,8 @@ export class SalleConfrontation {
     this.code = '';
     this.epreuve = '4x100';
     this.max = MAX_EQUIPES;
+    this.maxFixe = false;      // pose par celui qui a ouvert le code
+    this.maxLu = false;        // le stockage a-t-il deja ete relu
     this.departA = null;
     /** @type {Map<WebSocket, {id,nom,cle,equipe,relais,pret}>} */
     this.joueurs = new Map();
@@ -66,6 +78,44 @@ export class SalleConfrontation {
 
   base() {
     return this.test && this.env.DB_TEST ? this.env.DB_TEST : this.env.DB;
+  }
+
+  /**
+   * LA TAILLE EST CELLE DU CODE, PAS CELLE DU PREMIER ARRIVE.
+   *
+   * Elle se fixait a la premiere connexion, avec le `max` qu'elle portait.
+   * Or celui qui ouvre le code le partage d'abord, et un ami qui l'entre
+   * avant lui arrivait avec le chiffre affiche par defaut sur SON ecran : une
+   * confrontation ouverte a huit se refermait a quatre, et la cinquieme
+   * equipe se voyait refuser un code juste.
+   *
+   * Le worker la pose donc ici des l'ouverture du code (`/ouvrir`), et elle
+   * est rangee dans le stockage : entre l'ouverture et la premiere connexion,
+   * personne ne tient l'objet eveille, et sa memoire peut etre perdue.
+   */
+  async lireTaille() {
+    if (this.maxLu) return;
+    this.maxLu = true;
+    try {
+      const m = taille(await this.state.storage.get('max'));
+      if (m != null) { this.max = m; this.maxFixe = true; }
+    } catch (e) { /* stockage indisponible : la premiere connexion decidera */ }
+  }
+
+  async fixerTaille(brut) {
+    const m = taille(brut);
+    if (m == null || this.maxFixe || this.equipes.size > 0) return;
+    this.max = m;
+    this.maxFixe = true;
+    try {
+      await this.state.storage.put('max', m);
+      await this.state.storage.setAlarm(Date.now() + GARDE_TAILLE_MS);
+    } catch (e) { /* la memoire suffira tant que l'objet reste eveille */ }
+  }
+
+  /** Le code a vecu : son stockage n'a plus de raison d'etre. */
+  async alarm() {
+    try { await this.state.storage.deleteAll(); } catch (e) { /* deja efface */ }
   }
 
   /**
@@ -240,6 +290,15 @@ export class SalleConfrontation {
     const url = new URL(request.url);
     this.code = this.code || (url.searchParams.get('conf') || '').toUpperCase();
     if (url.searchParams.get('canal') === 'test') this.test = true;
+    await this.lireTaille();
+
+    // L'ouverture du code, par le worker seul : la route publique de la salle
+    // ne mene qu'a /etat et a /ws.
+    if (url.pathname.endsWith('/ouvrir')) {
+      await this.fixerTaille(url.searchParams.get('max'));
+      return new Response(JSON.stringify({ max: this.max }),
+                          { headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (url.pathname.endsWith('/etat')) {
       return new Response(JSON.stringify({ existe: this.joueurs.size > 0, ...this.vue() }),
@@ -253,11 +312,12 @@ export class SalleConfrontation {
     if (!/^[A-Z0-9]{4,10}$/.test(equipeId)) {
       return new Response('equipe invalide', { status: 400 });
     }
-    // Le premier arrive fixe la taille de la confrontation.
-    if (this.equipes.size === 0 && !this.departA) {
-      const m = parseInt(url.searchParams.get('max') || String(MAX_EQUIPES), 10);
-      this.max = Number.isFinite(m)
-        ? Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, m)) : MAX_EQUIPES;
+    // Un code ouvert sans taille — par une version du jeu qui ne l'envoyait
+    // pas encore — se regle encore sur la premiere connexion. Celle qui n'en
+    // dit rien, un ami qui rejoint, laisse la piste ouverte a huit plutot que
+    // de refuser des equipes que l'hote attendait.
+    if (!this.maxFixe && this.equipes.size === 0 && !this.departA) {
+      this.max = taille(url.searchParams.get('max')) ?? MAX_EQUIPES;
     }
     if (!this.equipes.has(equipeId) && this.equipes.size >= this.max) {
       return new Response('confrontation complete', { status: 409 });
