@@ -96,7 +96,16 @@ const COULEUR_PALIER: Record<string, string> = {
 const ECHECS_AVANT_CONSEIL = 3;
 
 export function Revanche() {
-  const { state, runTime, falseOut } = useGameStore();
+  const state = useGameStore(s => s.state);
+  const runTime = useGameStore(s => s.runTime);
+  const falseOut = useGameStore(s => s.falseOut);
+  // les minutes qui restent (minutesRestantes) se lisent a l'horloge : un
+  // battement les tient a jour, comme sur la carte de l'accueil
+  const [, battement] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => battement(n => n + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
   const { N } = SprinterApp;
   const s = useObjectif();
 

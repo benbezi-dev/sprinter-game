@@ -5,9 +5,15 @@ import { MONTEE } from '@/lib/mouvement';
 import { EcartRecord } from './RecordPerso';
 
 export function ResultScreen() {
-  const {
-    levelIdx, player, runTime, ranking, badge, mode, shotRaces, shotIdx, raceKey
-  } = useGameStore();
+  const levelIdx = useGameStore(s => s.levelIdx);
+  const player = useGameStore(s => s.player);
+  const runTime = useGameStore(s => s.runTime);
+  const ranking = useGameStore(s => s.ranking);
+  const badge = useGameStore(s => s.badge);
+  const mode = useGameStore(s => s.mode);
+  const shotRaces = useGameStore(s => s.shotRaces);
+  const shotIdx = useGameStore(s => s.shotIdx);
+  const raceKey = useGameStore(s => s.raceKey);
   const { N } = SprinterApp;
   const oneShot = mode === 'oneshot';
 

@@ -66,8 +66,18 @@ function noterDefiLance(id: string, nom: string, epreuves: string[]) {
 }
 
 export function OneShotEndScreen() {
-  const { runTime, runSplits, shotRaces, ghostName, ghostTime, challenge, falseOut,
-          liveOn, liveNom, liveResultat, liveDuel, player } = useGameStore();
+  const runTime = useGameStore(s => s.runTime);
+  const runSplits = useGameStore(s => s.runSplits);
+  const shotRaces = useGameStore(s => s.shotRaces);
+  const ghostName = useGameStore(s => s.ghostName);
+  const ghostTime = useGameStore(s => s.ghostTime);
+  const challenge = useGameStore(s => s.challenge);
+  const falseOut = useGameStore(s => s.falseOut);
+  const liveOn = useGameStore(s => s.liveOn);
+  const liveNom = useGameStore(s => s.liveNom);
+  const liveResultat = useGameStore(s => s.liveResultat);
+  const liveDuel = useGameStore(s => s.liveDuel);
+  const player = useGameStore(s => s.player);
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.

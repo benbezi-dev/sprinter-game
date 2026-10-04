@@ -12,7 +12,10 @@ import { LeaderboardScreen } from './LeaderboardScreen';
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export function WinAllScreen() {
-  const { runTime, runSplits, runRank, raceKey } = useGameStore();
+  const runTime = useGameStore(s => s.runTime);
+  const runSplits = useGameStore(s => s.runSplits);
+  const runRank = useGameStore(s => s.runRank);
+  const raceKey = useGameStore(s => s.raceKey);
   const { N } = SprinterApp;
 
   const [name, setName] = useState(getSavedName());

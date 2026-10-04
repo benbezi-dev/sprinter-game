@@ -54,7 +54,7 @@ function noterDuel(d: MonDuel) {
  * duels tranches d'un coup meritent trois nouvelles, pas une liste.
  */
 export function DuelResultPopup() {
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const { N, RACES } = SprinterApp;
 
   const [file, setFile] = useState<MonDuel[]>([]);

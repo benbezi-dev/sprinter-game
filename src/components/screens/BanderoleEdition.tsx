@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
@@ -36,6 +36,13 @@ function indexDuStade(cle: string): number {
 
 export function BanderoleEdition() {
   const { N } = SprinterApp;
+  // L'edition et ses jours restants se lisent a l'horloge : un battement par
+  // minute, l'accueil ne se redessinant plus a chaque image (useGameStore).
+  const [, battement] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => battement(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const edition = editionEnCours();
   if (!edition) return null;
   // UNE EDITION QUI PORTE UN MODE A SA PROPRE BANNIERE. Celle-ci ne sait

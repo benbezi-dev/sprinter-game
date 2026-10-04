@@ -83,6 +83,13 @@ function Portrait({ v, cadre, largeur, hauteur }: {
 --------------------------------------------------------------------------- */
 
 export function BanderoleVedette({ haies }: { haies: boolean }) {
+  // L'ouverture et la fin d'un defi se lisent a l'horloge (defiPossible) : un
+  // battement par minute, l'accueil ne se redessinant plus a chaque image.
+  const [, battement] = useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => battement(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const jeu = haies ? 'haies' : 'sprint';
   const defis = Object.values(VEDETTES).filter(v => v.jeux.includes(jeu) && defiPossible(v));
   if (!defis.length) return null;

@@ -19,7 +19,7 @@
 // course construite ; les haies s'y arment ou s'y rangent selon l'epreuve.
 
 import { useSyncExternalStore } from 'react';
-import { SprinterApp, SprinterCore, gameStore, primeTopNames } from './engine';
+import { SprinterApp, SprinterCore, rafraichirTout, primeTopNames } from './engine';
 import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
@@ -210,7 +210,7 @@ export function changerDeJeu(jeu: Jeu, construire = true) {
   // ce jeu-ci n'ont peut-etre pas encore ete demandes.
   primeTopNames(EPREUVES_DU_JEU[jeu]);
   for (const f of abonnes) f();
-  gameStore.setState({});
+  rafraichirTout();
 }
 
 export function useJeu(): Jeu {

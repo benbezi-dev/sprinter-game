@@ -153,8 +153,18 @@ function useVisualViewportHeight() {
 function MainGame() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
-  const countT = useGameStore(s => s.countT);
+  /** Le decompte suspendu, c'est la presentation des athletes. */
+  const enPresentation = useGameStore(s => s.state === 'count' && s.countT <= -90);
   const cut = useGameStore(s => s.cut);
+  // MAINGAME NE SE REDESSINE PLUS A CHAQUE IMAGE (voir useGameStore), et ses
+  // ecrans avec lui. Ce qu'il lit du moteur passe donc par un selecteur, et
+  // la revision le redessine en entier quand la langue, le son ou le jeu
+  // changent (rafraichirTout).
+  useGameStore(s => s.rev);
+  useGameStore(() => SprinterApp.N.getLang());
+  useGameStore(() => SprinterApp.Audio_.on);
+  const spectateur = useGameStore(() => !!SprinterApp.G.spectateur);
+  const sautEnCours = useGameStore(() => !!SprinterApp.G.sautEnCours);
   // La cinematique qui s'efface par-dessus celle qui commence — le sacre vers
   // le generique, et rien d'autre. Nulle le reste du temps.
   const sortie = useGameStore(s => s.sortie);
@@ -249,8 +259,6 @@ function MainGame() {
   // La carte `InviteNotifs`, plus bas, propose au même moment — mais avec un
   // bouton, et c'est le clic qui ouvre la fenêtre du système.
 
-  /** Le decompte suspendu, c'est la presentation des athletes. */
-  const enPresentation = state === 'count' && countT <= -90;
   /**
    * Le sacre d'un championnat, qui se joue sur la piste.
    *
@@ -326,8 +334,8 @@ function MainGame() {
         {/* Un concours de saut n'a ni chrono ni ligne : il porte son propre
             tableau (Longueur.tsx), monte par l'accueil de Jumper. */}
         {(state === 'count' || state === 'race') && !enPresentation
-          && !tutoHaies && !tutoSprint && !SprinterApp.G.spectateur
-          && !SprinterApp.G.sautEnCours && <RaceHUD />}
+          && !tutoHaies && !tutoSprint && !spectateur
+          && !sautEnCours && <RaceHUD />}
         {/* Une course de championnat qu'on revoit : la presentation des
             athletes avant le pistolet, le tableau apres la ligne. Elle se
             monte a cote du HUD et non dedans — elle survit a la fin de la

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { nomEnLigne } from '@/game/jeux';
-import { SprinterApp } from '@/game/engine';
+import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { TRANSITION } from '@/lib/mouvement';
 import { Radio, X } from 'lucide-react';
@@ -32,6 +32,8 @@ import { surCourrier } from '@/game/boite';
  */
 export function InvitationDirecte() {
   const { N } = SprinterApp;
+  // l'ecran : elle ne parait qu'au repos (estAuCalme), et doit partir au depart
+  useGameStore(s => s.state);
   const [invitations, setInvitations] = useState<InvitationRecue[]>([]);
   const annule = useRef(false);
   useEffect(() => { annule.current = false; return () => { annule.current = true; }; }, []);

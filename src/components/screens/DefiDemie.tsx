@@ -195,7 +195,7 @@ export function DefiDemieSpectateur() {
  */
 export function BandeauDefi() {
   const { N } = SprinterApp;
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const { defi, placement } = useDefiDemie();
   if (state !== 'count' || !defi || !placement || !SprinterApp.G.defiDemie) return null;
   return (

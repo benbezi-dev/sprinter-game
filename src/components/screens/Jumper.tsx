@@ -73,7 +73,9 @@ type Partie = { epreuve: Epreuve; etape: number; carriere: boolean; n: number };
 
 export function Jumper() {
   const { N, Audio_ } = SprinterApp;
-  useGameStore();
+  // ses boutons de langue et de son : redessines quand l'une ou l'autre change
+  useGameStore(() => N.getLang());
+  useGameStore(() => Audio_.on);
   const [epreuve, setEpreuve] = useState<Epreuve>(() => {
     try { const e = localStorage.getItem('sprinter.jumper.epreuve'); if (e && CLES[e]) return e as Epreuve; } catch { /* rien */ }
     return 'longueur';

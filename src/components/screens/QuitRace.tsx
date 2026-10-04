@@ -13,7 +13,8 @@ import { VOILE, PANNEAU } from '@/lib/mouvement';
  * le geste de reprendre, et le chrono ne tourne pas pendant l'hesitation.
  */
 export function QuitRace() {
-  const { state, paused } = useGameStore();
+  const state = useGameStore(s => s.state);
+  const paused = useGameStore(s => s.paused);
   const { N } = SprinterApp;
 
   if (state !== 'race' && state !== 'count') return null;

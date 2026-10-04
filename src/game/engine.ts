@@ -159,6 +159,12 @@ export type GameState = {
    */
   photo: { etat: 'attente' | 'tranche'; nom: string; moi: number;
            lui: number | null; ecartM: number } | null;
+  /**
+   * La revision de l'interface : elle change quand ce que tous les ecrans
+   * lisent hors du magasin change — la langue, le son, le jeu. MainGame la
+   * suit, et tout l'arbre se redessine avec lui. Voir rafraichirTout.
+   */
+  rev: number;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -167,7 +173,7 @@ class Store {
   listeners: Set<() => void>;
 
   constructor() {
-    this.state = { ...SprinterApp.G };
+    this.state = { ...SprinterApp.G, rev: 0 };
     this.listeners = new Set();
   }
 
@@ -188,14 +194,46 @@ class Store {
 
 export const gameStore = new Store();
 
+/**
+ * L'ETAT DU JEU, POUR UN COMPOSANT — ET SEULEMENT CE QU'IL EN LIT.
+ *
+ * Le moteur publie a chaque image (updateLogic). Le selecteur s'appliquait
+ * APRES l'abonnement : chaque composant abonne se redessinait donc a chaque
+ * image, quel que soit ce qu'il lisait — MainGame compris, et tout l'arbre
+ * avec lui. Mesure en course sur un telephone emule : React y prenait
+ * pres de dix pour cent du temps de l'image.
+ *
+ * Le selecteur passe maintenant DANS useSyncExternalStore : un composant ne
+ * se redessine que si la valeur qu'il selectionne change (Object.is). D'ou
+ * deux regles :
+ *  - selectionner des VALEURS SIMPLES. `player` et `runners` sont les memes
+ *    objets d'une image a l'autre, modifies en place : `s => s.player` ne
+ *    change jamais. Un composant qui doit suivre la course selectionne ce qui
+ *    bouge (`s => s.elapsed`) ; un autre, le champ qu'il lit
+ *    (`s => !!s.player?.finished`) ;
+ *  - ne jamais fabriquer d'objet dans un selecteur (`s => ({ ... })`) : un
+ *    objet neuf a chaque appel, et React boucle.
+ * Un selecteur peut lire le moteur lui-meme (`() => !!SprinterApp.G.x`) : il
+ * est reevalue a chaque publication.
+ * Sans selecteur, le composant se redessine a chaque publication, comme avant.
+ */
+const abonner = (l: () => void) => gameStore.subscribe(l);
+const toutLEtat = () => gameStore.getSnapshot();
 export function useGameStore(): GameState;
 export function useGameStore<T>(selector: (state: GameState) => T): T;
 export function useGameStore<T>(selector?: (state: GameState) => T) {
-  const state = useSyncExternalStore(
-    (l) => gameStore.subscribe(l),
-    () => gameStore.getSnapshot()
-  );
-  return selector ? selector(state) : state;
+  return useSyncExternalStore<T | GameState>(abonner, selector ? () => selector(gameStore.getSnapshot()) : toutLEtat);
+}
+
+/**
+ * Redessiner toute l'interface : ce qu'elle lit hors du magasin vient de
+ * changer — la langue de ses textes, l'icone du son, le jeu courant. C'est ce
+ * que faisait `gameStore.setState({})` quand tout se redessinait a chaque
+ * publication ; il faut maintenant le dire (voir `rev`).
+ */
+let revision = 0;
+export function rafraichirTout() {
+  gameStore.setState({ rev: ++revision });
 }
 
 // We'll write the update loop here
@@ -467,12 +505,12 @@ export function toggleLang() {
   SprinterApp.save();
   syncHtmlLang();
   // Force a re-render so text updates
-  gameStore.setState({});
+  rafraichirTout();
 }
 
 export function toggleAudio() {
   SprinterApp.Audio_.toggle();
-  gameStore.setState({});
+  rafraichirTout();
 }
 
 /** Etats ou une course est reellement en cours et peut etre suspendue. */
