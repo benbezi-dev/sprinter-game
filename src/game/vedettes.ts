@@ -151,6 +151,24 @@ export function defiPossible(v: Vedette): boolean {
   return defiLance(v) && indexDuStade(v) >= 0;
 }
 
+/** Le chemin de son vrai maillage (look.maillage, game/vedette-3d.ts), s'il en a un. */
+export function maillageDe(v: Vedette): string | null {
+  const look = (SprinterCore as any).VEDETTES && (SprinterCore as any).VEDETTES[v.coureur];
+  return (look && look.maillage) || null;
+}
+
+/**
+ * Demander son maillage avant la course : three.js, le fichier, et ses
+ * shaders compiles (game/vedette-3d.ts) — sans effet s'il est deja la ou en
+ * route. La fiche le fait a son ouverture, l'accueil un peu plus tot
+ * (chargement.ts) ; sinon, c'est la premiere image de la course qui le
+ * demanderait.
+ */
+export function demanderSonMaillage(v: Vedette) {
+  const chemin = maillageDe(v), demander = (globalThis as any).SprinterDemanderMaillage;
+  if (chemin && demander) void demander(chemin);
+}
+
 let enCours: Vedette | null = null;
 /** L'epreuve du defi en cours. */
 let epreuveEnCours: string | null = null;

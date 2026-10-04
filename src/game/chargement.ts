@@ -60,6 +60,15 @@
       fois les images la, et ce qui n'est pas fait quand l'ouverture se
       termine l'est a l'accueil, ou par l'attente d'avant le decompte, qui ne
       retient que les caps de la course qui va partir (tribune.js).
+
+   5. LES ATHLETES EN VRAI MAILLAGE, A L'ACCUEIL (avancerLesMaillages). Les
+      vedettes et leurs skins se dessinent en WebGL (game/vedette-3d.ts) :
+      three.js, le contexte, le fichier, ses shaders. Demandes a la premiere
+      image qui les dessinait, ils arrivaient pendant la presentation de la
+      course — des a-coups sous les yeux du joueur. L'accueil les demande
+      donc d'avance : ceux que game/jeux.ts dit attendus (le skin porte, les
+      defis proposes), un a la fois, une fois les images de l'ouverture la
+      et l'accueil installe.
 --------------------------------------------------------------------------- */
 import liste from 'virtual:precharge';
 
@@ -80,7 +89,9 @@ let t0 = 0;
 // l'ultra sont arrivees.
 const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 0, ultraApporte: false,
                 // le stade dont le public est compose d'avance, ou null
-                publicAvance: null as string | null };
+                publicAvance: null as string | null,
+                // les maillages demandes d'avance, a l'accueil
+                maillagesAvance: [] as string[] };
 (globalThis as any).SprinterChargement = etat;
 
 /** Telecharge `urls`, `EN_VOL` a la fois, et appelle `apres` a chacune. */
@@ -210,6 +221,41 @@ export function avancerLePublic(G: any, ms: number) {
     // cette image a compose : elle ne compte pas pour la regle de qualite
     g.RenduPremium && (g.RenduPremium.composeDAvance = performance.now() + 250);
   }
+}
+
+// Le temps laisse a l'accueil pour s'installer — ses panneaux qui montent —
+// avant d'y charger un maillage.
+const POSE_ACCUEIL_MS = 2000;
+// Chaque maillage ne se demande d'avance qu'une fois : un echec se rattrape
+// a la course (game/vedette-3d.ts l'oublie, et elle le redemande).
+const maillagesDemandes = new Set<string>();
+let maillageEnVol = false;
+let aLAccueilDepuis = 0, vuALAccueil = 0, revoirMaillagesA = 0;
+
+/**
+ * DEMANDE D'AVANCE LES MAILLAGES QUE LE JOUEUR VA VOIR (voir 5, plus haut).
+ * Appele a chaque image par engine.ts, a l'accueil seulement. Un a la fois :
+ * le suivant attend que le precedent ait fini de compiler ses shaders.
+ * (Ses a-coups ne coutent rien a la finition premium : la regle de qualite
+ * ne juge pas les images d'un maillage qui arrive, voir game/vedette-3d.ts.)
+ */
+export function avancerLesMaillages() {
+  const g = globalThis as any;
+  const maintenant = performance.now();
+  // plus d'une demi-seconde sans appel : on revient a l'accueil
+  if (maintenant - vuALAccueil > 500) aLAccueilDepuis = maintenant;
+  vuALAccueil = maintenant;
+  if (maillageEnVol || !fini || maintenant < revoirMaillagesA) return;
+  if (maintenant - aLAccueilDepuis < POSE_ACCUEIL_MS) return;
+  revoirMaillagesA = maintenant + 1000;
+  const attendus = g.SprinterMaillagesAttendus, demander = g.SprinterDemanderMaillage;
+  if (!attendus || !demander) return;
+  const chemin = (attendus() as string[]).find(c => !maillagesDemandes.has(c));
+  if (!chemin) return;
+  maillagesDemandes.add(chemin);
+  etat.maillagesAvance.push(chemin);
+  maillageEnVol = true;
+  Promise.resolve(demander(chemin)).catch(() => null).then(() => { maillageEnVol = false; });
 }
 
 /**

@@ -25,7 +25,8 @@ import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
 import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES } from './canal';
-import { habillerLeJoueur } from './vestiaire';
+import { habillerLeJoueur, skinPorte, skinGagne, lookDuSkin } from './vestiaire';
+import { VEDETTES, defiPossible, maillageDe } from './vedettes';
 
 export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
 
@@ -98,13 +99,35 @@ G.jeu = 'sprinter';
 // l'objectif du jour la lancent aussi, parfois depuis l'accueil de Sprinter.
 // Plutot que d'apprendre le jeu a chacun de ces chemins, on le regle ici, la
 // ou ils passent tous — sans reconstruire la course qu'on vient de poser.
-// LES ATHLETES EN VRAI MAILLAGE (game/vedette-3d.ts) : le moteur le demande
-// a la premiere fois qu'il en dessine un, et three.js n'est telecharge qu'alors.
-// Branche des l'ouverture des defis, et pour toujours : les skins gagnes se
-// dessinent avec ce maillage (canal.ts, VEDETTES_LANCEES).
+// LES ATHLETES EN VRAI MAILLAGE (game/vedette-3d.ts) : three.js n'est
+// telecharge que si l'un d'eux doit etre dessine. Branche des l'ouverture des
+// defis, et pour toujours : les skins gagnes se dessinent avec ce maillage
+// (canal.ts, VEDETTES_LANCEES).
+//
+// ET DEMANDE DES L'ACCUEIL, PAS EN COURSE. Le moteur le demandait a la
+// premiere image qui le dessinait : three.js, le contexte WebGL, le fichier
+// et ses shaders arrivaient pendant la presentation de la course, qui
+// ramait. L'accueil demande donc d'avance ceux que le joueur va voir
+// (chargement.ts, avancerLesMaillages) : le skin qu'il porte, et les vedettes
+// des defis que sa banniere lui propose et qu'il n'a pas encore battues.
+// La fiche d'un defi demande le sien a son ouverture (demanderSonMaillage).
 if (VEDETTES_LANCEES) {
   (globalThis as any).SprinterDemanderMaillage = (chemin: string) =>
     import('./vedette-3d').then((m) => m.charger(chemin)).catch(() => null);
+  (globalThis as any).SprinterMaillagesAttendus = (): string[] => {
+    const chemins: string[] = [];
+    const porte = skinPorte();
+    const look = porte ? lookDuSkin(porte) : null;
+    if (look && look.maillage) chemins.push(look.maillage);
+    // les defis de la banniere de cet accueil (BanderoleVedette)
+    const jeu = courant === 'hurdlers' ? 'haies' : 'sprint';
+    for (const v of Object.values(VEDETTES)) {
+      if (!v.jeux.includes(jeu) || !defiPossible(v) || skinGagne(v.skin)) continue;
+      const chemin = maillageDe(v);
+      if (chemin && !chemins.includes(chemin)) chemins.push(chemin);
+    }
+    return chemins;
+  };
 }
 
 G.apresConstruction = () => {

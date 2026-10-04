@@ -144,23 +144,59 @@ function lumieres() {
   scene.add(ciel);
 }
 
+/**
+ * LA FINITION PREMIUM NE PAIE PAS CE CHARGEMENT. La couche de finition
+ * (rendu-premium.js) se regle sur le temps des images : quand elles trainent,
+ * elle descend d'un palier — et l'ultra, une fois perdu, l'est pour de bon.
+ * Or three.js, le contexte WebGL, le fichier et le dessin d'essai se paient
+ * une fois, sur le fil du jeu : un travail qui finit, pas ce que l'appareil
+ * tient. Tant qu'un maillage arrive, ces images-la ne se jugent donc pas,
+ * comme celles du public d'avance (chargement.ts) — ou qu'il ait ete
+ * demande : l'accueil, la fiche d'un defi, ou la course elle-meme.
+ *
+ * Reposee a chaque image tant qu'il arrive, et APRES CHAQUE ETAPE LOURDE :
+ * l'image qui suit un a-coup le mesure, et elle doit encore tomber dans la
+ * fenetre, quelle que soit la longueur de l'a-coup.
+ */
+function nePasJuger() {
+  const P = (globalThis as any).RenduPremium;
+  if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 1000);
+}
+
+/** Ne rien juger tant que `p` n'est pas tenue. */
+function sansJugement(p: Promise<unknown>) {
+  let tenue = false;
+  const tenir = () => { nePasJuger(); if (!tenue) requestAnimationFrame(tenir); };
+  tenir();
+  p.then(() => { tenue = true; nePasJuger(); });
+}
+
 /** Charger un maillage d'athlete. Rend null s'il ne peut pas l'etre. */
 export function charger(chemin: string): Promise<Modele | null> {
   if (modeles.has(chemin)) return Promise.resolve(modeles.get(chemin)!);
   if (enCours.has(chemin)) return enCours.get(chemin)!;
-  if (!renduWebGL()) return Promise.resolve(null);
+  // (le module de three.js vient d'etre evalue, le contexte d'etre cree)
+  const R = renduWebGL();
+  nePasJuger();
+  if (!R) return Promise.resolve(null);
   const p = new Promise<Modele | null>((ok) => {
     const chargeur = new GLTFLoader();
     chargeur.setMeshoptDecoder(MeshoptDecoder);
     chargeur.load(url(chemin), (gltf) => {
+      nePasJuger();
       let m: Modele;
-      try { m = preparer(gltf.scene); } catch { ok(null); return; }
+      try { m = preparer(gltf.scene); } catch { ok(null); return; } finally { nePasJuger(); }
       // pret() reste faux jusqu'ici : les tubes tiennent la place pendant
       // que ses shaders se compilent
       prechauffer(m).then(() => { modeles.set(chemin, m); ok(m); });
     }, undefined, () => ok(null));
   });
   enCours.set(chemin, p);
+  sansJugement(p);
+  // UN ECHEC NE CONDAMNE PAS LES DEMANDES SUIVANTES. Le maillage se demande
+  // d'avance, a l'accueil (chargement.ts) : un reseau coupe a ce moment-la ne
+  // doit pas laisser la course qui suit sans lui. Elle le redemandera.
+  p.then((m) => { if (!m) enCours.delete(chemin); });
   return p;
 }
 
@@ -283,17 +319,21 @@ async function prechauffer(m: Modele) {
   try {
     // (une carte qui ne repond plus — contexte perdu — ne finit jamais de
     // compiler : on n'attend pas le maillage pour toujours)
-    await Promise.race([R.compileAsync(m.racine, camera, scene), attendre(4000)]);
+    const compile = R.compileAsync(m.racine, camera, scene);
+    nePasJuger();
+    await Promise.race([compile, attendre(4000)]);
     await apresUneImage();
     m.racine.visible = true;
     R.render(scene, camera);
     m.racine.visible = false;
+    nePasJuger();
     await carteAJour(R);
     await apresUneImage();
     const brouillon = document.createElement('canvas');
     brouillon.width = brouillon.height = 1;
     brouillon.getContext('2d')?.drawImage(R.domElement, 0, 0, 1, 1);
   } catch { /* voir plus haut */ }
+  nePasJuger();
   m.racine.visible = false;
 }
 

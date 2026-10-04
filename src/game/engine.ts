@@ -53,7 +53,8 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
-import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, courseLancee } from './chargement';
+import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
+         courseLancee } from './chargement';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -827,6 +828,8 @@ export function updateLogic(dt: number) {
   // l'accueil, qui doit rester fluide.
   if (G.state === 'open') avancerLePublic(G, OUVERTURE_PUBLIC_MS);
   else if (G.state === 'title') avancerLePublic(G, ACCUEIL_PUBLIC_MS);
+  // Et les athletes en vrai maillage qu'on y verra : jamais en course.
+  if (G.state === 'title') avancerLesMaillages();
 
   if (G.state === 'open') {
     G.openT += dt;
