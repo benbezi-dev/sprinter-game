@@ -32,7 +32,12 @@ const SONDE_MAX = 36;
  * piste est interrogee de loin, sans s'y connecter — une connexion la
  * tiendrait eveillee, et c'est justement ce que sa fermeture evite.
  */
-export function RevancheDirecte() {
+export function RevancheDirecte({ titre, bouton }: {
+  /** Ce que la revanche relance, quand ce n'est pas une course : un tournoi neuf. */
+  titre?: string;
+  /** Le bouton qui la demande, dans ce cas-la. */
+  bouton?: string;
+} = {}) {
   const s = useSalonDirect();
   const { N } = SprinterApp;
 
@@ -90,7 +95,7 @@ export function RevancheDirecte() {
   const libelle = moiPret && !coupee ? N.t('live_rev_retirer')
     : veutQuelquun ? N.t('live_rev_accepter')
     : coupee ? N.t('live_rev_rouvrir')
-    : N.t('live_revanche');
+    : bouton || N.t('live_revanche');
 
   return (
     <motion.div
@@ -101,7 +106,7 @@ export function RevancheDirecte() {
       <div className="flex items-center gap-2">
         <RotateCcw className="w-4 h-4 text-emerald-400" />
         <span className="text-[10px] md:text-xs font-bold tracking-[0.25em] text-emerald-300">
-          {N.t('live_rev_titre')}
+          {titre || N.t('live_rev_titre')}
         </span>
       </div>
 

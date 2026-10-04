@@ -39,11 +39,59 @@ export const MAX_COULOIRS = 8;
 export const COULOIRS: number[] =
   Array.from({ length: MAX_COULOIRS - MIN_COULOIRS + 1 }, (_, i) => MIN_COULOIRS + i);
 
+/**
+ * Le tournoi a elimination commence a trois : a deux, eliminer le dernier,
+ * c'est deja la finale. Voir TOURNOI_MIN dans worker/src/salle.js.
+ */
+export const TOURNOI_MIN = 3;
+
+/** Un coureur sorti du tournoi, et la place qu'il y a prise. */
+export type EliminTournoi = {
+  id: string; nom: string;
+  /** La manche ou il est sorti. */
+  manche: number;
+  /** Sa place finale : 8 pour le premier sorti a huit, 2 pour le finaliste. */
+  place: number;
+  ms: number | null; abandon: boolean; forfait: boolean;
+};
+
+/**
+ * Le tournoi a elimination, tel que la salle l'annonce.
+ *
+ * De trois a huit partants : des manches successives, le dernier de chacune
+ * sort, jusqu'a la finale a deux. Voir « LE TOURNOI A ELIMINATION » dans
+ * worker/src/salle.js.
+ */
+export type EtatTournoi = {
+  etat: 'inscription' | 'manche' | 'pause' | 'fini';
+  /** La manche en cours, ou la derniere courue. */
+  manche: number;
+  /** Combien il en faudra en tout — elle grandit si une manche se recourt. */
+  manches: number;
+  en_lice: string[];
+  elimines: EliminTournoi[];
+  champion: { id: string; nom: string } | null;
+  /** Le depart automatique de la manche suivante, horloge de la salle. */
+  prochaine_a: number | null;
+};
+
+/** Un tournoi se court : on est en manche, ou entre deux. */
+export function tournoiLance(t: EtatTournoi | null | undefined): boolean {
+  return !!t && (t.etat === 'manche' || t.etat === 'pause');
+}
+
+/** Ce coureur est-il encore en course dans ce tournoi ? */
+export function enLiceDans(t: EtatTournoi | null | undefined, id: string): boolean {
+  return !tournoiLance(t) || !!t!.en_lice.includes(id);
+}
+
 export type JoueurSalle = {
   id: string; nom: string; pret: boolean; d: number;
   fin: number | null; hote: boolean;
   /** Couloir attribue par la salle, dans l'ordre d'arrivee. */
   couloir?: number;
+  /** Tournoi : encore en course (absent hors tournoi). */
+  en_lice?: boolean;
   /** En championnat seulement : 'engage', 'dq', 'abandon'... */
   statut?: string;
   /**
@@ -122,6 +170,8 @@ export type EtatSalle = {
   champ?: EtatChamp | null;
   /** Championnat : le mot du vainqueur, une fois pose. */
   mot?: MotDirect | null;
+  /** Le tournoi a elimination, sur une piste ouverte en tournoi. */
+  tournoi?: EtatTournoi | null;
 };
 
 export type Arrivee = {
@@ -130,6 +180,17 @@ export type Arrivee = {
   motif?: 'faux_depart' | 'abandon' | 'forfait' | null;
   motif_ms?: number | null;
   couloir?: number;
+  /** Tournoi : ce coureur sort a l'issue de cette manche. */
+  elimine?: boolean;
+};
+
+/** Ce que le verdict d'une manche de tournoi ajoute a celui d'une course. */
+export type ResultatTournoi = {
+  manche: number; manches: number;
+  /** Ceux qui sortent a l'issue de cette manche. */
+  elimines: string[];
+  fini: boolean;
+  champion: { id: string; nom: string } | null;
 };
 
 export type ResultatDirect = {
@@ -145,6 +206,8 @@ export type ResultatDirect = {
   issue?: 'challenger' | 'opponent' | 'draw';
   hote?: { id: string; nom: string; ms: number };
   invite?: { id: string; nom: string; ms: number };
+  /** Une manche de tournoi : qui sort, et si c'etait la finale. */
+  tournoi?: ResultatTournoi;
 };
 
 /** Un des duels d'une course en direct, vu d'un partant. */
@@ -249,7 +312,7 @@ export async function etatSalle(code: string) {
   try {
     const res = await fetch(`${API_BASE}/live/${encodeURIComponent(code)}/etat`);
     if (!res.ok) return null;
-    return await res.json() as EtatSalle & { existe: boolean; complete: boolean };
+    return await res.json() as EtatSalle & { existe: boolean; complete: boolean; en_cours?: boolean };
   } catch {
     return null;
   }
@@ -291,6 +354,8 @@ export class Salle {
   /** De quoi refaire la meme piste sous le meme code : voir rouvrir(). */
   private niveau = 5;
   private places = 2;
+  /** Une piste ouverte en tournoi a elimination se rouvre en tournoi. */
+  private tournoi = false;
   /**
    * La salle a coupe la liaison d'elle-meme — fin de course, inactivite,
    * reseau. Pas quand on la quitte : fermer() la coupe aussi, mais il n'y a
@@ -339,6 +404,16 @@ export class Salle {
   }
 
   /**
+   * Tournoi : suis-je sorti ? Un elimine reste dans la salle et regarde les
+   * manches suivantes, mais ne les court plus. Faux hors tournoi, et avant
+   * qu'on ait une identite dans la salle.
+   */
+  get elimineMoi(): boolean {
+    const t = this.dernierEtat?.tournoi;
+    return !!this.moi && tournoiLance(t) && !enLiceDans(t, this.moi);
+  }
+
+  /**
    * ROUVRIR LA MEME PISTE, SOUS LE MEME CODE.
    *
    * Une salle se ferme d'elle-meme apres le verdict quand personne ne se
@@ -367,6 +442,7 @@ export class Salle {
     const epreuves = avant?.epreuves?.length ? avant.epreuves : this.epreuves;
     const niveau = avant ? avant.niveau : this.niveau;
     const places = avant?.max || this.places;
+    const tournoi = avant ? !!avant.tournoi : this.tournoi;
     // Ce que le dernier etat dit des autres — presents, prets — decrit une
     // salle qui n'existe plus, et l'ecran l'afficherait comme vrai.
     this.dernierEtat = avant
@@ -376,13 +452,19 @@ export class Salle {
     // une a l'arrivee. Garder l'ancienne ferait croire qu'on y est deja.
     this.moi = '';
     this.suisHote = false;
-    this.connecter(epreuves, niveau, places);
+    this.connecter(epreuves, niveau, places, tournoi);
   }
 
-  connecter(epreuves: string[], niveau: number, places = 2) {
+  /**
+   * @param tournoi ouvrir la piste en tournoi a elimination. Comme la taille,
+   *   seul le premier arrive le decide, et la salle l'ignore sous trois
+   *   couloirs.
+   */
+  connecter(epreuves: string[], niveau: number, places = 2, tournoi = false) {
     this.epreuves = epreuves.slice();
     this.niveau = niveau;
     this.places = places;
+    this.tournoi = tournoi;
     this.coupee = false;
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
@@ -395,6 +477,7 @@ export class Salle {
       // refuserait.
       max: String(Math.max(MIN_COULOIRS, Math.min(MAX_COULOIRS, Math.round(places) || 2))),
     });
+    if (tournoi && places >= TOURNOI_MIN) q.set('tournoi', '1');
     // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
     // passe donc par la requete.
     //
@@ -589,7 +672,10 @@ export class Salle {
     if (m.champ && Number.isFinite(m.champ.depart_n) && this.departN != null) {
       this.departN = Math.max(this.departN, m.champ.depart_n);
     }
-    const autre = (m.joueurs || []).find((j: JoueurSalle) => j.id !== this.moi);
+    // En tournoi, l'adversaire est quelqu'un qui court encore : un elimine
+    // regarde depuis les tribunes.
+    const autres = (m.joueurs || []).filter((j: JoueurSalle) => j.id !== this.moi);
+    const autre = autres.find((j: JoueurSalle) => j.en_lice !== false) || autres[0];
     this.adversaire = autre ? autre.nom : '';
     // La distance est celle de la SALLE, fixee par celui qui l'a ouverte. Ce
     // qu'on avait demande en se connectant ne compte que si l'on etait le
