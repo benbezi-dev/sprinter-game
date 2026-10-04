@@ -46,8 +46,20 @@
       dix secondes d'attente au premier depart dans les memes conditions de
       mesure. On le compose donc d'avance : celui des Jeux mondiaux, ou
       partent par defaut le one-shot, les defis, les duels et le classement,
-      PENDANT l'ecran d'ouverture — qui l'attend, comme il attend les images —,
-      puis, a l'accueil, celui du stade de la derniere course.
+      a l'ouverture une fois les images la, puis, a l'accueil, celui du stade
+      de la derniere course.
+
+      L'OUVERTURE NE L'ATTEND PLUS (04/10, « l'animation au demarrage est
+      tres longue voire bloquee »). Elle l'a attendu un jour, et sur un
+      telephone le pourcentage restait a quatre-vingt-dix et quelques, le
+      coureur arrete avant sa ligne, jusqu'au plafond de vingt-cinq secondes.
+      Mesure processeur bride quatre fois : vingt-cinq secondes d'ouverture,
+      le public toujours pas compose au bout ; et ses vingt millisecondes par
+      image prises pendant les telechargements les ralentissaient d'autant
+      (dix-huit secondes pour les images locales). Il ne commence donc qu'une
+      fois les images la, et ce qui n'est pas fait quand l'ouverture se
+      termine l'est a l'accueil, ou par l'attente d'avant le decompte, qui ne
+      retient que les caps de la course qui va partir (tribune.js).
 --------------------------------------------------------------------------- */
 import liste from 'virtual:precharge';
 
@@ -142,19 +154,18 @@ export function lancerChargement() {
 
 /**
  * L'ouverture peut-elle ceder la place a l'accueil ? Quand les images sont la
- * ET le public de la premiere course compose (avancerLePublic).
+ * — pas le public d'avance, qui continue a l'accueil (voir 4, plus haut).
  */
 export function chargementFini() {
-  return (fini && publicFait) || (lance && performance.now() - t0 > ATTENTE_MAX_MS);
+  return fini || (lance && performance.now() - t0 > ATTENTE_MAX_MS);
 }
 
 // Le niveau des Jeux mondiaux, ou partent par defaut le one-shot
 // (ModePanels), les defis (objectif.ts), les duels (duels.ts) et le classement.
 const NIVEAU_PAR_DEFAUT = 4;
 let dernierNiveau: number | null = null;
-// La part du public d'avance deja composee, et s'il l'a ete une fois en
-// entier : l'ouverture l'attend (chargementFini), une seule fois.
-let partPublic = 0, publicFait = false;
+// La part du public d'avance deja composee.
+let partPublic = 0;
 // une fois tout compose, on ne revient verifier qu'a cette heure-la
 let revoirA = 0;
 
@@ -166,7 +177,8 @@ export function courseLancee(niveau: number) {
 /**
  * COMPOSE D'AVANCE LE PUBLIC DE LA PROCHAINE COURSE PROBABLE, `ms`
  * millisecondes au plus. Appele a chaque image par engine.ts, a l'ouverture et
- * a l'accueil seulement — jamais en course ni en cinematique. La cible est le
+ * a l'accueil seulement — jamais en course ni en cinematique —, et sans effet
+ * tant que les images se telechargent (voir 4, plus haut). La cible est le
  * stade de la derniere course, et avant toute course celui des Jeux mondiaux.
  * Une fois compose, l'appel ne coute qu'une lecture de table ; il reprend de
  * lui-meme si l'heure du jour change le stade ou si la montee en ultra change
@@ -179,19 +191,18 @@ export function courseLancee(niveau: number) {
  * ces images-la (voir composeDAvance dans rendu-premium.js).
  */
 export function avancerLePublic(G: any, ms: number) {
-  if (!atlasPret) return;
+  if (!atlasPret || !fini) return;
   const g = globalThis as any;
   const A = g.SprinterApp, T = g.Tribune, H = g.SprinterHeure;
   if (!A || !T || !T.composerDAvance || (partPublic >= 1 && performance.now() < revoirA)) return;
   const lvl = A.LEVELS && A.LEVELS[dernierNiveau ?? NIVEAU_PAR_DEFAUT];
   const brut = lvl && A.THEMES && A.THEMES[lvl.theme];
-  if (!brut) { publicFait = true; return; }
+  if (!brut) return;
   // le stade tel que la course le dessinera : a l'heure (SprinterApp.theme)
   const th = H && H.eclairer ? H.eclairer(brut, G) : brut;
   const debut = performance.now();
   partPublic = T.composerDAvance(th, lvl.theme, debut + ms);
   if (partPublic >= 1) {
-    publicFait = true;
     etat.publicAvance = lvl.theme;
     revoirA = debut + 2000;
   } else {
@@ -214,5 +225,5 @@ export function stadeEnPreparation(depuis: number) {
 
 /** La part chargee, de 0 a 1, pour la barre de l'ecran d'ouverture. */
 export function partChargee() {
-  return chargementFini() ? 1 : fini ? 0.9 + 0.1 * partPublic : part * 0.9;
+  return chargementFini() ? 1 : part;
 }

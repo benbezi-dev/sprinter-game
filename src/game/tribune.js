@@ -447,6 +447,15 @@
   /** Les caps de spectateurs de ce stade, pour tout le trace. */
   let capsVus = new Set();
   let capsDuTrace = null;
+  // LES CAPS DE LA COURSE QUI VA PARTIR, et d'elle seule : ceux de son trace.
+  // `capsVus` en tient davantage des que le public d'un stade est compose
+  // d'avance (composerDAvance) — les vingt-six caps de l'atlas, toutes les
+  // distances. Le decompte attendait alors les vingt-six, meme pour un 100 m
+  // qui n'en montre que quelques-uns (04/10, « l'animation au demarrage est
+  // tres longue voire bloquee ») : mesure processeur bride quatre fois, le
+  // premier 100 m apres l'ouverture attendait mille huit cent quatre-vingt-dix-
+  // huit images au lieu de celles de sa ligne droite.
+  let capsCourse = new Set();
 
   // UN STADE EN RESERVE. Le public se compose stade par stade — ses couleurs
   // sont celles du stade —, et changer de stade vidait tout. Or l'accueil
@@ -460,16 +469,16 @@
   const MAX_IMAGES_EN_TOUT = 2400;
   function changerDeStade(th) {
     if (_themeCourant) {
-      reserve.set(_themeCourant, { cache, chantiers, poses, capsVus, capsDuTrace, pers: _personnages });
+      reserve.set(_themeCourant, { cache, chantiers, poses, capsVus, capsDuTrace, capsCourse, pers: _personnages });
     }
     const b = reserve.get(th);
     reserve.delete(th);
     if (b) {
-      ({ cache, chantiers, poses, capsVus, capsDuTrace } = b);
+      ({ cache, chantiers, poses, capsVus, capsDuTrace, capsCourse } = b);
       _personnages = b.pers;
     } else {
       cache = new Map(); chantiers = new Map(); poses = new Map(); capsVus = new Set();
-      capsDuTrace = null; _personnages = null;
+      capsDuTrace = null; capsCourse = new Set(); _personnages = null;
     }
     _themeCourant = th;
     while (reserve.size > 1) reserve.delete(reserve.keys().next().value);
@@ -482,15 +491,16 @@
   const siegeDe = (th, nom) => hexa(teinteNuit(th, SIEGES[nom] || (th.base || th).accent || [80, 90, 120]));
 
   /**
-   * Compose toutes les images des caps vus, puis les drapeaux, jusqu'a
-   * l'heure `limite`. Rend vrai quand il ne reste plus rien a faire.
-   * `teindre` : faire aussi la copie de nuit des drapeaux — seulement dans le
-   * dessin, ou la lumiere posee est celle de ce stade.
+   * Compose toutes les images des caps `caps` (par defaut, tous ceux vus dans
+   * ce stade), puis les drapeaux, jusqu'a l'heure `limite`. Rend vrai quand il
+   * ne reste plus rien a faire. `teindre` : faire aussi la copie de nuit des
+   * drapeaux — seulement dans le dessin, ou la lumiere posee est celle de ce
+   * stade.
    */
-  function toutComposer(siegeC, pers, avecDrapeaux, teindre) {
+  function toutComposer(siegeC, pers, avecDrapeaux, teindre, caps = capsVus) {
     const man = MAN();
     const nG = man.gestes.length, ligneVide = man.poses.indexOf('vide');
-    for (const capI of capsVus) {
+    for (const capI of caps) {
       if (!image(ligneVide, capI, null, siegeC)) return false;
       for (let pose = 0; pose < 3; pose++) {
         for (const p of pers) {
@@ -612,11 +622,14 @@
     // regardent. Meme calcul que plus bas, sur la rangee du milieu.
     if (G.state !== 'race' && capsDuTrace !== T) {
       capsDuTrace = T;
+      capsCourse = new Set();
       for (let i = 0; i + 1 < sm.length; i++) {
         const a = api.ptOf(sm[i], rMil), o = api.ptOf(sm[i], rMil + 1);
         let nx = o[0] - a[0], ny = o[1] - a[1];
         const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
-        capsVus.add(capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue));
+        const capI = capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue);
+        capsVus.add(capI);
+        capsCourse.add(capI);
       }
     }
     for (let i = 0; i < sm.length; i++) {
@@ -651,6 +664,7 @@
         const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
         const capI = capProche(Math.atan2(-nx, ny) * 180 / Math.PI + vue);
         capsVus.add(capI);
+        capsCourse.add(capI);
         const n = Math.max(1, Math.floor(L / PAS));
         // L'emotion de ce bout de rangee, une fois pour tous ses sieges.
         const eLoc = ferveur > 0 ? ferveur * (0.6 + 0.4 * presDe(a[0] + dx * 0.5, a[1] + dy * 0.5)) : 0;
@@ -751,7 +765,10 @@
     // Les drapeaux aussi : douze moments par pays, et leur copie de nuit.
     // Cuits a la premiere levee, ils tombaient en course — c'est quand le
     // peloton arrive devant la tribune qu'elle se leve.
-    if (G.state !== 'race') inacheve = !toutComposer(siegeC, pers, avecDrapeaux, true);
+    //
+    // Les caps de CE trace seulement (`capsCourse`) : ceux des autres
+    // distances, que l'accueil compose d'avance, ne retiennent pas le depart.
+    if (G.state !== 'race') inacheve = !toutComposer(siegeC, pers, avecDrapeaux, true, capsCourse);
     return true;
   }
 

@@ -830,8 +830,7 @@ export function updateLogic(dt: number) {
 
   if (G.state === 'open') {
     G.openT += dt;
-    // L'ouverture attend que les images soient la et le public de la
-    // premiere course compose (chargement.ts).
+    // L'ouverture attend que les images soient la (chargement.ts).
     if (G.openT > 6.4 && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
@@ -919,7 +918,12 @@ export function updateLogic(dt: number) {
       G.attenteImages = (G.attenteImages || 0) + 1;
       // trois images au moins : la premiere a tout demande, les suivantes ont
       // dessine ce qu'elle a demande
-      G.enPreparation = G.attenteStade < ATTENTE_STADE_MAX_S
+      // Le plafond se compte a la montre, pas en temps du jeu : sous quinze
+      // images par seconde, le pas plafonne (GameCanvas.tsx) ralentit
+      // `attenteStade`, et ses douze secondes en duraient trente sur un
+      // processeur bride quatre fois (04/10, « l'animation au demarrage est
+      // tres longue voire bloquee »).
+      G.enPreparation = performance.now() - G.debutAttente < ATTENTE_STADE_MAX_S * 1000
         && (G.attenteStade < ATTENTE_STADE_MIN_S || G.attenteImages < 3
             || stadeEnPreparation(G.debutAttente));
       if (G.enPreparation) {
