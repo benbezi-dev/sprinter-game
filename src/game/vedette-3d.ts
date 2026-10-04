@@ -439,6 +439,39 @@ function poser(m: Modele, sq: Squelette) {
 // --- LE RENDU ------------------------------------------------------------------
 
 /**
+ * LA TOILE NE CHANGE PLUS DE TAILLE A CHAQUE IMAGE. L'image de l'athlete fait
+ * Sd pixels de cote, et Sd suit le cadrage : pendant la presentation d'avant
+ * le depart, la camera zoome (G.zoomPres) et Sd changeait a chaque image. Or
+ * redimensionner la toile WebGL, c'est la reallouer, son antialiasing avec :
+ * un a-coup par image, tout le zoom durant.
+ *
+ * L'image se rend donc dans un coin de la toile (setViewport), A LA MEME
+ * DENSITE qu'avant. Le coin du bas a gauche, l'origine de WebGL : sans
+ * decalage, la trame et l'antialiasing tombent exactement comme sur une toile
+ * a sa taille (dans un autre coin, des bords de la silhouette changeaient de
+ * dix-huit niveaux sur 255). Reste, le temps d'un zoom, l'arrondi de la copie
+ * vers la toile du jeu : un niveau sur 255, invisible. La toile
+ * grandit avec de la marge quand l'image la deborde (une poignee de fois sur
+ * tout un zoom), et se resserre sur elle des que le cadrage est pose
+ * (TOILE_POSEE_MS), ou d'un coup si elle devient deux fois trop grande : en
+ * course, ou le cadrage ne bouge plus, elle a exactement la taille de
+ * l'image, comme avant — pas un pixel de trop a effacer ni a copier.
+ */
+const TOILE_MAX = 2048, TOILE_MARGE = 1.25, TOILE_POSEE_MS = 500;
+/** Le cote de la toile, en pixels ; 0 avant le premier dessin. */
+let toile = 0;
+let dernierSd = 0, poseDepuis = 0;
+
+/** Le cote que doit avoir la toile pour une image de `Sd` pixels. */
+function coteDeToile(Sd: number): number {
+  const t = performance.now();
+  if (Sd !== dernierSd) { dernierSd = Sd; poseDepuis = t; }
+  if (Sd > toile) return toile ? Math.min(TOILE_MAX, Math.ceil(Sd * TOILE_MARGE)) : Sd;
+  if (Sd < toile && (Sd * 2 < toile || t - poseDepuis > TOILE_POSEE_MS)) return Sd;
+  return toile;
+}
+
+/**
  * Dessiner l'athlete dans `ctx`, a la place de ses tubes.
  *
  * `repere` : les images des trois axes par repereDuCoureur (sprinter-app.js) ;
@@ -461,8 +494,14 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     // que le jeu s'accorde —, puis posee a sa taille.
     const tr = ctx.getTransform ? ctx.getTransform() : null;
     const dens = tr ? Math.max(1, Math.min(3, Math.hypot(tr.a, tr.b))) : 1;
-    const Sd = Math.min(2048, Math.ceil(S * dens));
-    if (R.domElement.width !== Sd || R.domElement.height !== Sd) R.setSize(Sd, Sd, false);
+    const Sd = Math.min(TOILE_MAX, Math.ceil(S * dens));
+    const cote = coteDeToile(Sd);
+    if (cote !== toile || R.domElement.width !== cote || R.domElement.height !== cote) {
+      R.setSize(cote, cote, false);
+      toile = cote;
+    }
+    // le coin du bas a gauche (voir LA TOILE, plus haut)
+    R.setViewport(0, 0, Sd, Sd);
     poser(m, sq);
     // le repere du coureur (tourne, bascule, miroir), puis le passage glTF -> jeu
     const [ex, ey, ez] = repere;
@@ -492,7 +531,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     for (const o of modeles.values()) o.racine.visible = o === m;
     R.render(scene, camera);
     m.racine.visible = false;
-    ctx.drawImage(R.domElement, ax - S / 2, ay - oy, S, S);
+    ctx.drawImage(R.domElement, 0, toile - Sd, Sd, Sd, ax - S / 2, ay - oy, S, S);
     return true;
   } catch {
     return false;
