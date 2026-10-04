@@ -106,6 +106,7 @@ export function TouchControls() {
   // phase a l'autre — passe par un selecteur, compare a chaque image.
   const rejeu = useGameStore(() => !!SprinterApp.G.rejeu);
   const spectateur = useGameStore(() => !!SprinterApp.G.spectateur);
+  const liveOn = useGameStore(s => !!s.liveOn);
   const pavesCaches = useGameStore(() => !!(SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut
                                              && !SprinterApp.G.pavesSaut()));
   const consigne = useGameStore((): string | null => SprinterApp.G.sautEnCours
@@ -274,6 +275,9 @@ export function TouchControls() {
   // Pas davantage une fois SA ligne passee : il attend les autres, et « alterne
   // les deux touches » sous un coureur qui freine promettait une course finie.
   if (champ.ouvert && (spectateur || champ.etape === 'fin' || fini)) return null;
+  // Un elimine du tournoi en direct regarde depuis les tribunes : pas de
+  // coureur, pas de paves.
+  if (spectateur && liveOn) return null;
   // Au saut en longueur, entre deux essais ou le temps que la marque tombe :
   // personne ne court, les paves n'ont rien a proposer.
   if (pavesCaches) return null;

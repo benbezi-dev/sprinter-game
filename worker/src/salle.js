@@ -119,6 +119,57 @@ export function rencontresDeLaCourse(partants, { code, course, hote = null }) {
 }
 
 /**
+ * LE TOURNOI A ELIMINATION : QUI SORT A L'ISSUE D'UNE MANCHE.
+ *
+ * De trois a huit partants, la piste court des manches successives et le
+ * DERNIER de chacune sort, jusqu'a la finale a deux. Huit, ce sont sept
+ * manches ; trois, deux. C'est le format de l'elimination des velodromes :
+ * on ne gagne pas une manche, on evite d'en etre le dernier.
+ *
+ * Trois cas, et chacun a sa raison :
+ *
+ * - le dernier, au chrono, sort. Un abandon ou un faux depart porte le chrono
+ *   sentinelle : il est donc dernier, et c'est lui qui sort.
+ * - DEUX DERNIERS EX AEQUO SORTENT ENSEMBLE. Deux faux departs dans la meme
+ *   manche, c'est deux disqualifies ; departager l'un par l'autre a la
+ *   milliseconde inventerait un vainqueur la ou il n'y a que deux fautes.
+ * - mais si TOUT LE MONDE est a egalite — tous en faux depart, ou une arrivee
+ *   impossible a separer — personne ne sort : la manche se recourt. Vider la
+ *   piste d'un coup ne laisserait aucun champion.
+ *
+ * Un partant qui a quitte la salle pendant la manche sort quoi qu'il arrive
+ * (`forfait`) : il ne courra pas la suivante, et la garder en lice ferait
+ * attendre tout le monde devant un couloir vide.
+ *
+ * Rend les identifiants qui sortent, dans l'ordre d'arrivee.
+ */
+export function eliminesDeLaManche(partants) {
+  const liste = (partants || []).filter(x => x && x.id);
+  if (liste.length < 2) return [];
+  const pire = Math.max(...liste.map(x => x.fin));
+  const derniers = liste.filter(x => x.fin === pire);
+  const sortis = new Set(derniers.length < liste.length ? derniers.map(x => x.id) : []);
+  for (const x of liste) if (x.forfait) sortis.add(x.id);
+  return [...liste].sort((a, b) => a.fin - b.fin)
+    .filter(x => sortis.has(x.id)).map(x => x.id);
+}
+
+/** Un tournoi neuf, qui attend que la piste soit pleine et prete. */
+function nouveauTournoi() {
+  return {
+    // 'inscription' : on remplit la piste ; 'manche' : une manche se court ;
+    // 'pause' : entre deux manches ; 'fini' : le champion est connu.
+    etat: 'inscription',
+    manche: 0,       // la manche en cours, ou la derniere courue
+    manches: 0,      // combien il en faudra en tout, si personne n'est ex aequo
+    en_lice: [],     // les identifiants encore en course
+    elimines: [],    // dans l'ordre ou ils sont sortis, avec leur place finale
+    champion: null,
+    prochaine_a: null, // le depart automatique de la manche suivante
+  };
+}
+
+/**
  * Ajoute un duel au bilan de course d'un partant.
  *
  * Le bilan dit ce qu'on lit a l'arrivee : les points de toute la course, la
@@ -253,6 +304,36 @@ const PLAFOND_JOUEURS = 8;
 const PLANCHER_JOUEURS = 1;
 const DEFAUT_JOUEURS = 2;
 
+/**
+ * LE TOURNOI COMMENCE A TROIS.
+ *
+ * A deux, eliminer le dernier, c'est deja la finale : le tournoi ne serait
+ * qu'un duel avec un autre titre. Une piste plus petite qui le demande court
+ * donc comme avant, en course simple.
+ */
+const TOURNOI_MIN = 3;
+/**
+ * Le temps de lire sa manche avant la suivante.
+ *
+ * Elle part plus tot si tous ceux qui restent en lice se sont dits prets, et
+ * d'elle-meme a l'heure dite sinon : un tournoi a huit, ce sont sept manches,
+ * et un seul joueur parti chercher un verre ne doit pas tenir les six autres.
+ * Trente secondes, parce que c'est ce que prend un ecran de fin quand on le
+ * lit — son chrono, sa place, ses points — et qu'on veut le lire.
+ */
+const ENTRE_MANCHES_MS = 30 * 1000;
+/**
+ * LE RETARDATAIRE.
+ *
+ * Une manche se tranche quand tout le monde a franchi la ligne, et un
+ * telephone en veille ne la franchira jamais : sans limite, la manche
+ * attendrait indefiniment et le tournoi avec elle. Le premier arrive ouvre
+ * donc un delai — autant de temps qu'il en a mis lui-meme, vingt secondes au
+ * moins — apres quoi ceux qui courent encore sont comptes en abandon. Courir
+ * deux fois plus lentement que le premier, c'est ne plus courir.
+ */
+const RETARD_MIN_MS = 20 * 1000;
+
 function net(nom) {
   const s = String(nom || '').trim().slice(0, 20).replace(/[<>]/g, '');
   return s || 'Anonyme';
@@ -277,21 +358,36 @@ export class SalleDirecte {
     this.minuteur = null;      // fermeture programmee
     this.ne = Date.now();
     this.debitRapide = new DebitRapide();  // la cadence du tchat rapide
+    this.tournoi = null;       // le tournoi a elimination, si l'hote l'a demande
+    this.coureurs = [];        // tournoi : les partants de la manche en cours
+    this.minuteurTournoi = null; // tournoi : la limite de la manche, ou la suivante
+    this.limiteManche = null;  // tournoi : l'instant ou les retardataires abandonnent
   }
 
   // --- utilitaires ---------------------------------------------------------
 
   /** Etat public de la salle, tel que le voit un client. */
   vue() {
+    const t = this.tournoi;
+    const lances = this.tournoiLance();
     const joueurs = [...this.joueurs.values()].map((j, i) => ({
       id: j.id, nom: j.nom, pret: j.pret, d: Math.round(j.d * 10) / 10,
       fin: j.fin, hote: j.id === this.hote,
       // Le couloir suit l'ordre d'arrivee sur la piste. Il sert au jeu a
       // placer chaque adversaire, et a la presentation a les faire passer.
-      couloir: i + 1,
+      //
+      // En tournoi, il est fixe au premier pistolet et ne bouge plus : un
+      // elimine qui quitte la salle decalerait sinon tous ceux d'apres, et
+      // l'on changerait de couloir d'une manche a l'autre sans avoir rien
+      // demande.
+      couloir: lances && j.couloir ? j.couloir : i + 1,
+      // Tournoi : encore en course, ou sorti. Le jeu ne met sur la piste que
+      // ceux qui courent ; les autres regardent.
+      ...(t ? { en_lice: !lances || t.en_lice.includes(j.id) } : {}),
     }));
     return {
       joueurs, epreuves: this.epreuves, niveau: this.niveau, max: this.max,
+      tournoi: t ? { ...t, en_lice: t.en_lice.slice(), elimines: t.elimines.slice() } : null,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
       presentation: this.presentationA ? {
         debut_a: this.presentationA,
@@ -335,6 +431,24 @@ export class SalleDirecte {
     this.presentationA = null;
     this.ordre = [];
     this.termine = false;
+    // Le tournoi aussi : celui qui revient le premier refonde la piste, et il
+    // dit lui-meme s'il veut un tournoi. Un minuteur de manche laisse en
+    // route relancerait une course dans une salle vide.
+    clearTimeout(this.minuteurTournoi); this.minuteurTournoi = null;
+    this.limiteManche = null;
+    this.coureurs = [];
+    this.tournoi = null;
+  }
+
+  /** Un tournoi est-il en train de se courir — manche, ou pause entre deux ? */
+  tournoiLance() {
+    const e = this.tournoi && this.tournoi.etat;
+    return e === 'manche' || e === 'pause';
+  }
+
+  /** Ce joueur court-il la manche en cours ? */
+  court(j) {
+    return !!this.tournoi && this.tournoi.etat === 'manche' && this.coureurs.includes(j);
   }
 
   /** Il se passe quelque chose : la salle ne ferme pas maintenant. */
@@ -373,7 +487,10 @@ export class SalleDirecte {
     if (url.pathname.endsWith('/etat')) {
       return new Response(JSON.stringify({
         existe: this.joueurs.size > 0 || !!this.epreuves,
-        complete: this.joueurs.size >= this.max,
+        complete: this.joueurs.size >= this.max || this.tournoiLance(),
+        // Un tournoi lance ne prend plus personne, meme quand un couloir s'est
+        // libere : on n'entre pas a la cinquieme manche d'une elimination.
+        en_cours: this.tournoiLance(),
         ...this.vue(),
       }), { headers: { 'Content-Type': 'application/json' } });
     }
@@ -384,6 +501,9 @@ export class SalleDirecte {
 
     if (this.joueurs.size >= this.max) {
       return new Response('salle complete', { status: 409 });
+    }
+    if (this.tournoiLance()) {
+      return new Response('tournoi en cours', { status: 409 });
     }
 
     const paire = new WebSocketPair();
@@ -409,10 +529,15 @@ export class SalleDirecte {
       this.max = Number.isFinite(m)
         ? Math.max(PLANCHER_JOUEURS, Math.min(PLAFOND_JOUEURS, m))
         : DEFAUT_JOUEURS;
+      // Le tournoi aussi se decide a l'ouverture, et seulement a partir de
+      // trois couloirs (voir TOURNOI_MIN).
+      this.tournoi = url.searchParams.get('tournoi') === '1' && this.max >= TOURNOI_MIN
+        ? nouveauTournoi() : null;
     }
 
     this.joueurs.set(serveur, {
       id, nom, pret: false, d: 0, c: null, fin: null, parti: false,
+      couloir: null, forfait: false,
     });
     this.vivante();
 
@@ -434,6 +559,19 @@ export class SalleDirecte {
     if (!j) return;
     this.joueurs.delete(ws);
     this.debitRapide.oublier(j.id);
+    // TOURNOI : PARTIR, C'EST DECLARER FORFAIT. En pleine manche, on compte
+    // un abandon — les autres voient son couloir s'arreter, et la manche peut
+    // se trancher sans lui. Entre deux manches, on sort tout de suite.
+    const t = this.tournoi;
+    if (t && this.court(j)) {
+      j.forfait = true;
+      if (j.fin === null) {
+        j.fin = ABANDON_MS;
+        this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms: j.fin, abandon: true });
+      }
+    } else if (t && t.etat === 'pause' && t.en_lice.includes(j.id)) {
+      this.forfaitEntreManches(j);
+    }
     // Un depart en pleine course laisse l'autre seul : on le lui dit plutot
     // que de le laisser courir contre un couloir vide.
     this.diffuser({ t: 'sorti', id: j.id, nom: j.nom, ...this.vue() });
@@ -442,6 +580,14 @@ export class SalleDirecte {
     if (this.joueurs.size === 0) {
       this.viderPiste();
       clearTimeout(this.minuteur); this.minuteur = null;
+      return;
+    }
+    // Le forfait a peut-etre ete la derniere arrivee qu'on attendait, ou le
+    // dernier « pas pret » d'une pause.
+    if (t && t.etat === 'manche') this.peutTrancher();
+    else if (t && t.etat === 'pause') {
+      this.pretTournoi();
+      if (this.tournoi && this.tournoi.etat === 'manche') this.envoyerEtat();
     }
   }
 
@@ -462,6 +608,13 @@ export class SalleDirecte {
       case 'pret': {
         j.pret = !!m.pret;
         this.vivante();
+        // En tournoi, « pret » ne fait pas partir la meme chose selon le
+        // moment : le premier pistolet, la manche suivante, ou un tournoi neuf.
+        if (this.tournoi) {
+          this.pretTournoi();
+          this.envoyerEtat();
+          return;
+        }
         // Le depart se declenche quand la salle est pleine et que tout le
         // monde a confirme. On l'annonce a une date absolue : chacun compte
         // avec sa propre horloge recalee, personne n'attend le signal d'un
@@ -526,6 +679,8 @@ export class SalleDirecte {
       // dixieme de seconde, et dix centimetres d'arrondi y faisaient un metre
       // par seconde d'erreur.
       case 'pos': {
+        // Un elimine ne court plus : il regarde.
+        if (this.tournoi && !this.court(j)) return;
         const d = Number(m.d);
         if (!Number.isFinite(d) || d < 0 || d > 2000) return;
         const c = Number(m.c);
@@ -544,10 +699,13 @@ export class SalleDirecte {
 
       case 'fini': {
         if (j.fin !== null) return;
+        if (this.tournoi && !this.court(j)) return;
         const ms = Math.round(Number(m.ms));
         if (!Number.isFinite(ms) || ms < MIN_MS || ms > MAX_MS) return;
         j.fin = ms;
         this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms });
+        // Le premier arrive d'une manche ouvre le delai des retardataires.
+        if (this.tournoi) this.limiterManche(Date.now() + Math.max(RETARD_MIN_MS, ms));
         this.peutTrancher();
         return;
       }
@@ -555,6 +713,7 @@ export class SalleDirecte {
       // Abandon volontaire, ou faux depart eliminatoire.
       case 'abandon': {
         if (j.fin !== null) return;
+        if (this.tournoi && !this.court(j)) return;
         j.fin = ABANDON_MS;
         this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms: j.fin, abandon: true });
         this.peutTrancher();
@@ -582,6 +741,7 @@ export class SalleDirecte {
   }
 
   peutTrancher() {
+    if (this.tournoi) { this.trancherManche(); return; }
     if (this.termine) return;
     const tous = [...this.joueurs.values()];
     if (tous.length < this.max || tous.some(x => x.fin === null)) return;
@@ -659,6 +819,226 @@ export class SalleDirecte {
     if (tous.length < 2) return;
     const ecrire = this.ecrire(tous, course);
     if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+  }
+
+  /* -------------------------------------------------------------------------
+     LE TOURNOI A ELIMINATION
+     -------------------------------------------------------------------------
+     Une piste de trois a huit couloirs, ouverte en tournoi. Elle se remplit
+     comme une autre ; au premier « pret » general part la manche 1, avec la
+     presentation de tout le monde. Le dernier sort. Ceux qui restent courent
+     la manche suivante — trente secondes plus tard, ou des que tous se sont
+     dits prets — et ainsi de suite jusqu'a la finale a deux, presentee elle
+     aussi. Son vainqueur est le champion.
+
+     CHAQUE MANCHE EST UNE COURSE EN DIRECT, ET COMPTE COMME TELLE. Chaque
+     paire de partants y est un duel au classement (rencontresDeLaCourse) :
+     c'est ce qui s'est passe sur la piste, manche apres manche. Les elimines
+     ne courent plus, et ne comptent donc plus ; ils restent dans la salle et
+     regardent la suite.
+  ------------------------------------------------------------------------- */
+
+  /** Un « pret » vient de changer : de quoi faire partir quelque chose ? */
+  pretTournoi() {
+    const t = this.tournoi;
+    if (!t) return;
+    const presents = [...this.joueurs.values()];
+    if (t.etat === 'inscription' || t.etat === 'fini') {
+      // Le premier pistolet, ou un tournoi neuf : comme une course simple,
+      // la piste pleine et tout le monde d'accord.
+      if (presents.length === this.max && presents.every(x => x.pret)) this.demarrerTournoi();
+    } else if (t.etat === 'pause') {
+      // La suite : seuls ceux qui courent encore ont leur mot a dire.
+      const enLice = presents.filter(x => t.en_lice.includes(x.id));
+      if (enLice.length >= 2 && enLice.every(x => x.pret)) this.lancerManche();
+    }
+  }
+
+  /** Tout le monde au depart de la manche 1, chacun dans son couloir. */
+  demarrerTournoi() {
+    const presents = [...this.joueurs.values()];
+    presents.forEach((x, i) => { x.couloir = i + 1; });
+    this.tournoi = {
+      ...nouveauTournoi(),
+      manches: presents.length - 1,
+      en_lice: presents.map(x => x.id),
+    };
+    this.lancerManche();
+  }
+
+  /**
+   * La manche suivante : ceux qui sont encore en lice, dans leurs couloirs.
+   *
+   * La presentation n'a lieu qu'a la premiere et a la finale. Elle dure trois
+   * secondes par athlete : a huit, la refaire a chaque manche ajouterait plus
+   * d'une minute et demie d'attente a un tournoi qui se court en dix secondes
+   * par manche — et entre deux, on sait deja qui est la.
+   */
+  lancerManche() {
+    const t = this.tournoi;
+    if (!t) return;
+    clearTimeout(this.minuteurTournoi); this.minuteurTournoi = null;
+    const coureurs = [...this.joueurs.values()]
+      .filter(x => t.en_lice.includes(x.id))
+      .sort((a, b) => a.couloir - b.couloir);
+    if (coureurs.length < 2) { this.finirTournoi(); return; }
+    t.manche++;
+    t.etat = 'manche';
+    t.prochaine_a = null;
+    this.coureurs = coureurs;
+    this.ordre = coureurs.map(x => ({ id: x.id, nom: x.nom, couloir: x.couloir }));
+    const presenter = t.manche === 1 || coureurs.length === 2;
+    this.presentationA = presenter ? Date.now() + AVANT_PRESENTATION_MS : null;
+    const attente = avantDepart(this.test, AVANT_DEPART_MS);
+    this.departA = presenter
+      ? this.presentationA + coureurs.length * creneauPresentation() + attente
+      : Date.now() + attente;
+    this.termine = false;
+    for (const x of this.joueurs.values()) {
+      x.d = 0; x.c = null; x.fin = null; x.parti = false; x.forfait = false;
+    }
+    // Le filet : personne ne reste en piste plus de trois minutes apres le
+    // pistolet, meme si personne n'arrive (voir RETARD_MIN_MS).
+    this.limiteManche = null;
+    this.limiterManche(this.departA + ABANDON_MS);
+    this.vivante();
+  }
+
+  /** Ramene la limite de la manche a cette date, si elle est plus proche. */
+  limiterManche(date) {
+    if (!this.tournoi || this.tournoi.etat !== 'manche') return;
+    if (this.limiteManche != null && this.limiteManche <= date) return;
+    this.limiteManche = date;
+    clearTimeout(this.minuteurTournoi);
+    this.minuteurTournoi = setTimeout(() => this.cloreManche(),
+                                      Math.max(0, date - Date.now()));
+  }
+
+  /** L'heure est passee : ceux qui courent encore abandonnent. */
+  cloreManche() {
+    this.minuteurTournoi = null;
+    if (!this.tournoi || this.tournoi.etat !== 'manche') return;
+    for (const x of this.coureurs) {
+      if (x.fin !== null) continue;
+      x.fin = ABANDON_MS;
+      this.diffuser({ t: 'fini', id: x.id, nom: x.nom, ms: x.fin, abandon: true });
+    }
+    this.trancherManche();
+  }
+
+  /**
+   * Le verdict d'une manche : l'ordre d'arrivee, qui sort, et la suite.
+   *
+   * Le message est celui d'une course simple — un classement, des partants,
+   * l'instant du pistolet — avec un bloc `tournoi` en plus, et chaque ligne
+   * du classement dit si son coureur est elimine. Un jeu qui ne connait pas
+   * le tournoi y lit donc une course ordinaire.
+   */
+  trancherManche() {
+    const t = this.tournoi;
+    if (!t || t.etat !== 'manche') return;
+    const tous = this.coureurs;
+    if (!tous.length || tous.some(x => x.fin === null)) return;
+    clearTimeout(this.minuteurTournoi); this.minuteurTournoi = null;
+    this.limiteManche = null;
+
+    const course = this.departA || Date.now();
+    this.departA = null;
+    this.presentationA = null;
+    this.ordre = [];
+    this.termine = true;
+    // Comme apres une course simple : la suite se redemande a chacun.
+    for (const x of this.joueurs.values()) x.pret = false;
+
+    const sortis = eliminesDeLaManche(tous.map(x => ({ id: x.id, fin: x.fin, forfait: x.forfait })));
+    const ordre = [...tous].sort((a, b) => a.fin - b.fin);
+    const classement = ordre.map(x => ({
+      place: 1 + ordre.filter(y => y.fin < x.fin).length, id: x.id, nom: x.nom, ms: x.fin,
+      abandon: x.fin >= ABANDON_MS, couloir: x.couloir,
+      elimine: sortis.includes(x.id),
+      ...(x.forfait ? { motif: 'forfait' } : {}),
+    }));
+
+    // La place dans le tournoi : ceux qui sortent ensemble prennent les
+    // dernieres places de la manche, departages par leur chrono ; deux
+    // abandons la partagent. Un forfait passe derriere tout le monde, meme
+    // s'il avait franchi la ligne avant de partir : il n'est plus la pour la
+    // suite, celui qui a fini dernier, si.
+    const restent = tous.length - sortis.length;
+    const sortants = ordre.filter(x => sortis.includes(x.id));
+    const rang = x => (x.forfait ? 2 * ABANDON_MS : x.fin);
+    for (const x of sortants) {
+      t.elimines.push({
+        id: x.id, nom: x.nom, manche: t.manche,
+        place: restent + 1 + sortants.filter(y => rang(y) < rang(x)).length,
+        ms: x.fin >= ABANDON_MS ? null : x.fin,
+        abandon: x.fin >= ABANDON_MS, forfait: !!x.forfait,
+      });
+    }
+    t.en_lice = t.en_lice.filter(id => !sortis.includes(id));
+    t.manches = t.manche + t.en_lice.length - 1;
+
+    if (t.en_lice.length <= 1) {
+      this.finirTournoi();
+    } else {
+      // La pause : la manche suivante part d'elle-meme a l'heure dite, ou
+      // plus tot si tout le monde est pret (pretTournoi).
+      t.etat = 'pause';
+      const attente = ENTRE_MANCHES_MS;
+      t.prochaine_a = Date.now() + attente;
+      this.minuteurTournoi = setTimeout(() => {
+        this.minuteurTournoi = null;
+        if (this.tournoi && this.tournoi.etat === 'pause') {
+          this.lancerManche();
+          this.envoyerEtat();
+        }
+      }, attente);
+    }
+
+    this.diffuser({
+      t: 'resultat', classement, partants: tous.length, course,
+      tournoi: {
+        manche: t.manche, manches: t.manches, elimines: sortis,
+        fini: t.etat === 'fini', champion: t.champion,
+      },
+    });
+    this.envoyerEtat();
+
+    // Les duels de la manche, comme ceux d'une course simple.
+    if (tous.length < 2) return;
+    const ecrire = this.ecrire(tous.slice(), course);
+    if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
+  }
+
+  /** Parti pendant une pause : il sort, a la derniere place qui reste. */
+  forfaitEntreManches(j) {
+    const t = this.tournoi;
+    t.en_lice = t.en_lice.filter(id => id !== j.id);
+    t.elimines.push({
+      id: j.id, nom: j.nom, manche: t.manche, place: t.en_lice.length + 1,
+      ms: null, abandon: true, forfait: true,
+    });
+    t.manches = t.manche + t.en_lice.length - 1;
+    if (t.en_lice.length <= 1) this.finirTournoi();
+  }
+
+  /**
+   * Le champion est connu — ou personne ne reste, si tout le monde est parti.
+   * La salle se comporte ensuite comme apres une course simple : on lit, on
+   * peut redemander un tournoi a tout le monde, et elle ferme sinon.
+   */
+  finirTournoi() {
+    const t = this.tournoi;
+    if (!t) return;
+    clearTimeout(this.minuteurTournoi); this.minuteurTournoi = null;
+    this.limiteManche = null;
+    this.coureurs = [];
+    t.etat = 'fini';
+    t.prochaine_a = null;
+    const id = t.en_lice[0];
+    const c = id ? [...this.joueurs.values()].find(x => x.id === id) : null;
+    t.champion = c ? { id: c.id, nom: c.nom } : null;
+    this.programmerFermeture(APRES_RESULTAT_MS, 'tournoi termine');
   }
 
   async ecrire(tous, course) {

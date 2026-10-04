@@ -22,6 +22,7 @@ import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
 import { PresentationDirect } from '@/components/screens/PresentationDirect';
 import { ChampDirect } from '@/components/screens/ChampDirect';
+import { BandeauTournoi } from '@/components/screens/TournoiDirect';
 import { BandeauDefi, FinDuDefi } from '@/components/screens/DefiDemie';
 import { Mondes } from '@/components/screens/Mondes';
 import { OpenScreen } from '@/components/screens/OpenScreen';
@@ -344,6 +345,10 @@ function MainGame() {
         {/* Une serie de championnat courue en direct : la chambre d'appel, le
             rappel apres un faux depart, le spectateur, l'arrivee. */}
         <ChampDirect />
+        {/* Un elimine du tournoi en direct regarde les manches suivantes
+            depuis les tribunes : le bandeau dit qu'il est sorti, laisse
+            choisir le coureur suivi, et annonce qui sort. Voir TournoiDirect. */}
+        <BandeauTournoi />
         {/* Le defi de la demi : le couloir au depart. Son arrivee remplace
             l'ecran de fin du one shot, plus bas. */}
         {DUELS_OUVERTS && <BandeauDefi />}

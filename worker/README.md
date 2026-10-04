@@ -114,6 +114,29 @@ partant sans nom (« Anonyme ») court sans compter, et un faux départ est un
 abandon : une défaite contre chacun. La salle annonce ensuite à chacun ses
 points, sa division, sa série avant et après, et le détail duel par duel.
 
+### Le tournoi à élimination
+
+Une piste de trois à huit couloirs peut s'ouvrir en tournoi (`tournoi=1` à la
+connexion du premier arrivé, ignoré sous trois couloirs). Elle se remplit
+comme une autre ; au « prêt » général part la manche 1. Le dernier de chaque
+manche sort, les autres courent la suivante, jusqu'à la finale à deux : huit
+partants, sept manches. La présentation n'a lieu qu'à la première manche et à
+la finale. Entre deux manches, la suivante part dès que tous ceux qui restent
+sont prêts, ou d'elle-même au bout de trente secondes ; un retardataire qui
+n'a pas franchi la ligne longtemps après le premier (autant que le temps du
+premier, vingt secondes au moins) est compté en abandon. Deux derniers ex
+aequo — deux faux départs — sortent ensemble ; tout le monde ex aequo, la
+manche se recourt. Partir pendant le tournoi, c'est déclarer forfait. On
+n'entre pas dans un tournoi lancé.
+
+Chaque manche est une course en direct comme les autres : chaque paire de ses
+partants est un duel au classement. Les éliminés restent dans la salle et
+regardent la suite depuis les tribunes ; ils ne courent plus, et ne comptent
+plus. Le verdict d'une manche porte un bloc `tournoi` (manche, éliminés,
+champion) et l'état de la salle le tournoi entier. Voir `eliminesDeLaManche`
+et « LE TOURNOI A ELIMINATION » dans `src/salle.js`, et le harnais
+`tools/direct-tournoi-test.mjs`.
+
 **Au premier appel après le déploiement, la table `duel_players` est refaite** :
 sa clé passe de `name_key` à `(name_key, epreuve)`, ce que SQLite ne sait pas
 retoucher en place. L'ancienne table est conservée telle quelle sous le nom
