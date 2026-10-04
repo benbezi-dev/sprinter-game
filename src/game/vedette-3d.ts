@@ -153,7 +153,11 @@ export function charger(chemin: string): Promise<Modele | null> {
     const chargeur = new GLTFLoader();
     chargeur.setMeshoptDecoder(MeshoptDecoder);
     chargeur.load(url(chemin), (gltf) => {
-      try { const m = preparer(gltf.scene); modeles.set(chemin, m); ok(m); } catch { ok(null); }
+      let m: Modele;
+      try { m = preparer(gltf.scene); } catch { ok(null); return; }
+      // pret() reste faux jusqu'ici : les tubes tiennent la place pendant
+      // que ses shaders se compilent
+      prechauffer(m).then(() => { modeles.set(chemin, m); ok(m); });
     }, undefined, () => ok(null));
   });
   enCours.set(chemin, p);
@@ -242,6 +246,84 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   scene.add(racine);
   racine.visible = false;
   return { racine, os, ordre, repos, reposLocal, bassinParent };
+}
+
+/**
+ * SES SHADERS SONT COMPILES AVANT QU'IL N'APPARAISSE. Un maillage tout juste
+ * charge n'a encore rien sur la carte graphique : son premier R.render()
+ * compilait les programmes (le standard de three.js, avec les os et le
+ * liseret), montait texture, geometrie et os, et la premiere copie vers la
+ * toile du jeu preparait son chemin — d'un bloc, au milieu d'une image de la
+ * course. Pres d'une demi-seconde de gel (480 ms mesurees dans Chromium,
+ * 35 pour les images suivantes).
+ *
+ * C'est donc fait ici, au chargement, pendant que drawRunner dessine encore
+ * les tubes (pret() reste faux jusqu'au bout) :
+ *   1. compileAsync : la carte compile en arriere-plan
+ *      (KHR_parallel_shader_compile), et le jeu continue de courir ;
+ *   2. un dessin d'essai, jamais montre : il lie les programmes et monte
+ *      texture, geometrie et os ;
+ *   3. ON ATTEND QUE LA CARTE L'AIT FAIT POUR DE BON. WebGL ne fait que
+ *      mettre le dessin en file, et le pilote acheve ses shaders au premier
+ *      trace qu'il execute : sans cette attente, tout retombait sur le
+ *      premier vrai dessin. Une barriere (fenceSync), sondee entre deux
+ *      images : le jeu ne l'attend jamais ;
+ *   4. une premiere copie de l'image vers une toile 2D de brouillon : celle
+ *      de dessiner() ne paie plus la mise en route.
+ * La meme scene, les memes lumieres, la meme sortie que dessiner() : les
+ * programmes compiles ici sont ceux qu'il reprendra. Sans l'extension, la
+ * compilation n'est que lancee en 1 et le dessin d'essai l'attend — mais
+ * entre deux images, a l'arrivee du maillage, plus a son apparition.
+ * Ne rejette jamais : si l'essai echoue, le premier vrai dessin fera le
+ * reste, comme avant.
+ */
+async function prechauffer(m: Modele) {
+  const R = rendu;
+  if (!R) return;
+  try {
+    // (une carte qui ne repond plus — contexte perdu — ne finit jamais de
+    // compiler : on n'attend pas le maillage pour toujours)
+    await Promise.race([R.compileAsync(m.racine, camera, scene), attendre(4000)]);
+    await apresUneImage();
+    m.racine.visible = true;
+    R.render(scene, camera);
+    m.racine.visible = false;
+    await carteAJour(R);
+    await apresUneImage();
+    const brouillon = document.createElement('canvas');
+    brouillon.width = brouillon.height = 1;
+    brouillon.getContext('2d')?.drawImage(R.domElement, 0, 0, 1, 1);
+  } catch { /* voir plus haut */ }
+  m.racine.visible = false;
+}
+
+/** Quand la carte a execute tout ce qu'on lui a demande — sans jamais bloquer le jeu. */
+function carteAJour(R: THREE.WebGLRenderer): Promise<void> {
+  const gl = R.getContext() as WebGL2RenderingContext;
+  const f = gl.fenceSync ? gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0) : null;
+  if (!f) return Promise.resolve();
+  gl.flush();
+  const t0 = performance.now();
+  return new Promise((ok) => {
+    const voir = () => {
+      // (l'etat d'une barriere ne change qu'entre deux taches : on repasse)
+      if (gl.isContextLost() || performance.now() - t0 > 4000
+          || gl.getSyncParameter(f, gl.SYNC_STATUS) === gl.SIGNALED) {
+        if (!gl.isContextLost()) gl.deleteSync(f);
+        ok();
+      } else setTimeout(voir, 16);
+    };
+    setTimeout(voir, 16);
+  });
+}
+
+function attendre(ms: number): Promise<void> {
+  return new Promise((ok) => setTimeout(ok, ms));
+}
+
+/** Juste apres une image : l'essai a tout le temps jusqu'a la suivante. */
+function apresUneImage(): Promise<void> {
+  return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
 }
 
 export function pret(chemin: string): boolean { return modeles.has(chemin); }
