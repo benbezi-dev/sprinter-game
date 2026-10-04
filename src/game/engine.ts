@@ -586,6 +586,8 @@ const ATTITUDES_S = 2.6;
 const ATTENTE_STADE_MIN_S = 0.25, ATTENTE_STADE_MAX_S = 12, ATTITUDES_MIN_S = 0.8;
 // Le public compose d'avance, par image : a l'ouverture, et a l'accueil.
 const OUVERTURE_PUBLIC_MS = 20, ACCUEIL_PUBLIC_MS = 4;
+// Le son, fabrique de meme : voir plus bas, et Audio_.avancer (sprinter-app.js).
+const OUVERTURE_SON_MS = 8, ACCUEIL_SON_MS = 4;
 
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
@@ -830,6 +832,16 @@ export function updateLogic(dt: number) {
   else if (G.state === 'title') avancerLePublic(G, ACCUEIL_PUBLIC_MS);
   // Et les athletes en vrai maillage qu'on y verra : jamais en course.
   if (G.state === 'title') avancerLesMaillages();
+  // LE SON AUSSI SE FABRIQUE D'AVANCE, quelques millisecondes par image : il
+  // l'etait au premier appui de la course, et le depart gelait (voir
+  // Audio_.avancer). Ces images-la ne se jugent pas : un travail qui finit,
+  // comme le public d'avance (rendu-premium.js).
+  if (G.state === 'open' || G.state === 'title') {
+    if (Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS)) {
+      const P = (globalThis as any).RenduPremium;
+      if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 250);
+    }
+  }
 
   if (G.state === 'open') {
     G.openT += dt;
