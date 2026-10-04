@@ -222,6 +222,18 @@ function creneauPresentation() {
 const MIN_MS = 1000, MAX_MS = 20 * 60000;
 // Au-dela, on considere que le joueur a abandonne la course en cours.
 const ABANDON_MS = 3 * 60000;
+/**
+ * Combien de temps apres le pistolet un partant peut rester muet.
+ *
+ * Un coureur en course envoie sa position dix fois par seconde des le coup de
+ * pistolet. Celui qui n'a rien envoye huit secondes apres n'a pas couru :
+ * c'est le faux depart des versions du jeu qui ne le signalaient pas encore —
+ * l'ecran de leur joueur dit « elimine », et la salle, elle, attendait une
+ * arrivee qui ne viendrait jamais (voir guetterLesMuets). Huit secondes, c'est
+ * large devant un decalage d'horloge ou un reseau lent, et court devant une
+ * course : au 100 m, les autres n'ont pas encore passe la ligne.
+ */
+const SILENCE_APRES_PISTOLET_MS = 8000;
 
 /**
  * Le plafond d'une piste.
@@ -275,6 +287,7 @@ export class SalleDirecte {
     this.test = false;         // salle du canal de test : ecrit ailleurs
     this.code = '';            // le code de la salle, pose au premier appel
     this.minuteur = null;      // fermeture programmee
+    this.guetteur = null;      // les muets d'apres le pistolet (guetterLesMuets)
     this.ne = Date.now();
     this.debitRapide = new DebitRapide();  // la cadence du tchat rapide
   }
@@ -331,6 +344,7 @@ export class SalleDirecte {
    * de finir, alors qu'il n'en avait couru aucune.
    */
   viderPiste() {
+    clearTimeout(this.guetteur); this.guetteur = null;
     this.departA = null;
     this.presentationA = null;
     this.ordre = [];
@@ -491,6 +505,7 @@ export class SalleDirecte {
               + attente;
           this.termine = false;
           for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; }
+          this.guetterLesMuets(this.departA);
         }
         this.envoyerEtat();
         return;
@@ -581,11 +596,48 @@ export class SalleDirecte {
     }
   }
 
+  /**
+   * LE FAUX DEPART DES ANCIENNES VERSIONS DU JEU.
+   *
+   * Le jeu signale maintenant son faux depart a la salle (un abandon). Les
+   * versions d'avant ne le faisaient pas : leur joueur etait elimine a
+   * l'ecran, et c'etait tout. La salle attendait son arrivee pour trancher —
+   * elle ne venait jamais — et les autres restaient devant leur ecran de fin
+   * sans verdict, sans points, et sans fin de film. Leur victoire ne comptait
+   * nulle part.
+   *
+   * Ces versions ne disent rien, mais leur silence parle : un partant qui n'a
+   * pas envoye une seule position SILENCE_APRES_PISTOLET_MS apres le pistolet
+   * n'a pas couru. On le range comme un abandon, exactement comme s'il l'avait
+   * annonce — une defaite contre chacun — et la course se tranche des que les
+   * autres ont fini. Celui qui court, lui, ne se tait jamais : sa position
+   * part dix fois par seconde, et ce guet ne le touche pas, si lent soit-il.
+   *
+   * Le meme silence couvre l'appareil mis en veille au depart : il ne court
+   * pas davantage, et la salle n'a pas a l'attendre.
+   */
+  guetterLesMuets(depart) {
+    clearTimeout(this.guetteur);
+    this.guetteur = setTimeout(() => {
+      this.guetteur = null;
+      if (this.termine || this.departA !== depart) return;
+      let muets = 0;
+      for (const j of this.joueurs.values()) {
+        if (j.fin !== null || j.parti) continue;
+        j.fin = ABANDON_MS;
+        this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms: j.fin, abandon: true });
+        muets++;
+      }
+      if (muets) this.peutTrancher();
+    }, Math.max(0, depart - Date.now()) + SILENCE_APRES_PISTOLET_MS);
+  }
+
   peutTrancher() {
     if (this.termine) return;
     const tous = [...this.joueurs.values()];
     if (tous.length < this.max || tous.some(x => x.fin === null)) return;
     this.termine = true;
+    clearTimeout(this.guetteur); this.guetteur = null;
     // De quelle course on parle : l'instant du pistolet, retenu avant d'etre
     // efface. Il ne sert qu'a nommer ce duel-la au classement, et il est le
     // seul nombre de la salle qui change a chaque depart.
