@@ -4223,6 +4223,82 @@
     return sm.slice(Math.max(0, i0 - 1), Math.min(sm.length, i1 + 2));
   }
   /**
+   * LE CADRE QUE L'IMAGE MONTRE, POUR NE PAS TRACER L'OVALE ENTIER.
+   *
+   * En virage, chaque bande du stade — piste, pelouse, barrieres, gradins,
+   * lignes, et les voiles de la finition — courait sur tout le trace : pres
+   * de trois cent quarante echantillons au 400 m, alors que le cadre n'en
+   * montre qu'une trentaine. Mesure le 04/10/2026 sur un telephone emule
+   * (processeur bride quatre fois) : trente et un mille ordres de dessin par
+   * image dans le virage du 400 m, contre douze mille au 100 m, et le
+   * virage coutait deux fois et demie la ligne droite.
+   *
+   * drawWorld pose donc le cadre (poserLeCadre) : le rectangle de la toile,
+   * ramene dans le repere ou l'on dessine — la camera d'un passage ou la
+   * secousse d'une chute comprises —, elargi de MARGE_CADRE. Chaque passe ne
+   * trace alors que la tranche contigue des quadrilateres qui le touchent
+   * (trancheVue). Ce qui est dans le cadre ne change pas : memes sommets,
+   * memes couleurs. Hors virage, ou le trace ne compte qu'une vingtaine de
+   * points, et hors drawWorld, rien n'est decoupe.
+   */
+  let _cadre = null;
+  const MARGE_CADRE = 64;
+  const _qA = [0, 0], _qB = [0, 0];
+  function poserLeCadre(ctx) {
+    _cadre = null;
+    if (!G.track || !G.track.curved || !ctx || !ctx.getTransform || !ctx.canvas) return;
+    const m = ctx.getTransform();
+    if (!m.is2D) return;
+    const inv = m.inverse();
+    if (!isFinite(inv.a) || !isFinite(inv.e) || !isFinite(inv.f)) return;
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let k = 0; k < 4; k++) {
+      const X = k & 1 ? W : 0, Y = k & 2 ? H : 0;
+      const x = inv.a * X + inv.c * Y + inv.e, y = inv.b * X + inv.d * Y + inv.f;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    _cadre = [x0 - MARGE_CADRE, y0 - MARGE_CADRE, x1 + MARGE_CADRE, y1 + MARGE_CADRE];
+  }
+  /**
+   * Les quadrilateres de `sm` (de l'echantillon i au suivant) qui touchent le
+   * cadre, entre les rayons rA et rB et les hauteurs zA et zB : [premier,
+   * dernier], ou null. La projection est affine en r et en z — z ne fait que
+   * monter le point — : deux points par echantillon bornent tout ce qui s'y
+   * trace.
+   */
+  function quadsVus(sm, rA, rB, zA, zB) {
+    const c = _cadre, s = scaleM(), hA = (zA || 0) * s, hB = (zB || 0) * s;
+    const hMin = Math.min(hA, hB), hMax = Math.max(hA, hB);
+    let first = -1, last = -1, pnx = 0, pxx = 0, pny = 0, pxy = 0;
+    for (let i = 0; i < sm.length; i++) {
+      sommetInto(sm[i], rA, 0, _qA);
+      sommetInto(sm[i], rB, 0, _qB);
+      const nx = Math.min(_qA[0], _qB[0]), xx = Math.max(_qA[0], _qB[0]);
+      const ny = Math.min(_qA[1], _qB[1]) - hMax, xy = Math.max(_qA[1], _qB[1]) - hMin;
+      if (i > 0 && !(Math.max(xx, pxx) < c[0] || Math.min(nx, pnx) > c[2] ||
+                     Math.max(xy, pxy) < c[1] || Math.min(ny, pny) > c[3])) {
+        if (first < 0) first = i - 1;
+        last = i - 1;
+      }
+      pnx = nx; pxx = xx; pny = ny; pxy = xy;
+    }
+    return first < 0 ? null : [first, last];
+  }
+  /**
+   * La tranche de `sm` qui se voit (voir le cadre, plus haut) ; `sm` lui-meme
+   * sans cadre. `pas` aligne ses bouts sur les troncons de wall() : un gradin
+   * eclaire par pans de `pas` echantillons garde exactement les memes pans.
+   */
+  function trancheVue(sm, rA, rB, zA, zB, pas) {
+    if (!_cadre || sm.length < 3) return sm;
+    const q = quadsVus(sm, rA, rB, zA, zB);
+    if (!q) return [];
+    let a = q[0], b = q[1] + 1;
+    if (pas > 1) { a = Math.floor(a / pas) * pas; b = Math.min(sm.length - 1, Math.ceil(b / pas) * pas); }
+    return a === 0 && b === sm.length - 1 ? sm : sm.slice(a, b + 1);
+  }
+  /**
    * Les echantillons du DECOR, pas ceux de la piste : un tous les quatre
    * metres en virage. A cinquante metres de rayon, la corde s'ecarte de l'arc
    * de quatre centimetres — un pixel a l'ecran —, et un toit ou une passe de
@@ -4278,7 +4354,7 @@
   // l'etat du jeu ni s'inserer dans sa geometrie.
   const PEINTRE = {
     G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
-    band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
+    band, bandBrute, bandPattern, rail, fenetre, samplesDecor, trancheVue,
   };
   const PREM = () => globalThis.RenduPremium;
   const HEURE = () => globalThis.SprinterHeure;
@@ -6706,6 +6782,11 @@
   }
 
   function drawWorld(ctx, th) {
+    // le cadre de cette image (voir trancheVue)
+    poserLeCadre(ctx);
+    try { drawWorldDansLeCadre(ctx, th); } finally { _cadre = null; }
+  }
+  function drawWorldDansLeCadre(ctx, th) {
     // Chaque appelant passe le theme du niveau tel qu'il est range dans
     // THEMES : c'est ici qu'il prend l'heure, une fois pour tous.
     th = eclaire(th);
@@ -6816,7 +6897,7 @@
     // arbres du dehors — recule du meme pas : piste, sautoir, tribune, puis
     // le paysage, dans cet ordre, comme au 100 m.
     const horizon = (th.horizon || 46) + (G.ecartTribune || 0);
-    band(ctx, sm, rOut, rOut + horizon, rgb(th.grass));
+    band(ctx, trancheVue(sm, rOut, rOut + horizon), rOut, rOut + horizon, rgb(th.grass));
     // Les passes de tondeuse, sur les deux pelouses a la fois. Elles viennent
     // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
     // apres les deux aplats qu'elles habillent. Voir rendu-premium.js.
@@ -6914,7 +6995,7 @@
     // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
     // les panneaux — quand elles sont chargees et valent pour cette vue.
     if (!(cdm && cdm.barrieres(ctx, apiCdm(), th, near))) {
-      band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
+      band(ctx, trancheVue(sm, near, near + 0.35, 1.05, 1.05), near, near + 0.35, rgb(th.barrier), 1.05);
       // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
       // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
       // Un sur deux porte le sponsor (panneauPub), avec l'affiche tiree pour la
@@ -6924,7 +7005,11 @@
       const reperes = pub ? reperesDeDistance(T)
         .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
         .filter(Boolean) : null;
+      // les panneaux hors du cadre ne se tracent pas ; l'alternance des
+      // sponsors se compte toujours depuis le debut du trace
+      const vus = _cadre ? quadsVus(sm, near, near, 0.02, 1.05) : [0, sm.length];
       for (let i = 0; i + stp < sm.length; i += stp) {
+        if (!vus || i + stp <= vus[0] || i > vus[1]) continue;
         const seg = sm.slice(i, i + stp + 1), n = i / stp;
         if (pub && n % 2 === 1) {
           wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
@@ -6943,13 +7028,14 @@
     // toiture —, seul l'escalier se resserre.
     const TR = globalThis.Tribune;
     const rangs = tiers * 2, pr = sr / 2, pz = sz / 2;
+    const smTVu = trancheVue(smT, near, near + rangs * pr, 1.05, 1.05 + rangs * pz, stp);
     for (let t = 0; t < rangs; t++) {
       const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz, f = 1 - t * 0.025;
       // contremarche : vraie face verticale, du gradin precedent a celui-ci,
       // eclairee selon son orientation -> l'escalier a du relief
-      wall(ctx, smT, r0, z1 - pz, z1, th.riser, stp);
+      wall(ctx, smTVu, r0, z1 - pz, z1, th.riser, stp);
       // marche : surface horizontale, pleinement exposee a la lumiere
-      band(ctx, smT, r0, r0 + pr, rgb(th.tread, f), z1);
+      band(ctx, smTVu, r0, r0 + pr, rgb(th.tread, f), z1);
     }
     // Le mur d'appui des tribunes a ciel ouvert, avant le public qui s'y
     // adosse (voir drawDosTribune). Le Champ-de-Mars a sa tribune provisoire.
@@ -7067,9 +7153,11 @@
     // coulee d'un seul tenant ; ce qui la sauve de l'aplat, c'est le grain de
     // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
     // changement de couleur tous les huit metres.
+    // la part de la piste qui se voit, pour elle, ses lignes et ses voiles
+    const smPiste = trancheVue(sm, rIn, rOut);
     if (cdm) cdm.surface(ctx, apiCdm(), th, sm, rIn, rOut);
     else if (th.arcEnCiel && ARC()) ARC().surface(ctx, PEINTRE, th, sm);
-    else band(ctx, sm, rIn, rOut, rgb(th.trackA));
+    else band(ctx, smPiste, rIn, rOut, rgb(th.trackA));
 
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
     // ne porte pas le granulat de la resine qu'elle recouvre.
@@ -7088,11 +7176,11 @@
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
                             (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
       if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
-      rail(ctx, sm, rIn, rgb(th.kerb), 3);
+      rail(ctx, smPiste, rIn, rgb(th.kerb), 3);
       for (let e = 1; e < C.LANE_COUNT; e++) {
-        rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+        rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
       }
-      rail(ctx, sm, rOut, rgb(th.lane), 2.2);
+      rail(ctx, smPiste, rOut, rgb(th.lane), 2.2);
       if (th.arcEnCiel && ARC()) ARC().guirlandes(ctx, PEINTRE, th, rIn, rOut);
     }
 

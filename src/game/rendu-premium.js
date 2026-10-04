@@ -466,7 +466,8 @@
     const m = motifGrain(ctx, finesseMotif(P));
     if (!m) return;
     const a = P.ground(0, 0);
-    P.bandPattern(ctx, P.samples(), rIn, rOut, m, 0,
+    // (la part du trace qui se voit : voir trancheVue, sprinter-app.js)
+    P.bandPattern(ctx, P.trancheVue(P.samples(), rIn, rOut), rIn, rOut, m, 0,
                   a[0] % TUILE_GRAIN, a[1] % TUILE_GRAIN);
   }
 
@@ -575,9 +576,9 @@
     if (!m) return;
     const a = P.ground(0, 0);
     const ox = a[0] % TUILE_HERBE, oy = a[1] % TUILE_HERBE;
-    const sm = P.samples(), courbe = P.G.track.curved;
-    P.bandPattern(ctx, sm, courbe ? 0 : rIn - 60, rIn, m, 0, ox, oy);
-    P.bandPattern(ctx, sm, rOut, rOut + horizon, m, 0, ox, oy);
+    const sm = P.samples(), courbe = P.G.track.curved, r0 = courbe ? 0 : rIn - 60;
+    P.bandPattern(ctx, P.trancheVue(sm, r0, rIn), r0, rIn, m, 0, ox, oy);
+    P.bandPattern(ctx, P.trancheVue(sm, rOut, rOut + horizon), rOut, rOut + horizon, m, 0, ox, oy);
   }
 
   // -------------------------------------------------------------------
@@ -596,7 +597,7 @@
   // -------------------------------------------------------------------
   function occlusion(ctx, P, rIn, rOut) {
     if (niveau < MOYEN) return;
-    const sm = P.samples();
+    const sm = P.trancheVue(P.samples(), rIn, rOut);
     for (let i = 0; i < 4; i++) {
       const a = (0.085 * (1 - i / 4)).toFixed(3);
       ctx.fillStyle = 'rgba(0,0,0,' + a + ')';
