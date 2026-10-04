@@ -49,13 +49,13 @@ export function Fantomes({ equipes }: { equipes: EquipeRelais[] }) {
     // Une confrontation contre des fantomes reste une confrontation : elle a
     // besoin d'un salon, meme si personne d'autre n'y entrera. Le code ne se
     // partage pas, il sert juste d'adresse.
-    const r = await ouvrirConfrontation();
+    const max = Math.min(MAX_EQUIPES, 1 + choisis.length);
+    const r = await ouvrirConfrontation(max);
     setOccupe(false);
     if (!r || r.error || !r.id) { setErreur(N.t('challenge_net')); return; }
     entrerSurLaPiste({
       genre: 'confrontation', code: r.id, equipe: mienne.id,
-      max: Math.min(MAX_EQUIPES, 1 + choisis.length),
-      fantomes: choisis,
+      max, fantomes: choisis,
     });
   };
 

@@ -12,10 +12,13 @@ import { entrerSurLaPiste } from '@/game/piste';
  * seule facon de reunir huit equipes sans annuaire, sans invitation a stocker
  * et sans que personne ait a chercher qui est connecte.
  *
- * Le nombre de couloirs se fixe a l'ouverture et par le premier arrive. Le
- * laisser ouvert jusqu'au depart obligerait a decider, a chaque nouvelle
- * equipe, si elle rentre ou non — et une equipe refusee apres avoir tape le
- * bon code ne comprendrait pas pourquoi.
+ * Le nombre de couloirs se fixe a l'ouverture, par celui qui ouvre le code, et
+ * le serveur le garde avec lui. Le laisser ouvert jusqu'au depart obligerait a
+ * decider, a chaque nouvelle equipe, si elle rentre ou non — et une equipe
+ * refusee apres avoir tape le bon code ne comprendrait pas pourquoi. C'est
+ * aussi pour cela que celui qui rejoint n'en annonce aucun : il se reglait
+ * autrefois sur le premier entre, et un ami plus rapide que l'hote imposait
+ * le chiffre affiche par defaut sur son propre ecran.
  */
 
 const CHOIX = [2, 3, 4, 6, 8];
@@ -35,17 +38,18 @@ export function Confrontation({ equipes }: { equipes: EquipeRelais[] }) {
   const ouvrir = async () => {
     if (!mienne) return;
     setOccupe(true); setErreur('');
-    const r = await ouvrirConfrontation();
+    const r = await ouvrirConfrontation(places);
     setOccupe(false);
     if (!r || r.error || !r.id) { setErreur(N.t('challenge_net')); return; }
     setCode(r.id);
   };
 
-  const entrer = (c: string) => {
+  /** `max` seulement pour le code qu'on a ouvert soi-meme. */
+  const entrer = (c: string, max?: number) => {
     if (!mienne) return;
     entrerSurLaPiste({
       genre: 'confrontation', code: c, equipe: mienne.id,
-      max: places, fantomes: [],
+      max, fantomes: [],
     });
   };
 
@@ -103,7 +107,7 @@ export function Confrontation({ equipes }: { equipes: EquipeRelais[] }) {
               {copie ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
             </button>
           </div>
-          <button onClick={() => entrer(code)}
+          <button onClick={() => entrer(code, places)}
             className="w-full py-2.5 rounded-xl font-black font-display tracking-widest
                        text-background bg-primary text-sm">
             {N.t('relais_courir')}
