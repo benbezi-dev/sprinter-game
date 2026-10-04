@@ -77,7 +77,12 @@ android {
         // 5 le 4 octobre : les defis des vedettes (Meba-Mickael Zeze, Aurel
         // Manga) tels qu'ouverts le 3 au soir, avec leurs phrases de defaite et
         // le son de l'arrivee, et la revanche du direct dans la meme salle.
-        versionCode 5
+        // 6 le 4 octobre aussi : le direct de deux a huit couloirs compte au
+        // classement des duels (#64) — nom valide avant de courir, faux depart
+        // signale a la salle, courses au journal, flamme a l'arrivee, replay
+        // apres un faux depart. Le 5 a pu partir sans elles ; le 6 ne coute
+        // rien s'il n'est jamais parti.
+        versionCode 6
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
