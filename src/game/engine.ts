@@ -226,6 +226,20 @@ export function useGameStore<T>(selector?: (state: GameState) => T) {
 }
 
 /**
+ * LA PUBLICATION COURTE D'AVANT LE DEPART PORTE AUSSI CE QUI DIT QUELLE COURSE
+ * PART. Pendant la preparation du stade, les attitudes, la presentation ou le
+ * rappel, le moteur ne publie que l'essentiel. Il ne publiait que l'ecran et
+ * le decompte : au passage a `count`, l'interface lisait donc le mode et
+ * l'epreuve de l'accueil — « carriere », epreuve 0. La camera du one shot
+ * (useFilmerLeOneShot, film-course.ts), qui ne decide qu'a ce passage, ne
+ * filmait ainsi aucun one shot lance de l'accueil, et repartait de zero a la
+ * deuxieme epreuve d'un one shot multiple.
+ */
+function publierLePassage(extra: Partial<GameState>) {
+  gameStore.setState({ state: G.state, mode: G.mode, shotIdx: G.shotIdx, liveOn: G.liveOn, ...extra });
+}
+
+/**
  * Redessiner toute l'interface : ce qu'elle lit hors du magasin vient de
  * changer — la langue de ses textes, l'icone du son, le jeu courant. C'est ce
  * que faisait `gameStore.setState({})` quand tout se redessinait a chaque
@@ -921,7 +935,7 @@ export function updateLogic(dt: number) {
       // c'est lui qui fait vivre l'image, le temps que la salle a annonce.
       if (G.rappel) {
         SprinterApp.stepRappel(dt);
-        gameStore.setState({ state: G.state, countT: G.countT });
+        publierLePassage({ countT: G.countT });
         return;
       }
       // Decompte suspendu : c'est le temps de la presentation. La piste est
@@ -933,7 +947,7 @@ export function updateLogic(dt: number) {
       // presentation d'un vrai decompte, et sans lui l'interface affichait le
       // tableau de course par-dessus — « a battre », « alterne les deux
       // touches » — alors que personne ne court encore.
-      gameStore.setState({ state: G.state, countT: G.countT });
+      publierLePassage({ countT: G.countT });
       return;
     }
     // LE CRI D'AVANT LES BLOCS (G.avantDepart, pose par game/vedettes.ts).
@@ -981,7 +995,7 @@ export function updateLogic(dt: number) {
             || stadeEnPreparation(G.debutAttente));
       if (G.enPreparation) {
         SprinterApp.followCam(dt);
-        gameStore.setState({ state: G.state, countT: -99 });
+        publierLePassage({ countT: -99 });
         return;
       }
     }
@@ -1003,7 +1017,7 @@ export function updateLogic(dt: number) {
       if (avD.claps && avD.claps.length) applaudir(avD, dt);
       if (avD.entree) entrerEnBoss(avD, dt);
       SprinterApp.followCam(dt);
-      gameStore.setState({ state: G.state, countT: -99 });
+      publierLePassage({ countT: -99 });
       return;
     }
     // Le pistolet est annonce : la presentation est finie, et les bras leves
