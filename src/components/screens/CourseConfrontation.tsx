@@ -5,7 +5,7 @@ import { Loader2, Eye, Swords } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { TAILLE, PORTEE } from '@/game/salle-relais';
 import {
-  SalleConfrontation,
+  SalleConfrontation, etatConfrontation,
   type EtatConfrontation, type EquipeEnCourse,
 } from '@/game/salle-confrontation';
 import {
@@ -47,6 +47,13 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
   const [marque, setMarque] = useState(0);
   const [erreur, setErreur] = useState('');
   const [termine, setTermine] = useState(false);
+  /**
+   * Pourquoi la porte est restee fermee — une cle de texte — quand on n'a
+   * jamais pu entrer. Sans elle, une piste pleine ou deja partie se lisait
+   * comme un rond qui tourne sans fin.
+   */
+  const [refus, setRefus] = useState('');
+  const refusDemande = useRef(false);
   const salle = useRef<SalleConfrontation | null>(null);
   /** Le couloir attribue a chaque equipe, fixe une fois pour toutes. */
   const couloirs = useRef(new Map<string, number>());
@@ -111,18 +118,34 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         // en course continuent de fonctionner sans savoir qu'ils viennent du
         // reseau. Leur identifiant est le code de leur equipe — un relais n'a
         // qu'un temoin, et c'est lui que l'on suit, pas ses quatre porteurs.
-        const autres = [...couloirs.current.entries()]
-          .filter(([id]) => id !== equipe)
-          .map(([id, i]) => ({ id, nom: noms.current.get(id) || id, couloir: i + 1 }));
+        //
+        // CHACUN DANS LE COULOIR QUE LA SALLE LUI DONNE, la mienne comprise.
+        // Chaque ecran placait jusqu'ici les autres autour de lui : deux
+        // joueurs ne voyaient pas la meme piste, et a huit equipes la
+        // derniere courait hors des lignes. Une salle plus ancienne ne donne
+        // pas de couloir ; on garde alors l'ancien placement.
+        const lesEquipes = etatRef.current?.equipes || [];
+        const mienne = lesEquipes.find(x => x.equipe === equipe);
+        const parLaSalle = lesEquipes.length > 0 &&
+                           lesEquipes.every(x => Number.isFinite(x.couloir));
+        const autres = parLaSalle
+          ? lesEquipes.filter(x => x.equipe !== equipe)
+              .map(x => ({ id: x.equipe, nom: x.nom || x.equipe, couloir: x.couloir! }))
+          : [...couloirs.current.entries()]
+              .filter(([id]) => id !== equipe)
+              .map(([id, i]) => ({ id, nom: noms.current.get(id) || id, couloir: i + 1 }));
         // Et mes trois coequipiers dans MON couloir : sans eux, la
         // transmission — qui exige maintenant un contact — se jouerait contre
         // un partenaire invisible.
-        const mienne = (etatRef.current?.equipes || []).find(x => x.equipe === equipe);
         const mesEquipiers = (mienne?.joueurs || [])
           .filter(j => j.relais !== s.monRelais)
           .map(j => ({ id: `moi:${j.relais}`, nom: j.nom, relais: j.relais }));
         SprinterApp.startRelais({
           relais: s.monRelais, marque: s.marque, autres, equipiers: mesEquipiers,
+          monCouloir: parLaSalle ? mienne?.couloir : undefined,
+          // Les equipes engagees, et personne d'autre : des coureurs maison
+          // dans les couloirs libres brouillaient qui l'on bat.
+          sansOrdinateur: true,
         });
         SprinterApp.liveDepart(dansMs, departA);
         SprinterApp.porteurDuTemoin(1);
@@ -226,7 +249,19 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         void arreterLeFilm('relais');
       },
       onTermine: () => setTermine(true),
-      onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
+      onFerme: (r) => {
+        if (r !== 'fermee') setErreur(r);
+        // JAMAIS ENTRE : la poignee de main a ete refusee, et le navigateur
+        // ne dit pas pourquoi. On le demande a la salle.
+        if (etatRef.current || refusDemande.current) return;
+        refusDemande.current = true;
+        void etatConfrontation(code).then(x => {
+          const dedans = !!x?.equipes?.some(q => q.equipe === equipe);
+          setRefus(x?.depart_a ? 'conf_refus_partie'
+            : x && !dedans && x.equipes.length >= x.max ? 'conf_refus_pleine'
+            : 'challenge_net');
+        });
+      },
     });
     salle.current = s;
     s.connecter(max, fantomes);
@@ -245,6 +280,29 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
 
   const mienne = useMemo(() => salle.current?.mienne(e) || null, [e]);
   const autres = useMemo(() => autresQue(e, equipe), [e, equipe]);
+
+  if (refus && !e) {
+    return (
+      <div className="fixed inset-0 z-40 flex items-center justify-center px-4
+                      bg-[#05070d]/90 backdrop-blur-sm">
+        <motion.div
+          {...MONTEE}
+          className="w-full max-w-sm bg-card/80 backdrop-blur-xl border border-primary/30
+                     rounded-2xl p-5 shadow-2xl flex flex-col gap-4 text-center"
+        >
+          <span className="flex items-center justify-center gap-1.5 text-[10px] font-bold
+                           tracking-widest text-primary">
+            <Swords className="w-3.5 h-3.5" /> {code}
+          </span>
+          <p className="text-sm text-foreground leading-snug">{N.t(refus)}</p>
+          <button onClick={onQuitter}
+                  className="text-[10px] tracking-widest text-muted-foreground hover:text-foreground">
+            {N.t('live_leave')}
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (!e || !mienne) {
     return (
@@ -271,7 +329,17 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
    */
   const aPortee = !!((jeRecois || jeDonne) && bras != null && bras <= PORTEE);
 
-  const couleur = (id: string) => couleurDe(couloirs.current.get(id) ?? 0);
+  /** Le couloir peint d'une equipe, quand la salle le donne. */
+  const couloirDe = (id: string) => e.equipes.find(x => x.equipe === id)?.couloir;
+  /**
+   * La couleur d'une equipe est celle de son couloir : la meme dans la bande
+   * et sur le cerceau qui la suit en piste (voir teinteDuCouloir dans
+   * sprinter-app.js), et la meme sur tous les telephones.
+   */
+  const couleur = (id: string) => {
+    const c = couloirDe(id);
+    return couleurDe(c ? c - 1 : (couloirs.current.get(id) ?? 0));
+  };
   const rangee = (x: EquipeEnCourse) => (
     <Couloir key={x.equipe} nom={x.nom || x.equipe} code={x.equipe}
              d={dTemoin(x.equipe)} porteur={x.porteur} couleur={couleur(x.equipe)}
@@ -372,6 +440,10 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
   /* ------------------------------------------------- avant le pistolet */
 
   const manque = mienne.presents < TAILLE;
+  /** Les couloirs encore libres : le pistolet attend que la piste soit pleine. */
+  const libres = Math.max(0, e.max - e.equipes.length);
+  /** Dans l'ordre de la piste, du couloir le plus a l'interieur au plus a l'exterieur. */
+  const enPiste = [...e.equipes].sort((a, b) => (a.couloir ?? 0) - (b.couloir ?? 0));
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center px-4 py-8
@@ -391,18 +463,26 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
           </span>
         </div>
 
-        {/* Qui est deja la. Le nombre d'equipes n'est pas un detail : on attend
-            que chaque equipe presente soit au complet, et une equipe qui
-            n'arrive jamais ne bloque personne. */}
+        {/* Qui est deja la, couloir par couloir. Le nombre d'equipes n'est pas
+            un detail : le pistolet attend que la piste soit pleine — le nombre
+            choisi a l'ouverture — et que chaque equipe soit au complet. Les
+            places libres se voient, sans quoi on attendrait sans savoir qui. */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[9px] tracking-widest text-muted-foreground">
             {N.t('conf_engagees', { n: String(e.equipes.length), m: String(e.max) })}
           </span>
-          {e.equipes.map(x => (
+          {enPiste.map(x => (
             <div key={x.equipe}
                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border
                    ${x.equipe === equipe ? 'border-emerald-400/40 bg-emerald-400/[0.08]'
                                          : 'border-white/8 bg-black/25'}`}>
+              {x.couloir != null && (
+                <span className="font-mono text-[10px] w-3 shrink-0 text-center tabular-nums
+                                 text-muted-foreground"
+                      title={N.t('conf_couloir', { n: String(x.couloir) })}>
+                  {x.couloir}
+                </span>
+              )}
               <span className="w-1.5 h-4 rounded-full shrink-0"
                     style={{ background: couleur(x.equipe) }} />
               <span className="flex-1 text-[11px] font-bold truncate text-foreground">
@@ -410,6 +490,15 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
               </span>
               <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
                 {x.presents === 0 ? N.t('relais_fantome') : `${x.prets}/${x.presents}`}
+              </span>
+            </div>
+          ))}
+          {Array.from({ length: libres }, (_, i) => (
+            <div key={'libre' + i}
+                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-dashed
+                            border-white/10 bg-black/10">
+              <span className="flex-1 text-[10px] tracking-wide text-muted-foreground/70">
+                {N.t('conf_place_libre')}
               </span>
             </div>
           ))}
@@ -441,9 +530,9 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
             {N.t('relais_attend_equipe', { n: String(TAILLE - mienne.presents) })}
           </p>
         )}
-        {!manque && e.equipes.length < 2 && (
-          <p className="text-[10px] text-center text-muted-foreground">
-            {N.t('conf_attend_adversaire')}
+        {libres > 0 && (
+          <p className="text-[10px] text-center text-muted-foreground leading-snug">
+            {N.t('conf_attend_equipes', { n: String(libres) })}
           </p>
         )}
 

@@ -33,7 +33,10 @@ function relayeur(conf, equipe, nom, vitesse) {
               // Ce que le JEU dessinerait, selon les deux lectures possibles
               // d'un message de position — voir le commentaire dans `pos`.
               piste: {}, naif: {}, ecart: {}, sansTemoin: 0 };
-  const url = `${WS}/relay/conf/${conf}?acces=${ACCES}&team=${equipe}&name=${encodeURIComponent(nom)}`;
+  // Une piste pour deux : le pistolet attend que la piste annoncee soit
+  // pleine, et sans `max` la salle en attendrait huit — voir
+  // relais-huit-equipes-test.mjs.
+  const url = `${WS}/relay/conf/${conf}?acces=${ACCES}&team=${equipe}&name=${encodeURIComponent(nom)}&max=2`;
   c.ws = new WebSocket(url);
   c.pret = new Promise(res => c.ws.addEventListener('open', res));
   c.ws.addEventListener('message', ev => {
@@ -201,11 +204,15 @@ ok('le coureur dessine EST le temoin',
                           - (c.etat?.equipes?.find(x => x.equipe === adverseDe(c))?.temoin_d ?? -2)) < 1),
    cl.map(c => `${(c.piste[adverseDe(c)] ?? -1).toFixed(1)} vs ` +
                `${c.etat?.equipes?.find(x => x.equipe === adverseDe(c))?.temoin_d}`).join(' | '));
-// Et voila ce que coutait la lecture naive : l'ecart maximal, en metres, entre
-// le coureur qu'elle dessinait et le temoin qu'il pretendait etre.
+// Et la lecture naive : l'ecart maximal, en metres, entre le coureur qu'elle
+// dessinait et le temoin qu'il pretendait etre. Il valait trois cents metres
+// tant que la salle envoyait aux autres equipes la position des relayeurs qui
+// attendent a leur marque. Elle ne leur envoie plus que celle du porteur (voir
+// `case 'pos'` dans salle-confrontation.js) : meme un jeu qui lirait n'importe
+// quel relayeur dessinerait desormais le temoin.
 const pire = Math.max(...cl.map(c => c.ecart[adverseDe(c)] ?? 0));
-console.log(`   la lecture d'avant le correctif s'ecartait du temoin de ${pire.toFixed(1)} m au pire`);
-ok('la lecture naive etait bien fautive (temoin de non-regression)', pire > 50,
+console.log(`   la lecture naive s'ecarte du temoin de ${pire.toFixed(1)} m au pire`);
+ok('aux autres equipes, la salle n envoie plus que le temoin', pire < 1,
    `ecart maximal ${pire.toFixed(1)} m`);
 
 if (f) {

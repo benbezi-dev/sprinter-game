@@ -22,7 +22,8 @@ export type SurLaPiste =
       genre: 'confrontation';
       code: string;
       equipe: string;
-      /** Combien d'equipes au plus. Le premier arrive le fixe. */
+      /** Combien d'equipes s'affrontent, de deux a huit. Le premier arrive le
+          fixe, et le pistolet attend que la piste en soit pleine. */
       max: number;
       /** Les courses enregistrees a affronter, par identifiant de course. */
       fantomes: number[];

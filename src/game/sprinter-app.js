@@ -1689,6 +1689,10 @@
     // `spectateur` quand on a pris le carton rouge ; `suivi` est alors le
     // coureur que la camera accompagne ; `rappel` vit le temps de la scene.
     champDirect: false, spectateur: false, suivi: null, rappel: null,
+    // Les couloirs annonces sont ceux qu'on voit peints, le joueur compris :
+    // la confrontation de relais, ou la salle donne son couloir a chaque
+    // equipe. Voir indiceDuCouloir.
+    couloirsPeints: false,
     // Le defi de la demi (game/defi-demie.ts) : une course contre les chronos
     // de la demi-finale 1, en attendant la 2. `{ edition, essai }` ou null.
     defiDemie: null,
@@ -2105,6 +2109,9 @@
     // Et le championnat en direct : un carton rouge ne suit pas le joueur dans
     // sa course suivante.
     G.champDirect = false; G.spectateur = false; G.suivi = null; G.rappel = null;
+    // Et les couloirs d'une confrontation de relais : la course suivante
+    // retrouve le couloir du joueur et la numerotation du direct.
+    G.couloirsPeints = false;
     // Et le defi de la demi : `defi-demie` le pose APRES startLive, comme le
     // rejeu. Une course lancee ensuite le trouve eteint, et son ecran de fin
     // n'est pas celui du defi.
@@ -2401,6 +2408,13 @@
       const l = opts.monCouloir;
       // Le couloir peint est l'indice plus un : voir indiceDuCouloir.
       if (l >= 1 && l <= C.LANE_COUNT && G.player) G.player.lane = l - 1;
+    } else if (opts.couloirsPeints) {
+      // UNE CONFRONTATION DE RELAIS : meme regle, sans rien d'autre du
+      // championnat. La salle donne son couloir a chaque equipe, la mienne
+      // comprise, et les huit telephones les posent tous aux memes endroits.
+      G.couloirsPeints = true;
+      const l = opts.monCouloir;
+      if (l >= 1 && l <= C.LANE_COUNT && G.player) G.player.lane = l - 1;
     }
     // Un seul chemin, a deux comme a huit.
     //
@@ -2504,7 +2518,7 @@
     // joueur local dans sa propre moitie, et deux moities ne s'additionnent
     // pas.
     const monCouloir = Math.round(G.player ? G.player.lane : 3);
-    const teinte = couleurCouloir(Math.round(monCouloir));
+    const teinte = teinteDuCouloir(Math.round(monCouloir));
     for (const a of autres) {
       // Celui qui me precede arrive par l'exterieur, celui qui me suit attend
       // a l'interieur : de mon ecran, l'un entre par derriere et l'autre est
@@ -2533,13 +2547,27 @@
     }
   }
 
+  /*
+   * En confrontation, trois options de plus, qui vont ensemble :
+   *
+   * @param opts.monCouloir le couloir peint de mon equipe, 1 a 8, tel que la
+   *   salle le donne. Les `autres` portent alors aussi leur couloir peint.
+   * @param opts.sansOrdinateur la piste aux seules equipes engagees. Seul,
+   *   contre le chrono, le relais garde son plateau ; contre d'autres equipes,
+   *   des coureurs maison dans les couloirs libres brouillent qui l'on bat —
+   *   voir retirerOrdinateur.
+   */
   function startRelais(opts) {
     opts = opts || {};
     const relais = Math.max(1, Math.min(4, opts.relais || 1));
     const marque = Math.max(0, Number(opts.marque) || (relais - 1) * 100);
+    const couloir = Number(opts.monCouloir);
     startLive(['4x100'], {
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
+      couloirsPeints: couloir >= 1 && couloir <= C.LANE_COUNT,
+      monCouloir: couloir,
+      sansOrdinateur: !!opts.sansOrdinateur,
     });
     // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
     // les coequipiers viennent par-dessus, dans mon couloir a moi.
@@ -2695,7 +2723,7 @@
         maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
       });
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
-      r.repere = { couleur: couleurCouloir(lane), nom: autre.nom || '' };
+      r.repere = { couleur: teinteDuCouloir(lane), nom: autre.nom || '' };
       G.runners.push(r);
       G.lives.set(autre.id, suiviLive(r, 0));
     });
@@ -2782,7 +2810,7 @@
         maxSpeed: G.race.maxSpeed, total: G.track.total, pool: LEVELS[G.levelIdx].pool
       });
       r.isGhost = true; r.isLive = true; r.d = 0; r.v = 0;
-      r.repere = { couleur: couleurCouloir(lane), nom: a.nom || '' };
+      r.repere = { couleur: teinteDuCouloir(lane), nom: a.nom || '' };
       G.runners.push(r);
       G.lives.set(id, suiviLive(r, G.elapsed));
     }
@@ -2817,14 +2845,30 @@
    * difference ne se voit pas ; pour une serie de championnat, ou le couloir
    * est annonce, presente et affiche au tableau, c'est une erreur. En
    * championnat, donc, le couloir est celui qu'on voit peint.
+   *
+   * Et en confrontation de relais (`G.couloirsPeints`) : huit equipes, et la
+   * huitieme courait dans le « couloir 8 » du direct — hors de la piste.
    */
+  function couloirsPeints() { return G.champDirect || G.couloirsPeints; }
   function indiceDuCouloir(c) {
     const n = Number(c);
     if (!Number.isFinite(n) || n < 1) return null;
-    return G.champDirect ? n - 1 : n;
+    return couloirsPeints() ? n - 1 : n;
   }
   function bornesDesCouloirs() {
-    return G.champDirect ? [0, C.LANE_COUNT - 1] : [1, 8];
+    return couloirsPeints() ? [0, C.LANE_COUNT - 1] : [1, 8];
+  }
+
+  /**
+   * La teinte d'un couloir, par son indice dans le moteur.
+   *
+   * `couleurCouloir` attend la numerotation du direct, ou le couloir 1 est
+   * l'indice 1. En confrontation de relais, l'indice 0 est le couloir 1 peint
+   * — sans ce decalage, les couloirs 1 et 2 portaient la meme couleur, et
+   * aucune ne correspondait a celle de l'equipe dans la bande des couloirs.
+   */
+  function teinteDuCouloir(lane) {
+    return couleurCouloir(G.couloirsPeints ? lane + 1 : lane);
   }
 
   function retirerOrdinateur() {
@@ -2844,7 +2888,7 @@
    */
   function marquerJoueur() {
     if (!G.player) return;
-    G.player.repere = { couleur: couleurCouloir(G.player.lane), nom: t('you'), moi: true };
+    G.player.repere = { couleur: teinteDuCouloir(G.player.lane), nom: t('you'), moi: true };
   }
 
   /**

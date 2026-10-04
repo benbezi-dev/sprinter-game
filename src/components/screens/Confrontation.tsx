@@ -15,10 +15,14 @@ import { entrerSurLaPiste } from '@/game/piste';
  * Le nombre de couloirs se fixe a l'ouverture et par le premier arrive. Le
  * laisser ouvert jusqu'au depart obligerait a decider, a chaque nouvelle
  * equipe, si elle rentre ou non — et une equipe refusee apres avoir tape le
- * bon code ne comprendrait pas pourquoi.
+ * bon code ne comprendrait pas pourquoi. C'est aussi le nombre qui court : le
+ * pistolet attend que la piste en soit pleine.
  */
 
-const CHOIX = [2, 3, 4, 6, 8];
+// Tous les nombres de deux a huit. Il manquait cinq et sept, et depuis que le
+// pistolet attend la piste pleine, cinq equipes n'auraient eu le choix
+// qu'entre en laisser une dehors et attendre une sixieme qui ne viendrait pas.
+const CHOIX = [2, 3, 4, 5, 6, 7, 8];
 
 export function Confrontation({ equipes }: { equipes: EquipeRelais[] }) {
   const { N } = SprinterApp;

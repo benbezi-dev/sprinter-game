@@ -541,8 +541,8 @@
     relais_fantome:  ['FANTÔME', 'GHOST'],
     // confrontations de 2 a 8 equipes
     conf_titre:      ['AFFRONTER D’AUTRES ÉQUIPES', 'RACE OTHER TEAMS'],
-    conf_desc:       ['un seul départ, un classement à l’arrivée. Ouvre un code et partage-le, ou entre celui qu’on t’a donné.',
-                      'one start, one finish order. Open a code and share it, or enter the one you were given.'],
+    conf_desc:       ['de deux à huit équipes, chacune dans son couloir : un seul départ, un classement à l’arrivée. Ouvre un code et partage-le, ou entre celui qu’on t’a donné.',
+                      'two to eight teams, each in its own lane: one start, one finish order. Open a code and share it, or enter the one you were given.'],
     conf_ouvrir:     ['OUVRIR UNE CONFRONTATION', 'OPEN A CONFRONTATION'],
     conf_rejoindre:  ['ENTRER', 'JOIN'],
     conf_code:       ['code', 'code'],
@@ -550,8 +550,16 @@
     conf_partage:    ['PARTAGE CE CODE AUX AUTRES ÉQUIPES', 'SHARE THIS CODE WITH THE OTHER TEAMS'],
     conf_places:     ['{n} équipes sur la piste', '{n} teams on the track'],
     conf_engagees:   ['{n} ÉQUIPE(S) SUR {m}', '{n} OF {m} TEAMS'],
-    conf_attend_adversaire: ['il faut au moins une autre équipe, ou un fantôme',
-                             'you need at least one more team, or a ghost'],
+    // Le pistolet attend la piste pleine : le nombre choisi a l'ouverture.
+    conf_attend_equipes: ['encore {n} équipe(s) attendue(s) : le départ est donné quand la piste est pleine',
+                          '{n} more team(s) to come: the gun fires once the track is full'],
+    conf_place_libre: ['place libre', 'open lane'],
+    // La porte refusee : on dit laquelle, plutot qu'un rond qui tourne.
+    conf_refus_pleine: ['cette confrontation est complète : tous ses couloirs sont pris.',
+                        'this confrontation is full: every lane is taken.'],
+    conf_refus_partie: ['la course est déjà partie : personne n’entre une fois le pistolet tiré.',
+                        'the race has already started: nobody joins once the gun has fired.'],
+    conf_couloir:    ['couloir {n}', 'lane {n}'],
     conf_classement: ['À L’ARRIVÉE', 'FINISH ORDER'],
     conf_encore:     ['les autres courent encore', 'the others are still running'],
     // mode fantome

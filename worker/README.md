@@ -146,6 +146,30 @@ gardent leurs `races` ; les courses en direct d'avant, qui ne gardaient rien,
 retombent sur le 100 m). Rien à lancer à la main ; `POST /duels/recalculer`
 refait le même travail à volonté.
 
+## Les relais, équipe contre équipe
+
+Une confrontation de relais oppose **de deux à huit équipes** de quatre :
+`POST /relay/confrontation` ouvre un code, `/relay/conf/<code>` est la salle
+(`src/salle-confrontation.js`). Le premier arrivé fixe le nombre d'équipes
+(`max` à la connexion), et c'est le nombre qui court : le pistolet attend que
+la piste soit pleine et que chaque équipe y soit au complet et prête. Un
+fantôme compte pour une équipe, prêt d'office ; un fantôme introuvable rend son
+couloir. Une équipe qui entre puis repart avant le départ rend sa place ; une
+fois le pistolet tiré, plus personne n'entre (409 `course en cours`, ou
+`confrontation complete` quand la piste est pleine).
+
+Chaque équipe reçoit son couloir de la salle — `couloir`, de 1 à 8, dans l'état
+de chaque équipe — et c'est le même sur tous les téléphones : un bloc au milieu
+de la piste, dans l'ordre d'entrée, les fantômes après les équipes connectées.
+À deux les couloirs 4 et 5, à trois de 3 à 5, à huit tous. Pendant la course,
+un relayeur reçoit la position de ses trois coéquipiers, et des autres équipes
+le seul témoin.
+
+Harnais, contre `wrangler dev --local --port 8788` :
+`tools/relais-huit-equipes-test.mjs` (huit équipes, trente-deux relayeurs, puis
+une confrontation à trois) et `tools/relais-confrontation-test.mjs` (deux
+équipes).
+
 ## Les notifications
 
 Deux transports, parce qu'une WebView n'a pas d'API Push et que le Web Push ne

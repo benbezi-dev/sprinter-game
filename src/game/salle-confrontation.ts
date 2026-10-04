@@ -41,6 +41,13 @@ export type EquipeEnCourse = {
   elimine: { raison: string; relais: number } | null;
   total: number | null;
   coureurs: { relais: number; d: number; fini: boolean }[];
+  /**
+   * Le couloir peint de l'equipe, 1 a 8 : un bloc au milieu de la piste, le
+   * meme sur tous les telephones. C'est la salle qui le donne. Absent d'une
+   * salle plus ancienne, qui laissait chaque ecran placer les autres autour
+   * de lui.
+   */
+  couloir?: number;
   presents: number;
   prets: number;
   joueurs: JoueurRelais[];
@@ -97,6 +104,26 @@ type Ecouteurs = {
   onFerme?: (raison: string) => void;
 };
 
+/**
+ * Ce que dit la salle, sans y entrer.
+ *
+ * Une porte refusee ne dit pas pourquoi : le navigateur ne laisse lire ni le
+ * statut ni le motif d'une poignee de main WebSocket ratee, seulement qu'elle a
+ * rate. Or depuis que le pistolet attend la piste pleine, etre refuse devient
+ * ordinaire — la neuvieme equipe, celle qui arrive une fois la course partie —
+ * et un rond qui tourne sans fin n'apprend rien a personne. On demande donc a
+ * la salle son etat, et l'on peut dire laquelle des deux portes est fermee.
+ */
+export async function etatConfrontation(code: string):
+    Promise<(EtatConfrontation & { existe: boolean }) | null> {
+  try {
+    const r = await fetch(avecAcces(
+      `${API_BASE}/relay/conf/${encodeURIComponent(code.toUpperCase())}/etat`));
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
 export class SalleConfrontation {
   private lien: Liaison | null = null;
   private ec: Ecouteurs;
@@ -118,7 +145,9 @@ export class SalleConfrontation {
   }
 
   /**
-   * @param max      combien d'equipes au plus — le premier arrive le fixe.
+   * @param max      combien d'equipes s'affrontent, de deux a huit — le
+   *                 premier arrive le fixe, et le pistolet attend que la piste
+   *                 en soit pleine.
    * @param fantomes les courses enregistrees a affronter, par identifiant.
    */
   connecter(max = MAX_EQUIPES, fantomes: number[] = []) {

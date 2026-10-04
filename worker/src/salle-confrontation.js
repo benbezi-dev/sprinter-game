@@ -14,13 +14,20 @@
    1. un coup de pistolet. Une seule date, annoncee a tout le monde.
    2. un classement. A l'arrivee on compare, ce qu'une equipe seule ne fait
       jamais.
-   3. le regard des autres. Les positions de chaque equipe partent a toutes,
-      sans quoi personne ne verrait contre qui il court.
+   3. le regard des autres. Le temoin de chaque equipe part a toutes, sans
+      quoi personne ne verrait contre qui il court.
 
    Une equipe eliminee ne fait pas tomber la confrontation : les autres
    continuent. C'est la difference avec un relais solitaire, ou l'elimination
    met fin a tout — ici elle met fin a une equipe, et le classement la range
    derriere celles qui ont fini.
+
+   DE DEUX A HUIT, ET LE NOMBRE ANNONCE EST CELUI QUI COURT. Celui qui ouvre
+   choisit combien d'equipes s'affrontent, et le pistolet attend que la piste
+   soit pleine — comme en course en direct (voir salle.js). Le pistolet
+   partait auparavant des que deux equipes presentes etaient pretes : on
+   ouvrait pour huit, on courait a deux, et les six autres trouvaient une
+   piste deja partie.
 --------------------------------------------------------------------------- */
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
@@ -30,6 +37,20 @@ import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
 const MAX_EQUIPES = 8;
+// La piste a huit couloirs : une equipe par couloir, jamais deux.
+const COULOIRS = 8;
+
+/**
+ * Le premier couloir d'une confrontation a `n` equipes.
+ *
+ * Les equipes courent en bloc AU MILIEU de la piste : a deux, les couloirs 4
+ * et 5 ; a trois, 3, 4 et 5 ; a huit, tous. C'est la que la camera regarde, et
+ * c'est la que se courent les finales — les couloirs du bord ne se donnent que
+ * quand il n'en reste pas d'autres.
+ */
+export function premierCouloir(n) {
+  return Math.floor((COULOIRS - Math.max(1, Math.min(COULOIRS, n))) / 2) + 1;
+}
 // Un peu plus qu'a une equipe : il y a du monde a mettre en place. Le depart
 // part au decompte, sur les deux canaux, et a la meme date pour toutes les
 // equipes engagees, parce qu'il n'y a qu'un seul coup de pistolet. Voir
@@ -77,17 +98,21 @@ export class SalleConfrontation {
    * equipes sans avoir a reunir huit personnes au meme moment.
    */
   async chargerFantomes(ids) {
-    if (!this.base()) return;
+    if (!this.base()) return 0;
+    let charges = 0;
     for (const brut of ids) {
       const id = parseInt(brut, 10);
-      if (!Number.isFinite(id) || this.fantomes.has('F' + id)) continue;
+      if (!Number.isFinite(id)) continue;
+      if (this.fantomes.has('F' + id)) { charges++; continue; }
       const f = await fantomeRelais(this.base(), id);
       if (!f || !Array.isArray(f.traces) || f.traces.length < 10) continue;
       const cle = 'F' + id;
       this.fantomes.set(cle, { trace: f.traces, total: f.total_ms });
       const c = this.courseDe(cle, f.equipe + ' (fantome)');
       c.fantome = true;
+      charges++;
     }
+    return charges;
   }
 
   /**
@@ -133,19 +158,61 @@ export class SalleConfrontation {
     return this.equipes.get(id);
   }
 
+  /** Les joueurs connectes, par equipe. */
+  parEquipe() {
+    const p = new Map();
+    for (const j of this.joueurs.values()) {
+      if (!p.has(j.equipe)) p.set(j.equipe, []);
+      p.get(j.equipe).push(j);
+    }
+    return p;
+  }
+
+  /**
+   * Rend les places des equipes dont plus personne n'est la.
+   *
+   * Hors course seulement. Ce sont les equipes d'une course deja jouee dont
+   * les quatre sont partis : leur ligne restait au classement que les autres
+   * lisent encore, mais elle n'a plus rien a faire sur la piste suivante. On ne
+   * les retire que quand leur place sert — a un nouveau depart, ou a une
+   * equipe qui frappe a une piste pleine.
+   */
+  purgerLesAbsentes() {
+    if (this.departA) return;
+    const presentes = this.parEquipe();
+    for (const [id, c] of [...this.equipes]) {
+      if (!c.fantome && !presentes.has(id)) this.equipes.delete(id);
+    }
+  }
+
+  /**
+   * Le couloir de chaque equipe : un bloc au milieu de la piste, dans l'ordre
+   * d'entree, les equipes connectees avant les fantomes.
+   *
+   * LA SALLE LE DONNE, LE TELEPHONE NE LE CHOISIT PAS. Chaque ecran attribuait
+   * jusqu'ici les couloirs lui-meme, autour du sien : deux joueurs ne voyaient
+   * pas les memes equipes aux memes endroits, et la huitieme tombait hors de
+   * la piste. Ici, un seul ordre pour tout le monde. Il ne bouge plus pendant
+   * une course, puisqu'aucune equipe n'y entre ni n'en sort.
+   */
+  couloirs() {
+    const ids = [...this.equipes.entries()];
+    const ordre = [...ids.filter(([, c]) => !c.fantome), ...ids.filter(([, c]) => c.fantome)];
+    const premier = premierCouloir(this.max);
+    return new Map(ordre.map(([id], i) => [id, Math.min(COULOIRS, premier + i)]));
+  }
+
   // --- vue publique --------------------------------------------------------
 
   vue() {
-    const parEquipe = new Map();
-    for (const j of this.joueurs.values()) {
-      if (!parEquipe.has(j.equipe)) parEquipe.set(j.equipe, []);
-      parEquipe.get(j.equipe).push(j);
-    }
+    const parEquipe = this.parEquipe();
+    const couloirs = this.couloirs();
     const equipes = [...this.equipes.entries()].map(([id, c]) => {
       const v = c.vue();
       const distances = new Map(v.coureurs.map(x => [x.relais, x]));
       return {
         ...v,
+        couloir: couloirs.get(id),
         presents: (parEquipe.get(id) || []).length,
         prets: (parEquipe.get(id) || []).filter(x => x.pret).length,
         joueurs: (parEquipe.get(id) || [])
@@ -202,10 +269,12 @@ export class SalleConfrontation {
                                INACTIVITE_MS);
   }
 
-  diffuser(msg, sauf) {
+  /** A tout le monde, ou — avec `equipe` — aux seuls membres de cette equipe. */
+  diffuser(msg, sauf, equipe = null) {
     const texte = JSON.stringify(msg);
-    for (const [ws] of this.joueurs) {
+    for (const [ws, j] of this.joueurs) {
       if (ws === sauf) continue;
+      if (equipe && j.equipe !== equipe) continue;
       try { ws.send(texte); } catch (e) { /* socket morte */ }
     }
   }
@@ -254,19 +323,27 @@ export class SalleConfrontation {
       return new Response('equipe invalide', { status: 400 });
     }
     // Le premier arrive fixe la taille de la confrontation.
-    if (this.equipes.size === 0 && !this.departA) {
+    const premier = this.equipes.size === 0 && !this.departA;
+    if (premier) {
       const m = parseInt(url.searchParams.get('max') || String(MAX_EQUIPES), 10);
       this.max = Number.isFinite(m)
         ? Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, m)) : MAX_EQUIPES;
     }
-    if (!this.equipes.has(equipeId) && this.equipes.size >= this.max) {
-      return new Response('confrontation complete', { status: 409 });
-    }
 
-    // Les fantombes se declarent a la connexion, et ne se chargent qu'une fois.
+    // Les fantomes se declarent a la connexion, et ne se chargent qu'une fois :
+    // a l'ouverture, par celui qui fixe la taille. Charges plus tard, ils
+    // prendraient des couloirs promis a des equipes, ou entreraient en course.
     const fantomes = (url.searchParams.get('fantomes') || '')
-      .split(',').map(x => x.trim()).filter(Boolean).slice(0, 7);
-    if (fantomes.length) await this.chargerFantomes(fantomes);
+      .split(',').map(x => x.trim()).filter(Boolean)
+      .slice(0, this.max - 1);
+    if (premier && fantomes.length) {
+      const charges = await this.chargerFantomes(fantomes);
+      // Un fantome introuvable ne doit pas laisser un couloir a attendre : la
+      // piste est pleine quand elle a tout ce qui pouvait venir.
+      if (charges < fantomes.length) {
+        this.max = Math.max(MIN_EQUIPES, this.max - (fantomes.length - charges));
+      }
+    }
 
     const nom = net(url.searchParams.get('name'));
     const cle = nom.trim().toLowerCase();
@@ -282,6 +359,20 @@ export class SalleConfrontation {
       nomEquipe = e.nom || equipeId;
     } else {
       relais = [...this.joueurs.values()].filter(j => j.equipe === equipeId).length + 1;
+    }
+
+    // LA PLACE, APRES LES ATTENTES ET SANS EN REFAIRE AUCUNE. Deux equipes qui
+    // frappent ensemble passeraient sinon toutes les deux le controle pendant
+    // que la base repond, et la piste aurait un couloir de trop.
+    if (!this.equipes.has(equipeId)) {
+      // Personne n'entre en pleine course : une equipe arrivee apres le
+      // pistolet ne courrait pas, et la confrontation attendrait sa fin pour
+      // rendre son classement.
+      if (this.departA) return new Response('course en cours', { status: 409 });
+      if (this.equipes.size >= this.max) this.purgerLesAbsentes();
+      if (this.equipes.size >= this.max) {
+        return new Response('confrontation complete', { status: 409 });
+      }
     }
     for (const j of this.joueurs.values()) {
       if (j.equipe === equipeId && j.relais === relais) {
@@ -324,6 +415,16 @@ export class SalleConfrontation {
       const el = c.eliminer('un relayeur a quitte la course', j.relais);
       if (el) this.diffuser({ t: 'elimine', equipe: j.equipe, ...el, ...this.vue() });
       this.cloreSiFini();
+    } else if (!this.departA && c && !c.fantome && !c.finie() &&
+               !this.parEquipe().has(j.equipe)) {
+      // ENTREE, PUIS REPARTIE SANS AVOIR COURU : elle rend sa place. Elle la
+      // gardait, et c'etait double peine — elle comptait dans la piste pleine
+      // qu'une autre equipe ne pouvait plus prendre, et surtout la
+      // confrontation attendait, pour rendre son classement, la fin d'une
+      // course que cette equipe ne courrait jamais. Rien ne s'ecrivait au
+      // tableau. Une equipe qui a couru, elle, reste : sa ligne est au
+      // classement que les autres lisent encore.
+      this.equipes.delete(j.equipe);
     }
     this.diffuser({ t: 'sorti', nom: j.nom, equipe: j.equipe, relais: j.relais, ...this.vue() });
     if (this.joueurs.size === 0) { clearTimeout(this.minuteur); this.minuteur = null; }
@@ -346,24 +447,28 @@ export class SalleConfrontation {
       case 'pret': {
         j.pret = !!m.pret;
         this.vivante();
-        // On part quand chaque equipe presente est au complet et prete, et
-        // qu'il y en a au moins deux. Attendre une equipe absente
-        // indefiniment n'aurait pas de sens ; partir a trois relayeurs non
-        // plus.
-        const parEquipe = new Map();
-        for (const x of this.joueurs.values()) {
-          if (!parEquipe.has(x.equipe)) parEquipe.set(x.equipe, []);
-          parEquipe.get(x.equipe).push(x);
-        }
+        // On part quand LA PISTE EST PLEINE — le nombre d'equipes choisi a
+        // l'ouverture — et que chacune est au complet et prete. Partir a trois
+        // relayeurs n'aurait pas de sens ; partir a deux equipes quand on en
+        // a annonce huit non plus, et c'est ce qui se faisait : les six
+        // autres arrivaient sur une piste deja partie.
+        //
+        // Une equipe qui n'arrive jamais ne bloque pas pour toujours : la
+        // salle se ferme d'elle-meme apres quelques minutes de silence, et
+        // celle qui entre puis repart rend sa place (voir `parti`).
+        const parEquipe = this.parEquipe();
         const pretes = [...parEquipe.values()]
           .filter(v => v.length === TAILLE && v.every(x => x.pret)).length;
-        // Les fantomes n'ont personne a attendre : on ne compte que les
-        // equipes qui ont des joueurs. Un fantome de plus ne doit jamais
-        // empecher un depart.
+        // Les fantomes n'ont personne a attendre : ils sont prets d'office, et
+        // occupent leur couloir comme une equipe.
         const humaines = parEquipe.size;
+        const fantomes = [...this.equipes.values()].filter(x => x.fantome).length;
         const tous = humaines >= 1 && pretes === humaines &&
-                     (humaines + this.fantomes.size) >= MIN_EQUIPES;
+                     (humaines + fantomes) >= Math.max(MIN_EQUIPES, this.max);
         if (tous && !this.departA) {
+          // Les equipes d'une course precedente dont plus personne n'est la
+          // ne prennent pas le depart de celle-ci.
+          this.purgerLesAbsentes();
           this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           for (const course of this.equipes.values()) { course.reinitialiser(); course.temoinCh = null; }
           // Les instants de course repartent de zero avec le pistolet.
@@ -434,7 +539,14 @@ export class SalleConfrontation {
                         temoin: Math.round(c.temoinD * 100) / 100 };
           if (j.ch != null) pos.c = j.ch;
           if (c.temoinCh != null) pos.ct = c.temoinCh;
-          this.diffuser(pos, ws);
+          // AUX AUTRES EQUIPES, LE TEMOIN SEUL. Elles ne dessinent qu'un
+          // coureur par equipe adverse, celui qui le porte ; la position d'un
+          // relayeur qui attend a sa marque ne regarde que ses coequipiers,
+          // pour qui elle decide d'une transmission. A huit equipes, l'envoyer
+          // a tous faisait recevoir a chaque telephone trois cents positions
+          // par seconde, dont les trois quarts ne servaient a rien.
+          if (j.relais === c.porteur) this.diffuser(pos, ws);
+          else this.diffuser(pos, ws, j.equipe);
         }
         return;
       }
@@ -446,7 +558,8 @@ export class SalleConfrontation {
         // pas une faute, et il faut le dire, sinon les deux coureurs tapent
         // dans le vide jusqu'a sortir de la zone.
         if (r.tropLoin) {
-          this.diffuser({ t: 'trop_loin', equipe: j.equipe, ...r.tropLoin });
+          // A l'equipe seule : une main dans le vide ne se joue que la.
+          this.diffuser({ t: 'trop_loin', equipe: j.equipe, ...r.tropLoin }, null, j.equipe);
           return;
         }
         if (r.elimine) {
