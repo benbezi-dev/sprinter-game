@@ -41,21 +41,18 @@
    la story ; rien d'important n'y est ecrit.
 
    LA PUBLICATION DU FIL (--fil, 04/10). La meme annonce en carrousel de
-   quatre images 1080 x 1350, postee le lendemain de l'ouverture : plus de
-   « ce soir », l'evenement est ouvert et l'on compte jusqu'a sa fermeture.
+   trois images 1080 x 1350, postee le lendemain de l'ouverture : plus de
+   « ce soir », l'evenement est ouvert jusqu'au samedi 10 octobre.
 
      1-ouvert       la photo d'eux deux (--photo-duo), la couverture
      2-meba         sa fiche, comme dans la story
-     3-aurel        la sienne
-     4-sept-jours   une seconde photo (--photo-fin), la fermeture, le lien en bio
+     3-aurel        la sienne, et le lien en bio
 
-     node tools/carte-defis-vedettes.mjs --fil \
-       --photo-duo ~/eux-deux.jpg --cadre-duo 0.52,0.36,1160,400 \
-       --photo-fin ~/en-position.jpg --cadre-fin 0.5,0.40,1500,360
+     node tools/carte-defis-vedettes.mjs --fil --photo-duo ~/eux-deux.jpg --cadre-duo 0.52,0.40,1120,500
 
-   --cadre-fin se lit comme --cadre-duo. Le fil n'a pas de bande mangee, mais
-   la grille du profil montre la couverture en 3:4 : 34 px tombent de chaque
-   cote, et rien n'est ecrit a moins de 80 px du bord.
+   Le fil n'a pas de bande mangee, mais la grille du profil montre la
+   couverture en 3:4 : 34 px tombent de chaque cote, et rien n'est ecrit a
+   moins de 80 px du bord.
    =========================================================================== */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -67,29 +64,25 @@ const SORTIE = path.join(RACINE, 'communication/defis-vedettes');
 const L = 1080;
 
 function lireArgs(argv) {
-  const a = { fil: false, meba: null, manga: null, duo: null, cadreDuo: null, fin: null, cadreFin: null };
-  const cadre = (option, valeur) => {
-    const v = String(valeur || '').split(',').map(Number);
-    if (v.length !== 4 || v.some(n => !Number.isFinite(n))) {
-      console.error(`${option} attend fx,fy,largeur,y — par exemple 0.52,0.40,1240,760`);
-      process.exit(1);
-    }
-    return v;
-  };
+  const a = { fil: false, meba: null, manga: null, duo: null, cadreDuo: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--fil') a.fil = true;
     else if (argv[i] === '--photo-meba') a.meba = path.resolve(String(argv[++i] || ''));
     else if (argv[i] === '--photo-manga') a.manga = path.resolve(String(argv[++i] || ''));
     else if (argv[i] === '--photo-duo') a.duo = path.resolve(String(argv[++i] || ''));
-    else if (argv[i] === '--photo-fin') a.fin = path.resolve(String(argv[++i] || ''));
-    else if (argv[i] === '--cadre-duo') a.cadreDuo = cadre(argv[i], argv[++i]);
-    else if (argv[i] === '--cadre-fin') a.cadreFin = cadre(argv[i], argv[++i]);
+    else if (argv[i] === '--cadre-duo') {
+      const v = String(argv[++i] || '').split(',').map(Number);
+      if (v.length !== 4 || v.some(n => !Number.isFinite(n))) {
+        console.error('--cadre-duo attend fx,fy,largeur,y — par exemple 0.52,0.40,1240,760');
+        process.exit(1);
+      }
+      a.cadreDuo = v;
+    }
   }
-  for (const f of [a.meba, a.manga, a.duo, a.fin]) {
+  for (const f of [a.meba, a.manga, a.duo]) {
     if (f && !fs.existsSync(f)) { console.error(`Photo introuvable : ${f}`); process.exit(1); }
   }
-  a.cadreDuo ??= a.fil ? [0.52, 0.36, 1160, 400] : [0.5, 0.4, 1240, 760];
-  a.cadreFin ??= [0.5, 0.4, 1500, 360];
+  a.cadreDuo ??= a.fil ? [0.52, 0.40, 1120, 500] : [0.5, 0.4, 1240, 760];
   return a;
 }
 const args = lireArgs(process.argv.slice(2));
@@ -297,8 +290,8 @@ const STORY = [
 ];
 
 /* La fiche d'un athlete dans le fil : la meme que dans la story, remontee de
-   400 px et un peu resserree pour tenir dans 1350. */
-const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain }) => page(`
+   400 px et un peu resserree pour tenir dans 1350. `droite` : le pied, a droite. */
+const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain, droite }) => page(`
     <div class="kicker" style="top:64px;color:${couleurs.pale}">${kicker}</div>
     ${img.photo ? figure(img, { x: 0, y: 110, w: L, h: 560 })
       : halo(540, 400, 760, couleurs.vive, 0.6) + figure(img, { x: 200, y: 110, w: 680, h: 560 })}
@@ -314,18 +307,7 @@ const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain }) => page
       </div>
       <div class="sous" style="font-size:32px;margin-top:16px">${gain}</div>
     </div>
-    ${signature(false)}`);
-
-/* Une ligne du calendrier : ce qui se passe, et quand. */
-const ligneDate = (quoi, quand) => `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:22px 0">
-        <span style="font-weight:700;font-size:32px;color:rgba(255,255,255,0.6)">${quoi}</span>
-        <span style="font-weight:800;font-size:38px">${quand}</span>
-      </div>
-      <div class="filet"></div>`;
-
-/* Le dernier ecran remonte son titre quand il n'a pas de photo au-dessus. */
-const hautFin = args.fin ? 0 : -220;
+    ${signature(false, droite)}`);
 
 const FIL = [
   { cle: '1-ouvert', html: page(`
@@ -352,25 +334,8 @@ const FIL = [
     img: IMG_MANGA, couleurs: MANGA, kicker: 'NOUVEAU · HURDLERS',
     prenom: 'AUREL', nom: 'MANGA',
     chronos: [['110 M HAIES', C.manga110h]],
-    gain: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>' }) },
-
-  { cle: '4-sept-jours', html: page(`
-    ${args.fin ? pleinCadre(args.fin, args.cadreFin, { haut: 300, bas: 380 }) : ''}
-    <div class="kicker" style="top:64px">DÉFIS DES VEDETTES</div>
-    <div class="bloc" style="top:${560 + hautFin}px">
-      <div class="titre" style="font-size:180px;color:${OR}">7 JOURS</div>
-      <div class="titre" style="font-size:72px;margin-top:6px">PAS UN DE PLUS</div>
-    </div>
-    <div class="bloc" style="top:${848 + hautFin}px">
-      <div class="filet"></div>
-      ${ligneDate('Ouverture', 'sam. 3 oct. · 21 h 30')}
-      ${ligneDate('Fermeture', 'sam. 10 oct. · 21 h 30')}
-      <div class="sous" style="font-size:34px;margin-top:28px">Après, ils repartent.<br><b>Qui les a battus garde son skin à vie.</b></div>
-    </div>
-    <div class="bloc" style="top:${1176 + hautFin}px">
-      <div class="chrono" style="font-size:44px;letter-spacing:0;color:#fff">sprinter-game.com</div>
-    </div>
-    ${signature(false, 'LIEN EN BIO')}`) },
+    gain: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>',
+    droite: 'LIEN EN BIO' }) },
 ];
 
 /* ----------------------------------------------------------------- le rendu */
@@ -384,5 +349,5 @@ for (const e of ECRANS) {
   console.log(`  ${path.relative(RACINE, sortie)}`);
 }
 console.log(`\n  ${ECRANS.length} ${args.fil ? 'images du fil' : 'écrans de story'} (${L} x ${H})` +
-  `${args.meba || args.manga || args.duo || args.fin ? ', avec photos' : ', portraits 3D'} · ` +
+  `${args.meba || args.manga || args.duo ? ', avec photos' : ', portraits 3D'} · ` +
   `chronos : ${virgule(C.meba100)} / ${virgule(C.meba200)} / ${virgule(C.manga110h)}\n`);

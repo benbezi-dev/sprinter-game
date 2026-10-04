@@ -25,20 +25,17 @@ La photo source n'est pas dans le dépôt : elle reste sur le Drive. Les
 
 # Publication du fil — le lendemain, l'événement est ouvert
 
-La même annonce en carrousel de quatre images 1080 × 1350 (4:5), à poster
-dans l'ordre. Plus de « ce soir » : on compte jusqu'à la fermeture, samedi
-10 octobre à 21 h 30.
+La même annonce en carrousel de trois images 1080 × 1350 (4:5), à poster
+dans l'ordre. Plus de « ce soir » : c'est ouvert jusqu'au samedi 10 octobre
+à 21 h 30.
 
 | Image | Ce qu'elle montre |
 |---|---|
 | `1-ouvert-feed.png` | La couverture : eux deux en photo (`20261003_181004`, la même que la story), « ILS ENTRENT DANS LE JEU », leurs épreuves |
 | `2-meba-feed.png` | Sa fiche : 8,39 au 100 m, 17,30 au 200 m, ce qu'on gagne |
-| `3-aurel-feed.png` | La sienne : 11,80 au 110 m haies, ce qu'on gagne |
-| `4-sept-jours-feed.png` | Eux deux en position (`20261003_181057`), « 7 JOURS », l'ouverture et la fermeture, « lien en bio » |
+| `3-aurel-feed.png` | La sienne : 11,80 au 110 m haies, ce qu'on gagne, « lien en bio » |
 
-    node tools/carte-defis-vedettes.mjs --fil \
-      --photo-duo 20261003_181004.jpg --cadre-duo 0.52,0.40,1120,500 \
-      --photo-fin 20261003_181057.jpg --cadre-fin 0.5,0.30,1080,400
+    node tools/carte-defis-vedettes.mjs --fil --photo-duo 20261003_181004.jpg --cadre-duo 0.52,0.40,1120,500
 
 **Avant de publier :**
 - **Identifie-les tous les deux** sur l'image 1 (« Identifier des personnes »).
