@@ -81,11 +81,13 @@ android {
         // classement des duels (#64) — nom valide avant de courir, faux depart
         // signale a la salle, courses au journal, flamme a l'arrivee, replay
         // apres un faux depart. Le 5 a pu partir sans elles ; le 6 ne coute
-        // rien s'il n'est jamais parti. Et le demarrage qui ne traine plus :
-        // l'ouverture n'attend plus le public des Jeux mondiaux (le 5 restait
-        // jusqu'a vingt-cinq secondes a « Chargement 9x % »), le premier
-        // depart n'attend que celui de sa course.
-        versionCode 6
+        // rien s'il n'est jamais parti.
+        // 7 le 4 octobre encore : le 6 est parti sans le demarrage qui ne
+        // traine plus (#67) — l'ouverture n'attend plus le public des Jeux
+        // mondiaux (le 5 et le 6 restaient jusqu'a vingt-cinq secondes a
+        // « Chargement 9x % »), le premier depart n'attend que celui de sa
+        // course.
+        versionCode 7
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
