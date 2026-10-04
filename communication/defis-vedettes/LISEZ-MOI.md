@@ -23,13 +23,57 @@ convertie de HEIC en JPEG, puis :
 La photo source n'est pas dans le dépôt : elle reste sur le Drive. Les
 écrans 2 et 3 gardent les portraits 3D du jeu.
 
+# Publication du fil — le lendemain, l'événement est ouvert
+
+La même annonce en carrousel de quatre images 1080 × 1350 (4:5), à poster
+dans l'ordre. Plus de « ce soir » : on compte jusqu'à la fermeture, samedi
+10 octobre à 21 h 30.
+
+| Image | Ce qu'elle montre |
+|---|---|
+| `1-ouvert-feed.png` | La couverture : eux deux en photo (`20261003_181004`, la même que la story), « ILS ENTRENT DANS LE JEU », leurs épreuves |
+| `2-meba-feed.png` | Sa fiche : 8,39 au 100 m, 17,30 au 200 m, ce qu'on gagne |
+| `3-aurel-feed.png` | La sienne : 11,80 au 110 m haies, ce qu'on gagne |
+| `4-sept-jours-feed.png` | Eux deux en position (`20261003_181057`), « 7 JOURS », l'ouverture et la fermeture, « lien en bio » |
+
+    node tools/carte-defis-vedettes.mjs --fil \
+      --photo-duo 20261003_181004.jpg --cadre-duo 0.52,0.40,1120,500 \
+      --photo-fin 20261003_181057.jpg --cadre-fin 0.5,0.30,1080,400
+
+**Avant de publier :**
+- **Identifie-les tous les deux** sur l'image 1 (« Identifier des personnes »).
+- **Invite-les en collaborateurs** (« Inviter un collaborateur ») : s'ils
+  acceptent, la publication s'affiche aussi sur leurs profils, devant leurs
+  abonnés.
+- Le lien de la bio doit pointer sur `https://sprinter-game.com` : sur le fil,
+  un lien n'est pas cliquable.
+
+**Légende**
+
+> Ils entrent dans le jeu. Tu as jusqu'à samedi pour les battre.
+>
+> 🔵 Méba-Mickaël Zézé : 100 m et 200 m, sur Sprinter
+> 🟣 Aurel Manga : 110 m haies, sur Hurdlers
+>
+> Bats-les et leur skin est à toi, à vie. Samedi 10 octobre à 21 h 30, ils repartent.
+>
+> 🔗 Lien en bio · sprinter-game.com
+>
+> #sprint #athletisme #100m #110mhaies #SprinterGame
+
+Aucun chrono dans la légende : les images en portent déjà trois, et un
+chiffre en légende suffit (voir `../defi-ouvert/legendes.md`).
+
 ## Avec les vraies photos
 
-Les portraits 3D du jeu sont en place. Pour mettre de vraies photos
-(pas besoin qu'elles soient détourées, elles sont recadrées et fondues par
-le bas) :
+Les portraits 3D du jeu sont en place sur les fiches (story et fil). Pour
+mettre de vraies photos (pas besoin qu'elles soient détourées, elles sont
+recadrées et fondues par le bas) :
 
     node tools/carte-defis-vedettes.mjs --photo-meba meba.jpg --photo-manga aurel.jpg
+
+Les photos du Drive les montrent toujours ensemble : il faut savoir qui est
+qui avant d'en recadrer une sur une fiche.
 
 Sans accès à Google Fonts depuis Chrome : `SPRINTER_POLICES=<dossier>` (voir
 `tools/chrome.mjs`).
