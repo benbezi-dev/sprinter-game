@@ -190,6 +190,13 @@ export function DuelResultPopup() {
       ghostName: f!.name || duel.adversaire,
       ghostTime: (f!.total_ms || duel.son_ms) / 1000,
     } : { levelIdx: 4 });
+    // LA CARTE A FAIT SON OFFICE : elle quitte la file, comme avec « suivant »,
+    // et le bouton se rearme. Elle restait sinon au premier rang, cachee le
+    // temps de la course — ce composant ne se demonte pas —, et revenait a
+    // l'ecran de fin de la revanche : le meme duel, son bouton bloque sur sa
+    // roue. Par son identifiant, la file ayant pu grandir pendant l'attente.
+    setFile(fl => fl.filter(d => d.id !== duel.id));
+    setEnRoute(false);
   };
 
   const ton = gagne ? 'text-primary' : nul ? 'text-foreground' : 'text-destructive';
