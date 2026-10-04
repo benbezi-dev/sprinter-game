@@ -41,12 +41,13 @@
    la story ; rien d'important n'y est ecrit.
 
    LA PUBLICATION DU FIL (--fil, 04/10). La meme annonce en carrousel de
-   trois images 1080 x 1350, postee le lendemain de l'ouverture : plus de
+   quatre images 1080 x 1350, postee le lendemain de l'ouverture : plus de
    « ce soir », l'evenement est ouvert jusqu'au samedi 10 octobre.
 
      1-ouvert       la photo d'eux deux (--photo-duo), la couverture
      2-meba         sa fiche, comme dans la story
-     3-aurel        la sienne, et le lien en bio
+     3-aurel        la sienne
+     4-sept-jours   l'ouverture et la fermeture, le lien en bio — sans photo
 
      node tools/carte-defis-vedettes.mjs --fil --photo-duo ~/eux-deux.jpg --cadre-duo 0.52,0.40,1120,500
 
@@ -290,8 +291,8 @@ const STORY = [
 ];
 
 /* La fiche d'un athlete dans le fil : la meme que dans la story, remontee de
-   400 px et un peu resserree pour tenir dans 1350. `droite` : le pied, a droite. */
-const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain, droite }) => page(`
+   400 px et un peu resserree pour tenir dans 1350. */
+const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain }) => page(`
     <div class="kicker" style="top:64px;color:${couleurs.pale}">${kicker}</div>
     ${img.photo ? figure(img, { x: 0, y: 110, w: L, h: 560 })
       : halo(540, 400, 760, couleurs.vive, 0.6) + figure(img, { x: 200, y: 110, w: 680, h: 560 })}
@@ -307,7 +308,15 @@ const ficheFil = ({ img, couleurs, kicker, prenom, nom, chronos, gain, droite })
       </div>
       <div class="sous" style="font-size:32px;margin-top:16px">${gain}</div>
     </div>
-    ${signature(false, droite)}`);
+    ${signature(false)}`);
+
+/* Une ligne du calendrier : ce qui se passe, et quand. */
+const ligneDate = (quoi, quand) => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:24px 0">
+        <span style="font-weight:700;font-size:34px;color:rgba(255,255,255,0.6)">${quoi}</span>
+        <span style="font-weight:800;font-size:40px">${quand}</span>
+      </div>
+      <div class="filet"></div>`;
 
 const FIL = [
   { cle: '1-ouvert', html: page(`
@@ -334,8 +343,24 @@ const FIL = [
     img: IMG_MANGA, couleurs: MANGA, kicker: 'NOUVEAU · HURDLERS',
     prenom: 'AUREL', nom: 'MANGA',
     chronos: [['110 M HAIES', C.manga110h]],
-    gain: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>',
-    droite: 'LIEN EN BIO' }) },
+    gain: 'Bats-le : <b>son skin<br>et le Stade Jean-Delbert</b>' }) },
+
+  { cle: '4-sept-jours', html: page(`
+    <div class="kicker" style="top:180px">DÉFIS DES VEDETTES</div>
+    <div class="bloc" style="top:268px">
+      <div class="titre" style="font-size:200px;color:${OR}">7 JOURS</div>
+      <div class="titre" style="font-size:80px;margin-top:6px">PAS UN DE PLUS</div>
+    </div>
+    <div class="bloc" style="top:610px">
+      <div class="filet"></div>
+      ${ligneDate('Ouverture', 'sam. 3 oct. · 21 h 30')}
+      ${ligneDate('Fermeture', 'sam. 10 oct. · 21 h 30')}
+      <div class="sous" style="margin-top:40px">Après, ils repartent.<br><b>Qui les a battus garde son skin à vie.</b></div>
+    </div>
+    <div class="bloc" style="top:1060px">
+      <div class="chrono" style="font-size:52px;letter-spacing:0;color:#fff">sprinter-game.com</div>
+    </div>
+    ${signature(false, 'LIEN EN BIO')}`) },
 ];
 
 /* ----------------------------------------------------------------- le rendu */
