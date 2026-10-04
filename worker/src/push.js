@@ -54,6 +54,12 @@ const MESSAGES = {
     fr: ['Ton duel est tranché', 'Quelqu\u2019un a relevé ton défi. Le résultat est là.'],
     en: ['Your duel is settled', 'Someone took your challenge. The result is in.'],
   },
+  // Un defi adresse reste une semaine sans reponse : il est gagne. Seul celui
+  // qui l'a lance recoit cette notification — voir `balayerForfaits`.
+  forfait: {
+    fr: ['Victoire par forfait', 'Ton défi est resté sept jours sans réponse. Le duel est à toi.'],
+    en: ['Won by forfeit', 'Your challenge went unanswered for seven days. The duel is yours.'],
+  },
   mot: {
     fr: ['Un mot pour toi', 'Le vainqueur t\u2019a laissé quelque chose.'],
     en: ['A word for you', 'The winner left you something.'],

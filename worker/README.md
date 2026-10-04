@@ -80,6 +80,7 @@ premier appel (voir `ensureChallengeTables` et `ensureScoreGhost`).
 | POST    | `/challenge/attempt`  | Enregistre une tentative |
 | GET     | `/duels?epreuve=&name=` | Classement des duels d'une discipline |
 | POST    | `/duels/recalculer`   | Rejoue tout l'historique (clé d'administration) |
+| POST    | `/duels/forfaits`     | Le balayage des forfaits, à la main (clé d'administration ; sur le canal de test, accepte `maintenant`) |
 | POST    | `/push/subscribe`     | Enregistre un abonnement Web Push |
 | POST    | `/push/unsubscribe`   | Oublie les abonnements web d'un appareil |
 | POST    | `/push/natif/abonner`   | Enregistre un jeton Firebase (iOS, Android) |
@@ -122,6 +123,29 @@ retoucher en place. L'ancienne table est conservée telle quelle sous le nom
 gardent leurs `races` ; les courses en direct d'avant, qui ne gardaient rien,
 retombent sur le 100 m). Rien à lancer à la main ; `POST /duels/recalculer`
 refait le même travail à volonté.
+
+## Le défi sans réponse, gagné par forfait
+
+Un défi **adressé** à quelqu'un — choisi au classement, ou renvoyé en revanche —
+qui reste **sept jours** sans tentative de l'appareil visé est gagné par celui
+qui l'a lancé. Le cron le tranche (`src/forfaits.js`) : le duel est rangé dans
+`duel_results` avec l'issue `challenger` et `forfait = 1`, et passe par le même
+barème que les autres, si bien que `POST /duels/recalculer` le rejoue sans
+règle à part. Le lanceur reçoit une notification « Victoire par forfait » ; le
+perdant l'apprend par l'annonce des duels, sans notification.
+
+- La boîte (`GET /inbox`) donne l'`echeance` de chaque défi et cesse de le
+  proposer une fois passée. Le cron attend encore quinze minutes, pour qui
+  court déjà au moment où l'échéance tombe.
+- Ne sont pas concernés : le défi qui ne vise personne, celui de la caméra jamais
+  envoyé, et ceux lancés avant le 4 octobre 2026 (`FORFAIT_DEPUIS`).
+- Un seul forfait par semaine contre la même personne sur une même discipline :
+  dix défis envoyés à un absent ne valent pas dix victoires.
+- Si la personne visée a bloqué celui qui l'a défiée, le défi tombe sans
+  forfait.
+- Courir après coup, même sous un autre nom, retombe sur le duel déjà tranché.
+
+`node tools/forfait-test.mjs` vérifie tout cela contre `wrangler dev --local`.
 
 ## Les notifications
 

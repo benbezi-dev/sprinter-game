@@ -297,6 +297,13 @@ export type MonDuel = {
    * (voir game/mot.ts, REPONSES). Nul pour le perdant lui-meme.
    */
   reponse?: string | null;
+  /**
+   * Tranche sans que personne ne coure en face : la personne visee n'a pas
+   * releve le defi dans la semaine, et celui qui l'a lance l'emporte. Le chrono
+   * de l'absent vaut alors zero — ce n'est pas un temps, et l'ecran ne doit pas
+   * l'annoncer comme tel. Absent des serveurs d'avant cette regle.
+   */
+  forfait?: boolean;
   races: string[];
   at: number;
 };

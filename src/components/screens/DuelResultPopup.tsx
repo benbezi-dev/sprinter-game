@@ -36,8 +36,10 @@ function noterDuel(d: MonDuel) {
     epreuves: d.races || [],
     at: d.at,
     lp: d.lp,
-    mon_ms: d.mon_ms,
-    son_ms: d.son_ms,
+    // Un forfait n'a qu'un chrono, celui de qui a lance : le zero de l'absent
+    // n'est pas un temps, et le journal ne le garde pas comme tel.
+    mon_ms: d.forfait && d.role === 'opponent' ? undefined : d.mon_ms,
+    son_ms: d.forfait && d.role === 'challenger' ? undefined : d.son_ms,
   });
 }
 
@@ -105,8 +107,11 @@ export function DuelResultPopup() {
   useSondageAuRepos(() => relever.current(), 10000);
   // La boite sonne : le resultat d'un duel, ou le mot du vainqueur qui arrive
   // apres coup. On va le chercher tout de suite plutot qu'au prochain palier.
+  // Le forfait aussi : c'est un resultat de duel, tranche sans course.
   useEffect(() => surCourrier(quoi => {
-    if (quoi === 'duel' || quoi === 'mot' || quoi === 'reponse') relever.current(true);
+    if (quoi === 'duel' || quoi === 'mot' || quoi === 'reponse' || quoi === 'forfait') {
+      relever.current(true);
+    }
   }), []);
   // Le changement d'etat reste un reveil a lui seul : on sort d'une course,
   // et le resultat peut attendre depuis qu'on y est entre.
@@ -145,6 +150,9 @@ export function DuelResultPopup() {
   const nul = duel.issue === 'draw';
   const perdu = !gagne && !nul;
   const jeRecoisUnMot = perdu && !!(duel.mot || duel.voix);
+  // Tranche sans course : la personne visee n'a pas releve le defi dans la
+  // semaine. Il n'y a qu'un chrono — l'autre est une absence.
+  const forfait = !!duel.forfait;
 
   const suivant = () => {
     marquerDuelsVus([duel.id]);
@@ -243,12 +251,14 @@ export function DuelResultPopup() {
               <div className="flex items-center gap-2">
                 <Swords className={`w-4 h-4 court:w-3.5 court:h-3.5 ${ton}`} />
                 <span className="text-[10px] md:text-xs court:text-[9px] font-bold tracking-[0.25em] text-muted-foreground">
-                  {N.t('duel_answered')}
+                  {N.t(forfait ? 'duel_forfait_titre' : 'duel_answered')}
                 </span>
               </div>
 
               <h2 className={`font-black font-display tracking-tight uppercase text-2xl md:text-3xl court:text-xl text-center ${ton}`}>
-                {N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
+                {forfait
+                  ? N.t(gagne ? 'duel_forfait_gagne' : 'duel_forfait_perdu')
+                  : N.t(gagne ? 'duel_won' : nul ? 'duel_tie' : 'duel_lost')}
               </h2>
 
               <span className="font-mono font-black text-3xl md:text-4xl court:text-2xl tabular-nums text-foreground leading-none">
@@ -287,6 +297,13 @@ export function DuelResultPopup() {
             </div>
 
             <div className="flex flex-col items-center gap-3 court:gap-2 min-w-0 w-full">
+            {/* Le forfait se dit en une phrase, des deux cotes : c'est la seule
+                chose qui explique un duel que personne n'a couru. */}
+            {forfait && (
+              <p className="text-xs md:text-sm court:text-[11px] text-muted-foreground text-center leading-snug px-2">
+                {N.t(gagne ? 'duel_forfait_lui' : 'duel_forfait_moi', { n: duel.adversaire })}
+              </p>
+            )}
             {/* Gagne ou nul : les deux chronos face a face, c'est la seule
                 chose que le lanceur n'a pas vue de ses yeux.
 
@@ -302,6 +319,10 @@ export function DuelResultPopup() {
               jeRecoisUnMot ? (
                 <LireLeMot duel={duel.id} texte={duel.mot} voix={duel.voix}
                            voixType={duel.voix_type} auteur={duel.adversaire} />
+              ) : forfait ? (
+                // Pas de pique sur un forfait : elles chambrent une course, et
+                // il n'y en a pas eu. La phrase du dessus dit deja tout.
+                null
               ) : (
                 <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
                                 px-4 py-3 court:py-2 flex flex-col items-center gap-1.5">
@@ -329,7 +350,7 @@ export function DuelResultPopup() {
                     {duel.adversaire}
                   </span>
                   <span className="font-mono font-bold text-sm md:text-base text-foreground">
-                    {fmt(duel.son_ms)}
+                    {forfait ? N.t('duel_forfait_absent') : fmt(duel.son_ms)}
                   </span>
                 </div>
               </div>
@@ -342,7 +363,9 @@ export function DuelResultPopup() {
                 pas le meme ton : on ne chambre pas quelqu'un qui vient de
                 gagner, on lui donne ce qu'il est venu chercher. Voir
                 game/piques.ts. */}
-            {gagne && (
+            {/* Pas sur un forfait : le boost parle d'une course gagnee, et
+                personne n'a couru en face. */}
+            {gagne && !forfait && (
               <p className="text-sm md:text-base court:text-xs font-semibold text-primary
                             text-center leading-snug px-2">
                 {boost(duel.id)}
