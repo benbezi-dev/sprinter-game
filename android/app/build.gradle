@@ -87,7 +87,15 @@ android {
         // mondiaux (le 5 et le 6 restaient jusqu'a vingt-cinq secondes a
         // « Chargement 9x % »), le premier depart n'attend que celui de sa
         // course.
-        versionCode 7
+        // 8 le 4 octobre au soir : la fluidite en course — la musique
+        // fabriquee avant la course et non plus au premier appui (le depart
+        // gelait), le stade des virages qui ne trace plus que ce qui se voit,
+        // la revue filmee a 30 images par seconde, l'interface qui ne se
+        // redessine plus a chaque image, les vedettes 3D prechargees a
+        // l'accueil — ; la revue des one shots de nouveau filmee, la carte
+        // d'un duel revanche qui ne revient plus ; et le tournoi a
+        // elimination du direct (#70), arrive apres le 7.
+        versionCode 8
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

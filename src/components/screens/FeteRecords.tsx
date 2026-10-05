@@ -35,7 +35,8 @@ import { defiPerdu } from '@/game/vedettes';
 const APRES_COURSE = new Set(['result', 'winall', 'over']);
 
 export function FeteRecords() {
-  const { state, player } = useGameStore();
+  const state = useGameStore(s => s.state);
+  const player = useGameStore(s => s.player);
   const fete = useFete();
 
   if (!APRES_COURSE.has(state)) return null;

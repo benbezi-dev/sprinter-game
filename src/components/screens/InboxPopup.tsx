@@ -19,7 +19,7 @@ import { useRetour } from '@/hooks/use-retour';
  * d'un 400 m, une invitation qui pulse serait une nuisance, pas une nouvelle.
  */
 export function InboxPopup() {
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const rangee = useRangeePastilles(state);
   const { N } = SprinterApp;
 

@@ -53,7 +53,7 @@ function estIOS() {
  * un refus est retenu.
  */
 export function InstallPrompt() {
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const { N } = SprinterApp;
 
   const [invite, setInvite] = useState<any>(null);   // evenement Android

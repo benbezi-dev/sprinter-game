@@ -317,6 +317,14 @@ export function PanneauMolosse() {
     reglerLHorloge().then(() => { if (vivant) rafraichir(x => x + 1); });
     return () => { vivant = false; };
   }, [affiche]);
+  // Les ouvertures et les « dans X h » se lisent a l'horloge : un battement
+  // les tient a jour tant que le panneau est ouvert (il ne se redessine plus
+  // a chaque image, voir useGameStore).
+  useEffect(() => {
+    if (!affiche) return;
+    const id = setInterval(() => rafraichir(x => x + 1), 30_000);
+    return () => clearInterval(id);
+  }, [affiche]);
 
   /* CE QUE LE CANAL DE TEST CHANGE, ET RIEN D'AUTRE.
 

@@ -12,12 +12,34 @@ import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from 
 import { HALLOWEEN_OUVERT } from '@/game/canal';
 
 export function RaceHUD() {
-  const { 
-    state, elapsed, countT, starter, champion, championTime, levelIdx, runners, player,
-    shake, falseFlash, reactFlash, transFlash, stumbleFlash,
-    mode, shotRaces, shotIdx, ghostName,
-    ghostOn, ghostD, ghostDone, challenge, raceKey, photo
-  } = useGameStore();
+  // LE TABLEAU DE COURSE SE REDESSINE A CHAQUE IMAGE, ET C'EST VOULU : chrono,
+  // vitesse, ecarts. `elapsed` (en course) et `countT` (au decompte) changent a
+  // chaque image ; ce sont eux qui gardent a jour ce qu'il lit dans `player`,
+  // `runners` et le moteur. Champ par champ, pour ne pas se redessiner en plus
+  // a chaque publication du reste.
+  const state = useGameStore(s => s.state);
+  const elapsed = useGameStore(s => s.elapsed);
+  const countT = useGameStore(s => s.countT);
+  const starter = useGameStore(s => s.starter);
+  const champion = useGameStore(s => s.champion);
+  const championTime = useGameStore(s => s.championTime);
+  const levelIdx = useGameStore(s => s.levelIdx);
+  const runners = useGameStore(s => s.runners);
+  const player = useGameStore(s => s.player);
+  const falseFlash = useGameStore(s => s.falseFlash);
+  const reactFlash = useGameStore(s => s.reactFlash);
+  const transFlash = useGameStore(s => s.transFlash);
+  const stumbleFlash = useGameStore(s => s.stumbleFlash);
+  const mode = useGameStore(s => s.mode);
+  const shotRaces = useGameStore(s => s.shotRaces);
+  const shotIdx = useGameStore(s => s.shotIdx);
+  const ghostName = useGameStore(s => s.ghostName);
+  const ghostOn = useGameStore(s => s.ghostOn);
+  const ghostD = useGameStore(s => s.ghostD);
+  const ghostDone = useGameStore(s => s.ghostDone);
+  const challenge = useGameStore(s => !!s.challenge);
+  const raceKey = useGameStore(s => s.raceKey);
+  const photo = useGameStore(s => s.photo);
 
   const { N, C } = SprinterApp;
 

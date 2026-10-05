@@ -110,6 +110,19 @@ export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
  */
 export const CARTON_MS = 1500;
 
+/**
+ * UNE IMAGE DU FILM TOUS LES TRENTIEMES DE SECONDE, PAS A CHAQUE IMAGE DE L'ECRAN.
+ *
+ * Le flux ne prend que trente images par seconde (`captureStream(30)`), et la
+ * boucle recopiait le stade a chaque image de l'ecran — soixante fois par
+ * seconde, quatre-vingt-dix ou cent vingt sur bien des Android : la moitie a
+ * les trois quarts des recopies partaient a la poubelle, et chacune coute,
+ * en pleine course, le transfert de toute l'image du jeu. Le film garde ses
+ * trente images, a la meme definition ; la marge de quatre millisecondes cale
+ * le pas sur une image d'ecran sur deux a 60 Hz (une sur quatre a 120 Hz).
+ */
+const PAS_DU_FILM_MS = 1000 / 30 - 4;
+
 export type EtatReview = {
   phase: PhaseReview;
   url: string | null;
@@ -244,6 +257,8 @@ export class Review {
   private cartonA = 0;
   /** L'appel a `requestAnimationFrame` en cours, pour pouvoir l'arreter. */
   private trait = 0;
+  /** Quand la derniere image du film a ete peinte (voir PAS_DU_FILM_MS). */
+  private peinteA = -Infinity;
   /** Pixels du film par point CSS. Recalcule quand le canvas change de taille. */
   private echelle = 1;
   private morceaux: Blob[] = [];
@@ -382,8 +397,11 @@ export class Review {
    * en tete de fonction pour qu'une surcouche qui echoue ne l'arrete pas. Une
    * erreur de peinture coute son HUD a une image — pas l'enregistrement.
    */
-  private tracer = () => {
+  private tracer = (maintenant?: number) => {
     this.trait = requestAnimationFrame(this.tracer);
+    // (appelee a la main — ouverture, reprise —, elle peint tout de suite)
+    if (maintenant !== undefined && maintenant - this.peinteA < PAS_DU_FILM_MS) return;
+    this.peinteA = maintenant ?? performance.now();
     const m = this.montage, ctx = this.pinceau;
     if (!m || !ctx) return;
     // LE CARTON PREND LA MAIN, ET LA GARDE. A partir de la, le canvas du jeu

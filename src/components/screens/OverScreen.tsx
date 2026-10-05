@@ -4,9 +4,9 @@ import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 
 export function OverScreen() {
-  const { 
-    levelIdx, player, ranking, overChoice 
-  } = useGameStore();
+  const levelIdx = useGameStore(s => s.levelIdx);
+  const player = useGameStore(s => s.player);
+  const ranking = useGameStore(s => s.ranking);
   const { N } = SprinterApp;
 
   const startRecap = () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 /**
  * LA RANGEE DES PASTILLES DE L'ACCUEIL.
@@ -12,16 +12,27 @@ import { useEffect, useState } from 'react';
  */
 export const ID_PASTILLES = 'pastilles-accueil';
 
+/**
+ * LA RANGEE SE DECLARE ELLE-MEME. Les pastilles la cherchaient dans la page
+ * a chaque changement d'ecran, et verifiaient a chaque image qu'elle y etait
+ * encore. Mais l'accueil peut disparaitre sans que l'ecran change — la
+ * ceremonie d'un championnat le remplace, le monde de Jumper le cache — et
+ * les pastilles ne se redessinent plus a chaque image (voir useGameStore) :
+ * elles restaient accrochees a une rangee sortie de la page, invisibles.
+ * L'accueil la pose donc par une ref (`poserLaRangee`), et la retire en
+ * partant : les pastilles suivent, ou qu'on en soit.
+ */
+let rangee: HTMLElement | null = null;
+const abonnes = new Set<() => void>();
+export function poserLaRangee(el: HTMLElement | null) {
+  if (el === rangee) return;
+  rangee = el;
+  for (const f of abonnes) f();
+}
+const abonner = (f: () => void) => { abonnes.add(f); return () => { abonnes.delete(f); }; };
+const lire = () => rangee;
+
 /** L'element de la rangee s'il est dans la page, sinon `null`. */
-export function useRangeePastilles(state: string): HTMLElement | null {
-  const [el, setEl] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    // Relue apres le rendu : l'accueil et les pastilles montent dans le meme
-    // passage, et la rangee n'existe dans le DOM qu'une fois celui-ci pose.
-    const lire = () => setEl(document.getElementById(ID_PASTILLES));
-    lire();
-    const id = requestAnimationFrame(lire);
-    return () => cancelAnimationFrame(id);
-  }, [state]);
-  return el && el.isConnected ? el : null;
+export function useRangeePastilles(_state?: string): HTMLElement | null {
+  return useSyncExternalStore(abonner, lire, lire);
 }

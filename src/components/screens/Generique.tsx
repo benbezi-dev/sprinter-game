@@ -30,7 +30,10 @@ const DEBUT_DEFILE = 9;
 const DEFILE_PAR_DEFAUT = 30;
 
 export function Generique() {
-  const { cut, skipArm } = useGameStore();
+  const cut = useGameStore(s => s.cut);
+  const skipArm = useGameStore(s => s.skipArm);
+  // l'horloge du generique avance dans le meme objet (voir CutScreen)
+  useGameStore(s => (s.cut ? s.cut.t : 0));
   const { N } = SprinterApp;
   const rouleau = useRef<HTMLDivElement>(null);
   const [hauteur, setHauteur] = useState(0);

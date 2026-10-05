@@ -19,7 +19,7 @@ import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { BanderoleSelection } from './Selection';
-import { ID_PASTILLES } from '@/hooks/use-pastilles';
+import { ID_PASTILLES, poserLaRangee } from '@/hooks/use-pastilles';
 import { BanderoleEdition } from './BanderoleEdition';
 // Charge a la demande, pour la raison expliquee dans App.tsx : un import
 // ordinaire fait voyager tout le mode dans le build public, drapeau ferme ou
@@ -119,7 +119,11 @@ function PiedLiens({ onTour, onTuto, haies }:
 }
 
 export function TitleScreen() {
-  const { raceKey, runs, furthest } = useGameStore();
+  const raceKey = useGameStore(s => s.raceKey);
+  // (les entrees de l'epreuve, pas les tables : `runs` et `furthest` sont les
+  // memes objets d'une course a l'autre — voir useGameStore)
+  const runsIci = useGameStore(s => s.runs && s.runs[s.raceKey]);
+  const furthestIci = useGameStore(s => s.furthest && s.furthest[s.raceKey]);
   const { Audio_, N, RACES } = SprinterApp;
   // Sprinter ou Hurdlers : le meme accueil, avec les epreuves du jeu courant.
   const jeu = useJeu();
@@ -216,7 +220,7 @@ export function TitleScreen() {
     SprinterApp.buildLevel(0);
   };
 
-  const currentRuns = runs[raceKey] || [];
+  const currentRuns = runsIci || [];
 
   // On demande l'objectif du jour a l'ouverture de l'accueil. Sans nom, sans
   // reseau ou hors fenetre, il n'y en a pas et la carte ne s'affiche pas.
@@ -318,7 +322,7 @@ export function TitleScreen() {
         {/* La rangee des pastilles « UN DÉFI » et « UN MESSAGE ». Vide, elle
             ne prend aucune place ; remplie, elle pousse le titre au lieu de
             le recouvrir. Voir hooks/use-pastilles.ts. */}
-        <div id={ID_PASTILLES}
+        <div id={ID_PASTILLES} ref={poserLaRangee}
              className="shrink-0 z-20 flex flex-wrap justify-end gap-2 mb-2 empty:hidden" />
 
         <div className="flex-1 min-h-0 flex flex-col landscape:flex-row items-center landscape:items-stretch gap-2 landscape:gap-8 max-w-5xl mx-auto w-full">
@@ -561,7 +565,7 @@ export function TitleScreen() {
                   {N.t('no_run')}
                   {' — '}
                   <span className="text-foreground/90 font-bold uppercase tracking-wide">
-                    {N.t('furthest')} {furthest[raceKey]} {N.t('of_six')}
+                    {N.t('furthest')} {furthestIci} {N.t('of_six')}
                   </span>
                 </p>
               ) : (

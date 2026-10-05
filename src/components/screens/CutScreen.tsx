@@ -18,7 +18,12 @@ import { SprinterApp, useGameStore } from '@/game/engine';
  * carte, et le stade reste net et franc derriere — comme en course.
  */
 export function CutScreen({ fige }: { fige?: any } = {}) {
-  const { cut: courant, skipArm } = useGameStore();
+  const courant = useGameStore(s => s.cut);
+  const skipArm = useGameStore(s => s.skipArm);
+  // L'HORLOGE DE LA SCENE. `cut` est le meme objet toute la scene, son `t`
+  // avance en place : c'est lui qu'on suit, a chaque image. Il anime aussi la
+  // scene figee (`fige`) qui s'efface pendant le generique.
+  useGameStore(s => (s.cut ? s.cut.t : 0));
   const { N } = SprinterApp;
 
   const cut = fige || courant;

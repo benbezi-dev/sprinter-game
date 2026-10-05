@@ -53,7 +53,8 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
-import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, courseLancee } from './chargement';
+import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
+         courseLancee } from './chargement';
 
 export const SprinterI18N = (globalThis as any).SprinterI18N;
 export const SprinterCore = (globalThis as any).SprinterCore;
@@ -158,6 +159,12 @@ export type GameState = {
    */
   photo: { etat: 'attente' | 'tranche'; nom: string; moi: number;
            lui: number | null; ecartM: number } | null;
+  /**
+   * La revision de l'interface : elle change quand ce que tous les ecrans
+   * lisent hors du magasin change — la langue, le son, le jeu. MainGame la
+   * suit, et tout l'arbre se redessine avec lui. Voir rafraichirTout.
+   */
+  rev: number;
 };
 
 // Create a reactive store to expose the game state to React without Zustand
@@ -166,7 +173,7 @@ class Store {
   listeners: Set<() => void>;
 
   constructor() {
-    this.state = { ...SprinterApp.G };
+    this.state = { ...SprinterApp.G, rev: 0 };
     this.listeners = new Set();
   }
 
@@ -187,14 +194,60 @@ class Store {
 
 export const gameStore = new Store();
 
+/**
+ * L'ETAT DU JEU, POUR UN COMPOSANT — ET SEULEMENT CE QU'IL EN LIT.
+ *
+ * Le moteur publie a chaque image (updateLogic). Le selecteur s'appliquait
+ * APRES l'abonnement : chaque composant abonne se redessinait donc a chaque
+ * image, quel que soit ce qu'il lisait — MainGame compris, et tout l'arbre
+ * avec lui. Mesure en course sur un telephone emule : React y prenait
+ * pres de dix pour cent du temps de l'image.
+ *
+ * Le selecteur passe maintenant DANS useSyncExternalStore : un composant ne
+ * se redessine que si la valeur qu'il selectionne change (Object.is). D'ou
+ * deux regles :
+ *  - selectionner des VALEURS SIMPLES. `player` et `runners` sont les memes
+ *    objets d'une image a l'autre, modifies en place : `s => s.player` ne
+ *    change jamais. Un composant qui doit suivre la course selectionne ce qui
+ *    bouge (`s => s.elapsed`) ; un autre, le champ qu'il lit
+ *    (`s => !!s.player?.finished`) ;
+ *  - ne jamais fabriquer d'objet dans un selecteur (`s => ({ ... })`) : un
+ *    objet neuf a chaque appel, et React boucle.
+ * Un selecteur peut lire le moteur lui-meme (`() => !!SprinterApp.G.x`) : il
+ * est reevalue a chaque publication.
+ * Sans selecteur, le composant se redessine a chaque publication, comme avant.
+ */
+const abonner = (l: () => void) => gameStore.subscribe(l);
+const toutLEtat = () => gameStore.getSnapshot();
 export function useGameStore(): GameState;
 export function useGameStore<T>(selector: (state: GameState) => T): T;
 export function useGameStore<T>(selector?: (state: GameState) => T) {
-  const state = useSyncExternalStore(
-    (l) => gameStore.subscribe(l),
-    () => gameStore.getSnapshot()
-  );
-  return selector ? selector(state) : state;
+  return useSyncExternalStore<T | GameState>(abonner, selector ? () => selector(gameStore.getSnapshot()) : toutLEtat);
+}
+
+/**
+ * LA PUBLICATION COURTE D'AVANT LE DEPART PORTE AUSSI CE QUI DIT QUELLE COURSE
+ * PART. Pendant la preparation du stade, les attitudes, la presentation ou le
+ * rappel, le moteur ne publie que l'essentiel. Il ne publiait que l'ecran et
+ * le decompte : au passage a `count`, l'interface lisait donc le mode et
+ * l'epreuve de l'accueil — « carriere », epreuve 0. La camera du one shot
+ * (useFilmerLeOneShot, film-course.ts), qui ne decide qu'a ce passage, ne
+ * filmait ainsi aucun one shot lance de l'accueil, et repartait de zero a la
+ * deuxieme epreuve d'un one shot multiple.
+ */
+function publierLePassage(extra: Partial<GameState>) {
+  gameStore.setState({ state: G.state, mode: G.mode, shotIdx: G.shotIdx, liveOn: G.liveOn, ...extra });
+}
+
+/**
+ * Redessiner toute l'interface : ce qu'elle lit hors du magasin vient de
+ * changer — la langue de ses textes, l'icone du son, le jeu courant. C'est ce
+ * que faisait `gameStore.setState({})` quand tout se redessinait a chaque
+ * publication ; il faut maintenant le dire (voir `rev`).
+ */
+let revision = 0;
+export function rafraichirTout() {
+  gameStore.setState({ rev: ++revision });
 }
 
 // We'll write the update loop here
@@ -470,12 +523,12 @@ export function toggleLang() {
   SprinterApp.save();
   syncHtmlLang();
   // Force a re-render so text updates
-  gameStore.setState({});
+  rafraichirTout();
 }
 
 export function toggleAudio() {
   SprinterApp.Audio_.toggle();
-  gameStore.setState({});
+  rafraichirTout();
 }
 
 /** Etats ou une course est reellement en cours et peut etre suspendue. */
@@ -589,6 +642,8 @@ const ATTITUDES_S = 2.6;
 const ATTENTE_STADE_MIN_S = 0.25, ATTENTE_STADE_MAX_S = 12, ATTITUDES_MIN_S = 0.8;
 // Le public compose d'avance, par image : a l'ouverture, et a l'accueil.
 const OUVERTURE_PUBLIC_MS = 20, ACCUEIL_PUBLIC_MS = 4;
+// Le son, fabrique de meme : voir plus bas, et Audio_.avancer (sprinter-app.js).
+const OUVERTURE_SON_MS = 8, ACCUEIL_SON_MS = 4;
 
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
@@ -831,6 +886,18 @@ export function updateLogic(dt: number) {
   // l'accueil, qui doit rester fluide.
   if (G.state === 'open') avancerLePublic(G, OUVERTURE_PUBLIC_MS);
   else if (G.state === 'title') avancerLePublic(G, ACCUEIL_PUBLIC_MS);
+  // Et les athletes en vrai maillage qu'on y verra : jamais en course.
+  if (G.state === 'title') avancerLesMaillages();
+  // LE SON AUSSI SE FABRIQUE D'AVANCE, quelques millisecondes par image : il
+  // l'etait au premier appui de la course, et le depart gelait (voir
+  // Audio_.avancer). Ces images-la ne se jugent pas : un travail qui finit,
+  // comme le public d'avance (rendu-premium.js).
+  if (G.state === 'open' || G.state === 'title') {
+    if (Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS)) {
+      const P = (globalThis as any).RenduPremium;
+      if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 250);
+    }
+  }
 
   if (G.state === 'open') {
     G.openT += dt;
@@ -872,7 +939,7 @@ export function updateLogic(dt: number) {
       // c'est lui qui fait vivre l'image, le temps que la salle a annonce.
       if (G.rappel) {
         SprinterApp.stepRappel(dt);
-        gameStore.setState({ state: G.state, countT: G.countT });
+        publierLePassage({ countT: G.countT });
         return;
       }
       // Decompte suspendu : c'est le temps de la presentation. La piste est
@@ -884,7 +951,7 @@ export function updateLogic(dt: number) {
       // presentation d'un vrai decompte, et sans lui l'interface affichait le
       // tableau de course par-dessus — « a battre », « alterne les deux
       // touches » — alors que personne ne court encore.
-      gameStore.setState({ state: G.state, countT: G.countT });
+      publierLePassage({ countT: G.countT });
       return;
     }
     // LE CRI D'AVANT LES BLOCS (G.avantDepart, pose par game/vedettes.ts).
@@ -932,7 +999,7 @@ export function updateLogic(dt: number) {
             || stadeEnPreparation(G.debutAttente));
       if (G.enPreparation) {
         SprinterApp.followCam(dt);
-        gameStore.setState({ state: G.state, countT: -99 });
+        publierLePassage({ countT: -99 });
         return;
       }
     }
@@ -954,7 +1021,7 @@ export function updateLogic(dt: number) {
       if (avD.claps && avD.claps.length) applaudir(avD, dt);
       if (avD.entree) entrerEnBoss(avD, dt);
       SprinterApp.followCam(dt);
-      gameStore.setState({ state: G.state, countT: -99 });
+      publierLePassage({ countT: -99 });
       return;
     }
     // Le pistolet est annonce : la presentation est finie, et les bras leves

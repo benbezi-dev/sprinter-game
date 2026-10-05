@@ -144,19 +144,59 @@ function lumieres() {
   scene.add(ciel);
 }
 
+/**
+ * LA FINITION PREMIUM NE PAIE PAS CE CHARGEMENT. La couche de finition
+ * (rendu-premium.js) se regle sur le temps des images : quand elles trainent,
+ * elle descend d'un palier — et l'ultra, une fois perdu, l'est pour de bon.
+ * Or three.js, le contexte WebGL, le fichier et le dessin d'essai se paient
+ * une fois, sur le fil du jeu : un travail qui finit, pas ce que l'appareil
+ * tient. Tant qu'un maillage arrive, ces images-la ne se jugent donc pas,
+ * comme celles du public d'avance (chargement.ts) — ou qu'il ait ete
+ * demande : l'accueil, la fiche d'un defi, ou la course elle-meme.
+ *
+ * Reposee a chaque image tant qu'il arrive, et APRES CHAQUE ETAPE LOURDE :
+ * l'image qui suit un a-coup le mesure, et elle doit encore tomber dans la
+ * fenetre, quelle que soit la longueur de l'a-coup.
+ */
+function nePasJuger() {
+  const P = (globalThis as any).RenduPremium;
+  if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 1000);
+}
+
+/** Ne rien juger tant que `p` n'est pas tenue. */
+function sansJugement(p: Promise<unknown>) {
+  let tenue = false;
+  const tenir = () => { nePasJuger(); if (!tenue) requestAnimationFrame(tenir); };
+  tenir();
+  p.then(() => { tenue = true; nePasJuger(); });
+}
+
 /** Charger un maillage d'athlete. Rend null s'il ne peut pas l'etre. */
 export function charger(chemin: string): Promise<Modele | null> {
   if (modeles.has(chemin)) return Promise.resolve(modeles.get(chemin)!);
   if (enCours.has(chemin)) return enCours.get(chemin)!;
-  if (!renduWebGL()) return Promise.resolve(null);
+  // (le module de three.js vient d'etre evalue, le contexte d'etre cree)
+  const R = renduWebGL();
+  nePasJuger();
+  if (!R) return Promise.resolve(null);
   const p = new Promise<Modele | null>((ok) => {
     const chargeur = new GLTFLoader();
     chargeur.setMeshoptDecoder(MeshoptDecoder);
     chargeur.load(url(chemin), (gltf) => {
-      try { const m = preparer(gltf.scene); modeles.set(chemin, m); ok(m); } catch { ok(null); }
+      nePasJuger();
+      let m: Modele;
+      try { m = preparer(gltf.scene); } catch { ok(null); return; } finally { nePasJuger(); }
+      // pret() reste faux jusqu'ici : les tubes tiennent la place pendant
+      // que ses shaders se compilent
+      prechauffer(m).then(() => { modeles.set(chemin, m); ok(m); });
     }, undefined, () => ok(null));
   });
   enCours.set(chemin, p);
+  sansJugement(p);
+  // UN ECHEC NE CONDAMNE PAS LES DEMANDES SUIVANTES. Le maillage se demande
+  // d'avance, a l'accueil (chargement.ts) : un reseau coupe a ce moment-la ne
+  // doit pas laisser la course qui suit sans lui. Elle le redemandera.
+  p.then((m) => { if (!m) enCours.delete(chemin); });
   return p;
 }
 
@@ -244,6 +284,88 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   return { racine, os, ordre, repos, reposLocal, bassinParent };
 }
 
+/**
+ * SES SHADERS SONT COMPILES AVANT QU'IL N'APPARAISSE. Un maillage tout juste
+ * charge n'a encore rien sur la carte graphique : son premier R.render()
+ * compilait les programmes (le standard de three.js, avec les os et le
+ * liseret), montait texture, geometrie et os, et la premiere copie vers la
+ * toile du jeu preparait son chemin — d'un bloc, au milieu d'une image de la
+ * course. Pres d'une demi-seconde de gel (480 ms mesurees dans Chromium,
+ * 35 pour les images suivantes).
+ *
+ * C'est donc fait ici, au chargement, pendant que drawRunner dessine encore
+ * les tubes (pret() reste faux jusqu'au bout) :
+ *   1. compileAsync : la carte compile en arriere-plan
+ *      (KHR_parallel_shader_compile), et le jeu continue de courir ;
+ *   2. un dessin d'essai, jamais montre : il lie les programmes et monte
+ *      texture, geometrie et os ;
+ *   3. ON ATTEND QUE LA CARTE L'AIT FAIT POUR DE BON. WebGL ne fait que
+ *      mettre le dessin en file, et le pilote acheve ses shaders au premier
+ *      trace qu'il execute : sans cette attente, tout retombait sur le
+ *      premier vrai dessin. Une barriere (fenceSync), sondee entre deux
+ *      images : le jeu ne l'attend jamais ;
+ *   4. une premiere copie de l'image vers une toile 2D de brouillon : celle
+ *      de dessiner() ne paie plus la mise en route.
+ * La meme scene, les memes lumieres, la meme sortie que dessiner() : les
+ * programmes compiles ici sont ceux qu'il reprendra. Sans l'extension, la
+ * compilation n'est que lancee en 1 et le dessin d'essai l'attend — mais
+ * entre deux images, a l'arrivee du maillage, plus a son apparition.
+ * Ne rejette jamais : si l'essai echoue, le premier vrai dessin fera le
+ * reste, comme avant.
+ */
+async function prechauffer(m: Modele) {
+  const R = rendu;
+  if (!R) return;
+  try {
+    // (une carte qui ne repond plus — contexte perdu — ne finit jamais de
+    // compiler : on n'attend pas le maillage pour toujours)
+    const compile = R.compileAsync(m.racine, camera, scene);
+    nePasJuger();
+    await Promise.race([compile, attendre(4000)]);
+    await apresUneImage();
+    m.racine.visible = true;
+    R.render(scene, camera);
+    m.racine.visible = false;
+    nePasJuger();
+    await carteAJour(R);
+    await apresUneImage();
+    const brouillon = document.createElement('canvas');
+    brouillon.width = brouillon.height = 1;
+    brouillon.getContext('2d')?.drawImage(R.domElement, 0, 0, 1, 1);
+  } catch { /* voir plus haut */ }
+  nePasJuger();
+  m.racine.visible = false;
+}
+
+/** Quand la carte a execute tout ce qu'on lui a demande — sans jamais bloquer le jeu. */
+function carteAJour(R: THREE.WebGLRenderer): Promise<void> {
+  const gl = R.getContext() as WebGL2RenderingContext;
+  const f = gl.fenceSync ? gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0) : null;
+  if (!f) return Promise.resolve();
+  gl.flush();
+  const t0 = performance.now();
+  return new Promise((ok) => {
+    const voir = () => {
+      // (l'etat d'une barriere ne change qu'entre deux taches : on repasse)
+      if (gl.isContextLost() || performance.now() - t0 > 4000
+          || gl.getSyncParameter(f, gl.SYNC_STATUS) === gl.SIGNALED) {
+        if (!gl.isContextLost()) gl.deleteSync(f);
+        ok();
+      } else setTimeout(voir, 16);
+    };
+    setTimeout(voir, 16);
+  });
+}
+
+function attendre(ms: number): Promise<void> {
+  return new Promise((ok) => setTimeout(ok, ms));
+}
+
+/** Juste apres une image : l'essai a tout le temps jusqu'a la suivante. */
+function apresUneImage(): Promise<void> {
+  return new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
+}
+
 export function pret(chemin: string): boolean { return modeles.has(chemin); }
 
 // --- LA POSE -------------------------------------------------------------------
@@ -317,6 +439,39 @@ function poser(m: Modele, sq: Squelette) {
 // --- LE RENDU ------------------------------------------------------------------
 
 /**
+ * LA TOILE NE CHANGE PLUS DE TAILLE A CHAQUE IMAGE. L'image de l'athlete fait
+ * Sd pixels de cote, et Sd suit le cadrage : pendant la presentation d'avant
+ * le depart, la camera zoome (G.zoomPres) et Sd changeait a chaque image. Or
+ * redimensionner la toile WebGL, c'est la reallouer, son antialiasing avec :
+ * un a-coup par image, tout le zoom durant.
+ *
+ * L'image se rend donc dans un coin de la toile (setViewport), A LA MEME
+ * DENSITE qu'avant. Le coin du bas a gauche, l'origine de WebGL : sans
+ * decalage, la trame et l'antialiasing tombent exactement comme sur une toile
+ * a sa taille (dans un autre coin, des bords de la silhouette changeaient de
+ * dix-huit niveaux sur 255). Reste, le temps d'un zoom, l'arrondi de la copie
+ * vers la toile du jeu : un niveau sur 255, invisible. La toile
+ * grandit avec de la marge quand l'image la deborde (une poignee de fois sur
+ * tout un zoom), et se resserre sur elle des que le cadrage est pose
+ * (TOILE_POSEE_MS), ou d'un coup si elle devient deux fois trop grande : en
+ * course, ou le cadrage ne bouge plus, elle a exactement la taille de
+ * l'image, comme avant — pas un pixel de trop a effacer ni a copier.
+ */
+const TOILE_MAX = 2048, TOILE_MARGE = 1.25, TOILE_POSEE_MS = 500;
+/** Le cote de la toile, en pixels ; 0 avant le premier dessin. */
+let toile = 0;
+let dernierSd = 0, poseDepuis = 0;
+
+/** Le cote que doit avoir la toile pour une image de `Sd` pixels. */
+function coteDeToile(Sd: number): number {
+  const t = performance.now();
+  if (Sd !== dernierSd) { dernierSd = Sd; poseDepuis = t; }
+  if (Sd > toile) return toile ? Math.min(TOILE_MAX, Math.ceil(Sd * TOILE_MARGE)) : Sd;
+  if (Sd < toile && (Sd * 2 < toile || t - poseDepuis > TOILE_POSEE_MS)) return Sd;
+  return toile;
+}
+
+/**
  * Dessiner l'athlete dans `ctx`, a la place de ses tubes.
  *
  * `repere` : les images des trois axes par repereDuCoureur (sprinter-app.js) ;
@@ -339,8 +494,14 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     // que le jeu s'accorde —, puis posee a sa taille.
     const tr = ctx.getTransform ? ctx.getTransform() : null;
     const dens = tr ? Math.max(1, Math.min(3, Math.hypot(tr.a, tr.b))) : 1;
-    const Sd = Math.min(2048, Math.ceil(S * dens));
-    if (R.domElement.width !== Sd || R.domElement.height !== Sd) R.setSize(Sd, Sd, false);
+    const Sd = Math.min(TOILE_MAX, Math.ceil(S * dens));
+    const cote = coteDeToile(Sd);
+    if (cote !== toile || R.domElement.width !== cote || R.domElement.height !== cote) {
+      R.setSize(cote, cote, false);
+      toile = cote;
+    }
+    // le coin du bas a gauche (voir LA TOILE, plus haut)
+    R.setViewport(0, 0, Sd, Sd);
     poser(m, sq);
     // le repere du coureur (tourne, bascule, miroir), puis le passage glTF -> jeu
     const [ex, ey, ez] = repere;
@@ -370,7 +531,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     for (const o of modeles.values()) o.racine.visible = o === m;
     R.render(scene, camera);
     m.racine.visible = false;
-    ctx.drawImage(R.domElement, ax - S / 2, ay - oy, S, S);
+    ctx.drawImage(R.domElement, 0, toile - Sd, Sd, Sd, ax - S / 2, ay - oy, S, S);
     return true;
   } catch {
     return false;

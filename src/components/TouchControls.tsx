@@ -94,11 +94,24 @@ const ZONE_JAUGE: Record<string, { fond: string; halo: string }> = {
 export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
-  const countT = useGameStore(s => s.countT);
+  // (le decompte suspendu, seulement : countT bouge a chaque image du decompte)
+  const presentation = useGameStore(s => s.state === 'count' && s.countT <= -90);
   const champ = useChampDirect();
   // La ligne passee, le joueur d'une serie en direct ne court plus : il regarde
   // les autres finir. Voir plus bas.
   const fini = useGameStore(s => !!s.player?.finished);
+  // CE QUE LE RENDU LIT DU MOTEUR, EN VALEURS SIMPLES. Le composant ne se
+  // redessine plus a chaque image (voir useGameStore) : ce qui change en
+  // course sans que l'etat change — les paves et la consigne d'un saut, d'une
+  // phase a l'autre — passe par un selecteur, compare a chaque image.
+  const rejeu = useGameStore(() => !!SprinterApp.G.rejeu);
+  const spectateur = useGameStore(() => !!SprinterApp.G.spectateur);
+  const liveOn = useGameStore(s => !!s.liveOn);
+  const pavesCaches = useGameStore(() => !!(SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut
+                                             && !SprinterApp.G.pavesSaut()));
+  const consigne = useGameStore((): string | null => SprinterApp.G.sautEnCours
+    ? (SprinterApp.G.consigneSaut ? SprinterApp.G.consigneSaut() : null)
+    : 'alternate');
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -250,28 +263,24 @@ export function TouchControls() {
   // ne court pas encore. Les pavés et leur consigne n'y ont rien a faire — ils
   // recouvraient la moitie basse de la piste au moment ou l'on presente
   // quelqu'un.
-  if (state === 'count' && countT <= -90) return null;
+  if (presentation) return null;
   // Un rejeu de championnat non plus : la course a deja eu lieu, personne ne
   // la pilote. Deux pavés « ALTERNE LES DEUX TOUCHES » sous une course qu'on
   // regarde promettent une prise en main qui n'existe pas — et ils mangent la
   // moitie basse de l'image au moment ou on la filme.
-  if (SprinterApp.G.rejeu) return null;
+  if (rejeu) return null;
   // Une serie de championnat en direct : le spectateur — carton rouge, ou pas
   // partant — ne court pas, et une fois le verdict de la salle tombe personne
   // ne court plus. Les pavés couvriraient le tableau d'arrivee et son bouton.
   // Pas davantage une fois SA ligne passee : il attend les autres, et « alterne
   // les deux touches » sous un coureur qui freine promettait une course finie.
-  if (champ.ouvert && (SprinterApp.G.spectateur || champ.etape === 'fin' || fini)) return null;
+  if (champ.ouvert && (spectateur || champ.etape === 'fin' || fini)) return null;
   // Un elimine du tournoi en direct regarde depuis les tribunes : pas de
   // coureur, pas de paves.
-  if (SprinterApp.G.spectateur && SprinterApp.G.liveOn) return null;
+  if (spectateur && liveOn) return null;
   // Au saut en longueur, entre deux essais ou le temps que la marque tombe :
   // personne ne court, les paves n'ont rien a proposer.
-  if (SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut && !SprinterApp.G.pavesSaut()) return null;
-
-  const consigne: string | null = SprinterApp.G.sautEnCours
-    ? (SprinterApp.G.consigneSaut ? SprinterApp.G.consigneSaut() : null)
-    : 'alternate';
+  if (pavesCaches) return null;
 
   // Zone sensible et zone visible sont deux choses distinctes.
   //

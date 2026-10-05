@@ -236,14 +236,20 @@ export function BlocTournoi() {
  * suivi, et au verdict il dit qui sort avant de ramener au salon.
  */
 export function BandeauTournoi() {
-  const { state } = useGameStore();
+  // Ce qu'il lit du moteur, par selecteurs : il est toujours monte, et ne se
+  // redessine plus a chaque image (voir useGameStore).
+  const state = useGameStore(s => s.state);
+  const liveOn = useGameStore(s => !!s.liveOn);
+  const spectateur = useGameStore(() => !!SprinterApp.G.spectateur);
+  const champDirect = useGameStore(() => !!SprinterApp.G.champDirect);
+  const presentation = useGameStore(s => s.state === 'count' && s.countT <= -90);
   const s = useSalonDirect();
   const regard = useRegardTournoi();
-  const { N, G } = SprinterApp;
-  if (!G.spectateur || !G.liveOn || G.champDirect) return null;
+  const { N } = SprinterApp;
+  if (!spectateur || !liveOn || champDirect) return null;
   if (state !== 'count' && state !== 'race') return null;
   // Pendant la presentation de la finale, la presentation parle seule.
-  if (state === 'count' && G.countT <= -90) return null;
+  if (presentation) return null;
   const t = s?.dernierEtat?.tournoi;
   const joueurs = s?.dernierEtat?.joueurs || [];
   const enPiste = joueurs.filter(j => j.en_lice !== false)

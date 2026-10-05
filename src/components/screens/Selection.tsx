@@ -526,7 +526,7 @@ function marquerVue(edition: string) {
  * la seule chose qu'il était venu faire.
  */
 export function SceneSelection() {
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const { N } = SprinterApp;
   const s = useMaSelection();
   const [ouvert, setOuvert] = useState(false);

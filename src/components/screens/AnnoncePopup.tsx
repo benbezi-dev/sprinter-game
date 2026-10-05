@@ -31,7 +31,7 @@ const BLEU = '#86B6E3';
 const BLEU_DOUX = '#A7C8E8';
 
 export function AnnoncePopup() {
-  const { state } = useGameStore();     // re-rendu au changement d'ecran
+  const state = useGameStore(s => s.state);     // re-rendu au changement d'ecran
   const rangee = useRangeePastilles(state);
   const { N } = SprinterApp;
 

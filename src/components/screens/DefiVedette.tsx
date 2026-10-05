@@ -6,7 +6,8 @@ import { MONTEE, VOILE, PANNEAU, DUREE, COURBE } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
-  meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, type Vedette, type Verdict,
+  meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, demanderSonMaillage,
+  type Vedette, type Verdict,
 } from '@/game/vedettes';
 import { useVestiaire, porterSkin } from '@/game/vestiaire';
 import { mot, chrono, ligne, aLeMot, phraseDeDefaite, type CasDeDefaite, type PhraseDeDefaite } from '@/game/vedettes-mots';
@@ -82,6 +83,13 @@ function Portrait({ v, cadre, largeur, hauteur }: {
 --------------------------------------------------------------------------- */
 
 export function BanderoleVedette({ haies }: { haies: boolean }) {
+  // L'ouverture et la fin d'un defi se lisent a l'horloge (defiPossible) : un
+  // battement par minute, l'accueil ne se redessinant plus a chaque image.
+  const [, battement] = useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => battement(n => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const jeu = haies ? 'haies' : 'sprint';
   const defis = Object.values(VEDETTES).filter(v => v.jeux.includes(jeu) && defiPossible(v));
   if (!defis.length) return null;
@@ -167,7 +175,9 @@ function FicheVedette({ v, onFermer, onPartir }: {
   // le contexte audio n'etait pas encore ouvert, le geste de « courir » le
   // trouve ouvert et relance le chargement ; arrivee en retard, elle prend le
   // relais en pleine course (musique-defi-aurel.ts, relayer).
-  React.useEffect(() => { chargerLaMusique(v); }, [v]);
+  // SON MAILLAGE AUSSI, s'il n'est pas deja venu a l'accueil (chargement.ts) :
+  // il ne doit pas arriver pendant la presentation de la course.
+  React.useEffect(() => { chargerLaMusique(v); demanderSonMaillage(v); }, [v]);
   const apprendre = avecHaies(v) && !tutoHaiesVu();
   const courir = (e: string) => { chargerLaMusique(v); onFermer(); onPartir?.(); lancerLeDefi(v, e); };
   const tuto = () => { onFermer(); marquerTutoHaiesVu(); ouvrirLeTuto(); };

@@ -64,7 +64,7 @@ function reports(): number {
  * et c'est de la qu'on part defier quelqu'un.
  */
 export function InviteNotifs() {
-  const { state } = useGameStore();
+  const state = useGameStore(s => s.state);
   const { N } = SprinterApp;
 
   const [ouvert, setOuvert] = useState(false);

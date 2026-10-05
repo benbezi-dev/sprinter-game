@@ -35,7 +35,9 @@ function Counter({ to }: { to: number }) {
 }
 
 export function RecordPopup() {
-  const { state, player, raceKey } = useGameStore();
+  const state = useGameStore(s => s.state);
+  const player = useGameStore(s => s.player);
+  const raceKey = useGameStore(s => s.raceKey);
   const { N } = SprinterApp;
 
   const [open, setOpen] = useState(false);

@@ -845,6 +845,13 @@
     },
   } : {};
 
+  /** Mener une fabrique (un generateur) a son terme, d'une traite : rend sa valeur. */
+  function jusquAuBout(gen) {
+    let r = gen.next();
+    while (!r.done) r = gen.next();
+    return r.value;
+  }
+
   const Audio_ = {
     ok: false, on: true, ctx: null, buf: {}, boucles: {}, src: null, cur: null, gain: null,
     // La SORTIE unique, et la prise branchee dessus.
@@ -856,10 +863,30 @@
     // enregistrer. Les trois passent maintenant par un seul noeud, et c'est de
     // celui-la que part le replay. Voir `prise`.
     sortie: null, capture: null,
-    init() {
-      if (this.ctx) return;
+    /**
+     * LE SON SE FABRIQUE AVANT LA COURSE, PAS AU PREMIER APPUI.
+     *
+     * Toute la musique du jeu est calculee ici, echantillon par echantillon :
+     * pres de deux secondes de calcul sur un telephone (1,95 s mesurees,
+     * processeur bride quatre fois). C'etait le premier geste de la partie
+     * qui la declenchait — et sur Android, le premier geste est le premier
+     * appui de la premiere course : le depart gelait.
+     *
+     * Elle avance donc par petits pas (`avancer`), a l'ouverture et a
+     * l'accueil (engine.ts), quelques millisecondes par image. Le contexte
+     * audio nait pour cela sans geste : les navigateurs le laissent alors
+     * suspendu, muet, et c'est le premier geste qui le reveille (`init`). Ce
+     * qui reste a fabriquer a ce moment-la se finit d'une traite, comme
+     * avant. Memes calculs, dans le meme ordre : les memes echantillons, au
+     * bit pres.
+     */
+    chantier: null,
+    /** Le morceau propre a Hurdlers ou a Jumper en cours de fabrique : { cle, gen }. */
+    morceau: null,
+    preparer() {
+      if (this.ctx) return true;
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return;
+      if (!AC) return false;
       try {
         this.ctx = new AC();
         this.sortie = this.ctx.createGain();
@@ -867,9 +894,78 @@
         this.gain = this.ctx.createGain();
         this.gain.gain.value = 0.34;
         this.gain.connect(this.sortie);
-        this.build();
-        this.ok = true;
-      } catch (e) { this.ok = false; }
+        this.chantier = this.fabrique();
+        this.guetterLePremierGeste();
+        return true;
+      } catch (e) { this.ok = false; return false; }
+    },
+    /**
+     * LE PREMIER GESTE, OU QU'IL SOIT, REVEILLE LE SON. Un contexte ne hors
+     * d'un geste reste muet jusqu'au premier, et le reveiller coute : la
+     * sortie audio du telephone s'ouvre. Sur Android, ce premier geste etait
+     * le premier appui de la course — le depart payait. Le moindre toucher
+     * dans les menus suffit aux navigateurs : c'est la qu'il se paie
+     * desormais, comme le faisaient deja le direct et la page Regarder. Et
+     * l'accueil a sa musique des ce premier toucher.
+     */
+    guetterLePremierGeste() {
+      const evts = ['pointerup', 'touchend', 'click', 'keydown'];
+      const reveil = () => {
+        this.init();
+        if (this.ctx && this.ctx.state !== 'suspended') {
+          evts.forEach(t => window.removeEventListener(t, reveil, true));
+        }
+      };
+      evts.forEach(t => window.addEventListener(t, reveil, true));
+    },
+    init() {
+      if (!this.ctx && !this.preparer()) return;
+      // ne hors d'un geste, il attendait celui-ci pour parler
+      if (this.ctx.state === 'suspended' && typeof this.ctx.resume === 'function') {
+        try { const p = this.ctx.resume(); if (p && p.catch) p.catch(() => { /* muet */ }); } catch (e) { /* muet */ }
+      }
+      if (this.chantier) {
+        try { jusquAuBout(this.chantier); this.ok = true; } catch (e) { this.ok = false; }
+        this.chantier = null;
+      }
+    },
+    /**
+     * Avancer la fabrique de `ms` millisecondes au plus. Rend faux quand il
+     * n'y a plus rien a faire. Apres les sons communs, les morceaux du jeu
+     * courant — Hurdlers, Jumper — qu'on fabriquait sinon au decompte.
+     */
+    avancer(ms) {
+      if (!this.ctx && !this.preparer()) return false;
+      const fin = performance.now() + ms;
+      if (this.chantier) {
+        try {
+          while (!this.chantier.next().done) if (performance.now() >= fin) return true;
+          this.ok = true;
+        } catch (e) { this.ok = false; }
+        this.chantier = null;
+        return true;
+      }
+      if (!this.ok) return false;
+      if (!this.morceau) {
+        const table = G.jeu === 'hurdlers' ? MUSIQUES_HAIES : G.jeu === 'jumper' ? MUSIQUES_SAUTS : null;
+        const cle = table && Object.keys(table).find(c => !this.buf[c]);
+        if (!cle) return false;
+        this.morceau = { cle, gen: this.fabriquerHaies(table[cle]) };
+      }
+      try {
+        let r;
+        while (!(r = this.morceau.gen.next()).done) if (performance.now() >= fin) return true;
+        this.buf[this.morceau.cle] = r.value;
+      } catch (e) { /* il se refera a la demande, comme avant */ }
+      this.morceau = null;
+      return true;
+    },
+    /** Le morceau `cle`, s'il etait en fabrique : acheve d'une traite, ou null. */
+    morceauFini(cle) {
+      if (!this.morceau || this.morceau.cle !== cle) return null;
+      const m = this.morceau;
+      this.morceau = null;
+      try { return jusquAuBout(m.gen); } catch (e) { return null; }
     },
 
     /**
@@ -942,10 +1038,15 @@
         }
       }
     },
-    norm(d) {
-      const ch = d.getChannelData(0);
+    norm(d) { return jusquAuBout(this.normaliser(d)); },
+    // (par tranches : chaque echantillon recoit exactement le meme calcul)
+    *normaliser(d) {
+      const ch = d.getChannelData(0), TRANCHE = 32768;
       let pk = 0;
-      for (let i = 0; i < ch.length; i++) pk = Math.max(pk, Math.abs(ch[i]));
+      for (let i = 0; i < ch.length; i++) {
+        pk = Math.max(pk, Math.abs(ch[i]));
+        if (i % TRANCHE === TRANCHE - 1) yield;
+      }
       const g = pk > 0.001 ? 0.86 / pk : 1;
       const fade = (0.006 * d.sampleRate) | 0;
       for (let i = 0; i < ch.length; i++) {
@@ -954,6 +1055,7 @@
         if (i < fade) v *= i / fade;
         else if (i > ch.length - fade) v *= (ch.length - i) / fade;
         ch[i] = v;
+        if (i % TRANCHE === TRANCHE - 1) yield;
       }
       return d;
     },
@@ -968,47 +1070,59 @@
     // monte par le tempo, l'harmonie (mineur simple -> dominante -> napolitain
     // -> accords diminues chromatiques), la densite rythmique et un bourdon
     // grave qui n'apparait qu'a partir du championnat du monde.
-    buildRace(cfg) {
+    buildRace(cfg) { return jusquAuBout(this.fabriquerCourse(cfg)); },
+    // (une fabrique qui s'arrete apres chaque note : voir `avancer`)
+    *fabriquerCourse(cfg) {
       const sr = this.ctx.sampleRate;
       const beat = 60 / cfg.bpm, bar = beat * 4, tot = bar * 4;
       const d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
       const F = (s, o) => this.semi(s, o);
-      cfg.prog.forEach((ch, b) => {
+      for (let b = 0; b < cfg.prog.length; b++) {
+        const ch = cfg.prog[b];
         const t = b * bar, root = ch[0], tri = ch[1];
         // grosse caisse et caisse claire
-        cfg.kick.forEach(x => this.drum(d, t + x * beat, 'k'));
-        cfg.snare.forEach(x => this.drum(d, t + x * beat, 's'));
+        for (const x of cfg.kick) { this.drum(d, t + x * beat, 'k'); yield; }
+        for (const x of cfg.snare) { this.drum(d, t + x * beat, 's'); yield; }
         // les mains du public, celles des concours de saut (MUSIQUES_SAUTS)
-        (cfg.claps || []).forEach(x => this.mains(d, t + x * beat, cfg.clapAmp || 1, b * 16 + x * 4));
+        for (const x of (cfg.claps || [])) { this.mains(d, t + x * beat, cfg.clapAmp || 1, b * 16 + x * 4); yield; }
         for (let i = 0; i < cfg.hats; i++)
           this.drum(d, t + i * beat * 4 / cfg.hats, 'h');
+        yield;
         // basse
         const div = cfg.bassDiv, bl = beat * 4 / div;
         for (let i = 0; i < div; i++) {
           const sm = cfg.bassPat[i % cfg.bassPat.length];
           this.tone(d, t + i * bl, bl * 0.92, F(root + sm, 2),
                     cfg.bassAmp, 'saw', 5);
+          yield;
         }
         // nappe d'accord
-        tri.forEach(n => this.tone(d, t, bar * 0.94, F(root + n, 3),
-                                   cfg.padAmp, 'tri', 1.1));
+        for (const n of tri) {
+          this.tone(d, t, bar * 0.94, F(root + n, 3), cfg.padAmp, 'tri', 1.1);
+          yield;
+        }
         // bourdon grave, seulement quand la tension monte
         if (cfg.drone > 0) {
           this.tone(d, t, bar * 0.99, F(cfg.droneSemi, 1), cfg.drone, 'sin', 0.22);
+          yield;
           this.tone(d, t, bar * 0.99, F(cfg.droneSemi + 0.14, 1), cfg.drone * 0.7,
                     'sin', 0.22);   // battement lent, effet d'oppression
+          yield;
         }
         // arpege aigu
         const n2 = cfg.arp;
-        for (let i = 0; i < n2; i++)
+        for (let i = 0; i < n2; i++) {
           this.tone(d, t + i * bar / n2, bar / n2 * 0.55,
                     F(root + tri[i % tri.length], 5), cfg.arpAmp, 'pulse', 9);
+          yield;
+        }
         // coups de tension : quinte diminuee sur le dernier temps
         if (cfg.stab)
           this.tone(d, t + beat * 3.5, beat * 0.45, F(root + 6, 4),
                     cfg.stab, 'saw', 7);
-      });
-      return this.norm(d);
+      }
+      yield;
+      return yield* this.normaliser(d);
     },
 
     // HURDLERS A SA MUSIQUE, ET ELLE SE RECONNAIT A L'OREILLE.
@@ -1023,7 +1137,8 @@
     //
     // Une fabrique a part, et non des options de plus dans buildRace : les
     // morceaux de Sprinter restent ce qu'ils sont, a l'echantillon pres.
-    buildHaies(cfg) {
+    buildHaies(cfg) { return jusquAuBout(this.fabriquerHaies(cfg)); },
+    *fabriquerHaies(cfg) {
       const sr = this.ctx.sampleRate;
       const beat = 60 / cfg.bpm, bar = beat * 4, tot = bar * cfg.prog.length;
       const d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
@@ -1031,27 +1146,34 @@
       // Les croches impaires tombent un peu en retard : le balancement d'une
       // foulee de hurdleur, qui n'est jamais tout a fait reguliere.
       const croche = i => (i + (i % 2 ? cfg.swing : 0)) * beat / 2;
-      cfg.prog.forEach((ch, b) => {
+      for (let b = 0; b < cfg.prog.length; b++) {
+        const ch = cfg.prog[b];
         const t = b * bar, root = ch[0], acc = ch[1], haut = acc[acc.length - 1];
-        cfg.kick.forEach(x => this.drum(d, t + x * beat, 'k'));
-        cfg.snare.forEach(x => this.drum(d, t + x * beat, 's'));
+        for (const x of cfg.kick) { this.drum(d, t + x * beat, 'k'); yield; }
+        for (const x of cfg.snare) { this.drum(d, t + x * beat, 's'); yield; }
         for (let i = 0; i < cfg.hats; i++) {
           this.drum(d, t + (cfg.hats === 8 ? croche(i) : i * bar / cfg.hats), 'h');
         }
-        cfg.bassPat.forEach((st, i) => {
-          if (st === null) return;
+        yield;
+        for (let i = 0; i < cfg.bassPat.length; i++) {
+          const st = cfg.bassPat[i];
+          if (st === null) continue;
           this.tone(d, t + croche(i), beat * 0.42, F(root + st, 2), cfg.bassAmp, 'sq', 7);
-        });
-        acc.forEach(n => this.tone(d, t, bar * 0.96, F(root + n, 3), cfg.padAmp, 'sin', 0.9));
+          yield;
+        }
+        for (const n of acc) { this.tone(d, t, bar * 0.96, F(root + n, 3), cfg.padAmp, 'sin', 0.9); yield; }
         for (let i = 0; i < cfg.arp; i++) {
           const n = acc[cfg.motif[i % cfg.motif.length] % acc.length];
           const at = cfg.arp === 8 ? croche(i) : i * bar / cfg.arp;
           this.tone(d, t + at, bar / cfg.arp * 0.6, F(root + n, cfg.arpOct), cfg.arpAmp, 'tri', 6);
+          yield;
         }
         this.envol(d, t + beat * 3, beat * 0.9, F(root + haut, 3), F(root + haut, 5), cfg.envol);
-        if (cfg.drone > 0) this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25);
-      });
-      return this.norm(d);
+        yield;
+        if (cfg.drone > 0) { this.tone(d, t, bar * 0.99, F(root, 1), cfg.drone, 'sin', 0.25); yield; }
+      }
+      yield;
+      return yield* this.normaliser(d);
     },
     /**
      * DES MAINS QUI FRAPPENT, dans un stade. Un claquement est une rafale de
@@ -1096,33 +1218,35 @@
       }
     },
 
-    build() {
+    build() { jusquAuBout(this.fabrique()); },
+    // Tout le son du jeu, d'une note a l'autre : voir `avancer`.
+    *fabrique() {
       const sr = this.ctx.sampleRate;
       const prog = [['A', 2, ['A', 'C', 'E']], ['F', 2, ['F', 'A', 'C']],
                     ['C', 2, ['C', 'E', 'G']], ['G', 2, ['G', 'B', 'D']]];
 
       // --- les quatre paliers de course -------------------------------
       const MIN = [0, 3, 7], MAJ = [0, 4, 7], AUG = [0, 4, 8], DIM = [0, 3, 6];
-      this.buf.race0 = this.buildRace({          // etapes 1 a 3 : entrainant
+      this.buf.race0 = yield* this.fabriquerCourse({          // etapes 1 a 3 : entrainant
         bpm: 124, prog: [[0, MIN], [-4, MAJ], [3, MAJ], [-2, MAJ]],
         kick: [0, 1.5, 2, 3.5], snare: [1, 3], hats: 8,
         bassDiv: 8, bassPat: [0, 0, 12, 0, 7, 0, 12, 3], bassAmp: 0.40,
         padAmp: 0.075, arp: 8, arpAmp: 0.10, drone: 0, droneSemi: 0, stab: 0
       });
-      this.buf.race1 = this.buildRace({          // championnat du monde
+      this.buf.race1 = yield* this.fabriquerCourse({          // championnat du monde
         bpm: 132, prog: [[0, MIN], [-4, MAJ], [5, MIN], [7, MAJ]],
         kick: [0, 1.5, 2, 2.75, 3.5], snare: [1, 3], hats: 12,
         bassDiv: 8, bassPat: [0, 0, 7, 0, 12, 0, 7, -1], bassAmp: 0.44,
         padAmp: 0.085, arp: 8, arpAmp: 0.11, drone: 0.10, droneSemi: 0, stab: 0
       });
-      this.buf.race2 = this.buildRace({          // jeux mondiaux
+      this.buf.race2 = yield* this.fabriquerCourse({          // jeux mondiaux
         bpm: 140, prog: [[0, MIN], [1, MAJ], [-4, MAJ], [7, AUG]],
         kick: [0, 1, 1.5, 2, 3, 3.5], snare: [1, 3, 3.75], hats: 16,
         bassDiv: 16, bassPat: [0, 0, 0, 12, 0, 0, 7, 0, 0, 0, 12, 0, 1, 0, 7, 0],
         bassAmp: 0.48, padAmp: 0.095, arp: 12, arpAmp: 0.12,
         drone: 0.15, droneSemi: 0, stab: 0.14
       });
-      this.buf.race3 = this.buildRace({          // inter galactique
+      this.buf.race3 = yield* this.fabriquerCourse({          // inter galactique
         bpm: 150, prog: [[0, DIM], [-1, DIM], [-2, DIM], [-3, AUG]],
         kick: [0, 0.75, 1.5, 2, 2.75, 3.5], snare: [1, 2.5, 3, 3.75], hats: 16,
         bassDiv: 16,
@@ -1153,7 +1277,7 @@
         // jamais, basse bavarde — c'est elle qui fait avancer le morceau, pas
         // la grosse caisse. Rien ici ne doit donner envie de courir plus vite
         // que le soleil ne le permet.
-        this.buf.riviera = this.buildRace({
+        this.buf.riviera = yield* this.fabriquerCourse({
           bpm: 112, prog: [[-4, M7], [-2, D7], [-5, m7], [0, m7]],
           kick: [0, 2, 2.5], snare: [1, 3], hats: 8,
           bassDiv: 8, bassPat: [0, 0, 7, 12, 0, 7, 10, 7], bassAmp: 0.38,
@@ -1165,7 +1289,7 @@
         // d'une piste ou rien ne presse. Le bourdon grave tient la nuit, la
         // caisse claire ne tombe qu'une fois par mesure, et l'harmonie
         // s'eloigne puis revient — la, fa, re, mi, comme on rentre chez soi.
-        this.buf.nuit = this.buildRace({
+        this.buf.nuit = yield* this.fabriquerCourse({
           bpm: 84, prog: [[0, m7], [-4, M7], [5, m7], [7, D7]],
           kick: [0, 2], snare: [3], hats: 8,
           bassDiv: 4, bassPat: [0, 0, 7, 0], bassAmp: 0.36,
@@ -1180,7 +1304,7 @@
         // fondamentale. L'harmonie glisse d'un demi-ton vers le haut a la
         // troisieme mesure — c'est le tour de passe-passe des generiques de
         // l'epoque : on ne redescend jamais tout a fait d'ou l'on est parti.
-        this.buf.namek = this.buildRace({
+        this.buf.namek = yield* this.fabriquerCourse({
           bpm: 156, prog: [[0, MIN], [3, MAJ], [1, D7], [-4, AUG]],
           kick: [0, 0.75, 1.5, 2, 2.5, 3.25], snare: [1, 3, 3.5], hats: 16,
           bassDiv: 16,
@@ -1194,16 +1318,20 @@
       let beat, bar, tot, d;
       beat = 60 / 92; bar = beat * 4; tot = bar * 4;
       d = this.ctx.createBuffer(1, (tot * sr) | 0, sr);
-      prog.forEach((ch, b) => {
+      for (let b = 0; b < prog.length; b++) {
+        const ch = prog[b];
         const t = b * bar;
         this.drum(d, t, 'k'); this.drum(d, t + beat * 2, 'k');
+        yield;
         this.tone(d, t, bar * 0.96, this.note(ch[0], ch[1]), 0.26, 'tri', 1.4);
-        ch[2].forEach(n => this.tone(d, t, bar * 0.96, this.note(n, 4),
-                                     0.085, 'sin', 1.0));
+        yield;
+        for (const n of ch[2]) { this.tone(d, t, bar * 0.96, this.note(n, 4), 0.085, 'sin', 1.0); yield; }
         this.tone(d, t + beat * 2, beat * 0.8, this.note(ch[2][2], 5), 0.09,
                   'sin', 2.4);
-      });
-      this.buf.menu = this.norm(d);
+        yield;
+      }
+      this.buf.menu = yield* this.normaliser(d);
+      yield;
       // bruitages
       const blip = (f, dur, amp, glide) => {
         const b = this.ctx.createBuffer(1, (dur * sr) | 0, sr);
@@ -1215,6 +1343,7 @@
         }
         return this.norm(b);
       };
+      yield;
       this.buf.beep = blip(660, 0.16, 0.3, 1);
       this.buf.go = blip(1050, 0.34, 0.34, 1.3);
       this.buf.trip = blip(160, 0.22, 0.32, 0.55);
@@ -1224,12 +1353,14 @@
       // cherche le fautif, et le coeur qui bat pendant qu'elle cherche.
       this.buf.tic = blip(1480, 0.045, 0.22, 1);
       this.buf.coeur = blip(58, 0.2, 0.55, 0.72);
+      yield;
       // Deux phrases pour les fins de duel. Un blip de 0,5 s ne porte pas un
       // resultat definitif : la fanfare monte a l'octave, la chute descend.
       this.buf.fanfare = this.phrase([
         [0, 0.00, 0.16], [4, 0.15, 0.16], [7, 0.30, 0.16],
         [12, 0.45, 0.22], [7, 0.68, 0.14], [12, 0.83, 0.85],
       ], 3);
+      yield;
       // LE CLAQUEMENT D'UNE HAIE QU'ON POSE.
       //
       // Deux choses arrivent ensemble quand une haie se redresse : le choc du
@@ -1261,6 +1392,7 @@
         return this.norm(b);
       };
       this.buf.haie = claque(0.11, 0.5);
+      yield;
       this.buf.dirge = this.phrase([
         [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
         [-9, 1.10, 1.10],
@@ -1281,10 +1413,15 @@
       // secondes de parole rendue echantillon par echantillon — qu'on ne
       // calcule pas au premier son d'une partie qui ne les jouera jamais.
       if (import.meta.env.VITE_CANAL === 'test') {
+        yield;
         this.buf.marques_fr = this.parole(COMMANDES.marques_fr);
+        yield;
         this.buf.pret_fr = this.parole(COMMANDES.pret_fr, { f0: 112 });
+        yield;
         this.buf.marques_en = this.parole(COMMANDES.marques_en);
+        yield;
         this.buf.pret_en = this.parole(COMMANDES.pret_en, { f0: 112 });
+        yield;
         this.buf.coup = this.pistolet();
       }
     },
@@ -1576,12 +1713,12 @@
       if (G.jeu === 'jumper') {
         const j = 's_' + name;
         if (!MUSIQUES_SAUTS[j]) return name;
-        if (!this.buf[j]) this.buf[j] = this.buildHaies(MUSIQUES_SAUTS[j]);
+        if (!this.buf[j]) this.buf[j] = this.morceauFini(j) || this.buildHaies(MUSIQUES_SAUTS[j]);
         return j;
       }
       const h = 'h_' + name;
       if (G.jeu !== 'hurdlers' || !MUSIQUES_HAIES[h]) return name;
-      if (!this.buf[h]) this.buf[h] = this.buildHaies(MUSIQUES_HAIES[h]);
+      if (!this.buf[h]) this.buf[h] = this.morceauFini(h) || this.buildHaies(MUSIQUES_HAIES[h]);
       return h;
     },
     music(name) {
@@ -4086,6 +4223,82 @@
     return sm.slice(Math.max(0, i0 - 1), Math.min(sm.length, i1 + 2));
   }
   /**
+   * LE CADRE QUE L'IMAGE MONTRE, POUR NE PAS TRACER L'OVALE ENTIER.
+   *
+   * En virage, chaque bande du stade — piste, pelouse, barrieres, gradins,
+   * lignes, et les voiles de la finition — courait sur tout le trace : pres
+   * de trois cent quarante echantillons au 400 m, alors que le cadre n'en
+   * montre qu'une trentaine. Mesure le 04/10/2026 sur un telephone emule
+   * (processeur bride quatre fois) : trente et un mille ordres de dessin par
+   * image dans le virage du 400 m, contre douze mille au 100 m, et le
+   * virage coutait deux fois et demie la ligne droite.
+   *
+   * drawWorld pose donc le cadre (poserLeCadre) : le rectangle de la toile,
+   * ramene dans le repere ou l'on dessine — la camera d'un passage ou la
+   * secousse d'une chute comprises —, elargi de MARGE_CADRE. Chaque passe ne
+   * trace alors que la tranche contigue des quadrilateres qui le touchent
+   * (trancheVue). Ce qui est dans le cadre ne change pas : memes sommets,
+   * memes couleurs. Hors virage, ou le trace ne compte qu'une vingtaine de
+   * points, et hors drawWorld, rien n'est decoupe.
+   */
+  let _cadre = null;
+  const MARGE_CADRE = 64;
+  const _qA = [0, 0], _qB = [0, 0];
+  function poserLeCadre(ctx) {
+    _cadre = null;
+    if (!G.track || !G.track.curved || !ctx || !ctx.getTransform || !ctx.canvas) return;
+    const m = ctx.getTransform();
+    if (!m.is2D) return;
+    const inv = m.inverse();
+    if (!isFinite(inv.a) || !isFinite(inv.e) || !isFinite(inv.f)) return;
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let k = 0; k < 4; k++) {
+      const X = k & 1 ? W : 0, Y = k & 2 ? H : 0;
+      const x = inv.a * X + inv.c * Y + inv.e, y = inv.b * X + inv.d * Y + inv.f;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    _cadre = [x0 - MARGE_CADRE, y0 - MARGE_CADRE, x1 + MARGE_CADRE, y1 + MARGE_CADRE];
+  }
+  /**
+   * Les quadrilateres de `sm` (de l'echantillon i au suivant) qui touchent le
+   * cadre, entre les rayons rA et rB et les hauteurs zA et zB : [premier,
+   * dernier], ou null. La projection est affine en r et en z — z ne fait que
+   * monter le point — : deux points par echantillon bornent tout ce qui s'y
+   * trace.
+   */
+  function quadsVus(sm, rA, rB, zA, zB) {
+    const c = _cadre, s = scaleM(), hA = (zA || 0) * s, hB = (zB || 0) * s;
+    const hMin = Math.min(hA, hB), hMax = Math.max(hA, hB);
+    let first = -1, last = -1, pnx = 0, pxx = 0, pny = 0, pxy = 0;
+    for (let i = 0; i < sm.length; i++) {
+      sommetInto(sm[i], rA, 0, _qA);
+      sommetInto(sm[i], rB, 0, _qB);
+      const nx = Math.min(_qA[0], _qB[0]), xx = Math.max(_qA[0], _qB[0]);
+      const ny = Math.min(_qA[1], _qB[1]) - hMax, xy = Math.max(_qA[1], _qB[1]) - hMin;
+      if (i > 0 && !(Math.max(xx, pxx) < c[0] || Math.min(nx, pnx) > c[2] ||
+                     Math.max(xy, pxy) < c[1] || Math.min(ny, pny) > c[3])) {
+        if (first < 0) first = i - 1;
+        last = i - 1;
+      }
+      pnx = nx; pxx = xx; pny = ny; pxy = xy;
+    }
+    return first < 0 ? null : [first, last];
+  }
+  /**
+   * La tranche de `sm` qui se voit (voir le cadre, plus haut) ; `sm` lui-meme
+   * sans cadre. `pas` aligne ses bouts sur les troncons de wall() : un gradin
+   * eclaire par pans de `pas` echantillons garde exactement les memes pans.
+   */
+  function trancheVue(sm, rA, rB, zA, zB, pas) {
+    if (!_cadre || sm.length < 3) return sm;
+    const q = quadsVus(sm, rA, rB, zA, zB);
+    if (!q) return [];
+    let a = q[0], b = q[1] + 1;
+    if (pas > 1) { a = Math.floor(a / pas) * pas; b = Math.min(sm.length - 1, Math.ceil(b / pas) * pas); }
+    return a === 0 && b === sm.length - 1 ? sm : sm.slice(a, b + 1);
+  }
+  /**
    * Les echantillons du DECOR, pas ceux de la piste : un tous les quatre
    * metres en virage. A cinquante metres de rayon, la corde s'ecarte de l'arc
    * de quatre centimetres — un pixel a l'ecran —, et un toit ou une passe de
@@ -4141,7 +4354,7 @@
   // l'etat du jeu ni s'inserer dans sa geometrie.
   const PEINTRE = {
     G, C, rgb, mix, ui, scaleM, ground, solid, ptOf, samples, decorStride,
-    band, bandBrute, bandPattern, rail, fenetre, samplesDecor,
+    band, bandBrute, bandPattern, rail, fenetre, samplesDecor, trancheVue,
   };
   const PREM = () => globalThis.RenduPremium;
   const HEURE = () => globalThis.SprinterHeure;
@@ -6569,6 +6782,11 @@
   }
 
   function drawWorld(ctx, th) {
+    // le cadre de cette image (voir trancheVue)
+    poserLeCadre(ctx);
+    try { drawWorldDansLeCadre(ctx, th); } finally { _cadre = null; }
+  }
+  function drawWorldDansLeCadre(ctx, th) {
     // Chaque appelant passe le theme du niveau tel qu'il est range dans
     // THEMES : c'est ici qu'il prend l'heure, une fois pour tous.
     th = eclaire(th);
@@ -6679,7 +6897,7 @@
     // arbres du dehors — recule du meme pas : piste, sautoir, tribune, puis
     // le paysage, dans cet ordre, comme au 100 m.
     const horizon = (th.horizon || 46) + (G.ecartTribune || 0);
-    band(ctx, sm, rOut, rOut + horizon, rgb(th.grass));
+    band(ctx, trancheVue(sm, rOut, rOut + horizon), rOut, rOut + horizon, rgb(th.grass));
     // Les passes de tondeuse, sur les deux pelouses a la fois. Elles viennent
     // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
     // apres les deux aplats qu'elles habillent. Voir rendu-premium.js.
@@ -6777,7 +6995,7 @@
     // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
     // les panneaux — quand elles sont chargees et valent pour cette vue.
     if (!(cdm && cdm.barrieres(ctx, apiCdm(), th, near))) {
-      band(ctx, sm, near, near + 0.35, rgb(th.barrier), 1.05);
+      band(ctx, trancheVue(sm, near, near + 0.35, 1.05, 1.05), near, near + 0.35, rgb(th.barrier), 1.05);
       // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
       // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
       // Un sur deux porte le sponsor (panneauPub), avec l'affiche tiree pour la
@@ -6787,7 +7005,11 @@
       const reperes = pub ? reperesDeDistance(T)
         .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
         .filter(Boolean) : null;
+      // les panneaux hors du cadre ne se tracent pas ; l'alternance des
+      // sponsors se compte toujours depuis le debut du trace
+      const vus = _cadre ? quadsVus(sm, near, near, 0.02, 1.05) : [0, sm.length];
       for (let i = 0; i + stp < sm.length; i += stp) {
+        if (!vus || i + stp <= vus[0] || i > vus[1]) continue;
         const seg = sm.slice(i, i + stp + 1), n = i / stp;
         if (pub && n % 2 === 1) {
           wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
@@ -6806,13 +7028,14 @@
     // toiture —, seul l'escalier se resserre.
     const TR = globalThis.Tribune;
     const rangs = tiers * 2, pr = sr / 2, pz = sz / 2;
+    const smTVu = trancheVue(smT, near, near + rangs * pr, 1.05, 1.05 + rangs * pz, stp);
     for (let t = 0; t < rangs; t++) {
       const r0 = near + t * pr, z1 = 1.05 + (t + 1) * pz, f = 1 - t * 0.025;
       // contremarche : vraie face verticale, du gradin precedent a celui-ci,
       // eclairee selon son orientation -> l'escalier a du relief
-      wall(ctx, smT, r0, z1 - pz, z1, th.riser, stp);
+      wall(ctx, smTVu, r0, z1 - pz, z1, th.riser, stp);
       // marche : surface horizontale, pleinement exposee a la lumiere
-      band(ctx, smT, r0, r0 + pr, rgb(th.tread, f), z1);
+      band(ctx, smTVu, r0, r0 + pr, rgb(th.tread, f), z1);
     }
     // Le mur d'appui des tribunes a ciel ouvert, avant le public qui s'y
     // adosse (voir drawDosTribune). Le Champ-de-Mars a sa tribune provisoire.
@@ -6930,9 +7153,11 @@
     // coulee d'un seul tenant ; ce qui la sauve de l'aplat, c'est le grain de
     // la resine et l'occlusion des bords (voir rendu-premium.js), pas un
     // changement de couleur tous les huit metres.
+    // la part de la piste qui se voit, pour elle, ses lignes et ses voiles
+    const smPiste = trancheVue(sm, rIn, rOut);
     if (cdm) cdm.surface(ctx, apiCdm(), th, sm, rIn, rOut);
     else if (th.arcEnCiel && ARC()) ARC().surface(ctx, PEINTRE, th, sm);
-    else band(ctx, sm, rIn, rOut, rgb(th.trackA));
+    else band(ctx, smPiste, rIn, rOut, rgb(th.trackA));
 
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
     // ne porte pas le granulat de la resine qu'elle recouvre.
@@ -6951,11 +7176,11 @@
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
                             (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
       if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
-      rail(ctx, sm, rIn, rgb(th.kerb), 3);
+      rail(ctx, smPiste, rIn, rgb(th.kerb), 3);
       for (let e = 1; e < C.LANE_COUNT; e++) {
-        rail(ctx, sm, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+        rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
       }
-      rail(ctx, sm, rOut, rgb(th.lane), 2.2);
+      rail(ctx, smPiste, rOut, rgb(th.lane), 2.2);
       if (th.arcEnCiel && ARC()) ARC().guirlandes(ctx, PEINTRE, th, rIn, rOut);
     }
 

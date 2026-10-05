@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SprinterApp, padPress, padRelease, useGameStore, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
+import { SprinterApp, padPress, padRelease, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
 
 /* Le jeu ecoute le clavier sur window, donc il recoit aussi les frappes
    destinees aux champs de texte. Sans ce filtre, taper son nom pilotait la
@@ -16,8 +16,6 @@ const zoneDeSaisie = (n: EventTarget | null): boolean => {
 };
 
 export function useInputHandlers() {
-  const state = useGameStore(s => s.state);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // e.target couvre le cas courant ; activeElement rattrape les
