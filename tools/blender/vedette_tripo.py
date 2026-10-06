@@ -363,7 +363,9 @@ def articulations(h, H):
     ex = aisselle - 0.012
     # LE POIGNET : la ou le pouce s'ecarte de l'avant-bras (le bord avant de
     # la coupe, en -y, saute de plus d'un centimetre sur deux)
-    av = [(x_, bornes(bras(x_), 1)[0]) for x_ in bande(ex + 0.20 * H, bout, pas)]
+    # (au bout des doigts, la derniere coupe peut n'avoir que quelques points :
+    # bras() n'y rend rien, on la saute — comme pour `dessous`)
+    av = [(x_, bornes(bras(x_), 1)[0]) for x_ in bande(ex + 0.20 * H, bout, pas) if bras(x_)]
     poignet = next(x_ for (x_, y_), (xp, yp) in zip(av[4:], av) if y_ < yp - 0.012) - 0.02
     # LE COUDE, au plus mince du bras vu de face (son epaisseur en z) dans le
     # tiers du milieu, un centimetre au-dela : l'interligne passe sous les

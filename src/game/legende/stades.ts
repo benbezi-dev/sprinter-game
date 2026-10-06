@@ -24,6 +24,19 @@ import { ETAPES, type Lieu } from './etapes';
 // src/assets/legende/ et non dans public/ : hors du canal de test, le greffon
 // HORS_PRODUCTION de vite.config.ts ne resout jamais ces imports.
 import kouassiGlb from '@/assets/legende/boss/kouassi.glb?url';
+import damionGlb from '@/assets/legende/boss/damion.glb?url';
+import keremGlb from '@/assets/legende/boss/kerem.glb?url';
+import zenithGlb from '@/assets/legende/boss/zenith.glb?url';
+import wukongGlb from '@/assets/legende/boss/wukong.glb?url';
+import anansiGlb from '@/assets/legende/boss/anansi.glb?url';
+import soraGlb from '@/assets/legende/boss/sora.glb?url';
+import marcGlb from '@/assets/legende/boss/marc.glb?url';
+import yassineGlb from '@/assets/legende/boss/yassine.glb?url';
+import theoGlb from '@/assets/legende/boss/theo.glb?url';
+import jaydenGlb from '@/assets/legende/boss/jayden.glb?url';
+import oliverGlb from '@/assets/legende/boss/oliver.glb?url';
+import hermesGlb from '@/assets/legende/boss/hermes.glb?url';
+import intiGlb from '@/assets/legende/boss/inti.glb?url';
 
 /**
  * LA DIFFICULTE, ETAPE PAR ETAPE, au 100 m. L'auteur, le 06/10 : « baisse le
@@ -86,15 +99,25 @@ function cheminDuMaillage(adresse: string): string | null {
 }
 
 /**
- * LES BOSS, EN TRONCS — en attendant leurs maillages.
+ * LES BOSS : leur maillage Tripo, et leur doublure en tubes.
  *
- * Le casting est a valider (projets/carriere-legende/PLAN.md, §5) et leurs
- * corps Tripo ne sont pas faits. D'ici la, chacun a deja ce que le moteur sait
- * dessiner : une couleur signature, une silhouette (taille, gabarit, foulee),
- * et l'accessoire que les troncs savent porter — chaine, bandeau, poignet,
- * barbe, lunettes. Ils entrent dans VEDETTES, que `lookFor` consulte avant de
- * tirer un coureur au hasard.
+ * Chaque corps est fait dans Tripo (Smart Mesh + texture) puis rigge, BENBEZI
+ * floque sur la tenue, par vedette_tripo.py (`corps`). Le look garde ce que
+ * les tubes savent dessiner — couleurs proches de la texture, silhouette,
+ * accessoire — car ce sont eux qu'on voit tant que le maillage charge. Ils
+ * entrent dans VEDETTES, que `lookFor` consulte avant de tirer un coureur au
+ * hasard.
  */
+/**
+ * Ce qu'un boss qui a son maillage ajoute a son look : le fichier, et l'ecart
+ * des epaules et des hanches (`sh`, `hip`) que vedette_tripo.py a LUS sur lui
+ * (ligne MORPH de son journal), pour que les mains et les pieds du jeu tombent
+ * sur les siens. Les tubes du look restent sa doublure le temps qu'il charge.
+ */
+function corps(glb: string, sh: number, hip: number) {
+  return { morph: { sh, hip }, maillage: cheminDuMaillage(glb), facettes: 48, lisse: true };
+}
+
 function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Record<string, any> {
   const or: [number, number, number] = [222, 178, 70];
   return {
@@ -106,59 +129,60 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
     // siens. Les tubes restent sa doublure le temps qu'il charge.
     'Kouassi': look({ build: 'm', skin: [122, 65, 47], jersey: [244, 130, 34], shorts: [244, 244, 240],
       shoe: [122, 65, 47], hair: 'shaved', h: 1.60, gait: 'sharp',
-      chaine: [238, 230, 210], morph: { sh: 0.73, hip: 1.14 },
-      maillage: cheminDuMaillage(kouassiGlb), facettes: 48, lisse: true }),
+      chaine: [238, 230, 210], ...corps(kouassiGlb, 0.73, 1.14) }),
     'Sora Kanzaki': look({ build: 'm', skin: 'clair', jersey: [246, 244, 240], shorts: [222, 58, 34],
       shoe: [230, 66, 38], hair: 'crop', hairCol: [24, 20, 22], h: 1.76, gait: 'sharp',
-      poignet: { col: [222, 58, 34], cote: 1 } }),
+      poignet: { col: [222, 58, 34], cote: 1 }, ...corps(soraGlb, 1.02, 1.05) }),
     'Damion Clarke': look({ build: 'm', skin: 'cacao', jersey: [0, 140, 70], shorts: [22, 22, 26],
       shoe: [250, 204, 40], hair: 'fade', h: 1.84, gait: 'whip',
-      poignet: { col: [250, 204, 40], cote: 1 }, morph: { sh: 1.06, leg: 1.06 } }),
+      poignet: { col: [250, 204, 40], cote: 1 }, ...corps(damionGlb, 1.05, 1.03) }),
     'Kerem Aydın': look({ build: 'm', skin: 'olive', jersey: [214, 30, 40], shorts: [244, 244, 240],
       shoe: [244, 244, 240], hair: 'crop', hairCol: [30, 22, 18], h: 1.85, gait: 'power',
-      barbe: [30, 22, 18], morph: { sh: 1.06, arm: 1.04 } }),
+      barbe: [30, 22, 18], ...corps(keremGlb, 1.24, 1.22) }),
     'Marc Puig': look({ build: 'm', skin: 'olive', jersey: [40, 168, 196], shorts: [244, 150, 40],
       shoe: [244, 196, 40], hair: 'fade', hairCol: [44, 30, 22], h: 1.82, gait: 'whip',
-      lunettes: [30, 30, 36] }),
+      lunettes: [30, 30, 36], ...corps(marcGlb, 1.11, 1.01) }),
     'Yassine Benali': look({ build: 'm', skin: 'ambre', jersey: [20, 116, 72], shorts: [176, 30, 42],
       shoe: [244, 240, 232], hair: 'crop', hairCol: [24, 18, 16], h: 1.92, gait: 'base',
-      poignet: { col: [120, 72, 40], cote: -1 }, morph: { sh: 0.98, leg: 1.06 } }),
-    'Chidi Okafor': look({ build: 'm', skin: 'ebene', jersey: [22, 150, 82], shorts: [244, 244, 240],
+      poignet: { col: [120, 72, 40], cote: -1 }, ...corps(yassineGlb, 0.95, 0.95) }),
+    'Chidi Okafor': look({ build: 'm', skin: 'ebene', jersey: [22, 150, 82], shorts: [30, 140, 80],
       shoe: [22, 150, 82], hair: 'flattop', h: 1.86, gait: 'power',
       morph: { sh: 1.14, hip: 1.02, arm: 1.16, leg: 1.10 } }),
     'Théo Garnier': look({ build: 'm', skin: 'clair', jersey: [26, 36, 92], shorts: or,
       shoe: or, hair: 'crop', hairCol: [22, 18, 16], h: 1.84, gait: 'whip',
-      barbe: [30, 22, 18] }),
+      barbe: [30, 22, 18], ...corps(theoGlb, 1.19, 1.08) }),
     'Jayden Brooks': look({ build: 'm', skin: 'cacao', jersey: [20, 20, 24], shorts: or,
       shoe: or, hair: 'fade', h: 1.83, gait: 'power', chaine: or,
-      bandeau: [20, 20, 24], morph: { sh: 1.08, arm: 1.08 } }),
+      bandeau: [20, 20, 24], ...corps(jaydenGlb, 1.24, 1.23) }),
     'Oliver Hart': look({ build: 'm', skin: 'porcelaine', jersey: [118, 24, 40], shorts: [30, 26, 34],
-      shoe: [244, 240, 232], hair: 'crop', hairCol: [148, 74, 38], h: 1.88, gait: 'base',
-      barbe: [148, 74, 38], poignet: { col: or, cote: 1 } }),
+      shoe: [246, 220, 190], hair: 'crop', hairCol: [148, 74, 38], h: 1.88, gait: 'base',
+      barbe: [148, 74, 38], poignet: { col: or, cote: 1 }, ...corps(oliverGlb, 1.27, 1.14) }),
     // Le plus rapide des dieux grecs : tout d'or et de blanc, le bandeau pour
     // le casque aile, les pointes d'or pour les sandales.
     'Hermès': look({ build: 'm', skin: 'miel', jersey: [248, 246, 240], shorts: or,
       shoe: [240, 200, 90], hair: 'crop', hairCol: [176, 132, 64], h: 1.86, gait: 'whip',
-      bandeau: [240, 200, 90] }),
+      bandeau: [240, 200, 90], ...corps(hermesGlb, 0.66, 0.98) }),
     // Le Roi Singe : armure d'or, cape rouge que les tubes ne portent pas, et
     // le cercle d'or sur le front.
     'Sun Wukong': look({ build: 'm', skin: 'ambre', jersey: [232, 182, 52], shorts: [190, 30, 30],
       shoe: [190, 30, 30], hair: 'crop', hairCol: [120, 70, 30], h: 1.70, gait: 'whip',
-      bandeau: [240, 200, 80], morph: { sh: 0.96, arm: 1.08, leg: 0.96 } }),
+      bandeau: [240, 200, 80], ...corps(wukongGlb, 1.26, 1.30) }),
     // Anansi : les couleurs du kente, or, vert et rouge.
     'Anansi': look({ build: 'm', skin: 'ebene', jersey: [232, 172, 30], shorts: [20, 120, 60],
       shoe: [180, 30, 30], hair: 'shaved', h: 1.78, gait: 'sharp',
-      poignet: { col: [180, 30, 30], cote: 1 }, morph: { sh: 0.94, arm: 1.12, leg: 1.04 } }),
-    // Inti : l'or du soleil, le rouge des textiles andins, la couronne de rayons
-    // (le bandeau d'or).
-    'Inti': look({ build: 'm', skin: 'bronze', jersey: [244, 192, 40], shorts: [176, 30, 36],
+      poignet: { col: [180, 30, 30], cote: 1 }, ...corps(anansiGlb, 0.78, 0.82) }),
+    // Inti : la tunique rouge des textiles andins sous le disque d'or du
+    // soleil, et le bandeau d'or. Les rayons de sa couronne sont retires du
+    // maillage avant le rig : comptes dans sa taille, ils mettaient le cou
+    // dans la tete et les epaules a 12 cm.
+    'Inti': look({ build: 'm', skin: 'bronze', jersey: [190, 36, 40], shorts: [176, 30, 36],
       shoe: [244, 192, 40], hair: 'crop', hairCol: [20, 16, 14], h: 1.84, gait: 'power',
-      bandeau: [250, 210, 60], morph: { sh: 1.08, arm: 1.04 } }),
-    // Un corps de lumiere : la carnation n'est pas humaine, comme le vert
-    // du stade des Trois Soleils.
-    'Zénith': look({ build: 'm', skin: [118, 84, 206], jersey: [250, 214, 110], shorts: [44, 22, 92],
-      shoe: [250, 214, 110], hair: 'shaved', h: 1.95, gait: 'whip',
-      morph: { sh: 1.10, arm: 1.08, leg: 1.10 } }),
+      bandeau: [250, 210, 60], ...corps(intiGlb, 1.45, 1.31) }),
+    // Un corps de lumiere, nu et violet d'un bout a l'autre, veine d'or : la
+    // carnation n'est pas humaine, comme le vert du stade des Trois Soleils.
+    'Zénith': look({ build: 'm', skin: [118, 84, 206], jersey: [104, 70, 196], shorts: [92, 58, 180],
+      shoe: [118, 84, 206], hair: 'shaved', h: 1.95, gait: 'whip',
+      ...corps(zenithGlb, 1.03, 1.04) }),
   };
 }
 
