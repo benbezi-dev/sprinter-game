@@ -431,6 +431,70 @@ const CHOREGRAPHIES: Record<string, Choregraphie> = {
     },
   },
 
+  // SUN WUKONG « LE ROI SINGE » — l'Olympe. Il tombe du ciel accroupi, comme
+  // sur son nuage, se pose, tourne une fois sur lui-meme, et prend la pose du
+  // Roi Singe : la main en visiere au-dessus des yeux, un genou leve.
+  nuage: {
+    duree: 5.6, bulle: [2.6, 5.4], plan: 1.6, visee: -0.6,
+    jouer(r, t) {
+      r.d = 0; r.demi = 0;
+      // un tour complet entre 1,4 et 2,1 s
+      r.cap = t < 1.4 ? 0 : t < 2.1 ? -2 * Math.PI * doux((t - 1.4) / 0.7) : 0;
+      const vol = (s: number): Posture => p({
+        jambes: [[0.95, -0.35, 0.1], [0.85, -0.45, 0.1]], bras: [[1.0, 1.8], [1.0, 1.8]],
+        roule: [-0.4, 0], buste: -0.20, tete: 0.15, leve: 2.6 * (1 - doux(s / 1.2)) - 0.18,
+      });
+      const pose = p({ jambes: [[0.10, 0.05, -0.15], [1.10, -0.20, 0.10]], brasD: [1.95, 3.45], brasG: [0.40, 1.20],
+                       roule: [0.35, 0.60], buste: -0.06, tete: 0.18, leve: 0.02 });
+      const cles: Cle[] = [
+        { t: 0, p: vol }, { t: 1.2, p: vol }, { t: 1.45, p: p({ jambes: [[0.5, -0.4, 0], [0.45, -0.45, 0]], leve: -0.12 }) },
+        { t: 2.1, p: DEBOUT }, { t: 2.5, p: pose }, { t: 4.8, p: pose }, { t: 5.4, p: DEBOUT },
+      ];
+      poser(r, entre(cles, t), 1);
+    },
+  },
+
+  // ANANSI « L'ARAIGNEE » — l'Olympe. Il descend du ciel au bout de son fil,
+  // les deux mains serrees au-dessus de la tete, se pose sans un bruit, agite
+  // l'index — on ne l'y prendra pas —, et salue, la main sur le coeur.
+  fil: {
+    duree: 6.6, bulle: [3.4, 6.4], plan: 1.5, visee: -0.6,
+    jouer(r, t) {
+      r.d = 0; r.demi = 0; r.cap = 0;
+      const fil = (s: number): Posture => p({
+        jambes: [[0.02, 0.02, -0.40], [-0.02, -0.02, -0.40]], bras: [[3.0, 3.1], [3.0, 3.1]],
+        roule: [0.25, 0.10], tete: 0.05, leve: 3.4 * (1 - doux(s / 2.6)),
+      });
+      const index = (s: number): Posture => p({
+        brasD: [0.60, 2.55 + 0.18 * Math.sin((s - 3.0) * Math.PI * 2 * 3.0)], roule: [0.10, 0.20], tete: 0.10,
+      });
+      const salut = p({ brasD: [0.45, 2.25], roule: [0.25, 0.95], buste: -0.18, tete: -0.20 });
+      const cles: Cle[] = [
+        { t: 0, p: fil }, { t: 2.6, p: fil }, { t: 3.0, p: DEBOUT }, { t: 3.3, p: index }, { t: 4.5, p: index },
+        { t: 4.9, p: salut }, { t: 5.8, p: salut }, { t: 6.4, p: DEBOUT },
+      ];
+      poser(r, entre(cles, t), 1);
+    },
+  },
+
+  // INTI « LE SOLEIL » — l'Olympe. A genoux a la ligne quand la camera
+  // arrive, la tete baissee ; il se leve lentement en ouvrant les deux bras au
+  // ciel, paumes ouvertes, la tete renversee — le soleil qui se leve.
+  soleil: {
+    duree: 6.0, bulle: [3.2, 5.8], plan: 1.7,
+    jouer(r, t) {
+      r.d = 0; r.demi = 0; r.cap = 0;
+      const genou = p({ jambes: [[1.45, 0.0, 0], [-0.05, -1.55, 0.10]], bras: [[0.10, 0.30], [0.10, 0.30]],
+                        buste: -0.30, leve: -0.42, tete: -0.40 });
+      const leve = p({ bras: [[2.55, 2.85], [2.55, 2.85]], roule: [-0.55, -0.25], buste: 0.10, tete: 0.32,
+                       jambes: [[0.06, 0.04, -0.10], [-0.06, -0.04, -0.10]], leve: 0.02 });
+      const cles: Cle[] = [
+        { t: 0, p: genou }, { t: 1.0, p: genou }, { t: 2.8, p: leve }, { t: 5.2, p: leve }, { t: 5.9, p: DEBOUT },
+      ];
+      poser(r, entre(cles, t), 1);
+    },
+  },
+
   // ZENITH « L'ASTRE » — l'apotheose. Il descend de tres haut, lentement, et
   // s'ouvre en V quand il touche la piste, les bras au ciel.
   astre: {

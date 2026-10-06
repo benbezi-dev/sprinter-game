@@ -9,6 +9,8 @@
 #   Boss de la Legende (06/10) : --nom kouassi --taille 1.60 [...] --glb
 #           src/assets/legende/boss/kouassi.glb --portraits src/assets/legende/boss
 #           (hors de public/ : la Legende ne vit que sur le canal de test)
+#           --marque public/pubs/benbezi-logo-3d.webp [--marque-couleur 1,1,1]
+#           [--marque-largeur 0.15] : BENBEZI floque sur la poitrine
 #   Aurel : --source aurel-tripo-lowpoly.glb --nom manga --taille 1.90 --sh 1.14 --hip 1.0
 #           --glb public/vedettes/manga-corps.glb (manga-* : hors de la production)
 #
@@ -71,7 +73,95 @@ def arguments():
     val = lambda k, d=None: a[a.index(k) + 1] if k in a else d
     return {'source': val('--source'), 'nom': val('--nom', 'meba'), 'taille': float(val('--taille', '1.78')),
             'sh': val('--sh'), 'hip': val('--hip'),
-            'glb': val('--glb'), 'portraits': val('--portraits'), 'blend': val('--blend')}
+            'glb': val('--glb'), 'portraits': val('--portraits'), 'blend': val('--blend'),
+            'marque': val('--marque'), 'marque_couleur': val('--marque-couleur', '1,1,1'),
+            'marque_largeur': float(val('--marque-largeur', '0.15')),
+            'marque_hauteur': float(val('--marque-hauteur', '0.15'))}
+
+
+# --- LA MARQUE SUR LA TENUE -----------------------------------------------------
+
+def poser_marque(h, J, H, logo, couleur=(1.0, 1.0, 1.0), largeur=0.15, hauteur=0.15):
+    """BENBEZI SUR LA POITRINE (06/10, l'auteur : « mets ma marque sur les
+    vetements »). Le logo du jeu (public/pubs/benbezi-logo-3d.webp) n'y est
+    pas colle en relief : seule sa silhouette compte — sa transparence —, et
+    elle est imprimee a plat, d'une couleur, comme un flocage. Blanc sur un
+    maillot colore, sombre sur un maillot clair (`couleur`, lineaire 0-1).
+
+    Le corps est encore celui de l'import : regard vers -y, z en haut, la
+    gauche du personnage en +x — vu de face, +x est a droite, et le mot se lit
+    donc dans le sens des x. Le rectangle est pose sur le haut de la poitrine,
+    entre le dos3 et la base du cou, large de `largeur` x la taille ; seules
+    les faces tournees vers l'avant le recoivent (sinon il traverserait le
+    corps et s'imprimerait aussi dans le dos). Chaque triangle concerne est
+    rasterise dans la texture, en UV : son point 3D dit ou il tombe dans le
+    logo."""
+    import numpy as np
+    img = texture(h).image
+    tw, th = img.size
+    P = np.empty(tw * th * 4, dtype=np.float32)
+    img.pixels.foreach_get(P)
+    P = P.reshape(th, tw, 4)
+    L = bpy.data.images.load(logo)
+    lw, lh = L.size
+    A = np.empty(lw * lh * 4, dtype=np.float32)
+    L.pixels.foreach_get(A)
+    A = A.reshape(lh, lw, 4)[:, :, 3]
+    W = largeur * H
+    Hl = W * lh / lw
+    # `hauteur` : 0 au dos3, 1 a la base du cou. A 0,55 (premier essai, sur
+    # Kouassi) le mot montait dans l'encolure, sous le collier : le milieu de
+    # la poitrine est plus bas.
+    zc = J['dos3'].z + hauteur * (J['cou'].z - J['dos3'].z)
+    x0, z0 = -W / 2, zc - Hl / 2
+    col = np.array(couleur, dtype=np.float32)
+    me = h.data
+    uv = me.uv_layers.active.data
+    n_tri = 0
+    for poly in me.polygons:
+        if poly.normal.y > -0.30:
+            continue
+        li = list(poly.loop_indices)
+        co = [me.vertices[me.loops[i].vertex_index].co for i in li]
+        if (max(c.x for c in co) < x0 or min(c.x for c in co) > x0 + W
+                or max(c.z for c in co) < z0 or min(c.z for c in co) > z0 + Hl):
+            continue
+        uvs = [uv[i].uv for i in li]
+        for k in range(1, len(li) - 1):
+            tri = (0, k, k + 1)
+            U = np.array([[uvs[j].x * tw, uvs[j].y * th] for j in tri])
+            X = np.array([[co[j].x, co[j].z] for j in tri])
+            mn = np.floor(U.min(0)).astype(int); mx = np.ceil(U.max(0)).astype(int)
+            mn = np.clip(mn, 0, [tw - 1, th - 1]); mx = np.clip(mx, 0, [tw - 1, th - 1])
+            gx, gy = np.meshgrid(np.arange(mn[0], mx[0] + 1) + 0.5, np.arange(mn[1], mx[1] + 1) + 0.5)
+            (ax, ay), (bx, by), (cx, cy) = U
+            d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy)
+            if abs(d) < 1e-9:
+                continue
+            w0 = ((by - cy) * (gx - cx) + (cx - bx) * (gy - cy)) / d
+            w1 = ((cy - ay) * (gx - cx) + (ax - cx) * (gy - cy)) / d
+            w2 = 1 - w0 - w1
+            dedans = (w0 >= -0.01) & (w1 >= -0.01) & (w2 >= -0.01)
+            if not dedans.any():
+                continue
+            px = w0 * X[0, 0] + w1 * X[1, 0] + w2 * X[2, 0]
+            pz = w0 * X[0, 1] + w1 * X[1, 1] + w2 * X[2, 1]
+            s_ = (px - x0) / W
+            t_ = (pz - z0) / Hl
+            sur = dedans & (s_ >= 0) & (s_ < 1) & (t_ >= 0) & (t_ < 1)
+            if not sur.any():
+                continue
+            a = np.zeros_like(px)
+            a[sur] = A[(t_[sur] * (lh - 1)).astype(int), (s_[sur] * (lw - 1)).astype(int)]
+            yy = (gy - 0.5).astype(int); xx = (gx - 0.5).astype(int)
+            m = a > 0.01
+            blk = P[yy[m], xx[m], :3]
+            P[yy[m], xx[m], :3] = blk * (1 - a[m, None]) + col * a[m, None]
+            n_tri += 1
+    img.pixels.foreach_set(P.ravel())
+    img.update()
+    img.pack()
+    print('MARQUE : %d triangles, logo %.0f x %.0f cm a z %.2f m' % (n_tri, W * 100, Hl * 100, zc))
 
 
 # --- LE CORPS, A SA TAILLE ---------------------------------------------------
@@ -912,6 +1002,10 @@ def tout(A):
     nom = A['nom'].capitalize()
     h = importer(A['source'], A['taille'], A['nom'])
     J = articulations(h, A['taille'])
+    if A['marque']:
+        poser_marque(h, J, A['taille'], A['marque'],
+                     tuple(float(c) for c in A['marque_couleur'].split(',')), A['marque_largeur'],
+                     A['marque_hauteur'])
     if A['nom'] in CARRURE:
         carrure(h, J, **CARRURE[A['nom']])
         J = articulations(h, A['taille'])

@@ -67,6 +67,8 @@ const CARNATIONS: Record<string, string[]> = {
 };
 const POOL_DU_LIEU: Record<string, string> = {
   menole: 'legende-ci', kyoto: 'legende-jp', kingston: 'legende-jm', izmir: 'legende-tr',
+  // l'Olympe : des coureurs de toutes les legendes, toutes les carnations
+  karman: 'divers', 'karman-wukong': 'divers', 'karman-anansi': 'divers', 'karman-inti': 'divers',
   barcelone: 'legende-es', casablanca: 'legende-ma', abuja: 'legende-ng',
 };
 
@@ -138,6 +140,20 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
     'Hermès': look({ build: 'm', skin: 'miel', jersey: [248, 246, 240], shorts: or,
       shoe: [240, 200, 90], hair: 'crop', hairCol: [176, 132, 64], h: 1.86, gait: 'whip',
       bandeau: [240, 200, 90] }),
+    // Le Roi Singe : armure d'or, cape rouge que les tubes ne portent pas, et
+    // le cercle d'or sur le front.
+    'Sun Wukong': look({ build: 'm', skin: 'ambre', jersey: [232, 182, 52], shorts: [190, 30, 30],
+      shoe: [190, 30, 30], hair: 'crop', hairCol: [120, 70, 30], h: 1.70, gait: 'whip',
+      bandeau: [240, 200, 80], morph: { sh: 0.96, arm: 1.08, leg: 0.96 } }),
+    // Anansi : les couleurs du kente, or, vert et rouge.
+    'Anansi': look({ build: 'm', skin: 'ebene', jersey: [232, 172, 30], shorts: [20, 120, 60],
+      shoe: [180, 30, 30], hair: 'shaved', h: 1.78, gait: 'sharp',
+      poignet: { col: [180, 30, 30], cote: 1 }, morph: { sh: 0.94, arm: 1.12, leg: 1.04 } }),
+    // Inti : l'or du soleil, le rouge des textiles andins, la couronne de rayons
+    // (le bandeau d'or).
+    'Inti': look({ build: 'm', skin: 'bronze', jersey: [244, 192, 40], shorts: [176, 30, 36],
+      shoe: [244, 192, 40], hair: 'crop', hairCol: [20, 16, 14], h: 1.84, gait: 'power',
+      bandeau: [250, 210, 60], morph: { sh: 1.08, arm: 1.04 } }),
     // Un corps de lumiere : la carnation n'est pas humaine, comme le vert
     // du stade des Trois Soleils.
     'Zénith': look({ build: 'm', skin: [118, 84, 206], jersey: [250, 214, 110], shorts: [44, 22, 92],

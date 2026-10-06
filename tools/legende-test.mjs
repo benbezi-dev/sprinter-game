@@ -177,6 +177,8 @@ ok('le regional se tire entre Kyoto, Kingston, Izmir',
    T.ETAPES[1].lieux.map(l => l.cle).join(',') === 'kyoto,kingston,izmir');
 ok('le national se tire entre Espagne, Maroc, Nigeria',
    T.ETAPES[2].lieux.map(l => l.drapeau).join(',') === 'es,ma,ng');
+ok('l Olympe a quatre maitres : Hermes, Sun Wukong, Anansi, Inti',
+   T.ETAPES[4].lieux.map(l => l.boss).join(',') === 'Hermès,Sun Wukong,Anansi,Inti');
 ok('le mondial entre Paris, New York, Londres',
    T.ETAPES[3].lieux.map(l => l.cle).join(',') === 'paris,newyork,londres');
 ok('chaque lieu a son boss et six autres couloirs',
@@ -188,12 +190,12 @@ ok('la piste du mondial est bleue (theme mondiaux)',
 ok('la premiere etape est a San-Pedro', T.ETAPES[0].lieux[0].pays.startsWith('San-Pédro'));
 
 const vus = new Set();
-for (let i = 0; i < 3000; i++) {
+for (let i = 0; i < 20000; i++) {
   const t = T.tirer();
-  vus.add(`${t[1]}-${t[2]}-${t[3]}`);
+  vus.add(`${t[1]}-${t[2]}-${t[3]}-${t[4]}`);
   if (t.some((v, k) => v < 0 || v >= T.ETAPES[k].lieux.length)) { ok('un tirage hors des lieux', false, t.join(',')); break; }
 }
-ok('les 27 combinaisons regional x national x mondial sortent', vus.size === 27, `${vus.size} vues`);
+ok('les 108 combinaisons regional x national x mondial x Olympe sortent', vus.size === 108, `${vus.size} vues`);
 ok('un alea a 0,9999 reste dans les lieux', T.tirer(() => 0.99999).every((v, k) => v < T.ETAPES[k].lieux.length));
 ok('un alea a 1 aussi (Math.random ne le rend jamais, un autre si)',
    T.tirer(() => 1).every((v, k) => v < T.ETAPES[k].lieux.length));
@@ -215,7 +217,7 @@ ok('l echelle monte : chaque boss plus rapide que le precedent',
 ok('le boss court sous le plateau de son etape',
    S.DIFFICULTE.every(d => d.boss < d.plateau[0] && d.plateau[0] < d.plateau[1]));
 const tous = S.ETAPES.flatMap((e, rang) => e.lieux.map(l => ({ l, rang, s: S.stadeDe(l, rang) })));
-ok('douze lieux', tous.length === 12, `${tous.length}`);
+ok('quinze lieux', tous.length === 15, `${tous.length}`);
 ok('le boss est 4e de la liste : couloir 5, a droite du joueur (couloir 4)',
    tous.every(({ l, s }) => s.names[3] === l.boss && s.names.length === 7));
 ok('son chrono est fixe (cibles) et vaut celui de l etape',
@@ -233,7 +235,7 @@ const { M: En } = await paquet('entrees', [
   `export { ETAPES } from '${src('legende/etapes.ts')}';`,
 ]);
 const lieux = En.ETAPES.flatMap(e => e.lieux);
-ok('douze entrees, une par boss', En.ENTREES.length === 12 && new Set(lieux.map(l => l.entree)).size === 12,
+ok('quinze entrees, une par boss', En.ENTREES.length === 15 && new Set(lieux.map(l => l.entree)).size === 15,
    En.ENTREES.join(','));
 ok('chaque boss joue une entree qui existe', lieux.every(l => En.ENTREES.includes(l.entree)),
    lieux.filter(l => !En.ENTREES.includes(l.entree)).map(l => l.boss).join(','));

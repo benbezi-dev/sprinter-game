@@ -253,6 +253,49 @@ const KARMAN: Lieu = {
   plateau: ['Atalante', 'Hippomène', 'Achille', 'Iris', 'Ladas', 'Phidippidès'],
 };
 
+// L'OLYMPE A QUATRE MAITRES POSSIBLES (l'auteur, 06/10 : « pour l'Olympe mets
+// 4 dieux possibles : 1 europeen, 1 asiatique, 1 africain, 1 sud-americain —
+// l'europeen c'est deja Hermes »). Le meme lieu, tire au sort comme les
+// villes : seul le maitre des lieux change. Ceux d'Asie, d'Afrique et
+// d'Amerique du Sud sont ceux des pantheons valides le 06/10.
+const KARMAN_WUKONG: Lieu = {
+  ...KARMAN, cle: 'karman-wukong',
+  boss: 'Sun Wukong', surnom: ['Le Roi Singe', 'The Monkey King'],
+  // Ne d'un rocher, le heros du « Voyage vers l'Ouest » : d'un seul saut
+  // perilleux sur son nuage, il franchit cent huit mille li. Il arrive en
+  // bondissant, tourne sur lui-meme et prend sa pose — la main en visiere, un
+  // genou leve. Sa replique est sa formule d'entree : « le vieux Sun est la ! »
+  // A FAIRE RELIRE.
+  bio: ['Le Roi Singe, né d’un rocher. D’un seul saut périlleux sur son nuage, il franchit cent huit mille li.',
+        'The Monkey King, born from a rock. A single somersault on his cloud carries him a hundred and eight thousand li.'],
+  replique: { vo: '俺老孙来也！', fr: 'Le vieux Sun est arrivé !', en: 'Old Sun has arrived!' },
+  entree: 'nuage',
+};
+const KARMAN_ANANSI: Lieu = {
+  ...KARMAN, cle: 'karman-anansi',
+  boss: 'Anansi', surnom: ['L’Araignée', 'The Spider'],
+  // L'araignee des contes akan : il a achete toutes les histoires du monde au
+  // dieu du ciel, et voulu cacher toute la sagesse dans une jarre — d'ou le
+  // proverbe qu'il dit en arrivant. Il descend du ciel au bout de son fil,
+  // agite l'index, salue la main sur le coeur. A FAIRE RELIRE.
+  bio: ['L’Araignée des contes akan. Il a acheté toutes les histoires du monde au dieu du ciel, et voulu cacher toute la sagesse dans une jarre.',
+        'The Spider of the Akan tales. He bought all the world’s stories from the sky god, and tried to hide all wisdom in a pot.'],
+  replique: { vo: 'Nyansa nni baako tirim.', fr: 'La sagesse n’est pas dans une seule tête.', en: 'Wisdom is not in one head.' },
+  entree: 'fil',
+};
+const KARMAN_INTI: Lieu = {
+  ...KARMAN, cle: 'karman-inti',
+  boss: 'Inti', surnom: ['Le Soleil', 'The Sun'],
+  // Le soleil des Incas, pere du premier Inca ; chaque juin Cusco fete son
+  // retour, l'Inti Raymi. Il est a genoux a la ligne quand la camera arrive,
+  // et se leve en ouvrant les bras au ciel. Replique en quechua. A FAIRE
+  // RELIRE.
+  bio: ['Le dieu soleil des Incas, père du premier Inca. Chaque juin, Cusco fête son retour : l’Inti Raymi.',
+        'The sun god of the Incas, father of the first Inca. Every June, Cusco celebrates his return: the Inti Raymi.'],
+  replique: { vo: 'Ñuqa Inti kani.', fr: 'Je suis le Soleil.', en: 'I am the Sun.' },
+  entree: 'soleil',
+};
+
 const APOTHEOSE: Lieu = {
   cle: 'apotheose', nom: 'Apothéose', pays: 'Galaxie', drapeau: '',
   geo: null,
@@ -272,7 +315,7 @@ export const ETAPES: Etape[] = [
   { rang: 1, intitule: ['Régional', 'Regional'], transport: 'voiture', lieux: [KYOTO, KINGSTON, IZMIR] },
   { rang: 2, intitule: ['National', 'National'], transport: 'car', lieux: [BARCELONE, CASABLANCA, ABUJA] },
   { rang: 3, intitule: ['Mondial', 'World'], transport: 'avion', lieux: [PARIS, NEW_YORK, LONDRES] },
-  { rang: 4, intitule: ['0.Games', '0.Games'], transport: 'fusee', lieux: [KARMAN] },
+  { rang: 4, intitule: ['0.Games', '0.Games'], transport: 'fusee', lieux: [KARMAN, KARMAN_WUKONG, KARMAN_ANANSI, KARMAN_INTI] },
   { rang: 5, intitule: ['L’apothéose', 'Apotheosis'], transport: 'fusee', lieux: [APOTHEOSE] },
 ];
 
