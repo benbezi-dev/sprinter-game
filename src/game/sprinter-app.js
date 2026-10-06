@@ -6888,6 +6888,15 @@
       // le ballon de la marque, plus pres que la tour, derriere les facades
       cdm.montgolfiere(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0));
     }
+    // LE LOINTAIN D'UN EVENEMENT : le monument d'une etape de la Legende
+    // (game/legende/decors.ts, canal de test), trace sur le ciel avant tout
+    // le sol, comme la tour — la tribune lui passe devant le pied. Pose par
+    // l'evenement qui le fournit, retire a son rangement ; une erreur la-bas
+    // ne coute qu'une image sans monument.
+    if (G.lointainEvenement) {
+      try { G.lointainEvenement(ctx, apiCdm(), th, sm, rOut, (th.horizon || 46) + (G.ecartTribune || 0)); }
+      catch (e) { /* le stade sans son monument */ }
+    }
 
     // pelouse interieure
     if (T.curved) {
@@ -7365,6 +7374,14 @@
     // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
     // doivent la recouvrir (voir drawArbresDedans).
     if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
+    // LE PREMIER PLAN D'UN EVENEMENT : ce qu'il pose dans la pelouse (les
+    // pirogues tirees sur le sable de Menole, game/legende/decors.ts), trace
+    // ici pour la meme raison que les palmiers — en deca du couloir 1, plus
+    // pres de la camera que la piste.
+    if (G.premierPlanEvenement) {
+      try { G.premierPlanEvenement(ctx, apiCdm(), th, sm, rIn); }
+      catch (e) { /* la pelouse sans son decor */ }
+    }
 
     // Hors course, les decors debout se posent ici. En course, ils passent
     // apres les coureurs : voir la fin de drawAthletes.

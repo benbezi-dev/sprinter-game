@@ -189,6 +189,55 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
 
 const CLE = (l: Lieu) => `legende-${l.cle}`;
 
+/**
+ * LE THEME D'UN LIEU : celui de son stade d'origine, vu comme le Champ-de-Mars.
+ *
+ * Le monument du lieu (decors.ts) se leve derriere la tribune, sur le ciel.
+ * Or a l'angle ordinaire du jeu, le cadre s'arrete une quinzaine de metres
+ * au-dela de la piste : en portrait, au depart, il ne montre pas un pixel de
+ * ciel (constate a Londres le 06/10, Big Ben derriere une tribune). Le
+ * Champ-de-Mars a resolu la meme question pour la Tour Eiffel, et c'est sa
+ * recette qu'on reprend : la camera plus rasante (15 degres), une tribune
+ * d'un seul gradin sans toit, et l'horizon pose a trois metres.
+ *
+ * Pas de `base` : les pieces de pelouse (decors-stades.js) sont rendues sous
+ * l'angle ordinaire et glisseraient sous celui-ci. Et pas d'heure du jour :
+ * la lumiere reste celle dans laquelle le monument a ete rendu.
+ */
+// Ni platanes derriere la tribune (`feuillus`) : ils poussaient devant le
+// monument, a Abuja une couronne d'arbre cachait Zuma Rock.
+const TRIBUNE_BASSE = { gradins: 1, toiture: false, horizon: 2, angle: 15, heure: false, feuillus: false };
+// LE CIEL DES LIEUX DE JOUR. Sans l'heure du jour, les stades rouge et bleu
+// gardent le bleu plat de leur theme (#4451a7), un ciel de crepuscule ; le
+// monument, rendu sous un soleil franc, y paraissait colle. Un ciel de
+// plein jour, et des nuages.
+const CIEL_DE_JOUR = { skyTop: [62, 128, 204], skyBot: [164, 206, 238], clouds: true };
+// (Deux gradins aux mondiaux bouchaient encore tout le ciel du portrait.)
+const THEME_DU_LIEU: Record<string, Record<string, unknown>> = {
+  // LA PLAGE DE MENOLE. Elle part de la Riviera — la mer et ses vagues au
+  // loin, les palmiers, le ciel franc — mais c'est une plage de village a
+  // San-Pedro, pas une station : ni piscine, ni transats, ni immeubles, ni
+  // haie taillee. Le sol est du sable, et la piste du sable tasse, ou
+  // Kouassi court pieds nus.
+  menole: {
+    piscine: false, transats: false, immeubles: false, haie: false, avion: false,
+    grass: [228, 204, 152], grassEdge: [210, 184, 130],
+    trackA: [212, 176, 120], trackB: [198, 162, 108],
+    lane: [255, 250, 236], kerb: [255, 250, 236],
+  },
+};
+
+function themeDuLieu(l: Lieu): string {
+  const A = (globalThis as any).SprinterApp;
+  const T = A && A.THEMES;
+  const base = T && T[l.theme];
+  if (!base) return l.theme;
+  const nom = CLE(l);
+  const jour = l.theme === 'day' || l.theme === 'mondiaux' ? CIEL_DE_JOUR : {};
+  if (!T[nom]) T[nom] = { ...base, ...TRIBUNE_BASSE, ...jour, ...(THEME_DU_LIEU[l.cle] || {}) };
+  return nom;
+}
+
 /** L'entree d'un lieu dans la table des etapes du moteur. */
 export function stadeDe(l: Lieu, rang: number): any {
   const d = DIFFICULTE[rang];
@@ -233,7 +282,7 @@ export function inscrireLesStades(): void {
     for (const l of e.lieux) {
       if (K.LEVELS.some((s: any) => s && s.cle === CLE(l))) continue;
       const idx = K.LEVELS.length;
-      K.LEVELS.push(stadeDe(l, rang));
+      K.LEVELS.push({ ...stadeDe(l, rang), theme: themeDuLieu(l) });
       // Par l'index et non par push : LEVEL_NAMES suit LEVELS, mais rien ne
       // garantit qu'il en ait exactement la longueur sur ce canal.
       if (N && N.LEVEL_NAMES) N.LEVEL_NAMES[idx] = [l.nom, l.nom];

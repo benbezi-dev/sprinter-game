@@ -24,6 +24,7 @@ import { tirer, lieuDe, type Tirage } from './tirage';
 import { inscrireLesStades, indexDuLieu, DIFFICULTE } from './stades';
 import { poserEtape } from './etat';
 import { entreeDe } from './entrees';
+import { lointainDe, premierPlanDe, preparerLeLointain } from './decors';
 import { legendeRemplaceLaCarriere } from './compte';
 
 type Parcours = {
@@ -111,6 +112,13 @@ export function lancerLEtape(): boolean {
   // defis de vedettes s'y posent aussi).
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaLegende;
   if (!G.sonDArrivee) G.sonDArrivee = sonDeLArrivee;
+  // Le monument du lieu, au loin (decors.ts) : demande avant le pistolet,
+  // le decompte attend les images en vol.
+  preparerLeLointain(lieu.cle);
+  monument = lointainDe(lieu.cle);
+  G.lointainEvenement = monument;
+  premierPlan = premierPlanDe(lieu.cle);
+  G.premierPlanEvenement = premierPlan;
   (SprinterApp as any).startOneShot(['100'], { levelIdx: idx });
   // LE BOSS ARRIVE AVANT SES BLOCS, A SA MANIERE (game/legende/entrees.ts) :
   // la camera va le chercher (entrerEnBoss, engine.ts), il fait son entree et
@@ -201,6 +209,10 @@ function sonDeLArrivee(): string | null {
 }
 
 /** Ranger la Legende : rien ne doit suivre le joueur dans un 100 m ordinaire. */
+/** Le dessin du monument pose dans le moteur pour l'etape en cours. */
+let monument: ReturnType<typeof lointainDe> = null;
+let premierPlan: ReturnType<typeof premierPlanDe> = null;
+
 export function rangerLaLegende() {
   parcours = null;
   poserEtape(null);
@@ -208,6 +220,10 @@ export function rangerLaLegende() {
   if (!G) return;
   if (G.surRetourAccueil === rangerLaLegende) G.surRetourAccueil = null;
   if (G.sonDArrivee === sonDeLArrivee) G.sonDArrivee = null;
+  if (monument && G.lointainEvenement === monument) G.lointainEvenement = null;
+  if (premierPlan && G.premierPlanEvenement === premierPlan) G.premierPlanEvenement = null;
+  monument = null;
+  premierPlan = null;
 }
 
 /** Le chrono que le boss de l'etape court, pour l'annoncer avant la course. */
