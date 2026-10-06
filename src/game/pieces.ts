@@ -70,9 +70,13 @@ export function usePieces(): EtatPieces | null {
   );
 }
 
-/** Le prix du prochain Continue de cette carriere, ou null s'il n'y en a plus. */
+/**
+ * Le prix du prochain Continue de cette carriere, ou null s'il n'y en a plus.
+ * Rendu meme a un nom non reserve : l'offre se montre a tous, l'achat seul
+ * exige un porte-monnaie (le serveur le verifie).
+ */
 export function coutDuContinue(e: EtatPieces | null, dejaAchetes: number): number | null {
-  if (!e || !e.reserve) return null;
+  if (!e) return null;
   const c = e.couts[dejaAchetes];
   return typeof c === 'number' && c > 0 ? c : null;
 }

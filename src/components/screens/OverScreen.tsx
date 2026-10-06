@@ -15,6 +15,11 @@ export function OverScreen() {
   // reprendre. Le prix vient du serveur et monte a chaque Continue de la
   // meme carriere ; quand il n'y en a plus, il ne reste que « repartir de
   // zero », comme avant.
+  //
+  // L'OFFRE SE MONTRE MEME SANS LES MOYENS (decision du 6 octobre 2026). Le
+  // bouton reste la, grise, avec son prix et ce qu'il manque : le joueur
+  // apprend que la defaite peut s'acheter, et c'est la que viendra l'achat de
+  // pieces en argent reel — ce jour-la, le bouton grise ouvrira la boutique.
   // Sans identifiant de carriere (une course qui n'est pas partie de
   // startRun), le serveur n'a rien a quoi rattacher l'achat : pas d'offre.
   const enCarriere = SprinterApp.G.mode === 'campaign' && !!SprinterApp.G.runId;
@@ -22,7 +27,8 @@ export function OverScreen() {
   const [achat, setAchat] = useState<'libre' | 'envoi' | 'reseau' | 'solde' | 'epuise' | 'nom'>('libre');
   useEffect(() => { if (enCarriere) rafraichirPieces(); }, [enCarriere]);
   const cout = enCarriere ? coutDuContinue(pieces, SprinterApp.G.runContinues || 0) : null;
-  const peutPayer = cout != null && pieces != null && pieces.solde >= cout;
+  const peutPayer = cout != null && pieces != null && pieces.reserve && pieces.solde >= cout;
+  const manque = cout != null && pieces ? Math.max(0, cout - (pieces.reserve ? pieces.solde : 0)) : 0;
 
   const handleContinue = async (relance = false) => {
     if (cout == null || achat === 'envoi') return;
@@ -100,38 +106,44 @@ export function OverScreen() {
             </div>
           </div>
 
-          {/* Le Continue : reprendre l'etape perdue contre des pieces. */}
-          {enCarriere && pieces && !pieces.reserve && (
-            <div className="text-xs md:text-sm text-muted-foreground tracking-wide">{N.t('pieces_nom')}</div>
-          )}
-          {enCarriere && pieces && pieces.reserve && (
+          {/* Le Continue : reprendre l'etape perdue contre des pieces. Toujours
+              montre tant qu'il en reste un a acheter, grise faute de pieces. */}
+          {enCarriere && pieces && cout != null && (
             <div className="w-full max-w-md flex flex-col items-center gap-2 mt-2">
-              <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm md:text-base">
-                <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
+              {pieces.reserve && (
+                <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm md:text-base">
+                  <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
+                </div>
+              )}
+              <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
+                {N.t('pieces_reprendre', { etape: N.levelName(levelIdx) })}
               </div>
-              {cout == null ? (
-                <div className="text-xs md:text-sm text-muted-foreground">{N.t('pieces_epuise')}</div>
-              ) : peutPayer ? (
-                <>
-                  <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
-                    {N.t('pieces_reprendre', { etape: N.levelName(levelIdx) })}
+              <button onClick={() => handleContinue()} disabled={!peutPayer || achat === 'envoi'}
+                aria-disabled={!peutPayer}
+                className={peutPayer
+                  ? 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-amber-400 hover:bg-amber-300 disabled:opacity-60 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
+                  : 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-amber-300/60 bg-amber-400/10 border-2 border-dashed border-amber-400/40 cursor-not-allowed flex items-center justify-center gap-2'}>
+                {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
+              </button>
+              {!peutPayer && (
+                <div className="flex flex-col items-center gap-0.5 text-center">
+                  <div className="text-xs md:text-sm font-bold text-amber-300/90">
+                    {pieces.reserve ? N.t('pieces_manque', { n: manque }) : N.t('pieces_nom')}
                   </div>
-                  <button onClick={() => handleContinue()} disabled={achat === 'envoi'}
-                    className="w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-amber-400 hover:bg-amber-300 disabled:opacity-60 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2">
-                    {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
-                  </button>
-                </>
-              ) : (
-                <div className="text-xs md:text-sm text-muted-foreground">{N.t('pieces_manque', { c: cout, n: pieces.solde })}</div>
+                  <div className="text-[11px] md:text-xs text-muted-foreground">{N.t('pieces_gagner')}</div>
+                </div>
               )}
               {achat === 'reseau' && <div className="text-xs text-destructive">{N.t('pieces_reseau')}</div>}
-              {achat === 'solde' && <div className="text-xs text-destructive">{N.t('pieces_manque', { c: cout ?? 0, n: pieces.solde })}</div>}
+              {achat === 'solde' && <div className="text-xs text-destructive">{N.t('pieces_manque', { n: manque })}</div>}
               {achat === 'nom' && <div className="text-xs text-destructive">{N.t('pieces_nom')}</div>}
             </div>
           )}
+          {enCarriere && pieces && pieces.reserve && cout == null && (
+            <div className="text-xs md:text-sm text-muted-foreground mt-2">{N.t('pieces_epuise')}</div>
+          )}
 
           <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
-            {N.t(peutPayer ? 'pieces_zero' : 'race_again')}
+            {N.t(cout != null ? 'pieces_zero' : 'race_again')}
           </div>
 
           {/* Actions */}
