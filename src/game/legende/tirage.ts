@@ -1,10 +1,11 @@
 // LE TIRAGE DES LIEUX — une fois par carriere Legende.
 //
-// Le national se court en Espagne, au Maroc ou au Nigeria ; le mondial a
-// Paris, New York ou Londres. Le de roule au DEBUT de la carriere, pas a
-// l'entree de l'etape : la carte doit pouvoir annoncer ou l'on va avant d'y
-// aller, et une etape recommencee garde son lieu — sinon perdre a Barcelone
-// enverrait courir a Abuja, et l'echec se lirait comme un voyage.
+// Le regional se court a Kyoto, Kingston ou Izmir ; le national en Espagne,
+// au Maroc ou au Nigeria ; le mondial a Paris, New York ou Londres. Le de
+// roule au DEBUT de la carriere, pas a l'entree de l'etape : la carte doit
+// pouvoir annoncer ou l'on va avant d'y aller, et une etape recommencee garde
+// son lieu — sinon perdre a Barcelone enverrait courir a Abuja, et l'echec se
+// lirait comme un voyage.
 //
 // `alea` est injectable pour le harnais ; le jeu passe Math.random.
 

@@ -20,10 +20,15 @@
 // relit donc toujours par la clef (`indexDuLieu`), jamais en dur.
 
 import { ETAPES, type Lieu } from './etapes';
+// LES CORPS DES BOSS, faits dans Tripo et rigges par vedette_tripo.py. Sous
+// src/assets/legende/ et non dans public/ : hors du canal de test, le greffon
+// HORS_PRODUCTION de vite.config.ts ne resout jamais ces imports.
+import kouassiGlb from '@/assets/legende/boss/kouassi.glb?url';
 
 /**
- * LA DIFFICULTE, ETAPE PAR ETAPE, au 100 m — validee par l'auteur le 06/10,
- * le premier boss a 10,00 s.
+ * LA DIFFICULTE, ETAPE PAR ETAPE, au 100 m. L'auteur, le 06/10 : « baisse le
+ * temps du premier niveau a 8,99, garde le temps du dernier niveau et retranche
+ * un dixieme jusqu'au dernier » — 8,99, 8,89, 8,79, 8,69, 8,59, puis 8,42.
  *
  * La Legende s'ouvre a qui a gagne 99 carrieres, donc battu 99 fois la finale
  * ZEZE (8,75 a 9,00 s). L'echelle classique (RACES['100'].ranges) lui serait
@@ -36,12 +41,12 @@ import { ETAPES, type Lieu } from './etapes';
  * vedettes. Le boss est toujours le plus rapide du plateau.
  */
 export const DIFFICULTE: { plateau: [number, number]; boss: number }[] = [
-  { plateau: [10.25, 10.90], boss: 10.00 },   // la plage : « on debute a 10"00 » (l'auteur, 06/10)
-  { plateau: [9.85, 10.30], boss: 9.70 },     // Kyoto
-  { plateau: [9.45, 9.80], boss: 9.32 },      // le national
-  { plateau: [9.10, 9.40], boss: 9.00 },      // le mondial
-  { plateau: [8.80, 9.05], boss: 8.70 },      // Karman — Hermes
-  { plateau: [8.50, 8.75], boss: 8.42 },      // l'apotheose
+  { plateau: [9.11, 9.39], boss: 8.99 },      // la plage
+  { plateau: [9.01, 9.29], boss: 8.89 },      // le regional
+  { plateau: [8.91, 9.19], boss: 8.79 },      // le national
+  { plateau: [8.81, 9.09], boss: 8.69 },      // le mondial
+  { plateau: [8.71, 8.99], boss: 8.59 },      // Karman — Hermes
+  { plateau: [8.50, 8.75], boss: 8.42 },      // l'apotheose, gardee
 ];
 
 /** Le remplissage des gradins (fouleDe, sprinter-app.js), de la plage a l'apotheose. */
@@ -57,11 +62,26 @@ const CARNATIONS: Record<string, string[]> = {
   'legende-es': ['clair', 'sable', 'olive', 'miel', 'noisette'],
   'legende-ma': ['olive', 'miel', 'ambre', 'bronze', 'sable', 'noisette'],
   'legende-ng': ['ebene', 'cacao', 'acajou'],
+  'legende-jm': ['ebene', 'cacao', 'acajou', 'noisette'],
+  'legende-tr': ['clair', 'sable', 'olive', 'miel', 'ambre'],
 };
 const POOL_DU_LIEU: Record<string, string> = {
-  menole: 'legende-ci', kyoto: 'legende-jp', barcelone: 'legende-es',
-  casablanca: 'legende-ma', abuja: 'legende-ng',
+  menole: 'legende-ci', kyoto: 'legende-jp', kingston: 'legende-jm', izmir: 'legende-tr',
+  barcelone: 'legende-es', casablanca: 'legende-ma', abuja: 'legende-ng',
 };
+
+/**
+ * Le chemin d'un maillage tel que vedette-3d.ts l'attend : relatif a la base
+ * du site, qu'il remet lui-meme devant (url(), vedette-3d.ts). Vite rend une
+ * adresse deja prefixee (/test/assets/... une fois construit) : on retire ce
+ * prefixe, sans quoi il serait double.
+ */
+function cheminDuMaillage(adresse: string): string | null {
+  if (!adresse) return null;
+  const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+  const a = adresse.startsWith(base) ? adresse.slice(base.length) : adresse;
+  return a.replace(/^\//, '');
+}
 
 /**
  * LES BOSS, EN TRONCS — en attendant leurs maillages.
@@ -76,13 +96,25 @@ const POOL_DU_LIEU: Record<string, string> = {
 function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Record<string, any> {
   const or: [number, number, number] = [222, 178, 70];
   return {
-    // Pieds nus : la chaussure prend la couleur de la peau.
-    'Kouassi': look({ build: 'm', skin: 'cacao', jersey: [250, 206, 46], shorts: [34, 84, 176],
-      shoe: SKIN.cacao, hair: 'shaved', h: 1.60, gait: 'sharp',
-      chaine: [238, 230, 210], morph: { sh: 0.94, arm: 0.94, leg: 0.98 } }),
+    // LE MAILLOT DE COTE D'IVOIRE (l'auteur, 06/10) : orange, col et manches
+    // verts — sans ecusson ni equipementier, ce sont des marques. Pieds nus :
+    // la chaussure prend la couleur de la peau. SON CORPS EST UN MAILLAGE
+    // (kouassi.glb) ; `sh` et `hip` sont ceux que vedette_tripo.py lit sur lui
+    // (0,73 / 1,14), pour que les mains et les pieds du jeu tombent sur les
+    // siens. Les tubes restent sa doublure le temps qu'il charge.
+    'Kouassi': look({ build: 'm', skin: [122, 65, 47], jersey: [244, 130, 34], shorts: [244, 244, 240],
+      shoe: [122, 65, 47], hair: 'shaved', h: 1.60, gait: 'sharp',
+      chaine: [238, 230, 210], morph: { sh: 0.73, hip: 1.14 },
+      maillage: cheminDuMaillage(kouassiGlb), facettes: 48, lisse: true }),
     'Sora Kanzaki': look({ build: 'm', skin: 'clair', jersey: [246, 244, 240], shorts: [222, 58, 34],
       shoe: [230, 66, 38], hair: 'crop', hairCol: [24, 20, 22], h: 1.76, gait: 'sharp',
       poignet: { col: [222, 58, 34], cote: 1 } }),
+    'Damion Clarke': look({ build: 'm', skin: 'cacao', jersey: [0, 140, 70], shorts: [22, 22, 26],
+      shoe: [250, 204, 40], hair: 'fade', h: 1.84, gait: 'whip',
+      poignet: { col: [250, 204, 40], cote: 1 }, morph: { sh: 1.06, leg: 1.06 } }),
+    'Kerem Aydın': look({ build: 'm', skin: 'olive', jersey: [214, 30, 40], shorts: [244, 244, 240],
+      shoe: [244, 244, 240], hair: 'crop', hairCol: [30, 22, 18], h: 1.85, gait: 'power',
+      barbe: [30, 22, 18], morph: { sh: 1.06, arm: 1.04 } }),
     'Marc Puig': look({ build: 'm', skin: 'olive', jersey: [40, 168, 196], shorts: [244, 150, 40],
       shoe: [244, 196, 40], hair: 'fade', hairCol: [44, 30, 22], h: 1.82, gait: 'whip',
       lunettes: [30, 30, 36] }),

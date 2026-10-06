@@ -14,6 +14,11 @@ import {
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
 } from '@/game/legende/legende';
 import { mot, chrono, dans } from '@/game/legende/mots';
+// LES PORTRAITS DES BOSS QUI ONT DEJA LEUR CORPS (vedette_tripo.py, rendus de
+// leur maillage). Les autres gardent l'affiche sans visage, en attendant.
+import kouassiBuste from '@/assets/legende/boss/kouassi-buste.webp?url';
+
+const PORTRAITS: Record<string, string> = { 'Kouassi': kouassiBuste };
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
@@ -210,8 +215,12 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
             </span>
           </div>
           <span className="font-black font-display text-3xl italic" style={{ color: teinte }}>{mot('contre')}</span>
-          <div className="rounded-2xl border-2 py-4 px-2 flex flex-col items-center"
+          <div className="rounded-2xl border-2 pb-4 pt-2 px-2 flex flex-col items-center overflow-hidden"
                style={{ borderColor: `${teinte}CC`, background: `linear-gradient(160deg, ${teinte}33, #0E0A1A)` }}>
+            {PORTRAITS[lieu.boss] && (
+              <img src={PORTRAITS[lieu.boss]} alt="" className="w-24 h-24 object-cover object-top rounded-xl mb-1"
+                   style={{ background: `radial-gradient(circle at 50% 35%, ${teinte}55, #0A0C18)` }} />
+            )}
             <span className="text-[10px] font-bold tracking-[0.18em]" style={{ color: teinte }}>
               « {dans(lieu.surnom).toUpperCase()} »
             </span>
@@ -274,8 +283,13 @@ export function PresentationBoss() {
                     transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                     className="absolute left-0 right-0 bottom-[18%] z-20 pointer-events-none
                                px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
-          <div className="max-w-md rounded-2xl border-l-4 px-4 py-3 shadow-2xl"
+          <div className="max-w-md rounded-2xl border-l-4 px-4 py-3 shadow-2xl flex gap-3 items-start"
                style={{ borderColor: teinte, background: 'linear-gradient(100deg, rgba(10,8,22,0.92), rgba(10,8,22,0.55))' }}>
+            {PORTRAITS[lieu.boss] && (
+              <img src={PORTRAITS[lieu.boss]} alt="" className="w-16 h-16 shrink-0 object-cover object-top rounded-xl"
+                   style={{ background: `radial-gradient(circle at 50% 35%, ${teinte}55, #0A0C18)` }} />
+            )}
+            <div className="min-w-0">
             <div className="text-[10px] font-bold tracking-[0.24em] text-white/70">
               {drapeau && <span className="mr-1.5">{drapeau}</span>}
               {lieu.pays.toUpperCase()}
@@ -288,6 +302,7 @@ export function PresentationBoss() {
             {traduction && (
               <div className="mt-1 text-[12px] leading-snug italic text-white">« {traduction} »</div>
             )}
+            </div>
           </div>
         </motion.div>
       )}

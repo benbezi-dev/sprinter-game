@@ -7,8 +7,8 @@
 // ombre chinoise, a la maniere de Street Fighter (decision de l'auteur,
 // 6 octobre 2026).
 //
-// Le national et le mondial se TIRENT AU SORT, une fois par carriere : trois
-// pays, puis trois villes (game/legende/tirage.ts). Une etape tiree garde son
+// Le regional, le national et le mondial se TIRENT AU SORT, une fois par
+// carriere : trois lieux chacun (game/legende/tirage.ts). Une etape tiree garde son
 // lieu tant que la carriere dure — recommencer une course ne relance pas le
 // de.
 //
@@ -98,6 +98,46 @@ const KYOTO: Lieu = {
   replique: { vo: '狐は振り返らない', fr: 'Le renard ne se retourne jamais.', en: 'The fox never looks back.' },
   entree: 'reverence',
   plateau: ['Haruto Sato', 'Yuto Suzuki', 'Sota Takahashi', 'Riku Tanaka', 'Aoi Watanabe', 'Kaito Ito'],
+};
+
+// LE REGIONAL SE TIRE AUSSI (l'auteur, 06/10 : « dans le niveau deux ajoute
+// aussi en destination la Jamaique, Kingston, et un pays de l'Asie mineure »).
+// Kyoto, Kingston ou Izmir — piste classique, et pour le decor les monuments
+// de chacune, comme aux autres etapes.
+//
+// L'ASIE MINEURE, C'EST L'ANATOLIE, et Izmir y est tout entiere, Ephese a une
+// heure de route. Istanbul aurait parle plus vite au joueur, mais ses grands
+// monuments — Sainte-Sophie, la Mosquee bleue — sont sur la rive europeenne
+// du Bosphore : ce n'est plus l'Asie mineure.
+const KINGSTON: Lieu = {
+  cle: 'kingston', nom: 'Kingston', pays: 'Jamaïque', drapeau: 'jm',
+  geo: [17.97, -76.79],
+  theme: 'day',
+  boss: 'Damion Clarke', surnom: ['Tallawah', 'Tallawah'],
+  // « Tallawah » : petit mais coriace, en patois jamaicain. Il arrive en
+  // rebondissant, quelques pas de dancehall, les epaules qui roulent, puis
+  // montre la ligne. Rien de la pose d'un recordman du monde jamaicain : elle
+  // est a lui. Sa replique est la devise que tout le pays connait. A FAIRE
+  // RELIRE.
+  bio: ['23 ans, de Kingston. Il a gagné Champs — le championnat des écoles, au National Stadium — trois années de suite.',
+        '23, from Kingston. He won Champs — the schools’ championship at the National Stadium — three years running.'],
+  replique: { vo: 'Wi likkle but wi tallawah!', fr: 'Petits, mais costauds !', en: 'We’re small, but mighty!' },
+  entree: 'dancehall',
+  plateau: ['Kemar Brown', 'Javon Henry', 'Romario Grant', 'Tajay Lewis', 'Kimone Bailey', 'Odane Miller'],
+};
+const IZMIR: Lieu = {
+  cle: 'izmir', nom: 'İzmir', pays: 'Turquie — Asie mineure', drapeau: 'tr',
+  geo: [38.42, 27.14],
+  theme: 'day',
+  boss: 'Kerem Aydın', surnom: ['Zeybek', 'Zeybek'],
+  // Le zeybek, la danse de la mer Egee et de ses guerriers : les bras ouverts
+  // comme un aigle, des pas lents, une claque sur la cuisse, un genou a terre,
+  // et l'on se releve. Une danse populaire, pas un rite. A FAIRE RELIRE.
+  bio: ['26 ans, d’İzmir. Il court sur le Kordon au lever du soleil, face à la mer Égée.',
+        '26, from İzmir. He runs along the Kordon at sunrise, facing the Aegean Sea.'],
+  replique: { vo: 'Hadi bakalım!', fr: 'Allez, on y va !', en: 'Come on, let’s go!' },
+  entree: 'zeybek',
+  plateau: ['Emre Yılmaz', 'Burak Demir', 'Mert Kaya', 'Can Öztürk', 'Elif Şahin', 'Oğuz Çelik'],
 };
 
 // Le national garde la piste rouge du jeu de base, au bit pres : c'est la
@@ -229,7 +269,7 @@ const APOTHEOSE: Lieu = {
 
 export const ETAPES: Etape[] = [
   { rang: 0, intitule: ['L’innocence', 'Innocence'], transport: 'velo', lieux: [MENOLE] },
-  { rang: 1, intitule: ['Régional', 'Regional'], transport: 'voiture', lieux: [KYOTO] },
+  { rang: 1, intitule: ['Régional', 'Regional'], transport: 'voiture', lieux: [KYOTO, KINGSTON, IZMIR] },
   { rang: 2, intitule: ['National', 'National'], transport: 'car', lieux: [BARCELONE, CASABLANCA, ABUJA] },
   { rang: 3, intitule: ['Mondial', 'World'], transport: 'avion', lieux: [PARIS, NEW_YORK, LONDRES] },
   { rang: 4, intitule: ['0.Games', '0.Games'], transport: 'fusee', lieux: [KARMAN] },

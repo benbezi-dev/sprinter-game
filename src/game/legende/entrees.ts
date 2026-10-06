@@ -209,6 +209,66 @@ const CHOREGRAPHIES: Record<string, Choregraphie> = {
     },
   },
 
+  // DAMION CLARKE « TALLAWAH » — Kingston. Il arrive en rebondissant, puis
+  // avance en pas de dancehall : les genoux qui plient sur le temps, les
+  // epaules qui roulent, les bras qui balancent devant lui. Deux tapes sur la
+  // poitrine, et il montre la ligne.
+  dancehall: {
+    duree: 6.8, bulle: [4.4, 6.6],
+    jouer(r, t, dt) {
+      let wm = 0;
+      if (t < 2.4) wm = marcher(r, t, dt, 0, 2.4, -6.2, -2.0);
+      else {
+        const u = doux((t - 2.4) / 2.0);
+        r.d = mel(-2.0, 0, u);
+        r.demi = mel(ecartDuChemin(-6.2, -2.0), 0, u);
+        r.cap = 0;
+      }
+      const pas = (s: number): Posture => {
+        const w = s * Math.PI * 2 * 2.0;
+        const rebond = Math.abs(Math.sin(w));
+        const tape = Math.max(0, Math.sin(w / 2));
+        return p({
+          jambes: [[0.20 + 0.18 * rebond + 0.15 * tape, -0.20 - 0.10 * rebond, 0.05],
+                   [0.15 + 0.18 * rebond, -0.25 - 0.10 * rebond - 0.15 * (1 - tape), 0.05]],
+          bras: [[0.45 * Math.sin(w), 0.45 * Math.sin(w) + 1.50], [-0.45 * Math.sin(w), -0.45 * Math.sin(w) + 1.50]],
+          roule: [0.15, 0.35], buste: -0.10 + 0.06 * Math.sin(w), leve: -0.06 - 0.04 * rebond,
+          tete: 0.12 + 0.05 * Math.sin(w),
+        });
+      };
+      const poitrine = (s: number): Posture => p({
+        brasD: [0.50, 2.20 + 0.20 * Math.abs(Math.sin((s - 4.6) * Math.PI * 2 * 2.2))], roule: [0.25, 0.95], tete: 0.10,
+      });
+      const cles: Cle[] = [
+        { t: 2.4, p: pas }, { t: 4.4, p: pas }, { t: 4.7, p: poitrine }, { t: 5.5, p: poitrine },
+        { t: 5.9, p: POINTE }, { t: 6.4, p: POINTE }, { t: 6.8, p: DEBOUT },
+      ];
+      poser(r, entre(cles, t), t < 2.2 ? 0 : doux((t - 2.2) / 0.3), wm);
+    },
+  },
+
+  // KEREM AYDIN « ZEYBEK » — Izmir. La danse de la mer Egee : les bras
+  // ouverts comme un aigle, un pas lent, une claque sur la cuisse, un genou a
+  // terre — puis il se releve, et montre la ligne.
+  zeybek: {
+    duree: 7.4, bulle: [5.1, 7.2],
+    jouer(r, t, dt) {
+      const wm = marcher(r, t, dt, 0, 2.8, -6.2, 0);
+      const aigle = p({ bras: [[1.55, 1.90], [1.55, 1.90]], roule: [-0.95, -0.35], tete: 0.15, buste: 0.04 });
+      const leve = p({ jambes: [[0.60, 0.10, 0], [-0.04, -0.04, 0]], bras: [[1.55, 1.90], [1.55, 1.90]],
+                       roule: [-0.95, -0.35], tete: 0.18, buste: 0.06 });
+      const claque = p({ brasG: [1.55, 1.90], brasD: [0.25, 0.35], roule: [-0.60, -0.20], tete: 0.05 });
+      const genou = p({ jambes: [[1.45, 0.0, 0], [-0.05, -1.55, 0.10]], bras: [[1.55, 1.90], [1.55, 1.90]],
+                        roule: [-0.95, -0.35], buste: 0.05, leve: -0.42, tete: 0.20 });
+      const cles: Cle[] = [
+        { t: 2.8, p: DEBOUT }, { t: 3.2, p: DEBOUT }, { t: 3.9, p: aigle }, { t: 4.3, p: leve },
+        { t: 4.6, p: aigle }, { t: 4.75, p: claque }, { t: 5.0, p: aigle }, { t: 5.6, p: genou },
+        { t: 6.1, p: genou }, { t: 6.6, p: aigle }, { t: 6.9, p: POINTE }, { t: 7.3, p: DEBOUT },
+      ];
+      poser(r, entre(cles, t), t < 2.6 ? 0 : doux((t - 2.6) / 0.3), wm);
+    },
+  },
+
   // MARC PUIG « TRENCADIS » — Barcelone. Il arrive d'un bon pas et leve la main
   // ouverte tout la-haut : le geste de l'enxaneta, l'enfant qui grimpe au
   // sommet du castell et le couronne (« fer l'aleta »). Il la tient, l'agite

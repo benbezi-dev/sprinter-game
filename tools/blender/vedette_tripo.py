@@ -6,6 +6,9 @@
 #       [--glb public/vedettes/meba.glb] [--portraits public/vedettes] [--blend F.blend]
 #
 #   Meba : --source meba-tripo-lowpoly.glb --nom meba --taille 1.78 --sh 1.20 --hip 1.22
+#   Boss de la Legende (06/10) : --nom kouassi --taille 1.60 [...] --glb
+#           src/assets/legende/boss/kouassi.glb --portraits src/assets/legende/boss
+#           (hors de public/ : la Legende ne vit que sur le canal de test)
 #   Aurel : --source aurel-tripo-lowpoly.glb --nom manga --taille 1.90 --sh 1.14 --hip 1.0
 #           --glb public/vedettes/manga-corps.glb (manga-* : hors de la production)
 #
@@ -478,6 +481,42 @@ def squelette(J, D, nom):
     return rig
 
 
+def poids_par_procuration(h, rig, voxel=0.010):
+    """LA CHALEUR SUR UNE DOUBLURE ETANCHE (06/10, Kouassi, premier boss de la
+    carriere Legende). Son corps Tripo est fait de 34 morceaux ouverts — les
+    manches, le short, les membres, chacun a part — et la diffusion de chaleur
+    de Blender n'y trouve aucune solution : pas un sommet ne recevait d'os.
+    On la fait donc sur le meme corps remaille en voxels, d'un seul tenant et
+    ferme, puis chaque sommet du vrai maillage reprend les poids de la face la
+    plus proche de la doublure. Les doigts serres se soudent dans la doublure :
+    leurs poids sont plus grossiers, ce que la course ne montre pas."""
+    p = h.copy(); p.data = h.data.copy()
+    bpy.context.scene.collection.objects.link(p)
+    p.parent = None; p.matrix_world = h.matrix_world.copy()
+    p.vertex_groups.clear()
+    for m in list(p.modifiers):
+        p.modifiers.remove(m)
+    bpy.ops.object.select_all(action='DESELECT')
+    p.select_set(True); bpy.context.view_layer.objects.active = p
+    r = p.modifiers.new('remaille', 'REMESH'); r.mode = 'VOXEL'; r.voxel_size = voxel
+    bpy.ops.object.modifier_apply(modifier=r.name)
+    bpy.ops.object.select_all(action='DESELECT')
+    p.select_set(True); rig.select_set(True); bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+    h.vertex_groups.clear()
+    for g in p.vertex_groups:
+        h.vertex_groups.new(name=g.name)
+    bpy.ops.object.select_all(action='DESELECT')
+    h.select_set(True); bpy.context.view_layer.objects.active = h
+    t = h.modifiers.new('report', 'DATA_TRANSFER'); t.object = p
+    t.use_vert_data = True; t.data_types_verts = {'VGROUP_WEIGHTS'}; t.vert_mapping = 'POLYINTERP_NEAREST'
+    t.layers_vgroup_select_src = 'ALL'; t.layers_vgroup_select_dst = 'NAME'
+    bpy.ops.object.modifier_move_to_index(modifier=t.name, index=0)
+    bpy.ops.object.modifier_apply(modifier=t.name)
+    print('POIDS PAR PROCURATION : doublure de %d faces (voxel %.3f m)' % (len(p.data.polygons), voxel))
+    bpy.data.objects.remove(p, do_unlink=True)
+
+
 def ponderer(h, rig):
     """Les poids automatiques de Blender ; un sommet qu'ils laissent sans os
     prend celui de son voisin pondere le plus proche."""
@@ -489,6 +528,13 @@ def ponderer(h, rig):
     os_ok = {b.name for b in rig.data.bones if b.use_deform}
     pese = lambda v: sum(g.weight for g in v.groups if noms.get(g.group) in os_ok)
     seuls = [v for v in h.data.vertices if pese(v) < 1e-4]
+    # La chaleur a echoue sur un corps en morceaux : on la refait sur une
+    # doublure etanche (voir poids_par_procuration).
+    if len(seuls) > 0.10 * len(h.data.vertices):
+        print('POIDS : la chaleur laisse %d sommets sur %d sans os' % (len(seuls), len(h.data.vertices)))
+        poids_par_procuration(h, rig)
+        noms = {g.index: g.name for g in h.vertex_groups}
+        seuls = [v for v in h.data.vertices if pese(v) < 1e-4]
     if seuls:
         from mathutils.kdtree import KDTree
         bons = [v for v in h.data.vertices if pese(v) >= 1e-4]
@@ -641,7 +687,8 @@ def masque_peau(px):
 def teinter_peau(img, cible, k=1.0, cote=None):
     """Une copie de `img` ou la peau a pour moyenne `cible` (sRGB 0-255),
     multipliee par k en lineaire. Les ombres et les reliefs peints restent :
-    seule la moyenne se deplace, canal par canal."""
+    seule la moyenne se deplace, canal par canal. `cible` nulle (les boss de
+    la carriere Legende, 06/10) : la peau garde sa teinte, et seul k joue."""
     import numpy as np
     im = img.copy()
     if cote and im.size[0] > cote:
@@ -650,13 +697,13 @@ def teinter_peau(img, cible, k=1.0, cote=None):
     m = masque_peau(px[:, :3])
     lin = srgb_lin(px[:, :3])
     moy = (lin * m[:, None]).sum(0) / max(float(m.sum()), 1.0)
-    voulu = srgb_lin(np.array(cible, dtype=np.float32) / 255) * k
+    voulu = (srgb_lin(np.array(cible, dtype=np.float32) / 255) if cible is not None else moy) * k
     f = voulu / np.maximum(moy, 1e-5)
     px[:, :3] = lin_srgb(lin * (1 + m[:, None] * (f - 1)))
     im.pixels[:] = px.ravel()
     im.pack()
     print('PEAU : moyenne %s -> %s x %.2f, %.0f %% de la texture' % (
-        tuple(int(round(c)) for c in lin_srgb(moy) * 255), cible, k, 100 * float(m.mean())))
+        tuple(int(round(c)) for c in lin_srgb(moy) * 255), cible or 'la sienne', k, 100 * float(m.mean())))
     return im
 
 
@@ -892,7 +939,9 @@ def tout(A):
     sternum_au_buste(h, rig)
     tex = texture(h)
     source = tex.image
-    peau = PEAU[A['nom']]
+    # Les boss de la Legende n'ont pas de teinte imposee : leur peau est celle
+    # que Tripo a peinte d'apres leur image, eclaircie pour le jeu seulement.
+    peau = PEAU.get(A['nom'])
     tex.image = modeler_blanc(teinter_peau(source, peau, cote=None))
     if A['glb']:
         jeu = dilater(h, modeler_blanc(teinter_peau(source, peau, k=ECLAIRCIR_JEU)), 1024)
