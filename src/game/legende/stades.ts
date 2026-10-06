@@ -37,6 +37,7 @@ import jaydenGlb from '@/assets/legende/boss/jayden.glb?url';
 import oliverGlb from '@/assets/legende/boss/oliver.glb?url';
 import hermesGlb from '@/assets/legende/boss/hermes.glb?url';
 import intiGlb from '@/assets/legende/boss/inti.glb?url';
+import chidiGlb from '@/assets/legende/boss/chidi.glb?url';
 
 /**
  * LA DIFFICULTE, ETAPE PAR ETAPE, au 100 m. L'auteur, le 06/10 : « baisse le
@@ -146,8 +147,8 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
       shoe: [244, 240, 232], hair: 'crop', hairCol: [24, 18, 16], h: 1.92, gait: 'base',
       poignet: { col: [120, 72, 40], cote: -1 }, ...corps(yassineGlb, 0.95, 0.95) }),
     'Chidi Okafor': look({ build: 'm', skin: 'ebene', jersey: [22, 150, 82], shorts: [30, 140, 80],
-      shoe: [22, 150, 82], hair: 'flattop', h: 1.86, gait: 'power',
-      morph: { sh: 1.14, hip: 1.02, arm: 1.16, leg: 1.10 } }),
+      shoe: [74, 46, 32], hair: 'flattop', h: 1.86, gait: 'power',
+      ...corps(chidiGlb, 1.12, 1.18) }),
     'Théo Garnier': look({ build: 'm', skin: 'clair', jersey: [26, 36, 92], shorts: or,
       shoe: or, hair: 'crop', hairCol: [22, 18, 16], h: 1.84, gait: 'whip',
       barbe: [30, 22, 18], ...corps(theoGlb, 1.19, 1.08) }),
