@@ -54,6 +54,7 @@
 // L'envoi est le travail de push.js, le declenchement celui du cron dans
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
+import { crediter as crediterPieces, BAREME } from './pieces.js';
 import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur,
          CLES_DU_JEU, epreuve as fiche } from './epreuves.js';
 import { decalageDe } from './journal.js';
@@ -1098,7 +1099,7 @@ export async function creerObjectif(db, joueur, maintenant) {
  * l'objectif reste un record.
  */
 export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant,
-                                           epreuve) {
+                                           epreuve, { test = false } = {}) {
   await ensureObjectifTables(db);
 
   const t = (maintenant || new Date()).getTime();
@@ -1181,11 +1182,21 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
                    reussi && !dejaValide, ligne);
   }
 
+  // Les pieces de l'objectif : une fois par objectif reussi (argent ou or),
+  // quelle que soit la course qui le valide. La reference est la cle de
+  // l'objectif lui-meme — c'est le journal des pieces qui garantit l'unicite,
+  // `dejaValide` se lit avant d'ecrire et deux requetes le verraient faux.
+  const pieces = reussi
+    ? await crediterPieces(db, nameKey, 'objectif',
+        `${objectif.jour}:${objectif.creneau}:${objectif.race_key}`, BAREME.objectif, { test })
+    : 0;
+
   return {
     reussi, record, essai,
     palier,
     seuils,
     points: gain,
+    pieces,
     pointsTotal: compte.total,
     detail: compte.detail,
     multiplicateur: compte.multiplicateur,

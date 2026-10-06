@@ -22,6 +22,7 @@
 --------------------------------------------------------------------------- */
 
 import { appliquerDuel } from './duels.js';
+import { crediter as crediterPieces, BAREME } from './pieces.js';
 import { EPREUVES } from './epreuves.js';
 
 /**
@@ -1095,7 +1096,29 @@ export class SalleDirecte {
         });
       }
       this.annoncerPoints(tous, bilans, course);
+      if (rencontres.length) await this.crediterVainqueur(base, tous, course);
     } catch (e) { /* le classement se passera de cette course */ }
+  }
+
+  /**
+   * LA PIECE DU VAINQUEUR. Une course en direct est UN duel, a deux comme a
+   * huit : seul le premier sur la ligne touche sa piece, pas chacun de ceux
+   * qu'il a devances paire par paire. Une egalite en tete ne paie personne,
+   * comme un duel nul. La reference est la course (code + numero) : une
+   * revanche est une course neuve, une ecriture rejouee ne l'est pas.
+   *
+   * La salle ne connait pas l'appareil des coureurs : la piece va au nom,
+   * a condition qu'il soit reserve (voir pieces.js).
+   */
+  async crediterVainqueur(base, tous, course) {
+    const arrives = tous.filter(x => x && !estAnonyme(x.nom)
+      && Number.isFinite(x.fin) && x.fin > 0 && x.fin < ABANDON_MS);
+    if (!arrives.length) return;
+    const meilleur = Math.min(...arrives.map(x => x.fin));
+    const premiers = tous.filter(x => x && Number.isFinite(x.fin) && x.fin <= meilleur);
+    if (premiers.length !== 1 || estAnonyme(premiers[0].nom)) return;
+    await crediterPieces(base, premiers[0].nom, 'duel',
+      `LIVE-${this.code}-${course}`, BAREME.duel, { test: !!this.test });
   }
 
   /**

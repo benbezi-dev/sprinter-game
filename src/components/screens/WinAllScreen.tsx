@@ -5,7 +5,7 @@ import { MONTEE, SURGISSEMENT, retarde } from '@/lib/mouvement';
 import { Globe2 } from 'lucide-react';
 import {
   getSavedName, saveName, submitScore, fetchLeaderboardRaw,
-  rankByRaceTime, rankOf, TOP_N,
+  rankByRaceTime, rankOf, TOP_N, NO_RUN_MS,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
 
@@ -44,6 +44,13 @@ export function WinAllScreen() {
     return Array.isArray(t) && t.length ? t.slice() : null;
   });
 
+  // UNE CARRIERE REPRISE PAR UN CONTINUE n'entre pas au classement des
+  // parcours : son meilleur chrono d'une course part au TOP 500 comme les
+  // autres (il a ete couru d'une traite), mais le cumul part en NO_RUN_MS,
+  // que le classement des parcours ignore. Lu au montage, avant qu'une
+  // carriere neuve ne remette le compte a zero.
+  const [reprise] = useState(() => (SprinterApp.G.runContinues || 0) > 0);
+
   // Un seul envoi par parcours termine, meme si le composant se re-rend.
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +77,8 @@ export function WinAllScreen() {
     setStatus('sending');
     try {
       const bestSplit = bestSplitMs;
-      const res = await submitScore(raceKey, finalName, runTime * 1000, bestSplit, traceDuMeilleur);
+      const res = await submitScore(raceKey, finalName, reprise ? NO_RUN_MS : runTime * 1000,
+                                    bestSplit, traceDuMeilleur);
       // Le rang se joue sur le meilleur chrono d'une course. On le recalcule
       // depuis la liste renvoyee plutot que de dependre du champ du serveur.
       const mine = res.best_split_ms ?? bestSplit;
@@ -101,6 +109,9 @@ export function WinAllScreen() {
             <div className="text-[10px] sm:text-xs md:text-base font-medium text-foreground/80 tracking-widest uppercase">
               {N.t('six_in')}<span className="text-white font-bold ml-1 md:ml-2">{runTime.toFixed(2)} s</span>
             </div>
+            {reprise && (
+              <div className="text-[10px] sm:text-xs text-amber-300/90 tracking-wide">{N.t('pieces_hors_rang')}</div>
+            )}
           </div>
           
           {/* Splits Card */}

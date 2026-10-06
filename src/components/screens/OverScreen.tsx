@@ -1,13 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
+import { Coins } from 'lucide-react';
+import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue } from '@/game/pieces';
 
 export function OverScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
   const player = useGameStore(s => s.player);
   const ranking = useGameStore(s => s.ranking);
   const { N } = SprinterApp;
+
+  // LE CONTINUE. Seulement en carriere : un one shot n'a pas d'etape ou
+  // reprendre. Le prix vient du serveur et monte a chaque Continue de la
+  // meme carriere ; quand il n'y en a plus, il ne reste que « repartir de
+  // zero », comme avant.
+  // Sans identifiant de carriere (une course qui n'est pas partie de
+  // startRun), le serveur n'a rien a quoi rattacher l'achat : pas d'offre.
+  const enCarriere = SprinterApp.G.mode === 'campaign' && !!SprinterApp.G.runId;
+  const pieces = usePieces();
+  const [achat, setAchat] = useState<'libre' | 'envoi' | 'reseau' | 'solde' | 'epuise' | 'nom'>('libre');
+  useEffect(() => { if (enCarriere) rafraichirPieces(); }, [enCarriere]);
+  const cout = enCarriere ? coutDuContinue(pieces, SprinterApp.G.runContinues || 0) : null;
+  const peutPayer = cout != null && pieces != null && pieces.solde >= cout;
+
+  const handleContinue = async (relance = false) => {
+    if (cout == null || achat === 'envoi') return;
+    setAchat('envoi');
+    const r = await acheterContinue(SprinterApp.G.runId, SprinterApp.G.runContinues || 0);
+    if (r.ok) { SprinterApp.continuerCarriere(); return; }
+    // Le serveur compte autrement (un Continue paye dont la reponse s'est
+    // perdue) : on se recale sur son compte et on redemande une fois.
+    if (r.raison === 'desaccord' && typeof r.essai === 'number' && !relance) {
+      SprinterApp.G.runContinues = r.essai;
+      setAchat('libre');
+      return handleContinue(true);
+    }
+    setAchat(r.raison === 'desaccord' ? 'reseau' : r.raison);
+    rafraichirPieces();
+  };
 
   const startRecap = () => {
     if (!player || player.reaction === null) return N.t('no_start');
@@ -69,8 +100,38 @@ export function OverScreen() {
             </div>
           </div>
 
+          {/* Le Continue : reprendre l'etape perdue contre des pieces. */}
+          {enCarriere && pieces && !pieces.reserve && (
+            <div className="text-xs md:text-sm text-muted-foreground tracking-wide">{N.t('pieces_nom')}</div>
+          )}
+          {enCarriere && pieces && pieces.reserve && (
+            <div className="w-full max-w-md flex flex-col items-center gap-2 mt-2">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm md:text-base">
+                <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
+              </div>
+              {cout == null ? (
+                <div className="text-xs md:text-sm text-muted-foreground">{N.t('pieces_epuise')}</div>
+              ) : peutPayer ? (
+                <>
+                  <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
+                    {N.t('pieces_reprendre', { etape: N.levelName(levelIdx) })}
+                  </div>
+                  <button onClick={() => handleContinue()} disabled={achat === 'envoi'}
+                    className="w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-amber-400 hover:bg-amber-300 disabled:opacity-60 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2">
+                    {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
+                  </button>
+                </>
+              ) : (
+                <div className="text-xs md:text-sm text-muted-foreground">{N.t('pieces_manque', { c: cout, n: pieces.solde })}</div>
+              )}
+              {achat === 'reseau' && <div className="text-xs text-destructive">{N.t('pieces_reseau')}</div>}
+              {achat === 'solde' && <div className="text-xs text-destructive">{N.t('pieces_manque', { c: cout ?? 0, n: pieces.solde })}</div>}
+              {achat === 'nom' && <div className="text-xs text-destructive">{N.t('pieces_nom')}</div>}
+            </div>
+          )}
+
           <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
-            {N.t('race_again')}
+            {N.t(peutPayer ? 'pieces_zero' : 'race_again')}
           </div>
 
           {/* Actions */}

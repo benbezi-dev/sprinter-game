@@ -1808,6 +1808,11 @@
     // c'est la preuve qui part avec le meilleur au classement. Le one-shot a
     // la sienne, shotTraces, qui sert aussi aux defis.
     runTraces: [],
+    // LE CONTINUE. `runId` nomme la carriere en cours aupres du serveur, qui
+    // compte les Continue achetes pour elle (le prix monte a chaque fois) ;
+    // `runContinues` est ce compte vu d'ici. Une carriere qui en a utilise un
+    // ne s'inscrit pas au classement des parcours. Voir game/pieces.ts.
+    runId: '', runContinues: 0,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
@@ -2344,9 +2349,31 @@
   function startRun() {
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
+    G.runId = nouveauParcours(); G.runContinues = 0;
     startLevel(0);
   }
   function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
+
+  // Un identifiant par carriere, que le serveur accepte (lettres, chiffres,
+  // tirets, 8 a 64). Il ne sert qu'a compter les Continue de CETTE carriere.
+  function nouveauParcours() {
+    try { if (crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* pas de crypto */ }
+    return 'p-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+  }
+
+  // LE CONTINUE : repartir de l'etape perdue, et non de la premiere.
+  //
+  // Le parcours garde tout ce qu'il a gagne — chronos des etapes passees,
+  // leurs traces, le cumul — et recourt l'etape ou il est tombe. La course
+  // perdue n'entre pas au cumul, comme avant : seul ce qu'on gagne y entre.
+  // Le paiement se fait AVANT, cote serveur (game/pieces.ts) ; le moteur ne
+  // sait rien des pieces, il compte seulement qu'un Continue a eu lieu.
+  function continuerCarriere() {
+    if (G.mode !== 'campaign' || G.state !== 'over') return false;
+    G.runContinues += 1;
+    startLevel(G.levelIdx);
+    return true;
+  }
 
   // Retour a l'accueil. On repasse en carriere et on oublie l'adversaire :
   // sans ca un defi termine resterait actif sur la course suivante.
@@ -3500,7 +3527,10 @@
       G.runTime += G.player.finishTime;
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {
-        G.runRank = recordRun(G.runTime); save(); G.flash = 1;
+        // Une carriere reprise par un Continue n'entre pas aux meilleurs
+        // parcours : son cumul ne compte que les courses gagnees, la
+        // tentative ratee en moins — ce serait un parcours qu'on achete.
+        G.runRank = G.runContinues ? null : recordRun(G.runTime); save(); G.flash = 1;
         // UNE CARRIERE GAGNEE DE BOUT EN BOUT : on la compte, c'est la clef de
         // la Legende (game/legende/compte.ts, branche par engine.ts). On n'arrive
         // ici que par la : une carriere part toujours de la premiere etape
@@ -8908,7 +8938,7 @@
   globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
-    startLevel, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
+    startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     majFerveur,
     theme, themeBrut, PEINTRE,
     startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,

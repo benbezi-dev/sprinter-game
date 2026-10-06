@@ -18,6 +18,9 @@ import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
+import { Coins } from 'lucide-react';
+import { rafraichirPieces, usePieces } from '@/game/pieces';
+import { NOM_CHANGE } from '@/game/leaderboard';
 import { BanderoleSelection } from './Selection';
 import { ID_PASTILLES, poserLaRangee } from '@/hooks/use-pastilles';
 import { BanderoleEdition } from './BanderoleEdition';
@@ -319,16 +322,19 @@ export function TitleScreen() {
               C'est le seul ecran que tout le monde traverse. */}
           <NameChip />
 
-          <button
-            onClick={() => toggleAudio()}
-            className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
-          >
-            <img
-              src={`${BASE}/icons/${Audio_.on ? 'audio-on' : 'audio-off'}.png`}
-              alt=""
-              className={`w-4 h-4 md:w-5 md:h-5 ${Audio_.on ? 'opacity-100' : 'opacity-40'}`}
-            />
-          </button>
+          <div className="flex items-start gap-2">
+            <PucePieces />
+            <button
+              onClick={() => toggleAudio()}
+              className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
+            >
+              <img
+                src={`${BASE}/icons/${Audio_.on ? 'audio-on' : 'audio-off'}.png`}
+                alt=""
+                className={`w-4 h-4 md:w-5 md:h-5 ${Audio_.on ? 'opacity-100' : 'opacity-40'}`}
+              />
+            </button>
+          </div>
         </div>
 
         {/* La rangee des pastilles « UN DÉFI » et « UN MESSAGE ». Vide, elle
@@ -704,6 +710,30 @@ export function TitleScreen() {
       {showTop500 && (
         <LeaderboardScreen initialRace={raceKey} onClose={() => setShowTop500(false)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * LE SOLDE DE PIECES, dans le bandeau de l'accueil. Relu a chaque retour a
+ * l'accueil (les gains tombent cote serveur, en duel, en objectif ou au sacre)
+ * et quand le nom change. Rien tant que le nom n'est pas reserve : un nom
+ * libre n'a pas de porte-monnaie (voir game/pieces.ts).
+ */
+function PucePieces() {
+  const pieces = usePieces();
+  useEffect(() => {
+    rafraichirPieces();
+    const relire = () => { rafraichirPieces(); };
+    window.addEventListener(NOM_CHANGE, relire);
+    return () => window.removeEventListener(NOM_CHANGE, relire);
+  }, []);
+  if (!pieces || !pieces.reserve) return null;
+  return (
+    <div title={SprinterApp.N.t('pieces_solde', { n: pieces.solde })}
+         className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 text-amber-300">
+      <Coins className="w-3.5 h-3.5 md:w-4 md:h-4" />
+      <span className="font-bold text-xs md:text-sm tabular-nums">{pieces.solde}</span>
     </div>
   );
 }

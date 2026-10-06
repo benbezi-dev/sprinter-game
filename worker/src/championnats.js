@@ -13,6 +13,7 @@
    ou derriere un VPN ne doit pas changer de nationalite sportive.
 --------------------------------------------------------------------------- */
 
+import { crediter as crediterPieces, creditDuTitre } from './pieces.js';
 import {
   FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
@@ -2290,7 +2291,7 @@ export async function courirSansPersonne(db, maintenant = Date.now()) {
  * comme `courirSansPersonne`, pour ne pas clore apres coup les vieilles
  * editions d'essai de la base de test.
  */
-export async function cloturerAuxHeures(db, maintenant = Date.now()) {
+export async function cloturerAuxHeures(db, maintenant = Date.now(), { test = false } = {}) {
   await ensureChampTables(db);
   const { results: eds } = await db.prepare(
     `SELECT id FROM champ_editions WHERE etat = 'ouverte'`).all();
@@ -2300,7 +2301,7 @@ export async function cloturerAuxHeures(db, maintenant = Date.now()) {
     if (!e) continue;
     const rv = (e.calendrier || []).find(r => r.phase === e.phase && (r.reveal || r.ceremonie));
     if (!rv || !(rv.at <= maintenant && maintenant < rv.at + 24 * 3600 * 1000)) continue;
-    closes.push({ edition: id, phase: e.phase, moment: rv.cle, ...(await cloturerPhase(db, id)) });
+    closes.push({ edition: id, phase: e.phase, moment: rv.cle, ...(await cloturerPhase(db, id, { test })) });
   }
   return closes;
 }
@@ -2400,7 +2401,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
  * le suspense autant que l'equite : les huit repeches ne peuvent pas etre
  * connus avant la quatrieme serie, puisqu'ils se calculent sur les quatre.
  */
-export async function cloturerPhase(db, edition) {
+export async function cloturerPhase(db, edition, { test = false } = {}) {
   await ensureChampTables(db);
   const e = await db.prepare(
     `SELECT phase, etat, zone, echelon FROM champ_editions WHERE id = ?`).bind(edition).first();
@@ -2457,7 +2458,7 @@ export async function cloturerPhase(db, edition) {
     // finale, il n'y est pas arrive.
     const sacre = await sacrer(db, edition,
       { cle: p.champion.cle, nom: p.champion.nom },
-      p.classement.map(r => r.cle));
+      p.classement.map(r => r.cle), { test });
     return { phase: e.phase, finale: true, podium: p.podium, classement: p.classement, ...sacre };
   }
 
@@ -3020,7 +3021,7 @@ function revoquerTitre(db, id, maintenant) {
  * `finalistes` sert a dire POURQUOI le titre est tombe, et rien d'autre. Perdre
  * une finale et etre depossede sans y avoir couru ne se racontent pas pareil.
  */
-export async function sacrer(db, edition, gagnant, finalistes = null) {
+export async function sacrer(db, edition, gagnant, finalistes = null, { test = false } = {}) {
   await ensureChampTables(db);
   const e = await db.prepare(
     `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
@@ -3059,6 +3060,14 @@ export async function sacrer(db, edition, gagnant, finalistes = null) {
 
   await db.batch(ecritures);
 
+  // Les pieces du titre. Une fois par edition : si le cron et une cloture
+  // manuelle sacraient tous les deux, le journal des pieces n'en garderait
+  // qu'une. Un partant fictif n'a pas de nom reserve et ne touche rien.
+  const credit = creditDuTitre(e.echelon);
+  const pieces = credit
+    ? await crediterPieces(db, gagnant.nom, credit.motif, String(edition), credit.montant, { test })
+    : 0;
+
   await annoncer(db, {
     edition, echelon: e.echelon, zone: e.zone, type: 'sacre',
     titre: gagnant.nom + ' — ' + libelle,
@@ -3080,6 +3089,7 @@ export async function sacrer(db, edition, gagnant, finalistes = null) {
   return {
     libelle, champion: gagnant.nom, expire_le: expire.getTime(),
     titre_conserve: !!conserve,
+    pieces,
     // `detrone` remonte a l'appelant : le harnais l'affiche, et le tableau de
     // bord des championnats en a besoin pour dire ce qui vient de changer.
     detrone: detrone

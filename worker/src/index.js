@@ -12,6 +12,10 @@ export { SalleChampionnat } from './salle-championnat.js';
 export { Boite } from './boite.js';
 export { Presence } from './presence.js';
 import { sonner } from './boite.js';
+import {
+  BAREME as PIECES, COUTS_CONTINUE, PLAFOND_DUELS_PAR_JOUR,
+  crediter as crediterPieces, soldeDe, acheterContinue, piecesOuvertes,
+} from './pieces.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
 import {
@@ -1068,7 +1072,7 @@ export default {
         courirSansPersonne(db, quand)
           .then(r => { if (r.length) console.log('champ courses rangees', nom, JSON.stringify(r)); })
           .catch(e => console.log('champ rangement KO', nom, String(e && e.message || e)))
-          .then(() => cloturerAuxHeures(db, quand))
+          .then(() => cloturerAuxHeures(db, quand, { test: canalDuCron.test }))
           .then(closes => {
             if (!closes.length) return;
             console.log('champ phases closes', nom, JSON.stringify(closes.map(c => ({
@@ -1466,6 +1470,57 @@ async function servir(request, env, ctx, porteur) {
        Cela la fait passer d'une ligne a poster a une course a fabriquer.
     ----------------------------------------------------------------- */
 
+    /* -----------------------------------------------------------------
+       LES PIECES : le solde, le bareme, et l'achat d'un Continue.
+       Voir pieces.js — tout le bareme vit la-bas.
+    ----------------------------------------------------------------- */
+
+    if (url.pathname.startsWith('/pieces') && !piecesOuvertes(canal.test)) {
+      return json({ error: 'not found' }, 404);
+    }
+
+    if (url.pathname === '/pieces' && request.method === 'GET') {
+      const nom = cleanName(url.searchParams.get('nom') || '').trim();
+      const cle = nom.toLowerCase();
+      await ensurePlayerTables(env.DB);
+      const reserve = cle
+        ? !!(await env.DB.prepare(`SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(cle).first())
+        : false;
+      return json({
+        reserve,
+        solde: reserve ? await soldeDe(env.DB, cle) : 0,
+        bareme: PIECES,
+        couts_continue: COUTS_CONTINUE,
+        plafond_duels_par_jour: PLAFOND_DUELS_PAR_JOUR,
+      });
+    }
+
+    if (url.pathname === '/pieces/continue' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const nom = cleanName(body?.nom || '').trim();
+      const cle = nom.toLowerCase();
+      const deviceId = body?.device_id;
+      const parcours = String(body?.parcours || '');
+      const essai = Number(body?.essai);
+      if (!cle) return json({ error: 'nom requis' }, 400);
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!/^[a-zA-Z0-9-]{8,64}$/.test(parcours)) return json({ error: 'parcours invalide' }, 400);
+      if (!Number.isInteger(essai) || essai < 0) return json({ error: 'essai invalide' }, 400);
+      // DEPENSER EXIGE UN NOM RESERVE ET CET APPAREIL LIE A LUI. `peutUtiliser`
+      // laisse passer un nom libre ; ici un nom libre n'a pas de solde a
+      // depenser, et on le dit plutot que de rendre un 403 muet.
+      await ensurePlayerTables(env.DB);
+      const lie = await env.DB.prepare(
+        `SELECT 1 AS ok FROM player_devices WHERE name_key = ? AND device_id = ?`
+      ).bind(cle, deviceId).first();
+      if (!lie) {
+        ctx.waitUntil(noterRefus(env.DB, { route: '/pieces/continue', nameKey: cle, deviceId }));
+        return json({ ok: false, raison: 'nom' }, 403);
+      }
+      return json(await acheterContinue(env.DB, cle, parcours, essai));
+    }
+
     if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -1504,7 +1559,7 @@ async function servir(request, env, ctx, porteur) {
         return json({ error: 'course invalide', griefs }, 422);
       }
 
-      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date(), epreuve);
+      const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date(), epreuve, { test: canal.test });
       if (!res) return json({ objectif: null });
       if (res.refuse) return json({ refuse: res.refuse, attendreMs: res.attendreMs }, 429);
 
@@ -2347,7 +2402,7 @@ async function servir(request, env, ctx, porteur) {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const edition = String(body.edition || '').toUpperCase();
-        const r = await cloturerPhase(env.DB, edition);
+        const r = await cloturerPhase(env.DB, edition, { test: canal.test });
         const signal = signalerSacre(canal, edition, r);
         if (signal) ctx.waitUntil(signal);
         return r.erreur ? json({ error: r.erreur, ...r }, 400) : json(r);
@@ -4821,6 +4876,22 @@ async function servir(request, env, ctx, porteur) {
         epreuves: epreuvesDuDefi,
       });
       if (duel && !duel.deja) duel.role = 'opponent';   // point de vue du repondant
+
+      // LA PIECE DU VAINQUEUR, une par duel tranche. Le nom d'un duel fantome
+      // vient du corps de la requete sans controle : la piece n'est donc
+      // versee que si l'appareil qui a couru est LIE a ce nom — celui du
+      // releveur ici, celui du lanceur tel qu'il l'a cree. La reference est
+      // le duel (defi + releveur) : une seconde tentative ne paie rien.
+      if (duel && !duel.deja && duel.issue !== 'draw') {
+        const refDuel = `${code}:${cleanName(name).trim().toLowerCase()}`;
+        if (duel.issue === 'opponent') {
+          duel.pieces = await crediterPieces(env.DB, cleanName(name), 'duel', refDuel,
+            PIECES.duel, { deviceId: device_id, test: canal.test });
+        } else if (ch.owner_device) {
+          await crediterPieces(env.DB, ch.owner_name, 'duel', refDuel,
+            PIECES.duel, { deviceId: ch.owner_device, test: canal.test });
+        }
+      }
 
       // Un duel tranche aux centiemes se raconte. On ne regarde que le premier
       // resultat — `deja` marque une seconde tentative, qui ne redistribue rien
