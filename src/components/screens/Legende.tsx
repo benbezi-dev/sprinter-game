@@ -237,6 +237,65 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
 }
 
 /* ===========================================================================
+   LA PRESENTATION DU BOSS, PENDANT SON ENTREE
+   ===========================================================================
+   Le bandeau des jeux de combat : son drapeau et sa ville, son nom en grand,
+   son surnom dans la couleur de l'etape, et deux lignes sur lui. Il glisse
+   pendant que le boss fait son entree (game/legende/entrees.ts) et s'en va
+   quand le decompte part. Sa replique, elle, est dans la bulle au-dessus de
+   lui (drawBulle). */
+
+export function PresentationBoss() {
+  const [visible, setVisible] = useState(false);
+  const [parle, setParle] = useState(false);
+  React.useEffect(() => {
+    // L'entree vit dans la boucle du jeu, pas dans React : on la relit.
+    const id = window.setInterval(() => {
+      const G = (SprinterApp as any).G;
+      const avD = G.avantDepart;
+      setVisible(!!(avD && avD.entree && avD.reste > 0 && (avD.t || 0) > 0.3));
+      setParle(!!G.presBulle);
+    }, 100);
+    return () => window.clearInterval(id);
+  }, []);
+  const rang = rangEnCours();
+  const lieu = lieuDeLEtape(rang);
+  const teinte = TEINTES[rang];
+  const drapeau = drapeauDe(lieu.drapeau);
+  // Sa replique est dans la bulle, dans sa langue ; sa traduction vient ici,
+  // le temps qu'il parle — sauf s'il parle deja la langue du joueur.
+  const trad = dans([lieu.replique.fr, lieu.replique.en]);
+  const traduction = parle && lieu.replique.vo && lieu.replique.vo !== trad ? trad : '';
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div key="presentation"
+                    initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute left-0 right-0 bottom-[18%] z-20 pointer-events-none
+                               px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+          <div className="max-w-md rounded-2xl border-l-4 px-4 py-3 shadow-2xl"
+               style={{ borderColor: teinte, background: 'linear-gradient(100deg, rgba(10,8,22,0.92), rgba(10,8,22,0.55))' }}>
+            <div className="text-[10px] font-bold tracking-[0.24em] text-white/70">
+              {drapeau && <span className="mr-1.5">{drapeau}</span>}
+              {lieu.pays.toUpperCase()}
+            </div>
+            <div className="font-black font-display text-3xl leading-[0.95] uppercase text-white">{lieu.boss}</div>
+            <div className="text-sm font-black italic tracking-wide" style={{ color: teinte }}>
+              « {dans(lieu.surnom).toUpperCase()} »
+            </div>
+            <div className="mt-1 text-[11px] leading-snug text-white/75">{dans(lieu.bio)}</div>
+            {traduction && (
+              <div className="mt-1 text-[12px] leading-snug italic text-white">« {traduction} »</div>
+            )}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ===========================================================================
    LA FIN D'UNE ETAPE
    =========================================================================== */
 

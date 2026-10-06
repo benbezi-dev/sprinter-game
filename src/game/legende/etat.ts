@@ -25,3 +25,6 @@ export function finDEtapeLegende(G: any): boolean {
 export function etapeLegendePerdue(G: any): boolean {
   return finDEtapeLegende(G) && !G.won;
 }
+
+/** Une etape de la Legende est-elle sur la piste (decompte, course, arrivee) ? */
+export const etapeLegendeEnPiste = finDEtapeLegende;

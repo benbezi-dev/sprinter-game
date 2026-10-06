@@ -3,9 +3,15 @@
 // La Legende ne s'ouvre qu'apres 99 carrieres classiques gagnees jusqu'au
 // bout, toutes epreuves confondues (decision de l'auteur, 6 octobre 2026).
 // Gagnee jusqu'au bout, parce qu'une carriere ne se termine pas autrement :
-// elle s'arrete a la premiere defaite. Rien ne les comptait — `G.runs` ne
-// garde que les dix meilleurs cumuls par epreuve —, si bien que ce compte part
-// de zero pour tout le monde, le jour ou il arrive sur l'appareil.
+// elle s'arrete a la premiere defaite.
+//
+// ET CELLES D'AVANT COMPTENT AUSSI (l'auteur, 06/10 : « on comptabilise le
+// nombre de fois le mode carriere deja termine avant »). Rien ne les comptait :
+// on les RETROUVE une fois, a la premiere ouverture du jeu qui porte ce
+// fichier, dans ce que l'appareil a garde (`estimerLesCarrieresDAvant`). Ce
+// n'est qu'un MINIMUM — l'appareil ne garde pas tout —, et il est range a part
+// (`avant`) pour qu'on sache toujours ce qui a ete compte et ce qui a ete
+// retrouve.
 //
 // IL COMPTE SUR LES DEUX CANAUX. La Legende ne se voit que sur le canal de
 // test (LEGENDE_OUVERTE, canal.ts), mais le jour ou elle ouvrira, les
@@ -27,16 +33,18 @@ export const CARRIERES_REQUISES = 99;
 const CLE = 'sprinter_carrieres_gagnees_v1';
 
 export type Compte = {
-  /** Toutes epreuves confondues : c'est lui qui ouvre la Legende. */
+  /** Comptees depuis l'arrivee de ce fichier, toutes epreuves confondues. */
   total: number;
   /** Par epreuve (`RACES`), pour le jour ou l'on voudra le montrer. */
   par: Record<string, number>;
   /** Horodatage de la premiere et de la derniere carriere comptees. */
   premiere: number;
   derniere: number;
+  /** Retrouvees d'avant le compte (un minimum), ou null tant qu'on n'a pas cherche. */
+  avant: number | null;
 };
 
-const VIDE: Compte = { total: 0, par: {}, premiere: 0, derniere: 0 };
+const VIDE: Compte = { total: 0, par: {}, premiere: 0, derniere: 0, avant: null };
 
 /** Un entier positif ou zero ; tout le reste vaut zero. */
 function entier(v: unknown): number {
@@ -51,7 +59,8 @@ export function lireCompte(): Compte {
     if (d.par && typeof d.par === 'object') {
       for (const k of Object.keys(d.par)) { const n = entier(d.par[k]); if (n) par[k] = n; }
     }
-    return { total: entier(d.total), par, premiere: entier(d.premiere), derniere: entier(d.derniere) };
+    return { total: entier(d.total), par, premiere: entier(d.premiere), derniere: entier(d.derniere),
+             avant: typeof d.avant === 'number' ? entier(d.avant) : null };
   } catch {
     return { ...VIDE, par: {} };
   }
@@ -72,8 +81,72 @@ export function compterCarriere(epreuve: string, quand: number = Date.now()): Co
   return c;
 }
 
+/** Toutes les carrieres gagnees : comptees, plus celles retrouvees d'avant. */
 export function carrieresGagnees(): number {
-  return lireCompte().total;
+  const c = lireCompte();
+  return c.total + (c.avant || 0);
+}
+
+/* ------------------------------------------------ les carrieres d'avant */
+
+/**
+ * Combien de carrieres l'appareil prouve-t-il avoir ete gagnees, avant ce
+ * compte ? Deux traces, et on garde la plus haute — elles se recouvrent, les
+ * additionner compterait deux fois les memes :
+ *
+ *  - LES MEILLEURS PARCOURS (`sprinter_web_v1`, `runs`) : le cumul d'une
+ *    carriere n'y entre qu'au bout de la sixieme etape gagnee, et le jeu en
+ *    garde les dix meilleurs par epreuve. Un parcours = une carriere.
+ *  - L'HISTORIQUE (`sprinter_history`, les 300 dernieres courses) : une
+ *    sixieme etape de carriere courue plus vite que le plus rapide possible
+ *    de son plateau (`plusRapide`, le bas de la fourchette de l'etape 6) est
+ *    forcement gagnee. Plus lente, on ne sait pas : on ne la compte pas.
+ *
+ * Un joueur qui en a gagne quarante au 100 m n'en a garde que dix : c'est un
+ * minimum, jamais une estimation par le haut.
+ */
+export function estimerLesCarrieresDAvant(plusRapide: (epreuve: string) => number | null): number {
+  let parcours = 0;
+  try {
+    const d = JSON.parse(localStorage.getItem('sprinter_web_v1') || '{}');
+    const runs = d && typeof d === 'object' ? d.runs : null;
+    if (runs && typeof runs === 'object') {
+      for (const k of Object.keys(runs)) {
+        const l = runs[k];
+        if (Array.isArray(l)) parcours += l.filter(t => typeof t === 'number' && t > 0).length;
+      }
+    }
+  } catch { /* sauvegarde illisible : rien a retrouver la */ }
+
+  let sixiemes = 0;
+  try {
+    const h = JSON.parse(localStorage.getItem('sprinter_history') || '[]');
+    if (Array.isArray(h)) {
+      for (const c of h) {
+        if (!c || c.m === 'oneshot' || c.l !== 5 || typeof c.t !== 'number') continue;
+        const lo = plusRapide(String(c.r));
+        if (lo !== null && c.t < lo) sixiemes += 1;
+      }
+    }
+  } catch { /* historique illisible : idem */ }
+
+  return Math.max(parcours, sixiemes);
+}
+
+/**
+ * Chercher les carrieres d'avant, UNE fois par appareil : a l'ouverture du jeu
+ * (engine.ts), avant qu'aucune course ne soit lancee — faite pendant le sacre,
+ * la recherche compterait deux fois la carriere qu'on vient de gagner. Rend le
+ * nombre retrouve (0 si deja cherche).
+ */
+export function poserLesCarrieresDAvant(plusRapide: (epreuve: string) => number | null): number {
+  const c = lireCompte();
+  if (c.avant !== null) return 0;
+  // Les carrieres deja comptees ici (`total`) sont peut-etre aussi parmi les
+  // meilleurs parcours : on les retire, quitte a retrouver un peu moins.
+  c.avant = Math.max(0, estimerLesCarrieresDAvant(plusRapide) - c.total);
+  try { localStorage.setItem(CLE, JSON.stringify(c)); } catch { /* on recherchera a la prochaine ouverture */ }
+  return c.avant;
 }
 
 /** La Legende est-elle gagnee au compte ? */

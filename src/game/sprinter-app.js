@@ -8535,7 +8535,11 @@
       // presentation (`celebrate`) et au cri de Meba-Mickael (`debout`).
       r.attitudeW = (1 - r.enBloc) * (1 - Math.min(1, r.celebrate || 0)) * (1 - Math.min(1, r.debout || 0))
         // ni pendant l'entree d'Aurel Manga : il marche, puis il pointe (MARCHE, POINTE)
-        * (1 - Math.min(1, (r.marche || 0) + (r.pointe || 0)));
+        // ni pendant celle d'un boss de la Legende, menee par une posture
+        // imposee (game/legende/entrees.ts) : appliquees apres elle, les
+        // attitudes l'effacaient — la torche de la statue de la Liberte
+        // retombait le long du corps (vu a l'image le 06/10)
+        * (1 - Math.min(1, (r.marche || 0) + (r.pointe || 0) + (r.posture ? r.posture.w || 0 : 0)));
       r.attitudeT = G.attT || 0;
       // DEBOUT, DROIT (02/10, « ils sont toujours penches par rapport a la
       // ligne de depart, lorsqu'ils sont debout ») : repereDuCoureur couche le

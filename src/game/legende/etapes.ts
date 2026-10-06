@@ -40,8 +40,12 @@ export type Lieu = {
   bio: [string, string];
   /**
    * Ce qu'il dit en arrivant, DANS SA LANGUE (`vo`), puis traduit. `vo` vide :
-   * il parle la langue du joueur. Les repliques en langue etrangere sont a
-   * faire relire par quelqu'un qui la parle avant toute ouverture.
+   * il parle la langue du joueur. La bulle ne porte que `vo` (ou la replique
+   * dans la langue du joueur) : elle tient en DEUX lignes, et sa police grandit
+   * avec le plan serre de l'entree — une trentaine de caracteres au plus. La
+   * traduction passe dans le bandeau de presentation pendant qu'il parle.
+   * Les repliques en langue etrangere sont a faire relire par quelqu'un qui
+   * la parle avant toute ouverture.
    */
   replique: { vo: string; fr: string; en: string };
   /** Son entree, propre a lui et a sa culture (game/legende/entrees.ts). */
@@ -72,7 +76,7 @@ const MENOLE: Lieu = {
   // « pas de probleme », en francais de Cote d'Ivoire. A FAIRE RELIRE.
   bio: ['12 ans. Invaincu sur le sable de Menolé depuis trois saisons. Toujours pieds nus.',
         '12 years old. Unbeaten on the sand of Menolé for three seasons. Always barefoot.'],
-  replique: { vo: '', fr: 'Y a pas drap ! Le sable, c’est chez moi.', en: 'No worries! The sand is my home.' },
+  replique: { vo: 'Y a pas drap !', fr: 'Pas de souci ! Le sable, c’est chez moi.', en: 'No worries! The sand is my home.' },
   entree: 'crabe',
   plateau: ['Aya Koffi', 'Yao Kouamé', 'Adjoua Brou', 'Ismaël Traoré', 'Affoué Yapi', 'Moussa Coulibaly'],
 };
@@ -89,7 +93,9 @@ const KYOTO: Lieu = {
   // « kitsune wa furikaeranai ». A FAIRE RELIRE.
   bio: ['24 ans. Il s’entraîne à l’aube dans les escaliers de Fushimi Inari, sous les milliers de torii.',
         '24. He trains at dawn on the steps of Fushimi Inari, under thousands of torii gates.'],
-  replique: { vo: '狐は振り返らない。', fr: 'Le renard ne se retourne jamais.', en: 'The fox never looks back.' },
+  // (sans le point final : la bulle coupe le japonais a la lettre, et le
+  // « 。 » passait seul a la ligne)
+  replique: { vo: '狐は振り返らない', fr: 'Le renard ne se retourne jamais.', en: 'The fox never looks back.' },
   entree: 'reverence',
   plateau: ['Haruto Sato', 'Yuto Suzuki', 'Sota Takahashi', 'Riku Tanaka', 'Aoi Watanabe', 'Kaito Ito'],
 };
@@ -137,7 +143,7 @@ const ABUJA: Lieu = {
   // en pidgin du Nigeria. A FAIRE RELIRE.
   bio: ['25 ans. Il court au pied de Zuma Rock, « la porte d’Abuja ». Casque sur les oreilles, toujours de l’afrobeats.',
         '25. He runs at the foot of Zuma Rock, "the gateway to Abuja". Headphones on, always afrobeats.'],
-  replique: { vo: 'No shaking! Dis race, na my own.', fr: 'T’inquiète ! Cette course, elle est à moi.',
+  replique: { vo: 'No shaking! Na my race.', fr: 'T’inquiète ! Cette course, elle est à moi.',
               en: 'No worries! This race is mine.' },
   entree: 'legwork',
   plateau: ['Emeka Nwosu', 'Tunde Adeyemi', 'Ibrahim Musa', 'Segun Bakare', 'Ngozi Eze', 'Femi Olawale'],
@@ -155,8 +161,7 @@ const PARIS: Lieu = {
   // la tete, satisfait.
   bio: ['29 ans. Champion de France en titre. Il court en foulard de soie — « pour l’élégance, et pour savoir d’où vient le vent ».',
         '29. Reigning French champion. He races in a silk scarf — "for elegance, and to know where the wind comes from".'],
-  replique: { vo: '', fr: 'L’élégance, c’est d’arriver premier sans avoir l’air de courir.',
-              en: 'Elegance is finishing first without looking like you ran.' },
+  replique: { vo: '', fr: 'Le style, ça ne s’apprend pas.', en: 'Style can’t be taught.' },
   entree: 'dandy',
   plateau: ['Hugo Lambert', 'Yanis Haddad', 'Jules Mercier', 'Inès Marchand', 'Bastien Roche', 'Ibrahim Diallo'],
 };
@@ -217,7 +222,7 @@ const APOTHEOSE: Lieu = {
   // les bras au ciel, quand il touche la piste.
   bio: ['Né de la poussière d’une étoile. Personne ne l’a jamais vu courir : on n’a vu que la lumière qu’il laisse derrière lui.',
         'Born from the dust of a star. No one has ever seen him run, only the light he leaves behind.'],
-  replique: { vo: '', fr: 'Je suis la dernière ligne d’arrivée.', en: 'I am the last finish line.' },
+  replique: { vo: '', fr: 'Je suis l’arrivée.', en: 'I am the finish line.' },
   entree: 'astre',
   plateau: ['Sirius', 'Orion', 'Nova', 'Pulsar', 'Andromède', 'Comète'],
 };

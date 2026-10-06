@@ -26,13 +26,26 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 
 const src = f => join(process.cwd(), 'src/game', f);
 
+// Le moteur (game/engine.ts) ne se charge pas sous Node — il attend le
+// navigateur et les modules virtuels de Vite. Ce qui l'importe pour l'appeler
+// en course (entrees.ts, legende.ts) le recoit donc en doublure ici.
+const doublureDuMoteur = {
+  name: 'doublure-moteur',
+  setup(b) {
+    b.onResolve({ filter: /(^|\/)engine$/ }, () => ({ path: 'engine', namespace: 'doublure' }));
+    b.onLoad({ filter: /.*/, namespace: 'doublure' }, () => ({
+      contents: 'export const SprinterApp = { G: {} }; export const SprinterCore = {};', loader: 'js',
+    }));
+  },
+};
+
 async function paquet(nom, lignes, canal = 'test') {
   const dossier = mkdtempSync(join(tmpdir(), `sprinter-legende-${nom}-`));
   const entree = join(dossier, 'entree.ts');
   const sortie = join(dossier, 'paquet.mjs');
   writeFileSync(entree, lignes.join('\n'));
   await build({
-    entryPoints: [entree], outfile: sortie, bundle: true,
+    entryPoints: [entree], outfile: sortie, bundle: true, plugins: [doublureDuMoteur],
     format: 'esm', platform: 'node', logLevel: 'silent',
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
@@ -103,6 +116,46 @@ try { sansEcrire = C.compterCarriere('100'); } catch { sansEcrire = null; }
 ok('un appareil qui refuse d ecrire ne fait pas tomber la course', sansEcrire && sansEcrire.total === 1);
 globalThis.localStorage.setItem = vraiSet;
 
+/* ------------------------------------------------ les carrieres d'avant */
+
+titre('LES CARRIERES D AVANT LE COMPTE : UN MINIMUM, CHERCHE UNE FOIS');
+
+memoire.clear();
+const plusRapide = e => ({ '100': 8.75, '200': 17.75, '400': 36.70 })[e] ?? null;
+memoire.set('sprinter_web_v1', JSON.stringify({ runs: { '100': [60.1, 61.2, 63.0], '200': [130.5], '400': [] } }));
+ok('chaque meilleur parcours garde est une carriere', C.estimerLesCarrieresDAvant(plusRapide) === 4,
+   `${C.estimerLesCarrieresDAvant(plusRapide)}`);
+const h = [
+  { r: '100', t: 8.70, m: 'campaign', l: 5 },   // sous le plus rapide des ZEZE : gagnee
+  { r: '100', t: 8.70, m: 'campaign', l: 5 },
+  { r: '100', t: 8.70, m: 'campaign', l: 5 },
+  { r: '200', t: 17.70, m: 'campaign', l: 5 },
+  { r: '100', t: 8.70, m: 'campaign', l: 5 },
+  { r: '100', t: 8.80, m: 'campaign', l: 5 },   // dans la fourchette : on ne sait pas
+  { r: '100', t: 8.50, m: 'oneshot', l: 5 },    // pas une carriere
+  { r: '100', t: 8.50, m: 'campaign', l: 4 },   // pas la sixieme etape
+  { r: '110h', t: 12.0, m: 'campaign', l: 5 },  // epreuve sans fourchette connue
+];
+memoire.set('sprinter_history', JSON.stringify(h));
+ok('la plus haute des deux traces, pas leur somme (elles se recouvrent)',
+   C.estimerLesCarrieresDAvant(plusRapide) === 5, `${C.estimerLesCarrieresDAvant(plusRapide)}`);
+ok('une sauvegarde illisible ne casse rien', (() => {
+  memoire.set('sprinter_web_v1', '{pas du json'); const n = C.estimerLesCarrieresDAvant(plusRapide);
+  memoire.set('sprinter_web_v1', JSON.stringify({ runs: { '100': [60.1, 61.2, 63.0], '200': [130.5] } }));
+  return n === 5;
+})());
+ok('avant la recherche, rien n est retrouve', C.lireCompte().avant === null && C.carrieresGagnees() === 0);
+C.compterCarriere('100', 5000);
+ok('une carriere comptee avant la recherche...', C.carrieresGagnees() === 1);
+ok('...est retiree de ce qu on retrouve (pas de double compte)', C.poserLesCarrieresDAvant(plusRapide) === 4);
+ok('le total = comptees + retrouvees', C.carrieresGagnees() === 5 && C.lireCompte().avant === 4);
+ok('on ne cherche qu une fois', C.poserLesCarrieresDAvant(plusRapide) === 0 && C.carrieresGagnees() === 5);
+C.compterCarriere('200', 6000);
+ok('les suivantes s ajoutent, les retrouvees restent', C.carrieresGagnees() === 6 && C.lireCompte().avant === 4);
+memoire.set(CLE, JSON.stringify({ total: 3, par: { '100': 3 }, premiere: 1, derniere: 2, avant: 97 }));
+ok('97 retrouvees + 3 comptees : la Legende est ouverte', C.carrieresGagnees() === 100 && C.legendeMeritee());
+memoire.clear();
+
 /* -------------------------------------------------------------- le tirage */
 
 titre('LE TIRAGE, UNE FOIS PAR CARRIERE');
@@ -164,6 +217,26 @@ ok('son chrono est fixe (cibles) et vaut celui de l etape',
 ok('aucun stade de la Legende n est ouvert au public ni choisissable',
    tous.every(({ s }) => s.ouvert === false && s.reserve === true && s.legende === true && s.horsSerie === true));
 ok('les clefs des stades sont uniques', new Set(tous.map(({ s }) => s.cle)).size === tous.length);
+
+/* ------------------------------------------------- les entrees des boss */
+
+titre('CHAQUE BOSS A SON ENTREE, SA PRESENTATION ET SA REPLIQUE');
+
+const { M: En } = await paquet('entrees', [
+  `export { ENTREES, dureeDeLEntree } from '${src('legende/entrees.ts')}';`,
+  `export { ETAPES } from '${src('legende/etapes.ts')}';`,
+]);
+const lieux = En.ETAPES.flatMap(e => e.lieux);
+ok('dix entrees, une par boss', En.ENTREES.length === 10 && new Set(lieux.map(l => l.entree)).size === 10,
+   En.ENTREES.join(','));
+ok('chaque boss joue une entree qui existe', lieux.every(l => En.ENTREES.includes(l.entree)),
+   lieux.filter(l => !En.ENTREES.includes(l.entree)).map(l => l.boss).join(','));
+ok('aucune entree ne retient le decompte plus de 8 s', En.ENTREES.every(c => En.dureeDeLEntree(c) > 3 && En.dureeDeLEntree(c) <= 8));
+ok('chaque boss a sa bio en francais et en anglais', lieux.every(l => l.bio[0].length > 20 && l.bio[1].length > 20));
+ok('chaque replique tient dans la bulle (2 lignes, ~32 caracteres)',
+   lieux.every(l => (l.replique.vo || l.replique.fr).length <= 32 && (l.replique.vo || l.replique.en).length <= 32),
+   lieux.filter(l => (l.replique.vo || l.replique.fr).length > 32).map(l => l.boss).join(','));
+ok('une replique en langue etrangere a sa traduction', lieux.every(l => !l.replique.vo || (l.replique.fr && l.replique.en)));
 
 /* -------------------------------------------------------------- le canal */
 

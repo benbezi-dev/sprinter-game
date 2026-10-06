@@ -109,6 +109,8 @@ const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens
   .then(m => ({ default: m.FinDuDefiVedette })));
 const FinDEtapeLegende = /* @__PURE__ */ lazy(() => import('@/components/screens/Legende')
   .then(m => ({ default: m.FinDEtapeLegende })));
+const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens/Legende')
+  .then(m => ({ default: m.PresentationBoss })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
@@ -121,7 +123,7 @@ import { nuitEnCours } from '@/game/halloween';
 import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
 // Un module sans import : demander « est-ce une etape de la Legende ? » ne
 // fait pas entrer la Legende dans le paquet public.
-import { finDEtapeLegende } from '@/game/legende/etat';
+import { finDEtapeLegende, etapeLegendeEnPiste } from '@/game/legende/etat';
 
 const queryClient = new QueryClient();
 
@@ -342,6 +344,10 @@ function MainGame() {
         {(state === 'count' || state === 'race') && !enPresentation
           && !tutoHaies && !tutoSprint && !spectateur
           && !sautEnCours && <RaceHUD />}
+        {/* LE BOSS DE LA LEGENDE SE PRESENTE pendant son entree : son nom, sa
+            ville, deux lignes sur lui (canal de test, game/legende/). */}
+        {LEGENDE_OUVERTE && state === 'count' && etapeLegendeEnPiste(SprinterApp.G)
+          && <Suspense fallback={null}><PresentationBoss /></Suspense>}
         {/* Une course de championnat qu'on revoit : la presentation des
             athletes avant le pistolet, le tableau apres la ligne. Elle se
             monte a cote du HUD et non dedans — elle survit a la fin de la

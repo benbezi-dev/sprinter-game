@@ -53,7 +53,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
-import { compterCarriere } from './legende/compte';
+import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
 
@@ -100,6 +100,21 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
 // ouvre la Legende (game/legende/compte.ts). Il tourne sur les deux canaux —
 // la Legende, elle, ne se voit que sur celui de test (canal.ts).
 SprinterApp.G.onCarriereGagnee = (race: string) => { compterCarriere(race); };
+
+// ...ET CELLES D'AVANT CE COMPTE, retrouvees une fois par appareil dans ce qu'il
+// a garde (un minimum : voir estimerLesCarrieresDAvant). Apres le chargement de
+// tous les modules — les haies posent leurs epreuves dans RACES en arrivant —,
+// et avant toute course : faite pendant un sacre, la recherche compterait deux
+// fois la carriere qu'on vient de gagner.
+setTimeout(() => {
+  try {
+    poserLesCarrieresDAvant((epreuve: string) => {
+      const R = SprinterCore.RACES && SprinterCore.RACES[epreuve];
+      const etape6 = R && Array.isArray(R.ranges) ? R.ranges[5] : null;
+      return etape6 && typeof etape6[0] === 'number' ? etape6[0] : null;
+    });
+  } catch { /* rien de retrouve : le compte part de ce qu'il a */ }
+}, 0);
 
 export type GameState = {
   state: 'open' | 'title' | 'cut' | 'count' | 'race' | 'result' | 'over' | 'winall' | 'falseout';

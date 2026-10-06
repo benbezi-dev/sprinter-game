@@ -23,6 +23,7 @@ import { ETAPES, type Lieu } from './etapes';
 import { tirer, lieuDe, type Tirage } from './tirage';
 import { inscrireLesStades, indexDuLieu, DIFFICULTE } from './stades';
 import { poserEtape } from './etat';
+import { entreeDe } from './entrees';
 import { legendeRemplaceLaCarriere } from './compte';
 
 type Parcours = {
@@ -111,12 +112,11 @@ export function lancerLEtape(): boolean {
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaLegende;
   if (!G.sonDArrivee) G.sonDArrivee = sonDeLArrivee;
   (SprinterApp as any).startOneShot(['100'], { levelIdx: idx });
-  // LE BOSS ARRIVE AVANT SES BLOCS — l'entree d'Aurel Manga (entrerEnBoss,
-  // engine.ts) : la camera va le chercher, il marche jusqu'a la ligne et
-  // pointe l'arrivee, puis le decompte part. APRES `startOneShot`, qui vient
-  // de construire la course et de remettre `avantDepart` a zero. Le geste
-  // propre a chaque boss viendra avec son maillage.
-  G.avantDepart = { reste: 99, t: 0, dit: true, entree: { depuis: -6.2, coureur: lieu.boss } };
+  // LE BOSS ARRIVE AVANT SES BLOCS, A SA MANIERE (game/legende/entrees.ts) :
+  // la camera va le chercher (entrerEnBoss, engine.ts), il fait son entree et
+  // dit sa replique, puis le decompte part. APRES `startOneShot`, qui vient de
+  // construire la course et de remettre `avantDepart` a zero.
+  G.avantDepart = { reste: 99, t: 0, dit: true, entree: entreeDe(lieu) };
   // Hors du cadre des la mise en place : on ne doit pas le voir deja a son bloc.
   const lui = (G.runners || []).find((r: any) => r.name === lieu.boss);
   if (lui) lui.d = -40;
