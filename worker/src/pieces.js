@@ -27,14 +27,14 @@
  */
 
 /**
- * CANAL DE TEST SEULEMENT, pour commencer (decision du 6 octobre 2026). Tant
- * que ce drapeau est faux, rien n'est credite dans la base de production et
- * les routes /pieces n'y repondent pas : un joueur de production ne voit
- * rien, et ne se retrouve pas a l'ouverture avec un solde amasse en silence.
- * Chaque appelant dit sur quelle base il ecrit (`test`) ; la base elle-meme
- * ne le dit pas, le cron passe sur les deux avec le meme code.
+ * OUVERT A LA PRODUCTION le 6 octobre 2026 au soir, apres un passage par le
+ * canal de test seul. Remis a false, rien n'est plus credite dans la base de
+ * production et les routes /pieces n'y repondent plus (les soldes restent,
+ * intacts, dans le journal). Chaque appelant dit sur quelle base il ecrit
+ * (`test`) ; la base elle-meme ne le dit pas, le cron passe sur les deux avec
+ * le meme code. Va de pair avec PIECES_OUVERTES dans src/game/pieces.ts.
  */
-export const OUVERT_EN_PRODUCTION = false;
+export const OUVERT_EN_PRODUCTION = true;
 export const piecesOuvertes = test => OUVERT_EN_PRODUCTION || !!test;
 
 /** Ce que rapporte chaque exploit. */

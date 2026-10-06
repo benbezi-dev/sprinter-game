@@ -21,11 +21,12 @@ import { getDeviceId, getSavedName } from './leaderboard';
 import { EST_TEST } from './canal';
 
 /**
- * CANAL DE TEST SEULEMENT, pour commencer (decision du 6 octobre 2026). Le
- * worker refuse aussi /pieces hors canal de test (OUVERT_EN_PRODUCTION dans
- * worker/src/pieces.js) : les deux verrous s'ouvrent ensemble.
+ * OUVERT A LA PRODUCTION le 6 octobre 2026 au soir, apres un passage par le
+ * canal de test seul. Le worker a le meme verrou (OUVERT_EN_PRODUCTION dans
+ * worker/src/pieces.js) : les deux s'ouvrent et se ferment ensemble.
  */
-export const PIECES_OUVERTES = EST_TEST;
+const OUVERT_EN_PRODUCTION = true;
+export const PIECES_OUVERTES = EST_TEST || OUVERT_EN_PRODUCTION;
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
