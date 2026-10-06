@@ -46,8 +46,12 @@ function publier(e: EtatPieces | null) {
 
 /** Relit le solde. Rend null si le joueur n'a pas de nom ou si le serveur ne repond pas. */
 export async function rafraichirPieces(): Promise<EtatPieces | null> {
+  // SANS NOM, ON DEMANDE QUAND MEME. Le serveur rend alors les prix avec
+  // `reserve: false` : l'offre du Continue se montre a tous (voir
+  // OverScreen), y compris a qui n'a pas encore de nom — c'est lui qu'il faut
+  // le plus convaincre d'en prendre un.
   const nom = getSavedName().trim();
-  if (!PIECES_OUVERTES || !nom) { publier(null); return null; }
+  if (!PIECES_OUVERTES) { publier(null); return null; }
   try {
     const r = await fetch(`${API_BASE}/pieces?nom=${encodeURIComponent(nom)}`);
     if (!r.ok) return etat;
