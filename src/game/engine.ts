@@ -53,6 +53,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
+import { compterCarriere } from './legende/compte';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
 
@@ -94,6 +95,11 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // n'aura plus qu'a laisser tomber les confettis.
   jugerLaCourse(race, t, SprinterApp.G.player);
 };
+
+// Meme crochet, pour une CARRIERE gagnee de bout en bout : le compte qui
+// ouvre la Legende (game/legende/compte.ts). Il tourne sur les deux canaux —
+// la Legende, elle, ne se voit que sur celui de test (canal.ts).
+SprinterApp.G.onCarriereGagnee = (race: string) => { compterCarriere(race); };
 
 export type GameState = {
   state: 'open' | 'title' | 'cut' | 'count' | 'race' | 'result' | 'over' | 'winall' | 'falseout';
@@ -791,6 +797,16 @@ function entrerEnBoss(avD: any, dt: number) {
   const E = avD.entree;
   const r = (G.runners || []).find((x: any) => x.name === E.coureur);
   if (!r) { avD.reste = 0; return; }
+  // UNE ENTREE A SOI (06/10, les boss de la carriere Legende : « des entrees
+  // et presentations propres a eux et a leurs cultures »). Le module qui l'a
+  // posee mene le corps image par image (`jouer`, game/legende/entrees.ts) et
+  // dit quand elle finit (`avD.reste = 0`) ; la camera reste celle d'Aurel,
+  // a son cadrage pres (`plan`, `visee`).
+  if (typeof E.jouer === 'function') {
+    E.jouer(r, avD, dt);
+    viserLEntree(r, E);
+    return;
+  }
   const doux = (x: number) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
   if (E.d == null) E.d = E.depuis;
   avD.reste = 99;
@@ -818,16 +834,19 @@ function entrerEnBoss(avD: any, dt: number) {
     avD.reste = 0;
   }
   r.d = E.d; r.v = 0;
-  if (!animationsReduites()) {
-    if (!G.viseCamera) {
-      const vise = () => G.track.pos(ENTREE.visee, r.lane);
-      (vise as any).cri = true;
-      G.viseCamera = vise;
-      // un plan, pas un travelling : il doit entrer dans le cadre, pas l'y
-      // trouver deja
-      G.zoomPres = ENTREE.plan;
-    }
-  }
+  viserLEntree(r, E);
+}
+
+/** La camera d'une entree : son couloir, derriere la ligne, en plan serre. */
+function viserLEntree(r: any, E: any) {
+  if (animationsReduites() || G.viseCamera) return;
+  const visee = typeof E.visee === 'number' ? E.visee : ENTREE.visee;
+  const vise = () => G.track.pos(visee, r.lane);
+  (vise as any).cri = true;
+  G.viseCamera = vise;
+  // un plan, pas un travelling : il doit entrer dans le cadre, pas l'y
+  // trouver deja
+  G.zoomPres = typeof E.plan === 'number' ? E.plan : ENTREE.plan;
 }
 
 /** Le plan serre sur Meba-Mickael pendant son cri (voir applaudir) : a 1,9 il

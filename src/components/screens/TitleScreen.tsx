@@ -32,11 +32,20 @@ const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
 // paquet public tant que DEFI_VEDETTE_OUVERT est ferme (canal.ts).
 const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
   .then(m => ({ default: m.BanderoleVedette })));
+// La carriere Legende : canal de test seulement (LEGENDE_OUVERTE, canal.ts),
+// chargee a la demande pour la meme raison que les deux autres.
+const PanneauLegende = /* @__PURE__ */ lazy(() => import('./Legende')
+  .then(m => ({ default: m.PanneauLegende })));
+const VerrouLegende = /* @__PURE__ */ lazy(() => import('./Legende')
+  .then(m => ({ default: m.VerrouLegende })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT } from '@/game/canal';
+import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
+// Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
+// en production l'appel se replie et le bundler le retire.
+import { legendeRemplaceLaCarriere } from '@/game/legende/compte';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
@@ -130,6 +139,9 @@ export function TitleScreen() {
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
+  // Redessiner l'onglet CARRIERE quand la Legende s'ouvre pour l'essai
+  // (canal de test, VerrouLegende) : la regle se lit dans le stockage.
+  const [, rafraichirLegende] = useState(0);
   const [showDuels, setShowDuels] = useState(false);
   // Combien sont la, sur le bouton qui mene a eux. Voir game/presence.ts.
   const presences = usePresences();
@@ -348,7 +360,9 @@ export function TitleScreen() {
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
-                  ? <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>
+                  ? (LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere()
+                      ? <>{RACES['100'].label} &mdash; {N.getLang() === 'en' ? 'LEGEND' : 'LÉGENDE'}</>
+                      : <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>)
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
               </p>
             </div>
@@ -386,6 +400,7 @@ export function TitleScreen() {
                 Meba-Mickael Zeze sur l'accueil de Sprinter, Aurel Manga sur
                 celui de Hurdlers (`jeux`, game/vedettes.ts). */}
             {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
+
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}
 
@@ -518,7 +533,20 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
-            {tab === 'career' && <>
+            {/* LA LEGENDE REMPLACE LA CARRIERE CLASSIQUE une fois celle-ci
+                gagnee 99 fois (decision de l'auteur, 06/10/2026), dans
+                Sprinter — la Legende est un 100 m, Hurdlers garde la sienne.
+                Canal de test seulement (LEGENDE_OUVERTE). */}
+            {tab === 'career' && LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere() && (
+              <Suspense fallback={null}><PanneauLegende /></Suspense>
+            )}
+
+            {tab === 'career' && !(LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere()) && <>
+            {/* Avant les 99 : ce qui manque pour la Legende, au-dessus de la
+                carriere qu'elle remplacera. */}
+            {LEGENDE_OUVERTE && !haies && (
+              <Suspense fallback={null}><VerrouLegende onOuvrir={() => rafraichirLegende(n => n + 1)} /></Suspense>
+            )}
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
                 fallait derouler pour lancer une course, sur l'ecran dont c'est

@@ -1,9 +1,11 @@
 import React from 'react';
-import { useGameStore } from '@/game/engine';
+import { SprinterApp, useGameStore } from '@/game/engine';
 import { useFete } from '@/game/fete';
 import { Confettis } from './Confettis';
 import { Feux } from './Feux';
 import { defiPerdu } from '@/game/vedettes';
+import { LEGENDE_OUVERTE } from '@/game/canal';
+import { etapeLegendePerdue } from '@/game/legende/etat';
 
 /**
  * LE CALQUE DE LA FETE, MONTE UNE FOIS POUR TOUT LE JEU.
@@ -41,8 +43,10 @@ export function FeteRecords() {
 
   if (!APRES_COURSE.has(state)) return null;
   // Une defaite : l'elimination de la carriere (`over`), ou un defi de vedette
-  // perdu, qui finit sur l'ecran de fin du one shot (`winall`).
-  const defaite = state === 'over' || (state === 'winall' && defiPerdu());
+  // perdu, qui finit sur l'ecran de fin du one shot (`winall`) — comme une
+  // etape perdue de la Legende (canal de test).
+  const defaite = state === 'over' || (state === 'winall' && defiPerdu())
+    || (LEGENDE_OUVERTE && state === 'winall' && etapeLegendePerdue(SprinterApp.G));
 
   // Le jeton est le coureur : une fete gagnee a la course d'avant ne se
   // rejoue pas sur celle-ci, sans qu'il ait fallu l'effacer nulle part. Le

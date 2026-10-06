@@ -125,8 +125,11 @@ export function OneShotPanel() {
                     contre Meba-Mickael Zeze battu au 100 m et au 200 m) ne se
                     choisit qu'une fois gagne. Avant, il se montre grise, avec
                     ce qu'il faut faire — tant que son defi est ouvert. */}
+                {/* Les lieux de la carriere Legende (`legende`, inscrits par
+                    game/legende/stades.ts sur le canal de test) ne se
+                    choisissent pas non plus : on y arrive etape par etape. */}
                 {LEVELS.map((l: any, i: number) => {
-                  if (!l.horsSerie || l.evenement || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
+                  if (!l.horsSerie || l.evenement || l.legende || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
                   if (stadeDebloque(l)) return (
                     <option key={i} value={i} className="bg-neutral-900">
                       {N.levelName(i)}

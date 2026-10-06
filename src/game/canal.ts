@@ -360,6 +360,31 @@ export const HALLOWEEN_OUVERT = EST_TEST;
 export const HALLOWEEN_2026_OUVERT = EST_TEST;
 
 /**
+ * LA CARRIERE LEGENDE — l'extension de fin de jeu (game/legende/).
+ *
+ * Six etapes comme la carriere classique, mais dans le monde : la plage de
+ * Menole a San-Pedro, Kyoto, un national et un mondial tires au sort, la ligne
+ * de Karman, l'apotheose. Une carte entre chaque course, un boss par plateau.
+ * Elle ne s'ouvre qu'apres 99 carrieres classiques gagnees, toutes epreuves
+ * confondues (game/legende/compte.ts).
+ *
+ * SUR LE CANAL DE TEST SEULEMENT, c'est la consigne de l'auteur (6 octobre
+ * 2026). La forme est celle du reste du fichier : `EST_TEST` se replie a la
+ * compilation, ce drapeau vaut `false` EN DUR dans le build public, et tout ce
+ * qui ne s'atteint que par `LEGENDE_OUVERTE && ...` en sort — les ecrans, la
+ * carte, la cinematique. Comme pour Halloween, ses decors ne vont PAS dans
+ * `public/`, qui part tel quel dans les deux builds.
+ *
+ * CE QUI RESTE EN PRODUCTION, ET QU'ON ASSUME : le compte des carrieres
+ * gagnees. Il tourne sur les deux canaux pour que, le jour de l'ouverture, les
+ * carrieres courues d'ici la soient deja comptees — comme les series de duels,
+ * que le serveur comptait pendant que la flamme restait eteinte.
+ *
+ * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ */
+export const LEGENDE_OUVERTE = EST_TEST;
+
+/**
  * LE TCHAT RAPIDE dans les salles de course : des phrases ecrites par le jeu,
  * envoyees par les joueurs (voir game/tchat-rapide.ts).
  *

@@ -63,7 +63,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
 import { Regarder } from '@/components/screens/Regarder';
 import { demandeDeLUrl } from '@/game/regarder';
-import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT } from '@/game/canal';
+import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
    QU'ELLE SORTE DU BUILD PUBLIC.
@@ -107,6 +107,8 @@ const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Hall
 // raison : l'evenement ferme (DEFI_VEDETTE_OUVERT), il ne part pas en public.
 const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens/DefiVedette')
   .then(m => ({ default: m.FinDuDefiVedette })));
+const FinDEtapeLegende = /* @__PURE__ */ lazy(() => import('@/components/screens/Legende')
+  .then(m => ({ default: m.FinDEtapeLegende })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
@@ -117,6 +119,9 @@ import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
 import { nuitEnCours } from '@/game/halloween';
 import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
+// Un module sans import : demander « est-ce une etape de la Legende ? » ne
+// fait pas entrer la Legende dans le paquet public.
+import { finDEtapeLegende } from '@/game/legende/etat';
 
 const queryClient = new QueryClient();
 
@@ -376,10 +381,13 @@ function MainGame() {
         {/* LE DEFI D'UNE VEDETTE PASSE AVANT LUI AUSSI : un duel contre un
             seul homme se conclut par un verdict et, peut-etre, un skin — pas
             par un tableau de huit choses (voir game/vedettes.ts). */}
+        {/* UNE ETAPE DE LA LEGENDE AUSSI : sa fin decide de la suite — l'etape
+            d'apres, ou la plage (game/legende/legende.ts). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
             : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
             : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
+            : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>
             : defiEnCours && programmeDuDefi() ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>

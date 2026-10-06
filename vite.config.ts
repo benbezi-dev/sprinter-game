@@ -60,7 +60,11 @@ const canalDuBuild = (mode: string) => {
 // `?url`, donc au moment ou le module est lu. Meme remede : hors du canal de
 // test, ces imports ne sont jamais resolus. Verifie par
 // tools/longueur-canal-test.mjs, qui bati les deux canaux.
-const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/longueur/'];
+//
+// LA CARRIERE LEGENDE AUSSI (canal.ts, LEGENDE_OUVERTE) : ses decors, ses
+// vehicules et ses boss vivent sous src/assets/legende/ et non dans public/,
+// precisement pour passer par ici.
+const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/longueur/', 'assets/legende/'];
 const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
   name: 'sprinter-musique-hors-production',
   enforce: 'pre' as const,

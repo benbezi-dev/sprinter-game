@@ -3501,6 +3501,14 @@
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {
         G.runRank = recordRun(G.runTime); save(); G.flash = 1;
+        // UNE CARRIERE GAGNEE DE BOUT EN BOUT : on la compte, c'est la clef de
+        // la Legende (game/legende/compte.ts, branche par engine.ts). On n'arrive
+        // ici que par la : une carriere part toujours de la premiere etape
+        // (startRun) et s'arrete a la premiere defaite. Le crochet ne doit rien
+        // pouvoir casser — le sacre passe avant le compte.
+        if (!G.rejeu && G.onCarriereGagnee) {
+          try { G.onCarriereGagnee(G.raceKey); } catch (e) { /* compte perdu, sacre intact */ }
+        }
         Audio_.sfx('win');
         // LE GENERIQUE, APRES LE SACRE.
         //

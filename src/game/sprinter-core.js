@@ -2892,6 +2892,20 @@
       leve = melange(leve, 0, wGe);
       teteAt = melange(teteAt, B.tete, wGe);
     }
+    // LA POSTURE IMPOSEE A AUSSI UNE TETE ET DES ROULIS (06/10, les entrees des
+    // boss de la carriere Legende, game/legende/entrees.ts : une reverence, une
+    // main sur le coeur, une montre qu'on consulte). `tete` : positive le menton
+    // leve, negative les yeux baisses, comme `teteAt`. `roule` : [bras,
+    // avant-bras], positif vers l'axe du corps, comme `rouleBras`. Poses apres
+    // la demarche et le geste, que la posture remplace a mesure de son poids.
+    // Le saut, qui n'en pose aucun, ne voit rien changer.
+    if (wPo > 0) {
+      if (posture.tete != null) teteAt = melange(teteAt, posture.tete, wPo);
+      if (posture.roule) {
+        rouleBras = [melange(rouleBras ? rouleBras[0] : 0, posture.roule[0], wPo),
+                     melange(rouleBras ? rouleBras[1] : 0, posture.roule[1], wPo)];
+      }
+    }
 
     // Moulinets de bras pendant la chute : les deux bras tournent en
     // opposition, bien plus vite que la foulee, comme quelqu'un qui essaie
