@@ -6,9 +6,8 @@ import { PANNEAU, VOILE } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { drapeauDe } from '@/components/Insignes';
 import { getSavedName } from '@/game/leaderboard';
-import { CARRIERES_REQUISES, carrieresGagnees } from '@/game/legende/compte';
+import { CARRIERES_REQUISES, carrieresGagnees, type ChoixCarriere } from '@/game/legende/compte';
 import { ETAPES, type Transport } from '@/game/legende/etapes';
-import { forcerLaLegende } from '@/game/legende/compte';
 import {
   commencerLaLegende, lancerLEtape, conclureLEtape, etapeSuivante, rangerLaLegende,
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
@@ -22,8 +21,8 @@ import { PORTRAITS, TEINTES } from './legende-commun';
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
    ---------------------------------------------------------------------------
-   L'onglet CARRIERE (la jauge des 99, puis la Legende a la place de la
-   carriere classique), une affiche avant chaque etape (le joueur a gauche, le
+   L'onglet CARRIERE (le choix entre la carriere classique et la Legende,
+   fermee avant les 99), une affiche avant chaque etape (le joueur a gauche, le
    boss a droite, comme l'ecran VS d'un jeu de combat), et l'ecran de fin qui
    decide de la suite. La carte du monde entre deux etapes viendra
    se poser AVANT l'affiche (projets/carriere-legende/PLAN.md, etape 2).
@@ -38,42 +37,65 @@ const OR = '#E8B84A';
 const ICONES: Record<Transport, typeof Bike> = { velo: Bike, voiture: Car, car: Bus, avion: Plane, fusee: Rocket };
 
 /* ===========================================================================
-   AVANT LES 99 : LA JAUGE, DANS L'ONGLET CARRIERE CLASSIQUE
+   LE CHOIX, EN TETE DE L'ONGLET CARRIERE
    ===========================================================================
-   Tant que la Legende n'est pas meritee, l'onglet CARRIERE reste celui de
-   toujours ; cette bande dit seulement ce qui manque. Sur le canal de test,
-   ESSAYER l'ouvre sans les 99 (compte.ts, forcerLaLegende). */
+   La Legende NE REMPLACE PAS la carriere classique (l'auteur, 07/10/2026) :
+   l'onglet propose les deux, cote a cote. Tant qu'il manque des carrieres
+   gagnees, la Legende est FERMEE — un cadenas et le compte, rien a toucher.
+   Plus de bouton ESSAYER : sur le canal de test, `?legende=99` l'ouvre
+   (compte.ts, legendeForcee). */
 
-export function VerrouLegende({ onOuvrir }: { onOuvrir: () => void }) {
+export function ChoixDeCarriere({ choix, ouverte, onChoisir }:
+  { choix: ChoixCarriere; ouverte: boolean; onChoisir: (c: ChoixCarriere) => void }) {
   const k = carrieresGagnees();
+  const legende = ouverte && choix === 'legende';
+  const tuile = 'flex-1 min-w-0 rounded-xl border px-3 py-2 flex flex-col items-start text-left transition-colors';
   return (
-    <div className="w-full rounded-2xl border overflow-hidden"
-         style={{ borderColor: `${OR}66`, background: 'linear-gradient(100deg, #1B1230E6, #0B0A1ACC)' }}>
-      <div className="flex items-center gap-3 px-3 py-2">
-        <Lock size={16} color={`${OR}CC`} className="shrink-0" />
-        <span className="flex-1 min-w-0 flex flex-col">
-          <span className="text-[9px] font-bold tracking-[0.22em] uppercase" style={{ color: OR }}>{mot('titre')}</span>
-          <span className="text-[11px] text-foreground/80 leading-snug">
-            {mot('verrou', { n: CARRIERES_REQUISES })} · {mot('compte', { k: Math.min(k, CARRIERES_REQUISES), n: CARRIERES_REQUISES })}
-          </span>
+    <div className="w-full flex gap-2" role="radiogroup">
+      <button role="radio" aria-checked={!legende} onClick={() => onChoisir('classique')}
+              className={`${tuile} ${!legende ? 'bg-primary/15 border-primary/60' : 'bg-card/60 border-white/10 hover:bg-white/5'}`}>
+        <span className={`text-[11px] md:text-sm font-black tracking-widest ${!legende ? 'text-primary' : 'text-foreground/80'}`}>
+          {mot('classique')}
         </span>
-        <button onClick={() => { forcerLaLegende(); onOuvrir(); }}
-                className="shrink-0 px-2 py-1.5 rounded-lg text-[9px] font-black tracking-widest text-white border border-white/25 hover:bg-white/10">
-          {mot('forcer')}
+        <span className="text-[9px] md:text-[11px] text-foreground/55 leading-snug">{mot('classique_sous')}</span>
+      </button>
+
+      {ouverte ? (
+        <button role="radio" aria-checked={legende} onClick={() => onChoisir('legende')}
+                className={tuile}
+                style={{ borderColor: legende ? OR : `${OR}55`,
+                         background: legende ? 'linear-gradient(160deg, #2A1C40F2, #0B0A1AE6)' : 'linear-gradient(100deg, #1B1230B3, #0B0A1A99)' }}>
+          <span className="flex items-center gap-1.5 text-[11px] md:text-sm font-black tracking-widest" style={{ color: OR }}>
+            <Crown size={13} color={OR} className="shrink-0" />{mot('legende_court')}
+          </span>
+          <span className="text-[9px] md:text-[11px] text-foreground/55 leading-snug">{mot('legende_sous')}</span>
         </button>
-      </div>
-      <div className="h-1 w-full bg-white/10">
-        <div className="h-full" style={{ width: `${Math.min(100, (100 * k) / CARRIERES_REQUISES)}%`, background: OR }} />
-      </div>
+      ) : (
+        // FERMEE : pas un bouton, rien ne s'y passe au toucher.
+        <div role="radio" aria-checked={false} aria-disabled
+             className={`${tuile} relative overflow-hidden cursor-default`}
+             style={{ borderColor: `${OR}40`, background: 'linear-gradient(100deg, #1B123099, #0B0A1A80)' }}>
+          <span className="flex items-center gap-1.5 text-[11px] md:text-sm font-black tracking-widest" style={{ color: `${OR}AA` }}>
+            <Lock size={12} color={`${OR}AA`} className="shrink-0" />{mot('legende_court')}
+          </span>
+          <span className="text-[9px] md:text-[11px] text-foreground/55 leading-snug">{mot('ferme', { n: CARRIERES_REQUISES })}</span>
+          <span className="text-[10px] md:text-xs font-bold tabular-nums mt-0.5" style={{ color: OR }}>
+            {mot('victoires', { k: Math.min(k, CARRIERES_REQUISES), n: CARRIERES_REQUISES })}
+          </span>
+          <span className="absolute left-0 bottom-0 h-1 w-full bg-white/10">
+            <span className="block h-full" style={{ width: `${Math.min(100, (100 * k) / CARRIERES_REQUISES)}%`, background: OR }} />
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ===========================================================================
-   APRES LES 99 : LA LEGENDE, A LA PLACE DE LA CARRIERE CLASSIQUE
+   APRES LES 99 : LE PANNEAU DE LA LEGENDE, QUAND ON LA CHOISIT
    ===========================================================================
-   L'onglet CARRIERE ne propose plus que la Legende (decision de l'auteur,
-   06/10/2026). Meme ossature que la carriere qu'elle remplace — une carte de
+   A cote de la carriere classique, pas a sa place (l'auteur, 07/10/2026).
+   Meme ossature que la carriere classique — une carte de
    ce qu'on a fait, puis le gros bouton —, mais la carte est l'echelle des six
    etapes : ou l'on court, contre qui, et le meilleur chrono gagnant de chacune.
    Le 100 m seulement : pas de selecteur d'epreuve. */

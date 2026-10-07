@@ -156,14 +156,17 @@ export function legendeMeritee(): boolean {
 
 // LE FORCAGE DU CANAL DE TEST. 99 carrieres gagnees, ce sont des heures de
 // jeu : sans porte de service, personne ne pourrait essayer la Legende. Elle se
-// force d'un bouton (ESSAYER, onglet CARRIERE) ou par l'adresse (`?legende=99`,
-// et `?legende=0` pour la refermer), retenu sur l'appareil.
+// force par l'adresse seulement (`?legende=99`, et `?legende=0` pour la
+// refermer), retenu sur l'appareil. Le bouton ESSAYER de l'onglet a ete retire
+// le 07/10 : la Legende se montre FERMEE, avec le compte qui manque (l'auteur).
+// La clef a change le meme jour (`_v2`) : les appareils forces par l'ancien
+// bouton la revoient fermee.
 //
 // CES FONCTIONS NE SONT APPELEES QUE DERRIERE `LEGENDE_OUVERTE && ...`
 // (TitleScreen.tsx, Legende.tsx) : en production la condition se replie en
 // `false` a la compilation et le bundler les retire — la porte n'existe pas
 // hors du canal de test. Ce fichier, lui, n'importe toujours rien.
-const CLE_FORCE = 'sprinter_legende_force';
+const CLE_FORCE = 'sprinter_legende_force_v2';
 
 export function legendeForcee(): boolean {
   try {
@@ -174,15 +177,27 @@ export function legendeForcee(): boolean {
   } catch { return false; }
 }
 
-export function forcerLaLegende(): void {
-  try { localStorage.setItem(CLE_FORCE, '1'); } catch { /* stockage ferme */ }
+/**
+ * La Legende est-elle ouverte a ce joueur : meritee (99 carrieres), ou forcee
+ * pour l'essai. Elle NE REMPLACE PAS la carriere classique (l'auteur, 07/10) :
+ * l'onglet CARRIERE propose les deux, la Legende fermee tant qu'il manque des
+ * carrieres. A appeler derriere `LEGENDE_OUVERTE && ...`.
+ */
+export function legendeAccessible(): boolean {
+  return legendeMeritee() || legendeForcee();
 }
 
-/**
- * LA LEGENDE REMPLACE LA CARRIERE CLASSIQUE une fois celle-ci gagnee 99 fois
- * (decision de l'auteur, 06/10/2026) : l'onglet CARRIERE de Sprinter ne
- * propose plus que la Legende. A appeler derriere `LEGENDE_OUVERTE && ...`.
- */
-export function legendeRemplaceLaCarriere(): boolean {
-  return legendeMeritee() || legendeForcee();
+/* ------------------------------------------------ le choix de l'onglet */
+
+export type ChoixCarriere = 'classique' | 'legende';
+const CLE_CHOIX = 'sprinter_carriere_choisie';
+
+/** La carriere choisie la derniere fois dans l'onglet ; la classique par defaut. */
+export function lireChoixCarriere(): ChoixCarriere {
+  try { return localStorage.getItem(CLE_CHOIX) === 'legende' ? 'legende' : 'classique'; }
+  catch { return 'classique'; }
+}
+
+export function retenirChoixCarriere(c: ChoixCarriere): void {
+  try { localStorage.setItem(CLE_CHOIX, c); } catch { /* le choix vaut pour la visite */ }
 }

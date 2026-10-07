@@ -39,8 +39,8 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
 // chargee a la demande pour la meme raison que les deux autres.
 const PanneauLegende = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.PanneauLegende })));
-const VerrouLegende = /* @__PURE__ */ lazy(() => import('./Legende')
-  .then(m => ({ default: m.VerrouLegende })));
+const ChoixDeCarriere = /* @__PURE__ */ lazy(() => import('./Legende')
+  .then(m => ({ default: m.ChoixDeCarriere })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -48,7 +48,7 @@ import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/g
 import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
-import { legendeRemplaceLaCarriere } from '@/game/legende/compte';
+import { legendeAccessible, lireChoixCarriere, retenirChoixCarriere, type ChoixCarriere } from '@/game/legende/compte';
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
@@ -142,9 +142,14 @@ export function TitleScreen() {
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
-  // Redessiner l'onglet CARRIERE quand la Legende s'ouvre pour l'essai
-  // (canal de test, VerrouLegende) : la regle se lit dans le stockage.
-  const [, rafraichirLegende] = useState(0);
+  // CARRIERE CLASSIQUE OU LEGENDE : les deux dans l'onglet (l'auteur,
+  // 07/10/2026), la Legende fermee avant les 99 (canal de test seulement).
+  const [carriere, setCarriere] = useState<ChoixCarriere>(() =>
+    LEGENDE_OUVERTE ? lireChoixCarriere() : 'classique');
+  const legendeOffre = LEGENDE_OUVERTE && !haies;
+  const legendeOuverte = legendeOffre && legendeAccessible();
+  const legendeChoisie = legendeOuverte && carriere === 'legende';
+  const choisirCarriere = (c: ChoixCarriere) => { setCarriere(c); retenirChoixCarriere(c); };
   const [showDuels, setShowDuels] = useState(false);
   // Combien sont la, sur le bouton qui mene a eux. Voir game/presence.ts.
   const presences = usePresences();
@@ -366,7 +371,7 @@ export function TitleScreen() {
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
-                  ? (LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere()
+                  ? (legendeChoisie
                       ? <>{RACES['100'].label} &mdash; {N.getLang() === 'en' ? 'LEGEND' : 'LÉGENDE'}</>
                       : <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>)
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
@@ -539,20 +544,22 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
-            {/* LA LEGENDE REMPLACE LA CARRIERE CLASSIQUE une fois celle-ci
-                gagnee 99 fois (decision de l'auteur, 06/10/2026), dans
-                Sprinter — la Legende est un 100 m, Hurdlers garde la sienne.
+            {/* LE CHOIX DE LA CARRIERE, en tete de l'onglet : la classique, ou
+                la Legende — fermee, avec le compte des carrieres gagnees,
+                tant qu'il en manque (l'auteur, 07/10/2026). Sprinter
+                seulement : la Legende est un 100 m, Hurdlers garde la sienne.
                 Canal de test seulement (LEGENDE_OUVERTE). */}
-            {tab === 'career' && LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere() && (
+            {tab === 'career' && legendeOffre && (
+              <Suspense fallback={null}>
+                <ChoixDeCarriere choix={carriere} ouverte={legendeOuverte} onChoisir={choisirCarriere} />
+              </Suspense>
+            )}
+
+            {tab === 'career' && legendeChoisie && (
               <Suspense fallback={null}><PanneauLegende /></Suspense>
             )}
 
-            {tab === 'career' && !(LEGENDE_OUVERTE && !haies && legendeRemplaceLaCarriere()) && <>
-            {/* Avant les 99 : ce qui manque pour la Legende, au-dessus de la
-                carriere qu'elle remplacera. */}
-            {LEGENDE_OUVERTE && !haies && (
-              <Suspense fallback={null}><VerrouLegende onOuvrir={() => rafraichirLegende(n => n + 1)} /></Suspense>
-            )}
+            {tab === 'career' && !legendeChoisie && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
                 fallait derouler pour lancer une course, sur l'ecran dont c'est

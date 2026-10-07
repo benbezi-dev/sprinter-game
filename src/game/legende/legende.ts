@@ -25,7 +25,7 @@ import { inscrireLesStades, indexDuLieu, DIFFICULTE } from './stades';
 import { poserEtape } from './etat';
 import { entreeDe } from './entrees';
 import { lointainDe, premierPlanDe, preparerLeLointain } from './decors';
-import { legendeRemplaceLaCarriere } from './compte';
+import { legendeAccessible } from './compte';
 
 type Parcours = {
   tirage: Tirage;
@@ -72,7 +72,7 @@ function retenir(m: Memoire) {
 
 /** La Legende est-elle ouverte a ce joueur : meritee, ou forcee pour l'essai. */
 export function legendeDebloquee(): boolean {
-  return LEGENDE_OUVERTE && legendeRemplaceLaCarriere();
+  return LEGENDE_OUVERTE && legendeAccessible();
 }
 
 /* --------------------------------------------------- le parcours */
