@@ -45,6 +45,15 @@
    "rot": 0.0,
    "w": 1678
   },
+  "baobab": {
+   "ax": 319.5,
+   "ay": 843.31,
+   "f": "baobab.webp",
+   "h": 874,
+   "hauteur_m": 5.16,
+   "largeur_m": 4.01,
+   "w": 639
+  },
   "barcelone": {
    "ax": 547.0,
    "ay": 1213.34,
@@ -59,6 +68,33 @@
    "h": 1356,
    "rot": 270.0,
    "w": 1094
+  },
+  "boite": {
+   "ax": 190.5,
+   "ay": 832.36,
+   "f": "boite.webp",
+   "h": 872,
+   "hauteur_m": 1.61,
+   "largeur_m": 0.72,
+   "w": 381
+  },
+  "borne": {
+   "ax": 224.5,
+   "ay": 833.15,
+   "f": "borne.webp",
+   "h": 872,
+   "hauteur_m": 0.87,
+   "largeur_m": 0.46,
+   "w": 449
+  },
+  "bus": {
+   "ax": 932.0,
+   "ay": 822.97,
+   "f": "bus.webp",
+   "h": 874,
+   "hauteur_m": 4.35,
+   "largeur_m": 10.22,
+   "w": 1864
   },
   "cabine": {
    "ax": 176.5,
@@ -84,6 +120,60 @@
    "rot": 30.0,
    "w": 434
   },
+  "cesme": {
+   "ax": 328.5,
+   "ay": 852.75,
+   "f": "cesme.webp",
+   "h": 872,
+   "hauteur_m": 2.64,
+   "largeur_m": 2.0,
+   "w": 657
+  },
+  "drac": {
+   "ax": 1305.5,
+   "ay": 800.19,
+   "f": "drac.webp",
+   "h": 874,
+   "hauteur_m": 0.9,
+   "largeur_m": 2.93,
+   "w": 2611
+  },
+  "etal": {
+   "ax": 507.0,
+   "ay": 844.43,
+   "f": "etal.webp",
+   "h": 872,
+   "hauteur_m": 2.55,
+   "largeur_m": 3.0,
+   "w": 1014
+  },
+  "fanous": {
+   "ax": 99.5,
+   "ay": 853.84,
+   "f": "fanous.webp",
+   "h": 872,
+   "hauteur_m": 2.69,
+   "largeur_m": 0.6,
+   "w": 199
+  },
+  "garde": {
+   "ax": 183.5,
+   "ay": 854.14,
+   "f": "garde.webp",
+   "h": 872,
+   "hauteur_m": 3.12,
+   "largeur_m": 1.3,
+   "w": 367
+  },
+  "hotdog": {
+   "ax": 408.0,
+   "ay": 843.61,
+   "f": "hotdog.webp",
+   "h": 872,
+   "hauteur_m": 2.33,
+   "largeur_m": 2.2,
+   "w": 816
+  },
   "izmir": {
    "ax": 331.0,
    "ay": 1241.09,
@@ -99,6 +189,15 @@
    "rot": 270.0,
    "w": 662
   },
+  "jerk": {
+   "ax": 273.5,
+   "ay": 841.36,
+   "f": "jerk.webp",
+   "h": 872,
+   "hauteur_m": 1.47,
+   "largeur_m": 0.95,
+   "w": 547
+  },
   "kingston": {
    "ax": 451.0,
    "ay": 1284.7,
@@ -113,6 +212,15 @@
    "h": 1356,
    "rot": 270.0,
    "w": 902
+  },
+  "kiosque": {
+   "ax": 410.5,
+   "ay": 810.52,
+   "f": "kiosque.webp",
+   "h": 870,
+   "hauteur_m": 2.83,
+   "largeur_m": 2.6,
+   "w": 821
   },
   "kyoto": {
    "ax": 1189.5,
@@ -183,6 +291,60 @@
    "rot": 270.0,
    "w": 693
   },
+  "reverbere": {
+   "ax": 78.0,
+   "ay": 859.55,
+   "f": "reverbere.webp",
+   "h": 871,
+   "hauteur_m": 4.11,
+   "largeur_m": 0.7,
+   "w": 156
+  },
+  "sakura": {
+   "ax": 372.0,
+   "ay": 854.58,
+   "f": "sakura.webp",
+   "h": 872,
+   "hauteur_m": 3.77,
+   "largeur_m": 3.21,
+   "w": 744
+  },
+  "simit": {
+   "ax": 438.5,
+   "ay": 830.06,
+   "f": "simit.webp",
+   "h": 874,
+   "hauteur_m": 1.61,
+   "largeur_m": 1.74,
+   "w": 877
+  },
+  "tambours": {
+   "ax": 634.5,
+   "ay": 833.69,
+   "f": "tambours.webp",
+   "h": 874,
+   "hauteur_m": 1.04,
+   "largeur_m": 1.6,
+   "w": 1269
+  },
+  "taxi": {
+   "ax": 1112.0,
+   "ay": 785.06,
+   "f": "taxi.webp",
+   "h": 874,
+   "hauteur_m": 1.63,
+   "largeur_m": 4.6,
+   "w": 2224
+  },
+  "terrasse": {
+   "ax": 735.0,
+   "ay": 832.02,
+   "f": "terrasse.webp",
+   "h": 872,
+   "hauteur_m": 0.95,
+   "largeur_m": 1.64,
+   "w": 1470
+  },
   "torii": {
    "ax": 595.0,
    "ay": 858.0,
@@ -191,6 +353,42 @@
    "hauteur_m": 5.08,
    "largeur_m": 6.93,
    "w": 1190
+  },
+  "toro": {
+   "ax": 185.0,
+   "ay": 833.11,
+   "f": "toro.webp",
+   "h": 872,
+   "hauteur_m": 2.26,
+   "largeur_m": 0.97,
+   "w": 370
+  },
+  "trencadis": {
+   "ax": 1843.0,
+   "ay": 780.4,
+   "f": "trencadis.webp",
+   "h": 878,
+   "hauteur_m": 0.98,
+   "largeur_m": 5.17,
+   "w": 3686
+  },
+  "wallace": {
+   "ax": 171.0,
+   "ay": 834.07,
+   "f": "wallace.webp",
+   "h": 872,
+   "hauteur_m": 2.62,
+   "largeur_m": 1.04,
+   "w": 342
+  },
+  "zellige": {
+   "ax": 401.0,
+   "ay": 838.95,
+   "f": "zellige.webp",
+   "h": 872,
+   "hauteur_m": 2.75,
+   "largeur_m": 2.5,
+   "w": 802
   }
  }
 }

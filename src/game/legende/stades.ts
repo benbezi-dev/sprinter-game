@@ -240,7 +240,29 @@ const OLYMPE = {
   arbres: null,
 };
 const THEME_DU_LIEU: Record<string, Record<string, unknown>> = {
-  kingston: PALMIERS, izmir: PALMIERS, casablanca: PALMIERS, barcelone: PALMIERS,
+  // LE DEPAYSEMENT (l'auteur, 07/10 ; voir CULTURE dans decors.ts) : les
+  // panneaux qui ne portent pas le sponsor aux couleurs du pays, et une piste
+  // de la couleur du lieu (« change la couleur de la piste pour quelque chose
+  // qui va plus dans le decor » — au national et au mondial, elle restait la
+  // rouge du jeu et le bleu des grands stades, comme le voulait le plan).
+  kingston: { ...PALMIERS, panels: [[0, 155, 58], [254, 209, 0], [24, 24, 24]],      // l'or jamaicain
+              trackA: [232, 182, 34], trackB: [220, 170, 26], lane: [0, 110, 54], kerb: [24, 24, 24] },
+  izmir: { ...PALMIERS, panels: [[227, 10, 23], [250, 250, 250]],                      // le turquoise d'Iznik
+           trackA: [34, 138, 150], trackB: [28, 126, 138], lane: [250, 250, 250], kerb: [250, 250, 250] },
+  casablanca: { ...PALMIERS, panels: [[193, 39, 45], [0, 98, 51], [244, 238, 226]],   // le vert des zelliges
+                trackA: [26, 112, 86], trackB: [22, 100, 76], lane: [250, 250, 250], kerb: [214, 172, 70] },
+  barcelone: { ...PALMIERS, panels: [[252, 221, 9], [218, 18, 26]],                    // le bleu de la Mediterranee
+               trackA: [36, 94, 168], trackB: [30, 84, 154], lane: [250, 250, 250], kerb: [250, 250, 250] },
+  kyoto: { panels: [[200, 36, 36], [246, 242, 232], [30, 28, 30]],                     // la laque noire, le liseré vermillon
+           trackA: [46, 42, 46], trackB: [40, 36, 40], lane: [250, 246, 236], kerb: [214, 60, 40] },
+  abuja: { panels: [[0, 135, 81], [250, 250, 250]],                                    // la terre rouge (laterite)
+           trackA: [168, 84, 44], trackB: [156, 76, 38], lane: [250, 250, 250], kerb: [250, 250, 250] },
+  paris: { panels: [[0, 85, 164], [250, 250, 250], [239, 65, 53]],                     // la terre battue de Roland-Garros
+           trackA: [200, 98, 54], trackB: [188, 88, 46], lane: [250, 250, 250], kerb: [250, 250, 250] },
+  newyork: { panels: [[178, 34, 52], [250, 250, 250], [60, 59, 110]],                  // l'asphalte et ses lignes jaunes
+             trackA: [58, 60, 66], trackB: [52, 54, 60], lane: [250, 206, 40], kerb: [250, 250, 250] },
+  londres: { panels: [[200, 16, 46], [250, 250, 250], [1, 33, 105]],                   // le vert anglais
+             trackA: [26, 82, 52], trackB: [22, 74, 46], lane: [250, 250, 250], kerb: [250, 250, 250] },
   karman: OLYMPE, 'karman-wukong': OLYMPE, 'karman-anansi': OLYMPE, 'karman-inti': OLYMPE,
   // L'APOTHEOSE (l'auteur, 07/10, image de reference, version retenue) : une
   // piste translucide dans une nebuleuse — pervenche, ses lignes en fins

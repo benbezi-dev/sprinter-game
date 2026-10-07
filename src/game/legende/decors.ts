@@ -36,6 +36,29 @@ import arene from '@/assets/legende/decors/arene.webp?url';
 import torii from '@/assets/legende/decors/torii.webp?url';
 import cabine from '@/assets/legende/decors/cabine.webp?url';
 import morris from '@/assets/legende/decors/morris.webp?url';
+// le depaysement des stades 2 a 4 (legende_pieces.py ; voir CULTURE)
+import toro from '@/assets/legende/decors/toro.webp?url';
+import sakura from '@/assets/legende/decors/sakura.webp?url';
+import kiosque from '@/assets/legende/decors/kiosque.webp?url';
+import jerk from '@/assets/legende/decors/jerk.webp?url';
+import cesme from '@/assets/legende/decors/cesme.webp?url';
+import simit from '@/assets/legende/decors/simit.webp?url';
+import trencadis from '@/assets/legende/decors/trencadis.webp?url';
+import drac from '@/assets/legende/decors/drac.webp?url';
+import fanous from '@/assets/legende/decors/fanous.webp?url';
+import zellige from '@/assets/legende/decors/zellige.webp?url';
+import tambours from '@/assets/legende/decors/tambours.webp?url';
+import etal from '@/assets/legende/decors/etal.webp?url';
+import baobab from '@/assets/legende/decors/baobab.webp?url';
+import terrasse from '@/assets/legende/decors/terrasse.webp?url';
+import wallace from '@/assets/legende/decors/wallace.webp?url';
+import reverbere from '@/assets/legende/decors/reverbere.webp?url';
+import taxi from '@/assets/legende/decors/taxi.webp?url';
+import borne from '@/assets/legende/decors/borne.webp?url';
+import hotdog from '@/assets/legende/decors/hotdog.webp?url';
+import boite from '@/assets/legende/decors/boite.webp?url';
+import bus from '@/assets/legende/decors/bus.webp?url';
+import garde from '@/assets/legende/decors/garde.webp?url';
 import { citeCeleste, W as CITE_W, H as CITE_H, AX as CITE_AX, AY as CITE_AY } from './cite-celeste';
 import { cumulus, chargerLesCumulus, poserCumulus } from './nuages';
 // les dieux de l'Olympe en pied (rendus de leur maillage, vedette_tripo.py)
@@ -59,6 +82,8 @@ const IMAGES: Record<string, string> = {
   menole, kyoto, kingston, izmir, barcelone, casablanca, abuja,
   newyork, londres, apotheose, arene,
   torii, cabine, morris,
+  toro, sakura, kiosque, jerk, cesme, simit, trencadis, drac, fanous, zellige, tambours,
+  etal, baobab, terrasse, wallace, reverbere, taxi, borne, hotdog, boite, bus, garde,
 };
 
 // A DROITE. En portrait, le ciel n'entre dans le cadre qu'une fois la course
@@ -128,6 +153,8 @@ export function preparerLeLointain(cle: string) {
   piece(MONUMENT_DU_LIEU(cle));
   const P = PREMIER_PLAN[MONUMENT_DU_LIEU(cle)];
   if (P) piece(P.img);
+  const Cu = CULTURE[MONUMENT_DU_LIEU(cle)];
+  if (Cu) for (const ob of Cu.objets) piece(ob.img);
   for (const d of dieuxSpectateurs(cle)) image(d.url);
   if (MONUMENT_DU_LIEU(cle) === 'karman') chargerLesCumulus();
   if (MONUMENT_DU_LIEU(cle) === 'apotheose') piece('arene');
@@ -335,12 +362,344 @@ const PREMIER_PLAN: Record<string, PremierPlan> = {
   // deux barques peintes, cote a cote. A douze metres et neuf de recul
   // elles mangeaient le bas de l'ecran (07/10) : huit metres, a cinq du bord.
   menole: { img: 'menole', largeur: 8, recul: 5, pas: 3 },
-  // Kyoto : une allee de torii, comme a Fushimi Inari, tous les 24 m
-  kyoto: { img: 'torii', largeur: 6.9, recul: 4, pas: 2 },
-  // Londres : la cabine rouge ; Paris : la colonne Morris
-  londres: { img: 'cabine', largeur: 1.04, recul: 3, pas: 4 },
-  paris: { img: 'morris', largeur: 1.32, recul: 3, pas: 4 },
 };
+
+// -----------------------------------------------------------------------
+// LE DEPAYSEMENT DES STADES 2 A 4.
+// -----------------------------------------------------------------------
+//
+// L'auteur, 07/10 : « ajoute plus d'elements culturels sur tous les autres
+// stades, ca manque de depaysement » — sauf la plage de Menole, l'Olympe et
+// l'apotheose. Trois choses par lieu :
+//   - des OBJETS TYPIQUES poses dans la pelouse interieure, chacun a sa
+//     distance de la piste, tires au sort (mais toujours les memes a la meme
+//     place : le hasard est une graine du trace) ;
+//   - une GUIRLANDE le long des panneaux, aux couleurs du pays — a Kyoto, des
+//     lanternes de papier ;
+//   - a Kyoto, un JARDIN SEC (karesansui) a la place du gazon.
+// Les objets sont modelises dans Blender (legende_pieces.py), comme le torii.
+type Objet = { img: string; recul: [number, number]; poids: number };
+type Motif = 'sakura' | 'hibiscus' | 'nazar' | 'panot' | 'etoile8' | 'spirale' | 'feuille' | 'plaque' | 'rose';
+/** La piste du lieu : un motif peint ca et la, et un vers (ou un proverbe)
+ *  peint a plat dans un couloir, comme une inscription au sol. */
+type Piste = { motif: Motif; texte: string; couleur: string; police?: string };
+type Culture = { objets: Objet[]; pas: number; guirlande: number[][] | 'chochin'; sol?: 'karesansui'; piste?: Piste };
+const objet = (img: string, recul: [number, number], poids = 1): Objet => ({ img, recul, poids });
+const CULTURE: Record<string, Culture> = {
+  kyoto: { objets: [objet('torii', [4, 4.5], 2), objet('toro', [1.6, 3]), objet('sakura', [5, 9], 2)], pas: 6,
+           guirlande: 'chochin', sol: 'karesansui',
+          piste: { motif: 'sakura', texte: '古池や　蛙飛び込む　水の音', couleur: 'rgba(232,190,96,0.8)', police: 'serif' } },
+  kingston: { objets: [objet('kiosque', [4, 6]), objet('jerk', [1.6, 3])], pas: 5,
+              guirlande: [[0, 155, 58], [254, 209, 0], [24, 24, 24]],
+             piste: { motif: 'hibiscus', texte: 'Wi likkle but wi tallawah', couleur: 'rgba(0,96,48,0.8)' } },
+  izmir: { objets: [objet('cesme', [3.5, 5]), objet('simit', [1.6, 3])], pas: 5,
+           guirlande: [[227, 10, 23], [250, 250, 250]],
+          piste: { motif: 'nazar', texte: 'Gelin tanış olalım', couleur: 'rgba(255,255,255,0.78)' } },
+  barcelone: { objets: [objet('trencadis', [2.5, 4], 2), objet('drac', [3, 6])], pas: 6,
+               guirlande: [[252, 221, 9], [218, 18, 26]],
+              piste: { motif: 'panot', texte: 'Qui no s’arrisca, no pisca', couleur: 'rgba(252,221,9,0.8)' } },
+  casablanca: { objets: [objet('fanous', [1.4, 2.4], 2), objet('zellige', [4, 6])], pas: 5,
+                guirlande: [[193, 39, 45], [0, 98, 51]],
+               piste: { motif: 'etoile8', texte: 'مَن جَدَّ وَجَدَ', couleur: 'rgba(232,192,96,0.85)' } },
+  abuja: { objets: [objet('tambours', [1.6, 3]), objet('etal', [3, 5]), objet('baobab', [7, 11])], pas: 6,
+           guirlande: [[0, 135, 81], [250, 250, 250]],
+          piste: { motif: 'spirale', texte: 'Komai nisan dare, gari zai waye', couleur: 'rgba(255,255,255,0.78)' } },
+  paris: { objets: [objet('morris', [3, 3.5]), objet('terrasse', [1.6, 3], 2), objet('wallace', [3, 5]), objet('reverbere', [1.2, 1.6])], pas: 5,
+           guirlande: [[0, 85, 164], [250, 250, 250], [239, 65, 53]],
+          piste: { motif: 'feuille', texte: 'Sous le pont Mirabeau coule la Seine', couleur: 'rgba(255,255,255,0.8)', police: 'serif' } },
+  newyork: { objets: [objet('taxi', [2.5, 3.5]), objet('borne', [1.2, 1.6], 2), objet('hotdog', [3, 5])], pas: 5,
+             guirlande: [[178, 34, 52], [250, 250, 250], [60, 59, 110]],
+            piste: { motif: 'plaque', texte: 'Give me your tired, your poor', couleur: 'rgba(250,206,40,0.8)' } },
+  londres: { objets: [objet('cabine', [3, 3.5]), objet('boite', [1.2, 2]), objet('bus', [8, 10]), objet('garde', [3, 5])], pas: 6,
+             guirlande: [[200, 16, 46], [250, 250, 250], [1, 33, 105]],
+            piste: { motif: 'rose', texte: 'All the world’s a stage', couleur: 'rgba(232,190,96,0.8)', police: 'serif' } },
+};
+
+/**
+ * Pose le repere au sol : en unites d'un centimetre, `u` dans le sens de la
+ * course et `v` vers l'interieur — le haut d'une lettre regarde alors la
+ * tribune, et un texte se lit comme une inscription peinte au sol.
+ *
+ * (L'echantillon suivant du trace est a GAUCHE a l'ecran, pas a droite :
+ * pris tel quel, le vers se lisait a l'envers, en miroir — vu le 07/10.)
+ */
+function auSol(ctx: CanvasRenderingContext2D, api: any, s0: any, s1: any, r: number, dessiner: () => void) {
+  const a = api.ground(...api.ptOf(s0, r)), ex = api.ground(...api.ptOf(s1, r)), ey = api.ground(...api.ptOf(s0, r + 1));
+  ctx.save();
+  ctx.transform(-(ex[0] - a[0]) / 100, -(ex[1] - a[1]) / 100, -(ey[0] - a[0]) / 100, -(ey[1] - a[1]) / 100, a[0], a[1]);
+  dessiner();
+  ctx.restore();
+}
+
+function motif(ctx: CanvasRenderingContext2D, m: Motif, l: number, g: number) {
+  const fleur = (n: number, R: number, r: number, coul: string, rot: number) => {
+    ctx.fillStyle = coul;
+    for (let k = 0; k < n; k++) {
+      const a = rot + (k * Math.PI * 2) / n;
+      ctx.beginPath(); ctx.ellipse(Math.cos(a) * R, Math.sin(a) * R, r * 1.1, r * 0.75, a, 0, Math.PI * 2); ctx.fill();
+    }
+  };
+  const rot = (g % 628) / 100;
+  switch (m) {
+    case 'sakura':
+      fleur(5, l * 0.24, l * 0.2, 'rgba(232,190,96,0.7)', rot);
+      ctx.fillStyle = 'rgba(255,236,170,0.8)'; ctx.beginPath(); ctx.arc(0, 0, l * 0.08, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'hibiscus':
+      fleur(5, l * 0.26, l * 0.24, 'rgba(214,32,58,0.75)', rot);
+      ctx.strokeStyle = 'rgba(250,220,60,0.9)'; ctx.lineWidth = l * 0.04;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(rot) * l * 0.5, Math.sin(rot) * l * 0.5); ctx.stroke();
+      break;
+    case 'nazar':
+      for (const [r, c] of [[0.5, 'rgba(20,60,170,0.85)'], [0.34, 'rgba(255,255,255,0.9)'], [0.22, 'rgba(90,170,230,0.9)'], [0.11, 'rgba(14,14,20,0.9)']] as [number, string][]) {
+        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(0, 0, l * r, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    case 'panot':
+      ctx.strokeStyle = 'rgba(250,250,250,0.35)'; ctx.lineWidth = l * 0.03;
+      ctx.strokeRect(-l / 2, -l / 2, l, l);
+      fleur(4, l * 0.2, l * 0.15, 'rgba(250,250,250,0.32)', Math.PI / 4);
+      break;
+    case 'etoile8':
+      ctx.fillStyle = 'rgba(232,192,96,0.55)';
+      for (const a of [0, Math.PI / 4]) { ctx.save(); ctx.rotate(a); ctx.fillRect(-l * 0.32, -l * 0.32, l * 0.64, l * 0.64); ctx.restore(); }
+      ctx.fillStyle = 'rgba(250,246,230,0.75)'; ctx.beginPath(); ctx.arc(0, 0, l * 0.14, 0, Math.PI * 2); ctx.fill();
+      break;
+    case 'spirale':
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = l * 0.04;
+      ctx.beginPath();
+      for (let k = 0; k <= 60; k++) { const a = k * 0.32 + rot, r = l * 0.008 * k; k ? ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r) : ctx.moveTo(0, 0); }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; ctx.beginPath(); ctx.arc(Math.cos(a) * l * 0.62, Math.sin(a) * l * 0.62, l * 0.05, 0, Math.PI * 2); ctx.fill(); }
+      break;
+    case 'feuille': {
+      const coul = ['rgba(150,86,34,0.75)', 'rgba(214,140,40,0.75)', 'rgba(120,70,30,0.75)'][g % 3];
+      ctx.rotate(rot);
+      ctx.fillStyle = coul;
+      ctx.beginPath(); ctx.moveTo(-l * 0.5, 0); ctx.quadraticCurveTo(0, -l * 0.32, l * 0.5, 0); ctx.quadraticCurveTo(0, l * 0.32, -l * 0.5, 0); ctx.fill();
+      ctx.strokeStyle = 'rgba(80,44,20,0.7)'; ctx.lineWidth = l * 0.025;
+      ctx.beginPath(); ctx.moveTo(-l * 0.55, 0); ctx.lineTo(l * 0.45, 0); ctx.stroke();
+      break;
+    }
+    case 'plaque':
+      ctx.fillStyle = 'rgba(30,30,34,0.85)'; ctx.beginPath(); ctx.arc(0, 0, l * 0.45, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(110,110,116,0.8)'; ctx.lineWidth = l * 0.03;
+      ctx.beginPath(); ctx.arc(0, 0, l * 0.4, 0, Math.PI * 2); ctx.stroke();
+      for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(-l * 0.36, k * l * 0.12); ctx.lineTo(l * 0.36, k * l * 0.12); ctx.stroke(); }
+      break;
+    case 'rose':
+      fleur(5, l * 0.24, l * 0.22, 'rgba(200,24,40,0.8)', rot);
+      fleur(5, l * 0.12, l * 0.12, 'rgba(250,246,240,0.9)', rot + 0.6);
+      ctx.fillStyle = 'rgba(232,190,96,0.9)'; ctx.beginPath(); ctx.arc(0, 0, l * 0.06, 0, Math.PI * 2); ctx.fill();
+      break;
+  }
+}
+
+/** Les motifs peints dans les couloirs, et le vers du lieu, peint a plat. */
+function pistePoetique(ctx: CanvasRenderingContext2D, api: any, rIn: number, P: Piste, graine: number) {
+  const { G, C } = api;
+  const fin = api.samples(1);
+  const lw = C.LANE_W;
+  const vu = (s: any, r: number) => {
+    const p = api.ground(...api.ptOf(s, r));
+    return p[0] > -80 && p[0] < G.VW + 80 && p[1] > -80 && p[1] < G.VH + 80;
+  };
+  // les motifs, un tous les deux metres environ, d'un couloir a l'autre
+  for (let i = 1; i + 1 < fin.length; i += 2) {
+    const g = hache(i * 53 + graine);
+    if (g % 3 === 0) continue;
+    const couloir = (g >>> 4) % C.LANE_COUNT;
+    const r = rIn + (couloir + 0.25 + (((g >>> 8) % 50) / 100)) * lw;
+    if (!vu(fin[i], r)) continue;
+    auSol(ctx, api, fin[i], fin[i + 1], r, () => motif(ctx, P.motif, (45 + ((g >>> 12) % 35)), g));
+  }
+  // le vers, dans le couloir 2 puis dans le 7, a 18 m et a 62 m du depart
+  for (const [depart, couloir] of [[18, 1], [62, 6]] as [number, number][]) {
+    const i = fin.findIndex((s: any) => api.ptOf(s, rIn)[0] >= depart);
+    if (i < 0 || i + 1 >= fin.length) continue;
+    const r = rIn + (couloir + 0.25) * lw;
+    if (!vu(fin[i], r) && !vu(fin[Math.min(fin.length - 1, i + 15)], r)) continue;
+    auSol(ctx, api, fin[i], fin[i + 1], r, () => {
+      ctx.font = `700 ${Math.round(lw * 100 * 0.62)}px ${P.police === 'serif' ? 'Georgia, \'Noto Serif CJK JP\', serif' : 'system-ui, sans-serif'}`;
+      ctx.fillStyle = P.couleur;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(P.texte, 0, 0);
+    });
+  }
+}
+
+/** Les petales de cerisier qui traversent l'ecran, a Kyoto. */
+function petales(ctx: CanvasRenderingContext2D, api: any) {
+  const { G } = api;
+  const u = api.ui(), t = performance.now() / 1000;
+  for (let i = 0; i < 26; i++) {
+    const g = hache(i * 31 + 7);
+    const v = 0.04 + ((g % 100) / 100) * 0.05;
+    const x = ((((g >>> 7) % 1000) / 1000) * 1.3 + t * v) % 1.3 - 0.15;
+    const y = ((((g >>> 17) % 1000) / 1000) + t * v * 1.4) % 1.1 - 0.05;
+    const a = t * (1 + (g % 3)) + i;
+    ctx.save();
+    ctx.translate(x * G.VW + Math.sin(t + i) * 12 * u, y * G.VH);
+    ctx.rotate(a);
+    ctx.scale(1, 0.35 + 0.65 * Math.abs(Math.cos(a * 0.7)));
+    ctx.fillStyle = i % 3 ? 'rgba(250,196,214,0.85)' : 'rgba(255,226,236,0.85)';
+    ctx.beginPath(); ctx.ellipse(0, 0, 4 * u, 2.6 * u, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+/** La largeur reelle d'une piece, en metres (manifeste, legende_pieces.py). */
+const largeurDe = (img: string): number => ((manifeste as any)?.pieces?.[img]?.largeur_m as number) || 1;
+
+/** Les objets typiques du lieu, poses dans la pelouse, du plus loin au plus pres. */
+function objetsDuLieu(ctx: CanvasRenderingContext2D, api: any, rIn: number, C: Culture, graine: number) {
+  const { G } = api;
+  const m = api.scaleM();
+  const fin = api.samples(1);
+  const total = C.objets.reduce((a, b) => a + b.poids, 0);
+  const poses: [number, CanvasImageSource, number, number, number, number, number, boolean][] = [];
+  for (let k = 0, i = 0; ; k++) {
+    const g = hache(k * 131 + graine);
+    i += Math.max(3, Math.round(C.pas * (0.7 + 0.6 * ((g % 1000) / 1000))));
+    if (i >= fin.length) break;
+    let tirage = ((g >>> 10) % 1000) / 1000 * total, ob = C.objets[0];
+    for (const c of C.objets) { if (tirage < c.poids) { ob = c; break; } tirage -= c.poids; }
+    const R = piece(ob.img);
+    if (!R) continue;
+    const recul = ob.recul[0] + (((g >>> 20) % 100) / 100) * (ob.recul[1] - ob.recul[0]);
+    const p = api.solid(...api.ptOf(fin[i], rIn - recul), 0);
+    const kk = (largeurDe(ob.img) * m) / R.p.w;
+    const w = R.p.w * kk, h = R.p.h * kk;
+    if (p[0] + w < 0 || p[0] - w > G.VW || p[1] - h > G.VH || p[1] + h < 0) continue;
+    poses.push([p[1], R.im, p[0], R.p.ax * kk, R.p.ay * kk, w, h, ((g >>> 5) & 1) === 1 && ob.img !== 'kiosque']);
+  }
+  poses.sort((a, b) => a[0] - b[0]);
+  for (const [y, im, x, ax, ay, w, h, retourne] of poses) {
+    if (retourne) {
+      ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1);
+      ctx.drawImage(im, -ax, y - ay, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(im, x - ax, y - ay, w, h);
+    }
+  }
+}
+
+/**
+ * La guirlande tendue le long des panneaux, de mat en mat (tous les six
+ * metres), qui pend entre eux : des fanions aux couleurs du pays, qui
+ * battent un peu — ou, a Kyoto, des lanternes de papier rouges et blanches.
+ */
+function guirlande(ctx: CanvasRenderingContext2D, api: any, rOut: number, C: Culture) {
+  const { G } = api;
+  const u = api.ui(), t = performance.now() / 1000;
+  const fin = api.samples(1);
+  const r = rOut + 1.45 + (G.ecartTribune || 0);
+  const pt = (i: number, f: number, z: number) => {
+    const a = api.ptOf(fin[i], r), b = api.ptOf(fin[Math.min(fin.length - 1, i + 1)], r);
+    return api.solid(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, z);
+  };
+  const MAT = 6;
+  for (let i0 = 0; i0 + MAT < fin.length; i0 += MAT) {
+    const a = pt(i0, 0, 0), e = pt(i0 + MAT, 0, 2.3);
+    if (Math.max(a[0], e[0]) < -40 || Math.min(a[0], e[0]) > G.VW + 40) continue;
+    // le mat
+    const haut = pt(i0, 0, 2.3);
+    ctx.strokeStyle = 'rgba(60,56,52,0.9)'; ctx.lineWidth = 1.6 * u;
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(haut[0], haut[1]); ctx.stroke();
+    // le fil, qui pend
+    const fil = (s: number) => {
+      const i = i0 + Math.floor(s * MAT), f = s * MAT - Math.floor(s * MAT);
+      return pt(Math.min(i, fin.length - 1), f, 2.25 - 0.45 * 4 * s * (1 - s));
+    };
+    ctx.strokeStyle = 'rgba(40,36,34,0.8)'; ctx.lineWidth = 1 * u;
+    ctx.beginPath();
+    for (let k = 0; k <= 12; k++) { const q = fil(k / 12); k ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+    ctx.stroke();
+    if (C.guirlande === 'chochin') {
+      for (let k = 1; k < 5; k++) {
+        const q = fil(k / 5), L = Math.max(5 * u, api.scaleM() * 0.45);
+        const cx = q[0] + Math.sin(t * 1.5 + k + i0) * 0.6 * u, cy = q[1] + L * 0.62;
+        const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, L * 1.2);
+        halo.addColorStop(0, 'rgba(255,170,90,0.35)'); halo.addColorStop(1, 'rgba(255,170,90,0)');
+        ctx.fillStyle = halo; ctx.fillRect(cx - L * 1.2, cy - L * 1.2, L * 2.4, L * 2.4);
+        ctx.fillStyle = (k + i0 / MAT) % 3 === 0 ? '#F4EEE2' : '#D8322A';
+        ctx.beginPath(); ctx.ellipse(cx, cy, L * 0.36, L * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#1E1A1A';
+        ctx.fillRect(cx - L * 0.22, cy - L * 0.56, L * 0.44, L * 0.12);
+        ctx.fillRect(cx - L * 0.22, cy + L * 0.44, L * 0.44, L * 0.12);
+      }
+    } else {
+      const coul = C.guirlande;
+      for (let k = 0; k < 10; k++) {
+        const s0 = k / 10, s1 = (k + 0.8) / 10;
+        const q0 = fil(s0), q1 = fil(s1);
+        const pointe = api.scaleM() * 0.38;
+        const bat = Math.sin(t * 3 + k * 0.8 + i0) * 0.12 * pointe;
+        const c = coul[(k + i0) % coul.length];
+        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+        ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]);
+        ctx.lineTo((q0[0] + q1[0]) / 2 + bat, (q0[1] + q1[1]) / 2 + pointe);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+}
+
+/**
+ * Le jardin sec de Kyoto, a la place du gazon : du gravier ratisse en lignes
+ * paralleles a la piste, et quelques rochers mousseux, que les ratissages
+ * contournent en cercles.
+ */
+function karesansui(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number) {
+  const { G } = api;
+  const u = api.ui(), m = api.scaleM();
+  ctx.save();
+  ctx.beginPath();
+  sm.forEach((s, i) => { const p = api.ground(...api.ptOf(s, rIn - 0.5)); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+  for (let i = sm.length - 1; i >= 0; i--) { const p = api.ground(...api.ptOf(sm[i], rIn - 60)); ctx.lineTo(p[0], p[1]); }
+  ctx.closePath();
+  ctx.fillStyle = 'rgb(222,218,206)';
+  ctx.fill();
+  ctx.clip();
+  for (let k = 0; k < 70; k++) {
+    api.rail(ctx, sm, rIn - 0.9 - k * 0.32, k % 2 ? 'rgba(176,170,156,0.7)' : 'rgba(250,248,240,0.7)', 1 * u);
+  }
+  // les rochers, et leurs cercles ratisses
+  const fin = api.samples(1);
+  for (let i = 9; i < fin.length; i += 23) {
+    const g = hache(i * 97 + 3);
+    const w0 = api.ptOf(fin[i], rIn - 5 - (g % 600) / 100);
+    const c = api.ground(w0[0], w0[1]);
+    if (c[0] < -6 * m || c[0] > G.VW + 6 * m || c[1] < -6 * m || c[1] > G.VH + 6 * m) continue;
+    const anneau = (R: number, coul: string, larg: number) => {
+      ctx.strokeStyle = coul; ctx.lineWidth = larg;
+      ctx.beginPath();
+      for (let a = 0; a <= 24; a++) {
+        const q = api.ground(w0[0] + Math.cos(a / 24 * Math.PI * 2) * R, w0[1] + Math.sin(a / 24 * Math.PI * 2) * R);
+        a ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+      }
+      ctx.stroke();
+    };
+    ctx.fillStyle = 'rgb(222,218,206)';
+    ctx.beginPath();
+    for (let a = 0; a <= 24; a++) {
+      const q = api.ground(w0[0] + Math.cos(a / 24 * Math.PI * 2) * 2.6, w0[1] + Math.sin(a / 24 * Math.PI * 2) * 2.6);
+      a ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+    }
+    ctx.fill();
+    for (let k = 0; k < 5; k++) anneau(1.2 + k * 0.32, k % 2 ? 'rgba(176,170,156,0.8)' : 'rgba(250,248,240,0.8)', 1 * u);
+    anneau(0.95, 'rgba(96,124,82,0.95)', 5 * u);
+    const r = (0.55 + (g % 40) / 100) * m;
+    const roc = ctx.createRadialGradient(c[0] - r * 0.3, c[1] - r * 0.7, r * 0.1, c[0], c[1] - r * 0.3, r * 1.1);
+    roc.addColorStop(0, '#9C9A94'); roc.addColorStop(1, '#4E4C48');
+    ctx.fillStyle = roc;
+    ctx.beginPath(); ctx.ellipse(c[0], c[1] - r * 0.35, r, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 
 // -----------------------------------------------------------------------
 // LES ENFANTS DE LA PLAGE (Menole).
@@ -738,6 +1097,19 @@ export function premierPlanDe(lieu: string) {
   if (cle === 'apotheose') {
     return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
       pisteGalactique(ctx, api, sm, rIn);
+    };
+  }
+  const Cu = CULTURE[cle];
+  if (Cu) {
+    const graine = cle.length * 7919 + cle.charCodeAt(0);
+    return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
+      const { G, C } = api;
+      const rOut = G.track.curved ? G.track.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+      if (Cu.sol === 'karesansui') karesansui(ctx, api, sm, rIn);
+      if (Cu.piste) pistePoetique(ctx, api, rIn, Cu.piste, graine);
+      guirlande(ctx, api, rOut, Cu);
+      objetsDuLieu(ctx, api, rIn, Cu, graine);
+      if (cle === 'kyoto') petales(ctx, api);
     };
   }
   const P = PREMIER_PLAN[cle];
