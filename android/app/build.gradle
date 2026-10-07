@@ -95,7 +95,11 @@ android {
         // l'accueil — ; la revue des one shots de nouveau filmee, la carte
         // d'un duel revanche qui ne revient plus ; et le tournoi a
         // elimination du direct (#70), arrive apres le 7.
-        versionCode 8
+        // 9 le 7 octobre : les pieces et le Continue ouverts a la version
+        // publique, la trace de course posee au pas fixe (les telephones lents
+        // ne sont plus refuses pour « depasse 18 m/s »), et la carriere
+        // Legende (canal de test seulement).
+        versionCode 9
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
