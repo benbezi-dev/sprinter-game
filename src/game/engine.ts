@@ -1122,16 +1122,24 @@ export function updateLogic(dt: number) {
       // temps ne sont jamais calculees, la position devient NaN, et
       // l'adversaire disparait de la piste sans une erreur.
       for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
-    }
-    
-    // Enregistre la course pour qu'un adversaire puisse la reaffronter en
-    // fantome, et fait avancer le fantome que l'on affronte.
-    if (G.recTrace) {
-      while (G.elapsed >= G.recNext) {
+
+      // Enregistre la course pour qu'un adversaire puisse la reaffronter en
+      // fantome — et c'est aussi la preuve du chrono, que le serveur juge.
+      //
+      // DANS LE PAS FIXE, PAS A L'IMAGE. Le point se posait apres la boucle,
+      // donc au moment de l'image, avec la position de l'image : a 20 images
+      // par seconde, deux points pouvaient etre separes de 130 ms reelles
+      // quand le serveur en compte 80 (REC_STEP). Il voyait une pointe a plus
+      // de 18 m/s et refusait la course (« depasse 18 m/s a N endroits ») —
+      // celle d'un telephone qui rame, pas d'un tricheur. Pose ici, le point
+      // tombe a 1/240 s pres de son instant, quelle que soit la cadence.
+      if (G.recTrace && G.elapsed >= G.recNext) {
         G.recTrace.push(Math.round(G.player.d * 10));
         G.recNext += SprinterApp.REC_STEP;
       }
     }
+    
+    // Fait avancer le fantome que l'on affronte.
     SprinterApp.stepGhost(dt);
     // Un depart donne pendant qu'un salut descendait encore : on finit de le
     // rendre en course plutot que de le figer a mi-hauteur.
