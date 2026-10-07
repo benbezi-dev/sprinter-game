@@ -5909,6 +5909,10 @@
   function drawArbres(ctx, th, sm, rOut) {
     const A = ARBRE[th.arbres];
     if (!A) return;
+    // `arbresDehors: false` : la rangee de la pelouse seulement. Celle du
+    // dehors passerait devant ce qui se dresse au loin (les monuments de la
+    // Legende, game/legende/decors.ts).
+    if (th.arbresDehors === false) return;
     // Le pas se compte en ECHANTILLONS, et ceux-ci ne mesurent pas la meme
     // longueur partout : 1,2 m dans le virage, 12 m en ligne droite (voir
     // samples()). Un pas unique donnerait des arbres tous les vingt metres

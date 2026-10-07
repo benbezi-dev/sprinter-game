@@ -14,6 +14,8 @@ import {
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
 } from '@/game/legende/legende';
 import { mot, chrono, dans } from '@/game/legende/mots';
+import { CarteDuVoyage } from './LegendeCarte';
+import { CinematiqueKarman } from './LegendeKarman';
 // LES PORTRAITS DES BOSS, rendus de leur maillage par vedette_tripo.py.
 import kouassiBuste from '@/assets/legende/boss/kouassi-buste.webp?url';
 import damionBuste from '@/assets/legende/boss/damion-buste.webp?url';
@@ -202,12 +204,16 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
   const teinte = TEINTES[rang];
   const Icone = ICONES[e.transport];
   const drapeau = drapeauDe(lieu.drapeau);
+  // L'etape de Karman part en fusee : la montee (LegendeKarman.tsx) passe
+  // entre l'affiche et la course.
+  const [montee, setMontee] = useState(false);
+  const partir = () => (rang === 4 ? setMontee(true) : onPartir());
 
   return (
     // OPAQUE : l'affiche est un ecran a part entiere, pas un voile sur
     // l'accueil — les cartes de l'accueil se lisaient encore au travers.
     <motion.div {...VOILE}
-                className="fixed inset-0 z-50 pointer-events-auto flex items-center justify-center
+                className="fixed inset-0 z-50 pointer-events-auto flex items-center justify-center overflow-y-auto py-6
                            px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]"
                 style={{ background: `radial-gradient(130% 70% at 50% 42%, ${teinte}30, #07050F 72%), #07050F` }}>
       <motion.div {...PANNEAU} className="w-full max-w-md flex flex-col items-center gap-4 text-center">
@@ -220,6 +226,7 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
           </span>
           <span className="text-xs text-white/60">{lieu.pays}</span>
         </div>
+        <CarteDuVoyage rang={rang} teinte={teinte} boss={lieu.boss} />
         <span className="flex items-center gap-2 text-[11px] text-white/70">
           <Icone size={16} color={teinte} />
           {mot('depuis', { t: mot(e.transport), d: depuis })}
@@ -249,7 +256,7 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
         </div>
 
         <div className="w-full flex gap-2 mt-2">
-          <button onClick={onPartir}
+          <button onClick={partir}
                   className="flex-1 py-3 rounded-xl font-black tracking-widest text-sm text-black hover:opacity-90 transition-opacity"
                   style={{ background: teinte }}>
             {mot('partir')}
@@ -260,6 +267,7 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
           </button>
         </div>
       </motion.div>
+      {montee && <CinematiqueKarman lieu={lieu.cle} onFin={onPartir} />}
     </motion.div>
   );
 }

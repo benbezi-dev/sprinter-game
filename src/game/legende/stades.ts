@@ -213,7 +213,13 @@ const TRIBUNE_BASSE = { gradins: 1, toiture: false, horizon: 2, angle: 15, heure
 // plein jour, et des nuages.
 const CIEL_DE_JOUR = { skyTop: [62, 128, 204], skyBot: [164, 206, 238], clouds: true };
 // (Deux gradins aux mondiaux bouchaient encore tout le ciel du portrait.)
+// Des palmiers dans la pelouse, ou il en pousse au bord de la mer ou des
+// avenues — pas derriere la tribune, ou ils cacheraient le monument.
+const PALMIERS = {
+  arbres: 'palmier', arbresDehors: false, palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100],
+};
 const THEME_DU_LIEU: Record<string, Record<string, unknown>> = {
+  kingston: PALMIERS, izmir: PALMIERS, casablanca: PALMIERS, barcelone: PALMIERS,
   // LA PLAGE DE MENOLE. Elle part de la Riviera — la mer et ses vagues au
   // loin, les palmiers, le ciel franc — mais c'est une plage de village a
   // San-Pedro, pas une station : ni piscine, ni transats, ni immeubles, ni
