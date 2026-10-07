@@ -509,11 +509,198 @@ function pisteCeleste(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: n
   ctx.restore();
 }
 
+// -----------------------------------------------------------------------
+// LA PISTE GALACTIQUE (l'apotheose).
+// -----------------------------------------------------------------------
+//
+// L'auteur, 07/10, image de reference : une piste translucide posee dans une
+// nebuleuse — on voit le ciel au travers, ses lignes sont de fins traits
+// blancs, ses bords luisent ; autour, des nebuleuses, des filaments de
+// poussiere sombre, des etoiles en croix et des galaxies. La piste est
+// pervenche (stades.ts) ; on y verse ici la nebuleuse et les etoiles, en
+// mode `lighter` : les lignes blanches du moteur restent blanches. Le dehors
+// de la piste, c'est la pelouse — le vide du stade cosmos, sans ses planetes
+// (`astres: []`). Deux versions plus fortes ont ete essayees et refusees
+// (« ca reste sobre », puis une texture tiree de l'image : « c'est moche ») ;
+// l'auteur a retenu celle-ci.
+let galaxieSprite: HTMLCanvasElement | null = null;
+/** Une petite galaxie spirale, vue de face : on l'incline au dessin. */
+function petiteGalaxie(): HTMLCanvasElement {
+  if (galaxieSprite) return galaxieSprite;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 160;
+  const c = cv.getContext('2d')!;
+  c.globalCompositeOperation = 'lighter';
+  const coeur = c.createRadialGradient(80, 80, 0, 80, 80, 60);
+  coeur.addColorStop(0, 'rgba(255,244,220,1)'); coeur.addColorStop(0.18, 'rgba(255,210,180,0.55)');
+  coeur.addColorStop(0.5, 'rgba(160,140,255,0.15)'); coeur.addColorStop(1, 'rgba(120,100,255,0)');
+  c.fillStyle = coeur; c.fillRect(0, 0, 160, 160);
+  for (let i = 0; i < 700; i++) {
+    const g = hache(i * 7 + 3), r = Math.pow((g % 1000) / 1000, 0.8);
+    const bras = i % 2 ? Math.PI : 0;
+    const ecart = (((g >>> 10) % 1000) / 1000 - 0.5) * 0.7 * (1.2 - r);
+    const a = bras + ecart + r * 3.6;
+    const x = 80 + Math.cos(a) * r * 72, y = 80 + Math.sin(a) * r * 72;
+    c.fillStyle = (g >>> 20) % 3 ? 'rgba(190,210,255,0.55)' : 'rgba(255,200,240,0.5)';
+    c.fillRect(x, y, 1.3, 1.3);
+  }
+  galaxieSprite = cv;
+  return cv;
+}
+
+/** Le contour de la bande [r0, r1] du trace ; `suite` l'ajoute au chemin
+ *  en cours au lieu d'en ouvrir un neuf (deux bandes, un seul decoupage). */
+function bande(ctx: CanvasRenderingContext2D, api: any, sm: any[], r0: number, r1: number, suite = false) {
+  if (!suite) ctx.beginPath();
+  sm.forEach((s, i) => { const p = api.ground(...api.ptOf(s, r1)); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+  for (let i = sm.length - 1; i >= 0; i--) { const p = api.ground(...api.ptOf(sm[i], r0)); ctx.lineTo(p[0], p[1]); }
+  ctx.closePath();
+}
+
+function etoileEnCroix(ctx: CanvasRenderingContext2D, x: number, y: number, l: number, a: number) {
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, l * 1.3);
+  halo.addColorStop(0, `rgba(255,246,236,${0.55 * a})`); halo.addColorStop(1, 'rgba(255,246,236,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(x - l * 1.3, y - l * 1.3, l * 2.6, l * 2.6);
+  ctx.fillStyle = `rgba(255,255,255,${0.6 + 0.4 * a})`;
+  ctx.fillRect(x - l, y - 0.5, l * 2, 1);
+  ctx.fillRect(x - 0.5, y - l, 1, l * 2);
+}
+
+function pisteGalactique(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number) {
+  const { G, C } = api;
+  const T = G.track;
+  const u = api.ui(), m = api.scaleM();
+  const t = performance.now() / 1000;
+  const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+  const fin = api.samples(2);
+  const vu = (p: number[], marge: number) =>
+    p[0] > -marge && p[0] < G.VW + marge && p[1] > -marge && p[1] < G.VH + marge;
+  const nuee = (x: number, y: number, rx: number, ry: number, coul: string, a: number) => {
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, `rgba(${coul},${a})`); g.addColorStop(0.5, `rgba(${coul},${a * 0.45})`); g.addColorStop(1, `rgba(${coul},0)`);
+    ctx.fillStyle = g; ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
+    ctx.restore();
+  };
+  const GAZ = ['236,84,196', '150,96,255', '80,150,255', '255,140,64', '90,220,236', '255,110,170'];
+
+  // LA NEBULEUSE, UNE SEULE, qui passe SOUS la piste : on la peint pleine
+  // dehors, puis attenuee dans la piste — c'est ce qui en fait une vitre.
+  type Nuee = [number, number, number, string, number];
+  const nuees: Nuee[] = [], poussieres: Nuee[] = [], noeuds: Nuee[] = [];
+  // (serrees : trois nuees par echantillon, de 24 m sous la piste a 3 m
+  // au-dela — clairsemees, on voyait surtout le noir)
+  for (let i = 0; i < fin.length; i++) {
+    for (let k = 0; k < 3; k++) {
+      const g = hache(i * 17 + k * 7919 + 5);
+      const p = api.ground(...api.ptOf(fin[i], rIn - 24 + (g % 3000) / 100));
+      const rx = (5 + ((g >>> 8) % 800) / 100) * m;
+      if (vu(p, rx)) nuees.push([p[0], p[1], rx, GAZ[(g >>> 4) % GAZ.length], 0.12 + ((g >>> 16) % 14) / 100]);
+    }
+    const h = hache(i * 23 + 11);
+    const q = api.ground(...api.ptOf(fin[i], rIn - 22 + (h % 2600) / 100));
+    const rq = (1.4 + ((h >>> 8) % 200) / 100) * m;
+    if (h % 2 === 0 && vu(q, rq)) noeuds.push([q[0], q[1], rq, ['255,220,250', '255,170,220', '200,220,255'][(h >>> 4) % 3], 0.35]);
+  }
+  for (let i = 1; i < fin.length; i++) {
+    const g = hache(i * 29 + 9);
+    const p = api.ground(...api.ptOf(fin[i], rIn - 22 + (g % 2600) / 100));
+    const rx = (4 + ((g >>> 8) % 700) / 100) * m;
+    if (vu(p, rx)) poussieres.push([p[0], p[1], rx, '18,4,26', 0.45]);
+  }
+  const peindre = (force: number) => {
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, r, c, a] of nuees) nuee(x, y, r, r * 0.55, c, a * force);
+    ctx.globalCompositeOperation = 'source-over';
+    for (const [x, y, r, c, a] of poussieres) nuee(x, y, r, r * 0.2, c, a * force);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, r, c, a] of noeuds) nuee(x, y, r, r * 0.7, c, a * force);
+  };
+
+  // 1. DEHORS : la nebuleuse pleine, ses galaxies, ses etoiles
+  ctx.save();
+  bande(ctx, api, sm, rIn - 60, rIn);
+  bande(ctx, api, sm, rOut, rOut + 1.6, true);
+  ctx.clip();
+  peindre(1);
+  const gal = petiteGalaxie();
+  for (let i = 2; i < fin.length; i += 11) {
+    const g = hache(i * 41 + 1);
+    const p = api.ground(...api.ptOf(fin[i], rIn - 8 - (g % 2200) / 100));
+    const l = (2.2 + ((g >>> 9) % 300) / 100) * m;
+    if (!vu(p, l)) continue;
+    ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(((g >>> 3) % 628) / 100 + t * 0.05); ctx.scale(1, 0.45);
+    ctx.drawImage(gal, -l / 2, -l / 2, l, l);
+    ctx.restore();
+  }
+  for (let i = 0; i < fin.length; i++) {
+    const g = hache(i * 13 + 77);
+    const p = api.ground(...api.ptOf(fin[i], rIn - 1 - (g % 3200) / 100));
+    if (!vu(p, 10)) continue;
+    const a = 0.5 + 0.5 * Math.sin(t * (1.2 + (g >>> 22) % 3) + (g >>> 6));
+    if (g % 4 === 0) etoileEnCroix(ctx, p[0], p[1], (3 + a * 4 + (g >>> 12) % 4) * u, a);
+    else { ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.5 * a})`; const s2 = (1 + (g >>> 16) % 2) * u; ctx.fillRect(p[0], p[1], s2, s2); }
+  }
+  ctx.restore();
+
+  // 2. LA PISTE EN VITRE : la meme nebuleuse au travers, attenuee ; des
+  // reflets en biais qui glissent ; le liseré clair des deux tranches
+  ctx.save();
+  bande(ctx, api, sm, rIn, rOut);
+  ctx.clip();
+  peindre(0.5);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < fin.length; i += 5) {
+    const g = hache(i * 61 + 3);
+    if (g % 3 === 0) continue;
+    const mm = api.ptOf(fin[i], rIn)[0];
+    // un reflet : une bande qui traverse la piste en biais
+    const base = (r: number, d: number): number[] => {
+      const w = api.ptOf(fin[i], r);
+      return api.ground(w[0] + d, w[1]);
+    };
+    const l0 = 1 + ((g >>> 6) % 160) / 100, biais = 2.5;
+    const a1 = base(rIn - 0.5, 0), a2 = base(rIn - 0.5, l0), b2 = base(rOut + 0.5, l0 + biais), b1 = base(rOut + 0.5, biais);
+    const gr = ctx.createLinearGradient(a1[0], a1[1], a2[0], a2[1]);
+    const f = 0.22 + 0.08 * Math.sin(t * 0.8 + mm * 0.1);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, `rgba(235,240,255,${f})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.moveTo(a1[0], a1[1]); ctx.lineTo(a2[0], a2[1]); ctx.lineTo(b2[0], b2[1]); ctx.lineTo(b1[0], b1[1]); ctx.closePath(); ctx.fill();
+  }
+  // l'eclat du verre, plus fort vers le bord lointain
+  api.rail(ctx, sm, rOut - 1.2, 'rgba(210,220,255,0.06)', 34 * u);
+  for (let i = 0; i < fin.length; i++) {
+    for (let k = 0; k < 6; k++) {
+      const g = hache(i * 31 + k * 104729 + 3);
+      const p = api.ground(...api.ptOf(fin[i], rIn + 0.1 + ((g % 1000) / 1000) * (rOut - rIn - 0.2)));
+      if (!vu(p, 8)) continue;
+      const a = 0.5 + 0.5 * Math.sin(t * (1.6 + ((g >>> 20) % 4) * 0.5) + (g >>> 8));
+      if (k === 0 && (g >>> 12) % 3 === 0) etoileEnCroix(ctx, p[0], p[1], (2.5 + a * 4) * u, a);
+      else { ctx.fillStyle = `rgba(255,250,255,${0.25 + 0.55 * a})`; const s2 = (0.8 + a * 1.2) * u; ctx.fillRect(p[0] - s2 / 2, p[1] - s2 / 2, s2, s2); }
+    }
+  }
+  ctx.restore();
+  // le liseré des tranches de la vitre
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  api.rail(ctx, sm, rIn + 0.1, 'rgba(255,255,255,0.75)', 1.6 * u);
+  api.rail(ctx, sm, rOut - 0.1, 'rgba(255,255,255,0.75)', 1.6 * u);
+  api.rail(ctx, sm, rIn + 0.35, 'rgba(200,220,255,0.18)', 5 * u);
+  api.rail(ctx, sm, rOut - 0.35, 'rgba(200,220,255,0.18)', 5 * u);
+  ctx.restore();
+}
+
 export function premierPlanDe(lieu: string) {
   const cle = MONUMENT_DU_LIEU(lieu);
   if (cle === 'karman') {
     return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
       pisteCeleste(ctx, api, sm, rIn);
+    };
+  }
+  if (cle === 'apotheose') {
+    return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
+      pisteGalactique(ctx, api, sm, rIn);
     };
   }
   const P = PREMIER_PLAN[cle];

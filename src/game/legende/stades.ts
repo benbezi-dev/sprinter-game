@@ -242,6 +242,19 @@ const OLYMPE = {
 const THEME_DU_LIEU: Record<string, Record<string, unknown>> = {
   kingston: PALMIERS, izmir: PALMIERS, casablanca: PALMIERS, barcelone: PALMIERS,
   karman: OLYMPE, 'karman-wukong': OLYMPE, 'karman-anansi': OLYMPE, 'karman-inti': OLYMPE,
+  // L'APOTHEOSE (l'auteur, 07/10, image de reference, version retenue) : une
+  // piste translucide dans une nebuleuse — pervenche, ses lignes en fins
+  // traits blancs, ses bords luisant de rose et de bleu ; les etoiles et la
+  // nebuleuse qu'on voit au travers sont versees par decors.ts
+  // (pisteGalactique). Le vide autour est celui du stade cosmos, sans ses
+  // planetes.
+  apotheose: {
+    astres: [],
+    nebuleuses: [[236, 84, 196], [80, 150, 255], [255, 140, 64]],
+    trackA: [108, 106, 206], trackB: [100, 98, 196],
+    lane: [255, 255, 255], kerb: [255, 236, 255],
+    neon: [255, 150, 232], neonExt: [140, 186, 255],
+  },
   // LA PLAGE DE MENOLE. Elle part de la Riviera — la mer et ses vagues au
   // loin, les palmiers, le ciel franc — mais c'est une plage de village a
   // San-Pedro, pas une station : ni piscine, ni transats, ni immeubles, ni
