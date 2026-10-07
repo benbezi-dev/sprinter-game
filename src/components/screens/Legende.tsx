@@ -22,7 +22,7 @@ import { PORTRAITS, TEINTES } from './legende-commun';
    LA CARRIERE LEGENDE — les ecrans du mode
    ---------------------------------------------------------------------------
    L'onglet CARRIERE (le choix entre la carriere classique et la Legende,
-   fermee avant les 99), une affiche avant chaque etape (le joueur a gauche, le
+   fermee avant les 30), une affiche avant chaque etape (le joueur a gauche, le
    boss a droite, comme l'ecran VS d'un jeu de combat), et l'ecran de fin qui
    decide de la suite. La carte du monde entre deux etapes viendra
    se poser AVANT l'affiche (projets/carriere-legende/PLAN.md, etape 2).
@@ -92,7 +92,7 @@ export function ChoixDeCarriere({ choix, ouverte, onChoisir }:
 }
 
 /* ===========================================================================
-   APRES LES 99 : LE PANNEAU DE LA LEGENDE, QUAND ON LA CHOISIT
+   APRES LES 30 : LE PANNEAU DE LA LEGENDE, QUAND ON LA CHOISIT
    ===========================================================================
    A cote de la carriere classique, pas a sa place (l'auteur, 07/10/2026).
    Meme ossature que la carriere classique — une carte de

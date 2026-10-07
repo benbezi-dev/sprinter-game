@@ -1,7 +1,8 @@
 // LE COMPTE DES CARRIERES GAGNEES — la clef de la carriere Legende.
 //
-// La Legende ne s'ouvre qu'apres 99 carrieres classiques gagnees jusqu'au
-// bout, toutes epreuves confondues (decision de l'auteur, 6 octobre 2026).
+// La Legende ne s'ouvre qu'apres 30 carrieres classiques gagnees jusqu'au
+// bout, toutes epreuves confondues (decision de l'auteur : 99 le 6 octobre
+// 2026, baisse a 30 le 7).
 // Gagnee jusqu'au bout, parce qu'une carriere ne se termine pas autrement :
 // elle s'arrete a la premiere defaite.
 //
@@ -28,7 +29,7 @@
 // installee a le sien.
 
 /** Le seuil d'ouverture de la Legende. */
-export const CARRIERES_REQUISES = 99;
+export const CARRIERES_REQUISES = 30;
 
 const CLE = 'sprinter_carrieres_gagnees_v1';
 
@@ -154,7 +155,7 @@ export function legendeMeritee(): boolean {
   return carrieresGagnees() >= CARRIERES_REQUISES;
 }
 
-// LE FORCAGE DU CANAL DE TEST. 99 carrieres gagnees, ce sont des heures de
+// LE FORCAGE DU CANAL DE TEST. 30 carrieres gagnees, ce sont des heures de
 // jeu : sans porte de service, personne ne pourrait essayer la Legende. Elle se
 // force par l'adresse seulement (`?legende=99`, et `?legende=0` pour la
 // refermer), retenu sur l'appareil. Le bouton ESSAYER de l'onglet a ete retire
@@ -178,7 +179,7 @@ export function legendeForcee(): boolean {
 }
 
 /**
- * La Legende est-elle ouverte a ce joueur : meritee (99 carrieres), ou forcee
+ * La Legende est-elle ouverte a ce joueur : meritee (CARRIERES_REQUISES), ou forcee
  * pour l'essai. Elle NE REMPLACE PAS la carriere classique (l'auteur, 07/10) :
  * l'onglet CARRIERE propose les deux, la Legende fermee tant qu'il manque des
  * carrieres. A appeler derriere `LEGENDE_OUVERTE && ...`.

@@ -44,7 +44,7 @@ import chidiGlb from '@/assets/legende/boss/chidi.glb?url';
  * temps du premier niveau a 8,99, garde le temps du dernier niveau et retranche
  * un dixieme jusqu'au dernier » — 8,99, 8,89, 8,79, 8,69, 8,59, puis 8,42.
  *
- * La Legende s'ouvre a qui a gagne 99 carrieres, donc battu 99 fois la finale
+ * La Legende s'ouvre a qui a gagne 30 carrieres, donc battu 30 fois la finale
  * ZEZE (8,75 a 9,00 s). L'echelle classique (RACES['100'].ranges) lui serait
  * une promenade. Celle-ci part plus haut et finit plus bas : la plage se gagne
  * a l'echauffement, Hermes court au niveau du meilleur ZEZE, et l'apotheose

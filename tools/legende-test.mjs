@@ -1,8 +1,8 @@
-// LA CARRIERE LEGENDE — la regle des 99, le tirage, et le canal.
+// LA CARRIERE LEGENDE — la regle des 30, le tirage, et le canal.
 //
 // Trois choses a tenir, et chacune s'est deja vue casser ailleurs dans le jeu :
 //
-//   1. LE COMPTE. 99 carrieres gagnees jusqu'au bout, toutes epreuves
+//   1. LE COMPTE. 30 carrieres gagnees jusqu'au bout, toutes epreuves
 //      confondues, et rien d'autre ne les compte. Un compte qui deraille sur
 //      une valeur pourrie du localStorage ouvrirait la Legende a tout le
 //      monde, ou la fermerait a qui l'a meritee.
@@ -77,7 +77,7 @@ titre('LE COMPTE DES CARRIERES GAGNEES');
 const { M: C } = await paquet('compte', [`export * from '${src('legende/compte.ts')}';`]);
 const CLE = 'sprinter_carrieres_gagnees_v1';
 
-ok('le seuil est 99', C.CARRIERES_REQUISES === 99);
+ok('le seuil est 30', C.CARRIERES_REQUISES === 30);
 ok('un appareil neuf part de zero', C.carrieresGagnees() === 0 && C.legendeMeritee() === false);
 
 C.compterCarriere('100', 1000);
@@ -88,10 +88,10 @@ ok('toutes epreuves confondues', c.total === 3, `total=${c.total}`);
 ok('et par epreuve', c.par['100'] === 2 && c.par['200'] === 1, JSON.stringify(c.par));
 ok('la premiere et la derniere sont datees', c.premiere === 1000 && c.derniere === 3000);
 
-for (let i = 0; i < 95; i++) C.compterCarriere('110h');
-ok('a 98 la Legende reste fermee', C.carrieresGagnees() === 98 && !C.legendeMeritee());
+for (let i = 0; i < 26; i++) C.compterCarriere('110h');
+ok('a 29 la Legende reste fermee', C.carrieresGagnees() === 29 && !C.legendeMeritee());
 C.compterCarriere('400');
-ok('a 99 elle s ouvre', C.carrieresGagnees() === 99 && C.legendeMeritee());
+ok('a 30 elle s ouvre', C.carrieresGagnees() === 30 && C.legendeMeritee());
 
 titre('UN COMPTE POURRI NE S OUVRE PAS TOUT SEUL');
 
@@ -156,8 +156,8 @@ ok('le total = comptees + retrouvees', C.carrieresGagnees() === 5 && C.lireCompt
 ok('on ne cherche qu une fois', C.poserLesCarrieresDAvant(plusRapide) === 0 && C.carrieresGagnees() === 5);
 C.compterCarriere('200', 6000);
 ok('les suivantes s ajoutent, les retrouvees restent', C.carrieresGagnees() === 6 && C.lireCompte().avant === 4);
-memoire.set(CLE, JSON.stringify({ total: 3, par: { '100': 3 }, premiere: 1, derniere: 2, avant: 97 }));
-ok('97 retrouvees + 3 comptees : la Legende est ouverte', C.carrieresGagnees() === 100 && C.legendeMeritee());
+memoire.set(CLE, JSON.stringify({ total: 3, par: { '100': 3 }, premiere: 1, derniere: 2, avant: 27 }));
+ok('27 retrouvees + 3 comptees : la Legende est ouverte', C.carrieresGagnees() === 30 && C.legendeMeritee());
 memoire.clear();
 
 /* -------------------------------------------------------------- le tirage */

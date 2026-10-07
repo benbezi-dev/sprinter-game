@@ -143,7 +143,7 @@ export function TitleScreen() {
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
   // CARRIERE CLASSIQUE OU LEGENDE : les deux dans l'onglet (l'auteur,
-  // 07/10/2026), la Legende fermee avant les 99 (canal de test seulement).
+  // 07/10/2026), la Legende fermee avant les 30 (canal de test seulement).
   const [carriere, setCarriere] = useState<ChoixCarriere>(() =>
     LEGENDE_OUVERTE ? lireChoixCarriere() : 'classique');
   const legendeOffre = LEGENDE_OUVERTE && !haies;
