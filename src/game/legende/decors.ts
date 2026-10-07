@@ -378,6 +378,15 @@ const PREMIER_PLAN: Record<string, PremierPlan> = {
 //     lanternes de papier ;
 //   - a Kyoto, un JARDIN SEC (karesansui) a la place du gazon.
 // Les objets sont modelises dans Blender (legende_pieces.py), comme le torii.
+//
+// LES VERS ET PROVERBES PEINTS AU SOL, verifies le 07/10 (pas par un
+// locuteur : contre des sources) — Basho, Yunus Emre, Apollinaire, Emma
+// Lazarus, Shakespeare (domaine public) ; « We likkle but we tallawah »
+// (Jamaique, graphie la plus attestee : « Wi » d'abord ecrit), « Qui no
+// s'arrisca no pisca » (Catalogne, Softcatala), « من جد وجد » (arabe
+// classique), « Komai yayi farko zai yi karshe » (haoussa, Zikoko : tout ce
+// qui commence finit ; « Komai nisan dare, gari zai waye », d'abord ecrit,
+// n'etait atteste nulle part). A faire relire avant toute ouverture.
 type Objet = { img: string; recul: [number, number]; poids: number };
 type Motif = 'sakura' | 'hibiscus' | 'nazar' | 'panot' | 'etoile8' | 'spirale' | 'feuille' | 'plaque' | 'rose';
 /** La piste du lieu : un motif peint ca et la, et un vers (ou un proverbe)
@@ -391,7 +400,7 @@ const CULTURE: Record<string, Culture> = {
           piste: { motif: 'sakura', texte: '古池や　蛙飛び込む　水の音', couleur: 'rgba(232,190,96,0.8)', police: 'serif' } },
   kingston: { objets: [objet('kiosque', [4, 6]), objet('jerk', [1.6, 3])], pas: 5,
               guirlande: [[0, 155, 58], [254, 209, 0], [24, 24, 24]],
-             piste: { motif: 'hibiscus', texte: 'Wi likkle but wi tallawah', couleur: 'rgba(0,96,48,0.8)' } },
+             piste: { motif: 'hibiscus', texte: 'We likkle but we tallawah', couleur: 'rgba(0,96,48,0.8)' } },
   izmir: { objets: [objet('cesme', [3.5, 5]), objet('simit', [1.6, 3])], pas: 5,
            guirlande: [[227, 10, 23], [250, 250, 250]],
           piste: { motif: 'nazar', texte: 'Gelin tanış olalım', couleur: 'rgba(255,255,255,0.78)' } },
@@ -403,7 +412,7 @@ const CULTURE: Record<string, Culture> = {
                piste: { motif: 'etoile8', texte: 'مَن جَدَّ وَجَدَ', couleur: 'rgba(232,192,96,0.85)' } },
   abuja: { objets: [objet('tambours', [1.6, 3]), objet('etal', [3, 5]), objet('baobab', [7, 11])], pas: 6,
            guirlande: [[0, 135, 81], [250, 250, 250]],
-          piste: { motif: 'spirale', texte: 'Komai nisan dare, gari zai waye', couleur: 'rgba(255,255,255,0.78)' } },
+          piste: { motif: 'spirale', texte: 'Komai yayi farko zai yi karshe', couleur: 'rgba(255,255,255,0.78)' } },
   paris: { objets: [objet('morris', [3, 3.5]), objet('terrasse', [1.6, 3], 2), objet('wallace', [3, 5]), objet('reverbere', [1.2, 1.6])], pas: 5,
            guirlande: [[0, 85, 164], [250, 250, 250], [239, 65, 53]],
           piste: { motif: 'feuille', texte: 'Sous le pont Mirabeau coule la Seine', couleur: 'rgba(255,255,255,0.8)', police: 'serif' } },

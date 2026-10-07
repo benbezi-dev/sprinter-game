@@ -121,7 +121,7 @@ const KINGSTON: Lieu = {
   // RELIRE.
   bio: ['23 ans, de Kingston. Il a gagné Champs — le championnat des écoles, au National Stadium — trois années de suite.',
         '23, from Kingston. He won Champs — the schools’ championship at the National Stadium — three years running.'],
-  replique: { vo: 'Wi likkle but wi tallawah!', fr: 'Petits, mais costauds !', en: 'We’re small, but mighty!' },
+  replique: { vo: 'We likkle but we tallawah!', fr: 'Petits, mais costauds !', en: 'We’re small, but mighty!' },
   entree: 'dancehall',
   plateau: ['Kemar Brown', 'Javon Henry', 'Romario Grant', 'Tajay Lewis', 'Kimone Bailey', 'Odane Miller'],
 };
@@ -279,11 +279,14 @@ const KARMAN_ANANSI: Lieu = {
   boss: 'Anansi', surnom: ['L’Araignée', 'The Spider'],
   // L'araignee des contes akan : il a achete toutes les histoires du monde au
   // dieu du ciel, et voulu cacher toute la sagesse dans une jarre — d'ou le
-  // proverbe qu'il dit en arrivant. Il descend du ciel au bout de son fil,
-  // agite l'index, salue la main sur le coeur. A FAIRE RELIRE.
+  // proverbe qu'il dit en arrivant (« Ti korɔ nkɔ agyina », releve dans les
+  // 50 proverbes akan d'adinkrasymbols.org, le 07/10 : la forme d'abord
+  // ecrite, « Nyansa nni baako tirim », ne s'y trouvait pas). Il descend du
+  // ciel au bout de son fil, agite l'index, salue la main sur le coeur.
+  // A FAIRE RELIRE par un locuteur twi.
   bio: ['L’Araignée des contes akan. Il a acheté toutes les histoires du monde au dieu du ciel, et voulu cacher toute la sagesse dans une jarre.',
         'The Spider of the Akan tales. He bought all the world’s stories from the sky god, and tried to hide all wisdom in a pot.'],
-  replique: { vo: 'Nyansa nni baako tirim.', fr: 'La sagesse n’est pas dans une seule tête.', en: 'Wisdom is not in one head.' },
+  replique: { vo: 'Ti korɔ nkɔ agyina.', fr: 'Une seule tête ne tient pas conseil.', en: 'One head alone does not hold council.' },
   entree: 'fil',
 };
 const KARMAN_INTI: Lieu = {
