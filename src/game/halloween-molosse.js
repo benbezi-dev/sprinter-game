@@ -232,6 +232,13 @@ export function molosseDe(chasse) {
   const braises = [];
   let derniereBraise = 0;
 
+  // LA BETE EN VRAI MAILLAGE (halloween-molosse-3d.ts), demandee des
+  // l'armement : la bete part de quatorze metres derriere, et le trace tient
+  // sa place le temps que three.js, le fichier et les shaders arrivent.
+  let maillage = null;
+  import('./halloween-molosse-3d').then((mod) => { maillage = mod; mod.charger(); })
+    .catch(() => { /* le trace reste */ });
+
   return {
     /** Ce a quoi le rangement reconnait la bete sur `G.obstacles`. */
     molosse: true,
@@ -419,39 +426,53 @@ export function molosseDe(chasse) {
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // LES DEUX PATTES DU FOND, sous le corps : peintes avant lui, plus
-      // sombres. Sans ce partage, les quatre pattes se confondaient en une
-      // seule masse et le galop ne se lisait plus.
-      for (const p of PATTES) {
-        if (p.cote > 0) continue;
-        pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, POIL_VENTRE);
-      }
+      // LE MAILLAGE, S'IL EST LA, et le trace sinon. Le maillage se couche sur
+      // le meme axe (la transformation de plus haut) et cale sa foulee sur le
+      // meme cycle ; il ne porte ni l'oeil ni les braises, qui doivent vivre
+      // avec la distance et restent peints par-dessus.
+      const C = globalThis.SprinterCore && globalThis.SprinterCore.C;
+      const yeux = maillage && maillage.pret()
+        ? maillage.dessiner(ctx, cycle, m, C ? C.ISO_SIN : 0.447) : null;
+      if (yeux) {
+        // l'oeil du fond, a peine : le crane le cache presque
+        for (let i = yeux.length - 1; i >= 0; i--) {
+          oeil(ctx, yeux[i][0], yeux[i][1], m, t, pres, i === 0 ? 1 : 0.35);
+        }
+      } else {
+        // LES DEUX PATTES DU FOND, sous le corps : peintes avant lui, plus
+        // sombres. Sans ce partage, les quatre pattes se confondaient en une
+        // seule masse et le galop ne se lisait plus.
+        for (const p of PATTES) {
+          if (p.cote > 0) continue;
+          pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, POIL_VENTRE);
+        }
 
-      // LE TRONC. Deux capsules : le poitrail, haut et large, et le rein, plus
-      // mince. Un molosse porte tout son poids devant.
-      capsule(ctx, arriere + LONG * 0.18 * m, croupe, avant - LONG * 0.16 * m, garrot,
-              EPAIS * 0.5 * m, POIL);
-      capsule(ctx, avant - LONG * 0.34 * m, garrot, avant - LONG * 0.08 * m, garrot + 0.02 * m,
-              EPAIS * 0.62 * m, POIL);
-      // Le ventre, plus sombre, pour que le volume se voie de loin.
-      capsule(ctx, arriere + LONG * 0.22 * m, croupe + EPAIS * 0.30 * m,
-              avant - LONG * 0.18 * m, garrot + EPAIS * 0.32 * m,
-              EPAIS * 0.20 * m, POIL_VENTRE);
-      // Le fil de lumiere sur l'echine : c'est lui qui detache la bete du fond
-      // sombre du stade, et il tire vers la braise plutot que vers le blanc.
-      ctx.globalAlpha = 0.5;
-      capsule(ctx, arriere + LONG * 0.22 * m, croupe - EPAIS * 0.34 * m,
-              avant - LONG * 0.20 * m, garrot - EPAIS * 0.36 * m,
-              EPAIS * 0.08 * m, POIL_CLAIR);
-      ctx.globalAlpha = 1;
+        // LE TRONC. Deux capsules : le poitrail, haut et large, et le rein, plus
+        // mince. Un molosse porte tout son poids devant.
+        capsule(ctx, arriere + LONG * 0.18 * m, croupe, avant - LONG * 0.16 * m, garrot,
+                EPAIS * 0.5 * m, POIL);
+        capsule(ctx, avant - LONG * 0.34 * m, garrot, avant - LONG * 0.08 * m, garrot + 0.02 * m,
+                EPAIS * 0.62 * m, POIL);
+        // Le ventre, plus sombre, pour que le volume se voie de loin.
+        capsule(ctx, arriere + LONG * 0.22 * m, croupe + EPAIS * 0.30 * m,
+                avant - LONG * 0.18 * m, garrot + EPAIS * 0.32 * m,
+                EPAIS * 0.20 * m, POIL_VENTRE);
+        // Le fil de lumiere sur l'echine : c'est lui qui detache la bete du fond
+        // sombre du stade, et il tire vers la braise plutot que vers le blanc.
+        ctx.globalAlpha = 0.5;
+        capsule(ctx, arriere + LONG * 0.22 * m, croupe - EPAIS * 0.34 * m,
+                avant - LONG * 0.20 * m, garrot - EPAIS * 0.36 * m,
+                EPAIS * 0.08 * m, POIL_CLAIR);
+        ctx.globalAlpha = 1;
 
-      queue(ctx, cycle, m, arriere + LONG * 0.16 * m, croupe, vitesse);
-      tete(ctx, t, m, avant, garrot, cycle, vitesse, pres);
+        queue(ctx, cycle, m, arriere + LONG * 0.16 * m, croupe, vitesse);
+        tete(ctx, t, m, avant, garrot, cycle, vitesse, pres);
 
-      // LES DEUX PATTES DE DEVANT, par-dessus le corps.
-      for (const p of PATTES) {
-        if (p.cote < 0) continue;
-        pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, POIL);
+        // LES DEUX PATTES DE DEVANT, par-dessus le corps.
+        for (const p of PATTES) {
+          if (p.cote < 0) continue;
+          pattes(ctx, p, cycle, amp, m, avant, arriere, garrot, croupe, POIL);
+        }
       }
 
       // LES BRAISES. Elles montent du garrot et s'eteignent en trois quarts
@@ -630,8 +651,16 @@ function tete(ctx, t, m, avant, garrot, cycle, vitesse, pres) {
   // se voyait pas, et il eclaircissait l'oeil au lieu de le faire briller.
   // Le battement s'accelere et s'amplifie avec la proximite : de loin c'est
   // une braise qui respire, a un metre c'est un stroboscope.
+  oeil(ctx, cx + TETE * 0.24 * m, cy - 0.075 * m, m, t, pres, 1);
+}
+
+/**
+ * Un oeil et son halo, a (ox, oy). `force` l'eteint en partie : l'oeil du
+ * fond, sur le maillage, que le crane cache presque.
+ */
+function oeil(ctx, ox, oy, m, t, pres, force) {
   const pulse = (0.82 + 0.34 * pres) + (0.18 + 0.22 * pres) * Math.sin(t * (7.5 + 9 * pres));
-  const ox = cx + TETE * 0.24 * m, oy = cy - 0.075 * m;
+  ctx.globalAlpha = force;
   const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, 0.34 * m * pulse);
   halo.addColorStop(0, 'rgba(255,96,48,0.90)');
   halo.addColorStop(0.45, 'rgba(228,48,22,0.32)');
@@ -644,6 +673,7 @@ function tete(ctx, t, m, avant, garrot, cycle, vitesse, pres) {
   ctx.beginPath();
   ctx.arc(ox, oy, 0.062 * m, 0, TAU);
   ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 /** La bete est-elle assez pres pour qu'on lui doive un grondement ? */

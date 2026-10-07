@@ -6695,8 +6695,16 @@
     // pied a cote de sa plaque. L'ancien bloc au trait reste en secours tant
     // que l'image n'est pas chargee.
     const vue = T.curved ? WROT * 180 / Math.PI : 0;
+    // LES IMAGES SONT CUITES SOUS LA CAMERA DU JEU (26,6 deg), ET SOUS ELLE
+    // SEULE. Une nuit du molosse descend la camera jusqu'a six degres
+    // (halloween-cameras.js) : posee telle quelle, l'image du bloc gardait la
+    // pente de la vue standard et partait de travers sur des couloirs devenus
+    // presque horizontaux (07/10, « les start ne sont pas droit »). Hors de
+    // cette vue, c'est le bloc au trait qui se dessine : il passe par solid(),
+    // donc par la camera du moment.
+    const vueDesImages = Math.abs(C.ISO_SIN - 1 / Math.sqrt(5)) < 0.005;
     for (let e = 0; e < C.LANE_COUNT; e++) {
-      if (DEC()) {
+      if (DEC() && vueDesImages) {
         const q = T.pos(0, e);
         const g2 = ground(q[0], q[1]);
         if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) {
@@ -7376,8 +7384,9 @@
     if (PREM()) PREM().nappes(ctx, PEINTRE, th, rIn, rOut);
 
     // Les palmiers du dedans, en dernier : ils sont plus pres que la piste et
-    // doivent la recouvrir (voir drawArbresDedans).
-    if (th.arbres) drawArbresDedans(ctx, th, sm, rIn);
+    // doivent la recouvrir (voir drawArbresDedans). Sous une camera basse, ils
+    // passent apres les coureurs (G.arbresDevant, voir drawAthletes).
+    if (th.arbres && !G.arbresDevant) drawArbresDedans(ctx, th, sm, rIn);
     // LE PREMIER PLAN D'UN EVENEMENT : ce qu'il pose dans la pelouse (les
     // pirogues tirees sur le sable de Menole, game/legende/decors.ts), trace
     // ici pour la meme raison que les palmiers — en deca du couloir 1, plus
@@ -8822,6 +8831,18 @@
     // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
     // un mat ne se lit plus.
     if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    // LES ARBRES DU DEDANS, DEVANT LES COUREURS, QUAND LA CAMERA DESCEND.
+    //
+    // Sous la vue du jeu, un cypres du dedans ne mord que les pieds du
+    // couloir 1, et la limite etait assumee (drawArbresDedans). Une nuit du
+    // molosse filme a six degres avec un zoom de 2,5 : le meme arbre monte
+    // alors jusqu'au haut de l'ecran, et le coureur se peignait PAR-DESSUS un
+    // tronc plante entre lui et la camera (07/10, « le personnage ne passe pas
+    // derriere le decor mais devant »). Ces arbres sont plus pres que tout le
+    // couloir 1 : les peindre apres les athletes est juste, sans aucun tri.
+    if (G.arbresDevant && th && th.arbres && G.track) {
+      drawArbresDedans(ctx, th, samples(), G.track.curved ? G.track.edge(0) : 0);
+    }
     // Le haut du portique du Champ-de-Mars, par-dessus les coureurs qui sont
     // passes dessous (voir portiqueDevant).
     if (th && th.champDeMars && CDM()) CDM().portiqueDevant(ctx, apiCdm(), th);

@@ -252,11 +252,15 @@ function poserLaCamera(n: number) {
   C.ISO_COS = iso.cos;
   C.ISO_SIN = iso.sin;
   G.zoomMode = cam.zoom;
+  // la camera basse met les arbres du dedans entre elle et le coureur :
+  // ils se peignent apres lui (drawAthletes, sprinter-app.js)
+  G.arbresDevant = true;
 }
 
 function rendreLaCamera() {
   const G = SprinterApp.G;
   const C = (SprinterApp as any).C;
+  if (G) G.arbresDevant = false;
   if (!C || !cameraGardee) return;
   C.ISO_COS = cameraGardee.cos;
   C.ISO_SIN = cameraGardee.sin;

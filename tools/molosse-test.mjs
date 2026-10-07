@@ -229,9 +229,14 @@ titre('L\'ECHELLE : chaque nuit demande plus que la precedente');
   ok('la cadence exigee ne redescend jamais', recule === null, recule);
   ok('deux nuits ne se prennent jamais a la meme cadence', double === null, double);
 
+  // LA PREMIERE NUIT FAIT DEJA COURIR (07/10). Elle se passait a 5,5 appuis
+  // par seconde : on la traversait sans voir la bete. Sept au moins, et le
+  // geste monte encore de plus de six appuis jusqu'a la treizieme.
+  ok('des la premiere nuit, il faut au moins sept appuis par seconde',
+     seuils[0].c !== null && seuils[0].c >= 7, `${seuils[0].c}/s`);
   const ecart = seuils[12].c - seuils[0].c;
-  ok('de la premiere a la treizieme, le geste double presque',
-     ecart >= 7, `seulement ${ecart ? ecart.toFixed(2) : '?'} appuis/s d'ecart`);
+  ok('de la premiere a la treizieme, le geste monte de plus de six appuis',
+     ecart >= 6.5, `seulement ${ecart ? ecart.toFixed(2) : '?'} appuis/s d'ecart`);
 }
 
 // ---------------------------------------------------------------------------

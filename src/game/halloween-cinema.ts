@@ -304,107 +304,178 @@ export function sceneDe(cle: string, mordu: boolean): Scene {
 
 const TAU = Math.PI * 2;
 
+/* LA SCENE FAIT PEUR, ET C'EST LA SECONDE VERSION (07/10, « les scenes ne
+   font pas assez peur »). La premiere etait une gravure : une lune pale et
+   ronde, deux silhouettes nettes, un cimetiere qui defile. Belle, et calme —
+   rien n'y menacait le regard. Ce qui fait peur dans une image fixe tient en
+   quatre choses, et elles sont ajoutees dans cet ordre :
+
+     - CE QU'ON NE VOIT PAS EN ENTIER : des nuages passent sur la lune, une
+       brume monte du sol, les bords de l'image se noient dans le noir ;
+     - CE QUI REGARDE : des paires d'yeux s'allument et s'eteignent entre les
+       tombes. Il n'y a pas qu'une bete ;
+     - CE QUI SURGIT : un eclair, deux fois par histoire, decoupe tout en
+       blanc — et c'est a ce moment-la qu'on voit vraiment la bete ;
+     - CE QUI EST TROP PRES : apres une morsure, la bete n'est plus au loin
+       a hurler. Sa tete occupe le premier plan, de face, les yeux sur nous.
+
+   La lune devient rousse : c'est la couleur des yeux, et le seul rouge de la
+   scene avec eux. */
+
+/** Un tirage fixe : les memes yeux et les memes eclairs d'une image a l'autre. */
+function hasard(k: number): number {
+  const x = Math.sin(k * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/**
+ * L'eclair a l'instant `t` : 0 la plupart du temps, 1 au plus fort. Il frappe
+ * en deux coups rapproches, comme un vrai — un seul flash se lit comme une
+ * erreur d'affichage. Le premier tombe a 1,6 s, quand la premiere ligne vient
+ * d'apparaitre et que l'oeil s'est pose sur le texte.
+ */
+function eclairA(t: number): number {
+  const DATES = [1.6, 6.4, 11.8, 17.5];
+  let e = 0;
+  for (const d of DATES) {
+    const u = t - d;
+    if (u < 0 || u > 0.9) continue;
+    e = Math.max(e, Math.exp(-u * 9) + (u > 0.16 ? 0.8 * Math.exp(-(u - 0.16) * 6) : 0));
+  }
+  return Math.min(1, e);
+}
+
+let grain: HTMLCanvasElement | null = null;
+/** Une trame de bruit, faite une fois : la pellicule d'une vieille bande. */
+function trameDeGrain(): HTMLCanvasElement {
+  if (grain) return grain;
+  grain = document.createElement('canvas');
+  grain.width = grain.height = 128;
+  const g = grain.getContext('2d')!;
+  const im = g.createImageData(128, 128);
+  for (let i = 0; i < im.data.length; i += 4) {
+    const v = Math.random() * 255;
+    im.data[i] = im.data[i + 1] = im.data[i + 2] = v;
+    im.data[i + 3] = 255;
+  }
+  g.putImageData(im, 0, 0);
+  return grain;
+}
+
 /**
  * Peindre la scene, a l'instant `t` (en secondes depuis son debut).
  *
- * `mordu` decide de ce qu'on regarde : la bete court derriere l'homme, ou elle
- * s'assoit sur ses talons et hurle. Rien d'autre ne change — c'est la meme
- * nuit, vue de la meme place, et la carte de texte fait le reste.
+ * `mordu` decide de ce qu'on regarde : la bete court derriere l'homme, ou
+ * l'homme est a terre et la bete est sur nous. Le reste est la meme nuit.
  */
 export function peindreLaScene(
   ctx: CanvasRenderingContext2D, L: number, H: number, t: number, mordu: boolean,
 ) {
-  // LA LIGNE DE SOL REMONTE EN PORTRAIT, et c'est la carte de texte qui
-  // l'impose. En paysage elle occupe la moitie droite de l'ecran : la scene
-  // vit a gauche, et le sol peut rester bas. En portrait elle se pose EN BAS,
-  // sur toute la largeur — et les deux silhouettes, dessinees a 78 % de la
-  // hauteur, se retrouvaient entierement derriere elle. On ne voyait que la
-  // lune, ce qui est exactement la moitie de l'image qui ne raconte rien.
-  //
-  // Les personnages remontent donc au-dessus de la carte. Le seuil est large
-  // (une image un dixieme plus haute que large) : entre les deux, aucune des
-  // deux dispositions ne gene, et l'on prefere basculer trop tot que trop
-  // tard.
+  // La ligne de sol remonte en portrait : la carte de texte se pose en bas,
+  // sur toute la largeur, et les silhouettes doivent rester au-dessus d'elle.
   const portrait = H > L * 1.1;
   const sol = H * (portrait ? 0.54 : 0.78);
   const m = Math.min(L / 12, H / (portrait ? 11 : 7));
+  const eclair = eclairA(t);
 
-  // LE CIEL. Le meme degrade que le stade du cimetiere, pour qu'on reconnaisse
-  // le lieu d'ou l'on sort.
+  // LA SECOUSSE : l'eclair, et les appuis de la bete quand elle court.
+  ctx.save();
+  const tremble = eclair * m * 0.10 + (mordu ? 0 : Math.max(0, Math.sin(t * 3.4 * TAU)) * m * 0.02);
+  ctx.translate((hasard(Math.floor(t * 30)) - 0.5) * tremble, (hasard(Math.floor(t * 30) + 7) - 0.5) * tremble);
+
+  // LE CIEL : un noir qui tire au sang vers l'horizon.
   const ciel = ctx.createLinearGradient(0, 0, 0, sol);
-  ciel.addColorStop(0, 'rgb(12,7,22)');
-  ciel.addColorStop(1, 'rgb(52,26,62)');
+  ciel.addColorStop(0, 'rgb(5,3,9)');
+  ciel.addColorStop(0.7, 'rgb(26,8,18)');
+  ciel.addColorStop(1, 'rgb(58,14,20)');
   ctx.fillStyle = ciel;
-  ctx.fillRect(0, 0, L, sol);
+  ctx.fillRect(-m, -m, L + 2 * m, sol + m);
 
-  // LA LUNE, enorme et basse. Elle sert de projecteur : tout ce qui est devant
-  // elle devient noir, ce qui est exactement le contre-jour qu'on cherche.
-  //
-  // ELLE EST A GAUCHE, ET LES DEUX RAISONS SONT VENUES DE L'ECRAN.
-  //
-  // Posee a droite, elle ne servait a rien : les personnages etaient a gauche,
-  // donc personne n'etait en contre-jour, et le mot « contre-jour » ne
-  // decrivait plus que l'intention. Et en paysage, la carte de texte occupe
-  // toute la moitie droite (voir FinDeLaNuit) : la lune se retrouvait derriere
-  // elle, c'est-a-dire nulle part.
-  //
-  // A gauche, elle tombe dans la seule zone libre des deux orientations, et
-  // les silhouettes se decoupent dessus — ce qui etait le but depuis le debut.
+  // LA LUNE ROUSSE, a gauche (la seule zone libre des deux orientations, voir
+  // FinDeLaNuit), et les silhouettes se decoupent dessus.
   const lx = L * 0.24, ly = sol - H * 0.36, lr = Math.min(L, H) * 0.19;
-  const halo = ctx.createRadialGradient(lx, ly, lr * 0.7, lx, ly, lr * 3.1);
-  halo.addColorStop(0, 'rgba(255,196,112,0.30)');
-  halo.addColorStop(1, 'rgba(255,196,112,0)');
+  const respire = 1 + Math.sin(t * 0.9) * 0.04;
+  const halo = ctx.createRadialGradient(lx, ly, lr * 0.6, lx, ly, lr * 3.4 * respire);
+  halo.addColorStop(0, 'rgba(220,60,36,0.34)');
+  halo.addColorStop(1, 'rgba(220,60,36,0)');
   ctx.fillStyle = halo;
-  ctx.beginPath(); ctx.arc(lx, ly, lr * 3.1, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgb(252,226,168)';
+  ctx.beginPath(); ctx.arc(lx, ly, lr * 3.4 * respire, 0, TAU); ctx.fill();
+  const disque = ctx.createRadialGradient(lx - lr * 0.3, ly - lr * 0.3, lr * 0.1, lx, ly, lr);
+  disque.addColorStop(0, 'rgb(236,120,74)');
+  disque.addColorStop(1, 'rgb(170,44,30)');
+  ctx.fillStyle = disque;
   ctx.beginPath(); ctx.arc(lx, ly, lr, 0, TAU); ctx.fill();
-  // Trois meres, posees a la main : une lune parfaitement lisse ressemble a un
-  // rond jaune, et un rond jaune ne dit pas « la nuit ».
-  ctx.fillStyle = 'rgba(226,196,146,0.55)';
+  ctx.fillStyle = 'rgba(110,22,18,0.45)';
   for (const [dx, dy, r] of [[-0.34, -0.22, 0.20], [0.26, 0.10, 0.26], [-0.08, 0.40, 0.14]]) {
     ctx.beginPath(); ctx.arc(lx + dx * lr, ly + dy * lr, r * lr, 0, TAU); ctx.fill();
   }
 
-  // LE SOL. Presque noir, et une simple ligne pour le separer du ciel.
-  //
-  // Il a ete un vert de pelouse, et c'etait une erreur que la page d'apercu a
-  // rendue evidente : une bande claire en bas de l'image tirait le regard
-  // sous les personnages, au seul endroit ou il ne se passe rien. Un
-  // cimetiere de nuit n'a pas de pelouse visible — il a une masse sombre, et
-  // la lune par-dessus.
-  //
-  // IL S'ASSOMBRIT VERS LE BAS, ET CE N'EST PAS UNE COQUETTERIE. En portrait
-  // la ligne de sol remonte a mi-hauteur : le sol occupe alors la moitie de
-  // l'image, et peint d'un seul aplat il devenait un rectangle noir mort
-  // sous la scene. Le degrade lui rend une profondeur — on lit une terre qui
-  // s'enfonce dans la nuit plutot qu'un bord d'ecran — et il coute deux
-  // lignes.
+  // LES NUAGES, qui passent devant la lune et la mangent par moments. Des
+  // bords flous : en aplats nets, ils faisaient des barres noires posees sur
+  // l'image, pas un ciel.
+  for (let k = 0; k < 4; k++) {
+    const v = 0.035 + 0.02 * k;
+    const cx = ((hasard(k) * 1.6 + t * v) % 1.6 - 0.3) * L;
+    const cy = ly + (hasard(k + 9) - 0.5) * lr * 2.2;
+    const R = lr * (1.5 + hasard(k + 3));
+    for (const [dx, a] of [[-0.35, 0.55], [0, 0.75], [0.4, 0.5]]) {
+      ctx.save();
+      ctx.translate(cx + dx * R, cy);
+      ctx.scale(1, 0.14 + 0.08 * hasard(k + 5));
+      const n = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.8);
+      n.addColorStop(0, `rgba(8,3,8,${a})`);
+      n.addColorStop(1, 'rgba(8,3,8,0)');
+      ctx.fillStyle = n;
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.8, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // L'ECLAIR. Le ciel blanchit, et une fourche descend sur l'horizon : tout
+  // ce qui est devant devient une decoupe noire nette.
+  if (eclair > 0.02) {
+    ctx.fillStyle = `rgba(214,206,236,${0.85 * eclair})`;
+    ctx.fillRect(-m, -m, L + 2 * m, sol + m);
+    const graine = Math.floor((t + 0.9) / 5);
+    ctx.strokeStyle = `rgba(255,255,255,${eclair})`;
+    ctx.lineWidth = Math.max(1.5, m * 0.05);
+    ctx.beginPath();
+    let x = L * (0.55 + 0.35 * hasard(graine)), y = 0;
+    ctx.moveTo(x, y);
+    for (let k = 1; k <= 7; k++) {
+      x += (hasard(graine * 13 + k) - 0.5) * m * 1.6;
+      y = sol * 0.85 * k / 7;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // LE SOL, presque noir, qui s'enfonce dans la nuit.
   const terre = ctx.createLinearGradient(0, sol, 0, H);
-  terre.addColorStop(0, 'rgb(13,16,13)');
-  terre.addColorStop(1, 'rgb(4,5,5)');
+  terre.addColorStop(0, 'rgb(12,10,12)');
+  terre.addColorStop(1, 'rgb(3,3,4)');
   ctx.fillStyle = terre;
-  ctx.fillRect(0, sol, L, H - sol);
-  ctx.fillStyle = 'rgba(140,116,74,0.22)';
+  ctx.fillRect(-m, sol, L + 2 * m, H - sol + m);
+  ctx.fillStyle = 'rgba(160,60,40,0.22)';
   ctx.fillRect(0, sol, L, 2);
 
-  // LES TOMBES ET LES CYPRES, en contre-jour. Ils defilent lentement vers la
-  // gauche : la scene est fixe, mais le monde derriere ne l'est pas — et c'est
-  // ce leger glissement qui empeche l'image de ressembler a une capture.
+  // LES TOMBES, LES CYPRES ET UN ARBRE MORT, en contre-jour, qui defilent.
   const glisse = (t * 26) % (L + 400);
-  ctx.fillStyle = 'rgb(8,10,12)';
+  ctx.fillStyle = 'rgb(7,6,9)';
+  ctx.strokeStyle = 'rgb(7,6,9)';
   for (let k = 0; k < 9; k++) {
     const x = ((k * 190 - glisse) % (L + 400) + L + 400) % (L + 400) - 200;
     if (k % 3 === 2) {
-      // un cypres
       ctx.beginPath();
       ctx.moveTo(x, sol);
       ctx.quadraticCurveTo(x - m * 0.30, sol - m * 1.5, x, sol - m * 2.6);
       ctx.quadraticCurveTo(x + m * 0.30, sol - m * 1.5, x, sol);
       ctx.fill();
+    } else if (k === 4) {
+      arbreMort(ctx, x, sol, m);
     } else {
-      // une pierre tombale, arrondie du haut et plantee de travers
       const l = m * 0.42, h = m * (0.62 + (k % 4) * 0.12);
-      const pente = ((k * 37) % 11 - 5) * 0.012;
+      const pente = ((k * 37) % 11 - 5) * 0.03;
       ctx.save();
       ctx.translate(x, sol); ctx.rotate(pente);
       ctx.beginPath();
@@ -416,23 +487,169 @@ export function peindreLaScene(
     }
   }
 
-  // LES DEUX SILHOUETTES. L'homme a gauche, la bete derriere lui, toutes deux
-  // en noir plein sur la lune.
-  // Places pour que l'un des deux passe DEVANT la lune : le coureur qu'on
-  // poursuit, et la bete qui hurle. C'est la seule chose que cette image doit
-  // faire lire en une demi-seconde.
-  const cycle = (t * (mordu ? 1.1 : 3.4)) % 1;
-  ctx.fillStyle = 'rgb(5,5,8)';
-  ctx.strokeStyle = 'rgb(5,5,8)';
-  if (mordu) {
-    silhouetteAssise(ctx, L * 0.27, sol, m, t);
-    silhouetteTombee(ctx, L * 0.11, sol, m, t);
-  } else {
-    // La bete garde une longueur de queue de marge sur le bord : posee plus a
-    // gauche, elle se faisait couper en deux par le cadre.
-    silhouetteChien(ctx, L * 0.09, sol, m, cycle);
-    silhouetteCoureur(ctx, L * 0.29, sol, m, cycle);
+  // LES YEUX DANS LE NOIR. Cinq paires, chacune a son rythme : elles
+  // s'allument, restent, clignent, s'eteignent. Jamais deux en meme temps au
+  // meme endroit, et jamais sur la lune — elles sont dans la terre sombre.
+  for (let k = 0; k < 5; k++) {
+    const periode = 3.2 + hasard(k + 20) * 3;
+    const u = ((t + hasard(k + 30) * periode) % periode) / periode;
+    if (u > 0.45) continue;
+    const allume = Math.min(1, u / 0.08) * Math.min(1, (0.45 - u) / 0.08);
+    const cligne = Math.abs(((u * periode) % 1.3) - 0.6) < 0.05 ? 0.1 : 1;
+    const ex = L * (0.42 + 0.55 * hasard(k + 40 + Math.floor((t + hasard(k + 30) * periode) / periode)));
+    const ey = sol + (H - sol) * (portrait ? 0.06 : 0.12) * hasard(k + 50) - m * 0.15;
+    const r = m * (0.035 + 0.02 * hasard(k + 60));
+    ctx.fillStyle = `rgba(255,${50 + 40 * hasard(k)},30,${0.9 * allume * cligne})`;
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(ex + s * r * 2.2, ey, r, r * 0.6, 0, 0, TAU); ctx.fill();
+    }
   }
+
+  // LA BRUME, qui monte du sol par nappes et noie les pieds de tout le monde.
+  for (let k = 0; k < 5; k++) {
+    const v = 8 + 10 * hasard(k + 70);
+    const bx = ((hasard(k + 80) * (L + 600) + t * v) % (L + 600)) - 300;
+    const by = sol + m * (0.1 - 0.35 * hasard(k + 90));
+    const br = m * (2.4 + 1.5 * hasard(k + 100));
+    const nappe = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+    nappe.addColorStop(0, `rgba(150,120,140,${0.16 + 0.10 * eclair})`);
+    nappe.addColorStop(1, 'rgba(150,120,140,0)');
+    ctx.fillStyle = nappe;
+    ctx.beginPath(); ctx.ellipse(bx, by, br, br * 0.35, 0, 0, TAU); ctx.fill();
+  }
+
+  // LES SILHOUETTES.
+  const cycle = (t * 3.4) % 1;
+  ctx.fillStyle = 'rgb(4,3,6)';
+  ctx.strokeStyle = 'rgb(4,3,6)';
+  if (mordu) {
+    // L'homme a terre, au loin, contre la lune. Et la bete sur nous.
+    silhouetteTombee(ctx, L * 0.24, sol, m, t);
+    teteDeFace(ctx, L, H, sol, m, t, eclair, portrait);
+  } else {
+    silhouetteChien(ctx, L * 0.09, sol, m * 1.25, cycle, t);
+    silhouetteCoureur(ctx, L * 0.32, sol, m, cycle);
+  }
+
+  // LE NOIR QUI SE REFERME SUR LES BORDS, plus fort quand l'eclair retombe.
+  const vignette = ctx.createRadialGradient(L * 0.45, sol * 0.8, Math.min(L, H) * 0.25,
+                                            L * 0.45, sol * 0.8, Math.max(L, H) * 0.85);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, `rgba(0,0,0,${0.82 - 0.4 * eclair})`);
+  ctx.fillStyle = vignette;
+  ctx.fillRect(-m, -m, L + 2 * m, H + 2 * m);
+
+  // LE GRAIN, d'une vieille bande : il bouge a chaque image.
+  const motif = ctx.createPattern(trameDeGrain(), 'repeat');
+  if (motif) {
+    ctx.globalAlpha = 0.07;
+    ctx.translate(hasard(Math.floor(t * 24)) * 128, hasard(Math.floor(t * 24) + 3) * 128);
+    ctx.fillStyle = motif;
+    ctx.fillRect(-256, -256, L + 512, H + 512);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/** Un arbre mort : un tronc tordu et des branches nues, comme des doigts. */
+function arbreMort(ctx: CanvasRenderingContext2D, x: number, sol: number, m: number) {
+  ctx.lineCap = 'round';
+  const branche = (x0: number, y0: number, a: number, l: number, w: number, n: number) => {
+    const x1 = x0 + Math.cos(a) * l, y1 = y0 - Math.sin(a) * l;
+    ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    if (n > 0) {
+      branche(x1, y1, a + 0.5 + hasard(n + x0) * 0.3, l * 0.68, w * 0.62, n - 1);
+      branche(x1, y1, a - 0.45 - hasard(n + y0) * 0.3, l * 0.62, w * 0.6, n - 1);
+    }
+  };
+  branche(x, sol, Math.PI / 2 + 0.12, m * 1.3, m * 0.24, 4);
+}
+
+/**
+ * LA TETE DE LA BETE, DE FACE, AU PREMIER PLAN — l'image de la morsure.
+ *
+ * Elle a remplace le chien assis qui hurlait a la lune : il racontait que
+ * c'etait fini, la ou il fallait raconter que ca ne l'est pas. La tete monte
+ * du bas de l'image, plus large que l'homme a terre n'est haut, et elle
+ * respire. On ne voit d'elle que la masse noire, deux yeux en braise et les
+ * crocs — l'eclair seul la decoupe en entier.
+ */
+function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
+                    m: number, t: number, eclair: number, portrait: boolean) {
+  // Elle monte pendant la premiere seconde, puis respire.
+  const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
+  const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);
+  const cx = L * (portrait ? 0.66 : 0.40);
+  // la gueule au-dessus de la carte de texte, qui couvre le bas de l'image
+  const cy = sol - s * (portrait ? 0.12 : 0.02) + (1 - monte) * s * 1.2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = 'rgb(3,2,5)';
+  // les epaules, qui sortent du cadre
+  ctx.beginPath(); ctx.ellipse(0, s * 0.95, s * 1.15, s * 0.65, 0, 0, TAU); ctx.fill();
+  // les oreilles, courtes et couchees : grandes et dressees, elles faisaient
+  // un chat, ou un hibou
+  for (const k of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(k * s * 0.30, -s * 0.46);
+    ctx.lineTo(k * s * 0.62, -s * 0.66);
+    ctx.lineTo(k * s * 0.52, -s * 0.30);
+    ctx.closePath(); ctx.fill();
+  }
+  // les cretes de l'echine, derriere la nuque
+  for (let k = -3; k <= 3; k++) {
+    const bx = k * s * 0.17, by = -s * 0.42 + Math.abs(k) * s * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(bx - s * 0.06, by); ctx.lineTo(bx + k * s * 0.02, by - s * (0.30 - Math.abs(k) * 0.03));
+    ctx.lineTo(bx + s * 0.06, by);
+    ctx.closePath(); ctx.fill();
+  }
+  // le crane et les bajoues
+  ctx.beginPath(); ctx.ellipse(0, -s * 0.18, s * 0.50, s * 0.42, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, s * 0.18, s * 0.58, s * 0.34, 0, 0, TAU); ctx.fill();
+  // la gueule ouverte : le fond rouge sombre, puis les crocs
+  const ouvre = s * (0.16 + 0.03 * Math.sin(t * 2.3));
+  ctx.fillStyle = 'rgb(62,6,10)';
+  ctx.beginPath(); ctx.ellipse(0, s * 0.30, s * 0.30, ouvre, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgb(232,226,214)';
+  const croc = (x: number, y: number, h: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.035, y); ctx.lineTo(x, y + h); ctx.lineTo(x + s * 0.035, y);
+    ctx.closePath(); ctx.fill();
+  };
+  for (const x of [-0.20, -0.09, 0.09, 0.20]) croc(x * s, s * 0.30 - ouvre * 0.85, s * (Math.abs(x) > 0.15 ? 0.15 : 0.08));
+  for (const x of [-0.16, 0.16]) croc(x * s, s * 0.30 + ouvre * 0.85, -s * 0.10);
+  // la bave, qui tombe d'un croc
+  ctx.fillStyle = 'rgba(220,220,230,0.55)';
+  const goutte = (t * 0.8) % 1;
+  ctx.beginPath(); ctx.ellipse(s * 0.20, s * 0.47 + goutte * s * 0.5, s * 0.012, s * 0.03, 0, 0, TAU); ctx.fill();
+  // la truffe
+  ctx.fillStyle = 'rgb(3,2,5)';
+  ctx.beginPath(); ctx.ellipse(0, s * 0.02, s * 0.15, s * 0.09, 0, 0, TAU); ctx.fill();
+  // LES YEUX : deux fentes en braise, le coin interieur plus bas, et une
+  // arcade qui tombe dessus. Ronds, ils etaient ceux d'une peluche ; c'est le
+  // sourcil qui fait la colere.
+  const pulse = 0.85 + 0.15 * Math.sin(t * 6.5);
+  for (const k of [-1, 1]) {
+    const ox = k * s * 0.22, oy = -s * 0.20;
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, s * 0.26 * pulse);
+    g.addColorStop(0, 'rgba(255,90,40,0.7)');
+    g.addColorStop(1, 'rgba(255,40,20,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(ox, oy, s * 0.26 * pulse, 0, TAU); ctx.fill();
+    ctx.fillStyle = `rgb(255,${130 + 80 * eclair},70)`;
+    ctx.beginPath(); ctx.ellipse(ox, oy, s * 0.10, s * 0.032, -k * 0.38, 0, TAU); ctx.fill();
+    // l'arcade, en biais vers la truffe
+    ctx.fillStyle = 'rgb(3,2,5)';
+    ctx.beginPath();
+    ctx.moveTo(k * s * 0.06, oy - s * 0.005);
+    ctx.lineTo(k * s * 0.38, oy - s * 0.075);
+    ctx.lineTo(k * s * 0.40, oy - s * 0.22);
+    ctx.lineTo(k * s * 0.04, oy - s * 0.22);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
 }
 
 /** Un coureur en contre-jour, jambes et bras en pleine foulee. */
@@ -485,7 +702,7 @@ function silhouetteCoureur(ctx: CanvasRenderingContext2D, x: number, sol: number
  * devant en la repliant, exactement comme `pied()` dans halloween-molosse.js.
  */
 function silhouetteChien(ctx: CanvasRenderingContext2D, x: number, sol: number,
-                         mesure: number, cycle: number) {
+                         mesure: number, cycle: number, t = 0) {
   // LA BETE EST PLUS GRANDE ICI QUE SUR LA PISTE, ET C'EST VOULU.
   //
   // A l'echelle exacte — la moitie d'un coureur — elle faisait quarante
@@ -549,55 +766,36 @@ function silhouetteChien(ctx: CanvasRenderingContext2D, x: number, sol: number,
   ctx.lineTo(x + m * 0.84, y + m * 0.10);
   ctx.closePath(); ctx.fill();
 
-  // L'OEIL, le seul point clair de la silhouette. Sans lui la bete n'est
-  // qu'une masse noire, et une masse noire ne regarde personne.
-  ctx.fillStyle = 'rgb(255,86,42)';
-  ctx.beginPath(); ctx.arc(x + m * 0.96, y + m * 0.12, m * 0.055, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgb(5,5,8)';
-}
-
-/**
- * La bete assise sur ses talons, museau au ciel.
- *
- * C'est l'image de la defaite, et elle ne montre rien de ce qui vient de se
- * passer : le chien ne devore pas, il annonce. Un hurlement se comprend de
- * dos, de loin, et en silhouette — ce qu'une gueule pleine ne ferait pas.
- */
-function silhouetteAssise(ctx: CanvasRenderingContext2D, x: number, sol: number,
-                          m: number, t: number) {
-  const souffle = Math.sin(t * 2.2) * m * 0.02;
-  ctx.lineCap = 'round';
-  // l'arriere-train pose au sol, le poitrail dresse
-  ctx.lineWidth = m * 0.40;
-  ctx.beginPath();
-  ctx.moveTo(x - m * 0.30, sol - m * 0.26);
-  ctx.lineTo(x + m * 0.16, sol - m * 0.92 + souffle);
-  ctx.stroke();
-  // les deux pattes avant, tendues
-  ctx.lineWidth = m * 0.12;
-  for (const dx of [-0.04, 0.12]) {
+  // LA GUEULE OUVERTE, et deux crocs qui accrochent la lumiere de la lune.
+  ctx.fillStyle = 'rgb(232,226,214)';
+  for (const [dx, sens] of [[1.12, 1], [1.02, 1], [1.08, -1]] as const) {
     ctx.beginPath();
-    ctx.moveTo(x + m * (0.18 + dx), sol - m * 0.80 + souffle);
-    ctx.lineTo(x + m * (0.30 + dx), sol);
-    ctx.stroke();
+    ctx.moveTo(x + m * (dx - 0.025), y + m * 0.22);
+    ctx.lineTo(x + m * dx, y + m * (0.22 + sens * 0.08));
+    ctx.lineTo(x + m * (dx + 0.025), y + m * 0.22);
+    ctx.closePath(); ctx.fill();
   }
-  // le cou et le museau, leves vers la lune
-  ctx.lineWidth = m * 0.22;
-  ctx.beginPath();
-  ctx.moveTo(x + m * 0.16, sol - m * 0.92 + souffle);
-  ctx.lineTo(x + m * 0.40, sol - m * 1.34 + souffle);
-  ctx.stroke();
-  ctx.lineWidth = m * 0.15;
-  ctx.beginPath();
-  ctx.moveTo(x + m * 0.40, sol - m * 1.34 + souffle);
-  ctx.lineTo(x + m * 0.74, sol - m * 1.62 + souffle);
-  ctx.stroke();
-  // la queue, posee au sol
-  ctx.lineWidth = m * 0.09;
-  ctx.beginPath();
-  ctx.moveTo(x - m * 0.30, sol - m * 0.22);
-  ctx.lineTo(x - m * 0.86, sol - m * 0.06);
-  ctx.stroke();
+
+  // SON SOUFFLE, en buee devant le museau : deux bouffees par foulee.
+  for (let k = 0; k < 3; k++) {
+    const u = ((t * 2 + k / 3) % 1);
+    ctx.fillStyle = `rgba(190,170,190,${0.22 * (1 - u)})`;
+    ctx.beginPath();
+    ctx.arc(x + m * (1.30 + u * 0.5), y + m * (0.18 - u * 0.12), m * (0.06 + u * 0.16), 0, TAU);
+    ctx.fill();
+  }
+
+  // L'OEIL, le seul point clair de la silhouette, et son halo qui bat.
+  const ox = x + m * 0.96, oy = y + m * 0.12;
+  const pulse = 0.8 + 0.2 * Math.sin(t * 7);
+  const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, m * 0.30 * pulse);
+  halo.addColorStop(0, 'rgba(255,80,40,0.8)');
+  halo.addColorStop(1, 'rgba(255,40,20,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(ox, oy, m * 0.30 * pulse, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgb(255,120,60)';
+  ctx.beginPath(); ctx.arc(ox, oy, m * 0.055, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgb(4,3,6)';
 }
 
 /**
