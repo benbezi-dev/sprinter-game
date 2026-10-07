@@ -240,7 +240,10 @@ const LONDRES: Lieu = {
 const KARMAN: Lieu = {
   cle: 'karman', nom: 'Ligne de Kármán', pays: '100 km', drapeau: '',
   geo: null,
-  theme: 'arcenciel',
+  // Un paysage dans les nuages, pas l'espace (l'auteur, 07/10, images a
+  // l'appui) : le stade de jour, repeint en ciel rose, nuages, marbre et or
+  // (THEME_DU_LIEU, stades.ts), la cite celeste au loin (decors.ts).
+  theme: 'day',
   boss: 'Hermès', surnom: ['Le Messager', 'The Messenger'],
   // Il ne marche pas jusqu'a la ligne : il y descend du ciel, les bras
   // ouverts, et s'y pose sur la pointe des pieds. Le jour de sa naissance il

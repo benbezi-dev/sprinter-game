@@ -28,12 +28,13 @@ import menole from '@/assets/legende/decors/menole.webp?url';
 import kyoto from '@/assets/legende/decors/kyoto.webp?url';
 import barcelone from '@/assets/legende/decors/barcelone.webp?url';
 import casablanca from '@/assets/legende/decors/casablanca.webp?url';
-import karman from '@/assets/legende/decors/karman.webp?url';
 import apotheose from '@/assets/legende/decors/apotheose.webp?url';
 // les pieces de premier plan, modelisees dans Blender (legende_pieces.py)
 import torii from '@/assets/legende/decors/torii.webp?url';
 import cabine from '@/assets/legende/decors/cabine.webp?url';
 import morris from '@/assets/legende/decors/morris.webp?url';
+import { citeCeleste, W as CITE_W, H as CITE_H, AX as CITE_AX, AY as CITE_AY } from './cite-celeste';
+import { cumulus, chargerLesCumulus, poserCumulus } from './nuages';
 // les dieux de l'Olympe en pied (rendus de leur maillage, vedette_tripo.py)
 import hermesPied from '@/assets/legende/boss/hermes-pied.webp?url';
 import wukongPied from '@/assets/legende/boss/wukong-pied.webp?url';
@@ -53,7 +54,7 @@ type Pose = {
 // Les images, par lieu. Une cle absente : le stade reste sans monument.
 const IMAGES: Record<string, string> = {
   menole, kyoto, kingston, izmir, barcelone, casablanca, abuja,
-  newyork, londres, karman, apotheose,
+  newyork, londres, apotheose,
   torii, cabine, morris,
 };
 
@@ -66,7 +67,7 @@ const POSE_PAR_DEFAUT: Pose = { x: [0.80, 0.70], part: 1, large: 0.40 };
 const POSES: Record<string, Partial<Pose>> = {
   // un inselberg et un temple sont plus larges que hauts
   abuja: { part: 0.85, large: 0.75 },
-  karman: { part: 0.8, large: 0.6 },
+  karman: { part: 1, large: 0.62 },
   barcelone: { large: 0.5 },
   apotheose: { large: 0.5 },
 };
@@ -77,7 +78,14 @@ const MONUMENT_DU_LIEU = (cle: string) => (cle.startsWith('karman') ? 'karman' :
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
-function piece(cle: string): { im: HTMLImageElement; p: Piece } | null {
+type Image_ = { im: CanvasImageSource; p: Piece };
+
+function piece(cle: string): Image_ | null {
+  // l'Olympe : la cite celeste, peinte au canvas (cite-celeste.ts)
+  if (cle === 'karman') {
+    const im = citeCeleste();
+    return im ? { im, p: { f: '', w: CITE_W, h: CITE_H, ax: CITE_AX, ay: CITE_AY } } : null;
+  }
   const imgs = (globalThis as any).SprinterImages;
   if (!imgs) return null;
   if (cle === 'paris') {
@@ -111,6 +119,7 @@ export function preparerLeLointain(cle: string) {
   const P = PREMIER_PLAN[MONUMENT_DU_LIEU(cle)];
   if (P) piece(P.img);
   for (const d of dieuxSpectateurs(cle)) image(d.url);
+  if (MONUMENT_DU_LIEU(cle) === 'karman') chargerLesCumulus();
 }
 
 // -----------------------------------------------------------------------
@@ -150,7 +159,7 @@ function image(url: string): HTMLImageElement | null {
 
 /** Pose une piece lointaine sur l'horizon, a l'abscisse et la taille de `pose`. */
 function poserAuLoin(ctx: CanvasRenderingContext2D, api: any, sm: any[], rOut: number, horizon: number,
-                     R: { im: HTMLImageElement; p: Piece }, pose: Pose) {
+                     R: Image_, pose: Pose) {
   const { G } = api;
   // La derive d'un objet lointain : un metre couru le deplace d'un pixel
   // et demi, quand la piste en defile une vingtaine.
@@ -177,7 +186,7 @@ export function lointainDe(lieu: string) {
   const cle = MONUMENT_DU_LIEU(lieu);
   // Menole : son image EST le premier plan (la pirogue), pas un monument
   if (PREMIER_PLAN[cle]?.img === cle) return null;
-  if (cle !== 'paris' && !IMAGES[cle]) return null;
+  if (cle !== 'paris' && cle !== 'karman' && !IMAGES[cle]) return null;
   const pose: Pose = { ...POSE_PAR_DEFAUT, ...(POSES[cle] || {}) };
   const dieux = dieuxSpectateurs(lieu);
   return function lointain(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rOut: number, horizon: number) {
@@ -191,9 +200,70 @@ export function lointainDe(lieu: string) {
       });
       ctx.restore();
     }
+    if (cle === 'karman') cielCeleste(ctx, api, pose);
     const R = piece(cle);
     if (R) poserAuLoin(ctx, api, sm, rOut, horizon, R, pose);
   };
+}
+
+/**
+ * Le ciel de l'Olympe : un halo d'or derriere la cite, des cumulus qui
+ * derivent, des rais de lumiere qui tombent du haut du cadre en eventail, et
+ * une poussiere d'or qui monte lentement.
+ * Peints avant la tribune, qui les coupe comme elle coupe la cite.
+ */
+function cielCeleste(ctx: CanvasRenderingContext2D, api: any, pose: Pose) {
+  const { G } = api;
+  const u = api.ui(), t = performance.now() / 1000;
+  const x = G.VW * (G.portrait ? pose.x[0] : pose.x[1]) - (G.camX - 50) * 1.4 * u;
+  const y = -G.VH * 0.08;
+  const L = Math.hypot(G.VW, G.VH);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(x, G.VH * 0.12, 0, x, G.VH * 0.12, G.VW * 0.45);
+  halo.addColorStop(0, 'rgba(255,214,140,0.28)'); halo.addColorStop(1, 'rgba(255,214,140,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, G.VW, G.VH);
+  // les cumulus du ciel, qui derivent lentement (ceux du moteur, des ronds
+  // blancs, sont eteints : `clouds: false`, stades.ts)
+  ctx.globalCompositeOperation = 'source-over';
+  const boucle = G.VW * 1.5;
+  for (let i = 0; i < 6; i++) {
+    const im = cumulus(i * 5 + 2);
+    if (!im) continue;
+    const l = G.VW * (G.portrait ? 0.3 : 0.16) * (0.7 + 0.15 * (i % 3));
+    const px = ((i / 6) * boucle + t * 3 * u - (G.camX - 50) * 0.5 * u) % boucle;
+    const py = G.VH * ((G.portrait ? 0.2 : 0.11) + 0.045 * ((i * 2) % 3));
+    ctx.globalAlpha = 0.92;
+    poserCumulus(ctx, im, (px < 0 ? px + boucle : px) - G.VW * 0.2, py, l, i % 2 === 1);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 11; i++) {
+    const a = Math.PI / 2 + (i - 5) * 0.17 + 0.05 * Math.sin(t * 0.25 + i * 1.7);
+    const w = 0.018 + 0.014 * ((i * 5) % 3);
+    const g = ctx.createLinearGradient(x, y, x + Math.cos(a) * L * 0.7, y + Math.sin(a) * L * 0.7);
+    g.addColorStop(0, `rgba(255,232,180,${0.16 + 0.06 * Math.sin(t * 0.6 + i)})`);
+    g.addColorStop(1, 'rgba(255,232,180,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a - w) * L, y + Math.sin(a - w) * L);
+    ctx.lineTo(x + Math.cos(a + w) * L, y + Math.sin(a + w) * L);
+    ctx.closePath();
+    ctx.fill();
+  }
+  for (let i = 0; i < 46; i++) {
+    const g = Math.imul(i + 17, 2654435761) >>> 0;
+    const v = 6 + (g % 14);
+    const px = ((g >>> 4) % 1000) / 1000 * G.VW + 10 * Math.sin(t * 0.5 + i);
+    const py = G.VH * 0.75 - ((t * v * u + ((g >>> 12) % 1000) / 1000 * G.VH * 0.75) % (G.VH * 0.75));
+    const a = 0.4 + 0.4 * Math.sin(t * 2 + i);
+    const r = (1 + (g >>> 22) % 3 * 0.6) * u;
+    ctx.fillStyle = `rgba(255,224,150,${a})`;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 // -----------------------------------------------------------------------
@@ -307,8 +377,138 @@ function enfants(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number
   }
 }
 
+// -----------------------------------------------------------------------
+// LA PISTE CELESTE (l'Olympe).
+// -----------------------------------------------------------------------
+//
+// « Je veux que le decor et la piste soient celestes » (l'auteur, 07/10),
+// puis « accentue le cote celeste, sur le decor et la piste » : la piste bleu
+// nuit du theme (stades.ts) devient un morceau de ciel — des nebuleuses, des
+// etoiles qui scintillent, quelques-unes en croix — et chaque ligne de couloir
+// rayonne d'or. Elle flotte sur une mer de nuages : des cumulus eclaires par
+// le haut, qui debordent un peu sur le bord du couloir 1 et sous les
+// panneaux. Les bords rayonnent par le `neon` du theme (decor-cosmos.js).
+const hache = (n: number) => Math.imul(n, 2654435761) >>> 0;
+
+function pisteCeleste(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number) {
+  const { G, C } = api;
+  const T = G.track;
+  const u = api.ui(), m = api.scaleM();
+  const t = performance.now() / 1000;
+  const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+  const fin = api.samples(2);
+  const dansLeCadre = (p: number[], marge: number) =>
+    p[0] > -marge && p[0] < G.VW + marge && p[1] > -marge && p[1] < G.VH + marge;
+
+  // 1. LE CIEL DANS LA PISTE, tenu dans ses bords
+  ctx.save();
+  ctx.beginPath();
+  sm.forEach((s, i) => { const p = api.ground(...api.ptOf(s, rIn)); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+  for (let i = sm.length - 1; i >= 0; i--) { const p = api.ground(...api.ptOf(sm[i], rOut)); ctx.lineTo(p[0], p[1]); }
+  ctx.closePath();
+  ctx.clip();
+  ctx.globalCompositeOperation = 'lighter';
+  // les nebuleuses, larges et pales
+  const teintes = ['120,96,255', '236,120,214', '86,170,255', '255,190,110'];
+  for (let i = 0; i < fin.length; i += 3) {
+    const g = hache(i * 7 + 3);
+    const p = api.ground(...api.ptOf(fin[i], rIn + ((g % 1000) / 1000) * (rOut - rIn)));
+    const r = (3 + ((g >>> 10) % 300) / 100) * m;
+    if (!dansLeCadre(p, r)) continue;
+    const n = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+    const c = teintes[(g >>> 4) % teintes.length];
+    n.addColorStop(0, `rgba(${c},0.16)`); n.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = n;
+    ctx.fillRect(p[0] - r, p[1] - r, r * 2, r * 2);
+  }
+  // les etoiles : des points qui scintillent, une sur sept en croix
+  for (let i = 0; i < fin.length; i++) {
+    for (let k = 0; k < 7; k++) {
+      const g = hache(i * 13 + k * 104729 + 11);
+      const p = api.ground(...api.ptOf(fin[i], rIn + 0.15 + ((g % 1000) / 1000) * (rOut - rIn - 0.3)));
+      if (!dansLeCadre(p, 8)) continue;
+      const a = 0.5 + 0.5 * Math.sin(t * (1.5 + ((g >>> 20) % 4) * 0.6) + (g >>> 8));
+      if (k === 0 && (g >>> 12) % 2 === 0) {
+        const l = (3 + a * 5) * u;
+        const halo = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], l * 1.4);
+        halo.addColorStop(0, `rgba(255,236,190,${0.5 * a})`); halo.addColorStop(1, 'rgba(255,236,190,0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(p[0] - l * 1.4, p[1] - l * 1.4, l * 2.8, l * 2.8);
+        ctx.fillStyle = `rgba(255,246,220,${0.55 + 0.45 * a})`;
+        ctx.fillRect(p[0] - l, p[1] - 0.5 * u, l * 2, u);
+        ctx.fillRect(p[0] - 0.5 * u, p[1] - l * 0.7, u, l * 1.4);
+      } else {
+        const s = (0.9 + a * 1.3 + ((g >>> 16) % 3) * 0.4) * u;
+        ctx.fillStyle = (g >>> 6) % 3 ? `rgba(255,240,206,${0.3 + 0.6 * a})` : `rgba(200,214,255,${0.3 + 0.6 * a})`;
+        ctx.fillRect(p[0] - s / 2, p[1] - s / 2, s, s);
+      }
+    }
+  }
+  ctx.restore();
+
+  // 2. LES LIGNES D'OR, qui rayonnent
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let l = 1; l < C.LANE_COUNT; l++) {
+    const r = T.curved ? T.edge(l) : C.LANE_W * l;
+    api.rail(ctx, sm, r, 'rgba(255,180,70,0.12)', 11 * u);
+    api.rail(ctx, sm, r, 'rgba(255,196,96,0.2)', 4.5 * u);
+  }
+  ctx.restore();
+  for (let l = 1; l < C.LANE_COUNT; l++) {
+    api.rail(ctx, sm, T.curved ? T.edge(l) : C.LANE_W * l, 'rgb(255,204,104)', 1.7 * u);
+  }
+
+  // 3. LA MER DE NUAGES, du plus loin au plus pres. Un cumulus se dresse
+  // vers le haut de l'image, donc par-dessus la piste qui est derriere lui :
+  // sa tete ne depasse jamais le bord du couloir 1 de plus d'un liseré, ou il
+  // cacherait les lignes et les blocs des couloirs 1 et 2.
+  const nuages: [number, number, number, HTMLImageElement, boolean, number][] = [];
+  const deborde = 5 * u;
+  const poser = (s: any, r: number, largeur: number, g: number) => {
+    const im = cumulus(g);
+    if (!im) return;
+    const p = api.ground(...api.ptOf(s, r));
+    if (!dansLeCadre(p, largeur)) return;
+    // trop haut : on l'ecrase d'abord (un banc bas, en bordure), puis on le
+    // retrecit
+    const place = p[1] - (api.ground(...api.ptOf(s, rIn))[1] - deborde);
+    const h = largeur * im.naturalHeight / im.naturalWidth * 0.9;
+    let ecrase = 1;
+    if (h > place) ecrase = Math.max(0.45, place / h);
+    if (h * ecrase > place) largeur *= Math.max(0, place) / (h * ecrase);
+    if (largeur < 0.8 * m) return;
+    nuages.push([p[1], p[0], largeur, im, ((g >>> 3) & 1) === 1, ecrase]);
+  };
+  for (let i = 0; i < fin.length; i++) {
+    for (let k = 0; k < 3; k++) {
+      const g = hache(i * 3 + k * 52711 + 5);
+      poser(fin[i], rIn - 0.6 - (g % 300) / 100, (2.6 + ((g >>> 6) % 160) / 100) * m, g);
+    }
+    for (let k = 0; k < 4; k++) {
+      const h = hache(i * 11 + k * 7919 + 1);
+      const r = rIn - 3 - (h % 2000) / 100;
+      // une lente houle : les nuages ne sont pas poses, ils derivent
+      poser(fin[i], r + 0.3 * Math.sin(t * 0.3 + (h >>> 8)), (3.6 + ((h >>> 9) % 400) / 100) * m, h);
+    }
+  }
+  nuages.sort((a, z) => a[0] - z[0]);
+  for (const [y, x, l, im, ret, e] of nuages) poserCumulus(ctx, im, x, y, l, ret, e);
+  // la piste eclaire d'or le sommet des nuages qui la bordent
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  api.rail(ctx, sm, rIn - 0.5, 'rgba(255,190,96,0.10)', 26 * u);
+  api.rail(ctx, sm, rIn - 0.25, 'rgba(255,200,110,0.14)', 10 * u);
+  ctx.restore();
+}
+
 export function premierPlanDe(lieu: string) {
   const cle = MONUMENT_DU_LIEU(lieu);
+  if (cle === 'karman') {
+    return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
+      pisteCeleste(ctx, api, sm, rIn);
+    };
+  }
   const P = PREMIER_PLAN[cle];
   if (!P || !IMAGES[P.img]) return null;
   return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {

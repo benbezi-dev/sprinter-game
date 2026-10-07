@@ -14,11 +14,11 @@ licence. **À reprendre dans les crédits du jeu avant toute ouverture publique.
 | Barcelone | `barcelone.webp` | [Sagrada Familia 03](https://commons.wikimedia.org/wiki/File:Sagrada_Familia_03.jpg) | Bernard Gagnon | CC BY-SA 3.0 |
 | New York | `newyork.webp` | [Statue of Liberty, Liberty Island, New York - April 2026](https://commons.wikimedia.org/wiki/File:Statue_of_Liberty,_Liberty_Island,_New_York_-_April_2026.jpg) | Christian David | CC BY-SA 4.0 |
 | Abuja | `abuja.webp` | [Zuma Rock in the dry season](https://commons.wikimedia.org/wiki/File:Zuma_Rock_in_the_dry_season.jpg) | Hui Linbo | CC BY-SA 4.0 |
-| Olympe | `karman.webp` | [Hephaisteion, Athens, Greece, 20240531 1427 9753](https://commons.wikimedia.org/wiki/File:Hephaisteion,_Athens,_Greece,_20240531_1427_9753.jpg) | Jakub Hałun | CC BY 4.0 |
 | Menolé | `menole.webp` | [Senegalese colourful canoes](https://commons.wikimedia.org/wiki/File:Senegalese_colourful_canoes.jpg) | Ruth Zurielly Jennings | CC BY-SA 4.0 |
 | Casablanca | `casablanca.webp` | image générée (Tripo, Nano Banana), minaret Hassan II | — | — |
 | Kingston | `kingston.webp` | image générée (Tripo, Nano Banana), sound system | — | — |
 | Apothéose | `apotheose.webp` | image générée (Tripo, Nano Banana), couronne de cristal | — | — |
+| Olympe | (cité céleste) | peinte au canvas, `src/game/legende/cite-celeste.ts` | — | — |
 | Paris | (tour du Champ-de-Mars) | `public/decors/champdemars/tour.webp`, déjà servie avec le jeu | — | — |
 
 Droits d'architecte à vérifier avant ouverture publique (juridique/) : mosquée

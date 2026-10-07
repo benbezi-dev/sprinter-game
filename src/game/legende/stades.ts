@@ -218,8 +218,30 @@ const CIEL_DE_JOUR = { skyTop: [62, 128, 204], skyBot: [164, 206, 238], clouds: 
 const PALMIERS = {
   arbres: 'palmier', arbresDehors: false, palmTrunk: [206, 172, 132], palmLeaf: [20, 122, 100],
 };
+// L'OLYMPE DANS LES NUAGES (l'auteur, 07/10, images de reference : « je veux
+// que le decor et la piste soient celestes », pas specialement pastel ; puis
+// « retire le palmier », « accentue le cote celeste ») : un ciel qui passe du
+// bleu de nuit a l'or, un sol de nuages sans brin d'herbe (`herbe: false`),
+// une piste bleu nuit semee d'etoiles aux lignes d'or qui rayonnent (`neon`,
+// decor-cosmos.js, et pisteCeleste dans decors.ts), une tribune de marbre et
+// d'or. La cite celeste — tours de marbre a croissant, porte d'or, iles
+// flottantes et leurs cascades — se dresse au loin sous des rais de lumiere.
+const OLYMPE = {
+  skyTop: [26, 30, 92], skyBot: [255, 202, 136], clouds: false, tonte: false, herbe: false,
+  grass: [232, 230, 246], grassEdge: [218, 214, 238],
+  trackA: [30, 32, 90], trackB: [24, 26, 80],
+  lane: [255, 214, 120], kerb: [255, 214, 120],
+  neon: [255, 206, 104], neonExt: [255, 222, 150],
+  tread: [248, 244, 240], riser: [226, 212, 206], roof: [242, 226, 204],
+  barrier: [255, 226, 150],
+  panels: [[255, 214, 120], [248, 244, 240], [236, 196, 100], [252, 238, 214]],
+  crowdLo: [196, 168, 160], crowdHi: [255, 250, 242],
+  accent: [255, 204, 96], dust: [252, 238, 224],
+  arbres: null,
+};
 const THEME_DU_LIEU: Record<string, Record<string, unknown>> = {
   kingston: PALMIERS, izmir: PALMIERS, casablanca: PALMIERS, barcelone: PALMIERS,
+  karman: OLYMPE, 'karman-wukong': OLYMPE, 'karman-anansi': OLYMPE, 'karman-inti': OLYMPE,
   // LA PLAGE DE MENOLE. Elle part de la Riviera — la mer et ses vagues au
   // loin, les palmiers, le ciel franc — mais c'est une plage de village a
   // San-Pedro, pas une station : ni piscine, ni transats, ni immeubles, ni

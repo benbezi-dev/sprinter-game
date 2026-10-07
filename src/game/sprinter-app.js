@@ -6988,7 +6988,7 @@
     // casser l'aplat plutot qu'une texture image plaquee sans rapport avec
     // notre perspective isometrique maison.
     if (th.pinceau) coupsDePinceau(ctx, th, rIn, rOut, horizon);
-    else for (let i = 0; i < sm.length; i += 3) {
+    else if (th.herbe !== false) for (let i = 0; i < sm.length; i += 3) {
       const seed = i * 13;
       for (let k = 0; k < 3; k++) {
         const rr = rOut + 3 + ((seed + k * 17) % Math.max(6, horizon - 4));

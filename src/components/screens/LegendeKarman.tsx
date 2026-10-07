@@ -15,7 +15,8 @@
 
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import temple from '@/assets/legende/decors/karman.webp?url';
+import { citeCeleste, W as CITE_W, AX as CITE_AX, AY as CITE_AY } from '@/game/legende/cite-celeste';
+import { cumulus, chargerLesCumulus, poserCumulus } from '@/game/legende/nuages';
 import { dieuxSpectateurs } from '@/game/legende/decors';
 import { mot } from '@/game/legende/mots';
 
@@ -103,7 +104,8 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
   useEffect(() => {
     const cv = toile.current!;
     const ctx = cv.getContext('2d')!;
-    const imTemple = new Image(); imTemple.src = temple;
+    chargerLesCumulus();
+    let cite = citeCeleste();
     const dieux = dieuxSpectateurs(lieu).map(d => { const im = new Image(); im.src = d.url; return { im, p: d.p }; });
     const etoiles = Array.from({ length: 160 }, (_, i) => {
       const g = Math.imul(i + 11, 2654435761) >>> 0;
@@ -152,11 +154,13 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
       }
 
       // la troposphere : les cumulus traverses, de haut en bas
-      for (const n of nuages) {
+      nuages.forEach((n, i) => {
         const u = (t - n.t) / 1.0;
-        if (u < 0 || u > 1) continue;
-        nuage(ctx, n.x * W, -H * 0.2 + u * H * 1.4, n.r * W, 0.85);
-      }
+        if (u < 0 || u > 1) return;
+        const im = cumulus(i);
+        if (im) poserCumulus(ctx, im, n.x * W, -H * 0.1 + u * H * 1.4, n.r * W * 4.2, i % 2 === 1);
+        else nuage(ctx, n.x * W, -H * 0.2 + u * H * 1.4, n.r * W, 0.85);
+      });
       // le long-courrier, vers dix kilometres
       const avion = fenetre(t, 2.6, 3.5);
       if (avion > 0 && avion < 1) {
@@ -200,20 +204,43 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
       if (olympe > 0) {
         ctx.save();
         ctx.globalAlpha = olympe;
+        // le noir de l'espace s'ouvre sur le ciel celeste, du bleu profond a l'or
+        const cielO = ctx.createLinearGradient(0, 0, 0, H);
+        cielO.addColorStop(0, 'rgb(48,56,116)'); cielO.addColorStop(0.7, 'rgb(236,170,120)'); cielO.addColorStop(1, 'rgb(252,214,160)');
+        ctx.fillStyle = cielO; ctx.fillRect(0, 0, W, H);
         const halo = ctx.createRadialGradient(W / 2, H * 0.36, 10, W / 2, H * 0.36, W * 0.7);
         halo.addColorStop(0, 'rgba(255,214,120,0.45)'); halo.addColorStop(1, 'rgba(255,214,120,0)');
         ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
         const hD = H * 0.46 * (0.92 + 0.08 * olympe);
-        dieux.forEach((d, i) => {
-          if (!d.im.complete || !d.im.naturalWidth) return;
+        // celui du milieu derriere la porte ; les deux autres DEVANT la cite :
+        // derriere, les tours de ses iles leur traversaient le visage
+        const dieu = (i: number) => {
+          const d = dieux[i];
+          if (!d || !d.im.complete || !d.im.naturalWidth) return;
           const k = hD / d.p.ay, x = W * [0.16, 0.84, 0.5][i] , y = H * 0.62 - (1 - olympe) * 30;
-          ctx.globalAlpha = olympe * (i === 2 ? 0.55 : 0.8);
+          ctx.globalAlpha = olympe * (i === 2 ? 0.55 : 0.92);
           ctx.drawImage(d.im, x - d.p.ax * k, y - d.p.ay * k, d.p.w * k, d.p.h * k);
-        });
+        };
+        dieu(2);
         ctx.globalAlpha = olympe;
-        if (imTemple.complete && imTemple.naturalWidth) {
-          const w = Math.min(W * 0.86, 560), h = w * imTemple.naturalHeight / imTemple.naturalWidth;
-          ctx.drawImage(imTemple, W / 2 - w / 2, H * 0.62 - h * 0.8 + (1 - olympe) * 20, w, h);
+        cite = citeCeleste();
+        if (cite) {
+          // la cite celeste, son pied sur le banc de nuages
+          const k = Math.min(W * 1.05, 700) / CITE_W;
+          ctx.drawImage(cite, W / 2 - CITE_AX * k, H * 0.8 - CITE_AY * k + (1 - olympe) * 20, cite.width * k, cite.height * k);
+        }
+        dieu(0); dieu(1);
+        ctx.globalAlpha = olympe;
+        // et sous elle, la mer de nuages jusqu'au bas de l'ecran, en rangs
+        // de plus en plus grands a mesure qu'ils approchent
+        for (let rang = 0; rang < 4; rang++) {
+          const y = H * (0.82 + rang * 0.065), l = W * (0.34 + rang * 0.1);
+          for (let j = -1; j * l * 0.6 < W + l; j++) {
+            const g = Math.imul(j + 7 + rang * 31, 2654435761) >>> 0;
+            const im = cumulus(g);
+            if (im) poserCumulus(ctx, im, j * l * 0.6 + (rang % 2) * l * 0.3 + Math.sin(t * 0.4 + j) * 4,
+                                 y + (1 - olympe) * 30 + (g % 12), l * (0.9 + ((g >>> 6) % 30) / 100), ((g >>> 3) & 1) === 1);
+          }
         }
         ctx.restore();
       }

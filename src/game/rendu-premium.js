@@ -571,7 +571,8 @@
    */
   function herbe(ctx, th, P, rIn, rOut, horizon) {
     // Pas de gazon dans l'espace : le vide a sa propre matiere (decor-cosmos.js).
-    if (niveau < MOYEN || th.pinceau || th.espace) return;
+    // Ni dans un sol de nuages (`herbe: false`, l'Olympe de la Legende).
+    if (niveau < MOYEN || th.pinceau || th.espace || th.herbe === false) return;
     const m = motifHerbe(ctx);
     if (!m) return;
     const a = P.ground(0, 0);
