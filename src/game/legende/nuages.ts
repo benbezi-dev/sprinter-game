@@ -14,27 +14,38 @@ import cumulus2 from '@/assets/legende/decors/nuages/cumulus2.webp?url';
 import cumulus3 from '@/assets/legende/decors/nuages/cumulus3.webp?url';
 import cumulus4 from '@/assets/legende/decors/nuages/cumulus4.webp?url';
 import cumulus5 from '@/assets/legende/decors/nuages/cumulus5.webp?url';
+// la palette du jour, pour les ciels terrestres des voyages : les ombres
+// lavande de l'Olympe y viraient au violet
+import jour0 from '@/assets/legende/decors/nuages/cumulus-jour0.webp?url';
+import jour1 from '@/assets/legende/decors/nuages/cumulus-jour1.webp?url';
+import jour2 from '@/assets/legende/decors/nuages/cumulus-jour2.webp?url';
+import jour3 from '@/assets/legende/decors/nuages/cumulus-jour3.webp?url';
+import jour4 from '@/assets/legende/decors/nuages/cumulus-jour4.webp?url';
+import jour5 from '@/assets/legende/decors/nuages/cumulus-jour5.webp?url';
 
 const URLS = [cumulus0, cumulus1, cumulus2, cumulus3, cumulus4, cumulus5];
+const URLS_JOUR = [jour0, jour1, jour2, jour3, jour4, jour5];
 export const NB_CUMULUS = URLS.length;
 const IMAGES: (HTMLImageElement | null)[] = URLS.map(() => null);
+const IMAGES_JOUR: (HTMLImageElement | null)[] = URLS_JOUR.map(() => null);
 
 /** Lance le chargement des cumulus (sans effet s'il est deja lance). */
-export function chargerLesCumulus() {
+export function chargerLesCumulus(jour = false) {
   if (typeof Image === 'undefined') return;
-  URLS.forEach((u, i) => {
-    if (IMAGES[i] || !u) return;
+  const imgs = jour ? IMAGES_JOUR : IMAGES;
+  (jour ? URLS_JOUR : URLS).forEach((u, i) => {
+    if (imgs[i] || !u) return;
     const im = new Image();
     im.decoding = 'async';
     im.src = u;
-    IMAGES[i] = im;
+    imgs[i] = im;
   });
 }
 
-/** Le cumulus n° i, ou null tant qu'il n'est pas charge. */
-export function cumulus(i: number): HTMLImageElement | null {
-  chargerLesCumulus();
-  const im = IMAGES[((i % NB_CUMULUS) + NB_CUMULUS) % NB_CUMULUS];
+/** Le cumulus n° i (de l'Olympe, ou du jour), ou null tant qu'il n'est pas charge. */
+export function cumulus(i: number, jour = false): HTMLImageElement | null {
+  chargerLesCumulus(jour);
+  const im = (jour ? IMAGES_JOUR : IMAGES)[((i % NB_CUMULUS) + NB_CUMULUS) % NB_CUMULUS];
   return im && im.complete && im.naturalWidth ? im : null;
 }
 

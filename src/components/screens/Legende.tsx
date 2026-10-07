@@ -16,30 +16,8 @@ import {
 import { mot, chrono, dans } from '@/game/legende/mots';
 import { CarteDuVoyage } from './LegendeCarte';
 import { CinematiqueKarman } from './LegendeKarman';
-// LES PORTRAITS DES BOSS, rendus de leur maillage par vedette_tripo.py.
-import kouassiBuste from '@/assets/legende/boss/kouassi-buste.webp?url';
-import damionBuste from '@/assets/legende/boss/damion-buste.webp?url';
-import keremBuste from '@/assets/legende/boss/kerem-buste.webp?url';
-import zenithBuste from '@/assets/legende/boss/zenith-buste.webp?url';
-import wukongBuste from '@/assets/legende/boss/wukong-buste.webp?url';
-import anansiBuste from '@/assets/legende/boss/anansi-buste.webp?url';
-import soraBuste from '@/assets/legende/boss/sora-buste.webp?url';
-import marcBuste from '@/assets/legende/boss/marc-buste.webp?url';
-import yassineBuste from '@/assets/legende/boss/yassine-buste.webp?url';
-import theoBuste from '@/assets/legende/boss/theo-buste.webp?url';
-import jaydenBuste from '@/assets/legende/boss/jayden-buste.webp?url';
-import oliverBuste from '@/assets/legende/boss/oliver-buste.webp?url';
-import hermesBuste from '@/assets/legende/boss/hermes-buste.webp?url';
-import intiBuste from '@/assets/legende/boss/inti-buste.webp?url';
-import chidiBuste from '@/assets/legende/boss/chidi-buste.webp?url';
-
-const PORTRAITS: Record<string, string> = {
-  'Kouassi': kouassiBuste, 'Damion Clarke': damionBuste, 'Kerem Aydın': keremBuste, 'Zénith': zenithBuste,
-  'Sun Wukong': wukongBuste, 'Anansi': anansiBuste,
-  'Sora Kanzaki': soraBuste, 'Marc Puig': marcBuste, 'Yassine Benali': yassineBuste,
-  'Théo Garnier': theoBuste, 'Jayden Brooks': jaydenBuste, 'Oliver Hart': oliverBuste,
-  'Hermès': hermesBuste, 'Inti': intiBuste, 'Chidi Okafor': chidiBuste,
-};
+import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './LegendeCinematiques';
+import { PORTRAITS, TEINTES } from './legende-commun';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
@@ -55,10 +33,6 @@ const PORTRAITS: Record<string, string> = {
    production le drapeau vaut `false` en dur, et rien d'ici n'est emis.
 --------------------------------------------------------------------------- */
 
-/** La couleur de chaque etape : le soleil de la plage, le vermillon des torii,
- *  la terre cuite du national, le bleu du mondial, l'or de l'Olympe, le violet
- *  de l'apotheose. */
-const TEINTES = ['#F6C343', '#E5482E', '#D9822B', '#2F7BE0', '#E8B84A', '#9B6BFF'];
 const OR = '#E8B84A';
 
 const ICONES: Record<Transport, typeof Bike> = { velo: Bike, voiture: Car, car: Bus, avion: Plane, fusee: Rocket };
@@ -204,10 +178,11 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
   const teinte = TEINTES[rang];
   const Icone = ICONES[e.transport];
   const drapeau = drapeauDe(lieu.drapeau);
-  // L'etape de Karman part en fusee : la montee (LegendeKarman.tsx) passe
-  // entre l'affiche et la course.
-  const [montee, setMontee] = useState(false);
-  const partir = () => (rang === 4 ? setMontee(true) : onPartir());
+  // Le voyage passe entre l'affiche et la course : a velo, en voiture, en car,
+  // en avion (LegendeCinematiques.tsx), la montee vers Karman
+  // (LegendeKarman.tsx), puis vers l'apotheose.
+  const [voyage, setVoyage] = useState(false);
+  const partir = () => setVoyage(true);
 
   return (
     // OPAQUE : l'affiche est un ecran a part entiere, pas un voile sur
@@ -267,7 +242,9 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
           </button>
         </div>
       </motion.div>
-      {montee && <CinematiqueKarman lieu={lieu.cle} onFin={onPartir} />}
+      {voyage && (rang === 4 ? <CinematiqueKarman lieu={lieu.cle} onFin={onPartir} />
+                : rang === 5 ? <CinematiqueApotheose onFin={onPartir} />
+                : <CinematiqueVoyage rang={rang} onFin={onPartir} />)}
     </motion.div>
   );
 }
@@ -347,6 +324,8 @@ export function FinDEtapeLegende() {
   // d'ailleurs sans effet a la seconde lecture d'une meme course).
   const [v] = useState<Verdict>(() => conclureLEtape());
   const [annonce, setAnnonce] = useState(false);
+  // la Legende accomplie : le sacre passe avant le verdict
+  const [sacre, setSacre] = useState(() => v.accomplie);
   if (state !== 'winall') return null;
 
   const teinte = TEINTES[v.rang];
@@ -413,6 +392,7 @@ export function FinDEtapeLegende() {
           </button>
         </div>
       </motion.div>
+      {sacre && <CinematiqueSacre onFin={() => setSacre(false)} />}
       <AnimatePresence>
         {annonce && <Affiche onPartir={() => { setAnnonce(false); lancerLEtape(); }} onFermer={() => { setAnnonce(false); accueil(); }} />}
       </AnimatePresence>

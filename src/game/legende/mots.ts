@@ -34,6 +34,18 @@ const MOTS: Record<string, [string, string]> = {
   meso:         ['MÉSOSPHÈRE', 'MESOSPHERE'],
   karman_titre: ['LIGNE DE KÁRMÁN · 100 KM', 'KÁRMÁN LINE · 100 KM'],
   accomplie:    ['LÉGENDE ACCOMPLIE', 'LEGEND COMPLETE'],
+  // les cinematiques des voyages, de l'apotheose et du sacre
+  lune:         ['LA LUNE', 'THE MOON'],
+  saturne:      ['SATURNE', 'SATURN'],
+  orion:        ['NÉBULEUSE D’ORION', 'ORION NEBULA'],
+  sgr:          ['SAGITTARIUS A* · LE CŒUR DE LA GALAXIE', 'SAGITTARIUS A* · THE HEART OF THE GALAXY'],
+  apotheose_t:  ['L’APOTHÉOSE', 'THE APOTHEOSIS'],
+  legende:      ['LÉGENDE', 'LEGEND'],
+  battus:       ['Ils sont tombés, un par un.', 'They fell, one by one.'],
+  fois:         ['×{n}', '×{n}'],
+  u_km:         ['km', 'km'],
+  u_md:         ['Md km', 'bn km'],
+  u_al:         ['al', 'ly'],
   perdue:       ['LA LÉGENDE S’ARRÊTE ICI', 'THE LEGEND ENDS HERE'],
   faux:         ['FAUX DÉPART', 'FALSE START'],
   place:        ['{o} à l’arrivée', '{o} at the line'],
@@ -62,6 +74,12 @@ export function chrono(t: number | null | undefined): string {
   if (t === null || t === undefined || !Number.isFinite(t)) return '—';
   const s = Math.abs(t).toFixed(2);
   return (langue() === 0 ? s.replace('.', ',') : s) + ' s';
+}
+
+/** Un nombre a l'ecran, aux separateurs de la langue du jeu. */
+export function nombre(n: number, dec = 0): string {
+  return new Intl.NumberFormat(langue() === 0 ? 'fr-FR' : 'en-US',
+                               { minimumFractionDigits: dec, maximumFractionDigits: dec }).format(n);
 }
 
 /** Le texte d'une paire [francais, anglais] dans la langue du jeu. */

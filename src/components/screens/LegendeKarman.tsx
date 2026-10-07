@@ -58,7 +58,7 @@ function ciel(alt: number): [Rgb, Rgb] {
 }
 const COUCHES: [number, number, string][] = [[1.6, 3.8, 'tropo'], [3.9, 6.2, 'strato'], [6.3, 8.6, 'meso']];
 
-function fusee(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, flamme: number, t: number) {
+export function fusee(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, flamme: number, t: number) {
   ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
   if (flamme > 0) {
     const f = (26 + Math.sin(t * 50) * 5) * flamme;

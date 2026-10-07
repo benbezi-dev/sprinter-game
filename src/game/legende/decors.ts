@@ -101,6 +101,13 @@ function piece(cle: string): Image_ | null {
   return im ? { im, p } : null;
 }
 
+/** Le monument du lieu (ou la piece qui en tient lieu), pour les
+ *  cinematiques ; null tant qu'il n'est pas charge. */
+export function monumentDuLieu(lieu: string): { im: CanvasImageSource; w: number; h: number; ax: number; ay: number } | null {
+  const R = piece(MONUMENT_DU_LIEU(lieu));
+  return R ? { im: R.im, w: R.p.w, h: R.p.h, ax: R.p.ax, ay: R.p.ay } : null;
+}
+
 /** Le point de l'horizon (rayon rH) a l'abscisse d'ecran x, le plus haut. */
 function horizonEn(api: any, sm: any[], rH: number, x: number): [number, number] | null {
   let best: [number, number] | null = null;

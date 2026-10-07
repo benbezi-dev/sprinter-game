@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------
 # SPRINTER — les cumulus de l'Olympe (Legende, etape de Karman).
 #
-#   "<python de Blender>" tools/blender/decors/legende_nuages.py [dossier]
+#   "<python de Blender>" tools/blender/decors/legende_nuages.py [dossier] [--palette jour]
 #
 # Le python de Blender suffit : il porte numpy, et rien d'autre n'est requis
 # (le PNG s'ecrit a la main, cwebp le convertit).
@@ -25,7 +25,7 @@ import zlib
 import numpy as np
 
 ICI = os.path.dirname(os.path.abspath(__file__))
-SORTIE = sys.argv[1] if len(sys.argv) > 1 else os.path.normpath(
+SORTIE = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else os.path.normpath(
     os.path.join(ICI, '../../../src/assets/legende/decors/nuages'))
 
 
@@ -71,7 +71,17 @@ def bruit(w, h, rng, octaves=5, base=6):
     return tot / somme
 
 
-def cumulus(graine, W=640, H=320, larges=4, tour=1.0):
+# Deux palettes : celle de l'Olympe (ombres lavande, sommets dores) et
+# celle du jour (ombres gris-bleu, a peine dore) pour les ciels terrestres
+# des voyages (LegendeCinematiques.tsx) — les lavandes y viraient au violet.
+PALETTES = {
+    '': dict(ombre=(140, 134, 198), milieu=(226, 224, 246), lumiere=(255, 251, 244), dore=0.5),
+    'jour': dict(ombre=(150, 160, 184), milieu=(230, 234, 242), lumiere=(255, 254, 250), dore=0.18),
+}
+
+
+def cumulus(graine, W=640, H=320, larges=4, tour=1.0, palette=''):
+    P = PALETTES[palette]
     rng = np.random.default_rng(graine)
     base = H * 0.84
     boules = []          # (x, y, z, r)
@@ -131,16 +141,16 @@ def cumulus(graine, W=640, H=320, larges=4, tour=1.0):
     v = np.clip((base - Y) / (H * 0.62), 0, 1)
     s = np.clip(diffus * ao * (0.55 + 0.45 * v) + 0.08 * (n1 - 0.5), 0, 1)
 
-    ombre = np.array([140, 134, 198.0])
-    milieu = np.array([226, 224, 246.0])
-    lumiere = np.array([255, 251, 244.0])
+    ombre = np.array(P['ombre'], float)
+    milieu = np.array(P['milieu'], float)
+    lumiere = np.array(P['lumiere'], float)
     t1 = np.clip(s / 0.55, 0, 1)[..., None]
     t2 = np.clip((s - 0.55) / 0.45, 0, 1)[..., None]
     col = ombre * (1 - t1) + milieu * t1
     col = col * (1 - t2) + lumiere * t2
     # une pointe d'or ou la lumiere tombe en plein, en haut
     or_ = np.clip((nl - 0.6) / 0.4, 0, 1) * np.clip(v * 1.2, 0, 1)
-    col += (np.array([255, 214, 146.0]) - col) * (or_ * 0.5)[..., None]
+    col += (np.array([255, 214, 146.0]) - col) * (or_ * P['dore'])[..., None]
     # le liseré : le bord d'un nuage laisse passer la lumiere
     lis = np.clip((1 - nz) ** 2.5, 0, 1) * np.clip(v * 1.5, 0, 1)
     col += (np.array([255, 252, 248.0]) - col) * (lis * 0.6)[..., None]
@@ -173,10 +183,12 @@ NUAGES = [
 
 if __name__ == '__main__':
     os.makedirs(SORTIE, exist_ok=True)
+    palette = sys.argv[sys.argv.index('--palette') + 1] if '--palette' in sys.argv else ''
+    suffixe = '-' + palette if palette else ''
     for i, (g, w, h, n, t) in enumerate(NUAGES):
-        a = cumulus(g, w, h, n, t)
-        p = os.path.join(SORTIE, 'cumulus%d.png' % i)
+        a = cumulus(g, w, h, n, t, palette)
+        p = os.path.join(SORTIE, 'cumulus%s%d.png' % (suffixe, i))
         png(p, a)
         subprocess.run(['cwebp', '-quiet', '-q', '88', '-alpha_q', '90', p, '-o', p[:-4] + '.webp'], check=True)
         os.remove(p)
-        print('cumulus%d.webp %dx%d' % (i, a.shape[1], a.shape[0]))
+        print('cumulus%s%d.webp %dx%d' % (suffixe, i, a.shape[1], a.shape[0]))
