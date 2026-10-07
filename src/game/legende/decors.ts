@@ -29,6 +29,9 @@ import kyoto from '@/assets/legende/decors/kyoto.webp?url';
 import barcelone from '@/assets/legende/decors/barcelone.webp?url';
 import casablanca from '@/assets/legende/decors/casablanca.webp?url';
 import apotheose from '@/assets/legende/decors/apotheose.webp?url';
+// l'arene-asteroide de l'apotheose : image FLUX.1-schnell, modele TRELLIS.2
+// (voir areneFlottante)
+import arene from '@/assets/legende/decors/arene.webp?url';
 // les pieces de premier plan, modelisees dans Blender (legende_pieces.py)
 import torii from '@/assets/legende/decors/torii.webp?url';
 import cabine from '@/assets/legende/decors/cabine.webp?url';
@@ -54,7 +57,7 @@ type Pose = {
 // Les images, par lieu. Une cle absente : le stade reste sans monument.
 const IMAGES: Record<string, string> = {
   menole, kyoto, kingston, izmir, barcelone, casablanca, abuja,
-  newyork, londres, apotheose,
+  newyork, londres, apotheose, arene,
   torii, cabine, morris,
 };
 
@@ -127,6 +130,7 @@ export function preparerLeLointain(cle: string) {
   if (P) piece(P.img);
   for (const d of dieuxSpectateurs(cle)) image(d.url);
   if (MONUMENT_DU_LIEU(cle) === 'karman') chargerLesCumulus();
+  if (MONUMENT_DU_LIEU(cle) === 'apotheose') piece('arene');
 }
 
 // -----------------------------------------------------------------------
@@ -186,6 +190,38 @@ function poserAuLoin(ctx: CanvasRenderingContext2D, api: any, sm: any[], rOut: n
 }
 
 /**
+ * L'ARENE-ASTEROIDE de l'apotheose (G2 du plan) : un stade dore creuse dans un
+ * rocher qui flotte, plus loin que la couronne de cristal et plus haut que
+ * l'horizon. L'image vient de FLUX.1-schnell (Apache 2.0), le modele de
+ * TRELLIS.2 (MIT), le rendu de legende_monuments.py (elev 28, pour voir dans
+ * l'arene). Il derive moins que la couronne (il est plus loin), se balance
+ * doucement, et une lueur violette le porte.
+ */
+function areneFlottante(ctx: CanvasRenderingContext2D, api: any, sm: any[], rOut: number, horizon: number) {
+  const R = piece('arene');
+  if (!R) return;
+  const { G } = api;
+  const u = api.ui(), t = performance.now() / 1000;
+  const x = G.VW * (G.portrait ? 0.56 : 0.46) - (G.camX - 50) * 1.0 * u;
+  const pied = horizonEn(api, sm, rOut + horizon + 4.0, x);
+  if (!pied) return;
+  const k = (G.VW * (G.portrait ? 0.34 : 0.2)) / R.p.w;
+  let y = pied[1] - G.VH * (G.portrait ? 0.16 : 0.12) + Math.sin(t * 0.7) * 4 * u;
+  // le haut du cadre appartient au bandeau de course
+  const haut = G.VH * (G.portrait ? 0.13 : 0.07);
+  if (y - R.p.ay * k < haut) y = haut + R.p.ay * k;
+  const l = R.p.w * k * 0.62;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(x, y, 0, x, y, l);
+  halo.addColorStop(0, 'rgba(176,96,255,0.4)'); halo.addColorStop(1, 'rgba(176,96,255,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(x - l, y - l, l * 2, l * 2);
+  ctx.restore();
+  ctx.drawImage(R.im, x - R.p.ax * k, y - R.p.ay * k, R.p.w * k, R.p.h * k);
+}
+
+/**
  * La fonction que le moteur appelle a chaque image pour le lieu `cle`, ou
  * null s'il n'a pas de monument.
  */
@@ -208,6 +244,7 @@ export function lointainDe(lieu: string) {
       ctx.restore();
     }
     if (cle === 'karman') cielCeleste(ctx, api, pose);
+    if (cle === 'apotheose') areneFlottante(ctx, api, sm, rOut, horizon);
     const R = piece(cle);
     if (R) poserAuLoin(ctx, api, sm, rOut, horizon, R, pose);
   };

@@ -19,6 +19,7 @@ licence. **À reprendre dans les crédits du jeu avant toute ouverture publique.
 | Kingston | `kingston.webp` | image générée (Tripo, Nano Banana), sound system | — | — |
 | Apothéose | `apotheose.webp` | image générée (Tripo, Nano Banana), couronne de cristal | — | — |
 | Olympe | (cité céleste) | peinte au canvas, `src/game/legende/cite-celeste.ts` | — | — |
+| Apothéose | `arene.webp` | image générée par FLUX.1-schnell (Black Forest Labs, Apache 2.0), modèle 3D par TRELLIS.2 (Microsoft, MIT), arène-astéroïde ; sources dans `assets-sources/legende/apotheose/` | — | — |
 | Paris | (tour du Champ-de-Mars) | `public/decors/champdemars/tour.webp`, déjà servie avec le jeu | — | — |
 
 Droits d'architecte à vérifier avant ouverture publique (juridique/) : mosquée
