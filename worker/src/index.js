@@ -78,6 +78,10 @@ import { alerterRecuperation } from './courriel.js';
 import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
 import { etapeConnue, noterEtape, lireTunnel } from './tunnel.js';
 import {
+  ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
+  lireComptage, lireSessions, lireArrivees,
+} from './comptage.js';
+import {
   signaler as signalerMot, bloquer, debloquer, listeBloques, estBanni,
   nombreEnAttente, listeSignalements, trancher, cleDe, MOTIFS,
 } from './moderation.js';
@@ -3712,7 +3716,7 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/race' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { device_id, name, race_key, time_ms, mode, level_idx } = body || {};
+      const { device_id, name, race_key, time_ms, mode, level_idx, contexte } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!ALLOWED_RACES.has(race_key)) return json({ error: 'race invalide' }, 400);
       const t = Math.round(Number(time_ms));
@@ -3748,11 +3752,25 @@ async function servir(request, env, ctx, porteur) {
       }
       const lvl = Math.max(0, Math.min(5, Math.round(Number(level_idx)) || 0));
       const md = mode === 'oneshot' ? 'oneshot' : 'campaign';
+      const at = Date.now();
       await ensureRaceTable(env.DB);
+      // AVANT l'insertion : a sa creation, le compte reprend `races`, et la
+      // course en cours n'y doit pas encore etre (voir ensureComptage).
+      let comptable = true;
+      try { await ensureComptage(env.DB); } catch (e) { comptable = false; }
       await env.DB.prepare(
         `INSERT INTO races (device_id, name_key, name, race_key, time_ms, mode, level_idx, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(device_id, cle, nom, race_key, t, md, lvl, Date.now()).run();
+      ).bind(device_id, cle, nom, race_key, t, md, lvl, at).run();
+      // Le compte qui ne se purge pas, et le vrai mode. Il ne peut pas faire
+      // tomber la course : elle est deja ecrite.
+      if (comptable) {
+        try {
+          await compterCourse(env.DB, {
+            deviceId: device_id, nameKey: cle, raceKey: race_key, mode: md, contexte, at,
+          });
+        } catch (e) { /* une course manquera au compte, pas a l'historique */ }
+      }
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -3816,6 +3834,13 @@ async function servir(request, env, ctx, porteur) {
         `INSERT INTO visits (day, device_id, hits, last_at) VALUES (?, ?, 1, ?)
          ON CONFLICT(day, device_id) DO UPDATE SET hits = hits + 1, last_at = excluded.last_at`
       ).bind(day, device_id, now).run();
+      // D'ou arrive ce passage : un total par heure et par source, sans
+      // l'appareil (voir comptage.js). Ne fait jamais tomber la visite.
+      try {
+        await ensureRaceTable(env.DB);
+        await ensureComptage(env.DB);
+        await compterArrivee(env.DB, sourceDeLaVisite(body), now);
+      } catch (e) { /* la visite est comptee, sa source manquera */ }
       return json({ ok: true });
     }
 
@@ -4381,6 +4406,11 @@ async function servir(request, env, ctx, porteur) {
 
       // --- le tunnel des premiers pas (table `tunnel`) --------------
       const tunnel = await bloc(() => lireTunnel(DB, 30, now), null);
+      // --- ce qui manquait : vrai mode, compte complet, retention sur le
+      // jeu, sessions, provenance des visites (voir comptage.js) ---------
+      const comptage = await bloc(() => lireComptage(DB, now), null);
+      const sessions = await bloc(() => lireSessions(DB, now), null);
+      const arrivees = await bloc(() => lireArrivees(DB, now), null);
       // Combien de signalements attendent d'etre tranches.
       //
       // Un nombre, et rien d'autre. Cette route s'ouvre avec `TABLEAU_CLE`,
@@ -4400,6 +4430,7 @@ async function servir(request, env, ctx, porteur) {
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
         parties, reprises, retention, duels, joueurs, geo, relais, championnats, tunnel,
+        comptage, sessions, arrivees,
         signalements,
         releve_a: now,
       });

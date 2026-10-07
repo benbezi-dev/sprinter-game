@@ -53,6 +53,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
+import { contexteDeLaCourse } from './contexte-course';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
@@ -87,7 +88,10 @@ const STARTER_MUET = true;
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
-  pushFinishedRace(race, t, mode, level);
+  // Le vrai mode se lit ICI, tant que les drapeaux de la course sont encore
+  // poses : l'envoi part apres un import differe, et l'ecran de fin ou le
+  // retour a l'accueil peuvent les avoir effaces entre-temps.
+  pushFinishedRace(race, t, mode, level, contexteDeLaCourse(SprinterApp.G));
   if (!SprinterApp.G.rejeu) etapeTunnel('arrivee');
   // Le chrono se juge ici et nulle part ailleurs : c'est le seul endroit ou
   // l'on voit passer TOUTES les courses terminees, carriere comme one shot,
@@ -353,8 +357,8 @@ export function primeTopNames(races: readonly RaceKey[] = ['100', '200', '400'])
  * qu'elle suive le joueur d'un appareil a l'autre. Le moteur l'a deja rangee
  * en local, cet envoi ne bloque donc rien.
  */
-export function pushFinishedRace(race: string, seconds: number, mode: string, level: number) {
-  import('./history').then(({ pushRace }) => pushRace(race as any, seconds, mode, level))
+export function pushFinishedRace(race: string, seconds: number, mode: string, level: number, contexte?: string) {
+  import('./history').then(({ pushRace }) => pushRace(race as any, seconds, mode, level, contexte))
     .catch(() => { /* module ou reseau indisponible : le local suffit */ });
   // Le record de l'appareil vient peut-etre de bouger, et l'ecran d'arrivee
   // s'affiche avant que le serveur en sache quoi que ce soit. Sans cette

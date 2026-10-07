@@ -1883,7 +1883,10 @@
     // La graine du defi en cours, ou null. Voir startShotRace.
     graineCourse: null,
     ghost: null, ghostName: '', ghostTime: 0,
-    challenge: null      // defi en cours (voir challenge.ts)
+    challenge: null,     // defi en cours (voir challenge.ts)
+    // Le vrai mode de la course pour le tableau de bord, quand les drapeaux
+    // ci-dessus ne le disent pas (vedette, Legende...). Voir contexte-course.ts.
+    etiquette: null
   };
   // pas de trace ultra-fine : 12,5 relevés par seconde suffisent a rejouer
   // une course de maniere fluide, et gardent la trace assez courte pour
@@ -2348,6 +2351,7 @@
 
   function startRun() {
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
+    G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
     G.runId = nouveauParcours(); G.runContinues = 0;
     startLevel(0);
@@ -2396,6 +2400,7 @@
     G.mode = 'campaign';
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
+    G.etiquette = null;
     G.shotRaces = []; G.shotIdx = 0;
     G.state = 'title';
     // CE QUI S'EST GREFFE SUR LA COURSE S'EN VA AVEC ELLE.
@@ -2422,6 +2427,7 @@
     // defaut. Le joueur croirait rejouer et courrait autre chose.
     G.shotOpts = opts;
     G.mode = 'oneshot';
+    G.etiquette = opts.etiquette || null;
     // Un one-shot n'a pas de photo-finish : l'adversaire, s'il y en a un, est
     // une trace dont on connait deja chaque centieme.
     G.photo = null; G.photoFinish = false;
@@ -2536,6 +2542,7 @@
   function startLive(races, opts) {
     opts = opts || {};
     G.mode = 'oneshot';
+    G.etiquette = opts.etiquette || null;
     G.liveOn = true;
     G.liveNom = opts.adversaire || '';
     G.liveFin = null;

@@ -43,7 +43,7 @@ export function localHistory(race: RaceKey): Course[] {
  * `nom_refuse`. Sans cette lecture, le joueur courait des jours durant sans
  * qu'aucun ecran ne lui signale que son nom ne le suivait plus.
  */
-export function pushRace(race: RaceKey, seconds: number, mode: string, level: number) {
+export function pushRace(race: RaceKey, seconds: number, mode: string, level: number, contexte?: string) {
   // Un relais ne va pas a l'historique individuel : son temps est celui de
   // l'equipe, deja range par la salle a son classement, et le serveur refuse
   // cette epreuve sur `/race`. Voir estEpreuveIndividuelle.
@@ -59,6 +59,9 @@ export function pushRace(race: RaceKey, seconds: number, mode: string, level: nu
       time_ms: Math.round(seconds * 1000),
       mode: mode === 'oneshot' ? 'oneshot' : 'campaign',
       level_idx: level,
+      // Le vrai mode (direct, defi, vedette...) : voir contexte-course.ts.
+      // Un serveur plus ancien l'ignore, un jeu plus ancien ne l'envoie pas.
+      contexte: contexte || undefined,
     }),
     keepalive: true,
   })

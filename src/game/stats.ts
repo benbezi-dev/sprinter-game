@@ -115,9 +115,42 @@ export function pingVisit() {
   fetch(`${API_BASE}/visit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_id: getDeviceId() }),
+    body: JSON.stringify({ device_id: getDeviceId(), ...dOuVientLaVisite() }),
     keepalive: true,
   }).catch(() => { /* compteur pas encore deploye : sans consequence */ });
+}
+
+/**
+ * D'ou arrive ce passage : de quoi relier une publication a un pic.
+ *
+ * Trois indices, du plus sur au plus fragile. L'application installee se
+ * reconnait sans faute. Un `?src=` (ou `?utm_source=`) pose sur un lien
+ * qu'on publie dit exactement d'ou l'on vient — encore faut-il l'avoir pose.
+ * Le referent, enfin : Instagram passe souvent par `l.instagram.com`, mais
+ * son navigateur integre le tait parfois, et ce passage-la tombe en
+ * « direct ». Le serveur ne garde que des totaux par heure et par source,
+ * jamais l'appareil : ce n'est pas un suivi de personne.
+ */
+function dOuVientLaVisite(): { src?: string; ref?: string; appli: boolean } {
+  // `appli` part TOUJOURS, vrai ou faux : son absence dit au serveur que le
+  // jeu est d'avant ce comptage, et il range la visite en « inconnu ».
+  const out: { src?: string; ref?: string; appli: boolean } = { appli: false };
+  try {
+    const c = (window as any).Capacitor;
+    if (c && (typeof c.isNativePlatform === 'function' ? c.isNativePlatform() : c.isNative)) out.appli = true;
+  } catch { /* pas d'enveloppe native */ }
+  try {
+    const p = new URLSearchParams(location.search);
+    const src = (p.get('src') || p.get('utm_source') || '').trim().toLowerCase();
+    if (src) out.src = src.slice(0, 32);
+  } catch { /* adresse illisible : pas de source */ }
+  try {
+    if (document.referrer) {
+      const h = new URL(document.referrer).hostname.toLowerCase();
+      if (h && h !== location.hostname) out.ref = h.slice(0, 64);
+    }
+  } catch { /* referent illisible */ }
+  return out;
 }
 
 /**

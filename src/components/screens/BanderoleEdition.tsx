@@ -63,7 +63,7 @@ export function BanderoleEdition() {
   // du record que la banniere met en jeu, et la plus courte a essayer : une
   // banniere qui embarque sur trois epreuves demande trois minutes a
   // quelqu'un qui voulait juste voir le stade.
-  const courir = () => (SprinterApp as any).startOneShot(['100'], { levelIdx: idx });
+  const courir = () => (SprinterApp as any).startOneShot(['100'], { levelIdx: idx, etiquette: 'edition' });
 
   return (
     <motion.div {...MONTEE}>

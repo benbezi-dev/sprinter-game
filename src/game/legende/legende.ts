@@ -119,7 +119,7 @@ export function lancerLEtape(): boolean {
   G.lointainEvenement = monument;
   premierPlan = premierPlanDe(lieu.cle);
   G.premierPlanEvenement = premierPlan;
-  (SprinterApp as any).startOneShot(['100'], { levelIdx: idx });
+  (SprinterApp as any).startOneShot(['100'], { levelIdx: idx, etiquette: 'legende' });
   // LE BOSS ARRIVE AVANT SES BLOCS, A SA MANIERE (game/legende/entrees.ts) :
   // la camera va le chercher (entrerEnBoss, engine.ts), il fait son entree et
   // dit sa replique, puis le decompte part. APRES `startOneShot`, qui vient de

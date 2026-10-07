@@ -82,7 +82,7 @@ function partir(n: number) {
   // courbe, ou une ligne droite de deux, trois ou quatre cents. C'est ce qui
   // empeche les treize nuits d'etre treize fois la meme course.
   const nuit = nuitDe(n);
-  (SprinterApp as any).startOneShot([nuit.epreuve], { levelIdx: etapeDuCimetiere() });
+  (SprinterApp as any).startOneShot([nuit.epreuve], { levelIdx: etapeDuCimetiere(), etiquette: 'halloween' });
   // APRES `startOneShot`, ET PAS AVANT. C'est lui qui construit la course, et
   // la construction range les obstacles de la precedente — une bete armee
   // avant aurait ete balayee par le menage du 100 m qu'on vient de demander.

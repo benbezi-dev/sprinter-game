@@ -212,7 +212,7 @@ export function lancerLeDefi(v: Vedette, epreuve: string = v.epreuves[0]) {
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLeDefi;
   // Le son de l'arrivee : c'est lui qui sait si on l'a battu (sonDuDefi).
   if (!G.sonDArrivee) G.sonDArrivee = sonDuDefi;
-  (SprinterApp as any).startOneShot([epreuve], { levelIdx: idx });
+  (SprinterApp as any).startOneShot([epreuve], { levelIdx: idx, etiquette: 'vedette' });
   // SON CRI AVANT LES BLOCS, pour qui en a un (`cri`) : le decompte attend
   // qu'il l'ait lance. Voir G.avantDepart dans engine.ts.
   G.avantDepart = v.cri ? { reste: v.cri.duree, t: 0, dit: false, cri: v.cri.son, a: v.cri.a,
