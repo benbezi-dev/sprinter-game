@@ -8,10 +8,9 @@
 const MOTS: Record<string, [string, string]> = {
   titre:        ['CARRIÈRE LÉGENDE', 'LEGEND CAREER'],
   sous:         ['Six étapes, du sable de San-Pédro à l’apothéose.', 'Six stages, from the sand of San-Pédro to the apotheosis.'],
-  classique:    ['CARRIÈRE', 'CAREER'],
+  classique_titre: ['CARRIÈRE CLASSIQUE', 'CLASSIC CAREER'],
+  changer:      ['CHANGER', 'SWITCH'],
   classique_sous: ['6 étapes · ton épreuve', '6 stages · your event'],
-  legende_court: ['LÉGENDE', 'LEGEND'],
-  legende_sous: ['6 étapes · 100 m', '6 stages · 100 m'],
   ferme:        ['Ouvre après {n} carrières gagnées', 'Opens after {n} careers won'],
   victoires:    ['{k} / {n} victoires', '{k} / {n} wins'],
   commencer:    ['COMMENCER', 'START'],

@@ -185,20 +185,17 @@ export function legendeForcee(): boolean {
  * carrieres. A appeler derriere `LEGENDE_OUVERTE && ...`.
  */
 export function legendeAccessible(): boolean {
-  return legendeMeritee() || legendeForcee();
+  return LIBRE_SUR_LE_CANAL_DE_TEST || legendeMeritee() || legendeForcee();
 }
+
+// OUVERTE A TOUS SUR LE CANAL DE TEST, le temps de l'essayer (l'auteur,
+// 07/10/2026 : « ouvre la carriere legende dans le mode test pour que je
+// puisse le tester »). La Legende n'existe que la (LEGENDE_OUVERTE) : la
+// regle des 30 ne s'y voit donc plus. Remettre `false` pour revoir la carte
+// fermee et son compte.
+const LIBRE_SUR_LE_CANAL_DE_TEST = true;
 
 /* ------------------------------------------------ le choix de l'onglet */
 
+/** Les deux carrieres de l'onglet CARRIERE (TitleScreen.tsx). */
 export type ChoixCarriere = 'classique' | 'legende';
-const CLE_CHOIX = 'sprinter_carriere_choisie';
-
-/** La carriere choisie la derniere fois dans l'onglet ; la classique par defaut. */
-export function lireChoixCarriere(): ChoixCarriere {
-  try { return localStorage.getItem(CLE_CHOIX) === 'legende' ? 'legende' : 'classique'; }
-  catch { return 'classique'; }
-}
-
-export function retenirChoixCarriere(c: ChoixCarriere): void {
-  try { localStorage.setItem(CLE_CHOIX, c); } catch { /* le choix vaut pour la visite */ }
-}

@@ -41,6 +41,8 @@ const PanneauLegende = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.PanneauLegende })));
 const ChoixDeCarriere = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.ChoixDeCarriere })));
+const RetourAuChoix = /* @__PURE__ */ lazy(() => import('./Legende')
+  .then(m => ({ default: m.RetourAuChoix })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
@@ -48,7 +50,12 @@ import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/g
 import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
-import { legendeAccessible, lireChoixCarriere, retenirChoixCarriere, type ChoixCarriere } from '@/game/legende/compte';
+import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
+
+// LA CARRIERE CHOISIE POUR LA VISITE (canal de test). Hors du composant : elle
+// survit au retour a l'accueil apres une course — on ne redemande pas le mode
+// a chaque etape —, et s'efface quand on rouvre l'onglet CARRIERE.
+let carriereDeLaVisite: ChoixCarriere | null = null;
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
@@ -142,14 +149,15 @@ export function TitleScreen() {
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
   const [showTop500, setShowTop500] = useState(false);
-  // CARRIERE CLASSIQUE OU LEGENDE : les deux dans l'onglet (l'auteur,
-  // 07/10/2026), la Legende fermee avant les 30 (canal de test seulement).
-  const [carriere, setCarriere] = useState<ChoixCarriere>(() =>
-    LEGENDE_OUVERTE ? lireChoixCarriere() : 'classique');
+  // LA LEGENDE EST IMBRIQUEE DANS LA CARRIERE (l'auteur, 07/10/2026) :
+  // ouvrir l'onglet montre d'abord le choix entre les deux, la Legende fermee
+  // avant les 30. Canal de test seulement, et Sprinter seulement.
+  const [carriere, setCarriere] = useState<ChoixCarriere | null>(() => carriereDeLaVisite);
+  const choisirCarriere = (c: ChoixCarriere | null) => { carriereDeLaVisite = c; setCarriere(c); };
   const legendeOffre = LEGENDE_OUVERTE && !haies;
   const legendeOuverte = legendeOffre && legendeAccessible();
+  const auChoix = legendeOffre && carriere === null;
   const legendeChoisie = legendeOuverte && carriere === 'legende';
-  const choisirCarriere = (c: ChoixCarriere) => { setCarriere(c); retenirChoixCarriere(c); };
   const [showDuels, setShowDuels] = useState(false);
   // Combien sont la, sur le bouton qui mene a eux. Voir game/presence.ts.
   const presences = usePresences();
@@ -371,7 +379,9 @@ export function TitleScreen() {
               </h1>
               <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
-                  ? (legendeChoisie
+                  ? (auChoix
+                      ? <>{N.getLang() === 'en' ? 'CAREER — PICK YOUR MODE' : 'CARRIÈRE — CHOISIS TON MODE'}</>
+                      : legendeChoisie
                       ? <>{RACES['100'].label} &mdash; {N.getLang() === 'en' ? 'LEGEND' : 'LÉGENDE'}</>
                       : <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>)
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
@@ -450,7 +460,7 @@ export function TitleScreen() {
               {TABS.map(t => (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => { if (t.id === 'career' && legendeOffre) choisirCarriere(null); setTab(t.id); }}
                   className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
                     ${tab === t.id
                       ? 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]'
@@ -544,14 +554,21 @@ export function TitleScreen() {
             {tab === 'oneshot' && <OneShotPanel />}
             {tab === 'versus' && <ChallengePanel />}
 
-            {/* LE CHOIX DE LA CARRIERE, en tete de l'onglet : la classique, ou
-                la Legende — fermee, avec le compte des carrieres gagnees,
-                tant qu'il en manque (l'auteur, 07/10/2026). Sprinter
-                seulement : la Legende est un 100 m, Hurdlers garde la sienne.
-                Canal de test seulement (LEGENDE_OUVERTE). */}
-            {tab === 'career' && legendeOffre && (
+            {/* LE CHOIX DE LA CARRIERE, a l'ouverture de l'onglet : deux cartes,
+                la classique et la Legende — fermee, avec le compte des
+                carrieres gagnees, tant qu'il en manque. Toucher une carte
+                ouvre ce mode ; CHANGER ramene au choix (l'auteur, 07/10/2026).
+                Sprinter seulement : la Legende est un 100 m, Hurdlers garde
+                la sienne. Canal de test seulement (LEGENDE_OUVERTE). */}
+            {tab === 'career' && auChoix && (
               <Suspense fallback={null}>
-                <ChoixDeCarriere choix={carriere} ouverte={legendeOuverte} onChoisir={choisirCarriere} />
+                <ChoixDeCarriere ouverte={legendeOuverte} onChoisir={choisirCarriere} />
+              </Suspense>
+            )}
+
+            {tab === 'career' && legendeOffre && !auChoix && (
+              <Suspense fallback={null}>
+                <RetourAuChoix mode={legendeChoisie ? 'legende' : 'classique'} onRetour={() => choisirCarriere(null)} />
               </Suspense>
             )}
 
@@ -559,7 +576,7 @@ export function TitleScreen() {
               <Suspense fallback={null}><PanneauLegende /></Suspense>
             )}
 
-            {tab === 'career' && !legendeChoisie && <>
+            {tab === 'career' && !auChoix && !legendeChoisie && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
                 fallait derouler pour lancer une course, sur l'ecran dont c'est
