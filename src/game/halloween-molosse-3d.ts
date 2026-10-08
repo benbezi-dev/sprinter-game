@@ -35,11 +35,23 @@ type Bete = {
 const Q = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
 
 /**
+ * LA BETE EST PLUS GRANDE QUE LE TRACE (08/10, « plus grand la bete ») : 1,30 m
+ * au garrot contre 1,00. Ce chiffre est celui du GLB, pose a l'export
+ * (`molosse_trellis.py --garrot 1.3`) — il ne le change pas, il le dit au
+ * jeu, et les deux doivent rester egaux. Le cadre ci-dessous et l'ombre de
+ * halloween-molosse.js en tirent leur mesure. Le galop, lui, n'a rien a
+ * suivre : son amplitude est en metres de sol, et le pied ne patine pas plus.
+ */
+export const GARROT_DU_MAILLAGE = 1.3;
+
+/**
  * LE CADRE DE L'IMAGE, en metres autour de l'origine de la bete (le sol sous
  * le milieu de son corps). De la queue au museau, et des pieds aux cretes —
- * la tete basse et la queue tendue y tiennent au galop.
+ * la tete basse et la queue tendue y tiennent au galop. Regle sur la bete
+ * d'un metre, il grandit avec elle.
  */
-const AVANT = 1.9, ARRIERE = 1.9, DESSUS = 1.75, DESSOUS = 0.35;
+const E = GARROT_DU_MAILLAGE;
+const AVANT = 1.9 * E, ARRIERE = 1.9 * E, DESSUS = 1.75 * E, DESSOUS = 0.35 * E;
 
 /** Les facettes des coureurs du jeu (vedette-3d.ts, FACETTES) : une face, une teinte. */
 const FACETTES = true;

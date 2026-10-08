@@ -271,7 +271,10 @@ export function molosseDe(chasse) {
       const q = T.pos(Math.min(d, T.total + 24), G.player.lane);
       const g = ground(q[0], q[1]);
       const m = scaleM();
-      const marge = (GARROT + TETE) * m + 60;
+      // Le maillage, s'il est la, est plus grand que le trace : l'ombre et la
+      // marge le suivent (GARROT_DU_MAILLAGE, halloween-molosse-3d.ts).
+      const taille = maillage && maillage.pret() ? maillage.GARROT_DU_MAILLAGE / GARROT : 1;
+      const marge = (GARROT + TETE) * taille * m + 60;
       if (g[0] < -marge || g[0] > G.VW + marge ||
           g[1] < -marge || g[1] > G.VH + marge) return vide;
 
@@ -419,10 +422,11 @@ export function molosseDe(chasse) {
       // L'OMBRE D'ABORD. Elle se resserre quand la bete decolle : une ombre
       // qui ne bouge pas fait flotter l'animal a dix centimetres du sol.
       const ombre = 1 - 0.35 * (bond / (0.09 * m || 1));
+      const taille = maillage && maillage.pret() ? maillage.GARROT_DU_MAILLAGE / GARROT : 1;
       ctx.globalAlpha = 0.42 * ombre;
       ctx.fillStyle = 'rgb(6,4,10)';
       ctx.beginPath();
-      ctx.ellipse(x, y, LONG * 0.46 * m * ombre, EPAIS * 0.42 * m * ombre, 0, 0, TAU);
+      ctx.ellipse(x, y, LONG * 0.46 * taille * m * ombre, EPAIS * 0.42 * taille * m * ombre, 0, 0, TAU);
       ctx.fill();
       ctx.globalAlpha = 1;
 
