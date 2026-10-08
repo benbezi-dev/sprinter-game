@@ -3,25 +3,34 @@
 // Quatorze scenettes : six pour les nuits tenues, huit pour les morsures. Elles
 // sont le vrai contenu du mode — la course dure onze secondes, la scene reste.
 //
+// ELLES FONT PEUR (08/10, « je veux qu'il fasse peur »). La premiere serie
+// faisait rire : un facteur promu, un short refuse par les commissaires. Elle
+// allait contre tout le reste du mode — la lune rousse, les yeux entre les
+// tombes, la tete de la bete au premier plan —, et le joueur sortait de la
+// scene plus leger qu'il n'y etait entre. Elle est reecrite d'un bout a
+// l'autre ; les deux regles qui suivent sont celles qui ont survecu.
+//
 // DEUX REGLES D'ECRITURE, ET ELLES VALENT PLUS QUE LE RESTE DU FICHIER.
 //
-// 1. LA CHUTE EST TOUJOURS SUR LA DERNIERE LIGNE, et les trois premieres ne
-//    font que la charger. Une scenette qui expliquerait sa blague avant de la
-//    finir n'en est pas une. Le jeu affiche les quatre lignes une par une, a
-//    intervalle fixe : le rythme est celui d'une histoire racontee, et la
-//    derniere ligne arrive dans un silence qu'on a le temps de sentir.
+// 1. LE FROID EST TOUJOURS SUR LA DERNIERE LIGNE, et les trois premieres ne
+//    font que le preparer. Les trois premieres sont ordinaires, presque
+//    rassurantes : un medecin, un bus, une porte fermee a double tour. Le jeu
+//    affiche les quatre lignes une par une, a intervalle fixe, et la derniere
+//    arrive dans un silence qu'on a le temps de sentir — c'est elle qui doit
+//    retourner les trois autres. Une scenette qui annoncerait la peur avant
+//    de la poser n'en ferait aucune.
 //
-// 2. ON NE MONTRE JAMAIS LA BLESSURE. Le molosse arrache un mollet, une
-//    oreille, un talon — et la scenette parle d'un rond-point, d'une lampe de
-//    poche et d'un reglement de competition. C'est ce qui separe une plaisante-
-//    rie macabre d'un truc desagreable : le gore se raconte au passe, de loin,
-//    et par ses consequences administratives. Un jeu ou l'on court se joue
-//    aussi chez des gens de douze ans.
+// 2. ON NE MONTRE JAMAIS LA BLESSURE. Le molosse emporte un mollet, une
+//    oreille, un talon — et la scenette parle d'une fenetre, d'un miroir, d'un
+//    pas dans la rue. La peur vient de ce qui revient la nuit, pas de ce qui
+//    saigne : c'est ce qui separe une histoire qui glace d'un truc
+//    desagreable. Un jeu ou l'on court se joue aussi chez des gens de douze
+//    ans.
 //
 // CE QUI SE PERD N'EST PAS TOUJOURS UN MORCEAU. Une scenette sur deux fait
-// perdre autre chose — une ombre, des dimanches, la moitie d'un nom. La serie
-// tiendrait mal sur huit membres arraches : au troisieme, le joueur sait ce
-// qu'il va lire. L'alternance est ce qui garde la surprise jusqu'a la huitieme.
+// perdre autre chose — une ombre, un nom, le sommeil. La serie tiendrait mal
+// sur huit membres arraches : au troisieme, le joueur sait ce qu'il va lire.
+// L'alternance est ce qui garde la surprise jusqu'a la huitieme.
 //
 // LES TEXTES VIVENT ICI ET NON DANS sprinter-i18n.js. Tout le mode doit
 // pouvoir sortir du paquet d'un seul drapeau (canal.ts, HALLOWEEN_OUVERT) ;
@@ -48,102 +57,103 @@ function i(): 0 | 1 { return SprinterI18N.index() as 0 | 1; }
 export function dit(paire: [string, string]): string { return paire[i()]; }
 
 /* ---------------------------------------------------------------------------
-   CE QU'IL A COMPRIS — les nuits tenues
+   IL S'EN EST SORTI — les nuits tenues
    ---------------------------------------------------------------------------
-   Toutes racontent la meme chose sous six angles : un homme ordinaire
-   decouvre, a cause d'un chien, qu'il court plus vite que sa vie ne le lui
-   avait jamais demande. Aucune ne le dit en ces termes — c'est un tiers qui
-   constate, un radar, un gardien, un club, un bus.
-
-   LE HEROS N'EST JAMAIS FIER, et c'est ce qui les rend drôles. Il ne
-   triomphe pas : il est promu, flashe, filme, refuse par un club. Sa vitesse
-   lui arrive dessus comme un ennui administratif de plus.
+   Le bandeau le dit, et chacune le dement. Le joueur vient de passer la ligne
+   avant la bete : la scenette lui raconte que ca ne suffit pas. La bete ne
+   l'a pas eu, elle l'a REPERE — elle dort devant sa porte, elle monte dans
+   son bus, elle s'aligne avec son club. Aucune ne le dit en ces termes : c'est
+   un tiers qui le constate, un facteur, un radar, un gardien, un entraineur.
 --------------------------------------------------------------------------- */
 export const TENUES: readonly Scene[] = [
   {
-    cle: 'facteur',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
-    titre: ['LA TOURNÉE', 'THE ROUND'],
+    cle: 'paillasson',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
+    titre: ['LE FACTEUR', 'THE POSTMAN'],
     lignes: [
-      ['Le facteur du quartier avait un chien.', 'The local postman had a dog.'],
-      ['Pendant six ans, il a distribué le courrier en marchant.',
-       'For six years he delivered the mail at walking pace.'],
-      ['Depuis cette nuit-là, il fait sa tournée en quatre minutes.',
-       'Since that night he does the whole round in four minutes.'],
-      ['La poste l\'a promu. Il n\'a jamais expliqué pourquoi.',
-       'The post office promoted him. He never explained why.'],
+      ['Le lendemain matin, le facteur a sonné chez lui.',
+       'The next morning, the postman rang his bell.'],
+      ['« Votre chien a encore dormi devant la porte. »',
+       '"Your dog slept outside the door again."'],
+      ['Il n\'a pas de chien. Il n\'en a jamais eu.',
+       'He has no dog. He never has.'],
+      ['« Encore », avait dit le facteur.',
+       '"Again," the postman had said.'],
     ],
   },
   {
-    cle: 'radar',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
+    cle: 'cliches',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
     titre: ['LE RADAR', 'THE SPEED CAMERA'],
     lignes: [
       ['Le radar de l\'avenue l\'a flashé à 2 h 40 du matin.',
-       'The camera on the avenue flashed him at 2:40 in the morning.'],
-      ['Le dossier a été classé : pas de plaque d\'immatriculation.',
-       'The case was dropped: no licence plate.'],
-      ['Il a demandé un tirage. Il l\'a fait encadrer.',
-       'He asked for a print. He had it framed.'],
-      ['C\'est le seul document au monde qui dise ce qu\'il vaut.',
-       'It is the only document in the world that states what he is worth.'],
+       'The avenue\'s speed camera flashed him at 2:40 a.m.'],
+      ['Il a demandé les clichés. On lui en a envoyé deux.',
+       'He asked for the photos. They sent him two.'],
+      ['Sur le premier, il court seul dans l\'avenue vide.',
+       'In the first, he runs alone down the empty avenue.'],
+      ['Sur le second, quelque chose regarde l\'objectif.',
+       'In the second, something is looking into the lens.'],
     ],
   },
   {
-    cle: 'camera',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
+    cle: 'portail',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
     titre: ['LA BANDE', 'THE TAPE'],
     lignes: [
       ['Le gardien du cimetière a revu la vidéo du portail.',
        'The cemetery keeper reviewed the footage from the gate.'],
-      ['Il a d\'abord cru à un défaut de compression.',
-       'At first he assumed it was a compression glitch.'],
-      ['Il l\'a montrée à son fils, qui a dit : « papa, c\'est un monsieur ».',
-       'He showed his son, who said: "dad, that\'s a man."'],
-      ['Il a démissionné le lendemain matin.', 'He resigned the next morning.'],
+      ['À 2 h 41, un homme passe en courant. Puis plus rien.',
+       'At 2:41 a man runs past. Then nothing.'],
+      ['À 3 h 20, le portail s\'ouvre tout seul. De l\'intérieur.',
+       'At 3:20 the gate opens by itself. From the inside.'],
+      ['Il a arrêté la bande. Il n\'a jamais voulu voir la suite.',
+       'He stopped the tape. He never wanted to see the rest.'],
     ],
   },
   {
-    cle: 'bus',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
+    cle: 'terminus',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
     titre: ['LE 7 H 12', 'THE 7:12'],
     lignes: [
-      ['Il courait après le bus de 7 h 12 depuis onze ans.',
-       'He had been running for the 7:12 bus for eleven years.'],
-      ['Il ne l\'avait jamais attrapé une seule fois.',
-       'He had never once caught it.'],
-      ['Cette nuit-là, il a doublé le bus.', 'That night, he overtook the bus.'],
-      ['Puis le suivant. Puis un scooter. Puis il a continué à pied.',
-       'Then the next one. Then a scooter. Then he just kept going.'],
+      ['Le lendemain, il a pris le 7 h 12, comme tous les jours.',
+       'The next day he took the 7:12, as he does every day.'],
+      ['À chaque arrêt, un chien noir attendait sur le trottoir.',
+       'At every stop, a black dog was waiting on the pavement.'],
+      ['Le même chien. Toujours un arrêt d\'avance.',
+       'The same dog. Always one stop ahead.'],
+      ['Au terminus, il était assis à côté de lui.',
+       'At the terminus, it was sitting next to him.'],
     ],
   },
   {
-    cle: 'club',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
-    titre: ['LA CANDIDATURE', 'THE APPLICATION'],
+    cle: 'neuvieme',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
+    titre: ['L\'ENTRAÎNEMENT', 'TRAINING'],
     lignes: [
-      ['Le club d\'athlétisme refusait ses dossiers depuis quatre ans.',
-       'The athletics club had turned him down four years running.'],
-      ['« Monsieur, on ne recrute plus au-delà de trente ans. »',
-       '"Sir, we no longer recruit over the age of thirty."'],
-      ['Il s\'est présenté un mardi soir, un chien noir à six mètres derrière.',
-       'He turned up on a Tuesday evening, a black dog six metres behind him.'],
-      ['Le club a créé une catégorie.', 'The club created a new category.'],
+      ['Il s\'est inscrit au club pour ne plus être rattrapé.',
+       'He joined the club, so he would never be caught again.'],
+      ['Mardi soir, ils étaient huit sur la ligne de départ.',
+       'On Tuesday night, eight of them lined up at the start.'],
+      ['À l\'arrivée, l\'entraîneur en a compté neuf.',
+       'At the finish, the coach counted nine.'],
+      ['Le neuvième courait à quatre pattes.',
+       'The ninth was running on all fours.'],
     ],
   },
   {
-    cle: 'lent',
-    sur: ['CE QU\'IL A COMPRIS', 'WHAT HE WORKED OUT'],
-    titre: ['CE QU\'ON LUI DISAIT', 'WHAT HE HAD BEEN TOLD'],
+    cle: 'sixieme',
+    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
+    titre: ['LA NUIT SUIVANTE', 'THE NEXT NIGHT'],
     lignes: [
-      ['Toute sa vie, on lui avait dit qu\'il était lent.',
-       'All his life he had been told he was slow.'],
-      ['Son professeur de sport le disait. Son père le disait.',
-       'His PE teacher said it. His father said it.'],
-      ['Le molosse, lui, n\'a rien dit du tout.',
-       'The hound, for its part, said nothing at all.'],
-      ['Il a simplement couru très vite. Et ça n\'a pas suffi.',
-       'It simply ran very fast. And it was not enough.'],
+      ['Il est rentré chez lui. Il a fermé à double tour.',
+       'He got home. He double-locked the door.'],
+      ['Vers trois heures, on a gratté à la porte. Doucement.',
+       'Around three, something scratched at the door. Gently.'],
+      ['Puis à la fenêtre du salon. Puis à celle de la chambre.',
+       'Then at the living-room window. Then at the bedroom one.'],
+      ['Il habite au sixième étage.',
+       'He lives on the sixth floor.'],
     ],
   },
 ];
@@ -152,28 +162,28 @@ export const TENUES: readonly Scene[] = [
    CE QU'IL A PERDU — les morsures
    ---------------------------------------------------------------------------
    Huit facons de se faire rattraper, et une seule regle : ce qui a ete
-   arrache n'est jamais decrit. On apprend la perte par ce qu'elle change —
-   un rond-point, une tasse de cafe, un reglement de competition, un contrat
-   oral. La bete, elle, sort du cadre des la premiere ligne.
+   arrache n'est jamais decrit. On apprend la perte par ce qui revient la nuit
+   — une odeur sous la fenetre, un pas dans la rue, une ombre sous un
+   reverbere. La bete n'a pas fini : c'est tout ce que ces huit-la disent.
 --------------------------------------------------------------------------- */
 export const MORSURES: readonly Scene[] = [
   {
-    cle: 'mollet',
+    cle: 'gout',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE MOLLET GAUCHE', 'THE LEFT CALF'],
     lignes: [
-      ['La bête n\'a pris qu\'une bouchée, et elle a bien choisi :',
-       'The beast took a single bite, and it chose well:'],
-      ['le mollet gauche. Celui qui poussait.',
-       'the left calf. The one that pushed.'],
-      ['Il court toujours. Il tire un peu sur la droite.',
-       'He still runs. He pulls slightly to the right.'],
-      ['On l\'a retrouvé trois jours plus tard dans un rond-point.',
-       'They found him three days later, circling a roundabout.'],
+      ['La bête n\'a pris qu\'une bouchée. Le mollet gauche.',
+       'The beast took a single bite. The left calf.'],
+      ['Les médecins disent qu\'il a eu de la chance.',
+       'The doctors say he was lucky.'],
+      ['Chaque nuit, quelque chose renifle sous sa fenêtre.',
+       'Every night, something sniffs beneath his window.'],
+      ['Elle connaît son goût, maintenant.',
+       'It knows how he tastes now.'],
     ],
   },
   {
-    cle: 'auriculaire',
+    cle: 'doigt',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE PETIT DOIGT', 'THE LITTLE FINGER'],
     lignes: [
@@ -181,25 +191,24 @@ export const MORSURES: readonly Scene[] = [
        'The hound took the little finger of his left hand.'],
       ['« Un détail », a dit le médecin des urgences.',
        '"A detail," said the doctor in A&E.'],
-      ['Il ne sait toujours pas boire un café sans lever le petit doigt.',
-       'He still cannot drink a coffee without raising his little finger.'],
-      ['Il ne l\'a plus. Le geste, lui, est resté.',
-       'He no longer has it. The gesture stayed.'],
+      ['Certaines nuits, il le sent encore. Il le sent bouger.',
+       'Some nights he can still feel it. He can feel it move.'],
+      ['Il le sent gratter, sous la terre, pour revenir.',
+       'He feels it scratching through the earth, coming back.'],
     ],
   },
   {
-    cle: 'short',
+    cle: 'humide',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE SHORT', 'THE SHORTS'],
     lignes: [
-      ['La gueule s\'est refermée sur le short, et non sur la jambe.',
+      ['La gueule s\'est refermée sur le short, pas sur la jambe.',
        'The jaws closed on the shorts, not on the leg.'],
-      ['Il a franchi la ligne d\'arrivée. Il l\'a franchie le premier.',
-       'He crossed the finish line. He crossed it first.'],
-      ['Les commissaires ont refusé d\'homologuer le chrono.',
-       'The officials refused to ratify the time.'],
-      ['Le règlement est très clair au sujet de la tenue.',
-       'The rulebook is extremely clear on the subject of kit.'],
+      ['Il a laissé le tissu entre ses crocs, et il a couru.',
+       'He left the cloth between its fangs, and he ran.'],
+      ['Le lendemain, le short était plié sur son lit.',
+       'The next day, the shorts were folded on his bed.'],
+      ['Encore humide.', 'Still damp.'],
     ],
   },
   {
@@ -211,68 +220,69 @@ export const MORSURES: readonly Scene[] = [
        'The beast did not bite any part of him.'],
       ['Elle a happé son ombre, et elle l\'a emportée.',
        'It snapped up his shadow, and carried it off.'],
-      ['Depuis, il marche en plein soleil sans rien projeter au sol.',
-       'Since then he walks in full sun and casts nothing on the ground.'],
-      ['Personne ne l\'a jamais remarqué. C\'est ça, le pire.',
-       'Nobody has ever noticed. That is the worst part.'],
+      ['Depuis, en plein soleil, il ne projette plus rien au sol.',
+       'Since then, in full sun, he casts nothing on the ground.'],
+      ['La nuit, son ombre revient. Elle marche à quatre pattes.',
+       'At night his shadow comes back. It walks on all fours.'],
     ],
   },
   {
-    cle: 'nom',
+    cle: 'hurle',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['LA FIN DE SON NOM', 'THE END OF HIS NAME'],
+    titre: ['SON NOM', 'HIS NAME'],
     lignes: [
       ['Ce qu\'il a laissé cette nuit-là n\'était pas un membre.',
        'What he left behind that night was not a limb.'],
-      ['C\'était la seconde moitié de son nom de famille.',
-       'It was the second half of his surname.'],
-      ['Il s\'appelle désormais Jean-Pierre Cour.',
-       'His name is now Jean-Pierre Cour.'],
-      ['Il s\'appelait Jean-Pierre Courageux.',
-       'It used to be Jean-Pierre Courage.'],
+      ['C\'était son nom. La bête l\'a emporté entre ses dents.',
+       'It was his name. The beast carried it off in its teeth.'],
+      ['Plus personne ne s\'en souvient. Ni ses amis, ni sa mère.',
+       'Nobody remembers it now. Not his friends, not his mother.'],
+      ['La nuit, au fond du cimetière, quelque chose le hurle.',
+       'At night, deep in the cemetery, something howls it.'],
     ],
   },
   {
-    cle: 'talon',
+    cle: 'pas',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['LE TALON DROIT', 'THE RIGHT HEEL'],
     lignes: [
       ['Le molosse a emporté le talon droit.',
        'The hound took the right heel.'],
-      ['Chez un sprinteur, le talon droit ne sert presque à rien.',
-       'On a sprinter, the right heel is of almost no use at all.'],
-      ['Presque.', 'Almost.'],
-      ['Il aura mis douze secondes à apprendre ce mot-là.',
-       'It took him twelve seconds to learn that word.'],
+      ['Depuis, il boite : un pas lourd, un pas léger.',
+       'He has limped ever since: one heavy step, one light.'],
+      ['La nuit, dans la rue vide, il l\'entend derrière lui.',
+       'At night, in the empty street, he hears it behind him.'],
+      ['Il a cessé de se retourner. Le pas, lui, se rapproche.',
+       'He no longer turns round. The steps keep getting closer.'],
     ],
   },
   {
-    cle: 'dimanches',
+    cle: 'sommeil',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['SES DIMANCHES', 'HIS SUNDAYS'],
+    titre: ['SON SOMMEIL', 'HIS SLEEP'],
     lignes: [
-      ['Elle ne lui a arraché aucun morceau de viande.',
-       'It did not tear off a single piece of him.'],
-      ['Elle a pris ses dimanches.', 'It took his Sundays.'],
-      ['Il travaille depuis sept jours sur sept, sans savoir pourquoi.',
-       'He has worked seven days a week ever since, without knowing why.'],
-      ['Le contrat était oral. Il n\'y a aucun recours.',
-       'The contract was verbal. There is no appeal.'],
+      ['Elle ne lui a rien arraché. Pas même un cheveu.',
+       'It did not tear anything off him. Not even a hair.'],
+      ['Elle a pris son sommeil.', 'It took his sleep.'],
+      ['Dès qu\'il ferme les yeux, il est de retour au cimetière.',
+       'Whenever he closes his eyes, he is back in the cemetery.'],
+      ['Et chaque nuit, la bête part un peu plus près de lui.',
+       'And every night, the beast starts a little closer.'],
     ],
   },
   {
-    cle: 'oreille',
+    cle: 'respire',
     sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
     titre: ['L\'OREILLE GAUCHE', 'THE LEFT EAR'],
     lignes: [
-      ['Il a perdu l\'oreille gauche entre la sixième et la septième tombe.',
-       'He lost his left ear between the sixth and the seventh grave.'],
+      ['Il a perdu l\'oreille gauche entre deux tombes.',
+       'He lost his left ear between two graves.'],
       ['Il l\'a cherchée deux heures, avec une lampe de poche.',
        'He searched for two hours with a torch.'],
-      ['Il l\'a retrouvée. Elle écoutait encore.',
-       'He found it. It was still listening.'],
-      ['Il a préféré la laisser là où elle était.',
-       'He decided to leave it where it was.'],
+      ['Il ne l\'a jamais retrouvée. Mais il entend encore avec.',
+       'He never found it. But he can still hear through it.'],
+      ['La nuit, il entend quelque chose respirer sous la terre.',
+       'At night, he hears something breathing under the earth.'],
     ],
   },
 ];

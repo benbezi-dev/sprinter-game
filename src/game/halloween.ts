@@ -496,7 +496,7 @@ export function chronoDe(n: number): number | null {
  * `cles` sont celles du repertoire ; on rend d'abord une inedite, et quand
  * toutes ont ete vues on repart du debut en evitant seulement la derniere. Un
  * tirage purement aleatoire aurait servi deux fois la meme histoire en deux
- * courses, ce qui est la facon la plus sure de tuer une blague.
+ * courses, ce qui est la facon la plus sure de tuer une histoire.
  */
 export function tirerLaScene(cles: readonly string[]): string {
   if (!cles.length) return '';

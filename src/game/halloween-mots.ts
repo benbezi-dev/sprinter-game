@@ -20,8 +20,8 @@ const MOTS: Record<string, Paire> = {
   // --- la banderole de l'accueil
   hw_sur:        ['ÉDITION LIMITÉE', 'LIMITED EDITION'],
   hw_titre:      ['La nuit du molosse', "The hound's night"],
-  hw_sous:       ['treize nuits, un chien, et un chrono à l\'envers',
-                  'thirteen nights, one hound, and a clock running backwards'],
+  hw_sous:       ['treize nuits, une bête, et le temps qu\'il te reste',
+                  'thirteen nights, one beast, and the time you have left'],
   hw_courir:     ['ENTRER', 'ENTER'],
   hw_reprendre:  ['REPRENDRE', 'RESUME'],
 
@@ -79,8 +79,8 @@ const MOTS: Record<string, Paire> = {
   hw_encore:     ['ENCORE', 'AGAIN'],
   hw_sortir:     ['SORTIR', 'LEAVE'],
   hw_toutes:     ['LES TREIZE NUITS SONT TOMBÉES', 'ALL THIRTEEN NIGHTS ARE DOWN'],
-  hw_toutes_sous: ['Le cimetière reste ouvert. Le chien aussi.',
-                   'The cemetery stays open. So does the hound.'],
+  hw_toutes_sous: ['La quatorzième n\'est pas sur le calendrier. Elle viendra quand même.',
+                   'The fourteenth is not on the calendar. It will come anyway.'],
   hw_suite:      ['toucher pour continuer', 'tap to continue'],
 };
 
