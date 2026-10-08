@@ -142,6 +142,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
             majBras();
           },
           fini: () => s.terminer(),
+          fauxDepart: () => s.fauxDepart(),
         });
 
         // ET LA CAMERA TOURNE, DU PISTOLET AU CHRONO DE MON EQUIPE.

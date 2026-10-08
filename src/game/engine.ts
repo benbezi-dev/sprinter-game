@@ -434,6 +434,23 @@ export function padPress(side: 'left' | 'right') {
       }
       return;
     }
+    // EN RELAIS AUSSI, C'EST LA SALLE QUI JUGE. Le faux depart du premier
+    // relayeur elimine toute l'equipe — et lui seul le sait, sur son ecran.
+    // Il passait par l'elimination du one-shot : ecran « LE DUEL EST
+    // PERDU » ici, et rien la-bas — la salle gardait l'equipe en course, le
+    // classement ne se refermait qu'a la deconnexion. On le lui dit donc, et
+    // c'est elle qui elimine, ce que l'ecran du relais montre ensuite.
+    // Les trois autres attendent debout dans leur zone : il n'y a pas de
+    // blocs, pas de depart a voler, leurs appuis du decompte ne comptent pas.
+    const rang = G.liveOn && G.raceKey === '4x100' ? G.player.relaisRang : null;
+    if (rang) {
+      if (rang === 1 && !G.player.jumped) {
+        G.player.jumped = true;
+        salleLive?.fauxDepart?.((G.countT - 3) * 1000);
+        buzz(120);
+      }
+      return;
+    }
     if (!G.player.jumped) {
       // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
       // En carriere il coute seulement un blocage au coup de pistolet.
@@ -582,7 +599,7 @@ export function resumeRace() {
 let salleLive: {
   position(d: number, c?: number): void;
   fini(ms: number): void;
-  /** Championnat seulement : signaler un appui avant le coup. */
+  /** Championnat et relais : signaler un appui avant le coup. */
   fauxDepart?(ms: number): void;
   /** Direct : on ne finira pas cette course — faux depart eliminatoire. */
   abandon?(): void;

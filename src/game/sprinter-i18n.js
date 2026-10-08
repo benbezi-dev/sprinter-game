@@ -544,6 +544,7 @@
     relais_attends_temoin: ['ATTENDS', 'WAIT'],
     relais_prends:   ['PRENDS LE TÉMOIN', 'TAKE THE BATON'],
     relais_donne:    ['DONNE LE TÉMOIN', 'PASS THE BATON'],
+    relais_approche: ['RAPPROCHE-TOI', 'GET CLOSER'],
     relais_arrivee:  ['LE RELAIS EST BOUCLÉ', 'RELAY COMPLETE'],
     relais_elimine:  ['ÉQUIPE ÉLIMINÉE', 'TEAM ELIMINATED'],
     relais_elimine_pourquoi: ['au {r}e relais : {c}', 'on leg {r}: {c}'],

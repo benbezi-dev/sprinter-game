@@ -214,6 +214,8 @@ export class SalleConfrontation {
     this.envoyer(c == null ? { t: 'pos', d } : { t: 'pos', d, c: Math.round(c) });
   }
   temoin() { this.envoyer({ t: 'temoin' }); }
+  /** Le premier relayeur est parti avant le coup : la salle elimine l'equipe. */
+  fauxDepart() { this.envoyer({ t: 'faux_depart' }); }
   fini(ms: number) { this.envoyer({ t: 'fini', ms: Math.round(ms) }); }
 
   /** Voir salle-relais.ts : le moteur compte deja en metres absolus. */

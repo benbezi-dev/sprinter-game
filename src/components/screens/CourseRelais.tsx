@@ -158,6 +158,7 @@ export function CourseRelais({ equipe, onQuitter }: {
             majBras();
           },
           fini: () => s.terminer(),
+          fauxDepart: () => s.fauxDepart(),
         });
 
         // ET LA CAMERA TOURNE, POUR LES QUATRE CENTS METRES ENTIERS.
