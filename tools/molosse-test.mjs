@@ -91,10 +91,10 @@ function courir(rang, cadence, { dureeMax = 90 } = {}) {
 /**
  * La plus petite cadence (par pas de 0,25) qui fait tomber cette nuit.
  *
- * JUSQU'A TRENTE APPUIS PAR SECONDE, et plus vingt (08/10) : les nuits 4 et 9,
- * deux trois cents metres a 26 s, ont ete voulues ainsi par l'auteur en
- * sachant qu'elles en demandent environ vingt-cinq. Une nuit qui ne tombe pas
- * a trente est vraiment hors de portee.
+ * JUSQU'A TRENTE APPUIS PAR SECONDE, et plus vingt (08/10) : les nuits 4 et 9
+ * ont ete un temps des trois cents metres a 26 s, qui en demandaient environ
+ * vingt-cinq. Elles sont redescendues, mais une nuit trop dure doit se lire
+ * ici comme un chiffre, pas comme « hors de portee » des vingt et un.
  */
 function seuilDe(rang) {
   for (let c = 4; c <= 30; c += 0.25) if (courir(rang, c).passe) return c;

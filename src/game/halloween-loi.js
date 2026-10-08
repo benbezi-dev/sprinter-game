@@ -56,20 +56,21 @@
  * automate parfaitement alterne — un vrai doigt fait moins bien) :
  *
  *     1 -> 10,5/s  100 m         8  -> 12,0/s  100 m en courbe
- *     2 ->  9,0/s  200 m ligne   9  -> 24,5/s  300 m ligne
+ *     2 ->  9,0/s  200 m ligne   9  -> 12,5/s  300 m ligne
  *     3 -> 11,0/s  100 m courbe  10 -> 13,0/s  200 m ligne
- *     4 -> 24,5/s  300 m ligne   11 -> 13,0/s  100 m
+ *     4 -> 11,5/s  300 m ligne   11 -> 13,0/s  100 m
  *     5 -> 11,5/s  100 m         12 -> 14,25/s 400 m ligne
  *     6 -> 13,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
  *     7 -> 10,25/s 200 m ligne
  *
- * LES DEUX TROIS CENTS METRES SONT DES MURS, ET C'EST UN CHOIX. Il les
+ * LES DEUX TROIS CENTS METRES ONT ETE DES MURS, UNE HEURE. L'auteur les
  * voulait en 18"10 et 17"75 — des temps de deux cents metres, que le moteur
- * ne permet pas sur trois cents (25"99 au mieux a vingt-cinq appuis) ; il a
- * retenu 26"0 pour les deux en le sachant. La nuit 12 devait faire 35"8, qui
- * demande plus de dix-huit appuis pendant trente-six secondes : elle est a
- * 36"1. L'echelle precedente (07/10) partait de 7 appuis (11,92 s) et montait
- * de quatre dixiemes par nuit.
+ * ne permet pas sur trois cents (25"99 au mieux a vingt-cinq appuis). Mis a
+ * 26"0 (environ 24,5 appuis), ils se sont reveles injouables ; ils sont
+ * revenus au niveau de leurs voisines : 26"85 et 26"70. La nuit 12 devait
+ * faire 35"8, qui demande plus de dix-huit appuis pendant trente-six
+ * secondes : elle est a 36"1. L'echelle precedente (07/10) partait de 7
+ * appuis (11,92 s) et montait de quatre dixiemes par nuit.
  *
  * LE RETARD A ETE RACCOURCI D'UN TIERS AVEC L'ECHELLE DU 07/10. Il ne change rien a la
  * regle (voir positionDe) : c'est la distance a laquelle la bete apparait.
@@ -84,12 +85,12 @@ export const NUITS = [
   { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9,  nom: ['La ruelle', 'The alley'] },
   { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, nom: ['Le portail', 'The gate'] },
   { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8,  nom: ['Les cyprès', 'The cypresses'] },
-  { n: 4,  epreuve: 'nuit-300',  imparti: 26.00, retard: 11, nom: ['La lune rousse', 'The blood moon'] },
+  { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, nom: ['La lune rousse', 'The blood moon'] },
   { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7,  nom: ['Le caveau', 'The vault'] },
   { n: 6,  epreuve: 'nuit-400',  imparti: 36.20, retard: 12, nom: ['Les corbeaux', 'The crows'] },
   { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8,  nom: ['La terre remuée', 'Turned earth'] },
   { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6,  nom: ['Le glas', 'The knell'] },
-  { n: 9,  epreuve: 'nuit-300',  imparti: 26.00, retard: 9,  nom: ['Les cendres', 'The ashes'] },
+  { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9,  nom: ['Les cendres', 'The ashes'] },
   { n: 10, epreuve: 'nuit-200',  imparti: 17.50, retard: 7,  nom: ['Le souffle', 'The breath'] },
   { n: 11, epreuve: 'nuit-100',  imparti: 8.80,  retard: 5,  nom: ['La gueule', 'The jaws'] },
   { n: 12, epreuve: 'nuit-400',  imparti: 36.10, retard: 8,  nom: ['Minuit', 'Midnight'] },
