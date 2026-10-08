@@ -4,7 +4,7 @@
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup \
 #       -P tools/blender/molosse_trellis.py -- --source <trellis.glb> \
 #       [--glb src/assets/molosse.glb] [--planche planche.png] [--blend F.blend] \
-#       [--garrot 1.3] [--faces 9000] [--texture 512] [--sens 1|-1]
+#       [--garrot 1.6] [--faces 9000] [--texture 512] [--sens 1|-1]
 #
 # D'OU VIENT LA BETE (07/10, « refait le molosse avec TRELLIS.2 »). Une image
 # FLUX.1-schnell (graine 637403160, invite dans assets-sources/molosse-trellis/)
@@ -41,10 +41,10 @@ from mathutils import Vector, Matrix
 import numpy as np
 
 # LA TAILLE AU GARROT. C'etait celle du trace (halloween-molosse.js, 1,00 m) ;
-# depuis le 08/10 (« plus grand la bete ») le maillage en fait 1,30. Le jeu
-# l'apprend par GARROT_DU_MAILLAGE (halloween-molosse-3d.ts) : changer l'un
-# sans l'autre fausse le cadre du rendu et l'ombre.
-GARROT = 1.30
+# depuis le 08/10 (« plus grand la bete », « plus haut ») le maillage en
+# fait 1,60. Le jeu l'apprend par GARROT_DU_MAILLAGE (halloween-molosse-3d.ts) :
+# changer l'un sans l'autre fausse le cadre du rendu et l'ombre.
+GARROT = 1.60
 # LA FOULEE DU TRACE : 0,45 foulee par metre, une tous les 2,22 m. Le jeu
 # cale la boucle sur la distance (cycle = d * FOULEE) : un pied au contact
 # recule de ce que le sol offre pendant ce temps, et ne patine pas.
