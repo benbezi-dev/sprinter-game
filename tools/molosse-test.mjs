@@ -88,9 +88,16 @@ function courir(rang, cadence, { dureeMax = 90 } = {}) {
   };
 }
 
-/** La plus petite cadence (par pas de 0,25) qui fait tomber cette nuit. */
+/**
+ * La plus petite cadence (par pas de 0,25) qui fait tomber cette nuit.
+ *
+ * JUSQU'A TRENTE APPUIS PAR SECONDE, et plus vingt (08/10) : les nuits 4 et 9,
+ * deux trois cents metres a 26 s, ont ete voulues ainsi par l'auteur en
+ * sachant qu'elles en demandent environ vingt-cinq. Une nuit qui ne tombe pas
+ * a trente est vraiment hors de portee.
+ */
 function seuilDe(rang) {
-  for (let c = 4; c <= 20; c += 0.25) if (courir(rang, c).passe) return c;
+  for (let c = 4; c <= 30; c += 0.25) if (courir(rang, c).passe) return c;
   return null;
 }
 
@@ -207,7 +214,7 @@ titre('LA PROMESSE : un coureur dans les temps n\'est jamais rattrape');
 }
 
 // ---------------------------------------------------------------------------
-titre('L\'ECHELLE : chaque nuit demande plus que la precedente');
+titre('L\'ECHELLE : ce que chaque nuit demande au pouce');
 // ---------------------------------------------------------------------------
 {
   const seuils = NUITS.map(n => ({ n: n.n, imparti: n.imparti, c: seuilDe(n.n) }));
@@ -217,26 +224,21 @@ titre('L\'ECHELLE : chaque nuit demande plus que la precedente');
   }
   ok('aucune nuit n\'est hors de portee', seuils.every(s => s.c !== null));
 
-  // MONTANTE, ET SANS PALIER EN DOUBLE. Deux nuits qui se prennent a la meme
-  // cadence sont deux fois la meme nuit : le joueur en traverse une sans rien
-  // changer a son geste, et la progression ne veut plus rien dire.
-  let double = null, recule = null;
+  // L'ECHELLE N'EST PLUS UNE REGLE, C'EST UN CONSTAT (08/10). Les treize temps
+  // sont ceux que l'auteur a donnes, nuit par nuit ; la cadence qu'ils
+  // demandent ne monte plus a chaque nuit (la 2 se prend plus lentement que
+  // la 1, la 7 que la 6) et c'est voulu. On l'affiche pour que la prochaine
+  // retouche se fasse en connaissance de cause, sans la bloquer.
   for (let k = 1; k < seuils.length; k++) {
     if (seuils[k].c === null || seuils[k - 1].c === null) continue;
-    if (seuils[k].c < seuils[k - 1].c) recule = `${k} → ${k + 1}`;
-    if (seuils[k].c === seuils[k - 1].c) double = `nuits ${k} et ${k + 1} a ${seuils[k].c}/s`;
+    if (seuils[k].c < seuils[k - 1].c) console.log(`     (la nuit ${k + 1} se prend plus lentement que la ${k})`);
+    if (seuils[k].c === seuils[k - 1].c) console.log(`     (nuits ${k} et ${k + 1} a la meme cadence, ${seuils[k].c}/s)`);
   }
-  ok('la cadence exigee ne redescend jamais', recule === null, recule);
-  ok('deux nuits ne se prennent jamais a la meme cadence', double === null, double);
 
   // LA PREMIERE NUIT FAIT DEJA COURIR (07/10). Elle se passait a 5,5 appuis
-  // par seconde : on la traversait sans voir la bete. Sept au moins, et le
-  // geste monte encore de plus de six appuis jusqu'a la treizieme.
+  // par seconde : on la traversait sans voir la bete. Sept au moins.
   ok('des la premiere nuit, il faut au moins sept appuis par seconde',
      seuils[0].c !== null && seuils[0].c >= 7, `${seuils[0].c}/s`);
-  const ecart = seuils[12].c - seuils[0].c;
-  ok('de la premiere a la treizieme, le geste monte de plus de six appuis',
-     ecart >= 6.5, `seulement ${ecart ? ecart.toFixed(2) : '?'} appuis/s d'ecart`);
 }
 
 // ---------------------------------------------------------------------------
