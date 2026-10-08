@@ -64,7 +64,12 @@ const canalDuBuild = (mode: string) => {
 // LA CARRIERE LEGENDE AUSSI (canal.ts, LEGENDE_OUVERTE) : ses decors, ses
 // vehicules et ses boss vivent sous src/assets/legende/ et non dans public/,
 // precisement pour passer par ici.
-const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/longueur/', 'assets/legende/'];
+//
+// LA BETE DE LA NUIT DU MOLOSSE ENFIN (08/10) : src/assets/molosse.glb, le
+// maillage TRELLIS, demande par game/halloween-molosse-3d.ts. Ce module n'est
+// jamais rendu en production, mais halloween.ts est importe par App.tsx et le
+// lit au passage : le GLB partait a la racine du site sans rien pour le lire.
+const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/molosse.glb', 'assets/longueur/', 'assets/legende/'];
 const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
   name: 'sprinter-musique-hors-production',
   enforce: 'pre' as const,
