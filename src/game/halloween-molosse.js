@@ -274,7 +274,9 @@ export function molosseDe(chasse) {
       // Le maillage, s'il est la, est plus grand que le trace : l'ombre et la
       // marge le suivent (GARROT_DU_MAILLAGE, halloween-molosse-3d.ts).
       const taille = maillage && maillage.pret() ? maillage.GARROT_DU_MAILLAGE / GARROT : 1;
-      const marge = (GARROT + TETE) * taille * m + 60;
+      // Le double : le maillage recule de sa gueule (voir dessiner), et tout
+      // son corps passe derriere le point de la piste.
+      const marge = (GARROT + TETE) * taille * (taille > 1 ? 2 : 1) * m + 60;
       if (g[0] < -marge || g[0] > G.VW + marge ||
           g[1] < -marge || g[1] > G.VH + marge) return vide;
 
@@ -383,6 +385,16 @@ export function molosseDe(chasse) {
       const by = pc.ey !== undefined ? pc.ey : 0;
       const norme = Math.hypot(bx, by) || 1;
       ctx.transform(bx / norme, by / norme, 0, 1, 0, 0);
+
+      // LA GUEULE SUR `chasse.d`, PAS LE MILIEU DU CORPS (08/10). La morsure
+      // tombe quand `chasse.d` atteint le joueur : la regle compte du museau
+      // au dos (halloween.ts). Le maillage, lui, est pose par le sol sous le
+      // milieu de son corps — a 1,60 m au garrot, sa tete recouvrait le
+      // coureur une bonne demi-seconde avant la morsure. Il recule donc de ce
+      // qui separe ce milieu de sa gueule, mesure sur le maillage lui-meme ;
+      // l'ombre et les braises reculent avec lui. Le trace garde sa place :
+      // il n'est plus qu'une doublure.
+      if (maillage && maillage.pret()) ctx.translate(-maillage.museau() * m, 0);
       const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur

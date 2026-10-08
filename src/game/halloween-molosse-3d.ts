@@ -28,6 +28,8 @@ type Bete = {
   duree: number;
   /** Les deux yeux (os oeil_g, oeil_d) : le trace y pose son halo. */
   yeux: THREE.Object3D[];
+  /** De l'origine (le sol sous le milieu du corps) au bout de la gueule, en metres. */
+  museau: number;
 };
 
 // Le repere du modele (glTF, y en haut) vers celui de la bete (x en avant,
@@ -170,7 +172,12 @@ function preparer(gltf: any): Bete {
   racine.visible = false;
   // l'oeil droit d'abord : y negatif, du cote de la camera
   yeux.sort((a, b) => a.name.localeCompare(b.name));
-  return { racine, melangeur, duree: clip.duration, yeux };
+  // LA GUEULE, MESUREE ET NON SUPPOSEE : le point le plus en avant de la bete
+  // debout, avant que le galop ne la mette en mouvement. Elle grandit avec le
+  // GLB sans qu'on ait a la recopier nulle part.
+  racine.updateMatrixWorld(true);
+  const museau = Math.max(0, new THREE.Box3().setFromObject(racine).max.x);
+  return { racine, melangeur, duree: clip.duration, yeux, museau };
 }
 
 /**
@@ -193,6 +200,9 @@ async function prechauffer(b: Bete) {
 }
 
 export function pret(): boolean { return bete !== null; }
+
+/** Ou est sa gueule, en metres devant son origine (0 tant qu'elle n'est pas la). */
+export function museau(): number { return bete ? bete.museau : 0; }
 
 const _v = new THREE.Vector3();
 
