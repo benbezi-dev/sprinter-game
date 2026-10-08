@@ -70,9 +70,15 @@ const arme = await etat();
 verifier('le pistolet s arme quand les quatre sont prets', !!arme.depart_a);
 
 // 4 · on attend le coup, puis on elimine l equipe volontairement : le
-//     deuxieme relayeur sort de sa zone (100–130 m) sans le temoin.
+//     deuxieme relayeur sort de sa zone (100–130 m) sans le temoin. EN
+//     COURANT, a 12 m/s : la salle borne la vitesse (voir VITESSE_MAX dans
+//     relais-course.js), et un bond de 100 a 136 m en 300 ms n'est plus une
+//     sortie de zone, c'est un telephone qui ment — elle l'ecrete.
 await dormir(Math.max(0, arme.depart_a - arme.horloge) + 300);
-envoyer(1, { t: 'pos', d: 136 });
+for (let ms = 400; ms <= 3600; ms += 100) {
+  envoyer(1, { t: 'pos', d: 100 + 12 * (ms - 300) / 1000, c: ms });
+  await dormir(100);
+}
 await dormir(500);
 const fini = await etat();
 verifier('l equipe est eliminee', !!fini.elimine, fini.elimine?.raison || 'aucune elimination');

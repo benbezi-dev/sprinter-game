@@ -277,8 +277,11 @@ export class SalleRelais {
 
       case 'pos': {
         this.vivante();
-        const r = c.avancer(j.relais, m.d,
-                            this.departA ? Date.now() - this.departA : null);
+        // Hors course, personne n'avance : la marque se pose par `marque`.
+        // Et pendant la course, la salle borne ce que le telephone annonce
+        // par ce qu'il a pu courir — voir VITESSE_MAX dans relais-course.js.
+        if (!this.departA) return;
+        const r = c.avancer(j.relais, m.d, Date.now() - this.departA, m.c);
         if (r.elimine) {
           this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
@@ -324,7 +327,13 @@ export class SalleRelais {
       }
 
       case 'fini': {
-        const r = c.terminer(j.relais, m.ms);
+        const r = c.terminer(j.relais, m.ms,
+                             this.departA ? Date.now() - this.departA : null);
+        if (r.elimine) {
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
+          this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
+          return;
+        }
         if (r.total == null) return;
         this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
         this.diffuser({ t: 'fini', total: r.total, passes: c.passes, ...this.vue() });

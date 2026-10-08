@@ -396,8 +396,11 @@ export class SalleConfrontation {
 
       case 'pos': {
         this.vivante();
-        const r = c.avancer(j.relais, m.d,
-                            this.departA ? Date.now() - this.departA : null);
+        // Hors course, personne n'avance : la marque se pose par `marque`.
+        // Et pendant la course, la salle borne ce que le telephone annonce
+        // par ce qu'il a pu courir — voir VITESSE_MAX dans relais-course.js.
+        if (!this.departA) return;
+        const r = c.avancer(j.relais, m.d, Date.now() - this.departA, m.c);
         if (r.elimine) {
           this.diffuser({ t: 'elimine', equipe: j.equipe, ...r.elimine, ...this.vue() });
           this.cloreSiFini();
@@ -467,7 +470,13 @@ export class SalleConfrontation {
       }
 
       case 'fini': {
-        const r = c.terminer(j.relais, m.ms);
+        const r = c.terminer(j.relais, m.ms,
+                             this.departA ? Date.now() - this.departA : null);
+        if (r.elimine) {
+          this.diffuser({ t: 'elimine', equipe: j.equipe, ...r.elimine, ...this.vue() });
+          this.cloreSiFini();
+          return;
+        }
         if (r.total == null) return;
         this.diffuser({ t: 'fini', equipe: j.equipe, total: r.total, ...this.vue() });
         this.cloreSiFini();

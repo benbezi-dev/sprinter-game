@@ -4,7 +4,8 @@
 // donc lui poser les cas limites directement, ce qui est precieux — un passage
 // accepte a tort ressemble exactement a un passage valide, et ne se verrait
 // jamais a l'ecran.
-import { CourseEquipe, zoneDe, noterPasse, ZONE, LEG, PORTEE }
+import { CourseEquipe, zoneDe, noterPasse, ZONE, LEG, PORTEE,
+         VITESSE_MAX, RESERVE_MAX, AVANCE_IMPOSSIBLE }
   from '../worker/src/relais-course.js';
 
 let e = 0;
@@ -154,12 +155,113 @@ console.log('\n── LA COURSE ENTIERE ─────────────�
   }
   ok('le temoin est arrive au quatrieme', c.porteur === 4, String(c.porteur));
   ok('trois passages enregistres', c.passes.length === 3, String(c.passes.length));
+  // Le quatrieme court jusqu'a la ligne avant d'y arriver : l'ancien test le
+  // faisait terminer depuis sa marque, a 312 m, et la salle l'acceptait.
+  ok('pas d arrivee depuis la marque', Object.keys(c.terminer(4, 38310)).length === 0);
+  c.avancer(4, 400);
   const t = c.terminer(4, 38310);
   ok('le chrono est accepte', t.total === 38310);
   ok('la course est finie', c.finie() && !c.elimine);
   ok('un chrono absurde est refuse', Object.keys(neuve().terminer(4, 12)).length === 0);
   ok('seul le quatrieme peut terminer', Object.keys(neuve().terminer(2, 38310)).length === 0);
   console.log('   passages : ' + c.passes.map(p=>`${p.de}→${p.vers} note ${p.note}`).join('  '));
+}
+
+console.log('\n── LA VITESSE : LA SALLE NE CROIT PAS LE TELEPHONE ─────────');
+{
+  // Un coureur honnete, au plafond du jeu (13,5 m/s), annonce sa position
+  // tous les dixiemes, date sur l'horloge de la salle.
+  const c = neuve();
+  let elim = null, d = 0;
+  for (let ms = 100; ms <= 7400; ms += 100) {
+    d = Math.min(99, 13.5 * ms / 1000);
+    const r = c.avancer(1, d, ms, ms);
+    if (r.elimine) elim = r.elimine;
+  }
+  ok('13,5 m/s : accepte au metre pres', !elim && Math.abs(c.coureur(1).d - d) < 0.01,
+     `${c.coureur(1).d} contre ${d}`);
+}
+{
+  // Le meme, mais ses paquets arrivent groupes : une seconde de silence, puis
+  // dix positions d'un coup. Chacune porte l'instant ou elle est partie.
+  const c = neuve();
+  for (let ms = 100; ms <= 2000; ms += 100) c.avancer(1, 10 * ms / 1000, ms < 1000 ? ms : 2050, ms);
+  ok('paquets groupes par le reseau : rien d ecrete', Math.abs(c.coureur(1).d - 20) < 0.01,
+     String(c.coureur(1).d));
+}
+{
+  const c = neuve();
+  const r = c.avancer(1, 8, -1000, -1000);
+  ok('avant le coup de pistolet, personne n avance', c.coureur(1).d === 0 && !r.elimine,
+     String(c.coureur(1).d));
+}
+{
+  // Un moteur trois fois trop rapide : celui qui a gagne le defi de test
+  // en 36,82 s.
+  const c = neuve();
+  let elim = null, ms = 0;
+  while (!elim && ms < 6000) { ms += 100; elim = c.avancer(1, 36 * ms / 1000, ms, ms).elimine; }
+  ok('36 m/s : equipe eliminee', !!elim && elim.raison === 'vitesse impossible',
+     JSON.stringify(elim));
+  ok('en moins d une seconde', ms <= 1000, `${ms} ms`);
+  ok('et la salle n a garde que le possible',
+     c.coureur(1).d <= VITESSE_MAX * ms / 1000 + 0.01, String(c.coureur(1).d));
+}
+{
+  // Juste au-dessus du plafond, sur une portion : ce qu'il annonce de trop
+  // reste sous le seuil d'elimination, mais la salle ne lui laisse que 15 m/s.
+  const c = neuve();
+  let elim = null;
+  for (let ms = 100; ms <= 5000; ms += 100) {
+    elim = elim || c.avancer(1, 16.5 * ms / 1000, ms, ms).elimine;
+  }
+  ok('16,5 m/s : ramene a 15 m/s', !elim && c.coureur(1).d <= VITESSE_MAX * 5 + 0.01,
+     `${c.coureur(1).d.toFixed(1)} m a 5 s`);
+}
+{
+  // Un relayeur qui se tait a sa marque n'accumule pas le droit de bondir.
+  const c = neuve(); c.placer(2, 112);
+  c.avancer(2, 112, 100, 100);
+  c.avancer(2, 112 + 20, 9000, 9000);
+  ok(`dix secondes de silence valent ${RESERVE_MAX} m, pas cent`,
+     Math.abs(c.coureur(2).d - (112 + RESERVE_MAX)) < 0.01, String(c.coureur(2).d));
+}
+{
+  // Un telephone ne date pas sa position dans le futur de la salle.
+  const c = neuve();
+  c.avancer(1, 30, 1000, 5000);
+  ok('un instant annonce en avance est ramene a la salle',
+     c.coureur(1).d <= VITESSE_MAX * 1.3 + 0.01, String(c.coureur(1).d));
+}
+{
+  // Sans instant annonce (client plus ancien), on ecrete sans eliminer.
+  const c = neuve();
+  const r = c.avancer(1, 60, 1000);
+  ok('client sans horloge : ecrete, pas elimine',
+     !r.elimine && c.coureur(1).d <= RESERVE_MAX + 0.01, String(c.coureur(1).d));
+}
+{
+  // L'arrivee : il faut porter le temoin, et avoir pu atteindre la ligne.
+  const c = neuve();
+  const r = c.terminer(4, 30000, 30000);
+  ok('le quatrieme sans le temoin ne termine pas', !r.total && !c.finie(), JSON.stringify(r));
+
+  const f = neuve(); f.porteur = 4;
+  f.coureur(4).d = 300; f.coureur(4).horloge = 20000;
+  const r2 = f.terminer(4, 21000, 21000);
+  ok('annoncer la ligne depuis 300 m : elimine', r2.elimine?.raison === 'arrivee impossible',
+     JSON.stringify(r2));
+
+  const g = neuve(); g.porteur = 4;
+  g.coureur(4).d = 399.2; g.coureur(4).horloge = 41900;
+  const r3 = g.terminer(4, 42000, 42080);
+  ok('arrivee honnete : le chrono du telephone, au millieme', r3.total === 42000, JSON.stringify(r3));
+
+  const h = neuve(); h.porteur = 4;
+  h.coureur(4).d = 400; h.coureur(4).horloge = 41900;
+  const r4 = h.terminer(4, 30000, 42000);
+  ok('un chrono annonce trop court est ramene a l horloge de la salle',
+     r4.total === 42000 - 1500, JSON.stringify(r4));
 }
 
 console.log('\n' + '─'.repeat(62));

@@ -38,7 +38,39 @@ export const ZONE = 30;                 // zone de lancement et de transmission
  */
 export const PORTEE = 2.5;
 export const LEG = 100;                 // longueur d'une portion
+export const ARRIVEE = TAILLE * LEG;    // la ligne, a 400 m
 export const FENETRE_TOUCHE_MS = 600;   // au-dela, les deux touches ne vont plus ensemble
+
+/**
+ * LA VITESSE, JUGEE PAR LA SALLE ET NON PAR LE TELEPHONE.
+ *
+ * La salle croyait toute position annoncee : un telephone qui courait trois
+ * fois trop vite — un moteur emballe, ou un client trafique — passait le
+ * temoin huit secondes avant les autres et gagnait un defi avec un chrono
+ * impossible. Rien ne le refusait, ni l'avance, ni l'arrivee.
+ *
+ * Le plafond vient du jeu : le coureur le plus rapide atteint 12,435 m/s,
+ * fois 1,045 apres une passe parfaite et 1,042 apres une transition parfaite,
+ * soit 13,5 m/s au mieux. On tolere 15 m/s — dix pour cent au-dessus de ce
+ * que le moteur peut produire, assez pour qu'aucun coureur honnete n'y touche.
+ *
+ * LA RESERVE, ET NON UN ECART PAQUET PAR PAQUET. Chaque relayeur a une
+ * reserve de metres qui se remplit a 15 m/s sur l'instant de course que son
+ * telephone annonce (`c`, borne par l'horloge de la salle : on n'annonce pas
+ * une position datee du futur), et que chaque avance consomme. Elle est
+ * plafonnee a six metres : un relayeur qui se tait pendant qu'il attend a sa
+ * marque n'accumule pas le droit de se teleporter ensuite. Une avance qui la
+ * depasse est ecretee — la salle garde ce qui etait possible.
+ *
+ * Ecreter ne suffit pas a dire ce qui s'est passe : un telephone qui annonce
+ * douze metres de plus que ce qu'il a pu courir ne court pas, il triche ou il
+ * s'est emballe. L'equipe est alors eliminee, et elle le sait.
+ */
+export const VITESSE_MAX = 15;          // m/s
+export const RESERVE_MAX = 6;           // m
+export const AVANCE_IMPOSSIBLE = 12;    // m d'avance annoncee au-dela du possible
+export const HORLOGE_TOLEREE_MS = 300;  // decalage admis entre le telephone et la salle
+export const ARRIVEE_TOLEREE_MS = 1500; // retard admis entre la ligne et l'annonce
 
 /** La zone du relayeur k (2..4), en metres absolus depuis le depart. */
 export function zoneDe(relais) {
@@ -95,14 +127,16 @@ export class CourseEquipe {
     this.elimine = null;
     this.total = null;
     for (let r = 1; r <= TAILLE; r++) {
-      this.coureurs.set(r, { d: (r - 1) * LEG, parti: false, fini: false });
+      this.coureurs.set(r, { d: (r - 1) * LEG, parti: false, fini: false,
+                             reserve: 0, horloge: 0 });
     }
   }
 
   /** Le coureur d'un rang, cree au besoin. */
   coureur(relais) {
     if (!this.coureurs.has(relais)) {
-      this.coureurs.set(relais, { d: (relais - 1) * LEG, parti: false, fini: false });
+      this.coureurs.set(relais, { d: (relais - 1) * LEG, parti: false, fini: false,
+                                  reserve: 0, horloge: 0 });
     }
     return this.coureurs.get(relais);
   }
@@ -136,12 +170,20 @@ export class CourseEquipe {
    * pas quatre sprints : on ne quitte pas sa zone sans le temoin, et on ne
    * l'emporte pas au-dela.
    */
-  avancer(relais, d, t = null) {
+  avancer(relais, d, t = null, ch = null) {
     if (this.finie()) return {};
     const v = Number(d);
     if (!Number.isFinite(v) || v < 0 || v > 500) return {};
     const c = this.coureur(relais);
-    if (v > c.d) c.d = v;
+    // Sans instant de course (`t`), il n'y a pas de vitesse a juger : ce sont
+    // les regles de geometrie seules, telles que les tests les posent. En
+    // course, la salle le donne toujours.
+    if (t != null && Number.isFinite(t)) {
+      // Avant le coup de pistolet, personne n'avance.
+      if (t < -HORLOGE_TOLEREE_MS) return {};
+      const r = this.borner(c, v, t, ch);
+      if (r.elimine) return r;
+    } else if (v > c.d) c.d = v;
     c.parti = true;
     if (relais === this.porteur) {
       this.temoinD = c.d;
@@ -263,14 +305,77 @@ export class CourseEquipe {
     return { d: this.temoinD };
   }
 
-  /** Le dernier relayeur franchit la ligne. */
-  terminer(relais, ms) {
+  /**
+   * L'avance d'un relayeur, bornee par ce qu'il a pu courir.
+   *
+   * `ch` est l'instant de course que le telephone annonce pour cette
+   * position ; a defaut — un client plus ancien que ce champ — c'est l'instant
+   * ou la salle la recoit. Dans ce cas on ecrete sans eliminer : les paquets
+   * retenus par le reseau arrivent groupes, et la salle verrait courir trop
+   * vite un coureur qui n'y est pour rien.
+   */
+  borner(c, v, t, ch) {
+    const annonce = Number(ch);
+    const date = ch != null && Number.isFinite(annonce);
+    const instant = date ? Math.min(annonce, t + HORLOGE_TOLEREE_MS) : t;
+    if (instant > c.horloge) {
+      c.reserve = Math.min(RESERVE_MAX,
+                           c.reserve + VITESSE_MAX * (instant - c.horloge) / 1000);
+      c.horloge = instant;
+    }
+    const gain = v - c.d;
+    if (gain <= 0) return {};
+    if (gain <= c.reserve) {
+      c.d = v; c.reserve -= gain;
+      return {};
+    }
+    c.d += c.reserve; c.reserve = 0;
+    const exces = v - c.d;
+    if (date && exces > AVANCE_IMPOSSIBLE) {
+      return { elimine: this.eliminer('vitesse impossible', this.rangDe(c)) };
+    }
+    return {};
+  }
+
+  rangDe(c) {
+    for (const [r, x] of this.coureurs) if (x === c) return r;
+    return null;
+  }
+
+  /**
+   * Le dernier relayeur franchit la ligne.
+   *
+   * Il faut qu'il porte le temoin, et qu'il ait pu atteindre la ligne : la
+   * salle le sait par sa derniere position et ce qu'il a pu courir depuis.
+   * Sans quoi un quatrieme relayeur pouvait annoncer son arrivee pendant que
+   * le premier etait encore dans les blocs.
+   *
+   * Le chrono annonce est celui du telephone, sur l'horloge de la salle — il
+   * garde ainsi sa precision au millieme. Il ne peut pas etre en avance sur
+   * elle de plus que le trajet d'un message : au-dela, c'est l'horloge de la
+   * salle qui fait foi.
+   */
+  terminer(relais, ms, t = null) {
     if (this.finie() || relais !== TAILLE) return {};
     const v = Math.round(Number(ms));
     if (!Number.isFinite(v) || v < 10000 || v > 600000) return {};
-    this.coureur(TAILLE).fini = true;
-    this.total = v;
-    return { total: v };
+    if (this.porteur !== TAILLE) return {};
+    const c = this.coureur(TAILLE);
+    let total = v;
+    if (t != null && Number.isFinite(t)) {
+      const atteignable = c.d + Math.min(RESERVE_MAX,
+        c.reserve + VITESSE_MAX * Math.max(0, t - c.horloge) / 1000);
+      if (atteignable < ARRIVEE - 1) {
+        return { elimine: this.eliminer('arrivee impossible', TAILLE) };
+      }
+      total = Math.min(Math.max(v, Math.round(t) - ARRIVEE_TOLEREE_MS),
+                       Math.round(t) + HORLOGE_TOLEREE_MS);
+    } else if (c.d < ARRIVEE - 1) {
+      return {};
+    }
+    c.fini = true;
+    this.total = total;
+    return { total };
   }
 
   /**
