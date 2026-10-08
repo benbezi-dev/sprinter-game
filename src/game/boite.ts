@@ -25,7 +25,9 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // attend, et se releve sur l'ecran des equipes.
 // 'annonce_dispo' : la boite dit qu'un message a tous les joueurs vient de
 // partir. 'annonce' : on a touche sa notification. Voir AnnoncePopup.tsx.
-export type Courrier = 'defi' | 'duel' | 'mot' | 'reponse' | 'ouverte' | 'direct' | 'relais'
+// 'relais_defi' : une equipe defie la tienne, ou l'un de tes coequipiers a
+// lance un defi. Voir DefiRelaisPopup.tsx.
+export type Courrier = 'defi' | 'duel' | 'mot' | 'reponse' | 'ouverte' | 'direct' | 'relais' | 'relais_defi'
                      | 'objectif' | 'annonce' | 'annonce_dispo';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();

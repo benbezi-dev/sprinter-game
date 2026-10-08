@@ -34,7 +34,7 @@ import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
-  fantomesRelais, fantomeRelais,
+  fantomesRelais, fantomeRelais, annuaireRelais, lancerDefi, defisDe,
 } from './relais.js';
 import {
   noterRecord, recordDuJoueur, recalculerRecords, SANS_PARCOURS_MS,
@@ -2541,6 +2541,56 @@ async function servir(request, env, ctx, porteur) {
         if (rep.status === 101) return rep;
         return cors(new Response(rep.body, { status: rep.status,
           headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      // L'annuaire des equipes completes, pour en defier jusqu'a sept. Celles
+      // dont un coureur est en ligne passent devant : un defi en direct ne
+      // vaut que si quelqu'un est la pour le recevoir.
+      if (sous === 'teams' && request.method === 'GET') {
+        const liste = await annuaireRelais(env.DB, {
+          q: url.searchParams.get('q') || '',
+          sauf: url.searchParams.get('name') || '',
+        });
+        let enLigne = new Set();
+        if (env.PRESENCES) {
+          try {
+            const id = env.PRESENCES.idFromName(canal.test ? 'presence-test' : 'presence');
+            const r = await env.PRESENCES.get(id).fetch('https://presence/liste');
+            const corps = await r.json();
+            enLigne = new Set((corps.joueurs || []).map(j => String(j.nom || '').trim().toLowerCase()));
+          } catch (e) { /* sans presence, l'annuaire reste lisible */ }
+        }
+        const equipes = liste.map(e => ({
+          ...e, en_ligne: e.membres.filter(m => enLigne.has(m.cle)).length,
+        }));
+        equipes.sort((a, b) => (b.en_ligne > 0) - (a.en_ligne > 0));
+        const reponse = json({ equipes });
+        reponse.headers.set('Cache-Control', 'no-store');
+        return reponse;
+      }
+
+      // Defier : une confrontation ordinaire, dont le code part chez chaque
+      // titulaire des equipes engagees. Voir lancerDefi dans relais.js.
+      if (sous === 'defi' && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { team, name, targets } = body || {};
+        const r = await lancerDefi(env.DB, {
+          equipe: team, joueur: name, cibles: targets, conf: makeCode(),
+        });
+        if (r.erreur) return json({ error: r.erreur }, 400);
+        ctx.waitUntil((async () => {
+          for (const appareil of await appareilsDe(env.DB, r.a_prevenir)) {
+            await sonnerEtPush(env, appareil, 'relais_defi', canal.test);
+          }
+        })());
+        return json({ id: r.conf, max: r.max });
+      }
+
+      if (sous === 'defis' && request.method === 'GET') {
+        const reponse = json({ defis: await defisDe(env.DB, url.searchParams.get('name') || '') });
+        reponse.headers.set('Cache-Control', 'no-store');
+        return reponse;
       }
 
       if (sous === 'ranking' && request.method === 'GET') {

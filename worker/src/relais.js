@@ -113,6 +113,25 @@ export async function ensureRelayTables(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS relay_scores_best
                   ON relay_scores(race_key, total_ms)`),
   ]);
+  // Les defis d'equipe a equipe : une ligne par equipe engagee dans une
+  // confrontation lancee depuis l'annuaire — celle qui defie (`lanceur`) et
+  // celles qu'elle defie (`defie`). Le code de la confrontation est la cle
+  // commune. Voir `lancerDefi`.
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS relay_defis (
+      conf TEXT NOT NULL,
+      team_id TEXT NOT NULL,
+      from_team TEXT NOT NULL,
+      from_name TEXT NOT NULL,
+      max INTEGER NOT NULL,
+      role TEXT NOT NULL,
+      state TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (conf, team_id)
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS relay_defis_par_equipe
+                  ON relay_defis(team_id, created_at)`),
+  ]);
   // Colonne ajoutee apres coup, comme ailleurs : la table peut deja exister.
   try { await db.prepare(`ALTER TABLE relay_scores ADD COLUMN traces TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
@@ -424,6 +443,185 @@ export async function enregistrerRelais(db, { team_id, race_key, legs, traces })
 
   if (tr) await elaguerFantomes(db, race);
   return { total_ms: total };
+}
+
+/* ---------------------------------------------------------------------------
+   L'ANNUAIRE ET LES DEFIS D'EQUIPE A EQUIPE
+   ---------------------------------------------------------------------------
+   Une confrontation se montait avec un code a partager de la main a la main :
+   il fallait connaitre les autres equipes, et les joindre hors du jeu. Ici on
+   les trouve dans le jeu — toutes les equipes completes, cherchables par leur
+   nom ou celui d'un de leurs coureurs — et on en defie jusqu'a sept d'un coup.
+   Sept, parce que la piste a huit couloirs et que le premier est a soi.
+
+   Le defi n'invente pas de nouvelle course : il ouvre une confrontation
+   ordinaire et en DISTRIBUE le code. Chaque membre des equipes engagees — les
+   trois coequipiers du lanceur compris — le trouve dans le jeu et entre sur la
+   piste avec son equipe. La salle reste celle de salle-confrontation.js, avec
+   ses regles : on part quand chaque equipe presente est au complet et prete.
+--------------------------------------------------------------------------- */
+
+/** Combien de temps un defi reste ouvert, s'il n'est pas couru avant. */
+const DUREE_DEFI_MS = 15 * 60 * 1000;
+/** Au-dela, une equipe attend avant de defier encore : la sonnette n'est pas un jouet. */
+const DEFIS_PAR_FENETRE = 5, FENETRE_DEFIS_MS = 10 * 60 * 1000;
+
+/** Les titulaires de plusieurs equipes, en une requete. */
+async function titulairesDe(db, ids) {
+  const par = new Map(ids.map(id => [id, []]));
+  if (!ids.length) return par;
+  const { results } = await db.prepare(
+    `SELECT team_id, name, name_key, leg FROM relay_members
+      WHERE state = 'in' AND team_id IN (${ids.map(() => '?').join(',')})
+      ORDER BY team_id, (leg IS NULL), leg`).bind(...ids).all();
+  for (const r of results || []) {
+    par.get(r.team_id)?.push({ nom: r.name, cle: r.name_key, relais: r.leg });
+  }
+  return par;
+}
+
+/**
+ * Les equipes qu'on peut defier : actives ET encore a quatre.
+ *
+ * `status = 'active'` ne suffit pas : quitter une equipe la laisse active a
+ * trois titulaires, et une equipe de trois ne peut plus entrer en salle — la
+ * defier, ce serait attendre quelqu'un qui ne viendra jamais.
+ *
+ * `sauf` retire les equipes ou court ce joueur : on ne se defie pas soi-meme,
+ * et un coureur ne tient pas deux couloirs.
+ */
+export async function annuaireRelais(db, { q = '', sauf = '', race = '4x100', limite = 40 } = {}) {
+  await ensureRelayTables(db);
+  const motif = String(q || '').trim().toLowerCase().replace(/[%_\\]/g, '').slice(0, 24);
+  const filtre = motif
+    ? `AND (t.name_key LIKE ?1 OR t.id IN (SELECT team_id FROM relay_members
+                                            WHERE state = 'in' AND name_key LIKE ?1))`
+    : '';
+  const req = db.prepare(
+    `SELECT t.id, t.name, t.sealed_at, MIN(s.total_ms) AS best, COUNT(s.id) AS courses
+       FROM relay_teams t
+       LEFT JOIN relay_scores s ON s.team_id = t.id AND s.race_key = ?2
+      WHERE t.status = 'active' ${filtre}
+      GROUP BY t.id
+      ORDER BY (best IS NULL), best, t.sealed_at DESC
+      LIMIT 120`);
+  const { results } = await (motif ? req.bind('%' + motif + '%', race) : req.bind(null, race)).all();
+  const lignes = results || [];
+  const membres = await titulairesDe(db, lignes.map(r => r.id));
+  const moi = cle(sauf);
+  const sortie = [];
+  for (const r of lignes) {
+    const m = membres.get(r.id) || [];
+    if (m.length !== TAILLE) continue;
+    if (moi && m.some(x => x.cle === moi)) continue;
+    sortie.push({ id: r.id, nom: r.name, membres: m,
+                  meilleur_ms: r.best ?? null, courses: r.courses || 0 });
+    if (sortie.length >= limite) break;
+  }
+  return sortie;
+}
+
+/**
+ * Lancer un defi : une confrontation, et sa distribution.
+ *
+ * Renvoie `{ conf, max, a_prevenir }` — `a_prevenir` est la liste des
+ * joueurs a sonner : tous les titulaires des equipes defiees, plus les trois
+ * coequipiers du lanceur, qui ont besoin du code autant que les autres.
+ */
+export async function lancerDefi(db, { equipe: id, joueur, cibles, conf }) {
+  await ensureRelayTables(db);
+  const moi = cle(joueur);
+  const code = String(id || '').toUpperCase();
+  const ids = [...new Set((Array.isArray(cibles) ? cibles : [])
+    .map(x => String(x || '').toUpperCase()).filter(x => /^[A-Z0-9]{4,10}$/.test(x)))];
+  if (!ids.length) return { erreur: 'aucune equipe a defier' };
+  if (ids.length > MAX_EQUIPES - 1) return { erreur: 'sept equipes au plus' };
+  if (ids.includes(code)) return { erreur: 'on ne se defie pas soi-meme' };
+
+  const tous = await titulairesDe(db, [code, ...ids]);
+  const miens = tous.get(code) || [];
+  if (miens.length !== TAILLE) return { erreur: 'ton equipe n est pas au complet' };
+  if (!miens.some(m => m.cle === moi)) return { erreur: 'tu ne cours pas dans cette equipe' };
+  const st = await db.prepare(
+    `SELECT id, status FROM relay_teams WHERE id IN (${ids.map(() => '?').join(',')})`
+  ).bind(...ids).all();
+  const actives = new Set((st.results || []).filter(r => r.status === 'active').map(r => r.id));
+  const nosCles = new Set(miens.map(m => m.cle));
+  for (const c of ids) {
+    const m = tous.get(c) || [];
+    if (!actives.has(c) || m.length !== TAILLE) return { erreur: 'une equipe defiee n est plus au complet' };
+    if (m.some(x => nosCles.has(x.cle))) return { erreur: 'un de tes coequipiers court dans une equipe defiee' };
+  }
+
+  const n = await db.prepare(
+    `SELECT COUNT(*) AS n FROM relay_defis
+      WHERE from_team = ? AND role = 'lanceur' AND created_at > ?`
+  ).bind(code, Date.now() - FENETRE_DEFIS_MS).first();
+  if ((n?.n || 0) >= DEFIS_PAR_FENETRE) return { erreur: 'trop de defis d affilee, attends un peu' };
+
+  const t = Date.now();
+  const max = 1 + ids.length;
+  const nom = nomPropre(joueur, 20);
+  await db.batch([[code, 'lanceur'], ...ids.map(c => [c, 'defie'])].map(([e, role]) =>
+    db.prepare(`INSERT OR REPLACE INTO relay_defis
+                  (conf, team_id, from_team, from_name, max, role, state, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'ouvert', ?)`)
+      .bind(conf, e, code, nom, max, role, t)));
+
+  const a_prevenir = [];
+  for (const [e, m] of tous) for (const x of m) if (x.cle !== moi) a_prevenir.push(x.cle);
+  return { conf, max, a_prevenir };
+}
+
+/**
+ * Les defis ouverts qui concernent un joueur, du plus recent au plus ancien.
+ *
+ * Ceux qu'il a lances compris (`lance_par_moi`) : s'il quitte l'ecran avant
+ * le depart, c'est d'ici qu'il revient sur la piste.
+ */
+export async function defisDe(db, joueur) {
+  await ensureRelayTables(db);
+  const moi = cle(joueur);
+  if (!moi) return [];
+  const depuis = Date.now() - DUREE_DEFI_MS;
+  const { results } = await db.prepare(
+    `SELECT d.conf, d.team_id, d.from_team, d.from_name, d.max, d.role, d.created_at
+       FROM relay_defis d
+       JOIN relay_members m ON m.team_id = d.team_id AND m.name_key = ? AND m.state = 'in'
+      WHERE d.state = 'ouvert' AND d.created_at > ?
+      ORDER BY d.created_at DESC LIMIT 10`).bind(moi, depuis).all();
+  const lignes = results || [];
+  if (!lignes.length) return [];
+  const confs = [...new Set(lignes.map(r => r.conf))];
+  const eng = await db.prepare(
+    `SELECT d.conf, d.team_id, t.name FROM relay_defis d
+       JOIN relay_teams t ON t.id = d.team_id
+      WHERE d.conf IN (${confs.map(() => '?').join(',')})`).bind(...confs).all();
+  const parConf = new Map();
+  for (const r of eng.results || []) {
+    if (!parConf.has(r.conf)) parConf.set(r.conf, []);
+    parConf.get(r.conf).push({ id: r.team_id, nom: r.name });
+  }
+  const maintenant = Date.now();
+  return lignes.map(r => {
+    const engagees = parConf.get(r.conf) || [];
+    return {
+      conf: r.conf, max: r.max, role: r.role, le: r.created_at,
+      reste_ms: Math.max(0, r.created_at + DUREE_DEFI_MS - maintenant),
+      equipe: r.team_id,
+      equipe_nom: engagees.find(e => e.id === r.team_id)?.nom || r.team_id,
+      de: engagees.find(e => e.id === r.from_team)?.nom || r.from_team,
+      lance_par: r.from_name,
+      lance_par_moi: cle(r.from_name) === moi,
+      adversaires: engagees.filter(e => e.id !== r.team_id).map(e => e.nom),
+    };
+  });
+}
+
+/** La confrontation a ete courue : ses defis ne se proposent plus. */
+export async function defiCouru(db, conf) {
+  await ensureRelayTables(db);
+  await db.prepare(`UPDATE relay_defis SET state = 'couru' WHERE conf = ?`).bind(conf).run();
 }
 
 export { TAILLE, MIN_EQUIPES, MAX_EQUIPES };

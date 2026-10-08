@@ -135,6 +135,56 @@ export const fantomesRelais = (race = '4x100') =>
 export const ouvrirConfrontation = () =>
   poster<{ id: string }>('/relay/confrontation', {});
 
+/** Une equipe complete de l'annuaire, qu'on peut defier. */
+export type EquipeAnnuaire = {
+  id: string;
+  nom: string;
+  membres: { nom: string; cle: string; relais: number | null }[];
+  meilleur_ms: number | null;
+  courses: number;
+  /** Combien de ses quatre coureurs ont le jeu ouvert en ce moment. */
+  en_ligne: number;
+};
+
+/**
+ * Les equipes completes, hors les miennes, filtrees par le nom de l'equipe ou
+ * celui d'un de ses coureurs. Celles qui ont quelqu'un en ligne d'abord.
+ */
+export const annuaireRelais = (q = '') =>
+  lire<{ equipes: EquipeAnnuaire[] }>(
+    '/relay/teams?name=' + encodeURIComponent(getSavedName() || '')
+    + '&q=' + encodeURIComponent(q));
+
+/**
+ * Defier jusqu'a sept equipes. Le serveur ouvre la confrontation, en renvoie
+ * le code et le sonne chez tous les titulaires engages — mes trois
+ * coequipiers compris.
+ */
+export const lancerDefi = (equipe: string, cibles: string[]) =>
+  poster<{ id: string; max: number }>('/relay/defi', {
+    team: equipe, name: getSavedName(), targets: cibles,
+  });
+
+/** Un defi ouvert qui concerne l'une de mes equipes. */
+export type DefiRelais = {
+  conf: string;
+  max: number;
+  role: 'lanceur' | 'defie';
+  le: number;
+  reste_ms: number;
+  /** Mon equipe, celle avec laquelle j'entre sur la piste. */
+  equipe: string;
+  equipe_nom: string;
+  /** L'equipe qui a lance le defi, et qui l'a lance. */
+  de: string;
+  lance_par: string;
+  lance_par_moi: boolean;
+  adversaires: string[];
+};
+
+export const mesDefis = (nom = getSavedName()) =>
+  lire<{ defis: DefiRelais[] }>('/relay/defis?name=' + encodeURIComponent(nom || ''));
+
 /** Les membres qui ont accepte, dans l'ordre des relais quand il est fixe. */
 export const titulaires = (e: EquipeRelais) =>
   e.membres.filter(m => m.etat === 'in')

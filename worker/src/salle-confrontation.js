@@ -25,7 +25,7 @@
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE } from './relais-course.js';
-import { fantomeRelais } from './relais.js';
+import { fantomeRelais, defiCouru } from './relais.js';
 import { avantDepart } from './depart.js';
 
 const MIN_EQUIPES = 2;
@@ -479,6 +479,10 @@ export class SalleConfrontation {
   async ecrire() {
     try {
       if (!this.base()) return;
+      // Un defi lance depuis l'annuaire ne se propose plus une fois couru :
+      // la salle ferme dans la minute et demie, et une equipe qui y entrerait
+      // apres trouverait un classement fini au lieu d'une course.
+      if (this.code) await defiCouru(this.base(), this.code).catch(() => {});
       for (const c of this.equipes.values()) {
         // Un fantome vient d'etre rejoue, pas couru : le reinscrire ajouterait
         // une course a une equipe qui n'a rien fait ce soir-la, et ferait

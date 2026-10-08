@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Confrontation } from './Confrontation';
 import { Fantomes } from './Fantomes';
+import { DefierEquipes } from './DefierEquipes';
+import { surCourrier } from '@/game/boite';
 import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
-import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut } from 'lucide-react';
+import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import {
-  mesEquipes, creerEquipe, repondre, ordonner, classementRelais,
+  mesEquipes, creerEquipe, repondre, ordonner, classementRelais, mesDefis,
   titulaires, ceQuiManque,
-  type EquipeRelais, type LigneRelais,
+  type EquipeRelais, type LigneRelais, type DefiRelais,
 } from '@/game/relais';
 
 /**
@@ -199,6 +201,7 @@ export function RelaisPanel() {
   const [equipes, setEquipes] = useState<EquipeRelais[]>([]);
   const [invitations, setInvitations] = useState<EquipeRelais[]>([]);
   const [classement, setClassement] = useState<LigneRelais[]>([]);
+  const [defis, setDefis] = useState<DefiRelais[]>([]);
   const [chargement, setChargement] = useState(true);
   const [nom, setNom] = useState('');
   const [coequipiers, setCoequipiers] = useState(['', '', '']);
@@ -206,13 +209,18 @@ export function RelaisPanel() {
   const [occupe, setOccupe] = useState(false);
 
   const recharger = async () => {
-    const [m, c] = await Promise.all([mesEquipes(), classementRelais()]);
+    const [m, c, d] = await Promise.all([mesEquipes(), classementRelais(), mesDefis()]);
     if (m) { setEquipes(m.equipes || []); setInvitations(m.invitations || []); }
+    if (d) setDefis(d.defis || []);
     if (c) setClassement(c.classement || []);
     setChargement(false);
   };
 
   useEffect(() => { recharger(); }, []);
+  // Un defi recu, ou une invitation : la boite sonne, on relit tout de suite.
+  useEffect(() => surCourrier(quoi => {
+    if (quoi === 'relais_defi' || quoi === 'relais') recharger();
+  }), []);
 
   /** Seules les equipes au complet peuvent entrer sur une piste. */
   const pretes = equipes.filter(e => ceQuiManque(e) === null);
@@ -257,12 +265,12 @@ export function RelaisPanel() {
       icone={<Users className="w-4 h-4" />}
       /* Une invitation attend une reponse : elle ouvre le panneau d'elle-meme,
          sinon personne ne saurait qu'elle est la. */
-      ouvertParDefaut={invitations.length > 0}
+      ouvertParDefaut={invitations.length > 0 || defis.length > 0}
       marque={
-        invitations.length > 0 ? (
+        invitations.length + defis.length > 0 ? (
           <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold tabular-nums
                            text-background bg-emerald-400">
-            {invitations.length}
+            {invitations.length + defis.length}
           </span>
         ) : equipes.length > 0 ? (
           <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
@@ -275,6 +283,39 @@ export function RelaisPanel() {
       {chargement && (
         <div className="flex justify-center py-4">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Les defis en direct avant tout : ils perissent en un quart d'heure,
+          et quatre coureurs de chaque equipe doivent entrer sur la piste. */}
+      {defis.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-primary">
+            <Swords className="w-3 h-3" /> {N.t('defis_recus')}
+          </span>
+          {defis.map(d => (
+            <div key={d.conf + d.equipe} className="flex items-center gap-2 p-3 rounded-2xl
+                                       border border-primary/30 bg-primary/[0.06]">
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-xs tracking-wide truncate text-foreground">
+                  {d.lance_par_moi ? N.t('defi_lance', { moi: d.equipe_nom })
+                    : d.role === 'lanceur' ? N.t('defi_lance_par', { qui: d.lance_par, moi: d.equipe_nom })
+                    : N.t('defi_recu', { de: d.de, moi: d.equipe_nom })}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {N.t('defi_contre', { l: d.adversaires.join(' · ') })}
+                  {' · '}{Math.ceil(d.reste_ms / 60000)} min
+                </p>
+              </div>
+              <button onClick={() => entrerSurLaPiste({
+                        genre: 'confrontation', code: d.conf, equipe: d.equipe,
+                        max: d.max, fantomes: [] })}
+                      className="shrink-0 px-3 py-2 rounded-xl font-black font-display tracking-widest
+                                 text-[10px] text-background bg-primary">
+                {N.t('defi_entrer')}
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -325,6 +366,7 @@ export function RelaisPanel() {
           chrono : d'autres equipes maintenant, ou les meilleures courses deja
           enregistrees. Elles ne s'excluent pas — une confrontation peut
           melanger les deux. */}
+      {pretes.length > 0 && <DefierEquipes equipes={pretes} />}
       {pretes.length > 0 && <Confrontation equipes={pretes} />}
       {pretes.length > 0 && <Fantomes equipes={pretes} />}
 

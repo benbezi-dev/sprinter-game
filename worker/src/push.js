@@ -50,6 +50,10 @@ const MESSAGES = {
     fr: ['On te veut dans une équipe', 'Un relais se forme, et il manque ta réponse.'],
     en: ['A relay team wants you', 'A relay is forming, and your answer is missing.'],
   },
+  relais_defi: {
+    fr: ['Une équipe vous défie', 'Un relais en direct vous attend. Rejoins la piste avec tes coéquipiers.'],
+    en: ['A team challenges yours', 'A live relay is waiting. Join the track with your teammates.'],
+  },
   duel: {
     fr: ['Ton duel est tranché', 'Quelqu\u2019un a relevé ton défi. Le résultat est là.'],
     en: ['Your duel is settled', 'Someone took your challenge. The result is in.'],

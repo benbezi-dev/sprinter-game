@@ -53,6 +53,7 @@ import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
+import { DefiRelaisPopup } from '@/components/screens/DefiRelaisPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
 import { InviteNotifs } from '@/components/screens/InviteNotifs';
 import { TchatRapide } from '@/components/screens/TchatRapide';
@@ -418,6 +419,7 @@ function MainGame() {
       <InboxPopup />
       <AnnoncePopup />
       <InvitationDirecte />
+      {RELAIS_OUVERT && <DefiRelaisPopup />}
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
           annonce ici, des son retour au calme. Comme pour PisteRelais
           ci-dessous, la porte se pose ici et non a l'interieur du composant :
