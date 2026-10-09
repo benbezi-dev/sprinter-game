@@ -33,6 +33,28 @@ SIN = 1 / math.sqrt(5)
 # hauteur le long du haut de l'ecran (voir en-tete, point 3)
 ETIREMENT = (COS * math.sqrt(2)) / (math.sqrt(7) / math.sqrt(5))
 
+
+
+def poser_angle(deg):
+    """Une autre camera que celle du sprint : `deg` au-dessus de l'horizon.
+
+    Le jeu ne fait que changer le couple (ISO_COS, ISO_SIN) — les nuits du
+    molosse descendent jusqu'a cinq degres (halloween-cameras.js) — et la
+    projection reste de la meme forme : ecran_x = cos(-X+Y), ecran_y =
+    -(sin(X+Y)+Z). C'est toujours une vue orthographique, regardant le long
+    de (1, 1, -2 sin), avec un pixel etire de cos*racine2 / racine(2 sin2+1).
+    Meme formule que champ-de-mars.py (15 degres). A appeler AVANT camera()
+    et avant le premier materiau (le liseret de matiere.py suit la vue).
+    """
+    global COS, SIN, ETIREMENT
+    r = math.radians(deg)
+    COS, SIN = math.cos(r), math.sin(r)
+    ETIREMENT = COS * math.sqrt(2) / math.sqrt(2 * SIN * SIN + 1)
+    import matiere
+    v = mathutils.Vector((COS, COS, -2 * COS * SIN)).normalized()
+    matiere.VUE = (v.x, v.y, v.z)
+
+
 # La lumiere du jeu (LIGHT, sprinter-core.js) : un vecteur VERS la source.
 LUMIERE = mathutils.Vector((-0.42, 0.28, 0.86)).normalized()
 
@@ -71,8 +93,9 @@ def camera(px_par_m, largeur, hauteur, centre=(0.0, 0.0, 0.0)):
     sc.render.resolution_y = hauteur
     sc.render.resolution_percentage = 100
 
-    d = mathutils.Vector((1, 1, -2 / math.sqrt(5))).normalized()
-    haut = mathutils.Vector((1, 1, math.sqrt(5))).normalized()
+    # sous la vue du sprint : (1, 1, -2/racine5) et (1, 1, racine5)
+    d = mathutils.Vector((1, 1, -2 * SIN)).normalized()
+    haut = mathutils.Vector((SIN, SIN, 1)).normalized()
     droite = d.cross(haut).normalized()
     # repere camera : X droite, Y haut, regarde vers -Z
     rot = mathutils.Matrix((droite, haut, -d)).transposed()
@@ -81,7 +104,7 @@ def camera(px_par_m, largeur, hauteur, centre=(0.0, 0.0, 0.0)):
     cam_d.type = 'ORTHO'
     # verticalement, un metre le long de `haut` vaut sqrt7/sqrt5 metres-jeu
     # a l'ecran : V pixels Blender par unite doivent donc donner px_par_m.
-    V = px_par_m * math.sqrt(7) / math.sqrt(5)
+    V = px_par_m * math.sqrt(2 * SIN * SIN + 1)
     # En orthographique, ortho_scale est la LARGEUR vue. L'image finale est
     # etiree horizontalement de ETIREMENT : on rend donc plus large que
     # l'image, a raison de largeur / (V * ETIREMENT) unites.

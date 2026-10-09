@@ -4513,7 +4513,9 @@
   }
   function apiDecor() {
     if (!_apiDecor) {
-      _apiDecor = { G, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI };
+      _apiDecor = { G, C, THEMES, ground, depthOf, scaleM, WROT_DEG: WROT * 180 / Math.PI,
+                    // la vue du sprint, quand un lieu l'a changee (angleDuLieu)
+                    get vueGardee() { return angleGarde; } };
     }
     return _apiDecor;
   }
@@ -6640,27 +6642,6 @@
     }
   }
 
-  /**
-   * Un bloc de depart : un rail, deux cales inclinees.
-   *
-   * Tout est construit sur la piste elle-meme — `markAt` pour la distance,
-   * le rayon du couloir pour la largeur — donc l'objet suit le virage et la
-   * quinconce sans qu'on ait un angle a tenir quelque part. Les quatre coins
-   * de chaque cale passent par `solid()`, comme les gradins : l'inclinaison
-   * est portee par la hauteur, pas par une rotation a l'ecran.
-   *
-   * Le metal est le meme sur les six stades. Un bloc est du materiel, pas du
-   * decor : il ne prend pas la couleur du lieu, et c'est justement ce qui le
-   * fait lire comme un objet pose sur la piste plutot que comme une marque
-   * peinte de plus.
-   */
-  // Trois valeurs, et l'ecart entre elles compte plus que les teintes : la
-  // face inclinee est nettement plus claire que la piste, le chant nettement
-  // plus sombre. C'est ce contraste-la qui fait lire un VOLUME a quarante
-  // pixels de haut — deux gris voisins auraient donne une tache.
-  const BLOC_RAIL = [34, 36, 46], BLOC_CALE = [152, 160, 180],
-        BLOC_CHANT = [66, 70, 86];
-
   // L'IMAGE DU BLOC SE CHOISIT A L'ECRAN, PAS DANS LE MONDE.
   //
   // Les blocs sont rendus dans Blender sous la vue standard (26,6°). Un theme
@@ -6685,70 +6666,35 @@
 
   function drawBlocs(ctx, th) {
     const T = G.track;
-    const lineR = (e) => T.curved ? T.edge(e) : e * C.LANE_W;
-    // Le point du monde, sur l'axe du couloir, a `d` metres de SA ligne de
-    // depart et `dr` metres de cote.
-    const pt = (d, e, dr, z) => {
-      const q = ptOf(T.markAt(d, e), lineR(e) + C.LANE_W * 0.5 + dr);
-      return solid(q[0], q[1], z || 0);
-    };
-    const quad = (a, b, c, d, col) => {
-      ctx.beginPath();
-      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
-      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
-    };
-    const W = 0.085;                 // demi-largeur du rail, en metres
-    const CW = 0.25;                 // demi-largeur d'une cale
     // LE BLOC RENDU DANS BLENDER, AU PIED DU COUREUR.
     //
     // Pose exactement la ou pose() met le coureur au coup de feu — T.pos(0)
-    // et T.heading(0) du couloir —, et non plus au milieu geometrique du
-    // couloir : ses pedales sont modelisees sous les pieds de la posture de
-    // depart, et quelques centimetres d'ecart suffisaient a faire flotter un
-    // pied a cote de sa plaque. L'ancien bloc au trait reste en secours tant
-    // que l'image n'est pas chargee.
+    // et T.heading(0) du couloir —, et non au milieu geometrique du couloir :
+    // ses pedales sont modelisees sous les pieds de la posture de depart, et
+    // quelques centimetres d'ecart suffisaient a faire flotter un pied a cote
+    // de sa plaque.
+    //
+    // IL N'Y A PLUS DE BLOC AU TRAIT (09/10, « je ne veux plus jamais voir ce
+    // type de starting block »). Il servait de secours tant que l'image
+    // n'etait pas chargee, et sous les cameras basses des nuits du molosse,
+    // ou l'image du sprint partait de travers. Ces cameras ont maintenant
+    // leur propre serie (decors-stades.js, materielDeLaVue) ; une image pas
+    // encore la ne dessine rien — le decompte attend les decors de toute
+    // facon (images-pretes.js).
+    if (!DEC()) return;
     const vue = T.curved ? WROT * 180 / Math.PI : 0;
-    // LES IMAGES SONT CUITES SOUS LA CAMERA DU JEU (26,6 deg), ET SOUS ELLE
-    // SEULE. Une nuit du molosse descend la camera jusqu'a six degres
-    // (halloween-cameras.js) : posee telle quelle, l'image du bloc gardait la
-    // pente de la vue standard et partait de travers sur des couloirs devenus
-    // presque horizontaux (07/10, « les start ne sont pas droit »). Hors de
-    // cette vue, c'est le bloc au trait qui se dessine : il passe par solid(),
-    // donc par la camera du moment.
-    const vueDesImages = Math.abs(C.ISO_SIN - 1 / Math.sqrt(5)) < 0.005;
     for (let e = 0; e < C.LANE_COUNT; e++) {
-      if (DEC() && vueDesImages) {
-        const q = T.pos(0, e);
-        const g2 = ground(q[0], q[1]);
-        if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) {
-          // Hors du cadre, il ne se dessine pas, mais son image se demande
-          // avant le pistolet : au 400 m, la camera rattrape les blocs decales
-          // en pleine course (voir images-pretes.js).
-          if (G.state !== 'race') DEC().demanderBloc(apiDecor(), capALEcran(q, T.heading(0, e), vue));
-          continue;
-        }
-        DEC().bloc(ctx, apiDecor(), q[0], q[1], capALEcran(q, T.heading(0, e), vue)); continue;
+      const q = T.pos(0, e);
+      const g2 = ground(q[0], q[1]);
+      const cap = capALEcran(q, T.heading(0, e), vue);
+      if (g2[0] < -80 || g2[0] > G.VW + 80 || g2[1] < -80 || g2[1] > G.VH + 80) {
+        // Hors du cadre, il ne se dessine pas, mais son image se demande
+        // avant le pistolet : au 400 m, la camera rattrape les blocs decales
+        // en pleine course (voir images-pretes.js).
+        if (G.state !== 'race') DEC().demanderBloc(apiDecor(), cap);
+        continue;
       }
-      // Un seul test de cadre par couloir, sur le milieu du rail : huit blocs
-      // dont sept hors champ ne doivent rien couter.
-      const centre = pt(-0.62, e, 0, 0);
-      if (centre[0] < -80 || centre[0] > G.VW + 80 ||
-          centre[1] < -80 || centre[1] > G.VH + 80) continue;
-      // Le rail, a plat sur la piste.
-      quad(pt(-0.18, e, -W), pt(-0.18, e, W),
-           pt(-1.12, e, W), pt(-1.12, e, -W), rgb(BLOC_RAIL));
-      // Les deux cales. Celle de devant est plus basse et plus redressee que
-      // celle de derriere : c'est la position reelle, et c'est aussi ce qui
-      // evite que les deux ne se lisent comme un seul bloc carre.
-      for (const [d0, d1, h] of [[-0.34, -0.56, 0.20], [-0.66, -0.92, 0.26]]) {
-        // La face inclinee, celle qui prend le pied.
-        quad(pt(d0, e, -CW), pt(d0, e, CW),
-             pt(d1, e, CW, h), pt(d1, e, -CW, h), rgb(BLOC_CALE));
-        // Le chant, du cote eclaire : sans lui la cale est un losange plat.
-        quad(pt(d1, e, CW, h), pt(d1, e, CW), pt(d1, e, -CW), pt(d1, e, -CW, h),
-             rgb(BLOC_CALE, 0.62));
-      }
+      DEC().bloc(ctx, apiDecor(), q[0], q[1], cap);
     }
   }
 

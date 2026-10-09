@@ -469,8 +469,8 @@
    *
    * `X, Y` : le point de depart du couloir (la ou pose() met le coureur au
    * coup de feu) ; `angle` : la direction de la course a cet endroit, en
-   * degres, vue comprise. Rend faux si l'image n'est pas encore la — le
-   * moteur dessine alors son ancien bloc.
+   * degres, vue comprise. Rend faux si l'image n'est pas encore la — rien
+   * ne se dessine alors.
    */
   function bloc(ctx, api, X, Y, angle) {
     const ri = demanderBloc(api, angle);
@@ -488,9 +488,36 @@
    * au 400 m, les blocs decales entrent dans le champ pendant la course.
    */
   function demanderBloc(api, angle) {
-    const ri = rendu(api, 'debout', 'materiel', 'blocs', (rendus) => cap(rendus, angle));
+    const ri = rendu(api, 'debout', materielDeLaVue(api), 'blocs', (rendus) => cap(rendus, angle));
     if (ri) nuit(ri[1], 'piste');
     return ri;
+  }
+
+  // LE BLOC SE REND POUR CHAQUE CAMERA. Rendu sous la vue du sprint (26,6°),
+  // il se lisait faux sous les cameras basses des nuits du molosse (5 a 22°,
+  // halloween-cameras.js) : on le rend donc aussi sous chacune d'elles
+  // (fabriquer.py --angle), sous « materiel-a<deg> ». On prend la serie dont
+  // l'angle est le plus proche de la vue du moment ; « materiel » est celle du
+  // sprint. Le Champ-de-Mars (15°) garde la serie du sprint : sa vue est
+  // ramenee a celle-ci par capALEcran (sprinter-app.js), voir `vueGardee`.
+  const SPRINT_DEG = Math.atan(0.5) * 180 / Math.PI;
+  let seriesConnues = null;
+  function materielDeLaVue(api) {
+    if (!seriesConnues) {
+      seriesConnues = [];
+      for (const k of Object.keys(MAN().stades || {})) {
+        if (k === 'materiel') seriesConnues.push([SPRINT_DEG, k]);
+        const m = /^materiel-a([\d.]+)$/.exec(k);
+        if (m) seriesConnues.push([parseFloat(m[1]), k]);
+      }
+    }
+    const sin = api.vueGardee ? api.vueGardee.sin : api.C.ISO_SIN;
+    const deg = Math.asin(Math.max(-1, Math.min(1, sin))) * 180 / Math.PI;
+    let mieux = 'materiel', ecart = Infinity;
+    for (const [a, k] of seriesConnues) {
+      if (Math.abs(a - deg) < ecart) { ecart = Math.abs(a - deg); mieux = k; }
+    }
+    return mieux;
   }
 
   root.DecorsStades = { sol, debout, bloc, demanderBloc, PLAN };

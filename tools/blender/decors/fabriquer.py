@@ -362,16 +362,28 @@ def main():
     # dans son propre dossier et son propre manifeste : le jeu ne la charge
     # qu'a trois pixels par point, et garde la serie ordinaire en secours.
     ultra = '--ultra' in args
-    dossier = os.path.join(RACINE_PROJET, 'public', 'decors-ultra' if ultra else 'decors', stade)
+    # --angle : la meme piece sous une camera plus basse (les nuits du
+    # molosse, halloween-cameras.js). Rangee a part, sous « <stade>-a<deg> » —
+    # dossier et entree du manifeste —, et cherchee la par le moteur.
+    angle = float(args[args.index('--angle') + 1]) if '--angle' in args else None
+    sortie = stade if angle is None else '%s-a%g' % (stade, angle)
+    if angle is not None:
+        vue.poser_angle(angle)
+    dossier = os.path.join(RACINE_PROJET, 'public', 'decors-ultra' if ultra else 'decors', sortie)
     os.makedirs(dossier, exist_ok=True)
     f_man = os.path.join(RACINE_PROJET, 'src', 'game',
                          'decors-manifeste-ultra.json' if ultra else 'decors-manifeste.json')
+    # --manifeste : un manifeste a part, pour faire tourner plusieurs Blender
+    # a la fois (chacun reecrit le sien en entier) ; on fusionne apres.
+    if '--manifeste' in args:
+        f_man = args[args.index('--manifeste') + 1]
     man = json.load(open(f_man)) if os.path.exists(f_man) else \
         {'pxParM': 192.0 if ultra else 96.0, 'stades': {}}
-    entree = man['stades'].setdefault(stade, {'debout': {}, 'sol': {}})
+    entree = man['stades'].setdefault(sortie, {'debout': {}, 'sol': {}})
 
     cfg = palettes.STADES[stade]
-    PX_PAR_M = float(cfg.get('pxParM', 96.0)) * (2 if ultra else 1)
+    PX_PAR_M = float(args[args.index('--ppm') + 1]) if '--ppm' in args else \
+        float(cfg.get('pxParM', 96.0)) * (2 if ultra else 1)
     pieces.FINESSE = 3 if ultra else 1
     OMBRE_DEMI = ultra
     SYMETRIQUES = set(cfg.get('symetriques', []))
