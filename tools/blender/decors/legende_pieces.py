@@ -32,6 +32,9 @@
 #              Wallace), reverbere
 #   New York   taxi (le yellow cab), borne (bouche d'incendie), hotdog
 #   Londres    boite (pillar box), bus (impériale), garde (guerite et garde)
+#
+# Le drac, le taxi et le bus ne sont plus modelises ici depuis le 09/10 :
+# ce sont des modeles Tripo, rendus de la meme facon (voir TRIPO plus bas).
 # -----------------------------------------------------------------------
 
 import bpy
@@ -580,7 +583,34 @@ PIECES = {'torii': torii, 'cabine': cabine, 'morris': morris,
           'garde': garde}
 
 
+# Les pieces REFAITES DANS TRIPO (09/10, « le dragon en boules, le taxi en
+# boites ») : le modele HD, le quart de tour qui presente son flanc a la
+# camera (--apercu4 de legende_monuments.py), et sa hauteur reelle en
+# metres, qui donne la largeur ecrite au manifeste ; `sat` ravive la teinte
+# que la texture Tripo rend fade (taxi creme, bus rose). Les modeles vivent hors
+# du depot, dans assets-sources (registre : legende/refonte-0910/registre.txt).
+SOURCES = os.path.abspath(os.path.join(LM.PROJET, '..', 'assets-sources', 'legende', 'refonte-0910'))
+TRIPO = {
+    'drac': dict(source='drac-tripo.glb', rot=0.0, hauteur=1.15),
+    'taxi': dict(source='taxi-tripo.glb', rot=0.0, hauteur=1.48, sat=1.9),
+    'bus': dict(source='bus-tripo.glb', rot=180.0, hauteur=4.38, sat=1.5),
+}
+
+
 def rendre_piece(nom):
+    if nom in TRIPO:
+        T = TRIPO[nom]
+        o = LM.importer(os.path.join(SOURCES, T['source']))
+        image = LM.texture(o)
+        if image is None:
+            raise RuntimeError('pas de texture dans ' + T['source'])
+        LM.normaliser(o, T['rot'])
+        LM.matiere(o, image, (1, 1, 1, 0))
+        xs = [v.co.x for v in o.data.vertices]
+        hauteur = T['hauteur']
+        largeur = (max(xs) - min(xs)) * hauteur
+        ecrire_piece(nom, o, largeur, hauteur, T.get('sat', 1.0))
+        return
     bpy.ops.wm.read_factory_settings(use_empty=True)
     MATS.clear()
     PIECES[nom]()
@@ -597,6 +627,10 @@ def rendre_piece(nom):
     LM.normaliser(o, 0)
     for p in o.data.polygons:
         p.use_smooth = False
+    ecrire_piece(nom, o, largeur, hauteur)
+
+
+def ecrire_piece(nom, o, largeur, hauteur, sat=1.0):
     tmp = '/tmp/legende-piece-%d.png' % os.getpid()
     W, H, pied = LM.rendre(o, 12.0, 900, tmp)
     a = LM.lire(tmp)
@@ -604,6 +638,9 @@ def rendre_piece(nom):
     x0, x1 = max(0, xs.min() - 2), min(W, xs.max() + 3)
     y0, y1 = max(0, ys.min() - 2), min(H, ys.max() + 3)
     a = a[y0:y1, x0:x1]
+    if sat != 1.0:
+        gris = a[..., :3].mean(axis=2, keepdims=True)
+        a[..., :3] = np.clip(gris + (a[..., :3] - gris) * sat, 0, 1)
     f = nom + '.webp'
     LM.ecrire(a, os.path.join(LM.DOSSIER, f))
     man = json.load(open(LM.F_MAN)) if os.path.exists(LM.F_MAN) else {'pieces': {}}

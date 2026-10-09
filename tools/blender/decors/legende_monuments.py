@@ -3,7 +3,8 @@
 #
 #   blender -b --factory-startup -P tools/blender/decors/legende_monuments.py -- \
 #       --source <modele Tripo .glb|.fbx> --cle londres [--rot 0] [--elev 14] \
-#       [--haut 1400] [--brume r,g,b,part] [--apercu4 vues.png]
+#       [--haut 1400] [--brume r,g,b,part] [--socle 0.04] [--sans-herbe]
+#       [--apercu4 vues.png]
 #
 # Un monument de la Legende ne se pose pas dans le stade : il se tient au
 # loin, derriere la tribune, a une position d'ECRAN (game/legende/decors.ts),
@@ -14,6 +15,9 @@
 #
 # Ce que fait ce script a un modele Tripo :
 #   1. il le reduit (un modele HD fait pres d'un million de faces) ;
+#   1b. avec --socle h, il retire ce qui est sous h (part de la hauteur) ;
+#      avec --sans-herbe, les faces que la texture peint en vert : le disque
+#      d'herbe et les buissons que Tripo pose sous un rocher isole (Zuma) ;
 #   2. il le tourne de `rot` degres pour presenter sa face a la camera (le
 #      mode --apercu4 rend les quatre faces cote a cote pour choisir), pose
 #      son pied a l'origine et le ramene a une unite de haut ;
@@ -52,7 +56,8 @@ def arguments():
         return a[a.index(k) + 1] if k in a else d
     return dict(source=val('--source'), cle=val('--cle'), rot=float(val('--rot', '0')),
                 elev=float(val('--elev', '14')), haut=int(val('--haut', '1400')),
-                brume=val('--brume', '0.62,0.78,0.92,0.10'), apercu4=val('--apercu4'))
+                brume=val('--brume', '0.62,0.78,0.92,0.10'), apercu4=val('--apercu4'),
+                socle=float(val('--socle', '0')), herbe='--sans-herbe' not in a)
 
 
 def importer(src):
@@ -107,6 +112,71 @@ def normaliser(o, rot):
     c = Vector(((mn.x + mx.x) / 2, (mn.y + mx.y) / 2, mn.z))
     me.transform(Matrix.Scale(k, 4) @ Matrix.Translation(-c))
     me.update()
+
+
+def couper_socle(o, h):
+    """Retire les faces toutes sous h (le modele a une unite de haut), puis
+    repose le pied a l'origine."""
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bas = [f for f in bm.faces if all(v.co.z < h for v in f.verts)]
+    bmesh.ops.delete(bm, geom=bas, context='FACES')
+    seuls = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=seuls, context='VERTS')
+    bm.to_mesh(o.data)
+    bm.free()
+    normaliser(o, 0)
+
+
+def couper_herbe(o, image):
+    """Retire les faces dont la texture, au centre de leurs UV, est verte
+    (le vert domine le rouge et le bleu de 12 %), puis repose le pied."""
+    import bmesh
+    w, h = image.size
+    px = np.empty(w * h * 4, dtype=np.float32)
+    image.pixels.foreach_get(px)
+    px = px.reshape(h, w, 4)
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    uv = bm.loops.layers.uv.active
+    verts = []
+    for f in bm.faces:
+        u = sum(l[uv].uv.x for l in f.loops) / len(f.loops)
+        v = sum(l[uv].uv.y for l in f.loops) / len(f.loops)
+        r, g, b = px[min(h - 1, max(0, int(v * h))), min(w - 1, max(0, int((u % 1) * w))), :3]
+        if g > 1.12 * r and g > 1.12 * b:
+            verts.append(f)
+    bmesh.ops.delete(bm, geom=verts, context='FACES')
+    # les miettes que la coupe laisse (brins d'herbe gris, bords de buisson) :
+    # tout ilot de moins de 1 % des faces part aussi. Le glb de Tripo est
+    # decoupe aux coutures d'UV : souder d'abord, sinon chaque morceau de
+    # texture du rocher passe pour une miette (le Zuma sortait troue).
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    bm.faces.index_update()
+    vu, miettes = set(), []
+    for f0 in bm.faces:
+        if f0.index in vu:
+            continue
+        ilot, pile = [], [f0]
+        vu.add(f0.index)
+        while pile:
+            f = pile.pop()
+            ilot.append(f)
+            for e in f.edges:
+                for g in e.link_faces:
+                    if g.index not in vu:
+                        vu.add(g.index)
+                        pile.append(g)
+        if len(ilot) < 0.01 * len(bm.faces):
+            miettes += ilot
+    bmesh.ops.delete(bm, geom=miettes, context='FACES')
+    seuls = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=seuls, context='VERTS')
+    bm.to_mesh(o.data)
+    bm.free()
+    normaliser(o, 0)
+    print('HERBE retiree : %d faces, %d en miettes' % (len(verts), len(miettes)))
 
 
 def matiere(o, image, brume):
@@ -248,6 +318,10 @@ def main():
         o = importer(A['source'])
         image = texture(o)
         normaliser(o, 0)
+        if A['socle'] > 0:
+            couper_socle(o, A['socle'])
+        if not A['herbe']:
+            couper_herbe(o, image)
         matiere(o, image, (1, 1, 1, 0))
         for r in (0, 90, 180, 270):
             if r:
@@ -268,6 +342,10 @@ def main():
     if image is None:
         raise RuntimeError('pas de texture dans le modele')
     normaliser(o, A['rot'])
+    if A['socle'] > 0:
+        couper_socle(o, A['socle'])
+    if not A['herbe']:
+        couper_herbe(o, image)
     matiere(o, image, brume)
     W, H, pied = rendre(o, A['elev'], A['haut'], tmp)
     a = lire(tmp)
