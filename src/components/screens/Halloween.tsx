@@ -422,7 +422,11 @@ export function PanneauMolosse() {
                         droite de quatre cents metres comme a un cent
                         metres. */}
                     {jouable
-                      ? <>{trace(nuit.epreuve)} · {mot('hw_imparti', { s: chrono(nuit.imparti) })}</>
+                      ? <>{trace(nuit.epreuve)} · {mot('hw_imparti', { s: chrono(nuit.imparti) })}
+                          {/* et comment on part : on ne se met pas en garde de
+                              la meme facon pour une surprise que pour des blocs */}
+                          {' · '}{mot(nuit.depart === 'surpris' ? 'hw_dep_surpris'
+                                     : nuit.depart === 'elan' ? 'hw_dep_elan' : 'hw_dep_blocs')}</>
                       : parLaDate
                         ? (nuit.n === CAL_NB && resteAvant(nuit.n, ms) === ''
                             ? mot('hw_ce_soir')

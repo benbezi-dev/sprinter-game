@@ -29,6 +29,10 @@ const MOTS: Record<string, Paire> = {
   hw_nuits:      ['LES TREIZE NUITS', 'THE THIRTEEN NIGHTS'],
   hw_nuit_n:     ['NUIT {n}', 'NIGHT {n}'],
   hw_imparti:    ['{s} s pour passer', '{s}s to get through'],
+  // le depart de la nuit (voir `depart` dans halloween-loi.js)
+  hw_dep_blocs:   ['dans les blocs', 'from the blocks'],
+  hw_dep_surpris: ['départ surpris', 'caught off guard'],
+  hw_dep_elan:    ['départ lancé', 'rocking start'],
   hw_meilleur:   ['ton chrono : {s} s', 'your time: {s}s'],
   hw_verrouille: ['tiens la nuit précédente', 'hold the previous night first'],
 

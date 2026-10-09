@@ -2063,7 +2063,11 @@
         // affiche reste le vrai.
         const marge = (this.look && this.look.departParfait) || 1;
         const jugee = this.reaction / marge;
-        this.reactBonus = C.REACT_BONUS *
+        // LE PRE-ELAN (depart debout de la nuit du molosse, `elan` pose par
+        // le dessin du depart) : parti buste en avant, le gain monte jusqu'a
+        // 1,4 fois ; buste en arriere, il tombe a 0,6. Ailleurs, 1.
+        const elan = this.elan || 1;
+        this.reactBonus = C.REACT_BONUS * elan *
           Math.min(1, Math.max(0, (C.REACT_WINDOW - jugee) / w));
         this.v += this.reactBonus;
       }

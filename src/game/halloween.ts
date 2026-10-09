@@ -41,6 +41,7 @@
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT } from './canal';
 import { molosseDe, FOULEE, proximite } from './halloween-molosse.js';
+import { preparerLeGrognement, GROGNEMENT, DUREE_GROGNEMENT } from './halloween-son';
 // Les treize nuits et la loi de la bete vivent a part, dans un module sans le
 // moindre import : c'est ce qui permet au harnais de les charger seuls, sans
 // navigateur ni piste (voir tools/molosse-test.mjs).
@@ -82,6 +83,8 @@ export type Nuit = {
   retard: number;
   /** Le nom de la nuit, en francais et en anglais. */
   nom: [string, string];
+  /** Son depart : dans les blocs, debout et surpris, ou debout avec pre-elan. */
+  depart: 'blocs' | 'surpris' | 'elan';
 };
 
 /** L'index du cimetiere municipal dans la table des etapes du moteur. */
@@ -132,6 +135,11 @@ type Chasse = {
    * ou il n'y a pas de precedente a comparer.
    */
   demiFoulee?: number;
+  /**
+   * Les yeux dans le noir, de 0 a 1 : allumes par le grognement du depart
+   * surpris, avant que la bete n'entre dans l'image (halloween-molosse.js).
+   */
+  yeux?: number;
 };
 
 /** La nuit en cours. Nulle en dehors d'une nuit. */
@@ -204,11 +212,43 @@ export function armerLaNuit(n: number) {
     // plat, et le rangement des haies l'a videe a la construction.
     G.obstacles = molosseDe(chasse);
     poserLaCamera(n);
+    poserLeDepart(nuit);
     // Et le retour a l'accueil remballe la bete, par quelque chemin qu'il
     // arrive : le bouton de l'ecran de fin, l'abandon, le retour arriere du
     // telephone (voir goHome dans sprinter-app.js).
     G.surRetourAccueil = rangerLaNuit;
   }
+}
+
+/**
+ * LE DEPART DE LA NUIT (voir `depart` dans halloween-loi.js).
+ *
+ * Debout, il n'y a ni blocs ni starter (`G.departDebout`, lu par le moteur).
+ * Surpris, le coureur attend dans le silence un temps qu'il ne peut pas
+ * prevoir — entre une et trois secondes — puis la bete gronde derriere lui :
+ * l'ecran tremble, deux yeux s'allument dans le noir, et le decompte part
+ * quand le grognement se tait (G.avantDepart, le crochet d'avant le 3-2-1 du
+ * moteur, qui coupe la musique et ignore les appuis). Le son se fabrique ici
+ * (halloween-son.ts) ; sans lui — telephone muet, contexte audio absent —
+ * la secousse et les yeux disent la meme chose.
+ */
+function poserLeDepart(nuit: Nuit) {
+  const G = SprinterApp.G;
+  if (!G) return;
+  const style = nuit.depart || 'blocs';
+  G.departDebout = style === 'blocs' ? null : style;
+  if (style !== 'surpris') return;
+  preparerLeGrognement();
+  const attente = 1.0 + Math.random() * 2.0;
+  G.avantDepart = {
+    reste: attente + DUREE_GROGNEMENT, t: 0, dit: false, a: attente,
+    cri: GROGNEMENT, gain: 1, attitudes: true,
+    auCri() {
+      G.shake = 0.9;
+      if (chasse) chasse.yeux = 1;
+      try { navigator.vibrate?.([60, 40, 120]); } catch { /* sans vibreur */ }
+    },
+  };
 }
 
 /**
@@ -311,6 +351,7 @@ export function rangerLaNuit() {
     // ici les ferait disparaitre de la piste.
     if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
     if (G.surRetourAccueil === rangerLaNuit) G.surRetourAccueil = null;
+    G.departDebout = null;
     rendreLaCamera();
   }
 }

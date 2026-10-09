@@ -81,20 +81,26 @@
  * rejouer (tools/molosse-test.mjs) et cette table qu'il faudra reecrire. Ces
  * nombres ne se deduisent d'aucune formule.
  */
+// LE DEPART DE CHAQUE NUIT (09/10, « alterner entre des departs debout et
+// en start ») : 'blocs', le depart ordinaire ; 'surpris', debout dans le
+// silence jusqu'a ce que la bete gronde derriere, puis 3-2-1 ; 'elan', debout,
+// le buste qui bascule pour prendre de la vitesse (le pre-elan des
+// sprinteurs). Un cycle blocs / surpris / elan, la premiere nuit en blocs —
+// on decouvre le mode avec un depart connu — et la derniere surprise.
 export const NUITS = [
-  { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9,  nom: ['La ruelle', 'The alley'] },
-  { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, nom: ['Le portail', 'The gate'] },
-  { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8,  nom: ['Les cyprès', 'The cypresses'] },
-  { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, nom: ['La lune rousse', 'The blood moon'] },
-  { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7,  nom: ['Le caveau', 'The vault'] },
-  { n: 6,  epreuve: 'nuit-400',  imparti: 36.20, retard: 12, nom: ['Les corbeaux', 'The crows'] },
-  { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8,  nom: ['La terre remuée', 'Turned earth'] },
-  { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6,  nom: ['Le glas', 'The knell'] },
-  { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9,  nom: ['Les cendres', 'The ashes'] },
-  { n: 10, epreuve: 'nuit-200',  imparti: 17.50, retard: 7,  nom: ['Le souffle', 'The breath'] },
-  { n: 11, epreuve: 'nuit-100',  imparti: 8.80,  retard: 5,  nom: ['La gueule', 'The jaws'] },
-  { n: 12, epreuve: 'nuit-400',  imparti: 36.10, retard: 8,  nom: ['Minuit', 'Midnight'] },
-  { n: 13, epreuve: 'nuit-100v', imparti: 8.70,  retard: 4,  nom: ['La nuit du molosse', "The hound's night"] },
+  { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
+  { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, depart: 'surpris', nom: ['Le portail', 'The gate'] },
+  { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8, depart: 'elan',  nom: ['Les cyprès', 'The cypresses'] },
+  { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, depart: 'blocs', nom: ['La lune rousse', 'The blood moon'] },
+  { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7, depart: 'surpris',  nom: ['Le caveau', 'The vault'] },
+  { n: 6,  epreuve: 'nuit-400',  imparti: 36.20, retard: 12, depart: 'elan', nom: ['Les corbeaux', 'The crows'] },
+  { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8, depart: 'blocs',  nom: ['La terre remuée', 'Turned earth'] },
+  { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6, depart: 'surpris',  nom: ['Le glas', 'The knell'] },
+  { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9, depart: 'elan',  nom: ['Les cendres', 'The ashes'] },
+  { n: 10, epreuve: 'nuit-200',  imparti: 17.50, retard: 7, depart: 'blocs',  nom: ['Le souffle', 'The breath'] },
+  { n: 11, epreuve: 'nuit-100',  imparti: 8.80,  retard: 5, depart: 'surpris',  nom: ['La gueule', 'The jaws'] },
+  { n: 12, epreuve: 'nuit-400',  imparti: 36.10, retard: 8, depart: 'elan',  nom: ['Minuit', 'Midnight'] },
+  { n: 13, epreuve: 'nuit-100v', imparti: 8.70,  retard: 4, depart: 'surpris',  nom: ['La nuit du molosse', "The hound's night"] },
 ];
 
 /** La nuit de ce rang, ou la derniere si le rang deborde. */

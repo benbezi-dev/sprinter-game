@@ -265,7 +265,26 @@ export function molosseDe(chasse) {
       const { G, ground, depthOf, scaleM } = api;
       if (!chasse || !G.player || !G.track) return vide;
       const d = chasse.d;
-      if (d < 0.4) return vide;
+      piece.yeuxSeuls = false;
+      if (d < 0.4) {
+        // LES YEUX DANS LE NOIR (depart surpris, `chasse.yeux`) : la bete a
+        // gronde, on ne la voit pas encore. Deux braises a hauteur de sa tete,
+        // la ou elle se tient derriere la ligne — ramenees au bord de l'image
+        // si elle est hors champ : on doit les voir.
+        if (!(chasse.yeux > 0)) return vide;
+        const T = G.track, m = scaleM();
+        const q0 = T.pos(0, G.player.lane), q1 = T.pos(4, G.player.lane);
+        const ux = (q1[0] - q0[0]) / 4, uy = (q1[1] - q0[1]) / 4;
+        const recul = Math.min(chasse.ecart || 6, 7);
+        const X = q0[0] - ux * recul, Y = q0[1] - uy * recul;
+        const g = ground(X, Y);
+        piece.yeuxSeuls = true;
+        piece.profondeur = depthOf(X, Y);
+        piece.x = Math.max(36, Math.min(G.VW - 36, g[0]));
+        piece.y = Math.max(80, Math.min(G.VH - 80, g[1] - 1.45 * m));
+        piece.m = m;
+        return liste;
+      }
 
       const T = G.track;
       const q = T.pos(Math.min(d, T.total + 24), G.player.lane);
@@ -334,6 +353,37 @@ export function molosseDe(chasse) {
     /** Peindre la bete. */
     dessiner(ctx, api, pc) {
       const { G } = api;
+      if (pc.yeuxSeuls) {
+        // Plus gros que les yeux de la bete en course, et dans une masse
+        // d'ombre : vus seuls, a la taille de la course, ils passaient pour
+        // un reflet rouge sur la piste (09/10).
+        const t = performance.now() / 1000, f = Math.min(1, chasse ? chasse.yeux || 0 : 0);
+        const m = pc.m, x = pc.x, y = pc.y;
+        ctx.save();
+        ctx.globalAlpha = 0.75 * f;
+        const o = ctx.createRadialGradient(x, y + 0.2 * m, 0, x, y + 0.2 * m, 1.3 * m);
+        o.addColorStop(0, 'rgba(0,0,0,0.9)');
+        o.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = o;
+        ctx.beginPath(); ctx.ellipse(x, y + 0.2 * m, 1.3 * m, 0.9 * m, 0, 0, TAU); ctx.fill();
+        // un clignement lent, toutes les trois secondes
+        const cligne = (t % 3.1) < 0.12 ? 0.08 : 1;
+        const bat = 0.85 + 0.15 * Math.sin(t * 6);
+        for (const s of [-1, 1]) {
+          const ox = x + s * 0.24 * m;
+          ctx.globalAlpha = f;
+          const h = ctx.createRadialGradient(ox, y, 0, ox, y, 0.6 * m * bat);
+          h.addColorStop(0, `rgba(255,110,50,${0.95 * cligne})`);
+          h.addColorStop(0.35, `rgba(230,40,20,${0.45 * cligne})`);
+          h.addColorStop(1, 'rgba(230,40,20,0)');
+          ctx.fillStyle = h;
+          ctx.beginPath(); ctx.arc(ox, y, 0.6 * m * bat, 0, TAU); ctx.fill();
+          ctx.fillStyle = OEIL;
+          ctx.beginPath(); ctx.ellipse(ox, y, 0.11 * m, 0.11 * m * cligne + 0.5, s * 0.25, 0, TAU); ctx.fill();
+        }
+        ctx.restore();
+        return;
+      }
       const m = pc.m;
       const t = G.elapsed || 0;
       // TOUT LE DESSIN QUI SUIT REGARDE VERS LES X POSITIFS, et le miroir

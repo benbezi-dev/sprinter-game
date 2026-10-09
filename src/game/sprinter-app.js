@@ -2141,7 +2141,9 @@
   function annoncerLeDepart(avant) {
     // Au starter, sa voix prend la place du bip au 3 et au 1 ; le 2 garde son
     // bip. Le rythme du decompte s'entend donc toujours, seconde par seconde.
-    const dit = STARTER ? starterParle() : 0;
+    // (un depart DEBOUT — la nuit du molosse, `G.departDebout` — n'a pas de
+    // starter : on fuit, on ne s'aligne pas ; le decompte seul, en bips)
+    const dit = STARTER && !G.departDebout ? starterParle() : 0;
     if (!dit && Math.floor(G.countT) !== avant && G.countT < DECOMPTE) Audio_.sfx('beep');
     return dit;
   }
@@ -2158,6 +2160,8 @@
    * parti d'un canon, et un ecran qui tremble sur un bip ne raconterait rien.
    */
   function coupDePistolet() {
+    // Un depart debout n'a ni blocs ni canon : le signal seul.
+    if (G.departDebout) { Audio_.sfx('go'); return; }
     // Huit paires de pointes qui lachent les blocs en meme temps : c'est la
     // seule image de la course ou toute la piste bouge d'un coup, et elle ne
     // durait rien. La poussiere du depart la tient un demi-seconde.
@@ -2240,6 +2244,9 @@
     // commandes. Le direct et le relais le reposeront sur l'heure annoncee par
     // leur salle — voir liveDepart.
     poserLeDepart(tirerLeDepart());
+    // Le depart debout est l'affaire d'un mode (la nuit du molosse le pose
+    // apres la construction) : toute course neuve repart des blocs.
+    G.departDebout = null;
     // LES ATTITUDES D'AVANT LE DEPART (02/10, voir pose et engine.ts) :
     // chaque coureur tire les deux siennes, et son decalage. Math.random et
     // non K.alea : le tirage seme d'un defi decide du plateau, il ne doit
@@ -6764,6 +6771,8 @@
   }
 
   function drawBlocs(ctx, th) {
+    // LE DEPART DEBOUT (la nuit du molosse, `G.departDebout`) : pas de blocs.
+    if (G.departDebout) return;
     const T = G.track;
     // LE BLOC RENDU DANS BLENDER, AU PIED DU COUREUR.
     //
@@ -8497,7 +8506,7 @@
     // Personne sur la pelouse quand c'est un decompte qui donne le depart :
     // le jeu publie n'a pas de starter, et un officiel plante la sans rien
     // faire serait plus etrange que son absence.
-    if (!STARTER) return null;
+    if (!STARTER || G.departDebout) return null;
     const T = G.track, d = G.depart;
     if (!T || !d) return null;
     // Le coup est parti quand la course a commence : `elapsed` compte alors
@@ -8629,6 +8638,52 @@
    *   temoin — n'a pas de blocs.
    */
   const SORTIE_BLOCS = 0.9;
+  /* LE DEPART DEBOUT — la nuit du molosse (09/10, « pas de start sur ce
+     schema »). `G.departDebout` vaut :
+       - 'surpris' : debout, a l'aise, jusqu'a ce que la bete gronde derriere
+         (G.avantDepart, halloween.ts) ; alors plus d'attitudes, le buste un
+         peu penche, et le decompte ;
+       - 'elan' : le PRE-ELAN des sprinteurs. Pendant le decompte, et jusqu'au
+         premier appui, le coureur bascule les epaules et le buste d'avant en
+         arriere pour prendre de la vitesse. Partir buste EN AVANT rapporte
+         plus que le bonus de reaction ordinaire, buste en arriere moins : le
+         joueur le regle a l'oeil (`r.elan`, lu par Runner.press).
+     Jamais de blocs : `enBloc` reste a zero, du decompte a la course. */
+  const ELAN_PERIODE = 0.9, ELAN_PENCHE = 0.12, ELAN_BASCULE = 0.20;
+  function departDebout(r) {
+    r.enBloc = 0;
+    r.prets = 0;
+    const avD = G.avantDepart, avant = avD && avD.reste > 0;
+    const elan = G.departDebout === 'elan';
+    const bascule = (t) => Math.sin((t / ELAN_PERIODE) * Math.PI * 2 + (r.lane || 0) * 0.7);
+    if (G.state === 'count') {
+      // avant le grondement (ou les attitudes du depart ordinaire) : a l'aise
+      const libre = avant && !(avD && avD.dit && avD.cri);
+      r.attitudeW = libre ? 1 - Math.min(1, r.celebrate || 0) : 0;
+      r.attitudeT = G.attT || 0;
+      if (elan && !avant) {
+        const b = bascule(performance.now() / 1000);
+        r.drivePitch = ELAN_PENCHE + ELAN_BASCULE * b;
+        r.elan = 0.6 + 0.8 * (b + 1) / 2;
+      } else {
+        r.drivePitch = libre ? 0 : 0.12;
+      }
+      return;
+    }
+    if (G.state === 'race') {
+      r.debout = 0; r.cri = 0; r.criHaut = 0; r.criBond = 0;
+      r.attitudeW = 0;
+      r.prets = 1;
+      // le pre-elan continue jusqu'au premier appui : c'est la qu'il compte
+      if (elan && r === G.player && r.reaction === null) {
+        const b = bascule(performance.now() / 1000);
+        r.drivePitch = ELAN_PENCHE + ELAN_BASCULE * b;
+        r.elan = 0.6 + 0.8 * (b + 1) / 2;
+      }
+      return;
+    }
+    r.attitudeW = 0;
+  }
   function phaseBlocs(r) {
     const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
     if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; r.attitudeW = 0; return; }
@@ -8636,6 +8691,7 @@
     // decompte l'a laisse — dans ses blocs, pas debout d'un coup derriere eux.
     if (G.state === 'falseout') return;
     r.rituel = 0;
+    if (G.departDebout) { departDebout(r); return; }
     if (G.state === 'count') {
       const d = G.depart;
       let marques, prets;

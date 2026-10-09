@@ -476,6 +476,17 @@ export function padPress(side: 'left' | 'right') {
       }
       return;
     }
+    // LE DEPART DEBOUT (la nuit du molosse) N'ELIMINE PAS. On y fuit, on ne
+    // s'aligne pas : partir avant le signal fige le coureur un instant et lui
+    // retire le gain de la reaction, comme en carriere, sans finir la nuit.
+    if (G.departDebout) {
+      if (!G.player.jumped) {
+        G.player.jumped = true;
+        G.player.freeze = C.FALSE_START_FREEZE;
+        G.falseFlash = 1.6; G.shake = 0.5; Audio_.sfx('trip'); buzz(30);
+      }
+      return;
+    }
     if (!G.player.jumped) {
       // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
       // En carriere il coute seulement un blocage au coup de pistolet.
@@ -1097,6 +1108,8 @@ export function updateLogic(dt: number) {
       if (!avD.dit && avD.t >= (avD.a ?? 0.25)) {
         avD.dit = true;
         if (avD.cri) Audio_.sfx(avD.cri, { gain: avD.gain ?? 0.95 });
+        // ce qu'un mode attache au cri (la nuit du molosse : la secousse, les yeux)
+        if (avD.auCri) avD.auCri();
       }
       if (avD.claps && avD.claps.length) applaudir(avD, dt);
       if (avD.entree) entrerEnBoss(avD, dt);
