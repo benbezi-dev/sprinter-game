@@ -283,16 +283,40 @@ lancerChargement();
 const { C } = SprinterCore;
 const { N } = SprinterI18N;
 
+/**
+ * UNE SECOUSSE DE `ms` MILLISECONDES, SUR LE SITE COMME DANS L'APPLICATION.
+ *
+ * Les durees ci-dessous ont ete choisies pour l'API Vibration. L'application
+ * passait par `Haptics.impact`, qui n'a que trois crans fixes : sur Android,
+ * LIGHT vibre 50 ms et MEDIUM 43 ms plus fort. Tout ce qui tenait sous 12 ms
+ * tombait dans LIGHT — la foulee de 6 ms vibrait huit fois plus longtemps
+ * que sur le site, et un ciseau ne se distinguait plus d'une foulee.
+ * `Haptics.vibrate` garde la duree demandee ; `impact` ne reste qu'en repli.
+ */
 export function buzz(ms: number) {
   try {
-    const cap = (window as any).Capacitor;
-    if (cap?.Plugins?.Haptics) {
-      cap.Plugins.Haptics.impact({ style: ms > 12 ? 'MEDIUM' : 'LIGHT' });
+    const h = (window as any).Capacitor?.Plugins?.Haptics;
+    if (h) {
+      const repli = () => h.impact({ style: ms > 12 ? 'MEDIUM' : 'LIGHT' }).catch?.(() => { });
+      if (typeof h.vibrate === 'function') h.vibrate({ duration: ms }).catch?.(repli);
+      else repli();
       return;
     }
     if (navigator.vibrate) navigator.vibrate(ms);
   } catch (e) { }
 }
+
+/**
+ * PENDANT LA COURSE, LE TELEPHONE VIBRE BAS ; A LA HAIE, UN PEU PLUS.
+ *
+ * Une secousse par foulee, a dix foulees par seconde, finit en bourdonnement
+ * continu qui couvre tout le reste. Toute la course vibre donc au plus bas
+ * (foulee, accroc), sur le plat comme entre deux haies. Les gestes de la haie
+ * (appel, ciseau, frappe en l'air) vibrent un peu plus qu'avant : c'est
+ * l'ecart qui dit au pouce qu'il passe de la course a l'obstacle.
+ */
+const COURSE = { foulee: 4, accroc: 18 };
+const HAIE = { appel: 22, ciseau: 14, rate: 26, vol: 14 };
 
 /**
  * Safari sur iOS n'implemente pas l'API Vibration, et ne l'a jamais fait :
@@ -492,7 +516,7 @@ export function padPress(side: 'left' | 'right') {
   // facon plus marteler — et le relache fait le ciseau (padRelease).
   if (G.appelHaies) {
     const juge = G.appelHaies(side);
-    if (juge) { buzz(18); cue(side, 'step'); return; }
+    if (juge) { buzz(HAIE.appel); cue(side, 'step'); return; }
   }
 
   // EN L'AIR, LES PAVES NE POUSSENT PLUS — ILS COUTENT.
@@ -510,7 +534,7 @@ export function padPress(side: 'left' | 'right') {
   if (G.volHaies && G.volHaies()) {
     G.stumbleFlash = 0.35;
     cue(side, 'trip');
-    buzz(12);
+    buzz(HAIE.vol);
     return;
   }
 
@@ -519,10 +543,10 @@ export function padPress(side: 'left' | 'right') {
   // comme une foulee normale, avec sa poussee pleine.
   if (missedBeat) G.player.lastKey = null;
   if (G.player.press(side, G.elapsed)) {
-    G.stumbleFlash = 0.9; G.shake = 1; Audio_.sfx('trip'); buzz(30);
+    G.stumbleFlash = 0.9; G.shake = 1; Audio_.sfx('trip'); buzz(COURSE.accroc);
     cue(side, 'trip');
   } else if (G.player.tookStep()) {
-    buzz(6);
+    buzz(COURSE.foulee);
     cue(side, 'step');
   }
 }
@@ -548,8 +572,8 @@ export function padRelease(side: 'left' | 'right') {
   if (!G.relacherHaies) return;
   const jc = G.relacherHaies(side);
   if (!jc) return;
-  if (jc.note === 'ciseau') { buzz(10); cue(side, 'step'); }
-  else { buzz(24); cue(side, 'trip'); }
+  if (jc.note === 'ciseau') { buzz(HAIE.ciseau); cue(side, 'step'); }
+  else { buzz(HAIE.rate); cue(side, 'trip'); }
 }
 
 // Garde l'attribut lang du document aligne sur la langue du jeu. Sans ca
