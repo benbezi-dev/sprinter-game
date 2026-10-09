@@ -251,8 +251,12 @@ const DUREE_EVENEMENT_MS = 7 * 24 * 3600 * 1000;
 const LANCEMENT_DUEL_MARQUES = (() => {
   const v = process.env.LANCEMENT_DUEL_MARQUES;
   if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
-  return null;
+  // Provisoire (09/10) : dimanche 11 octobre 2026, 21 h 30 a Paris.
+  return Date.UTC(2026, 9, 11, 19, 30, 0);
 })();
+// Six jours, pas sept : fin samedi 17/10 21 h 30, avant Halloween (le 19).
+// Meme valeur que DUREE_MS dans worker/src/marques.js.
+const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 
 export default defineConfig(({ mode }) => ({
   base: basePath,
@@ -260,6 +264,7 @@ export default defineConfig(({ mode }) => ({
     __LANCEMENT_DEFI_MEBA__: JSON.stringify(LANCEMENT_DEFI_MEBA),
     __DUREE_EVENEMENT_MS__: JSON.stringify(DUREE_EVENEMENT_MS),
     __LANCEMENT_DUEL_MARQUES__: JSON.stringify(LANCEMENT_DUEL_MARQUES),
+    __DUREE_DUEL_MARQUES_MS__: JSON.stringify(DUREE_DUEL_MARQUES_MS),
   },
   plugins: [
     react(),

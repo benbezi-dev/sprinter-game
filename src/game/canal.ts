@@ -217,7 +217,7 @@ export const VEDETTES_LANCEES = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
 
 /**
  * LE DUEL DES MARQUES — Team adidas contre Team Nike (09/10/2026). Ouvert sur
- * le canal de test ; au public pendant DUREE_EVENEMENT_MS a partir de
+ * le canal de test ; au public pendant DUREE_DUEL_MARQUES_MS a partir de
  * LANCEMENT_DUEL_MARQUES (vite.config.ts), nul tant qu'il n'est pas fixe.
  * Le serveur tient sa propre date (worker/src/marques.js) : les deux bougent
  * ensemble.
@@ -225,7 +225,12 @@ export const VEDETTES_LANCEES = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
 declare const __LANCEMENT_DUEL_MARQUES__: number | null;
 export const LANCEMENT_DUEL_MARQUES: number =
   typeof __LANCEMENT_DUEL_MARQUES__ === 'number' ? __LANCEMENT_DUEL_MARQUES__ : Infinity;
-export const DUEL_MARQUES_OUVERT = EST_TEST || evenementEnCours(LANCEMENT_DUEL_MARQUES);
+declare const __DUREE_DUEL_MARQUES_MS__: number;
+/** Six jours, pas la semaine des autres evenements (vite.config.ts). */
+export const DUREE_DUEL_MARQUES_MS: number =
+  typeof __DUREE_DUEL_MARQUES_MS__ === 'number' ? __DUREE_DUEL_MARQUES_MS__ : 0;
+export const DUEL_MARQUES_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_DUEL_MARQUES
+  && Date.now() < LANCEMENT_DUEL_MARQUES + DUREE_DUEL_MARQUES_MS);
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.

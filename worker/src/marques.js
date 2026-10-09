@@ -1,7 +1,7 @@
 /* ---------------------------------------------------------------------------
    LE DUEL DES MARQUES — Team adidas contre Team Nike (decide le 09/10/2026).
 
-   Une semaine. Chaque joueur choisit son camp ET son epreuve (100, 200 ou
+   Six jours. Chaque joueur choisit son camp ET son epreuve (100, 200 ou
    400 m), une fois pour toutes, puis court cette epreuve comme d'habitude. Son
    meilleur chrono de la semaine compte pour son camp. Une personne = une
    place : on ne compte pas sur deux epreuves.
@@ -45,9 +45,13 @@ export const CAMPS = ['adidas', 'nike'];
 export const EPREUVES = ['100', '200', '400'];
 export const TAILLE_EQUIPE = 32;
 export const PLAFOND_MS = { '100': 15_000, '200': 30_000, '400': 70_000 };
-/** Ouverture publique, en ms UTC ; null = ferme en production. */
-export const DEBUT_PROD = null;
-export const DUREE_MS = 7 * 24 * 3600 * 1000;
+/** Ouverture publique, en ms UTC ; null = ferme en production.
+ *  Provisoire (09/10) : dimanche 11 octobre 2026, 21 h 30 a Paris, pour six
+ *  jours. La meme valeur est dans vite.config.ts (et la duree aussi). */
+export const DEBUT_PROD = Date.UTC(2026, 9, 11, 19, 30, 0);
+// Six jours (decide le 09/10) : fin samedi 17/10 21 h 30, le dimanche sert au
+// resultat, et Halloween s'ouvre le lundi 19 a minuit.
+export const DUREE_MS = 6 * 24 * 3600 * 1000;
 
 /** Les contextes de course qui comptent : ceux ou l'epreuve est l'epreuve.
  *  La Legende, la nuit au cimetiere et les editions changent la piste ou les
