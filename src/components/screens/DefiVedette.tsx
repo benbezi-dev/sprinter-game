@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Lock, Shirt } from 'lucide-react';
 import { Repliable } from './Repliable';
-import { MONTEE, VOILE, PANNEAU, DUREE, COURBE } from '@/lib/mouvement';
+import { MONTEE, VOILE, PANNEAU, DUREE, COURBE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import {
   VEDETTES, defiPossible, defiEnCours, lancerLeDefi, rangerLeDefi, conclureLeDefi,
@@ -182,82 +182,172 @@ function FicheVedette({ v, onFermer, onPartir }: {
   const courir = (e: string) => { chargerLaMusique(v); onFermer(); onPartir?.(); lancerLeDefi(v, e); };
   const tuto = () => { onFermer(); marquerTutoHaiesVu(); ouvrirLeTuto(); };
   const { vive: VIVE, fonce: FONCE, pale, halo } = v.couleurs;
+  // EN MOUVEMENT (demande de l'auteur, 09/10) : la fiche s'ouvre comme une
+  // presentation de finale — le portrait monte dans sa lumiere, le nom tombe,
+  // le palmares defile ligne a ligne, la recompense luit, les boutons battent.
+  // Que transform, opacite et ombres ; rien pour qui a demande moins
+  // d'animations.
+  const reduit = useAnimationsReduites();
+  const vivant = !reduit;
+  const entree = (delai: number, de: Record<string, number> = { opacity: 0, y: 14 }) => reduit
+    ? { initial: false as const }
+    : { initial: de, animate: { opacity: 1, x: 0, y: 0, scale: 1 },
+        transition: { duration: 0.42, ease: COURBE.sortie as any, delay: delai } };
+  const BAT = { scale: [1, 1.05, 1, 1.03, 1, 1] };
+  const BAT_T = (d: number) => ({ duration: 1.8, times: [0, 0.08, 0.18, 0.26, 0.4, 1], repeat: Infinity, ease: 'easeOut' as const, delay: d });
 
   return (
     <motion.div {...VOILE} onClick={onFermer}
                 className="fixed inset-0 z-[59] flex items-center justify-center bg-black/85 pointer-events-auto
                            px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
       <motion.div {...PANNEAU} onClick={e => e.stopPropagation()}
-                  className="w-full max-w-md rounded-2xl border-2 p-5 flex flex-col gap-3 max-h-[88dvh] overflow-y-auto"
-                  style={{ borderColor: `${VIVE}90`, background: `linear-gradient(170deg, ${FONCE}, #09060F 70%)` }}>
+                  className="relative w-full max-w-md rounded-2xl">
+       {/* le cadre qui luit, sur un calque a lui : PANNEAU garde son entree */}
+       {vivant && (
+         <motion.div aria-hidden className="absolute inset-0 rounded-2xl pointer-events-none"
+           animate={{ boxShadow: [`0 0 0px ${VIVE}00`, `0 0 38px ${VIVE}88`, `0 0 0px ${VIVE}00`] }}
+           transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }} />
+       )}
+       <div className="relative rounded-2xl overflow-hidden">
+        {/* une lumiere qui derive lentement derriere le texte, comme un projecteur */}
+        {vivant && (
+          <motion.div aria-hidden className="absolute -inset-1/4 pointer-events-none z-0"
+            style={{ background: `radial-gradient(circle at 30% 30%, ${VIVE}38, transparent 45%)` }}
+            animate={{ x: ['-8%', '14%', '-8%'], y: ['-6%', '10%', '-6%'] }}
+            transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }} />
+        )}
+        <div className="relative z-10 w-full rounded-2xl border-2 p-5 flex flex-col gap-3 max-h-[88dvh] overflow-y-auto"
+             style={{ borderColor: `${VIVE}90`, background: `linear-gradient(170deg, ${FONCE}E6, #09060FEE 70%)` }}>
         <div className="flex items-end gap-3">
-          <div className="shrink-0 rounded-xl overflow-hidden border border-white/10"
-               style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}>
-            <Portrait v={v} cadre="buste" largeur={132} hauteur={160} />
-          </div>
+          <motion.div className="relative shrink-0 rounded-xl overflow-hidden border border-white/10"
+               style={{ background: `radial-gradient(circle at 50% 35%, ${halo}, #0A0C18)` }}
+               {...(reduit ? { initial: false as const } : {
+                 initial: { opacity: 0, y: 40, scale: 0.92 }, animate: { opacity: 1, y: 0, scale: 1 },
+                 transition: { ...RESSORT.glissement, delay: 0.08 } })}>
+            {/* le halo du portrait respire */}
+            {vivant && (
+              <motion.div aria-hidden className="absolute inset-0 pointer-events-none"
+                style={{ background: `radial-gradient(circle at 50% 38%, ${halo}, transparent 62%)` }}
+                animate={{ opacity: [0.25, 0.9, 0.25], scale: [0.95, 1.08, 0.95] }}
+                transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }} />
+            )}
+            <motion.div className="relative"
+              animate={vivant ? { y: [0, -4, 0] } : undefined}
+              transition={vivant ? { duration: 3.4, repeat: Infinity, ease: 'easeInOut', delay: 0.6 } : undefined}>
+              <Portrait v={v} cadre="buste" largeur={132} hauteur={160} />
+            </motion.div>
+            {/* un reflet qui passe sur le cadre, de temps en temps */}
+            {vivant && (
+              <motion.div aria-hidden className="absolute inset-y-0 -left-1/2 w-1/2 pointer-events-none"
+                style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.28), transparent)', skewX: -16 }}
+                initial={{ x: '-120%' }} animate={{ x: ['-120%', '320%'] }}
+                transition={{ duration: 1.1, ease: 'easeInOut', repeat: Infinity, repeatDelay: 4.2, delay: 1.1 }} />
+            )}
+          </motion.div>
           <div className="flex-1 min-w-0 flex flex-col gap-1 pb-2">
-            <span className="text-[10px] font-bold tracking-[0.24em] text-white/70">{mot('vd_fiche_sur')}</span>
+            <motion.span className="text-[10px] font-bold tracking-[0.24em] text-white/70"
+              {...entree(0.2, { opacity: 0, x: -12 })}>{mot('vd_fiche_sur')}</motion.span>
             <h2 className="font-black font-display text-3xl leading-[0.9] tracking-tight text-white">
-              {v.prenom}<br />{v.nom}
+              <motion.span className="inline-block origin-left" {...(reduit ? { initial: false as const } : {
+                initial: { opacity: 0, x: 30 }, animate: { opacity: 1, x: 0 },
+                transition: { ...RESSORT.glissement, delay: 0.28 } })}>{v.prenom}</motion.span><br />
+              <motion.span className="inline-block origin-left"
+                style={{ textShadow: `0 0 18px ${VIVE}` }}
+                {...(reduit ? { initial: false as const } : {
+                  initial: { opacity: 0, scale: 1.8 }, animate: { opacity: 1, scale: 1 },
+                  transition: { ...RESSORT.trophee, delay: 0.42 } })}>{v.nom}</motion.span>
             </h2>
-            <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: pale }}>
+            <motion.span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: pale }}
+              {...entree(0.6, { opacity: 0, y: 8 })}>
               {mot('vd_pays', undefined, v.cle)} · {mot('vd_epreuve', undefined, v.cle)}
-            </span>
-            <span className="text-[10px] text-white/55">{mot('vd_lieu', undefined, v.cle)}</span>
+            </motion.span>
+            <motion.span className="text-[10px] text-white/55" {...entree(0.68, { opacity: 0, y: 8 })}>
+              {mot('vd_lieu', undefined, v.cle)}
+            </motion.span>
           </div>
         </div>
 
         <ul className="flex flex-col gap-1">
           {v.palmares.map((p, i) => (
-            <li key={i} className="text-[12px] text-white/85 flex gap-2">
-              <span style={{ color: VIVE }}>▸</span>{ligne(p)}
-            </li>
+            <motion.li key={i} className="text-[12px] text-white/85 flex gap-2"
+              {...entree(0.72 + 0.09 * i, { opacity: 0, x: -18 })}>
+              <motion.span style={{ color: VIVE }} className="inline-block"
+                animate={vivant ? { x: [0, 3, 0], opacity: [1, 0.5, 1] } : undefined}
+                transition={vivant ? { duration: 0.6, repeat: Infinity, repeatDelay: 2.4, delay: 1.4 + 0.18 * i } : undefined}>
+                ▸
+              </motion.span>{ligne(p)}
+            </motion.li>
           ))}
         </ul>
 
-        <div className="rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col gap-1">
+        <motion.div className="rounded-xl bg-white/5 border border-white/10 p-3 flex flex-col gap-1"
+          {...entree(0.85 + 0.09 * v.palmares.length)}>
           <span className="text-[10px] font-bold tracking-[0.2em] text-white/60">{mot('vd_regle_titre')}</span>
           <p className="text-[12px] leading-snug text-white/85">{mot('vd_regle', undefined, v.cle)}</p>
-        </div>
+        </motion.div>
 
-        <div className="rounded-xl p-3 flex flex-col gap-0.5" style={{ background: `${VIVE}22`, border: `1px solid ${VIVE}55` }}>
-          <span className="text-[10px] font-bold tracking-[0.2em]" style={{ color: pale }}>{mot('vd_recompense')}</span>
-          <span className="text-[12px] text-white/85">{mot('vd_recompense_sous', undefined, v.cle)}</span>
+        <motion.div className="relative overflow-hidden rounded-xl p-3 flex flex-col gap-0.5"
+          style={{ background: `${VIVE}22`, border: `1px solid ${VIVE}55` }}
+          {...entree(0.95 + 0.09 * v.palmares.length)}>
+          {/* la recompense luit : un liseré qui s'allume, un reflet qui passe */}
+          {vivant && (
+            <motion.div aria-hidden className="absolute inset-0 rounded-xl pointer-events-none"
+              style={{ boxShadow: `inset 0 0 22px ${VIVE}AA` }}
+              animate={{ opacity: [0.15, 0.85, 0.15] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 1.6 }} />
+          )}
+          {vivant && (
+            <motion.div aria-hidden className="absolute inset-y-0 -left-1/3 w-1/3 pointer-events-none"
+              style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,0.18), transparent)', skewX: -18 }}
+              initial={{ x: '-120%' }} animate={{ x: ['-120%', '420%'] }}
+              transition={{ duration: 1.2, ease: 'easeInOut', repeat: Infinity, repeatDelay: 3.6, delay: 2 }} />
+          )}
+          <span className="relative text-[10px] font-bold tracking-[0.2em]" style={{ color: pale }}>{mot('vd_recompense')}</span>
+          <span className="relative text-[12px] text-white/85">{mot('vd_recompense_sous', undefined, v.cle)}</span>
           {aLeMot('vs_bonus', v.cle) && (
-            <span className="text-[11px] font-bold text-white/90">
+            <motion.span className="relative text-[11px] font-bold text-white/90"
+              animate={vivant ? { textShadow: ['0 0 0px rgba(255,255,255,0)', `0 0 12px ${VIVE}`, '0 0 0px rgba(255,255,255,0)'] } : undefined}
+              transition={vivant ? { duration: 1.4, delay: 1.5, repeat: Infinity, repeatDelay: 3 } : undefined}>
               <span style={{ color: pale }}>{mot('vs_bonus_titre')} · </span>{mot('vs_bonus', undefined, v.cle)}
-            </span>
+            </motion.span>
           )}
           {/* LE STADE QUE SA DOUBLE VICTOIRE DEBLOQUE, et ou l'on en est :
               une coche par epreuve deja gagnee. */}
           {stadeDonne(v) && aLeMot('vd_stade', v.cle) && (
-            <span className="mt-1 text-[11px] text-white/85 leading-snug">
+            <span className="relative mt-1 text-[11px] text-white/85 leading-snug">
               {mot('vd_stade', undefined, v.cle)}
               <span className="ml-1 font-bold tabular-nums">
                 {v.epreuves.map(e => `${nomEpreuve(e)} ${battuSur(v, e) ? '✓' : '·'}`).join('  ')}
               </span>
             </span>
           )}
-        </div>
+        </motion.div>
 
         {/* UNE EPREUVE, UN BOUTON. Avec plusieurs, chaque bouton dit son chrono
             a battre et le meilleur du joueur : c'est le choix qu'on fait ici. */}
         {v.epreuves.length === 1 ? (
-          <button onClick={() => courir(v.epreuves[0])}
-                  className="w-full py-3 rounded-xl font-black font-display text-xl tracking-widest text-black bg-white hover:bg-white/90 transition-colors">
-            {mot('vd_partir')}
-          </button>
+          <motion.button onClick={() => courir(v.epreuves[0])} whileTap={{ scale: 0.97 }}
+                  {...entree(1.05 + 0.09 * v.palmares.length, { opacity: 0, y: 20 })}
+                  className="relative overflow-hidden w-full py-3 rounded-xl font-black font-display text-xl tracking-widest text-black bg-white hover:bg-white/90 transition-colors">
+            <motion.span className="relative inline-block"
+              animate={vivant ? BAT : undefined} transition={vivant ? BAT_T(1.8) : undefined}>
+              {mot('vd_partir')}
+            </motion.span>
+          </motion.button>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {v.epreuves.map(e => {
+            {v.epreuves.map((e, i) => {
               const cible = chronoDeLaVedette(v, e);
               const moi = meilleurDuDefi(v, e);
               return (
-                <button key={e} onClick={() => courir(e)}
+                <motion.button key={e} onClick={() => courir(e)} whileTap={{ scale: 0.96 }}
+                        {...entree(1.05 + 0.09 * v.palmares.length + 0.08 * i, { opacity: 0, y: 20 })}
                         className="py-2.5 rounded-xl bg-white hover:bg-white/90 transition-colors text-black flex flex-col items-center gap-0.5">
-                  <span className="font-black font-display text-lg tracking-widest leading-none">
+                  {/* les deux boutons battent tour a tour */}
+                  <motion.span className="font-black font-display text-lg tracking-widest leading-none inline-block"
+                    animate={vivant ? BAT : undefined} transition={vivant ? BAT_T(1.8 + 0.9 * i) : undefined}>
                     {mot('vd_courir_sur', { e: nomEpreuve(e) })}
-                  </span>
+                  </motion.span>
                   <span className="text-[10px] font-bold tracking-wide tabular-nums opacity-70">
                     {mot('vd_a_battre', { s: chrono(cible) })}
                   </span>
@@ -266,7 +356,7 @@ function FicheVedette({ v, onFermer, onPartir }: {
                       {mot('vd_meilleur', { s: chrono(moi) })}
                     </span>
                   )}
-                </button>
+                </motion.button>
               );
             })}
           </div>
@@ -281,6 +371,8 @@ function FicheVedette({ v, onFermer, onPartir }: {
         <button onClick={onFermer} className="text-[11px] tracking-widest text-white/45 hover:text-white/80">
           {mot('vd_fermer')}
         </button>
+        </div>
+       </div>
       </motion.div>
     </motion.div>
   );
