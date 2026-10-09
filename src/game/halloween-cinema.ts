@@ -519,6 +519,13 @@ export function peindreLaScene(
     }
   }
 
+  // LA NUIT TENUE EST UNE IMAGE (09/10) quand elle est chargee : elle couvre
+  // tout ce qui precede (ciel, lune, tombes) ; la brume, l'eclair, le noir des
+  // bords et le grain passent par-dessus comme sur le reste. Voir
+  // imageDeVictoire.
+  const fond = mordu ? null : victoire;
+  if (fond) peindreLaVictoire(ctx, fond, L, H, t, eclair);
+
   // LA BRUME, qui monte du sol par nappes et noie les pieds de tout le monde.
   for (let k = 0; k < 5; k++) {
     const v = 8 + 10 * hasard(k + 70);
@@ -543,7 +550,7 @@ export function peindreLaScene(
   if (mordu) {
     // La bete sur nous, et rien d'autre.
     teteDeFace(ctx, L, H, sol, m, t, eclair, portrait);
-  } else {
+  } else if (!fond) {
     // Il court vers la lune, petit et loin. La bete ne le poursuit plus : elle
     // le REGARDE partir, du noir du premier plan. Elle sait ou il habite.
     silhouetteCoureur(ctx, L * 0.26, sol, m * 0.7, cycle);
@@ -623,6 +630,72 @@ function teteFondue(): HTMLCanvasElement | null {
   g.fillRect(0, 0, W, W);
   teteFondueCache = c;
   return c;
+}
+
+/* LA CARTE DE VICTOIRE (09/10, « les cartes restent droles »). Le chien en
+   silhouette qui poursuivait le coureur se lisait comme un dessin anime. La
+   scene vient de Tripo Studio (outil Image, Nano Banana, 9:16 ;
+   assets-sources/molosse-victoire/) : un cimetiere dans le brouillard sous
+   la lune rouge, l'homme minuscule qui s'enfuit sur l'allee, et la bete au
+   premier plan qui le laisse partir — elle sait ou il habite. Le bas de
+   l'image est noir : c'est la que se pose la carte de texte.
+
+   Invite : « Vertical horror film still. Night, an old overgrown cemetery in
+   heavy fog under a huge blood-red full moon in the upper left of the sky.
+   Far away in the middle distance, a tiny lone athlete in running clothes
+   sprints away along a path toward the moon, seen only as a dark silhouette.
+   In the foreground on the right, crouched low between crooked gravestones,
+   an enormous black mastiff hellhound watches him, mostly lost in shadow,
+   only its two glowing ember-red eyes and its bared wet fangs catching the
+   light. [...] No text, no letters, no logo. »
+
+   Hors production comme la tete (HORS_PRODUCTION). Tant qu'elle n'est pas
+   chargee, la scene dessinee (la tete qui guette) tient sa place. */
+let victoire: HTMLImageElement | null = null;
+import('@/assets/molosse-victoire.webp?url').then(m => {
+  const url = m.default as string;
+  if (!url) return;
+  const im = new Image();
+  im.onload = () => { victoire = im; };
+  im.src = url;
+}).catch(() => { /* la tete qui guette reste */ });
+
+/** Les yeux de la bete dans l'image de victoire, mesures sur l'image (fractions). */
+const YEUX_VICTOIRE = [[0.6354, 0.4825], [0.7043, 0.4811]];
+
+/** L'image de victoire, en couverture (rognee sur les cotes en portrait). */
+function peindreLaVictoire(ctx: CanvasRenderingContext2D, im: HTMLImageElement,
+                          L: number, H: number, t: number, eclair: number) {
+  const iw = im.naturalWidth, ih = im.naturalHeight;
+  const k = Math.max(L / iw, H / ih);
+  const w = iw * k, h = ih * k;
+  const x0 = (L - w) * 0.5, y0 = (H - h) * 0.42;
+  // elle sort du noir pendant la premiere seconde
+  const entre = Math.min(1, t / 1.0);
+  ctx.save();
+  ctx.fillStyle = 'rgb(3,2,5)';
+  ctx.fillRect(-L, -H, 3 * L, 3 * H);
+  ctx.globalAlpha = entre;
+  ctx.drawImage(im, x0, y0, w, h);
+  ctx.globalCompositeOperation = 'lighter';
+  if (eclair > 0.02) {
+    ctx.globalAlpha = 0.35 * eclair;
+    ctx.drawImage(im, x0, y0, w, h);
+  }
+  // LES YEUX BATTENT, et clignent lentement : l'image est une photo, ce sont
+  // eux qui la font vivre.
+  const pulse = 0.75 + 0.25 * Math.sin(t * 5.5);
+  const cligne = ((t % 4.3) < 0.12) ? 0.1 : 1;
+  ctx.globalAlpha = entre * cligne;
+  for (const [u, v] of YEUX_VICTOIRE) {
+    const ox = x0 + u * w, oy = y0 + v * h, r = w * 0.03 * pulse;
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+    g.addColorStop(0, 'rgba(255,80,40,0.8)');
+    g.addColorStop(1, 'rgba(255,20,10,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
 }
 
 /** Ou sont les yeux et le croc gauche dans l'image (fractions de son cote). */
