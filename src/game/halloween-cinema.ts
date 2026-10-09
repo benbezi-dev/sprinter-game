@@ -576,8 +576,97 @@ function arbreMort(ctx: CanvasRenderingContext2D, x: number, sol: number, m: num
   branche(x, sol, Math.PI / 2 + 0.12, m * 1.3, m * 0.24, 4);
 }
 
+/* LA TETE EST UNE IMAGE, PLUS UN DESSIN (09/10, « les cartes ne sont pas
+   effrayantes mais droles »). Le trace au canvas — oreilles en triangles,
+   crocs en dents de scie, yeux en fentes — se lisait comme un chat de dessin
+   anime, quoi qu'on fasse du sourcil. La tete vient maintenant de FLUX
+   (assets-sources/molosse-tete/, graine 1313) : un molosse de face qui sort du
+   noir, les yeux en braise. Le fond de l'image est noir, et ses bords sont
+   fondus une fois pour toutes (`teteFondue`) : posee sur le ciel rouge, elle
+   n'a pas de cadre.
+
+   Le fichier ne part pas en production (HORS_PRODUCTION, vite.config.ts). Tant
+   qu'il n'est pas charge — ou s'il ne l'est jamais —, l'ancien trace sert de
+   doublure (`teteDessinee`). */
+let teteImage: HTMLImageElement | null = null;
+let teteFondueCache: HTMLCanvasElement | null = null;
+import('@/assets/molosse-tete.webp?url').then(m => {
+  const url = m.default as string;
+  if (!url) return;
+  const im = new Image();
+  im.onload = () => { teteImage = im; };
+  im.src = url;
+}).catch(() => { /* la doublure reste */ });
+
+/** L'image de la tete, les bords fondus au noir transparent. */
+function teteFondue(): HTMLCanvasElement | null {
+  if (teteFondueCache || !teteImage) return teteFondueCache;
+  const c = document.createElement('canvas');
+  const W = c.width = c.height = teteImage.naturalWidth || 1024;
+  const g = c.getContext('2d')!;
+  g.drawImage(teteImage, 0, 0, W, W);
+  g.globalCompositeOperation = 'destination-in';
+  const masque = g.createRadialGradient(W * 0.5, W * 0.47, W * 0.20, W * 0.5, W * 0.47, W * 0.47);
+  masque.addColorStop(0, 'rgba(0,0,0,1)');
+  masque.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = masque;
+  g.fillRect(0, 0, W, W);
+  teteFondueCache = c;
+  return c;
+}
+
+/** Ou sont les yeux et le croc gauche dans l'image (fractions de son cote). */
+const OEIL_G = [0.293, 0.230], OEIL_D = [0.6875, 0.215], CROC = [0.375, 0.80];
+
 /**
  * LA TETE DE LA BETE, DE FACE, AU PREMIER PLAN — l'image de la morsure.
+ *
+ * Elle monte du bas pendant la premiere seconde, puis respire ; les yeux
+ * battent, la bave tombe, et l'eclair la blanchit d'un coup.
+ */
+function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
+                    m: number, t: number, eclair: number, portrait: boolean) {
+  const img = teteFondue();
+  if (!img) { teteDessinee(ctx, L, H, sol, m, t, eclair, portrait); return; }
+  const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
+  const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);
+  const D = s * (portrait ? 2.2 : 2.3);
+  const cx = L * (portrait ? 0.62 : 0.40);
+  // la gueule au-dessus de la carte de texte, qui couvre le bas de l'image
+  const cy = sol - s * (portrait ? 0.22 : 0.10) + (1 - monte) * s * 1.4;
+  const x0 = cx - D / 2, y0 = cy - D / 2;
+  ctx.save();
+  ctx.globalAlpha = monte;
+  ctx.drawImage(img, x0, y0, D, D);
+  ctx.globalCompositeOperation = 'lighter';
+  if (eclair > 0.02) {
+    ctx.globalAlpha = 0.45 * eclair;
+    ctx.drawImage(img, x0, y0, D, D);
+  }
+  // LES YEUX BATTENT, comme un pouls : l'image seule est une photo, ce sont
+  // eux qui la font vivre.
+  const pulse = 0.75 + 0.25 * Math.sin(t * 6.5);
+  ctx.globalAlpha = monte;
+  for (const [u, v] of [OEIL_G, OEIL_D]) {
+    const ox = x0 + u * D, oy = y0 + v * D, r = D * 0.06 * pulse;
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+    g.addColorStop(0, 'rgba(255,90,30,0.75)');
+    g.addColorStop(1, 'rgba(255,30,10,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  // la bave, qui tombe d'un croc
+  ctx.fillStyle = 'rgba(210,205,215,0.6)';
+  const goutte = (t * 0.8) % 1;
+  ctx.beginPath();
+  ctx.ellipse(x0 + CROC[0] * D, y0 + CROC[1] * D + goutte * D * 0.18, D * 0.005, D * 0.014, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * LA TETE DESSINEE — la doublure, tant que l'image n'est pas la.
  *
  * Elle a remplace le chien assis qui hurlait a la lune : il racontait que
  * c'etait fini, la ou il fallait raconter que ca ne l'est pas. La tete monte
@@ -585,8 +674,8 @@ function arbreMort(ctx: CanvasRenderingContext2D, x: number, sol: number, m: num
  * respire. On ne voit d'elle que la masse noire, deux yeux en braise et les
  * crocs — l'eclair seul la decoupe en entier.
  */
-function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
-                    m: number, t: number, eclair: number, portrait: boolean) {
+function teteDessinee(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
+                      m: number, t: number, eclair: number, portrait: boolean) {
   // Elle monte pendant la premiere seconde, puis respire.
   const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
   const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);

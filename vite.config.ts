@@ -69,7 +69,7 @@ const canalDuBuild = (mode: string) => {
 // maillage TRELLIS, demande par game/halloween-molosse-3d.ts. Ce module n'est
 // jamais rendu en production, mais halloween.ts est importe par App.tsx et le
 // lit au passage : le GLB partait a la racine du site sans rien pour le lire.
-const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/molosse.glb', 'assets/longueur/', 'assets/legende/'];
+const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/molosse.glb', 'assets/molosse-tete.webp', 'assets/longueur/', 'assets/legende/'];
 const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
   name: 'sprinter-musique-hors-production',
   enforce: 'pre' as const,
